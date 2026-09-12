@@ -73,7 +73,12 @@
   /* ⛔ LA GRILLE EST L ACCENT A 10 %, mesure : `rgba(167, 139, 250, 0.1)` sur la vraie page. Ce n est
    * pas une couleur de plus, c est LA couleur, estompee — et c est pour ca qu elle ne detonne jamais. */
   --grille:rgb(167 139 250 / .1); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
-  --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b; --r:16px; --rs:11px;
+  /* ⛔⛔ RAYONS ET FILETS, PASSE « APPLE » DU 2026-09-12 (demande de Phil : « harmonieux comme
+   * Apple »). Ce qui fait cette impression n est ni une couleur ni une ombre : c est la REGULARITE.
+   * Deux rayons seulement, un filet d un pixel a faible contraste, un rythme d espacement constant
+   * (6 / 10 / 14 / 18), et des aplats — jamais de degrade sur une surface. */
+  --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b; --r:18px; --rs:12px;
+  --pas:14px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -87,19 +92,28 @@ body{background:var(--fond);
   -webkit-font-smoothing:antialiased;padding-bottom:84px}
 .enveloppe{max-width:560px;margin:0 auto;padding:0 14px}
 .tete{display:flex;align-items:center;gap:10px;padding:16px 0 12px}
-.marque{font-weight:800;font-size:17px;letter-spacing:-.2px}
+.marque{font-weight:700;font-size:16px;letter-spacing:-.2px}
 .marque span{color:var(--accent2)}
 .tete .droite{margin-left:auto;display:flex;gap:8px}
-.puce{font-size:11px;font-weight:700;padding:5px 9px;border-radius:99px;border:1px solid var(--ligne);
-  background:var(--fond2);color:var(--doux)}
-.bouton{appearance:none;border:0;border-radius:var(--rs);padding:13px 16px;font:inherit;font-weight:700;
-  cursor:pointer;background:var(--accent);color:hsl(var(--h) 60% 10%);width:100%;min-height:46px}
+.puce{font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid var(--ligne);
+  background:var(--fond2);color:var(--doux);transition:border-color .12s ease,color .12s ease}
+.puce:hover{border-color:var(--accent);color:var(--texte)}
+.bouton{appearance:none;border:0;border-radius:var(--rs);padding:13px 16px;font:inherit;font-weight:600;
+  letter-spacing:-.1px;cursor:pointer;background:var(--accent);color:hsl(var(--h) 60% 10%);width:100%;
+  min-height:46px;transition:transform .12s ease,background .12s ease,border-color .12s ease,opacity .12s ease}
+.bouton:active{transform:scale(.985)}
 .bouton.sec{background:var(--fond2);color:var(--texte);border:1px solid var(--ligne)}
-.carte{background:linear-gradient(180deg,var(--carte),var(--fond2));border:1px solid var(--ligne);
-  border-radius:var(--r);padding:16px;margin:0 0 12px}
-.titre{font-weight:800;font-size:15px;margin:0 0 4px}
-.sous{color:var(--doux);font-size:12.5px;margin:0 0 12px;line-height:1.45}
-.note{color:var(--doux);font-size:12px;line-height:1.5;margin:10px 0 0}
+.bouton.sec:hover{border-color:var(--accent)}
+/* ⛔ LE FOCUS SE VOIT. Un contour invisible au clavier, c est une app qu on ne peut pas traverser
+ * sans souris — et c est exactement le genre de detail ou « harmonieux » veut dire « fini ». */
+.bouton:focus-visible,.puce:focus-visible,.navB:focus-visible,input:focus-visible,select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+/* ⛔ APLAT, PAS DEGRADE : une carte en degrade a deux valeurs, donc deux bords perçus. */
+.carte{background:var(--carte);border:1px solid var(--ligne);border-radius:var(--r);
+  padding:18px;margin:0 0 var(--pas)}
+.titre{font-weight:700;font-size:16px;letter-spacing:-.2px;margin:0 0 5px}
+.sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
+.note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
 
 /* ══ LA MAP ══════════════════════════════════════════════════════════════════════════════════
  * ⛔ LA TAILLE EST LA SEULE CHOSE QUI VARIE, ET C EST DELIBERE. Le dessin du block vient de son
@@ -167,7 +181,7 @@ body{background:var(--fond);
  * caractere par caractere. Une proportionnelle y fait confondre 0 et O, 1 et l. */
 .mono,.fiche .note,#mapNote{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   font-size:11.5px;letter-spacing:-.1px}
-.bloc{position:absolute;border:1px solid var(--contour);border-radius:12px;background:transparent;cursor:pointer;
+.bloc{position:absolute;border:1px solid var(--contour);border-radius:var(--rs);background:transparent;cursor:pointer;
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
 .bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.32)}
 /* ⛔⛔ LE DESSIN EST EN 200x220, PAS CARRE — ET C ETAIT LE « BUG VISUEL » SIGNALE PAR PHIL. Force
@@ -178,7 +192,7 @@ body{background:var(--fond);
 .bloc svg{display:block;width:100%;height:100%}
 .bloc .etiq{position:absolute;left:0;right:0;bottom:0;
   background:linear-gradient(transparent,hsl(var(--h) 40% 4% / .8) 55%);
-  color:#fff;font-size:10px;font-weight:800;padding:10px 3px 3px;text-align:center;
+  color:#fff;font-size:11px;font-weight:700;padding:10px 3px 3px;text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ⛔ SANS MARCHE, LE BLOCK EST PALE — jamais absent, jamais « mort ». Il n a pas ete echange, ce
  *    qui n est pas la meme chose que ne rien valoir.
@@ -198,18 +212,18 @@ body{background:var(--fond);
 .fiche{margin:12px 0 0;border-top:1px solid var(--ligne);padding-top:12px}
 .fiche[hidden]{display:none}
 .grilleMien{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
-.mienTuile{background:var(--fond2);border:1px solid var(--ligne);border-radius:12px;padding:8px;
-  font-size:12px;font-weight:800;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mienTuile{background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);padding:8px;
+  font-size:12px;font-weight:700;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ⛔ MEME RATIO QUE PARTOUT AILLEURS (200x220) : un dessin ecrase ici et juste la-bas serait deux
  * apparences pour un seul block. */
-.mienArt{aspect-ratio:200/220;margin-bottom:6px;border-radius:9px;overflow:hidden}
+.mienArt{aspect-ratio:200/220;margin-bottom:6px;border-radius:10px;overflow:hidden}
 .mienArt svg{display:block;width:100%;height:100%}
 .fTete{display:flex;gap:12px;align-items:center;margin:0 0 8px}
-.fAvatar{width:56px;height:62px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:12px;
+.fAvatar{width:56px;height:62px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:var(--rs);
   overflow:hidden;background:var(--creux)}
 .fAvatar svg{display:block;width:100%;height:100%}
-.fNom{font-weight:800;font-size:16px;margin:0}
-.fVie{font-weight:800;color:var(--accent2);font-size:14px;margin:2px 0 0}
+.fNom{font-weight:700;font-size:16px;margin:0}
+.fVie{font-weight:700;color:var(--accent2);font-size:13px;margin:2px 0 0}
 .fActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .fActions .plein{grid-column:1/-1}
 
@@ -218,10 +232,10 @@ body{background:var(--fond);
  *    chiffres en tuiles et les gestes. C est ce qu on attend d une page de profil sur n importe
  *    quelle app ; un tableau de faits se lit comme un rapport, pas comme quelqu un. */
 .pTete{display:flex;gap:14px;align-items:center}
-.pAvatar{width:92px;height:101px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:16px;
+.pAvatar{width:92px;height:101px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:14px;
   overflow:hidden;background:var(--creux)}
 .pAvatar svg{display:block;width:100%;height:100%}
-.pSym{font-weight:800;font-size:22px;letter-spacing:-.3px;margin:0;overflow-wrap:anywhere}
+.pSym{font-weight:700;font-size:22px;letter-spacing:-.3px;margin:0;overflow-wrap:anywhere}
 .pNomLong{color:var(--doux);font-size:13px;margin:2px 0 0}
 .pAdr{color:var(--doux);margin:6px 0 0;word-break:break-all}
 .pFermer{margin-left:auto;align-self:flex-start;cursor:pointer}
@@ -229,11 +243,11 @@ body{background:var(--fond);
 .pStat{background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);padding:10px 12px;
   display:flex;flex-direction:column;gap:3px;min-width:0}
 .pStat span{color:var(--doux);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-.pStat b{font-size:14px;overflow-wrap:anywhere}
+.pStat b{font-size:13px;overflow-wrap:anywhere}
 .pLarge{grid-column:1/-1}
 .pJeu{margin:14px 0 0;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);padding:12px}
 .pJeuTete{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.pBadge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
+.pBadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
   border:1px solid var(--accent);border-radius:99px;padding:4px 10px}
 .pPV{color:var(--doux);font-size:12px;font-weight:700}
 .pPV b{color:var(--texte);font-size:20px;font-variant-numeric:tabular-nums}
@@ -241,7 +255,7 @@ body{background:var(--fond);
 .pBarre i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .6s}
 .pProchain{font-size:12px;color:var(--doux);margin:0;line-height:1.45}
 .pPuces{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 0}
-.pPuce{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;border:1px solid var(--ligne);color:var(--doux)}
+.pPuce{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;border:1px solid var(--ligne);color:var(--doux)}
 .pPuce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
@@ -251,16 +265,54 @@ body{background:var(--fond);
   font-size:12px;color:var(--doux);line-height:1.45}
 .pmProp{border:1px solid var(--ligne);border-radius:var(--rs);padding:9px 11px;margin:8px 0 0;background:var(--fond2)}
 .pmProp b{color:var(--accent2)}
-.pmProp .aSigner{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;
+.pmProp .aSigner{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.4px;color:var(--tiede);border:1px solid var(--tiede);border-radius:99px;padding:2px 7px;margin-left:6px}
 /* ══ CLASSEMENT — l ego du plus gros, avec sa borne collee dessus ══ */
 .rangs{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .rangL{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--ligne)}
-.rangN{font-weight:800;font-size:13px;color:var(--accent2);min-width:28px}
-.rangArt{width:30px;height:33px;flex:0 0 auto;border-radius:8px;overflow:hidden;background:var(--creux)}
+.rangN{font-weight:700;font-size:13px;color:var(--accent2);min-width:28px}
+.rangArt{width:30px;height:33px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux)}
 .rangArt svg{display:block;width:100%;height:100%}
-.rangNom{flex:1;min-width:0;font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rangVie{font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums}
+.rangNom{flex:1;min-width:0;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rangVie{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
+/* ══ CREATE ══ */
+/* ⛔ COLLANT EN HAUT DE L ONGLET, translucide : on voit le block pendant qu on regle sa face, et le
+ * contenu qui passe dessous reste lisible. */
+.creaSticky{position:sticky;top:0;z-index:6;display:flex;gap:12px;align-items:center;
+  background:hsl(var(--h) 41% 6% / .86);backdrop-filter:blur(14px);
+  border:1px solid var(--ligne);border-radius:var(--r);padding:10px 12px;margin:0 0 var(--pas)}
+.creaNom{font-weight:700;font-size:15px;letter-spacing:-.2px;margin:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.creaArt{width:72px;height:79px;flex:0 0 auto;border:1px solid var(--ligne);border-radius:14px;
+  overflow:hidden;background:var(--creux)}
+.creaArt svg{display:block;width:100%;height:100%}
+.reglages{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){ .reglages{grid-template-columns:1fr} }
+.reglage{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--doux);
+  text-transform:uppercase;letter-spacing:.4px}
+.reglage select,.reglage input[type=range]{width:100%;box-sizing:border-box}
+.reglage select{background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
+  color:var(--texte);font:inherit;font-weight:400;text-transform:none;letter-spacing:0;padding:9px 10px;min-height:40px}
+.reglage input[type=range]{accent-color:var(--accent);height:26px}
+.reglage b{color:var(--texte);font-weight:700;text-transform:none;letter-spacing:0}
+/* ══ BRAIN AI ══ */
+.toile{display:block;width:100%;height:auto;margin-top:10px;background:var(--creux);
+  border:1px solid var(--ligne);border-radius:var(--rs)}
+/* ══ LEARN ══ */
+.etapes{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.etape{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--ligne);padding-top:10px}
+.etapeIc{width:46px;height:46px;flex:0 0 auto;border-radius:12px;overflow:hidden;background:var(--fond2);
+  border:1px solid var(--ligne)}
+.etapeIc svg{display:block;width:100%;height:100%}
+.etapeT{font-weight:700;font-size:13px;margin:0 0 3px}
+.etapeD{color:var(--doux);font-size:12.5px;line-height:1.5;margin:0}
+.etapeEtat{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  border-radius:99px;padding:2px 8px;margin-left:6px;border:1px solid var(--ligne);color:var(--doux)}
+.etapeEtat.ok{color:var(--vif);border-color:var(--vif)}
+.etapeEtat.partiel{color:var(--tiede);border-color:var(--tiede)}
+.etapeEtat.absent{color:var(--dur);border-color:var(--dur)}
+.schemaVie{margin:6px 0 10px}
+.schemaVie svg{display:block;width:100%;height:auto}
 .pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
 .pActions .bouton:first-child{grid-column:1/-1}
 a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
@@ -270,19 +322,20 @@ button.mienTuile:hover{border-color:var(--accent)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:rgba(7,11,24,.93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
-.navIn{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-.navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:10.5px;
+.navIn{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
+.navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
   font-weight:700;padding:7px 3px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;gap:3px;min-height:48px}
 .navB b{font-size:17px;line-height:1}
 .navB[aria-selected="true"]{color:var(--texte);background:hsl(var(--h) 32% 19%)}
+.navB{transition:color .12s ease,background .12s ease}
 .volet{display:none}
 .volet.on{display:block}
 /* ⛔ MEME TEINTE QUE LE RESTE. Ce cadre etait en 226 — du BLEU au milieu d une page violette, et
  * c est precisement le genre d ecart qui fait sonner faux sans qu on sache le nommer. */
 .pasEncore{border:1px dashed hsl(var(--h) 25% 35%);border-radius:var(--rs);padding:14px;
   background:hsl(var(--h) 30% 10%)}
-.pasEncore h4{margin:0 0 6px;font-size:13.5px}
+.pasEncore h4{margin:0 0 6px;font-size:13px}
 .pasEncore ul{margin:8px 0 0;padding-left:18px;color:var(--doux);font-size:12.5px;line-height:1.6}
 .pasEncore li b{color:var(--texte)}
 .avert{border-left:3px solid var(--tiede);padding-left:10px;color:var(--tiede);font-size:12.5px;
@@ -298,7 +351,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
  *    agencement « original » leur ferait chercher le bouton Send. Aucune couleur nouvelle : tout
  *    sort des jetons deja mesures (regle 17). */
 .wAdr{display:flex;gap:8px;align-items:center;color:var(--doux)}
-.wSolde{font-size:30px;font-weight:800;letter-spacing:-.6px;margin:10px 0 2px;font-variant-numeric:tabular-nums}
+.wSolde{font-size:30px;font-weight:700;letter-spacing:-.6px;margin:10px 0 2px;font-variant-numeric:tabular-nums}
 .wActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 0}
 .wAct{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px}
 .wAct b{font-size:17px;line-height:1}
@@ -306,11 +359,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .wListe{list-style:none;margin:6px 0 0;padding:0}
 .wLigne{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--ligne)}
 .wIc{width:36px;height:40px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux);
-  display:grid;place-items:center;font-weight:800;color:var(--accent2)}
+  display:grid;place-items:center;font-weight:700;color:var(--accent2)}
 .wIc svg{display:block;width:100%;height:100%}
 .wNm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .wNm span{color:var(--doux);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wQt{font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+.wQt{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
 .wIllisible{color:var(--tiede);font-weight:700;font-size:12px}
 .wAdrPleine{word-break:break-all;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);
   padding:12px;margin:0 0 10px;color:var(--texte)}
@@ -337,6 +390,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            aucune pool n existe la-bas. La difference de taille, qui est tout le sujet, ne pouvait
            donc jamais se voir. Le reseau est NOMME a l ecran a chaque instant : une capitalisation
            lue sur le mauvais reseau serait un chiffre juste sur le mauvais objet. -->
+      <!-- ⛔ « LEARN » EST DANS LA TETE, PAS DANS LA BARRE DU BAS. Six onglets tiennent deja mal sur
+           un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
+           se lit de partout : chaque borne longue de l app pointe ICI. -->
+      <button class="puce" id="pLearn" style="cursor:pointer">? Learn</button>
       <button class="puce" id="pReseau" style="cursor:pointer">Base Sepolia</button>
       <span class="puce" id="pCompte">not connected</span>
     </div>
@@ -421,6 +478,144 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
          La legende garde « life can go down » ; le profil dit « a tier is a state, not a reward you
          keep ». Si une page d explication revient, ce sera une page a part, pas un mur sur la map. -->
       </aside>
+    </div>
+  </section>
+
+  <!-- ══ CREATE ══════════════════════════════════════════════════════════════════════════════
+       ⛔ LA CREATION EST UNE SIGNATURE DE L UTILISATEUR, ICI COMME AILLEURS. Cette page prepare le
+          calldata, le wallet l affiche, l utilisateur decide. Le frais fixe est un transfert SEPARE
+          et VISIBLE, dit AVANT — une deuxieme fenetre de wallet non annoncee se lit comme un piege. -->
+  <section class="volet" id="v-creer" aria-label="Create a block">
+    <!-- ⛔ L APERCU SUIT L UTILISATEUR (Phil, 2026-09-12, capture a l appui : « la fenetre du block
+         doit suivre pendant qu il choisit »). Il est SORTI de la premiere carte exprès : colle a
+         l interieur d une carte, il se decollait des qu on descendait vers les reglages — c est-a-dire
+         precisement au moment ou on en a besoin. Ici, il tient tout l onglet. -->
+    <div class="creaSticky">
+      <div class="creaArt" id="cArt"></div>
+      <div style="min-width:0;flex:1">
+        <p class="creaNom" id="cApercuNom">Your block</p>
+        <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
+      </div>
+      <button class="bouton sec" id="cHasard" type="button" style="width:auto;padding:10px 14px">Surprise me</button>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Create a block</p>
+      <p class="sous">One billion units, sealed at birth — nobody can mint more, not even you. Its face
+        is engraved in the token's own metadata.</p>
+      <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
+      <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
+      <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
+      <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
+           creations avec le meme sel depuis le meme compte se heurtent, et la factory le dit. -->
+      <label class="champ">Salt — it fixes the address<input id="cSel" placeholder="anything you like" autocomplete="off" spellcheck="false"></label>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Its face</p>
+      <p class="sous">Every setting changes what gets engraved. Nothing here is random unless you ask.</p>
+      <div class="reglages" id="cReglages"></div>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Fly brain</p>
+      <label class="wConsent" style="color:var(--doux)"><input type="checkbox" id="cCerveau" checked>
+        Give this block a fly brain: 128 neurons seeded by its address, written into its metadata at
+        birth so the choice travels with the block.</label>
+      <p class="note">The brain moves the block and reads its market. It holds no key and signs
+        nothing — see Learn.</p>
+    </div>
+
+    <div class="carte">
+      <p class="titre">What it costs, and what it signs</p>
+      <p class="note" id="cReseauAvert"></p>
+      <p class="note" id="cFrais"></p>
+      <p class="note" id="cRecap"></p>
+      <div class="pActions" style="grid-template-columns:1fr 1fr">
+        <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
+        <button class="bouton" id="cCreer" type="button">Create — sign in my wallet</button>
+      </div>
+      <p class="note" id="cEtat"></p>
+    </div>
+  </section>
+
+  <!-- ══ BRAIN AI ════════════════════════════════════════════════════════════════════════════
+       ⛔ UN MODELE, ET IL LE DIT. Ce n est pas un connectome biologique : 128 neurones a fuite,
+          semes par l adresse du block. Ce qu il fait est visible ici plutot que raconte. -->
+  <section class="volet" id="v-brain" aria-label="Brain AI">
+    <div class="carte">
+      <p class="titre">Brain AI</p>
+      <p class="sous">128 spiking neurons per block, seeded by its address. It watches its own market,
+        moves its block, and signs nothing.</p>
+      <label class="champ">Block<select id="bChoix"></select></label>
+      <div class="pJeuTete" style="margin-top:12px">
+        <span class="pBadge" id="bPhase">—</span>
+        <span class="pPV"><b id="bTick">0</b> ticks</span>
+      </div>
+      <canvas id="bRaster" width="640" height="150" class="toile"></canvas>
+      <p class="note" style="margin-top:6px">Each column is one beat, each dot a neuron that fired.</p>
+      <div class="pcStats">
+        <span>≋ <b id="bG">—</b> Hz left</span>
+        <span>≋ <b id="bD">—</b> Hz right</span>
+        <span>⤳ <b id="bVirage">—</b> steering</span>
+        <span>⚡ <b id="bSpikes">—</b> spikes</span>
+        <span>◉ <b id="bActifs">—</b> firing</span>
+      </div>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Its wiring</p>
+      <p class="sous">Eight outgoing links per neuron, drawn from the address. The same block wires the
+        same way for everyone, and nothing is stored.</p>
+      <canvas id="bReseau" width="640" height="300" class="toile"></canvas>
+      <p class="note mono" id="bEmpreinte"></p>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Its job</p>
+      <p class="note" id="bMetier"></p>
+      <p class="note" id="bJamais"></p>
+    </div>
+  </section>
+
+  <!-- ══ LEARN ═══════════════════════════════════════════════════════════════════════════════
+       ⛔ LES BORNES LONGUES VIVENT ICI (Phil, 2026-09-12 : « ce genre d'info, la meme que dans un
+          onglet need to learn »). Ailleurs, une phrase courte et un lien : une explication de six
+          lignes sous un classement se fait sauter, et la borne qu elle portait avec elle.
+       ⛔ ET CETTE PAGE DIT AUSSI CE QUI N EXISTE PAS ENCORE. Un tutoriel qui decrit un parcours
+          complet alors que deux etapes manquent apprend a ne plus le croire. -->
+  <section class="volet" id="v-learn" aria-label="Learn">
+    <div class="carte">
+      <p class="titre">How this works, end to end</p>
+      <p class="sous">Five steps. What is built says how it is built; what is missing says so.</p>
+      <div class="etapes" id="lEtapes"></div>
+    </div>
+
+    <div class="carte">
+      <p class="titre">What “life” actually is</p>
+      <div class="schemaVie" id="lSchemaVie"></div>
+      <table class="regles">
+        <tr><td>Life =</td><td><b>price × supply</b>, both re-readable on chain. Nobody paints it.</td></tr>
+        <tr><td>It goes down</td><td>If the price falls, life falls with it. A big block can become a
+          small one overnight. Nobody refunds that.</td></tr>
+        <tr><td>⚠️ It is buyable</td><td>Measured 2026-09-09: <b>0.01 ETH moved a displayed market cap
+          by 2 346 ETH</b> — a lever of ×234 645, because supply is enormous. <b>A big number here is
+          not a big pile of money.</b></td></tr>
+        <tr><td>Unit</td><td>Measured in <b>ETH</b>, not dollars. We name the currency instead of
+          mixing two.</td></tr>
+        <tr><td>No market yet</td><td>A faded, smaller block has never been traded. That is <b>not</b>
+          the same as being worthless.</td></tr>
+      </table>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Why a rank is only a sample</p>
+      <p class="note" id="lBorneRang"></p>
+    </div>
+
+    <div class="carte">
+      <p class="titre">What this page never does</p>
+      <ul class="pmLignes" id="lJamais"></ul>
     </div>
   </section>
 
@@ -585,6 +780,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton" id="pEnvoyer" type="button">Send from this block</button>
         <button class="bouton sec" id="pPartager" type="button">Share profile</button>
         <button class="bouton sec" id="pMap" type="button">Show on map</button>
+        <!-- ⛔ RESERVE AUX BLOCKS ENDORMIS : un block qui a deja un marche n a rien a reveiller. -->
+        <a class="bouton" id="pReveiller" hidden style="grid-column:1/-1">Wake it — open its market ↗</a>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
       <p class="note" id="pNote"></p>
@@ -603,7 +800,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
 <nav class="nav" aria-label="Sections">
   <div class="navIn" role="tablist">
-    <button class="navB" role="tab" aria-selected="true"  data-volet="map"><b>◈</b>Blocks map</button>
+    <button class="navB" role="tab" aria-selected="true"  data-volet="map"><b>◈</b>Map</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain AI</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Social</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="mien"><b>★</b>My block</button>
@@ -612,7 +811,19 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
-import { listerCreations, creationsDe } from './index-blocks.js';
+import { listerCreations, creationsDe, FACTORY } from './index-blocks.js';
+/* ⛔ L ENCODEUR DE CREATION EST CELUI DE L AUTRE ECRAN, teste et deja utilise en vrai sur mainnet.
+ * En reecrire un ici donnerait deux encodages pour un seul geste — et celui qu on maintient le moins
+ * finirait par graver autre chose que ce qui est affiche. */
+import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI,
+  encodeBatchMint, adresseOuRefus } from './encodeur.js';
+/* ⛔ LE FRAIS FIXE, SOURCE UNIQUE : un test compare ces constantes a celles de `index.html`. */
+/* ⛔⛔ LE FRAIS EST EN USDC, ET C EST CE QUI L A RENDU HONNETE. En ETH, il fallait lire un prix sur
+ * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
+ * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
+ * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
+import { FEE_WALLET, fraisCreationUsd, phraseFrais, USDC_BASE, FRAIS_USDC_UNITES,
+  USDC_DECIMALES } from './frais-creation.js';
 /* ⛔⛔ LE VRAI DESSIN DE CREATION, celui que l app grave depuis le premier jour. Phil : « refais les
  * carres, et prends tes exemples de creation qui existaient deja ». Ma tete de chat est abandonnee :
  * elle etait une SECONDE identite pour un objet qui en avait deja une, et celle qui compte est celle
@@ -621,7 +832,7 @@ import { listerCreations, creationsDe } from './index-blocks.js';
  *    pour ca que cette map dessinait ses propres cubes. Il est maintenant dans `logo.js`, deplace
  *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
-import { apparenceDepuisAdresse } from './apparence.js';
+import { apparenceDepuisAdresse, ORBITES, FACETTES, MATIERES, ORNEMENTS, combinaisons } from './apparence.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -666,6 +877,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'map') setTimeout(replacerDansLaMap, 50);
   /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
   if (nom === 'mien') peindreClassement();
+  if (nom === 'brain') peindreChoixBrain();
+  /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
+  if (nom === 'creer') { majFraisEtRecap(); void lireSoldeUsdc(); }
 });
 
 /* ⛔ UNE SEULE TABLE POUR LE RESEAU : RPC, StateView et nom voyagent ENSEMBLE. Les separer
@@ -825,6 +1039,7 @@ function battre() {
     h.vy = Math.sin(angle) * vitesse;
   }
   battreProfil();
+  battreBrain();
 }
 function demarrerBattement() {
   if (battement) clearInterval(battement);
@@ -1192,6 +1407,8 @@ $('#pReseau').addEventListener('click', () => {
   jetonProfil++;
   profilEnLecture = false;
   $('#profil').hidden = true;
+  /* le frais et le recap parlent du reseau : ils changent avec lui */
+  majFraisEtRecap();
 });
 
 /* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
@@ -1509,6 +1726,10 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
  *    Il faut un index des evenements — c est le chantier du fil Social. */
 let jetonProfil = 0;
 /* vrai tant qu un profil se lit : la boucle des vies de la map lui cede le noeud */
+/* ⛔ CE DRAPEAU N EST PLUS RESERVE AU PROFIL : tout geste que l utilisateur ATTEND le leve, et la
+ * boucle des vies de la map attend son tour. Mesure du 2026-09-12 : « Check the address » rendait
+ * « over rate limit » parce que la map lisait 22 vies en meme temps — le noeud public refusait le
+ * seul appel que quelqu un regardait. */
 let profilEnLecture = false;
 /* ce que le profil ouvert a lu — « Show on map » pose le block avec, sans relire */
 let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil = null, soldeProfil = null;
@@ -1541,7 +1762,11 @@ function peindreClassement() {
       ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
         + ' with no readable market — unranked, which is not last.'
       : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.';
-  $('#rangBorne').textContent = cl.borne;
+  /* ⛔ LA BORNE COURTE ICI, L EXPLICATION DANS LEARN (Phil, 2026-09-12 : six lignes sous un
+   * classement se font sauter, et la borne part avec elles). Le texte long vit dans un seul endroit
+   * — le module — et Learn l affiche en entier. */
+  $('#rangBorne').innerHTML = 'A rank is a sample, and a market cap is not money in the pool. '
+    + '<button type="button" class="lienLearn">Why →</button>';
 }
 
 /* ⛔ LE METIER PARLE APRES LA LECTURE, pas avant : sinon il commenterait des chiffres qu il n a pas. */
@@ -1700,6 +1925,10 @@ async function lireProfil(adr, sym, perime) {
   $('#pNomLong').textContent = '';
   $('#pAdr').textContent = adr;
   $('#pExplorer').href = RESEAUX[CHAINE].explorateur + '/token/' + adr;
+  /* ⛔ « REVEILLER » UN BLOCK = LUI OUVRIR UN MARCHE, et c est une signature. Le chemin qui le fait
+   * vraiment est l ecran de lancement, deja eprouve sur mainnet : on y ENVOIE avec le block en lien,
+   * plutot que de recopier ici un parcours a six transactions qui toucherait de l argent reel. */
+  $('#pReveiller').href = './index.html?block=' + adr + '&chain=' + CHAINE;
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
   $('#pNote').textContent = 'reading the chain…';
   symProfil = sym || null; vieProfil = null; etatVieProfil = undefined;
@@ -1757,6 +1986,9 @@ async function lireProfil(adr, sym, perime) {
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
+  /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
+   * proposer de reveiller un block qu on n a pas su lire enverrait ouvrir une pool qui existe. */
+  $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
   noterVie(adr, vieProfil);
@@ -1846,11 +2078,459 @@ $('#pEnvoyer').addEventListener('click', () => {
   $('#sDest').focus();
 });
 
+/* ══ CREATE ══════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ CETTE PAGE PREPARE, LE WALLET SIGNE. Le calldata est construit par `encodeur.js` — le meme
+ *    qui a servi aux creations reelles — et part par `envoi.js`, qui verifie chaine ET compte.
+ * ⛔ LE FRAIS EST UN GESTE SEPARE ET FAIL-CLOSED : s il est refuse ou echoue, la creation n est PAS
+ *    envoyee. Creer d abord et rater le frais donnerait un block gratuit et un ecran qui ment.
+ * ⛔ LA SUPPLY EST FIXE ET SCELLEE : un milliard, 18 decimales, `updateSupplyCap` puis `batchMint`
+ *    du total. Personne ne peut en emettre plus ensuite — pas meme le createur. */
+const SUPPLY_FIXE = 1000000000n * 10n ** 18n;
+const DECIMALES_FIXES = 18;
+const CURSEURS = [
+  { cle: 'teinte', titre: 'Hue', min: 0, max: 360 },
+  { cle: 'accent', titre: 'Accent hue', min: 0, max: 360 },
+  { cle: 'division', titre: 'Division', min: 1, max: 5 },
+  { cle: 'eclats', titre: 'Shards', min: 0, max: 6 },
+  { cle: 'ecart', titre: 'Spread', min: 0, max: 4 },
+];
+const LISTES = [
+  { cle: 'orbite', titre: 'Orbit', valeurs: ORBITES },
+  { cle: 'facette', titre: 'Face', valeurs: FACETTES },
+  { cle: 'matiere', titre: 'Material', valeurs: MATIERES },
+  { cle: 'ornement', titre: 'Ornament', valeurs: ORNEMENTS },
+];
+let apparenceChoisie = {
+  teinte: 255, accent: 290, division: 3, eclats: 3, ecart: 2,
+  orbite: ORBITES[0], facette: FACETTES[0], matiere: MATIERES[0], ornement: ORNEMENTS[0],
+};
+
+function construireReglages() {
+  const boite = $('#cReglages');
+  boite.innerHTML = CURSEURS.map((c) => '<label class="reglage">' + enTexte(c.titre)
+    + ' <b id="v-' + c.cle + '">' + apparenceChoisie[c.cle] + '</b>'
+    + '<input type="range" data-cle="' + c.cle + '" min="' + c.min + '" max="' + c.max + '" value="'
+    + apparenceChoisie[c.cle] + '"></label>').join('')
+    + LISTES.map((l) => '<label class="reglage">' + enTexte(l.titre) + '<select data-cle="' + l.cle + '">'
+      + l.valeurs.map((v) => '<option' + (v === apparenceChoisie[l.cle] ? ' selected' : '') + '>'
+        + enTexte(v) + '</option>').join('') + '</select></label>').join('');
+  boite.addEventListener('input', (e) => {
+    const cle = e.target.getAttribute('data-cle');
+    if (!cle) return;
+    apparenceChoisie[cle] = e.target.type === 'range' ? Number(e.target.value) : e.target.value;
+    const sortie = $('#v-' + cle);
+    if (sortie) sortie.textContent = apparenceChoisie[cle];
+    peindreApercuCreation();
+  });
+  boite.addEventListener('change', () => peindreApercuCreation());
+}
+
+function peindreApercuCreation() {
+  const sym = String($('#cSym').value || 'T').toUpperCase();
+  $('#cArt').innerHTML = logoSvg(paramsLogoDepuisApparence(apparenceChoisie, sym));
+  /* l apercu collant porte le nom et le symbole en cours de frappe : on voit ce qu on fabrique */
+  $('#cApercuNom').textContent = String($('#cNom').value || '').trim() || 'Your block';
+  $('#cApercuSym').textContent = String($('#cSym').value || '').trim()
+    ? String($('#cSym').value).trim().toUpperCase() + ' · 1,000,000,000 sealed'
+    : 'no symbol yet';
+  /* ⛔ LE NOMBRE DE COMBINAISONS VIENT DU MODULE, pas d un chiffre tape ici : c est lui qui sait ce
+   * que le catalogue contient vraiment, et un test compare ce produit a des apparences reelles. */
+  $('#cCombinaisons').textContent = combinaisons().toLocaleString('en-US')
+    + ' possible faces. Two addresses can still land on the same one — we publish the number, not the word « unique ».';
+  majFraisEtRecap();
+}
+
+function hasardApparence() {
+  const d = (n) => Math.floor(Math.random() * n);
+  for (const c of CURSEURS) apparenceChoisie[c.cle] = c.min + d(c.max - c.min + 1);
+  for (const l of LISTES) apparenceChoisie[l.cle] = l.valeurs[d(l.valeurs.length)];
+  construireReglages();
+  peindreApercuCreation();
+}
+
+/**
+ * Les metadonnees gravees avec le block.
+ * ⛔ EN `data:` ET PAS EN IPFS, DELIBEREMENT : cette page ne peut rien epingler sur IPFS, et un lien
+ *    ipfs:// que personne n heberge serait une promesse vide gravee pour toujours.
+ * ⚠️ NON MESURE : si les explorateurs affichent une `data:` URI. On ne le sait pas, on ne le promet pas.
+ */
+function uriCreation() {
+  return 'data:application/json,' + encodeURIComponent(JSON.stringify({
+    name: String($('#cNom').value || '').trim(),
+    symbol: String($('#cSym').value || '').trim().toUpperCase(),
+    supply: SUPPLY_FIXE.toString(),
+    sealed: true,
+    face: apparenceChoisie,
+    flyBrain: !!$('#cCerveau').checked,
+  }));
+}
+
+function validerCreation() {
+  const nom = String($('#cNom').value || '').trim();
+  const sym = String($('#cSym').value || '').trim().toUpperCase();
+  const sel = String($('#cSel').value || '').trim();
+  const octets = (s) => new TextEncoder().encode(s).length;
+  if (!nom) return { ko: 'A block needs a name.' };
+  if (!sym) return { ko: 'A block needs a symbol.' };
+  /* ⛔ LA BORNE EST CELLE DE L ENCODEUR (32 octets), et elle compte des OCTETS, pas des lettres : un
+   * emoji en pese quatre. Laisser passer ferait lever l encodeur au moment de signer. */
+  if (octets(nom) > 32) return { ko: 'The name is over 32 bytes (accents and emoji count more).' };
+  if (octets(sym) > 32) return { ko: 'The symbol is over 32 bytes.' };
+  if (!sel) return { ko: 'Pick a salt — it is what fixes the address.' };
+  if (!compte) return { ko: 'Connect your wallet first: it is the one that signs, and it receives the supply.' };
+  return { nom, sym, sel };
+}
+
+function calldataCreation(v) {
+  const params = paramsAsset({ nom: v.nom, symbole: v.sym, admin: compte, decimales: DECIMALES_FIXES });
+  /* ⛔ L ORDRE EST CELUI DE L ECRAN QUI A DEJA CREE DE VRAIS BLOCKS : URI, plafond, puis frappe. */
+  const initCalls = [
+    encodeUpdateContractURI(uriCreation()),
+    encodeUpdateSupplyCap(SUPPLY_FIXE),
+    encodeBatchMint([compte], [SUPPLY_FIXE]),
+  ];
+  return encodeCreateB20({ variant: 0, saltTexte: v.sel, params, initCalls });
+}
+
+/* ⛔ LE SOLDE USDC EST LU, PAS SUPPOSE — et « pas lu » ne se dira jamais « pas assez ». */
+let soldeUsdc = null;
+
+async function lireSoldeUsdc(force = false) {
+  if (fraisCreationUsd(CHAINE) === 0 || !compte) { soldeUsdc = null; majFraisEtRecap(); return null; }
+  if (!force && soldeUsdc !== null) return soldeUsdc;
+  /* ⛔ LA MAP CEDE LE NOEUD pendant ce que l utilisateur attend. */
+  profilEnLecture = true;
+  try { soldeUsdc = (await lireJeton(USDC_BASE, compte)).solde; }
+  catch (e) { soldeUsdc = null; }
+  finally { profilEnLecture = false; }
+  majFraisEtRecap();
+  return soldeUsdc;
+}
+
+function majFraisEtRecap() {
+  const R = RESEAUX[CHAINE];
+  $('#cFrais').textContent = phraseFrais(CHAINE, R.nom, soldeUsdc);
+  const v = validerCreation();
+  const usd = fraisCreationUsd(CHAINE);
+  $('#cRecap').textContent = v.ko
+    ? v.ko
+    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed, all minted to you'
+      + (usd > 0 ? ', after a ' + usd + ' USDC fee' : '') + '.';
+  $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
+  /* ⛔⛔ SUR MAINNET, ON LE DIT AVANT, EN GRAND. Phil travaille sur testnet pour l instant : une
+   * creation reelle partie par habitude coute de l argent et grave un block pour toujours. */
+  $('#cReseauAvert').textContent = CHAINE === 8453
+    ? '⚠️ This is Base mainnet: the block is real, the fee is real, and a block cannot be undone. '
+      + 'Switch the network chip to Base Sepolia to practise for free.'
+    : 'Practice network — free, and nothing here is real money.';
+  $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
+}
+
+/**
+ * Un `eth_call` qui rend la reponse ENTIERE, erreur comprise — c est ainsi que la factory nomme son
+ * refus (`TokenAlreadyExists(address)` porte l adresse existante).
+ * ⛔ MEME PATIENCE QUE `rpc()` SUR UN 429. Ma premiere version faisait son propre `fetch` sans
+ *    reessayer : le bouton « Check the address » rendait « over rate limit » — une limite de debit
+ *    affichee comme un refus de la chaine. Deux causes opposees, un seul message.
+ */
+async function appelBrut(tx) {
+  for (let essai = 0; ; essai++) {
+    const r = await fetch(RESEAUX[CHAINE].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: 'eth_call', params: [tx, 'latest'] }) });
+    if (r.status === 429 && essai < ESSAIS_429) { await dormir(700 * 2 ** essai); continue; }
+    if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const debit = j && j.error && /rate limit|too many requests/i.test(String(j.error.message));
+    if (debit && essai < ESSAIS_429) { await dormir(700 * 2 ** essai); continue; }
+    return j;
+  }
+}
+
+async function verifierAdresseCreation() {
+  const v = validerCreation();
+  const e = $('#cEtat');
+  if (v.ko) { e.className = 'note wKo'; e.textContent = v.ko; return null; }
+  e.className = 'note';
+  e.textContent = 'Asking the factory…';
+  /* ⛔ LA MAP CEDE LE NOEUD PENDANT CE TEMPS : c est le seul appel que quelqu un attend. */
+  profilEnLecture = true;
+  try {
+    const r = await adresseOuRefus(appelBrut, compte, calldataCreation(v));
+    if (r.refus) { e.className = 'note wKo'; e.textContent = r.refus; return null; }
+    /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY, jamais calculee ici. */
+    e.className = 'note wOk';
+    e.textContent = 'This salt gives the address ' + r.adresse + ' — nothing has been created yet.';
+    return r.adresse;
+  } catch (err) {
+    e.className = 'note wKo';
+    e.textContent = 'Could not ask the chain: ' + String((err && err.message) || err);
+    return null;
+  } finally {
+    profilEnLecture = false;
+  }
+}
+
+let creationEnCours = false;
+async function creerBlock() {
+  if (creationEnCours) return;
+  const v = validerCreation();
+  const e = $('#cEtat');
+  if (v.ko) { e.className = 'note wKo'; e.textContent = v.ko; return; }
+  /* ⛔⛔ SUR UNE CHAINE PAYANTE, LE SOLDE USDC EST LU AVANT TOUT. Lancer la creation puis decouvrir
+   * que le frais ne passe pas ferait payer le gas pour rien. Et un solde ILLISIBLE arrete aussi : on
+   * ne lance pas deux signatures en esperant. */
+  const usd = fraisCreationUsd(CHAINE);
+  let creationEnCoursPayante = false;
+  if (usd > 0) {
+    e.className = 'note';
+    e.textContent = 'Checking your USDC balance…';
+    const s = await lireSoldeUsdc(true);
+    if (s === null) {
+      e.className = 'note wKo';
+      e.textContent = 'Could not read your USDC balance, so nothing was started. That is about the network, not about you.';
+      return;
+    }
+    if (s < FRAIS_USDC_UNITES) {
+      e.className = 'note wKo';
+      e.textContent = 'The fee is ' + usd + ' USDC and this account holds '
+        + formaterUnites(s, USDC_DECIMALES) + ' USDC on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+      return;
+    }
+    creationEnCoursPayante = true;
+  }
+  creationEnCours = true;
+  $('#cCreer').disabled = true;
+  try {
+    if (creationEnCoursPayante) {
+      e.className = 'note';
+      e.textContent = 'Signature 1 of 2 — the ' + usd + ' USDC fee. Check it in your wallet.';
+      /* ⛔ UN TRANSFERT ERC-20, PAS DE L ETH : le calldata est construit par `envoi.js`, le meme
+       * encodeur teste que le bouton Send du wallet. */
+      const rf = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+        to: USDC_BASE, data: encodeTransfer(FEE_WALLET, FRAIS_USDC_UNITES), value: '0x0' });
+      /* ⛔ FAIL-CLOSED : sans frais confirme, on ne cree pas. */
+      if (rf.etat !== 'CONFIRME') {
+        e.className = 'note wKo';
+        e.textContent = 'The fee did not go through (' + rf.etat.toLowerCase().replace(/_/g, ' ')
+          + '), so nothing was created. ' + (rf.pourquoi || '');
+        return;
+      }
+    }
+    e.className = 'note';
+    e.textContent = creationEnCoursPayante ? 'Fee confirmed. Signature 2 of 2 — the creation.'
+      : 'One signature — the creation. Check it in your wallet.';
+    const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: FACTORY, data: calldataCreation(v) });
+    const lien = rc.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rc.hash)
+      + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+    if (rc.etat === 'CONFIRME') {
+      e.className = 'note wOk';
+      e.innerHTML = v.sym + ' exists on ' + enTexte(RESEAUX[CHAINE].nom) + '.' + lien;
+      /* la map le montrera au prochain chargement : on ne fabrique pas un block a l ecran */
+      void listerMesBlocks();
+    } else {
+      e.className = 'note wKo';
+      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + lien;
+    }
+  } finally {
+    creationEnCours = false;
+    $('#cCreer').disabled = false;
+  }
+}
+
+/* ══ BRAIN AI ════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ON DESSINE CE QUI EST LU, PAS UNE ANIMATION. Le raster utilise les INDICES des neurones qui ont
+ *    tire ; sans eux, ce serait un joli bruit qui ressemble a une mesure. */
+let brainAdr = null, brainEtat = null, brainHisto = [];
+const HISTO_MAX = 120;
+
+function peindreChoixBrain() {
+  const s = $('#bChoix');
+  const avant = s.value;
+  const options = habitants.map((h) => ({ adr: h.adr, sym: h.sym }));
+  if (brainAdr && !options.some((o) => o.adr === brainAdr)) options.unshift({ adr: brainAdr, sym: symProfil });
+  s.innerHTML = options.map((o) => '<option value="' + enTexte(o.adr) + '">'
+    + enTexte(String(o.sym || '?').slice(0, 14)) + ' · ' + enTexte(o.adr.slice(0, 10)) + '…</option>').join('');
+  if (options.some((o) => o.adr === avant)) s.value = avant;
+  if (!brainAdr && options.length) choisirBrain(options[0].adr);
+}
+
+function choisirBrain(adr) {
+  brainAdr = adr;
+  brainHisto = [];
+  try { brainEtat = cerveauInitial(adr); } catch (e) { brainEtat = null; }
+  dessinerReseau();
+  let m = null;
+  try { m = metierDe(adr); } catch (e) { /* adresse invalide : rien a dire */ }
+  $('#bMetier').textContent = m ? m.titre + ' — ' + m.fait + '.' : '';
+  $('#bJamais').textContent = m ? 'It ' + m.jamais + '.' : '';
+}
+
+function battreBrain() {
+  if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
+  const h = habitants.find((x) => x.adr === brainAdr);
+  const r = cerveauPas(brainEtat, { vie: h ? h.vie : null, vieAvant: h ? h.vieAvant : null, gm: 0 });
+  brainEtat = r.etat;
+  brainHisto.push(r.vu);
+  if (brainHisto.length > HISTO_MAX) brainHisto.shift();
+  dessinerRaster();
+  $('#bPhase').textContent = r.vu.phase.toLowerCase();
+  $('#bTick').textContent = r.vu.tick;
+  $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
+  $('#bD').textContent = r.vu.droite_hz.toFixed(1);
+  $('#bVirage').textContent = r.vu.virage.toFixed(3);
+  $('#bSpikes').textContent = r.vu.spikes;
+  $('#bActifs').textContent = r.vu.actifs;
+  $('#bEmpreinte').textContent = 'input ' + r.vu.entree.slice(0, 26) + '… · replay it and you get the same beat';
+}
+
+function dessinerRaster() {
+  const c = $('#bRaster'), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  const larg = c.width / HISTO_MAX;
+  for (let i = 0; i < brainHisto.length; i++) {
+    const v = brainHisto[i];
+    ctx.fillStyle = 'hsl(255 80% 72%)';
+    for (const n of v.indices) {
+      ctx.fillRect(i * larg, (n / 128) * c.height, Math.max(1.5, larg - 0.5), 2);
+    }
+  }
+}
+
+function dessinerReseau() {
+  const c = $('#bReseau'), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (!brainEtat) return;
+  const liens = brainEtat.c.liens;
+  const cx = c.width / 2, cy = c.height / 2, r = Math.min(cx, cy) - 16;
+  const pos = liens.map((_, i) => {
+    const a = (i / liens.length) * Math.PI * 2;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  });
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < liens.length; i++) {
+    for (const l of liens[i]) {
+      /* ⛔ LE SIGNE DU POIDS SE VOIT : l inhibition est ce qui empeche tout le reseau de tirer
+       * ensemble, la cacher donnerait a croire a un reseau qui ne fait qu exciter. */
+      ctx.strokeStyle = l.poids >= 0 ? 'hsl(255 70% 70% / .18)' : 'hsl(38 80% 65% / .14)';
+      ctx.beginPath();
+      ctx.moveTo(pos[i][0], pos[i][1]);
+      ctx.lineTo(pos[l.vers][0], pos[l.vers][1]);
+      ctx.stroke();
+    }
+  }
+  for (const [x, y] of pos) {
+    ctx.fillStyle = 'hsl(255 60% 80%)';
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ══ LEARN ═══════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ CETTE LISTE EST UN AUDIT, PAS UNE BROCHURE. Chaque etape porte son etat REEL — fait, partiel,
+ *    absent — et je le mets a jour quand le code change, pas quand ca arrange. Un tutoriel qui
+ *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
+const ETAPES = [
+  { t: 'Create a block', etat: 'ok', e: 'Built',
+    d: 'Name, symbol, salt and face. One billion units, sealed at birth. The fee is a separate, visible transfer; if it fails, nothing is created. Your wallet signs — this page never holds a key.' },
+  { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
+    d: 'Its size is its market cap, read from the chain. Its brain moves it. A block with no market is paler and smaller — never called worthless.' },
+  { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
+    d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
+  { t: 'Send a GM — a real fragment of your block', etat: 'partiel', e: 'Partly',
+    d: 'A GM is a real transfer, so it uses the same Send path. What is missing is the one-tap button on the map card: today you pick the block in Wallet and send it yourself.' },
+  { t: 'Messages between blocks, inside the transaction', etat: 'absent', e: 'Missing',
+    d: 'Nothing carries messages on chain here yet. A transfer can carry data, but no screen writes or reads it — so the app does not pretend it can.' },
+  { t: 'Pair your block with another token at launch', etat: 'absent', e: 'Missing',
+    d: 'Pairing is the pool: measured on three OpenLaunch launches, the pair is simply the quote currency. The old screen opens pools; this one does not yet.' },
+  { t: 'See what people bought, and at what price', etat: 'partiel', e: 'Engine only',
+    d: 'The reader exists and is tested: Swap logs decoded, buyer taken from the transaction and not from the event. The Social screen is not built.' },
+];
+
+function peindreLearn() {
+  $('#lEtapes').innerHTML = ETAPES.map((s, i) => '<div class="etape"><div class="etapeIc">'
+    + iconeEtape(i) + '</div><div style="min-width:0"><p class="etapeT">' + enTexte(s.t)
+    + '<span class="etapeEtat ' + s.etat + '">' + enTexte(s.e) + '</span></p>'
+    + '<p class="etapeD">' + enTexte(s.d) + '</p></div></div>').join('');
+  /* ⛔ LA BORNE DU CLASSEMENT VIENT DU MODULE : la recopier ici la ferait diverger le jour ou elle change. */
+  $('#lBorneRang').textContent = classer([]).borne;
+  $('#lJamais').innerHTML = [
+    'It never holds a key, and never asks for one.',
+    'It never sends anything by itself: every transaction is shown by your wallet and signed by you.',
+    'It never shows a number it did not read — « not read » is written where a zero would lie.',
+    'It never ranks blocks it could not read, and never calls an unranked block last.',
+    'Its brains never place an order: they read, they propose, you sign.',
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+}
+
+/** Une petite figure par etape, dessinee ici : aucune image a charger, aucune promesse de serveur. */
+function iconeEtape(i) {
+  const c = 'hsl(255 70% 72%)', f = 'hsl(263 40% 12%)';
+  const cadre = (dedans) => '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">'
+    + '<rect width="48" height="48" fill="' + f + '"/>' + dedans + '</svg>';
+  return [
+    cadre('<rect x="14" y="14" width="20" height="20" rx="4" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M24 18v12M18 24h12" stroke="' + c + '" stroke-width="2"/>'),
+    cadre('<rect x="10" y="10" width="10" height="10" rx="2" fill="' + c + '" opacity=".5"/><rect x="26" y="20" width="14" height="14" rx="3" fill="' + c + '"/><rect x="12" y="28" width="7" height="7" rx="2" fill="' + c + '" opacity=".35"/>'),
+    cadre('<rect x="10" y="16" width="28" height="18" rx="4" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M10 22h28" stroke="' + c + '" stroke-width="2"/><circle cx="32" cy="28" r="2.5" fill="' + c + '"/>'),
+    cadre('<circle cx="24" cy="24" r="10" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M18 24h12M24 18l6 6-6 6" stroke="' + c + '" stroke-width="2" fill="none"/>'),
+    cadre('<rect x="10" y="14" width="28" height="16" rx="4" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M16 34l6-4h12" stroke="' + c + '" stroke-width="2" fill="none"/>'),
+    cadre('<circle cx="18" cy="24" r="7" fill="none" stroke="' + c + '" stroke-width="2"/><circle cx="30" cy="24" r="7" fill="none" stroke="' + c + '" stroke-width="2"/>'),
+    cadre('<path d="M10 32l8-8 6 5 8-11 6 6" fill="none" stroke="' + c + '" stroke-width="2"/><circle cx="38" cy="24" r="2.5" fill="' + c + '"/>'),
+  ][i] || cadre('');
+}
+
+/** ⛔ Le schema de « life » : une figure, pas un paragraphe de plus. */
+function peindreSchemaVie() {
+  const c = 'hsl(255 70% 72%)', d = 'hsl(258 30% 70%)';
+  $('#lSchemaVie').innerHTML = '<svg viewBox="0 0 320 78" xmlns="http://www.w3.org/2000/svg">'
+    + '<text x="0" y="20" fill="' + c + '" font-size="13" font-weight="700">price</text>'
+    + '<text x="52" y="20" fill="' + d + '" font-size="13">×</text>'
+    + '<text x="68" y="20" fill="' + c + '" font-size="13" font-weight="700">supply</text>'
+    + '<text x="132" y="20" fill="' + d + '" font-size="13">=</text>'
+    + '<text x="148" y="20" fill="' + c + '" font-size="13" font-weight="700">life</text>'
+    + '<rect x="0" y="32" width="60" height="10" rx="5" fill="' + c + '" opacity=".8"/>'
+    + '<rect x="68" y="32" width="56" height="10" rx="5" fill="' + c + '" opacity=".4"/>'
+    + '<rect x="148" y="32" width="110" height="10" rx="5" fill="' + c + '"/>'
+    + '<text x="0" y="64" fill="' + d + '" font-size="11">both re-readable on chain · the price moves, so life moves</text>'
+    + '</svg>';
+}
+
 /* ⛔ UN LIEN MAL FORME NE S OUVRE PAS ET NE SE CORRIGE PAS. Une chaine inconnue garde le reseau par
  * defaut ; une adresse invalide n ouvre rien. */
 const paramsLien = new URLSearchParams(location.search);
 const chaineLien = Number(paramsLien.get('chain'));
 if (RESEAUX[chaineLien]) CHAINE = chaineLien;
+/* ── Create ─────────────────────────────────────────────────────────────────────────────────── */
+construireReglages();
+peindreApercuCreation();
+$('#cHasard').addEventListener('click', hasardApparence);
+$('#cSym').addEventListener('input', peindreApercuCreation);
+$('#cNom').addEventListener('input', peindreApercuCreation);
+$('#cSel').addEventListener('input', majFraisEtRecap);
+$('#cCerveau').addEventListener('change', majFraisEtRecap);
+$('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
+$('#cCreer').addEventListener('click', () => void creerBlock());
+
+/* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */
+$('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
+
+/* ── Learn ──────────────────────────────────────────────────────────────────────────────────── */
+peindreLearn();
+peindreSchemaVie();
+/* ⛔ LEARN N EST PAS DANS LA BARRE : on l ouvre depuis la tete, ou depuis n importe quelle borne
+ * courte. Aucun onglet du bas n est « selectionne » pendant ce temps — mentir sur l onglet actif
+ * ferait croire a un bug au retour. */
+function ouvrirLearn() {
+  for (const x of document.querySelectorAll('.navB')) x.setAttribute('aria-selected', 'false');
+  for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-learn');
+  window.scrollTo({ top: 0 });
+}
+$('#pLearn').addEventListener('click', ouvrirLearn);
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.classList && e.target.classList.contains('lienLearn')) ouvrirLearn();
+});
+
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
 charger();
 demarrerBattement();

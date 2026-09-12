@@ -175,6 +175,10 @@ export function pas(etat, faits = {}) {
       vitesse,
       spikes,
       actifs: actifs.length,
+      /* ⛔ LES INDICES, PAS SEULEMENT LE COMPTE. Un ecran qui dessine « 12 neurones ont tire » sans
+       * savoir LESQUELS dessinerait douze points au hasard — une animation qui a l air d une mesure.
+       * Avec les indices, le trace est la lecture elle-meme. */
+      indices: actifs,
       phase,
       /* ⛔ L EMPREINTE DE L ENTREE VOYAGE AVEC LA SORTIE. C est ce qui rend une simulation
        * verifiable au lieu de decorative : deux personnes peuvent rejouer le meme pas. */
