@@ -300,6 +300,7 @@ body{background:var(--fond);
 /* ══ BRAIN AI ══ */
 .toile{display:block;width:100%;height:auto;margin-top:10px;background:var(--creux);
   border:1px solid var(--ligne);border-radius:var(--rs)}
+.toileRonde{max-width:340px;margin-left:auto;margin-right:auto}
 /* ══ LEARN ══ */
 .etapes{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .etape{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--ligne);padding-top:10px}
@@ -313,6 +314,16 @@ body{background:var(--fond);
 .etapeEtat.ok{color:var(--vif);border-color:var(--vif)}
 .etapeEtat.partiel{color:var(--tiede);border-color:var(--tiede)}
 .etapeEtat.absent{color:var(--dur);border-color:var(--dur)}
+/* ══ SOCIAL ══ */
+.fil{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.filL{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--ligne)}
+.filArt{width:32px;height:35px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux)}
+.filArt svg{display:block;width:100%;height:100%}
+.filT{font-size:13px;margin:0;line-height:1.45;overflow-wrap:anywhere}
+.filM{margin:5px 0 0;font-size:13px;color:var(--texte);background:var(--fond2);border:1px solid var(--ligne);
+  border-radius:var(--rs);padding:7px 10px;overflow-wrap:anywhere}
+.filS{font-size:11.5px;color:var(--doux);margin:3px 0 0}
+.filS a{color:var(--accent2)}
 .schemaVie{margin:6px 0 10px}
 .schemaVie svg{display:block;width:100%;height:auto}
 .pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
@@ -521,6 +532,19 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         nothing — see Learn.</p>
     </div>
 
+    <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
+         creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
+         elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
+    <div class="carte">
+      <p class="titre">Pair it with</p>
+      <p class="sous">The currency its market will be priced in: ETH, USDC, a Coinbase tokenized
+        stock, or any token you choose.</p>
+      <label class="champ">Pair<select id="cPaire"></select></label>
+      <label class="champ" id="cPaireAutreRang" hidden>Token address<input id="cPaireAutre"
+        placeholder="0x… the whole address" autocomplete="off" spellcheck="false"></label>
+      <p class="note" id="cPaireNote"></p>
+    </div>
+
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
@@ -562,7 +586,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">Its wiring</p>
       <p class="sous">Eight outgoing links per neuron, drawn from the address. The same block wires the
         same way for everyone, and nothing is stored.</p>
-      <canvas id="bReseau" width="640" height="300" class="toile"></canvas>
+      <!-- ⛔ CARRE ET BORNE EN HAUTEUR : un cercle dans une toile 640x300 debordait sur un grand
+           ecran, et on n en voyait que la moitie. -->
+      <canvas id="bReseau" width="520" height="520" class="toile toileRonde"></canvas>
       <p class="note mono" id="bEmpreinte"></p>
     </div>
 
@@ -658,6 +684,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         spellcheck="false"></label>
       <label class="champ">Amount<input id="sMontant" inputmode="decimal" placeholder="0.0"
         autocomplete="off"></label>
+      <!-- ⛔ LE MESSAGE VOYAGE DANS LA TRANSACTION, et il est PUBLIC POUR TOUJOURS. C est dit ici,
+           pas dans une page d aide : c est au moment d ecrire que ca compte. -->
+      <label class="champ" id="sMessageRang">Message — optional, rides inside the transaction
+        <input id="sMessage" maxlength="256" placeholder="gm 👋" autocomplete="off"></label>
+      <p class="note" id="sMessageNote"></p>
       <label class="wConsent" id="sConsentRow"><input type="checkbox" id="sConsent"> This is real money
         on Base mainnet, and a send cannot be undone.</label>
       <p class="note" id="sRecap"></p>
@@ -694,10 +725,22 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            serait invente). Farcaster = accountAssociation, signature de custodie que seul Phil peut
            faire. -->
     <div class="carte">
-      <p class="titre">Social</p>
-      <p class="sous">See which blocks people buy, and at what price — read from the chain, so every
-        post is a real purchase.</p>
-      <p class="note">Coming next.</p>
+      <p class="titre">The feed</p>
+      <p class="sous">Every line is a transfer that really happened, read from the chain. A message
+        rides inside the transaction itself — public and permanent, like the transfer.</p>
+      <div class="pActions" style="grid-template-columns:1fr 1fr">
+        <button class="bouton sec" id="sfCharger" type="button">Read the chain</button>
+        <button class="bouton sec" id="sfPlus" type="button" disabled>Read further back</button>
+      </div>
+      <ul class="fil" id="sfFil"></ul>
+      <p class="note" id="sfNote"></p>
+    </div>
+
+    <div class="carte">
+      <p class="titre">Who bought, and at what price</p>
+      <p class="sous">Purchases come from Uniswap v4 swap logs: the buyer is taken from the
+        transaction, never from the event — an event can name anyone.</p>
+      <p class="note" id="sfAchats"></p>
     </div>
   </section>
 
@@ -806,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
-import { listerCreations, creationsDe, FACTORY } from './index-blocks.js';
+import { listerCreations, creationsDe, FACTORY, listerTransfers } from './index-blocks.js';
 /* ⛔ L ENCODEUR DE CREATION EST CELUI DE L AUTRE ECRAN, teste et deja utilise en vrai sur mainnet.
  * En reecrire un ici donnerait deux encodages pour un seul geste — et celui qu on maintient le moins
  * finirait par graver autre chose que ce qui est affiche. */
@@ -828,6 +871,9 @@ import { FEE_WALLET, fraisCreationUsd, phraseFrais, USDC_BASE, FRAIS_USDC_UNITES
  *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
 import { apparenceDepuisAdresse, ORBITES, FACETTES, MATIERES, ORNEMENTS, combinaisons } from './apparence.js';
+/* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
+ * mais jamais blanchi. */
+import { pairesProposees, qualifierPaire, etiquettePaire } from './paires.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -839,6 +885,8 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
  * verifie chaine ET compte, estime, fixe une limite de gas explicite et relit le recu ; la regle 8
  * surveille qu aucun envoi ne s en passe. Le wallet de l utilisateur signe — cette page, jamais. */
 import { encodeTransfer, envoyerDepuisWallet } from './envoi.js';
+/* ⛔ LE MESSAGE VOYAGE DANS LE CALLDATA DU TRANSFERT : public, definitif, relisible sans nous. */
+import { encodeTransferAvecMemo, lireMemo, validerMemo, AVERTISSEMENT as AVERT_MEMO } from './messages.js';
 import { montantHumain, formaterUnites } from './montants.js';
 import { selecteur } from './pool.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
@@ -1425,7 +1473,8 @@ $('#pReseau').addEventListener('click', () => {
   jetonProfil++;
   profilEnLecture = false;
   $('#profil').hidden = true;
-  /* le frais et le recap parlent du reseau : ils changent avec lui */
+  /* le frais, le recap ET les paires parlent du reseau : les actions Coinbase n existent que sur mainnet */
+  peindrePaires();
   majFraisEtRecap();
 });
 
@@ -1644,9 +1693,18 @@ function preparerEnvoi() {
   if (m.etat !== 'OK') return { ko: m.pourquoi };
   if (m.valeur === 0n) return { ko: 'Zero is not a send.' };
   if (m.valeur > a.solde) return { ko: 'More than your balance (' + formaterUnites(a.solde, a.decimales) + ' ' + a.nom + ').' };
-  const tx = a.adr ? { to: a.adr, data: encodeTransfer(dest, m.valeur), value: '0x0' }
+  /* ⛔ LE MESSAGE EST VALIDE AVANT L ENCODAGE, et un refus arrete l envoi : on n envoie jamais un
+   * texte tronque que personne n a ecrit. */
+  const memo = validerMemo($('#sMessage').value);
+  if (memo.etat === 'REFUSE') return { ko: memo.pourquoi };
+  /* ⛔ UN MESSAGE NE VOYAGE QU AVEC UN JETON. Sur un envoi d ETH, les octets partiraient vers une
+   * adresse qui n est pas un contrat : certains wallets refusent, d autres avertissent, et rien ne
+   * relit ce message dans cette app. Mieux vaut le dire que le laisser se perdre. */
+  if (memo.etat === 'OK' && !a.adr) return { ko: 'Messages ride on block and token transfers — not on ETH sends.' };
+  const texte = memo.etat === 'OK' ? memo.texte : '';
+  const tx = a.adr ? { to: a.adr, data: encodeTransferAvecMemo(dest, m.valeur, texte), value: '0x0' }
     : { to: dest, data: '0x', value: '0x' + m.valeur.toString(16) };
-  return { a, dest, valeur: m.valeur, tx };
+  return { a, dest, valeur: m.valeur, tx, memo: texte || null };
 }
 
 function majRecap() {
@@ -1661,7 +1719,8 @@ function majRecap() {
   r.className = 'note';
   r.textContent = 'You send ' + formaterUnites(p.valeur, p.a.decimales) + ' ' + p.a.nom + ' to '
     + court(p.dest) + ' on ' + RESEAUX[CHAINE].nom + '. Your wallet shows the same before you sign — '
-    + 'check the whole address there.' + (p.a.adr ? ' The network fee is paid in ETH.' : ' The network fee comes on top.');
+    + 'check the whole address there.' + (p.a.adr ? ' The network fee is paid in ETH.' : ' The network fee comes on top.')
+    + (p.memo ? ' With the message « ' + p.memo + ' » — public, for good.' : '');
   /* ⛔ SUR MAINNET, LE CONSENTEMENT EST UN GESTE, PAS UN DEFAUT. La case n est jamais pre-cochee. */
   $('#bEnvoyer').disabled = envoiEnCours || (CHAINE === 8453 && !$('#sConsent').checked);
   return p;
@@ -1718,7 +1777,11 @@ $('#bCopier').addEventListener('click', copier);
 $('#bCopier2').addEventListener('click', copier);
 $('#bSend').addEventListener('click', () => basculer('#wSendCarte'));
 $('#bReceive').addEventListener('click', () => basculer('#wReceive'));
-for (const id of ['#sDest', '#sMontant']) $(id).addEventListener('input', majRecap);
+for (const id of ['#sDest', '#sMontant', '#sMessage']) $(id).addEventListener('input', majRecap);
+/* ⛔ L AVERTISSEMENT EST AFFICHE SOUS LE CHAMP, en permanence, et il dit aussi ce qui n est PAS
+ * prouve : aucun message n a encore ete envoye sur la chaine par cette app. */
+$('#sMessageNote').textContent = AVERT_MEMO + ' Not yet exercised on chain by this app — the format '
+  + 'follows the ABI, and the first real send will be the proof.';
 for (const id of ['#sActif', '#sConsent']) $(id).addEventListener('change', majRecap);
 $('#bEnvoyer').addEventListener('click', envoyer);
 
@@ -2085,6 +2148,112 @@ $('#pEnvoyer').addEventListener('click', () => {
   ouvrirEnvoiPour($('#profil').dataset.block, (t) => { $('#pNote').textContent = t; });
 });
 
+/* ══ SOCIAL — LE FIL ═════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ CHAQUE LIGNE EST UN TRANSFERT QUI A EU LIEU. Rien n est ecrit ici par nous : on lit les logs
+ *    `Transfer` des blocks, puis la TRANSACTION de chacun pour son expediteur reel et son message.
+ * ⛔ L EXPEDITEUR AFFICHE EST `tx.from`, PAS LE `from` DE L EVENEMENT. Un evenement Transfer est
+ *    emis par le contrat et peut nommer n importe qui ; la transaction, elle, a ete SIGNEE.
+ * ⛔ PAR LOTS, SUR DEMANDE. Lire les transferts de 22 blocks d un coup, puis une transaction par
+ *    ligne, saturerait le noeud public — et la moitie du fil s afficherait « illisible » a cause de
+ *    nous. Six blocks par lecture, un bouton pour aller plus loin. */
+const FIL_LOT = 6;
+const FIL_TX_MAX = 24;
+let filLignes = [], filProchain = 0, filEnCours = false, filRatees = 0;
+
+async function chargerFil(suite = false) {
+  if (filEnCours) return;
+  if (!habitants.length) {
+    $('#sfNote').textContent = 'The map has not finished reading the chain yet — open it first, then come back.';
+    return;
+  }
+  if (!suite) { filLignes = []; filProchain = 0; filRatees = 0; }
+  filEnCours = true;
+  $('#sfCharger').disabled = true;
+  $('#sfPlus').disabled = true;
+  profilEnLecture = true;
+  try {
+    const lot = habitants.slice(filProchain, filProchain + FIL_LOT);
+    filProchain += lot.length;
+    $('#sfNote').textContent = 'Reading transfers of ' + lot.length + ' block(s)…';
+    const nouveaux = [];
+    for (const h of lot) {
+      await dormir(260);
+      let r;
+      try { r = await listerTransfers({ rpc, token: h.adr }); }
+      catch (e) { filRatees++; continue; }
+      filRatees += (r.fenetresRatees || []).length;
+      for (const t of r.transfers || []) nouveaux.push({ ...t, sym: h.sym });
+    }
+    nouveaux.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0));
+    /* ⛔ LA TRANSACTION EST RELUE pour chaque ligne gardee : c est elle qui dit qui a signe, et elle
+     * seule qui porte le message. Bornee a FIL_TX_MAX pour ne pas vider le noeud. */
+    for (const t of nouveaux.slice(0, FIL_TX_MAX)) {
+      await dormir(220);
+      let tx = null;
+      try { tx = t.tx ? await rpc('eth_getTransactionByHash', [t.tx]) : null; } catch (e) { tx = null; }
+      filLignes.push({ ...t, signataire: tx ? tx.from : null, memo: tx ? lireMemo(tx.input) : null });
+    }
+    peindreFil(nouveaux.length);
+  } finally {
+    filEnCours = false;
+    profilEnLecture = false;
+    $('#sfCharger').disabled = false;
+    $('#sfPlus').disabled = filProchain >= habitants.length;
+  }
+}
+
+function peindreFil(vusCeLot) {
+  const zero = '0x0000000000000000000000000000000000000000';
+  $('#sfFil').innerHTML = filLignes.map((l) => {
+    const d = Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?';
+    /* ⛔ UNE FRAPPE N EST PAS UN ENVOI : `from = 0x0` veut dire « cree », pas « envoye par zero ». */
+    /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-12) : j affichais le SIGNATAIRE comme expediteur, puis
+     * « signed by » le meme — ce qui CACHAIT l adresse d ou les jetons sont vraiment partis (souvent
+     * une pool ou un router). Les jetons quittent le `from` de l evenement ; la transaction, elle, a
+     * ete signee par quelqu un, parfois quelqu un d autre. Les deux faits s affichent, chacun a sa
+     * place. */
+    const quoi = l.from === zero ? 'minted to ' + court(l.to)
+      : court(l.from) + ' → ' + court(l.to);
+    const signe = l.signataire && l.from !== zero && l.signataire.toLowerCase() !== l.from.toLowerCase()
+      ? ' · signed by ' + court(l.signataire) : '';
+    const msg = !l.memo ? '<p class="filS">transaction not read — sender and message unknown</p>'
+      : l.memo.etat === 'LU' ? '<p class="filM">« ' + enTexte(l.memo.texte) + ' »</p>'
+        : l.memo.etat === 'ILLISIBLE' ? '<p class="filS">extra bytes that are not readable text</p>' : '';
+    const lien = l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
+      + '" target="_blank" rel="noopener">tx</a>' : '';
+    return '<li class="filL"><div class="filArt">' + dessin(l.token, l.sym) + '</div><div style="min-width:0;flex:1">'
+      + '<p class="filT"><b>' + enTexte(String(l.sym || '?').slice(0, 14)) + '</b> · ' + enTexte(quoi) + enTexte(signe) + '</p>'
+      + msg + '<p class="filS">block ' + d + lien + '</p></div></li>';
+  }).join('');
+  const avecMsg = filLignes.filter((l) => l.memo && l.memo.etat === 'LU').length;
+  $('#sfNote').textContent = filLignes.length
+    ? filLignes.length + ' transfer(s) shown from ' + filProchain + ' of ' + habitants.length + ' blocks, '
+      + avecMsg + ' with a message · over the last 2,000 chain blocks'
+      + (filRatees ? ' · ⚠️ ' + filRatees + ' read(s) refused by the node — the feed is incomplete, not quiet' : '')
+    : 'No transfer in the last 2,000 chain blocks for these ' + filProchain + ' blocks'
+      + (filRatees ? ' — but ' + filRatees + ' read(s) were refused, so this is not proof of silence.' : '.');
+  peindreAchats();
+}
+
+/* ⛔ LES ACHATS NE S AFFICHENT QUE S IL Y A UN MARCHE. Sans pool, il n y a pas d achat possible — et
+ * le dire vaut mieux qu une liste vide qui laisserait croire que personne n achete. */
+function peindreAchats() {
+  const avecMarche = habitants.filter((h) => h.etatVie === 'LUE').length;
+  const lus = habitants.filter((h) => h.etatVie).length;
+  $('#sfAchats').textContent = avecMarche === 0
+    ? (lus === 0 ? 'No block market has been read yet — the map is still reading.'
+      : 'None of the ' + lus + ' block' + (lus > 1 ? 's' : '') + ' whose market we read has a pool yet, so '
+        + 'there is no purchase to show. The purchase reader is built and tested; the first block with a '
+        + 'market will fill this.')
+    /* ⛔⛔ CETTE PHRASE MENTAIT : elle disait « read on demand from the profile », et aucun ecran
+     * n importe `achats.js`. Relu le 2026-09-12 — une fonctionnalite annoncee qui n existe pas. */
+    : avecMarche + ' block(s) with a market. The purchase reader is built and tested, but no screen '
+      + 'shows its history yet — that is the next step, not a hidden feature.';
+}
+
+$('#sfCharger').addEventListener('click', () => void chargerFil(false));
+$('#sfPlus').addEventListener('click', () => void chargerFil(true));
+
 /* ══ CREATE ══════════════════════════════════════════════════════════════════════════════════
  * ⛔⛔ CETTE PAGE PREPARE, LE WALLET SIGNE. Le calldata est construit par `encodeur.js` — le meme
  *    qui a servi aux creations reelles — et part par `envoi.js`, qui verifie chaine ET compte.
@@ -2147,6 +2316,50 @@ function peindreApercuCreation() {
   majFraisEtRecap();
 }
 
+/* ══ LA PAIRE ═══════════════════════════════════════════════════════════════════════════════ */
+const AUTRE_PAIRE = '__autre__';
+let paireChoisie = null;
+
+function peindrePaires() {
+  const s = $('#cPaire');
+  const avant = s.value;
+  const liste = pairesProposees(CHAINE);
+  s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '">' + enTexte(etiquettePaire(p)) + '</option>').join('')
+    + '<option value="' + AUTRE_PAIRE + '">Another token — paste its address</option>';
+  if ([...s.options].some((o) => o.value === avant)) s.value = avant;
+  majPaire();
+}
+
+function majPaire() {
+  const autre = $('#cPaire').value === AUTRE_PAIRE;
+  $('#cPaireAutreRang').hidden = !autre;
+  const n = $('#cPaireNote');
+  const adr = autre ? $('#cPaireAutre').value : $('#cPaire').value;
+  if (autre && !String(adr || '').trim()) {
+    paireChoisie = null;
+    n.className = 'note';
+    n.textContent = 'Paste the token address. It will be marked unverified: this app gives it no name.';
+    majFraisEtRecap();
+    return;
+  }
+  const q = qualifierPaire(adr, CHAINE);
+  if (q.etat !== 'OK') {
+    paireChoisie = null;
+    n.className = 'note wKo';
+    n.textContent = q.pourquoi;
+  } else {
+    paireChoisie = q.paire;
+    n.className = 'note' + (q.paire.verifiee ? '' : ' wKo');
+    /* ⛔ CE QUE CE CHOIX FAIT, ET CE QU IL NE FAIT PAS : il est grave avec le block ; la pool s ouvre au
+     * lancement. Et le lanceur de l ancien ecran refuse les actions — on le dit ici plutot que de
+     * laisser decouvrir un refus plus tard. */
+    n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ')
+      + 'Recorded with the block at creation. The pool itself opens at launch'
+      + (q.paire.type === 'ACTION' ? ' — for a stock pair, through OpenLaunch (Advanced → Stock), which the launch screen here points to.' : '.');
+  }
+  majFraisEtRecap();
+}
+
 function hasardApparence() {
   const d = (n) => Math.floor(Math.random() * n);
   for (const c of CURSEURS) apparenceChoisie[c.cle] = c.min + d(c.max - c.min + 1);
@@ -2169,6 +2382,9 @@ function uriCreation() {
     sealed: true,
     face: apparenceChoisie,
     flyBrain: !!$('#cCerveau').checked,
+    /* ⛔ LA PAIRE EST GRAVEE AVEC SON STATUT : « unverified » voyage avec l adresse, pour toujours. */
+    pair: paireChoisie ? { address: paireChoisie.adr, symbol: paireChoisie.symbole,
+      kind: paireChoisie.type, verified: !!paireChoisie.verifiee } : null,
   }));
 }
 
@@ -2184,6 +2400,7 @@ function validerCreation() {
   if (octets(nom) > 32) return { ko: 'The name is over 32 bytes (accents and emoji count more).' };
   if (octets(sym) > 32) return { ko: 'The symbol is over 32 bytes.' };
   if (!sel) return { ko: 'Pick a salt — it is what fixes the address.' };
+  if (!paireChoisie) return { ko: 'Pick what it pairs with — or paste a valid token address.' };
   if (!compte) return { ko: 'Connect your wallet first: it is the one that signs, and it receives the supply.' };
   return { nom, sym, sel };
 }
@@ -2222,6 +2439,7 @@ function majFraisEtRecap() {
   $('#cRecap').textContent = v.ko
     ? v.ko
     : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed, all minted to you'
+      + ', paired with ' + etiquettePaire(paireChoisie)
       + (usd > 0 ? ', after a ' + usd + ' USDC fee' : '') + '.';
   $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
   /* ⛔⛔ SUR MAINNET, ON LE DIT AVANT, EN GRAND. Phil travaille sur testnet pour l instant : une
@@ -2381,6 +2599,8 @@ function battreBrain() {
   brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
+  /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
+  dessinerReseau(r.vu);
   $('#bPhase').textContent = r.vu.phase.toLowerCase();
   $('#bTick').textContent = r.vu.tick;
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
@@ -2404,32 +2624,48 @@ function dessinerRaster() {
   }
 }
 
-function dessinerReseau() {
+/**
+ * Le cablage, redessine A CHAQUE BATTEMENT.
+ * ⛔⛔ PHIL, 2026-09-12 : « c est juste une image la ». C en etait une : dessinee une fois au choix du
+ *    block, elle ne montrait rien de ce que le cerveau FAISAIT. Maintenant les neurones qui viennent
+ *    de tirer s allument, et leurs liens avec eux — ce qui bouge a l ecran est exactement ce que le
+ *    module vient de calculer, pas une animation decorative.
+ * ⚠️ Le fond (tous les liens) est trace en premier et tres faible : sans lui, on ne verrait pas la
+ *    forme du reseau entre deux impulsions.
+ */
+function dessinerReseau(vu = null) {
   const c = $('#bReseau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   if (!brainEtat) return;
   const liens = brainEtat.c.liens;
-  const cx = c.width / 2, cy = c.height / 2, r = Math.min(cx, cy) - 16;
+  const cx = c.width / 2, cy = c.height / 2, r = Math.min(cx, cy) - 14;
   const pos = liens.map((_, i) => {
-    const a = (i / liens.length) * Math.PI * 2;
+    const a = (i / liens.length) * Math.PI * 2 - Math.PI / 2;
     return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
   });
+  const actifs = new Set(vu && vu.indices ? vu.indices : []);
+
   ctx.lineWidth = 0.5;
   for (let i = 0; i < liens.length; i++) {
+    const vif = actifs.has(i);
     for (const l of liens[i]) {
       /* ⛔ LE SIGNE DU POIDS SE VOIT : l inhibition est ce qui empeche tout le reseau de tirer
        * ensemble, la cacher donnerait a croire a un reseau qui ne fait qu exciter. */
-      ctx.strokeStyle = l.poids >= 0 ? 'hsl(255 70% 70% / .18)' : 'hsl(38 80% 65% / .14)';
+      ctx.strokeStyle = l.poids >= 0
+        ? (vif ? 'hsl(255 85% 78% / .75)' : 'hsl(255 70% 70% / .10)')
+        : (vif ? 'hsl(38 85% 70% / .55)' : 'hsl(38 80% 65% / .08)');
+      ctx.lineWidth = vif ? 1.1 : 0.5;
       ctx.beginPath();
       ctx.moveTo(pos[i][0], pos[i][1]);
       ctx.lineTo(pos[l.vers][0], pos[l.vers][1]);
       ctx.stroke();
     }
   }
-  for (const [x, y] of pos) {
-    ctx.fillStyle = 'hsl(255 60% 80%)';
+  for (let i = 0; i < pos.length; i++) {
+    const vif = actifs.has(i);
+    ctx.fillStyle = vif ? 'hsl(255 100% 88%)' : 'hsl(255 40% 62% / .55)';
     ctx.beginPath();
-    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.arc(pos[i][0], pos[i][1], vif ? 3.4 : 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -2447,12 +2683,12 @@ const ETAPES = [
     d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
   { t: 'Send a GM — a real fragment of your block', etat: 'ok', e: 'Built',
     d: 'Send GM on a block card opens the Wallet send form with that block already picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer, not a counter — anyone can read it on chain years later, without us.' },
-  { t: 'Messages between blocks, inside the transaction', etat: 'absent', e: 'Missing',
-    d: 'Nothing carries messages on chain here yet. A transfer can carry data, but no screen writes or reads it — so the app does not pretend it can.' },
-  { t: 'Pair your block with another token at launch', etat: 'absent', e: 'Missing',
-    d: 'Pairing is the pool: measured on three OpenLaunch launches, the pair is simply the quote currency. The old screen opens pools; this one does not yet.' },
-  { t: 'See what people bought, and at what price', etat: 'partiel', e: 'Engine only',
-    d: 'The reader exists and is tested: Swap logs decoded, buyer taken from the transaction and not from the event. The Social screen is not built.' },
+  { t: 'Messages between blocks, inside the transaction', etat: 'partiel', e: 'Built · not yet sent',
+    d: 'Write a message when you send a block: it is appended after the transfer in the transaction data, and the Social feed reads it back from the chain. Public and permanent. No message has been sent by this app yet — the first real one is the proof.' },
+  { t: 'Pair your block with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
+    d: 'At creation you choose the pair: ETH, USDC, one of the 13 Coinbase tokenized stocks, or a token you paste (marked unverified, never renamed). The choice is engraved with the block. The pool itself opens at launch — measured on OpenLaunch, the pair is simply the quote currency.' },
+  { t: 'See what moved, and what people bought', etat: 'partiel', e: 'Feed built · buys wait',
+    d: 'The Social feed shows real transfers and their messages, sender taken from the signed transaction. Purchases need a pool: none of the blocks read has one yet, so that part stays empty rather than invented.' },
 ];
 
 function peindreLearn() {
@@ -2510,7 +2746,10 @@ const chaineLien = Number(paramsLien.get('chain'));
 if (RESEAUX[chaineLien]) CHAINE = chaineLien;
 /* ── Create ─────────────────────────────────────────────────────────────────────────────────── */
 construireReglages();
+peindrePaires();
 peindreApercuCreation();
+$('#cPaire').addEventListener('change', majPaire);
+$('#cPaireAutre').addEventListener('input', majPaire);
 $('#cHasard').addEventListener('click', hasardApparence);
 $('#cSym').addEventListener('input', peindreApercuCreation);
 $('#cNom').addEventListener('input', peindreApercuCreation);
