@@ -205,8 +205,10 @@ body{background:var(--fond);
 .mapBarre{display:flex;gap:8px;align-items:center;margin:0 0 10px}
 .mapBarre input{flex:1;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
   color:var(--texte);font:inherit;padding:11px 12px;min-height:44px}
-.mapLeg{display:flex;gap:14px;flex-wrap:wrap;color:var(--doux);font-size:11.5px;margin:10px 0 0}
-.mapLeg i{display:inline-block;background:var(--contour);border-radius:3px;vertical-align:middle;margin-right:5px}
+.mapLeg{display:flex;gap:14px;align-items:center;color:var(--doux);font-size:11.5px;margin:10px 0 0}
+/* ⛔ UN LIEN, PAS UN BOUTON PLEIN : il propose une explication, il ne reclame pas l attention. */
+.lienLearn{appearance:none;border:0;background:none;color:var(--accent2);font:inherit;font-size:11.5px;
+  font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
 
 /* fiche du block choisi */
 .fiche{margin:12px 0 0;border-top:1px solid var(--ligne);padding-top:12px}
@@ -418,22 +420,14 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <div class="mapEnv" id="map" role="application" aria-label="Living blocks map"></div>
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
         </div>
+        <!-- ⛔⛔ LEGENDE RETIREE (Phil, 2026-09-12 : « on explique deja autre part »). Elle disait
+             taille = life = prix x supply, les trois tailles, le pale « sans marche » et « life can
+             go down ». Tout cela vit maintenant dans Learn, avec le chiffre mesure du levier — un
+             seul endroit, donc un seul texte a tenir a jour. Ce qui reste ici est un ETAT, pas une
+             explication : ce que la page est en train de lire, ou ce qu elle n a pas pu lire. -->
         <div class="mapLeg">
-          <!-- ⛔⛔ LA LEGENDE PORTE LE SENS, PAS SEULEMENT LES COULEURS. Le tiroir est ferme par
-               defaut : si « life » n etait explique QUE la-dedans, la grande majorite des visiteurs
-               verrait des carres de tailles differentes sans savoir ce que la taille mesure — et
-               croirait ce qu elle veut. La phrase la plus importante — c est un PRIX, il DESCEND,
-               il est ACHETABLE — doit etre lisible sans ouvrir quoi que ce soit. Le detail chiffre
-               reste dans le tiroir, pour qui veut verifier. -->
-          <span><b style="color:var(--texte)">Size = life</b> = price × supply</span>
-          <span><i style="width:10px;height:10px"></i>quiet</span>
-          <span><i style="width:16px;height:16px"></i>growing</span>
-          <span><i style="width:24px;height:24px"></i>big</span>
-          <span style="opacity:.6">faded = no market yet</span>
-          <!-- ⛔ LE LIEN VERS LA CARTE EXPLICATIVE EST RETIRE AVEC ELLE (Phil, 2026-09-11 : « trop
-               envahissant »). Il ne reste que l essentiel, en quatre mots. -->
-          <span style="color:var(--tiede)">⚠️ life can go down</span>
-          <span id="mapEtat" style="margin-left:auto"></span>
+          <span id="mapEtat"></span>
+          <button type="button" class="lienLearn" style="margin-left:auto">What am I looking at? →</button>
         </div>
       </div>
 
@@ -441,9 +435,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <aside class="cote" id="cote" hidden>
         <div class="carte">
           <p class="titre">Blocks map</p>
-          <p class="sous" style="margin:0">Every square is a real block on Base. <b>The bigger it is,
-            the more life it has</b> — and life can shrink. The drawing never changes: it is the one
-            engraved when the block was made.</p>
+          <!-- ⛔ UNE LIGNE, ET LE RESTE DANS LEARN : la meme explication a deux endroits finit par
+               dire deux choses differentes. -->
+          <p class="sous" style="margin:0">Every square is a real block on Base, and its size is what
+            the chain says it is worth. <button type="button" class="lienLearn">How that works →</button></p>
           <div class="fiche" id="fiche" hidden>
             <!-- ⛔ LE LOGO EN AVATAR, ET C EST LE MEME QUE SUR LA MAP ET QUE DANS LES METADONNEES.
                  Une fiche sans le dessin obligerait a faire l aller-retour avec la map pour savoir
@@ -1119,18 +1114,41 @@ $('#map').addEventListener('click', (e) => {
  * ⚠️ CE QUI N EST PAS ENCORE BRANCHE, dit plutot que masque : il faut un wallet connecte et le
  *    block dans lequel on puise. Tant que l onglet Wallet n existe pas, ce bouton PREPARE le geste
  *    et le dit — il ne fait pas semblant de l avoir envoye. */
+/**
+ * Ouvrir l envoi pour un block precis — c est ce que « GM » veut dire concretement.
+ * ⛔ UN SEUL CHEMIN D ENVOI POUR TOUTE L APP : le formulaire du Wallet, avec sa garde `envoi.js`.
+ *    Un second chemin « special GM » aurait sa propre garde a maintenir, donc sa propre faille.
+ */
+function ouvrirEnvoiPour(adr, dire) {
+  if (!compte) {
+    dire('A GM is a real transfer: a fragment of a block you hold, sent to someone. Connect your '
+      + 'wallet first — it signs, this page never does.');
+    return false;
+  }
+  const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
+  if (!a) {
+    dire('You hold none of this block, or we could not read your balance — so there is nothing to '
+      + 'send from it yet.');
+    return false;
+  }
+  allerA('wallet');
+  $('#wReceive').hidden = true;
+  $('#wSendCarte').hidden = false;
+  $('#sActif').value = a.id;
+  majRecap();
+  $('#sDest').focus();
+  return true;
+}
+
 $('#fGM').addEventListener('click', () => {
   const adr = $('#fAdr').textContent.trim();
   const n = $('#fNote');
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
-  if (!compte) {
-    n.textContent = 'A GM is a real on-chain transfer: a fragment of a block you hold, sent to '
-      + 'someone. It needs your wallet — and your wallet signs it, never this page. '
-      + 'Connect from My block first.';
-    return;
+  if (ouvrirEnvoiPour(adr, (t) => { n.textContent = t; })) {
+    $('#sEtat').className = 'note';
+    $('#sEtat').textContent = 'GM: pick who receives it and how much. Your wallet shows the transfer '
+      + 'before you sign — nothing leaves without you.';
   }
-  n.textContent = 'Ready to prepare a GM from your block. The transaction is built here, shown by '
-    + 'your wallet, and signed by you — nothing is sent on your behalf.';
 });
 /* ⛔⛔ CE BOUTON PROMETTAIT ET NE LIVRAIT PAS, et Phil l a signale : « le bouton sur le block qui
  * donne leur info marche pas ». Il ecrivait une phrase expliquant qu il n etait pas branche. Un
@@ -2062,20 +2080,9 @@ $('#pMap').addEventListener('click', () => {
 /* ⛔ ENVOYER DEPUIS CE BLOCK = LE FORMULAIRE DU WALLET, PRE-REMPLI. Pas un second chemin d envoi :
  * un seul formulaire, une seule garde (`envoi.js`), une seule regle 8 a surveiller. */
 $('#pEnvoyer').addEventListener('click', () => {
-  const adr = $('#profil').dataset.block;
-  if (!compte) { $('#pNote').textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
-  const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
-  if (!a) {
-    $('#pNote').textContent = 'This block is not in your wallet list yet: either you hold none, or it '
-      + 'was not read. Only blocks you created are listed for now.';
-    return;
-  }
-  allerA('wallet');
-  $('#wReceive').hidden = true;
-  $('#wSendCarte').hidden = false;
-  $('#sActif').value = a.id;
-  majRecap();
-  $('#sDest').focus();
+  /* ⛔ MEME FONCTION QUE LE BOUTON GM : deux copies de ce chemin finiraient par diverger, et l une
+   * des deux perdrait une verification. */
+  ouvrirEnvoiPour($('#profil').dataset.block, (t) => { $('#pNote').textContent = t; });
 });
 
 /* ══ CREATE ══════════════════════════════════════════════════════════════════════════════════
@@ -2438,8 +2445,8 @@ const ETAPES = [
     d: 'Its size is its market cap, read from the chain. Its brain moves it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
     d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
-  { t: 'Send a GM — a real fragment of your block', etat: 'partiel', e: 'Partly',
-    d: 'A GM is a real transfer, so it uses the same Send path. What is missing is the one-tap button on the map card: today you pick the block in Wallet and send it yourself.' },
+  { t: 'Send a GM — a real fragment of your block', etat: 'ok', e: 'Built',
+    d: 'Send GM on a block card opens the Wallet send form with that block already picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer, not a counter — anyone can read it on chain years later, without us.' },
   { t: 'Messages between blocks, inside the transaction', etat: 'absent', e: 'Missing',
     d: 'Nothing carries messages on chain here yet. A transfer can carry data, but no screen writes or reads it — so the app does not pretend it can.' },
   { t: 'Pair your block with another token at launch', etat: 'absent', e: 'Missing',
