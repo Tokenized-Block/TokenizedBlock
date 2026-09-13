@@ -577,9 +577,20 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <span>≋ <b id="bG">—</b> Hz left</span>
         <span>≋ <b id="bD">—</b> Hz right</span>
         <span>⤳ <b id="bVirage">—</b> steering</span>
-        <span>⚡ <b id="bSpikes">—</b> spikes</span>
-        <span>◉ <b id="bActifs">—</b> firing</span>
+        <span>⚡ <b id="bSpikes">—</b> spikes since open</span>
+        <span>◉ <b id="bActifs">—</b> firing now</span>
       </div>
+      <ul class="note" style="margin:8px 0 0 18px;padding:0">
+        <li><b>Hz left / right</b> — how fast each wing beats. Each wing listens to a different third of the neurons.</li>
+        <li><b>Steering</b> — left minus right, from −1 to 1. Negative turns left, positive turns right. It is what moves the block on the map.</li>
+        <li><b>Spikes since open</b> — every neuron firing counted since you opened this block here.</li>
+        <li><b>Firing now</b> — neurons that fired on this beat, out of 128. More than 8 makes it curious.</li>
+        <li><b>Its food</b> — for now, only its market. GMs, messages and new holders are not counted yet.</li>
+      </ul>
+      <div class="rang" style="margin-top:10px">
+        <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
+      </div>
+      <p class="note" id="bGraverEtat">Writes the beat (tick, input fingerprint, spikes, phase) as a message on a transfer of 0 of this block to yourself. Your wallet signs and pays the gas; nothing moves.</p>
     </div>
 
     <div class="carte">
@@ -956,7 +967,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * de 166 700 neurones pilote un wallet qui SIGNE, avec des bornes affichees. Ici le cerveau fait
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
-import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase } from './cerveau.js';
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU } from './cerveau.js';
 /* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
  * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
  * possibles pour le verifier. Aucun ordre ne part d ici. */
@@ -3157,6 +3168,10 @@ async function creerBlock() {
  * ⛔ ON DESSINE CE QUI EST LU, PAS UNE ANIMATION. Le raster utilise les INDICES des neurones qui ont
  *    tire ; sans eux, ce serait un joli bruit qui ressemble a une mesure. */
 let brainAdr = null, brainEtat = null, brainHisto = [];
+/* ⛔ « spikes » et « firing » affichaient LE MEME NOMBRE (mesure 2026-09-13 : `spikes` et
+ * `actifs.length` sont comptes dans la meme boucle). Deux cases pour un chiffre ne disent rien de
+ * plus : l une devient le cumul depuis l ouverture. */
+let brainTotal = 0, brainDernier = null;
 const HISTO_MAX = 120;
 
 function peindreChoixBrain() {
@@ -3173,6 +3188,7 @@ function peindreChoixBrain() {
 function choisirBrain(adr) {
   brainAdr = adr;
   brainHisto = [];
+  brainTotal = 0; brainDernier = null;
   try { brainEtat = cerveauInitial(adr); } catch (e) { brainEtat = null; }
   dessinerReseau();
   let m = null;
@@ -3196,10 +3212,47 @@ function battreBrain() {
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);
   $('#bVirage').textContent = r.vu.virage.toFixed(3);
-  $('#bSpikes').textContent = r.vu.spikes;
-  $('#bActifs').textContent = r.vu.actifs;
+  brainTotal += r.vu.spikes;
+  brainDernier = r.vu;
+  $('#bSpikes').textContent = brainTotal;
+  $('#bActifs').textContent = r.vu.actifs + ' / 128';
   $('#bEmpreinte').textContent = 'input ' + r.vu.entree.slice(0, 26) + '… · replay it and you get the same beat';
 }
+
+/**
+ * Graver un battement sur la chaine : un transfert de 0 du block a soi-meme, avec le battement en message.
+ * ⛔ SIGNE PAR LE WALLET DE L UTILISATEUR, jamais par la page — meme chemin que Send (`envoi.js`).
+ * ⛔ ZERO JETON, A SOI-MEME : rien ne bouge, seul le message reste lisible dans `tx.input`.
+ * ⛔ LE BATTEMENT EST FIGE AU CLIC : le cerveau continue de battre pendant la signature, et graver
+ *    le battement suivant ecrirait un tick que l utilisateur n a pas vu.
+ */
+let gravureEnCours = false;
+$('#bGraver').addEventListener('click', async () => {
+  const e = $('#bGraverEtat');
+  if (gravureEnCours) return;
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first.'; return; }
+  const vu = brainDernier;
+  if (!brainAdr || !vu) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
+  const texte = VERSION_CERVEAU + ' tick=' + vu.tick + ' input=' + vu.entree + ' spikes=' + vu.spikes
+    + ' firing=' + vu.actifs + ' phase=' + vu.phase;
+  const memo = validerMemo(texte);
+  if (memo.etat !== 'OK') { e.className = 'note wKo'; e.textContent = memo.pourquoi || 'Message refused.'; return; }
+  gravureEnCours = true;
+  e.className = 'note';
+  e.textContent = 'Opening your wallet — it should show a transfer of 0 to yourself.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: brainAdr, data: encodeTransferAvecMemo(compte, 0n, memo.texte), value: '0x0' });
+  } catch (err) {
+    r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) };
+  } finally { gravureEnCours = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
+    + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+  e.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
+  e.innerHTML = (r.etat === 'CONFIRME' ? 'Beat ' + vu.tick + ' recorded.'
+    : 'Not recorded (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+});
 
 function dessinerRaster() {
   const c = $('#bRaster'), ctx = c.getContext('2d');
