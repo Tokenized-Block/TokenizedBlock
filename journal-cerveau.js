@@ -40,7 +40,8 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
   /* ⛔ VU PAR PHIL SUR TBLOCK (2026-09-13) : « asleep… because no market » et « moves without a market » sur un block dont
    *    le marche est EN LIGNE — la lecture avait seulement echoue. Le marche n est nomme absent que sur NON_TROUVEE. */
   const marche = etatVie === 'NON_TROUVEE' ? 'no market' : etatVie === 'LUE' ? 'market read' : 'market not read right now';
-  if (phase === 'DORMANT') ajoute('FAIT', nom + ' is asleep, at rest.', marche + ', and no food received in the recent window · ' + spikes + ' neuron(s) fired');
+  if (phase === 'NON_LU') ajoute('FAIT', nom + ' cannot see its own market right now, so it judges no mood from it.', 'market read failed or not done yet · ' + spikes + ' neuron(s) fired');
+  else if (phase === 'DORMANT') ajoute('FAIT', nom + ' is asleep, at rest.', marche + ', and no food received in the recent window · ' + spikes + ' neuron(s) fired');
   else if (phase === 'EVEILLE') ajoute('FAIT', nom + ' woke up on its own community' + (etatVie === 'NON_TROUVEE' ? ': it moves without a market.' : '.'), 'food read on chain is above zero · ' + marche);
   else ajoute('FAIT', nom + ' is ' + String(phase).toLowerCase() + '.', 'brain phase from its market and food · ' + spikes + ' neuron(s) fired');
 

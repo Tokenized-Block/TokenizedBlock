@@ -1069,10 +1069,11 @@ import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
-function entreesCerveau(vie, vieAvant, n) {
+function entreesCerveau(vie, vieAvant, n, etatVie) {
   const lue = n && n.etat === 'LUE' ? n : null;
+  /* ⛔ un marche pas encore lu (undefined) est NON_LUE : le cerveau dit « non jugé », jamais « endormi sans marche » */
   return { vie, vieAvant, gm: lue ? lue.gm : 0, messages: lue ? lue.messages : 0,
-    detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false };
+    detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false, etatVie: etatVie || 'NON_LUE' };
 }
 /* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
  * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
@@ -1310,7 +1311,7 @@ let battement = null;
 function battre() {
   for (const h of habitants) {
     if (!h.cerveau) continue;
-    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture));
+    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie));
     h.cerveau = r.etat;
     /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
     if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
@@ -1394,9 +1395,7 @@ $('#map').addEventListener('click', (e) => {
   /* ⛔ DEFAUT VU SUR LA CAPTURE DE PHIL (TBLOCK, 2026-09-13) : « asleep: no market and nothing received » alors que la vie
    * n etait simplement PAS ENCORE LUE — et TBLOCK a un marche. La phrase du dormant n est dite que sur un « pas de marche »
    * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
-  $('#fNote').textContent = !h || !h.phase ? ''
-    : h.phase === 'DORMANT' && (h.etatVie === 'NON_LUE' || !h.etatVie) ? (h.sym || 'This block') + '\'s market has not been read yet — nothing is concluded.'
-      : phraseDePhase(h.phase, h.sym);
+  $('#fNote').textContent = !h || !h.phase ? '' : phraseDePhase(h.phase, h.sym);
 });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
@@ -2385,7 +2384,10 @@ function cerveauVoulu() {
 function battreProfil() {
   if ($('#profil').hidden || !profilCerveau || !$('#pcActif').checked) return;
   const hP = habitants.find((x) => String(x.adr).toLowerCase() === String(profilCerveau.adr).toLowerCase());
-  const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, null, hP ? hP.nourriture : null));
+  /* ⛔ JUMEAUX QUI DIVERGEAIENT : le profil passait `vieAvant: null` (variation toujours 0, donc jamais INQUIET ni
+   *    EXCITE par le prix) quand la map passait la lecture precedente — deux humeurs pour le meme block. */
+  const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
+    hP ? hP.nourriture : null, etatVieProfil));
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   peindreCerveau();
@@ -4007,7 +4009,7 @@ function choisirBrain(adr) {
 function battreBrain() {
   if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
   const h = habitants.find((x) => x.adr === brainAdr);
-  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null));
+  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null));
   const n = h && h.nourriture;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
     : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'

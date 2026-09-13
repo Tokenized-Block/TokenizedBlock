@@ -52,7 +52,9 @@ export const NEURONES = PARAMETRES.neurones;
 export const CAPTEURS = PARAMETRES.capteurs;
 /* ⛔ EVEILLE et MORT sont nes des regles du 2026-09-13 : un block nourri sans marche ne dort pas, et un
  * block dont le createur n a plus rien est mort. */
-export const PHASES = ['DORMANT', 'EVEILLE', 'CALME', 'CURIEUX', 'EXCITE', 'INQUIET', 'MORT'];
+/* ⛔ NON_LU (2026-09-13, capture de Phil sur TBLOCK) : un marche PAS LU se disait DORMANT — « asleep: no market » —
+ *    sur un block dont le marche est en ligne. Ce n est pas une humeur : c est « on ne juge pas ». */
+export const PHASES = ['DORMANT', 'EVEILLE', 'CALME', 'CURIEUX', 'EXCITE', 'INQUIET', 'MORT', 'NON_LU'];
 
 const enc = new TextEncoder();
 
@@ -113,7 +115,7 @@ const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / divi
  * ⛔ `mort` n est vrai QUE s il vaut strictement `true` : un solde non lu (null, undefined) ne tue pas.
  */
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
-  scelle = null, mort = null } = {}) {
+  scelle = null, mort = null, etatVie = null } = {}) {
   const aMarche = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
   /* la variation RELATIVE, bornee : un x10 ne doit pas saturer le reseau pour toujours */
   let delta = 0;
@@ -133,6 +135,9 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
     part: Math.max(0, Math.min(1, Number(part) || 0)),
     scelle: scelle === true ? 1 : 0,
     mort: mort === true,
+    /* ⛔ SEULEMENT LE LIBELLE : le courant est le meme (vie null dans les deux cas), donc les potentiels et
+     *    l empreinte d entree ne changent pas — un enregistrement deja grave se rejoue a l identique. */
+    nonLu: !aMarche && etatVie === 'NON_LUE',
   };
 }
 
@@ -198,6 +203,7 @@ export function pas(etat, faits = {}) {
   /* ⛔ L ORDRE DES REGLES EST LA REGLE : la mort d abord, puis sans marche (nourri ou non), puis le marche. */
   let phase;
   if (f.mort) phase = 'MORT';
+  else if (f.nonLu) phase = 'NON_LU';
   else if (!f.aMarche) phase = miam > 0 ? 'EVEILLE' : 'DORMANT';
   else if (f.delta <= -0.05) phase = 'INQUIET';
   else if (f.delta >= 0.05 || f.gm > 0.3 || f.detenteurs > 0.3) phase = 'EXCITE';
@@ -268,5 +274,6 @@ export function phraseDePhase(phase, symbole) {
     EXCITE: nom + ' is buzzing: its life went up, or it was fed.',
     INQUIET: nom + ' is agitated: its life went down. Nobody refunds that.',
     MORT: nom + ' is dead: its creator no longer holds any of it.',
+    NON_LU: nom + '\'s market could not be read right now — no mood is judged until it is.',
   }[phase] || nom + ' is quiet.';
 }
