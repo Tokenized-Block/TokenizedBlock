@@ -13,7 +13,7 @@
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
-  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
+  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
@@ -72,10 +72,17 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: marche.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
   }
-  const cle = marche.cle;
-  if (String(cle.currency0).toLowerCase() !== ETH) return { etat: 'REFUSE', pourquoi: 'only markets against native ETH are traded here' };
   const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
+  /* ⛔⛔ ACHAT VIA TBLOCK (Phil, 2026-09-13 : « fait l achat via TBLOCK ») : un block apparie a TBLOCK se paie en ETH
+   *    et se vend pour de l ETH, en DEUX sauts dans UNE transaction — ETH -> TBLOCK -> block, ou l inverse. */
+  if (marche.paire === 'TBLOCK') {
+    const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
+    if (!route.actions) return route;
+    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
+  }
+  const cle = marche.cle;
+  if (String(cle.currency0).toLowerCase() !== ETH) return { etat: 'REFUSE', pourquoi: 'only markets against native ETH are traded here' };
   const zeroForOne = sens === 'ACHAT'; // ETH est currency0 : acheter = payer currency0
 
   /* ── quote : le prix REEL, sur le montant qui passe vraiment dans la pool ── */
@@ -113,7 +120,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     if (minT !== null && minT > 0n) {
       actions = [{ code: ACTIONS_V4.SETTLE, params: paramsAction.settle(ETH, m, true) },
         /* le credit ETH restant = le frais exact ; OPEN_DELTA le depense en entier */
-        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP_RACHAT__', rachatMontant: 0n, rachatMin: minT },
+        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP__', swap: { cle: rachat.cle, zeroForOne: true, montant: 0n, sortieMin: minT } },
         { code: ACTIONS_V4.TAKE, params: paramsAction.take(TBLOCK, FEE_WALLET, 0n) },
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(jeton, min) }];
       valeur = m;
@@ -128,7 +135,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     try { minT = fraisExact > 0n ? ((await quoteTblock(fraisExact)) * (10000n - tol)) / 10000n : null; } catch { minT = null; }
     if (minT !== null && minT > 0n) {
       actions = [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(jeton, m) },
-        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP_RACHAT__', rachatMontant: fraisExact, rachatMin: minT },
+        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP__', swap: { cle: rachat.cle, zeroForOne: true, montant: fraisExact, sortieMin: minT } },
         { code: ACTIONS_V4.TAKE, params: paramsAction.take(TBLOCK, FEE_WALLET, 0n) },
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(ETH, brutMin - fraisExact) }];
       valeur = 0n;
@@ -159,7 +166,52 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
+  return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
+}
 
+/**
+ * Route a deux sauts pour un block dont le marche est TBLOCK/block. Rend `{ actions, valeur, resume, cle, zeroForOne,
+ * sortieMinTete }` (le premier saut est le swap de tete), ou un refus `{ etat, pourquoi }`.
+ * ⛔ LE FRAIS EST PRELEVE EN TBLOCK, ENTRE LES DEUX SAUTS (TAKE_PORTION, lu dans V4Router : bips du credit ENTIER) :
+ *    c est le buyback direct, sans troisieme swap. Le second saut prend TOUT le credit TBLOCK restant (OPEN_DELTA).
+ * ⛔ DEUX MINIMUMS : le premier saut garantit le TBLOCK (donc le frais), TAKE_ALL garantit ce que recoit l utilisateur.
+ */
+async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) {
+  let mt;
+  try { mt = await vieDuBlock({ rpc: lire, stateView: V.stateView, jeton: TBLOCK }); } catch { mt = { etat: 'NON_LUE' }; }
+  if (mt.etat !== 'LUE' || !mt.cle || String(mt.cle.currency0).toLowerCase() !== ETH) {
+    return { etat: 'NON_MESURE', pourquoi: 'this block trades against TBLOCK, and the TBLOCK/ETH market could not be read' };
+  }
+  const cleB = marche.cle, cleT = mt.cle;
+  const tblockEst0 = String(cleB.currency0).toLowerCase() === TBLOCK.toLowerCase();
+  const saut1 = sens === 'ACHAT' ? { cle: cleT, zeroForOne: true } : { cle: cleB, zeroForOne: !tblockEst0 };
+  const saut2 = sens === 'ACHAT' ? { cle: cleB, zeroForOne: tblockEst0 } : { cle: cleT, zeroForOne: false };
+  const moinsTol = (x) => (x * (10000n - tol)) / 10000n;
+  let t, sortie;
+  try {
+    t = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut1, montant: m }) }, 'latest'])).slice(2, 66));
+    if (t <= 0n) return { etat: 'REFUSE', pourquoi: 'the first pool returns nothing for this amount' };
+    sortie = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut2, montant: t - (t * bps) / 10000n }) }, 'latest'])).slice(2, 66));
+  } catch (e) {
+    return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
+  }
+  if (sortie <= 0n) return { etat: 'REFUSE', pourquoi: 'the second pool returns nothing for this amount' };
+  const tMin = moinsTol(t), min = moinsTol(sortie);
+  const entree = sens === 'ACHAT' ? ETH : jeton, recu = sens === 'ACHAT' ? jeton : ETH;
+  const actions = [
+    ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(TBLOCK, FEE_WALLET, bps) }] : []),
+    { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP__', swap: { ...saut2, montant: 0n, sortieMin: 0n } },
+    { code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
+    { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(recu, min) }];
+  const resume = { paye: m, payeDevise: sens === 'ACHAT' ? 'ETH' : 'block', recoitAuMoins: min, recoitDevise: sens === 'ACHAT' ? 'block' : 'ETH',
+    quote: sortie, frais: (t * bps) / 10000n, fraisDevise: 'TBLOCK', montantSwap: m, via: 'TBLOCK',
+    rachatAuto: bps > 0n ? true : undefined, tblockRachetesAuMoins: (tMin * bps) / 10000n,
+    fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null };
+  return { actions, valeur: sens === 'ACHAT' ? m : 0n, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: tMin };
+}
+
+/** Approbations mesurees (vente), forme de struct demandee a la chaine, encodage, simulation de la transaction exacte. */
+async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete }) {
   /* ── vente : les deux autorisations Permit2, MESUREES (meme regle d expiration que le lancement) ── */
   const etapes = [];
   if (sens === 'VENTE') {
@@ -186,12 +238,24 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
       pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + JSON.stringify(f.causes).slice(0, 160) };
   }
-  const actionsEncodees = actions.map((a) => (a.params === '__SWAP_RACHAT__'
-    ? { code: a.code, params: paramsSwapExactInSingle({ cle: rachat.cle, zeroForOne: true, montant: a.rachatMontant, sortieMin: a.rachatMin, forme: f.forme }) }
-    : a));
-  const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: 0n, deadline, forme: f.forme, actions: actionsEncodees });
-  const tx = { to: R, data, value: '0x' + valeur.toString(16) };
-  const sim = await appelOuErreur(lire, { from: compte, ...tx });
-  if (sim.error) return { etat: 'REFUSE', resume, cle, pourquoi: 'the chain refuses this exact transaction: ' + sim.error.message.slice(0, 160) };
-  return { etat: 'PRET', etapes: [], tx, resume, cle, forme: f.forme, pourquoi: null };
+  /* ⛔⛔ MESURE SUR FORK (2026-09-13, route via TBLOCK) : la forme sondee sur UN swap ne vaut pas pour les suivants —
+   *    « avecMinHop » passait sur ETH -> TBLOCK et revertait SANS DONNEE sur TBLOCK -> block, ou « sansMinHop » passait.
+   *    Des qu il y a un second swap, la forme se choisit sur la TRANSACTION EXACTE : la sondee d abord, puis l autre. */
+  const construire = (forme) => {
+    const actionsEncodees = actions.map((a) => (a.params === '__SWAP__'
+      ? { code: a.code, params: paramsSwapExactInSingle({ ...a.swap, forme }) }
+      : a));
+    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme, actions: actionsEncodees });
+    return { to: R, data, value: '0x' + valeur.toString(16) };
+  };
+  const formes = actions.some((a) => a.params === '__SWAP__')
+    ? [f.forme, f.forme === AVEC_MINHOP ? SANS_MINHOP : AVEC_MINHOP] : [f.forme];
+  let refus = null;
+  for (const forme of formes) {
+    const tx = construire(forme);
+    const sim = await appelOuErreur(lire, { from: compte, ...tx });
+    if (!sim.error) return { etat: 'PRET', etapes: [], tx, resume, cle, forme, pourquoi: null };
+    refus = sim.error;
+  }
+  return { etat: 'REFUSE', resume, cle, pourquoi: 'the chain refuses this exact transaction: ' + refus.message.slice(0, 160) };
 }

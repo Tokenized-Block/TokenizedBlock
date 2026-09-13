@@ -2988,7 +2988,10 @@ async function preparerEchange(sens) {
     $('#peLignes').innerHTML = [
       'You pay: ' + q(r.paye, r.payeDevise),
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
-      r.frais > 0n ? 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %) to the TokenizedBlock fee wallet, inside the same transaction'
+      ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
+      r.frais > 0n ? 'Fee: ' + formaterUnites(r.frais, 18) + (r.fraisDevise === 'TBLOCK'
+        ? ' TBLOCK (0.5 %, taken between the two swaps) to the TokenizedBlock fee wallet, inside the same transaction'
+        : ' ETH (0.5 %) to the TokenizedBlock fee wallet, inside the same transaction')
         : 'No fee: this is a buyback by the TokenizedBlock fee wallet',
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
