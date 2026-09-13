@@ -70,6 +70,38 @@ for (const nom of SERVIS) {
   });
 }
 
+/* ⛔⛔ XMTP VENDORISE, VERIFIE AU DEMARRAGE, FICHIER PAR FICHIER. Les fichiers viennent du CDN via
+ * `vendor-xmtp.mjs` (lance avant ce serveur) ; ICI on recalcule chaque sha256 et on refuse de servir
+ * tout fichier dont l empreinte differe du manifeste. Un seul fichier suspect n eteint pas l app :
+ * seule la messagerie privee s arrete, et le journal le dit.
+ * ⛔ UNIQUEMENT LES CHEMINS DU MANIFESTE, sous /npm/, sans `..` : pas de parcours de dossier. */
+let xmtpServis = 0, xmtpRefuses = 0;
+try {
+  const manifeste = JSON.parse(readFileSync(join(ici, 'xmtp-manifeste.json'), 'utf8'));
+  for (const [servi, attendu] of Object.entries(manifeste.fichiers || {})) {
+    if (!servi.startsWith('/npm/') || servi.includes('..')) { xmtpRefuses++; continue; }
+    const chemin = join(ici, 'vendor', ...servi.split('/').filter(Boolean));
+    if (!existsSync(chemin)) { xmtpRefuses++; continue; }
+    const corps = readFileSync(chemin);
+    const empreinte = createHash('sha256').update(corps).digest('hex');
+    if (empreinte !== attendu.sha256) {
+      console.warn('[xmtp] EMPREINTE DIFFERENTE, non servi : ' + servi);
+      xmtpRefuses++;
+      continue;
+    }
+    cache.set(servi, {
+      corps,
+      type: servi.endsWith('.wasm') ? 'application/wasm' : 'text/javascript; charset=utf-8',
+      etag: '"' + empreinte.slice(0, 24) + '"',
+      image: false,
+    });
+    xmtpServis++;
+  }
+} catch (e) {
+  console.warn('[xmtp] manifeste illisible — messagerie privee indisponible : ' + e.message);
+}
+console.log('[xmtp] ' + xmtpServis + ' fichier(s) servis, ' + xmtpRefuses + ' refuse(s)');
+
 const entete = (e) => ({
   'content-type': e.type,
   etag: e.etag,

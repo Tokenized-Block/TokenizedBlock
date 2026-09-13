@@ -736,6 +736,28 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="sfNote"></p>
     </div>
 
+    <!-- ⛔⛔ LA MESSAGERIE PRIVEE (XMTP). Deuxieme systeme choisi par Phil, a cote des messages publics
+         on-chain. Chiffree de bout en bout, HORS chaine. Le SDK n est charge qu au clic : 14 Mo que
+         personne ne doit telecharger sans l avoir demande. Une signature du wallet la premiere fois,
+         aucune ensuite sur ce navigateur. Aucune cle detenue par nous. -->
+    <div class="carte" id="xmCarte">
+      <p class="titre">Private messages</p>
+      <p class="sous">End-to-end encrypted chats between wallets, on XMTP. Unlike public messages,
+        nothing here is on chain — and nothing here is public.</p>
+      <p class="note" id="xmEtat">Off.</p>
+      <button class="bouton" id="xmActiver" type="button" style="margin-top:10px">Turn on private messages</button>
+      <div id="xmZone" hidden>
+        <label class="champ">Write to a wallet<input id="xmDest" placeholder="0x… the whole address"
+          autocomplete="off" spellcheck="false"></label>
+        <label class="champ">Message<input id="xmTexte" maxlength="1000" autocomplete="off"></label>
+        <button class="bouton sec" id="xmEnvoyer" type="button" style="margin-top:10px">Send privately</button>
+        <p class="note" id="xmEnvoiNote"></p>
+        <p class="titre" style="margin-top:16px;font-size:14px">Conversations</p>
+        <ul class="fil" id="xmConversations"></ul>
+      </div>
+      <p class="note" id="xmBornes"></p>
+    </div>
+
     <div class="carte">
       <p class="titre">Who bought, and at what price</p>
       <p class="sous">Purchases come from Uniswap v4 swap logs: the buyer is taken from the
@@ -2398,6 +2420,167 @@ $('#pmsgEcrire').addEventListener('click', () => {
   }
 });
 
+/* ══ MESSAGERIE PRIVEE — XMTP ════════════════════════════════════════════════════════════════
+ * ⛔⛔ AUCUNE CLE ICI. L identite XMTP est ouverte par UNE signature du wallet de l utilisateur
+ *    (`personal_sign`), et le client vit dans son navigateur. Nous ne detenons rien et ne faisons
+ *    tourner aucune passerelle — XMTP annonce une messagerie payante qui exigerait une cle « payer » :
+ *    si elle arrive, la messagerie privee s arretera ici plutot que de nous faire detenir une cle.
+ * ⛔ LES NOMS D API ONT ETE VERIFIES DANS LE CODE VENDORISE (2026-09-13) : `Client.create`,
+ *    `canMessage`, `createDmWithIdentifier`, `listDms`, `sendText`, `streamAllMessages`, `syncAll`.
+ * ⛔ SDK CHARGE AU CLIC, pas a l ouverture de la page : ~14 Mo au premier chargement.
+ * ⚠️ NON PROUVE DE BOUT EN BOUT PAR NOUS : la creation du client et l envoi demandent une vraie
+ *    signature. Le chargement et `canMessage` sont prouves (mesure du 2026-09-13). */
+const XMTP_SDK = '/npm/@xmtp/browser-sdk@7.1.0/+esm';
+/* ⛔ ENV EXPLICITE : la valeur par defaut du SDK est `dev`, un reseau separe et effacable. */
+const XMTP_ENV = 'production';
+let xm = null, xmSdk = null, xmFlux = null, xmEnCours = false;
+
+$('#xmBornes').textContent = 'Private and end-to-end encrypted, but stored UNENCRYPTED in this browser: '
+  + 'anyone using this browser profile could read them. One tab at a time. Up to 10 installations per '
+  + 'inbox — clearing this site\'s data uses one. Free today. Not yet tested end to end by this app: '
+  + 'the first real conversation is the proof.';
+
+const hexUtf8 = (s) => '0x' + [...new TextEncoder().encode(String(s))].map((b) => b.toString(16).padStart(2, '0')).join('');
+const octetsDeHex = (h) => Uint8Array.from(String(h).replace(/^0x/, '').match(/../g) || [], (b) => parseInt(b, 16));
+
+/* ⛔ UN SEUL ONGLET : la base locale d XMTP n accepte pas deux connexions. Le verrou est tenu tant que
+ * l onglet vit ; un deuxieme onglet est refuse avec la raison, au lieu de corrompre la base. */
+function prendreVerrouXmtp() {
+  if (!navigator.locks) return Promise.resolve(true);
+  return new Promise((ok) => {
+    navigator.locks.request('tokenizedblock-xmtp', { ifAvailable: true }, (verrou) => {
+      if (!verrou) { ok(false); return undefined; }
+      ok(true);
+      return new Promise(() => {});
+    });
+  });
+}
+
+async function activerXmtp() {
+  if (xmEnCours || xm) return;
+  const e = $('#xmEtat');
+  e.className = 'note';
+  if (!window.ethereum || !compte) {
+    e.textContent = 'Connect your wallet first (Wallet tab) — it signs once to open your private inbox.';
+    return;
+  }
+  if (!window.isSecureContext) { e.textContent = 'Private messages need a secure (https) page.'; return; }
+  xmEnCours = true;
+  $('#xmActiver').disabled = true;
+  try {
+    if (!(await prendreVerrouXmtp())) {
+      e.className = 'note wKo';
+      e.textContent = 'Private messages are already open in another tab of this app. Close it, then try here.';
+      return;
+    }
+    /* ⛔ LE COMPTE EST RELU AVANT LA SIGNATURE : ouvrir l inbox d un autre compte que celui affiche
+     * lierait les conversations a la mauvaise identite. */
+    let courant = null;
+    try { courant = ((await window.ethereum.request({ method: 'eth_accounts' })) || [])[0] || null; } catch (err) { courant = null; }
+    if (!courant || courant.toLowerCase() !== compte.toLowerCase()) {
+      e.className = 'note wKo';
+      e.textContent = 'Your wallet account is not the one this page shows — reconnect, then try again.';
+      return;
+    }
+    e.textContent = 'Loading the messaging library (about 14 MB the first time)…';
+    xmSdk = await import(XMTP_SDK);
+    const id = { identifier: compte.toLowerCase(), identifierKind: xmSdk.IdentifierKind.Ethereum };
+    const signer = {
+      type: 'EOA',
+      getIdentifier: () => id,
+      signMessage: async (msg) => octetsDeHex(await window.ethereum.request({
+        method: 'personal_sign', params: [hexUtf8(msg), compte] })),
+    };
+    e.textContent = 'Your wallet may ask for ONE signature to open your private inbox — only the first time on this browser. It moves no funds.';
+    xm = await xmSdk.Client.create(signer, { env: XMTP_ENV, appVersion: 'tokenizedblock/1' });
+    e.className = 'note wOk';
+    e.textContent = 'On — your private inbox is open in this tab.';
+    $('#xmActiver').hidden = true;
+    $('#xmZone').hidden = false;
+    await listerConversationsXmtp();
+    try {
+      xmFlux = await xm.conversations.streamAllMessages({
+        onValue: () => { void listerConversationsXmtp(); },
+        onError: (err) => console.warn('[xmtp] flux :', err && err.message ? err.message : err),
+      });
+    } catch (err) { console.warn('[xmtp] flux non ouvert :', err && err.message ? err.message : err); }
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    e.className = 'note wKo';
+    /* ⛔ UN REFUS N EST PAS UNE PANNE, et une panne n est pas un refus : deux phrases differentes. */
+    e.textContent = estRefusUtilisateurXmtp(err)
+      ? 'You declined the signature — private messages stay off, and nothing happened.'
+      : 'Private messages could not open: ' + msg;
+    xm = null;
+  } finally {
+    xmEnCours = false;
+    $('#xmActiver').disabled = false;
+  }
+}
+
+function estRefusUtilisateurXmtp(err) {
+  return !!(err && (err.code === 4001 || /user (rejected|denied)|reject(ed)? the request/i.test(String(err.message || err))));
+}
+
+async function listerConversationsXmtp() {
+  if (!xm) return;
+  const boite = $('#xmConversations');
+  try {
+    try { await xm.conversations.syncAll(); } catch (err) { /* synchro partielle : on liste ce qu on a */ }
+    const dms = await xm.conversations.listDms();
+    const lignes = [];
+    for (const dm of dms.slice(0, 20)) {
+      let pair = '?', dernier = null;
+      try { pair = await dm.peerInboxId(); } catch (err) { pair = '?'; }
+      try { const ms = await dm.messages(); dernier = ms.length ? ms[ms.length - 1] : null; } catch (err) { dernier = null; }
+      const texte = dernier && typeof dernier.content === 'string' ? dernier.content
+        : dernier ? '(a message that is not plain text)' : '(no message yet)';
+      lignes.push('<li class="filL"><div style="min-width:0;flex:1"><p class="filT"><b>inbox '
+        + enTexte(String(pair).slice(0, 10)) + '…</b></p><p class="filM">' + enTexte(texte.slice(0, 280))
+        + '</p></div></li>');
+    }
+    boite.innerHTML = lignes.join('') || '<li class="filS">No private conversation yet.</li>';
+  } catch (err) {
+    boite.innerHTML = '<li class="filS">Conversations could not be read right now.</li>';
+  }
+}
+
+async function envoyerXmtp() {
+  const n = $('#xmEnvoiNote');
+  n.className = 'note';
+  if (!xm || !xmSdk) { n.textContent = 'Turn on private messages first.'; return; }
+  const dest = String($('#xmDest').value || '').trim();
+  const texte = String($('#xmTexte').value || '');
+  /* ⛔ REFUSE, NE COMPLETE PAS : une adresse incomplete ne se devine jamais. */
+  if (!/^0x[0-9a-fA-F]{40}$/.test(dest)) { n.className = 'note wKo'; n.textContent = 'Not an address — paste it whole.'; return; }
+  if (!texte.trim()) { n.className = 'note wKo'; n.textContent = 'Write something first.'; return; }
+  $('#xmEnvoyer').disabled = true;
+  try {
+    const pair = { identifier: dest.toLowerCase(), identifierKind: xmSdk.IdentifierKind.Ethereum };
+    const joignable = (await xmSdk.Client.canMessage([pair], XMTP_ENV)).get(pair.identifier);
+    /* ⛔ « PAS D INBOX » N EST PAS UNE ERREUR D ENVOI : c est un fait sur le destinataire, dit tel quel. */
+    if (!joignable) {
+      n.className = 'note wKo';
+      n.textContent = 'This wallet has no private inbox yet — they need to turn on private messages once.';
+      return;
+    }
+    const dm = await xm.conversations.createDmWithIdentifier(pair);
+    await dm.sendText(texte);
+    n.className = 'note wOk';
+    n.textContent = 'Sent privately to ' + court(dest) + '.';
+    $('#xmTexte').value = '';
+    await listerConversationsXmtp();
+  } catch (err) {
+    n.className = 'note wKo';
+    n.textContent = 'Not sent: ' + String((err && err.message) || err);
+  } finally {
+    $('#xmEnvoyer').disabled = false;
+  }
+}
+
+$('#xmActiver').addEventListener('click', () => void activerXmtp());
+$('#xmEnvoyer').addEventListener('click', () => void envoyerXmtp());
+
 $('#sfCharger').addEventListener('click', () => void chargerFil(false));
 $('#sfPlus').addEventListener('click', () => void chargerFil(true));
 
@@ -2837,8 +3020,8 @@ const ETAPES = [
     d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
   { t: 'Send a GM — a real fragment of your block', etat: 'ok', e: 'Built',
     d: 'Send GM on a block card opens the Wallet send form with that block already picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer, not a counter — anyone can read it on chain years later, without us.' },
-  { t: 'Messages between blocks, inside the transaction', etat: 'partiel', e: 'Built · not yet sent',
-    d: 'Write a message when you send a block: it is appended after the transfer in the transaction data, and the Social feed reads it back from the chain. Public and permanent. No message has been sent by this app yet — the first real one is the proof.' },
+  { t: 'Messages: public on chain, and private', etat: 'partiel', e: 'Built · not yet sent',
+    d: 'Two systems. Public: a message rides inside a block transfer, and anyone can read it on chain, forever — each block profile shows its own. Private: end-to-end encrypted chats between wallets on XMTP, opened by one signature, off chain. Neither has been used for real by this app yet — the first real message of each is the proof.' },
   { t: 'Pair your block with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
     d: 'At creation you choose the pair: ETH, USDC, one of the 13 Coinbase tokenized stocks, or a token you paste (marked unverified, never renamed). The choice is engraved with the block. The pool itself opens at launch — measured on OpenLaunch, the pair is simply the quote currency.' },
   { t: 'See what moved, and what people bought', etat: 'partiel', e: 'Feed built · buys wait',

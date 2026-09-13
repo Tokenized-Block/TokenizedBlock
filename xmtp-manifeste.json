@@ -1,0 +1,232 @@
+{
+  "fige_le": "2026-09-13",
+  "total": 13999186,
+  "nombre": 45,
+  "fichiers": {
+    "/npm/@noble/curves@1.9.0/abstract/modular/+esm": {
+      "source": "/npm/@noble/curves@1.9.0/abstract/modular/+esm",
+      "octets": 7785,
+      "sha256": "b6f223551b172afb5990d15a93a9421d81a2f2d944c07b168955dc38c83ad632"
+    },
+    "/npm/@noble/curves@1.9.0/secp256k1/+esm": {
+      "source": "/npm/@noble/curves@1.9.0/secp256k1/+esm",
+      "octets": 33674,
+      "sha256": "7e178f86b07343e875b3b553865690bc2e68af0ed0fd27c1cbde0ad4c41f4292"
+    },
+    "/npm/@noble/curves@1.9.1/abstract/utils/+esm": {
+      "source": "/npm/@noble/curves@1.9.1/abstract/utils/+esm",
+      "octets": 4994,
+      "sha256": "62cbabbb8680694e406f56cd2e5603b9c105f4e5f55a672a3002d2dcb4165142"
+    },
+    "/npm/@noble/curves@1.9.1/secp256k1/+esm": {
+      "source": "/npm/@noble/curves@1.9.1/secp256k1/+esm",
+      "octets": 33838,
+      "sha256": "0e8ccf62d72c18cebd4b8bcce5b6579dcbf6ab6ae674618d03fdf559c622d0db"
+    },
+    "/npm/@noble/hashes@1.8.0/crypto/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/crypto/+esm",
+      "octets": 455,
+      "sha256": "bfc88405d539223361e23630cbf0b38e26a44dc34cf499e7afe5655a5e2486c5"
+    },
+    "/npm/@noble/hashes@1.8.0/hmac/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/hmac/+esm",
+      "octets": 2628,
+      "sha256": "68e298222cdcb1734f8e14329f42df6ac7dbaaeea7cc39039a883dd4df77198b"
+    },
+    "/npm/@noble/hashes@1.8.0/legacy/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/legacy/+esm",
+      "octets": 6641,
+      "sha256": "d6435648a0f3f3fc3a6340986813c4591f4c92a1ea2b1a253d1303d1716ee899"
+    },
+    "/npm/@noble/hashes@1.8.0/pbkdf2/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/pbkdf2/+esm",
+      "octets": 4304,
+      "sha256": "713f7a6c0d312cd9d50568abbd547887e39b934d2bba14ba3f0fad7c38de53a3"
+    },
+    "/npm/@noble/hashes@1.8.0/ripemd160/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/ripemd160/+esm",
+      "octets": 4848,
+      "sha256": "bf097428a28c50c58c9a9d42cb7de2dd09553563b0cbdee16b6302f6c53bb113"
+    },
+    "/npm/@noble/hashes@1.8.0/sha2/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/sha2/+esm",
+      "octets": 11692,
+      "sha256": "539a5274f75679d1c8a1b90b750db1922daa8fbb7d9e2829fa8c09534927b695"
+    },
+    "/npm/@noble/hashes@1.8.0/sha256/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/sha256/+esm",
+      "octets": 5321,
+      "sha256": "d72769a7350e4b3532d6ea46f578c0efe6021ccc99f5d1c672eaeef42a757e99"
+    },
+    "/npm/@noble/hashes@1.8.0/sha3/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/sha3/+esm",
+      "octets": 5461,
+      "sha256": "58fd1494ba665a7572d6f80e4ca995c89c013fd42097822a56ce102333f0ef07"
+    },
+    "/npm/@noble/hashes@1.8.0/utils/+esm": {
+      "source": "/npm/@noble/hashes@1.8.0/utils/+esm",
+      "octets": 4746,
+      "sha256": "d40d819462cd0c16c078a132f600a5eab4bba7356f6e259ad85e49839f0f7ad9"
+    },
+    "/npm/@scure/base@1.2.5/+esm": {
+      "source": "/npm/@scure/base@1.2.5/+esm",
+      "octets": 10169,
+      "sha256": "552ee8d5f31f0fe994aed4767a000d211992e4ec222a761d15dad115829778f3"
+    },
+    "/npm/@scure/bip32@1.7.0/+esm": {
+      "source": "/npm/@scure/bip32@1.7.0/+esm",
+      "octets": 5714,
+      "sha256": "1b3ce474efc2dd19cc21a3d2c30ba25bd13768888153a04a40e78dc18899e2d0"
+    },
+    "/npm/@scure/bip39@1.6.0/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/+esm",
+      "octets": 1938,
+      "sha256": "eae01a4487be531f0a5cc2191c1d555ad0afe3448f921d8644d76ad383a2ba2a"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/czech/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/czech/+esm",
+      "octets": 15347,
+      "sha256": "4e7740d94326bcfe92f5c114169f1a61b5759708ccabe9410b439a6605861e06"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/english/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/english/+esm",
+      "octets": 13520,
+      "sha256": "d8b3d572a30fc7e003cd5e970673bb7f8fd4d1b9a252855a40f9926d92af542f"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/french/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/french/+esm",
+      "octets": 18732,
+      "sha256": "e0220212e3a44fc0e3d844bbce978e2473bb9f28a8ff1604e1a18d0e48cfab9f"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/italian/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/italian/+esm",
+      "octets": 16437,
+      "sha256": "07ca78d90131b0d46e76dca6b8d5ec90fc53778ab351a9d0f1aaf3b4bb9188b3"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/japanese/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/japanese/+esm",
+      "octets": 51203,
+      "sha256": "413925cdb03d3a1211385cea02ee790fbcac7b8ffc96918a597b42ad4aeed273"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/korean/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/korean/+esm",
+      "octets": 74019,
+      "sha256": "75a3330f797a3d1320e9d64f69ea50005457e0e8a747cc7bb04b3f8d30c847c1"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/portuguese/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/portuguese/+esm",
+      "octets": 16078,
+      "sha256": "9a0738e8523585cd54ae73287a8cdcca533d2b7b59e75f4c0b8d2b8374f449bb"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/simplified-chinese/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/simplified-chinese/+esm",
+      "octets": 14751,
+      "sha256": "523a5918839575bc23d35d74eb8e03c18f517a26e7f0fa746f4f7ccc6217bbe9"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/spanish/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/spanish/+esm",
+      "octets": 15748,
+      "sha256": "5996c7d7df20480a7419abf2ae8ad30770e5efd809086417619623528deff9ea"
+    },
+    "/npm/@scure/bip39@1.6.0/wordlists/traditional-chinese/+esm": {
+      "source": "/npm/@scure/bip39@1.6.0/wordlists/traditional-chinese/+esm",
+      "octets": 14752,
+      "sha256": "6052306cb2c1f23473f0a4b615decc4fe1b3723c5fbad43aa3c51e58bda3d114"
+    },
+    "/npm/@xmtp/browser-sdk@7.1.0/+esm": {
+      "source": "/npm/@xmtp/browser-sdk@7.1.0/+esm",
+      "octets": 35528,
+      "sha256": "ba993714acbd400a6db66e5d441ced46fe28aa3ad58046e1a102a986c5e89da9"
+    },
+    "/npm/@xmtp/browser-sdk@7.1.0/dist/index.js": {
+      "source": "/npm/@xmtp/browser-sdk@7.1.0/dist/index.js",
+      "octets": 34415,
+      "sha256": "baf84d7a459f6a623766e2faf0e06490e0784b5d94db0f8b57b26f415137d652"
+    },
+    "/npm/@xmtp/browser-sdk@7.1.0/dist/workers/client": {
+      "source": "/npm/@xmtp/browser-sdk@7.1.0/dist/workers/client.js/+esm",
+      "octets": 29663,
+      "sha256": "0cf6bf8703be2961f55f8a0fb8e6405cc7860fde19cce35c514542823709b71b"
+    },
+    "/npm/@xmtp/browser-sdk@7.1.0/dist/workers/opfs": {
+      "source": "/npm/@xmtp/browser-sdk@7.1.0/dist/workers/opfs.js/+esm",
+      "octets": 1906,
+      "sha256": "f799eb89e996f7c538a1984f3042e7f22b9b17eba7aca70b9085933dc562ef1f"
+    },
+    "/npm/@xmtp/content-type-primitives@3.0.0/+esm": {
+      "source": "/npm/@xmtp/content-type-primitives@3.0.0/+esm",
+      "octets": 882,
+      "sha256": "83a92e32c5f7dc644e8fc847d7ec80a27259c98896a77beb66584f54d470dd2b"
+    },
+    "/npm/@xmtp/wasm-bindings@1.11.0/+esm": {
+      "source": "/npm/@xmtp/wasm-bindings@1.11.0/+esm",
+      "octets": 65209,
+      "sha256": "f30a6eb55399f3abb2e9fbbf7e0c6913684b836d63674fc9ddd7dafcbf69653c"
+    },
+    "/npm/@xmtp/wasm-bindings@1.11.0/dist/bindings_wasm.js": {
+      "source": "/npm/@xmtp/wasm-bindings@1.11.0/dist/bindings_wasm.js",
+      "octets": 159500,
+      "sha256": "7089868e5405ba3ce1bdea7fd82a3c6a724719fc7ac4cfe973a80775fcc9c4b6"
+    },
+    "/npm/@xmtp/wasm-bindings@1.11.0/dist/bindings_wasm_bg.wasm": {
+      "source": "/npm/@xmtp/wasm-bindings@1.11.0/dist/bindings_wasm_bg.wasm",
+      "octets": 12759225,
+      "sha256": "733fea171a54090a147f67804300d3b436dde5ad4fa3dd0f18380a5af8e5a3b1"
+    },
+    "/npm/abitype@1.2.3/+esm": {
+      "source": "/npm/abitype@1.2.3/+esm",
+      "octets": 15969,
+      "sha256": "01b45a44761750e513d7c8bceb35bd84a6b2f308c689241411ffd05419000dac"
+    },
+    "/npm/abitype@1.3.0/+esm": {
+      "source": "/npm/abitype@1.3.0/+esm",
+      "octets": 15969,
+      "sha256": "75f837ea2713ee6f6cc3e42f763c5865bc4779e6ccd570abec11116fe48e5260"
+    },
+    "/npm/isows@1.0.7/+esm": {
+      "source": "/npm/isows@1.0.7/+esm",
+      "octets": 732,
+      "sha256": "6e0b8043ac9a662047ec95cdfd75916b78153fd99e3941dd1c125d5b11920e77"
+    },
+    "/npm/ox@0.14.33/AbiConstructor/+esm": {
+      "source": "/npm/ox@0.14.33/AbiConstructor/+esm",
+      "octets": 28965,
+      "sha256": "0b04e05db27f8bac846748b32615736a396087ce35382c0b2121acb7a1f846e6"
+    },
+    "/npm/ox@0.14.33/AbiFunction/+esm": {
+      "source": "/npm/ox@0.14.33/AbiFunction/+esm",
+      "octets": 29906,
+      "sha256": "053f256181b90c8eb85e68bf597524fd31442dd951d8515930cbf914b4952d9b"
+    },
+    "/npm/ox@0.14.33/BlockOverrides/+esm": {
+      "source": "/npm/ox@0.14.33/BlockOverrides/+esm",
+      "octets": 5138,
+      "sha256": "d1385da1729a4855ffc064485f71593327d54ae332720cdb884a9f8348ebc9cf"
+    },
+    "/npm/ox@0.14.33/erc6492/+esm": {
+      "source": "/npm/ox@0.14.33/erc6492/+esm",
+      "octets": 28328,
+      "sha256": "e187f9847816820713ddd203cec63d5cf4e6ca1a59747ec018e1b7d8d833a247"
+    },
+    "/npm/ox@0.14.33/erc8010/+esm": {
+      "source": "/npm/ox@0.14.33/erc8010/+esm",
+      "octets": 34427,
+      "sha256": "a71a8db7991bbd48c27fe5e0fefd5773545954884998c7277e42c6058fada310"
+    },
+    "/npm/viem@2.55.10/+esm": {
+      "source": "/npm/viem@2.55.10/+esm",
+      "octets": 256444,
+      "sha256": "0e0072f0900e1cd5da4509a1075a22192f6d684baf1f147910718d14c06dee33"
+    },
+    "/npm/viem@2.55.10/_esm/utils/ccip.js/+esm": {
+      "source": "/npm/viem@2.55.10/_esm/utils/ccip.js/+esm",
+      "octets": 65513,
+      "sha256": "1aeed20abe797d856051687809278a9bbd9b18971aa48d13085af4fb5bf05d96"
+    },
+    "/npm/viem@2.55.10/accounts/+esm": {
+      "source": "/npm/viem@2.55.10/accounts/+esm",
+      "octets": 36672,
+      "sha256": "fb25b7badd9e659c64ba608325b7bd804d9d35beb6cdc864a3c820158f50c6a1"
+    }
+  }
+}

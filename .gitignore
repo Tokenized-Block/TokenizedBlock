@@ -1,2 +1,5 @@
 node_modules/
 *.log
+# SDK XMTP vendorise : telecharge au demarrage par vendor-xmtp.mjs et VERIFIE fichier par fichier
+# contre xmtp-manifeste.json. 14 Mo qui n ont rien a faire dans l historique d un depot public.
+vendor/

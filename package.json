@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Tokenized Block — the living map. Static app served with cache headers GitHub Pages does not allow.",
   "scripts": {
-    "start": "node serveur-web.js"
+    "start": "node vendor-xmtp.mjs ; node serveur-web.js"
   },
   "engines": {
     "node": ">=20"
