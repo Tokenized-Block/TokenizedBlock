@@ -3692,6 +3692,20 @@ $('#cSel').addEventListener('input', majFraisEtRecap);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
 $('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
 $('#cCreer').addEventListener('click', () => void creerBlock());
+/* ⛔ PRE-REMPLISSAGE PAR LIEN (Phil, 2026-09-13 : « preenregistre tout » pour creer TBLOCK sur une autre
+ *    machine). Le lien REMPLIT les champs, il ne signe rien et ne clique rien : l utilisateur relit l apercu
+ *    « What your wallet will sign » et signe lui-meme. Seuls des presets nommes ici sont acceptes — un lien
+ *    ne peut pas injecter un nom ou un sel arbitraire dans l ecran. */
+const PRESETS_CREATION = { tblock: { nom: 'TokenizedBlock', sym: 'TBLOCK', sel: 'tblock-official-v1' } };
+const presetLien = PRESETS_CREATION[String(paramsLien.get('creer') || '').toLowerCase()];
+if (presetLien) {
+  $('#cNom').value = presetLien.nom;
+  $('#cSym').value = presetLien.sym;
+  $('#cSel').value = presetLien.sel;
+  peindreApercuCreation();
+  majFraisEtRecap();
+  setTimeout(() => allerA('creer'), 0);
+}
 
 /* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */
 $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
