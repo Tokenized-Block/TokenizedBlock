@@ -184,6 +184,7 @@ body{background:var(--fond);
 .bloc{position:absolute;border:1px solid var(--contour);border-radius:var(--rs);background:transparent;cursor:pointer;
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
 .bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.32)}
+.bloc.nous{border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(167,139,250,.28);z-index:2}
 /* ⛔⛔ LE DESSIN EST EN 200x220, PAS CARRE — ET C ETAIT LE « BUG VISUEL » SIGNALE PAR PHIL. Force
  * dans une case carree, le cube etait rogne ou ecrase : plusieurs blocks n affichaient qu une
  * bande de leur face du haut. Le dessin part dans le contractURI ; le deformer a l ecran, c est
@@ -1012,7 +1013,10 @@ function cerveauAvecMemoire(adr) {
 import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
-import { origineDepuisFace, phrasesOrigine } from './origine.js';
+import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
+/* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🧩 sur la map, 🧩 dans Live. */
+let nosSet = new Set(NOS_BLOCKS_GENESE);
+const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { repartitionFrappe } from './tokenomics.js';
 import { evenementsLive } from './fil-live.js';
@@ -1481,6 +1485,42 @@ $('#trouver').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); chercherBlock(); }
 });
 
+/**
+ * Pose NOS blocks sur la map (meme hors de la fenetre lue), les marque et les met en tete de `habitants`.
+ * ⛔ Mainnet seulement (la genese y vit). Scan des frappes vers le wallet de frais sur 20 000 blocs a chaque
+ *    chargement : un block v2 recent y est ; la genese est toujours la. Une lecture ratee garde la genese.
+ */
+const SYMBOLES_GENESE = { [NOS_BLOCKS_GENESE[0]]: 'TBLOCK', [NOS_BLOCKS_GENESE[1]]: 'TTB' };
+async function poserNosBlocks(fin) {
+  if (CHAINE !== 8453) return;
+  try {
+    const r = await nosBlocks({ rpc, deBloc: Math.max(0, fin - 20000), aBloc: fin });
+    nosSet = new Set(r.blocks);
+  } catch (e) { /* genese seule */ }
+  for (const adr of nosSet) {
+    let h = habitants.find((x) => String(x.adr).toLowerCase() === adr);
+    if (!h) {
+      const c = creationsLues.find((x) => String(x.jeton).toLowerCase() === adr);
+      h = creerHabitant({ jeton: adr, symbole: (c && c.symbole) || SYMBOLES_GENESE[adr] || null, vie: null });
+    }
+    marquerNotre(h);
+    habitants.splice(habitants.indexOf(h), 1);
+    habitants.unshift(h);
+  }
+  if (!anim) animer();
+}
+function marquerNotre(h) {
+  if (!h.nous) {
+    h.t = Math.round(h.t * 1.25);
+    h.el.style.width = h.t + 'px';
+    h.el.style.height = Math.round(h.t * 1.1) + 'px';
+  }
+  h.nous = true;
+  h.el.classList.add('nous');
+  const etiq = h.el.querySelector('.etiq');
+  if (etiq && !etiq.textContent.startsWith('🧩')) etiq.textContent = '🧩 ' + etiq.textContent;
+}
+
 async function charger() {
   const etat = $('#mapEtat'), note = $('#mapNote');
   try {
@@ -1503,6 +1543,7 @@ async function charger() {
      *    pas lue, ils sont PALES, jamais « a zero ». */
     poserBlocks(vues.slice(0, 22).map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null })));
     etat.textContent = '';
+    void poserNosBlocks(r.fenetre.a);
     note.textContent = vues.length + ' blocks made in the last '
       + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · showing '
       + Math.min(22, vues.length)
@@ -1571,7 +1612,7 @@ async function lireLaVie() {
     if (r.etat === 'LUE') {
       avecMarche++;
       h.vie = r.vie; h.devise = r.devise; h.via = r.via;
-      const t = tailleDe(r.vie);
+      const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
       h.t = t;
       h.el.style.width = t + 'px';
       h.el.style.height = Math.round(t * 1.1) + 'px';
@@ -2582,7 +2623,7 @@ async function lireLive(sens) {
 
 function peindreLive() {
   $('#sfLive').innerHTML = liveEvts.map((e) => {
-    const nom = enTexte(String(e.sym || '?').slice(0, 14));
+    const nom = (estANous(e.jeton) ? '🧩 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> bought · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> sold · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
