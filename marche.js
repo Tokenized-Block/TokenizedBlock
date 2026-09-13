@@ -101,7 +101,10 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
       ratees++;
       continue;
     }
-    if (!s0 || s0 === '0x' || String(s0).length < 66) continue;
+    /* ⛔⛔ VU EN DIRECT (2026-09-13, fil « Blocks talking ») : « TBLOCK: I am dormant now » — NON_TROUVEE sur un block dont
+     *    le marche est en ligne. getSlot0 rend TOUJOURS quatre mots : une reponse vide ou courte est une lecture RATEE,
+     *    pas une pool absente — ne pas la compter laissait le « zero » des autres cles conclure « aucun marche ». */
+    if (!s0 || s0 === '0x' || String(s0).length < 66) { ratees++; continue; }
     lues++;
     const v = BigInt(String(s0).slice(0, 66));
     if (v !== 0n) { sqrt = v; via = cfg.nom; cleTrouvee = cle; break; }
