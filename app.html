@@ -844,6 +844,23 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
+      <!-- ⛔⛔ OUVRIR SON MARCHE — dans l app, plus jamais par l ancien site. Cache tant que le block
+           n est pas un block SANS marche avere : « pas lu » n est pas « endormi ». Rien ne part avant
+           que le wallet ne le montre, et le bouton de lancement ne s ouvre qu apres un OUI de la chaine. -->
+      <div class="pJeu" id="pLancement" hidden>
+        <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
+        <p class="pProchain">Creates its pool against ETH and places almost all of your blocks in it, in one
+          signed transaction. Nothing moves before your wallet shows it.</p>
+        <label class="champ">Starting value of the whole supply, in ETH<input id="plValo" inputmode="decimal"
+          placeholder="e.g. 10" autocomplete="off"></label>
+        <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
+          the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
+        <button class="bouton sec" id="plCalculer" type="button" style="margin-top:10px">Work it out</button>
+        <ul class="pmLignes" id="plLignes"></ul>
+        <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
+        <p class="note" id="plEtat"></p>
+      </div>
+
       <p class="note" id="pNote"></p>
 
       <!-- ⛔ LES MESSAGES PUBLICS DU BLOCK : ceux qui voyagent DANS ses transferts, relus depuis la
@@ -912,6 +929,11 @@ import { pairesProposees, qualifierPaire, etiquettePaire } from './paires.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
 import { faceDuBlock, validerFace } from './face.js';
+/* ⛔⛔ OUVRIR LE MARCHE D UN BLOCK, DANS L APP. Le plan recopie le lancement qui a deja marche (compare
+ * a index.html par un test) ; il ne signe rien. Chaque signature passe par `envoi.js`, et la chaine
+ * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
+ * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
+import { planLancement, simulerLancement } from './lancer-pool.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -2109,6 +2131,10 @@ async function lireProfil(adr, sym, perime) {
   $('#pmLignes').innerHTML = '';
   $('#pmPropositions').innerHTML = '';
   $('#pmJamais').textContent = '';
+  /* le plan de lancement parlait du block precedent : il se ferme a l ouverture d un autre profil */
+  $('#pLancement').hidden = true;
+  $('#pReveiller').hidden = true;
+  planCourant = null;
   /* le fil de messages parlait du block precedent : on le vide a l ouverture */
   $('#pmsgFil').innerHTML = '';
   $('#pmsgNote').textContent = '';
@@ -2164,10 +2190,10 @@ async function lireProfil(adr, sym, perime) {
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
   /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
    * proposer de reveiller un block qu on n a pas su lire enverrait ouvrir une pool qui existe. */
-  /* ⛔ CACHE TANT QUE LE LANCEMENT N EST PAS DANS L APP. Il renvoyait vers l ancien site (retire) ;
-   * un bouton visible qui ne fait plus rien apprendrait que les boutons de cette app mentent. Il
-   * reapparaitra quand « ouvrir son marche » se fera ICI. */
-  $('#pReveiller').hidden = true;
+  /* ⛔ LE LANCEMENT EST MAINTENANT DANS L APP : le bouton revient, mais SEULEMENT pour un block sans
+   * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
+   * enverrait creer une pool qui existe peut-etre deja. */
+  $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
   noterVie(adr, vieProfil);
@@ -2348,6 +2374,183 @@ function peindreAchats() {
     : avecMarche + ' block(s) with a market. The purchase reader is built and tested, but no screen '
       + 'shows its history yet — that is the next step, not a hidden feature.';
 }
+
+/* ══ OUVRIR LE MARCHE D UN BLOCK ═════════════════════════════════════════════════════════════
+ * ⛔⛔ L ORDRE EST LA SECURITE : mesurer (plan) → autorisations une par une, chacune suivie d une
+ *    NOUVELLE mesure (jamais « elle a du passer ») → la chaine simule le lancement → seulement alors
+ *    le bouton de lancement s ouvre → le wallet signe. Aucun raccourci ne saute une marche.
+ * ⛔ UNE SEULE TRANSACTION DE LANCEMENT (multicall initialize + mint) : pas d etat intermediaire ou une
+ *    pool vide survit a un refus. Repris tel quel de l ecran qui a marche. */
+let planCourant = null, lancementEnCours = false;
+
+function ouvrirLancement() {
+  $('#pLancement').hidden = false;
+  $('#plReseau').textContent = RESEAUX[CHAINE].nom;
+  $('#plLignes').innerHTML = '';
+  $('#plActions').innerHTML = '';
+  $('#plEtat').textContent = '';
+  planCourant = null;
+  $('#pLancement').scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+async function calculerLancement() {
+  const adr = $('#profil').dataset.block;
+  const e = $('#plEtat');
+  e.className = 'note';
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
+  if (!(valo > 0) || !Number.isFinite(valo)) {
+    e.className = 'note wKo';
+    e.textContent = 'Enter the starting value of the whole supply, in ETH — a positive number.';
+    return;
+  }
+  e.textContent = 'Reading the block, its pool and your approvals…';
+  $('#plCalculer').disabled = true;
+  profilEnLecture = true;
+  let plan;
+  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo }); }
+  catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
+  /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
+  if ($('#profil').dataset.block !== adr) return;
+  planCourant = plan;
+  peindrePlan(plan, adr);
+}
+
+function peindrePlan(plan, adr) {
+  const e = $('#plEtat');
+  const actions = $('#plActions');
+  actions.innerHTML = '';
+  if (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE') {
+    $('#plLignes').innerHTML = '';
+    e.className = 'note wKo';
+    /* ⛔ DEUX PHRASES DIFFERENTES : un refus est un fait sur ce lancement, une lecture ratee est un
+     * fait sur notre reseau — et dans les deux cas, rien n est offert a signer. */
+    e.textContent = (plan.etat === 'REFUSE' ? 'Not possible as set: ' : 'Not measured, so nothing to sign: ') + plan.pourquoi;
+    return;
+  }
+  const d = plan.dec;
+  $('#plLignes').innerHTML = [
+    'Pool on ' + RESEAUX[CHAINE].nom + ': against native ETH · fee 0.5 % · spacing 200 · '
+      + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
+    'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
+      + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
+    'ETH needed: none — a single-sided launch.',
+    'Fee: 0.5 % of every trade goes to the position, which belongs to you. ⚠️ The same wallet that collects '
+      + 'those fees can also take the liquidity out — a permanent lock is being checked, not built yet.',
+    'Irreversible: the fee can never change, and this value sets the starting price for good.',
+    ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+
+  /* ⛔ LE PLANCHER DE VALORISATION EST UNE CONFIRMATION, PAS UN BLOCAGE : repris de l ecran qui a marche. */
+  const tropBas = plan.classement && plan.classement.etat === 'TROP_BON_MARCHE';
+  $('#plConfirmRang').hidden = !tropBas;
+  if (tropBas && !$('#plConfirm').checked) {
+    e.className = 'note wKo';
+    e.textContent = 'Tick the confirmation above to go on with such a cheap start, then work it out again.';
+    return;
+  }
+
+  if (plan.etat === 'APPROBATIONS') {
+    const etape = plan.etapes[0];
+    const b = document.createElement('button');
+    b.className = 'bouton';
+    b.type = 'button';
+    b.textContent = 'Approval 1 of ' + plan.etapes.length + ' — ' + etape.nom;
+    b.addEventListener('click', () => void signerEtapeLancement(etape));
+    actions.appendChild(b);
+    e.className = 'note';
+    e.textContent = 'Approvals first, then the launch. Each opens your wallet, and each is measured again once done.';
+    return;
+  }
+  const b = document.createElement('button');
+  b.className = 'bouton sec';
+  b.type = 'button';
+  b.textContent = 'Ask the chain first';
+  b.addEventListener('click', () => void verifierLancement(adr));
+  actions.appendChild(b);
+  e.className = 'note';
+  e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.';
+}
+
+async function signerEtapeLancement(etape) {
+  if (lancementEnCours) return;
+  lancementEnCours = true;
+  const e = $('#plEtat');
+  e.className = 'note';
+  e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: etape.to, data: etape.data, value: '0x0' });
+  } finally { lancementEnCours = false; }
+  if (r.etat !== 'CONFIRME') {
+    e.className = 'note wKo';
+    e.textContent = 'Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || '');
+    return;
+  }
+  /* ⛔ ON REMESURE, ON NE SUPPOSE PAS : l autorisation est relue sur la chaine avant l etape suivante. */
+  await calculerLancement();
+}
+
+async function verifierLancement(adr) {
+  if (lancementEnCours || !planCourant || !planCourant.tx) return;
+  const e = $('#plEtat');
+  e.className = 'note';
+  e.textContent = 'Asking the chain to run the launch, without sending it…';
+  profilEnLecture = true;
+  let sim;
+  try { sim = await simulerLancement({ rpc, compte, tx: planCourant.tx }); }
+  finally { profilEnLecture = false; }
+  if ($('#profil').dataset.block !== adr) return;
+  if (sim.etat !== 'ACCEPTE') {
+    e.className = 'note wKo';
+    /* ⛔ FAIL-CLOSED : « je n ai pas pu demander » garde le bouton ferme, exactement comme un refus. */
+    e.textContent = (sim.etat === 'REFUSE' ? 'The chain refuses this launch: ' : 'The chain could not be asked, so the launch stays closed: ')
+      + sim.pourquoi;
+    return;
+  }
+  const actions = $('#plActions');
+  actions.innerHTML = '';
+  const b = document.createElement('button');
+  b.className = 'bouton';
+  b.type = 'button';
+  b.textContent = 'Launch — sign in my wallet';
+  b.addEventListener('click', () => void lancerMarcheBlock(adr));
+  actions.appendChild(b);
+  e.className = 'note' + (CHAINE === 8453 ? ' wKo' : ' wOk');
+  e.textContent = 'The chain accepts this launch'
+    + (sim.gasUtilise ? ' (about ' + Number(sim.gasUtilise).toLocaleString('en-US') + ' gas)' : '') + '. '
+    + (CHAINE === 8453 ? '⚠️ Base mainnet: real ETH for gas, and the starting price is permanent.' : 'Practice network — nothing here is real money.');
+}
+
+async function lancerMarcheBlock(adr) {
+  if (lancementEnCours || !planCourant || !planCourant.tx) return;
+  lancementEnCours = true;
+  const e = $('#plEtat');
+  e.className = 'note';
+  e.textContent = 'Opening your wallet — one transaction creates the pool and places your blocks.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: planCourant.tx.to, data: planCourant.tx.data, value: '0x0' });
+  } finally { lancementEnCours = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
+    + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+  if (r.etat === 'CONFIRME') {
+    e.className = 'note wOk';
+    e.innerHTML = 'Its market is open.' + lien;
+    $('#plActions').innerHTML = '';
+    planCourant = null;
+  } else {
+    e.className = 'note wKo';
+    e.innerHTML = enTexte(r.pourquoi || r.etat) + lien;
+  }
+}
+
+$('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#plCalculer').addEventListener('click', () => void calculerLancement());
+$('#plConfirm').addEventListener('change', () => { if (planCourant) peindrePlan(planCourant, $('#profil').dataset.block); });
 
 /* ══ MESSAGES PUBLICS D UN BLOCK ═════════════════════════════════════════════════════════════
  * ⛔ SUR DEMANDE, PAS A L OUVERTURE DU PROFIL : lire les transferts puis une transaction par ligne
