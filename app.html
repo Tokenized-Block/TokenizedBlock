@@ -901,6 +901,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="pMap" type="button">Show on map</button>
         <!-- ⛔ RESERVE AUX BLOCKS ENDORMIS : un block qui a deja un marche n a rien a reveiller. -->
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
+        <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Read its market again — the public node refused the read</button>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
       <!-- ⛔⛔ OUVRIR SON MARCHE — dans l app, plus jamais par l ancien site. Cache tant que le block
@@ -2631,7 +2632,19 @@ async function lireProfil(adr, sym, perime) {
   await dormir(260);
   if (perime()) return;
   let v = null;
-  try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { /* dit juste dessous */ }
+  /* ⛔⛔ PHIL (2026-09-13, lien de lancement TTB) : « Life not read — unreadable right now », donc PAS de carte de
+   *    lancement (elle n apparait que sur une absence de marche AVEREE) et rien a « work out ». Sous limite de debit
+   *    une lecture ratee etait definitive. On relit jusqu a 4 fois, espace croissant, en le disant. */
+  for (let essai = 0; essai < 4; essai++) {
+    if (essai) {
+      $('#pVie').textContent = 'market not read yet — retrying (' + (essai + 1) + '/4)…';
+      await dormir(3000 * 2 ** (essai - 1));
+      if (perime()) return;
+    }
+    try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { v = null; }
+    if (perime()) return;
+    if (v && v.etat !== 'NON_LUE') break;
+  }
   marcheProfil = v ? { adr: String(adr).toLowerCase(), chaine: CHAINE, v } : null;
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
@@ -2655,6 +2668,12 @@ async function lireProfil(adr, sym, perime) {
    * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
    * enverrait creer une pool qui existe peut-etre deja. */
   $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
+  $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
+  /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
+  if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
+    lancementLien = null;
+    ouvrirLancement();
+  }
   $('#pEchange').hidden = etatVieProfil !== 'LUE';
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
@@ -3018,6 +3037,8 @@ function peindreAchats() {
 let echangeCourant = null, echangeEnCours = false;
 /* le marche que le profil vient de lire : reutilise par l achat / vente du MEME block sur la MEME chaine */
 let marcheProfil = null;
+/* le block dont le lien demande le lancement (?block=…&lancer=…), ouvert une seule fois */
+let lancementLien = null;
 async function decimalesDe(jeton) {
   const r = await rpc('eth_call', [{ to: jeton, data: '0x313ce567' }, 'latest']);
   return Number(BigInt(r));
@@ -3405,6 +3426,10 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#pRelire').addEventListener('click', () => {
+  const adr = $('#profil').dataset.block;
+  if (adr) void ouvrirProfil(adr, symProfil);
+});
 $('#plCalculer').addEventListener('click', () => void calculerLancement());
 $('#plDevise').addEventListener('change', () => {
   const t = $('#plDevise').value === 'TBLOCK' ? 'TBLOCK' : 'ETH';
@@ -4486,6 +4511,7 @@ const valoLien = Number(paramsLien.get('lancer'));
 const partLien = Number(paramsLien.get('part'));
 if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e6) $('#plValo').value = String(valoLien);
 if (Number.isFinite(partLien) && partLien >= 0.1 && partLien <= 99.9) $('#plPart').value = String(partLien);
+if (Number.isFinite(valoLien) && valoLien > 0) lancementLien = String(paramsLien.get('block') || '').toLowerCase();
 /* &paire=tblock : preselectionne la paire TBLOCK (Phil, 2026-09-13 : TTB sera le premier block apparie a TBLOCK) */
 if (String(paramsLien.get('paire') || '').toLowerCase() === 'tblock') {
   $('#plDevise').value = 'TBLOCK';
