@@ -823,6 +823,19 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
       <p class="note" id="pNote"></p>
+
+      <!-- ⛔ LES MESSAGES PUBLICS DU BLOCK : ceux qui voyagent DANS ses transferts, relus depuis la
+           chaine. Rien n est stocke par nous ; chaque ligne renvoie a sa transaction. -->
+      <div class="pJeu" id="pMessages">
+        <div class="pJeuTete"><span class="pBadge">Public messages</span><span class="pPV" id="pmsgCompte"></span></div>
+        <p class="pProchain">Written inside its transfers — public and permanent, readable by anyone, forever.</p>
+        <div class="pActions" style="grid-template-columns:1fr 1fr">
+          <button class="bouton sec" id="pmsgLire" type="button">Read its messages</button>
+          <button class="bouton sec" id="pmsgEcrire" type="button">Write one with it</button>
+        </div>
+        <ul class="fil" id="pmsgFil"></ul>
+        <p class="note" id="pmsgNote"></p>
+      </div>
     </div>
 
     <div class="carte">
@@ -1196,10 +1209,16 @@ $('#map').addEventListener('click', (e) => {
  * ⛔ UN SEUL CHEMIN D ENVOI POUR TOUTE L APP : le formulaire du Wallet, avec sa garde `envoi.js`.
  *    Un second chemin « special GM » aurait sa propre garde a maintenir, donc sa propre faille.
  */
-function ouvrirEnvoiPour(adr, dire) {
+function ouvrirEnvoiPour(adr, dire, geste = 'send') {
   if (!compte) {
-    dire('A GM is a real transfer: a fragment of a block you hold, sent to someone. Connect your '
-      + 'wallet first — it signs, this page never does.');
+    /* ⛔ LA PHRASE SUIT LE GESTE : parler de GM a quelqu un qui voulait ecrire un message, c est
+     * repondre a une autre question que la sienne. */
+    dire((geste === 'gm'
+      ? 'A GM is a real transfer: a fragment of a block you hold, sent to someone.'
+      : geste === 'message'
+        ? 'A public message rides inside a transfer of this block, so it needs a little of it to send.'
+        : 'Sending from this block is a real transfer.')
+      + ' Connect your wallet first — it signs, this page never does.');
     return false;
   }
   const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
@@ -1221,7 +1240,7 @@ $('#fGM').addEventListener('click', () => {
   const adr = $('#fAdr').textContent.trim();
   const n = $('#fNote');
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
-  if (ouvrirEnvoiPour(adr, (t) => { n.textContent = t; })) {
+  if (ouvrirEnvoiPour(adr, (t) => { n.textContent = t; }, 'gm')) {
     $('#sEtat').className = 'note';
     $('#sEtat').textContent = 'GM: pick who receives it and how much. Your wallet shows the transfer '
       + 'before you sign — nothing leaves without you.';
@@ -2068,6 +2087,10 @@ async function lireProfil(adr, sym, perime) {
   $('#pmLignes').innerHTML = '';
   $('#pmPropositions').innerHTML = '';
   $('#pmJamais').textContent = '';
+  /* le fil de messages parlait du block precedent : on le vide a l ouverture */
+  $('#pmsgFil').innerHTML = '';
+  $('#pmsgNote').textContent = '';
+  $('#pmsgCompte').textContent = '';
   $('#pcActif').checked = cerveauVoulu();
   try { profilCerveau = { etat: cerveauInitial(adr), vu: null }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
@@ -2303,6 +2326,77 @@ function peindreAchats() {
     : avecMarche + ' block(s) with a market. The purchase reader is built and tested, but no screen '
       + 'shows its history yet — that is the next step, not a hidden feature.';
 }
+
+/* ══ MESSAGES PUBLICS D UN BLOCK ═════════════════════════════════════════════════════════════
+ * ⛔ SUR DEMANDE, PAS A L OUVERTURE DU PROFIL : lire les transferts puis une transaction par ligne
+ *    coute des dizaines d appels, et le profil lit deja ses faits et sa vie.
+ * ⛔ SEULS LES TRANSFERTS QUI PORTENT UN TEXTE LISIBLE S AFFICHENT ; les autres sont COMPTES, pour
+ *    que « aucun message » ne se lise pas comme « aucune activite ». */
+const MSG_TX_MAX = 30;
+let msgEnCours = false;
+
+async function lireMessagesDuBlock() {
+  const adr = $('#profil').dataset.block;
+  if (msgEnCours || !/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) return;
+  msgEnCours = true;
+  $('#pmsgLire').disabled = true;
+  const note = $('#pmsgNote');
+  note.className = 'note';
+  note.textContent = 'Reading its transfers…';
+  profilEnLecture = true;
+  try {
+    let r;
+    try { r = await listerTransfers({ rpc, token: adr }); }
+    catch (e) {
+      note.className = 'note wKo';
+      note.textContent = 'Could not read its transfers right now — that is about the network, not about the block.';
+      return;
+    }
+    const recents = (r.transfers || []).slice(0, MSG_TX_MAX);
+    const avec = [];
+    let illisibles = 0, txNonLues = 0;
+    for (const t of recents) {
+      if ($('#profil').dataset.block !== adr) return;
+      await dormir(220);
+      let tx = null;
+      try { tx = t.tx ? await rpc('eth_getTransactionByHash', [t.tx]) : null; } catch (e) { tx = null; }
+      if (!tx) { txNonLues++; continue; }
+      const m = lireMemo(tx.input);
+      if (m.etat === 'LU') avec.push({ ...t, texte: m.texte, signataire: tx.from });
+      else if (m.etat === 'ILLISIBLE') illisibles++;
+    }
+    const sym = symProfil || 'this block';
+    $('#pmsgFil').innerHTML = avec.map((l) => '<li class="filL"><div style="min-width:0;flex:1">'
+      + '<p class="filM" style="margin:0">« ' + enTexte(l.texte) + ' »</p>'
+      + '<p class="filS">' + enTexte(court(l.signataire || l.from)) + ' → ' + enTexte(court(l.to))
+      + ' · block ' + (Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?')
+      + (l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
+        + '" target="_blank" rel="noopener">tx</a>' : '') + '</p></div></li>').join('');
+    $('#pmsgCompte').textContent = avec.length + ' message' + (avec.length === 1 ? '' : 's');
+    const ratees = (r.fenetresRatees || []).length;
+    note.className = 'note';
+    note.textContent = (avec.length
+      ? avec.length + ' message(s) among the last ' + recents.length + ' transfer(s) of ' + sym
+      : 'No message among the last ' + recents.length + ' transfer(s) of ' + sym)
+      + ' · over the last 2,000 chain blocks'
+      + (illisibles ? ' · ' + illisibles + ' transfer(s) with extra bytes that are not text' : '')
+      + (txNonLues ? ' · ⚠️ ' + txNonLues + ' transaction(s) not read — incomplete, not empty' : '')
+      + (ratees ? ' · ⚠️ ' + ratees + ' window(s) refused by the node' : '');
+  } finally {
+    msgEnCours = false;
+    profilEnLecture = false;
+    $('#pmsgLire').disabled = false;
+  }
+}
+
+$('#pmsgLire').addEventListener('click', () => void lireMessagesDuBlock());
+/* ⛔ ECRIRE = LE MEME FORMULAIRE D ENVOI QUE PARTOUT, avec le champ message mis en avant. Pas de
+ * second chemin d envoi, donc pas de seconde garde a maintenir. */
+$('#pmsgEcrire').addEventListener('click', () => {
+  if (ouvrirEnvoiPour($('#profil').dataset.block, (t) => { $('#pmsgNote').textContent = t; }, 'message')) {
+    $('#sMessage').focus();
+  }
+});
 
 $('#sfCharger').addEventListener('click', () => void chargerFil(false));
 $('#sfPlus').addEventListener('click', () => void chargerFil(true));
