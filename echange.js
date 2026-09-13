@@ -11,7 +11,8 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, ACTIONS_V4, selecteur,
+import { TBLOCK } from './tokenomics.js';
+import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -88,8 +89,56 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   if (quote <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
 
+  /* ⛔⛔ BUYBACK AUTOMATIQUE (Phil, 2026-09-13 : « si frais alors buyback direct ») : quand le marche TBLOCK/ETH est
+   *    LU, le frais n arrive pas en ETH — il RACHETE du TBLOCK dans la meme transaction, livre au wallet de frais.
+   *    Sinon (marche TBLOCK absent ou illisible, ou echange de TBLOCK lui-meme), le frais reste en ETH. Le second
+   *    swap a sa propre sortie minimale (quote reel) : un rachat qui se ferait voler son prix ne rachete rien. */
+  let rachat = null;
+  if (bps > 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
+    try {
+      const mt = await vieDuBlock({ rpc: lire, stateView: V.stateView, jeton: TBLOCK });
+      if (mt.etat === 'LUE' && mt.cle && String(mt.cle.currency0).toLowerCase() === ETH) rachat = { cle: mt.cle };
+    } catch { rachat = null; }
+  }
+  const quoteTblock = async (eth) => {
+    const r = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle: rachat.cle, zeroForOne: true, montant: eth }) }, 'latest']);
+    return BigInt('0x' + String(r).slice(2, 66));
+  };
+
   let actions, valeur, resume;
-  if (sens === 'ACHAT') {
+  if (sens === 'ACHAT' && rachat && fraisAchat > 0n) {
+    const min = (quote * (10000n - tol)) / 10000n;
+    let minT;
+    try { minT = ((await quoteTblock(fraisAchat)) * (10000n - tol)) / 10000n; } catch { minT = null; }
+    if (minT !== null && minT > 0n) {
+      actions = [{ code: ACTIONS_V4.SETTLE, params: paramsAction.settle(ETH, m, true) },
+        /* le credit ETH restant = le frais exact ; OPEN_DELTA le depense en entier */
+        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP_RACHAT__', rachatMontant: 0n, rachatMin: minT },
+        { code: ACTIONS_V4.TAKE, params: paramsAction.take(TBLOCK, FEE_WALLET, 0n) },
+        { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(jeton, min) }];
+      valeur = m;
+      resume = { paye: m, payeDevise: 'ETH', recoitAuMoins: min, recoitDevise: 'block', quote, frais: fraisAchat, fraisDevise: 'ETH',
+        montantSwap: netAchat, rachatAuto: true, tblockRachetesAuMoins: minT };
+    }
+  }
+  if (!actions && sens === 'VENTE' && rachat && bps > 0n) {
+    const brutMin = (quote * (10000n - tol)) / 10000n;
+    const fraisExact = (brutMin * bps) / 10000n;
+    let minT;
+    try { minT = fraisExact > 0n ? ((await quoteTblock(fraisExact)) * (10000n - tol)) / 10000n : null; } catch { minT = null; }
+    if (minT !== null && minT > 0n) {
+      actions = [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(jeton, m) },
+        { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP_RACHAT__', rachatMontant: fraisExact, rachatMin: minT },
+        { code: ACTIONS_V4.TAKE, params: paramsAction.take(TBLOCK, FEE_WALLET, 0n) },
+        { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(ETH, brutMin - fraisExact) }];
+      valeur = 0n;
+      resume = { paye: m, payeDevise: 'block', recoitAuMoins: brutMin - fraisExact, recoitDevise: 'ETH', quote, frais: fraisExact, fraisDevise: 'ETH',
+        montantSwap: m, rachatAuto: true, tblockRachetesAuMoins: minT };
+    }
+  }
+  if (actions) {
+    /* le second swap est encode maintenant que la forme de struct sera connue — voir plus bas */
+  } else if (sens === 'ACHAT') {
     const min = (quote * (10000n - tol)) / 10000n;
     actions = bps > 0n
       ? [{ code: ACTIONS_V4.SETTLE, params: paramsAction.settle(ETH, m, true) },
@@ -137,7 +186,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
       pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + JSON.stringify(f.causes).slice(0, 160) };
   }
-  const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: 0n, deadline, forme: f.forme, actions });
+  const actionsEncodees = actions.map((a) => (a.params === '__SWAP_RACHAT__'
+    ? { code: a.code, params: paramsSwapExactInSingle({ cle: rachat.cle, zeroForOne: true, montant: a.rachatMontant, sortieMin: a.rachatMin, forme: f.forme }) }
+    : a));
+  const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: 0n, deadline, forme: f.forme, actions: actionsEncodees });
   const tx = { to: R, data, value: '0x' + valeur.toString(16) };
   const sim = await appelOuErreur(lire, { from: compte, ...tx });
   if (sim.error) return { etat: 'REFUSE', resume, cle, pourquoi: 'the chain refuses this exact transaction: ' + sim.error.message.slice(0, 160) };

@@ -28,12 +28,16 @@
 
 /** Les paliers, du plus bas au plus haut. `mc` est le seuil de capitalisation en devise de cotation. */
 export const PALIERS = [
-  { cle: 'GRAINE',   mc: 0,        titre: 'Seed',      ouvre: 'the companion home and its vitals' },
-  { cle: 'POUSSE',   mc: 1e3,      titre: 'Sprout',    ouvre: 'corner ornaments and the spread slider' },
-  { cle: 'BRANCHE',  mc: 1e4,      titre: 'Branch',    ouvre: 'a photo on a face of the block' },
-  { cle: 'TRONC',    mc: 1e5,      titre: 'Trunk',     ouvre: 'a wider History window' },
-  { cle: 'CANOPEE',  mc: 1e6,      titre: 'Canopy',    ouvre: 'the shareable block card' },
-  { cle: 'FORET',    mc: 1e8,      titre: 'Forest',    ouvre: 'the full companion panel set' },
+  /* ⛔⛔ PROMESSES TENUES (Phil, 2026-09-13 : « faut tenir les promesses qu on a inscrites »). Mesure en relisant
+   *    l app : AUCUNE fonction n est reservee a un palier — ornements, ecart et photo sont ouverts a tous des
+   *    Create, et « History window », « block card », « companion panel set » n existent pas. Le texte promettait
+   *    ce que le code ne fait pas. Il dit maintenant ce qui est VRAI : un nom, et une tuile qui grandit avec la vie. */
+  { cle: 'GRAINE',   mc: 0,        titre: 'Seed',      ouvre: 'the Seed name on its profile' },
+  { cle: 'POUSSE',   mc: 1e3,      titre: 'Sprout',    ouvre: 'the Sprout name, and a larger tile on the map' },
+  { cle: 'BRANCHE',  mc: 1e4,      titre: 'Branch',    ouvre: 'the Branch name, and a larger tile on the map' },
+  { cle: 'TRONC',    mc: 1e5,      titre: 'Trunk',     ouvre: 'the Trunk name, and a larger tile on the map' },
+  { cle: 'CANOPEE',  mc: 1e6,      titre: 'Canopy',    ouvre: 'the Canopy name, and a larger tile on the map' },
+  { cle: 'FORET',    mc: 1e8,      titre: 'Forest',    ouvre: 'the Forest name, and a larger tile on the map' },
   { cle: 'MONUMENT', mc: 1e9,      titre: 'Monument',  ouvre: 'nothing more — the top is a name, not a privilege' },
 ];
 

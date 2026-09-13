@@ -185,6 +185,9 @@ body{background:var(--fond);
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
 .bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.32)}
 .bloc.nous{border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(167,139,250,.28);z-index:2}
+.bloc.pulse{animation:pulseBloc 1.4s ease-out 1}
+@keyframes pulseBloc{0%{box-shadow:0 0 0 0 rgba(167,139,250,.7)}100%{box-shadow:0 0 0 22px rgba(167,139,250,0)}}
+@media (prefers-reduced-motion:reduce){.bloc.pulse{animation:none}}
 /* ⛔⛔ LE DESSIN EST EN 200x220, PAS CARRE — ET C ETAIT LE « BUG VISUEL » SIGNALE PAR PHIL. Force
  * dans une case carree, le cube etait rogne ou ecrase : plusieurs blocks n affichaient qu une
  * bande de leur face du haut. Le dessin part dans le contractURI ; le deformer a l ecran, c est
@@ -1583,6 +1586,49 @@ async function charger() {
  * ⛔ ET CHAQUE BLOCK GRANDIT DES QUE SA VIE ARRIVE, sans attendre les autres : la map respire au
  *    lieu de sauter d un coup a la fin.
  */
+/**
+ * Applique une vie lue a une tuile : taille, paleur, vie precedente gardee pour le cerveau.
+ * ⛔ UNE SEULE FONCTION pour la boucle de la map ET pour le rafraichissement declenche par un achat / une vente
+ *    du fil Live : deux copies du redimensionnement finiraient par dessiner deux tailles pour la meme vie.
+ */
+function appliquerVie(h, r) {
+  if (typeof h.vie === 'number') h.vieAvant = h.vie;
+  h.etatVie = r.etat;
+  if (r.etat !== 'LUE') return;
+  h.vie = r.vie; h.devise = r.devise; h.via = r.via;
+  const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
+  h.t = t;
+  h.el.style.width = t + 'px';
+  h.el.style.height = Math.round(t * 1.1) + 'px';
+  h.el.classList.remove('sansPrix');
+}
+
+/**
+ * ⛔ UN BLOCK ACHETE OU VENDU GROSSIT (OU RETRECIT) TOUT DE SUITE (Phil, 2026-09-13 : « fais gonfler les blocks
+ *    pour ceux ou on achete et vend »). Le fil Live signale le swap ; on relit la vie de CE block seulement, et la
+ *    tuile pulse — la taille suit la capitalisation relue, jamais un chiffre invente a partir du montant du swap.
+ */
+const MAJ_LIVE_MAX = 4;
+async function rafraichirApresEchanges(evenements) {
+  const vus = new Set();
+  for (const e of evenements) {
+    if ((e.type !== 'ACHAT' && e.type !== 'VENTE' && e.type !== 'SWAP') || vus.size >= MAJ_LIVE_MAX) continue;
+    const k = String(e.jeton).toLowerCase();
+    if (vus.has(k)) continue;
+    vus.add(k);
+    const h = habitants.find((x) => String(x.adr).toLowerCase() === k);
+    if (!h) continue;
+    let r;
+    try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); } catch { continue; }
+    appliquerVie(h, r);
+    h.el.classList.remove('pulse');
+    void h.el.offsetWidth;
+    h.el.classList.add(e.type === 'VENTE' ? 'pulse' : 'pulse');
+    h.el.dataset.dernier = e.type;
+    await dormir(260);
+  }
+}
+
 async function lireLaVie() {
   let lus = 0, avecMarche = 0, nonLus = 0;
   /* ⛔⛔ ON RESPIRE ENTRE DEUX BLOCKS, ET C EST MESURE. Vingt-deux blocks x six cles = jusqu a 132
@@ -1627,15 +1673,9 @@ async function lireLaVie() {
     }
     /* ⛔ LA VIE PRECEDENTE EST GARDEE AVANT D ETRE ECRASEE : sans elle, le cerveau ne saurait jamais
      * si la vie MONTE ou DESCEND, et ne serait jamais ni excite ni inquiet. */
-    if (typeof h.vie === 'number') h.vieAvant = h.vie;
+    appliquerVie(h, r);
     if (r.etat === 'LUE') {
       avecMarche++;
-      h.vie = r.vie; h.devise = r.devise; h.via = r.via;
-      const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
-      h.t = t;
-      h.el.style.width = t + 'px';
-      h.el.style.height = Math.round(t * 1.1) + 'px';
-      h.el.classList.remove('sansPrix');
     } else if (r.etat === 'NON_LUE') {
       /* ⛔ « PAS PU LIRE » RESTE PALE ET N EST PAS COMPTE COMME « SANS MARCHE ». Les confondre
        * ferait passer une limite de debit pour un fait sur le block. */
@@ -1735,8 +1775,8 @@ function mesCreations() {
  *    gardes meme si une fenetre a rate : ils sont vrais.
  */
 const PROFONDEUR_FRAPPES = 120000;
-async function mesFrappes(plusLoin = false) {
-  const cle = 'tblock.frappes.' + CHAINE + '.' + String(compte).toLowerCase();
+async function mesFrappes(plusLoin = false, recus = false) {
+  const cle = 'tblock.' + (recus ? 'recus.' : 'frappes.') + CHAINE + '.' + String(compte).toLowerCase();
   let cache = null;
   try { cache = JSON.parse(localStorage.getItem(cle) || 'null'); } catch (e) { cache = null; }
   const fin = parseInt(await rpc('eth_blockNumber', []), 16);
@@ -1745,7 +1785,7 @@ async function mesFrappes(plusLoin = false) {
   if (!borne) { aBloc = fin; deBloc = Math.max(0, fin - PROFONDEUR_FRAPPES + 1); }
   else if (plusLoin) { aBloc = cache.depuis - 1; deBloc = Math.max(0, aBloc - PROFONDEUR_FRAPPES + 1); }
   else { aBloc = fin; deBloc = cache.jusqua + 1; }
-  const scan = aBloc >= deBloc ? await frappesVers({ rpc, compte, deBloc, aBloc })
+  const scan = aBloc >= deBloc ? await frappesVers({ rpc, compte, deBloc, aBloc, deTous: recus })
     : { blocks: [], fenetresRatees: [], nonVerifies: [] };
   const neuf = { blocks: fusionnerCache(cache, scan, aBloc).blocks,
     depuis: borne ? cache.depuis : null, jusqua: borne ? cache.jusqua : null };
@@ -2018,7 +2058,23 @@ async function majWallet() {
       actifs.push(a);
       peindreActifs();
     }
-    note += gardees.length ? '' : 'No block created by this address in the window we read. ';
+    /* ⛔⛔ DEFAUT TROUVE EN RELISANT (2026-09-13) : le Wallet ne listait que les blocks CREES dans les 9 000 derniers
+     * blocs — TBLOCK, 35 000 blocs plus tot, n y etait pas, alors que My blocks le retrouvait deja. Les blocks
+     * FRAPPES vers ce compte (meme scan, meme cache que My blocks) s ajoutent, sans doublon. */
+    let frappes = { blocks: [] };
+    try { frappes = await mesFrappes(false, true); } catch { note += '⚠️ blocks you received could not be read further back. '; }
+    if (perime()) return;
+    for (const b of frappes.blocks.filter((x) => !gardees.some((c) => String(c.jeton).toLowerCase() === x.jeton)).slice(0, 12)) {
+      await dormir(260);
+      const a = { id: b.jeton, nom: '?', sous: 'block you received or bought · ' + court(b.jeton), adr: b.jeton, bloc: true };
+      try { Object.assign(a, await lireJeton(b.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
+      const connu = creationsLues.find((c) => String(c.jeton).toLowerCase() === b.jeton);
+      a.nom = String((connu && connu.symbole) || SYMBOLES_GENESE[b.jeton] || '?').slice(0, 12);
+      if (perime()) return;
+      actifs.push(a);
+      peindreActifs();
+    }
+    note += gardees.length || frappes.blocks.length ? '' : 'No block created by or minted to this address in the windows we read. ';
     if (gardees.length > 12) note += 'Showing 12 of the ' + gardees.length + ' blocks you created. ';
     if (nonResolues.length) note += '⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, not « not yours ». ';
   } catch (e) {
@@ -2026,8 +2082,9 @@ async function majWallet() {
     note = 'Could not read your blocks right now — that is about the network, not your wallet. ';
   }
   if (perime()) return;
-  $('#wActifsNote').textContent = note + 'Blocks you bought but did not create are not listed yet: '
-    + 'finding them needs a transfer index this page does not have.';
+  /* ⛔ LA PROMESSE D AVANT (« not listed yet ») EST TENUE : les blocks recus ou achetes sont lus. On dit la borne. */
+  $('#wActifsNote').textContent = note + 'Blocks you created, received or bought over the last 120,000 chain blocks are listed '
+    + '(My blocks can look further back).';
 }
 
 function peindreActifs() {
@@ -2640,7 +2697,9 @@ async function lireLive(sens) {
     const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250 });
     liveRatees += r.fenetresRatees.length;
     const deja = new Set(liveEvts.map(cleEvtLive));
-    for (const e of r.evenements) if (!deja.has(cleEvtLive(e))) liveEvts.push(e);
+    const nouveaux = r.evenements.filter((e) => !deja.has(cleEvtLive(e)));
+    for (const e of nouveaux) liveEvts.push(e);
+    if (sens !== 'ancien' && nouveaux.length) void rafraichirApresEchanges(nouveaux);
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
     if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;

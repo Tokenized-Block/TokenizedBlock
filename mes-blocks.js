@@ -30,7 +30,9 @@ export async function estB20({ rpc, jeton }) {
  * ⛔ Une fenetre ratee est NOMMEE, jamais comptee comme vide. Un jeton dont le code n a pas pu etre lu est
  *    rendu dans `nonVerifies`, ni montre ni cache.
  */
-export async function frappesVers({ rpc, compte, deBloc, aBloc, surProgres = null }) {
+export async function frappesVers({ rpc, compte, deBloc, aBloc, surProgres = null, deTous = false }) {
+  /* ⛔ `deTous` (2026-09-13) : TOUT Transfer vers le compte, pas seulement les frappes — c est ce qui fait apparaitre
+   *    dans le Wallet les blocks ACHETES ou recus, que la page disait « not listed yet ». Meme verification 0xef. */
   const cible = topicAdresse(compte);
   if (!cible) return { blocks: [], fenetresRatees: [{ de: deBloc, a: aBloc, cause: 'invalid account' }], nonVerifies: [] };
   const vus = new Map();
@@ -39,7 +41,7 @@ export async function frappesVers({ rpc, compte, deBloc, aBloc, surProgres = nul
     const bas = Math.max(deBloc, haut - FENETRE_FRAPPES + 1);
     try {
       const logs = await rpc('eth_getLogs', [{ fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16),
-        topics: [TOPIC_TRANSFER, topicAdresse(ZERO), cible] }]);
+        topics: [TOPIC_TRANSFER, deTous ? null : topicAdresse(ZERO), cible] }]);
       for (const l of logs || []) {
         const a = String(l.address || '').toLowerCase();
         if (!/^0x[0-9a-f]{40}$/.test(a) || vus.has(a)) continue;

@@ -414,7 +414,7 @@ export function encodeSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, d
  *    (currency, amount, payerIsUser), TAKE et TAKE_PORTION = (currency, recipient, amount|bips),
  *    SETTLE_ALL / TAKE_ALL = (currency, uint256). Un test prouve que `encodeV4Swap` avec [SETTLE_ALL, TAKE_ALL]
  *    rend EXACTEMENT les octets de `encodeSwapExactInSingle` : les deux ne peuvent pas diverger en silence. */
-export const ACTIONS_V4 = Object.freeze({ SETTLE: '0b', SETTLE_ALL: '0c', TAKE: '0e', TAKE_ALL: '0f', TAKE_PORTION: '10' });
+export const ACTIONS_V4 = Object.freeze({ SWAP_EXACT_IN_SINGLE: '06', SETTLE: '0b', SETTLE_ALL: '0c', TAKE: '0e', TAKE_ALL: '0f', TAKE_PORTION: '10' });
 export const paramsAction = Object.freeze({
   settle: (devise, montant, payeurEstUtilisateur) => motAdr(devise) + mot(montant) + mot(payeurEstUtilisateur ? 1 : 0),
   settleAll: (devise, max) => motAdr(devise) + mot(max),
@@ -427,11 +427,17 @@ export const paramsAction = Object.freeze({
  * Un swap exact-in sur UNE pool, suivi des actions donnees (`[{ code, params }]`), via l Universal Router.
  * ⛔ Meme en-tete de swap que `encodeSwapExactInSingle` (voir ses deux corrections d offset, gardees ici).
  */
-export function encodeV4Swap({ cle, zeroForOne, montant, sortieMin, deadline, forme, actions }) {
+/** Les parametres d un SWAP_EXACT_IN_SINGLE (0x06), utilisables comme action suivante (buyback automatique).
+ *  ⛔ `montant` 0 = OPEN_DELTA : le routeur prend TOUT le credit de la devise d entree (V4Router, lu a la source). */
+export function paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme }) {
   const champs = forme === AVEC_MINHOP ? 9 : 8;
-  const tete = mot(0x20) + cleInline(cle) + mot(zeroForOne ? 1 : 0) + mot(montant) + mot(sortieMin)
+  return mot(0x20) + cleInline(cle) + mot(zeroForOne ? 1 : 0) + mot(montant) + mot(sortieMin)
     + (forme === AVEC_MINHOP ? mot(0) : '')
     + mot((champs + 1) * 32) + mot(0);
+}
+
+export function encodeV4Swap({ cle, zeroForOne, montant, sortieMin, deadline, forme, actions }) {
+  const tete = paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme });
   const elements = [dyn(tete), ...actions.map((a) => dyn(a.params))];
   let curseur = BigInt(32 * elements.length);
   const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
