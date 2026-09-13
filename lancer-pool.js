@@ -75,39 +75,60 @@ async function lireAppel(rpc, to, data) {
  * Le plan de lancement d un block.
  * @returns {Promise<object>} `etat` ∈ PRET | APPROBATIONS | REFUSE | NON_MESURE
  */
-export async function planLancement({ rpc, chaine, jeton, compte, valorisationEth, maintenant = Date.now() }) {
+export const ADRESSE_NULLE = '0x0000000000000000000000000000000000000000';
+
+/**
+ * ⛔⛔ PAIRE ET HOOK PARAMETRES (tokenomics v2, 2026-09-13) : `devise` = ETH natif par defaut (inchange), ou
+ *    TBLOCK ; `hooks` = aucun par defaut, ou le hook de frais. Avec l ETH natif (adresse 0), le block est
+ *    TOUJOURS currency1. Avec TBLOCK, il peut etre currency0 : la plage unilaterale doit alors etre AU-DESSUS
+ *    du prix. On calcule dans l orientation « block = currency1 » (celle que `parametresLancement` connait) et
+ *    on MIROITE les ticks — le prix inverse est le tick oppose, et un multiple de l espacement reste aligne.
+ * ⚠️ `valorisationEth` est une valorisation EN DEVISE de la paire : ETH, ou TBLOCK. Le plancher de
+ *    `classementValoLancement` est en ETH : il ne s applique pas a une autre devise.
+ */
+export async function planLancement({ rpc, chaine, jeton, compte, valorisationEth, maintenant = Date.now(),
+  devise = ETH_NATIF, hooks = ADRESSE_NULLE }) {
   const V = V4_ADRESSES[Number(chaine)];
   if (!V) return { etat: 'REFUSE', pourquoi: 'this network has no Uniswap v4 addresses here' };
   if (!ADRESSE.test(String(jeton || ''))) return { etat: 'REFUSE', pourquoi: 'the block is not an address' };
   if (!ADRESSE.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
-  const classement = classementValoLancement(valorisationEth);
-  if (classement.etat === 'ILLISIBLE') return { etat: 'REFUSE', pourquoi: 'the valuation must be a positive number of ETH' };
+  if (!ADRESSE.test(String(devise || '')) || !ADRESSE.test(String(hooks || ''))) return { etat: 'REFUSE', pourquoi: 'pair or hook is not an address' };
+  if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };
+  const enEth = String(devise).toLowerCase() === ETH_NATIF;
+  const classement = enEth ? classementValoLancement(valorisationEth)
+    : (Number(valorisationEth) > 0 && Number.isFinite(Number(valorisationEth)) ? { etat: 'NON_APPLICABLE' } : { etat: 'ILLISIBLE' });
+  if (classement.etat === 'ILLISIBLE') return { etat: 'REFUSE', pourquoi: 'the valuation must be a positive number' };
   const valo = Number(valorisationEth);
 
   /* ── lectures ── */
-  let supply, dec, solde, s0;
-  const cle = cleDePool(ETH_NATIF, jeton, { fee: FEE_POOL, tickSpacing: TICK_SPACING_POOL });
+  let supply, dec, solde, s0, decDevise = 18;
+  const cle = cleDePool(devise, jeton, { fee: FEE_POOL, tickSpacing: TICK_SPACING_POOL, hooks });
   const blockEst1 = String(cle.currency1).toLowerCase() === String(jeton).toLowerCase();
   try {
     supply = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('totalSupply()')));
     dec = Number(BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('decimals()'))));
     solde = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('balanceOf(address)') + pad(compte)));
+    if (!enEth) decDevise = Number(BigInt(await lireAppel(rpc, devise, '0x' + selecteur('decimals()'))));
     s0 = await lireAppel(rpc, V.stateView, '0x' + selecteur('getSlot0(bytes32)') + poolId(cle).slice(2));
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'the block or its pool could not be read: ' + String((e && e.message) || e) };
   }
   if (!Number.isInteger(dec) || dec < 0 || dec > 36) return { etat: 'NON_MESURE', pourquoi: 'decimals out of range' };
+  /* ⛔ la plage suppose des decimales egales des deux cotes (le ratio entier suffit) — sinon refus, jamais un prix faux */
+  if (decDevise !== dec) return { etat: 'REFUSE', pourquoi: 'block and pair currency must have the same decimals here' };
   if (solde === 0n) return { etat: 'REFUSE', pourquoi: 'this account holds none of this block' };
   const entiere = supply / 10n ** BigInt(dec);
   const sqrtExistant = BigInt('0x' + String(s0).slice(2, 66));
   const tickCourant = sqrtExistant === 0n ? null : Number(BigInt.asIntN(24, BigInt('0x' + String(s0).slice(66, 130))));
 
   /* ── prix, plage, liquidite ── */
-  const p = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: TICK_SPACING_POOL, tickCourant });
-  if (p.etat !== 'OK') return { etat: 'REFUSE', pourquoi: p.pourquoi };
+  const pm = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: TICK_SPACING_POOL,
+    tickCourant: tickCourant === null ? null : (blockEst1 ? tickCourant : -tickCourant) });
+  if (pm.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pm.pourquoi };
+  const p = blockEst1 ? pm : { ...pm, tickBas: -pm.tickHaut, tickHaut: -pm.tickBas, tickPrix: -pm.tickPrix };
   const sqrtVise = sqrtExistant !== 0n ? sqrtExistant
     : sqrtPriceDepuisPrix({ prixNum: BigInt(Math.round(valo * 1e6)), prixDen: entiere * 1000000n,
-      decDevise: 18, decBlock: dec, deviseEst0: blockEst1 });
+      decDevise, decBlock: dec, deviseEst0: blockEst1 });
   const sqA = sqrtDeTick(p.tickBas), sqB = sqrtDeTick(p.tickHaut);
   const aPlacer = (solde * MARGE_POUR_MILLE) / 1000n;
   const L = liquiditeUnilaterale({ montant: aPlacer, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
