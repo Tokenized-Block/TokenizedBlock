@@ -9,6 +9,8 @@
 //    conseil d investissement, jamais une promesse de prix.
 // ⛔ LE BLOCK NE SIGNE RIEN. Il ecrit ; un humain agit.
 
+import { nomHumeur } from './cerveau.js';
+
 export const GENRES_PENSEE = ['FAIT', 'PENSE', 'AMELIORER'];
 
 /**
@@ -43,7 +45,7 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
   if (phase === 'NON_LU') ajoute('FAIT', nom + ' cannot see its own market right now, so it judges no mood from it.', 'market read failed or not done yet · ' + spikes + ' neuron(s) fired');
   else if (phase === 'DORMANT') ajoute('FAIT', nom + ' is asleep, at rest.', marche + ', and no food received in the recent window · ' + spikes + ' neuron(s) fired');
   else if (phase === 'EVEILLE') ajoute('FAIT', nom + ' woke up on its own community' + (etatVie === 'NON_TROUVEE' ? ': it moves without a market.' : '.'), 'food read on chain is above zero · ' + marche);
-  else ajoute('FAIT', nom + ' is ' + String(phase).toLowerCase() + '.', 'brain phase from its market and food · ' + spikes + ' neuron(s) fired');
+  else ajoute('FAIT', nom + ' is ' + nomHumeur(phase) + '.', 'brain phase from its market and food · ' + spikes + ' neuron(s) fired');
 
   // ce qu il pense — a partir des faits lus
   if (etatVie === 'LUE' && typeof vie === 'number') {

@@ -592,6 +592,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <span>🧠 <b id="bMemoire">—</b> memory</span>
       </div>
       <p class="note" id="bMemoireNote"></p>
+      <!-- ⛔ PHIL (2026-09-13) : « ecrit pas tout sur l app, ou alors fais ouvrir en detail pour pas polluer l app
+           d info ». Une ligne visible (la derniere pensee) ; le reste se deplie. -->
+      <p class="note" id="bJournalDernier"></p>
+      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer">What these numbers mean</summary>
       <ul class="note" style="margin:8px 0 0 18px;padding:0">
         <li><b>Hz left / right</b> — how fast each wing beats. Each wing listens to a different third of the neurons.</li>
         <li><b>Steering</b> — left minus right, from −1 to 1. Negative turns left, positive turns right. It is what moves the block on the map.</li>
@@ -602,15 +606,19 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <li><b>Death</b> — only when its creator held it and now holds none. A creator who never held it, or a balance we could not read, never kills a block.</li>
       </ul>
       <p class="note" id="bNourriture">Food not read yet.</p>
-      <p class="titre" style="margin-top:12px;font-size:1em">Its journal</p>
+      </details>
+      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bJournalResume">Its journal</summary>
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
-      <p class="titre" style="margin-top:12px;font-size:1em">Its rules — code it writes itself</p>
+      </details>
+      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bReglesResume">Its rules — code it writes itself</summary>
       <p class="note">After it has seen the same event on chain at least twice, it writes a rule for it. A closed engine
         reads these lines: a rule can only write in its journal or suggest a gesture to you. It never signs, sends or
         reads anything by itself.</p>
       <pre class="mono" id="bRegles" style="white-space:pre-wrap;overflow-x:auto"></pre>
       <p class="note" id="bReglesNote"></p>
+      </details>
+      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer">Record, resume or rebuild its brain on chain</summary>
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
@@ -629,6 +637,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="bReconstruire" type="button">Rebuild its brain from fragments</button>
       </div>
       <p class="note" id="bFragmenterEtat"></p>
+      </details>
     </div>
 
     <div class="carte">
@@ -1064,7 +1073,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * de 166 700 neurones pilote un wallet qui SIGNE, avec des bornes affichees. Ici le cerveau fait
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
-import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire } from './cerveau.js';
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur } from './cerveau.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
 const CLE_MEMOIRE = 'tblock.memoire.';
@@ -2472,7 +2481,7 @@ function peindreCerveau() {
   }
   const v = profilCerveau && profilCerveau.vu;
   if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; return; }
-  $('#pcPhase').textContent = v.phase === 'NON_LU' ? 'market unread' : v.phase.toLowerCase();
+  $('#pcPhase').textContent = nomHumeur(v.phase);
   $('#pcPhrase').textContent = phraseDePhase(v.phase, symProfil || 'This block');
   $('#pcG').textContent = v.gauche_hz.toFixed(1);
   $('#pcD').textContent = v.droite_hz.toFixed(1);
@@ -4113,6 +4122,9 @@ function peindreJournal(adr, j = journalLu(adr)) {
   $('#bJournal').innerHTML = j.length ? j.slice().reverse().slice(0, 12).map((e) => '<li>' + (icone[e.genre] || '·') + ' '
     + enTexte(e.texte) + '<br><span class="filS">beat ' + Number(e.tick).toLocaleString('en-US') + ' · because ' + enTexte(e.parce_que) + '</span></li>').join('')
     : '<li>Nothing written yet — it writes on its first beat.</li>';
+  const dernier = j.length ? j[j.length - 1] : null;
+  $('#bJournalDernier').textContent = dernier ? (icone[dernier.genre] || '·') + ' ' + dernier.texte : '';
+  $('#bJournalResume').textContent = 'Its journal — ' + j.length + ' line(s), open for detail';
 }
 /* ⛔ LES REGLES DU BLOCK (choix A de Phil, 2026-09-13) : compteurs d evenements VUS et lignes ecrites, gardes dans ce
  *    navigateur par block. Le moteur (regles-cerveau.js) ne rend que des lignes de journal. */
@@ -4129,6 +4141,7 @@ function peindreRegles(adr, compteurs = reglesLues(adr).compteurs) {
   const lignes = ecrireRegles(compteurs);
   const lu = lireRegles(lignes);
   $('#bRegles').textContent = lignes.length ? lignes.join('\n') : '// no rule yet — it writes one after seeing the same event twice';
+  $('#bReglesResume').textContent = 'Its rules — ' + (lignes.length ? lignes.length + ' written by itself' : 'none yet') + ', open for detail';
   const vus = Object.entries(compteurs).map(([e, n]) => e + ' ×' + n).join(' · ');
   $('#bReglesNote').textContent = (lu.etat === 'VALIDES' ? 'Engine: ' + lu.regles.length + ' rule(s) valid.' : 'Engine refused the rules: ' + lu.pourquoi + '.')
     + (vus ? ' Seen here: ' + vus + '.' : ' Nothing seen yet in this browser.');
@@ -4220,7 +4233,7 @@ function battreBrain() {
   dessinerRaster();
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
   dessinerReseau(r.vu);
-  $('#bPhase').textContent = r.vu.phase === 'NON_LU' ? 'market unread' : r.vu.phase.toLowerCase();
+  $('#bPhase').textContent = nomHumeur(r.vu.phase);
   $('#bTick').textContent = r.vu.tick;
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);

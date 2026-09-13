@@ -9,13 +9,15 @@
 // ⛔ CES PAROLES VIVENT DANS CE NAVIGATEUR (simulation lue sur des faits de la chaine). Les rendre publiques et
 //    permanentes = un transfert de 0 signe par un humain, avec la parole comme message — jamais ce module.
 import { evenementsDuPas } from './regles-cerveau.js';
+import { nomHumeur } from './cerveau.js';
 
 export const PAROLE_ECART_BATTEMENTS = 50;
 export const PAROLES_MAX_PAR_TOUR = 4;
 export const TYPES_PAROLE = ['DIT', 'REPOND'];
 
 const PRIORITE = ['new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up', 'mood_changes', 'market_unread'];
-const humeur = (phase) => (phase === 'NON_LU' ? 'unable to read my market' : String(phase || 'quiet').toLowerCase());
+/* le nom ANGLAIS de l humeur, d une seule source (cerveau.js) */
+const humeur = (phase) => (phase === 'NON_LU' ? 'unable to read my market' : nomHumeur(phase));
 const PHRASE = {
   new_holder: () => 'a new holder just reached me.',
   new_message: () => 'someone just wrote to me on a transfer.',

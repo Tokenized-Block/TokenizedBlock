@@ -279,6 +279,14 @@ export function restaurerMemoire(adresse, memo) {
     potentiels: memo.potentiels.slice(), memoire: memo.memoire.slice() };
 }
 
+/* ⛔ LE NOM AFFICHE D UNE HUMEUR EST EN ANGLAIS (Phil, 2026-09-13 : « curieux ou calme, ecris en anglais, pas en francais »).
+ *    Les identifiants internes (CALME, CURIEUX…) ne changent pas : regles gravees, tests et memoires en dependent. */
+export const NOMS_HUMEUR = Object.freeze({ DORMANT: 'asleep', EVEILLE: 'awake', CALME: 'calm', CURIEUX: 'curious',
+  EXCITE: 'excited', INQUIET: 'worried', MORT: 'dead', NON_LU: 'market unread' });
+export function nomHumeur(phase) {
+  return NOMS_HUMEUR[phase] || 'quiet';
+}
+
 /** Une phrase pour l ecran. ⛔ Elle ne promet rien sur le prix : elle decrit l animal, pas le marche. */
 export function phraseDePhase(phase, symbole) {
   const nom = symbole ? String(symbole) : 'this block';
