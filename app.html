@@ -819,7 +819,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="pPartager" type="button">Share profile</button>
         <button class="bouton sec" id="pMap" type="button">Show on map</button>
         <!-- ⛔ RESERVE AUX BLOCKS ENDORMIS : un block qui a deja un marche n a rien a reveiller. -->
-        <a class="bouton" id="pReveiller" hidden style="grid-column:1/-1">Wake it — open its market ↗</a>
+        <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
       <p class="note" id="pNote"></p>
@@ -874,6 +874,9 @@ import { apparenceDepuisAdresse, ORBITES, FACETTES, MATIERES, ORNEMENTS, combina
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
 import { pairesProposees, qualifierPaire, etiquettePaire } from './paires.js';
+/* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
+ * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
+import { faceDuBlock, validerFace } from './face.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -1002,7 +1005,33 @@ function tailleDe(vie) {
  * EXACTEMENT celui que le createur a vu au moment de le faire, et celui qui est grave dans les
  * metadonnees. Un dessin d appoint « juste pour la map » aurait donne deux identites a une seule
  * chose, et celle qu on maintient le moins finit par contredire l autre. */
-const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(apparenceDepuisAdresse(adr), sym));
+/* ⛔⛔ ORDRE DE VERITE DU DESSIN : la face GRAVEE dans les metadonnees du block, sinon celle de son
+ * adresse. Avant, c etait toujours l adresse — et le block qu on venait de dessiner dans Create
+ * reapparaissait avec une autre tete sur la map. */
+const FACES = new Map();
+const CLE_FACE = 'tblock.face.';
+function faceConnue(adr) {
+  const a = String(adr || '').toLowerCase();
+  if (FACES.has(a)) return FACES.get(a);
+  try {
+    const brut = localStorage.getItem(CLE_FACE + a);
+    if (brut) {
+      /* ⛔ CE QUI VIENT DU STOCKAGE EST REVALIDE : un navigateur peut garder une valeur d une autre version. */
+      const v = validerFace(JSON.parse(brut));
+      if (v.etat === 'OK') { FACES.set(a, v.face); return v.face; }
+    }
+  } catch (e) { /* stockage illisible : on retombe sur l adresse */ }
+  return null;
+}
+function noterFace(adr, face) {
+  const v = validerFace(face);
+  if (v.etat !== 'OK') return false;
+  const a = String(adr || '').toLowerCase();
+  FACES.set(a, v.face);
+  try { localStorage.setItem(CLE_FACE + a, JSON.stringify(v.face)); } catch (e) { /* sans memoire */ }
+  return true;
+}
+const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(faceConnue(adr) || apparenceDepuisAdresse(adr), sym));
 
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
@@ -1310,6 +1339,19 @@ async function lireLaVie() {
     catch (e) { nonLus++; h.etatVie = 'NON_LUE'; continue; }
     lus++;
     h.etatVie = r.etat;
+    /* ⛔ LA FACE GRAVEE EST RELUE ICI, avec la vie : un appel de plus par block, dans la meme boucle
+     * patiente. Si elle differe de celle dessinee, la tuile est redessinee — le block reprend la tete
+     * que son createur lui a donnee. */
+    if (!faceConnue(h.adr)) {
+      await souffler();
+      try {
+        const fr = await faceDuBlock({ rpc, jeton: h.adr });
+        if (fr.etat === 'LU' && noterFace(h.adr, fr.face)) {
+          h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
+            + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
+        }
+      } catch (e) { /* face non lue : la tuile garde le dessin de l adresse, sans rien affirmer */ }
+    }
     /* ⛔ LA VIE PRECEDENTE EST GARDEE AVANT D ETRE ECRASEE : sans elle, le cerveau ne saurait jamais
      * si la vie MONTE ou DESCEND, et ne serait jamais ni excite ni inquiet. */
     if (typeof h.vie === 'number') h.vieAvant = h.vie;
@@ -2006,10 +2048,9 @@ async function lireProfil(adr, sym, perime) {
   $('#pNomLong').textContent = '';
   $('#pAdr').textContent = adr;
   $('#pExplorer').href = RESEAUX[CHAINE].explorateur + '/token/' + adr;
-  /* ⛔ « REVEILLER » UN BLOCK = LUI OUVRIR UN MARCHE, et c est une signature. Le chemin qui le fait
-   * vraiment est l ecran de lancement, deja eprouve sur mainnet : on y ENVOIE avec le block en lien,
-   * plutot que de recopier ici un parcours a six transactions qui toucherait de l argent reel. */
-  $('#pReveiller').href = './index.html?block=' + adr + '&chain=' + CHAINE;
+  /* ⛔⛔ PLUS DE RENVOI VERS L ANCIEN SITE (test de Phil, 2026-09-12 : « fais gaffe, bouton ramene
+   * ancien site »). Ce lien sortait l utilisateur de l app vers `index.html`, un autre ecran, une autre
+   * logique, sans prevenir. Le bouton ouvre maintenant le lancement DANS l app. */
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
   $('#pNote').textContent = 'reading the chain…';
   symProfil = sym || null; vieProfil = null; etatVieProfil = undefined;
@@ -2053,6 +2094,15 @@ async function lireProfil(adr, sym, perime) {
     for (const id of ['#pSupply', '#pScelle', '#pB20']) $(id).textContent = 'not read';
   }
 
+  /* ⛔ L AVATAR DU PROFIL PREND LA FACE GRAVEE des qu elle est lue. */
+  if (!faceConnue(adr)) {
+    try {
+      const fr = await faceDuBlock({ rpc, jeton: adr });
+      if (perime()) return;
+      if (fr.etat === 'LU' && noterFace(adr, fr.face)) $('#pAvatar').innerHTML = dessin(adr, symProfil || sym);
+    } catch (e) { /* non lue : l avatar reste celui de l adresse */ }
+  }
+
   await dormir(260);
   if (perime()) return;
   let v = null;
@@ -2069,7 +2119,10 @@ async function lireProfil(adr, sym, perime) {
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
   /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
    * proposer de reveiller un block qu on n a pas su lire enverrait ouvrir une pool qui existe. */
-  $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
+  /* ⛔ CACHE TANT QUE LE LANCEMENT N EST PAS DANS L APP. Il renvoyait vers l ancien site (retire) ;
+   * un bouton visible qui ne fait plus rien apprendrait que les boutons de cette app mentent. Il
+   * reapparaitra quand « ouvrir son marche » se fera ICI. */
+  $('#pReveiller').hidden = true;
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
   noterVie(adr, vieProfil);
@@ -2354,8 +2407,7 @@ function majPaire() {
      * lancement. Et le lanceur de l ancien ecran refuse les actions — on le dit ici plutot que de
      * laisser decouvrir un refus plus tard. */
     n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ')
-      + 'Recorded with the block at creation. The pool itself opens at launch'
-      + (q.paire.type === 'ACTION' ? ' — for a stock pair, through OpenLaunch (Advanced → Stock), which the launch screen here points to.' : '.');
+      + 'Recorded with the block at creation. Its market opens when you launch it, in this app.';
   }
   majFraisEtRecap();
 }
@@ -2544,8 +2596,16 @@ async function creerBlock() {
     e.className = 'note';
     e.textContent = creationEnCoursPayante ? 'Fee confirmed. Signature 2 of 2 — the creation.'
       : 'One signature — the creation. Check it in your wallet.';
+    /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY AVANT D ENVOYER : c est sous elle que la face choisie sera
+     * gardee, pour que le block apparaisse avec SA tete des la confirmation — sans attendre qu une
+     * lecture de metadonnees reussisse. */
+    const calldata = calldataCreation(v);
+    let adresseCreee = null;
+    try { const q = await adresseOuRefus(appelBrut, compte, calldata); adresseCreee = q.adresse || null; } catch (e) { adresseCreee = null; }
+    const faceGravee = { ...apparenceChoisie };
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to: FACTORY, data: calldataCreation(v) });
+      to: FACTORY, data: calldata });
+    if (rc.etat === 'CONFIRME' && adresseCreee) noterFace(adresseCreee, faceGravee);
     const lien = rc.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rc.hash)
       + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
     if (rc.etat === 'CONFIRME') {
