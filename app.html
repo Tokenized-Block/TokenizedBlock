@@ -585,8 +585,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <li><b>Steering</b> — left minus right, from −1 to 1. Negative turns left, positive turns right. It is what moves the block on the map.</li>
         <li><b>Spikes since open</b> — every neuron firing counted since you opened this block here.</li>
         <li><b>Firing now</b> — neurons that fired on this beat, out of 128. More than 8 makes it curious.</li>
-        <li><b>Its food</b> — for now, only its market. GMs, messages and new holders are not counted yet.</li>
+        <li><b>Its food</b> — its market, plus what the chain shows in the recent window: transfers, holders reached and messages. The creation itself does not count.</li>
+        <li><b>Death</b> — only when its creator held it and now holds none. A creator who never held it, or a balance we could not read, never kills a block.</li>
       </ul>
+      <p class="note" id="bNourriture">Food not read yet.</p>
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
@@ -970,6 +972,14 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU } from './cerveau.js';
+import { nourritureDuBlock } from './nourriture.js';
+/* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
+ * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
+function entreesCerveau(vie, vieAvant, n) {
+  const lue = n && n.etat === 'LUE' ? n : null;
+  return { vie, vieAvant, gm: lue ? lue.gm : 0, messages: lue ? lue.messages : 0,
+    detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false };
+}
 /* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
  * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
  * possibles pour le verifier. Aucun ordre ne part d ici. */
@@ -1175,7 +1185,7 @@ let battement = null;
 function battre() {
   for (const h of habitants) {
     if (!h.cerveau) continue;
-    const r = cerveauPas(h.cerveau, { vie: h.vie, vieAvant: h.vieAvant, gm: 0 });
+    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture));
     h.cerveau = r.etat;
     h.vu = r.vu;
     h.phase = r.vu.phase;
@@ -1466,6 +1476,13 @@ async function lireLaVie() {
             + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
         }
       } catch (e) { /* face non lue : la tuile garde le dessin de l adresse, sans rien affirmer */ }
+    }
+    /* ⛔ LA NOURRITURE EST LUE UNE FOIS PAR BLOCK (≈15 lectures) et relue seulement si elle a echoue :
+     * la relire a chaque tour multiplierait les refus du noeud public, qui s affichent comme « non lu ». */
+    if (!h.nourriture || h.nourriture.etat !== 'LUE') {
+      await souffler();
+      try { h.nourriture = await nourritureDuBlock({ rpc, jeton: h.adr }); }
+      catch (e) { h.nourriture = { etat: 'NON_LUE', pourquoi: String((e && e.message) || e), mort: null }; }
     }
     /* ⛔ LA VIE PRECEDENTE EST GARDEE AVANT D ETRE ECRASEE : sans elle, le cerveau ne saurait jamais
      * si la vie MONTE ou DESCEND, et ne serait jamais ni excite ni inquiet. */
@@ -2069,7 +2086,8 @@ function cerveauVoulu() {
 }
 function battreProfil() {
   if ($('#profil').hidden || !profilCerveau || !$('#pcActif').checked) return;
-  const r = cerveauPas(profilCerveau.etat, { vie: vieProfil, gm: 0 });
+  const hP = habitants.find((x) => String(x.adr).toLowerCase() === String(profilCerveau.adr).toLowerCase());
+  const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, null, hP ? hP.nourriture : null));
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   peindreCerveau();
@@ -2192,7 +2210,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pmsgNote').textContent = '';
   $('#pmsgCompte').textContent = '';
   $('#pcActif').checked = cerveauVoulu();
-  try { profilCerveau = { etat: cerveauInitial(adr), vu: null }; } catch (e) { profilCerveau = null; }
+  try { profilCerveau = { etat: cerveauInitial(adr), vu: null, adr }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
   /* ⛔ LE METIER S AFFICHE TOUT DE SUITE : il ne depend QUE de l adresse. L attacher a la fin des
    * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
@@ -3203,7 +3221,14 @@ function choisirBrain(adr) {
 function battreBrain() {
   if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
   const h = habitants.find((x) => x.adr === brainAdr);
-  const r = cerveauPas(brainEtat, { vie: h ? h.vie : null, vieAvant: h ? h.vieAvant : null, gm: 0 });
+  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null));
+  const n = h && h.nourriture;
+  $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
+    : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'
+    : 'Food read on chain (recent window): ' + n.gm + ' transfers · ' + n.detenteurs + ' holders reached · '
+      + n.messages + ' messages in ' + n.messagesLus + ' checked. '
+      + (n.mort === true ? 'Dead: ' + n.pourquoiMort + '.' : n.mort === false ? 'Its creator still holds it.'
+        : 'Death not judged: ' + n.pourquoiMort + '.');
   brainEtat = r.etat;
   brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
