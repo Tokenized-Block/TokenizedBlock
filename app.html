@@ -474,6 +474,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
               <button class="bouton sec" id="fGM">Send GM 👋</button>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
               <button class="bouton plein" id="fProfil">Open profile</button>
+              <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
             </div>
             <p class="note" id="fNote"></p>
           </div>
@@ -1423,6 +1424,7 @@ $('#map').addEventListener('click', (e) => {
    * n etait simplement PAS ENCORE LUE — et TBLOCK a un marche. La phrase du dormant n est dite que sur un « pas de marche »
    * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
   $('#fNote').textContent = !h || !h.phase ? '' : phraseDePhase(h.phase, h.sym);
+  $('#fConnecter').hidden = true;
 });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
@@ -1458,7 +1460,7 @@ function ouvrirEnvoiPour(adr, dire, geste = 'send') {
   const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
   if (!a) {
     dire('You hold none of this block, or we could not read your balance — so there is nothing to '
-      + 'send from it yet.');
+      + 'send from it yet. Open its profile to buy some first.');
     return false;
   }
   allerA('wallet');
@@ -1470,10 +1472,23 @@ function ouvrirEnvoiPour(adr, dire, geste = 'send') {
   return true;
 }
 
+/* ⛔⛔ PHIL (2026-09-13, onglet Map) : « Send GM fonctionne pas ». Mesure en navigateur : sans wallet, le clic ecrivait
+ *    « Connect your wallet first » et S ARRETAIT — aucun moyen de se connecter depuis la fiche. Un bouton de connexion
+ *    apparait maintenant a cote, et le GM reprend des que le wallet est connecte. */
+$('#fConnecter').addEventListener('click', async () => {
+  $('#fConnecter').disabled = true;
+  try { await connecter(); } finally { $('#fConnecter').disabled = false; }
+  if (compte) { $('#fConnecter').hidden = true; $('#fGM').click(); return; }
+  /* mesure en navigateur : sans wallet, la raison s ecrivait dans l onglet Wallet, invisible depuis la fiche */
+  $('#fNote').textContent = typeof window.ethereum === 'undefined'
+    ? 'No wallet found in this browser. Open this page where your wallet is installed (Coinbase Wallet, MetaMask…) — it never asks for a key.'
+    : 'The wallet did not connect — nothing was shared. Try again and approve the connection in your wallet.';
+});
 $('#fGM').addEventListener('click', () => {
   const adr = $('#fAdr').textContent.trim();
   const n = $('#fNote');
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  $('#fConnecter').hidden = Boolean(compte);
   if (ouvrirEnvoiPour(adr, (t) => { n.textContent = t; }, 'gm')) {
     $('#sEtat').className = 'note';
     $('#sEtat').textContent = 'GM: pick who receives it and how much. Your wallet shows the transfer '
@@ -1490,7 +1505,8 @@ $('#fOuvrir').addEventListener('click', async () => {
   const adr = $('#fAdr').textContent.trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
   const note = $('#fNote');
-  note.textContent = 'reading the chain…';
+  /* ⛔ mesure du 2026-09-13 : 20 s sur le noeud public sature — on le dit plutot que de laisser croire a un bouton mort */
+  note.textContent = 'Reading the chain… the public node is busy, this can take about 20 seconds.';
   let f;
   /* ⛔ 280 ms entre chaque lecture : sans ca, cinq des six appels sont refuses par le noeud public
    * et l ecran n affiche presque rien — mesure du 2026-09-10. */
@@ -1510,7 +1526,7 @@ $('#fOuvrir').addEventListener('click', async () => {
   l.push(sup ? 'supply ' + sup + ' (' + f.decimales + ' decimals)' : 'supply not read');
   l.push(f.mintFerme === null ? 'sealed supply: not read'
     : f.mintFerme ? 'supply sealed — nobody can make more' : 'more can still be minted');
-  if (f.manques.length) l.push('not read: ' + f.manques.join(', '));
+  if (f.manques.length) l.push('not read: ' + f.manques.join(', ') + ' — click “Read its facts” again to retry');
   note.textContent = l.join(' · ');
 });
 
