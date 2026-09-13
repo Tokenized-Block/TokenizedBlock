@@ -924,9 +924,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <div class="pJeu" id="pLancement" hidden>
         <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain">Creates its pool against ETH and places the share of your blocks you choose below, in one
+        <p class="pProchain">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
           signed transaction. Nothing moves before your wallet shows it.</p>
-        <label class="champ">Starting value of the whole supply, in ETH<input id="plValo" inputmode="decimal"
+        <label class="champ">Pair it against<select id="plDevise"><option value="ETH">ETH (native)</option>
+          <option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option></select></label>
+        <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
           placeholder="e.g. 10" autocomplete="off"></label>
         <label class="champ">Share of your blocks to place, in %<input id="plPart" inputmode="decimal"
           value="99.9" autocomplete="off"></label>
@@ -3176,9 +3178,10 @@ async function calculerLancement() {
   e.className = 'note';
   if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
+  const contreTblock = $('#plDevise').value === 'TBLOCK';
   if (!(valo > 0) || !Number.isFinite(valo)) {
     e.className = 'note wKo';
-    e.textContent = 'Enter the starting value of the whole supply, in ETH — a positive number.';
+    e.textContent = 'Enter the starting value of the whole supply, in ' + (contreTblock ? 'TBLOCK' : 'ETH') + ' — a positive number.';
     return;
   }
   e.textContent = 'Reading the block, its pool and your approvals…';
@@ -3194,7 +3197,10 @@ async function calculerLancement() {
     profilEnLecture = false;
     return;
   }
-  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille }); }
+  /* ⛔ LANCEMENT CONTRE TBLOCK (Phil, 2026-09-13) : meme plan, meme cle (frais 0, espacement 200, sans hook) que la
+   *    lecture `marche.js` de la paire TBLOCK — la valorisation est alors en TBLOCK, et l achat passe par TBLOCK/ETH. */
+  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
+    ...(contreTblock ? { devise: TBLOCK } : {}) }); }
   catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
@@ -3217,11 +3223,12 @@ function peindrePlan(plan, adr) {
   }
   const d = plan.dec;
   $('#plLignes').innerHTML = [
-    'Pool on ' + RESEAUX[CHAINE].nom + ': against native ETH · fee 0 % · spacing 200 · permanent · '
+    'Pool on ' + RESEAUX[CHAINE].nom + ': against ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
+      ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH') + ' · fee 0 % · spacing 200 · permanent · '
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
-    'ETH needed: none — a single-sided launch.',
+    'ETH or TBLOCK needed: none — a single-sided launch.',
     /* ⛔ REGLE DU JEU (2026-09-13) : pool permanente, frais 0. Dit AVANT la signature, en clair. */
     'Permanent: the liquidity is placed in the name of a dead address — nobody, not you and not us, can '
       + 'ever take it out. That is why the fee is 0 %: nobody could ever collect it.',
@@ -3342,6 +3349,16 @@ async function lancerMarcheBlock(adr) {
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
 $('#plCalculer').addEventListener('click', () => void calculerLancement());
+$('#plDevise').addEventListener('change', () => {
+  const t = $('#plDevise').value === 'TBLOCK' ? 'TBLOCK' : 'ETH';
+  $('#plContre').textContent = t;
+  $('#plUnite').textContent = t;
+  $('#plValo').placeholder = t === 'TBLOCK' ? 'e.g. 10000000' : 'e.g. 10';
+  planCourant = null;
+  $('#plLignes').innerHTML = '';
+  $('#plActions').innerHTML = '';
+  $('#plEtat').textContent = '';
+});
 $('#plConfirm').addEventListener('change', () => { if (planCourant) peindrePlan(planCourant, $('#profil').dataset.block); });
 
 /* ══ MESSAGES PUBLICS D UN BLOCK ═════════════════════════════════════════════════════════════
@@ -4268,6 +4285,12 @@ const valoLien = Number(paramsLien.get('lancer'));
 const partLien = Number(paramsLien.get('part'));
 if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e6) $('#plValo').value = String(valoLien);
 if (Number.isFinite(partLien) && partLien >= 0.1 && partLien <= 99.9) $('#plPart').value = String(partLien);
+/* &paire=tblock : preselectionne la paire TBLOCK (Phil, 2026-09-13 : TTB sera le premier block apparie a TBLOCK) */
+if (String(paramsLien.get('paire') || '').toLowerCase() === 'tblock') {
+  $('#plDevise').value = 'TBLOCK';
+  $('#plDevise').dispatchEvent(new Event('change'));
+  if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e12) $('#plValo').value = String(valoLien);
+}
 const presetLien = PRESETS_CREATION[String(paramsLien.get('creer') || '').toLowerCase()];
 if (presetLien) {
   $('#cNom').value = presetLien.nom;

@@ -129,7 +129,7 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   if (sqrt === 0n) {
     return { etat: 'NON_TROUVEE', vie: null, devise: null, via: null,
       pourquoi: 'no initialized pool among the ' + CLES_MARCHE.length + ' keys read ('
-        + CLES_MARCHE.map((c) => c.nom).join(', ') + ') — NOT a claim that this block has no price' };
+        + CLES_MARCHE.map((c) => c.nom).join(', ') + ', and TBLOCK · 0 %) — NOT a claim that this block has no price' };
   }
 
   /* ⛔ LES DECIMALES SE LISENT, ELLES NE SE SUPPOSENT PAS. Supposer 18 a deja produit des
