@@ -1,0 +1,77 @@
+// liquidite.js — les outils de liquidite d un block : AJOUTER ses blocks a son marche en gardant la position, et la RETIRER.
+// ================================================================================================
+// ⛔ DEMANDE DE PHIL (2026-09-13) : « donne tous les outils au block pour etre liquide et facile d apport de fonds ».
+// ⛔ DIFFERENT DU LANCEMENT : le lancement cree la pool et place la position au nom de 0x…dEaD (permanente, regle 1).
+//    Ici la pool EXISTE deja, et la position appartient a CELUI QUI SIGNE : il peut la retirer quand il veut.
+// ⛔ JAMAIS D INITIALISATION ICI : si le plan dit que la pool n existe pas, on refuse — un « ajout » qui creerait une
+//    pool a un prix par defaut serait un lancement deguise, au mauvais prix.
+// ⛔ SEULEMENT LES MARCHES AU FORMAT DE L APP (ETH natif, frais 0, espacement 200, sans hook) : un block qui trade sur
+//    une autre pool (autre frais, autre launcher) ne recoit pas de liquidite sur une pool voisine vide.
+import { planLancement, V4_ADRESSES, FEE_POOL, TICK_SPACING_POOL, ADRESSE_NULLE, ETH_NATIF, sqrtDeTick } from './lancer-pool.js';
+import { selecteur, montantsPosition, encodeRetraitPosition, decoderPoolEtPosition, poolId } from './pool.js';
+import { vieDuBlock } from './marche.js';
+
+export const ETATS_LIQUIDITE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
+const pad = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
+
+export async function planAjoutLiquidite({ rpc, chaine, jeton, compte, partPourMille, maintenant = Date.now(), marcheLu = null }) {
+  const V = V4_ADRESSES[Number(chaine)];
+  if (!V) return { etat: 'REFUSE', pourquoi: 'no Uniswap v4 addresses on this network here' };
+  const lire = rpc;
+  const marche = marcheLu && marcheLu.etat === 'LUE' ? marcheLu : await vieDuBlock({ rpc: lire, stateView: V.stateView, jeton });
+  if (marche.etat === 'NON_TROUVEE') return { etat: 'REFUSE', pourquoi: 'this block has no market yet — open it first' };
+  if (marche.etat !== 'LUE' || !marche.cle) return { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
+  const k = marche.cle;
+  if (String(k.currency0).toLowerCase() !== ETH_NATIF || Number(k.fee) !== FEE_POOL || Number(k.tickSpacing) !== TICK_SPACING_POOL
+    || String(k.hooks).toLowerCase() !== ADRESSE_NULLE) {
+    return { etat: 'REFUSE', pourquoi: 'its market is not a TokenizedBlock market (ETH, 0 % fee, spacing 200) — liquidity tools only add to those' };
+  }
+  const plan = await planLancement({ rpc: lire, chaine, jeton, compte, valorisationEth: 1, maintenant, partPourMille, proprietaire: compte });
+  if (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE') return plan;
+  if (!plan.poolExiste) return { etat: 'REFUSE', pourquoi: 'the pool was not found at the moment of planning — nothing is created here' };
+  return { ...plan, ajout: true };
+}
+
+/** Les positions (ids) de ce compte : proprietaire, liquidite, pool et ticks — lus sur la chaine. */
+export async function lirePosition({ rpc, chaine, tokenId }) {
+  const V = V4_ADRESSES[Number(chaine)];
+  const lire = rpc;
+  const id = BigInt(tokenId).toString(16).padStart(64, '0');
+  let proprietaire = null;
+  try { proprietaire = '0x' + String(await lire('eth_call', [{ to: V.posm, data: '0x' + selecteur('ownerOf(uint256)') + id }, 'latest'])).slice(-40); }
+  catch { return { tokenId: BigInt(tokenId), etat: 'BRULEE_OU_ABSENTE' }; }
+  const L = BigInt(await lire('eth_call', [{ to: V.posm, data: '0x' + selecteur('getPositionLiquidity(uint256)') + id }, 'latest']));
+  const pp = decoderPoolEtPosition(await lire('eth_call', [{ to: V.posm, data: '0x' + selecteur('getPoolAndPositionInfo(uint256)') + id }, 'latest']));
+  return { tokenId: BigInt(tokenId), etat: 'LUE', proprietaire, liquidite: L, ...pp };
+}
+
+export async function planRetrait({ rpc, chaine, compte, tokenId, toleranceBps = 100n, maintenant = Date.now() }) {
+  const V = V4_ADRESSES[Number(chaine)];
+  if (!V) return { etat: 'REFUSE', pourquoi: 'no Uniswap v4 addresses on this network here' };
+  const lire = rpc;
+  let pos;
+  try { pos = await lirePosition({ rpc: lire, chaine, tokenId }); }
+  catch (e) { return { etat: 'NON_MESURE', pourquoi: 'the position could not be read' }; }
+  if (pos.etat !== 'LUE') return { etat: 'REFUSE', pourquoi: 'this position no longer exists (already withdrawn?)' };
+  if (pos.proprietaire.toLowerCase() !== String(compte).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'this position belongs to another address' };
+  if (pos.liquidite === 0n) return { etat: 'REFUSE', pourquoi: 'this position is empty' };
+  let sqrt;
+  try {
+    const s0 = String(await lire('eth_call', [{ to: V.stateView, data: '0x' + selecteur('getSlot0(bytes32)') + poolId(pos.cle).slice(2) }, 'latest']));
+    sqrt = BigInt('0x' + s0.slice(2, 66));
+  } catch { return { etat: 'NON_MESURE', pourquoi: 'the pool price could not be read' }; }
+  const m = montantsPosition(pos.liquidite, sqrt, sqrtDeTick(pos.tickLower), sqrtDeTick(pos.tickUpper));
+  const tol = BigInt(toleranceBps);
+  const min0 = (m.montant0 * (10000n - tol)) / 10000n, min1 = (m.montant1 * (10000n - tol)) / 10000n;
+  const tx = { to: V.posm, value: '0x0',
+    data: encodeRetraitPosition({ tokenId: pos.tokenId, min0, min1, cle: pos.cle, destinataire: compte, deadline: BigInt(Math.floor(maintenant / 1000) + 1800) }) };
+  try { await lire('eth_call', [{ from: compte, ...tx }, 'latest']); }
+  catch (e) { return { etat: 'REFUSE', pourquoi: 'the chain refuses this withdrawal: ' + String((e && e.message) || e).slice(0, 140) }; }
+  return { etat: 'PRET', tx, position: pos, attendu: { eth: m.montant0, blocks: m.montant1 }, minimum: { eth: min0, blocks: min1 } };
+}
+
+/** Lit l id que recevra le PROCHAIN mint (a lire juste avant d envoyer l ajout, pour retrouver la position apres). */
+export async function prochainIdPosition({ rpc, chaine }) {
+  const V = V4_ADRESSES[Number(chaine)];
+  return BigInt(await rpc('eth_call', [{ to: V.posm, data: '0x' + selecteur('nextTokenId()') }, 'latest']));
+}

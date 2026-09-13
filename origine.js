@@ -70,7 +70,7 @@ export async function lireOrigineEtScellement({ rpc, jeton }) {
 
 /** Les phrases a l ecran. */
 export function phrasesOrigine({ origine, scellement }) {
-  const o = origine === 'TOKENIZEDBLOCK' ? '🧩 Made with TokenizedBlock — its face was engraved by our Create.'
+  const o = origine === 'TOKENIZEDBLOCK' ? '🟦 Made with TokenizedBlock — its face was engraved by our Create.'
     /* ⛔ Phil, 2026-09-13 : « non mets pas ca » — aucune phrase pour un block cree ailleurs ; seuls les notres portent une marque. */
     : origine === 'AILLEURS' ? ''
       : '';

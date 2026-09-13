@@ -104,7 +104,15 @@ export const ADRESSE_NULLE = '0x0000000000000000000000000000000000000000';
  *    `classementValoLancement` est en ETH : il ne s applique pas a une autre devise.
  */
 export async function planLancement({ rpc, chaine, jeton, compte, valorisationEth, maintenant = Date.now(),
-  devise = ETH_NATIF, hooks = ADRESSE_NULLE, partPourMille = Number(MARGE_POUR_MILLE) }) {
+  devise = ETH_NATIF, hooks = ADRESSE_NULLE, partPourMille = Number(MARGE_POUR_MILLE), proprietaire = PROPRIETAIRE_PERMANENT }) {
+  /* ⛔⛔ OUTILS DE LIQUIDITE (Phil, 2026-09-13) : un detenteur peut AJOUTER ses blocks a un marche existant en GARDANT
+   *    sa position (retirable). Le proprietaire est donc soit l adresse morte (lancement permanent, regle 1), soit
+   *    le COMPTE qui signe — jamais une troisieme adresse : donner la position a un tiers depuis cet ecran serait
+   *    un piege, pas un outil. */
+  if (String(proprietaire).toLowerCase() !== PROPRIETAIRE_PERMANENT.toLowerCase()
+    && String(proprietaire).toLowerCase() !== String(compte || '').toLowerCase()) {
+    return { etat: 'REFUSE', pourquoi: 'the position can belong only to the dead address (permanent) or to you' };
+  }
   if (!Number.isInteger(partPourMille) || partPourMille < 1 || partPourMille > Number(MARGE_POUR_MILLE)) {
     return { etat: 'REFUSE', pourquoi: 'the share to place must be between 0.1 % and 99.9 % of your balance' };
   }
@@ -199,12 +207,12 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     /* ⛔⛔ LE PROPRIETAIRE DE LA POSITION EST L ADRESSE MORTE, PAS LE COMPTE : c est ce qui rend la pool
      * permanente. Le compte PAIE (via Permit2), mais ne possede pas la position — il ne pourra ni
      * retirer ni collecter, et personne d autre non plus. */
-    proprietaire: PROPRIETAIRE_PERMANENT, deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S) });
+    proprietaire, deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S) });
   const donnee = sqrtExistant !== 0n ? mint : encodeMulticall([encodeInitializePool(cle, sqrtVise), mint]);
   const tx = { to: V.posm, data: donnee, value: '0x0' };
 
   return { ...base, etat: etapes.length ? 'APPROBATIONS' : 'PRET', etapes, tx,
-    permanente: true, proprietairePosition: PROPRIETAIRE_PERMANENT,
+    permanente: String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase(), proprietairePosition: proprietaire,
     approbationsIllimitees: 'Permit2 gets an unlimited allowance for this block (MAX_UINT256), and the position '
       + 'manager an unlimited Permit2 allowance (MAX_UINT160) — both until you revoke them.' };
 }

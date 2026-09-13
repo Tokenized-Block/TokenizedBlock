@@ -907,6 +907,21 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="titre" id="peJournalTitre" hidden style="margin-top:10px;font-size:1em">Buybacks by the TokenizedBlock fee wallet</p>
         <ul class="pmLignes" id="peJournal"></ul>
       </div>
+      <!-- ⛔ OUTILS DE LIQUIDITE (Phil, 2026-09-13) : ajouter ses blocks au marche en GARDANT sa position, la retirer
+           avec minimums. Visible seulement sur un marche LU au format de l app. -->
+      <div class="pJeu" id="pLiquidite" hidden>
+        <div class="pJeuTete"><span class="pBadge">Liquidity</span><span class="pPV">you keep your position</span></div>
+        <p class="pProchain">Add some of your blocks to its market so people can buy them. Unlike the launch, this position is yours: you can withdraw it at any time.</p>
+        <div class="pActions" style="grid-template-columns:1fr 1fr">
+          <label class="champ">Share of your blocks, in %<input id="plqPart" inputmode="decimal" placeholder="1" autocomplete="off"></label>
+          <button class="bouton" id="plqAjouter" type="button" style="align-self:end">Prepare add</button>
+        </div>
+        <ul class="pmLignes" id="plqLignes"></ul>
+        <div class="pActions" id="plqActions"></div>
+        <p class="note" id="plqEtat"></p>
+        <p class="titre" style="margin-top:10px;font-size:1em">Your positions on this block (added from this browser)</p>
+        <ul class="pmLignes" id="plqPositions"></ul>
+      </div>
       <div class="pJeu" id="pLancement" hidden>
         <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
         <p class="pProchain">Creates its pool against ETH and places the share of your blocks you choose below, in one
@@ -1039,12 +1054,13 @@ import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal } from './journal-cerveau.js';
-/* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🧩 sur la map, 🧩 dans Live. */
+/* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { repartitionFrappe, TBLOCK } from './tokenomics.js';
 import { planEchange, estWalletDeFrais } from './echange.js';
+import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
@@ -1140,7 +1156,9 @@ let idRpc = 0;
  * ⚠️ SUR DES LECTURES SEULEMENT. Tout ce qui passe ici est une lecture publique (`eth_call`,
  *    `eth_getLogs`, `eth_estimateGas`, recus) : la rejouer ne change rien sur la chaine. Aucun
  *    envoi ne passe par cette fonction — les envois passent par le wallet, via `envoi.js`. */
-const ESSAIS_429 = 3;
+/* ⛔ 5 ESSAIS (0,7 → 11 s + alea), pas 3 (2026-09-13) : sous la charge d une map vivante, 3 ne suffisaient pas a lire le
+ * plan de liquidite de TBLOCK — « HTTP 429 after 4 tries ». Toujours borne : au-dela, on echoue et on le dit. */
+const ESSAIS_429 = 5;
 async function rpc(methode, params) {
   for (let essai = 0; ; essai++) {
     const r = await fetch(RESEAUX[CHAINE].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1153,7 +1171,10 @@ async function rpc(methode, params) {
     }
     const refusDebit = limite || (j && j.error && /rate limit|too many requests/i.test(String(j.error.message)));
     if (refusDebit && essai < ESSAIS_429) {
-      await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai));
+      /* ⛔ ALEA AJOUTE (2026-09-13) : sans lui, toutes les lectures refusees au meme instant (map, live, profil) revenaient
+       * au MEME instant et se refaisaient refuser ensemble. Aucun RPC de secours : mesure du meme jour, publicnode, drpc
+       * et 1rpc rendent 0x00 pour les B20 — un secours afficherait « pas de marche » sur tous les blocks. */
+      await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai + Math.floor(Math.random() * 400)));
       continue;
     }
     if (limite) throw new Error('HTTP 429 after ' + (ESSAIS_429 + 1) + ' tries');
@@ -1544,7 +1565,7 @@ function marquerNotre(h) {
   h.nous = true;
   h.el.classList.add('nous');
   const etiq = h.el.querySelector('.etiq');
-  if (etiq && !etiq.textContent.startsWith('🧩')) etiq.textContent = '🧩 ' + etiq.textContent;
+  if (etiq && !etiq.textContent.startsWith('🟦')) etiq.textContent = '🟦 ' + etiq.textContent;
 }
 
 async function charger() {
@@ -2482,6 +2503,8 @@ async function lireProfil(adr, sym, perime) {
   $('#pLancement').hidden = true;
   $('#pReveiller').hidden = true;
   $('#pEchange').hidden = true;
+  $('#pLiquidite').hidden = true;
+  $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
   $('#peLignes').innerHTML = ''; $('#peActions').innerHTML = ''; $('#peEtat').textContent = ''; $('#peJournal').innerHTML = '';
   $('#peJournalTitre').hidden = true;
   echangeCourant = null;
@@ -2555,6 +2578,11 @@ async function lireProfil(adr, sym, perime) {
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
+  /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT TBLOCK (2026-09-13) : les cartes Buy / Sell et Liquidity ne s ouvraient qu APRES la
+   * lecture du prix ETH/USD — qui, sous limite de debit, tenait la page plusieurs dizaines de secondes : « 5.07 ETH »
+   * affiche, et aucune carte. Elles dependent du MARCHE lu, pas du prix en dollars : on les ouvre des maintenant. */
+  $('#pEchange').hidden = etatVieProfil !== 'LUE';
+  $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (ethUsd === null && typeof vieProfil === 'number') await lirePrixEth();
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
   /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
@@ -2564,6 +2592,8 @@ async function lireProfil(adr, sym, perime) {
    * enverrait creer une pool qui existe peut-etre deja. */
   $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
   $('#pEchange').hidden = etatVieProfil !== 'LUE';
+  $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
+  if (etatVieProfil === 'LUE') void peindrePositions(adr);
   if (etatVieProfil === 'LUE') {
     const bb = estWalletDeFrais(compte);
     $('#peBadge').textContent = bb ? 'Buyback · fee wallet' : 'Buy · Sell';
@@ -2717,7 +2747,7 @@ async function lireLive(sens) {
 
 function peindreLive() {
   $('#sfLive').innerHTML = liveEvts.map((e) => {
-    const nom = (estANous(e.jeton) ? '🧩 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
+    const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> bought · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> sold · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
@@ -2764,7 +2794,8 @@ function demarrerLive() {
   if (liveMinuterie) { void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
-    if ($('#v-social').classList.contains('on') && !document.hidden) void lireLive('neuf');
+    /* le fil live cede le noeud quand l utilisateur prepare un geste (achat, liquidite, profil) */
+    if ($('#v-social').classList.contains('on') && !document.hidden && !profilEnLecture) void lireLive('neuf');
   }, LIVE_MS);
   /* ⛔ LE DEFILEMENT CHARGE LE PASSE : arriver au bas du fil lit la fenetre precedente. */
   if ('IntersectionObserver' in window) {
@@ -3006,6 +3037,116 @@ async function peindreJournalBuyback(adr) {
       : '<li>No buyback in the last 20,000 chain blocks' + (t.fenetresRatees.length ? ' — ⚠️ some windows unread, not proof of none' : '') + '.</li>';
   } catch (e) { /* journal non lu : rien n est affirme */ }
 }
+/* ══ LIQUIDITE — ajouter en gardant sa position, retirer avec minimums ══════════════════════════════════════
+ * ⛔ L id de la position est lu AVANT l envoi (nextTokenId), puis VERIFIE apres (ownerOf = ce compte) : on ne garde
+ *    jamais un id qu on n a pas vu appartenir a l utilisateur. Liste gardee par chaine et par compte. */
+let liquiditeEnCours = false;
+const clePositions = () => 'tblock.positions.' + CHAINE + '.' + String(compte || '').toLowerCase();
+function positionsGardees() { try { return JSON.parse(localStorage.getItem(clePositions()) || '[]'); } catch (e) { return []; } }
+function garderPosition(id, jeton) {
+  const l = positionsGardees().filter((x) => x.id !== String(id));
+  l.push({ id: String(id), jeton: String(jeton).toLowerCase() });
+  try { localStorage.setItem(clePositions(), JSON.stringify(l.slice(-50))); } catch (e) { /* liste de la page seulement */ }
+}
+async function peindrePositions(adr) {
+  const boite = $('#plqPositions');
+  if (!compte) { boite.innerHTML = '<li>Connect your wallet to see your positions.</li>'; return; }
+  const miennes = positionsGardees().filter((x) => x.jeton === String(adr).toLowerCase());
+  if (!miennes.length) { boite.innerHTML = '<li>None added from this browser yet.</li>'; return; }
+  boite.innerHTML = '<li>reading…</li>';
+  const lignes = [];
+  for (const x of miennes) {
+    let p;
+    try { p = await lirePosition({ rpc, chaine: CHAINE, tokenId: BigInt(x.id) }); } catch { p = { etat: 'NON_LUE' }; }
+    if ($('#profil').dataset.block !== adr) return;
+    const actif = p.etat === 'LUE' && p.liquidite > 0n && p.proprietaire.toLowerCase() === compte.toLowerCase();
+    lignes.push('<li>Position #' + enTexte(x.id) + ' · ' + (p.etat === 'LUE' ? (actif ? 'active' : 'empty or not yours') : p.etat === 'BRULEE_OU_ABSENTE' ? 'withdrawn' : 'not read')
+      + (actif ? ' <button class="bouton sec" type="button" data-retrait="' + enTexte(x.id) + '">Withdraw</button>' : '') + '</li>');
+  }
+  boite.innerHTML = lignes.join('');
+}
+$('#plqPositions').addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-retrait]') : null;
+  if (b) void retirerPosition(BigInt(b.getAttribute('data-retrait')));
+});
+async function preparerAjout() {
+  const adr = $('#profil').dataset.block;
+  const e = $('#plqEtat');
+  $('#plqActions').innerHTML = ''; $('#plqLignes').innerHTML = '';
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  const pct = Number(String($('#plqPart').value || '').trim().replace(',', '.'));
+  if (!(pct >= 0.1 && pct <= 99.9)) { e.className = 'note wKo'; e.textContent = 'Enter a share between 0.1 and 99.9 %.'; return; }
+  e.className = 'note'; e.textContent = 'Reading the pool, your balance and your approvals…';
+  profilEnLecture = true;
+  let p;
+  const marcheLu = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
+  try { p = await planAjoutLiquidite({ rpc, chaine: CHAINE, jeton: adr, compte, partPourMille: Math.round(pct * 10), marcheLu }); }
+  catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  finally { profilEnLecture = false; }
+  if ($('#profil').dataset.block !== adr) return;
+  if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + p.pourquoi; return; }
+  $('#plqLignes').innerHTML = [
+    'Places ' + formaterUnites(p.blocksRequis, p.dec) + ' ' + (symProfil || 'blocks') + ' in its market, below the current price — they are sold as people buy.',
+    'ETH needed: none.',
+    'The position belongs to YOU — withdraw it here whenever you want. No fee is taken on liquidity.',
+    ...[...(p.etapes || []), p.tx].filter(Boolean).map((tx, k) => {
+      const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: p.dec });
+      return 'Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ');
+    }),
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  const b = document.createElement('button');
+  b.className = 'bouton'; b.type = 'button';
+  if (p.etat === 'APPROBATIONS') {
+    b.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + p.etapes[0].nom;
+    b.addEventListener('click', () => void signerLiquidite(p.etapes[0], adr, 'APPROBATION'));
+  } else {
+    b.textContent = 'Sign — add my blocks';
+    b.addEventListener('click', () => void signerLiquidite(p.tx, adr, 'AJOUT'));
+  }
+  $('#plqActions').appendChild(b);
+  e.className = 'note'; e.textContent = p.etat === 'APPROBATIONS' ? 'Approvals first, then the add.' : 'Check it in your wallet before signing.';
+}
+async function signerLiquidite(tx, adr, genre) {
+  if (liquiditeEnCours) return;
+  liquiditeEnCours = true;
+  const e = $('#plqEtat');
+  e.className = 'note'; e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  let idAvant = null, r;
+  try {
+    if (genre === 'AJOUT') idAvant = await prochainIdPosition({ rpc, chaine: CHAINE });
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: tx.to, data: tx.data, value: tx.value || '0x0' });
+  } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+  finally { liquiditeEnCours = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+  if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
+  if (genre === 'APPROBATION') { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerAjout(); return; }
+  if (genre === 'AJOUT' && idAvant !== null) {
+    try {
+      const pos = await lirePosition({ rpc, chaine: CHAINE, tokenId: idAvant });
+      if (pos.etat === 'LUE' && pos.proprietaire.toLowerCase() === compte.toLowerCase()) garderPosition(idAvant, adr);
+    } catch { /* non verifiee : pas gardee */ }
+  }
+  e.className = 'note wOk'; e.innerHTML = (genre === 'AJOUT' ? 'Liquidity added — your position is listed below.' : 'Position withdrawn.') + lien;
+  void peindrePositions(adr);
+}
+async function retirerPosition(id) {
+  const adr = $('#profil').dataset.block;
+  const e = $('#plqEtat');
+  e.className = 'note'; e.textContent = 'Reading your position and the pool price…';
+  const p = await planRetrait({ rpc, chaine: CHAINE, compte, tokenId: id });
+  if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + p.pourquoi; return; }
+  $('#plqLignes').innerHTML = ['Withdraw position #' + id.toString(),
+    'You get back at least ' + formaterUnites(p.minimum.eth, 18) + ' ETH and ' + formaterUnites(p.minimum.blocks, 18) + ' ' + (symProfil || 'blocks') + ' (1 % slippage)',
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  $('#plqActions').innerHTML = '';
+  const b = document.createElement('button');
+  b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign — withdraw my position';
+  b.addEventListener('click', () => void signerLiquidite(p.tx, adr, 'RETRAIT'));
+  $('#plqActions').appendChild(b);
+  e.className = 'note'; e.textContent = 'The chain accepts this withdrawal. Check it in your wallet before signing.';
+}
+$('#plqAjouter').addEventListener('click', () => void preparerAjout());
+
 $('#peAcheter').addEventListener('click', () => void preparerEchange('ACHAT'));
 $('#peVendre').addEventListener('click', () => void preparerEchange('VENTE'));
 

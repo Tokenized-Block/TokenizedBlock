@@ -147,6 +147,42 @@ export function encodeMintPosition({ cle, tickBas, tickHaut, liquidite, max0, ma
   return '0x' + selecteur('modifyLiquidities(bytes,uint256)') + mot(0x40) + mot(deadline) + dyn(unlock);
 }
 
+/**
+ * Retirer une position : modifyLiquidities avec [BURN_POSITION 0x03, TAKE_PAIR 0x11] (Actions.sol, lus a la source).
+ * BURN = (uint256 tokenId, uint128 amount0Min, uint128 amount1Min, bytes hookData) ; TAKE_PAIR = (currency0, currency1,
+ * recipient). BURN ramene la liquidite a zero s il en reste (PositionManager.handleAction).
+ * ⛔ Des minimums, pas zero : un retrait a minimum nul accepterait n importe quel prix au moment du retrait.
+ */
+export function encodeRetraitPosition({ tokenId, min0, min1, cle, destinataire, deadline }) {
+  const p0 = mot(tokenId) + mot(min0) + mot(min1) + mot(0x80) + mot(0);
+  const p1 = motAdr(cle.currency0) + motAdr(cle.currency1) + motAdr(destinataire);
+  const elements = [dyn(p0), dyn(p1)];
+  let curseur = BigInt(32 * elements.length);
+  const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
+  const tableau = mot(elements.length) + offsets.join('') + elements.join('');
+  const blocActions = dyn('0311');
+  const unlock = mot(0x40) + mot(0x40 + blocActions.length / 2) + blocActions + tableau;
+  return '0x' + selecteur('modifyLiquidities(bytes,uint256)') + mot(0x40) + mot(deadline) + dyn(unlock);
+}
+
+/**
+ * Decode `getPoolAndPositionInfo(tokenId)` : PoolKey (5 mots) puis PositionInfo (1 mot).
+ * ⛔ Disposition lue dans PositionInfoLibrary.sol : bits 0-7 hasSubscriber, 8-31 tickLower, 32-55 tickUpper (signes),
+ *    200 bits hauts = poolId tronque.
+ */
+export function decoderPoolEtPosition(retour) {
+  const h = String(retour || '').replace(/^0x/, '');
+  if (h.length < 64 * 6) return null;
+  const w = (i) => h.slice(64 * i, 64 * (i + 1));
+  const adr = (s) => '0x' + s.slice(24);
+  const signe = (v, bits) => { const m = 1n << BigInt(bits); const x = v & (m - 1n); return Number(x >= m / 2n ? x - m : x); };
+  const info = BigInt('0x' + w(5));
+  return {
+    cle: { currency0: adr(w(0)), currency1: adr(w(1)), fee: Number(BigInt('0x' + w(2))), tickSpacing: signe(BigInt('0x' + w(3)), 24), hooks: adr(w(4)) },
+    tickLower: signe(info >> 8n, 24), tickUpper: signe(info >> 32n, 24), abonne: (info & 0xffn) !== 0n,
+  };
+}
+
 /** ⛔ L ordre des devises est IMPOSE par v4 : currency0 < currency1 PAR ADRESSE. L inverser
  *  designerait une AUTRE pool — qui n existe pas — et le mint reverterait sans parler d ordre. */
 export function cleDePool(a, b, { fee = 3000, tickSpacing = 60, hooks = '0x0000000000000000000000000000000000000000' } = {}) {
