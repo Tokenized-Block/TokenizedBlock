@@ -28,7 +28,10 @@ const enc = new TextEncoder();
  */
 export const METIERS = [
   { cle: 'GARDIEN', titre: 'Keeper',
-    fait: 'watches its own market cap and says when it moves',
+    /* ⛔⛔ LA PROMESSE D AVANT ETAIT FAUSSE (Phil, capture du 2026-09-13) : « says when it moves » — et
+     *    `rapport` ne disait JAMAIS un mouvement, juste la capitalisation lue. Le Keeper compare
+     *    maintenant les lectures gardees dans CE navigateur et le dit — y compris qu il n en a pas assez. */
+    fait: 'compares its market cap across your visits and says whether it moved',
     propose: null,
     jamais: 'never moves anything — it only reports' },
   { cle: 'MOMENTUM', titre: 'Momentum',
@@ -133,6 +136,22 @@ export function rapport({ metier, symbole = null, vie = null, devise = null, ten
         avertissement: 'A market cap is buyable: measured 2026-09-09, 0.01 ETH moved a displayed cap '
           + 'by 2 346 ETH. Size is not money in the pool.',
       });
+    }
+  }
+
+  if (m.cle === 'GARDIEN' && aVie) {
+    /* ⛔ SANS TROIS LECTURES, IL LE DIT — il ne dit pas « stable » : le silence d un gardien se lirait
+     *    comme « rien ne bouge », ce qui n a jamais ete mesure. */
+    if (!tendance || tendance.etat === 'PAS_ASSEZ') {
+      const n = tendance ? tendance.lectures : 0;
+      lignes.push('Not enough readings to say it moved: ' + n + ' of ' + LECTURES_MIN
+        + '. Readings are kept in this browser, one per visit.');
+    } else if (tendance.etat === 'PLAT') {
+      lignes.push('Did not move over ' + tendance.lectures + ' readings (less than '
+        + Math.round(SEUIL_PLAT * 100) + ' %).');
+    } else {
+      lignes.push('Moved ' + (tendance.variation > 0 ? 'up ' : 'down ')
+        + Math.abs(Math.round(tendance.variation * 1000) / 10) + ' % over ' + tendance.lectures + ' readings.');
     }
   }
 
