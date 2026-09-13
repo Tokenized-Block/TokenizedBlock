@@ -601,6 +601,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <li><b>Death</b> — only when its creator held it and now holds none. A creator who never held it, or a balance we could not read, never kills a block.</li>
       </ul>
       <p class="note" id="bNourriture">Food not read yet.</p>
+      <p class="titre" style="margin-top:12px;font-size:1em">Its journal</p>
+      <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
+      <ul class="pmLignes" id="bJournal"></ul>
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
@@ -1035,6 +1038,7 @@ import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
+import { pensees, ajouterAuJournal } from './journal-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🧩 sur la map, 🧩 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
@@ -3774,6 +3778,26 @@ let brainAdr = null, brainEtat = null, brainHisto = [];
  * `actifs.length` sont comptes dans la meme boucle). Deux cases pour un chiffre ne disent rien de
  * plus : l une devient le cumul depuis l ouverture. */
 let brainTotal = 0, brainDernier = null;
+let brainPhaseJournal = null, brainNourriture = null;
+const CLE_JOURNAL = 'tblock.journal.';
+function journalLu(adr) {
+  try { return JSON.parse(localStorage.getItem(CLE_JOURNAL + String(adr).toLowerCase()) || '[]'); } catch (e) { return []; }
+}
+function ecrireJournal(adr, vu, h) {
+  const nourr = h && h.nourriture ? h.nourriture
+    : brainNourriture && brainNourriture.adr === String(adr).toLowerCase() ? brainNourriture.n : null;
+  const nouvelles = pensees({ phase: vu.phase, vie: h ? h.vie : null, etatVie: h ? h.etatVie : null, nourriture: nourr,
+    memoire: vu.memoire, spikes: vu.spikes, symbole: h ? h.sym : null });
+  const j = ajouterAuJournal(journalLu(adr), vu.tick, nouvelles);
+  try { localStorage.setItem(CLE_JOURNAL + String(adr).toLowerCase(), JSON.stringify(j)); } catch (e) { /* journal de la page seulement */ }
+  peindreJournal(adr, j);
+}
+function peindreJournal(adr, j = journalLu(adr)) {
+  const icone = { FAIT: '👁', PENSE: '💭', AMELIORER: '🌱' };
+  $('#bJournal').innerHTML = j.length ? j.slice().reverse().slice(0, 12).map((e) => '<li>' + (icone[e.genre] || '·') + ' '
+    + enTexte(e.texte) + '<br><span class="filS">beat ' + Number(e.tick).toLocaleString('en-US') + ' · because ' + enTexte(e.parce_que) + '</span></li>').join('')
+    : '<li>Nothing written yet — it writes on its first beat.</li>';
+}
 const HISTO_MAX = 120;
 
 function peindreChoixBrain() {
@@ -3792,6 +3816,18 @@ function choisirBrain(adr) {
   brainHisto = [];
   brainTotal = 0; brainDernier = null;
   try { brainEtat = cerveauAvecMemoire(adr); } catch (e) { brainEtat = null; }
+  brainPhaseJournal = null;
+  peindreJournal(adr);
+  /* ⛔ LE DORMANT SE REVEILLE AVEC SES PROPRES INFOS : si sa nourriture n a pas encore ete lue par la map, on la lit
+   * maintenant pour CE block — sans elle il resterait « asleep » faute d avoir regarde, pas faute d activite. */
+  void (async () => {
+    const hB = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
+    if (hB && hB.nourriture && hB.nourriture.etat === 'LUE') return;
+    try {
+      const n = await nourritureDuBlock({ rpc, jeton: adr });
+      if (hB) hB.nourriture = n; else brainNourriture = { adr: String(adr).toLowerCase(), n };
+    } catch { /* non lue : le journal le dira */ }
+  })();
   $('#bMemoireNote').textContent = brainEtat && brainEtat.tick > 0
     ? 'Memory resumed at beat ' + brainEtat.tick.toLocaleString('en-US') + ' — kept in this browser.'
     : 'New memory — nothing kept for this block in this browser yet.';
@@ -3816,6 +3852,11 @@ function battreBrain() {
   brainEtat = r.etat;
   if (r.etat.tick % 10 === 0 && brainAdr) noterMemoire(brainAdr, r.etat);
   $('#bMemoire').textContent = Math.round(r.vu.memoire * 100) + ' %';
+  /* ⛔ LE JOURNAL S ECRIT au premier battement, a chaque changement de phase, puis tous les 25 battements */
+  if (brainAdr && (r.vu.phase !== brainPhaseJournal || r.vu.tick % 25 === 1)) {
+    brainPhaseJournal = r.vu.phase;
+    ecrireJournal(brainAdr, r.vu, h);
+  }
   brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
