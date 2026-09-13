@@ -115,7 +115,15 @@ const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / divi
  * ⛔ `mort` n est vrai QUE s il vaut strictement `true` : un solde non lu (null, undefined) ne tue pas.
  */
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
-  scelle = null, mort = null, etatVie = null } = {}) {
+  scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null } = {}) {
+  /* ⛔⛔ L HUMEUR SUR LE NOUVEAU (Phil, 2026-09-13, apres mesure : TBLOCK et WOFI EXCITE 40/40 battements a prix stable,
+   *    parce que 3 detenteurs dans la fenetre suffisaient — CALME et CURIEUX n arrivaient jamais sur un block vivant).
+   *    Seul ce qui est arrive DEPUIS LA LECTURE PRECEDENTE excite. Sans lecture precedente, rien n est « nouveau ».
+   * ⚠️ BORNE : les compteurs sont sur une fenetre glissante ; un transfert qui entre pendant qu un ancien sort se compense
+   *    et n est pas vu. On rate du nouveau, on n en invente jamais. */
+  const hausse = (x, avant) => (typeof avant === 'number' && Number.isFinite(avant) ? Math.max(0, (Number(x) || 0) - avant) : 0);
+  const nouveaux = { gm: hausse(gm, gmAvant), messages: hausse(messages, messagesAvant), detenteurs: hausse(detenteurs, detenteursAvant) };
+  const avecAvant = [gmAvant, messagesAvant, detenteursAvant].some((a) => typeof a === 'number' && Number.isFinite(a));
   const aMarche = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
   /* la variation RELATIVE, bornee : un x10 ne doit pas saturer le reseau pour toujours */
   let delta = 0;
@@ -138,6 +146,9 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
     /* ⛔ SEULEMENT LE LIBELLE : le courant est le meme (vie null dans les deux cas), donc les potentiels et
      *    l empreinte d entree ne changent pas — un enregistrement deja grave se rejoue a l identique. */
     nonLu: !aMarche && etatVie === 'NON_LUE',
+    nouveau: Math.min(1, nouveaux.gm * 0.5 + nouveaux.messages * 0.5 + nouveaux.detenteurs * 0.5),
+    nouveaux,
+    avecAvant,
   };
 }
 
@@ -206,7 +217,7 @@ export function pas(etat, faits = {}) {
   else if (f.nonLu) phase = 'NON_LU';
   else if (!f.aMarche) phase = miam > 0 ? 'EVEILLE' : 'DORMANT';
   else if (f.delta <= -0.05) phase = 'INQUIET';
-  else if (f.delta >= 0.05 || f.gm > 0.3 || f.detenteurs > 0.3) phase = 'EXCITE';
+  else if (f.delta >= 0.05 || f.nouveau > 0) phase = 'EXCITE';
   else if (spikes > 8) phase = 'CURIEUX';
   else phase = 'CALME';
 
@@ -230,7 +241,9 @@ export function pas(etat, faits = {}) {
       memoire: memoireMoyenne,
       /* ⛔ L EMPREINTE DE L ENTREE PORTE LA VERSION ET CHAQUE FAIT : deux personnes rejouent le meme pas. */
       entree: empreinte(JSON.stringify([VERSION_CERVEAU, f.aMarche, f.taille, f.delta, f.gm, f.messages,
-        f.detenteurs, f.part, f.scelle, f.mort, etat.tick])),
+        f.detenteurs, f.part, f.scelle, f.mort, etat.tick,
+        /* le nouveau n entre dans l empreinte que s il a ete fourni : un pas d avant se rejoue a l identique */
+        ...(f.avecAvant ? [f.nouveaux.gm, f.nouveaux.messages, f.nouveaux.detenteurs] : [])])),
     },
   };
 }
@@ -271,7 +284,7 @@ export function phraseDePhase(phase, symbole) {
     EVEILLE: nom + ' is awake: no market yet, but its community feeds it — GMs, messages, new holders.',
     CALME: nom + ' is calm. Its market is steady.',
     CURIEUX: nom + ' is restless, looking around.',
-    EXCITE: nom + ' is buzzing: its life went up, or it was fed.',
+    EXCITE: nom + ' is buzzing: its life went up, or something new just reached it — a transfer, a holder, a message.',
     INQUIET: nom + ' is agitated: its life went down. Nobody refunds that.',
     MORT: nom + ' is dead: its creator no longer holds any of it.',
     NON_LU: nom + '\'s market could not be read right now — no mood is judged until it is.',

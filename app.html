@@ -1069,11 +1069,31 @@ import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
-function entreesCerveau(vie, vieAvant, n, etatVie) {
+function entreesCerveau(vie, vieAvant, n, etatVie, nAvant) {
   const lue = n && n.etat === 'LUE' ? n : null;
+  /* ⛔ LE NOUVEAU = la lecture courante moins la PRECEDENTE lecture reussie ; sans precedente, rien n est nouveau */
+  const avant = lue && nAvant && nAvant.etat === 'LUE' ? nAvant : null;
   /* ⛔ un marche pas encore lu (undefined) est NON_LUE : le cerveau dit « non jugé », jamais « endormi sans marche » */
   return { vie, vieAvant, gm: lue ? lue.gm : 0, messages: lue ? lue.messages : 0,
-    detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false, etatVie: etatVie || 'NON_LUE' };
+    detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false, etatVie: etatVie || 'NON_LUE',
+    gmAvant: avant ? avant.gm : null, messagesAvant: avant ? avant.messages : null, detenteursAvant: avant ? avant.detenteurs : null };
+}
+/* ⛔⛔ RELECTURE DE LA NOURRITURE DU BLOCK REGARDE (2026-09-13) : la map ne la lit qu UNE fois par block — sans relecture,
+ *    « du nouveau » ne pouvait jamais etre vu. Seul le block ouvert (profil ou Brain) est relu, au plus toutes les 90 s
+ *    (≈15 lectures), pour ne pas saturer le noeud public. Une excitation dure donc au plus jusqu a la relecture suivante. */
+const RELIRE_NOURRITURE_MS = 90000;
+const relecturesNourriture = new Map();
+async function relireNourriture(h) {
+  if (!h || profilEnLecture) return;
+  const cle = String(h.adr).toLowerCase();
+  if ((relecturesNourriture.get(cle) || 0) > Date.now() - RELIRE_NOURRITURE_MS) return;
+  relecturesNourriture.set(cle, Date.now());
+  try {
+    const n = await nourritureDuBlock({ rpc, jeton: h.adr });
+    if (n.etat !== 'LUE') return;
+    if (h.nourriture && h.nourriture.etat === 'LUE') h.nourritureAvant = h.nourriture;
+    h.nourriture = n;
+  } catch (e) { /* non relue : l humeur garde la lecture d avant, sans nouveau invente */ }
 }
 /* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
  * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
@@ -1311,7 +1331,7 @@ let battement = null;
 function battre() {
   for (const h of habitants) {
     if (!h.cerveau) continue;
-    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie));
+    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie, h.nourritureAvant));
     h.cerveau = r.etat;
     /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
     if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
@@ -2386,8 +2406,9 @@ function battreProfil() {
   const hP = habitants.find((x) => String(x.adr).toLowerCase() === String(profilCerveau.adr).toLowerCase());
   /* ⛔ JUMEAUX QUI DIVERGEAIENT : le profil passait `vieAvant: null` (variation toujours 0, donc jamais INQUIET ni
    *    EXCITE par le prix) quand la map passait la lecture precedente — deux humeurs pour le meme block. */
+  void relireNourriture(hP);
   const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
-    hP ? hP.nourriture : null, etatVieProfil));
+    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null));
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   peindreCerveau();
@@ -2404,7 +2425,7 @@ function peindreCerveau() {
   }
   const v = profilCerveau && profilCerveau.vu;
   if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; return; }
-  $('#pcPhase').textContent = v.phase.toLowerCase();
+  $('#pcPhase').textContent = v.phase === 'NON_LU' ? 'market unread' : v.phase.toLowerCase();
   $('#pcPhrase').textContent = phraseDePhase(v.phase, symProfil || 'This block');
   $('#pcG').textContent = v.gauche_hz.toFixed(1);
   $('#pcD').textContent = v.droite_hz.toFixed(1);
@@ -4009,7 +4030,9 @@ function choisirBrain(adr) {
 function battreBrain() {
   if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
   const h = habitants.find((x) => x.adr === brainAdr);
-  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null));
+  void relireNourriture(h);
+  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null,
+    h ? h.nourritureAvant : null));
   const n = h && h.nourriture;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
     : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'
@@ -4030,7 +4053,7 @@ function battreBrain() {
   dessinerRaster();
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
   dessinerReseau(r.vu);
-  $('#bPhase').textContent = r.vu.phase.toLowerCase();
+  $('#bPhase').textContent = r.vu.phase === 'NON_LU' ? 'market unread' : r.vu.phase.toLowerCase();
   $('#bTick').textContent = r.vu.tick;
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);
