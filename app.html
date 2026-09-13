@@ -604,6 +604,12 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre" style="margin-top:12px;font-size:1em">Its journal</p>
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
+      <p class="titre" style="margin-top:12px;font-size:1em">Its rules — code it writes itself</p>
+      <p class="note">After it has seen the same event on chain at least twice, it writes a rule for it. A closed engine
+        reads these lines: a rule can only write in its journal or suggest a gesture to you. It never signs, sends or
+        reads anything by itself.</p>
+      <pre class="mono" id="bRegles" style="white-space:pre-wrap;overflow-x:auto"></pre>
+      <p class="note" id="bReglesNote"></p>
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
@@ -1056,6 +1062,7 @@ import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal } from './journal-cerveau.js';
+import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
@@ -3987,6 +3994,43 @@ function peindreJournal(adr, j = journalLu(adr)) {
     + enTexte(e.texte) + '<br><span class="filS">beat ' + Number(e.tick).toLocaleString('en-US') + ' · because ' + enTexte(e.parce_que) + '</span></li>').join('')
     : '<li>Nothing written yet — it writes on its first beat.</li>';
 }
+/* ⛔ LES REGLES DU BLOCK (choix A de Phil, 2026-09-13) : compteurs d evenements VUS et lignes ecrites, gardes dans ce
+ *    navigateur par block. Le moteur (regles-cerveau.js) ne rend que des lignes de journal. */
+const CLE_REGLES = 'tblock.regles.';
+let brainVuAvant = null;
+function reglesLues(adr) {
+  try {
+    const o = JSON.parse(localStorage.getItem(CLE_REGLES + String(adr).toLowerCase()) || '{}');
+    return { compteurs: o && typeof o.compteurs === 'object' && o.compteurs ? o.compteurs : {},
+      dernieres: o && typeof o.dernieres === 'object' && o.dernieres ? o.dernieres : {} };
+  } catch (e) { return { compteurs: {}, dernieres: {} }; }
+}
+function peindreRegles(adr, compteurs = reglesLues(adr).compteurs) {
+  const lignes = ecrireRegles(compteurs);
+  const lu = lireRegles(lignes);
+  $('#bRegles').textContent = lignes.length ? lignes.join('\n') : '// no rule yet — it writes one after seeing the same event twice';
+  const vus = Object.entries(compteurs).map(([e, n]) => e + ' ×' + n).join(' · ');
+  $('#bReglesNote').textContent = (lu.etat === 'VALIDES' ? 'Engine: ' + lu.regles.length + ' rule(s) valid.' : 'Engine refused the rules: ' + lu.pourquoi + '.')
+    + (vus ? ' Seen here: ' + vus + '.' : ' Nothing seen yet in this browser.');
+  return lu;
+}
+function appliquerReglesDuBrain(adr, vu) {
+  const ev = evenementsDuPas(vu, brainVuAvant);
+  brainVuAvant = vu;
+  if (!ev.length) return;
+  const avant = reglesLues(adr);
+  const compteurs = compter(avant.compteurs, ev);
+  const lu = peindreRegles(adr, compteurs);
+  const { lignes, retenues, dernieres } = lu.etat === 'VALIDES'
+    ? appliquerRegles(lu.regles, ev, { phase: vu.phase, compteurs, dernieres: avant.dernieres, tick: vu.tick })
+    : { lignes: [], retenues: [], dernieres: avant.dernieres };
+  try { localStorage.setItem(CLE_REGLES + String(adr).toLowerCase(), JSON.stringify({ compteurs, dernieres })); } catch (e) { /* regles de la page seulement */ }
+  if (retenues.length) $('#bReglesNote').textContent += ' Held back by prudence: ' + retenues.map((x) => x.ligne.split(' THEN ')[1].split(' ')[0] + ' (' + x.pourquoi + ')').join(' · ') + '.';
+  if (!lignes.length) return;
+  const j = ajouterAuJournal(journalLu(adr), vu.tick, lignes);
+  try { localStorage.setItem(CLE_JOURNAL + String(adr).toLowerCase(), JSON.stringify(j)); } catch (e) { /* journal de la page seulement */ }
+  peindreJournal(adr, j);
+}
 const HISTO_MAX = 120;
 
 function peindreChoixBrain() {
@@ -4006,7 +4050,9 @@ function choisirBrain(adr) {
   brainTotal = 0; brainDernier = null;
   try { brainEtat = cerveauAvecMemoire(adr); } catch (e) { brainEtat = null; }
   brainPhaseJournal = null;
+  brainVuAvant = null;
   peindreJournal(adr);
+  peindreRegles(adr);
   /* ⛔ LE DORMANT SE REVEILLE AVEC SES PROPRES INFOS : si sa nourriture n a pas encore ete lue par la map, on la lit
    * maintenant pour CE block — sans elle il resterait « asleep » faute d avoir regarde, pas faute d activite. */
   void (async () => {
@@ -4048,6 +4094,7 @@ function battreBrain() {
     brainPhaseJournal = r.vu.phase;
     ecrireJournal(brainAdr, r.vu, h);
   }
+  if (brainAdr) appliquerReglesDuBrain(brainAdr, r.vu);
   brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();

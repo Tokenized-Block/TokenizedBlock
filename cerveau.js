@@ -237,6 +237,9 @@ export function pas(etat, faits = {}) {
       indices: actifs,
       phase,
       nourriture: Math.round(miam * 1000) / 1000,
+      /* ce qui est NOUVEAU depuis la lecture precedente, et la variation de vie : lus par les regles du block */
+      nouveaux: f.nouveaux,
+      delta: f.delta,
       /* la memoire de travail moyenne, 0..1 : combien le reseau « se souvient » de ce qu il vient de faire */
       memoire: memoireMoyenne,
       /* ⛔ L EMPREINTE DE L ENTREE PORTE LA VERSION ET CHAQUE FAIT : deux personnes rejouent le meme pas. */
