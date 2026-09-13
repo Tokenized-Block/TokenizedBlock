@@ -65,10 +65,27 @@ export function sqrtDeTick(t) {
   return BigInt(Math.floor(Math.sqrt(Math.pow(1.0001, t)) * 2 ** 96));
 }
 
+/* ⛔⛔ BUG DE PHIL DU 2026-09-13 : « Not measured … an approval could not be read » en lancant TBLOCK/ETH. Mesure
+ *    au meme moment : le noeud public repondait « over rate limit » (HTTP 429). La limite de debit est
+ *    TRANSITOIRE : on reessaie (0,6 s, 1,2 s, 2,4 s) avant de conclure « non mesure ». Toute AUTRE erreur echoue
+ *    tout de suite — on ne masque pas une vraie panne en insistant. */
+export const ESSAIS_DEBIT = 3;
+const estLimiteDeDebit = (e) => /rate limit|too many requests|429/i.test(String((e && e.message) || e));
+/* ⚠️ Fonction de module, pas une fleche en parametre par defaut : la regle 5 de verifie-coherence ne voit pas
+ *    un parametre-fonction appele directement (meme remarque dans achats.js). */
+function patienter(ms) { return new Promise((ok) => setTimeout(ok, ms)); }
 async function lireAppel(rpc, to, data) {
-  const r = await rpc('eth_call', [{ to, data }, 'latest']);
-  if (!r || r === '0x') throw new Error('empty answer from ' + to);
-  return r;
+  for (let essai = 0; ; essai++) {
+    let r;
+    try {
+      r = await rpc('eth_call', [{ to, data }, 'latest']);
+    } catch (e) {
+      if (estLimiteDeDebit(e) && essai < ESSAIS_DEBIT) { await patienter(600 * 2 ** essai); continue; }
+      throw e;
+    }
+    if (!r || r === '0x') throw new Error('empty answer from ' + to);
+    return r;
+  }
 }
 
 /**
