@@ -978,6 +978,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU } from './cerveau.js';
 import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction } from './apercu.js';
+import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -1621,6 +1622,54 @@ function mesCreations() {
 }
 
 /**
+ * Les blocks FRAPPES VERS le wallet connecte, bien au-dela de la fenetre de la map (`mes-blocks.js`).
+ * ⛔⛔ BUG DE PHIL DU 2026-09-13 : TTB, cree par ce wallet ~35 000 blocs plus tot, n apparaissait plus — la
+ *    lecture des creations ne couvre que 9 000 blocs. Mesure : les frappes vers le wallet sur 60 000 blocs le
+ *    retrouvent en 33 appels.
+ * ⛔ CACHE PAR CHAINE ET PAR COMPTE, plage CONTIGUE [depuis, jusqua] : elle n avance que sur un scan sans
+ *    fenetre ratee — un trou n est jamais recouvert par un « deja lu ». Les blocks trouves (verifies B20) sont
+ *    gardes meme si une fenetre a rate : ils sont vrais.
+ */
+const PROFONDEUR_FRAPPES = 120000;
+async function mesFrappes(plusLoin = false) {
+  const cle = 'tblock.frappes.' + CHAINE + '.' + String(compte).toLowerCase();
+  let cache = null;
+  try { cache = JSON.parse(localStorage.getItem(cle) || 'null'); } catch (e) { cache = null; }
+  const fin = parseInt(await rpc('eth_blockNumber', []), 16);
+  const borne = cache && cache.depuis !== null && cache.jusqua !== null && cache.depuis !== undefined;
+  let deBloc, aBloc;
+  if (!borne) { aBloc = fin; deBloc = Math.max(0, fin - PROFONDEUR_FRAPPES + 1); }
+  else if (plusLoin) { aBloc = cache.depuis - 1; deBloc = Math.max(0, aBloc - PROFONDEUR_FRAPPES + 1); }
+  else { aBloc = fin; deBloc = cache.jusqua + 1; }
+  const scan = aBloc >= deBloc ? await frappesVers({ rpc, compte, deBloc, aBloc })
+    : { blocks: [], fenetresRatees: [], nonVerifies: [] };
+  const neuf = { blocks: fusionnerCache(cache, scan, aBloc).blocks,
+    depuis: borne ? cache.depuis : null, jusqua: borne ? cache.jusqua : null };
+  if (!scan.fenetresRatees.length) {
+    if (!borne) { neuf.depuis = deBloc; neuf.jusqua = aBloc; }
+    else if (plusLoin) neuf.depuis = deBloc;
+    else neuf.jusqua = aBloc;
+  }
+  try { localStorage.setItem(cle, JSON.stringify(neuf)); } catch (e) { /* stockage refuse : on relira */ }
+  return { blocks: neuf.blocks, fenetresRatees: scan.fenetresRatees, nonVerifies: scan.nonVerifies, depuis: neuf.depuis, fin };
+}
+function noteFrappes(fr) {
+  return '<p class="note">Blocks minted to you: scanned back '
+    + (fr.depuis !== null ? (fr.fin - fr.depuis).toLocaleString('en-US') + ' chain blocks' : 'not yet — a window failed')
+    + (fr.fenetresRatees.length ? ' · ⚠️ ' + fr.fenetresRatees.length + ' window(s) refused by the node — not read, not empty' : '')
+    + (fr.nonVerifies.length ? ' · ⚠️ ' + fr.nonVerifies.length + ' token(s) whose code we could not read' : '')
+    + '. « Minted to you » is not always « created by you ».</p>'
+    + (fr.depuis !== null && fr.depuis > 0 ? '<button class="bouton sec" id="mbPlusLoin" type="button">Look further back</button>' : '');
+}
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('#mbPlusLoin') : null;
+  if (!b || !compte) return;
+  b.disabled = true;
+  b.textContent = 'reading further back…';
+  void mesFrappes(true).then(() => listerMesBlocks(), () => listerMesBlocks());
+});
+
+/**
  * Les blocks crees par l adresse connectee.
  * ⛔⛔ « JE N AI PAS PU RESOUDRE » N EST PAS « CE N EST PAS A TOI ». `creationsDe` rend les
  *    creations NON RESOLUES a part, exactement pour ca — une transaction dont on n a pas lu
@@ -1632,7 +1681,15 @@ async function listerMesBlocks() {
   if (!compte) return;
   boite.innerHTML = '<p class="note">reading the chain…</p>';
   try {
-    const { r, gardees, nonResolues } = await mesCreations();
+    const { r, gardees: creees, nonResolues } = await mesCreations();
+    boite.innerHTML = '<p class="note">reading the blocks minted to you, further back…</p>';
+    let fr;
+    try { fr = await mesFrappes(); }
+    catch (e) { fr = { blocks: [], fenetresRatees: [{ cause: String((e && e.message) || e) }], nonVerifies: [], depuis: null, fin: 0 }; }
+    const gardees = [...creees];
+    for (const b of fr.blocks) {
+      if (!gardees.some((c) => String(c.jeton).toLowerCase() === b.jeton)) gardees.push({ ...b, frappe: true });
+    }
     if (!gardees.length) {
       boite.innerHTML = '<p class="note">No block of yours in the window we read ('
         + ((r.creations || []).length) + ' creations over '
@@ -1640,18 +1697,27 @@ async function listerMesBlocks() {
         + ((r.fenetresRatees || []).length ? ' · ⚠️ ' + r.fenetresRatees.length + ' window(s) refused by '
           + 'the node — not read, not empty' : '')
         + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) we could not attribute '
-          + '— unknown, not « not yours »' : '') + '.</p>';
+          + '— unknown, not « not yours »' : '') + '.</p>' + noteFrappes(fr);
       return;
     }
     /* ⛔ CHAQUE TUILE OUVRE LE PROFIL. Une grille de visages qu on ne peut pas toucher se lit comme
      * une decoration ; le profil est la ou le block devient quelqu un. */
+    /* un block trouve par frappe n a pas son symbole : on le lit, sans rien inventer s il ne se lit pas */
+    for (const c of gardees.slice(0, 12)) {
+      if (c.frappe && !c.symbole) {
+        try { const f = await faitsDuBlock({ rpc, jeton: c.jeton, pause: 150 }); c.symbole = f.symbole || null; }
+        catch (e) { c.symbole = null; }
+      }
+    }
     boite.innerHTML = '<div class="grilleMien">' + gardees.slice(0, 12).map((c) =>
       '<button type="button" class="mienTuile" data-block="' + enTexte(c.jeton) + '" data-sym="'
       + enTexte(String(c.symbole || '').slice(0, 32)) + '"><div class="mienArt">' + dessin(c.jeton, c.symbole) + '</div>'
       + '<b>' + enTexte(String(c.symbole || '?').slice(0, 12)) + '</b></button>').join('') + '</div>'
-      + '<p class="note">' + gardees.length + ' block(s) you created, in the window we read'
+      + '<p class="note">' + creees.length + ' block(s) you created in the last '
+      + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · '
+      + fr.blocks.length + ' minted to you'
       + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, '
-        + 'not « not yours »' : '') + '.</p>';
+        + 'not « not yours »' : '') + '.</p>' + noteFrappes(fr);
   } catch (e) {
     console.warn('[mes blocks] lecture interrompue :', e && e.message ? e.message : e);
     boite.innerHTML = '<p class="note">Could not read the chain right now. That is about us, not '
