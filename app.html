@@ -462,6 +462,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
                 <p class="fVie" id="fVie">—</p>
               </div>
             </div>
+            <div class="pBarre"><i id="fBarre"></i></div>
+            <p class="note" id="fPalier"></p>
             <p class="note" id="fAdr"></p>
             <div class="fActions">
               <button class="bouton sec" id="fGM">Send GM 👋</button>
@@ -550,6 +552,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
       <p class="note" id="cRecap"></p>
+      <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
+      <ol class="pmLignes" id="cApercuTx"></ol>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
         <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
         <button class="bouton" id="cCreer" type="button">Create — sign in my wallet</button>
@@ -973,6 +977,9 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU } from './cerveau.js';
 import { nourritureDuBlock } from './nourriture.js';
+import { apercuTransaction } from './apercu.js';
+import { prixEthUsd } from './prix-eth.js';
+import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 function entreesCerveau(vie, vieAvant, n) {
@@ -1027,6 +1034,31 @@ let CHAINE = 8453;
  * ⛔ ET ELLE RESTE `null` TANT QU AUCUN WALLET N EST CONNECTE. Aucune adresse n est supposee : une
  *    app qui devine a qui elle parle finit par envoyer au mauvais destinataire. */
 let compte = null;
+/* ⛔ LE PRIX ETH/USD EST MESURE (mediane des pools v4, `prix-eth.js`), JAMAIS SUPPOSE. `null` = non lu :
+ * la jauge et les PV disent alors « non juges », ils ne tombent pas a zero. */
+let ethUsd = null;
+async function lirePrixEth() {
+  try {
+    const r = await prixEthUsd({ rpc, stateView: RESEAUX[CHAINE].stateView });
+    ethUsd = r.etat === 'LU' && Number.isFinite(r.usd) && r.usd > 0 ? r.usd : null;
+  } catch (e) { ethUsd = null; }
+  return ethUsd;
+}
+/** La jauge d un block, en dollars. Rend le texte a afficher et la largeur de barre. */
+function jaugeDe(vieEth, etatVie) {
+  if (!(typeof vieEth === 'number' && vieEth > 0)) {
+    return { pct: 0, texte: etatVie === 'NON_TROUVEE' ? 'No market yet — no tier, nothing locked.' : 'Tier not judged: life not read.' };
+  }
+  if (ethUsd === null) return { pct: 0, texte: 'Tier not judged: the ETH/USD price could not be read.' };
+  const usd = vieEth * ethUsd;
+  const p = progressionPalier(usd);
+  if (p.etat !== 'LU') return { pct: 0, texte: 'Tier not judged.' };
+  const dollars = (x) => '$' + Math.round(x).toLocaleString('en-US');
+  return { pct: p.pct, usd, p,
+    texte: 'Tier ' + (p.index + 1) + '/' + PALIERS.length + ' · ' + p.palier.titre + ' · ' + dollars(usd) + ' cap'
+      + (p.prochain ? ' → ' + p.prochain.titre + ' at ' + dollars(p.prochain.mc) : ' · top tier')
+      + '. Follows the price, down as well as up.' };
+}
 
 let idRpc = 0;
 /* ⛔⛔ UN 429 SE RETENTE, IL NE SE CONCLUT PAS. Mesure du 2026-09-11 sur le profil de Block 0 :
@@ -1255,6 +1287,9 @@ $('#map').addEventListener('click', (e) => {
       : h && h.etatVie === 'NON_LUE' ? 'life unreadable right now — not the same as none'
         : 'life not read yet';
   $('#fAdr').textContent = adr;
+  const j = jaugeDe(h ? h.vie : null, h ? h.etatVie : null);
+  $('#fBarre').style.width = j.pct > 0 ? Math.max(2, Math.round(j.pct * 100)) + '%' : '0';
+  $('#fPalier').textContent = j.texte;
   /* ⛔ LE BOUTON EXISTE, LE SERVICE NON, ET ON LE DIT PLUTOT QUE DE FAIRE SEMBLANT. Un « chat »
    * entre deux blocks demande un endroit ou les messages vivent et un moyen de prouver qui parle.
    * Aucun des deux n existe ici. Un champ de saisie qui avale ce qu on ecrit serait pire que rien. */
@@ -1452,6 +1487,7 @@ async function lireLaVie() {
    * sans marche : notre impatience se lisait donc, a l ecran, comme un fait sur le block de
    * quelqu un d autre. Attendre est plus lent et honnete ; ne pas attendre est rapide et faux. */
   const souffler = () => new Promise((r) => setTimeout(r, 260));
+  if (ethUsd === null) await lirePrixEth();
   for (const h of habitants) {
     await souffler();
     /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
@@ -2127,13 +2163,20 @@ function peindreCerveau() {
  * ⚠️ La barre avance en RACINE CUBIQUE, comme les PV : en lineaire, un block serait colle a zero
  *    pendant 99 % du chemin vers le palier suivant.
  */
-function peindreJeu(mc, devise, etat) {
+function peindreJeu(mcDevise, devise, etat) {
+  /* ⛔⛔ L ECHELLE DES PV ET DES PALIERS EST EN DOLLARS (`pointsdevie.js`). Jusqu au 2026-09-13 on lui
+   * passait la capitalisation EN ETH : « Sprout at 1,000 » voulait dire 1 000 ETH. Conversion par le
+   * prix MESURE ; sans lui, rien n est juge. */
+  const prixManque = typeof mcDevise === 'number' && mcDevise > 0 && devise === 'ETH' && ethUsd === null;
+  const mc = typeof mcDevise === 'number' && devise === 'ETH' && ethUsd !== null ? mcDevise * ethUsd : null;
+  devise = 'USD';
   const pv = pointsDeVie(mc);
   const e = etatPaliers(mc);
   const i = e.palier ? PALIERS.indexOf(e.palier) : -1;
   $('#pPV').textContent = pv === null ? '—' : pv.toLocaleString('en-US');
   if (!e.palier) {
-    $('#pPalier').textContent = etat === 'NON_TROUVEE' ? 'No market yet' : 'Life not read';
+    $('#pPalier').textContent = prixManque ? 'Tier not judged — ETH/USD price unread'
+      : etat === 'NON_TROUVEE' ? 'No market yet' : 'Life not read';
     $('#pBarre').style.width = '0';
     $('#pProchain').textContent = etat === 'NON_TROUVEE'
       ? 'Its life starts with its first trade. Nothing is locked, nothing is unlocked.'
@@ -2267,6 +2310,7 @@ async function lireProfil(adr, sym, perime) {
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
+  if (ethUsd === null && typeof vieProfil === 'number') await lirePrixEth();
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
   /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
    * proposer de reveiller un block qu on n a pas su lire enverrait ouvrir une pool qui existe. */
@@ -2521,7 +2565,12 @@ function peindrePlan(plan, adr) {
       + 'ever take it out. That is why the fee is 0 %: nobody could ever collect it.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
-  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('')
+    /* ⛔ CE QUE LE WALLET SIGNERA, RELU DEPUIS LES CALLDATAS DU PLAN — pas depuis les phrases ci-dessus. */
+    + [...(plan.etapes || []), plan.tx].filter(Boolean).map((tx, k) => {
+      const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: d });
+      return '<li><b>Signature ' + (k + 1) + ' — ' + enTexte(a.action) + '</b><br>' + a.lignes.map(enTexte).join('<br>') + '</li>';
+    }).join('');
 
   /* ⛔ LE PLANCHER DE VALORISATION EST UNE CONFIRMATION, PAS UN BLOCAGE : repris de l ecran qui a marche. */
   const tropBas = plan.classement && plan.classement.etat === 'TROP_BON_MARCHE';
@@ -3056,6 +3105,24 @@ function majFraisEtRecap() {
       + ', paired with ' + etiquettePaire(paireChoisie)
       + (usd > 0 ? ', after a ' + usd + ' USDC fee' : '') + '.';
   $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
+  /* ⛔ L APERCU EST RELU DEPUIS LES CALLDATAS QUE `creerBlock` ENVOIE — memes encodeurs, memes arguments.
+   * Sans wallet, pas de calldata exact (l admin est le compte) : on le dit au lieu d inventer. */
+  const liste = $('#cApercuTx');
+  if (v.ko) { liste.innerHTML = ''; }
+  else if (!compte) { liste.innerHTML = '<li>Connect your wallet to see the exact transactions before you sign.</li>'; }
+  else {
+    const txs = [];
+    if (usd > 0) txs.push({ to: USDC_BASE, data: encodeTransfer(FEE_WALLET, FRAIS_USDC_UNITES), value: '0x0' });
+    let dCreation = null;
+    try { dCreation = calldataCreation(v); } catch (e) { dCreation = null; }
+    if (dCreation) txs.push({ to: FACTORY, data: dCreation, value: '0x0' });
+    liste.innerHTML = txs.map((tx, k) => {
+      const a = apercuTransaction({ chaine: CHAINE, tx, compte });
+      const extra = tx.to === FACTORY ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
+        'Supply: 1,000,000,000, sealed, all minted to you', 'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved as shown'] : [];
+      return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
+    }).join('') + '<li>Trading fee on a market opened here: 0 % — nobody receives trading fees.</li>';
+  }
   /* ⛔⛔ SUR MAINNET, ON LE DIT AVANT, EN GRAND. Phil travaille sur testnet pour l instant : une
    * creation reelle partie par habitude coute de l argent et grave un block pour toujours. */
   $('#cReseauAvert').textContent = CHAINE === 8453

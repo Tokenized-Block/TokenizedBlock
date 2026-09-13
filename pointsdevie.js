@@ -157,3 +157,22 @@ export function etatPaliers(capitalisation) {
     note: 'Tiers follow the market cap, and a market cap goes down as well as up. A tier is a state, not a reward you keep.',
   };
 }
+
+/**
+ * La jauge vers le palier suivant, en DOLLARS.
+ * ⛔⛔ BUG TROUVE LE 2026-09-13 : l echelle de ce module est en dollars (« 1 000 $ -> 10 PV », PALIERS
+ *    1e3, 1e6…), mais le profil lui passait la capitalisation EN ETH (`vieDuBlock`). « Sprout at 1,000 »
+ *    voulait donc dire 1 000 ETH, environ trois mille fois le seuil voulu. L appelant convertit en
+ *    dollars avec un prix ETH MESURE ; sans prix, la jauge n est pas jugee — jamais estimee.
+ * ⚠️ La barre avance en racine cubique, comme les PV (un lineaire serait colle a zero).
+ * @returns {{etat:'LU'|'NON_MESURABLE', index:number, palier:object|null, prochain:object|null, pct:number|null}}
+ */
+export function progressionPalier(capUsd) {
+  const e = etatPaliers(capUsd);
+  if (!e.palier) return { etat: 'NON_MESURABLE', index: -1, palier: null, prochain: null, pct: null };
+  const index = PALIERS.indexOf(e.palier);
+  const pct = e.prochain
+    ? (Math.cbrt(capUsd) - Math.cbrt(e.palier.mc)) / (Math.cbrt(e.prochain.mc) - Math.cbrt(e.palier.mc))
+    : 1;
+  return { etat: 'LU', index, palier: e.palier, prochain: e.prochain, pct: Math.max(0, Math.min(1, pct)) };
+}
