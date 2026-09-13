@@ -988,6 +988,7 @@ import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSIO
 import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction } from './apercu.js';
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
+import { repartitionFrappe } from './tokenomics.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
@@ -3271,7 +3272,8 @@ function calldataCreation(v) {
   const initCalls = [
     encodeUpdateContractURI(uriCreation()),
     encodeUpdateSupplyCap(SUPPLY_FIXE),
-    encodeBatchMint([compte], [SUPPLY_FIXE]),
+    /* ⛔ TOKENOMICS V2 (Phil, 2026-09-13) : 5 % au wallet de frais, 95 % au createur, total exact. */
+    encodeBatchMint(repartitionFrappe(SUPPLY_FIXE, compte).destinataires, repartitionFrappe(SUPPLY_FIXE, compte).montants),
   ];
   return encodeCreateB20({ variant: 0, saltTexte: v.sel, params, initCalls });
 }
@@ -3298,7 +3300,7 @@ function majFraisEtRecap() {
   const usd = fraisCreationUsd(CHAINE);
   $('#cRecap').textContent = v.ko
     ? v.ko
-    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed, all minted to you'
+    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — 95 % to you, 5 % to the TokenizedBlock fee wallet'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + (usd > 0 ? ', after a ' + usd + ' USDC fee' : '') + '.';
   $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
@@ -3315,8 +3317,12 @@ function majFraisEtRecap() {
     if (dCreation) txs.push({ to: FACTORY, data: dCreation, value: '0x0' });
     liste.innerHTML = txs.map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte });
+      const rep = repartitionFrappe(SUPPLY_FIXE, compte);
       const extra = tx.to === FACTORY ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
-        'Supply: 1,000,000,000, sealed, all minted to you', 'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved as shown'] : [];
+        'Supply: 1,000,000,000, sealed — ' + BigInt(formaterUnites(rep.createur, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US') + ' to you'
+          + (rep.frais > 0n ? ', ' + BigInt(formaterUnites(rep.frais, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US')
+            + ' (5 %) to the TokenizedBlock fee wallet' : ''),
+        'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved as shown'] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>Trading fee on a market opened here: 0 % — nobody receives trading fees.</li>';
   }
