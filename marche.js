@@ -100,5 +100,7 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   if (c.valeur === null || c.valeur === undefined) {
     return { etat: 'NON_LUE', vie: null, devise: null, via, pourquoi: c.pourquoi || 'market cap not computable' };
   }
-  return { etat: 'LUE', vie: c.valeur, devise: c.devise, via, pourquoi: null };
+  /* ⛔ LA CLE TROUVEE EST RENDUE (2026-09-13) : l achat / vente dans l app doit trader SUR LA POOL LUE ICI, pas
+   * sur une cle recalculee ailleurs — une deuxieme recherche de marche finirait par diverger de celle-ci. */
+  return { etat: 'LUE', vie: c.valeur, devise: c.devise, via, pourquoi: null, cle: cleTrouvee, sqrtPriceX96: sqrt, decimales: dec };
 }

@@ -883,6 +883,24 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔⛔ OUVRIR SON MARCHE — dans l app, plus jamais par l ancien site. Cache tant que le block
            n est pas un block SANS marche avere : « pas lu » n est pas « endormi ». Rien ne part avant
            que le wallet ne le montre, et le bouton de lancement ne s ouvre qu apres un OUI de la chaine. -->
+      <!-- ⛔ ACHETER / VENDRE DANS L APP (Phil, 2026-09-13) : 0,5 % au wallet de frais, dit avant la signature.
+           Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
+      <div class="pJeu" id="pEchange" hidden>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % fee</span></div>
+        <div class="pActions" style="grid-template-columns:1fr 1fr">
+          <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
+          <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off"></label>
+        </div>
+        <div class="pActions" style="grid-template-columns:1fr 1fr">
+          <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
+          <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
+        </div>
+        <ul class="pmLignes" id="peLignes"></ul>
+        <div class="pActions" id="peActions"></div>
+        <p class="note" id="peEtat"></p>
+        <p class="titre" id="peJournalTitre" hidden style="margin-top:10px;font-size:1em">Buybacks by the TokenizedBlock fee wallet</p>
+        <ul class="pmLignes" id="peJournal"></ul>
+      </div>
       <div class="pJeu" id="pLancement" hidden>
         <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
         <p class="pProchain">Creates its pool against ETH and places the share of your blocks you choose below, in one
@@ -1018,7 +1036,8 @@ import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from 
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK } from './tokenomics.js';
+import { planEchange, estWalletDeFrais } from './echange.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
@@ -2401,6 +2420,10 @@ async function lireProfil(adr, sym, perime) {
   /* le plan de lancement parlait du block precedent : il se ferme a l ouverture d un autre profil */
   $('#pLancement').hidden = true;
   $('#pReveiller').hidden = true;
+  $('#pEchange').hidden = true;
+  $('#peLignes').innerHTML = ''; $('#peActions').innerHTML = ''; $('#peEtat').textContent = ''; $('#peJournal').innerHTML = '';
+  $('#peJournalTitre').hidden = true;
+  echangeCourant = null;
   planCourant = null;
   /* le fil de messages parlait du block precedent : on le vide a l ouverture */
   $('#pmsgFil').innerHTML = '';
@@ -2461,6 +2484,7 @@ async function lireProfil(adr, sym, perime) {
   if (perime()) return;
   let v = null;
   try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { /* dit juste dessous */ }
+  marcheProfil = v ? { adr: String(adr).toLowerCase(), chaine: CHAINE, v } : null;
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
    * fait sur notre lecture. Les fondre ferait dire au profil de quelqu un qu il ne vaut rien. */
@@ -2478,6 +2502,13 @@ async function lireProfil(adr, sym, perime) {
    * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
    * enverrait creer une pool qui existe peut-etre deja. */
   $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
+  $('#pEchange').hidden = etatVieProfil !== 'LUE';
+  if (etatVieProfil === 'LUE') {
+    const bb = estWalletDeFrais(compte);
+    $('#peBadge').textContent = bb ? 'Buyback · fee wallet' : 'Buy · Sell';
+    $('#peFrais').textContent = bb ? 'no fee' : '0.5 % fee';
+    if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
+  }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
   noterVie(adr, vieProfil);
@@ -2823,6 +2854,98 @@ function peindreAchats() {
  *    le bouton de lancement s ouvre → le wallet signe. Aucun raccourci ne saute une marche.
  * ⛔ UNE SEULE TRANSACTION DE LANCEMENT (multicall initialize + mint) : pas d etat intermediaire ou une
  *    pool vide survit a un refus. Repris tel quel de l ecran qui a marche. */
+/* ══ ACHETER / VENDRE — frais d interface 0,5 % ; buyback sans frais pour le wallet de frais ════════════════
+ * ⛔ Le plan vient de `echange.js` : quote reel, forme acceptee, puis simulation de la transaction EXACTE. Le wallet
+ *    signe ; la page ne signe rien. Apres une autorisation, le plan est refait (elle est mesuree, pas supposee). */
+let echangeCourant = null, echangeEnCours = false;
+/* le marche que le profil vient de lire : reutilise par l achat / vente du MEME block sur la MEME chaine */
+let marcheProfil = null;
+async function decimalesDe(jeton) {
+  const r = await rpc('eth_call', [{ to: jeton, data: '0x313ce567' }, 'latest']);
+  return Number(BigInt(r));
+}
+async function preparerEchange(sens) {
+  const adr = $('#profil').dataset.block;
+  const e = $('#peEtat');
+  $('#peActions').innerHTML = '';
+  $('#peLignes').innerHTML = '';
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  let dec = 18;
+  if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; return; } }
+  const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
+  if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; return; }
+  e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
+  profilEnLecture = true;
+  let p;
+  const marcheLu = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
+  try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu }); }
+  catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  finally { profilEnLecture = false; }
+  if ($('#profil').dataset.block !== adr) return;
+  echangeCourant = p;
+  const r = p.resume;
+  if (r) {
+    const q = (v, devise) => (devise === 'ETH' ? formaterUnites(v, 18) + ' ETH' : formaterUnites(v, dec === undefined ? 18 : (sens === 'ACHAT' ? 18 : dec)) + ' ' + (symProfil || 'blocks'));
+    $('#peLignes').innerHTML = [
+      'You pay: ' + q(r.paye, r.payeDevise),
+      'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
+      r.frais > 0n ? 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %) to the TokenizedBlock fee wallet, inside the same transaction'
+        : 'No fee: this is a buyback by the TokenizedBlock fee wallet',
+      ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
+        const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
+        return ['Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ')];
+      }),
+    ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  }
+  if (p.etat === 'APPROBATIONS') {
+    const etape = p.etapes[0];
+    const b = document.createElement('button');
+    b.className = 'bouton'; b.type = 'button';
+    b.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + etape.nom;
+    b.addEventListener('click', () => void signerEchange(etape, sens, true));
+    $('#peActions').appendChild(b);
+    e.className = 'note'; e.textContent = 'Approvals first, then the sale. Each is measured again once done.';
+    return;
+  }
+  if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
+  const b = document.createElement('button');
+  b.className = 'bouton'; b.type = 'button';
+  b.textContent = sens === 'ACHAT' ? (estWalletDeFrais(compte) ? 'Sign the buyback' : 'Sign the buy') : 'Sign the sale';
+  b.addEventListener('click', () => void signerEchange(p.tx, sens, false));
+  $('#peActions').appendChild(b);
+  e.className = 'note wOk'; e.textContent = 'The chain accepts this exact transaction. Check it in your wallet before signing.';
+}
+async function signerEchange(tx, sens, estApprobation) {
+  if (echangeEnCours) return;
+  echangeEnCours = true;
+  const e = $('#peEtat');
+  e.className = 'note'; e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  let r;
+  try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: tx.to, data: tx.data, value: tx.value || '0x0' }); }
+  catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+  finally { echangeEnCours = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+  if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
+  if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
+  e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
+}
+/* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
+async function peindreJournalBuyback(adr) {
+  const V = V4_ADRESSES[CHAINE];
+  if (!V) return;
+  try {
+    const t = await listerTransfers({ rpc, token: adr, fromAddr: V.poolm, toAddr: FEE_WALLET, blocs: 20000 });
+    if ($('#profil').dataset.block !== adr) return;
+    $('#peJournalTitre').hidden = false;
+    $('#peJournal').innerHTML = t.transfers.length
+      ? t.transfers.slice(0, 20).map((x) => '<li>' + enTexte(formaterUnites(x.value, 18) + ' TBLOCK bought back · block ' + x.bloc.toLocaleString('en-US'))
+        + ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(x.tx) + '" target="_blank" rel="noopener">tx</a></li>').join('')
+      : '<li>No buyback in the last 20,000 chain blocks' + (t.fenetresRatees.length ? ' — ⚠️ some windows unread, not proof of none' : '') + '.</li>';
+  } catch (e) { /* journal non lu : rien n est affirme */ }
+}
+$('#peAcheter').addEventListener('click', () => void preparerEchange('ACHAT'));
+$('#peVendre').addEventListener('click', () => void preparerEchange('VENTE'));
+
 let planCourant = null, lancementEnCours = false;
 
 function ouvrirLancement() {

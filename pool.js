@@ -408,6 +408,42 @@ export function encodeSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, d
     + mot(offCommands) + mot(offInputs) + mot(deadline) + commands + mot(1) + mot(0x20) + input0;
 }
 
+/* ══ SWAP AVEC ACTIONS PARAMETRABLES (2026-09-13 : frais d interface 0,5 %) ═══════════════════════════════
+ * ⛔ CODES ET DISPOSITIONS LUS DANS v4-periphery (lib de tblock-hook) : Actions.sol — SETTLE 0x0b, SETTLE_ALL 0x0c,
+ *    TAKE 0x0e, TAKE_ALL 0x0f, TAKE_PORTION 0x10 ; V4Router.handleAction + CalldataDecoder — SETTLE =
+ *    (currency, amount, payerIsUser), TAKE et TAKE_PORTION = (currency, recipient, amount|bips),
+ *    SETTLE_ALL / TAKE_ALL = (currency, uint256). Un test prouve que `encodeV4Swap` avec [SETTLE_ALL, TAKE_ALL]
+ *    rend EXACTEMENT les octets de `encodeSwapExactInSingle` : les deux ne peuvent pas diverger en silence. */
+export const ACTIONS_V4 = Object.freeze({ SETTLE: '0b', SETTLE_ALL: '0c', TAKE: '0e', TAKE_ALL: '0f', TAKE_PORTION: '10' });
+export const paramsAction = Object.freeze({
+  settle: (devise, montant, payeurEstUtilisateur) => motAdr(devise) + mot(montant) + mot(payeurEstUtilisateur ? 1 : 0),
+  settleAll: (devise, max) => motAdr(devise) + mot(max),
+  take: (devise, destinataire, montant) => motAdr(devise) + motAdr(destinataire) + mot(montant),
+  takeAll: (devise, min) => motAdr(devise) + mot(min),
+  takePortion: (devise, destinataire, bips) => motAdr(devise) + motAdr(destinataire) + mot(bips),
+});
+
+/**
+ * Un swap exact-in sur UNE pool, suivi des actions donnees (`[{ code, params }]`), via l Universal Router.
+ * ⛔ Meme en-tete de swap que `encodeSwapExactInSingle` (voir ses deux corrections d offset, gardees ici).
+ */
+export function encodeV4Swap({ cle, zeroForOne, montant, sortieMin, deadline, forme, actions }) {
+  const champs = forme === AVEC_MINHOP ? 9 : 8;
+  const tete = mot(0x20) + cleInline(cle) + mot(zeroForOne ? 1 : 0) + mot(montant) + mot(sortieMin)
+    + (forme === AVEC_MINHOP ? mot(0) : '')
+    + mot((champs + 1) * 32) + mot(0);
+  const elements = [dyn(tete), ...actions.map((a) => dyn(a.params))];
+  let curseur = BigInt(32 * elements.length);
+  const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
+  const tableau = mot(elements.length) + offsets.join('') + elements.join('');
+  const codes = dyn('06' + actions.map((a) => a.code).join(''));
+  const input0 = dyn(mot(0x40) + mot(0x40 + codes.length / 2) + codes + tableau);
+  const commands = dyn('10');
+  const offCommands = 0x60n, offInputs = offCommands + BigInt(commands.length / 2);
+  return '0x' + selecteur('execute(bytes,bytes[],uint256)')
+    + mot(offCommands) + mot(offInputs) + mot(deadline) + commands + mot(1) + mot(0x20) + input0;
+}
+
 /** Quote read-only : ne signe rien, ne coute rien. */
 export function encodeQuote({ cle, zeroForOne, montant }) {
   return '0x' + selecteur('quoteExactInputSingle(((address,address,uint24,int24,address),bool,uint128,bytes))')

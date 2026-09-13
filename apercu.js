@@ -15,12 +15,17 @@ import { FACTORY } from './index-blocks.js';
 import { V4_ADRESSES, PERMIT2, PROPRIETAIRE_PERMANENT } from './lancer-pool.js';
 import { formaterUnites } from './montants.js';
 
+/** ⛔ RECOPIE de index.html (const ROUTEUR) — le test d echange.js compare la meme valeur ; apercu ne l importe
+ *  pas d echange.js pour ne pas tirer le lecteur de marche dans un module pur. */
+const ROUTEUR_SWAP = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
+
 export const ETATS_APERCU = ['LUE', 'INCONNUE'];
 const S = {
   transfer: selecteur('transfer(address,uint256)'),
   approve: selecteur('approve(address,uint256)'),
   permit2: selecteur('approve(address,address,uint160,uint48)'),
   create: selecteur('createB20(uint8,bytes32,bytes,bytes[])'),
+  execute: selecteur('execute(bytes,bytes[],uint256)'),
   multicall: selecteur('multicall(bytes[])'),
   modify: selecteur('modifyLiquidities(bytes,uint256)'),
 };
@@ -34,7 +39,7 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
   const connus = [
     [compte, 'you'], [jeton, symbole ? 'the block ' + symbole : 'this block'],
     [FEE_WALLET, 'TokenizedBlock fee wallet'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
-    [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'],
+    [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'], [ROUTEUR_SWAP[Number(chaine)], 'Uniswap router'],
     [PROPRIETAIRE_PERMANENT, 'dead address (nobody)'],
   ];
   for (const [x, nom] of connus) if (x && String(x).toLowerCase() === a) return nom + ' ' + court(a);
@@ -83,6 +88,13 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     lignes.push('Lets ' + nomDe(adresseDe(mot(data, 1)), ctx) + ' move '
       + (montant === MAX_UINT160 ? 'ANY amount (unlimited)' : formaterUnites(montant, decimales)) + ' through Permit2');
     return { etat: 'LUE', action: 'Permit2 approval', lignes };
+  }
+  if (sel === S.execute && ROUTEUR_SWAP[Number(chaine)] && to === ROUTEUR_SWAP[Number(chaine)].toLowerCase()) {
+    lignes.push('Swaps through the Uniswap v4 router. The amounts, the minimum you accept and the 0.5 % TokenizedBlock fee are listed with this transaction.');
+    const frais = FEE_WALLET.slice(2).toLowerCase();
+    lignes.push(data.includes(frais) ? 'Fee recipient inside this transaction: TokenizedBlock fee wallet ' + court(FEE_WALLET.toLowerCase())
+      : 'No TokenizedBlock fee inside this transaction.');
+    return { etat: 'LUE', action: 'Swap', lignes };
   }
   if (sel === S.create && to === FACTORY.toLowerCase()) {
     lignes.push('Creates a new B20 block. You become its admin; the factory refuses a salt already used.');
