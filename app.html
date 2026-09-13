@@ -753,6 +753,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="sfNote"></p>
     </div>
 
+    <div class="carte">
+      <p class="titre">Live</p>
+      <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
+      <ul class="fil" id="sfLive"></ul>
+      <div id="sfLiveFin" style="height:1px"></div>
+      <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
+      <button class="bouton sec" id="sfLivePlus" type="button">Load older</button>
+    </div>
+
     <!-- ⛔⛔ LA MESSAGERIE PRIVEE (XMTP). Deuxieme systeme choisi par Phil, a cote des messages publics
          on-chain. Chiffree de bout en bout, HORS chaine. Le SDK n est charge qu au clic : 14 Mo que
          personne ne doit telecharger sans l avoir demande. Une signature du wallet la premiere fois,
@@ -979,6 +988,8 @@ import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSIO
 import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction } from './apercu.js';
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
+import { evenementsLive } from './fil-live.js';
+import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -1012,6 +1023,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
   if (nom === 'mien') peindreClassement();
   if (nom === 'brain') peindreChoixBrain();
+  if (nom === 'social') demarrerLive();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') { majFraisEtRecap(); void lireSoldeUsdc(); }
 });
@@ -1752,6 +1764,9 @@ $('#pReseau').addEventListener('click', () => {
   /* le frais, le recap ET les paires parlent du reseau : les actions Coinbase n existent que sur mainnet */
   peindrePaires();
   majFraisEtRecap();
+  /* ⛔ LE FIL LIVE PARLAIT DE L AUTRE CHAINE */
+  liveEvts = []; liveDernier = null; livePlusAncien = null; liveRatees = 0;
+  $('#sfLive').innerHTML = '';
 });
 
 /* ⛔ MASQUER LE PANNEAU NE LE DETRUIT PAS. La map se re-mesure apres, parce que les blocks sont
@@ -2470,6 +2485,110 @@ $('#pEnvoyer').addEventListener('click', () => {
  * ⛔ PAR LOTS, SUR DEMANDE. Lire les transferts de 22 blocks d un coup, puis une transaction par
  *    ligne, saturerait le noeud public — et la moitie du fil s afficherait « illisible » a cause de
  *    nous. Six blocks par lecture, un bouton pour aller plus loin. */
+/* ══ LIVE — L HISTORIQUE EN DIRECT ═══════════════════════════════════════════════════════════════
+ * ⛔ DEMANDE DE PHIL (2026-09-13) : creations de blocks et swaps, en direct, avec defilement. Lu sur la
+ *    chaine par `fil-live.js` : rien n est stocke ni invente par nous.
+ * ⛔ UNE LECTURE RATEE SE DIT : le compteur de refus s affiche, le fil n est jamais presente comme complet.
+ * ⛔ RAFRAICHI SEULEMENT ONGLET VISIBLE : un onglet cache qui interroge le noeud toutes les 20 s ferait
+ *    refuser les lectures que quelqu un regarde vraiment.
+ * ⚠️ Un trou plus long qu une fenetre (onglet ferme longtemps) repart de zero plutot que de sauter en
+ *    silence la periode manquee. */
+const LIVE_MS = 20000, LIVE_FENETRE = 1999;
+let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
+const cleEvtLive = (e) => e.type + ':' + e.tx + ':' + e.jeton + ':' + (e.logIndex ?? '');
+
+function blocksSuivisLive() {
+  const m = new Map();
+  for (const c of creationsLues) {
+    m.set(String(c.jeton).toLowerCase(), { jeton: c.jeton, sym: c.symbole, dec: Number.isInteger(c.decimales) ? c.decimales : null });
+  }
+  for (const h of habitants) {
+    const k = String(h.adr).toLowerCase();
+    if (!m.has(k)) m.set(k, { jeton: h.adr, sym: h.sym, dec: null });
+  }
+  return [...m.values()];
+}
+
+async function lireLive(sens) {
+  const V = V4_ADRESSES[CHAINE];
+  if (liveEnCours || !V) return;
+  liveEnCours = true;
+  try {
+    const fin = parseInt(await rpc('eth_blockNumber', []), 16);
+    let deBloc, aBloc;
+    if (sens === 'ancien') {
+      if (livePlusAncien === null || livePlusAncien <= 0) return;
+      aBloc = livePlusAncien - 1;
+      deBloc = Math.max(0, aBloc - LIVE_FENETRE);
+    } else {
+      aBloc = fin;
+      if (liveDernier !== null && fin - liveDernier > LIVE_FENETRE) { liveEvts = []; liveDernier = null; livePlusAncien = null; }
+      deBloc = liveDernier === null ? Math.max(0, fin - LIVE_FENETRE) : liveDernier + 1;
+      if (deBloc > aBloc) return;
+    }
+    $('#sfLiveNote').textContent = 'reading chain blocks ' + deBloc.toLocaleString('en-US') + '–' + aBloc.toLocaleString('en-US') + '…';
+    const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250 });
+    liveRatees += r.fenetresRatees.length;
+    const deja = new Set(liveEvts.map(cleEvtLive));
+    for (const e of r.evenements) if (!deja.has(cleEvtLive(e))) liveEvts.push(e);
+    liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
+    if (sens !== 'ancien') liveDernier = aBloc;
+    if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;
+  } catch (e) {
+    liveRatees++;
+  } finally {
+    liveEnCours = false;
+    peindreLive();
+  }
+}
+
+function peindreLive() {
+  $('#sfLive').innerHTML = liveEvts.map((e) => {
+    const nom = enTexte(String(e.sym || '?').slice(0, 14));
+    const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
+      : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> bought · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
+        : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> sold · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
+          : '↔ <b>' + nom + '</b> swapped · amounts not read (decimals unknown)';
+    const lien = e.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
+    return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
+      + '<p class="filT">' + quoi + '</p><p class="filS">block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?') + lien + '</p></div></li>';
+  }).join('');
+  $('#sfLiveNote').textContent = (liveEvts.length ? liveEvts.length + ' event(s)' : 'Nothing happened')
+    + (livePlusAncien !== null && liveDernier !== null
+      ? ' between chain blocks ' + livePlusAncien.toLocaleString('en-US') + ' and ' + liveDernier.toLocaleString('en-US') : '')
+    + ' · ' + blocksSuivisLive().length + ' blocks followed, swaps on their ETH markets'
+    + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '') + '.';
+  /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-13) : le repere du bas etait DEJA visible avant la premiere
+   * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
+   * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
+   * precedente. Le bouton reste la pour qui ne defile pas. */
+  const fin = $('#sfLiveFin').getBoundingClientRect();
+  /* ⛔ BORNE : au plus 5 fenetres chargees d affilee sans geste de l utilisateur. Sans elle, un fil calme
+   * (le bas toujours visible) remonterait la chaine sans fin et viderait le noeud public. */
+  if ($('#v-social').classList.contains('on') && liveDernier !== null && liveAuto < 5
+    && fin.top < window.innerHeight + 200 && fin.bottom > -200 && !liveEnCours) {
+    liveAuto++;
+    setTimeout(() => { if (!liveEnCours) void lireLive('ancien'); }, 1500);
+  }
+}
+let liveAuto = 0;
+$('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; void lireLive('ancien'); });
+window.addEventListener('scroll', () => { if ($('#v-social').classList.contains('on')) liveAuto = 0; }, { passive: true });
+
+function demarrerLive() {
+  if (liveMinuterie) { void lireLive('neuf'); return; }
+  void lireLive('neuf');
+  liveMinuterie = setInterval(() => {
+    if ($('#v-social').classList.contains('on') && !document.hidden) void lireLive('neuf');
+  }, LIVE_MS);
+  /* ⛔ LE DEFILEMENT CHARGE LE PASSE : arriver au bas du fil lit la fenetre precedente. */
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entrees) => {
+      if (entrees.some((x) => x.isIntersecting) && $('#v-social').classList.contains('on') && liveDernier !== null) void lireLive('ancien');
+    }, { rootMargin: '200px' }).observe($('#sfLiveFin'));
+  }
+}
+
 const FIL_LOT = 6;
 const FIL_TX_MAX = 24;
 let filLignes = [], filProchain = 0, filEnCours = false, filRatees = 0;
