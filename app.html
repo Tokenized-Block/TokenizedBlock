@@ -2562,18 +2562,30 @@ function peindreLive() {
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
    * precedente. Le bouton reste la pour qui ne defile pas. */
+  verifierBasLive();
+}
+let liveAuto = 0;
+/* ⛔⛔ SECOND DEFAUT TROUVE EN VERIFIANT : meme le repere amene a l ecran ne declenchait rien — l observateur
+ * ne se reveille pas toujours (page en arriere-plan, defilement programme). Le defilement appelle donc la
+ * meme verification : on ne depend plus d un seul mecanisme.
+ * ⛔ BORNE : au plus 5 fenetres chargees d affilee sans geste de l utilisateur. Sans elle, un fil calme
+ * (le bas toujours visible) remonterait la chaine sans fin et viderait le noeud public. */
+function verifierBasLive() {
   const fin = $('#sfLiveFin').getBoundingClientRect();
-  /* ⛔ BORNE : au plus 5 fenetres chargees d affilee sans geste de l utilisateur. Sans elle, un fil calme
-   * (le bas toujours visible) remonterait la chaine sans fin et viderait le noeud public. */
   if ($('#v-social').classList.contains('on') && liveDernier !== null && liveAuto < 5
     && fin.top < window.innerHeight + 200 && fin.bottom > -200 && !liveEnCours) {
     liveAuto++;
     setTimeout(() => { if (!liveEnCours) void lireLive('ancien'); }, 1500);
   }
 }
-let liveAuto = 0;
 $('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; void lireLive('ancien'); });
-window.addEventListener('scroll', () => { if ($('#v-social').classList.contains('on')) liveAuto = 0; }, { passive: true });
+let liveDefile = null;
+window.addEventListener('scroll', () => {
+  if (!$('#v-social').classList.contains('on')) return;
+  liveAuto = 0;
+  clearTimeout(liveDefile);
+  liveDefile = setTimeout(verifierBasLive, 250);
+}, { passive: true });
 
 function demarrerLive() {
   if (liveMinuterie) { void lireLive('neuf'); return; }
