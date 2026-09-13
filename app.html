@@ -2607,6 +2607,14 @@ async function lireProfil(adr, sym, perime) {
    * qui ne la concerne pas. Les chiffres, eux, arriveront quand ils arriveront. */
   peindreMetier(adr);
   p.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  /* ⛔⛔ LIEN DE LANCEMENT : la carte s ouvre TOUT DE SUITE (mesure prod 2026-09-13 : le profil lit d abord ses faits et
+   *    sa face, puis le marche — sous saturation, la carte n arrivait jamais). « Work it out » verifie le marche avant
+   *    tout plan : rien n est propose a signer tant que l absence de marche n est pas averee. */
+  if (lancementLien && lancementLien === String(adr).toLowerCase()) {
+    ouvrirLancement();
+    $('#plEtat').className = 'note';
+    $('#plEtat').textContent = 'Opened from your link. “Work it out” first checks on chain that this block has no market yet.';
+  }
 
   let f = null;
   try { f = await faitsDuBlock({ rpc, jeton: adr, pause: 280 }); } catch { /* dit juste dessous */ }
@@ -2694,6 +2702,14 @@ async function lireProfil(adr, sym, perime) {
   if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
     lancementLien = null;
     ouvrirLancement();
+  }
+  /* ⛔⛔ MESURE EN PROD (2026-09-13, lien TTB de Phil) : ~80 s de reprises sans reponse du noeud sature — la carte ne
+   *    s ouvrait jamais. Avec l intention du lien, la carte s ouvre quand meme ; « Work it out » relit le marche et
+   *    REFUSE tant que l absence n est pas averee. Aucune signature n est proposee sur une lecture ratee. */
+  if (etatVieProfil === 'NON_LUE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
+    ouvrirLancement();
+    $('#plEtat').className = 'note';
+    $('#plEtat').textContent = 'Its market could not be read yet (the public node is busy). “Work it out” checks it again before anything is offered to sign.';
   }
   $('#pEchange').hidden = etatVieProfil !== 'LUE';
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
@@ -3352,6 +3368,25 @@ async function calculerLancement() {
     profilEnLecture = false;
     return;
   }
+  /* ⛔⛔ GARDE AVANT TOUT PLAN : l absence de marche doit etre AVEREE a ce moment-la (lue, pas supposee). LUE = ce block
+   *    a deja un marche (on n ouvre pas une seconde pool) ; NON_LUE = pas mesure, rien a signer. 3 lectures, espacees. */
+  let marcheAvant = null;
+  for (let essai = 0; essai < 3; essai++) {
+    if (essai) { e.textContent = 'Checking its market again (' + (essai + 1) + '/3)…'; await dormir(4000 * essai); }
+    try { marcheAvant = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { marcheAvant = null; }
+    if (marcheAvant && marcheAvant.etat !== 'NON_LUE') break;
+  }
+  if ($('#profil').dataset.block !== adr) { profilEnLecture = false; $('#plCalculer').disabled = false; return; }
+  if (!marcheAvant || marcheAvant.etat !== 'NON_TROUVEE') {
+    e.className = 'note wKo';
+    e.textContent = marcheAvant && marcheAvant.etat === 'LUE'
+      ? 'This block already has a market (' + (marcheAvant.via || marcheAvant.paire || 'read on chain') + ') — nothing to launch.'
+      : 'Its market could not be read, so nothing is offered to sign. The public node is busy — try “Work it out” again in a moment.';
+    profilEnLecture = false;
+    $('#plCalculer').disabled = false;
+    return;
+  }
+  e.textContent = 'No market on any key read — reading the block, its pool and your approvals…';
   /* ⛔ LANCEMENT CONTRE TBLOCK (Phil, 2026-09-13) : meme plan, meme cle (frais 0, espacement 200, sans hook) que la
    *    lecture `marche.js` de la paire TBLOCK — la valorisation est alors en TBLOCK, et l achat passe par TBLOCK/ETH. */
   try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
