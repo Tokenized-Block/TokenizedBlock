@@ -619,6 +619,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="bReprendre" type="button">Resume its memory from the chain</button>
       </div>
       <p class="note" id="bReprendreEtat"></p>
+      <p class="titre" style="margin-top:12px;font-size:1em">Its whole brain, in fragments</p>
+      <p class="note">One message cannot hold its exact memory, so it is cut into 4 fragments, frozen at the beat you
+        click. Each fragment is a transfer of 0 of this block to yourself, with the fragment as its message: your wallet
+        signs and pays the gas for each, nothing moves. Anyone can then rebuild the EXACT brain from the chain — the
+        rebuild is refused unless it matches the fingerprint of the memory that was cut.</p>
+      <div class="rang" style="margin-top:6px">
+        <button class="bouton" id="bFragmenter" type="button">Record its full brain in 4 fragments</button>
+        <button class="bouton sec" id="bReconstruire" type="button">Rebuild its brain from fragments</button>
+      </div>
+      <p class="note" id="bFragmenterEtat"></p>
     </div>
 
     <div class="carte">
@@ -1055,6 +1065,7 @@ function noterMemoire(adr, etat) {
   try { localStorage.setItem(CLE_MEMOIRE + String(adr).toLowerCase(), JSON.stringify(serialiserMemoire(etat))); } catch (e) { /* stockage refuse : la memoire vivra le temps de la page */ }
 }
 import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } from './memoire-chaine.js';
+import { fragmenterMemoire, lireFragment, reconstruireCerveau } from './fragments-cerveau.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -4163,6 +4174,108 @@ $('#bGraver').addEventListener('click', async () => {
   e.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
   e.innerHTML = (r.etat === 'CONFIRME' ? 'Memory at beat ' + vu.tick + ' recorded on chain.'
     : 'Not recorded (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+});
+
+/* ⛔⛔ FRAGMENTS DU CERVEAU (Phil, 2026-09-13 : « fragmenter le Brain AI pour le reconstruire, toutes ses fonctions,
+ *    ajoute un bouton ») : 4 fragments de la memoire EXACTE, figes au premier clic, un transfert de 0 a soi-meme
+ *    chacun — le wallet signe chaque fragment, un echec reste sur le meme fragment. `fragments-cerveau.js`. */
+let fragmentsAGraver = null, fragmentEnCours = false;
+$('#bFragmenter').addEventListener('click', async () => {
+  const e = $('#bFragmenterEtat');
+  if (fragmentEnCours) return;
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs each fragment, this page never does.'; return; }
+  if (!brainAdr || !brainEtat) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
+  if (!fragmentsAGraver || fragmentsAGraver.adr !== brainAdr) {
+    fragmentsAGraver = { adr: brainAdr, textes: fragmenterMemoire(brainEtat), fait: 0, tick: brainEtat.tick, liens: [] };
+  }
+  const g = fragmentsAGraver;
+  const k = g.fait, n = g.textes.length;
+  const memo = validerMemo(g.textes[k]);
+  if (memo.etat !== 'OK') { e.className = 'note wKo'; e.textContent = 'Fragment refused: ' + (memo.pourquoi || 'message refused') + '.'; return; }
+  fragmentEnCours = true;
+  e.className = 'note';
+  e.textContent = 'Opening your wallet — fragment ' + (k + 1) + ' of ' + n + ' (memory of beat ' + g.tick.toLocaleString('en-US') + '): a transfer of 0 to yourself.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: g.adr, data: encodeTransferAvecMemo(compte, 0n, memo.texte), value: '0x0' });
+  } catch (err) {
+    r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) };
+  } finally { fragmentEnCours = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">tx</a>' : '';
+  if (r.etat !== 'CONFIRME') {
+    e.className = 'note wKo';
+    e.innerHTML = 'Fragment ' + (k + 1) + ' not recorded (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')
+      + ' Click again to retry the same fragment.' + lien;
+    return;
+  }
+  g.fait++;
+  g.liens.push(lien);
+  if (g.fait >= n) {
+    e.className = 'note wOk';
+    e.innerHTML = 'All ' + n + ' fragments of beat ' + g.tick.toLocaleString('en-US') + ' recorded — anyone can rebuild this exact brain.' + g.liens.join(' ');
+    $('#bFragmenter').textContent = 'Record its full brain in 4 fragments';
+    fragmentsAGraver = null;
+  } else {
+    e.className = 'note wOk';
+    e.innerHTML = 'Fragment ' + g.fait + ' of ' + n + ' recorded.' + lien + ' Sign the next one when ready.';
+    $('#bFragmenter').textContent = 'Sign fragment ' + (g.fait + 1) + ' of ' + n;
+  }
+});
+
+let reconstructionEnCours = false;
+$('#bReconstruire').addEventListener('click', async () => {
+  const e = $('#bFragmenterEtat');
+  if (reconstructionEnCours || !brainAdr) return;
+  reconstructionEnCours = true;
+  profilEnLecture = true;
+  e.className = 'note';
+  e.textContent = 'Reading this block\'s recent transfers of 0 and their messages… this can take a while on the public node.';
+  try {
+    const adr = brainAdr;
+    const r = await listerTransfers({ rpc, token: adr, blocs: 60000 });
+    const candidats = (r.transfers || []).filter((t) => t.from.toLowerCase() === t.to.toLowerCase() && t.value === 0n).slice(0, 60);
+    const lus = [];
+    let illisibles = 0;
+    for (const t of candidats) {
+      let tx = null;
+      try { tx = t.tx ? await rpc('eth_getTransactionByHash', [t.tx]) : null; } catch (err) { tx = null; }
+      /* ⛔ un evenement n est pas une transaction : seul `tx.from` dit qui a grave le fragment */
+      if (!tx || String(tx.from).toLowerCase() !== t.from.toLowerCase()) continue;
+      const m = lireMemo(tx.input);
+      if (m.etat !== 'LU') continue;
+      const f = lireFragment(m.texte);
+      if (f.etat === 'LU') lus.push(f); else if (f.etat === 'ILLISIBLE') illisibles++;
+    }
+    if (brainAdr !== adr) return;
+    const rec = reconstruireCerveau(adr, lus);
+    const ratees = (r.fenetresRatees || []).length;
+    const borne = ratees ? ' ' + ratees + ' window(s) could not be read, so missing fragments may exist.' : '';
+    if (rec.etat === 'EXACTE') {
+      brainEtat = rec.cerveau;
+      brainHisto = [];
+      noterMemoire(adr, rec.cerveau);
+      e.className = 'note wOk';
+      e.textContent = 'Exact brain rebuilt at beat ' + rec.tick.toLocaleString('en-US') + ' from its fragments — the fingerprint '
+        + rec.empreinte + ' matches. It beats on from there.';
+    } else if (rec.etat === 'INCOMPLETE') {
+      e.className = 'note wKo';
+      e.textContent = 'Fragments of beat ' + rec.tick.toLocaleString('en-US') + ' found, but fragment(s) ' + rec.manquants.join(', ')
+        + ' are missing — not rebuilt.' + borne;
+    } else if (rec.etat === 'EMPREINTE_FAUSSE') {
+      e.className = 'note wKo';
+      e.textContent = 'Fragments were found but they do not rebuild the memory their fingerprint names — refused.';
+    } else {
+      e.className = 'note wKo';
+      e.textContent = 'No brain fragments for this block in the last 60,000 chain blocks.' + (illisibles ? ' ' + illisibles + ' damaged fragment(s) ignored.' : '') + borne;
+    }
+  } catch (err) {
+    e.className = 'note wKo';
+    e.textContent = 'Could not read the chain right now — that is about the network, not about the block.';
+  } finally {
+    reconstructionEnCours = false;
+    profilEnLecture = false;
+  }
 });
 
 /* ⛔ REPRENDRE DEPUIS LA CHAINE : la memoire gravee la plus recente de ce block — un transfert de 0 d un compte a
