@@ -599,7 +599,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
-      <p class="note" id="bGraverEtat">Writes the beat (tick, input fingerprint, spikes, phase) as a message on a transfer of 0 of this block to yourself. Your wallet signs and pays the gas; nothing moves.</p>
+      <p class="note" id="bGraverEtat">Writes the brain's memory — its beat, a fingerprint of the exact memory, and a snapshot of its 128 neurons — as a message on a transfer of 0 of this block to yourself. Your wallet signs and pays the gas; nothing moves. Anyone can then resume it from the chain.</p>
+      <div class="rang" style="margin-top:6px">
+        <button class="bouton sec" id="bReprendre" type="button">Resume its memory from the chain</button>
+      </div>
+      <p class="note" id="bReprendreEtat"></p>
     </div>
 
     <div class="carte">
@@ -999,6 +1003,7 @@ function memoireLue(adr) {
 function noterMemoire(adr, etat) {
   try { localStorage.setItem(CLE_MEMOIRE + String(adr).toLowerCase(), JSON.stringify(serialiserMemoire(etat))); } catch (e) { /* stockage refuse : la memoire vivra le temps de la page */ }
 }
+import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } from './memoire-chaine.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -3564,8 +3569,10 @@ $('#bGraver').addEventListener('click', async () => {
   if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first.'; return; }
   const vu = brainDernier;
   if (!brainAdr || !vu) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
-  const texte = VERSION_CERVEAU + ' tick=' + vu.tick + ' input=' + vu.entree + ' spikes=' + vu.spikes
-    + ' firing=' + vu.actifs + ' phase=' + vu.phase;
+  /* ⛔ LA MEMOIRE GRAVEE (decision de Phil, 2026-09-13) : instantane des 128 neurones + empreinte de la memoire
+   *    exacte, figes au clic — `memoire-chaine.js`. */
+  if (!brainEtat) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
+  const texte = encoderMemoireChaine(brainEtat);
   const memo = validerMemo(texte);
   if (memo.etat !== 'OK') { e.className = 'note wKo'; e.textContent = memo.pourquoi || 'Message refused.'; return; }
   gravureEnCours = true;
@@ -3581,8 +3588,59 @@ $('#bGraver').addEventListener('click', async () => {
   const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
     + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
   e.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
-  e.innerHTML = (r.etat === 'CONFIRME' ? 'Beat ' + vu.tick + ' recorded.'
+  e.innerHTML = (r.etat === 'CONFIRME' ? 'Memory at beat ' + vu.tick + ' recorded on chain.'
     : 'Not recorded (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+});
+
+/* ⛔ REPRENDRE DEPUIS LA CHAINE : la memoire gravee la plus recente de ce block — un transfert de 0 d un compte a
+ *    lui-meme, dont la TRANSACTION (pas seulement l evenement) est signee par ce compte, et dont le message se
+ *    decode. On la LIT, on ne la croit pas : message abime = refuse, fenetre ratee = dite. */
+let repriseEnCours = false;
+$('#bReprendre').addEventListener('click', async () => {
+  const e = $('#bReprendreEtat');
+  if (repriseEnCours || !brainAdr) return;
+  repriseEnCours = true;
+  e.className = 'note';
+  e.textContent = 'Reading this block\'s recent transfers…';
+  profilEnLecture = true;
+  try {
+    const adr = brainAdr;
+    const r = await listerTransfers({ rpc, token: adr, blocs: 60000 });
+    const candidats = (r.transfers || []).filter((t) => t.from.toLowerCase() === t.to.toLowerCase() && t.value === 0n).slice(0, 20);
+    let trouve = null;
+    for (const t of candidats) {
+      let tx = null;
+      try { tx = t.tx ? await rpc('eth_getTransactionByHash', [t.tx]) : null; } catch (err) { tx = null; }
+      /* ⛔ un evenement n est pas une transaction : seul `tx.from` dit qui a grave */
+      if (!tx || String(tx.from).toLowerCase() !== t.from.toLowerCase()) continue;
+      const m = lireMemo(tx.input);
+      if (m.etat !== 'LU') continue;
+      const lu = decoderMemoireChaine(m.texte);
+      if (lu.etat === 'LU') { trouve = { lu, t }; break; }
+    }
+    if (brainAdr !== adr) return;
+    if (!trouve) {
+      e.className = 'note wKo';
+      e.textContent = 'No memory recorded for this block in the last 60,000 chain blocks'
+        + ((r.fenetresRatees || []).length ? ' — but ' + r.fenetresRatees.length + ' window(s) could not be read, so this is not proof there is none.' : '.');
+      return;
+    }
+    const etat = restaurerDepuisChaine(adr, trouve.lu);
+    if (!etat) { e.className = 'note wKo'; e.textContent = 'A memory was found but it cannot be resumed with this brain version.'; return; }
+    brainEtat = etat;
+    brainHisto = [];
+    noterMemoire(adr, etat);
+    e.className = 'note wOk';
+    e.innerHTML = 'Resumed from the chain at beat ' + trouve.lu.tick.toLocaleString('en-US')
+      + ' — a snapshot, close to the exact memory (±0.27 per potential) · <a href="' + RESEAUX[CHAINE].explorateur
+      + '/tx/' + enTexte(trouve.t.tx) + '" target="_blank" rel="noopener">tx</a>';
+  } catch (err) {
+    e.className = 'note wKo';
+    e.textContent = 'Could not read the chain right now — that is about the network, not about the block.';
+  } finally {
+    repriseEnCours = false;
+    profilEnLecture = false;
+  }
 });
 
 function dessinerRaster() {
