@@ -26,7 +26,9 @@ import { keccak256Hex } from './keccak.js';
 
 /** ⛔ LA VERSION GRAVEE A LA CREATION. Changer la dynamique sans changer ce nom ferait mentir les blocks
  *  qui la portent : un tiers recalculerait avec la mauvaise regle. */
-export const VERSION_CERVEAU = 'tblock-fly-brain/2';
+/* ⛔ v3 (2026-09-13, Phil : « les ticks des neurones doivent avoir une memoire pour travailler ») : chaque
+ *    neurone porte une TRACE de son activite recente, qui le re-amorce aux pas suivants. */
+export const VERSION_CERVEAU = 'tblock-fly-brain/3';
 
 /** ⛔ SOURCE UNIQUE DES PARAMETRES — `pas()` les lit ici, et Create les grave tels quels. */
 export const PARAMETRES = Object.freeze({
@@ -37,6 +39,10 @@ export const PARAMETRES = Object.freeze({
   fuite: 0.82,
   reposSansMarche: 0.15,
   bruitMax: 0.10,
+  /* ⛔ MEMOIRE DE TRAVAIL : trace = moyenne glissante des tirs (0,97 ≈ une trentaine de pas), re-injectee a
+   *    0,2 — sous le seuil de 1 : la memoire AMORCE un neurone, elle ne le fait jamais tirer seule. */
+  memoireDecroissance: 0.97,
+  memoireGain: 0.2,
   graine: 'keccak256(lowercase block address)',
 });
 
@@ -96,7 +102,7 @@ export function connectome(adresse) {
 /** L etat de depart. ⛔ `tick` commence a 0 : un cerveau qui « a deja vecu » mentirait sur son age. */
 export function etatInitial(adresse) {
   const c = connectome(adresse);
-  return { c, tick: 0, potentiels: new Array(NEURONES).fill(0), spikes: 0, dernierSpikes: 0 };
+  return { c, tick: 0, potentiels: new Array(NEURONES).fill(0), memoire: new Array(NEURONES).fill(0), spikes: 0, dernierSpikes: 0 };
 }
 
 const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / diviseur));
@@ -156,10 +162,16 @@ export function pas(etat, faits = {}) {
         + f.delta * 0.4 + miam * 0.6 + bruit;
     }
   }
+  /* ⛔ UN ETAT SANS MEMOIRE (sauvegarde d avant la v3) repart de zero, il ne casse pas. */
+  const m = Array.isArray(etat.memoire) && etat.memoire.length === NEURONES ? etat.memoire.slice() : new Array(NEURONES).fill(0);
+  if (!f.mort) {
+    for (let i = 0; i < NEURONES; i++) p[i] += m[i] * PARAMETRES.memoireGain;
+  }
   let spikes = 0;
   const actifs = [];
   for (let i = 0; i < NEURONES; i++) {
-    if (p[i] >= PARAMETRES.seuil) {
+    const tire = p[i] >= PARAMETRES.seuil;
+    if (tire) {
       spikes++;
       actifs.push(i);
       p[i] = 0;
@@ -167,6 +179,8 @@ export function pas(etat, faits = {}) {
     } else {
       p[i] *= PARAMETRES.fuite;
     }
+    /* un block mort OUBLIE aussi : sa trace s eteint sans jamais etre re-nourrie */
+    m[i] = m[i] * PARAMETRES.memoireDecroissance + (tire && !f.mort ? 1 - PARAMETRES.memoireDecroissance : 0);
     /* ⛔ BORNES DURES : sans elles un potentiel diverge et `left_hz` devient NaN. */
     if (!Number.isFinite(p[i])) p[i] = 0;
     p[i] = Math.max(-4, Math.min(4, p[i]));
@@ -190,7 +204,8 @@ export function pas(etat, faits = {}) {
   else if (spikes > 8) phase = 'CURIEUX';
   else phase = 'CALME';
 
-  const nouvel = { c, tick: etat.tick + 1, potentiels: p, spikes, dernierSpikes: etat.spikes };
+  const nouvel = { c, tick: etat.tick + 1, potentiels: p, memoire: m, spikes, dernierSpikes: etat.spikes };
+  const memoireMoyenne = Math.round((m.reduce((s, x) => s + x, 0) / NEURONES) * 10000) / 10000;
   return {
     etat: nouvel,
     vu: {
@@ -205,11 +220,41 @@ export function pas(etat, faits = {}) {
       indices: actifs,
       phase,
       nourriture: Math.round(miam * 1000) / 1000,
+      /* la memoire de travail moyenne, 0..1 : combien le reseau « se souvient » de ce qu il vient de faire */
+      memoire: memoireMoyenne,
       /* ⛔ L EMPREINTE DE L ENTREE PORTE LA VERSION ET CHAQUE FAIT : deux personnes rejouent le meme pas. */
       entree: empreinte(JSON.stringify([VERSION_CERVEAU, f.aMarche, f.taille, f.delta, f.gm, f.messages,
         f.detenteurs, f.part, f.scelle, f.mort, etat.tick])),
     },
   };
+}
+
+/**
+ * La memoire d un cerveau, a garder entre deux ouvertures (tick, potentiels, traces).
+ * ⛔ ARRONDIE A 1e-4 : assez pour reprendre, pas assez pour qu un stockage de navigateur gonfle.
+ * ⚠️ CE QU ELLE CHANGE A LA VERIFIABILITE : un cerveau REPRIS depend de l histoire de ce navigateur. Il reste
+ *    rejouable depuis le tick 0 avec les memes faits ; c est ce que dit l empreinte d entree, pas l etat repris.
+ */
+export function serialiserMemoire(etat) {
+  const r = (x) => Math.round(x * 10000) / 10000;
+  return { v: VERSION_CERVEAU, tick: etat.tick, spikes: etat.spikes,
+    potentiels: etat.potentiels.map(r), memoire: (etat.memoire || new Array(NEURONES).fill(0)).map(r) };
+}
+
+/**
+ * Reprend un cerveau depuis sa memoire. Rend `null` — jamais un etat a moitie valide — si la version, la taille
+ * ou une valeur ne tient pas : l appelant repart alors de `etatInitial`.
+ */
+export function restaurerMemoire(adresse, memo) {
+  if (!memo || typeof memo !== 'object' || memo.v !== VERSION_CERVEAU) return null;
+  if (!Number.isSafeInteger(memo.tick) || memo.tick < 0) return null;
+  const tableau = (t, min, max) => Array.isArray(t) && t.length === NEURONES
+    && t.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= min && x <= max);
+  if (!tableau(memo.potentiels, -4, 4) || !tableau(memo.memoire, 0, 1)) return null;
+  let base;
+  try { base = etatInitial(adresse); } catch { return null; }
+  return { ...base, tick: memo.tick, spikes: Number.isSafeInteger(memo.spikes) ? memo.spikes : 0,
+    potentiels: memo.potentiels.slice(), memoire: memo.memoire.slice() };
 }
 
 /** Une phrase pour l ecran. ⛔ Elle ne promet rien sur le prix : elle decrit l animal, pas le marche. */

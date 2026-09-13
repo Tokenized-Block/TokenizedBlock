@@ -583,12 +583,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <span>⤳ <b id="bVirage">—</b> steering</span>
         <span>⚡ <b id="bSpikes">—</b> spikes since open</span>
         <span>◉ <b id="bActifs">—</b> firing now</span>
+        <span>🧠 <b id="bMemoire">—</b> memory</span>
       </div>
+      <p class="note" id="bMemoireNote"></p>
       <ul class="note" style="margin:8px 0 0 18px;padding:0">
         <li><b>Hz left / right</b> — how fast each wing beats. Each wing listens to a different third of the neurons.</li>
         <li><b>Steering</b> — left minus right, from −1 to 1. Negative turns left, positive turns right. It is what moves the block on the map.</li>
         <li><b>Spikes since open</b> — every neuron firing counted since you opened this block here.</li>
         <li><b>Firing now</b> — neurons that fired on this beat, out of 128. More than 8 makes it curious.</li>
+        <li><b>Memory</b> — each neuron keeps a trace of what it just did, and that trace primes it on the next beats. It fades in about thirty beats, it is kept in this browser, and the brain resumes where it was when you come back.</li>
         <li><b>Its food</b> — its market, plus what the chain shows in the recent window: transfers, holders reached and messages. The creation itself does not count.</li>
         <li><b>Death</b> — only when its creator held it and now holds none. A creator who never held it, or a balance we could not read, never kills a block.</li>
       </ul>
@@ -984,7 +987,19 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * de 166 700 neurones pilote un wallet qui SIGNE, avec des bornes affichees. Ici le cerveau fait
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
-import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU } from './cerveau.js';
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire } from './cerveau.js';
+/* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
+ *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
+const CLE_MEMOIRE = 'tblock.memoire.';
+function memoireLue(adr) {
+  try { return JSON.parse(localStorage.getItem(CLE_MEMOIRE + String(adr).toLowerCase()) || 'null'); } catch (e) { return null; }
+}
+function noterMemoire(adr, etat) {
+  try { localStorage.setItem(CLE_MEMOIRE + String(adr).toLowerCase(), JSON.stringify(serialiserMemoire(etat))); } catch (e) { /* stockage refuse : la memoire vivra le temps de la page */ }
+}
+function cerveauAvecMemoire(adr) {
+  return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
+}
 import { nourritureDuBlock } from './nourriture.js';
 import { apercuTransaction } from './apercu.js';
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
@@ -1196,7 +1211,7 @@ function creerHabitant(c) {
    * pareil, et le meme block bougera pareil chez tout le monde. Une adresse illisible n a pas de
    * cerveau plutot qu un cerveau au hasard. */
   let cerveau = null;
-  try { cerveau = cerveauInitial(c.jeton); } catch (e) { cerveau = null; }
+  try { cerveau = cerveauAvecMemoire(c.jeton); } catch (e) { cerveau = null; }
   const h = {
     el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
     x: Math.random() * Math.max(1, L - t), y: Math.random() * Math.max(1, H - t),
@@ -1233,6 +1248,8 @@ function battre() {
     if (!h.cerveau) continue;
     const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture));
     h.cerveau = r.etat;
+    /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
+    if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
     h.vu = r.vu;
     h.phase = r.vu.phase;
     const vitesse = 0.05 + r.vu.vitesse * 0.45;
@@ -2335,7 +2352,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pmsgNote').textContent = '';
   $('#pmsgCompte').textContent = '';
   $('#pcActif').checked = cerveauVoulu();
-  try { profilCerveau = { etat: cerveauInitial(adr), vu: null, adr }; } catch (e) { profilCerveau = null; }
+  try { profilCerveau = { etat: cerveauAvecMemoire(adr), vu: null, adr }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
   /* ⛔ LE METIER S AFFICHE TOUT DE SUITE : il ne depend QUE de l adresse. L attacher a la fin des
    * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
@@ -3480,7 +3497,10 @@ function choisirBrain(adr) {
   brainAdr = adr;
   brainHisto = [];
   brainTotal = 0; brainDernier = null;
-  try { brainEtat = cerveauInitial(adr); } catch (e) { brainEtat = null; }
+  try { brainEtat = cerveauAvecMemoire(adr); } catch (e) { brainEtat = null; }
+  $('#bMemoireNote').textContent = brainEtat && brainEtat.tick > 0
+    ? 'Memory resumed at beat ' + brainEtat.tick.toLocaleString('en-US') + ' — kept in this browser.'
+    : 'New memory — nothing kept for this block in this browser yet.';
   dessinerReseau();
   let m = null;
   try { m = metierDe(adr); } catch (e) { /* adresse invalide : rien a dire */ }
@@ -3500,6 +3520,8 @@ function battreBrain() {
       + (n.mort === true ? 'Dead: ' + n.pourquoiMort + '.' : n.mort === false ? 'Its creator still holds it.'
         : 'Death not judged: ' + n.pourquoiMort + '.');
   brainEtat = r.etat;
+  if (r.etat.tick % 10 === 0 && brainAdr) noterMemoire(brainAdr, r.etat);
+  $('#bMemoire').textContent = Math.round(r.vu.memoire * 100) + ' %';
   brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
