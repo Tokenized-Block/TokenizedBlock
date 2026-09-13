@@ -786,6 +786,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     </div>
 
     <div class="carte">
+      <p class="titre">Blocks talking</p>
+      <p class="sous">Live from the brains on your map. A block speaks only when its brain sees something new on chain,
+        and another block answers with its own mood. Prudent: a block speaks at most once every 50 beats. These lines
+        live in this browser — “Say it on chain” makes one public and permanent, signed by your wallet.</p>
+      <ul class="fil" id="sfParoles"></ul>
+      <p class="note" id="sfParolesNote">Silent for now — a block speaks only when its brain sees something new.</p>
+    </div>
+
+    <div class="carte">
       <p class="titre">Live</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <ul class="fil" id="sfLive"></ul>
@@ -1067,6 +1076,7 @@ function noterMemoire(adr, etat) {
 }
 import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } from './memoire-chaine.js';
 import { fragmenterMemoire, lireFragment, reconstruireCerveau } from './fragments-cerveau.js';
+import { parolesDuTour } from './parole-cerveaux.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -1355,6 +1365,7 @@ function battre() {
     h.cerveau = r.etat;
     /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
     if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
+    h.vuAvant = h.vu || null;
     h.vu = r.vu;
     h.phase = r.vu.phase;
     const vitesse = 0.05 + r.vu.vitesse * 0.45;
@@ -1364,6 +1375,7 @@ function battre() {
   }
   battreProfil();
   battreBrain();
+  parlerCerveaux();
 }
 function demarrerBattement() {
   if (battement) clearInterval(battement);
@@ -2873,7 +2885,63 @@ window.addEventListener('scroll', () => {
   liveDefile = setTimeout(verifierBasLive, 250);
 }, { passive: true });
 
+/* ══ LES BLOCKS PARLENT (choix B de Phil, 2026-09-13) ════════════════════════════════════════════════
+ * ⛔ `parole-cerveaux.js` decide qui parle et quoi, a partir du front des evenements vus par chaque cerveau de la map ;
+ *    ici on garde le fil (40 lignes, ce navigateur) et on propose de rendre une ligne publique : un transfert de 0 du
+ *    block qui parle, a soi-meme, avec la ligne comme message — le wallet signe, jamais la page. */
+let parolesFil = [], parolesDernieres = {}, parolesTour = 0, parolesCompteur = 0, paroleEnvoi = false;
+function parlerCerveaux() {
+  parolesTour++;
+  const avecCerveau = habitants.filter((h) => h.cerveau && h.vu);
+  if (!avecCerveau.length) return;
+  const { paroles, dernieres } = parolesDuTour({ tick: parolesTour, dernieres: parolesDernieres,
+    blocks: avecCerveau.map((h) => ({ adr: h.adr, sym: h.sym, vu: h.vu, vuAvant: h.vuAvant || null })) });
+  parolesDernieres = dernieres;
+  if (!paroles.length) return;
+  const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  for (const p of paroles) parolesFil.unshift({ ...p, heure, id: 'p' + (++parolesCompteur) });
+  parolesFil = parolesFil.slice(0, 40);
+  if ($('#v-social').classList.contains('on')) peindreParoles();
+}
+function peindreParoles() {
+  $('#sfParoles').innerHTML = parolesFil.map((p) => '<li class="filL"><div class="filArt">' + dessin(p.de, p.sym) + '</div>'
+    + '<div style="min-width:0;flex:1"><p class="filT">' + (p.type === 'REPOND' ? '💬 ' : '🧠 ') + enTexte(p.texte) + '</p>'
+    + '<p class="filS">' + enTexte(p.heure) + ' · because ' + enTexte(p.parce_que) + ' · in this browser, not on chain · '
+    + '<button class="bouton sec" type="button" data-parole="' + enTexte(p.id) + '" style="padding:2px 8px;font-size:.85em">Say it on chain</button></p>'
+    + '</div></li>').join('');
+  if (!paroleEnvoi) {
+    $('#sfParolesNote').className = 'note';
+    $('#sfParolesNote').textContent = parolesFil.length ? parolesFil.length + ' line(s) since this page opened.'
+      : 'Silent for now — a block speaks only when its brain sees something new (a transfer, a holder, a message, its life moving, its mood changing).';
+  }
+}
+$('#sfParoles').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('button[data-parole]');
+  if (!b || paroleEnvoi) return;
+  const p = parolesFil.find((x) => x.id === b.getAttribute('data-parole'));
+  if (!p) return;
+  const note = $('#sfParolesNote');
+  if (!compte) { note.className = 'note wKo'; note.textContent = 'Connect your wallet first — it signs the message, this page never does.'; return; }
+  const memo = validerMemo(p.texte);
+  if (memo.etat !== 'OK') { note.className = 'note wKo'; note.textContent = 'This line cannot be a message: ' + (memo.pourquoi || 'refused') + '.'; return; }
+  paroleEnvoi = true;
+  note.className = 'note';
+  note.textContent = 'Opening your wallet — a transfer of 0 ' + p.sym + ' to yourself, with this line as its public message.';
+  let r;
+  try {
+    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+      to: p.de, data: encodeTransferAvecMemo(compte, 0n, memo.texte), value: '0x0' });
+  } catch (err) {
+    r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) };
+  } finally { paroleEnvoi = false; }
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">tx</a>' : '';
+  note.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
+  note.innerHTML = (r.etat === 'CONFIRME' ? 'Said on chain — public and permanent, readable in ' + enTexte(p.sym) + '’s public messages.'
+    : 'Not sent (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+});
+
 function demarrerLive() {
+  peindreParoles();
   if (liveMinuterie) { void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
