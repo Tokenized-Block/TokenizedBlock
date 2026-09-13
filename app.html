@@ -1389,7 +1389,12 @@ $('#map').addEventListener('click', (e) => {
    * entre deux blocks demande un endroit ou les messages vivent et un moyen de prouver qui parle.
    * Aucun des deux n existe ici. Un champ de saisie qui avale ce qu on ecrit serait pire que rien. */
   /* ⛔ LA FICHE DIT L HUMEUR DU BLOCK, pas une excuse. Elle vient du cerveau, qui vient des faits. */
-  $('#fNote').textContent = h && h.phase ? phraseDePhase(h.phase, h.sym) : '';
+  /* ⛔ DEFAUT VU SUR LA CAPTURE DE PHIL (TBLOCK, 2026-09-13) : « asleep: no market and nothing received » alors que la vie
+   * n etait simplement PAS ENCORE LUE — et TBLOCK a un marche. La phrase du dormant n est dite que sur un « pas de marche »
+   * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
+  $('#fNote').textContent = !h || !h.phase ? ''
+    : h.phase === 'DORMANT' && (h.etatVie === 'NON_LUE' || !h.etatVie) ? (h.sym || 'This block') + '\'s market has not been read yet — nothing is concluded.'
+      : phraseDePhase(h.phase, h.sym);
 });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════

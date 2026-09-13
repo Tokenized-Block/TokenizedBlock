@@ -37,8 +37,11 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
   // ce qu il fait
   /* ⛔ LE NOMBRE DE NEURONES N EST PAS DANS LE TEXTE (verifie en navigateur, 2026-09-13) : il change a chaque battement,
    *    et le journal se remplissait de quasi-doublons (« 6 neurons », « 0 neurons »). Il reste dans la raison. */
-  if (phase === 'DORMANT') ajoute('FAIT', nom + ' is asleep, at rest.', 'no market, and no food received in the recent window · ' + spikes + ' neuron(s) fired');
-  else if (phase === 'EVEILLE') ajoute('FAIT', nom + ' woke up on its own community: it moves without a market.', 'food read on chain is above zero');
+  /* ⛔ VU PAR PHIL SUR TBLOCK (2026-09-13) : « asleep… because no market » et « moves without a market » sur un block dont
+   *    le marche est EN LIGNE — la lecture avait seulement echoue. Le marche n est nomme absent que sur NON_TROUVEE. */
+  const marche = etatVie === 'NON_TROUVEE' ? 'no market' : etatVie === 'LUE' ? 'market read' : 'market not read right now';
+  if (phase === 'DORMANT') ajoute('FAIT', nom + ' is asleep, at rest.', marche + ', and no food received in the recent window · ' + spikes + ' neuron(s) fired');
+  else if (phase === 'EVEILLE') ajoute('FAIT', nom + ' woke up on its own community' + (etatVie === 'NON_TROUVEE' ? ': it moves without a market.' : '.'), 'food read on chain is above zero · ' + marche);
   else ajoute('FAIT', nom + ' is ' + String(phase).toLowerCase() + '.', 'brain phase from its market and food · ' + spikes + ' neuron(s) fired');
 
   // ce qu il pense — a partir des faits lus
@@ -57,7 +60,7 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
 
   // ce qui l ameliorerait — des gestes possibles, jamais un conseil financier
   if (etatVie === 'NON_TROUVEE') ajoute('AMELIORER', 'Opening my market would let people buy me — my creator can do it from my profile.', 'no market yet');
-  if (!n || n.gm === 0) ajoute('AMELIORER', 'A GM — even a tiny fragment sent to someone — would feed me.', 'no transfer received recently');
+  if (!n || n.gm === 0) ajoute('AMELIORER', 'A GM — even a tiny fragment sent to someone — would feed me.', n ? 'no transfer received recently' : 'transfers not read yet');
   if (n && n.messages === 0) ajoute('AMELIORER', 'A message written on a transfer would give me something to read.', 'no message read recently');
   if (n && n.detenteurs <= 1) ajoute('AMELIORER', 'More holders would make me harder to put back to sleep.', 'few holders reached recently');
   return out;

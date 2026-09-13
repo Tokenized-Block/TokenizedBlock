@@ -19,8 +19,42 @@
 //    s appelle NON_TROUVEE et jamais « sans valeur ».
 import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
+import { TBLOCK } from './tokenomics.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
+
+/** La cle TBLOCK/block lue en second (format du lancement de l app). */
+export const CLE_TBLOCK = { fee: 0, tickSpacing: 200 };
+
+/**
+ * La vie d un block apparie a TBLOCK, en ETH. `null` = pas de pool TBLOCK/block (on laisse le NON_TROUVEE d origine).
+ * ⛔ Rend NON_LUE (pas null) si la pool TBLOCK/block existe mais qu un prix ou la supply manque.
+ */
+async function vieEnTblock({ rpc, stateView, jeton }) {
+  const lire = rpc;
+  const sel = selecteur('getSlot0(bytes32)');
+  const cle = cleDePool(TBLOCK, jeton, CLE_TBLOCK);
+  let s;
+  try { s = BigInt(String(await lire('eth_call', [{ to: stateView, data: '0x' + sel + poolId(cle).slice(2) }, 'latest'])).slice(0, 66)); }
+  catch { return { etat: 'NON_LUE', vie: null, devise: null, via: null, pourquoi: 'the TBLOCK pair could not be read' }; }
+  if (s === 0n) return null;
+  const nonLue = (pourquoi) => ({ etat: 'NON_LUE', vie: null, devise: null, via: 'TBLOCK · 0 %', pourquoi });
+  let dec, supply, sE;
+  try {
+    dec = Number(BigInt(String(await lire('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
+    supply = BigInt(String(await lire('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66));
+    const cleE = cleDePool(ETH_NATIF, TBLOCK, CLE_TBLOCK);
+    sE = BigInt(String(await lire('eth_call', [{ to: stateView, data: '0x' + sel + poolId(cleE).slice(2) }, 'latest'])).slice(0, 66));
+  } catch { return nonLue('decimals, supply or the TBLOCK/ETH price unread'); }
+  if (sE === 0n) return nonLue('TBLOCK has no ETH price to convert with');
+  const prixEnTblock = prixDepuisSqrt({ sqrtPriceX96: s, decDevise: 18, decBlock: dec, deviseEst0: String(cle.currency0).toLowerCase() === TBLOCK.toLowerCase() });
+  const prixTblockEnEth = prixDepuisSqrt({ sqrtPriceX96: sE, decDevise: 18, decBlock: 18, deviseEst0: true });
+  if (!(prixEnTblock > 0) || !(prixTblockEnEth > 0)) return nonLue('a price could not be computed');
+  const c = capitalisation({ supply, decimales: dec, prix: prixEnTblock * prixTblockEnEth, devise: 'ETH' });
+  if (c.valeur === null || c.valeur === undefined) return nonLue(c.pourquoi || 'market cap not computable');
+  return { etat: 'LUE', vie: c.valeur, devise: 'ETH', via: 'TBLOCK · 0 %', pourquoi: null, cle, sqrtPriceX96: s, decimales: dec, paire: 'TBLOCK',
+    prixTblockEnEth };
+}
 
 /** Les cles de pool lues, dans l ordre. ⛔ NOTRE Launch d abord : un block lance ici doit etre lu
  *  sur SA pool plutot que sur une pool tierce ouverte au meme jeton. */
@@ -81,6 +115,13 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
    * a ete refusee par le noeud sature pendant que les AUTRES cles repondaient « pas de pool » — et la fonction concluait
    * NON_TROUVEE : « this block has no market yet » sur un block qui en a un. La lecture ratee n etait pas comptee comme
    * un « non »… mais le « non » des autres cles la recouvrait. Si UNE cle n a pas ete lue, on ne peut pas dire « aucune ». */
+  /* ⛔⛔ BLOCKS APPARIES A TBLOCK (Phil, 2026-09-13 : « creer des blocks avec TBLOCK »). Si aucune pool ETH n existe, on lit
+   * la pool TBLOCK/block (frais 0, espacement 200, sans hook — le format du lancement de l app), et la capitalisation est
+   * CONVERTIE EN ETH par le prix de la pool TBLOCK/ETH, lu lui aussi. Un des deux prix illisible = NON_LUE, jamais un chiffre. */
+  if (sqrt === 0n && ratees === 0 && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
+    const vt = await vieEnTblock({ rpc, stateView, jeton });
+    if (vt) return vt;
+  }
   if (sqrt === 0n && ratees > 0) {
     return { etat: 'NON_LUE', vie: null, devise: null, via: null,
       pourquoi: ratees + ' of the ' + CLES_MARCHE.length + ' market keys could not be read — the market may exist on one of them' };
