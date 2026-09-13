@@ -2431,14 +2431,15 @@ function peindrePlan(plan, adr) {
   }
   const d = plan.dec;
   $('#plLignes').innerHTML = [
-    'Pool on ' + RESEAUX[CHAINE].nom + ': against native ETH · fee 0.5 % · spacing 200 · '
+    'Pool on ' + RESEAUX[CHAINE].nom + ': against native ETH · fee 0 % · spacing 200 · permanent · '
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     'ETH needed: none — a single-sided launch.',
-    'Fee: 0.5 % of every trade goes to the position, which belongs to you. ⚠️ The same wallet that collects '
-      + 'those fees can also take the liquidity out — a permanent lock is being checked, not built yet.',
-    'Irreversible: the fee can never change, and this value sets the starting price for good.',
+    /* ⛔ REGLE DU JEU (2026-09-13) : pool permanente, frais 0. Dit AVANT la signature, en clair. */
+    'Permanent: the liquidity is placed in the name of a dead address — nobody, not you and not us, can '
+      + 'ever take it out. That is why the fee is 0 %: nobody could ever collect it.',
+    'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
 

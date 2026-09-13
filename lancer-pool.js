@@ -33,9 +33,22 @@ export const V4_ADRESSES = {
 };
 /** ⛔ `PERMIT2` dans index.html. */
 export const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
-/** ⛔ `FRAIS_LAUNCH` (0,5 %, decision de Phil du 2026-09-09) et `ESPACEMENT_LAUNCH` dans index.html. */
-export const FEE_POOL = 5000;
+/* ⛔⛔ REGLE DU JEU DE PHIL, 2026-09-13 : POOL PERMANENTE, FRAIS 0 (DECISIONS-regles-du-jeu-2026-09-13.md).
+ *    La position est creee au nom de l adresse morte : personne — ni le createur, ni nous — ne peut
+ *    jamais retirer la liquidite. Mesure (recherche du 2026-09-13) : le PositionManager v4 n a ni
+ *    proprietaire ni proxy, et `onlyIfApproved` garde a la fois le retrait ET la collecte. Donc les
+ *    frais ne pourraient jamais etre collectes : ils sont a 0 %, pour que les acheteurs ne paient pas
+ *    un frais que personne ne touche.
+ * ⚠️ DIVERGENCE VOLONTAIRE avec l ancien ecran, qui applique 0,5 % au createur. Le test la PROUVE au
+ *    lieu d exiger l egalite, et verifie que la map lit bien cette cle (sinon nos propres blocks
+ *    lances afficheraient « pas de marche »). */
+export const FEE_POOL = 0;
+/** Ce que l ancien ecran applique (`FRAIS_LAUNCH` dans index.html) — garde pour le test de divergence. */
+export const FEE_ANCIEN_ECRAN = 5000;
+/** ⛔ `ESPACEMENT_LAUNCH` dans index.html. */
 export const TICK_SPACING_POOL = 200;
+/** ⛔ L adresse morte, RECOPIEE de `frais-05.mjs` (const MORTE) — un test compare. */
+export const PROPRIETAIRE_PERMANENT = '0x000000000000000000000000000000000000dEaD';
 /** ⛔ 999/1000 : place a 1000/1000 le mint REVERTE (TRANSFER_FROM_FAILED), mesure du 2026-09-06. */
 export const MARGE_POUR_MILLE = 999n;
 /** Delai de validite du mint. */
@@ -139,11 +152,15 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
   const mint = encodeMintPosition({ cle, tickBas: p.tickBas, tickHaut: p.tickHaut, liquidite: L,
     max0: blockEst1 ? 0n : (blocksRequis * 102n) / 100n,
     max1: blockEst1 ? (blocksRequis * 102n) / 100n : 0n,
-    proprietaire: compte, deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S) });
+    /* ⛔⛔ LE PROPRIETAIRE DE LA POSITION EST L ADRESSE MORTE, PAS LE COMPTE : c est ce qui rend la pool
+     * permanente. Le compte PAIE (via Permit2), mais ne possede pas la position — il ne pourra ni
+     * retirer ni collecter, et personne d autre non plus. */
+    proprietaire: PROPRIETAIRE_PERMANENT, deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S) });
   const donnee = sqrtExistant !== 0n ? mint : encodeMulticall([encodeInitializePool(cle, sqrtVise), mint]);
   const tx = { to: V.posm, data: donnee, value: '0x0' };
 
   return { ...base, etat: etapes.length ? 'APPROBATIONS' : 'PRET', etapes, tx,
+    permanente: true, proprietairePosition: PROPRIETAIRE_PERMANENT,
     approbationsIllimitees: 'Permit2 gets an unlimited allowance for this block (MAX_UINT256), and the position '
       + 'manager an unlimited Permit2 allowance (MAX_UINT160) — both until you revoke them.' };
 }

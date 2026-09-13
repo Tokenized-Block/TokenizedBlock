@@ -43,10 +43,14 @@ export const METIERS = [
     fait: 'writes a post about its block using measured numbers only',
     propose: 'a draft you send yourself',
     jamais: 'never posts anywhere on its own' },
+  /* ⛔⛔ REGLE DU JEU DE PHIL, 2026-09-13 : POOL PERMANENTE, FRAIS 0. Ce metier proposait « collecter
+   *    les 0,5 % » — devenu FAUX pour tout marche ouvert par l app : la position appartient a l adresse
+   *    morte et les frais sont a 0, donc il n y a rien a collecter, pour personne. Une proposition
+   *    fausse affichee dans un profil serait pire qu aucune proposition. */
   { cle: 'COMPTABLE', titre: 'Bookkeeper',
-    fait: 'reads what the block holds and what its position has earned',
-    propose: 'a fee collection, prepared for you to sign',
-    jamais: 'never collects, and never holds a key' },
+    fait: 'reads what you hold of the block',
+    propose: null,
+    jamais: 'never moves anything, and never holds a key' },
 ];
 
 export const ETATS_TENDANCE = ['HAUSSE', 'BAISSE', 'PLAT', 'PAS_ASSEZ'];
@@ -141,12 +145,8 @@ export function rapport({ metier, symbole = null, vie = null, devise = null, ten
   if (m.cle === 'COMPTABLE') {
     lignes.push(solde === null ? 'Your balance of this block was not read.'
       : 'You hold ' + solde + ' of it.');
-    propositions.push({
-      quoi: 'COLLECT_FEES',
-      pourquoi: 'the 0.5 % launch fee accrues to the liquidity position, and only its owner can collect',
-      signeParUtilisateur: true,
-      avertissement: 'Collecting is a signature in your wallet, and only the position owner can do it.',
-    });
+    /* ⛔ AUCUNE PROPOSITION DE COLLECTE : un marche ouvert ici est permanent, a 0 % de frais. */
+    lignes.push('A market opened in this app is permanent, with a 0 % fee: there are no pool fees to collect — for anyone.');
   }
 
   if (m.cle === 'HERAUT') {
