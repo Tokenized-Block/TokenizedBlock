@@ -882,6 +882,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           signed transaction. Nothing moves before your wallet shows it.</p>
         <label class="champ">Starting value of the whole supply, in ETH<input id="plValo" inputmode="decimal"
           placeholder="e.g. 10" autocomplete="off"></label>
+        <label class="champ">Share of your blocks to place, in %<input id="plPart" inputmode="decimal"
+          value="99.9" autocomplete="off"></label>
         <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
           the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
         <button class="bouton sec" id="plCalculer" type="button" style="margin-top:10px">Work it out</button>
@@ -2747,7 +2749,16 @@ async function calculerLancement() {
   $('#plCalculer').disabled = true;
   profilEnLecture = true;
   let plan;
-  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo }); }
+  /* ⛔ LA PART PLACEE EST UN CHOIX (Phil, 2026-09-13 : TBLOCK a 50 %) : ce qui est place ne revient jamais. */
+  const partPourMille = Math.round(Number(String($('#plPart').value || '99.9').trim().replace(',', '.')) * 10);
+  if (!Number.isInteger(partPourMille) || partPourMille < 1 || partPourMille > 999) {
+    e.className = 'note wKo';
+    e.textContent = 'The share to place must be between 0.1 and 99.9 %.';
+    $('#plCalculer').disabled = false;
+    profilEnLecture = false;
+    return;
+  }
+  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille }); }
   catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
@@ -3725,6 +3736,12 @@ $('#cCreer').addEventListener('click', () => void creerBlock());
  *    « What your wallet will sign » et signe lui-meme. Seuls des presets nommes ici sont acceptes — un lien
  *    ne peut pas injecter un nom ou un sel arbitraire dans l ecran. */
 const PRESETS_CREATION = { tblock: { nom: 'TokenizedBlock', sym: 'TBLOCK', sel: 'tblock-official-v1' } };
+/* ⛔ LANCEMENT PRE-REMPLI PAR LIEN (?block=…&lancer=<ETH>&part=<%>) : remplit la valorisation et la part, ne
+ *    calcule ni ne signe rien — l utilisateur ouvre le marche, relit « What your wallet will sign » et signe. */
+const valoLien = Number(paramsLien.get('lancer'));
+const partLien = Number(paramsLien.get('part'));
+if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e6) $('#plValo').value = String(valoLien);
+if (Number.isFinite(partLien) && partLien >= 0.1 && partLien <= 99.9) $('#plPart').value = String(partLien);
 const presetLien = PRESETS_CREATION[String(paramsLien.get('creer') || '').toLowerCase()];
 if (presetLien) {
   $('#cNom').value = presetLien.nom;

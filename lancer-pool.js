@@ -87,7 +87,10 @@ export const ADRESSE_NULLE = '0x0000000000000000000000000000000000000000';
  *    `classementValoLancement` est en ETH : il ne s applique pas a une autre devise.
  */
 export async function planLancement({ rpc, chaine, jeton, compte, valorisationEth, maintenant = Date.now(),
-  devise = ETH_NATIF, hooks = ADRESSE_NULLE }) {
+  devise = ETH_NATIF, hooks = ADRESSE_NULLE, partPourMille = Number(MARGE_POUR_MILLE) }) {
+  if (!Number.isInteger(partPourMille) || partPourMille < 1 || partPourMille > Number(MARGE_POUR_MILLE)) {
+    return { etat: 'REFUSE', pourquoi: 'the share to place must be between 0.1 % and 99.9 % of your balance' };
+  }
   const V = V4_ADRESSES[Number(chaine)];
   if (!V) return { etat: 'REFUSE', pourquoi: 'this network has no Uniswap v4 addresses here' };
   if (!ADRESSE.test(String(jeton || ''))) return { etat: 'REFUSE', pourquoi: 'the block is not an address' };
@@ -130,7 +133,10 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     : sqrtPriceDepuisPrix({ prixNum: BigInt(Math.round(valo * 1e6)), prixDen: entiere * 1000000n,
       decDevise, decBlock: dec, deviseEst0: blockEst1 });
   const sqA = sqrtDeTick(p.tickBas), sqB = sqrtDeTick(p.tickHaut);
-  const aPlacer = (solde * MARGE_POUR_MILLE) / 1000n;
+  /* ⛔ PART PLACEE (Phil, 2026-09-13 : TBLOCK/ETH a 50 %) : pour mille du solde, borne a la marge de 999 —
+   *    placer 1000/1000 revert (mesure du 2026-09-06). Par defaut : 999, le comportement d avant. */
+  const part = BigInt(partPourMille);
+  const aPlacer = (solde * part) / 1000n;
   const L = liquiditeUnilaterale({ montant: aPlacer, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
   if (!L) return { etat: 'REFUSE', pourquoi: 'no liquidity is computable for this range' };
   const m = montantsPosition(L, sqrtVise, sqA, sqB);
