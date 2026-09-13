@@ -1008,7 +1008,8 @@ function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
 import { nourritureDuBlock } from './nourriture.js';
-import { apercuTransaction } from './apercu.js';
+import { apercuTransaction, nomDe } from './apercu.js';
+import { resumerTransaction } from './resume-tx.js';
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { repartitionFrappe } from './tokenomics.js';
 import { evenementsLive } from './fil-live.js';
@@ -2672,7 +2673,49 @@ async function chargerFil(suite = false) {
   }
 }
 
+/* ⛔ UNE TRANSACTION, UNE PHRASE (Phil, 2026-09-13 : « detaille la tx en une ligne, on comprend tout direct »).
+ *    Les Transfer d une meme tx sont regroupes et dits par `resume-tx.js` : « 0x208e…0105 bought 968.53M jubjub
+ *    from the pool ». Le PoolManager est nomme, le signataire est `tx.from` lu. */
+function nomFil(a) {
+  const V = V4_ADRESSES[CHAINE];
+  if (V && String(a).toLowerCase() === V.poolm.toLowerCase()) return 'the Uniswap pool';
+  return nomDe(a, { chaine: CHAINE, compte });
+}
 function peindreFil(vusCeLot) {
+  const parTx = new Map();
+  for (const l of filLignes) {
+    const cle = (l.tx || 'sans-tx-' + l.bloc + '-' + l.logIndex) + ':' + String(l.token).toLowerCase();
+    if (!parTx.has(cle)) parTx.set(cle, []);
+    parTx.get(cle).push(l);
+  }
+  const V = V4_ADRESSES[CHAINE];
+  $('#sfFil').innerHTML = [...parTx.values()].map((groupe) => {
+    const l = groupe[0];
+    const creation = creationsLues.find((c) => String(c.jeton).toLowerCase() === String(l.token).toLowerCase());
+    const r = resumerTransaction({ transfers: groupe, signataire: l.signataire, sym: l.sym,
+      decimales: creation && Number.isInteger(creation.decimales) ? creation.decimales : null,
+      poolManager: V ? V.poolm : '', nom: nomFil, memo: l.memo });
+    const d = Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?';
+    const msg = !l.memo ? '<p class="filS">transaction not read — sender and message unknown</p>'
+      : l.memo.etat === 'LU' && r.genre !== 'MEMOIRE' ? '<p class="filM">« ' + enTexte(l.memo.texte) + ' »</p>' : '';
+    const lien = l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
+      + '" target="_blank" rel="noopener">tx</a>' : '';
+    const icone = { ACHAT: '🟢', VENTE: '🔴', ALLER_RETOUR: '↔', FRAPPE: '🧱', MEMOIRE: '🧠', MESSAGE: '✉️', ENVOI: '➡️' }[r.genre] || '·';
+    return '<li class="filL"><div class="filArt">' + dessin(l.token, l.sym) + '</div><div style="min-width:0;flex:1">'
+      + '<p class="filT">' + icone + ' ' + enTexte(r.phrase) + '</p>' + msg
+      + '<p class="filS">block ' + d + lien + (groupe.length > 1 ? ' · ' + groupe.length + ' transfers' : '') + '</p></div></li>';
+  }).join('');
+  const avecMsg = filLignes.filter((l) => l.memo && l.memo.etat === 'LU').length;
+  $('#sfNote').textContent = filLignes.length
+    ? parTx.size + ' transaction(s) from ' + filLignes.length + ' transfer(s), ' + filProchain + ' of ' + habitants.length + ' blocks, '
+      + avecMsg + ' with a message · over the last 2,000 chain blocks'
+      + (filRatees ? ' · ⚠️ ' + filRatees + ' read(s) refused by the node — the feed is incomplete, not quiet' : '')
+    : 'No transfer in the last 2,000 chain blocks for these ' + filProchain + ' blocks'
+      + (filRatees ? ' — but ' + filRatees + ' read(s) were refused, so this is not proof of silence.' : '.');
+  peindreAchats();
+}
+
+function peindreFilAncien(vusCeLot) {
   const zero = '0x0000000000000000000000000000000000000000';
   $('#sfFil').innerHTML = filLignes.map((l) => {
     const d = Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?';
