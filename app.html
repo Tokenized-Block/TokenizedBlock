@@ -933,7 +933,9 @@ import { FEE_WALLET, fraisCreationUsd, phraseFrais, USDC_BASE, FRAIS_USDC_UNITES
  *    pour ca que cette map dessinait ses propres cubes. Il est maintenant dans `logo.js`, deplace
  *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
-import { apparenceDepuisAdresse, ORBITES, FACETTES, MATIERES, ORNEMENTS, combinaisons } from './apparence.js';
+import { apparenceDepuisAdresse } from './apparence.js';
+import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE as MATIERES,
+  ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
 import { pairesProposees, qualifierPaire, etiquettePaire } from './paires.js';
@@ -2860,9 +2862,10 @@ const DECIMALES_FIXES = 18;
 const CURSEURS = [
   { cle: 'teinte', titre: 'Hue', min: 0, max: 360 },
   { cle: 'accent', titre: 'Accent hue', min: 0, max: 360 },
-  { cle: 'division', titre: 'Division', min: 1, max: 5 },
-  { cle: 'eclats', titre: 'Shards', min: 0, max: 6 },
-  { cle: 'ecart', titre: 'Spread', min: 0, max: 4 },
+  { cle: 'saturation', titre: 'Saturation', min: 20, max: 100 },
+  { cle: 'division', titre: 'Division', min: 1, max: 8 },
+  { cle: 'eclats', titre: 'Shards', min: 0, max: 12 },
+  { cle: 'ecart', titre: 'Spread', min: 0, max: 8 },
 ];
 const LISTES = [
   { cle: 'orbite', titre: 'Orbit', valeurs: ORBITES },
@@ -2871,7 +2874,7 @@ const LISTES = [
   { cle: 'ornement', titre: 'Ornament', valeurs: ORNEMENTS },
 ];
 let apparenceChoisie = {
-  teinte: 255, accent: 290, division: 3, eclats: 3, ecart: 2,
+  teinte: 255, accent: 290, saturation: 100, division: 3, eclats: 3, ecart: 2,
   orbite: ORBITES[0], facette: FACETTES[0], matiere: MATIERES[0], ornement: ORNEMENTS[0],
 };
 

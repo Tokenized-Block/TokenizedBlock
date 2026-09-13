@@ -19,11 +19,34 @@ import { selecteur } from './pool.js';
 import { chaineA } from './index-blocks.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
 
-/** Bornes EXACTES des curseurs de Create — un test les compare aux listes d apparence.js. */
+/* ⛔⛔ CATALOGUE DE CREATE ELARGI (Phil, 2026-09-13 : « personnalisation pousse au max »), SANS TOUCHER
+ *    AU TIRAGE. Les listes d `apparence.js` restent GELEES : elles derivent la face de chaque block qui
+ *    n en a pas grave une (changer leur longueur changerait le modulo, donc la tete de TOUS ces blocks),
+ *    et un test les compare aux menus de `index.html`. Les nouvelles valeurs sont AJOUTEES A LA FIN :
+ *    l indice de chaque valeur ancienne ne bouge pas. */
+export const ORBITES_CREATE = [...ORBITES, 'vortex', 'pluie', 'constellation', 'halo', 'escalier', 'ellipse'];
+export const FACETTES_CREATE = [...FACETTES, 'coeur', 'lune', 'soleil', 'oeil', 'couronne', 'infini', 'goutte', 'diamant'];
+export const MATIERES_CREATE = [...MATIERES, 'or', 'holo', 'nuit', 'acide', 'ombre', 'rose'];
+export const ORNEMENTS_CREATE = [...ORNEMENTS, 'cercles', 'losanges', 'fleurs', 'eclairs', 'lignes', 'cadre',
+  'ondes', 'pixels', 'coeurs', 'lunes', 'soleils', 'couronnes'];
+
+/** Bornes EXACTES des curseurs de Create — un test les compare a app.html.
+ * ⚠️ Elargies le 2026-09-13 (division 5→8, eclats 6→12, ecart 4→8) : les anciennes valeurs restent
+ *    toutes valides, donc toute face deja gravee reste lisible. */
 export const BORNES = {
-  teinte: [0, 360], accent: [0, 360], division: [1, 5], eclats: [0, 6], ecart: [0, 4],
+  teinte: [0, 360], accent: [0, 360], division: [1, 8], eclats: [0, 12], ecart: [0, 8],
 };
-export const LISTES = { orbite: ORBITES, facette: FACETTES, matiere: MATIERES, ornement: ORNEMENTS };
+/** ⛔ CHAMPS OPTIONNELS : les faces gravees AVANT leur ajout ne les portent pas, et doivent rester
+ *  valides. Absent ⇒ le dessin d avant, au pixel pres. */
+export const OPTIONNELS = { saturation: [20, 100] };
+export const LISTES = { orbite: ORBITES_CREATE, facette: FACETTES_CREATE, matiere: MATIERES_CREATE, ornement: ORNEMENTS_CREATE };
+
+/** Le nombre de faces que Create peut graver — publie, jamais le mot « unique ». */
+export function combinaisonsCreate() {
+  const [smin, smax] = OPTIONNELS.saturation;
+  return 361 * 361 * 8 * 13 * 9 * (smax - smin + 1) * ORBITES_CREATE.length * FACETTES_CREATE.length
+    * MATIERES_CREATE.length * ORNEMENTS_CREATE.length;
+}
 
 /**
  * Valide un objet `face`.
@@ -33,6 +56,14 @@ export function validerFace(f) {
   if (!f || typeof f !== 'object') return { etat: 'INVALIDE', pourquoi: 'no face object' };
   const propre = {};
   for (const [cle, [min, max]] of Object.entries(BORNES)) {
+    const v = f[cle];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
+      return { etat: 'INVALIDE', pourquoi: cle + ' must be an integer between ' + min + ' and ' + max };
+    }
+    propre[cle] = v;
+  }
+  for (const [cle, [min, max]] of Object.entries(OPTIONNELS)) {
+    if (f[cle] === undefined) continue;
     const v = f[cle];
     if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
       return { etat: 'INVALIDE', pourquoi: cle + ' must be an integer between ' + min + ' and ' + max };
