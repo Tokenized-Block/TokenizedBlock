@@ -1,35 +1,54 @@
-// cerveau.js — le cerveau de mouche d un block : il VIT, il ne trade pas.
+// cerveau.js — le cerveau de mouche d un block : il VIT, il se NOURRIT, il peut MOURIR — et il ne trade pas.
 // ================================================================================================
-// ⛔⛔ CE CERVEAU NE PROPOSE AUCUN ACHAT ET NE SIGNE RIEN. degen-fly fait piloter un wallet qui SIGNE
-//    par un connectome de mouche (mesure du 2026-09-12 : budget 70 $, achat max 5 $, `signing: true`).
-//    Nous, non : un cerveau qui proposerait des trades finirait par en executer, et la promesse de
-//    cette app est « aucune cle ici, ton wallet signe ». Ce cerveau-la fait UNE chose : il rend le
-//    block VIVANT — sa facon de bouger, de se reveiller, de reagir a ce qui lui arrive sur la chaine.
+// ⛔⛔ REGLES DU JEU DE PHIL, 2026-09-13 (tblock/DECISIONS-regles-du-jeu-2026-09-13.md) :
+//    2. le cerveau est VERIFIABLE on-chain : fonction PURE de l adresse du block et de donnees lues sur
+//       la chaine ; sa version et ses parametres sont exportes d UNE source (`VERSION_CERVEAU`,
+//       `PARAMETRES`) pour etre graves a la creation. N importe qui recalcule les memes neurones.
+//    3. la NOURRITURE, c est tout a la fois : GM recus, messages recus, nouveaux detenteurs, achats.
+//       Un block SANS marche mais nourri s EVEILLE — il ne dort plus parce que personne ne l a achete.
+//    4. la MORT : quand le createur ne detient plus rien. ⛔ Elle se constate sur une lecture REUSSIE :
+//       l appelant passe `mort: true` seulement s il a LU un solde nul. « Pas lu » ne tue jamais.
 //
-// ⛔ LE CONNECTOME EST DERIVE DE L ADRESSE DU BLOCK. Il n est ni copie de degen-fly (leur graphe de
-//    166 700 neurones est a eux) ni tire au hasard : la MEME adresse rend TOUJOURS le meme cerveau,
-//    sur n importe quelle machine, sans rien stocker. C est ce qui fait qu un block a un caractere
-//    au lieu d une animation.
+// ⛔⛔ CE CERVEAU NE PROPOSE AUCUN ACHAT ET NE SIGNE RIEN. Il rend le block vivant : sa facon de bouger,
+//    son humeur, sa reaction a ce qui lui arrive VRAIMENT sur la chaine.
 //
-// ⛔⛔ LES ENTREES SONT DES FAITS LUS, JAMAIS DES HUMEURS INVENTEES. `vie` est la capitalisation
-//    mesuree (prix x supply), `vieAvant` la precedente, `gm` des transferts reels. Sans marche, le
-//    cerveau DORT — il ne fait pas semblant d etre excite pour faire joli, et il ne se dit pas
-//    « mort » non plus : jamais echange n est pas la meme chose que sans valeur.
+// ⛔ LES ENTREES SONT DES FAITS LUS, JAMAIS DES HUMEURS INVENTEES. Ce que chaque entree veut dire, et
+//    comment la lire sur la chaine (c est ce qui rend le cerveau recalculable par un tiers) :
+//    · vie / vieAvant   capitalisation mesuree (prix × supply) et la precedente ;
+//    · gm               nombre de transferts du block entre deux adresses non nulles (hors frappe) ;
+//    · messages         nombre de ces transferts qui portent un message lisible dans leur calldata ;
+//    · detenteurs       nombre d adresses qui recoivent le block pour la premiere fois dans la fenetre ;
+//    · mort             `true` SEULEMENT si le solde du createur a ete lu et vaut zero.
 //
-// ⚠️ CE QUE CE MODULE NE PROUVE PAS : qu une vraie mouche ferait ca. C est un reseau a impulsions
-//    JOUET (128 neurones, integration et fuite), pas une reconstruction biologique. Le dire est plus
-//    honnete que de laisser croire qu on a un connectome.
+// ⚠️ CE QUE CE MODULE NE PROUVE PAS : qu une vraie mouche ferait ca. C est un reseau a impulsions JOUET
+//    (128 neurones, integration et fuite), pas une reconstruction biologique.
 import { keccak256Hex } from './keccak.js';
 
+/** ⛔ LA VERSION GRAVEE A LA CREATION. Changer la dynamique sans changer ce nom ferait mentir les blocks
+ *  qui la portent : un tiers recalculerait avec la mauvaise regle. */
+export const VERSION_CERVEAU = 'tblock-fly-brain/2';
+
+/** ⛔ SOURCE UNIQUE DES PARAMETRES — `pas()` les lit ici, et Create les grave tels quels. */
+export const PARAMETRES = Object.freeze({
+  neurones: 128,
+  capteurs: 16,
+  liensParNeurone: 8,
+  seuil: 1,
+  fuite: 0.82,
+  reposSansMarche: 0.15,
+  bruitMax: 0.10,
+  graine: 'keccak256(lowercase block address)',
+});
+
 /** ⛔ Taille FIXE : le cerveau de deux blocks doit etre comparable, sinon « plus actif » ne veut rien dire. */
-export const NEURONES = 128;
-/** Combien de neurones recoivent directement les faits du marche. */
-export const CAPTEURS = 16;
-export const PHASES = ['DORMANT', 'CALME', 'CURIEUX', 'EXCITE', 'INQUIET'];
+export const NEURONES = PARAMETRES.neurones;
+/** Combien de neurones recoivent directement les faits de la chaine. */
+export const CAPTEURS = PARAMETRES.capteurs;
+/* ⛔ EVEILLE et MORT sont nes des regles du 2026-09-13 : un block nourri sans marche ne dort pas, et un
+ * block dont le createur n a plus rien est mort. */
+export const PHASES = ['DORMANT', 'EVEILLE', 'CALME', 'CURIEUX', 'EXCITE', 'INQUIET', 'MORT'];
 
 const enc = new TextEncoder();
-const SEUIL = 1;          // potentiel a partir duquel un neurone tire
-const FUITE = 0.82;       // ce qui reste du potentiel au pas suivant
 
 /** ⛔ Un generateur DETERMINISTE et portable : `Math.random` rendrait le caractere different a chaque ouverture. */
 function tirage(graine) {
@@ -49,8 +68,7 @@ export function empreinte(texte) {
 
 /**
  * Le connectome d un block : des poids signes, sparses, tires de son adresse.
- * ⛔ MEME ADRESSE ⇒ MEME CERVEAU, toujours. Aucun stockage, aucun serveur : le caractere du block
- *    est une propriete de son identite, pas une donnee qu on pourrait perdre ou falsifier.
+ * ⛔ MEME ADRESSE ⇒ MEME CERVEAU, toujours. Aucun stockage, aucun serveur.
  */
 export function connectome(adresse) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(adresse || ''))) throw new Error('connectome needs an address');
@@ -58,11 +76,10 @@ export function connectome(adresse) {
   const graine = parseInt(h.slice(2, 10), 16);
   const suivant = tirage(graine);
   const liens = [];
-  /* ⛔ SPARSE, PAS COMPLET : 128x128 liens donneraient une bouillie uniforme ou tous les blocks se
-   * ressemblent. Huit liens par neurone laissent des circuits DIFFERENTS d une adresse a l autre. */
+  /* ⛔ SPARSE, PAS COMPLET : huit liens par neurone laissent des circuits DIFFERENTS d une adresse a l autre. */
   for (let i = 0; i < NEURONES; i++) {
     const sortants = [];
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < PARAMETRES.liensParNeurone; k++) {
       const vers = Math.floor(suivant() * NEURONES);
       /* des poids negatifs autant que positifs : sans inhibition, tout le reseau tire en meme temps */
       const poids = Math.round((suivant() * 2 - 1) * 100) / 100;
@@ -82,87 +99,96 @@ export function etatInitial(adresse) {
   return { c, tick: 0, potentiels: new Array(NEURONES).fill(0), spikes: 0, dernierSpikes: 0 };
 }
 
+const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / diviseur));
+
 /**
  * Les faits de la chaine, transformes en courant d entree.
- * ⛔ TROIS ETATS, PAS DEUX (comme partout ici) : `vie` a `null` veut dire « pas de marche ou pas lu »,
- *    et ce n est pas zero. Un cerveau nourri de zeros se comporterait comme un block qui s effondre.
+ * ⛔ TROIS ETATS, PAS DEUX : `vie` a `null` veut dire « pas de marche ou pas lu », et ce n est pas zero.
+ * ⛔ `mort` n est vrai QUE s il vaut strictement `true` : un solde non lu (null, undefined) ne tue pas.
  */
-export function courant({ vie = null, vieAvant = null, gm = 0, part = 0, scelle = null } = {}) {
+export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
+  scelle = null, mort = null } = {}) {
   const aMarche = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
   /* la variation RELATIVE, bornee : un x10 ne doit pas saturer le reseau pour toujours */
   let delta = 0;
   if (aMarche && typeof vieAvant === 'number' && vieAvant > 0) {
     delta = Math.max(-1, Math.min(1, (vie - vieAvant) / vieAvant));
   }
-  /* ⚠️ ECHELLE LOGARITHMIQUE, comme les PV : en lineaire, un block a 1 000 et un a 1 000 000 auraient
-   * la meme entree « faible » a cote d un gros, et tous les cerveaux se ressembleraient. */
+  /* ⚠️ ECHELLE LOGARITHMIQUE, comme les PV : en lineaire, tous les cerveaux se ressembleraient. */
   const taille = aMarche ? Math.min(1, Math.log10(1 + vie) / 9) : 0;
   return {
     aMarche,
     taille,
     delta,
-    /* un GM est un vrai transfert : il compte comme une caresse, bornee pour qu on ne puisse pas
-     * fabriquer un block hyperactif en s envoyant mille GM a soi-meme */
-    gm: Math.max(0, Math.min(1, Number(gm) / 10)),
-    part: Math.max(0, Math.min(1, Number(part))),
+    /* ⛔ BORNES : on ne fabrique pas un block hyperactif en s envoyant mille GM a soi-meme. */
+    gm: borne01(gm, 10),
+    messages: borne01(messages, 5),
+    detenteurs: borne01(detenteurs, 5),
+    part: Math.max(0, Math.min(1, Number(part) || 0)),
     scelle: scelle === true ? 1 : 0,
+    mort: mort === true,
   };
 }
 
+/** La nourriture recue hors marche, entre 0 et 1. */
+function nourriture(f) {
+  return Math.min(1, f.gm * 0.5 + f.messages * 0.3 + f.detenteurs * 0.4);
+}
+
 /**
- * Un pas de temps. Rend le nouvel etat ET ce qui se voit : battements d ailes, virage, vitesse, phase.
- * ⛔ SANS MARCHE, LE CERVEAU DORT et le dit (`DORMANT`). Il continue de tirer faiblement — un block
- *    jamais echange n est pas eteint, il est endormi.
+ * Un pas de temps. Rend le nouvel etat ET ce qui se voit.
+ * ⛔ UN BLOCK MORT NE RECOIT PLUS AUCUN COURANT : son reseau s eteint pour de vrai. Le dire « mort » tout
+ *    en le laissant tirer serait une animation qui ment.
  */
 export function pas(etat, faits = {}) {
   const f = courant(faits);
   const { c } = etat;
   const p = etat.potentiels.slice();
   const suivant = tirage((parseInt(c.empreinte.slice(10, 18), 16) ^ etat.tick) >>> 0);
+  const miam = nourriture(f);
 
-  /* les capteurs recoivent les faits ; le reste du reseau ne recoit que ses voisins */
-  for (let i = 0; i < CAPTEURS; i++) {
-    const bruit = suivant() * 0.10;
-    /* ⛔⛔ LE COURANT DE REPOS EST CE QUI SEPARE « ENDORMI » DE « ETEINT », ET MA PREMIERE VERSION
-     * ETAIT ETEINTE : 0,06 de courant avec une fuite de 0,82 plafonne a 0,06/(1-0,82) = 0,33, sous
-     * le seuil de 1 — un block sans marche ne tirait JAMAIS. Le test l a attrape. Avec 0,15 et un
-     * bruit jusqu a 0,10, le potentiel de repos tourne autour de 1,1 : il tire RAREMENT, ce qui est
-     * exactement ce qu on voulait dire par « jamais echange n est pas mort ». */
-    p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 : 0.15) + f.delta * 0.4 + f.gm * 0.5 + bruit;
+  if (!f.mort) {
+    for (let i = 0; i < CAPTEURS; i++) {
+      const bruit = suivant() * PARAMETRES.bruitMax;
+      /* ⛔ LE COURANT DE REPOS SEPARE « ENDORMI » DE « ETEINT » : avec 0,15 et un bruit jusqu a 0,10, le
+       * potentiel tourne autour de 1,1 — il tire RAREMENT. La nourriture s ajoute, avec ou sans marche. */
+      p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 : PARAMETRES.reposSansMarche)
+        + f.delta * 0.4 + miam * 0.6 + bruit;
+    }
   }
   let spikes = 0;
   const actifs = [];
   for (let i = 0; i < NEURONES; i++) {
-    if (p[i] >= SEUIL) {
+    if (p[i] >= PARAMETRES.seuil) {
       spikes++;
       actifs.push(i);
       p[i] = 0;
       for (const l of c.liens[i]) p[l.vers] += l.poids * 0.5;
     } else {
-      p[i] *= FUITE;
+      p[i] *= PARAMETRES.fuite;
     }
-    /* ⛔ BORNES DURES : sans elles, un poids positif en boucle fait diverger le potentiel vers
-     * l infini, et `left_hz` devient NaN — un NaN traverse toutes les comparaisons sans rien dire. */
+    /* ⛔ BORNES DURES : sans elles un potentiel diverge et `left_hz` devient NaN. */
     if (!Number.isFinite(p[i])) p[i] = 0;
     p[i] = Math.max(-4, Math.min(4, p[i]));
   }
 
   const tireG = actifs.filter((i) => (i + c.aileG) % 3 === 0).length;
   const tireD = actifs.filter((i) => (i + c.aileD) % 3 === 0).length;
-  /* 12 Hz de battement de base, comme un insecte au repos ; le reste vient de l activite */
-  const gauche = Math.round((12 + tireG * 4 + f.taille * 18) * 100) / 100;
-  const droite = Math.round((12 + tireD * 4 + f.taille * 18) * 100) / 100;
+  const base = f.mort ? 0 : 12;
+  const gauche = Math.round((base + tireG * 4 + f.taille * 18) * 100) / 100;
+  const droite = Math.round((base + tireD * 4 + f.taille * 18) * 100) / 100;
   const somme = gauche + droite;
   const virage = somme > 0 ? Math.round(((gauche - droite) / somme) * 1000) / 1000 : 0;
   const vitesse = Math.round(Math.min(1, spikes / 40) * 1000) / 1000;
 
-  let phase = 'DORMANT';
-  if (f.aMarche) {
-    if (f.delta <= -0.05) phase = 'INQUIET';
-    else if (f.delta >= 0.05 || f.gm > 0.3) phase = 'EXCITE';
-    else if (spikes > 8) phase = 'CURIEUX';
-    else phase = 'CALME';
-  }
+  /* ⛔ L ORDRE DES REGLES EST LA REGLE : la mort d abord, puis sans marche (nourri ou non), puis le marche. */
+  let phase;
+  if (f.mort) phase = 'MORT';
+  else if (!f.aMarche) phase = miam > 0 ? 'EVEILLE' : 'DORMANT';
+  else if (f.delta <= -0.05) phase = 'INQUIET';
+  else if (f.delta >= 0.05 || f.gm > 0.3 || f.detenteurs > 0.3) phase = 'EXCITE';
+  else if (spikes > 8) phase = 'CURIEUX';
+  else phase = 'CALME';
 
   const nouvel = { c, tick: etat.tick + 1, potentiels: p, spikes, dernierSpikes: etat.spikes };
   return {
@@ -175,14 +201,13 @@ export function pas(etat, faits = {}) {
       vitesse,
       spikes,
       actifs: actifs.length,
-      /* ⛔ LES INDICES, PAS SEULEMENT LE COMPTE. Un ecran qui dessine « 12 neurones ont tire » sans
-       * savoir LESQUELS dessinerait douze points au hasard — une animation qui a l air d une mesure.
-       * Avec les indices, le trace est la lecture elle-meme. */
+      /* ⛔ LES INDICES, PAS SEULEMENT LE COMPTE : le trace est la lecture elle-meme. */
       indices: actifs,
       phase,
-      /* ⛔ L EMPREINTE DE L ENTREE VOYAGE AVEC LA SORTIE. C est ce qui rend une simulation
-       * verifiable au lieu de decorative : deux personnes peuvent rejouer le meme pas. */
-      entree: empreinte(JSON.stringify([f.aMarche, f.taille, f.delta, f.gm, f.part, f.scelle, etat.tick])),
+      nourriture: Math.round(miam * 1000) / 1000,
+      /* ⛔ L EMPREINTE DE L ENTREE PORTE LA VERSION ET CHAQUE FAIT : deux personnes rejouent le meme pas. */
+      entree: empreinte(JSON.stringify([VERSION_CERVEAU, f.aMarche, f.taille, f.delta, f.gm, f.messages,
+        f.detenteurs, f.part, f.scelle, f.mort, etat.tick])),
     },
   };
 }
@@ -191,10 +216,12 @@ export function pas(etat, faits = {}) {
 export function phraseDePhase(phase, symbole) {
   const nom = symbole ? String(symbole) : 'this block';
   return {
-    DORMANT: nom + ' is asleep: never traded yet. Not dead — untouched.',
+    DORMANT: nom + ' is asleep: no market and nothing received yet. Not dead — untouched.',
+    EVEILLE: nom + ' is awake: no market yet, but its community feeds it — GMs, messages, new holders.',
     CALME: nom + ' is calm. Its market is steady.',
     CURIEUX: nom + ' is restless, looking around.',
-    EXCITE: nom + ' is buzzing: its life went up, or someone sent it a GM.',
+    EXCITE: nom + ' is buzzing: its life went up, or it was fed.',
     INQUIET: nom + ' is agitated: its life went down. Nobody refunds that.',
+    MORT: nom + ' is dead: its creator no longer holds any of it.',
   }[phase] || nom + ' is quiet.';
 }

@@ -1093,6 +1093,10 @@ const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(faceConnue(adr) |
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
 let anim = null;
+/* ⛔ TOUTES LES CREATIONS LUES, pas seulement les 22 affichees : la recherche doit trouver un block que la
+ * map a lu sans avoir la place de le montrer (mesure du 2026-09-13 : 87 lues, 22 affichees, et « TTB »
+ * repondait « pas sur la map »). */
+let creationsLues = [];
 
 /**
  * Poser UN block sur la map.
@@ -1324,21 +1328,55 @@ $('#fOuvrir').addEventListener('click', async () => {
   note.textContent = l.join(' · ');
 });
 
-$('#bTrouver').addEventListener('click', () => {
-  const q = String($('#trouver').value || '').trim().toLowerCase();
+/**
+ * Trouver un block : par adresse, par symbole exact, puis par symbole partiel.
+ * ⛔⛔ TROIS DEFAUTS MESURES EN PROD LE 2026-09-13 (Phil : « la barre de recherche marche pas ») :
+ *    1. ENTREE NE FAISAIT RIEN — seul le clic sur « Find » cherchait ;
+ *    2. elle ne cherchait que les 22 blocks AFFICHES, pas les 87 LUS ;
+ *    3. une adresse collee posait une tuile dont la fiche disait « ? » et « life not read yet » — rien
+ *       n etait lu, on aurait dit une panne.
+ * ⛔ L EXACT AVANT LE PARTIEL : « T » ne doit pas ouvrir le premier block dont le symbole contient un T.
+ * ⛔ UNE ADRESSE INCONNUE DE LA FENETRE OUVRE SON PROFIL, qui la lit sur la chaine (nom, vie, face,
+ *    cerveau) — au lieu d une tuile muette.
+ */
+function chercherBlock() {
+  const brut = String($('#trouver').value || '').trim();
+  const q = brut.toLowerCase();
+  const note = $('#mapNote');
   if (!q) return;
-  let h = habitants.find((x) => String(x.sym || '').toLowerCase().includes(q)
-    || String(x.adr).toLowerCase() === q);
-  /* ⛔ UNE ADRESSE COMPLETE ABSENTE DE LA MAP Y EST POSEE, au lieu d un « pas ici ». La vie sera lue
-   * par sa fiche et son profil ; tant qu elle ne l est pas, le block est pale et dit « not read yet ». */
-  if (!h && ADRESSE.test(q)) h = creerHabitant({ jeton: String($('#trouver').value).trim(), symbole: null, vie: null });
+  let h = habitants.find((x) => String(x.adr).toLowerCase() === q)
+    || habitants.find((x) => String(x.sym || '').toLowerCase() === q)
+    || habitants.find((x) => String(x.sym || '').toLowerCase().includes(q));
   if (!h) {
-    $('#mapNote').textContent = 'Not among the blocks on this map. This map shows what we read in '
-      + 'one window of chain history — not every block that exists.';
+    const c = creationsLues.find((x) => String(x.jeton).toLowerCase() === q)
+      || creationsLues.find((x) => String(x.symbole || '').toLowerCase() === q)
+      || creationsLues.find((x) => String(x.symbole || '').toLowerCase().includes(q));
+    if (c) {
+      h = creerHabitant({ jeton: c.jeton, symbole: c.symbole, vie: null });
+      if (!anim) animer();
+    }
+  }
+  if (!h && ADRESSE.test(brut)) {
+    const pose = creerHabitant({ jeton: brut, symbole: null, vie: null });
+    if (!anim) animer();
+    note.textContent = 'Not in the recent window of the map — opening its profile to read it from the chain.';
+    pose.el.classList.add('actif');
+    void ouvrirProfil(brut, null);
     return;
   }
+  if (!h) {
+    note.textContent = 'No block named « ' + brut + ' » among the ' + creationsLues.length
+      + ' read in the recent window. Older blocks are not indexed here yet — paste its address to open it.';
+    return;
+  }
+  note.textContent = '';
   h.el.click();
   h.el.scrollIntoView({ block: 'center' });
+}
+$('#bTrouver').addEventListener('click', chercherBlock);
+/* ⛔ ENTREE CHERCHE — c est le geste que tout le monde fait dans une barre de recherche. */
+$('#trouver').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); chercherBlock(); }
 });
 
 async function charger() {
@@ -1347,6 +1385,7 @@ async function charger() {
     const r = await listerCreations({ rpc, blocs: 9000 });
     const vues = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || ''));
     const ratees = (r.fenetresRatees || []).length;
+    creationsLues = vues;
     if (!vues.length) {
       /* ⛔ « JE N AI PAS PU LIRE » N EST PAS « IL N Y A RIEN ». Les confondre a deja fait
        * disparaitre une section entiere de l autre ecran, sans un mot d explication. */
@@ -2154,7 +2193,17 @@ async function lireProfil(adr, sym, perime) {
   if (f) {
     /* le dessin depend du symbole : on ne le refait que s il manquait a l ouverture */
     if (f.symbole && !sym) { $('#pAvatar').innerHTML = dessin(adr, f.symbole); }
-    if (f.symbole) { $('#pSym').textContent = f.symbole; symProfil = f.symbole; }
+    if (f.symbole) {
+      $('#pSym').textContent = f.symbole;
+      symProfil = f.symbole;
+      /* ⛔ LE NOM LU MET A JOUR LA TUILE : un block pose par adresse ne reste pas « ? » sur la map. */
+      const hMap = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
+      if (hMap && !hMap.sym) {
+        hMap.sym = f.symbole;
+        const etiq = hMap.el.querySelector('.etiq');
+        if (etiq) etiq.textContent = String(f.symbole).slice(0, 10);
+      }
+    }
     else if (!sym) $('#pSym').textContent = 'symbol not read';
     $('#pNomLong').textContent = f.nom || '';
     /* ⛔ LE MARQUEUR EST LE CODE, PAS LE PREFIXE D ADRESSE (EIP-3541 : `0xef` est infalsifiable). */
