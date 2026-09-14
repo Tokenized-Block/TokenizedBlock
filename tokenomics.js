@@ -12,8 +12,8 @@ export const DECIMALES_FIXES = 18;
 export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 /** TBLOCK, lu dans le log B20Created de la tx 0xda396460…4cf3 (bloc 51 260 745). */
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
-/** Adresse MINEE du hook (simulation forge sans --broadcast, 2026-09-13) — PAS une adresse deployee. */
-export const HOOK_PREVU = '0xc3Fc7C671Dc2bA698943E7Cd961A0F561585E044';
+/** TbFeeHook LIVE on Base (CREATE2 salt 38, tx 0xb7413aa4…88c3, 2026-09-15). */
+export const HOOK_PREVU = '0x34E3920fF955CA062Cf5A8372D4CC5C653fB6044';
 /* ⛔ When hook deploys: on-chain fee recipient MUST be 0x37eb…580a (FEE_WALLET). ABSENT today. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 
