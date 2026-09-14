@@ -1131,6 +1131,7 @@ import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
+import { decouvrirPools } from './pools-du-jeton.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
@@ -2910,6 +2911,11 @@ const LIVE_MS = 20000, LIVE_FENETRE = 1999;
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /* le filtre du fil Live : un tri de LECTURE, il ne change ni ce qui est lu ni ce qui est compte */
 let liveFiltre = 'TOUT';
+/* ⛔⛔ LES VRAIES POOLS (2026-09-14, mesure : 2 swaps sur 425 tombaient sur nos 6 cles devinees) : decouvertes par les
+ *    logs Initialize, gardees pour la page ; et les blocks trouves en remontant le fil (« Load older ») sont suivis aussi. */
+let poolsLive = new Map(), decouverteJusqua = null;
+const creationsLive = new Map();
+const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
   if (liveFiltre === 'TOUT') return true;
   if (liveFiltre === 'NOUS') return estANous(e.jeton);
@@ -2929,6 +2935,7 @@ function blocksSuivisLive() {
   for (const c of creationsLues) {
     m.set(String(c.jeton).toLowerCase(), { jeton: c.jeton, sym: c.symbole, dec: Number.isInteger(c.decimales) ? c.decimales : null });
   }
+  for (const [k, c] of creationsLive) if (!m.has(k)) m.set(k, c);
   for (const h of habitants) {
     const k = String(h.adr).toLowerCase();
     if (!m.has(k)) m.set(k, { jeton: h.adr, sym: h.sym, dec: null });
@@ -2954,16 +2961,29 @@ async function lireLive(sens) {
       if (deBloc > aBloc) return;
     }
     $('#sfLiveNote').textContent = 'reading chain blocks ' + deBloc.toLocaleString('en-US') + '–' + aBloc.toLocaleString('en-US') + '…';
-    const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250 });
+    /* decouverte des pools : au premier tour, DECOUVERTE_INITIALE blocs en arriere ; ensuite la fenetre lue */
+    const deDec = sens === 'ancien' ? deBloc : decouverteJusqua === null ? Math.max(0, fin - DECOUVERTE_INITIALE) : decouverteJusqua + 1;
+    if (deDec <= aBloc) {
+      const d = await decouvrirPools({ rpc, poolManager: V.poolm, deBloc: deDec, aBloc, jetons: null, pause: 250 });
+      d.pools.forEach((p, id) => poolsLive.set(id, p));
+      liveRatees += d.fenetresRatees.length;
+      if (sens !== 'ancien' && !d.fenetresRatees.length) decouverteJusqua = aBloc;
+    }
+    const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250, poolsDecouvertes: poolsLive });
     liveRatees += r.fenetresRatees.length;
     const deja = new Set(liveEvts.map(cleEvtLive));
     const nouveaux = r.evenements.filter((e) => !deja.has(cleEvtLive(e)));
     for (const e of nouveaux) liveEvts.push(e);
+    /* un block cree dans une fenetre lue (meme ancienne) est suivi a partir de maintenant */
+    for (const e of nouveaux) {
+      if (e.type === 'CREATION' && !creationsLive.has(e.jeton)) creationsLive.set(e.jeton, { jeton: e.jeton, sym: e.sym, dec: e.dec ?? null });
+    }
     /* ⛔ LES CERVEAUX SENTENT LES ECHANGES — sauf la PREMIERE fenetre lue : des achats d il y a une heure ne sont pas
      *    « nouveaux » a l ouverture de la page (sinon tous les blocks parleraient d un coup de leur passe). */
     if (sens !== 'ancien' && liveDernier !== null) {
       for (const e of nouveaux) {
-        if (e.type !== 'ACHAT' && e.type !== 'VENTE') continue;
+        /* ⛔ seuls les echanges VERIFIES (pool sans hook, devise prouvee) nourrissent un cerveau */
+        if ((e.type !== 'ACHAT' && e.type !== 'VENTE') || !e.verifie) continue;
         const hE = habitants.find((x) => String(x.adr).toLowerCase() === String(e.jeton).toLowerCase());
         if (!hE) continue;
         if (e.type === 'ACHAT') hE.achatsVus = (hE.achatsVus || 0) + 1; else hE.ventesVus = (hE.ventesVus || 0) + 1;
@@ -2982,23 +3002,54 @@ async function lireLive(sens) {
   }
 }
 
+/* affichage seulement : « 22146.665951691321294165 » devient « 22,146.67 » ; un petit montant garde ses chiffres
+ * significatifs (« 0.0000495 ») ; le montant exact reste dans la transaction liee */
+function lisible(texte) {
+  const x = Number(texte);
+  if (!Number.isFinite(x)) return String(texte ?? '?');
+  if (x !== 0 && Math.abs(x) < 1) return String(Number(x.toPrecision(3)));
+  return x.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
-  $('#sfLive').innerHTML = montres.map((e) => {
+  /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
+   *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
+   *    echanges neutres CONSECUTIFS d un meme block tiennent en UNE ligne, avec leur nombre et leur plage de blocs. */
+  const lignes = [];
+  for (const e of montres) {
+    const der = lignes[lignes.length - 1];
+    if (e.type === 'SWAP' && der && der.type === 'SWAP' && der.jeton === e.jeton && der.confiance === e.confiance) {
+      der.n = (der.n || 1) + 1;
+      der.blocBas = e.bloc;
+      continue;
+    }
+    lignes.push({ ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc });
+  }
+  $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
-      : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> bought · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
-        : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> sold · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
-          : '↔ <b>' + nom + '</b> swapped · amounts not read (decimals unknown)';
-    const lien = e.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
+      : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
+        : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
+          : e.confiance === 'HOOK'
+            ? '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' ' + e.n + ' times' : '') + ' on a pool with a hook · no amount shown (a hook can change them)'
+            : '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' ' + e.n + ' times' : '') + ' · amounts not read (decimals or pair not known)';
+    const lien = e.tx && e.n === 1 ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
+    const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
+      ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
+      : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + '</p><p class="filS">block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?') + lien + '</p></div></li>';
-  }).join('');
+      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + '</p></div></li>';
+  }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
+    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Trades on pools with a hook are listed under All, without amounts.</p></li>' : '');
+  const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
+  const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
+  const parConf = (c) => pools.filter((p) => p.confiance === c).length;
   $('#sfLiveNote').textContent = (liveFiltre !== 'TOUT' ? montres.length + ' shown · ' : '')
     + (liveEvts.length ? liveEvts.length + ' event(s)' : 'Nothing happened')
     + (livePlusAncien !== null && liveDernier !== null
       ? ' between chain blocks ' + livePlusAncien.toLocaleString('en-US') + ' and ' + liveDernier.toLocaleString('en-US') : '')
-    + ' · ' + blocksSuivisLive().length + ' blocks followed, swaps on their ETH markets'
+    + ' · ' + suivis.size + ' blocks followed · ' + pools.length + ' pools found on chain (' + parConf('NOTRE') + ' app format, '
+    + parConf('SANS_HOOK') + ' without hook, ' + parConf('HOOK') + ' with a hook) plus the app\'s own market keys'
     + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '') + '.';
   /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-13) : le repere du bas etait DEJA visible avant la premiere
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se

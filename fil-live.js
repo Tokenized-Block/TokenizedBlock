@@ -11,8 +11,10 @@
 // ⚠️ Le routeur n est pas l acheteur : ce module ne nomme personne.
 import { listerCreations } from './index-blocks.js';
 import { listerAchats, achatDepuisSwap } from './achats.js';
-import { CLES_MARCHE } from './marche.js';
+import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
+import { TBLOCK } from './tokenomics.js';
+import { confianceDe } from './pools-du-jeton.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP'];
@@ -27,10 +29,25 @@ export function poolsSuivies(blocks) {
     for (const k of CLES_MARCHE) {
       const cle = cleDePool(ETH_NATIF, b.jeton, { fee: k.fee, tickSpacing: k.tickSpacing });
       out.set(poolId(cle), { cle, jeton: String(b.jeton).toLowerCase(), sym: b.sym ?? null,
-        dec: Number.isInteger(b.dec) ? b.dec : null });
+        dec: Number.isInteger(b.dec) ? b.dec : null, confiance: confianceDe(cle) });
+    }
+    /* ⛔ la paire TBLOCK/block du lancement de l app est suivie elle aussi (elle ne l etait pas, mesure 2026-09-14) */
+    if (String(b.jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
+      const cle = cleDePool(TBLOCK, b.jeton, CLE_TBLOCK);
+      out.set(poolId(cle), { cle, jeton: String(b.jeton).toLowerCase(), sym: b.sym ?? null,
+        dec: Number.isInteger(b.dec) ? b.dec : null, confiance: confianceDe(cle) });
     }
   }
   return out;
+}
+
+/** Le nom de la devise d une pool, SEULEMENT si elle est prouvee : ETH natif (0x0) ou TBLOCK. Sinon null. */
+function deviseConnue(cle, jeton) {
+  const autre = String(cle.currency0).toLowerCase() === String(jeton).toLowerCase() ? cle.currency1 : cle.currency0;
+  const a = String(autre).toLowerCase();
+  if (a === ETH_NATIF) return { nom: 'ETH', dec: 18 };
+  if (a === TBLOCK.toLowerCase()) return { nom: 'TBLOCK', dec: 18 };
+  return null;
 }
 
 /**
@@ -39,7 +56,7 @@ export function poolsSuivies(blocks) {
  * ⛔ Une fenetre ratee est rendue, jamais comptee comme silence.
  */
 export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, pause = 0,
-  lireCreations = listerCreations }) {
+  lireCreations = listerCreations, poolsDecouvertes = null }) {
   const evenements = [], fenetresRatees = [];
   const vus = new Set();
   const ajouter = (e) => {
@@ -53,10 +70,21 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
   for (const f of cr.fenetresRatees || []) fenetresRatees.push({ ...f, quoi: 'creations' });
   for (const c of cr.creations || []) {
     if (!Number.isFinite(c.bloc) || c.bloc < deBloc || c.bloc > aBloc) continue;
-    ajouter({ type: 'CREATION', bloc: c.bloc, jeton: String(c.jeton).toLowerCase(), sym: c.symbole ?? null, tx: c.tx ?? null });
+    ajouter({ type: 'CREATION', bloc: c.bloc, jeton: String(c.jeton).toLowerCase(), sym: c.symbole ?? null, tx: c.tx ?? null,
+      dec: Number.isInteger(c.decimales) ? c.decimales : null });
   }
 
   const pools = poolsSuivies(blocks);
+  /* ⛔ les pools DECOUVERTES (Initialize) des blocks suivis s ajoutent aux cles devinees — jamais celles d un autre jeton */
+  if (poolsDecouvertes && typeof poolsDecouvertes.forEach === 'function') {
+    const decs = new Map((blocks || []).map((b) => [String(b.jeton).toLowerCase(), b]));
+    poolsDecouvertes.forEach((p, id) => {
+      const b = decs.get(String(p.jeton).toLowerCase());
+      if (!b || pools.has(id)) return;
+      pools.set(id, { cle: p.cle, jeton: String(p.jeton).toLowerCase(), sym: b.sym ?? null,
+        dec: Number.isInteger(b.dec) ? b.dec : null, confiance: p.confiance || confianceDe(p.cle) });
+    });
+  }
   const ids = [...pools.keys()];
   for (let i = 0; i < ids.length; i += IDS_PAR_REQUETE) {
     const r = await listerAchats({ rpc, poolManager, poolIds: ids.slice(i, i + IDS_PAR_REQUETE), deBloc, aBloc, pause });
@@ -65,11 +93,16 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
       const p = pools.get(s.poolId);
       if (!p) continue;
       let type = 'SWAP', quantite = null, eth = null;
-      if (p.dec !== null) {
-        const a = achatDepuisSwap({ swap: s, cle: p.cle, jeton: p.jeton, decJeton: p.dec, decDevise: 18 });
+      const confiance = p.confiance || confianceDe(p.cle);
+      const devise = deviseConnue(p.cle, p.jeton);
+      /* ⛔⛔ ACHAT / VENTE SEULEMENT SUR UNE POOL SANS HOOK A DEVISE PROUVEE (ETH natif ou TBLOCK). Sur une pool a hook, le
+       *    hook peut changer les montants : echange NEUTRE, sans montant, et les cerveaux ne s en nourrissent pas. */
+      if (p.dec !== null && confiance !== 'HOOK' && devise) {
+        const a = achatDepuisSwap({ swap: s, cle: p.cle, jeton: p.jeton, decJeton: p.dec, decDevise: devise.dec });
         if (a.etat === 'ACHAT' || a.etat === 'VENTE') { type = a.etat; quantite = a.quantiteBlockTexte; eth = a.quantiteDeviseTexte; }
       }
-      ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, eth });
+      ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, eth,
+        devise: type === 'SWAP' ? null : devise.nom, confiance, verifie: type !== 'SWAP' });
     }
   }
   evenements.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
