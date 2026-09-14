@@ -15,7 +15,7 @@ import { FEE_WALLET, CREATE_ROUTER } from './frais-creation.js';
 import { listerAchats, achatDepuisSwap } from './achats.js';
 import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
-import { TBLOCK, SUPPLY_FIXE, PART_FRAIS_POUR_CENT } from './tokenomics.js';
+import { TBLOCK } from './tokenomics.js';
 import { confianceDe } from './pools-du-jeton.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -25,31 +25,14 @@ const GM_MAX_UNITES = 1_000_000n * 10n ** 18n;
  *    (ni creation, ni jambe de swap) ; NOTE = transfert de 0 portant un message ; MESSAGE = message PAYE entre blocks. */
 export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE'];
 
-/** True if create tx minted the TB 5% sealed share to FEE_WALLET (50M of 1B × 18 decimals).
- * ⛔ Clansy 2026-09-14: any 1-wei mint to fee used to count as Fee mint — that flattered capture. */
-const MINT_FRAIS_ATTENDU = (SUPPLY_FIXE * PART_FRAIS_POUR_CENT) / 100n;
-async function creationPayee({ rpc, jeton, tx }) {
-  if (!tx || !jeton || !rpc) return false;
+/** True if create went through CreateRouter (paid ETH fee path).
+ * ⛔ Raksha 2026-09-14: do NOT key on 50M mint — fee is ETH only; supply is 100% creator. */
+async function creationPayee({ rpc, tx }) {
+  if (!tx || !rpc) return false;
   try {
-    /* Router path is paid by construction (createPaid). */
-    try {
-      const raw = await rpc('eth_getTransactionByHash', [tx]);
-      if (raw && String(raw.to || '').toLowerCase() === String(CREATE_ROUTER).toLowerCase()) return true;
-    } catch (_) { /* fall through to mint proof */ }
-    const r = await rpc('eth_getTransactionReceipt', [tx]);
-    const zero = '0x' + '0'.repeat(64);
-    const feeTopic = topicAdresse(FEE_WALLET);
-    if (!feeTopic) return false;
-    const j = String(jeton).toLowerCase();
-    for (const l of (r && r.logs) || []) {
-      if (String(l.address).toLowerCase() !== j) continue;
-      if (!l.topics || String(l.topics[0]).toLowerCase() !== String(TOPIC_TRANSFER).toLowerCase()) continue;
-      if (String(l.topics[1]).toLowerCase() !== zero) continue;
-      if (!(l.topics[2] && String(l.topics[2]).toLowerCase() === feeTopic.toLowerCase())) continue;
-      const amt = BigInt(l.data || '0x0');
-      if (amt === MINT_FRAIS_ATTENDU) return true;
-    }
-  } catch (_) { /* unread ≠ unpaid: leave false; badge says unpaid only when read */ }
+    const raw = await rpc('eth_getTransactionByHash', [tx]);
+    if (raw && String(raw.to || '').toLowerCase() === String(CREATE_ROUTER).toLowerCase()) return true;
+  } catch (_) { /* unread ≠ unpaid */ }
   return false;
 }
 
@@ -134,10 +117,10 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
     if (!Number.isFinite(c.bloc) || c.bloc < deBloc || c.bloc > aBloc) continue;
     const jeton = String(c.jeton).toLowerCase();
     const tx = c.tx ?? null;
-    /* ⛔ Fee mint = 5% mint to FEE_WALLET in the create tx (app path). External launchers usually mint 100% elsewhere. */
+    /* ⛔ Paid = CreateRouter tx.to (ETH fee). External / factory-raw = unpaid. */
     let paidCreate = false;
     if (tx) {
-      paidCreate = await creationPayee({ rpc, jeton, tx });
+      paidCreate = await creationPayee({ rpc, tx });
       if (pause) await new Promise((r) => setTimeout(r, pause));
     }
     ajouter({ type: 'CREATION', bloc: c.bloc, jeton, sym: c.symbole ?? null, tx,

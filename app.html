@@ -593,7 +593,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). Mainnet Create goes through <b>CreateRouter</b> only (one signature: fee ETH + forced 5% mint to <code>0x37eb…580a</code>). Creates that skip this app (raw factory) pay nothing — we cannot force the Base precompile. Not a safety score.</p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet fee is <b>≈ $1 in ETH</b> (USDC/ETH Uniswap median) → fee wallet <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing — we cannot force the Base precompile. Not a safety score.</p>
       <p class="note" id="cBuybackHint">After the fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Create fee ≠ automatic buyback, and nothing pegs price.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
@@ -4439,7 +4439,7 @@ function utiliseCreateRouter() {
 function calldataCreation(v) {
   const params = paramsAsset({ nom: v.nom, symbole: v.sym, admin: compte, decimales: DECIMALES_FIXES });
   if (utiliseCreateRouter()) {
-    /* Router strips any cap/mint and force-appends sealed 1B + 5%/95%. URI only keeps calldata small. */
+    /* Router strips any cap/mint and force-appends sealed 1B → 100% creator. URI only keeps calldata small. */
     const initCalls = [encodeUpdateContractURI(uriCreation())];
     return encodeCreatePaid({ variant: 0, saltTexte: v.sel, params, initCalls, creator: compte });
   }
@@ -4514,7 +4514,7 @@ function majFraisEtRecap() {
     : '';
   $('#cRecap').textContent = v.ko
     ? v.ko
-    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — 95 % to you, 5 % to the TokenizedBlock fee wallet'
+    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — all to you'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.';
   $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
@@ -4533,16 +4533,13 @@ function majFraisEtRecap() {
     }
     liste.innerHTML = txs.map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte });
-      const rep = repartitionFrappe(SUPPLY_FIXE, compte);
       const toL = String(tx.to || '').toLowerCase();
       const estCreate = toL === String(FACTORY).toLowerCase() || toL === String(CREATE_ROUTER).toLowerCase();
       const extra = estCreate ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
-        'Supply: 1,000,000,000, sealed — ' + BigInt(formaterUnites(rep.createur, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US') + ' to you'
-          + (rep.frais > 0n ? ', ' + BigInt(formaterUnites(rep.frais, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US')
-            + ' (5 %) to the TokenizedBlock fee wallet' : ''),
+        'Supply: 1,000,000,000, sealed — all to you',
         'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
         ...(toL === String(CREATE_ROUTER).toLowerCase()
-          ? ['Via CreateRouter — fee ETH forwarded only after create succeeds'] : [])] : [];
+          ? ['Via CreateRouter — ≈ $1 ETH fee (oracle) to fee wallet only after create succeeds; no token mint split'] : [])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. Hooked TBLOCK markets wait on the fee-hook audit.</li>';
   }
@@ -5159,7 +5156,7 @@ function dessinerReseau(vu = null) {
  *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — ≈ $1 ETH (Uniswap median, floor 0.0003) forwarded to the fee wallet only after create succeeds; sealed 5% mint forced on-chain. Practice is free. Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
+    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — ≈ $1 ETH (USDC/ETH Uniswap median, floor 0.0003) forwarded to the fee wallet only after create succeeds; sealed 1B all to you (no 5%/50M mint to fee). Practice is free. Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
     d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',

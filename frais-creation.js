@@ -11,7 +11,7 @@
 
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire. */
 export const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
-/** Base mainnet CreateRouter — fee ETH + forced sealed 1B mint (deployed 2026-09-14). */
+/** Base mainnet CreateRouter — fee ETH + forced sealed 1B to creator (redeploy pending if mint still 5%). */
 export const CREATE_ROUTER = '0xd0a69ca617ceedcf66329802ce9d462347f1f148';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */
 export const CREATE_FEE_WEI_FLOOR = 300000000000000n;

@@ -102,7 +102,7 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Create a block', lignes };
   }
   if (sel === S.createPaid && to === String(CREATE_ROUTER).toLowerCase()) {
-    lignes.push('Creates via CreateRouter: sealed 1B + 5% fee mint; ETH fee forwarded only after create succeeds.');
+    lignes.push('Creates via CreateRouter: sealed 1B all to you; ≈ $1 ETH fee (USDC/ETH oracle) forwarded to the fee wallet only after create succeeds.');
     return { etat: 'LUE', action: 'Create a block (paid)', lignes };
   }
   if ((sel === S.multicall || sel === S.modify) && V.posm && to === V.posm.toLowerCase()) {
