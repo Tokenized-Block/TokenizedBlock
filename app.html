@@ -832,7 +832,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260914-1923">Build <code>20260914-1923</code> · <b>Fee mint</b> = 5% of supply to <code>0x37eb…580a</code> (+ ETH Stage‑1 on this app). <b>All (quiet)</b> hides external creates and hook-pool trades — use <b>No fee mint</b> / <b>Swap</b> to inspect. Fee mint ≠ safe/scam.</p>
+      <p class="note" data-build="20260914-2012">Build <code>20260914-2012</code> · <b>All</b> hides external creates (no TB fee path) and hook-pool trades — use <b>Created</b> / <b>Swap</b> to inspect the full chain.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3040,7 +3040,7 @@ const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
   /* ⛔ 2026-09-14: All hides noise that drowns usable feed —
-   * unpaid creates (external launchers) + hook-pool swaps (amounts untrusted / no qty).
+   * external creates (no TB fee path) + hook-pool swaps (amounts untrusted / no qty).
    * Created chip shows all creates; All (quiet) still hides external creates + hook swaps. */
   if (liveFiltre === 'TOUT') {
     if (e.type === 'CREATION' && e.paidCreate !== true) return false;
@@ -3049,8 +3049,6 @@ function filtreLive(e) {
   }
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
-  if (liveFiltre === 'PAID_CREATE') return e.type === 'CREATION' && e.paidCreate === true;
-  if (liveFiltre === 'UNPAID_CREATE') return e.type === 'CREATION' && e.paidCreate !== true;
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
