@@ -145,7 +145,10 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
     mort: mort === true,
     /* ⛔ SEULEMENT LE LIBELLE : le courant est le meme (vie null dans les deux cas), donc les potentiels et
      *    l empreinte d entree ne changent pas — un enregistrement deja grave se rejoue a l identique. */
-    nonLu: !aMarche && etatVie === 'NON_LUE',
+    /* ⛔⛔ VU EN PROD (2026-09-14, « TBLOCK: I am asleep now ») : la map ecrivait etatVie = 'LUE' AVANT la vie (lectures
+     *    de face et de nourriture entre les deux) — « lu mais sans vie » tombait en DORMANT. Une vie absente n est un
+     *    « pas de marche » que sur NON_TROUVEE. */
+    nonLu: !aMarche && (etatVie === 'NON_LUE' || etatVie === 'LUE'),
     nouveau: Math.min(1, nouveaux.gm * 0.5 + nouveaux.messages * 0.5 + nouveaux.detenteurs * 0.5),
     nouveaux,
     avecAvant,

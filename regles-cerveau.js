@@ -145,6 +145,8 @@ const REGLE_ECRITE = {
 export function ecrireRegles(compteurs) {
   const c = compteurs || {};
   return DECLENCHEURS
+    /* ⛔ market_unread = notre reseau, pas le block : le block n ecrit pas de regle sur nos pannes (mesure 2026-09-14) */
+    .filter((e) => e !== 'market_unread')
     .filter((e) => (Number(c[e]) || 0) >= 2)
     .sort((a, b) => (Number(c[b]) - Number(c[a])) || (DECLENCHEURS.indexOf(a) - DECLENCHEURS.indexOf(b)))
     .slice(0, REGLES_MAX)

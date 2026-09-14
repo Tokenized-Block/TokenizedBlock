@@ -15,7 +15,11 @@ export const PAROLE_ECART_BATTEMENTS = 50;
 export const PAROLES_MAX_PAR_TOUR = 4;
 export const TYPES_PAROLE = ['DIT', 'REPOND'];
 
-const PRIORITE = ['new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up', 'mood_changes', 'market_unread'];
+/* ⛔⛔ MESURE (Phil + prod, 2026-09-14) : 16 lignes sur 20 disaient « I cannot see my market right now » ou un changement
+ *    d humeur qui sortait d une lecture ratee. Ca parle de NOTRE reseau, pas du block. Un block ne parle donc que d un
+ *    fait de la chaine, ou d un changement entre deux humeurs REELLEMENT jugees (jamais depuis / vers NON_LU). */
+const PRIORITE = ['new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up', 'mood_changes'];
+const humeurJugee = (vu) => !!vu && vu.phase !== 'NON_LU';
 /* le nom ANGLAIS de l humeur, d une seule source (cerveau.js) */
 const humeur = (phase) => (phase === 'NON_LU' ? 'unable to read my market' : nomHumeur(phase));
 const PHRASE = {
@@ -55,7 +59,7 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
   for (const b of liste) {
     if (paroles.length >= PAROLES_MAX_PAR_TOUR) break;
     const ev = evenementsDuPas(b.vu, b.vuAvant || null);
-    const e = PRIORITE.find((x) => ev.includes(x));
+    const e = PRIORITE.find((x) => ev.includes(x) && (x !== 'mood_changes' || (humeurJugee(b.vu) && humeurJugee(b.vuAvant))));
     if (!e || !libre(b.adr)) continue;
     d[b.adr] = tick;
     paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu),

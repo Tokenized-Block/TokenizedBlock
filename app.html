@@ -1756,7 +1756,7 @@ async function lireLaVie() {
     try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); }
     catch (e) { nonLus++; h.etatVie = 'NON_LUE'; continue; }
     lus++;
-    h.etatVie = r.etat;
+    /* ⛔ etatVie n est plus ecrit ici : `appliquerVie` l ecrit AVEC la vie (sinon « lu sans vie » = dormant, vu en prod) */
     /* ⛔ LA FACE GRAVEE EST RELUE ICI, avec la vie : un appel de plus par block, dans la meme boucle
      * patiente. Si elle differe de celle dessinee, la tuile est redessinee — le block reprend la tete
      * que son createur lui a donnee. */
