@@ -796,6 +796,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="sfNote"></p>
     </div>
 
+    <!-- ⛔ PHIL (2026-09-14) : « un agent qui lit ce que chaque Brain AI dit et fait pour le relayer » — relais-cerveaux.js -->
+    <div class="carte">
+      <p class="titre">Relay — what the brains say, strongest proof first</p>
+      <p class="sous">An agent reads every brain's lines and the Live feed, and keeps the strongest proof on top: paid messages,
+        verified trades, new activity, then moods. It is not an AI model — it only ranks lines already read from the chain.
+        Its buttons only open things for you: your wallet signs, it never does.</p>
+      <ul class="fil" id="sfRelais"></ul>
+      <p class="note" id="sfRelaisNote">Nothing relayed yet.</p>
+    </div>
+
     <div class="carte">
       <p class="titre">Blocks talking</p>
       <p class="sous">Live from the brains on your map. A block speaks only when its brain sees something new on chain,
@@ -1135,6 +1145,7 @@ import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools } from './pools-du-jeton.js';
+import { resumeRelais } from './relais-cerveaux.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
@@ -3068,6 +3079,7 @@ function peindreLive() {
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
    * precedente. Le bouton reste la pour qui ne defile pas. */
   verifierBasLive();
+  peindreRelais();
 }
 let liveAuto = 0;
 /* ⛔⛔ SECOND DEFAUT TROUVE EN VERIFIANT : meme le repere amene a l ecran ne declenchait rien — l observateur
@@ -3108,7 +3120,7 @@ function parlerCerveaux() {
   const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   for (const p of paroles) parolesFil.unshift({ ...p, heure, id: 'p' + (++parolesCompteur) });
   parolesFil = parolesFil.slice(0, 40);
-  if ($('#v-social').classList.contains('on')) peindreParoles();
+  if ($('#v-social').classList.contains('on')) { peindreParoles(); peindreRelais(); }
 }
 function peindreParoles() {
   $('#sfParoles').innerHTML = parolesFil.map((p) => '<li class="filL"><div class="filArt">' + dessin(p.de, p.sym) + '</div>'
@@ -3145,6 +3157,44 @@ $('#sfParoles').addEventListener('click', async (ev) => {
   note.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
   note.innerHTML = (r.etat === 'CONFIRME' ? 'Said on chain — public and permanent, readable in ' + enTexte(p.sym) + '’s public messages.'
     : 'Not sent (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+});
+
+/* ══ L AGENT RELAIS (relais-cerveaux.js) ══════════════════════════════════════════════════════════════════
+ * ⛔ Il relit les paroles des cerveaux et le fil Live, classe par preuve, et ne propose que des gestes a signer. */
+const EMOJI_PREUVE = { MESSAGE_PAYE: '✉️', ECHANGE_VERIFIE: '🟢', NOUVEAU: '✨', HUMEUR: '💭' };
+const LIBELLE_OUTIL = { OUVRIR_PROFIL: 'Open', PROPOSER_GM: 'GM', PROPOSER_MESSAGE_PAYE: 'Reply (paid)', PROPOSER_ENREGISTREMENT: 'Record brain' };
+function peindreRelais() {
+  const entrees = [...liveEvts.slice(0, 400).map((e) => ({ source: 'live', e })), ...parolesFil.map((p) => ({ source: 'parole', p }))];
+  const nous = new Set(entrees.map((x) => String((x.e && (x.e.jeton || x.e.a)) || (x.p && x.p.de) || '').toLowerCase()).filter((a) => a && estANous(a)));
+  const r = resumeRelais(entrees, { nous });
+  const nomDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === adr); return (h && h.sym) || court(adr); };
+  $('#sfRelais').innerHTML = r.lignes.map((l) => '<li class="filL"><div class="filArt">' + dessin(l.adr, l.sym || nomDe(l.adr)) + '</div>'
+    + '<div style="min-width:0;flex:1"><p class="filT">' + (l.sens === 'KILL' ? '🔴' : EMOJI_PREUVE[l.preuve] || '·') + ' ' + (l.nous ? '🟦 ' : '') + '<b>'
+    + enTexte(String(l.sym || nomDe(l.adr)).slice(0, 14)) + '</b> · ' + enTexte(l.texte) + '</p>'
+    + '<p class="filS">' + enTexte(l.parce_que) + '</p><div class="stadeLigne" style="margin-top:4px">'
+    + r.outils.filter((o) => o.adr === l.adr).map((o) => '<button type="button" class="puce" data-outil="' + o.quoi + '" data-adr="' + enTexte(o.adr)
+      + '" title="' + enTexte(o.pourquoi) + '">' + enTexte(LIBELLE_OUTIL[o.quoi] || o.quoi) + '</button>').join('')
+    + '</div></div></li>').join('');
+  $('#sfRelaisNote').textContent = r.total
+    ? r.lignes.length + ' relayed of ' + r.total + ' · ' + r.parPreuve.MESSAGE_PAYE + ' paid message(s), ' + r.parPreuve.ECHANGE_VERIFIE
+      + ' verified trade(s), ' + r.parPreuve.NOUVEAU + ' new, ' + r.parPreuve.HUMEUR + ' mood(s)' + (r.coupees ? ' · ' + r.coupees + ' not shown' : '') + '.'
+    : 'Nothing relayed yet — it waits for a paid message, a verified trade or a brain seeing something new.';
+}
+$('#sfRelais').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-outil]');
+  if (!b) return;
+  const adr = b.getAttribute('data-adr');
+  const outil = b.getAttribute('data-outil');
+  /* ⛔ chaque outil OUVRE un ecran ; aucun n envoie ni ne signe */
+  if (outil === 'OUVRIR_PROFIL' || outil === 'PROPOSER_MESSAGE_PAYE') {
+    void ouvrirProfil(adr, null);
+    if (outil === 'PROPOSER_MESSAGE_PAYE') setTimeout(() => $('#pMessages').scrollIntoView({ block: 'start', behavior: 'smooth' }), 600);
+  } else if (outil === 'PROPOSER_GM') {
+    ouvrirEnvoiPour(adr, (t) => { $('#sfRelaisNote').textContent = t; }, 'gm');
+  } else if (outil === 'PROPOSER_ENREGISTREMENT') {
+    allerA('brain');
+    choisirBrain(adr);
+  }
 });
 
 function demarrerLive() {
