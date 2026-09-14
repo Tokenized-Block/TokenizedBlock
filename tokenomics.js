@@ -18,6 +18,7 @@ export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
 /** Adresse MINEE du hook (simulation forge sans --broadcast, 2026-09-13) — PAS une adresse deployee. */
 export const HOOK_PREVU = '0xc3Fc7C671Dc2bA698943E7Cd961A0F561585E044';
+/* ⛔ When hook deploys: on-chain fee recipient MUST be FEE_WALLET (0x37eb…580a). ABSENT today. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 
 /** Destinataires et montants de la frappe initiale d un nouveau block. */

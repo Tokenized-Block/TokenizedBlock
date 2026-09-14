@@ -849,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260914-2019">Build <code>20260914-2019</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260914-2040">Build <code>20260914-2040</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -4432,8 +4432,9 @@ function validerCreation() {
 }
 
 function utiliseCreateRouter() {
-  /* ⛔ MAIN only — CreateRouter live 2026-09-14. Practice stays free factory createB20. */
-  return Number(CHAINE) === 8453 && fraisCreationUsd(CHAINE) > 0;
+  /* ⛔ Base mainnet ALWAYS CreateRouter — sole path that pays 0x37eb…580a.
+   * Practice (Sepolia) stays free factory. Never fall back to factory on 8453. */
+  return Number(CHAINE) === 8453;
 }
 function calldataCreation(v) {
   const params = paramsAsset({ nom: v.nom, symbole: v.sym, admin: compte, decimales: DECIMALES_FIXES });
@@ -4629,31 +4630,17 @@ async function creerBlock() {
   $('#cCreer').disabled = true;
   try {
     /* MAIN CreateRouter: one payable createPaid. Practice: free factory createB20. */
-    if (creationEnCoursPayante && utiliseCreateRouter()) {
+    if (utiliseCreateRouter()) {
       e.className = 'note';
       e.textContent = 'One signature — Create + fee ' + formaterEthCourt(fraisWei)
-        + ' ETH (≈ $' + usd + ') via CreateRouter. Fee is kept only if create succeeds.';
-    } else if (creationEnCoursPayante) {
-      /* legacy 2-stage fallback (should not hit MAIN after router wire) */
-      e.className = 'note';
-      e.textContent = 'Signature 1 of 2 — ' + formaterEthCourt(fraisWei) + ' ETH to the fee wallet (≈ $' + usd + '). Check it in your wallet.';
-      const rf = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-        to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisWei).toString(16) });
-      if (rf.etat !== 'CONFIRME') {
-        e.className = 'note wKo';
-        e.textContent = 'The fee did not go through (' + rf.etat.toLowerCase().replace(/_/g, ' ')
-          + '), so nothing was created. ' + (rf.pourquoi || '');
-        return;
-      }
-      e.className = 'note';
-      e.textContent = 'Stage 2/2 — Create. Check it in your wallet.';
+        + ' ETH (≈ $' + usd + ') via CreateRouter → fee wallet. Fee kept only if create succeeds.';
     } else {
       e.className = 'note';
-      e.textContent = 'One signature — the creation. Check it in your wallet.';
+      e.textContent = 'One signature — the creation (Practice, free). Check it in your wallet.';
     }
     const calldata = calldataCreation(v);
     const to = cibleCreation();
-    const value = creationEnCoursPayante && utiliseCreateRouter() ? valeurCreation(fraisWei) : '0x0';
+    const value = utiliseCreateRouter() ? valeurCreation(fraisWei) : '0x0';
     let adresseCreee = null;
     try {
       const opts = utiliseCreateRouter() ? { to: CREATE_ROUTER, value } : {};
@@ -4672,11 +4659,9 @@ async function creerBlock() {
       void listerMesBlocks();
     } else {
       e.className = 'note wKo';
-      const feeKept = creationEnCoursPayante && !utiliseCreateRouter()
-        ? ' The Create fee already went to the fee wallet — it is kept; do not pay the fee again. Retry Create only when ready (no automatic refund).'
-        : (creationEnCoursPayante && utiliseCreateRouter()
-          ? ' CreateRouter keeps fee ETH only after a successful create — a revert refunds the fee with the failed call.'
-          : '');
+      const feeKept = utiliseCreateRouter()
+        ? ' CreateRouter keeps fee ETH only after a successful create — a revert refunds the fee with the failed call.'
+        : '';
       e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien;
     }
   } finally {
