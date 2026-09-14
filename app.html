@@ -576,7 +576,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). Social labels that <b>Fee mint</b> — not a safety score.</p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). That 5% is the TB Create path — not a safety score.</p>
       <p class="note" id="cBuybackHint">After the fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Create fee ≠ automatic buyback, and nothing pegs price.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
@@ -836,10 +836,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
-        <button type="button" class="puce on" data-filtre="TOUT">All (quiet)</button>
+        <button type="button" class="puce on" data-filtre="TOUT">All</button>
         <button type="button" class="puce" data-filtre="CREATION">🧱 Created</button>
-        <button type="button" class="puce" data-filtre="PAID_CREATE">Fee mint</button>
-        <button type="button" class="puce" data-filtre="UNPAID_CREATE">No fee mint</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE">🔴 Kill</button>
@@ -3043,7 +3041,7 @@ const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
   /* ⛔ 2026-09-14: All hides noise that drowns usable feed —
    * unpaid creates (external launchers) + hook-pool swaps (amounts untrusted / no qty).
-   * No fee mint + Swap still show the hole; Fee mint / Feed / Kill stay honest. */
+   * Created chip shows all creates; All (quiet) still hides external creates + hook swaps. */
   if (liveFiltre === 'TOUT') {
     if (e.type === 'CREATION' && e.paidCreate !== true) return false;
     if (e.type === 'SWAP' && (e.confiance === 'HOOK' || e.verifie !== true)) return false;
@@ -3163,7 +3161,7 @@ function peindreLive() {
   $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
-    const quoi = e.type === 'CREATION' ? (e.paidCreate ? '🧱 <b>' + nom + '</b> Fee mint · 5% to fee wallet' : '🧱 <b>' + nom + '</b> external create · no 5% fee mint')
+    const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> sent' + (e.n > 1 ? ' ' + e.n + ' times' : ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'an amount') + ' to ' + enTexte(court(e.a)))
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
@@ -3179,7 +3177,7 @@ function peindreLive() {
     return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
       + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
-    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; external creates under No fee mint.</p></li>' : '');
+    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; all creates under Created.</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
