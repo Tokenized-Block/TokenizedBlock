@@ -35,7 +35,8 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
     if (!x || !/^0x[0-9a-fA-F]{40}$/.test(String(x.adr))) continue;
     total++;
     const n = x.nourriture && x.nourriture.etat === 'LUE' ? x.nourriture : null;
-    const base = { adr: String(x.adr).toLowerCase(), sym: x.sym || null, capUsd: null, pct: null, prochain: null };
+    /* ⛔ PHIL (2026-09-14) : « ne donne pas les noms, on a deja trop de monde — nos blocks du launcher en priorite » */
+    const base = { adr: String(x.adr).toLowerCase(), sym: x.sym || null, nous: x.nous === true, capUsd: null, pct: null, prochain: null };
     if (n && n.mort === true) { mettre('MORT', base); continue; }
     const vieLue = x.etatVie === 'LUE' && typeof x.vie === 'number' && Number.isFinite(x.vie) && x.vie > 0;
     if (vieLue) {
@@ -58,8 +59,8 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
   for (const g of ordre) {
     const l = par.get(g.cle);
     if (!l || !l.length) continue;
-    l.sort((a, b) => (b.capUsd ?? -1) - (a.capUsd ?? -1) || String(a.sym || '').localeCompare(String(b.sym || '')));
-    groupes.push({ cle: g.cle, titre: g.titre, blocks: l });
+    l.sort((a, b) => Number(b.nous) - Number(a.nous) || (b.capUsd ?? -1) - (a.capUsd ?? -1) || String(a.sym || '').localeCompare(String(b.sym || '')));
+    groupes.push({ cle: g.cle, titre: g.titre, blocks: l, nous: l.filter((b) => b.nous).length, autres: l.filter((b) => !b.nous).length });
   }
   return { groupes, total };
 }

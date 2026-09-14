@@ -2433,15 +2433,19 @@ function peindreClassement() {
 }
 
 function peindreStades() {
+  /* ⛔⛔ PHIL (2026-09-14) : « ne donne pas les noms, on a deja trop de monde — nos blocks du launcher en priorite ». Seuls
+   *    NOS blocks (🟦, faits avec notre Create) sont nommes ; les autres ne sont que COMPTES par stade. */
   const r = stadesDesBlocks({ ethUsd, blocks: habitants.map((h) => ({ adr: h.adr, sym: h.sym, vie: h.vie, devise: h.devise,
-    etatVie: h.etatVie, nourriture: h.nourriture })) });
+    etatVie: h.etatVie, nourriture: h.nourriture, nous: h.nous === true || estANous(h.adr) })) });
   $('#stades').innerHTML = r.groupes.map((g) => '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
     + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(g.titre) + ' · ' + g.blocks.length + '</p><div class="stadeLigne">'
-    + g.blocks.map((b) => '<button type="button" class="puce" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-      + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
+    + g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
+      + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
       + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
+    + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '')
     + '</div>').join('');
-  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map, ' + r.groupes.length + ' stage(s).'
+  const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
+  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named first.'
     : 'The map has not read any block yet.';
 }
 $('#stades').addEventListener('click', (ev) => {
