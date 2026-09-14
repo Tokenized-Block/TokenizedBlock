@@ -263,6 +263,8 @@ body{background:var(--fond);
 .pPuces{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 0}
 .pPuce{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;border:1px solid var(--ligne);color:var(--doux)}
 .pPuce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
+.puce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
+.stadeLigne{display:flex;flex-wrap:wrap;gap:6px}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
@@ -806,6 +808,14 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">Live</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
+      <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
+      <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
+        <button type="button" class="puce on" data-filtre="TOUT">All</button>
+        <button type="button" class="puce" data-filtre="CREATION">🧱 Created</button>
+        <button type="button" class="puce" data-filtre="ACHAT">🟢 Bought</button>
+        <button type="button" class="puce" data-filtre="VENTE">🔴 Sold</button>
+        <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
+      </div>
       <ul class="fil" id="sfLive"></ul>
       <div id="sfLiveFin" style="height:1px"></div>
       <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
@@ -856,6 +866,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
+    </div>
+
+    <!-- ⛔ PHIL (2026-09-14) : « classe bien les blocks pour qu on voie qui est a quel stade — progression et
+         evolution ». Un bareme (pointsdevie.js), « pas lu » a part, jamais en Seed. -->
+    <div class="carte" id="carteStades">
+      <p class="titre">Blocks by stage</p>
+      <p class="sous">From Monument down to Seed. A tier follows the market cap, down as well as up. Tap a block to open it.</p>
+      <div id="stades"></div>
+      <p class="note" id="stadesNote"></p>
     </div>
 
     <div class="carte" id="profil" hidden>
@@ -1106,6 +1125,7 @@ import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
+import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
@@ -1712,6 +1732,9 @@ async function charger() {
 function appliquerVie(h, r) {
   if (typeof h.vie === 'number') h.vieAvant = h.vie;
   h.etatVie = r.etat;
+  /* ⛔ mesure en navigateur (2026-09-14) : peinte seulement a la FIN de la lecture de tous les blocks, la carte des stades
+   *    restait vide plus de 40 s sous saturation. Elle se repeint a chaque vie lue : on voit les blocks monter de stade. */
+  queueMicrotask(peindreStades);
   if (r.etat !== 'LUE') return;
   h.vie = r.vie; h.devise = r.devise; h.via = r.via;
   const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
@@ -2406,7 +2429,25 @@ function peindreClassement() {
    * — le module — et Learn l affiche en entier. */
   $('#rangBorne').innerHTML = 'A rank is a sample, and a market cap is not money in the pool. '
     + '<button type="button" class="lienLearn">Why →</button>';
+  peindreStades();
 }
+
+function peindreStades() {
+  const r = stadesDesBlocks({ ethUsd, blocks: habitants.map((h) => ({ adr: h.adr, sym: h.sym, vie: h.vie, devise: h.devise,
+    etatVie: h.etatVie, nourriture: h.nourriture })) });
+  $('#stades').innerHTML = r.groupes.map((g) => '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
+    + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(g.titre) + ' · ' + g.blocks.length + '</p><div class="stadeLigne">'
+    + g.blocks.map((b) => '<button type="button" class="puce" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
+      + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
+      + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
+    + '</div>').join('');
+  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map, ' + r.groupes.length + ' stage(s).'
+    : 'The map has not read any block yet.';
+}
+$('#stades').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-block]');
+  if (b) void ouvrirProfil(b.getAttribute('data-block'), b.getAttribute('data-sym') || null);
+});
 
 /* ⛔ LE METIER PARLE APRES LA LECTURE, pas avant : sinon il commenterait des chiffres qu il n a pas. */
 function peindreMetier(adr) {
@@ -2827,6 +2868,20 @@ $('#pEnvoyer').addEventListener('click', () => {
  *    silence la periode manquee. */
 const LIVE_MS = 20000, LIVE_FENETRE = 1999;
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
+/* le filtre du fil Live : un tri de LECTURE, il ne change ni ce qui est lu ni ce qui est compte */
+let liveFiltre = 'TOUT';
+function filtreLive(e) {
+  if (liveFiltre === 'TOUT') return true;
+  if (liveFiltre === 'NOUS') return estANous(e.jeton);
+  return e.type === liveFiltre;
+}
+$('#sfLiveFiltres').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button[data-filtre]');
+  if (!b) return;
+  liveFiltre = b.getAttribute('data-filtre');
+  for (const x of $('#sfLiveFiltres').querySelectorAll('button')) x.classList.toggle('on', x === b);
+  peindreLive();
+});
 const cleEvtLive = (e) => e.type + ':' + e.tx + ':' + e.jeton + ':' + (e.logIndex ?? '');
 
 function blocksSuivisLive() {
@@ -2888,7 +2943,8 @@ async function lireLive(sens) {
 }
 
 function peindreLive() {
-  $('#sfLive').innerHTML = liveEvts.map((e) => {
+  const montres = liveEvts.filter(filtreLive);
+  $('#sfLive').innerHTML = montres.map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> bought · ' + enTexte(e.quantite) + ' for ' + enTexte(e.eth) + ' ETH'
@@ -2898,7 +2954,8 @@ function peindreLive() {
     return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
       + '<p class="filT">' + quoi + '</p><p class="filS">block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?') + lien + '</p></div></li>';
   }).join('');
-  $('#sfLiveNote').textContent = (liveEvts.length ? liveEvts.length + ' event(s)' : 'Nothing happened')
+  $('#sfLiveNote').textContent = (liveFiltre !== 'TOUT' ? montres.length + ' shown · ' : '')
+    + (liveEvts.length ? liveEvts.length + ' event(s)' : 'Nothing happened')
     + (livePlusAncien !== null && liveDernier !== null
       ? ' between chain blocks ' + livePlusAncien.toLocaleString('en-US') + ' and ' + liveDernier.toLocaleString('en-US') : '')
     + ' · ' + blocksSuivisLive().length + ' blocks followed, swaps on their ETH markets'
