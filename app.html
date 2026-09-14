@@ -849,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260914-2040">Build <code>20260914-2040</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260914-2042">Build <code>20260914-2042</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -4496,8 +4496,16 @@ function majFraisEtRecap() {
   const boutonCreer = $('#cCreer');
   if (boutonCreer && typeof creationEnCours !== 'undefined' && !creationEnCours) {
     const prixOk = usd === 0 || (fraisWeiCalcule != null && ethUsd != null);
-    boutonCreer.disabled = !prixOk || Boolean(v.ko);
-    boutonCreer.title = (usd > 0 && !prixOk) ? 'Fee price unread — Create closed' : '';
+    let soldeOk = true;
+    if (utiliseCreateRouter() && fraisWeiCalcule != null && soldeEthNat != null) {
+      const gasBuf = 250000000000000n;
+      soldeOk = soldeEthNat >= CREATE_FEE_WEI_FLOOR + gasBuf;
+    } else if (usd > 0 && fraisWeiCalcule != null && soldeEthNat != null) {
+      soldeOk = soldeEthNat >= fraisWeiCalcule;
+    }
+    boutonCreer.disabled = !prixOk || !soldeOk || Boolean(v.ko);
+    boutonCreer.title = (usd > 0 && !prixOk) ? 'Fee price unread — Create closed'
+      : (!soldeOk ? 'ETH balance below CreateRouter floor + gas' : '');
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
@@ -4618,7 +4626,24 @@ async function creerBlock() {
       e.textContent = 'Could not read your ETH balance, so nothing was started.';
       return;
     }
-    if (s < fraisWei) {
+    /* ⛔ CreateRouter floor still pays 0x37eb…580a. If wallet cannot cover the ≈$1 quote
+     * but can cover floor + gas, charge the floor — fail-closed only below floor. */
+    const gasBuf = 250000000000000n; /* ~0.00025 ETH headroom for Base gas */
+    if (utiliseCreateRouter() && s < fraisWei) {
+      const besoinFloor = CREATE_FEE_WEI_FLOOR + gasBuf;
+      if (s >= besoinFloor) {
+        fraisWei = CREATE_FEE_WEI_FLOOR;
+        fraisWeiCalcule = fraisWei;
+        e.className = 'note';
+        e.textContent = 'Balance below ≈ $' + usd + ' quote — using CreateRouter floor '
+          + formaterEthCourt(fraisWei) + ' ETH so the fee wallet still gets paid.';
+      } else {
+        e.className = 'note wKo';
+        e.textContent = 'Need at least ' + formaterEthCourt(besoinFloor) + ' ETH (CreateRouter floor + gas). This account holds '
+          + formaterEthCourt(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+        return;
+      }
+    } else if (s < fraisWei) {
       e.className = 'note wKo';
       e.textContent = 'The fee is ' + formaterEthCourt(fraisWei) + ' ETH (≈ $' + usd + ') and this account holds '
         + formaterEthCourt(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
