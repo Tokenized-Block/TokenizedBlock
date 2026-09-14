@@ -19,6 +19,8 @@ import { TBLOCK, SUPPLY_FIXE, PART_FRAIS_POUR_CENT } from './tokenomics.js';
 import { confianceDe } from './pools-du-jeton.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
+/* ⛔ GM = greeting fragment, not a dump. >1M of a sealed 1B supply is a move, not a GM (Clansy 2026-09-14). */
+const GM_MAX_UNITES = 1_000_000n * 10n ** 18n;
 /* ⛔ PHIL (2026-09-14) : « t as oublie les swaps, send, GM — n oublie rien ». GM = envoi d un block entre deux wallets
  *    (ni creation, ni jambe de swap) ; NOTE = transfert de 0 portant un message ; MESSAGE = message PAYE entre blocks. */
 export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE'];
@@ -195,6 +197,7 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
           if (!b || t.from === ZERO || t.from === pm || t.to === pm) continue;
           if (t.tx && txSwaps.has(String(t.tx).toLowerCase())) continue;
           const dec = Number.isInteger(b.dec) ? b.dec : null;
+          if (t.value > 0n && t.value > GM_MAX_UNITES) continue; /* dump/move ≠ GM */
           ajouter({ type: t.value === 0n ? 'NOTE' : 'GM', bloc: t.bloc, jeton: t.token, sym: b.sym ?? null, tx: t.tx, logIndex: t.logIndex,
             de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null });
         }

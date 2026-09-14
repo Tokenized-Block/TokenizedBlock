@@ -404,6 +404,23 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .wOk{color:var(--vif)}
 .wKo{color:var(--dur)}
 .note a{color:var(--accent2)}
+
+/* ══ Motion (subtle, 2026-09-14) — prefer reduced-motion ══════════════════════ */
+@media (prefers-reduced-motion: no-preference) {
+  .carte{animation:tbIn .28s ease both}
+  .filL{animation:tbFil .32s ease both}
+  .bouton:not([disabled]):active{transform:scale(.985)}
+  .puce{transition:background .15s ease,color .15s ease,transform .15s ease}
+  .puce:active{transform:scale(.96)}
+  .navB{transition:color .15s ease,background .15s ease,opacity .15s ease}
+  .wLigne{transition:background .15s ease}
+  .wLigne:hover{background:hsl(var(--h) 30% 12%)}
+  #cCreer.bouton:not([disabled]){box-shadow:0 0 0 0 hsl(var(--h) 70% 50% / .35)}
+  #cCreer.bouton:not([disabled]):hover{box-shadow:0 0 0 3px hsl(var(--h) 70% 50% / .2)}
+  .brainCan{transition:opacity .2s ease}
+}
+@keyframes tbIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes tbFil{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -832,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260914-2012">Build <code>20260914-2012</code> · <b>All</b> hides external creates (no TB fee path) and hook-pool trades — use <b>Created</b> / <b>Swap</b> to inspect the full chain.</p>
+      <p class="note" data-build="20260914-2019">Build <code>20260914-2019</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1655,9 +1672,12 @@ $('#fGM').addEventListener('click', () => {
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
   $('#fConnecter').hidden = Boolean(compte);
   if (ouvrirEnvoiPour(adr, (t) => { n.textContent = t; }, 'gm')) {
+    const amt = $('#sMontant');
+    if (amt && !String(amt.value || '').trim()) amt.value = '1';
+    const dest = $('#sDest');
+    if (dest) dest.placeholder = 'Friend wallet 0x… — GM is a real transfer of this block';
     $('#sEtat').className = 'note';
-    $('#sEtat').textContent = 'GM: pick who receives it and how much. Your wallet shows the transfer '
-      + 'before you sign — nothing leaves without you.';
+    $('#sEtat').textContent = 'GM ready: paste who receives it. Default amount is 1 unit — change it, then sign in your wallet. Nothing leaves without you.';
   }
 });
 /* ⛔⛔ CE BOUTON PROMETTAIT ET NE LIVRAIT PAS, et Phil l a signale : « le bouton sur le block qui
@@ -3045,6 +3065,8 @@ function filtreLive(e) {
   if (liveFiltre === 'TOUT') {
     if (e.type === 'CREATION' && e.paidCreate !== true) return false;
     if (e.type === 'SWAP' && (e.confiance === 'HOOK' || e.verifie !== true)) return false;
+    /* ⛔ 2026-09-14: GM/NOTE bursts drown All (4×7, EVERYTHING×23…). Chip GM keeps them. */
+    if (e.type === 'GM' || e.type === 'NOTE') return false;
     return true;
   }
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
@@ -3146,9 +3168,26 @@ function peindreLive() {
    *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
    *    echanges neutres CONSECUTIFS d un meme block tiennent en UNE ligne, avec leur nombre et leur plage de blocs. */
   const lignes = [];
+  const gmParJeton = new Map(); /* GM/NOTE: one row per token (burst spam fix) */
   for (const e of montres) {
+    if (e.type === 'GM' || e.type === 'NOTE') {
+      const k = e.type + ':' + String(e.jeton).toLowerCase();
+      const g = gmParJeton.get(k);
+      if (g) {
+        g.n += 1;
+        if (Number.isFinite(e.bloc)) {
+          if (e.bloc > g.blocHaut) { g.blocHaut = e.bloc; g.tx = e.tx; g.a = e.a; g.quantite = e.quantite; g.bloc = e.bloc; }
+          if (e.bloc < g.blocBas) g.blocBas = e.bloc;
+        }
+        continue;
+      }
+      const row = { ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc };
+      gmParJeton.set(k, row);
+      lignes.push(row);
+      continue;
+    }
     const der = lignes[lignes.length - 1];
-    if ((e.type === 'SWAP' || e.type === 'GM' || e.type === 'NOTE') && der && der.type === e.type && der.jeton === e.jeton
+    if (e.type === 'SWAP' && der && der.type === e.type && der.jeton === e.jeton
       && der.confiance === e.confiance) {
       der.n = (der.n || 1) + 1;
       der.blocBas = e.bloc;
@@ -3156,11 +3195,13 @@ function peindreLive() {
     }
     lignes.push({ ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc });
   }
+  /* keep chronological: re-sort by blocHaut after GM merge */
+  lignes.sort((a, b) => (b.blocHaut ?? b.bloc ?? 0) - (a.blocHaut ?? a.bloc ?? 0));
   $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
-      : e.type === 'GM' ? '👋 <b>' + nom + '</b> sent' + (e.n > 1 ? ' ' + e.n + ' times' : ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'an amount') + ' to ' + enTexte(court(e.a)))
+      : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
