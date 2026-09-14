@@ -18,11 +18,16 @@ export const TYPES_PAROLE = ['DIT', 'REPOND'];
 /* ⛔⛔ MESURE (Phil + prod, 2026-09-14) : 16 lignes sur 20 disaient « I cannot see my market right now » ou un changement
  *    d humeur qui sortait d une lecture ratee. Ca parle de NOTRE reseau, pas du block. Un block ne parle donc que d un
  *    fait de la chaine, ou d un changement entre deux humeurs REELLEMENT jugees (jamais depuis / vers NON_LU). */
-const PRIORITE = ['new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up', 'mood_changes'];
+const PRIORITE = ['new_buy', 'new_sell', 'new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up', 'mood_changes'];
 const humeurJugee = (vu) => !!vu && vu.phase !== 'NON_LU';
 /* le nom ANGLAIS de l humeur, d une seule source (cerveau.js) */
 const humeur = (phase) => (phase === 'NON_LU' ? 'unable to read my market' : nomHumeur(phase));
+/* ⛔ les montants viennent TELS QUELS de l evenement Live (achats.js) ; absents = on ne cite aucun chiffre */
+const montant = (b) => (b && b.echange && b.echange.quantite && b.echange.eth ? ' ' + String(b.echange.quantite).slice(0, 16) + ' of me for '
+  + String(b.echange.eth).slice(0, 12) + ' ETH' : '');
 const PHRASE = {
+  new_buy: (vu, b) => 'someone just bought' + (montant(b) || ' me') + '.',
+  new_sell: (vu, b) => 'someone just sold' + (montant(b) || ' me') + '.',
   new_holder: () => 'a new holder just reached me.',
   new_message: () => 'someone just wrote to me on a transfer.',
   new_transfer: () => 'a transfer just reached me.',
@@ -32,8 +37,10 @@ const PHRASE = {
   market_unread: () => 'I cannot see my market right now.',
 };
 /* seuls ces evenements appellent une reponse : on ne repond pas a « je suis curieux » */
-const APPELLE_REPONSE = new Set(['new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up']);
+const APPELLE_REPONSE = new Set(['new_buy', 'new_sell', 'new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up']);
 const REPONSE = {
+  new_buy: 'I saw that purchase.',
+  new_sell: 'I saw that sale.',
   new_holder: 'welcome to your new holder.',
   new_message: 'I read that someone wrote to you.',
   new_transfer: 'I saw your transfer.',
@@ -62,7 +69,7 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     const e = PRIORITE.find((x) => ev.includes(x) && (x !== 'mood_changes' || (humeurJugee(b.vu) && humeurJugee(b.vuAvant))));
     if (!e || !libre(b.adr)) continue;
     d[b.adr] = tick;
-    paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu),
+    paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu, b),
       parce_que: 'its brain saw ' + e + ' at beat ' + tick });
     if (!APPELLE_REPONSE.has(e) || paroles.length >= PAROLES_MAX_PAR_TOUR) continue;
     /* le repondant : le block suivant dans l ordre des adresses, qui n a pas parle recemment — deterministe */

@@ -1108,14 +1108,23 @@ import { prixEthUsd } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
-function entreesCerveau(vie, vieAvant, n, etatVie, nAvant) {
+function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
   const lue = n && n.etat === 'LUE' ? n : null;
   /* ⛔ LE NOUVEAU = la lecture courante moins la PRECEDENTE lecture reussie ; sans precedente, rien n est nouveau */
   const avant = lue && nAvant && nAvant.etat === 'LUE' ? nAvant : null;
   /* ⛔ un marche pas encore lu (undefined) est NON_LUE : le cerveau dit « non jugé », jamais « endormi sans marche » */
   return { vie, vieAvant, gm: lue ? lue.gm : 0, messages: lue ? lue.messages : 0,
     detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false, etatVie: etatVie || 'NON_LUE',
-    gmAvant: avant ? avant.gm : null, messagesAvant: avant ? avant.messages : null, detenteursAvant: avant ? avant.detenteurs : null };
+    gmAvant: avant ? avant.gm : null, messagesAvant: avant ? avant.messages : null, detenteursAvant: avant ? avant.detenteurs : null,
+    ...echangesDe(h) };
+}
+/* ⛔⛔ ACHATS / VENTES VUS PAR LE FIL LIVE (2026-09-14) : compteurs par block, et leur valeur au battement PRECEDENT —
+ *    le nouveau dure exactement un battement (front montant). Un block jamais vu passe « avant = maintenant ». */
+function echangesDe(h) {
+  if (!h) return {};
+  const a = h.achatsVus || 0, v = h.ventesVus || 0;
+  const av = h.echAvant || { a, v };
+  return { achats: a, ventes: v, achatsAvant: av.a, ventesAvant: av.v };
 }
 /* ⛔⛔ RELECTURE DE LA NOURRITURE DU BLOCK REGARDE (2026-09-13) : la map ne la lit qu UNE fois par block — sans relecture,
  *    « du nouveau » ne pouvait jamais etre vu. Seul le block ouvert (profil ou Brain) est relu, au plus toutes les 90 s
@@ -1370,7 +1379,7 @@ let battement = null;
 function battre() {
   for (const h of habitants) {
     if (!h.cerveau) continue;
-    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie, h.nourritureAvant));
+    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie, h.nourritureAvant, h));
     h.cerveau = r.etat;
     /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
     if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
@@ -1385,6 +1394,8 @@ function battre() {
   battreProfil();
   battreBrain();
   parlerCerveaux();
+  /* le front des achats / ventes : ce battement devient le « precedent » du suivant, pour TOUS les cerveaux a la fois */
+  for (const h of habitants) h.echAvant = { a: h.achatsVus || 0, v: h.ventesVus || 0 };
 }
 function demarrerBattement() {
   if (battement) clearInterval(battement);
@@ -2464,7 +2475,7 @@ function battreProfil() {
    *    EXCITE par le prix) quand la map passait la lecture precedente — deux humeurs pour le meme block. */
   void relireNourriture(hP);
   const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
-    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null));
+    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null, hP));
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   peindreCerveau();
@@ -2853,6 +2864,17 @@ async function lireLive(sens) {
     const deja = new Set(liveEvts.map(cleEvtLive));
     const nouveaux = r.evenements.filter((e) => !deja.has(cleEvtLive(e)));
     for (const e of nouveaux) liveEvts.push(e);
+    /* ⛔ LES CERVEAUX SENTENT LES ECHANGES — sauf la PREMIERE fenetre lue : des achats d il y a une heure ne sont pas
+     *    « nouveaux » a l ouverture de la page (sinon tous les blocks parleraient d un coup de leur passe). */
+    if (sens !== 'ancien' && liveDernier !== null) {
+      for (const e of nouveaux) {
+        if (e.type !== 'ACHAT' && e.type !== 'VENTE') continue;
+        const hE = habitants.find((x) => String(x.adr).toLowerCase() === String(e.jeton).toLowerCase());
+        if (!hE) continue;
+        if (e.type === 'ACHAT') hE.achatsVus = (hE.achatsVus || 0) + 1; else hE.ventesVus = (hE.ventesVus || 0) + 1;
+        hE.dernierEchange = { type: e.type, quantite: e.quantite, eth: e.eth, tx: e.tx };
+      }
+    }
     if (sens !== 'ancien' && nouveaux.length) void rafraichirApresEchanges(nouveaux);
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
@@ -2920,7 +2942,7 @@ function parlerCerveaux() {
   const avecCerveau = habitants.filter((h) => h.cerveau && h.vu);
   if (!avecCerveau.length) return;
   const { paroles, dernieres } = parolesDuTour({ tick: parolesTour, dernieres: parolesDernieres,
-    blocks: avecCerveau.map((h) => ({ adr: h.adr, sym: h.sym, vu: h.vu, vuAvant: h.vuAvant || null })) });
+    blocks: avecCerveau.map((h) => ({ adr: h.adr, sym: h.sym, vu: h.vu, vuAvant: h.vuAvant || null, echange: h.dernierEchange || null })) });
   parolesDernieres = dernieres;
   if (!paroles.length) return;
   const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -4246,7 +4268,7 @@ function battreBrain() {
   const h = habitants.find((x) => x.adr === brainAdr);
   void relireNourriture(h);
   const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null,
-    h ? h.nourritureAvant : null));
+    h ? h.nourritureAvant : null, h));
   const n = h && h.nourriture;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
     : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'

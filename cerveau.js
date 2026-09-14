@@ -115,15 +115,21 @@ const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / divi
  * ⛔ `mort` n est vrai QUE s il vaut strictement `true` : un solde non lu (null, undefined) ne tue pas.
  */
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
-  scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null } = {}) {
+  scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null,
+  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null } = {}) {
   /* ⛔⛔ L HUMEUR SUR LE NOUVEAU (Phil, 2026-09-13, apres mesure : TBLOCK et WOFI EXCITE 40/40 battements a prix stable,
    *    parce que 3 detenteurs dans la fenetre suffisaient — CALME et CURIEUX n arrivaient jamais sur un block vivant).
    *    Seul ce qui est arrive DEPUIS LA LECTURE PRECEDENTE excite. Sans lecture precedente, rien n est « nouveau ».
    * ⚠️ BORNE : les compteurs sont sur une fenetre glissante ; un transfert qui entre pendant qu un ancien sort se compense
    *    et n est pas vu. On rate du nouveau, on n en invente jamais. */
   const hausse = (x, avant) => (typeof avant === 'number' && Number.isFinite(avant) ? Math.max(0, (Number(x) || 0) - avant) : 0);
-  const nouveaux = { gm: hausse(gm, gmAvant), messages: hausse(messages, messagesAvant), detenteurs: hausse(detenteurs, detenteursAvant) };
-  const avecAvant = [gmAvant, messagesAvant, detenteursAvant].some((a) => typeof a === 'number' && Number.isFinite(a));
+  /* ⛔⛔ CONNEXION AU MARCHE (Phil, 2026-09-14 : « donne plus de connexion au block pour pouvoir reellement reflechir ») :
+   *    les ACHATS et VENTES lus par le fil Live (logs Swap du PoolManager, decodes par achats.js) entrent aussi. */
+  const nouveaux = { gm: hausse(gm, gmAvant), messages: hausse(messages, messagesAvant), detenteurs: hausse(detenteurs, detenteursAvant),
+    achats: hausse(achats, achatsAvant), ventes: hausse(ventes, ventesAvant) };
+  const fini = (a) => typeof a === 'number' && Number.isFinite(a);
+  const avecAvant = [gmAvant, messagesAvant, detenteursAvant].some(fini);
+  const avecEchanges = [achatsAvant, ventesAvant].some(fini);
   const aMarche = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
   /* la variation RELATIVE, bornee : un x10 ne doit pas saturer le reseau pour toujours */
   let delta = 0;
@@ -149,9 +155,12 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
      *    de face et de nourriture entre les deux) — « lu mais sans vie » tombait en DORMANT. Une vie absente n est un
      *    « pas de marche » que sur NON_TROUVEE. */
     nonLu: !aMarche && (etatVie === 'NON_LUE' || etatVie === 'LUE'),
-    nouveau: Math.min(1, nouveaux.gm * 0.5 + nouveaux.messages * 0.5 + nouveaux.detenteurs * 0.5),
+    nouveau: Math.min(1, nouveaux.gm * 0.5 + nouveaux.messages * 0.5 + nouveaux.detenteurs * 0.5 + nouveaux.achats * 0.5),
+    /* la pression vendeuse NOUVELLE, 0..1 : plus de ventes que d achats depuis le battement precedent */
+    pression: Math.min(1, Math.max(0, nouveaux.ventes - nouveaux.achats) * 0.5),
     nouveaux,
     avecAvant,
+    avecEchanges,
   };
 }
 
@@ -178,7 +187,9 @@ export function pas(etat, faits = {}) {
       /* ⛔ LE COURANT DE REPOS SEPARE « ENDORMI » DE « ETEINT » : avec 0,15 et un bruit jusqu a 0,10, le
        * potentiel tourne autour de 1,1 — il tire RAREMENT. La nourriture s ajoute, avec ou sans marche. */
       p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 : PARAMETRES.reposSansMarche)
-        + f.delta * 0.4 + miam * 0.6 + bruit;
+        + f.delta * 0.4 + miam * 0.6 + bruit
+        /* un evenement NOUVEAU (achat, vente, transfert, detenteur, message) secoue le reseau le battement ou il arrive */
+        + (f.nouveau + f.pression) * 0.8;
     }
   }
   /* ⛔ UN ETAT SANS MEMOIRE (sauvegarde d avant la v3) repart de zero, il ne casse pas. */
@@ -219,7 +230,7 @@ export function pas(etat, faits = {}) {
   if (f.mort) phase = 'MORT';
   else if (f.nonLu) phase = 'NON_LU';
   else if (!f.aMarche) phase = miam > 0 ? 'EVEILLE' : 'DORMANT';
-  else if (f.delta <= -0.05) phase = 'INQUIET';
+  else if (f.delta <= -0.05 || f.pression > 0) phase = 'INQUIET';
   else if (f.delta >= 0.05 || f.nouveau > 0) phase = 'EXCITE';
   else if (spikes > 8) phase = 'CURIEUX';
   else phase = 'CALME';
@@ -249,7 +260,8 @@ export function pas(etat, faits = {}) {
       entree: empreinte(JSON.stringify([VERSION_CERVEAU, f.aMarche, f.taille, f.delta, f.gm, f.messages,
         f.detenteurs, f.part, f.scelle, f.mort, etat.tick,
         /* le nouveau n entre dans l empreinte que s il a ete fourni : un pas d avant se rejoue a l identique */
-        ...(f.avecAvant ? [f.nouveaux.gm, f.nouveaux.messages, f.nouveaux.detenteurs] : [])])),
+        ...(f.avecAvant ? [f.nouveaux.gm, f.nouveaux.messages, f.nouveaux.detenteurs] : []),
+        ...(f.avecEchanges ? ['echanges', f.nouveaux.achats, f.nouveaux.ventes] : [])])),
     },
   };
 }

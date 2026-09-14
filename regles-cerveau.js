@@ -12,7 +12,8 @@
 // ⛔ LES DECLENCHEURS SONT SUR FRONT : un « nouveau » dure jusqu a la relecture suivante (≈90 s) ; sans front, la meme
 //    nouveaute tirerait la regle a chaque battement.
 
-export const DECLENCHEURS = ['new_transfer', 'new_holder', 'new_message', 'price_up', 'price_down', 'market_unread', 'mood_changes'];
+export const DECLENCHEURS = ['new_transfer', 'new_holder', 'new_message', 'price_up', 'price_down', 'market_unread', 'mood_changes',
+  'new_buy', 'new_sell'];
 export const ACTIONS_REGLE = ['journal', 'suggest_gm', 'suggest_record'];
 export const PHASES_REGLE = ['DORMANT', 'EVEILLE', 'CALME', 'CURIEUX', 'EXCITE', 'INQUIET', 'MORT', 'NON_LU'];
 export const REGLES_MAX = 8;
@@ -59,6 +60,8 @@ function presents(vu) {
   if (n.gm > 0) s.add('new_transfer');
   if (n.detenteurs > 0) s.add('new_holder');
   if (n.messages > 0) s.add('new_message');
+  if (n.achats > 0) s.add('new_buy');
+  if (n.ventes > 0) s.add('new_sell');
   if (typeof vu.delta === 'number' && vu.delta >= 0.05) s.add('price_up');
   if (typeof vu.delta === 'number' && vu.delta <= -0.05) s.add('price_down');
   if (vu.phase === 'NON_LU') s.add('market_unread');
@@ -136,6 +139,8 @@ const REGLE_ECRITE = {
   price_down: 'WHEN price_down THEN journal "My life went down. Nobody refunds that."',
   market_unread: 'WHEN market_unread THEN journal "I could not see my market: the network, not me."',
   mood_changes: 'WHEN mood_changes AND mood IS DORMANT THEN suggest_gm "I went back to sleep: a GM would wake me."',
+  new_buy: 'WHEN new_buy THEN journal "Someone bought me on my market."',
+  new_sell: 'WHEN new_sell AND mood IS INQUIET THEN journal "Someone sold me, and I felt it."',
 };
 
 /**
