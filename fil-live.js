@@ -11,7 +11,7 @@
 // ⚠️ Le routeur n est pas l acheteur : ce module ne nomme personne.
 import { listerCreations, TOPIC_TRANSFER, decoderTransfer, topicAdresse } from './index-blocks.js';
 import { messageDepuisTransfert, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
-import { FEE_WALLET } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER } from './frais-creation.js';
 import { listerAchats, achatDepuisSwap } from './achats.js';
 import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
@@ -29,6 +29,11 @@ const MINT_FRAIS_ATTENDU = (SUPPLY_FIXE * PART_FRAIS_POUR_CENT) / 100n;
 async function creationPayee({ rpc, jeton, tx }) {
   if (!tx || !jeton || !rpc) return false;
   try {
+    /* Router path is paid by construction (createPaid). */
+    try {
+      const raw = await rpc('eth_getTransactionByHash', [tx]);
+      if (raw && String(raw.to || '').toLowerCase() === String(CREATE_ROUTER).toLowerCase()) return true;
+    } catch (_) { /* fall through to mint proof */ }
     const r = await rpc('eth_getTransactionReceipt', [tx]);
     const zero = '0x' + '0'.repeat(64);
     const feeTopic = topicAdresse(FEE_WALLET);

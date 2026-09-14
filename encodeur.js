@@ -77,6 +77,23 @@ export function encodeCreateB20({ variant = 0, saltTexte, params, initCalls }) {
     + blocParams + tableau;
 }
 
+
+/** createPaid(uint8,bytes32,bytes,bytes[],address) — CreateRouter payable path. */
+export function encodeCreatePaid({ variant = 0, saltTexte, params, initCalls, creator }) {
+  const salt = motDeHash(saltTexte);
+  const corpsElements = initCalls.map((c) => dynamique(c));
+  let curseur = BigInt(32 * initCalls.length);
+  const offsets = [];
+  for (const e of corpsElements) { offsets.push(mot(curseur)); curseur += BigInt(e.length / 2); }
+  const tableau = mot(BigInt(initCalls.length)) + offsets.join('') + corpsElements.join('');
+  const blocParams = dynamique(params);
+  const offParams = 0xa0n; /* 5 head words: variant, salt, offParams, offInit, creator */
+  const offInit = offParams + BigInt(blocParams.length / 2);
+  return '0x' + selecteur('createPaid(uint8,bytes32,bytes,bytes[],address)')
+    + mot(BigInt(variant)) + salt + mot(offParams) + mot(offInit) + motAdresse(creator)
+    + blocParams + tableau;
+}
+
 /** L adresse deterministe n est PAS calculable ici : elle depend du precompile. On la LIT. */
 export async function adresseAttendue(rpc, appelant, calldata) {
   const r = await rpc('eth_call', [{ from: appelant, to: '0xb20f000000000000000000000000000000000000', data: calldata }, 'latest']);
@@ -99,6 +116,9 @@ for (const [sig, texte] of [
   ['AbiDecodeFailed()', 'The factory refused the encoding of the parameters.'],
   ['InvalidVariant()', 'Unknown token variant.'],
   ['NonPayable()', 'This call must carry no ETH.'],
+  ['FeeTooLow()', 'Create fee ETH is below the CreateRouter floor.'],
+  ['BadMint()', 'CreateRouter refused the mint (bad creator).'],
+  ['EthTransferFailed()', 'CreateRouter could not forward the fee ETH.'],
 ]) REFUS['0x' + selecteur(sig)] = texte;
 
 /**
@@ -116,8 +136,11 @@ export function expliquerRefus(donnee) {
  *    affichait « Not signed: execution reverted » — c est-a-dire qu il ACCUSAIT L UTILISATEUR
  *    d avoir refuse alors que c est la CHAINE qui refusait. Deux causes opposees, un seul message.
  */
-export async function adresseOuRefus(appelBrut, appelant, calldata) {
-  const r = await appelBrut({ from: appelant, to: '0xb20f000000000000000000000000000000000000', data: calldata });
+export async function adresseOuRefus(appelBrut, appelant, calldata, opts = {}) {
+  const to = (opts && opts.to) || '0xb20f000000000000000000000000000000000000';
+  const tx = { from: appelant, to, data: calldata };
+  if (opts && opts.value != null) tx.value = opts.value;
+  const r = await appelBrut(tx);
   if (r && r.error) {
     const d = r.error.data ? String(r.error.data) : '';
     /* ⛔ ON GARDE LES DONNEES ENTIERES, pas seulement le selecteur. `TokenAlreadyExists(address)`

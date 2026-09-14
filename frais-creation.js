@@ -1,7 +1,7 @@
 // frais-creation.js — le frais FIXE de creation, une seule source pour les deux ecrans.
 // ================================================================================================
-// ⛔ LE FRAIS EST UN TRANSFERT SEPARE, VISIBLE, SIGNE PAR L UTILISATEUR. createB20 refuse toute value
-//    (`NonPayable()`). Deux gestes, dits AVANT — fail-closed si le frais echoue.
+// ⛔ MAIN (8453): one payable createPaid → CreateRouter (fee ETH forwarded after create).
+//    Practice: free createB20 on factory (NonPayable). Fail-closed if fee price unread.
 //
 // ⛔⛔ DECISION RAKSHA 2026-09-14 : le frais MAIN se paie en ETH, equivalent a FRAIS_USD dollars,
 //    calcule via `prix-eth.js` (mediane multi-pools). Sans prix fiable → creation REFUSEE.
@@ -11,6 +11,10 @@
 
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire. */
 export const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
+/** Base mainnet CreateRouter — fee ETH + forced sealed 1B mint (deployed 2026-09-14). */
+export const CREATE_ROUTER = '0xd0a69ca617ceedcf66329802ce9d462347f1f148';
+/** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */
+export const CREATE_FEE_WEI_FLOOR = 300000000000000n;
 
 /** 0,00005 ETH — ancien ecran Pages (garde pour tests d alignement). */
 export const FRAIS_HERITE_WEI = 50000000000000n;
@@ -56,7 +60,7 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   let base = 'Creation fee: ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
     + '/ETH median) → ' + walletCourt
-    + '. Stages: 1) Pay fee (ETH) · 2) Create. If the fee fails, nothing is created. Create fee ≠ automatic buyback.';
+    + '. One signature: CreateRouter (fee ETH only after create succeeds — revert refunds you). Create fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Your ETH balance is below the fee, so creation cannot start.';

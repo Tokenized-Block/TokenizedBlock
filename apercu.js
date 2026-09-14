@@ -10,7 +10,7 @@
 //    adresse n est recopiee ici.
 import { selecteur, MAX_UINT256, MAX_UINT160 } from './pool.js';
 import { lireMemo } from './messages.js';
-import { FEE_WALLET, USDC_BASE, USDC_DECIMALES } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER, USDC_BASE, USDC_DECIMALES } from './frais-creation.js';
 import { FACTORY } from './index-blocks.js';
 import { V4_ADRESSES, PERMIT2, PROPRIETAIRE_PERMANENT } from './lancer-pool.js';
 import { formaterUnites } from './montants.js';
@@ -25,6 +25,7 @@ const S = {
   approve: selecteur('approve(address,uint256)'),
   permit2: selecteur('approve(address,address,uint160,uint48)'),
   create: selecteur('createB20(uint8,bytes32,bytes,bytes[])'),
+  createPaid: selecteur('createPaid(uint8,bytes32,bytes,bytes[],address)'),
   execute: selecteur('execute(bytes,bytes[],uint256)'),
   multicall: selecteur('multicall(bytes[])'),
   modify: selecteur('modifyLiquidities(bytes,uint256)'),
@@ -38,7 +39,7 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
   const V = V4_ADRESSES[Number(chaine)] || {};
   const connus = [
     [compte, 'you'], [jeton, symbole ? 'the block ' + symbole : 'this block'],
-    [FEE_WALLET, 'TokenizedBlock fee wallet'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
+    [FEE_WALLET, 'TokenizedBlock fee wallet'], [CREATE_ROUTER, 'TB CreateRouter'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
     [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'], [ROUTEUR_SWAP[Number(chaine)], 'Uniswap router'],
     [PROPRIETAIRE_PERMANENT, 'dead address (nobody)'],
   ];
@@ -99,6 +100,10 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
   if (sel === S.create && to === FACTORY.toLowerCase()) {
     lignes.push('Creates a new B20 block. You become its admin; the factory refuses a salt already used.');
     return { etat: 'LUE', action: 'Create a block', lignes };
+  }
+  if (sel === S.createPaid && to === String(CREATE_ROUTER).toLowerCase()) {
+    lignes.push('Creates via CreateRouter: sealed 1B + 5% fee mint; ETH fee forwarded only after create succeeds.');
+    return { etat: 'LUE', action: 'Create a block (paid)', lignes };
   }
   if ((sel === S.multicall || sel === S.modify) && V.posm && to === V.posm.toLowerCase()) {
     const permanent = data.includes(String(PROPRIETAIRE_PERMANENT).slice(2).toLowerCase().padStart(64, '0'));
