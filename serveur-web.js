@@ -108,12 +108,22 @@ const entete = (e) => ({
   /* ⛔ LES IMAGES PEUVENT DORMIR, LE CODE NON. Une icone qui change est un evenement rare ; un
    * module JavaScript qui change est le quotidien de ce projet, et le servir depuis un cache
    * remettrait exactement le probleme qu on vient de fuir. */
-  'cache-control': e.image ? 'public, max-age=86400' : 'no-cache',
+  'cache-control': e.image ? 'public, max-age=86400' : 'no-store, max-age=0',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
 });
 
 createServer((req, res) => {
+  /* ⛔ Old Railway host name must never serve content — always send people to MAIN. */
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  if (host === 'tokenized-block-production.up.railway.app') {
+    const raw = String(req.url || '/');
+    const dest = 'https://tokenized-block.up.railway.app' + (raw.startsWith('/') ? raw : '/' + raw);
+    res.writeHead(301, { Location: dest, 'Cache-Control': 'public, max-age=3600' });
+    res.end();
+    return;
+  }
+
   const chemin = String(req.url || '/').split('?')[0];
 
   /* sonde de sante — pour qu un cron puisse demander « es-tu vivant » sans charger l app */
@@ -132,7 +142,10 @@ createServer((req, res) => {
     res.end('not served');
     return;
   }
-  if (req.headers['if-none-match'] === e.etag) {
+  /* ⛔ 2026-09-14: never 304 HTML/JS — Chrome kept Paid Create / Brain unread after Railway tip. Images still etag. */
+  if (!e.image && req.headers['if-none-match'] === e.etag) {
+    /* fall through to 200 with full body */
+  } else if (e.image && req.headers['if-none-match'] === e.etag) {
     res.writeHead(304, entete(e));
     res.end();
     return;

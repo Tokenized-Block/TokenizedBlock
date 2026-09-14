@@ -1,3 +1,5 @@
+> **2026-09-14:** Live product is `https://tokenized-block.up.railway.app/`. `tokenized-block.github.io` is retired.
+
 # Mini app — what is done, and the one thing that is not
 
 ## Done

@@ -19,7 +19,11 @@
 export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 
 /** Les devises « de base ». ⛔ Adresses recopiees de `DEVISES` dans index.html. */
+/** TBLOCK — standard quote for new blocks (mainnet). Address from tokenomics / B20Created. */
+export const TBLOCK_MAINNET = '0xb20000000000000000000024c30d3fcb7931272e';
+
 export const DEVISES_BASE = [
+  { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock (standard pair)', type: 'TBLOCK', chaines: [8453] },
   { adr: ETH_NATIF, symbole: 'ETH', nom: 'Ether (native)', type: 'NATIF', chaines: [8453, 84532] },
   { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbole: 'USDC', nom: 'USD Coin', type: 'STABLE', chaines: [8453] },
 ];
@@ -79,6 +83,7 @@ export function qualifierPaire(adresse, chaine) {
 export function etiquettePaire(p) {
   if (!p) return '—';
   if (p.type === 'SAISIE') return 'custom token ' + p.adr.slice(0, 6) + '…' + p.adr.slice(-4) + ' (unverified)';
+  if (p.type === 'TBLOCK') return p.symbole + ' — ' + p.nom + ' (standard; may add another tokenized pair later)';
   if (p.type === 'ACTION') return p.symbole + ' — ' + p.nom + ' (Coinbase tokenized stock)';
   return p.symbole + ' — ' + p.nom;
 }

@@ -15,13 +15,38 @@ import { FEE_WALLET } from './frais-creation.js';
 import { listerAchats, achatDepuisSwap } from './achats.js';
 import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
-import { TBLOCK } from './tokenomics.js';
+import { TBLOCK, SUPPLY_FIXE, PART_FRAIS_POUR_CENT } from './tokenomics.js';
 import { confianceDe } from './pools-du-jeton.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 /* ⛔ PHIL (2026-09-14) : « t as oublie les swaps, send, GM — n oublie rien ». GM = envoi d un block entre deux wallets
  *    (ni creation, ni jambe de swap) ; NOTE = transfert de 0 portant un message ; MESSAGE = message PAYE entre blocks. */
 export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE'];
+
+/** True if create tx minted the TB 5% sealed share to FEE_WALLET (50M of 1B × 18 decimals).
+ * ⛔ Clansy 2026-09-14: any 1-wei mint to fee used to count as Fee mint — that flattered capture. */
+const MINT_FRAIS_ATTENDU = (SUPPLY_FIXE * PART_FRAIS_POUR_CENT) / 100n;
+async function creationPayee({ rpc, jeton, tx }) {
+  if (!tx || !jeton || !rpc) return false;
+  try {
+    const r = await rpc('eth_getTransactionReceipt', [tx]);
+    const zero = '0x' + '0'.repeat(64);
+    const feeTopic = topicAdresse(FEE_WALLET);
+    if (!feeTopic) return false;
+    const j = String(jeton).toLowerCase();
+    for (const l of (r && r.logs) || []) {
+      if (String(l.address).toLowerCase() !== j) continue;
+      if (!l.topics || String(l.topics[0]).toLowerCase() !== String(TOPIC_TRANSFER).toLowerCase()) continue;
+      if (String(l.topics[1]).toLowerCase() !== zero) continue;
+      if (!(l.topics[2] && String(l.topics[2]).toLowerCase() === feeTopic.toLowerCase())) continue;
+      const amt = BigInt(l.data || '0x0');
+      if (amt === MINT_FRAIS_ATTENDU) return true;
+    }
+  } catch (_) { /* unread ≠ unpaid: leave false; badge says unpaid only when read */ }
+  return false;
+}
+
+
 export const JETONS_PAR_REQUETE = 50;
 const ZERO = '0x0000000000000000000000000000000000000000';
 
@@ -100,8 +125,16 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
   for (const f of cr.fenetresRatees || []) fenetresRatees.push({ ...f, quoi: 'creations' });
   for (const c of cr.creations || []) {
     if (!Number.isFinite(c.bloc) || c.bloc < deBloc || c.bloc > aBloc) continue;
-    ajouter({ type: 'CREATION', bloc: c.bloc, jeton: String(c.jeton).toLowerCase(), sym: c.symbole ?? null, tx: c.tx ?? null,
-      dec: Number.isInteger(c.decimales) ? c.decimales : null });
+    const jeton = String(c.jeton).toLowerCase();
+    const tx = c.tx ?? null;
+    /* ⛔ Fee mint = 5% mint to FEE_WALLET in the create tx (app path). External launchers usually mint 100% elsewhere. */
+    let paidCreate = false;
+    if (tx) {
+      paidCreate = await creationPayee({ rpc, jeton, tx });
+      if (pause) await new Promise((r) => setTimeout(r, pause));
+    }
+    ajouter({ type: 'CREATION', bloc: c.bloc, jeton, sym: c.symbole ?? null, tx,
+      dec: Number.isInteger(c.decimales) ? c.decimales : null, paidCreate });
   }
 
   const pools = poolsSuivies(blocks);

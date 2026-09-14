@@ -12,9 +12,9 @@
         l apercu est construit par un serveur tiers qui n a aucun contexte de page. -->
 <meta property="og:title" content="Tokenized Block · Tokenized-Block.app">
 <meta property="og:description" content="Build a block. It becomes a B-20 token on Base — with no admin and no minter.">
-<meta property="og:image" content="https://tokenized-block.github.io/embed.png">
-<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
-<meta name="fc:frame" content='{"version":"1","imageUrl":"https://tokenized-block.github.io/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.github.io/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.github.io/splash.png","splashBackgroundColor":"#000000"}}}'>
+<meta property="og:image" content="https://tokenized-block.up.railway.app/embed.png">
+<meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://tokenized-block.up.railway.app/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.up.railway.app/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.up.railway.app/splash.png","splashBackgroundColor":"#000000"}}}'>
+<meta name="fc:frame" content='{"version":"1","imageUrl":"https://tokenized-block.up.railway.app/embed.png","button":{"title":"Build a block","action":{"type":"launch_miniapp","url":"https://tokenized-block.up.railway.app/","name":"Tokenized-Block.app","splashImageUrl":"https://tokenized-block.up.railway.app/splash.png","splashBackgroundColor":"#000000"}}}'>
 <style>
 /* ══ BLEU NUIT ═════════════════════════════════════════════════════════════════════════════════
  * ⚠️ RETOUR AU BLEU NUIT, DEMANDE. Le noir integral a ete essaye puis ecarte : c est un choix
@@ -2577,12 +2577,12 @@ const FACTORY = '0xb20f000000000000000000000000000000000000';
 /**
  * SITE HOST / BRAND (overnight economy 2026-09-07 Europe/Brussels)
  * Display brand: Tokenized-Block.app (canonical public name).
- * Live absolute URLs stay on github.io until DNS for tokenized-block.app resolves
+ * Live absolute URLs point at Railway MAIN (Pages retired 2026-09-14)
  * (checked 2026-09-07: NXDOMAIN / no A/AAAA). Do NOT point farcaster.json homeUrl
- * at a dead domain — cutover = DNS live first, then flip SITE_ORIGIN_LIVE.
+ * Pages github.io retired 2026-09-14 — SITE_ORIGIN_LIVE is Railway MAIN.
  */
 const SITE_BRAND = 'Tokenized-Block.app';
-const SITE_ORIGIN_LIVE = 'https://tokenized-block.github.io';
+const SITE_ORIGIN_LIVE = 'https://tokenized-block.up.railway.app';
 const SITE_ORIGIN_FUTURE = 'https://tokenized-block.app'; /* DNS not live as of 2026-09-07 */
 /**
  * Tokenized Block Create service fee (subscription recovery) — NOT gas.

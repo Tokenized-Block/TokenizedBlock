@@ -8,6 +8,7 @@
 // ⚠️ ACHAT / VENTE SONT ICI DEDUITS DES TRANSFERTS DU BLOCK (sortie / entree du PoolManager), pas du log Swap :
 //    un swap qui traverse le pool dans les deux sens dans la meme tx est dit « swapped through the pool ».
 import { formaterUnites } from './montants.js';
+import { SUPPLY_FIXE, DECIMALES_FIXES } from './tokenomics.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 export const GENRES_RESUME = ['ACHAT', 'VENTE', 'ALLER_RETOUR', 'FRAPPE', 'MEMOIRE', 'MESSAGE', 'ENVOI'];
@@ -44,8 +45,12 @@ export function resumerTransaction({ transfers, signataire, sym, decimales, pool
   const frappes = transfers.filter((t) => t.from.toLowerCase() === ZERO);
 
   if (frappes.length) {
+    const total = somme(frappes);
     const vers = [...new Set(frappes.map((t) => nom(t.to)))].join(', ');
-    return { genre: 'FRAPPE', phrase: q(somme(frappes)) + ' ' + S + ' minted to ' + vers };
+    /* ⛔ TB rule: sealed 1B (18 decimals). Anything else is an external / custom mint — never pretend it is ours. */
+    const tbSealed = Number.isInteger(decimales) && decimales === DECIMALES_FIXES && total === SUPPLY_FIXE;
+    const tag = tbSealed ? ' · sealed 1B' : ' · not TB sealed 1B';
+    return { genre: 'FRAPPE', phrase: q(total) + ' ' + S + ' minted to ' + vers + tag, tbSealed };
   }
   if (sortis.length && entres.length) {
     return { genre: 'ALLER_RETOUR', phrase: qui + ' swapped ' + S + ' through the pool (in and out in one transaction)' };

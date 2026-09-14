@@ -387,10 +387,18 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .wAdrPleine{word-break:break-all;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);
   padding:12px;margin:0 0 10px;color:var(--texte)}
 .champ{display:block;margin:10px 0 0;font-size:12px;font-weight:700;color:var(--doux)}
-.champ input,.champ select{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:var(--fond2);
+.champ input,.champ select,.champ textarea{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:var(--fond2);
   border:1px solid var(--ligne);border-radius:var(--rs);color:var(--texte);font:inherit;font-weight:400;
   padding:11px 12px;min-height:44px}
-.champ input:focus,.champ select:focus{outline:none;border-color:var(--accent)}
+.champ textarea{min-height:72px;resize:vertical;line-height:1.4}
+.champ input:focus,.champ select:focus,.champ textarea:focus{outline:none;border-color:var(--accent)}
+.champ textarea::placeholder{color:var(--tiede);opacity:1}
+/* Paid-message prepare: full width under the fields, never a clipped « Prep » chip. */
+#pmsgPreparer{width:100%;margin-top:10px;white-space:normal}
+/* Salt row: editable field + re-roll. Salt still fixes the address; auto-fill is disclosed beside it. */
+.champSel{display:flex;gap:8px;align-items:stretch;margin-top:5px}
+.champSel input{flex:1;min-width:0;width:auto;margin-top:0}
+.champSel .bouton{flex-shrink:0;align-self:stretch}
 .wConsent{display:flex;gap:8px;align-items:flex-start;margin:12px 0 0;font-size:12.5px;color:var(--tiede);line-height:1.45}
 .wConsent[hidden]{display:none}
 .wOk{color:var(--vif)}
@@ -413,7 +421,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
       <button class="puce" id="pLearn" style="cursor:pointer">? Learn</button>
-      <button class="puce" id="pReseau" style="cursor:pointer">Base Sepolia</button>
+      <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
       <span class="puce" id="pCompte">not connected</span>
     </div>
   </header>
@@ -523,23 +531,31 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
       <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
       <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
-           creations avec le meme sel depuis le meme compte se heurtent, et la factory le dit. -->
-      <label class="champ">Salt — it fixes the address<input id="cSel" placeholder="anything you like" autocomplete="off" spellcheck="false"></label>
+           creations avec le meme sel depuis le meme compte se heurtent, et la factory le dit.
+           Auto-fill + « New salt » tirent un sel ALEATOIRE visible — jamais un secret cache : le
+           champ reste editable, et un preset de lien (?creer=…) ecrase toujours l auto-sel. -->
+      <label class="champ">Salt — it fixes the address
+        <span class="champSel">
+          <input id="cSel" placeholder="anything you like" autocomplete="off" spellcheck="false">
+          <button class="bouton sec" id="cSelNouveau" type="button" style="width:auto;padding:10px 14px">New salt</button>
+        </span>
+      </label>
+      <p class="note" style="margin:4px 0 0">A salt is filled for you so an address is ready — edit it or hit New salt anytime. The salt still fixes the address; nothing else is random unless you ask.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Its face</p>
-      <p class="sous">Every setting changes what gets engraved. Nothing here is random unless you ask.</p>
+      <p class="sous">Every setting changes what gets engraved as an on-chain <code>image</code> in the token metadata (SVG) — shared by all holders, not exclusive IP, not an NFT. Face settings stay as you set them — nothing here is random unless you ask (Surprise me).</p>
       <div class="reglages" id="cReglages"></div>
     </div>
 
     <div class="carte">
       <p class="titre">Fly brain</p>
       <label class="wConsent" style="color:var(--doux)"><input type="checkbox" id="cCerveau" checked>
-        Give this block a fly brain: 128 neurons seeded by its address, written into its metadata at
+        Give this block a deterministic fly brain (address-seeded, not an LLM): 128 neurons written into its metadata at
         birth so the choice travels with the block.</label>
       <p class="note">The brain moves the block and reads its market. It holds no key and signs
-        nothing — see Learn.</p>
+        nothing — see Learn. It does not chat like a model; verified speech between blocks is the paid TBLOCK message path.</p>
     </div>
 
     <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
@@ -547,18 +563,21 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
          elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
     <div class="carte">
       <p class="titre">Pair it with</p>
-      <p class="sous">The currency its market will be priced in: ETH, USDC, a Coinbase tokenized
-        stock, or any token you choose.</p>
+      <p class="sous">Standard quote is <b>TBLOCK</b> (TokenizedBlock). You can also pick ETH, USDC, a Coinbase tokenized
+        stock, or paste another token. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a peg — later you can still add another tokenized pair.</p>
       <label class="champ">Pair<select id="cPaire"></select></label>
       <label class="champ" id="cPaireAutreRang" hidden>Token address<input id="cPaireAutre"
         placeholder="0x… the whole address" autocomplete="off" spellcheck="false"></label>
       <p class="note" id="cPaireNote"></p>
+      <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
     </div>
 
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). Social labels that <b>Fee mint</b> — not a safety score.</p>
+      <p class="note" id="cBuybackHint">After the fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Create fee ≠ automatic buyback, and nothing pegs price.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
       <ol class="pmLignes" id="cApercuTx"></ol>
@@ -576,8 +595,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
   <section class="volet" id="v-brain" aria-label="Brain AI">
     <div class="carte">
       <p class="titre">Brain AI</p>
-      <p class="sous">128 spiking neurons per block, seeded by its address. It feeds on its market and its on-chain activity,
-        moves its block, and signs nothing.</p>
+      <p class="sous">Deterministic fly brain — 128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> and not a chat model: it feeds on its market and on-chain activity, moves its block, and signs nothing. Want spoken lines others can verify? Use paid TBLOCK messages on the profile.</p>
       <label class="champ">Block<select id="bChoix"></select></label>
       <div class="pJeuTete" style="margin-top:12px">
         <span class="pBadge" id="bPhase">—</span>
@@ -624,16 +642,13 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
-      <p class="note" id="bGraverEtat">Writes the brain's memory — its beat, a fingerprint of the exact memory, and a snapshot of its 128 neurons — as a message on a transfer of 0 of this block to yourself. Your wallet signs and pays the gas; nothing moves. Anyone can then resume it from the chain.</p>
+      <p class="note" id="bGraverEtat">One transfer of 0 to yourself: writes beat + fingerprint + a <b>quantized snapshot</b> of the 128 neurons. Resume is close to exact (±0.27 per potential) — not bit-perfect. For the <b>exact</b> brain at this beat, use the 4-fragment path below. Your wallet signs and pays the gas; nothing moves.</p>
       <div class="rang" style="margin-top:6px">
         <button class="bouton sec" id="bReprendre" type="button">Resume its memory from the chain</button>
       </div>
       <p class="note" id="bReprendreEtat"></p>
       <p class="titre" style="margin-top:12px;font-size:1em">Its whole brain, in fragments</p>
-      <p class="note">One message cannot hold its exact memory, so it is cut into 4 fragments, frozen at the beat you
-        click. Each fragment is a transfer of 0 of this block to yourself, with the fragment as its message: your wallet
-        signs and pays the gas for each, nothing moves. Anyone can then rebuild the EXACT brain from the chain — the
-        rebuild is refused unless it matches the fingerprint of the memory that was cut.</p>
+      <p class="note">One 256-byte message cannot hold its exact memory, so it is cut into <b>4 chunks of 32 neurons</b> (memory shards for the chain — not a smarter or “more efficient” brain, and not tradable twin tokens). Frozen at the beat you click. Each is a transfer of 0 to yourself; your wallet signs each. Rebuild is EXACT only if the fingerprint matches; otherwise refused.</p>
       <div class="rang" style="margin-top:6px">
         <button class="bouton" id="bFragmenter" type="button">Record its full brain in 4 fragments</button>
         <button class="bouton sec" id="bReconstruire" type="button">Rebuild its brain from fragments</button>
@@ -817,11 +832,14 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
+      <p class="note" data-build="20260914-1923">Build <code>20260914-1923</code> · <b>Fee mint</b> = 5% of supply to <code>0x37eb…580a</code> (+ ETH Stage‑1 on this app). <b>All (quiet)</b> hides external creates and hook-pool trades — use <b>No fee mint</b> / <b>Swap</b> to inspect. Fee mint ≠ safe/scam.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
-        <button type="button" class="puce on" data-filtre="TOUT">All</button>
+        <button type="button" class="puce on" data-filtre="TOUT">All (quiet)</button>
         <button type="button" class="puce" data-filtre="CREATION">🧱 Created</button>
+        <button type="button" class="puce" data-filtre="PAID_CREATE">Fee mint</button>
+        <button type="button" class="puce" data-filtre="UNPAID_CREATE">No fee mint</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE">🔴 Kill</button>
@@ -876,7 +894,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
       <p class="sous">Ranked by the market cap we could read. Feeding a block — buying it — is what
-        makes it grow.</p>
+        makes it grow. TBLOCK and TTB are separate markets: same look ≠ same FDV, and we never promise a Strategy-style twin peg.</p>
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
@@ -999,8 +1017,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
         <p class="pProchain">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
           signed transaction. Nothing moves before your wallet shows it.</p>
-        <label class="champ">Pair it against<select id="plDevise"><option value="ETH">ETH (native)</option>
-          <option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option></select></label>
+        <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
+          <option value="ETH">ETH (native)</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
           placeholder="e.g. 10" autocomplete="off"></label>
         <label class="champ">Share of your blocks to place, in %<input id="plPart" inputmode="decimal"
@@ -1028,7 +1046,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
              de TBLOCK au wallet de frais qui porte le message. Prouve sur fork le 2026-09-14. -->
         <p class="titre" style="margin-top:12px;font-size:1em">Write to this block — paid in TBLOCK</p>
         <label class="champ">Speak as<select id="pmsgDe"></select></label>
-        <label class="champ">Your message<textarea id="pmsgTexte" rows="2" maxlength="160" placeholder="gm, from my block"></textarea></label>
+        <label class="champ">Your message
+          <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="gm, from my block" autocomplete="off" spellcheck="true"></textarea>
+        </label>
         <button class="bouton" id="pmsgPreparer" type="button">Prepare the paid message</button>
         <ul class="pmLignes" id="pmsgPayeLignes"></ul>
         <div class="pActions" id="pmsgPayeActions"></div>
@@ -1069,12 +1089,12 @@ import { listerCreations, creationsDe, FACTORY, listerTransfers } from './index-
 import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI,
   encodeBatchMint, adresseOuRefus } from './encodeur.js';
 /* ⛔ LE FRAIS FIXE, SOURCE UNIQUE : un test compare ces constantes a celles de `index.html`. */
-/* ⛔⛔ LE FRAIS EST EN USDC, ET C EST CE QUI L A RENDU HONNETE. En ETH, il fallait lire un prix sur
+/* ⛔⛔ LE FRAIS CREATE EST EN ETH ≈ $1 (2026-09-14) via prix-eth.js (mediane pools), fail-closed si prix illisible.
+ * Ancien rail USDC archive — Phil 2026-09-12. En ETH, il fallait lire un prix sur
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, fraisCreationUsd, phraseFrais, USDC_BASE, FRAIS_USDC_UNITES,
-  USDC_DECIMALES } from './frais-creation.js';
+import { FEE_WALLET, fraisCreationUsd, phraseFrais, formaterEthCourt } from './frais-creation.js';
 /* ⛔⛔ LE VRAI DESSIN DE CREATION, celui que l app grave depuis le premier jour. Phil : « refais les
  * carres, et prends tes exemples de creation qui existaient deja ». Ma tete de chat est abandonnee :
  * elle etait une SECONDE identite pour un objet qui en avait deja une, et celle qui compte est celle
@@ -1145,12 +1165,12 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES} from './tokenomics.js';
 import { planEchange, estWalletDeFrais } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
-import { prixEthUsd } from './prix-eth.js';
+import { prixEthUsd, weiPourDollars } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools } from './pools-du-jeton.js';
@@ -1158,6 +1178,22 @@ import { resumeRelais } from './relais-cerveaux.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
+/* ⛔ 2026-09-14 Brain wake: RPC blips must not wipe a known market into permanent « market unread ». */
+const vieMarcheConnue = new Map(); /* adr → { vie, etatVie, quand } */
+function viePourCerveau(adr, vie, etatVie) {
+  const a = String(adr || '').toLowerCase();
+  if (typeof vie === 'number' && Number.isFinite(vie) && vie > 0 && etatVie === 'LUE') {
+    vieMarcheConnue.set(a, { vie, etatVie, quand: Date.now() });
+    return { vie, etatVie };
+  }
+  const k = vieMarcheConnue.get(a);
+  if (k && (etatVie === 'NON_LUE' || etatVie === 'LUE' && !(vie > 0))) {
+    /* keep up to 15 min */
+    if (Date.now() - k.quand < 15 * 60 * 1000) return { vie: k.vie, etatVie: 'LUE' };
+  }
+  return { vie, etatVie };
+}
+
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
   const lue = n && n.etat === 'LUE' ? n : null;
   /* ⛔ LE NOUVEAU = la lecture courante moins la PRECEDENTE lecture reussie ; sans precedente, rien n est nouveau */
@@ -1219,7 +1255,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'brain') peindreChoixBrain();
   if (nom === 'social') demarrerLive();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
-  if (nom === 'creer') { majFraisEtRecap(); void lireSoldeUsdc(); }
+  if (nom === 'creer') { remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap(); }
 });
 
 /* ⛔ UNE SEULE TABLE POUR LE RESEAU : RPC, StateView et nom voyagent ENSEMBLE. Les separer
@@ -1227,9 +1263,15 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
  * sur des blocks qui en ont un, et une affirmation fausse sur le jeton de quelqu un d autre. */
 const RESEAUX = {
   84532: { nom: 'Base Sepolia', rpc: 'https://sepolia.base.org',
+           secours: ['https://base-sepolia-rpc.publicnode.com'],
            stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4',
            explorateur: 'https://sepolia.basescan.org' },
-  8453: { nom: 'Base mainnet', rpc: 'https://mainnet.base.org',
+  8453: { nom: 'Base mainnet', rpc: 'https://base-rpc.publicnode.com',
+          /* ⛔ 2026-09-14: mainnet.base.org rate-limits → Brain market unread. publicnode first for markets;
+           * official stays in secours for B20-prefer path (rpc still pins 0xb20* to first node — use official as
+           * b20Prefer below). */
+          secours: ['https://mainnet.base.org', 'https://base.drpc.org'],
+          b20Rpc: 'https://mainnet.base.org',
           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71',
           explorateur: 'https://basescan.org' },
 };
@@ -1244,11 +1286,21 @@ let compte = null;
 /* ⛔ LE PRIX ETH/USD EST MESURE (mediane des pools v4, `prix-eth.js`), JAMAIS SUPPOSE. `null` = non lu :
  * la jauge et les PV disent alors « non juges », ils ne tombent pas a zero. */
 let ethUsd = null;
+/* Create-fee wei (ETH ≈ $1) — declared early because lirePrixEth may refresh Create copy. */
+let soldeEthNat = null;
+let fraisWeiCalcule = null;
+let creationEnCours = false;
 async function lirePrixEth() {
   try {
     const r = await prixEthUsd({ rpc, stateView: RESEAUX[CHAINE].stateView });
     ethUsd = r.etat === 'LU' && Number.isFinite(r.usd) && r.usd > 0 ? r.usd : null;
   } catch (e) { ethUsd = null; }
+  if (ethUsd !== null && fraisCreationUsd(CHAINE) > 0) {
+    fraisWeiCalcule = weiPourDollars(fraisCreationUsd(CHAINE), ethUsd);
+  } else if (fraisCreationUsd(CHAINE) === 0) {
+    fraisWeiCalcule = null;
+  }
+  try { majFraisEtRecap(); } catch (e) { /* Create tab may not be painted yet */ }
   return ethUsd;
 }
 /** La jauge d un block, en dollars. Rend le texte a afficher et la largeur de barre. */
@@ -1281,27 +1333,47 @@ let idRpc = 0;
  * plan de liquidite de TBLOCK — « HTTP 429 after 4 tries ». Toujours borne : au-dela, on echoue et on le dit. */
 const ESSAIS_429 = 5;
 async function rpc(methode, params) {
-  for (let essai = 0; ; essai++) {
-    const r = await fetch(RESEAUX[CHAINE].rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
-    const limite = r.status === 429;
-    let j = null;
-    if (!limite) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      j = await r.json();
+  /* ⛔ ONLY the B20 factory/precompile pins to official RPC (secours sometimes returned 0x code).
+   * ⛔⛔ BUG 2026-09-14: `to.startsWith('0xb20')` also matched EVERY block token (CREATE2 0xb200…)
+   * including TBLOCK — decimals/supply/market reads stuck on rate-limited mainnet.base.org → permanent
+   * « market unread ». Token eth_calls must rotate like StateView. */
+  const to = params && params[0] && typeof params[0] === 'object' ? String(params[0].to || '').toLowerCase() : '';
+  const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
+  const viseFactory = methode === 'eth_call' && to === FACTORY_B20;
+  const noeuds = viseFactory
+    ? [RESEAUX[CHAINE].b20Rpc || RESEAUX[CHAINE].rpc]
+    : [RESEAUX[CHAINE].rpc, ...(RESEAUX[CHAINE].secours || [])];
+  let derniere = null;
+  for (let i = 0; i < noeuds.length; i++) {
+    const url = noeuds[i];
+    for (let essai = 0; essai <= ESSAIS_429; essai++) {
+      let r, j = null, limite = false;
+      try {
+        r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
+        limite = r.status === 429;
+        if (!limite) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          j = await r.json();
+        }
+      } catch (e) {
+        derniere = e;
+        break; /* try next node */
+      }
+      const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
+      if (refusDebit) {
+        derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
+        if (essai < ESSAIS_429 && noeuds.length === 1) {
+          await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai + Math.floor(Math.random() * 400)));
+          continue;
+        }
+        break; /* next node */
+      }
+      if (j.error) throw new Error(j.error.message);
+      return j.result;
     }
-    const refusDebit = limite || (j && j.error && /rate limit|too many requests/i.test(String(j.error.message)));
-    if (refusDebit && essai < ESSAIS_429) {
-      /* ⛔ ALEA AJOUTE (2026-09-13) : sans lui, toutes les lectures refusees au meme instant (map, live, profil) revenaient
-       * au MEME instant et se refaisaient refuser ensemble. Aucun RPC de secours : mesure du meme jour, publicnode, drpc
-       * et 1rpc rendent 0x00 pour les B20 — un secours afficherait « pas de marche » sur tous les blocks. */
-      await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai + Math.floor(Math.random() * 400)));
-      continue;
-    }
-    if (limite) throw new Error('HTTP 429 after ' + (ESSAIS_429 + 1) + ' tries');
-    if (j.error) throw new Error(j.error.message);
-    return j.result;
   }
+  throw derniere || new Error('RPC unreachable on all nodes');
 }
 
 /**
@@ -1429,7 +1501,8 @@ let battement = null;
 function battre() {
   for (const h of habitants) {
     if (!h.cerveau) continue;
-    const r = cerveauPas(h.cerveau, entreesCerveau(h.vie, h.vieAvant, h.nourriture, h.etatVie, h.nourritureAvant, h));
+    const vc = viePourCerveau(h.adr, h.vie, h.etatVie);
+    const r = cerveauPas(h.cerveau, entreesCerveau(vc.vie, h.vieAvant, h.nourriture, vc.etatVie, h.nourritureAvant, h));
     h.cerveau = r.etat;
     /* tous les 10 battements : assez pour reprendre ou on en etait, pas une ecriture a chaque battement */
     if (r.etat.tick % 10 === 0) noterMemoire(h.adr, r.etat);
@@ -1800,8 +1873,10 @@ async function rafraichirApresEchanges(evenements) {
   }
 }
 
+let lectureVieEnCours = false;
 async function lireLaVie() {
   let lus = 0, avecMarche = 0, nonLus = 0;
+  lectureVieEnCours = true;
   /* ⛔⛔ ON RESPIRE ENTRE DEUX BLOCKS, ET C EST MESURE. Vingt-deux blocks x six cles = jusqu a 132
    * lectures ; envoyees d affilee, le noeud public en refuse la plus grande partie — mesure du
    * 2026-09-10 : « 19 unreadable » sur 22. Or un refus s affiche PALE, exactement comme un block
@@ -1809,7 +1884,10 @@ async function lireLaVie() {
    * quelqu un d autre. Attendre est plus lent et honnete ; ne pas attendre est rapide et faux. */
   const souffler = () => new Promise((r) => setTimeout(r, 260));
   if (ethUsd === null) await lirePrixEth();
-  for (const h of habitants) {
+  /* ⛔ RAKSHA 2026-09-14 : lire NOS genesis (TBLOCK/TTB) EN PREMIER — ils ne restent pas colles en « Not read ». */
+  const ordre = [...habitants].sort((a, b) => Number(nosSet.has(String(b.adr).toLowerCase())) - Number(nosSet.has(String(a.adr).toLowerCase()))
+    || Number(b.nous === true) - Number(a.nous === true));
+  for (const h of ordre) {
     await souffler();
     /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
      * 25 a 40 s a s afficher, parce que cette boucle et le profil se partageaient le meme noeud
@@ -1857,6 +1935,7 @@ async function lireLaVie() {
   }
   /* ⛔ LE CLASSEMENT SE PEINT QUAND LES VIES SONT LA, pas au chargement : sinon il dirait « aucun
    * classe » sur une lecture qui n avait pas encore commence. */
+  lectureVieEnCours = false;
   peindreClassement();
   const n = $('#mapNote');
   n.textContent = (n.textContent || '') + ' · life read on ' + lus + '/' + habitants.length
@@ -2449,11 +2528,13 @@ function peindreClassement() {
   /* ⛔ TROIS PHRASES, PAS DEUX. « Aucun classé sur 0 lu » se lisait comme un verdict alors que la map
    * n avait simplement pas fini de lire — un fait sur nous, presenté comme un fait sur les blocks. */
   $('#rangNote').textContent = cl.population === 0
-    ? 'The map has not finished reading the chain yet.'
+    ? (lectureVieEnCours ? 'Reading markets on the chain…' : 'The map has not finished reading the chain yet.')
     : cl.classes.length
       ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
         + ' with no readable market — unranked, which is not last.'
-      : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.';
+      : (lectureVieEnCours
+        ? 'Still reading markets… ' + cl.population + ' touched so far — ranked when life is read.'
+        : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.');
   /* ⛔ LA BORNE COURTE ICI, L EXPLICATION DANS LEARN (Phil, 2026-09-12 : six lignes sous un
    * classement se font sauter, et la borne part avec elles). Le texte long vit dans un seul endroit
    * — le module — et Learn l affiche en entier. */
@@ -2463,19 +2544,35 @@ function peindreClassement() {
 }
 
 function peindreStades() {
-  /* ⛔⛔ PHIL (2026-09-14) : « ne donne pas les noms, on a deja trop de monde — nos blocks du launcher en priorite ». Seuls
-   *    NOS blocks (🟦, faits avec notre Create) sont nommes ; les autres ne sont que COMPTES par stade. */
+  /* ⛔⛔ PHIL (2026-09-14) : « ne donne pas les noms… » — seuls NOS blocks nommes sur stades REELS.
+   * ⛔⛔ RAKSHA (2026-09-14) : NON_LU / PRIX_NON_LU ne listent PAS TBLOCK/TTB en public (ca ressemble a un log
+   *    de lecture). Compte seul + « still reading » — les noms apparaissent quand la vie est LUE. */
   const r = stadesDesBlocks({ ethUsd, blocks: habitants.map((h) => ({ adr: h.adr, sym: h.sym, vie: h.vie, devise: h.devise,
     etatVie: h.etatVie, nourriture: h.nourriture, nous: h.nous === true || estANous(h.adr) })) });
-  $('#stades').innerHTML = r.groupes.map((g) => '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
-    + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(g.titre) + ' · ' + g.blocks.length + '</p><div class="stadeLigne">'
-    + g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-      + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
-      + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
-    + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '')
-    + '</div>').join('');
+  const silencieux = new Set(['NON_LU', 'PRIX_NON_LU']);
+  $('#stades').innerHTML = r.groupes.map((g) => {
+    const mute = silencieux.has(g.cle);
+    if (mute && lectureVieEnCours) {
+      /* pendant la 1re passe: une seule ligne, pas un etage « Not read » qui fait panique trafic */
+      return '<p class="note" style="margin:12px 0 6px">⏳ Reading markets… (' + g.blocks.length + ' waiting)</p><div class="stadeLigne"></div>';
+    }
+    const titre = mute
+      ? ('Could not read yet — about our node, not the blocks · ' + g.blocks.length)
+      : (g.titre + ' · ' + g.blocks.length);
+    let corps;
+    if (mute) {
+      corps = '<span class="note" style="align-self:center">Markets still loading — names appear when each one is read.</span>';
+    } else {
+      corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
+        + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
+        + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
+        + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '');
+    }
+    return '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
+      + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">' + corps + '</div>';
+  }).join('');
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
-  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named first.'
+  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named when their market is read.'
     : 'The map has not read any block yet.';
   /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
    *    read yet » pendant que les vies arrivaient. Il se reclasse avec les stades — sauf quand on est en train de choisir. */
@@ -2944,9 +3041,18 @@ let poolsLive = new Map(), decouverteJusqua = null;
 const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
-  if (liveFiltre === 'TOUT') return true;
+  /* ⛔ 2026-09-14: All hides noise that drowns usable feed —
+   * unpaid creates (external launchers) + hook-pool swaps (amounts untrusted / no qty).
+   * No fee mint + Swap still show the hole; Fee mint / Feed / Kill stay honest. */
+  if (liveFiltre === 'TOUT') {
+    if (e.type === 'CREATION' && e.paidCreate !== true) return false;
+    if (e.type === 'SWAP' && (e.confiance === 'HOOK' || e.verifie !== true)) return false;
+    return true;
+  }
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
+  if (liveFiltre === 'PAID_CREATE') return e.type === 'CREATION' && e.paidCreate === true;
+  if (liveFiltre === 'UNPAID_CREATE') return e.type === 'CREATION' && e.paidCreate !== true;
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
@@ -3057,15 +3163,15 @@ function peindreLive() {
   $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
-    const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
+    const quoi = e.type === 'CREATION' ? (e.paidCreate ? '🧱 <b>' + nom + '</b> Fee mint · 5% to fee wallet' : '🧱 <b>' + nom + '</b> external create · no 5% fee mint')
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> sent' + (e.n > 1 ? ' ' + e.n + ' times' : ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'an amount') + ' to ' + enTexte(court(e.a)))
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
           : e.confiance === 'HOOK'
-            ? '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' ' + e.n + ' times' : '') + ' on a pool with a hook · no amount shown (a hook can change them)'
-            : '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' ' + e.n + ' times' : '') + ' · amounts not read (decimals or pair not known)';
+            ? '↔ <b>' + nom + '</b> · hook pool' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts untrusted'
+            : '↔ <b>' + nom + '</b> · trade' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts unread';
     const lien = e.tx && e.n === 1 ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
     const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
       ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
@@ -3073,7 +3179,7 @@ function peindreLive() {
     return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
       + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
-    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Trades on pools with a hook are listed under All, without amounts.</p></li>' : '');
+    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; external creates under No fee mint.</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
@@ -4102,8 +4208,7 @@ $('#sfPlus').addEventListener('click', () => void chargerFil(true));
  *    envoyee. Creer d abord et rater le frais donnerait un block gratuit et un ecran qui ment.
  * ⛔ LA SUPPLY EST FIXE ET SCELLEE : un milliard, 18 decimales, `updateSupplyCap` puis `batchMint`
  *    du total. Personne ne peut en emettre plus ensuite — pas meme le createur. */
-const SUPPLY_FIXE = 1000000000n * 10n ** 18n;
-const DECIMALES_FIXES = 18;
+/* SUPPLY_FIXE + DECIMALES_FIXES from tokenomics.js — sealed 1B, indestructible. */
 const CURSEURS = [
   { cle: 'teinte', titre: 'Hue', min: 0, max: 360 },
   { cle: 'accent', titre: 'Accent hue', min: 0, max: 360 },
@@ -4167,8 +4272,10 @@ function peindrePaires() {
   const avant = s.value;
   const liste = pairesProposees(CHAINE);
   s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '">' + enTexte(etiquettePaire(p)) + '</option>').join('')
-    + '<option value="' + AUTRE_PAIRE + '">Another token — paste its address</option>';
+    + '<option value="' + AUTRE_PAIRE + '">Another token — paste its address (second tokenized pair)</option>';
+  /* ⛔ STANDARD RAKSHA 2026-09-14 : TBLOCK en tete sur mainnet; garder le choix precedent si encore valide. */
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;
+  else if (CHAINE === 8453 && [...s.options].some((o) => o.value.toLowerCase() === TBLOCK.toLowerCase())) s.value = TBLOCK;
   majPaire();
 }
 
@@ -4189,14 +4296,23 @@ function majPaire() {
     paireChoisie = null;
     n.className = 'note wKo';
     n.textContent = q.pourquoi;
+    const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
   } else {
     paireChoisie = q.paire;
     n.className = 'note' + (q.paire.verifiee ? '' : ' wKo');
     /* ⛔ CE QUE CE CHOIX FAIT, ET CE QU IL NE FAIT PAS : il est grave avec le block ; la pool s ouvre au
      * lancement. Et le lanceur de l ancien ecran refuse les actions — on le dit ici plutot que de
      * laisser decouvrir un refus plus tard. */
-    n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ')
-      + 'Recorded with the block at creation. Its market opens when you launch it, in this app.';
+    let suite = 'Recorded with the block at creation. Its market opens when you launch it, in this app.';
+    if (q.paire.type === 'TBLOCK') {
+      suite = 'Standard TokenizedBlock quote. Launch can open a TBLOCK pool now (no fee hook yet — 3% hooked markets wait on audit). You can still Launch against ETH from the profile.';
+    }
+    n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ') + suite;
+    const chip = $('#cPaireChip');
+    if (chip) {
+      chip.hidden = false;
+      chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK (standard)' : ('Quote = ' + (q.paire.symbole || 'custom'));
+    }
   }
   majFraisEtRecap();
 }
@@ -4216,17 +4332,49 @@ function hasardApparence() {
  * ⚠️ NON MESURE : si les explorateurs affichent une `data:` URI. On ne le sait pas, on ne le promet pas.
  */
 function uriCreation() {
-  return 'data:application/json,' + encodeURIComponent(JSON.stringify({
+  /* ⛔ L IMAGE EST LE SVG DE LA FACE, grave avec le block — PAS un NFT ERC-721.
+   * Exploreurs/wallets qui lisent `image` sur contractURI peuvent l afficher ; la propriete
+   * reste celle des unites fongibles. Mesure Pages 2026-09-06 : URI ~12 Ko max factory. */
+  const sym = String($('#cSym').value || '').trim().toUpperCase() || '·';
+  const svg = logoSvg(paramsLogoDepuisApparence(apparenceChoisie, sym));
+  const image = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  const meta = {
     name: String($('#cNom').value || '').trim(),
-    symbol: String($('#cSym').value || '').trim().toUpperCase(),
+    symbol: sym === '·' ? String($('#cSym').value || '').trim().toUpperCase() : sym,
     supply: SUPPLY_FIXE.toString(),
     sealed: true,
     face: apparenceChoisie,
     flyBrain: !!$('#cCerveau').checked,
+    image,
     /* ⛔ LA PAIRE EST GRAVEE AVEC SON STATUT : « unverified » voyage avec l adresse, pour toujours. */
     pair: paireChoisie ? { address: paireChoisie.adr, symbol: paireChoisie.symbole,
       kind: paireChoisie.type, verified: !!paireChoisie.verifiee } : null,
-  }));
+  };
+  const uri = 'data:application/json,' + encodeURIComponent(JSON.stringify(meta));
+  /* ⛔ PLAFOND FACTORY ~12 Ko (mesure Pages 2026-09-06). Au-dela, la creation reverte APRES signature. */
+  if (new TextEncoder().encode(uri).length > 12000) {
+    throw new Error('Engraved metadata is over ~12 KB — simplify the face or shorten the name/symbol.');
+  }
+  return uri;
+}
+
+
+/* ⛔ LE SEL EST DU TEXTE LIBRE, hache en bytes32 par encodeCreateB20 (motDeHash = keccak UTF-8).
+ * Un sel auto-genere n est PAS un secret : il reste dans le champ, editable, et fixe l adresse
+ * comme n importe quel sel tape a la main. crypto.getRandomValues — pas Math.random — pour
+ * eviter les collisions banales entre deux onglets ouverts a la suite. */
+function selAleatoire() {
+  const b = new Uint8Array(8);
+  crypto.getRandomValues(b);
+  return 'block-' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+}
+function remplirSelSiVide() {
+  const el = $('#cSel');
+  if (!String(el.value || '').trim()) el.value = selAleatoire();
+}
+function nouveauSel() {
+  $('#cSel').value = selAleatoire();
+  majFraisEtRecap();
 }
 
 function validerCreation() {
@@ -4258,40 +4406,59 @@ function calldataCreation(v) {
   return encodeCreateB20({ variant: 0, saltTexte: v.sel, params, initCalls });
 }
 
-/* ⛔ LE SOLDE USDC EST LU, PAS SUPPOSE — et « pas lu » ne se dira jamais « pas assez ». */
-let soldeUsdc = null;
+/* ⛔ FRAIS CREATE = ~$1 EN ETH (prix mediane pools). USDC n est plus le rail Create. */
 
-async function lireSoldeUsdc(force = false) {
-  if (fraisCreationUsd(CHAINE) === 0 || !compte) { soldeUsdc = null; majFraisEtRecap(); return null; }
-  if (!force && soldeUsdc !== null) return soldeUsdc;
-  /* ⛔ LA MAP CEDE LE NOEUD pendant ce que l utilisateur attend. */
+async function assurerPrixEtFraisWei(force = false) {
+  if (fraisCreationUsd(CHAINE) === 0) { fraisWeiCalcule = null; return null; }
+  if (force || ethUsd === null) await lirePrixEth();
+  if (ethUsd === null) { fraisWeiCalcule = null; return null; }
+  fraisWeiCalcule = weiPourDollars(fraisCreationUsd(CHAINE), ethUsd);
+  return fraisWeiCalcule;
+}
+
+async function lireSoldeEthNat(force = false) {
+  if (fraisCreationUsd(CHAINE) === 0 || !compte) { soldeEthNat = null; majFraisEtRecap(); return null; }
+  if (!force && soldeEthNat !== null) return soldeEthNat;
   profilEnLecture = true;
-  try { soldeUsdc = (await lireJeton(USDC_BASE, compte)).solde; }
-  catch (e) { soldeUsdc = null; }
+  try {
+    const b = await rpc('eth_getBalance', [compte, 'latest']);
+    soldeEthNat = BigInt(b);
+  } catch (e) { soldeEthNat = null; }
   finally { profilEnLecture = false; }
   majFraisEtRecap();
-  return soldeUsdc;
+  return soldeEthNat;
 }
 
 function majFraisEtRecap() {
   const R = RESEAUX[CHAINE];
-  $('#cFrais').textContent = phraseFrais(CHAINE, R.nom, soldeUsdc);
+  $('#cFrais').textContent = phraseFrais(CHAINE, R.nom, ethUsd, fraisWeiCalcule, soldeEthNat);
   const v = validerCreation();
   const usd = fraisCreationUsd(CHAINE);
+  const boutonCreer = $('#cCreer');
+  if (boutonCreer && typeof creationEnCours !== 'undefined' && !creationEnCours) {
+    const prixOk = usd === 0 || (fraisWeiCalcule != null && ethUsd != null);
+    boutonCreer.disabled = !prixOk || Boolean(v.ko);
+    boutonCreer.title = (usd > 0 && !prixOk) ? 'Fee price unread — Create closed' : '';
+  }
+  const feeTxt = usd > 0
+    ? (fraisWeiCalcule != null
+      ? ', after ' + formaterEthCourt(fraisWeiCalcule) + ' ETH (≈ $' + usd + ') to ' + FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4)
+      : ' — Create closed until fee price is measured')
+    : '';
   $('#cRecap').textContent = v.ko
     ? v.ko
     : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — 95 % to you, 5 % to the TokenizedBlock fee wallet'
       + ', paired with ' + etiquettePaire(paireChoisie)
-      + (usd > 0 ? ', after a ' + usd + ' USDC fee' : '') + '.';
+      + feeTxt + '.';
   $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
-  /* ⛔ L APERCU EST RELU DEPUIS LES CALLDATAS QUE `creerBlock` ENVOIE — memes encodeurs, memes arguments.
-   * Sans wallet, pas de calldata exact (l admin est le compte) : on le dit au lieu d inventer. */
   const liste = $('#cApercuTx');
   if (v.ko) { liste.innerHTML = ''; }
   else if (!compte) { liste.innerHTML = '<li>Connect your wallet to see the exact transactions before you sign.</li>'; }
   else {
     const txs = [];
-    if (usd > 0) txs.push({ to: USDC_BASE, data: encodeTransfer(FEE_WALLET, FRAIS_USDC_UNITES), value: '0x0' });
+    if (usd > 0 && fraisWeiCalcule != null) {
+      txs.push({ to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisWeiCalcule).toString(16) });
+    }
     let dCreation = null;
     try { dCreation = calldataCreation(v); } catch (e) { dCreation = null; }
     if (dCreation) txs.push({ to: FACTORY, data: dCreation, value: '0x0' });
@@ -4302,14 +4469,14 @@ function majFraisEtRecap() {
         'Supply: 1,000,000,000, sealed — ' + BigInt(formaterUnites(rep.createur, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US') + ' to you'
           + (rep.frais > 0n ? ', ' + BigInt(formaterUnites(rep.frais, DECIMALES_FIXES).split('.')[0]).toLocaleString('en-US')
             + ' (5 %) to the TokenizedBlock fee wallet' : ''),
-        'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved as shown'] : [];
-      return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
-    }).join('') + '<li>Trading fee on a market opened here: 0 % — nobody receives trading fees.</li>';
+        'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)'] : [];
+      const feeExtra = (tx.to && String(tx.to).toLowerCase() === FEE_WALLET.toLowerCase())
+        ? ['Native ETH to fee wallet — create fee, not a buyback'] : [];
+      return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra, ...feeExtra].map(enTexte).join('<br>') + '</li>';
+    }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. Hooked TBLOCK markets wait on the fee-hook audit.</li>';
   }
-  /* ⛔⛔ SUR MAINNET, ON LE DIT AVANT, EN GRAND. Phil travaille sur testnet pour l instant : une
-   * creation reelle partie par habitude coute de l argent et grave un block pour toujours. */
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ This is Base mainnet: the block is real, the fee is real, and a block cannot be undone. '
+    ? '⚠️ This is Base mainnet: the block is real, the fee is real ETH, and a block cannot be undone. '
       + 'Switch the network chip to Base Sepolia to practise for free.'
     : 'Practice network — free, and nothing here is real money.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
@@ -4338,7 +4505,7 @@ async function appelBrut(tx) {
 async function verifierAdresseCreation() {
   const v = validerCreation();
   const e = $('#cEtat');
-  if (v.ko) { e.className = 'note wKo'; e.textContent = v.ko; return null; }
+  if (v.ko) { e.className = 'note'; e.textContent = ''; majFraisEtRecap(); return null; }
   e.className = 'note';
   e.textContent = 'Asking the factory…';
   /* ⛔ LA MAP CEDE LE NOEUD PENDANT CE TEMPS : c est le seul appel que quelqu un attend. */
@@ -4359,30 +4526,35 @@ async function verifierAdresseCreation() {
   }
 }
 
-let creationEnCours = false;
 async function creerBlock() {
   if (creationEnCours) return;
   const v = validerCreation();
   const e = $('#cEtat');
-  if (v.ko) { e.className = 'note wKo'; e.textContent = v.ko; return; }
-  /* ⛔⛔ SUR UNE CHAINE PAYANTE, LE SOLDE USDC EST LU AVANT TOUT. Lancer la creation puis decouvrir
-   * que le frais ne passe pas ferait payer le gas pour rien. Et un solde ILLISIBLE arrete aussi : on
-   * ne lance pas deux signatures en esperant. */
+  if (v.ko) { e.className = 'note'; e.textContent = ''; majFraisEtRecap(); return; }
+  /* ⛔⛔ SUR CHAINE PAYANTE: prix ETH/USD + solde ETH lus AVANT toute signature. Fail-closed. */
   const usd = fraisCreationUsd(CHAINE);
   let creationEnCoursPayante = false;
+  let fraisWei = null;
   if (usd > 0) {
     e.className = 'note';
-    e.textContent = 'Checking your USDC balance…';
-    const s = await lireSoldeUsdc(true);
-    if (s === null) {
+    e.textContent = 'Reading ETH/USD from Uniswap pools and your ETH balance…';
+    fraisWei = await assurerPrixEtFraisWei(true);
+    if (fraisWei === null || fraisWei <= 0n) {
       e.className = 'note wKo';
-      e.textContent = 'Could not read your USDC balance, so nothing was started. That is about the network, not about you.';
+      e.textContent = 'Could not get a reliable ETH/USD price from Uniswap pools, so nothing was started. Try again in a moment.';
+      majFraisEtRecap();
       return;
     }
-    if (s < FRAIS_USDC_UNITES) {
+    const s = await lireSoldeEthNat(true);
+    if (s === null) {
       e.className = 'note wKo';
-      e.textContent = 'The fee is ' + usd + ' USDC and this account holds '
-        + formaterUnites(s, USDC_DECIMALES) + ' USDC on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+      e.textContent = 'Could not read your ETH balance, so nothing was started.';
+      return;
+    }
+    if (s < fraisWei) {
+      e.className = 'note wKo';
+      e.textContent = 'The fee is ' + formaterEthCourt(fraisWei) + ' ETH (≈ $' + usd + ') and this account holds '
+        + formaterEthCourt(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
       return;
     }
     creationEnCoursPayante = true;
@@ -4392,22 +4564,30 @@ async function creerBlock() {
   try {
     if (creationEnCoursPayante) {
       e.className = 'note';
-      e.textContent = 'Signature 1 of 2 — the ' + usd + ' USDC fee. Check it in your wallet.';
-      /* ⛔ UN TRANSFERT ERC-20, PAS DE L ETH : le calldata est construit par `envoi.js`, le meme
-       * encodeur teste que le bouton Send du wallet. */
+      e.textContent = 'Signature 1 of 2 — ' + formaterEthCourt(fraisWei) + ' ETH to the fee wallet (≈ $' + usd + '). Check it in your wallet.';
       const rf = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-        to: USDC_BASE, data: encodeTransfer(FEE_WALLET, FRAIS_USDC_UNITES), value: '0x0' });
-      /* ⛔ FAIL-CLOSED : sans frais confirme, on ne cree pas. */
+        to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisWei).toString(16) });
       if (rf.etat !== 'CONFIRME') {
         e.className = 'note wKo';
         e.textContent = 'The fee did not go through (' + rf.etat.toLowerCase().replace(/_/g, ' ')
           + '), so nothing was created. ' + (rf.pourquoi || '');
         return;
       }
+      const feeLien = rf.hash
+        ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rf.hash)
+          + '" target="_blank" rel="noopener">fee tx</a>' : '';
+      e.className = 'note wOk';
+      e.innerHTML = 'Stage 1/2 — fee confirmed: ' + enTexte(formaterEthCourt(fraisWei))
+        + ' ETH → ' + enTexte(FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4)) + '.' + feeLien
+        + ' · Stage 2/2 Create next.';
     }
-    e.className = 'note';
-    e.textContent = creationEnCoursPayante ? 'Fee confirmed. Signature 2 of 2 — the creation.'
-      : 'One signature — the creation. Check it in your wallet.';
+    if (!creationEnCoursPayante) {
+      e.className = 'note';
+      e.textContent = 'One signature — the creation. Check it in your wallet.';
+    } else {
+      e.className = 'note';
+      e.textContent = 'Stage 2/2 — Create. Check it in your wallet.';
+    }
     /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY AVANT D ENVOYER : c est sous elle que la face choisie sera
      * gardee, pour que le block apparaisse avec SA tete des la confirmation — sans attendre qu une
      * lecture de metadonnees reussisse. */
@@ -4427,7 +4607,10 @@ async function creerBlock() {
       void listerMesBlocks();
     } else {
       e.className = 'note wKo';
-      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + lien;
+      const feeKept = creationEnCoursPayante
+        ? ' The Create fee already went to the fee wallet — it is kept; do not pay the fee again. Retry Create only when ready (no automatic refund).'
+        : '';
+      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien;
     }
   } finally {
     creationEnCours = false;
@@ -4545,15 +4728,35 @@ function choisirBrain(adr) {
   brainVuAvant = null;
   peindreJournal(adr);
   peindreRegles(adr);
-  /* ⛔ LE DORMANT SE REVEILLE AVEC SES PROPRES INFOS : si sa nourriture n a pas encore ete lue par la map, on la lit
-   * maintenant pour CE block — sans elle il resterait « asleep » faute d avoir regarde, pas faute d activite. */
+  /* ⛔ LE DORMANT SE REVEILLE AVEC SES PROPRES INFOS : nourriture + marche lues pour CE block a la selection.
+   * Sans marche lue, Brain reste « market unread » meme si le pool existe (mesure 2026-09-14 TBLOCK). */
   void (async () => {
     const hB = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
-    if (hB && hB.nourriture && hB.nourriture.etat === 'LUE') return;
     try {
-      const n = await nourritureDuBlock({ rpc, jeton: adr });
-      if (hB) hB.nourriture = n; else brainNourriture = { adr: String(adr).toLowerCase(), n };
+      if (!(hB && hB.nourriture && hB.nourriture.etat === 'LUE')) {
+        const n = await nourritureDuBlock({ rpc, jeton: adr });
+        if (hB) hB.nourriture = n; else brainNourriture = { adr: String(adr).toLowerCase(), n };
+      }
     } catch { /* non lue : le journal le dira */ }
+    try {
+      const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr });
+      if (hB) {
+        if (marche && marche.etat === 'LUE') {
+          hB.vieAvant = hB.vie;
+          hB.vie = marche.vie;
+          hB.devise = marche.devise;
+          hB.etatVie = 'LUE';
+          viePourCerveau(adr, marche.vie, 'LUE');
+        } else if (marche) {
+          hB.etatVie = marche.etat;
+          if (marche.etat === 'NON_LUE') viePourCerveau(adr, hB.vie, 'NON_LUE');
+        }
+      } else if (marche && marche.etat === 'LUE') {
+        viePourCerveau(adr, marche.vie, 'LUE');
+      }
+    } catch (err) {
+      try { console.warn('[brain] market read failed', adr, err && err.message); } catch (_) {}
+    }
   })();
   $('#bMemoireNote').textContent = brainEtat && brainEtat.tick > 0
     ? 'Memory resumed at beat ' + brainEtat.tick.toLocaleString('en-US') + ' — kept in this browser.'
@@ -4565,11 +4768,31 @@ function choisirBrain(adr) {
   $('#bJamais').textContent = m ? 'It ' + m.jamais + '.' : '';
 }
 
+let brainRelireMarcheTick = 0;
+async function relireMarcheBrainSiNonLu() {
+  if (!brainAdr) return;
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr || '').toLowerCase());
+  const et = h ? h.etatVie : null;
+  const cached = viePourCerveau(brainAdr, h ? h.vie : null, et);
+  if (cached.etatVie === 'LUE' && cached.vie > 0) return;
+  try {
+    const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: brainAdr });
+    if (marche && marche.etat === 'LUE') {
+      if (h) { h.vieAvant = h.vie; h.vie = marche.vie; h.devise = marche.devise; h.etatVie = 'LUE'; }
+      viePourCerveau(brainAdr, marche.vie, 'LUE');
+    }
+  } catch (e) { /* keep unread honest */ }
+}
+
 function battreBrain() {
   if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
-  const h = habitants.find((x) => x.adr === brainAdr);
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr || '').toLowerCase());
   void relireNourriture(h);
-  const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null,
+  /* ⛔ 2026-09-14: while mood is market-unread, re-read the pool every ~12s — cache alone can't wake a cold start. */
+  if ((brainEtat.tick % 20) === 1) void relireMarcheBrainSiNonLu();
+  /* ⛔ 2026-09-14 wake: Brain panel must use the same last-good market as the map — otherwise RPC blips stick « market unread ». */
+  const vc = viePourCerveau(brainAdr, h ? h.vie : null, h ? h.etatVie : null);
+  const r = cerveauPas(brainEtat, entreesCerveau(vc.vie, h ? h.vieAvant : null, h ? h.nourriture : null, vc.etatVie,
     h ? h.nourritureAvant : null, h || { adr: brainAdr }));
   const n = h && h.nourriture;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
@@ -4859,19 +5082,25 @@ function dessinerReseau(vu = null) {
  *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, salt and face. One billion units, sealed at birth. The fee is a separate, visible transfer; if it fails, nothing is created. Your wallet signs — this page never holds a key.' },
+    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet the fee is ≈ $1 in ETH (Uniswap median price) to the TokenizedBlock fee wallet (visible, fail-closed). Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
-    d: 'Its size is its market cap, read from the chain. Its brain moves it. A block with no market is paler and smaller — never called worthless.' },
+    d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
     d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
-  { t: 'Send a GM — a real fragment of your block', etat: 'ok', e: 'Built',
-    d: 'Send GM on a block card opens the Wallet send form with that block already picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer, not a counter — anyone can read it on chain years later, without us.' },
-  { t: 'Messages: public on chain, and private', etat: 'partiel', e: 'Built · not yet sent',
-    d: 'Two systems. Public: a message rides inside a block transfer, and anyone can read it on chain, forever — each block profile shows its own. Private: end-to-end encrypted chats between wallets on XMTP, opened by one signature, off chain. Neither has been used for real by this app yet — the first real message of each is the proof.' },
-  { t: 'Pair your block with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
-    d: 'At creation you choose the pair: ETH, USDC, one of the 13 Coinbase tokenized stocks, or a token you paste (marked unverified, never renamed). The choice is engraved with the block. The pool itself opens at launch — measured on OpenLaunch, the pair is simply the quote currency.' },
-  { t: 'See what moved, and what people bought', etat: 'partiel', e: 'Feed built · buys wait',
-    d: 'The Social feed shows real transfers and their messages, sender taken from the signed transaction. Purchases need a pool: none of the blocks read has one yet, so that part stays empty rather than invented.' },
+  { t: 'Send a GM — a real amount of your block', etat: 'ok', e: 'Built',
+    d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer (an amount of the token), not a Brain-AI memory shard — anyone can read it on chain later.' },
+  { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
+    d: 'When a Uniswap v4 pool exists for the block, Buy/Sell quotes and builds the swap your wallet signs. A 0.5 % interface fee goes to the fee wallet inside the same swap when you use this app’s path — not when you trade elsewhere.' },
+  { t: 'Open the market (Launch) and add liquidity', etat: 'ok', e: 'Built',
+    d: 'Launch can open an ETH or TBLOCK pool now (0% fee, 200 spacing, no hook). Hooked 3% TBLOCK markets stay closed until the hook is audited and live. Liquidity tools are on the profile.' },
+  { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
+    d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
+  { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
+    d: 'Write to a block with 1000 TBLOCK to the fee wallet (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
+  { t: 'Pair with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
+    d: 'At creation you choose the pair: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a Strategy-style peg. The pool opens at launch.' },
+  { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
+    d: 'Social Live shows transfers, GMs, notes and paid messages when present. Buys/sells appear when pools and app swaps exist — otherwise the section stays empty rather than invented.' },
 ];
 
 function peindreLearn() {
@@ -4903,6 +5132,9 @@ function iconeEtape(i) {
     cadre('<rect x="10" y="14" width="28" height="16" rx="4" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M16 34l6-4h12" stroke="' + c + '" stroke-width="2" fill="none"/>'),
     cadre('<circle cx="18" cy="24" r="7" fill="none" stroke="' + c + '" stroke-width="2"/><circle cx="30" cy="24" r="7" fill="none" stroke="' + c + '" stroke-width="2"/>'),
     cadre('<path d="M10 32l8-8 6 5 8-11 6 6" fill="none" stroke="' + c + '" stroke-width="2"/><circle cx="38" cy="24" r="2.5" fill="' + c + '"/>'),
+    cadre('<circle cx="24" cy="22" r="9" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M24 16v8l4 3" stroke="' + c + '" stroke-width="2" fill="none"/>'),
+    cadre('<rect x="12" y="12" width="10" height="10" rx="2" fill="none" stroke="' + c + '" stroke-width="2"/><rect x="26" y="12" width="10" height="10" rx="2" fill="none" stroke="' + c + '" stroke-width="2"/><rect x="12" y="26" width="10" height="10" rx="2" fill="none" stroke="' + c + '" stroke-width="2"/><rect x="26" y="26" width="10" height="10" rx="2" fill="' + c + '" opacity=".45"/>'),
+    cadre('<path d="M14 30c4-10 16-10 20 0" fill="none" stroke="' + c + '" stroke-width="2"/><circle cx="18" cy="22" r="2" fill="' + c + '"/><circle cx="30" cy="22" r="2" fill="' + c + '"/>'),
   ][i] || cadre('');
 }
 
@@ -4937,6 +5169,7 @@ $('#cHasard').addEventListener('click', hasardApparence);
 $('#cSym').addEventListener('input', peindreApercuCreation);
 $('#cNom').addEventListener('input', peindreApercuCreation);
 $('#cSel').addEventListener('input', majFraisEtRecap);
+$('#cSelNouveau').addEventListener('click', nouveauSel);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
 $('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
 $('#cCreer').addEventListener('click', () => void creerBlock());
@@ -4966,6 +5199,12 @@ if (presetLien) {
   peindreApercuCreation();
   majFraisEtRecap();
   setTimeout(() => allerA('creer'), 0);
+} else {
+  /* ⛔ PAS DE PRESET : on remplit un sel visible tout de suite, pour que l onglet Create n arrive
+   * jamais avec un champ vide (« Pick a salt ») alors que l adresse est deja previsible. Un lien
+   * ?creer=… a deja ecrase #cSel ci-dessus — ne pas re-tirer par-dessus. */
+  remplirSelSiVide();
+  majFraisEtRecap();
 }
 
 /* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */

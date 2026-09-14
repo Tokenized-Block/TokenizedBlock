@@ -11,6 +11,9 @@
 import { FEE_WALLET } from './frais-creation.js';
 
 export const PART_FRAIS_POUR_CENT = 5n;
+/** Fixed sealed supply for every TB Create: 1 billion units × 18 decimals. Indestructible = cap == mint, nobody can mint more. */
+export const DECIMALES_FIXES = 18;
+export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 /** TBLOCK, lu dans le log B20Created de la tx 0xda396460…4cf3 (bloc 51 260 745). */
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
 /** Adresse MINEE du hook (simulation forge sans --broadcast, 2026-09-13) — PAS une adresse deployee. */

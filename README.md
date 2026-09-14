@@ -72,6 +72,6 @@ Status is never inferred from broadcast alone — green / Ready-to-Launch only a
 ## Brand / host (2026-09-07 overnight)
 
 - **Public brand:** Tokenized-Block.app
-- **Live host until DNS:** `https://tokenized-block.github.io/` (tokenized-block.app had no A/AAAA as of 2026-09-07 — do not flip farcaster homeUrl yet)
+- **Live host:** `https://tokenized-block.up.railway.app/` (Pages github.io retired 2026-09-14; Railway MAIN only)
 - **Fee wallet (all Tokenized Block fees):** `0x37eb9b7ce0b51fe12fbf092026e001918128580a`
 
