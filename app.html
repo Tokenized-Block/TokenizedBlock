@@ -593,7 +593,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). Mainnet Create goes through <b>CreateRouter</b> (one signature: fee ETH only kept if create succeeds). Not a safety score.</p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more) · <b>5%</b> minted to fee wallet <code>0x37eb…580a</code> (same wallet as the ETH fee). Mainnet Create goes through <b>CreateRouter</b> only (one signature: fee ETH + forced 5% mint to <code>0x37eb…580a</code>). Creates that skip this app (raw factory) pay nothing — we cannot force the Base precompile. Not a safety score.</p>
       <p class="note" id="cBuybackHint">After the fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Create fee ≠ automatic buyback, and nothing pegs price.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>

@@ -126,6 +126,17 @@ createServer((req, res) => {
 
   const chemin = String(req.url || '/').split('?')[0];
 
+  /* ⛔ 2026-09-14: old Instant Create shells still call factory createB20 with NO fee.
+   * Force everyone onto app.html CreateRouter path (MAIN only place fees are captured). */
+  if (chemin === '/index.html' || chemin === '/block-0.html') {
+    res.writeHead(301, {
+      Location: '/#creer',
+      'Cache-Control': 'no-store, max-age=0',
+    });
+    res.end();
+    return;
+  }
+
   /* sonde de sante — pour qu un cron puisse demander « es-tu vivant » sans charger l app */
   if (chemin === '/sante') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
