@@ -102,8 +102,17 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Create a block', lignes };
   }
   if (sel === S.createPaid && to === String(CREATE_ROUTER).toLowerCase()) {
-    lignes.push('Creates via CreateRouter: sealed 1B all to you; ≈ $1 ETH fee (USDC/ETH oracle) forwarded to the fee wallet only after create succeeds.');
-    return { etat: 'LUE', action: 'Create a block (paid)', lignes };
+    lignes.push('Creates via CreateRouter: sealed 1B all to you; life fee ≈ $1 ETH (birth, USDC/ETH oracle) forwarded to the fee wallet only after create succeeds.');
+    return { etat: 'LUE', action: 'Create a block (life fee)', lignes };
+  }
+  /* Native ETH transfer (no calldata) — Launch life fee → FEE_WALLET. */
+  if ((data === '0x' || data.length <= 2 || sel === '') && valeur > 0n) {
+    const fee = to === String(FEE_WALLET).toLowerCase();
+    lignes.push('Sends: ' + formaterUnites(valeur, 18) + ' ETH');
+    lignes.push('To: ' + nomDe(to, ctx));
+    return { etat: 'LUE',
+      action: fee ? 'Life fee (ETH) — stay alive / Launch' : 'Send ETH',
+      lignes };
   }
   if ((sel === S.multicall || sel === S.modify) && V.posm && to === V.posm.toLowerCase()) {
     const permanent = data.includes(String(PROPRIETAIRE_PERMANENT).slice(2).toLowerCase().padStart(64, '0'));

@@ -126,8 +126,9 @@ createServer((req, res) => {
 
   const chemin = String(req.url || '/').split('?')[0];
 
-  /* ⛔ 2026-09-14: old Instant Create shells still call factory createB20 with NO fee.
-   * Force everyone onto app.html CreateRouter path (MAIN only place fees are captured). */
+  /* ⛔ 2026-09-14: Instant Create retired — factory createB20 unpaid on MAIN.
+   * Hard 301 → /#creer (app.html CreateRouter createPaid + life fee ≈$1 ETH).
+   * Practice 84532 stays free factory inside app.html only. Zero TB create UI on 8453 → FACTORY. */
   if (chemin === '/index.html' || chemin === '/block-0.html') {
     res.writeHead(301, {
       Location: '/#creer',

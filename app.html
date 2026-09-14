@@ -593,8 +593,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet fee is <b>≈ $1 in ETH</b> (USDC/ETH Uniswap median) → fee wallet <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing — we cannot force the Base precompile. Not a safety score.</p>
-      <p class="note" id="cBuybackHint">After the fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Create fee ≠ automatic buyback, and nothing pegs price.</p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet <b>life fee ≈ $1 ETH</b> (birth — USDC/ETH Uniswap median) → <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; life fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing until Launch — we cannot force the Base precompile. Not a safety score.</p>
+      <p class="note" id="cBuybackHint">After the life fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Life fee ≠ automatic buyback, and nothing pegs price. Sleep / no-market = not paying life yet.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
       <ol class="pmLignes" id="cApercuTx"></ol>
@@ -849,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260914-2105">Build <code>20260914-2105</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260914-2118">Build <code>20260914-2118</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1109,7 +1109,7 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, phraseFrais, formaterEthCourt } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt } from './frais-creation.js';
 /* ⛔⛔ LE VRAI DESSIN DE CREATION, celui que l app grave depuis le premier jour. Phil : « refais les
  * carres, et prends tes exemples de creation qui existaient deja ». Ma tete de chat est abandonnee :
  * elle etait une SECONDE identite pour un objet qui en avait deja une, et celle qui compte est celle
@@ -3780,8 +3780,23 @@ async function calculerLancement() {
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
   if ($('#profil').dataset.block !== adr) return;
+  if (fraisLancementUsd(CHAINE) > 0) {
+    plan.fraisLancementWei = await assurerFraisLancementWei(true);
+    await lireSoldeEthNat(true);
+  } else {
+    plan.fraisLancementWei = null;
+  }
   planCourant = plan;
   peindrePlan(plan, adr);
+}
+
+/* ⛔ LIFE FEE Launch (8453): same ≈$1 ETH as Create birth → FEE_WALLET, then existing Launch tx.
+ * Practice 84532 stays free. Fail-closed if oracle unread or balance too low. */
+async function assurerFraisLancementWei(force = false) {
+  if (fraisLancementUsd(CHAINE) === 0) return null;
+  if (force || ethUsd === null) await lirePrixEth();
+  if (ethUsd === null) return null;
+  return weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
 }
 
 function peindrePlan(plan, adr) {
@@ -3797,21 +3812,36 @@ function peindrePlan(plan, adr) {
     return;
   }
   const d = plan.dec;
+  const usdLaunch = fraisLancementUsd(CHAINE);
+  const fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : null;
+  const feeLignes = usdLaunch > 0
+    ? [phraseFraisLancement(CHAINE, RESEAUX[CHAINE].nom, ethUsd, fraisL, soldeEthNat),
+      ...(fraisL == null
+        ? ['Life-fee price unread — Launch stays closed on mainnet until ETH/USD is measured.']
+        : ['Signature order on mainnet: (1) life fee ETH → fee wallet, (2) Launch pool.'])]
+    : ['Practice — Launch life fee is free here.'];
+  const txsApercu = [];
+  if (usdLaunch > 0 && fraisL != null) {
+    txsApercu.push({ to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisL).toString(16) });
+  }
+  txsApercu.push(...(plan.etapes || []), plan.tx);
   $('#plLignes').innerHTML = [
     'Pool on ' + RESEAUX[CHAINE].nom + ': against ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
       ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH') + ' · fee 0 % · spacing 200 · permanent · '
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
-    'ETH or TBLOCK needed: none — a single-sided launch.',
+    'ETH or TBLOCK for the pool: none — a single-sided launch.'
+      + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH to the fee wallet.' : ''),
     /* ⛔ REGLE DU JEU (2026-09-13) : pool permanente, frais 0. Dit AVANT la signature, en clair. */
     'Permanent: the liquidity is placed in the name of a dead address — nobody, not you and not us, can '
-      + 'ever take it out. That is why the fee is 0 %: nobody could ever collect it.',
+      + 'ever take it out. That is why the pool fee is 0 %: nobody could ever collect it.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
+    ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('')
     /* ⛔ CE QUE LE WALLET SIGNERA, RELU DEPUIS LES CALLDATAS DU PLAN — pas depuis les phrases ci-dessus. */
-    + [...(plan.etapes || []), plan.tx].filter(Boolean).map((tx, k) => {
+    + txsApercu.filter(Boolean).map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: d });
       return '<li><b>Signature ' + (k + 1) + ' — ' + enTexte(a.action) + '</b><br>' + a.lignes.map(enTexte).join('<br>') + '</li>';
     }).join('');
@@ -3825,6 +3855,24 @@ function peindrePlan(plan, adr) {
     return;
   }
 
+  /* ⛔ MAIN Launch fail-closed: no measured life-fee wei → nothing to sign past approvals. */
+  if (usdLaunch > 0 && (fraisL == null || ethUsd == null)) {
+    e.className = 'note wKo';
+    e.textContent = 'Life-fee price unread — Launch closed on Base mainnet. Work it out again when the ETH/USD median is readable.';
+    void assurerFraisLancementWei(true).then(async (w) => {
+      if ($('#profil').dataset.block !== adr || !planCourant) return;
+      planCourant.fraisLancementWei = w;
+      await lireSoldeEthNat(true);
+      peindrePlan(planCourant, adr);
+    });
+    return;
+  }
+  if (usdLaunch > 0 && soldeEthNat != null && fraisL != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
+    e.className = 'note wKo';
+    e.textContent = 'ETH balance below the Launch life fee — top up, then work it out again.';
+    return;
+  }
+
   if (plan.etat === 'APPROBATIONS') {
     const etape = plan.etapes[0];
     const b = document.createElement('button');
@@ -3834,7 +3882,7 @@ function peindrePlan(plan, adr) {
     b.addEventListener('click', () => void signerEtapeLancement(etape));
     actions.appendChild(b);
     e.className = 'note';
-    e.textContent = 'Approvals first, then the launch. Each opens your wallet, and each is measured again once done.';
+    e.textContent = 'Approvals first, then the life fee + launch. Each opens your wallet, and each is measured again once done.';
     return;
   }
   const b = document.createElement('button');
@@ -3844,7 +3892,10 @@ function peindrePlan(plan, adr) {
   b.addEventListener('click', () => void verifierLancement(adr));
   actions.appendChild(b);
   e.className = 'note';
-  e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.';
+  e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.'
+    + (usdLaunch > 0 && fraisL != null
+      ? ' Then: life fee ' + formaterEthCourt(fraisL) + ' ETH → fee wallet, then Launch.'
+      : '');
 }
 
 async function signerEtapeLancement(etape) {
@@ -3870,6 +3921,24 @@ async function signerEtapeLancement(etape) {
 async function verifierLancement(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
+  const usdLaunch = fraisLancementUsd(CHAINE);
+  if (usdLaunch > 0) {
+    const w = await assurerFraisLancementWei(true);
+    planCourant.fraisLancementWei = w;
+    await lireSoldeEthNat(true);
+    if (w == null || ethUsd == null) {
+      e.className = 'note wKo';
+      e.textContent = 'Life-fee price unread — Launch stays closed. Nothing was sent.';
+      peindrePlan(planCourant, adr);
+      return;
+    }
+    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(w)) {
+      e.className = 'note wKo';
+      e.textContent = 'ETH balance below the Launch life fee (' + formaterEthCourt(w) + ' ETH). Nothing was sent.';
+      peindrePlan(planCourant, adr);
+      return;
+    }
+  }
   e.className = 'note';
   e.textContent = 'Asking the chain to run the launch, without sending it…';
   profilEnLecture = true;
@@ -3889,23 +3958,61 @@ async function verifierLancement(adr) {
   const b = document.createElement('button');
   b.className = 'bouton';
   b.type = 'button';
-  b.textContent = 'Launch — sign in my wallet';
+  const fraisL = planCourant.fraisLancementWei;
+  b.textContent = (usdLaunch > 0 && fraisL != null)
+    ? 'Launch — pay life fee ' + formaterEthCourt(fraisL) + ' ETH, then open market'
+    : 'Launch — sign in my wallet';
   b.addEventListener('click', () => void lancerMarcheBlock(adr));
   actions.appendChild(b);
   e.className = 'note' + (CHAINE === 8453 ? ' wKo' : ' wOk');
   e.textContent = 'The chain accepts this launch'
     + (sim.gasUtilise ? ' (about ' + Number(sim.gasUtilise).toLocaleString('en-US') + ' gas)' : '') + '. '
-    + (CHAINE === 8453 ? '⚠️ Base mainnet: real ETH for gas, and the starting price is permanent.' : 'Practice network — nothing here is real money.');
+    + (CHAINE === 8453
+      ? ('⚠️ Base mainnet: life fee ≈ $' + usdLaunch + ' ETH to the fee wallet first (stay alive), then Launch. Starting price is permanent.')
+      : 'Practice network — nothing here is real money.');
 }
 
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
-  lancementEnCours = true;
   const e = $('#plEtat');
+  const usdLaunch = fraisLancementUsd(CHAINE);
+  let fraisL = null;
+  if (usdLaunch > 0) {
+    fraisL = await assurerFraisLancementWei(true);
+    planCourant.fraisLancementWei = fraisL;
+    await lireSoldeEthNat(true);
+    if (fraisL == null || ethUsd == null) {
+      e.className = 'note wKo';
+      e.textContent = 'Life-fee price unread — Launch refused. Nothing was sent.';
+      return;
+    }
+    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
+      e.className = 'note wKo';
+      e.textContent = 'ETH balance below the Launch life fee. Nothing was sent.';
+      return;
+    }
+  }
+  lancementEnCours = true;
   e.className = 'note';
-  e.textContent = 'Opening your wallet — one transaction creates the pool and places your blocks.';
   let r;
   try {
+    if (usdLaunch > 0 && fraisL != null) {
+      e.textContent = 'Opening your wallet — life fee ' + formaterEthCourt(fraisL)
+        + ' ETH to the fee wallet (stay alive). Then the Launch tx.';
+      const feeVal = '0x' + BigInt(fraisL).toString(16);
+      r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+        to: FEE_WALLET, data: '0x', value: feeVal });
+      if (r.etat !== 'CONFIRME') {
+        e.className = 'note wKo';
+        const lienF = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
+          + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+        e.innerHTML = 'Life fee not confirmed — Launch was not sent. ' + enTexte(r.pourquoi || r.etat) + lienF;
+        return;
+      }
+      e.textContent = 'Life fee confirmed. Opening your wallet — Launch creates the pool and places your blocks.';
+    } else {
+      e.textContent = 'Opening your wallet — one transaction creates the pool and places your blocks.';
+    }
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to: planCourant.tx.to, data: planCourant.tx.data, value: '0x0' });
   } finally { lancementEnCours = false; }
@@ -3913,12 +4020,14 @@ async function lancerMarcheBlock(adr) {
     + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
   if (r.etat === 'CONFIRME') {
     e.className = 'note wOk';
-    e.innerHTML = 'Its market is open.' + lien;
+    e.innerHTML = 'Its market is open.' + (usdLaunch > 0 ? ' Life fee paid.' : '') + lien;
     $('#plActions').innerHTML = '';
     planCourant = null;
   } else {
     e.className = 'note wKo';
-    e.innerHTML = enTexte(r.pourquoi || r.etat) + lien;
+    e.innerHTML = enTexte(r.pourquoi || r.etat)
+      + (usdLaunch > 0 ? ' (Life fee may already have been paid — do not resend the fee; retry Launch only.)' : '')
+      + lien;
   }
 }
 
@@ -4504,13 +4613,13 @@ function majFraisEtRecap() {
       soldeOk = soldeEthNat >= fraisWeiCalcule;
     }
     boutonCreer.disabled = !prixOk || !soldeOk || Boolean(v.ko);
-    boutonCreer.title = (usd > 0 && !prixOk) ? 'Fee price unread — Create closed'
-      : (!soldeOk ? 'ETH balance below CreateRouter floor + gas' : '');
+    boutonCreer.title = (usd > 0 && !prixOk) ? 'Life-fee price unread — Create closed'
+      : (!soldeOk ? 'ETH balance below CreateRouter life-fee floor + gas' : '');
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
-      ? ', after ' + formaterEthCourt(fraisWeiCalcule) + ' ETH (≈ $' + usd + ') to ' + FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4)
-      : ' — Create closed until fee price is measured')
+      ? ', after life fee ' + formaterEthCourt(fraisWeiCalcule) + ' ETH (≈ $' + usd + ' birth) to ' + FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4)
+      : ' — Create closed until life-fee price is measured')
     : '';
   $('#cRecap').textContent = v.ko
     ? v.ko
@@ -4539,12 +4648,12 @@ function majFraisEtRecap() {
         'Supply: 1,000,000,000, sealed — all to you',
         'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
         ...(toL === String(CREATE_ROUTER).toLowerCase()
-          ? ['Via CreateRouter — ≈ $1 ETH fee (oracle) to fee wallet only after create succeeds; no token mint split'] : [])] : [];
+          ? ['Via CreateRouter — life fee ≈ $1 ETH (birth, oracle) to fee wallet only after create succeeds; no token mint split'] : [])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. Hooked TBLOCK markets wait on the fee-hook audit.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ This is Base mainnet: the block is real, the fee is real ETH, and a block cannot be undone. '
+    ? '⚠️ This is Base mainnet: the block is real, the life fee is real ETH (birth), and a block cannot be undone. '
       + 'Switch the network chip to Base Sepolia to practise for free.'
     : 'Practice network — free, and nothing here is real money.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
@@ -4654,8 +4763,8 @@ async function creerBlock() {
     /* MAIN CreateRouter: one payable createPaid. Practice: free factory createB20. */
     if (utiliseCreateRouter()) {
       e.className = 'note';
-      e.textContent = 'One signature — Create + fee ' + formaterEthCourt(fraisWei)
-        + ' ETH (≈ $' + usd + ') via CreateRouter → fee wallet. Fee kept only if create succeeds.';
+      e.textContent = 'One signature — Create + life fee ' + formaterEthCourt(fraisWei)
+        + ' ETH (≈ $' + usd + ' birth) via CreateRouter → fee wallet. Life fee kept only if create succeeds.';
     } else {
       e.className = 'note';
       e.textContent = 'One signature — the creation (Practice, free). Check it in your wallet.';
@@ -4682,7 +4791,7 @@ async function creerBlock() {
     } else {
       e.className = 'note wKo';
       const feeKept = utiliseCreateRouter()
-        ? ' CreateRouter keeps fee ETH only after a successful create — a revert refunds the fee with the failed call.'
+        ? ' CreateRouter keeps life fee ETH only after a successful create — a revert refunds the life fee with the failed call.'
         : '';
       e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien;
     }
@@ -5156,7 +5265,7 @@ function dessinerReseau(vu = null) {
  *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — ≈ $1 ETH (USDC/ETH Uniswap median, floor 0.0003) forwarded to the fee wallet only after create succeeds; sealed 1B all to you (no 5%/50M mint to fee). Practice is free. Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
+    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — life fee ≈ $1 ETH (birth; USDC/ETH Uniswap median, floor 0.0003) forwarded to 0x37eb…580a only after create succeeds; sealed 1B all to you. Practice is free. Raw factory creates stay sleep until Launch pays life. Your wallet signs — this page never holds a key. Life fee ≠ automatic buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
     d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
@@ -5166,7 +5275,7 @@ const ETAPES = [
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
     d: 'When a Uniswap v4 pool exists for the block, Buy/Sell quotes and builds the swap your wallet signs. A 0.5 % interface fee goes to the fee wallet inside the same swap when you use this app’s path — not when you trade elsewhere.' },
   { t: 'Open the market (Launch) and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Launch can open an ETH or TBLOCK pool now (0% fee, 200 spacing, no hook). Hooked 3% TBLOCK markets stay closed until the hook is audited and live. Liquidity tools are on the profile.' },
+    d: 'Launch wakes the market (ETH or TBLOCK pool, 0% pool fee, 200 spacing, no hook). On Base mainnet: same life fee ≈ $1 ETH to 0x37eb…580a first (stay alive / open life on-chain), then the Launch tx — so unpaid external creates still pay when they Launch here. Practice Launch stays free. Sleep / no-market stays free until Launch. Hooked 3% TBLOCK markets wait on audit.' },
   { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
@@ -5280,6 +5389,13 @@ if (presetLien) {
   remplirSelSiVide();
   majFraisEtRecap();
 }
+/* ⛔ 301 Instant Create → /#creer must open Create (CreateRouter life fee), not Map. */
+if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') {
+  setTimeout(() => allerA('creer'), 0);
+}
+window.addEventListener('hashchange', () => {
+  if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') allerA('creer');
+});
 
 /* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */
 $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
