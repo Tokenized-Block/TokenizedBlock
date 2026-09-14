@@ -23,6 +23,7 @@
 // ⚠️ CE QUE CE MODULE NE PROUVE PAS : qu une vraie mouche ferait ca. C est un reseau a impulsions JOUET
 //    (128 neurones, integration et fuite), pas une reconstruction biologique.
 import { keccak256Hex } from './keccak.js';
+import { sensibiliteDe } from './metiers.js';
 
 /** ⛔ LA VERSION GRAVEE A LA CREATION. Changer la dynamique sans changer ce nom ferait mentir les blocks
  *  qui la portent : un tiers recalculerait avec la mauvaise regle. */
@@ -116,7 +117,9 @@ const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / divi
  */
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
   scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null,
-  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null } = {}) {
+  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null, role = null } = {}) {
+  /* ⛔⛔ LE CERVEAU S ADAPTE A SON ROLE (Phil, 2026-09-14) : multiplicateurs de `metiers.js`, neutres sans role */
+  const s = sensibiliteDe(role);
   /* ⛔⛔ L HUMEUR SUR LE NOUVEAU (Phil, 2026-09-13, apres mesure : TBLOCK et WOFI EXCITE 40/40 battements a prix stable,
    *    parce que 3 detenteurs dans la fenetre suffisaient — CALME et CURIEUX n arrivaient jamais sur un block vivant).
    *    Seul ce qui est arrive DEPUIS LA LECTURE PRECEDENTE excite. Sans lecture precedente, rien n est « nouveau ».
@@ -155,9 +158,12 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
      *    de face et de nourriture entre les deux) — « lu mais sans vie » tombait en DORMANT. Une vie absente n est un
      *    « pas de marche » que sur NON_TROUVEE. */
     nonLu: !aMarche && (etatVie === 'NON_LUE' || etatVie === 'LUE'),
-    nouveau: Math.min(1, nouveaux.gm * 0.5 + nouveaux.messages * 0.5 + nouveaux.detenteurs * 0.5 + nouveaux.achats * 0.5),
+    nouveau: Math.min(1, nouveaux.gm * 0.5 * s.transfert + nouveaux.messages * 0.5 * s.message
+      + nouveaux.detenteurs * 0.5 * s.detenteur + nouveaux.achats * 0.5 * s.achat),
     /* la pression vendeuse NOUVELLE, 0..1 : plus de ventes que d achats depuis le battement precedent */
-    pression: Math.min(1, Math.max(0, nouveaux.ventes - nouveaux.achats) * 0.5),
+    pression: Math.min(1, Math.max(0, nouveaux.ventes - nouveaux.achats) * 0.5 * s.vente),
+    sensibilite: s,
+    role: typeof role === 'string' && role ? role : null,
     nouveaux,
     avecAvant,
     avecEchanges,
@@ -186,8 +192,8 @@ export function pas(etat, faits = {}) {
       const bruit = suivant() * PARAMETRES.bruitMax;
       /* ⛔ LE COURANT DE REPOS SEPARE « ENDORMI » DE « ETEINT » : avec 0,15 et un bruit jusqu a 0,10, le
        * potentiel tourne autour de 1,1 — il tire RAREMENT. La nourriture s ajoute, avec ou sans marche. */
-      p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 : PARAMETRES.reposSansMarche)
-        + f.delta * 0.4 + miam * 0.6 + bruit
+      p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 * f.sensibilite.taille : PARAMETRES.reposSansMarche)
+        + f.delta * 0.4 * f.sensibilite.delta + miam * 0.6 + bruit
         /* un evenement NOUVEAU (achat, vente, transfert, detenteur, message) secoue le reseau le battement ou il arrive */
         + (f.nouveau + f.pression) * 0.8;
     }
@@ -261,7 +267,8 @@ export function pas(etat, faits = {}) {
         f.detenteurs, f.part, f.scelle, f.mort, etat.tick,
         /* le nouveau n entre dans l empreinte que s il a ete fourni : un pas d avant se rejoue a l identique */
         ...(f.avecAvant ? [f.nouveaux.gm, f.nouveaux.messages, f.nouveaux.detenteurs] : []),
-        ...(f.avecEchanges ? ['echanges', f.nouveaux.achats, f.nouveaux.ventes] : [])])),
+        ...(f.avecEchanges ? ['echanges', f.nouveaux.achats, f.nouveaux.ventes] : []),
+        ...(f.role ? ['role', f.role] : [])])),
     },
   };
 }

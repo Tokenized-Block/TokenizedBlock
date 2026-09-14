@@ -54,7 +54,39 @@ export const METIERS = [
     fait: 'reads what you hold of the block',
     propose: null,
     jamais: 'never moves anything, and never holds a key' },
+  /* ⛔⛔ ROLES A CHOISIR (Phil, 2026-09-14 : « mets de vrais roles au block, que les users peuvent choisir sur leur
+   *    profil » + « le Brain AI s adapte »). Ces deux-la ne sont PAS tires de l adresse (voir METIERS_DERIVES) : les
+   *    ajouter au tirage aurait change le metier de TOUS les blocks existants. */
+  { cle: 'SENTINELLE', titre: 'Sentinel',
+    fait: 'watches the buys and sells on its market and says when selling outweighs buying',
+    propose: null,
+    jamais: 'never buys or sells — it only warns' },
+  { cle: 'ACCUEIL', titre: 'Greeter',
+    fait: 'notices new holders and transfers, and suggests a GM back',
+    propose: 'a GM you send yourself',
+    jamais: 'never sends a GM by itself' },
 ];
+/** ⛔ LES METIERS TIRES DE L ADRESSE : les cinq d origine, dans leur ordre — un block garde le metier qu il avait. */
+export const METIERS_DERIVES = METIERS.slice(0, 5);
+
+/**
+ * ⛔⛔ LE CERVEAU S ADAPTE AU ROLE : un multiplicateur par fait, applique au courant d entree (cerveau.js). Il change
+ *    CE QUI COMPTE pour le block, jamais les regles d humeur ni ce que l app verifie. 1 = comme sans role.
+ */
+export const SENSIBILITES = Object.freeze({
+  GARDIEN: Object.freeze({ delta: 1.5 }),
+  MOMENTUM: Object.freeze({ delta: 2, achat: 1.5, vente: 1.5 }),
+  ECLAIREUR: Object.freeze({ taille: 1.5 }),
+  HERAUT: Object.freeze({ message: 2, transfert: 1.5 }),
+  COMPTABLE: Object.freeze({}),
+  SENTINELLE: Object.freeze({ vente: 2.5, delta: 1.5 }),
+  ACCUEIL: Object.freeze({ detenteur: 2.5, transfert: 2 }),
+});
+const NEUTRE = { delta: 1, taille: 1, transfert: 1, message: 1, detenteur: 1, achat: 1, vente: 1 };
+/** La sensibilite d un role ; un role inconnu ou absent = neutre (le cerveau d avant). */
+export function sensibiliteDe(cle) {
+  return { ...NEUTRE, ...(SENSIBILITES[cle] || {}) };
+}
 
 export const ETATS_TENDANCE = ['HAUSSE', 'BAISSE', 'PLAT', 'PAS_ASSEZ'];
 /** En dessous de ce mouvement relatif, on dit PLAT : le bruit n est pas une tendance. */
@@ -72,7 +104,7 @@ export const LECTURES_MIN = 3;
 export function metierDe(adresse) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(adresse || ''))) throw new Error('metierDe needs an address');
   const h = keccak256Hex(enc.encode('metier:' + String(adresse).toLowerCase()));
-  return METIERS[parseInt(h.slice(2, 10), 16) % METIERS.length];
+  return METIERS_DERIVES[parseInt(h.slice(2, 10), 16) % METIERS_DERIVES.length];
 }
 
 /**
@@ -102,7 +134,7 @@ export function momentum(lectures) {
  *    un jour, un executeur.
  */
 export function rapport({ metier, symbole = null, vie = null, devise = null, tendance = null,
-  rang = null, population = null, solde = null } = {}) {
+  rang = null, population = null, solde = null, echanges = null, nourriture = null } = {}) {
   /* ⛔ LE METIER EST RETROUVE DANS LA LISTE, PAS CRU SUR PAROLE. Ma premiere version gardait tout
    * objet portant un `cle` : un metier inconnu traversait, et `jamais` s affichait « undefined » —
    * la borne qui rassure devenait un bug a l ecran. */
@@ -178,6 +210,34 @@ export function rapport({ metier, symbole = null, vie = null, devise = null, ten
       signeParUtilisateur: true,
       avertissement: 'Only measured numbers go in a draft — nothing is invented to make it sound better.',
     });
+  }
+
+  if (m.cle === 'SENTINELLE') {
+    /* ⛔ ce qu elle a VU cette session (fil Live), jamais une estimation ; sans echange vu, elle le dit */
+    const a = echanges && Number.isFinite(echanges.achats) ? echanges.achats : null;
+    const v = echanges && Number.isFinite(echanges.ventes) ? echanges.ventes : null;
+    if (a === null || v === null) lignes.push('No buy or sell seen yet on its market since this page opened.');
+    else {
+      lignes.push('Seen since this page opened: ' + a + ' buy(s), ' + v + ' sell(s).');
+      lignes.push(v > a ? '⚠️ Selling outweighs buying in what was seen — a warning, not an order.'
+        : a + v === 0 ? 'Nothing traded in what was seen.' : 'Selling does not outweigh buying in what was seen.');
+    }
+  }
+
+  if (m.cle === 'ACCUEIL') {
+    const n = nourriture && nourriture.etat === 'LUE' ? nourriture : null;
+    if (!n) lignes.push('Its recent holders and transfers were not read yet.');
+    else {
+      lignes.push(n.detenteurs + ' holder(s) reached and ' + n.gm + ' transfer(s) in the recent window.');
+      if (n.detenteurs + n.gm > 0) {
+        propositions.push({
+          quoi: 'GM_BACK',
+          pourquoi: 'someone reached ' + nom + ' recently — a GM back is a small transfer you choose and send',
+          signeParUtilisateur: true,
+          avertissement: 'A GM is a real transfer of this block from your wallet: you pick who and how much, your wallet shows it.',
+        });
+      }
+    }
   }
 
   return { metier: m, lignes, propositions, jamais: m.jamais };

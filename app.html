@@ -812,8 +812,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
         <button type="button" class="puce" data-filtre="CREATION">🧱 Created</button>
-        <button type="button" class="puce" data-filtre="ACHAT">🟢 Bought</button>
-        <button type="button" class="puce" data-filtre="VENTE">🔴 Sold</button>
+        <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
+        <button type="button" class="puce" data-filtre="ACHAT">🟢 Feed</button>
+        <button type="button" class="puce" data-filtre="VENTE">🔴 Kill</button>
         <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
       </div>
       <ul class="fil" id="sfLive"></ul>
@@ -921,6 +922,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="pJeu" id="pMetier">
         <div class="pJeuTete"><span class="pBadge" id="pmTitre">—</span><span class="pPV" id="pmTendance"></span></div>
         <p class="pProchain" id="pmFait"></p>
+        <!-- ⛔ PHIL (2026-09-14) : « de vrais roles, que les users peuvent choisir sur leur profil » + « le Brain AI
+             s adapte ». Le choix vit dans CE navigateur ; il change ce que le cerveau pese, jamais ce que l app verifie. -->
+        <label class="champ" style="margin-top:6px">Its role<select id="pmRole"></select></label>
+        <p class="note" id="pmRoleNote"></p>
         <ul class="pmLignes" id="pmLignes"></ul>
         <div id="pmPropositions"></div>
         <p class="note" id="pmJamais"></p>
@@ -1136,7 +1141,7 @@ function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
   return { vie, vieAvant, gm: lue ? lue.gm : 0, messages: lue ? lue.messages : 0,
     detenteurs: lue ? lue.detenteurs : 0, mort: lue ? lue.mort === true : false, etatVie: etatVie || 'NON_LUE',
     gmAvant: avant ? avant.gm : null, messagesAvant: avant ? avant.messages : null, detenteursAvant: avant ? avant.detenteurs : null,
-    ...echangesDe(h) };
+    ...echangesDe(h), role: h && h.adr ? roleDe(h.adr) : null };
 }
 /* ⛔⛔ ACHATS / VENTES VUS PAR LE FIL LIVE (2026-09-14) : compteurs par block, et leur valeur au battement PRECEDENT —
  *    le nouveau dure exactement un battement (front montant). Un block jamais vu passe « avant = maintenant ». */
@@ -1166,7 +1171,7 @@ async function relireNourriture(h) {
 /* ⛔ LE METIER DU CERVEAU : il lit et il PROPOSE. Le module refuse par construction toute
  * proposition qui ne porte pas « signe par l utilisateur » — un test parcourt tous les rapports
  * possibles pour le verifier. Aucun ordre ne part d ici. */
-import { metierDe, momentum, rapport } from './metiers.js';
+import { METIERS, metierDe, momentum, rapport } from './metiers.js';
 /* ⛔ LE CLASSEMENT PORTE SA POPULATION ET SA BORNE : « 3e » sans « sur combien, lu comment » est un
  * palmares invente. Le module rend la phrase, l ecran l affiche. */
 import { classer, rangDe } from './classement.js';
@@ -2448,19 +2453,50 @@ function peindreStades() {
   $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named first.'
     : 'The map has not read any block yet.';
 }
+$('#pmRole').addEventListener('change', () => {
+  const adr = $('#profil').dataset.block;
+  const cle = $('#pmRole').value;
+  if (!adr || !METIERS.some((x) => x.cle === cle)) return;
+  try { localStorage.setItem(CLE_ROLE + String(adr).toLowerCase(), cle); } catch (e) { /* role de la page seulement */ }
+  peindreMetier(adr);
+});
 $('#stades').addEventListener('click', (ev) => {
   const b = ev.target.closest('button[data-block]');
   if (b) void ouvrirProfil(b.getAttribute('data-block'), b.getAttribute('data-sym') || null);
 });
 
 /* ⛔ LE METIER PARLE APRES LA LECTURE, pas avant : sinon il commenterait des chiffres qu il n a pas. */
+/* ⛔⛔ LE ROLE CHOISI (2026-09-14) : garde par block dans CE navigateur ; sinon le metier derive de l adresse. Une valeur
+ *    stockee qui n est pas un metier connu est ignoree (jamais « undefined » a l ecran). */
+const CLE_ROLE = 'tblock.role.';
+function roleChoisi(adr) {
+  try {
+    const c = localStorage.getItem(CLE_ROLE + String(adr).toLowerCase());
+    return METIERS.some((x) => x.cle === c) ? c : null;
+  } catch (e) { return null; }
+}
+function roleDe(adr) {
+  const c = roleChoisi(adr);
+  if (c) return c;
+  try { return metierDe(adr).cle; } catch (e) { return null; }
+}
+const SENS_ROLE = { SENTINELLE: 'sells and price drops', ACCUEIL: 'new holders and transfers', MOMENTUM: 'price moves, buys and sells',
+  GARDIEN: 'price moves', ECLAIREUR: 'its size', HERAUT: 'messages and transfers', COMPTABLE: 'nothing more than the others' };
 function peindreMetier(adr) {
-  let m;
-  try { m = metierDe(adr); } catch (e) { return; }
+  const cle = roleDe(adr);
+  const m = METIERS.find((x) => x.cle === cle);
+  if (!m) return;
   const tendance = momentum(lecturesDe(adr));
   const r = rangDe(classementCourant(), adr);
+  const hM = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
   const rap = rapport({ metier: m, symbole: symProfil, vie: vieProfil, devise: deviseProfil,
-    tendance, rang: r ? r.rang : null, population: r ? r.sur : null, solde: soldeProfil });
+    tendance, rang: r ? r.rang : null, population: r ? r.sur : null, solde: soldeProfil,
+    echanges: hM && liveDernier !== null ? { achats: hM.achatsVus || 0, ventes: hM.ventesVus || 0 } : null,
+    nourriture: hM ? hM.nourriture : null });
+  $('#pmRole').innerHTML = METIERS.map((x) => '<option value="' + x.cle + '"' + (x.cle === cle ? ' selected' : '') + '>'
+    + enTexte(x.titre) + '</option>').join('');
+  $('#pmRoleNote').textContent = (roleChoisi(adr) ? 'Chosen in this browser' : 'Derived from its address — pick another to change it')
+    + ' · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads') + ' more. It never signs or sends anything.';
   $('#pmTitre').textContent = m.titre;
   $('#pmFait').textContent = 'Its job: ' + m.fait + '.';
   $('#pmTendance').textContent = tendance.etat === 'PAS_ASSEZ'
@@ -2520,7 +2556,7 @@ function battreProfil() {
    *    EXCITE par le prix) quand la map passait la lecture precedente — deux humeurs pour le meme block. */
   void relireNourriture(hP);
   const r = cerveauPas(profilCerveau.etat, entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
-    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null, hP));
+    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr }));
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   peindreCerveau();
@@ -4329,7 +4365,7 @@ function battreBrain() {
   const h = habitants.find((x) => x.adr === brainAdr);
   void relireNourriture(h);
   const r = cerveauPas(brainEtat, entreesCerveau(h ? h.vie : null, h ? h.vieAvant : null, h ? h.nourriture : null, h ? h.etatVie : null,
-    h ? h.nourritureAvant : null, h));
+    h ? h.nourritureAvant : null, h || { adr: brainAdr }));
   const n = h && h.nourriture;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
     : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'
