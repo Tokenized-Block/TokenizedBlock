@@ -1022,8 +1022,17 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="pProchain">Written inside its transfers — public and permanent, readable by anyone, forever.</p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <button class="bouton sec" id="pmsgLire" type="button">Read its messages</button>
-          <button class="bouton sec" id="pmsgEcrire" type="button">Write one with it</button>
+          <button class="bouton sec" id="pmsgEcrire" type="button">Free note (send form)</button>
         </div>
+        <!-- ⛔⛔ MESSAGERIE ENTRE BLOCKS PAYEE EN TBLOCK (Phil, 2026-09-14) — messagerie-blocks.js. Une signature : un transfert
+             de TBLOCK au wallet de frais qui porte le message. Prouve sur fork le 2026-09-14. -->
+        <p class="titre" style="margin-top:12px;font-size:1em">Write to this block — paid in TBLOCK</p>
+        <label class="champ">Speak as<select id="pmsgDe"></select></label>
+        <label class="champ">Your message<textarea id="pmsgTexte" rows="2" maxlength="160" placeholder="gm, from my block"></textarea></label>
+        <button class="bouton" id="pmsgPreparer" type="button">Prepare the paid message</button>
+        <ul class="pmLignes" id="pmsgPayeLignes"></ul>
+        <div class="pActions" id="pmsgPayeActions"></div>
+        <p class="note" id="pmsgPayeNote"></p>
         <ul class="fil" id="pmsgFil"></ul>
         <p class="note" id="pmsgNote"></p>
       </div>
@@ -1146,6 +1155,7 @@ import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools } from './pools-du-jeton.js';
 import { resumeRelais } from './relais-cerveaux.js';
+import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
@@ -3850,6 +3860,69 @@ async function lireMessagesDuBlock() {
 }
 
 $('#pmsgLire').addEventListener('click', () => void lireMessagesDuBlock());
+
+/* ══ MESSAGE PAYE ENTRE BLOCKS ════════════════════════════════════════════════════════════════
+ * ⛔ « Speak as » ne liste QUE des blocks que le wallet connecte detient (soldes lus par le Wallet) ; le plan relit le
+ *    compte et le solde TBLOCK, refuse le wallet de frais et les smart wallets, puis la page propose UNE signature. */
+let messagePayeCourant = null, messagePayeEnvoi = false;
+function peindreChoixParler() {
+  const adrProfil = String($('#profil').dataset.block || '').toLowerCase();
+  const detenus = actifs.filter((x) => x && x.etat === 'LU' && /^0x[0-9a-fA-F]{40}$/.test(String(x.id || ''))
+    && ((typeof x.solde === 'bigint' && x.solde > 0n) || (typeof x.solde === 'number' && x.solde > 0))
+    && String(x.id).toLowerCase() !== adrProfil);
+  $('#pmsgDe').innerHTML = detenus.length
+    ? detenus.map((x) => '<option value="' + enTexte(x.id) + '">' + enTexte(String((x.nom && x.nom !== '?' ? x.nom : null) || x.sym || court(x.id)).slice(0, 14)) + '</option>').join('')
+    : '<option value="">' + (compte ? 'you hold no other block to speak as' : 'connect your wallet first') + '</option>';
+}
+$('#pmsgPreparer').addEventListener('click', async () => {
+  const note = $('#pmsgPayeNote');
+  const a = $('#profil').dataset.block;
+  $('#pmsgPayeLignes').innerHTML = '';
+  $('#pmsgPayeActions').innerHTML = '';
+  messagePayeCourant = null;
+  peindreChoixParler();
+  const de = $('#pmsgDe').value;
+  if (!compte) { note.className = 'note wKo'; note.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  if (!de) { note.className = 'note wKo'; note.textContent = 'You need to hold another block to speak as it.'; return; }
+  note.className = 'note';
+  note.textContent = 'Reading your account and your TBLOCK balance…';
+  profilEnLecture = true;
+  let p;
+  try {
+    p = await planMessagePaye({ rpc, compte, de, a, texte: $('#pmsgTexte').value, detientDe: true });
+  } catch (err) {
+    p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) };
+  } finally { profilEnLecture = false; }
+  if ($('#profil').dataset.block !== a) return;
+  if (p.etat !== 'PRET') {
+    note.className = 'note wKo';
+    note.textContent = (p.etat === 'NON_MESURE' ? 'Not measured, nothing to sign: ' : 'Not possible: ') + p.pourquoi + '.';
+    return;
+  }
+  messagePayeCourant = p;
+  const ap = apercuTransaction({ chaine: CHAINE, tx: p.tx, compte, jeton: TBLOCK, symbole: 'TBLOCK', decimales: 18 });
+  $('#pmsgPayeLignes').innerHTML = ['Fee: ' + formaterUnites(FRAIS_MESSAGE_TBLOCK, 18) + ' TBLOCK to the TokenizedBlock fee wallet, in the same transaction as the message — not a buyback.',
+    'Public and permanent: anyone can read it on chain, forever. It shows your wallet speaking as the block you picked.',
+    'Signature 1 — ' + ap.action + ': ' + ap.lignes.join(' · ')].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  const b = document.createElement('button');
+  b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign the paid message';
+  b.addEventListener('click', async () => {
+    if (messagePayeEnvoi || !messagePayeCourant) return;
+    messagePayeEnvoi = true;
+    note.className = 'note'; note.textContent = 'Opening your wallet — check what it shows before you sign.';
+    let r;
+    try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: messagePayeCourant.tx.to, data: messagePayeCourant.tx.data, value: '0x0' }); }
+    catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    finally { messagePayeEnvoi = false; }
+    const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+    note.className = r.etat === 'CONFIRME' ? 'note wOk' : 'note wKo';
+    note.innerHTML = (r.etat === 'CONFIRME' ? 'Message sent and paid — it will appear under Messages in the Live feed.'
+      : 'Not sent (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
+  });
+  $('#pmsgPayeActions').appendChild(b);
+  note.className = 'note wOk';
+  note.textContent = 'Ready: one signature. Check the recipient (fee wallet), the amount and the message in your wallet.';
+});
 /* ⛔ ECRIRE = LE MEME FORMULAIRE D ENVOI QUE PARTOUT, avec le champ message mis en avant. Pas de
  * second chemin d envoi, donc pas de seconde garde a maintenir. */
 $('#pmsgEcrire').addEventListener('click', () => {
