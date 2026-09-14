@@ -1,3 +1,13 @@
+# Tokenized Block · Pages RETIRED (2026-09-14)
+
+**This GitHub Pages site is retired.** Live product:
+
+→ **https://tokenized-block-production.up.railway.app/**
+
+`tokenized-block.github.io` is TEST/archive only — a redirect stub. Do not ship Instant Create or treat Pages as source of truth.
+
+---
+
 # Tokenized Block · Tokenized-Block.app
 
 Build a block — name, symbol, decimals, supply, description, colour — and it becomes a **B-20
