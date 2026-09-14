@@ -2,7 +2,7 @@
 
 **This GitHub Pages site is retired.** Live product:
 
-→ **https://tokenized-block-production.up.railway.app/**
+→ **https://tokenized-block.up.railway.app/**
 
 `tokenized-block.github.io` is TEST/archive only — a redirect stub. Do not ship Instant Create or treat Pages as source of truth.
 
