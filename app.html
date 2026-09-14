@@ -5149,7 +5149,7 @@ function dessinerReseau(vu = null) {
  *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet the fee is ≈ $1 in ETH (Uniswap median price) to the TokenizedBlock fee wallet (visible, fail-closed). Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
+    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — ≈ $1 ETH (Uniswap median, floor 0.0003) forwarded to the fee wallet only after create succeeds; sealed 5% mint forced on-chain. Practice is free. Your wallet signs — this page never holds a key. Create fee ≠ automatic buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
     d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
@@ -5167,7 +5167,7 @@ const ETAPES = [
   { t: 'Pair with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
     d: 'At creation you choose the pair: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a Strategy-style peg. The pool opens at launch.' },
   { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
-    d: 'Social Live shows transfers, GMs, notes and paid messages when present. Buys/sells appear when pools and app swaps exist — otherwise the section stays empty rather than invented.' },
+    d: 'Social Live: All stays quiet (hides external creates, hook-blind swaps, GM/note bursts). Use Created / Swap / GM chips to inspect. Buys/sells appear when pools and app swaps exist — empty stays empty.' },
 ];
 
 function peindreLearn() {
