@@ -50,8 +50,9 @@ export function resumerTransaction({ transfers, signataire, sym, decimales, pool
   if (sortis.length && entres.length) {
     return { genre: 'ALLER_RETOUR', phrase: qui + ' swapped ' + S + ' through the pool (in and out in one transaction)' };
   }
-  if (sortis.length) return { genre: 'ACHAT', phrase: qui + ' bought ' + q(somme(sortis)) + ' ' + S + ' from the pool' };
-  if (entres.length) return { genre: 'VENTE', phrase: qui + ' sold ' + q(somme(entres)) + ' ' + S + ' into the pool' };
+  /* ⛔ LES MOTS DE PHIL (2026-09-14) : acheter = FEED (nourrir le block), vendre = KILL */
+  if (sortis.length) return { genre: 'ACHAT', phrase: qui + ' fed ' + q(somme(sortis)) + ' ' + S + ' (bought from the pool)' };
+  if (entres.length) return { genre: 'VENTE', phrase: qui + ' killed ' + q(somme(entres)) + ' ' + S + ' (sold into the pool)' };
 
   const soi = transfers.length === 1 && transfers[0].from.toLowerCase() === transfers[0].to.toLowerCase();
   if (soi && memo && memo.etat === 'LU' && /^tbm\d+ /.test(memo.texte)) {

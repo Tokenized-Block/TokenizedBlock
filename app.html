@@ -815,6 +815,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE">🔴 Kill</button>
+        <button type="button" class="puce" data-filtre="SWAP">↔ Swap</button>
+        <button type="button" class="puce" data-filtre="GM">👋 GM</button>
+        <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
         <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
       </div>
       <ul class="fil" id="sfLive"></ul>
@@ -2918,7 +2921,8 @@ const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
   if (liveFiltre === 'TOUT') return true;
-  if (liveFiltre === 'NOUS') return estANous(e.jeton);
+  if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
+  if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
@@ -3018,7 +3022,8 @@ function peindreLive() {
   const lignes = [];
   for (const e of montres) {
     const der = lignes[lignes.length - 1];
-    if (e.type === 'SWAP' && der && der.type === 'SWAP' && der.jeton === e.jeton && der.confiance === e.confiance) {
+    if ((e.type === 'SWAP' || e.type === 'GM' || e.type === 'NOTE') && der && der.type === e.type && der.jeton === e.jeton
+      && der.confiance === e.confiance) {
       der.n = (der.n || 1) + 1;
       der.blocBas = e.bloc;
       continue;
@@ -3027,7 +3032,11 @@ function peindreLive() {
   }
   $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
+    const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
+      : e.type === 'GM' ? '👋 <b>' + nom + '</b> sent' + (e.n > 1 ? ' ' + e.n + ' times' : ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'an amount') + ' to ' + enTexte(court(e.a)))
+      : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
+      : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
           : e.confiance === 'HOOK'

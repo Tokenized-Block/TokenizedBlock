@@ -9,7 +9,9 @@
 // ⛔ ACHAT / VENTE VIENNENT DE `achatDepuisSwap` (achats.js, teste), jamais recalcules ici — et seulement
 //    quand les decimales du block sont CONNUES. Sinon l evenement reste « SWAP », sans quantite inventee.
 // ⚠️ Le routeur n est pas l acheteur : ce module ne nomme personne.
-import { listerCreations } from './index-blocks.js';
+import { listerCreations, TOPIC_TRANSFER, decoderTransfer, topicAdresse } from './index-blocks.js';
+import { messageDepuisTransfert, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
+import { FEE_WALLET } from './frais-creation.js';
 import { listerAchats, achatDepuisSwap } from './achats.js';
 import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
@@ -17,7 +19,28 @@ import { TBLOCK } from './tokenomics.js';
 import { confianceDe } from './pools-du-jeton.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
-export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP'];
+/* ⛔ PHIL (2026-09-14) : « t as oublie les swaps, send, GM — n oublie rien ». GM = envoi d un block entre deux wallets
+ *    (ni creation, ni jambe de swap) ; NOTE = transfert de 0 portant un message ; MESSAGE = message PAYE entre blocks. */
+export const TYPES_LIVE = ['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE'];
+export const JETONS_PAR_REQUETE = 50;
+const ZERO = '0x0000000000000000000000000000000000000000';
+
+/** getLogs qui coupe en deux une fenetre refusee comme trop grosse, jusqu a 250 blocs ; les echecs sont rendus. */
+async function logsAdaptatifs(rpc, filtre, de, a, ratees, quoi) {
+  try {
+    return await rpc('eth_getLogs', [{ ...filtre, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16) }]);
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    if (/too large|-32020|limit exceeded|too many/i.test(msg) && a - de + 1 > 250) {
+      const m = de + Math.floor((a - de) / 2);
+      const x = await logsAdaptatifs(rpc, filtre, de, m, ratees, quoi);
+      const y = await logsAdaptatifs(rpc, filtre, m + 1, a, ratees, quoi);
+      return [...(x || []), ...(y || [])];
+    }
+    ratees.push({ de, a, cause: msg, quoi });
+    return null;
+  }
+}
 /** Identifiants de pool par requete : sous la mesure de 468, avec de la marge. */
 export const IDS_PAR_REQUETE = 400;
 
@@ -41,6 +64,13 @@ export function poolsSuivies(blocks) {
   return out;
 }
 
+/** Unites brutes -> texte decimal exact (sans flottant). */
+function formaterBrut(v, dec) {
+  const base = 10n ** BigInt(dec);
+  const ent = v / base, frac = (v % base).toString().padStart(dec, '0').replace(/0+$/, '');
+  return ent.toString() + (frac ? '.' + frac : '');
+}
+
 /** Le nom de la devise d une pool, SEULEMENT si elle est prouvee : ETH natif (0x0) ou TBLOCK. Sinon null. */
 function deviseConnue(cle, jeton) {
   const autre = String(cle.currency0).toLowerCase() === String(jeton).toLowerCase() ? cle.currency1 : cle.currency0;
@@ -56,7 +86,7 @@ function deviseConnue(cle, jeton) {
  * ⛔ Une fenetre ratee est rendue, jamais comptee comme silence.
  */
 export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, pause = 0,
-  lireCreations = listerCreations, poolsDecouvertes = null }) {
+  lireCreations = listerCreations, poolsDecouvertes = null, lireTransferts = true }) {
   const evenements = [], fenetresRatees = [];
   const vus = new Set();
   const ajouter = (e) => {
@@ -86,10 +116,14 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
     });
   }
   const ids = [...pools.keys()];
+  /* ⛔⛔ MESURE (2026-09-14, 3 « GM » BLST) : chaque transaction contenait un Swap, et le block passait PoolManager ->
+   *    routeur tiers (contrat) -> wallet. Un transfert d une transaction qui porte un Swap est une JAMBE D ECHANGE, pas un GM. */
+  const txSwaps = new Set();
   for (let i = 0; i < ids.length; i += IDS_PAR_REQUETE) {
     const r = await listerAchats({ rpc, poolManager, poolIds: ids.slice(i, i + IDS_PAR_REQUETE), deBloc, aBloc, pause });
     for (const f of r.fenetresRatees || []) fenetresRatees.push({ ...f, quoi: 'swaps' });
     for (const s of r.swaps || []) {
+      if (s.txHash) txSwaps.add(String(s.txHash).toLowerCase());
       const p = pools.get(s.poolId);
       if (!p) continue;
       let type = 'SWAP', quantite = null, eth = null;
@@ -103,6 +137,45 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
       }
       ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, eth,
         devise: type === 'SWAP' ? null : devise.nom, confiance, verifie: type !== 'SWAP' });
+    }
+  }
+  if (lireTransferts && Number.isSafeInteger(deBloc) && Number.isSafeInteger(aBloc) && aBloc >= deBloc) {
+    const pm = String(poolManager || '').toLowerCase();
+    const parJeton = new Map((blocks || []).filter((b) => /^0x[0-9a-fA-F]{40}$/.test(String(b.jeton)))
+      .map((b) => [String(b.jeton).toLowerCase(), b]));
+    const jetons = [...parJeton.keys()];
+    /* ── GM et notes : les transferts des blocks suivis, hors creation (from 0x0) et hors jambes de swap (PoolManager) ── */
+    for (let i = 0; i < jetons.length; i += JETONS_PAR_REQUETE) {
+      for (let de = deBloc; de <= aBloc; de += 2000) {
+        const a = Math.min(aBloc, de + 1999);
+        if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
+        const logs = await logsAdaptatifs(rpc, { address: jetons.slice(i, i + JETONS_PAR_REQUETE), topics: [TOPIC_TRANSFER] }, de, a, fenetresRatees, 'transfers');
+        for (const l of logs || []) {
+          const t = decoderTransfer(l);
+          if (!t || t.value === null) continue;
+          const b = parJeton.get(String(t.token));
+          if (!b || t.from === ZERO || t.from === pm || t.to === pm) continue;
+          if (t.tx && txSwaps.has(String(t.tx).toLowerCase())) continue;
+          const dec = Number.isInteger(b.dec) ? b.dec : null;
+          ajouter({ type: t.value === 0n ? 'NOTE' : 'GM', bloc: t.bloc, jeton: t.token, sym: b.sym ?? null, tx: t.tx, logIndex: t.logIndex,
+            de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null });
+        }
+      }
+    }
+    /* ── messages PAYES entre blocks : TBLOCK -> wallet de frais, au moins le frais, relus un par un ── */
+    for (let de = deBloc; de <= aBloc; de += 2000) {
+      const a = Math.min(aBloc, de + 1999);
+      const logs = await logsAdaptatifs(rpc, { address: TBLOCK.toLowerCase(), topics: [TOPIC_TRANSFER, null, topicAdresse(FEE_WALLET)] }, de, a, fenetresRatees, 'messages');
+      for (const l of logs || []) {
+        const t = decoderTransfer(l);
+        if (!t || typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) continue;
+        let tx = null;
+        try { tx = await rpc('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
+        const m = messageDepuisTransfert(t, tx);
+        if (m.etat !== 'MESSAGE') continue;
+        ajouter({ type: 'MESSAGE', bloc: t.bloc, jeton: m.a, sym: null, tx: t.tx, logIndex: t.logIndex,
+          de: m.de, a: m.a, texte: m.texte, signataire: m.signataire });
+      }
     }
   }
   evenements.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
