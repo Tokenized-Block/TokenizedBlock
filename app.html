@@ -2456,6 +2456,9 @@ function peindreStades() {
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
   $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named first.'
     : 'The map has not read any block yet.';
+  /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
+   *    read yet » pendant que les vies arrivaient. Il se reclasse avec les stades — sauf quand on est en train de choisir. */
+  if ($('#v-brain').classList.contains('on') && document.activeElement !== $('#bChoix')) peindreChoixBrain();
 }
 $('#pmRole').addEventListener('change', () => {
   const adr = $('#profil').dataset.block;
@@ -4381,14 +4384,33 @@ function appliquerReglesDuBrain(adr, vu) {
 const HISTO_MAX = 120;
 
 function peindreChoixBrain() {
+  /* ⛔⛔ PHIL (2026-09-14) : « la possibilite d avoir TOUS les Brain AI dispo, et meme bon tri ». Tous les blocks connus de la
+   *    page (carte + creations lues + creations vues par le Live), NOS blocks d abord, puis par stade (stades.js : Monument ->
+   *    Seed, puis hors palier). Un block hors carte a quand meme son cerveau : il ne depend que de son adresse. */
   const s = $('#bChoix');
   const avant = s.value;
-  const options = habitants.map((h) => ({ adr: h.adr, sym: h.sym }));
-  if (brainAdr && !options.some((o) => o.adr === brainAdr)) options.unshift({ adr: brainAdr, sym: symProfil });
-  s.innerHTML = options.map((o) => '<option value="' + enTexte(o.adr) + '">'
-    + enTexte(String(o.sym || '?').slice(0, 14)) + ' · ' + enTexte(o.adr.slice(0, 10)) + '…</option>').join('');
-  if (options.some((o) => o.adr === avant)) s.value = avant;
-  if (!brainAdr && options.length) choisirBrain(options[0].adr);
+  const tous = new Map();
+  const ajouter = (adr, sym) => {
+    const k = String(adr || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(k) || tous.has(k)) return;
+    const h = habitants.find((x) => String(x.adr).toLowerCase() === k);
+    tous.set(k, { adr: h ? h.adr : adr, sym: (h && h.sym) || sym || null, vie: h ? h.vie : null, devise: h ? h.devise : null,
+      etatVie: h ? h.etatVie : null, nourriture: h ? h.nourriture : null, nous: (h && h.nous === true) || estANous(k) });
+  };
+  for (const h of habitants) ajouter(h.adr, h.sym);
+  for (const c of creationsLues) ajouter(c.jeton, c.symbole);
+  for (const c of creationsLive.values()) ajouter(c.jeton, c.sym);
+  if (brainAdr) ajouter(brainAdr, symProfil);
+  const r = stadesDesBlocks({ ethUsd, blocks: [...tous.values()] });
+  s.innerHTML = r.groupes.map((g) => '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + g.blocks.length) + '">'
+    + g.blocks.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (b.nous ? '🟦 ' : '')
+      + enTexte(String(b.sym || '?').slice(0, 14)) + ' · ' + enTexte(b.adr.slice(0, 10)) + '…'
+      + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
+    + '</optgroup>').join('');
+  const valeurs = [...s.querySelectorAll('option')].map((o) => o.value);
+  if (valeurs.includes(avant)) s.value = avant;
+  else if (brainAdr && valeurs.includes(brainAdr)) s.value = brainAdr;
+  if (!brainAdr && valeurs.length) choisirBrain(valeurs[0]);
 }
 
 function choisirBrain(adr) {
