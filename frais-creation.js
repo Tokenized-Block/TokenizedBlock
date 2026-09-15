@@ -91,7 +91,7 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   let base = 'Life fee (Launch / stay alive): ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
     + '/ETH median) → ' + walletCourt
-    + '. Separate ETH transfer first, then the Launch tx. Same wallet as Create birth fee. Life fee ≠ automatic buyback.';
+    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified at fee wallet before Launch. Same wallet as Create birth fee. Life fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Your ETH balance is below the life fee, so Launch cannot start.';
