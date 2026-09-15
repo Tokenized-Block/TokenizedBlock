@@ -94,6 +94,9 @@ export function snapshotCerveau({
         hooks: marche.hooks != null ? String(marche.hooks) : null,
         hooked: typeof marche.hooked === 'boolean' ? marche.hooked : null,
         isTbFeeHook: typeof marche.isTbFeeHook === 'boolean' ? marche.isTbFeeHook : null,
+        /* Uniswap L from StateView getLiquidity — string for JSON; null = unread (never invent 0). */
+        liquidite: marche.liquidite != null && marche.liquidite !== '' ? String(marche.liquidite) : null,
+        liqOrdre: marche.liqOrdre != null ? String(marche.liqOrdre) : null,
       };
     })(),
     nourriture: n,

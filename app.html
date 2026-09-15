@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1745">Build <code>20260915-1745</code> · Profile hooked-pool detect · Brain marche/hooks + last-export persist · CreateRouter honesty.</p>
+      <p class="note" data-build="20260915-1800">Build <code>20260915-1800</code> · Social CreateRouter unused chip · Brain LP depth (getLiquidity) · Profile hooked + liq sensor · path to first hooked Launch.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -883,6 +883,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
         <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
       </div>
+      <!-- ⛔ P0 2026-09-15 tip 1800: dashboard honesty — CreateRouter unused vs Social factory flood.
+           Not redundant with per-row 0630 unpaid→Launch nudge: this is the window aggregate. -->
+      <p class="note" id="sfCreateFeeHonesty" hidden></p>
       <ul class="fil" id="sfLive"></ul>
       <div id="sfLiveFin" style="height:1px"></div>
       <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
@@ -1902,7 +1905,7 @@ function appliquerVie(h, r) {
    *    restait vide plus de 40 s sous saturation. Elle se repeint a chaque vie lue : on voit les blocks monter de stade. */
   queueMicrotask(peindreStades);
   if (r.etat !== 'LUE') return;
-  h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null;
+  h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
   const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
   h.t = t;
   h.el.style.width = t + 'px';
@@ -2850,6 +2853,12 @@ function peindreMarcheHook(v) {
     el.textContent = 'Market pool · unhooked (legacy / pre-hook Launch) — no enduring 2 % hook fee; in-app Buy/Sell still takes 0.5 % → fee wallet. New app Launch opens a NEW hooked pool id; this pool stays as-is'
       + (info.via ? ' · via ' + info.via : '') + '.';
   }
+  const lo = ordreLiquidite(v.liquidite);
+  if (lo) {
+    el.textContent += ' · LP depth L≈' + lo + ' (StateView getLiquidity — not ETH; thin book ≠ market-cap).';
+  } else if (v.liquidite === 0n || v.liquidite === 0 || v.liquidite === '0') {
+    el.textContent += ' · LP depth L=0 (empty book).';
+  }
 }
 
 function peindreJeu(mcDevise, devise, etat) {
@@ -3297,6 +3306,50 @@ function lisible(texte) {
   if (x !== 0 && Math.abs(x) < 1) return String(Number(x.toPrecision(3)));
   return x.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
+
+/** Uniswap L → short order-of-magnitude label (facts only; never invent ETH depth). */
+function ordreLiquidite(L) {
+  if (L == null) return null;
+  let n;
+  try { n = typeof L === 'bigint' ? L : BigInt(String(L)); } catch { return null; }
+  if (n < 0n) return null;
+  if (n === 0n) return '0 (empty book)';
+  const s = n.toString();
+  const exp = s.length - 1;
+  if (exp < 3) return '~10^' + exp + ' (thin)';
+  if (exp < 6) return '~10^' + exp;
+  if (exp < 12) return '~10^' + exp;
+  return '~10^' + exp + ' (deep)';
+}
+
+/** Social Live dashboard: CreateRouter paid vs unpaid factory creates in the loaded window. */
+function peindreCreateFeeHonesty() {
+  const el = $('#sfCreateFeeHonesty');
+  if (!el) return;
+  const creations = liveEvts.filter((e) => e.type === 'CREATION');
+  if (!creations.length) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  const paid = creations.filter((e) => e.paidCreate === true).length;
+  const unpaid = creations.length - paid;
+  el.hidden = false;
+  if (CHAINE === 8453) {
+    if (paid === 0) {
+      el.innerHTML = '<b>CreateRouter unused</b> in this window · <b>0</b> paid · <b>'
+        + unpaid + '</b> unpaid factory create(s). Fee path: <b>Create</b> in-app (CreateRouter life fee) '
+        + 'or tap an unpaid row → profile → <b>Launch</b> (life fee + first hooked Initialize). '
+        + 'Social flood alone does not pay 0x37eb…580a.';
+    } else {
+      el.innerHTML = '<b>' + paid + '</b> CreateRouter paid · <b>' + unpaid
+        + '</b> unpaid factory in this window. Unpaid still need <b>Launch here</b> for life fee + hooked market.';
+    }
+  } else {
+    el.textContent = paid + ' paid · ' + unpaid + ' unpaid creates in this window (Practice — no mainnet fee).';
+  }
+}
+
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
   /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
@@ -3375,6 +3428,7 @@ function peindreLive() {
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
    * precedente. Le bouton reste la pour qui ne defile pas. */
+  peindreCreateFeeHonesty();
   verifierBasLive();
   peindreRelais();
 }
@@ -5280,6 +5334,9 @@ function choisirBrain(adr) {
           hB.vieAvant = hB.vie;
           hB.vie = marche.vie;
           hB.devise = marche.devise;
+          hB.via = marche.via || null;
+          hB.cle = marche.cle || null;
+          hB.liquidite = marche.liquidite != null ? marche.liquidite : null;
           hB.etatVie = 'LUE';
           viePourCerveau(adr, marche.vie, 'LUE');
         } else if (marche) {
@@ -5313,7 +5370,7 @@ async function relireMarcheBrainSiNonLu() {
   try {
     const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: brainAdr });
     if (marche && marche.etat === 'LUE') {
-      if (h) { h.vieAvant = h.vie; h.vie = marche.vie; h.devise = marche.devise; h.etatVie = 'LUE'; }
+      if (h) { h.vieAvant = h.vie; h.vie = marche.vie; h.devise = marche.devise; h.via = marche.via || null; h.cle = marche.cle || null; h.liquidite = marche.liquidite != null ? marche.liquidite : null; h.etatVie = 'LUE'; }
       viePourCerveau(brainAdr, marche.vie, 'LUE');
     }
   } catch (e) { /* keep unread honest */ }
@@ -5389,6 +5446,8 @@ function publierSnapshotBrain(vu, h) {
             hooks: infoH.hooks,
             hooked: infoH.hooked,
             isTbFeeHook: infoH.isTbFeeHook,
+            liquidite: h.liquidite != null ? String(h.liquidite) : null,
+            liqOrdre: ordreLiquidite(h.liquidite),
           };
         }
         return {
@@ -5398,6 +5457,8 @@ function publierSnapshotBrain(vu, h) {
           hooks: null,
           hooked: null,
           isTbFeeHook: null,
+          liquidite: h && h.liquidite != null ? String(h.liquidite) : null,
+          liqOrdre: h ? ordreLiquidite(h.liquidite) : null,
         };
       }
       const info = infoHookMarche(mp);
@@ -5408,6 +5469,8 @@ function publierSnapshotBrain(vu, h) {
         hooks: info.hooks,
         hooked: info.hooked,
         isTbFeeHook: info.isTbFeeHook,
+        liquidite: mp.liquidite != null ? String(mp.liquidite) : null,
+        liqOrdre: ordreLiquidite(mp.liquidite),
       };
     } catch (e) {
       return null;
@@ -5428,7 +5491,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1745',
+    build: '20260915-1800',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -5447,6 +5510,7 @@ function publierSnapshotBrain(vu, h) {
       + ' · ' + (snap.phase || '?') + ' · tick ' + (snap.tick ?? '?')
       + (snap.marche && snap.marche.hooked === true ? ' · hooked pool'
         : snap.marche && snap.marche.hooked === false ? ' · unhooked pool' : '')
+      + (snap.marche && snap.marche.liqOrdre ? ' · L' + snap.marche.liqOrdre : '')
       + ' · localStorage[tb-brain-last]';
   }
   return snap;

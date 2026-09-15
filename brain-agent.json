@@ -18,7 +18,7 @@
     "read": "Open MAIN \u2192 Brain AI \u2192 pick block \u2192 let it beat \u2192 read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
     "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture \u2014 never invent mood/phase/advice",
     "ensemble_calm_example": "phase CALME + symmetric gauche_hz\u2248droite_hz + |virage|\u22480 \u2192 balanced calm ensemble; tick\u2265100000 \u2192 continuity product",
-    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via \u2014 from profile market read when same block was opened; null if unread"
+    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via / liquidite (StateView getLiquidity as decimal string) \u2014 from profile market read when same block was opened; null if unread"
   },
   "snapshot_schema": "tblock-brain-snapshot/1",
   "fields": [
@@ -38,9 +38,11 @@
     "journal[]",
     "regles",
     "ensemble_note",
-    "entree"
+    "entree",
+    "marche.liquidite",
+    "marche.liqOrdre"
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-1745"
+  "tip": "20260915-1800"
 }

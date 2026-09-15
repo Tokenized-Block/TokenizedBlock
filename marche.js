@@ -27,6 +27,23 @@ const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 /** La cle TBLOCK/block lue en second (format du lancement de l app). */
 export const CLE_TBLOCK = { fee: 0, tickSpacing: 200 };
 
+
+/** StateView getLiquidity(bytes32) — pool depth sensor (Uniswap L, not ETH). null = unread, never invent 0. */
+async function lireLiquiditePool(rpc, stateView, cle) {
+  if (!stateView || !cle) return null;
+  try {
+    const raw = await rpc('eth_call', [{
+      to: stateView,
+      data: '0x' + selecteur('getLiquidity(bytes32)') + poolId(cle).slice(2),
+    }, 'latest']);
+    if (!raw || raw === '0x' || String(raw).length < 66) return null;
+    return BigInt(String(raw).slice(0, 66));
+  } catch {
+    return null;
+  }
+}
+
+
 /**
  * La vie d un block apparie a TBLOCK, en ETH. `null` = pas de pool TBLOCK/block (on laisse le NON_TROUVEE d origine).
  * ⛔ Rend NON_LUE (pas null) si la pool TBLOCK/block existe mais qu un prix ou la supply manque.
@@ -67,8 +84,9 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
   if (!(prixEnTblock > 0) || !(prixTblockEnEth > 0)) return nonLue('a price could not be computed');
   const c = capitalisation({ supply, decimales: dec, prix: prixEnTblock * prixTblockEnEth, devise: 'ETH' });
   if (c.valeur === null || c.valeur === undefined) return nonLue(c.pourquoi || 'market cap not computable');
+  const liquidite = await lireLiquiditePool(lire, stateView, cle);
   return { etat: 'LUE', vie: c.valeur, devise: 'ETH', via, pourquoi: null, cle, sqrtPriceX96: s, decimales: dec, paire: 'TBLOCK',
-    prixTblockEnEth };
+    prixTblockEnEth, liquidite };
 }
 
 /** Les cles de pool lues, dans l ordre. ⛔ NOTRE Launch d abord : un block lance ici doit etre lu
@@ -175,5 +193,6 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   }
   /* ⛔ LA CLE TROUVEE EST RENDUE (2026-09-13) : l achat / vente dans l app doit trader SUR LA POOL LUE ICI, pas
    * sur une cle recalculee ailleurs — une deuxieme recherche de marche finirait par diverger de celle-ci. */
-  return { etat: 'LUE', vie: c.valeur, devise: c.devise, via, pourquoi: null, cle: cleTrouvee, sqrtPriceX96: sqrt, decimales: dec };
+  const liquidite = await lireLiquiditePool(rpc, stateView, cleTrouvee);
+  return { etat: 'LUE', vie: c.valeur, devise: c.devise, via, pourquoi: null, cle: cleTrouvee, sqrtPriceX96: sqrt, decimales: dec, liquidite };
 }
