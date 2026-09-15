@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1830">Build <code>20260915-1830</code> · FEE 0x37eb capture · Wake→life fee · Social Create/Launch/Feed · TBLOCK deepen LP · Map node≠blocks · B20 pair.</p>
+      <p class="note" data-build="20260915-1835">Build <code>20260915-1835</code> · FEE 0x37eb capture · Social chips on open · Wake gate · TBLOCK deepen LP · Map node≠blocks · B20 pair.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3698,6 +3698,8 @@ $('#sfRelais').addEventListener('click', (ev) => {
 
 function demarrerLive() {
   peindreParoles();
+  /* ⛔ FEE capture: paint Create/Launch + Feed/Trust honesty immediately (not only after first getLogs). */
+  try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); } catch (_) {}
   if (liveMinuterie) { void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
@@ -5686,7 +5688,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1830',
+    build: '20260915-1835',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
