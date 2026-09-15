@@ -5,7 +5,8 @@
 //    Market card = buys/sells counts + buy/sell USD volumes from the trades SAMPLE WINDOW only.
 //    Your PnL = wallet-matched gecko trades only, with paper mark labeled when inventory remains.
 // ✅ On-demand per profile open — no poller.
-// ✅ Base mainnet token addresses. Best pair = highest liquidity among base chain pairs.
+// ✅ Base mainnet token addresses. Best pair = deepest honest quote-side (not Dex inventory mark).
+// ⛔ tip 2330 BRAINARM: Dex liquidity.usd / fdv often = tokens_in_pool×price (paper). Prefer ETH quote depth.
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
 const DS_TOKENS = 'https://api.dexscreener.com/latest/dex/tokens/';
@@ -36,8 +37,42 @@ function fmtPct(n) {
   return sign + n.toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%';
 }
 
+/** Honest quote-side USD from Dex pair (ETH/WETH depth), not inventory mark. */
+export function profondeurQuoteUsd(pair) {
+  if (!pair || !pair.liquidity) return null;
+  const quote = num(pair.liquidity.quote);
+  const priceUsd = num(pair.priceUsd);
+  const priceNative = num(pair.priceNative);
+  if (quote === null || !(quote >= 0)) return null;
+  /* Native quote (ETH): convert via priceUsd/priceNative when both set. */
+  if (priceUsd !== null && priceNative !== null && priceNative > 0) {
+    return quote * (priceUsd / priceNative);
+  }
+  /* Already USD-ish quotes (USDC): quote amount ≈ USD */
+  const qSym = String((pair.quoteToken && pair.quoteToken.symbol) || '').toUpperCase();
+  if (qSym === 'USDC' || qSym === 'USDT' || qSym === 'DAI') return quote;
+  return null;
+}
+
+/** True when Dex liquidity.usd is mostly marked base inventory, not exit depth. */
+export function liquiditeInventairePapier(pair) {
+  const marked = num(pair && pair.liquidity && pair.liquidity.usd);
+  const quoteUsd = profondeurQuoteUsd(pair);
+  if (marked === null || quoteUsd === null) return false;
+  if (quoteUsd <= 0) return marked > 100; /* any big mark with ~0 quote = paper */
+  return marked > Math.max(50, quoteUsd * 20);
+}
+
+/** Score for pair pick: prefer real quote depth; demote phantom inventory marks. */
+function scorePaire(pair) {
+  const quoteUsd = profondeurQuoteUsd(pair) || 0;
+  const marked = num(pair && pair.liquidity && pair.liquidity.usd) || 0;
+  if (liquiditeInventairePapier(pair)) return quoteUsd; /* ignore flattering mark */
+  return Math.max(quoteUsd, marked);
+}
+
 /**
- * Pick best Base pair from DexScreener token payload (highest liquidity.usd).
+ * Pick best Base pair from DexScreener token payload (honest quote depth first).
  * @returns {object|null}
  */
 export function choisirPaireBase(pairs, jeton) {
@@ -50,7 +85,7 @@ export function choisirPaireBase(pairs, jeton) {
     return b === want || q === want;
   });
   if (!base.length) return null;
-  base.sort((a, b) => (num(b.liquidity && b.liquidity.usd) || 0) - (num(a.liquidity && a.liquidity.usd) || 0));
+  base.sort((a, b) => scorePaire(b) - scorePaire(a));
   return base[0];
 }
 
@@ -204,8 +239,14 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
   const dexId = pair.dexId || null;
   const labels = Array.isArray(pair.labels) ? pair.labels.join(' ') : '';
 
+  const quoteUsdPre = profondeurQuoteUsd(pair);
+  const paperLiqPre = liquiditeInventairePapier(pair);
   const market = {
     priceUsd, liqUsd, volH24, volH6,
+    quoteUsd: quoteUsdPre,
+    paperInventoryLiq: paperLiqPre,
+    fdv: num(pair.fdv),
+    marketCap: num(pair.marketCap),
     buys, sells,
     priceChangeH6, priceChangeH24,
     pairCreatedAt,
@@ -234,12 +275,33 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
   }
 
   const lignes = [];
+  const quoteUsd = profondeurQuoteUsd(pair);
+  const paperLiq = liquiditeInventairePapier(pair);
+  const fdv = num(pair.fdv);
+  const mcap = num(pair.marketCap);
+  const quoteAmt = num(pair.liquidity && pair.liquidity.quote);
+  const qSym = String((pair.quoteToken && pair.quoteToken.symbol) || 'ETH');
+
   lignes.push('Price: <b>' + fmtPx(priceUsd) + '</b>'
     + (fmtPct(priceChangeH6) ? ' · h6 ' + fmtPct(priceChangeH6) : '')
     + (fmtPct(priceChangeH24) && priceChangeH24 !== priceChangeH6 ? ' · h24 ' + fmtPct(priceChangeH24) : ''));
-  lignes.push('Liquidity: <b>' + fmtUsd(liqUsd) + '</b>'
-    + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : '')
-    + (volH24 != null && volH24 !== volH6 ? ' · h24 ' + fmtUsd(volH24) : ''));
+  if (paperLiq && quoteUsd != null) {
+    lignes.push('Exit depth (quote in pool): <b>' + fmtUsd(quoteUsd) + '</b>'
+      + (quoteAmt != null ? ' · ' + quoteAmt.toLocaleString('en-US', { maximumFractionDigits: 6 }) + ' ' + qSym : '')
+      + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : ''));
+    lignes.push('DexScreener liquidity mark: <b>' + fmtUsd(liqUsd) + '</b> — paper (tokens in pool × spot). Not cash you can exit for.');
+  } else {
+    lignes.push('Liquidity: <b>' + fmtUsd(liqUsd) + '</b>'
+      + (quoteUsd != null ? ' · quote≈' + fmtUsd(quoteUsd) : '')
+      + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : '')
+      + (volH24 != null && volH24 !== volH6 ? ' · h24 ' + fmtUsd(volH24) : ''));
+  }
+  if (fdv != null || mcap != null) {
+    const same = fdv != null && mcap != null && Math.abs(fdv - mcap) < 1;
+    lignes.push((same ? 'Dex paper FDV≈MC: <b>' : 'Dex paper FDV/MC: <b>')
+      + fmtUsd(fdv != null ? fdv : mcap) + '</b>'
+      + ' = spot × supply — vanity when the pool has almost no quote. Not launch spend.');
+  }
   if (buys != null || sells != null) {
     lignes.push('Txns (DexScreener h6/h24 window): <b>'
       + (buys != null ? buys : '—') + ' buys</b> / <b>'
