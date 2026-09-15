@@ -849,7 +849,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-0540">Build <code>20260915-0540</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260915-0555">Build <code>20260915-0555</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1180,7 +1180,8 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES} from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
+import { completerInscriptionHook } from './lancer-pool-v2.js';
 import { planEchange, estWalletDeFrais } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
@@ -3772,11 +3773,17 @@ async function calculerLancement() {
     return;
   }
   e.textContent = 'No market on any key read — reading the block, its pool and your approvals…';
-  /* ⛔ LANCEMENT CONTRE TBLOCK (Phil, 2026-09-13) : meme plan, meme cle (frais 0, espacement 200, sans hook) que la
-   *    lecture `marche.js` de la paire TBLOCK — la valorisation est alors en TBLOCK, et l achat passe par TBLOCK/ETH. */
-  try { plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
-    ...(contreTblock ? { devise: TBLOCK } : {}) }); }
-  catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  /* ⛔ P0 2026-09-15: when TbFeeHook code is DEPLOYE, Real Launch opens the pool with HOOK_PREVU
+   *    (2% → FEE_WALLET + 1% creator on later swaps). Practice / ABSENT / NON_LU keep hooks=0.
+   *    TBLOCK or ETH pair — same hook; smart-wallet creator register via completerInscriptionHook. */
+  try {
+    const etatHook = await hookDeploye({ rpc });
+    const hooks = etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+    plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
+      ...(contreTblock ? { devise: TBLOCK } : {}),
+      ...(hooks ? { hooks } : {}) });
+    if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+  } catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
   if ($('#profil').dataset.block !== adr) return;
@@ -3825,9 +3832,14 @@ function peindrePlan(plan, adr) {
     txsApercu.push({ to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisL).toString(16) });
   }
   txsApercu.push(...(plan.etapes || []), plan.tx);
+  const hookAdr = plan.cle && plan.cle.hooks ? String(plan.cle.hooks).toLowerCase() : '0x0000000000000000000000000000000000000000';
+  const avecHook = hookAdr !== '0x0000000000000000000000000000000000000000';
   $('#plLignes').innerHTML = [
     'Pool on ' + RESEAUX[CHAINE].nom + ': against ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
       ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH') + ' · fee 0 % · spacing 200 · permanent · '
+      + (avecHook
+        ? 'TbFeeHook 3 % on swaps (2 % → fee wallet, 1 % creator) · '
+        : 'no fee hook · ')
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
@@ -4451,7 +4463,7 @@ function majPaire() {
      * laisser decouvrir un refus plus tard. */
     let suite = 'Recorded with the block at creation. Its market opens when you launch it, in this app.';
     if (q.paire.type === 'TBLOCK') {
-      suite = 'Standard TokenizedBlock quote. Launch can open a TBLOCK pool now (fee hook live at 0x34E3…6044 — 3% hooked markets pay FEE_WALLET). You can still Launch against ETH from the profile.';
+      suite = 'Standard TokenizedBlock quote. Launch (TBLOCK or ETH) attaches fee hook 0x34E3…6044 when live — 3% on hooked-pool swaps pay FEE_WALLET (2%) + creator (1%).';
     }
     n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ') + suite;
     const chip = $('#cPaireChip');
@@ -4650,7 +4662,7 @@ function majFraisEtRecap() {
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Via CreateRouter — life fee ≈ $1 ETH (birth, oracle) to fee wallet only after create succeeds; no token mint split'] : [])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
-    }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. Hooked TBLOCK markets wait on the fee-hook audit.</li>';
+    }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. On Base, Launch attaches TbFeeHook when live (3 % on hooked-pool swaps: 2 % → fee wallet, 1 % creator) — including external DEX volume on that pool.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
     ? '⚠️ This is Base mainnet: the block is real, the life fee is real ETH (birth), and a block cannot be undone. '
@@ -5275,7 +5287,7 @@ const ETAPES = [
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
     d: 'When a Uniswap v4 pool exists for the block, Buy/Sell quotes and builds the swap your wallet signs. A 0.5 % interface fee goes to the fee wallet inside the same swap when you use this app’s path — not when you trade elsewhere.' },
   { t: 'Open the market (Launch) and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Launch wakes the market (ETH or TBLOCK pool, 0% pool fee, 200 spacing, no hook). On Base mainnet: same life fee ≈ $1 ETH to 0x37eb…580a first (stay alive / open life on-chain), then the Launch tx — so unpaid external creates still pay when they Launch here. Practice Launch stays free. Sleep / no-market stays free until Launch. Hooked 3% TBLOCK markets wait on audit.' },
+    d: 'Launch wakes the market (ETH or TBLOCK pool, 0% LP fee, 200 spacing). On Base mainnet when TbFeeHook is deployed: pool opens with HOOK_PREVU — later swaps pay 3% (2% → 0x37eb…580a, 1% creator), app + external. Same life fee ≈ $1 ETH to the fee wallet first, then Launch — so unpaid external creates still pay when they Launch here. Practice Launch stays free (no hook on Sepolia). Sleep / no-market stays free until Launch. Pools launched before the hook stay unhooked.' },
   { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',

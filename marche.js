@@ -14,12 +14,13 @@
 //    parmi CELLES-CI ».
 //
 // ⚠️ CE QUE CE MODULE NE COUVRE PAS, ecrit ici plutot que decouvert plus tard : les paires contre
-//    autre chose que l ETH natif, les hooks non nuls, et tout ce qui n est pas Uniswap v4. Un jeton
-//    cote sur une v2, une v3 ou un autre protocole restera invisible — et c est pourquoi le refus
-//    s appelle NON_TROUVEE et jamais « sans valeur ».
+//    autre chose que l ETH natif / TBLOCK, les hooks AUTRES que HOOK_PREVU, et tout ce qui n est pas
+//    Uniswap v4. Un jeton cote sur une v2, une v3 ou un autre protocole restera invisible — et c est
+//    pourquoi le refus s appelle NON_TROUVEE et jamais « sans valeur ».
+// ✅ 2026-09-15 P0: App Launch attaches HOOK_PREVU — try that key first (ETH + TBLOCK), then legacy zero-hook.
 import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
-import { TBLOCK } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU } from './tokenomics.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 
@@ -33,12 +34,26 @@ export const CLE_TBLOCK = { fee: 0, tickSpacing: 200 };
 async function vieEnTblock({ rpc, stateView, jeton }) {
   const lire = rpc;
   const sel = selecteur('getSlot0(bytes32)');
-  const cle = cleDePool(TBLOCK, jeton, CLE_TBLOCK);
-  let s;
-  try { s = BigInt(String(await lire('eth_call', [{ to: stateView, data: '0x' + sel + poolId(cle).slice(2) }, 'latest'])).slice(0, 66)); }
-  catch { return { etat: 'NON_LUE', vie: null, devise: null, via: null, pourquoi: 'the TBLOCK pair could not be read' }; }
-  if (s === 0n) return null;
-  const nonLue = (pourquoi) => ({ etat: 'NON_LUE', vie: null, devise: null, via: 'TBLOCK · 0 %', pourquoi });
+  /* ⛔ P0 2026-09-15: Launch may open TBLOCK/block with HOOK_PREVU — try hooked key first, then legacy zero. */
+  const variants = [
+    { hooks: HOOK_PREVU, via: 'TBLOCK · 0 % · TbFeeHook' },
+    { hooks: null, via: 'TBLOCK · 0 %' },
+  ];
+  let cle = null, s = 0n, via = null, ratee = false;
+  for (const v of variants) {
+    const c = cleDePool(TBLOCK, jeton, v.hooks ? { ...CLE_TBLOCK, hooks: v.hooks } : CLE_TBLOCK);
+    let raw;
+    try { raw = await lire('eth_call', [{ to: stateView, data: '0x' + sel + poolId(c).slice(2) }, 'latest']); }
+    catch { ratee = true; continue; }
+    if (!raw || raw === '0x' || String(raw).length < 66) { ratee = true; continue; }
+    const sv = BigInt(String(raw).slice(0, 66));
+    if (sv !== 0n) { cle = c; s = sv; via = v.via; break; }
+  }
+  if (!cle) {
+    if (ratee) return { etat: 'NON_LUE', vie: null, devise: null, via: null, pourquoi: 'the TBLOCK pair could not be read' };
+    return null;
+  }
+  const nonLue = (pourquoi) => ({ etat: 'NON_LUE', vie: null, devise: null, via, pourquoi });
   let dec, supply, sE;
   try {
     dec = Number(BigInt(String(await lire('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
@@ -52,15 +67,16 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
   if (!(prixEnTblock > 0) || !(prixTblockEnEth > 0)) return nonLue('a price could not be computed');
   const c = capitalisation({ supply, decimales: dec, prix: prixEnTblock * prixTblockEnEth, devise: 'ETH' });
   if (c.valeur === null || c.valeur === undefined) return nonLue(c.pourquoi || 'market cap not computable');
-  return { etat: 'LUE', vie: c.valeur, devise: 'ETH', via: 'TBLOCK · 0 %', pourquoi: null, cle, sqrtPriceX96: s, decimales: dec, paire: 'TBLOCK',
+  return { etat: 'LUE', vie: c.valeur, devise: 'ETH', via, pourquoi: null, cle, sqrtPriceX96: s, decimales: dec, paire: 'TBLOCK',
     prixTblockEnEth };
 }
 
 /** Les cles de pool lues, dans l ordre. ⛔ NOTRE Launch d abord : un block lance ici doit etre lu
  *  sur SA pool plutot que sur une pool tierce ouverte au meme jeton. */
 export const CLES_MARCHE = [
-  /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) first — fee 5000 was the OLD screen, not today's Launch. */
-  { nom: 'ETH · 0 % (notre Launch)', fee: 0, tickSpacing: 200 },
+  /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) first — hooked when TbFeeHook DEPLOYE (P0 2026-09-15), then legacy zero-hook. */
+  { nom: 'ETH · 0 % · TbFeeHook (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_PREVU },
+  { nom: 'ETH · 0 % (legacy Launch)', fee: 0, tickSpacing: 200 },
   { nom: 'ETH · 0,5 % (legacy screen)', fee: 5000, tickSpacing: 200 },
   { nom: 'ETH · 3 % (OpenLaunch)', fee: 30000, tickSpacing: 200 },
   { nom: 'ETH · 1 %', fee: 10000, tickSpacing: 200 },
@@ -93,7 +109,7 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
 
   let lues = 0, ratees = 0, sqrt = 0n, via = null, cleTrouvee = null;
   for (const cfg of CLES_MARCHE) {
-    const cle = cleDePool(ETH_NATIF, jeton, { fee: cfg.fee, tickSpacing: cfg.tickSpacing });
+    const cle = cleDePool(ETH_NATIF, jeton, { fee: cfg.fee, tickSpacing: cfg.tickSpacing, ...(cfg.hooks ? { hooks: cfg.hooks } : {}) });
     let s0;
     try {
       s0 = await rpc('eth_call', [{ to: stateView, data: '0x' + selSlot0 + poolId(cle).slice(2) }, 'latest']);
@@ -120,7 +136,7 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
    * NON_TROUVEE : « this block has no market yet » sur un block qui en a un. La lecture ratee n etait pas comptee comme
    * un « non »… mais le « non » des autres cles la recouvrait. Si UNE cle n a pas ete lue, on ne peut pas dire « aucune ». */
   /* ⛔⛔ BLOCKS APPARIES A TBLOCK (Phil, 2026-09-13 : « creer des blocks avec TBLOCK »). Si aucune pool ETH n existe, on lit
-   * la pool TBLOCK/block (frais 0, espacement 200, sans hook — le format du lancement de l app), et la capitalisation est
+   * la pool TBLOCK/block (frais 0, espacement 200, HOOK_PREVU ou sans hook — format Launch), et la capitalisation est
    * CONVERTIE EN ETH par le prix de la pool TBLOCK/ETH, lu lui aussi. Un des deux prix illisible = NON_LUE, jamais un chiffre. */
   /* ⛔⛔ AVAIL 2026-09-15: try TBLOCK/block EVEN when some ETH keys rate-limited.
    *    Before: ratees>0 short-circuited to NON_LUE and never opened Buy/Sell for TBLOCK-launched blocks.

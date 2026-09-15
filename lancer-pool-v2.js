@@ -1,9 +1,9 @@
 // lancer-pool-v2.js — le marche d un block contre TBLOCK, avec le hook de frais (tokenomics v2).
 // ================================================================================================
-// ⛔⛔ BLOQUE TANT QUE LE HOOK N EXISTE PAS SUR LA CHAINE. Son code est LU a chaque plan : absent = aucun plan,
-//    aucune transaction a signer. Le hook ne doit pas etre deploye avant son audit (decision du 2026-09-13).
+// ⛔⛔ GARDE CODE LU : absent / non lu = pas de plan V2. TbFeeHook LIVE Base 2026-09-15 (HOOK_PREVU).
 // ⛔ LE MEME PLAN QUE LE MARCHE ETH (`planLancement`), paire = TBLOCK et hooks = le hook : Permit2, marge,
 //    proprietaire 0x…dEaD, frais LP 0 — rien n est recopie. Seules s ajoutent la garde du hook et l inscription.
+// ✅ App ETH Launch (2026-09-15 P0) also attaches HOOK_PREVU via `completerInscriptionHook` when DEPLOYE.
 // ⛔ SMART WALLET : dans le multicall du PositionManager, le hook voit le PositionManager comme `sender` et le
 //    bundler comme `tx.origin` — ni l un ni l autre n est l admin du block. Un compte qui a du code doit donc
 //    s INSCRIRE d abord (`inscrire(key, sqrtPrice)`), au MEME prix que l initialisation (le hook l exige).
@@ -20,38 +20,43 @@ export function encodeInscrire(cle, sqrtPriceX96) {
     + encodeInitializePool(cle, sqrtPriceX96).slice(10);
 }
 
+
+/** After `planLancement(..., hooks: HOOK_PREVU)`: add smart-wallet creator register if the pool is new. */
+export async function completerInscriptionHook({ rpc, plan, compte }) {
+  if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) return plan;
+  const out = { ...plan, hook: HOOK_PREVU, frais: FRAIS_V2 };
+  if (plan.poolExiste) return out;
+  const lire = rpc;
+  let code;
+  try { code = String(await lire('eth_getCode', [compte, 'latest']) || '0x').toLowerCase(); }
+  catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'could not tell whether your wallet is a smart wallet' }; }
+  /* ⚠️ 0xef0100… = EIP-7702 EOA: tx.origin is the account. Only a real contract registers. */
+  const contrat = code !== '0x' && !code.startsWith('0xef0100');
+  if (!contrat) return out;
+  let inscrit;
+  try {
+    const r = await lire('eth_call', [{ to: HOOK_PREVU, data: '0x' + selecteur('inscrit(bytes32)') + poolId(plan.cle).slice(2) }, 'latest']);
+    inscrit = '0x' + String(r).slice(-40);
+  } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the creator registration could not be read' }; }
+  const etapes = [...plan.etapes];
+  if (inscrit.toLowerCase() !== String(compte).toLowerCase()) {
+    etapes.push({ nom: 'Register as this market\'s creator (smart wallet)', to: HOOK_PREVU,
+      data: encodeInscrire(plan.cle, plan.sqrtVise), value: '0x0' });
+  }
+  return { ...out, etapes, etat: etapes.length ? 'APPROBATIONS' : 'PRET' };
+}
+
 export async function planLancementV2({ rpc, chaine, jeton, compte, valorisationTblock, maintenant = Date.now() }) {
   if (Number(chaine) !== 8453) return { etat: 'REFUSE', pourquoi: 'TBLOCK markets exist on Base mainnet only' };
   const h = await hookDeploye({ rpc });
   if (h === 'ABSENT') {
-    return { etat: 'HOOK_ABSENT', pourquoi: 'the TBLOCK fee hook is not deployed yet — it waits for its security audit' };
+    return { etat: 'HOOK_ABSENT', pourquoi: 'the TBLOCK fee hook has no code on this network' };
   }
   if (h !== 'DEPLOYE') return { etat: 'NON_MESURE', pourquoi: 'the hook code could not be read' };
 
   const plan = await planLancement({ rpc, chaine, jeton, compte, valorisationEth: valorisationTblock, maintenant,
     devise: TBLOCK, hooks: HOOK_PREVU });
   if (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS') return plan;
-
-  const etapes = [...plan.etapes];
-  /* ⚠️ Nomme par un `const` : la regle 5 de verifie-coherence ne voit pas un parametre destructure appele directement. */
-  const lire = rpc;
-  if (!plan.poolExiste) {
-    let code;
-    try { code = String(await lire('eth_getCode', [compte, 'latest']) || '0x').toLowerCase(); }
-    catch { return { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'could not tell whether your wallet is a smart wallet' }; }
-    /* ⚠️ 0xef0100… = compte EIP-7702 : c est un EOA, tx.origin le reconnait. Seul un vrai contrat s inscrit. */
-    const contrat = code !== '0x' && !code.startsWith('0xef0100');
-    if (contrat) {
-      let inscrit;
-      try {
-        const r = await lire('eth_call', [{ to: HOOK_PREVU, data: '0x' + selecteur('inscrit(bytes32)') + poolId(plan.cle).slice(2) }, 'latest']);
-        inscrit = '0x' + String(r).slice(-40);
-      } catch { return { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'the creator registration could not be read' }; }
-      if (inscrit.toLowerCase() !== String(compte).toLowerCase()) {
-        etapes.push({ nom: 'Register as this market\'s creator (smart wallet)', to: HOOK_PREVU,
-          data: encodeInscrire(plan.cle, plan.sqrtVise), value: '0x0' });
-      }
-    }
-  }
-  return { ...plan, etapes, etat: etapes.length ? 'APPROBATIONS' : 'PRET', devise: TBLOCK, hook: HOOK_PREVU, frais: FRAIS_V2 };
+  const complet = await completerInscriptionHook({ rpc, plan, compte });
+  return { ...complet, devise: TBLOCK };
 }

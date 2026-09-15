@@ -5,13 +5,13 @@
 //    Ici la pool EXISTE deja, et la position appartient a CELUI QUI SIGNE : il peut la retirer quand il veut.
 // ⛔ JAMAIS D INITIALISATION ICI : si le plan dit que la pool n existe pas, on refuse — un « ajout » qui creerait une
 //    pool a un prix par defaut serait un lancement deguise, au mauvais prix.
-// ⛔ SEULEMENT LES MARCHES AU FORMAT DE L APP (ETH natif, frais 0, espacement 200, sans hook) : un block qui trade sur
-//    une autre pool (autre frais, autre launcher, hook) ne recoit pas de liquidite sur une pool voisine vide.
-//    ETH natif OU TBLOCK (meme cle 0 % / spacing 200 / sans hook) — Create+Launch default TBLOCK depuis 2026-09.
+// ⛔ SEULEMENT LES MARCHES AU FORMAT DE L APP (ETH ou TBLOCK, frais 0, espacement 200, hook nul OU HOOK_PREVU) :
+//    un block qui trade sur une autre pool (autre frais, autre launcher, autre hook) ne recoit pas de liquidite
+//    sur une pool voisine vide. Create+Launch default TBLOCK ; P0 2026-09-15 attaches TbFeeHook when DEPLOYE.
 import { planLancement, V4_ADRESSES, FEE_POOL, TICK_SPACING_POOL, ADRESSE_NULLE, ETH_NATIF, sqrtDeTick } from './lancer-pool.js';
 import { selecteur, montantsPosition, encodeRetraitPosition, decoderPoolEtPosition, poolId } from './pool.js';
 import { vieDuBlock } from './marche.js';
-import { TBLOCK } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU } from './tokenomics.js';
 
 export const ETATS_LIQUIDITE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
 const pad = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
@@ -24,19 +24,21 @@ export async function planAjoutLiquidite({ rpc, chaine, jeton, compte, partPourM
   if (marche.etat === 'NON_TROUVEE') return { etat: 'REFUSE', pourquoi: 'this block has no market yet — open it first' };
   if (marche.etat !== 'LUE' || !marche.cle) return { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
   const k = marche.cle;
-  const feeOk = Number(k.fee) === FEE_POOL && Number(k.tickSpacing) === TICK_SPACING_POOL
-    && String(k.hooks).toLowerCase() === ADRESSE_NULLE;
+  const h = String(k.hooks || ADRESSE_NULLE).toLowerCase();
+  const hookOk = h === ADRESSE_NULLE || h === HOOK_PREVU.toLowerCase();
+  const feeOk = Number(k.fee) === FEE_POOL && Number(k.tickSpacing) === TICK_SPACING_POOL && hookOk;
   const estEthApp = feeOk && String(k.currency0).toLowerCase() === ETH_NATIF;
   const t0 = String(k.currency0).toLowerCase() === TBLOCK.toLowerCase();
   const t1 = String(k.currency1).toLowerCase() === TBLOCK.toLowerCase();
-  /* ⛔ AVAIL 2026-09-15: Create+Launch default TBLOCK — Add liquidity must deepen THAT pool, not refuse it. */
+  /* ⛔ AVAIL 2026-09-15: Create+Launch default TBLOCK — Add liquidity must deepen THAT pool, not refuse it.
+   *    P0 same day: hooked pools (HOOK_PREVU) are still our format — pass the same hooks into the mint plan. */
   const estTblockApp = feeOk && (marche.paire === 'TBLOCK' || t0 || t1)
     && (t0 || t1);
   if (!estEthApp && !estTblockApp) {
-    return { etat: 'REFUSE', pourquoi: 'its market is not a TokenizedBlock market (ETH or TBLOCK, 0 % fee, spacing 200, no hook) — liquidity tools only add to those' };
+    return { etat: 'REFUSE', pourquoi: 'its market is not a TokenizedBlock market (ETH or TBLOCK, 0 % fee, spacing 200, our hook or none) — liquidity tools only add to those' };
   }
   const devise = estTblockApp ? TBLOCK : ETH_NATIF;
-  const plan = await planLancement({ rpc: lire, chaine, jeton, compte, valorisationEth: 1, maintenant, partPourMille, proprietaire: compte, devise });
+  const plan = await planLancement({ rpc: lire, chaine, jeton, compte, valorisationEth: 1, maintenant, partPourMille, proprietaire: compte, devise, hooks: k.hooks });
   if (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE') return plan;
   if (!plan.poolExiste) return { etat: 'REFUSE', pourquoi: 'the pool was not found at the moment of planning — nothing is created here' };
   return { ...plan, ajout: true };
