@@ -1,5 +1,7 @@
 // echange.js — acheter / vendre un block DANS l app, avec le frais d interface de 0,5 %, et le buyback.
 // ================================================================================================
+// ⛔ HARD RULE tip 2349/2350: every in-app Buy/Sell 0.5% → FEE_WALLET a6cf only (never 37eb, never skip).
+//    External Dex on unhooked pools = 0 forever — chop that volume only via TbFeeHook Launch (new pool id).
 // ⛔ DECISION DE PHIL (2026-09-13) : 0,5 % de chaque achat / vente fait via l app va au wallet de frais, DIT avant
 //    la signature. Mesure qui l a motivee : 459 creations B20 en 22 h sur la factory publique de Base, 2 chez nous.
 // ⛔ LE FRAIS EST PRIS EN ETH, DANS LA MEME TRANSACTION, PAR LES ACTIONS DU ROUTEUR v4 (lues a la source) :
@@ -35,6 +37,20 @@ export function fraisSur(total, bps) {
 }
 
 export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === FEE_WALLET.toLowerCase();
+
+/** tip 2350: fail-closed — non-fee-wallet trades must TAKE/TAKE_PORTION to a6cf with non-zero fee. */
+function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
+  if (estWalletDeFrais(compte)) return null; /* buyback path: fee = 0 by design */
+  if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
+  if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
+    return 'fee beneficiary is not FEE_WALLET a6cf';
+  }
+  const blob = JSON.stringify(actions || []).toLowerCase();
+  const sink = FEE_WALLET.slice(2).toLowerCase();
+  if (!blob.includes(sink)) return 'fee TAKE/TAKE_PORTION to a6cf missing from actions';
+  if (resume.frais == null || BigInt(resume.frais) <= 0n) return 'fee amount is zero — amount too small for 0.5%';
+  return null;
+}
 
 async function appelOuErreur(rpc, tx) {
   try { return { result: await rpc('eth_call', [tx, 'latest']) }; }
@@ -80,6 +96,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   if (marche.paire === 'TBLOCK') {
     const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
     if (!route.actions) return route;
+    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions });
+    if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume: route.resume };
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
   }
   const cle = marche.cle;
@@ -167,6 +185,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
+  if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
 }
 
@@ -311,6 +331,8 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
     fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null,
     via: 'ETH/USDC · fee ' + best.fee, usdcExit: true,
   };
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
+  if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({
     lire, R, compte, jeton: USDC_BASE, sens: 'ACHAT', m, maintenant, deadline,
     actions, valeur: m, resume, cle: best.cle, zeroForOne: true, sortieMinTete: 0n,

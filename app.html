@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2349">Build <code>20260915-2349</code> · fees→a6cf · Create free · fee at Launch · Buy/Sell after hooked market.</p>
+      <p class="note" data-build="20260915-2350">Build <code>20260915-2350</code> · fees→a6cf · Create free · Launch+hook chops Dex · Buy/Sell 0.5% fail-closed.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3201,6 +3201,19 @@ async function peindrePnlSwaps(adr, perime) {
     badge.textContent = r.etat === 'LUE' ? (dexUrl ? ' · Dex pair' : ' · DexScreener')
       : (r.etat === 'NON_TROUVEE' ? ' · no pair' : ' · unread');
   }
+  /* tip 2350: unhooked Dex profit ≠ fees — cannot tax this pool id; CTA Launch hooked beside */
+  try {
+    const mv = marcheProfil && String(marcheProfil.adr || '').toLowerCase() === String(adr || '').toLowerCase()
+      && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
+    const hk = mv && mv.etat === 'LUE' ? infoHookMarche(mv) : null;
+    if (hk && !hk.isTbFeeHook && Number(CHAINE) === 8453) {
+      ul.innerHTML = '<li><b>Unhooked Dex = $0 to a6cf</b> on this pool id (FREE/legacy proof). We cannot tax existing unhooked volume. <b>Launch hooked pool beside</b> → TbFeeHook chops Dex/Uniswap UI swaps on the new pool → Fees for BaseAPP Holders.</li>'
+        + ul.innerHTML;
+      note.textContent = (note.textContent || '')
+        + ' · ⚠️ Dex chart ≠ fee capture. Launch hooked beside to start chopping.';
+      if (badge) badge.textContent = ' · unhooked · $0 fees';
+    }
+  } catch (_) { /* honesty optional */ }
 }
 
 
@@ -3941,9 +3954,9 @@ async function peindreFeeRecu() {
     const when = new Date().toLocaleString('fr-BE', { timeZone: 'Europe/Brussels' });
     el.innerHTML = '<b>Fees received (on-chain)</b> · BaseAPP Holders wallet holds <b>' + ethTxt + ' ETH</b>'
       + ' <span class="mono">(a6cf…f5d4)</span> · read ' + when
-      + '. Paths: Launch life · in-app 0.5% after hooked market · TbFeeHook pools · optional CreateRouter. External Dex on unhooked = <b>0</b>.';
+      + '. Paths: Launch life · TbFeeHook chops Dex on hooked pools · in-app 0.5% after hooked market. Unhooked Dex = <b>0</b> forever (cannot tax that pool id).';
   } catch (e) {
-    el.innerHTML = '<b>Fees received</b> · balance unread (RPC). Paths that pay: Launch life · Buy/Sell 0.5% (after hooked market) · hooked pools · optional CreateRouter.';
+    el.innerHTML = '<b>Fees received</b> · balance unread (RPC). Paths: Launch life · TbFeeHook (Dex chop) · in-app 0.5% after hooked market.';
   }
 }
 
@@ -4020,9 +4033,9 @@ function peindreLive() {
         ? '✉️ fee → BaseAPP Holders (smart wallet · text opaque) · ' + enTexte(court(e.signataire))
         : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-        + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Buy in app)</span>' : '')
+        + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Launch hooked beside)</span>' : '')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-          + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Sell in app / Launch hook)</span>' : '')
+          + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Launch hooked beside)</span>' : '')
           : e.confiance === 'HOOK'
             ? '↔ <b>' + nom + '</b> · hook pool' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts untrusted'
             : '↔ <b>' + nom + '</b> · trade' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts unread';
