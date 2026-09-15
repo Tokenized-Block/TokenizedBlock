@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1835">Build <code>20260915-1835</code> · FEE 0x37eb capture · Social chips on open · Wake gate · TBLOCK deepen LP · Map node≠blocks · B20 pair.</p>
+      <p class="note" data-build="20260915-1845">Build <code>20260915-1845</code> · FEE 0x37eb · ETH→USDC exit 0.5% · TBLOCK deepen · Wake/Social capture · Map node≠blocks.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1058,6 +1058,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
           <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
         </div>
+        <!-- ⛔ P0 2026-09-15: ETH→USDC exit — 0.5% → 0x37eb (external DEX pays wallet nothing). Quoter-gated. -->
+        <div class="pActions" id="peUsdcRow" style="grid-template-columns:1fr 1fr;margin-top:8px" hidden>
+          <label class="champ">ETH → USDC (exit)<input id="peUsdcEth" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
+          <button class="bouton sec" id="peUsdcPrep" type="button" style="align-self:end">Prepare ETH→USDC</button>
+        </div>
         <ul class="pmLignes" id="peLignes"></ul>
         <div class="pActions" id="peActions"></div>
         <p class="note" id="peEtat"></p>
@@ -1234,7 +1239,7 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
 import { completerInscriptionHook } from './lancer-pool-v2.js';
-import { planEchange, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
+import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -2865,17 +2870,19 @@ function peindreCapturePaths(adr, v, hkInfo) {
         + '. Unlike Launch, this position is yours.');
   }
   const u = $('#peUsdcPath');
+  const row = $('#peUsdcRow');
+  if (row) row.hidden = !(CHAINE === 8453);
   if (u) {
     u.hidden = false;
-    if (estTb) {
-      u.innerHTML = '<b>Exit path</b>: Sell TBLOCK here → <b>ETH</b> (0.5&nbsp;% → fee wallet). '
-        + 'USDC realization = ETH→USDC after (in-app USDC hop when quoter proves it — not invented). Deepen LP first so quotes fill.';
-    } else if (viaTb) {
-      u.innerHTML = '<b>Exit path</b>: Sell → ETH via TBLOCK hop (0.5&nbsp;% / buyback path → fee wallet). USDC = ETH→USDC next when quotes work.';
+    if (CHAINE === 8453) {
+      u.innerHTML = (estTb
+        ? '<b>Exit path</b>: Sell TBLOCK → <b>ETH</b> (0.5&nbsp;% → fee wallet), then <b>Prepare ETH→USDC</b> below — same 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated; external DEX pays 0). '
+        : '<b>Fee path</b>: Buy/Sell 0.5&nbsp;% → fee wallet'
+          + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2&nbsp;%' : '')
+          + '. After you hold ETH, <b>Prepare ETH→USDC</b> takes another 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated). ')
+        + 'Deepen TBLOCK LP so sells fill.';
     } else {
-      u.innerHTML = '<b>Fee path</b>: in-app Buy/Sell takes <b>0.5&nbsp;% → 0x37eb…580a</b>'
-        + (hkInfo && hkInfo.isTbFeeHook ? ' · hooked pool also pays 2&nbsp;% enduring' : ' · unhooked pool = app fee only')
-        + '.';
+      u.textContent = 'Practice — ETH→USDC exit is Base mainnet only.';
     }
   }
 }
@@ -4157,6 +4164,71 @@ $('#plqAjouter').addEventListener('click', () => void preparerAjout());
 
 $('#peAcheter').addEventListener('click', () => void preparerEchange('ACHAT'));
 $('#peVendre').addEventListener('click', () => void preparerEchange('VENTE'));
+
+/** ETH→USDC exit — 0.5% → FEE_WALLET. Quoter-gated; nothing to sign if pools unread. */
+async function preparerEthUsdc() {
+  const e = $('#peEtat');
+  $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
+  if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
+  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
+  const eth = Number(raw);
+  if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
+  /* wei from ETH string without float drift: use parse like other mounts */
+  let wei;
+  try {
+    const [a, b = ''] = raw.split('.');
+    const frac = (b + '000000000000000000').slice(0, 18);
+    wei = BigInt(a || '0') * 10n ** 18n + BigInt(frac);
+  } catch {
+    e.className = 'note wKo'; e.textContent = 'Invalid ETH amount.'; return;
+  }
+  if (wei <= 0n) { e.className = 'note wKo'; e.textContent = 'Enter ETH above zero.'; return; }
+  e.className = 'note'; e.textContent = 'Quoting ETH→USDC pools (0.5 % → fee wallet)…';
+  profilEnLecture = true;
+  let p;
+  try { p = await planEthVersUsdc({ rpc, chaine: CHAINE, compte, montantWei: wei }); }
+  catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  finally { profilEnLecture = false; }
+  const r = p.resume || {};
+  if (p.etat === 'NON_MESURE') {
+    e.className = 'note wKo';
+    e.textContent = 'Not measured: ' + (p.pourquoi || 'unread') + ' — Retry when the node answers.';
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry ETH→USDC';
+    br.addEventListener('click', () => void preparerEthUsdc());
+    $('#peActions').appendChild(br);
+    return;
+  }
+  if (p.etat === 'REFUSE') {
+    e.className = 'note wKo'; e.textContent = 'Not possible: ' + (p.pourquoi || p.etat); return;
+  }
+  if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
+  if (!estWalletDeFrais(compte)) {
+    if (r.fraisBps !== FRAIS_INTERFACE_BPS || !r.beneficiaireFrais
+      || String(r.beneficiaireFrais).toLowerCase() !== FEE_WALLET.toLowerCase()
+      || !(typeof r.frais === 'bigint' && r.frais > 0n)) {
+      e.className = 'note wKo';
+      e.textContent = 'Refused: ETH→USDC plan missing 0.5 % → fee wallet — fail-closed.';
+      return;
+    }
+  }
+  const feeCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
+  $('#peLignes').innerHTML = [
+    'Pay ' + formaterUnites(r.paye, 18) + ' ETH → receive at least ' + formaterUnites(r.recoitAuMoins, 6) + ' USDC',
+    'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH → ' + feeCourt + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
+    'External DEX would pay the fee wallet nothing — this hop is a fee-capture exit.',
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  const b = document.createElement('button');
+  b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
+  b.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
+  $('#peActions').appendChild(b);
+  e.className = 'note wOk';
+  e.textContent = 'Chain accepts this ETH→USDC — 0.5 % to ' + feeCourt + ' is inside it. Check your wallet before signing.';
+}
+const _usdcBtn = $('#peUsdcPrep');
+if (_usdcBtn) _usdcBtn.addEventListener('click', () => void preparerEthUsdc());
+
 
 let planCourant = null, lancementEnCours = false;
 
@@ -5688,7 +5760,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1835',
+    build: '20260915-1845',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

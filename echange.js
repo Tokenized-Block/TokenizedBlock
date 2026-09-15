@@ -13,10 +13,11 @@
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
-  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP } from './pool.js';
+  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
+import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
 
 /** ⛔ RECOPIEES de index.html (const ROUTEUR, const QUOTER) — un test compare. */
 export const ROUTEUR = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
@@ -259,3 +260,60 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
   }
   return { etat: 'REFUSE', resume, cle, pourquoi: 'the chain refuses this exact transaction: ' + refus.message.slice(0, 160) };
 }
+
+/**
+ * ETH → USDC on Base v4 — same 0.5% interface fee → FEE_WALLET.
+ * ⛔ HARD OBJECTIVE: exit conversion that still pays 0x37eb (external DEX pays 0).
+ * ⛔ Fail-closed: no Sign unless Quoter returns >0 on a measured ETH/USDC key (CLES_PRIX).
+ */
+export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleranceBps = 100n, maintenant = Date.now() }) {
+  const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)], V = V4_ADRESSES[Number(chaine)];
+  if (!R || !Q || !V) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
+  if (Number(chaine) !== 8453) return { etat: 'REFUSE', pourquoi: 'ETH→USDC exit is Base mainnet only here' };
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
+  const m = BigInt(montantWei);
+  if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'enter an ETH amount above zero' };
+  const tol = BigInt(toleranceBps);
+  if (tol < 0n || tol >= 10000n) return { etat: 'REFUSE', pourquoi: 'slippage out of range' };
+  const lire = rpc;
+  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
+  const { frais: fraisAchat, net: netAchat } = fraisSur(m, bps);
+  const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
+
+  let best = null;
+  for (const k of CLES_PRIX) {
+    const cle = cleDePool(ETH, USDC_BASE, k);
+    const zeroForOne = String(cle.currency0).toLowerCase() === ETH; // ETH is 0x0 → always currency0
+    let quote;
+    try {
+      const r = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: true, montant: netAchat }) }, 'latest']);
+      quote = BigInt('0x' + String(r).slice(2, 66));
+    } catch {
+      continue;
+    }
+    if (quote > 0n && (!best || quote > best.quote)) best = { cle, quote, fee: k.fee, tickSpacing: k.tickSpacing };
+  }
+  if (!best) {
+    return { etat: 'NON_MESURE', pourquoi: 'no ETH/USDC v4 pool quoted for this size — try again or a smaller amount' };
+  }
+  const min = (best.quote * (10000n - tol)) / 10000n;
+  if (min <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
+
+  const actions = bps > 0n
+    ? [{ code: ACTIONS_V4.SETTLE, params: paramsAction.settle(ETH, m, true) },
+      { code: ACTIONS_V4.TAKE, params: paramsAction.take(ETH, FEE_WALLET, fraisAchat) },
+      { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(USDC_BASE, min) }]
+    : [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(ETH, m) },
+      { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(USDC_BASE, min) }];
+  const resume = {
+    paye: m, payeDevise: 'ETH', recoitAuMoins: min, recoitDevise: 'USDC', quote: best.quote,
+    frais: fraisAchat, fraisDevise: 'ETH', montantSwap: netAchat,
+    fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null,
+    via: 'ETH/USDC · fee ' + best.fee, usdcExit: true,
+  };
+  return finaliser({
+    lire, R, compte, jeton: USDC_BASE, sens: 'ACHAT', m, maintenant, deadline,
+    actions, valeur: m, resume, cle: best.cle, zeroForOne: true, sortieMinTete: 0n,
+  });
+}
+
