@@ -859,7 +859,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-0615">Build <code>20260915-0615</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260915-0630">Build <code>20260915-0630</code> · <b>Created</b> marks unpaid/sleep → Launch; <b>All</b> hides external creates, hook trades, GM/note — use chips to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1060,8 +1060,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <ul class="pmLignes" id="plqPositions"></ul>
       </div>
       <div class="pJeu" id="pLancement" hidden>
-        <div class="pJeuTete"><span class="pBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
+        <div class="pJeuTete"><span class="pBadge" id="plBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
+        <p class="pProchain" id="plIntro">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
           signed transaction. Nothing moves before your wallet shows it.</p>
         <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
           <option value="ETH">ETH (native)</option></select></label>
@@ -2996,6 +2996,12 @@ async function lireProfil(adr, sym, perime) {
    * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
    * enverrait creer une pool qui existe peut-etre deja. */
   $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
+  /* ⛔ P0 2026-09-15: Wake CTA honesty — Real Launch = life fee + HOOK_PREVU; Practice free / no hook. */
+  if (etatVieProfil === 'NON_TROUVEE') {
+    $('#pReveiller').textContent = CHAINE === 8453
+      ? 'Wake it — Launch (life fee ≈ $1 + fee hook on new pool)'
+      : 'Wake it — Launch (Practice, free · no fee hook)';
+  }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
   /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
   if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
@@ -3271,7 +3277,12 @@ function peindreLive() {
   $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
-    const quoi = e.type === 'CREATION' ? '🧱 <b>' + nom + '</b> was created'
+    /* ⛔ P0 2026-09-15: unpaid Social creates nudge → Launch (life fee + hooked pool). Paid = CreateRouter. */
+    const quoi = e.type === 'CREATION'
+      ? (e.paidCreate === true
+        ? '🧱 <b>' + nom + '</b> was created · paid CreateRouter (life fee)'
+        : '🧱 <b>' + nom + '</b> was created · unpaid / sleep'
+          + (CHAINE === 8453 ? ' · Launch here → life fee ≈ $1 + hooked market' : ' · Launch here (Practice free)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
@@ -3284,8 +3295,12 @@ function peindreLive() {
     const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
       ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
-    return '<li class="filL"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + '</p></div></li>';
+    const openHint = e.type === 'CREATION' && e.paidCreate !== true
+      ? ' · <span class="filOpen">tap → profile · Wake / Launch</span>' : '';
+    return '<li class="filL" data-block="' + enTexte(e.jeton) + '"'
+      + (e.sym ? ' data-sym="' + enTexte(String(e.sym).slice(0, 14)) + '"' : '')
+      + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
+      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
     ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; all creates under Created.</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
@@ -3320,6 +3335,15 @@ function verifierBasLive() {
   }
 }
 $('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; void lireLive('ancien'); });
+/* ⛔ P0 2026-09-15: Social row → profile so unpaid creates can Wake / Launch (fee path). */
+$('#sfLive').addEventListener('click', (ev) => {
+  if (ev.target.closest('a')) return;
+  const li = ev.target.closest('li.filL[data-block]');
+  if (!li) return;
+  const adr = li.getAttribute('data-block');
+  if (!/^0x[0-9a-fA-F]{40}$/i.test(String(adr || ''))) return;
+  void ouvrirProfil(adr, li.getAttribute('data-sym') || null);
+});
 let liveDefile = null;
 window.addEventListener('scroll', () => {
   if (!$('#v-social').classList.contains('on')) return;
@@ -3842,10 +3866,28 @@ let planCourant = null, lancementEnCours = false;
 
 function ouvrirLancement() {
   $('#pLancement').hidden = false;
-  $('#plReseau').textContent = RESEAUX[CHAINE].nom;
+  const real = CHAINE === 8453;
+  $('#plReseau').textContent = (real ? 'Real · ' : 'Practice · ') + RESEAUX[CHAINE].nom;
+  const badge = $('#plBadge');
+  if (badge) badge.textContent = real ? 'Launch · life fee + fee hook' : 'Launch · Practice free';
+  const intro = $('#plIntro');
+  if (intro) {
+    const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
+    intro.innerHTML = real
+      ? ('On <b>Base mainnet</b>: life fee ≈ <b>$1 ETH</b> → fee wallet first, then this Launch opens a <b>new</b> pool with '
+        + '<b>TbFeeHook</b> (3&nbsp;% on later swaps: 2&nbsp;% → fee wallet, 1&nbsp;% creator — app + external). '
+        + 'Creates its pool against <span id="plContre">' + contre + '</span> and places the share you choose. '
+        + 'Nothing moves before your wallet shows it. Old pools stay unhooked.')
+      : ('<b>Practice</b> — Launch life fee is free here, and no fee hook is attached. '
+        + 'Creates its pool against <span id="plContre">' + contre + '</span> and places the share you choose. '
+        + 'Nothing moves before your wallet shows it.');
+  }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
-  $('#plEtat').textContent = '';
+  $('#plEtat').textContent = real
+    ? 'Work it out measures life fee + hooked pool plan. No broadcast until you sign.'
+    : 'Practice — Work it out is free; nothing here is real money.';
+  $('#plEtat').className = 'note' + (real ? ' wKo' : '');
   planCourant = null;
   $('#pLancement').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
