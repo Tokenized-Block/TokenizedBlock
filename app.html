@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1800">Build <code>20260915-1800</code> · Social CreateRouter unused chip · Brain LP depth (getLiquidity) · Profile hooked + liq sensor · path to first hooked Launch.</p>
+      <p class="note" data-build="20260915-1805">Build <code>20260915-1805</code> · Social CreateRouter/Launch fee chip (always on MAIN) · Brain LP depth · Profile liq sensor.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3322,31 +3322,31 @@ function ordreLiquidite(L) {
   return '~10^' + exp + ' (deep)';
 }
 
-/** Social Live dashboard: CreateRouter paid vs unpaid factory creates in the loaded window. */
+/** Social Live dashboard: CreateRouter vs factory flood — always visible on MAIN (not just per-row 0630). */
 function peindreCreateFeeHonesty() {
   const el = $('#sfCreateFeeHonesty');
   if (!el) return;
   const creations = liveEvts.filter((e) => e.type === 'CREATION');
-  if (!creations.length) {
-    el.hidden = true;
-    el.textContent = '';
-    return;
-  }
   const paid = creations.filter((e) => e.paidCreate === true).length;
   const unpaid = creations.length - paid;
   el.hidden = false;
   if (CHAINE === 8453) {
-    if (paid === 0) {
+    const base = 'Fee path: <b>Create</b> in-app (CreateRouter life fee) or tap unpaid Created → profile → <b>Launch</b> '
+      + '(life fee + first hooked Initialize). Social flood alone does not pay 0x37eb…580a.';
+    if (!creations.length) {
+      el.innerHTML = '<b>CreateRouter / Launch for fees</b> · ' + base
+        + ' · counts appear once Created events load in this window.';
+    } else if (paid === 0) {
       el.innerHTML = '<b>CreateRouter unused</b> in this window · <b>0</b> paid · <b>'
-        + unpaid + '</b> unpaid factory create(s). Fee path: <b>Create</b> in-app (CreateRouter life fee) '
-        + 'or tap an unpaid row → profile → <b>Launch</b> (life fee + first hooked Initialize). '
-        + 'Social flood alone does not pay 0x37eb…580a.';
+        + unpaid + '</b> unpaid factory create(s). ' + base;
     } else {
       el.innerHTML = '<b>' + paid + '</b> CreateRouter paid · <b>' + unpaid
         + '</b> unpaid factory in this window. Unpaid still need <b>Launch here</b> for life fee + hooked market.';
     }
   } else {
-    el.textContent = paid + ' paid · ' + unpaid + ' unpaid creates in this window (Practice — no mainnet fee).';
+    el.textContent = creations.length
+      ? (paid + ' paid · ' + unpaid + ' unpaid creates in this window (Practice — no mainnet fee).')
+      : 'Practice Live — no mainnet CreateRouter fee on this network.';
   }
 }
 
@@ -5491,7 +5491,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1800',
+    build: '20260915-1805',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
