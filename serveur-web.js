@@ -127,8 +127,8 @@ createServer((req, res) => {
   const chemin = String(req.url || '/').split('?')[0];
 
   /* ⛔ 2026-09-14: Instant Create retired — factory createB20 unpaid on MAIN.
-   * Hard 301 → /#creer (app.html CreateRouter createPaid + life fee ≈$1 ETH).
-   * Practice 84532 stays free factory inside app.html only. Zero TB create UI on 8453 → FACTORY. */
+   * Hard 301 → /#creer (app.html free factory create; life fee at Launch → a6cf).
+   * tip 2349: Create free on MAIN + Practice; fee moment = Launch. */
   if (chemin === '/index.html' || chemin === '/block-0.html') {
     res.writeHead(301, {
       Location: '/#creer',

@@ -1,14 +1,11 @@
-// frais-creation.js — le frais FIXE de creation, une seule source pour les deux ecrans.
+// frais-creation.js — life fee source for Create + Launch (tip 2349 product rule).
 // ================================================================================================
-// ⛔ MAIN (8453): one payable createPaid → CreateRouter (fee ETH forwarded after create).
-//    Practice: free createB20 on factory (NonPayable). Fail-closed if fee price unread.
-//
-// ⛔⛔ DECISION RAKSHA 2026-09-14 : LIFE FEE MAIN = ETH ≈ FRAIS_USD dollars (birth at Create,
-//    stay-alive / wake market at Launch). Calcule via `prix-eth.js` (mediane multi-pools).
-//    Sans prix fiable → Create / Launch REFUSES. USDC exporte pour compat ; rail app = ETH.
-//    Sleep / no-market = not paying life yet. Raw external factory creates stay unpaid until Launch.
+// ⛔ HARD RULE Raksha 2026-09-15 tip 2349: Creation stays FREE (factory createB20 on MAIN + Practice).
+//    Fee moment = Launch / mise en market (life fee ETH ≈ FRAIS_USD + TbFeeHook → a6cf).
+//    CreateRouter (createPaid) stays optional/legacy — app default UX = free factory.
+//    Sans prix fiable → Launch REFUSES (Create never needs price). USDC exporte pour compat.
 // ⚠️ Pages / Instant Create historiques peuvent encore citer FRAIS_HERITE_WEI (0,00005 ETH) —
-//    ce module expose les deux ; l app Railway utilise FRAIS_USD + weiPourDollars.
+//    ce module expose les deux ; l app Railway utilise FRAIS_USD + weiPourDollars at Launch.
 
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire.
  * HARD RULE Raksha 2026-09-15: ALL fees → only Base smart wallet a6cf…f5d4.
@@ -47,7 +44,9 @@ export function fraisCreationWei(chaine) {
 }
 
 export function fraisCreationUsd(chaine) {
-  return CHAINES_PAYANTES.includes(Number(chaine)) ? FRAIS_USD : 0;
+  /* tip 2349: Create is free everywhere — fee is at Launch (fraisLancementUsd). */
+  void chaine;
+  return 0;
 }
 
 /**
@@ -57,25 +56,13 @@ export function fraisCreationUsd(chaine) {
  * @param {bigint|null} soldeEth  solde ETH natif LU, ou null
  */
 export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, soldeEth = null) {
-  const usd = fraisCreationUsd(chaine);
-  if (usd === 0) {
-    return 'No life fee on ' + (nomReseau || 'this network') + ' — testnet blocks are free. '
-      + 'One signature: the creation itself.';
-  }
-  /* ⛔ Grok Super P0 2026-09-14: jamais CTA « $1 » sans wei mesure; prix illu = Create ferme. */
-  if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
-    return 'Life-fee price unread — Create closed. Need a measured ETH amount ≈ $' + usd
-      + ' · Fees for BaseAPP Holders (Uniswap v4 median). No silent micro-ETH fallback. Life fee ≠ automatic buyback.';
-  }
-  let base = 'Life fee (birth): ' + formaterEthCourt(fraisWei) + ' ETH'
-    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
-    + '/ETH median) · Fees for BaseAPP Holders'
-    + '. One signature: CreateRouter (life fee ETH only after create succeeds — revert refunds you). Life fee ≠ automatic buyback.';
-  if (soldeEth === null || soldeEth === undefined) return base;
-  if (BigInt(soldeEth) < BigInt(fraisWei)) {
-    return base + ' ⚠️ Your ETH balance is below the life fee, so creation cannot start.';
-  }
-  return base;
+  /* tip 2349: Create free — phrase ignores create wei; Launch owns life fee. */
+  void ethUsd; void fraisWei; void soldeEth;
+  const main = Number(chaine) === 8453;
+  return 'Create is free on ' + (nomReseau || 'this network')
+    + (main
+      ? ' (factory). Life fee ≈ $' + FRAIS_USD + ' ETH + TbFeeHook market at Launch → Fees for BaseAPP Holders (a6cf). One signature now: creation only.'
+      : ' — Practice. One signature: the creation itself. MAIN life fee is at Launch.');
 }
 
 /** Same FRAIS_USD on MAIN — Launch / wake market life fee (stage 2). Practice = 0. */
@@ -99,7 +86,7 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   let base = 'Life fee (Launch / stay alive): ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
     + '/ETH median) · Fees for BaseAPP Holders'
-    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified for BaseAPP Holders before Launch. Same path as Create birth fee. Life fee ≠ automatic buyback.';
+    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified for BaseAPP Holders before Launch. Create itself is free — this is THE fee moment. Life fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Your ETH balance is below the life fee, so Launch cannot start.';
