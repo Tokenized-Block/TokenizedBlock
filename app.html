@@ -115,6 +115,12 @@ body{background:var(--fond);
 .sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
 .note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
 
+/* Mini tabs inside a card — reuse .puce; panes hide walls of text. */
+.infoPane{margin-top:8px}
+.infoPane[hidden]{display:none!important}
+.infoPane ul.noteBullets{margin:6px 0 0 18px;padding:0}
+.infoPane ul.noteBullets li{margin:0 0 4px}
+
 /* ══ LA MAP ══════════════════════════════════════════════════════════════════════════════════
  * ⛔ LA TAILLE EST LA SEULE CHOSE QUI VARIE, ET C EST DELIBERE. Le dessin du block vient de son
  *    ADRESSE et ne change JAMAIS : c est son identite. Si la couleur ou la forme bougeaient avec
@@ -550,8 +556,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Create a block</p>
-      <p class="sous">One billion units, sealed at birth — nobody can mint more, not even you. Its face
-        is engraved in the token's own metadata.</p>
+      <p class="sous">Sealed <b>1B</b> at birth — nobody can mint more. Face engraved in token metadata.</p>
       <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
       <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
@@ -565,24 +570,22 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <button class="bouton sec" id="cSelNouveau" type="button" style="width:auto;padding:10px 14px">New salt</button>
         </span>
       </label>
-      <p class="note" style="margin:4px 0 0">A salt is filled for you so an address is ready — edit it or hit New salt anytime. The salt still fixes the address; nothing else is random unless you ask.</p>
+      <p class="note" style="margin:4px 0 0">Salt is prefilled so an address is ready — edit or New salt anytime. Salt fixes the address.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Its face</p>
-      <p class="sous">Every setting changes what gets engraved as an on-chain <code>image</code> in the token metadata (SVG) — shared by all holders, not exclusive IP, not an NFT. Face settings stay as you set them — nothing here is random unless you ask (Surprise me).</p>
+      <p class="sous">Engraved on-chain as SVG <code>image</code> metadata — shared look, not an NFT. Stays as you set it (Surprise me = random).</p>
       <div class="reglages" id="cReglages"></div>
     </div>
 
     <div class="carte">
       <p class="titre">Fly brain</p>
       <label class="wConsent" style="color:var(--doux)"><input type="checkbox" id="cCerveau" checked>
-        Give this block a deterministic fly brain (address-seeded, not an LLM): 128 neurons written into its metadata at
-        birth so the choice travels with the block.</label>
-      <p class="note">The brain moves the block and reads its market. It holds no key and signs
-        nothing — see Learn. It does not chat like a model; verified speech between blocks is the paid TBLOCK message path.</p>
+        Fly brain at birth (128 neurons, address-seeded — <b>not an LLM</b>). Written into metadata with the block.</label>
+      <p class="note">Moves the block, reads its market, signs nothing. Verified speech = paid TBLOCK messages.</p>
       <label class="champ" style="margin-top:10px">Its role at birth<select id="cRole"></select></label>
-      <p class="note" id="cRoleNote">Engraved in metadata with the face — not an LLM job, not a security level. You can still change the browser pick later on the profile.</p>
+      <p class="note" id="cRoleNote">Engraved with the face — not a security level. Browser pick can change later on the profile.</p>
     </div>
 
     <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
@@ -590,8 +593,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
          elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
     <div class="carte">
       <p class="titre">Pair it with</p>
-      <p class="sous">Standard quote is <b>TBLOCK</b> (TokenizedBlock). You can also pick ETH, USDC, a Coinbase tokenized
-        stock, or paste <b>another native B20</b> (code 0xef — not a random ERC-20). Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a peg — later you can still add another B20 pair.</p>
+      <p class="sous">Default <b>TBLOCK</b>. Or ETH, USDC, a Coinbase stock, or another native B20 (0xef). Pairing ≠ TBLOCK FDV / peg.</p>
       <label class="champ">Pair<select id="cPaire"></select></label>
       <label class="champ" id="cPaireAutreRang" hidden>Token address<input id="cPaireAutre"
         placeholder="0x… the whole address" autocomplete="off" spellcheck="false"></label>
@@ -602,12 +604,29 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
-      <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet <b>life fee ≈ $1 ETH</b> (birth — USDC/ETH Uniswap median) → <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; life fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing until Launch — we cannot force the Base precompile. Social Live lists every factory create; those are unpaid until Launch. CreateRouter is the paid in-app Create path (life fee only after create succeeds). Not a safety score.</p>
-      <p class="note" id="cBuybackHint">After the life fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Life fee ≠ automatic buyback, and nothing pegs price. Sleep / no-market = not paying life yet.</p>
-      <p class="note" id="cRecap"></p>
-      <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
-      <ol class="pmLignes" id="cApercuTx"></ol>
+      <!-- ⛔ P0 tip 2125: tabs — wall of text → Costs / Sign / Notes. Same fee truth → 0x37eb. -->
+      <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
+        <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
+        <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
+        <button type="button" class="puce" role="tab" aria-selected="false" data-itab="notes">Notes</button>
+      </div>
+      <div class="infoPane" data-itabs-pane="cCost" data-itab="cost">
+        <p class="note" id="cFrais"></p>
+        <ul class="note noteBullets">
+          <li><b>Result</b>: sealed <b>1B</b>, all to you — no token mint to the fee wallet.</li>
+          <li><b>Mainnet</b>: life fee ≈ $1 ETH → <code>0x37eb…580a</code> via CreateRouter.</li>
+          <li><b>Practice</b>: free.</li>
+        </ul>
+        <p class="note" id="cRecap"></p>
+      </div>
+      <div class="infoPane" data-itabs-pane="cCost" data-itab="sign" hidden>
+        <p class="note"><b>One signature</b> for Create. Life fee ETH only after create succeeds (revert refunds you).</p>
+        <ol class="pmLignes" id="cApercuTx"></ol>
+      </div>
+      <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
+        <p class="note" id="cMintFeeHint"><b>Factory bypass</b>: raw factory creates pay nothing until Launch — we cannot force the Base precompile. Social Live lists them unpaid. CreateRouter = paid in-app path. Not a safety score.</p>
+        <p class="note" id="cBuybackHint"><b>Life fee ≠ automatic buyback</b>. Fee wallet <em>can</em> buy TBLOCK (shown on TBLOCK profile) — nothing pegs price. Sleep / no-market = not paying life yet.</p>
+      </div>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
         <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
         <button class="bouton" id="cCreer" type="button">Create — sign in my wallet</button>
@@ -622,7 +641,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
   <section class="volet" id="v-brain" aria-label="Brain AI">
     <div class="carte">
       <p class="titre">Brain AI</p>
-      <p class="sous">Deterministic fly brain — 128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> and not a chat model: it feeds on its market and on-chain activity, moves its block, and signs nothing. Want spoken lines others can verify? Use paid TBLOCK messages on the profile.</p>
+      <p class="sous">128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> — feeds on market + chain, moves the block, signs nothing. Verified speech = paid TBLOCK messages.</p>
       <label class="champ">Block<select id="bChoix"></select></label>
       <div class="pJeuTete" style="margin-top:12px">
         <span class="pBadge" id="bPhase">—</span>
@@ -661,7 +680,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ P0 2026-09-15: Tasks — degen-fly offer loop honesty. Full brain OFFCHAIN; 32-signal 0/1 ONCHAIN (schema stub). -->
       <details class="bDetail" id="tbTasksDetails" style="margin-top:8px" open>
         <summary class="note" style="cursor:pointer" id="tbTasksSummary">Tasks · on-chain tools (honesty)</summary>
-        <p class="note" id="tbTasksHonesty">Full fly brain = <b>128 LIF offchain</b> (not an LLM). Offer food → <b>32 recorded signals</b> → integer circuit returns <b>0 refuse</b> / <b>1 dinner served</b>. Accepted food may lock forever (dead-address / locker — Base). One offering at a time. Fees / life → <code>0x37eb…580a</code>.</p>
+        <div class="stadeLigne" data-itabs="bTasks" role="tablist" style="margin-top:6px">
+          <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="how">How</button>
+          <button type="button" class="puce" role="tab" aria-selected="false" data-itab="fees">Fees</button>
+        </div>
+        <div class="infoPane" data-itabs-pane="bTasks" data-itab="how">
+          <p class="note" id="tbTasksHonesty"><b>128 LIF offchain</b> (not an LLM). Offer → <b>32 signals</b> → <b>0 refuse</b> / <b>1 dinner</b>. One offering at a time. Accepted food may lock forever (dead-address / locker).</p>
+        </div>
+        <div class="infoPane" data-itabs-pane="bTasks" data-itab="fees" hidden>
+          <p class="note">Fees / life → <code>0x37eb…580a</code>. Circuit stub only until contract deploy.</p>
+        </div>
         <ul class="pmLignes" id="tbTasksList"></ul>
         <p class="note" style="margin-top:8px"><b>Decision receipts</b> — journal facts + offer preview (evidence_hash = keccak256(canonical evidence) · contract lock pending).</p>
         <ul class="pmLignes" id="tbTaskLog"></ul>
@@ -695,7 +723,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <p class="note" id="bReprendreEtat"></p>
       <p class="titre" style="margin-top:12px;font-size:1em">Its whole brain, in fragments</p>
-      <p class="note">One 256-byte message cannot hold its exact memory, so it is cut into <b>4 chunks of 32 neurons</b> (memory shards for the chain — not a smarter or “more efficient” brain, and not tradable twin tokens). Frozen at the beat you click. Each is a transfer of 0 to yourself; your wallet signs each. Rebuild is EXACT only if the fingerprint matches; otherwise refused.</p>
+      <p class="note">Exact memory = <b>4×32-neuron</b> shards (256-byte memo limit) — not a smarter brain, not an FDV twin.</p>
       <div class="rang" style="margin-top:6px">
         <button class="bouton" id="bFragmenter" type="button">Record its full brain in 4 fragments</button>
         <button class="bouton sec" id="bReconstruire" type="button">Rebuild its brain from fragments</button>
@@ -848,8 +876,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            faire. -->
     <div class="carte">
       <p class="titre">The feed</p>
-      <p class="sous">Every line is a transfer that really happened, read from the chain. A message
-        rides inside the transaction itself — public and permanent, like the transfer.</p>
+            <p class="sous">Real transfers from the chain. A message rides inside the tx — public and permanent.</p>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
         <button class="bouton sec" id="sfCharger" type="button">Read the chain</button>
         <button class="bouton sec" id="sfPlus" type="button" disabled>Read further back</button>
@@ -861,26 +888,22 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <!-- ⛔ PHIL (2026-09-14) : « un agent qui lit ce que chaque Brain AI dit et fait pour le relayer » — relais-cerveaux.js -->
     <div class="carte">
       <p class="titre">Relay — what the brains say, strongest proof first</p>
-      <p class="sous">An agent reads every brain's lines and the Live feed, and keeps the strongest proof on top: paid messages,
-        verified trades, new activity, then moods. It is not an AI model — it only ranks lines already read from the chain.
-        Its buttons only open things for you: your wallet signs, it never does.</p>
+            <p class="sous">Ranks brain lines + Live by on-chain proof (paid messages first). Not an AI model — empty stays empty.</p>
       <ul class="fil" id="sfRelais"></ul>
       <p class="note" id="sfRelaisNote">Nothing relayed yet.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Blocks talking</p>
-      <p class="sous">Live from the brains on your map. A block speaks only when its brain sees something new on chain,
-        and another block answers with its own mood. Prudent: chain events ≤ every 50 beats; <b>mood-only</b> lines collapse to one row per token (browser-local — not on chain).
-        “Say it on chain” makes one public and permanent, signed by your wallet.</p>
+      <p class="sous">Brains speak when they see something new on chain. Mood-only lines: 1 row / token (browser-local). “Say it on chain” = your wallet signs a permanent public line.</p>
       <ul class="fil" id="sfParoles"></ul>
       <p class="note" id="sfParolesNote">Silent for now — a block speaks only when its brain sees something new.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2040">Build <code>20260915-2040</code> · holders/trust facts → Launch/Buy · Brain Tasks schema · fees → 0x37eb.</p>
-      <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older. <b>All</b> still hides GM/NOTE bursts (chip GM); brain mood lines are browser-local under Blocks talking (1 chip / token).</p>
+      <p class="note" data-build="20260915-2125">Build <code>20260915-2125</code> · copy tabs (Create/Launch/Swap/Brain/Social) · fees → 0x37eb.</p>
+      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -910,8 +933,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
          aucune ensuite sur ce navigateur. Aucune cle detenue par nous. -->
     <div class="carte" id="xmCarte">
       <p class="titre">Private messages</p>
-      <p class="sous">End-to-end encrypted chats between wallets, on XMTP. Unlike public messages,
-        nothing here is on chain — and nothing here is public.</p>
+            <p class="sous">Encrypted wallet chats on XMTP — off chain, unlike public messages. One tab at a time.</p>
       <p class="note" id="xmEtat">Off.</p>
       <button class="bouton" id="xmActiver" type="button" style="margin-top:10px">Turn on private messages</button>
       <div id="xmZone" hidden>
@@ -928,8 +950,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Who bought, and at what price</p>
-      <p class="sous">Purchases come from Uniswap v4 swap logs: the buyer is taken from the
-        transaction, never from the event — an event can name anyone.</p>
+            <p class="sous">Buys from Uniswap v4 swap logs — buyer from the tx, never guessed from the event alone.</p>
       <p class="note" id="sfAchats"></p>
     </div>
   </section>
@@ -943,8 +964,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
          cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
-      <p class="sous">Ranked by the market cap we could read. Feeding a block — buying it — is what
-        makes it grow. TBLOCK and TTB are separate markets: same look ≠ same FDV, and we never promise a Strategy-style twin peg.</p>
+            <p class="sous">Ranked by readable market cap. Buying feeds growth. TBLOCK and TTB stay separate markets.</p>
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
@@ -985,7 +1005,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <span class="pcChip"><b>HP · stage</b><i id="pcgHp">—</i></span>
           <span class="pcChip"><b>Role</b><i id="pcgRole">—</i></span>
         </div>
-        <p class="note" id="pcgHonesty" style="margin-top:8px">Fly brain owns mood · HP is ∛(market cap USD) · lines mirror chain facts only · <b>Not an LLM</b> · never signs · no invented lines.</p>
+        <p class="note" id="pcgHonesty" style="margin-top:8px">Mood = fly brain · HP = ∛(USD cap) · <b>not an LLM</b> · never signs · no invented lines.</p>
         <div class="pcLinks">
           <button class="bouton sec" id="pcgMap" type="button">Show on map</button>
           <button class="bouton sec" id="pcgBrain" type="button">Open Brain AI</button>
@@ -1044,7 +1064,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ P0 tip 2025: OL-inspired holders / trust facts — measured only; CTA → Launch or Buy (fee funnel). -->
       <div class="pJeu" id="pTrustFacts" hidden>
         <div class="pJeuTete"><span class="pBadge">Holders · trust facts</span><span class="pPV" id="pTfBadge">measured only</span></div>
-        <p class="pProchain" id="pTfIntro">OL-style density, TB fee path: facts from this visit’s chain reads — never a score.</p>
+        <p class="pProchain" id="pTfIntro">Measured this visit only — never a score. Fee path still → <code>0x37eb…580a</code>.</p>
         <ul class="pmLignes" id="pTfLignes"></ul>
         <p class="note" id="pTfCta"></p>
       </div>
@@ -1066,7 +1086,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
         <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % app fee → fee wallet</span></div>
-        <p class="note" id="peUsdcPath" hidden></p>
+        <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
+          <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
+          <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
+        </div>
+        <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
+          <p class="note">In-app Buy/Sell: <b>0.5%</b> → <code>0x37eb…580a</code>. Hooked pools also take hook fee on that pool. External DEX ≠ this path.</p>
+        </div>
+        <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit">
+          <p class="note" id="peUsdcPath" hidden></p>
+        </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
           <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off"></label>
@@ -1090,9 +1119,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            avec minimums. Visible seulement sur un marche LU au format de l app. -->
       <div class="pJeu" id="pLiquidite" hidden>
         <div class="pJeuTete"><span class="pBadge" id="plqBadge">Liquidity</span><span class="pPV" id="plqDepth">you keep your position</span></div>
-        <p class="pProchain" id="plqIntro">Add some of your blocks to its market so people can buy them. Unlike the launch, this position is yours: you can withdraw it at any time. Deeper book → more in-app Buy/Sell → 0.5&nbsp;% → fee wallet 0x37eb…580a.</p>
-        <!-- ⛔ P0 2026-09-15 tip 2010: OL contrast — this add is withdrawable; Launch lock was the permanent one. -->
-        <p class="note" id="plqLiqHonesty">🔓 <b>This Add = withdrawable</b> (you own the position). Launch LP stays dead-owner locked. Deepen the book so Trusted / Buy-Sell fills pay 0.5&nbsp;% → <code>0x37eb…580a</code>. Not a forever-lock claim.</p>
+        <p class="pProchain" id="plqIntro">Add blocks to the book. You keep this position (withdraw anytime). Deeper book → more Buy/Sell → 0.5% → <code>0x37eb…580a</code>.</p>
+        <!-- ⛔ tip 2125: short honesty — Launch lock ≠ this Add. -->
+        <p class="note" id="plqLiqHonesty">🔓 <b>Withdrawable</b> · Launch LP stays forever-locked · deepen → 0.5% → <code>0x37eb…580a</code></p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Share of your blocks, in %<input id="plqPart" inputmode="decimal" placeholder="1" autocomplete="off"></label>
           <button class="bouton" id="plqAjouter" type="button" style="align-self:end">Prepare add</button>
@@ -1105,10 +1134,18 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <div class="pJeu" id="pLancement" hidden>
         <div class="pJeuTete"><span class="pBadge" id="plBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain" id="plIntro">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
-          signed transaction. Nothing moves before your wallet shows it.</p>
-        <!-- ⛔ P0 2026-09-15 tip 2010: OL-inspired locked-liq honesty BEFORE Sign — Launch dead-owner ≠ later Add LP withdrawable. Not zero-fee. -->
-        <p class="note" id="plLiqHonesty">🔒 <b>Launch LP = permanently locked</b> (dead-address owner — nobody can pull it). Later <b>Add liquidity</b> = <b>your</b> position, withdrawable anytime. Do not treat every LP as forever-locked. Life fee + hooked swaps still → <code>0x37eb…580a</code> (not zero platform fee).</p>
+        <p class="pProchain" id="plIntro">Opens a pool against <span id="plContre">ETH</span> and places your share — one signed tx. Nothing moves before your wallet shows it.</p>
+        <!-- ⛔ tip 2125: Launch honesty in tabs — Lock | Fees. -->
+        <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px">
+          <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="lock">Lock</button>
+          <button type="button" class="puce" role="tab" aria-selected="false" data-itab="fees">Fees</button>
+        </div>
+        <div class="infoPane" data-itabs-pane="plInfo" data-itab="lock">
+          <p class="note" id="plLiqHonesty">🔒 <b>Launch LP locked forever</b> (dead-address owner). Later <b>Add liquidity</b> stays yours / withdrawable. Not every LP is forever-locked.</p>
+        </div>
+        <div class="infoPane" data-itabs-pane="plInfo" data-itab="fees" hidden>
+          <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH + hooked swaps → <code>0x37eb…580a</code> (not zero platform fee). Practice Launch is free.</p>
+        </div>
         <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
           <option value="ETH">ETH (native)</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
@@ -2887,12 +2924,12 @@ function peindreCapturePaths(adr, v, hkInfo) {
   if (depth) depth.textContent = lo ? ('L≈' + lo + ' · you keep position') : 'you keep your position';
   if (intro) {
     intro.innerHTML = estTb
-      ? ('TBLOCK is the gas token of this app. Add TBLOCK below the price so buyers can fill — deeper book → more in-app swaps → <b>0.5&nbsp;% → 0x37eb…580a</b>'
-        + (hkInfo && hkInfo.isTbFeeHook ? ' + hook 2&nbsp;%' : ' (this pool unhooked — enduring 2% needs a new hooked Launch elsewhere)')
+      ? ('Deepen TBLOCK book → more swaps → <b>0.5% → 0x37eb…580a</b>'
+        + (hkInfo && hkInfo.isTbFeeHook ? ' + hook 2%' : ' (unhooked pool)')
         + '. Position stays yours.')
-      : ('Add some of your blocks to its market so people can buy them. Deeper book → more Buy/Sell → <b>0.5&nbsp;% → fee wallet</b>'
-        + (hkInfo && hkInfo.hooked ? ' · pool also takes hook fee' : '')
-        + '. Unlike Launch, this position is yours.');
+      : ('Add blocks to the book → more Buy/Sell → <b>0.5% → fee wallet</b>'
+        + (hkInfo && hkInfo.hooked ? ' · hook fee too' : '')
+        + '. Unlike Launch, you keep this position.');
   }
   const u = $('#peUsdcPath');
   const row = $('#peUsdcRow');
@@ -2900,12 +2937,11 @@ function peindreCapturePaths(adr, v, hkInfo) {
   if (u) {
     u.hidden = false;
     if (CHAINE === 8453) {
-      u.innerHTML = (estTb
-        ? '<b>Exit path</b>: Sell TBLOCK → <b>ETH</b> (0.5&nbsp;% ETH → fee wallet — not circular TBLOCK buyback), then <b>Prepare ETH→USDC</b> (or use <b>Next</b> after Prepare sell) — another 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated; external DEX pays 0). '
-        : '<b>Fee path</b>: Buy/Sell 0.5&nbsp;% → fee wallet'
-          + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2&nbsp;%' : '')
-          + ' (auto-buyback to TBLOCK when TBLOCK/ETH book quotes). After ETH out, <b>Prepare ETH→USDC</b> / <b>Next</b> takes another 0.5&nbsp;% → <code>0x37eb…580a</code>. ')
-        + 'Deepen TBLOCK LP so sells fill.';
+      u.innerHTML = estTb
+        ? '<b>Exit</b>: Sell → ETH (0.5% → fee wallet, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5% → <code>0x37eb…580a</code>). External DEX pays 0.'
+        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5% → <code>0x37eb…580a</code>)'
+          + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2%' : '')
+          + '. Deepen TBLOCK LP so sells fill.';
     } else {
       u.textContent = 'Practice — ETH→USDC exit is Base mainnet only.';
     }
@@ -3572,11 +3608,10 @@ function peindreFeedTrustHonesty() {
   const hookedPools = [...poolsLive.values()].filter((p) => p.confiance === 'HOOK').length;
   if (CHAINE === 8453) {
     el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;% → fee wallet). '
-      + '<b>Trusted</b> = fee-honest path only: CreateRouter paid create, or first <b>hooked</b> Launch (TbFeeHook) — not a score, not KYC. '
-      + 'Keep trusted in this browser (' + nTrust + ' kept)'
-      + (feeds ? ' · ' + feeds + ' Feed event(s) in window' : '')
-      + (hookedPools ? ' · ' + hookedPools + ' hooked pool(s) seen' : '')
-      + '. Filter ✦ Trusted shows their Live rows.';
+      + '<b>Trusted</b> = CreateRouter paid or first hooked Launch — not a score (' + nTrust + ' kept)'
+      + (feeds ? ' · ' + feeds + ' Feed' : '')
+      + (hookedPools ? ' · ' + hookedPools + ' hooked' : '')
+      + '.';
   } else {
     el.textContent = 'Practice — Feed/Trust chips mirror MAIN; no mainnet fee path here. ' + nTrust + ' trusted kept in this browser.';
   }
@@ -3591,22 +3626,17 @@ function peindreCreateFeeHonesty() {
   const unpaid = creations.length - paid;
   el.hidden = false;
   if (CHAINE === 8453) {
-    const base = 'Fee path: <b>Create</b> in-app (CreateRouter life fee) or tap unpaid Created → profile → <b>Launch</b> '
-      + '(life fee + first hooked Initialize). Social flood alone does not pay 0x37eb…580a.';
     if (!creations.length) {
-      el.innerHTML = '<b>CreateRouter / Launch for fees</b> · ' + base
-        + ' · counts appear once Created events load in this window.';
+      el.innerHTML = '<b>Fees</b>: Create in-app (CreateRouter) or unpaid Created → Launch. Social flood alone ≠ pay <code>0x37eb…580a</code>.';
     } else if (paid === 0) {
-      el.innerHTML = '<b>CreateRouter unused</b> in this window · <b>0</b> paid · <b>'
-        + unpaid + '</b> unpaid factory create(s). ' + base;
+      el.innerHTML = '<b>0</b> paid · <b>' + unpaid + '</b> unpaid factory. CreateRouter or Launch → <code>0x37eb…580a</code>.';
     } else {
-      el.innerHTML = '<b>' + paid + '</b> CreateRouter paid · <b>' + unpaid
-        + '</b> unpaid factory in this window. Unpaid still need <b>Launch here</b> for life fee + hooked market.';
+      el.innerHTML = '<b>' + paid + '</b> paid · <b>' + unpaid + '</b> unpaid. Unpaid still need Launch here.';
     }
   } else {
     el.textContent = creations.length
-      ? (paid + ' paid · ' + unpaid + ' unpaid creates in this window (Practice — no mainnet fee).')
-      : 'Practice Live — no mainnet CreateRouter fee on this network.';
+      ? (paid + ' paid · ' + unpaid + ' unpaid (Practice — no mainnet fee).')
+      : 'Practice Live — no mainnet CreateRouter fee.';
   }
 }
 
@@ -4458,26 +4488,22 @@ function ouvrirLancement() {
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = real
-      ? ('On <b>Base mainnet</b>: life fee ≈ <b>$1 ETH</b> → fee wallet first, then this Launch opens a <b>new</b> pool with '
-        + '<b>TbFeeHook</b> (3&nbsp;% on later swaps: 2&nbsp;% → fee wallet, 1&nbsp;% creator — app + external). '
-        + 'Creates its pool against <span id="plContre">' + contre + '</span> and places the share you choose. '
-        + 'Nothing moves before your wallet shows it. Old pools stay unhooked.')
-      : ('<b>Practice</b> — Launch life fee is free here, and no fee hook is attached. '
-        + 'Creates its pool against <span id="plContre">' + contre + '</span> and places the share you choose. '
-        + 'Nothing moves before your wallet shows it.');
+      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> → fee wallet, then a <b>new</b> hooked pool (3%: 2% → fee wallet, 1% creator). Against <span id="plContre">'
+        + contre + '</span>. Old pools stay unhooked.')
+      : ('<b>Practice</b>: free Launch, no fee hook. Against <span id="plContre">' + contre + '</span>.');
   }
-  /* ⛔ P0 tip 2010: locked-liq honesty chip — always visible before Work it out / Sign. */
+  /* ⛔ tip 2125: short Lock tab copy — Fees tab is static HTML. */
   const liqH = $('#plLiqHonesty');
   if (liqH) {
     liqH.hidden = false;
     liqH.innerHTML = real
-      ? '🔒 <b>Launch LP = permanently locked</b> (dead-address owner — nobody can pull it). Later <b>Add liquidity</b> = <b>your</b> position, withdrawable anytime. Do not treat every LP as forever-locked. Life fee + hooked swaps still → <code>0x37eb…580a</code> (not zero platform fee).'
-      : '🔒 <b>Practice Launch LP</b> still uses dead-address owner when engraved — permanent lock on that LP. Later Add liquidity stays withdrawable. Practice charges no life fee; Real fees → <code>0x37eb…580a</code>.';
+      ? '🔒 <b>Launch LP locked forever</b> (dead-address). Later Add = yours / withdrawable.'
+      : '🔒 Practice Launch LP still forever-locks when engraved. Add stays withdrawable. Real fees → <code>0x37eb…580a</code>.';
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
   $('#plEtat').textContent = real
-    ? 'GATED: Work it out → Ask the chain → pay life fee ≈ $1 ETH to 0x37eb…580a (verified on chain, no bypass) → then Launch opens hooked pool. No Sign until fee path is ready.'
+    ? 'Gated: Work it out → pay life fee ≈ $1 ETH to 0x37eb…580a (verified) → Launch hooked pool.'
     : 'Practice — Work it out is free; nothing here is real money.';
   $('#plEtat').className = 'note' + (real ? ' wKo' : '');
   planCourant = null;
@@ -5547,9 +5573,8 @@ function majFraisEtRecap() {
     }).join('') + '<li>In-app Buy/Sell still takes 0.5 % to the fee wallet when you trade here. On Base, Launch attaches TbFeeHook when live (3 % on hooked-pool swaps: 2 % → fee wallet, 1 % creator) — including external DEX volume on that pool.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ This is Base mainnet: the block is real, the life fee is real ETH (birth), and a block cannot be undone. '
-      + 'Switch the network chip to Base Sepolia to practise for free.'
-    : 'Practice network — free, and nothing here is real money.';
+    ? '⚠️ Base mainnet — real block, real life fee ETH; cannot be undone. Switch to Sepolia to practise free.'
+    : 'Practice — free; nothing here is real money.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
 
@@ -6345,9 +6370,28 @@ function dessinerReseau(vu = null) {
  * ⛔⛔ CETTE LISTE EST UN AUDIT, PAS UNE BROCHURE. Chaque etape porte son etat REEL — fait, partiel,
  *    absent — et je le mets a jour quand le code change, pas quand ca arrange. Un tutoriel qui
  *    decrit un parcours complet alors que deux etapes manquent apprend a ne plus le croire. */
+
+/* ⛔ tip 2125: mini info tabs inside cards (Create/Launch/Swap/Brain). */
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-itab]');
+  if (!btn) return;
+  const bar = btn.closest('[data-itabs]');
+  if (!bar) return;
+  const id = bar.getAttribute('data-itabs');
+  const tab = btn.getAttribute('data-itab');
+  for (const x of bar.querySelectorAll('button[data-itab]')) {
+    const on = x === btn;
+    x.classList.toggle('on', on);
+    x.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  for (const pane of document.querySelectorAll('[data-itabs-pane="' + id + '"]')) {
+    pane.hidden = pane.getAttribute('data-itab') !== tab;
+  }
+});
+
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, auto-salt, face, optional fly brain, pair choice. One billion units, sealed at birth. On Base mainnet: one CreateRouter signature — life fee ≈ $1 ETH (birth; USDC/ETH Uniswap median, floor 0.0003) forwarded to 0x37eb…580a only after create succeeds; sealed 1B all to you. Practice is free. Raw factory creates stay sleep until Launch pays life. Your wallet signs — this page never holds a key. Life fee ≠ automatic buyback.' },
+    d: 'Name, symbol, salt, face, optional fly brain, pair. Sealed 1B all to you. Mainnet: one CreateRouter sig — life fee ≈ $1 ETH → 0x37eb…580a only after success. Practice free. Raw factory creates sleep until Launch. Life fee ≠ auto buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
     d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
@@ -6355,9 +6399,9 @@ const ETAPES = [
   { t: 'Send a GM — a real amount of your block', etat: 'ok', e: 'Built',
     d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer (an amount of the token), not a Brain-AI memory shard — anyone can read it on chain later.' },
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
-    d: 'When a Uniswap v4 pool exists for the block, Buy/Sell quotes and builds the swap your wallet signs. A 0.5 % interface fee goes to the fee wallet inside the same swap when you use this app’s path — not when you trade elsewhere.' },
+    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. In-app path: 0.5% → fee wallet. Trading elsewhere does not pay this app fee.' },
   { t: 'Open the market (Launch) and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Launch wakes the market (ETH or TBLOCK pool, 0% LP fee, 200 spacing). On Base mainnet when TbFeeHook is deployed: pool opens with HOOK_PREVU — later swaps pay 3% (2% → 0x37eb…580a, 1% creator), app + external. Same life fee ≈ $1 ETH (CreateRouter floor 0.0003) to the fee wallet first — verified on chain before Launch — so unpaid external creates still pay when they Launch here. Practice Launch stays free (no hook on Sepolia). Sleep / no-market stays free until Launch. Pools launched before the hook stay unhooked.' },
+    d: 'Launch wakes the market. Mainnet: life fee ≈ $1 ETH first, then hooked pool (3%: 2% → 0x37eb…580a, 1% creator). Practice free. Unpaid factory creates still pay at Launch here. Pre-hook pools stay unhooked.' },
   { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
