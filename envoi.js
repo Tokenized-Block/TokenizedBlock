@@ -83,6 +83,63 @@ export async function gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu }
  *
  * @returns {Promise<{etat: string, hash?: string, gaz?: bigint, horsGaz?: boolean, pourquoi?: string}>}
  */
+
+/** tip 2346: Base App / Coinbase Smart Wallet often reject eth_sendTransaction.
+ *  Try EIP-5792 wallet_sendCalls → poll wallet_getCallsStatus for a tx hash. */
+async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value }) {
+  if (!eth || typeof eth.request !== 'function') return null;
+  const chainId = '0x' + Number(chaineAttendue).toString(16);
+  let id;
+  try {
+    const r = await eth.request({
+      method: 'wallet_sendCalls',
+      params: [{
+        version: '2.0.0',
+        from: compte,
+        chainId,
+        atomicRequired: true,
+        calls: [{ to, data: data || '0x', value: value || '0x0' }],
+      }],
+    });
+    id = (r && (r.id || r)) || null;
+    if (typeof id === 'object' && id.id) id = id.id;
+  } catch (e) {
+    /* older wallets: try 1.0 shape once */
+    try {
+      const r = await eth.request({
+        method: 'wallet_sendCalls',
+        params: [{
+          version: '1.0',
+          from: compte,
+          chainId,
+          calls: [{ to, data: data || '0x', value: value || '0x0' }],
+        }],
+      });
+      id = (typeof r === 'string') ? r : (r && r.id) || null;
+    } catch (e2) {
+      return { etat: 'ECHEC_ENVOI', pourquoi: 'smart wallet sendCalls failed — ' + String((e2 && e2.message) || e2 || e) };
+    }
+  }
+  if (!id) return { etat: 'ECHEC_ENVOI', pourquoi: 'wallet_sendCalls returned no id' };
+  for (let i = 0; i < 40; i++) {
+    await pause(1500);
+    let st;
+    try {
+      st = await eth.request({ method: 'wallet_getCallsStatus', params: [id] });
+    } catch (_) { continue; }
+    const status = st && (st.status ?? st);
+    /* 200 = confirmed success in some implementations; "CONFIRMED" string in others */
+    const receipts = (st && st.receipts) || [];
+    const hash = receipts[0] && (receipts[0].transactionHash || receipts[0].hash);
+    if (hash) return { etat: 'ENVOYE_AA', hash: String(hash), gaz: null };
+    if (status === 100 || status === 'PENDING') continue;
+    if (status === 400 || status === 500 || status === 'FAILED' || status === 'REVERTED') {
+      return { etat: 'ANNULE_SUR_CHAINE', pourquoi: 'smart wallet batch failed (status ' + status + ')' };
+    }
+  }
+  return { etat: 'EN_ATTENTE', pourquoi: 'smart wallet batch sent, not confirmed yet — do not resend', hash: null };
+}
+
 export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to, data = '0x',
   value = '0x0', attendre = true, delai = 2000, essais = 30 }) {
   if (!ADRESSE.test(String(to || ''))) {
@@ -114,7 +171,18 @@ export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to
       params: [{ from: compte, to, value, data, gas: '0x' + gaz.toString(16) }] });
   } catch (e) {
     if (estRefusUtilisateur(e)) return { etat: 'REFUSE_PAR_UTILISATEUR', pourquoi: 'you declined in your wallet — nothing was sent' };
-    return { etat: 'ECHEC_ENVOI', pourquoi: 'the send failed — check your wallet before retrying. ' + String((e && e.message) || e) };
+    /* tip 2346: Base App / Coinbase Smart Wallet — fall back to wallet_sendCalls */
+    const aa = await envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value });
+    if (aa && aa.hash) {
+      hash = aa.hash;
+    } else if (aa && aa.etat === 'EN_ATTENTE') {
+      return aa;
+    } else if (aa && aa.etat && aa.etat !== 'ECHEC_ENVOI') {
+      return aa;
+    } else {
+      const why = (aa && aa.pourquoi) ? aa.pourquoi : String((e && e.message) || e);
+      return { etat: 'ECHEC_ENVOI', pourquoi: 'the send failed — check your wallet before retrying. ' + why };
+    }
   }
   if (!attendre) return { etat: 'ENVOYE', hash, gaz };
 
