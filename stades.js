@@ -14,7 +14,7 @@ export const STADES_HORS_PALIER = Object.freeze([
   { cle: 'PRIX_NON_LU', titre: 'Tier not judged — the ETH/USD price is not read yet' },
   { cle: 'NOURRI', titre: 'Awake — no market yet, fed by its community' },
   { cle: 'SANS_MARCHE', titre: 'No market yet — never traded, not worthless' },
-  { cle: 'NON_LU', titre: 'Not read yet — about our reading, not about the block' },
+  { cle: 'NON_LU', titre: 'Market unread — node/RPC lag, not a broken block' },
   { cle: 'MORT', titre: 'Dead — its creator held it and holds none now' },
 ]);
 export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🏞', CANOPEE: '🌲', TRONC: '🪵', BRANCHE: '🌳', POUSSE: '🌿',

@@ -591,7 +591,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">Pair it with</p>
       <p class="sous">Standard quote is <b>TBLOCK</b> (TokenizedBlock). You can also pick ETH, USDC, a Coinbase tokenized
-        stock, or paste another token. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a peg — later you can still add another tokenized pair.</p>
+        stock, or paste <b>another native B20</b> (code 0xef — not a random ERC-20). Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a peg — later you can still add another B20 pair.</p>
       <label class="champ">Pair<select id="cPaire"></select></label>
       <label class="champ" id="cPaireAutreRang" hidden>Token address<input id="cPaireAutre"
         placeholder="0x… the whole address" autocomplete="off" spellcheck="false"></label>
@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1805">Build <code>20260915-1805</code> · Social CreateRouter/Launch fee chip (always on MAIN) · Brain LP depth · Profile liq sensor.</p>
+      <p class="note" data-build="20260915-1830">Build <code>20260915-1830</code> · FEE 0x37eb capture · Wake→life fee · Social Create/Launch/Feed · TBLOCK deepen LP · Map node≠blocks · B20 pair.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -882,10 +882,12 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button type="button" class="puce" data-filtre="GM">👋 GM</button>
         <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
         <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
+        <button type="button" class="puce" data-filtre="TRUSTED">✦ Trusted</button>
       </div>
       <!-- ⛔ P0 2026-09-15 tip 1800: dashboard honesty — CreateRouter unused vs Social factory flood.
            Not redundant with per-row 0630 unpaid→Launch nudge: this is the window aggregate. -->
       <p class="note" id="sfCreateFeeHonesty" hidden></p>
+      <p class="note" id="sfFeedTrustHonesty" hidden></p>
       <ul class="fil" id="sfLive"></ul>
       <div id="sfLiveFin" style="height:1px"></div>
       <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
@@ -1034,7 +1036,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="pPartager" type="button">Share profile</button>
         <button class="bouton sec" id="pMap" type="button">Show on map</button>
         <!-- ⛔ RESERVE AUX BLOCKS ENDORMIS : un block qui a deja un marche n a rien a reveiller. -->
+        <p class="note" id="pWakeGate" hidden></p>
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
+        <button class="bouton sec" id="pGarderTrusted" type="button" hidden style="grid-column:1/-1">Keep as trusted (fee-honest path)</button>
         <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Read its market again — the public node refused the read</button>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
@@ -1045,6 +1049,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
         <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % app fee → fee wallet</span></div>
+        <p class="note" id="peUsdcPath" hidden></p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
           <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off"></label>
@@ -1062,8 +1067,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ OUTILS DE LIQUIDITE (Phil, 2026-09-13) : ajouter ses blocks au marche en GARDANT sa position, la retirer
            avec minimums. Visible seulement sur un marche LU au format de l app. -->
       <div class="pJeu" id="pLiquidite" hidden>
-        <div class="pJeuTete"><span class="pBadge">Liquidity</span><span class="pPV">you keep your position</span></div>
-        <p class="pProchain">Add some of your blocks to its market so people can buy them. Unlike the launch, this position is yours: you can withdraw it at any time.</p>
+        <div class="pJeuTete"><span class="pBadge" id="plqBadge">Liquidity</span><span class="pPV" id="plqDepth">you keep your position</span></div>
+        <p class="pProchain" id="plqIntro">Add some of your blocks to its market so people can buy them. Unlike the launch, this position is yours: you can withdraw it at any time. Deeper book → more in-app Buy/Sell → 0.5&nbsp;% → fee wallet 0x37eb…580a.</p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Share of your blocks, in %<input id="plqPart" inputmode="decimal" placeholder="1" autocomplete="off"></label>
           <button class="bouton" id="plqAjouter" type="button" style="align-self:end">Prepare add</button>
@@ -2626,11 +2631,18 @@ function peindreStades() {
       return '<p class="note" style="margin:12px 0 6px">⏳ Reading markets… (' + g.blocks.length + ' waiting)</p><div class="stadeLigne"></div>';
     }
     const titre = mute
-      ? ('Could not read yet — about our node, not the blocks · ' + g.blocks.length)
+      ? (lectureVieEnCours
+        ? ('Reading markets… · ' + g.blocks.length + ' waiting')
+        : (g.cle === 'PRIX_NON_LU'
+          ? ('Tier not judged — ETH/USD unread · ' + g.blocks.length)
+          : ('Market unread — about our node/RPC, not that these blocks are broken · ' + g.blocks.length)))
       : (g.titre + ' · ' + g.blocks.length);
     let corps;
     if (mute) {
-      corps = '<span class="note" style="align-self:center">Markets still loading — names appear when each one is read.</span>';
+      corps = lectureVieEnCours
+        ? '<span class="note" style="align-self:center">Still reading — TokenizedBlock names appear when each market is LUE. Silence ≠ broken.</span>'
+        : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
+          + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
     } else {
       corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
         + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
@@ -2641,7 +2653,9 @@ function peindreStades() {
       + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">' + corps + '</div>';
   }).join('');
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
-  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock, named when their market is read.'
+  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock'
+    + (lectureVieEnCours ? ' · markets still loading' : '')
+    + ' · named when life is LUE (unread ≠ broken).'
     : 'The map has not read any block yet.';
   /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
    *    read yet » pendant que les vies arrivaient. Il se reclasse avec les stades — sauf quand on est en train de choisir. */
@@ -2828,6 +2842,42 @@ function infoHookMarche(v) {
     hooks: hooked ? hk : zero,
     via: v && v.via ? String(v.via) : null,
   };
+}
+
+
+/** FEE capture honesty on profile: deepen TBLOCK LP + Sell→ETH path (USDC = ETH→USDC next, no invented hop). */
+function peindreCapturePaths(adr, v, hkInfo) {
+  const estTb = String(adr || '').toLowerCase() === TBLOCK.toLowerCase();
+  const viaTb = v && (v.paire === 'TBLOCK' || (v.via && /TBLOCK/i.test(String(v.via))));
+  const lo = ordreLiquidite(v && v.liquidite);
+  const badge = $('#plqBadge');
+  const depth = $('#plqDepth');
+  const intro = $('#plqIntro');
+  if (badge) badge.textContent = estTb ? 'Deepen TBLOCK liquidity' : (viaTb ? 'Liquidity · TBLOCK pair' : 'Liquidity');
+  if (depth) depth.textContent = lo ? ('L≈' + lo + ' · you keep position') : 'you keep your position';
+  if (intro) {
+    intro.innerHTML = estTb
+      ? ('TBLOCK is the gas token of this app. Add TBLOCK below the price so buyers can fill — deeper book → more in-app swaps → <b>0.5&nbsp;% → 0x37eb…580a</b>'
+        + (hkInfo && hkInfo.isTbFeeHook ? ' + hook 2&nbsp;%' : ' (this pool unhooked — enduring 2% needs a new hooked Launch elsewhere)')
+        + '. Position stays yours.')
+      : ('Add some of your blocks to its market so people can buy them. Deeper book → more Buy/Sell → <b>0.5&nbsp;% → fee wallet</b>'
+        + (hkInfo && hkInfo.hooked ? ' · pool also takes hook fee' : '')
+        + '. Unlike Launch, this position is yours.');
+  }
+  const u = $('#peUsdcPath');
+  if (u) {
+    u.hidden = false;
+    if (estTb) {
+      u.innerHTML = '<b>Exit path</b>: Sell TBLOCK here → <b>ETH</b> (0.5&nbsp;% → fee wallet). '
+        + 'USDC realization = ETH→USDC after (in-app USDC hop when quoter proves it — not invented). Deepen LP first so quotes fill.';
+    } else if (viaTb) {
+      u.innerHTML = '<b>Exit path</b>: Sell → ETH via TBLOCK hop (0.5&nbsp;% / buyback path → fee wallet). USDC = ETH→USDC next when quotes work.';
+    } else {
+      u.innerHTML = '<b>Fee path</b>: in-app Buy/Sell takes <b>0.5&nbsp;% → 0x37eb…580a</b>'
+        + (hkInfo && hkInfo.isTbFeeHook ? ' · hooked pool also pays 2&nbsp;% enduring' : ' · unhooked pool = app fee only')
+        + '.';
+    }
+  }
 }
 
 /** Profile honesty: hooked (TbFeeHook) vs legacy unhooked — old pools never gain 2% retroactively. */
@@ -3065,6 +3115,24 @@ async function lireProfil(adr, sym, perime) {
       ? 'Wake it — Launch (life fee ≈ $1 + fee hook on new pool)'
       : 'Wake it — Launch (Practice, free · no fee hook)';
   }
+  const wg = $('#pWakeGate');
+  if (wg) {
+    if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
+      wg.hidden = false;
+      wg.innerHTML = '<b>Dormant → Wake is gated</b>: life fee ≈ <b>$1 ETH</b> → <code>0x37eb…580a</code> first (floor 0.0003, verified on chain — no wallet bypass), '
+        + 'then Launch opens a <b>new hooked</b> pool (2&nbsp;% enduring → fee wallet). Work it out → Ask the chain → pay fee → Launch. Nothing skips the fee.';
+    } else { wg.hidden = true; wg.textContent = ''; }
+  }
+  const gt = $('#pGarderTrusted');
+  if (gt) {
+    const canKeep = (etatVieProfil === 'LUE' && infoHookMarche(v).isTbFeeHook)
+      || (etatVieProfil === 'NON_TROUVEE' && false);
+    gt.hidden = !(etatVieProfil === 'LUE' && v && infoHookMarche(v).isTbFeeHook);
+    if (!gt.hidden) {
+      gt.textContent = estTrusted(adr) ? '✦ Trusted (hooked fee path)' : 'Keep as trusted (hooked → 2% to fee wallet)';
+      gt.disabled = estTrusted(adr);
+    }
+  }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
   /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
   if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
@@ -3090,7 +3158,10 @@ async function lireProfil(adr, sym, perime) {
     $('#peBadge').textContent = bb ? 'Buyback · fee wallet' : 'Buy · Sell';
     $('#peFrais').textContent = bb ? 'no fee'
       : (hkInfo.hooked ? '0.5 % app → fee wallet · pool hook 3 %' : '0.5 % app fee → fee wallet (pool unhooked)');
+    peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
+  } else {
+    const u = $('#peUsdcPath'); if (u) { u.hidden = true; u.textContent = ''; }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
@@ -3214,6 +3285,12 @@ function filtreLive(e) {
     return true;
   }
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
+  if (liveFiltre === 'TRUSTED') {
+    const tset = lireTrusted();
+    if (!tset.size) return false;
+    return tset.has(String(e.jeton || '').toLowerCase())
+      || (e.type === 'MESSAGE' && (tset.has(String(e.de || '').toLowerCase()) || tset.has(String(e.a || '').toLowerCase())));
+  }
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
   return e.type === liveFiltre;
 }
@@ -3322,6 +3399,54 @@ function ordreLiquidite(L) {
   return '~10^' + exp + ' (deep)';
 }
 
+
+/* ⛔ RAKSHA 2026-09-15: Trusted = fee-honest path only (CreateRouter paid OR TbFeeHook pool). Browser-local — not a score. */
+const CLE_TRUSTED = 'tb-trusted-b20';
+function lireTrusted() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CLE_TRUSTED) || '[]');
+    return new Set((Array.isArray(raw) ? raw : []).map((a) => String(a).toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a)));
+  } catch { return new Set(); }
+}
+function ecrireTrusted(set) {
+  try { localStorage.setItem(CLE_TRUSTED, JSON.stringify([...set])); } catch (_) { /* private mode */ }
+}
+function estTrusted(adr) { return lireTrusted().has(String(adr || '').toLowerCase()); }
+function garderTrusted(adr, pourquoi) {
+  const a = String(adr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return false;
+  const s = lireTrusted();
+  s.add(a);
+  ecrireTrusted(s);
+  try { console.info('[trust] keep', a, pourquoi || ''); } catch (_) {}
+  return true;
+}
+function retirerTrusted(adr) {
+  const s = lireTrusted();
+  s.delete(String(adr || '').toLowerCase());
+  ecrireTrusted(s);
+}
+
+/** Social: blocks Feed each other (🟢) — trust root = fee-honest Create/Launch, not a score. */
+function peindreFeedTrustHonesty() {
+  const el = $('#sfFeedTrustHonesty');
+  if (!el) return;
+  el.hidden = false;
+  const nTrust = lireTrusted().size;
+  const feeds = liveEvts.filter((e) => e.type === 'ACHAT').length;
+  const hookedPools = [...poolsLive.values()].filter((p) => p.confiance === 'HOOK').length;
+  if (CHAINE === 8453) {
+    el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;% → fee wallet). '
+      + '<b>Trusted</b> = fee-honest path only: CreateRouter paid create, or first <b>hooked</b> Launch (TbFeeHook) — not a score, not KYC. '
+      + 'Keep trusted in this browser (' + nTrust + ' kept)'
+      + (feeds ? ' · ' + feeds + ' Feed event(s) in window' : '')
+      + (hookedPools ? ' · ' + hookedPools + ' hooked pool(s) seen' : '')
+      + '. Filter ✦ Trusted shows their Live rows.';
+  } else {
+    el.textContent = 'Practice — Feed/Trust chips mirror MAIN; no mainnet fee path here. ' + nTrust + ' trusted kept in this browser.';
+  }
+}
+
 /** Social Live dashboard: CreateRouter vs factory flood — always visible on MAIN (not just per-row 0630). */
 function peindreCreateFeeHonesty() {
   const el = $('#sfCreateFeeHonesty');
@@ -3408,10 +3533,15 @@ function peindreLive() {
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     const openHint = e.type === 'CREATION' && e.paidCreate !== true
       ? ' · <span class="filOpen">tap → profile · Wake / Launch</span>' : '';
+    const trustHint = e.type === 'CREATION' && e.paidCreate === true
+      ? (estTrusted(e.jeton)
+        ? ' · <span class="filOpen">✦ trusted (CreateRouter)</span>'
+        : ' · <button type="button" class="puce" data-keep-trust="' + enTexte(e.jeton) + '">Keep trusted</button>')
+      : (e.type === 'CREATION' && estTrusted(e.jeton) ? ' · <span class="filOpen">✦ trusted</span>' : '');
     return '<li class="filL" data-block="' + enTexte(e.jeton) + '"'
       + (e.sym ? ' data-sym="' + enTexte(String(e.sym).slice(0, 14)) + '"' : '')
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + '</p></div></li>';
+      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
     ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; all creates under Created.</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
@@ -3429,6 +3559,7 @@ function peindreLive() {
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
    * precedente. Le bouton reste la pour qui ne defile pas. */
   peindreCreateFeeHonesty();
+  peindreFeedTrustHonesty();
   verifierBasLive();
   peindreRelais();
 }
@@ -3447,8 +3578,16 @@ function verifierBasLive() {
   }
 }
 $('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; void lireLive('ancien'); });
-/* ⛔ P0 2026-09-15: Social row → profile so unpaid creates can Wake / Launch (fee path). */
+/* ⛔ P0 2026-09-15: Keep trusted (CreateRouter paid) — fee-honest root, browser-local. */
 $('#sfLive').addEventListener('click', (ev) => {
+  const keep = ev.target.closest('[data-keep-trust]');
+  if (keep) {
+    ev.preventDefault(); ev.stopPropagation();
+    garderTrusted(keep.getAttribute('data-keep-trust'), 'CreateRouter paid');
+    peindreLive();
+    return;
+  }
+
   if (ev.target.closest('a')) return;
   const li = ev.target.closest('li.filL[data-block]');
   if (!li) return;
@@ -3944,10 +4083,18 @@ async function preparerAjout() {
     e.textContent = 'Not possible: ' + p.pourquoi;
     return;
   }
+  const estTbLiq = String(adr).toLowerCase() === TBLOCK.toLowerCase();
+  const viaTbLiq = (marcheLu && marcheLu.paire === 'TBLOCK')
+    || (p.cle && (String(p.cle.currency0).toLowerCase() === TBLOCK.toLowerCase()
+      || String(p.cle.currency1).toLowerCase() === TBLOCK.toLowerCase()));
   $('#plqLignes').innerHTML = [
     'Places ' + formaterUnites(p.blocksRequis, p.dec) + ' ' + (symProfil || 'blocks') + ' in its market, below the current price — they are sold as people buy.',
-    'ETH needed: none.',
-    'The position belongs to YOU — withdraw it here whenever you want. No fee is taken on liquidity.',
+    (p.ethRequis != null && BigInt(p.ethRequis) > 0n)
+      ? ('Also needs ' + formaterUnites(p.ethRequis, 18) + ' of the quote token (measured).')
+      : (viaTbLiq ? 'Quote side is TBLOCK — unilateral block range asks for blocks only (measured).' : 'Quote side ETH not required for this unilateral range (measured).'),
+    estTbLiq
+      ? 'Deepening TBLOCK → more fills → more 0.5 % interface fees → 0x37eb…580a. No fee on the add itself.'
+      : 'The position belongs to YOU — withdraw anytime. No fee on liquidity; fees accrue when others Buy/Sell against this book.',
     ...[...(p.etapes || []), p.tx].filter(Boolean).map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: p.dec });
       return 'Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ');
@@ -4032,7 +4179,7 @@ function ouvrirLancement() {
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
   $('#plEtat').textContent = real
-    ? 'Work it out measures life fee + hooked pool plan. No broadcast until you sign.'
+    ? 'GATED: Work it out → Ask the chain → pay life fee ≈ $1 ETH to 0x37eb…580a (verified on chain, no bypass) → then Launch opens hooked pool. No Sign until fee path is ready.'
     : 'Practice — Work it out is free; nothing here is real money.';
   $('#plEtat').className = 'note' + (real ? ' wKo' : '');
   planCourant = null;
@@ -4408,6 +4555,23 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+const _gtBtn = $('#pGarderTrusted');
+if (_gtBtn) {
+  _gtBtn.addEventListener('click', () => {
+    const adr = $('#profil').dataset.block;
+    if (!adr) return;
+    const mp = marcheProfil && String(marcheProfil.adr).toLowerCase() === String(adr).toLowerCase() ? marcheProfil.v : null;
+    const info = infoHookMarche(mp || { etat: 'LUE', cle: null });
+    if (!info.isTbFeeHook) {
+      const gt = $('#pGarderTrusted');
+      if (gt) gt.textContent = 'Only hooked (TbFeeHook) pools are fee-honest trusted — Launch a new hooked pool first';
+      return;
+    }
+    garderTrusted(adr, 'TbFeeHook pool');
+    const gt = $('#pGarderTrusted');
+    if (gt) { gt.textContent = '✦ Trusted (hooked fee path)'; gt.disabled = true; }
+  });
+}
 $('#pRelire').addEventListener('click', () => {
   const adr = $('#profil').dataset.block;
   if (adr) void ouvrirProfil(adr, symProfil);
@@ -4806,14 +4970,16 @@ function peindrePaires() {
   const avant = s.value;
   const liste = pairesProposees(CHAINE);
   s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '">' + enTexte(etiquettePaire(p)) + '</option>').join('')
-    + '<option value="' + AUTRE_PAIRE + '">Another token — paste its address (second tokenized pair)</option>';
+    + '<option value="' + AUTRE_PAIRE + '">Another B20 — paste native B20 address (second tokenized pair)</option>';
   /* ⛔ STANDARD RAKSHA 2026-09-14 : TBLOCK en tete sur mainnet; garder le choix precedent si encore valide. */
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;
   else if (CHAINE === 8453 && [...s.options].some((o) => o.value.toLowerCase() === TBLOCK.toLowerCase())) s.value = TBLOCK;
   majPaire();
 }
 
-function majPaire() {
+let majPaireSeq = 0;
+async function majPaire() {
+  const seq = ++majPaireSeq;
   const autre = $('#cPaire').value === AUTRE_PAIRE;
   $('#cPaireAutreRang').hidden = !autre;
   const n = $('#cPaireNote');
@@ -4821,7 +4987,7 @@ function majPaire() {
   if (autre && !String(adr || '').trim()) {
     paireChoisie = null;
     n.className = 'note';
-    n.textContent = 'Paste the token address. It will be marked unverified: this app gives it no name.';
+    n.textContent = 'Paste a native B20 address (code 0xef). Random ERC-20 pairs are refused — keeps fee path on TokenizedBlock markets.';
     majFraisEtRecap();
     return;
   }
@@ -4831,22 +4997,51 @@ function majPaire() {
     n.className = 'note wKo';
     n.textContent = q.pourquoi;
     const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
-  } else {
-    paireChoisie = q.paire;
-    n.className = 'note' + (q.paire.verifiee ? '' : ' wKo');
-    /* ⛔ CE QUE CE CHOIX FAIT, ET CE QU IL NE FAIT PAS : il est grave avec le block ; la pool s ouvre au
-     * lancement. Et le lanceur de l ancien ecran refuse les actions — on le dit ici plutot que de
-     * laisser decouvrir un refus plus tard. */
-    let suite = 'Recorded with the block at creation. Its market opens when you launch it, in this app.';
-    if (q.paire.type === 'TBLOCK') {
-      suite = 'Standard TokenizedBlock quote. Launch (TBLOCK or ETH) attaches fee hook 0x34E3…6044 when live — 3% on hooked-pool swaps pay FEE_WALLET (2%) + creator (1%).';
+    majFraisEtRecap();
+    return;
+  }
+  /* ⛔ RAKSHA 2026-09-15: custom paste must prove native B20 — no ERC-20 sprawl diluting fee markets. */
+  if (q.paire.type === 'SAISIE' || q.paire.besoinB20) {
+    n.className = 'note';
+    n.textContent = 'Checking native B20 (code 0xef) on chain…';
+    paireChoisie = null;
+    majFraisEtRecap();
+    let f = null;
+    try { f = await faitsDuBlock({ rpc, jeton: q.paire.adr, pause: 200 }); } catch (e) { f = null; }
+    if (seq !== majPaireSeq) return;
+    if (!f || f.estB20 !== true) {
+      paireChoisie = null;
+      n.className = 'note wKo';
+      n.textContent = (f && f.estB20 === false)
+        ? 'Refused: not a native B20 (code ≠ 0xef). Paste a TokenizedBlock / B20 token only — keeps Launch→hook fee path coherent.'
+        : 'Could not prove native B20 yet (node unread) — pair stays closed until code 0xef is read. Not a random ERC-20.';
+      const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
+      majFraisEtRecap();
+      return;
     }
-    n.textContent = (q.paire.verifiee ? '' : q.paire.avertissement + ' ') + suite;
-    const chip = $('#cPaireChip');
-    if (chip) {
-      chip.hidden = false;
-      chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK (standard)' : ('Quote = ' + (q.paire.symbole || 'custom'));
-    }
+    q.paire.estB20 = true;
+    q.paire.symbole = f.symbole || q.paire.symbole;
+    q.paire.nom = f.nom || q.paire.nom;
+    q.paire.verifiee = true;
+    q.paire.type = 'B20';
+    q.paire.avertissement = null;
+  }
+  if (seq !== majPaireSeq) return;
+  paireChoisie = q.paire;
+  n.className = 'note';
+  let suite = 'Recorded with the block at creation. Its market opens when you launch it — life fee + hooked pool pay 0x37eb…580a.';
+  if (q.paire.type === 'TBLOCK') {
+    suite = 'Standard TBLOCK quote (gas token). Launch attaches TbFeeHook when live — 3% on hooked swaps (2% → FEE_WALLET). Deepen TBLOCK LP after Launch so Buy/Sell quotes fill.';
+  } else if (q.paire.type === 'B20') {
+    suite = 'Native B20 pair proven (code 0xef). Launch still pays life fee → fee wallet, then hooked pool when DEPLOYE.';
+  }
+  n.textContent = suite;
+  const chip = $('#cPaireChip');
+  if (chip) {
+    chip.hidden = false;
+    chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK (standard · fee path)'
+      : q.paire.type === 'B20' ? ('Quote = B20 ' + (q.paire.symbole || '·'))
+        : ('Quote = ' + (q.paire.symbole || 'custom'));
   }
   majFraisEtRecap();
 }
@@ -5491,7 +5686,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1805',
+    build: '20260915-1830',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -5876,8 +6071,8 @@ construireReglages();
 peindrePaires();
 peindreRolesCreate();
 peindreApercuCreation();
-$('#cPaire').addEventListener('change', majPaire);
-$('#cPaireAutre').addEventListener('input', majPaire);
+$('#cPaire').addEventListener('change', () => void majPaire());
+$('#cPaireAutre').addEventListener('input', () => void majPaire());
 $('#cHasard').addEventListener('click', hasardApparence);
 $('#cSym').addEventListener('input', peindreApercuCreation);
 $('#cNom').addEventListener('input', peindreApercuCreation);

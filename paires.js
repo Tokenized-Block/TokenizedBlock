@@ -74,15 +74,16 @@ export function qualifierPaire(adresse, chaine) {
   if (Number(chaine) !== 8453 && ACTIONS_COINBASE.some((s) => s.adr.toLowerCase() === bas)) {
     return { etat: 'REFUSE', pourquoi: 'that is a Coinbase stock on Base mainnet — it does not exist as a stock on this network' };
   }
-  return { etat: 'OK', paire: { adr: a, symbole: null, nom: null, type: 'SAISIE', verifiee: false,
-    avertissement: 'Typed by you, not verified: this app gives it no name, no logo and no label. '
-      + 'Check the contract yourself before pairing real money with it.' } };
+  /* ⛔ RAKSHA 2026-09-15: custom pair must prove native B20 (code 0xef) in Create majPaire — no ERC-20 sprawl. */
+  return { etat: 'OK', paire: { adr: a, symbole: null, nom: null, type: 'SAISIE', verifiee: false, besoinB20: true,
+    avertissement: 'Typed address — must be a native B20 (code 0xef) to pair here. Not a random ERC-20. '
+      + 'This app gives it no name until the chain proves B20.' } };
 }
 
 /** L etiquette a afficher. ⛔ Une paire non verifiee n emprunte jamais un nom. */
 export function etiquettePaire(p) {
   if (!p) return '—';
-  if (p.type === 'SAISIE') return 'custom token ' + p.adr.slice(0, 6) + '…' + p.adr.slice(-4) + ' (unverified)';
+  if (p.type === 'SAISIE') return 'B20 pair ' + p.adr.slice(0, 6) + '…' + p.adr.slice(-4) + (p.estB20 ? ' (native B20)' : ' (B20 check…)');
   if (p.type === 'TBLOCK') return p.symbole + ' — ' + p.nom + ' (standard; may add another tokenized pair later)';
   if (p.type === 'ACTION') return p.symbole + ' — ' + p.nom + ' (Coinbase tokenized stock)';
   return p.symbole + ' — ' + p.nom;
