@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2340">Build <code>20260915-2340</code> · fees→a6cf · Launch hooked pool beside legacy unhooked · Fees for BaseAPP Holders.</p>
+      <p class="note" data-build="20260915-2341">Build <code>20260915-2341</code> · fees→a6cf · profile discovers external unhooked pools · Launch hooked beside.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1330,7 +1330,7 @@ import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd, weiPourDollars } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
-import { decouvrirPools } from './pools-du-jeton.js';
+import { decouvrirPools, confianceDe } from './pools-du-jeton.js';
 import { resumeRelais } from './relais-cerveaux.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -2965,6 +2965,60 @@ function peutOuvrirPoolHooke(v) {
   return marcheLegacySansTbFeeHook(v);
 }
 
+/** tip 2341: pools Live discovered via Initialize (not only app CLES_MARCHE). */
+function poolDecouvertPour(adr) {
+  const want = String(adr || '').toLowerCase();
+  if (!want || !poolsLive || !poolsLive.size) return null;
+  let best = null;
+  for (const p of poolsLive.values()) {
+    if (!p || !p.cle) continue;
+    const c0 = String(p.cle.currency0 || '').toLowerCase();
+    const c1 = String(p.cle.currency1 || '').toLowerCase();
+    const j = String(p.jeton || '').toLowerCase();
+    if (j !== want && c0 !== want && c1 !== want) continue;
+    const conf = p.confiance || confianceDe(p.cle);
+    const hk = String(p.cle.hooks || '').toLowerCase();
+    const isTb = hk === String(HOOK_PREVU).toLowerCase();
+    /* Prefer TbFeeHook if somehow present; else any ETH pair we can trade/upgrade. */
+    const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : (conf === 'SANS_HOOK' ? 100 : 50));
+    if (!best || score > best._score) best = { ...p, confiance: conf, _score: score, isTbFeeHook: isTb };
+  }
+  return best;
+}
+
+/** When vieDuBlock says NON_TROUVEE but Initialize found a pool, promote to LUE for Buy/Sell + tip 2340. */
+async function enrichirMarcheSiDecouvert(adr, v) {
+  if (!v || v.etat !== 'NON_TROUVEE' || CHAINE !== 8453) return v;
+  let ext = poolDecouvertPour(adr);
+  if (!ext) {
+    try {
+      const V = RESEAUX[CHAINE];
+      const headHex = await rpc('eth_blockNumber', []);
+      const head = parseInt(headHex, 16);
+      if (Number.isSafeInteger(head) && V && V.poolm) {
+        const de = Math.max(0, head - 8000);
+        const d = await decouvrirPools({ rpc, poolManager: V.poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 180 });
+        (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
+        ext = poolDecouvertPour(adr);
+      }
+    } catch (_) { /* keep NON_TROUVEE */ }
+  }
+  if (!ext || !ext.cle) return v;
+  return {
+    etat: 'LUE',
+    vie: null,
+    devise: 'ETH',
+    via: 'discovered · ' + (ext.confiance || '?'),
+    pourquoi: null,
+    cle: ext.cle,
+    sqrtPriceX96: null,
+    decimales: null,
+    liquidite: null,
+    decouvertExterne: true,
+    confiance: ext.confiance || null,
+  };
+}
+
 
 /** FEE capture honesty on profile: deepen TBLOCK LP + Sell→ETH path (USDC = ETH→USDC next, no invented hop). */
 function peindreCapturePaths(adr, v, hkInfo) {
@@ -3418,13 +3472,21 @@ async function lireProfil(adr, sym, perime) {
     if (perime()) return;
     if (v && v.etat !== 'NON_LUE') break;
   }
+  /* tip 2341: app key miss ≠ no pool — promote Initialize-discovered unhooked/hooked markets. */
+  if (v && v.etat === 'NON_TROUVEE') {
+    $('#pVie').textContent = 'checking Live-discovered pools…';
+    try { v = await enrichirMarcheSiDecouvert(adr, v); } catch (_) { /* keep NON_TROUVEE */ }
+    if (perime()) return;
+  }
   marcheProfil = v ? { adr: String(adr).toLowerCase(), chaine: CHAINE, v } : null;
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
    * fait sur notre lecture. Les fondre ferait dire au profil de quelqu un qu il ne vaut rien. */
   $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
-      : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || '');
+      : (v.vie == null || !Number.isFinite(Number(v.vie))
+        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · open Buy/Sell or Launch hooked → a6cf' : ''))
+        : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || ''));
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
@@ -4770,6 +4832,9 @@ async function calculerLancement() {
     if (essai) { e.textContent = 'Checking its market again (' + (essai + 1) + '/3)…'; await dormir(4000 * essai); }
     try { marcheAvant = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { marcheAvant = null; }
     if (marcheAvant && marcheAvant.etat !== 'NON_LUE') break;
+  }
+  if (marcheAvant && marcheAvant.etat === 'NON_TROUVEE') {
+    try { marcheAvant = await enrichirMarcheSiDecouvert(adr, marcheAvant); } catch (_) {}
   }
   if ($('#profil').dataset.block !== adr) { profilEnLecture = false; $('#plCalculer').disabled = false; return; }
   /* tip 2340: NON_TROUVEE = first market; LUE without TbFeeHook = open NEW hooked pool id beside legacy (fees → a6cf). */
