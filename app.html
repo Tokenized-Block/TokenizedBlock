@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2351">Build <code>20260915-2351</code> · fees→a6cf · Create free from birth · Sign scrub · Launch=fee.</p>
+      <p class="note" data-build="20260915-2352">Build <code>20260915-2352</code> · fees→a6cf · Create free · Launch tier≠protocol fee · hook chops Dex.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3931,7 +3931,7 @@ function peindreFeedTrustHonesty() {
   const hookedPools = [...poolsLive.values()].filter((p) => p.confiance === 'HOOK').length;
   if (CHAINE === 8453) {
     el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;% · Fees for BaseAPP Holders). '
-      + '<b>Trusted</b> = CreateRouter paid or first hooked Launch — not a score (' + nTrust + ' kept)'
+      + '<b>Trusted</b> = TbFeeHook Launch (fee-honest) — not a score (' + nTrust + ' kept)'
       + (feeds ? ' · ' + feeds + ' Feed' : '')
       + (hookedPools ? ' · ' + hookedPools + ' hooked' : '')
       + '.';
@@ -5032,19 +5032,20 @@ function peindrePlan(plan, adr) {
   const hookAdr = plan.cle && plan.cle.hooks ? String(plan.cle.hooks).toLowerCase() : '0x0000000000000000000000000000000000000000';
   const avecHook = hookAdr !== '0x0000000000000000000000000000000000000000';
   $('#plLignes').innerHTML = [
+    /* tip 2352: « fee 0 % » = Uniswap pool fee TIER only — NOT protocol/life/BuySell fees. */
     'Pool on ' + RESEAUX[CHAINE].nom + ': against ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
-      ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH') + ' · fee 0 % · spacing 200 · permanent · '
+      ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH')
+      + ' · Uniswap pool fee tier 0% · tick spacing 200 · LP locked permanent · '
       + (avecHook
-        ? 'TbFeeHook 3 % on swaps (2 % · Fees for BaseAPP Holders, 1 % creator) · '
-        : 'no fee hook · ')
+        ? 'TbFeeHook still takes protocol cut on swaps → a6cf (2%) + creator (1%); in-app Buy/Sell +0.5% → a6cf · '
+        : '⚠️ no TbFeeHook on this plan — MAIN Launch must attach hook · ')
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     'ETH or TBLOCK for the pool: none — a single-sided launch.'
-      + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH · Fees for BaseAPP Holders.' : ''),
-    /* ⛔ REGLE DU JEU (2026-09-13) : pool permanente, frais 0. Dit AVANT la signature, en clair. */
-    'Permanent: the liquidity is placed in the name of a dead address — nobody, not you and not us, can '
-      + 'ever take it out. That is why the pool fee is 0 %: nobody could ever collect it.',
+      + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH · Fees for BaseAPP Holders — not the Uniswap tier.' : ''),
+    'Permanent LP: liquidity sits on a dead address — nobody can withdraw Launch LP. '
+      + 'Uniswap tier 0% ≠ zero fees for traders: TbFeeHook + in-app 0.5% still apply when hooked.',
     'Honesty: this Launch lock ≠ later Add liquidity (Add keeps YOUR position — withdrawable). Not OpenLaunch forever-lock on every surface.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
     ...(plan.legacyUpgrade ? ['tip 2340: NEW hooked pool beside legacy unhooked — TbFeeHook fees → a6cf (0xa6cf…f5d4). Old Dex pool stays and still pays 0 until liquidity moves here.'] : []),
