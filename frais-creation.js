@@ -21,7 +21,7 @@ export const FEE_WALLET_LEGACY_37EB = '0x37eb9b7ce0b51fe12fbf092026e001918128580
 /** eth_call CreateRouter.FEE_WALLET() — still 0x37eb (WRONG vs hard rule). Redeploy pack dig. */
 export const CREATE_ROUTER_FEE_WALLET = FEE_WALLET; /* tip 2290: new CreateRouter on-chain a6cf */
 /** eth_call TbFeeHook.FEE_WALLET() — still 0x37eb (WRONG vs hard rule). New CREATE2 required. */
-export const HOOK_FEE_WALLET = FEE_WALLET_LEGACY_37EB;
+export const HOOK_FEE_WALLET = FEE_WALLET; /* tip 2300: new TbFeeHook on-chain a6cf */
 /** Base mainnet CreateRouter 0x3486…ff0a — on-chain still forwards to 0x37eb until redeploy; sealed 1B 100% creator. */
 export const CREATE_ROUTER = '0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */

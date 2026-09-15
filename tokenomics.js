@@ -12,7 +12,7 @@ export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 /** TBLOCK, lu dans le log B20Created de la tx 0xda396460…4cf3 (bloc 51 260 745). */
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
 /** TbFeeHook LIVE on Base (CREATE2 salt 38, tx 0xb7413aa4…88c3, 2026-09-15). */
-export const HOOK_PREVU = '0x34E3920fF955CA062Cf5A8372D4CC5C653fB6044';
+export const HOOK_PREVU = '0xaa6D7bD9FC7D394bc717137936f2939834382044';
 /* HARD RULE: only a6cf. Live hook FEE_WALLET()=0x37eb. Pending CREATE2 0xaa6D…2044 salt 56999 — flip HOOK_PREVU only after code live. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 
