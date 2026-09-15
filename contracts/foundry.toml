@@ -9,7 +9,7 @@ evm_version = "cancun"
 
 # UNIT TESTS ONLY — NO broadcast / NO mainnet deploy this tip.
 # Align decide() with brain-tasks.js decideOffre (THRESHOLD=5, toy weights).
-# FEE_WALLET 0x37eb9b7ce0b51fe12fbf092026e001918128580a — do not change.
+# FEE_WALLET 0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4 (tip 2220 smart wallet). Live CreateRouter/TbFeeHook still 0x37eb immutable.
 #
 # Run from contracts/:
 #   forge build
