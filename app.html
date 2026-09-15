@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2220">Build <code>20260915-2220</code> · Fees for BaseAPP Holders · no fee-wallet CV on Sign/Create.</p>
+      <p class="note" data-build="20260915-2245">Build <code>20260915-2245</code> · Swaps·PnL on profile · Fees for BaseAPP Holders · no fee-wallet CV.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1073,6 +1073,12 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="pProchain" id="pTfIntro">Measured this visit only — never a score. Swap fees → <b>creator + holders</b>; protocol · <b>Fees for BaseAPP Holders</b>.</p>
         <ul class="pmLignes" id="pTfLignes"></ul>
         <p class="note" id="pTfCta"></p>
+      </div>
+      <!-- tip 2245: swap-derived PnL — DexScreener + optional Gecko sample; never invent; never sum-of-trader paper as cash -->
+      <div class="pJeu" id="pPnlSwaps" hidden>
+        <div class="pJeuTete"><span class="pBadge">Swaps · PnL</span><span class="pPV" id="pPnlBadge"> · measured only</span></div>
+        <ul class="pmLignes" id="pPnlLignes"></ul>
+        <p class="note" id="pPnlNote"></p>
       </div>
       <div class="pActions">
         <button class="bouton" id="pEnvoyer" type="button">Send from this block</button>
@@ -1257,6 +1263,7 @@ import { planLancement, simulerLancement } from './lancer-pool.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
+import { lirePnlSwaps } from './pnl-swaps.js';
 /* ⛔ LES FAITS SONT LUS PAR UN MODULE TESTE, pas par une lecture improvisee ici : c est lui qui
  * garantit que « pas lu » ne se dise jamais comme « zero », et que le marqueur B20 reste le CODE
  * et jamais le prefixe d adresse. */
@@ -3046,6 +3053,36 @@ function peindreMarcheHook(v) {
 }
 
 
+
+/** tip 2245: swap-derived market + optional Your PnL — DexScreener / Gecko; measured only. */
+async function peindrePnlSwaps(adr, perime) {
+  const box = $('#pPnlSwaps');
+  const ul = $('#pPnlLignes');
+  const note = $('#pPnlNote');
+  const badge = $('#pPnlBadge');
+  if (!box || !ul || !note) return;
+  box.hidden = true;
+  ul.innerHTML = '';
+  note.textContent = '';
+  if (badge) badge.textContent = ' · reading…';
+  let r = null;
+  try {
+    r = await lirePnlSwaps({ jeton: adr, compte: compte || null });
+  } catch (e) {
+    r = { etat: 'NON_LUE', lignes: ['DexScreener / Gecko fetch failed — no invented numbers.'],
+      note: 'unread · ' + new Date().toISOString(), cardHidden: false };
+  }
+  if (perime && perime()) return;
+  if (!r || r.cardHidden) { box.hidden = true; return; }
+  box.hidden = false;
+  ul.innerHTML = (r.lignes || []).map((x) => '<li>' + x + '</li>').join('');
+  note.textContent = r.note || '';
+  if (badge) {
+    badge.textContent = r.etat === 'LUE' ? ' · DexScreener'
+      : (r.etat === 'NON_TROUVEE' ? ' · no pair' : ' · unread');
+  }
+}
+
 /** ⛔ P0 tip 2025: OL-inspired holders / trust facts on profile — measured only; funnel → Launch / Buy. */
 function peindreTrustFacts(adr, v, origine) {
   const box = $('#pTrustFacts');
@@ -3202,6 +3239,10 @@ async function lireProfil(adr, sym, perime) {
   const ptf0 = $('#pTrustFacts'); if (ptf0) ptf0.hidden = true;
   const ptfL = $('#pTfLignes'); if (ptfL) ptfL.innerHTML = '';
   const ptfC = $('#pTfCta'); if (ptfC) ptfC.textContent = '';
+  const pps0 = $('#pPnlSwaps'); if (pps0) pps0.hidden = true;
+  const ppsL = $('#pPnlLignes'); if (ppsL) ppsL.innerHTML = '';
+  const ppsN = $('#pPnlNote'); if (ppsN) ppsN.textContent = '';
+  const ppsB = $('#pPnlBadge'); if (ppsB) ppsB.textContent = ' · measured only';
   $('#pEchange').hidden = true;
   $('#pLiquidite').hidden = true;
   $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
@@ -3366,6 +3407,8 @@ async function lireProfil(adr, sym, perime) {
   /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (TbFeeHook) or legacy unhooked. */
   peindreMarcheHook(v);
   peindreTrustFacts(adr, v, origineProfil);
+  /* tip 2245: swap PnL on-demand per profile open — parallel to holders food read; never invent. */
+  void peindrePnlSwaps(adr, perime);
   /* ⛔ tip 2040: measure holders (Transfer window) once per profile open — never invent; repaint when LUE. */
   void (async () => {
     try {
@@ -6342,7 +6385,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2220',
+    build: '20260915-2245',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

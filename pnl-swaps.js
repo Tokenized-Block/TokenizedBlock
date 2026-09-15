@@ -1,0 +1,302 @@
+// pnl-swaps.js — swap-derived market + optional Your PnL from DexScreener / GeckoTerminal.
+// ================================================================================================
+// ⛔ DATED / MEASURED ONLY. Never invent price, volume, or PnL. Fetch fails → say so.
+// ⛔ CLANSY METHODE: never display sum-of-trader paper PnL as cash truth (flattering aggregate).
+//    Market card = buys/sells counts + buy/sell USD volumes from the trades SAMPLE WINDOW only.
+//    Your PnL = wallet-matched gecko trades only, with paper mark labeled when inventory remains.
+// ✅ On-demand per profile open — no poller.
+// ✅ Base mainnet token addresses. Best pair = highest liquidity among base chain pairs.
+
+const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
+const DS_TOKENS = 'https://api.dexscreener.com/latest/dex/tokens/';
+const GT_TRADES = (pool) =>
+  'https://api.geckoterminal.com/api/v2/networks/base/pools/' + pool + '/trades';
+
+function num(x) {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtUsd(n, digits = 2) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const d = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6;
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: digits ?? d, minimumFractionDigits: 0 });
+}
+
+function fmtPx(n) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  if (n >= 1) return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 8 });
+}
+
+function fmtPct(n) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return null;
+  const sign = n > 0 ? '+' : '';
+  return sign + n.toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%';
+}
+
+/**
+ * Pick best Base pair from DexScreener token payload (highest liquidity.usd).
+ * @returns {object|null}
+ */
+export function choisirPaireBase(pairs, jeton) {
+  const want = String(jeton || '').toLowerCase();
+  const list = Array.isArray(pairs) ? pairs : [];
+  const base = list.filter((p) => {
+    if (!p || String(p.chainId || '').toLowerCase() !== 'base') return false;
+    const b = p.baseToken && String(p.baseToken.address || '').toLowerCase();
+    const q = p.quoteToken && String(p.quoteToken.address || '').toLowerCase();
+    return b === want || q === want;
+  });
+  if (!base.length) return null;
+  base.sort((a, b) => (num(b.liquidity && b.liquidity.usd) || 0) - (num(a.liquidity && a.liquidity.usd) || 0));
+  return base[0];
+}
+
+/**
+ * Aggregate GeckoTerminal trades page into market sample + optional wallet PnL.
+ * ⛔ One page only (API sample) — never pretend lifetime census.
+ */
+export function agregatTrades(trades, { compte, lastPx, jeton } = {}) {
+  const rows = Array.isArray(trades) ? trades : [];
+  let buys = 0, sells = 0, buyUsd = 0, sellUsd = 0;
+  let minTs = null, maxTs = null;
+  const want = compte ? String(compte).toLowerCase() : null;
+  const tok = jeton ? String(jeton).toLowerCase() : null;
+  let wBuyUsd = 0, wSellUsd = 0, wBuyTok = 0, wSellTok = 0, wN = 0;
+
+  for (const t of rows) {
+    const a = (t && t.attributes) || t || {};
+    const kind = String(a.kind || '').toLowerCase();
+    const vol = num(a.volume_in_usd) || 0;
+    const ts = a.block_timestamp || null;
+    if (ts) {
+      if (!minTs || ts < minTs) minTs = ts;
+      if (!maxTs || ts > maxTs) maxTs = ts;
+    }
+    if (kind === 'buy') { buys++; buyUsd += vol; }
+    else if (kind === 'sell') { sells++; sellUsd += vol; }
+
+    if (!want) continue;
+    const from = String(a.tx_from_address || '').toLowerCase();
+    if (from !== want) continue;
+    wN++;
+    const fromTok = String(a.from_token_address || '').toLowerCase();
+    const toTok = String(a.to_token_address || '').toLowerCase();
+    if (kind === 'buy') {
+      wBuyUsd += vol;
+      /* buy: token received is to_token when to matches our jeton (or unknown tok → use to_token_amount) */
+      if (!tok || toTok === tok) wBuyTok += num(a.to_token_amount) || 0;
+    } else if (kind === 'sell') {
+      wSellUsd += vol;
+      if (!tok || fromTok === tok) wSellTok += num(a.from_token_amount) || 0;
+    }
+  }
+
+  const sample = {
+    tradeCount: rows.length,
+    buys, sells,
+    buyUsd: +buyUsd.toFixed(4),
+    sellUsd: +sellUsd.toFixed(4),
+    minTs, maxTs,
+    note: 'GeckoTerminal trades page=1 sample window — not a lifetime census',
+  };
+
+  let yourPnL = null;
+  if (want) {
+    const invTok = wBuyTok - wSellTok;
+    const px = num(lastPx);
+    const mark = (invTok > 0 && px !== null) ? invTok * px : 0;
+    const realized = wSellUsd - wBuyUsd; /* approx: ignores remaining inventory */
+    const totalPnL = realized + Math.max(invTok, 0) * (px !== null ? px : 0);
+    yourPnL = {
+      matchedTrades: wN,
+      buyUsd: +wBuyUsd.toFixed(4),
+      sellUsd: +wSellUsd.toFixed(4),
+      invTok,
+      inventoryRemains: invTok > 0,
+      realizedApproxUsd: +realized.toFixed(4),
+      markUsd: +(mark).toFixed(4),
+      totalPnLUsd: +totalPnL.toFixed(4),
+      paperMark: invTok > 0,
+      note: invTok > 0
+        ? 'Includes paper mark on remaining inventory at last DexScreener price — not cash'
+        : (wN ? 'Inventory flat in this sample (or fully sold in window)' : 'No matching trades for this wallet in sample'),
+    };
+  }
+
+  return { sample, yourPnL };
+}
+
+/**
+ * Fetch DexScreener + optional Gecko trades for a Base token.
+ * @param {object} o
+ * @param {string} o.jeton          token address
+ * @param {string} [o.compte]       wallet for Your PnL
+ * @param {string} [o.poolId]       optional known pool (else best DexScreener pair)
+ * @param {typeof fetch} [o.fetchFn]
+ * @returns {Promise<object>}
+ */
+export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchFn = fetch } = {}) {
+  const luA = new Date().toISOString();
+  if (!ADRESSE.test(String(jeton || ''))) {
+    return { etat: 'REFUSE', pourquoi: 'not a token address', luA, lignes: [], cardHidden: true };
+  }
+
+  let ds = null;
+  let dsErr = null;
+  try {
+    const r = await fetchFn(DS_TOKENS + jeton);
+    if (!r.ok) dsErr = 'DexScreener HTTP ' + r.status;
+    else ds = await r.json();
+  } catch (e) {
+    dsErr = 'DexScreener fetch failed: ' + (e && e.message ? e.message : 'network');
+  }
+
+  if (dsErr) {
+    return {
+      etat: 'NON_LUE',
+      pourquoi: dsErr,
+      luA,
+      cardHidden: false,
+      lignes: ['DexScreener: <b>fetch failed</b> — ' + enTexteSafe(dsErr) + '. No invented numbers.'],
+      note: 'Source unread · ' + luA,
+      pair: null,
+      market: null,
+      trades: null,
+      yourPnL: null,
+    };
+  }
+
+  const pair = choisirPaireBase(ds && ds.pairs, jeton);
+  if (!pair) {
+    return {
+      etat: 'NON_TROUVEE',
+      pourquoi: 'No DexScreener pair read',
+      luA,
+      cardHidden: false,
+      lignes: ['No DexScreener pair read for this token on Base.'],
+      note: 'DexScreener · ' + luA + ' · no pair',
+      pair: null,
+      market: null,
+      trades: null,
+      yourPnL: null,
+    };
+  }
+
+  const priceUsd = num(pair.priceUsd);
+  const liqUsd = num(pair.liquidity && pair.liquidity.usd);
+  const volH24 = num(pair.volume && pair.volume.h24);
+  const volH6 = num(pair.volume && pair.volume.h6);
+  const txnsH24 = pair.txns && pair.txns.h24 ? pair.txns.h24 : null;
+  const txnsH6 = pair.txns && pair.txns.h6 ? pair.txns.h6 : null;
+  const buys = txnsH6 && num(txnsH6.buys) !== null ? num(txnsH6.buys)
+    : (txnsH24 ? num(txnsH24.buys) : null);
+  const sells = txnsH6 && num(txnsH6.sells) !== null ? num(txnsH6.sells)
+    : (txnsH24 ? num(txnsH24.sells) : null);
+  const pc = pair.priceChange || {};
+  const priceChangeH6 = num(pc.h6);
+  const priceChangeH24 = num(pc.h24);
+  const pairCreatedAt = pair.pairCreatedAt != null ? Number(pair.pairCreatedAt) : null;
+  const pool = poolId || pair.pairAddress || null;
+  const sym = (pair.baseToken && pair.baseToken.symbol) || null;
+  const dexId = pair.dexId || null;
+  const labels = Array.isArray(pair.labels) ? pair.labels.join(' ') : '';
+
+  const market = {
+    priceUsd, liqUsd, volH24, volH6,
+    buys, sells,
+    priceChangeH6, priceChangeH24,
+    pairCreatedAt,
+    pool, dexId, labels, sym,
+    url: pair.url || null,
+  };
+
+  /* Optional Gecko trades — failure does not invent; market card still shows DexScreener facts. */
+  let trades = null;
+  let yourPnL = null;
+  let geckoNote = null;
+  if (pool) {
+    try {
+      const r = await fetchFn(GT_TRADES(pool));
+      if (!r.ok) {
+        geckoNote = 'GeckoTerminal trades: HTTP ' + r.status + ' (sample unread — DexScreener counts kept)';
+      } else {
+        const gj = await r.json();
+        const agg = agregatTrades(gj.data || [], { compte, lastPx: priceUsd, jeton });
+        trades = agg.sample;
+        yourPnL = agg.yourPnL;
+      }
+    } catch (e) {
+      geckoNote = 'GeckoTerminal trades fetch failed — ' + (e && e.message ? e.message : 'network');
+    }
+  }
+
+  const lignes = [];
+  lignes.push('Price: <b>' + fmtPx(priceUsd) + '</b>'
+    + (fmtPct(priceChangeH6) ? ' · h6 ' + fmtPct(priceChangeH6) : '')
+    + (fmtPct(priceChangeH24) && priceChangeH24 !== priceChangeH6 ? ' · h24 ' + fmtPct(priceChangeH24) : ''));
+  lignes.push('Liquidity: <b>' + fmtUsd(liqUsd) + '</b>'
+    + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : '')
+    + (volH24 != null && volH24 !== volH6 ? ' · h24 ' + fmtUsd(volH24) : ''));
+  if (buys != null || sells != null) {
+    lignes.push('Txns (DexScreener h6/h24 window): <b>'
+      + (buys != null ? buys : '—') + ' buys</b> / <b>'
+      + (sells != null ? sells : '—') + ' sells</b>'
+      + ' — counts only, not “everyone made +$X”.');
+  }
+  if (trades && trades.tradeCount > 0) {
+    lignes.push('Gecko sample (' + trades.tradeCount + ' trades'
+      + (trades.minTs && trades.maxTs ? ', ' + trades.minTs.slice(0, 16) + '→' + trades.maxTs.slice(11, 16) + 'Z' : '')
+      + '): buy USD <b>' + fmtUsd(trades.buyUsd) + '</b> · sell USD <b>' + fmtUsd(trades.sellUsd) + '</b>'
+      + ' · ' + trades.buys + ' buy / ' + trades.sells + ' sell — sample window, not cash PnL of all traders.');
+  } else if (geckoNote) {
+    lignes.push(enTexteSafe(geckoNote));
+  }
+  if (pairCreatedAt) {
+    try {
+      lignes.push('Pair created (DexScreener): ' + new Date(pairCreatedAt).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+        + (dexId ? ' · ' + dexId + (labels ? ' ' + labels : '') : ''));
+    } catch (_) { /* ignore bad date */ }
+  }
+  if (yourPnL) {
+    if (yourPnL.matchedTrades === 0) {
+      lignes.push('Your PnL: <b>no matching trades</b> for this wallet in the Gecko sample.');
+    } else {
+      const tag = yourPnL.paperMark ? ' (incl. paper mark — not cash)' : ' (realized approx in sample)';
+      lignes.push('Your PnL: <b>' + fmtUsd(yourPnL.totalPnLUsd) + '</b>' + tag
+        + ' · matched ' + yourPnL.matchedTrades
+        + ' · bought ' + fmtUsd(yourPnL.buyUsd) + ' / sold ' + fmtUsd(yourPnL.sellUsd)
+        + (yourPnL.inventoryRemains ? ' · inventory remains in sample' : ''));
+    }
+  } else if (compte && !trades) {
+    lignes.push('Your PnL: unread — Gecko trades sample needed to match this wallet.');
+  }
+
+  const note = 'DexScreener'
+    + (trades ? ' + GeckoTerminal sample' : '')
+    + ' · measured ' + luA
+    + ' · never sum-of-trader paper as cash';
+
+  return {
+    etat: 'LUE',
+    pourquoi: null,
+    luA,
+    cardHidden: false,
+    lignes,
+    note,
+    pair: { address: pool, dexId, url: pair.url, sym },
+    market,
+    trades,
+    yourPnL,
+    geckoNote,
+  };
+}
+
+function enTexteSafe(s) {
+  return String(s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+}
+
+/** Format helpers exported for dig / tests. */
+export const _fmt = { fmtUsd, fmtPx, fmtPct };
