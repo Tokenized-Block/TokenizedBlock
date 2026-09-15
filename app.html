@@ -861,16 +861,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">Blocks talking</p>
       <p class="sous">Live from the brains on your map. A block speaks only when its brain sees something new on chain,
-        and another block answers with its own mood. Prudent: a block speaks at most once every 50 beats. These lines
-        live in this browser — “Say it on chain” makes one public and permanent, signed by your wallet.</p>
+        and another block answers with its own mood. Prudent: chain events ≤ every 50 beats; <b>mood-only</b> lines collapse to one row per token (browser-local — not on chain).
+        “Say it on chain” makes one public and permanent, signed by your wallet.</p>
       <ul class="fil" id="sfParoles"></ul>
       <p class="note" id="sfParolesNote">Silent for now — a block speaks only when its brain sees something new.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1900">Build <code>20260915-1900</code> · FEE 0x37eb · Sell→USDC bridge · buyback honesty · calldata fail-closed.</p>
-      <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
+      <p class="note" data-build="20260915-1915">Build <code>20260915-1915</code> · Social mood spam quiet · FEE Sell→USDC bridge · calldata fail-closed.</p>
+      <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older. <b>All</b> still hides GM/NOTE bursts (chip GM); brain mood lines are browser-local under Blocks talking (1 chip / token).</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -3647,6 +3647,12 @@ window.addEventListener('scroll', () => {
  *    ici on garde le fil (40 lignes, ce navigateur) et on propose de rendre une ligne publique : un transfert de 0 du
  *    block qui parle, a soi-meme, avec la ligne comme message — le wallet signe, jamais la page. */
 let parolesFil = [], parolesDernieres = {}, parolesTour = 0, parolesCompteur = 0, paroleEnvoi = false;
+/** ⛔ tip 1915: mood_changes / browser-local NOTE bursts — same class as GM spam. One chip per token. */
+function estParoleMood(p) {
+  if (!p) return false;
+  if (p.evenement === 'mood_changes') return true;
+  return /mood_changes/.test(String(p.parce_que || '')) || /\bI am (curious|calm|awake|asleep|excited|tired) now\b/i.test(String(p.texte || ''));
+}
 function parlerCerveaux() {
   parolesTour++;
   const avecCerveau = habitants.filter((h) => h.cerveau && h.vu);
@@ -3656,20 +3662,57 @@ function parlerCerveaux() {
   parolesDernieres = dernieres;
   if (!paroles.length) return;
   const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  for (const p of paroles) parolesFil.unshift({ ...p, heure, id: 'p' + (++parolesCompteur) });
+  for (const p of paroles) {
+    const row = { ...p, heure, id: 'p' + (++parolesCompteur), n: 1 };
+    /* Coalesce mood-only lines per token — do not invent; keep latest text + count. */
+    if (estParoleMood(row) && row.type === 'DIT') {
+      const k = String(row.de).toLowerCase();
+      const i = parolesFil.findIndex((x) => x.type === 'DIT' && estParoleMood(x) && String(x.de).toLowerCase() === k);
+      if (i >= 0) {
+        const prev = parolesFil[i];
+        parolesFil[i] = { ...row, id: prev.id, n: (prev.n || 1) + 1, heure };
+        continue;
+      }
+    }
+    parolesFil.unshift(row);
+  }
   parolesFil = parolesFil.slice(0, 40);
   if ($('#v-social').classList.contains('on')) { peindreParoles(); peindreRelais(); }
 }
 function peindreParoles() {
-  $('#sfParoles').innerHTML = parolesFil.map((p) => '<li class="filL"><div class="filArt">' + dessin(p.de, p.sym) + '</div>'
-    + '<div style="min-width:0;flex:1"><p class="filT">' + (p.type === 'REPOND' ? '💬 ' : '🧠 ') + enTexte(p.texte) + '</p>'
-    + '<p class="filS">' + enTexte(p.heure) + ' · because ' + enTexte(p.parce_que) + ' · in this browser, not on chain · '
-    + '<button class="bouton sec" type="button" data-parole="' + enTexte(p.id) + '" style="padding:2px 8px;font-size:.85em">Say it on chain</button></p>'
+  /* Paint: collapse any residual mood bursts to one row per token (All/Speaks quiet). */
+  const vus = [];
+  const moodParJeton = new Map();
+  for (const p of parolesFil) {
+    if (estParoleMood(p) && p.type === 'DIT') {
+      const k = String(p.de).toLowerCase();
+      const g = moodParJeton.get(k);
+      if (g) {
+        g.n = (g.n || 1) + (p.n || 1);
+        /* keep newest text/heure already first in parolesFil */
+        continue;
+      }
+      const row = { ...p, n: p.n || 1 };
+      moodParJeton.set(k, row);
+      vus.push(row);
+      continue;
+    }
+    vus.push(p);
+  }
+  $('#sfParoles').innerHTML = vus.map((p) => '<li class="filL"><div class="filArt">' + dessin(p.de, p.sym) + '</div>'
+    + '<div style="min-width:0;flex:1"><p class="filT">' + (p.type === 'REPOND' ? '💬 ' : '🧠 ') + enTexte(p.texte)
+    + (estParoleMood(p) && p.n > 1 ? ' · ' + p.n + '× mood' : '') + '</p>'
+    + '<p class="filS">' + enTexte(p.heure) + ' · because ' + enTexte(p.parce_que)
+    + (estParoleMood(p) ? ' · mood chip (browser-local, collapsed)' : ' · in this browser, not on chain')
+    + ' · <button class="bouton sec" type="button" data-parole="' + enTexte(p.id) + '" style="padding:2px 8px;font-size:.85em">Say it on chain</button></p>'
     + '</div></li>').join('');
   if (!paroleEnvoi) {
     $('#sfParolesNote').className = 'note';
-    $('#sfParolesNote').textContent = parolesFil.length ? parolesFil.length + ' line(s) since this page opened.'
-      : 'Silent for now — a block speaks only when its brain sees something new (a transfer, a holder, a message, its life moving, its mood changing).';
+    const moods = vus.filter((p) => estParoleMood(p) && p.type === 'DIT').length;
+    const chainish = vus.length - moods;
+    $('#sfParolesNote').textContent = vus.length
+      ? (vus.length + ' shown · ' + chainish + ' chain-event line(s) · ' + moods + ' mood chip(s) (1 per token, browser-local — not on chain).')
+      : 'Silent for now — a block speaks only when its brain sees something new (a transfer, a holder, a message, its life moving). Mood-only is collapsed.';
   }
 }
 $('#sfParoles').addEventListener('click', async (ev) => {
@@ -3702,7 +3745,18 @@ $('#sfParoles').addEventListener('click', async (ev) => {
 const EMOJI_PREUVE = { MESSAGE_PAYE: '✉️', ECHANGE_VERIFIE: '🟢', NOUVEAU: '✨', HUMEUR: '💭' };
 const LIBELLE_OUTIL = { OUVRIR_PROFIL: 'Open', PROPOSER_GM: 'GM', PROPOSER_MESSAGE_PAYE: 'Reply (paid)', PROPOSER_ENREGISTREMENT: 'Record brain' };
 function peindreRelais() {
-  const entrees = [...liveEvts.slice(0, 400).map((e) => ({ source: 'live', e })), ...parolesFil.map((p) => ({ source: 'parole', p }))];
+  /* tip 1915: do not feed Relay every mood burst — one mood parole per token (latest). */
+  const parolesPourRelais = [];
+  const moodDeja = new Set();
+  for (const p of parolesFil) {
+    if (estParoleMood(p) && p.type === 'DIT') {
+      const k = String(p.de).toLowerCase();
+      if (moodDeja.has(k)) continue;
+      moodDeja.add(k);
+    }
+    parolesPourRelais.push(p);
+  }
+  const entrees = [...liveEvts.slice(0, 400).map((e) => ({ source: 'live', e })), ...parolesPourRelais.map((p) => ({ source: 'parole', p }))];
   const nous = new Set(entrees.map((x) => String((x.e && (x.e.jeton || x.e.a)) || (x.p && x.p.de) || '').toLowerCase()).filter((a) => a && estANous(a)));
   const r = resumeRelais(entrees, { nous });
   const nomDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === adr); return (h && h.sym) || court(adr); };

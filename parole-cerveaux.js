@@ -8,10 +8,13 @@
 //    PAROLE_ECART_BATTEMENTS battements, et le fil ne prend pas plus de PAROLES_MAX_PAR_TOUR lignes par battement.
 // ⛔ CES PAROLES VIVENT DANS CE NAVIGATEUR (simulation lue sur des faits de la chaine). Les rendre publiques et
 //    permanentes = un transfert de 0 signe par un humain, avec la parole comme message — jamais ce module.
+// ⛔ P0 2026-09-15 tip 1915: mood_changes alone flooded Social (calm↔curious ~30s). Longer gap; UI collapses per token.
 import { evenementsDuPas } from './regles-cerveau.js';
 import { nomHumeur } from './cerveau.js';
 
 export const PAROLE_ECART_BATTEMENTS = 50;
+/** Mood-only speech: same class as GM spam — do not re-announce every calm↔curious flip. */
+export const PAROLE_ECART_MOOD = 250;
 export const PAROLES_MAX_PAR_TOUR = 4;
 export const TYPES_PAROLE = ['DIT', 'REPOND'];
 
@@ -53,7 +56,7 @@ const nom = (b) => String(b.sym || String(b.adr).slice(0, 8)).slice(0, 14);
 /**
  * Les paroles d un battement.
  * @param {{ blocks: {adr:string, sym?:string, vu:object, vuAvant:object|null}[], tick:number, dernieres?:Record<string,number> }} o
- * @returns {{ paroles: {type:string, de:string, sym:string, a:string|null, symA:string|null, texte:string, parce_que:string}[],
+ * @returns {{ paroles: {type:string, de:string, sym:string, a:string|null, symA:string|null, texte:string, parce_que:string, evenement:string}[],
  *   dernieres: Record<string,number> }}
  */
 export function parolesDuTour({ blocks, tick, dernieres = {} }) {
@@ -61,16 +64,18 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
   const liste = (Array.isArray(blocks) ? blocks : []).filter((b) => b && b.vu && /^0x[0-9a-fA-F]{40}$/.test(String(b.adr)))
     .map((b) => ({ ...b, adr: String(b.adr).toLowerCase() }))
     .sort((x, y) => (x.adr < y.adr ? -1 : 1));
-  const libre = (adr) => !Number.isFinite(d[adr]) || tick - d[adr] >= PAROLE_ECART_BATTEMENTS;
+  const libre = (adr, gap = PAROLE_ECART_BATTEMENTS) => !Number.isFinite(d[adr]) || tick - d[adr] >= gap;
   const paroles = [];
   for (const b of liste) {
     if (paroles.length >= PAROLES_MAX_PAR_TOUR) break;
     const ev = evenementsDuPas(b.vu, b.vuAvant || null);
     const e = PRIORITE.find((x) => ev.includes(x) && (x !== 'mood_changes' || (humeurJugee(b.vu) && humeurJugee(b.vuAvant))));
-    if (!e || !libre(b.adr)) continue;
+    if (!e) continue;
+    const gap = e === 'mood_changes' ? PAROLE_ECART_MOOD : PAROLE_ECART_BATTEMENTS;
+    if (!libre(b.adr, gap)) continue;
     d[b.adr] = tick;
     paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu, b),
-      parce_que: 'its brain saw ' + e + ' at beat ' + tick });
+      parce_que: 'its brain saw ' + e + ' at beat ' + tick, evenement: e });
     if (!APPELLE_REPONSE.has(e) || paroles.length >= PAROLES_MAX_PAR_TOUR) continue;
     /* le repondant : le block suivant dans l ordre des adresses, qui n a pas parle recemment — deterministe */
     const i = liste.indexOf(b);
@@ -79,7 +84,7 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     d[autre.adr] = tick;
     paroles.push({ type: 'REPOND', de: autre.adr, sym: nom(autre), a: b.adr, symA: nom(b),
       texte: nom(autre) + ' → ' + nom(b) + ': ' + REPONSE[e] + ' I am ' + humeur(autre.vu.phase) + ' myself.',
-      parce_que: 'replies to ' + nom(b) + '\'s ' + e + ' · its own mood read from its brain' });
+      parce_que: 'replies to ' + nom(b) + '\'s ' + e + ' · its own mood read from its brain', evenement: e });
   }
   return { paroles, dernieres: d };
 }
