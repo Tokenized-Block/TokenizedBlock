@@ -69,12 +69,11 @@ export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = n
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'your account or TBLOCK balance could not be read' };
   }
-  /* 0x = EOA ; 0xef0100 + adresse = EOA delegue (EIP-7702), qui signe lui-meme la transaction */
-  if (code !== '0x' && !/^0xef0100[0-9a-f]{40}$/i.test(code)) {
-    return { etat: 'REFUSE', pourquoi: 'smart-contract wallets are not supported yet: the fee would be paid but the message could not be read back' };
-  }
+  /* tip 2347: Base App / smart wallets MAY pay the fee → a6cf. Memo readback can stay opaque on AA
+   * (bundler tx.to ≠ TBLOCK) — still PREPARE; Social may show fee without chat text. 7702 EOA = full path. */
+  const estSmartWallet = code !== '0x' && !/^0xef0100[0-9a-f]{40}$/i.test(code);
   if (solde < FRAIS_MESSAGE_TBLOCK) return { etat: 'REFUSE', pourquoi: 'not enough TBLOCK for the message fee', manque: FRAIS_MESSAGE_TBLOCK - solde };
-  return { etat: 'PRET', pourquoi: null, frais: FRAIS_MESSAGE_TBLOCK,
+  return { etat: 'PRET', pourquoi: null, frais: FRAIS_MESSAGE_TBLOCK, aaOpaque: estSmartWallet || undefined,
     tx: { to: TBLOCK, data: encodeTransferAvecMemo(FEE_WALLET, FRAIS_MESSAGE_TBLOCK, enc.memo), value: '0x0' } };
 }
 
@@ -88,7 +87,13 @@ export function messageDepuisTransfert(t, tx) {
   if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent as Fees for BaseAPP Holders' };
   if (typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) return { etat: 'REJETE', pourquoi: 'below the message fee' };
   if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the BaseAPP Holders fee path itself' };
-  if (String(tx.to).toLowerCase() !== TBLOCK.toLowerCase()) return { etat: 'NON_LISIBLE', pourquoi: 'not a direct TBLOCK transfer (smart wallet or relay)' };
+  const direct = String(tx.to).toLowerCase() === TBLOCK.toLowerCase();
+  if (!direct) {
+    /* tip 2347: AA / bundler — Transfer still paid FEE_WALLET; chat text opaque */
+    return { etat: 'MESSAGE_FEE', signataire: String(t.from).toLowerCase(), de: null, a: null, texte: null,
+      frais: t.value, tx: t.tx, bloc: t.bloc ?? null, aaOpaque: true,
+      pourquoi: 'fee → BaseAPP Holders; message text not readable on smart-wallet relay' };
+  }
   if (String(tx.from).toLowerCase() !== String(t.from).toLowerCase()) return { etat: 'REJETE', pourquoi: 'the signer is not the sender of the transfer' };
   const m = lireMemo(tx.input);
   if (m.etat !== 'LU') return { etat: 'REJETE', pourquoi: 'no message in the transaction' };
@@ -108,7 +113,7 @@ export async function lireConversations({ rpc, blocs = 20000, fin = null, pause 
     try { tx = await lire('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
     if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
     const x = messageDepuisTransfert(t, tx);
-    if (x.etat === 'MESSAGE') messages.push(x);
+    if (x.etat === 'MESSAGE' || x.etat === 'MESSAGE_FEE') messages.push(x);
     else if (x.etat === 'NON_LISIBLE') compteurs.nonLisibles++;
     else compteurs.rejetes++;
   }

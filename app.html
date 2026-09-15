@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2346">Build <code>20260915-2346</code> · fees→a6cf · Base App wallet_sendCalls fallback · Launch hooked.</p>
+      <p class="note" data-build="20260915-2347">Build <code>20260915-2347</code> · fees→a6cf · Base App paid-msg fee allowed · Launch hooked.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -4008,7 +4008,9 @@ function peindreLive() {
           + (CHAINE === 8453 ? ' · Launch here → life fee ≈ $1 + hooked market (MAIN)' : ' · Launch here (Practice free · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
-      : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
+      : e.type === 'MESSAGE' ? (e.aaOpaque
+        ? '✉️ fee → BaseAPP Holders (smart wallet · text opaque) · ' + enTexte(court(e.signataire))
+        : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
         + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Buy in app)</span>' : '')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
@@ -5418,6 +5420,7 @@ $('#pmsgPreparer').addEventListener('click', async () => {
   messagePayeCourant = p;
   const ap = apercuTransaction({ chaine: CHAINE, tx: p.tx, compte, jeton: TBLOCK, symbole: 'TBLOCK', decimales: 18 });
   $('#pmsgPayeLignes').innerHTML = ['Fee: ' + formaterUnites(FRAIS_MESSAGE_TBLOCK, 18) + ' TBLOCK · Fees for BaseAPP Holders, in the same transaction as the message — not a buyback.',
+    ...(messagePayeCourant && messagePayeCourant.aaOpaque ? ['Base App / smart wallet: fee still pays Holders; chat text may stay opaque on-chain (tip 2347).'] : []),
     'Public and permanent: anyone can read it on chain, forever. It shows your wallet speaking as the block you picked.',
     'Signature 1 — ' + ap.action + ': ' + ap.lignes.join(' · ')].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const b = document.createElement('button');

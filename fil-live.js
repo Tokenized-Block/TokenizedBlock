@@ -196,9 +196,9 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
         let tx = null;
         try { tx = await rpc('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
         const m = messageDepuisTransfert(t, tx);
-        if (m.etat !== 'MESSAGE') continue;
-        ajouter({ type: 'MESSAGE', bloc: t.bloc, jeton: m.a, sym: null, tx: t.tx, logIndex: t.logIndex,
-          de: m.de, a: m.a, texte: m.texte, signataire: m.signataire });
+        if (m.etat !== 'MESSAGE' && m.etat !== 'MESSAGE_FEE') continue;
+        ajouter({ type: 'MESSAGE', bloc: t.bloc, jeton: m.a || m.de || null, sym: null, tx: t.tx, logIndex: t.logIndex,
+          de: m.de, a: m.a, texte: m.texte, signataire: m.signataire, aaOpaque: m.aaOpaque || m.etat === 'MESSAGE_FEE' });
       }
     }
   }
