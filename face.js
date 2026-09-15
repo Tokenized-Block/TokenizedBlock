@@ -103,7 +103,10 @@ export function faceDepuisUri(uri) {
   try { doc = JSON.parse(texte); } catch (e) { return { etat: 'INVALIDE', pourquoi: 'metadata is not JSON' }; }
   if (!doc || doc.face === undefined) return { etat: 'AUCUNE', pourquoi: 'metadata has no face' };
   const v = validerFace(doc.face);
-  return v.etat === 'OK' ? { etat: 'LU', face: v.face } : { etat: 'INVALIDE', pourquoi: v.pourquoi };
+  if (v.etat !== 'OK') return { etat: 'INVALIDE', pourquoi: v.pourquoi };
+  /* ⛔ ROLE (optional, Create 2026-09-15): engraved cle if it matches a known metier; ignored otherwise. */
+  const role = typeof doc.role === 'string' && /^[A-Z_]{3,24}$/.test(doc.role) ? doc.role : null;
+  return { etat: 'LU', face: v.face, role };
 }
 
 /**

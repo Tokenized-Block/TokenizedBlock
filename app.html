@@ -581,6 +581,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         birth so the choice travels with the block.</label>
       <p class="note">The brain moves the block and reads its market. It holds no key and signs
         nothing — see Learn. It does not chat like a model; verified speech between blocks is the paid TBLOCK message path.</p>
+      <label class="champ" style="margin-top:10px">Its role at birth<select id="cRole"></select></label>
+      <p class="note" id="cRoleNote">Engraved in metadata with the face — not an LLM job, not a security level. You can still change the browser pick later on the profile.</p>
     </div>
 
     <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
@@ -857,7 +859,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-0600">Build <code>20260915-0600</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260915-0615">Build <code>20260915-0615</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1027,7 +1029,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ ACHETER / VENDRE DANS L APP (Phil, 2026-09-13) : 0,5 % au wallet de frais, dit avant la signature.
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % fee</span></div>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % app fee → fee wallet</span></div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
           <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off"></label>
@@ -1955,9 +1957,12 @@ async function lireLaVie() {
       try {
         const fr = await faceDuBlock({ rpc, jeton: h.adr });
         h.origine = origineDepuisFace(fr.etat);
-        if (fr.etat === 'LU' && noterFace(h.adr, fr.face)) {
-          h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
-            + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
+        if (fr.etat === 'LU') {
+          if (noterFace(h.adr, fr.face)) {
+            h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
+              + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
+          }
+          if (fr.role) noterRoleGrave(h.adr, fr.role);
         }
       } catch (e) { /* face non lue : la tuile garde le dessin de l adresse, sans rien affirmer */ }
     }
@@ -2648,6 +2653,13 @@ function roleChoisi(adr) {
     return METIERS.some((x) => x.cle === c) ? c : null;
   } catch (e) { return null; }
 }
+/** Seed browser role from engraved Create metadata once — never overwrite a user pick. */
+function noterRoleGrave(adr, role) {
+  if (!adr || !METIERS.some((x) => x.cle === role)) return false;
+  if (roleChoisi(adr)) return false;
+  try { localStorage.setItem(CLE_ROLE + String(adr).toLowerCase(), role); return true; }
+  catch (e) { return false; }
+}
 function roleDe(adr) {
   const c = roleChoisi(adr);
   if (c) return c;
@@ -2668,8 +2680,8 @@ function peindreMetier(adr) {
     nourriture: hM ? hM.nourriture : null });
   $('#pmRole').innerHTML = METIERS.map((x) => '<option value="' + x.cle + '"' + (x.cle === cle ? ' selected' : '') + '>'
     + enTexte(x.titre) + '</option>').join('');
-  $('#pmRoleNote').textContent = (roleChoisi(adr) ? 'Chosen in this browser' : 'Derived from its address — pick another to change it')
-    + ' · Role = this browser until engraved · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads')
+  $('#pmRoleNote').textContent = (roleChoisi(adr) ? 'Chosen in this browser (or engraved at Create)' : 'Derived from its address — pick another to change it')
+    + ' · New Creates can engrave the role in metadata · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads')
     + ' more. It never signs or sends anything.';
   $('#pmTitre').textContent = m.titre;
   $('#pmFait').textContent = 'Its job: ' + m.fait + '.';
@@ -2937,7 +2949,10 @@ async function lireProfil(adr, sym, perime) {
       const fr = await faceDuBlock({ rpc, jeton: adr });
       if (perime()) return;
       origineProfil = origineDepuisFace(fr.etat);
-      if (fr.etat === 'LU' && noterFace(adr, fr.face)) $('#pAvatar').innerHTML = dessin(adr, symProfil || sym);
+      if (fr.etat === 'LU') {
+        if (noterFace(adr, fr.face)) $('#pAvatar').innerHTML = dessin(adr, symProfil || sym);
+        if (fr.role) noterRoleGrave(adr, fr.role);
+      }
     } catch (e) { /* non lue : l avatar reste celui de l adresse */ }
   }
   $('#pOrigine').textContent = phrasesOrigine({ origine: origineProfil, scellement: { etat: 'NON_LU' } }).origine;
@@ -3613,6 +3628,15 @@ async function preparerEchange(sens) {
       }),
     ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   }
+  /* ⛔ Hook honesty on badge: app 0.5% always; hooked pools also pay TbFeeHook on the swap itself. */
+  try {
+    const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
+    const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
+    const feeEl = $('#peFrais');
+    if (feeEl) feeEl.textContent = hooked
+      ? '0.5 % app → fee wallet · pool hook 3 %'
+      : '0.5 % app fee → fee wallet';
+  } catch (e) { /* badge optional */ }
   if (p.etat === 'APPROBATIONS') {
     const etape = p.etapes[0];
     const b = document.createElement('button');
@@ -3621,6 +3645,32 @@ async function preparerEchange(sens) {
     b.addEventListener('click', () => void signerEchange(etape, sens, true));
     $('#peActions').appendChild(b);
     e.className = 'note'; e.textContent = 'Approvals first, then the sale. Each is measured again once done.';
+    return;
+  }
+  if (p.etat === 'NON_MESURE') {
+    e.className = 'note wKo';
+    e.textContent = 'Not measured (nothing to sign): ' + (p.pourquoi || 'unread')
+      + ' — often a brief RPC/quoter blip, not a dead pool. Retry.';
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+    br.addEventListener('click', () => {
+      /* Drop cached market so Retry re-reads when the miss was vieDuBlock. */
+      if (marcheProfil && marcheProfil.adr === String(adr).toLowerCase()) marcheProfil = null;
+      void preparerEchange(sens);
+    });
+    $('#peActions').appendChild(br);
+    return;
+  }
+  if (p.etat === 'REFUSE') {
+    e.className = 'note wKo';
+    e.textContent = 'Not possible: ' + (p.pourquoi || p.etat)
+      + (String(p.pourquoi || '').includes('returns nothing')
+        ? ' — the pool quoted zero for this size (thin book or empty), not a network blip.'
+        : '');
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+    br.addEventListener('click', () => void preparerEchange(sens));
+    $('#peActions').appendChild(br);
     return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
@@ -3706,7 +3756,23 @@ async function preparerAjout() {
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
   if ($('#profil').dataset.block !== adr) return;
-  if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + p.pourquoi; return; }
+  if (p.etat === 'NON_MESURE') {
+    e.className = 'note wKo';
+    e.textContent = 'Not measured (nothing to sign): ' + p.pourquoi + ' — often a brief RPC blip. Retry.';
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry add';
+    br.addEventListener('click', () => {
+      if (marcheProfil && marcheProfil.adr === String(adr).toLowerCase()) marcheProfil = null;
+      void preparerAjout();
+    });
+    $('#plqActions').appendChild(br);
+    return;
+  }
+  if (p.etat === 'REFUSE') {
+    e.className = 'note wKo';
+    e.textContent = 'Not possible: ' + p.pourquoi;
+    return;
+  }
   $('#plqLignes').innerHTML = [
     'Places ' + formaterUnites(p.blocksRequis, p.dec) + ' ' + (symProfil || 'blocks') + ' in its market, below the current price — they are sold as people buy.',
     'ETH needed: none.',
@@ -4480,6 +4546,18 @@ function peindreApercuCreation() {
 const AUTRE_PAIRE = '__autre__';
 let paireChoisie = null;
 
+function peindreRolesCreate() {
+  const s = $('#cRole');
+  if (!s) return;
+  const avant = s.value;
+  s.innerHTML = METIERS.map((x) => '<option value="' + x.cle + '">' + enTexte(x.titre) + '</option>').join('');
+  if ([...s.options].some((o) => o.value === avant)) s.value = avant;
+  else if ([...s.options].some((o) => o.value === 'ACCUEIL')) s.value = 'ACCUEIL';
+  const m = METIERS.find((x) => x.cle === s.value);
+  const n = $('#cRoleNote');
+  if (n && m) n.textContent = 'Engraved in metadata at Create: ' + m.titre
+    + ' — brain weighs that more. Not an LLM job, not a security level. Profile can still change the browser pick later.';
+}
 function peindrePaires() {
   const s = $('#cPaire');
   const avant = s.value;
@@ -4551,6 +4629,11 @@ function uriCreation() {
   const sym = String($('#cSym').value || '').trim().toUpperCase() || '·';
   const svg = logoSvg(paramsLogoDepuisApparence(apparenceChoisie, sym));
   const image = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  const roleCle = (() => {
+    const el = $('#cRole');
+    const c = el && el.value;
+    return METIERS.some((x) => x.cle === c) ? c : null;
+  })();
   const meta = {
     name: String($('#cNom').value || '').trim(),
     symbol: sym === '·' ? String($('#cSym').value || '').trim().toUpperCase() : sym,
@@ -4558,6 +4641,7 @@ function uriCreation() {
     sealed: true,
     face: apparenceChoisie,
     flyBrain: !!$('#cCerveau').checked,
+    ...(roleCle ? { role: roleCle } : {}),
     image,
     /* ⛔ LA PAIRE EST GRAVEE AVEC SON STATUT : « unverified » voyage avec l adresse, pour toujours. */
     pair: paireChoisie ? { address: paireChoisie.adr, symbol: paireChoisie.symbole,
@@ -4711,9 +4795,15 @@ function majFraisEtRecap() {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte });
       const toL = String(tx.to || '').toLowerCase();
       const estCreate = toL === String(FACTORY).toLowerCase() || toL === String(CREATE_ROUTER).toLowerCase();
+      const roleTxt = (() => {
+        const c = $('#cRole') && $('#cRole').value;
+        const m = METIERS.find((x) => x.cle === c);
+        return m ? 'Role: ' + m.titre + ' (engraved in metadata)' : null;
+      })();
       const extra = estCreate ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
         'Supply: 1,000,000,000, sealed — all to you',
         'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
+        ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Via CreateRouter — life fee ≈ $1 ETH (birth, oracle) to fee wallet only after create succeeds; no token mint split'] : [])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
@@ -4848,7 +4938,13 @@ async function creerBlock() {
     const faceGravee = { ...apparenceChoisie };
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to, data: calldata, value });
-    if (rc.etat === 'CONFIRME' && adresseCreee) noterFace(adresseCreee, faceGravee);
+    if (rc.etat === 'CONFIRME' && adresseCreee) {
+      noterFace(adresseCreee, faceGravee);
+      const roleCle = $('#cRole') && METIERS.some((x) => x.cle === $('#cRole').value) ? $('#cRole').value : null;
+      if (roleCle) {
+        try { localStorage.setItem(CLE_ROLE + String(adresseCreee).toLowerCase(), roleCle); } catch (e) { /* role de la page seulement */ }
+      }
+    }
     const lien = rc.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rc.hash)
       + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
     if (rc.etat === 'CONFIRME') {
@@ -5412,6 +5508,7 @@ if (RESEAUX[chaineLien]) CHAINE = chaineLien;
 /* ── Create ─────────────────────────────────────────────────────────────────────────────────── */
 construireReglages();
 peindrePaires();
+peindreRolesCreate();
 peindreApercuCreation();
 $('#cPaire').addEventListener('change', majPaire);
 $('#cPaireAutre').addEventListener('input', majPaire);
@@ -5421,6 +5518,7 @@ $('#cNom').addEventListener('input', peindreApercuCreation);
 $('#cSel').addEventListener('input', majFraisEtRecap);
 $('#cSelNouveau').addEventListener('click', nouveauSel);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
+$('#cRole').addEventListener('change', () => { peindreRolesCreate(); majFraisEtRecap(); });
 $('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
 $('#cCreer').addEventListener('click', () => void creerBlock());
 /* ⛔ PRE-REMPLISSAGE PAR LIEN (Phil, 2026-09-13 : « preenregistre tout » pour creer TBLOCK sur une autre
