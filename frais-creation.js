@@ -48,7 +48,6 @@ export function fraisCreationUsd(chaine) {
  */
 export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, soldeEth = null) {
   const usd = fraisCreationUsd(chaine);
-  const walletCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
   if (usd === 0) {
     return 'No life fee on ' + (nomReseau || 'this network') + ' — testnet blocks are free. '
       + 'One signature: the creation itself.';
@@ -56,11 +55,11 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   /* ⛔ Grok Super P0 2026-09-14: jamais CTA « $1 » sans wei mesure; prix illu = Create ferme. */
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
     return 'Life-fee price unread — Create closed. Need a measured ETH amount ≈ $' + usd
-      + ' to ' + walletCourt + ' (Uniswap v4 median). No silent micro-ETH fallback. Life fee ≠ automatic buyback.';
+      + ' · Fees for BaseAPP Holders (Uniswap v4 median). No silent micro-ETH fallback. Life fee ≠ automatic buyback.';
   }
   let base = 'Life fee (birth): ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
-    + '/ETH median) → ' + walletCourt
+    + '/ETH median) · Fees for BaseAPP Holders'
     + '. One signature: CreateRouter (life fee ETH only after create succeeds — revert refunds you). Life fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
@@ -80,18 +79,17 @@ export function fraisLancementUsd(chaine) {
  */
 export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei = null, soldeEth = null) {
   const usd = fraisLancementUsd(chaine);
-  const walletCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
   if (usd === 0) {
     return 'No Launch life fee on ' + (nomReseau || 'this network') + ' — Practice wake is free.';
   }
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
     return 'Life-fee price unread — Launch closed. Need a measured ETH amount ≈ $' + usd
-      + ' to ' + walletCourt + ' (Uniswap v4 median). Sleep stays free until Launch pays life.';
+      + ' · Fees for BaseAPP Holders (Uniswap v4 median). Sleep stays free until Launch pays life.';
   }
   let base = 'Life fee (Launch / stay alive): ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
-    + '/ETH median) → ' + walletCourt
-    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified at fee wallet before Launch. Same wallet as Create birth fee. Life fee ≠ automatic buyback.';
+    + '/ETH median) · Fees for BaseAPP Holders'
+    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified for BaseAPP Holders before Launch. Same path as Create birth fee. Life fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Your ETH balance is below the life fee, so Launch cannot start.';

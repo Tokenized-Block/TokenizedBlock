@@ -1,24 +1,24 @@
 {
   "schema": "tblock-brain-agent/1",
-  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state \u2014 brains run in the browser.",
+  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state — brains run in the browser.",
   "live_facts": {
     "where": "Browser only, after Brain AI tab has beaten at least once for a block",
     "window": "window.__TB_BRAIN_SNAPSHOT__",
-    "download": "Brain AI \u2192 Export brain facts (JSON file)",
+    "download": "Brain AI → Export brain facts (JSON file)",
     "dom": "#tbBrainJson inside #tbBrainDetails (summary updates each beat)",
-    "localStorage": "tb-brain-last (last beat JSON \u2014 same schema as snapshot)"
+    "localStorage": "tb-brain-last (last beat JSON — same schema as snapshot)"
   },
   "curl": {
     "this_file": "curl -sS https://tokenized-block.up.railway.app/brain-agent.json",
     "app_tip": "curl -sS https://tokenized-block.up.railway.app/app.html | rg 'data-build='",
     "module": "curl -sS https://tokenized-block.up.railway.app/export-cerveau.js | head",
-    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz \u2014 that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
+    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz — that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
   },
   "zero1": {
-    "read": "Open MAIN \u2192 Brain AI \u2192 pick block \u2192 let it beat \u2192 read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
-    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture \u2014 never invent mood/phase/advice",
-    "ensemble_calm_example": "phase CALME + symmetric gauche_hz\u2248droite_hz + |virage|\u22480 \u2192 balanced calm ensemble; tick\u2265100000 \u2192 continuity product",
-    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via / liquidite (StateView getLiquidity as decimal string) \u2014 from profile market read when same block was opened; null if unread"
+    "read": "Open MAIN → Brain AI → pick block → let it beat → read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
+    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture — never invent mood/phase/advice",
+    "ensemble_calm_example": "phase CALME + symmetric gauche_hz≈droite_hz + |virage|≈0 → balanced calm ensemble; tick≥100000 → continuity product",
+    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via / liquidite (StateView getLiquidity as decimal string) — from profile market read when same block was opened; null if unread"
   },
   "snapshot_schema": "tblock-brain-snapshot/1",
   "fields": [
@@ -49,32 +49,32 @@
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2185",
-  "hard_objective": "Real protocol fees \u2192 0x37eb\u2026. Brain picker + Export (2150). Bug-sweep 2170. QA+ 2185: Buy\u00b7Sell Exit tab never blank; hook via chip strips pool-fee 0% noise; trust badge spacing.",
+  "tip": "20260915-2200",
+  "hard_objective": "Fees for BaseAPP Holders (fee sinks unchanged). Public fee framing tip 2200 — no 0x37eb CV in live UI. Keep creator+holders on hook 1%/2%. Brain picker + Export (2150). Bug-sweep 2170. QA+ 2185 Exit honesty.",
   "locked_liq": {
-    "launch_lp": "Dead-address owner \u2014 permanently locked; nobody can withdraw Launch LP.",
-    "add_liquidity_later": "Position belongs to the wallet that added \u2014 withdrawable anytime. Not forever-locked.",
-    "do_not_claim": "Do not tell users every TB LP is permanently locked. Launch lock \u2260 later Add.",
-    "not_zero_fee": "TB is fee-opposite to OpenLaunch: life Create/Launch, hook 2%, app 0.5% \u2192 fee_wallet. Never market zero platform fee."
+    "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
+    "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
+    "do_not_claim": "Do not tell users every TB LP is permanently locked. Launch lock ≠ later Add.",
+    "not_zero_fee": "TB is fee-opposite to OpenLaunch: life Create/Launch, hook 2%, app 0.5% · Fees for BaseAPP Holders. Never market zero platform fee."
   },
   "trust_facts": {
-    "trusted_means": "Browser-local Keep only when CreateRouter-paid create OR TbFeeHook pool \u2014 not a score, not KYC.",
-    "fee_honest_path": "Trusted / Launch / Deepen TBLOCK \u2192 fees to fee_wallet",
-    "holders": "Use chain Transfer window + vitalite porteurs when measured \u2014 never invent holder counts or trust scores.",
-    "profile_panel": "#pTrustFacts \u2014 holders (nourriture window), hooked/unhooked, Trusted, origin; CTA \u2192 Wake/Launch or Buy/Sell",
-    "funnel": "Dormant \u2192 Launch (life fee + hook). Live \u2192 in-app Buy/Sell 0.5%. Never zero platform fee."
+    "trusted_means": "Browser-local Keep only when CreateRouter-paid create OR TbFeeHook pool — not a score, not KYC.",
+    "fee_honest_path": "Trusted / Launch / Deepen TBLOCK · Fees for BaseAPP Holders",
+    "holders": "Use chain Transfer window + vitalite porteurs when measured — never invent holder counts or trust scores.",
+    "profile_panel": "#pTrustFacts — holders (nourriture window), hooked/unhooked, Trusted, origin; CTA → Wake/Launch or Buy/Sell",
+    "funnel": "Dormant → Launch (life fee + hook). Live → in-app Buy/Sell 0.5% · Fees for BaseAPP Holders. Never zero platform fee."
   },
   "onchain_tasks": {
     "schema": "tblock-brain-tasks/1",
     "module": "/brain-tasks.js",
     "window": "window.__TB_BRAIN_TASKS__",
-    "ui": "Brain AI \u2192 Tasks details (#tbTasksDetails)",
+    "ui": "Brain AI → Tasks details (#tbTasksDetails)",
     "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
     "split": {
-      "full_brain": "OFFCHAIN browser 128 LIF \u2014 mood/phase/journal \u2014 never LLM",
-      "decision_circuit": "ONCHAIN Base \u2014 32 recorded signals \u2192 integer 0 refuse / 1 dinner served",
+      "full_brain": "OFFCHAIN browser 128 LIF — mood/phase/journal — never LLM",
+      "decision_circuit": "ONCHAIN Base — 32 recorded signals → integer 0 refuse / 1 dinner served",
       "evidence": "keccak256(canonical evidence) linked per receipt",
-      "lock_on_accept": "forever \u2192 dead/locker (OL idea on Base) \u2014 one offering at a time"
+      "lock_on_accept": "forever → dead/locker (OL idea on Base) — one offering at a time"
     },
     "signals": 32,
     "circuit_version": "tblock-offer-circuit/1",
@@ -92,23 +92,23 @@
       },
       {
         "id": "offer_food",
-        "fee": "gas (+ optional life dust \u2192 fee_wallet)",
+        "fee": "gas (+ optional life dust · Fees for BaseAPP Holders)",
         "signs": true,
         "decision": "0|1"
       },
       {
         "id": "trade_tblock",
-        "fee": "0.5% \u2192 fee_wallet",
+        "fee": "0.5% · Fees for BaseAPP Holders",
         "signs": true
       },
       {
         "id": "launch_wake",
-        "fee": "\u2248$1 ETH life \u2192 fee_wallet",
+        "fee": "≈$1 ETH life · Fees for BaseAPP Holders",
         "signs": true
       },
       {
         "id": "feed_trusted",
-        "fee": "gas + 1000 TBLOCK if paid msg \u2192 fee_wallet",
+        "fee": "gas + 1000 TBLOCK if paid msg · Fees for BaseAPP Holders",
         "signs": true
       },
       {
@@ -117,6 +117,6 @@
         "signs": true
       }
     ],
-    "deploy_status": "schema + honesty UI stub \u2014 OfferCircuit not deployed this tip"
+    "deploy_status": "schema + UI ready — OfferCircuit ships in a follow-up"
   }
 }

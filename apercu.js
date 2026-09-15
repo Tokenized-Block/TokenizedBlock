@@ -39,7 +39,7 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
   const V = V4_ADRESSES[Number(chaine)] || {};
   const connus = [
     [compte, 'you'], [jeton, symbole ? 'the block ' + symbole : 'this block'],
-    [FEE_WALLET, 'TokenizedBlock fee wallet'], [CREATE_ROUTER, 'TB CreateRouter'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
+    [FEE_WALLET, 'Fees for BaseAPP Holders'], [CREATE_ROUTER, 'TB CreateRouter'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
     [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'], [ROUTEUR_SWAP[Number(chaine)], 'Uniswap router'],
     [PROPRIETAIRE_PERMANENT, 'dead address (nobody)'],
   ];
@@ -91,10 +91,10 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Permit2 approval', lignes };
   }
   if (sel === S.execute && ROUTEUR_SWAP[Number(chaine)] && to === ROUTEUR_SWAP[Number(chaine)].toLowerCase()) {
-    lignes.push('Swaps through the Uniswap v4 router. The amounts, the minimum you accept and the 0.5 % TokenizedBlock fee are listed with this transaction.');
+    lignes.push('Swaps through the Uniswap v4 router. The amounts, the minimum you accept and the 0.5 % · Fees for BaseAPP Holders are listed with this transaction.');
     const frais = FEE_WALLET.slice(2).toLowerCase();
-    lignes.push(data.includes(frais) ? 'Fee recipient inside this transaction: TokenizedBlock fee wallet ' + court(FEE_WALLET.toLowerCase())
-      : 'No TokenizedBlock fee inside this transaction.');
+    lignes.push(data.includes(frais) ? 'Fee recipient inside this transaction: Fees for BaseAPP Holders'
+      : 'No BaseAPP Holders fee inside this transaction.');
     return { etat: 'LUE', action: 'Swap', lignes };
   }
   if (sel === S.create && to === FACTORY.toLowerCase()) {
@@ -102,7 +102,7 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Create a block', lignes };
   }
   if (sel === S.createPaid && to === String(CREATE_ROUTER).toLowerCase()) {
-    lignes.push('Creates via CreateRouter: sealed 1B all to you; life fee ≈ $1 ETH (birth, USDC/ETH oracle) forwarded to the fee wallet only after create succeeds.');
+    lignes.push('Creates via CreateRouter: sealed 1B all to you; life fee ≈ $1 ETH (birth, USDC/ETH oracle) · Fees for BaseAPP Holders only after create succeeds.');
     return { etat: 'LUE', action: 'Create a block (life fee)', lignes };
   }
   /* Native ETH transfer (no calldata) — Launch life fee → FEE_WALLET. */

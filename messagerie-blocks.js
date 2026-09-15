@@ -56,7 +56,7 @@ export function lireMessageBlock(texte) {
  */
 export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = null }) {
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
-  if (String(compte).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REFUSE', pourquoi: 'the fee wallet cannot send paid messages to itself' };
+  if (String(compte).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REFUSE', pourquoi: 'BaseAPP Holders fee path cannot send paid messages to itself' };
   const enc = encoderMessageBlock({ de, a, texte });
   if (enc.etat !== 'OK') return enc;
   if (detientDe === false) return { etat: 'REFUSE', pourquoi: 'you hold none of the block you speak as' };
@@ -85,9 +85,9 @@ export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = n
  */
 export function messageDepuisTransfert(t, tx) {
   if (!t || !tx) return { etat: 'REJETE', pourquoi: 'transaction not read' };
-  if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent to the fee wallet' };
+  if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent as Fees for BaseAPP Holders' };
   if (typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) return { etat: 'REJETE', pourquoi: 'below the message fee' };
-  if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the fee wallet itself' };
+  if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the BaseAPP Holders fee path itself' };
   if (String(tx.to).toLowerCase() !== TBLOCK.toLowerCase()) return { etat: 'NON_LISIBLE', pourquoi: 'not a direct TBLOCK transfer (smart wallet or relay)' };
   if (String(tx.from).toLowerCase() !== String(t.from).toLowerCase()) return { etat: 'REJETE', pourquoi: 'the signer is not the sender of the transfer' };
   const m = lireMemo(tx.input);

@@ -48,7 +48,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Offer food (token)',
     does: 'One offering at a time → 32-signal circuit returns 0 refuse / 1 dinner served; accept may lock forever',
     signs: true,
-    fee: 'gas (+ optional life dust → FEE_WALLET when contract live)',
+    fee: 'gas (+ optional life dust · Fees for BaseAPP Holders when contract live)',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'offer_slot_free',
   },
@@ -57,7 +57,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Trade TBLOCK / block',
     does: 'In-app Buy/Sell — user wallet signs',
     signs: true,
-    fee: '0.5% interface',
+    fee: '0.5% · Fees for BaseAPP Holders',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'market_alive',
   },
@@ -66,7 +66,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Launch / Wake',
     does: 'Life fee then open hooked market',
     signs: true,
-    fee: '≈$1 ETH life',
+    fee: '≈$1 ETH life · Fees for BaseAPP Holders',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'sleep_or_unpaid',
   },
@@ -75,7 +75,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Feed (trusted gesture)',
     does: 'GM / paid TBLOCK message — sensor food (parallel to offer circuit)',
     signs: true,
-    fee: 'gas + 1000 TBLOCK if paid message',
+    fee: 'gas + 1000 TBLOCK if paid · Fees for BaseAPP Holders',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'awake_or_hungry',
   },
@@ -275,7 +275,7 @@ export function construireRecuOffre({
     tx,
     fee_sink: FEE_WALLET_TASKS,
     lock: verdict.decision === 1
-      ? { forever: true, to: LOCK_FOREVER, status: tx ? 'locked' : 'pending_contract', note: 'OL-style forever lock adapted to Base — contract not deployed in this P0' }
+      ? { forever: true, to: LOCK_FOREVER, status: tx ? 'locked' : 'pending_contract', note: 'Forever lock on accept — offer contract follow-up' }
       : null,
     one_offering_at_a_time: true,
   };
@@ -320,7 +320,7 @@ export function resumeTaches(snap, opts = {}) {
   });
   return {
     schema: TASKS_SCHEMA,
-    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Fees → FEE_WALLET when tools execute.',
+    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Fees for BaseAPP Holders when tools execute.',
     fee_wallet: FEE_WALLET_TASKS,
     neuron_mass_band: band,
     neurones_offchain: 128,
