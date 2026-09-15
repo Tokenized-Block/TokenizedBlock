@@ -1,5 +1,9 @@
 # CreateRouter — integrator pack (Base mainnet)
 
+> **HARD RULE 2026-09-15:** Target FEE_WALLET = `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` only.  
+> Live router below still returns legacy `0x37eb…` via `FEE_WALLET()` — **redeploy pending** (see `/workspace/DIG-FEE-A6CF-HARD-RULE-2026-09-15.md`). After redeploy, update this table to the NEW CreateRouter address + a6cf.
+
+
 **Audience:** other apps that create TB / B20 tokens and must pay the life fee.  
 **Stamp:** 2026-09-14 night CEST · **Do not deploy hook.**
 

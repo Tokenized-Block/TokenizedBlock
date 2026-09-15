@@ -13,7 +13,7 @@ export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
 /** TbFeeHook LIVE on Base (CREATE2 salt 38, tx 0xb7413aa4…88c3, 2026-09-15). */
 export const HOOK_PREVU = '0x34E3920fF955CA062Cf5A8372D4CC5C653fB6044';
-/* HARD RULE: only a6cf. Hook FEE_WALLET() eth_call still 0x37eb — must new CREATE2; 37eb receives NOTHING. */
+/* HARD RULE: only a6cf. Live hook FEE_WALLET()=0x37eb. Pending CREATE2 0xaa6D…2044 salt 56999 — flip HOOK_PREVU only after code live. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 
 /** Destinataires et montants de la frappe initiale d un nouveau block — 100% creator. */
