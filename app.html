@@ -605,7 +605,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
-      <!-- ⛔ P0 tip 2140: tabs — wall of text → Costs / Sign / Notes. Same fee truth → 0x37eb. -->
+      <!-- ⛔ P0 tip 2140→2250: tabs — Costs / Sign / Notes. App sinks → FEE_WALLET (a6cf); CreateRouter/hook still LEGACY 0x37eb. UI copy: Fees for BaseAPP Holders. -->
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2245">Build <code>20260915-2245</code> · Swaps·PnL on profile · Fees for BaseAPP Holders · no fee-wallet CV.</p>
+      <p class="note" data-build="20260915-2250">Build <code>20260915-2250</code> · Swaps·PnL · fee comment scrub · Fees for BaseAPP Holders · no fee-wallet CV.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1117,7 +1117,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
           <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
         </div>
-        <!-- ⛔ P0 2026-09-15: ETH→USDC exit — 0.5% → 0x37eb (external DEX pays wallet nothing). Quoter-gated. -->
+        <!-- ⛔ P0 tip 2250: ETH→USDC exit — 0.5% → FEE_WALLET (a6cf); external DEX pays wallet nothing. Quoter-gated. -->
         <div class="pActions" id="peUsdcRow" style="grid-template-columns:1fr 1fr;margin-top:8px" hidden>
           <label class="champ">ETH → USDC (exit)<input id="peUsdcEth" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
           <button class="bouton sec" id="peUsdcPrep" type="button" style="align-self:end">Prepare ETH→USDC</button>
@@ -2985,7 +2985,7 @@ function feeWalletDansCalldata(tx) {
   return Boolean(w && d.includes(w));
 }
 
-/** Prefill ETH→USDC exit + CTA after a Sell that pays out ETH (second 0.5% → 0x37eb). */
+/** Prefill ETH→USDC exit + CTA after a Sell that pays out ETH (second 0.5% → FEE_WALLET / a6cf). */
 function proposerSortieUsdcApresVente(ethWei) {
   if (CHAINE !== 8453) return;
   let wei = ethWei;
@@ -6385,7 +6385,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2245',
+    build: '20260915-2250',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
