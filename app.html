@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2342">Build <code>20260915-2342</code> · fees→a6cf · Dex→Initialize pool key (fee/spacing outside app) · Launch hooked.</p>
+      <p class="note" data-build="20260915-2343">Build <code>20260915-2343</code> · fees→a6cf · fix V4_ADRESSES.poolm for Dex pool discover · Launch hooked.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -2990,24 +2990,26 @@ function poolDecouvertPour(adr) {
 async function enrichirMarcheSiDecouvert(adr, v) {
   if (!v || v.etat !== 'NON_TROUVEE' || CHAINE !== 8453) return v;
   let ext = poolDecouvertPour(adr);
+  /* tip 2343: PoolManager lives on V4_ADRESSES, NOT RESEAUX — RESEAUX.poolm was always undefined (BRAINARM stayed dormant). */
+  const V4 = V4_ADRESSES[CHAINE];
+  const poolm = V4 && V4.poolm;
   if (!ext) {
     try {
-      const V = RESEAUX[CHAINE];
       const headHex = await rpc('eth_blockNumber', []);
       const head = parseInt(headHex, 16);
-      if (Number.isSafeInteger(head) && V && V.poolm) {
+      if (Number.isSafeInteger(head) && poolm) {
         const de = Math.max(0, head - 8000);
-        const d = await decouvrirPools({ rpc, poolManager: V.poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 180 });
+        const d = await decouvrirPools({ rpc, poolManager: poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 180 });
         (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
         ext = poolDecouvertPour(adr);
       }
     } catch (_) { /* keep trying Dex path */ }
   }
-  /* tip 2342: Dex pair → Initialize(topic1=poolId) — catches fee/spacing outside app keys (BRAINARM 375/4). */
+  /* tip 2342/2343: Dex pair → Initialize(topic1=poolId) — fee/spacing outside app keys (BRAINARM 375/4). */
   if (!ext || !ext.cle) {
     try {
-      const V = RESEAUX[CHAINE];
-      const dex = await lirePoolParDexScreener({ rpc, poolManager: V.poolm, jeton: adr });
+      if (!poolm) throw new Error('no PoolManager on this chain');
+      const dex = await lirePoolParDexScreener({ rpc, poolManager: poolm, jeton: adr });
       if (dex && dex.cle) {
         poolsLive.set(dex.poolId, dex);
         ext = { ...dex, confiance: dex.confiance || confianceDe(dex.cle), _score: 150 };
