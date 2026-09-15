@@ -91,12 +91,20 @@ export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to
   const garde = await gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu: compte });
   if (!garde.ok) return { etat: garde.etat, pourquoi: garde.pourquoi };
 
+  /* tip 2345: HARD BUG for "works for us, not others" — box Rabby still opens Sign when
+   * node estimateGas/sim fails; old app returned ESTIMATION_IMPOSSIBLE and never opened the wallet.
+   * Prefer estimate; on failure use a ceiling so the USER wallet decides (same as smoke path). */
   let estimation;
+  let estimateFallback = false;
   try { estimation = BigInt(await rpc('eth_estimateGas', [{ from: compte, to, data, value }])); }
   catch (e) {
-    return { etat: 'ESTIMATION_IMPOSSIBLE',
-      pourquoi: 'the chain would not estimate this — it would likely fail, so nothing was sent. '
-        + String((e && e.message) || e) };
+    estimateFallback = true;
+    const dataStr = String(data || '0x').toLowerCase();
+    const plainEth = dataStr === '0x' || dataStr === '0x0';
+    const createPaid = dataStr.startsWith('0x1d03fb54');
+    if (plainEth) estimation = 65000n;
+    else if (createPaid) estimation = 450000n; /* measured ~305k createPaid Base */
+    else estimation = 900000n; /* v4 swap / Launch ceiling */
   }
   const gaz = estimation * 125n / 100n;
 
