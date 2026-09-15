@@ -40,12 +40,17 @@
     "ensemble_note",
     "entree",
     "marche.liquidite",
-    "marche.liqOrdre"
+    "marche.liqOrdre",
+    "tasks",
+    "offer_preview",
+    "signals32",
+    "decision",
+    "evidence_hash"
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2010",
-  "hard_objective": "Real fees to FEE_WALLET 0x37eb…580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means. OL UX = honesty only, not zero-fee.",
+  "tip": "20260915-2025",
+  "hard_objective": "Real fees to FEE_WALLET 0x37eb…580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means. OL UX = honesty only, not zero-fee. Profile holders/trust facts funnel → Launch/Buy.",
   "locked_liq": {
     "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
@@ -55,6 +60,63 @@
   "trust_facts": {
     "trusted_means": "Browser-local Keep only when CreateRouter-paid create OR TbFeeHook pool — not a score, not KYC.",
     "fee_honest_path": "Trusted / Launch / Deepen TBLOCK → fees to fee_wallet",
-    "holders": "Use chain Transfer window + vitalite porteurs when measured — never invent holder counts or trust scores."
+    "holders": "Use chain Transfer window + vitalite porteurs when measured — never invent holder counts or trust scores.",
+    "profile_panel": "#pTrustFacts — holders (nourriture window), hooked/unhooked, Trusted, origin; CTA → Wake/Launch or Buy/Sell",
+    "funnel": "Dormant → Launch (life fee + hook). Live → in-app Buy/Sell 0.5%. Never zero platform fee."
+  },
+  "onchain_tasks": {
+    "schema": "tblock-brain-tasks/1",
+    "module": "/brain-tasks.js",
+    "window": "window.__TB_BRAIN_TASKS__",
+    "ui": "Brain AI → Tasks details (#tbTasksDetails)",
+    "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+    "split": {
+      "full_brain": "OFFCHAIN browser 128 LIF — mood/phase/journal — never LLM",
+      "decision_circuit": "ONCHAIN Base — 32 recorded signals → integer 0 refuse / 1 dinner served",
+      "evidence": "keccak256(canonical evidence) linked per receipt",
+      "lock_on_accept": "forever → dead/locker (OL idea on Base) — one offering at a time"
+    },
+    "signals": 32,
+    "circuit_version": "tblock-offer-circuit/1",
+    "receipt_schema": "tblock-offer-receipt/1",
+    "tasks": [
+      {
+        "id": "export_snapshot",
+        "fee": "none",
+        "signs": false
+      },
+      {
+        "id": "decision_receipts",
+        "fee": "none",
+        "signs": false
+      },
+      {
+        "id": "offer_food",
+        "fee": "gas (+ optional life dust → fee_wallet)",
+        "signs": true,
+        "decision": "0|1"
+      },
+      {
+        "id": "trade_tblock",
+        "fee": "0.5% → fee_wallet",
+        "signs": true
+      },
+      {
+        "id": "launch_wake",
+        "fee": "≈$1 ETH life → fee_wallet",
+        "signs": true
+      },
+      {
+        "id": "feed_trusted",
+        "fee": "gas + 1000 TBLOCK if paid msg → fee_wallet",
+        "signs": true
+      },
+      {
+        "id": "record_memory",
+        "fee": "gas only",
+        "signs": true
+      }
+    ],
+    "deploy_status": "schema + honesty UI stub — OfferCircuit not deployed this tip"
   }
 }

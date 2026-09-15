@@ -658,6 +658,16 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
       </details>
+      <!-- ⛔ P0 2026-09-15: Tasks — degen-fly offer loop honesty. Full brain OFFCHAIN; 32-signal 0/1 ONCHAIN (schema stub). -->
+      <details class="bDetail" id="tbTasksDetails" style="margin-top:8px" open>
+        <summary class="note" style="cursor:pointer" id="tbTasksSummary">Tasks · on-chain tools (honesty)</summary>
+        <p class="note" id="tbTasksHonesty">Full fly brain = <b>128 LIF offchain</b> (not an LLM). Offer food → <b>32 recorded signals</b> → integer circuit returns <b>0 refuse</b> / <b>1 dinner served</b>. Accepted food may lock forever (dead-address / locker — Base). One offering at a time. Fees / life → <code>0x37eb…580a</code>.</p>
+        <ul class="pmLignes" id="tbTasksList"></ul>
+        <p class="note" style="margin-top:8px"><b>Decision receipts</b> — journal facts + offer preview (evidence_hash = keccak256(canonical evidence) · contract lock pending).</p>
+        <ul class="pmLignes" id="tbTaskLog"></ul>
+        <pre class="mono" id="tbOfferReceipt" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
+        <p class="note" id="tbTasksNote">Contract not deployed this tip — schema + UI stub only. Sibling owns remaining fee volume gaps.</p>
+      </details>
       <!-- ⛔ P0 2026-09-15: write what Brain SAYS so Zero 1 / tools can read facts — not invent mood.
            Live dump = window.__TB_BRAIN_SNAPSHOT__ + #tbBrainJson; download = Export. Server has no neurons. -->
       <div class="rang" style="margin-top:10px">
@@ -869,7 +879,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2010">Build <code>20260915-2010</code> · OL locked-liq honesty chip · fees → 0x37eb · tip surfaces aligned.</p>
+      <p class="note" data-build="20260915-2035">Build <code>20260915-2035</code> · Brain Tasks + 32-signal offer circuit schema · fees → 0x37eb · tip surfaces aligned.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older. <b>All</b> still hides GM/NOTE bursts (chip GM); brain mood lines are browser-local under Blocks talking (1 chip / token).</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1031,6 +1041,13 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <!-- ⛔ P0 2026-09-15: hooked vs legacy pool on profile — fee path honesty. -->
       <p class="note" id="pMarcheHook" hidden></p>
+      <!-- ⛔ P0 tip 2025: OL-inspired holders / trust facts — measured only; CTA → Launch or Buy (fee funnel). -->
+      <div class="pJeu" id="pTrustFacts" hidden>
+        <div class="pJeuTete"><span class="pBadge">Holders · trust facts</span><span class="pPV" id="pTfBadge">measured only</span></div>
+        <p class="pProchain" id="pTfIntro">OL-style density, TB fee path: facts from this visit’s chain reads — never a score.</p>
+        <ul class="pmLignes" id="pTfLignes"></ul>
+        <p class="note" id="pTfCta"></p>
+      </div>
       <div class="pActions">
         <button class="bouton" id="pEnvoyer" type="button">Send from this block</button>
         <button class="bouton sec" id="pPartager" type="button">Share profile</button>
@@ -1236,6 +1253,7 @@ import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal } from './journal-cerveau.js';
 import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
+import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT } from './brain-tasks.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -2576,7 +2594,8 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
  *    comme un zero ; « not read » dit que c est nous qui n avons pas vu, pas le block qui n a rien.
  * ⛔ UN JETON PAR OUVERTURE, meme discipline que le Wallet : ouvrir un deuxieme profil pendant que
  *    le premier se lit ne doit pas laisser les chiffres de l un s ecrire sous le visage de l autre.
- * ⚠️ CE QUE LE PROFIL NE MONTRE PAS ENCORE : le createur, les detenteurs, l historique des achats.
+ * ⚠️ CE QUE LE PROFIL NE MONTRE PAS ENCORE : le createur, l historique des achats.
+ *    Detenteurs = fenetre Transfer recente (nourriture) quand mesuree — tip 2025 trust facts.
  *    Il faut un index des evenements — c est le chantier du fil Social. */
 let jetonProfil = 0;
 /* vrai tant qu un profil se lit : la boucle des vies de la map lui cede le noeud */
@@ -2954,6 +2973,60 @@ function peindreMarcheHook(v) {
   }
 }
 
+
+/** ⛔ P0 tip 2025: OL-inspired holders / trust facts on profile — measured only; funnel → Launch / Buy. */
+function peindreTrustFacts(adr, v, origine) {
+  const box = $('#pTrustFacts');
+  const ul = $('#pTfLignes');
+  const cta = $('#pTfCta');
+  const badge = $('#pTfBadge');
+  if (!box || !ul || !cta) return;
+  box.hidden = false;
+  const etat = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
+  const info = (v && etat === 'LUE') ? infoHookMarche(v) : { hooked: false, isTbFeeHook: false, via: null };
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr || '').toLowerCase());
+  const n = h && h.nourriture && h.nourriture.etat === 'LUE' ? h.nourriture : null;
+  const trusted = estTrusted(adr);
+  const madeHere = origine === 'TOKENIZEDBLOCK';
+  const lignes = [];
+  if (n) {
+    lignes.push('Holders reached (recent Transfer window, creator excluded): <b>' + n.detenteurs + '</b> · transfers ' + n.gm
+      + (n.messages ? ' · memos ' + n.messages : '') + ' — not a lifetime census.');
+  } else {
+    lignes.push('Holders: <b>not measured this visit</b> (food/Transfer window unread). Never invent a count — open Brain AI or wait for a food read.');
+  }
+  if (etat === 'LUE' && info.isTbFeeHook) {
+    lignes.push('Pool: <b>✦ TbFeeHook</b> — enduring 2&nbsp;% → <code>0x37eb…580a</code> + 1&nbsp;% creator on later swaps (app + external).');
+  } else if (etat === 'LUE' && info.hooked) {
+    lignes.push('Pool: hooked, but <b>not</b> TbFeeHook — TB fee split does not apply on this pool id.');
+  } else if (etat === 'LUE') {
+    lignes.push('Pool: <b>unhooked</b> (legacy). In-app Buy/Sell still 0.5&nbsp;% → fee wallet; enduring 2&nbsp;% needs a <b>new</b> hooked Launch elsewhere.');
+  } else if (etat === 'NON_TROUVEE') {
+    lignes.push('Market: <b>dormant</b> — no pool yet. Wake/Launch here pays life fee + opens hooked pool (2&nbsp;% enduring).');
+  } else {
+    lignes.push('Market: <b>unread</b> this visit — trust path not judged from a failed read.');
+  }
+  lignes.push(trusted
+    ? 'Trusted: <b>✦ yes</b> (browser-local Keep — CreateRouter paid or TbFeeHook — not a score, not KYC).'
+    : 'Trusted: no Keep yet. Mark Trusted only on CreateRouter-paid create or TbFeeHook pool — fee-honest path only.');
+  lignes.push(madeHere
+    ? 'Origin: face engraved via <b>TokenizedBlock Create</b> (CreateRouter life fee path when paid here).'
+    : 'Origin: created elsewhere / face unread — unpaid factory until Launch here.');
+  ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
+  if (badge) {
+    badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? 'hooked path' : 'measured only');
+  }
+  if (etat === 'NON_TROUVEE') {
+    cta.innerHTML = '<b>Next → Wake / Launch</b>: life fee ≈ $1 ETH → <code>0x37eb…580a</code>, then hooked pool (2&nbsp;% enduring). Locked Launch LP ≠ later Add (withdrawable).';
+  } else if (etat === 'LUE') {
+    cta.innerHTML = '<b>Next → Buy / Sell in-app</b>: 0.5&nbsp;% → <code>0x37eb…580a</code>'
+      + (info.isTbFeeHook ? ' · hook 2&nbsp;% on every swap' : ' (pool unhooked — app fee still applies)')
+      + '. Deepen LP if quotes thin. External DEX pays this wallet 0.';
+  } else {
+    cta.innerHTML = '<b>Next → Read its market again</b>, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths → <code>0x37eb…580a</code>.';
+  }
+}
+
 function peindreJeu(mcDevise, devise, etat) {
   /* ⛔⛔ L ECHELLE DES PV ET DES PALIERS EST EN DOLLARS (`pointsdevie.js`). Jusqu au 2026-09-13 on lui
    * passait la capitalisation EN ETH : « Sprout at 1,000 » voulait dire 1 000 ETH. Conversion par le
@@ -3040,6 +3113,9 @@ async function lireProfil(adr, sym, perime) {
   $('#pLancement').hidden = true;
   $('#pReveiller').hidden = true;
   const pmh0 = $('#pMarcheHook'); if (pmh0) { pmh0.hidden = true; pmh0.textContent = ''; }
+  const ptf0 = $('#pTrustFacts'); if (ptf0) ptf0.hidden = true;
+  const ptfL = $('#pTfLignes'); if (ptfL) ptfL.innerHTML = '';
+  const ptfC = $('#pTfCta'); if (ptfC) ptfC.textContent = '';
   $('#pEchange').hidden = true;
   $('#pLiquidite').hidden = true;
   $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
@@ -3195,6 +3271,7 @@ async function lireProfil(adr, sym, perime) {
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
   /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (TbFeeHook) or legacy unhooked. */
   peindreMarcheHook(v);
+  peindreTrustFacts(adr, v, origineProfil);
   if (etatVieProfil === 'LUE') {
     const bb = estWalletDeFrais(compte);
     const hkInfo = infoHookMarche(v);
@@ -5631,6 +5708,59 @@ function ecrireJournal(adr, vu, h) {
   try { localStorage.setItem(CLE_JOURNAL + String(adr).toLowerCase(), JSON.stringify(j)); } catch (e) { /* journal de la page seulement */ }
   peindreJournal(adr, j);
 }
+
+function peindreTasks(snap) {
+  const list = $('#tbTasksList');
+  const log = $('#tbTaskLog');
+  const pre = $('#tbOfferReceipt');
+  const sum = $('#tbTasksSummary');
+  const note = $('#tbTasksNote');
+  if (!list) return;
+  let resume = null;
+  try { resume = resumeTaches(snap || window.__TB_BRAIN_SNAPSHOT__ || { journal: journalLu(brainAdr) }, { offerBusy: false }); }
+  catch (e) { resume = null; }
+  if (!resume) {
+    list.innerHTML = '<li>Tasks unread — open a block and let it beat once.</li>';
+    if (log) log.innerHTML = '';
+    if (sum) sum.textContent = 'Tasks · on-chain tools (honesty)';
+    return;
+  }
+  list.innerHTML = resume.tasks.map((t) => {
+    const fee = t.fee_sink ? (t.fee + ' → 0x37eb…580a') : t.fee;
+    const st = t.allowed ? '✅' : '🔒';
+    const why = t.pourquoi ? ' — ' + enTexte(t.pourquoi) : '';
+    return '<li>' + st + ' <b>' + enTexte(t.label) + '</b> <span class="filS">(' + enTexte(t.id) + (t.signs ? ' · signs' : ' · read') + ' · ' + enTexte(fee) + ')</span>' + why + '</li>';
+  }).join('');
+  if (log) {
+    const lines = [];
+    for (const r of (resume.receipts || []).slice(0, 6)) {
+      lines.push('<li>🧾 beat ' + Number(r.tick).toLocaleString('en-US') + ' · ' + enTexte(r.texte)
+        + '<br><span class="filS">because ' + enTexte(r.parce_que) + '</span></li>');
+    }
+    const op = resume.offer_preview;
+    if (op) {
+      lines.unshift('<li>' + (op.decision === 1 ? '🍽' : '⛔') + ' offer preview · <b>' + enTexte(op.decision_label) + '</b> (score '
+        + op.score + '/' + op.threshold + ') · ' + SIGNALS_COUNT + ' signals · ' + enTexte(CIRCUIT_VERSION)
+        + '<br><span class="filS">' + enTexte(op.pourquoi) + (op.lock ? ' · lock forever → dEaD (pending contract)' : '') + '</span></li>');
+    }
+    log.innerHTML = lines.length ? lines.join('') : '<li>No receipts yet — first beat writes the journal.</li>';
+  }
+  if (pre && resume.offer_preview) {
+    pre.hidden = false;
+    pre.textContent = JSON.stringify(resume.offer_preview, null, 2);
+  }
+  if (sum) {
+    sum.textContent = 'Tasks · band ' + (resume.neuron_mass_band || '?')
+      + ' · ' + SIGNALS_COUNT + '-signal circuit · offchain 128 LIF · '
+      + (resume.offer_preview ? resume.offer_preview.decision_label : 'no preview');
+  }
+  if (note) {
+    note.textContent = 'Schema ' + (resume.schema || '') + ' · circuit ' + CIRCUIT_VERSION
+      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN (stub) · fees → 0x37eb…580a · contract not deployed this tip.';
+  }
+  try { window.__TB_BRAIN_TASKS__ = resume; } catch (e) { /* agent surface */ }
+}
+
 function peindreJournal(adr, j = journalLu(adr)) {
   const icone = { FAIT: '👁', PENSE: '💭', AMELIORER: '🌱' };
   $('#bJournal').innerHTML = j.length ? j.slice().reverse().slice(0, 12).map((e) => '<li>' + (icone[e.genre] || '·') + ' '
@@ -5639,6 +5769,11 @@ function peindreJournal(adr, j = journalLu(adr)) {
   const dernier = j.length ? j[j.length - 1] : null;
   $('#bJournalDernier').textContent = dernier ? (icone[dernier.genre] || '·') + ' ' + dernier.texte : '';
   $('#bJournalResume').textContent = 'Its journal — ' + j.length + ' line(s), open for detail';
+  try {
+    const snap = window.__TB_BRAIN_SNAPSHOT__;
+    if (snap && String(snap.address || '').toLowerCase() === String(adr || '').toLowerCase()) peindreTasks(snap);
+    else peindreTasks({ address: adr, phase: snap && snap.phase, journal: j, tick: snap && snap.tick, marche: snap && snap.marche, nourriture: snap && snap.nourriture, hz: snap && snap.hz, spikes: snap && snap.spikes, memoire: snap && snap.memoire, role: snap && snap.role });
+  } catch (e) { /* tasks panel optional */ }
 }
 /* ⛔ LES REGLES DU BLOCK (choix A de Phil, 2026-09-13) : compteurs d evenements VUS et lignes ecrites, gardes dans ce
  *    navigateur par block. Le moteur (regles-cerveau.js) ne rend que des lignes de journal. */
@@ -5893,7 +6028,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2010',
+    build: '20260915-2035',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -5915,6 +6050,7 @@ function publierSnapshotBrain(vu, h) {
       + (snap.marche && snap.marche.liqOrdre ? ' · L' + snap.marche.liqOrdre : '')
       + ' · localStorage[tb-brain-last]';
   }
+  try { peindreTasks(snap); } catch (e) { /* tasks */ }
   return snap;
 }
 
