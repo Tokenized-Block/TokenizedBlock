@@ -8,7 +8,8 @@
 | | |
 |--|--|
 | **CreateRouter** | `0x34862fF4e76330E55853A371fc245f55f60BfF0a` |
-| **FEE_WALLET** | `0x37eb9b7ce0b51fe12fbf092026e001918128580a` |
+| **FEE_WALLET (target / hard rule)** | `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` |
+| **FEE_WALLET() live eth_call (WRONG until redeploy)** | `0x37eb9b7ce0b51fe12fbf092026e001918128580a` — must receive NOTHING |
 | **Floor** | `0.0003 ETH` (`300000000000000` wei) on-chain |
 | **App target** | ≈ **$1 ETH** (oracle); always `msg.value >= floor` |
 | **Selector** | `createPaid(uint8,bytes32,bytes,bytes[],address)` → **`0x1d03fb54`** |
@@ -36,7 +37,7 @@ function createPaid(
 
 1. Encode `createPaid(variant, salt, params, initCalls, creator)` — selector `0x1d03fb54`.
 2. Send payable tx to `0x34862fF4e76330E55853A371fc245f55f60BfF0a` with `value >= 0.0003 ether` (≈$1 preferred).
-3. Confirm `FEE_WALLET()` on the router equals `0x37eb9b7ce0b51fe12fbf092026e001918128580a`.
+3. Confirm `FEE_WALLET()` on the router equals **`0xa6cf…f5d4`** after redeploy. Live pre-redeploy still returns `0x37eb…` (forbidden sink — dig honesty).
 4. Predict token address with **deployer = router** (CREATE2 salt binds to router, not the EOA).
 5. Do **not** rely on factory-direct creates for paid path honesty.
 

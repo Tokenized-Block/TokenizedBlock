@@ -49,8 +49,8 @@
   ],
   "fee_wallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2250",
-  "hard_objective": "tip 2250 fee-comment scrub. Swaps\u00b7PnL tip 2245 on profile (DexScreener/Gecko measured). Fees for BaseAPP Holders. tip 2220: app fee sinks \u2192 Base smart wallet 0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4 (0.5%/Launch life/paid msg/USDC/OfferCircuit). CreateRouter+TbFeeHook on-chain FEE_WALLET() still immutable legacy 0x37eb \u2014 redeploy dig, do not lie. Public UI: no fee-wallet CV. O5 CURRENT_TOY_V1 \u00b7 O6 Prepare preview+plan \u00b7 no OfferCircuit broadcast.",
+  "tip": "20260915-2260",
+  "hard_objective": "HARD RULE: ALL fees → only 0xa6cf…f5d4; 0x37eb receives NOTHING. tip 2260 pnl whitelist + honesty. tip 2250 scrub. Swaps\u00b7PnL tip 2245 on profile (DexScreener/Gecko measured). Fees for BaseAPP Holders. tip 2220: app fee sinks \u2192 Base smart wallet 0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4 (0.5%/Launch life/paid msg/USDC/OfferCircuit). CreateRouter+TbFeeHook on-chain FEE_WALLET() still immutable legacy 0x37eb \u2014 redeploy dig, do not lie. Public UI: no fee-wallet CV. O5 CURRENT_TOY_V1 \u00b7 O6 Prepare preview+plan \u00b7 no OfferCircuit broadcast.",
   "locked_liq": {
     "launch_lp": "Dead-address owner \u2014 permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added \u2014 withdrawable anytime. Not forever-locked.",
