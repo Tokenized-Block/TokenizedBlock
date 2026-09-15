@@ -11,6 +11,8 @@ export const DECIMALES_FIXES = 18;
 export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 /** TBLOCK, lu dans le log B20Created de la tx 0xda396460…4cf3 (bloc 51 260 745). */
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
+/** TBGAS — Tokenized Gas · MAIN Launch 2026-09-15 hooked HOOK_PREVU → a6cf (tip 2357). */
+export const TBGAS = '0xb200000000000000000000df3ffcd9be89b3843c';
 /** TbFeeHook LIVE on Base — CREATE2 a6cf (salt 56999). FEE_WALLET() = a6cf. */
 export const HOOK_PREVU = '0xaa6D7bD9FC7D394bc717137936f2939834382044';
 /* tip 2300/2356: HOOK_PREVU = 0xaa6D…2044 a6cf. Legacy 0x34E3…6044 still 37eb — unused by new Launch. */

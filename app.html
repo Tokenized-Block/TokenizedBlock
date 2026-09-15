@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2356">Build <code>20260915-2356</code> · Create free · Launch ≈$1+hook · Buy/Sell 0.5% · Costs short.</p>
+      <p class="note" data-build="20260915-2357">Build <code>20260915-2357</code> · Create free · Launch ≈$1+hook · Buy/Sell hooked · Costs short.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -922,7 +922,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
         <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
         <button type="button" class="puce" data-filtre="TRUSTED">✦ Trusted</button>
+        <button type="button" class="puce" data-filtre="HOOKED">🪝 Hooked</button>
       </div>
+      <!-- tip 2357: route volume → hooked / in-app BuySell (TBGAS + TbFeeHook). No fee addr in UI. -->
+      <p class="note" id="sfHookedRoute" hidden></p>
       <!-- ⛔ P0 2026-09-15 tip 1800: dashboard honesty — CreateRouter unused vs Social factory flood.
            Not redundant with per-row 0630 no-launch→Launch nudge: this is the window aggregate. -->
       <p class="note" id="sfCreateFeeHonesty" hidden></p>
@@ -1322,7 +1325,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
 import { completerInscriptionHook } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -3212,6 +3215,10 @@ async function peindrePnlSwaps(adr, perime) {
       note.textContent = (note.textContent || '')
         + ' · ⚠️ Dex chart ≠ fee capture. Launch hooked beside to start chopping.';
       if (badge) badge.textContent = ' · unhooked · $0 fees';
+    } else if (hk && hk.isTbFeeHook && Number(CHAINE) === 8453) {
+      ul.innerHTML = '<li><b>Buy/Sell in-app</b> (0.5%) preferred · Dex on this hooked pool also chops (external volume pays). Unhooked pools elsewhere = $0.</li>'
+        + ul.innerHTML;
+      if (badge) badge.textContent = ' · hooked · Dex chops';
     }
   } catch (_) { /* honesty optional */ }
 }
@@ -3302,11 +3309,12 @@ function peindreTrustFacts(adr, v, origine) {
         + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
         + '<button type="button" class="bouton sec" data-tf-act="hook-launch">Launch hooked (Dex chop)</button></div>';
     } else {
-      cta.innerHTML = '<b>Next</b>: 0.5&nbsp;% · Fees for BaseAPP Holders'
-        + (info.isTbFeeHook ? ' · hook fees to creator + holders' : '')
-        + '. Deepen LP if quotes thin. External DEX pays this wallet 0.'
+      /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
+      cta.innerHTML = info.isTbFeeHook
+        ? ('<b>Trade here</b>: <b>Buy/Sell in-app</b> (0.5% · Fees for BaseAPP Holders) + TbFeeHook chops Dex on this pool. Deepen LP if thin.')
+        : ('<b>Next</b>: 0.5&nbsp;% · Fees for BaseAPP Holders. Deepen LP if quotes thin. External DEX pays this wallet 0.')
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
+        + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell in-app</button>'
         + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
     }
   } else {
@@ -3611,6 +3619,17 @@ async function lireProfil(adr, sym, perime) {
           : '0.5% · Fees for BaseAPP Holders (Dex unhooked = 0 protocol)'));
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
+    /* tip 2357: hooked / TBGAS → surface in-app BuySell (no fee addr). */
+    if (hkInfo.isTbFeeHook || String(adr).toLowerCase() === String(TBGAS).toLowerCase()) {
+      const pe = $('#pEchange');
+      if (pe && !pe.hidden) {
+        try { pe.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+        const badge = $('#peBadge');
+        if (badge && !badge.textContent.includes('hooked')) {
+          badge.textContent = (badge.textContent || 'Buy · Sell') + ' · hooked';
+        }
+      }
+    }
   } else {
     const u = $('#peUsdcPath');
     if (u) {
@@ -3783,6 +3802,22 @@ function filtreLive(e) {
       || (e.type === 'MESSAGE' && (tset.has(String(e.de || '').toLowerCase()) || tset.has(String(e.a || '').toLowerCase())));
   }
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
+  /* tip 2357: Hooked chip — TbFeeHook / HOOK confiance only (volume that can pay protocol). */
+  if (liveFiltre === 'HOOKED') {
+    if (e.confiance === 'HOOK') return true;
+    const j = String(e.jeton || '').toLowerCase();
+    if (j && typeof TBGAS !== 'undefined' && j === String(TBGAS).toLowerCase()) return true;
+    /* pool discovered as HOOK for this jeton */
+    for (const p of poolsLive.values()) {
+      if (!p || !p.cle) continue;
+      if (String(p.jeton || '').toLowerCase() !== j && String(p.cle.currency0 || '').toLowerCase() !== j
+        && String(p.cle.currency1 || '').toLowerCase() !== j) continue;
+      if (p.confiance === 'HOOK') return true;
+      const hk = String(p.cle.hooks || '').toLowerCase();
+      if (hk && hk === String(HOOK_PREVU).toLowerCase()) return true;
+    }
+    return false;
+  }
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
@@ -3918,6 +3953,44 @@ function retirerTrusted(adr) {
   ecrireTrusted(s);
 }
 
+
+/** tip 2357: route users to hooked markets / in-app BuySell — external Dex on TbFeeHook still chops. No fee addr. */
+function peindreHookedRoute() {
+  const el = $('#sfHookedRoute');
+  if (!el) return;
+  const hooked = [...poolsLive.values()].filter((p) => {
+    if (!p || !p.cle) return false;
+    if (p.confiance === 'HOOK') return true;
+    const hk = String(p.cle.hooks || '').toLowerCase();
+    return hk && hk === String(HOOK_PREVU).toLowerCase();
+  });
+  const hasTbgas = hooked.some((p) => {
+    const j = String(p.jeton || '').toLowerCase();
+    const c0 = String(p.cle.currency0 || '').toLowerCase();
+    const c1 = String(p.cle.currency1 || '').toLowerCase();
+    const t = String(TBGAS).toLowerCase();
+    return j === t || c0 === t || c1 === t;
+  }) || liveEvts.some((e) => String(e.jeton || '').toLowerCase() === String(TBGAS).toLowerCase());
+  if (CHAINE !== 8453) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.hidden = false;
+  const n = hooked.length;
+  el.innerHTML = '<b>Hooked markets</b> · trade <b>in-app Buy/Sell</b> (0.5%)'
+    + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : '')
+    + (hasTbgas ? ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>' : '')
+    + '. Dex on hooked also chops · unhooked Dex = $0. Filter: <b>Hooked</b>.';
+  const b = $('#sfOpenTbgas');
+  if (b) {
+    b.addEventListener('click', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      void ouvrirProfil(TBGAS, 'TBGAS');
+    });
+  }
+}
+
 /** Social: blocks Feed each other (🟢) — trust root = fee-honest Create/Launch, not a score. */
 function peindreFeedTrustHonesty() {
   const el = $('#sfFeedTrustHonesty');
@@ -4042,7 +4115,10 @@ function peindreLive() {
       ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     const openHint = e.type === 'CREATION' && e.paidCreate !== true
-      ? ' · <span class="filOpen">tap → profile · Launch to market</span>' : '';
+      ? ' · <span class="filOpen">tap → profile · Launch to market</span>'
+      : ((e.confiance === 'HOOK' || (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
+          && String(e.jeton || '').toLowerCase() === String(TBGAS).toLowerCase())
+        ? ' · <span class="filOpen">tap → Buy/Sell in-app (hook chops Dex too)</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
       ? (estTrusted(e.jeton)
         ? ' · <span class="filOpen">✦ trusted (CreateRouter)</span>'
@@ -4070,6 +4146,7 @@ function peindreLive() {
    * precedente. Le bouton reste la pour qui ne defile pas. */
   peindreCreateFeeHonesty();
   peindreFeedTrustHonesty();
+  peindreHookedRoute();
   peindreFeeRecu();
   verifierBasLive();
   peindreRelais();
@@ -4264,7 +4341,7 @@ $('#sfRelais').addEventListener('click', (ev) => {
 function demarrerLive() {
   peindreParoles();
   /* ⛔ FEE capture: paint Create/Launch + Feed/Trust honesty immediately (not only after first getLogs). */
-  try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); peindreFeeRecu(); } catch (_) {}
+  try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); peindreHookedRoute(); peindreFeeRecu(); } catch (_) {}
   if (liveMinuterie) { void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
@@ -6645,7 +6722,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2356',
+    build: '20260915-2357',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

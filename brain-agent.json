@@ -49,8 +49,8 @@
   ],
   "fee_wallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2356",
-  "hard_objective": "HARD RULE: ALL fees → only 0xa6cf…f5d4; 0x37eb receives NOTHING. tip 2356: live CreateRouter 0xe05C… + HOOK_PREVU 0xaa6D… eth_call FEE_WALLET()=a6cf (verified). Legacy 0x3486…/0x34E3… still 37eb — unused. App sinks: Launch life / 0.5% BuySell / ETH→USDC / paid msg / OfferCircuit → a6cf. Public UI: no fee-wallet CV. Create FREE. Costs short. O5 CURRENT_TOY_V1 · O6 Prepare preview+plan · no OfferCircuit broadcast.",
+  "tip": "20260915-2357",
+  "hard_objective": "HARD RULE: ALL fees → only 0xa6cf…f5d4; 0x37eb receives NOTHING. tip 2356: live CreateRouter 0xe05C… + HOOK_PREVU 0xaa6D… eth_call FEE_WALLET()=a6cf (verified). Legacy 0x3486…/0x34E3… still 37eb — unused. App sinks: Launch life / 0.5% BuySell / ETH→USDC / paid msg / OfferCircuit → a6cf. Public UI: no fee-wallet CV. Create FREE. Costs short. tip 2357: Live Hooked filter + route TBGAS/TbFeeHook → in-app Buy/Sell (external hooked Dex also chops). O5 CURRENT_TOY_V1 · O6 Prepare preview+plan · no OfferCircuit broadcast.",
   "locked_liq": {
     "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
