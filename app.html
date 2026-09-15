@@ -641,7 +641,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
   <section class="volet" id="v-brain" aria-label="Brain AI">
     <div class="carte">
       <p class="titre">Brain AI</p>
-      <p class="sous">128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> — feeds on market + chain, moves the block, signs nothing. Verified speech = paid TBLOCK messages.</p>
+      <p class="sous">128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> — feeds on market + chain, moves the block, signs nothing. Pick any listed block — TBLOCK is not forced.</p>
       <label class="champ">Block<select id="bChoix"></select></label>
       <div class="pJeuTete" style="margin-top:12px">
         <span class="pBadge" id="bPhase">—</span>
@@ -902,7 +902,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2140">Build <code>20260915-2140</code> · paid-msg prepare · no-launch copy · fees creator+holders · → 0x37eb.</p>
+      <p class="note" data-build="20260915-2150">Build <code>20260915-2150</code> · Brain select sticks + Export download · fees → 0x37eb.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -2808,6 +2808,8 @@ function peindreMetier(adr) {
 let profilCerveau = null;
 const CLE_CERVEAU = 'tblock.cerveau';
 const CLE_VIES = 'tblock.vies.';
+/* tip 2150: last Brain block pick in THIS browser — not a chain fact; never forces TBLOCK. */
+const CLE_BRAIN_CHOIX = 'tblock.brain.choix.';
 /** ⛔ VINGT LECTURES MAXIMUM PAR BLOCK : un journal qui grossit sans fin remplit le stockage du
  * navigateur de quelqu un d autre. */
 const LECTURES_GARDEES = 20;
@@ -5921,12 +5923,48 @@ function appliquerReglesDuBrain(adr, vu) {
 }
 const HISTO_MAX = 120;
 
+function adrBrainEq(a, b) {
+  return String(a || '').toLowerCase() === String(b || '').toLowerCase();
+}
+function optionBrainParAdr(valeurs, voulu) {
+  if (!voulu) return null;
+  const k = String(voulu).toLowerCase();
+  return valeurs.find((v) => String(v).toLowerCase() === k) || null;
+}
+/** tip 2150: prefer deep-link → open profile → wallet-held → last local — NEVER hard-default TBLOCK. */
+function prefererBrainAdr(valeurs) {
+  if (!valeurs.length) return null;
+  const lien = typeof paramsLien !== 'undefined' ? paramsLien.get('block') : null;
+  const mLien = optionBrainParAdr(valeurs, lien);
+  if (mLien) return mLien;
+  const pEl = $('#profil');
+  const profilAdr = pEl && !pEl.hidden ? pEl.dataset.block : null;
+  const mProfil = optionBrainParAdr(valeurs, profilAdr);
+  if (mProfil) return mProfil;
+  if (compte) {
+    for (const a of actifs) {
+      if (!a || a.etat !== 'LU' || !/^0x[0-9a-fA-F]{40}$/.test(String(a.id || ''))) continue;
+      const ok = (typeof a.solde === 'bigint' && a.solde > 0n) || (typeof a.solde === 'number' && a.solde > 0);
+      if (!ok) continue;
+      const m = optionBrainParAdr(valeurs, a.id);
+      if (m) return m;
+    }
+  }
+  try {
+    const last = localStorage.getItem(CLE_BRAIN_CHOIX + CHAINE);
+    const mLast = optionBrainParAdr(valeurs, last);
+    if (mLast) return mLast;
+  } catch (_) { /* private mode */ }
+  /* last resort: first in staged list (may be TBLOCK by cap) — not a forced product default */
+  return valeurs[0];
+}
 function peindreChoixBrain() {
   /* ⛔⛔ PHIL (2026-09-14) : « la possibilite d avoir TOUS les Brain AI dispo, et meme bon tri ». Tous les blocks connus de la
    *    page (carte + creations lues + creations vues par le Live), NOS blocks d abord, puis par stade (stades.js : Monument ->
    *    Seed, puis hors palier). Un block hors carte a quand meme son cerveau : il ne depend que de son adresse. */
+  /* tip 2150: brainAdr is source of truth — do NOT restore from select `avant` first (after a failed paint the UI
+   * stuck on TBLOCK while brainAdr was another token; avant then "won" forever). Case-insensitive match. */
   const s = $('#bChoix');
-  const avant = s.value;
   const tous = new Map();
   const ajouter = (adr, sym) => {
     const k = String(adr || '').toLowerCase();
@@ -5939,6 +5977,10 @@ function peindreChoixBrain() {
   for (const c of creationsLues) ajouter(c.jeton, c.symbole);
   for (const c of creationsLive.values()) ajouter(c.jeton, c.sym);
   if (brainAdr) ajouter(brainAdr, symProfil);
+  try {
+    const last = localStorage.getItem(CLE_BRAIN_CHOIX + CHAINE);
+    if (last) ajouter(last, null);
+  } catch (_) { /* private mode */ }
   const r = stadesDesBlocks({ ethUsd, blocks: [...tous.values()] });
   s.innerHTML = r.groupes.map((g) => '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + g.blocks.length) + '">'
     + g.blocks.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (b.nous ? '🟦 ' : '')
@@ -5946,13 +5988,31 @@ function peindreChoixBrain() {
       + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
     + '</optgroup>').join('');
   const valeurs = [...s.querySelectorAll('option')].map((o) => o.value);
-  if (valeurs.includes(avant)) s.value = avant;
-  else if (brainAdr && valeurs.includes(brainAdr)) s.value = brainAdr;
-  if (!brainAdr && valeurs.length) choisirBrain(valeurs[0]);
+  const garde = optionBrainParAdr(valeurs, brainAdr);
+  if (garde) {
+    s.value = garde;
+    if (!adrBrainEq(brainAdr, garde)) choisirBrain(garde);
+    else brainAdr = garde;
+  } else if (!brainAdr && valeurs.length) {
+    const pref = prefererBrainAdr(valeurs);
+    if (pref) choisirBrain(pref);
+  }
 }
 
 function choisirBrain(adr) {
+  if (!adr) return;
+  const meme = brainAdr && adrBrainEq(brainAdr, adr);
   brainAdr = adr;
+  try { localStorage.setItem(CLE_BRAIN_CHOIX + CHAINE, String(adr).toLowerCase()); } catch (_) { /* private mode */ }
+  const s = $('#bChoix');
+  if (s && s.options && s.options.length) {
+    const match = [...s.options].find((o) => adrBrainEq(o.value, adr));
+    if (match && s.value !== match.value) s.value = match.value;
+  }
+  if (meme && brainEtat) {
+    /* same block (casing sync / re-paint) — do not wipe ticks / journal paint */
+    return;
+  }
   brainHisto = [];
   brainTotal = 0; brainDernier = null;
   try { brainEtat = cerveauAvecMemoire(adr); } catch (e) { brainEtat = null; }
@@ -6134,7 +6194,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2040',
+    build: '20260915-2150',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -6160,25 +6220,82 @@ function publierSnapshotBrain(vu, h) {
   return snap;
 }
 
+/** tip 2150: resolve facts for download — live window dump / #tbBrainJson / rebuild from last beat. */
+function snapBrainPourExport() {
+  const k = String(brainAdr || '').toLowerCase();
+  try {
+    const w = window.__TB_BRAIN_SNAPSHOT__;
+    if (w && typeof w === 'object' && (!k || String(w.address || '').toLowerCase() === k)) return w;
+  } catch (_) { /* ignore */ }
+  try {
+    const pre = $('#tbBrainJson');
+    const raw = pre && String(pre.textContent || '').trim();
+    if (raw && raw.charAt(0) === '{') {
+      const j = JSON.parse(raw);
+      if (j && typeof j === 'object' && (!k || String(j.address || '').toLowerCase() === k)) return j;
+    }
+  } catch (_) { /* ignore bad JSON */ }
+  try {
+    const last = localStorage.getItem('tb-brain-last');
+    if (last) {
+      const j = JSON.parse(last);
+      if (j && typeof j === 'object' && (!k || String(j.address || '').toLowerCase() === k)) return j;
+    }
+  } catch (_) { /* private mode / bad JSON */ }
+  if (brainAdr && brainDernier) {
+    const h = habitants.find((x) => String(x.adr).toLowerCase() === k);
+    return publierSnapshotBrain(brainDernier, h);
+  }
+  return null;
+}
+/** Chrome: <a download> must be in the document; detached .click() often does nothing. */
+function telechargerJsonBrain(snap) {
+  const texte = typeof texteSnapshot === 'function' ? texteSnapshot(snap) : JSON.stringify(snap, null, 2);
+  const blob = new Blob([texte], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'brain-' + String((snap && snap.address) || brainAdr || 'block').replace(/^0x/i, '').slice(0, 8)
+    + '-tick' + ((snap && snap.tick) || 0) + '.json';
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { try { a.remove(); URL.revokeObjectURL(url); } catch (_) {} }, 2000);
+  return a.download;
+}
 $('#bExporter').addEventListener('click', () => {
   const note = $('#bExporterNote');
-  const vu = brainDernier;
-  if (!brainAdr || !vu) {
-    if (note) { note.className = 'note wKo'; note.textContent = 'Pick a block and let it beat once — nothing to export yet.'; }
-    return;
-  }
-  const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr).toLowerCase());
-  const snap = publierSnapshotBrain(vu, h);
-  const blob = new Blob([texteSnapshot(snap)], { type: 'application/json;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'brain-' + String(brainAdr).slice(2, 10) + '-tick' + (vu.tick || 0) + '.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  if (note) {
-    note.className = 'note wOk';
-    note.textContent = 'Exported facts for ' + (snap.symbole || snap.address) + ' @ beat ' + snap.tick
-      + ' · window.__TB_BRAIN_SNAPSHOT__ + localStorage[tb-brain-last] · schema ' + snap.schema;
+  try {
+    let snap = snapBrainPourExport();
+    if (!snap && brainAdr && brainDernier) {
+      const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr).toLowerCase());
+      snap = publierSnapshotBrain(brainDernier, h);
+    }
+    if (!snap) {
+      if (note) {
+        note.className = 'note wKo';
+        note.textContent = 'Pick a block and let it beat once — nothing in window.__TB_BRAIN_SNAPSHOT__ / #tbBrainJson yet.';
+      }
+      return;
+    }
+    /* keep live surfaces in sync with what we download */
+    try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (_) {}
+    try {
+      const pre = $('#tbBrainJson');
+      if (pre) { pre.hidden = false; pre.textContent = texteSnapshot(snap); }
+    } catch (_) {}
+    const nom = telechargerJsonBrain(snap);
+    if (note) {
+      note.className = 'note wOk';
+      note.textContent = 'Downloaded ' + nom + ' · ' + (snap.symbole || snap.address) + ' @ beat ' + (snap.tick ?? '?')
+        + ' · window.__TB_BRAIN_SNAPSHOT__ + #tbBrainJson · schema ' + (snap.schema || '?');
+    }
+  } catch (err) {
+    if (note) {
+      note.className = 'note wKo';
+      note.textContent = 'Export failed: ' + String((err && err.message) || err);
+    }
   }
 });
 
