@@ -658,6 +658,13 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
       </details>
+      <!-- ⛔ P0 2026-09-15: write what Brain SAYS so Zero 1 / tools can read facts — not invent mood.
+           Live dump = window.__TB_BRAIN_SNAPSHOT__ + #tbBrainJson; download = Export. Server has no neurons. -->
+      <div class="rang" style="margin-top:10px">
+        <button class="bouton sec" id="bExporter" type="button">Export brain facts</button>
+      </div>
+      <p class="note" id="bExporterNote">Writes phase, Hz, steering, spikes, journal, rules, sensors as JSON (facts only). Also updates <code>window.__TB_BRAIN_SNAPSHOT__</code> each beat for agents. How-to: <code>/brain-agent.json</code>.</p>
+      <pre class="mono" id="tbBrainJson" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap;font-size:11px"></pre>
       <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bReglesResume">Its rules — code it writes itself</summary>
       <p class="note">After it has seen the same event on chain at least twice, it writes a rule for it. A closed engine
         reads these lines: a rule can only write in its journal or suggest a gesture to you. It never signs, sends or
@@ -859,7 +866,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-0645">Build <code>20260915-0645</code> · Launch life-fee floor + FEE_WALLET verify; <b>Created</b> unpaid→Launch; chips filter Social.</p>
+      <p class="note" data-build="20260915-1715">Build <code>20260915-1715</code> · Brain facts export for agents · Buy/Sell 0.5% fee harden; Launch life-fee verify kept.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1206,6 +1213,7 @@ import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal } from './journal-cerveau.js';
+import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -1213,7 +1221,7 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { repartitionFrappe, TBLOCK, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
 import { completerInscriptionHook } from './lancer-pool-v2.js';
-import { planEchange, estWalletDeFrais } from './echange.js';
+import { planEchange, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -3698,12 +3706,47 @@ async function preparerEchange(sens) {
     return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
+  /* ⛔ P0 2026-09-15 fee harden: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback). */
+  const feeCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
+  if (!estWalletDeFrais(compte)) {
+    const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
+    const destOk = r && r.beneficiaireFrais
+      && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
+    const fraisOk = r && typeof r.frais === 'bigint' && r.frais > 0n;
+    if (!bpsOk || !destOk || !fraisOk) {
+      e.className = 'note wKo';
+      e.textContent = 'Refused: this swap plan is missing the 0.5 % interface fee to ' + feeCourt
+        + ' — nothing to sign (fail-closed). Retry quote.';
+      const br = document.createElement('button');
+      br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+      br.addEventListener('click', () => void preparerEchange(sens));
+      $('#peActions').appendChild(br);
+      try {
+        const feeEl = $('#peFrais');
+        if (feeEl) feeEl.textContent = '0.5 % MISSING — refused';
+      } catch (err) { /* badge optional */ }
+      return;
+    }
+    /* Honesty: show exact fee + short wallet on badge before Sign. */
+    try {
+      const feeEl = $('#peFrais');
+      if (feeEl && r) {
+        const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
+        const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
+        feeEl.textContent = (hooked ? '0.5 % app + hook · ' : '0.5 % → ') + feeCourt
+          + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.fraisDevise || 'ETH');
+      }
+    } catch (err) { /* badge optional */ }
+  }
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button';
   b.textContent = sens === 'ACHAT' ? (estWalletDeFrais(compte) ? 'Sign the buyback' : 'Sign the buy') : 'Sign the sale';
   b.addEventListener('click', () => void signerEchange(p.tx, sens, false));
   $('#peActions').appendChild(b);
-  e.className = 'note wOk'; e.textContent = 'The chain accepts this exact transaction. Check it in your wallet before signing.';
+  e.className = 'note wOk';
+  e.textContent = estWalletDeFrais(compte)
+    ? 'The chain accepts this exact buyback (no self-fee). Check it in your wallet before signing.'
+    : 'The chain accepts this exact transaction — 0.5 % to ' + feeCourt + ' is inside it. Check it in your wallet before signing.';
 }
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
@@ -5267,7 +5310,69 @@ function battreBrain() {
   $('#bSpikes').textContent = brainTotal;
   $('#bActifs').textContent = r.vu.actifs + ' / 128';
   $('#bEmpreinte').textContent = 'input ' + r.vu.entree.slice(0, 26) + '… · replay it and you get the same beat';
+  publierSnapshotBrain(r.vu, h);
 }
+
+/** Facts-only dump for Zero 1 / tools — same numbers the panel already shows. Never invents mood. */
+function publierSnapshotBrain(vu, h) {
+  if (!brainAdr || !vu) return null;
+  let role = null;
+  try { role = roleChoisi(brainAdr) || null; } catch (e) { role = null; }
+  if (!role) {
+    try {
+      const m = metierDe(brainAdr);
+      role = m && m.cle ? m.cle : (m && m.titre ? m.titre : null);
+    } catch (e) { role = null; }
+  }
+  const reg = reglesLues(brainAdr);
+  const snap = snapshotCerveau({
+    address: brainAdr,
+    symbole: (h && h.sym) || null,
+    role,
+    vu,
+    etat: brainEtat,
+    spikesDepuisOuverture: brainTotal,
+    journal: journalLu(brainAdr),
+    reglesLignes: ecrireRegles(reg.compteurs),
+    compteurs: reg.compteurs,
+    nourriture: h && h.nourriture ? h.nourriture
+      : (brainNourriture && brainNourriture.adr === String(brainAdr).toLowerCase() ? brainNourriture.n : null),
+    vie: h ? h.vie : null,
+    etatVie: h ? h.etatVie : null,
+    build: '20260915-1715',
+    at: new Date().toISOString(),
+  });
+  try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
+  const pre = $('#tbBrainJson');
+  if (pre) {
+    pre.hidden = false;
+    pre.textContent = texteSnapshot(snap);
+  }
+  return snap;
+}
+
+$('#bExporter').addEventListener('click', () => {
+  const note = $('#bExporterNote');
+  const vu = brainDernier;
+  if (!brainAdr || !vu) {
+    if (note) { note.className = 'note wKo'; note.textContent = 'Pick a block and let it beat once — nothing to export yet.'; }
+    return;
+  }
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr).toLowerCase());
+  const snap = publierSnapshotBrain(vu, h);
+  const blob = new Blob([texteSnapshot(snap)], { type: 'application/json;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'brain-' + String(brainAdr).slice(2, 10) + '-tick' + (vu.tick || 0) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  if (note) {
+    note.className = 'note wOk';
+    note.textContent = 'Exported facts for ' + (snap.symbole || snap.address) + ' @ beat ' + snap.tick
+      + ' · also on window.__TB_BRAIN_SNAPSHOT__ · schema ' + snap.schema;
+  }
+});
+
 
 /**
  * Graver un battement sur la chaine : un transfert de 0 du block a soi-meme, avec le battement en message.
