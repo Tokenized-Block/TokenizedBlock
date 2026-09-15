@@ -67,11 +67,11 @@ Mechanics only from the Zero 1 dig (no scoreboards, no invented revenue):
 | **P1 / P4** Create CTA packet | Network (Practice/Real), irreversibility one-liner, link to **What you will sign** (gas already there). |
 | **P2** bounded re-read | After create: max **3** eth_getCode re-reads; same empty fingerprint twice → **Blocked** (honest message, no RPC spam). |
 
-Status is never inferred from broadcast alone — green / Ready-to-Launch only after chain re-read sees code. **Custody:** none. **Network gas** → Base validators/builders (cannot redirect). **Real Create** charges a separate **0.001 ETH** Tokenized Block service fee to `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` (not gas; Fees for BaseAPP Holders). CreateRouter/TbFeeHook on-chain still wrongly 0x37eb until redeploy. **Practice = 0**. METHODE: no undated ARR/MRR claims.
+Status is never inferred from broadcast alone — green / Ready-to-Launch only after chain re-read sees code. **Custody:** none. **Network gas** → Base validators/builders (cannot redirect). **Real Create** charges a separate **0.001 ETH** Tokenized Block service fee to `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` (not gas; Fees for BaseAPP Holders). CreateRouter 0xe05C… + HOOK_PREVU eth_call FEE_WALLET()=a6cf (tip 2356); legacy 0x3486…/0x34E3… unused. **Practice = 0**. METHODE: no undated ARR/MRR claims.
 
 ## Brand / host (2026-09-07 overnight)
 
 - **Public brand:** Tokenized-Block.app
 - **Live host:** `https://tokenized-block.up.railway.app/` (Pages github.io retired 2026-09-14; Railway MAIN only)
-- **Fee wallet (ALL fees → only):** `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` · Fees for BaseAPP Holders. Legacy `0x37eb…580a` must receive NOTHING (CreateRouter+Hook still engraved — redeploy).
+- **Fee wallet (ALL fees → only):** `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` · Fees for BaseAPP Holders. Legacy `0x37eb…580a` must receive NOTHING (legacy contracts only; live router+hook = a6cf).
 

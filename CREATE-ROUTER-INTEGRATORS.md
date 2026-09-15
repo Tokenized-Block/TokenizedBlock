@@ -1,7 +1,7 @@
 # CreateRouter — integrator pack (Base mainnet)
 
-> **HARD RULE 2026-09-15:** Target FEE_WALLET = `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` only.  
-> Live router below still returns legacy `0x37eb…` via `FEE_WALLET()` — **redeploy pending** (see `/workspace/DIG-FEE-A6CF-HARD-RULE-2026-09-15.md`). After redeploy, update this table to the NEW CreateRouter address + a6cf.
+> **HARD RULE 2026-09-15 / tip 2356:** Target FEE_WALLET = `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` only.  
+> Live CreateRouter below `FEE_WALLET()` = **a6cf** (eth_call verified). Legacy `0x3486…` still 37eb — do not call it.
 
 
 **Audience:** other apps that create TB / B20 tokens and must pay the life fee.  
@@ -13,7 +13,7 @@
 |--|--|
 | **CreateRouter** | `0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5` |
 | **FEE_WALLET (target / hard rule)** | `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` |
-| **FEE_WALLET() live eth_call (WRONG until redeploy)** | `0x37eb9b7ce0b51fe12fbf092026e001918128580a` — must receive NOTHING |
+| **FEE_WALLET() live eth_call** | `0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4` (verified tip 2356) |
 | **Floor** | `0.0003 ETH` (`300000000000000` wei) on-chain |
 | **App target** | ≈ **$1 ETH** (oracle); always `msg.value >= floor` |
 | **Selector** | `createPaid(uint8,bytes32,bytes,bytes[],address)` → **`0x1d03fb54`** |
@@ -41,7 +41,7 @@ function createPaid(
 
 1. Encode `createPaid(variant, salt, params, initCalls, creator)` — selector `0x1d03fb54`.
 2. Send payable tx to `0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5` with `value >= 0.0003 ether` (≈$1 preferred).
-3. Confirm `FEE_WALLET()` on the router equals **`0xa6cf…f5d4`** after redeploy. Live pre-redeploy still returns `0x37eb…` (forbidden sink — dig honesty).
+3. Confirm `FEE_WALLET()` on the router equals **`0xa6cf…f5d4`** (live tip 2356). Never use legacy `0x3486…` (still 37eb).
 4. Predict token address with **deployer = router** (CREATE2 salt binds to router, not the EOA).
 5. Do **not** rely on factory-direct creates for paid path honesty.
 

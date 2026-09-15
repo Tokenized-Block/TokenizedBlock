@@ -9,17 +9,17 @@
 
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire.
  * HARD RULE Raksha 2026-09-15: ALL fees → only Base smart wallet a6cf…f5d4.
- * Legacy 0x37eb…580a must receive NOTHING (policy). CreateRouter+TbFeeHook still
- * engrave 0x37eb on-chain until redeploy — dig honesty, not a destination.
+ * Legacy 0x37eb…580a receives NOTHING (policy). Live CreateRouter 0xe05C… + HOOK_PREVU
+ * eth_call FEE_WALLET() = a6cf (verified tip 2356). Old 0x3486… / 0x34E3… still 37eb — unused.
  */
 export const FEE_WALLET = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
-/** FORBIDDEN sink — eth_call truth only. Live CreateRouter+Hook still return this; must redeploy. Never send app fees here. */
+/** FORBIDDEN sink — legacy contracts only. Never send app fees here. */
 export const FEE_WALLET_LEGACY_37EB = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
-/** CreateRouter FEE_WALLET = a6cf (verified tip 2290). */
-export const CREATE_ROUTER_FEE_WALLET = FEE_WALLET; /* tip 2290: new CreateRouter on-chain a6cf */
-/** TbFeeHook FEE_WALLET = a6cf at HOOK_PREVU (verified tip 2300). */
-export const HOOK_FEE_WALLET = FEE_WALLET; /* tip 2300: new TbFeeHook on-chain a6cf */
-/** Base mainnet CreateRouter 0x3486…ff0a — on-chain still forwards to 0x37eb until redeploy; sealed 1B 100% creator. */
+/** CreateRouter FEE_WALLET = a6cf (eth_call tip 2356). */
+export const CREATE_ROUTER_FEE_WALLET = FEE_WALLET;
+/** TbFeeHook FEE_WALLET = a6cf at HOOK_PREVU (eth_call tip 2356). */
+export const HOOK_FEE_WALLET = FEE_WALLET;
+/** Base mainnet CreateRouter — on-chain FEE_WALLET a6cf; sealed 1B 100% creator. */
 export const CREATE_ROUTER = '0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */
 export const CREATE_FEE_WEI_FLOOR = 300000000000000n;

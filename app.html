@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2355">Build <code>20260915-2355</code> · Create free · Launch ≈$1+hook · Buy/Sell 0.5% · Costs short.</p>
+      <p class="note" data-build="20260915-2356">Build <code>20260915-2356</code> · Create free · Launch ≈$1+hook · Buy/Sell 0.5% · Costs short.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -6094,7 +6094,7 @@ async function creerBlock() {
       e.textContent = 'Could not read your ETH balance, so nothing was started.';
       return;
     }
-    /* ⛔ CreateRouter floor still wrongly pays on-chain 0x37eb (FORBIDDEN) until router redeploy to FEE_WALLET. If wallet cannot cover the ≈$1 quote
+    /* tip 2356: CreateRouter on-chain FEE_WALLET = a6cf. If wallet cannot cover the ≈$1 quote
      * but can cover floor + gas, charge the floor — fail-closed only below floor. */
     const gasBuf = 250000000000000n; /* ~0.00025 ETH headroom for Base gas */
     if (utiliseCreateRouter() && s < fraisWei) {
@@ -6645,7 +6645,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2320',
+    build: '20260915-2356',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

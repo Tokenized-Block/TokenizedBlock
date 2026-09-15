@@ -3,7 +3,7 @@
 // ⛔ RAKSHA 2026-09-14 : Create MAIN fee = ETH ≈ $1 → FEE_WALLET. No 5% / 50M token mint to fee.
 //    Sealed 1B supply mints 100% to the creator (CreateRouter + Practice factory path).
 // ⛔ TBLOCK EXISTE (cree par Phil le 2026-09-13, adresse LUE dans le log B20Created de sa transaction).
-// ✅ TbFeeHook LIVE Base CREATE2 0x34E3…6044 — on-chain FEE_WALLET wrongly still 0x37eb (FORBIDDEN). HARD RULE: only a6cf. Hook redeploy pack dig.
+// ✅ TbFeeHook LIVE Base CREATE2 HOOK_PREVU 0xaa6D…2044 — FEE_WALLET() = a6cf (tip 2356). Legacy 0x34E3…6044 still 37eb — unused by new Launch.
 /** @deprecated Was 5n (50M of 1B). Create fee is ETH only — keep 0 so Social never keys on a fee mint. */
 export const PART_FRAIS_POUR_CENT = 0n;
 /** Fixed sealed supply for every TB Create: 1 billion units × 18 decimals. Indestructible = cap == mint, nobody can mint more. */
@@ -11,9 +11,9 @@ export const DECIMALES_FIXES = 18;
 export const SUPPLY_FIXE = 1_000_000_000n * 10n ** BigInt(DECIMALES_FIXES);
 /** TBLOCK, lu dans le log B20Created de la tx 0xda396460…4cf3 (bloc 51 260 745). */
 export const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
-/** TbFeeHook LIVE on Base (CREATE2 salt 38, tx 0xb7413aa4…88c3, 2026-09-15). */
+/** TbFeeHook LIVE on Base — CREATE2 a6cf (salt 56999). FEE_WALLET() = a6cf. */
 export const HOOK_PREVU = '0xaa6D7bD9FC7D394bc717137936f2939834382044';
-/* tip 2300: HOOK_PREVU = CREATE2 a6cf TbFeeHook 0xaa6D…2044 (salt 56999). Legacy 0x34E3…6044 still 37eb — unused by new Launch. */
+/* tip 2300/2356: HOOK_PREVU = 0xaa6D…2044 a6cf. Legacy 0x34E3…6044 still 37eb — unused by new Launch. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 
 /** Destinataires et montants de la frappe initiale d un nouveau block — 100% creator. */
