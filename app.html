@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2343">Build <code>20260915-2343</code> · fees→a6cf · fix V4_ADRESSES.poolm for Dex pool discover · Launch hooked.</p>
+      <p class="note" data-build="20260915-2344">Build <code>20260915-2344</code> · fees→a6cf · live Fees received ETH chip · Launch hooked.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -926,6 +926,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ P0 2026-09-15 tip 1800: dashboard honesty — CreateRouter unused vs Social factory flood.
            Not redundant with per-row 0630 no-launch→Launch nudge: this is the window aggregate. -->
       <p class="note" id="sfCreateFeeHonesty" hidden></p>
+      <p class="note" id="sfFeeRecu" hidden></p>
       <p class="note" id="sfFeedTrustHonesty" hidden></p>
       <ul class="fil" id="sfLive"></ul>
       <div id="sfLiveFin" style="height:1px"></div>
@@ -3916,6 +3917,26 @@ function peindreFeedTrustHonesty() {
   }
 }
 
+/** tip 2344: live FEE_WALLET ETH on MAIN — so "fees received" is measured, not hoped. */
+async function peindreFeeRecu() {
+  const el = $('#sfFeeRecu');
+  if (!el) return;
+  if (CHAINE !== 8453) { el.hidden = true; return; }
+  el.hidden = false;
+  try {
+    const hex = await rpc('eth_getBalance', [FEE_WALLET, 'latest']);
+    const wei = BigInt(hex);
+    const eth = Number(wei) / 1e18;
+    const ethTxt = eth >= 0.0001 ? eth.toFixed(6) : wei.toString() + ' wei';
+    const when = new Date().toLocaleString('fr-BE', { timeZone: 'Europe/Brussels' });
+    el.innerHTML = '<b>Fees received (on-chain)</b> · BaseAPP Holders wallet holds <b>' + ethTxt + ' ETH</b>'
+      + ' <span class="mono">(a6cf…f5d4)</span> · read ' + when
+      + '. Only CreateRouter / life fee / in-app 0.5% / TbFeeHook pools. External Dex on unhooked pools = <b>0</b>.';
+  } catch (e) {
+    el.innerHTML = '<b>Fees received</b> · balance unread (RPC). Paths that pay: CreateRouter · Launch life · Buy/Sell 0.5% · hooked pools.';
+  }
+}
+
 /** Social Live dashboard: CreateRouter vs factory flood — always visible on MAIN (not just per-row 0630). */
 function peindreCreateFeeHonesty() {
   const el = $('#sfCreateFeeHonesty');
@@ -4028,6 +4049,7 @@ function peindreLive() {
    * precedente. Le bouton reste la pour qui ne defile pas. */
   peindreCreateFeeHonesty();
   peindreFeedTrustHonesty();
+  peindreFeeRecu();
   verifierBasLive();
   peindreRelais();
 }
@@ -4221,7 +4243,7 @@ $('#sfRelais').addEventListener('click', (ev) => {
 function demarrerLive() {
   peindreParoles();
   /* ⛔ FEE capture: paint Create/Launch + Feed/Trust honesty immediately (not only after first getLogs). */
-  try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); } catch (_) {}
+  try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); peindreFeeRecu(); } catch (_) {}
   if (liveMinuterie) { void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
