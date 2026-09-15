@@ -903,7 +903,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2165">Build <code>20260915-2165</code> · bug-sweep: tabs/companion/trust CTAs/RPC · fees → 0x37eb.</p>
+      <p class="note" data-build="20260915-2170">Build <code>20260915-2170</code> · bug-sweep + Practice Wake honesty · fees → 0x37eb.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -3059,7 +3059,9 @@ function peindreTrustFacts(adr, v, origine) {
   } else if (etat === 'LUE') {
     lignes.push('Pool: <b>unhooked</b> (legacy). In-app Buy/Sell still 0.5&nbsp;% protocol; enduring creator+holders hook needs a <b>new</b> Launch elsewhere.');
   } else if (etat === 'NON_TROUVEE') {
-    lignes.push('Market: <b>dormant</b> — no pool yet. Wake/Launch here pays life fee + opens hooked pool (2&nbsp;% enduring).');
+    lignes.push(CHAINE === 8453
+      ? 'Market: <b>dormant</b> — no pool yet. Wake/Launch on <b>MAIN</b>: life fee ≈ $1 ETH (→ <code>0x37eb…</code>) + new hooked pool (2&nbsp;% enduring).'
+      : 'Market: <b>dormant</b> — no pool yet. Wake/Launch is <b>Practice</b>: free · no life fee · no fee hook.');
   } else {
     lignes.push('Market: <b>unread</b> this visit — trust path not judged from a failed read.');
   }
@@ -3075,7 +3077,9 @@ function peindreTrustFacts(adr, v, origine) {
   }
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
-    cta.innerHTML = '<b>Next</b>: life fee ≈ $1 ETH (protocol → <code>0x37eb…</code>), then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.'
+    cta.innerHTML = (CHAINE === 8453
+      ? '<b>Next (MAIN Real)</b>: life fee ≈ $1 ETH (protocol → <code>0x37eb…</code>), then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.'
+      : '<b>Next (Practice)</b>: free Wake/Launch · no $1 life fee · no fee hook. Real MAIN fees → <code>0x37eb…</code>.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
   } else if (etat === 'LUE') {
@@ -3308,8 +3312,11 @@ async function lireProfil(adr, sym, perime) {
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = '<b>Dormant → Wake is gated</b>: life fee ≈ <b>$1 ETH</b> (protocol → <code>0x37eb…</code>) first (floor 0.0003, verified on chain — no wallet bypass), '
+      wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> (protocol → <code>0x37eb…</code>) first (floor 0.0003, verified on chain — no wallet bypass), '
         + 'then Launch opens a <b>new hooked</b> pool (2&nbsp;% enduring → fee wallet). Work it out → Ask the chain → pay fee → Launch. Nothing skips the fee.';
+    } else if (etatVieProfil === 'NON_TROUVEE') {
+      wg.hidden = false;
+      wg.innerHTML = '<b>Practice</b>: Wake/Launch is free · no $1 life fee · no fee hook. MAIN Real fees → <code>0x37eb…</code>.';
     } else { wg.hidden = true; wg.textContent = ''; }
   }
   const gt = $('#pGarderTrusted');
@@ -3744,9 +3751,11 @@ function peindreLive() {
     /* ⛔ P0 2026-09-15: no-launch Social creates nudge → Launch (life fee + hooked pool). Paid = CreateRouter. */
     const quoi = e.type === 'CREATION'
       ? (e.paidCreate === true
-        ? '🧱 <b>' + nom + '</b> was created · paid CreateRouter (life fee)'
+        ? (CHAINE === 8453
+          ? '🧱 <b>' + nom + '</b> was created · paid CreateRouter (life fee → <code>0x37eb…</code>)'
+          : '🧱 <b>' + nom + '</b> was created · Create path (Practice — no mainnet life fee)')
         : '🧱 <b>' + nom + '</b> was created · no launch / sleep'
-          + (CHAINE === 8453 ? ' · Launch here → life fee ≈ $1 + hooked market' : ' · Launch here (Practice free)'))
+          + (CHAINE === 8453 ? ' · Launch here → life fee ≈ $1 + hooked market (MAIN)' : ' · Launch here (Practice free · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
@@ -6245,7 +6254,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2165',
+    build: '20260915-2170',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
