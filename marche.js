@@ -59,8 +59,9 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
 /** Les cles de pool lues, dans l ordre. ⛔ NOTRE Launch d abord : un block lance ici doit etre lu
  *  sur SA pool plutot que sur une pool tierce ouverte au meme jeton. */
 export const CLES_MARCHE = [
-  { nom: 'ETH · 0,5 % (notre Launch)', fee: 5000, tickSpacing: 200 },
-  { nom: 'ETH · 0 % (lancements d avant le 2026-09-09)', fee: 0, tickSpacing: 200 },
+  /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) first — fee 5000 was the OLD screen, not today's Launch. */
+  { nom: 'ETH · 0 % (notre Launch)', fee: 0, tickSpacing: 200 },
+  { nom: 'ETH · 0,5 % (legacy screen)', fee: 5000, tickSpacing: 200 },
   { nom: 'ETH · 3 % (OpenLaunch)', fee: 30000, tickSpacing: 200 },
   { nom: 'ETH · 1 %', fee: 10000, tickSpacing: 200 },
   { nom: 'ETH · 0,3 %', fee: 3000, tickSpacing: 60 },
@@ -121,7 +122,10 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   /* ⛔⛔ BLOCKS APPARIES A TBLOCK (Phil, 2026-09-13 : « creer des blocks avec TBLOCK »). Si aucune pool ETH n existe, on lit
    * la pool TBLOCK/block (frais 0, espacement 200, sans hook — le format du lancement de l app), et la capitalisation est
    * CONVERTIE EN ETH par le prix de la pool TBLOCK/ETH, lu lui aussi. Un des deux prix illisible = NON_LUE, jamais un chiffre. */
-  if (sqrt === 0n && ratees === 0 && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
+  /* ⛔⛔ AVAIL 2026-09-15: try TBLOCK/block EVEN when some ETH keys rate-limited.
+   *    Before: ratees>0 short-circuited to NON_LUE and never opened Buy/Sell for TBLOCK-launched blocks.
+   *    Create+Launch default TBLOCK — skipping this path = false « unavailable ». */
+  if (sqrt === 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
     const vt = await vieEnTblock({ rpc, stateView, jeton });
     if (vt) return vt;
   }
