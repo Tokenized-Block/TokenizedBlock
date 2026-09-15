@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2330">Build <code>20260915-2330</code> · fees→a6cf · Dex liq/FDV honesty (quote depth) · Fees for BaseAPP Holders.</p>
+      <p class="note" data-build="20260915-2340">Build <code>20260915-2340</code> · fees→a6cf · Launch hooked pool beside legacy unhooked · Fees for BaseAPP Holders.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -2952,6 +2952,19 @@ function infoHookMarche(v) {
   };
 }
 
+/** tip 2340: MAIN can open a NEW TbFeeHook pool id beside a legacy unhooked market (Uniswap pool keys differ by hooks). */
+function marcheLegacySansTbFeeHook(v) {
+  if (!v || v.etat !== 'LUE') return false;
+  return !infoHookMarche(v).isTbFeeHook;
+}
+
+function peutOuvrirPoolHooke(v) {
+  if (CHAINE !== 8453) return false;
+  if (!v) return false;
+  if (v.etat === 'NON_TROUVEE') return true;
+  return marcheLegacySansTbFeeHook(v);
+}
+
 
 /** FEE capture honesty on profile: deepen TBLOCK LP + Sell→ETH path (USDC = ETH→USDC next, no invented hop). */
 function peindreCapturePaths(adr, v, hkInfo) {
@@ -3052,7 +3065,7 @@ function peindreMarcheHook(v) {
     el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not TbFeeHook — creator + holders fee split does not apply'
       + viaCourt + '.';
   } else {
-    el.textContent = 'Market pool · unhooked (legacy / pre-hook Launch) — no enduring creator/holders hook; in-app Buy/Sell still 0.5 % protocol. New app Launch opens a NEW hooked pool id; this pool stays as-is'
+    el.textContent = 'Market pool · unhooked — Dex swaps pay 0 to a6cf. In-app Buy/Sell = 0.5 % → a6cf. Use “Launch hooked pool beside this one” for enduring TbFeeHook fees → a6cf (new pool id; this pool stays)'
       + viaCourt + '.';
   }
   const lo = ordreLiquidite(v.liquidite);
@@ -3194,12 +3207,20 @@ function peindreTrustFacts(adr, v, origine) {
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
   } else if (etat === 'LUE') {
-    cta.innerHTML = '<b>Next</b>: 0.5&nbsp;% · Fees for BaseAPP Holders'
-      + (info.isTbFeeHook ? ' · hook fees to creator + holders' : ' (pool unhooked — app fee still applies)')
-      + '. Deepen LP if quotes thin. External DEX pays this wallet 0.'
-      + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-      + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
-      + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
+    if (!info.isTbFeeHook && CHAINE === 8453) {
+      cta.innerHTML = '<b>Fees → BaseAPP Holders (a6cf)</b>: external Dex on this unhooked pool pays <b>0</b> (same as every other Uniswap app). '
+        + 'Capture now: <b>Buy/Sell in this app</b> (0.5&nbsp;% → a6cf). Better: <b>Launch a new hooked pool</b> (same token, new pool id · TbFeeHook → a6cf) — legacy pool stays.'
+        + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
+        + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell in app → a6cf</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="hook-launch">Launch hooked pool → a6cf</button></div>';
+    } else {
+      cta.innerHTML = '<b>Next</b>: 0.5&nbsp;% · Fees for BaseAPP Holders'
+        + (info.isTbFeeHook ? ' · hook fees to creator + holders (a6cf)' : '')
+        + '. Deepen LP if quotes thin. External DEX pays this wallet 0.'
+        + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
+        + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
+    }
   } else {
     cta.innerHTML = '<b>Next</b>: read market again, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths · Fees for BaseAPP Holders.'
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
@@ -3419,19 +3440,25 @@ async function lireProfil(adr, sym, perime) {
   /* ⛔ LE LANCEMENT EST MAINTENANT DANS L APP : le bouton revient, mais SEULEMENT pour un block sans
    * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
    * enverrait creer une pool qui existe peut-etre deja. */
-  $('#pReveiller').hidden = etatVieProfil !== 'NON_TROUVEE';
-  /* ⛔ P0 2026-09-15: Wake CTA honesty — Real Launch = life fee + HOOK_PREVU; Practice free / no hook. */
+  /* tip 2340: also offer Launch when market is LUE but not TbFeeHook — opens NEW hooked pool id → a6cf. */
+  const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
+  $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
   if (etatVieProfil === 'NON_TROUVEE') {
     $('#pReveiller').textContent = CHAINE === 8453
-      ? 'Wake it — Launch (life fee ≈ $1 + fee hook on new pool)'
+      ? 'Wake it — Launch (life fee ≈ $1 + fee hook → a6cf)'
       : 'Wake it — Launch (Practice, free · no fee hook)';
+  } else if (legacySansHook) {
+    $('#pReveiller').textContent = 'Launch hooked pool beside this one (fees → a6cf · legacy stays)';
   }
   const wg = $('#pWakeGate');
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> · Fees for BaseAPP Holders first (floor 0.0003, verified on chain — no wallet bypass), '
-        + 'then Launch opens a <b>new hooked</b> pool (2&nbsp;% enduring · Fees for BaseAPP Holders). Work it out → Ask the chain → pay fee → Launch. Nothing skips the fee.';
+      wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> · Fees for BaseAPP Holders (<code>0xa6cf…f5d4</code>) first (floor 0.0003), '
+        + 'then Launch opens a <b>new hooked</b> pool (TbFeeHook → a6cf). Work it out → Ask the chain → pay fee → Launch.';
+    } else if (legacySansHook) {
+      wg.hidden = false;
+      wg.innerHTML = '<b>Unhooked market already live</b>: Dex swaps here pay <b>0</b> to BaseAPP. Best fix: Launch a <b>new</b> TbFeeHook pool (same token, different pool id) → fees to <code>0xa6cf…f5d4</code>. Until then use <b>Buy/Sell in this app</b> (0.5&nbsp;% → a6cf). Legacy pool is not deleted.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
       wg.innerHTML = '<b>Practice</b>: Wake/Launch is free · no $1 life fee · no fee hook. MAIN Real · Fees for BaseAPP Holders.';
@@ -3581,7 +3608,7 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
   if (!b) return;
   const act = b.getAttribute('data-tf-act');
   const pe = $('#pEchange'), plq = $('#pLiquidite'), pl = $('#pLancement');
-  if (act === 'wake') {
+  if (act === 'wake' || act === 'hook-launch') {
     const w = $('#pReveiller');
     if (w && !w.hidden) { w.click(); return; }
     if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
@@ -3887,7 +3914,9 @@ function peindreLive() {
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte).slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee'
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
+        + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Buy in app)</span>' : '')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
+          + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 → a6cf (Sell in app / Launch hook)</span>' : '')
           : e.confiance === 'HOOK'
             ? '↔ <b>' + nom + '</b> · hook pool' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts untrusted'
             : '↔ <b>' + nom + '</b> · trade' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts unread';
@@ -4687,8 +4716,8 @@ function ouvrirLancement() {
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = real
-      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> · Fees for BaseAPP Holders, then a <b>new</b> hooked pool (3%: 2% BaseAPP Holders · 1% creator). Against <span id="plContre">'
-        + contre + '</span>. Old pools stay unhooked.')
+      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> → <code>0xa6cf…f5d4</code>, then a <b>new</b> hooked pool (TbFeeHook → a6cf). Against <span id="plContre">'
+        + contre + '</span>. Works beside an existing unhooked market (new pool id).')
       : ('<b>Practice</b>: free Launch, no fee hook. Against <span id="plContre">' + contre + '</span>.');
   }
   /* ⛔ tip 2140: short Lock tab copy — Fees tab is static HTML. */
@@ -4743,26 +4772,40 @@ async function calculerLancement() {
     if (marcheAvant && marcheAvant.etat !== 'NON_LUE') break;
   }
   if ($('#profil').dataset.block !== adr) { profilEnLecture = false; $('#plCalculer').disabled = false; return; }
-  if (!marcheAvant || marcheAvant.etat !== 'NON_TROUVEE') {
+  /* tip 2340: NON_TROUVEE = first market; LUE without TbFeeHook = open NEW hooked pool id beside legacy (fees → a6cf). */
+  const legacyUpgrade = marcheAvant && marcheAvant.etat === 'LUE' && marcheLegacySansTbFeeHook(marcheAvant) && CHAINE === 8453;
+  if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade)) {
     e.className = 'note wKo';
-    e.textContent = marcheAvant && marcheAvant.etat === 'LUE'
-      ? 'This block already has a market (' + (marcheAvant.via || marcheAvant.paire || 'read on chain') + ') — nothing to launch.'
-      : 'Its market could not be read, so nothing is offered to sign. The public node is busy — try “Work it out” again in a moment.';
+    if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
+      e.textContent = 'This block already has a TbFeeHook market (' + (marcheAvant.via || 'hooked') + ') — fees already route to a6cf on that pool. Nothing to launch.';
+    } else if (marcheAvant && marcheAvant.etat === 'LUE') {
+      e.textContent = 'This block already has a market (' + (marcheAvant.via || 'read on chain') + ') — hooked upgrade only on MAIN Real.';
+    } else {
+      e.textContent = 'Its market could not be read, so nothing is offered to sign. The public node is busy — try “Work it out” again in a moment.';
+    }
     profilEnLecture = false;
     $('#plCalculer').disabled = false;
     return;
   }
-  e.textContent = 'No market on any key read — reading the block, its pool and your approvals…';
-  /* ⛔ P0 2026-09-15: when TbFeeHook code is DEPLOYE, Real Launch opens the pool with HOOK_PREVU
-   *    (2% → FEE_WALLET + 1% creator on later swaps). Practice / ABSENT / NON_LU keep hooks=0.
-   *    TBLOCK or ETH pair — same hook; smart-wallet creator register via completerInscriptionHook. */
+  e.textContent = legacyUpgrade
+    ? 'Legacy unhooked market found — planning a NEW TbFeeHook pool (fees → a6cf). Old pool stays…'
+    : 'No market on any key read — reading the block, its pool and your approvals…';
+  /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET a6cf. */
   try {
     const etatHook = await hookDeploye({ rpc });
-    const hooks = etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
-    plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
-      ...(contreTblock ? { devise: TBLOCK } : {}),
-      ...(hooks ? { hooks } : {}) });
-    if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+    if (legacyUpgrade && etatHook !== 'DEPLOYE') {
+      plan = { etat: 'REFUSE', pourquoi: 'TbFeeHook not DEPLOYE — cannot open hooked pool beside legacy (would launch another unhooked market)' };
+    } else {
+      const hooks = etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
+        ...(contreTblock ? { devise: TBLOCK } : {}),
+        ...(hooks ? { hooks } : {}) });
+      if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+      if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
+        plan.legacyUpgrade = true;
+        plan.pourquoiLegacy = 'Opens a NEW hooked pool id beside the existing unhooked market. Fees on the new pool → a6cf. Legacy Dex volume still pays 0 until liquidity moves.';
+      }
+    }
   } catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
@@ -4867,6 +4910,8 @@ function peindrePlan(plan, adr) {
       + 'ever take it out. That is why the pool fee is 0 %: nobody could ever collect it.',
     'Honesty: this Launch lock ≠ later Add liquidity (Add keeps YOUR position — withdrawable). Not OpenLaunch forever-lock on every surface.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
+    ...(plan.legacyUpgrade ? ['tip 2340: NEW hooked pool beside legacy unhooked — TbFeeHook fees → a6cf (0xa6cf…f5d4). Old Dex pool stays and still pays 0 until liquidity moves here.'] : []),
+    ...(avecHook ? ['Fee sink: BaseAPP Holders wallet 0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4 (life fee + hook protocol share).'] : []),
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('')
