@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1845">Build <code>20260915-1845</code> · FEE 0x37eb · ETH→USDC exit 0.5% · TBLOCK deepen · Wake/Social capture · Map node≠blocks.</p>
+      <p class="note" data-build="20260915-1900">Build <code>20260915-1900</code> · FEE 0x37eb · Sell→USDC bridge · buyback honesty · calldata fail-closed.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -2876,15 +2876,47 @@ function peindreCapturePaths(adr, v, hkInfo) {
     u.hidden = false;
     if (CHAINE === 8453) {
       u.innerHTML = (estTb
-        ? '<b>Exit path</b>: Sell TBLOCK → <b>ETH</b> (0.5&nbsp;% → fee wallet), then <b>Prepare ETH→USDC</b> below — same 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated; external DEX pays 0). '
+        ? '<b>Exit path</b>: Sell TBLOCK → <b>ETH</b> (0.5&nbsp;% ETH → fee wallet — not circular TBLOCK buyback), then <b>Prepare ETH→USDC</b> (or use <b>Next</b> after Prepare sell) — another 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated; external DEX pays 0). '
         : '<b>Fee path</b>: Buy/Sell 0.5&nbsp;% → fee wallet'
           + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2&nbsp;%' : '')
-          + '. After you hold ETH, <b>Prepare ETH→USDC</b> takes another 0.5&nbsp;% → <code>0x37eb…580a</code> (quoter-gated). ')
+          + ' (auto-buyback to TBLOCK when TBLOCK/ETH book quotes). After ETH out, <b>Prepare ETH→USDC</b> / <b>Next</b> takes another 0.5&nbsp;% → <code>0x37eb…580a</code>. ')
         + 'Deepen TBLOCK LP so sells fill.';
     } else {
       u.textContent = 'Practice — ETH→USDC exit is Base mainnet only.';
     }
   }
+}
+
+/** ⛔ P0 2026-09-15 tip 1900: fail-closed — FEE_WALLET must appear in router calldata when a fee is owed. */
+function feeWalletDansCalldata(tx) {
+  const d = String(tx && tx.data || '').toLowerCase();
+  const w = String(FEE_WALLET || '').toLowerCase().replace(/^0x/, '');
+  return Boolean(w && d.includes(w));
+}
+
+/** Prefill ETH→USDC exit + CTA after a Sell that pays out ETH (second 0.5% → 0x37eb). */
+function proposerSortieUsdcApresVente(ethWei) {
+  if (CHAINE !== 8453) return;
+  let wei = ethWei;
+  try { if (typeof wei !== 'bigint') wei = BigInt(wei || 0); } catch { return; }
+  if (wei <= 0n) return;
+  const inp = $('#peUsdcEth');
+  if (inp) {
+    const shown = formaterUnites(wei, 18);
+    if (shown && !inp.value) inp.value = shown;
+    try { inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* optional */ }
+  }
+  const row = $('#peUsdcRow');
+  if (row) row.hidden = false;
+  const actions = $('#peActions');
+  if (!actions) return;
+  if ([...actions.querySelectorAll('button')].some((b) => /ETH→USDC/i.test(b.textContent || ''))) return;
+  const b = document.createElement('button');
+  b.className = 'bouton sec'; b.type = 'button';
+  b.textContent = 'Next: Prepare ETH→USDC (0.5 % → fee)';
+  b.title = 'Exit hop — same 0.5 % interface fee → 0x37eb…580a (quoter-gated; external DEX pays 0)';
+  b.addEventListener('click', () => void preparerEthUsdc());
+  actions.appendChild(b);
 }
 
 /** Profile honesty: hooked (TbFeeHook) vs legacy unhooked — old pools never gain 2% retroactively. */
@@ -3898,14 +3930,27 @@ async function preparerEchange(sens) {
   const r = p.resume;
   if (r) {
     const q = (v, devise) => (devise === 'ETH' ? formaterUnites(v, 18) + ' ETH' : formaterUnites(v, dec === undefined ? 18 : (sens === 'ACHAT' ? 18 : dec)) + ' ' + (symProfil || 'blocks'));
+    const estTbProfil = String(adr).toLowerCase() === TBLOCK.toLowerCase();
+    const feeLigne = r.frais > 0n
+      ? (r.rachatAuto
+        ? ('Fee buyback: ' + formaterUnites(r.frais, 18) + ' ETH → ≥'
+          + formaterUnites(r.tblockRachetesAuMoins || 0n, 18)
+          + ' TBLOCK to the TokenizedBlock fee wallet, inside the same transaction (auto-buyback)')
+        : (r.fraisDevise === 'TBLOCK'
+          ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK (0.5 %, taken between the two swaps) to the TokenizedBlock fee wallet, inside the same transaction'
+          : 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %) to the TokenizedBlock fee wallet, inside the same transaction'
+            + (estTbProfil && sens === 'VENTE'
+              ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
+              : '')))
+      : 'No fee: this is a buyback by the TokenizedBlock fee wallet';
     $('#peLignes').innerHTML = [
       'You pay: ' + q(r.paye, r.payeDevise),
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
-      r.frais > 0n ? 'Fee: ' + formaterUnites(r.frais, 18) + (r.fraisDevise === 'TBLOCK'
-        ? ' TBLOCK (0.5 %, taken between the two swaps) to the TokenizedBlock fee wallet, inside the same transaction'
-        : ' ETH (0.5 %) to the TokenizedBlock fee wallet, inside the same transaction')
-        : 'No fee: this is a buyback by the TokenizedBlock fee wallet',
+      feeLigne,
+      ...(sens === 'VENTE' && r.recoitDevise === 'ETH' && CHAINE === 8453
+        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % → 0x37eb…580a (external DEX pays 0)']
+        : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
         return ['Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ')];
@@ -3986,15 +4031,28 @@ async function preparerEchange(sens) {
         const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
         const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
         feeEl.textContent = (hooked ? '0.5 % app + hook · ' : '0.5 % → ') + feeCourt
-          + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.fraisDevise || 'ETH');
+          + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.rachatAuto ? '→TBLOCK' : (r.fraisDevise || 'ETH'));
       }
     } catch (err) { /* badge optional */ }
+    /* ⛔ tip 1900: calldata must name FEE_WALLET when fee is owed (resume alone is not enough). */
+    if (p.tx && !feeWalletDansCalldata(p.tx)) {
+      e.className = 'note wKo';
+      e.textContent = 'Refused: fee wallet missing from swap calldata — nothing to sign (fail-closed). Retry quote.';
+      const br = document.createElement('button');
+      br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+      br.addEventListener('click', () => void preparerEchange(sens));
+      $('#peActions').appendChild(br);
+      return;
+    }
   }
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button';
   b.textContent = sens === 'ACHAT' ? (estWalletDeFrais(compte) ? 'Sign the buyback' : 'Sign the buy') : 'Sign the sale';
   b.addEventListener('click', () => void signerEchange(p.tx, sens, false));
   $('#peActions').appendChild(b);
+  if (sens === 'VENTE' && r && r.recoitDevise === 'ETH' && typeof r.recoitAuMoins === 'bigint') {
+    proposerSortieUsdcApresVente(r.recoitAuMoins);
+  }
   e.className = 'note wOk';
   e.textContent = estWalletDeFrais(compte)
     ? 'The chain accepts this exact buyback (no self-fee). Check it in your wallet before signing.'
@@ -4013,6 +4071,13 @@ async function signerEchange(tx, sens, estApprobation) {
   if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
+  /* tip 1900: after Sell that paid out ETH, bridge into fee-capture ETH→USDC exit. */
+  if (sens === 'VENTE' && echangeCourant && echangeCourant.resume
+    && echangeCourant.resume.recoitDevise === 'ETH'
+    && typeof echangeCourant.resume.recoitAuMoins === 'bigint') {
+    e.innerHTML += ' · Next: convert ETH→USDC in-app (0.5 % → fee wallet) — external DEX pays 0.';
+    proposerSortieUsdcApresVente(echangeCourant.resume.recoitAuMoins);
+  }
 }
 /* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
 async function peindreJournalBuyback(adr) {
@@ -4207,9 +4272,10 @@ async function preparerEthUsdc() {
   if (!estWalletDeFrais(compte)) {
     if (r.fraisBps !== FRAIS_INTERFACE_BPS || !r.beneficiaireFrais
       || String(r.beneficiaireFrais).toLowerCase() !== FEE_WALLET.toLowerCase()
-      || !(typeof r.frais === 'bigint' && r.frais > 0n)) {
+      || !(typeof r.frais === 'bigint' && r.frais > 0n)
+      || !feeWalletDansCalldata(p.tx)) {
       e.className = 'note wKo';
-      e.textContent = 'Refused: ETH→USDC plan missing 0.5 % → fee wallet — fail-closed.';
+      e.textContent = 'Refused: ETH→USDC plan missing 0.5 % → fee wallet (resume or calldata) — fail-closed.';
       return;
     }
   }
