@@ -605,7 +605,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
-      <!-- ⛔ P0 tip 2140→2250: tabs — Costs / Sign / Notes. App sinks → FEE_WALLET (a6cf); CreateRouter/hook still LEGACY 0x37eb. UI copy: Fees for BaseAPP Holders. -->
+      <!-- ⛔ P0 tip 2140→2250: tabs — Costs / Sign / Notes. App sinks + CreateRouter + TbFeeHook → FEE_WALLET (a6cf) tip 2300+. UI copy: Fees for BaseAPP Holders. -->
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
@@ -908,8 +908,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2300">Build <code>20260915-2300</code> · CreateRouter+TbFeeHook a6cf · live PnL · DexScreener · Fees for BaseAPP Holders.</p>
-      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
+      <p class="note" data-build="20260915-2310">Build <code>20260915-2310</code> · All = fee path a6cf · CreateRouter+Hook live · DexScreener · Fees for BaseAPP Holders.</p>
+      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -3639,15 +3639,18 @@ let poolsLive = new Map(), decouverteJusqua = null;
 const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
-  /* ⛔ 2026-09-14: All hides noise that drowns usable feed —
-   * external creates (no TB fee path) + hook-pool swaps (amounts untrusted / no qty).
-   * Created chip shows all creates; All (quiet) still hides external creates + hook swaps. */
+  /* tip 2310: All = fee-relevant feed for BaseAPP Holders (a6cf).
+   * Show: paid CreateRouter creates, Feed/Kill, Messages, verified swaps + HOOK swaps (TbFeeHook → a6cf).
+   * Hide: unpaid factory creates (no fee), GM/NOTE spam (chip GM). Created chip still lists every create. */
   if (liveFiltre === 'TOUT') {
-    if (e.type === 'CREATION' && e.paidCreate !== true) return false;
-    if (e.type === 'SWAP' && (e.confiance === 'HOOK' || e.verifie !== true)) return false;
-    /* ⛔ 2026-09-14: GM/NOTE bursts drown All (4×7, EVERYTHING×23…). Chip GM keeps them. */
     if (e.type === 'GM' || e.type === 'NOTE') return false;
-    return true;
+    if (e.type === 'CREATION') return e.paidCreate === true; /* CreateRouter → FEE_WALLET a6cf */
+    if (e.type === 'SWAP') {
+      /* Hooked pools now fee to a6cf (tip 2300 HOOK_PREVU) — must appear on All */
+      if (e.confiance === 'HOOK') return true;
+      return e.verifie === true;
+    }
+    return true; /* ACHAT · VENTE · MESSAGE */
   }
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
   if (liveFiltre === 'TRUSTED') {
@@ -6445,7 +6448,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2300',
+    build: '20260915-2310',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
