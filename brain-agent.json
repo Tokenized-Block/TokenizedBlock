@@ -1,24 +1,24 @@
 {
   "schema": "tblock-brain-agent/1",
-  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state \u2014 brains run in the browser.",
+  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state — brains run in the browser.",
   "live_facts": {
     "where": "Browser only, after Brain AI tab has beaten at least once for a block",
     "window": "window.__TB_BRAIN_SNAPSHOT__",
-    "download": "Brain AI \u2192 Export brain facts (JSON file)",
+    "download": "Brain AI → Export brain facts (JSON file)",
     "dom": "#tbBrainJson inside #tbBrainDetails (summary updates each beat)",
-    "localStorage": "tb-brain-last (last beat JSON \u2014 same schema as snapshot)"
+    "localStorage": "tb-brain-last (last beat JSON — same schema as snapshot)"
   },
   "curl": {
     "this_file": "curl -sS https://tokenized-block.up.railway.app/brain-agent.json",
     "app_tip": "curl -sS https://tokenized-block.up.railway.app/app.html | rg 'data-build='",
     "module": "curl -sS https://tokenized-block.up.railway.app/export-cerveau.js | head",
-    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz \u2014 that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
+    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz — that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
   },
   "zero1": {
-    "read": "Open MAIN \u2192 Brain AI \u2192 pick block \u2192 let it beat \u2192 read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
-    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture \u2014 never invent mood/phase/advice",
-    "ensemble_calm_example": "phase CALME + symmetric gauche_hz\u2248droite_hz + |virage|\u22480 \u2192 balanced calm ensemble; tick\u2265100000 \u2192 continuity product",
-    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via / liquidite (StateView getLiquidity as decimal string) \u2014 from profile market read when same block was opened; null if unread"
+    "read": "Open MAIN → Brain AI → pick block → let it beat → read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
+    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture — never invent mood/phase/advice",
+    "ensemble_calm_example": "phase CALME + symmetric gauche_hz≈droite_hz + |virage|≈0 → balanced calm ensemble; tick≥100000 → continuity product",
+    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via / liquidite (StateView getLiquidity as decimal string) — from profile market read when same block was opened; null if unread"
   },
   "snapshot_schema": "tblock-brain-snapshot/1",
   "fields": [
@@ -44,6 +44,17 @@
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-1948",
-  "hard_objective": "Real fees to FEE_WALLET 0x37eb\u2026580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means."
+  "tip": "20260915-2010",
+  "hard_objective": "Real fees to FEE_WALLET 0x37eb…580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means. OL UX = honesty only, not zero-fee.",
+  "locked_liq": {
+    "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
+    "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
+    "do_not_claim": "Do not tell users every TB LP is permanently locked. Launch lock ≠ later Add.",
+    "not_zero_fee": "TB is fee-opposite to OpenLaunch: life Create/Launch, hook 2%, app 0.5% → fee_wallet. Never market zero platform fee."
+  },
+  "trust_facts": {
+    "trusted_means": "Browser-local Keep only when CreateRouter-paid create OR TbFeeHook pool — not a score, not KYC.",
+    "fee_honest_path": "Trusted / Launch / Deepen TBLOCK → fees to fee_wallet",
+    "holders": "Use chain Transfer window + vitalite porteurs when measured — never invent holder counts or trust scores."
+  }
 }

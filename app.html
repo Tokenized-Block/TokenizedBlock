@@ -869,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1948">Build <code>20260915-1948</code> · ALL fees → 0x37eb audit · tip surfaces aligned · Sell→USDC + calldata fail-closed.</p>
+      <p class="note" data-build="20260915-2010">Build <code>20260915-2010</code> · OL locked-liq honesty chip · fees → 0x37eb · tip surfaces aligned.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older. <b>All</b> still hides GM/NOTE bursts (chip GM); brain mood lines are browser-local under Blocks talking (1 chip / token).</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1074,6 +1074,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="pJeu" id="pLiquidite" hidden>
         <div class="pJeuTete"><span class="pBadge" id="plqBadge">Liquidity</span><span class="pPV" id="plqDepth">you keep your position</span></div>
         <p class="pProchain" id="plqIntro">Add some of your blocks to its market so people can buy them. Unlike the launch, this position is yours: you can withdraw it at any time. Deeper book → more in-app Buy/Sell → 0.5&nbsp;% → fee wallet 0x37eb…580a.</p>
+        <!-- ⛔ P0 2026-09-15 tip 2010: OL contrast — this add is withdrawable; Launch lock was the permanent one. -->
+        <p class="note" id="plqLiqHonesty">🔓 <b>This Add = withdrawable</b> (you own the position). Launch LP stays dead-owner locked. Deepen the book so Trusted / Buy-Sell fills pay 0.5&nbsp;% → <code>0x37eb…580a</code>. Not a forever-lock claim.</p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Share of your blocks, in %<input id="plqPart" inputmode="decimal" placeholder="1" autocomplete="off"></label>
           <button class="bouton" id="plqAjouter" type="button" style="align-self:end">Prepare add</button>
@@ -1088,6 +1090,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <div class="pJeuTete"><span class="pBadge" id="plBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
         <p class="pProchain" id="plIntro">Creates its pool against <span id="plContre">ETH</span> and places the share of your blocks you choose below, in one
           signed transaction. Nothing moves before your wallet shows it.</p>
+        <!-- ⛔ P0 2026-09-15 tip 2010: OL-inspired locked-liq honesty BEFORE Sign — Launch dead-owner ≠ later Add LP withdrawable. Not zero-fee. -->
+        <p class="note" id="plLiqHonesty">🔒 <b>Launch LP = permanently locked</b> (dead-address owner — nobody can pull it). Later <b>Add liquidity</b> = <b>your</b> position, withdrawable anytime. Do not treat every LP as forever-locked. Life fee + hooked swaps still → <code>0x37eb…580a</code> (not zero platform fee).</p>
         <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
           <option value="ETH">ETH (native)</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
@@ -4370,6 +4374,14 @@ function ouvrirLancement() {
         + 'Creates its pool against <span id="plContre">' + contre + '</span> and places the share you choose. '
         + 'Nothing moves before your wallet shows it.');
   }
+  /* ⛔ P0 tip 2010: locked-liq honesty chip — always visible before Work it out / Sign. */
+  const liqH = $('#plLiqHonesty');
+  if (liqH) {
+    liqH.hidden = false;
+    liqH.innerHTML = real
+      ? '🔒 <b>Launch LP = permanently locked</b> (dead-address owner — nobody can pull it). Later <b>Add liquidity</b> = <b>your</b> position, withdrawable anytime. Do not treat every LP as forever-locked. Life fee + hooked swaps still → <code>0x37eb…580a</code> (not zero platform fee).'
+      : '🔒 <b>Practice Launch LP</b> still uses dead-address owner when engraved — permanent lock on that LP. Later Add liquidity stays withdrawable. Practice charges no life fee; Real fees → <code>0x37eb…580a</code>.';
+  }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
   $('#plEtat').textContent = real
@@ -4536,6 +4548,7 @@ function peindrePlan(plan, adr) {
     /* ⛔ REGLE DU JEU (2026-09-13) : pool permanente, frais 0. Dit AVANT la signature, en clair. */
     'Permanent: the liquidity is placed in the name of a dead address — nobody, not you and not us, can '
       + 'ever take it out. That is why the pool fee is 0 %: nobody could ever collect it.',
+    'Honesty: this Launch lock ≠ later Add liquidity (Add keeps YOUR position — withdrawable). Not OpenLaunch forever-lock on every surface.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
@@ -5880,7 +5893,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-1948',
+    build: '20260915-2010',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
