@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2357">Build <code>20260915-2357</code> · Create free · Launch ≈$1+hook · Buy/Sell hooked · Costs short.</p>
+      <p class="note" data-build="20260916-0008">Build <code>20260916-0008</code> · Create free · Launch ≈$1+hook · Buy/Sell hooked · Costs short.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -924,7 +924,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button type="button" class="puce" data-filtre="TRUSTED">✦ Trusted</button>
         <button type="button" class="puce" data-filtre="HOOKED">🪝 Hooked</button>
       </div>
-      <!-- tip 2357: route volume → hooked / in-app BuySell (TBGAS + TbFeeHook). No fee addr in UI. -->
+      <!-- tip 2357/2358: hooked BuySell + unhooked Live → Launch beside. No fee addr in UI. -->
       <p class="note" id="sfHookedRoute" hidden></p>
       <!-- ⛔ P0 2026-09-15 tip 1800: dashboard honesty — CreateRouter unused vs Social factory flood.
            Not redundant with per-row 0630 no-launch→Launch nudge: this is the window aggregate. -->
@@ -3954,7 +3954,7 @@ function retirerTrusted(adr) {
 }
 
 
-/** tip 2357: route users to hooked markets / in-app BuySell — external Dex on TbFeeHook still chops. No fee addr. */
+/** tip 2357/2358: hooked BuySell + unhooked Live → Launch beside. No fee addr. */
 function peindreHookedRoute() {
   const el = $('#sfHookedRoute');
   if (!el) return;
@@ -3981,7 +3981,7 @@ function peindreHookedRoute() {
   el.innerHTML = '<b>Hooked markets</b> · trade <b>in-app Buy/Sell</b> (0.5%)'
     + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : '')
     + (hasTbgas ? ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>' : '')
-    + '. Dex on hooked also chops · unhooked Dex = $0. Filter: <b>Hooked</b>.';
+    + '. Dex on hooked also chops · unhooked Dex = $0 — profile → <b>Launch hooked beside</b>. Filter: <b>Hooked</b>.';
   const b = $('#sfOpenTbgas');
   if (b) {
     b.addEventListener('click', (ev) => {
@@ -4114,11 +4114,14 @@ function peindreLive() {
     const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
       ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
+    /* tip 2358: unhooked ACHAT/VENTE → Launch hooked beside (fee capture); hooked/TBGAS → Buy/Sell */
     const openHint = e.type === 'CREATION' && e.paidCreate !== true
       ? ' · <span class="filOpen">tap → profile · Launch to market</span>'
-      : ((e.confiance === 'HOOK' || (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
-          && String(e.jeton || '').toLowerCase() === String(TBGAS).toLowerCase())
-        ? ' · <span class="filOpen">tap → Buy/Sell in-app (hook chops Dex too)</span>' : '');
+      : (e.confiance === 'SANS_HOOK' && (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
+        ? ' · <span class="filOpen">tap → profile · Launch hooked beside</span>'
+        : ((e.confiance === 'HOOK' || (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
+            && String(e.jeton || '').toLowerCase() === String(TBGAS).toLowerCase())
+          ? ' · <span class="filOpen">tap → Buy/Sell in-app (hook chops Dex too)</span>' : ''));
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
       ? (estTrusted(e.jeton)
         ? ' · <span class="filOpen">✦ trusted (CreateRouter)</span>'
@@ -6722,7 +6725,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2357',
+    build: '20260916-0008',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
