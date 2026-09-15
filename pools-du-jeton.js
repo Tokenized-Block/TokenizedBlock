@@ -107,3 +107,62 @@ export async function decouvrirPools({ rpc, poolManager, deBloc, aBloc, jetons =
   for (let de = deBloc; de <= aBloc; de += FENETRE_DECOUVERTE) await lire(de, Math.min(aBloc, de + FENETRE_DECOUVERTE - 1));
   return { pools, illisibles, fenetresRatees };
 }
+
+/**
+ * tip 2342: when app CLES_MARCHE miss a live Dex pair (e.g. fee 375 / spacing 4),
+ * resolve Uniswap v4 poolId via DexScreener then eth_getLogs Initialize(topic1=poolId).
+ * @returns {Promise<object|null>} same shape as decouvrirPools entry, or null
+ */
+export async function lirePoolParDexScreener({ rpc, poolManager, jeton, fetchFn = fetch }) {
+  const want = String(jeton || '').toLowerCase();
+  const pm = String(poolManager || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(want) || !/^0x[0-9a-f]{40}$/.test(pm)) return null;
+  let pairs = [];
+  try {
+    const r = await fetchFn('https://api.dexscreener.com/token-pairs/v1/base/' + want);
+    if (!r || !r.ok) return null;
+    const j = await r.json();
+    pairs = Array.isArray(j) ? j : [];
+  } catch { return null; }
+  const ETH0 = ETH;
+  const cands = pairs.filter((p) => {
+    if (!p || String(p.chainId || '').toLowerCase() !== 'base') return false;
+    if (String(p.dexId || '').toLowerCase() !== 'uniswap') return false;
+    const labels = Array.isArray(p.labels) ? p.labels.map((x) => String(x).toLowerCase()) : [];
+    if (labels.length && !labels.includes('v4')) return false;
+    const b = p.baseToken && String(p.baseToken.address || '').toLowerCase();
+    const q = p.quoteToken && String(p.quoteToken.address || '').toLowerCase();
+    if (b !== want && q !== want) return false;
+    return b === ETH0 || q === ETH0 || b === TBLOCK.toLowerCase() || q === TBLOCK.toLowerCase();
+  });
+  if (!cands.length) return null;
+  cands.sort((a, b) => (Number(b.liquidity && b.liquidity.usd) || 0) - (Number(a.liquidity && a.liquidity.usd) || 0));
+  const pair = cands[0];
+  let poolIdHex = String(pair.pairAddress || '').toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/.test(poolIdHex)) return null;
+
+  let head;
+  try { head = parseInt(await rpc('eth_blockNumber', []), 16); } catch { return null; }
+  if (!Number.isSafeInteger(head)) return null;
+
+  const span = 2000;
+  let log = null;
+  for (let de = head - span; de > head - 120000; de -= span) {
+    const a = Math.min(head, de + span - 1);
+    const from = Math.max(0, de);
+    let logs;
+    try {
+      logs = await rpc('eth_getLogs', [{
+        address: pm,
+        topics: [TOPIC_INITIALIZE, poolIdHex],
+        fromBlock: '0x' + from.toString(16),
+        toBlock: '0x' + a.toString(16),
+      }]);
+    } catch { continue; }
+    if (Array.isArray(logs) && logs.length) { log = logs[0]; break; }
+  }
+  if (!log) return null;
+  const dec = decoderInitialize(log);
+  if (!dec || dec.erreur || !dec.cle) return null;
+  return { ...dec, jeton: want, viaDex: pair.url || null, pairAddress: poolIdHex };
+}
