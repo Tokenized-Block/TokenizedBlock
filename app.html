@@ -605,7 +605,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
-      <!-- ⛔ P0 tip 2140→2250: tabs — Costs / Sign / Notes. App sinks + CreateRouter + TbFeeHook → FEE_WALLET (a6cf) tip 2300+. UI copy: Fees for BaseAPP Holders. -->
+      <!-- tip 2349–2351: Create FREE · fee at Launch+TbFeeHook → a6cf. Sign tab must not say life fee at create. -->
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
@@ -621,7 +621,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="note" id="cRecap"></p>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="sign" hidden>
-        <p class="note"><b>One signature</b> for Create. Life fee ETH only after create succeeds (revert refunds you).</p>
+        <p class="note"><b>One signature</b> for free Create (factory). <b>No life fee at birth.</b> Fee = Launch (life + TbFeeHook → a6cf) — next step after create.</p>
         <ol class="pmLignes" id="cApercuTx"></ol>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
@@ -908,8 +908,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2350">Build <code>20260915-2350</code> · fees→a6cf · Create free · Launch+hook chops Dex · Buy/Sell 0.5% fail-closed.</p>
-      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
+      <p class="note" data-build="20260915-2351">Build <code>20260915-2351</code> · fees→a6cf · Create free from birth · Sign scrub · Launch=fee.</p>
+      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -3278,10 +3278,10 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: <b>unread</b> this visit — trust path not judged from a failed read.');
   }
   lignes.push(trusted
-    ? 'Trusted: <b>✦ yes</b> (browser-local Keep — CreateRouter paid or TbFeeHook — not a score, not KYC).'
-    : 'Trusted: no Keep yet. Mark Trusted only on CreateRouter-paid create or TbFeeHook pool — fee-honest path only.');
+    ? 'Trusted: <b>✦ yes</b> (browser-local Keep — TbFeeHook Launch path — not a score, not KYC).'
+    : 'Trusted: no Keep yet. Mark Trusted on TbFeeHook Launch (fee-honest). Free create alone ≠ fees.');
   lignes.push(madeHere
-    ? 'Origin: face engraved via <b>TokenizedBlock Create</b> (CreateRouter life fee path when paid here).'
+    ? 'Origin: face engraved via <b>TokenizedBlock Create</b> (free factory — fee at Launch + TbFeeHook).'
     : 'Origin: created elsewhere / face unread — <b>no launch</b> until Launch here.');
   ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
   if (badge) {
@@ -3518,7 +3518,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
       : (v.vie == null || !Number.isFinite(Number(v.vie))
-        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · open Buy/Sell or Launch hooked → a6cf' : ''))
+        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · Launch hooked → a6cf (Buy/Sell after hook)' : ''))
         : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || ''));
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
@@ -3766,8 +3766,8 @@ const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
   /* tip 2310: All = fee-relevant feed for BaseAPP Holders (a6cf).
-   * Show: paid CreateRouter creates, Feed/Kill, Messages, verified swaps + HOOK swaps (TbFeeHook → a6cf).
-   * Hide: unpaid factory creates (no fee), GM/NOTE spam (chip GM). Created chip still lists every create. */
+   * Show: Launch/hook fee path (Feed/Kill · Messages · hooked swaps → a6cf). Free creates under Created chip.
+   * Hide: free factory creates on All (no fee yet), GM/NOTE (chip GM). */
   if (liveFiltre === 'TOUT') {
     if (e.type === 'GM' || e.type === 'NOTE') return false;
     if (e.type === 'CREATION') return e.paidCreate === true; /* CreateRouter → FEE_WALLET a6cf */
@@ -3972,7 +3972,8 @@ function peindreCreateFeeHonesty() {
     if (!creations.length) {
       el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + TbFeeHook → a6cf). Free create ≠ fee yet.';
     } else {
-      el.innerHTML = '<b>' + free + '</b> free create · <b>' + paid + '</b> CreateRouter (optional). Fee = Launch → a6cf · Fees for BaseAPP Holders.';
+      el.innerHTML = '<b>' + free + '</b> free create · fee starts at <b>Launch + TbFeeHook</b> → a6cf'
+        + (paid ? (' · <b>' + paid + '</b> legacy CreateRouter') : '') + '.';
     }
   } else {
     el.textContent = creations.length
@@ -4025,8 +4026,8 @@ function peindreLive() {
         ? (CHAINE === 8453
           ? '🧱 <b>' + nom + '</b> was created · CreateRouter (optional paid path)'
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
-        : '🧱 <b>' + nom + '</b> · free create · Launch to market'
-          + (CHAINE === 8453 ? ' (life fee ≈ $1 + hooked pool → a6cf)' : ' (Practice free · no hook)'))
+        : '🧱 <b>' + nom + '</b> · free create · Launch hooked to chop Dex'
+          + (CHAINE === 8453 ? ' (life fee ≈ $1 + TbFeeHook → a6cf)' : ' (Practice free · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? (e.aaOpaque
@@ -6154,8 +6155,17 @@ async function creerBlock() {
       + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
     if (rc.etat === 'CONFIRME') {
       e.className = 'note wOk';
-      e.innerHTML = v.sym + ' exists on ' + enTexte(RESEAUX[CHAINE].nom) + '.' + lien;
+      const nextLaunch = Number(CHAINE) === 8453
+        ? ' <b>Next:</b> open the block → <b>Wake / Launch</b> (life fee + TbFeeHook mandatory) — only then Buy/Sell & Dex chop → a6cf.'
+        : ' <b>Next:</b> Wake / Launch on Practice (free), then Buy/Sell.';
+      e.innerHTML = v.sym + ' exists on ' + enTexte(RESEAUX[CHAINE].nom) + ' — <b>Create was free</b>.' + nextLaunch + lien;
       void listerMesBlocks();
+      if (adresseCreee) {
+        try {
+          ouvrirProfil(adresseCreee, v.sym);
+          /* tip 2351: after free create, surface Launch — do not send users to unhooked Dex first */
+        } catch (_) {}
+      }
     } else {
       e.className = 'note wKo';
       const feeKept = utiliseCreateRouter()
@@ -7152,7 +7162,7 @@ if (presetLien) {
   remplirSelSiVide();
   majFraisEtRecap();
 }
-/* ⛔ 301 Instant Create → /#creer must open Create (CreateRouter life fee), not Map. */
+/* tip 2351: 301 Instant Create → /#creer opens free Create (fee at Launch), not Map. */
 if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') {
   setTimeout(() => allerA('creer'), 0);
 }
