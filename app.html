@@ -2929,10 +2929,10 @@ function peindreCapturePaths(adr, v, hkInfo) {
   if (depth) depth.textContent = lo ? ('L≈' + lo + ' · you keep position') : 'you keep your position';
   if (intro) {
     intro.innerHTML = estTb
-      ? ('Deepen TBLOCK book → more swaps → <b>0.5% → 0x37eb…580a</b>'
+      ? ('Deepen TBLOCK book → more swaps → <b>0.5% protocol → 0x37eb…</b>'
         + (hkInfo && hkInfo.isTbFeeHook ? ' + hook 2%' : ' (unhooked pool)')
         + '. Position stays yours.')
-      : ('Add blocks to the book → more Buy/Sell → <b>0.5% → fee wallet</b>'
+      : ('Add blocks to the book → more Buy/Sell → <b>0.5% protocol</b>'
         + (hkInfo && hkInfo.hooked ? ' · hook fee too' : '')
         + '. Unlike Launch, you keep this position.');
   }
@@ -2943,8 +2943,8 @@ function peindreCapturePaths(adr, v, hkInfo) {
     u.hidden = false;
     if (CHAINE === 8453) {
       u.innerHTML = estTb
-        ? '<b>Exit</b>: Sell → ETH (0.5% → fee wallet, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5% → <code>0x37eb…580a</code>). External DEX pays 0.'
-        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5% → <code>0x37eb…580a</code>)'
+        ? '<b>Exit</b>: Sell → ETH (0.5% protocol, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5% → <code>0x37eb…</code>). External DEX pays 0.'
+        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5% protocol → <code>0x37eb…</code>)'
           + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2%' : '')
           + '. Deepen TBLOCK LP so sells fill.';
     } else {
@@ -2980,7 +2980,7 @@ function proposerSortieUsdcApresVente(ethWei) {
   const b = document.createElement('button');
   b.className = 'bouton sec'; b.type = 'button';
   b.textContent = 'Next: Prepare ETH→USDC (0.5 % → fee)';
-  b.title = 'Exit hop — same 0.5 % interface fee → 0x37eb…580a (quoter-gated; external DEX pays 0)';
+  b.title = 'Exit hop — same 0.5 % protocol fee → 0x37eb… (quoter-gated; external DEX pays 0)';
   b.addEventListener('click', () => void preparerEthUsdc());
   actions.appendChild(b);
 }
@@ -3288,7 +3288,7 @@ async function lireProfil(adr, sym, perime) {
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = '<b>Dormant → Wake is gated</b>: life fee ≈ <b>$1 ETH</b> → <code>0x37eb…580a</code> first (floor 0.0003, verified on chain — no wallet bypass), '
+      wg.innerHTML = '<b>Dormant → Wake is gated</b>: life fee ≈ <b>$1 ETH</b> (protocol → <code>0x37eb…</code>) first (floor 0.0003, verified on chain — no wallet bypass), '
         + 'then Launch opens a <b>new hooked</b> pool (2&nbsp;% enduring → fee wallet). Work it out → Ask the chain → pay fee → Launch. Nothing skips the fee.';
     } else { wg.hidden = true; wg.textContent = ''; }
   }
@@ -4139,7 +4139,7 @@ async function preparerEchange(sens) {
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
       feeLigne,
       ...(sens === 'VENTE' && r.recoitDevise === 'ETH' && CHAINE === 8453
-        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % → 0x37eb…580a (external DEX pays 0)']
+        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % protocol → 0x37eb… (external DEX pays 0)']
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
@@ -4357,7 +4357,7 @@ async function preparerAjout() {
       ? ('Also needs ' + formaterUnites(p.ethRequis, 18) + ' of the quote token (measured).')
       : (viaTbLiq ? 'Quote side is TBLOCK — unilateral block range asks for blocks only (measured).' : 'Quote side ETH not required for this unilateral range (measured).'),
     estTbLiq
-      ? 'Deepening TBLOCK → more fills → more 0.5 % interface fees → 0x37eb…580a. No fee on the add itself.'
+      ? 'Deepening TBLOCK → more fills → more 0.5 % protocol fees → 0x37eb…. No fee on the add itself.'
       : 'The position belongs to YOU — withdraw anytime. No fee on liquidity; fees accrue when others Buy/Sell against this book.',
     ...[...(p.etapes || []), p.tx].filter(Boolean).map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: p.dec });
