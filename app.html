@@ -613,10 +613,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="cost">
         <p class="note" id="cFrais"></p>
-        <ul class="note noteBullets">
+        <ul class="note noteBullets" id="cCostBullets">
           <li><b>Create</b>: free</li>
-          <li><b>Launch</b>: ≈ $1 ETH · <b>Fees for BaseAPP Holders</b> + TbFeeHook</li>
-          <li><b>Buy/Sell</b> (when pool live): 0.5% · <b>Fees for BaseAPP Holders</b></li>
+          <li><b>Launch</b>: ≈ $1 ETH + TbFeeHook</li>
+          <li><b>Buy/Sell</b> (pool live): 0.5%</li>
         </ul>
         <p class="note" id="cRecap"></p>
       </div>
@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2354">Build <code>20260915-2354</code> · Create free · Launch starts fees · Buy/Sell 0.5% first · Fees for BaseAPP Holders · no fee addr in UI.</p>
+      <p class="note" data-build="20260915-2355">Build <code>20260915-2355</code> · Create free · Launch ≈$1+hook · Buy/Sell 0.5% · Costs short.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -5949,8 +5949,10 @@ function majFraisEtRecap() {
   const R = RESEAUX[CHAINE];
   const v = validerCreation();
   const feePhrase = phraseFrais(CHAINE, R.nom, ethUsd, fraisWeiCalcule, soldeEthNat);
-  /* tip 2354: empty name → ONLY the ko (no fee essay dump) */
-  $('#cFrais').textContent = v.ko ? v.ko : feePhrase;
+  /* tip 2355: ko once in cRecap only — no double « needs a name » */
+  $('#cFrais').textContent = v.ko ? '' : feePhrase;
+  const bullets = $('#cCostBullets');
+  if (bullets) bullets.hidden = Boolean(v.ko);
   const usd = fraisCreationUsd(CHAINE);
   const boutonCreer = $('#cCreer');
   if (boutonCreer && typeof creationEnCours !== 'undefined' && !creationEnCours) {
@@ -6014,8 +6016,8 @@ function majFraisEtRecap() {
     }).join('') + '<li>Buy/Sell in-app: 0.5% · Fees for BaseAPP Holders. Launch attaches TbFeeHook on MAIN.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base mainnet — Create is free. Fees start at Launch. Cannot be undone.'
-    : 'Practice — free; nothing here is real money.';
+    ? '⚠️ Base mainnet — Create free. Fees at Launch (≈$1 ETH + TbFeeHook). Cannot be undone.'
+    : 'Practice — Create free. Launch fees are MAIN only.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
 

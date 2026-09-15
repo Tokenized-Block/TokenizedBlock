@@ -60,8 +60,8 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   void ethUsd; void fraisWei; void soldeEth;
   const main = Number(chaine) === 8453;
   return main
-    ? 'Create free. Fees start at Launch · Fees for BaseAPP Holders.'
-    : 'Create free (Practice). Fees start at Launch on MAIN.';
+    ? 'Create free. Fees start at Launch (≈$1 ETH + TbFeeHook).'
+    : 'Create free (Practice).';
 }
 
 /** Same FRAIS_USD on MAIN — Launch / wake market life fee (stage 2). Practice = 0. */
