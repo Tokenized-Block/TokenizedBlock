@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>TokenizedBlock — the living map</title>
+<link rel="icon" href="icon.png" type="image/png">
 <!-- ══════════════════════════════════════════════════════════════════════════════════════════════
      COQUE NEUVE, MODULES INCHANGES. `index.html` fait 600 Ko et se lit comme un panneau
      d administration ; les modules qu il importe portent 313 assertions et 16 regles. On refait
@@ -902,7 +903,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2150">Build <code>20260915-2150</code> · Brain select sticks + Export download · fees → 0x37eb.</p>
+      <p class="note" data-build="20260915-2165">Build <code>20260915-2165</code> · bug-sweep: tabs/companion/trust CTAs/RPC · fees → 0x37eb.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1093,7 +1094,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
           <p class="note">In-app Buy/Sell: <b>0.5%</b> protocol (→ <code>0x37eb…</code>). Hooked pools: fees to <b>creator + holders</b> (1% creator · 2% protocol). External DEX ≠ this path.</p>
         </div>
-        <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit">
+        <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <p class="note" id="peUsdcPath" hidden></p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
@@ -1400,9 +1401,9 @@ const RESEAUX = {
            stateView: '0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4',
            explorateur: 'https://sepolia.basescan.org' },
   8453: { nom: 'Base mainnet', rpc: 'https://base-rpc.publicnode.com',
-          /* ⛔ 2026-09-14: mainnet.base.org rate-limits → Brain market unread. publicnode first for markets;
-           * official stays in secours for B20-prefer path (rpc still pins 0xb20* to first node — use official as
-           * b20Prefer below). */
+          /* tip 2165: keep publicnode first (mainnet.base.org 429 under map load — overnight fix).
+           * Console 403 from some egresses is noisy but rpc() already rotates to secours.
+           * Extra: drpc last. B20 factory still pins b20Rpc (official). */
           secours: ['https://mainnet.base.org', 'https://base.drpc.org'],
           b20Rpc: 'https://mainnet.base.org',
           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71',
@@ -1560,7 +1561,16 @@ function noterFace(adr, face) {
   try { localStorage.setItem(CLE_FACE + a, JSON.stringify(v.face)); } catch (e) { /* sans memoire */ }
   return true;
 }
-const dessin = (adr, sym) => logoSvg(paramsLogoDepuisApparence(faceConnue(adr) || apparenceDepuisAdresse(adr), sym));
+const dessin = (adr, sym) => {
+  try {
+    const face = faceConnue(adr) || apparenceDepuisAdresse(adr);
+    if (!face) return '';
+    return logoSvg(paramsLogoDepuisApparence(face, sym));
+  } catch (e) {
+    try { console.warn('[face] draw skipped', adr, e && e.message); } catch (_) {}
+    return '';
+  }
+};
 
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
@@ -3063,14 +3073,22 @@ function peindreTrustFacts(adr, v, origine) {
   if (badge) {
     badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? 'hooked path' : 'measured only');
   }
+  /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
-    cta.innerHTML = '<b>Next → Wake / Launch</b>: life fee ≈ $1 ETH (protocol → <code>0x37eb…</code>), then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.';
+    cta.innerHTML = '<b>Next</b>: life fee ≈ $1 ETH (protocol → <code>0x37eb…</code>), then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.'
+      + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+      + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
   } else if (etat === 'LUE') {
-    cta.innerHTML = '<b>Next → Buy / Sell in-app</b>: 0.5&nbsp;% protocol (→ <code>0x37eb…</code>)'
+    cta.innerHTML = '<b>Next</b>: 0.5&nbsp;% protocol (→ <code>0x37eb…</code>)'
       + (info.isTbFeeHook ? ' · hook fees to creator + holders' : ' (pool unhooked — app fee still applies)')
-      + '. Deepen LP if quotes thin. External DEX pays this wallet 0.';
+      + '. Deepen LP if quotes thin. External DEX pays this wallet 0.'
+      + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
+      + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
+      + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
   } else {
-    cta.innerHTML = '<b>Next → Read its market again</b>, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths (protocol → <code>0x37eb…</code>).';
+    cta.innerHTML = '<b>Next</b>: read market again, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths (protocol → <code>0x37eb…</code>).'
+      + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+      + '<button type="button" class="bouton sec" data-tf-act="reread">Read its market again</button></div>';
   }
 }
 
@@ -3418,10 +3436,43 @@ $('#pMap').addEventListener('click', () => {
 });
 /* Companion glue links — same map path; Brain AI selects this profile block. No fee / Launch touch. */
 $('#pcgMap').addEventListener('click', () => { $('#pMap').click(); });
+/* tip 2165: pin brainAdr BEFORE allerA — peindreChoixBrain on tab open was keeping a stale pick
+ * (garde) so Companion → Open Brain AI opened the wrong block. */
 $('#pcgBrain').addEventListener('click', () => {
   const adr = $('#profil').dataset.block;
+  if (adr) brainAdr = adr;
   allerA('brain');
   if (adr) choisirBrain(adr);
+});
+/* tip 2165: Holders · trust facts CTAs */
+$('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-tf-act]');
+  if (!b) return;
+  const act = b.getAttribute('data-tf-act');
+  const pe = $('#pEchange'), plq = $('#pLiquidite'), pl = $('#pLancement');
+  if (act === 'wake') {
+    const w = $('#pReveiller');
+    if (w && !w.hidden) { w.click(); return; }
+    if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    try { ouvrirLancement(); } catch (_) {}
+    return;
+  }
+  if (act === 'buy') {
+    if (pe) { pe.hidden = false; pe.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    const a = $('#peAchat'); if (a) { try { a.focus(); } catch (_) {} }
+    return;
+  }
+  if (act === 'deepen') {
+    if (plq) { plq.hidden = false; plq.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    const a = $('#plqAjouter'); if (a) { try { a.focus(); } catch (_) {} }
+    return;
+  }
+  if (act === 'reread') {
+    const r = $('#pRelire');
+    if (r && !r.hidden) { r.click(); return; }
+    const adr = $('#profil') && $('#profil').dataset.block;
+    if (adr) void ouvrirProfil(adr, symProfil);
+  }
 });
 /* ⛔ ENVOYER DEPUIS CE BLOCK = LE FORMULAIRE DU WALLET, PRE-REMPLI. Pas un second chemin d envoi :
  * un seul formulaire, une seule garde (`envoi.js`), une seule regle 8 a surveiller. */
@@ -6194,7 +6245,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2150',
+    build: '20260915-2165',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

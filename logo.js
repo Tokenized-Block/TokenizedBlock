@@ -30,6 +30,8 @@ export function paramsLogoDepuisApparence(a, lettre) {
 }
 
 export function logoSvg(o) {
+  /* tip 2165: never throw on null/partial settings — map paint must not die mid-frame. */
+  if (!o || typeof o !== 'object') o = {};
   const h = Number(o.teinte), ha = Number(o.accent);
   /* ⚠️ Bornes elargies le 2026-09-13 (5→8, 6→12) : toute valeur d avant rend EXACTEMENT le meme dessin. */
   const n = Math.max(1, Math.min(8, Number(o.division) || 3));
