@@ -61,7 +61,7 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   const main = Number(chaine) === 8453;
   return 'Create is free on ' + (nomReseau || 'this network')
     + (main
-      ? ' (factory). Life fee ≈ $' + FRAIS_USD + ' ETH + TbFeeHook market at Launch → Fees for BaseAPP Holders (a6cf). One signature now: creation only.'
+      ? ' (factory). Life fee ≈ $' + FRAIS_USD + ' ETH + TbFeeHook market at Launch · Fees for BaseAPP Holders. One signature now: creation only.'
       : ' — Practice. One signature: the creation itself. MAIN life fee is at Launch.');
 }
 
