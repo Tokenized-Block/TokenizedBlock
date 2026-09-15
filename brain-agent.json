@@ -1,30 +1,46 @@
 {
   "schema": "tblock-brain-agent/1",
-  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state — brains run in the browser.",
+  "honesty": "Fly brain is deterministic (tblock-fly-brain/3). Not an LLM. Server has no live neuron state \u2014 brains run in the browser.",
   "live_facts": {
     "where": "Browser only, after Brain AI tab has beaten at least once for a block",
     "window": "window.__TB_BRAIN_SNAPSHOT__",
-    "download": "Brain AI → Export brain facts (JSON file)",
-    "dom": "#tbBrainJson (machine-readable <pre> updated each beat)"
+    "download": "Brain AI \u2192 Export brain facts (JSON file)",
+    "dom": "#tbBrainJson inside #tbBrainDetails (summary updates each beat)",
+    "localStorage": "tb-brain-last (last beat JSON \u2014 same schema as snapshot)"
   },
   "curl": {
     "this_file": "curl -sS https://tokenized-block.up.railway.app/brain-agent.json",
     "app_tip": "curl -sS https://tokenized-block.up.railway.app/app.html | rg 'data-build='",
     "module": "curl -sS https://tokenized-block.up.railway.app/export-cerveau.js | head",
-    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz — that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
+    "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz \u2014 that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
   },
   "zero1": {
-    "read": "Open MAIN app → Brain AI → pick block (e.g. TBLOCK 0xb200…) → let it beat → read window.__TB_BRAIN_SNAPSHOT__ or click Export",
-    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture — never invent mood/phase/advice",
-    "ensemble_calm_example": "phase CALME + symmetric gauche_hz≈droite_hz + |virage|≈0 → balanced calm ensemble; tick≥100000 → continuity product"
+    "read": "Open MAIN \u2192 Brain AI \u2192 pick block \u2192 let it beat \u2192 read window.__TB_BRAIN_SNAPSHOT__ or localStorage.getItem(\"tb-brain-last\") or #tbBrainJson / Export",
+    "adapt": "Use phase, hz, journal[].parce_que, regles, nourriture \u2014 never invent mood/phase/advice",
+    "ensemble_calm_example": "phase CALME + symmetric gauche_hz\u2248droite_hz + |virage|\u22480 \u2192 balanced calm ensemble; tick\u2265100000 \u2192 continuity product",
+    "fee_pool": "snapshot.marche.hooked / isTbFeeHook / via \u2014 from profile market read when same block was opened; null if unread"
   },
   "snapshot_schema": "tblock-brain-snapshot/1",
   "fields": [
-    "phase", "humeur", "phrase", "tick",
-    "hz.gauche", "hz.droite", "hz.virage",
-    "spikes", "memoire", "marche", "nourriture",
-    "journal[]", "regles", "ensemble_note", "entree"
+    "phase",
+    "humeur",
+    "phrase",
+    "tick",
+    "hz.gauche",
+    "hz.droite",
+    "hz.virage",
+    "spikes",
+    "memoire",
+    "marche",
+    "marche.hooked",
+    "marche.via",
+    "nourriture",
+    "journal[]",
+    "regles",
+    "ensemble_note",
+    "entree"
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
-  "main": "https://tokenized-block.up.railway.app/"
+  "main": "https://tokenized-block.up.railway.app/",
+  "tip": "20260915-1745"
 }

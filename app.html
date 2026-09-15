@@ -603,7 +603,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
       <p class="note" id="cFrais"></p>
-      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet <b>life fee ≈ $1 ETH</b> (birth — USDC/ETH Uniswap median) → <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; life fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing until Launch — we cannot force the Base precompile. Not a safety score.</p>
+      <p class="note" id="cMintFeeHint">Plus on Create: supply is <b>sealed 1B</b> (indestructible — nobody can mint more), <b>all to you</b>. Mainnet <b>life fee ≈ $1 ETH</b> (birth — USDC/ETH Uniswap median) → <code>0x37eb…580a</code> via <b>CreateRouter</b> (one signature; life fee ETH only after create succeeds). No 5% / 50M token mint to the fee wallet. Creates that skip this app (raw factory) pay nothing until Launch — we cannot force the Base precompile. Social Live lists every factory create; those are unpaid until Launch. CreateRouter is the paid in-app Create path (life fee only after create succeeds). Not a safety score.</p>
       <p class="note" id="cBuybackHint">After the life fee lands in the TokenizedBlock fee wallet, that wallet can buy TBLOCK on-chain (buybacks show on the TBLOCK profile). Life fee ≠ automatic buyback, and nothing pegs price. Sleep / no-market = not paying life yet.</p>
       <p class="note" id="cRecap"></p>
       <p class="titre" style="margin-top:10px;font-size:1em">What your wallet will sign</p>
@@ -663,8 +663,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div class="rang" style="margin-top:10px">
         <button class="bouton sec" id="bExporter" type="button">Export brain facts</button>
       </div>
-      <p class="note" id="bExporterNote">Writes phase, Hz, steering, spikes, journal, rules, sensors as JSON (facts only). Also updates <code>window.__TB_BRAIN_SNAPSHOT__</code> each beat for agents. How-to: <code>/brain-agent.json</code>.</p>
-      <pre class="mono" id="tbBrainJson" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap;font-size:11px"></pre>
+      <p class="note" id="bExporterNote">Writes phase, Hz, steering, spikes, journal, rules, sensors as JSON (facts only). Also updates <code>window.__TB_BRAIN_SNAPSHOT__</code> each beat + <code>localStorage[tb-brain-last]</code> for agents. How-to: <code>/brain-agent.json</code>.</p>
+      <details class="bDetail" id="tbBrainDetails" style="margin-top:8px" open>
+        <summary class="note" style="cursor:pointer" id="tbBrainSummary">Agent dump · #tbBrainJson (facts only — fills after first beat)</summary>
+        <pre class="mono" id="tbBrainJson" hidden style="max-height:220px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
+      </details>
       <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bReglesResume">Its rules — code it writes itself</summary>
       <p class="note">After it has seen the same event on chain at least twice, it writes a rule for it. A closed engine
         reads these lines: a rule can only write in its journal or suggest a gesture to you. It never signs, sends or
@@ -866,7 +869,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-1715">Build <code>20260915-1715</code> · Brain facts export for agents · Buy/Sell 0.5% fee harden; Launch life-fee verify kept.</p>
+      <p class="note" data-build="20260915-1745">Build <code>20260915-1745</code> · Profile hooked-pool detect · Brain marche/hooks + last-export persist · CreateRouter honesty.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1021,6 +1024,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <div class="pStat"><span>Native B20</span><b id="pB20"></b></div>
         <div class="pStat pLarge"><span>You hold</span><b id="pSolde"></b></div>
       </div>
+      <!-- ⛔ P0 2026-09-15: hooked vs legacy pool on profile — fee path honesty. -->
+      <p class="note" id="pMarcheHook" hidden></p>
       <div class="pActions">
         <button class="bouton" id="pEnvoyer" type="button">Send from this block</button>
         <button class="bouton sec" id="pPartager" type="button">Share profile</button>
@@ -1897,7 +1902,7 @@ function appliquerVie(h, r) {
    *    restait vide plus de 40 s sous saturation. Elle se repeint a chaque vie lue : on voit les blocks monter de stade. */
   queueMicrotask(peindreStades);
   if (r.etat !== 'LUE') return;
-  h.vie = r.vie; h.devise = r.devise; h.via = r.via;
+  h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null;
   const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
   h.t = t;
   h.el.style.width = t + 'px';
@@ -2807,6 +2812,46 @@ function peindreCerveau() {
  * ⚠️ La barre avance en RACINE CUBIQUE, comme les PV : en lineaire, un block serait colle a zero
  *    pendant 99 % du chemin vers le palier suivant.
  */
+
+/** Read pool-key hook status from a vieDuBlock result (facts only). */
+function infoHookMarche(v) {
+  const zero = '0x0000000000000000000000000000000000000000';
+  const hk = v && v.cle && v.cle.hooks ? String(v.cle.hooks).toLowerCase() : '';
+  const hooked = Boolean(hk && hk !== zero);
+  const isTb = hooked && hk === String(HOOK_PREVU).toLowerCase();
+  return {
+    hooked,
+    isTbFeeHook: isTb,
+    hooks: hooked ? hk : zero,
+    via: v && v.via ? String(v.via) : null,
+  };
+}
+
+/** Profile honesty: hooked (TbFeeHook) vs legacy unhooked — old pools never gain 2% retroactively. */
+function peindreMarcheHook(v) {
+  const el = $('#pMarcheHook');
+  if (!el) return;
+  if (!v || v.etat !== 'LUE') {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  const info = infoHookMarche(v);
+  el.hidden = false;
+  if (info.isTbFeeHook) {
+    el.textContent = 'Market pool · hooked (TbFeeHook '
+      + HOOK_PREVU.slice(0, 6) + '…' + HOOK_PREVU.slice(-4)
+      + ') — later swaps pay 3 % (2 % → fee wallet 0x37eb…580a, 1 % creator), app + external'
+      + (info.via ? ' · via ' + info.via : '') + '.';
+  } else if (info.hooked) {
+    el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not TbFeeHook — TokenizedBlock fee split does not apply'
+      + (info.via ? ' · via ' + info.via : '') + '.';
+  } else {
+    el.textContent = 'Market pool · unhooked (legacy / pre-hook Launch) — no enduring 2 % hook fee; in-app Buy/Sell still takes 0.5 % → fee wallet. New app Launch opens a NEW hooked pool id; this pool stays as-is'
+      + (info.via ? ' · via ' + info.via : '') + '.';
+  }
+}
+
 function peindreJeu(mcDevise, devise, etat) {
   /* ⛔⛔ L ECHELLE DES PV ET DES PALIERS EST EN DOLLARS (`pointsdevie.js`). Jusqu au 2026-09-13 on lui
    * passait la capitalisation EN ETH : « Sprout at 1,000 » voulait dire 1 000 ETH. Conversion par le
@@ -2892,6 +2937,7 @@ async function lireProfil(adr, sym, perime) {
   /* le plan de lancement parlait du block precedent : il se ferme a l ouverture d un autre profil */
   $('#pLancement').hidden = true;
   $('#pReveiller').hidden = true;
+  const pmh0 = $('#pMarcheHook'); if (pmh0) { pmh0.hidden = true; pmh0.textContent = ''; }
   $('#pEchange').hidden = true;
   $('#pLiquidite').hidden = true;
   $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
@@ -3027,10 +3073,14 @@ async function lireProfil(adr, sym, perime) {
   $('#pEchange').hidden = etatVieProfil !== 'LUE';
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
+  /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (TbFeeHook) or legacy unhooked. */
+  peindreMarcheHook(v);
   if (etatVieProfil === 'LUE') {
     const bb = estWalletDeFrais(compte);
+    const hkInfo = infoHookMarche(v);
     $('#peBadge').textContent = bb ? 'Buyback · fee wallet' : 'Buy · Sell';
-    $('#peFrais').textContent = bb ? 'no fee' : '0.5 % fee';
+    $('#peFrais').textContent = bb ? 'no fee'
+      : (hkInfo.hooked ? '0.5 % app → fee wallet · pool hook 3 %' : '0.5 % app fee → fee wallet (pool unhooked)');
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
@@ -5325,6 +5375,44 @@ function publierSnapshotBrain(vu, h) {
     } catch (e) { role = null; }
   }
   const reg = reglesLues(brainAdr);
+  const marcheExtra = (() => {
+    try {
+      const mp = marcheProfil && String(marcheProfil.adr).toLowerCase() === String(brainAdr).toLowerCase()
+        ? marcheProfil.v : null;
+      if (!mp || mp.etat !== 'LUE') {
+        if (h && h.cle) {
+          const infoH = infoHookMarche({ etat: 'LUE', vie: h.vie, via: h.via, cle: h.cle });
+          return {
+            vie: typeof h.vie === 'number' ? h.vie : null,
+            etatVie: h.etatVie || null,
+            via: infoH.via,
+            hooks: infoH.hooks,
+            hooked: infoH.hooked,
+            isTbFeeHook: infoH.isTbFeeHook,
+          };
+        }
+        return {
+          vie: h && typeof h.vie === 'number' ? h.vie : null,
+          etatVie: h ? h.etatVie : null,
+          via: h && h.via ? String(h.via) : null,
+          hooks: null,
+          hooked: null,
+          isTbFeeHook: null,
+        };
+      }
+      const info = infoHookMarche(mp);
+      return {
+        vie: typeof mp.vie === 'number' && Number.isFinite(mp.vie) ? mp.vie : null,
+        etatVie: 'LUE',
+        via: info.via,
+        hooks: info.hooks,
+        hooked: info.hooked,
+        isTbFeeHook: info.isTbFeeHook,
+      };
+    } catch (e) {
+      return null;
+    }
+  })();
   const snap = snapshotCerveau({
     address: brainAdr,
     symbole: (h && h.sym) || null,
@@ -5339,14 +5427,27 @@ function publierSnapshotBrain(vu, h) {
       : (brainNourriture && brainNourriture.adr === String(brainAdr).toLowerCase() ? brainNourriture.n : null),
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
-    build: '20260915-1715',
+    marche: marcheExtra,
+    build: '20260915-1745',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
+  try {
+    localStorage.setItem('tb-brain-last', JSON.stringify(snap));
+    window.__TB_BRAIN_LAST_KEY__ = 'tb-brain-last';
+  } catch (e) { /* private mode */ }
   const pre = $('#tbBrainJson');
   if (pre) {
     pre.hidden = false;
     pre.textContent = texteSnapshot(snap);
+  }
+  const sum = $('#tbBrainSummary');
+  if (sum && snap) {
+    sum.textContent = 'Agent dump · ' + (snap.symbole || (snap.address || '').slice(0, 10))
+      + ' · ' + (snap.phase || '?') + ' · tick ' + (snap.tick ?? '?')
+      + (snap.marche && snap.marche.hooked === true ? ' · hooked pool'
+        : snap.marche && snap.marche.hooked === false ? ' · unhooked pool' : '')
+      + ' · localStorage[tb-brain-last]';
   }
   return snap;
 }
@@ -5369,7 +5470,7 @@ $('#bExporter').addEventListener('click', () => {
   if (note) {
     note.className = 'note wOk';
     note.textContent = 'Exported facts for ' + (snap.symbole || snap.address) + ' @ beat ' + snap.tick
-      + ' · also on window.__TB_BRAIN_SNAPSHOT__ · schema ' + snap.schema;
+      + ' · window.__TB_BRAIN_SNAPSHOT__ + localStorage[tb-brain-last] · schema ' + snap.schema;
   }
 });
 

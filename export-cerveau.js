@@ -28,6 +28,7 @@ export function snapshotCerveau({
   nourriture = null,
   vie = null,
   etatVie = null,
+  marche = null,
   build = null,
   at = null,
 } = {}) {
@@ -80,10 +81,21 @@ export function snapshotCerveau({
     } : null,
     memoire: vu && typeof vu.memoire === 'number' ? vu.memoire : null,
     entree: vu && vu.entree ? String(vu.entree) : null,
-    marche: {
-      vie: typeof vie === 'number' && Number.isFinite(vie) ? vie : null,
-      etatVie: etatVie || null,
-    },
+    marche: (() => {
+      const base = {
+        vie: typeof vie === 'number' && Number.isFinite(vie) ? vie : null,
+        etatVie: etatVie || null,
+      };
+      if (!marche || typeof marche !== 'object') return base;
+      return {
+        vie: typeof marche.vie === 'number' && Number.isFinite(marche.vie) ? marche.vie : base.vie,
+        etatVie: marche.etatVie != null ? marche.etatVie : base.etatVie,
+        via: marche.via != null ? String(marche.via) : null,
+        hooks: marche.hooks != null ? String(marche.hooks) : null,
+        hooked: typeof marche.hooked === 'boolean' ? marche.hooked : null,
+        isTbFeeHook: typeof marche.isTbFeeHook === 'boolean' ? marche.isTbFeeHook : null,
+      };
+    })(),
     nourriture: n,
     journal: lignes,
     regles: {
