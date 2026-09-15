@@ -49,8 +49,8 @@
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2170",
-  "hard_objective": "Real protocol fees \u2192 0x37eb\u2026. Brain picker + Export (2150). Bug-sweep 2170: peInfo Exit hidden, Companion\u2192Brain pin, trust CTAs clickable, Practice Wake never claims $1+hooked (MAIN Real only).",
+  "tip": "20260915-2185",
+  "hard_objective": "Real protocol fees \u2192 0x37eb\u2026. Brain picker + Export (2150). Bug-sweep 2170. QA+ 2185: Buy\u00b7Sell Exit tab never blank; hook via chip strips pool-fee 0% noise; trust badge spacing.",
   "locked_liq": {
     "launch_lp": "Dead-address owner \u2014 permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added \u2014 withdrawable anytime. Not forever-locked.",

@@ -903,7 +903,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2170">Build <code>20260915-2170</code> · bug-sweep + Practice Wake honesty · fees → 0x37eb.</p>
+      <p class="note" data-build="20260915-2185">Build <code>20260915-2185</code> · Exit tab never blank + hook via honesty · fees → 0x37eb.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1064,7 +1064,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note" id="pMarcheHook" hidden></p>
       <!-- ⛔ P0 tip 2025: OL-inspired holders / trust facts — measured only; CTA → Launch or Buy (fee funnel). -->
       <div class="pJeu" id="pTrustFacts" hidden>
-        <div class="pJeuTete"><span class="pBadge">Holders · trust facts</span><span class="pPV" id="pTfBadge">measured only</span></div>
+        <div class="pJeuTete"><span class="pBadge">Holders · trust facts</span><span class="pPV" id="pTfBadge"> · measured only</span></div>
         <p class="pProchain" id="pTfIntro">Measured this visit only — never a score. Swap fees → creator + holders; protocol sinks → <code>0x37eb…</code>.</p>
         <ul class="pmLignes" id="pTfLignes"></ul>
         <p class="note" id="pTfCta"></p>
@@ -1095,7 +1095,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note">In-app Buy/Sell: <b>0.5%</b> protocol (→ <code>0x37eb…</code>). Hooked pools: fees to <b>creator + holders</b> (1% creator · 2% protocol). External DEX ≠ this path.</p>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
-          <p class="note" id="peUsdcPath" hidden></p>
+          <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
+          <p class="note" id="peUsdcPath">Exit: Sell → ETH (0.5% protocol → <code>0x37eb…</code>), then optional <b>ETH→USDC</b> (+0.5% → <code>0x37eb…</code>). External DEX pays this wallet 0. Practice = Base mainnet only.</p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
@@ -3008,17 +3009,28 @@ function peindreMarcheHook(v) {
   }
   const info = infoHookMarche(v);
   el.hidden = false;
+  /* tip 2185: via labels carry pool fee-tier names ("0 %") — never echo raw; looks like protocol fee 0. */
+  const viaCourt = (() => {
+    const s = info.via ? String(info.via) : '';
+    if (!s) return '';
+    if (/TBLOCK/i.test(s) && /TbFeeHook/i.test(s)) return ' · via TBLOCK (hooked Launch)';
+    if (/TBLOCK/i.test(s)) return ' · via TBLOCK (legacy Launch)';
+    if (/TbFeeHook/i.test(s)) return ' · via ETH (TbFeeHook Launch)';
+    if (/legacy Launch/i.test(s)) return ' · via ETH (legacy Launch pool)';
+    if (/^ETH/i.test(s)) return ' · via ETH';
+    return ' · via ' + s.replace(/\s*·\s*0\s*%[^·]*/gi, '').replace(/\s*·\s*0,5\s*%[^·]*/gi, '').trim();
+  })();
   if (info.isTbFeeHook) {
     el.textContent = 'Market pool · hooked (TbFeeHook '
       + HOOK_PREVU.slice(0, 6) + '…' + HOOK_PREVU.slice(-4)
       + ') — later swaps: fees to creator + holders (1 % creator · 2 % protocol → 0x37eb…), app + external'
-      + (info.via ? ' · via ' + info.via : '') + '.';
+      + viaCourt + '.';
   } else if (info.hooked) {
     el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not TbFeeHook — TokenizedBlock fee split does not apply'
-      + (info.via ? ' · via ' + info.via : '') + '.';
+      + viaCourt + '.';
   } else {
     el.textContent = 'Market pool · unhooked (legacy / pre-hook Launch) — no enduring creator/holders hook; in-app Buy/Sell still 0.5 % protocol. New app Launch opens a NEW hooked pool id; this pool stays as-is'
-      + (info.via ? ' · via ' + info.via : '') + '.';
+      + viaCourt + '.';
   }
   const lo = ordreLiquidite(v.liquidite);
   if (lo) {
@@ -3073,7 +3085,7 @@ function peindreTrustFacts(adr, v, origine) {
     : 'Origin: created elsewhere / face unread — <b>no launch</b> until Launch here.');
   ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
   if (badge) {
-    badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? 'hooked path' : 'measured only');
+    badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? ' · hooked path' : ' · measured only');
   }
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
@@ -3369,7 +3381,11 @@ async function lireProfil(adr, sym, perime) {
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
   } else {
-    const u = $('#peUsdcPath'); if (u) { u.hidden = true; u.textContent = ''; }
+    const u = $('#peUsdcPath');
+    if (u) {
+      u.hidden = false;
+      u.innerHTML = 'Exit: Sell → ETH (0.5% protocol → <code>0x37eb…</code>), then optional <b>ETH→USDC</b> (+0.5% → <code>0x37eb…</code>). External DEX pays this wallet 0. Practice = Base mainnet only.';
+    }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
    * tendance mesurable. Une capitalisation non lue n est jamais notee. */
@@ -6254,7 +6270,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2170',
+    build: '20260915-2185',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
