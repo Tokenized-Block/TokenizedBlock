@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2270">Build <code>20260915-2270</code> · DexScreener pair window on profile · Swaps·PnL · Fees for BaseAPP Holders · no fee-wallet CV.</p>
+      <p class="note" data-build="20260915-2280">Build <code>20260915-2280</code> · live Swaps·PnL refresh · DexScreener · Fees for BaseAPP Holders.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1081,6 +1081,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <ul class="pmLignes" id="pPnlLignes"></ul>
         <div class="pActions" id="pPnlDexRow" hidden style="grid-template-columns:1fr;margin-top:8px">
           <a class="bouton plein" id="pPnlDex" target="_blank" rel="noopener" style="grid-column:1/-1;text-align:center">Open DexScreener ↗</a>
+          <button type="button" class="bouton sec" id="pPnlRefresh" style="grid-column:1/-1">Refresh swaps · live</button>
           <p class="note" id="pPnlDexHint" style="grid-column:1/-1;margin:4px 0 0">Live pair window on DexScreener (external) — this block's Base pool chart.</p>
         </div>
         <div id="pPnlDexEmbed" hidden style="margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid var(--ligne);aspect-ratio:16/10;background:var(--fond)">
@@ -2313,6 +2314,7 @@ $('#pReseau').addEventListener('click', () => {
   /* ⛔ LE PROFIL OUVERT PARLAIT DE L AUTRE CHAINE : on le ferme et on invalide sa lecture en cours. */
   jetonProfil++;
   profilEnLecture = false;
+  stopPnlLive();
   $('#profil').hidden = true;
   /* le frais, le recap ET les paires parlent du reseau : les actions Coinbase n existent que sur mainnet */
   peindrePaires();
@@ -3112,6 +3114,31 @@ async function peindrePnlSwaps(adr, perime) {
       : (r.etat === 'NON_TROUVEE' ? ' · no pair' : ' · unread');
   }
 }
+
+
+/* tip 2280: public live Swaps·PnL — anyone on the profile; re-read Dex/Gecko on a timer while open */
+let pnlLiveTimer = null;
+let pnlLiveAdr = null;
+function stopPnlLive() {
+  if (pnlLiveTimer) { clearInterval(pnlLiveTimer); pnlLiveTimer = null; }
+  pnlLiveAdr = null;
+}
+function startPnlLive(adr) {
+  stopPnlLive();
+  pnlLiveAdr = String(adr || '');
+  if (!pnlLiveAdr) return;
+  pnlLiveTimer = setInterval(() => {
+    const box = $('#profil');
+    if (!box || box.hidden || String(box.dataset.block || '').toLowerCase() !== pnlLiveAdr.toLowerCase()) {
+      stopPnlLive(); return;
+    }
+    void peindrePnlSwaps(pnlLiveAdr, () => false);
+  }, 45000); /* 45s — measured re-fetch, not invented ticks */
+}
+$('#pPnlRefresh') && $('#pPnlRefresh').addEventListener('click', () => {
+  const adr = ($('#profil') && $('#profil').dataset.block) || pnlLiveAdr;
+  if (adr) void peindrePnlSwaps(adr, () => false);
+});
 
 /** ⛔ P0 tip 2025: OL-inspired holders / trust facts on profile — measured only; funnel → Launch / Buy. */
 function peindreTrustFacts(adr, v, origine) {
@@ -6418,7 +6445,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2270',
+    build: '20260915-2280',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
