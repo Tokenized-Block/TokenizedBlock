@@ -14,6 +14,51 @@ export const SIGNALS_COUNT = 32;
 /** Dead address — same forever-lock idea as Launch LP (OL locker adapted to Base/TB). */
 export const LOCK_FOREVER = '0x000000000000000000000000000000000000dEaD';
 
+/**
+ * CURRENT_TOY_V1 — frozen 2026-09-15 (lead autonomy; Raksha may re-engrave later).
+ * Shared with contracts/src/OfferCircuit.sol named weight constants.
+ * Circuit stays tblock-offer-circuit/1 (weights unchanged — freeze only, no /2 bump).
+ * Dig: DIG-OFFERCIRCUIT-O56-2026-09-15.md
+ */
+export const CURRENT_TOY_V1 = 'CURRENT_TOY_V1';
+export const OFFER_TOY_V1 = Object.freeze({
+  id: CURRENT_TOY_V1,
+  frozen_at: '2026-09-15',
+  THRESHOLD: 5,
+  /** s[0] market life read */
+  W_LIFE_READ: 3,
+  /** s[1] life > 0 */
+  W_LIFE_GT0: 2,
+  /** s[2] hooked */
+  W_HOOKED: 2,
+  /** s[11] food LUE */
+  W_FOOD_LUE: 2,
+  /** s[12] living phase */
+  W_LIVING_PHASE: 2,
+  /** s[8] > 0 → +1 GM */
+  W_GM_ANY: 1,
+  /** s[9] > 0 → +1 messages */
+  W_MSG_ANY: 1,
+  /** s[16] TbFeeHook */
+  W_TB_FEE_HOOK: 1,
+  /** s[6] > 0 DORMANT penalty */
+  PEN_DORMANT: 2,
+  /** s[13] === 1 INQUIET penalty */
+  PEN_INQUIET: 1,
+});
+export const THRESHOLD = OFFER_TOY_V1.THRESHOLD;
+
+/**
+ * Deploy honesty — preview/plan only until address filled after greenlit O7 deploy.
+ * ⛔ Never broadcast OfferCircuit from the app. Agents READ; user wallet SIGNS when live.
+ */
+export const OFFER_DEPLOY = Object.freeze({
+  status: 'not_deployed',
+  address: null,
+  mode: 'preview_only',
+  note: 'O5 CURRENT_TOY_V1 frozen · O6 Prepare = preview + plan only · O7 fills address after Raksha deploy OK',
+});
+
 /** Catalog of allowed on-chain tasks — honesty for UI + /brain-agent.json. */
 export const ONCHAIN_TASKS = Object.freeze([
   {
@@ -197,28 +242,30 @@ export function signaux32DepuisSnapshot(snap) {
 export function decideOffre(signals32) {
   const s = Array.isArray(signals32) ? signals32 : signaux32DepuisSnapshot(null);
   while (s.length < SIGNALS_COUNT) s.push(0);
+  const W = OFFER_TOY_V1;
   // Refuse hard stops
-  if (s[5] === 1) return { decision: 0, pourquoi: 'MORT signal' };
-  if (s[4] === 1 && s[0] === 0) return { decision: 0, pourquoi: 'market unread + no life read' };
-  if (s[25] === 1) return { decision: 0, pourquoi: 'offer slot busy' };
-  // Integer score (toy weights — engraved constants later)
+  if (s[5] === 1) return { decision: 0, pourquoi: 'MORT signal', toy: W.id };
+  if (s[4] === 1 && s[0] === 0) return { decision: 0, pourquoi: 'market unread + no life read', toy: W.id };
+  if (s[25] === 1) return { decision: 0, pourquoi: 'offer slot busy', toy: W.id };
+  // Integer score — CURRENT_TOY_V1 named weights (synced with OfferCircuit.sol)
   let score = 0;
-  score += s[0] * 3;
-  score += s[1] * 2;
-  score += s[2] * 2;
-  score += s[11] * 2;
-  score += s[12] * 2;
-  score += Math.min(3, s[8] > 0 ? 1 : 0);
-  score += Math.min(2, s[9] > 0 ? 1 : 0);
-  score += s[16];
-  score -= s[6] * 2;
-  score -= s[13] === 1 ? 1 : 0; // worried slightly harder
-  const decision = score >= 5 ? 1 : 0;
+  score += s[0] * W.W_LIFE_READ;
+  score += s[1] * W.W_LIFE_GT0;
+  score += s[2] * W.W_HOOKED;
+  score += s[11] * W.W_FOOD_LUE;
+  score += s[12] * W.W_LIVING_PHASE;
+  score += s[8] > 0 ? W.W_GM_ANY : 0;
+  score += s[9] > 0 ? W.W_MSG_ANY : 0;
+  score += s[16] * W.W_TB_FEE_HOOK;
+  score -= s[6] > 0 ? W.PEN_DORMANT : 0;
+  score -= s[13] === 1 ? W.PEN_INQUIET : 0; // worried slightly harder
+  const decision = score >= W.THRESHOLD ? 1 : 0;
   return {
     decision,
     score,
-    threshold: 5,
-    pourquoi: decision === 1 ? 'dinner is served (score≥5)' : 'refused (score<5)',
+    threshold: W.THRESHOLD,
+    toy: W.id,
+    pourquoi: decision === 1 ? ('dinner is served (score≥' + W.THRESHOLD + ')') : ('refused (score<' + W.THRESHOLD + ')'),
     circuit_version: CIRCUIT_VERSION,
   };
 }
@@ -296,6 +343,76 @@ export function recusDecision(journal, lim = 8) {
     }));
 }
 
+/**
+ * Prepare offer_food plan — honesty gate on OFFER_DEPLOY.
+ * Preview + plan only until deploy_status has a live address. Never broadcasts.
+ */
+export function planOfferFood({
+  block = null,
+  offerToken = null,
+  offerAmount = null,
+  snap = null,
+  offerBusy = false,
+  dustWei = '0',
+} = {}) {
+  const receipt = construireRecuOffre({
+    block, offerToken, offerAmount, snap, offerBusy,
+  });
+  const live = !!(OFFER_DEPLOY.address && OFFER_DEPLOY.status === 'deployed');
+  const mode = live ? 'approve_then_offer' : 'preview_only';
+  const steps = live
+    ? [
+        {
+          kind: 'approve',
+          token: offerToken,
+          spender: OFFER_DEPLOY.address,
+          amount: offerAmount != null ? String(offerAmount) : null,
+          note: 'ERC-20 approve OfferCircuit — user wallet signs',
+        },
+        {
+          kind: 'offer',
+          to: OFFER_DEPLOY.address,
+          value: String(dustWei || '0'),
+          args: {
+            blockToken: block,
+            offerToken,
+            amount: offerAmount != null ? String(offerAmount) : null,
+            evidenceHash: receipt.evidence_hash,
+            signalsPacked: 'pack(signals32) — browser helper when live',
+          },
+          note: 'offer(...) — optional life dust → FEE_WALLET · Fees for BaseAPP Holders',
+        },
+      ]
+    : [
+        {
+          kind: 'preview',
+          note: 'Refresh 32-signal 0/1 receipt from live snapshot — no wallet, no broadcast',
+        },
+        {
+          kind: 'plan_hold',
+          note: 'approve + offer calldata held until deploy_status=deployed + address (O7). Do NOT broadcast OfferCircuit.',
+        },
+      ];
+  return {
+    schema: 'tblock-offer-plan/1',
+    mode,
+    honesty: live
+      ? 'Contract address set — plan builds approve + offer for user signature. App never auto-broadcasts.'
+      : 'Preview + plan only — OfferCircuit not deployed (deploy_status). No approve, no offer tx, no broadcast.',
+    deploy_status: OFFER_DEPLOY.status,
+    contract: OFFER_DEPLOY.address,
+    toy: CURRENT_TOY_V1,
+    threshold: THRESHOLD,
+    circuit_version: CIRCUIT_VERSION,
+    fee_sink: FEE_WALLET_TASKS,
+    decision: receipt.decision,
+    decision_label: receipt.decision_label,
+    score: receipt.score,
+    steps,
+    receipt,
+  };
+}
+
 export function resumeTaches(snap, opts = {}) {
   const band = bandeNeurone(snap);
   const allowed = ONCHAIN_TASKS.map((t) => {
@@ -326,9 +443,14 @@ export function resumeTaches(snap, opts = {}) {
     neurones_offchain: 128,
     signals_onchain: SIGNALS_COUNT,
     circuit_version: CIRCUIT_VERSION,
+    toy: CURRENT_TOY_V1,
+    threshold: THRESHOLD,
+    deploy_status: OFFER_DEPLOY.status,
+    offer_contract: OFFER_DEPLOY.address,
     scale_note: 'Keep 128 LIF offchain. Onchain stays tiny (32 signals). Never overnight 166k, never LLM-as-brain.',
     tasks: allowed,
     receipts: recusDecision(snap && snap.journal, 8),
     offer_preview: demo,
+    offer_plan: planOfferFood({ block: snap && snap.address, snap, offerBusy: opts.offerBusy === true }),
   };
 }

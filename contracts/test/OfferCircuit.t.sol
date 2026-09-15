@@ -9,9 +9,10 @@ import {MockERC20} from "./MockERC20.sol";
  * O2 unit tests — integer 0/1 decide ↔ brain-tasks.js decideOffre.
  * NO broadcast. NO mainnet fork (fork = O4+ documented in DIG).
  *
- * Fixtures use the same hard stops, toy weights, THRESHOLD=5 as:
- *   /workspace/tb-gh-app/brain-tasks.js → decideOffre / signaux32DepuisSnapshot
+ * Fixtures use the same hard stops + CURRENT_TOY_V1 weights / THRESHOLD=5 as:
+ *   /workspace/tb-gh-app/brain-tasks.js → OFFER_TOY_V1 / decideOffre
  * Schema marker: s[24]=1, s[31]=22 (len of "tblock-offer-circuit/1").
+ * Dig O5: CURRENT_TOY_V1 frozen 2026-09-15 — circuit stays /1.
  */
 contract OfferCircuitTest is Test {
     OfferCircuit circuit;
@@ -48,6 +49,7 @@ contract OfferCircuitTest is Test {
 
     function test_constants_matchBrainTasks() public view {
         assertEq(circuit.THRESHOLD(), 5);
+        assertEq(circuit.TOY_ID(), "CURRENT_TOY_V1");
         assertEq(circuit.FEE_WALLET(), FEE_WALLET);
         assertEq(circuit.LOCK_FOREVER(), LOCK_FOREVER);
         assertEq(circuit.CIRCUIT(), keccak256("tblock-offer-circuit/1"));

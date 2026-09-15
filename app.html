@@ -678,7 +678,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
       </details>
-      <!-- ⛔ P0 2026-09-15: Tasks — degen-fly offer loop honesty. Full brain OFFCHAIN; 32-signal 0/1 ONCHAIN (schema stub). -->
+      <!-- ⛔ P0 2026-09-15: Tasks — degen-fly offer loop honesty. Full brain OFFCHAIN; 32-signal 0/1 ONCHAIN (schema + preview; contract follow-up). -->
       <details class="bDetail" id="tbTasksDetails" style="margin-top:8px" open>
         <summary class="note" style="cursor:pointer" id="tbTasksSummary">Tasks · on-chain tools</summary>
         <div class="stadeLigne" data-itabs="bTasks" role="tablist" style="margin-top:6px">
@@ -695,7 +695,12 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="note" style="margin-top:8px"><b>Decision receipts</b> — journal facts + offer preview (evidence_hash = keccak256(canonical evidence) · contract lock pending).</p>
         <ul class="pmLignes" id="tbTaskLog"></ul>
         <pre class="mono" id="tbOfferReceipt" hidden style="max-height:180px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
-        <p class="note" id="tbTasksNote">Offer circuit: schema + UI ready; on-chain contract ships in a follow-up.</p>
+        <div class="rang" style="margin-top:8px">
+          <button class="bouton sec" id="tbOfferPrep" type="button" title="Prepare offer_food — preview + plan until deploy_status; never broadcasts OfferCircuit">Prepare offer (preview + plan)</button>
+        </div>
+        <p class="note" id="tbOfferPrepNote" style="margin-top:4px">Preview + plan only until deploy_status — refreshes 32-signal 0/1 from the live snapshot. No approve / no offer tx / no OfferCircuit broadcast.</p>
+        <pre class="mono" id="tbOfferPlan" hidden style="max-height:140px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
+        <p class="note" id="tbTasksNote">Offer circuit: CURRENT_TOY_V1 frozen · Prepare = preview + plan · contract address after O7 greenlit deploy.</p>
       </details>
       <!-- ⛔ P0 2026-09-15: write what Brain SAYS so Zero 1 / tools can read facts — not invent mood.
            Live dump = window.__TB_BRAIN_SNAPSHOT__ + #tbBrainJson; download = Export. Server has no neurons. -->
@@ -903,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2200">Build <code>20260915-2200</code> · Fees for BaseAPP Holders · public fee framing.</p>
+      <p class="note" data-build="20260915-2210">Build <code>20260915-2210</code> · Fees for BaseAPP Holders · no fee-wallet CV on Sign/Create.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -1293,7 +1298,7 @@ import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal } from './journal-cerveau.js';
 import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
-import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT } from './brain-tasks.js';
+import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1 } from './brain-tasks.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -4272,7 +4277,7 @@ async function preparerEchange(sens) {
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   /* ⛔ P0 2026-09-15 fee harden: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback). */
-  const feeCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
+  const feeLabel = 'Fees for BaseAPP Holders';
   if (!estWalletDeFrais(compte)) {
     const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
     const destOk = r && r.beneficiaireFrais
@@ -4280,7 +4285,7 @@ async function preparerEchange(sens) {
     const fraisOk = r && typeof r.frais === 'bigint' && r.frais > 0n;
     if (!bpsOk || !destOk || !fraisOk) {
       e.className = 'note wKo';
-      e.textContent = 'Refused: this swap plan is missing the 0.5 % interface fee to ' + feeCourt
+      e.textContent = 'Refused: this swap plan is missing the 0.5 % · ' + feeLabel
         + ' — nothing to sign (fail-closed). Retry quote.';
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
@@ -4298,7 +4303,7 @@ async function preparerEchange(sens) {
       if (feeEl && r) {
         const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
         const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
-        feeEl.textContent = (hooked ? '0.5 % app + hook · ' : '0.5 % → ') + feeCourt
+        feeEl.textContent = (hooked ? '0.5 % app + hook · ' : '0.5 % · ') + feeLabel
           + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.rachatAuto ? '→TBLOCK' : (r.fraisDevise || 'ETH'));
       }
     } catch (err) { /* badge optional */ }
@@ -4324,7 +4329,7 @@ async function preparerEchange(sens) {
   e.className = 'note wOk';
   e.textContent = estWalletDeFrais(compte)
     ? 'The chain accepts this exact buyback (no self-fee). Check it in your wallet before signing.'
-    : 'The chain accepts this exact transaction — 0.5 % to ' + feeCourt + ' is inside it. Check it in your wallet before signing.';
+    : 'The chain accepts this exact transaction — 0.5 % · ' + feeLabel + ' is inside it. Check it in your wallet before signing.';
 }
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
@@ -4547,10 +4552,10 @@ async function preparerEthUsdc() {
       return;
     }
   }
-  const feeCourt = FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4);
+  const feeLabel = 'Fees for BaseAPP Holders';
   $('#peLignes').innerHTML = [
     'Pay ' + formaterUnites(r.paye, 18) + ' ETH → receive at least ' + formaterUnites(r.recoitAuMoins, 6) + ' USDC',
-    'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH → ' + feeCourt + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
+    'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH · ' + feeLabel + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
     'External DEX would pay BaseAPP Holders nothing — this hop keeps Fees for BaseAPP Holders.',
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const b = document.createElement('button');
@@ -4558,7 +4563,7 @@ async function preparerEthUsdc() {
   b.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
   $('#peActions').appendChild(b);
   e.className = 'note wOk';
-  e.textContent = 'Chain accepts this ETH→USDC — 0.5 % to ' + feeCourt + ' is inside it. Check your wallet before signing.';
+  e.textContent = 'Chain accepts this ETH→USDC — 0.5 % · ' + feeLabel + ' is inside it. Check your wallet before signing.';
 }
 const _usdcBtn = $('#peUsdcPrep');
 if (_usdcBtn) _usdcBtn.addEventListener('click', () => void preparerEthUsdc());
@@ -5676,7 +5681,7 @@ function majFraisEtRecap() {
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
-      ? ', after life fee ' + formaterEthCourt(fraisWeiCalcule) + ' ETH (≈ $' + usd + ' birth) to ' + FEE_WALLET.slice(0, 6) + '…' + FEE_WALLET.slice(-4)
+      ? ', after life fee ' + formaterEthCourt(fraisWeiCalcule) + ' ETH (≈ $' + usd + ' birth) · Fees for BaseAPP Holders'
       : ' — Create closed until life-fee price is measured')
     : '';
   $('#cRecap').textContent = v.ko
@@ -5893,6 +5898,69 @@ function ecrireJournal(adr, vu, h) {
   peindreJournal(adr, j);
 }
 
+
+/* ⛔ tip 2210 / O6: Prepare offer_food — preview + plan until deploy_status; NEVER broadcast OfferCircuit. */
+function preparerOffreApercu() {
+  const note = $('#tbOfferPrepNote');
+  const planEl = $('#tbOfferPlan');
+  try {
+    const snap = window.__TB_BRAIN_SNAPSHOT__ || { journal: journalLu(brainAdr), address: brainAdr };
+    peindreTasks(snap);
+    const plan = planOfferFood({
+      block: snap && snap.address,
+      snap,
+      offerBusy: false,
+    });
+    try { window.__TB_OFFER_PLAN__ = plan; } catch (e) { /* agent surface */ }
+    const pre = $('#tbOfferReceipt');
+    const resume = window.__TB_BRAIN_TASKS__;
+    if (pre && resume && resume.offer_preview) {
+      pre.hidden = false;
+      pre.textContent = JSON.stringify(resume.offer_preview, null, 2);
+    }
+    if (planEl) {
+      planEl.hidden = false;
+      planEl.textContent = JSON.stringify({
+        mode: plan.mode,
+        deploy_status: plan.deploy_status,
+        contract: plan.contract,
+        toy: plan.toy,
+        threshold: plan.threshold,
+        decision_label: plan.decision_label,
+        score: plan.score,
+        honesty: plan.honesty,
+        steps: plan.steps,
+      }, null, 2);
+      planEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    if (note) {
+      const live = plan.mode === 'approve_then_offer';
+      note.textContent = live
+        ? ('Plan ready · ' + plan.decision_label + ' (score ' + plan.score + '/' + plan.threshold
+          + ') · ' + CURRENT_TOY_V1 + ' · approve+offer for user sign — app does not auto-send')
+        : ('Preview + plan · ' + (plan.decision_label || '?') + ' (score ' + plan.score + '/' + plan.threshold
+          + ') · ' + CURRENT_TOY_V1 + ' · deploy_status=' + (plan.deploy_status || OFFER_DEPLOY.status)
+          + ' · no wallet / no broadcast');
+      note.className = plan.decision_label ? 'note wOk' : 'note wKo';
+    }
+    /* Honesty: real approve+offer only when OFFER_DEPLOY.status==='deployed' + address — not tonight. */
+    if (plan.mode === 'approve_then_offer' && OFFER_DEPLOY.address) {
+      if (note) {
+        note.textContent += ' · (wire live path on next tip — still no auto-broadcast)';
+      }
+    }
+  } catch (err) {
+    if (note) {
+      note.className = 'note wKo';
+      note.textContent = 'Prepare failed: ' + String((err && err.message) || err);
+    }
+  }
+}
+try {
+  const _opBtn = $('#tbOfferPrep');
+  if (_opBtn) _opBtn.addEventListener('click', () => preparerOffreApercu());
+} catch (e) { /* optional */ }
+
 function peindreTasks(snap) {
   const list = $('#tbTasksList');
   const log = $('#tbTaskLog');
@@ -5925,7 +5993,9 @@ function peindreTasks(snap) {
     if (op) {
       lines.unshift('<li>' + (op.decision === 1 ? '🍽' : '⛔') + ' offer preview · <b>' + enTexte(op.decision_label) + '</b> (score '
         + op.score + '/' + op.threshold + ') · ' + SIGNALS_COUNT + ' signals · ' + enTexte(CIRCUIT_VERSION)
-        + '<br><span class="filS">' + enTexte(op.pourquoi) + (op.lock ? ' · lock forever → dEaD (pending contract)' : '') + '</span></li>');
+        + ' · ' + enTexte(CURRENT_TOY_V1)
+        + '<br><span class="filS">' + enTexte(op.pourquoi) + (op.lock ? ' · lock forever → dEaD (pending contract)' : '')
+        + ' · deploy_status=' + enTexte(OFFER_DEPLOY.status) + '</span></li>');
     }
     log.innerHTML = lines.length ? lines.join('') : '<li>No receipts yet — first beat writes the journal.</li>';
   }
@@ -5940,7 +6010,9 @@ function peindreTasks(snap) {
   }
   if (note) {
     note.textContent = 'Schema ' + (resume.schema || '') + ' · circuit ' + CIRCUIT_VERSION
-      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN · Fees for BaseAPP Holders · offer contract follow-up.';
+      + ' · ' + CURRENT_TOY_V1 + ' (threshold ' + THRESHOLD + ') · deploy_status='
+      + (resume.deploy_status || OFFER_DEPLOY.status)
+      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN · Fees for BaseAPP Holders · Prepare = preview + plan until O7.';
   }
   try { window.__TB_BRAIN_TASKS__ = resume; } catch (e) { /* agent surface */ }
 }
@@ -6270,7 +6342,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2200',
+    build: '20260915-2210',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

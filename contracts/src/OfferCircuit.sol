@@ -9,12 +9,14 @@ pragma solidity ^0.8.24;
 /// CIRCUIT:    keccak256("tblock-offer-circuit/1")  ↔  brain-tasks.js CIRCUIT_VERSION
 /// RECEIPT:    tblock-offer-receipt/1 (offchain evidence + onchain Decision event)
 ///
-/// ALIGNMENT WITH browser stub (`brain-tasks.js` decideOffre / signaux32DepuisSnapshot):
+/// ALIGNMENT WITH browser stub (`brain-tasks.js` decideOffre / OFFER_TOY_V1):
 ///   - same hard stops: MORT (s[5]), unread+no-life (s[4]&&!s[0]), slot busy (s[25])
-///   - same toy weights + threshold 5 (engrave / freeze before mainnet)
+///   - CURRENT_TOY_V1 frozen 2026-09-15 (named weights below ↔ brain-tasks.js OFFER_TOY_V1)
 ///   - packing: signalsPacked = 32 bytes, signal i = byte i (big-endian left → s[0])
+///   - circuit stays /1 (freeze only — no weight change → no /2 bump)
 ///
 /// Moved from repo-root OfferCircuit.sketch.sol → contracts/src/OfferCircuit.sol (O1).
+/// Dig: DIG-OFFERCIRCUIT-O56-2026-09-15.md · O5 freeze · NO broadcast.
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -25,8 +27,21 @@ contract OfferCircuit {
     /// @dev Same forever-lock idea as Launch LP dead-owner (OL locker adapted to Base/TB).
     address public constant LOCK_FOREVER = 0x000000000000000000000000000000000000dEaD;
     bytes32 public constant CIRCUIT = keccak256("tblock-offer-circuit/1");
-    /// @dev Must match brain-tasks.js decideOffre threshold until weights are engraved.
-    uint8 public constant THRESHOLD = 5;
+
+    // --- CURRENT_TOY_V1 (frozen 2026-09-15) — must match brain-tasks.js OFFER_TOY_V1 ---
+    /// @dev Lead autonomy freeze; Raksha may re-engrave later. Circuit version stays /1.
+    string public constant TOY_ID = "CURRENT_TOY_V1";
+    uint8 public constant THRESHOLD = 5; // OFFER_TOY_V1.THRESHOLD
+    uint8 internal constant W_LIFE_READ = 3; // s[0]
+    uint8 internal constant W_LIFE_GT0 = 2; // s[1]
+    uint8 internal constant W_HOOKED = 2; // s[2]
+    uint8 internal constant W_FOOD_LUE = 2; // s[11]
+    uint8 internal constant W_LIVING_PHASE = 2; // s[12]
+    uint8 internal constant W_GM_ANY = 1; // s[8] > 0
+    uint8 internal constant W_MSG_ANY = 1; // s[9] > 0
+    uint8 internal constant W_TB_FEE_HOOK = 1; // s[16]
+    uint8 internal constant PEN_DORMANT = 2; // s[6] > 0
+    uint8 internal constant PEN_INQUIET = 1; // s[13] == 1
 
     bool public busy;
     address public currentOfferer;
@@ -54,7 +69,7 @@ contract OfferCircuit {
         }
     }
 
-    /// @notice Integer circuit — mirrors brain-tasks.js decideOffre (toy weights).
+    /// @notice Integer circuit — mirrors brain-tasks.js decideOffre (CURRENT_TOY_V1).
     /// @dev Returns only 0 or 1. Not the 128 LIF brain.
     function decide(bytes32 signalsPacked) public pure returns (uint8 decision, uint16 score) {
         uint8[32] memory s = unpack(signalsPacked);
@@ -64,25 +79,26 @@ contract OfferCircuit {
         if (s[4] == 1 && s[0] == 0) return (0, 0); // market unread + no life read
         if (s[25] == 1) return (0, 0); // offer slot busy
 
+        // CURRENT_TOY_V1 named weights (↔ brain-tasks.js OFFER_TOY_V1)
         uint16 sc = 0;
-        sc += uint16(s[0]) * 3;
-        sc += uint16(s[1]) * 2;
-        sc += uint16(s[2]) * 2;
-        sc += uint16(s[11]) * 2;
-        sc += uint16(s[12]) * 2;
-        if (s[8] > 0) sc += 1;
-        if (s[9] > 0) sc += 1;
-        sc += uint16(s[16]);
-        // JS: score -= s[6] * 2; snapshot only sets 0|1 — subtract 2 once when DORMANT
+        sc += uint16(s[0]) * W_LIFE_READ;
+        sc += uint16(s[1]) * W_LIFE_GT0;
+        sc += uint16(s[2]) * W_HOOKED;
+        sc += uint16(s[11]) * W_FOOD_LUE;
+        sc += uint16(s[12]) * W_LIVING_PHASE;
+        if (s[8] > 0) sc += W_GM_ANY;
+        if (s[9] > 0) sc += W_MSG_ANY;
+        sc += uint16(s[16]) * W_TB_FEE_HOOK;
+        // JS: score -= PEN_DORMANT when s[6]>0 — snapshot only sets 0|1
         if (s[6] > 0) {
             unchecked {
-                sc = sc >= 2 ? sc - 2 : 0;
+                sc = sc >= PEN_DORMANT ? sc - PEN_DORMANT : 0;
             }
         }
-        // JS: score -= s[13] === 1 ? 1 : 0
-        if (s[13] == 1 && sc > 0) {
+        // JS: score -= PEN_INQUIET when s[13]==1
+        if (s[13] == 1 && sc >= PEN_INQUIET) {
             unchecked {
-                sc -= 1;
+                sc -= PEN_INQUIET;
             }
         }
 
