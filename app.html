@@ -879,7 +879,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2035">Build <code>20260915-2035</code> · Brain Tasks + 32-signal offer circuit schema · fees → 0x37eb · tip surfaces aligned.</p>
+      <p class="note" data-build="20260915-2040">Build <code>20260915-2040</code> · holders/trust facts → Launch/Buy · Brain Tasks schema · fees → 0x37eb.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older. <b>All</b> still hides GM/NOTE bursts (chip GM); brain mood lines are browser-local under Blocks talking (1 chip / token).</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -2606,6 +2606,8 @@ let jetonProfil = 0;
 let profilEnLecture = false;
 /* ce que le profil ouvert a lu — « Show on map » pose le block avec, sans relire */
 let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil = null, soldeProfil = null;
+/* tip 2040: holders window measured for open profile — never invent */
+let profilNourriture = null;
 
 /* ⛔ LE CLASSEMENT SE CALCULE SUR CE QU ON A LU, ET RIEN D AUTRE. Les blocks sans vie lue partent en
  * NON MESURES — jamais au fond de la liste, ou ils se liraient comme « les moins bons ». */
@@ -2985,7 +2987,9 @@ function peindreTrustFacts(adr, v, origine) {
   const etat = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
   const info = (v && etat === 'LUE') ? infoHookMarche(v) : { hooked: false, isTbFeeHook: false, via: null };
   const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr || '').toLowerCase());
-  const n = h && h.nourriture && h.nourriture.etat === 'LUE' ? h.nourriture : null;
+  const nCand = (profilNourriture && profilNourriture.etat === 'LUE') ? profilNourriture
+    : (h && h.nourriture && h.nourriture.etat === 'LUE' ? h.nourriture : null);
+  const n = nCand;
   const trusted = estTrusted(adr);
   const madeHere = origine === 'TOKENIZEDBLOCK';
   const lignes = [];
@@ -3094,7 +3098,7 @@ async function lireProfil(adr, sym, perime) {
    * logique, sans prevenir. Le bouton ouvre maintenant le lancement DANS l app. */
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
   $('#pNote').textContent = 'reading the chain…';
-  symProfil = sym || null; vieProfil = null; etatVieProfil = undefined;
+  symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null;
   $('#pPV').textContent = '…';
   $('#pPalier').textContent = 'reading…';
   $('#pBarre').style.width = '0';
@@ -3272,6 +3276,17 @@ async function lireProfil(adr, sym, perime) {
   /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (TbFeeHook) or legacy unhooked. */
   peindreMarcheHook(v);
   peindreTrustFacts(adr, v, origineProfil);
+  /* ⛔ tip 2040: measure holders (Transfer window) once per profile open — never invent; repaint when LUE. */
+  void (async () => {
+    try {
+      const n = await nourritureDuBlock({ rpc, jeton: adr });
+      if (perime()) return;
+      profilNourriture = n;
+      const hN = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
+      if (hN) hN.nourriture = n;
+      peindreTrustFacts(adr, marcheProfil && marcheProfil.v ? marcheProfil.v : v, origineProfil);
+    } catch (e) { /* keep prior "not measured" honesty */ }
+  })();
   if (etatVieProfil === 'LUE') {
     const bb = estWalletDeFrais(compte);
     const hkInfo = infoHookMarche(v);
@@ -6028,7 +6043,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2035',
+    build: '20260915-2040',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

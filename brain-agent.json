@@ -49,8 +49,8 @@
   ],
   "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2025",
-  "hard_objective": "Real fees to FEE_WALLET 0x37eb…580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means. OL UX = honesty only, not zero-fee. Profile holders/trust facts funnel → Launch/Buy.",
+  "tip": "20260915-2040",
+  "hard_objective": "Real fees to FEE_WALLET 0x37eb…580a (life Create/Launch, hook 2%, app 0.5%). TBLOCK liq / USDC exit / Brain tools are means. OL UX = honesty only, not zero-fee. Profile #pTrustFacts holders/trust → Launch/Buy funnel.",
   "locked_liq": {
     "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
