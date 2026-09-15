@@ -5,7 +5,7 @@ pragma solidity ^0.8.24;
 ///      `contracts/src/OfferCircuit.sol` (Foundry package under this app).
 ///      Unit tests: `contracts/test/OfferCircuit.t.sol`
 ///      Run: `cd contracts && forge test -vv`
-///      NOT broadcast. FEE_WALLET → 0x37eb…580a.
+///      NOT broadcast. FEE_WALLET → Base smart wallet a6cf…f5d4 (tip 2220).
 ///      See /workspace/DIG-OFFERCIRCUIT-O123-2026-09-15.md
 contract OfferCircuitSketchMoved {
     function movedTo() external pure returns (string memory) {

@@ -47,10 +47,10 @@
     "decision",
     "evidence_hash"
   ],
-  "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+  "fee_wallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
   "main": "https://tokenized-block.up.railway.app/",
-  "tip": "20260915-2210",
-  "hard_objective": "Fees for BaseAPP Holders (fee sinks unchanged). Public fee framing tip 2210 \u2014 Sign/Create no feeCourt CV \u2014 no 0x37eb CV in live UI. OfferCircuit O5 CURRENT_TOY_V1 frozen \u00b7 O6 Prepare preview+plan (no broadcast). Keep creator+holders on hook 1%/2%.",
+  "tip": "20260915-2220",
+  "hard_objective": "Fees for BaseAPP Holders. tip 2220: app fee sinks \u2192 Base smart wallet 0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4 (0.5%/Launch life/paid msg/USDC/OfferCircuit). CreateRouter+TbFeeHook on-chain FEE_WALLET() still immutable legacy 0x37eb \u2014 redeploy dig, do not lie. Public UI: no fee-wallet CV. O5 CURRENT_TOY_V1 \u00b7 O6 Prepare preview+plan \u00b7 no OfferCircuit broadcast.",
   "locked_liq": {
     "launch_lp": "Dead-address owner \u2014 permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added \u2014 withdrawable anytime. Not forever-locked.",
@@ -69,7 +69,7 @@
     "module": "/brain-tasks.js",
     "window": "window.__TB_BRAIN_TASKS__",
     "ui": "Brain AI \u2192 Tasks details (#tbTasksDetails)",
-    "fee_wallet": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+    "fee_wallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
     "split": {
       "full_brain": "OFFCHAIN browser 128 LIF \u2014 mood/phase/journal \u2014 never LLM",
       "decision_circuit": "ONCHAIN Base \u2014 32 recorded signals \u2192 integer 0 refuse / 1 dinner served",
@@ -117,7 +117,7 @@
         "signs": true
       }
     ],
-    "deploy_status": "not_deployed \u2014 O5 CURRENT_TOY_V1 frozen \u00b7 O6 Prepare = preview + plan only \u00b7 address after O7 greenlit (no broadcast)",
+    "deploy_status": "not_deployed \u2014 O5 CURRENT_TOY_V1 frozen \u00b7 O6 Prepare preview+plan \u00b7 fee sink a6cf\u2026 \u00b7 address after O7",
     "toy": "CURRENT_TOY_V1",
     "threshold": 5,
     "offer_prepare": {
@@ -126,5 +126,12 @@
       "plan_window": "window.__TB_OFFER_PLAN__",
       "honesty": "Preview + plan until deploy_status=deployed + address. Never auto-broadcast OfferCircuit."
     }
+  },
+  "fee_sinks": {
+    "app": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
+    "label": "Fees for BaseAPP Holders",
+    "create_router_onchain": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+    "tb_fee_hook_onchain": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+    "honesty": "App-controlled paths use smart wallet. CreateRouter createPaid + hooked 2% still LEGACY until redeploy."
   }
 }

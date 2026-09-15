@@ -10,9 +10,18 @@
 // ⚠️ Pages / Instant Create historiques peuvent encore citer FRAIS_HERITE_WEI (0,00005 ETH) —
 //    ce module expose les deux ; l app Railway utilise FRAIS_USD + weiPourDollars.
 
-/** ⛔ ADRESSE RECOPIEE, jamais de memoire. */
-export const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
-/** Base mainnet CreateRouter 0x3486…ff0a — fee ETH → FEE_WALLET; sealed 1B 100% creator (2026-09-14). */
+/** ⛔ ADRESSE RECOPIEE, jamais de memoire.
+ * tip 2220: app fee destination = Base smart wallet (BaseAPP Holders custody path).
+ * CreateRouter + TbFeeHook on-chain FEE_WALLET() still immutable → LEGACY until redeploy (dig).
+ */
+export const FEE_WALLET = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+/** Legacy EOA sink still engraved in live CreateRouter + TbFeeHook (immutable). Do not claim app CreateRouter path pays FEE_WALLET until router redeploy. */
+export const FEE_WALLET_LEGACY_37EB = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
+/** On-chain CreateRouter.FEE_WALLET() as of 2026-09-15 eth_call — equals LEGACY until redeploy. */
+export const CREATE_ROUTER_FEE_WALLET = FEE_WALLET_LEGACY_37EB;
+/** On-chain TbFeeHook.FEE_WALLET() as of 2026-09-15 eth_call — equals LEGACY until new hook CREATE2. */
+export const HOOK_FEE_WALLET = FEE_WALLET_LEGACY_37EB;
+/** Base mainnet CreateRouter 0x3486…ff0a — fee ETH → CREATE_ROUTER_FEE_WALLET (still 0x37eb); sealed 1B 100% creator (2026-09-14). */
 export const CREATE_ROUTER = '0x34862fF4e76330E55853A371fc245f55f60BfF0a';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */
 export const CREATE_FEE_WEI_FLOOR = 300000000000000n;

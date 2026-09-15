@@ -2,11 +2,11 @@
 // ================================================================================================
 // ⛔ NOT AN LLM. Full 128 LIF brain stays OFFCHAIN (cerveau.js). Onchain path = tiny integer circuit
 //    on 32 recorded signals → 0 refuse / 1 dinner served. Agents READ; user wallet SIGNS.
-// ⛔ Fees → FEE_WALLET 0x37eb…580a when tools execute. Never invent mood/phase/advice.
+// ⛔ Fees → FEE_WALLET (Base smart wallet a6cf…f5d4) when app tools execute. CreateRouter/hook still 0x37eb until redeploy. Never invent mood/phase/advice.
 
 import { keccak256Hex } from './keccak.js';
 
-export const FEE_WALLET_TASKS = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
+export const FEE_WALLET_TASKS = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 export const TASKS_SCHEMA = 'tblock-brain-tasks/1';
 export const OFFER_RECEIPT_SCHEMA = 'tblock-offer-receipt/1';
 export const CIRCUIT_VERSION = 'tblock-offer-circuit/1';

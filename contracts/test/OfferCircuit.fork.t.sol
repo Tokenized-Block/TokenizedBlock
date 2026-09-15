@@ -18,7 +18,7 @@ contract OfferCircuitForkTest is Test {
     OfferCircuit circuit;
     MockERC20 food;
 
-    address constant FEE_WALLET = 0x37Eb9b7ce0b51Fe12fBf092026e001918128580A;
+    address constant FEE_WALLET = 0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4;
     address constant LOCK_FOREVER = 0x000000000000000000000000000000000000dEaD;
     address offerer = address(0xA11CE);
     address blockToken = address(0xB10C);

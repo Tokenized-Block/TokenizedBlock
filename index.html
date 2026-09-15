@@ -2593,7 +2593,7 @@ const SITE_ORIGIN_FUTURE = 'https://tokenized-block.app'; /* DNS not live as of 
  * Real (8453): fixed 0.00005 ETH as a separate visible ETH transfer to FEE_WALLET before Create.
  * Practice (84532): 0. Fail-closed if the fee transfer fails — Create is not sent.
  */
-const FEE_WALLET = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
+const FEE_WALLET = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 const REAL_CREATE_SERVICE_FEE_WEI = 50000000000000n; /* 0.00005 ETH — fits ~$1 Real smoke; still to FEE_WALLET */
 function createServiceFeeWei() {
   return chaine === 8453 ? REAL_CREATE_SERVICE_FEE_WEI : 0n;

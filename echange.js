@@ -263,7 +263,7 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
 
 /**
  * ETH → USDC on Base v4 — same 0.5% interface fee → FEE_WALLET.
- * ⛔ HARD OBJECTIVE: exit conversion that still pays 0x37eb (external DEX pays 0).
+ * ⛔ HARD OBJECTIVE: exit conversion that still pays FEE_WALLET (external DEX pays 0). tip 2220 → smart wallet a6cf….
  * ⛔ Fail-closed: no Sign unless Quoter returns >0 on a measured ETH/USDC key (CLES_PRIX).
  */
 export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleranceBps = 100n, maintenant = Date.now() }) {

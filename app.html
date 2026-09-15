@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2210">Build <code>20260915-2210</code> · Fees for BaseAPP Holders · no fee-wallet CV on Sign/Create.</p>
+      <p class="note" data-build="20260915-2220">Build <code>20260915-2220</code> · Fees for BaseAPP Holders · no fee-wallet CV on Sign/Create.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> hides GM/NOTE bursts; use chips to inspect.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -5604,7 +5604,7 @@ function validerCreation() {
 }
 
 function utiliseCreateRouter() {
-  /* ⛔ Base mainnet ALWAYS CreateRouter — sole path that pays 0x37eb…580a.
+  /* ⛔ Base mainnet ALWAYS CreateRouter — sole paid Create path. On-chain FEE_WALLET() still LEGACY 0x37eb until router redeploy; app FEE_WALLET (0.5%/Launch/msg) = smart wallet a6cf….
    * Practice (Sepolia) stays free factory. Never fall back to factory on 8453. */
   return Number(CHAINE) === 8453;
 }
@@ -5800,7 +5800,7 @@ async function creerBlock() {
       e.textContent = 'Could not read your ETH balance, so nothing was started.';
       return;
     }
-    /* ⛔ CreateRouter floor still pays 0x37eb…580a. If wallet cannot cover the ≈$1 quote
+    /* ⛔ CreateRouter floor still pays on-chain CREATE_ROUTER_FEE_WALLET (legacy 0x37eb until redeploy). If wallet cannot cover the ≈$1 quote
      * but can cover floor + gas, charge the floor — fail-closed only below floor. */
     const gasBuf = 250000000000000n; /* ~0.00025 ETH headroom for Base gas */
     if (utiliseCreateRouter() && s < fraisWei) {
@@ -6342,7 +6342,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260915-2210',
+    build: '20260915-2220',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

@@ -5,7 +5,7 @@ pragma solidity ^0.8.24;
 /// @notice 32 recorded uint8 signals → integer 0 (refuse) | 1 (dinner served).
 /// @dev Full 128 LIF brain stays OFFCHAIN (`cerveau.js`). This contract is NOT an LLM.
 ///
-/// FEE_WALLET: 0x37Eb9b7ce0b51Fe12fBf092026e001918128580A
+/// FEE_WALLET: 0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4 (app smart wallet · tip 2220; not broadcast)
 /// CIRCUIT:    keccak256("tblock-offer-circuit/1")  ↔  brain-tasks.js CIRCUIT_VERSION
 /// RECEIPT:    tblock-offer-receipt/1 (offchain evidence + onchain Decision event)
 ///
@@ -23,7 +23,7 @@ interface IERC20 {
 }
 
 contract OfferCircuit {
-    address public constant FEE_WALLET = 0x37Eb9b7ce0b51Fe12fBf092026e001918128580A;
+    address public constant FEE_WALLET = 0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4;
     /// @dev Same forever-lock idea as Launch LP dead-owner (OL locker adapted to Base/TB).
     address public constant LOCK_FOREVER = 0x000000000000000000000000000000000000dEaD;
     bytes32 public constant CIRCUIT = keccak256("tblock-offer-circuit/1");
