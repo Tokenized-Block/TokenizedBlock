@@ -269,6 +269,14 @@ body{background:var(--fond);
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
 .pcBascule{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--doux);cursor:pointer}
+/* Companion Mode glue — mood + HP/stage + role; no new scores (DIG 2026-09-15) */
+.pcGlue{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+.pcChip{display:inline-flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 110px;
+  background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);padding:8px 10px}
+.pcChip b{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+.pcChip i{font-style:normal;font-size:13px;font-weight:700;color:var(--texte);overflow-wrap:anywhere}
+.pcLinks{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pcLinks .bouton{flex:1 1 120px;min-height:40px}
 .pmLignes{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;
   font-size:12px;color:var(--doux);line-height:1.45}
 .pmProp{border:1px solid var(--ligne);border-radius:var(--rs);padding:9px 11px;margin:8px 0 0;background:var(--fond2)}
@@ -849,7 +857,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-0555">Build <code>20260915-0555</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
+      <p class="note" data-build="20260915-0600">Build <code>20260915-0600</code> · <b>All</b> hides external creates, hook trades, and GM/note bursts — use <b>Created</b> / <b>Swap</b> / <b>GM</b> to inspect.</p>
       <p class="sous">Blocks being created, bought and sold — read from the chain as it happens, refreshed every 20 seconds. Scroll down for older.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -934,6 +942,27 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note" id="pOrigine"></p>
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
+      </div>
+      <!-- ⛔ COMPANION MODE (P0 glue, 2026-09-15): one strip that names existing mood + HP/stage + role.
+           No new vitality score. Fly brain owns mood/phase/rules; HP = ∛(USD cap); role = browser until engraved.
+           Any future LLM may ONLY rephrase facts already produced by fly brain / chain — never decide
+           mood, phase, rules, advice, or steering. This ship = glue of existing DOM facts only.
+           Does not touch cerveau.js / Launch / fees. -->
+      <div class="pJeu" id="pCompanion" data-companion="p0">
+        <div class="pJeuTete">
+          <span class="pBadge">Companion</span>
+          <span class="pPV">living block · glued facts</span>
+        </div>
+        <div class="pcGlue" id="pcGlue">
+          <span class="pcChip"><b>Mood</b><i id="pcgMood">—</i></span>
+          <span class="pcChip"><b>HP · stage</b><i id="pcgHp">—</i></span>
+          <span class="pcChip"><b>Role</b><i id="pcgRole">—</i></span>
+        </div>
+        <p class="note" id="pcgHonesty" style="margin-top:8px">Fly brain owns mood · HP is ∛(market cap USD) · lines mirror chain facts only · <b>Not an LLM</b> · never signs · no invented lines.</p>
+        <div class="pcLinks">
+          <button class="bouton sec" id="pcgMap" type="button">Show on map</button>
+          <button class="bouton sec" id="pcgBrain" type="button">Open Brain AI</button>
+        </div>
       </div>
       <!-- ⛔ LE COMPAGNON : PV, palier, barre. Tout est derive de la capitalisation lue (pointsdevie.js) ;
            la barre descend quand le prix descend. -->
@@ -2640,7 +2669,8 @@ function peindreMetier(adr) {
   $('#pmRole').innerHTML = METIERS.map((x) => '<option value="' + x.cle + '"' + (x.cle === cle ? ' selected' : '') + '>'
     + enTexte(x.titre) + '</option>').join('');
   $('#pmRoleNote').textContent = (roleChoisi(adr) ? 'Chosen in this browser' : 'Derived from its address — pick another to change it')
-    + ' · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads') + ' more. It never signs or sends anything.';
+    + ' · Role = this browser until engraved · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads')
+    + ' more. It never signs or sends anything.';
   $('#pmTitre').textContent = m.titre;
   $('#pmFait').textContent = 'Its job: ' + m.fait + '.';
   $('#pmTendance').textContent = tendance.etat === 'PAS_ASSEZ'
@@ -2653,6 +2683,7 @@ function peindreMetier(adr) {
     + '<div class="note" style="margin-top:4px">' + enTexte(p.pourquoi) + '</div>'
     + '<div class="note">⚠️ ' + enTexte(p.avertissement) + '</div></div>').join('');
   $('#pmJamais').textContent = 'This job ' + m.jamais + '.';
+  peindreCompanion();
 }
 
 /* ══ LE CERVEAU DU BLOCK OUVERT ══════════════════════════════════════════════════════════════
@@ -2705,6 +2736,20 @@ function battreProfil() {
   profilCerveau.vu = r.vu;
   peindreCerveau();
 }
+/**
+ * Companion Mode glue: mirror mood / HP·stage / role already painted on the profile.
+ * ⛔ No new score — reads existing DOM only. No invented lines. Future LLM (if any) may only
+ *    rephrase these facts — never decide mood/phase/rules/advice.
+ */
+function peindreCompanion() {
+  const mood = $('#pcgMood'), hp = $('#pcgHp'), role = $('#pcgRole');
+  if (!mood || !hp || !role) return;
+  mood.textContent = ($('#pcPhase') && $('#pcPhase').textContent) || '—';
+  const pv = ($('#pPV') && $('#pPV').textContent) || '—';
+  const palier = ($('#pPalier') && $('#pPalier').textContent) || '—';
+  hp.textContent = (pv === '—' || pv === '…') ? palier : (pv + ' HP · ' + palier);
+  role.textContent = ($('#pmTitre') && $('#pmTitre').textContent) || '—';
+}
 function peindreCerveau() {
   const vides = ['#pcG', '#pcD', '#pcSpikes', '#pcActifs', '#pcTick'];
   if (!$('#pcActif').checked) {
@@ -2713,10 +2758,11 @@ function peindreCerveau() {
       + 'the same, you just stop watching it think.';
     for (const id of vides) $(id).textContent = '—';
     $('#pcEmpreinte').textContent = '';
+    peindreCompanion();
     return;
   }
   const v = profilCerveau && profilCerveau.vu;
-  if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; return; }
+  if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; peindreCompanion(); return; }
   $('#pcPhase').textContent = nomHumeur(v.phase);
   $('#pcPhrase').textContent = phraseDePhase(v.phase, symProfil || 'This block');
   $('#pcG').textContent = v.gauche_hz.toFixed(1);
@@ -2728,6 +2774,7 @@ function peindreCerveau() {
    * simulation qu on peut rejouer d une animation qui fait joli. */
   $('#pcEmpreinte').textContent = 'input ' + v.entree.slice(0, 18) + '… · 128 neurons seeded by this '
     + 'block address · simulation, nothing on chain';
+  peindreCompanion();
 }
 
 /**
@@ -2773,6 +2820,7 @@ function peindreJeu(mcDevise, devise, etat) {
   }
   $('#pPuces').innerHTML = PALIERS.map((p, k) => '<span class="pPuce' + (k <= i ? ' on' : '')
     + '" title="' + enTexte(p.ouvre) + '">' + enTexte(p.titre) + '</span>').join('');
+  peindreCompanion();
 }
 
 function allerA(nom) {
@@ -3025,6 +3073,13 @@ $('#pMap').addEventListener('click', () => {
     if (!anim) animer();
   }
   h.el.click();
+});
+/* Companion glue links — same map path; Brain AI selects this profile block. No fee / Launch touch. */
+$('#pcgMap').addEventListener('click', () => { $('#pMap').click(); });
+$('#pcgBrain').addEventListener('click', () => {
+  const adr = $('#profil').dataset.block;
+  allerA('brain');
+  if (adr) choisirBrain(adr);
 });
 /* ⛔ ENVOYER DEPUIS CE BLOCK = LE FORMULAIRE DU WALLET, PRE-REMPLI. Pas un second chemin d envoi :
  * un seul formulaire, une seule garde (`envoi.js`), une seule regle 8 a surveiller. */
