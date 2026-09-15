@@ -908,7 +908,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260915-2347">Build <code>20260915-2347</code> · fees→a6cf · Base App paid-msg fee allowed · Launch hooked.</p>
+      <p class="note" data-build="20260915-2348">Build <code>20260915-2348</code> · fees→a6cf · MAIN Launch refuses unhooked · paid-msg AA.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (paid Create · Feed/Kill · hooked swaps → BaseAPP Holders). Hides GM/NOTE + unpaid factory creates — use chips for those.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
@@ -4895,7 +4895,12 @@ async function calculerLancement() {
   /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET a6cf. */
   try {
     const etatHook = await hookDeploye({ rpc });
-    if (legacyUpgrade && etatHook !== 'DEPLOYE') {
+    /* tip 2348: MAIN never Launch unhooked — no hook = no enduring fees to a6cf. */
+    if (Number(CHAINE) === 8453 && etatHook !== 'DEPLOYE') {
+      plan = { etat: 'REFUSE', pourquoi: etatHook === 'ABSENT'
+        ? 'TbFeeHook has no code on Base — Launch closed (would open an unhooked market with 0 fees to a6cf)'
+        : 'TbFeeHook unread — Launch closed until hook DEPLOYE (no unhooked MAIN markets)' };
+    } else if (legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'TbFeeHook not DEPLOYE — cannot open hooked pool beside legacy (would launch another unhooked market)' };
     } else {
       const hooks = etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
