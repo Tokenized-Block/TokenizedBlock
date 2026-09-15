@@ -1107,7 +1107,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ ACHETER / VENDRE DANS L APP (Phil, 2026-09-13) : 0,5 % au wallet de frais, dit avant la signature.
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % app → protocol</span></div>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5 % → a6cf</span></div>
         <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
@@ -3181,7 +3181,7 @@ function peindreTrustFacts(adr, v, origine) {
   } else if (etat === 'LUE' && info.hooked) {
     lignes.push('Pool: hooked, but <b>not</b> TbFeeHook — TB fee split does not apply on this pool id.');
   } else if (etat === 'LUE') {
-    lignes.push('Pool: <b>unhooked</b> (legacy). In-app Buy/Sell still 0.5&nbsp;% protocol; enduring creator+holders hook needs a <b>new</b> Launch elsewhere.');
+    lignes.push('Pool: <b>unhooked</b> — Dex pays 0 to a6cf. In-app Buy/Sell = 0.5&nbsp;% → a6cf. Or Launch a <b>new</b> TbFeeHook pool beside this one (tip 2340) → enduring fees to a6cf.');
   } else if (etat === 'NON_TROUVEE') {
     lignes.push(CHAINE === 8453
       ? 'Market: <b>dormant</b> — no pool yet. Wake/Launch on <b>MAIN</b>: life fee ≈ $1 ETH · Fees for BaseAPP Holders + new hooked pool (2&nbsp;% enduring).'
@@ -3512,7 +3512,7 @@ async function lireProfil(adr, sym, perime) {
     const hkInfo = infoHookMarche(v);
     $('#peBadge').textContent = bb ? 'Buyback · BaseAPP Holders' : 'Buy · Sell';
     $('#peFrais').textContent = bb ? 'no fee'
-      : (hkInfo.hooked ? '0.5 % app · Fees for BaseAPP Holders · pool hook 3 %' : '0.5 % app · Fees for BaseAPP Holders (pool unhooked)');
+      : (hkInfo.isTbFeeHook ? '0.5% + TbFeeHook → a6cf' : (hkInfo.hooked ? '0.5% → a6cf · foreign hook' : '0.5% → a6cf (Dex unhooked=0)'));
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
   } else {
