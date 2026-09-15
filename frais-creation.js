@@ -59,10 +59,9 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   /* tip 2349: Create free — phrase ignores create wei; Launch owns life fee. */
   void ethUsd; void fraisWei; void soldeEth;
   const main = Number(chaine) === 8453;
-  return 'Create is free on ' + (nomReseau || 'this network')
-    + (main
-      ? ' (factory). Life fee ≈ $' + FRAIS_USD + ' ETH + TbFeeHook market at Launch · Fees for BaseAPP Holders. One signature now: creation only.'
-      : ' — Practice. One signature: the creation itself. MAIN life fee is at Launch.');
+  return main
+    ? 'Create free. Fees start at Launch · Fees for BaseAPP Holders.'
+    : 'Create free (Practice). Fees start at Launch on MAIN.';
 }
 
 /** Same FRAIS_USD on MAIN — Launch / wake market life fee (stage 2). Practice = 0. */

@@ -15,8 +15,42 @@
 //    refuse ce qui est mal forme et ne corrige rien — une saisie « reparee » en silence est une
 //    saisie qu on n a pas faite.
 import { selecteur } from './pool.js';
+import { keccak256 } from './keccak.js';
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** tip 2354: quiet unique wallet log for later airdrop scan — localStorage only, no PII UI. */
+const CLE_USED_WALLETS = 'tb-used-wallets';
+const MAX_USED_WALLETS = 500;
+
+function checksumAdresse(adr) {
+  const hex = String(adr || '').toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]{40}$/.test(hex)) return null;
+  const hash = [...keccak256(new TextEncoder().encode(hex))]
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  let out = '0x';
+  for (let i = 0; i < 40; i++) {
+    out += parseInt(hash[i], 16) >= 8 ? hex[i].toUpperCase() : hex[i];
+  }
+  return out;
+}
+
+export function noterWalletUtilise(adr) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const cs = checksumAdresse(adr);
+    if (!cs) return;
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(CLE_USED_WALLETS) || '[]'); } catch (_) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    const low = cs.toLowerCase();
+    if (list.some((x) => String(x).toLowerCase() === low)) return;
+    list.push(cs);
+    if (list.length > MAX_USED_WALLETS) list = list.slice(-MAX_USED_WALLETS);
+    localStorage.setItem(CLE_USED_WALLETS, JSON.stringify(list));
+  } catch (_) { /* private mode */ }
+}
+
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
 const MAX_UINT256 = (1n << 256n) - 1n;
 
@@ -165,6 +199,7 @@ export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to
   }
   const gaz = estimation * 125n / 100n;
 
+  noterWalletUtilise(compte);
   let hash;
   try {
     hash = await eth.request({ method: 'eth_sendTransaction',
