@@ -14,7 +14,7 @@
 //    comme ratee — jamais lue comme « pas de pool ».
 import { keccak256Hex } from './keccak.js';
 import { cleDePool, poolId } from './pool.js';
-import { TBLOCK } from './tokenomics.js';
+import { TBLOCK, TBGAS, TBGAS_POOL_ID } from './tokenomics.js';
 
 export const SIGNATURE_INITIALIZE = 'Initialize(bytes32,address,address,uint24,int24,address,uint160,int24)';
 export const TOPIC_INITIALIZE = keccak256Hex(new TextEncoder().encode(SIGNATURE_INITIALIZE));
@@ -135,11 +135,18 @@ export async function lirePoolParDexScreener({ rpc, poolManager, jeton, fetchFn 
     if (b !== want && q !== want) return false;
     return b === ETH0 || q === ETH0 || b === TBLOCK.toLowerCase() || q === TBLOCK.toLowerCase();
   });
-  if (!cands.length) return null;
-  cands.sort((a, b) => (Number(b.liquidity && b.liquidity.usd) || 0) - (Number(a.liquidity && a.liquidity.usd) || 0));
-  const pair = cands[0];
-  let poolIdHex = String(pair.pairAddress || '').toLowerCase();
-  if (!/^0x[0-9a-f]{64}$/.test(poolIdHex)) return null;
+  /* tip 0016: TBGAS Launch poolId seed when Dex token-pairs still empty (index lag). */
+  let pair = null;
+  let poolIdHex = null;
+  if (cands.length) {
+    cands.sort((a, b) => (Number(b.liquidity && b.liquidity.usd) || 0) - (Number(a.liquidity && a.liquidity.usd) || 0));
+    pair = cands[0];
+    poolIdHex = String(pair.pairAddress || '').toLowerCase();
+  } else if (want === String(TBGAS).toLowerCase()) {
+    poolIdHex = String(TBGAS_POOL_ID).toLowerCase();
+    pair = { url: 'https://dexscreener.com/base/' + poolIdHex, pairAddress: poolIdHex };
+  }
+  if (!poolIdHex || !/^0x[0-9a-f]{64}$/.test(poolIdHex)) return null;
 
   let head;
   try { head = parseInt(await rpc('eth_blockNumber', []), 16); } catch { return null; }

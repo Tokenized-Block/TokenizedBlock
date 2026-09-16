@@ -9,7 +9,10 @@
 // ⛔ tip 2330 BRAINARM: Dex liquidity.usd / fdv often = tokens_in_pool×price (paper). Prefer ETH quote depth.
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
+import { TBGAS, TBGAS_POOL_ID } from './tokenomics.js';
+
 const DS_TOKENS = 'https://api.dexscreener.com/latest/dex/tokens/';
+const DS_PAIR = (pool) => 'https://api.dexscreener.com/latest/dex/pairs/base/' + pool;
 const GT_TRADES = (pool) =>
   'https://api.geckoterminal.com/api/v2/networks/base/pools/' + pool + '/trades';
 
@@ -204,19 +207,37 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
     };
   }
 
-  const pair = choisirPaireBase(ds && ds.pairs, jeton);
+  let pair = choisirPaireBase(ds && ds.pairs, jeton);
+  /* tip 0016: when token-pairs lags (was 0 for TBGAS), resolve known v4 poolId directly. */
+  const wantJet = String(jeton || '').toLowerCase();
+  const seedPool = (poolId && /^0x[0-9a-fA-F]{64}$/.test(poolId))
+    ? String(poolId).toLowerCase()
+    : (wantJet === String(TBGAS).toLowerCase() ? String(TBGAS_POOL_ID).toLowerCase() : null);
+  if (!pair && seedPool) {
+    try {
+      const r = await fetchFn(DS_PAIR(seedPool));
+      if (r && r.ok) {
+        const j = await r.json();
+        const one = (j && j.pair) || (Array.isArray(j && j.pairs) && j.pairs[0]) || null;
+        if (one && String(one.chainId || '').toLowerCase() === 'base') pair = one;
+      }
+    } catch (_) { /* keep null */ }
+  }
   if (!pair) {
+    const seedUrl = seedPool ? ('https://dexscreener.com/base/' + seedPool) : null;
     return {
       etat: 'NON_TROUVEE',
       pourquoi: 'No DexScreener pair read',
       luA,
       cardHidden: false,
-      lignes: ['No DexScreener pair read for this token on Base.'],
+      lignes: ['No DexScreener pair read for this token on Base.'
+        + (seedUrl ? ' Known Launch pool chart: open DexScreener.' : '')],
       note: 'DexScreener · ' + luA + ' · no pair',
-      pair: null,
-      market: null,
+      pair: seedUrl ? { address: seedPool, dexId: 'uniswap', url: seedUrl, sym: wantJet === String(TBGAS).toLowerCase() ? 'TBGAS' : null } : null,
+      market: seedUrl ? { dexUrl: seedUrl, url: seedUrl, pool: seedPool, sym: wantJet === String(TBGAS).toLowerCase() ? 'TBGAS' : null } : null,
       trades: null,
       yourPnL: null,
+      dexUrl: seedUrl,
     };
   }
 
@@ -337,6 +358,7 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
     note,
     pair: { address: pool, dexId, url: pair.url, sym },
     market,
+    dexUrl: pair.url || (pool ? ('https://dexscreener.com/base/' + pool) : null),
     trades,
     yourPnL,
     geckoNote,
