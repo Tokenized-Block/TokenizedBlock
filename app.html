@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0017">Build <code>20260916-0017</code> · Launch now MAIN · TBGAS example · unhooked CTA.</p>
+      <p class="note" data-build="20260916-0018">Build <code>20260916-0018</code> · mute Fees received · no BaseAPP Holders UI.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1148,7 +1148,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <ul class="pmLignes" id="peLignes"></ul>
         <div class="pActions" id="peActions"></div>
         <p class="note" id="peEtat"></p>
-        <p class="titre" id="peJournalTitre" hidden style="margin-top:10px;font-size:1em">Buybacks on the BaseAPP Holders fee path</p>
+        <p class="titre" id="peJournalTitre" hidden style="margin-top:10px;font-size:1em">Buybacks on the protocol fee path</p>
         <ul class="pmLignes" id="peJournal"></ul>
       </div>
       <!-- ⛔ OUTILS DE LIQUIDITE (Phil, 2026-09-13) : ajouter ses blocks au marche en GARDANT sa position, la retirer
@@ -3621,7 +3621,7 @@ async function lireProfil(adr, sym, perime) {
   if (etatVieProfil === 'LUE' && echangeAutorise(v, etatVieProfil)) {
     const bb = estWalletDeFrais(compte);
     const hkInfo = infoHookMarche(v);
-    $('#peBadge').textContent = bb ? 'Buyback · BaseAPP Holders' : 'Buy · Sell';
+    $('#peBadge').textContent = bb ? 'Buyback · protocol fee path' : 'Buy · Sell';
     $('#peFrais').textContent = bb ? 'no fee'
       : (hkInfo.isTbFeeHook ? '0.5% + TbFeeHook Dex chop'
         : (hkInfo.hooked ? '0.5% · foreign hook'
@@ -4051,10 +4051,13 @@ function peindreFeedTrustHonesty() {
   }
 }
 
-/** tip 0015: fees received = ETH+USDC+TBLOCK+TBGAS at FEE_WALLET. Never show address. No Holders branding. */
+/** tip 0018: mute Fees received until organic inbound on sink (HARD Raksha 2026-09-16). Keep balances off Social. */
 async function peindreFeeRecu() {
   const el = $('#sfFeeRecu');
   if (!el) return;
+  el.hidden = true;
+  el.textContent = '';
+  return; /* tip 0018 — do not paint smoke balances as "Fees received" */
   if (CHAINE !== 8453) { el.hidden = true; return; }
   el.hidden = false;
   const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -4167,7 +4170,7 @@ function peindreLive() {
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? (e.aaOpaque
-        ? '✉️ fee → BaseAPP Holders (smart wallet · text opaque) · ' + enTexte(court(e.signataire))
+        ? '✉️ fee → protocol sink (smart wallet · text opaque) · ' + enTexte(court(e.signataire))
         : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
         + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex=$0 · Launch hooked</span>' : '')
@@ -4621,7 +4624,7 @@ async function preparerEchange(sens) {
             + (estTbProfil && sens === 'VENTE'
               ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
               : '')))
-      : 'No fee: this is a buyback on the BaseAPP Holders fee path';
+      : 'No fee: this is a buyback on the protocol fee path';
     $('#peLignes').innerHTML = [
       'You pay: ' + q(r.paye, r.payeDevise),
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
@@ -4716,7 +4719,7 @@ async function preparerEchange(sens) {
     /* ⛔ tip 1900: calldata must name FEE_WALLET when fee is owed (resume alone is not enough). */
     if (p.tx && !feeWalletDansCalldata(p.tx)) {
       e.className = 'note wKo';
-      e.textContent = 'Refused: BaseAPP Holders fee missing from swap calldata — nothing to sign (fail-closed). Retry quote.';
+      e.textContent = 'Refused: protocol fee missing from swap calldata — nothing to sign (fail-closed). Retry quote.';
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
@@ -4962,7 +4965,7 @@ async function preparerEthUsdc() {
   $('#peLignes').innerHTML = [
     'Pay ' + formaterUnites(r.paye, 18) + ' ETH → receive at least ' + formaterUnites(r.recoitAuMoins, 6) + ' USDC',
     'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH · ' + feeLabel + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
-    'External DEX would pay BaseAPP Holders nothing — this hop keeps fee.',
+    'External DEX would pay the protocol fee sink nothing — this hop keeps fee.',
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
@@ -5136,12 +5139,12 @@ async function verifierLifeFeeAuWallet({ hash, weiMin, balAvant }) {
   let tx = null;
   try { tx = await rpc('eth_getTransactionByHash', [hash]); } catch { tx = null; }
   if (!tx) {
-    return { ok: false, pourquoi: 'life fee not observed for BaseAPP Holders — Launch stays closed (do not resend fee blindly; check explorer)' };
+    return { ok: false, pourquoi: 'life fee not observed for the protocol fee sink — Launch stays closed (do not resend fee blindly; check explorer)' };
   }
   const to = String(tx.to || '').toLowerCase();
   const val = BigInt(tx.value || '0x0');
   if (to === FEE_WALLET.toLowerCase() && val >= besoin) return { ok: true, via: 'tx', value: val };
-  return { ok: false, pourquoi: 'life fee underpaid or not to BaseAPP Holders on chain — Launch refused (do not resend fee blindly)' };
+  return { ok: false, pourquoi: 'life fee underpaid or not to the protocol fee sink on chain — Launch refused (do not resend fee blindly)' };
 }
 
 function peindrePlan(plan, adr) {
@@ -6812,7 +6815,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0017',
+    build: '20260916-0018',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
