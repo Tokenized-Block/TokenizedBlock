@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0018">Build <code>20260916-0018</code> · mute Fees received · no BaseAPP Holders UI.</p>
+      <p class="note" data-build="20260916-0018">Build <code>20260916-0018</code> · fee chip muted · no Holders branding.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3790,7 +3790,7 @@ let poolsLive = new Map(), decouverteJusqua = null;
 const creationsLive = new Map();
 const DECOUVERTE_INITIALE = 10000;
 function filtreLive(e) {
-  /* tip 2310: All = fee-relevant feed for BaseAPP Holders (FEE_WALLET).
+  /* tip 2310: All = fee-relevant feed for FEE_WALLET (address never shown).
    * Show: Launch/hook fee path (Feed/Kill · Messages · hooked swaps → FEE_WALLET). Free creates under Created chip.
    * Hide: free factory creates on All (no fee yet), GM/NOTE (chip GM). */
   if (liveFiltre === 'TOUT') {
@@ -4051,7 +4051,7 @@ function peindreFeedTrustHonesty() {
   }
 }
 
-/** tip 0018: mute Fees received until organic inbound on sink (HARD Raksha 2026-09-16). */
+/** tip 0018: mute fee chip until organic inbound on sink (HARD Raksha 2026-09-16). */
 async function peindreFeeRecu() {
   const el = $('#sfFeeRecu');
   if (!el) return;
