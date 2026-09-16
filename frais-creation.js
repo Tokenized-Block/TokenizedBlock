@@ -1,5 +1,7 @@
 // frais-creation.js — life fee source for Create + Launch (tip 2349 product rule).
 // ================================================================================================
+// ⛔ BETA FREE 2026-09-16 tip 0019: Create FREE. Fee moment = Launch life ≈$1 ETH + TbFeeHook HOOK_PREVU aa6D→a6cf.
+//    Prefer in-app ETH→USDC exit so FEE_WALLET shows USDC (hook chops swap currency; TBGAS smokes left tokens not dollars).
 // ⛔ HARD RULE Raksha 2026-09-15 tip 2349: Creation stays FREE (factory createB20 on MAIN + Practice).
 //    Fee moment = Launch / mise en market (life fee ETH ≈ FRAIS_USD + TbFeeHook → a6cf).
 //    CreateRouter (createPaid) stays optional/legacy — app default UX = free factory.

@@ -632,7 +632,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <ol class="pmLignes" id="cApercuTx"></ol>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
-        <p class="note" id="cMintFeeHint"><b>Create free</b> (factory). Fees start at <b>Launch</b>.</p>
+        <p class="note" id="cMintFeeHint"><b>Beta free Create</b> (factory). Life ≈$1 ETH at <b>Launch</b> + TbFeeHook. Then classic hook + in-app 0.5%. Prefer <b>ETH→USDC</b> exit so the sink shows dollars (USDC), not only dust tokens.</p>
         <p class="note" id="cBuybackHint"><b>Life fee ≠ buyback</b>. Holders path can buy TBLOCK — no peg.</p>
       </div>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0018">Build <code>20260916-0018</code> · fee chip muted · no Holders branding.</p>
+      <p class="note" data-build="20260916-0019">Build <code>20260916-0019</code> · beta free Create · life ≈$1 Launch hooked · exit USDC for sink dollars.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1130,7 +1130,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
-          <p class="note" id="peUsdcPath">Exit: Sell → ETH (0.5%), then optional <b>ETH→USDC</b> (+0.5%). External DEX pays 0 on this path. Practice = Base mainnet only.</p>
+          <p class="note" id="peUsdcPath">Exit to dollars: Sell → ETH (0.5%), then <b>ETH→USDC</b> (+0.5%) — this is how the sink accrues USDC. External DEX pays 0. Practice = MAIN only.</p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
@@ -3643,7 +3643,7 @@ async function lireProfil(adr, sym, perime) {
     const u = $('#peUsdcPath');
     if (u) {
       u.hidden = false;
-      u.innerHTML = 'Exit: Sell → ETH (0.5%), then optional <b>ETH→USDC</b> (+0.5%). External DEX pays 0 on this path. Practice = Base mainnet only.';
+      u.innerHTML = 'Exit to dollars: Sell → ETH (0.5%), then <b>ETH→USDC</b> (+0.5%) — this is how the sink accrues USDC. External DEX pays 0. Practice = MAIN only.';
     }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
@@ -6775,7 +6775,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0018',
+    build: '20260916-0019',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
