@@ -214,6 +214,23 @@ body{background:var(--fond);
 .mapZoom button:active{transform:scale(.92)}
 .mapAide{position:absolute;left:10px;bottom:10px;z-index:7;font-size:11px;color:var(--doux);
   background:rgba(10,10,20,.7);padding:5px 9px;border-radius:99px;pointer-events:none;transition:opacity .6s}
+/* tip 0026 — MAP 3D PLEIN ECRAN (Phil : « couvre toute la surface de cet onglet », « expand au max ton cube »).
+ * La map occupe tout entre l en-tete et la barre du bas ; recherche, Info et etat flottent par-dessus.
+ * `isolation` : les z-index de profondeur des tuiles restent DANS la map (la fiche et la barre du bas passent devant). */
+.mapEnv.a3d{isolation:isolate;cursor:grab;touch-action:none;user-select:none}
+.mapEnv.a3d.glisse{cursor:grabbing}
+.mapEnv.a3d::before{display:none}
+.mapEnv.a3d .bloc{left:0;top:0;transform-origin:0 0}
+.map3dFx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
+.mapEnv.a3d .mapZoom,.mapEnv.a3d .mapAide{z-index:100000}
+#v-map.on .mapEnv.a3d{position:fixed;left:0;right:0;top:var(--mapHaut,64px);bottom:var(--mapBas,72px);height:auto;min-height:0;
+  border:0;border-radius:0;z-index:1;
+  background:radial-gradient(ellipse at 50% 45%,rgba(90,70,200,.14),transparent 62%),var(--mapNuit)}
+#v-map.on .mapBarre{position:fixed;top:calc(var(--mapHaut,64px) + 10px);left:12px;right:96px;max-width:520px;z-index:20;margin:0}
+#v-map.on .bMasquer{position:fixed;top:calc(var(--mapHaut,64px) + 12px);right:12px;z-index:20}
+#v-map.on .mapLeg{position:fixed;left:12px;right:70px;bottom:calc(var(--mapBas,72px) + 44px);z-index:20;pointer-events:none}
+#v-map.on .mapLeg button{pointer-events:auto}
+#v-map.on{animation:none}
 .cote:not([hidden]){animation:coteEntre .22s ease-out}
 @keyframes coteEntre{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.cote:not([hidden]){animation:none}}
@@ -961,7 +978,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0025" hidden>Build <code>20260916-0025</code> · map world (pan, zoom, giant cube, live pulses) · ETH exit · Live claims a fee only where a hooked market was seen.</p>
+      <p class="note" data-build="20260916-0026" hidden>Build <code>20260916-0026</code> · 3D map: rotate, depth, whole cube, all blocks, live links, full screen · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (fee hook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1401,6 +1418,7 @@ import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
 import { resumeRelais } from './relais-cerveaux.js';
 import { dollarsCourts, lienOL } from './openlaunch.js';
+import { creerMoteur3D } from './map3d.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -1686,219 +1704,58 @@ let creationsLues = [];
  * ⛔ LES IMPULSIONS NE MONTRENT QUE DES EVENEMENTS LUS : une parole d un cerveau vers un autre (REPOND), un message
  *    paye (MESSAGE de -> a), un echange vu dans le fil Live (vert = Feed, rouge = Kill, bleu = swap sur pool a hook).
  *    Rien n est invente pour « faire vivant ». */
-const MONDE_L = 1500, MONDE_H = 1700;
-/* le cube geant : hexagone « pointe en haut » centre dans le monde ; les blocks vivent DEDANS */
-const CUBE_CX = MONDE_L / 2, CUBE_CY = MONDE_H / 2, CUBE_R = 820;
-/** centre d un block dans le cube ? (hexagone pointe en haut : |dx| <= R·cos30 et |dy| + |dx|·tan30 <= R), marge m */
-function dansLeCube(px, py, m = 0) {
-  const dx = Math.abs(px - CUBE_CX), dy = Math.abs(py - CUBE_CY), R = CUBE_R - m;
-  return dx <= R * 0.8660254 && dy + dx * 0.5773503 <= R;
-}
-function pointDansLeCube(t) {
-  for (let i = 0; i < 40; i++) {
-    const x = CUBE_CX + (Math.random() - 0.5) * 2 * CUBE_R * 0.87, y = CUBE_CY + (Math.random() - 0.5) * 2 * CUBE_R;
-    if (dansLeCube(x, y, t)) return { x: x - t / 2, y: y - t * 0.55 };
-  }
-  return { x: CUBE_CX - t / 2, y: CUBE_CY - t * 0.55 };
-}
-const camera = { x: 0, y: 0, s: 1, cible: null, touchee: false };
-let effetsMap = [];
+/* tip 0026 — la map passe en VRAIE 3D (map3d.js) : Phil « tourne-la en 3D, profondeur, cube entier, TOUS les blocks,
+ * toutes les connexions en live, toute la surface ». Le monde 2D de 0025 est remplace par le moteur 3D. */
 const mouvementReduit = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
+let moteur3d = null;
 function mondeMap() {
   const map = $('#map');
-  let m = map.querySelector('#mapMonde');
-  if (m) return m;
-  map.classList.add('aMonde');
-  m = document.createElement('div');
-  m.id = 'mapMonde'; m.className = 'mapMonde';
-  m.style.width = MONDE_L + 'px'; m.style.height = MONDE_H + 'px';
-  /* le cube geant : un hexagone isometrique (trois faces) qui contient tout le monde */
-  const cx = CUBE_CX, cy = CUBE_CY, R = CUBE_R;
-  const p = (d) => [cx + R * Math.cos(d * Math.PI / 180), cy + R * Math.sin(d * Math.PI / 180)];
-  const hex = [-90, -30, 30, 90, 150, 210].map(p);
-  const pts = (arr) => arr.map((q) => q[0].toFixed(0) + ',' + q[1].toFixed(0)).join(' ');
-  const c = [cx, cy];
-  m.innerHTML = '<svg class="mapCube" width="' + MONDE_L + '" height="' + MONDE_H + '" viewBox="0 0 ' + MONDE_L + ' ' + MONDE_H + '">'
-    + '<polygon points="' + pts([hex[4], hex[5], hex[0], c]) + '" fill="rgba(140,120,255,.05)"/>'
-    + '<polygon points="' + pts([hex[0], hex[1], hex[2], c]) + '" fill="rgba(140,120,255,.03)"/>'
-    + '<polygon points="' + pts([hex[2], hex[3], hex[4], c]) + '" fill="rgba(140,120,255,.04)"/>'
-    + '<polygon points="' + pts(hex) + '" fill="none" stroke="rgba(167,139,250,.34)" stroke-width="3"/>'
-    + '<path d="M' + pts([c, hex[0]]) + ' M' + pts([c, hex[2]]) + ' M' + pts([c, hex[4]]) + '" stroke="rgba(167,139,250,.22)" stroke-width="2" fill="none"/>'
-    + '</svg><svg class="mapFx" id="mapFx" width="' + MONDE_L + '" height="' + MONDE_H + '"></svg>';
-  map.appendChild(m);
-  const zoom = document.createElement('div');
-  zoom.className = 'mapZoom';
-  zoom.innerHTML = '<button type="button" data-zoom="1" aria-label="Zoom in">+</button><button type="button" data-zoom="-1" aria-label="Zoom out">−</button>'
-    + '<button type="button" data-zoom="0" aria-label="See the whole cube" title="See the whole cube">⤢</button>';
-  map.appendChild(zoom);
-  const aide = document.createElement('div');
-  aide.className = 'mapAide'; aide.id = 'mapAide';
-  aide.textContent = 'Drag to move · scroll or pinch to zoom';
-  map.appendChild(aide);
-  zoom.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-zoom]');
-    if (!b) return;
-    e.stopPropagation();
-    const k = Number(b.getAttribute('data-zoom'));
-    camera.touchee = true;
-    if (k === 0) { cadrerTout(true); return; }
-    zoomerAutour(map.clientWidth / 2, map.clientHeight / 2, k > 0 ? 1.4 : 1 / 1.4, true);
-  });
-  brancherCamera(map);
-  return m;
+  if (!moteur3d) moteur3d = creerMoteur3D({ map, habitants, enTexte, mouvementReduit });
+  return map;
 }
 
-function echelleMin() {
-  const map = $('#map');
-  const L = map.clientWidth || 640, H = map.clientHeight || 420;
-  return Math.min(L / MONDE_L, H / MONDE_H) * 0.5;
+function centrerSur(h) { if (moteur3d) moteur3d.centrerSur(h); }
+/* tip 0026 : la map plein ecran se cale sous l en-tete et au-dessus de la barre du bas, mesures (pas devines) */
+function caleMapPleinEcran() {
+  const t = document.querySelector('header.tete'), n = document.querySelector('nav.nav');
+  const haut = t ? Math.max(0, Math.round(t.getBoundingClientRect().bottom)) : 64;
+  const bas = n ? Math.round(n.getBoundingClientRect().height) : 72;
+  document.documentElement.style.setProperty('--mapHaut', haut + 'px');
+  document.documentElement.style.setProperty('--mapBas', bas + 'px');
 }
-function poserCamera(cible, doux) {
-  if (doux && !mouvementReduit) { camera.cible = cible; return; }
-  camera.x = cible.x; camera.y = cible.y; camera.s = cible.s; camera.cible = null;
-  appliquerCamera();
-}
-function cadrerTout(doux) {
-  const map = $('#map');
-  const L = map.clientWidth, H = map.clientHeight;
-  if (L <= 0 || H <= 0) return;
-  const s = Math.min(L / MONDE_L, H / MONDE_H) * 0.96;
-  poserCamera({ x: (L - MONDE_L * s) / 2, y: (H - MONDE_H * s) / 2, s }, doux);
-}
-/* vue d ouverture : le centre du cube, a une echelle ou les blocks restent lisibles (tout voir = bouton ⤢ ou dezoomer) */
-function vueDeDepart() {
-  const map = $('#map');
-  const L = map.clientWidth, H = map.clientHeight;
-  if (L <= 0 || H <= 0) return;
-  const s = Math.max(Math.min(L / MONDE_L, H / MONDE_H) * 0.96, Math.min(0.62, 1));
-  poserCamera({ x: L / 2 - CUBE_CX * s, y: H / 2 - CUBE_CY * s, s }, false);
-}
-function zoomerAutour(px, py, facteur, doux) {
-  const base = camera.cible || camera;
-  const s = Math.max(echelleMin(), Math.min(3, base.s * facteur));
-  const wx = (px - base.x) / base.s, wy = (py - base.y) / base.s;
-  poserCamera({ x: px - wx * s, y: py - wy * s, s }, doux);
-}
-function centrerSur(h) {
-  const map = $('#map');
-  const L = map.clientWidth, H = map.clientHeight;
-  if (L <= 0 || H <= 0 || !h) return;
-  const s = Math.max(camera.s, 0.9);
-  /* sur grand ecran la fiche occupe la droite : le block se pose au centre de ce qui reste visible */
-  const cxVisible = L >= 700 ? (L - 380) / 2 : L / 2, cyVisible = L >= 700 ? H / 2 : H * 0.3;
-  poserCamera({ x: cxVisible - (h.x + h.t / 2) * s, y: cyVisible - (h.y + h.t * 0.55) * s, s }, true);
-}
-function appliquerCamera() {
-  const m = $('#mapMonde');
-  if (m) m.style.transform = 'translate(' + camera.x.toFixed(1) + 'px,' + camera.y.toFixed(1) + 'px) scale(' + camera.s.toFixed(4) + ')';
-}
-
-/* glisser = deplacer ; molette = zoom autour du curseur ; deux doigts = pincer. Un glisser de plus de 6 px n est PAS un clic. */
-let glisseAuClic = false;
-function brancherCamera(map) {
-  const doigts = new Map();
-  let depart = null, pince = null;
-  map.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.mapZoom, .bMasquer')) return;
-    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    glisseAuClic = false;
-    camera.cible = null;
-    if (doigts.size === 1) depart = { px: e.clientX, py: e.clientY, cx: camera.x, cy: camera.y };
-    if (doigts.size === 2) {
-      const [a, b] = [...doigts.values()];
-      const r = map.getBoundingClientRect();
-      pince = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: camera.s, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, cx: camera.x, cy: camera.y };
-    }
-  });
-  map.addEventListener('pointermove', (e) => {
-    if (!doigts.has(e.pointerId)) return;
-    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (doigts.size >= 2 && pince) {
-      const [a, b] = [...doigts.values()];
-      const s = Math.max(echelleMin(), Math.min(3, pince.s * Math.hypot(a.x - b.x, a.y - b.y) / pince.d));
-      const wx = (pince.mx - pince.cx) / pince.s, wy = (pince.my - pince.cy) / pince.s;
-      camera.s = s; camera.x = pince.mx - wx * s; camera.y = pince.my - wy * s;
-      glisseAuClic = true; camera.touchee = true;
-      appliquerCamera();
-      return;
-    }
-    if (!depart) return;
-    const dx = e.clientX - depart.px, dy = e.clientY - depart.py;
-    if (!glisseAuClic && Math.hypot(dx, dy) < 6) return;
-    if (!glisseAuClic) { try { map.setPointerCapture(e.pointerId); } catch (_) { /* capture optionnelle */ } }
-    glisseAuClic = true; camera.touchee = true;
-    map.classList.add('glisse');
-    camera.x = depart.cx + dx; camera.y = depart.cy + dy;
-    appliquerCamera();
-  });
-  const fin = (e) => {
-    doigts.delete(e.pointerId);
-    if (doigts.size < 2) pince = null;
-    if (!doigts.size) { depart = null; map.classList.remove('glisse'); }
-  };
-  map.addEventListener('pointerup', fin);
-  map.addEventListener('pointercancel', fin);
-  map.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const r = map.getBoundingClientRect();
-    camera.touchee = true;
-    zoomerAutour(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015), false);
-    const aide = $('#mapAide'); if (aide) aide.style.opacity = '0';
-  }, { passive: false });
-}
+window.addEventListener('resize', caleMapPleinEcran);
+setTimeout(caleMapPleinEcran, 0);
 
 function habitantDe(adr) {
   const a = String(adr || '').toLowerCase();
   return habitants.find((x) => String(x.adr).toLowerCase() === a) || null;
 }
-/* une impulsion d un block vers un autre : elle suit les deux blocks pendant qu ils bougent */
-function impulsion(deAdr, aAdr, couleur) {
+/* une impulsion d un block vers un autre (et un lien qui reste visible 10 min) — adresses lues, jamais inventees */
+function impulsion(deAdr, aAdr, couleur, mot) {
   const de = habitantDe(deAdr), a = habitantDe(aAdr);
-  if (!de || !a || de === a || mouvementReduit) return;
-  effetsMap.push({ genre: 'IMPULSION', de, a, couleur, t0: performance.now(), duree: 1700 });
+  if (!moteur3d || !de || !a || de === a) return;
+  moteur3d.impulsion(de, a, couleur);
+  if (mot) moteur3d.onde(a, couleur, mot);
 }
-/* une onde sur un block (echange, parole, creation), avec une etiquette courte */
-function onde(adr, couleur, etiquette) {
+/* une onde sur un block, avec UN MOT (Phil : « des mots, pas des phrases, sinon illisible ») */
+function onde(adr, couleur, mot) {
   const h = habitantDe(adr);
-  if (!h || mouvementReduit) return;
-  effetsMap.push({ genre: 'ONDE', h, couleur, etiquette: etiquette || '', t0: performance.now(), duree: 1600 });
+  if (moteur3d && h) moteur3d.onde(h, couleur, mot);
 }
-function dessinerEffets(maintenant) {
-  const fx = $('#mapFx');
-  if (!fx) return;
-  const avant = effetsMap.length;
-  effetsMap = effetsMap.filter((f) => maintenant - f.t0 < f.duree).slice(-60);
-  if (!effetsMap.length) { if (avant) fx.innerHTML = ''; return; }
-  let html = '';
-  for (const f of effetsMap) {
-    const k = (maintenant - f.t0) / f.duree;
-    if (f.genre === 'IMPULSION') {
-      const x1 = f.de.x + f.de.t / 2, y1 = f.de.y + f.de.t * 0.55, x2 = f.a.x + f.a.t / 2, y2 = f.a.y + f.a.t * 0.55;
-      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      const px = x1 + (x2 - x1) * e, py = y1 + (y2 - y1) * e;
-      const op = k < 0.85 ? 1 : (1 - k) / 0.15;
-      html += '<line x1="' + x1.toFixed(0) + '" y1="' + y1.toFixed(0) + '" x2="' + x2.toFixed(0) + '" y2="' + y2.toFixed(0)
-        + '" stroke="' + f.couleur + '" stroke-opacity="' + (0.3 * op).toFixed(2) + '" stroke-width="2" stroke-dasharray="6 8"/>'
-        + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="18" fill="' + f.couleur + '" fill-opacity="' + (0.18 * op).toFixed(2) + '"/>'
-        + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="7" fill="' + f.couleur + '" fill-opacity="' + op.toFixed(2) + '"/>';
-    } else {
-      const cx = f.h.x + f.h.t / 2, cy = f.h.y + f.h.t * 0.55;
-      const r = f.h.t * 0.55 + k * 60, op = 1 - k;
-      html += '<circle cx="' + cx.toFixed(0) + '" cy="' + cy.toFixed(0) + '" r="' + r.toFixed(1) + '" fill="none" stroke="' + f.couleur
-        + '" stroke-width="3" stroke-opacity="' + op.toFixed(2) + '"/>';
-      if (f.etiquette) {
-        html += '<text x="' + cx.toFixed(0) + '" y="' + (f.h.y - 8 - k * 34).toFixed(0) + '" text-anchor="middle" font-size="20" font-weight="800" fill="'
-          + f.couleur + '" fill-opacity="' + op.toFixed(2) + '">' + enTexte(f.etiquette) + '</text>';
-      }
-    }
-  }
-  fx.innerHTML = html;
-}
-/* ⚠️ VERIFICATION SEULEMENT : `?fxdemo=1` joue une impulsion et une onde entre les deux premiers blocks, pour tester le
- * rendu sans attendre un vrai evenement. Jamais sans ce parametre. */
+/* un mot court par evenement de cerveau (parole-cerveaux.js `evenement`) */
+const MOT_EVENEMENT = { new_buy: 'fed', new_sell: 'killed', new_holder: 'holder', new_message: 'message', new_transfer: 'transfer', price_up: 'up', price_down: 'down' };
+/* ⚠️ VERIFICATION SEULEMENT : `?fxdemo=1` joue des impulsions entre les premiers blocks, pour tester le rendu sans
+ * attendre un vrai evenement. Jamais sans ce parametre. */
 if (new URLSearchParams(location.search).get('fxdemo') === '1') {
-  setInterval(() => { if (habitants.length > 1) { impulsion(habitants[0].adr, habitants[1].adr, '#a78bfa'); onde(habitants[1].adr, '#22c55e', 'Feed (demo)'); } }, 2500);
+  const mots = [['reply', '#a78bfa'], ['Feed', '#22c55e'], ['Kill', '#ef4444'], ['GM', '#a78bfa'], ['message', '#f7a318'], ['swap', '#60a5fa']];
+  let i = 0;
+  setInterval(() => {
+    if (habitants.length < 2) return;
+    const a = habitants[i % habitants.length], b = habitants[(i * 7 + 3) % habitants.length];
+    const [mot, c] = mots[i % mots.length];
+    impulsion(a.adr, b.adr, c, mot + ' (demo)');
+    i++;
+  }, 1200);
 }
 /* les evenements Live -> effets sur la map (appele avec les SEULS evenements nouveaux) */
 function effetsDepuisLive(evts) {
@@ -1906,17 +1763,16 @@ function effetsDepuisLive(evts) {
     if (e.type === 'ACHAT') onde(e.jeton, '#22c55e', 'Feed');
     else if (e.type === 'VENTE') onde(e.jeton, '#ef4444', 'Kill');
     else if (e.type === 'SWAP') onde(e.jeton, '#60a5fa', 'swap');
-    else if (e.type === 'CREATION') onde(e.jeton, '#f7a318', 'born');
+    else if (e.type === 'CREATION') { if (!habitantDe(e.jeton)) creerHabitant({ jeton: e.jeton, symbole: e.sym, vie: null }); onde(e.jeton, '#f7a318', 'born'); }
     else if (e.type === 'GM') onde(e.jeton, '#a78bfa', 'GM');
-    else if (e.type === 'MESSAGE' && e.de && e.a) { impulsion(e.de, e.a, '#f7a318'); onde(e.a, '#f7a318', 'message'); }
+    else if (e.type === 'NOTE') onde(e.jeton, '#94a3b8', 'note');
+    else if (e.type === 'MESSAGE' && e.de && e.a) impulsion(e.de, e.a, '#f7a318', 'message');
   }
 }
 
 function creerHabitant(c) {
   const map = mondeMap();
-  /* tip 0025 : les blocks naissent dans le MONDE (taille fixe), plus dans la fenetre — la fenetre cachee ne peut plus
-   * les empiler a 0,0 (le defaut du 2026-09-12 est donc ferme a la racine). */
-  const L = MONDE_L, H = MONDE_H;
+  /* tip 0026 : position 3D dans le cube, posee par le moteur (map3d.js) — plus aucune dependance a la taille de la fenetre */
   const t = tailleDe(c.vie);
   const el = document.createElement('button');
   el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
@@ -1935,15 +1791,11 @@ function creerHabitant(c) {
   try { cerveau = cerveauAvecMemoire(c.jeton); } catch (e) { cerveau = null; }
   const h = {
     el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
-    ...pointDansLeCube(t),
     /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
      * doigt sur un telephone — un jeu qu on ne peut pas toucher n est pas un jeu. */
     vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22,
   };
-  /* ⛔ LA POSITION EST POSEE TOUT DE SUITE, PAS A LA PREMIERE IMAGE D ANIMATION. `requestAnimationFrame`
-   * ne tourne PAS dans un onglet invisible : sans ca, un block cree hors ecran restait a 0,0 et la map
-   * s ouvrait avec tout le monde dans le coin. La derive, elle, peut attendre l animation. */
-  el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
+  if (moteur3d) moteur3d.placer(h);
   habitants.push(h);
   return h;
 }
@@ -1951,7 +1803,7 @@ function creerHabitant(c) {
 function poserBlocks(liste) {
   /* tip 0025 : on retire les BLOCKS, pas le monde (le cube, la couche d impulsions et la camera restent) */
   mondeMap().querySelectorAll('.bloc').forEach((el) => el.remove());
-  effetsMap = [];
+  if (moteur3d) moteur3d.vider();
   habitants.length = 0;
   for (const c of liste) creerHabitant(c);
   animer();
@@ -2002,28 +1854,8 @@ function animer() {
      * les 22 blocks etaient empiles dans le coin haut-gauche. Une taille inconnue n est pas une
      * taille de zero : on ne bouge rien tant qu on ne sait pas ou sont les bords. */
     if (L2 <= 0 || H2 <= 0) { anim = requestAnimationFrame(pas); return; }
-    /* tip 0025 : premiere image visible -> on cadre tout le cube, tant que l utilisateur n a pas deplace la camera */
-    if (!camera.touchee && !camera.cadree) { vueDeDepart(); camera.cadree = true; }
-    if (camera.cible) {
-      const c = camera.cible, k = 0.16;
-      camera.x += (c.x - camera.x) * k; camera.y += (c.y - camera.y) * k; camera.s += (c.s - camera.s) * k;
-      if (Math.abs(c.x - camera.x) < 0.5 && Math.abs(c.y - camera.y) < 0.5 && Math.abs(c.s - camera.s) < 0.001) {
-        camera.x = c.x; camera.y = c.y; camera.s = c.s; camera.cible = null;
-      }
-      appliquerCamera();
-    }
-    for (const h of habitants) {
-      h.x += h.vx; h.y += h.vy;
-      /* tip 0025 : rebond sur les parois du cube — un centre qui sort repart vers le centre du cube, meme vitesse */
-      const hx = h.x + h.t / 2, hy = h.y + h.t * 0.55;
-      if (!dansLeCube(hx, hy, h.t * 0.6)) {
-        const v = Math.hypot(h.vx, h.vy) || 0.1, a = Math.atan2(CUBE_CY - hy, CUBE_CX - hx) + (Math.random() - 0.5) * 0.8;
-        h.vx = Math.cos(a) * v; h.vy = Math.sin(a) * v;
-        h.x += h.vx * 2; h.y += h.vy * 2;
-      }
-      h.el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
-    }
-    dessinerEffets(performance.now());
+    /* tip 0026 : derive 3D, camera, cube, liens et impulsions — tout dans map3d.js */
+    if (moteur3d) moteur3d.image(performance.now());
     anim = requestAnimationFrame(pas);
   };
   anim = requestAnimationFrame(pas);
@@ -2042,7 +1874,7 @@ document.addEventListener('visibilitychange', () => {
 
 $('#map').addEventListener('click', (e) => {
   /* tip 0025 : un glisser n est pas un clic */
-  if (glisseAuClic) { glisseAuClic = false; return; }
+  if (moteur3d && moteur3d.glisseAuClic()) { moteur3d.oublierGlisse(); return; }
   const b = e.target.closest('.bloc');
   if (!b) return;
   const adr = b.getAttribute('data-block');
@@ -2295,12 +2127,13 @@ async function charger() {
      *    block, et les afficher toutes avant le premier dessin laisserait la map vide plusieurs
      *    secondes. Les blocks apparaissent d abord, la vie arrive ensuite — et tant qu elle n est
      *    pas lue, ils sont PALES, jamais « a zero ». */
-    poserBlocks(vues.slice(0, 22).map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null })));
+    /* tip 0026 (Phil « accueillir TOUS les blocks vivants ») : tous les blocks lus sont poses ; la vie n est lue que pour les 30 premiers (limite du noeud public) */
+    poserBlocks(vues.map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null })));
     etat.textContent = '';
     void poserNosBlocks(r.fenetre.a);
     note.textContent = vues.length + ' blocks made in the last '
       + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · showing '
-      + Math.min(22, vues.length)
+      + vues.length + " (life read for the first " + Math.min(30, vues.length) + ")"
       + (ratees ? ' · ' + ratees + ' window(s) unread — this map is incomplete' : '');
     void lireLaVie();
   } catch (e) {
@@ -2378,7 +2211,7 @@ async function lireLaVie() {
   /* ⛔ RAKSHA 2026-09-14 : lire NOS genesis (TBLOCK/TTB) EN PREMIER — ils ne restent pas colles en « Not read ». */
   const ordre = [...habitants].sort((a, b) => Number(nosSet.has(String(b.adr).toLowerCase())) - Number(nosSet.has(String(a.adr).toLowerCase()))
     || Number(b.nous === true) - Number(a.nous === true));
-  for (const h of ordre) {
+  for (const h of ordre.slice(0, 30)) {
     await souffler();
     /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
      * 25 a 40 s a s afficher, parce que cette boucle et le profil se partageaient le meme noeud
@@ -2695,12 +2528,8 @@ function replacerDansLaMap() {
   const L = map.clientWidth, H = map.clientHeight;
   /* ⛔ ON NE REPLACE RIEN SUR UNE MAP SANS TAILLE : ce serait ramener tout le monde a 0,0. */
   if (L <= 0 || H <= 0) return;
-  /* tip 0025 : les blocks sont bornes par le MONDE ; c est la camera qui s adapte a la fenetre */
-  if (!camera.touchee) vueDeDepart();
-  for (const h of habitants) {
-    if (!dansLeCube(h.x + h.t / 2, h.y + h.t * 0.55, 0)) Object.assign(h, pointDansLeCube(h.t));
-    h.el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
-  }
+  /* tip 0026 : en 3D les blocks sont bornes par le cube, la projection suit la fenetre a chaque image — rien a replacer */
+  if (moteur3d && habitants.length) moteur3d.image(performance.now());
 }
 
 /* ══ WALLET ══════════════════════════════════════════════════════════════════════════════════
@@ -4245,6 +4074,16 @@ async function lireLive(sens) {
     if (sens !== 'ancien' && nouveaux.length) void rafraichirApresEchanges(nouveaux);
     /* tip 0025 : les evenements NOUVEAUX (pas la premiere fenetre, pas le passe charge) deviennent des effets sur la map */
     if (sens !== 'ancien' && liveDernier !== null && nouveaux.length) effetsDepuisLive(nouveaux);
+    /* tip 0026 — PREMIERE fenetre lue (~1 h de chaine) : Phil a aime les impulsions de test mais « on est mainnet direct ».
+     * ⛔ On ne dessine PAS d evenements inventes : on REJOUE les vrais evenements de cette fenetre, du plus ancien au plus
+     *    recent, etales sur ~90 s, avec leurs mots (Feed, Kill, swap, GM, born, message). La note de la map le dit. */
+    if (sens !== 'ancien' && liveDernier === null && nouveaux.length) {
+      const rejeu = [...nouveaux].sort((a, b) => (a.bloc ?? 0) - (b.bloc ?? 0) || (a.logIndex ?? 0) - (b.logIndex ?? 0)).slice(-240);
+      const pasMs = Math.max(250, Math.min(1500, Math.round(90000 / rejeu.length)));
+      rejeu.forEach((e, i) => setTimeout(() => effetsDepuisLive([e]), i * pasMs));
+      const etat = $('#mapEtat');
+      if (etat) etat.textContent = 'Replaying the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length + ' real events), then live.';
+    }
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
     if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;
@@ -4600,8 +4439,8 @@ function parlerCerveaux() {
   for (const p of paroles) {
     /* tip 0025 : une reponse d un cerveau a un autre = une impulsion visible sur la map ; une parole seule = une onde douce.
      * Les changements d humeur seuls ne font pas d effet (bruit). */
-    if (p.type === 'REPOND' && p.a) impulsion(p.de, p.a, '#a78bfa');
-    else if (p.type === 'DIT' && !estParoleMood(p)) onde(p.de, '#a78bfa', '');
+    if (p.type === 'REPOND' && p.a) impulsion(p.de, p.a, '#a78bfa', 'reply');
+    else if (p.type === 'DIT' && !estParoleMood(p)) onde(p.de, '#a78bfa', MOT_EVENEMENT[p.evenement] || 'talk');
     const row = { ...p, heure, id: 'p' + (++parolesCompteur), n: 1 };
     /* Coalesce mood-only lines per token — do not invent; keep latest text + count. */
     if (estParoleMood(row) && row.type === 'DIT') {
@@ -7248,7 +7087,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0025',
+    build: '20260916-0026',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
