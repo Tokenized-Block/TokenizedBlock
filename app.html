@@ -195,6 +195,33 @@ body{background:var(--fond);
 .bloc.pulse{animation:pulseBloc 1.4s ease-out 1}
 @keyframes pulseBloc{0%{box-shadow:0 0 0 0 rgba(167,139,250,.7)}100%{box-shadow:0 0 0 22px rgba(167,139,250,0)}}
 @media (prefers-reduced-motion:reduce){.bloc.pulse{animation:none}}
+/* tip 0025 — LA MAP EST UN MONDE (Phil 2026-09-16 : « se balader sur la map, dezoomer, un cube geant a l interieur de
+ * tout, voir en direct entre les blocks une impulsion »). `#map` = la fenetre ; `#mapMonde` = le monde 2400x1500 qu on
+ * deplace et zoome (camera = un seul transform). La grille vit dans le monde, elle bouge avec lui. */
+.mapEnv.aMonde::before{display:none}
+.mapEnv.aMonde{cursor:grab;touch-action:none;user-select:none}
+.mapEnv.aMonde.glisse{cursor:grabbing}
+.mapMonde{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;
+  background-image:linear-gradient(var(--grille) 1px,transparent 1px),linear-gradient(90deg,var(--grille) 1px,transparent 1px);
+  background-size:34px 34px}
+.mapCube,.mapFx{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.mapFx{z-index:5}
+.mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
+.mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
+  background:rgba(10,10,20,.82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
+  cursor:pointer;transition:transform .12s,border-color .12s}
+.mapZoom button:hover{border-color:var(--accent)}
+.mapZoom button:active{transform:scale(.92)}
+.mapAide{position:absolute;left:10px;bottom:10px;z-index:7;font-size:11px;color:var(--doux);
+  background:rgba(10,10,20,.7);padding:5px 9px;border-radius:99px;pointer-events:none;transition:opacity .6s}
+.cote:not([hidden]){animation:coteEntre .22s ease-out}
+@keyframes coteEntre{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.cote:not([hidden]){animation:none}}
+/* tip 0025 UX : clic sur un block -> la fiche du block d abord ; l explication de la map reste derriere « Info » */
+.cote.aFiche .coteIntro{display:none}
+.fiche:not([hidden]){animation:coteEntre .2s ease-out}
+.bloc{transition:border-color .12s,box-shadow .12s,filter .2s}
+.bloc:hover{filter:brightness(1.15)}
 /* ⛔⛔ LE DESSIN EST EN 200x220, PAS CARRE — ET C ETAIT LE « BUG VISUEL » SIGNALE PAR PHIL. Force
  * dans une case carree, le cube etait rogne ou ecrase : plusieurs blocks n affichaient qu une
  * bande de leur face du haut. Le dessin part dans le contractURI ; le deformer a l ecran, c est
@@ -364,6 +391,8 @@ button.mienTuile:hover{border-color:var(--accent)}
 .navB[aria-selected="true"]{color:var(--texte);background:hsl(var(--h) 32% 19%)}
 .navB{transition:color .12s ease,background .12s ease}
 .volet{display:none}
+@media (prefers-reduced-motion:no-preference){.volet.on{animation:voletEntre .22s ease-out}}
+@keyframes voletEntre{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .volet.on{display:block}
 /* ⛔ MEME TEINTE QUE LE RESTE. Ce cadre etait en 226 — du BLEU au milieu d une page violette, et
  * c est precisement le genre d ecart qui fait sonner faux sans qu on sache le nommer. */
@@ -487,7 +516,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <button type="button" class="lienLearn" style="margin-left:auto">What am I looking at? →</button>
         </div>
         <!-- tip 0013: Map surfaces Hooked / TBGAS deep link — gas/example fee path. No fee addr in UI. -->
-        <p class="note" id="mapHookedPath" style="margin:8px 0 0">
+        <p class="note" id="mapHookedPath" style="margin:8px 0 0" hidden>
           <b>Hooked markets</b> · example
           <button type="button" class="puce" id="mapOpenTbgas">Open TBGAS</button>
           · Buy/Sell in-app (0.5%) · hooked Dex chops · unhooked Dex = $0 → Launch hooked.
@@ -498,10 +527,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ FERME PAR DEFAUT. Le sujet est la map ; l explication est disponible, pas imposee. -->
       <aside class="cote" id="cote" hidden>
         <div class="carte">
-          <p class="titre">Blocks map</p>
+          <p class="titre coteIntro">Blocks map</p>
           <!-- ⛔ UNE LIGNE, ET LE RESTE DANS LEARN : la meme explication a deux endroits finit par
                dire deux choses differentes. -->
-          <p class="sous" style="margin:0">Every square is a real block on Base, and its size is what
+          <p class="sous coteIntro" style="margin:0">Every square is a real block on Base, and its size is what
             the chain says it is worth. <button type="button" class="lienLearn">How that works →</button></p>
           <div class="fiche" id="fiche" hidden>
             <!-- ⛔ LE LOGO EN AVATAR, ET C EST LE MEME QUE SUR LA MAP ET QUE DANS LES METADONNEES.
@@ -612,7 +641,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
     <div class="carte">
       <p class="titre">What it costs, and what it signs</p>
       <p class="note" id="cReseauAvert"></p>
-      <!-- tip 2349–2354: Create FREE · fee at Launch+TbFeeHook. Sign tab must not say life fee at create. Never show FEE_WALLET in UI. -->
+      <!-- tip 2349–2354: Create FREE · fee at Launch+fee hook. Sign tab must not say life fee at create. Never show FEE_WALLET in UI. -->
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
@@ -622,22 +651,22 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <p class="note" id="cFrais"></p>
         <ul class="note noteBullets" id="cCostBullets">
           <li><b>Create</b>: free</li>
-          <li><b>Launch</b>: ≈ $1 ETH + TbFeeHook</li>
+          <li><b>Launch</b>: ≈ $1 ETH + fee hook</li>
           <li><b>Buy/Sell</b> (pool live): 0.5%</li>
         </ul>
         <p class="note" id="cRecap"></p>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="sign" hidden>
-        <p class="note"><b>One signature</b> — free Create. Launch is when fees start.</p>
+        <p class="note"><b>Step 1 of 2</b> — free Create (one signature). <b>Step 2</b> — Launch opens right after: that is when fees start.</p>
         <ol class="pmLignes" id="cApercuTx"></ol>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
-        <p class="note" id="cMintFeeHint"><b>Instant Birth (OL-inspired)</b>: Create free → Launch seeds <b>~99.9% supply</b> into a <b>hooked ETH pool</b> (locked LP) · life ≈$1 → sink · then hook + in-app 0.5%. Prefer ETH→USDC for dollars on sink.</p>
+        <p class="note" id="cMintFeeHint"><b>Instant Birth (OL-inspired)</b>: Create free → Launch seeds <b>~99.9% supply</b> into a <b>hooked ETH pool</b> (locked LP) · life ≈$1 · then hook + in-app 0.5%. Fees are taken in ETH.</p>
         <p class="note" id="cBuybackHint"><b>Life fee ≠ buyback</b>. Holders path can buy TBLOCK — no peg.</p>
       </div>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
         <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
-        <button class="bouton" id="cCreer" type="button">Create + Launch — sign in my wallet</button>
+        <button class="bouton" id="cCreer" type="button">Create, then Launch — 2 signatures</button>
         <p class="note" id="cALancer" hidden></p>
       </div>
       <p class="note" id="cEtat"></p>
@@ -932,10 +961,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0024">Build <code>20260916-0024</code> · Launch on OpenLaunch from the app (LP fee 50/50) · Create + Launch together · Live claims a fee only where a hooked market was seen.</p>
+      <p class="note" data-build="20260916-0025" hidden>Build <code>20260916-0025</code> · map world (pan, zoom, giant cube, live pulses) · ETH exit · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
-      <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
+      <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (fee hook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -1156,7 +1185,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
-          <p class="note" id="peUsdcPath">Exit to dollars: Sell → ETH (0.5%), then <b>ETH→USDC</b> (+0.5%) — this is how the sink accrues USDC. External DEX pays 0. Practice = MAIN only.</p>
+          <p class="note" id="peUsdcPath"><b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.</p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
@@ -1206,7 +1235,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note" id="plLiqHonesty">🔒 <b>Launch LP locked forever</b> (dead-address owner). Later <b>Add liquidity</b> stays yours / withdrawable. Not every LP is forever-locked.</p>
         </div>
         <div class="infoPane" data-itabs-pane="plInfo" data-itab="fees" hidden>
-          <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH + TbFeeHook. Practice Launch free.</p>
+          <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH + fee hook. Practice Launch free.</p>
         </div>
         <label class="champ">Pair it against<select id="plDevise"><option value="ETH" selected>ETH (native) — Instant Birth default</option>
           <option value="TBLOCK">TBLOCK — via TBLOCK/ETH hop (thin book today)</option></select></label>
@@ -1651,13 +1680,243 @@ let creationsLues = [];
  *    on map marche pas ». Un bouton qui repond par une excuse ne sert a rien : maintenant il POSE le
  *    block. Tout redessiner aurait remis a zero les vies deja lues et la boucle qui les lit.
  */
-function creerHabitant(c) {
+/* ══ tip 0025 — LE MONDE, LA CAMERA, LES IMPULSIONS ═══════════════════════════════════════════════
+ * ⛔ Les blocks vivent dans un monde de taille FIXE (plus la taille de la fenetre) : un onglet cache ne peut plus les
+ *    empiler a 0,0, et on peut dezoomer pour tout voir. La camera {x, y, s} est le seul transform du monde.
+ * ⛔ LES IMPULSIONS NE MONTRENT QUE DES EVENEMENTS LUS : une parole d un cerveau vers un autre (REPOND), un message
+ *    paye (MESSAGE de -> a), un echange vu dans le fil Live (vert = Feed, rouge = Kill, bleu = swap sur pool a hook).
+ *    Rien n est invente pour « faire vivant ». */
+const MONDE_L = 1500, MONDE_H = 1700;
+/* le cube geant : hexagone « pointe en haut » centre dans le monde ; les blocks vivent DEDANS */
+const CUBE_CX = MONDE_L / 2, CUBE_CY = MONDE_H / 2, CUBE_R = 820;
+/** centre d un block dans le cube ? (hexagone pointe en haut : |dx| <= R·cos30 et |dy| + |dx|·tan30 <= R), marge m */
+function dansLeCube(px, py, m = 0) {
+  const dx = Math.abs(px - CUBE_CX), dy = Math.abs(py - CUBE_CY), R = CUBE_R - m;
+  return dx <= R * 0.8660254 && dy + dx * 0.5773503 <= R;
+}
+function pointDansLeCube(t) {
+  for (let i = 0; i < 40; i++) {
+    const x = CUBE_CX + (Math.random() - 0.5) * 2 * CUBE_R * 0.87, y = CUBE_CY + (Math.random() - 0.5) * 2 * CUBE_R;
+    if (dansLeCube(x, y, t)) return { x: x - t / 2, y: y - t * 0.55 };
+  }
+  return { x: CUBE_CX - t / 2, y: CUBE_CY - t * 0.55 };
+}
+const camera = { x: 0, y: 0, s: 1, cible: null, touchee: false };
+let effetsMap = [];
+const mouvementReduit = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+function mondeMap() {
   const map = $('#map');
-  /* ⛔⛔ UNE TAILLE INCONNUE N EST PAS UNE TAILLE DE ZERO. Mesure du 2026-09-12 : quand la page n est
-   * pas visible, `clientWidth` rend 0 — et les 22 blocks naissaient tous a l abscisse 0, empiles en
-   * colonne contre le bord. On se rabat sur une aire par defaut ; `replacerDansLaMap` les remettra
-   * dans les vrais bords des que la map en a. */
+  let m = map.querySelector('#mapMonde');
+  if (m) return m;
+  map.classList.add('aMonde');
+  m = document.createElement('div');
+  m.id = 'mapMonde'; m.className = 'mapMonde';
+  m.style.width = MONDE_L + 'px'; m.style.height = MONDE_H + 'px';
+  /* le cube geant : un hexagone isometrique (trois faces) qui contient tout le monde */
+  const cx = CUBE_CX, cy = CUBE_CY, R = CUBE_R;
+  const p = (d) => [cx + R * Math.cos(d * Math.PI / 180), cy + R * Math.sin(d * Math.PI / 180)];
+  const hex = [-90, -30, 30, 90, 150, 210].map(p);
+  const pts = (arr) => arr.map((q) => q[0].toFixed(0) + ',' + q[1].toFixed(0)).join(' ');
+  const c = [cx, cy];
+  m.innerHTML = '<svg class="mapCube" width="' + MONDE_L + '" height="' + MONDE_H + '" viewBox="0 0 ' + MONDE_L + ' ' + MONDE_H + '">'
+    + '<polygon points="' + pts([hex[4], hex[5], hex[0], c]) + '" fill="rgba(140,120,255,.05)"/>'
+    + '<polygon points="' + pts([hex[0], hex[1], hex[2], c]) + '" fill="rgba(140,120,255,.03)"/>'
+    + '<polygon points="' + pts([hex[2], hex[3], hex[4], c]) + '" fill="rgba(140,120,255,.04)"/>'
+    + '<polygon points="' + pts(hex) + '" fill="none" stroke="rgba(167,139,250,.34)" stroke-width="3"/>'
+    + '<path d="M' + pts([c, hex[0]]) + ' M' + pts([c, hex[2]]) + ' M' + pts([c, hex[4]]) + '" stroke="rgba(167,139,250,.22)" stroke-width="2" fill="none"/>'
+    + '</svg><svg class="mapFx" id="mapFx" width="' + MONDE_L + '" height="' + MONDE_H + '"></svg>';
+  map.appendChild(m);
+  const zoom = document.createElement('div');
+  zoom.className = 'mapZoom';
+  zoom.innerHTML = '<button type="button" data-zoom="1" aria-label="Zoom in">+</button><button type="button" data-zoom="-1" aria-label="Zoom out">−</button>'
+    + '<button type="button" data-zoom="0" aria-label="See the whole cube" title="See the whole cube">⤢</button>';
+  map.appendChild(zoom);
+  const aide = document.createElement('div');
+  aide.className = 'mapAide'; aide.id = 'mapAide';
+  aide.textContent = 'Drag to move · scroll or pinch to zoom';
+  map.appendChild(aide);
+  zoom.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-zoom]');
+    if (!b) return;
+    e.stopPropagation();
+    const k = Number(b.getAttribute('data-zoom'));
+    camera.touchee = true;
+    if (k === 0) { cadrerTout(true); return; }
+    zoomerAutour(map.clientWidth / 2, map.clientHeight / 2, k > 0 ? 1.4 : 1 / 1.4, true);
+  });
+  brancherCamera(map);
+  return m;
+}
+
+function echelleMin() {
+  const map = $('#map');
   const L = map.clientWidth || 640, H = map.clientHeight || 420;
+  return Math.min(L / MONDE_L, H / MONDE_H) * 0.5;
+}
+function poserCamera(cible, doux) {
+  if (doux && !mouvementReduit) { camera.cible = cible; return; }
+  camera.x = cible.x; camera.y = cible.y; camera.s = cible.s; camera.cible = null;
+  appliquerCamera();
+}
+function cadrerTout(doux) {
+  const map = $('#map');
+  const L = map.clientWidth, H = map.clientHeight;
+  if (L <= 0 || H <= 0) return;
+  const s = Math.min(L / MONDE_L, H / MONDE_H) * 0.96;
+  poserCamera({ x: (L - MONDE_L * s) / 2, y: (H - MONDE_H * s) / 2, s }, doux);
+}
+/* vue d ouverture : le centre du cube, a une echelle ou les blocks restent lisibles (tout voir = bouton ⤢ ou dezoomer) */
+function vueDeDepart() {
+  const map = $('#map');
+  const L = map.clientWidth, H = map.clientHeight;
+  if (L <= 0 || H <= 0) return;
+  const s = Math.max(Math.min(L / MONDE_L, H / MONDE_H) * 0.96, Math.min(0.62, 1));
+  poserCamera({ x: L / 2 - CUBE_CX * s, y: H / 2 - CUBE_CY * s, s }, false);
+}
+function zoomerAutour(px, py, facteur, doux) {
+  const base = camera.cible || camera;
+  const s = Math.max(echelleMin(), Math.min(3, base.s * facteur));
+  const wx = (px - base.x) / base.s, wy = (py - base.y) / base.s;
+  poserCamera({ x: px - wx * s, y: py - wy * s, s }, doux);
+}
+function centrerSur(h) {
+  const map = $('#map');
+  const L = map.clientWidth, H = map.clientHeight;
+  if (L <= 0 || H <= 0 || !h) return;
+  const s = Math.max(camera.s, 0.9);
+  /* sur grand ecran la fiche occupe la droite : le block se pose au centre de ce qui reste visible */
+  const cxVisible = L >= 700 ? (L - 380) / 2 : L / 2, cyVisible = L >= 700 ? H / 2 : H * 0.3;
+  poserCamera({ x: cxVisible - (h.x + h.t / 2) * s, y: cyVisible - (h.y + h.t * 0.55) * s, s }, true);
+}
+function appliquerCamera() {
+  const m = $('#mapMonde');
+  if (m) m.style.transform = 'translate(' + camera.x.toFixed(1) + 'px,' + camera.y.toFixed(1) + 'px) scale(' + camera.s.toFixed(4) + ')';
+}
+
+/* glisser = deplacer ; molette = zoom autour du curseur ; deux doigts = pincer. Un glisser de plus de 6 px n est PAS un clic. */
+let glisseAuClic = false;
+function brancherCamera(map) {
+  const doigts = new Map();
+  let depart = null, pince = null;
+  map.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.mapZoom, .bMasquer')) return;
+    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    glisseAuClic = false;
+    camera.cible = null;
+    if (doigts.size === 1) depart = { px: e.clientX, py: e.clientY, cx: camera.x, cy: camera.y };
+    if (doigts.size === 2) {
+      const [a, b] = [...doigts.values()];
+      const r = map.getBoundingClientRect();
+      pince = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: camera.s, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, cx: camera.x, cy: camera.y };
+    }
+  });
+  map.addEventListener('pointermove', (e) => {
+    if (!doigts.has(e.pointerId)) return;
+    doigts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (doigts.size >= 2 && pince) {
+      const [a, b] = [...doigts.values()];
+      const s = Math.max(echelleMin(), Math.min(3, pince.s * Math.hypot(a.x - b.x, a.y - b.y) / pince.d));
+      const wx = (pince.mx - pince.cx) / pince.s, wy = (pince.my - pince.cy) / pince.s;
+      camera.s = s; camera.x = pince.mx - wx * s; camera.y = pince.my - wy * s;
+      glisseAuClic = true; camera.touchee = true;
+      appliquerCamera();
+      return;
+    }
+    if (!depart) return;
+    const dx = e.clientX - depart.px, dy = e.clientY - depart.py;
+    if (!glisseAuClic && Math.hypot(dx, dy) < 6) return;
+    if (!glisseAuClic) { try { map.setPointerCapture(e.pointerId); } catch (_) { /* capture optionnelle */ } }
+    glisseAuClic = true; camera.touchee = true;
+    map.classList.add('glisse');
+    camera.x = depart.cx + dx; camera.y = depart.cy + dy;
+    appliquerCamera();
+  });
+  const fin = (e) => {
+    doigts.delete(e.pointerId);
+    if (doigts.size < 2) pince = null;
+    if (!doigts.size) { depart = null; map.classList.remove('glisse'); }
+  };
+  map.addEventListener('pointerup', fin);
+  map.addEventListener('pointercancel', fin);
+  map.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = map.getBoundingClientRect();
+    camera.touchee = true;
+    zoomerAutour(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015), false);
+    const aide = $('#mapAide'); if (aide) aide.style.opacity = '0';
+  }, { passive: false });
+}
+
+function habitantDe(adr) {
+  const a = String(adr || '').toLowerCase();
+  return habitants.find((x) => String(x.adr).toLowerCase() === a) || null;
+}
+/* une impulsion d un block vers un autre : elle suit les deux blocks pendant qu ils bougent */
+function impulsion(deAdr, aAdr, couleur) {
+  const de = habitantDe(deAdr), a = habitantDe(aAdr);
+  if (!de || !a || de === a || mouvementReduit) return;
+  effetsMap.push({ genre: 'IMPULSION', de, a, couleur, t0: performance.now(), duree: 1700 });
+}
+/* une onde sur un block (echange, parole, creation), avec une etiquette courte */
+function onde(adr, couleur, etiquette) {
+  const h = habitantDe(adr);
+  if (!h || mouvementReduit) return;
+  effetsMap.push({ genre: 'ONDE', h, couleur, etiquette: etiquette || '', t0: performance.now(), duree: 1600 });
+}
+function dessinerEffets(maintenant) {
+  const fx = $('#mapFx');
+  if (!fx) return;
+  const avant = effetsMap.length;
+  effetsMap = effetsMap.filter((f) => maintenant - f.t0 < f.duree).slice(-60);
+  if (!effetsMap.length) { if (avant) fx.innerHTML = ''; return; }
+  let html = '';
+  for (const f of effetsMap) {
+    const k = (maintenant - f.t0) / f.duree;
+    if (f.genre === 'IMPULSION') {
+      const x1 = f.de.x + f.de.t / 2, y1 = f.de.y + f.de.t * 0.55, x2 = f.a.x + f.a.t / 2, y2 = f.a.y + f.a.t * 0.55;
+      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const px = x1 + (x2 - x1) * e, py = y1 + (y2 - y1) * e;
+      const op = k < 0.85 ? 1 : (1 - k) / 0.15;
+      html += '<line x1="' + x1.toFixed(0) + '" y1="' + y1.toFixed(0) + '" x2="' + x2.toFixed(0) + '" y2="' + y2.toFixed(0)
+        + '" stroke="' + f.couleur + '" stroke-opacity="' + (0.3 * op).toFixed(2) + '" stroke-width="2" stroke-dasharray="6 8"/>'
+        + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="18" fill="' + f.couleur + '" fill-opacity="' + (0.18 * op).toFixed(2) + '"/>'
+        + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="7" fill="' + f.couleur + '" fill-opacity="' + op.toFixed(2) + '"/>';
+    } else {
+      const cx = f.h.x + f.h.t / 2, cy = f.h.y + f.h.t * 0.55;
+      const r = f.h.t * 0.55 + k * 60, op = 1 - k;
+      html += '<circle cx="' + cx.toFixed(0) + '" cy="' + cy.toFixed(0) + '" r="' + r.toFixed(1) + '" fill="none" stroke="' + f.couleur
+        + '" stroke-width="3" stroke-opacity="' + op.toFixed(2) + '"/>';
+      if (f.etiquette) {
+        html += '<text x="' + cx.toFixed(0) + '" y="' + (f.h.y - 8 - k * 34).toFixed(0) + '" text-anchor="middle" font-size="20" font-weight="800" fill="'
+          + f.couleur + '" fill-opacity="' + op.toFixed(2) + '">' + enTexte(f.etiquette) + '</text>';
+      }
+    }
+  }
+  fx.innerHTML = html;
+}
+/* ⚠️ VERIFICATION SEULEMENT : `?fxdemo=1` joue une impulsion et une onde entre les deux premiers blocks, pour tester le
+ * rendu sans attendre un vrai evenement. Jamais sans ce parametre. */
+if (new URLSearchParams(location.search).get('fxdemo') === '1') {
+  setInterval(() => { if (habitants.length > 1) { impulsion(habitants[0].adr, habitants[1].adr, '#a78bfa'); onde(habitants[1].adr, '#22c55e', 'Feed (demo)'); } }, 2500);
+}
+/* les evenements Live -> effets sur la map (appele avec les SEULS evenements nouveaux) */
+function effetsDepuisLive(evts) {
+  for (const e of evts || []) {
+    if (e.type === 'ACHAT') onde(e.jeton, '#22c55e', 'Feed');
+    else if (e.type === 'VENTE') onde(e.jeton, '#ef4444', 'Kill');
+    else if (e.type === 'SWAP') onde(e.jeton, '#60a5fa', 'swap');
+    else if (e.type === 'CREATION') onde(e.jeton, '#f7a318', 'born');
+    else if (e.type === 'GM') onde(e.jeton, '#a78bfa', 'GM');
+    else if (e.type === 'MESSAGE' && e.de && e.a) { impulsion(e.de, e.a, '#f7a318'); onde(e.a, '#f7a318', 'message'); }
+  }
+}
+
+function creerHabitant(c) {
+  const map = mondeMap();
+  /* tip 0025 : les blocks naissent dans le MONDE (taille fixe), plus dans la fenetre — la fenetre cachee ne peut plus
+   * les empiler a 0,0 (le defaut du 2026-09-12 est donc ferme a la racine). */
+  const L = MONDE_L, H = MONDE_H;
   const t = tailleDe(c.vie);
   const el = document.createElement('button');
   el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
@@ -1676,7 +1935,7 @@ function creerHabitant(c) {
   try { cerveau = cerveauAvecMemoire(c.jeton); } catch (e) { cerveau = null; }
   const h = {
     el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
-    x: Math.random() * Math.max(1, L - t), y: Math.random() * Math.max(1, H - t),
+    ...pointDansLeCube(t),
     /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
      * doigt sur un telephone — un jeu qu on ne peut pas toucher n est pas un jeu. */
     vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22,
@@ -1690,8 +1949,9 @@ function creerHabitant(c) {
 }
 
 function poserBlocks(liste) {
-  const map = $('#map');
-  map.innerHTML = '';
+  /* tip 0025 : on retire les BLOCKS, pas le monde (le cube, la couche d impulsions et la camera restent) */
+  mondeMap().querySelectorAll('.bloc').forEach((el) => el.remove());
+  effetsMap = [];
   habitants.length = 0;
   for (const c of liste) creerHabitant(c);
   animer();
@@ -1742,12 +2002,28 @@ function animer() {
      * les 22 blocks etaient empiles dans le coin haut-gauche. Une taille inconnue n est pas une
      * taille de zero : on ne bouge rien tant qu on ne sait pas ou sont les bords. */
     if (L2 <= 0 || H2 <= 0) { anim = requestAnimationFrame(pas); return; }
+    /* tip 0025 : premiere image visible -> on cadre tout le cube, tant que l utilisateur n a pas deplace la camera */
+    if (!camera.touchee && !camera.cadree) { vueDeDepart(); camera.cadree = true; }
+    if (camera.cible) {
+      const c = camera.cible, k = 0.16;
+      camera.x += (c.x - camera.x) * k; camera.y += (c.y - camera.y) * k; camera.s += (c.s - camera.s) * k;
+      if (Math.abs(c.x - camera.x) < 0.5 && Math.abs(c.y - camera.y) < 0.5 && Math.abs(c.s - camera.s) < 0.001) {
+        camera.x = c.x; camera.y = c.y; camera.s = c.s; camera.cible = null;
+      }
+      appliquerCamera();
+    }
     for (const h of habitants) {
       h.x += h.vx; h.y += h.vy;
-      if (h.x <= 0 || h.x >= L2 - h.t) { h.vx *= -1; h.x = Math.max(0, Math.min(L2 - h.t, h.x)); }
-      if (h.y <= 0 || h.y >= H2 - h.t) { h.vy *= -1; h.y = Math.max(0, Math.min(H2 - h.t, h.y)); }
+      /* tip 0025 : rebond sur les parois du cube — un centre qui sort repart vers le centre du cube, meme vitesse */
+      const hx = h.x + h.t / 2, hy = h.y + h.t * 0.55;
+      if (!dansLeCube(hx, hy, h.t * 0.6)) {
+        const v = Math.hypot(h.vx, h.vy) || 0.1, a = Math.atan2(CUBE_CY - hy, CUBE_CX - hx) + (Math.random() - 0.5) * 0.8;
+        h.vx = Math.cos(a) * v; h.vy = Math.sin(a) * v;
+        h.x += h.vx * 2; h.y += h.vy * 2;
+      }
       h.el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
     }
+    dessinerEffets(performance.now());
     anim = requestAnimationFrame(pas);
   };
   anim = requestAnimationFrame(pas);
@@ -1765,12 +2041,17 @@ document.addEventListener('visibilitychange', () => {
 });
 
 $('#map').addEventListener('click', (e) => {
+  /* tip 0025 : un glisser n est pas un clic */
+  if (glisseAuClic) { glisseAuClic = false; return; }
   const b = e.target.closest('.bloc');
   if (!b) return;
   const adr = b.getAttribute('data-block');
   const h = habitants.find((x) => x.adr === adr);
   for (const x of habitants) x.el.classList.toggle('actif', x.el === b);
+  if (h) centrerSur(h);
   ouvrirCote();
+  $('#cote').classList.add('aFiche');
+  $('#cote').scrollTop = 0;
   $('#fiche').hidden = false;
   /* ⛔ MEME DESSIN QUE SUR LA MAP, PAR LA MEME FONCTION : deux rendus du meme block seraient deux
    * identites pour une seule chose. */
@@ -2342,7 +2623,7 @@ $('#pReseau').addEventListener('click', () => {
   CHAINE = CHAINE === 8453 ? 84532 : 8453;
   $('#pReseau').textContent = RESEAUX[CHAINE].nom;
   if (anim) { cancelAnimationFrame(anim); anim = null; }
-  $('#map').innerHTML = '';
+  mondeMap().querySelectorAll('.bloc').forEach((el) => el.remove());
   habitants.length = 0;
   $('#fiche').hidden = true;
   $('#mapNote').textContent = '';
@@ -2376,6 +2657,9 @@ $('#bMasquer').addEventListener('click', () => {
   const c = $('#cote'), b = $('#bMasquer');
   const ouvert = c.hidden;
   c.hidden = !ouvert;
+  /* « Info » montre l explication ; fermer oublie le block choisi */
+  if (ouvert) c.classList.remove('aFiche');
+  else { $('#fiche').hidden = true; for (const x of habitants) x.el.classList.remove('actif'); }
   b.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
   b.textContent = ouvert ? 'Close' : 'Info';
 });
@@ -2411,9 +2695,10 @@ function replacerDansLaMap() {
   const L = map.clientWidth, H = map.clientHeight;
   /* ⛔ ON NE REPLACE RIEN SUR UNE MAP SANS TAILLE : ce serait ramener tout le monde a 0,0. */
   if (L <= 0 || H <= 0) return;
+  /* tip 0025 : les blocks sont bornes par le MONDE ; c est la camera qui s adapte a la fenetre */
+  if (!camera.touchee) vueDeDepart();
   for (const h of habitants) {
-    h.x = Math.max(0, Math.min(Math.max(0, L - h.t), h.x));
-    h.y = Math.max(0, Math.min(Math.max(0, H - h.t), h.y));
+    if (!dansLeCube(h.x + h.t / 2, h.y + h.t * 0.55, 0)) Object.assign(h, pointDansLeCube(h.t));
     h.el.style.transform = 'translate(' + h.x.toFixed(1) + 'px,' + h.y.toFixed(1) + 'px)';
   }
 }
@@ -2995,7 +3280,7 @@ function infoHookMarche(v) {
   };
 }
 
-/** tip 2340: MAIN can open a NEW TbFeeHook pool id beside a legacy unhooked market (Uniswap pool keys differ by hooks). */
+/** tip 2340: MAIN can open a NEW fee hook pool id beside a legacy unhooked market (Uniswap pool keys differ by hooks). */
 function marcheLegacySansTbFeeHook(v) {
   if (!v || v.etat !== 'LUE') return false;
   return !infoHookMarche(v).isTbFeeHook;
@@ -3028,7 +3313,7 @@ function poolDecouvertPour(adr) {
     const conf = p.confiance || confianceDe(p.cle);
     const hk = String(p.cle.hooks || '').toLowerCase();
     const isTb = hk === String(HOOK_PREVU).toLowerCase();
-    /* Prefer TbFeeHook if somehow present; else any ETH pair we can trade/upgrade. */
+    /* Prefer fee hook if somehow present; else any ETH pair we can trade/upgrade. */
     const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : (conf === 'SANS_HOOK' ? 100 : 50));
     if (!best || score > best._score) best = { ...p, confiance: conf, _score: score, isTbFeeHook: isTb };
   }
@@ -3103,18 +3388,15 @@ function peindreCapturePaths(adr, v, hkInfo) {
   }
   const u = $('#peUsdcPath');
   const row = $('#peUsdcRow');
-  if (row) row.hidden = !(CHAINE === 8453);
+  /* tip 0025 — PHIL 2026-09-16 « change USDC par ETH » : le rail de sortie vise l ETH, plus l USDC. La rangee ETH→USDC reste
+   * dans le code (rien n est supprime) mais n est plus montree ni poussee. */
+  if (row) row.hidden = true;
   if (u) {
     u.hidden = false;
-    if (CHAINE === 8453) {
-      u.innerHTML = estTb
-        ? '<b>Exit</b>: Sell → ETH (0.5%, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5%). External DEX pays 0.'
-        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5%)'
-          + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2%' : '')
-          + '. Deepen TBLOCK LP so sells fill.';
-    } else {
-      u.textContent = 'Practice — ETH→USDC exit is Base mainnet only.';
-    }
+    u.innerHTML = CHAINE === 8453
+      ? '<b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH)'
+        + (hkInfo && hkInfo.isTbFeeHook ? ' · hook fee too' : '') + '. External DEX pays 0.'
+      : 'Practice — Sell pays out test ETH.';
   }
 }
 
@@ -3150,7 +3432,7 @@ function proposerSortieUsdcApresVente(ethWei) {
   actions.appendChild(b);
 }
 
-/** Profile honesty: hooked (TbFeeHook) vs legacy unhooked — old pools never gain 2% retroactively. */
+/** Profile honesty: hooked (fee hook) vs legacy unhooked — old pools never gain 2% retroactively. */
 function peindreMarcheHook(v) {
   const el = $('#pMarcheHook');
   if (!el) return;
@@ -3165,18 +3447,18 @@ function peindreMarcheHook(v) {
   const viaCourt = (() => {
     const s = info.via ? String(info.via) : '';
     if (!s) return '';
-    if (/TBLOCK/i.test(s) && /TbFeeHook/i.test(s)) return ' · via TBLOCK (hooked Launch)';
+    if (/TBLOCK/i.test(s) && /fee hook/i.test(s)) return ' · via TBLOCK (hooked Launch)';
     if (/TBLOCK/i.test(s)) return ' · via TBLOCK (legacy Launch)';
-    if (/TbFeeHook/i.test(s)) return ' · via ETH (TbFeeHook Launch)';
+    if (/fee hook/i.test(s)) return ' · via ETH (fee hook Launch)';
     if (/legacy Launch/i.test(s)) return ' · via ETH (legacy Launch pool)';
     if (/^ETH/i.test(s)) return ' · via ETH';
     return ' · via ' + s.replace(/\s*·\s*0\s*%[^·]*/gi, '').replace(/\s*·\s*0,5\s*%[^·]*/gi, '').trim();
   })();
   if (info.isTbFeeHook) {
-    el.textContent = 'Market · hooked (TbFeeHook) — in-app + Dex fees'
+    el.textContent = 'Market · hooked (fee hook) — in-app + Dex fees'
       + viaCourt + '.';
   } else if (info.hooked) {
-    el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not TbFeeHook — creator + holders fee split does not apply'
+    el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not fee hook — creator + holders fee split does not apply'
       + viaCourt + '.';
   } else {
     el.textContent = 'Market · unhooked — Dex=$0 · Launch hooked'
@@ -3309,9 +3591,9 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Holders: <b>not measured this visit</b> (food/Transfer window unread). Never invent a count — open Brain AI or wait for a food read.');
   }
   if (etat === 'LUE' && info.isTbFeeHook) {
-    lignes.push('Pool: <b>✦ TbFeeHook</b> — fees to <b>creator + holders</b> (1&nbsp;% creator · 2&nbsp;% protocol) on later swaps.');
+    lignes.push('Pool: <b>✦ fee hook</b> — fees to <b>creator + holders</b> (1&nbsp;% creator · 2&nbsp;% protocol) on later swaps.');
   } else if (etat === 'LUE' && info.hooked) {
-    lignes.push('Pool: hooked, but <b>not</b> TbFeeHook — TB fee split does not apply on this pool id.');
+    lignes.push('Pool: hooked, but <b>not</b> fee hook — TB fee split does not apply on this pool id.');
   } else if (etat === 'LUE') {
     lignes.push('Pool: <b>unhooked</b> — Dex=$0 · Launch hooked.');
   } else if (etat === 'NON_TROUVEE') {
@@ -3322,10 +3604,10 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: <b>unread</b> this visit — trust path not judged from a failed read.');
   }
   lignes.push(trusted
-    ? 'Trusted: <b>✦ yes</b> (browser-local Keep — TbFeeHook Launch path — not a score, not KYC).'
-    : 'Trusted: no Keep yet. Mark Trusted on TbFeeHook Launch (fee-honest). Free create alone ≠ fees.');
+    ? 'Trusted: <b>✦ yes</b> (browser-local Keep — fee hook Launch path — not a score, not KYC).'
+    : 'Trusted: no Keep yet. Mark Trusted on fee hook Launch (fee-honest). Free create alone ≠ fees.');
   lignes.push(madeHere
-    ? 'Origin: face engraved via <b>TokenizedBlock Create</b> (free factory — fee at Launch + TbFeeHook).'
+    ? 'Origin: face engraved via <b>TokenizedBlock Create</b> (free factory — fee at Launch + fee hook).'
     : 'Origin: created elsewhere / face unread — <b>no launch</b> until Launch here.');
   ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
   if (badge) {
@@ -3579,7 +3861,7 @@ async function lireProfil(adr, sym, perime) {
   /* ⛔ LE LANCEMENT EST MAINTENANT DANS L APP : le bouton revient, mais SEULEMENT pour un block sans
    * marche AVERE. « Pas lu » n est pas « endormi » : proposer d ouvrir un marche qu on n a pas su lire
    * enverrait creer une pool qui existe peut-etre deja. */
-  /* tip 2340: also offer Launch when market is LUE but not TbFeeHook — opens NEW hooked pool id → FEE_WALLET. */
+  /* tip 2340: also offer Launch when market is LUE but not fee hook — opens NEW hooked pool id → FEE_WALLET. */
   const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
   $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
   if (etatVieProfil === 'NON_TROUVEE') {
@@ -3594,7 +3876,7 @@ async function lireProfil(adr, sym, perime) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
       wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> · fee first (floor 0.0003), '
-        + 'then Launch opens a <b>new hooked</b> pool (TbFeeHook — Dex chop). Work it out → Ask the chain → pay fee → Launch.';
+        + 'then Launch opens a <b>new hooked</b> pool (fee hook — Dex chop). Work it out → Ask the chain → pay fee → Launch.';
     } else if (legacySansHook) {
       wg.hidden = false;
       wg.innerHTML = '<b>Unhooked</b> · Dex=$0 · <b>Launch hooked</b>.';
@@ -3630,7 +3912,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
-  /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (TbFeeHook) or legacy unhooked. */
+  /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (fee hook) or legacy unhooked. */
   peindreMarcheHook(v);
   peindreTrustFacts(adr, v, origineProfil);
   /* tip 2245: swap PnL on-demand per profile open — parallel to holders food read; never invent. */
@@ -3651,7 +3933,7 @@ async function lireProfil(adr, sym, perime) {
     const hkInfo = infoHookMarche(v);
     $('#peBadge').textContent = bb ? 'Buyback · protocol fee path' : 'Buy · Sell';
     $('#peFrais').textContent = bb ? 'no fee'
-      : (hkInfo.isTbFeeHook ? '0.5% + TbFeeHook Dex chop'
+      : (hkInfo.isTbFeeHook ? '0.5% + fee hook Dex chop'
         : (hkInfo.hooked ? '0.5% · foreign hook'
           : '0.5% (Dex unhooked = 0 protocol)'));
     peindreCapturePaths(adr, v, hkInfo);
@@ -3671,7 +3953,7 @@ async function lireProfil(adr, sym, perime) {
     const u = $('#peUsdcPath');
     if (u) {
       u.hidden = false;
-      u.innerHTML = 'Exit to dollars: Sell → ETH (0.5%), then <b>ETH→USDC</b> (+0.5%) — this is how the sink accrues USDC. External DEX pays 0. Practice = MAIN only.';
+      u.innerHTML = '<b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.';
     }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
@@ -3839,7 +4121,7 @@ function filtreLive(e) {
       || (e.type === 'MESSAGE' && (tset.has(String(e.de || '').toLowerCase()) || tset.has(String(e.a || '').toLowerCase())));
   }
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
-  /* tip 2357: Hooked chip — TbFeeHook / HOOK confiance only (volume that can pay protocol). */
+  /* tip 2357: Hooked chip — fee hook / HOOK confiance only (volume that can pay protocol). */
   if (liveFiltre === 'HOOKED') {
     if (e.confiance === 'HOOK') return true;
     const j = String(e.jeton || '').toLowerCase();
@@ -3961,6 +4243,8 @@ async function lireLive(sens) {
       }
     }
     if (sens !== 'ancien' && nouveaux.length) void rafraichirApresEchanges(nouveaux);
+    /* tip 0025 : les evenements NOUVEAUX (pas la premiere fenetre, pas le passe charge) deviennent des effets sur la map */
+    if (sens !== 'ancien' && liveDernier !== null && nouveaux.length) effetsDepuisLive(nouveaux);
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
     if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;
@@ -3997,7 +4281,7 @@ function ordreLiquidite(L) {
 }
 
 
-/* ⛔ RAKSHA 2026-09-15: Trusted = fee-honest path only (CreateRouter paid OR TbFeeHook pool). Browser-local — not a score. */
+/* ⛔ RAKSHA 2026-09-15: Trusted = fee-honest path only (CreateRouter paid OR fee hook pool). Browser-local — not a score. */
 const CLE_TRUSTED = 'tb-trusted-b20';
 function lireTrusted() {
   try {
@@ -4104,7 +4388,7 @@ function peindreFeedTrustHonesty() {
   const hookedPools = [...poolsLive.values()].filter((p) => p.confiance === 'HOOK').length;
   if (CHAINE === 8453) {
     el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;%). '
-      + '<b>Trusted</b> = TbFeeHook Launch (fee-honest) — not a score (' + nTrust + ' kept)'
+      + '<b>Trusted</b> = fee hook Launch (fee-honest) — not a score (' + nTrust + ' kept)'
       + (feeds ? ' · ' + feeds + ' Feed' : '')
       + (hookedPools ? ' · ' + hookedPools + ' hooked' : '')
       + '.';
@@ -4131,7 +4415,7 @@ function peindreCreateFeeHonesty() {
   el.hidden = false;
   if (CHAINE === 8453) {
     if (!creations.length) {
-      el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + TbFeeHook). Free create ≠ fee yet.';
+      el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + fee hook). Free create ≠ fee yet.';
     } else {
       /* tip 0021: count creates that really reached a hooked market — the rest earned nothing. */
       const crochetes = creations.filter((e) => { const p = poolDecouvertPour(e.jeton); return p && p.isTbFeeHook; }).length;
@@ -4190,10 +4474,10 @@ function peindreLive() {
           ? '🧱 <b>' + nom + '</b> was created · CreateRouter (optional paid path)'
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
         /* tip 0021 (Phil 2026-09-16: « c est ecrit fees mais ya rien ») : the old line promised a fee on EVERY free
-         * create. Say a fee path exists only when a TbFeeHook pool for this block was actually seen on chain. */
+         * create. Say a fee path exists only when a fee hook pool for this block was actually seen on chain. */
         : (CHAINE === 8453
           ? (((p) => p && p.isTbFeeHook)(poolDecouvertPour(e.jeton))
-            ? '🧱 <b>' + nom + '</b> · free create · hooked market open (TbFeeHook)'
+            ? '🧱 <b>' + nom + '</b> · free create · hooked market open (fee hook)'
             : '🧱 <b>' + nom + '</b> · free create · no hooked market seen · no fee yet')
           : '🧱 <b>' + nom + '</b> · free create (Practice · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
@@ -4314,6 +4598,10 @@ function parlerCerveaux() {
   if (!paroles.length) return;
   const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   for (const p of paroles) {
+    /* tip 0025 : une reponse d un cerveau a un autre = une impulsion visible sur la map ; une parole seule = une onde douce.
+     * Les changements d humeur seuls ne font pas d effet (bruit). */
+    if (p.type === 'REPOND' && p.a) impulsion(p.de, p.a, '#a78bfa');
+    else if (p.type === 'DIT' && !estParoleMood(p)) onde(p.de, '#a78bfa', '');
     const row = { ...p, heure, id: 'p' + (++parolesCompteur), n: 1 };
     /* Coalesce mood-only lines per token — do not invent; keep latest text + count. */
     if (estParoleMood(row) && row.type === 'DIT') {
@@ -4448,7 +4736,8 @@ function demarrerLive() {
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
     /* le fil live cede le noeud quand l utilisateur prepare un geste (achat, liquidite, profil) */
-    if ($('#v-social').classList.contains('on') && !document.hidden && !profilEnLecture) void lireLive('neuf');
+    /* tip 0025 : le fil lit aussi quand la MAP est affichee — c est lui qui fait les effets d echanges en direct */
+    if (($('#v-social').classList.contains('on') || $('#v-map').classList.contains('on')) && !document.hidden && !profilEnLecture) void lireLive('neuf');
   }, LIVE_MS);
   /* ⛔ LE DEFILEMENT CHARGE LE PASSE : arriver au bas du fil lit la fenetre precedente. */
   if ('IntersectionObserver' in window) {
@@ -4660,7 +4949,7 @@ async function preparerEchange(sens) {
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
       feeLigne,
       ...(sens === 'VENTE' && r.recoitDevise === 'ETH' && CHAINE === 8453
-        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % (external DEX pays 0)']
+        ? []
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
@@ -4668,7 +4957,7 @@ async function preparerEchange(sens) {
       }),
     ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   }
-  /* ⛔ Hook honesty on badge: app 0.5% always; hooked pools also pay TbFeeHook on the swap itself. */
+  /* ⛔ Hook honesty on badge: app 0.5% always; hooked pools also pay fee hook on the swap itself. */
   try {
     const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
     const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
@@ -4786,8 +5075,8 @@ async function signerEchange(tx, sens, estApprobation) {
   if (sens === 'VENTE' && echangeCourant && echangeCourant.resume
     && echangeCourant.resume.recoitDevise === 'ETH'
     && typeof echangeCourant.resume.recoitAuMoins === 'bigint') {
-    e.innerHTML += ' · Next: convert ETH→USDC in-app (0.5 %) — external DEX pays 0.';
-    proposerSortieUsdcApresVente(echangeCourant.resume.recoitAuMoins);
+    /* tip 0025: plus de relance ETH→USDC — la sortie vise l ETH (Phil). */
+    void 0;
   }
 }
 /* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
@@ -5019,7 +5308,7 @@ function ouvrirLancement() {
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = real
-      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> · fee, then a <b>new</b> hooked pool (TbFeeHook Dex chop). Against <span id="plContre">'
+      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> · fee, then a <b>new</b> hooked pool (fee hook Dex chop). Against <span id="plContre">'
         + contre + '</span>. Works beside an existing unhooked market (new pool id).')
       : ('<b>Practice</b>: free Launch, no fee hook. Against <span id="plContre">' + contre + '</span>.');
   }
@@ -5078,12 +5367,12 @@ async function calculerLancement() {
     try { marcheAvant = await enrichirMarcheSiDecouvert(adr, marcheAvant); } catch (_) {}
   }
   if ($('#profil').dataset.block !== adr) { profilEnLecture = false; $('#plCalculer').disabled = false; return; }
-  /* tip 2340: NON_TROUVEE = first market; LUE without TbFeeHook = open NEW hooked pool id beside legacy (fees → FEE_WALLET). */
+  /* tip 2340: NON_TROUVEE = first market; LUE without fee hook = open NEW hooked pool id beside legacy (fees → FEE_WALLET). */
   const legacyUpgrade = marcheAvant && marcheAvant.etat === 'LUE' && marcheLegacySansTbFeeHook(marcheAvant) && CHAINE === 8453;
   if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade)) {
     e.className = 'note wKo';
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
-      e.textContent = 'This block already has a TbFeeHook market (' + (marcheAvant.via || 'hooked') + ') — TbFeeHook fees already route on that pool. Nothing to launch.';
+      e.textContent = 'This block already has a fee hook market (' + (marcheAvant.via || 'hooked') + ') — fee hook fees already route on that pool. Nothing to launch.';
     } else if (marcheAvant && marcheAvant.etat === 'LUE') {
       e.textContent = 'This block already has a market (' + (marcheAvant.via || 'read on chain') + ') — hooked upgrade only on MAIN Real.';
     } else {
@@ -5094,7 +5383,7 @@ async function calculerLancement() {
     return;
   }
   e.textContent = legacyUpgrade
-    ? 'Legacy unhooked market found — planning a NEW TbFeeHook pool (Dex chop). Old pool stays…'
+    ? 'Legacy unhooked market found — planning a NEW fee hook pool (Dex chop). Old pool stays…'
     : 'No market on any key read — reading the block, its pool and your approvals…';
   /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET. */
   try {
@@ -5114,7 +5403,7 @@ async function calculerLancement() {
       if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
-        plan.pourquoiLegacy = 'Opens a NEW hooked pool id beside the existing unhooked market. Fees on the new pool (TbFeeHook). Legacy Dex volume still pays 0 protocol until liquidity moves.';
+        plan.pourquoiLegacy = 'Opens a NEW hooked pool id beside the existing unhooked market. Fees on the new pool (fee hook). Legacy Dex volume still pays 0 protocol until liquidity moves.';
       }
     }
   } catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
@@ -5212,17 +5501,17 @@ function peindrePlan(plan, adr) {
       + ' · Uniswap pool fee tier 0% · tick spacing 200 · LP locked permanent · '
       + (avecHook
         ? 'TbFeeHook still takes protocol cut on swaps (2% + 1% creator); in-app Buy/Sell +0.5% · '
-        : '⚠️ no TbFeeHook on this plan — MAIN Launch must attach hook · ')
+        : '⚠️ no fee hook on this plan — MAIN Launch must attach hook · ')
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     'ETH or TBLOCK for the pool: none — a single-sided launch.'
       + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH — not the Uniswap tier.' : ''),
     'Permanent LP: liquidity sits on a dead address — nobody can withdraw Launch LP. '
-      + 'Uniswap tier 0% ≠ zero fees for traders: TbFeeHook + in-app 0.5% still apply when hooked.',
+      + 'Uniswap tier 0% ≠ zero fees for traders: fee hook + in-app 0.5% still apply when hooked.',
     'Honesty: this Launch lock ≠ later Add liquidity (Add keeps YOUR position — withdrawable). Not OpenLaunch forever-lock on every surface.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
-    ...(plan.legacyUpgrade ? ['NEW hooked pool beside legacy unhooked — TbFeeHook (Dex chop). Old Dex pool stays and still pays 0 protocol until liquidity moves here.'] : []),
+    ...(plan.legacyUpgrade ? ['NEW hooked pool beside legacy unhooked — fee hook (Dex chop). Old Dex pool stays and still pays 0 protocol until liquidity moves here.'] : []),
     ...(avecHook ? ['Fee path: fee'] : []),
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
@@ -5446,7 +5735,7 @@ if (_gtBtn) {
     const info = infoHookMarche(mp || { etat: 'LUE', cle: null });
     if (!info.isTbFeeHook) {
       const gt = $('#pGarderTrusted');
-      if (gt) gt.textContent = 'Only hooked (TbFeeHook) pools are fee-honest trusted — Launch a new hooked pool first';
+      if (gt) gt.textContent = 'Only hooked (fee hook) pools are fee-honest trusted — Launch a new hooked pool first';
       return;
     }
     garderTrusted(adr, 'TbFeeHook pool');
@@ -5970,7 +6259,7 @@ async function majPaire() {
   n.className = 'note';
   let suite = 'Recorded with the block at creation. Its market opens when you launch it — life fee + hooked pool.';
   if (q.paire.type === 'TBLOCK') {
-    suite = 'Standard TBLOCK quote (gas token). Launch attaches TbFeeHook when live — 3% on hooked swaps (2% → FEE_WALLET). Deepen TBLOCK LP after Launch so Buy/Sell quotes fill.';
+    suite = 'Standard TBLOCK quote (gas token). Launch attaches fee hook when live — 3% on hooked swaps (2% → FEE_WALLET). Deepen TBLOCK LP after Launch so Buy/Sell quotes fill.';
   } else if (q.paire.type === 'B20') {
     suite = 'Native B20 pair proven (code 0xef). Launch still pays life fee, then hooked pool when DEPLOYE.';
   }
@@ -6191,12 +6480,12 @@ function majFraisEtRecap() {
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Via CreateRouter (optional paid path) — life fee ≈ $1 ETH only after create succeeds']
-          : ['Via free factory — Create costs 0; life fee + TbFeeHook at Launch'])] : [];
+          : ['Via free factory — Create costs 0; life fee + fee hook at Launch'])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
-    }).join('') + '<li>Buy/Sell in-app: 0.5%. Launch attaches TbFeeHook on MAIN.</li>';
+    }).join('') + '<li>Buy/Sell in-app: 0.5%. Launch attaches fee hook on MAIN.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base mainnet — Create free. Fees at Launch (≈$1 ETH + TbFeeHook). Cannot be undone.'
+    ? '⚠️ Base mainnet — Create free. Fees at Launch (≈$1 ETH + fee hook). Cannot be undone.'
     : 'Practice — Create free. Launch fees are MAIN only.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -6387,7 +6676,7 @@ async function creerBlock() {
     creationEnCoursPayante = true;
   }
   /* ⛔ tip 0023 — PHIL 2026-09-16 « Launch obligatoire des la creation : yes fais le ». Mesure du meme jour : 22 creations,
-   *    0 avec une pool TbFeeHook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
+   *    0 avec une pool fee hook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
    *    frais de vie du Launch + gaz des deux transactions, lus AVANT la signature. Prix ou solde illisible = refus. */
   if (Number(CHAINE) === 8453 && !utiliseCreateRouter()) {
     e.className = 'note';
@@ -6450,7 +6739,7 @@ async function creerBlock() {
         e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create free</b>. Next = <b>Instant Birth</b> (hooked ETH pool · ~99.9% supply · ≈$1 life).'
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
           + 'Instant Birth — open hooked ETH market</button>'
-          + '<p class="note" style="margin-top:6px">OL-inspired: liquidity at birth. MAIN · life fee + TbFeeHook. No fee addr in UI.</p>'
+          + '<p class="note" style="margin-top:6px">OL-inspired: liquidity at birth. MAIN · life fee + fee hook. No fee addr in UI.</p>'
           + lien;
         const goLaunch = () => {
           try {
@@ -6472,7 +6761,7 @@ async function creerBlock() {
         goLaunch();
       } else {
         const nextLaunch = Number(CHAINE) === 8453
-          ? ' <b>Next:</b> open the block → <b>Wake / Launch</b> to start life fee + TbFeeHook (Dex chop).'
+          ? ' <b>Next:</b> open the block → <b>Wake / Launch</b> to start life fee + fee hook (Dex chop).'
           : ' <b>Next:</b> Wake / Launch on Practice (free), then Buy/Sell.';
         e.innerHTML = enTexte(v.sym) + ' exists on ' + enTexte(RESEAUX[CHAINE].nom) + ' — <b>Create was free</b>.' + nextLaunch + lien;
         if (adresseCreee) {
@@ -6959,7 +7248,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0024',
+    build: '20260916-0025',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7505,6 +7794,8 @@ document.addEventListener('click', (e) => {
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
 charger();
 demarrerBattement();
+/* tip 0025 : le fil Live demarre avec la map (apres la premiere lecture des blocks, pour laisser le noeud a la map) */
+setTimeout(() => { try { demarrerLive(); } catch (_) { /* Social le redemarrera */ } }, 15000);
 try { filHookedTbgasHandlers(); } catch (_) {}
 const blockLien = paramsLien.get('block');
 if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);
