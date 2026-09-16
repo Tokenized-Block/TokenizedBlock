@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0021">Build <code>20260916-0021</code> · Live: a fee is claimed only where a hooked market was seen on chain.</p>
+      <p class="note" data-build="20260916-0022">Build <code>20260916-0022</code> · OpenLaunch bridge (read-only) · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -944,6 +944,15 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <div id="sfLiveFin" style="height:1px"></div>
       <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
       <button class="bouton sec" id="sfLivePlus" type="button">Load older</button>
+    </div>
+
+    <!-- tip 0022 pont OpenLaunch : lecture seule de leur API (relayee par serveur-web.js /api/ol/list, pas de CORS chez eux).
+         ⛔ Ce ne sont pas nos blocks : ERC-20, pool sans hook, TokenizedBlock touche $0 — l ecran le dit a chaque fois. -->
+    <div class="carte">
+      <p class="titre">OpenLaunch · live on Base</p>
+      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b> — their LP fee goes to the launcher's recipients or is burned. <b>TokenizedBlock earns $0 on these trades.</b></p>
+      <ul class="fil" id="sfOl"></ul>
+      <p class="note" id="sfOlNote">Open this tab to read OpenLaunch.</p>
     </div>
 
     <!-- ⛔⛔ LA MESSAGERIE PRIVEE (XMTP). Deuxieme systeme choisi par Phil, a cote des messages publics
@@ -1345,6 +1354,7 @@ import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
 import { resumeRelais } from './relais-cerveaux.js';
+import { dollarsCourts } from './openlaunch.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
@@ -3851,7 +3861,41 @@ function blocksSuivisLive() {
   return [...m.values()];
 }
 
+/* tip 0022 — pont OpenLaunch : au plus une lecture par minute cote page (le serveur a son propre cache d 1 min). */
+let olLuA = 0;
+async function lireOpenLaunch() {
+  const note = $('#sfOlNote'), ul = $('#sfOl');
+  if (!note || !ul || Date.now() - olLuA < 60_000) return;
+  olLuA = Date.now();
+  if (CHAINE !== 8453) { ul.innerHTML = ''; note.textContent = 'OpenLaunch is read on Base mainnet only.'; return; }
+  let d;
+  try {
+    const r = await fetch('/api/ol/list', { cache: 'no-store' });
+    d = await r.json();
+  } catch (e) {
+    d = { ok: false, pourquoi: 'OpenLaunch relay not reachable' };
+  }
+  if (!d || d.ok !== true || !Array.isArray(d.lignes)) {
+    /* ⛔ un echec n est pas une liste vide : on le dit */
+    note.textContent = '⚠️ ' + ((d && d.pourquoi) || 'OpenLaunch not read') + ' — not read, not empty.';
+    return;
+  }
+  ul.innerHTML = d.lignes.map((l) => {
+    const frais = l.frais && l.frais.genre === 'DESTINATAIRES'
+      ? l.lpFeePct + '% LP fee → ' + l.frais.n + ' recipient' + (l.frais.n === 1 ? '' : 's') + ' (set by the launcher)'
+      : l.lpFeePct + '% LP fee → burned';
+    return '<li class="filL"><div style="min-width:0;flex:1">'
+      + '<p class="filT">🚀 <b>' + enTexte(l.symbole) + '</b> · paired with ' + enTexte(l.quote) + ' · vol ' + dollarsCourts(l.volumeUsd)
+      + ' · FDV ' + dollarsCourts(l.fdvUsd) + ' · ' + (l.detenteurs === null ? '? holders' : l.detenteurs + ' holders') + '</p>'
+      + '<p class="filS">' + enTexte(frais) + (l.palier ? ' · ' + enTexte(l.palier) : '')
+      + (l.lien ? ' · <a href="' + enTexte(l.lien) + '" target="_blank" rel="noopener noreferrer">open on OpenLaunch ↗</a>' : '') + '</p></div></li>';
+  }).join('');
+  note.textContent = d.lignes.length + ' launches shown (their "live" order)' + (d.ecartees ? ' · ' + d.ecartees + ' malformed rows skipped' : '')
+    + ' · read ' + new Date(d.lu).toLocaleTimeString() + ' · figures are OpenLaunch\'s, not checked on chain by us.';
+}
+
 async function lireLive(sens) {
+  void lireOpenLaunch();
   const V = V4_ADRESSES[CHAINE];
   if (liveEnCours || !V) return;
   liveEnCours = true;
@@ -6786,7 +6830,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0021',
+    build: '20260916-0022',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
