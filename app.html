@@ -637,7 +637,11 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       </div>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
         <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
-        <button class="bouton" id="cCreer" type="button">Create — sign in my wallet</button>
+        <button class="bouton" id="cCreer" type="button">Create + Launch — sign in my wallet</button>
+        <p class="note" id="cALancer" hidden></p>
+        <!-- tip 0023 pont OpenLaunch (Phil : « fait la connection TokenizedBlock to le launch OpenLaunch »). Lien sortant seul :
+             leur factory n accepte pas un B20, donc ce n est PAS un block — pas de cerveau, pas de hook, $0 pour nous. -->
+        <p class="note">Want a plain ERC-20 instead? <a href="https://openlaunch.lol/launch?chain=base" target="_blank" rel="noopener noreferrer">Launch on OpenLaunch ↗</a> — not a block: no Brain AI, no TbFeeHook, TokenizedBlock earns $0. Its live launches are listed under Social.</p>
       </div>
       <p class="note" id="cEtat"></p>
     </div>
@@ -915,7 +919,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0022">Build <code>20260916-0022</code> · OpenLaunch bridge (read-only) · Live claims a fee only where a hooked market was seen.</p>
+      <p class="note" data-build="20260916-0023">Build <code>20260916-0023</code> · Create + Launch together · OpenLaunch bridge · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5405,6 +5409,7 @@ async function lancerMarcheBlock(adr) {
   const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
     + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
   if (r.etat === 'CONFIRME') {
+    aLancerRetirer(adr);
     e.className = 'note wOk';
     e.innerHTML = 'Its market is open.' + (usdLaunch > 0 ? ' Life fee paid.' : '') + lien;
     $('#plActions').innerHTML = '';
@@ -6230,6 +6235,40 @@ async function verifierAdresseCreation() {
   }
 }
 
+/* tip 0023 — blocks crees par CE navigateur et pas encore lances : rappel persistant jusqu au Launch confirme.
+ * ⚠️ localStorage : par navigateur seulement ; un Launch fait ailleurs laisse la ligne jusqu a « dismiss ». */
+const CLE_A_LANCER = 'tb.aLancer.v1';
+function aLancerLire() {
+  try { const x = JSON.parse(localStorage.getItem(CLE_A_LANCER) || '[]'); return Array.isArray(x) ? x.filter((b) => /^0x[0-9a-f]{40}$/.test(b.adr)) : []; } catch (_) { return []; }
+}
+function aLancerEcrire(l) { try { localStorage.setItem(CLE_A_LANCER, JSON.stringify(l.slice(-20))); } catch (_) { /* rappel perdu, rien d autre */ } peindreALancer(); }
+function aLancerAjouter(adr, sym) {
+  const a = String(adr).toLowerCase();
+  aLancerEcrire([...aLancerLire().filter((b) => b.adr !== a), { adr: a, sym: String(sym || '').slice(0, 14) }]);
+}
+function aLancerRetirer(adr) { const a = String(adr || '').toLowerCase(); aLancerEcrire(aLancerLire().filter((b) => b.adr !== a)); }
+function peindreALancer() {
+  const boite = $('#cALancer');
+  if (!boite) return;
+  const l = Number(CHAINE) === 8453 ? aLancerLire() : [];
+  boite.hidden = !l.length;
+  boite.innerHTML = l.length
+    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not born yet</b> — no hooked market, no fee yet. Finish with Launch:'
+      + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Launch '
+        + enTexte(b.sym || court(b.adr)) + '</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
+    : '';
+  boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', () => {
+    const adr = btn.getAttribute('data-a-lancer');
+    const b = aLancerLire().find((x) => x.adr === adr);
+    lancementLien = adr;
+    void ouvrirProfil(adr, b && b.sym).then(() => {
+      try { const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); } ouvrirLancement(); } catch (_) {}
+    });
+  }));
+  boite.querySelectorAll('[data-a-oublier]').forEach((btn) => btn.addEventListener('click', () => aLancerRetirer(btn.getAttribute('data-a-oublier'))));
+}
+queueMicrotask(peindreALancer);
+
 async function creerBlock() {
   if (creationEnCours) return;
   const v = validerCreation();
@@ -6280,6 +6319,28 @@ async function creerBlock() {
     }
     creationEnCoursPayante = true;
   }
+  /* ⛔ tip 0023 — PHIL 2026-09-16 « Launch obligatoire des la creation : yes fais le ». Mesure du meme jour : 22 creations,
+   *    0 avec une pool TbFeeHook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
+   *    frais de vie du Launch + gaz des deux transactions, lus AVANT la signature. Prix ou solde illisible = refus. */
+  if (Number(CHAINE) === 8453 && !utiliseCreateRouter()) {
+    e.className = 'note';
+    e.textContent = 'Launch is part of creating a block — checking you can pay it before anything is signed…';
+    const fraisL = await assurerFraisLancementWei(true);
+    let solde = null;
+    try { solde = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { solde = null; }
+    const gazDeux = 500000000000000n; /* ~0.0005 ETH : Create + Launch sur Base, marge comprise */
+    if (fraisL === null || solde === null) {
+      e.className = 'note wKo';
+      e.textContent = 'Could not read the Launch life fee or your ETH balance, so nothing was started. A block is born with its market — try again in a moment.';
+      return;
+    }
+    if (solde < fraisL + gazDeux) {
+      e.className = 'note wKo';
+      e.textContent = 'A block is born with its market: Create, then Launch (life fee ' + formaterEthCourt(fraisL) + ' ETH + gas). You need about '
+        + formaterEthCourt(fraisL + gazDeux) + ' ETH and this account holds ' + formaterEthCourt(solde) + ' ETH. Nothing was started.';
+      return;
+    }
+  }
   creationEnCours = true;
   $('#cCreer').disabled = true;
   try {
@@ -6306,6 +6367,7 @@ async function creerBlock() {
       to, data: calldata, value });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       noterFace(adresseCreee, faceGravee);
+      if (Number(CHAINE) === 8453) aLancerAjouter(adresseCreee, v.sym);
       const roleCle = $('#cRole') && METIERS.some((x) => x.cle === $('#cRole').value) ? $('#cRole').value : null;
       if (roleCle) {
         try { localStorage.setItem(CLE_ROLE + String(adresseCreee).toLowerCase(), roleCle); } catch (e) { /* role de la page seulement */ }
@@ -6830,7 +6892,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0022',
+    build: '20260916-0023',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
