@@ -28,6 +28,10 @@ export const FRAIS_INTERFACE_BPS = 50n;
 export const ETATS_ECHANGE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
 const ETH = '0x0000000000000000000000000000000000000000';
 const pad = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
+/** tip 20260916-0012: actions hold BigInt — JSON.stringify throws «serialize a BigInt» and kills Buy/Sell quotes. */
+function jsonSafe(x) {
+  return JSON.stringify(x, (_, v) => (typeof v === 'bigint' ? '0x' + v.toString(16) : v));
+}
 
 /** Le frais sur un montant : tronque vers le bas, le reste va au swap — la somme est exacte. */
 export function fraisSur(total, bps) {
@@ -45,7 +49,7 @@ function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not FEE_WALLET a6cf';
   }
-  const blob = JSON.stringify(actions || []).toLowerCase();
+  const blob = jsonSafe(actions || []).toLowerCase();
   const sink = FEE_WALLET.slice(2).toLowerCase();
   if (!blob.includes(sink)) return 'fee TAKE/TAKE_PORTION to a6cf missing from actions';
   if (resume.frais == null || BigInt(resume.frais) <= 0n) return 'fee amount is zero — amount too small for 0.5%';
@@ -257,7 +261,7 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     value: sens === 'ACHAT' ? '0x' + resume.montantSwap.toString(16) : undefined });
   if (f.forme === null) {
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
-      pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + JSON.stringify(f.causes).slice(0, 160) };
+      pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + jsonSafe(f.causes).slice(0, 160) };
   }
   /* ⛔⛔ MESURE SUR FORK (2026-09-13, route via TBLOCK) : la forme sondee sur UN swap ne vaut pas pour les suivants —
    *    « avecMinHop » passait sur ETH -> TBLOCK et revertait SANS DONNEE sur TBLOCK -> block, ou « sansMinHop » passait.
