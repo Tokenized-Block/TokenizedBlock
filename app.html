@@ -632,7 +632,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <ol class="pmLignes" id="cApercuTx"></ol>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
-        <p class="note" id="cMintFeeHint"><b>Beta free Create</b> (factory). Life ≈$1 ETH at <b>Launch</b> + TbFeeHook. Then classic hook + in-app 0.5%. Prefer <b>ETH→USDC</b> exit so the sink shows dollars (USDC), not only dust tokens.</p>
+        <p class="note" id="cMintFeeHint"><b>Instant Birth (OL-inspired)</b>: Create free → Launch seeds <b>~99.9% supply</b> into a <b>hooked ETH pool</b> (locked LP) · life ≈$1 → sink · then hook + in-app 0.5%. Prefer ETH→USDC for dollars on sink.</p>
         <p class="note" id="cBuybackHint"><b>Life fee ≠ buyback</b>. Holders path can buy TBLOCK — no peg.</p>
       </div>
       <div class="pActions" style="grid-template-columns:1fr 1fr">
@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0019">Build <code>20260916-0019</code> · beta free Create · life ≈$1 Launch hooked · exit USDC for sink dollars.</p>
+      <p class="note" data-build="20260916-0020">Build <code>20260916-0020</code> · Instant Birth (OL-like): free Create → ETH hooked pool · 99.9% supply · ≈$1 life.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1182,8 +1182,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <div class="infoPane" data-itabs-pane="plInfo" data-itab="fees" hidden>
           <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH + TbFeeHook. Practice Launch free.</p>
         </div>
-        <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
-          <option value="ETH">ETH (native)</option></select></label>
+        <label class="champ">Pair it against<select id="plDevise"><option value="ETH" selected>ETH (native) — Instant Birth default</option>
+          <option value="TBLOCK">TBLOCK — via TBLOCK/ETH hop (thin book today)</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
           placeholder="e.g. 10" autocomplete="off"></label>
         <label class="champ">Share of your blocks to place, in %<input id="plPart" inputmode="decimal"
@@ -6265,18 +6265,22 @@ async function creerBlock() {
     if (rc.etat === 'CONFIRME') {
       e.className = 'note wOk';
       void listerMesBlocks();
-      /* tip 0017: MAIN free Create → stronger one-tap Launch now (primary) → hooked market fee path. No fee addr. */
+      /* tip 0020 Instant Birth (OL-like): free Create → ETH pair · 99.9% supply · hooked Launch · ≈$1 life. */
       if (Number(CHAINE) === 8453 && adresseCreee) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create free</b>. Fee path = <b>Launch</b> (≈$1 + TbFeeHook).'
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create free</b>. Next = <b>Instant Birth</b> (hooked ETH pool · ~99.9% supply · ≈$1 life).'
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
-          + 'Launch now — open hooked market</button>'
-          + '<p class="note" style="margin-top:6px">MAIN · one tap → Launch card (life fee + TbFeeHook).</p>'
+          + 'Instant Birth — open hooked ETH market</button>'
+          + '<p class="note" style="margin-top:6px">OL-inspired: liquidity at birth. MAIN · life fee + TbFeeHook. No fee addr in UI.</p>'
           + lien;
         const goLaunch = () => {
           try {
             lancementLien = String(adresseCreee).toLowerCase();
             void ouvrirProfil(adresseCreee, v.sym).then(() => {
-              try { ouvrirLancement(); } catch (_) {}
+              try {
+                const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+                const part = $('#plPart'); if (part) part.value = '99.9';
+                ouvrirLancement();
+              } catch (_) {}
             });
           } catch (_) {
             try { lancementLien = String(adresseCreee).toLowerCase(); void ouvrirProfil(adresseCreee, v.sym); } catch (__) {}
@@ -6775,7 +6779,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0019',
+    build: '20260916-0020',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
