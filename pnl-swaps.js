@@ -274,7 +274,8 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
     }
   }
 
-  const lignes = [];
+  const lignes = []; /* public */
+  const lignesPrivees = []; /* folded — operator detail */
   const quoteUsd = profondeurQuoteUsd(pair);
   const paperLiq = liquiditeInventairePapier(pair);
   const fdv = num(pair.fdv);
@@ -282,64 +283,48 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
   const quoteAmt = num(pair.liquidity && pair.liquidity.quote);
   const qSym = String((pair.quoteToken && pair.quoteToken.symbol) || 'ETH');
 
+  /* tip 0013: public = price + exit depth only */
   lignes.push('Price: <b>' + fmtPx(priceUsd) + '</b>'
-    + (fmtPct(priceChangeH6) ? ' · h6 ' + fmtPct(priceChangeH6) : '')
-    + (fmtPct(priceChangeH24) && priceChangeH24 !== priceChangeH6 ? ' · h24 ' + fmtPct(priceChangeH24) : ''));
-  if (paperLiq && quoteUsd != null) {
-    lignes.push('Exit depth (quote in pool): <b>' + fmtUsd(quoteUsd) + '</b>'
-      + (quoteAmt != null ? ' · ' + quoteAmt.toLocaleString('en-US', { maximumFractionDigits: 6 }) + ' ' + qSym : '')
-      + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : ''));
-    lignes.push('DexScreener liquidity mark: <b>' + fmtUsd(liqUsd) + '</b> — paper (tokens in pool × spot). Not cash you can exit for.');
-  } else {
-    lignes.push('Liquidity: <b>' + fmtUsd(liqUsd) + '</b>'
-      + (quoteUsd != null ? ' · quote≈' + fmtUsd(quoteUsd) : '')
-      + (volH6 != null ? ' · vol h6 ' + fmtUsd(volH6) : '')
-      + (volH24 != null && volH24 !== volH6 ? ' · h24 ' + fmtUsd(volH24) : ''));
+    + (fmtPct(priceChangeH6) ? ' · h6 ' + fmtPct(priceChangeH6) : ''));
+  if (quoteUsd != null) {
+    lignes.push('Exit depth: <b>' + fmtUsd(quoteUsd) + '</b>'
+      + (quoteAmt != null ? ' · ' + quoteAmt.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' ' + qSym : ''));
+  } else if (liqUsd != null) {
+    lignes.push('Liquidity (mark): <b>' + fmtUsd(liqUsd) + '</b>');
+  }
+
+  if (paperLiq && liqUsd != null) {
+    lignesPrivees.push('Dex liquidity mark: <b>' + fmtUsd(liqUsd) + '</b> — paper, not exit cash.');
   }
   if (fdv != null || mcap != null) {
-    const same = fdv != null && mcap != null && Math.abs(fdv - mcap) < 1;
-    lignes.push((same ? 'Dex paper FDV≈MC: <b>' : 'Dex paper FDV/MC: <b>')
-      + fmtUsd(fdv != null ? fdv : mcap) + '</b>'
-      + ' = spot × supply — vanity when the pool has almost no quote. Not launch spend.');
+    lignesPrivees.push('Paper FDV/MC: <b>' + fmtUsd(fdv != null ? fdv : mcap) + '</b> — vanity vs thin quote.');
   }
   if (buys != null || sells != null) {
-    lignes.push('Txns (DexScreener h6/h24 window): <b>'
-      + (buys != null ? buys : '—') + ' buys</b> / <b>'
-      + (sells != null ? sells : '—') + ' sells</b>'
-      + ' — counts only, not “everyone made +$X”.');
+    lignesPrivees.push('Txns window: ' + (buys != null ? buys : '—') + ' buys / ' + (sells != null ? sells : '—') + ' sells');
   }
+  if (volH6 != null) lignesPrivees.push('Vol h6: ' + fmtUsd(volH6));
   if (trades && trades.tradeCount > 0) {
-    lignes.push('Gecko sample (' + trades.tradeCount + ' trades'
-      + (trades.minTs && trades.maxTs ? ', ' + trades.minTs.slice(0, 16) + '→' + trades.maxTs.slice(11, 16) + 'Z' : '')
-      + '): buy USD <b>' + fmtUsd(trades.buyUsd) + '</b> · sell USD <b>' + fmtUsd(trades.sellUsd) + '</b>'
-      + ' · ' + trades.buys + ' buy / ' + trades.sells + ' sell — sample window, not cash PnL of all traders.');
+    lignesPrivees.push('Gecko sample: ' + trades.tradeCount + ' trades · buy ' + fmtUsd(trades.buyUsd) + ' / sell ' + fmtUsd(trades.sellUsd));
   } else if (geckoNote) {
-    lignes.push(enTexteSafe(geckoNote));
+    lignesPrivees.push(enTexteSafe(geckoNote));
   }
   if (pairCreatedAt) {
     try {
-      lignes.push('Pair created (DexScreener): ' + new Date(pairCreatedAt).toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
-        + (dexId ? ' · ' + dexId + (labels ? ' ' + labels : '') : ''));
-    } catch (_) { /* ignore bad date */ }
+      lignesPrivees.push('Pair: ' + new Date(pairCreatedAt).toISOString().slice(0, 10)
+        + (dexId ? ' · ' + dexId : ''));
+    } catch (_) {}
   }
   if (yourPnL) {
     if (yourPnL.matchedTrades === 0) {
-      lignes.push('Your PnL: <b>no matching trades</b> for this wallet in the Gecko sample.');
+      lignesPrivees.push('Your PnL: no matches in sample');
     } else {
-      const tag = yourPnL.paperMark ? ' (incl. paper mark — not cash)' : ' (realized approx in sample)';
-      lignes.push('Your PnL: <b>' + fmtUsd(yourPnL.totalPnLUsd) + '</b>' + tag
-        + ' · matched ' + yourPnL.matchedTrades
-        + ' · bought ' + fmtUsd(yourPnL.buyUsd) + ' / sold ' + fmtUsd(yourPnL.sellUsd)
-        + (yourPnL.inventoryRemains ? ' · inventory remains in sample' : ''));
+      lignesPrivees.push('Your PnL: ' + fmtUsd(yourPnL.totalPnLUsd)
+        + (yourPnL.paperMark ? ' (paper)' : '')
+        + ' · ' + yourPnL.matchedTrades + ' matched');
     }
-  } else if (compte && !trades) {
-    lignes.push('Your PnL: unread — Gecko trades sample needed to match this wallet.');
   }
 
-  const note = 'DexScreener'
-    + (trades ? ' + GeckoTerminal sample' : '')
-    + ' · measured ' + luA
-    + ' · never sum-of-trader paper as cash';
+  const note = 'measured ' + luA;
 
   return {
     etat: 'LUE',
@@ -347,6 +332,7 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
     luA,
     cardHidden: false,
     lignes,
+    lignesPrivees,
     note,
     pair: { address: pool, dexId, url: pair.url, sym },
     market,
