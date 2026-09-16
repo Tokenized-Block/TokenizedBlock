@@ -289,12 +289,13 @@ export async function lirePnlSwaps({ jeton, compte = null, poolId = null, fetchF
   if (quoteUsd != null) {
     lignes.push('Exit depth: <b>' + fmtUsd(quoteUsd) + '</b>'
       + (quoteAmt != null ? ' · ' + quoteAmt.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' ' + qSym : ''));
-  } else if (liqUsd != null) {
-    lignes.push('Liquidity (mark): <b>' + fmtUsd(liqUsd) + '</b>');
+  } else {
+    lignes.push('Exit depth: <b>unread</b>');
   }
 
-  if (paperLiq && liqUsd != null) {
-    lignesPrivees.push('Dex liquidity mark: <b>' + fmtUsd(liqUsd) + '</b> — paper, not exit cash.');
+  if (liqUsd != null) {
+    lignesPrivees.push('Dex liquidity mark: <b>' + fmtUsd(liqUsd) + '</b>'
+      + (paperLiq ? ' — paper, not exit cash.' : '.'));
   }
   if (fdv != null || mcap != null) {
     lignesPrivees.push('Paper FDV/MC: <b>' + fmtUsd(fdv != null ? fdv : mcap) + '</b> — vanity vs thin quote.');

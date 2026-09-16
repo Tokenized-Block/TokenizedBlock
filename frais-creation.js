@@ -80,11 +80,11 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   }
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
     return 'Life-fee price unread — Launch closed. Need a measured ETH amount ≈ $' + usd
-      + ' · Fees for BaseAPP Holders (Uniswap v4 median). Sleep stays free until Launch pays life.';
+      + ' (Uniswap v4 median). Sleep stays free until Launch pays life.';
   }
   let base = 'Life fee (Launch / stay alive): ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
-    + '/ETH median) · Fees for BaseAPP Holders'
+    + '/ETH median)'
     + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified for BaseAPP Holders before Launch. Create itself is free — this is THE fee moment. Life fee ≠ automatic buyback.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {

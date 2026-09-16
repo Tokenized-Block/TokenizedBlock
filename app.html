@@ -696,7 +696,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note" id="tbTasksHonesty"><b>128 LIF offchain</b> (not an LLM). Offer → <b>32 signals</b> → <b>0 refuse</b> / <b>1 dinner</b>. One offering at a time. Accepted food may lock forever (dead-address / locker).</p>
         </div>
         <div class="infoPane" data-itabs-pane="bTasks" data-itab="fees" hidden>
-          <p class="note"><b>Fees for BaseAPP Holders</b> on life / signed tools. Offer circuit ships with its contract.</p>
+          <p class="note">fee on life / signed tools. Offer circuit ships with its contract.</p>
         </div>
         <ul class="pmLignes" id="tbTasksList"></ul>
         <p class="note" style="margin-top:8px"><b>Decision receipts</b> — journal facts + offer preview (evidence_hash = keccak256(canonical evidence) · contract lock pending).</p>
@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0013">Build <code>20260916-0013</code> · PnL public/private · Buy BigInt fix.</p>
+      <p class="note" data-build="20260916-0014">Build <code>20260916-0014</code> · fee copy muted until organic · BigInt Buy ok.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook chops). Unhooked volume → profile <b>Launch hooked beside</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1083,7 +1083,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ P0 tip 2025: OL-inspired holders / trust facts — measured only; CTA → Launch or Buy (fee funnel). -->
       <div class="pJeu" id="pTrustFacts" hidden>
         <div class="pJeuTete"><span class="pBadge">Holders · trust facts</span><span class="pPV" id="pTfBadge"> · measured only</span></div>
-        <p class="pProchain" id="pTfIntro">Measured this visit only — never a score. Swap fees → <b>creator + holders</b>; protocol · <b>Fees for BaseAPP Holders</b>.</p>
+        <p class="pProchain" id="pTfIntro">Measured this visit only — never a score. Swap fees → creator + holders (when hooked).</p>
         <ul class="pmLignes" id="pTfLignes"></ul>
         <p class="note" id="pTfCta"></p>
       </div>
@@ -1120,17 +1120,17 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
       <!-- ⛔ ACHETER / VENDRE DANS L APP (Phil, 2026-09-13) : 0,5 % au wallet de frais, dit avant la signature.
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5% · Fees for BaseAPP Holders</span></div>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5%</span></div>
         <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
-          <p class="note">In-app Buy/Sell: <b>0.5%</b> · <b>Fees for BaseAPP Holders</b>. Hooked pools: fees to <b>creator + holders</b> (1% creator · 2% protocol). External DEX ≠ this path.</p>
+          <p class="note">In-app Buy/Sell: <b>0.5%</b>. Hooked: 1% creator · 2% protocol. External unhooked Dex ≠ this path.</p>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
-          <p class="note" id="peUsdcPath">Exit: Sell → ETH (0.5% · Fees for BaseAPP Holders), then optional <b>ETH→USDC</b> (+0.5% · Fees for BaseAPP Holders). External DEX pays 0 on this path. Practice = Base mainnet only.</p>
+          <p class="note" id="peUsdcPath">Exit: Sell → ETH (0.5%), then optional <b>ETH→USDC</b> (+0.5%). External DEX pays 0 on this path. Practice = Base mainnet only.</p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
@@ -1155,7 +1155,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
            avec minimums. Visible seulement sur un marche LU au format de l app. -->
       <div class="pJeu" id="pLiquidite" hidden>
         <div class="pJeuTete"><span class="pBadge" id="plqBadge">Liquidity</span><span class="pPV" id="plqDepth">you keep your position</span></div>
-        <p class="pProchain" id="plqIntro">Add blocks to the book. You keep this position (withdraw anytime). Deeper book → more Buy/Sell → 0.5% · Fees for BaseAPP Holders.</p>
+        <p class="pProchain" id="plqIntro">Add blocks to the book. You keep this position (withdraw anytime). Deeper book → more Buy/Sell → 0.5%.</p>
         <!-- ⛔ tip 2140: short honesty — Launch lock ≠ this Add. -->
         <p class="note" id="plqLiqHonesty">🔓 <b>Withdrawable</b> · Launch LP stays forever-locked · deepen → 0.5% protocol</p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
@@ -1180,7 +1180,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
           <p class="note" id="plLiqHonesty">🔒 <b>Launch LP locked forever</b> (dead-address owner). Later <b>Add liquidity</b> stays yours / withdrawable. Not every LP is forever-locked.</p>
         </div>
         <div class="infoPane" data-itabs-pane="plInfo" data-itab="fees" hidden>
-          <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH · <b>Fees for BaseAPP Holders</b> + hooked swaps to <b>creator + holders</b>. Practice Launch is free.</p>
+          <p class="note"><b>Mainnet</b>: life fee ≈ $1 ETH + TbFeeHook. Practice Launch free.</p>
         </div>
         <label class="champ">Pair it against<select id="plDevise"><option value="TBLOCK">TBLOCK — bought with ETH through TBLOCK/ETH, in one transaction</option>
           <option value="ETH">ETH (native)</option></select></label>
@@ -1210,7 +1210,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <!-- ⛔⛔ MESSAGERIE ENTRE BLOCKS PAYEE EN TBLOCK (Phil, 2026-09-14) — messagerie-blocks.js. Une signature : un transfert
              de TBLOCK au wallet de frais qui porte le message. Prouve sur fork le 2026-09-14. -->
         <p class="titre" style="margin-top:12px;font-size:1em">Write to this block — paid in TBLOCK</p>
-        <p class="note" id="pmsgGate">Connect → pick a block you hold to speak as → write → Prepare (1000 TBLOCK · Fees for BaseAPP Holders).</p>
+        <p class="note" id="pmsgGate">Connect → pick a block you hold to speak as → write → Prepare (1000 TBLOCK).</p>
         <label class="champ">Speak as<select id="pmsgDe"></select></label>
         <label class="champ">Your message
           <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="gm, from my block" autocomplete="off" spellcheck="true"></textarea>
@@ -2981,7 +2981,7 @@ function peutOuvrirPoolHooke(v) {
 }
 
 /** tip 2353: in-app Buy/Sell whenever a pool is live (LUE) — hooked or unhooked/external.
- *  0.5% every buy/sell → FEE_WALLET (Fees for BaseAPP Holders). Only NON_TROUVEE / no pool closes Buy/Sell. */
+ *  0.5% every buy/sell → FEE_WALLET (fee). Only NON_TROUVEE / no pool closes Buy/Sell. */
 function echangeAutorise(v, etat) {
   return etat === 'LUE' && !!v;
 }
@@ -3066,7 +3066,7 @@ function peindreCapturePaths(adr, v, hkInfo) {
   if (depth) depth.textContent = lo ? ('L≈' + lo + ' · you keep position') : 'you keep your position';
   if (intro) {
     intro.innerHTML = estTb
-      ? ('Deepen TBLOCK book → more swaps → <b>0.5% · Fees for BaseAPP Holders</b>'
+      ? ('Deepen TBLOCK book → more swaps → <b>0.5%</b>'
         + (hkInfo && hkInfo.isTbFeeHook ? ' + hook 2%' : ' (unhooked pool)')
         + '. Position stays yours.')
       : ('Add blocks to the book → more Buy/Sell → <b>0.5% protocol</b>'
@@ -3080,8 +3080,8 @@ function peindreCapturePaths(adr, v, hkInfo) {
     u.hidden = false;
     if (CHAINE === 8453) {
       u.innerHTML = estTb
-        ? '<b>Exit</b>: Sell → ETH (0.5% · Fees for BaseAPP Holders, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5% · Fees for BaseAPP Holders). External DEX pays 0.'
-        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5% · Fees for BaseAPP Holders)'
+        ? '<b>Exit</b>: Sell → ETH (0.5%, not circular TBLOCK buyback), then <b>ETH→USDC</b> (+0.5%). External DEX pays 0.'
+        : '<b>Exit</b>: after ETH out, <b>ETH→USDC</b> (+0.5%)'
           + (hkInfo && hkInfo.isTbFeeHook ? ' · hook 2%' : '')
           + '. Deepen TBLOCK LP so sells fill.';
     } else {
@@ -3117,7 +3117,7 @@ function proposerSortieUsdcApresVente(ethWei) {
   const b = document.createElement('button');
   b.className = 'bouton sec'; b.type = 'button';
   b.textContent = 'Next: Prepare ETH→USDC (0.5 % → fee)';
-  b.title = 'Exit hop — same 0.5 % · Fees for BaseAPP Holders (quoter-gated; external DEX pays 0)';
+  b.title = 'Exit hop — same 0.5 % (quoter-gated; external DEX pays 0)';
   b.addEventListener('click', () => void preparerEthUsdc());
   actions.appendChild(b);
 }
@@ -3222,10 +3222,8 @@ async function peindrePnlSwaps(adr, perime) {
     const mv = marcheProfil && String(marcheProfil.adr || '').toLowerCase() === String(adr || '').toLowerCase()
       && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
     const hk = mv && mv.etat === 'LUE' ? infoHookMarche(mv) : null;
-    if (hk && !hk.isTbFeeHook && Number(CHAINE) === 8453) {
-      if (badge) badge.textContent = ' · unhooked';
-    } else if (hk && hk.isTbFeeHook && Number(CHAINE) === 8453) {
-      if (badge) badge.textContent = ' · hooked';
+    if (hk && Number(CHAINE) === 8453 && badge) {
+      badge.textContent = hk.isTbFeeHook ? ' · hooked' : ' · unhooked';
     }
   } catch (_) { /* honesty optional */ }
 }
@@ -3279,14 +3277,14 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Holders: <b>not measured this visit</b> (food/Transfer window unread). Never invent a count — open Brain AI or wait for a food read.');
   }
   if (etat === 'LUE' && info.isTbFeeHook) {
-    lignes.push('Pool: <b>✦ TbFeeHook</b> — fees to <b>creator + holders</b> (1&nbsp;% creator · 2&nbsp;% protocol · Fees for BaseAPP Holders) on later swaps.');
+    lignes.push('Pool: <b>✦ TbFeeHook</b> — fees to <b>creator + holders</b> (1&nbsp;% creator · 2&nbsp;% protocol) on later swaps.');
   } else if (etat === 'LUE' && info.hooked) {
     lignes.push('Pool: hooked, but <b>not</b> TbFeeHook — TB fee split does not apply on this pool id.');
   } else if (etat === 'LUE') {
     lignes.push('Pool: <b>unhooked</b> — Buy/Sell in-app · Launch hooked for Dex.');
   } else if (etat === 'NON_TROUVEE') {
     lignes.push(CHAINE === 8453
-      ? 'Market: <b>dormant</b> — no pool yet. Wake/Launch on <b>MAIN</b>: life fee ≈ $1 ETH · Fees for BaseAPP Holders + new hooked pool (2&nbsp;% enduring).'
+      ? 'Market: <b>dormant</b> — no pool yet. Wake/Launch on <b>MAIN</b>: life fee ≈ $1 ETH + new hooked pool (2&nbsp;% enduring).'
       : 'Market: <b>dormant</b> — no pool yet. Wake/Launch is <b>Practice</b>: free · no life fee · no fee hook.');
   } else {
     lignes.push('Market: <b>unread</b> this visit — trust path not judged from a failed read.');
@@ -3304,28 +3302,27 @@ function peindreTrustFacts(adr, v, origine) {
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
     cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next (MAIN Real)</b>: life fee ≈ $1 ETH · Fees for BaseAPP Holders, then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.'
-      : '<b>Next (Practice)</b>: free Wake/Launch · no $1 life fee · no fee hook. Real MAIN · Fees for BaseAPP Holders.')
+      ? '<b>Next (MAIN Real)</b>: life fee ≈ $1 ETH, then hooked pool — fees to creator + holders. Locked Launch LP ≠ later Add.'
+      : '<b>Next (Practice)</b>: free Wake/Launch · no $1 life fee · no fee hook. Real MAIN.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
-      cta.innerHTML = '<b>Buy/Sell in-app</b> · '
-        + 'Unhooked Dex on this pool pays <b>0</b> protocol hook. Launch hooked = Dex chop second (TbFeeHook; legacy stays).'
+      cta.innerHTML = 'In-app Buy/Sell · Launch hooked if Dex=$0'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="buy">Prepare buy</button>'
-        + '<button type="button" class="bouton sec" data-tf-act="hook-launch">Launch hooked (Dex chop)</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="hook-launch">Launch hooked</button></div>';
     } else {
       /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
       cta.innerHTML = info.isTbFeeHook
-        ? ('<b>Trade here</b>: <b>Buy/Sell in-app</b> (0.5% · Fees for BaseAPP Holders) + TbFeeHook chops Dex on this pool. Deepen LP if thin.')
-        : ('<b>Next</b>: 0.5&nbsp;% · Fees for BaseAPP Holders. Deepen LP if quotes thin. External DEX pays this wallet 0.')
+        ? ('Buy/Sell in-app · hooked Dex chops')
+        : ('Buy/Sell in-app · deepen if thin')
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
         + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell in-app</button>'
         + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
     }
   } else {
-    cta.innerHTML = '<b>Next</b>: read market again, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths · Fees for BaseAPP Holders.'
+    cta.innerHTML = '<b>Next</b>: read market again, then Launch (if dormant) or Buy (if live). Fees only on Real signed paths.'
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton sec" data-tf-act="reread">Read its market again</button></div>';
   }
@@ -3534,7 +3531,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
       : (v.vie == null || !Number.isFinite(Number(v.vie))
-        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · unhooked Dex=0 protocol · in-app Buy/Sell 0.5% · Fees for BaseAPP Holders' : ''))
+        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · unhooked · In-app Buy/Sell · Launch hooked if Dex=$0' : ''))
         : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || ''));
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
@@ -3554,23 +3551,23 @@ async function lireProfil(adr, sym, perime) {
   $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
   if (etatVieProfil === 'NON_TROUVEE') {
     $('#pReveiller').textContent = CHAINE === 8453
-      ? 'Wake it — Launch (life fee ≈ $1 + fee hook · Fees for BaseAPP Holders)'
+      ? 'Wake it — Launch (life fee ≈ $1 + fee hook)'
       : 'Wake it — Launch (Practice, free · no fee hook)';
   } else if (legacySansHook) {
-    $('#pReveiller').textContent = 'Launch hooked pool beside this one (Dex chop · Fees for BaseAPP Holders · legacy stays)';
+    $('#pReveiller').textContent = 'Launch hooked pool beside this one (Dex chop · legacy stays)';
   }
   const wg = $('#pWakeGate');
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> · <b>Fees for BaseAPP Holders</b> first (floor 0.0003), '
+      wg.innerHTML = '<b>Dormant → Wake is gated (MAIN Real)</b>: life fee ≈ <b>$1 ETH</b> · fee first (floor 0.0003), '
         + 'then Launch opens a <b>new hooked</b> pool (TbFeeHook — Dex chop). Work it out → Ask the chain → pay fee → Launch.';
     } else if (legacySansHook) {
       wg.hidden = false;
       wg.innerHTML = '<b>Unhooked</b>: Buy/Sell in-app · Launch hooked for Dex fees.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
-      wg.innerHTML = '<b>Practice</b>: Wake/Launch is free · no $1 life fee · no fee hook. MAIN Real · Fees for BaseAPP Holders.';
+      wg.innerHTML = '<b>Practice</b>: Wake/Launch is free · no $1 life fee · no fee hook. MAIN Real.';
     } else { wg.hidden = true; wg.textContent = ''; }
   }
   const gt = $('#pGarderTrusted');
@@ -3579,7 +3576,7 @@ async function lireProfil(adr, sym, perime) {
       || (etatVieProfil === 'NON_TROUVEE' && false);
     gt.hidden = !(etatVieProfil === 'LUE' && v && infoHookMarche(v).isTbFeeHook);
     if (!gt.hidden) {
-      gt.textContent = estTrusted(adr) ? '✦ Trusted (hooked fee path)' : 'Keep as trusted (hooked → 2% · Fees for BaseAPP Holders)';
+      gt.textContent = estTrusted(adr) ? '✦ Trusted (hooked fee path)' : 'Keep as trusted (hooked → 2%)';
       gt.disabled = estTrusted(adr);
     }
   }
@@ -3621,9 +3618,9 @@ async function lireProfil(adr, sym, perime) {
     const hkInfo = infoHookMarche(v);
     $('#peBadge').textContent = bb ? 'Buyback · BaseAPP Holders' : 'Buy · Sell';
     $('#peFrais').textContent = bb ? 'no fee'
-      : (hkInfo.isTbFeeHook ? '0.5% · Fees for BaseAPP Holders + TbFeeHook Dex chop'
-        : (hkInfo.hooked ? '0.5% · Fees for BaseAPP Holders · foreign hook'
-          : '0.5% · Fees for BaseAPP Holders (Dex unhooked = 0 protocol)'));
+      : (hkInfo.isTbFeeHook ? '0.5% + TbFeeHook Dex chop'
+        : (hkInfo.hooked ? '0.5% · foreign hook'
+          : '0.5% (Dex unhooked = 0 protocol)'));
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
     /* tip 2357: hooked / TBGAS → surface in-app BuySell (no fee addr). */
@@ -3641,7 +3638,7 @@ async function lireProfil(adr, sym, perime) {
     const u = $('#peUsdcPath');
     if (u) {
       u.hidden = false;
-      u.innerHTML = 'Exit: Sell → ETH (0.5% · Fees for BaseAPP Holders), then optional <b>ETH→USDC</b> (+0.5% · Fees for BaseAPP Holders). External DEX pays 0 on this path. Practice = Base mainnet only.';
+      u.innerHTML = 'Exit: Sell → ETH (0.5%), then optional <b>ETH→USDC</b> (+0.5%). External DEX pays 0 on this path. Practice = Base mainnet only.';
     }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
@@ -4039,7 +4036,7 @@ function peindreFeedTrustHonesty() {
   const feeds = liveEvts.filter((e) => e.type === 'ACHAT').length;
   const hookedPools = [...poolsLive.values()].filter((p) => p.confiance === 'HOOK').length;
   if (CHAINE === 8453) {
-    el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;% · Fees for BaseAPP Holders). '
+    el.innerHTML = '<b>Feed &amp; trust</b> · 🟢 Feed = buy into another block (in-app 0.5&nbsp;%). '
       + '<b>Trusted</b> = TbFeeHook Launch (fee-honest) — not a score (' + nTrust + ' kept)'
       + (feeds ? ' · ' + feeds + ' Feed' : '')
       + (hookedPools ? ' · ' + hookedPools + ' hooked' : '')
@@ -4061,7 +4058,7 @@ async function peindreFeeRecu() {
     const eth = Number(wei) / 1e18;
     const ethTxt = eth >= 0.0001 ? eth.toFixed(6) : wei.toString() + ' wei';
     const when = new Date().toLocaleString('fr-BE', { timeZone: 'Europe/Brussels' });
-    el.innerHTML = '<b>Fees received (on-chain)</b> · Fees for BaseAPP Holders wallet holds <b>' + ethTxt + ' ETH</b>'
+    el.innerHTML = '<b>Fees received (on-chain)</b> wallet holds <b>' + ethTxt + ' ETH</b>'
       + ' · read ' + when
       + '. Paths: Launch life · TbFeeHook chops Dex on hooked pools · in-app 0.5% on any live pool. Unhooked Dex = <b>0</b> protocol forever (cannot tax that pool id).';
   } catch (e) {
@@ -4079,9 +4076,9 @@ function peindreCreateFeeHonesty() {
   el.hidden = false;
   if (CHAINE === 8453) {
     if (!creations.length) {
-      el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + TbFeeHook · Fees for BaseAPP Holders). Free create ≠ fee yet.';
+      el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + TbFeeHook). Free create ≠ fee yet.';
     } else {
-      el.innerHTML = '<b>' + free + '</b> free create · fee starts at <b>Launch + TbFeeHook</b> · Fees for BaseAPP Holders'
+      el.innerHTML = '<b>' + free + '</b> free create · fee starts at <b>Launch + TbFeeHook</b>'
         + (paid ? (' · <b>' + paid + '</b> legacy CreateRouter') : '') + '.';
     }
   } else {
@@ -4136,7 +4133,7 @@ function peindreLive() {
           ? '🧱 <b>' + nom + '</b> was created · CreateRouter (optional paid path)'
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
         : '🧱 <b>' + nom + '</b> · free create · Launch hooked to chop Dex'
-          + (CHAINE === 8453 ? ' (life fee ≈ $1 + TbFeeHook · Fees for BaseAPP Holders)' : ' (Practice free · no hook)'))
+          + (CHAINE === 8453 ? ' (life fee ≈ $1 + TbFeeHook)' : ' (Practice free · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? (e.aaOpaque
@@ -4587,10 +4584,10 @@ async function preparerEchange(sens) {
       ? (r.rachatAuto
         ? ('Fee buyback: ' + formaterUnites(r.frais, 18) + ' ETH → ≥'
           + formaterUnites(r.tblockRachetesAuMoins || 0n, 18)
-          + ' TBLOCK · Fees for BaseAPP Holders, inside the same transaction (auto-buyback)')
+          + ' TBLOCK, inside the same transaction (auto-buyback)')
         : (r.fraisDevise === 'TBLOCK'
-          ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK (0.5 %, taken between the two swaps) · Fees for BaseAPP Holders, inside the same transaction'
-          : 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %) · Fees for BaseAPP Holders, inside the same transaction'
+          ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK (0.5 %, taken between the two swaps), inside the same transaction'
+          : 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %), inside the same transaction'
             + (estTbProfil && sens === 'VENTE'
               ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
               : '')))
@@ -4601,7 +4598,7 @@ async function preparerEchange(sens) {
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
       feeLigne,
       ...(sens === 'VENTE' && r.recoitDevise === 'ETH' && CHAINE === 8453
-        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % · Fees for BaseAPP Holders (external DEX pays 0)']
+        ? ['Next exit: after this sale, Prepare ETH→USDC below — another 0.5 % (external DEX pays 0)']
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
@@ -4615,8 +4612,8 @@ async function preparerEchange(sens) {
     const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
     const feeEl = $('#peFrais');
     if (feeEl) feeEl.textContent = hooked
-      ? '0.5 % app · Fees for BaseAPP Holders · pool hook 3 %'
-      : '0.5 % app · Fees for BaseAPP Holders';
+      ? '0.5 % app · pool hook 3 %'
+      : '0.5 % app';
   } catch (e) { /* badge optional */ }
   if (p.etat === 'APPROBATIONS') {
     const etape = p.etapes[0];
@@ -4656,7 +4653,7 @@ async function preparerEchange(sens) {
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   /* ⛔ P0 2026-09-15 fee harden: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback). */
-  const feeLabel = 'Fees for BaseAPP Holders';
+  const feeLabel = 'fee';
   if (!estWalletDeFrais(compte)) {
     const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
     const destOk = r && r.beneficiaireFrais
@@ -4727,7 +4724,7 @@ async function signerEchange(tx, sens, estApprobation) {
   if (sens === 'VENTE' && echangeCourant && echangeCourant.resume
     && echangeCourant.resume.recoitDevise === 'ETH'
     && typeof echangeCourant.resume.recoitAuMoins === 'bigint') {
-    e.innerHTML += ' · Next: convert ETH→USDC in-app (0.5 % · Fees for BaseAPP Holders) — external DEX pays 0.';
+    e.innerHTML += ' · Next: convert ETH→USDC in-app (0.5 %) — external DEX pays 0.';
     proposerSortieUsdcApresVente(echangeCourant.resume.recoitAuMoins);
   }
 }
@@ -4819,7 +4816,7 @@ async function preparerAjout() {
       ? ('Also needs ' + formaterUnites(p.ethRequis, 18) + ' of the quote token (measured).')
       : (viaTbLiq ? 'Quote side is TBLOCK — unilateral block range asks for blocks only (measured).' : 'Quote side ETH not required for this unilateral range (measured).'),
     estTbLiq
-      ? 'Deepening TBLOCK → more fills → more 0.5 % · Fees for BaseAPP Holders. No fee on the add itself.'
+      ? 'Deepening TBLOCK → more fills → more 0.5 %. No fee on the add itself.'
       : 'The position belongs to YOU — withdraw anytime. No fee on liquidity; fees accrue when others Buy/Sell against this book.',
     ...[...(p.etapes || []), p.tx].filter(Boolean).map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: p.dec });
@@ -4901,7 +4898,7 @@ async function preparerEthUsdc() {
     e.className = 'note wKo'; e.textContent = 'Invalid ETH amount.'; return;
   }
   if (wei <= 0n) { e.className = 'note wKo'; e.textContent = 'Enter ETH above zero.'; return; }
-  e.className = 'note'; e.textContent = 'Quoting ETH→USDC pools (0.5 % · Fees for BaseAPP Holders)…';
+  e.className = 'note'; e.textContent = 'Quoting ETH→USDC pools (0.5 %)…';
   profilEnLecture = true;
   let p;
   try { p = await planEthVersUsdc({ rpc, chaine: CHAINE, compte, montantWei: wei }); }
@@ -4927,15 +4924,15 @@ async function preparerEthUsdc() {
       || !(typeof r.frais === 'bigint' && r.frais > 0n)
       || !feeWalletDansCalldata(p.tx)) {
       e.className = 'note wKo';
-      e.textContent = 'Refused: ETH→USDC plan missing 0.5 % · Fees for BaseAPP Holders (resume or calldata) — fail-closed.';
+      e.textContent = 'Refused: ETH→USDC plan missing 0.5 % (resume or calldata) — fail-closed.';
       return;
     }
   }
-  const feeLabel = 'Fees for BaseAPP Holders';
+  const feeLabel = 'fee';
   $('#peLignes').innerHTML = [
     'Pay ' + formaterUnites(r.paye, 18) + ' ETH → receive at least ' + formaterUnites(r.recoitAuMoins, 6) + ' USDC',
     'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH · ' + feeLabel + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
-    'External DEX would pay BaseAPP Holders nothing — this hop keeps Fees for BaseAPP Holders.',
+    'External DEX would pay BaseAPP Holders nothing — this hop keeps fee.',
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
@@ -4960,7 +4957,7 @@ function ouvrirLancement() {
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = real
-      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> · <b>Fees for BaseAPP Holders</b>, then a <b>new</b> hooked pool (TbFeeHook Dex chop). Against <span id="plContre">'
+      ? ('<b>Mainnet</b>: life fee ≈ <b>$1 ETH</b> · fee, then a <b>new</b> hooked pool (TbFeeHook Dex chop). Against <span id="plContre">'
         + contre + '</span>. Works beside an existing unhooked market (new pool id).')
       : ('<b>Practice</b>: free Launch, no fee hook. Against <span id="plContre">' + contre + '</span>.');
   }
@@ -4970,12 +4967,12 @@ function ouvrirLancement() {
     liqH.hidden = false;
     liqH.innerHTML = real
       ? '🔒 <b>Launch LP locked forever</b> (dead-address). Later Add = yours / withdrawable.'
-      : '🔒 Practice Launch LP still forever-locks when engraved. Add stays withdrawable. Real · Fees for BaseAPP Holders.';
+      : '🔒 Practice Launch LP still forever-locks when engraved. Add stays withdrawable. Real.';
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
   $('#plEtat').textContent = real
-    ? 'Gated: Work it out → pay life fee ≈ $1 ETH · Fees for BaseAPP Holders (verified) → Launch hooked pool.'
+    ? 'Gated: Work it out → pay life fee ≈ $1 ETH (verified) → Launch hooked pool.'
     : 'Practice — Work it out is free; nothing here is real money.';
   $('#plEtat').className = 'note' + (real ? ' wKo' : '');
   planCourant = null;
@@ -5024,7 +5021,7 @@ async function calculerLancement() {
   if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade)) {
     e.className = 'note wKo';
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
-      e.textContent = 'This block already has a TbFeeHook market (' + (marcheAvant.via || 'hooked') + ') — TbFeeHook fees already route · Fees for BaseAPP Holders on that pool. Nothing to launch.';
+      e.textContent = 'This block already has a TbFeeHook market (' + (marcheAvant.via || 'hooked') + ') — TbFeeHook fees already route on that pool. Nothing to launch.';
     } else if (marcheAvant && marcheAvant.etat === 'LUE') {
       e.textContent = 'This block already has a market (' + (marcheAvant.via || 'read on chain') + ') — hooked upgrade only on MAIN Real.';
     } else {
@@ -5035,7 +5032,7 @@ async function calculerLancement() {
     return;
   }
   e.textContent = legacyUpgrade
-    ? 'Legacy unhooked market found — planning a NEW TbFeeHook pool (Dex chop · Fees for BaseAPP Holders). Old pool stays…'
+    ? 'Legacy unhooked market found — planning a NEW TbFeeHook pool (Dex chop). Old pool stays…'
     : 'No market on any key read — reading the block, its pool and your approvals…';
   /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET. */
   try {
@@ -5055,7 +5052,7 @@ async function calculerLancement() {
       if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
-        plan.pourquoiLegacy = 'Opens a NEW hooked pool id beside the existing unhooked market. Fees on the new pool · Fees for BaseAPP Holders (TbFeeHook). Legacy Dex volume still pays 0 protocol until liquidity moves.';
+        plan.pourquoiLegacy = 'Opens a NEW hooked pool id beside the existing unhooked market. Fees on the new pool (TbFeeHook). Legacy Dex volume still pays 0 protocol until liquidity moves.';
       }
     }
   } catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
@@ -5136,7 +5133,7 @@ function peindrePlan(plan, adr) {
     ? [phraseFraisLancement(CHAINE, RESEAUX[CHAINE].nom, ethUsd, fraisL, soldeEthNat),
       ...(!fraisLancementPret(fraisL)
         ? ['Life-fee price unread or below floor — Launch stays closed on mainnet until ETH/USD is measured.']
-        : ['Signature order on mainnet: (1) life fee ETH · Fees for BaseAPP Holders (verified on chain, floor '
+        : ['Signature order on mainnet: (1) life fee ETH (verified on chain, floor '
           + formaterEthCourt(CREATE_FEE_WEI_FLOOR) + '), (2) Launch pool.'])]
     : ['Practice — Launch life fee is free here.'];
   const txsApercu = [];
@@ -5152,19 +5149,19 @@ function peindrePlan(plan, adr) {
       ? 'TBLOCK (buyers pay ETH, routed through TBLOCK/ETH)' : 'native ETH')
       + ' · Uniswap pool fee tier 0% · tick spacing 200 · LP locked permanent · '
       + (avecHook
-        ? 'TbFeeHook still takes protocol cut on swaps (2% · Fees for BaseAPP Holders + 1% creator); in-app Buy/Sell +0.5% · Fees for BaseAPP Holders · '
+        ? 'TbFeeHook still takes protocol cut on swaps (2% + 1% creator); in-app Buy/Sell +0.5% · '
         : '⚠️ no TbFeeHook on this plan — MAIN Launch must attach hook · ')
       + (plan.poolExiste ? 'already exists — its current price rules' : 'to be created'),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     'ETH or TBLOCK for the pool: none — a single-sided launch.'
-      + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH · Fees for BaseAPP Holders — not the Uniswap tier.' : ''),
+      + (usdLaunch > 0 ? ' Life fee (stay alive) is separate ETH — not the Uniswap tier.' : ''),
     'Permanent LP: liquidity sits on a dead address — nobody can withdraw Launch LP. '
       + 'Uniswap tier 0% ≠ zero fees for traders: TbFeeHook + in-app 0.5% still apply when hooked.',
     'Honesty: this Launch lock ≠ later Add liquidity (Add keeps YOUR position — withdrawable). Not OpenLaunch forever-lock on every surface.',
     'Irreversible: once launched, these blocks stay in the pool for good, and this value sets the starting price.',
-    ...(plan.legacyUpgrade ? ['NEW hooked pool beside legacy unhooked — TbFeeHook · Fees for BaseAPP Holders (Dex chop). Old Dex pool stays and still pays 0 protocol until liquidity moves here.'] : []),
-    ...(avecHook ? ['Fee path: Fees for BaseAPP Holders'] : []),
+    ...(plan.legacyUpgrade ? ['NEW hooked pool beside legacy unhooked — TbFeeHook (Dex chop). Old Dex pool stays and still pays 0 protocol until liquidity moves here.'] : []),
+    ...(avecHook ? ['Fee path: fee'] : []),
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('')
@@ -5222,7 +5219,7 @@ function peindrePlan(plan, adr) {
   e.className = 'note';
   e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.'
     + (usdLaunch > 0 && fraisLancementPret(fraisL)
-      ? ' Then: life fee ' + formaterEthCourt(fraisL) + ' ETH · Fees for BaseAPP Holders (floor ' + formaterEthCourt(CREATE_FEE_WEI_FLOOR) + '), then Launch.'
+      ? ' Then: life fee ' + formaterEthCourt(fraisL) + ' ETH (floor ' + formaterEthCourt(CREATE_FEE_WEI_FLOOR) + '), then Launch.'
       : '');
 }
 
@@ -5296,7 +5293,7 @@ async function verifierLancement(adr) {
   e.textContent = 'The chain accepts this launch'
     + (sim.gasUtilise ? ' (about ' + Number(sim.gasUtilise).toLocaleString('en-US') + ' gas)' : '') + '. '
     + (CHAINE === 8453
-      ? ('⚠️ Base mainnet: life fee ≈ $' + usdLaunch + ' ETH · Fees for BaseAPP Holders first (stay alive), then Launch. Starting price is permanent.')
+      ? ('⚠️ Base mainnet: life fee ≈ $' + usdLaunch + ' ETH first (stay alive), then Launch. Starting price is permanent.')
       : 'Practice network — nothing here is real money.');
 }
 
@@ -5326,7 +5323,7 @@ async function lancerMarcheBlock(adr) {
   try {
     if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
       e.textContent = 'Opening your wallet — life fee ' + formaterEthCourt(fraisL)
-        + ' ETH · Fees for BaseAPP Holders (stay alive; floor ' + formaterEthCourt(CREATE_FEE_WEI_FLOOR)
+        + ' ETH (stay alive; floor ' + formaterEthCourt(CREATE_FEE_WEI_FLOOR)
         + '). Then the Launch tx.';
       const feeVal = '0x' + BigInt(fraisL).toString(16);
       let balAvant = null;
@@ -5354,7 +5351,7 @@ async function lancerMarcheBlock(adr) {
         e.innerHTML = enTexte(verif.pourquoi) + lienF;
         return;
       }
-      e.textContent = 'Life fee confirmed · Fees for BaseAPP Holders. Opening your wallet — Launch creates the pool and places your blocks.';
+      e.textContent = 'Life fee confirmed. Opening your wallet — Launch creates the pool and places your blocks.';
     } else {
       e.textContent = 'Opening your wallet — one transaction creates the pool and places your blocks.';
     }
@@ -5507,11 +5504,11 @@ function majPrepMsgPaye() {
   } else {
     b.disabled = false;
     b.textContent = 'Prepare the paid message';
-    b.title = why || 'One signature: 1000 TBLOCK · Fees for BaseAPP Holders';
+    b.title = why || 'One signature: 1000 TBLOCK';
   }
   if (gate) {
     gate.textContent = why
-      || 'Speak as a block you hold → Prepare → Sign (1000 TBLOCK · Fees for BaseAPP Holders, not a buyback).';
+      || 'Speak as a block you hold → Prepare → Sign (1000 TBLOCK, not a buyback).';
   }
 }
 function peindreChoixParler() {
@@ -5570,7 +5567,7 @@ $('#pmsgPreparer').addEventListener('click', async () => {
   }
   messagePayeCourant = p;
   const ap = apercuTransaction({ chaine: CHAINE, tx: p.tx, compte, jeton: TBLOCK, symbole: 'TBLOCK', decimales: 18 });
-  $('#pmsgPayeLignes').innerHTML = ['Fee: ' + formaterUnites(FRAIS_MESSAGE_TBLOCK, 18) + ' TBLOCK · Fees for BaseAPP Holders, in the same transaction as the message — not a buyback.',
+  $('#pmsgPayeLignes').innerHTML = ['Fee: ' + formaterUnites(FRAIS_MESSAGE_TBLOCK, 18) + ' TBLOCK, in the same transaction as the message — not a buyback.',
     ...(messagePayeCourant && messagePayeCourant.aaOpaque ? ['Base App / smart wallet: fee still pays Holders; chat text may stay opaque on-chain (tip 2347).'] : []),
     'Public and permanent: anyone can read it on chain, forever. It shows your wallet speaking as the block you picked.',
     'Signature 1 — ' + ap.action + ': ' + ap.lignes.join(' · ')].map((l) => '<li>' + enTexte(l) + '</li>').join('');
@@ -5591,7 +5588,7 @@ $('#pmsgPreparer').addEventListener('click', async () => {
   });
   $('#pmsgPayeActions').appendChild(b);
   note.className = 'note wOk';
-  note.textContent = 'Ready: one signature. Check recipient (Fees for BaseAPP Holders), amount and message in your wallet.';
+  note.textContent = 'Ready: one signature. Check recipient (fee), amount and message in your wallet.';
   majPrepMsgPaye();
 });
 /* ⛔ ECRIRE = LE MEME FORMULAIRE D ENVOI QUE PARTOUT, avec le champ message mis en avant. Pas de
@@ -5908,11 +5905,11 @@ async function majPaire() {
   if (seq !== majPaireSeq) return;
   paireChoisie = q.paire;
   n.className = 'note';
-  let suite = 'Recorded with the block at creation. Its market opens when you launch it — life fee + hooked pool · Fees for BaseAPP Holders.';
+  let suite = 'Recorded with the block at creation. Its market opens when you launch it — life fee + hooked pool.';
   if (q.paire.type === 'TBLOCK') {
     suite = 'Standard TBLOCK quote (gas token). Launch attaches TbFeeHook when live — 3% on hooked swaps (2% → FEE_WALLET). Deepen TBLOCK LP after Launch so Buy/Sell quotes fill.';
   } else if (q.paire.type === 'B20') {
-    suite = 'Native B20 pair proven (code 0xef). Launch still pays life fee · Fees for BaseAPP Holders, then hooked pool when DEPLOYE.';
+    suite = 'Native B20 pair proven (code 0xef). Launch still pays life fee, then hooked pool when DEPLOYE.';
   }
   n.textContent = suite;
   const chip = $('#cPaireChip');
@@ -6091,7 +6088,7 @@ function majFraisEtRecap() {
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
-      ? ', after life fee ' + formaterEthCourt(fraisWeiCalcule) + ' ETH · Fees for BaseAPP Holders'
+      ? ', after life fee ' + formaterEthCourt(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
       ? ' — Create free; fees start at Launch'
@@ -6130,10 +6127,10 @@ function majFraisEtRecap() {
         'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
-          ? ['Via CreateRouter (optional paid path) — life fee ≈ $1 ETH · Fees for BaseAPP Holders only after create succeeds']
-          : ['Via free factory — Create costs 0; life fee + TbFeeHook at Launch · Fees for BaseAPP Holders'])] : [];
+          ? ['Via CreateRouter (optional paid path) — life fee ≈ $1 ETH only after create succeeds']
+          : ['Via free factory — Create costs 0; life fee + TbFeeHook at Launch'])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
-    }).join('') + '<li>Buy/Sell in-app: 0.5% · Fees for BaseAPP Holders. Launch attaches TbFeeHook on MAIN.</li>';
+    }).join('') + '<li>Buy/Sell in-app: 0.5%. Launch attaches TbFeeHook on MAIN.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
     ? '⚠️ Base mainnet — Create free. Fees at Launch (≈$1 ETH + TbFeeHook). Cannot be undone.'
@@ -6224,7 +6221,7 @@ async function creerBlock() {
         fraisWeiCalcule = fraisWei;
         e.className = 'note';
         e.textContent = 'Balance below ≈ $' + usd + ' quote — using CreateRouter floor '
-          + formaterEthCourt(fraisWei) + ' ETH so Fees for BaseAPP Holders still get paid.';
+          + formaterEthCourt(fraisWei) + ' ETH so fee still get paid.';
       } else {
         e.className = 'note wKo';
         e.textContent = 'Need at least ' + formaterEthCourt(besoinFloor) + ' ETH (CreateRouter floor + gas). This account holds '
@@ -6246,10 +6243,10 @@ async function creerBlock() {
     if (utiliseCreateRouter()) {
       e.className = 'note';
       e.textContent = 'One signature — Create + life fee ' + formaterEthCourt(fraisWei)
-        + ' ETH (≈ $' + usd + ') via CreateRouter · Fees for BaseAPP Holders. Life fee kept only if create succeeds.';
+        + ' ETH (≈ $' + usd + ') via CreateRouter. Life fee kept only if create succeeds.';
     } else {
       e.className = 'note';
-      e.textContent = 'One signature — free create (factory). Life fee is at Launch · Fees for BaseAPP Holders. Check it in your wallet.';
+      e.textContent = 'One signature — free create (factory). Life fee is at Launch. Check it in your wallet.';
     }
     const calldata = calldataCreation(v);
     const to = cibleCreation();
@@ -6277,7 +6274,7 @@ async function creerBlock() {
       void listerMesBlocks();
       /* tip 0013: MAIN free Create → hard next-step Launch now (fee moment). No fee addr in UI. */
       if (Number(CHAINE) === 8453 && adresseCreee) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create was free</b>. Fee moment = <b>Launch</b> (≈$1 + TbFeeHook · Fees for BaseAPP Holders).'
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create was free</b>. Fee moment = <b>Launch</b> (≈$1 + TbFeeHook).'
           + ' <button type="button" class="bouton" id="cLaunchNow" style="margin-top:8px;display:block;width:100%">Launch now</button>'
           + lien;
         const goLaunch = () => {
@@ -6419,7 +6416,7 @@ function peindreTasks(snap) {
     return;
   }
   list.innerHTML = resume.tasks.map((t) => {
-    const fee = t.fee_sink ? (t.fee + ' · Fees for BaseAPP Holders') : t.fee;
+    const fee = t.fee_sink ? (t.fee + '') : t.fee;
     const st = t.allowed ? '✅' : '🔒';
     const why = t.pourquoi ? ' — ' + enTexte(t.pourquoi) : '';
     return '<li>' + st + ' <b>' + enTexte(t.label) + '</b> <span class="filS">(' + enTexte(t.id) + (t.signs ? ' · signs' : ' · read') + ' · ' + enTexte(fee) + ')</span>' + why + '</li>';
@@ -6453,7 +6450,7 @@ function peindreTasks(snap) {
     note.textContent = 'Schema ' + (resume.schema || '') + ' · circuit ' + CIRCUIT_VERSION
       + ' · ' + CURRENT_TOY_V1 + ' (threshold ' + THRESHOLD + ') · deploy_status='
       + (resume.deploy_status || OFFER_DEPLOY.status)
-      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN · Fees for BaseAPP Holders · Prepare = preview + plan until O7.';
+      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN · Prepare = preview + plan until O7.';
   }
   try { window.__TB_BRAIN_TASKS__ = resume; } catch (e) { /* agent surface */ }
 }
@@ -6783,7 +6780,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0008',
+    build: '20260916-0014',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7163,7 +7160,7 @@ document.addEventListener('click', (ev) => {
 
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, salt, face, optional fly brain, pair. Sealed 1B all to you. Mainnet: one CreateRouter sig — life fee ≈ $1 ETH · Fees for BaseAPP Holders only after success. Practice free. Raw factory creates sleep until Launch. Life fee ≠ auto buyback.' },
+    d: 'Name, symbol, salt, face, optional fly brain, pair. Sealed 1B all to you. Mainnet: one CreateRouter sig — life fee ≈ $1 ETH only after success. Practice free. Raw factory creates sleep until Launch. Life fee ≠ auto buyback.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
     d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
@@ -7171,13 +7168,13 @@ const ETAPES = [
   { t: 'Send a GM — a real amount of your block', etat: 'ok', e: 'Built',
     d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer (an amount of the token), not a Brain-AI memory shard — anyone can read it on chain later.' },
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
-    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. In-app path: 0.5% · Fees for BaseAPP Holders. Trading elsewhere does not pay this app fee.' },
+    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. In-app path: 0.5%. Trading elsewhere does not pay this app fee.' },
   { t: 'Open the market (Launch) and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Launch wakes the market. Mainnet: life fee ≈ $1 ETH first · Fees for BaseAPP Holders, then hooked pool — fees to creator + holders (1% creator · 2% protocol). Practice free. No-launch factory creates still pay at Launch here. Pre-hook pools stay unhooked.' },
+    d: 'Launch wakes the market. Mainnet: life fee ≈ $1 ETH first, then hooked pool — fees to creator + holders (1% creator · 2% protocol). Practice free. No-launch factory creates still pay at Launch here. Pre-hook pools stay unhooked.' },
   { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
-    d: 'Write to a block with 1000 TBLOCK · Fees for BaseAPP Holders (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
+    d: 'Write to a block with 1000 TBLOCK (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
   { t: 'Pair with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
     d: 'At creation you choose the pair: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a Strategy-style peg. The pool opens at launch.' },
   { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
