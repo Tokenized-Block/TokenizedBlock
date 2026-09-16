@@ -4051,52 +4051,12 @@ function peindreFeedTrustHonesty() {
   }
 }
 
-/** tip 0018: mute Fees received until organic inbound on sink (HARD Raksha 2026-09-16). Keep balances off Social. */
+/** tip 0018: mute Fees received until organic inbound on sink (HARD Raksha 2026-09-16). */
 async function peindreFeeRecu() {
   const el = $('#sfFeeRecu');
   if (!el) return;
   el.hidden = true;
   el.textContent = '';
-  return; /* tip 0018 — do not paint smoke balances as "Fees received" */
-  if (CHAINE !== 8453) { el.hidden = true; return; }
-  el.hidden = false;
-  const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-  const balOf = async (token) => {
-    try {
-      const raw = await rpc('eth_call', [{ to: token,
-        data: '0x70a08231' + String(FEE_WALLET).slice(2).toLowerCase().padStart(64, '0') }, 'latest']);
-      if (!raw || raw === '0x') return null;
-      return BigInt(raw);
-    } catch (_) { return null; }
-  };
-  const fmtTok = (wei, dec, sym) => {
-    if (wei == null) return '<b>? ' + sym + '</b>';
-    try { return '<b>' + enTexte(formaterUnites(wei, dec)) + ' ' + sym + '</b>'; }
-    catch (_) {
-      const n = Number(wei) / (10 ** dec);
-      const s = !Number.isFinite(n) ? String(wei)
-        : (n >= 1 ? n.toFixed(2) : (n >= 0.0001 ? n.toFixed(6) : wei.toString() + ' raw'));
-      return '<b>' + s + ' ' + sym + '</b>';
-    }
-  };
-  try {
-    /* sequential — public RPC rate limits Promise.all bursts */
-    const ethWei = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest']));
-    await dormir(120);
-    const usdc = await balOf(USDC);
-    await dormir(120);
-    const tblock = await balOf(TBLOCK);
-    await dormir(120);
-    const tbgas = await balOf(TBGAS);
-    const eth = Number(ethWei) / 1e18;
-    const ethBit = '<b>' + (eth >= 0.0001 ? eth.toFixed(6) : ethWei.toString() + ' wei') + ' ETH</b>';
-    const bits = [ethBit, fmtTok(usdc, 6, 'USDC'), fmtTok(tblock, 18, 'TBLOCK'), fmtTok(tbgas, 18, 'TBGAS')];
-    const when = new Date().toLocaleString('fr-BE', { timeZone: 'Europe/Brussels' });
-    el.innerHTML = '<b>Fees received</b> · ' + bits.join(' · ') + ' · read ' + when
-      + '. Paths: life fee · hook chop · in-app 0.5% (any asset). Unhooked Dex = 0.';
-  } catch (e) {
-    el.innerHTML = '<b>Fees received</b> · unread (RPC).';
-  }
 }
 
 /** Social Live: Create is free; fee = Launch (tip 2349). */
