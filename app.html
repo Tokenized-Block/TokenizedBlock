@@ -488,9 +488,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         </div>
         <!-- tip 0013: Map surfaces Hooked / TBGAS deep link — gas/example fee path. No fee addr in UI. -->
         <p class="note" id="mapHookedPath" style="margin:8px 0 0">
-          <b>Hooked markets</b> · example gas path
+          <b>Hooked markets</b> · example
           <button type="button" class="puce" id="mapOpenTbgas">Open TBGAS</button>
-          · Buy/Sell in-app (0.5%) · Dex on hooked also chops · unhooked Dex = $0.
+          · Buy/Sell in-app (0.5%) · hooked Dex chops · unhooked Dex = $0 → Launch hooked.
           <a class="lienLearn" id="mapTbgasDeep" href="/?block=0xb200000000000000000000df3ffcd9be89b3843c&amp;chain=8453">deep link</a>
         </p>
       </div>
@@ -915,10 +915,10 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0016">Build <code>20260916-0016</code> · TBGAS Dex pool seed · fees chip · Create→Launch.</p>
-      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
+      <p class="note" data-build="20260916-0017">Build <code>20260916-0017</code> · Launch now MAIN · TBGAS example · unhooked CTA.</p>
+      <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
-      <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook chops). Unhooked volume → profile <b>Launch hooked beside</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
+      <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT">All</button>
@@ -3151,7 +3151,7 @@ function peindreMarcheHook(v) {
     el.textContent = 'Market pool · has a hook (' + info.hooks.slice(0, 10) + '…) but not TbFeeHook — creator + holders fee split does not apply'
       + viaCourt + '.';
   } else {
-    el.textContent = 'Market · unhooked — Buy/Sell in-app · Launch hooked for Dex fees'
+    el.textContent = 'Market · unhooked — Dex=$0 · Launch hooked'
       + viaCourt + '.';
   }
   const lo = ordreLiquidite(v.liquidite);
@@ -3224,8 +3224,8 @@ async function peindrePnlSwaps(adr, perime) {
     const hk = mv && mv.etat === 'LUE' ? infoHookMarche(mv) : null;
     if (hk && Number(CHAINE) === 8453) {
       if (!hk.isTbFeeHook) {
-        /* tip 0015: one short fee-win line — no Holders phrase */
-        ul.innerHTML = '<li>In-app Buy/Sell · Launch hooked if Dex=$0</li>' + ul.innerHTML;
+        /* tip 0017: FREE-like unhooked Dex volume → short Launch hooked CTA */
+        ul.innerHTML = '<li>Unhooked Dex=$0 · <b>Launch hooked</b></li>' + ul.innerHTML;
       }
       if (badge) badge.textContent = hk.isTbFeeHook ? ' · hooked' : ' · unhooked';
     }
@@ -3285,7 +3285,7 @@ function peindreTrustFacts(adr, v, origine) {
   } else if (etat === 'LUE' && info.hooked) {
     lignes.push('Pool: hooked, but <b>not</b> TbFeeHook — TB fee split does not apply on this pool id.');
   } else if (etat === 'LUE') {
-    lignes.push('Pool: <b>unhooked</b> — Buy/Sell in-app · Launch hooked for Dex.');
+    lignes.push('Pool: <b>unhooked</b> — Dex=$0 · Launch hooked.');
   } else if (etat === 'NON_TROUVEE') {
     lignes.push(CHAINE === 8453
       ? 'Market: <b>dormant</b> — no pool yet. Wake/Launch on <b>MAIN</b>: life fee ≈ $1 ETH + new hooked pool (2&nbsp;% enduring).'
@@ -3312,10 +3312,11 @@ function peindreTrustFacts(adr, v, origine) {
       + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
-      cta.innerHTML = 'In-app Buy/Sell · Launch hooked if Dex=$0'
+      /* tip 0017: FREE-like unhooked volume → short Launch hooked (MAIN primary) */
+      cta.innerHTML = '<b>Unhooked Dex = $0</b> · Launch hooked'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell</button>'
-        + '<button type="button" class="bouton sec" data-tf-act="hook-launch">Launch hooked</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="hook-launch">Launch hooked</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="buy">Buy/Sell in-app</button></div>';
     } else {
       /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
       cta.innerHTML = info.isTbFeeHook
@@ -3535,7 +3536,7 @@ async function lireProfil(adr, sym, perime) {
   $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
     : v.etat === 'NON_TROUVEE' ? 'no market yet'
       : (v.vie == null || !Number.isFinite(Number(v.vie))
-        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · unhooked · In-app Buy/Sell · Launch hooked if Dex=$0' : ''))
+        ? ('market found · ' + (v.via || 'discovered') + (v.decouvertExterne ? ' · unhooked · Dex=$0 · Launch hooked' : ''))
         : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || ''));
   vieProfil = v && v.etat === 'LUE' ? v.vie : null;
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
@@ -3568,7 +3569,7 @@ async function lireProfil(adr, sym, perime) {
         + 'then Launch opens a <b>new hooked</b> pool (TbFeeHook — Dex chop). Work it out → Ask the chain → pay fee → Launch.';
     } else if (legacySansHook) {
       wg.hidden = false;
-      wg.innerHTML = '<b>Unhooked</b>: Buy/Sell in-app · Launch hooked for Dex fees.';
+      wg.innerHTML = '<b>Unhooked</b> · Dex=$0 · <b>Launch hooked</b>.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
       wg.innerHTML = '<b>Practice</b>: Wake/Launch is free · no $1 life fee · no fee hook. MAIN Real.';
@@ -3986,7 +3987,7 @@ function peindreHookedRoute() {
   el.innerHTML = '<b>Hooked markets</b> · <b>Hooked</b> chip = Dex fees · trade <b>in-app Buy/Sell</b> (0.5%)'
     + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : ' · waiting for Live window / Dex index')
     + ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>'
-    + '. Dex on hooked also chops · unhooked Dex = $0 — profile → <b>Launch hooked beside</b>.';
+    + '. Hooked Dex chops · unhooked Dex = $0 → profile <b>Launch hooked</b>.';
   const b = $('#sfOpenTbgas');
   if (b) {
     b.addEventListener('click', (ev) => {
@@ -4169,9 +4170,9 @@ function peindreLive() {
         ? '✉️ fee → BaseAPP Holders (smart wallet · text opaque) · ' + enTexte(court(e.signataire))
         : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
       : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-        + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 protocol (Launch hooked beside)</span>' : '')
+        + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex=$0 · Launch hooked</span>' : '')
         : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-          + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex · 0 protocol (Launch hooked beside)</span>' : '')
+          + (e.confiance === 'SANS_HOOK' ? ' · <span class="filOpen">unhooked Dex=$0 · Launch hooked</span>' : '')
           : e.confiance === 'HOOK'
             ? '↔ <b>' + nom + '</b> · hook pool' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts untrusted'
             : '↔ <b>' + nom + '</b> · trade' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · amounts unread';
@@ -4183,7 +4184,7 @@ function peindreLive() {
     const openHint = e.type === 'CREATION' && e.paidCreate !== true
       ? ' · <span class="filOpen">tap → profile · Launch to market</span>'
       : (e.confiance === 'SANS_HOOK' && (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
-        ? ' · <span class="filOpen">tap → profile · Launch hooked beside</span>'
+        ? ' · <span class="filOpen">tap → Launch hooked</span>'
         : ((e.confiance === 'HOOK' || (e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
             && String(e.jeton || '').toLowerCase() === String(TBGAS).toLowerCase())
           ? ' · <span class="filOpen">tap → Buy/Sell in-app (hook chops Dex too)</span>' : ''));
@@ -6301,10 +6302,12 @@ async function creerBlock() {
     if (rc.etat === 'CONFIRME') {
       e.className = 'note wOk';
       void listerMesBlocks();
-      /* tip 0013: MAIN free Create → hard next-step Launch now (fee moment). No fee addr in UI. */
+      /* tip 0017: MAIN free Create → stronger one-tap Launch now (primary) → hooked market fee path. No fee addr. */
       if (Number(CHAINE) === 8453 && adresseCreee) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create was free</b>. Fee moment = <b>Launch</b> (≈$1 + TbFeeHook).'
-          + ' <button type="button" class="bouton" id="cLaunchNow" style="margin-top:8px;display:block;width:100%">Launch now</button>'
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> exists — <b>Create free</b>. Fee path = <b>Launch</b> (≈$1 + TbFeeHook).'
+          + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
+          + 'Launch now — open hooked market</button>'
+          + '<p class="note" style="margin-top:6px">MAIN · one tap → Launch card (life fee + TbFeeHook).</p>'
           + lien;
         const goLaunch = () => {
           try {
@@ -6318,7 +6321,7 @@ async function creerBlock() {
         };
         const btn = $('#cLaunchNow');
         if (btn) btn.addEventListener('click', (ev) => { ev.preventDefault(); goLaunch(); });
-        /* hard path: one click worth of auto-open Launch card on profile */
+        /* tip 0017: auto-open fee moment; button remains one-tap retry */
         goLaunch();
       } else {
         const nextLaunch = Number(CHAINE) === 8453
@@ -6809,7 +6812,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0016',
+    build: '20260916-0017',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
