@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0015">Build <code>20260916-0015</code> · fees chip multi-asset (ETH/USDC/tokens).</p>
+      <p class="note" data-build="20260916-0015">Build <code>20260916-0015</code> · fees chip ETH/USDC/TBLOCK/TBGAS · Create→Launch.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex swaps → BaseAPP Holders). Free creates live under Created — fee starts at Launch.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook chops). Unhooked volume → profile <b>Launch hooked beside</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4050,33 +4050,46 @@ function peindreFeedTrustHonesty() {
   }
 }
 
-/** tip 0015: fees received = ANY asset at FEE_WALLET (ETH/USDC/tokens) — not ETH-only. */
+/** tip 0015: fees received = ETH+USDC+TBLOCK+TBGAS at FEE_WALLET. Never show address. No Holders branding. */
 async function peindreFeeRecu() {
   const el = $('#sfFeeRecu');
   if (!el) return;
   if (CHAINE !== 8453) { el.hidden = true; return; }
   el.hidden = false;
   const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-  const TBGAS = '0xb200000000000000000000df3ffcd9be89b3843c';
   const balOf = async (token) => {
     try {
       const raw = await rpc('eth_call', [{ to: token,
         data: '0x70a08231' + String(FEE_WALLET).slice(2).toLowerCase().padStart(64, '0') }, 'latest']);
+      if (!raw || raw === '0x') return null;
       return BigInt(raw);
     } catch (_) { return null; }
   };
+  const fmtTok = (wei, dec, sym) => {
+    if (wei == null) return '<b>? ' + sym + '</b>';
+    try { return '<b>' + enTexte(formaterUnites(wei, dec)) + ' ' + sym + '</b>'; }
+    catch (_) {
+      const n = Number(wei) / (10 ** dec);
+      const s = !Number.isFinite(n) ? String(wei)
+        : (n >= 1 ? n.toFixed(2) : (n >= 0.0001 ? n.toFixed(6) : wei.toString() + ' raw'));
+      return '<b>' + s + ' ' + sym + '</b>';
+    }
+  };
   try {
+    /* sequential — public RPC rate limits Promise.all bursts */
     const ethWei = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest']));
-    const [usdc, tblock, tbgas] = await Promise.all([balOf(USDC), balOf(TBLOCK), balOf(TBGAS)]);
-    const bits = [];
+    await dormir(120);
+    const usdc = await balOf(USDC);
+    await dormir(120);
+    const tblock = await balOf(TBLOCK);
+    await dormir(120);
+    const tbgas = await balOf(TBGAS);
     const eth = Number(ethWei) / 1e18;
-    bits.push('<b>' + (eth >= 0.0001 ? eth.toFixed(6) : ethWei.toString() + ' wei') + ' ETH</b>');
-    if (usdc != null && usdc > 0n) bits.push('<b>' + (Number(usdc) / 1e6).toFixed(2) + ' USDC</b>');
-    if (tblock != null && tblock > 0n) bits.push('<b>' + (Number(tblock) / 1e18).toFixed(2) + ' TBLOCK</b>');
-    if (tbgas != null && tbgas > 0n) bits.push('<b>' + (Number(tbgas) / 1e18).toFixed(2) + ' TBGAS</b>');
+    const ethBit = '<b>' + (eth >= 0.0001 ? eth.toFixed(6) : ethWei.toString() + ' wei') + ' ETH</b>';
+    const bits = [ethBit, fmtTok(usdc, 6, 'USDC'), fmtTok(tblock, 18, 'TBLOCK'), fmtTok(tbgas, 18, 'TBGAS')];
     const when = new Date().toLocaleString('fr-BE', { timeZone: 'Europe/Brussels' });
     el.innerHTML = '<b>Fees received</b> · ' + bits.join(' · ') + ' · read ' + when
-      + '. Launch / hook / in-app 0.5% (any asset). Unhooked Dex = 0.';
+      + '. Paths: life fee · hook chop · in-app 0.5% (any asset). Unhooked Dex = 0.';
   } catch (e) {
     el.innerHTML = '<b>Fees received</b> · unread (RPC).';
   }
