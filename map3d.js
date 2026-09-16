@@ -11,7 +11,12 @@
 // ⛔ PAS DE RESEAU, PAS DE CHAINE : ce module ne fait que dessiner.
 
 /* tip 0026 (Phil « augmente les limites du cube, agrandis-le ») : 520 -> 1000 ; les tuiles gardent leur taille a l ecran (k x S/520) */
-export const DEMI_COTE = 1000;
+/* tip 0027 (Phil « la camera DANS le cube, on ne devrait pas le voir, principe univers, exploite tout l espace ») : 1400 */
+export const DEMI_COTE = 1400;
+/* la camera vit a l interieur : distance au centre bornee dans [-0,7 S ; 0,9 S], deplacement additif (pas multiplicatif) */
+const DIST_MIN = -0.7, DIST_MAX = 0.95, DIST_DEPART = 0.85;
+/* les aretes du cube ne se dessinent plus : on est dedans (garde a true pour les revoir) */
+const VOIR_CUBE = false;
 const LIEN_VIE_MS = 10 * 60 * 1000;
 const ROT_AUTO = 0.0014;
 
@@ -44,16 +49,17 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   ui.className = 'mapZoom';
   ui.innerHTML = '<button type="button" data-cam="plus" aria-label="Zoom in" title="Zoom in">+</button>'
     + '<button type="button" data-cam="moins" aria-label="Zoom out" title="Zoom out">−</button>'
-    + '<button type="button" data-cam="tout" aria-label="See the whole cube" title="See the whole cube">⤢</button>'
+    + '<button type="button" data-cam="tout" aria-label="Back to the start view" title="Back to the start view">⤢</button>'
     + '<button type="button" data-cam="auto" aria-label="Auto-rotate" title="Auto-rotate on / off">⟳</button>';
   map.appendChild(ui);
   const compteur = document.createElement('div');
   compteur.className = 'mapAide';
-  compteur.textContent = 'Drag to rotate · scroll or pinch to fly in · right-drag or two fingers to move';
+  compteur.textContent = 'Drag to look around · scroll or pinch to fly · right-drag or two fingers to move';
   map.appendChild(compteur);
 
   const taille = () => ({ L: map.clientWidth, H: map.clientHeight });
-  const focale = (L, H) => 1.1 * Math.min(L, H);
+  /* tip 0027 : grand angle (~84° sur la largeur) pour voir l univers autour de soi, pas un tunnel */
+  const focale = (L, H) => 0.5 * Math.max(L, H);
   /* tip 0026 (Phil « agrandis de base le cube, c est trop petit ») : la distance de depart est CALCULEE pour que les 8 coins
    * projetes remplissent ~94 % de la fenetre (largeur ET hauteur), mesuree sur l angle le plus large du tour (45°).
    * Une formule sur le rayon laissait le cube a la moitie de l ecran (vu en test, fenetre 1568x670). */
@@ -79,7 +85,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
 
   function vueDeDepart(doux) {
     const { L, H } = taille();
-    const c = { yaw: 0.65, pitch: -0.42, dist: distTout(L, H), ox: 0, oy: 0 };
+    const c = { yaw: 0.65, pitch: -0.18, dist: S * DIST_DEPART, ox: 0, oy: 0 };
     if (doux && !mouvementReduit) cam.cible = c; else { Object.assign(cam, c); cam.cible = null; }
     cam.auto = !mouvementReduit;
   }
@@ -110,7 +116,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
 
   function vers(h, L, H) {
     const cx = L >= 700 ? (L - 380) / 2 : L / 2, cy = L >= 700 ? H / 2 : H * 0.28;
-    const distNeuve = Math.min(cam.dist, distTout(L, H) * 0.5);
+    const distNeuve = cam.dist;
     const [x1, y2, z2] = tourner(h.wx, h.wy, h.wz);
     const zc = z2 + distNeuve, f = focale(L, H);
     return { yaw: cam.yaw, pitch: cam.pitch, dist: distNeuve, ox: cx - L / 2 - x1 * f / zc, oy: cy - H / 2 - y2 * f / zc };
@@ -139,6 +145,27 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   function onde(h, couleur, etiquette) {
     if (!h || mouvementReduit) return;
     effets.push({ genre: 'ONDE', h, couleur, etiquette: etiquette || '', t0: performance.now(), duree: 1600 });
+  }
+  /* tip 0027 — un signal d un block vers un WALLET lu (le destinataire d un transfert). Le wallet n est pas dessine comme
+   * un block : c est un point fixe dans l espace, place par son adresse (meme wallet = meme point chez tout le monde). */
+  const pointsWallet = new Map();
+  function pointDe(adr) {
+    const a = String(adr || '').toLowerCase().replace(/^0x/, '');
+    if (!/^[0-9a-f]{40}$/.test(a)) return null;
+    if (pointsWallet.has(a)) return pointsWallet.get(a);
+    const n = (i) => parseInt(a.slice(i, i + 8), 16) / 0xffffffff * 2 - 1;
+    let x = n(0), y = n(8), z = n(16);
+    const l = Math.hypot(x, y, z) || 1, r = S * (0.55 + 0.4 * ((parseInt(a.slice(24, 32), 16) / 0xffffffff)));
+    const p = { point: [x / l * r, y / l * r, z / l * r], visible: false, sx: 0, sy: 0 };
+    pointsWallet.set(a, p);
+    if (pointsWallet.size > 2000) pointsWallet.delete(pointsWallet.keys().next().value);
+    return p;
+  }
+  function signalVersWallet(h, adr, couleur) {
+    const p = pointDe(adr);
+    if (!h || !p || mouvementReduit) return;
+    if (effets.length > 70) return;
+    effets.push({ genre: 'IMPULSION', de: h, a: p, couleur, t0: performance.now(), duree: 1500 });
   }
 
   /** une image : derive 3D, camera, tuiles, cube, liens, effets */
@@ -170,9 +197,9 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       if (Math.abs(h.wz) > SZ - m) { h.vz = -Math.sign(h.wz) * Math.abs(h.vz || 0.1); h.wz = Math.sign(h.wz) * (SZ - m); }
       const p = projeter(h.wx, h.wy, h.wz, L, H);
       /* dans le cube, un block colle a la camera couvrirait l ecran : sous 0,3 S il est cache */
-      if (!p || p.zc < S * 0.3) { if (h.visible !== false) { h.el.style.visibility = 'hidden'; h.visible = false; } continue; }
+      if (!p || p.zc < S * 0.12) { if (h.visible !== false) { h.el.style.visibility = 'hidden'; h.visible = false; } continue; }
       if (!h.visible) { h.el.style.visibility = ''; h.visible = true; }
-      const k = p.k * 2.2 * (S / 520);
+      const k = Math.min(2.2, p.k * 2.4);
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
       h.el.style.zIndex = String(Math.max(1, Math.round(200000 / p.zc)));
@@ -209,11 +236,11 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
         + '" stroke="rgb(167,139,250)" stroke-opacity="' + (base * (1 - 0.7 * loin)).toFixed(3) + '" stroke-width="' + largeur + '"'
         + (dash ? ' stroke-dasharray="4 6"' : '') + '/>';
     };
-    for (let g = 1; g < 6; g++) {
+    for (let g = 1; g < 6 && VOIR_CUBE; g++) {
       const vx = -SX + (2 * SX * g) / 6, vz = -SZ + (2 * SZ * g) / 6;
       html += seg([vx, SY, -SZ], [vx, SY, SZ], 1, 0.16, false) + seg([-SX, SY, vz], [SX, SY, vz], 1, 0.16, false);
     }
-    for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
+    if (VOIR_CUBE) for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
     /* les connexions lues ces 10 dernieres minutes */
     liens = liens.filter((x) => maintenant - x.t0 < LIEN_VIE_MS && x.de.visible !== undefined);
     for (const x of liens) {
@@ -226,12 +253,24 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     for (const e of effets) {
       const k = (maintenant - e.t0) / e.duree;
       if (e.genre === 'IMPULSION') {
+        if (e.a.point) {
+          const q = projeter(e.a.point[0], e.a.point[1], e.a.point[2], L, H);
+          e.a.visible = !!q && q.zc > S * 0.12;
+          if (q) { e.a.sx = q.sx; e.a.sy = q.sy; }
+          if (e.a.visible) html += '<circle cx="' + e.a.sx.toFixed(1) + '" cy="' + e.a.sy.toFixed(1) + '" r="2.5" fill="' + e.couleur + '" fill-opacity="' + (1 - k).toFixed(2) + '"/>';
+        }
         if (!e.de.visible || !e.a.visible) continue;
         const t = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
         const px = e.de.sx + (e.a.sx - e.de.sx) * t, py = e.de.sy + (e.a.sy - e.de.sy) * t;
         const op = k < 0.85 ? 1 : (1 - k) / 0.15;
-        html += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="13" fill="' + e.couleur + '" fill-opacity="' + (0.22 * op).toFixed(2) + '"/>'
-          + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="5" fill="' + e.couleur + '" fill-opacity="' + op.toFixed(2) + '"/>';
+        /* tip 0027 (Phil « des signaux de lumiere d un block a l autre ») : une trainee lumineuse derriere la tete du signal */
+        const t0 = Math.max(0, t - 0.22), qx = e.de.sx + (e.a.sx - e.de.sx) * t0, qy = e.de.sy + (e.a.sy - e.de.sy) * t0;
+        html += '<line x1="' + qx.toFixed(1) + '" y1="' + qy.toFixed(1) + '" x2="' + px.toFixed(1) + '" y2="' + py.toFixed(1) + '" stroke="' + e.couleur
+          + '" stroke-opacity="' + (0.35 * op).toFixed(2) + '" stroke-width="7" stroke-linecap="round"/>'
+          + '<line x1="' + qx.toFixed(1) + '" y1="' + qy.toFixed(1) + '" x2="' + px.toFixed(1) + '" y2="' + py.toFixed(1) + '" stroke="#fff'
+          + '" stroke-opacity="' + (0.8 * op).toFixed(2) + '" stroke-width="2" stroke-linecap="round"/>'
+          + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="18" fill="' + e.couleur + '" fill-opacity="' + (0.2 * op).toFixed(2) + '"/>'
+          + '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="5" fill="#fff" fill-opacity="' + op.toFixed(2) + '"/>';
       } else {
         if (!e.h.visible) continue;
         const r = e.h.t * e.h.k * 0.6 + k * 42, op = 1 - k;
@@ -252,7 +291,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   const zoomer = (facteur) => {
     const { L, H } = taille();
     const base = cam.cible || cam;
-    const dist = Math.max(S * 0.12, Math.min(distTout(L, H), base.dist * facteur));
+    const dist = Math.max(S * DIST_MIN, Math.min(S * DIST_MAX, base.dist + Math.log(facteur) * S * 0.9));
     if (cam.cible) cam.cible.dist = dist; else cam.dist = dist;
   };
   map.addEventListener('contextmenu', (e) => { if (e.target.closest('.a3d')) e.preventDefault(); });
@@ -275,7 +314,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     if (doigts.size >= 2 && pince) {
       const [a, b] = [...doigts.values()];
       const { L, H } = taille();
-      cam.dist = Math.max(S * 0.12, Math.min(distTout(L, H), pince.dist * pince.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)));
+      cam.dist = Math.max(S * DIST_MIN, Math.min(S * DIST_MAX, pince.dist + Math.log(pince.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)) * S * 0.9));
       cam.ox = pince.ox + ((a.x + b.x) / 2 - pince.mx); cam.oy = pince.oy + ((a.y + b.y) / 2 - pince.my);
       glisse = true; cam.touchee = true; cam.auto = false; cam.cible = null;
       return;
@@ -316,7 +355,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   });
 
   return {
-    image, placer, centrerSur, impulsion, onde, vueDeDepart,
+    image, placer, centrerSur, impulsion, onde, signalVersWallet, vueDeDepart,
     glisseAuClic: () => glisse, oublierGlisse: () => { glisse = false; },
     nbLiens: () => liens.length,
     vider: () => { effets = []; liens = []; },

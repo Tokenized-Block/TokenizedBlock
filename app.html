@@ -978,7 +978,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0026" hidden>Build <code>20260916-0026</code> · 3D map: rotate, depth, whole cube, all blocks, live links, full screen · Live claims a fee only where a hooked market was seen.</p>
+      <p class="note" data-build="20260916-0027" hidden>Build <code>20260916-0027</code> · camera inside the universe, light signals from real data · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (fee hook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1734,6 +1734,8 @@ function habitantDe(adr) {
 function impulsion(deAdr, aAdr, couleur, mot) {
   const de = habitantDe(deAdr), a = habitantDe(aAdr);
   if (!moteur3d || !de || !a || de === a) return;
+  /* compteur lisible en verification (DevTools) : combien de signaux reels ont ete dessines */
+  const m = $('#map'); m.dataset.signaux = String((Number(m.dataset.signaux) || 0) + 1);
   moteur3d.impulsion(de, a, couleur);
   if (mot) moteur3d.onde(a, couleur, mot);
 }
@@ -1758,13 +1760,53 @@ if (new URLSearchParams(location.search).get('fxdemo') === '1') {
   }, 1200);
 }
 /* les evenements Live -> effets sur la map (appele avec les SEULS evenements nouveaux) */
-function effetsDepuisLive(evts) {
+/* tip 0027 — SIGNAUX ENTRE BLOCKS, UNIQUEMENT DEPUIS DES DONNEES LUES (Phil : « avec vraie donnee ») :
+ *  · route  : une MEME transaction touche deux blocks (ex. achat via TBLOCK : deux swaps dans un tx) -> signal entre eux ;
+ *  · paire  : un Feed/Kill dont la devise prouvee est TBLOCK -> signal TBLOCK <-> ce block ;
+ *  · wallet : un MEME wallet (GM / note : expediteur ou destinataire) touche un block puis un autre en moins de ~1 h ;
+ *  · message: un message paye d un block a un autre (deja la).
+ * Aucun lien n est deduit d un nom ou d une ressemblance : seulement tx, devise prouvee, adresse de wallet. */
+const txBlocks = new Map();
+const walletBlock = new Map();
+function signauxEntreBlocks(e) {
+  const j = String(e.jeton || '').toLowerCase();
+  if (!j) return;
+  if (e.tx) {
+    const vus = txBlocks.get(e.tx) || new Set();
+    for (const autre of vus) if (autre !== j) impulsion(autre, j, '#22d3ee', 'route');
+    vus.add(j);
+    txBlocks.set(e.tx, vus);
+    if (txBlocks.size > 3000) txBlocks.delete(txBlocks.keys().next().value);
+  }
+  if ((e.type === 'ACHAT' || e.type === 'VENTE') && e.verifie && e.devise === 'TBLOCK' && j !== TBLOCK.toLowerCase()) {
+    if (e.type === 'ACHAT') impulsion(TBLOCK, j, '#22c55e', 'Feed'); else impulsion(j, TBLOCK, '#ef4444', 'Kill');
+  }
+  if (e.type === 'GM' || e.type === 'NOTE') {
+    for (const w of [e.de, e.a]) {
+      const cle = String(w || '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(cle)) continue;
+      const avant = walletBlock.get(cle);
+      if (avant && avant.jeton !== j && Math.abs((e.bloc ?? 0) - (avant.bloc ?? 0)) <= 1800) impulsion(avant.jeton, j, '#f472b6', 'wallet');
+      walletBlock.set(cle, { jeton: j, bloc: e.bloc ?? 0 });
+      if (walletBlock.size > 3000) walletBlock.delete(walletBlock.keys().next().value);
+    }
+  }
+}
+function effetsDepuisLive(evts, { animeMax = Infinity } = {}) {
+  let animes = 0;
+  /* les evenements rares passent toujours ; transferts et swaps (des milliers par heure) sont limites a `animeMax` */
+  const frequent = (e) => e.type === 'GM' || e.type === 'SWAP' || e.type === 'NOTE';
   for (const e of evts || []) {
+    signauxEntreBlocks(e);
+    if (frequent(e) && animes >= animeMax) continue;
+    if (frequent(e)) animes++;
     if (e.type === 'ACHAT') onde(e.jeton, '#22c55e', 'Feed');
     else if (e.type === 'VENTE') onde(e.jeton, '#ef4444', 'Kill');
     else if (e.type === 'SWAP') onde(e.jeton, '#60a5fa', 'swap');
     else if (e.type === 'CREATION') { if (!habitantDe(e.jeton)) creerHabitant({ jeton: e.jeton, symbole: e.sym, vie: null }); onde(e.jeton, '#f7a318', 'born'); }
-    else if (e.type === 'GM') onde(e.jeton, '#a78bfa', 'GM');
+    /* tip 0027 : un transfert lu = un signal lumineux du block vers le wallet qui le RECOIT (adresse lue, point fixe dans l espace).
+     * Le mot est « sent », pas « GM » : la mesure montre des milliers de transferts par heure, pas des GM choisis. */
+    else if (e.type === 'GM') { const h = habitantDe(e.jeton); if (moteur3d && h && e.a) moteur3d.signalVersWallet(h, e.a, '#a78bfa'); if (animes <= 1) onde(e.jeton, '#a78bfa', 'sent'); }
     else if (e.type === 'NOTE') onde(e.jeton, '#94a3b8', 'note');
     else if (e.type === 'MESSAGE' && e.de && e.a) impulsion(e.de, e.a, '#f7a318', 'message');
   }
@@ -4078,11 +4120,16 @@ async function lireLive(sens) {
      * ⛔ On ne dessine PAS d evenements inventes : on REJOUE les vrais evenements de cette fenetre, du plus ancien au plus
      *    recent, etales sur ~90 s, avec leurs mots (Feed, Kill, swap, GM, born, message). La note de la map le dit. */
     if (sens !== 'ancien' && liveDernier === null && nouveaux.length) {
-      const rejeu = [...nouveaux].sort((a, b) => (a.bloc ?? 0) - (b.bloc ?? 0) || (a.logIndex ?? 0) - (b.logIndex ?? 0)).slice(-240);
-      const pasMs = Math.max(250, Math.min(1500, Math.round(90000 / rejeu.length)));
-      rejeu.forEach((e, i) => setTimeout(() => effetsDepuisLive([e]), i * pasMs));
+      /* tip 0027 — TOUTE la fenetre est rejouee (mesure 2026-09-16 : 29 224 evenements en 1 999 blocs, dont 28 536 transferts),
+       * en 360 paquets de 250 ms dans l ordre des blocs : chaque paquet fait passer TOUS ses evenements par les regles de liens
+       * (sinon « meme wallet » ne voit rien), mais n anime qu un petit nombre d ondes et de signaux par paquet. */
+      const rejeu = [...nouveaux].sort((a, b) => (a.bloc ?? 0) - (b.bloc ?? 0) || (a.logIndex ?? 0) - (b.logIndex ?? 0));
+      const PAQUETS = 360, span = Math.max(1, aBloc - deBloc);
+      const paquets = Array.from({ length: PAQUETS }, () => []);
+      for (const e of rejeu) paquets[Math.min(PAQUETS - 1, Math.floor(((e.bloc ?? deBloc) - deBloc) / span * PAQUETS))].push(e);
+      paquets.forEach((lot, i) => { if (lot.length) setTimeout(() => effetsDepuisLive(lot, { animeMax: 4 }), i * 250); });
       const etat = $('#mapEtat');
-      if (etat) etat.textContent = 'Replaying the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length + ' real events), then live.';
+      if (etat) etat.textContent = 'Replaying the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length.toLocaleString('en-US') + ' real events), then live.';
     }
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
@@ -7087,7 +7134,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0026',
+    build: '20260916-0027',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
