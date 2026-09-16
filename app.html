@@ -915,7 +915,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0020">Build <code>20260916-0020</code> · Instant Birth (OL-like): free Create → ETH hooked pool · 99.9% supply · ≈$1 life.</p>
+      <p class="note" data-build="20260916-0021">Build <code>20260916-0021</code> · Live: a fee is claimed only where a hooked market was seen on chain.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4071,7 +4071,9 @@ function peindreCreateFeeHonesty() {
     if (!creations.length) {
       el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + TbFeeHook). Free create ≠ fee yet.';
     } else {
-      el.innerHTML = '<b>' + free + '</b> free create · fee starts at <b>Launch + TbFeeHook</b>'
+      /* tip 0021: count creates that really reached a hooked market — the rest earned nothing. */
+      const crochetes = creations.filter((e) => { const p = poolDecouvertPour(e.jeton); return p && p.isTbFeeHook; }).length;
+      el.innerHTML = '<b>' + free + '</b> free create · <b>' + crochetes + '</b> with a hooked market seen (fee path) · the rest: no fee yet'
         + (paid ? (' · <b>' + paid + '</b> legacy CreateRouter') : '') + '.';
     }
   } else {
@@ -4125,8 +4127,13 @@ function peindreLive() {
         ? (CHAINE === 8453
           ? '🧱 <b>' + nom + '</b> was created · CreateRouter (optional paid path)'
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
-        : '🧱 <b>' + nom + '</b> · free create · Launch hooked to chop Dex'
-          + (CHAINE === 8453 ? ' (life fee ≈ $1 + TbFeeHook)' : ' (Practice free · no hook)'))
+        /* tip 0021 (Phil 2026-09-16: « c est ecrit fees mais ya rien ») : the old line promised a fee on EVERY free
+         * create. Say a fee path exists only when a TbFeeHook pool for this block was actually seen on chain. */
+        : (CHAINE === 8453
+          ? (((p) => p && p.isTbFeeHook)(poolDecouvertPour(e.jeton))
+            ? '🧱 <b>' + nom + '</b> · free create · hooked market open (TbFeeHook)'
+            : '🧱 <b>' + nom + '</b> · free create · no hooked market seen · no fee yet')
+          : '🧱 <b>' + nom + '</b> · free create (Practice · no hook)'))
       : e.type === 'GM' ? '👋 <b>' + nom + '</b> GM' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note') + ' · a transfer of 0 carrying a message (free, anyone can write one)'
       : e.type === 'MESSAGE' ? (e.aaOpaque
@@ -6779,7 +6786,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0020',
+    build: '20260916-0021',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
