@@ -639,11 +639,24 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
         <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
         <button class="bouton" id="cCreer" type="button">Create + Launch — sign in my wallet</button>
         <p class="note" id="cALancer" hidden></p>
-        <!-- tip 0023 pont OpenLaunch (Phil : « fait la connection TokenizedBlock to le launch OpenLaunch »). Lien sortant seul :
-             leur factory n accepte pas un B20, donc ce n est PAS un block — pas de cerveau, pas de hook, $0 pour nous. -->
-        <p class="note">Want a plain ERC-20 instead? <a href="https://openlaunch.lol/launch?chain=base" target="_blank" rel="noopener noreferrer">Launch on OpenLaunch ↗</a> — not a block: no Brain AI, no TbFeeHook, TokenizedBlock earns $0. Its live launches are listed under Social.</p>
       </div>
       <p class="note" id="cEtat"></p>
+    </div>
+
+    <!-- tip 0024 — launch OpenLaunch DIRECT depuis l app (factory OL, Base). Preuve fork 2026-09-16 : launch OK, achat 0,1 ETH,
+         collect -> frais LP repartis selon recipientsOf. Partage 50/50 valide par Phil (2026-09-16), dit avant signature. -->
+    <div class="carte">
+      <p class="titre">Or launch a plain ERC-20 on OpenLaunch — from here</p>
+      <p class="sous">OpenLaunch's own contract: 1B supply, <b>100% locked</b> in a Uniswap v4 pool paired with ETH, no hook, no mint, no owner. Not a block: no Brain AI.
+        The LP fee on every trade is split <b>50% to you · 50% to TokenizedBlock</b>, paid in ETH, fixed forever. Pick 0% and nobody earns fees.</p>
+      <label class="champ">Name<input id="olNom" maxlength="32" placeholder="My token" autocomplete="off"></label>
+      <label class="champ">Symbol<input id="olSym" maxlength="11" placeholder="MYTKN" autocomplete="off"></label>
+      <label class="champ">Starting value (whole supply)<select id="olFdv"><option value="3">≈ 3 ETH</option><option value="10" selected>≈ 10 ETH</option><option value="30">≈ 30 ETH</option></select></label>
+      <label class="champ">LP fee on trades<select id="olFee"><option value="10000" selected>1%</option><option value="30000">3%</option><option value="0">0% (no fee, nobody earns)</option></select></label>
+      <button class="bouton" id="olPreparer" type="button">Prepare the OpenLaunch launch</button>
+      <ol class="pmLignes" id="olLignes"></ol>
+      <div id="olActions"></div>
+      <p class="note" id="olEtat"></p>
     </div>
   </section>
 
@@ -919,7 +932,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260916-0023">Build <code>20260916-0023</code> · Create + Launch together · OpenLaunch bridge · Live claims a fee only where a hooked market was seen.</p>
+      <p class="note" data-build="20260916-0024">Build <code>20260916-0024</code> · Launch on OpenLaunch from the app (LP fee 50/50) · Create + Launch together · Live claims a fee only where a hooked market was seen.</p>
       <p class="sous">Creates, buys, sells — from chain, every 20s. <b>All</b> = fee path (Launch life · Feed/Kill · hooked Dex chops). Free creates under Created — fee starts at Launch. Hooked example: TBGAS.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky"><b>🪝 Hooked</b> chip = Dex fees (TbFeeHook). Unhooked volume → profile <b>Launch hooked</b>. Example: <button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1358,7 +1371,8 @@ import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
 import { resumeRelais } from './relais-cerveaux.js';
-import { dollarsCourts } from './openlaunch.js';
+import { dollarsCourts, lienOL } from './openlaunch.js';
+import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
@@ -6269,6 +6283,59 @@ function peindreALancer() {
 }
 queueMicrotask(peindreALancer);
 
+/* tip 0024 — launch OpenLaunch depuis l app. Simulation (eth_estimateGas) AVANT d afficher le bouton de signature. */
+let olEnCours = false;
+$('#olPreparer').addEventListener('click', async () => {
+  const etat = $('#olEtat'), lignes = $('#olLignes'), actions = $('#olActions');
+  lignes.innerHTML = ''; actions.innerHTML = '';
+  if (Number(CHAINE) !== 8453) { etat.className = 'note wKo'; etat.textContent = 'OpenLaunch launches run on Base mainnet only — switch network.'; return; }
+  const sel = crypto.getRandomValues(new Uint8Array(32));
+  const plan = planLaunchOL({ nom: $('#olNom').value, symbole: $('#olSym').value, lanceur: compte,
+    startTick: tickPourFdv(Number($('#olFdv').value)), lpFee: Number($('#olFee').value),
+    salt: '0x' + [...sel].map((b) => b.toString(16).padStart(2, '0')).join('') });
+  if (plan.etat !== 'OK') { etat.className = 'note wKo'; etat.textContent = plan.pourquoi + '. Nothing was prepared.'; return; }
+  etat.className = 'note'; etat.textContent = 'Simulating on Base…';
+  try {
+    await rpc('eth_estimateGas', [{ from: compte, to: plan.tx.to, data: plan.tx.data, value: '0x0' }]);
+  } catch (err) {
+    etat.className = 'note wKo';
+    etat.textContent = 'The simulation refused this launch, so there is nothing to sign: ' + String((err && err.message) || err).slice(0, 160);
+    return;
+  }
+  const r = plan.resume;
+  lignes.innerHTML = [
+    '<b>' + enTexte(r.nom) + '</b> (' + enTexte(r.symbole) + ') · ' + r.supply + ' tokens, all locked in the pool',
+    'Paired with ETH · starting value ≈ ' + r.fdvEth.toFixed(2) + ' ETH for the whole supply',
+    r.lpFeePct ? r.lpFeePct + '% LP fee → ' + r.partLanceurPct + '% to your wallet · ' + r.partTokenizedBlockPct + '% to TokenizedBlock (fixed forever)' : '0% LP fee — nobody earns fees',
+    'Contract: OpenLaunch LaunchFactory · you pay gas only · no ETH sent',
+    'Simulation passed on Base just now',
+  ].map((t) => '<li>' + t + '</li>').join('');
+  actions.innerHTML = '<button class="bouton" id="olSigner" type="button">Sign the OpenLaunch launch</button>';
+  $('#olSigner').addEventListener('click', async () => {
+    if (olEnCours) return;
+    olEnCours = true;
+    try {
+      etat.className = 'note'; etat.textContent = 'Check it in your wallet.';
+      const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: OL_FACTORY, data: plan.tx.data, value: '0x0' });
+      const lien = rc.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rc.hash) + '" target="_blank" rel="noopener">tx</a>' : '';
+      if (rc.etat === 'CONFIRME') {
+        let token = null;
+        try {
+          const rec = await rpc('eth_getTransactionReceipt', [rc.hash]);
+          const lg = (rec.logs || []).find((l) => String(l.address).toLowerCase() === OL_FACTORY.toLowerCase() && l.topics && l.topics.length === 4);
+          if (lg) token = '0x' + lg.topics[1].slice(26);
+        } catch (_) { token = null; }
+        etat.className = 'note wOk';
+        etat.innerHTML = 'Launched on OpenLaunch.' + (token && lienOL(token) ? ' <a href="' + lienOL(token) + '" target="_blank" rel="noopener noreferrer">Open it on OpenLaunch ↗</a>' : '') + lien;
+        actions.innerHTML = '';
+      } else {
+        etat.className = 'note wKo'; etat.innerHTML = enTexte(rc.pourquoi || rc.etat) + lien;
+      }
+    } finally { olEnCours = false; }
+  });
+  etat.className = 'note'; etat.textContent = 'Read it, then sign. Nothing is sent until your wallet confirms.';
+});
+
 async function creerBlock() {
   if (creationEnCours) return;
   const v = validerCreation();
@@ -6892,7 +6959,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260916-0023',
+    build: '20260916-0024',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
