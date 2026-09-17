@@ -808,8 +808,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
       <ul class="pmLignes" id="bJournal"></ul>
       </details>
+      <!-- tip 0031 (Phil : « ne publie pas ce que tu penses en solo ») : outils agents / receipts / dump JSON replies
+           dans UNE section fermee pour developpeurs. Rien n est supprime. -->
+      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer">For developers &amp; agents</summary>
       <!-- ⛔ P0 2026-09-15: Tasks — degen-fly offer loop honesty. Full brain OFFCHAIN; 32-signal 0/1 ONCHAIN (schema + preview; contract follow-up). -->
-      <details class="bDetail" id="tbTasksDetails" style="margin-top:8px" open>
+      <details class="bDetail" id="tbTasksDetails" style="margin-top:8px">
         <summary class="note" style="cursor:pointer" id="tbTasksSummary">Tasks · on-chain tools</summary>
         <div class="stadeLigne" data-itabs="bTasks" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="how">How</button>
@@ -838,9 +841,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton sec" id="bExporter" type="button">Export brain facts</button>
       </div>
       <p class="note" id="bExporterNote">Writes phase, Hz, steering, spikes, journal, rules, sensors as JSON (facts only). Also updates <code>window.__TB_BRAIN_SNAPSHOT__</code> each beat + <code>localStorage[tb-brain-last]</code> for agents. How-to: <code>/brain-agent.json</code>.</p>
-      <details class="bDetail" id="tbBrainDetails" style="margin-top:8px" open>
+      <details class="bDetail" id="tbBrainDetails" style="margin-top:8px">
         <summary class="note" style="cursor:pointer" id="tbBrainSummary">Agent dump · #tbBrainJson (facts only — fills after first beat)</summary>
         <pre class="mono" id="tbBrainJson" hidden style="max-height:220px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
+      </details>
       </details>
       <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bReglesResume">Its rules — code it writes itself</summary>
       <p class="note">After it has seen the same event on chain at least twice, it writes a rule for it. A closed engine
@@ -1038,7 +1042,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0030" hidden>Build <code>20260917-0030</code> · Bring life vocabulary · glow up.</p>
+      <p class="note" data-build="20260917-0031" hidden>Build <code>20260917-0031</code> · true fee copy (0.5%) · Live capped · dev tools folded.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1258,7 +1262,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
-          <p class="note">Buy or sell here: <b>0.5%</b>. On a block alive on TokenizedBlock, every trade also pays its creator 1% and TokenizedBlock 2%.</p>
+          <p class="note">Buy or sell here: <b>0.5%</b> fee.</p>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
@@ -3510,7 +3514,7 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Holders: <b>not measured this visit</b> (food/Transfer window unread). Never invent a count — open Brain AI or wait for a food read.');
   }
   if (etat === 'LUE' && info.isTbFeeHook) {
-    lignes.push('Market: <b>TokenizedBlock</b> — every trade pays its creator (1&nbsp;%) and the protocol (2&nbsp;%).');
+    lignes.push('Market: <b>alive on TokenizedBlock</b>.');
   } else if (etat === 'LUE') {
     lignes.push('Market: <b>outside</b> — trades there pay nothing back to this block.');
   } else if (etat === 'NON_TROUVEE') {
@@ -4396,7 +4400,8 @@ function peindreLive() {
   }
   /* keep chronological: re-sort by blocHaut after GM merge */
   lignes.sort((a, b) => (b.blocHaut ?? b.bloc ?? 0) - (a.blocHaut ?? a.bloc ?? 0));
-  $('#sfLive').innerHTML = lignes.slice(0, 200).map((e) => {
+  /* tip 0031 (Phil : « mets une limite, ca part a fond ») : 40 lignes a l ecran, pas 200 */
+  $('#sfLive').innerHTML = lignes.slice(0, 40).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     /* tip 2349: free create OK — nudge Launch to market (fee moment), not “spam kill create”. */
@@ -4888,7 +4893,7 @@ async function preparerEchange(sens) {
     const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
     const feeEl = $('#peFrais');
     if (feeEl) feeEl.textContent = hooked
-      ? '0.5 % · creator 1 % · TokenizedBlock 2 %'
+      ? '0.5 %'
       : '0.5 % app';
   } catch (e) { /* badge optional */ }
   if (p.etat === 'APPROBATIONS') {
@@ -4955,7 +4960,7 @@ async function preparerEchange(sens) {
       if (feeEl && r) {
         const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
         const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
-        feeEl.textContent = (hooked ? '0.5 % + creator & TokenizedBlock · ' : '0.5 % · ') + feeLabel
+        feeEl.textContent = '0.5 % · ' + feeLabel
           + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.rachatAuto ? '→TBLOCK' : (r.fraisDevise || 'ETH'));
       }
     } catch (err) { /* badge optional */ }
@@ -5422,7 +5427,6 @@ function peindrePlan(plan, adr) {
     /* tip 2352: « fee 0 % » = Uniswap pool fee TIER only — NOT protocol/life/BuySell fees. */
     'Market on ' + RESEAUX[CHAINE].nom + ', paired with ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
       ? 'TBLOCK (buyers still pay in ETH)' : 'ETH')
-      + (avecHook ? ' · every trade pays its creator 1% and TokenizedBlock 2%' : '')
       + (plan.poolExiste ? ' · already exists, its current price applies' : ''),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
@@ -6173,7 +6177,7 @@ async function majPaire() {
   n.className = 'note';
   let suite = 'Recorded with the block at creation. Its market opens when you bring it to life.';
   if (q.paire.type === 'TBLOCK') {
-    suite = 'Paired with TBLOCK. Once alive, every trade pays its creator 1% and TokenizedBlock 2%.';
+    suite = 'Paired with TBLOCK. Its market opens when you bring it to life.';
   } else if (q.paire.type === 'B20') {
     suite = 'Paired with another block (checked on chain). Its market opens when you bring it to life.';
   }
@@ -6951,7 +6955,8 @@ function peindreChoixBrain() {
   const r = stadesDesBlocks({ ethUsd, blocks: [...tous.values()] });
   s.innerHTML = r.groupes.map((g) => '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + g.blocks.length) + '">'
     + g.blocks.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (b.nous ? '🟦 ' : '')
-      + enTexte(String(b.sym || '?').slice(0, 14)) + ' · ' + enTexte(b.adr.slice(0, 10)) + '…'
+      /* tip 0031 : toutes les adresses B20 commencent par 0xb2000000… — on montre la FIN, la seule partie qui distingue */
+      + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4))
       + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
     + '</optgroup>').join('');
   const valeurs = [...s.querySelectorAll('option')].map((o) => o.value);
@@ -7161,7 +7166,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0030',
+    build: '20260917-0031',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7551,7 +7556,7 @@ const ETAPES = [
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
     d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. In-app path: 0.5%. Trading elsewhere does not pay this app fee.' },
   { t: 'Bring it to life and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Bringing a block to life opens its market (≈ $1 in ETH on Base). Every trade then pays its creator 1% and TokenizedBlock 2%. Practice is free.' },
+    d: 'Bringing a block to life opens its market (≈ $1 in ETH on Base). Practice is free.' },
   { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
