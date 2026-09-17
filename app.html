@@ -1053,7 +1053,7 @@ details[open] > summary::before{transform:rotate(90deg)}
   <section class="volet" id="v-trade" aria-label="Trade blocks">
     <div class="carte">
       <p class="titre">Trending blocks</p>
-      <p class="sous">Every block on Base, ranked by what is moving right now. Buy or sell here in one tap — your wallet signs.</p>
+      <p class="sous">Every block on Base with a live market, ranked by what is moving right now — read from the chain and DexScreener.</p>
       <div class="stadeLigne" id="trTri" style="margin-top:4px">
         <button type="button" class="puce on" data-tri="h1">🔥 Last hour</button>
         <button type="button" class="puce" data-tri="h24">24h volume</button>
@@ -1106,7 +1106,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0038" hidden>Build <code>20260917-0038</code> · expanding universe, camera stays inside, all living blocks.</p>
+      <p class="note" data-build="20260917-0039" hidden>Build <code>20260917-0039</code> · Give birth card · Trade lists every block with a market.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1369,28 +1369,28 @@ details[open] > summary::before{transform:rotate(90deg)}
         <ul class="pmLignes" id="plqPositions"></ul>
       </div>
       <div class="pJeu" id="pLancement" hidden>
-        <div class="pJeuTete"><span class="pBadge" id="plBadge">Open its market</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain" id="plIntro">Opens a pool against <span id="plContre">ETH</span> and places your share — one signed tx. Nothing moves before your wallet shows it.</p>
-        <!-- ⛔ tip 2140: Launch honesty in tabs — Lock | Fees. -->
-        <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px">
+        <!-- tip 0039 (Phil : « c est le Brain AI qui le fait, comme give birth — pas un formulaire alors que Create existe ») :
+             une phrase, un bouton « Give birth ». Les reglages (paire, valeur de depart, part) sont prerempli et replies.
+             ⛔ Tous les id sont gardes : la logique de plan / signature ne change pas. -->
+        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth</span><span class="pPV" id="plReseau"></span></div>
+        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. ≈ $1 in ETH.</p>
+        <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px" hidden>
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="lock">Lock</button>
-          <button type="button" class="puce" role="tab" aria-selected="false" data-itab="fees">Fees</button>
         </div>
-        <div class="infoPane" data-itabs-pane="plInfo" data-itab="lock">
-          <p class="note" id="plLiqHonesty">🔒 <b>Locked forever</b>: the blocks placed when it comes to life can never be withdrawn. Liquidity you add later stays yours.</p>
+        <div class="infoPane" data-itabs-pane="plInfo" data-itab="lock" hidden>
+          <p class="note" id="plLiqHonesty">🔒 Locked forever.</p>
         </div>
-        <div class="infoPane" data-itabs-pane="plInfo" data-itab="fees" hidden>
-          <p class="note"><b>Base</b>: bringing it to life costs ≈ $1 in ETH. Free in Practice.</p>
-        </div>
-        <label class="champ">Pair it against<select id="plDevise"><option value="ETH" selected>ETH (native) — Instant Birth default</option>
-          <option value="TBLOCK">TBLOCK — via TBLOCK/ETH hop (thin book today)</option></select></label>
+        <details class="bDetail" style="margin-top:8px"><summary class="note">Advanced · pair, starting value, share</summary>
+        <label class="champ">Paired with<select id="plDevise"><option value="ETH" selected>ETH</option>
+          <option value="TBLOCK">TBLOCK</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
-          placeholder="e.g. 10" autocomplete="off"></label>
-        <label class="champ">Share of your blocks to place, in %<input id="plPart" inputmode="decimal"
+          value="10" placeholder="e.g. 10" autocomplete="off"></label>
+        <label class="champ">Share of its blocks to place, in %<input id="plPart" inputmode="decimal"
           value="99.9" autocomplete="off"></label>
+        </details>
         <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
           the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
-        <button class="bouton sec" id="plCalculer" type="button" style="margin-top:10px">Work it out</button>
+        <button class="bouton creaGo" id="plCalculer" type="button" style="margin-top:10px">✨ Give birth</button>
         <ul class="pmLignes" id="plLignes"></ul>
         <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
         <p class="note" id="plEtat"></p>
@@ -5344,29 +5344,18 @@ function ouvrirLancement() {
   const real = CHAINE === 8453;
   $('#plReseau').textContent = (real ? 'Real · ' : 'Practice · ') + RESEAUX[CHAINE].nom;
   const badge = $('#plBadge');
-  if (badge) badge.textContent = real ? 'Bring life · ≈ $1 in ETH' : 'Bring life · free in Practice';
+  /* tip 0039 : « Give birth » — une phrase, un bouton ; les details du plan s affichent apres le clic */
+  if (badge) badge.textContent = real ? 'Give birth · ≈ $1 in ETH' : 'Give birth · free in Practice';
   const intro = $('#plIntro');
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
-    intro.innerHTML = real
-      ? ('<b>Base</b>: ≈ <b>$1 in ETH</b>, then its blocks go into a market paired with <span id="plContre">'
-        + contre + '</span>. Every trade then pays its creator.')
-      : ('<b>Practice</b>: free. Paired with <span id="plContre">' + contre + '</span>.');
-  }
-  /* ⛔ tip 2140: short Lock tab copy — Fees tab is static HTML. */
-  const liqH = $('#plLiqHonesty');
-  if (liqH) {
-    liqH.hidden = false;
-    liqH.innerHTML = real
-      ? '🔒 <b>Locked forever</b>: the blocks placed now can never be withdrawn. Liquidity added later stays yours.'
-      : '🔒 Practice: the blocks placed now are locked forever too. Liquidity added later stays yours.';
+    intro.innerHTML = 'Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">'
+      + contre + '</span>, locked forever.' + (real ? ' ≈ $1 in ETH.' : ' Free in Practice.');
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
-  $('#plEtat').textContent = real
-    ? 'Work it out → pay ≈ $1 in ETH → bring it to life.'
-    : 'Practice — Work it out is free; nothing here is real money.';
-  $('#plEtat').className = 'note' + (real ? ' wKo' : '');
+  $('#plEtat').textContent = '';
+  $('#plEtat').className = 'note';
   planCourant = null;
   $('#pLancement').scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
@@ -6677,26 +6666,34 @@ function peindreTrending() {
   const ul = $('#trListe'), note = $('#trNote'), d = trDonnees;
   if (!ul || !d) return;
   const cle = { h1: (l) => l.volume1hUsd, h24: (l) => l.volume24hUsd, gain: (l) => l.change1h ?? -1e9, liq: (l) => l.liquiditeUsd }[trTri];
-  const lignes = [...d.lignes].sort((a, b) => cle(b) - cle(a)).slice(0, 40);
+  /* tip 0039 (Phil « montre tous les blocks qui ont ete chiffres ») : tous, par pages de 50 (« Show more ») */
+  const toutes = [...d.lignes].sort((a, b) => cle(b) - cle(a));
+  const lignes = toutes.slice(0, trAffiches);
   const pct = (v) => v === null || v === undefined ? '' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
   ul.innerHTML = lignes.map((l, i) => '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
     + '<span class="trRang">' + (i + 1) + '</span>'
     + '<div class="filArt">' + dessin(l.adr, l.sym) + '</div>'
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
-    + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 1h ' + usdCourt(l.volume1hUsd) + ' · 24h ' + usdCourt(l.volume24hUsd) + ' · liq ' + usdCourt(l.liquiditeUsd) + '</p></div>'
-    + '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button></li>').join('')
+    + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · vol 1h ' + usdCourt(l.volume1hUsd) + ' · 24h ' + usdCourt(l.volume24hUsd)
+    + ' · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</p></div>'
+    /* mesure 2026-09-17 : la plupart de ces marches n acceptent que leur propre app -> « Open », pas une promesse d achat */
+    + '<button type="button" class="bouton sec trAcheter" data-ouvrir="' + enTexte(l.adr) + '">Open</button></li>').join('')
+    + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     || '<li class="filL"><p class="note">Nothing is moving right now.</p></li>';
-  note.textContent = d.blocksAvecPaire + ' blocks trading · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
-    + new Date(d.lu).toLocaleTimeString() + ' · 0.5% fee.';
+  note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
+    + new Date(d.lu).toLocaleTimeString();
 }
+let trAffiches = 50;
 $('#trTri').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tri]');
   if (!b) return;
   trTri = b.getAttribute('data-tri');
+  trAffiches = 50;
   $('#trTri').querySelectorAll('[data-tri]').forEach((x) => x.classList.toggle('on', x === b));
   peindreTrending();
 });
 $('#trListe').addEventListener('click', (e) => {
+  if (e.target.closest('#trPlus')) { trAffiches += 50; peindreTrending(); return; }
   const li = e.target.closest('.trLigne');
   if (!li) return;
   const adr = li.getAttribute('data-block'), sym = li.getAttribute('data-sym');
@@ -7354,7 +7351,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0038',
+    build: '20260917-0039',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
