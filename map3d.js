@@ -12,9 +12,11 @@
 
 /* tip 0026 (Phil « augmente les limites du cube, agrandis-le ») : 520 -> 1000 ; les tuiles gardent leur taille a l ecran (k x S/520) */
 /* tip 0027 (Phil « la camera DANS le cube, on ne devrait pas le voir, principe univers, exploite tout l espace ») : 1400 */
-export const DEMI_COTE = 1400;
-/* la camera vit a l interieur : distance au centre bornee dans [-0,7 S ; 0,9 S], deplacement additif (pas multiplicatif) */
-const DIST_MIN = -0.7, DIST_MAX = 0.95, DIST_DEPART = 0.85;
+/* tip 0033 (Phil « impression de trop serre, un peu plus de zoom, sans sortir du cadre ») : 1400 -> 2200 d espace, et la
+ * camera peut reculer jusqu a 0,98 S (toujours DANS le cube) ; depart un peu plus en arriere pour voir plus large */
+export const DEMI_COTE = 2200;
+/* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
+const DIST_MIN = -0.8, DIST_MAX = 0.98, DIST_DEPART = 0.9;
 /* les aretes du cube ne se dessinent plus : on est dedans (garde a true pour les revoir) */
 const VOIR_CUBE = false;
 const LIEN_VIE_MS = 10 * 60 * 1000;
