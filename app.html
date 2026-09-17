@@ -336,6 +336,13 @@ body{background:var(--fond);
 .pPuce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
 .puce.on{background:var(--accent);color:hsl(var(--h) 60% 10%);border-color:var(--accent)}
 .stadeLigne{display:flex;flex-wrap:wrap;gap:6px}
+/* la banniere « nouvelle version » : discrete, au-dessus de la nav, jamais un rechargement force */
+.vNouvelle{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:60;display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:14px;border:1px solid rgb(167 139 250 / .45);background:rgb(18 12 28 / .96);
+  font-size:12px;color:var(--texte);box-shadow:0 12px 30px rgb(0 0 0 / .5)}
+.vNouvelle .bouton{width:auto;padding:8px 12px;margin:0}
+.pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(167 139 250 / .14);border-radius:10px;padding:6px;min-height:34px}
+.pcTrace svg{display:block;width:100%;max-width:420px;height:auto}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
@@ -905,6 +912,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <span class="pBadge" id="bPhase">—</span>
         <span class="pPV"><b id="bTick">0</b> ticks</span>
       </div>
+      <!-- ⛔ DEUX SOURCES, DEUX PHRASES (Phil, 2026-09-17 : « il etait dans Trunk mais en realite
+           asleep »). Le palier peut venir du marche public ; l humeur ne vient QUE de la lecture
+           on-chain. Quand les deux divergent, cette ligne dit laquelle est laquelle. -->
+      <p class="note" id="bSource"></p>
       <canvas id="bRaster" width="640" height="150" class="toile"></canvas>
       <p class="note" style="margin-top:6px">Each column is one beat, each dot a neuron that fired.</p>
       <div class="pcStats">
@@ -1188,7 +1199,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0048" hidden>Build <code>20260917-0048</code> · fees to the EOA, hidden means hidden.</p>
+      <p class="note" data-build="20260917-0051" hidden>Build <code>20260917-0051</code> · brain beat in the profile, stale-tab notice.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1331,6 +1342,10 @@ details[open] > summary::before{transform:rotate(90deg)}
           <label class="pcBascule"><input type="checkbox" id="pcActif" checked> Fly brain</label>
         </div>
         <p class="pProchain" id="pcPhrase"></p>
+        <!-- ⛔ PHIL (2026-09-17) : « mets autre chose, plus comme un apercu du brain AI en mouvement ».
+             Marche non lu = aucune humeur jugee, mais le battement est REEL : il vient du cablage, pas
+             du prix. La bande le montre, au lieu d une phrase morte. -->
+        <div class="pcTrace" id="pcTrace" aria-hidden="true"></div>
         <div class="pcStats">
           <span>≋ <b id="pcG">—</b> Hz left wing</span>
           <span>≋ <b id="pcD">—</b> Hz right wing</span>
@@ -3402,6 +3417,28 @@ function peindreCompanion() {
   hp.textContent = (pv === '—' || pv === '…') ? palier : (pv + ' HP · ' + palier);
   role.textContent = ($('#pmTitre') && $('#pmTitre').textContent) || '—';
 }
+/* ⛔ LA BANDE DU PROFIL : 48 battements x 16 rangees (8 neurones par rangee). On ne dessine que ce qui
+ * a tire — jamais un point pose pour faire joli, et rien du tout tant qu aucun battement n est arrive. */
+const TRACE_COLS = 48, TRACE_RANGS = 16;
+let traceProfil = [];
+function traceProfilVider() { traceProfil = []; const t = $('#pcTrace'); if (t) t.innerHTML = ''; }
+function traceProfilAjouter(indices) {
+  const seaux = new Set();
+  for (const i of Array.isArray(indices) ? indices : []) seaux.add(Math.floor(i / 8) % TRACE_RANGS);
+  traceProfil.push(seaux);
+  if (traceProfil.length > TRACE_COLS) traceProfil = traceProfil.slice(-TRACE_COLS);
+  const t = $('#pcTrace');
+  if (!t) return;
+  const L = 240, H = 64, lc = L / TRACE_COLS, lr = H / TRACE_RANGS;
+  let d = '';
+  traceProfil.forEach((s, x) => {
+    for (const r of s) d += '<rect x="' + (x * lc).toFixed(2) + '" y="' + (r * lr).toFixed(2)
+      + '" width="' + (lc - 0.6).toFixed(2) + '" height="' + (lr - 0.6).toFixed(2) + '" rx="0.8" fill="currentColor"'
+      + ' opacity="' + (0.35 + 0.65 * ((x + 1) / traceProfil.length)).toFixed(2) + '"/>';
+  });
+  t.innerHTML = '<svg viewBox="0 0 ' + L + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' + d + '</svg>';
+}
+
 function peindreCerveau() {
   const vides = ['#pcG', '#pcD', '#pcSpikes', '#pcActifs', '#pcTick'];
   if (!$('#pcActif').checked) {
@@ -3410,13 +3447,19 @@ function peindreCerveau() {
       + 'the same, you just stop watching it think.';
     for (const id of vides) $(id).textContent = '—';
     $('#pcEmpreinte').textContent = '';
+    traceProfilVider();
     peindreCompanion();
     return;
   }
   const v = profilCerveau && profilCerveau.vu;
   if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; peindreCompanion(); return; }
   $('#pcPhase').textContent = nomHumeur(v.phase);
-  $('#pcPhrase').textContent = phraseDePhase(v.phase, symProfil || 'This block');
+  /* ⛔ MARCHE NON LU : on ne juge pas d humeur, et on ne laisse pas une phrase morte a la place. La
+   * bande montre le battement, qui ne depend que du cablage — et le dit. */
+  $('#pcPhrase').textContent = v.phase === 'NON_LU'
+    ? 'Market unread, so no mood is judged. The beat below is real: it comes from its wiring, not from its price.'
+    : phraseDePhase(v.phase, symProfil || 'This block');
+  traceProfilAjouter(v.indices);
   $('#pcG').textContent = v.gauche_hz.toFixed(1);
   $('#pcD').textContent = v.droite_hz.toFixed(1);
   $('#pcSpikes').textContent = v.spikes;
@@ -3867,6 +3910,7 @@ async function lireProfil(adr, sym, perime) {
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
   $('#pNote').textContent = 'reading the chain…';
   symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null;
+  traceProfilVider(); /* la bande appartient au block qu on regarde, jamais au precedent */
   $('#pPV').textContent = '…';
   $('#pPalier').textContent = 'reading…';
   $('#pBarre').style.width = '0';
@@ -7358,8 +7402,13 @@ function peindreChoixBrain() {
       .sort((a, b) => (b.capUsd ?? -1) - (a.capUsd ?? -1) || String(a.sym || '').localeCompare(String(b.sym || '')));
     if (!lignes.length) return '';
     return '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + lignes.length) + '">'
-      /* l emoji sur CHAQUE option : un select replie ne montre que l option, jamais le groupe */
-      + lignes.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (EMOJI_STADE[g.cle] || '·') + ' '
+      /* l emoji sur CHAQUE option : un select replie ne montre que l option, jamais le groupe.
+       * ⛔⛔ PHIL (2026-09-17) : « lui il etait dans Trunk mais en realite asleep — mets ce qui est
+       * onchain, la verite ». Les deux etaient vrais, de sources differentes : le palier venait du
+       * marche public, l humeur de la lecture ON-CHAIN (absente ⇒ endormi). On garde le palier et on
+       * dit d ou il vient : « ≈ » = chiffre du marche public, pas une lecture de la chaine. */
+      + lignes.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">'
+        + (b.source === 'MARCHE' ? '≈ ' : '') + (EMOJI_STADE[g.cle] || '·') + ' '
         /* tip 0031 : toutes les adresses B20 commencent par 0xb2000000… — on montre la FIN, la seule partie qui distingue */
         + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4))
         + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
@@ -7498,6 +7547,14 @@ function battreBrain() {
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
   dessinerReseau(r.vu);
   $('#bPhase').textContent = nomHumeur(r.vu.phase);
+  /* ⛔ LA CHAINE EST LA VERITE POUR L HUMEUR. Si le marche public cote ce block alors que notre noeud
+   * ne l a pas lu, on le dit ici au lieu de laisser « Trunk » et « asleep » se contredire a l ecran. */
+  const mk = marcheParAdr.get(String(brainAdr || '').toLowerCase());
+  const lueChaine = h && h.etatVie === 'LUE' && typeof h.vie === 'number' && h.vie > 0;
+  $('#bSource').textContent = !lueChaine && mk && Number(mk.fdvUsd) > 0
+    ? 'Mood comes from the chain only, and its market was not read on chain — so it reads asleep. '
+      + 'The tier you see next to its name (≈) comes from the public market, not from our own read.'
+    : '';
   $('#bTick').textContent = r.vu.tick;
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);
@@ -7586,7 +7643,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0048',
+    build: '20260917-0051',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8170,6 +8227,36 @@ async function soleilsSurLaMap() {
 }
 setTimeout(() => { void soleilsSurLaMap(); }, 8000);
 setInterval(() => { if (!document.hidden) void soleilsSurLaMap(); }, 300_000);
+/* ══ ONGLET PERIME ═════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ MESURE DU 2026-09-17 : Phil lisait une page chargee AVANT le deploiement et en concluait que le
+ *    travail n avait pas ete fait. Le serveur repond deja `no-store` — mais un onglet deja ouvert ne
+ *    recharge rien tout seul. La page demande donc au serveur quel build il sert, et le DIT.
+ * ⛔ AUCUN RECHARGEMENT AUTOMATIQUE : recharger sous les doigts de quelqu un qui remplit le formulaire
+ *    de creation lui ferait perdre sa saisie. On propose, il decide. */
+const BUILD_PAGE = (() => {
+  const el = document.querySelector('[data-build]');
+  return el ? el.getAttribute('data-build') : null;
+})();
+async function verifierVersion() {
+  if (!BUILD_PAGE) return;
+  try {
+    const r = await fetch('/sante', { cache: 'no-store' });
+    const d = await r.json();
+    if (!d || typeof d.build !== 'string' || d.build === BUILD_PAGE) return;
+    if ($('#vNouvelle')) return;
+    const b = document.createElement('div');
+    b.id = 'vNouvelle';
+    b.className = 'vNouvelle';
+    b.innerHTML = '<span>A newer version of this page is live.</span>'
+      + '<button type="button" class="bouton" id="vRecharger">Reload</button>';
+    document.body.appendChild(b);
+    $('#vRecharger').addEventListener('click', () => location.reload());
+  } catch (_) { /* pas de reseau : on se taît plutot que d inventer une version */ }
+}
+setTimeout(() => { void verifierVersion(); }, 30_000);
+setInterval(() => { if (!document.hidden) void verifierVersion(); }, 180_000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) void verifierVersion(); });
+
 try { filHookedTbgasHandlers(); } catch (_) {}
 const blockLien = paramsLien.get('block');
 if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);

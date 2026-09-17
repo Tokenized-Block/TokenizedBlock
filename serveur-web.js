@@ -146,6 +146,14 @@ for (const nom of SERVIS) {
   });
 }
 
+/** Le build du fichier SERVI, lu dans son `data-build` — jamais une constante tapee a cote. */
+function buildServi() {
+  const e = cache.get('/' + RACINE);
+  if (!e) return null;
+  const m = /data-build="([0-9-]{6,32})"/.exec(e.corps.toString('utf8').slice(0, 200000));
+  return m ? m[1] : null;
+}
+
 /* ⛔⛔ INCIDENT 2026-09-17 : un deploiement fait hors git servait app.html SANS map3d.js / openlaunch.js /
  * openlaunch-launch.js (absents de SERVIS) -> 404 -> le module de l app ne se chargeait plus, map vide,
  * mais la page repondait 200 et /sante disait ok. Desormais on relit les imports de app.html au demarrage :
@@ -250,7 +258,10 @@ createServer((req, res) => {
     /* ok:false (et 503) si un module importe par l app n est pas servi : la page repondrait 200 mais serait morte */
     const ok = modulesManquants.length === 0;
     res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, ...(ok ? {} : { modulesManquants }) }));
+    /* ⛔ LE BUILD SERVI, POUR QU UN ONGLET DEJA OUVERT SACHE QU IL EST PERIME (2026-09-17 : Phil lisait
+     * une page d avant le deploiement et en concluait que le travail n avait pas ete fait). Lu dans le
+     * fichier SERVI, jamais recopie a la main. */
+    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 

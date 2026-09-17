@@ -17,7 +17,11 @@ export const STADES_HORS_PALIER = Object.freeze([
   { cle: 'NON_LU', titre: 'Market unread — node/RPC lag, not a broken block' },
   { cle: 'MORT', titre: 'Dead — its creator held it and holds none now' },
 ]);
-export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🏞', CANOPEE: '🌲', TRONC: '🪵', BRANCHE: '🌳', POUSSE: '🌿',
+/* ⛔⛔ UN EMOJI QUI NE S AFFICHE PAS N EST PAS UN EMOJI (Phil, 2026-09-17 : capture d un carre vide a la
+ * place de 🪵 devant « ARC · Trunk »). 🪵 (Emoji 12.0, 2019) et 🏞 manquent dans les polices de
+ * plusieurs systemes Windows : ils sortent en tofu. Ici, uniquement des caracteres d Emoji 1.0 (2015),
+ * presents partout — et la progression reste lisible : bosquet, arbre, palmier, feuille, herbe, pousse. */
+export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🌲', CANOPEE: '🌳', TRONC: '🌴', BRANCHE: '🍃', POUSSE: '🌿',
   GRAINE: '🌱', PRIX_NON_LU: '⏳', NOURRI: '✨', SANS_MARCHE: '💤', NON_LU: '⏳', MORT: '⚫' });
 
 /**

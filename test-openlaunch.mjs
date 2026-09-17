@@ -9,7 +9,13 @@ const ok = (f) => { f(); n++; };
 
 ok(() => {
   const r = resumerLancementsOL(vrai);
-  assert.equal(r.lignes.length, OL_MAX);
+  /* ⛔ LA FIXTURE PORTE 12 LIGNES ET LE PLAFOND EST PASSE A 24 (Phil, 2026-09-17 : « ajoute en plus ») :
+   * comparer la longueur au plafond ne prouvait plus rien. On attend le minimum des deux, et on verifie
+   * A PART que le plafond coupe vraiment, avec une entree plus longue que lui. */
+  assert.equal(r.lignes.length, Math.min(OL_MAX, vrai.launches.length));
+  assert.equal(r.lignes.length, 12);
+  const trop = { launches: Array.from({ length: OL_MAX + 7 }, (_, i) => ({ ...vrai.launches[i % vrai.launches.length] })) };
+  assert.equal(resumerLancementsOL(trop).lignes.length, OL_MAX);
   assert.equal(r.ecartees, 0);
   assert.equal(r.lignes[0].symbole, 'BASEFLY');
   /* BASEFLY : un seul destinataire, dEaD -> frais brules */
