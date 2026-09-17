@@ -403,7 +403,9 @@ body{background:var(--fond);
 .filS{font-size:11.5px;color:var(--doux);margin:3px 0 0}
 .filS a{color:var(--accent2)}
 .schemaVie{margin:6px 0 10px}
-.schemaVie svg{display:block;width:100%;height:auto}
+/* ⛔ BORNE DE TAILLE : ce SVG n a que 320 unites de large. Sans plafond il s etire sur toute la
+   carte et le mot « price » devient un titre de 60px (vu en prod le 2026-09-17). */
+.schemaVie svg{display:block;width:100%;max-width:360px;height:auto}
 .pActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0}
 .pActions .bouton:first-child{grid-column:1/-1}
 a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:none;box-sizing:border-box}
@@ -991,7 +993,7 @@ details[open] > summary::before{transform:rotate(90deg)}
   <section class="volet" id="v-learn" aria-label="Learn">
     <div class="carte">
       <p class="titre">How this works, end to end</p>
-      <p class="sous">Five steps. What is built says how it is built; what is missing says so.</p>
+      <p class="sous">Ten steps, from birth to trade. What is built says how it is built; what is missing says so.</p>
       <div class="etapes" id="lEtapes"></div>
     </div>
 
@@ -1154,7 +1156,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0042" hidden>Build <code>20260917-0042</code> · Create hero block · map card data + Buy + Pair · bigger universe.</p>
+      <p class="note" data-build="20260917-0043" hidden>Build <code>20260917-0043</code> · Learn rewritten, life diagram capped.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4643,7 +4645,7 @@ function peindreLive() {
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
       + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
-    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Hook-pool trades live under Swap; all creates under Created.</p></li>' : '');
+    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Trades live under Swap; every new block under Created.</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
@@ -7453,7 +7455,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0042',
+    build: '20260917-0043',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7833,25 +7835,25 @@ document.addEventListener('click', (ev) => {
 
 const ETAPES = [
   { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, salt, face, optional fly brain, pair. Sealed 1B all to you. Create is free; bringing it to life costs ≈ $1 in ETH. Practice is free.' },
+    d: 'Name, symbol, face, brain, and what it is paired with. The whole supply is sealed to you at birth. Creating is free; bringing it to life costs ≈ $1 in ETH. Practice mode is free.' },
   { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
-    d: 'Its size is its market cap, read from the chain. Its deterministic fly brain (not an LLM) can move it. A block with no market is paler and smaller — never called worthless.' },
+    d: 'Its size is its market cap, read from the chain. Its brain is a small set of neurons carried by the block itself — not an LLM, no server thinking for it. A block with no market is paler and smaller — never called worthless.' },
   { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
     d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
   { t: 'Send a GM — a real amount of your block', etat: 'ok', e: 'Built',
-    d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer (an amount of the token), not a Brain-AI memory shard — anyone can read it on chain later.' },
+    d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer of a real amount — anyone can read it on chain later.' },
   { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
-    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. In-app path: 0.5%. Trading elsewhere does not pay this app fee.' },
-  { t: 'Bring it to life and add liquidity', etat: 'ok', e: 'Built',
-    d: 'Bringing a block to life opens its market (≈ $1 in ETH on Base). Practice is free.' },
-  { t: 'Brain AI on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
+    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. 0.5% on trades made in the app. Trading the same block elsewhere does not go through it.' },
+  { t: 'Bring it to life', etat: 'ok', e: 'Built',
+    d: 'Bringing a block to life opens its market on Base and seeds it with liquidity (≈ $1 in ETH). Its liquidity stays locked with the block. Practice mode is free.' },
+  { t: 'Brain on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
     d: 'Write to a block with 1000 TBLOCK (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
-  { t: 'Pair with ETH, USDC, a stock or any token', etat: 'partiel', e: 'Choice built · pool at launch',
-    d: 'At creation you choose the pair: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s FDV or promise a Strategy-style peg. The pool opens at launch.' },
+  { t: 'Pair with ETH, USDC, a stock or any token', etat: 'ok', e: 'Built',
+    d: 'At creation you choose what the block is paired with: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s market cap or promise any peg. The market opens when the block comes to life.' },
   { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
-    d: 'Social Live shows what happens to blocks on Base. Use the chips to filter: Created, Feed, Kill, Swap, Sent, Messages.' },
+    d: 'Social Live shows what happens to blocks on Base. Use the chips to filter: Created, Feed, Kill, Swap, Sent, Messages, Ours, Alive here.' },
 ];
 
 function peindreLearn() {
