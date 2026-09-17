@@ -589,6 +589,17 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaSol{position:absolute;bottom:2px;left:50%;width:120px;height:18px;margin-left:-60px;border-radius:50%;z-index:0;
   background:radial-gradient(ellipse, rgb(0 0 0 / .55), transparent 70%)}
 .creaHeros .creaNom{font-size:22px;letter-spacing:-.4px;max-width:100%}
+.creaBoutonsHeros{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+.creaBoutonsHeros .bouton{width:auto;padding:10px 16px;margin:0}
+/* les styles : une rangee de vrais apercus, jamais une liste de mots */
+.creaStyles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:2px 0 12px}
+.creaStyle{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;cursor:pointer;
+  font:700 10px/1.2 inherit;letter-spacing:.3px;text-transform:uppercase;color:var(--doux);
+  background:rgb(167 139 250 / .06);border:1px solid rgb(167 139 250 / .16);border-radius:14px;transition:transform .12s ease,border-color .12s ease}
+.creaStyle:hover{transform:translateY(-2px);border-color:rgb(167 139 250 / .42)}
+.creaStyle.on{color:#fff;border-color:rgb(167 139 250 / .75);background:rgb(167 139 250 / .16)}
+.creaStyleArt{display:block;width:100%;max-width:56px}
+.creaStyleArt svg{display:block;width:100%;height:auto}
 @media (prefers-reduced-motion: no-preference){
   .creaHeros .creaArt{animation:creaFlotte 4.5s ease-in-out infinite}
   .creaHalo{animation:creaRespire 4.5s ease-in-out infinite}
@@ -741,7 +752,13 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
-      <button class="bouton sec" id="cHasard" type="button" style="width:auto;padding:10px 18px;margin-top:10px">🎲 Surprise me</button>
+      <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
+           ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
+           bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
+      <div class="creaBoutonsHeros">
+        <button class="bouton sec" id="cHasard" type="button">🎲 Surprise me</button>
+        <button class="bouton sec" id="cManuel" type="button" aria-expanded="false">🎛 Manual settings</button>
+      </div>
     </div>
 
     <!-- tip 0032 — REFONTE CREATE (Phil 2026-09-17 : « retravailler l onglet creation »). Un choix clair en haut
@@ -782,9 +799,15 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre"><span class="creaEtape">2</span> Its face and its brain</p>
-      <p class="sous">The face is written into the block forever. Tap <b>Surprise me</b> above, or shape it yourself.</p>
+      <p class="sous">The face is written into the block forever. Pick a style, tap <b>Surprise me</b>, or set every dial yourself.</p>
+      <!-- ⛔ DES STYLES, PAS DE NOUVELLES PRIMITIVES. Un style est une COMBINAISON des valeurs deja
+           gravables (orbite, facette, matiere, ornement, teintes) : rien de nouveau n entre dans les
+           metadonnees, donc un block style aujourd hui se relit partout ou l app tourne deja. Ajouter
+           une primitive au catalogue rendrait au contraire « INVALIDE » toute face gravee avec elle
+           sur les copies pas encore a jour. -->
+      <div class="creaStyles" id="cStyles"></div>
       <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
-      <details class="bDetail"><summary class="note">Shape its face</summary>
+      <details class="bDetail" id="cReglagesDetail"><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
       <label class="wConsent" style="color:var(--doux);margin-top:12px"><input type="checkbox" id="cCerveau" checked>
@@ -1156,7 +1179,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0044" hidden>Build <code>20260917-0044</code> · stages judged from the public market too.</p>
+      <p class="note" data-build="20260917-0045" hidden>Build <code>20260917-0045</code> · manual settings button + ten styles.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6264,7 +6287,26 @@ let apparenceChoisie = {
   orbite: ORBITES[0], facette: FACETTES[0], matiere: MATIERES[0], ornement: ORNEMENTS[0],
 };
 
-function construireReglages() {
+/* ⛔ STYLES = COMBINAISONS DE L EXISTANT (Phil 2026-09-17 : « ajoute en plus de style different »).
+ * Chaque style ne pose que des valeurs deja presentes dans ORBITES/FACETTES/MATIERES/ORNEMENTS :
+ * aucune primitive nouvelle, donc aucune face gravee ne devient illisible ailleurs. Les dix cadrans
+ * restent editables apres : un style est un point de depart, pas un verrou. */
+const STYLES_CREA = [
+  { nom: 'Glass', a: { teinte: 255, accent: 290, saturation: 100, division: 3, eclats: 3, ecart: 2, orbite: 'sillage', facette: 'lettre', matiere: 'verre', ornement: 'points' } },
+  { nom: 'Neon', a: { teinte: 300, accent: 190, saturation: 100, division: 2, eclats: 4, ecart: 3, orbite: 'couronne', facette: 'eclair', matiere: 'neon', ornement: 'chevrons' } },
+  { nom: 'Ink', a: { teinte: 230, accent: 20, saturation: 35, division: 4, eclats: 2, ecart: 1, orbite: 'colonne', facette: 'grille', matiere: 'encre', ornement: 'equerres' } },
+  { nom: 'Chrome', a: { teinte: 210, accent: 250, saturation: 20, division: 3, eclats: 5, ecart: 2, orbite: 'diagonale', facette: 'hexagone', matiere: 'chrome', ornement: 'arcs' } },
+  { nom: 'Ember', a: { teinte: 18, accent: 45, saturation: 100, division: 2, eclats: 5, ecart: 4, orbite: 'essaim', facette: 'etoile', matiere: 'braise', ornement: 'etoiles' } },
+  { nom: 'Frost', a: { teinte: 195, accent: 160, saturation: 80, division: 4, eclats: 3, ecart: 2, orbite: 'chute', facette: 'losange', matiere: 'givre', ornement: 'croix' } },
+  { nom: 'Paper', a: { teinte: 35, accent: 355, saturation: 45, division: 5, eclats: 2, ecart: 1, orbite: 'ronde', facette: 'anneau', matiere: 'papier', ornement: 'aucun' } },
+  { nom: 'Wire', a: { teinte: 120, accent: 275, saturation: 70, division: 3, eclats: 4, ecart: 3, orbite: 'spirale', facette: 'cible', matiere: 'fil', ornement: 'griffes' } },
+  { nom: 'Solid', a: { teinte: 265, accent: 315, saturation: 95, division: 2, eclats: 3, ecart: 2, orbite: 'ailes', facette: 'disque', matiere: 'plein', ornement: 'points' } },
+  { nom: 'Bare', a: { teinte: 250, accent: 250, saturation: 60, division: 3, eclats: 3, ecart: 2, orbite: 'coins', facette: 'vide', matiere: 'verre', ornement: 'aucun' } },
+];
+
+/** Les dix cadrans, redessines depuis `apparenceChoisie` — appelable apres un style sans re-brancher
+ *  les ecouteurs (ils vivent sur la boite, pas sur les champs). */
+function dessinerReglages() {
   const boite = $('#cReglages');
   boite.innerHTML = CURSEURS.map((c) => '<label class="reglage">' + enTexte(c.titre)
     + ' <b id="v-' + c.cle + '">' + apparenceChoisie[c.cle] + '</b>'
@@ -6273,6 +6315,11 @@ function construireReglages() {
     + LISTES.map((l) => '<label class="reglage">' + enTexte(l.titre) + '<select data-cle="' + l.cle + '">'
       + l.valeurs.map((v) => '<option' + (v === apparenceChoisie[l.cle] ? ' selected' : '') + '>'
         + enTexte(v) + '</option>').join('') + '</select></label>').join('');
+}
+
+function construireReglages() {
+  dessinerReglages();
+  const boite = $('#cReglages');
   boite.addEventListener('input', (e) => {
     const cle = e.target.getAttribute('data-cle');
     if (!cle) return;
@@ -6282,6 +6329,28 @@ function construireReglages() {
     peindreApercuCreation();
   });
   boite.addEventListener('change', () => peindreApercuCreation());
+}
+
+let dernierSymStyles = null;
+/** Les styles, chacun dessine avec son propre apercu : on choisit ce qu on VOIT, pas un mot. */
+function peindreStylesCrea() {
+  const sym = String($('#cSym').value || 'T').toUpperCase().slice(0, 3) || 'T';
+  $('#cStyles').innerHTML = STYLES_CREA.map((s, i) => '<button type="button" class="creaStyle'
+    + (memeApparence(s.a, apparenceChoisie) ? ' on' : '') + '" data-style="' + i + '">'
+    + '<span class="creaStyleArt">' + logoSvg(paramsLogoDepuisApparence(s.a, sym)) + '</span>'
+    + '<span>' + enTexte(s.nom) + '</span></button>').join('');
+}
+/** Un style est « celui-ci » seulement si les dix valeurs collent — sinon le cadran bouge et la puce
+ *  mentirait en restant allumee. */
+function memeApparence(a, b) {
+  return Object.keys(a).every((k) => a[k] === b[k]);
+}
+function appliquerStyle(i) {
+  const s = STYLES_CREA[i];
+  if (!s) return;
+  apparenceChoisie = { ...apparenceChoisie, ...s.a };
+  dessinerReglages();
+  peindreApercuCreation();
 }
 
 function peindreApercuCreation() {
@@ -6294,6 +6363,14 @@ function peindreApercuCreation() {
     : 'no symbol yet';
   /* ⛔ LE NOMBRE DE COMBINAISONS VIENT DU MODULE, pas d un chiffre tape ici : c est lui qui sait ce
    * que le catalogue contient vraiment, et un test compare ce produit a des apparences reelles. */
+  /* ⛔ NE PAS REDESSINER DIX SVG A CHAQUE TOUCHE : on ne repeint les styles que si le symbole
+   * affiche dessus a change ; sinon on ne bouge que la puce allumee. */
+  const symStyle = sym.slice(0, 3) || 'T';
+  if (symStyle !== dernierSymStyles) { dernierSymStyles = symStyle; peindreStylesCrea(); }
+  else for (const b of document.querySelectorAll('#cStyles .creaStyle')) {
+    const s = STYLES_CREA[Number(b.getAttribute('data-style'))];
+    b.classList.toggle('on', !!s && memeApparence(s.a, apparenceChoisie));
+  }
   $('#cCombinaisons').textContent = combinaisons().toLocaleString('en-US')
     + ' possible faces. Two addresses can still land on the same one — we publish the number, not the word « unique ».';
   majFraisEtRecap();
@@ -7461,7 +7538,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0044',
+    build: '20260917-0045',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7926,6 +8003,19 @@ peindreApercuCreation();
 $('#cPaire').addEventListener('change', () => void majPaire());
 $('#cPaireAutre').addEventListener('input', () => void majPaire());
 $('#cHasard').addEventListener('click', hasardApparence);
+/* « Manual settings » : ouvrir le volet des cadrans, y descendre, et le dire au bouton. */
+$('#cManuel').addEventListener('click', () => {
+  const d = $('#cReglagesDetail');
+  if (!d) return;
+  d.open = !d.open;
+  $('#cManuel').setAttribute('aria-expanded', d.open ? 'true' : 'false');
+  $('#cManuel').textContent = d.open ? '🎛 Hide settings' : '🎛 Manual settings';
+  if (d.open) d.scrollIntoView({ behavior: mouvementReduit ? 'auto' : 'smooth', block: 'center' });
+});
+$('#cStyles').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-style]');
+  if (b) appliquerStyle(Number(b.getAttribute('data-style')));
+});
 function autoRemplirNomDepuisSym() {
   /* tip 2349 soft UX: empty name + non-empty symbol → fill name (never overwrite). */
   const nom = String($('#cNom').value || '').trim();
