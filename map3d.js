@@ -18,7 +18,8 @@
  * DANS le cube (max 0,98 S). Pour « plus de zoom » sans sortir : un cube plus grand, 2200 -> 3200. */
 export const DEMI_COTE = 3200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
-const DIST_MIN = -0.8, DIST_MAX = 0.98, DIST_DEPART = 0.9;
+/* tip 0040 (Phil « t as bloque le dezoom, remets-le ») : le recul au-dela du cube est rendu (4 S), le depart reste dedans */
+const DIST_MIN = -0.8, DIST_MAX = 4, DIST_DEPART = 0.9;
 /* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
 const VOIR_CUBE_DEHORS = 1.15;
 const LIEN_VIE_MS = 10 * 60 * 1000;
@@ -272,7 +273,9 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     for (const h of habitants) {
       if (!h.visible) continue;
       const vif = h.vifJusqua && h.vifJusqua > maintenant ? 1 : 0;
-      const e = Math.max(h.eclat || 0, vif * 0.6);
+      /* tip 0040 (Phil « pas ca — seulement ceux qui create / swap, pas tous ») : plus de halo permanent au volume ;
+       * seul un block qui vient d emettre ou recevoir un signal lu s allume, puis s eteint */
+      const e = vif * 0.7;
       if (e <= 0.02) continue;
       /* vu en test : des halos de plusieurs centaines de px couvraient l ecran -> rayon borne a 110 px, lueur plus douce */
       const r = Math.min(110, h.t * h.k * (0.65 + 1.1 * e)), halo = 'rgb(255,' + Math.round(210 - 60 * e) + ',' + Math.round(120 - 40 * e) + ')';
