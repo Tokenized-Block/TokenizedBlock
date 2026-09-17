@@ -4,9 +4,9 @@
 //    (name, symbol, metadataURI, quote, supply, startTick, lpFee, salt, Recipient[] {payout, bps}).
 //    Regles du contrat recopiees ICI comme refus AVANT signature : lpFee <= 30000, startTick multiple de 200 et dans les
 //    bornes, bps > 0 et somme = 10000, payout != 0. Quote ETH (address(0)) : le jeton trie toujours au-dessus, pas de findSalt.
-// ⛔⛔ DECISION DE LEAD (Claude, mandat de Phil 2026-09-16 « rendre l app rentable ») : un launch fait DEPUIS notre app
-//    partage les frais LP : 50 % au lanceur, 50 % a TokenizedBlock (Phil 2026-09-16 « dit 50/50 valide »). C est grave a vie par le locker (aucun retour) :
-//    l ecran le dit en clair AVANT la signature, et le wallet montre la calldata. Frais payes dans la quote = ETH reel.
+// ⛔⛔ REGLES D OPENLAUNCH (Phil 2026-09-16, apres le 50/50 : « pas de sens — fais aux regles d OpenLaunch si tu lances
+//    dessus, ou sur notre hook ») : un launch OpenLaunch fait depuis notre app donne 100 % des frais LP AU LANCEUR, comme
+//    sur openlaunch.lol. TokenizedBlock ne se nomme pas destinataire. Les frais TokenizedBlock existent sur NOS marches.
 // ⛔ Le module ne lit pas le reseau et n envoie rien : il rend { to, data, value:'0x0', resume }.
 import { selecteur } from './encodeur.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -15,7 +15,7 @@ export const OL_FACTORY = '0x815542E8b392389A1389E22E588E4B62A67Ade72';
 export const OL_LOCKER = '0xcd1680D26922fcd9CabFbb8a56bA40C333fD842a';
 export const OL_SIG_LAUNCH = 'launch((string,string,string,address,uint256,int24,uint24,bytes32,(address,uint16)[]))';
 export const OL_TOPIC_LAUNCHED_SIG = 'Launched(address,uint256,address,address,bytes32,int24,uint24,uint256,string)';
-export const PART_TOKENIZEDBLOCK_BPS = 5000;
+export const PART_TOKENIZEDBLOCK_BPS = 0;
 export const TICK_SPACING = 200;
 const MIN_USABLE = -887200, MAX_USABLE = 887200;
 const FRAIS_OK = [0, 10000, 30000];
@@ -58,10 +58,8 @@ export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, me
   if (uri.length > 512) return refus('metadata URI too long');
 
   /* lpFee 0 = aucun frais : on ne nomme alors personne (liste vide = le contrat brule 0). */
-  const recipients = Number(lpFee) === 0 ? [] : [
-    { payout: String(lanceur), bps: 10000 - PART_TOKENIZEDBLOCK_BPS },
-    { payout: FEE_WALLET, bps: PART_TOKENIZEDBLOCK_BPS },
-  ];
+  /* ⛔ le locker REFUSE un destinataire a 0 bps (BadRecipients, source lue) : le lanceur seul, 100 %, jamais une ligne a 0 */
+  const recipients = Number(lpFee) === 0 ? [] : [{ payout: String(lanceur), bps: 10000 }];
   if (recipients.length && recipients.reduce((a, r) => a + r.bps, 0) !== 10000) return refus('recipient shares must sum to 100 %');
 
   /* tuple dynamique : 9 mots de tete, puis les queues dans l ordre name, symbol, metadataURI, recipients */

@@ -14,11 +14,11 @@ ok(() => {
   assert.equal(p.etat, 'OK');
   assert.equal(p.tx.data, ref);
   assert.equal(p.tx.value, '0x0');
-  assert.equal(PART_TOKENIZEDBLOCK_BPS, 5000);
-  assert.equal(p.resume.partLanceurPct, 50);
-  assert.equal(p.resume.partTokenizedBlockPct, 50);
-  /* le wallet de frais figure dans la calldata, le lanceur aussi */
-  assert.ok(p.tx.data.includes(FEE_WALLET.slice(2).toLowerCase()));
+  /* regles d OpenLaunch : 100 % au lanceur, TokenizedBlock n est PAS destinataire (Phil 2026-09-16) */
+  assert.equal(PART_TOKENIZEDBLOCK_BPS, 0);
+  assert.equal(p.resume.partLanceurPct, 100);
+  assert.equal(p.resume.partTokenizedBlockPct, 0);
+  assert.ok(!p.tx.data.includes(FEE_WALLET.slice(2).toLowerCase()));
   assert.ok(p.tx.data.includes(L.slice(2)));
 });
 
