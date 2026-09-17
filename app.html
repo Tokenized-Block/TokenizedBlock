@@ -1179,7 +1179,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0045" hidden>Build <code>20260917-0045</code> · manual settings button + ten styles.</p>
+      <p class="note" data-build="20260917-0046" hidden>Build <code>20260917-0046</code> · brain picker: stage emojis, no genesis pair.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7324,13 +7324,36 @@ function peindreChoixBrain() {
     const last = localStorage.getItem(CLE_BRAIN_CHOIX + CHAINE);
     if (last) ajouter(last, null);
   } catch (_) { /* private mode */ }
-  const r = stadesDesBlocks({ ethUsd, blocks: [...tous.values()] });
-  s.innerHTML = r.groupes.map((g) => '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + g.blocks.length) + '">'
-    + g.blocks.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (b.nous ? '🟦 ' : '')
-      /* tip 0031 : toutes les adresses B20 commencent par 0xb2000000… — on montre la FIN, la seule partie qui distingue */
-      + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4))
-      + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
-    + '</optgroup>').join('');
+  const r = stadesDesBlocks({ ethUsd, blocks: [...tous.values()].map((x) => ({ ...x,
+    capUsdMarche: (marcheParAdr.get(String(x.adr).toLowerCase()) || {}).fdvUsd ?? null })) });
+  /* ⛔ PHIL (2026-09-17) : « retire TTB et TBLOCK avec le carre bleu ». Nos deux blocks de genese
+   * tenaient la tete de liste alors que personne ne vient ici pour eux, et le carre bleu remplacait
+   * l information utile. Ils sortent — SAUF celui qu on regarde en ce moment : retirer la ligne
+   * selectionnee viderait le choix. L emoji porte desormais le STADE, sur chaque ligne. */
+  s.innerHTML = r.groupes.map((g) => {
+    const lignes = g.blocks
+      .filter((b) => !NOS_BLOCKS_GENESE.includes(b.adr) || adrBrainEq(brainAdr, b.adr))
+      /* « du plus avance » : dans un stade, la plus grosse capitalisation LUE d abord ; celles qu on
+       * n a pas lues suivent, elles ne passent pas devant. */
+      .sort((a, b) => (b.capUsd ?? -1) - (a.capUsd ?? -1) || String(a.sym || '').localeCompare(String(b.sym || '')));
+    if (!lignes.length) return '';
+    return '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + lignes.length) + '">'
+      /* l emoji sur CHAQUE option : un select replie ne montre que l option, jamais le groupe */
+      + lignes.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (EMOJI_STADE[g.cle] || '·') + ' '
+        /* tip 0031 : toutes les adresses B20 commencent par 0xb2000000… — on montre la FIN, la seule partie qui distingue */
+        + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4))
+        + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
+      + '</optgroup>';
+  }).join('');
+  /* ⛔ UN FILTRE QUI VIDE L ECRAN EST PIRE QUE LE FILTRE : au demarrage a froid, la page ne connait
+   * parfois QUE nos deux blocks de genese (ils sont lus en premier). Dans ce cas seulement, ils
+   * restent — sinon l onglet Brain n aurait aucun cerveau a montrer. */
+  if (!s.querySelector('option')) {
+    s.innerHTML = r.groupes.map((g) => '<optgroup label="' + enTexte((EMOJI_STADE[g.cle] || '·') + ' ' + g.titre.split(' — ')[0] + ' · ' + g.blocks.length) + '">'
+      + g.blocks.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">' + (EMOJI_STADE[g.cle] || '·') + ' '
+        + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4)) + '</option>').join('')
+      + '</optgroup>').join('');
+  }
   const valeurs = [...s.querySelectorAll('option')].map((o) => o.value);
   const garde = optionBrainParAdr(valeurs, brainAdr);
   if (garde) {
@@ -7538,7 +7561,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0045',
+    build: '20260917-0046',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
