@@ -94,6 +94,21 @@ for (const nom of SERVIS) {
   });
 }
 
+/* ⛔⛔ INCIDENT 2026-09-17 : un deploiement fait hors git servait app.html SANS map3d.js / openlaunch.js /
+ * openlaunch-launch.js (absents de SERVIS) -> 404 -> le module de l app ne se chargeait plus, map vide,
+ * mais la page repondait 200 et /sante disait ok. Desormais on relit les imports de app.html au demarrage :
+ * tout module importe et non servi est journalise ET fait repondre /sante ok:false avec la liste. */
+const modulesManquants = [];
+try {
+  const html = readFileSync(join(ici, RACINE), 'utf8');
+  for (const m of html.matchAll(/from\s+'\.\/([A-Za-z0-9_-]+\.m?js)'/g)) {
+    if (!cache.has('/' + m[1]) && !modulesManquants.includes(m[1])) modulesManquants.push(m[1]);
+  }
+} catch (e) {
+  modulesManquants.push('app.html illisible : ' + e.message);
+}
+if (modulesManquants.length) console.error('[servi] ⛔ MODULES IMPORTES MAIS NON SERVIS (app cassee) : ' + modulesManquants.join(', '));
+
 /* ⛔⛔ XMTP VENDORISE, VERIFIE AU DEMARRAGE, FICHIER PAR FICHIER. Les fichiers viennent du CDN via
  * `vendor-xmtp.mjs` (lance avant ce serveur) ; ICI on recalcule chaque sha256 et on refuse de servir
  * tout fichier dont l empreinte differe du manifeste. Un seul fichier suspect n eteint pas l app :
@@ -172,8 +187,10 @@ createServer((req, res) => {
 
   /* sonde de sante — pour qu un cron puisse demander « es-tu vivant » sans charger l app */
   if (chemin === '/sante') {
-    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, servis: cache.size, racine: RACINE }));
+    /* ok:false (et 503) si un module importe par l app n est pas servi : la page repondrait 200 mais serait morte */
+    const ok = modulesManquants.length === 0;
+    res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 
