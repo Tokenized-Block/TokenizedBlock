@@ -1106,7 +1106,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0036" hidden>Build <code>20260917-0036</code> · trade fee delivered in ETH.</p>
+      <p class="note" data-build="20260917-0037" hidden>Build <code>20260917-0037</code> · map suns (volume glow), live highlight, zoom out of the cube.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7354,7 +7354,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0036',
+    build: '20260917-0037',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7898,10 +7898,29 @@ document.addEventListener('click', (e) => {
 });
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
-charger();
+/* tip 0037 : poserBlocks (dans charger) remet la map a zero — les soleils se posent APRES, sinon ils seraient effaces */
+charger().then(() => { void soleilsSurLaMap(); });
 demarrerBattement();
 /* tip 0025 : le fil Live demarre avec la map (apres la premiere lecture des blocks, pour laisser le noeud a la map) */
 setTimeout(() => { try { demarrerLive(); } catch (_) { /* Social le redemarrera */ } }, 15000);
+/* ══ tip 0037 — SOLEILS SUR LA MAP (Phil : « tout les blocks vivants, surbrillance plus forte sur gros volume, comme le
+ * soleil dans notre galaxie ») : le classement Trending (volume 24 h DexScreener lu par le serveur) donne a chaque block
+ * un eclat 0..1 (echelle log) ; les blocks qui tradent et ne sont pas encore sur la map y sont ajoutes (au plus 220 au total). */
+async function soleilsSurLaMap() {
+  try {
+    const r = await fetch('/api/trending', { cache: 'no-store' });
+    const d = await r.json();
+    if (!d || d.ok !== true || !Array.isArray(d.lignes) || !d.lignes.length) return;
+    const max = Math.max(...d.lignes.map((l) => l.volume24hUsd || 0), 1);
+    for (const l of d.lignes) {
+      let h = habitantDe(l.adr);
+      if (!h && habitants.length < 220) h = creerHabitant({ jeton: l.adr, symbole: l.sym, vie: null });
+      if (h) h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
+    }
+  } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
+}
+setTimeout(() => { void soleilsSurLaMap(); }, 8000);
+setInterval(() => { if (!document.hidden) void soleilsSurLaMap(); }, 300_000);
 try { filHookedTbgasHandlers(); } catch (_) {}
 const blockLien = paramsLien.get('block');
 if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);

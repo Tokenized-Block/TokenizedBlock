@@ -16,9 +16,10 @@
  * camera peut reculer jusqu a 0,98 S (toujours DANS le cube) ; depart un peu plus en arriere pour voir plus large */
 export const DEMI_COTE = 2200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
-const DIST_MIN = -0.8, DIST_MAX = 0.98, DIST_DEPART = 0.9;
-/* les aretes du cube ne se dessinent plus : on est dedans (garde a true pour les revoir) */
-const VOIR_CUBE = false;
+/* tip 0037 (Phil « plus de zoom, sors de la boite ») : on peut reculer jusqu a 4 S, HORS du cube ; le depart reste dedans */
+const DIST_MIN = -0.8, DIST_MAX = 4, DIST_DEPART = 0.9;
+/* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
+const VOIR_CUBE_DEHORS = 1.15;
 const LIEN_VIE_MS = 10 * 60 * 1000;
 const ROT_AUTO = 0.0014;
 
@@ -139,12 +140,16 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     liens.push({ k, de, a, couleur, t0: performance.now() });
     if (liens.length > 400) liens = liens.slice(-400);
   }
+  /* tip 0037 : tout block qui emet ou recoit un signal lu brille 6 s (surbrillance « en direct ») */
+  const vif = (h) => { if (h && !h.point) h.vifJusqua = performance.now() + 6000; };
   function impulsion(de, a, couleur) {
     if (!de || !a || de === a) return;
+    vif(de); vif(a);
     lien(de, a, couleur);
     if (!mouvementReduit) effets.push({ genre: 'IMPULSION', de, a, couleur, t0: performance.now(), duree: 1800 });
   }
   function onde(h, couleur, etiquette) {
+    vif(h);
     if (!h || mouvementReduit) return;
     effets.push({ genre: 'ONDE', h, couleur, etiquette: etiquette || '', t0: performance.now(), duree: 1600 });
   }
@@ -165,6 +170,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   }
   function signalVersWallet(h, adr, couleur) {
     const p = pointDe(adr);
+    vif(h);
     if (!h || !p || mouvementReduit) return;
     if (effets.length > 70) return;
     effets.push({ genre: 'IMPULSION', de: h, a: p, couleur, t0: performance.now(), duree: 1500 });
@@ -238,11 +244,24 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
         + '" stroke="rgb(167,139,250)" stroke-opacity="' + (base * (1 - 0.7 * loin)).toFixed(3) + '" stroke-width="' + largeur + '"'
         + (dash ? ' stroke-dasharray="4 6"' : '') + '/>';
     };
+    const VOIR_CUBE = cam.dist > S * VOIR_CUBE_DEHORS;
     for (let g = 1; g < 6 && VOIR_CUBE; g++) {
       const vx = -SX + (2 * SX * g) / 6, vz = -SZ + (2 * SZ * g) / 6;
       html += seg([vx, SY, -SZ], [vx, SY, SZ], 1, 0.16, false) + seg([-SX, SY, vz], [SX, SY, vz], 1, 0.16, false);
     }
     if (VOIR_CUBE) for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
+    /* tip 0037 — SOLEILS : un block a fort volume (h.eclat 0..1, fourni par l app depuis le volume 24 h lu) rayonne ;
+     * un block qui vient d emettre un signal (h.vifJusqua) brille plus fort quelques secondes. */
+    for (const h of habitants) {
+      if (!h.visible) continue;
+      const vif = h.vifJusqua && h.vifJusqua > maintenant ? 1 : 0;
+      const e = Math.max(h.eclat || 0, vif * 0.6);
+      if (e <= 0.02) continue;
+      /* vu en test : des halos de plusieurs centaines de px couvraient l ecran -> rayon borne a 110 px, lueur plus douce */
+      const r = Math.min(110, h.t * h.k * (0.65 + 1.1 * e)), halo = 'rgb(255,' + Math.round(210 - 60 * e) + ',' + Math.round(120 - 40 * e) + ')';
+      html += '<circle cx="' + h.sx.toFixed(1) + '" cy="' + h.sy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + halo + '" fill-opacity="' + (0.04 + 0.12 * e).toFixed(3) + '"/>'
+        + '<circle cx="' + h.sx.toFixed(1) + '" cy="' + h.sy.toFixed(1) + '" r="' + (r * 0.5).toFixed(1) + '" fill="' + halo + '" fill-opacity="' + (0.06 + 0.16 * e).toFixed(3) + '"/>';
+    }
     /* les connexions lues ces 10 dernieres minutes */
     liens = liens.filter((x) => maintenant - x.t0 < LIEN_VIE_MS && x.de.visible !== undefined);
     for (const x of liens) {
