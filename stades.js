@@ -21,22 +21,29 @@ export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🏞', CANO
   GRAINE: '🌱', PRIX_NON_LU: '⏳', NOURRI: '✨', SANS_MARCHE: '💤', NON_LU: '⏳', MORT: '⚫' });
 
 /**
+ * ⛔ DEUXIEME SOURCE DE CAP (2026-09-17) : notre noeud ne lit la vie que des premiers blocks — en prod
+ *    251 blocks tombaient dans « market unread » alors que le marche public en cote plus de 200. Un
+ *    `capUsdMarche` (FDV lue par le serveur chez DexScreener) juge alors le palier, et le block porte
+ *    `source:'MARCHE'`. Ce n est PAS une lecture on-chain : l appelant doit le dire a l ecran.
+ * ⛔ PRIORITE INCHANGEE : une vie LUE on-chain gagne toujours ; le marche ne sert qu a ce qu on n a
+ *    pas lu. Sans aucune des deux, le block reste dans NON_LU — jamais range en Seed.
  * @param {{ blocks: {adr:string, sym?:string|null, vie?:number|null, devise?:string|null, etatVie?:string|null,
+ *   capUsdMarche?:number|null,
  *   nourriture?:{etat:string, gm:number, messages:number, detenteurs:number, mort:boolean|null}|null}[], ethUsd: number|null }} o
  * @returns {{ groupes: {cle:string, titre:string, blocks:{adr:string, sym:string|null, capUsd:number|null, pct:number|null,
- *   prochain:string|null}[]}[], total:number }}
+ *   prochain:string|null, source:string}[]}[], total:number, parMarche:number }}
  */
 export function stadesDesBlocks({ blocks, ethUsd = null }) {
   const prixOk = typeof ethUsd === 'number' && Number.isFinite(ethUsd) && ethUsd > 0;
   const par = new Map();
   const mettre = (cle, b) => { if (!par.has(cle)) par.set(cle, []); par.get(cle).push(b); };
-  let total = 0;
+  let total = 0, parMarche = 0;
   for (const x of Array.isArray(blocks) ? blocks : []) {
     if (!x || !/^0x[0-9a-fA-F]{40}$/.test(String(x.adr))) continue;
     total++;
     const n = x.nourriture && x.nourriture.etat === 'LUE' ? x.nourriture : null;
     /* ⛔ PHIL (2026-09-14) : « ne donne pas les noms, on a deja trop de monde — nos blocks du launcher en priorite » */
-    const base = { adr: String(x.adr).toLowerCase(), sym: x.sym || null, nous: x.nous === true, capUsd: null, pct: null, prochain: null };
+    const base = { adr: String(x.adr).toLowerCase(), sym: x.sym || null, nous: x.nous === true, capUsd: null, pct: null, prochain: null, source: 'RIEN' };
     if (n && n.mort === true) { mettre('MORT', base); continue; }
     const vieLue = x.etatVie === 'LUE' && typeof x.vie === 'number' && Number.isFinite(x.vie) && x.vie > 0;
     if (vieLue) {
@@ -44,8 +51,20 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
       const capUsd = x.vie * ethUsd;
       const p = progressionPalier(capUsd);
       if (p.etat !== 'LU') { mettre('PRIX_NON_LU', base); continue; }
-      mettre(p.palier.cle, { ...base, capUsd, pct: p.prochain ? p.pct : null, prochain: p.prochain ? p.prochain.titre : null });
+      mettre(p.palier.cle, { ...base, capUsd, pct: p.prochain ? p.pct : null, prochain: p.prochain ? p.prochain.titre : null, source: 'CHAINE' });
       continue;
+    }
+    /* seconde source : la FDV du marche public, quand notre noeud n a pas lu ce block */
+    const capMarche = typeof x.capUsdMarche === 'number' && Number.isFinite(x.capUsdMarche) && x.capUsdMarche > 0
+      ? x.capUsdMarche : null;
+    if (capMarche !== null) {
+      const p = progressionPalier(capMarche);
+      if (p.etat === 'LU') {
+        parMarche++;
+        mettre(p.palier.cle, { ...base, capUsd: capMarche, pct: p.prochain ? p.pct : null,
+          prochain: p.prochain ? p.prochain.titre : null, source: 'MARCHE' });
+        continue;
+      }
     }
     if (x.etatVie === 'NON_TROUVEE') {
       mettre(n && n.gm + n.messages + n.detenteurs > 0 ? 'NOURRI' : 'SANS_MARCHE', base);
@@ -62,5 +81,5 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
     l.sort((a, b) => Number(b.nous) - Number(a.nous) || (b.capUsd ?? -1) - (a.capUsd ?? -1) || String(a.sym || '').localeCompare(String(b.sym || '')));
     groupes.push({ cle: g.cle, titre: g.titre, blocks: l, nous: l.filter((b) => b.nous).length, autres: l.filter((b) => !b.nous).length });
   }
-  return { groupes, total };
+  return { groupes, total, parMarche };
 }

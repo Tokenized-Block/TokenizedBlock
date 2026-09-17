@@ -1156,7 +1156,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0043" hidden>Build <code>20260917-0043</code> · Learn rewritten, life diagram capped.</p>
+      <p class="note" data-build="20260917-0044" hidden>Build <code>20260917-0044</code> · stages judged from the public market too.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3191,8 +3191,13 @@ function peindreStades() {
   /* ⛔⛔ PHIL (2026-09-14) : « ne donne pas les noms… » — seuls NOS blocks nommes sur stades REELS.
    * ⛔⛔ RAKSHA (2026-09-14) : NON_LU / PRIX_NON_LU ne listent PAS TBLOCK/TTB en public (ca ressemble a un log
    *    de lecture). Compte seul + « still reading » — les noms apparaissent quand la vie est LUE. */
+  /* ⛔ 2026-09-17 : notre noeud ne lit la vie que des premiers blocks — 251 blocks restaient en
+   * « market unread » alors que /api/trending (DexScreener, lu par le serveur) en cote plus de 200.
+   * On passe cette FDV comme SECONDE source ; `stadesDesBlocks` garde la lecture on-chain prioritaire
+   * et rend `parMarche`, que la note ci-dessous dit a l ecran. */
   const r = stadesDesBlocks({ ethUsd, blocks: habitants.map((h) => ({ adr: h.adr, sym: h.sym, vie: h.vie, devise: h.devise,
-    etatVie: h.etatVie, nourriture: h.nourriture, nous: h.nous === true || estANous(h.adr) })) });
+    etatVie: h.etatVie, nourriture: h.nourriture, nous: h.nous === true || estANous(h.adr),
+    capUsdMarche: (marcheParAdr.get(String(h.adr).toLowerCase()) || {}).fdvUsd ?? null })) });
   const silencieux = new Set(['NON_LU', 'PRIX_NON_LU']);
   $('#stades').innerHTML = r.groupes.map((g) => {
     const mute = silencieux.has(g.cle);
@@ -3224,6 +3229,7 @@ function peindreStades() {
   }).join('');
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
   $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock'
+    + (r.parMarche ? ' · ' + r.parMarche + ' tier(s) from the public market (DexScreener), the rest read on chain' : '')
     + (lectureVieEnCours ? ' · markets still loading' : '')
     + ' · named when life is LUE (unread ≠ broken).'
     : 'The map has not read any block yet.';
@@ -7455,7 +7461,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0043',
+    build: '20260917-0044',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8020,6 +8026,8 @@ async function soleilsSurLaMap() {
       if (h) h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
       marcheParAdr.set(String(l.adr).toLowerCase(), l);
     }
+    /* ⛔ LA DONNEE LUE PUIS JETEE EST UN DEFAUT : ces FDV jugent aussi les stades, donc on repeint. */
+    try { peindreStades(); } catch (_) { /* l onglet n est peut-etre pas encore peint */ }
   } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
 }
 setTimeout(() => { void soleilsSurLaMap(); }, 8000);
