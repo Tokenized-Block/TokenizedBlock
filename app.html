@@ -96,6 +96,13 @@ body{background:var(--fond);
 .marque{font-weight:700;font-size:16px;letter-spacing:-.2px}
 .marque span{color:var(--accent2)}
 .tete .droite{margin-left:auto;display:flex;gap:8px}
+/* ⛔⛔ UNE REGLE, PAS DIX RUSTINES (2026-09-17, Phil : « ya des incoherences »). `[hidden]` vient de la
+   feuille du navigateur avec la specificite la plus faible : la moindre classe qui pose un `display`
+   (.champ{display:block}, .puce{display:inline-block}) le rend VISIBLE. En prod, « Token address »
+   s affichait avec la paire ETH. Le depot portait deja quatre rustines separees (.infoPane[hidden],
+   .cote[hidden], .fiche[hidden], .wConsent[hidden]) : le symptome etait connu, la cause jamais
+   traitee. Ici, une fois pour toutes — cache veut dire cache. */
+[hidden]{display:none!important}
 .puce{font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid var(--ligne);
   background:var(--fond2);color:var(--doux);transition:border-color .12s ease,color .12s ease}
 .puce:hover{border-color:var(--accent);color:var(--texte)}
@@ -828,7 +835,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       </ol>
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
-      <details class="bDetail" style="margin-top:10px"><summary class="note">Paired with · TBLOCK by default</summary>
+      <!-- ⛔ LE RESUME REPLIE DISAIT « TBLOCK by default » MEME QUAND ETH ETAIT CHOISI (Phil, 2026-09-17).
+           Un resume qui ne suit pas le choix est un mensonge poli : `majPaire` l ecrit desormais. -->
+      <details class="bDetail" style="margin-top:10px"><summary class="note" id="cPaireResume">Paired with · TBLOCK by default</summary>
       <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
            creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
            elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
@@ -1179,7 +1188,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0047" hidden>Build <code>20260917-0047</code> · brain: wiring fingerprint next to facts.</p>
+      <p class="note" data-build="20260917-0048" hidden>Build <code>20260917-0048</code> · fees to the EOA, hidden means hidden.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6404,6 +6413,14 @@ function peindrePaires() {
   majPaire();
 }
 
+/** Le titre replie de la carte « Paired with » : il dit ce qui est choisi MAINTENANT. */
+function majResumePaire(sym) {
+  const r = $('#cPaireResume');
+  if (!r) return;
+  const s = String(sym || '').trim();
+  r.textContent = s ? 'Paired with · ' + s : 'Paired with · not chosen yet';
+}
+
 let majPaireSeq = 0;
 async function majPaire() {
   const seq = ++majPaireSeq;
@@ -6415,6 +6432,7 @@ async function majPaire() {
     paireChoisie = null;
     n.className = 'note';
     n.textContent = 'Paste a native B20 address (code 0xef). Random ERC-20 pairs are refused — keeps fee path on TokenizedBlock markets.';
+    majResumePaire(null);
     majFraisEtRecap();
     return;
   }
@@ -6470,6 +6488,8 @@ async function majPaire() {
       : q.paire.type === 'B20' ? ('Quote = B20 ' + (q.paire.symbole || '·'))
         : ('Quote = ' + (q.paire.symbole || 'custom'));
   }
+  /* le resume replie porte le choix en cours, jamais « TBLOCK by default » pose en dur */
+  majResumePaire(q.paire.symbole || null);
   majFraisEtRecap();
 }
 
@@ -7566,7 +7586,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0047',
+    build: '20260917-0048',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

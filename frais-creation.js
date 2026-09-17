@@ -10,17 +10,27 @@
 //    ce module expose les deux ; l app Railway utilise FRAIS_USD + weiPourDollars at Launch.
 
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire.
- * HARD RULE Raksha 2026-09-15: ALL fees → only Base smart wallet a6cf…f5d4.
- * Legacy 0x37eb…580a receives NOTHING (policy). Live CreateRouter 0xe05C… + HOOK_PREVU
- * eth_call FEE_WALLET() = a6cf (verified tip 2356). Old 0x3486… / 0x34E3… still 37eb — unused.
+ * Legacy 0x37eb…580a receives NOTHING (policy). Old 0x3486… / 0x34E3… still 37eb — unused.
  */
-export const FEE_WALLET = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+/** ⛔⛔ DESTINATION CHANGEE LE 2026-09-17, A LA DEMANDE DE PHIL : « envoie les fees direct a mon
+ * wallet, je recois toujours sur le smart wallet ». Adresse RECOPIEE de son message.
+ * MESURE FAITE AVANT DE CHANGER, sur Base :
+ *   · a6cf…f5d4 = CONTRAT de 61 octets, le proxy minimal ERC-1967 d un smart wallet (slot
+ *     implementation non nul), solde 0,002294 ETH ;
+ *   · le nouveau = EOA, AUCUN code, nonce 48 — un compte qu il signe lui-meme.
+ * Les deux savent recevoir de l ETH (le `take` de v4 transmet tout le gas) : c est un choix de
+ * destination, pas un correctif de transport. */
+export const FEE_WALLET = '0xaf8e0a44496a6b90da03fbadd9daec875fc3e2a6';
+/** ⛔ LE SMART WALLET N EST PAS REMPLACABLE PARTOUT : deux contrats DEJA DEPLOYES le portent en
+ * immuable (le hook HOOK_PREVU et le CreateRouter). Ce qu ils encaissent continue d aller la — seule
+ * la destination des frais que l APP calcule a change. C est aussi lui qui rachete du TBLOCK. */
+export const WALLET_TRESOR_SMART = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 /** FORBIDDEN sink — legacy contracts only. Never send app fees here. */
 export const FEE_WALLET_LEGACY_37EB = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
-/** CreateRouter FEE_WALLET = a6cf (eth_call tip 2356). */
-export const CREATE_ROUTER_FEE_WALLET = FEE_WALLET;
-/** TbFeeHook FEE_WALLET = a6cf at HOOK_PREVU (eth_call tip 2356). */
-export const HOOK_FEE_WALLET = FEE_WALLET;
+/** ⛔ GRAVE DANS LE CONTRAT : le CreateRouter deploye paie le smart wallet, pas la nouvelle adresse. */
+export const CREATE_ROUTER_FEE_WALLET = WALLET_TRESOR_SMART;
+/** ⛔ GRAVE DANS LE CONTRAT : HOOK_PREVU.FEE_WALLET() rend le smart wallet (eth_call tip 2356). */
+export const HOOK_FEE_WALLET = WALLET_TRESOR_SMART;
 /** Base mainnet CreateRouter — on-chain FEE_WALLET a6cf; sealed 1B 100% creator. */
 export const CREATE_ROUTER = '0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */

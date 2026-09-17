@@ -1,6 +1,6 @@
 // echange.js — acheter / vendre un block DANS l app, avec le frais d interface de 0,5 %, et le buyback.
 // ================================================================================================
-// ⛔ HARD RULE tip 2349/2350: every in-app Buy/Sell 0.5% → FEE_WALLET a6cf only (never 37eb, never skip).
+// ⛔ HARD RULE tip 2349/2350: every in-app Buy/Sell 0.5% → FEE_WALLET only (never 37eb, never skip).
 //    External Dex on unhooked pools = 0 forever — chop that volume only via TbFeeHook Launch (new pool id).
 // ⛔ DECISION DE PHIL (2026-09-13) : 0,5 % de chaque achat / vente fait via l app va au wallet de frais, DIT avant
 //    la signature. Mesure qui l a motivee : 459 creations B20 en 22 h sur la factory publique de Base, 2 chez nous.
@@ -17,7 +17,7 @@ import { TBLOCK } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
-import { FEE_WALLET } from './frais-creation.js';
+import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
 
@@ -42,18 +42,23 @@ export function fraisSur(total, bps) {
   return { frais, net: t - frais };
 }
 
-export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === FEE_WALLET.toLowerCase();
+/** ⛔⛔ L EXEMPTION SUIT LE TRESOR, PAS LA DESTINATION (2026-09-17). Depuis que les frais partent vers
+ * le wallet perso de Phil, lier l exemption a la DESTINATION aurait rendu ses propres trades gratuits
+ * — donc invisibles, donc impossibles a prouver : on aurait rejoue « le wallet ne recoit rien »
+ * exactement comme avec le rachat automatique. Ce qui ne se paie pas de frais a lui-meme, c est le
+ * smart wallet qui rachete du TBLOCK. */
+export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === WALLET_TRESOR_SMART.toLowerCase();
 
-/** tip 2350: fail-closed — non-fee-wallet trades must TAKE/TAKE_PORTION to a6cf with non-zero fee. */
+/** tip 2350: fail-closed — un trade hors tresor doit porter un TAKE/TAKE_PORTION vers le wallet de frais, montant non nul. */
 function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
-  if (estWalletDeFrais(compte)) return null; /* buyback path: fee = 0 by design */
+  if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
   if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
-    return 'fee beneficiary is not FEE_WALLET a6cf';
+    return 'fee beneficiary is not the configured fee wallet';
   }
   const blob = jsonSafe(actions || []).toLowerCase();
   const sink = FEE_WALLET.slice(2).toLowerCase();
-  if (!blob.includes(sink)) return 'fee TAKE/TAKE_PORTION to a6cf missing from actions';
+  if (!blob.includes(sink)) return 'fee TAKE/TAKE_PORTION to the fee wallet missing from actions';
   if (resume.frais == null || BigInt(resume.frais) <= 0n) return 'fee amount is zero — amount too small for 0.5%';
   return null;
 }
