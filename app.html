@@ -753,7 +753,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <ol class="creaPas">
         <li><b>Create</b> <span>free · one signature</span></li>
         <li><b>Bring it to life</b> <span>≈ $1 in ETH · its market opens</span></li>
-        <li><b>It lives</b> <span>on the map, with its brain · 0.5% on trades made here</span></li>
+        <li><b>It lives</b> <span>on the map, with its brain · 0.5%</span></li>
       </ol>
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
@@ -1106,7 +1106,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0034" hidden>Build <code>20260917-0034</code> · Trade tab (Trending + one-tap buy).</p>
+      <p class="note" data-build="20260917-0035" hidden>Build <code>20260917-0035</code> · auto wallet connect + network switch · plain fee copy.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1141,7 +1141,7 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ Ce ne sont pas nos blocks : ERC-20, pool sans hook, TokenizedBlock touche $0 — l ecran le dit a chaque fois. -->
     <div class="carte">
       <p class="titre">OpenLaunch · live on Base</p>
-      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b> — their LP fee goes to the launcher's recipients or is burned. <b>TokenizedBlock earns $0 on these trades.</b></p>
+      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b>.</p>
       <ul class="fil" id="sfOl"></ul>
       <p class="note" id="sfOlNote">Open this tab to read OpenLaunch.</p>
     </div>
@@ -2456,6 +2456,40 @@ async function lireLaVie() {
  * ⚠️ Ce que la connexion ne prouve pas : que cette adresse soit celle qu on croit. Elle prouve
  *    seulement que le wallet a bien voulu la donner.
  */
+/* ══ tip 0035 (Phil : « lance auto la connexion », « wallet sur la chain 1 -> automatise ») ═══════════════════════════
+ * `basculerChaine` demande au wallet de passer sur le bon reseau (et de l ajouter s il ne le connait pas) ; `pret`
+ * connecte le wallet s il ne l est pas, puis bascule le reseau. Le wallet affiche chaque demande : l utilisateur peut
+ * refuser, et alors rien n est envoye (la garde de envoi.js relit la chaine avant chaque envoi, inchangee). */
+async function basculerChaine(id) {
+  const eth = window.ethereum;
+  if (!eth) return false;
+  let actuelle = null;
+  try { actuelle = parseInt(await eth.request({ method: 'eth_chainId' }), 16); } catch (_) { return false; }
+  if (actuelle === id) return true;
+  const hex = '0x' + Number(id).toString(16);
+  try {
+    await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+    return true;
+  } catch (e) {
+    if (e && (e.code === 4902 || /unrecognized|not added|unknown chain/i.test(String(e.message)))) {
+      const R = RESEAUX[id];
+      try {
+        await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: R.nom,
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: [id === 8453 ? 'https://mainnet.base.org' : 'https://sepolia.base.org'],
+          blockExplorerUrls: [R.explorateur] }] });
+        return true;
+      } catch (_) { return false; }
+    }
+    return false;
+  }
+}
+async function pret() {
+  if (!compte) await connecter();
+  if (!compte) return false;
+  await basculerChaine(CHAINE);
+  return true;
+}
+
 async function connecter() {
   /* ⛔ UNE SEULE CONNEXION, DEUX ONGLETS. My block et Wallet ont chacun leur bouton, mais c est la
    * meme fonction et le meme `compte` : deux connexions separees finiraient par designer deux
@@ -2483,6 +2517,8 @@ async function connecter() {
 
   let chaineWallet = null;
   try { chaineWallet = parseInt(await eth.request({ method: 'eth_chainId' }), 16); } catch { /* dit juste dessous */ }
+  /* tip 0035 : mauvais reseau -> on demande tout de suite au wallet de basculer */
+  if (chaineWallet !== null && chaineWallet !== CHAINE && await basculerChaine(CHAINE)) chaineWallet = CHAINE;
 
   $('#pCompte').textContent = compte.slice(0, 6) + '…' + compte.slice(-4);
   const surLaBonne = chaineWallet === CHAINE;
@@ -4657,7 +4693,7 @@ $('#sfParoles').addEventListener('click', async (ev) => {
   const p = parolesFil.find((x) => x.id === b.getAttribute('data-parole'));
   if (!p) return;
   const note = $('#sfParolesNote');
-  if (!compte) { note.className = 'note wKo'; note.textContent = 'Connect your wallet first — it signs the message, this page never does.'; return; }
+  if (!(await pret())) { note.className = 'note wKo'; note.textContent = 'Open your wallet to continue — it signs the message, this page never does.'; return; }
   const memo = validerMemo(p.texte);
   if (memo.etat !== 'OK') { note.className = 'note wKo'; note.textContent = 'This line cannot be a message: ' + (memo.pourquoi || 'refused') + '.'; return; }
   paroleEnvoi = true;
@@ -4910,7 +4946,7 @@ async function preparerEchange(sens) {
     e.textContent = 'This block has no market yet — bring it to life first.';
     return;
   }
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; return; } }
   const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
@@ -4973,10 +5009,18 @@ async function preparerEchange(sens) {
     e.className = 'note'; e.textContent = 'Approvals first, then the sale. Each is measured again once done.';
     return;
   }
+  /* tip 0035 — MESURE 2026-09-17 sur fork Base : 0 des 56 blocks du Trending achetables ici. Leur pool a un hook qui
+   * n accepte que le routeur de leur propre app (toutes les vraies transactions passent par 0x2151…e2e7, non verifie) :
+   * devis « UnexpectedRevertBytes » ou routeur « WrappedError ». On le dit simplement au lieu d un JSON d erreur. */
+  const verrouilleAilleurs = /UnexpectedRevertBytes|0x6190b2b0|WrappedError|0x90bfb865/i.test(String(p.pourquoi || ''));
+  if ((p.etat === 'NON_MESURE' || p.etat === 'REFUSE') && verrouilleAilleurs) {
+    e.className = 'note wKo';
+    e.textContent = 'This block can only be traded from the app that launched it — its market refuses other apps. Nothing to sign.';
+    return;
+  }
   if (p.etat === 'NON_MESURE') {
     e.className = 'note wKo';
-    e.textContent = 'Not measured (nothing to sign): ' + (p.pourquoi || 'unread')
-      + ' — often a brief RPC/quoter blip, not a dead pool. Retry.';
+    e.textContent = 'Could not get a price right now (nothing to sign) — try again.';
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => {
@@ -5126,7 +5170,7 @@ async function preparerAjout() {
   const adr = $('#profil').dataset.block;
   const e = $('#plqEtat');
   $('#plqActions').innerHTML = ''; $('#plqLignes').innerHTML = '';
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   const pct = Number(String($('#plqPart').value || '').trim().replace(',', '.'));
   if (!(pct >= 0.1 && pct <= 99.9)) { e.className = 'note wKo'; e.textContent = 'Enter a share between 0.1 and 99.9 %.'; return; }
   e.className = 'note'; e.textContent = 'Reading the pool, your balance and your approvals…';
@@ -5232,7 +5276,7 @@ async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
   const eth = Number(raw);
   if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
@@ -5331,7 +5375,7 @@ async function calculerLancement() {
   const adr = $('#profil').dataset.block;
   const e = $('#plEtat');
   e.className = 'note';
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   const contreTblock = $('#plDevise').value === 'TBLOCK';
   if (!(valo > 0) || !Number.isFinite(valo)) {
@@ -6643,7 +6687,7 @@ function peindreTrending() {
     + '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button></li>').join('')
     || '<li class="filL"><p class="note">Nothing is moving right now.</p></li>';
   note.textContent = d.blocksAvecPaire + ' blocks trading · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
-    + new Date(d.lu).toLocaleTimeString() + ' · 0.5% fee when you trade here.';
+    + new Date(d.lu).toLocaleTimeString() + ' · 0.5% fee.';
 }
 $('#trTri').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tri]');
@@ -7310,7 +7354,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0034',
+    build: '20260917-0035',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7427,7 +7471,7 @@ let gravureEnCours = false;
 $('#bGraver').addEventListener('click', async () => {
   const e = $('#bGraverEtat');
   if (gravureEnCours) return;
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue.'; return; }
   const vu = brainDernier;
   if (!brainAdr || !vu) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   /* ⛔ LA MEMOIRE GRAVEE (decision de Phil, 2026-09-13) : instantane des 128 neurones + empreinte de la memoire
@@ -7460,7 +7504,7 @@ let fragmentsAGraver = null, fragmentEnCours = false;
 $('#bFragmenter').addEventListener('click', async () => {
   const e = $('#bFragmenterEtat');
   if (fragmentEnCours) return;
-  if (!compte) { e.className = 'note wKo'; e.textContent = 'Connect your wallet first — it signs each fragment, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs each fragment, this page never does.'; return; }
   if (!brainAdr || !brainEtat) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   if (!fragmentsAGraver || fragmentsAGraver.adr !== brainAdr) {
     fragmentsAGraver = { adr: brainAdr, textes: fragmenterMemoire(brainEtat), fait: 0, tick: brainEtat.tick, liens: [] };

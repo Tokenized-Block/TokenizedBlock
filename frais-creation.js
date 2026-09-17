@@ -62,7 +62,7 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   void ethUsd; void fraisWei; void soldeEth;
   const main = Number(chaine) === 8453;
   return main
-    ? 'Create free. Fees start at Launch (≈$1 ETH + TbFeeHook).'
+    ? 'Create is free. Bringing it to life costs ≈ $1 in ETH.'
     : 'Create free (Practice).';
 }
 
@@ -81,16 +81,14 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
     return 'No Launch life fee on ' + (nomReseau || 'this network') + ' — Practice wake is free.';
   }
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
-    return 'Life-fee price unread — Launch closed. Need a measured ETH amount ≈ $' + usd
-      + ' (Uniswap v4 median). Sleep stays free until Launch pays life.';
+    /* tip 0035 (Phil : pas de jargon, pas ou vont les frais — juste le montant) */
+    return 'Reading the ETH price… bringing it to life costs ≈ $' + usd + '.';
   }
-  let base = 'Life fee (Launch / stay alive): ' + formaterEthCourt(fraisWei) + ' ETH'
-    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US')
-    + '/ETH median)'
-    + '. Separate ETH transfer first (≥ CreateRouter floor 0.0003 ETH), verified for the protocol fee sink before Launch. Create itself is free — this is THE fee moment. Life fee ≠ automatic buyback.';
+  let base = 'Bringing it to life: ' + formaterEthCourt(fraisWei) + ' ETH'
+    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH). Create itself is free.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
-    return base + ' ⚠️ Your ETH balance is below the life fee, so Launch cannot start.';
+    return base + ' ⚠️ Not enough ETH in your wallet yet.';
   }
   return base;
 }
