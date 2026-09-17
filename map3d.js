@@ -14,19 +14,25 @@
 /* tip 0027 (Phil « la camera DANS le cube, on ne devrait pas le voir, principe univers, exploite tout l espace ») : 1400 */
 /* tip 0033 (Phil « impression de trop serre, un peu plus de zoom, sans sortir du cadre ») : 1400 -> 2200 d espace, et la
  * camera peut reculer jusqu a 0,98 S (toujours DANS le cube) ; depart un peu plus en arriere pour voir plus large */
-export const DEMI_COTE = 2200;
+/* tip 0038 (Phil « t es sorti du block, je t ai demande de ne pas sortir — mode in galaxy ») : retour a la camera TOUJOURS
+ * DANS le cube (max 0,98 S). Pour « plus de zoom » sans sortir : un cube plus grand, 2200 -> 3200. */
+export const DEMI_COTE = 3200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
-/* tip 0037 (Phil « plus de zoom, sors de la boite ») : on peut reculer jusqu a 4 S, HORS du cube ; le depart reste dedans */
-const DIST_MIN = -0.8, DIST_MAX = 4, DIST_DEPART = 0.9;
+const DIST_MIN = -0.8, DIST_MAX = 0.98, DIST_DEPART = 0.9;
 /* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
 const VOIR_CUBE_DEHORS = 1.15;
 const LIEN_VIE_MS = 10 * 60 * 1000;
 const ROT_AUTO = 0.0014;
 
 export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false }) {
-  const S = DEMI_COTE;
+  /* tip 0038 — EXPANSION DE L UNIVERS (Phil : « une expansion des limites qui s agrandit tout doucement, comme l expansion
+   * de l univers ») : S part de 0,7 x DEMI_COTE et grandit de ~0,06 % par seconde jusqu a 2,5 x. Positions des blocks,
+   * points des wallets, distance de camera et vitesse suivent le meme facteur : tout s ecarte, la camera reste DEDANS. */
+  let S = DEMI_COTE * 0.7;
+  const S_MAX = DEMI_COTE * 2.5, EXPANSION_PAR_S = 0.0006;
   /* tip 0026 (Phil « un GROS CUBE, pas un rectangle ») : cote egal sur les trois axes */
-  const SX = S, SY = S, SZ = S;
+  let SX = S, SY = S, SZ = S;
+  let dernierT = null;
   /* zoom avant jusque DANS le cube (Phil « tu te balades dans la map, visite ») : les blocks derriere la camera sont caches */
   /* dezoom maximum = le cube entier qui REMPLIT la fenetre (Phil « prends l espace, dezoom a fond ») : il ne redevient jamais minuscule */
   const cam = { yaw: 0.65, pitch: -0.42, dist: 0, ox: 0, oy: 0, auto: !mouvementReduit, touchee: false, cible: null, pret: false };
@@ -186,6 +192,16 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     /* lisible pour les verifications (DevTools) : distance et taille de fenetre utilisees */
     const trace = Math.round(cam.dist) + "@" + L + "x" + H;
     if (map.dataset.cam !== trace) map.dataset.cam = trace;
+    /* expansion : facteur f = 1 + taux x dt, applique a tout ce qui a une taille dans l espace */
+    const dt = dernierT === null ? 0 : Math.min(0.1, (maintenant - dernierT) / 1000);
+    dernierT = maintenant;
+    if (S < S_MAX && dt > 0 && !mouvementReduit) {
+      const f = Math.min(S_MAX / S, 1 + EXPANSION_PAR_S * dt);
+      S *= f; SX = SY = SZ = S;
+      cam.dist *= f; cam.ox *= 1; if (cam.cible) cam.cible.dist *= f;
+      for (const h of habitants) { if (h.wx !== undefined) { h.wx *= f; h.wy *= f; h.wz *= f; } }
+      for (const p of pointsWallet.values()) { p.point[0] *= f; p.point[1] *= f; p.point[2] *= f; }
+    }
     if (cam.auto && !cam.cible) cam.yaw += ROT_AUTO;
     if (cam.cible) {
       const c = cam.cible, q = 0.14;
@@ -198,7 +214,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     for (const h of habitants) {
       if (h.wx === undefined) placer(h);
       /* derive : vx/vy viennent du cerveau (battre), vz est la profondeur ; x3 pour que le mouvement se voie dans un grand cube */
-      h.wx += h.vx * 3; h.wy += h.vy * 3; h.wz += (h.vz || 0) * 3;
+      const vit = 3 * (S / DEMI_COTE);
+      h.wx += h.vx * vit; h.wy += h.vy * vit; h.wz += (h.vz || 0) * vit;
       const m = h.t * 0.8;
       if (Math.abs(h.wx) > SX - m) { h.vx = -Math.sign(h.wx) * Math.abs(h.vx); h.wx = Math.sign(h.wx) * (SX - m); }
       if (Math.abs(h.wy) > SY - m) { h.vy = -Math.sign(h.wy) * Math.abs(h.vy); h.wy = Math.sign(h.wy) * (SY - m); }

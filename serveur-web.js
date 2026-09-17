@@ -88,7 +88,7 @@ async function lireTrending() {
       await new Promise((ok) => setTimeout(ok, 250));
     }
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
-      fenetresRatees: (cr.fenetresRatees || []).length, ...resumerTrending(paires, adrs, { max: 60 }) });
+      fenetresRatees: (cr.fenetresRatees || []).length, ...resumerTrending(paires, adrs, { max: 400 }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
