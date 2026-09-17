@@ -25,6 +25,8 @@ import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
 export const ROUTEUR = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
 export const QUOTEUR = { 84532: '0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba', 8453: '0x0d5e0F971ED27FBfF6c2837bf31316121532048D' };
 export const FRAIS_INTERFACE_BPS = 50n;
+/** tip 0036 : false = le frais de 0,5 % est livre en ETH au wallet de frais (pas de rachat automatique de TBLOCK). */
+export const RACHAT_AUTO = false;
 export const ETATS_ECHANGE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
 const ETH = '0x0000000000000000000000000000000000000000';
 const pad = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
@@ -124,7 +126,9 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
    *    Sinon (marche TBLOCK absent ou illisible, ou echange de TBLOCK lui-meme), le frais reste en ETH. Le second
    *    swap a sa propre sortie minimale (quote reel) : un rachat qui se ferait voler son prix ne rachete rien. */
   let rachat = null;
-  if (bps > 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
+  /* ⛔ tip 0036 (Phil : dollars/ETH sur le wallet de frais) : smoke test sur fork 2026-09-17, 3 achats de 0,01 ETH avec le
+   *    buyback auto -> 0 wei d ETH au wallet de frais (le frais repartait en TBLOCK). Buyback garde, desactive. */
+  if (RACHAT_AUTO && bps > 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
     try {
       const mt = await vieDuBlock({ rpc: lire, stateView: V.stateView, jeton: TBLOCK });
       if (mt.etat === 'LUE' && mt.cle && String(mt.cle.currency0).toLowerCase() === ETH) rachat = { cle: mt.cle };
