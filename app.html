@@ -283,6 +283,19 @@ body{background:var(--fond);
 .fVie{font-weight:700;color:var(--accent2);font-size:13px;margin:2px 0 0}
 .fActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .fActions .plein{grid-column:1/-1}
+/* tip 0042 — fiche du block sur la map, glow up */
+.fiche .fTete{gap:14px}
+.fiche .fAvatar{width:76px;height:84px;border:0;border-radius:16px;background:radial-gradient(circle, rgb(167 139 250 / .3), transparent 70%);
+  filter:drop-shadow(0 0 14px rgb(167 139 250 / .45))}
+.fiche .fNom{font-size:19px;letter-spacing:-.3px}
+.fChips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.fChip{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border-radius:12px;min-width:70px;
+  background:rgb(15 10 23 / .6);border:1px solid rgb(167 139 250 / .16)}
+.fChip span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);font-family:inherit}
+.fChip b{font-size:14px;color:var(--texte);font-family:inherit}
+.fChip b.trUp{color:var(--vif)} .fChip b.trDown{color:var(--dur)}
+.fActionsMini .bouton{min-height:38px;font-size:13px;padding:8px 10px}
+.fiche details{margin-top:4px}
 
 /* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
  * ⛔ LA FORME D UN PROFIL, PAS D UNE FICHE TECHNIQUE : le visage en grand, le nom, puis quelques
@@ -562,6 +575,26 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaGo{font-size:15.5px;min-height:52px}
 @media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
+/* tip 0041 — le block au centre, comme un personnage */
+.creaSticky.creaHeros{position:relative;top:auto;display:flex;flex-direction:column;align-items:center;text-align:center;
+  gap:0;padding:26px 16px 18px;background:radial-gradient(ellipse at 50% 38%, rgb(167 139 250 / .16), transparent 62%), rgb(15 10 23 / .55);
+  border:1px solid rgb(167 139 250 / .18);backdrop-filter:none}
+.creaScene{position:relative;width:200px;height:236px;display:grid;place-items:center;margin-bottom:10px}
+.creaHeros .creaArt{position:relative;z-index:2;width:176px;height:194px;border:0;background:transparent;border-radius:24px;
+  filter:drop-shadow(0 16px 30px rgb(0 0 0 / .45)) drop-shadow(0 0 22px rgb(167 139 250 / .35))}
+.creaHalo{position:absolute;inset:6px;border-radius:50%;z-index:1;
+  background:radial-gradient(circle, rgb(167 139 250 / .38), rgb(167 139 250 / .08) 55%, transparent 70%)}
+.creaSol{position:absolute;bottom:2px;left:50%;width:120px;height:18px;margin-left:-60px;border-radius:50%;z-index:0;
+  background:radial-gradient(ellipse, rgb(0 0 0 / .55), transparent 70%)}
+.creaHeros .creaNom{font-size:22px;letter-spacing:-.4px;max-width:100%}
+@media (prefers-reduced-motion: no-preference){
+  .creaHeros .creaArt{animation:creaFlotte 4.5s ease-in-out infinite}
+  .creaHalo{animation:creaRespire 4.5s ease-in-out infinite}
+  .creaSol{animation:creaOmbre 4.5s ease-in-out infinite}
+}
+@keyframes creaFlotte{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(-10px) rotate(1.5deg)}}
+@keyframes creaRespire{0%,100%{transform:scale(.94);opacity:.8}50%{transform:scale(1.05);opacity:1}}
+@keyframes creaOmbre{0%,100%{transform:scaleX(1);opacity:.9}50%{transform:scaleX(.8);opacity:.6}}
 /* tip 0034 — onglet Trade */
 .trLigne{align-items:center;cursor:pointer}
 .trRang{min-width:22px;text-align:right;color:var(--doux);font-weight:700;font-size:12px}
@@ -649,14 +682,22 @@ details[open] > summary::before{transform:rotate(90deg)}
                 <p class="fVie" id="fVie">—</p>
               </div>
             </div>
+            <!-- tip 0042 (Phil : « glow up la fiche, donne les data condensees, possibilite de buy ou de se pairer au block ») -->
+            <div class="fChips" id="fChips"></div>
             <div class="pBarre"><i id="fBarre"></i></div>
             <p class="note" id="fPalier"></p>
+            <details class="bDetail"><summary class="note">Origin & address</summary>
             <p class="note" id="fOrigine"></p>
             <p class="note" id="fAdr"></p>
-            <div class="fActions">
+            </details>
+            <div class="fActions fActionsMain">
+              <button class="bouton" id="fAcheter" type="button">Buy</button>
+              <button class="bouton sec" id="fPairer" type="button">Pair with it</button>
+              <button class="bouton plein sec" id="fProfil">Open profile</button>
+            </div>
+            <div class="fActions fActionsMini">
               <button class="bouton sec" id="fGM">Send GM 👋</button>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
-              <button class="bouton plein" id="fProfil">Open profile</button>
               <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
             </div>
             <p class="note" id="fNote"></p>
@@ -687,13 +728,18 @@ details[open] > summary::before{transform:rotate(90deg)}
          doit suivre pendant qu il choisit »). Il est SORTI de la premiere carte exprès : colle a
          l interieur d une carte, il se decollait des qu on descendait vers les reglages — c est-a-dire
          precisement au moment ou on en a besoin. Ici, il tient tout l onglet. -->
-    <div class="creaSticky">
-      <div class="creaArt" id="cArt"></div>
-      <div style="min-width:0;flex:1">
-        <p class="creaNom" id="cApercuNom">Your block</p>
-        <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
+    <!-- tip 0041 (Phil « la page create avec le block au centre, comme un personnage ») : le block que l on cree est le
+         heros de la page — grand, au centre, qui flotte dans sa lueur ; son nom et son symbole s ecrivent sous lui pendant
+         qu on tape. Les id (cArt, cApercuNom, cApercuSym, cHasard) sont gardes : l apercu en direct ne change pas. -->
+    <div class="creaSticky creaHeros">
+      <div class="creaScene">
+        <div class="creaHalo" aria-hidden="true"></div>
+        <div class="creaArt" id="cArt"></div>
+        <div class="creaSol" aria-hidden="true"></div>
       </div>
-      <button class="bouton sec" id="cHasard" type="button" style="width:auto;padding:10px 14px">Surprise me</button>
+      <p class="creaNom" id="cApercuNom">Your block</p>
+      <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
+      <button class="bouton sec" id="cHasard" type="button" style="width:auto;padding:10px 18px;margin-top:10px">🎲 Surprise me</button>
     </div>
 
     <!-- tip 0032 — REFONTE CREATE (Phil 2026-09-17 : « retravailler l onglet creation »). Un choix clair en haut
@@ -786,6 +832,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ce qui manque encore (nom, symbole…) reste VISIBLE a cote du bouton, pas replie -->
       <p class="note" id="cRecap"></p>
       <div class="pActions" style="grid-template-columns:1fr">
+        <!-- tip 0041 (Phil : « la mise en vie cochee par defaut ») -->
+        <label class="wConsent" style="color:var(--texte)"><input type="checkbox" id="cVieDirecte" checked> Bring it to life right after (≈ $1 in ETH)</label>
         <button class="bouton creaGo" id="cCreer" type="button">Create, then bring it to life — 2 signatures</button>
         <button class="bouton sec" id="cVerifier" type="button">Check its address first</button>
         <p class="note" id="cALancer" hidden></p>
@@ -1106,7 +1154,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0040" hidden>Build <code>20260917-0040</code> · map: zoom out restored, glow only on live signals.</p>
+      <p class="note" data-build="20260917-0042" hidden>Build <code>20260917-0042</code> · Create hero block · map card data + Buy + Pair · bigger universe.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1816,6 +1864,8 @@ const dessin = (adr, sym) => {
 
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
+/* tip 0042 : marche condense par block (adresse minuscule -> ligne /api/trending), lu pour les soleils et la fiche */
+const marcheParAdr = new Map();
 let anim = null;
 /* ⛔ TOUTES LES CREATIONS LUES, pas seulement les 22 affichees : la recherche doit trouver un block que la
  * map a lu sans avoir la place de le montrer (mesure du 2026-09-13 : 87 lues, 22 affichees, et « TTB »
@@ -2085,6 +2135,52 @@ $('#map').addEventListener('click', (e) => {
    * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
   $('#fNote').textContent = !h || !h.phase ? '' : phraseDePhase(h.phase, h.sym);
   $('#fConnecter').hidden = true;
+  /* tip 0042 : donnees condensees du marche (lues par le serveur : DexScreener), si le block en a */
+  const mk = marcheParAdr.get(String(adr).toLowerCase());
+  const chip = (t, v, cls) => '<div class="fChip"><span>' + t + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</b></div>';
+  const pctTxt = (v) => (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%';
+  $('#fChips').innerHTML = mk
+    ? chip('Price', usdCourt(mk.prixUsd))
+      + (mk.change24h !== null && mk.change24h !== undefined ? chip('24h', pctTxt(mk.change24h), mk.change24h >= 0 ? 'trUp' : 'trDown') : '')
+      + chip('Vol 24h', usdCourt(mk.volume24hUsd)) + chip('Liquidity', usdCourt(mk.liquiditeUsd))
+      + (mk.fdvUsd ? chip('FDV', usdCourt(mk.fdvUsd)) : '')
+    : '';
+  $('#fiche').dataset.block = adr;
+  $('#fiche').dataset.sym = (h && h.sym) || '';
+});
+
+/* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;
+ * Pair with it : onglet Create, block en mode block, paire = ce block (adresse collee, verifiee par la page Create) */
+$('#fAcheter').addEventListener('click', () => {
+  const adr = $('#fiche').dataset.block, sym = $('#fiche').dataset.sym;
+  if (!adr) return;
+  void ouvrirProfil(adr, sym).then(() => {
+    let essais = 0;
+    const attendre = () => {
+      const carte = $('#pEchange'), champ = $('#peAchat');
+      if (carte && !carte.hidden && champ) {
+        if (!champ.value) champ.value = '0.01';
+        try { carte.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+        $('#peAcheter').click();
+        return;
+      }
+      if (++essais < 80) setTimeout(attendre, 500);
+    };
+    attendre();
+  });
+});
+$('#fPairer').addEventListener('click', () => {
+  const adr = $('#fiche').dataset.block;
+  if (!adr) return;
+  allerA('creer');
+  const bloc = document.querySelector('[data-cmode="block"]'); if (bloc) bloc.click();
+  const s = $('#cPaire');
+  if (s) {
+    if ([...s.options].some((o) => o.value.toLowerCase() === adr.toLowerCase())) s.value = [...s.options].find((o) => o.value.toLowerCase() === adr.toLowerCase()).value;
+    else { s.value = AUTRE_PAIRE; $('#cPaireAutre').value = adr; }
+    s.dispatchEvent(new Event('change'));
+    const det = s.closest('details'); if (det) det.open = true;
+  }
 });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
@@ -6718,6 +6814,11 @@ $('#trListe').addEventListener('click', (e) => {
 });
 setInterval(() => { if ($('#v-trade').classList.contains('on') && !document.hidden) void lireTrending(); }, 60_000);
 
+/* tip 0041 : le libelle du bouton suit la case « bring it to life right after » */
+$('#cVieDirecte').addEventListener('change', () => {
+  $('#cCreer').textContent = $('#cVieDirecte').checked ? 'Create, then bring it to life — 2 signatures' : 'Create it — 1 signature';
+});
+
 /* tip 0032 — choix du mode dans Create : un block (parcours complet + apercu) ou un token OpenLaunch (sa carte seule) */
 document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('click', () => {
   const token = b.getAttribute('data-cmode') === 'token';
@@ -6781,7 +6882,7 @@ async function creerBlock() {
   /* ⛔ tip 0023 — PHIL 2026-09-16 « Launch obligatoire des la creation : yes fais le ». Mesure du meme jour : 22 creations,
    *    0 avec une pool fee hook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
    *    frais de vie du Launch + gaz des deux transactions, lus AVANT la signature. Prix ou solde illisible = refus. */
-  if (Number(CHAINE) === 8453 && !utiliseCreateRouter()) {
+  if (Number(CHAINE) === 8453 && !utiliseCreateRouter() && (!$('#cVieDirecte') || $('#cVieDirecte').checked)) {
     e.className = 'note';
     e.textContent = 'A block is created to be brought to life — checking you can pay for both before anything is signed…';
     const fraisL = await assurerFraisLancementWei(true);
@@ -6859,8 +6960,9 @@ async function creerBlock() {
         };
         const btn = $('#cLaunchNow');
         if (btn) btn.addEventListener('click', (ev) => { ev.preventDefault(); goLaunch(); });
-        /* tip 0017: auto-open fee moment; button remains one-tap retry */
-        goLaunch();
+        /* tip 0017: auto-open fee moment; button remains one-tap retry
+         * tip 0041 : seulement si « bring it to life right after » est coche (coche par defaut) */
+        if (!$('#cVieDirecte') || $('#cVieDirecte').checked) goLaunch();
       } else {
         const nextLaunch = Number(CHAINE) === 8453
           ? ' <b>Next:</b> open it and <b>bring it to life</b>.'
@@ -7351,7 +7453,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0040',
+    build: '20260917-0042',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -7914,6 +8016,7 @@ async function soleilsSurLaMap() {
       /* tip 0038 (Phil « le max de blocks crees et vivants ») : jusqu a 450 sur la map ; l univers en expansion leur fait la place */
       if (!h && habitants.length < 450) h = creerHabitant({ jeton: l.adr, symbole: l.sym, vie: null });
       if (h) h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
+      marcheParAdr.set(String(l.adr).toLowerCase(), l);
     }
   } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
 }

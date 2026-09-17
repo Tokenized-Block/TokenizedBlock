@@ -19,7 +19,8 @@
 export const DEMI_COTE = 3200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
 /* tip 0040 (Phil « t as bloque le dezoom, remets-le ») : le recul au-dela du cube est rendu (4 S), le depart reste dedans */
-const DIST_MIN = -0.8, DIST_MAX = 4, DIST_DEPART = 0.9;
+/* tip 0042 (Phil « agrandis la limite de l univers, laisse-moi dezoomer plus ») : 4 S -> 9 S */
+const DIST_MIN = -0.8, DIST_MAX = 9, DIST_DEPART = 0.9;
 /* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
 const VOIR_CUBE_DEHORS = 1.15;
 const LIEN_VIE_MS = 10 * 60 * 1000;
@@ -30,7 +31,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
    * de l univers ») : S part de 0,7 x DEMI_COTE et grandit de ~0,06 % par seconde jusqu a 2,5 x. Positions des blocks,
    * points des wallets, distance de camera et vitesse suivent le meme facteur : tout s ecarte, la camera reste DEDANS. */
   let S = DEMI_COTE * 0.7;
-  const S_MAX = DEMI_COTE * 2.5, EXPANSION_PAR_S = 0.0006;
+  /* tip 0042 : limite de l expansion 2,5 x -> 4 x */
+  const S_MAX = DEMI_COTE * 4, EXPANSION_PAR_S = 0.0006;
   /* tip 0026 (Phil « un GROS CUBE, pas un rectangle ») : cote egal sur les trois axes */
   let SX = S, SY = S, SZ = S;
   let dernierT = null;
