@@ -46,6 +46,58 @@ async function lireOpenLaunch() {
   return corps;
 }
 
+/* ⛔ TRENDING (tip 0034). Mesure 2026-09-17 : ~5,4 M$ de volume 24 h sur les blocks B20 nes en 24 h, lances AILLEURS ;
+ * on ne capte leurs frais que si le trade passe par notre Buy/Sell. Ce serveur tient la liste des blocks crees (logs
+ * de la factory B20, lecture seule, 3 jours puis increments), lit DexScreener par lots de 30 et renvoie le classement.
+ * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
+import { listerCreations } from './index-blocks.js';
+import { resumerTrending } from './trending.js';
+const RPC_BASE = 'https://mainnet.base.org';
+let rpcId = 0;
+async function rpcServeur(methode, params) {
+  for (let k = 0; k < 5; k++) {
+    const r = await fetch(RPC_BASE, { method: 'POST', signal: AbortSignal.timeout(15000),
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
+    const j = await r.json();
+    if (!j.error) return j.result;
+    if (!/rate|limit|timeout/i.test(String(j.error.message))) throw new Error(j.error.message);
+    await new Promise((ok) => setTimeout(ok, 1200 * (k + 1)));
+  }
+  throw new Error('node rate limit');
+}
+const blocksConnus = new Set();
+let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
+function trending() {
+  if (trCache.corps && Date.now() - trCache.a < 300_000) return Promise.resolve(trCache.corps);
+  if (!trEnCours) trEnCours = lireTrending().finally(() => { trEnCours = null; });
+  /* une ancienne liste vaut mieux qu une attente de 2 min : on la rend pendant le rafraichissement */
+  return trCache.corps ? Promise.resolve(trCache.corps) : trEnCours;
+}
+async function lireTrending() {
+  let corps;
+  try {
+    const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua);
+    const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
+    for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
+    if (!(cr.fenetresRatees || []).length) blocsLusJusqua = fin;
+    const adrs = [...blocksConnus], paires = [];
+    for (let i = 0; i < adrs.length; i += 30) {
+      const r = await fetch('https://api.dexscreener.com/tokens/v1/base/' + adrs.slice(i, i + 30).join(','), { signal: AbortSignal.timeout(10000) });
+      if (r.ok) { const j = await r.json(); if (Array.isArray(j)) paires.push(...j); }
+      await new Promise((ok) => setTimeout(ok, 250));
+    }
+    corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
+      fenetresRatees: (cr.fenetresRatees || []).length, ...resumerTrending(paires, adrs, { max: 60 }) });
+  } catch (e) {
+    corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
+  }
+  trCache = { a: Date.now(), corps };
+  return corps;
+}
+/* premiere lecture des le demarrage : le premier visiteur n attend pas 3 jours de logs */
+setTimeout(() => { void trending(); }, 2000);
+
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
 
@@ -65,7 +117,7 @@ const SERVIS = [
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
@@ -174,6 +226,14 @@ createServer((req, res) => {
       'Cache-Control': 'no-store, max-age=0',
     });
     res.end();
+    return;
+  }
+
+  if (chemin === '/api/trending') {
+    trending().then((corps) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(corps);
+    });
     return;
   }
 

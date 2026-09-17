@@ -400,7 +400,7 @@ button.mienTuile:hover{border-color:var(--accent)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:rgba(7,11,24,.93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
-.navIn{max-width:720px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
+.navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
   font-weight:700;padding:7px 3px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;gap:3px;min-height:48px}
@@ -562,6 +562,14 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaGo{font-size:15.5px;min-height:52px}
 @media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
+/* tip 0034 — onglet Trade */
+.trLigne{align-items:center;cursor:pointer}
+.trRang{min-width:22px;text-align:right;color:var(--doux);font-weight:700;font-size:12px}
+.trInfo{min-width:0;flex:1}
+.trUp{color:var(--vif);font-weight:700;font-size:12.5px}
+.trDown{color:var(--dur);font-weight:700;font-size:12.5px}
+.trAcheter{width:auto;min-height:38px;padding:8px 18px;flex:0 0 auto}
+.navB{font-size:10.5px}
 </style>
 </head>
 <body>
@@ -1038,6 +1046,25 @@ details[open] > summary::before{transform:rotate(90deg)}
   </section>
 
   <!-- ══ SOCIAL / COLLATERAL ═════════════════════════════════════════════════════════════════ -->
+  <!-- ══ TRADE (tip 0034) ══════════════════════════════════════════════════════════════════════
+       ⛔ Phil 2026-09-17 : « c est dingue on perd ca ». Mesure du jour : ~6 M$ de volume 24 h sur les blocks B20 de Base,
+          lances ailleurs. On ne capte le 0,5 % que si le trade passe PAR NOTRE Buy/Sell : cet onglet range les blocks
+          qui bougent et mene a l achat en un geste. Chiffres DexScreener, dits comme tels. Le wallet signe, toujours. -->
+  <section class="volet" id="v-trade" aria-label="Trade blocks">
+    <div class="carte">
+      <p class="titre">Trending blocks</p>
+      <p class="sous">Every block on Base, ranked by what is moving right now. Buy or sell here in one tap — your wallet signs.</p>
+      <div class="stadeLigne" id="trTri" style="margin-top:4px">
+        <button type="button" class="puce on" data-tri="h1">🔥 Last hour</button>
+        <button type="button" class="puce" data-tri="h24">24h volume</button>
+        <button type="button" class="puce" data-tri="gain">📈 Gainers</button>
+        <button type="button" class="puce" data-tri="liq">💧 Liquidity</button>
+      </div>
+      <ul class="fil trListe" id="trListe"><li class="filL"><p class="note">Reading the market…</p></li></ul>
+      <p class="note" id="trNote"></p>
+    </div>
+  </section>
+
   <section class="volet" id="v-social" aria-label="Social and collateral">
     <!-- ⛔⛔ NOTES DE CONCEPTION RETIREES DE L ECRAN, meme regle que le Wallet (Phil, 2026-09-11 :
          « le user ne doit pas voir ca »). Elles nommaient Phil et listaient nos dependances — rien
@@ -1079,7 +1106,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0033" hidden>Build <code>20260917-0033</code> · roomier universe.</p>
+      <p class="note" data-build="20260917-0034" hidden>Build <code>20260917-0034</code> · Trade tab (Trending + one-tap buy).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1411,6 +1438,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 <nav class="nav" aria-label="Sections">
   <div class="navIn" role="tablist">
     <button class="navB" role="tab" aria-selected="true"  data-volet="map"><b>◈</b>Map</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Trade</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain AI</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
@@ -1520,6 +1548,7 @@ import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-
 import { resumeRelais } from './relais-cerveaux.js';
 import { dollarsCourts, lienOL } from './openlaunch.js';
 import { creerMoteur3D } from './map3d.js';
+import { usdCourt } from './trending.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -1600,6 +1629,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'mien') peindreClassement();
   if (nom === 'brain') peindreChoixBrain();
   if (nom === 'social') demarrerLive();
+  if (nom === 'trade') void lireTrending();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') { remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap(); }
 });
@@ -6580,6 +6610,73 @@ $('#olPreparer').addEventListener('click', async () => {
   etat.className = 'note'; etat.textContent = 'Read it, then sign. Nothing is sent until your wallet confirms.';
 });
 
+/* ══ tip 0034 — TRADE : classement Trending + achat en un geste ════════════════════════════════════════════════════
+ * Donnees : /api/trending (serveur : creations B20 lues sur la chaine + DexScreener). « Buy » ouvre le profil du block,
+ * remplit 0.01 ETH et prepare l achat (0,5 % au wallet de frais, controle dans la calldata) : il ne reste qu a signer. */
+let trDonnees = null, trTri = 'h1', trLuA = 0;
+async function lireTrending() {
+  const ul = $('#trListe'), note = $('#trNote');
+  if (!ul) return;
+  if (!trDonnees || Date.now() - trLuA > 60_000) {
+    try {
+      const r = await fetch('/api/trending', { cache: 'no-store' });
+      const d = await r.json();
+      if (d && d.ok === true && Array.isArray(d.lignes)) { trDonnees = d; trLuA = Date.now(); }
+      else if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ ' + ((d && d.pourquoi) || 'Market not read') + ' — try again in a moment.'; return; }
+    } catch (_) {
+      if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ Market not reachable right now — try again in a moment.'; return; }
+    }
+  }
+  peindreTrending();
+}
+function peindreTrending() {
+  const ul = $('#trListe'), note = $('#trNote'), d = trDonnees;
+  if (!ul || !d) return;
+  const cle = { h1: (l) => l.volume1hUsd, h24: (l) => l.volume24hUsd, gain: (l) => l.change1h ?? -1e9, liq: (l) => l.liquiditeUsd }[trTri];
+  const lignes = [...d.lignes].sort((a, b) => cle(b) - cle(a)).slice(0, 40);
+  const pct = (v) => v === null || v === undefined ? '' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
+  ul.innerHTML = lignes.map((l, i) => '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
+    + '<span class="trRang">' + (i + 1) + '</span>'
+    + '<div class="filArt">' + dessin(l.adr, l.sym) + '</div>'
+    + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
+    + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 1h ' + usdCourt(l.volume1hUsd) + ' · 24h ' + usdCourt(l.volume24hUsd) + ' · liq ' + usdCourt(l.liquiditeUsd) + '</p></div>'
+    + '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button></li>').join('')
+    || '<li class="filL"><p class="note">Nothing is moving right now.</p></li>';
+  note.textContent = d.blocksAvecPaire + ' blocks trading · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
+    + new Date(d.lu).toLocaleTimeString() + ' · 0.5% fee when you trade here.';
+}
+$('#trTri').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tri]');
+  if (!b) return;
+  trTri = b.getAttribute('data-tri');
+  $('#trTri').querySelectorAll('[data-tri]').forEach((x) => x.classList.toggle('on', x === b));
+  peindreTrending();
+});
+$('#trListe').addEventListener('click', (e) => {
+  const li = e.target.closest('.trLigne');
+  if (!li) return;
+  const adr = li.getAttribute('data-block'), sym = li.getAttribute('data-sym');
+  const acheter = Boolean(e.target.closest('[data-acheter]'));
+  void ouvrirProfil(adr, sym).then(() => {
+    if (!acheter) return;
+    /* le marche du profil se lit en arriere-plan : on attend la carte Buy/Sell (au plus ~40 s), puis on prepare */
+    let essais = 0;
+    const attendre = () => {
+      const carte = $('#pEchange'), champ = $('#peAchat');
+      if (carte && !carte.hidden && champ) {
+        if (!champ.value) champ.value = '0.01';
+        try { carte.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+        champ.focus();
+        $('#peAcheter').click();
+        return;
+      }
+      if (++essais < 80) setTimeout(attendre, 500);
+    };
+    attendre();
+  });
+});
+setInterval(() => { if ($('#v-trade').classList.contains('on') && !document.hidden) void lireTrending(); }, 60_000);
+
 /* tip 0032 — choix du mode dans Create : un block (parcours complet + apercu) ou un token OpenLaunch (sa carte seule) */
 document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('click', () => {
   const token = b.getAttribute('data-cmode') === 'token';
@@ -7213,7 +7310,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0033',
+    build: '20260917-0034',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
