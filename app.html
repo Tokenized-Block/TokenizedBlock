@@ -592,7 +592,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 @media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
 /* tip 0041 — le block au centre, comme un personnage */
-.creaSticky.creaHeros{position:relative;top:auto;display:flex;flex-direction:column;align-items:center;text-align:center;
+.creaSticky.creaHeros{position:sticky;top:4px;display:flex;flex-direction:column;align-items:center;text-align:center;
   gap:0;padding:26px 16px 18px;background:radial-gradient(ellipse at 50% 38%, rgb(167 139 250 / .16), transparent 62%), rgb(15 10 23 / .55);
   border:1px solid rgb(167 139 250 / .18);backdrop-filter:none}
 .creaScene{position:relative;width:200px;height:236px;display:grid;place-items:center;margin-bottom:10px}
@@ -603,6 +603,16 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaSol{position:absolute;bottom:2px;left:50%;width:120px;height:18px;margin-left:-60px;border-radius:50%;z-index:0;
   background:radial-gradient(ellipse, rgb(0 0 0 / .55), transparent 70%)}
 .creaHeros .creaNom{font-size:22px;letter-spacing:-.4px;max-width:100%}
+/* ⛔ PHIL (2026-09-17) : « fais en sorte que le block suive le mouvement pour pas perdre le block de vue ».
+   Le hero redevient collant, et se COMPACTE des qu on descend : colle en pleine taille, il mangeait
+   la moitie de l ecran pendant qu on bouge les cadrans. */
+.creaHeros.compacte{padding:10px 16px 8px}
+.creaHeros.compacte .creaScene{width:96px;height:104px;margin-bottom:4px}
+.creaHeros.compacte .creaArt{width:84px;height:92px}
+.creaHeros.compacte .creaNom{font-size:15px}
+.creaHeros.compacte #cApercuSym,.creaHeros.compacte .creaSol{display:none}
+.creaHeros.compacte .creaBoutonsHeros .bouton{padding:7px 12px;font-size:12px}
+.creaScene,.creaHeros .creaArt,.creaHeros .creaNom{transition:width .18s ease,height .18s ease,font-size .18s ease}
 .creaBoutonsHeros{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
 .creaBoutonsHeros .bouton{width:auto;padding:10px 16px;margin:0}
 /* les styles : une rangee de vrais apercus, jamais une liste de mots */
@@ -821,7 +831,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            sur les copies pas encore a jour. -->
       <div class="creaStyles" id="cStyles"></div>
       <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
-      <details class="bDetail" id="cReglagesDetail"><summary class="note">Manual settings — every dial</summary>
+      <details class="bDetail" id="cReglagesDetail" open><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
       <label class="wConsent" style="color:var(--doux);margin-top:12px"><input type="checkbox" id="cCerveau" checked>
@@ -1199,7 +1209,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0051" hidden>Build <code>20260917-0051</code> · brain beat in the profile, stale-tab notice.</p>
+      <p class="note" data-build="20260917-0052" hidden>Build <code>20260917-0052</code> · dials open again, the block follows you.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6442,8 +6452,14 @@ function peindreRolesCreate() {
   else if ([...s.options].some((o) => o.value === 'ACCUEIL')) s.value = 'ACCUEIL';
   const m = METIERS.find((x) => x.cle === s.value);
   const n = $('#cRoleNote');
-  if (n && m) n.textContent = 'Engraved in metadata at Create: ' + m.titre
-    + ' — brain weighs that more. Not an LLM job, not a security level. Profile can still change the browser pick later.';
+  /* ⛔⛔ PHIL (2026-09-17) : « tu dis la meme chose et pas le vrai role, tu expliques pas ». La phrase
+   * etait identique pour les sept metiers : elle parlait du champ grave, jamais de ce que le metier
+   * FAIT. Le catalogue porte deja ses trois lignes (fait / propose / jamais) — on les affiche. */
+  if (n && m) {
+    n.textContent = m.titre + ' — it ' + m.fait + '. '
+      + (m.propose ? 'It offers ' + m.propose + ', and it ' : 'It ') + m.jamais + '. '
+      + 'Engraved with the block at Create; changeable later on its profile.';
+  }
 }
 function peindrePaires() {
   const s = $('#cPaire');
@@ -7643,7 +7659,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0051',
+    build: '20260917-0052',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8117,6 +8133,17 @@ $('#cManuel').addEventListener('click', () => {
   $('#cManuel').textContent = d.open ? '🎛 Hide settings' : '🎛 Manual settings';
   if (d.open) d.scrollIntoView({ behavior: mouvementReduit ? 'auto' : 'smooth', block: 'center' });
 });
+/* le hero se compacte au defilement de l onglet Create : il reste visible, sans couvrir les cadrans */
+function majHeroCompact() {
+  const h = document.querySelector('.creaHeros');
+  if (!h) return;
+  const v = document.querySelector('#v-creer');
+  if (!v || v.hidden) return;
+  h.classList.toggle('compacte', (window.scrollY || document.documentElement.scrollTop || 0) > 140);
+}
+window.addEventListener('scroll', majHeroCompact, { passive: true });
+$('#cManuel').textContent = $('#cReglagesDetail') && $('#cReglagesDetail').open ? '🎛 Hide settings' : '🎛 Manual settings';
+if ($('#cManuel')) $('#cManuel').setAttribute('aria-expanded', $('#cReglagesDetail') && $('#cReglagesDetail').open ? 'true' : 'false');
 $('#cStyles').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-style]');
   if (b) appliquerStyle(Number(b.getAttribute('data-style')));
