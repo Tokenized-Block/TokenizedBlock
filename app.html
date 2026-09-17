@@ -542,6 +542,26 @@ details[open] > summary::before{transform:rotate(90deg)}
 /* ⛔ transform seulement, jamais l opacite : vu en test, une animation en pause laissait les cartes a moitie transparentes */
 @keyframes carteEntre{from{transform:translateY(8px)}to{transform:none}}
 @media (prefers-reduced-motion: reduce){.bouton:not([disabled]):hover{transform:none}}
+/* tip 0032 — onglet Create : choix block / token, etapes numerotees */
+.creaChoix{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px}
+.creaMode{appearance:none;text-align:left;font:inherit;color:var(--texte);cursor:pointer;border-radius:14px;padding:14px;
+  background:rgb(15 10 23 / .6);border:1px solid rgb(167 139 250 / .16);display:flex;flex-direction:column;gap:4px;
+  transition:border-color .2s ease, box-shadow .2s ease, background .2s ease}
+.creaMode b{font-size:15px}
+.creaMode span:not(.creaModeIc){color:var(--doux);font-size:12.5px;line-height:1.45}
+.creaModeIc{font-size:22px;line-height:1}
+.creaMode:hover{border-color:rgb(167 139 250 / .4)}
+.creaMode.on{border-color:var(--accent);background:rgb(167 139 250 / .12);box-shadow:0 0 22px rgb(167 139 250 / .22)}
+.creaEtape{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;margin-right:8px;font-size:12.5px;
+  background:rgb(167 139 250 / .18);color:var(--accent2);box-shadow:0 0 12px rgb(167 139 250 / .3);vertical-align:1px}
+.creaPas{list-style:none;margin:6px 0 4px;padding:0;display:grid;gap:8px;counter-reset:pas}
+.creaPas li{counter-increment:pas;display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:12px;
+  background:rgb(15 10 23 / .5);border:1px solid rgb(167 139 250 / .1)}
+.creaPas li::before{content:counter(pas);color:var(--accent);font-weight:800;min-width:14px}
+.creaPas li span{color:var(--doux);font-size:12.5px}
+.creaGo{font-size:15.5px;min-height:52px}
+@media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
+.creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -668,92 +688,109 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button class="bouton sec" id="cHasard" type="button" style="width:auto;padding:10px 14px">Surprise me</button>
     </div>
 
+    <!-- tip 0032 — REFONTE CREATE (Phil 2026-09-17 : « retravailler l onglet creation »). Un choix clair en haut
+         (un block OU un token OpenLaunch), puis le parcours du block en 3 cartes : le nommer, son apparence et son cerveau,
+         le mettre en vie. Les reglages avances (sel, paire, detail de ce que le wallet signe) sont replies.
+         ⛔ Tous les id existants sont conserves : le code qui les lit ne change pas. -->
+    <div class="carte creaChoix" role="tablist" aria-label="What do you want to create">
+      <button type="button" class="creaMode on" role="tab" aria-selected="true" data-cmode="block">
+        <span class="creaModeIc">🧱</span><b>A block</b>
+        <span>Its own face, a living brain, a place on the map. Create free, bring it to life for ≈ $1.</span>
+      </button>
+      <button type="button" class="creaMode" role="tab" aria-selected="false" data-cmode="token">
+        <span class="creaModeIc">🚀</span><b>A plain token</b>
+        <span>On OpenLaunch, by their rules. No face, no brain. Gas only.</span>
+      </button>
+    </div>
+
+    <div id="cModeBlock">
     <div class="carte">
-      <p class="titre">Create a block</p>
-      <p class="sous">Sealed <b>1B</b> at birth — nobody can mint more. Face engraved in token metadata.</p>
-      <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
+      <p class="titre"><span class="creaEtape">1</span> Name it</p>
+      <p class="sous">1 billion blocks, sealed at birth — nobody can ever mint more.</p>
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
       <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
       <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
            creations avec le meme sel depuis le meme compte se heurtent, et la factory le dit.
            Auto-fill + « New salt » tirent un sel ALEATOIRE visible — jamais un secret cache : le
            champ reste editable, et un preset de lien (?creer=…) ecrase toujours l auto-sel. -->
+      <details class="bDetail" style="margin-top:12px"><summary class="note">Advanced · its address</summary>
       <label class="champ">Salt — it fixes the address
         <span class="champSel">
           <input id="cSel" placeholder="anything you like" autocomplete="off" spellcheck="false">
           <button class="bouton sec" id="cSelNouveau" type="button" style="width:auto;padding:10px 14px">New salt</button>
         </span>
       </label>
-      <p class="note" style="margin:4px 0 0">Salt is prefilled so an address is ready — edit or New salt anytime. Salt fixes the address.</p>
+      <p class="note" style="margin:4px 0 0">Already filled in. Change it only if you want a different address.</p>
+      </details>
     </div>
 
     <div class="carte">
-      <p class="titre">Its face</p>
-      <p class="sous">Engraved on-chain as SVG <code>image</code> metadata — shared look, not an NFT. Stays as you set it (Surprise me = random).</p>
+      <p class="titre"><span class="creaEtape">2</span> Its face and its brain</p>
+      <p class="sous">The face is written into the block forever. Tap <b>Surprise me</b> above, or shape it yourself.</p>
+      <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
+      <details class="bDetail"><summary class="note">Shape its face</summary>
       <div class="reglages" id="cReglages"></div>
-    </div>
-
-    <div class="carte">
-      <p class="titre">Fly brain</p>
-      <label class="wConsent" style="color:var(--doux)"><input type="checkbox" id="cCerveau" checked>
-        Fly brain at birth (128 neurons, address-seeded — <b>not an LLM</b>). Written into metadata with the block.</label>
-      <p class="note">Moves the block, reads its market, signs nothing. Verified speech = paid TBLOCK messages.</p>
-      <label class="champ" style="margin-top:10px">Its role at birth<select id="cRole"></select></label>
-      <p class="note" id="cRoleNote">Engraved with the face — not a security level. Browser pick can change later on the profile.</p>
+      </details>
+      <label class="wConsent" style="color:var(--doux);margin-top:12px"><input type="checkbox" id="cCerveau" checked>
+        Give it a brain — 128 neurons that move it on the map and react to its market. Signs nothing.</label>
+      <label class="champ" style="margin-top:10px">Its role<select id="cRole"></select></label>
+      <p class="note" id="cRoleNote">You can change it later on its profile.</p>
     </div>
 
     <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
          creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
          elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
     <div class="carte">
-      <p class="titre">Pair it with</p>
-      <p class="sous">Default <b>TBLOCK</b>. Or ETH, USDC, a Coinbase stock, or another native B20 (0xef). Pairing ≠ TBLOCK FDV / peg.</p>
+      <p class="titre"><span class="creaEtape">3</span> Bring it to life</p>
+      <ol class="creaPas">
+        <li><b>Create</b> <span>free · one signature</span></li>
+        <li><b>Bring it to life</b> <span>≈ $1 in ETH · its market opens</span></li>
+        <li><b>It lives</b> <span>on the map, with its brain · 0.5% on trades made here</span></li>
+      </ol>
+      <p class="note" id="cReseauAvert"></p>
+      <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
+      <details class="bDetail" style="margin-top:10px"><summary class="note">Paired with · TBLOCK by default</summary>
+      <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
+           creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
+           elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
       <label class="champ">Pair<select id="cPaire"></select></label>
       <label class="champ" id="cPaireAutreRang" hidden>Token address<input id="cPaireAutre"
         placeholder="0x… the whole address" autocomplete="off" spellcheck="false"></label>
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
-    </div>
-
-    <div class="carte">
-      <p class="titre">What it costs, and what it signs</p>
-      <p class="note" id="cReseauAvert"></p>
-      <!-- tip 2349–2354: Create FREE · fee at Launch+fee hook. Sign tab must not say life fee at create. Never show FEE_WALLET in UI. -->
-      <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px">
+      </details>
+      <details class="bDetail" style="margin-top:6px"><summary class="note">What your wallet will sign</summary>
+      <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
-        <button type="button" class="puce" role="tab" aria-selected="false" data-itab="sign">Sign</button>
-        <button type="button" class="puce" role="tab" aria-selected="false" data-itab="notes">Notes</button>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="cost">
         <p class="note" id="cFrais"></p>
-        <ul class="note noteBullets" id="cCostBullets">
+        <ul class="note noteBullets" id="cCostBullets" hidden>
           <li><b>Create</b>: free</li>
           <li><b>Bring life</b>: ≈ $1 in ETH</li>
-          <li><b>Buy/Sell</b> (pool live): 0.5%</li>
+          <li><b>Buy/Sell</b>: 0.5%</li>
         </ul>
-        <p class="note" id="cRecap"></p>
-      </div>
-      <div class="infoPane" data-itabs-pane="cCost" data-itab="sign" hidden>
-        <p class="note"><b>Step 1 of 2</b> — free Create (one signature). <b>Step 2</b> — bring it to life right after: that is when it starts earning.</p>
         <ol class="pmLignes" id="cApercuTx"></ol>
+        <p class="note" id="cMintFeeHint" hidden></p>
+        <p class="note" id="cBuybackHint" hidden></p>
       </div>
-      <div class="infoPane" data-itabs-pane="cCost" data-itab="notes" hidden>
-        <p class="note" id="cMintFeeHint">Create is free. Bringing it to life (≈ $1 in ETH) puts <b>~99.9% of its blocks</b> in a market paired with ETH, locked forever. Every trade then pays its creator. Fees are taken in ETH.</p>
-        <p class="note" id="cBuybackHint"><b>Life fee ≠ buyback</b>. Holders path can buy TBLOCK — no peg.</p>
-      </div>
-      <div class="pActions" style="grid-template-columns:1fr 1fr">
-        <button class="bouton sec" id="cVerifier" type="button">Check the address first</button>
-        <button class="bouton" id="cCreer" type="button">Create, then bring it to life — 2 signatures</button>
+      </details>
+      <!-- ce qui manque encore (nom, symbole…) reste VISIBLE a cote du bouton, pas replie -->
+      <p class="note" id="cRecap"></p>
+      <div class="pActions" style="grid-template-columns:1fr">
+        <button class="bouton creaGo" id="cCreer" type="button">Create, then bring it to life — 2 signatures</button>
+        <button class="bouton sec" id="cVerifier" type="button">Check its address first</button>
         <p class="note" id="cALancer" hidden></p>
       </div>
       <p class="note" id="cEtat"></p>
     </div>
+    </div>
 
     <!-- tip 0024 — launch OpenLaunch DIRECT depuis l app (factory OL, Base). Preuve fork 2026-09-16 : launch OK, achat 0,1 ETH,
          collect -> frais LP repartis selon recipientsOf. tip 0028 : regles d OpenLaunch, 100 % des frais au lanceur (Phil). -->
-    <div class="carte">
-      <p class="titre">Or launch a plain token on OpenLaunch</p>
-      <p class="sous">Their contract, their rules: 1B supply, all of it locked in a pool paired with ETH. It is a token, not a block — no Brain AI.
+    <div class="carte" id="cModeToken" hidden>
+      <p class="titre">A plain token on OpenLaunch</p>
+      <p class="sous">Their contract, their rules: 1B supply, all of it locked in a pool paired with ETH. No face, no brain, not on the map.
         The trading fee you pick goes <b>100% to you</b>, in ETH, forever. Pick 0% and nobody earns it.</p>
       <label class="champ">Name<input id="olNom" maxlength="32" placeholder="My token" autocomplete="off"></label>
       <label class="champ">Symbol<input id="olSym" maxlength="11" placeholder="MYTKN" autocomplete="off"></label>
@@ -1042,7 +1079,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0031" hidden>Build <code>20260917-0031</code> · true fee copy (0.5%) · Live capped · dev tools folded.</p>
+      <p class="note" data-build="20260917-0032" hidden>Build <code>20260917-0032</code> · Create tab redesign.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6353,7 +6390,7 @@ function majFraisEtRecap() {
     }
     boutonCreer.disabled = !prixOk || !soldeOk || Boolean(v.ko);
     boutonCreer.title = v.ko ? v.ko
-      : ((usd > 0 && !prixOk) ? 'Life-fee price unread — Create closed'
+      : ((usd > 0 && !prixOk) ? 'Reading the ETH price…'
         : (!soldeOk ? 'Not enough ETH' : ''));
   }
   const feeTxt = usd > 0
@@ -6542,6 +6579,16 @@ $('#olPreparer').addEventListener('click', async () => {
   });
   etat.className = 'note'; etat.textContent = 'Read it, then sign. Nothing is sent until your wallet confirms.';
 });
+
+/* tip 0032 — choix du mode dans Create : un block (parcours complet + apercu) ou un token OpenLaunch (sa carte seule) */
+document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('click', () => {
+  const token = b.getAttribute('data-cmode') === 'token';
+  document.querySelectorAll('[data-cmode]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on ? 'true' : 'false'); });
+  const bloc = $('#cModeBlock'), tok = $('#cModeToken'), sticky = document.querySelector('#v-creer .creaSticky');
+  if (bloc) bloc.hidden = token;
+  if (tok) tok.hidden = !token;
+  if (sticky) sticky.hidden = token;
+}));
 
 async function creerBlock() {
   if (creationEnCours) return;
@@ -7166,7 +7213,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0031',
+    build: '20260917-0032',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
