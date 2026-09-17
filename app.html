@@ -1179,7 +1179,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0046" hidden>Build <code>20260917-0046</code> · brain picker: stage emojis, no genesis pair.</p>
+      <p class="note" data-build="20260917-0047" hidden>Build <code>20260917-0047</code> · brain: wiring fingerprint next to facts.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3415,8 +3415,8 @@ function peindreCerveau() {
   $('#pcTick').textContent = v.tick;
   /* ⛔ L EMPREINTE DE L ENTREE EST AFFICHEE, comme les sha256 de degen-fly : c est ce qui separe une
    * simulation qu on peut rejouer d une animation qui fait joli. */
-  $('#pcEmpreinte').textContent = 'input ' + v.entree.slice(0, 18) + '… · 128 neurons seeded by this '
-    + 'block address · simulation, nothing on chain';
+  $('#pcEmpreinte').textContent = 'wiring ' + String(v.cablage || '').slice(0, 14) + '… (from this block address) · facts '
+    + v.entree.slice(0, 14) + '… · 128 neurons · simulation, nothing on chain';
   peindreCompanion();
 }
 
@@ -7486,7 +7486,12 @@ function battreBrain() {
   brainDernier = r.vu;
   $('#bSpikes').textContent = brainTotal;
   $('#bActifs').textContent = r.vu.actifs + ' / 128';
-  $('#bEmpreinte').textContent = 'input ' + r.vu.entree.slice(0, 26) + '… · replay it and you get the same beat';
+  /* ⛔ DEUX EMPREINTES, PAS UNE. « input … replay it and you get the same beat » etait faux entre
+   * deux blocks : l empreinte des faits ne porte pas l adresse, donc elle est la MEME pour deux
+   * blocks nourris des memes chiffres (mesure 2026-09-17) — ce qui donnait l impression que tous les
+   * cerveaux etaient le meme. Le cablage vient de l adresse : c est lui qui distingue. */
+  $('#bEmpreinte').textContent = 'wiring ' + String(r.vu.cablage || '').slice(0, 14) + '… (this block) · facts '
+    + r.vu.entree.slice(0, 14) + '… · same wiring and same facts replay the same beat';
   publierSnapshotBrain(r.vu, h);
 }
 
@@ -7561,7 +7566,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0046',
+    build: '20260917-0047',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

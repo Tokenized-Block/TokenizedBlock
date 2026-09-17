@@ -262,6 +262,13 @@ export function pas(etat, faits = {}) {
       delta: f.delta,
       /* la memoire de travail moyenne, 0..1 : combien le reseau « se souvient » de ce qu il vient de faire */
       memoire: memoireMoyenne,
+      /* ⛔⛔ L EMPREINTE DU CABLAGE, A COTE DE CELLE DES FAITS (mesure du 2026-09-17, sur une remarque de
+       * Phil : « c est tout le meme block »). `entree` ne porte QUE les faits — donc deux blocks
+       * differents avec les memes faits rendent la MEME empreinte, et l ecran, qui l affichait seule
+       * comme identite du cerveau, donnait raison a Phil. Verifie : meme `entree`, indices actifs
+       * DIFFERENTS, connectomes differents. Le cablage, lui, vient de l adresse : c est lui qui
+       * distingue. Les deux ensemble disent ce qui se rejoue vraiment. */
+      cablage: c.empreinte,
       /* ⛔ L EMPREINTE DE L ENTREE PORTE LA VERSION ET CHAQUE FAIT : deux personnes rejouent le meme pas. */
       entree: empreinte(JSON.stringify([VERSION_CERVEAU, f.aMarche, f.taille, f.delta, f.gm, f.messages,
         f.detenteurs, f.part, f.scelle, f.mort, etat.tick,

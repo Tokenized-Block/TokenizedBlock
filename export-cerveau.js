@@ -81,6 +81,9 @@ export function snapshotCerveau({
     } : null,
     memoire: vu && typeof vu.memoire === 'number' ? vu.memoire : null,
     entree: vu && vu.entree ? String(vu.entree) : null,
+    /* ⛔ SANS LE CABLAGE, L EXPORT NE DESIGNE PAS UN BLOCK : `entree` ne porte que les faits, donc deux
+     * blocks nourris des memes chiffres s exportaient avec la meme empreinte (mesure 2026-09-17). */
+    cablage: vu && vu.cablage ? String(vu.cablage) : null,
     marche: (() => {
       const base = {
         vie: typeof vie === 'number' && Number.isFinite(vie) ? vie : null,
