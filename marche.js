@@ -116,7 +116,14 @@ export const CLES_MARCHE = [
  *    « pas de prix » a une panne de reseau — et une panne chez nous se lirait comme un fait sur le
  *    jeton de quelqu un d autre.
  */
-export async function vieDuBlock({ rpc, stateView, jeton }) {
+/**
+ * ⛔⛔ LES CLES EXACTES PASSENT AVANT LES CANDIDATES (2026-09-17). Mesure : la pool de bGYND est
+ *    fee 3000 / tickSpacing 60 / hooks 0xee0f… ; notre liste essayait bien 3000/60 mais TOUJOURS
+ *    SANS HOOK — donc un autre poolId, donc « aucun marche ». Et on en avait conclu, a tort, que
+ *    les pools des autres lanceurs refusaient notre routeur. Une cle LUE sur la chaine (evenement
+ *    Initialize du PoolManager) est la verite ; les candidates ne sont plus qu un repli.
+ */
+export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
     return { etat: 'REFUSEE', vie: null, devise: null, via: null, pourquoi: 'not an address' };
   }
@@ -126,7 +133,15 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   const selSlot0 = selecteur('getSlot0(bytes32)');
 
   let lues = 0, ratees = 0, sqrt = 0n, via = null, cleTrouvee = null;
-  for (const cfg of CLES_MARCHE) {
+  const nulle = (h) => !h || /^0x0{40}$/i.test(String(h));
+  const candidates = [
+    ...(Array.isArray(clesExactes) ? clesExactes : [])
+      .filter((c) => c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing)))
+      .map((c) => ({ nom: 'on-chain key ' + (Number(c.fee) / 10000) + ' %', fee: Number(c.fee),
+        tickSpacing: Number(c.tickSpacing), hooks: nulle(c.hooks) ? null : c.hooks })),
+    ...CLES_MARCHE,
+  ];
+  for (const cfg of candidates) {
     const cle = cleDePool(ETH_NATIF, jeton, { fee: cfg.fee, tickSpacing: cfg.tickSpacing, ...(cfg.hooks ? { hooks: cfg.hooks } : {}) });
     let s0;
     try {
@@ -147,7 +162,7 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
 
   if (!lues) {
     return { etat: 'NON_LUE', vie: null, devise: null, via: null,
-      pourquoi: 'no readable slot0 on any of the ' + CLES_MARCHE.length + ' keys' };
+      pourquoi: 'no readable slot0 on any of the ' + candidates.length + ' keys' };
   }
   /* ⛔⛔ BUG TROUVE EN VERIFIANT TBLOCK (2026-09-13) : le marche TBLOCK/ETH est en ligne (cle frais 0), mais sa lecture
    * a ete refusee par le noeud sature pendant que les AUTRES cles repondaient « pas de pool » — et la fonction concluait
@@ -165,11 +180,11 @@ export async function vieDuBlock({ rpc, stateView, jeton }) {
   }
   if (sqrt === 0n && ratees > 0) {
     return { etat: 'NON_LUE', vie: null, devise: null, via: null,
-      pourquoi: ratees + ' of the ' + CLES_MARCHE.length + ' market keys could not be read — the market may exist on one of them' };
+      pourquoi: ratees + ' of the ' + candidates.length + ' market keys could not be read — the market may exist on one of them' };
   }
   if (sqrt === 0n) {
     return { etat: 'NON_TROUVEE', vie: null, devise: null, via: null,
-      pourquoi: 'no initialized pool among the ' + CLES_MARCHE.length + ' keys read ('
+      pourquoi: 'no initialized pool among the ' + candidates.length + ' keys read ('
         + CLES_MARCHE.map((c) => c.nom).join(', ') + ', and TBLOCK · 0 %) — NOT a claim that this block has no price' };
   }
 

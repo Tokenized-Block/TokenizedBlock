@@ -65,6 +65,54 @@ async function rpcServeur(methode, params) {
   }
   throw new Error('node rate limit');
 }
+/* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
+ * ⛔⛔ MESURE DU 2026-09-17, ET ELLE RENVERSE UNE CONCLUSION QUE J AVAIS PUBLIEE. On croyait que les
+ *    pools des autres lanceurs REFUSAIENT notre routeur. Faux : on lisait la mauvaise cle. Pour
+ *    bGYND, la pool vraie est fee 3000 / tickSpacing 60 / hooks 0xee0f… ; notre liste de candidats
+ *    essayait bien 3000/60, mais TOUJOURS SANS HOOK — donc un autre poolId, donc « pas de marche ».
+ *    Avec la cle exacte, le Quoter officiel rend un prix : 0,01 ETH -> 1,856e23 unites, gas 60 256.
+ * ⛔ LA CLE EST IMMUABLE : une pool ne change jamais de fee, de tickSpacing ni de hook. Le cache n a
+ *    donc pas de peremption — seul un ECHEC de lecture se reessaie.
+ * ⛔ ET « PAS TROUVE » N EST PAS « PAS DE POOL » : on rend la fenetre balayee avec la reponse, pour
+ *    qu un appelant ne transforme pas notre fenetre trop courte en verdict sur le block. */
+const PM_V4 = '0x498581ff718922c3f8e6a244956af099b2652b2b';
+const TOPIC_INITIALIZE = '0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438';
+const clesPool = new Map();
+async function resoudreClePool(token, fenetres = 40) {
+  const t = String(token).toLowerCase();
+  if (clesPool.has(t)) return clesPool.get(t);
+  const t32 = '0x' + t.slice(2).padStart(64, '0');
+  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  const trouvees = [];
+  for (let i = 0; i < fenetres && !trouvees.length; i++) {
+    const fin = tete - i * 2000, deb = fin - 1999;
+    const enHex = (n) => '0x' + n.toString(16);
+    for (const topics of [[TOPIC_INITIALIZE, null, null, t32], [TOPIC_INITIALIZE, null, t32]]) {
+      const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(deb), toBlock: enHex(fin), address: PM_V4, topics }]);
+      for (const l of logs) trouvees.push(l);
+    }
+  }
+  if (!trouvees.length) {
+    /* pas de cache : la pool peut etre plus ancienne que la fenetre, et demain la fenetre bougera */
+    return { ok: false, pourquoi: 'no Initialize found in the last ' + (fenetres * 2000) + ' blocks', balaye: fenetres * 2000 };
+  }
+  const cles = trouvees.map((l) => {
+    const d = l.data.slice(2), mot = (i) => d.slice(i * 64, (i + 1) * 64);
+    return {
+      poolId: l.topics[1],
+      currency0: '0x' + l.topics[2].slice(26),
+      currency1: '0x' + l.topics[3].slice(26),
+      fee: parseInt(mot(0), 16),
+      tickSpacing: parseInt(mot(1), 16),
+      hooks: '0x' + mot(2).slice(24),
+      bloc: parseInt(l.blockNumber, 16),
+    };
+  });
+  const r = { ok: true, cles, balaye: fenetres * 2000 };
+  clesPool.set(t, r);
+  return r;
+}
+
 const blocksConnus = new Set();
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 function trending() {
@@ -241,6 +289,24 @@ createServer((req, res) => {
     trending().then((corps) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(corps);
+    });
+    return;
+  }
+
+  /* la vraie cle de pool d un block : /api/cle/0x… — lue sur la chaine, jamais devinee */
+  if (chemin.startsWith('/api/cle/')) {
+    const token = chemin.slice('/api/cle/'.length);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(token)) {
+      res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: 'whole address required' }));
+      return;
+    }
+    resoudreClePool(token).then((r) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
     });
     return;
   }

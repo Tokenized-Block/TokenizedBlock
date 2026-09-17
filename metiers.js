@@ -27,22 +27,22 @@ const enc = new TextEncoder();
  * borne dite a l ecran, parce qu une borne qu on ne lit pas ne rassure personne.
  */
 export const METIERS = [
-  { cle: 'GARDIEN', titre: 'Keeper',
+  { cle: 'GARDIEN', regarde: 'its own market cap, compared across your visits (kept in this browser)', titre: 'Keeper',
     /* ⛔⛔ LA PROMESSE D AVANT ETAIT FAUSSE (Phil, capture du 2026-09-13) : « says when it moves » — et
      *    `rapport` ne disait JAMAIS un mouvement, juste la capitalisation lue. Le Keeper compare
      *    maintenant les lectures gardees dans CE navigateur et le dit — y compris qu il n en a pas assez. */
     fait: 'compares its market cap across your visits and says whether it moved',
     propose: null,
     jamais: 'never moves anything — it only reports' },
-  { cle: 'MOMENTUM', titre: 'Momentum',
+  { cle: 'MOMENTUM', regarde: 'its own last three readings', titre: 'Momentum',
     fait: 'compares its last three readings and calls the trend',
     propose: 'a buy or a sell, prepared for you to sign',
     jamais: 'never sends an order by itself' },
-  { cle: 'ECLAIREUR', titre: 'Scout',
+  { cle: 'ECLAIREUR', regarde: 'the other blocks this page could actually read — never all of them', titre: 'Scout',
     fait: 'ranks the blocks it can see, and says how shallow they are',
     propose: null,
     jamais: 'never claims a rank over blocks it could not read' },
-  { cle: 'HERAUT', titre: 'Herald',
+  { cle: 'HERAUT', regarde: 'its own measured numbers', titre: 'Herald',
     fait: 'writes a post about its block using measured numbers only',
     propose: 'a draft you send yourself',
     jamais: 'never posts anywhere on its own' },
@@ -50,18 +50,18 @@ export const METIERS = [
    *    les 0,5 % » — devenu FAUX pour tout marche ouvert par l app : la position appartient a l adresse
    *    morte et les frais sont a 0, donc il n y a rien a collecter, pour personne. Une proposition
    *    fausse affichee dans un profil serait pire qu aucune proposition. */
-  { cle: 'COMPTABLE', titre: 'Bookkeeper',
+  { cle: 'COMPTABLE', regarde: 'your balance of this block', titre: 'Bookkeeper',
     fait: 'reads what you hold of the block',
     propose: null,
     jamais: 'never moves anything, and never holds a key' },
   /* ⛔⛔ ROLES A CHOISIR (Phil, 2026-09-14 : « mets de vrais roles au block, que les users peuvent choisir sur leur
    *    profil » + « le Brain AI s adapte »). Ces deux-la ne sont PAS tires de l adresse (voir METIERS_DERIVES) : les
    *    ajouter au tirage aurait change le metier de TOUS les blocks existants. */
-  { cle: 'SENTINELLE', titre: 'Sentinel',
+  { cle: 'SENTINELLE', regarde: 'the buys and sells on its own market', titre: 'Sentinel',
     fait: 'watches the buys and sells on its market and says when selling outweighs buying',
     propose: null,
     jamais: 'never buys or sells — it only warns' },
-  { cle: 'ACCUEIL', titre: 'Greeter',
+  { cle: 'ACCUEIL', regarde: 'new holders and transfers of its own block', titre: 'Greeter',
     fait: 'notices new holders and transfers, and suggests a GM back',
     propose: 'a GM you send yourself',
     jamais: 'never sends a GM by itself' },

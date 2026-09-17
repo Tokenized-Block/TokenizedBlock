@@ -1209,7 +1209,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0052" hidden>Build <code>20260917-0052</code> · dials open again, the block follows you.</p>
+      <p class="note" data-build="20260917-0053" hidden>Build <code>20260917-0053</code> · real pool key read on chain.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1223,9 +1223,13 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="puce" data-filtre="SWAP">↔ Swap</button>
         <button type="button" class="puce" data-filtre="GM">➡️ Sent</button>
         <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
-        <button type="button" class="puce" data-filtre="NOUS">🟦 Ours</button>
-        <button type="button" class="puce" data-filtre="TRUSTED">✦ Trusted</button>
-        <button type="button" class="puce" data-filtre="HOOKED">✦ Alive here</button>
+        <!-- ⛔ PHIL (2026-09-17) : « Ours / Trusted / Alive here : on s en fout, refais ca et ajoute si besoin ».
+             Les trois filtraient sur des listes a nous (nos deux blocks, une liste gardee dans le navigateur, un
+             hook) — donc presque toujours vides, et ils prenaient la place de ce qui bouge vraiment. Les branches
+             de code restent (rien n est supprime) ; ce sont les boutons qui partent.
+             A LA PLACE, deux filtres qui portent sur la DONNEE de l evenement, pas sur nos listes. -->
+        <button type="button" class="puce" data-filtre="GROS">💰 Big</button>
+        <button type="button" class="puce" data-filtre="ECHANGES">📈 Trades</button>
       </div>
       <!-- tip 2357/2358/0013: hooked BuySell + unhooked → Launch beside · sticky Hooked=Dex fees. No fee addr. -->
       <p class="note" id="sfHookedRoute" hidden></p>
@@ -4039,7 +4043,7 @@ async function lireProfil(adr, sym, perime) {
       await dormir(3000 * 2 ** (essai - 1));
       if (perime()) return;
     }
-    try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { v = null; }
+    try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, clesExactes: await clesReellesDe(adr) }); } catch { v = null; }
     if (perime()) return;
     if (v && v.etat !== 'NON_LUE') break;
   }
@@ -4300,6 +4304,8 @@ $('#pEnvoyer').addEventListener('click', () => {
 const LIVE_MS = 20000, LIVE_FENETRE = 1999;
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /* le filtre du fil Live : un tri de LECTURE, il ne change ni ce qui est lu ni ce qui est compte */
+/** ⛔ Seuil de « Big », en ETH : parametre NOMME, pas un nombre perdu dans une condition. */
+const SEUIL_GROS_ETH = 0.02;
 let liveFiltre = 'TOUT';
 /* ⛔⛔ LES VRAIES POOLS (2026-09-14, mesure : 2 swaps sur 425 tombaient sur nos 6 cles devinees) : decouvertes par les
  *    logs Initialize, gardees pour la page ; et les blocks trouves en remontant le fil (« Load older ») sont suivis aussi. */
@@ -4327,6 +4333,13 @@ function filtreLive(e) {
     return tset.has(String(e.jeton || '').toLowerCase())
       || (e.type === 'MESSAGE' && (tset.has(String(e.de || '').toLowerCase()) || tset.has(String(e.a || '').toLowerCase())));
   }
+  /* ⛔ « Big » SE MESURE, il ne se decrete pas : seuls les evenements qui PORTENT un montant lu
+   * peuvent entrer. Un montant absent n est pas un petit montant — il ne passe pas le filtre. */
+  if (liveFiltre === 'GROS') {
+    const m = Number(e.eth);
+    return Number.isFinite(m) && m >= SEUIL_GROS_ETH;
+  }
+  if (liveFiltre === 'ECHANGES') return e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP';
   if (liveFiltre === 'GM') return e.type === 'GM' || e.type === 'NOTE';
   /* tip 2357: Hooked chip — fee hook / HOOK confiance only (volume that can pay protocol). */
   if (liveFiltre === 'HOOKED') {
@@ -5580,7 +5593,7 @@ async function calculerLancement() {
   let marcheAvant = null;
   for (let essai = 0; essai < 3; essai++) {
     if (essai) { e.textContent = 'Checking its market again (' + (essai + 1) + '/3)…'; await dormir(4000 * essai); }
-    try { marcheAvant = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr }); } catch { marcheAvant = null; }
+    try { marcheAvant = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, clesExactes: await clesReellesDe(adr) }); } catch { marcheAvant = null; }
     if (marcheAvant && marcheAvant.etat !== 'NON_LUE') break;
   }
   if (marcheAvant && marcheAvant.etat === 'NON_TROUVEE') {
@@ -6455,8 +6468,11 @@ function peindreRolesCreate() {
   /* ⛔⛔ PHIL (2026-09-17) : « tu dis la meme chose et pas le vrai role, tu expliques pas ». La phrase
    * etait identique pour les sept metiers : elle parlait du champ grave, jamais de ce que le metier
    * FAIT. Le catalogue porte deja ses trois lignes (fait / propose / jamais) — on les affiche. */
+  /* ⛔ ET IL DIT SUR QUOI IL REGARDE (Phil, 2026-09-17 : « decris le role, quels blocks il choisit »).
+   * Un seul des sept touche a d autres blocks (le Scout) : le dire evite de laisser croire que chaque
+   * metier surveille tout le marche. */
   if (n && m) {
-    n.textContent = m.titre + ' — it ' + m.fait + '. '
+    n.textContent = m.titre + ' — it ' + m.fait + '. It looks at ' + (m.regarde || 'its own block') + '. '
       + (m.propose ? 'It offers ' + m.propose + ', and it ' : 'It ') + m.jamais + '. '
       + 'Engraved with the block at Create; changeable later on its profile.';
   }
@@ -6479,6 +6495,34 @@ function majResumePaire(sym) {
   if (!r) return;
   const s = String(sym || '').trim();
   r.textContent = s ? 'Paired with · ' + s : 'Paired with · not chosen yet';
+}
+
+/* ══ LA VRAIE CLE DE POOL ═══════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ CE QUI A ETE MESURE LE 2026-09-17, ET QUI CORRIGE UNE CONCLUSION PUBLIEE ICI : les pools des
+ *    autres lanceurs ne refusaient pas notre routeur — on lisait la MAUVAISE cle. La pool de bGYND
+ *    est fee 3000 / tickSpacing 60 / hooks 0xee0f… ; nos candidates essayaient 3000/60 sans hook,
+ *    donc un autre poolId. Avec la cle exacte, le Quoter officiel rend un prix (0,01 ETH ->
+ *    1,856e23 unites, gas 60 256). Le serveur lit la cle dans l evenement Initialize et la cache ;
+ *    la page la demande avant de lire un marche.
+ * ⛔ UN ECHEC N EST PAS UNE ABSENCE : on garde `null` en memoire seulement pour un « pas trouve »
+ *    explicite, jamais pour une panne — sinon une coupure de reseau condamnerait le block. */
+const clesReelles = new Map();
+async function clesReellesDe(adr) {
+  const k = String(adr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(k)) return [];
+  if (clesReelles.has(k)) return clesReelles.get(k) || [];
+  try {
+    const r = await fetch('/api/cle/' + k, { cache: 'no-store' });
+    const d = await r.json();
+    if (d && d.ok === true && Array.isArray(d.cles)) {
+      clesReelles.set(k, d.cles);
+      return d.cles;
+    }
+    if (d && d.ok === false) clesReelles.set(k, []);
+    return [];
+  } catch (_) {
+    return []; /* rien en cache : on reessaiera */
+  }
 }
 
 let majPaireSeq = 0;
@@ -7483,7 +7527,7 @@ function choisirBrain(adr) {
       }
     } catch { /* non lue : le journal le dira */ }
     try {
-      const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr });
+      const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, clesExactes: await clesReellesDe(adr) });
       if (hB) {
         if (marche && marche.etat === 'LUE') {
           hB.vieAvant = hB.vie;
@@ -7523,7 +7567,7 @@ async function relireMarcheBrainSiNonLu() {
   const cached = viePourCerveau(brainAdr, h ? h.vie : null, et);
   if (cached.etatVie === 'LUE' && cached.vie > 0) return;
   try {
-    const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: brainAdr });
+    const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: brainAdr, clesExactes: await clesReellesDe(brainAdr) });
     if (marche && marche.etat === 'LUE') {
       if (h) { h.vieAvant = h.vie; h.vie = marche.vie; h.devise = marche.devise; h.via = marche.via || null; h.cle = marche.cle || null; h.liquidite = marche.liquidite != null ? marche.liquidite : null; h.etatVie = 'LUE'; }
       viePourCerveau(brainAdr, marche.vie, 'LUE');
@@ -7659,7 +7703,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0052',
+    build: '20260917-0053',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

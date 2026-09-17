@@ -12,7 +12,11 @@
 /** ⛔ ADRESSE RECOPIEE, jamais de memoire.
  * Legacy 0x37eb…580a receives NOTHING (policy). Old 0x3486… / 0x34E3… still 37eb — unused.
  */
-/** ⛔⛔ DESTINATION CHANGEE LE 2026-09-17, A LA DEMANDE DE PHIL : « envoie les fees direct a mon
+/** ⛔⛔ DESTINATION : LE SMART WALLET, remis le 2026-09-17 apres un aller-retour assume — Phil suit
+ * CE wallet (« continue a check que 0xa6cf… se remplisse ») et c est lui qui est GRAVE dans le hook et
+ * le CreateRouter deja deployes : une seule caisse, pas deux. Son wallet perso reste connu de nous mais
+ * ne sert plus de destination (le mettre dans un depot PUBLIC liait aussi toute son activite perso).
+ * ANCIENNE NOTE, gardee parce que la mesure vaut toujours : « envoie les fees direct a mon
  * wallet, je recois toujours sur le smart wallet ». Adresse RECOPIEE de son message.
  * MESURE FAITE AVANT DE CHANGER, sur Base :
  *   · a6cf…f5d4 = CONTRAT de 61 octets, le proxy minimal ERC-1967 d un smart wallet (slot
@@ -20,7 +24,7 @@
  *   · le nouveau = EOA, AUCUN code, nonce 48 — un compte qu il signe lui-meme.
  * Les deux savent recevoir de l ETH (le `take` de v4 transmet tout le gas) : c est un choix de
  * destination, pas un correctif de transport. */
-export const FEE_WALLET = '0xaf8e0a44496a6b90da03fbadd9daec875fc3e2a6';
+export const FEE_WALLET = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 /** ⛔ LE SMART WALLET N EST PAS REMPLACABLE PARTOUT : deux contrats DEJA DEPLOYES le portent en
  * immuable (le hook HOOK_PREVU et le CreateRouter). Ce qu ils encaissent continue d aller la — seule
  * la destination des frais que l APP calcule a change. C est aussi lui qui rachete du TBLOCK. */
