@@ -51,6 +51,7 @@ async function lireOpenLaunch() {
  * de la factory B20, lecture seule, 3 jours puis increments), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations } from './index-blocks.js';
+import { faceDuBlock } from './face.js';
 import { resumerTrending } from './trending.js';
 const RPC_BASE = 'https://mainnet.base.org';
 let rpcId = 0;
@@ -111,6 +112,31 @@ async function resoudreClePool(token, fenetres = 40) {
   const r = { ok: true, cles, balaye: fenetres * 2000 };
   clesPool.set(t, r);
   return r;
+}
+
+/* ══ LA FACE GRAVEE D UN BLOCK ════════════════════════════════════════════════════════════════════
+ * ⛔⛔ CE QUE PHIL DEMANDE DE VERIFIER (2026-09-17) : « que les blocks correspondent a ce qu ils
+ *    creent de base et a ce qui est affiche sur la map ». Mesure du jour : nos deux blocks de genese
+ *    portent bien une face GRAVEE (facette lettre/verre et fleche/fil), trois blocks tiers n ont
+ *    AUCUNE metadonnee (la face derivee de l adresse est alors la seule verite disponible), et neuf
+ *    lectures ont ete REFUSEES par le noeud public depuis le navigateur — ni gravee, ni absente :
+ *    non lue. C est pour ces neuf-la que la lecture passe cote serveur, qui reessaie et qui partage
+ *    son cache avec tout le monde.
+ * ⛔ CE QUI SE MET EN CACHE POUR TOUJOURS : « LU » et « AUCUNE ». Les deux sont immuables — mesure du
+ *    2026-09-06 : updateContractURI est REFUSE sur les B20. Un ECHEC, lui, ne se cache jamais. */
+const facesLues = new Map();
+async function resoudreFace(token) {
+  const t = String(token).toLowerCase();
+  if (facesLues.has(t)) return facesLues.get(t);
+  const r = await faceDuBlock({ rpc: rpcServeur, jeton: t });
+  const rep = { ok: true, etat: r.etat, face: r.face || null, role: r.role || null,
+    pourquoi: r.pourquoi || null };
+  /* ⛔ TOUT CE QUI DECOULE DES METADONNEES EST IMMUABLE, donc cachable : LU, AUCUNE (aucun URI),
+   * AUTRE_SOURCE (URI hebergee ailleurs — mesure du 2026-09-18 : un de nos blocks de genese est dans
+   * ce cas) et INVALIDE (champs hors bornes). SEUL « NON_LUE » est un echec de LECTURE : jamais cache,
+   * sinon une minute de noeud sature condamnerait la face d un block pour toute la vie du process. */
+  if (r.etat !== 'NON_LUE') facesLues.set(t, rep);
+  return rep;
 }
 
 const blocksConnus = new Set();
@@ -289,6 +315,24 @@ createServer((req, res) => {
     trending().then((corps) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(corps);
+    });
+    return;
+  }
+
+  /* la face GRAVEE d un block : /api/face/0x… — celle que son createur a choisie, pas celle qu on devine */
+  if (chemin.startsWith('/api/face/')) {
+    const token = chemin.slice('/api/face/'.length);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(token)) {
+      res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: 'whole address required' }));
+      return;
+    }
+    resoudreFace(token).then((r) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, etat: 'NON_LUE', pourquoi: 'face not read: ' + String(e.message || e).slice(0, 120) }));
     });
     return;
   }

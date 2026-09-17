@@ -1209,7 +1209,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260917-0053" hidden>Build <code>20260917-0053</code> · real pool key read on chain.</p>
+      <p class="note" data-build="20260918-0054" hidden>Build <code>20260918-0054</code> · engraved faces on every map tile.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7703,7 +7703,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260917-0053',
+    build: '20260918-0054',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8296,6 +8296,43 @@ async function soleilsSurLaMap() {
     try { peindreStades(); } catch (_) { /* l onglet n est peut-etre pas encore peint */ }
   } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
 }
+/* ══ LES FACES DE LA MAP ════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ PHIL (2026-09-17) : « regarde bien que les blocks correspondent a ce qu ils creent de base et a
+ *    ce qui est affiche sur la map ». Trou mesure : la face GRAVEE n etait relue que dans la boucle de
+ *    vie, donc pour les 30 premiers blocks. Les centaines ajoutes par les soleils gardaient la face
+ *    DERIVEE de leur adresse — juste pour un block sans metadonnees, FAUX pour un block ne chez nous.
+ * ⛔ LA LECTURE PASSE PAR LE SERVEUR : depuis le navigateur, neuf lectures sur douze ont ete refusees
+ *    par le noeud public (ni gravee, ni absente : non lue). Le serveur reessaie et partage son cache.
+ * ⛔ ET ON NE REDESSINE QUE SUR « LU » : une face non lue laisse la tuile telle quelle, sans rien
+ *    affirmer. Par petits lots, pour ne pas transformer la map en rafale de requetes. */
+let facesEnCours = false;
+async function facesDeLaMap(lot = 8) {
+  if (facesEnCours) return;
+  facesEnCours = true;
+  try {
+    const aLire = habitants.filter((h) => h && h.adr && !faceConnue(h.adr) && !h.faceDemandee).slice(0, lot);
+    for (const h of aLire) {
+      h.faceDemandee = true;
+      try {
+        const r = await (await fetch('/api/face/' + String(h.adr).toLowerCase(), { cache: 'no-store' })).json();
+        if (r && r.etat === 'LU' && r.face && noterFace(h.adr, r.face)) {
+          h.origine = origineDepuisFace('LU');
+          if (h.el) {
+            h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
+              + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
+          }
+          if (r.role) { try { noterRoleGrave(h.adr, r.role); } catch (_) {} }
+        } else if (r && r.etat !== 'LU' && r.etat !== 'AUCUNE') {
+          h.faceDemandee = false; /* non lue : on reessaiera, ce n est pas une absence */
+        }
+      } catch (_) { h.faceDemandee = false; }
+      await new Promise((ok) => setTimeout(ok, 120));
+    }
+  } finally { facesEnCours = false; }
+}
+setTimeout(() => { void facesDeLaMap(); }, 12000);
+setInterval(() => { if (!document.hidden) void facesDeLaMap(); }, 20000);
+
 setTimeout(() => { void soleilsSurLaMap(); }, 8000);
 setInterval(() => { if (!document.hidden) void soleilsSurLaMap(); }, 300_000);
 /* ══ ONGLET PERIME ═════════════════════════════════════════════════════════════════════════════════
