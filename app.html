@@ -347,6 +347,9 @@ body{background:var(--fond);
   background:rgb(167 139 250 / .04)}
 .dexCol .champ{margin-top:0}
 .dexCol .bouton{width:100%;margin:0;grid-column:auto}
+.pConnect{cursor:pointer;font-weight:700}
+.pConnect:not(.connecte){background:linear-gradient(135deg,hsl(262 83% 66%),hsl(282 80% 62%));color:#fff;border-color:transparent;
+  box-shadow:0 0 0 1px rgb(167 139 250 / .35),0 6px 18px rgb(139 92 246 / .35)}
 .soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
 .soldeDex b{color:var(--texte);font-weight:700}
 .maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
@@ -674,7 +677,10 @@ details[open] > summary::before{transform:rotate(90deg)}
            se lit de partout : chaque borne longue de l app pointe ICI. -->
       <button class="puce" id="pLearn" style="cursor:pointer">? Learn</button>
       <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
-      <span class="puce" id="pCompte">not connected</span>
+      <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
+           disait « not connected » sans qu on puisse rien en faire. C est maintenant le bouton : il connecte, puis
+           montre l adresse courte et ouvre l onglet Wallet. -->
+      <button class="puce pConnect" id="pCompte" type="button">Connect wallet</button>
     </div>
   </header>
 
@@ -910,7 +916,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0041 (Phil : « la mise en vie cochee par defaut ») -->
         <label class="wConsent" style="color:var(--texte)"><input type="checkbox" id="cVieDirecte" checked> Bring it to life right after (≈ $1 in ETH)</label>
         <button class="bouton creaGo" id="cCreer" type="button">Create, then bring it to life — 2 signatures</button>
-        <button class="bouton sec" id="cVerifier" type="button">Check its address first</button>
+        <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
+             de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
+             frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
+        <button class="bouton sec" id="cVerifier" type="button" hidden>Check its address first</button>
         <p class="note" id="cALancer" hidden></p>
       </div>
       <p class="note" id="cEtat"></p>
@@ -1234,7 +1243,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0062" hidden>Build <code>20260918-0062</code> · reading width on every tab, Live never pauses.</p>
+      <p class="note" data-build="20260918-0063" hidden>Build <code>20260918-0063</code> · connect button up top, address checked by itself, logo URL.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1777,7 +1786,11 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
-  if (nom === 'creer') { remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap(); }
+  if (nom === 'creer') {
+    remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
+    /* l adresse du futur block se verifie des l ouverture, sans bouton, si nom, symbole et sel sont deja la */
+    if (String($('#cNom').value || '').trim() && String($('#cSym').value || '').trim() && String($('#cSel').value || '').trim()) void verifierAdresseCreation();
+  }
 });
 
 /* ⛔ UNE SEULE TABLE POUR LE RESEAU : RPC, StateView et nom voyagent ENSEMBLE. Les separer
@@ -2733,6 +2746,7 @@ async function connecter() {
   if (chaineWallet !== null && chaineWallet !== CHAINE && await basculerChaine(CHAINE)) chaineWallet = CHAINE;
 
   $('#pCompte').textContent = compte.slice(0, 6) + '…' + compte.slice(-4);
+  $('#pCompte').classList.add('connecte');
   const surLaBonne = chaineWallet === CHAINE;
   dire('Connected. This page holds no key: your wallet signs, and it shows you what it '
     + 'signs.' + (chaineWallet === null ? ' ⚠️ Could not read your wallet network.'
@@ -3236,7 +3250,8 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
   window.ethereum.on('accountsChanged', (accs) => {
     if (!compte) return;
     compte = (accs && accs[0]) || null;
-    $('#pCompte').textContent = compte ? court(compte) : 'not connected';
+    $('#pCompte').textContent = compte ? court(compte) : 'Connect wallet';
+    $('#pCompte').classList.toggle('connecte', !!compte);
     $('#sEtat').textContent = '';
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
     void majWallet();
@@ -6154,6 +6169,10 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#pCompte').addEventListener('click', async () => {
+  if (!compte) { await connecter(); return; }
+  try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
+});
 
 /* ══ LE PROFIL, DANS L ORDRE OU ON S EN SERT ════════════════════════════════════════════════════════
  * ⛔⛔ MESURE SUR TELEPHONE (375 px, 2026-09-18) : « Buy · Sell » arrivait en 8e position, apres Companion,
@@ -8006,7 +8025,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0062',
+    build: '20260918-0063',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

@@ -52,6 +52,7 @@ async function lireOpenLaunch() {
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations } from './index-blocks.js';
 import { faceDuBlock } from './face.js';
+import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
 import { resumerTrending } from './trending.js';
 const RPC_BASE = 'https://mainnet.base.org';
 let rpcId = 0;
@@ -315,6 +316,44 @@ createServer((req, res) => {
     trending().then((corps) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(corps);
+    });
+    return;
+  }
+
+  /* ══ LE LOGO D UN BLOCK, A UNE URL (/face/0x….svg) ═════════════════════════════════════════════════
+   * ⛔⛔ PHIL (2026-09-18) : « hors de l app, le block n a pas sa face — grosse erreur de design ». Mesure : la face
+   *    EST deja gravee a la creation (champ image du contractURI, SVG). Mais DexScreener, les wallets et Basescan
+   *    ne lisent pas le contractURI d un ERC-20 : ils demandent une URL de logo. Cette route la fournit, rendue
+   *    depuis la face GRAVEE — la meme que l app dessine.
+   * ⛔ SEULEMENT POUR UNE FACE GRAVEE (etat LU). Pour le token de quelqu un d autre, sans face gravee, on rend 404 :
+   *    fabriquer un logo depuis son adresse, c est lui preter une identite qu il n a jamais choisie.
+   * ⚠️ CE QUE CA NE FAIT PAS : l afficher automatiquement ailleurs. Il faut coller cette URL la ou chaque
+   *    plateforme la demande (profil DexScreener, token list, fiche Basescan). */
+  if (/^\/face\/0x[0-9a-fA-F]{40}\.svg$/.test(chemin)) {
+    const token = chemin.slice('/face/'.length, -'.svg'.length);
+    Promise.all([
+      resoudreFace(token),
+      rpcServeur('eth_call', [{ to: token, data: '0x95d89b41' }, 'latest']).catch(() => null),
+    ]).then(([r, symHex]) => {
+      if (!r || r.etat !== 'LU' || !r.face) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('no engraved face for this block');
+        return;
+      }
+      let sym = '';
+      try {
+        const b = String(symHex || '').slice(2);
+        const n = parseInt(b.slice(64, 128), 16);
+        sym = Buffer.from(b.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12);
+      } catch (_) { sym = ''; }
+      const svg = logoSvg(paramsLogoDepuisApparence(r.face, sym || '·'));
+      /* la face est immuable : une journee de cache public ne peut jamais servir une face perimee */
+      res.writeHead(200, { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'public, max-age=86400',
+        'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' });
+      res.end(svg);
+    }).catch(() => {
+      res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('face not read right now');
     });
     return;
   }
