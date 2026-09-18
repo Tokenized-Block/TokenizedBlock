@@ -345,6 +345,7 @@ body{background:var(--fond);
 .soldeDex b{color:var(--texte);font-weight:700}
 .maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
   font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
+.sentinelle{height:1px;width:100%}
 .pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(167 139 250 / .14);border-radius:10px;padding:6px;min-height:34px}
 .pcTrace svg{display:block;width:100%;max-width:420px;height:auto}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
@@ -1197,6 +1198,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton sec" id="sfPlus" type="button" disabled>Read further back</button>
       </div>
       <ul class="fil" id="sfFil"></ul>
+      <div class="sentinelle" id="sfFilFin" aria-hidden="true"></div>
       <p class="note" id="sfNote"></p>
     </div>
 
@@ -1217,7 +1219,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0059" hidden>Build <code>20260918-0059</code> · leaving the page no longer resets the map or Live.</p>
+      <p class="note" data-build="20260918-0060" hidden>Build <code>20260918-0060</code> · reads happen by themselves, no manual loading.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1247,6 +1249,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="sfFeeRecu" hidden></p>
       <p class="note" id="sfFeedTrustHonesty" hidden></p>
       <ul class="fil" id="sfLive"></ul>
+      <div class="sentinelle" id="sfLiveFin" aria-hidden="true"></div>
       <div id="sfLiveFin" style="height:1px"></div>
       <p class="note" id="sfLiveNote">Open this tab to start reading.</p>
       <button class="bouton sec" id="sfLivePlus" type="button">Load older</button>
@@ -1750,7 +1753,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
   if (nom === 'mien') peindreClassement();
   if (nom === 'brain') peindreChoixBrain();
-  if (nom === 'social') demarrerLive();
+  /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
+   * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
+  if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') { remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap(); }
@@ -6130,6 +6135,20 @@ $('#pRelire').addEventListener('click', () => {
   const adr = $('#profil').dataset.block;
   if (adr) void ouvrirProfil(adr, symProfil);
 });
+/* ⛔ RELIRE SANS QU ON LE DEMANDE, MAIS PAS SANS FIN : 3 essais espaces (8 s, 16 s, 24 s) par block. Au-dela,
+ * le bouton reste — marteler un noeud sature ne le rend pas plus disponible. */
+const relecturesMarche = new Map();
+new MutationObserver(() => {
+  const b = $('#pRelire');
+  const adr = $('#profil') && $('#profil').dataset.block;
+  if (!b || b.hidden || !adr) return;
+  const n = relecturesMarche.get(adr) || 0;
+  if (n >= 3) return;
+  relecturesMarche.set(adr, n + 1);
+  setTimeout(() => {
+    if ($('#profil').dataset.block === adr && !$('#pRelire').hidden) void ouvrirProfil(adr, symProfil);
+  }, 8000 * (n + 1));
+}).observe($('#pRelire'), { attributes: true, attributeFilter: ['hidden'] });
 $('#plCalculer').addEventListener('click', () => void calculerLancement());
 $('#plDevise').addEventListener('change', () => {
   const t = $('#plDevise').value === 'TBLOCK' ? 'TBLOCK' : 'ETH';
@@ -7926,7 +7945,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0059',
+    build: '20260918-0060',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8436,6 +8455,58 @@ $('#cSelNouveau').addEventListener('click', nouveauSel);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
 $('#cRole').addEventListener('change', () => { peindreRolesCreate(); majFraisEtRecap(); });
 $('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
+
+/* ══ PLUS DE CHARGEMENTS MANUELS ════════════════════════════════════════════════════════════════════
+ * ⛔⛔ PHIL (2026-09-18) : « fais le feed automatiquement, il y a plein de trucs que tu fais manuellement,
+ *    donc l utilisateur est perdu ». Recensement fait dans le code : cinq boutons ne servaient qu a
+ *    DEMANDER une lecture que la page aurait pu faire seule — Read the chain, Read further back, Load older,
+ *    Read its messages, Check its address first (et le relire du marche apres un refus du noeud).
+ * ⛔ CE QUI NE DEVIENT PAS AUTOMATIQUE : tout ce qui SIGNE. Seules les LECTURES partent seules.
+ * ⛔ LES BOUTONS RESTENT (caches quand l automatique a fait son travail) : un navigateur sans
+ *    IntersectionObserver, ou une lecture refusee, doit toujours avoir une porte de sortie. */
+function autoVisible(el, fn, { une = false, marge = '300px' } = {}) {
+  if (!el || typeof IntersectionObserver === 'undefined') return false;
+  const io = new IntersectionObserver((entrees) => {
+    for (const e of entrees) if (e.isIntersecting) { fn(); if (une) io.disconnect(); }
+  }, { rootMargin: marge });
+  io.observe(el);
+  return true;
+}
+/* ⛔⛔ MESURE DU 2026-09-18 : dans un panneau qui n est pas peint, un IntersectionObserver ne se declenche
+ *    JAMAIS (verifie : aucun rappel en 4 s, visibilityState « visible »). Cacher les boutons des la pose
+ *    aurait laisse un feed vide SANS porte de sortie. Un bouton ne se cache donc qu au PREMIER rappel reel —
+ *    quand on a la preuve que l automatique fonctionne dans CE navigateur. La premiere lecture du feed, elle,
+ *    part de l ouverture de l onglet (declencheur deterministe, dans le gestionnaire de la barre du bas). */
+$('#sfCharger').hidden = true; /* remplace par la lecture a l ouverture de l onglet Social */
+autoVisible($('#sfFilFin'), () => {
+  $('#sfPlus').hidden = true;
+  if (!filEnCours && filLignes.length && filProchain < habitants.length) void chargerFil(true);
+});
+/* le Live lit plus ancien tout seul quand on arrive en bas de sa liste */
+autoVisible($('#sfLiveFin'), () => {
+  $('#sfLivePlus').hidden = true;
+  if (!liveEnCours && liveEvts.length && livePlusAncien !== null && livePlusAncien > 0) { liveAuto = 0; void lireLive('ancien'); }
+});
+/* les messages d un block se lisent quand leur section devient visible, une fois par block ouvert */
+let pmsgLuPour = null;
+autoVisible($('#pmsgFil'), () => {
+  const adr = $('#profil') && $('#profil').dataset.block;
+  if (adr && pmsgLuPour !== adr) { pmsgLuPour = adr; void lireMessagesDuBlock(); }
+});
+/* l adresse du futur block se verifie seule quand nom, symbole et sel ne bougent plus (600 ms) */
+let verifAdresseMinuterie = null;
+for (const id of ['#cNom', '#cSym', '#cSel']) {
+  const el = $(id);
+  if (!el) continue;
+  el.addEventListener('input', () => {
+    clearTimeout(verifAdresseMinuterie);
+    verifAdresseMinuterie = setTimeout(() => {
+      if (String($('#cNom').value || '').trim() && String($('#cSym').value || '').trim() && String($('#cSel').value || '').trim()) {
+        void verifierAdresseCreation();
+      }
+    }, 600);
+  });
+}
 $('#cCreer').addEventListener('click', () => void creerBlock());
 /* ⛔ PRE-REMPLISSAGE PAR LIEN (Phil, 2026-09-13 : « preenregistre tout » pour creer TBLOCK sur une autre
  *    machine). Le lien REMPLIT les champs, il ne signe rien et ne clique rien : l utilisateur relit l apercu
