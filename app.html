@@ -341,13 +341,19 @@ body{background:var(--fond);
   padding:10px 12px;border-radius:14px;border:1px solid rgb(167 139 250 / .45);background:rgb(18 12 28 / .96);
   font-size:12px;color:var(--texte);box-shadow:0 12px 30px rgb(0 0 0 / .5)}
 .vNouvelle .bouton{width:auto;padding:8px 12px;margin:0}
+.dexCols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+@media (max-width:560px){.dexCols{grid-template-columns:1fr}}
+.dexCol{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid rgb(167 139 250 / .16);border-radius:14px;
+  background:rgb(167 139 250 / .04)}
+.dexCol .champ{margin-top:0}
+.dexCol .bouton{width:100%;margin:0;grid-column:auto}
 .soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
 .soldeDex b{color:var(--texte);font-weight:700}
 .maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
   font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
 .sentinelle{height:1px;width:100%}
 .pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(167 139 250 / .14);border-radius:10px;padding:6px;min-height:34px}
-.pcTrace svg{display:block;width:100%;max-width:420px;height:auto}
+.pcTrace svg{display:block;width:100%;height:64px}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
@@ -445,6 +451,11 @@ button.mienTuile:hover{border-color:var(--accent)}
 @media (prefers-reduced-motion:no-preference){.volet.on{animation:voletEntre .22s ease-out}}
 @keyframes voletEntre{from{transform:translateY(6px)}to{transform:none}}
 .volet.on{display:block}
+/* ⛔⛔ PHIL (2026-09-18, captures Buy/Sell et cerveau) : « evite de tout etirer pour prendre tout l espace — c etait
+   seulement pour la map ». Sur un ecran large, chaque carte faisait 1 800 px : champs demesures, boutons de
+   travers, une bande de cerveau perdue dans une boite vide. Tous les onglets prennent une largeur de LECTURE
+   (820 px, centree) ; seule la map garde tout l ecran. Sur telephone rien ne change : 820 > 375. */
+.volet:not(#v-map){max-width:820px;margin-left:auto;margin-right:auto}
 /* ⛔ MEME TEINTE QUE LE RESTE. Ce cadre etait en 226 — du BLEU au milieu d une page violette, et
  * c est precisement le genre d ecart qui fait sonner faux sans qu on sache le nommer. */
 .pasEncore{border:1px dashed hsl(var(--h) 25% 35%);border-radius:var(--rs);padding:14px;
@@ -1223,7 +1234,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0061" hidden>Build <code>20260918-0061</code> · profile ordered for phones, map card trimmed.</p>
+      <p class="note" data-build="20260918-0062" hidden>Build <code>20260918-0062</code> · reading width on every tab, Live never pauses.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1458,15 +1469,19 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
           <p class="note" id="peUsdcPath"><b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.</p>
         </div>
-        <div class="pActions" style="grid-template-columns:1fr 1fr">
-          <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
-            <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
-          <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
-            <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
-        </div>
-        <div class="pActions" style="grid-template-columns:1fr 1fr">
-          <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
-          <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
+        <!-- ⛔ DEUX COLONNES FACON DEX (Phil, capture 2026-09-18 : « Prepare buy » pleine largeur, « Prepare sell » a
+             moitie — la grille de boutons se cassait). Chaque cote porte son champ, son solde et son bouton. -->
+        <div class="dexCols">
+          <div class="dexCol">
+            <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
+              <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
+            <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
+          </div>
+          <div class="dexCol">
+            <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
+              <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
+            <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
+          </div>
         </div>
         <!-- ⛔ P0 tip 2250: ETH→USDC exit — 0.5% → FEE_WALLET; external DEX pays wallet nothing. Quoter-gated. -->
         <div class="pActions" id="peUsdcRow" style="grid-template-columns:1fr 1fr;margin-top:8px" hidden>
@@ -3488,7 +3503,8 @@ function traceProfilAjouter(indices) {
       + '" width="' + (lc - 0.6).toFixed(2) + '" height="' + (lr - 0.6).toFixed(2) + '" rx="0.8" fill="currentColor"'
       + ' opacity="' + (0.35 + 0.65 * ((x + 1) / traceProfil.length)).toFixed(2) + '"/>';
   });
-  t.innerHTML = '<svg viewBox="0 0 ' + L + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' + d + '</svg>';
+  /* preserveAspectRatio=none : les 48 battements occupent TOUTE la largeur de la boite, sans bandes vides */
+  t.innerHTML = '<svg viewBox="0 0 ' + L + ' ' + H + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + d + '</svg>';
 }
 
 function peindreCerveau() {
@@ -4430,6 +4446,8 @@ const LIVE_MS = 20000, LIVE_FENETRE = 1999;
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
+/** l heure de la derniere lecture du fil : un clic sur Social ne relance pas une lecture de moins de 10 s */
+let liveLuA = 0;
 /* le filtre du fil Live : un tri de LECTURE, il ne change ni ce qui est lu ni ce qui est compte */
 /** ⛔ Seuil de « Big », en ETH : parametre NOMME, pas un nombre perdu dans une condition. */
 const SEUIL_GROS_ETH = 0.02;
@@ -4546,6 +4564,7 @@ async function lireLive(sens) {
   const V = V4_ADRESSES[CHAINE];
   if (liveEnCours || !V) return;
   liveEnCours = true;
+  liveLuA = Date.now();
   try {
     const fin = parseInt(await rpc('eth_blockNumber', []), 16);
     let deBloc, aBloc;
@@ -5103,12 +5122,16 @@ function demarrerLive() {
   peindreParoles();
   /* ⛔ FEE capture: paint Create/Launch + Feed/Trust honesty immediately (not only after first getLogs). */
   try { peindreCreateFeeHonesty(); peindreFeedTrustHonesty(); peindreHookedRoute(); peindreFeeRecu(); } catch (_) {}
-  if (liveMinuterie) { void lireLive('neuf'); return; }
+  /* ⛔⛔ PHIL (2026-09-18) : « le live n est pas automatique, laisse-le ouvert — pourquoi tu relances la recherche
+   *    a chaque fois et elle s arrete ». Deux causes dans le code : (1) le fil ne lisait QUE si l onglet Social ou
+   *    Map etait affiche — ailleurs il s arretait, puis repartait avec un trou ; (2) chaque clic sur Social
+   *    relancait une lecture, meme si la derniere avait deux secondes. Le fil tourne maintenant tant que la PAGE
+   *    est visible, quel que soit l onglet, et un clic ne relit que si la derniere lecture date de plus de 10 s. */
+  if (liveMinuterie) { if (Date.now() - liveLuA > 10000) void lireLive('neuf'); return; }
   void lireLive('neuf');
   liveMinuterie = setInterval(() => {
     /* le fil live cede le noeud quand l utilisateur prepare un geste (achat, liquidite, profil) */
-    /* tip 0025 : le fil lit aussi quand la MAP est affichee — c est lui qui fait les effets d echanges en direct */
-    if (($('#v-social').classList.contains('on') || $('#v-map').classList.contains('on')) && !document.hidden && !profilEnLecture) void lireLive('neuf');
+    if (!document.hidden && !profilEnLecture) void lireLive('neuf');
   }, LIVE_MS);
   /* ⛔ LE DEFILEMENT CHARGE LE PASSE : arriver au bas du fil lit la fenetre precedente. */
   if ('IntersectionObserver' in window) {
@@ -7983,7 +8006,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0061',
+    build: '20260918-0062',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

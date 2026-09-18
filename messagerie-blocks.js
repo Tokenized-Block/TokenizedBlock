@@ -20,9 +20,28 @@ import { TBLOCK } from './tokenomics.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { selecteur } from './pool.js';
 import { listerTransfers } from './index-blocks.js';
+import { USDC_BASE } from './prix-eth.js';
 
 /** ⛔ Montant FIXE choisi pour la mise en service (1 000 TBLOCK) : parametre nomme, a ajuster par decision de Phil. */
 export const FRAIS_MESSAGE_TBLOCK = 1000n * 10n ** 18n;
+/** ⛔ 0,50 $ en USDC (6 decimales). Phil (2026-09-17) : « fais de l USDC, de l argent qui rentre ». */
+export const FRAIS_MESSAGE_USDC = 500_000n;
+/**
+ * ⛔⛔ DEUX DEVISES, UNE SEULE FORME DE TRANSACTION. Un message paye reste un `transfer` vers le wallet
+ * de frais, memo colle derriere le calldata : une implementation ERC-20 ne decode que ses deux premiers
+ * mots, donc les octets en trop voyagent sans rien casser et restent lisibles dans l input.
+ * ⛔ LE TBLOCK NE DISPARAIT PAS : il reste la devise par defaut (aucune coupure pour qui envoie deja).
+ * ⚠️ LES MONTANTS NE SE COMPARENT PAS : 1000 TBLOCK et 0,50 $ n ont aucune raison de valoir la meme
+ *    chose. L ecran affiche toujours la devise A COTE du montant, et ne totalise jamais les deux.
+ */
+export const DEVISES_MESSAGE = Object.freeze({
+  TBLOCK: Object.freeze({ token: TBLOCK, frais: FRAIS_MESSAGE_TBLOCK, decimales: 18, nom: 'TBLOCK' }),
+  USDC: Object.freeze({ token: USDC_BASE, frais: FRAIS_MESSAGE_USDC, decimales: 6, nom: 'USDC' }),
+});
+/** La devise demandee, ou `null` — jamais un repli silencieux sur une autre devise que celle demandee. */
+export function deviseMessage(devise) {
+  return DEVISES_MESSAGE[String(devise ?? 'TBLOCK').toUpperCase()] || null;
+}
 export const PREFIXE_MESSAGE_BLOCK = 'tbx1 ';
 export const ETATS_MESSAGE_BLOCK = ['LU', 'AUTRE', 'ILLISIBLE'];
 export const ETATS_ENVOI_MESSAGE = ['PRET', 'REFUSE', 'NON_MESURE'];
@@ -54,7 +73,9 @@ export function lireMessageBlock(texte) {
  * @param {{ rpc: Function, compte: string, de: string, a: string, texte: string, detientDe: boolean|null }} o
  *   `detientDe` : le solde du block `de` lu par l app (true/false), null si non lu.
  */
-export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = null }) {
+export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = null, devise = 'TBLOCK' }) {
+  const dev = deviseMessage(devise);
+  if (!dev) return { etat: 'REFUSE', pourquoi: 'unknown currency for the message fee' };
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (String(compte).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REFUSE', pourquoi: 'BaseAPP Holders fee path cannot send paid messages to itself' };
   const enc = encoderMessageBlock({ de, a, texte });
@@ -65,16 +86,16 @@ export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = n
   let code, solde;
   try {
     code = String(await lire('eth_getCode', [compte, 'latest']));
-    solde = BigInt(String(await lire('eth_call', [{ to: TBLOCK, data: '0x' + selecteur('balanceOf(address)') + pad(compte) }, 'latest'])).slice(0, 66));
+    solde = BigInt(String(await lire('eth_call', [{ to: dev.token, data: '0x' + selecteur('balanceOf(address)') + pad(compte) }, 'latest'])).slice(0, 66));
   } catch (e) {
-    return { etat: 'NON_MESURE', pourquoi: 'your account or TBLOCK balance could not be read' };
+    return { etat: 'NON_MESURE', pourquoi: 'your account or ' + dev.nom + ' balance could not be read' };
   }
   /* tip 2347: Base App / smart wallets MAY pay the fee → a6cf. Memo readback can stay opaque on AA
    * (bundler tx.to ≠ TBLOCK) — still PREPARE; Social may show fee without chat text. 7702 EOA = full path. */
   const estSmartWallet = code !== '0x' && !/^0xef0100[0-9a-f]{40}$/i.test(code);
-  if (solde < FRAIS_MESSAGE_TBLOCK) return { etat: 'REFUSE', pourquoi: 'not enough TBLOCK for the message fee', manque: FRAIS_MESSAGE_TBLOCK - solde };
-  return { etat: 'PRET', pourquoi: null, frais: FRAIS_MESSAGE_TBLOCK, aaOpaque: estSmartWallet || undefined,
-    tx: { to: TBLOCK, data: encodeTransferAvecMemo(FEE_WALLET, FRAIS_MESSAGE_TBLOCK, enc.memo), value: '0x0' } };
+  if (solde < dev.frais) return { etat: 'REFUSE', pourquoi: 'not enough ' + dev.nom + ' for the message fee', manque: dev.frais - solde, devise: dev.nom };
+  return { etat: 'PRET', pourquoi: null, frais: dev.frais, devise: dev.nom, decimales: dev.decimales, aaOpaque: estSmartWallet || undefined,
+    tx: { to: dev.token, data: encodeTransferAvecMemo(FEE_WALLET, dev.frais, enc.memo), value: '0x0' } };
 }
 
 /**
@@ -82,12 +103,16 @@ export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = n
  * @param {{from:string, to:string, value:bigint, tx:string, bloc?:number}} t  le log Transfer (de TBLOCK)
  * @param {{from:string, to:string, input:string}|null} tx  la transaction lue
  */
-export function messageDepuisTransfert(t, tx) {
+export function messageDepuisTransfert(t, tx, devise = 'TBLOCK') {
+  const dev = deviseMessage(devise);
+  if (!dev) return { etat: 'REJETE', pourquoi: 'unknown currency for the message fee' };
   if (!t || !tx) return { etat: 'REJETE', pourquoi: 'transaction not read' };
   if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent as Fees for BaseAPP Holders' };
-  if (typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) return { etat: 'REJETE', pourquoi: 'below the message fee' };
+  if (typeof t.value !== 'bigint' || t.value < dev.frais) return { etat: 'REJETE', pourquoi: 'below the message fee' };
   if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the BaseAPP Holders fee path itself' };
-  const direct = String(tx.to).toLowerCase() === TBLOCK.toLowerCase();
+  /* ⛔ LE JETON DE LA TRANSACTION DOIT ETRE CELUI DE LA DEVISE ATTENDUE : sinon un transfert d USDC
+   * passerait pour un message en TBLOCK (et le contraire), et les deux compteurs se melangeraient. */
+  const direct = String(tx.to).toLowerCase() === dev.token.toLowerCase();
   if (!direct) {
     /* tip 2347: AA / bundler — Transfer still paid FEE_WALLET; chat text opaque */
     return { etat: 'MESSAGE_FEE', signataire: String(t.from).toLowerCase(), de: null, a: null, texte: null,
