@@ -732,12 +732,16 @@ details[open] > summary::before{transform:rotate(90deg)}
             <p class="note" id="fOrigine"></p>
             <p class="note" id="fAdr"></p>
             </details>
+            <!-- ⛔ PHIL (2026-09-18, capture barree) : « Pair with it », « Send GM », « Read its facts » — pas reels ou
+                 pas utiles ICI. « Pair with it » envoyait vers Create avec ce block comme devise de cotation : un
+                 nouveau block qui ne s acheterait QU avec celui-ci — un piege, pas une fonction. La carte garde deux
+                 gestes : acheter, ouvrir. GM et faits restent dans le profil ; les boutons sont caches, pas supprimes. -->
             <div class="fActions fActionsMain">
               <button class="bouton" id="fAcheter" type="button">Buy</button>
-              <button class="bouton sec" id="fPairer" type="button">Pair with it</button>
+              <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
             </div>
-            <div class="fActions fActionsMini">
+            <div class="fActions fActionsMini" hidden>
               <button class="bouton sec" id="fGM">Send GM 👋</button>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
               <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
@@ -1219,7 +1223,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0060" hidden>Build <code>20260918-0060</code> · reads happen by themselves, no manual loading.</p>
+      <p class="note" data-build="20260918-0061" hidden>Build <code>20260918-0061</code> · profile ordered for phones, map card trimmed.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2199,15 +2203,26 @@ $('#map').addEventListener('click', (e) => {
   /* ⛔ TROIS ETATS ICI AUSSI. La fiche disait « no market yet » pour tout block sans vie connue —
    * y compris ceux dont la lecture n avait pas encore eu lieu ou avait ete refusee. Un fait sur le
    * block affiche a la place d un fait sur notre lecture. */
-  $('#fVie').textContent = (h && typeof h.vie === 'number' && h.vie > 0)
+  /* ⛔⛔ LA CARTE SE CONTREDISAIT (capture de Phil, PERPS) : prix, volume, liquidite et FDV affiches juste au-dessus
+   *    — et « life not read yet », « Tier not judged », « market could not be read ». Les chiffres venaient du
+   *    marche public (DexScreener, lu par le serveur), les phrases de NOTRE lecture on-chain, absente. Quand le
+   *    marche public cote le block, la carte le dit en une ligne, avec sa source, au lieu de trois refus. */
+  const mkPublic = marcheParAdr.get(String(adr).toLowerCase());
+  const lueSurChaine = h && typeof h.vie === 'number' && h.vie > 0;
+  $('#fVie').textContent = lueSurChaine
     ? Math.round(h.vie * 100) / 100 + ' ETH of life'
-    : h && h.etatVie === 'NON_TROUVEE' ? 'no market yet — never traded, which is not the same as worthless'
-      : h && h.etatVie === 'NON_LUE' ? 'life unreadable right now — not the same as none'
-        : 'life not read yet';
+    : mkPublic && Number(mkPublic.fdvUsd) > 0 ? '≈ ' + usdCourt(mkPublic.fdvUsd) + ' market cap · public market'
+      : h && h.etatVie === 'NON_TROUVEE' ? 'no market yet — never traded, which is not the same as worthless'
+        : h && h.etatVie === 'NON_LUE' ? 'life unreadable right now — not the same as none'
+          : 'life not read yet';
   $('#fAdr').textContent = adr;
   const j = jaugeDe(h ? h.vie : null, h ? h.etatVie : null);
   $('#fBarre').style.width = j.pct > 0 ? Math.max(2, Math.round(j.pct * 100)) + '%' : '0';
-  $('#fPalier').textContent = j.texte;
+  if (!lueSurChaine && mkPublic && Number(mkPublic.fdvUsd) > 0) {
+    const st = stadesDesBlocks({ ethUsd, blocks: [{ adr, sym: h && h.sym, vie: null, etatVie: 'NON_LUE', capUsdMarche: Number(mkPublic.fdvUsd) }] });
+    const g = st.groupes[0];
+    $('#fPalier').textContent = g ? '≈ ' + (EMOJI_STADE[g.cle] || '') + ' ' + g.titre.split(' — ')[0] + ' — from the public market' : j.texte;
+  } else $('#fPalier').textContent = j.texte;
   $('#fOrigine').textContent = phrasesOrigine({ origine: h && faceConnue(h.adr) ? 'TOKENIZEDBLOCK' : (h && h.origine) || 'NON_LU',
     scellement: { etat: 'NON_LU' } }).origine;
   /* ⛔ LE BOUTON EXISTE, LE SERVICE NON, ET ON LE DIT PLUTOT QUE DE FAIRE SEMBLANT. Un « chat »
@@ -2217,7 +2232,9 @@ $('#map').addEventListener('click', (e) => {
   /* ⛔ DEFAUT VU SUR LA CAPTURE DE PHIL (TBLOCK, 2026-09-13) : « asleep: no market and nothing received » alors que la vie
    * n etait simplement PAS ENCORE LUE — et TBLOCK a un marche. La phrase du dormant n est dite que sur un « pas de marche »
    * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
-  $('#fNote').textContent = !h || !h.phase ? '' : phraseDePhase(h.phase, h.sym);
+  $('#fNote').textContent = !h || !h.phase ? ''
+    : (h.phase === 'NON_LU' && mkPublic) ? 'Its mood waits for our own read of the chain; the numbers above come from the public market.'
+      : phraseDePhase(h.phase, h.sym);
   $('#fConnecter').hidden = true;
   /* tip 0042 : donnees condensees du marche (lues par le serveur : DexScreener), si le block en a */
   const mk = marcheParAdr.get(String(adr).toLowerCase());
@@ -6114,6 +6131,27 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+
+/* ══ LE PROFIL, DANS L ORDRE OU ON S EN SERT ════════════════════════════════════════════════════════
+ * ⛔⛔ MESURE SUR TELEPHONE (375 px, 2026-09-18) : « Buy · Sell » arrivait en 8e position, apres Companion,
+ *    cerveau, role, holders, PnL et « More ». Phil : « le profil masque tout, il faut toujours appuyer ».
+ *    On ne retire RIEN : on remonte les deux gestes qui comptent juste sous le palier du block — donner vie
+ *    (quand il n a pas de marche) puis acheter / vendre. Les noeuds sont DEPLACES, pas recrees : leurs
+ *    identifiants et leurs ecouteurs restent les memes. */
+(() => {
+  /* ⛔ ancre = la carte qui porte le palier (#pJeu est une CLASSE, pas un id — premier essai sorti a vide) */
+  const jeu = $('#pPalier') && $('#pPalier').closest('.pJeu');
+  if (!jeu) return;
+  const lanc = $('#pLancement'), ech = $('#pEchange');
+  if (ech) jeu.after(ech);
+  if (lanc) jeu.after(lanc);
+  /* ⛔ DANS BUY · SELL, PLUS D ONGLETS A BASCULER : le frais s affiche d office, en une ligne. Le volet
+   * « Exit » disait la meme chose que le devis ; il reste dans le code, cache. */
+  const onglets = document.querySelector('[data-itabs="peInfo"]');
+  if (onglets) onglets.hidden = true;
+  const sortie = document.querySelector('[data-itabs-pane="peInfo"][data-itab="exit"]');
+  if (sortie) sortie.hidden = true;
+})();
 const _gtBtn = $('#pGarderTrusted');
 if (_gtBtn) {
   _gtBtn.addEventListener('click', () => {
@@ -7945,7 +7983,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0060',
+    build: '20260918-0061',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
