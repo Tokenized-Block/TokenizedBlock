@@ -833,7 +833,11 @@ details[open] > summary::before{transform:rotate(90deg)}
            metadonnees, donc un block style aujourd hui se relit partout ou l app tourne deja. Ajouter
            une primitive au catalogue rendrait au contraire « INVALIDE » toute face gravee avec elle
            sur les copies pas encore a jour. -->
-      <div class="creaStyles" id="cStyles"></div>
+      <!-- ⛔ PHIL (2026-09-18) : « remplace les elements par un choix en liste comme les autres, les gens sont
+           perdus avec ca ». Dix tuiles a cote de dix cadrans faisaient deux facons de choisir la meme chose.
+           Une liste « Style », au meme format que Orbit / Face / Material : l apercu en haut montre le resultat. -->
+      <label class="champ">Style<select id="cStyle"></select></label>
+      <div id="cStyles" hidden></div>
       <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
       <details class="bDetail" id="cReglagesDetail" open><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
@@ -1213,7 +1217,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0057" hidden>Build <code>20260918-0057</code> · tested on a fork with a wallet: create, bring life, buy, sell.</p>
+      <p class="note" data-build="20260918-0058" hidden>Build <code>20260918-0058</code> · style as a list, dials in plain words.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6523,6 +6527,27 @@ const STYLES_CREA = [
   { nom: 'Bare', a: { teinte: 250, accent: 250, saturation: 60, division: 3, eclats: 3, ecart: 2, orbite: 'coins', facette: 'vide', matiere: 'verre', ornement: 'aucun' } },
 ];
 
+/* ⛔ LIBELLES D AFFICHAGE SEULEMENT (Phil, 2026-09-18 : « les gens sont perdus »). Les listes montraient les
+ * mots INTERNES (coins, vide, verre, aucun) : des mots francais qui se lisaient comme des exemples, pas comme
+ * des choix. La VALEUR de chaque option reste le mot grave dans les metadonnees — changer la valeur rendrait
+ * « INVALIDE » toute face deja gravee. Seul le texte montre change. Un mot absent de la table s affiche tel
+ * quel, en majuscule : rien ne disparait si le catalogue grandit. */
+const LIBELLES_FACE = Object.freeze({
+  /* orbites */
+  sillage: 'Trail', couronne: 'Crown', essaim: 'Swarm', chute: 'Fall', coins: 'Corners', spirale: 'Spiral',
+  colonne: 'Column', ailes: 'Wings', ronde: 'Round', diagonale: 'Diagonal',
+  /* facettes */
+  lettre: 'Letter', anneau: 'Ring', barres: 'Bars', disque: 'Disc', croix: 'Cross', losange: 'Diamond',
+  triangle: 'Triangle', points: 'Dots', chevrons: 'Chevrons', cible: 'Target', etoile: 'Star', eclair: 'Bolt',
+  hexagone: 'Hexagon', coche: 'Check', cle: 'Key', vague: 'Wave', grille: 'Grid', fleche: 'Arrow', vide: 'Blank',
+  /* matieres */
+  verre: 'Glass', plein: 'Solid', fil: 'Wire', neon: 'Neon', papier: 'Paper', encre: 'Ink', chrome: 'Chrome',
+  braise: 'Ember', givre: 'Frost',
+  /* ornements */
+  aucun: 'None', equerres: 'Brackets', griffes: 'Claws', arcs: 'Arcs', etoiles: 'Stars',
+});
+const libelleFace = (v) => LIBELLES_FACE[v] || (String(v).charAt(0).toUpperCase() + String(v).slice(1));
+
 /** Les dix cadrans, redessines depuis `apparenceChoisie` — appelable apres un style sans re-brancher
  *  les ecouteurs (ils vivent sur la boite, pas sur les champs). */
 function dessinerReglages() {
@@ -6532,8 +6557,8 @@ function dessinerReglages() {
     + '<input type="range" data-cle="' + c.cle + '" min="' + c.min + '" max="' + c.max + '" value="'
     + apparenceChoisie[c.cle] + '"></label>').join('')
     + LISTES.map((l) => '<label class="reglage">' + enTexte(l.titre) + '<select data-cle="' + l.cle + '">'
-      + l.valeurs.map((v) => '<option' + (v === apparenceChoisie[l.cle] ? ' selected' : '') + '>'
-        + enTexte(v) + '</option>').join('') + '</select></label>').join('');
+      + l.valeurs.map((v) => '<option value="' + enTexte(v) + '"' + (v === apparenceChoisie[l.cle] ? ' selected' : '') + '>'
+        + enTexte(libelleFace(v)) + '</option>').join('') + '</select></label>').join('');
 }
 
 function construireReglages() {
@@ -6553,6 +6578,14 @@ function construireReglages() {
 let dernierSymStyles = null;
 /** Les styles, chacun dessine avec son propre apercu : on choisit ce qu on VOIT, pas un mot. */
 function peindreStylesCrea() {
+  const sel = $('#cStyle');
+  if (sel) {
+    const actuel = STYLES_CREA.findIndex((x) => memeApparence(x.a, apparenceChoisie));
+    sel.innerHTML = '<option value="">Custom — your own dials</option>'
+      + STYLES_CREA.map((x, i) => '<option value="' + i + '">' + enTexte(x.nom) + '</option>').join('');
+    sel.value = actuel >= 0 ? String(actuel) : '';
+    return;
+  }
   const sym = String($('#cSym').value || 'T').toUpperCase().slice(0, 3) || 'T';
   $('#cStyles').innerHTML = STYLES_CREA.map((s, i) => '<button type="button" class="creaStyle'
     + (memeApparence(s.a, apparenceChoisie) ? ' on' : '') + '" data-style="' + i + '">'
@@ -6586,6 +6619,10 @@ function peindreApercuCreation() {
    * affiche dessus a change ; sinon on ne bouge que la puce allumee. */
   const symStyle = sym.slice(0, 3) || 'T';
   if (symStyle !== dernierSymStyles) { dernierSymStyles = symStyle; peindreStylesCrea(); }
+  else if ($('#cStyle')) {
+    const actuel = STYLES_CREA.findIndex((x) => memeApparence(x.a, apparenceChoisie));
+    $('#cStyle').value = actuel >= 0 ? String(actuel) : '';
+  }
   else for (const b of document.querySelectorAll('#cStyles .creaStyle')) {
     const s = STYLES_CREA[Number(b.getAttribute('data-style'))];
     b.classList.toggle('on', !!s && memeApparence(s.a, apparenceChoisie));
@@ -7874,7 +7911,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0057',
+    build: '20260918-0058',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8359,6 +8396,10 @@ function majHeroCompact() {
 window.addEventListener('scroll', majHeroCompact, { passive: true });
 $('#cManuel').textContent = $('#cReglagesDetail') && $('#cReglagesDetail').open ? '🎛 Hide settings' : '🎛 Manual settings';
 if ($('#cManuel')) $('#cManuel').setAttribute('aria-expanded', $('#cReglagesDetail') && $('#cReglagesDetail').open ? 'true' : 'false');
+$('#cStyle') && $('#cStyle').addEventListener('change', (e) => {
+  const v = e.target.value;
+  if (v !== '') appliquerStyle(Number(v));
+});
 $('#cStyles').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-style]');
   if (b) appliquerStyle(Number(b.getAttribute('data-style')));
