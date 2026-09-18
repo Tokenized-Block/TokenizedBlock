@@ -341,6 +341,10 @@ body{background:var(--fond);
   padding:10px 12px;border-radius:14px;border:1px solid rgb(167 139 250 / .45);background:rgb(18 12 28 / .96);
   font-size:12px;color:var(--texte);box-shadow:0 12px 30px rgb(0 0 0 / .5)}
 .vNouvelle .bouton{width:auto;padding:8px 12px;margin:0}
+.soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
+.soldeDex b{color:var(--texte);font-weight:700}
+.maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
+  font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
 .pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(167 139 250 / .14);border-radius:10px;padding:6px;min-height:34px}
 .pcTrace svg{display:block;width:100%;max-width:420px;height:auto}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
@@ -854,7 +858,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
       <!-- ⛔ LE RESUME REPLIE DISAIT « TBLOCK by default » MEME QUAND ETH ETAIT CHOISI (Phil, 2026-09-17).
            Un resume qui ne suit pas le choix est un mensonge poli : `majPaire` l ecrit desormais. -->
-      <details class="bDetail" style="margin-top:10px"><summary class="note" id="cPaireResume">Paired with · TBLOCK by default</summary>
+      <details class="bDetail" style="margin-top:10px"><summary class="note" id="cPaireResume">Paired with · ETH</summary>
       <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
            creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
            elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
@@ -1209,7 +1213,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0055" hidden>Build <code>20260918-0055</code> · locker path ready, waiting on its address.</p>
+      <p class="note" data-build="20260918-0057" hidden>Build <code>20260918-0057</code> · tested on a fork with a wallet: create, bring life, buy, sell.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1437,15 +1441,17 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
-          <p class="note">Buy or sell here: <b>0.5%</b> fee.</p>
+          <p class="note" id="peFraisTexte">Buy or sell here: <b>0.5%</b> app fee.</p>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
           <p class="note" id="peUsdcPath"><b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.</p>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
-          <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
-          <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off"></label>
+          <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
+            <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
+          <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
+            <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
         </div>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
           <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
@@ -1504,7 +1510,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton creaGo" id="plCalculer" type="button" style="margin-top:10px">✨ Give birth</button>
         <ul class="pmLignes" id="plLignes"></ul>
         <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
-        <p class="note" id="plEtat"></p>
+        <p class="note wOk" id="plProgression" hidden style="font-weight:700"></p>
+      <p class="note" id="plEtat"></p>
       </div>
 
       <p class="note" id="pNote"></p>
@@ -3497,6 +3504,34 @@ function peindreCerveau() {
  *    pendant 99 % du chemin vers le palier suivant.
  */
 
+/* ══ LES VRAIS FRAIS D UN ECHANGE ═══════════════════════════════════════════════════════════════════
+ * ⛔⛔ MESURE DU 2026-09-18, TEST REEL SUR FORK (achat puis vente d un block mis en vie par l app) :
+ *    le hook HOOK_PREVU preleve, sur CHAQUE swap de ses pools, 2,0000 % vers le wallet de frais et
+ *    1,0000 % vers le createur du block (evenement du hook decode : 201714636428150 et 100857318214075
+ *    wei sur une sortie brute de 10085731821000000 wei). Il le prend en block a l achat, en ETH a la vente.
+ *    Avec nos 0,5 % d interface, un echange dans l app coutait 3,5 % — et l ecran affichait « 0,5 % ».
+ *    Afficher un frais sept fois plus petit que celui paye est un mensonge, meme par omission.
+ * ⛔ SEULEMENT DES POURCENTAGES (regle de Phil : jamais ou partent les frais). Mais le TOTAL est vrai.
+ * ⚠️ Pour une pool d un AUTRE lanceur, son hook peut prendre sa propre part, que nous ne mesurons pas :
+ *    on le dit (« + this market's own fees »), sans inventer de chiffre. */
+const HOOK_PREVU_FRAIS_BPS = 300; /* 2 % + 1 %, mesures ; le contrat ne l expose pas (HOOK_FEE() revert) */
+function libelleFrais(cle) {
+  const zero = '0x0000000000000000000000000000000000000000';
+  const hk = cle && cle.hooks ? String(cle.hooks).toLowerCase() : zero;
+  const tier = cle && Number.isFinite(Number(cle.fee)) ? Number(cle.fee) : null;
+  if (hk === String(HOOK_PREVU).toLowerCase()) {
+    const total = (50 + HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
+    return { court: total + '%', long: 'Buy or sell here: <b>' + total + '%</b> in total — 0.5% app + '
+      + (HOOK_PREVU_FRAIS_BPS / 100) + '% on every trade of this market, wherever it happens.' };
+  }
+  const pool = tier !== null ? ' + ' + (tier / 10000) + '% pool' : '';
+  if (hk !== zero) {
+    return { court: '0.5% + market fees', long: 'Buy or sell here: <b>0.5%</b> app fee' + pool
+      + ', plus any fee this market’s launcher set on it — we do not measure that part.' };
+  }
+  return { court: '0.5%' + pool, long: 'Buy or sell here: <b>0.5%</b> app fee' + pool + '.' };
+}
+
 /** Read pool-key hook status from a vieDuBlock result (facts only). */
 function infoHookMarche(v) {
   const zero = '0x0000000000000000000000000000000000000000';
@@ -3983,7 +4018,8 @@ async function lireProfil(adr, sym, perime) {
   if (lancementLien && lancementLien === String(adr).toLowerCase()) {
     ouvrirLancement();
     $('#plEtat').className = 'note';
-    $('#plEtat').textContent = 'Opened from your link. “Work it out” first checks on chain that this block has no market yet.';
+    /* ⛔ pendant le parcours automatique, ce conseil ECRASAIT l etape en cours (vu en test reel le 2026-09-18) */
+    if (!vieAuto) $('#plEtat').textContent = 'Opened from your link. “Work it out” first checks on chain that this block has no market yet.';
   }
 
   let f = null;
@@ -4145,8 +4181,9 @@ async function lireProfil(adr, sym, perime) {
     const bb = estWalletDeFrais(compte);
     const hkInfo = infoHookMarche(v);
     $('#peBadge').textContent = bb ? 'Buyback · protocol fee path' : 'Buy · Sell';
-    $('#peFrais').textContent = bb ? 'no fee'
-      : '0.5% fee';
+    const lf = libelleFrais(v && v.cle);
+    $('#peFrais').textContent = bb ? 'no fee' : lf.court;
+    if ($('#peFraisTexte')) $('#peFraisTexte').innerHTML = bb ? 'No app fee on this path.' : lf.long;
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
     /* tip 2357: hooked / TBGAS → surface in-app BuySell (no fee addr). */
@@ -4192,10 +4229,67 @@ async function lireProfil(adr, sym, perime) {
       /* le comptable parle de ce solde : il doit etre lu AVANT qu il ne le commente */
       soldeProfil = formaterUnites(b.solde, b.decimales);
       peindreMetier(adr);
+      void peindreMesAvoirsProfil(adr); /* soldes du DEX et ETH, des l ouverture */
     }
   }
   $('#pNote').textContent = f && f.manques.length ? 'not read: ' + f.manques.join(', ') : '';
 }
+
+/* ══ CE QUE TU DETIENS, RELU A LA DEMANDE ════════════════════════════════════════════════════════════
+ * ⛔⛔ PHIL (2026-09-18) : « tu vois pas combien l user a de tokens dans son wallet ». Mesure dans le code :
+ *    « You hold » n etait lu QU UNE FOIS, a l ouverture du profil, et seulement si le wallet etait deja
+ *    connecte. Wallet connecte apres, block mis en vie, achat, vente : rien ne le relisait — la tuile
+ *    restait vide ou fausse. Cette fonction relit le block ET l ETH du compte, et l ecrit en valeurs
+ *    EXACTES (unites entieres du token, pas un arrondi flottant).
+ * ⛔ « not read » reste « not read » : une lecture ratee n est jamais affichee comme un zero. */
+async function peindreMesAvoirsProfil(adr) {
+  const a = String(adr || ($('#profil') && $('#profil').dataset.block) || '');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(a) || !compte) return;
+  let b = null, eth = null;
+  try { b = await lireJeton(a, compte); } catch (_) { b = null; }
+  try { eth = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { eth = null; }
+  if (!$('#profil') || String($('#profil').dataset.block || '').toLowerCase() !== a.toLowerCase()) return;
+  const sym = symProfil || 'blocks';
+  const bloc = b ? formaterUnites(b.solde, b.decimales) + ' ' + sym : 'not read';
+  const ethTxt = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'ETH not read';
+  $('#pSolde').textContent = bloc + ' · ' + ethTxt;
+  if (b) soldeProfil = formaterUnites(b.solde, b.decimales);
+  /* ⛔ LES SOLDES DU DEX : exacts, et gardes BRUTS pour MAX (un arrondi d affichage ne doit jamais
+   * devenir le montant signe — vendre « 1 000,0 » quand on a 999,97 serait refuse par la chaine). */
+  soldesDex = { eth, bloc: b ? b.solde : null, decimales: b ? b.decimales : null };
+  if ($('#peSoldeEth')) $('#peSoldeEth').textContent = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'not read';
+  if ($('#peSoldeBloc')) $('#peSoldeBloc').textContent = b ? formaterUnites(b.solde, b.decimales) + ' ' + sym : 'not read';
+}
+let soldesDex = { eth: null, bloc: null, decimales: null };
+/* ⛔ MAX EN ETH GARDE DE QUOI PAYER LE GAS : tout depenser rendrait la transaction impossible a
+ * envoyer. 0,0003 ETH couvre largement un swap sur Base (≈ 0,00002 ETH mesures) ; le reste part. */
+const RESERVE_GAS_WEI = 300000000000000n;
+$('#peMaxEth') && $('#peMaxEth').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  if (soldesDex.eth === null) return;
+  const net = soldesDex.eth > RESERVE_GAS_WEI ? soldesDex.eth - RESERVE_GAS_WEI : 0n;
+  $('#peAchat').value = formaterEthCourt(net);
+});
+$('#peMaxBloc') && $('#peMaxBloc').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  if (soldesDex.bloc === null || soldesDex.decimales === null) return;
+  /* valeur EXACTE, sans separateur de milliers : c est elle qui sera relue et signee */
+  $('#peVente').value = formaterUnites(soldesDex.bloc, soldesDex.decimales).replace(/[,\s]/g, '');
+});
+/* EN DIRECT, SANS BOUTON (Phil : « tu montres en live, comme les autres DEX ») : toutes les 15 s tant
+ * que le profil est ouvert et la page visible, et tout de suite quand le wallet change de compte. */
+setInterval(() => {
+  const prof = $('#profil');
+  if (document.hidden || !prof || prof.hidden || !prof.dataset.block || !compte) return;
+  void peindreMesAvoirsProfil(prof.dataset.block);
+}, 15000);
+try {
+  if (window.ethereum && window.ethereum.on) {
+    window.ethereum.on('accountsChanged', () => setTimeout(() => {
+      const prof = $('#profil'); if (prof && prof.dataset.block) void peindreMesAvoirsProfil(prof.dataset.block);
+    }, 800));
+  }
+} catch (_) { /* wallet sans evenements : le rafraichissement periodique suffit */ }
 
 $('#mesBlocks').addEventListener('click', (e) => {
   const t = e.target.closest('.mienTuile[data-block]');
@@ -5184,8 +5278,11 @@ async function preparerEchange(sens) {
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
       feeLigne,
-      ...(sens === 'VENTE' && r.recoitDevise === 'ETH' && CHAINE === 8453
-        ? []
+      /* ⛔ LA PART DU MARCHE, MESUREE (2026-09-18) : sur une pool HOOK_PREVU, le hook preleve 3 % du swap en
+       * plus des 0,5 % ci-dessus. « You receive at least » l inclut deja (le devis passe par la pool) ;
+       * cette ligne dit POURQUOI il est plus bas que ce que le prix affiche laisserait croire. */
+      ...(p.cle && String(p.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase()
+        ? ['Market fee: ' + (HOOK_PREVU_FRAIS_BPS / 100) + '% of the trade, taken by the market itself — already inside “You receive at least”']
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
@@ -5198,9 +5295,8 @@ async function preparerEchange(sens) {
     const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
     const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
     const feeEl = $('#peFrais');
-    if (feeEl) feeEl.textContent = hooked
-      ? '0.5 %'
-      : '0.5 % app';
+    if (feeEl) feeEl.textContent = libelleFrais(p.cle).court;
+    void hooked;
   } catch (e) { /* badge optional */ }
   if (p.etat === 'APPROBATIONS') {
     const etape = p.etapes[0];
@@ -5274,7 +5370,7 @@ async function preparerEchange(sens) {
       if (feeEl && r) {
         const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
         const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
-        feeEl.textContent = '0.5 % · ' + feeLabel
+        feeEl.textContent = libelleFrais(p.cle).court + ' · ' + feeLabel
           + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.rachatAuto ? '→TBLOCK' : (r.fraisDevise || 'ETH'));
       }
     } catch (err) { /* badge optional */ }
@@ -5315,13 +5411,14 @@ async function signerEchange(tx, sens, estApprobation) {
   if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
-  /* tip 1900: after Sell that paid out ETH, bridge into fee-capture ETH→USDC exit. */
-  if (sens === 'VENTE' && echangeCourant && echangeCourant.resume
-    && echangeCourant.resume.recoitDevise === 'ETH'
-    && typeof echangeCourant.resume.recoitAuMoins === 'bigint') {
-    /* tip 0025: plus de relance ETH→USDC — la sortie vise l ETH (Phil). */
-    void 0;
-  }
+  /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « Bought. », le bouton « Sign the buy »
+   *    RESTAIT affiche avec la meme transaction — le harnais l a reclique et a achete QUATRE fois. Un
+   *    utilisateur qui clique deux fois paierait deux fois. Une transaction confirmee quitte l ecran ;
+   *    un nouvel echange repart de « Prepare », avec un devis relu. (Le relais ETH -> USDC qui lisait
+   *    encore `echangeCourant` ici est eteint depuis tip 0025 : rien ne le lit plus apres ce point.) */
+  $('#peActions').innerHTML = '';
+  echangeCourant = null;
+  void peindreMesAvoirsProfil($('#profil').dataset.block); /* le solde bouge tout de suite apres l echange, comme sur un DEX */
 }
 /* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
 async function peindreJournalBuyback(adr) {
@@ -5541,6 +5638,24 @@ if (_usdcBtn) _usdcBtn.addEventListener('click', () => void preparerEthUsdc());
 
 
 let planCourant = null, lancementEnCours = false;
+/* ══ « BRING IT TO LIFE » EN UN BOUTON ═══════════════════════════════════════════════════════════════
+ * ⛔⛔ PHIL (2026-09-18) : « un bouton pour creer, un bouton pour donner vie, que les tx se suivent ».
+ *    Mesure avant ce correctif : apres Create, il fallait encore cliquer « Give birth », puis « Approval
+ *    1 of N » (N fois), puis « Ask the chain first », puis « Bring it to life » — 3 + N clics dans la
+ *    page, en plus d un saut d onglet. Le mode auto enchaine ces etapes SANS clic dans la page.
+ * ⛔ CE QUI NE CHANGE PAS : le wallet s ouvre a CHAQUE transaction. On ne signe rien a la place de
+ *    personne ; on retire seulement les clics inutiles ENTRE les signatures.
+ * ⛔ FAIL-CLOSED : au premier refus, au premier echec, a la premiere lecture ratee, le mode auto
+ *    s ARRETE et le bouton manuel reste la. Il ne relance jamais une etape qui a echoue. */
+let vieAuto = false;
+function vieAutoArreter() { vieAuto = false; majProgressionVie(null); }
+/** Une ligne de progression au-dessus du plan : ou on en est, et ce que le wallet va demander. */
+function majProgressionVie(texte) {
+  const el = $('#plProgression');
+  if (!el) return;
+  el.hidden = !texte;
+  el.textContent = texte || '';
+}
 
 function ouvrirLancement() {
   $('#pLancement').hidden = false;
@@ -5567,11 +5682,11 @@ async function calculerLancement() {
   const adr = $('#profil').dataset.block;
   const e = $('#plEtat');
   e.className = 'note';
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; vieAutoArreter(); e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   const contreTblock = $('#plDevise').value === 'TBLOCK';
   if (!(valo > 0) || !Number.isFinite(valo)) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Enter the starting value of the whole supply, in ' + (contreTblock ? 'TBLOCK' : 'ETH') + ' — a positive number.';
     return;
   }
@@ -5582,7 +5697,7 @@ async function calculerLancement() {
   /* ⛔ LA PART PLACEE EST UN CHOIX (Phil, 2026-09-13 : TBLOCK a 50 %) : ce qui est place ne revient jamais. */
   const partPourMille = Math.round(Number(String($('#plPart').value || '99.9').trim().replace(',', '.')) * 10);
   if (!Number.isInteger(partPourMille) || partPourMille < 1 || partPourMille > 999) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'The share to place must be between 0.1 and 99.9 %.';
     $('#plCalculer').disabled = false;
     profilEnLecture = false;
@@ -5603,7 +5718,7 @@ async function calculerLancement() {
   /* tip 2340: NON_TROUVEE = first market; LUE without fee hook = open NEW hooked pool id beside legacy (fees → FEE_WALLET). */
   const legacyUpgrade = marcheAvant && marcheAvant.etat === 'LUE' && marcheLegacySansTbFeeHook(marcheAvant) && CHAINE === 8453;
   if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade)) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
       e.textContent = 'This block is already alive on TokenizedBlock. Nothing to do.';
     } else if (marcheAvant && marcheAvant.etat === 'LUE') {
@@ -5704,7 +5819,7 @@ function peindrePlan(plan, adr) {
   actions.innerHTML = '';
   if (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE') {
     $('#plLignes').innerHTML = '';
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     /* ⛔ DEUX PHRASES DIFFERENTES : un refus est un fait sur ce lancement, une lecture ratee est un
      * fait sur notre reseau — et dans les deux cas, rien n est offert a signer. */
     e.textContent = (plan.etat === 'REFUSE' ? 'Not possible as set: ' : 'Not measured, so nothing to sign: ') + plan.pourquoi;
@@ -5749,14 +5864,14 @@ function peindrePlan(plan, adr) {
   const tropBas = plan.classement && plan.classement.etat === 'TROP_BON_MARCHE';
   $('#plConfirmRang').hidden = !tropBas;
   if (tropBas && !$('#plConfirm').checked) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Tick the confirmation above to go on with such a cheap start, then work it out again.';
     return;
   }
 
   /* ⛔ MAIN Launch fail-closed: no measured life-fee wei → nothing to sign past approvals. */
   if (usdLaunch > 0 && (ethUsd == null || !fraisLancementPret(fraisL))) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Could not read the ETH price right now — work it out again in a moment.';
     void assurerFraisLancementWei(true).then(async (w) => {
       if ($('#profil').dataset.block !== adr || !planCourant) return;
@@ -5767,7 +5882,7 @@ function peindrePlan(plan, adr) {
     return;
   }
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Not enough ETH to bring it to life (≈ $1) — top up, then work it out again.';
     return;
   }
@@ -5782,6 +5897,11 @@ function peindrePlan(plan, adr) {
     actions.appendChild(b);
     e.className = 'note';
     e.textContent = 'Approvals first, then ≈ $1 in ETH, then bring it to life. Each opens your wallet.';
+    if (vieAuto) {
+      majProgressionVie('Step 2 — allowing the market to hold your block (' + plan.etapes.length + ' approval'
+        + (plan.etapes.length > 1 ? 's' : '') + '). Your wallet opens now.');
+      void signerEtapeLancement(etape);
+    }
     return;
   }
   const b = document.createElement('button');
@@ -5790,6 +5910,10 @@ function peindrePlan(plan, adr) {
   b.textContent = 'Ask the chain first';
   b.addEventListener('click', () => void verifierLancement(adr));
   actions.appendChild(b);
+  if (vieAuto) {
+    majProgressionVie('Step 3 — asking the chain to run it first, without sending anything.');
+    setTimeout(() => { if (vieAuto) void verifierLancement(adr); }, 0);
+  }
   e.className = 'note';
   e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.'
     + (usdLaunch > 0 && fraisLancementPret(fraisL)
@@ -5811,6 +5935,7 @@ async function signerEtapeLancement(etape) {
   if (r.etat !== 'CONFIRME') {
     e.className = 'note wKo';
     e.textContent = 'Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || '');
+    vieAutoArreter();
     return;
   }
   /* ⛔ ON REMESURE, ON NE SUPPOSE PAS : l autorisation est relue sur la chaine avant l etape suivante. */
@@ -5826,13 +5951,13 @@ async function verifierLancement(adr) {
     planCourant.fraisLancementWei = w;
     await lireSoldeEthNat(true);
     if (ethUsd == null || !fraisLancementPret(w)) {
-      e.className = 'note wKo';
+      e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Could not read the ETH price right now. Nothing was sent.';
       peindrePlan(planCourant, adr);
       return;
     }
     if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(w)) {
-      e.className = 'note wKo';
+      e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Not enough ETH to bring it to life (' + formaterEthCourt(w) + ' ETH needed). Nothing was sent.';
       peindrePlan(planCourant, adr);
       return;
@@ -5846,7 +5971,7 @@ async function verifierLancement(adr) {
   finally { profilEnLecture = false; }
   if ($('#profil').dataset.block !== adr) return;
   if (sim.etat !== 'ACCEPTE') {
-    e.className = 'note wKo';
+    e.className = 'note wKo'; vieAutoArreter();
     /* ⛔ FAIL-CLOSED : « je n ai pas pu demander » garde le bouton ferme, exactement comme un refus. */
     e.textContent = (sim.etat === 'REFUSE' ? 'The chain refuses this launch: ' : 'The chain could not be asked, so the launch stays closed: ')
       + sim.pourquoi;
@@ -5863,6 +5988,10 @@ async function verifierLancement(adr) {
     : 'Bring it to life — sign in my wallet';
   b.addEventListener('click', () => void lancerMarcheBlock(adr));
   actions.appendChild(b);
+  if (vieAuto) {
+    majProgressionVie('Step 4 — ≈ $1 in ETH, then the market opens. Your wallet opens now.');
+    setTimeout(() => { if (vieAuto) void lancerMarcheBlock(adr); }, 0);
+  }
   e.className = 'note' + (CHAINE === 8453 ? ' wKo' : ' wOk');
   e.textContent = 'The chain accepts this launch'
     + (sim.gasUtilise ? ' (about ' + Number(sim.gasUtilise).toLocaleString('en-US') + ' gas)' : '') + '. '
@@ -5881,12 +6010,12 @@ async function lancerMarcheBlock(adr) {
     planCourant.fraisLancementWei = fraisL;
     await lireSoldeEthNat(true);
     if (ethUsd == null || !fraisLancementPret(fraisL)) {
-      e.className = 'note wKo';
+      e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Could not read the ETH price right now. Nothing was sent — try again.';
       return;
     }
     if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
-      e.className = 'note wKo';
+      e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Not enough ETH to bring it to life. Nothing was sent.';
       return;
     }
@@ -5902,14 +6031,14 @@ async function lancerMarcheBlock(adr) {
       try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); }
       catch { balAvant = null; }
       if (balAvant === null) {
-        e.className = 'note wKo';
+        e.className = 'note wKo'; vieAutoArreter();
         e.textContent = 'Could not check the chain right now. Nothing was sent — try again.';
         return;
       }
       r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
         to: FEE_WALLET, data: '0x', value: feeVal });
       if (r.etat !== 'CONFIRME') {
-        e.className = 'note wKo';
+        e.className = 'note wKo'; vieAutoArreter();
         const lienF = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
           + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
         e.innerHTML = 'The ≈ $1 payment was not confirmed, so nothing else was sent. ' + enTexte(r.pourquoi || r.etat) + lienF;
@@ -5917,7 +6046,7 @@ async function lancerMarcheBlock(adr) {
       }
       const verif = await verifierLifeFeeAuWallet({ hash: r.hash, weiMin: fraisL, balAvant });
       if (!verif.ok) {
-        e.className = 'note wKo';
+        e.className = 'note wKo'; vieAutoArreter();
         const lienF = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
           + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
         e.innerHTML = enTexte(verif.pourquoi) + lienF;
@@ -5938,8 +6067,22 @@ async function lancerMarcheBlock(adr) {
     e.innerHTML = 'It is alive. Its market is open.' + lien;
     $('#plActions').innerHTML = '';
     planCourant = null;
+    vieAutoArreter();
+    majProgressionVie('Done — it is alive. Your blocks are below.');
+    void peindreMesAvoirsProfil(adr);
+    lancementLien = null; /* le lien de lancement est consomme : relire le profil ne doit pas rouvrir la carte */
+    /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « It is alive », le profil disait
+     *    encore « No market yet » et le panneau Buy/Sell restait CACHE — son marche avait ete lu AVANT la
+     *    mise en vie et rien ne le relisait. D ou le « apres bring life, tu sais pas echanger » de Phil.
+     *    On relit le profil entier une fois la pool ouverte : palier, prix, Buy/Sell. */
+    setTimeout(() => {
+      if ($('#profil') && String($('#profil').dataset.block || '').toLowerCase() === String(adr).toLowerCase()) {
+        void ouvrirProfil(adr, symProfil).then(() => majProgressionVie('Done — it is alive. Buy and sell are open below.'));
+      }
+    }, 1500);
   } else {
-    e.className = 'note wKo';
+    vieAutoArreter();
+    e.className = 'note wKo'; vieAutoArreter();
     e.innerHTML = enTexte(r.pourquoi || r.etat)
       + (usdLaunch > 0 ? ' (The ≈ $1 may already be paid — do not pay again; retry bringing it to life only.)' : '')
       + lien;
@@ -6483,9 +6626,13 @@ function peindrePaires() {
   const liste = pairesProposees(CHAINE);
   s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '">' + enTexte(etiquettePaire(p)) + '</option>').join('')
     + '<option value="' + AUTRE_PAIRE + '">Another B20 — paste native B20 address (second tokenized pair)</option>';
-  /* ⛔ STANDARD RAKSHA 2026-09-14 : TBLOCK en tete sur mainnet; garder le choix precedent si encore valide. */
-  if ([...s.options].some((o) => o.value === avant)) s.value = avant;
-  else if (CHAINE === 8453 && [...s.options].some((o) => o.value.toLowerCase() === TBLOCK.toLowerCase())) s.value = TBLOCK;
+  /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ».
+   *    Mesure du probleme : un block paire a TBLOCK ne s achete qu avec du TBLOCK ; un nouvel utilisateur
+   *    n en a pas, donc son propre block lui etait inachetable des la naissance. ETH d abord, partout.
+   *    (Ancienne regle, remplacee : « STANDARD RAKSHA 2026-09-14 : TBLOCK en tete sur mainnet ».) */
+  const ethOption = [...s.options].find((o) => /^0x0{40}$/i.test(o.value) || /^ETH\b/.test(o.textContent));
+  if ([...s.options].some((o) => o.value === avant) && avant) s.value = avant;
+  else if (ethOption) s.value = ethOption.value;
   majPaire();
 }
 
@@ -6588,7 +6735,7 @@ async function majPaire() {
   const chip = $('#cPaireChip');
   if (chip) {
     chip.hidden = false;
-    chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK (standard · fee path)'
+    chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK — buyers need TBLOCK'
       : q.paire.type === 'B20' ? ('Quote = B20 ' + (q.paire.symbole || '·'))
         : ('Quote = ' + (q.paire.symbole || 'custom'));
   }
@@ -6756,10 +6903,15 @@ function majFraisEtRecap() {
     } else if (usd > 0 && fraisWeiCalcule != null && soldeEthNat != null) {
       soldeOk = soldeEthNat >= fraisWeiCalcule;
     }
-    boutonCreer.disabled = !prixOk || !soldeOk || Boolean(v.ko);
-    boutonCreer.title = v.ko ? v.ko
-      : ((usd > 0 && !prixOk) ? 'Reading the ETH price…'
-        : (!soldeOk ? 'Not enough ETH' : ''));
+    /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL : sans wallet connecte, Create etait DESACTIVE (v.ko =
+     *    « connect your wallet first »), et la seule raison vivait dans un `title` — une infobulle qu un
+     *    telephone n affiche jamais. Un bouton mort sans explication : c est le « ca bug » de Phil.
+     *    Un refus de validation ne desactive plus le bouton : le clic connecte le wallet, ou dit ce qui
+     *    manque en clair. Seuls un prix ou un solde MESURES insuffisants le ferment encore. */
+    boutonCreer.disabled = !prixOk || !soldeOk;
+    boutonCreer.title = (usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : '');
+    if (!compte) boutonCreer.textContent = 'Connect wallet, then create';
+    else if ($('#cVieDirecte')) boutonCreer.textContent = $('#cVieDirecte').checked ? 'Create, then bring it to life' : 'Create it — 1 signature';
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
@@ -7040,9 +7192,24 @@ document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('cli
 
 async function creerBlock() {
   if (creationEnCours) return;
-  const v = validerCreation();
   const e = $('#cEtat');
-  if (v.ko) { e.className = 'note'; e.textContent = ''; majFraisEtRecap(); return; }
+  /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local + wallet injecte) : sans wallet connecte, le
+   *    clic sur Create ne faisait RIEN — la validation refusait (« connect your wallet first »), et
+   *    cette fonction effacait le message puis sortait en silence. Phil avait demande que ce cas ouvre
+   *    le wallet tout seul ; les autres boutons le faisaient, pas celui-ci. On connecte d abord. */
+  if (!compte) {
+    e.className = 'note';
+    e.textContent = 'Opening your wallet to connect…';
+    if (!(await pret())) {
+      e.className = 'note wKo';
+      e.textContent = 'Your wallet did not connect, so nothing was started.';
+      return;
+    }
+    majFraisEtRecap();
+  }
+  const v = validerCreation();
+  /* ⛔ UN REFUS SE DIT : on n efface plus le message pour sortir sans rien afficher. */
+  if (v.ko) { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; majFraisEtRecap(); return; }
   /* ⛔⛔ SUR CHAINE PAYANTE: prix ETH/USD + solde ETH lus AVANT toute signature. Fail-closed. */
   const usd = fraisCreationUsd(CHAINE);
   let creationEnCoursPayante = false;
@@ -7161,6 +7328,10 @@ async function creerBlock() {
                 const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
                 const part = $('#plPart'); if (part) part.value = '99.9';
                 ouvrirLancement();
+                /* ⛔ UN BOUTON : on enchaine « Give birth » sans attendre de clic ; la suite s enchaine seule */
+                vieAuto = true;
+                majProgressionVie('Step 1 — reading its market and your approvals…');
+                void calculerLancement();
               } catch (_) {}
             });
           } catch (_) {
@@ -7703,7 +7874,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0055',
+    build: '20260918-0057',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

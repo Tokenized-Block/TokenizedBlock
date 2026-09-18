@@ -22,10 +22,14 @@ export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 /** TBLOCK — standard quote for new blocks (mainnet). Address from tokenomics / B20Created. */
 export const TBLOCK_MAINNET = '0xb20000000000000000000024c30d3fcb7931272e';
 
+/* ⛔⛔ ETH D ABORD (Phil, 2026-09-18 : « la pool sur ETH par defaut, oublie le TBLOCK paired — gros
+ *    probleme »). Un block paire a TBLOCK ne s achete QU avec du TBLOCK, qu un nouvel utilisateur n a
+ *    pas : son propre block lui etait inachetable des la naissance. L ordre de cette liste est le premier
+ *    choix montre a l ecran — ETH en tete, TBLOCK reste disponible mais n est plus « le standard ». */
 export const DEVISES_BASE = [
-  { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock (standard pair)', type: 'TBLOCK', chaines: [8453] },
-  { adr: ETH_NATIF, symbole: 'ETH', nom: 'Ether (native)', type: 'NATIF', chaines: [8453, 84532] },
+  { adr: ETH_NATIF, symbole: 'ETH', nom: 'Ether (native) — recommended', type: 'NATIF', chaines: [8453, 84532] },
   { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbole: 'USDC', nom: 'USD Coin', type: 'STABLE', chaines: [8453] },
+  { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock — buyers need TBLOCK to buy', type: 'TBLOCK', chaines: [8453] },
 ];
 
 /** ⛔ RECOPIE de STOCKS_BASE_REGISTRY (index.html). Un test compare les deux listes, adresse par adresse. */
@@ -84,7 +88,7 @@ export function qualifierPaire(adresse, chaine) {
 export function etiquettePaire(p) {
   if (!p) return '—';
   if (p.type === 'SAISIE') return 'B20 pair ' + p.adr.slice(0, 6) + '…' + p.adr.slice(-4) + (p.estB20 ? ' (native B20)' : ' (B20 check…)');
-  if (p.type === 'TBLOCK') return p.symbole + ' — ' + p.nom + ' (standard; may add another tokenized pair later)';
+  if (p.type === 'TBLOCK') return p.symbole + ' — ' + p.nom;
   if (p.type === 'ACTION') return p.symbole + ' — ' + p.nom + ' (Coinbase tokenized stock)';
   return p.symbole + ' — ' + p.nom;
 }
