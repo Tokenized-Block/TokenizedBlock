@@ -625,11 +625,16 @@ details[open] > summary::before{transform:rotate(90deg)}
 /* ⛔ PHIL (2026-09-17) : « fais en sorte que le block suive le mouvement pour pas perdre le block de vue ».
    Le hero redevient collant, et se COMPACTE des qu on descend : colle en pleine taille, il mangeait
    la moitie de l ecran pendant qu on bouge les cadrans. */
-.creaHeros.compacte{padding:10px 16px 8px}
-.creaHeros.compacte .creaScene{width:96px;height:104px;margin-bottom:4px}
-.creaHeros.compacte .creaArt{width:84px;height:92px}
-.creaHeros.compacte .creaNom{font-size:15px}
-.creaHeros.compacte #cApercuSym,.creaHeros.compacte .creaSol{display:none}
+/* ⛔⛔ CAPTURE DE PHIL (2026-09-18) : le hero compact FLOTTAIT sur les etapes (« Surprise me » pose sur « 1 Create »),
+   parce que son fond etait semi-transparent et qu il gardait sa mise en colonne. En defilant, il devient une BARRE :
+   une rangee opaque — le block, son nom, les deux boutons — et le contenu passe DESSOUS, proprement. */
+.creaHeros.compacte{flex-direction:row;justify-content:flex-start;gap:12px;padding:8px 12px;text-align:left;
+  background:rgb(15 10 23 / .97);border-color:rgb(167 139 250 / .35);box-shadow:0 10px 26px rgb(0 0 0 / .45);border-radius:16px}
+.creaHeros.compacte .creaScene{width:56px;height:60px;margin:0;flex:0 0 auto}
+.creaHeros.compacte .creaArt{width:52px;height:56px}
+.creaHeros.compacte .creaHalo,.creaHeros.compacte .creaSol,.creaHeros.compacte #cApercuSym{display:none}
+.creaHeros.compacte .creaNom{font-size:15px;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.creaHeros.compacte .creaBoutonsHeros{margin:0;flex:0 0 auto}
 .creaHeros.compacte .creaBoutonsHeros .bouton{padding:7px 12px;font-size:12px}
 .creaScene,.creaHeros .creaArt,.creaHeros .creaNom{transition:width .18s ease,height .18s ease,font-size .18s ease}
 .creaBoutonsHeros{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
@@ -1243,7 +1248,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0063" hidden>Build <code>20260918-0063</code> · connect button up top, address checked by itself, logo URL.</p>
+      <p class="note" data-build="20260918-0064" hidden>Build <code>20260918-0064</code> · compact create bar, no red before the first try.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7072,12 +7077,16 @@ function majFraisEtRecap() {
       ? ' — Create is free; bringing it to life costs ≈ $1'
       : ' — Create free (Practice)');
   /* tip 2354: when ko, just the ko — never paste fee story */
+  /* ⛔ PAS D ERREUR ROUGE AVANT LE PREMIER GESTE (capture de Phil, 2026-09-18 : « A block needs a name. » deux fois,
+   * en rouge, sur une page qu on vient d ouvrir). Un champ vide n est pas une faute tant qu on n a rien tente : on
+   * dit ce qui reste a faire, en neutre. Le rouge revient au clic sur Create (creerBlock l ecrit alors). */
+  const neutre = v.ko && !String($('#cNom').value || '').trim() && !String($('#cSym').value || '').trim();
   $('#cRecap').textContent = v.ko
-    ? v.ko
+    ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
     : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — all to you'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.';
-  $('#cRecap').className = 'note' + (v.ko ? ' wKo' : '');
+  $('#cRecap').className = 'note' + (v.ko && !neutre ? ' wKo' : '');
   const liste = $('#cApercuTx');
   if (v.ko) { liste.innerHTML = ''; }
   else if (!compte) { liste.innerHTML = '<li>Connect your wallet to see the exact transactions before you sign.</li>'; }
@@ -8025,7 +8034,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0063',
+    build: '20260918-0064',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
