@@ -1217,7 +1217,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0058" hidden>Build <code>20260918-0058</code> · style as a list, dials in plain words.</p>
+      <p class="note" data-build="20260918-0059" hidden>Build <code>20260918-0059</code> · leaving the page no longer resets the map or Live.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2166,7 +2166,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (battement) { clearInterval(battement); battement = null; } }
   else if (!battement) demarrerBattement();
   if (document.hidden && anim) { cancelAnimationFrame(anim); anim = null; }
-  else if (!document.hidden && !anim && habitants.length) poserBlocks(habitants.map((h) => ({ jeton: h.adr, symbole: h.sym, vie: h.vie })));
+  /* ⛔⛔ BUG SIGNALE PAR PHIL (2026-09-18) : « quand tu sors de la page ca remet a zero, garde l historique ».
+   *    Au retour sur l onglet, on appelait `poserBlocks(...)` — qui SUPPRIME toutes les tuiles, efface les
+   *    liens lumineux (`moteur3d.vider()`) et recree chaque block avec sa seule « vie » : faces lues, etat
+   *    de vie, cerveau, eclat, tout repartait de zero. Il fallait seulement RELANCER la boucle d animation.
+   *    Les blocks, leurs lectures et les liens restent tels qu on les avait laisses. */
+  else if (!document.hidden && !anim && habitants.length) animer();
 });
 
 $('#map').addEventListener('click', (e) => {
@@ -2855,7 +2860,7 @@ $('#pReseau').addEventListener('click', () => {
   peindrePaires();
   majFraisEtRecap();
   /* ⛔ LE FIL LIVE PARLAIT DE L AUTRE CHAINE */
-  liveEvts = []; liveDernier = null; livePlusAncien = null; liveRatees = 0;
+  liveEvts = []; liveDernier = null; livePlusAncien = null; liveRatees = 0; liveTrou = 0;
   $('#sfLive').innerHTML = '';
   try { peindreHookedRoute(); filHookedTbgasHandlers(); } catch (_) {}
 });
@@ -4401,6 +4406,8 @@ $('#pEnvoyer').addEventListener('click', () => {
  *    silence la periode manquee. */
 const LIVE_MS = 20000, LIVE_FENETRE = 1999;
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
+/** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
+let liveTrou = 0;
 /* le filtre du fil Live : un tri de LECTURE, il ne change ni ce qui est lu ni ce qui est compte */
 /** ⛔ Seuil de « Big », en ETH : parametre NOMME, pas un nombre perdu dans une condition. */
 const SEUIL_GROS_ETH = 0.02;
@@ -4526,7 +4533,14 @@ async function lireLive(sens) {
       deBloc = Math.max(0, aBloc - LIVE_FENETRE);
     } else {
       aBloc = fin;
-      if (liveDernier !== null && fin - liveDernier > LIVE_FENETRE) { liveEvts = []; liveDernier = null; livePlusAncien = null; }
+      /* ⛔⛔ « GARDE L HISTORIQUE » (Phil, 2026-09-18). Apres une absence plus longue que la fenetre, on VIDAIT
+       *    tout le fil (`liveEvts = []`) : revenir sur la page effacait ce qu on venait de voir. On garde les
+       *    evenements deja lus, on saute a la fenetre la plus recente, et on DIT le trou au lieu de le cacher —
+       *    les blocs de chaine non lus pendant l absence ne sont ni inventes ni comptes comme « rien ». */
+      if (liveDernier !== null && fin - liveDernier > LIVE_FENETRE) {
+        liveTrou = (liveTrou || 0) + (fin - LIVE_FENETRE - liveDernier - 1);
+        liveDernier = fin - LIVE_FENETRE - 1;
+      }
       deBloc = liveDernier === null ? Math.max(0, fin - LIVE_FENETRE) : liveDernier + 1;
       if (deBloc > aBloc) return;
     }
@@ -4858,7 +4872,8 @@ function peindreLive() {
       ? ' between chain blocks ' + livePlusAncien.toLocaleString('en-US') + ' and ' + liveDernier.toLocaleString('en-US') : '')
     + ' · ' + suivis.size + ' blocks followed · ' + pools.length + ' pools found on chain (' + parConf('NOTRE') + ' app format, '
     + parConf('SANS_HOOK') + ' without hook, ' + parConf('HOOK') + ' with a hook) plus the app\'s own market keys'
-    + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '') + '.';
+    + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '')
+    + (liveTrou ? ' · ' + liveTrou.toLocaleString('en-US') + ' chain blocks not read while you were away — a gap, not a quiet time' : '') + '.';
   /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-13) : le repere du bas etait DEJA visible avant la premiere
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
@@ -7911,7 +7926,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0058',
+    build: '20260918-0059',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
