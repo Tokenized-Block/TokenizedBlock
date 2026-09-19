@@ -1320,7 +1320,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0091" hidden>Build <code>20260919-0091</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0092" hidden>Build <code>20260919-0092</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1771,7 +1771,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, estNotreHook, hookDeploye, hookV2Deploye } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -7029,12 +7029,24 @@ function peindreRolesCreate() {
       + 'Engraved with the block at Create; changeable later on its profile.';
   }
 }
+let v3Pret = false;
+/* le V3 est-il sur la chaine ? lu une fois au demarrage, puis toutes les 5 min : les paires s ouvrent seules */
+async function lireV3() {
+  try { const e = await hookV3Deploye({ rpc }); const avant = v3Pret; v3Pret = e === 'DEPLOYE'; if (v3Pret !== avant) peindrePaires(); } catch (_) {}
+}
+setTimeout(() => { void lireV3(); }, 3000);
+setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
 function peindrePaires() {
   const s = $('#cPaire');
   const avant = s.value;
   const liste = pairesProposees(CHAINE);
-  s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '">' + enTexte(etiquettePaire(p)) + '</option>').join('')
-    + '<option value="' + AUTRE_PAIRE + '">Another B20 — paste native B20 address (second tokenized pair)</option>';
+  /* ⛔ UNE PAIRE N EST PROPOSEE QUE SI LA MISE EN VIE SAIT L OUVRIR. ETH et TBLOCK : hook V2. Le reste (USDC, cbBTC,
+   *    actions, autre B20) attend le hook V3 : « soon » tant que son code n est pas sur la chaine (v3Pret, lu au demarrage). */
+  const ouverte = (p) => p.type === 'NATIF' || p.type === 'TBLOCK' || v3Pret;
+  s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
+      + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>').join('')
+    + '<option value="' + AUTRE_PAIRE + '"' + (v3Pret ? '' : ' disabled') + '>Another B20 — paste native B20 address (second tokenized pair)'
+    + (v3Pret ? '' : ' — soon') + '</option>';
   /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ».
    *    Mesure du probleme : un block paire a TBLOCK ne s achete qu avec du TBLOCK ; un nouvel utilisateur
    *    n en a pas, donc son propre block lui etait inachetable des la naissance. ETH d abord, partout.
@@ -8380,7 +8392,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0091',
+    build: '20260919-0092',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

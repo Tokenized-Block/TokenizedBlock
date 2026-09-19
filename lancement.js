@@ -44,7 +44,7 @@ export function tickDepuisPrix(prixNum, prixDen, espacement) {
  * @param {number} espacement     tickSpacing de la pool visee
  * @param {number|null} tickCourant  si la pool existe deja : son tick LU. Sinon null.
  */
-export function parametresLancement({ supply, valorisationEth, espacement, tickCourant = null }) {
+export function parametresLancement({ supply, valorisationEth, espacement, tickCourant = null, ecartDecimales = 0 }) {
   const s = BigInt(supply);
   if (s <= 0n) return { etat: 'REFUSE', pourquoi: 'supply must be positive' };
   const v = Number(valorisationEth);
@@ -52,9 +52,13 @@ export function parametresLancement({ supply, valorisationEth, espacement, tickC
   const tickBas = tickMinAligne(espacement);
   if (tickBas === null) return { etat: 'REFUSE', pourquoi: 'tick spacing must be a positive integer' };
 
-  /* prix = combien de jetons pour 1 ETH = supply / valorisation. Les decimales des deux cotes
-   * s annulent (18 et 18), donc le ratio ENTIER suffit — pas de conversion a faire. */
-  const tickPrix = tickDepuisPrix(Number(s), v, espacement);
+  /* prix = combien de jetons pour 1 unite de devise = supply / valorisation, en UNITES DE BASE :
+   * (supply x 10^decBlock) / (valo x 10^decDevise). Avec 18 et 18, l ecart vaut 0 et c est le ratio entier d avant.
+   * ⛔ V3 (2026-09-19) : une action Coinbase a 8 decimales -> ecart = 18 - 8 = 10. Sans lui, la plage serait posee a
+   *    ~230 000 ticks du prix de depart (le meme genre d erreur de 1e8 que le 2026-09-06). test-decimales-lancement.mjs. */
+  const ecart = Number(ecartDecimales);
+  if (!Number.isInteger(ecart) || Math.abs(ecart) > 30) return { etat: 'REFUSE', pourquoi: 'decimals gap out of range' };
+  const tickPrix = tickDepuisPrix(Number(s) * 10 ** ecart, v, espacement);
   if (tickPrix === null) return { etat: 'REFUSE', pourquoi: 'price out of computable range' };
 
   /* ⛔ SI LA POOL EXISTE, LE TICK COURANT COMMANDE — pas celui qu on aurait voulu. Utiliser le

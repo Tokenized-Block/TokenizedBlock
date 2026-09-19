@@ -232,7 +232,7 @@ const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 
 const entonnoir = { depuis: new Date().toISOString(), total: {}, parJour: {} };
 
 const SERVIS = [
-  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json',
+  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',

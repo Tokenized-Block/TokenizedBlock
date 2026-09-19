@@ -142,8 +142,9 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     return { etat: 'NON_MESURE', pourquoi: 'the block or its pool could not be read: ' + String((e && e.message) || e) };
   }
   if (!Number.isInteger(dec) || dec < 0 || dec > 36) return { etat: 'NON_MESURE', pourquoi: 'decimals out of range' };
-  /* ⛔ la plage suppose des decimales egales des deux cotes (le ratio entier suffit) — sinon refus, jamais un prix faux */
-  if (decDevise !== dec) return { etat: 'REFUSE', pourquoi: 'block and pair currency must have the same decimals here' };
+  /* ⛔ DECIMALES DIFFERENTES (V3, 2026-09-19) : l ecart est passe au calcul de la plage (et sqrtPriceDepuisPrix le connait
+   *    deja) — le test aller-retour prouve que plage et prix de depart restent alignes. Au-dela de 30 : refus. */
+  if (!Number.isInteger(decDevise) || decDevise < 0 || decDevise > 36) return { etat: 'NON_MESURE', pourquoi: 'pair decimals out of range' };
   if (solde === 0n) return { etat: 'REFUSE', pourquoi: 'this account holds none of this block' };
   const entiere = supply / 10n ** BigInt(dec);
   const sqrtExistant = BigInt('0x' + String(s0).slice(2, 66));
@@ -151,7 +152,7 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
 
   /* ── prix, plage, liquidite ── */
   const pm = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: TICK_SPACING_POOL,
-    tickCourant: tickCourant === null ? null : (blockEst1 ? tickCourant : -tickCourant) });
+    tickCourant: tickCourant === null ? null : (blockEst1 ? tickCourant : -tickCourant), ecartDecimales: dec - decDevise });
   if (pm.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pm.pourquoi };
   const p = blockEst1 ? pm : { ...pm, tickBas: -pm.tickHaut, tickHaut: -pm.tickBas, tickPrix: -pm.tickPrix };
   const sqrtVise = sqrtExistant !== 0n ? sqrtExistant

@@ -23,10 +23,21 @@ export const HOOK_PREVU = '0xaa6D7bD9FC7D394bc717137936f2939834382044';
  *    PositionManager). Adresse = celle MINEE par script/DeployTBlockFeeHookV2.s.sol (simulation du 2026-09-19), deployee
  *    par Phil. Tant qu elle n a pas de code, l app garde HOOK_PREVU : la bascule est lue sur la chaine, jamais supposee. */
 export const HOOK_V2 = '0x8E1Eb57AD2A87a4f7bc89ce94eFD5cd77aEc2044';
-/** Un marche est-il sur NOTRE hook (V1 ou V2) ? La seule fonction qui en decide. */
+/* ⛔ HOOK V3 (2026-09-19) : le V2 + les ACTIONS TOKENISEES et gros jetons (USDC, cbBTC, 13 actions Coinbase), liste FIXEE au
+ *    deploiement. Adresse = celle minee par script/DeployTBlockFeeHookV3.s.sol (simulation du 2026-09-19). Tant qu elle n a
+ *    pas de code, ces paires restent « soon » dans Create : la bascule est lue sur la chaine. */
+export const HOOK_V3 = '0x7a7cEBB2Ccb84C9fBfa2730e6cB23Bb192166044';
+/** Un marche est-il sur NOTRE hook (V1, V2 ou V3) ? La seule fonction qui en decide. */
 export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
-  return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase();
+  return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase() || x === HOOK_V3.toLowerCase();
+}
+/** Le V3 est-il deploye ? Lu sur son code. */
+export async function hookV3Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V3, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
 }
 /** La V2 est-elle deployee ? Lu sur son code. */
 export async function hookV2Deploye({ rpc }) {

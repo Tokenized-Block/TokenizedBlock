@@ -29,6 +29,8 @@ export const TBLOCK_MAINNET = '0xb20000000000000000000024c30d3fcb7931272e';
 export const DEVISES_BASE = [
   { adr: ETH_NATIF, symbole: 'ETH', nom: 'Ether (native) — recommended', type: 'NATIF', chaines: [8453, 84532] },
   { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbole: 'USDC', nom: 'USD Coin', type: 'STABLE', chaines: [8453] },
+  /* cbBTC : adresse lue sur Blockscout (« Coinbase Wrapped BTC », 623 614 detenteurs, 8 decimales) — les homonymes sont des imitations */
+  { adr: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', symbole: 'cbBTC', nom: 'Coinbase Wrapped BTC', type: 'MAJEUR', chaines: [8453] },
   { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock — buyers need TBLOCK to buy', type: 'TBLOCK', chaines: [8453] },
 ];
 
