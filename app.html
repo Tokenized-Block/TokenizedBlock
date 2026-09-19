@@ -1248,7 +1248,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260918-0064" hidden>Build <code>20260918-0064</code> · compact create bar, no red before the first try.</p>
+      <p class="note" data-build="20260919-0065" hidden>Build <code>20260919-0065</code> · Trade tells a refused read from a quiet market.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7264,6 +7264,16 @@ $('#olPreparer').addEventListener('click', async () => {
  * Donnees : /api/trending (serveur : creations B20 lues sur la chaine + DexScreener). « Buy » ouvre le profil du block,
  * remplit 0.01 ETH et prepare l achat (0,5 % au wallet de frais, controle dans la calldata) : il ne reste qu a signer. */
 let trDonnees = null, trTri = 'h1', trLuA = 0;
+/* ⛔ PHIL (2026-09-19, capture du Trade vide) : un echec de lecture ne doit pas laisser l utilisateur devant « try again ».
+ * On reessaie seul, toutes les 30 s, tant que l onglet Trade est affiche et la page visible. */
+let trRelecture = null;
+function relireTrendingPlusTard() {
+  if (trRelecture) return;
+  trRelecture = setTimeout(() => {
+    trRelecture = null;
+    if (!document.hidden && $('#v-trade') && $('#v-trade').classList.contains('on')) { trLuA = 0; void lireTrending(); }
+  }, 30000);
+}
 async function lireTrending() {
   const ul = $('#trListe'), note = $('#trNote');
   if (!ul) return;
@@ -7272,9 +7282,9 @@ async function lireTrending() {
       const r = await fetch('/api/trending', { cache: 'no-store' });
       const d = await r.json();
       if (d && d.ok === true && Array.isArray(d.lignes)) { trDonnees = d; trLuA = Date.now(); }
-      else if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ ' + ((d && d.pourquoi) || 'Market not read') + ' — try again in a moment.'; return; }
+      else if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ ' + ((d && d.pourquoi) || 'Market not read') + ' — retrying by itself in 30 s.'; relireTrendingPlusTard(); return; }
     } catch (_) {
-      if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ Market not reachable right now — try again in a moment.'; return; }
+      if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ Market not reachable right now — retrying by itself in 30 s.'; relireTrendingPlusTard(); return; }
     }
   }
   peindreTrending();
@@ -7296,7 +7306,10 @@ function peindreTrending() {
     /* mesure 2026-09-17 : la plupart de ces marches n acceptent que leur propre app -> « Open », pas une promesse d achat */
     + '<button type="button" class="bouton sec trAcheter" data-ouvrir="' + enTexte(l.adr) + '">Open</button></li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
-    || '<li class="filL"><p class="note">Nothing is moving right now.</p></li>';
+    || (d.lotsMarche && d.lotsMarche.ko
+      ? '<li class="filL"><p class="note">⚠️ Market data was not fully read (' + d.lotsMarche.ko + ' of '
+        + (d.lotsMarche.ok + d.lotsMarche.ko) + ' reads refused) — retrying by itself. This is not a quiet market.</p></li>'
+      : '<li class="filL"><p class="note">Nothing is moving right now.</p></li>');
   note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
     + new Date(d.lu).toLocaleTimeString();
 }
@@ -8034,7 +8047,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260918-0064',
+    build: '20260919-0065',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

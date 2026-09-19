@@ -157,13 +157,34 @@ async function lireTrending() {
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
     if (!(cr.fenetresRatees || []).length) blocsLusJusqua = fin;
     const adrs = [...blocksConnus], paires = [];
+    /* ⛔⛔ BUG EN PROD (2026-09-19, capture de Phil) : « 0 blocks with a live market · $0 traded » et « Nothing is
+     *    moving right now » — alors que 1 095 blocks etaient suivis. DexScreener n avait rien rendu, et `if (r.ok)`
+     *    AVALAIT chaque refus sans le compter : un echec de lecture publie comme un marche calme. Chaque lot est
+     *    maintenant compte (statut HTTP garde), un refus 429 est reessaye, et si AUCUN lot n a abouti on GARDE
+     *    la derniere bonne liste au lieu de l ecraser par un vide. */
+    const statuts = {};
+    let lotsOk = 0, lotsKo = 0;
     for (let i = 0; i < adrs.length; i += 30) {
-      const r = await fetch('https://api.dexscreener.com/tokens/v1/base/' + adrs.slice(i, i + 30).join(','), { signal: AbortSignal.timeout(10000) });
-      if (r.ok) { const j = await r.json(); if (Array.isArray(j)) paires.push(...j); }
+      let fait = false;
+      for (let essai = 0; essai < 3 && !fait; essai++) {
+        try {
+          const r = await fetch('https://api.dexscreener.com/tokens/v1/base/' + adrs.slice(i, i + 30).join(','),
+            { signal: AbortSignal.timeout(10000), headers: { accept: 'application/json' } });
+          statuts[r.status] = (statuts[r.status] || 0) + 1;
+          if (r.ok) { const j = await r.json(); if (Array.isArray(j)) paires.push(...j); fait = true; }
+          else if (r.status !== 429) break;
+          else await new Promise((ok) => setTimeout(ok, 2000 * (essai + 1)));
+        } catch (e) { statuts.erreur = (statuts.erreur || 0) + 1; }
+      }
+      if (fait) lotsOk++; else lotsKo++;
       await new Promise((ok) => setTimeout(ok, 250));
     }
+    if (!lotsOk && lotsKo) {
+      throw new Error('DexScreener refused all ' + lotsKo + ' reads (' + JSON.stringify(statuts) + ')');
+    }
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
-      fenetresRatees: (cr.fenetresRatees || []).length, ...resumerTrending(paires, adrs, { max: 400 }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+      fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
+      ...resumerTrending(paires, adrs, { max: 400 }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
