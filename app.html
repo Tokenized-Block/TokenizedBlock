@@ -1367,7 +1367,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0108" hidden>Build <code>20260919-0108</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0109" hidden>Build <code>20260919-0109</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1630,6 +1630,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <label class="champ">ETH → USDC (exit)<input id="peUsdcEth" inputmode="decimal" placeholder="0.01" autocomplete="off"></label>
           <button class="bouton sec" id="peUsdcPrep" type="button" style="align-self:end">Prepare ETH→USDC</button>
         </div>
+        <p class="note" id="peAction" hidden></p>
         <ul class="pmLignes" id="peLignes"></ul>
         <div class="pActions" id="peActions"></div>
         <p class="note" id="peEtat"></p>
@@ -5660,6 +5661,15 @@ function majDeviseEchange(v) {
   if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + sym + ' to spend';
   $('#peAchat').placeholder = enDevise ? (sym === 'USDC' ? '10' : '0.1') : '0.01';
   deviseEchange = enDevise ? { adr: v.deviseAdr, sym, dec: v.decDevise } : null;
+  /* ⛔ Base (post B20 du 2026-08-27, lu par Phil) : les actions Coinbase sont reservees aux juridictions eligibles hors US, et
+   *    une policy de l emetteur peut bloquer une adresse (le transfert revert). 1 token n est pas toujours 1 action (multiplier).
+   *    On le dit la ou on en echange, en une ligne. */
+  const action = enDevise && pairesProposees(CHAINE).some((p) => p.type === 'ACTION' && p.adr.toLowerCase() === String(v.deviseAdr).toLowerCase());
+  const nAction = $('#peAction');
+  if (nAction) {
+    nAction.hidden = !action;
+    if (action) nAction.textContent = 'Coinbase tokenized stocks are only for eligible jurisdictions outside the U.S.; the issuer can block an address, and then the trade fails before anything moves. One ' + sym + ' is not always one share (dividends and splits change the ratio).';
+  }
   void majSoldeDeviseEchange();
 }
 let deviseEchange = null;
@@ -8719,7 +8729,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0108',
+    build: '20260919-0109',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
