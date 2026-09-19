@@ -41,6 +41,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   const cam = { yaw: 0.65, pitch: -0.42, dist: 0, ox: 0, oy: 0, auto: !mouvementReduit, touchee: false, cible: null, pret: false };
   let effets = [];
   let liens = [];
+  /* l instant du dernier geste de l utilisateur : le spotlight automatique ne lui arrache jamais la camera */
+  let mainA = 0;
   let glisse = false;
   /* etoiles : directions sur la sphere, graine fixe (meme ciel chez tout le monde), taille et eclat varies */
   const ETOILES = [];
@@ -359,14 +361,14 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const { L, H } = taille();
       cam.dist = Math.max(S * DIST_MIN, Math.min(S * DIST_MAX, pince.dist + Math.log(pince.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)) * S * 0.9));
       cam.ox = pince.ox + ((a.x + b.x) / 2 - pince.mx); cam.oy = pince.oy + ((a.y + b.y) / 2 - pince.my);
-      glisse = true; cam.touchee = true; cam.auto = false; cam.cible = null;
+      glisse = true; cam.touchee = true; cam.auto = false; cam.cible = null; mainA = performance.now();
       return;
     }
     if (!depart) return;
     const dx = e.clientX - depart.x, dy = e.clientY - depart.y;
     if (!glisse && Math.hypot(dx, dy) < 6) return;
     if (!glisse) { try { map.setPointerCapture(e.pointerId); } catch (_) { /* optionnel */ } }
-    glisse = true; cam.touchee = true; cam.auto = false; cam.cible = null;
+    glisse = true; cam.touchee = true; cam.auto = false; cam.cible = null; mainA = performance.now();
     map.classList.add('glisse');
     compteur.style.opacity = '0';
     if (depart.deplacer) { cam.ox = depart.ox + dx; cam.oy = depart.oy + dy; }
@@ -382,7 +384,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   map.addEventListener('lostpointercapture', fin);
   map.addEventListener('wheel', (e) => {
     e.preventDefault();
-    cam.touchee = true; cam.auto = false;
+    cam.touchee = true; cam.auto = false; mainA = performance.now();
     zoomer(Math.exp(e.deltaY * 0.0012));
     compteur.style.opacity = '0';
   }, { passive: false });
@@ -401,6 +403,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     image, placer, centrerSur, impulsion, onde, signalVersWallet, vueDeDepart,
     glisseAuClic: () => glisse, oublierGlisse: () => { glisse = false; },
     nbLiens: () => liens.length,
+    derniereMain: () => mainA,
     vider: () => { effets = []; liens = []; },
   };
 }

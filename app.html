@@ -350,6 +350,9 @@ body{background:var(--fond);
 .pConnect{cursor:pointer;font-weight:700}
 .pConnect:not(.connecte){background:linear-gradient(135deg,hsl(262 83% 66%),hsl(282 80% 62%));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(167 139 250 / .35),0 6px 18px rgb(139 92 246 / .35)}
+.mapCentre{display:block;width:100%;font-size:15px;font-weight:800;letter-spacing:.2px;color:#f3edff;margin-bottom:4px;
+  text-shadow:0 0 12px rgb(167 139 250 / .75),0 0 2px rgb(0 0 0 / .9)}
+@media (max-width:560px){.mapCentre{font-size:13px}}
 .soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
 .soldeDex b{color:var(--texte);font-weight:700}
 .maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
@@ -714,6 +717,10 @@ details[open] > summary::before{transform:rotate(90deg)}
              seul endroit, donc un seul texte a tenir a jour. Ce qui reste ici est un ETAT, pas une
              explication : ce que la page est en train de lire, ou ce qu elle n a pas pu lire. -->
         <div class="mapLeg">
+          <!-- ⛔ PHIL (2026-09-19) : « une proba de changer de block central, que tous aient la meme chance d etre le centre
+               de l univers et le spotlight ; les chances affichees en live, pas aussi petit que les ecrits, a la place de
+               Replaying… ». -->
+          <span id="mapCentre" class="mapCentre"></span>
           <span id="mapEtat"></span>
           <button type="button" class="lienLearn" style="margin-left:auto">What am I looking at? →</button>
         </div>
@@ -1247,7 +1254,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0068" hidden>Build <code>20260919-0068</code> · wallet balances re-read, Swap works.</p>
+      <p class="note" data-build="20260919-0069" hidden>Build <code>20260919-0069</code> · centre of the universe drawn fairly, messages in USDC.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1566,8 +1573,11 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <!-- ⛔⛔ MESSAGERIE ENTRE BLOCKS PAYEE EN TBLOCK (Phil, 2026-09-14) — messagerie-blocks.js. Une signature : un transfert
              de TBLOCK au wallet de frais qui porte le message. Prouve sur fork le 2026-09-14. -->
-        <p class="titre" style="margin-top:12px;font-size:1em">Write to this block — paid in TBLOCK</p>
-        <p class="note" id="pmsgGate">Connect → pick a block you hold to speak as → write → Prepare (1000 TBLOCK).</p>
+        <p class="titre" style="margin-top:12px;font-size:1em">Write to this block</p>
+        <p class="note" id="pmsgGate">Pick a block you hold to speak as, write, then Prepare.</p>
+        <!-- ⛔ PHIL (2026-09-17/19) : « fais de l USDC ». Le message se paie en USDC (0.50) ou en TBLOCK (1000) : meme
+             transaction, meme lecture ; l USDC est propose d abord, le TBLOCK reste pour ceux qui en ont. -->
+        <label class="champ">Pay with<select id="pmsgDevise"><option value="USDC">0.50 USDC</option><option value="TBLOCK">1,000 TBLOCK</option></select></label>
         <label class="champ">Speak as<select id="pmsgDe"></select></label>
         <label class="champ">Your message
           <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="gm, from my block" autocomplete="off" spellcheck="true"></textarea>
@@ -1706,6 +1716,7 @@ import { resumeRelais } from './relais-cerveaux.js';
 import { dollarsCourts, lienOL } from './openlaunch.js';
 import { creerMoteur3D } from './map3d.js';
 import { usdCourt } from './trending.js';
+import { tirageUniforme } from './tirage.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
 import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
@@ -2266,7 +2277,8 @@ $('#map').addEventListener('click', (e) => {
    * n etait simplement PAS ENCORE LUE — et TBLOCK a un marche. La phrase du dormant n est dite que sur un « pas de marche »
    * AVERE ; sinon on dit ce qu on sait : pas encore lu. */
   $('#fNote').textContent = !h || !h.phase ? ''
-    : (h.phase === 'NON_LU' && mkPublic) ? 'Its mood waits for our own read of the chain; the numbers above come from the public market.'
+    : ((h.phase === 'NON_LU' || h.phase === 'DORMANT' || h.phase === 'EVEILLE') && mkPublic && !lueSurChaine)
+      ? 'Its mood waits for our own read of the chain; the numbers above come from the public market.'
       : phraseDePhase(h.phase, h.sym);
   $('#fConnecter').hidden = true;
   /* tip 0042 : donnees condensees du marche (lues par le serveur : DexScreener), si le block en a */
@@ -3124,6 +3136,7 @@ async function majWallet() {
 }
 
 function peindreActifs() {
+  try { if ($('#profil') && !$('#profil').hidden) peindreChoixParler(); } catch (_) { /* profil pas encore construit */ }
   $('#wActifs').innerHTML = actifs.map((a) => '<li class="wLigne"><div class="wIc">'
     + (a.bloc ? dessin(a.adr, a.nom) : enTexte(a.ic || '•')) + '</div>'
     + '<div class="wNm"><b>' + enTexte(a.nom) + '</b><span class="mono">' + enTexte(a.sous) + '</span></div>'
@@ -4667,7 +4680,8 @@ async function lireLive(sens) {
       for (const e of rejeu) paquets[Math.min(PAQUETS - 1, Math.floor(((e.bloc ?? deBloc) - deBloc) / span * PAQUETS))].push(e);
       paquets.forEach((lot, i) => { if (lot.length) setTimeout(() => effetsDepuisLive(lot, { animeMax: 4 }), i * 250); });
       const etat = $('#mapEtat');
-      if (etat) etat.textContent = 'Replaying the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length.toLocaleString('en-US') + ' real events), then live.';
+      /* la phrase « Replaying… » cede sa place au tirage du centre ; elle reste en infobulle pour qui la cherche */
+      if (etat) { etat.textContent = ''; etat.title = 'Replayed the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length.toLocaleString('en-US') + ' real events), then live.'; }
     }
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
@@ -6346,6 +6360,10 @@ function blocsPourParler() {
     && ((typeof x.solde === 'bigint' && x.solde > 0n) || (typeof x.solde === 'number' && x.solde > 0))
     && String(x.id).toLowerCase() !== adrProfil);
 }
+/** Le prix du message, dans la devise choisie a l ecran. */
+function prixMessageTexte() {
+  return ($('#pmsgDevise') && $('#pmsgDevise').value === 'TBLOCK') ? '1,000 TBLOCK' : '0.50 USDC';
+}
 function raisonPrepMsgPaye() {
   if (!compte) return 'Connect your wallet first — it signs; this page never holds a key.';
   if (!blocsPourParler().length) return 'Hold another block (Wallet tab) to speak as it — a block cannot message itself.';
@@ -6368,11 +6386,11 @@ function majPrepMsgPaye() {
   } else {
     b.disabled = false;
     b.textContent = 'Prepare the paid message';
-    b.title = why || 'One signature: 1000 TBLOCK';
+    b.title = why || 'One signature: ' + prixMessageTexte();
   }
   if (gate) {
     gate.textContent = why
-      || 'Speak as a block you hold → Prepare → Sign (1000 TBLOCK, not a buyback).';
+      || 'Speak as a block you hold → Prepare → Sign (' + prixMessageTexte() + ').';
   }
 }
 function peindreChoixParler() {
@@ -6388,6 +6406,7 @@ function peindreChoixParler() {
 }
 $('#pmsgTexte') && $('#pmsgTexte').addEventListener('input', () => majPrepMsgPaye());
 $('#pmsgDe') && $('#pmsgDe').addEventListener('change', () => majPrepMsgPaye());
+$('#pmsgDevise') && $('#pmsgDevise').addEventListener('change', () => majPrepMsgPaye());
 $('#pmsgPreparer').addEventListener('click', async () => {
   const note = $('#pmsgPayeNote');
   const a = $('#profil').dataset.block;
@@ -6418,7 +6437,7 @@ $('#pmsgPreparer').addEventListener('click', async () => {
   profilEnLecture = true;
   let p;
   try {
-    p = await planMessagePaye({ rpc, compte, de, a, texte: $('#pmsgTexte').value, detientDe: true });
+    p = await planMessagePaye({ rpc, compte, de, a, texte: $('#pmsgTexte').value, detientDe: true, devise: ($('#pmsgDevise') && $('#pmsgDevise').value) || 'TBLOCK' });
   } catch (err) {
     p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) };
   } finally { profilEnLecture = false; }
@@ -8072,7 +8091,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0068',
+    build: '20260919-0069',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8489,7 +8508,7 @@ const ETAPES = [
   { t: 'Brain on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
     d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
   { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
-    d: 'Write to a block with 1000 TBLOCK (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
+    d: 'Write to a block for 0.50 USDC or 1,000 TBLOCK (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
   { t: 'Pair with ETH, USDC, a stock or any token', etat: 'ok', e: 'Built',
     d: 'At creation you choose what the block is paired with: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s market cap or promise any peg. The market opens when the block comes to life.' },
   { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
@@ -8780,6 +8799,41 @@ async function facesDeLaMap(lot = 8) {
 }
 setTimeout(() => { void facesDeLaMap(); }, 12000);
 setInterval(() => { if (!document.hidden) void facesDeLaMap(); }, 20000);
+
+/* ══ LE CENTRE DE L UNIVERS ══════════════════════════════════════════════════════════════════════════
+ * ⛔ UNE CHANCE EGALE, VRAIMENT : le tirage est UNIFORME sur les blocks presents sur la map a cet instant (1 / N), avec
+ *    crypto.getRandomValues et un rejet des valeurs biaisees — pas Math.random, pas de poids au volume, pas de faveur
+ *    pour nos blocks. Ce qui est affiche (« 1 in N ») est exactement la regle appliquee.
+ * ⛔ LA CAMERA N EST JAMAIS ARRACHEE : si l utilisateur a touche la map dans les 20 dernieres secondes, le centre change
+ *    et brille, mais la vue ne bouge pas. Mouvement reduit : aucun deplacement, seulement la lumiere et le texte. */
+const CENTRE_MS = 40000;
+let centreActuel = null, centreProchainA = 0;
+/* le tirage vit dans tirage.js — teste (test-tirage.mjs : 700 000 tirages, rejet de queue verifie) */
+function nouveauCentre() {
+  const candidats = habitants.filter((h) => h && h.adr);
+  const i = tirageUniforme(candidats.length);
+  if (i < 0) return;
+  centreActuel = candidats[i];
+  centreProchainA = Date.now() + CENTRE_MS;
+  centreActuel.vifJusqua = performance.now() + CENTRE_MS; /* le spotlight : il brille tout son tour */
+  const carteVisible = $('#v-map') && $('#v-map').classList.contains('on') && !document.hidden;
+  const mainRecente = moteur3d && typeof moteur3d.derniereMain === 'function' && performance.now() - moteur3d.derniereMain() < 20000;
+  if (moteur3d && carteVisible && !mainRecente && !mouvementReduit) { try { moteur3d.centrerSur(centreActuel); } catch (_) {} }
+  peindreCentre();
+}
+function peindreCentre() {
+  const el = $('#mapCentre');
+  if (!el) return;
+  const n = habitants.length;
+  if (!centreActuel || !n) { el.textContent = ''; return; }
+  const reste = Math.max(0, Math.ceil((centreProchainA - Date.now()) / 1000));
+  const pct = 100 / n;
+  el.textContent = '✦ Centre of the universe: ' + String(centreActuel.sym || court(centreActuel.adr)).slice(0, 14)
+    + ' · every block has the same chance — 1 in ' + n.toLocaleString('en-US')
+    + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%) · next draw in ' + reste + ' s';
+}
+setTimeout(() => { nouveauCentre(); }, 15000);
+setInterval(() => { if (!document.hidden && habitants.length) { if (Date.now() >= centreProchainA) nouveauCentre(); else peindreCentre(); } }, 1000);
 
 setTimeout(() => { void soleilsSurLaMap(); }, 8000);
 setInterval(() => { if (!document.hidden) void soleilsSurLaMap(); }, 300_000);

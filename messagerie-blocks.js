@@ -128,20 +128,27 @@ export function messageDepuisTransfert(t, tx, devise = 'TBLOCK') {
 }
 
 /** Les messages payes des derniers `blocs` blocs, groupes par paire de blocks. Les fenetres ratees sont rendues. */
+/* ⛔ LES DEUX DEVISES SONT LUES : un message paye en USDC doit apparaitre dans le fil comme un message paye en TBLOCK.
+ * Les fenetres ratees des deux lectures sont additionnees — une devise non lue n est jamais une devise vide. */
 export async function lireConversations({ rpc, blocs = 20000, fin = null, pause = 350 }) {
   const lire = rpc;
-  const r = await listerTransfers({ rpc: lire, token: TBLOCK, blocs, fin, toAddr: FEE_WALLET });
   const messages = [], compteurs = { rejetes: 0, nonLisibles: 0, sousFrais: 0 };
-  for (const t of r.transfers || []) {
-    if (typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) { compteurs.sousFrais++; continue; }
-    let tx = null;
-    try { tx = await lire('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
-    if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
-    const x = messageDepuisTransfert(t, tx);
-    if (x.etat === 'MESSAGE' || x.etat === 'MESSAGE_FEE') messages.push(x);
-    else if (x.etat === 'NON_LISIBLE') compteurs.nonLisibles++;
-    else compteurs.rejetes++;
+  const lectures = [];
+  for (const [nomDevise, dev] of Object.entries(DEVISES_MESSAGE)) {
+    const lu = await listerTransfers({ rpc: lire, token: dev.token, blocs, fin, toAddr: FEE_WALLET });
+    lectures.push(lu);
+    for (const t of lu.transfers || []) {
+      if (typeof t.value !== 'bigint' || t.value < dev.frais) { compteurs.sousFrais++; continue; }
+      let tx = null;
+      try { tx = await lire('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
+      if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
+      const x = messageDepuisTransfert(t, tx, nomDevise);
+      if (x.etat === 'MESSAGE' || x.etat === 'MESSAGE_FEE') messages.push({ ...x, devise: nomDevise });
+      else if (x.etat === 'NON_LISIBLE') compteurs.nonLisibles++;
+      else compteurs.rejetes++;
+    }
   }
+  const r = { fenetresRatees: lectures.flatMap((l) => l.fenetresRatees || []) };
   const paires = new Map();
   for (const m of messages) {
     const cle = [m.de, m.a].sort().join('|');
