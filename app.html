@@ -433,6 +433,9 @@ body:not(.surMap) .mapCta{display:none}
   .tete .droite #mapCta{order:1} .tete .droite #pCompte{order:2} .tete .droite .teinteBoite{order:3}
   .tete .droite #pLearn{order:4} .tete .droite #pReseau{order:5}
   .tete .long{display:none}
+  /* ⛔ PHIL (tel) : « le bouton couleur marche pas ». Mesure a 375 px : le menu s ouvrait, mais la rangee qui defile
+       (overflow-x:auto) le rognait — au centre du menu, c etait la map. Fixe a l ecran, sous le bouton (top pose en JS). */
+  .teinteMenu{position:fixed;right:12px;left:auto}
   .mapAide{padding-right:64px}
 }
 @media (max-width:560px){
@@ -789,7 +792,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
       <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at">?<span class="long"> What am I looking at</span></button>
-      <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
+      <!-- ⛔ PHIL (2026-09-19) : « retire base sepolia ». Le bouton reste dans le DOM (le code le lit) mais n est plus
+           montre : l app reste sur Base mainnet (CHAINE = 8453 au demarrage, rien ne memorise l autre reseau). -->
+      <button class="puce" id="pReseau" style="cursor:pointer;display:none" hidden>Base mainnet</button>
       <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
            disait « not connected » sans qu on puisse rien en faire. C est maintenant le bouton : il connecte, puis
            montre l adresse courte et ouvre l onglet Wallet. -->
@@ -1367,7 +1372,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0113" hidden>Build <code>20260919-0113</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0114" hidden>Build <code>20260919-0114</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6669,6 +6674,8 @@ $('#pTeinte').addEventListener('click', (ev) => {
   const m = $('#teinteMenu');
   const ouvrir = m.hidden;
   if (ouvrir) peindreMenuTeintes();
+  /* telephone : le menu est fixe a l ecran (sinon rogne par la rangee qui defile) — on le pose sous le bouton */
+  if (ouvrir && getComputedStyle(m).position === 'fixed') m.style.top = Math.round($('#pTeinte').getBoundingClientRect().bottom + 8) + 'px';
   m.hidden = !ouvrir;
   $('#pTeinte').setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
 });
@@ -8851,7 +8858,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0113',
+    build: '20260919-0114',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
