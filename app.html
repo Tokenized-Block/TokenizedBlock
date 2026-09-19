@@ -51,7 +51,7 @@
    * page d accueil du serveur MCP lui-meme — `avisradar-production.up.railway.app/mainstreet.html` —
    * et `curl` s y faisait refuser en 403 ; un vrai navigateur passe. Valeurs CALCULEES par
    * `getComputedStyle` sur les elements affiches :
-   *     bouton / mot « Trust »  #a78bfa  teinte 255   (mon approximation etait exacte)
+   *     bouton / mot « Trust »  var(--accent)  teinte 255   (mon approximation etait exacte)
    *     fond de page            #0f0a17  teinte 263   (la mienne etait a 255 : 8 degres a cote)
    *     texte                   #f3effb  teinte 260
    *     texte des paragraphes   #b9a9dd  teinte 258
@@ -66,6 +66,9 @@
   --accent:#a78bfa; --accent2:hsl(var(--h) 100% 87%);
   /* canaux RGB des couleurs du theme : le CSS ecrit rgb(var(--accentRgb) / .3), et un coloris n a qu a les redefinir */
   --accentRgb:167 139 250; --fondRgb:15 10 23; --fond2Rgb:26 18 40; --boutonRgb:139 92 246;
+  /* etoiles du fond, degrade des cartes : eux aussi suivent le coloris (Phil : « tu dois tout adapter a la couleur ») */
+  --etoileRgb:233 227 255; --carteHautRgb:40 30 64; --carteBasRgb:22 16 36;
+  --g1:hsl(262 83% 66%); --g2:hsl(282 80% 62%);
   /* les nuances qui trainaient en dur, ramenees sur la meme teinte */
   /* ⛔ `--halo` ET `--mapFond` ONT ETE RETIRES AVEC LES DEGRADES. Un token qui ne sert plus se
    * relit comme une option encore valable, et le prochain qui le voit refait la tache lumineuse
@@ -73,7 +76,7 @@
   /* ⛔ LA MAP A LE MEME FOND QUE LA PAGE, comme chez MainStreet : un seul noir, et seule la grille
    * l habite. Deux noirs voisins se lisent comme un cadre qu on n a pas voulu dessiner. */
   --mapNuit:var(--fond);
-  /* ⛔ LA GRILLE EST L ACCENT A 10 %, mesure : `rgba(167, 139, 250, 0.1)` sur la vraie page. Ce n est
+  /* ⛔ LA GRILLE EST L ACCENT A 10 %, mesure : `rgb(var(--accentRgb) / 0.1)` sur la vraie page. Ce n est
    * pas une couleur de plus, c est LA couleur, estompee — et c est pour ca qu elle ne detonne jamais. */
   --grille:rgb(var(--accentRgb) / .1); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
   /* ⛔⛔ RAYONS ET FILETS, PASSE « APPLE » DU 2026-09-12 (demande de Phil : « harmonieux comme
@@ -86,12 +89,27 @@
 /* ══ COLORIS (Phil, 2026-09-19 : « ajoute un bouton en haut pour proposer differents coloris, je les trouve tous beaux »)
    A = le mauve d origine (aucune surcharge). B, C, D redefinissent seulement les tokens : fonds, lignes, texte doux,
    lumiere. Les FACES des blocks ne changent jamais — elles sont gravees, pas decorees. */
-:root[data-teinte="b"]{--h:220;--fond:#070b1a;--fond2:#0f1a33;--carte:hsl(220 45% 11%);--ligne:#1c2a4a;--doux:#a9bde6;
-  --accent:#7aa2ff;--accent2:hsl(220 100% 86%);--accentRgb:122 162 255;--fondRgb:7 11 26;--fond2Rgb:15 26 51;--boutonRgb:59 130 246}
-:root[data-teinte="c"]{--h:235;--fond:#060816;--fond2:#121a3a;--carte:hsl(232 48% 12%);--ligne:#222a55;--doux:#b3b8ea;
-  --accent:#8b93ff;--accent2:hsl(236 100% 88%);--accentRgb:139 147 255;--fondRgb:6 8 22;--fond2Rgb:18 26 58;--boutonRgb:99 102 241}
-:root[data-teinte="d"]{--h:200;--fond:#04101a;--fond2:#0b2233;--carte:hsl(204 60% 10%);--ligne:#143447;--doux:#9fcfe0;
-  --accent:#5fd4ff;--accent2:hsl(195 100% 85%);--accentRgb:95 212 255;--fondRgb:4 16 26;--fond2Rgb:11 34 51;--boutonRgb:14 165 233}
+:root[data-teinte="b"]{--h:222;--fond:#060a18;--fond2:#0e1830;--carte:hsl(222 46% 11%);--ligne:#1d2b4d;--texte:#eef3ff;--doux:#a9bce6;
+  --accent:#7ea6ff;--accent2:hsl(222 100% 87%);--accentRgb:126 166 255;--fondRgb:6 10 24;--fond2Rgb:14 24 48;--boutonRgb:59 130 246;
+  --etoileRgb:220 232 255;--carteHautRgb:26 40 78;--carteBasRgb:12 18 40;--g1:#3b82f6;--g2:#7ea6ff}
+:root[data-teinte="c"]{--h:250;--fond:#070616;--fond2:#15123a;--carte:hsl(248 46% 12%);--ligne:#2a2460;--texte:#f1efff;--doux:#b8b3ee;
+  --accent:#9d8cff;--accent2:hsl(300 100% 88%);--accentRgb:157 140 255;--fondRgb:7 6 22;--fond2Rgb:21 18 58;--boutonRgb:168 85 247;
+  --etoileRgb:236 226 255;--carteHautRgb:44 30 92;--carteBasRgb:16 12 44;--g1:#7c5cff;--g2:#c084fc}
+/* D = « Base app » (Phil, 2026-09-19 : « remplace Polar night par Base app color », capture du Coinbase Wallet) :
+   fond sarcelle presque noir, lueur sarcelle en haut, degrade du logo bleu -> cyan. Notre lecture de leur palette. */
+:root[data-teinte="d"]{--h:200;--fond:#04090c;--fond2:#0a1b22;--carte:hsl(198 48% 8%);--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;
+  --accent:#35d3f0;--accent2:hsl(168 85% 76%);--accentRgb:53 211 240;--fondRgb:4 9 12;--fond2Rgb:10 27 34;--boutonRgb:31 91 255;
+  --etoileRgb:214 244 255;--carteHautRgb:12 44 56;--carteBasRgb:6 18 24;--g1:#1f5bff;--g2:#2fe0c8}
+/* le selecteur de coloris : des pastilles, pas un bouton qui tourne en rond */
+.teinteMenu{position:absolute;top:calc(100% + 8px);right:0;z-index:200;display:grid;gap:4px;min-width:190px;padding:8px;
+  background:var(--fond2);border:1px solid rgb(var(--accentRgb) / .25);border-radius:14px;box-shadow:0 18px 40px rgb(0 0 0 / .5)}
+.teinteMenu button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;
+  color:var(--texte);font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.teinteMenu button:hover,.teinteMenu button.on{background:rgb(var(--accentRgb) / .14)}
+.teintePastille{width:22px;height:22px;flex:0 0 auto;border-radius:50%;box-shadow:0 0 0 2px rgb(255 255 255 / .12), 0 0 12px var(--p2)}
+.teinteBoite{position:relative;display:inline-flex}
+.etapeIc{color:var(--accent)}
+.schemaVie{color:var(--accent)}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 /* ⛔⛔ FOND PLAT, PAS UN DEGRADE — ET C EST LA REMARQUE LA PLUS JUSTE DE LA JOURNEE. Phil a entoure
@@ -172,7 +190,7 @@ body{background:var(--fond);
  * qui marche pour un effet qu on obtient sans y toucher. */
 .cote{position:fixed;top:104px;right:14px;bottom:88px;width:min(360px,calc(100vw - 28px));z-index:30;
   display:flex;flex-direction:column;gap:10px;overflow-y:auto;
-  background:rgba(8,8,16,.9);backdrop-filter:blur(16px);border:1px solid var(--ligne);
+  background:rgb(var(--fondRgb) / .9);backdrop-filter:blur(16px);border:1px solid var(--ligne);
   border-radius:var(--r);padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
 .cote[hidden]{display:none}
 /* ⛔⛔ SUR TELEPHONE LE TIROIR MANGEAIT TOUT L ECRAN, capture de Phil a l appui : la map
@@ -193,7 +211,7 @@ body{background:var(--fond);
 .cote .carte{margin:0;background:transparent;border:0;padding:0}
 .cote .carte + .carte{border-top:1px solid var(--ligne);padding-top:12px}
 .bMasquer{position:absolute;top:10px;right:10px;z-index:7;appearance:none;border:1px solid var(--ligne);
-  background:rgba(10,10,20,.8);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
+  background:rgb(var(--fondRgb) / .8);backdrop-filter:blur(6px);color:var(--doux);font:inherit;font-size:11.5px;
   font-weight:700;padding:8px 13px;border-radius:99px;cursor:pointer;min-height:36px}
 .bMasquer:hover,.bMasquer[aria-expanded="true"]{color:var(--texte);border-color:var(--accent)}
 /* ⛔ OPACITE A 1 : l estompage est DEJA dans la couleur (accent a 10 %, mesure). Garder `.35`
@@ -208,10 +226,10 @@ body{background:var(--fond);
   font-size:11.5px;letter-spacing:-.1px}
 .bloc{position:absolute;border:1px solid var(--contour);border-radius:var(--rs);background:transparent;cursor:pointer;
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
-.bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.32)}
-.bloc.nous{border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(167,139,250,.28);z-index:2}
+.bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .32)}
+.bloc.nous{border:2px solid var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .28);z-index:2}
 .bloc.pulse{animation:pulseBloc 1.4s ease-out 1}
-@keyframes pulseBloc{0%{box-shadow:0 0 0 0 rgba(167,139,250,.7)}100%{box-shadow:0 0 0 22px rgba(167,139,250,0)}}
+@keyframes pulseBloc{0%{box-shadow:0 0 0 0 rgb(var(--accentRgb) / .7)}100%{box-shadow:0 0 0 22px rgb(var(--accentRgb) / 0)}}
 @media (prefers-reduced-motion:reduce){.bloc.pulse{animation:none}}
 /* tip 0025 — LA MAP EST UN MONDE (Phil 2026-09-16 : « se balader sur la map, dezoomer, un cube geant a l interieur de
  * tout, voir en direct entre les blocks une impulsion »). `#map` = la fenetre ; `#mapMonde` = le monde 2400x1500 qu on
@@ -226,12 +244,12 @@ body{background:var(--fond);
 .mapFx{z-index:5}
 .mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
-  background:rgba(10,10,20,.82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
+  background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
 .mapZoom button:hover{border-color:var(--accent)}
 .mapZoom button:active{transform:scale(.92)}
 .mapAide{position:absolute;left:10px;bottom:10px;z-index:7;font-size:11px;color:var(--doux);
-  background:rgba(10,10,20,.7);padding:5px 9px;border-radius:99px;pointer-events:none;transition:opacity .6s}
+  background:rgb(var(--fondRgb) / .7);padding:5px 9px;border-radius:99px;pointer-events:none;transition:opacity .6s}
 /* tip 0026 — MAP 3D PLEIN ECRAN (Phil : « couvre toute la surface de cet onglet », « expand au max ton cube »).
  * La map occupe tout entre l en-tete et la barre du bas ; recherche, Info et etat flottent par-dessus.
  * `isolation` : les z-index de profondeur des tuiles restent DANS la map (la fiche et la barre du bas passent devant). */
@@ -243,7 +261,7 @@ body{background:var(--fond);
 .mapEnv.a3d .mapZoom,.mapEnv.a3d .mapAide{z-index:100000}
 #v-map.on .mapEnv.a3d{position:fixed;left:0;right:0;top:var(--mapHaut,64px);bottom:var(--mapBas,72px);height:auto;min-height:0;
   border:0;border-radius:0;z-index:1;
-  background:radial-gradient(ellipse at 50% 45%,rgba(90,70,200,.14),transparent 62%),var(--mapNuit)}
+  background:radial-gradient(ellipse at 50% 45%,rgb(var(--boutonRgb) / .14),transparent 62%),var(--mapNuit)}
 #v-map.on .mapBarre{position:fixed;top:calc(var(--mapHaut,64px) + 10px);left:12px;right:96px;max-width:520px;z-index:20;margin:0}
 #v-map.on .bMasquer{position:fixed;top:calc(var(--mapHaut,64px) + 12px);right:12px;z-index:20}
 #v-map.on .mapLeg{position:fixed;left:12px;right:70px;bottom:calc(var(--mapBas,72px) + 44px);z-index:20;pointer-events:none}
@@ -349,7 +367,7 @@ body{background:var(--fond);
 .stadeLigne{display:flex;flex-wrap:wrap;gap:6px}
 /* la banniere « nouvelle version » : discrete, au-dessus de la nav, jamais un rechargement force */
 .vNouvelle{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:60;display:flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:14px;border:1px solid rgb(var(--accentRgb) / .45);background:rgb(18 12 28 / .96);
+  padding:10px 12px;border-radius:14px;border:1px solid rgb(var(--accentRgb) / .45);background:rgb(var(--fondRgb) / .96);
   font-size:12px;color:var(--texte);box-shadow:0 12px 30px rgb(0 0 0 / .5)}
 .vNouvelle .bouton{width:auto;padding:8px 12px;margin:0}
 .dexCols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
@@ -359,9 +377,9 @@ body{background:var(--fond);
 .dexCol .champ{margin-top:0}
 .dexCol .bouton{width:100%;margin:0;grid-column:auto}
 .pConnect{cursor:pointer;font-weight:700}
-.pConnect:not(.connecte){background:linear-gradient(135deg,hsl(262 83% 66%),hsl(282 80% 62%));color:#fff;border-color:transparent;
+.pConnect:not(.connecte){background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
-.mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:left;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:#f3edff;margin:0 8px;
+.mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:left;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
   text-shadow:0 0 12px rgb(var(--accentRgb) / .75),0 0 2px rgb(0 0 0 / .9)}
 @media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
 body:not(.surMap) .mapCentre{visibility:hidden}
@@ -371,7 +389,7 @@ body:not(.surMap) .mapCentre{visibility:hidden}
 .maxDex{appearance:none;border:1px solid rgb(var(--accentRgb) / .45);background:rgb(var(--accentRgb) / .12);color:var(--texte);
   font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
 .sentinelle{height:1px;width:100%}
-.pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(var(--accentRgb) / .14);border-radius:10px;padding:6px;min-height:34px}
+.pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(var(--fondRgb) / .6);border:1px solid rgb(var(--accentRgb) / .14);border-radius:10px;padding:6px;min-height:34px}
 .pcTrace svg{display:block;width:100%;height:64px}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
@@ -457,7 +475,7 @@ a.bouton{display:flex;align-items:center;justify-content:center;text-decoration:
 button.mienTuile{appearance:none;cursor:pointer;color:inherit;font:inherit;width:100%}
 button.mienTuile:hover{border-color:var(--accent)}
 
-.nav{position:fixed;left:0;right:0;bottom:0;background:rgba(7,11,24,.93);backdrop-filter:blur(12px);
+.nav{position:fixed;left:0;right:0;bottom:0;background:rgb(var(--fondRgb) / .93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
 .navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
@@ -551,27 +569,27 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
  * La map est un univers (etoiles, lueur, profondeur). Le reste de l app reprend CE vocabulaire visuel, sans nouvelle
  * teinte : ciel etoile fixe tres discret derriere tout, cartes en verre sombre, lueur violette au survol et sur l action
  * principale, barre du bas en verre avec l onglet actif qui brille. Couleurs : UNIQUEMENT les jetons existants
- * (--accent #a78bfa, --fond, --ligne) a differentes opacites. Mouvement coupe si « reduced motion ». */
+ * (--accent var(--accent), --fond, --ligne) a differentes opacites. Mouvement coupe si « reduced motion ». */
 body{background:
-  radial-gradient(1px 1px at 12% 18%, rgb(233 227 255 / .55), transparent 60%),
-  radial-gradient(1px 1px at 72% 9%, rgb(233 227 255 / .45), transparent 60%),
-  radial-gradient(1.5px 1.5px at 38% 64%, rgb(233 227 255 / .4), transparent 60%),
-  radial-gradient(1px 1px at 88% 42%, rgb(233 227 255 / .5), transparent 60%),
-  radial-gradient(1px 1px at 22% 86%, rgb(233 227 255 / .35), transparent 60%),
-  radial-gradient(1.5px 1.5px at 57% 31%, rgb(233 227 255 / .3), transparent 60%),
-  radial-gradient(1px 1px at 93% 78%, rgb(233 227 255 / .4), transparent 60%),
-  radial-gradient(1px 1px at 5% 52%, rgb(233 227 255 / .35), transparent 60%),
+  radial-gradient(1px 1px at 12% 18%, rgb(var(--etoileRgb) / .55), transparent 60%),
+  radial-gradient(1px 1px at 72% 9%, rgb(var(--etoileRgb) / .45), transparent 60%),
+  radial-gradient(1.5px 1.5px at 38% 64%, rgb(var(--etoileRgb) / .4), transparent 60%),
+  radial-gradient(1px 1px at 88% 42%, rgb(var(--etoileRgb) / .5), transparent 60%),
+  radial-gradient(1px 1px at 22% 86%, rgb(var(--etoileRgb) / .35), transparent 60%),
+  radial-gradient(1.5px 1.5px at 57% 31%, rgb(var(--etoileRgb) / .3), transparent 60%),
+  radial-gradient(1px 1px at 93% 78%, rgb(var(--etoileRgb) / .4), transparent 60%),
+  radial-gradient(1px 1px at 5% 52%, rgb(var(--etoileRgb) / .35), transparent 60%),
   radial-gradient(ellipse 70% 50% at 50% 0%, rgb(var(--accentRgb) / .08), transparent 70%),
   var(--fond);
   background-attachment:fixed}
-.carte{background:linear-gradient(180deg, rgb(40 30 64 / .55), rgb(22 16 36 / .62));
+.carte{background:linear-gradient(180deg, rgb(var(--carteHautRgb) / .55), rgb(var(--carteBasRgb) / .62));
   /* pas de backdrop-filter sur les cartes : des dizaines de flous plein ecran ralentissaient le rendu (vu en test) */
   border:1px solid rgb(var(--accentRgb) / .16);
   box-shadow:0 10px 30px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .04);
   transition:border-color .25s ease, box-shadow .25s ease}
 .carte:hover{border-color:rgb(var(--accentRgb) / .32);box-shadow:0 12px 38px rgb(0 0 0 / .4), 0 0 0 1px rgb(var(--accentRgb) / .08), 0 0 28px rgb(var(--accentRgb) / .08)}
 .titre{letter-spacing:-.3px}
-.bouton{background:linear-gradient(180deg, #b9a2ff, var(--accent));
+.bouton{background:linear-gradient(180deg, var(--accent2), var(--accent));
   box-shadow:0 6px 18px rgb(var(--accentRgb) / .28), inset 0 1px 0 rgb(255 255 255 / .35)}
 .bouton:not([disabled]):hover{box-shadow:0 8px 26px rgb(var(--accentRgb) / .45), inset 0 1px 0 rgb(255 255 255 / .4);transform:translateY(-1px)}
 .bouton:active{transform:translateY(0) scale(.985)}
@@ -583,7 +601,7 @@ body{background:
 .champ input,.champ select,.champ textarea{background:rgb(var(--fondRgb) / .75);border-color:rgb(var(--accentRgb) / .18);transition:border-color .2s ease, box-shadow .2s ease}
 .champ input:focus,.champ select:focus,.champ textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .18), 0 0 18px rgb(var(--accentRgb) / .15)}
 #trouver{background:rgb(var(--fondRgb) / .75);border:1px solid rgb(var(--accentRgb) / .2);backdrop-filter:blur(10px)}
-.nav{background:rgb(12 8 22 / .72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgb(var(--accentRgb) / .14)}
+.nav{background:rgb(var(--fondRgb) / .72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgb(var(--accentRgb) / .14)}
 .navB[aria-selected="true"]{background:rgb(var(--accentRgb) / .16);box-shadow:0 0 18px rgb(var(--accentRgb) / .25), inset 0 0 0 1px rgb(var(--accentRgb) / .35)}
 .navB[aria-selected="true"] b{text-shadow:0 0 12px rgb(var(--accentRgb) / .8)}
 .navB:hover{color:var(--texte)}
@@ -594,7 +612,7 @@ details > summary{cursor:pointer;list-style:none}
 details > summary::-webkit-details-marker{display:none}
 details > summary::before{content:"›";display:inline-block;margin-right:8px;color:var(--accent);transition:transform .2s ease}
 details[open] > summary::before{transform:rotate(90deg)}
-.cote{background:rgb(14 10 26 / .78);border-color:rgb(var(--accentRgb) / .2);box-shadow:0 18px 50px rgb(0 0 0 / .55), 0 0 40px rgb(var(--accentRgb) / .08)}
+.cote{background:rgb(var(--fondRgb) / .78);border-color:rgb(var(--accentRgb) / .2);box-shadow:0 18px 50px rgb(0 0 0 / .55), 0 0 40px rgb(var(--accentRgb) / .08)}
 .tete .marque{text-shadow:0 0 18px rgb(var(--accentRgb) / .35)}
 @media (prefers-reduced-motion: no-preference){
   .volet.on .carte{animation:carteEntre .38s cubic-bezier(.2,.7,.2,1) both}
@@ -699,7 +717,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ « LEARN » EST DANS LA TETE, PAS DANS LA BARRE DU BAS. Six onglets tiennent deja mal sur
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
-      <button class="puce" id="pTeinte" type="button" style="cursor:pointer" title="Change the colours of the site">◐ Night purple</button>
+      <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
+        <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
       <button class="puce" id="pLearn" style="cursor:pointer">? What am I looking at</button>
       <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
       <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
@@ -1106,35 +1125,30 @@ details[open] > summary::before{transform:rotate(90deg)}
           complet alors que deux etapes manquent apprend a ne plus le croire. -->
   <section class="volet" id="v-learn" aria-label="Learn">
     <div class="carte">
-      <p class="titre">How this works, end to end</p>
-      <p class="sous">Ten steps, from birth to trade. What is built says how it is built; what is missing says so.</p>
+      <p class="titre">What am I looking at?</p>
+      <p class="sous">A living map of tokens on Base. Every little cube is a real token — we call it a <b>block</b>.</p>
       <div class="etapes" id="lEtapes"></div>
     </div>
 
     <div class="carte">
-      <p class="titre">What “life” actually is</p>
+      <p class="titre">What the size of a block means</p>
       <div class="schemaVie" id="lSchemaVie"></div>
       <table class="regles">
-        <tr><td>Life =</td><td><b>price × supply</b>, both re-readable on chain. Nobody paints it.</td></tr>
-        <tr><td>It goes down</td><td>If the price falls, life falls with it. A big block can become a
-          small one overnight. Nobody refunds that.</td></tr>
-        <tr><td>⚠️ It is buyable</td><td>Measured 2026-09-09: <b>0.01 ETH moved a displayed market cap
-          by 2 346 ETH</b> — a lever of ×234 645, because supply is enormous. <b>A big number here is
-          not a big pile of money.</b></td></tr>
-        <tr><td>Unit</td><td>Measured in <b>ETH</b>, not dollars. We name the currency instead of
-          mixing two.</td></tr>
-        <tr><td>No market yet</td><td>A faded, smaller block has never been traded. That is <b>not</b>
-          the same as being worthless.</td></tr>
+        <tr><td>Size</td><td>Its <b>price × how many exist</b>, read straight from the chain. Nobody sets it by hand.</td></tr>
+        <tr><td>It moves</td><td>When the price goes down, the block shrinks. It can go up or down fast.</td></tr>
+        <tr><td>⚠️ Careful</td><td>A small purchase can make the number jump a lot. <b>A big block is not
+          a big pile of money.</b></td></tr>
+        <tr><td>Pale block</td><td>Never traded yet. That is <b>not</b> the same as worthless.</td></tr>
       </table>
     </div>
 
     <div class="carte">
-      <p class="titre">Why a rank is only a sample</p>
+      <p class="titre">About rankings</p>
       <p class="note" id="lBorneRang"></p>
     </div>
 
     <div class="carte">
-      <p class="titre">What this page never does</p>
+      <p class="titre">What this app never does</p>
       <ul class="pmLignes" id="lJamais"></ul>
     </div>
   </section>
@@ -1270,7 +1284,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0073" hidden>Build <code>20260919-0073</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0074" hidden>Build <code>20260919-0074</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2069,6 +2083,13 @@ function onde(adr, couleur, mot) {
   const h = habitantDe(adr);
   if (moteur3d && h) moteur3d.onde(h, couleur, mot);
 }
+/** La couleur d accent du coloris choisi, lue sur la page — les signaux de la map la suivent. */
+function accentVif() {
+  try { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#a78bfa'; } catch (_) { return '#a78bfa'; }
+}
+function teinteH() {
+  try { return Number(getComputedStyle(document.documentElement).getPropertyValue('--h').trim()) || 255; } catch (_) { return 255; }
+}
 /* un mot court par evenement de cerveau (parole-cerveaux.js `evenement`) */
 const MOT_EVENEMENT = { new_buy: 'fed', new_sell: 'killed', new_holder: 'holder', new_message: 'message', new_transfer: 'transfer', price_up: 'up', price_down: 'down' };
 /* ⚠️ VERIFICATION SEULEMENT : `?fxdemo=1` joue des impulsions entre les premiers blocks, pour tester le rendu sans
@@ -2131,7 +2152,7 @@ function effetsDepuisLive(evts, { animeMax = Infinity } = {}) {
     else if (e.type === 'CREATION') { if (!habitantDe(e.jeton)) creerHabitant({ jeton: e.jeton, symbole: e.sym, vie: null }); onde(e.jeton, '#f7a318', 'born'); }
     /* tip 0027 : un transfert lu = un signal lumineux du block vers le wallet qui le RECOIT (adresse lue, point fixe dans l espace).
      * Le mot est « sent », pas « GM » : la mesure montre des milliers de transferts par heure, pas des GM choisis. */
-    else if (e.type === 'GM') { const h = habitantDe(e.jeton); if (moteur3d && h && e.a) moteur3d.signalVersWallet(h, e.a, '#a78bfa'); if (animes <= 1) onde(e.jeton, '#a78bfa', 'sent'); }
+    else if (e.type === 'GM') { const h = habitantDe(e.jeton); if (moteur3d && h && e.a) moteur3d.signalVersWallet(h, e.a, accentVif()); if (animes <= 1) onde(e.jeton, accentVif(), 'sent'); }
     else if (e.type === 'NOTE') onde(e.jeton, '#94a3b8', 'note');
     else if (e.type === 'MESSAGE' && e.de && e.a) impulsion(e.de, e.a, '#f7a318', 'message');
   }
@@ -5057,8 +5078,8 @@ function parlerCerveaux() {
   for (const p of paroles) {
     /* tip 0025 : une reponse d un cerveau a un autre = une impulsion visible sur la map ; une parole seule = une onde douce.
      * Les changements d humeur seuls ne font pas d effet (bruit). */
-    if (p.type === 'REPOND' && p.a) impulsion(p.de, p.a, '#a78bfa', 'reply');
-    else if (p.type === 'DIT' && !estParoleMood(p)) onde(p.de, '#a78bfa', MOT_EVENEMENT[p.evenement] || 'talk');
+    if (p.type === 'REPOND' && p.a) impulsion(p.de, p.a, accentVif(), 'reply');
+    else if (p.type === 'DIT' && !estParoleMood(p)) onde(p.de, accentVif(), MOT_EVENEMENT[p.evenement] || 'talk');
     const row = { ...p, heure, id: 'p' + (++parolesCompteur), n: 1 };
     /* Coalesce mood-only lines per token — do not invent; keep latest text + count. */
     if (estParoleMood(row) && row.type === 'DIT') {
@@ -6228,22 +6249,44 @@ async function lancerMarcheBlock(adr) {
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
 const TEINTES = [
-  { cle: 'a', nom: 'Night purple' }, { cle: 'b', nom: 'Night blue' },
-  { cle: 'c', nom: 'Deep galaxy' }, { cle: 'd', nom: 'Polar night' },
+  { cle: 'a', nom: 'Night purple', p1: '#1a1228', p2: '#a78bfa' },
+  { cle: 'b', nom: 'Night blue', p1: '#0e1830', p2: '#7ea6ff' },
+  { cle: 'c', nom: 'Deep galaxy', p1: '#15123a', p2: '#c084fc' },
+  { cle: 'd', nom: 'Base app', p1: '#1f5bff', p2: '#2fe0c8' },
 ];
+function peindreMenuTeintes() {
+  const actuel = document.documentElement.getAttribute('data-teinte') || 'a';
+  $('#teinteMenu').innerHTML = TEINTES.map((t) => '<button type="button" role="menuitem" data-teinte-choix="' + t.cle + '"'
+    + (t.cle === actuel ? ' class="on"' : '') + '><span class="teintePastille" style="--p2:' + t.p2 + ';background:linear-gradient(135deg,'
+    + t.p1 + ' 0 45%,' + t.p2 + ' 55% 100%)"></span>' + enTexte(t.nom) + '</button>').join('');
+}
 function poserTeinte(cle) {
   const t = TEINTES.find((x) => x.cle === cle) || TEINTES[0];
   if (t.cle === 'a') document.documentElement.removeAttribute('data-teinte');
   else document.documentElement.setAttribute('data-teinte', t.cle);
   if ($('#pTeinte')) $('#pTeinte').textContent = '◐ ' + t.nom;
+  /* les dessins deja poses (reseau du cerveau, icones) se repeignent dans la nouvelle teinte */
+  try { if (typeof peindreLearn === 'function') { peindreLearn(); peindreSchemaVie(); } } catch (_) {}
   try { localStorage.setItem('tb.teinte', t.cle); } catch (_) { /* navigation privee : le coloris vaut pour cette visite */ }
 }
 (() => { let c = 'a'; try { c = localStorage.getItem('tb.teinte') || 'a'; } catch (_) {} poserTeinte(c); })();
-$('#pTeinte').addEventListener('click', () => {
-  const actuel = document.documentElement.getAttribute('data-teinte') || 'a';
-  const i = TEINTES.findIndex((x) => x.cle === actuel);
-  poserTeinte(TEINTES[(i + 1) % TEINTES.length].cle);
+$('#pTeinte').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  const m = $('#teinteMenu');
+  const ouvrir = m.hidden;
+  if (ouvrir) peindreMenuTeintes();
+  m.hidden = !ouvrir;
+  $('#pTeinte').setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
 });
+$('#teinteMenu').addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-teinte-choix]');
+  if (!b) return;
+  ev.stopPropagation();
+  poserTeinte(b.getAttribute('data-teinte-choix'));
+  $('#teinteMenu').hidden = true;
+  $('#pTeinte').setAttribute('aria-expanded', 'false');
+});
+document.addEventListener('click', () => { const m = $('#teinteMenu'); if (m && !m.hidden) { m.hidden = true; $('#pTeinte').setAttribute('aria-expanded', 'false'); } });
 /* ⛔ PHIL (2026-09-19) : « le bouton swap marche pas ». Il etait desactive en dur depuis le debut (« the screen is not
  * built yet »). L achat et la vente existent deja, bloc par bloc : Swap y mene, au lieu d un bouton mort. */
 $('#bSwap') && $('#bSwap').addEventListener('click', () => { try { allerA('trade'); } catch (_) {} });
@@ -8144,7 +8187,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0073',
+    build: '20260919-0074',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8490,6 +8533,7 @@ function dessinerReseau(vu = null) {
   ctx.clearRect(0, 0, c.width, c.height);
   if (!brainEtat) return;
   const liens = brainEtat.c.liens;
+  const th = teinteH();
   const cx = c.width / 2, cy = c.height / 2, r = Math.min(cx, cy) - 14;
   const pos = liens.map((_, i) => {
     const a = (i / liens.length) * Math.PI * 2 - Math.PI / 2;
@@ -8504,7 +8548,7 @@ function dessinerReseau(vu = null) {
       /* ⛔ LE SIGNE DU POIDS SE VOIT : l inhibition est ce qui empeche tout le reseau de tirer
        * ensemble, la cacher donnerait a croire a un reseau qui ne fait qu exciter. */
       ctx.strokeStyle = l.poids >= 0
-        ? (vif ? 'hsl(255 85% 78% / .75)' : 'hsl(255 70% 70% / .10)')
+        ? (vif ? 'hsl(' + th + ' 85% 78% / .75)' : 'hsl(' + th + ' 70% 70% / .10)')
         : (vif ? 'hsl(38 85% 70% / .55)' : 'hsl(38 80% 65% / .08)');
       ctx.lineWidth = vif ? 1.1 : 0.5;
       ctx.beginPath();
@@ -8515,7 +8559,7 @@ function dessinerReseau(vu = null) {
   }
   for (let i = 0; i < pos.length; i++) {
     const vif = actifs.has(i);
-    ctx.fillStyle = vif ? 'hsl(255 100% 88%)' : 'hsl(255 40% 62% / .55)';
+    ctx.fillStyle = vif ? 'hsl(' + th + ' 100% 88%)' : 'hsl(' + th + ' 40% 62% / .55)';
     ctx.beginPath();
     ctx.arc(pos[i][0], pos[i][1], vif ? 3.4 : 1.8, 0, Math.PI * 2);
     ctx.fill();
@@ -8545,50 +8589,45 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+/* ⛔ PUBLIC SEULEMENT : aucun pourcentage de frais, aucune destination, aucun detail interne. Des mots simples. */
 const ETAPES = [
-  { t: 'Create a block', etat: 'ok', e: 'Built',
-    d: 'Name, symbol, face, brain, and what it is paired with. The whole supply is sealed to you at birth. Creating is free; bringing it to life costs ≈ $1 in ETH. Practice mode is free.' },
-  { t: 'Watch it live on the map', etat: 'ok', e: 'Built',
-    d: 'Its size is its market cap, read from the chain. Its brain is a small set of neurons carried by the block itself — not an LLM, no server thinking for it. A block with no market is paler and smaller — never called worthless.' },
-  { t: 'Hold, receive and send from your wallet', etat: 'ok', e: 'Built',
-    d: 'Balances read on chain, address to receive, and sends that go through one guarded path: chain and account checked, gas estimated, receipt re-read.' },
-  { t: 'Send a GM — a real amount of your block', etat: 'ok', e: 'Built',
-    d: 'Send GM opens Wallet send with that block picked: you choose who and how much, your wallet shows it, you sign. It is a real transfer of a real amount — anyone can read it on chain later.' },
-  { t: 'Buy and Sell in the profile', etat: 'ok', e: 'Built',
-    d: 'Buy/Sell quotes a Uniswap v4 swap your wallet signs. 0.5% on trades made in the app. Trading the same block elsewhere does not go through it.' },
-  { t: 'Bring it to life', etat: 'ok', e: 'Built',
-    d: 'Bringing a block to life opens its market on Base and seeds it with liquidity (≈ $1 in ETH). Its liquidity stays locked with the block. Practice mode is free.' },
-  { t: 'Brain on chain: snapshot or 4 fragments', etat: 'ok', e: 'Built',
-    d: 'Record this beat = one quantized snapshot you can resume (±0.27). Exact memory = 4 fragments of 32 neurons each, rebuilt only if the fingerprint matches. Splitting is for the 256-byte memo limit — not a smarter brain, not an FDV twin.' },
-  { t: 'Paid messages in TBLOCK + roles + Relay', etat: 'partiel', e: 'Built · sparse on-chain use',
-    d: 'Write to a block for 0.50 USDC or 1,000 TBLOCK (one signature). Profile roles adapt the brain’s job copy. Social Relay ranks what brains said by on-chain proof. Private XMTP chats exist off chain. Volume of paid messages and Relay use is still thin — empty is shown empty.' },
-  { t: 'Pair with ETH, USDC, a stock or any token', etat: 'ok', e: 'Built',
-    d: 'At creation you choose what the block is paired with: ETH, USDC, a Coinbase tokenized stock, TBLOCK, or a pasted token (unverified). Engraved with the block. Pairing with TBLOCK does not copy TBLOCK’s market cap or promise any peg. The market opens when the block comes to life.' },
-  { t: 'See what moved, and what people bought', etat: 'ok', e: 'Built',
-    d: 'Social Live shows what happens to blocks on Base. Use the chips to filter: Created, Feed, Kill, Swap, Sent, Messages, Ours, Alive here.' },
+  { t: 'Every cube is a block', ic: 1,
+    d: 'A block is a token someone created on Base. It has a name, a face engraved at birth, and a small brain that reacts to what happens to it.' },
+  { t: 'The bigger the cube, the bigger its market', ic: 6,
+    d: 'Size follows the market right now, read from the chain. A pale, small cube has no market yet — it is not worthless, just untouched.' },
+  { t: 'Light beams are real events', ic: 3,
+    d: 'A buy, a sale, a message, a transfer: each one lights up the map for a few seconds. The Feed tab lists them.' },
+  { t: 'Create your own block', ic: 0,
+    d: 'Give it a name and a symbol — the face and settings are ready. Creating is free. Bringing it to life (opening its market) costs about $1, once.' },
+  { t: 'Buy, sell and send from your wallet', ic: 2,
+    d: 'Everything goes through your own wallet: it shows you the transaction, you sign. Nothing moves without your signature. A small fee is included in each trade and shown before you sign.' },
+  { t: 'Be the centre of the universe', ic: 9,
+    d: 'Every few minutes one block is drawn at random and placed at the centre of the map. Every block has exactly the same chance. Tap the text at the top to draw again.' },
+  { t: 'Your blocks, your page', ic: 5,
+    d: 'My block shows what you hold and what you created, with its brain and its market.' },
 ];
 
 function peindreLearn() {
-  $('#lEtapes').innerHTML = ETAPES.map((s, i) => '<div class="etape"><div class="etapeIc">'
-    + iconeEtape(i) + '</div><div style="min-width:0"><p class="etapeT">' + enTexte(s.t)
-    + '<span class="etapeEtat ' + s.etat + '">' + enTexte(s.e) + '</span></p>'
+  $('#lEtapes').innerHTML = ETAPES.map((s) => '<div class="etape"><div class="etapeIc">'
+    + iconeEtape(s.ic) + '</div><div style="min-width:0"><p class="etapeT">' + enTexte(s.t) + '</p>'
     + '<p class="etapeD">' + enTexte(s.d) + '</p></div></div>').join('');
   /* ⛔ LA BORNE DU CLASSEMENT VIENT DU MODULE : la recopier ici la ferait diverger le jour ou elle change. */
-  $('#lBorneRang').textContent = classer([]).borne;
+  $('#lBorneRang').textContent = 'Rankings only include the blocks we could read at that moment. A block missing from a ranking is not last — it simply was not read.';
+  $('#lBorneRang').title = classer([]).borne;
   $('#lJamais').innerHTML = [
     'It never holds a key, and never asks for one.',
     'It never sends anything by itself: every transaction is shown by your wallet and signed by you.',
-    'It never shows a number it did not read — « not read » is written where a zero would lie.',
-    'It never ranks blocks it could not read, and never calls an unranked block last.',
-    'Its brains never place an order: they read, they propose, you sign.',
+    'It never shows a number it did not read — you will see “not read” instead of a fake zero.',
+    'The brains of the blocks never trade for you: they react, you decide.',
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
 }
 
 /** Une petite figure par etape, dessinee ici : aucune image a charger, aucune promesse de serveur. */
 function iconeEtape(i) {
-  const c = 'hsl(255 70% 72%)', f = 'hsl(263 40% 12%)';
+  /* la teinte suit le coloris : l icone peint en currentColor sur le fond de la carte */
+  const c = 'currentColor', f = 'rgb(var(--fond2Rgb))';
   const cadre = (dedans) => '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">'
-    + '<rect width="48" height="48" fill="' + f + '"/>' + dedans + '</svg>';
+    + '<rect width="48" height="48" style="fill:' + f + '"/>' + dedans + '</svg>';
   return [
     cadre('<rect x="14" y="14" width="20" height="20" rx="4" fill="none" stroke="' + c + '" stroke-width="2"/><path d="M24 18v12M18 24h12" stroke="' + c + '" stroke-width="2"/>'),
     cadre('<rect x="10" y="10" width="10" height="10" rx="2" fill="' + c + '" opacity=".5"/><rect x="26" y="20" width="14" height="14" rx="3" fill="' + c + '"/><rect x="12" y="28" width="7" height="7" rx="2" fill="' + c + '" opacity=".35"/>'),
@@ -8605,17 +8644,17 @@ function iconeEtape(i) {
 
 /** ⛔ Le schema de « life » : une figure, pas un paragraphe de plus. */
 function peindreSchemaVie() {
-  const c = 'hsl(255 70% 72%)', d = 'hsl(258 30% 70%)';
+  const c = 'currentColor', d = 'var(--doux)';
   $('#lSchemaVie').innerHTML = '<svg viewBox="0 0 320 78" xmlns="http://www.w3.org/2000/svg">'
     + '<text x="0" y="20" fill="' + c + '" font-size="13" font-weight="700">price</text>'
-    + '<text x="52" y="20" fill="' + d + '" font-size="13">×</text>'
+    + '<text x="52" y="20" style="fill:' + d + '" font-size="13">×</text>'
     + '<text x="68" y="20" fill="' + c + '" font-size="13" font-weight="700">supply</text>'
-    + '<text x="132" y="20" fill="' + d + '" font-size="13">=</text>'
-    + '<text x="148" y="20" fill="' + c + '" font-size="13" font-weight="700">life</text>'
+    + '<text x="132" y="20" style="fill:' + d + '" font-size="13">=</text>'
+    + '<text x="148" y="20" fill="' + c + '" font-size="13" font-weight="700">size</text>'
     + '<rect x="0" y="32" width="60" height="10" rx="5" fill="' + c + '" opacity=".8"/>'
     + '<rect x="68" y="32" width="56" height="10" rx="5" fill="' + c + '" opacity=".4"/>'
     + '<rect x="148" y="32" width="110" height="10" rx="5" fill="' + c + '"/>'
-    + '<text x="0" y="64" fill="' + d + '" font-size="11">both re-readable on chain · the price moves, so life moves</text>'
+    + '<text x="0" y="64" style="fill:' + d + '" font-size="11">both re-readable on chain · the price moves, so life moves</text>'
     + '</svg>';
 }
 
@@ -8872,6 +8911,8 @@ function nouveauCentre(parClic = false) {
   const candidats = candidatsCentre();
   const i = tirageUniforme(candidats.length);
   if (i < 0) return;
+  /* l ancien centre s eteint tout de suite : un seul block brille, celui du tirage en cours */
+  if (centreActuel) centreActuel.vifJusqua = 0;
   centreActuel = candidats[i];
   centreProchainA = Date.now() + CENTRE_MS;
   centreActuel.vifJusqua = performance.now() + CENTRE_MS; /* le spotlight : il brille tout son tour */

@@ -52,10 +52,12 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
    * glisse VRAIMENT jusqu a l origine du cube (0,0,0) et y reste son tour ; l ancien centre reprend sa derive. */
   let centre = null;
   let rappelTout = null;
+  /* ⛔ CAPTURE DE PHIL : trois blocks agglutines au centre, tous encore allumes. L ancien centre restait a l origine.
+   *    Desormais chaque centre retient sa place d avant et y RETOURNE quand un autre le remplace. */
   function fixerCentre(h) {
-    if (centre && centre !== h) centre.centreFixe = false;
+    if (centre && centre !== h) { centre.centreFixe = false; if (centre.place) centre.retour = true; }
     centre = h || null;
-    if (centre) centre.centreFixe = true;
+    if (centre) { centre.centreFixe = true; centre.retour = false; if (!centre.place) centre.place = { x: centre.wx, y: centre.wy, z: centre.wz }; }
   }
   let glisse = false;
   /* etoiles : directions sur la sphere, graine fixe (meme ciel chez tout le monde), taille et eclat varies */
@@ -155,8 +157,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     const { L, H } = taille();
     if (L <= 0 || H <= 0) return;
     cam.auto = false; cam.touchee = true;
-    const cx = L >= 700 ? (L - 380) / 2 : L / 2, cy = L >= 700 ? H / 2 : H * 0.28;
-    const c = { yaw: cam.yaw, pitch: cam.pitch, dist: S * 0.25, ox: cx - L / 2, oy: cy - H / 2 };
+    /* Phil : « centre de la map » = le MILIEU EXACT de l ecran (ox = oy = 0), et assez pres pour que le block se voie */
+    const c = { yaw: cam.yaw, pitch: cam.pitch, dist: S * 0.08, ox: 0, oy: 0 };
     if (mouvementReduit) { Object.assign(cam, c); cam.cible = null; } else cam.cible = c;
   }
   function centrerSur(h) {
@@ -247,6 +249,10 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       if (h.centreFixe) {
         /* le centre de l univers rejoint l origine en douceur (5 % du chemin par image), sans derive ni rebond */
         h.wx *= 0.95; h.wy *= 0.95; h.wz *= 0.95;
+      } else if (h.retour && h.place) {
+        /* l ancien centre rentre chez lui, a la meme douceur */
+        h.wx += (h.place.x - h.wx) * 0.05; h.wy += (h.place.y - h.wy) * 0.05; h.wz += (h.place.z - h.wz) * 0.05;
+        if (Math.abs(h.place.x - h.wx) + Math.abs(h.place.y - h.wy) + Math.abs(h.place.z - h.wz) < 1) { h.retour = false; h.place = null; }
       } else {
         h.wx += h.vx * vit; h.wy += h.vy * vit; h.wz += (h.vz || 0) * vit;
       }
@@ -277,7 +283,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     for (const e of ETOILES) {
       const p = projeter(e[0] * S * 7, e[1] * S * 7, e[2] * S * 7, L, H);
       if (!p || p.sx < -4 || p.sy < -4 || p.sx > L + 4 || p.sy > H + 4) continue;
-      html += '<circle cx="' + p.sx.toFixed(1) + '" cy="' + p.sy.toFixed(1) + '" r="' + e[3] + '" fill="#e9e3ff" fill-opacity="' + e[4] + '"/>';
+      html += '<circle cx="' + p.sx.toFixed(1) + '" cy="' + p.sy.toFixed(1) + '" r="' + e[3] + '" style="fill:rgb(var(--etoileRgb, 233 227 255))" fill-opacity="' + e[4] + '"/>';
     }
     /* le cube : 12 aretes, les plus proches plus claires ; un quadrillage au sol pour la profondeur */
     const coins = [];
@@ -292,7 +298,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       if (!p || !q) return '';
       const loin = Math.min(1, Math.max(0, ((p.z2 + q.z2) / 2 + R) / (2 * R)));
       return '<line x1="' + p.sx.toFixed(1) + '" y1="' + p.sy.toFixed(1) + '" x2="' + q.sx.toFixed(1) + '" y2="' + q.sy.toFixed(1)
-        + '" stroke="rgb(167,139,250)" stroke-opacity="' + (base * (1 - 0.7 * loin)).toFixed(3) + '" stroke-width="' + largeur + '"'
+        + '" style="stroke:rgb(var(--accentRgb, 167 139 250))" stroke-opacity="' + (base * (1 - 0.7 * loin)).toFixed(3) + '" stroke-width="' + largeur + '"'
         + (dash ? ' stroke-dasharray="4 6"' : '') + '/>';
     };
     const VOIR_CUBE = cam.dist > S * VOIR_CUBE_DEHORS;
