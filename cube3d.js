@@ -88,7 +88,13 @@ export const CUBE3D_CSS = `
 .c3s.c3c{background:none;border:0;box-shadow:none;width:13cqmin;height:13cqmin}
 .c3s.c3c svg{width:100%;height:100%}
 @media (prefers-reduced-motion: reduce){.c3r,.c3o{animation:none}}
-/* PERF : un cube petit a l ecran est fige et sans satellites (map3d pose la classe « loin ») */
-.bloc.loin .c3r{animation-play-state:paused}
+/* ⛔ MELANGE 3D / 2D (Phil : « fais un melange 3D 2D qui passe bien pour optimiser les fps ») : un block petit a l ecran
+   (classe « loin », posee par map3d) devient UNE face plate, de face, avec son logo — 1 element peint au lieu de 6,
+   aucune rotation, aucun satellite. Seuls les blocks proches sont en volume. */
+.bloc.loin .c3{perspective:none}
+.bloc.loin .c3t{transform:none}
+.bloc.loin .c3r{animation:none;transform:none}
+.bloc.loin .c3f:not(.av){display:none}
+.bloc.loin .c3f.av{transform:none;border-radius:4px}
 .bloc.loin .c3o{display:none}
 `;

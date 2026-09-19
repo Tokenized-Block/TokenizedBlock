@@ -20,7 +20,7 @@ export const DEMI_COTE = 3200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
 /* tip 0040 (Phil « t as bloque le dezoom, remets-le ») : le recul au-dela du cube est rendu (4 S), le depart reste dedans */
 /* tip 0042 (Phil « agrandis la limite de l univers, laisse-moi dezoomer plus ») : 4 S -> 9 S */
-const DIST_MIN = -0.8, DIST_MAX = 12, DIST_DEPART = 0.9;
+const DIST_MIN = -0.8, DIST_MAX = 12, DIST_DEPART = 0.62;
 /* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
 const VOIR_CUBE_DEHORS = 1.15;
 /* ⛔ PHIL (2026-09-19, capture) : « change les lignes droites par des faisceaux lumineux qui passent — on voit
@@ -37,7 +37,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   /* Phil (2026-09-19) : « agrandis le cube, il y a de plus en plus de blocks » — depart 1,2x au lieu de 0,7x */
   let S = DEMI_COTE * 1.2;
   /* tip 0042 : limite de l expansion 2,5 x -> 4 x */
-  const S_MAX = DEMI_COTE * 14, EXPANSION_PAR_S = 0.0006;
+  const S_MAX = DEMI_COTE * 20, EXPANSION_PAR_S = 0.0006;
   /* tip 0026 (Phil « un GROS CUBE, pas un rectangle ») : cote egal sur les trois axes */
   let SX = S, SY = S, SZ = S;
   let dernierT = null;
@@ -271,9 +271,9 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
         continue;
       }
       if (!h.visible) { h.el.style.visibility = ''; h.visible = true; }
-      const k = Math.min(2.2, p.k * 2.4);
+      const k = Math.min(2.2, p.k * 1.8);
       /* un cube de moins de 44 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
-      const petit = h.t * k < 44;
+      const petit = h.t * k < 64;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
