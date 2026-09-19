@@ -318,17 +318,52 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     if (VOIR_CUBE) for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
     /* tip 0037 — SOLEILS : un block a fort volume (h.eclat 0..1, fourni par l app depuis le volume 24 h lu) rayonne ;
      * un block qui vient d emettre un signal (h.vifJusqua) brille plus fort quelques secondes. */
+    /* ⛔ PHIL (2026-09-19, capture du centre) : « fais la vraie 3D autour du bloc, ca fait bizarre a l oeil ». Mesure : deux
+     *    DISQUES PLATS pleins derriere un cube qui tourne en 3D — un decor colle a l ecran. Desormais : une lueur en degrade
+     *    (aucun bord dur) et, pour le centre de l univers, un ANNEAU EN ORBITE calcule dans l espace 3D du monde et projete
+     *    par la camera : il s incline et tourne avec la vue, sa moitie arriere est pale, sa moitie avant vive. */
+    html += '<defs><radialGradient id="tbLueur"><stop offset="0" style="stop-color:rgb(var(--accentRgb, 167 139 250))" stop-opacity=".42"/>'
+      + '<stop offset=".55" style="stop-color:rgb(var(--accentRgb, 167 139 250))" stop-opacity=".12"/>'
+      + '<stop offset="1" style="stop-color:rgb(var(--accentRgb, 167 139 250))" stop-opacity="0"/></radialGradient></defs>';
     for (const h of habitants) {
       if (!h.visible) continue;
       const vif = h.vifJusqua && h.vifJusqua > maintenant ? 1 : 0;
       /* tip 0040 (Phil « pas ca — seulement ceux qui create / swap, pas tous ») : plus de halo permanent au volume ;
        * seul un block qui vient d emettre ou recevoir un signal lu s allume, puis s eteint */
       const e = vif * 0.7;
-      if (e <= 0.02) continue;
-      /* vu en test : des halos de plusieurs centaines de px couvraient l ecran -> rayon borne a 110 px, lueur plus douce */
-      const r = Math.min(110, h.t * h.k * (0.65 + 1.1 * e)), halo = 'rgb(255,' + Math.round(210 - 60 * e) + ',' + Math.round(120 - 40 * e) + ')';
-      html += '<circle cx="' + h.sx.toFixed(1) + '" cy="' + h.sy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + halo + '" fill-opacity="' + (0.04 + 0.12 * e).toFixed(3) + '"/>'
-        + '<circle cx="' + h.sx.toFixed(1) + '" cy="' + h.sy.toFixed(1) + '" r="' + (r * 0.5).toFixed(1) + '" fill="' + halo + '" fill-opacity="' + (0.06 + 0.16 * e).toFixed(3) + '"/>';
+      if (e <= 0.02 && !h.centreFixe) continue;
+      /* vu en test : des halos de plusieurs centaines de px couvraient l ecran -> rayon borne a 110 px */
+      const r = Math.min(110, h.t * h.k * (0.75 + 0.9 * Math.max(e, 0.5)));
+      html += '<circle cx="' + h.sx.toFixed(1) + '" cy="' + h.sy.toFixed(1) + '" r="' + r.toFixed(1) + '" fill="url(#tbLueur)"/>';
+      if (!h.centreFixe || !h.wx && h.wx !== 0) continue;
+      /* l anneau : cercle horizontal (plan x-z du monde) autour du block, 48 points projetes. Rayon calcule depuis la taille
+       * REELLEMENT affichee du cube (h.t * h.k, plafonnee de pres) : meme proportion a toute distance, jamais geant. */
+      const pc0 = projeter(h.wx, h.wy, h.wz, L, H);
+      if (!pc0 || !(pc0.k > 0)) continue;
+      const rho = (0.8 * h.t * h.k) / pc0.k;
+      const tour = mouvementReduit ? 0 : (maintenant / 9000) * Math.PI * 2;
+      const pts = [];
+      for (let i = 0; i <= 48; i++) {
+        const a = tour + (i / 48) * Math.PI * 2;
+        const q = projeter(h.wx + rho * Math.cos(a), h.wy, h.wz + rho * Math.sin(a), L, H);
+        if (!q) { pts.length = 0; break; }
+        pts.push(q);
+      }
+      if (pts.length < 2) continue;
+      const pc = projeter(h.wx, h.wy, h.wz, L, H);
+      const zCentre = pc ? pc.z2 : 0;
+      let arriere = '', avant = '';
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const seg = 'M' + a.sx.toFixed(1) + ' ' + a.sy.toFixed(1) + 'L' + b.sx.toFixed(1) + ' ' + b.sy.toFixed(1);
+        if ((a.z2 + b.z2) / 2 > zCentre) arriere += seg; else avant += seg;
+      }
+      html += '<path d="' + arriere + '" fill="none" style="stroke:rgb(var(--accentRgb, 167 139 250))" stroke-opacity=".28" stroke-width="1.5" stroke-linecap="round"/>'
+        + '<path d="' + avant + '" fill="none" style="stroke:rgb(var(--accent2Rgb, var(--accentRgb, 196 181 253)))" stroke-opacity=".85" stroke-width="2.2" stroke-linecap="round"/>';
+      /* un satellite sur l anneau : plus petit et pale quand il passe derriere */
+      const s = pts[Math.round(((mouvementReduit ? 0 : maintenant / 2600) % 1) * 47)] || pts[0];
+      const derriere = s.z2 > zCentre;
+      html += '<circle cx="' + s.sx.toFixed(1) + '" cy="' + s.sy.toFixed(1) + '" r="' + (derriere ? 2.2 : 3.6) + '" style="fill:rgb(var(--accentRgb, 167 139 250))" fill-opacity="' + (derriere ? 0.45 : 1) + '"/>';
     }
     /* les connexions lues ces 10 dernieres minutes */
     liens = liens.filter((x) => maintenant - x.t0 < LIEN_VIE_MS && x.de.visible !== undefined);
