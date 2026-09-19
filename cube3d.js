@@ -9,7 +9,7 @@
 // ⛔ CSS 3D PUR, aucun WebGL : 6 faces + au plus 2 satellites par block (perf, 2026-09-19), animes par le compositeur du navigateur.
 //    Mouvement reduit : aucune rotation, aucune orbite (le cube reste pose en 3/4).
 // ⚠️ Les tailles sont en unites de conteneur (cqw) : le cube suit la taille de sa tuile sans qu on la lui repasse.
-import { modeleFace } from './logo.js';
+import { modeleFace, logoSvg } from './logo.js';
 
 /** Nombre pseudo-aleatoire DETERMINISTE depuis l adresse : chaque block tourne toujours de la meme facon. */
 function graine(adr, i) {
@@ -52,13 +52,26 @@ export function cube3dHtml(params, adr) {
     const tour = (graine(adr, 20 + i) * 360).toFixed(0);
     const rayon = (46 + i * 7 + graine(adr, 30 + i) * 6).toFixed(1);
     const d = (7 + i * 3 + graine(adr, 40 + i) * 5).toFixed(1);
+    /* Phil : « les particules autour comme satellites, aussi en 3D » : chaque eclat est un MINI-CUBE en volume */
+    const mf = (cls, fond) => '<b class="' + cls + '" style="background:' + fond + ';border-color:' + m.eclat.trait + '"></b>';
     const corps = s.genre === 'eclat'
-      ? '<i class="c3s" style="background:linear-gradient(135deg,' + m.eclat.haut + ',' + m.eclat.droite + ');border-color:' + m.eclat.trait + '"></i>'
+      ? '<i class="c3m">' + mf('av', m.eclat.gauche) + mf('ar', m.eclat.gauche) + mf('dr', m.eclat.droite) + mf('ga', m.eclat.droite)
+        + mf('ha', m.eclat.haut) + mf('ba', m.eclat.haut) + '</i>'
       : '<i class="c3s c3c" style="color:' + m.coinCouleur + '"><svg viewBox="-14 -14 40 40" fill="currentColor" stroke="currentColor">' + m.coin + '</svg></i>';
     return '<div class="c3o" style="--incl:' + incl + 'deg;--tour:' + tour + 'deg;--rayon:' + rayon + 'cqw;--d:' + d + 's">'
       + '<div class="c3p">' + corps + '</div></div>';
-  }).join('');
-  return '<div class="c3" aria-hidden="true"><div class="c3t">'
+  }).join('')
+    /* et 3 particules lumineuses, chacune sur son orbite (1 element chacune : le decor ne coute presque rien) */
+    + [0, 1, 2].map((i) => '<div class="c3o c3q" style="--incl:' + (40 + graine(adr, 60 + i) * 90).toFixed(0) + 'deg;--tour:'
+      + (graine(adr, 70 + i) * 360).toFixed(0) + 'deg;--rayon:' + (38 + graine(adr, 80 + i) * 22).toFixed(1) + 'cqw;--d:'
+      + (5 + graine(adr, 90 + i) * 7).toFixed(1) + 's"><div class="c3p"><i class="c3dot" style="background:' + m.eclat.haut
+      + ';box-shadow:0 0 5px ' + m.eclat.haut + '"></i></div></div>').join('');
+  /* ⛔ PHIL (2026-09-19) : en 2D, « reprends le modele precedent du block, pas juste la face » : le dessin isometrique
+   *    (cube + eclats + ornements), SANS son rectangle de fond — la galaxie reste visible autour. */
+  let iso = '';
+  try { iso = logoSvg(params).replace(/<rect width="200" height="220" fill="[^"]*"\/>/, ''); } catch (_) { iso = ''; }
+  return '<div class="c2" aria-hidden="true">' + iso + '</div>'
+    + '<div class="c3" aria-hidden="true"><div class="c3t">'
     + '<div class="c3r" style="--vx:' + vx + ';--vy:' + vy + ';--vz:' + vz + ';--d:' + duree + 's;animation-direction:' + sens + '">'
     + faces + '</div>' + orbites + '</div></div>';
 }
@@ -91,10 +104,21 @@ export const CUBE3D_CSS = `
 /* ⛔ MELANGE 3D / 2D (Phil : « fais un melange 3D 2D qui passe bien pour optimiser les fps ») : un block petit a l ecran
    (classe « loin », posee par map3d) devient UNE face plate, de face, avec son logo — 1 element peint au lieu de 6,
    aucune rotation, aucun satellite. Seuls les blocks proches sont en volume. */
-.bloc.loin .c3{perspective:none}
-.bloc.loin .c3t{transform:none}
-.bloc.loin .c3r{animation:none;transform:none}
-.bloc.loin .c3f:not(.av){display:none}
-.bloc.loin .c3f.av{transform:none;border-radius:4px}
-.bloc.loin .c3o{display:none}
+/* ⛔ TRANSITION DOUCE (Phil : « fais la transition plus smooth ») : 2D et 3D se croisent en fondu ; la 3D cachee est mise
+   en pause (visibility apres le fondu) pour ne rien couter une fois invisible. */
+.c2{position:absolute;inset:0 0 6% 0;opacity:0;visibility:hidden;transform:scale(.9);
+  transition:opacity .5s ease,transform .5s ease,visibility 0s linear .5s}
+.c2 svg{width:100%;height:100%}
+.c3{transition:opacity .5s ease,transform .5s ease,visibility 0s}
+.bloc.loin .c2{opacity:1;visibility:visible;transform:none;transition:opacity .5s ease,transform .5s ease,visibility 0s}
+.bloc.loin .c3{opacity:0;visibility:hidden;transform:scale(.85);transition:opacity .5s ease,transform .5s ease,visibility 0s linear .5s}
+.bloc.loin .c3r,.bloc.loin .c3o,.bloc.loin .c3m{animation-play-state:paused}
+/* mini-cube satellite, en volume, qui tourne sur lui-meme */
+.c3m{position:absolute;width:0;height:0;transform-style:preserve-3d;animation:c3tourne 4s linear infinite;--vx:1;--vy:1;--vz:0}
+.c3m b{position:absolute;left:-4.5cqmin;top:-4.5cqmin;width:9cqmin;height:9cqmin;border:1px solid;box-sizing:border-box}
+.c3m .av{transform:translateZ(4.5cqmin)}.c3m .ar{transform:rotateY(180deg) translateZ(4.5cqmin)}
+.c3m .dr{transform:rotateY(90deg) translateZ(4.5cqmin)}.c3m .ga{transform:rotateY(-90deg) translateZ(4.5cqmin)}
+.c3m .ha{transform:rotateX(90deg) translateZ(4.5cqmin)}.c3m .ba{transform:rotateX(-90deg) translateZ(4.5cqmin)}
+.c3dot{position:absolute;width:3cqmin;height:3cqmin;margin:-1.5cqmin 0 0 -1.5cqmin;border-radius:50%}
+@media (prefers-reduced-motion: reduce){.c3m{animation:none}}
 `;

@@ -227,6 +227,10 @@ const TYPES = {
 /* ⛔ CE QUI EST SERVI, NOMME UN PAR UN. Ajouter un fichier a l app demande de l ajouter ici — c est
  * volontairement un peu penible : la meme discipline a deja evite qu un module importe mais non
  * declare parte en production en 404 silencieux. */
+/* l ordre de l entonnoir : visite -> pastille de la map -> clic Create -> cree -> vivant -> partage -> lien recu -> achat */
+const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 'partage', 'lien_recu', 'achat'];
+const entonnoir = { depuis: new Date().toISOString(), total: {}, parJour: {} };
+
 const SERVIS = [
   'app.html', 'index.html', 'block-0.html', 'lien-x.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
@@ -468,6 +472,29 @@ createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(corps);
     });
+    return;
+  }
+
+  /* ══ ENTONNOIR (Phil, 2026-09-19 : « fais l entonnoir, avec des resultats vrais ») ══════════════════════════
+   * ⛔ ANONYME PAR CONSTRUCTION : on compte des ETAPES, rien d autre — ni adresse, ni IP, ni identifiant, ni cookie.
+   * ⚠️ BORNES : en memoire, remis a zero a chaque deploiement (le journal garde chaque ligne) ; un curieux peut gonfler
+   *    un compteur a la main — ce sont des ordres de grandeur, jamais une preuve d argent (l argent se lit sur a6cf). */
+  if (chemin === '/api/etape') {
+    const e = new URL(req.url, 'http://x').searchParams.get('e') || '';
+    if (ETAPES_ENTONNOIR.includes(e)) {
+      const jour = new Date().toISOString().slice(0, 10);
+      entonnoir.total[e] = (entonnoir.total[e] || 0) + 1;
+      entonnoir.parJour[jour] = entonnoir.parJour[jour] || {};
+      entonnoir.parJour[jour][e] = (entonnoir.parJour[jour][e] || 0) + 1;
+      console.log('[entonnoir]', jour, e);
+    }
+    res.writeHead(204, { 'cache-control': 'no-store' });
+    res.end();
+    return;
+  }
+  if (chemin === '/api/entonnoir') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
     return;
   }
 

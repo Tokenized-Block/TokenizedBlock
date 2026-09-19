@@ -387,6 +387,16 @@ body{background:var(--fond);
   text-shadow:0 0 12px rgb(var(--accentRgb) / .75),0 0 2px rgb(0 0 0 / .9)}
 @media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
 body:not(.surMap) .mapCentre{visibility:hidden}
+/* la pastille de l entonnoir : sur la map seulement, au-dessus de la barre du bas */
+.mapCta{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--mapBas,72px) + 16px);z-index:60;
+  padding:12px 20px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:15px;color:#fff;
+  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 8px 26px rgb(var(--boutonRgb) / .45)}
+.mapCta:hover{filter:brightness(1.1)}
+body:not(.surMap) .mapCta{display:none}
+.partage{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.partage a,.partage button{flex:1 1 120px;text-align:center;padding:10px 12px;border-radius:12px;font-weight:700;font-size:14px;
+  border:1px solid rgb(var(--accentRgb) / .35);background:rgb(var(--accentRgb) / .12);color:var(--texte);text-decoration:none;cursor:pointer;font-family:inherit}
+.lienRecu{margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgb(var(--accentRgb) / .12);border:1px solid rgb(var(--accentRgb) / .3)}
 .mapCentre:hover,.mapCentre:focus-visible{background:rgb(var(--accentRgb) / .12);outline:none}
 .soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
 .soldeDex b{color:var(--texte);font-weight:700}
@@ -711,6 +721,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="marque">Tokenized<span>Block</span></div>
     <!-- ⛔ PHIL (2026-09-19) : « place le texte en haut ». Le tirage du centre de l univers vit dans la barre du haut, entre
          la marque et les boutons — visible sur la Map seulement (ailleurs, il parlerait d un univers qu on ne voit pas). -->
+    <button type="button" id="mapCta" class="mapCta">✦ Create your own block — ≈ $1</button>
     <button type="button" id="mapCentre" class="mapCentre" title="Draw a new centre of the universe — every block has the same chance"></button>
     <div class="droite">
       <!-- ⛔ LE RESEAU EST UN BOUTON, PAS UNE CONSTANTE. Fige sur Sepolia, la map affichait
@@ -1286,7 +1297,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0083" hidden>Build <code>20260919-0083</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0084" hidden>Build <code>20260919-0084</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4109,6 +4120,13 @@ function peindreJeu(mcDevise, devise, etat) {
   peindreCompanion();
 }
 
+/** Compte une etape de l entonnoir (anonyme : le nom de l etape, rien d autre). « une fois » = une fois par visite. */
+function etape(nom, uneFois = false) {
+  try {
+    if (uneFois) { const k = 'tb.etape.' + nom; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); }
+  } catch (_) { /* navigation privee : on compte quand meme */ }
+  try { navigator.sendBeacon('/api/etape?e=' + encodeURIComponent(nom)); } catch (_) {}
+}
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
   if (b) b.click();
@@ -5618,6 +5636,7 @@ async function signerEchange(tx, sens, estApprobation) {
   if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
+  if (sens === 'ACHAT') etape('achat');
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « Bought. », le bouton « Sign the buy »
    *    RESTAIT affiche avec la meme transaction — le harnais l a reclique et a achete QUATRE fois. Un
    *    utilisateur qui clique deux fois paierait deux fois. Une transaction confirmee quitte l ecran ;
@@ -6214,6 +6233,26 @@ async function verifierLancement(adr) {
       : 'Practice network — nothing here is real money.');
 }
 
+/** Les boutons de partage d un block vivant. Le texte ne promet rien : il montre le block. */
+function blocPartage(adr, sym) {
+  const url = location.origin + '/?block=' + String(adr).toLowerCase();
+  const texte = (sym ? '$' + String(sym).slice(0, 12) + ' ' : 'My block ') + 'is alive on TokenizedBlock — come see it:';
+  const x = 'https://x.com/intent/post?text=' + encodeURIComponent(texte) + '&url=' + encodeURIComponent(url);
+  const fc = 'https://farcaster.xyz/~/compose?text=' + encodeURIComponent(texte) + '&embeds[]=' + encodeURIComponent(url);
+  return '<div class="partage"><b style="flex-basis:100%">Share it — people who open your link land on your block.</b>'
+    + '<a href="' + enTexte(x) + '" target="_blank" rel="noopener" data-partage="x">Post on X</a>'
+    + '<a href="' + enTexte(fc) + '" target="_blank" rel="noopener" data-partage="farcaster">Cast on Farcaster</a>'
+    + '<button type="button" data-copier="' + enTexte(url) + '">Copy link</button></div>';
+}
+document.addEventListener('click', (ev) => {
+  const a = ev.target.closest('[data-partage]');
+  if (a) { etape('partage'); return; }
+  const c = ev.target.closest('[data-copier]');
+  if (c) {
+    etape('partage');
+    try { navigator.clipboard.writeText(c.getAttribute('data-copier')); c.textContent = 'Link copied'; } catch (_) { c.textContent = c.getAttribute('data-copier'); }
+  }
+});
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
@@ -6280,7 +6319,8 @@ async function lancerMarcheBlock(adr) {
   if (r.etat === 'CONFIRME') {
     aLancerRetirer(adr);
     e.className = 'note wOk';
-    e.innerHTML = 'It is alive. Its market is open.' + lien;
+    etape('vivant');
+    e.innerHTML = 'It is alive. Its market is open.' + lien + blocPartage(adr, symProfil);
     $('#plActions').innerHTML = '';
     planCourant = null;
     vieAutoArreter();
@@ -7558,6 +7598,7 @@ document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('cli
 /** L adresse que la factory rendra pour ce sel et ce compte — calculee par verifierAdresseCreation, jamais devinee. */
 let adressePrevue = null;
 async function creerBlock() {
+  etape('create_clic');
   if (creationEnCours) return;
   const e = $('#cEtat');
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local + wallet injecte) : sans wallet connecte, le
@@ -7671,6 +7712,7 @@ async function creerBlock() {
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to, data: calldata, value });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
+      etape('cree');
       noterFace(adresseCreee, faceGravee);
       if (Number(CHAINE) === 8453) aLancerAjouter(adresseCreee, v.sym);
       const roleCle = $('#cRole') && METIERS.some((x) => x.cle === $('#cRole').value) ? $('#cRole').value : null;
@@ -8243,7 +8285,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0083',
+    build: '20260919-0084',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -9013,6 +9055,8 @@ function peindreCentre() {
 }
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
 $('#mapCentre').addEventListener('click', () => { if (habitants.length) nouveauCentre(true); });
+$('#mapCta').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+etape('visite', true);
 /* le bouton ⤢ de la map fait le meme tirage */
 (function brancherTout() {
   if (moteur3d && typeof moteur3d.surBoutonTout === 'function') moteur3d.surBoutonTout(() => { if (habitants.length) nouveauCentre(true); });
@@ -9054,7 +9098,22 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) void
 
 try { filHookedTbgasHandlers(); } catch (_) {}
 const blockLien = paramsLien.get('block');
-if (blockLien && ADRESSE.test(blockLien)) void ouvrirProfil(blockLien, null);
+if (blockLien && ADRESSE.test(blockLien)) {
+  etape('lien_recu', true);
+  void ouvrirProfil(blockLien, null).then(() => {
+    try {
+      const p = $('#profil');
+      if (!p || $('#lienRecu')) return;
+      const n = document.createElement('div');
+      n.id = 'lienRecu'; n.className = 'lienRecu';
+      n.innerHTML = '<b>Someone shared this block with you.</b> You can buy it below — or make your own in a minute.'
+        + '<div class="partage"><button type="button" id="lrAcheter">Buy it</button><button type="button" id="lrCreer">Create my own — ≈ $1</button></div>';
+      p.insertBefore(n, p.firstChild);
+      $('#lrAcheter').addEventListener('click', () => { const x = $('#pEchange'); if (x && !x.hidden) x.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+      $('#lrCreer').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+    } catch (_) {}
+  });
+}
 </script>
 </body>
 </html>
