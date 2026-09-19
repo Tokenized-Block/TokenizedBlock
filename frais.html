@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pending hook fees</title>
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:680px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px} td{padding:6px 4px;border-top:1px solid var(--ligne)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  button{font:inherit;font-weight:700;padding:10px 16px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012;margin:6px 6px 0 0}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)} code{font-size:12px;color:var(--doux);word-break:break-all}
+</style>
+</head>
+<body>
+<main>
+  <h1>Pending hook fees</h1>
+  <p class="doux">Token shares (blocks on buys, stocks or USDC on sells) wait inside the hooks until someone sends them.
+    Anyone may press the button; the contract always pays the fee wallet — never the person who presses. The ETH share is
+    already paid during each swap.</p>
+  <div class="carte"><div id="liste" class="doux">Reading the chain…</div></div>
+  <div class="carte">
+    <button id="connecter" type="button">Connect wallet</button>
+    <span id="boutons"></span>
+    <p id="etat" class="doux" style="margin:12px 0 0"></p>
+  </div>
+</main>
+<script type="module">
+/* ⛔ PAGE PRIVEE (noindex, non liee) : envoie au wallet de frais les parts en jeton qui attendent dans les hooks V2/V3.
+ *    handleHookFees(devises) paie TOUJOURS le wallet de frais fixe dans le contrat ; la page ne touche a aucune cle, le
+ *    wallet de l utilisateur signe. Les montants viennent de /api/frais-hook (lecture seule sur la chaine). */
+import { envoyerDepuisWallet } from './envoi.js';
+const $ = (s) => document.querySelector(s);
+const RPC = 'https://mainnet.base.org';
+const rpc = async (method, params) => {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }).then((x) => x.json());
+  if (r.error) throw new Error(r.error.message || 'rpc error');
+  return r.result;
+};
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const lisible = (brut, dec) => {
+  if (dec === null || dec === undefined) return brut + ' (raw)';
+  const b = BigInt(brut), e = 10n ** BigInt(dec), ent = b / e, fr = (b % e).toString().padStart(dec, '0').slice(0, 6).replace(/0+$/, '');
+  return ent.toLocaleString('en-US') + (fr ? '.' + fr : '');
+};
+/** handleHookFees(address[]) : selecteur fc656ac5, tableau dynamique d adresses. */
+const encoder = (devises) => '0xfc656ac5' + (32).toString(16).padStart(64, '0') + devises.length.toString(16).padStart(64, '0')
+  + devises.map((a) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0')).join('');
+let compte = null, parHook = new Map();
+
+async function charger() {
+  const d = await fetch('/api/frais-hook', { cache: 'no-store' }).then((r) => r.json());
+  if (!d.ok) { $('#liste').textContent = 'Could not read the hooks right now: ' + (d.pourquoi || ''); return; }
+  parHook = new Map();
+  for (const l of d.lignes) { if (!parHook.has(l.hookAdr)) parHook.set(l.hookAdr, { nom: l.hook, devises: [] }); parHook.get(l.hookAdr).devises.push(l.devise); }
+  $('#liste').innerHTML = d.lignes.length
+    ? '<table>' + d.lignes.map((l) => '<tr><td>' + esc(l.hook) + '</td><td>' + esc(l.symbole || l.devise.slice(0, 10) + '…') + '</td><td class="n">'
+      + esc(lisible(l.du, l.decimales)) + '</td></tr>').join('') + '</table>'
+      + '<p class="doux" style="margin:8px 0 0">Read at ' + esc(d.lu) + (d.fenetresRatees ? ' · ' + d.fenetresRatees + ' read(s) failed — some amounts may be missing' : '') + '.</p>'
+    : 'Nothing is waiting in the hooks right now.';
+  $('#boutons').innerHTML = [...parHook.entries()].map(([adr, h]) => '<button type="button" data-hook="' + esc(adr) + '"' + (compte ? '' : ' disabled') + '>Send ' + esc(h.nom)
+    + ' shares (' + h.devises.length + ')</button>').join('');
+}
+$('#connecter').addEventListener('click', async () => {
+  if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
+  try {
+    compte = (await window.ethereum.request({ method: 'eth_requestAccounts' }))[0];
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
+    document.querySelectorAll('[data-hook]').forEach((b) => { b.disabled = false; });
+  } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
+});
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-hook]');
+  if (!b || b.disabled) return;
+  const h = parHook.get(b.getAttribute('data-hook'));
+  b.disabled = true;
+  $('#etat').textContent = 'Opening your wallet — the contract pays the fee wallet, not you.';
+  const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: b.getAttribute('data-hook'), data: encoder(h.devises), value: '0x0' });
+  $('#etat').innerHTML = r.etat === 'CONFIRME' ? '<span class="ok">Sent. Transaction:</span> <code>' + esc(r.hash) + '</code>' : '<span class="ko">Not done: ' + esc(r.pourquoi || r.etat) + '</span>';
+  setTimeout(() => { charger().catch(() => {}); }, 4000);
+});
+charger().catch((e) => { $('#liste').textContent = 'Could not read the hooks: ' + (e.message || e); });
+</script>
+</body>
+</html>

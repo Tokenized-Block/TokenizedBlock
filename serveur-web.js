@@ -98,6 +98,59 @@ async function rpcServeur(methode, params) {
  *    qu un appelant ne transforme pas notre fenetre trop courte en verdict sur le block. */
 const PM_V4 = '0x498581ff718922c3f8e6a244956af099b2652b2b';
 const TOPIC_INITIALIZE = '0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438';
+/* ══ LES PARTS EN ATTENTE DANS NOS HOOKS (2026-09-19) ════════════════════════════════════════════════════════════════
+ * ⛔ La part ETH du wallet de frais est versee PENDANT le swap ; les parts en JETON (block a l achat, action a la vente)
+ *    s accumulent dans le hook (du[wallet][devise]) jusqu a handleHookFees — que n importe qui peut appeler, et qui paie
+ *    TOUJOURS le wallet de frais. Ici : lecture seule de ce qui attend, pool par pool ouverte avec V2/V3 depuis leur
+ *    deploiement. Rien n est signe ni envoye par le serveur. */
+const HOOKS_FRAIS = [
+  { nom: 'V2', adr: '0x8e1eb57ad2a87a4f7bc89ce94efd5cd77aec2044', depuis: 51518785 },
+  { nom: 'V3', adr: '0x7a7cebb2ccb84c9fbfa2730e6cb23bb192166044', depuis: 51518785 },
+];
+const WALLET_FRAIS = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+let fraisCache = null;
+/* balayage INCREMENTAL : les devises deja vues restent ; on ne relit que les blocs nouveaux. Une fenetre ratee arrete
+ * l avancee (on la relira), jamais un trou recouvert par un « deja lu ». */
+const fraisScan = { jusqua: null, devises: new Map() };
+async function fraisEnAttente() {
+  if (fraisCache && Date.now() - fraisCache.t < 120000) return fraisCache.r;
+  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  for (const h of HOOKS_FRAIS) if (!fraisScan.devises.has(h.adr)) fraisScan.devises.set(h.adr, new Set());
+  const devises = fraisScan.devises;
+  const depuis = fraisScan.jusqua === null ? Math.min(...HOOKS_FRAIS.map((h) => h.depuis)) : fraisScan.jusqua + 1;
+  let fenetresRatees = 0, avance = true;
+  for (let bas = depuis; bas <= tete; bas += 2000) {
+    const haut = Math.min(tete, bas + 1999);
+    try {
+      const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
+      for (const l of logs || []) {
+        const hook = '0x' + String(l.data).slice(2 + 128 + 24, 2 + 192);
+        if (!devises.has(hook)) continue;
+        devises.get(hook).add('0x' + l.topics[2].slice(26));
+        devises.get(hook).add('0x' + l.topics[3].slice(26));
+      }
+      if (avance) fraisScan.jusqua = haut;
+    } catch { fenetresRatees++; avance = false; }
+  }
+  const pad = (a) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+  const lignes = [];
+  for (const h of HOOKS_FRAIS) {
+    for (const d of devises.get(h.adr)) {
+      if (/^0x0{40}$/.test(d)) continue; /* ETH : deja verse pendant le swap */
+      try {
+        const du = BigInt(await rpcServeur('eth_call', [{ to: h.adr, data: '0xe69df140' /* du(address,address) */ + pad(WALLET_FRAIS) + pad(d) }, 'latest']));
+        if (du === 0n) continue;
+        let sym = null, dec = null;
+        try { const x = await rpcServeur('eth_call', [{ to: d, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }
+        try { dec = Number(BigInt(await rpcServeur('eth_call', [{ to: d, data: '0x313ce567' }, 'latest']))); } catch { dec = null; }
+        lignes.push({ hook: h.nom, hookAdr: h.adr, devise: d, symbole: sym, decimales: dec, du: du.toString() });
+      } catch { fenetresRatees++; }
+    }
+  }
+  const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, lignes };
+  fraisCache = { t: Date.now(), r };
+  return r;
+}
 const clesPool = new Map();
 async function resoudreClePool(token, fenetres = 40) {
   const t = String(token).toLowerCase();
@@ -232,7 +285,7 @@ const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 
 const entonnoir = { depuis: new Date().toISOString(), total: {}, parJour: {} };
 
 const SERVIS = [
-  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json',
+  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'frais.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
@@ -510,6 +563,17 @@ createServer((req, res) => {
   if (chemin === '/api/entonnoir') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: true, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
+    return;
+  }
+
+  if (chemin === '/api/frais-hook') {
+    fraisEnAttente().then((r) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
+    });
     return;
   }
 

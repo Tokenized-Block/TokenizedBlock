@@ -1330,7 +1330,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0095" hidden>Build <code>20260919-0095</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0096" hidden>Build <code>20260919-0096</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6492,13 +6492,30 @@ $('#bSwap') && $('#bSwap').addEventListener('click', async () => {
     + enTexte(x.symbole + ' — ' + x.nom) + (v3Pret ? '' : ' — soon') + '</option>').join('');
   /* les blocks : ceux que ce compte a crees, lus sur la chaine */
   $('#wpEtat').textContent = '';
+  /* ⛔⛔ PHIL (2026-09-19) : « Paired with ne detecte pas le block que j ai cree ». Cause : mesCreations ne lit que les
+   *    9 000 derniers blocs (~5 h) et reconnait le createur a l EXPEDITEUR de la tx — avec un smart wallet, c est le bundler.
+   *    Desormais : les creations recentes + les blocks FRAPPES vers ce wallet (120 000 blocs, cache), puis on garde ceux
+   *    dont ce compte est ADMIN B20, lu sur la chaine — c est exactement ce que le hook exige pour ouvrir une paire. */
   try {
-    const { gardees } = await mesCreations();
-    const mes = (gardees || []).filter((c) => c && c.jeton);
+    const vus = new Map();
+    try { const { gardees } = await mesCreations(); for (const c of gardees || []) if (c && c.jeton) vus.set(String(c.jeton).toLowerCase(), c.symbole || null); } catch (_) {}
+    $('#wpBlock').innerHTML = '<option value="">Reading the blocks minted to you…</option>';
+    try { const fr = await mesFrappes(); for (const x of (fr && fr.blocks) || []) if (!vus.has(x.jeton)) vus.set(x.jeton, null); } catch (_) {}
+    const pad = (a) => String(a).toLowerCase().replace(/^0x/, '').padStart(64, '0');
+    const mes = [];
+    for (const [jeton, symConnu] of vus) {
+      try {
+        const adm = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('hasRole(bytes32,address)') + '0'.repeat(64) + pad(compte) }, 'latest']);
+        if (BigInt(adm) !== 1n) continue;
+        let sym = symConnu;
+        if (!sym) { try { const f = await faitsDuBlock({ rpc, jeton, pause: 0 }); sym = f.symbole || null; } catch (_) {} }
+        mes.push({ jeton, symbole: sym });
+      } catch (_) { /* illisible : on ne le propose pas plutot que de promettre */ }
+    }
     $('#wpBlock').innerHTML = mes.length
       ? mes.map((c) => '<option value="' + enTexte(c.jeton) + '" data-sym="' + enTexte(c.symbole || '') + '">'
         + enTexte((c.symbole || court(c.jeton))) + '</option>').join('')
-      : '<option value="">You have not created a block yet</option>';
+      : '<option value="">No block you created was found for this wallet</option>';
   } catch (_) { $('#wpBlock').innerHTML = '<option value="">Your blocks could not be read right now</option>'; }
 });
 $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
@@ -8504,7 +8521,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0095',
+    build: '20260919-0096',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
