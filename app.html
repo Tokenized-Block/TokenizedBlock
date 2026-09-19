@@ -1320,7 +1320,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0092" hidden>Build <code>20260919-0092</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0093" hidden>Build <code>20260919-0093</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1610,8 +1610,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <p class="note" id="plLiqHonesty">🔒 Locked forever.</p>
         </div>
         <details class="bDetail" style="margin-top:8px"><summary class="note">Advanced · pair, starting value, share</summary>
-        <label class="champ">Paired with<select id="plDevise"><option value="ETH" selected>ETH</option>
-          <option value="TBLOCK">TBLOCK</option></select></label>
+        <label class="champ">Paired with<select id="plDevise"><option value="ETH" selected>ETH</option></select></label>
         <label class="champ">Starting value of the whole supply, in <span id="plUnite">ETH</span><input id="plValo" inputmode="decimal"
           value="10" placeholder="e.g. 10" autocomplete="off"></label>
         <label class="champ">Share of its blocks to place, in %<input id="plPart" inputmode="decimal"
@@ -5936,10 +5935,13 @@ async function calculerLancement() {
   e.className = 'note';
   if (!(await pret())) { e.className = 'note wKo'; vieAutoArreter(); e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
-  const contreTblock = $('#plDevise').value === 'TBLOCK';
+  /* ⛔ V3 (2026-09-19) : la devise choisie est une ADRESSE (USDC, cbBTC, action) ou ETH. Plus de TBLOCK a la mise en vie. */
+  const deviseLancement = $('#plDevise').value === 'ETH' ? null : $('#plDevise').value;
+  const symDevise = deviseLancement ? (($('#plDevise').selectedOptions[0] || {}).dataset || {}).sym || 'the pair' : 'ETH';
+  const contreTblock = false;
   if (!(valo > 0) || !Number.isFinite(valo)) {
     e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Enter the starting value of the whole supply, in ' + (contreTblock ? 'TBLOCK' : 'ETH') + ' — a positive number.';
+    e.textContent = 'Enter the starting value of the whole supply, in ' + symDevise + ' — a positive number.';
     return;
   }
   e.textContent = 'Reading the block, its pool and your approvals…';
@@ -5997,15 +5999,23 @@ async function calculerLancement() {
     } else if (legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now.' };
     } else {
-      const hooks = etatV2 === 'DEPLOYE' ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
-      plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
-        ...(contreTblock ? { devise: TBLOCK } : {}),
-        ...(hooks ? { hooks } : {}) });
-      if (hooks === HOOK_V2) {
-        /* ⛔ V2 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
-        const w = await assurerFraisLancementWei(true);
-        plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null });
-      } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+      /* ETH -> hook V2 ; une devise de la liste -> hook V3 (et rien d autre : sans V3 deploye, pas de mise en vie) */
+      const etatV3 = deviseLancement ? await hookV3Deploye({ rpc }) : 'ABSENT';
+      const hooks = deviseLancement ? (etatV3 === 'DEPLOYE' ? HOOK_V3 : undefined)
+        : etatV2 === 'DEPLOYE' ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      if (deviseLancement && !hooks) {
+        plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
+      } else {
+        plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
+          ...(deviseLancement ? { devise: deviseLancement } : {}),
+          ...(hooks ? { hooks } : {}) });
+        if (hooks === HOOK_V2 || hooks === HOOK_V3) {
+          /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
+          const w = await assurerFraisLancementWei(true);
+          plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
+          if (plan && deviseLancement) plan.symDevise = symDevise;
+        } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+      }
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
         plan.pourquoiLegacy = 'Opens a TokenizedBlock market next to its outside market. Only trades on the new one pay its creator.';
@@ -6100,8 +6110,8 @@ function peindrePlan(plan, adr) {
   const avecHook = hookAdr !== '0x0000000000000000000000000000000000000000';
   $('#plLignes').innerHTML = [
     /* tip 2352: « fee 0 % » = Uniswap pool fee TIER only — NOT protocol/life/BuySell fees. */
-    'Market on ' + RESEAUX[CHAINE].nom + ', paired with ' + (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
-      ? 'TBLOCK (buyers still pay in ETH)' : 'ETH')
+    'Market on ' + RESEAUX[CHAINE].nom + ', paired with ' + (plan.symDevise || (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
+      ? 'TBLOCK (buyers still pay in ETH)' : 'ETH'))
       + (plan.poolExiste ? ' · already exists, its current price applies' : ''),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
@@ -6484,10 +6494,11 @@ new MutationObserver(() => {
 }).observe($('#pRelire'), { attributes: true, attributeFilter: ['hidden'] });
 $('#plCalculer').addEventListener('click', () => void calculerLancement());
 $('#plDevise').addEventListener('change', () => {
-  const t = $('#plDevise').value === 'TBLOCK' ? 'TBLOCK' : 'ETH';
+  const o = $('#plDevise').selectedOptions[0];
+  const t = $('#plDevise').value === 'ETH' ? 'ETH' : ((o && o.dataset.sym) || 'the pair');
   $('#plContre').textContent = t;
   $('#plUnite').textContent = t;
-  $('#plValo').placeholder = t === 'TBLOCK' ? 'e.g. 10000000' : 'e.g. 10';
+  $('#plValo').placeholder = t === 'ETH' ? 'e.g. 10' : t === 'USDC' ? 'e.g. 20000' : 'e.g. 5';
   planCourant = null;
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
@@ -7030,9 +7041,19 @@ function peindreRolesCreate() {
   }
 }
 let v3Pret = false;
+/** Les devises proposees a la mise en vie. ETH (hook V2) ; USDC, cbBTC, actions (hook V3) quand le V3 est deploye. */
+function peindreDevisesLancement() {
+  const d = $('#plDevise');
+  if (!d) return;
+  const avant = d.value;
+  const autres = v3Pret ? pairesProposees(CHAINE).filter((p) => p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION') : [];
+  d.innerHTML = '<option value="ETH">ETH</option>' + autres.map((p) => '<option value="' + enTexte(p.adr) + '" data-sym="'
+    + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + p.nom) + '</option>').join('');
+  if ([...d.options].some((o) => o.value === avant)) d.value = avant;
+}
 /* le V3 est-il sur la chaine ? lu une fois au demarrage, puis toutes les 5 min : les paires s ouvrent seules */
 async function lireV3() {
-  try { const e = await hookV3Deploye({ rpc }); const avant = v3Pret; v3Pret = e === 'DEPLOYE'; if (v3Pret !== avant) peindrePaires(); } catch (_) {}
+  try { const e = await hookV3Deploye({ rpc }); const avant = v3Pret; v3Pret = e === 'DEPLOYE'; if (v3Pret !== avant) { peindrePaires(); peindreDevisesLancement(); } } catch (_) {}
 }
 setTimeout(() => { void lireV3(); }, 3000);
 setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
@@ -7042,11 +7063,12 @@ function peindrePaires() {
   const liste = pairesProposees(CHAINE);
   /* ⛔ UNE PAIRE N EST PROPOSEE QUE SI LA MISE EN VIE SAIT L OUVRIR. ETH et TBLOCK : hook V2. Le reste (USDC, cbBTC,
    *    actions, autre B20) attend le hook V3 : « soon » tant que son code n est pas sur la chaine (v3Pret, lu au demarrage). */
-  const ouverte = (p) => p.type === 'NATIF' || p.type === 'TBLOCK' || v3Pret;
-  s.innerHTML = liste.map((p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
+  /* Phil (2026-09-19) : « ne propose plus TBLOCK — aucune liquidite injectee, on fera plus tard ». ETH, puis la liste du V3. */
+  const ouverte = (p) => p.type === 'NATIF' || (v3Pret && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION'));
+  s.innerHTML = liste.filter((p) => p.type !== 'TBLOCK').map((p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
       + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>').join('')
-    + '<option value="' + AUTRE_PAIRE + '"' + (v3Pret ? '' : ' disabled') + '>Another B20 — paste native B20 address (second tokenized pair)'
-    + (v3Pret ? '' : ' — soon') + '</option>';
+    /* ⛔ UN AUTRE B20 QUELCONQUE : le hook V3 n admet qu une liste FIXE — la paire serait refusee par la chaine. « soon ». */
+    + '<option value="' + AUTRE_PAIRE + '" disabled>Another B20 — paste native B20 address — soon</option>';
   /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ».
    *    Mesure du probleme : un block paire a TBLOCK ne s achete qu avec du TBLOCK ; un nouvel utilisateur
    *    n en a pas, donc son propre block lui etait inachetable des la naissance. ETH d abord, partout.
@@ -7843,7 +7865,13 @@ async function creerBlock() {
             lancementLien = String(adresseCreee).toLowerCase();
             void ouvrirProfil(adresseCreee, v.sym).then(() => {
               try {
-                const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+                const d = $('#plDevise');
+                if (d) {
+                  const voulue = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? paireChoisie.adr : 'ETH';
+                  d.value = [...d.options].some((o) => o.value.toLowerCase() === String(voulue).toLowerCase())
+                    ? [...d.options].find((o) => o.value.toLowerCase() === String(voulue).toLowerCase()).value : 'ETH';
+                  d.dispatchEvent(new Event('change'));
+                }
                 const part = $('#plPart'); if (part) part.value = '99.9';
                 ouvrirLancement();
                 /* ⛔ UN BOUTON : on enchaine « Give birth » sans attendre de clic ; la suite s enchaine seule */
@@ -8392,7 +8420,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0092',
+    build: '20260919-0093',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

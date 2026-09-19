@@ -51,9 +51,9 @@ export async function completerInscriptionHook({ rpc, plan, compte }) {
  * ⛔ Pour TOUT compte, EOA comme smart wallet : sans elle, la chaine refuse d ouvrir le marche.
  * ⛔ L etat vient de la chaine (`payee`, `inscrit`) : deja payee -> pas de second paiement.
  */
-export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei }) {
+export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2 }) {
   if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) return plan;
-  const out = { ...plan, hook: HOOK_V2, frais: FRAIS_V2, v2: true };
+  const out = { ...plan, hook, frais: FRAIS_V2, v2: true };
   if (plan.poolExiste) return out;
   if (typeof fraisWei !== 'bigint' || fraisWei <= 0n) {
     return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the price of bringing it to life could not be worked out' };
@@ -61,16 +61,18 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei })
   const id = poolId(plan.cle).slice(2);
   let payee, inscrit, prix;
   try {
-    payee = BigInt(await rpc('eth_call', [{ to: HOOK_V2, data: '0x' + selecteur('payee(bytes32)') + id }, 'latest'])) !== 0n;
-    inscrit = '0x' + String(await rpc('eth_call', [{ to: HOOK_V2, data: '0x' + selecteur('inscrit(bytes32)') + id }, 'latest'])).slice(-40);
-    prix = BigInt(await rpc('eth_call', [{ to: HOOK_V2, data: '0x' + selecteur('prixInscrit(bytes32)') + id }, 'latest']));
+    /* ⛔ le hook DONNE (V2 pour ETH, V3 pour une devise de sa liste) — mesure fork 2026-09-19 : ces lectures et l etape
+     *    visaient encore HOOK_V2 en dur, et l inscription d une paire AAPLc est partie au V2, qui l a refusee. */
+    payee = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('payee(bytes32)') + id }, 'latest'])) !== 0n;
+    inscrit = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('inscrit(bytes32)') + id }, 'latest'])).slice(-40);
+    prix = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('prixInscrit(bytes32)') + id }, 'latest']));
   } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the registration could not be read' }; }
   const etapes = [...plan.etapes];
   const aJour = payee && inscrit.toLowerCase() === String(compte).toLowerCase() && prix === BigInt(plan.sqrtVise);
   if (!aJour) {
     etapes.push({
       nom: payee ? 'Confirm the starting price' : 'Bring it to life — ≈ $1, paid on chain',
-      to: HOOK_V2, data: encodeInscrire(plan.cle, plan.sqrtVise),
+      to: hook, data: encodeInscrire(plan.cle, plan.sqrtVise),
       value: payee ? '0x0' : '0x' + fraisWei.toString(16),
       payant: !payee,
     });

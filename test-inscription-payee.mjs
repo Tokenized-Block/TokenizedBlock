@@ -2,7 +2,7 @@
 // RPC simule : l etat payee / inscrit / prixInscrit du hook est fourni par le test, rien ne part sur un reseau.
 import assert from 'node:assert/strict';
 import { completerInscriptionPayee } from './lancer-pool-v2.js';
-import { HOOK_V2 } from './tokenomics.js';
+import { HOOK_V2, HOOK_V3 } from './tokenomics.js';
 import { selecteur } from './pool.js';
 
 const COMPTE = '0x' + '11'.repeat(20);
@@ -54,6 +54,16 @@ let n = 0;
 {
   const r = await completerInscriptionPayee({ rpc: async () => { throw new Error('noeud occupe'); }, plan, compte: COMPTE, fraisWei: FRAIS });
   assert.equal(r.etat, 'NON_MESURE'); assert.equal(r.etapes.length, 0);
+  n++;
+}
+// 6. hook V3 donne : TOUTES les lectures et l etape visent le V3, jamais le V2 (bug mesure sur fork le 2026-09-19)
+{
+  const vus = new Set();
+  const rpcV3 = async (m, p) => { vus.add(String(p[0].to).toLowerCase()); return rpcAvec({ payee: false, inscrit: 0, prix: 0 })(m, [{ ...p[0], to: HOOK_V2 }]); };
+  const r = await completerInscriptionPayee({ rpc: rpcV3, plan, compte: COMPTE, fraisWei: FRAIS, hook: HOOK_V3 });
+  assert.deepEqual([...vus], [HOOK_V3.toLowerCase()], 'lectures sur le V3 seulement');
+  assert.equal(r.etapes[0].to, HOOK_V3, 'etape vers le V3');
+  assert.equal(r.hook, HOOK_V3);
   n++;
 }
 console.log('test-inscription-payee:', n, 'cas, exit 0');
