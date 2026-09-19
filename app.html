@@ -389,12 +389,13 @@ body{background:var(--fond);
 body:not(.surMap) .mapCentre{visibility:hidden}
 /* la pastille de l entonnoir : sur la map seulement, au-dessus de la barre du bas */
 /* Phil (2026-09-19) : en bas, la pastille cachait le nom des gros blocks — en haut au centre sur ordinateur */
-.mapCta{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--mapHaut,64px) + 12px);z-index:60;
-  padding:12px 20px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:15px;color:#fff;
-  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 8px 26px rgb(var(--boutonRgb) / .45)}
+/* la pastille de l entonnoir, DANS la barre du haut (Phil, 2026-09-19) */
+.mapCta{padding:8px 16px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13.5px;color:#fff;white-space:nowrap;
+  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 4px 16px rgb(var(--boutonRgb) / .45)}
 .mapCta:hover{filter:brightness(1.1)}
 body:not(.surMap) .mapCta{display:none}
-@media (max-width:1200px){.mapCta{top:auto;bottom:calc(var(--mapBas,72px) + 10px);padding:9px 14px;font-size:13px}}
+@media (max-width:760px){.mapCta{font-size:11.5px;padding:6px 10px}}
+
 .partage{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .partage a,.partage button{flex:1 1 120px;text-align:center;padding:10px 12px;border-radius:12px;font-weight:700;font-size:14px;
   border:1px solid rgb(var(--accentRgb) / .35);background:rgb(var(--accentRgb) / .12);color:var(--texte);text-decoration:none;cursor:pointer;font-family:inherit}
@@ -723,7 +724,6 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="marque">Tokenized<span>Block</span></div>
     <!-- ⛔ PHIL (2026-09-19) : « place le texte en haut ». Le tirage du centre de l univers vit dans la barre du haut, entre
          la marque et les boutons — visible sur la Map seulement (ailleurs, il parlerait d un univers qu on ne voit pas). -->
-    <button type="button" id="mapCta" class="mapCta">✦ Create your own block — ≈ $1</button>
     <button type="button" id="mapCentre" class="mapCentre" title="Draw a new centre of the universe — every block has the same chance"></button>
     <div class="droite">
       <!-- ⛔ LE RESEAU EST UN BOUTON, PAS UNE CONSTANTE. Fige sur Sepolia, la map affichait
@@ -734,6 +734,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ « LEARN » EST DANS LA TETE, PAS DANS LA BARRE DU BAS. Six onglets tiennent deja mal sur
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
+      <button type="button" id="mapCta" class="mapCta">✦ Create your own block — ≈ $1</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
       <button class="puce" id="pLearn" style="cursor:pointer">? What am I looking at</button>
@@ -882,7 +883,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte creaChoix" role="tablist" aria-label="What do you want to create">
       <button type="button" class="creaMode on" role="tab" aria-selected="true" data-cmode="block">
         <span class="creaModeIc">🧱</span><b>A block</b>
-        <span>Its own face, a living brain, a place on the map. Create free, bring it to life for ≈ $1.</span>
+        <span>Its own face, a living brain, a place on the map — born and brought to life for ≈ $1.</span>
       </button>
       <button type="button" class="creaMode" role="tab" aria-selected="false" data-cmode="token">
         <span class="creaModeIc">🚀</span><b>A plain token</b>
@@ -940,9 +941,9 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte">
       <p class="titre"><span class="creaEtape">3</span> Bring it to life</p>
       <ol class="creaPas">
-        <li><b>Create</b> <span>free · one signature</span></li>
-        <li><b>Bring it to life</b> <span>≈ $1 in ETH · its market opens</span></li>
-        <li><b>It lives</b> <span>on the map, with its brain · 0.5%</span></li>
+        <li><b>≈ $1 in ETH</b> <span>paid once, first</span></li>
+        <li><b>Create</b> <span>its face and brain are engraved</span></li>
+        <li><b>Bring it to life</b> <span>its market opens · it lives on the map</span></li>
       </ol>
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
@@ -1307,7 +1308,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0087" hidden>Build <code>20260919-0087</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0088" hidden>Build <code>20260919-0088</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4976,7 +4977,7 @@ function peindreCreateFeeHonesty() {
   return;
   if (CHAINE === 8453) {
     if (!creations.length) {
-      el.innerHTML = '<b>Create is free</b>. Fee = <b>Launch</b> (life + fee hook). Free create ≠ fee yet.';
+      el.innerHTML = 'Every block made here is born and brought to life in one go.';
     } else {
       /* tip 0021: count creates that really reached a hooked market — the rest earned nothing. */
       const crochetes = creations.filter((e) => { const p = poolDecouvertPour(e.jeton); return p && p.isTbFeeHook; }).length;
@@ -6266,7 +6267,8 @@ document.addEventListener('click', (ev) => {
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
-  const usdLaunch = fraisLancementUsd(CHAINE);
+  const dejaPaye = !planCourant.v2 && !!prepayePour(adr) && String((prepayePour(adr) || {}).compte || '') === String(compte || '').toLowerCase();
+  const usdLaunch = dejaPaye ? 0 : fraisLancementUsd(CHAINE);
   let fraisL = null;
   if (usdLaunch > 0) {
     fraisL = await assurerFraisLancementWei(true);
@@ -6287,8 +6289,8 @@ async function lancerMarcheBlock(adr) {
   e.className = 'note';
   let r;
   try {
-    if (planCourant.v2) {
-      e.textContent = 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid on chain).';
+    if (planCourant.v2 || dejaPaye) {
+      e.textContent = 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid).';
     } else if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
       e.textContent = 'Opening your wallet — ' + formaterEthCourt(fraisL) + ' ETH first, then bring it to life.';
       const feeVal = '0x' + BigInt(fraisL).toString(16);
@@ -7325,7 +7327,7 @@ function majFraisEtRecap() {
       ? ', after ' + formaterEthCourt(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
-      ? ' — Create is free; bringing it to life costs ≈ $1'
+      ? ' — ≈ $1 brings it to life, paid once'
       : ' — Create free (Practice)');
   /* tip 2354: when ko, just the ko — never paste fee story */
   /* ⛔ PAS D ERREUR ROUGE AVANT LE PREMIER GESTE (capture de Phil, 2026-09-18 : « A block needs a name. » deux fois,
@@ -7371,7 +7373,7 @@ function majFraisEtRecap() {
     }).join('') + '<li>Buy or sell here: 0.5%. Once alive, every trade pays its creator.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base — Create is free. Bringing it to life costs ≈ $1 in ETH. Cannot be undone.'
+    ? '⚠️ Base — ≈ $1 in ETH brings your block to life, paid once, first. Cannot be undone.'
     : 'Practice — everything is free.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -7615,6 +7617,19 @@ document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('cli
 
 /** L adresse que la factory rendra pour ce sel et ce compte — calculee par verifierAdresseCreation, jamais devinee. */
 let adressePrevue = null;
+/* ── le paiement de mise en vie fait AVANT la creation (localStorage : confort du parcours ; la verite reste a6cf) ── */
+let prepayeCourant = null;
+const CLE_PREPAYE = 'tb.prepaye.';
+function prepayeEnAttente(c) {
+  try { const v = JSON.parse(localStorage.getItem(CLE_PREPAYE + 'attente.' + String(c || '').toLowerCase()) || 'null');
+    return v && v.hash && Date.now() - (v.t || 0) < 7 * 86400000 ? v : null; } catch (_) { return null; }
+}
+function noterPrepayeEnAttente(c, v) { try { localStorage.setItem(CLE_PREPAYE + 'attente.' + String(c).toLowerCase(), JSON.stringify(v)); } catch (_) {} }
+function oublierPrepayeEnAttente(c) { try { localStorage.removeItem(CLE_PREPAYE + 'attente.' + String(c).toLowerCase()); } catch (_) {} }
+function noterPrepayeBlock(adr, v) { try { localStorage.setItem(CLE_PREPAYE + String(adr).toLowerCase(), JSON.stringify(v)); } catch (_) {} }
+function prepayePour(adr) {
+  try { const v = JSON.parse(localStorage.getItem(CLE_PREPAYE + String(adr || '').toLowerCase()) || 'null'); return v && v.hash ? v : null; } catch (_) { return null; }
+}
 async function creerBlock() {
   etape('create_clic');
   if (creationEnCours) return;
@@ -7713,9 +7728,55 @@ async function creerBlock() {
       e.className = 'note';
       e.textContent = 'One signature — Create + ' + formaterEthCourt(fraisWei)
         + ' ETH (≈ $' + usd + '). Paid only if creation succeeds.';
+    } else if (Number(CHAINE) === 8453 && (await hookV2Deploye({ rpc })) !== 'DEPLOYE') {
+      /* ⚠️ Quand le hook V2 est deploye, c est SON inscription qui encaisse la mise en vie (le contrat l exige) :
+       *    payer ici en plus ferait payer deux fois. Tant qu il ne l est pas, on paie ici, avant de creer. */
+      /* ⛔⛔ AUCUN BLOCK SANS SA MISE EN VIE PAYEE : sur Base, les ≈ 1 $ partent AVANT la creation, verifies sur la chaine.
+       *    Paiement refuse ou non verifie = rien n est cree. Un paiement verifie dont la creation echoue ensuite reste
+       *    EN ATTENTE pour ce compte : le prochain essai ne le redemande pas. La mise en vie ne le redemande pas non plus.
+       * ⚠️ BORNE : la factory B20 reste publique — on ne peut interdire qu une creation gratuite PAR CETTE APP. */
+      const attente = prepayeEnAttente(compte);
+      if (attente) {
+        e.className = 'note';
+        e.textContent = 'Already paid (≈ $1) — now the creation. Check it in your wallet.';
+        prepayeCourant = attente;
+      } else {
+        const fraisP = await assurerFraisLancementWei(true);
+        if (!fraisLancementPret(fraisP)) {
+          e.className = 'note wKo';
+          e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.';
+          return;
+        }
+        let balAvant = null;
+        try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
+        if (balAvant === null) {
+          e.className = 'note wKo';
+          e.textContent = 'Could not check the chain right now, so nothing was started. Try again in a moment.';
+          return;
+        }
+        e.className = 'note';
+        e.textContent = 'Step 1 — ' + formaterEthCourt(fraisP) + ' ETH (≈ $1) brings your block to life. Check it in your wallet.';
+        const rf = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+          to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisP).toString(16) });
+        if (rf.etat !== 'CONFIRME') {
+          e.className = 'note wKo';
+          e.textContent = 'The ≈ $1 was not confirmed, so nothing was created. ' + (rf.pourquoi || '');
+          return;
+        }
+        const verifP = await verifierLifeFeeAuWallet({ hash: rf.hash, weiMin: fraisP, balAvant });
+        if (!verifP.ok) {
+          e.className = 'note wKo';
+          e.textContent = verifP.pourquoi;
+          return;
+        }
+        prepayeCourant = { hash: rf.hash, wei: String(fraisP), compte: String(compte).toLowerCase(), t: Date.now() };
+        noterPrepayeEnAttente(compte, prepayeCourant);
+        e.className = 'note';
+        e.textContent = 'Paid. Step 2 — create it. Check it in your wallet.';
+      }
     } else {
       e.className = 'note';
-      e.textContent = 'Step 1 — free create. Check it in your wallet.';
+      e.textContent = 'Practice — create it. Check it in your wallet.';
     }
     const calldata = calldataCreation(v);
     const to = cibleCreation();
@@ -7731,6 +7792,8 @@ async function creerBlock() {
       to, data: calldata, value });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
+      /* le paiement fait avant la creation appartient desormais a CE block : la mise en vie ne le redemandera pas */
+      if (prepayeCourant) { noterPrepayeBlock(adresseCreee, prepayeCourant); oublierPrepayeEnAttente(compte); prepayeCourant = null; }
       noterFace(adresseCreee, faceGravee);
       if (Number(CHAINE) === 8453) aLancerAjouter(adresseCreee, v.sym);
       const roleCle = $('#cRole') && METIERS.some((x) => x.cle === $('#cRole').value) ? $('#cRole').value : null;
@@ -8303,7 +8366,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0087',
+    build: '20260919-0088',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8718,7 +8781,7 @@ const ETAPES = [
   { t: 'Blocks — the list', ic: 6,
     d: 'All blocks sorted by how big their market is. Tap one to open it, see its brain, and buy or sell.' },
   { t: 'Create — make your own', ic: 0,
-    d: 'Pick a name and a symbol; the face is ready. Creating is free. Bringing it to life opens its market and costs about $1, once.' },
+    d: 'Pick a name and a symbol; the face is ready. About $1, once: it is born, and its market opens.' },
   { t: 'Brain AI — what a block feels', ic: 9,
     d: 'Every block has a small brain that reacts to what happens to it: a buy, a sale, a new holder. You watch it light up. It never trades for you.' },
   { t: 'Wallet — your money stays yours', ic: 2,
