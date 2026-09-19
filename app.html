@@ -1352,7 +1352,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0099" hidden>Build <code>20260919-0099</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0100" hidden>Build <code>20260919-0100</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5329,9 +5329,12 @@ function peindreRelais() {
   const nous = new Set(entrees.map((x) => String((x.e && (x.e.jeton || x.e.a)) || (x.p && x.p.de) || '').toLowerCase()).filter((a) => a && estANous(a)));
   const r = resumeRelais(entrees, { nous });
   const nomDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === adr); return (h && h.sym) || court(adr); };
+  /* ⛔ 2026-09-19 : le Feed dit « born on another launchpad », le Relay disait « Born on chain » pour les MEMES blocks.
+   *    Meme lecture (hook de la pool decouverte) aux deux endroits. */
+  const ailleurs = (adr) => { const p = poolDecouvertPour(adr); return !!(p && !p.isTbFeeHook); };
   $('#sfRelais').innerHTML = r.lignes.map((l) => '<li class="filL"><div class="filArt">' + dessin(l.adr, l.sym || nomDe(l.adr)) + '</div>'
     + '<div style="min-width:0;flex:1"><p class="filT">' + (l.sens === 'KILL' ? '🔴' : EMOJI_PREUVE[l.preuve] || '·') + ' ' + (l.nous ? '🟦 ' : '') + '<b>'
-    + enTexte(String(l.sym || nomDe(l.adr)).slice(0, 14)) + '</b> · ' + enTexte(l.texte) + '</p>'
+    + enTexte(String(l.sym || nomDe(l.adr)).slice(0, 14)) + '</b> · ' + enTexte(l.texte) + (ailleurs(l.adr) ? ' · on another launchpad' : '') + '</p>'
     + '<p class="filS">' + enTexte(l.parce_que) + '</p><div class="stadeLigne" style="margin-top:4px">'
     + r.outils.filter((o) => o.adr === l.adr).map((o) => '<button type="button" class="puce" data-outil="' + o.quoi + '" data-adr="' + enTexte(o.adr)
       + '" title="' + enTexte(o.pourquoi) + '">' + enTexte(LIBELLE_OUTIL[o.quoi] || o.quoi) + '</button>').join('')
@@ -8580,7 +8583,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0099',
+    build: '20260919-0100',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
