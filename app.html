@@ -1367,7 +1367,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0111" hidden>Build <code>20260919-0111</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0112" hidden>Build <code>20260919-0112</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1775,7 +1775,8 @@ import { faceDuBlock, validerFace } from './face.js';
  * a index.html par un test) ; il ne signe rien. Chaque signature passe par `envoi.js`, et la chaine
  * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
-import { planLancement, simulerLancement } from './lancer-pool.js';
+import { planLancement, simulerLancement, PERMIT2 } from './lancer-pool.js';
+import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu } from './groupe-wallet.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -7987,6 +7988,83 @@ function noterPrepayeBlock(adr, v) { try { localStorage.setItem(CLE_PREPAYE + St
 function prepayePour(adr) {
   try { const v = JSON.parse(localStorage.getItem(CLE_PREPAYE + String(adr || '').toLowerCase()) || 'null'); return v && v.hash ? v : null; } catch (_) { return null; }
 }
+/* ══ CREER ET METTRE EN VIE EN UNE SIGNATURE ═══════════════════════════════════════════════════════════════════════
+ * ⛔ MESURE (fork + interface, build 0109) : 5 signatures d affilee (creation, approve, Permit2, inscription payee, marche),
+ *    ~30 s — et 0 inscription reelle sur nos hooks en 3,5 h. Un wallet EIP-5792 execute la liste en UNE signature et, avec
+ *    atomicRequired, TOUT OU RIEN : jamais un block cree sans marche, jamais ≈ $1 paye sans block.
+ * Le plan de lancement est calcule sur le « block prevu » (rpcAvecBlockPrevu) : l adresse est deja predite par la factory,
+ *    le supply est scelle et frappe au createur. Si la chaine ne donne pas exactement cet etat, un appel echoue et rien
+ *    n est applique.
+ * Rend 'SANS' (garder le parcours etape par etape), 'FAIT' ou 'STOP' (message deja affiche).
+ * BORNES : paire ETH seulement (les devises gardent le parcours classique) ; un lot rate bascule sur le parcours classique. */
+let sansGroupe = false;
+async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, e }) {
+  const eth = window.ethereum;
+  if (sansGroupe || !eth || Number(CHAINE) !== 8453 || utiliseCreateRouter()) return 'SANS';
+  if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
+  if (paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr)) return 'SANS';
+  if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
+  if ((await hookV2Deploye({ rpc })) !== 'DEPLOYE') return 'SANS';
+  e.className = 'note';
+  e.textContent = 'Preparing everything for one signature…';
+  const rep = repartitionFrappe(SUPPLY_FIXE, compte);
+  const k = rep.destinataires.findIndex((d) => String(d).toLowerCase() === String(compte).toLowerCase());
+  const solde = k >= 0 ? BigInt(rep.montants[k]) : 0n;
+  const rpcPrevu = rpcAvecBlockPrevu(rpc, { jeton: adresse, compte, supply: SUPPLY_FIXE, dec: DECIMALES_FIXES, solde, permit2: PERMIT2 });
+  const valo = Number(String(($('#plValo') && $('#plValo').value) || '10').trim().replace(',', '.'));
+  let plan;
+  try {
+    plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo > 0 ? valo : 10, partPourMille: 999, hooks: HOOK_V2 });
+    const w = await assurerFraisLancementWei(true);
+    if (!fraisLancementPret(w)) { e.className = 'note wKo'; e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.'; return 'STOP'; }
+    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook: HOOK_V2 });
+    plan.fraisW = BigInt(w);
+  } catch (_) { return 'SANS'; }
+  /* un plan incomplet, deja marche, ou a confirmer a la main : le parcours classique sait l expliquer */
+  if (!plan || !plan.tx || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS') || plan.poolExiste
+    || (plan.classement && plan.classement.etat === 'TROP_BON_MARCHE')) return 'SANS';
+  if (!(plan.etapes || []).some((x) => x.payant)) return 'SANS';
+  const calls = [{ to, data: calldata, value: '0x0' },
+    ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
+    { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' }];
+  let balAvant = null;
+  try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
+  e.className = 'note';
+  e.textContent = 'One signature: it is created, ≈ $1 (' + formaterEthCourt(plan.fraisW) + ' ETH) brings it to life, and its market opens — all or nothing. Check it in your wallet.';
+  majProgressionVie('One signature — create, bring to life and open its market, all at once.');
+  const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
+  if (r.etat === 'REFUSE') { e.className = 'note wKo'; e.textContent = 'You declined in your wallet — nothing was sent, nothing moved.'; return 'STOP'; }
+  if (r.etat === 'EN_ATTENTE' || r.etat === 'PARTIEL') { e.className = 'note wKo'; e.textContent = r.pourquoi; return 'STOP'; }
+  if (r.etat !== 'CONFIRME') {
+    sansGroupe = true;
+    e.className = 'note wKo';
+    e.textContent = 'Nothing was applied (all or nothing): ' + (r.pourquoi || r.etat) + '. Tap again — it will go step by step.';
+    return 'STOP';
+  }
+  /* ⛔ ON RELIT, ON NE CROIT PAS LE WALLET : le block existe, et le wallet de frais a touche ses ≈ $1 */
+  let code = '0x';
+  try { code = String(await rpc('eth_getCode', [adresse, 'latest']) || '0x'); } catch (_) { code = '0x'; }
+  const verif = await verifierLifeFeeAuWallet({ hash: r.hash, weiMin: plan.fraisW, balAvant });
+  etape('cree');
+  noterFace(adresse, faceGravee);
+  const roleCle = $('#cRole') && METIERS.some((x) => x.cle === $('#cRole').value) ? $('#cRole').value : null;
+  if (roleCle) { try { localStorage.setItem(CLE_ROLE + String(adresse).toLowerCase(), roleCle); } catch (_) {} }
+  void listerMesBlocks();
+  const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+  if (code.length <= 2 || !verif.ok) {
+    e.className = 'note wKo';
+    e.innerHTML = 'Your wallet says it went through, but the chain does not show it yet. Do not pay again — check the explorer.' + lien;
+    return 'STOP';
+  }
+  etape('vivant');
+  e.className = 'note wOk';
+  e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is alive. Its market is open — one signature.' + lien + blocPartage(adresse, v.sym);
+  majProgressionVie('Done — it is alive.');
+  lancementLien = String(adresse).toLowerCase();
+  void ouvrirProfil(adresse, v.sym).then(() => { setTimeout(() => montrerPremierAcheteur(adresse), 1500); });
+  return 'FAIT';
+}
+
 async function creerBlock() {
   etape('create_clic');
   if (creationEnCours) return;
@@ -8145,6 +8223,12 @@ async function creerBlock() {
       adresseCreee = q.adresse || null;
     } catch (errPeek) { adresseCreee = null; }
     const faceGravee = { ...apparenceChoisie };
+    /* ⛔ UNE SIGNATURE (Phil 2026-09-19) : si le wallet sait grouper (EIP-5792, atomique), creation + mise en vie partent
+     *    ensemble ; sinon, le parcours etape par etape ci-dessous, inchange. */
+    if (adresseCreee) {
+      const g = await creerEtVivreUneSignature({ v, calldata, to, adresse: adresseCreee, faceGravee, e });
+      if (g !== 'SANS') return;
+    }
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to, data: calldata, value });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
@@ -8729,7 +8813,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0111',
+    build: '20260919-0112',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
