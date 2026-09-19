@@ -5,6 +5,24 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>TokenizedBlock — the living map</title>
 <link rel="icon" href="icon.png" type="image/png">
+<!-- ⛔ APERCU DES LIENS (2026-09-19) : mesure — / sert CETTE page et elle n avait aucune balise og/twitter/fc : un lien
+     partage sur X ou Farcaster s affichait nu. Le bloc entre og:debut et og:fin est REMPLACE par le serveur pour
+     /?block=0x… (symbole + face gravee du block) ; ne pas renommer les marqueurs. -->
+<!--og:debut-->
+<meta name="description" content="Make a living block on Base: ≈ $1, once — born with its own face and brain, and its market opens.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TokenizedBlock">
+<meta property="og:title" content="TokenizedBlock — make a living block on Base">
+<meta property="og:description" content="≈ $1, once: your block is born with its own face and brain, and its market opens.">
+<meta property="og:url" content="https://tokenizedblock.space/">
+<meta property="og:image" content="https://tokenizedblock.space/embed.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TokenizedBlock — make a living block on Base">
+<meta name="twitter:description" content="≈ $1, once: your block is born with its own face and brain, and its market opens.">
+<meta name="twitter:image" content="https://tokenizedblock.space/embed.png">
+<meta name="fc:miniapp" content="{&quot;version&quot;:&quot;1&quot;,&quot;imageUrl&quot;:&quot;https://tokenizedblock.space/embed.png&quot;,&quot;button&quot;:{&quot;title&quot;:&quot;Make a block · ≈ $1&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;launch_miniapp&quot;,&quot;url&quot;:&quot;https://tokenizedblock.space/&quot;,&quot;name&quot;:&quot;TokenizedBlock&quot;,&quot;splashImageUrl&quot;:&quot;https://tokenizedblock.space/splash.png&quot;,&quot;splashBackgroundColor&quot;:&quot;#000000&quot;}}}">
+<meta name="fc:frame" content="{&quot;version&quot;:&quot;1&quot;,&quot;imageUrl&quot;:&quot;https://tokenizedblock.space/embed.png&quot;,&quot;button&quot;:{&quot;title&quot;:&quot;Make a block · ≈ $1&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;launch_miniapp&quot;,&quot;url&quot;:&quot;https://tokenizedblock.space/&quot;,&quot;name&quot;:&quot;TokenizedBlock&quot;,&quot;splashImageUrl&quot;:&quot;https://tokenizedblock.space/splash.png&quot;,&quot;splashBackgroundColor&quot;:&quot;#000000&quot;}}}">
+<!--og:fin-->
 <!-- ══════════════════════════════════════════════════════════════════════════════════════════════
      COQUE NEUVE, MODULES INCHANGES. `index.html` fait 600 Ko et se lit comme un panneau
      d administration ; les modules qu il importe portent 313 assertions et 16 regles. On refait
@@ -1119,22 +1137,24 @@ details[open] > summary::before{transform:rotate(90deg)}
       <pre class="mono" id="bRegles" style="white-space:pre-wrap;overflow-x:auto"></pre>
       <p class="note" id="bReglesNote"></p>
       </details>
-      <details class="bDetail" style="margin-top:8px" open><summary class="note" style="cursor:pointer">Its memory, written on chain — record, resume, rebuild</summary>
+      <!-- ⛔ PHIL (2026-09-19, capture) : « 3 fois le meme bouton ». Il y avait trois gros boutons pleins pour UNE ecriture
+           (Record this beat / Record 4 fragments / Write this beat — le dernier cliquait simplement le premier). Une seule
+           action principale ; lire et la copie exacte sont secondaires, la copie exacte repliee. -->
+      <details class="bDetail" style="margin-top:8px" open><summary class="note" style="cursor:pointer">Its memory, written on chain</summary>
       <div class="rang" style="margin-top:10px">
-        <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
+        <button class="bouton" id="bGraver" type="button">✍ Write this beat into the block</button>
+        <button class="bouton sec" id="bReprendre" type="button">Read its memory back</button>
       </div>
-      <p class="note" id="bGraverEtat">One transfer of 0 to yourself: writes beat + fingerprint + a <b>quantized snapshot</b> of the 128 neurons. Resume is close to exact (±0.27 per potential) — not bit-perfect. For the <b>exact</b> brain at this beat, use the 4-fragment path below. Your wallet signs and pays the gas; nothing moves.</p>
-      <div class="rang" style="margin-top:6px">
-        <button class="bouton sec" id="bReprendre" type="button">Resume its memory from the chain</button>
-      </div>
+      <p class="note" id="bGraverEtat">One signature: a transfer of 0 of this block to yourself, whose memo carries this beat, its fingerprint and its 128 neurons (rounded, ±0.27). Nothing moves; you pay the gas.</p>
       <p class="note" id="bReprendreEtat"></p>
-      <p class="titre" style="margin-top:12px;font-size:1em">Its whole brain, in fragments</p>
-      <p class="note">Exact memory = <b>4×32-neuron</b> shards (256-byte memo limit) — not a smarter brain, not an FDV twin.</p>
+      <details class="bDetail" style="margin-top:6px"><summary class="note" style="cursor:pointer">Exact copy, in 4 fragments</summary>
+      <p class="note">4 signatures of 32 neurons each (a memo holds 256 bytes) — the brain exactly as it is now, not a smarter one.</p>
       <div class="rang" style="margin-top:6px">
-        <button class="bouton" id="bFragmenter" type="button">Record its full brain in 4 fragments</button>
-        <button class="bouton sec" id="bReconstruire" type="button">Rebuild its brain from fragments</button>
+        <button class="bouton sec" id="bFragmenter" type="button">Write the exact copy (4 fragments)</button>
+        <button class="bouton sec" id="bReconstruire" type="button">Rebuild from fragments</button>
       </div>
       <p class="note" id="bFragmenterEtat"></p>
+      </details>
       </details>
     </div>
 
@@ -1144,12 +1164,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            existait (un transfert de 0 du block a soi-meme, avec la memoire en memo) mais cachee dans un menu replie.
            Le cablage, lui, n est PAS stocke : il se recalcule depuis l adresse — les deux phrases disent chacune le vrai. -->
       <p class="sous">Eight links per neuron, drawn from its address — the same wiring for everyone. What it lives, it can
-        <b>write into itself</b>: one signature, and this beat stays stored on chain for good.</p>
-      <div class="rang" style="margin:10px 0 4px">
-        <button class="bouton" id="bEcrireBlock" type="button">✍ Write this beat into the block</button>
-      </div>
-      <p class="note" id="bEcrireEtat">Your wallet signs a transfer of 0 of this block to yourself; the memo carries its beat,
-        fingerprint and neurons. Nothing moves, only gas is paid. Read it back any time with “Resume its memory”.</p>
+        <b>write into itself</b> with “Write this beat into the block” above: one signature, stored on chain for good.</p>
       <!-- ⛔ CARRE ET BORNE EN HAUTEUR : un cercle dans une toile 640x300 debordait sur un grand
            ecran, et on n en voyait que la moitie. -->
       <canvas id="bReseau" width="520" height="520" class="toile toileRonde"></canvas>
@@ -1337,7 +1352,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0098" hidden>Build <code>20260919-0098</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0099" hidden>Build <code>20260919-0099</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8565,7 +8580,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0098',
+    build: '20260919-0099',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8746,7 +8761,7 @@ $('#bFragmenter').addEventListener('click', async () => {
   if (g.fait >= n) {
     e.className = 'note wOk';
     e.innerHTML = 'All ' + n + ' fragments of beat ' + g.tick.toLocaleString('en-US') + ' recorded — anyone can rebuild this exact brain.' + g.liens.join(' ');
-    $('#bFragmenter').textContent = 'Record its full brain in 4 fragments';
+    $('#bFragmenter').textContent = 'Write the exact copy (4 fragments)';
     fragmentsAGraver = null;
   } else {
     e.className = 'note wOk';

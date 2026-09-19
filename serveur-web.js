@@ -373,6 +373,51 @@ try {
 }
 console.log('[xmtp] ' + xmtpServis + ' fichier(s) servis, ' + xmtpRefuses + ' refuse(s)');
 
+/* ══ APERCU D UN LIEN DE BLOCK (2026-09-19) ═══════════════════════════════════════════════════════════════════════
+ * Les createurs arrivent par les liens partages (X, Farcaster). /?block=0x… rend la meme page, mais le bloc
+ * <!--og:debut-->…<!--og:fin--> dit le SYMBOLE du block et montre SA face gravee (/face/0x….png) — sinon l image
+ * generique : jamais une face inventee. Lecture seule, bornee a 2,5 s (un robot d apercu n attend pas), cachee. */
+const apercusBlocs = new Map();
+const htmlAttr = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+async function apercuBlock(adr) {
+  const a = adr.toLowerCase();
+  if (apercusBlocs.has(a)) return apercusBlocs.get(a);
+  const borne = (p) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(null), 2500))]);
+  const [f, symHex] = await Promise.all([
+    borne(resoudreFace(a).catch(() => null)),
+    borne(rpcServeur('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest']).catch(() => null)),
+  ]);
+  let sym = '';
+  try { const b = String(symHex || '').slice(2); const n = parseInt(b.slice(64, 128), 16); sym = Buffer.from(b.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12); } catch (_) { sym = ''; }
+  const U = 'https://tokenizedblock.space';
+  const aFace = !!(f && f.etat === 'LU' && f.face);
+  const img = aFace ? U + '/face/' + a + '.png' : U + '/embed.png';
+  const nom = sym ? '$' + sym : 'This block';
+  const titre = nom + ' is alive on TokenizedBlock';
+  const desc = 'See it on the living map. Make your own: ≈ $1, once — born with its face and brain, market open.';
+  const url = U + '/?block=' + a;
+  const mini = JSON.stringify({ version: '1', imageUrl: img, button: { title: ('Open ' + nom).slice(0, 32),
+    action: { type: 'launch_miniapp', url, name: 'TokenizedBlock', splashImageUrl: U + '/splash.png', splashBackgroundColor: '#000000' } } });
+  const tags = [
+    '<meta name="description" content="' + htmlAttr(desc) + '">',
+    '<meta property="og:type" content="website">',
+    '<meta property="og:site_name" content="TokenizedBlock">',
+    '<meta property="og:title" content="' + htmlAttr(titre) + '">',
+    '<meta property="og:description" content="' + htmlAttr(desc) + '">',
+    '<meta property="og:url" content="' + htmlAttr(url) + '">',
+    '<meta property="og:image" content="' + htmlAttr(img) + '">',
+    '<meta name="twitter:card" content="' + (aFace ? 'summary' : 'summary_large_image') + '">',
+    '<meta name="twitter:title" content="' + htmlAttr(titre) + '">',
+    '<meta name="twitter:description" content="' + htmlAttr(desc) + '">',
+    '<meta name="twitter:image" content="' + htmlAttr(img) + '">',
+    '<meta name="fc:miniapp" content="' + htmlAttr(mini) + '">',
+    '<meta name="fc:frame" content="' + htmlAttr(mini) + '">',
+  ].join('\n');
+  /* on ne cache que ce qui a ete LU : un symbole manque (RPC lent) doit pouvoir etre relu au prochain robot */
+  if (sym && f) { apercusBlocs.set(a, tags); if (apercusBlocs.size > 2000) apercusBlocs.delete(apercusBlocs.keys().next().value); }
+  return tags;
+}
+
 const entete = (e) => ({
   'content-type': e.type,
   etag: e.etag,
@@ -604,6 +649,15 @@ createServer((req, res) => {
   } else if (e.image && req.headers['if-none-match'] === e.etag) {
     res.writeHead(304, entete(e));
     res.end();
+    return;
+  }
+  const blocDemande = cle === '/' + RACINE ? (String(req.url || '').match(/[?&]block=(0x[0-9a-fA-F]{40})(?:&|$)/) || [])[1] : null;
+  if (blocDemande) {
+    apercuBlock(blocDemande).then((tags) => {
+      const html = String(e.corps).replace(/<!--og:debut-->[\s\S]*?<!--og:fin-->/, () => '<!--og:debut-->\n' + tags + '\n<!--og:fin-->');
+      res.writeHead(200, entete(e));
+      res.end(req.method === 'HEAD' ? undefined : html);
+    }).catch(() => { res.writeHead(200, entete(e)); res.end(req.method === 'HEAD' ? undefined : e.corps); });
     return;
   }
   res.writeHead(200, entete(e));
