@@ -1207,13 +1207,23 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="wActions">
           <button class="bouton sec wAct" id="bSend" type="button"><b>↑</b>Send</button>
           <button class="bouton sec wAct" id="bReceive" type="button"><b>↓</b>Receive</button>
-          <button class="bouton sec wAct" id="bSwap" type="button"><b>⇄</b>Swap</button>
+          <button class="bouton sec wAct" id="bSwap" type="button"><b>⇄</b>Paired with</button>
+        </div>
+        <!-- ⛔ PHIL (2026-09-19) : « dans le wallet, le bouton Paired with au lieu du swap ». Un createur ouvre un marche de plus
+             pour SON block contre une action tokenisee, USDC ou cbBTC — meme mise en vie (≈ 1 $, 3 % par swap), autre devise. -->
+        <div class="carte" id="wPaire" hidden style="margin-top:12px">
+          <p class="titre" style="font-size:1em">Pair one of your blocks with another currency</p>
+          <p class="note">Opens a new market for your block. You can add another one at any time.</p>
+          <label class="champ">Your block<select id="wpBlock"><option value="">Reading your blocks…</option></select></label>
+          <label class="champ">Paired with<select id="wpDevise"></select></label>
+          <button class="bouton" id="wpOuvrir" type="button">Open this pair</button>
+          <p class="note" id="wpEtat"></p>
         </div>
         <!-- ⛔ DEPOT = RECEVOIR, RETRAIT = ENVOYER. Il n y a pas de compte chez nous a alimenter ou a
              vider : les fonds ne quittent jamais le wallet de l utilisateur. Le dire evite qu on
              cherche un bouton « Deposit » qui supposerait une garde. -->
         <p class="note">Deposit = Receive, withdraw = Send: your funds never leave your wallet, so
-          there is nothing held here to top up or empty. Swap opens the Blocks list: pick a block, then buy or sell it.</p>
+          there is nothing held here to top up or empty.</p>
       </div>
     </div>
 
@@ -1320,7 +1330,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0093" hidden>Build <code>20260919-0093</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0094" hidden>Build <code>20260919-0094</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5971,7 +5981,12 @@ async function calculerLancement() {
   if ($('#profil').dataset.block !== adr) { profilEnLecture = false; $('#plCalculer').disabled = false; return; }
   /* tip 2340: NON_TROUVEE = first market; LUE without fee hook = open NEW hooked pool id beside legacy (fees → FEE_WALLET). */
   const legacyUpgrade = marcheAvant && marcheAvant.etat === 'LUE' && marcheLegacySansTbFeeHook(marcheAvant) && CHAINE === 8453;
-  if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade)) {
+  /* ⛔⛔ « PAIRED WITH » (Phil, 2026-09-19) : un block peut ouvrir, a tout moment, un marche de PLUS contre une autre devise
+   *    de la liste du V3. Autorise seulement si la devise choisie n est PAS celle du marche deja lu ; la nouvelle pool a sa
+   *    propre cle (planLancement le verifie) et le hook exige que ce soit l admin du block qui l ouvre. */
+  const autrePaire = !!(deviseLancement && marcheAvant && marcheAvant.etat === 'LUE' && marcheAvant.cle
+    && ![String(marcheAvant.cle.currency0).toLowerCase(), String(marcheAvant.cle.currency1).toLowerCase()].includes(String(deviseLancement).toLowerCase()));
+  if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade && !autrePaire)) {
     e.className = 'note wKo'; vieAutoArreter();
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
       e.textContent = 'This block is already alive on TokenizedBlock. Nothing to do.';
@@ -6431,7 +6446,40 @@ $('#teinteMenu').addEventListener('click', (ev) => {
 document.addEventListener('click', () => { const m = $('#teinteMenu'); if (m && !m.hidden) { m.hidden = true; $('#pTeinte').setAttribute('aria-expanded', 'false'); } });
 /* ⛔ PHIL (2026-09-19) : « le bouton swap marche pas ». Il etait desactive en dur depuis le debut (« the screen is not
  * built yet »). L achat et la vente existent deja, bloc par bloc : Swap y mene, au lieu d un bouton mort. */
-$('#bSwap') && $('#bSwap').addEventListener('click', () => { try { allerA('trade'); } catch (_) {} });
+$('#bSwap') && $('#bSwap').addEventListener('click', async () => {
+  const w = $('#wPaire');
+  w.hidden = !w.hidden;
+  if (w.hidden) return;
+  /* les devises : celles du V3 (ouvertes seulement s il est deploye) */
+  const liste = pairesProposees(CHAINE).filter((x) => x.type === 'STABLE' || x.type === 'MAJEUR' || x.type === 'ACTION');
+  $('#wpDevise').innerHTML = liste.map((x) => '<option value="' + enTexte(x.adr) + '"' + (v3Pret ? '' : ' disabled') + '>'
+    + enTexte(x.symbole + ' — ' + x.nom) + (v3Pret ? '' : ' — soon') + '</option>').join('');
+  /* les blocks : ceux que ce compte a crees, lus sur la chaine */
+  $('#wpEtat').textContent = '';
+  try {
+    const { gardees } = await mesCreations();
+    const mes = (gardees || []).filter((c) => c && c.jeton);
+    $('#wpBlock').innerHTML = mes.length
+      ? mes.map((c) => '<option value="' + enTexte(c.jeton) + '" data-sym="' + enTexte(c.symbole || '') + '">'
+        + enTexte((c.symbole || court(c.jeton))) + '</option>').join('')
+      : '<option value="">You have not created a block yet</option>';
+  } catch (_) { $('#wpBlock').innerHTML = '<option value="">Your blocks could not be read right now</option>'; }
+});
+$('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
+  const adr = $('#wpBlock').value, dev = $('#wpDevise').value;
+  if (!ADRESSE.test(String(adr || '')) || !dev) { $('#wpEtat').textContent = 'Pick one of your blocks and a currency.'; return; }
+  if (!v3Pret) { $('#wpEtat').textContent = 'This pairing opens soon.'; return; }
+  const sym = ($('#wpBlock').selectedOptions[0] || {}).dataset ? $('#wpBlock').selectedOptions[0].dataset.sym : '';
+  await ouvrirProfil(adr, sym || null);
+  const d = $('#plDevise');
+  if (d && [...d.options].some((o) => o.value.toLowerCase() === dev.toLowerCase())) {
+    d.value = [...d.options].find((o) => o.value.toLowerCase() === dev.toLowerCase()).value;
+    d.dispatchEvent(new Event('change'));
+  }
+  ouvrirLancement();
+  $('#plEtat').className = 'note';
+  $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. ≈ $1 opens this new market.';
+});
 $('#pCompte').addEventListener('click', async () => {
   if (!compte) { await connecter(); return; }
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
@@ -8420,7 +8468,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0093',
+    build: '20260919-0094',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
