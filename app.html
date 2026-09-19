@@ -407,7 +407,7 @@ body{background:var(--fond);
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
 .mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:center;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
   text-shadow:0 0 12px rgb(var(--accentRgb) / .75),0 0 2px rgb(0 0 0 / .9)}
-@media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
+@media (max-width:560px){.mapCentre{font-size:11px}}
 body:not(.surMap) .mapCentre{visibility:hidden}
 /* la pastille de l entonnoir : sur la map seulement, au-dessus de la barre du bas */
 /* Phil (2026-09-19) : en bas, la pastille cachait le nom des gros blocks — en haut au centre sur ordinateur */
@@ -427,7 +427,18 @@ body:not(.surMap) .mapCta{display:none}
   .tete .droite::-webkit-scrollbar{display:none}
   .tete .droite > *{flex:0 0 auto}
   .tete .puce{padding:5px 9px;font-size:11px;white-space:nowrap}
-  .mapCentre{order:3;flex:1 1 100%;margin:0;padding:2px 4px;font-size:11.5px;white-space:normal;text-align:center;overflow:visible}
+  .mapCentre{order:3;flex:1 1 100%;margin:0;padding:2px 4px;font-size:11.5px;white-space:nowrap;text-overflow:ellipsis;text-align:center;overflow:hidden}
+  /* ⛔ PHIL (2026-09-19, captures tel) : « Connect » etait pousse hors de l ecran a droite, « What am I loo… » coupe, et la
+       ligne du centre passait sur deux lignes, sous la recherche. Connect juste apres Create ; libelles courts ; une ligne. */
+  .tete .droite #mapCta{order:1} .tete .droite #pCompte{order:2} .tete .droite .teinteBoite{order:3}
+  .tete .droite #pLearn{order:4} .tete .droite #pReseau{order:5}
+  .tete .long{display:none}
+  .mapAide{padding-right:64px}
+}
+@media (max-width:560px){
+  .trPlus{display:none}
+  .trAcheter{min-height:34px;padding:6px 12px;font-size:13px}
+  .trLigne .filS{font-size:12px}
 }
 
 .partage{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -777,7 +788,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" id="mapCta" class="mapCta">✦ Create your own block — ≈ $1</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
-      <button class="puce" id="pLearn" style="cursor:pointer">? What am I looking at</button>
+      <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at">?<span class="long"> What am I looking at</span></button>
       <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
       <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
            disait « not connected » sans qu on puisse rien en faire. C est maintenant le bouton : il connecte, puis
@@ -1356,7 +1367,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0106" hidden>Build <code>20260919-0106</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0107" hidden>Build <code>20260919-0107</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6628,7 +6639,7 @@ function poserTeinte(cle) {
   const t = TEINTES.find((x) => x.cle === cle) || TEINTES[0];
   if (t.cle === 'a') document.documentElement.removeAttribute('data-teinte');
   else document.documentElement.setAttribute('data-teinte', t.cle);
-  if ($('#pTeinte')) $('#pTeinte').textContent = '◐ ' + t.nom;
+  if ($('#pTeinte')) $('#pTeinte').innerHTML = '◐<span class="long"> ' + enTexte(t.nom) + '</span>';
   /* les dessins deja poses (reseau du cerveau, icones) se repeignent dans la nouvelle teinte */
   try { if (typeof peindreLearn === 'function') { peindreLearn(); peindreSchemaVie(); } } catch (_) {}
   try { localStorage.setItem('tb.teinte', t.cle); } catch (_) { /* navigation privee : le coloris vaut pour cette visite */ }
@@ -7892,7 +7903,7 @@ function peindreTrending() {
     + '<div class="filArt">' + dessin(l.adr, l.sym) + '</div>'
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
     + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · ' + (bouge(l) ? 'vol 1h ' + usdCourt(l.volume1hUsd) : 'no trade in the last hour') + ' · 24h ' + usdCourt(l.volume24hUsd)
-    + ' · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</p></div>'
+    + '<span class="trPlus"> · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</span></p></div>'
     /* mesure 2026-09-17 : la plupart de ces marches n acceptent que leur propre app -> « Open », pas une promesse d achat */
     + '<button type="button" class="bouton sec trAcheter" data-ouvrir="' + enTexte(l.adr) + '">Open</button></li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
@@ -8708,7 +8719,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0106',
+    build: '20260919-0107',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -9472,8 +9483,12 @@ function peindreCentre() {
   /* Phil (2026-09-19) : « change la formulation : Be centre of Tokenized Block » */
   /* Phil (2026-09-19) : « n affiche pas de nom » — le block tire se voit au centre de la map, le texte est le BOUTON du tirage */
   /* Phil : « Be centre of TokenizedBlock, je le dis 2 fois, c est moche » — la marque est deja juste a gauche */
-  el.textContent = '✦ Be the centre of the universe · 1 in ' + n.toLocaleString('en-US')
-    + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%)' + (centreActuel ? ' · next draw in ' + mmss : '');
+  /* telephone : la meme information, courte, sur une ligne (capture de Phil : coupee et passee sous la recherche) */
+  const etroit = window.matchMedia && window.matchMedia('(max-width:560px)').matches;
+  el.textContent = etroit
+    ? '✦ Be the centre · 1 in ' + n.toLocaleString('en-US') + (centreActuel ? ' · ' + mmss : '')
+    : '✦ Be the centre of the universe · 1 in ' + n.toLocaleString('en-US')
+      + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%)' + (centreActuel ? ' · next draw in ' + mmss : '');
   el.title = 'Every block on the map has exactly the same chance to become the centre of the universe.';
 }
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
