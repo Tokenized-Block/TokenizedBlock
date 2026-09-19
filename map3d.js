@@ -159,7 +159,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     cam.auto = false; cam.touchee = true;
     /* Phil : « centre de la map » = le MILIEU EXACT de l ecran (ox = oy = 0), et assez pres pour que le block se voie */
     /* ⛔ MESURE 0074 : a 0,08 S le block etait CACHE (la map masque tout block a moins de 0,12 S de la camera) */
-    const c = { yaw: cam.yaw, pitch: cam.pitch, dist: S * 0.35, ox: 0, oy: 0 };
+    const c = { yaw: cam.yaw, pitch: cam.pitch, dist: S * DIST_DEPART, ox: 0, oy: 0 };
     if (mouvementReduit) { Object.assign(cam, c); cam.cible = null; } else cam.cible = c;
   }
   function centrerSur(h) {
