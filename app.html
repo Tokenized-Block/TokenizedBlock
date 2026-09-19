@@ -256,7 +256,10 @@ body{background:var(--fond);
 .mapEnv.a3d{isolation:isolate;cursor:grab;touch-action:none;user-select:none}
 .mapEnv.a3d.glisse{cursor:grabbing}
 .mapEnv.a3d::before{display:none}
-.mapEnv.a3d .bloc{left:0;top:0;transform-origin:0 0}
+.mapEnv.a3d .bloc{left:0;top:0;transform-origin:0 0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
+.mapEnv.a3d .bloc:hover,.mapEnv.a3d .bloc.actif{box-shadow:none;filter:drop-shadow(0 0 10px rgb(var(--accentRgb) / .8))}
+.mapEnv.a3d .bloc.nous{border:0;box-shadow:none;filter:drop-shadow(0 0 7px rgb(var(--accentRgb) / .75))}
+.mapEnv.a3d .bloc .etiq{background:none;text-shadow:0 1px 3px #000,0 0 6px #000;padding:0 2px}
 .map3dFx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .mapEnv.a3d .mapZoom,.mapEnv.a3d .mapAide{z-index:100000}
 #v-map.on .mapEnv.a3d{position:fixed;left:0;right:0;top:var(--mapHaut,64px);bottom:var(--mapBas,72px);height:auto;min-height:0;
@@ -1282,7 +1285,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0080" hidden>Build <code>20260919-0080</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0081" hidden>Build <code>20260919-0081</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1665,6 +1668,9 @@ import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, frai
  *    pour ca que cette map dessinait ses propres cubes. Il est maintenant dans `logo.js`, deplace
  *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
+import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
+/* la feuille du cube 3D, posee une fois */
+(() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
 import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE as MATIERES,
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
@@ -1980,7 +1986,7 @@ async function rpc(methode, params) {
  *    une vie lue en ETH : un block a 20 ETH (≈ 50 000 $) etait « sous 50 000 » — presque tous les blocks avaient la
  *    MEME taille minimale. L echelle compare maintenant des DOLLARS : vie x prix de l ETH (ou la vie telle quelle
  *    si la pool est en USDC). De 1 000 $ (petit) a 1 000 000 $ (gros), en log. */
-const TAILLE_MIN = 40, TAILLE_MAX = 170;
+const TAILLE_MIN = 30, TAILLE_MAX = 170;
 const SEUIL_FAIBLE_USD = 1000, SEUIL_GROS_USD = 1000000;
 function vieEnUsd(vie, devise) {
   if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return null;
@@ -1990,7 +1996,8 @@ function vieEnUsd(vie, devise) {
 }
 function tailleDe(vie, devise = 'ETH') {
   const usd = vieEnUsd(vie, devise);
-  if (usd == null) return typeof vie === 'number' && vie > 0 ? TAILLE_MIN : 34;
+  /* Phil : « rends les nouveaux plus petits que le format standard » — sans marche : 24 px */
+  if (usd == null) return typeof vie === 'number' && vie > 0 ? TAILLE_MIN : 24;
   return tailleDeUsd(usd);
 }
 function tailleDeUsd(usd) {
@@ -2029,6 +2036,14 @@ function noterFace(adr, face) {
   try { localStorage.setItem(CLE_FACE + a, JSON.stringify(v.face)); } catch (e) { /* sans memoire */ }
   return true;
 }
+/** Sur la MAP : le block en volume (cube qui tourne, eclats en orbite, sans fond). Ailleurs, le logo grave (dessin). */
+const dessinMap = (adr, sym) => {
+  try {
+    const face = faceConnue(adr) || apparenceDepuisAdresse(adr);
+    if (!face) return '';
+    return cube3dHtml(paramsLogoDepuisApparence(face, sym), adr) || dessin(adr, sym);
+  } catch (e) { return dessin(adr, sym); }
+};
 const dessin = (adr, sym) => {
   try {
     const face = faceConnue(adr) || apparenceDepuisAdresse(adr);
@@ -2189,7 +2204,7 @@ function creerHabitant(c) {
   el.style.width = t + 'px';
   el.style.height = Math.round(t * 1.1) + 'px';
   el.setAttribute('data-block', c.jeton);
-  el.innerHTML = dessin(c.jeton, c.symbole) + '<span class="etiq">'
+  el.innerHTML = dessinMap(c.jeton, c.symbole) + '<span class="etiq">'
     + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
   map.appendChild(el);
   /* ⛔ CHAQUE BLOCK NAIT AVEC SON CERVEAU, derive de son adresse : deux blocks ne bougeront jamais
@@ -2706,7 +2721,7 @@ async function lireLaVie() {
         h.origine = origineDepuisFace(fr.etat);
         if (fr.etat === 'LU') {
           if (noterFace(h.adr, fr.face)) {
-            h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
+            h.el.innerHTML = dessinMap(h.adr, h.sym) + '<span class="etiq">'
               + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
           }
           if (fr.role) noterRoleGrave(h.adr, fr.role);
@@ -8224,7 +8239,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0080',
+    build: '20260919-0081',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8928,7 +8943,7 @@ async function facesDeLaMap(lot = 8) {
         if (r && r.etat === 'LU' && r.face && noterFace(h.adr, r.face)) {
           h.origine = origineDepuisFace('LU');
           if (h.el) {
-            h.el.innerHTML = dessin(h.adr, h.sym) + '<span class="etiq">'
+            h.el.innerHTML = dessinMap(h.adr, h.sym) + '<span class="etiq">'
               + enTexte(String(h.sym || '?').slice(0, 10)) + '</span>';
           }
           if (r.role) { try { noterRoleGrave(h.adr, r.role); } catch (_) {} }

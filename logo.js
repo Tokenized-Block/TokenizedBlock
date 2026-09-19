@@ -29,6 +29,9 @@ export function paramsLogoDepuisApparence(a, lettre) {
   };
 }
 
+/** Les couleurs, le motif et les eclats d une face, pour la dessiner en volume (map). Meme source que le logo grave. */
+export function modeleFace(o) { return logoSvg({ ...(o || {}), _modele: true }); }
+
 export function logoSvg(o) {
   /* tip 2165: never throw on null/partial settings — map paint must not die mid-frame. */
   if (!o || typeof o !== 'object') o = {};
@@ -254,6 +257,18 @@ export function logoSvg(o) {
       trait: 'hsl(330 50% 30%)', ep: 1.8, epInt: 1.3, lustre: true },
   };
   const M = MATIERES[o.matiere] || MATIERES.verre;
+
+  /* ⛔⛔ LE MODELE 3D DE LA MAP (2026-09-19) lit les MEMES couleurs et le MEME motif que le logo grave — une seule source.
+   *    Branche privee (`_modele`) : le SVG grave, lui, sort plus bas sans avoir change d un caractere (test golden). */
+  if (o._modele === true) {
+    const plat = (f) => motif('1 0 0 1 0 0', f);
+    return {
+      haut: M.haut, gauche: M.gauche, droite: M.droite, trait: M.trait, ep: M.ep, lustre: M.lustre,
+      motifs: { haut: plat(ca(92, 56)), gauche: plat(ca(90, 48)), droite: plat(ca(88, 38)) },
+      eclats, eclat: { haut: c(70, 62), gauche: c(75, 44), droite: c(78, 32), trait: ca(90, 72) },
+      coin: motifCoin, coinCouleur: ca(85, 66),
+    };
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220"><rect width="200" height="220" fill="${M.fond}"/>`
     + coins
