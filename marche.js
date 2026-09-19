@@ -21,6 +21,7 @@
 import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
 import { TBLOCK, HOOK_PREVU, HOOK_V2 } from './tokenomics.js';
+import { pairesProposees } from './paires.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
 
@@ -125,6 +126,42 @@ export const CLES_MARCHE = [
  *    les pools des autres lanceurs refusaient notre routeur. Une cle LUE sur la chaine (evenement
  *    Initialize du PoolManager) est la verite ; les candidates ne sont plus qu un repli.
  */
+/**
+ * ⛔⛔ MARCHE CONTRE UNE DEVISE ERC-20 (hook V3, 2026-09-19). Les cles exactes lues sur la chaine etaient REASSEMBLEES contre
+ *    l ETH (cleDePool(ETH_NATIF, …)) : une pool block/AAPLc etait cherchee a une cle qui n existe pas, et le block paraissait
+ *    « sans marche » (mesure sur fork). Ici la cle est lue TELLE QUELLE si sa devise est dans la liste (USDC, cbBTC, actions),
+ *    et la capitalisation est dite DANS CETTE DEVISE, decimales lues des deux cotes. Rien trouve = null (le reste decide).
+ */
+async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
+  const j = String(jeton).toLowerCase();
+  const connues = new Map(pairesProposees(8453).filter((p) => p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION')
+    .map((p) => [p.adr.toLowerCase(), p.symbole]));
+  for (const c of Array.isArray(clesExactes) ? clesExactes : []) {
+    if (!c || !c.currency0 || !c.currency1) continue;
+    const c0 = String(c.currency0).toLowerCase(), c1 = String(c.currency1).toLowerCase();
+    if (c0 !== j && c1 !== j) continue;
+    const devise = c0 === j ? c1 : c0;
+    const sym = connues.get(devise);
+    if (!sym) continue;
+    const cle = { currency0: c.currency0, currency1: c.currency1, fee: Number(c.fee), tickSpacing: Number(c.tickSpacing), hooks: c.hooks };
+    try {
+      const s0 = await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + poolId(cle).slice(2) }, 'latest']);
+      if (!s0 || String(s0).length < 66) continue;
+      const sqrt = BigInt(String(s0).slice(0, 66));
+      if (sqrt === 0n) continue;
+      const decB = Number(BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
+      const decD = Number(BigInt(String(await rpc('eth_call', [{ to: devise, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
+      const supply = BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66));
+      const prix = prixDepuisSqrt({ sqrtPriceX96: sqrt, decDevise: decD, decBlock: decB, deviseEst0: c0 === devise });
+      const cap = capitalisation({ supply, decimales: decB, prix, devise: sym });
+      if (cap.valeur === null) continue;
+      return { etat: 'LUE', vie: cap.valeur, devise: sym, via: 'on-chain key · ' + sym, pourquoi: null, cle, sqrtPriceX96: sqrt,
+        decimales: decB, paire: 'DEVISE', deviseAdr: devise, decDevise: decD };
+    } catch { /* lecture ratee : on essaie la cle suivante */ }
+  }
+  return null;
+}
+
 export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
     return { etat: 'REFUSEE', vie: null, devise: null, via: null, pourquoi: 'not an address' };
@@ -176,6 +213,10 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
   /* ⛔⛔ AVAIL 2026-09-15: try TBLOCK/block EVEN when some ETH keys rate-limited.
    *    Before: ratees>0 short-circuited to NON_LUE and never opened Buy/Sell for TBLOCK-launched blocks.
    *    Create+Launch default TBLOCK — skipping this path = false « unavailable ». */
+  if (sqrt === 0n) {
+    const vd = await vieEnDevise({ rpc, stateView, jeton, clesExactes });
+    if (vd) return vd;
+  }
   if (sqrt === 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {
     const vt = await vieEnTblock({ rpc, stateView, jeton });
     if (vt) return vt;

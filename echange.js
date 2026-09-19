@@ -76,7 +76,7 @@ async function appelOuErreur(rpc, tx) {
  * @param {bigint} o.montant  achat : wei d ETH payes (frais compris) ; vente : unites brutes du block vendues
  */
 export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, toleranceBps = 100n, maintenant = Date.now(),
-  marcheLu = null }) {
+  marcheLu = null, cleImposee = null }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)], V = V4_ADRESSES[Number(chaine)];
   if (!R || !Q || !V) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
@@ -90,7 +90,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   /* ⛔⛔ BUG TROUVE EN VERIFIANT (2026-09-13, WOFI) : le profil venait de LIRE le marche (12,67 ETH), et le clic
    * « Prepare buy » le relisait — refuse par le noeud public sature : « its market could not be read ». Le marche
    * deja lu par `vieDuBlock` (meme fonction, meme cle) est reutilise ; sinon on lit, et on relit UNE fois. */
-  let marche = marcheLu && marcheLu.etat === 'LUE' && marcheLu.cle ? marcheLu : null;
+  /* ⛔ « PAIRED WITH » (2026-09-19) : un block peut avoir plusieurs marches (ETH, AAPLc, NVDAc…). Le marche CHOISI arrive
+   *    avec sa cle exacte ; il n est pas relu, on le prend tel quel (la simulation de la transaction exacte le verifie). */
+  let marche = cleImposee ? { etat: 'LUE', cle: cleImposee, paire: null }
+    : (marcheLu && marcheLu.etat === 'LUE' && marcheLu.cle ? marcheLu : null);
   if (!marche) {
     marche = await vieDuBlock({ rpc: lire, stateView: V.stateView, jeton });
     if (marche.etat === 'NON_LUE') {
@@ -119,7 +122,31 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
   }
   const cle = marche.cle;
-  if (String(cle.currency0).toLowerCase() !== ETH) return { etat: 'REFUSE', pourquoi: 'only markets against native ETH are traded here' };
+  if (String(cle.currency0).toLowerCase() !== ETH) {
+    /* ⛔⛔ MARCHE CONTRE UNE DEVISE ERC-20 (V3, 2026-09-19) : on paie la devise pour acheter, on la recoit en vendant — un saut.
+     *    Seulement sur NOTRE hook : c est lui qui preleve (3 %) ; l interface n ajoute rien. Permit2 sur le jeton PAYE. */
+    if (!hookPaieDeja) return { etat: 'REFUSE', pourquoi: 'this market is not a TokenizedBlock market — only those are traded here in another currency' };
+    const c0 = String(cle.currency0).toLowerCase(), c1 = String(cle.currency1).toLowerCase(), j = String(jeton).toLowerCase();
+    if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
+    const devise = c0 === j ? c1 : c0;
+    const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne
+    let q;
+    try {
+      const rq = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: zf, montant: m }) }, 'latest']);
+      q = BigInt('0x' + String(rq).slice(2, 66));
+    } catch (e) {
+      return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
+    }
+    if (q <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
+    const min = (q * (10000n - tol)) / 10000n;
+    const entree = sens === 'ACHAT' ? devise : j, sortie = sens === 'ACHAT' ? j : devise;
+    const actionsD = [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
+      { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
+    const resumeD = { paye: m, payeDevise: sens === 'ACHAT' ? 'pair' : 'block', recoitAuMoins: min, recoitDevise: sens === 'ACHAT' ? 'block' : 'pair',
+      quote: q, frais: 0n, fraisDevise: null, montantSwap: m, devise, fraisBps: 0n, beneficiaireFrais: null, fraisMarcheBps: 300 };
+    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: 0n, resume: resumeD,
+      cle, zeroForOne: zf, sortieMinTete: 0n, jetonPaye: entree, valeurEth: false });
+  }
   const zeroForOne = sens === 'ACHAT'; // ETH est currency0 : acheter = payer currency0
 
   /* ── quote : le prix REEL, sur le montant qui passe vraiment dans la pool ── */
@@ -253,10 +280,13 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
 }
 
 /** Approbations mesurees (vente), forme de struct demandee a la chaine, encodage, simulation de la transaction exacte. */
-async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete }) {
-  /* ── vente : les deux autorisations Permit2, MESUREES (meme regle d expiration que le lancement) ── */
+async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete,
+  jetonPaye = null, valeurEth = null }) {
+  /* ── les deux autorisations Permit2 sur le jeton PAYE (le block a la vente ; la devise ERC-20 a l achat), MESUREES ── */
   const etapes = [];
-  if (sens === 'VENTE') {
+  const paye = jetonPaye || (sens === 'VENTE' ? jeton : null);
+  if (paye) {
+    const jeton = paye; // la suite du bloc lit et autorise CE jeton
     let okP2, okR;
     try {
       okP2 = BigInt(await lire('eth_call', [{ to: jeton, data: '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2) }, 'latest'])) >= m;
@@ -274,8 +304,9 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
 
   /* ── la chaine dit quelle forme de struct elle accepte, puis on simule la transaction EXACTE ── */
   const appelBrut = (demande) => appelOuErreur(lire, demande);
+  const enEth = valeurEth === null ? sens === 'ACHAT' : valeurEth;
   const f = await formeAcceptee({ appelBrut, ur: R, de: compte, cle, zeroForOne, montant: resume.montantSwap, deadline,
-    value: sens === 'ACHAT' ? '0x' + resume.montantSwap.toString(16) : undefined });
+    value: enEth ? '0x' + resume.montantSwap.toString(16) : undefined });
   if (f.forme === null) {
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
       pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + jsonSafe(f.causes).slice(0, 160) };

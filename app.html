@@ -1330,7 +1330,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0094" hidden>Build <code>20260919-0094</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0095" hidden>Build <code>20260919-0095</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4337,6 +4337,7 @@ async function lireProfil(adr, sym, perime) {
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
   /* tip 2353: Buy/Sell card whenever pool is LUE (hooked or not). Liquidity still needs LUE. */
   $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
+  majDeviseEchange(v);
   peindreVerrouMarche(v, origineProfil);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (ethUsd === null && typeof vieProfil === 'number') await lirePrixEth();
@@ -4394,6 +4395,7 @@ async function lireProfil(adr, sym, perime) {
     $('#plEtat').textContent = 'Its market could not be read yet (the public node is busy). “Work it out” checks it again before anything is offered to sign.';
   }
   $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
+  majDeviseEchange(v);
   peindreVerrouMarche(v, origineProfil);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
@@ -4493,7 +4495,9 @@ async function peindreMesAvoirsProfil(adr) {
   /* ⛔ LES SOLDES DU DEX : exacts, et gardes BRUTS pour MAX (un arrondi d affichage ne doit jamais
    * devenir le montant signe — vendre « 1 000,0 » quand on a 999,97 serait refuse par la chaine). */
   soldesDex = { eth, bloc: b ? b.solde : null, decimales: b ? b.decimales : null };
-  if ($('#peSoldeEth')) $('#peSoldeEth').textContent = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'not read';
+  /* le cote « payer » parle la devise du marche : l ETH, ou la devise d un marche V3 (AAPLc…) */
+  if (deviseEchange) void majSoldeDeviseEchange();
+  else if ($('#peSoldeEth')) $('#peSoldeEth').textContent = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'not read';
   if ($('#peSoldeBloc')) $('#peSoldeBloc').textContent = b ? formaterUnites(b.solde, b.decimales) + ' ' + sym : 'not read';
 }
 let soldesDex = { eth: null, bloc: null, decimales: null };
@@ -4501,6 +4505,12 @@ let soldesDex = { eth: null, bloc: null, decimales: null };
  * envoyer. 0,0003 ETH couvre largement un swap sur Base (≈ 0,00002 ETH mesures) ; le reste part. */
 const RESERVE_GAS_WEI = 300000000000000n;
 $('#peMaxEth') && $('#peMaxEth').addEventListener('click', (ev) => {
+  /* MAX dans la devise du marche : tout le solde (le gas se paie en ETH, pas dans cette devise) */
+  if (deviseEchange && typeof soldesDex.devise === 'bigint') {
+    ev.preventDefault();
+    $('#peAchat').value = formaterUnites(soldesDex.devise, deviseEchange.dec).replace(/,/g, '');
+    return;
+  }
   ev.preventDefault();
   if (soldesDex.eth === null) return;
   const net = soldesDex.eth > RESERVE_GAS_WEI ? soldesDex.eth - RESERVE_GAS_WEI : 0n;
@@ -4519,6 +4529,10 @@ setInterval(() => {
   if (document.hidden || !prof || prof.hidden || !prof.dataset.block || !compte) return;
   void peindreMesAvoirsProfil(prof.dataset.block);
 }, 15000);
+/* ⛔ la fiche peinte AVANT la connexion gardait « — » jusqu au prochain tour : on repeint des que le wallet est connecte */
+$('#pCompte').addEventListener('click', () => setTimeout(() => {
+  const prof = $('#profil'); if (prof && !prof.hidden && prof.dataset.block && compte) void peindreMesAvoirsProfil(prof.dataset.block);
+}, 1500));
 try {
   if (window.ethereum && window.ethereum.on) {
     window.ethereum.on('accountsChanged', () => setTimeout(() => {
@@ -5486,6 +5500,25 @@ async function decimalesDe(jeton) {
   const r = await rpc('eth_call', [{ to: jeton, data: '0x313ce567' }, 'latest']);
   return Number(BigInt(r));
 }
+/** La carte Achat/Vente dans la devise du marche : ETH, ou la devise d un marche V3 (AAPLc, USDC…). */
+function majDeviseEchange(v) {
+  const enDevise = !!(v && v.paire === 'DEVISE' && v.deviseAdr);
+  const sym = enDevise ? v.devise : 'ETH';
+  const lab = $('#peAchat') && $('#peAchat').closest('label');
+  if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + sym + ' to spend';
+  $('#peAchat').placeholder = enDevise ? (sym === 'USDC' ? '10' : '0.1') : '0.01';
+  deviseEchange = enDevise ? { adr: v.deviseAdr, sym, dec: v.decDevise } : null;
+  void majSoldeDeviseEchange();
+}
+let deviseEchange = null;
+async function majSoldeDeviseEchange() {
+  if (!deviseEchange || !compte) return;
+  try {
+    const b = BigInt(await rpc('eth_call', [{ to: deviseEchange.adr, data: '0x70a08231' + String(compte).toLowerCase().slice(2).padStart(64, '0') }, 'latest']));
+    soldesDex.devise = b;
+    $('#peSoldeEth').textContent = formaterUnites(b, deviseEchange.dec) + ' ' + deviseEchange.sym;
+  } catch (_) { $('#peSoldeEth').textContent = 'not read'; }
+}
 async function preparerEchange(sens) {
   const adr = $('#profil').dataset.block;
   const e = $('#peEtat');
@@ -5500,6 +5533,7 @@ async function preparerEchange(sens) {
   if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; return; } }
+  else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
   const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; return; }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
@@ -5513,7 +5547,9 @@ async function preparerEchange(sens) {
   echangeCourant = p;
   const r = p.resume;
   if (r) {
-    const q = (v, devise) => (devise === 'ETH' ? formaterUnites(v, 18) + ' ETH' : formaterUnites(v, dec === undefined ? 18 : (sens === 'ACHAT' ? 18 : dec)) + ' ' + (symProfil || 'blocks'));
+    const q = (v, devise) => (devise === 'ETH' ? formaterUnites(v, 18) + ' ETH'
+      : devise === 'pair' && deviseEchange ? formaterUnites(v, deviseEchange.dec) + ' ' + deviseEchange.sym
+      : formaterUnites(v, dec === undefined ? 18 : (sens === 'ACHAT' ? 18 : dec)) + ' ' + (symProfil || 'blocks'));
     const estTbProfil = String(adr).toLowerCase() === TBLOCK.toLowerCase();
     const feeLigne = r.frais > 0n
       ? (r.rachatAuto
@@ -5526,12 +5562,12 @@ async function preparerEchange(sens) {
             + (estTbProfil && sens === 'VENTE'
               ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
               : '')))
-      : 'No fee: this is a buyback on the protocol fee path';
+      : (r.fraisMarcheBps ? null : 'No fee: this is a buyback on the protocol fee path');
     $('#peLignes').innerHTML = [
       'You pay: ' + q(r.paye, r.payeDevise),
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
-      feeLigne,
+      ...(feeLigne ? [feeLigne] : []),
       /* ⛔ LA PART DU MARCHE, MESUREE (2026-09-18) : sur une pool HOOK_PREVU, le hook preleve 3 % du swap en
        * plus des 0,5 % ci-dessus. « You receive at least » l inclut deja (le devis passe par la pool) ;
        * cette ligne dit POURQUOI il est plus bas que ce que le prix affiche laisserait croire. */
@@ -8468,7 +8504,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0094',
+    build: '20260919-0095',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
