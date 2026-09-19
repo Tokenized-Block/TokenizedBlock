@@ -17,7 +17,7 @@
 // ⛔ AUCUN SECRET, AUCUNE CLE, AUCUNE ECRITURE. Ce processus ne fait que lire des fichiers publics
 //    deja servis par GitHub Pages : rien de neuf n est expose par ce deploiement.
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -282,7 +282,27 @@ const TYPES = {
  * declare parte en production en 404 silencieux. */
 /* l ordre de l entonnoir : visite -> pastille de la map -> clic Create -> cree -> vivant -> partage -> lien recu -> achat */
 const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat'];
-const entonnoir = { depuis: new Date().toISOString(), total: {}, parJour: {} };
+/* ⛔ PERSISTANT (Phil, 2026-09-19 : « oui cree le volume ») : mesure — les compteurs repartaient de zero a CHAQUE deploiement
+ *    (10 deploiements ce jour-la : aucun chiffre ne survivait). Volume Railway monte sur /data : lu au demarrage, ecrit
+ *    au plus toutes les 30 s (fichier temporaire puis renommage : un arret brutal ne laisse jamais un JSON coupe).
+ *    Sans volume (local, ou volume absent), on retombe sur la memoire, et /api/entonnoir le DIT (persistant:false). */
+const FICHIER_ENTONNOIR = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'entonnoir.json') : null;
+const entonnoir = (() => {
+  try {
+    if (FICHIER_ENTONNOIR && existsSync(FICHIER_ENTONNOIR)) {
+      const x = JSON.parse(readFileSync(FICHIER_ENTONNOIR, 'utf8'));
+      if (x && x.total && x.parJour) return x;
+    }
+  } catch (e) { console.log('[entonnoir] fichier illisible, on repart de zero :', e.message); }
+  return { depuis: new Date().toISOString(), total: {}, parJour: {} };
+})();
+let entonnoirSale = false;
+setInterval(() => {
+  if (!entonnoirSale || !FICHIER_ENTONNOIR) return;
+  try { writeFileSync(FICHIER_ENTONNOIR + '.tmp', JSON.stringify(entonnoir)); renameSync(FICHIER_ENTONNOIR + '.tmp', FICHIER_ENTONNOIR); entonnoirSale = false; }
+  catch (e) { console.log('[entonnoir] ecriture ratee :', e.message); }
+}, 30000).unref();
 
 const SERVIS = [
   'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'frais.html',
@@ -654,7 +674,7 @@ createServer((req, res) => {
 
   /* ══ ENTONNOIR (Phil, 2026-09-19 : « fais l entonnoir, avec des resultats vrais ») ══════════════════════════
    * ⛔ ANONYME PAR CONSTRUCTION : on compte des ETAPES, rien d autre — ni adresse, ni IP, ni identifiant, ni cookie.
-   * ⚠️ BORNES : en memoire, remis a zero a chaque deploiement (le journal garde chaque ligne) ; un curieux peut gonfler
+   * ⚠️ BORNES : persistant sur le volume /data (≤ 30 s de pertes a l arret) ; un curieux peut gonfler
    *    un compteur a la main — ce sont des ordres de grandeur, jamais une preuve d argent (l argent se lit sur a6cf). */
   if (chemin === '/api/etape') {
     const e = new URL(req.url, 'http://x').searchParams.get('e') || '';
@@ -663,6 +683,7 @@ createServer((req, res) => {
       entonnoir.total[e] = (entonnoir.total[e] || 0) + 1;
       entonnoir.parJour[jour] = entonnoir.parJour[jour] || {};
       entonnoir.parJour[jour][e] = (entonnoir.parJour[jour][e] || 0) + 1;
+      entonnoirSale = true;
       console.log('[entonnoir]', jour, e);
     }
     res.writeHead(204, { 'cache-control': 'no-store' });
@@ -671,7 +692,7 @@ createServer((req, res) => {
   }
   if (chemin === '/api/entonnoir') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
+    res.end(JSON.stringify({ ok: true, persistant: !!FICHIER_ENTONNOIR, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
     return;
   }
 
