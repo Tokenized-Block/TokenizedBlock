@@ -388,11 +388,13 @@ body{background:var(--fond);
 @media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
 body:not(.surMap) .mapCentre{visibility:hidden}
 /* la pastille de l entonnoir : sur la map seulement, au-dessus de la barre du bas */
-.mapCta{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--mapBas,72px) + 16px);z-index:60;
+/* Phil (2026-09-19) : en bas, la pastille cachait le nom des gros blocks — en haut au centre sur ordinateur */
+.mapCta{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--mapHaut,64px) + 12px);z-index:60;
   padding:12px 20px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:15px;color:#fff;
   background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 8px 26px rgb(var(--boutonRgb) / .45)}
 .mapCta:hover{filter:brightness(1.1)}
 body:not(.surMap) .mapCta{display:none}
+@media (max-width:1200px){.mapCta{top:auto;bottom:calc(var(--mapBas,72px) + 10px);padding:9px 14px;font-size:13px}}
 .partage{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .partage a,.partage button{flex:1 1 120px;text-align:center;padding:10px 12px;border-radius:12px;font-weight:700;font-size:14px;
   border:1px solid rgb(var(--accentRgb) / .35);background:rgb(var(--accentRgb) / .12);color:var(--texte);text-decoration:none;cursor:pointer;font-family:inherit}
@@ -1297,7 +1299,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0085" hidden>Build <code>20260919-0085</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0086" hidden>Build <code>20260919-0086</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8285,7 +8287,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0085',
+    build: '20260919-0086',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
