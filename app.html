@@ -1134,14 +1134,13 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="wActions">
           <button class="bouton sec wAct" id="bSend" type="button"><b>↑</b>Send</button>
           <button class="bouton sec wAct" id="bReceive" type="button"><b>↓</b>Receive</button>
-          <button class="bouton sec wAct" id="bSwap" type="button" disabled><b>⇄</b>Swap</button>
+          <button class="bouton sec wAct" id="bSwap" type="button"><b>⇄</b>Swap</button>
         </div>
         <!-- ⛔ DEPOT = RECEVOIR, RETRAIT = ENVOYER. Il n y a pas de compte chez nous a alimenter ou a
              vider : les fonds ne quittent jamais le wallet de l utilisateur. Le dire evite qu on
              cherche un bouton « Deposit » qui supposerait une garde. -->
         <p class="note">Deposit = Receive, withdraw = Send: your funds never leave your wallet, so
-          there is nothing held here to top up or empty. Swap is next — its routing is measured
-          against the deployed router, the screen is not built yet.</p>
+          there is nothing held here to top up or empty. Swap opens the Blocks list: pick a block, then buy or sell it.</p>
       </div>
     </div>
 
@@ -1248,7 +1247,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0067" hidden>Build <code>20260919-0067</code> · 3% on our markets, not 3.5%.</p>
+      <p class="note" data-build="20260919-0068" hidden>Build <code>20260919-0068</code> · wallet balances re-read, Swap works.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1790,6 +1789,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
+  if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -3025,7 +3025,13 @@ async function lireJeton(jeton, qui) {
  *    parallele, et la plus lente ecrivait en dernier : des soldes Sepolia sous l etiquette mainnet.
  *    Seule la lecture la plus recente a le droit d ecrire.
  */
+/* ⛔⛔ BUG MESURE SUR FORK (2026-09-19) : le Wallet affichait 999 999,99 FEE3, le solde on-chain etait 1 977 454,74.
+ *    majWallet ne tournait QU A LA CONNEXION : ouvrir l onglet plus tard, acheter, vendre — rien ne relisait. Envoyer
+ *    sur la foi d un solde fige, c est le « vrai transfer bug » de Phil. Le Wallet se relit a l ouverture de l onglet
+ *    et apres chaque transaction confirmee. */
+let walletLuA = 0;
 async function majWallet() {
+  walletLuA = Date.now();
   const moi = ++jetonLecture;
   const perime = () => moi !== jetonLecture;
   $('#wDeconnecte').hidden = !!compte;
@@ -3091,7 +3097,15 @@ async function majWallet() {
       const a = { id: b.jeton, nom: '?', sous: 'block you received or bought · ' + court(b.jeton), adr: b.jeton, bloc: true };
       try { Object.assign(a, await lireJeton(b.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
       const connu = creationsLues.find((c) => String(c.jeton).toLowerCase() === b.jeton);
-      a.nom = String((connu && connu.symbole) || SYMBOLES_GENESE[b.jeton] || '?').slice(0, 12);
+      a.nom = String((connu && connu.symbole) || SYMBOLES_GENESE[b.jeton] || '').slice(0, 12);
+      if (!a.nom) {
+        try {
+          const h = String(await rpc('eth_call', [{ to: b.jeton, data: '0x95d89b41' }, 'latest'])).slice(2);
+          const n = parseInt(h.slice(64, 128), 16);
+          a.nom = new TextDecoder().decode(new Uint8Array((h.slice(128, 128 + n * 2).match(/../g) || []).map((x) => parseInt(x, 16)))).slice(0, 12);
+        } catch (_) { /* symbole illisible */ }
+        if (!a.nom) a.nom = court(b.jeton);
+      }
       if (perime()) return;
       actifs.push(a);
       peindreActifs();
@@ -3128,7 +3142,9 @@ function peindreActifs() {
  * prepare pas un envoi contre un solde qu on ne connait pas. */
 function remplirChoixActif() {
   const s = $('#sActif'), avant = s.value;
-  const lus = actifs.filter((a) => a.etat === 'LU');
+  /* ⛔ MESURE SUR FORK (2026-09-19) : la liste d envoi proposait « ? — 0 » — un block recu puis revendu, sans nom et a
+   * zero. On ne propose d envoyer que ce qu on DETIENT (l ETH reste toujours, meme a zero : c est lui qui paie le gas). */
+  const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n)));
   s.innerHTML = lus.map((a) => '<option value="' + enTexte(a.id) + '">' + enTexte(a.nom) + ' — '
     + enTexte(abrege(formaterUnites(a.solde, a.decimales))) + '</option>').join('');
   if (lus.some((a) => a.id === avant)) s.value = avant;
@@ -5508,6 +5524,7 @@ async function signerEchange(tx, sens, estApprobation) {
   $('#peActions').innerHTML = '';
   echangeCourant = null;
   void peindreMesAvoirsProfil($('#profil').dataset.block); /* le solde bouge tout de suite apres l echange, comme sur un DEX */
+  walletLuA = 0; /* le prochain passage sur Wallet relira, sans attendre les 15 s */
 }
 /* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
 async function peindreJournalBuyback(adr) {
@@ -6179,6 +6196,9 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+/* ⛔ PHIL (2026-09-19) : « le bouton swap marche pas ». Il etait desactive en dur depuis le debut (« the screen is not
+ * built yet »). L achat et la vente existent deja, bloc par bloc : Swap y mene, au lieu d un bouton mort. */
+$('#bSwap') && $('#bSwap').addEventListener('click', () => { try { allerA('trade'); } catch (_) {} });
 $('#pCompte').addEventListener('click', async () => {
   if (!compte) { await connecter(); return; }
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
@@ -8052,7 +8072,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0067',
+    build: '20260919-0068',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
