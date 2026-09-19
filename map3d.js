@@ -149,6 +149,16 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     const zc = z2 + distNeuve, f = focale(L, H);
     return { yaw: cam.yaw, pitch: cam.pitch, dist: distNeuve, ox: cx - L / 2 - x1 * f / zc, oy: cy - H / 2 - y2 * f / zc };
   }
+  /* ⛔ MESURE (Chrome, build 0072) : centrerSur visait la position ACTUELLE du block tire — mais il glisse vers 0,0,0,
+   *    et la camera restait sur la vue d ensemble. Le centre de l univers se montre en visant l ORIGINE, de pres. */
+  function montrerOrigine() {
+    const { L, H } = taille();
+    if (L <= 0 || H <= 0) return;
+    cam.auto = false; cam.touchee = true;
+    const cx = L >= 700 ? (L - 380) / 2 : L / 2, cy = L >= 700 ? H / 2 : H * 0.28;
+    const c = { yaw: cam.yaw, pitch: cam.pitch, dist: S * 0.25, ox: cx - L / 2, oy: cy - H / 2 };
+    if (mouvementReduit) { Object.assign(cam, c); cam.cible = null; } else cam.cible = c;
+  }
   function centrerSur(h) {
     if (!h) return;
     const { L, H } = taille();
@@ -418,7 +428,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     /* le bouton ⤢ mene au centre de l univers quand il y en a un ; sinon, la vue de depart comme avant */
     /* ⛔ PHIL (2026-09-19) : « le bouton qui fait centre de la map doit a chaque fois un block different pris au hasard ».
      * L app branche ici son tirage ; sans tirage branche, le bouton mene au centre actuel ou a la vue de depart. */
-    else if (quoi === 'tout') { if (rappelTout) rappelTout(); else if (centre) centrerSur(centre); else vueDeDepart(true); }
+    else if (quoi === 'tout') { if (rappelTout) rappelTout(); else if (centre) montrerOrigine(); else vueDeDepart(true); }
     else if (quoi === 'auto') { cam.auto = !cam.auto; cam.cible = null; }
   });
 
@@ -428,6 +438,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     nbLiens: () => liens.length,
     derniereMain: () => mainA,
     fixerCentre,
+    montrerOrigine,
     surBoutonTout: (fn) => { rappelTout = typeof fn === 'function' ? fn : null; },
     vider: () => { effets = []; liens = []; },
   };

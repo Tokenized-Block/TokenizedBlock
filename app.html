@@ -1270,7 +1270,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0072" hidden>Build <code>20260919-0072</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0073" hidden>Build <code>20260919-0073</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8144,7 +8144,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0072',
+    build: '20260919-0073',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8879,7 +8879,9 @@ function nouveauCentre(parClic = false) {
   if (moteur3d && typeof moteur3d.fixerCentre === 'function') moteur3d.fixerCentre(centreActuel);
   const carteVisible = $('#v-map') && $('#v-map').classList.contains('on') && !document.hidden;
   const mainRecente = moteur3d && typeof moteur3d.derniereMain === 'function' && performance.now() - moteur3d.derniereMain() < 20000;
-  if (moteur3d && carteVisible && (parClic || (!mainRecente && !mouvementReduit))) { try { moteur3d.centrerSur(centreActuel); } catch (_) {} }
+  if (moteur3d && carteVisible && (parClic || (!mainRecente && !mouvementReduit))) {
+    try { if (typeof moteur3d.montrerOrigine === 'function') moteur3d.montrerOrigine(); else moteur3d.centrerSur(centreActuel); } catch (_) {}
+  }
   peindreCentre();
 }
 function peindreCentre() {
@@ -8893,7 +8895,8 @@ function peindreCentre() {
   /* ⛔ capture de Phil : le texte long etait COUPE A GAUCHE dans la barre (« ntre of the universe… »). Court, et le nom d abord. */
   /* Phil (2026-09-19) : « change la formulation : Be centre of Tokenized Block » */
   /* Phil (2026-09-19) : « n affiche pas de nom » — le block tire se voit au centre de la map, le texte est le BOUTON du tirage */
-  el.textContent = '✦ Be centre of TokenizedBlock · every block 1 in ' + n.toLocaleString('en-US')
+  /* Phil : « Be centre of TokenizedBlock, je le dis 2 fois, c est moche » — la marque est deja juste a gauche */
+  el.textContent = '✦ Be the centre of the universe · 1 in ' + n.toLocaleString('en-US')
     + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%)' + (centreActuel ? ' · next draw in ' + mmss : '');
   el.title = 'Every block on the map has exactly the same chance to become the centre of the universe.';
 }
