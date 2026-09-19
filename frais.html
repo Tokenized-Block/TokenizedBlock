@@ -27,7 +27,9 @@
   <div class="carte"><div id="liste" class="doux">Reading the chain…</div></div>
   <div class="carte">
     <button id="connecter" type="button">Connect wallet</button>
-    <span id="boutons"></span>
+    <button id="relire" type="button">Read again</button>
+    <p id="compteTxt" class="doux" style="margin:8px 0 0">Not connected.</p>
+    <div id="boutons"></div>
     <p id="etat" class="doux" style="margin:12px 0 0"></p>
   </div>
 </main>
@@ -53,6 +55,7 @@ const lisible = (brut, dec) => {
 const encoder = (devises) => '0xfc656ac5' + (32).toString(16).padStart(64, '0') + devises.length.toString(16).padStart(64, '0')
   + devises.map((a) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0')).join('');
 let compte = null, parHook = new Map();
+const HOOKS = [{ nom: 'V2', adr: '0x8e1eb57ad2a87a4f7bc89ce94efd5cd77aec2044' }, { nom: 'V3', adr: '0x7a7cebb2ccb84c9fbfa2730e6cb23bb192166044' }];
 
 async function charger() {
   const d = await fetch('/api/frais-hook', { cache: 'no-store' }).then((r) => r.json());
@@ -64,15 +67,20 @@ async function charger() {
       + esc(lisible(l.du, l.decimales)) + '</td></tr>').join('') + '</table>'
       + '<p class="doux" style="margin:8px 0 0">Read at ' + esc(d.lu) + (d.fenetresRatees ? ' · ' + d.fenetresRatees + ' read(s) failed — some amounts may be missing' : '') + '.</p>'
     : 'Nothing is waiting in the hooks right now.';
-  $('#boutons').innerHTML = [...parHook.entries()].map(([adr, h]) => '<button type="button" data-hook="' + esc(adr) + '"' + (compte ? '' : ' disabled') + '>Send ' + esc(h.nom)
-    + ' shares (' + h.devises.length + ')</button>').join('');
+  $('#boutons').innerHTML = HOOKS.map((h) => {
+    const x = parHook.get(h.adr);
+    const n = x ? x.devises.length : 0;
+    return '<button type="button" data-hook="' + esc(h.adr) + '"' + (compte && n ? '' : ' disabled') + '>'
+      + (n ? 'Send ' + h.nom + ' shares (' + n + ')' : 'Nothing to send on ' + h.nom) + '</button>';
+  }).join('');
 }
 $('#connecter').addEventListener('click', async () => {
   if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
   try {
     compte = (await window.ethereum.request({ method: 'eth_requestAccounts' }))[0];
     try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
-    document.querySelectorAll('[data-hook]').forEach((b) => { b.disabled = false; });
+    $('#compteTxt').textContent = 'Connected: ' + compte.slice(0, 6) + '…' + compte.slice(-4) + ' — any wallet can send; the fee wallet receives.';
+    await charger();
   } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
 });
 document.addEventListener('click', async (ev) => {
@@ -85,6 +93,7 @@ document.addEventListener('click', async (ev) => {
   $('#etat').innerHTML = r.etat === 'CONFIRME' ? '<span class="ok">Sent. Transaction:</span> <code>' + esc(r.hash) + '</code>' : '<span class="ko">Not done: ' + esc(r.pourquoi || r.etat) + '</span>';
   setTimeout(() => { charger().catch(() => {}); }, 4000);
 });
+$('#relire').addEventListener('click', () => { $('#liste').textContent = 'Reading the chain…'; charger().catch((e) => { $('#liste').textContent = 'Could not read the hooks: ' + (e.message || e); }); });
 charger().catch((e) => { $('#liste').textContent = 'Could not read the hooks: ' + (e.message || e); });
 </script>
 </body>
