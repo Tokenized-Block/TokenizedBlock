@@ -1330,7 +1330,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0096" hidden>Build <code>20260919-0096</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0097" hidden>Build <code>20260919-0097</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5076,8 +5076,12 @@ function peindreLive() {
         /* tip 0021 (Phil 2026-09-16: « c est ecrit fees mais ya rien ») : the old line promised a fee on EVERY free
          * create. Say a fee path exists only when a fee hook pool for this block was actually seen on chain. */
         : (CHAINE === 8453
+          /* ⛔ Phil 2026-09-19 (TENZ) : un block ne via un AUTRE launchpad (RWAB20LaunchpadFactory + son LaunchHook)
+           * s affichait « market open » comme s il etait a nous. Le hook de la pool dit ou il est ne. */
           ? (poolDecouvertPour(e.jeton)
-            ? '🧱 <b>' + nom + '</b> was born · market open'
+            ? (poolDecouvertPour(e.jeton).isTbFeeHook
+              ? '🧱 <b>' + nom + '</b> was born here · market open'
+              : '🧱 <b>' + nom + '</b> was born on another launchpad')
             : '🧱 <b>' + nom + '</b> was born')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
@@ -8521,7 +8525,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0096',
+    build: '20260919-0097',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
