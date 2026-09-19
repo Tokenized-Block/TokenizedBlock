@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0120" hidden>Build <code>20260919-0120</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0121" hidden>Build <code>20260919-0121</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1607,7 +1607,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ ACHETER / VENDRE DANS L APP (Phil, 2026-09-13) : 0,5 % au wallet de frais, dit avant la signature.
            Le wallet de frais qui achete (buyback) ne paie pas de frais. Visible seulement sur un marche LU. -->
       <div class="pJeu" id="pEchange" hidden>
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5%</span></div>
+        <!-- ⛔ PHIL (2026-09-19, capture « Fee 0.8%+ ») : « retirer l affichage des fees ». Le badge reste dans le DOM (le code
+             l ecrit) mais n est plus montre ; les montants exacts restent dans la fenetre du wallet avant de signer. -->
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais" hidden style="display:none">0.5%</span></div>
         <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
@@ -1767,7 +1769,10 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
+/* ⛔ Phil (test « Paired with ») : un bouton disait « Bring it to life — 0.000379689641686885 ETH ». A L ECRAN : 6 decimales
+ *    au plus ; formaterEthCourt reste EXACT pour remplir un champ qui sera signe (bouton MAX). */
+const ethLisible = (w) => arrondiAffichage(w, 6);
 /* ⛔⛔ LE VRAI DESSIN DE CREATION, celui que l app grave depuis le premier jour. Phil : « refais les
  * carres, et prends tes exemples de creation qui existaient deja ». Ma tete de chat est abandonnee :
  * elle etait une SECONDE identite pour un objet qui en avait deja une, et celle qui compte est celle
@@ -4667,7 +4672,7 @@ async function peindreMesAvoirsProfil(adr) {
   if (!$('#profil') || String($('#profil').dataset.block || '').toLowerCase() !== a.toLowerCase()) return;
   const sym = symProfil || 'blocks';
   const bloc = b ? formaterUnites(b.solde, b.decimales) + ' ' + sym : 'not read';
-  const ethTxt = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'ETH not read';
+  const ethTxt = eth !== null ? ethLisible(eth) + ' ETH' : 'ETH not read';
   $('#pSolde').textContent = bloc + ' · ' + ethTxt;
   if (b) soldeProfil = formaterUnites(b.solde, b.decimales);
   /* ⛔ LES SOLDES DU DEX : exacts, et gardes BRUTS pour MAX (un arrondi d affichage ne doit jamais
@@ -4675,7 +4680,7 @@ async function peindreMesAvoirsProfil(adr) {
   soldesDex = { eth, bloc: b ? b.solde : null, decimales: b ? b.decimales : null };
   /* le cote « payer » parle la devise du marche : l ETH, ou la devise d un marche V3 (AAPLc…) */
   if (deviseEchange) void majSoldeDeviseEchange();
-  else if ($('#peSoldeEth')) $('#peSoldeEth').textContent = eth !== null ? formaterEthCourt(eth) + ' ETH' : 'not read';
+  else if ($('#peSoldeEth')) $('#peSoldeEth').textContent = eth !== null ? ethLisible(eth) + ' ETH' : 'not read';
   if ($('#peSoldeBloc')) $('#peSoldeBloc').textContent = b ? formaterUnites(b.solde, b.decimales) + ' ' + sym : 'not read';
 }
 let soldesDex = { eth: null, bloc: null, decimales: null };
@@ -6436,7 +6441,7 @@ function peindrePlan(plan, adr) {
   e.className = 'note';
   e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.'
     + (usdLaunch > 0 && fraisLancementPret(fraisL)
-      ? ' Then: ' + formaterEthCourt(fraisL) + ' ETH, then bring it to life.'
+      ? ' Then: ' + ethLisible(fraisL) + ' ETH, then bring it to life.'
       : '');
 }
 
@@ -6448,7 +6453,7 @@ async function signerEtapeLancement(etape) {
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
   let r;
   try {
-    if (etape.payant) e.textContent = 'Opening your wallet — ' + formaterEthCourt(BigInt(etape.value)) + ' ETH brings it to life (paid on chain).';
+    if (etape.payant) e.textContent = 'Opening your wallet — ' + ethLisible(BigInt(etape.value)) + ' ETH brings it to life (paid on chain).';
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to: etape.to, data: etape.data, value: etape.value || '0x0' });
   } finally { lancementEnCours = false; }
@@ -6478,7 +6483,7 @@ async function verifierLancement(adr) {
     }
     if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(w)) {
       e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Not enough ETH to bring it to life (' + formaterEthCourt(w) + ' ETH needed). Nothing was sent.';
+      e.textContent = 'Not enough ETH to bring it to life (' + ethLisible(w) + ' ETH needed). Nothing was sent.';
       peindrePlan(planCourant, adr);
       return;
     }
@@ -6504,7 +6509,7 @@ async function verifierLancement(adr) {
   b.type = 'button';
   const fraisL = planCourant.fraisLancementWei;
   b.textContent = (usdLaunch > 0 && fraisLancementPret(fraisL))
-    ? 'Bring it to life — ' + formaterEthCourt(fraisL) + ' ETH'
+    ? 'Bring it to life — ' + ethLisible(fraisL) + ' ETH'
     : 'Bring it to life — sign in my wallet';
   b.addEventListener('click', () => void lancerMarcheBlock(adr));
   actions.appendChild(b);
@@ -6595,7 +6600,7 @@ async function lancerMarcheBlock(adr) {
     if (planCourant.v2 || dejaPaye) {
       e.textContent = 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid).';
     } else if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
-      e.textContent = 'Opening your wallet — ' + formaterEthCourt(fraisL) + ' ETH first, then bring it to life.';
+      e.textContent = 'Opening your wallet — ' + ethLisible(fraisL) + ' ETH first, then bring it to life.';
       const feeVal = '0x' + BigInt(fraisL).toString(16);
       let balAvant = null;
       try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); }
@@ -7732,7 +7737,7 @@ function majFraisEtRecap() {
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
-      ? ', after ' + formaterEthCourt(fraisWeiCalcule) + ' ETH'
+      ? ', after ' + ethLisible(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
       ? ' — ≈ $1 brings it to life, paid once'
@@ -7778,7 +7783,7 @@ function majFraisEtRecap() {
           ? ['Create + ≈ $1 in ETH in one signature (paid only if creation succeeds)']
           : ['Create costs nothing; bringing it to life costs ≈ $1 in ETH'])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
-    }).join('') + '<li>Buy or sell here: 0.5%. Once alive, every trade pays its creator.</li>';
+    }).join('') + '<li>Once alive, anyone can buy and sell it here.</li>';
   }
   $('#cReseauAvert').textContent = CHAINE === 8453
     ? '⚠️ Base — ≈ $1 in ETH brings your block to life, paid once. Cannot be undone.'
@@ -8100,7 +8105,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   let balAvant = null;
   try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
   e.className = 'note';
-  e.textContent = 'One signature: it is created, ≈ $1 (' + formaterEthCourt(plan.fraisW) + ' ETH) brings it to life, and its market opens — all or nothing. Check it in your wallet.';
+  e.textContent = 'One signature: it is created, ≈ $1 (' + ethLisible(plan.fraisW) + ' ETH) brings it to life, and its market opens — all or nothing. Check it in your wallet.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
   etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
@@ -8194,17 +8199,17 @@ async function creerBlock() {
         fraisWeiCalcule = fraisWei;
         e.className = 'note';
         e.textContent = 'Balance below ≈ $' + usd + ' — using the minimum '
-          + formaterEthCourt(fraisWei) + ' ETH so fee still get paid.';
+          + ethLisible(fraisWei) + ' ETH so fee still get paid.';
       } else {
         e.className = 'note wKo';
-        e.textContent = 'Need at least ' + formaterEthCourt(besoinFloor) + ' ETH (including gas). This account holds '
-          + formaterEthCourt(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+        e.textContent = 'Need at least ' + ethLisible(besoinFloor) + ' ETH (including gas). This account holds '
+          + ethLisible(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
         return;
       }
     } else if (s < fraisWei) {
       e.className = 'note wKo';
-      e.textContent = 'The fee is ' + formaterEthCourt(fraisWei) + ' ETH (≈ $' + usd + ') and this account holds '
-        + formaterEthCourt(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+      e.textContent = 'The fee is ' + ethLisible(fraisWei) + ' ETH (≈ $' + usd + ') and this account holds '
+        + ethLisible(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
       return;
     }
     creationEnCoursPayante = true;
@@ -8226,8 +8231,8 @@ async function creerBlock() {
     }
     if (solde < fraisL + gazDeux) {
       e.className = 'note wKo';
-      e.textContent = 'Create, then bring it to life (' + formaterEthCourt(fraisL) + ' ETH + gas). You need about '
-        + formaterEthCourt(fraisL + gazDeux) + ' ETH and this account holds ' + formaterEthCourt(solde) + ' ETH. Nothing was started.';
+      e.textContent = 'Create, then bring it to life (' + ethLisible(fraisL) + ' ETH + gas). You need about '
+        + ethLisible(fraisL + gazDeux) + ' ETH and this account holds ' + ethLisible(solde) + ' ETH. Nothing was started.';
       return;
     }
   }
@@ -8237,7 +8242,7 @@ async function creerBlock() {
     /* tip 2349: default free factory on MAIN + Practice. CreateRouter only if utiliseCreateRouter(). */
     if (utiliseCreateRouter()) {
       e.className = 'note';
-      e.textContent = 'One signature — Create + ' + formaterEthCourt(fraisWei)
+      e.textContent = 'One signature — Create + ' + ethLisible(fraisWei)
         + ' ETH (≈ $' + usd + '). Paid only if creation succeeds.';
     } else if (Number(CHAINE) === 8453 && (await hookV2Deploye({ rpc })) !== 'DEPLOYE') {
       /* ⚠️ Quand le hook V2 est deploye, c est SON inscription qui encaisse la mise en vie (le contrat l exige) :
@@ -8266,7 +8271,7 @@ async function creerBlock() {
           return;
         }
         e.className = 'note';
-        e.textContent = 'Step 1 — ' + formaterEthCourt(fraisP) + ' ETH (≈ $1) brings your block to life. Check it in your wallet.';
+        e.textContent = 'Step 1 — ' + ethLisible(fraisP) + ' ETH (≈ $1) brings your block to life. Check it in your wallet.';
         const rf = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
           to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisP).toString(16) });
         if (rf.etat !== 'CONFIRME') {
@@ -8892,7 +8897,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0120',
+    build: '20260919-0121',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
