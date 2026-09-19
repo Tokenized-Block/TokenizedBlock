@@ -37,7 +37,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   /* Phil (2026-09-19) : « agrandis le cube, il y a de plus en plus de blocks » — depart 1,2x au lieu de 0,7x */
   let S = DEMI_COTE * 1.2;
   /* tip 0042 : limite de l expansion 2,5 x -> 4 x */
-  const S_MAX = DEMI_COTE * 6, EXPANSION_PAR_S = 0.0006;
+  const S_MAX = DEMI_COTE * 9, EXPANSION_PAR_S = 0.0006;
   /* tip 0026 (Phil « un GROS CUBE, pas un rectangle ») : cote egal sur les trois axes */
   let SX = S, SY = S, SZ = S;
   let dernierT = null;

@@ -1131,14 +1131,14 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
 
     <div class="carte">
-      <p class="titre">What the size of a block means</p>
+      <p class="titre">Why some cubes are bigger</p>
       <div class="schemaVie" id="lSchemaVie"></div>
       <table class="regles">
-        <tr><td>Size</td><td>Its <b>price × how many exist</b>, read straight from the chain. Nobody sets it by hand.</td></tr>
-        <tr><td>It moves</td><td>When the price goes down, the block shrinks. It can go up or down fast.</td></tr>
-        <tr><td>⚠️ Careful</td><td>A small purchase can make the number jump a lot. <b>A big block is not
-          a big pile of money.</b></td></tr>
-        <tr><td>Pale block</td><td>Never traded yet. That is <b>not</b> the same as worthless.</td></tr>
+        <tr><td>Big cube</td><td>Its market is worth more: <b>price × number of tokens</b>, read from the chain.</td></tr>
+        <tr><td>Small cube</td><td>A small market — around $1,000 or less.</td></tr>
+        <tr><td>Pale cube</td><td>No market yet: nobody can buy it for now.</td></tr>
+        <tr><td>⚠️ Careful</td><td>Prices move fast, and a small purchase can make a cube grow a lot.
+          <b>A big cube is not a big pile of money.</b></td></tr>
       </table>
     </div>
 
@@ -1284,7 +1284,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0076" hidden>Build <code>20260919-0076</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0077" hidden>Build <code>20260919-0077</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1883,6 +1883,14 @@ async function lirePrixEth() {
     fraisWeiCalcule = null;
   }
   try { majFraisEtRecap(); } catch (e) { /* Create tab may not be painted yet */ }
+  if (ethUsd !== null) {
+    for (const h of habitants) {
+      if (!h || h.etatVie !== 'LUE' || typeof h.vie !== 'number') continue;
+      const t = Math.round(tailleDe(h.vie, h.devise) * (h.nous ? 1.25 : 1));
+      if (t === h.t) continue;
+      h.t = t; h.el.style.width = t + 'px'; h.el.style.height = Math.round(t * 1.1) + 'px';
+    }
+  }
   return ethUsd;
 }
 /** La jauge d un block, en dollars. Rend le texte a afficher et la largeur de barre. */
@@ -1970,12 +1978,23 @@ async function rpc(methode, params) {
  *    OpenLaunch affiche « $24.9K » pour une base mesuree a 10,016 ETH — melanger les deux ferait
  *    d un seuil « 50 k » un nombre qui ne veut rien dire.
  */
-const TAILLE_MIN = 40, TAILLE_MAX = 132;
-const SEUIL_FAIBLE = 50000, SEUIL_GROS = 1000000;
-function tailleDe(vie) {
-  if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return 34;
-  const bas = Math.log10(SEUIL_FAIBLE), haut = Math.log10(SEUIL_GROS);
-  const p = (Math.log10(vie) - bas) / (haut - bas);
+/* ⛔⛔ MESURE (Phil, 2026-09-19 : « la taille des blocks ne fonctionne pas »). Les seuils 50 k / 1 M etaient compares a
+ *    une vie lue en ETH : un block a 20 ETH (≈ 50 000 $) etait « sous 50 000 » — presque tous les blocks avaient la
+ *    MEME taille minimale. L echelle compare maintenant des DOLLARS : vie x prix de l ETH (ou la vie telle quelle
+ *    si la pool est en USDC). De 1 000 $ (petit) a 1 000 000 $ (gros), en log. */
+const TAILLE_MIN = 40, TAILLE_MAX = 170;
+const SEUIL_FAIBLE_USD = 1000, SEUIL_GROS_USD = 1000000;
+function vieEnUsd(vie, devise) {
+  if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return null;
+  if (devise === 'USDC') return vie;
+  if (!devise || devise === 'ETH') return typeof ethUsd === 'number' && ethUsd > 0 ? vie * ethUsd : null;
+  return null;
+}
+function tailleDe(vie, devise = 'ETH') {
+  const usd = vieEnUsd(vie, devise);
+  if (usd == null) return typeof vie === 'number' && vie > 0 ? TAILLE_MIN : 34;
+  const bas = Math.log10(SEUIL_FAIBLE_USD), haut = Math.log10(SEUIL_GROS_USD);
+  const p = (Math.log10(usd) - bas) / (haut - bas);
   return Math.round(TAILLE_MIN + Math.max(0, Math.min(1, p)) * (TAILLE_MAX - TAILLE_MIN));
 }
 
@@ -2161,7 +2180,7 @@ function effetsDepuisLive(evts, { animeMax = Infinity } = {}) {
 function creerHabitant(c) {
   const map = mondeMap();
   /* tip 0026 : position 3D dans le cube, posee par le moteur (map3d.js) — plus aucune dependance a la taille de la fenetre */
-  const t = tailleDe(c.vie);
+  const t = tailleDe(c.vie, c.devise);
   const el = document.createElement('button');
   el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
   /* ⛔ RATIO DU DESSIN, PAS UN CARRE : le SVG fait 200x220 et le forcer dans une case carree le
@@ -2617,7 +2636,7 @@ function appliquerVie(h, r) {
   queueMicrotask(peindreStades);
   if (r.etat !== 'LUE') return;
   h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
-  const t = Math.round(tailleDe(r.vie) * (h.nous ? 1.25 : 1));
+  const t = Math.round(tailleDe(r.vie, r.devise) * (h.nous ? 1.25 : 1));
   h.t = t;
   h.el.style.width = t + 'px';
   h.el.style.height = Math.round(t * 1.1) + 'px';
@@ -8175,7 +8194,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0076',
+    build: '20260919-0077',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8582,21 +8601,23 @@ document.addEventListener('click', (ev) => {
 });
 
 /* ⛔ PUBLIC SEULEMENT : aucun pourcentage de frais, aucune destination, aucun detail interne. Des mots simples. */
+/* ⛔ PUBLIC SEULEMENT : aucun pourcentage de frais, aucune destination, aucun detail interne.
+ * Phil : « ecris par rapport a nos onglets » — une etape par onglet, dans l ordre de la barre du bas. */
 const ETAPES = [
-  { t: 'Every cube is a block', ic: 1,
-    d: 'A block is a token someone created on Base. It has a name, a face engraved at birth, and a small brain that reacts to what happens to it.' },
-  { t: 'The bigger the cube, the bigger its market', ic: 6,
-    d: 'Size follows the market right now, read from the chain. A pale, small cube has no market yet — it is not worthless, just untouched.' },
-  { t: 'Light beams are real events', ic: 3,
-    d: 'A buy, a sale, a message, a transfer: each one lights up the map for a few seconds. The Feed tab lists them.' },
-  { t: 'Create your own block', ic: 0,
-    d: 'Give it a name and a symbol — the face and settings are ready. Creating is free. Bringing it to life (opening its market) costs about $1, once.' },
-  { t: 'Buy, sell and send from your wallet', ic: 2,
-    d: 'Everything goes through your own wallet: it shows you the transaction, you sign. Nothing moves without your signature. A small fee is included in each trade and shown before you sign.' },
-  { t: 'Be the centre of the universe', ic: 9,
-    d: 'Every few minutes one block is drawn at random and placed at the centre of the map. Every block has exactly the same chance. Tap the text at the top to draw again.' },
-  { t: 'Your blocks, your page', ic: 5,
-    d: 'My block shows what you hold and what you created, with its brain and its market.' },
+  { t: 'Map — every cube is a block', ic: 1,
+    d: 'Each cube is a real token on Base. The more its market is worth, the bigger the cube. Light beams are real buys, sales and transfers happening now. Every few minutes one block is drawn at random to sit at the centre — tap the text at the top to draw again.' },
+  { t: 'Blocks — the list', ic: 6,
+    d: 'All blocks sorted by how big their market is. Tap one to open it, see its brain, and buy or sell.' },
+  { t: 'Create — make your own', ic: 0,
+    d: 'Pick a name and a symbol; the face is ready. Creating is free. Bringing it to life opens its market and costs about $1, once.' },
+  { t: 'Brain AI — what a block feels', ic: 9,
+    d: 'Every block has a small brain that reacts to what happens to it: a buy, a sale, a new holder. You watch it light up. It never trades for you.' },
+  { t: 'Wallet — your money stays yours', ic: 2,
+    d: 'See what you hold, send and receive. Every action opens your own wallet: you check it, you sign. A small fee is included in each trade and shown before you sign.' },
+  { t: 'Feed — what just happened', ic: 3,
+    d: 'Everything happening to blocks on Base, live: births, buys, sales, messages.' },
+  { t: 'My block — your page', ic: 5,
+    d: 'The blocks you created and the ones you hold, with their brain and their market.' },
 ];
 
 function peindreLearn() {
@@ -8640,9 +8661,9 @@ function peindreSchemaVie() {
   $('#lSchemaVie').innerHTML = '<svg viewBox="0 0 320 78" xmlns="http://www.w3.org/2000/svg">'
     + '<text x="0" y="20" fill="' + c + '" font-size="13" font-weight="700">price</text>'
     + '<text x="52" y="20" style="fill:' + d + '" font-size="13">×</text>'
-    + '<text x="68" y="20" fill="' + c + '" font-size="13" font-weight="700">supply</text>'
+    + '<text x="68" y="20" fill="' + c + '" font-size="13" font-weight="700">tokens</text>'
     + '<text x="132" y="20" style="fill:' + d + '" font-size="13">=</text>'
-    + '<text x="148" y="20" fill="' + c + '" font-size="13" font-weight="700">size</text>'
+    + '<text x="148" y="20" fill="' + c + '" font-size="13" font-weight="700">cube size</text>'
     + '<rect x="0" y="32" width="60" height="10" rx="5" fill="' + c + '" opacity=".8"/>'
     + '<rect x="68" y="32" width="56" height="10" rx="5" fill="' + c + '" opacity=".4"/>'
     + '<rect x="148" y="32" width="110" height="10" rx="5" fill="' + c + '"/>'
