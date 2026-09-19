@@ -263,7 +263,7 @@ export function logoSvg(o) {
   if (o._modele === true) {
     const plat = (f) => motif('1 0 0 1 0 0', f);
     return {
-      haut: M.haut, gauche: M.gauche, droite: M.droite, trait: M.trait, ep: M.ep, lustre: M.lustre,
+      haut: M.haut, gauche: M.gauche, droite: M.droite, trait: M.trait, ep: M.ep, lustre: M.lustre, division: n,
       motifs: { haut: plat(ca(92, 56)), gauche: plat(ca(90, 48)), droite: plat(ca(88, 38)) },
       eclats, eclat: { haut: c(70, 62), gauche: c(75, 44), droite: c(78, 32), trait: ca(90, 72) },
       coin: motifCoin, coinCouleur: ca(85, 66),

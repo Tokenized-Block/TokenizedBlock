@@ -19,8 +19,17 @@ function graine(adr, i) {
   return ((h >>> 0) % 10000) / 10000;
 }
 
-const face = (cls, fond, trait, ep, motif) => '<div class="c3f ' + cls + '" style="background:' + (fond === 'none' ? 'transparent' : fond)
-  + ';border:' + Math.max(1, ep * 0.6).toFixed(1) + 'px solid ' + trait + '">'
+/* ⛔ PHIL (2026-09-19) : « rajoute tous les elements de l image 2D sur le modele 3D, comme les lignes ». La GRILLE de la
+ *    face (division n, meme trait que le logo grave : #cfe6ff a 32 %) et le LUSTRE de la face du haut sont peints en
+ *    fonds CSS — aucun element de plus, donc aucun cout de plus. */
+const grilleCss = (n) => n > 1
+  ? 'background-image:linear-gradient(rgb(207 230 255 / .32) 1px,transparent 1px),linear-gradient(90deg,rgb(207 230 255 / .32) 1px,transparent 1px);'
+    + 'background-size:calc(100% / ' + n + ') calc(100% / ' + n + ');background-position:-0.5px -0.5px;'
+  : '';
+const face = (cls, fond, trait, ep, motif, n = 1, lustre = false) => '<div class="c3f ' + cls + '" style="background-color:'
+  + (fond === 'none' ? 'transparent' : fond) + ';' + grilleCss(n)
+  + (lustre ? 'box-shadow:inset 0 0 0 999px rgb(255 255 255 / .10);' : '')
+  + 'border:' + Math.max(1, ep * 0.6).toFixed(1) + 'px solid ' + trait + '">'
   + (motif ? '<svg viewBox="-26 -26 52 52" aria-hidden="true">' + motif + '</svg>' : '') + '</div>';
 
 /**
@@ -36,12 +45,13 @@ export function cube3dHtml(params, adr) {
   const vx = (graine(adr, 1) * 2 - 1).toFixed(3), vy = (0.4 + graine(adr, 2)).toFixed(3), vz = (graine(adr, 3) * 2 - 1).toFixed(3);
   const duree = (14 + graine(adr, 4) * 16).toFixed(1);
   const sens = graine(adr, 5) < 0.5 ? 'normal' : 'reverse';
-  const faces = face('av', m.gauche, m.trait, m.ep, m.motifs.gauche)
-    + face('ar', m.gauche, m.trait, m.ep, m.motifs.gauche)
-    + face('dr', m.droite, m.trait, m.ep, m.motifs.droite)
-    + face('ga', m.droite, m.trait, m.ep, m.motifs.droite)
-    + face('ha', m.haut, m.trait, m.ep, m.motifs.haut)
-    + face('ba', m.haut, m.trait, m.ep, m.motifs.haut);
+  const n = Number(m.division) || 1;
+  const faces = face('av', m.gauche, m.trait, m.ep, m.motifs.gauche, n)
+    + face('ar', m.gauche, m.trait, m.ep, m.motifs.gauche, n)
+    + face('dr', m.droite, m.trait, m.ep, m.motifs.droite, n)
+    + face('ga', m.droite, m.trait, m.ep, m.motifs.droite, n)
+    + face('ha', m.haut, m.trait, m.ep, m.motifs.haut, n, m.lustre)
+    + face('ba', m.haut, m.trait, m.ep, m.motifs.haut, n, m.lustre);
   /* les satellites : les eclats du logo (petits cubes a sa couleur), puis l ornement s il y en a un ; 2 au plus */
   const sats = [];
   const nEclats = Math.min(2, Number(m.eclats) || 0);
@@ -70,8 +80,14 @@ export function cube3dHtml(params, adr) {
    *    (cube + eclats + ornements), SANS son rectangle de fond — la galaxie reste visible autour. */
   let iso = '';
   try { iso = logoSvg(params).replace(/<rect width="200" height="220" fill="[^"]*"\/>/, ''); } catch (_) { iso = ''; }
+  /* les ornements de coin, places EXACTEMENT comme sur le logo grave (memes positions, meme couleur), en cadre fixe */
+  const coins3d = !m.coin ? '' : '<svg class="c3k" viewBox="0 0 200 220" aria-hidden="true"><g fill="' + m.coinCouleur + '" stroke="'
+    + m.coinCouleur + '" opacity="0.85">'
+    + [[16, 16, 1, 1], [184, 16, -1, 1], [16, 204, 1, -1], [184, 204, -1, -1]]
+      .map(([x, y, sx, sy]) => '<g transform="translate(' + x + ' ' + y + ') scale(' + sx + ' ' + sy + ')">' + m.coin + '</g>').join('')
+    + '</g></svg>';
   return '<div class="c2" aria-hidden="true">' + iso + '</div>'
-    + '<div class="c3" aria-hidden="true"><div class="c3t">'
+    + '<div class="c3" aria-hidden="true">' + coins3d + '<div class="c3t">'
     + '<div class="c3r" style="--vx:' + vx + ';--vy:' + vy + ';--vz:' + vz + ';--d:' + duree + 's;animation-direction:' + sens + '">'
     + faces + '</div>' + orbites + '</div></div>';
 }
@@ -119,6 +135,7 @@ export const CUBE3D_CSS = `
 .c3m .av{transform:translateZ(4.5cqmin)}.c3m .ar{transform:rotateY(180deg) translateZ(4.5cqmin)}
 .c3m .dr{transform:rotateY(90deg) translateZ(4.5cqmin)}.c3m .ga{transform:rotateY(-90deg) translateZ(4.5cqmin)}
 .c3m .ha{transform:rotateX(90deg) translateZ(4.5cqmin)}.c3m .ba{transform:rotateX(-90deg) translateZ(4.5cqmin)}
+.c3k{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .c3dot{position:absolute;width:3cqmin;height:3cqmin;margin:-1.5cqmin 0 0 -1.5cqmin;border-radius:50%}
 @media (prefers-reduced-motion: reduce){.c3m{animation:none}}
 `;
