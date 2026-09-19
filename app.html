@@ -1367,7 +1367,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0112" hidden>Build <code>20260919-0112</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0113" hidden>Build <code>20260919-0113</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1777,6 +1777,7 @@ import { faceDuBlock, validerFace } from './face.js';
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
 import { planLancement, simulerLancement, PERMIT2 } from './lancer-pool.js';
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu } from './groupe-wallet.js';
+import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
 import { vieDuBlock } from './marche.js';
@@ -6143,6 +6144,7 @@ async function calculerLancement() {
   const e = $('#plEtat');
   e.className = 'note';
   if (!(await pret())) { e.className = 'note wKo'; vieAutoArreter(); e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  try { await valoPrete; } catch (_) {}
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   /* ⛔ V3 (2026-09-19) : la devise choisie est une ADRESSE (USDC, cbBTC, action) ou ETH. Plus de TBLOCK a la mise en vie. */
   const deviseLancement = $('#plDevise').value === 'ETH' ? null : $('#plDevise').value;
@@ -6229,6 +6231,12 @@ async function calculerLancement() {
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+      }
+      /* plancher en dollars pour une devise (planLancement ne le juge qu en ETH) : meme plancher, converti */
+      if (deviseLancement && plan && plan.classement && plan.classement.etat === 'NON_APPLICABLE') {
+        const p = await prixUsdDevise(deviseLancement);
+        if (ethUsd === null) await lirePrixEth();
+        if (p > 0 && ethUsd > 0 && valo * p < VALO_PLANCHER_ETH * ethUsd) plan.classement = { etat: 'TROP_BON_MARCHE', valo, plancherEth: VALO_PLANCHER_ETH };
       }
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
@@ -6787,12 +6795,36 @@ new MutationObserver(() => {
   }, 8000 * (n + 1));
 }).observe($('#pRelire'), { attributes: true, attributeFilter: ['hidden'] });
 $('#plCalculer').addEventListener('click', () => void calculerLancement());
+/* ⛔ LA VALEUR DE DEPART EST LA MEME EN DOLLARS, QUELLE QUE SOIT LA PAIRE (2026-09-19) : avant, choisir USDC ne changeait
+ *    que l exemple et laissait « 10 » — 10 $ au lieu de ~26 000 $. Tant que la valeur n a pas ete tapee (ni donnee par un
+ *    lien), elle suit la paire : 10 ETH convertis au prix lu (ETH : Uniswap ; devise : /api/prix-usd, USDC = 1). */
+const VALO_DEFAUT_ETH = 10;
+let valoParDefaut = true;
+let valoPrete = Promise.resolve();
+$('#plValo').addEventListener('input', () => { valoParDefaut = false; });
+async function prixUsdDevise(adr) {
+  if (String(adr).toLowerCase() === '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913') return 1;
+  try { const d = await fetch('/api/prix-usd?adr=' + encodeURIComponent(adr), { cache: 'no-store' }).then((r) => r.json()); return d && d.ok && d.prixUsd > 0 ? d.prixUsd : null; }
+  catch (_) { return null; }
+}
+async function valoDefautEnDevise(adr) {
+  if (ethUsd === null) await lirePrixEth();
+  if (ethUsd === null) return null;
+  const p = await prixUsdDevise(adr);
+  if (!(p > 0)) return null;
+  return Number((VALO_DEFAUT_ETH * ethUsd / p).toPrecision(3));
+}
 $('#plDevise').addEventListener('change', () => {
   const o = $('#plDevise').selectedOptions[0];
   const t = $('#plDevise').value === 'ETH' ? 'ETH' : ((o && o.dataset.sym) || 'the pair');
   $('#plContre').textContent = t;
   $('#plUnite').textContent = t;
   $('#plValo').placeholder = t === 'ETH' ? 'e.g. 10' : t === 'USDC' ? 'e.g. 20000' : 'e.g. 5';
+  if (valoParDefaut) {
+    const d = $('#plDevise').value;
+    if (d === 'ETH' || d === 'TBLOCK') { $('#plValo').value = String(VALO_DEFAUT_ETH); valoPrete = Promise.resolve(); }
+    else valoPrete = valoDefautEnDevise(d).then((v) => { if (valoParDefaut && $('#plDevise').value === d) $('#plValo').value = v ? String(v) : ''; });
+  }
   planCourant = null;
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
@@ -7996,28 +8028,34 @@ function prepayePour(adr) {
  *    le supply est scelle et frappe au createur. Si la chaine ne donne pas exactement cet etat, un appel echoue et rien
  *    n est applique.
  * Rend 'SANS' (garder le parcours etape par etape), 'FAIT' ou 'STOP' (message deja affiche).
- * BORNES : paire ETH seulement (les devises gardent le parcours classique) ; un lot rate bascule sur le parcours classique. */
+ * BORNES : ETH (hook V2) et les devises de la liste V3 (USDC, cbBTC, actions) ; un lot rate bascule sur le parcours classique. */
 let sansGroupe = false;
 async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, e }) {
   const eth = window.ethereum;
   if (sansGroupe || !eth || Number(CHAINE) !== 8453 || utiliseCreateRouter()) return 'SANS';
   if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
-  if (paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr)) return 'SANS';
+  /* ETH -> hook V2 ; USDC, cbBTC, actions (liste V3) -> hook V3 (Phil 2026-09-19 : « fais aussi USDC et actions ») */
+  const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
+  if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
   if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
-  if ((await hookV2Deploye({ rpc })) !== 'DEPLOYE') return 'SANS';
+  const hook = devise ? HOOK_V3 : HOOK_V2;
+  if ((await (devise ? hookV3Deploye({ rpc }) : hookV2Deploye({ rpc }))) !== 'DEPLOYE') return 'SANS';
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);
   const k = rep.destinataires.findIndex((d) => String(d).toLowerCase() === String(compte).toLowerCase());
   const solde = k >= 0 ? BigInt(rep.montants[k]) : 0n;
   const rpcPrevu = rpcAvecBlockPrevu(rpc, { jeton: adresse, compte, supply: SUPPLY_FIXE, dec: DECIMALES_FIXES, solde, permit2: PERMIT2 });
-  const valo = Number(String(($('#plValo') && $('#plValo').value) || '10').trim().replace(',', '.'));
+  /* valeur de depart : la meme en dollars que 10 ETH, convertie dans la devise ; illisible = parcours classique */
+  const valo = devise ? await valoDefautEnDevise(devise) : VALO_DEFAUT_ETH;
+  if (!(valo > 0)) return 'SANS';
   let plan;
   try {
-    plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo > 0 ? valo : 10, partPourMille: 999, hooks: HOOK_V2 });
+    plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999,
+      ...(devise ? { devise } : {}), hooks: hook });
     const w = await assurerFraisLancementWei(true);
     if (!fraisLancementPret(w)) { e.className = 'note wKo'; e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.'; return 'STOP'; }
-    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook: HOOK_V2 });
+    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook });
     plan.fraisW = BigInt(w);
   } catch (_) { return 'SANS'; }
   /* un plan incomplet, deja marche, ou a confirmer a la main : le parcours classique sait l expliquer */
@@ -8813,7 +8851,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0112',
+    build: '20260919-0113',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -9410,14 +9448,14 @@ const PRESETS_CREATION = { tblock: { nom: 'TokenizedBlock', sym: 'TBLOCK', sel: 
  *    calcule ni ne signe rien — l utilisateur ouvre le marche, relit « What your wallet will sign » et signe. */
 const valoLien = Number(paramsLien.get('lancer'));
 const partLien = Number(paramsLien.get('part'));
-if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e6) $('#plValo').value = String(valoLien);
+if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e6) { $('#plValo').value = String(valoLien); valoParDefaut = false; }
 if (Number.isFinite(partLien) && partLien >= 0.1 && partLien <= 99.9) $('#plPart').value = String(partLien);
 if (Number.isFinite(valoLien) && valoLien > 0) lancementLien = String(paramsLien.get('block') || '').toLowerCase();
 /* &paire=tblock : preselectionne la paire TBLOCK (Phil, 2026-09-13 : TTB sera le premier block apparie a TBLOCK) */
 if (String(paramsLien.get('paire') || '').toLowerCase() === 'tblock') {
   $('#plDevise').value = 'TBLOCK';
   $('#plDevise').dispatchEvent(new Event('change'));
-  if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e12) $('#plValo').value = String(valoLien);
+  if (Number.isFinite(valoLien) && valoLien > 0 && valoLien <= 1e12) { $('#plValo').value = String(valoLien); valoParDefaut = false; }
 }
 const presetLien = PRESETS_CREATION[String(paramsLien.get('creer') || '').toLowerCase()];
 if (presetLien) {

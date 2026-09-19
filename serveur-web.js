@@ -73,6 +73,7 @@ async function obtenirRasteriseur() {
   return rasteriseur;
 }
 import { resumerTrending } from './trending.js';
+import { pairesProposees } from './paires.js';
 const RPC_BASE = 'https://mainnet.base.org';
 let rpcId = 0;
 async function rpcServeur(methode, params) {
@@ -399,6 +400,7 @@ console.log('[xmtp] ' + xmtpServis + ' fichier(s) servis, ' + xmtpRefuses + ' re
  * <!--og:debut-->…<!--og:fin--> dit le SYMBOLE du block et montre SA face gravee (/face/0x….png) — sinon l image
  * generique : jamais une face inventee. Lecture seule, bornee a 2,5 s (un robot d apercu n attend pas), cachee. */
 const apercusBlocs = new Map();
+const prixUsdCache = new Map();
 const htmlAttr = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 async function apercuBlock(adr) {
   const a = adr.toLowerCase();
@@ -506,6 +508,34 @@ createServer((req, res) => {
     res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
       + '  <url><loc>https://tokenizedblock.space/</loc><lastmod>' + jour + '</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>\n'
       + '</urlset>\n');
+    return;
+  }
+
+  /* ══ PRIX EN DOLLARS D UNE DEVISE DE PAIRE (2026-09-19) ═══════════════════════════════════════════════════════════
+   * ⛔ BUG MESURE : a la mise en vie, choisir USDC ou une action ne changeait que l exemple ; la valeur restait « 10 » —
+   *    un block a 10 USDC (10 $) au lieu de ~26 000 $ en ETH, sans aucun plancher. La valeur par defaut est desormais la
+   *    MEME en dollars, convertie avec ce prix. Seulement les devises de la liste V3 ; paire la plus liquide sur Base
+   *    (DexScreener), au moins 10 000 $ de liquidite, sinon « non lu ». Cache 5 min. */
+  if (chemin === '/api/prix-usd') {
+    const adr = String(new URL(req.url, 'http://x').searchParams.get('adr') || '').toLowerCase();
+    const admise = pairesProposees(8453).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === adr);
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (!admise) { repondre({ ok: false, pourquoi: 'not a pair currency of this app' }); return; }
+    const c = prixUsdCache.get(adr);
+    if (c && Date.now() - c.t < 300000) { repondre(c.r); return; }
+    fetch('https://api.dexscreener.com/tokens/v1/base/' + adr, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } })
+      .then((x) => (x.ok ? x.json() : Promise.reject(new Error('HTTP ' + x.status))))
+      .then((j) => {
+        const p = (Array.isArray(j) ? j : []).filter((x) => String(x.baseToken && x.baseToken.address).toLowerCase() === adr)
+          .sort((a, b) => ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0))[0];
+        const prix = p ? Number(p.priceUsd) : NaN, liq = p && p.liquidity ? Number(p.liquidity.usd) : 0;
+        const r = prix > 0 && Number.isFinite(prix) && liq >= 10000
+          ? { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() }
+          : { ok: false, pourquoi: 'no liquid enough market read' };
+        if (r.ok) prixUsdCache.set(adr, { t: Date.now(), r });
+        repondre(r);
+      })
+      .catch((e) => repondre({ ok: false, pourquoi: 'price not read: ' + String((e && e.message) || e).slice(0, 80) }));
     return;
   }
 
