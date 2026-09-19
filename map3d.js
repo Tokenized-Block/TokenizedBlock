@@ -48,6 +48,14 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   let liens = [];
   /* l instant du dernier geste de l utilisateur : le spotlight automatique ne lui arrache jamais la camera */
   let mainA = 0;
+  /* ⛔ PHIL (2026-09-19) : « le bouton ne montre pas le block place au centre, le point 0 0 ». Le block tire au sort
+   * glisse VRAIMENT jusqu a l origine du cube (0,0,0) et y reste son tour ; l ancien centre reprend sa derive. */
+  let centre = null;
+  function fixerCentre(h) {
+    if (centre && centre !== h) centre.centreFixe = false;
+    centre = h || null;
+    if (centre) centre.centreFixe = true;
+  }
   let glisse = false;
   /* etoiles : directions sur la sphere, graine fixe (meme ciel chez tout le monde), taille et eclat varies */
   const ETOILES = [];
@@ -225,7 +233,12 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       if (h.wx === undefined) placer(h);
       /* derive : vx/vy viennent du cerveau (battre), vz est la profondeur ; x3 pour que le mouvement se voie dans un grand cube */
       const vit = 3 * (S / DEMI_COTE);
-      h.wx += h.vx * vit; h.wy += h.vy * vit; h.wz += (h.vz || 0) * vit;
+      if (h.centreFixe) {
+        /* le centre de l univers rejoint l origine en douceur (5 % du chemin par image), sans derive ni rebond */
+        h.wx *= 0.95; h.wy *= 0.95; h.wz *= 0.95;
+      } else {
+        h.wx += h.vx * vit; h.wy += h.vy * vit; h.wz += (h.vz || 0) * vit;
+      }
       const m = h.t * 0.8;
       if (Math.abs(h.wx) > SX - m) { h.vx = -Math.sign(h.wx) * Math.abs(h.vx); h.wx = Math.sign(h.wx) * (SX - m); }
       if (Math.abs(h.wy) > SY - m) { h.vy = -Math.sign(h.wy) * Math.abs(h.vy); h.wy = Math.sign(h.wy) * (SY - m); }
@@ -401,7 +414,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     const quoi = b.getAttribute('data-cam');
     if (quoi === 'plus') { cam.auto = false; zoomer(1 / 1.4); }
     else if (quoi === 'moins') { cam.auto = false; zoomer(1.4); }
-    else if (quoi === 'tout') vueDeDepart(true);
+    /* le bouton ⤢ mene au centre de l univers quand il y en a un ; sinon, la vue de depart comme avant */
+    else if (quoi === 'tout') { if (centre) centrerSur(centre); else vueDeDepart(true); }
     else if (quoi === 'auto') { cam.auto = !cam.auto; cam.cible = null; }
   });
 
@@ -410,6 +424,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     glisseAuClic: () => glisse, oublierGlisse: () => { glisse = false; },
     nbLiens: () => liens.length,
     derniereMain: () => mainA,
+    fixerCentre,
     vider: () => { effets = []; liens = []; },
   };
 }

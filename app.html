@@ -64,6 +64,8 @@
   --carte:hsl(var(--h) 37% 12%); --ligne:#2f2545;
   --texte:#f3effb; --doux:#b9a9dd;
   --accent:#a78bfa; --accent2:hsl(var(--h) 100% 87%);
+  /* canaux RGB des couleurs du theme : le CSS ecrit rgb(var(--accentRgb) / .3), et un coloris n a qu a les redefinir */
+  --accentRgb:167 139 250; --fondRgb:15 10 23; --fond2Rgb:26 18 40; --boutonRgb:139 92 246;
   /* les nuances qui trainaient en dur, ramenees sur la meme teinte */
   /* ⛔ `--halo` ET `--mapFond` ONT ETE RETIRES AVEC LES DEGRADES. Un token qui ne sert plus se
    * relit comme une option encore valable, et le prochain qui le voit refait la tache lumineuse
@@ -73,7 +75,7 @@
   --mapNuit:var(--fond);
   /* ⛔ LA GRILLE EST L ACCENT A 10 %, mesure : `rgba(167, 139, 250, 0.1)` sur la vraie page. Ce n est
    * pas une couleur de plus, c est LA couleur, estompee — et c est pour ca qu elle ne detonne jamais. */
-  --grille:rgb(167 139 250 / .1); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
+  --grille:rgb(var(--accentRgb) / .1); --contour:hsl(var(--h) 29% 29%); --creux:hsl(var(--h) 33% 8%);
   /* ⛔⛔ RAYONS ET FILETS, PASSE « APPLE » DU 2026-09-12 (demande de Phil : « harmonieux comme
    * Apple »). Ce qui fait cette impression n est ni une couleur ni une ombre : c est la REGULARITE.
    * Deux rayons seulement, un filet d un pixel a faible contraste, un rythme d espacement constant
@@ -81,6 +83,15 @@
   --vif:#3ddc97; --tiede:#f0c674; --dur:#ff6b6b; --r:18px; --rs:12px;
   --pas:14px;
 }
+/* ══ COLORIS (Phil, 2026-09-19 : « ajoute un bouton en haut pour proposer differents coloris, je les trouve tous beaux »)
+   A = le mauve d origine (aucune surcharge). B, C, D redefinissent seulement les tokens : fonds, lignes, texte doux,
+   lumiere. Les FACES des blocks ne changent jamais — elles sont gravees, pas decorees. */
+:root[data-teinte="b"]{--h:220;--fond:#070b1a;--fond2:#0f1a33;--carte:hsl(220 45% 11%);--ligne:#1c2a4a;--doux:#a9bde6;
+  --accent:#7aa2ff;--accent2:hsl(220 100% 86%);--accentRgb:122 162 255;--fondRgb:7 11 26;--fond2Rgb:15 26 51;--boutonRgb:59 130 246}
+:root[data-teinte="c"]{--h:235;--fond:#060816;--fond2:#121a3a;--carte:hsl(232 48% 12%);--ligne:#222a55;--doux:#b3b8ea;
+  --accent:#8b93ff;--accent2:hsl(236 100% 88%);--accentRgb:139 147 255;--fondRgb:6 8 22;--fond2Rgb:18 26 58;--boutonRgb:99 102 241}
+:root[data-teinte="d"]{--h:200;--fond:#04101a;--fond2:#0b2233;--carte:hsl(204 60% 10%);--ligne:#143447;--doux:#9fcfe0;
+  --accent:#5fd4ff;--accent2:hsl(195 100% 85%);--accentRgb:95 212 255;--fondRgb:4 16 26;--fond2Rgb:11 34 51;--boutonRgb:14 165 233}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 /* ⛔⛔ FOND PLAT, PAS UN DEGRADE — ET C EST LA REMARQUE LA PLUS JUSTE DE LA JOURNEE. Phil a entoure
@@ -292,12 +303,12 @@ body{background:var(--fond);
 .fActions .plein{grid-column:1/-1}
 /* tip 0042 — fiche du block sur la map, glow up */
 .fiche .fTete{gap:14px}
-.fiche .fAvatar{width:76px;height:84px;border:0;border-radius:16px;background:radial-gradient(circle, rgb(167 139 250 / .3), transparent 70%);
-  filter:drop-shadow(0 0 14px rgb(167 139 250 / .45))}
+.fiche .fAvatar{width:76px;height:84px;border:0;border-radius:16px;background:radial-gradient(circle, rgb(var(--accentRgb) / .3), transparent 70%);
+  filter:drop-shadow(0 0 14px rgb(var(--accentRgb) / .45))}
 .fiche .fNom{font-size:19px;letter-spacing:-.3px}
 .fChips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
 .fChip{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border-radius:12px;min-width:70px;
-  background:rgb(15 10 23 / .6);border:1px solid rgb(167 139 250 / .16)}
+  background:rgb(var(--fondRgb) / .6);border:1px solid rgb(var(--accentRgb) / .16)}
 .fChip span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);font-family:inherit}
 .fChip b{font-size:14px;color:var(--texte);font-family:inherit}
 .fChip b.trUp{color:var(--vif)} .fChip b.trDown{color:var(--dur)}
@@ -338,27 +349,28 @@ body{background:var(--fond);
 .stadeLigne{display:flex;flex-wrap:wrap;gap:6px}
 /* la banniere « nouvelle version » : discrete, au-dessus de la nav, jamais un rechargement force */
 .vNouvelle{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:60;display:flex;align-items:center;gap:10px;
-  padding:10px 12px;border-radius:14px;border:1px solid rgb(167 139 250 / .45);background:rgb(18 12 28 / .96);
+  padding:10px 12px;border-radius:14px;border:1px solid rgb(var(--accentRgb) / .45);background:rgb(18 12 28 / .96);
   font-size:12px;color:var(--texte);box-shadow:0 12px 30px rgb(0 0 0 / .5)}
 .vNouvelle .bouton{width:auto;padding:8px 12px;margin:0}
 .dexCols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
 @media (max-width:560px){.dexCols{grid-template-columns:1fr}}
-.dexCol{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid rgb(167 139 250 / .16);border-radius:14px;
-  background:rgb(167 139 250 / .04)}
+.dexCol{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid rgb(var(--accentRgb) / .16);border-radius:14px;
+  background:rgb(var(--accentRgb) / .04)}
 .dexCol .champ{margin-top:0}
 .dexCol .bouton{width:100%;margin:0;grid-column:auto}
 .pConnect{cursor:pointer;font-weight:700}
 .pConnect:not(.connecte){background:linear-gradient(135deg,hsl(262 83% 66%),hsl(282 80% 62%));color:#fff;border-color:transparent;
-  box-shadow:0 0 0 1px rgb(167 139 250 / .35),0 6px 18px rgb(139 92 246 / .35)}
-.mapCentre{display:block;width:100%;font-size:15px;font-weight:800;letter-spacing:.2px;color:#f3edff;margin-bottom:4px;
-  text-shadow:0 0 12px rgb(167 139 250 / .75),0 0 2px rgb(0 0 0 / .9)}
-@media (max-width:560px){.mapCentre{font-size:13px}}
+  box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
+.mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:#f3edff;margin:0 8px;
+  text-shadow:0 0 12px rgb(var(--accentRgb) / .75),0 0 2px rgb(0 0 0 / .9)}
+@media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
+body:not(.surMap) .mapCentre{visibility:hidden}
 .soldeDex{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:11px;font-weight:600;color:var(--doux)}
 .soldeDex b{color:var(--texte);font-weight:700}
-.maxDex{appearance:none;border:1px solid rgb(167 139 250 / .45);background:rgb(167 139 250 / .12);color:var(--texte);
+.maxDex{appearance:none;border:1px solid rgb(var(--accentRgb) / .45);background:rgb(var(--accentRgb) / .12);color:var(--texte);
   font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
 .sentinelle{height:1px;width:100%}
-.pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(167 139 250 / .14);border-radius:10px;padding:6px;min-height:34px}
+.pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(10 6 18 / .6);border:1px solid rgb(var(--accentRgb) / .14);border-radius:10px;padding:6px;min-height:34px}
 .pcTrace svg{display:block;width:100%;height:64px}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
@@ -548,41 +560,41 @@ body{background:
   radial-gradient(1.5px 1.5px at 57% 31%, rgb(233 227 255 / .3), transparent 60%),
   radial-gradient(1px 1px at 93% 78%, rgb(233 227 255 / .4), transparent 60%),
   radial-gradient(1px 1px at 5% 52%, rgb(233 227 255 / .35), transparent 60%),
-  radial-gradient(ellipse 70% 50% at 50% 0%, rgb(167 139 250 / .08), transparent 70%),
+  radial-gradient(ellipse 70% 50% at 50% 0%, rgb(var(--accentRgb) / .08), transparent 70%),
   var(--fond);
   background-attachment:fixed}
 .carte{background:linear-gradient(180deg, rgb(40 30 64 / .55), rgb(22 16 36 / .62));
   /* pas de backdrop-filter sur les cartes : des dizaines de flous plein ecran ralentissaient le rendu (vu en test) */
-  border:1px solid rgb(167 139 250 / .16);
+  border:1px solid rgb(var(--accentRgb) / .16);
   box-shadow:0 10px 30px rgb(0 0 0 / .35), inset 0 1px 0 rgb(255 255 255 / .04);
   transition:border-color .25s ease, box-shadow .25s ease}
-.carte:hover{border-color:rgb(167 139 250 / .32);box-shadow:0 12px 38px rgb(0 0 0 / .4), 0 0 0 1px rgb(167 139 250 / .08), 0 0 28px rgb(167 139 250 / .08)}
+.carte:hover{border-color:rgb(var(--accentRgb) / .32);box-shadow:0 12px 38px rgb(0 0 0 / .4), 0 0 0 1px rgb(var(--accentRgb) / .08), 0 0 28px rgb(var(--accentRgb) / .08)}
 .titre{letter-spacing:-.3px}
 .bouton{background:linear-gradient(180deg, #b9a2ff, var(--accent));
-  box-shadow:0 6px 18px rgb(167 139 250 / .28), inset 0 1px 0 rgb(255 255 255 / .35)}
-.bouton:not([disabled]):hover{box-shadow:0 8px 26px rgb(167 139 250 / .45), inset 0 1px 0 rgb(255 255 255 / .4);transform:translateY(-1px)}
+  box-shadow:0 6px 18px rgb(var(--accentRgb) / .28), inset 0 1px 0 rgb(255 255 255 / .35)}
+.bouton:not([disabled]):hover{box-shadow:0 8px 26px rgb(var(--accentRgb) / .45), inset 0 1px 0 rgb(255 255 255 / .4);transform:translateY(-1px)}
 .bouton:active{transform:translateY(0) scale(.985)}
 .bouton[disabled]{opacity:.55;box-shadow:none;cursor:not-allowed}
-.bouton.sec{background:rgb(26 18 40 / .7);box-shadow:inset 0 1px 0 rgb(255 255 255 / .04)}
-.bouton.sec:not([disabled]):hover{border-color:rgb(167 139 250 / .55);box-shadow:0 0 18px rgb(167 139 250 / .18)}
-.puce{background:rgb(26 18 40 / .7)}
-.puce.on{border-color:var(--accent);color:var(--texte);box-shadow:0 0 14px rgb(167 139 250 / .3);background:rgb(167 139 250 / .14)}
-.champ input,.champ select,.champ textarea{background:rgb(15 10 23 / .75);border-color:rgb(167 139 250 / .18);transition:border-color .2s ease, box-shadow .2s ease}
-.champ input:focus,.champ select:focus,.champ textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgb(167 139 250 / .18), 0 0 18px rgb(167 139 250 / .15)}
-#trouver{background:rgb(15 10 23 / .75);border:1px solid rgb(167 139 250 / .2);backdrop-filter:blur(10px)}
-.nav{background:rgb(12 8 22 / .72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgb(167 139 250 / .14)}
-.navB[aria-selected="true"]{background:rgb(167 139 250 / .16);box-shadow:0 0 18px rgb(167 139 250 / .25), inset 0 0 0 1px rgb(167 139 250 / .35)}
-.navB[aria-selected="true"] b{text-shadow:0 0 12px rgb(167 139 250 / .8)}
+.bouton.sec{background:rgb(var(--fond2Rgb) / .7);box-shadow:inset 0 1px 0 rgb(255 255 255 / .04)}
+.bouton.sec:not([disabled]):hover{border-color:rgb(var(--accentRgb) / .55);box-shadow:0 0 18px rgb(var(--accentRgb) / .18)}
+.puce{background:rgb(var(--fond2Rgb) / .7)}
+.puce.on{border-color:var(--accent);color:var(--texte);box-shadow:0 0 14px rgb(var(--accentRgb) / .3);background:rgb(var(--accentRgb) / .14)}
+.champ input,.champ select,.champ textarea{background:rgb(var(--fondRgb) / .75);border-color:rgb(var(--accentRgb) / .18);transition:border-color .2s ease, box-shadow .2s ease}
+.champ input:focus,.champ select:focus,.champ textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .18), 0 0 18px rgb(var(--accentRgb) / .15)}
+#trouver{background:rgb(var(--fondRgb) / .75);border:1px solid rgb(var(--accentRgb) / .2);backdrop-filter:blur(10px)}
+.nav{background:rgb(12 8 22 / .72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgb(var(--accentRgb) / .14)}
+.navB[aria-selected="true"]{background:rgb(var(--accentRgb) / .16);box-shadow:0 0 18px rgb(var(--accentRgb) / .25), inset 0 0 0 1px rgb(var(--accentRgb) / .35)}
+.navB[aria-selected="true"] b{text-shadow:0 0 12px rgb(var(--accentRgb) / .8)}
 .navB:hover{color:var(--texte)}
-.filL{border-top:1px solid rgb(167 139 250 / .09);border-radius:12px;padding:10px 8px;margin:0 -8px;transition:background .2s ease}
-.filL:hover{background:rgb(167 139 250 / .07)}
-.filArt{filter:drop-shadow(0 0 6px rgb(167 139 250 / .25))}
+.filL{border-top:1px solid rgb(var(--accentRgb) / .09);border-radius:12px;padding:10px 8px;margin:0 -8px;transition:background .2s ease}
+.filL:hover{background:rgb(var(--accentRgb) / .07)}
+.filArt{filter:drop-shadow(0 0 6px rgb(var(--accentRgb) / .25))}
 details > summary{cursor:pointer;list-style:none}
 details > summary::-webkit-details-marker{display:none}
 details > summary::before{content:"›";display:inline-block;margin-right:8px;color:var(--accent);transition:transform .2s ease}
 details[open] > summary::before{transform:rotate(90deg)}
-.cote{background:rgb(14 10 26 / .78);border-color:rgb(167 139 250 / .2);box-shadow:0 18px 50px rgb(0 0 0 / .55), 0 0 40px rgb(167 139 250 / .08)}
-.tete .marque{text-shadow:0 0 18px rgb(167 139 250 / .35)}
+.cote{background:rgb(14 10 26 / .78);border-color:rgb(var(--accentRgb) / .2);box-shadow:0 18px 50px rgb(0 0 0 / .55), 0 0 40px rgb(var(--accentRgb) / .08)}
+.tete .marque{text-shadow:0 0 18px rgb(var(--accentRgb) / .35)}
 @media (prefers-reduced-motion: no-preference){
   .volet.on .carte{animation:carteEntre .38s cubic-bezier(.2,.7,.2,1) both}
   .volet.on .carte:nth-of-type(2){animation-delay:.04s}
@@ -596,18 +608,18 @@ details[open] > summary::before{transform:rotate(90deg)}
 /* tip 0032 — onglet Create : choix block / token, etapes numerotees */
 .creaChoix{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px}
 .creaMode{appearance:none;text-align:left;font:inherit;color:var(--texte);cursor:pointer;border-radius:14px;padding:14px;
-  background:rgb(15 10 23 / .6);border:1px solid rgb(167 139 250 / .16);display:flex;flex-direction:column;gap:4px;
+  background:rgb(var(--fondRgb) / .6);border:1px solid rgb(var(--accentRgb) / .16);display:flex;flex-direction:column;gap:4px;
   transition:border-color .2s ease, box-shadow .2s ease, background .2s ease}
 .creaMode b{font-size:15px}
 .creaMode span:not(.creaModeIc){color:var(--doux);font-size:12.5px;line-height:1.45}
 .creaModeIc{font-size:22px;line-height:1}
-.creaMode:hover{border-color:rgb(167 139 250 / .4)}
-.creaMode.on{border-color:var(--accent);background:rgb(167 139 250 / .12);box-shadow:0 0 22px rgb(167 139 250 / .22)}
+.creaMode:hover{border-color:rgb(var(--accentRgb) / .4)}
+.creaMode.on{border-color:var(--accent);background:rgb(var(--accentRgb) / .12);box-shadow:0 0 22px rgb(var(--accentRgb) / .22)}
 .creaEtape{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;margin-right:8px;font-size:12.5px;
-  background:rgb(167 139 250 / .18);color:var(--accent2);box-shadow:0 0 12px rgb(167 139 250 / .3);vertical-align:1px}
+  background:rgb(var(--accentRgb) / .18);color:var(--accent2);box-shadow:0 0 12px rgb(var(--accentRgb) / .3);vertical-align:1px}
 .creaPas{list-style:none;margin:6px 0 4px;padding:0;display:grid;gap:8px;counter-reset:pas}
 .creaPas li{counter-increment:pas;display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:12px;
-  background:rgb(15 10 23 / .5);border:1px solid rgb(167 139 250 / .1)}
+  background:rgb(var(--fondRgb) / .5);border:1px solid rgb(var(--accentRgb) / .1)}
 .creaPas li::before{content:counter(pas);color:var(--accent);font-weight:800;min-width:14px}
 .creaPas li span{color:var(--doux);font-size:12.5px}
 .creaGo{font-size:15.5px;min-height:52px}
@@ -615,13 +627,13 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
 /* tip 0041 — le block au centre, comme un personnage */
 .creaSticky.creaHeros{position:sticky;top:4px;display:flex;flex-direction:column;align-items:center;text-align:center;
-  gap:0;padding:26px 16px 18px;background:radial-gradient(ellipse at 50% 38%, rgb(167 139 250 / .16), transparent 62%), rgb(15 10 23 / .55);
-  border:1px solid rgb(167 139 250 / .18);backdrop-filter:none}
+  gap:0;padding:26px 16px 18px;background:radial-gradient(ellipse at 50% 38%, rgb(var(--accentRgb) / .16), transparent 62%), rgb(var(--fondRgb) / .55);
+  border:1px solid rgb(var(--accentRgb) / .18);backdrop-filter:none}
 .creaScene{position:relative;width:200px;height:236px;display:grid;place-items:center;margin-bottom:10px}
 .creaHeros .creaArt{position:relative;z-index:2;width:176px;height:194px;border:0;background:transparent;border-radius:24px;
-  filter:drop-shadow(0 16px 30px rgb(0 0 0 / .45)) drop-shadow(0 0 22px rgb(167 139 250 / .35))}
+  filter:drop-shadow(0 16px 30px rgb(0 0 0 / .45)) drop-shadow(0 0 22px rgb(var(--accentRgb) / .35))}
 .creaHalo{position:absolute;inset:6px;border-radius:50%;z-index:1;
-  background:radial-gradient(circle, rgb(167 139 250 / .38), rgb(167 139 250 / .08) 55%, transparent 70%)}
+  background:radial-gradient(circle, rgb(var(--accentRgb) / .38), rgb(var(--accentRgb) / .08) 55%, transparent 70%)}
 .creaSol{position:absolute;bottom:2px;left:50%;width:120px;height:18px;margin-left:-60px;border-radius:50%;z-index:0;
   background:radial-gradient(ellipse, rgb(0 0 0 / .55), transparent 70%)}
 .creaHeros .creaNom{font-size:22px;letter-spacing:-.4px;max-width:100%}
@@ -632,7 +644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
    parce que son fond etait semi-transparent et qu il gardait sa mise en colonne. En defilant, il devient une BARRE :
    une rangee opaque — le block, son nom, les deux boutons — et le contenu passe DESSOUS, proprement. */
 .creaHeros.compacte{flex-direction:row;justify-content:flex-start;gap:12px;padding:8px 12px;text-align:left;
-  background:rgb(15 10 23 / .97);border-color:rgb(167 139 250 / .35);box-shadow:0 10px 26px rgb(0 0 0 / .45);border-radius:16px}
+  background:rgb(var(--fondRgb) / .97);border-color:rgb(var(--accentRgb) / .35);box-shadow:0 10px 26px rgb(0 0 0 / .45);border-radius:16px}
 .creaHeros.compacte .creaScene{width:56px;height:60px;margin:0;flex:0 0 auto}
 .creaHeros.compacte .creaArt{width:52px;height:56px}
 .creaHeros.compacte .creaHalo,.creaHeros.compacte .creaSol,.creaHeros.compacte #cApercuSym{display:none}
@@ -646,9 +658,9 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaStyles{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:2px 0 12px}
 .creaStyle{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;cursor:pointer;
   font:700 10px/1.2 inherit;letter-spacing:.3px;text-transform:uppercase;color:var(--doux);
-  background:rgb(167 139 250 / .06);border:1px solid rgb(167 139 250 / .16);border-radius:14px;transition:transform .12s ease,border-color .12s ease}
-.creaStyle:hover{transform:translateY(-2px);border-color:rgb(167 139 250 / .42)}
-.creaStyle.on{color:#fff;border-color:rgb(167 139 250 / .75);background:rgb(167 139 250 / .16)}
+  background:rgb(var(--accentRgb) / .06);border:1px solid rgb(var(--accentRgb) / .16);border-radius:14px;transition:transform .12s ease,border-color .12s ease}
+.creaStyle:hover{transform:translateY(-2px);border-color:rgb(var(--accentRgb) / .42)}
+.creaStyle.on{color:#fff;border-color:rgb(var(--accentRgb) / .75);background:rgb(var(--accentRgb) / .16)}
 .creaStyleArt{display:block;width:100%;max-width:56px}
 .creaStyleArt svg{display:block;width:100%;height:auto}
 @media (prefers-reduced-motion: no-preference){
@@ -669,11 +681,14 @@ details[open] > summary::before{transform:rotate(90deg)}
 .navB{font-size:10.5px}
 </style>
 </head>
-<body>
+<body class="surMap">
 
 <div class="enveloppe">
   <header class="tete">
     <div class="marque">Tokenized<span>Block</span></div>
+    <!-- ⛔ PHIL (2026-09-19) : « place le texte en haut ». Le tirage du centre de l univers vit dans la barre du haut, entre
+         la marque et les boutons — visible sur la Map seulement (ailleurs, il parlerait d un univers qu on ne voit pas). -->
+    <span id="mapCentre" class="mapCentre"></span>
     <div class="droite">
       <!-- ⛔ LE RESEAU EST UN BOUTON, PAS UNE CONSTANTE. Fige sur Sepolia, la map affichait
            « 0 avec marche » sur 22 blocks — une lecture EXACTE et parfaitement inutile, puisque
@@ -683,7 +698,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ « LEARN » EST DANS LA TETE, PAS DANS LA BARRE DU BAS. Six onglets tiennent deja mal sur
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
-      <button class="puce" id="pLearn" style="cursor:pointer">? Learn</button>
+      <button class="puce" id="pTeinte" type="button" style="cursor:pointer" title="Change the colours of the site">◐ Night purple</button>
+      <button class="puce" id="pLearn" style="cursor:pointer">? What am I looking at</button>
       <button class="puce" id="pReseau" style="cursor:pointer">Base mainnet</button>
       <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
            disait « not connected » sans qu on puisse rien en faire. C est maintenant le bouton : il connecte, puis
@@ -720,9 +736,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- ⛔ PHIL (2026-09-19) : « une proba de changer de block central, que tous aient la meme chance d etre le centre
                de l univers et le spotlight ; les chances affichees en live, pas aussi petit que les ecrits, a la place de
                Replaying… ». -->
-          <span id="mapCentre" class="mapCentre"></span>
           <span id="mapEtat"></span>
-          <button type="button" class="lienLearn" style="margin-left:auto">What am I looking at? →</button>
+          <!-- Phil (2026-09-19) : ce lien est devenu le bouton du haut « ? What am I looking at » — plus de doublon ici -->
         </div>
         <!-- tip 0013: Map surfaces Hooked / TBGAS deep link — gas/example fee path. No fee addr in UI. -->
         <p class="note" id="mapHookedPath" style="margin:8px 0 0" hidden>
@@ -1254,7 +1269,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0070" hidden>Build <code>20260919-0070</code> · light beams instead of lines, bigger universe.</p>
+      <p class="note" data-build="20260919-0071" hidden>Build <code>20260919-0071</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1790,6 +1805,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   for (const x of document.querySelectorAll('.navB')) x.setAttribute('aria-selected', x === b ? 'true' : 'false');
   for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-' + nom);
   window.scrollTo({ top: 0 });
+  document.body.classList.toggle('surMap', nom === 'map');
   /* ⛔ EN REVENANT SUR LA MAP, ON REMESURE. Les blocks ont pu naitre pendant que l onglet etait cache,
    * donc dans une aire par defaut qui n est pas celle de l ecran. */
   if (nom === 'map') setTimeout(replacerDansLaMap, 50);
@@ -6210,6 +6226,23 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+const TEINTES = [
+  { cle: 'a', nom: 'Night purple' }, { cle: 'b', nom: 'Night blue' },
+  { cle: 'c', nom: 'Deep galaxy' }, { cle: 'd', nom: 'Polar night' },
+];
+function poserTeinte(cle) {
+  const t = TEINTES.find((x) => x.cle === cle) || TEINTES[0];
+  if (t.cle === 'a') document.documentElement.removeAttribute('data-teinte');
+  else document.documentElement.setAttribute('data-teinte', t.cle);
+  if ($('#pTeinte')) $('#pTeinte').textContent = '◐ ' + t.nom;
+  try { localStorage.setItem('tb.teinte', t.cle); } catch (_) { /* navigation privee : le coloris vaut pour cette visite */ }
+}
+(() => { let c = 'a'; try { c = localStorage.getItem('tb.teinte') || 'a'; } catch (_) {} poserTeinte(c); })();
+$('#pTeinte').addEventListener('click', () => {
+  const actuel = document.documentElement.getAttribute('data-teinte') || 'a';
+  const i = TEINTES.findIndex((x) => x.cle === actuel);
+  poserTeinte(TEINTES[(i + 1) % TEINTES.length].cle);
+});
 /* ⛔ PHIL (2026-09-19) : « le bouton swap marche pas ». Il etait desactive en dur depuis le debut (« the screen is not
  * built yet »). L achat et la vente existent deja, bloc par bloc : Swap y mene, au lieu d un bouton mort. */
 $('#bSwap') && $('#bSwap').addEventListener('click', () => { try { allerA('trade'); } catch (_) {} });
@@ -6964,7 +6997,20 @@ function uriCreation() {
    * reste celle des unites fongibles. Mesure Pages 2026-09-06 : URI ~12 Ko max factory. */
   const sym = String($('#cSym').value || '').trim().toUpperCase() || '·';
   const svg = logoSvg(paramsLogoDepuisApparence(apparenceChoisie, sym));
-  const image = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  /* ⛔⛔ LOGO HORS DE L APP (Phil, 2026-09-19 : « sur Base App je vois les blocks mais pas leur image »). Mesure : Coinbase
+   *    grave dans le contractURI d un B20 une URL https vers un PNG (AAPLc). Nous gravions un SVG en data:, que Base App
+   *    n affiche pas. Desormais : image = https://…/face/<adresse>.png, rendu par notre serveur depuis la face GRAVEE.
+   * ⛔ L ADRESSE DOIT ETRE LA BONNE, POUR TOUJOURS : on n utilise l adresse prevue que si elle a ete calculee pour le SEL
+   *    et le COMPTE actuels. Sinon — ou si elle n a pas ete calculee — on garde le SVG inline : une URL vers la face d un
+   *    autre block serait gravee a jamais. Le SVG voyage aussi en image_data, pour les lecteurs qui le preferent.
+   * ⚠️ CE QUE CA SUPPOSE : ce serveur doit rester en ligne pour que l URL reponde — comme celle de Coinbase. */
+  const selActuel = String($('#cSel').value || '').trim();
+  const adresseSure = adressePrevue && adressePrevue.sel === selActuel
+    && adressePrevue.compte === String(compte || '').toLowerCase() && /^0x[0-9a-fA-F]{40}$/.test(adressePrevue.adresse);
+  const imageSvg = 'data:image/svg+xml,' + encodeURIComponent(svg);
+  const image = adresseSure && Number(CHAINE) === 8453
+    ? 'https://tokenized-block.up.railway.app/face/' + String(adressePrevue.adresse).toLowerCase() + '.png'
+    : imageSvg;
   const roleCle = (() => {
     const el = $('#cRole');
     const c = el && el.value;
@@ -6979,6 +7025,7 @@ function uriCreation() {
     flyBrain: !!$('#cCerveau').checked,
     ...(roleCle ? { role: roleCle } : {}),
     image,
+    ...(image !== imageSvg ? { image_data: imageSvg } : {}),
     /* ⛔ LA PAIRE EST GRAVEE AVEC SON STATUT : « unverified » voyage avec l adresse, pour toujours. */
     pair: paireChoisie ? { address: paireChoisie.adr, symbol: paireChoisie.symbole,
       kind: paireChoisie.type, verified: !!paireChoisie.verifiee } : null,
@@ -7207,6 +7254,7 @@ async function verifierAdresseCreation() {
     /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY, jamais calculee ici. */
     e.className = 'note wOk';
     e.textContent = 'This salt gives the address ' + r.adresse + ' — nothing has been created yet.';
+    adressePrevue = { adresse: r.adresse, sel: String($('#cSel').value || '').trim(), compte: String(compte || '').toLowerCase() };
     return r.adresse;
   } catch (err) {
     e.className = 'note wKo';
@@ -7407,6 +7455,8 @@ document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('cli
   if (sticky) sticky.hidden = token;
 }));
 
+/** L adresse que la factory rendra pour ce sel et ce compte — calculee par verifierAdresseCreation, jamais devinee. */
+let adressePrevue = null;
 async function creerBlock() {
   if (creationEnCours) return;
   const e = $('#cEtat');
@@ -7425,6 +7475,8 @@ async function creerBlock() {
     majFraisEtRecap();
   }
   const v = validerCreation();
+  /* l adresse prevue est RECALCULEE juste avant la creation : c est elle qui part dans l URL du logo grave */
+  if (!v.ko && Number(CHAINE) === 8453) { try { await verifierAdresseCreation(); } catch (_) { adressePrevue = null; } }
   /* ⛔ UN REFUS SE DIT : on n efface plus le message pour sortir sans rien afficher. */
   if (v.ko) { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; majFraisEtRecap(); return; }
   /* ⛔⛔ SUR CHAINE PAYANTE: prix ETH/USD + solde ETH lus AVANT toute signature. Fail-closed. */
@@ -8091,7 +8143,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0070',
+    build: '20260919-0071',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8816,6 +8868,8 @@ function nouveauCentre() {
   centreActuel = candidats[i];
   centreProchainA = Date.now() + CENTRE_MS;
   centreActuel.vifJusqua = performance.now() + CENTRE_MS; /* le spotlight : il brille tout son tour */
+  /* il rejoint le point 0,0,0 du cube, meme si la camera ne bouge pas */
+  if (moteur3d && typeof moteur3d.fixerCentre === 'function') moteur3d.fixerCentre(centreActuel);
   const carteVisible = $('#v-map') && $('#v-map').classList.contains('on') && !document.hidden;
   const mainRecente = moteur3d && typeof moteur3d.derniereMain === 'function' && performance.now() - moteur3d.derniereMain() < 20000;
   if (moteur3d && carteVisible && !mainRecente && !mouvementReduit) { try { moteur3d.centrerSur(centreActuel); } catch (_) {} }
@@ -8828,9 +8882,11 @@ function peindreCentre() {
   if (!centreActuel || !n) { el.textContent = ''; return; }
   const reste = Math.max(0, Math.ceil((centreProchainA - Date.now()) / 1000));
   const pct = 100 / n;
-  el.textContent = '✦ Centre of the universe: ' + String(centreActuel.sym || court(centreActuel.adr)).slice(0, 14)
-    + ' · every block has the same chance — 1 in ' + n.toLocaleString('en-US')
-    + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%) · next draw in ' + reste + ' s';
+  /* ⛔ capture de Phil : le texte long etait COUPE A GAUCHE dans la barre (« ntre of the universe… »). Court, et le nom d abord. */
+  /* Phil (2026-09-19) : « change la formulation : Be centre of Tokenized Block » */
+  el.textContent = '✦ Be centre of TokenizedBlock — now: ' + String(centreActuel.sym || court(centreActuel.adr)).slice(0, 14)
+    + ' · every block 1 in ' + n.toLocaleString('en-US') + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%) · next draw in ' + reste + ' s';
+  el.title = 'Every block on the map has exactly the same chance to become the centre of the universe.';
 }
 setTimeout(() => { nouveauCentre(); }, 15000);
 setInterval(() => { if (!document.hidden && habitants.length) { if (Date.now() >= centreProchainA) nouveauCentre(); else peindreCentre(); } }, 1000);

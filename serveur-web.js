@@ -53,6 +53,25 @@ async function lireOpenLaunch() {
 import { listerCreations } from './index-blocks.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
+/* ══ RASTERISEUR PNG, CHARGE A LA DEMANDE ══════════════════════════════════════════════════════════
+ * ⛔ POURQUOI UN PNG : Base App lit l « image » du contractURI d un B20 ; Coinbase y met une URL https vers un PNG
+ *    (mesure sur AAPLc, 2026-09-18). Un SVG en data: ne s y affiche pas.
+ * ⛔ POURQUOI WASM : une version native compilee sous Windows planterait le serveur Linux. @resvg/resvg-wasm 2.6.2,
+ *    zero dependance. La police (DejaVu Sans Bold, licence libre jointe dans polices/) est chargee avec lui : le WASM
+ *    n a aucune police systeme, et sans elle la lettre du logo disparait (mesure : rendu sans lettre).
+ * ⛔ CHARGEMENT PARESSEUX ET ISOLE : si le WASM ou la police manquent, SEULE la route .png repond 503 — le reste du
+ *    serveur ne depend jamais d eux. */
+let rasteriseur = null;
+async function obtenirRasteriseur() {
+  if (rasteriseur) return rasteriseur;
+  const mod = await import('@resvg/resvg-wasm');
+  const dir = dirname(fileURLToPath(import.meta.url));
+  await mod.initWasm(readFileSync(join(dir, 'node_modules', '@resvg', 'resvg-wasm', 'index_bg.wasm')));
+  const police = readFileSync(join(dir, 'polices', 'DejaVuSans-Bold.ttf'));
+  rasteriseur = (svg) => new mod.Resvg(svg, { fitTo: { mode: 'width', value: 256 },
+    font: { fontBuffers: [police], defaultFontFamily: 'DejaVu Sans', loadSystemFonts: false } }).render().asPng();
+  return rasteriseur;
+}
 import { resumerTrending } from './trending.js';
 const RPC_BASE = 'https://mainnet.base.org';
 let rpcId = 0;
@@ -350,6 +369,35 @@ createServer((req, res) => {
    *    fabriquer un logo depuis son adresse, c est lui preter une identite qu il n a jamais choisie.
    * ⚠️ CE QUE CA NE FAIT PAS : l afficher automatiquement ailleurs. Il faut coller cette URL la ou chaque
    *    plateforme la demande (profil DexScreener, token list, fiche Basescan). */
+  if (/^\/face\/0x[0-9a-fA-F]{40}\.png$/.test(chemin)) {
+    const token = chemin.slice('/face/'.length, -'.png'.length);
+    Promise.all([
+      resoudreFace(token),
+      rpcServeur('eth_call', [{ to: token, data: '0x95d89b41' }, 'latest']).catch(() => null),
+    ]).then(async ([f, symHex]) => {
+      if (!f || f.etat !== 'LU' || !f.face) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('no engraved face for this block');
+        return;
+      }
+      let sym = '';
+      try {
+        const b = String(symHex || '').slice(2);
+        const n = parseInt(b.slice(64, 128), 16);
+        sym = Buffer.from(b.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12);
+      } catch (_) { sym = ''; }
+      const rendre = await obtenirRasteriseur();
+      const png = rendre(logoSvg(paramsLogoDepuisApparence(f.face, sym || '·')));
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400',
+        'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' });
+      res.end(Buffer.from(png));
+    }).catch(() => {
+      res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('logo not rendered right now');
+    });
+    return;
+  }
+
   if (/^\/face\/0x[0-9a-fA-F]{40}\.svg$/.test(chemin)) {
     const token = chemin.slice('/face/'.length, -'.svg'.length);
     Promise.all([
