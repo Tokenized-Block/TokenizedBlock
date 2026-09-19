@@ -344,6 +344,21 @@ createServer((req, res) => {
 
   const chemin = String(req.url || '/').split('?')[0];
 
+  /* ⛔⛔ UN SEUL NOM PUBLIC (Phil, 2026-09-19) : tokenizedblock.space. Les PAGES ouvertes sur les anciens noms y sont
+   *    renvoyees (301, meme chemin, meme ?block=). Les ressources NE le sont PAS : les images gravees a jamais dans les
+   *    blocks pointent vers /face/<adresse>.png sur l ancien nom — elles doivent y repondre pour toujours ; /api et
+   *    /sante restent aussi servis la ou on les appelle. */
+  {
+    const hote = String(req.headers.host || '').toLowerCase().split(':')[0];
+    const ANCIENS = ['tokenized-block.up.railway.app', 'tokenized-block.app', 'www.tokenized-block.app', 'www.tokenizedblock.space'];
+    const estPage = chemin === '/' || chemin.endsWith('.html');
+    if (ANCIENS.includes(hote) && estPage && (req.method === 'GET' || req.method === 'HEAD')) {
+      res.writeHead(301, { Location: 'https://tokenizedblock.space' + String(req.url || '/'), 'Cache-Control': 'public, max-age=3600' });
+      res.end();
+      return;
+    }
+  }
+
   /* ⛔ 2026-09-14: Instant Create retired — factory createB20 unpaid on MAIN.
    * Hard 301 → /#creer (app.html free factory create; life fee at Launch → a6cf).
    * tip 2349: Create free on MAIN + Practice; fee moment = Launch. */

@@ -383,7 +383,7 @@ body{background:var(--fond);
 .pConnect{cursor:pointer;font-weight:700}
 .pConnect:not(.connecte){background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
-.mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:left;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
+.mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:center;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
   text-shadow:0 0 12px rgb(var(--accentRgb) / .75),0 0 2px rgb(0 0 0 / .9)}
 @media (max-width:560px){.mapCentre{font-size:11px;white-space:normal}}
 body:not(.surMap) .mapCentre{visibility:hidden}
@@ -1099,7 +1099,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <pre class="mono" id="bRegles" style="white-space:pre-wrap;overflow-x:auto"></pre>
       <p class="note" id="bReglesNote"></p>
       </details>
-      <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer">Record, resume or rebuild its brain on chain</summary>
+      <details class="bDetail" style="margin-top:8px" open><summary class="note" style="cursor:pointer">Its memory, written on chain — record, resume, rebuild</summary>
       <div class="rang" style="margin-top:10px">
         <button class="bouton" id="bGraver" type="button">Record this beat on chain</button>
       </div>
@@ -1119,9 +1119,17 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
 
     <div class="carte">
-      <p class="titre">Its wiring</p>
-      <p class="sous">Eight outgoing links per neuron, drawn from the address. The same block wires the
-        same way for everyone, and nothing is stored.</p>
+      <p class="titre">Its wiring — and what it writes</p>
+      <!-- ⛔ PHIL (2026-09-19) : « le block sait ecrire : donne-lui la capacite d ecrire, tout sera stocke ». L ecriture
+           existait (un transfert de 0 du block a soi-meme, avec la memoire en memo) mais cachee dans un menu replie.
+           Le cablage, lui, n est PAS stocke : il se recalcule depuis l adresse — les deux phrases disent chacune le vrai. -->
+      <p class="sous">Eight links per neuron, drawn from its address — the same wiring for everyone. What it lives, it can
+        <b>write into itself</b>: one signature, and this beat stays stored on chain for good.</p>
+      <div class="rang" style="margin:10px 0 4px">
+        <button class="bouton" id="bEcrireBlock" type="button">✍ Write this beat into the block</button>
+      </div>
+      <p class="note" id="bEcrireEtat">Your wallet signs a transfer of 0 of this block to yourself; the memo carries its beat,
+        fingerprint and neurons. Nothing moves, only gas is paid. Read it back any time with “Resume its memory”.</p>
       <!-- ⛔ CARRE ET BORNE EN HAUTEUR : un cercle dans une toile 640x300 debordait sur un grand
            ecran, et on n en voyait que la moitie. -->
       <canvas id="bReseau" width="520" height="520" class="toile toileRonde"></canvas>
@@ -1299,7 +1307,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0086" hidden>Build <code>20260919-0086</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0087" hidden>Build <code>20260919-0087</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6348,6 +6356,14 @@ async function lancerMarcheBlock(adr) {
 }
 
 $('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#bEcrireBlock') && $('#bEcrireBlock').addEventListener('click', () => {
+  const g = $('#bGraver');
+  if (!g) return;
+  g.click();
+  /* l etat de l ecriture est celui du chemin commun ; on le reflete ici */
+  const suivre = () => { const src = $('#bGraverEtat'), dst = $('#bEcrireEtat'); if (src && dst) { dst.innerHTML = src.innerHTML; dst.className = src.className; } };
+  let n = 0; const t = setInterval(() => { suivre(); if (++n > 120) clearInterval(t); }, 1000);
+});
 const TEINTES = [
   { cle: 'a', nom: 'Night purple', p1: '#1a1228', p2: '#a78bfa' },
   { cle: 'b', nom: 'Night blue', p1: '#0e1830', p2: '#7ea6ff' },
@@ -8287,7 +8303,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0086',
+    build: '20260919-0087',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
