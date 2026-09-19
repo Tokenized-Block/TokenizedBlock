@@ -11,7 +11,7 @@
 import { planLancement, V4_ADRESSES, FEE_POOL, TICK_SPACING_POOL, ADRESSE_NULLE, ETH_NATIF, sqrtDeTick } from './lancer-pool.js';
 import { selecteur, montantsPosition, encodeRetraitPosition, decoderPoolEtPosition, poolId } from './pool.js';
 import { vieDuBlock } from './marche.js';
-import { TBLOCK, HOOK_PREVU } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, estNotreHook } from './tokenomics.js';
 
 export const ETATS_LIQUIDITE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
 const pad = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
@@ -25,7 +25,7 @@ export async function planAjoutLiquidite({ rpc, chaine, jeton, compte, partPourM
   if (marche.etat !== 'LUE' || !marche.cle) return { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
   const k = marche.cle;
   const h = String(k.hooks || ADRESSE_NULLE).toLowerCase();
-  const hookOk = h === ADRESSE_NULLE || h === HOOK_PREVU.toLowerCase();
+  const hookOk = h === ADRESSE_NULLE || estNotreHook(h);
   const feeOk = Number(k.fee) === FEE_POOL && Number(k.tickSpacing) === TICK_SPACING_POOL && hookOk;
   const estEthApp = feeOk && String(k.currency0).toLowerCase() === ETH_NATIF;
   const t0 = String(k.currency0).toLowerCase() === TBLOCK.toLowerCase();

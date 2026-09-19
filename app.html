@@ -1284,7 +1284,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0077" hidden>Build <code>20260919-0077</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0078" hidden>Build <code>20260919-0078</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1732,8 +1732,8 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, hookDeploye } from './tokenomics.js';
-import { completerInscriptionHook } from './lancer-pool-v2.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, estNotreHook, hookDeploye, hookV2Deploye } from './tokenomics.js';
+import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
@@ -3662,7 +3662,7 @@ function libelleFrais(cle) {
   const tier = cle && Number.isFinite(Number(cle.fee)) ? Number(cle.fee) : null;
   /* ⛔ PHIL (2026-09-19) : « 3,5 % c est de trop — entre 0,5 % et 3 %, mais ne l ecris pas ». Sur nos pools, l interface
    * ne s ajoute plus au hook (echange.js) : total 3 %. L ecran montre UN pourcentage, vrai, sans paragraphe. */
-  if (hk === String(HOOK_PREVU).toLowerCase()) {
+  if (estNotreHook(hk)) {
     const total = (HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
     return { court: 'Fee ' + total + '%', long: '' };
   }
@@ -3678,7 +3678,7 @@ function infoHookMarche(v) {
   const zero = '0x0000000000000000000000000000000000000000';
   const hk = v && v.cle && v.cle.hooks ? String(v.cle.hooks).toLowerCase() : '';
   const hooked = Boolean(hk && hk !== zero);
-  const isTb = hooked && hk === String(HOOK_PREVU).toLowerCase();
+  const isTb = hooked && estNotreHook(hk);
   return {
     hooked,
     isTbFeeHook: isTb,
@@ -3702,8 +3702,29 @@ function peutOuvrirPoolHooke(v) {
 
 /** tip 2353: in-app Buy/Sell whenever a pool is live (LUE) — hooked or unhooked/external.
  *  0.5% every buy/sell → FEE_WALLET (fee). Only NON_TROUVEE / no pool closes Buy/Sell. */
-function echangeAutorise(v, etat) {
-  return etat === 'LUE' && !!v;
+/* ⛔⛔ PHIL (2026-09-19) : « les blocks gratuits n ont pas acces aux fonctionnalites du market ». Un block NE ICI (face
+ *    gravee par notre Create) dont le marche a ete ouvert HORS de notre hook n a pas paye la mise en vie et ne paie aucun
+ *    frais de swap : l app ne lui ouvre pas Buy/Sell — elle lui propose de naitre au marche ici.
+ * ⚠️ Les blocks des AUTRES launchpads gardent Buy/Sell : leurs achats par l app paient nos 0,5 % (mesure : ils arrivent). */
+function marcheHorsHookPourNotreBlock(v, origine) {
+  return origine === 'TOKENIZEDBLOCK' && !!(v && v.etat === 'LUE' && v.cle) && !estNotreHook(v.cle.hooks);
+}
+function echangeAutorise(v, etat, origine = null) {
+  return etat === 'LUE' && !!v && !marcheHorsHookPourNotreBlock(v, origine);
+}
+function peindreVerrouMarche(v, origine) {
+  let n = $('#pEchangeVerrou');
+  const bloque = marcheHorsHookPourNotreBlock(v, origine);
+  if (!bloque) { if (n) n.hidden = true; return; }
+  if (!n) {
+    n = document.createElement('p');
+    n.id = 'pEchangeVerrou';
+    n.className = 'note';
+    $('#pEchange').parentNode.insertBefore(n, $('#pEchange'));
+  }
+  n.hidden = false;
+  n.textContent = 'This block was made here, but its market was opened outside TokenizedBlock. Trading it in the app '
+    + 'opens once it is brought to life here.';
 }
 
 /** tip 2341: pools Live discovered via Initialize (not only app CLES_MARCHE). */
@@ -3719,7 +3740,7 @@ function poolDecouvertPour(adr) {
     if (j !== want && c0 !== want && c1 !== want) continue;
     const conf = p.confiance || confianceDe(p.cle);
     const hk = String(p.cle.hooks || '').toLowerCase();
-    const isTb = hk === String(HOOK_PREVU).toLowerCase();
+    const isTb = estNotreHook(hk);
     /* Prefer fee hook if somehow present; else any ETH pair we can trade/upgrade. */
     const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : (conf === 'SANS_HOOK' ? 100 : 50));
     if (!best || score > best._score) best = { ...p, confiance: conf, _score: score, isTbFeeHook: isTb };
@@ -4243,7 +4264,8 @@ async function lireProfil(adr, sym, perime) {
   deviseProfil = v && v.etat === 'LUE' ? v.devise : null;
   etatVieProfil = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
   /* tip 2353: Buy/Sell card whenever pool is LUE (hooked or not). Liquidity still needs LUE. */
-  $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil);
+  $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
+  peindreVerrouMarche(v, origineProfil);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (ethUsd === null && typeof vieProfil === 'number') await lirePrixEth();
   peindreJeu(vieProfil, deviseProfil, etatVieProfil);
@@ -4299,7 +4321,8 @@ async function lireProfil(adr, sym, perime) {
     $('#plEtat').className = 'note';
     $('#plEtat').textContent = 'Its market could not be read yet (the public node is busy). “Work it out” checks it again before anything is offered to sign.';
   }
-  $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil);
+  $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
+  peindreVerrouMarche(v, origineProfil);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
   /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (fee hook) or legacy unhooked. */
@@ -4592,7 +4615,7 @@ function filtreLive(e) {
         && String(p.cle.currency1 || '').toLowerCase() !== j) continue;
       if (p.confiance === 'HOOK') return true;
       const hk = String(p.cle.hooks || '').toLowerCase();
-      if (hk && hk === String(HOOK_PREVU).toLowerCase()) return true;
+      if (estNotreHook(hk)) return true;
     }
     return false;
   }
@@ -4808,7 +4831,7 @@ function peindreHookedRoute() {
     if (!p || !p.cle) return false;
     if (p.confiance === 'HOOK') return true;
     const hk = String(p.cle.hooks || '').toLowerCase();
-    return hk && hk === String(HOOK_PREVU).toLowerCase();
+    return estNotreHook(hk);
   });
   /* tip 0030 (Phil : pas de « hook » en public) : cette note interne n est plus affichee */
   el.hidden = true;
@@ -5440,7 +5463,7 @@ async function preparerEchange(sens) {
       /* ⛔ LA PART DU MARCHE, MESUREE (2026-09-18) : sur une pool HOOK_PREVU, le hook preleve 3 % du swap en
        * plus des 0,5 % ci-dessus. « You receive at least » l inclut deja (le devis passe par la pool) ;
        * cette ligne dit POURQUOI il est plus bas que ce que le prix affiche laisserait croire. */
-      ...(p.cle && String(p.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase()
+      ...(p.cle && estNotreHook(p.cle.hooks)
         ? ['Fee: ' + (HOOK_PREVU_FRAIS_BPS / 100) + '%, already inside “You receive at least”']
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
@@ -5508,7 +5531,7 @@ async function preparerEchange(sens) {
    * porte alors fraisBps 0 et fraisMarcheBps 300. Ce garde exigeait les 0,5 % et REFUSAIT ce cas — vu sur fork. On
    * l exempte seulement quand la cle de la pool est bien celle du hook : ailleurs, l exigence reste entiere. */
   const hookPaie = !!(r && r.fraisMarcheBps === 300 && p.cle
-    && String(p.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase());
+    && estNotreHook(p.cle.hooks));
   if (!estWalletDeFrais(compte) && !hookPaie) {
     const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
     const destOk = r && r.beneficiaireFrais
@@ -5901,6 +5924,7 @@ async function calculerLancement() {
   /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET. */
   try {
     const etatHook = await hookDeploye({ rpc });
+    const etatV2 = Number(CHAINE) === 8453 ? await hookV2Deploye({ rpc }) : 'ABSENT';
     /* tip 2348: MAIN never Launch unhooked — no hook = no enduring fees to FEE_WALLET. */
     if (Number(CHAINE) === 8453 && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: etatHook === 'ABSENT'
@@ -5909,11 +5933,15 @@ async function calculerLancement() {
     } else if (legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now.' };
     } else {
-      const hooks = etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      const hooks = etatV2 === 'DEPLOYE' ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
       plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
         ...(contreTblock ? { devise: TBLOCK } : {}),
         ...(hooks ? { hooks } : {}) });
-      if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+      if (hooks === HOOK_V2) {
+        /* ⛔ V2 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
+        const w = await assurerFraisLancementWei(true);
+        plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null });
+      } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
         plan.pourquoiLegacy = 'Opens a TokenizedBlock market next to its outside market. Only trades on the new one pay its creator.';
@@ -6000,7 +6028,7 @@ function peindrePlan(plan, adr) {
         : ['Two signatures: (1) ≈ $1 in ETH (checked on chain), (2) bring it to life.'])]
     : ['Practice — bringing life is free here.'];
   const txsApercu = [];
-  if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
+  if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2) {
     txsApercu.push({ to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisL).toString(16) });
   }
   txsApercu.push(...(plan.etapes || []), plan.tx);
@@ -6094,8 +6122,9 @@ async function signerEtapeLancement(etape) {
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
   let r;
   try {
+    if (etape.payant) e.textContent = 'Opening your wallet — ' + formaterEthCourt(BigInt(etape.value)) + ' ETH brings it to life (paid on chain).';
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to: etape.to, data: etape.data, value: '0x0' });
+      to: etape.to, data: etape.data, value: etape.value || '0x0' });
   } finally { lancementEnCours = false; }
   if (r.etat !== 'CONFIRME') {
     e.className = 'note wKo';
@@ -6189,7 +6218,9 @@ async function lancerMarcheBlock(adr) {
   e.className = 'note';
   let r;
   try {
-    if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
+    if (planCourant.v2) {
+      e.textContent = 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid on chain).';
+    } else if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
       e.textContent = 'Opening your wallet — ' + formaterEthCourt(fraisL) + ' ETH first, then bring it to life.';
       const feeVal = '0x' + BigInt(fraisL).toString(16);
       let balAvant = null;
@@ -8194,7 +8225,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0077',
+    build: '20260919-0078',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

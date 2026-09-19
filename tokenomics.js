@@ -18,6 +18,23 @@ export const TBGAS_POOL_ID = '0x085294111dc0da95e5496d5c81deaa094fdf73bd5a1e0816
 /** tip 0019: keep HOOK_PREVU aa6D (proven TBGAS) — do NOT redeploy same bytecode. FEE_WALLET=a6cf. Dollar visibility = ETH→USDC / USDC-side volume (Launch refuses USDC pair: 6 vs 18 decimals). */
 /** TbFeeHook LIVE on Base — CREATE2 a6cf (salt 56999). FEE_WALLET() = a6cf. */
 export const HOOK_PREVU = '0xaa6D7bD9FC7D394bc717137936f2939834382044';
+/* ⛔⛔ HOOK V2 (2026-09-19) : la mise en vie est PAYEE ON-CHAIN (inscrire payable, beforeInitialize refuse sans paiement).
+ *    Mesure qui l a motivee : 2 marches sur 4 ouverts avec HOOK_PREVU en 72 h, sans les frais de vie (appel direct au
+ *    PositionManager). Adresse = celle MINEE par script/DeployTBlockFeeHookV2.s.sol (simulation du 2026-09-19), deployee
+ *    par Phil. Tant qu elle n a pas de code, l app garde HOOK_PREVU : la bascule est lue sur la chaine, jamais supposee. */
+export const HOOK_V2 = '0x8E1Eb57AD2A87a4f7bc89ce94eFD5cd77aEc2044';
+/** Un marche est-il sur NOTRE hook (V1 ou V2) ? La seule fonction qui en decide. */
+export function estNotreHook(h) {
+  const x = String(h || '').toLowerCase();
+  return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase();
+}
+/** La V2 est-elle deployee ? Lu sur son code. */
+export async function hookV2Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V2, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
 /* tip 2300/2356: HOOK_PREVU = 0xaa6D…2044 a6cf. Legacy 0x34E3…6044 still 37eb — unused by new Launch. */
 export const ETATS_HOOK = ['DEPLOYE', 'ABSENT', 'NON_LU'];
 

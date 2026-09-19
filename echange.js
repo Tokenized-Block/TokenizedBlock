@@ -13,7 +13,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, estNotreHook } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -106,7 +106,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
    *    notre hook HOOK_PREVU, le swap paie DEJA 3 % (2 % au wallet de frais, 1 % au createur). Ajouter nos 0,5 %
    *    d interface faisait 3,5 %. Sur ces pools, l interface ne prend plus rien : total 3 %, et le wallet de frais
    *    est deja paye par le hook. Partout ailleurs : 0,5 % d interface, comme avant. */
-  const hookPaieDeja = !!(marche.cle && String(marche.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase());
+  const hookPaieDeja = !!(marche.cle && estNotreHook(marche.cle.hooks));
   const bps = (estWalletDeFrais(compte) || hookPaieDeja) ? 0n : FRAIS_INTERFACE_BPS;
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
   /* ⛔⛔ ACHAT VIA TBLOCK (Phil, 2026-09-13 : « fait l achat via TBLOCK ») : un block apparie a TBLOCK se paie en ETH
