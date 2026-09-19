@@ -671,6 +671,12 @@ details[open] > summary::before{transform:rotate(90deg)}
 .creaPas li::before{content:counter(pas);color:var(--accent);font-weight:800;min-width:14px}
 .creaPas li span{color:var(--doux);font-size:12.5px}
 .creaGo{font-size:15.5px;min-height:52px}
+.creaPrix{display:inline-flex;gap:8px;align-items:baseline;margin:10px 0 0;padding:7px 14px;border-radius:999px;
+  background:rgb(var(--accentRgb) / .14);border:1px solid rgb(var(--accentRgb) / .35);box-shadow:0 0 18px rgb(var(--accentRgb) / .2)}
+.creaPrix b{font-size:18px;color:var(--accent2)} .creaPrix span{color:var(--doux);font-size:12.5px}
+.pePremier{margin:8px 0 10px;padding:10px 12px;border-radius:12px;border:1px solid rgb(var(--accentRgb) / .35);background:rgb(var(--accentRgb) / .08)}
+.pePremier[hidden]{display:none!important}
+.pePremier .puce{margin:6px 6px 0 0}
 @media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
 /* tip 0041 — le block au centre, comme un personnage */
@@ -879,6 +885,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
+      <p class="creaPrix"><b>≈ $1</b><span>once · born, face and brain engraved, market open</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
            bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
@@ -1330,7 +1337,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0097" hidden>Build <code>20260919-0097</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0098" hidden>Build <code>20260919-0098</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1567,6 +1574,15 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <!-- ⛔ DEUX COLONNES FACON DEX (Phil, capture 2026-09-18 : « Prepare buy » pleine largeur, « Prepare sell » a
              moitie — la grille de boutons se cassait). Chaque cote porte son champ, son solde et son bouton. -->
+        <!-- ⛔ PREMIER ACHETEUR (2026-09-19) : mesure sur 22 h, 86 naissances sur un autre launchpad dont 45 avec un achat
+             du createur des la naissance ; chez nous rien ne le proposait. Les boutons REMPLISSENT le champ Buy et
+             PREPARENT l achat : aucune signature sans le wallet. Montre seulement juste apres « It is alive ». -->
+        <div class="pePremier" id="pePremier" hidden>
+          <b>Be its first buyer</b> <span class="note">— optional, you sign in your wallet</span><br>
+          <button type="button" class="puce" data-premier="0.001">0.001 ETH</button>
+          <button type="button" class="puce" data-premier="0.005">0.005 ETH</button>
+          <button type="button" class="puce" data-premier="0.02">0.02 ETH</button>
+        </div>
         <div class="dexCols">
           <div class="dexCol">
             <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
@@ -4168,6 +4184,7 @@ function allerA(nom) {
 
 async function ouvrirProfil(adr, sym) {
   if (!ADRESSE.test(String(adr || ''))) return;
+  if ($('#pePremier')) $('#pePremier').hidden = true;
   const moi = ++jetonProfil;
   const perime = () => moi !== jetonProfil;
   /* ⛔ LE DRAPEAU EST RENDU PAR CELUI QUI L A PRIS, ET SEULEMENT S IL EST TOUJOURS LE DERNIER : un
@@ -6343,6 +6360,26 @@ document.addEventListener('click', (ev) => {
     try { navigator.clipboard.writeText(c.getAttribute('data-copier')); c.textContent = 'Link copied'; } catch (_) { c.textContent = c.getAttribute('data-copier'); }
   }
 });
+/** Juste apres la mise en vie : proposer d etre le premier acheteur (ETH seulement — un block apparie a une action
+ *  s achete dans cette action, le champ Buy le dit deja). Cache des qu on ouvre un autre block. */
+function montrerPremierAcheteur(adr) {
+  const z = $('#pePremier');
+  if (!z) return;
+  const ok = !$('#pEchange').hidden && !deviseEchange
+    && String(($('#profil') || {}).dataset?.block || '').toLowerCase() === String(adr).toLowerCase();
+  z.hidden = !ok;
+  if (ok) { etape('premier_propose'); z.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-premier]');
+  if (!b) return;
+  const champ = $('#peAchat');
+  champ.value = b.getAttribute('data-premier');
+  champ.dispatchEvent(new Event('input', { bubbles: true }));
+  etape('premier_prepare');
+  $('#peAcheter').click();
+});
+
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
@@ -6424,7 +6461,10 @@ async function lancerMarcheBlock(adr) {
      *    On relit le profil entier une fois la pool ouverte : palier, prix, Buy/Sell. */
     setTimeout(() => {
       if ($('#profil') && String($('#profil').dataset.block || '').toLowerCase() === String(adr).toLowerCase()) {
-        void ouvrirProfil(adr, symProfil).then(() => majProgressionVie('Done — it is alive. Buy and sell are open below.'));
+        void ouvrirProfil(adr, symProfil).then(() => {
+          majProgressionVie('Done — it is alive. Buy and sell are open below.');
+          montrerPremierAcheteur(adr);
+        });
       }
     }, 1500);
   } else {
@@ -8525,7 +8565,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0097',
+    build: '20260919-0098',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

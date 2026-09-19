@@ -281,7 +281,7 @@ const TYPES = {
  * volontairement un peu penible : la meme discipline a deja evite qu un module importe mais non
  * declare parte en production en 404 silencieux. */
 /* l ordre de l entonnoir : visite -> pastille de la map -> clic Create -> cree -> vivant -> partage -> lien recu -> achat */
-const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 'partage', 'lien_recu', 'achat'];
+const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'cree', 'vivant', 'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat'];
 const entonnoir = { depuis: new Date().toISOString(), total: {}, parJour: {} };
 
 const SERVIS = [
