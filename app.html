@@ -1320,7 +1320,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0090" hidden>Build <code>20260919-0090</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0091" hidden>Build <code>20260919-0091</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2713,7 +2713,9 @@ async function rafraichirApresEchanges(evenements) {
     const h = habitants.find((x) => String(x.adr).toLowerCase() === k);
     if (!h) continue;
     let r;
-    try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); } catch { continue; }
+    /* ⛔ LA CLE EXACTE, COMME LE PROFIL (2026-09-19) : sans elle, une pool a hook n est jamais trouvee — mesure prod
+   *    « 0 with a market » sur 30 lus, 210 cerveaux NON_LU, aucune humeur jugee, « Blocks talking » muet. */
+  try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr, clesExactes: await clesReellesDe(h.adr) }); } catch { continue; }
     appliquerVie(h, r);
     h.el.classList.remove('pulse');
     void h.el.offsetWidth;
@@ -2745,7 +2747,7 @@ async function lireLaVie() {
      * ⚠️ PLAFOND DE 60 s : un profil bloque ne doit jamais affamer la map pour toujours. */
     for (let attente = 0; profilEnLecture && attente < 230; attente++) await souffler();
     let r;
-    try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr }); }
+    try { r = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: h.adr, clesExactes: await clesReellesDe(h.adr) }); }
     catch (e) { nonLus++; h.etatVie = 'NON_LUE'; continue; }
     lus++;
     /* ⛔ etatVie n est plus ecrit ici : `appliquerVie` l ecrit AVEC la vie (sinon « lu sans vie » = dormant, vu en prod) */
@@ -5250,7 +5252,7 @@ $('#sfParoles').addEventListener('click', async (ev) => {
 
 /* ══ L AGENT RELAIS (relais-cerveaux.js) ══════════════════════════════════════════════════════════════════
  * ⛔ Il relit les paroles des cerveaux et le fil Live, classe par preuve, et ne propose que des gestes a signer. */
-const EMOJI_PREUVE = { MESSAGE_PAYE: '✉️', ECHANGE_VERIFIE: '🟢', NOUVEAU: '✨', HUMEUR: '💭' };
+const EMOJI_PREUVE = { MESSAGE_PAYE: '✉️', ECHANGE_VERIFIE: '🟢', NOUVEAU: '✨', ECHANGE: '↔', HUMEUR: '💭' };
 const LIBELLE_OUTIL = { OUVRIR_PROFIL: 'Open', PROPOSER_GM: 'GM', PROPOSER_MESSAGE_PAYE: 'Reply (paid)', PROPOSER_ENREGISTREMENT: 'Record brain' };
 function peindreRelais() {
   /* tip 1915: do not feed Relay every mood burst — one mood parole per token (latest). */
@@ -5277,7 +5279,7 @@ function peindreRelais() {
     + '</div></div></li>').join('');
   $('#sfRelaisNote').textContent = r.total
     ? r.lignes.length + ' relayed of ' + r.total + ' · ' + r.parPreuve.MESSAGE_PAYE + ' paid message(s), ' + r.parPreuve.ECHANGE_VERIFIE
-      + ' verified trade(s), ' + r.parPreuve.NOUVEAU + ' new, ' + r.parPreuve.HUMEUR + ' mood(s)' + (r.coupees ? ' · ' + r.coupees + ' not shown' : '') + '.'
+      + ' verified trade(s), ' + r.parPreuve.NOUVEAU + ' new, ' + (r.parPreuve.ECHANGE || 0) + ' trade(s), ' + r.parPreuve.HUMEUR + ' mood(s)' + (r.coupees ? ' · ' + r.coupees + ' not shown' : '') + '.'
     : 'Nothing relayed yet — it waits for a paid message, a verified trade or a brain seeing something new.';
 }
 $('#sfRelais').addEventListener('click', (ev) => {
@@ -8378,7 +8380,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0090',
+    build: '20260919-0091',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
