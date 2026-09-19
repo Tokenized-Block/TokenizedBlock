@@ -143,6 +143,7 @@ body{background:var(--fond);
   color:var(--texte);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   -webkit-font-smoothing:antialiased;padding-bottom:84px}
 .enveloppe{max-width:560px;margin:0 auto;padding:0 14px}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .tete{display:flex;align-items:center;gap:10px;padding:16px 0 12px}
 .marque{font-weight:700;font-size:16px;letter-spacing:-.2px}
 .marque span{color:var(--accent2)}
@@ -433,6 +434,12 @@ body:not(.surMap) .mapCta{display:none}
   .tete .droite #mapCta{order:1} .tete .droite #pCompte{order:2} .tete .droite .teinteBoite{order:3}
   .tete .droite #pLearn{order:4} .tete .droite #pReseau{order:5}
   .tete .long{display:none}
+  /* en-tete opaque et AU-DESSUS de la map : rien ne passe sur la marque, les boutons ni la ligne du centre */
+  .tete{position:relative;z-index:25;background:rgb(var(--fondRgb));padding-top:max(10px, env(safe-area-inset-top))}
+  /* le champ de recherche : opaque (a 75 % on voyait les cubes a travers le texte) */
+  #v-map.on #trouver{background:rgb(var(--fondRgb) / .97)}
+  /* iPhone : un champ sous 16 px fait zoomer Safari a chaque saisie */
+  input,select,textarea{font-size:16px!important}
   /* ⛔ PHIL (tel) : « le bouton couleur marche pas ». Mesure a 375 px : le menu s ouvrait, mais la rangee qui defile
        (overflow-x:auto) le rognait — au centre du menu, c etait la map. Fixe a l ecran, sous le bouton (top pose en JS). */
   .teinteMenu{position:fixed;right:12px;left:auto}
@@ -1372,7 +1379,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0114" hidden>Build <code>20260919-0114</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0115" hidden>Build <code>20260919-0115</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2295,6 +2302,19 @@ function caleMapPleinEcran() {
 }
 window.addEventListener('resize', caleMapPleinEcran);
 setTimeout(caleMapPleinEcran, 0);
+/* ⛔ PHIL (2026-09-19, capture Android) : des cubes passaient SUR le texte du centre. Mesure : --mapHaut etait pris une fois
+ *    au chargement ; sur telephone la ligne du centre, vide au depart, se remplit ~15 s plus tard et l en-tete grandit
+ *    (~20 px) — la map, restee calee sur l ancienne hauteur, passait dessous. On la recale a chaque changement de taille
+ *    de l en-tete ou de la barre du bas (polices, texte, barre d outils iOS/Android, rotation). */
+try {
+  if ('ResizeObserver' in window) {
+    const obs = new ResizeObserver(() => caleMapPleinEcran());
+    const t = document.querySelector('header.tete'), n = document.querySelector('nav.nav');
+    if (t) obs.observe(t);
+    if (n) obs.observe(n);
+  }
+} catch (_) { /* sans ResizeObserver : le recalage au redimensionnement reste */ }
+if (window.visualViewport) window.visualViewport.addEventListener('resize', caleMapPleinEcran);
 
 function habitantDe(adr) {
   const a = String(adr || '').toLowerCase();
@@ -8858,7 +8878,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0114',
+    build: '20260919-0115',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -9629,6 +9649,9 @@ function peindreCentre() {
     : '✦ Be the centre of the universe · 1 in ' + n.toLocaleString('en-US')
       + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%)' + (centreActuel ? ' · next draw in ' + mmss : '');
   el.title = 'Every block on the map has exactly the same chance to become the centre of the universe.';
+  /* la ligne peut changer la hauteur de l en-tete (telephone) : on recale la map a chaque peinture, sans dependre de
+   * ResizeObserver (bride dans un onglet en arriere-plan) */
+  caleMapPleinEcran();
 }
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
 $('#mapCentre').addEventListener('click', () => { if (habitants.length) nouveauCentre(true); });
