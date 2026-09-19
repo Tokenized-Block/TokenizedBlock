@@ -52,6 +52,13 @@ const REPONSE = {
 };
 
 const nom = (b) => String(b.sym || String(b.adr).slice(0, 8)).slice(0, 14);
+/* ⛔ Phil (2026-09-19, capture) : « replies to FREEBOTS's price_up · its own mood read from its brain » — des CODES a
+ *    l ecran. La raison se dit avec des mots ; le code reste dans `evenement` pour la machine. */
+const RAISON = { new_buy: 'a purchase', new_sell: 'a sale', new_holder: 'a new holder', new_message: 'a message',
+  new_transfer: 'a transfer', price_down: 'its price going down', price_up: 'its price going up', mood_changes: 'its mood changing' };
+const RAISON_AUTRE = { new_buy: 'was just bought', new_sell: 'was just sold', new_holder: 'got a new holder', new_message: 'got a message',
+  new_transfer: 'got a transfer', price_down: 'price went down', price_up: 'price went up' };
+const deQui = (b, e) => nom(b) + (e === 'price_up' || e === 'price_down' ? '’s ' : ' ') + RAISON_AUTRE[e];
 
 /**
  * Les paroles d un battement.
@@ -75,7 +82,7 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     if (!libre(b.adr, gap)) continue;
     d[b.adr] = tick;
     paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu, b),
-      parce_que: 'its brain saw ' + e + ' at beat ' + tick, evenement: e });
+      parce_que: 'it saw ' + RAISON[e], evenement: e });
     if (!APPELLE_REPONSE.has(e) || paroles.length >= PAROLES_MAX_PAR_TOUR) continue;
     /* le repondant : le block suivant dans l ordre des adresses, qui n a pas parle recemment — deterministe */
     const i = liste.indexOf(b);
@@ -83,8 +90,9 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     if (!autre) continue;
     d[autre.adr] = tick;
     paroles.push({ type: 'REPOND', de: autre.adr, sym: nom(autre), a: b.adr, symA: nom(b),
-      texte: nom(autre) + ' → ' + nom(b) + ': ' + REPONSE[e] + ' I am ' + humeur(autre.vu.phase) + ' myself.',
-      parce_que: 'replies to ' + nom(b) + '\'s ' + e + ' · its own mood read from its brain', evenement: e });
+      /* humeur non lue (marche illisible) : on ne la dit pas — « I am unable to read my market myself » ne veut rien dire */
+      texte: nom(autre) + ' → ' + nom(b) + ': ' + REPONSE[e] + (humeurJugee(autre.vu) ? ' I am ' + humeur(autre.vu.phase) + ' myself.' : ''),
+      parce_que: 'a reply — ' + deQui(b, e), evenement: e });
   }
   return { paroles, dernieres: d };
 }
