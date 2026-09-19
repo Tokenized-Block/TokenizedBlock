@@ -260,14 +260,18 @@ export async function listerTransfers({
   const debut = Math.max(0, dernier - blocs);
   const trouvees = [];
   const fenetresRatees = [];
-  let bas = dernier;
-  while (bas > debut) {
-    const haut = bas;
-    bas = Math.max(debut, haut - FENETRE_MAX);
+  /* ⛔ FENETRES ALIGNEES SUR DES MULTIPLES DE FENETRE_MAX (2026-09-19, charge RPC) : glissantes (dernier - 2000…), elles
+   *    changeaient a chaque lecture et aucune ne se relisait du cache. Alignees, seule celle du haut bouge ; les autres
+   *    sont identiques d une lecture a l autre. Bornes jointives sans recouvrement : [bas, haut] puis [.., bas - 1]. */
+  let haut = dernier;
+  while (haut >= debut) {
+    const bas = Math.max(debut, Math.floor(haut / FENETRE_MAX) * FENETRE_MAX);
+    const hautFenetre = haut;
+    haut = bas - 1;
     try {
       const logs = await rpc('eth_getLogs', [{
         fromBlock: '0x' + bas.toString(16),
-        toBlock: '0x' + haut.toString(16),
+        toBlock: '0x' + hautFenetre.toString(16),
         address: adr,
         topics,
       }]);
@@ -276,7 +280,7 @@ export async function listerTransfers({
         if (t) trouvees.push(t);
       }
     } catch (e) {
-      fenetresRatees.push({ de: bas, a: haut, cause: e.message });
+      fenetresRatees.push({ de: bas, a: hautFenetre, cause: e.message });
     }
     if (surProgres) {
       surProgres({ parcouru: dernier - bas, total: dernier - debut, trouvees: trouvees.length });

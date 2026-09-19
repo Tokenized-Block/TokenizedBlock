@@ -1352,7 +1352,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0100" hidden>Build <code>20260919-0100</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0103" hidden>Build <code>20260919-0103</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1722,7 +1722,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
-import { listerCreations, creationsDe, FACTORY, listerTransfers } from './index-blocks.js';
+import { listerCreations, creationsDe, FACTORY, listerTransfers, createurDuJeton } from './index-blocks.js';
 /* ⛔ L ENCODEUR DE CREATION EST CELUI DE L AUTRE ECRAN, teste et deja utilise en vrai sur mainnet.
  * En reecrire un ici donnerait deux encodages pour un seul geste — et celui qu on maintient le moins
  * finirait par graver autre chose que ce qui est affiche. */
@@ -1800,6 +1800,27 @@ function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
 import { nourritureDuBlock } from './nourriture.js';
+/* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
+ *    (getLogs + blockNumber + tx). Trouve une fois, il est garde (memoire + stockage navigateur) et passe en `creation`.
+ *    Meme fenetre que nourritureDuBlock (8000 blocs) : le verdict « mort » ne change pas. Non trouve = pas garde. */
+const CREATEURS_STOCKAGE = 'tb-createurs-v1';
+const createursConnus = new Map();
+try { for (const [k, v] of JSON.parse(localStorage.getItem(CREATEURS_STOCKAGE) || '[]')) createursConnus.set(k, v); } catch (_) { /* sans stockage : on relit */ }
+async function nourritureDe(jeton) {
+  const k = CHAINE + ':' + String(jeton).toLowerCase();
+  let creation = createursConnus.get(k) || null;
+  if (!creation) {
+    try {
+      const c = await createurDuJeton({ rpc, token: String(jeton).toLowerCase(), blocs: 8000 });
+      if (c && c.createur && c.tx) {
+        creation = { createur: c.createur, tx: c.tx };
+        createursConnus.set(k, creation);
+        try { localStorage.setItem(CREATEURS_STOCKAGE, JSON.stringify([...createursConnus.entries()].slice(-3000))); } catch (_) { /* plein : memoire seule */ }
+      }
+    } catch (_) { creation = null; /* nourritureDuBlock refera sa propre recherche */ }
+  }
+  return nourritureDuBlock({ rpc, jeton, ...(creation ? { creation } : {}) });
+}
 import { apercuTransaction, nomDe } from './apercu.js';
 import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
@@ -1875,7 +1896,7 @@ async function relireNourriture(h) {
   if ((relecturesNourriture.get(cle) || 0) > Date.now() - RELIRE_NOURRITURE_MS) return;
   relecturesNourriture.set(cle, Date.now());
   try {
-    const n = await nourritureDuBlock({ rpc, jeton: h.adr });
+    const n = await nourritureDe(h.adr);
     if (n.etat !== 'LUE') return;
     if (h.nourriture && h.nourriture.etat === 'LUE') h.nourritureAvant = h.nourriture;
     h.nourriture = n;
@@ -2001,7 +2022,84 @@ let idRpc = 0;
 /* ⛔ 5 ESSAIS (0,7 → 11 s + alea), pas 3 (2026-09-13) : sous la charge d une map vivante, 3 ne suffisaient pas a lire le
  * plan de liquidite de TBLOCK — « HTTP 429 after 4 tries ». Toujours borne : au-dela, on echoue et on le dit. */
 const ESSAIS_429 = 5;
+/* ══ CACHE RPC DE L IMMUABLE (2026-09-19) ════════════════════════════════════════════════════════════════════════
+ * ⛔ MESURE (Chrome, prod, onglet ouvert) : 192 lectures en 30 s, ~4 % refusees (publicnode 403, base.org 429, drpc
+ *    400/408). Sources : nourritureDuBlock (tx + logs + createur, ~90), vieDuBlock (slot0, 43), decimals() 11 fois.
+ *    Une grande part relit ce qui NE PEUT PAS changer. Ce cache ne garde QUE cela :
+ *    - decimals / symbol / name / contractURI (appel SANS argument, reponse non vide) ;
+ *    - une tx ou un recu DEJA MINE (blockNumber present) ;
+ *    - des logs sur une plage FINIE dont la fin est a plus de 32 blocs sous la tete lue (memoire seulement).
+ *    Rien de « latest » n est garde au-dela de la fusion des requetes identiques EN VOL, sauf eth_blockNumber (4 s).
+ * ⚠️ Stockage navigateur = confort par visiteur : il peut etre vide ou refuse, tout est en try/catch, et l app lit la
+ *    chaine normalement sans lui. Plafonne (~1,5 Mo). Aucune ecriture ne passe ici (les envois passent par envoi.js). */
+const RPC_SEL_IMMUABLES = new Set(['0x313ce567', '0x95d89b41', '0x06fdde03', '0xe8a3d485']);
+const RPC_STOCKAGE = 'tb-rpc-immuable-v1';
+const rpcImmuable = new Map();
+const rpcLogs = new Map();
+const rpcEnVol = new Map();
+let rpcTete = { n: 0, t: 0, v: null };
+let rpcStockagePlanifie = null;
+try {
+  const brut = localStorage.getItem(RPC_STOCKAGE);
+  if (brut) for (const [k, v] of JSON.parse(brut)) rpcImmuable.set(k, v);
+} catch (_) { /* stockage absent ou refuse : on lit la chaine, simplement */ }
+function rpcStocker() {
+  if (rpcStockagePlanifie) return;
+  rpcStockagePlanifie = setTimeout(() => {
+    rpcStockagePlanifie = null;
+    try {
+      let taille = 0; const garde = [];
+      for (const e of [...rpcImmuable.entries()].reverse()) { const l = e[0].length + JSON.stringify(e[1]).length; if (taille + l > 1_500_000) break; taille += l; garde.push(e); }
+      localStorage.setItem(RPC_STOCKAGE, JSON.stringify(garde.reverse()));
+    } catch (_) { /* plein ou refuse : le cache memoire suffit pour cette visite */ }
+  }, 3000);
+}
+function rpcCleImmuable(m, p) {
+  if (m === 'eth_call' && p && p[0] && typeof p[0] === 'object') {
+    const d = String(p[0].data || '').toLowerCase();
+    if (d.length === 10 && RPC_SEL_IMMUABLES.has(d)) return 'c:' + CHAINE + ':' + String(p[0].to || '').toLowerCase() + ':' + d;
+    return null;
+  }
+  if ((m === 'eth_getTransactionByHash' || m === 'eth_getTransactionReceipt') && p && typeof p[0] === 'string') return (m === 'eth_getTransactionByHash' ? 't:' : 'r:') + CHAINE + ':' + p[0].toLowerCase();
+  return null;
+}
+function rpcGardable(m, res) {
+  if (res === null || res === undefined) return false;
+  if (m === 'eth_call') return typeof res === 'string' && res.length > 2 && !/^0x0*$/.test(res);
+  return typeof res === 'object' && !!res.blockNumber;
+}
+function rpcCleLogs(p) {
+  const f = p && p[0];
+  if (!f || typeof f.fromBlock !== 'string' || typeof f.toBlock !== 'string' || !/^0x[0-9a-f]+$/i.test(f.toBlock) || f.blockHash) return null;
+  if (!rpcTete.n || parseInt(f.toBlock, 16) > rpcTete.n - 32) return null;
+  return CHAINE + ':' + JSON.stringify(f);
+}
+/* compteur de diagnostic (lecture seule, dans la console : __tbRpc) — pour MESURER le gain au lieu de le supposer */
+const rpcCompte = { reseau: 0, cache: 0, fusion: 0, t0: Date.now() };
+try { window.__tbRpc = rpcCompte; } catch (_) { /* rien */ }
 async function rpc(methode, params) {
+  const deCache = (v) => { rpcCompte.cache++; return v; };
+  if (methode === 'eth_blockNumber' && rpcTete.v && Date.now() - rpcTete.t < 4000) return deCache(rpcTete.v);
+  const ci = rpcCleImmuable(methode, params);
+  if (ci && rpcImmuable.has(ci)) return deCache(rpcImmuable.get(ci));
+  const cl = methode === 'eth_getLogs' ? rpcCleLogs(params) : null;
+  if (cl && rpcLogs.has(cl)) return deCache(rpcLogs.get(cl));
+  if (cl && rpcImmuable.has('l:' + cl)) return deCache(rpcImmuable.get('l:' + cl));
+  const cv = methode + ':' + CHAINE + ':' + JSON.stringify(params || []);
+  if (rpcEnVol.has(cv)) { rpcCompte.fusion++; return rpcEnVol.get(cv); }
+  rpcCompte.reseau++;
+  const pr = rpcReseau(methode, params).then((res) => {
+    if (methode === 'eth_blockNumber') { const n = parseInt(res, 16); if (Number.isSafeInteger(n)) rpcTete = { n: Math.max(n, rpcTete.n), t: Date.now(), v: res }; }
+    if (ci && rpcGardable(methode, res)) { rpcImmuable.set(ci, res); if (rpcImmuable.size > 6000) rpcImmuable.delete(rpcImmuable.keys().next().value); rpcStocker(); }
+    /* petites plages finies (vides le plus souvent) : gardees d une visite a l autre ; les grosses, en memoire seulement */
+    if (cl && Array.isArray(res) && res.length <= 20) { rpcImmuable.set('l:' + cl, res); if (rpcImmuable.size > 6000) rpcImmuable.delete(rpcImmuable.keys().next().value); rpcStocker(); }
+    else if (cl && Array.isArray(res) && res.length <= 300) { rpcLogs.set(cl, res); if (rpcLogs.size > 600) rpcLogs.delete(rpcLogs.keys().next().value); }
+    return res;
+  }).finally(() => { rpcEnVol.delete(cv); });
+  rpcEnVol.set(cv, pr);
+  return pr;
+}
+async function rpcReseau(methode, params) {
   /* ⛔ ONLY the B20 factory/precompile pins to official RPC (secours sometimes returned 0x code).
    * ⛔⛔ BUG 2026-09-14: `to.startsWith('0xb20')` also matched EVERY block token (CREATE2 0xb200…)
    * including TBLOCK — decimals/supply/market reads stuck on rate-limited mainnet.base.org → permanent
@@ -2812,7 +2910,7 @@ async function lireLaVie() {
      * la relire a chaque tour multiplierait les refus du noeud public, qui s affichent comme « non lu ». */
     if (!h.nourriture || h.nourriture.etat !== 'LUE') {
       await souffler();
-      try { h.nourriture = await nourritureDuBlock({ rpc, jeton: h.adr }); }
+      try { h.nourriture = await nourritureDe(h.adr); }
       catch (e) { h.nourriture = { etat: 'NON_LUE', pourquoi: String((e && e.message) || e), mort: null }; }
     }
     /* ⛔ LA VIE PRECEDENTE EST GARDEE AVANT D ETRE ECRASEE : sans elle, le cerveau ne saurait jamais
@@ -4439,7 +4537,7 @@ async function lireProfil(adr, sym, perime) {
   /* ⛔ tip 2040: measure holders (Transfer window) once per profile open — never invent; repaint when LUE. */
   void (async () => {
     try {
-      const n = await nourritureDuBlock({ rpc, jeton: adr });
+      const n = await nourritureDe(adr);
       if (perime()) return;
       profilNourriture = n;
       const hN = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
@@ -7759,14 +7857,28 @@ function peindreTrending() {
   if (!ul || !d) return;
   const cle = { h1: (l) => l.volume1hUsd, h24: (l) => l.volume24hUsd, gain: (l) => l.change1h ?? -1e9, liq: (l) => l.liquiditeUsd }[trTri];
   /* tip 0039 (Phil « montre tous les blocks qui ont ete chiffres ») : tous, par pages de 50 (« Show more ») */
-  const toutes = [...d.lignes].sort((a, b) => cle(b) - cle(a));
+  /* ⛔ PHIL (2026-09-19, capture « toujours buge ») : mesure — 8 lignes sur 194 ont bouge dans l heure (DexScreener
+   *    confirme h1 = 0 tx pour les autres). « vol 1h $0 » sur chaque ligne se lisait comme une lecture ratee, et « Last hour »
+   *    melangeait les 186 immobiles au hasard. Les actifs d abord ; les immobiles sous un separateur, par 24 h ; en Gainers,
+   *    une ligne sans variation 1 h passe apres celles qui en ont une (plus de tri au hasard sur des egalites). */
+  const bouge = (l) => (l.volume1hUsd || 0) > 0;
+  const toutes = [...d.lignes].sort((a, b) => {
+    if (trTri === 'h1' && bouge(a) !== bouge(b)) return bouge(b) - bouge(a);
+    if (trTri === 'h1' && !bouge(a)) return (b.volume24hUsd || 0) - (a.volume24hUsd || 0);
+    if (trTri === 'gain' && (a.change1h == null) !== (b.change1h == null)) return (a.change1h == null) - (b.change1h == null);
+    if (trTri === 'gain' && a.change1h == null) return (b.change24h ?? -1e9) - (a.change24h ?? -1e9);
+    return cle(b) - cle(a);
+  });
   const lignes = toutes.slice(0, trAffiches);
+  const actifs = toutes.filter(bouge).length;
   const pct = (v) => v === null || v === undefined ? '' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
-  ul.innerHTML = lignes.map((l, i) => '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
+  ul.innerHTML = lignes.map((l, i) => (trTri === 'h1' && i === actifs && i > 0
+      ? '<li class="filL"><p class="note" style="margin:6px 0">Quiet in the last hour — sorted by 24h volume</p></li>' : '')
+    + '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
     + '<span class="trRang">' + (i + 1) + '</span>'
     + '<div class="filArt">' + dessin(l.adr, l.sym) + '</div>'
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
-    + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · vol 1h ' + usdCourt(l.volume1hUsd) + ' · 24h ' + usdCourt(l.volume24hUsd)
+    + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · ' + (bouge(l) ? 'vol 1h ' + usdCourt(l.volume1hUsd) : 'no trade in the last hour') + ' · 24h ' + usdCourt(l.volume24hUsd)
     + ' · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</p></div>'
     /* mesure 2026-09-17 : la plupart de ces marches n acceptent que leur propre app -> « Open », pas une promesse d achat */
     + '<button type="button" class="bouton sec trAcheter" data-ouvrir="' + enTexte(l.adr) + '">Open</button></li>').join('')
@@ -8402,7 +8514,7 @@ function choisirBrain(adr) {
     const hB = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
     try {
       if (!(hB && hB.nourriture && hB.nourriture.etat === 'LUE')) {
-        const n = await nourritureDuBlock({ rpc, jeton: adr });
+        const n = await nourritureDe(adr);
         if (hB) hB.nourriture = n; else brainNourriture = { adr: String(adr).toLowerCase(), n };
       }
     } catch { /* non lue : le journal le dira */ }
@@ -8583,7 +8695,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0100',
+    build: '20260919-0103',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
