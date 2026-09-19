@@ -68,7 +68,7 @@ async function obtenirRasteriseur() {
   const dir = dirname(fileURLToPath(import.meta.url));
   await mod.initWasm(readFileSync(join(dir, 'node_modules', '@resvg', 'resvg-wasm', 'index_bg.wasm')));
   const police = readFileSync(join(dir, 'polices', 'DejaVuSans-Bold.ttf'));
-  rasteriseur = (svg) => new mod.Resvg(svg, { fitTo: { mode: 'width', value: 256 },
+  rasteriseur = (svg, largeur = 256) => new mod.Resvg(svg, { fitTo: { mode: 'width', value: largeur },
     font: { fontBuffers: [police], defaultFontFamily: 'DejaVu Sans', loadSystemFonts: false } }).render().asPng();
   return rasteriseur;
 }
@@ -504,6 +504,51 @@ createServer((req, res) => {
    *    fabriquer un logo depuis son adresse, c est lui preter une identite qu il n a jamais choisie.
    * ⚠️ CE QUE CA NE FAIT PAS : l afficher automatiquement ailleurs. Il faut coller cette URL la ou chaque
    *    plateforme la demande (profil DexScreener, token list, fiche Basescan). */
+  /* ══ KIT DEXSCREENER (Phil 2026-09-19 : « le block en 2D sur DexScreener ») ════════════════════════════════════════
+   * Mesure (docs DexScreener) : AUCUN logo n est lu depuis la chaine ; il vient d une liste externe (CoinGecko…) ou de
+   * « Enhanced Token Info », payant, commande par l equipe du token. On ne peut donc que PREPARER les images aux formats
+   * demandes (logo carre, banniere 3:1). ⛔ Meme regle que /face : seulement pour une face GRAVEE, sinon 404. */
+  const kit = chemin.match(/^\/face\/(0x[0-9a-fA-F]{40})\.(carre|banniere)\.png$/);
+  if (kit) {
+    const [, token, forme] = kit;
+    Promise.all([
+      resoudreFace(token),
+      rpcServeur('eth_call', [{ to: token, data: '0x95d89b41' }, 'latest']).catch(() => null),
+    ]).then(async ([f, symHex]) => {
+      if (!f || f.etat !== 'LU' || !f.face) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+        res.end('no engraved face for this block');
+        return;
+      }
+      let sym = '';
+      try { const b = String(symHex || '').slice(2); const n = parseInt(b.slice(64, 128), 16); sym = Buffer.from(b.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch (_) { sym = ''; }
+      const face = logoSvg(paramsLogoDepuisApparence(f.face, sym || '·'));
+      const fond = (face.match(/<rect width="200" height="220" fill="([^"]+)"/) || [])[1] || '#0b0b14';
+      const niche = (x, y, l, h) => face.replace(/^<svg /, '<svg x="' + x + '" y="' + y + '" width="' + l + '" height="' + h + '" ');
+      const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const svg = forme === 'carre'
+        ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220"><rect width="220" height="220" fill="' + fond + '"/>' + niche(10, 0, 200, 220) + '</svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+          + '<stop offset="0" stop-color="#05070f"/><stop offset="1" stop-color="' + fond + '"/></linearGradient></defs>'
+          + '<rect width="1500" height="500" fill="url(#g)"/>'
+          /* sans son fond carre : la face flotte sur le degrade */
+          + niche(90, 40, 382, 420).replace(/<rect width="200" height="220" fill="[^"]+"\s*\/?>(<\/rect>)?/, '')
+          /* le titre tient dans 880 px quelle que soit la longueur du symbole (12 caracteres max) */
+          + '<text x="560" y="250" font-family="DejaVu Sans" font-size="' + Math.min(120, Math.floor(880 / (Math.max(4, (sym ? sym.length + 1 : 7)) * 0.72))) + '" font-weight="700" fill="#f2fbff">' + esc(sym ? '$' + sym : 'A block') + '</text>'
+          + '<text x="564" y="325" font-family="DejaVu Sans" font-size="32" fill="#9cc3cf">a living block on Base · tokenizedblock.space</text></svg>';
+      const rendre = await obtenirRasteriseur();
+      const png = rendre(svg, forme === 'carre' ? 512 : 1500);
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400',
+        'content-disposition': 'inline; filename="' + (sym || 'block').replace(/[^A-Za-z0-9]/g, '') + '-' + (forme === 'carre' ? 'logo-512' : 'banner-1500x500') + '.png"',
+        'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' });
+      res.end(Buffer.from(png));
+    }).catch(() => {
+      res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+      res.end('image not rendered right now');
+    });
+    return;
+  }
+
   if (/^\/face\/0x[0-9a-fA-F]{40}\.png$/.test(chemin)) {
     const token = chemin.slice('/face/'.length, -'.png'.length);
     Promise.all([

@@ -1356,7 +1356,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0104" hidden>Build <code>20260919-0104</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0105" hidden>Build <code>20260919-0105</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6469,7 +6469,14 @@ function blocPartage(adr, sym) {
   return '<div class="partage"><b style="flex-basis:100%">Share it — people who open your link land on your block.</b>'
     + '<a href="' + enTexte(x) + '" target="_blank" rel="noopener" data-partage="x">Post on X</a>'
     + '<a href="' + enTexte(fc) + '" target="_blank" rel="noopener" data-partage="farcaster">Cast on Farcaster</a>'
-    + '<button type="button" data-copier="' + enTexte(url) + '">Copy link</button></div>';
+    + '<button type="button" data-copier="' + enTexte(url) + '">Copy link</button></div>'
+    /* ⛔ KIT DEXSCREENER : DexScreener ne lit aucun logo sur la chaine ; son formulaire est payant et c est au createur
+     *    de choisir. On prepare seulement les deux images aux bons formats, et on le dit. */
+    + '<div class="partage"><b style="flex-basis:100%">Show its face on DexScreener</b>'
+    + '<span class="note" style="flex-basis:100%;margin:0">DexScreener does not read logos from the chain. Its token-info form is paid and up to you — here are the two images it asks for.</span>'
+    + '<a href="/face/' + enTexte(String(adr).toLowerCase()) + '.carre.png" download target="_blank" rel="noopener">Logo 512×512</a>'
+    + '<a href="/face/' + enTexte(String(adr).toLowerCase()) + '.banniere.png" download target="_blank" rel="noopener">Banner 1500×500</a>'
+    + '<a href="https://marketplace.dexscreener.com/product/token-info" target="_blank" rel="noopener">DexScreener form ↗</a></div>';
 }
 document.addEventListener('click', (ev) => {
   const a = ev.target.closest('[data-partage]');
@@ -8699,7 +8706,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0104',
+    build: '20260919-0105',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
