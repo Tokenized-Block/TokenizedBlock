@@ -51,6 +51,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   /* ⛔ PHIL (2026-09-19) : « le bouton ne montre pas le block place au centre, le point 0 0 ». Le block tire au sort
    * glisse VRAIMENT jusqu a l origine du cube (0,0,0) et y reste son tour ; l ancien centre reprend sa derive. */
   let centre = null;
+  let rappelTout = null;
   function fixerCentre(h) {
     if (centre && centre !== h) centre.centreFixe = false;
     centre = h || null;
@@ -76,7 +77,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   ui.className = 'mapZoom';
   ui.innerHTML = '<button type="button" data-cam="plus" aria-label="Zoom in" title="Zoom in">+</button>'
     + '<button type="button" data-cam="moins" aria-label="Zoom out" title="Zoom out">−</button>'
-    + '<button type="button" data-cam="tout" aria-label="Back to the start view" title="Back to the start view">⤢</button>'
+    + '<button type="button" data-cam="tout" aria-label="Draw a new centre of the universe" title="Draw a new centre of the universe — every block has the same chance">⤢</button>'
     + '<button type="button" data-cam="auto" aria-label="Auto-rotate" title="Auto-rotate on / off">⟳</button>';
   map.appendChild(ui);
   const compteur = document.createElement('div');
@@ -415,7 +416,9 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     if (quoi === 'plus') { cam.auto = false; zoomer(1 / 1.4); }
     else if (quoi === 'moins') { cam.auto = false; zoomer(1.4); }
     /* le bouton ⤢ mene au centre de l univers quand il y en a un ; sinon, la vue de depart comme avant */
-    else if (quoi === 'tout') { if (centre) centrerSur(centre); else vueDeDepart(true); }
+    /* ⛔ PHIL (2026-09-19) : « le bouton qui fait centre de la map doit a chaque fois un block different pris au hasard ».
+     * L app branche ici son tirage ; sans tirage branche, le bouton mene au centre actuel ou a la vue de depart. */
+    else if (quoi === 'tout') { if (rappelTout) rappelTout(); else if (centre) centrerSur(centre); else vueDeDepart(true); }
     else if (quoi === 'auto') { cam.auto = !cam.auto; cam.cible = null; }
   });
 
@@ -425,6 +428,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     nbLiens: () => liens.length,
     derniereMain: () => mainA,
     fixerCentre,
+    surBoutonTout: (fn) => { rappelTout = typeof fn === 'function' ? fn : null; },
     vider: () => { effets = []; liens = []; },
   };
 }
