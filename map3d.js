@@ -20,19 +20,24 @@ export const DEMI_COTE = 3200;
 /* la camera vit a l interieur : distance au centre bornee dans [-0,8 S ; 0,98 S], deplacement additif (pas multiplicatif) */
 /* tip 0040 (Phil « t as bloque le dezoom, remets-le ») : le recul au-dela du cube est rendu (4 S), le depart reste dedans */
 /* tip 0042 (Phil « agrandis la limite de l univers, laisse-moi dezoomer plus ») : 4 S -> 9 S */
-const DIST_MIN = -0.8, DIST_MAX = 9, DIST_DEPART = 0.9;
+const DIST_MIN = -0.8, DIST_MAX = 12, DIST_DEPART = 0.9;
 /* les aretes du cube ne se dessinent que vues de DEHORS (au-dela de 1,15 S) : dedans, on ne voit pas les murs */
 const VOIR_CUBE_DEHORS = 1.15;
-const LIEN_VIE_MS = 10 * 60 * 1000;
+/* ⛔ PHIL (2026-09-19, capture) : « change les lignes droites par des faisceaux lumineux qui passent — on voit
+ * brievement la connexion ; avec beaucoup de cubes, ca rend bordelique ». Une connexion lue restait tracee DIX
+ * MINUTES : des dizaines de traits fixes sur la map. Elle s allume maintenant en faisceau, puis s eteint en 7 s.
+ * Le lien reste compte (nbLiens) : seule sa trace a l ecran est breve. */
+const LIEN_VIE_MS = 7000;
 const ROT_AUTO = 0.0014;
 
 export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false }) {
   /* tip 0038 — EXPANSION DE L UNIVERS (Phil : « une expansion des limites qui s agrandit tout doucement, comme l expansion
    * de l univers ») : S part de 0,7 x DEMI_COTE et grandit de ~0,06 % par seconde jusqu a 2,5 x. Positions des blocks,
    * points des wallets, distance de camera et vitesse suivent le meme facteur : tout s ecarte, la camera reste DEDANS. */
-  let S = DEMI_COTE * 0.7;
+  /* Phil (2026-09-19) : « agrandis le cube, il y a de plus en plus de blocks » — depart 1,2x au lieu de 0,7x */
+  let S = DEMI_COTE * 1.2;
   /* tip 0042 : limite de l expansion 2,5 x -> 4 x */
-  const S_MAX = DEMI_COTE * 4, EXPANSION_PAR_S = 0.0006;
+  const S_MAX = DEMI_COTE * 6, EXPANSION_PAR_S = 0.0006;
   /* tip 0026 (Phil « un GROS CUBE, pas un rectangle ») : cote egal sur les trois axes */
   let SX = S, SY = S, SZ = S;
   let dernierT = null;
@@ -267,10 +272,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
         + (dash ? ' stroke-dasharray="4 6"' : '') + '/>';
     };
     const VOIR_CUBE = cam.dist > S * VOIR_CUBE_DEHORS;
-    for (let g = 1; g < 6 && VOIR_CUBE; g++) {
-      const vx = -SX + (2 * SX * g) / 6, vz = -SZ + (2 * SZ * g) / 6;
-      html += seg([vx, SY, -SZ], [vx, SY, SZ], 1, 0.16, false) + seg([-SX, SY, vz], [SX, SY, vz], 1, 0.16, false);
-    }
+    /* ⛔ PHIL (2026-09-19) : « retire le quadrillage au fond ». Il n existait que sur la face du bas : le cube n avait pas
+     * six faces pareilles. Il ne reste que les 12 aretes. */
     if (VOIR_CUBE) for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
     /* tip 0037 — SOLEILS : un block a fort volume (h.eclat 0..1, fourni par l app depuis le volume 24 h lu) rayonne ;
      * un block qui vient d emettre un signal (h.vifJusqua) brille plus fort quelques secondes. */
@@ -291,8 +294,11 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     for (const x of liens) {
       if (!x.de.visible || !x.a.visible) continue;
       const age = (maintenant - x.t0) / LIEN_VIE_MS;
-      html += '<line x1="' + x.de.sx.toFixed(1) + '" y1="' + x.de.sy.toFixed(1) + '" x2="' + x.a.sx.toFixed(1) + '" y2="' + x.a.sy.toFixed(1)
-        + '" stroke="' + x.couleur + '" stroke-opacity="' + (0.5 * (1 - age) + 0.06).toFixed(3) + '" stroke-width="1.5"/>';
+      /* un faisceau : un halo large et doux, un coeur fin et vif — les deux s eteignent ensemble */
+      const eclat = Math.max(0, 1 - age);
+      const coords = 'x1="' + x.de.sx.toFixed(1) + '" y1="' + x.de.sy.toFixed(1) + '" x2="' + x.a.sx.toFixed(1) + '" y2="' + x.a.sy.toFixed(1) + '"';
+      html += '<line ' + coords + ' stroke="' + x.couleur + '" stroke-opacity="' + (0.22 * eclat).toFixed(3) + '" stroke-width="6" stroke-linecap="round"/>'
+        + '<line ' + coords + ' stroke="#fff4ff" stroke-opacity="' + (0.75 * eclat).toFixed(3) + '" stroke-width="1.2" stroke-linecap="round"/>';
     }
     effets = effets.filter((e) => maintenant - e.t0 < e.duree).slice(-80);
     for (const e of effets) {
