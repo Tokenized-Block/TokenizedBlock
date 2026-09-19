@@ -390,7 +390,7 @@ body:not(.surMap) .mapCentre{visibility:hidden}
   font:700 10px/1 inherit;letter-spacing:.4px;padding:3px 7px;border-radius:99px;cursor:pointer}
 .sentinelle{height:1px;width:100%}
 .pcTrace{margin:8px 0 0;color:var(--accent);background:rgb(var(--fondRgb) / .6);border:1px solid rgb(var(--accentRgb) / .14);border-radius:10px;padding:6px;min-height:34px}
-.pcTrace svg{display:block;width:100%;height:64px}
+.pcTrace canvas{display:block;width:100%;height:auto;aspect-ratio:640/170}
 .pcStats{display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11.5px;color:var(--doux);margin:10px 0 0;
   font-variant-numeric:tabular-nums}
 .pcStats b{color:var(--texte)}
@@ -1006,7 +1006,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            asleep »). Le palier peut venir du marche public ; l humeur ne vient QUE de la lecture
            on-chain. Quand les deux divergent, cette ligne dit laquelle est laquelle. -->
       <p class="note" id="bSource"></p>
-      <canvas id="bRaster" width="640" height="150" class="toile"></canvas>
+      <canvas id="bRaster" width="640" height="200" class="toile"></canvas>
       <p class="note" style="margin-top:6px">Each column is one beat, each dot a neuron that fired.</p>
       <div class="pcStats">
         <span>≋ <b id="bG">—</b> Hz left</span>
@@ -1284,7 +1284,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0075" hidden>Build <code>20260919-0075</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0076" hidden>Build <code>20260919-0076</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1435,7 +1435,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- ⛔ PHIL (2026-09-17) : « mets autre chose, plus comme un apercu du brain AI en mouvement ».
              Marche non lu = aucune humeur jugee, mais le battement est REEL : il vient du cablage, pas
              du prix. La bande le montre, au lieu d une phrase morte. -->
-        <div class="pcTrace" id="pcTrace" aria-hidden="true"></div>
+        <div class="pcTrace" id="pcTrace" aria-hidden="true"><canvas id="pcRaster" width="640" height="170"></canvas></div>
         <div class="pcStats">
           <span>≋ <b id="pcG">—</b> Hz left wing</span>
           <span>≋ <b id="pcD">—</b> Hz right wing</span>
@@ -3575,23 +3575,11 @@ function peindreCompanion() {
  * a tire — jamais un point pose pour faire joli, et rien du tout tant qu aucun battement n est arrive. */
 const TRACE_COLS = 48, TRACE_RANGS = 16;
 let traceProfil = [];
-function traceProfilVider() { traceProfil = []; const t = $('#pcTrace'); if (t) t.innerHTML = ''; }
+function traceProfilVider() { traceProfil = []; dessinerRasterSur($('#pcRaster'), traceProfil); }
 function traceProfilAjouter(indices) {
-  const seaux = new Set();
-  for (const i of Array.isArray(indices) ? indices : []) seaux.add(Math.floor(i / 8) % TRACE_RANGS);
-  traceProfil.push(seaux);
-  if (traceProfil.length > TRACE_COLS) traceProfil = traceProfil.slice(-TRACE_COLS);
-  const t = $('#pcTrace');
-  if (!t) return;
-  const L = 240, H = 64, lc = L / TRACE_COLS, lr = H / TRACE_RANGS;
-  let d = '';
-  traceProfil.forEach((s, x) => {
-    for (const r of s) d += '<rect x="' + (x * lc).toFixed(2) + '" y="' + (r * lr).toFixed(2)
-      + '" width="' + (lc - 0.6).toFixed(2) + '" height="' + (lr - 0.6).toFixed(2) + '" rx="0.8" fill="currentColor"'
-      + ' opacity="' + (0.35 + 0.65 * ((x + 1) / traceProfil.length)).toFixed(2) + '"/>';
-  });
-  /* preserveAspectRatio=none : les 48 battements occupent TOUTE la largeur de la boite, sans bandes vides */
-  t.innerHTML = '<svg viewBox="0 0 ' + L + ' ' + H + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' + d + '</svg>';
+  traceProfil.push({ indices: Array.isArray(indices) ? indices : [] });
+  if (traceProfil.length > 64) traceProfil = traceProfil.slice(-64);
+  dessinerRasterSur($('#pcRaster'), traceProfil);
 }
 
 function peindreCerveau() {
@@ -8187,7 +8175,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0075',
+    build: '20260919-0076',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8490,13 +8478,17 @@ $('#bReprendre').addEventListener('click', async () => {
  *    comme un oscilloscope qui defile, au lieu d une colonne qui se remplit par la gauche.
  * ⛔ CE QUI EST DESSINE RESTE EXACTEMENT CE QUI A TIRE : un cube par groupe de 4 neurones dont au moins un a tire
  *    a ce battement. Aucun point decoratif, rien quand rien n a tire. */
-function dessinerRaster() {
-  const c = $('#bRaster'), ctx = c.getContext('2d');
+function dessinerRaster() { dessinerRasterSur($('#bRaster'), brainHisto); }
+/** Cubes lumineux, 64 battements x 24 rangees, le plus recent a droite, dans la teinte du coloris choisi. */
+function dessinerRasterSur(c, histoTout) {
+  if (!c) return;
+  const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
+  const th = teinteH();
   /* 64 battements x 24 rangees : des cellules de ~10 x 6 px — des cubes lisibles, pas des tirets */
   const RANGS = 24, cols = Math.min(HISTO_MAX, 64);
   const lc = c.width / cols, lr = c.height / RANGS;
-  const histo = brainHisto.slice(-cols);
+  const histo = histoTout.slice(-cols);
   const debut = cols - histo.length; /* le plus recent colle a droite */
   const arrondi = (x, y, w, h, r) => {
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); } else ctx.fillRect(x, y, w, h);
@@ -8507,7 +8499,7 @@ function dessinerRaster() {
     const seaux = new Set();
     for (const n of v.indices || []) seaux.add(Math.floor(n / (128 / RANGS)) % RANGS);
     for (const r of seaux) {
-      const teinte = 250 + (r / RANGS) * 50;
+      const teinte = th - 5 + (r / RANGS) * 50;
       ctx.globalAlpha = 0.25 + 0.75 * age;
       ctx.shadowColor = 'hsl(' + teinte + ' 90% 70%)';
       ctx.shadowBlur = age > 0.9 ? 8 : 0;
