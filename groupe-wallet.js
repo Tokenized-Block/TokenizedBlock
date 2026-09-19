@@ -20,7 +20,10 @@ export async function peutGrouper({ eth, compte, chaineHex }) {
   const c = caps && (caps[chaineHex] || caps[String(parseInt(chaineHex, 16))] || caps[parseInt(chaineHex, 16)]);
   if (!c) return false;
   const st = c.atomic && c.atomic.status;
-  return st === 'supported' || st === 'ready' || !!(c.atomicBatch && c.atomicBatch.supported === true);
+  /* ⛔ « ready » NE SUFFIT PAS (2026-09-19) : pour un compte classique (EOA), « ready » veut dire « possible APRES une mise
+   *    a niveau du compte » (EIP-7702) — le wallet affiche alors une demande de conversion en smart account, surprenante et
+   *    facile a refuser. Seul « supported » (deja capable) prend la voie une-signature ; le reste garde l etape par etape. */
+  return st === 'supported' || !!(c.atomicBatch && c.atomicBatch.supported === true);
 }
 
 /** Lit un statut EIP-5792 (v2 : nombres 100/200/400/500/600 ; v1 : 'PENDING'/'CONFIRMED'). */

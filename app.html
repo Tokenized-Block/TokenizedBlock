@@ -1379,7 +1379,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0115" hidden>Build <code>20260919-0115</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0116" hidden>Build <code>20260919-0116</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8097,15 +8097,21 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   e.className = 'note';
   e.textContent = 'One signature: it is created, ≈ $1 (' + formaterEthCourt(plan.fraisW) + ' ETH) brings it to life, and its market opens — all or nothing. Check it in your wallet.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
+  etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
-  if (r.etat === 'REFUSE') { e.className = 'note wKo'; e.textContent = 'You declined in your wallet — nothing was sent, nothing moved.'; return 'STOP'; }
-  if (r.etat === 'EN_ATTENTE' || r.etat === 'PARTIEL') { e.className = 'note wKo'; e.textContent = r.pourquoi; return 'STOP'; }
+  if (r.etat === 'REFUSE') { etape('groupe_refus'); e.className = 'note wKo'; e.textContent = 'You declined in your wallet — nothing was sent, nothing moved.'; return 'STOP'; }
+  if (r.etat === 'EN_ATTENTE' || r.etat === 'PARTIEL') { etape('groupe_echec'); e.className = 'note wKo'; e.textContent = r.pourquoi; return 'STOP'; }
   if (r.etat !== 'CONFIRME') {
+    /* ⛔ 2026-09-19 (test reel de Phil, 2e wallet : rien n est arrive sur la chaine) : un lot qui echoue SANS rien appliquer
+     *    (le wallet ne l a pas envoye, ou la chaine l a refuse en bloc) ne doit pas laisser le createur devant « recliquez » :
+     *    on enchaine TOUT DE SUITE le parcours etape par etape, dans le meme clic. */
+    etape('groupe_echec');
     sansGroupe = true;
-    e.className = 'note wKo';
-    e.textContent = 'Nothing was applied (all or nothing): ' + (r.pourquoi || r.etat) + '. Tap again — it will go step by step.';
-    return 'STOP';
+    e.className = 'note';
+    e.textContent = 'Your wallet could not do it in one signature — going on step by step (' + (r.pourquoi || r.etat) + ').';
+    return 'SANS';
   }
+  etape('groupe_ok');
   /* ⛔ ON RELIT, ON NE CROIT PAS LE WALLET : le block existe, et le wallet de frais a touche ses ≈ $1 */
   let code = '0x';
   try { code = String(await rpc('eth_getCode', [adresse, 'latest']) || '0x'); } catch (_) { code = '0x'; }
@@ -8878,7 +8884,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0115',
+    build: '20260919-0116',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

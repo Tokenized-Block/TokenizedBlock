@@ -13,7 +13,7 @@ ok(selecteur('allowance(address,address,address)') === '927da105', 'selecteur Pe
 // 2. capacites : oui seulement si atomique annonce ; faux au moindre doute
 const eth = (caps, jette = false) => ({ request: async ({ method }) => { if (jette) throw new Error('x'); if (method === 'wallet_getCapabilities') return caps; } });
 ok(await peutGrouper({ eth: eth({ '0x2105': { atomic: { status: 'supported' } } }), compte: '0x1', chaineHex: '0x2105' }) === true, 'supported');
-ok(await peutGrouper({ eth: eth({ '0x2105': { atomic: { status: 'ready' } } }), compte: '0x1', chaineHex: '0x2105' }) === true, 'ready');
+ok(await peutGrouper({ eth: eth({ '0x2105': { atomic: { status: 'ready' } } }), compte: '0x1', chaineHex: '0x2105' }) === false, 'ready = mise a niveau du compte requise -> pas de lot');
 ok(await peutGrouper({ eth: eth({ '0x2105': { atomic: { status: 'unsupported' } } }), compte: '0x1', chaineHex: '0x2105' }) === false, 'unsupported');
 ok(await peutGrouper({ eth: eth({ '0x1': { atomic: { status: 'supported' } } }), compte: '0x1', chaineHex: '0x2105' }) === false, 'autre chaine');
 ok(await peutGrouper({ eth: eth({ '0x2105': { atomicBatch: { supported: true } } }), compte: '0x1', chaineHex: '0x2105' }) === true, 'v1 atomicBatch');
