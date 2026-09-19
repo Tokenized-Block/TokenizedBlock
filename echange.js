@@ -13,7 +13,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -50,8 +50,10 @@ export function fraisSur(total, bps) {
 export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === WALLET_TRESOR_SMART.toLowerCase();
 
 /** tip 2350: fail-closed — un trade hors tresor doit porter un TAKE/TAKE_PORTION vers le wallet de frais, montant non nul. */
-function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
+function assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaieDeja = false }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
+  /* le hook de nos pools paie deja le wallet de frais sur ce swap : l interface ne s y ajoute pas (voir planEchange) */
+  if (hookPaieDeja && bps === 0n) return null;
   if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
@@ -100,14 +102,19 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: marche.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
   }
-  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
+  /* ⛔⛔ PHIL (2026-09-19) : « 3,5 %, c est de trop — entre 0,5 % et 3 % ». Mesure du 2026-09-18 : sur une pool de
+   *    notre hook HOOK_PREVU, le swap paie DEJA 3 % (2 % au wallet de frais, 1 % au createur). Ajouter nos 0,5 %
+   *    d interface faisait 3,5 %. Sur ces pools, l interface ne prend plus rien : total 3 %, et le wallet de frais
+   *    est deja paye par le hook. Partout ailleurs : 0,5 % d interface, comme avant. */
+  const hookPaieDeja = !!(marche.cle && String(marche.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase());
+  const bps = (estWalletDeFrais(compte) || hookPaieDeja) ? 0n : FRAIS_INTERFACE_BPS;
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
   /* ⛔⛔ ACHAT VIA TBLOCK (Phil, 2026-09-13 : « fait l achat via TBLOCK ») : un block apparie a TBLOCK se paie en ETH
    *    et se vend pour de l ETH, en DEUX sauts dans UNE transaction — ETH -> TBLOCK -> block, ou l inverse. */
   if (marche.paire === 'TBLOCK') {
     const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
     if (!route.actions) return route;
-    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions });
+    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions, hookPaieDeja });
     if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume: route.resume };
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
   }
@@ -198,7 +205,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
-  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
+  resume.fraisMarcheBps = hookPaieDeja ? 300 : null;
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaieDeja });
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
 }

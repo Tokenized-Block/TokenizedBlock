@@ -1248,7 +1248,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0065" hidden>Build <code>20260919-0065</code> · Trade tells a refused read from a quiet market.</p>
+      <p class="note" data-build="20260919-0067" hidden>Build <code>20260919-0067</code> · 3% on our markets, not 3.5%.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1477,7 +1477,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="fees">
-          <p class="note" id="peFraisTexte">Buy or sell here: <b>0.5%</b> app fee.</p>
+          <p class="note" id="peFraisTexte" hidden></p>
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
@@ -1596,11 +1596,11 @@ details[open] > summary::before{transform:rotate(90deg)}
 <nav class="nav" aria-label="Sections">
   <div class="navIn" role="tablist">
     <button class="navB" role="tab" aria-selected="true"  data-volet="map"><b>◈</b>Map</button>
-    <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Trade</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Blocks</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain AI</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
-    <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Social</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="mien"><b>★</b>My block</button>
   </div>
 </nav>
@@ -3586,17 +3586,17 @@ function libelleFrais(cle) {
   const zero = '0x0000000000000000000000000000000000000000';
   const hk = cle && cle.hooks ? String(cle.hooks).toLowerCase() : zero;
   const tier = cle && Number.isFinite(Number(cle.fee)) ? Number(cle.fee) : null;
+  /* ⛔ PHIL (2026-09-19) : « 3,5 % c est de trop — entre 0,5 % et 3 %, mais ne l ecris pas ». Sur nos pools, l interface
+   * ne s ajoute plus au hook (echange.js) : total 3 %. L ecran montre UN pourcentage, vrai, sans paragraphe. */
   if (hk === String(HOOK_PREVU).toLowerCase()) {
-    const total = (50 + HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
-    return { court: total + '%', long: 'Buy or sell here: <b>' + total + '%</b> in total — 0.5% app + '
-      + (HOOK_PREVU_FRAIS_BPS / 100) + '% on every trade of this market, wherever it happens.' };
+    const total = (HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
+    return { court: 'Fee ' + total + '%', long: '' };
   }
   const pool = tier !== null ? ' + ' + (tier / 10000) + '% pool' : '';
-  if (hk !== zero) {
-    return { court: '0.5% + market fees', long: 'Buy or sell here: <b>0.5%</b> app fee' + pool
-      + ', plus any fee this market’s launcher set on it — we do not measure that part.' };
-  }
-  return { court: '0.5%' + pool, long: 'Buy or sell here: <b>0.5%</b> app fee' + pool + '.' };
+  const base = Math.round((0.5 + (tier !== null ? tier / 10000 : 0)) * 100) / 100;
+  if (hk !== zero) return { court: 'Fee ' + base + '%+', long: '' };
+  return { court: 'Fee ' + base + '%', long: '' };
+  void pool;
 }
 
 /** Read pool-key hook status from a vieDuBlock result (facts only). */
@@ -4250,7 +4250,7 @@ async function lireProfil(adr, sym, perime) {
     $('#peBadge').textContent = bb ? 'Buyback · protocol fee path' : 'Buy · Sell';
     const lf = libelleFrais(v && v.cle);
     $('#peFrais').textContent = bb ? 'no fee' : lf.court;
-    if ($('#peFraisTexte')) $('#peFraisTexte').innerHTML = bb ? 'No app fee on this path.' : lf.long;
+    if ($('#peFraisTexte')) { $('#peFraisTexte').innerHTML = ''; $('#peFraisTexte').hidden = true; }
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
     /* tip 2357: hooked / TBGAS → surface in-app BuySell (no fee addr). */
@@ -5366,7 +5366,7 @@ async function preparerEchange(sens) {
        * plus des 0,5 % ci-dessus. « You receive at least » l inclut deja (le devis passe par la pool) ;
        * cette ligne dit POURQUOI il est plus bas que ce que le prix affiche laisserait croire. */
       ...(p.cle && String(p.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase()
-        ? ['Market fee: ' + (HOOK_PREVU_FRAIS_BPS / 100) + '% of the trade, taken by the market itself — already inside “You receive at least”']
+        ? ['Fee: ' + (HOOK_PREVU_FRAIS_BPS / 100) + '%, already inside “You receive at least”']
         : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
@@ -5429,7 +5429,12 @@ async function preparerEchange(sens) {
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   /* ⛔ P0 2026-09-15 fee harden: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback). */
   const feeLabel = 'fee';
-  if (!estWalletDeFrais(compte)) {
+  /* ⛔ LE HOOK PAIE DEJA (2026-09-19) : sur une pool HOOK_PREVU, le swap verse lui-meme 2 % au wallet de frais ; le plan
+   * porte alors fraisBps 0 et fraisMarcheBps 300. Ce garde exigeait les 0,5 % et REFUSAIT ce cas — vu sur fork. On
+   * l exempte seulement quand la cle de la pool est bien celle du hook : ailleurs, l exigence reste entiere. */
+  const hookPaie = !!(r && r.fraisMarcheBps === 300 && p.cle
+    && String(p.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase());
+  if (!estWalletDeFrais(compte) && !hookPaie) {
     const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
     const destOk = r && r.beneficiaireFrais
       && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
@@ -5480,7 +5485,7 @@ async function preparerEchange(sens) {
   e.className = 'note wOk';
   e.textContent = estWalletDeFrais(compte)
     ? 'The chain accepts this exact buyback (no self-fee). Check it in your wallet before signing.'
-    : 'The chain accepts this exact transaction — 0.5 % · ' + feeLabel + ' is inside it. Check it in your wallet before signing.';
+    : 'The chain accepts this exact transaction — ' + libelleFrais(p.cle).court.toLowerCase() + ', inside it. Check it in your wallet before signing.';
 }
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
@@ -8047,7 +8052,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0065',
+    build: '20260919-0067',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -8343,17 +8348,40 @@ $('#bReprendre').addEventListener('click', async () => {
   }
 });
 
+/* ⛔⛔ PHIL (2026-09-19) : « le design du Brain AI n est pas le meme que sur My block — celui de My block est plus
+ *    joli ». Ici chaque neurone etait un TRAIT de 2 px (128 lignes dans 150 px) : des tirets fins, eparpilles.
+ *    La bande de My block regroupe les neurones en petits CUBES arrondis qui s estompent avec l age. Meme dessin
+ *    ici, en plus grand (32 rangees de 4 neurones), avec une lueur douce, le battement le plus recent a DROITE —
+ *    comme un oscilloscope qui defile, au lieu d une colonne qui se remplit par la gauche.
+ * ⛔ CE QUI EST DESSINE RESTE EXACTEMENT CE QUI A TIRE : un cube par groupe de 4 neurones dont au moins un a tire
+ *    a ce battement. Aucun point decoratif, rien quand rien n a tire. */
 function dessinerRaster() {
   const c = $('#bRaster'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
-  const larg = c.width / HISTO_MAX;
-  for (let i = 0; i < brainHisto.length; i++) {
-    const v = brainHisto[i];
-    ctx.fillStyle = 'hsl(255 80% 72%)';
-    for (const n of v.indices) {
-      ctx.fillRect(i * larg, (n / 128) * c.height, Math.max(1.5, larg - 0.5), 2);
+  /* 64 battements x 24 rangees : des cellules de ~10 x 6 px — des cubes lisibles, pas des tirets */
+  const RANGS = 24, cols = Math.min(HISTO_MAX, 64);
+  const lc = c.width / cols, lr = c.height / RANGS;
+  const histo = brainHisto.slice(-cols);
+  const debut = cols - histo.length; /* le plus recent colle a droite */
+  const arrondi = (x, y, w, h, r) => {
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); } else ctx.fillRect(x, y, w, h);
+  };
+  for (let i = 0; i < histo.length; i++) {
+    const v = histo[i];
+    const age = (i + 1) / histo.length; /* 0 = ancien, 1 = maintenant */
+    const seaux = new Set();
+    for (const n of v.indices || []) seaux.add(Math.floor(n / (128 / RANGS)) % RANGS);
+    for (const r of seaux) {
+      const teinte = 250 + (r / RANGS) * 50;
+      ctx.globalAlpha = 0.25 + 0.75 * age;
+      ctx.shadowColor = 'hsl(' + teinte + ' 90% 70%)';
+      ctx.shadowBlur = age > 0.9 ? 8 : 0;
+      ctx.fillStyle = 'hsl(' + teinte + ' 85% ' + (62 + 14 * age) + '%)';
+      arrondi((debut + i) * lc + 0.6, r * lr + 0.6, Math.max(1.2, lc - 1.2), Math.max(1.2, lr - 1.2), Math.min(2.5, lc / 3));
     }
   }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
 }
 
 /**
