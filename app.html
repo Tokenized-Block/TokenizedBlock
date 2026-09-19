@@ -3,12 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>TokenizedBlock — the living map</title>
+<title>TokenizedBlock · Tokenized Block — make a living block on Base</title>
 <link rel="icon" href="icon.png" type="image/png">
 <!-- ⛔ APERCU DES LIENS (2026-09-19) : mesure — / sert CETTE page et elle n avait aucune balise og/twitter/fc : un lien
      partage sur X ou Farcaster s affichait nu. Le bloc entre og:debut et og:fin est REMPLACE par le serveur pour
      /?block=0x… (symbole + face gravee du block) ; ne pas renommer les marqueurs. -->
+<!-- ⛔ REFERENCEMENT (Phil, 2026-09-19 : « attrape ceux qui tapent juste tokenizedblock ») : alternateName associe les
+     graphies que les gens tapent au site. Le canonical est DANS le bloc og (le serveur le reecrit pour /?block=). -->
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://tokenizedblock.space/#site","url":"https://tokenizedblock.space/","name":"TokenizedBlock","alternateName":["Tokenized Block","tokenizedblock","Tokenized-Block","tokenized block app","TBLOCK"]},{"@type":"WebApplication","@id":"https://tokenizedblock.space/#app","url":"https://tokenizedblock.space/","name":"TokenizedBlock","applicationCategory":"FinanceApplication","operatingSystem":"Web","isPartOf":{"@id":"https://tokenizedblock.space/#site"},"description":"Make a tokenized block on Base: its own face and a small brain, born for about $1, with its market open. Every block lives on a shared map."}]}</script>
 <!--og:debut-->
+<link rel="canonical" href="https://tokenizedblock.space/">
 <meta name="description" content="Make a living block on Base: ≈ $1, once — born with its own face and brain, and its market opens.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TokenizedBlock">
@@ -1352,7 +1356,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0103" hidden>Build <code>20260919-0103</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0104" hidden>Build <code>20260919-0104</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8695,7 +8699,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0103',
+    build: '20260919-0104',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

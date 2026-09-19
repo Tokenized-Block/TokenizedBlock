@@ -399,6 +399,7 @@ async function apercuBlock(adr) {
   const mini = JSON.stringify({ version: '1', imageUrl: img, button: { title: ('Open ' + nom).slice(0, 32),
     action: { type: 'launch_miniapp', url, name: 'TokenizedBlock', splashImageUrl: U + '/splash.png', splashBackgroundColor: '#000000' } } });
   const tags = [
+    '<link rel="canonical" href="' + htmlAttr(url) + '">',
     '<meta name="description" content="' + htmlAttr(desc) + '">',
     '<meta property="og:type" content="website">',
     '<meta property="og:site_name" content="TokenizedBlock">',
@@ -466,6 +467,23 @@ createServer((req, res) => {
       'Cache-Control': 'no-store, max-age=0',
     });
     res.end();
+    return;
+  }
+
+  /* ══ REFERENCEMENT (2026-09-19) : robots + sitemap. Les pages privees (frais, deploy-*) ne sont pas indexees ; les
+   *    anciens noms repondent deja en 301 vers tokenizedblock.space (ils transmettent leur referencement). */
+  if (chemin === '/robots.txt') {
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' });
+    res.end(['User-agent: *', 'Allow: /', 'Disallow: /frais.html', 'Disallow: /deploy-v2.html', 'Disallow: /deploy-v3.html',
+      'Disallow: /api/', '', 'Sitemap: https://tokenizedblock.space/sitemap.xml', ''].join('\n'));
+    return;
+  }
+  if (chemin === '/sitemap.xml') {
+    const jour = new Date().toISOString().slice(0, 10);
+    res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' });
+    res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+      + '  <url><loc>https://tokenizedblock.space/</loc><lastmod>' + jour + '</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>\n'
+      + '</urlset>\n');
     return;
   }
 
