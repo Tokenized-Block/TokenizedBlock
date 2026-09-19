@@ -257,8 +257,9 @@ body{background:var(--fond);
 .mapEnv.a3d.glisse{cursor:grabbing}
 .mapEnv.a3d::before{display:none}
 .mapEnv.a3d .bloc{left:0;top:0;transform-origin:0 0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible}
-.mapEnv.a3d .bloc:hover,.mapEnv.a3d .bloc.actif{box-shadow:none;filter:drop-shadow(0 0 10px rgb(var(--accentRgb) / .8))}
-.mapEnv.a3d .bloc.nous{border:0;box-shadow:none;filter:drop-shadow(0 0 7px rgb(var(--accentRgb) / .75))}
+.mapEnv.a3d .bloc:hover,.mapEnv.a3d .bloc.actif{box-shadow:none;filter:none}
+.mapEnv.a3d .bloc.nous{border:0;box-shadow:none}
+.mapEnv.a3d .bloc:hover .etiq,.mapEnv.a3d .bloc.nous .etiq{color:var(--accent2)}
 .mapEnv.a3d .bloc .etiq{background:none;text-shadow:0 1px 3px #000,0 0 6px #000;padding:0 2px}
 .map3dFx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:visible}
 .mapEnv.a3d .mapZoom,.mapEnv.a3d .mapAide{z-index:100000}
@@ -1285,7 +1286,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0081" hidden>Build <code>20260919-0081</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0082" hidden>Build <code>20260919-0082</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2267,6 +2268,7 @@ function demarrerBattement() {
   battement = setInterval(battre, BATTEMENT_MS);
 }
 
+let dernierImage = 0;
 function animer() {
   const map = $('#map');
   if (anim) cancelAnimationFrame(anim);
@@ -2277,8 +2279,10 @@ function animer() {
      * les 22 blocks etaient empiles dans le coin haut-gauche. Une taille inconnue n est pas une
      * taille de zero : on ne bouge rien tant qu on ne sait pas ou sont les bords. */
     if (L2 <= 0 || H2 <= 0) { anim = requestAnimationFrame(pas); return; }
-    /* tip 0026 : derive 3D, camera, cube, liens et impulsions — tout dans map3d.js */
-    if (moteur3d) moteur3d.image(performance.now());
+    /* tip 0026 : derive 3D, camera, cube, liens et impulsions — tout dans map3d.js
+     * ⛔ PERF (Phil : « mon PC a du mal ») : 30 images par seconde au plus — la derive est lente, 60 ne se voit pas */
+    const t = performance.now();
+    if (moteur3d && t - dernierImage >= 32) { dernierImage = t; moteur3d.image(t); }
     anim = requestAnimationFrame(pas);
   };
   anim = requestAnimationFrame(pas);
@@ -8239,7 +8243,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0081',
+    build: '20260919-0082',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

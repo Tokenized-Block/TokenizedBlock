@@ -6,7 +6,7 @@
 //    logo GRAVE. Le cube de la map ne peut donc pas contredire l image du block.
 // ⛔ AUCUN FOND : le logo grave a un rectangle de fond (blanc pour papier / encre / rose) ; le cube n en a pas — la galaxie
 //    se voit autour de lui.
-// ⛔ CSS 3D PUR, aucun WebGL : 6 faces + au plus 4 satellites par block, animes par le compositeur du navigateur.
+// ⛔ CSS 3D PUR, aucun WebGL : 6 faces + au plus 2 satellites par block (perf, 2026-09-19), animes par le compositeur du navigateur.
 //    Mouvement reduit : aucune rotation, aucune orbite (le cube reste pose en 3/4).
 // ⚠️ Les tailles sont en unites de conteneur (cqw) : le cube suit la taille de sa tuile sans qu on la lui repasse.
 import { modeleFace } from './logo.js';
@@ -42,11 +42,11 @@ export function cube3dHtml(params, adr) {
     + face('ga', m.droite, m.trait, m.ep, m.motifs.droite)
     + face('ha', m.haut, m.trait, m.ep, m.motifs.haut)
     + face('ba', m.haut, m.trait, m.ep, m.motifs.haut);
-  /* les satellites : les eclats du logo (petits cubes a sa couleur), puis l ornement s il y en a un ; 4 au plus */
+  /* les satellites : les eclats du logo (petits cubes a sa couleur), puis l ornement s il y en a un ; 2 au plus */
   const sats = [];
-  const nEclats = Math.min(3, Number(m.eclats) || 0);
+  const nEclats = Math.min(2, Number(m.eclats) || 0);
   for (let i = 0; i < nEclats; i++) sats.push({ genre: 'eclat' });
-  if (m.coin && sats.length < 4) sats.push({ genre: 'coin' });
+  if (m.coin && sats.length < 2) sats.push({ genre: 'coin' });
   const orbites = sats.map((s, i) => {
     const incl = (55 + graine(adr, 10 + i) * 50).toFixed(0);
     const tour = (graine(adr, 20 + i) * 360).toFixed(0);
@@ -84,8 +84,11 @@ export const CUBE3D_CSS = `
 @keyframes c3orbite{from{transform:rotateX(var(--incl)) rotateZ(var(--tour))}to{transform:rotateX(var(--incl)) rotateZ(calc(var(--tour) + 360deg))}}
 .c3p{position:absolute;transform:translateX(var(--rayon))}
 .c3s{display:block;width:11cqmin;height:11cqmin;margin:-5.5cqmin 0 0 -5.5cqmin;border:1px solid;border-radius:2px;
-  box-shadow:0 0 6px rgb(255 255 255 / .35)}
+}
 .c3s.c3c{background:none;border:0;box-shadow:none;width:13cqmin;height:13cqmin}
 .c3s.c3c svg{width:100%;height:100%}
 @media (prefers-reduced-motion: reduce){.c3r,.c3o{animation:none}}
+/* PERF : un cube petit a l ecran est fige et sans satellites (map3d pose la classe « loin ») */
+.bloc.loin .c3r{animation-play-state:paused}
+.bloc.loin .c3o{display:none}
 `;

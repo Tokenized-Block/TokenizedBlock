@@ -264,11 +264,21 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const p = projeter(h.wx, h.wy, h.wz, L, H);
       /* dans le cube, un block colle a la camera couvrirait l ecran : sous 0,3 S il est cache */
       if (!p || p.zc < S * 0.12) { if (h.visible !== false) { h.el.style.visibility = 'hidden'; h.visible = false; } continue; }
+      /* ⛔ PERF (Phil, 2026-09-19 : « mon PC a du mal ») : un block HORS DE L ECRAN n est ni peint ni anime */
+      const marge = 160;
+      if (p.sx < -marge || p.sx > L + marge || p.sy < -marge || p.sy > H + marge) {
+        if (h.visible !== false) { h.el.style.visibility = 'hidden'; h.visible = false; }
+        continue;
+      }
       if (!h.visible) { h.el.style.visibility = ''; h.visible = true; }
       const k = Math.min(2.2, p.k * 2.4);
+      /* un cube de moins de 44 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
+      const petit = h.t * k < 44;
+      if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
-      h.el.style.zIndex = String(Math.max(1, Math.round(200000 / p.zc)));
+      const z = Math.max(1, Math.round(200000 / p.zc));
+      if (z !== h._z) { h.el.style.zIndex = String(z); h._z = z; }
       const loin = Math.min(1, Math.max(0, (p.z2 + R) / (2 * R)));
       const op = Math.round((1 - 0.6 * loin) * 20) / 20;
       if (op !== h._op) { h.el.style.opacity = String(h.el.classList.contains('sansPrix') ? op * 0.75 : op); h._op = op; }
