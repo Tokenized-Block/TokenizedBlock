@@ -297,7 +297,8 @@ const entonnoir = (() => {
   } catch (e) { console.log('[entonnoir] fichier illisible, on repart de zero :', e.message); }
   return { depuis: new Date().toISOString(), total: {}, parJour: {} };
 })();
-let entonnoirSale = false;
+/* premiere ecriture des le demarrage : sinon, sans etape comptee, aucun fichier n existe et « depuis » repart a chaque deploiement */
+let entonnoirSale = !!FICHIER_ENTONNOIR && !existsSync(FICHIER_ENTONNOIR);
 setInterval(() => {
   if (!entonnoirSale || !FICHIER_ENTONNOIR) return;
   try { writeFileSync(FICHIER_ENTONNOIR + '.tmp', JSON.stringify(entonnoir)); renameSync(FICHIER_ENTONNOIR + '.tmp', FICHIER_ENTONNOIR); entonnoirSale = false; }
