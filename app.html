@@ -869,7 +869,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       </button>
       <button type="button" class="creaMode" role="tab" aria-selected="false" data-cmode="token">
         <span class="creaModeIc">🚀</span><b>A plain token</b>
-        <span>On OpenLaunch, by their rules. No face, no brain. Gas only.</span>
+        <span>With <b>openlaunch.lol</b>, by their rules. No face, no brain. Gas only.</span>
       </button>
     </div>
 
@@ -961,8 +961,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cRecap"></p>
       <div class="pActions" style="grid-template-columns:1fr">
         <!-- tip 0041 (Phil : « la mise en vie cochee par defaut ») -->
-        <label class="wConsent" style="color:var(--texte)"><input type="checkbox" id="cVieDirecte" checked> Bring it to life right after (≈ $1 in ETH)</label>
-        <button class="bouton creaGo" id="cCreer" type="button">Create, then bring it to life — 2 signatures</button>
+        <!-- ⛔ PHIL (2026-09-19) : « plus de free block, un seul chemin — celui qui a prouve l entree d ETH sur a6cf ».
+             La case « bring it to life right after » est retiree : sur Base, creer ENCHAINE toujours la mise en vie. -->
+        <button class="bouton creaGo" id="cCreer" type="button">Create and bring it to life — ≈ $1</button>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -976,7 +977,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <!-- tip 0024 — launch OpenLaunch DIRECT depuis l app (factory OL, Base). Preuve fork 2026-09-16 : launch OK, achat 0,1 ETH,
          collect -> frais LP repartis selon recipientsOf. tip 0028 : regles d OpenLaunch, 100 % des frais au lanceur (Phil). -->
     <div class="carte" id="cModeToken" hidden>
-      <p class="titre">A plain token on OpenLaunch</p>
+      <p class="titre">A plain token with <a href="https://openlaunch.lol" target="_blank" rel="noopener">openlaunch.lol ↗</a></p>
       <p class="sous">Their contract, their rules: 1B supply, all of it locked in a pool paired with ETH. No face, no brain, not on the map.
         The trading fee you pick goes <b>100% to you</b>, in ETH, forever. Pick 0% and nobody earns it.</p>
       <label class="champ">Name<input id="olNom" maxlength="32" placeholder="My token" autocomplete="off"></label>
@@ -1281,7 +1282,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0079" hidden>Build <code>20260919-0079</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0080" hidden>Build <code>20260919-0080</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7240,7 +7241,7 @@ function majFraisEtRecap() {
     boutonCreer.disabled = !prixOk || !soldeOk;
     boutonCreer.title = (usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : '');
     if (!compte) boutonCreer.textContent = 'Connect wallet, then create';
-    else if ($('#cVieDirecte')) boutonCreer.textContent = $('#cVieDirecte').checked ? 'Create, then bring it to life' : 'Create it — 1 signature';
+    else boutonCreer.textContent = Number(CHAINE) === 8453 ? 'Create and bring it to life — ≈ $1' : 'Create it (practice, free)';
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
@@ -7523,9 +7524,7 @@ $('#trListe').addEventListener('click', (e) => {
 setInterval(() => { if ($('#v-trade').classList.contains('on') && !document.hidden) void lireTrending(); }, 60_000);
 
 /* tip 0041 : le libelle du bouton suit la case « bring it to life right after » */
-$('#cVieDirecte').addEventListener('change', () => {
-  $('#cCreer').textContent = $('#cVieDirecte').checked ? 'Create, then bring it to life — 2 signatures' : 'Create it — 1 signature';
-});
+/* (case retiree le 2026-09-19 : un seul chemin, creer puis donner vie) */
 
 /* tip 0032 — choix du mode dans Create : un block (parcours complet + apercu) ou un token OpenLaunch (sa carte seule) */
 document.querySelectorAll('[data-cmode]').forEach((b) => b.addEventListener('click', () => {
@@ -8225,7 +8224,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0079',
+    build: '20260919-0080',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
