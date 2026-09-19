@@ -435,7 +435,8 @@ createServer((req, res) => {
   const host = String(req.headers.host || '').split(':')[0].toLowerCase();
   if (host === 'tokenized-block-production.up.railway.app') {
     const raw = String(req.url || '/');
-    const dest = 'https://tokenized-block.up.railway.app' + (raw.startsWith('/') ? raw : '/' + raw);
+    /* droit au nom public (un seul saut, plus deux) ; /face y est servi aussi */
+    const dest = 'https://tokenizedblock.space' + (raw.startsWith('/') ? raw : '/' + raw);
     res.writeHead(301, { Location: dest, 'Cache-Control': 'public, max-age=3600' });
     res.end();
     return;

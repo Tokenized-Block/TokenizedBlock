@@ -9,9 +9,9 @@
     "localStorage": "tb-brain-last (last beat JSON — same schema as snapshot)"
   },
   "curl": {
-    "this_file": "curl -sS https://tokenized-block.up.railway.app/brain-agent.json",
-    "app_tip": "curl -sS https://tokenized-block.up.railway.app/app.html | rg 'data-build='",
-    "module": "curl -sS https://tokenized-block.up.railway.app/export-cerveau.js | head",
+    "this_file": "curl -sS https://tokenizedblock.space/brain-agent.json",
+    "app_tip": "curl -sS https://tokenizedblock.space/app.html | rg 'data-build='",
+    "module": "curl -sS https://tokenizedblock.space/export-cerveau.js | head",
     "no_live_json_on_server": "There is no /brain-snapshot.json with live Hz — that would invent server-side mood. Use window.__TB_BRAIN_SNAPSHOT__ or the download."
   },
   "zero1": {
@@ -48,7 +48,7 @@
     "evidence_hash"
   ],
   "fee_wallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
-  "main": "https://tokenized-block.up.railway.app/",
+  "main": "https://tokenizedblock.space/",
   "tip": "20260915-2357",
   "hard_objective": "HARD RULE: ALL fees → only 0xa6cf…f5d4; 0x37eb receives NOTHING. tip 2356: live CreateRouter 0xe05C… + HOOK_PREVU 0xaa6D… eth_call FEE_WALLET()=a6cf (verified). Legacy 0x3486…/0x34E3… still 37eb — unused. App sinks: Launch life / 0.5% BuySell / ETH→USDC / paid msg / OfferCircuit → a6cf. Public UI: no fee-wallet CV. Create FREE. Costs short. tip 2357: Live Hooked filter + route TBGAS/TbFeeHook → in-app Buy/Sell (external hooked Dex also chops). O5 CURRENT_TOY_V1 · O6 Prepare preview+plan · no OfferCircuit broadcast.",
   "locked_liq": {

@@ -1356,7 +1356,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0105" hidden>Build <code>20260919-0105</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0106" hidden>Build <code>20260919-0106</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7491,7 +7491,9 @@ function uriCreation() {
     && adressePrevue.compte === String(compte || '').toLowerCase() && /^0x[0-9a-fA-F]{40}$/.test(adressePrevue.adresse);
   const imageSvg = 'data:image/svg+xml,' + encodeURIComponent(svg);
   const image = adresseSure && Number(CHAINE) === 8453
-    ? 'https://tokenized-block.up.railway.app/face/' + String(adressePrevue.adresse).toLowerCase() + '.png'
+    /* ⛔ Phil 2026-09-19 (« onchain aussi ») : l URL GRAVEE porte le nom public. Les blocks graves avant gardent
+     *    tokenized-block.up.railway.app/face/… : cet hote doit continuer a servir /face pour toujours (jamais redirige). */
+    ? 'https://tokenizedblock.space/face/' + String(adressePrevue.adresse).toLowerCase() + '.png'
     : imageSvg;
   const roleCle = (() => {
     const el = $('#cRole');
@@ -8706,7 +8708,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0105',
+    build: '20260919-0106',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
