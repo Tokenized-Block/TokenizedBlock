@@ -11,12 +11,19 @@
 // ⚠️ CE QUE CE MODULE NE PROUVE PAS : qu un wallet donne sait grouper. On le DEMANDE (wallet_getCapabilities) ;
 //    sans reponse claire, l app garde le parcours etape par etape. Aucun envoi ne part d ici sans le wallet.
 
-/** Le wallet sait-il executer un lot ATOMIQUE sur cette chaine ? Faux au moindre doute. */
-export async function peutGrouper({ eth, compte, chaineHex }) {
+/* ⛔⛔ BUG REPRODUIT (2026-09-19, capture de Phil dans le navigateur d un wallet) : ce wallet ne repond JAMAIS a
+ *    wallet_getCapabilities — ni oui, ni erreur. Sans delai, l app restait figee sur « Step 1 — create it », 0 envoi.
+ *    Toute question au wallet qui n ouvre pas de fenetre a signer a desormais un delai ; au-dela, on fait comme « non ». */
+const DELAI = Symbol('delai');
+const avecDelai = (p, ms) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(DELAI), ms))]);
+
+/** Le wallet sait-il executer un lot ATOMIQUE sur cette chaine ? Faux au moindre doute — et faux s il ne repond pas. */
+export async function peutGrouper({ eth, compte, chaineHex, delaiMs = 2500 }) {
   if (!eth || typeof eth.request !== 'function' || !compte) return false;
   let caps;
-  try { caps = await eth.request({ method: 'wallet_getCapabilities', params: [compte, [chaineHex]] }); }
+  try { caps = await avecDelai(eth.request({ method: 'wallet_getCapabilities', params: [compte, [chaineHex]] }), delaiMs); }
   catch (_) { return false; }
+  if (caps === DELAI) return false;
   const c = caps && (caps[chaineHex] || caps[String(parseInt(chaineHex, 16))] || caps[parseInt(chaineHex, 16)]);
   if (!c) return false;
   const st = c.atomic && c.atomic.status;
@@ -64,7 +71,8 @@ export async function envoyerGroupe({ eth, compte, chaineHex, calls, attendreMs 
   while (Date.now() < fin) {
     await new Promise((ok) => setTimeout(ok, pauseMs));
     let s;
-    try { s = await eth.request({ method: 'wallet_getCallsStatus', params: [id] }); } catch (_) { continue; }
+    try { s = await avecDelai(eth.request({ method: 'wallet_getCallsStatus', params: [id] }), 10000); } catch (_) { continue; }
+    if (s === DELAI) continue;
     const v = lireStatutGroupe(s);
     if (v.etat !== 'EN_COURS') return { ...v, id };
   }

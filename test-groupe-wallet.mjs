@@ -19,6 +19,24 @@ ok(await peutGrouper({ eth: eth({ '0x1': { atomic: { status: 'supported' } } }),
 ok(await peutGrouper({ eth: eth({ '0x2105': { atomicBatch: { supported: true } } }), compte: '0x1', chaineHex: '0x2105' }) === true, 'v1 atomicBatch');
 ok(await peutGrouper({ eth: eth(null, true), compte: '0x1', chaineHex: '0x2105' }) === false, 'methode inconnue');
 ok(await peutGrouper({ eth: null, compte: '0x1', chaineHex: '0x2105' }) === false, 'pas de wallet');
+// le cas reel de Phil : un wallet qui ne repond JAMAIS -> faux, et vite (pas de blocage)
+{
+  const muet = { request: () => new Promise(() => {}) };
+  const t0 = performance.now();
+  const r = await peutGrouper({ eth: muet, compte: '0x1', chaineHex: '0x2105', delaiMs: 200 });
+  const dt = performance.now() - t0;
+  ok(r === false && dt < 1000, 'wallet muet -> faux en ' + Math.round(dt) + ' ms');
+}
+// statut muet puis confirme : le suivi ne se fige pas sur une question sans reponse
+{
+  let n = 0;
+  const e = { request: async ({ method }) => {
+    if (method === 'wallet_sendCalls') return { id: 'x' };
+    n++; if (n === 1) return new Promise(() => {}); return { status: 200, receipts: [{ status: '0x1', transactionHash: '0xok' }] };
+  } };
+  const r = await envoyerGroupe({ eth: e, compte: '0x1', chaineHex: '0x2105', calls: [{ to: '0x2' }], pauseMs: 1, attendreMs: 30000 });
+  ok(r.etat === 'CONFIRME', 'statut muet une fois puis confirme -> ' + r.etat);
+}
 
 // 3. statuts : un recu en echec = ECHEC, jamais CONFIRME
 ok(lireStatutGroupe({ status: 200, receipts: [{ status: '0x1', transactionHash: '0xa' }] }).etat === 'CONFIRME', '200 ok');
