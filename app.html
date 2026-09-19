@@ -395,6 +395,18 @@ body:not(.surMap) .mapCentre{visibility:hidden}
 .mapCta:hover{filter:brightness(1.1)}
 body:not(.surMap) .mapCta{display:none}
 @media (max-width:760px){.mapCta{font-size:11.5px;padding:6px 10px}}
+/* ⛔ TELEPHONE (Phil, 2026-09-19 : « regarde bien la correction UX sur tel ») — mesure a 375 px : la barre du haut
+   debordait, la page defilait en largeur, le texte du centre etait ecrase en une colonne d une lettre.
+   Trois rangees : la marque ; les boutons (qui defilent a l horizontale, sans barre) ; le texte du centre, pleine largeur. */
+@media (max-width:760px){
+  html,body{overflow-x:hidden}
+  .tete{flex-wrap:wrap;gap:6px 8px;padding:10px 0 8px}
+  .tete .droite{order:2;flex:1 1 100%;margin-left:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .tete .droite::-webkit-scrollbar{display:none}
+  .tete .droite > *{flex:0 0 auto}
+  .tete .puce{padding:5px 9px;font-size:11px;white-space:nowrap}
+  .mapCentre{order:3;flex:1 1 100%;margin:0;padding:2px 4px;font-size:11.5px;white-space:normal;text-align:center;overflow:visible}
+}
 
 .partage{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .partage a,.partage button{flex:1 1 120px;text-align:center;padding:10px 12px;border-radius:12px;font-weight:700;font-size:14px;
@@ -1308,7 +1320,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0089" hidden>Build <code>20260919-0089</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260919-0090" hidden>Build <code>20260919-0090</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8366,7 +8378,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0089',
+    build: '20260919-0090',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
