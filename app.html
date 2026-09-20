@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0124" hidden>Build <code>20260920-0124</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0125" hidden>Build <code>20260920-0125</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5211,8 +5211,25 @@ function peindreCreateFeeHonesty() {
   }
 }
 
+/* ⛔ PHIL (2026-09-20, « recheck, pas tous fonctionnent bien ») : mesure en prod sur 1 215 evenements lus — Feed (achats),
+ *    Kill (ventes), Messages et Big rendaient 0 ligne (le fil ne recoit que des SWAP sans montant lu) et Trades donnait
+ *    exactement Swap. Chaque filtre porte desormais SON NOMBRE, et un filtre a zero se cache (All et Created restent, ainsi
+ *    que celui qui est ouvert) ; il revient seul des qu il a de la matiere. Le compte vient des memes evenements. */
+function majComptesFiltres() {
+  const garde = liveFiltre;
+  for (const b of document.querySelectorAll('[data-filtre]')) {
+    const f = b.getAttribute('data-filtre');
+    if (!b.dataset.nom) b.dataset.nom = b.textContent.trim();
+    let n = 0;
+    try { liveFiltre = f; n = liveEvts.filter(filtreLive).length; } catch (_) { n = 0; }
+    b.textContent = b.dataset.nom + (n ? ' ' + n : '');
+    b.hidden = n === 0 && f !== 'TOUT' && f !== 'CREATION' && f !== garde;
+  }
+  liveFiltre = garde;
+}
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
+  majComptesFiltres();
   /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
    *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
    *    echanges neutres CONSECUTIFS d un meme block tiennent en UNE ligne, avec leur nombre et leur plage de blocs. */
@@ -8955,7 +8972,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0124',
+    build: '20260920-0125',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
