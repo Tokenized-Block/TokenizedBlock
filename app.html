@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0161" hidden>Build <code>20260920-0161</code> · a block now shows who holds it and what a reward would pay.</p>
+      <p class="note" data-build="20260920-0162" hidden>Build <code>20260920-0162</code> · holders card: instant reply, bounded retry, pool share named.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4671,16 +4671,37 @@ function allerA(nom) {
  *  Trois etats a l ecran, jamais confondus : lecture en cours · reconstruction incomplete (avec SA
  *  raison) · pret. « Incomplet » qui ressemblerait a « personne » ferait croire un block abandonne.
  *  ⛔ AUCUNE PROMESSE DE PAIEMENT : rien n est distribue, et l ecran le dit lui-meme. */
-async function peindreHolders(adr) {
+let holdersEnCours = null;
+async function peindreHolders(adr, essai = 0) {
   const carte = $('#pHolders'), liste = $('#pHoldersListe'), note = $('#pHoldersNote'), compte = $('#pHoldersCompte');
   if (!carte || !liste || !note || !compte) return;
+  /* ⛔ UN SEUL BLOCK A LA FOIS : si l utilisateur ouvre un autre profil pendant la lecture, la
+   *    reponse de l ancien ne doit pas venir ecraser le nouveau. */
+  if (essai === 0) holdersEnCours = String(adr).toLowerCase();
+  else if (holdersEnCours !== String(adr).toLowerCase()) return;
   carte.hidden = false;
-  liste.innerHTML = '';
-  compte.textContent = '…';
-  note.textContent = 'Reading every transfer of this block from its birth…';
+  if (essai === 0) { liste.innerHTML = ''; compte.textContent = '…'; }
+  note.textContent = 'Reading every transfer of this block from its birth…'
+    + (essai ? ' (' + essai + ')' : '');
   let j = null;
   try { j = await fetch('/api/holders/' + String(adr).toLowerCase(), { cache: 'no-store' }).then((x) => x.json()); }
   catch (e) { j = null; }
+  if (holdersEnCours !== String(adr).toLowerCase()) return;
+  /* ⛔ « EN TRAIN DE LIRE » EST TRANSITOIRE : on revient, et on ARRETE apres un nombre d essais dit
+   *    a l ecran. Un etat transitoire affiche comme final est exactement le bug du classement. */
+  /* ⛔ LA BORNE EST MESUREE, PAS DEVINEE : une premiere reconstruction prend ~100 s (mesure locale
+   *    du 2026-09-20 sur un block de 84 000 blocs). Une relance qui abandonnait a 40 s renoncait
+   *    juste avant d avoir la reponse — et disait « lent » d un serveur qui travaillait. */
+  if (j && j.ok && j.etat === 'NON_LU' && essai < 30) {
+    setTimeout(() => { void peindreHolders(adr, essai + 1); }, 6000);
+    return;
+  }
+  if (j && j.ok && j.etat === 'NON_LU') {
+    compte.textContent = '—';
+    note.textContent = 'Still reading this block after three minutes — that is our node being slow, '
+      + 'not the block being empty. Reopen this profile in a minute.';
+    return;
+  }
   if (!j || !j.ok) {
     compte.textContent = '—';
     note.textContent = 'Could not read the holders right now — that is us, not the block.';

@@ -365,8 +365,18 @@ async function reconstruireHolders(jeton) {
 }
 
 async function holdersCorps(jeton) {
-  const e = await reconstruireHolders(jeton);
-  if (!e) return JSON.stringify({ ok: false, pourquoi: 'not a B20 address' });
+  /* ⛔ ON NE BLOQUE PAS LA REQUETE : la reconstruction d un block coute ~42 lectures et peut durer
+   *    des dizaines de secondes. On lance (ou on laisse tourner) et on rend l etat CONNU tout de
+   *    suite. Mesure du 2026-09-20 : la version bloquante pendait au-dela de 45 s. */
+  const dejaLa = holdersCache.get(jeton);
+  if (!dejaLa) {
+    if (!/^0xb20[0-9a-f]{37}$/.test(jeton)) return JSON.stringify({ ok: false, pourquoi: 'not a B20 address' });
+    void reconstruireHolders(jeton).catch(() => {});
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: null,
+      pourquoi: 'reading every transfer of this block from its birth — ask again in a moment' });
+  }
+  void reconstruireHolders(jeton).catch(() => {}); /* rafraichit en tache de fond */
+  const e = dejaLa;
   if (e.naissance === null) {
     return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
       pourquoi: 'no mint found for this token yet — reading, or it was never minted' });
