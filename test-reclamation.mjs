@@ -71,4 +71,51 @@ assert.throws(() => calldataReclamer({ id: 0, jeton: JETON, montant: 1n, preuve:
   for (const e of attendus) ok(mod.ETATS.includes(e), e + ' existe');
 }
 
+// ══ 6. LE MONTANT MIS SOUS LES YEUX D UN HUMAIN ════════════════════════════════════════════════
+// ⛔⛔ UN DECALAGE DE DECIMALES EST LA PIRE ERREUR D AFFICHAGE POSSIBLE ICI : elle ne plante pas,
+//    elle ne revert pas, elle fait simplement croire a quelqu un qu il a gagne mille milliards de
+//    fois plus — ou mille milliards de fois moins, et il ne reclame jamais.
+// ⛔ ET LE BRUT DOIT SURVIVRE A LA CONVERSION : c est lui qui est dans la feuille de merkle, donc
+//    le seul avec lequel un detenteur peut nous contredire.
+{
+  const { montantLisible, decoderChaine } = await import('./reclamation.js');
+
+  /* le cas reel mesure : le jeton OK, 18 decimales, une part de 2 409 jetons */
+  const r18 = montantLisible(2409000000000000000000n, { sym: 'OK', dec: 18 });
+  ok(/^2,409 OK /.test(r18), 'dix-huit decimales : ' + r18);
+  ok(r18.includes('2409000000000000000000 raw'), 'le brut survit : ' + r18);
+
+  /* ⛔ LE TEMOIN QUI DONNE SA VALEUR AU PRECEDENT : le MEME nombre a 6 decimales n est pas le meme
+     montant. Sans ce cas, une fonction qui suppose 18 partout passerait le test ci-dessus. */
+  const r6 = montantLisible(2409000000000000000000n, { sym: 'USDC', dec: 6 });
+  ok(/^2,409,000,000,000,000 USDC /.test(r6), 'six decimales, tout autre chose : ' + r6);
+  ok(r18 !== r6, 'les deux lectures du meme nombre brut DIFFERENT');
+
+  /* les decimales illisibles : on garde le brut et on le DIT, on ne suppose pas 18 */
+  for (const mauvaise of [null, undefined, {}, { sym: 'X' }, { sym: 'X', dec: -1 },
+    { sym: 'X', dec: 99 }, { sym: 'X', dec: 1.5 }]) {
+    const r = montantLisible(123n, mauvaise);
+    ok(r.startsWith('123 (raw units'), 'unite invalide -> brut : ' + JSON.stringify(mauvaise) + ' -> ' + r);
+    ok(!/\d OK|tokens \(/.test(r) || r.includes('raw units'), 'et aucune conversion inventee');
+  }
+
+  /* les bords : zero, un wei, et une fraction qui ne tombe pas juste */
+  ok(montantLisible(0n, { sym: 'OK', dec: 18 }).startsWith('0 OK'), 'zero se lit zero');
+  const petit = montantLisible(1n, { sym: 'OK', dec: 18 });
+  ok(petit.startsWith('0.00000000 OK') || petit.startsWith('0 OK'), 'un wei ne devient pas 1 : ' + petit);
+  ok(petit.includes('1 raw'), 'et son brut est la : ' + petit);
+  const tiers = montantLisible(1500000000000000000n, { sym: 'OK', dec: 18 });
+  ok(tiers.startsWith('1.5 OK'), 'une moitie se lit 1.5 : ' + tiers);
+
+  /* decoderChaine : le vrai retour de symbol() sur le B20 OK, lu sur la chaine le 2026-09-21 */
+  const SYMBOLE_OK = '0x' + '0'.repeat(62) + '20' + '0'.repeat(62) + '02'
+    + '4f4b' + '0'.repeat(60);
+  eq(decoderChaine(SYMBOLE_OK), 'OK', 'le symbole du B20 se decode');
+  /* ⛔ TEMOIN : ce qui n est pas decodable rend null, jamais du charabia hexadecimal. */
+  eq(decoderChaine('0x'), null, 'vide -> null');
+  eq(decoderChaine('0x1234'), null, 'tronque -> null');
+  eq(decoderChaine(null), null, 'null -> null');
+  eq(decoderChaine('0x' + '0'.repeat(62) + '20' + 'f'.repeat(64)), null, 'taille absurde -> null');
+}
+
 console.log('test-reclamation : ' + n + ' assertions, OK');

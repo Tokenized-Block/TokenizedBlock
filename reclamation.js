@@ -26,6 +26,52 @@ const motAdr = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0
 const mots = (d) => (String(d).replace(/^0x/, '').match(/.{64}/g) || []);
 
 /** Decode `pots(uint256,address)` : racine, total, verse, ancre. */
+/**
+ * Decode une chaine ABI (le retour de symbol() ou name()).
+ * ⛔ REND null PLUTOT QUE DU CHARABIA : afficher 0x4f4b0000… a la place d un symbole donne
+ *    l impression d un bug du jeton alors que c est notre decodage qui a echoue.
+ */
+export function decoderChaine(hex) {
+  const d = String(hex || '').replace(/^0x/, '');
+  if (d.length < 128) return null;
+  let taille;
+  try { taille = Number(BigInt('0x' + d.slice(64, 128))); } catch { return null; }
+  if (!taille || !Number.isInteger(taille) || taille > 64) return null;
+  if (d.length < 128 + taille * 2) return null;
+  const oct = d.slice(128, 128 + taille * 2).match(/.{2}/g) || [];
+  try { return new TextDecoder().decode(Uint8Array.from(oct.map((h) => parseInt(h, 16)))); }
+  catch { return null; }
+}
+
+/**
+ * Un montant brut rendu lisible, SUIVI du nombre brut.
+ *
+ * ⛔⛔ LES DECIMALES NE SONT JAMAIS SUPPOSEES. `unite` doit venir d une lecture de decimals().
+ *    Supposer 18 sur un jeton a 6 decimales afficherait 1 000 000 000 000 fois trop — quelqu un
+ *    croirait avoir gagne une fortune et paierait du gas pour des miettes.
+ * ⛔ ET LE BRUT RESTE AFFICHE : c est lui qui est dans la feuille de merkle, donc le seul qui
+ *    permette a un detenteur de recalculer et de nous contredire. La lisibilite ne doit pas couter
+ *    la verifiabilite.
+ *
+ * @param {bigint|string|number} montant  le montant brut, tel qu il est dans la feuille
+ * @param {{sym:string, dec:number}|null} unite  lu sur le jeton, ou null si illisible
+ */
+export function montantLisible(montant, unite) {
+  const n = String(montant);
+  if (!unite || !Number.isInteger(unite.dec) || unite.dec < 0 || unite.dec > 36) {
+    return n + ' (raw units — this token decimals could not be read, so no conversion is shown)';
+  }
+  let v;
+  try { v = BigInt(n); } catch { return n + ' (raw units — unreadable amount)'; }
+  const base = 10n ** BigInt(unite.dec);
+  const neg = v < 0n;
+  const abs = neg ? -v : v;
+  const ent = abs / base;
+  const frac = (abs % base).toString().padStart(unite.dec, '0').replace(/0+$/, '');
+  const humain = (neg ? '-' : '') + ent.toLocaleString('en-US') + (frac ? '.' + frac.slice(0, 8) : '');
+  return humain + ' ' + (unite.sym || 'tokens') + ' (' + n + ' raw)';
+}
+
 export function decoderPot(data) {
   const m = mots(data);
   if (m.length < 4) return null;

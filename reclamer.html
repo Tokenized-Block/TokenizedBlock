@@ -64,7 +64,11 @@
  * ⛔ ELLE REFUSE DE DONNER UNE PREUVE SI LA RACINE RECALCULEE NE CORRESPOND PAS A LA RACINE ANCREE.
  *    Servir quand meme ferait echouer la reclamation chez l utilisateur, qui paierait du gas et
  *    croirait que le probleme vient de lui. */
-import { periodesDuPot, etatReclamation } from './reclamation.js';
+/* ⛔ montantLisible et decoderChaine VIVENT DANS reclamation.js, testees. Les garder en ligne
+ *    dans cette page les rendait intestables, alors que ce sont elles qui decident si quelqu un
+ *    lit « 2 409 OK » ou « 2409000000000000000000 » — un decalage de decimales ferait croire a
+ *    une fortune, ou a des miettes. */
+import { periodesDuPot, etatReclamation, montantLisible, decoderChaine } from './reclamation.js';
 import { envoyerDepuisWallet } from './envoi.js';
 
 const $ = (s) => document.querySelector(s);
@@ -106,41 +110,14 @@ async function lireUniteRecompense() {
   } catch { uniteRecompense = null; }
 }
 
-/** Decode une chaine ABI. ⛔ Rend null plutot que du charabia hexadecimal. */
-function decoderChaine(hex) {
-  try {
-    const d = String(hex || '').replace(/^0x/, '');
-    if (d.length < 128) return null;
-    const taille = Number(BigInt('0x' + d.slice(64, 128)));
-    if (!taille || taille > 64) return null;
-    const oct = d.slice(128, 128 + taille * 2).match(/.{2}/g) || [];
-    return new TextDecoder().decode(Uint8Array.from(oct.map((h) => parseInt(h, 16))));
-  } catch { return null; }
-}
-
-/**
- * Le montant, lisible, SUIVI du nombre brut.
- * ⛔ LE BRUT RESTE AFFICHE : c est lui qui est dans la feuille de merkle, donc le seul qui permette
- *    a l utilisateur de recalculer et de nous contredire. L enlever ferait de la lisibilite une
- *    perte de verifiabilite.
- */
-function montantLisible(brutMontant) {
-  const n = String(brutMontant);
-  if (!uniteRecompense) return n + ' (raw units — could not read this token\'s decimals, so no conversion is shown)';
-  const v = BigInt(n);
-  const base = 10n ** BigInt(uniteRecompense.dec);
-  const ent = v / base;
-  const frac = (v % base).toString().padStart(uniteRecompense.dec, '0').replace(/0+$/, '');
-  const humain = ent.toLocaleString('en-US') + (frac ? '.' + frac.slice(0, 8) : '');
-  return humain + ' ' + uniteRecompense.sym + ' (' + n + ' raw)';
-}
+const lisible = (m) => montantLisible(m, uniteRecompense);
 
 /** ⛔ Une phrase par etat. « rien a reclamer » a sept causes, et les confondre trompe l utilisateur. */
 function phrase(r, jeton) {
-  if (r.etat === 'PAYABLE') return { classe: 'ok', texte: 'You can claim ' + montantLisible(r.montant) + '.' };
+  if (r.etat === 'PAYABLE') return { classe: 'ok', texte: 'You can claim ' + lisible(r.montant) + '.' };
   if (r.etat === 'CONTESTATION') {
     const min = Math.ceil((r.resteSecondes || 0) / 60);
-    return { classe: 'tiede', texte: 'Your share is ' + montantLisible(r.montant) + ', but claims open in about '
+    return { classe: 'tiede', texte: 'Your share is ' + lisible(r.montant) + ', but claims open in about '
       + min + ' min. That wait exists so anyone can recompute the root first.' };
   }
   if (r.etat === 'DEJA_RECLAME') return { classe: 'doux', texte: 'Already claimed by this wallet.' };
