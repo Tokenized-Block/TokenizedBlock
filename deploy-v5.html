@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Deploy TBlock hook V5</title>
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:640px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px}
+  h2{font-size:15px;margin:0 0 6px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  .ligne{display:flex;gap:10px;align-items:baseline;margin:6px 0}
+  .ligne b{min-width:18px}
+  code{font-size:12.5px;word-break:break-all;color:var(--doux)}
+  button{font:inherit;font-weight:700;padding:12px 18px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:4px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Deploy the TBlock hook V5</h1>
+  <p class="doux">One transaction, signed by <b>your</b> wallet. This page never sees a key. The contract has no owner and
+    lands at the same address whoever sends it — the address depends only on its code.</p>
+
+  <div class="carte">
+    <h2>What the V5 changes</h2>
+    <ul class="doux">
+      <li><b>Fees are paid out during the swap.</b> The V4 credited token shares to an internal balance that somebody
+        had to claim — and nobody ever did. The V5 pushes them, inside a gas-capped <code>try</code>, and falls back to
+        that internal balance only if the token itself refuses the transfer.</li>
+      <li><b>Why the fallback matters.</b> Pushing without a net is a denial of service: if a token refuses a transfer,
+        the payout reverts <i>inside</i> the swap, and every swap on that pool dies. One broken token would kill its own
+        market. The V5 never lets that happen.</li>
+      <li><b>The fee wallet now takes 20% of the creator's third.</b> The total fee is unchanged at 3%. The creator's
+        share goes from 33.33% to 26.67% of it — said plainly, because that share is the only reason a stranger would
+        launch here rather than somewhere else.</li>
+      <li><b>Both V4 locks are kept word for word</b> — an empty market cannot be traded, and no label means no market.
+        The hook permissions are identical, so the CREATE2 flags are too.</li>
+      <li class="ko"><b>It repairs nothing that already exists.</b> A hook is part of a pool's identity in Uniswap v4.
+        Every pool already open keeps the hook it was born with, forever.</li>
+    </ul>
+  </div>
+
+  <div class="carte">
+    <div class="ligne"><b id="c1">…</b><span>Base mainnet reachable, hook address still empty</span></div>
+    <div class="ligne"><b id="c2">…</b><span>Dry run on Base returns the expected hook address</span></div>
+    <div class="ligne"><b id="c3">…</b><span>Wallet connected on Base</span></div>
+    <p class="doux" style="margin:10px 0 0">Expected hook: <code id="attendu"></code></p>
+    <p class="doux">Fee wallet baked in: <code id="fee"></code> · life fee <code id="vie"></code> wei · label <code id="marq"></code>
+      · creator tithe <code id="dime"></code>%</p>
+  </div>
+
+  <div class="carte">
+    <button id="connecter" type="button">Connect wallet</button>
+    <button id="deployer" type="button" disabled>Deploy — sign in your wallet</button>
+    <p id="etat" class="doux" style="margin:12px 0 0"></p>
+    <p id="relecture" class="doux" style="margin:8px 0 0"></p>
+  </div>
+</main>
+<script type="module">
+/* ⛔ PAGE DE DEPLOIEMENT DU HOOK V5 (2026-09-20), copie de celle du V4 qui a servi. `cast` sur la machine de Phil n a
+ *    pas le compte importe ; cette page laisse SON wallet signer.
+ *    Le contrat part par le deployeur CREATE2 standard : l adresse ne depend QUE du code (aucun proprietaire), donc
+ *    n importe quel wallet peut l envoyer. La page VERIFIE avant d autoriser la signature :
+ *      1. aucun code a l adresse attendue ; 2. un eth_call de la transaction rend exactement cette adresse ;
+ *      3. wallet sur Base.
+ * ⛔⛔ ET APRES : elle relit le contrat deploye, y compris `porteLeLabel(<un vrai block ne par notre app>)`. C est la
+ *    seule verification qui ne peut PAS se faire avant — forge ne sait pas executer un B20 (code 0xEF, execute
+ *    nativement par le noeud Base : l EVM locale rend OpcodeNotFound). Si elle rend `false`, le verrou du label
+ *    refuserait nos propres createurs, et il ne faut surtout pas brancher l app dessus. */
+import { envoyerDepuisWallet } from './envoi.js';
+
+const $ = (s) => document.querySelector(s);
+const RPC = 'https://mainnet.base.org';
+const rpc = async (method, params) => {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }).then((x) => x.json());
+  if (r.error) throw new Error(r.error.message || 'rpc error');
+  return r.result;
+};
+const marque = (id, ok, texte) => { const e = $(id); e.textContent = ok ? '✓' : '✗'; e.className = ok ? 'ok' : 'ko'; if (texte) e.title = texte; };
+
+let tx = null, compte = null, pret = { vide: false, simu: false };
+
+async function verifier() {
+  tx = await fetch('./deploy-v5.json', { cache: 'no-store' }).then((r) => r.json());
+  $('#attendu').textContent = tx.hook;
+  $('#fee').textContent = tx.feeWallet;
+  $('#vie').textContent = tx.fraisVieWei;
+  $('#marq').textContent = tx.marqueur;
+  $('#dime').textContent = String(tx.dimeCreateurPourCent);
+  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  pret.vide = code === '0x';
+  marque('#c1', pret.vide);
+  if (!pret.vide) {
+    $('#etat').innerHTML = '<span class="ok">The hook V5 is already deployed at this address. Nothing to do.</span>';
+    void relire();
+    return;
+  }
+  const r = await rpc('eth_call', [{ to: tx.deployeur, data: tx.data, gas: '0x4c4b40' }, 'latest']);
+  pret.simu = ('0x' + String(r).slice(-40)).toLowerCase() === tx.hook.toLowerCase();
+  marque('#c2', pret.simu);
+  majBouton();
+}
+function majBouton() { $('#deployer').disabled = !(pret.vide && pret.simu && compte); }
+
+/** ⛔ Les trois lectures qui comptent, faites SUR LA CHAINE une fois le contrat vivant. */
+async function relire() {
+  const appel = async (data) => rpc('eth_call', [{ to: tx.hook, data }, 'latest']);
+  const lignes = [];
+  try {
+    /* ⛔ Les trois selecteurs sont MESURES avec `cast sig` et ecrits dans deploy-v4.json, jamais devines ici. */
+    const fee = '0x' + String(await appel(tx.selecteurs.feeWallet)).slice(-40);
+    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + fee);
+    const taille = BigInt(await appel(tx.selecteurs.tailleMarqueur));
+    lignes.push((taille === BigInt(tx.marqueur.length) ? '✓' : '✗') + ' label length: ' + taille);
+    /* ⛔ LA DIME SE LIT SUR LA CHAINE. Ecrite dans le json, elle n est qu une intention ; lue dans le
+     *    contrat deploye, elle est un fait. Les deux doivent coincider ou on ne branche rien. */
+    const dime = BigInt(await appel(tx.selecteurs.dime));
+    lignes.push((dime === BigInt(tx.dimeCreateurPourCent) ? '✓' : '✗') + ' creator tithe on chain: ' + dime + '%'
+      + (dime === BigInt(tx.dimeCreateurPourCent) ? '' : ' — expected ' + tx.dimeCreateurPourCent + ', DO NOT switch the app'));
+    const tiers = BigInt(await appel(tx.selecteurs.diviseur));
+    lignes.push((tiers === 3n ? '✓' : '✗') + ' creator share divisor: ' + tiers);
+    const arg = tx.temoinLabel.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+    const porte = BigInt(await appel(tx.selecteurs.porteLeLabel + arg)) === 1n;
+    lignes.push((porte ? '✓' : '✗') + ' a block born through this app passes the label check ('
+      + tx.temoinLabel.slice(0, 10) + '…)' + (porte ? '' : ' — DO NOT switch the app to this hook'));
+  } catch (e) {
+    lignes.push('✗ could not read the deployed hook: ' + (e.message || e));
+  }
+  $('#relecture').innerHTML = lignes.map((l) => '<div>' + l.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>').join('');
+}
+
+$('#connecter').addEventListener('click', async () => {
+  if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
+  try {
+    const comptes = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    compte = comptes && comptes[0];
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
+    const chaine = await window.ethereum.request({ method: 'eth_chainId' });
+    marque('#c3', !!compte && Number(chaine) === 8453);
+    if (Number(chaine) !== 8453) compte = null;
+  } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
+  majBouton();
+});
+
+$('#deployer').addEventListener('click', async () => {
+  $('#deployer').disabled = true;
+  $('#etat').textContent = 'Opening your wallet — check it shows Base and a contract call, then sign.';
+  const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: tx.deployeur, data: tx.data, value: '0x0' });
+  if (r.etat !== 'CONFIRME') { $('#etat').innerHTML = '<span class="ko">Not done: ' + (r.pourquoi || r.etat) + '</span>'; majBouton(); return; }
+  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  $('#etat').innerHTML = code !== '0x'
+    ? '<span class="ok">Deployed. Hook V5 is live at ' + tx.hook + '.</span> Transaction: <code>' + r.hash + '</code>'
+    : '<span class="ko">Transaction confirmed but no code at the address yet — send me the hash: </span><code>' + r.hash + '</code>';
+  void relire();
+});
+
+verifier().catch((e) => { $('#etat').textContent = 'Could not read Base right now: ' + (e.message || e); });
+</script>
+</body>
+</html>
