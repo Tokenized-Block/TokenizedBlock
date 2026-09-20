@@ -1491,7 +1491,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0146" hidden>Build <code>20260920-0146</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0147" hidden>Build <code>20260920-0147</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2417,6 +2417,11 @@ let moteur3d = null;
 function mondeMap() {
   const map = $('#map');
   if (!moteur3d) moteur3d = creerMoteur3D({ map, habitants, enTexte, mouvementReduit });
+  /* ⛔ ICI, PAS SEULEMENT AU CHANGEMENT D ONGLET : la colonne de zoom n existe qu une fois le moteur
+   *    3D construit. Mesure du 2026-09-20 : branche uniquement sur le changement d onglet, la classe
+   *    n etait JAMAIS posee — la map est l onglet d arrivee, donc le changement ne se produit pas.
+   *    `suivreLeCote` se garde elle-meme contre les appels repetes. */
+  suivreLeCote();
   return map;
 }
 
@@ -9494,7 +9499,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0146',
+    build: '20260920-0147',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
