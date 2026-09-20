@@ -171,9 +171,28 @@ async function lire() {
   if (t.arbre) {
     const lignes = t.arbre.preuves.slice(0, 15).map((p) =>
       '<tr><td><code>' + txt(p.compte.slice(0, 8) + '…' + p.compte.slice(-4)) + '</code></td><td>' + txt(p.montant) + '</td></tr>').join('');
+    /* ⛔⛔ CE QUI NE VAUT PAS SON GAS DOIT ETRE DIT AVANT LA SIGNATURE. Mesure du 2026-09-20 : sur un
+     *    block a 62 detenteurs, la plus petite part valait 2 849 507 902 wei pour un gas de
+     *    reclamation d environ 20 000 000 000 000 wei — 7 000 fois moins que ce qu elle coute.
+     *    Une racine gravee ne se reprend pas ; l avertissement doit arriver AVANT. */
+    const GAS_RECLAMATION = 20000000000000;
+    const avertir = [];
+    if (t.arbre.poussiere) {
+      avertir.push(t.arbre.poussiere + ' of these ' + t.arbre.preuves.length
+        + ' share(s) are worth less than the gas it costs to claim them'
+        + (t.arbre.plusPetite ? ' (smallest: ' + txt(t.arbre.plusPetite) + ' wei, against roughly '
+          + GAS_RECLAMATION + ' wei of gas)' : '')
+        + '. They stay owed — nothing is taken from anyone — but most of them will never be claimed.');
+    }
+    if (t.arbre.aZero) {
+      avertir.push(t.arbre.aZero + ' holder(s) were left out of the tree because their share rounded '
+        + 'down to zero: claiming nothing would still cost them gas, and the contract would mark them '
+        + 'as having claimed.');
+    }
     $('#detail').innerHTML = '<p class="doux" style="margin-top:10px">Drawn block <code>' + txt(t.arbre.cible)
       + '</code> · root <code>' + txt(t.arbre.racine.slice(0, 18)) + '…</code> · '
       + t.arbre.preuves.length + ' recipient(s), total ' + txt(t.arbre.total) + '</p>'
+      + (avertir.length ? '<p class="doux" style="color:#c96">⚠️ ' + avertir.map(txt).join(' ') + '</p>' : '')
       + '<table>' + lignes + '</table>'
       + (t.arbre.preuves.length > 15 ? '<p class="doux">… and ' + (t.arbre.preuves.length - 15) + ' more</p>' : '')
       + '<p class="doux">' + txt(t.arbre.borne) + '</p>';

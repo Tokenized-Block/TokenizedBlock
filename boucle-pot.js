@@ -148,6 +148,12 @@ export async function preparerAncrage({ rpc, pot, periode, jetonHolders, jetonRe
     total: arbre.total,
     preuves,
     horsBase: parts.baseExclue,
+    /* ⛔ CE QUE LA REPARTITION A MESURE VOYAGE AVEC ELLE. Sans ces trois nombres, l ecran de
+     *    signature ne pouvait pas dire qu une part ne vaut pas son gas — et la racine se grave
+     *    pour toujours. */
+    aZero: parts.aZero || 0,
+    poussiere: parts.poussiere || 0,
+    plusPetite: parts.plusPetite === undefined ? null : parts.plusPetite.toString(),
     borne: 'Balances read AT the drawn block, not at chain head. The market pool and our own contracts '
       + 'are excluded by a named list. Every proof was replayed to the root before proposing this anchor.',
   };
@@ -237,7 +243,9 @@ export async function tour({ rpc, pot, jetonHolders, jetonRecompense, plancher, 
   if (d.calldata) sortie.aSigner = { to: pot, data: d.calldata, value: '0x0' };
   if (d.action === 'ANCRER' && snapshot && snapshot.complet) {
     sortie.arbre = { racine: snapshot.racine, total: snapshot.total.toString(), cible: snapshot.cible,
-      graine: snapshot.graine, preuves: snapshot.preuves, borne: snapshot.borne };
+      graine: snapshot.graine, preuves: snapshot.preuves, borne: snapshot.borne,
+      aZero: snapshot.aZero || 0, poussiere: snapshot.poussiere || 0,
+      plusPetite: snapshot.plusPetite === undefined ? null : snapshot.plusPetite };
   }
   return sortie;
 }

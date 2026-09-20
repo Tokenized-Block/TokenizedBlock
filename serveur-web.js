@@ -326,9 +326,13 @@ function nosBlocksCorps() {
  *    le PoolManager detient 99,89 % de la supply d un block, parce que le lancement y place 99,9 %.
  *    Un prorata BRUT enverrait donc la recompense dans une pool que personne ne peut vider.
  *    `partsHolders` exclut une liste NOMMEE, et rend ce qui est exclu pour qu on puisse le dire.
- * ⛔ LE POT EST FICTIF : 1 000 000 de dix-milliemes. Rien n est distribue, aucun contrat n existe.
+ * ⛔ LE POT EST FICTIF : cet ecran montre des PROPORTIONS, il ne distribue rien.
+ * ⛔⛔ SON ECHELLE DOIT ETRE PLUS FINE QUE TOUT VRAI POT. Mesure du 2026-09-20 : a 1 000 000 d unites,
+ *    deux porteurs que le pot reel (3e14 wei) paierait 149 999 992 et 14 999 999 wei tombaient a une
+ *    part de ZERO et disparaissaient de l ecran — l apercu et le paiement ne repondaient plus la meme
+ *    chose. A 1e18, l ecart mesure est de zero oubli.
  * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la reconstruction repart. C est dit par `lu`. */
-const POT_FICTIF = 1000000n;
+const POT_FICTIF = 10n ** 18n;
 const holdersCache = new Map(); /* jeton -> { soldes, naissance, jusqua, ratees, lu, enCours } */
 const HOLDERS_MAX = 200;
 
@@ -418,13 +422,21 @@ async function holdersCorps(jeton) {
   const parts = partsHolders({ soldes: [...e.soldes.entries()], pot: POT_FICTIF });
   return JSON.stringify({
     ok: true, etat: parts.etat, jeton, lu: e.lu, naissance: e.naissance, jusqua: e.jusqua,
-    /* parts en dix-milliemes : 10 000 = 100 % */
-    detenteurs: parts.parts.map((x) => ({ adr: x.adr, part: Number(x.montant / 100n) })),
+    /* ⛔ parts en dix-milliemes CALCULEES A PARTIR DU POT : `montant / 100n` ne tombait juste que
+     *    parce que POT_FICTIF valait exactement 1e6. Un changement d echelle aurait fausse l affichage
+     *    sans rien casser de visible. */
+    detenteurs: parts.parts.map((x) => ({ adr: x.adr, part: Number((x.montant * 10000n) / POT_FICTIF) })),
+    /* ⛔ COMBIEN SONT TROP PETITS POUR CETTE ECHELLE : zero attendu, mais un zero MESURE vaut mieux
+     *    qu un silence. `poussiere` n est PAS publie ici : il se compare au gas d une reclamation, ce
+     *    qui n a aucun sens contre un pot fictif. */
+    tropPetits: parts.aZero || 0,
     horsBase: { adresses: parts.exclus.length, pourquoi: parts.exclus.map((x) => x.pourquoi) },
     partHorsBase: total && total > 0n ? Number((parts.baseExclue * 10000n) / total) : null,
+    /* ⛔ BORNE CORRIGEE : « no reward contract exists yet » est devenu FAUX le 2026-09-20, le pot est
+     *    deploye et la premiere periode est alimentee. Une borne perimee ment a l ecran. */
     borne: 'Shares are pro rata of the supply held OUTSIDE the market pool and our own contracts. '
-      + 'At launch the pool holds 99.9% of a block by design. Nothing is distributed: no reward '
-      + 'contract exists yet. This only shows who WOULD be paid.',
+      + 'At launch the pool holds 99.9% of a block by design. This screen shows proportions only: '
+      + 'which block a round pays is decided when that round is anchored, not here.',
   });
 }
 

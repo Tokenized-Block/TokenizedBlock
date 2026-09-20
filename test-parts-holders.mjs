@@ -6,7 +6,7 @@
 //    99,89 % de la recompense partirait dans une pool dont la position appartient a l adresse morte.
 //    L argent serait brule, sans aucune erreur.
 import assert from 'node:assert/strict';
-import { partsHolders, EXCLUS } from './parts-holders.js';
+import { partsHolders, EXCLUS, GAS_RECLAMATION_WEI } from './parts-holders.js';
 
 let n = 0;
 const eq = (a, b, m) => { assert.equal(a, b, m); n++; };
@@ -35,11 +35,19 @@ const C = '0x' + 'c3'.repeat(20);
 }
 
 // ══ 2. AUCUN WEI PERDU NI INVENTE, meme avec des divisions qui ne tombent pas juste ══════════════
-for (const pot of [1n, 2n, 7n, 999n, 1_000_001n, 12_345_678_901n]) {
+// ⛔ SAUF QUAND LE POT EST TROP PETIT POUR ETRE PARTAGE. Avec 1 wei pour 3 detenteurs, toutes les
+//    parts tombent a zero. Donner le wei a un seul et zero aux deux autres les ferait payer du gas
+//    pour ne rien recevoir — et le contrat les marquerait comme AYANT RECLAME. On refuse, en le disant.
+for (const pot of [7n, 999n, 1_000_001n, 12_345_678_901n]) {
   const r = partsHolders({ soldes: [[A, 333n], [B, 333n], [C, 334n]], pot });
   const total = r.parts.reduce((s, p) => s + p.montant, 0n);
   eq(total, pot, 'somme des parts === pot, pour un pot de ' + pot);
-  ok(r.parts.every((p) => p.montant >= 0n), 'aucune part negative');
+  ok(r.parts.every((p) => p.montant > 0n), 'aucune part nulle ni negative');
+}
+for (const pot of [1n, 2n]) {
+  const r = partsHolders({ soldes: [[A, 333n], [B, 333n], [C, 334n]], pot });
+  eq(r.etat, 'AUCUN_DETENTEUR', 'un pot de ' + pot + ' wei ne peut pas se partager entre 3');
+  ok(/rounds down to zero/.test(r.pourquoi), 'et la raison le dit : ' + r.pourquoi);
 }
 
 // ══ 3. TROIS ETATS, JAMAIS UN TABLEAU VIDE AMBIGU ════════════════════════════════════════════════
@@ -84,5 +92,33 @@ for (const pot of [1n, 2n, 7n, 999n, 1_000_001n, 12_345_678_901n]) {
 }
 assert.throws(() => partsHolders({ soldes: [[A, 1n]], pot: -1n }), /non-negative/, 'un pot negatif est refuse');
 n++;
+
+// ══ 7. UNE PART DE ZERO EST EXCLUE DE L ARBRE, ET DITE ═════════════════════════════════════════
+// ⛔⛔ MESURE SUR LA CHAINE (2026-09-20) : sur TUTU, avec un pot de 300 000 000 000 000 wei, un
+//    detenteur reel ressortait avec 0 wei. Le laisser dans l arbre le ferait payer du gas pour ne
+//    RIEN recevoir — et le contrat le marquerait comme AYANT RECLAME, donc il ne pourrait plus
+//    revenir meme si on corrigeait ensuite.
+{
+  /* un gros detenteur et un tout petit : la part du petit tombe a zero */
+  const r = partsHolders({ soldes: [[A, 1_000_000n], [B, 1n]], pot: 1000n });
+  eq(r.parts.length, 1, 'le detenteur a part nulle est EXCLU de l arbre');
+  eq(r.parts[0].adr, A, 'seul le gros reste');
+  eq(r.aZero, 1, 'et on DIT combien ont ete exclus');
+  eq(r.parts[0].montant, 1000n, 'le pot entier va aux parts qui restent, aucun wei perdu');
+}
+
+// ══ 8. LA POUSSIERE EST COMPTEE, PAS EXCLUE ════════════════════════════════════════════════════
+// ⛔ Une part plus petite que le gas d une reclamation reste DUE : c est leur argent, et le seuil
+//    de rentabilite depend du gas au moment ou ILS reclament, pas de ce qu on croit aujourd hui.
+//    On la compte pour que l ecran puisse prevenir ; on ne decide pas a leur place.
+{
+  const r = partsHolders({ soldes: [[A, 999_999n], [B, 1n]], pot: 100_000_000_000_000_000n });
+  eq(r.parts.length, 2, 'le petit detenteur est PAYE, pas exclu');
+  ok(r.poussiere >= 1, 'mais sa part est comptee comme poussiere : ' + r.poussiere);
+  ok(r.plusPetite < GAS_RECLAMATION_WEI, 'la plus petite part est sous le cout du gas');
+  // ⛔ TEMOIN : quand tout le monde touche largement, la poussiere est a zero.
+  const gros = partsHolders({ soldes: [[A, 1n], [B, 1n]], pot: 10n ** 18n });
+  eq(gros.poussiere, 0, 'aucune poussiere quand les parts sont grandes');
+}
 
 console.log('test-parts-holders : ' + n + ' assertions, OK');

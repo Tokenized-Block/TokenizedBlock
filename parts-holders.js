@@ -30,6 +30,10 @@ export const EXCLUS = Object.freeze({
 
 export const ETATS_PART = Object.freeze(['PAYABLE', 'AUCUN_DETENTEUR', 'RIEN_A_PARTAGER']);
 
+/** Ordre de grandeur du gas d une reclamation sur Base, en wei. Sert a COMPTER la poussiere, pas a
+ *  l exclure : le seuil reel depend du gas au moment ou la personne reclame. */
+export const GAS_RECLAMATION_WEI = 20000000000000n;
+
 /**
  * Repartit un pot entre les detenteurs reels, au prorata de ce qu ils detiennent HORS pool.
  *
@@ -65,16 +69,35 @@ export function partsHolders({ soldes, pot, exclus = EXCLUS }) {
     /* ⛔ LA BORNE VOYAGE AVEC LE RESULTAT : un appelant qui n afficherait que `parts` laisserait croire
      *    que la supply entiere est entre ces mains-la. */
     borne: 'Shares are pro rata of the supply held OUTSIDE the market pool and our own contracts. '
-      + 'At launch the pool holds 99.9% of a block by design, so it is excluded on purpose.',
+      + 'At launch the pool holds 99.9% of a block by design, so it is excluded on purpose. '
+      + 'Holders whose share rounds down to zero are left out of the tree on purpose: claiming zero '
+      + 'would cost them gas and lock them out. Shares smaller than a claim costs are counted, not '
+      + 'removed — that money is theirs.',
   };
   if (!dehors.length) return { etat: 'AUCUN_DETENTEUR', parts: [], ...commun };
   if (pot === 0n) return { etat: 'RIEN_A_PARTAGER', parts: [], ...commun };
 
-  const parts = dehors.map(([adr, solde]) => ({ adr, solde, montant: (pot * solde) / base }));
-  /* le reste d arrondi va au plus gros detenteur, de facon deterministe */
+  const bruts = dehors.map(([adr, solde]) => ({ adr, solde, montant: (pot * solde) / base }));
+  /* ⛔⛔ UNE PART DE ZERO EST UN DEFAUT, PAS UN ARRONDI. Mesure du 2026-09-20 : sur TUTU, un detenteur
+   *    reel ressortait avec 0 wei. Le laisser dans l arbre le ferait payer du gas pour ne rien
+   *    recevoir — et le contrat le marquerait comme AYANT RECLAME, donc il ne pourrait plus revenir.
+   *    On l exclut, et on DIT combien ont ete exclus. */
+  const parts = bruts.filter((p) => p.montant > 0n);
+  const aZero = bruts.filter((p) => p.montant === 0n);
+  if (!parts.length) {
+    return { etat: 'AUCUN_DETENTEUR', parts: [], aZero: aZero.length, poussiere: 0,
+      pourquoi: 'every share rounds down to zero at this pot size — the pot is too small to split '
+        + 'between ' + bruts.length + ' holders', ...commun };
+  }
+  /* le reste d arrondi va au plus gros detenteur restant, de facon deterministe */
   const distribue = parts.reduce((s, p) => s + p.montant, 0n);
   parts[0].montant += pot - distribue;
   const total = parts.reduce((s, p) => s + p.montant, 0n);
   if (total !== pot) throw new Error('repartition incoherente : ' + total + ' != ' + pot);
-  return { etat: 'PAYABLE', parts, ...commun };
+  /* ⛔ LA POUSSIERE EST COMPTEE, PAS EXCLUE. C est leur argent ; le seuil de rentabilite depend du gas
+   *    au moment ou ILS reclament, pas de ce qu on croit aujourd hui. A l ecran de prevenir. */
+  const poussiere = parts.filter((p) => p.montant < GAS_RECLAMATION_WEI).length;
+  return { etat: 'PAYABLE', parts, aZero: aZero.length, poussiere,
+    plusPetite: parts.reduce((m, p) => (p.montant < m ? p.montant : m), pot),
+    ...commun };
 }

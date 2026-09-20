@@ -1513,7 +1513,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0174" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260920-0175" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4726,16 +4726,22 @@ async function peindreHolders(adr, essai = 0) {
   const d = j.detenteurs || [];
   compte.textContent = d.length + (d.length === 1 ? ' holder' : ' holders');
   liste.innerHTML = d.slice(0, 12).map((x) => {
-    const part = (x.part / 100).toFixed(x.part < 100 ? 2 : 1);
+    /* ⛔ UNE PART REELLE PLUS PETITE QUE LE PAS D AFFICHAGE N EST PAS ZERO. Le serveur a deja retire
+     *    les parts vraiment nulles ; ce qui reste et s affiche « 0.00% » touche quelque chose. */
+    const part = x.part ? (x.part / 100).toFixed(x.part < 100 ? 2 : 1) + '%' : '<0.01%';
     const court = x.adr.slice(0, 6) + '…' + x.adr.slice(-4);
-    return '<span class="puce' + (x.part ? '' : ' vide') + '">' + enTexte(court) + ' <b>' + part + '%</b></span>';
+    return '<span class="puce' + (x.part ? '' : ' vide') + '">' + enTexte(court) + ' <b>' + part + '</b></span>';
   }).join('');
   /* ⛔ OU DORT LE RESTE : sans cette phrase, « 6 holders » laisserait croire que six adresses se
    *    partagent le block entier. Mesure : la pool en detient 99,89 % a la naissance. */
   const pool = j.partHorsBase === null || j.partHorsBase === undefined ? null : (j.partHorsBase / 100).toFixed(2);
-  note.textContent = 'Share of a reward if one were paid today, split between wallets that actually hold it. '
+  /* ⛔ PHRASE CORRIGEE LE 2026-09-20 : le pot existe et la premiere periode est alimentee. Ce qui
+   *    reste vrai, c est que CE bloc-ci n est pas forcement celui qu une periode paiera — le jeton
+   *    paye se choisit a l ancrage. On dit ca, pas « aucun contrat ». */
+  note.textContent = 'Share of a reward if this block were the one paid, split between wallets that actually hold it. '
     + (pool !== null ? pool + '% of this block sits in its market pool, which nobody can withdraw, so it is left out. ' : '')
-    + 'Nothing is being distributed: there is no reward contract yet.';
+    + (j.tropPetits ? j.tropPetits + ' wallet(s) hold too little to show a share at this scale. ' : '')
+    + 'Which block a round pays is decided when that round is anchored, not here.';
 }
 
 async function ouvrirProfil(adr, sym) {

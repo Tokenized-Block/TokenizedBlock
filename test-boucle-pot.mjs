@@ -283,4 +283,37 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   ok(/jetonHolders manquant/.test(sansHold.pourquoi), 'et celui-la aussi');
 }
 
+// ══ 11. CE QUI NE VAUT PAS SON GAS ARRIVE JUSQU A L ECRAN DE SIGNATURE ════════════════════════
+// ⛔⛔ MESURE SUR LA CHAINE (2026-09-20) : sur un block a 62 detenteurs, la plus petite part valait
+//    2 849 507 902 wei contre ~20 000 000 000 000 wei de gas — 7 000 fois moins que son cout. Le
+//    chiffre EXISTAIT dans `partsHolders` et etait jete par `preparerAncrage` : l ecran affichait
+//    « 62 recipient(s) » sans un mot. Un chiffre juste mais absent n avertit personne, et une racine
+//    gravee ne se reprend pas.
+{
+  const RECOMPENSE = '0x0000000000000000000000000000000000000001';
+  /* ⛔ UN DETENTEUR A 1 UNITE SUR 1001 : sa part tombe a zero, il doit etre COMPTE et exclu. */
+  const C = '0x' + 'c3'.repeat(20);
+  const logs = [logT(1500, ADRESSE_ZERO, POOL, 2001n), logT(1600, POOL, A, 600n),
+    logT(1650, POOL, B, 400n), logT(1700, POOL, C, 1n)];
+  const rpc = chaine({ tete: 5000, periodes: [{ debut: 2000, fin: 4000, ancreeLe: 0 }],
+    logs, supply: 2001n, depose: 1000n });
+  const t = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: RECOMPENSE,
+    plancher: PLANCHER });
+  eq(t.action, 'ANCRER', 'la periode est finie et le pot est plein : on ancre');
+  eq(t.arbre.preuves.length, 2, 'deux destinataires payables');
+  eq(t.arbre.aZero, 1, 'le detenteur a part nulle est COMPTE dans l arbre rendu');
+  eq(t.arbre.poussiere, 2, 'les deux parts sont sous le gas d une reclamation, et c est DIT');
+  /* ⛔ 399 ET NON 400 : le reste d arrondi va au PLUS GROS (601 au lieu de 599). La plus petite part
+   *    est donc la part plancher de B, 1000*400/1001 = 399. Mon attente de 400 etait fausse ; le code
+   *    avait raison. Une attente calculee a la main vaut mieux qu une attente recopiee du code. */
+  eq(String(t.arbre.plusPetite), '399', 'la plus petite part voyage jusqu a l ecran');
+  // ⛔ TEMOIN : avec un pot enorme, plus aucune part n est de la poussiere.
+  const gros = chaine({ tete: 5000, periodes: [{ debut: 2000, fin: 4000, ancreeLe: 0 }],
+    logs, supply: 2001n, depose: 10n ** 20n });
+  const tg = await tour({ rpc: gros, pot: POT, jetonHolders: JETON, jetonRecompense: RECOMPENSE,
+    plancher: PLANCHER });
+  eq(tg.arbre.poussiere, 0, 'temoin : un pot large ne produit aucune poussiere');
+  eq(tg.arbre.aZero, 0, 'temoin : et plus personne ne tombe a zero');
+}
+
 console.log('test-boucle-pot : ' + n + ' assertions, OK');
