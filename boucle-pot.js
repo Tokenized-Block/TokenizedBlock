@@ -139,7 +139,57 @@ export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
 }
 
 /**
- * Un tour de boucle. Rend l action, la transaction a signer, et l arbre quand il y en a un.
+ * Recalcule l arbre d une periode DEJA ANCREE, et le confronte a ce que le contrat a grave.
+ *
+ * ⛔⛔ C EST LA FONCTION QUI PERMET DE NOUS CONTREDIRE. Elle refait le tirage depuis la graine
+ *    stockee et le compare a la cible stockee ; puis elle refait l arbre et compare sa racine a
+ *    la racine ancree. Un desaccord signifie que l ancrage ne decrit pas les soldes reels — et
+ *    c est precisement ce que le delai de contestation existe pour attraper.
+ * ⛔ EN CAS DE DESACCORD, ON NE SERT AUCUNE PREUVE. Servir une preuve issue d un arbre qui ne
+ *    correspond pas a la racine ancree ferait echouer la reclamation chez l utilisateur, qui
+ *    croirait que le probleme vient de lui.
+ */
+export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, plancher, racineAncree, totalAncre }) {
+  if (!periode || !periode.ancreeLe) {
+    return { ok: false, pourquoi: 'this round is not anchored yet — nothing to claim' };
+  }
+  /* 1. le tirage stocke doit decouler de la graine stockee */
+  const rejoue = blocDeSnapshot({ debut: periode.debut, fin: periode.fin, graine: periode.graine });
+  if (rejoue.etat !== 'TIRE') {
+    return { ok: false, pourquoi: 'the stored seed does not produce a draw: ' + (rejoue.pourquoi || rejoue.etat) };
+  }
+  if (rejoue.cible !== periode.cible) {
+    return { ok: false,
+      pourquoi: 'the stored drawn block (' + periode.cible + ') is not what the stored seed produces ('
+        + rejoue.cible + ') — do not trust this anchor' };
+  }
+  /* 2. les soldes AU BLOC TIRE, comme a l ancrage */
+  const naissance = await naissanceDuJeton({ rpc, jeton, depuis: plancher, jusqua: periode.cible });
+  if (naissance === null) return { ok: false, pourquoi: 'token birth not found before the drawn block' };
+  const s = await soldesAuBloc({ rpc, jeton, naissance, auBloc: periode.cible });
+  if (s.etat !== 'COMPLET') return { ok: false, pourquoi: s.pourquoi || 'balances could not be rebuilt' };
+  const depose = await lireDepose({ rpc, pot, id: periode.id, jeton });
+  if (depose === null) return { ok: false, pourquoi: 'pot balance unreadable' };
+
+  /* ⛔ LE POT A PU DIMINUER depuis l ancrage (des gens ont deja reclame). On refait donc l arbre
+   *    sur le TOTAL ANCRE, pas sur le solde du moment — sinon les parts changeraient a chaque
+   *    reclamation et plus aucune preuve ne serait valable. */
+  const parts = partsHolders({ soldes: [...s.soldes.entries()], pot: BigInt(totalAncre ?? depose) });
+  if (parts.etat !== 'PAYABLE') return { ok: false, pourquoi: 'nobody to pay for this round' };
+  const arbre = construireArbre({ id: periode.id, jeton,
+    parts: parts.parts.map((p) => ({ compte: p.adr, montant: p.montant })) });
+
+  /* 3. LA RACINE RECALCULEE DOIT EGALER LA RACINE ANCREE */
+  if (racineAncree && String(racineAncree).toLowerCase() !== arbre.racine.toLowerCase()) {
+    return { ok: false, racineRecalculee: arbre.racine, racineAncree,
+      pourquoi: 'the root we recompute does not match the anchored root — this anchor does not describe '
+        + 'the real balances at block ' + periode.cible };
+  }
+  return { ok: true, racine: arbre.racine, cible: periode.cible, total: arbre.total, arbre, parts: arbre.parts };
+}
+
+/**
+ * Que faut-il faire maintenant ?
  * ⛔ AUCUN ENVOI. `aSigner` est une description, pas un geste.
  */
 export async function tour({ rpc, pot, jeton, plancher, config = {} }) {

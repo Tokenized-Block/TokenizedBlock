@@ -5,7 +5,8 @@
 //    a tort ne coute qu un tour. Les refus sont donc testes un par un, avec leur raison.
 // RPC simule : rien ne part sur un reseau.
 import assert from 'node:assert/strict';
-import { tour, preparerAncrage, decoderPeriode, lirePeriodes, prepararAlimentation, SEL } from './boucle-pot.js';
+import { tour, preparerAncrage, decoderPeriode, lirePeriodes, prepararAlimentation,
+  arbreDUnePeriodeAncree, SEL } from './boucle-pot.js';
 import { feuille, verifierPreuve } from './merkle-pot.js';
 import { TOPIC_TRANSFER, ADRESSE_ZERO } from './soldes-jeton.js';
 
@@ -183,6 +184,56 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   const e = prepararAlimentation({ pot: POT, id: 0, jeton: JETON, montant: 7n, estEth: true });
   eq(e.aSigner.value, '0x7', 'en ETH, le montant voyage dans la value');
   ok(!e.prealable, 'et aucune approbation n est necessaire');
+}
+
+// ══ 8. ON DOIT POUVOIR NOUS CONTREDIRE ═════════════════════════════════════════════════════════
+// ⛔ C EST LA PROPRIETE LA PLUS IMPORTANTE DU SYSTEME. Le contrat ne peut verifier ni la graine ni
+//    la racine ; le delai de contestation de 6 h n a de sens que si quelqu un peut RECALCULER et
+//    constater un desaccord. Ces tests prouvent que le recalcul MORD.
+{
+  const logs = [logT(1500, ADRESSE_ZERO, POOL, 2000n), logT(1600, POOL, A, 600n), logT(1700, POOL, B, 400n)];
+  const rpc = chaine({ tete: 9000, periodes: [], logs, supply: 2000n, depose: 1000n });
+  /* une periode ancree honnetement : cible = celle que la graine produit */
+  const { blocDeSnapshot } = await import('./regle-snapshot.js');
+  const tirage = blocDeSnapshot({ debut: 2000, fin: 4000, graine: GRAINE });
+  const honnete = { id: 0, debut: 2000, fin: 4000, ancreeLe: 12345, cible: tirage.cible, graine: GRAINE };
+
+  const bon = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+    plancher: PLANCHER, totalAncre: 1000n });
+  ok(bon.ok, 'un ancrage honnete se recalcule : ' + (bon.pourquoi || ''));
+  eq(bon.cible, tirage.cible, 'et il tombe sur la meme cible');
+
+  /* ⛔ LE MEME ARBRE, AVEC LA RACINE ANCREE : doit concorder */
+  const avecRacine = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+    plancher: PLANCHER, totalAncre: 1000n, racineAncree: bon.racine });
+  ok(avecRacine.ok, 'la racine recalculee egale la racine ancree');
+
+  /* ⛔ UNE CIBLE TRUQUEE EST ATTRAPEE : elle ne decoule pas de la graine stockee. */
+  const cibleTruquee = { ...honnete, cible: honnete.cible + 1 };
+  const r1 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: cibleTruquee, jeton: JETON,
+    plancher: PLANCHER, totalAncre: 1000n });
+  ok(!r1.ok, 'une cible qui ne decoule pas de la graine est REFUSEE');
+  ok(/not what the stored seed produces/.test(r1.pourquoi), 'et la raison le nomme : ' + r1.pourquoi);
+
+  /* ⛔ UNE RACINE TRUQUEE EST ATTRAPEE : elle ne decrit pas les soldes reels. */
+  const r2 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+    plancher: PLANCHER, totalAncre: 1000n, racineAncree: '0x' + 'ab'.repeat(32) });
+  ok(!r2.ok, 'une racine qui ne correspond pas aux soldes est REFUSEE');
+  ok(/does not match the anchored root/.test(r2.pourquoi), 'et on dit exactement quoi');
+  ok(r2.racineRecalculee && r2.racineAncree, 'en rendant LES DEUX racines, pour qu on puisse juger');
+
+  /* une periode pas encore ancree ne sert aucune preuve */
+  const pasAncree = { ...honnete, ancreeLe: 0 };
+  const r3 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: pasAncree, jeton: JETON, plancher: PLANCHER });
+  ok(!r3.ok, 'une periode non ancree ne rend pas de preuve');
+  ok(/not anchored yet/.test(r3.pourquoi), 'et le dit');
+
+  /* ⛔ LE TOTAL ANCRE, PAS LE SOLDE DU MOMENT. Si on rebatissait sur le depot courant, les parts
+   *    changeraient a chaque reclamation et plus aucune preuve ne serait valable. */
+  const potEntame = chaine({ tete: 9000, periodes: [], logs, supply: 2000n, depose: 400n });
+  const apresReclamations = await arbreDUnePeriodeAncree({ rpc: potEntame, pot: POT, periode: honnete,
+    jeton: JETON, plancher: PLANCHER, totalAncre: 1000n, racineAncree: bon.racine });
+  ok(apresReclamations.ok, 'le pot entame ne change pas l arbre : on rebatit sur le TOTAL ANCRE');
 }
 
 console.log('test-boucle-pot : ' + n + ' assertions, OK');
