@@ -93,6 +93,7 @@
       block's token. Nothing is sold, and no ETH is spent.</p>
     <p class="doux"><b>This takes two signatures:</b> one to let the pot take the tokens, one to send
       them. Said here so the second one is not a surprise.</p>
+    <p id="jTour" class="doux"></p>
     <div id="jListe" class="doux">reading what this wallet holds…</div>
     <p id="jEtat" class="doux" style="margin:10px 0 0"></p>
   </div>
@@ -409,6 +410,19 @@ async function lireJetons() {
   const hote = $('#jListe');
   if (!compte) { hote.textContent = 'Connect the operator wallet to see what it holds.'; return; }
   const idP = courant && courant.periode != null ? courant.periode : (courant ? courant.periodes - 1 : 0);
+  /* ⛔⛔ UN TOUR, UN JETON. `ancreeLe` est stocke PAR PERIODE alors que les racines et les pots sont
+   *    PAR JETON : une deuxieme devise ancree sur la meme periode aurait une fenetre de contestation
+   *    de ZERO. Et `rouler` exige la periode ancree PUIS 30 jours, donc la devise non ancree resterait
+   *    immobilisee un mois. On le DIT avant, on ne l apprend pas apres. */
+  const dejaEth = await lireDepose(idP, ADRESSE_ETH);
+  $('#jTour').innerHTML = dejaEth === null
+    ? '<span class="ko">Could not read what round ' + idP + ' already holds — that is us, not the pot.</span>'
+    : dejaEth > 0n
+      ? '<span class="ko">⚠️ Round ' + idP + ' already holds ' + txt(String(dejaEth))
+        + ' wei of ETH.</span> A round pays out ONE currency: the challenge window is stored per round, '
+        + 'not per currency, so a second currency anchored here would have no window at all. And the '
+        + 'one left unanchored cannot be moved for 30 days. Open a fresh round for these tokens instead.'
+      : 'Round ' + idP + ' holds no ETH — safe to make it a token round.';
   const lignes = [];
   let ratees = 0;
   for (const jeton of JETONS_FRAIS) {
@@ -452,6 +466,16 @@ function decoderSymbole(hex) {
     return new TextDecoder().decode(Uint8Array.from(oct.map((h) => parseInt(h, 16))));
   } catch { return null; }
 }
+
+/** Ce qu une periode detient d une devise. ⛔ null quand la lecture echoue — jamais zero. */
+async function lireDepose(id, jeton) {
+  try {
+    const r2 = await rpc('eth_call', [{ to: POT, data: '0x721da62e' + num32(id) + mot32(jeton) }, 'latest']);
+    if (!r2 || r2 === '0x') return null;
+    return BigInt(r2);
+  } catch { return null; }
+}
+const ADRESSE_ETH = '0x0000000000000000000000000000000000000000';
 
 async function versementJeton(l, idP) {
   const besoinApprove = l.allow < l.solde;
