@@ -500,6 +500,9 @@ body:not(.surMap) .mapCta{display:none}
  *    bouge pas d un pixel, seuls le curseur et le fond au survol changent. */
 /* ⛔ Un filtre a zero reste a sa place et se lit comme tel : la barre ne change jamais de forme. */
 .stadeLigne .puce.vide{opacity:.42}
+/* un zero qui est une reussite se lit comme une reussite ; un chiffre ici est une ALARME */
+.stadeLigne .puce.reussi{opacity:1;border-color:rgb(61 220 151 / .55);color:#7ef0bb}
+.stadeLigne .puce.alerte{opacity:1;border-color:rgb(255 107 107 / .7);color:#ff9d9d;font-weight:800}
 .stadeLigne .puce.vide.on{opacity:1}
 .rangL[data-block]{cursor:pointer}
 .rangL[data-block]:hover,.rangL[data-block]:focus-visible{background:rgb(var(--accentRgb) / .10);outline:none}
@@ -1406,7 +1409,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0136" hidden>Build <code>20260920-0136</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0137" hidden>Build <code>20260920-0137</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5334,9 +5337,15 @@ function majComptesFiltres() {
      *    faisait CHANGER LA BARRE DE FORME pendant le chargement : au depart tout vaut 0, donc il ne
      *    restait que deux boutons. Un filtre vide reste desormais a l ecran et DIT 0 — un compte a
      *    zero est une information, une absence n en est pas une. */
-    b.textContent = b.dataset.nom + ' ' + n;
+    /* ⛔ UN ZERO QUI EST UNE REUSSITE N A PAS LA MEME FORME QU UN ZERO QUI EST UNE ABSENCE.
+     *    « Not read » compte les echanges qu on n a PAS SU lire : a zero, tout a ete lu — c est le
+     *    meilleur resultat possible, et affiche « Not read 0 » il se lisait comme une panne. */
+    const reussiteAZero = f === 'SWAP' && n === 0;
+    b.textContent = reussiteAZero ? '✓ All read' : b.dataset.nom + ' ' + n;
     b.hidden = false;
-    b.classList.toggle('vide', n === 0);
+    b.classList.toggle('vide', n === 0 && !reussiteAZero);
+    b.classList.toggle('reussi', reussiteAZero);
+    b.classList.toggle('alerte', f === 'SWAP' && n > 0);
     comptes[f] = n;
   }
   liveFiltre = garde;
@@ -9216,7 +9225,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0136',
+    build: '20260920-0137',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
