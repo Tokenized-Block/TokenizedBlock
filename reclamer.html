@@ -42,7 +42,8 @@
 
   <div class="carte">
     <p class="doux">Pot: <code id="adrPot"></code></p>
-    <p class="doux">Block token: <code id="adrJeton"></code></p>
+    <p class="doux">Holders of: <code id="adrJeton"></code></p>
+    <p class="doux">Paid in: <code id="adrRecompense"></code> <span class="doux">(the zero address is ETH)</span></p>
     <div style="margin:10px 0">
       <label class="doux" for="champJeton">Look at another block (paste its address):</label>
       <input id="champJeton" type="text" spellcheck="false" placeholder="0xb20…">
@@ -71,7 +72,11 @@ const RPC = 'https://mainnet.base.org';
 const POT = '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272';
 const PLANCHER = 50861088;
 const params = new URLSearchParams(location.search);
-let JETON = (params.get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+/* ⛔⛔ DEUX JETONS, DEUX ROLES — voir boucle-pot.js. Mesure du 2026-09-20 : le pot de la periode 0
+ *    contient 300 000 000 000 000 wei en ETH et 0 en OK. Les confondre annoncerait « rien a
+ *    reclamer » a quelqu un a qui on doit de l argent. */
+let JETON_HOLDERS = (params.get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+const JETON_RECOMPENSE = (params.get('recompense') || '0x0000000000000000000000000000000000000000').toLowerCase();
 
 const rpc = async (methode, p) => {
   const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -107,7 +112,8 @@ async function lire() {
   if (enCours) return;
   enCours = true;
   $('#adrPot').textContent = POT;
-  $('#adrJeton').textContent = JETON;
+  $('#adrRecompense').textContent = JETON_RECOMPENSE;
+  $('#adrJeton').textContent = JETON_HOLDERS;
   $('#titre').textContent = 'Reading the chain…';
   $('#tours').innerHTML = '';
   $('#etat').textContent = '';
@@ -141,9 +147,10 @@ async function lire() {
         + '</code><br><span class="doux">checking…</span>';
       $('#tours').appendChild(bloc);
       let r = null;
-      try { r = await etatReclamation({ rpc, pot: POT, periode: p, jeton: JETON, compte, plancher: PLANCHER, maintenant }); }
+      try { r = await etatReclamation({ rpc, pot: POT, periode: p, jetonHolders: JETON_HOLDERS,
+        jetonRecompense: JETON_RECOMPENSE, compte, plancher: PLANCHER, maintenant }); }
       catch (e) { r = { etat: 'NON_LU', pourquoi: e.message || String(e) }; }
-      const ph = phrase(r, JETON);
+      const ph = phrase(r, JETON_HOLDERS);
       bloc.innerHTML = '<b>Round ' + p.id + '</b> · drawn block <code>' + txt(p.cible) + '</code><br>'
         + '<span class="' + ph.classe + '">' + txt(ph.texte) + '</span>';
       if (r.etat === 'PAYABLE') {
@@ -205,7 +212,7 @@ $('#champJeton').addEventListener('change', () => {
   const v = String($('#champJeton').value || '').trim().toLowerCase();
   /* ⛔ UNE ADRESSE MAL FORMEE EST REFUSEE ET DITE, jamais interrogee telle quelle. */
   if (!/^0x[0-9a-f]{40}$/.test(v)) { $('#etat').innerHTML = '<span class="ko">That is not an address.</span>'; return; }
-  JETON = v;
+  JETON_HOLDERS = v;
   void lire();
 });
 

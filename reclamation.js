@@ -53,7 +53,11 @@ export function calldataReclamer({ id, jeton, montant, preuve }) {
  * ⛔ SEPT ETATS, chacun nomme. « rien a reclamer » a beaucoup de causes differentes, et les
  *    confondre ferait chercher un bug la ou il n y en a pas — ou l inverse.
  */
-export async function etatReclamation({ rpc, pot, periode, jeton, compte, plancher, maintenant }) {
+export async function etatReclamation({ rpc, pot, periode, jetonHolders, jetonRecompense, compte,
+  plancher, maintenant }) {
+  /* ⛔ DEUX JETONS, DEUX NOMS — voir preparerAncrage. Les confondre ferait chercher le pot dans la
+   *    mauvaise devise et annoncerait « rien a reclamer » a quelqu un a qui on doit de l argent. */
+  const jeton = jetonRecompense;
   if (!periode || !periode.ancreeLe) {
     return { etat: 'PAS_ANCREE', pourquoi: 'this round has not been anchored yet' };
   }
@@ -73,7 +77,7 @@ export async function etatReclamation({ rpc, pot, periode, jeton, compte, planch
 
   /* ⛔ ON RECALCULE L ARBRE ET ON LE CONFRONTE A LA RACINE ANCREE. Sans cette comparaison, on
    *    servirait une preuve qui echouerait chez l utilisateur. */
-  const a = await arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, plancher,
+  const a = await arbreDUnePeriodeAncree({ rpc, pot, periode, jetonHolders, jetonRecompense, plancher,
     racineAncree: infos.racine, totalAncre: infos.total });
   if (!a.ok) {
     /* un desaccord de racine est une chose grave ; une lecture incomplete en est une autre */

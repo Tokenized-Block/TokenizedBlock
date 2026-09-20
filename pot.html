@@ -101,7 +101,13 @@ const POT = '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272';
 const OPERATEUR = '0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4';
 const PLANCHER = 50861088;
 /* le jeton par defaut : celui dont on veut recompenser les detenteurs. Reglable par ?jeton=0x… */
-const JETON = (new URLSearchParams(location.search).get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+/* ⛔⛔ DEUX JETONS, DEUX ROLES. Mesure du 2026-09-20 : depose[0][ETH] = 300 000 000 000 000 wei et
+ *    depose[0][OK] = 0. Les confondre faisait chercher le pot dans la MAUVAISE devise, et la boucle
+ *    aurait refuse l ancrage avec « le pot est vide » alors que l argent etait la. */
+/** QUI est recompense : les detenteurs de ce block. Reglable par ?jeton=0x… */
+const JETON_HOLDERS = (new URLSearchParams(location.search).get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+/** EN QUOI ils sont payes : l ETH natif par defaut, comme le pot de la periode 0. */
+const JETON_RECOMPENSE = (new URLSearchParams(location.search).get('recompense') || '0x0000000000000000000000000000000000000000').toLowerCase();
 
 const rpc = async (methode, params) => {
   const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -146,7 +152,7 @@ async function lire() {
   $('#titreAction').textContent = 'Reading the chain…';
   $('#detail').innerHTML = '';
   let t = null;
-  try { t = await tour({ rpc, pot: POT, jeton: JETON, plancher: PLANCHER }); }
+  try { t = await tour({ rpc, pot: POT, jetonHolders: JETON_HOLDERS, jetonRecompense: JETON_RECOMPENSE, plancher: PLANCHER }); }
   catch (e) { $('#titreAction').textContent = 'Could not read Base'; $('#etat').textContent = e.message || String(e); marque('#c1', false); return; }
   courant = t;
   marque('#c1', true);

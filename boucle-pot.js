@@ -76,7 +76,19 @@ export async function lireDepose({ rpc, pot, id, jeton }) {
  * ⛔ Rend un objet avec `complet: false` et SA raison des qu une seule etape ne tient pas. Le keeper
  *    refusera alors d ancrer -- c est la chaine de refus qui protege l argent, pas un seul garde.
  */
-export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
+export async function preparerAncrage({ rpc, pot, periode, jetonHolders, jetonRecompense, plancher }) {
+  /* ⛔⛔ DEUX CHOSES DIFFERENTES, DEUX NOMS. Elles n en avaient qu un, et la mesure du 2026-09-20 l a
+   *    prouve : depose[0][ETH] = 300 000 000 000 000 wei, depose[0][OK] = 0. Un seul parametre aurait
+   *    fait refuser l ancrage avec « le pot est vide » alors que l argent etait la, dans l autre
+   *    devise.
+   * ⛔ AUCUNE VALEUR PAR DEFAUT : faire retomber la recompense sur le jeton des holders reproduirait
+   *    le bug en silence. Un parametre manquant est un refus NOMME. */
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(jetonHolders || ''))) {
+    return { complet: false, pourquoi: 'jetonHolders manquant : on ne sait pas QUI detient' };
+  }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(jetonRecompense || ''))) {
+    return { complet: false, pourquoi: 'jetonRecompense manquant : on ne sait pas EN QUOI on paie' };
+  }
   /* 1. LA GRAINE : le prevRandao du bloc de FIN, lu sur la chaine. */
   const blocFin = await rpc('eth_getBlockByNumber', [hex(periode.fin), false]);
   const graine = blocFin && blocFin.mixHash;
@@ -86,17 +98,18 @@ export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
   }
 
   /* 2. LES SOLDES AU BLOC TIRE — jamais a la tete de chaine. */
-  const naissance = await naissanceDuJeton({ rpc, jeton, depuis: plancher, jusqua: tirage.cible });
+  const naissance = await naissanceDuJeton({ rpc, jeton: jetonHolders, depuis: plancher, jusqua: tirage.cible });
   if (naissance === null) {
     return { complet: false, cible: tirage.cible, pourquoi: 'naissance du jeton introuvable avant le bloc tire' };
   }
-  const s = await soldesAuBloc({ rpc, jeton, naissance, auBloc: tirage.cible });
+  const s = await soldesAuBloc({ rpc, jeton: jetonHolders, naissance, auBloc: tirage.cible });
   if (s.etat !== 'COMPLET') {
     return { complet: false, cible: tirage.cible, pourquoi: s.pourquoi || 'reconstruction incomplete' };
   }
 
   /* 3. LES PARTS, pool exclue. */
-  const depose = await lireDepose({ rpc, pot, id: periode.id, jeton });
+  /* ⛔ LE POT SE LIT DANS LA DEVISE DE RECOMPENSE, pas dans le jeton des holders. */
+  const depose = await lireDepose({ rpc, pot, id: periode.id, jeton: jetonRecompense });
   if (depose === null) return { complet: false, cible: tirage.cible, pourquoi: 'depot du pot illisible' };
   const parts = partsHolders({ soldes: [...s.soldes.entries()], pot: depose });
   if (parts.etat !== 'PAYABLE') {
@@ -107,11 +120,12 @@ export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
   }
 
   /* 4. L ARBRE, ET LA RE-VERIFICATION DE CHAQUE PREUVE. */
-  const arbre = construireArbre({ id: periode.id, jeton,
+  /* ⛔ LA FEUILLE PORTE LA DEVISE DE RECOMPENSE : c est elle que le contrat verifie dans reclamer. */
+  const arbre = construireArbre({ id: periode.id, jeton: jetonRecompense,
     parts: parts.parts.map((p) => ({ compte: p.adr, montant: p.montant })) });
   const preuves = [];
   for (const p of arbre.parts) {
-    const f = feuille({ id: periode.id, jeton, compte: p.compte, montant: p.montant });
+    const f = feuille({ id: periode.id, jeton: jetonRecompense, compte: p.compte, montant: p.montant });
     const preuve = arbre.preuveDe(p.compte);
     /* ⛔ ON REJOUE CE QU ON VIENT DE CONSTRUIRE. Une preuve fausse ne se decouvrirait sinon qu au
      *    moment ou un detenteur tente de reclamer -- apres que la racine soit gravee pour toujours. */
@@ -124,7 +138,8 @@ export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
 
   return {
     complet: true,
-    jeton,
+    jeton: jetonRecompense,
+    jetonHolders,
     graine,
     cible: tirage.cible,
     naissance,
@@ -149,7 +164,14 @@ export async function preparerAncrage({ rpc, pot, periode, jeton, plancher }) {
  *    correspond pas a la racine ancree ferait echouer la reclamation chez l utilisateur, qui
  *    croirait que le probleme vient de lui.
  */
-export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, plancher, racineAncree, totalAncre }) {
+export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jetonHolders, jetonRecompense,
+  plancher, racineAncree, totalAncre }) {
+  /* ⛔ MEMES DEUX NOMS QU A L ANCRAGE : rebatir l arbre avec un seul jeton donnerait une racine
+   *    differente de celle ancree, et on accuserait l operateur a tort. */
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(jetonHolders || ''))
+    || !/^0x[0-9a-fA-F]{40}$/.test(String(jetonRecompense || ''))) {
+    return { ok: false, pourquoi: 'jetonHolders and jetonRecompense are both required' };
+  }
   if (!periode || !periode.ancreeLe) {
     return { ok: false, pourquoi: 'this round is not anchored yet — nothing to claim' };
   }
@@ -164,11 +186,11 @@ export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, planche
         + rejoue.cible + ') — do not trust this anchor' };
   }
   /* 2. les soldes AU BLOC TIRE, comme a l ancrage */
-  const naissance = await naissanceDuJeton({ rpc, jeton, depuis: plancher, jusqua: periode.cible });
+  const naissance = await naissanceDuJeton({ rpc, jeton: jetonHolders, depuis: plancher, jusqua: periode.cible });
   if (naissance === null) return { ok: false, pourquoi: 'token birth not found before the drawn block' };
-  const s = await soldesAuBloc({ rpc, jeton, naissance, auBloc: periode.cible });
+  const s = await soldesAuBloc({ rpc, jeton: jetonHolders, naissance, auBloc: periode.cible });
   if (s.etat !== 'COMPLET') return { ok: false, pourquoi: s.pourquoi || 'balances could not be rebuilt' };
-  const depose = await lireDepose({ rpc, pot, id: periode.id, jeton });
+  const depose = await lireDepose({ rpc, pot, id: periode.id, jeton: jetonRecompense });
   if (depose === null) return { ok: false, pourquoi: 'pot balance unreadable' };
 
   /* ⛔ LE POT A PU DIMINUER depuis l ancrage (des gens ont deja reclame). On refait donc l arbre
@@ -176,7 +198,7 @@ export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, planche
    *    reclamation et plus aucune preuve ne serait valable. */
   const parts = partsHolders({ soldes: [...s.soldes.entries()], pot: BigInt(totalAncre ?? depose) });
   if (parts.etat !== 'PAYABLE') return { ok: false, pourquoi: 'nobody to pay for this round' };
-  const arbre = construireArbre({ id: periode.id, jeton,
+  const arbre = construireArbre({ id: periode.id, jeton: jetonRecompense,
     parts: parts.parts.map((p) => ({ compte: p.adr, montant: p.montant })) });
 
   /* 3. LA RACINE RECALCULEE DOIT EGALER LA RACINE ANCREE */
@@ -192,7 +214,7 @@ export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jeton, planche
  * Que faut-il faire maintenant ?
  * ⛔ AUCUN ENVOI. `aSigner` est une description, pas un geste.
  */
-export async function tour({ rpc, pot, jeton, plancher, config = {} }) {
+export async function tour({ rpc, pot, jetonHolders, jetonRecompense, plancher, config = {} }) {
   const teteHex = await rpc('eth_blockNumber', []);
   const blocCourant = typeof teteHex === 'string' ? Number(BigInt(teteHex)) : null;
   const periodes = await lirePeriodes({ rpc, pot });
@@ -205,8 +227,9 @@ export async function tour({ rpc, pot, jeton, plancher, config = {} }) {
   const aAncrer = periodes.find((p) => p && p.fin < blocCourant && !p.ancreeLe);
   let snapshot = null;
   if (aAncrer) {
-    const prep = await preparerAncrage({ rpc, pot, periode: aAncrer, jeton, plancher });
-    snapshot = { ...prep, jeton, depose: prep.depose, racine: prep.racine, total: prep.total, graine: prep.graine };
+    const prep = await preparerAncrage({ rpc, pot, periode: aAncrer, jetonHolders, jetonRecompense, plancher });
+    snapshot = { ...prep, jeton: jetonRecompense, depose: prep.depose, racine: prep.racine,
+      total: prep.total, graine: prep.graine };
   }
 
   const d = prochaineAction({ periodes, blocCourant, snapshot, config });

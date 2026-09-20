@@ -74,7 +74,7 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
 // ══ 2. AUCUNE PERIODE : la boucle propose d en OUVRIR une ═══════════════════════════════════════
 {
   const rpc = chaine({ tete: 5000, periodes: [], logs: [], supply: 1000n, depose: 0n });
-  const r = await tour({ rpc, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r.action, 'OUVRIR', 'rien n existe : on ouvre');
   eq(r.aSigner.to, POT, 'la transaction vise le pot');
   eq(r.aSigner.value, '0x0', 'et n envoie aucune valeur');
@@ -85,7 +85,7 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
 // ══ 3. UNE PERIODE EN COURS : on ATTEND, et on dit combien ══════════════════════════════════════
 {
   const rpc = chaine({ tete: 5000, periodes: [{ debut: 4000, fin: 6000, ancreeLe: 0 }], logs: [], supply: 1000n, depose: 0n });
-  const r = await tour({ rpc, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r.action, 'ATTENDRE', 'la periode court encore');
   eq(r.blocsRestants, 1000, 'et il reste 1000 blocs');
   ok(!r.aSigner, 'rien a signer');
@@ -99,7 +99,7 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   const logs = [logT(1500, ADRESSE_ZERO, POOL, 2000n), logT(1600, POOL, A, 600n), logT(1700, POOL, B, 400n)];
   const rpc = chaine({ tete: 5000, periodes: [{ debut: 2000, fin: 4000, ancreeLe: 0 }],
     logs, supply: 2000n, depose: 1000n });
-  const r = await tour({ rpc, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r.action, 'ANCRER', 'une periode finie et non ancree : on ancre');
   ok(r.arbre, 'et la boucle rend l arbre');
   ok(r.arbre.cible >= 2000 && r.arbre.cible <= 4000, 'la cible tombe DANS la periode : ' + r.arbre.cible);
@@ -128,20 +128,20 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   /* pas de detenteur hors pool : on ne grave rien */
   const seule = chaine({ tete: 5000, periodes: finie, logs: [logT(1500, ADRESSE_ZERO, POOL, 1000n)],
     supply: 1000n, depose: 1000n });
-  const r1 = await tour({ rpc: seule, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r1 = await tour({ rpc: seule, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r1.action, 'REFUS', 'tout est dans la pool : personne a payer');
   ok(/personne ne detient|incomplete/.test(r1.pourquoi), 'et la raison le dit : ' + r1.pourquoi);
 
   /* pot vide : rien a partager */
   const vide = chaine({ tete: 5000, periodes: finie,
     logs: [logT(1500, ADRESSE_ZERO, POOL, 600n), logT(1600, POOL, A, 400n)], supply: 600n, depose: 0n });
-  const r2 = await tour({ rpc: vide, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r2 = await tour({ rpc: vide, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r2.action, 'REFUS', 'pot vide : on n ancre pas');
 
   /* somme differente du totalSupply : la reconstruction est fausse, on refuse */
   const faux = chaine({ tete: 5000, periodes: finie,
     logs: [logT(1500, ADRESSE_ZERO, POOL, 600n), logT(1600, POOL, A, 400n)], supply: 999n, depose: 1000n });
-  const r3 = await tour({ rpc: faux, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r3 = await tour({ rpc: faux, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r3.action, 'REFUS', 'somme != totalSupply au bloc tire : refus');
   ok(/differs from totalSupply/.test(r3.pourquoi), 'avec la raison exacte');
 
@@ -149,13 +149,13 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   const sansGraine = chaine({ tete: 5000, periodes: finie,
     logs: [logT(1500, ADRESSE_ZERO, POOL, 600n), logT(1600, POOL, A, 400n)],
     supply: 1000n, depose: 1000n, mixHash: '0x' + '0'.repeat(64) });
-  const r4 = await tour({ rpc: sansGraine, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r4 = await tour({ rpc: sansGraine, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r4.action, 'REFUS', 'graine nulle : refus');
   ok(/tirage impossible/.test(r4.pourquoi), 'et on dit que le tirage est impossible');
 
   /* jeton jamais mint avant la cible : naissance introuvable */
   const sansMint = chaine({ tete: 5000, periodes: finie, logs: [], supply: 0n, depose: 1000n });
-  const r5 = await tour({ rpc: sansMint, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r5 = await tour({ rpc: sansMint, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r5.action, 'REFUS', 'aucune naissance : refus');
 }
 
@@ -170,7 +170,7 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
     throw new Error('non simule');
   };
   eq(await lirePeriodes({ rpc: casse, pot: POT }), null, 'une periode illisible rend null');
-  const r = await tour({ rpc: casse, pot: POT, jeton: JETON, plancher: PLANCHER });
+  const r = await tour({ rpc: casse, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   eq(r.action, 'REFUS', 'et la boucle refuse plutot que d ouvrir a l aveugle');
   ok(/liste trouee/.test(r.pourquoi), 'en disant pourquoi');
 }
@@ -198,25 +198,25 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
   const tirage = blocDeSnapshot({ debut: 2000, fin: 4000, graine: GRAINE });
   const honnete = { id: 0, debut: 2000, fin: 4000, ancreeLe: 12345, cible: tirage.cible, graine: GRAINE };
 
-  const bon = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+  const bon = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jetonHolders: JETON, jetonRecompense: JETON,
     plancher: PLANCHER, totalAncre: 1000n });
   ok(bon.ok, 'un ancrage honnete se recalcule : ' + (bon.pourquoi || ''));
   eq(bon.cible, tirage.cible, 'et il tombe sur la meme cible');
 
   /* ⛔ LE MEME ARBRE, AVEC LA RACINE ANCREE : doit concorder */
-  const avecRacine = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+  const avecRacine = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jetonHolders: JETON, jetonRecompense: JETON,
     plancher: PLANCHER, totalAncre: 1000n, racineAncree: bon.racine });
   ok(avecRacine.ok, 'la racine recalculee egale la racine ancree');
 
   /* ⛔ UNE CIBLE TRUQUEE EST ATTRAPEE : elle ne decoule pas de la graine stockee. */
   const cibleTruquee = { ...honnete, cible: honnete.cible + 1 };
-  const r1 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: cibleTruquee, jeton: JETON,
+  const r1 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: cibleTruquee, jetonHolders: JETON, jetonRecompense: JETON,
     plancher: PLANCHER, totalAncre: 1000n });
   ok(!r1.ok, 'une cible qui ne decoule pas de la graine est REFUSEE');
   ok(/not what the stored seed produces/.test(r1.pourquoi), 'et la raison le nomme : ' + r1.pourquoi);
 
   /* ⛔ UNE RACINE TRUQUEE EST ATTRAPEE : elle ne decrit pas les soldes reels. */
-  const r2 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jeton: JETON,
+  const r2 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: honnete, jetonHolders: JETON, jetonRecompense: JETON,
     plancher: PLANCHER, totalAncre: 1000n, racineAncree: '0x' + 'ab'.repeat(32) });
   ok(!r2.ok, 'une racine qui ne correspond pas aux soldes est REFUSEE');
   ok(/does not match the anchored root/.test(r2.pourquoi), 'et on dit exactement quoi');
@@ -224,7 +224,7 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
 
   /* une periode pas encore ancree ne sert aucune preuve */
   const pasAncree = { ...honnete, ancreeLe: 0 };
-  const r3 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: pasAncree, jeton: JETON, plancher: PLANCHER });
+  const r3 = await arbreDUnePeriodeAncree({ rpc, pot: POT, periode: pasAncree, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
   ok(!r3.ok, 'une periode non ancree ne rend pas de preuve');
   ok(/not anchored yet/.test(r3.pourquoi), 'et le dit');
 
@@ -232,8 +232,55 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
    *    changeraient a chaque reclamation et plus aucune preuve ne serait valable. */
   const potEntame = chaine({ tete: 9000, periodes: [], logs, supply: 2000n, depose: 400n });
   const apresReclamations = await arbreDUnePeriodeAncree({ rpc: potEntame, pot: POT, periode: honnete,
-    jeton: JETON, plancher: PLANCHER, totalAncre: 1000n, racineAncree: bon.racine });
+    jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER, totalAncre: 1000n, racineAncree: bon.racine });
   ok(apresReclamations.ok, 'le pot entame ne change pas l arbre : on rebatit sur le TOTAL ANCRE');
+}
+
+// ══ 9. DEUX JETONS, DEUX ROLES — LE BUG QUI ALLAIT COUTER UN TOUR ENTIER ═══════════════════════
+// ⛔⛔ MESURE SUR LA CHAINE (2026-09-20) : depose[periode 0][ETH] = 300 000 000 000 000 wei et
+//    depose[periode 0][OK] = 0. Le code utilisait UN SEUL parametre pour QUI detient et EN QUOI on
+//    paie. A la fin de la periode, il aurait lu le pot dans la mauvaise devise et refuse avec
+//    « le pot est vide » — techniquement vrai, completement faux pour la situation.
+{
+  const RECOMPENSE = '0x0000000000000000000000000000000000000000';
+  const logs = [logT(1500, ADRESSE_ZERO, POOL, 2000n), logT(1600, POOL, A, 600n), logT(1700, POOL, B, 400n)];
+  /* une chaine ou le pot est alimente en RECOMPENSE, et VIDE dans le jeton des holders */
+  const parDevise = (m, p) => {
+    if (m === 'eth_call' && p[0].data.startsWith(SEL.depose)) {
+      const dem = p[0].data.slice(74).toLowerCase();
+      const estRecompense = dem.endsWith(RECOMPENSE.slice(2));
+      return '0x' + m32(estRecompense ? 1000 : 0);
+    }
+    return null;
+  };
+  const base = chaine({ tete: 5000, periodes: [{ debut: 2000, fin: 4000, ancreeLe: 0 }],
+    logs, supply: 2000n, depose: 0n });
+  const rpc2 = async (m, p) => { const v = parDevise(m, p); return v !== null ? v : base(m, p); };
+
+  // ⛔ LE TEMOIN : avec UN SEUL jeton (l ancien comportement), le pot est vide -> REFUS.
+  const ancien = await tour({ rpc: rpc2, pot: POT, jetonHolders: JETON, jetonRecompense: JETON,
+    plancher: PLANCHER });
+  eq(ancien.action, 'REFUS', 'un seul jeton : le pot parait vide, on refuse (le bug)');
+
+  // ✅ Avec les DEUX jetons separes, l ancrage part.
+  const bon = await tour({ rpc: rpc2, pot: POT, jetonHolders: JETON, jetonRecompense: RECOMPENSE,
+    plancher: PLANCHER });
+  eq(bon.action, 'ANCRER', 'deux jetons : on trouve le pot dans la bonne devise');
+  eq(bon.arbre.total, '1000', 'et on distribue ce qu il contient vraiment');
+}
+
+// ══ 10. UN JETON MANQUANT EST UN REFUS NOMME, PAS UN DEFAUT SILENCIEUX ═════════════════════════
+// ⛔ Faire retomber la recompense sur le jeton des holders reproduirait le bug EN SILENCE.
+{
+  const logs = [logT(1500, ADRESSE_ZERO, POOL, 2000n), logT(1600, POOL, A, 600n)];
+  const rpc3 = chaine({ tete: 5000, periodes: [{ debut: 2000, fin: 4000, ancreeLe: 0 }],
+    logs, supply: 2000n, depose: 1000n });
+  const sansRec = await tour({ rpc: rpc3, pot: POT, jetonHolders: JETON, plancher: PLANCHER });
+  eq(sansRec.action, 'REFUS', 'jetonRecompense manquant : REFUS');
+  ok(/jetonRecompense manquant/.test(sansRec.pourquoi), 'et le parametre est NOMME');
+  const sansHold = await tour({ rpc: rpc3, pot: POT, jetonRecompense: JETON, plancher: PLANCHER });
+  eq(sansHold.action, 'REFUS', 'jetonHolders manquant : REFUS');
+  ok(/jetonHolders manquant/.test(sansHold.pourquoi), 'et celui-la aussi');
 }
 
 console.log('test-boucle-pot : ' + n + ' assertions, OK');
