@@ -1490,14 +1490,14 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Blocks talking</p>
-      <p class="sous">What each block’s brain notices, live — the latest 8. “Say it on chain” publishes the line from your wallet.</p>
+      <p class="sous">What each block’s brain notices, live — newest first. “Say it on chain” publishes the line from your wallet.</p>
       <ul class="fil" id="sfParoles"></ul>
       <p class="note" id="sfParolesNote">Silent for now — a block speaks only when its brain sees something new.</p>
     </div>
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0149" hidden>Build <code>20260920-0149</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0150" hidden>Build <code>20260920-0150</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5854,6 +5854,11 @@ window.addEventListener('scroll', () => {
  *    ici on garde le fil (40 lignes, ce navigateur) et on propose de rendre une ligne publique : un transfert de 0 du
  *    block qui parle, a soi-meme, avec la ligne comme message — le wallet signe, jamais la page. */
 let parolesFil = [], parolesDernieres = {}, parolesTour = 0, parolesCompteur = 0, paroleEnvoi = false;
+/** Combien de lignes de cerveau on GARDE en memoire (navigateur seulement). */
+const PAROLES_GARDEES = 400;
+/** Combien on en MONTRE. Depart a 8, +25 par clic — comme « Show more » de Trending. */
+const PAROLES_PAS = 25;
+let parolesAffichees = 8;
 /** ⛔ tip 1915: mood_changes / browser-local NOTE bursts — same class as GM spam. One chip per token. */
 function estParoleMood(p) {
   if (!p) return false;
@@ -5887,7 +5892,11 @@ function parlerCerveaux() {
     }
     parolesFil.unshift(row);
   }
-  parolesFil = parolesFil.slice(0, 40);
+  /* ⛔ BORNE DE MEMOIRE, ecrite parce qu elle existe : 400 lignes gardees (40 avant). « Sans limite »
+   *    ne veut pas dire sans borne — une liste qui grossit toutes les secondes sans fin mange la
+   *    memoire d un telephone. Au-dela de 400, les plus vieilles sortent, et elles n ont jamais ete
+   *    ailleurs que dans ce navigateur de toute facon. */
+  parolesFil = parolesFil.slice(0, PAROLES_GARDEES);
   if ($('#v-social').classList.contains('on')) { peindreParoles(); peindreRelais(); }
 }
 function peindreParoles() {
@@ -5913,12 +5922,18 @@ function peindreParoles() {
   /* ⛔ PHIL (2026-09-19) : « mets une limite de 8 » et « ca bouge toujours l ecran ». Mesure : liste sans limite, lignes de
    *    hauteurs variables (textes longs sur 2 lignes), repeinte a chaque humeur -> tout ce qui suit sautait. 8 lignes au
    *    plus, UNE ligne chacune (hauteur fixe), et plus de jargon a l ecran (beat, chip, browser-local). */
-  const affiches = vus.slice(0, 8);
+  /* ⛔ PHIL (2026-09-20) : « tu peux etendre autant que tu veux sans limite ». La limite de 8 venait de
+   *    lui la veille, pour une raison qui A DISPARU : la liste etait alors au milieu de sept cartes
+   *    ouvertes, donc chaque humeur poussait tout ce qui suivait. Depuis les bulles, cette carte est
+   *    SEULE a l ecran quand elle est ouverte — elle ne pousse plus rien. */
+  const affiches = vus.slice(0, parolesAffichees);
+  const reste = Math.max(0, vus.length - affiches.length);
   $('#sfParoles').innerHTML = affiches.map((p) => '<li class="filL"><div class="filArt">' + dessin(p.de, p.sym) + '</div>'
     + '<div style="min-width:0;flex:1"><p class="filT">' + (p.type === 'REPOND' ? '💬 ' : '🧠 ') + enTexte(p.texte) + '</p>'
     + '<p class="filS">' + enTexte(p.heure) + (estParoleMood(p) ? '' : ' · ' + enTexte(p.parce_que))
     + ' · <button class="bouton sec" type="button" data-parole="' + enTexte(p.id) + '" style="padding:2px 8px;font-size:.85em">Say it on chain</button></p>'
-    + '</div></li>').join('');
+    + '</div></li>').join('')
+    + (reste ? '<li class="filL"><button type="button" class="bouton sec" id="sfParolesPlus">Show ' + Math.min(reste, PAROLES_PAS) + ' more</button></li>' : '');
   if (!paroleEnvoi) {
     $('#sfParolesNote').className = 'note';
     $('#sfParolesNote').textContent = affiches.length
@@ -5926,6 +5941,13 @@ function peindreParoles() {
       : 'Silent for now — a block speaks when its brain sees something new: a transfer, a new holder, a message.';
   }
 }
+/* ⛔ Un seul ecouteur : la liste est redessinee a chaque humeur, et recabler a chaque redessin
+ *    fuirait. Le bouton « Show more » passe par la meme delegation que « Say it on chain ». */
+$('#sfParoles').addEventListener('click', (ev) => {
+  if (!ev.target.closest('#sfParolesPlus')) return;
+  parolesAffichees += PAROLES_PAS;
+  peindreParoles();
+});
 $('#sfParoles').addEventListener('click', async (ev) => {
   const b = ev.target.closest('button[data-parole]');
   if (!b || paroleEnvoi) return;
@@ -9519,7 +9541,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0149',
+    build: '20260920-0150',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
