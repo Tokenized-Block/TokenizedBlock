@@ -269,8 +269,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    de zoom — donc au moment precis ou on veut s approcher du block qu on vient de choisir, les quatre
    boutons de camera disparaissaient, et rien ne le disait. La colonne se decale tant que le panneau
    est ouvert : sur large ecran elle passe a gauche du panneau, sur telephone elle remonte au-dessus. */
-.mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px;
-  transition:transform .18s ease}
+/* ⛔⛔ AUCUNE `transition` ICI, ET C EST LA MESURE QUI L IMPOSE (2026-09-20, Chrome, builds 0145→0148) :
+   · 0145, SANS transition sur `transform` : poser `style.transform = translateX(-388px)` deplace la
+     colonne de 388 px, tout de suite (1910 → 1522). Refait deux fois.
+   · 0148, AVEC `transition:transform .18s ease` : le meme style en ligne est bien POSE (l attribut
+     contient `translateX(-388px)`, relu a 1,5 s) et le style CALCULE reste `matrix(1,0,0,1,0,0)` —
+     l identite. La transition ne se termine jamais sur cet element.
+   Une animation qu on ne sait pas faire aboutir vaut moins qu un deplacement qui a lieu. */
+.mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
 /* ⛔⛔ CE DECALAGE PASSE PAR `transform`, ET PAS PAR `right` — ET C EST MESURE, PAS PREFERE.
    Comptee « faite » TROIS fois avant d etre mesuree : 0135 (:has sur .mapEnv, ne matchait rien),
    0138 (:has sur #scene, MATCHAIT et ne bougeait pas), 0144 (classe posee en JS, idem).
@@ -1491,7 +1497,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0148" hidden>Build <code>20260920-0148</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0149" hidden>Build <code>20260920-0149</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9513,7 +9519,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0148',
+    build: '20260920-0149',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
