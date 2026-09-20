@@ -503,6 +503,31 @@ body:not(.surMap) .mapCta{display:none}
 /* ⛔ Phil 2026-09-20 : la ligne entiere ouvre le block. Pas de bouton en plus — la mise en page ne
  *    bouge pas d un pixel, seuls le curseur et le fond au survol changent. */
 /* ⛔ Un filtre a zero reste a sa place et se lit comme tel : la barre ne change jamais de forme. */
+/* ══ CARTES PLIABLES DU FEED (Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ») ══════
+   Le titre devient un bouton pleine largeur : gros, tappable au pouce, et il DIT a quoi la section
+   sert. Fermee, la carte tient en deux lignes. Ouverte, elle prend un halo doux — le meme accent que
+   le reste de l app, jamais une couleur nouvelle. */
+.plieTete{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
+  padding:12px 4px;margin:0;font:inherit;color:inherit;cursor:pointer;border-radius:12px;min-height:52px}
+.plieTete:hover{background:rgb(var(--accentRgb) / .06)}
+.plieTete:focus-visible{outline:2px solid rgb(var(--accentRgb) / .6);outline-offset:2px}
+.plieTexte{flex:1 1 auto;min-width:0}
+.plieTitre{display:block;font-weight:800;font-size:16px;letter-spacing:-.2px}
+.plieSous{display:block;color:var(--doux);font-size:12.5px;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.plieCompteur{flex:0 0 auto;font-size:12px;color:var(--doux);background:rgb(var(--accentRgb) / .10);
+  border:1px solid rgb(var(--accentRgb) / .22);border-radius:99px;padding:3px 9px;white-space:nowrap}
+.plieFleche{flex:0 0 auto;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;
+  border:1px solid var(--ligne);font-size:13px;transition:transform .18s ease, border-color .18s ease}
+.carte.plie.ouverte .plieFleche{transform:rotate(180deg);border-color:rgb(var(--accentRgb) / .55)}
+.carte.plie{transition:box-shadow .22s ease, border-color .22s ease}
+.carte.plie.ouverte{border-color:rgb(var(--accentRgb) / .32);
+  box-shadow:0 0 0 1px rgb(var(--accentRgb) / .12), 0 14px 38px rgb(0 0 0 / .32)}
+.plieCorps{animation:plieOuvre .22s ease}
+@keyframes plieOuvre{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.plieCorps{animation:none}.plieFleche{transition:none}}
+@media (max-width:520px){.plieTitre{font-size:15px}.plieSous{-webkit-line-clamp:3}}
+
 .stadeLigne .puce.vide{opacity:.42}
 /* un zero qui est une reussite se lit comme une reussite ; un chiffre ici est une ALARME */
 .stadeLigne .puce.reussi{opacity:1;border-color:rgb(61 220 151 / .55);color:#7ef0bb}
@@ -1413,7 +1438,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0138" hidden>Build <code>20260920-0138</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0139" hidden>Build <code>20260920-0139</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2003,6 +2028,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'map') setTimeout(replacerDansLaMap, 50);
   /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
   if (nom === 'mien') peindreClassement();
+  /* ⛔ Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ». Sept listes d affilee, il n en lit
+   *    aucune. Les cartes du Feed se plient a la premiere ouverture de l onglet — une seule ouverte. */
+  if (nom === 'social') plierLesCartes();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
@@ -5400,6 +5428,98 @@ function riennDeTrouve() {
   }
   if (liveFiltre === 'GROS') return 'No trade of 0.02 ETH or more among these ' + n + ' events.';
   return 'None of the ' + n + ' events read matches this filter.';
+}
+
+/* ══ LES CARTES DU FEED SE PLIENT (Phil 2026-09-20) ═══════════════════════════════════════════════
+ * ⛔ ON ENVELOPPE, ON NE REECRIT PAS. Le titre existant devient le texte d un bouton ; tout ce qui
+ *    suit passe dans un conteneur qu on montre ou cache. Aucun id ne change de place dans le DOM au
+ *    sens des selecteurs : #sfLive, #trListe, #xmCarte… restent joignables exactement pareil.
+ * ⛔ UNE SEULE OUVERTE PAR DEFAUT. Sept listes ouvertes en meme temps, c est ce que Phil a vu : on en
+ *    ouvre UNE (Live), et le visiteur ouvre le reste s il veut. Son choix est garde dans son
+ *    navigateur — et s il ne l est pas (navigation privee, stockage refuse), on retombe sur le meme
+ *    defaut, jamais sur un ecran vide. */
+const PLI_CLE = 'tb-feed-plis-v1';
+/** Ce a quoi chaque section sert, en UNE phrase — c est ce que le bouton dit quand la carte est fermee. */
+const PLI_OUVERTES_PAR_DEFAUT = ['Live'];
+function plisLus() {
+  try { const x = JSON.parse(localStorage.getItem(PLI_CLE) || 'null'); return x && typeof x === 'object' ? x : null; }
+  catch (_) { return null; }
+}
+function plisEcrits(etat) { try { localStorage.setItem(PLI_CLE, JSON.stringify(etat)); } catch (_) { /* stockage refuse : le defaut suffit */ } }
+
+let plisPoses = false;
+function plierLesCartes() {
+  if (plisPoses) return;
+  const volet = document.querySelector('#v-social');
+  if (!volet) return;
+  const garde = plisLus();
+  let posees = 0;
+  for (const carte of [...volet.querySelectorAll(':scope > .carte')]) {
+    const titre = carte.querySelector(':scope > .titre');
+    if (!titre || carte.classList.contains('plie')) continue;
+    const sous = carte.querySelector(':scope > .sous');
+    const nom = titre.textContent.trim();
+    /* le corps = tout ce qui suit le titre (et la phrase d explication, qui monte dans le bouton) */
+    const corps = document.createElement('div');
+    corps.className = 'plieCorps';
+    const aDeplacer = [];
+    let vu = false;
+    for (const enfant of [...carte.children]) {
+      if (enfant === titre) { vu = true; continue; }
+      if (enfant === sous) continue;
+      if (vu) aDeplacer.push(enfant);
+    }
+    if (!aDeplacer.length) continue;
+    for (const e of aDeplacer) corps.appendChild(e);
+
+    const tete = document.createElement('button');
+    tete.type = 'button';
+    tete.className = 'plieTete';
+    tete.setAttribute('aria-expanded', 'false');
+    const txt = document.createElement('span');
+    txt.className = 'plieTexte';
+    const t1 = document.createElement('span');
+    t1.className = 'plieTitre';
+    t1.textContent = nom;
+    txt.appendChild(t1);
+    if (sous) {
+      const t2 = document.createElement('span');
+      t2.className = 'plieSous';
+      t2.textContent = sous.textContent.trim();
+      txt.appendChild(t2);
+      sous.remove();
+    }
+    const fleche = document.createElement('span');
+    fleche.className = 'plieFleche';
+    fleche.setAttribute('aria-hidden', 'true');
+    fleche.textContent = '⌄';
+    tete.appendChild(txt);
+    tete.appendChild(fleche);
+
+    titre.replaceWith(tete);
+    carte.appendChild(corps);
+    carte.classList.add('plie');
+    carte.dataset.pli = nom;
+
+    const ouvrir = garde && typeof garde[nom] === 'boolean' ? garde[nom]
+      : PLI_OUVERTES_PAR_DEFAUT.some((x) => nom.startsWith(x));
+    basculerCarte(carte, ouvrir, false);
+    tete.addEventListener('click', () => basculerCarte(carte, !carte.classList.contains('ouverte'), true));
+    posees += 1;
+  }
+  plisPoses = posees > 0;
+}
+function basculerCarte(carte, ouvrir, garder) {
+  const corps = carte.querySelector(':scope > .plieCorps');
+  const tete = carte.querySelector(':scope > .plieTete');
+  if (!corps || !tete) return;
+  corps.hidden = !ouvrir;
+  carte.classList.toggle('ouverte', !!ouvrir);
+  tete.setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
+  if (!garder) return;
+  const etat = plisLus() || {};
+  etat[carte.dataset.pli] = !!ouvrir;
+  plisEcrits(etat);
 }
 
 function peindreLive() {
@@ -9229,7 +9349,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0138',
+    build: '20260920-0139',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
