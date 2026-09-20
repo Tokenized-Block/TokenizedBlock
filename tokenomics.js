@@ -52,13 +52,27 @@ export const HOOK_V4 = '0x11FCd588c96b1781cc88B8B9F349B6067D9BE4c4';
  *    createur (33,33 % -> 26,67 % du frais).
  *    ⚠️ IL NE REPARE RIEN DU PASSE : le hook est dans la PoolKey, donc chaque pool garde le sien. */
 export const HOOK_V5 = '0x799136c3F5f572f1597b5B7E067D3eE45Fe4A4C4';
+/* ⛔ HOOK V6 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+ *    Adresse obtenue par CREATE2 et verifiee par DEUX chemins independants : HookMiner dans forge, et
+ *    un recalcul keccak en JavaScript a partir du meme sel et du meme initcode. Bits de permission
+ *    0x24cc = beforeInitialize, afterAddLiquidity, beforeSwap, afterSwap, afterSwapReturnsDelta et
+ *    beforeSwapReturnsDelta — le bit de plus que le V5, celui qui autorise un delta avant le swap.
+ *    CE QUE LE V6 CHANGE : un ACHAT « entree exacte en ETH » paie son frais EN ETH, pris avant le
+ *    swap, au lieu d etre pris apres coup sur le jeton de block.
+ *    MESURE QUI L A DICTE : 14 jours du V1 deploye, 303/303 fenetres lues, 39 encaissements — 19 en
+ *    ETH (0,001019868 ETH au wallet) et 20 en jetons (0,002000588 ETH d equivalent qui dort).
+ *    ⛔ BORNE : un swap a SORTIE EXACTE en ETH paie toujours en jeton, et ce frais part en claims.
+ *    ⚠️ SON ETAT EST TOUJOURS LU SUR LA CHAINE, jamais ecrit en dur : tant que la transaction n est
+ *       pas signee, l app doit continuer de lancer sur le V5. */
+export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
 /** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
  *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
  *     Les retirer d ici ferait disparaitre nos propres marches du fil Live et des frais affiches. */
 export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
-    || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase();
+    || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase()
+    || x === HOOK_V6.toLowerCase();
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
@@ -88,6 +102,13 @@ export async function hookV4Deploye({ rpc }) {
   } catch { return 'NON_LU'; }
 }
 /** Le V5 est-il deploye ? Lu sur son code, jamais suppose. */
+export async function hookV6Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V6, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
+/** Le V5 est-il deploye ? Lu sur son code. */
 export async function hookV5Deploye({ rpc }) {
   try {
     const code = String(await rpc('eth_getCode', [HOOK_V5, 'latest']) || '');
