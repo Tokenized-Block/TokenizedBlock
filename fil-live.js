@@ -10,7 +10,7 @@
 //    quand les decimales du block sont CONNUES. Sinon l evenement reste « SWAP », sans quantite inventee.
 // ⚠️ Le routeur n est pas l acheteur : ce module ne nomme personne.
 import { listerCreations, TOPIC_TRANSFER, decoderTransfer, topicAdresse } from './index-blocks.js';
-import { messageDepuisTransfert, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
+import { messageDepuisTransfert, DEVISES_MESSAGE } from './messagerie-blocks.js';
 import { FEE_WALLET, CREATE_ROUTER } from './frais-creation.js';
 import { listerAchats, achatDepuisSwap, sensDuSwap } from './achats.js';
 import { formaterUnites } from './montants.js';
@@ -199,19 +199,29 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
         }
       }
     }
-    /* ── messages PAYES entre blocks : TBLOCK -> wallet de frais, au moins le frais, relus un par un ── */
-    for (let de = deBloc; de <= aBloc; de += 2000) {
-      const a = Math.min(aBloc, de + 1999);
-      const logs = await logsAdaptatifs(rpc, { address: TBLOCK.toLowerCase(), topics: [TOPIC_TRANSFER, null, topicAdresse(FEE_WALLET)] }, de, a, fenetresRatees, 'messages');
-      for (const l of logs || []) {
-        const t = decoderTransfer(l);
-        if (!t || typeof t.value !== 'bigint' || t.value < FRAIS_MESSAGE_TBLOCK) continue;
-        let tx = null;
-        try { tx = await rpc('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
-        const m = messageDepuisTransfert(t, tx);
-        if (m.etat !== 'MESSAGE' && m.etat !== 'MESSAGE_FEE') continue;
-        ajouter({ type: 'MESSAGE', bloc: t.bloc, jeton: m.a || m.de || null, sym: null, tx: t.tx, logIndex: t.logIndex,
-          de: m.de, a: m.a, texte: m.texte, signataire: m.signataire, aaOpaque: m.aaOpaque || m.etat === 'MESSAGE_FEE' });
+    /* ── messages PAYES entre blocks : la devise -> wallet de frais, au moins son frais, relus un par un ──
+     * ⛔⛔ CORRIGE LE 2026-09-20. Cette boucle ne lisait QUE le TBLOCK, et appelait
+     *    `messageDepuisTransfert(t, tx)` sans devise — donc avec son defaut, TBLOCK. Or l ecran d envoi
+     *    ne propose plus que l USDC : TOUT message envoye depuis l app etait invisible ici, et le filtre
+     *    « Messages » ne pouvait afficher que 0. `lireConversations` (messagerie-blocks.js), lui, lisait
+     *    deja les deux devises : deux jumeaux qui avaient diverge, et c est la copie affichee qui perdait.
+     * ⛔ LA LISTE DES DEVISES VIENT DE `DEVISES_MESSAGE`, jamais recopiee : en ajouter une la fait
+     *    apparaitre ici sans toucher a ce fichier. */
+    for (const [nomDevise, dev] of Object.entries(DEVISES_MESSAGE)) {
+      for (let de = deBloc; de <= aBloc; de += 2000) {
+        const a = Math.min(aBloc, de + 1999);
+        const logs = await logsAdaptatifs(rpc, { address: String(dev.token).toLowerCase(), topics: [TOPIC_TRANSFER, null, topicAdresse(FEE_WALLET)] }, de, a, fenetresRatees, 'messages ' + nomDevise);
+        for (const l of logs || []) {
+          const t = decoderTransfer(l);
+          if (!t || typeof t.value !== 'bigint' || t.value < dev.frais) continue;
+          let tx = null;
+          try { tx = await rpc('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
+          const m = messageDepuisTransfert(t, tx, nomDevise);
+          if (m.etat !== 'MESSAGE' && m.etat !== 'MESSAGE_FEE') continue;
+          ajouter({ type: 'MESSAGE', bloc: t.bloc, jeton: m.a || m.de || null, sym: null, tx: t.tx, logIndex: t.logIndex,
+            de: m.de, a: m.a, texte: m.texte, signataire: m.signataire, devise: nomDevise,
+            aaOpaque: m.aaOpaque || m.etat === 'MESSAGE_FEE' });
+        }
       }
     }
   }

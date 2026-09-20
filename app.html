@@ -1391,7 +1391,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0132" hidden>Build <code>20260920-0132</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0133" hidden>Build <code>20260920-0133</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1899,7 +1899,7 @@ import { creerMoteur3D } from './map3d.js';
 import { usdCourt } from './trending.js';
 import { tirageUniforme } from './tirage.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
-import { planMessagePaye, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
+import { planMessagePaye } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 /* ⛔ 2026-09-14 Brain wake: RPC blips must not wipe a known market into permanent « market unread ». */
@@ -7190,7 +7190,10 @@ $('#pmsgPreparer').addEventListener('click', async () => {
   }
   messagePayeCourant = p;
   const ap = apercuTransaction({ chaine: CHAINE, tx: p.tx, compte, jeton: TBLOCK, symbole: 'TBLOCK', decimales: 18 });
-  $('#pmsgPayeLignes').innerHTML = ['Fee: ' + formaterUnites(FRAIS_MESSAGE_TBLOCK, 18) + ' TBLOCK, in the same transaction as the message — not a buyback.',
+  /* ⛔ AUDIT 2026-09-20 : cette ligne ecrivait « 1000 TBLOCK » EN DUR juste avant la signature, pendant
+   *    que l ecran ne propose plus que l USDC et que le wallet allait debiter 0,50 USDC. Une phrase
+   *    fausse sur de l argent, au moment ou on la croit le plus. Elle lit maintenant le choix reel. */
+  $('#pmsgPayeLignes').innerHTML = ['Fee: ' + prixMessageTexte() + ', in the same transaction as the message — not a buyback.',
     ...(messagePayeCourant && messagePayeCourant.aaOpaque ? ['Base App / smart wallet: fee still pays Holders; chat text may stay opaque on-chain (tip 2347).'] : []),
     'Public and permanent: anyone can read it on chain, forever. It shows your wallet speaking as the block you picked.',
     'Signature 1 — ' + ap.action + ': ' + ap.lignes.join(' · ')].map((l) => '<li>' + enTexte(l) + '</li>').join('');
@@ -9105,7 +9108,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0132',
+    build: '20260920-0133',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
