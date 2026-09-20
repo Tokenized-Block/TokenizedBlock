@@ -389,6 +389,15 @@ async function holdersCorps(jeton) {
   } catch (err) { total = null; }
   const somme = verifierSomme({ soldes: e.soldes, totalSupply: total });
   const negatifs = soldesNegatifs(e.soldes);
+  /* ⛔⛔ « PAS FINI DE LIRE » A SA PROPRE BRANCHE, ET ELLE PASSE EN PREMIER. Sans elle, un balayage
+   *    encore en cours (jusqua === null) tombait dans la derniere branche et sortait le message
+   *    « reconstructed sum differs from totalSupply by 0 » : un ecart de ZERO presente comme une
+   *    difference. Observe en production le 2026-09-20.
+   *    Un etat qui se resout tout seul ne doit pas ressembler a un etat qui demande une enquete. */
+  if (e.jusqua === null && e.ratees === 0) {
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, naissance: e.naissance,
+      pourquoi: 'still replaying this block transfers from block ' + e.naissance });
+  }
   const complet = e.ratees === 0 && e.jusqua !== null && somme.etat === 'JUSTE' && negatifs.length === 0;
   if (!complet) {
     return JSON.stringify({ ok: true, etat: 'INCOMPLET', jeton, lu: e.lu,
@@ -396,7 +405,8 @@ async function holdersCorps(jeton) {
       pourquoi: e.ratees ? e.ratees + ' window(s) refused by the node'
         : negatifs.length ? negatifs.length + ' impossible negative balance(s)'
           : somme.etat === 'NON_LU' ? 'totalSupply could not be read'
-            : 'reconstructed sum differs from totalSupply by ' + somme.ecart,
+            : e.jusqua === null ? 'the replay has not finished yet'
+              : 'reconstructed sum differs from totalSupply by ' + somme.ecart,
       borne: 'Balances are not trustworthy yet, so no share is shown. This is about our reading, '
         + 'not about the block.' });
   }
