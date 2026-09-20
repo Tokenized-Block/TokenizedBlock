@@ -202,23 +202,61 @@ function majBouton() {
     : courant && courant.action === 'OUVRIR' ? 'Open the round — sign in your wallet' : 'Sign';
 }
 
+/**
+ * Applique un compte a TOUT l ecran. ⛔ UNE SEULE FONCTION, appelee au chargement, apres une
+ * connexion, et a chaque changement de compte ou de reseau. La version precedente n activait le
+ * bouton « Fill » qu au chargement — donc AVANT toute connexion, donc jamais.
+ */
+async function appliquerCompte(nouveau) {
+  compte = nouveau || null;
+  let chaine = null;
+  try { chaine = await window.ethereum.request({ method: 'eth_chainId' }); } catch (_) { chaine = null; }
+  const surBase = Number(chaine) === 8453;
+  const estOperateur = !!compte && String(compte).toLowerCase() === OPERATEUR.toLowerCase();
+  marque('#c3', compte ? (estOperateur && surBase) : null);
+  $('#connecter').textContent = compte
+    ? String(compte).slice(0, 6) + '…' + String(compte).slice(-4)
+    : 'Connect wallet';
+  /* ⛔ ON NOMME LE PROBLEME : « bouton grise » sans raison est le pire des messages. */
+  if (compte && !estOperateur) {
+    $('#etat').innerHTML = '<span class="ko">This wallet is not the operator. Only '
+      + txt(OPERATEUR) + ' can open or anchor.</span>';
+  } else if (compte && !surBase) {
+    $('#etat').textContent = 'Switch your wallet to Base.';
+  } else if ($('#etat').textContent.startsWith('This wallet') || $('#etat').textContent.startsWith('Switch')) {
+    $('#etat').textContent = '';
+  }
+  majBouton();
+  /* ⛔ LE CORRECTIF : la carte « Fill » se relit APRES la connexion, pas seulement avant. */
+  await lireFonds();
+}
+
 $('#connecter').addEventListener('click', async () => {
   if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
   try {
     const comptes = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    compte = comptes && comptes[0];
     try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
-    const chaine = await window.ethereum.request({ method: 'eth_chainId' });
-    const bonCompte = !!compte && String(compte).toLowerCase() === OPERATEUR.toLowerCase();
-    marque('#c3', bonCompte && Number(chaine) === 8453);
-    /* ⛔ ON NOMME LE PROBLEME : « bouton grise » sans raison est le pire des messages. */
-    if (!bonCompte) $('#etat').innerHTML = '<span class="ko">This wallet is not the operator. Only '
-      + txt(OPERATEUR) + ' can open or anchor.</span>';
-    else if (Number(chaine) !== 8453) $('#etat').textContent = 'Switch your wallet to Base.';
-    else $('#etat').textContent = '';
+    await appliquerCompte(comptes && comptes[0]);
   } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
-  majBouton();
 });
+
+/* ⛔ REPRENDRE UNE AUTORISATION DEJA DONNEE, SANS REDEMANDER. `eth_accounts` ne declenche aucune
+ *    fenetre : il rend ce qui est deja autorise. Redemander a chaque visite apprend a l utilisateur
+ *    a cliquer « connecter » sans lire — exactement l habitude qu on ne veut pas installer. */
+async function reprendreConnexion() {
+  if (!window.ethereum) return;
+  try {
+    const comptes = await window.ethereum.request({ method: 'eth_accounts' });
+    if (comptes && comptes[0]) await appliquerCompte(comptes[0]);
+  } catch (_) { /* pas autorise : l utilisateur cliquera */ }
+}
+
+/* ⛔ UN CHANGEMENT DE COMPTE OU DE RESEAU DOIT SE VOIR. Un ecran qui montre l ancien compte ferait
+ *    signer depuis le mauvais. */
+if (window.ethereum && window.ethereum.on) {
+  window.ethereum.on('accountsChanged', (c) => { void appliquerCompte(c && c[0]); });
+  window.ethereum.on('chainChanged', () => { void appliquerCompte(compte); });
+}
 
 $('#agir').addEventListener('click', async () => {
   if (!courant || !courant.aSigner) return;
@@ -250,7 +288,13 @@ async function lireFonds() {
       data: '0x721da62e' + BigInt(id).toString(16).padStart(64, '0') + '0'.repeat(64) }, 'latest']);
     $('#fSolde').textContent = BigInt(d).toString();
   } catch (e) { $('#fSolde').textContent = 'unreadable'; }
+  /* ⛔ UN BOUTON DESACTIVE SANS RAISON EST UNE IMPASSE. On dit ce qui manque. */
   $('#fEnvoyer').disabled = !compte;
+  if (!compte && !$('#fEtat').textContent) {
+    $('#fEtat').textContent = 'Connect your wallet above to fill this round.';
+  } else if (compte && $('#fEtat').textContent.startsWith('Connect your wallet')) {
+    $('#fEtat').textContent = '';
+  }
 }
 
 $('#fEnvoyer').addEventListener('click', async () => {
@@ -278,7 +322,7 @@ $('#fEnvoyer').addEventListener('click', async () => {
   await lireFonds();
 });
 
-void lire().then(() => lireFonds());
+void lire().then(() => lireFonds()).then(() => reprendreConnexion());
 </script>
 </body>
 </html>
