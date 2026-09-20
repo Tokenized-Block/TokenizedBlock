@@ -12,7 +12,8 @@
 import { listerCreations, TOPIC_TRANSFER, decoderTransfer, topicAdresse } from './index-blocks.js';
 import { messageDepuisTransfert, FRAIS_MESSAGE_TBLOCK } from './messagerie-blocks.js';
 import { FEE_WALLET, CREATE_ROUTER } from './frais-creation.js';
-import { listerAchats, achatDepuisSwap } from './achats.js';
+import { listerAchats, achatDepuisSwap, sensDuSwap } from './achats.js';
+import { formaterUnites } from './montants.js';
 import { CLES_MARCHE, CLE_TBLOCK } from './marche.js';
 import { cleDePool, poolId } from './pool.js';
 import { TBLOCK } from './tokenomics.js';
@@ -149,17 +150,29 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
       if (s.txHash) txSwaps.add(String(s.txHash).toLowerCase());
       const p = pools.get(s.poolId);
       if (!p) continue;
-      let type = 'SWAP', quantite = null, eth = null;
+      let type = 'SWAP', quantite = null, eth = null, fraisMarche = false;
       const confiance = p.confiance || confianceDe(p.cle);
       const devise = deviseConnue(p.cle, p.jeton);
-      /* ⛔⛔ ACHAT / VENTE SEULEMENT SUR UNE POOL SANS HOOK A DEVISE PROUVEE (ETH natif ou TBLOCK). Sur une pool a hook, le
-       *    hook peut changer les montants : echange NEUTRE, sans montant, et les cerveaux ne s en nourrissent pas. */
-      if (p.dec !== null && confiance !== 'HOOK' && devise) {
-        const a = achatDepuisSwap({ swap: s, cle: p.cle, jeton: p.jeton, decJeton: p.dec, decDevise: devise.dec });
-        if (a.etat === 'ACHAT' || a.etat === 'VENTE') { type = a.etat; quantite = a.quantiteBlockTexte; eth = a.quantiteDeviseTexte; }
+      /* ⛔⛔ CORRIGE LE 2026-09-20 (Phil : « Feed = buy, Kill = sell, divise le Swap en 2 »).
+       * L ANCIENNE REGLE exigeait `confiance !== 'HOOK'` avant de classer quoi que ce soit. Mesure du
+       * jour sur la page en prod : 118 pools sur 118 portent un hook — donc AUCUN swap n etait jamais
+       * classe. « Feed » et « Kill » affichaient 0 pendant que « Swap » affichait 1 306, et le fil
+       * disait « traded » pour tout, alors que la chaine dit QUI A ACHETE.
+       * Ce que la source d Uniswap v4 prouve (PoolManager.sol:240, « event is emitted before the
+       * afterSwap call ») : l evenement porte le delta du trader AVANT la part du hook. Un hook REDUIT
+       * un montant recu, il ne lui change pas son SIGNE. Le sens est donc prouve, hook ou pas.
+       * ⚠️ CE QUI RESTE VRAI DE L ANCIENNE PRUDENCE, et qui voyage maintenant avec l evenement :
+       *    sur une pool a hook, le montant du cote non specifie est celui d AVANT le frais du marche.
+       *    D ou `fraisMarche` — l ecran doit ecrire « avant le frais de ce marche », pas un chiffre net. */
+      const sens = sensDuSwap({ swap: s, cle: p.cle, jeton: p.jeton });
+      if (sens.etat === 'ACHAT' || sens.etat === 'VENTE') {
+        type = sens.etat;
+        fraisMarche = confiance === 'HOOK';
+        if (p.dec !== null) quantite = formaterUnites(sens.quantiteBlock, p.dec);
+        if (devise) eth = formaterUnites(sens.quantiteDevise, devise.dec);
       }
       ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, eth,
-        devise: type === 'SWAP' ? null : devise.nom, confiance, verifie: type !== 'SWAP' });
+        devise: type === 'SWAP' || !devise ? null : devise.nom, confiance, fraisMarche, verifie: type !== 'SWAP' });
     }
   }
   if (lireTransferts && Number.isSafeInteger(deBloc) && Number.isSafeInteger(aBloc) && aBloc >= deBloc) {

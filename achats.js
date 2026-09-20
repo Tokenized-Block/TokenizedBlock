@@ -29,10 +29,23 @@
 //    Deux temoins independants (l evenement de la pool, les Transfer des jetons), les deux signes
 //    observes, egalite a l unite. Cette fixture est rejouee dans `test-achats.mjs`.
 //    ⚠️ CE QUE CETTE PREUVE NE COUVRE PAS : une pool en ETH NATIF (aucun Transfer a recouper), un
-//       swap « exact output », et une pool a HOOK qui prend sa part par delta (le Swap dit alors ce
-//       que la POOL a echange, pas forcement ce que le trader a paye). Un seul swap observe, dans
-//       un seul sens (une vente). La convention est la meme pour les deux sens — c est un signe par
-//       jeton — mais un ACHAT reel n a pas encore ete recoupe de la meme facon.
+//       swap « exact output ». Un seul swap observe, dans un seul sens (une vente). La convention
+//       est la meme pour les deux sens — c est un signe par jeton — mais un ACHAT reel n a pas
+//       encore ete recoupe de la meme facon.
+//
+// ⛔⛔ LES POOLS A HOOK : CE QUI A CHANGE LE 2026-09-20. Cette entete disait « une pool a HOOK prend
+//    sa part par delta (le Swap dit alors ce que la POOL a echange, pas forcement ce que le trader a
+//    paye) », et l app en avait tire une regle trop large : ne RIEN classer sur une pool a hook.
+//    Mesure du jour en prod : 118 pools sur 118 portent un hook, donc AUCUN echange n etait classe —
+//    « Feed » et « Kill » affichaient 0 pendant que « Swap » affichait 1 306.
+//    Ce que dit la SOURCE d Uniswap v4 (lu, pas suppose) :
+//      v4-core/src/PoolManager.sol:240 — « event is emitted before the afterSwap call to ensure
+//      events are always emitted in order ».
+//    Donc l evenement porte le delta du trader AVANT la part du hook. Un hook REDUIT un montant
+//    recu de quelques pourcents ; il ne lui change PAS son signe.
+//    ⇒ LE SENS (acheter / vendre) EST PROUVE, hook ou pas : c est `sensDuSwap`.
+//    ⇒ LE MONTANT du cote non specifie est celui d AVANT le frais du marche. L appelant doit le dire
+//      (`fraisMarche` dans fil-live.js) au lieu de se taire — se taire etait la vraie perte.
 //
 // ⚠️ LE CHAMP `fee` DU SWAP N EST PAS LE `fee` DE LA POOLKEY. Sur la meme transaction, le Swap
 //    portait un fee DIFFERENT de celui de la cle qui a donne le bon poolId. On le rend tel quel,
@@ -163,12 +176,24 @@ const decimalesValides = (n) => Number.isInteger(n) && n >= 0 && n <= 36;
  * @param {number} p.decDevise decimales de la devise, LUES sur la chaine
  * @param {number} [p.chiffresEnPlus]  precision du texte de prix au-dela des decimales de la devise
  */
-export function achatDepuisSwap({ swap, cle, jeton, decJeton, decDevise, chiffresEnPlus = 18 }) {
+/**
+ * Le SENS d un swap — acheter ou vendre le block — depuis les SEULS SIGNES des deltas.
+ * ================================================================================================
+ * ⛔ AUCUNE DECIMALE REQUISE, ET C EST LE POINT. Le sens est prouve par la chaine meme quand on ne
+ *    sait pas formater les montants, et meme sur une pool a hook. C est ce qui manquait au fil Live,
+ *    ou 1 306 echanges sur 1 306 s affichaient « traded » alors que la chaine dit qui a achete.
+ * ⛔ POURQUOI UN HOOK NE CHANGE PAS LE SENS (verifie dans la source, pas suppose) :
+ *    v4-core/src/PoolManager.sol:240 — « event is emitted before the afterSwap call ». L evenement
+ *    porte le delta du trader AVANT la part du hook. Un hook REDUIT un montant recu ; il ne lui
+ *    change pas son signe. Le sens tient donc ; le MONTANT du cote non specifie est celui d avant
+ *    le frais du marche, et l appelant doit le dire (`fraisMarche`).
+ * ⚠️ CE QU ELLE NE DIT PAS : qui a achete. Le `sender` du log est le ROUTEUR, jamais le trader.
+ * @returns {{etat:'ACHAT'|'VENTE'|'SWAP_ILLISIBLE'|'HORS_POOL'|'AUTRE_POOL'|'INCOHERENT',
+ *   raison?:string, quantiteBlock?:bigint, quantiteDevise?:bigint, blockEst0?:boolean}}
+ */
+export function sensDuSwap({ swap, cle, jeton }) {
   if (!swap || swap.erreur || typeof swap.amount0 !== 'bigint' || typeof swap.amount1 !== 'bigint') {
     return { etat: 'SWAP_ILLISIBLE', raison: swap && swap.erreur ? swap.erreur : 'no decoded swap' };
-  }
-  if (!decimalesValides(decJeton) || !decimalesValides(decDevise) || !decimalesValides(chiffresEnPlus)) {
-    return { etat: 'DECIMALES_INVALIDES', raison: 'decimals must be whole numbers between 0 and 36' };
   }
   const c0 = String(cle?.currency0 ?? '').toLowerCase();
   const c1 = String(cle?.currency1 ?? '').toLowerCase();
@@ -191,8 +216,27 @@ export function achatDepuisSwap({ swap, cle, jeton, decJeton, decDevise, chiffre
     return { etat: 'INCOHERENT',
       raison: 'block and quote amounts do not have opposite signs — not classified as a buy or a sell' };
   }
-  const quantiteBlock = montantBlock < 0n ? -montantBlock : montantBlock;
-  const quantiteDevise = montantDevise < 0n ? -montantDevise : montantDevise;
+  return {
+    etat, blockEst0,
+    quantiteBlock: montantBlock < 0n ? -montantBlock : montantBlock,
+    quantiteDevise: montantDevise < 0n ? -montantDevise : montantDevise,
+  };
+}
+
+export function achatDepuisSwap({ swap, cle, jeton, decJeton, decDevise, chiffresEnPlus = 18 }) {
+  if (!swap || swap.erreur || typeof swap.amount0 !== 'bigint' || typeof swap.amount1 !== 'bigint') {
+    return { etat: 'SWAP_ILLISIBLE', raison: swap && swap.erreur ? swap.erreur : 'no decoded swap' };
+  }
+  if (!decimalesValides(decJeton) || !decimalesValides(decDevise) || !decimalesValides(chiffresEnPlus)) {
+    return { etat: 'DECIMALES_INVALIDES', raison: 'decimals must be whole numbers between 0 and 36' };
+  }
+  /* ⛔ LE SENS VIENT DE `sensDuSwap`, JAMAIS RECALCULE ICI : une copie du meme test finit toujours
+   *    par diverger de l original, et c est la copie qui reste affichee. */
+  const sens = sensDuSwap({ swap, cle, jeton });
+  if (sens.etat !== 'ACHAT' && sens.etat !== 'VENTE') return sens;
+  const { etat, quantiteBlock, quantiteDevise, blockEst0 } = sens;
+  /* La devise est le cote qui n est PAS le block — relu depuis la cle, jamais devine. */
+  const deviseAdr = blockEst0 ? String(cle.currency1).toLowerCase() : String(cle.currency0).toLowerCase();
 
   const num0 = quantiteDevise * 10n ** BigInt(decJeton);
   const den0 = quantiteBlock * 10n ** BigInt(decDevise);
@@ -211,7 +255,7 @@ export function achatDepuisSwap({ swap, cle, jeton, decJeton, decDevise, chiffre
     prix: { num: num0 / g, den: den0 / g },
     prixTexte: formaterUnites(brutPrix, decDevise + chiffresEnPlus),
     prixExact: reste === 0n,
-    devise: blockEst0 ? c1 : c0,
+    devise: deviseAdr,
     /* ⛔ NOMME « routeur », PAS « acheteur ». C est le contrat qui a appele la pool. */
     routeur: swap.sender,
     txHash: swap.txHash,

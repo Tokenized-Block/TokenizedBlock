@@ -1391,7 +1391,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0130" hidden>Build <code>20260920-0130</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0131" hidden>Build <code>20260920-0131</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1883,7 +1883,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye, hookV4Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -5301,6 +5301,23 @@ function reconciliationFiltres(comptes) {
     + (autres.length ? ' · types sans filtre : ' + autres.join(', ') : '')
     + ' — un evenement n est compte par aucun bouton, dis-le moi';
 }
+/** La ligne d un achat ou d une vente, montant par montant, sans jamais en inventer un.
+ * ⛔ REGROUPEE (n > 1) : on ne montre AUCUN montant — additionner des textes deja formates donnerait
+ *    un chiffre faux, et n en montrer qu un seul ferait passer un echange pour tous les autres.
+ * ⚠️ `fraisMarche` : sur une pool a hook, le montant lu est celui d AVANT le frais du marche
+ *    (l evenement Swap est emis avant `afterSwap` — v4-core/PoolManager.sol:240). On le dit. */
+function ligneEchange(e, nom) {
+  const achat = e.type === 'ACHAT';
+  const tete = achat ? '🟢 <b>' + nom + '</b> fed' : '🔴 <b>' + nom + '</b> killed';
+  if (e.n > 1) return tete + ' · ' + e.n + (achat ? ' buys' : ' sells');
+  const bouts = [];
+  if (e.quantite) bouts.push(enTexte(lisible(e.quantite)) + (achat ? ' bought' : ' sold'));
+  if (e.eth && e.devise) bouts.push('for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise));
+  let ligne = tete + (bouts.length ? ' · ' + bouts.join(' ') : '');
+  if (bouts.length && e.fraisMarche) ligne += ' · before this market\'s fee';
+  return ligne;
+}
+
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
   const comptesFiltres = majComptesFiltres();
@@ -5327,7 +5344,8 @@ function peindreLive() {
       continue;
     }
     const der = lignes[lignes.length - 1];
-    if (e.type === 'SWAP' && der && der.type === e.type && der.jeton === e.jeton
+    if ((e.type === 'SWAP' || e.type === 'ACHAT' || e.type === 'VENTE')
+      && der && der.type === e.type && der.jeton === e.jeton
       && der.confiance === e.confiance) {
       der.n = (der.n || 1) + 1;
       der.blocBas = e.bloc;
@@ -5365,9 +5383,9 @@ function peindreLive() {
       : e.type === 'MESSAGE' ? (e.aaOpaque
         ? '✉️ a paid message from a smart wallet · ' + enTexte(court(e.signataire))
         : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
-      : e.type === 'ACHAT' ? '🟢 <b>' + nom + '</b> fed · ' + enTexte(lisible(e.quantite)) + ' bought for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-        : e.type === 'VENTE' ? '🔴 <b>' + nom + '</b> killed · ' + enTexte(lisible(e.quantite)) + ' sold for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise || 'ETH')
-          /* tip 0028 (Phil : « ne note pas hook en public ») : un swap dont les montants ne sont pas prouves dit juste « traded » */
+      : (e.type === 'ACHAT' || e.type === 'VENTE') ? ligneEchange(e, nom)
+          /* ⛔ « traded » ne reste que pour ce qui n a PAS pu etre classe : signes incoherents, pool
+           * inconnue, log illisible. Ce n est plus le cas general — c est l aveu d un cas precis. */
           : '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' · ' + e.n + '×' : '');
     const lien = e.tx && e.n === 1 ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
     const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
@@ -6357,17 +6375,28 @@ async function calculerLancement() {
     if (!mainnet && legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now.' };
     } else {
-      /* ETH -> hook V2 ; une devise de la liste -> hook V3 (et rien d autre) */
-      const etatV3 = deviseLancement ? (mainnet ? 'DEPLOYE' : await hookV3Deploye({ rpc })) : 'ABSENT';
-      const hooks = deviseLancement ? (etatV3 === 'DEPLOYE' ? HOOK_V3 : undefined)
-        : mainnet ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
-      if (deviseLancement && !hooks) {
+      /* ⛔⛔ DEPUIS LE 2026-09-20 : UN SEUL HOOK POUR LES NOUVEAUX MARCHES, le V4 (ETH comme devises).
+       * Il porte la meme liste de 15 devises que le V3, plus les deux verrous (pool vide non echangeable,
+       * label exige). Les pools deja ouvertes sur V1/V2/V3 gardent leur hook et paient toujours a6cf. */
+      const etatV4 = mainnet ? 'DEPLOYE' : await hookV4Deploye({ rpc });
+      const hooks = etatV4 === 'DEPLOYE' ? HOOK_V4
+        : deviseLancement ? undefined
+          : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
+       *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
+       *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
+       * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
+       *    bloquer un vrai createur parce qu un noeud a tousse. */
+      const label = hooks === HOOK_V4 ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
+      if (label === 'NON') {
+        plan = { etat: 'REFUSE', pourquoi: 'this block was not engraved by this app\'s Create, so its market cannot open here' };
+      } else if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
       } else {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
           ...(deviseLancement ? { devise: deviseLancement } : {}),
           ...(hooks ? { hooks } : {}) });
-        if (hooks === HOOK_V2 || hooks === HOOK_V3) {
+        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
@@ -8240,8 +8269,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
   if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
-  const hook = devise ? HOOK_V3 : HOOK_V2;
-  /* V2 et V3 sont deployes pour toujours sur mainnet (voir calculerLancement) : plus de relecture qui pourrait echouer */
+  /* ⛔ UN SEUL HOOK DEPUIS LE 2026-09-20 : le V4 accepte ETH ET les 15 devises. */
+  const hook = HOOK_V4;
+  void devise;
+  /* le V4 est deploye pour toujours sur mainnet (voir calculerLancement) : plus de relecture qui pourrait echouer */
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);
@@ -9074,7 +9105,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0130',
+    build: '20260920-0131',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
