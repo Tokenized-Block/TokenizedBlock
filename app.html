@@ -422,7 +422,12 @@ body:not(.surMap) .mapCta{display:none}
    debordait, la page defilait en largeur, le texte du centre etait ecrase en une colonne d une lettre.
    Trois rangees : la marque ; les boutons (qui defilent a l horizontale, sans barre) ; le texte du centre, pleine largeur. */
 @media (max-width:760px){
-  html,body{overflow-x:hidden}
+  /* ⛔⛔ NE JAMAIS REMETTRE `overflow-x:hidden` SEUL ICI (mesure 2026-09-20) : il force
+     `overflow-y:auto` sur le body, qui devient une boite de defilement — et TOUT `position:sticky`
+     de la page cesse de coller, sur telephone uniquement, sans erreur ni avertissement. C est ce qui
+     detachait le block de Create pendant qu on regle ses cadrans. `clip` coupe pareil sans creer de
+     boite ; `hidden` reste en secours pour les navigateurs qui ne connaissent pas `clip`. */
+  html,body{overflow-x:hidden;overflow-x:clip}
   .tete{flex-wrap:wrap;gap:6px 8px;padding:10px 0 8px}
   .tete .droite{order:2;flex:1 1 100%;margin-left:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
   .tete .droite::-webkit-scrollbar{display:none}
@@ -1391,27 +1396,31 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0133" hidden>Build <code>20260920-0133</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0134" hidden>Build <code>20260920-0134</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
-        <button type="button" class="puce on" data-filtre="TOUT">All</button>
-        <button type="button" class="puce" data-filtre="CREATION">🧱 Created</button>
+        <button type="button" class="puce on" data-filtre="TOUT" title="Everything this page read on chain in this window">All</button>
+        <button type="button" class="puce" data-filtre="CREATION" title="New blocks born on Base — every launchpad, not only this app">🧱 Created</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
-        <button type="button" class="puce" data-filtre="ACHAT">🟢 Feed</button>
-        <button type="button" class="puce" data-filtre="VENTE">🔴 Kill</button>
-        <button type="button" class="puce" data-filtre="SWAP">↔ Swap</button>
-        <button type="button" class="puce" data-filtre="GM">➡️ Sent</button>
-        <button type="button" class="puce" data-filtre="MESSAGE">✉️ Messages</button>
+        <button type="button" class="puce" data-filtre="ACHAT" title="Buys — the block left its pool for someone's wallet">🟢 Feed</button>
+        <button type="button" class="puce" data-filtre="VENTE" title="Sells — the block went back into its pool">🔴 Kill</button>
+        <!-- ⛔ RENOMME LE 2026-09-20. Depuis que le sens se lit sur toutes les pools (y compris a hook),
+             ce bouton ne compte plus « les echanges » : il compte ceux qu on n a PAS SU lire. Garder le
+             mot « Swap » en aurait fait un compteur toujours a 0 et incomprehensible. Un chiffre autre
+             que 0 ici est une ALARME, pas une categorie. -->
+        <button type="button" class="puce" data-filtre="SWAP" title="Trades whose side could not be proven from the chain — this should stay at 0">↔ Not read</button>
+        <button type="button" class="puce" data-filtre="GM" title="Blocks moved between wallets, and free notes">➡️ Sent</button>
+        <button type="button" class="puce" data-filtre="MESSAGE" title="Paid messages between blocks. Measured 2026-09-20: none on chain in the last 120,000 blocks, on either currency">✉️ Messages</button>
         <!-- ⛔ PHIL (2026-09-17) : « Ours / Trusted / Alive here : on s en fout, refais ca et ajoute si besoin ».
              Les trois filtraient sur des listes a nous (nos deux blocks, une liste gardee dans le navigateur, un
              hook) — donc presque toujours vides, et ils prenaient la place de ce qui bouge vraiment. Les branches
              de code restent (rien n est supprime) ; ce sont les boutons qui partent.
              A LA PLACE, deux filtres qui portent sur la DONNEE de l evenement, pas sur nos listes. -->
-        <button type="button" class="puce" data-filtre="GROS">💰 Big</button>
-        <button type="button" class="puce" data-filtre="ECHANGES">📈 Trades</button>
+        <button type="button" class="puce" data-filtre="GROS" title="Trades of 0.02 ETH or more — only those that carry a readable amount">💰 Big</button>
+        <button type="button" class="puce" data-filtre="ECHANGES" title="Buys + sells + the ones we could not read">📈 Trades</button>
       </div>
       <!-- tip 2357/2358/0013: hooked BuySell + unhooked → Launch beside · sticky Hooked=Dex fees. No fee addr. -->
       <p class="note" id="sfHookedRoute" hidden></p>
@@ -5318,6 +5327,21 @@ function ligneEchange(e, nom) {
   return ligne;
 }
 
+/** La phrase d une liste vide : ce qu on cherchait, et pourquoi il n y en a pas. */
+function riennDeTrouve() {
+  const n = liveEvts.length;
+  if (liveFiltre === 'MESSAGE') {
+    return 'No paid message in these ' + n + ' events. Measured on 2026-09-20 over the last 120,000 chain '
+      + 'blocks, on both fee currencies: none has ever been sent. This zero is the chain, not a bug.';
+  }
+  if (liveFiltre === 'SWAP') {
+    return 'Nothing unreadable in these ' + n + ' events — every trade could be read as a buy or a sell. '
+      + 'That is the good case: a number here would mean we lost some.';
+  }
+  if (liveFiltre === 'GROS') return 'No trade of 0.02 ETH or more among these ' + n + ' events.';
+  return 'None of the ' + n + ' events read matches this filter.';
+}
+
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
   const comptesFiltres = majComptesFiltres();
@@ -5405,7 +5429,9 @@ function peindreLive() {
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
       + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p></div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
-    ? '<li class="filL"><p class="note">None of the ' + liveEvts.length + ' events read matches this filter. Trades live under Swap; every new block under Created.</p></li>' : '');
+    /* ⛔ Une liste vide qui ne nomme pas son filtre se lit comme une panne. Elle dit donc CE QU ELLE
+     *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
+    ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>' : '');
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
@@ -6005,6 +6031,13 @@ async function preparerEchange(sens) {
      *    au-dessus (« You pay » / « You receive at least ») et dans le wallet. */
     : 'The chain accepts this exact transaction. Check it in your wallet before signing.';
 }
+/** ⛔ LES ETATS OU QUELQUE CHOSE EST DEJA PARTI SUR LA CHAINE. Ecrits ICI, une seule fois : les
+ *  recopier a chaque appelant est exactement la faute qui a produit le double paiement.
+ *  Source : envoi.js — ENVOYE (transaction envoyee, non attendue), ENVOYE_AA (lot de smart wallet
+ *  avec un hash), EN_ATTENTE (envoye, recu pas encore lu). Tout le reste n a RIEN diffuse. */
+const ETATS_DIFFUSES = Object.freeze(['ENVOYE', 'ENVOYE_AA', 'EN_ATTENTE']);
+const aEteDiffusee = (etat) => ETATS_DIFFUSES.includes(String(etat));
+
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
   echangeEnCours = true;
@@ -6015,7 +6048,21 @@ async function signerEchange(tx, sens, estApprobation) {
   catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
   finally { echangeEnCours = false; }
   const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-  if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
+  if (r.etat !== 'CONFIRME') {
+    /* ⛔⛔ AUDIT 2026-09-20 : ce branchement rangeait ENVOYE / ENVOYE_AA / EN_ATTENTE avec les refus,
+     *    en rouge « Not done », EN LAISSANT le bouton « Sign ». Or dans ces trois etats la transaction
+     *    EST PARTIE : un utilisateur qui relit « pas fait » et reclique paie DEUX FOIS. */
+    if (aEteDiffusee(r.etat)) {
+      e.className = 'note';
+      e.innerHTML = 'Sent, not confirmed yet — <b>do not sign it again</b>.' + lien;
+      $('#peActions').innerHTML = '';
+      echangeCourant = null;
+      return;
+    }
+    e.className = 'note wKo';
+    e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
+    return;
+  }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
   if (sens === 'ACHAT') etape('achat');
@@ -6150,7 +6197,21 @@ async function signerLiquidite(tx, adr, genre) {
   } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
   finally { liquiditeEnCours = false; }
   const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-  if (r.etat !== 'CONFIRME') { e.className = 'note wKo'; e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien; return; }
+  if (r.etat !== 'CONFIRME') {
+    /* ⛔⛔ AUDIT 2026-09-20 : ce branchement rangeait ENVOYE / ENVOYE_AA / EN_ATTENTE avec les refus,
+     *    en rouge « Not done », EN LAISSANT le bouton « Sign ». Or dans ces trois etats la transaction
+     *    EST PARTIE : un utilisateur qui relit « pas fait » et reclique paie DEUX FOIS. */
+    if (aEteDiffusee(r.etat)) {
+      e.className = 'note';
+      e.innerHTML = 'Sent, not confirmed yet — <b>do not sign it again</b>.' + lien;
+      $('#peActions').innerHTML = '';
+      echangeCourant = null;
+      return;
+    }
+    e.className = 'note wKo';
+    e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
+    return;
+  }
   if (genre === 'APPROBATION') { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerAjout(); return; }
   if (genre === 'AJOUT' && idAvant !== null) {
     try {
@@ -9108,7 +9169,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0133',
+    build: '20260920-0134',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
