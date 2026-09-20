@@ -1491,7 +1491,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0147" hidden>Build <code>20260920-0147</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0148" hidden>Build <code>20260920-0148</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5666,8 +5666,22 @@ function suivreLeCote() {
   const cote = document.querySelector('#cote');
   const zoom = document.querySelector('.mapZoom');
   if (!cote || !zoom || typeof MutationObserver === 'undefined') return;
-  const maj = () => zoom.classList.toggle('decale', !cote.hasAttribute('hidden'));
+  /* ⛔⛔ LE DECALAGE EST POSE EN LIGNE, PAS PAR UNE REGLE. Mesure du 2026-09-20, build 0147, Chrome :
+   *    la classe `decale` etait bien la, et `transform` calculait `matrix(1,0,0,1,0,0)` — l identite.
+   *    La regle de feuille de style ne prenait donc pas, exactement comme `right` avant elle. Mesure
+   *    qui tranche : la MEME valeur posee EN LIGNE deplace la colonne de 388 px, immediatement.
+   *    On arrete de se battre avec la cascade sur cet element : on ecrit la valeur. */
+  const decalage = () => (window.innerWidth <= 699
+    ? 'translateY(calc(-52dvh - 14px))'   /* telephone : le panneau prend le bas de l ecran */
+    : 'translateX(-388px)');              /* large : il prend la colonne de droite */
+  const maj = () => {
+    const ouvert = !cote.hasAttribute('hidden');
+    zoom.classList.toggle('decale', ouvert);
+    zoom.style.transform = ouvert ? decalage() : '';
+  };
   new MutationObserver(maj).observe(cote, { attributes: true, attributeFilter: ['hidden'] });
+  /* la largeur change (rotation, fenetre redimensionnee) : le sens du decalage aussi */
+  window.addEventListener('resize', () => { if (!cote.hasAttribute('hidden')) zoom.style.transform = decalage(); }, { passive: true });
   coteSuivi = true;
   maj();
 }
@@ -9499,7 +9513,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0147',
+    build: '20260920-0148',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
