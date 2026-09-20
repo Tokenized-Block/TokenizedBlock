@@ -52,6 +52,20 @@ export function calldataAncrer({ id, jeton, graine, racine, total }) {
   return SELECTEURS.ancrer + mot(id) + motAdresse(jeton) + motBytes32(graine) + motBytes32(racine) + mot(total);
 }
 
+/** Calldata de alimenter(uint256 id, address jeton, uint256 montant).
+ *  ⛔ RAPPEL : il faut une approbation ERC-20 AVANT, sinon la transaction revert sur le
+ *     transferFrom. Le dire ici evite de faire payer un gas perdu pour rien. */
+export function calldataAlimenter({ id, jeton, montant }) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton))) throw new Error('jeton invalide : ' + jeton);
+  if (BigInt(montant) <= 0n) throw new Error('alimenter de zero ne ferait rien');
+  return SELECTEURS.alimenter + mot(id) + motAdresse(jeton) + mot(montant);
+}
+
+/** Calldata de alimenterEth(uint256 id). Le montant voyage dans la value, pas dans le calldata. */
+export function calldataAlimenterEth({ id }) {
+  return SELECTEURS.alimenterEth + mot(id);
+}
+
 /**
  * Que faut-il faire maintenant ?
  *

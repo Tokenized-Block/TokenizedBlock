@@ -5,8 +5,8 @@
 //    la-dessus paierait la mauvaise adresse, sans aucune erreur nulle part.
 // RPC simule : rien ne part sur un reseau.
 import assert from 'node:assert/strict';
-import { naissanceDuJeton, rejouerTransferts, verifierSomme, soldesNegatifs, TOPIC_TRANSFER, ADRESSE_ZERO }
-  from './soldes-jeton.js';
+import { naissanceDuJeton, rejouerTransferts, verifierSomme, soldesNegatifs, soldesAuBloc,
+  TOPIC_TRANSFER, ADRESSE_ZERO } from './soldes-jeton.js';
 
 let n = 0;
 const eq = (a, b, m) => { assert.equal(a, b, m); n++; };
@@ -105,6 +105,68 @@ const rpcAvec = (tous, fenetresRefusees = []) => async (methode, params) => {
   await rejouerTransferts({ rpc: rpcAvec(tous), jeton: JETON, deBloc: 2601, aBloc: 4000, soldes: enDeux });
   eq(enDeux.get(A), enUneFois.get(A), 'A : deux passes == une passe');
   eq(enDeux.get(B), enUneFois.get(B), 'B : deux passes == une passe');
+}
+
+// ══ 7. LES SOLDES AU BLOC TIRE, PAS A LA TETE DE CHAINE ════════════════════════════════════════
+// ⛔ POUR UNE RECOMPENSE, LA TETE EST LA MAUVAISE REPONSE : quelqu un qui a VENDU apres le tirage
+//    serait paye, et quelqu un qui a ACHETE apres toucherait sans avoir tenu — exactement le
+//    comportement que la recompense doit decourager.
+{
+  const tous = [log(1500, ADRESSE_ZERO, A, 1000n), log(2500, A, B, 300n), log(3100, B, A, 100n)];
+  /* un RPC qui repond aussi a eth_call(totalSupply) au bloc demande */
+  const rpcComplet = (logs, supply) => async (m, p) => {
+    if (m === 'eth_call') return '0x' + BigInt(supply).toString(16).padStart(64, '0');
+    return rpcAvec(logs)(m, p);
+  };
+
+  const a2000 = await soldesAuBloc({ rpc: rpcComplet(tous, 1000n), jeton: JETON, naissance: 1500, auBloc: 2000 });
+  eq(a2000.etat, 'COMPLET', 'rejeu borne au bloc 2000');
+  eq(a2000.soldes.get(A), 1000n, 'au bloc 2000, A detient encore tout');
+  ok(!a2000.soldes.has(B), 'et B n a rien : son transfert est POSTERIEUR');
+
+  const a2600 = await soldesAuBloc({ rpc: rpcComplet(tous, 1000n), jeton: JETON, naissance: 1500, auBloc: 2600 });
+  eq(a2600.soldes.get(A), 700n, 'au bloc 2600, A a envoye 300');
+  eq(a2600.soldes.get(B), 300n, 'et B les a recus');
+
+  // ⛔ LE TEMOIN QUI DONNE SA VALEUR AUX DEUX PRECEDENTS : deux blocs differents donnent des soldes
+  //    DIFFERENTS. Si la borne etait ignoree, ces deux appels seraient identiques et les tests
+  //    ci-dessus passeraient quand meme.
+  ok(a2000.soldes.get(A) !== a2600.soldes.get(A), 'la borne MORD : deux blocs, deux resultats');
+
+  const a4000 = await soldesAuBloc({ rpc: rpcComplet(tous, 1000n), jeton: JETON, naissance: 1500, auBloc: 4000 });
+  eq(a4000.soldes.get(A), 800n, 'a la fin, A a repris 100');
+  eq(a4000.soldes.get(B), 200n, 'et B en a rendu 100');
+}
+
+// ══ 8. soldesAuBloc REFUSE plutot que de rendre des soldes douteux ══════════════════════════════
+{
+  const tous = [log(1500, ADRESSE_ZERO, A, 1000n), log(2500, A, B, 300n)];
+  const total = (v) => async (m, p) => (m === 'eth_call'
+    ? '0x' + BigInt(v).toString(16).padStart(64, '0')
+    : rpcAvec(tous)(m, p));
+
+  const bornesFolles = await soldesAuBloc({ rpc: total(1000n), jeton: JETON, naissance: 3000, auBloc: 2000 });
+  eq(bornesFolles.etat, 'INCOMPLET', 'un bloc vise anterieur a la naissance est refuse');
+  ok(/bornes absurdes/.test(bornesFolles.pourquoi), 'avec sa raison');
+
+  /* une fenetre refusee rend la reconstruction INVALIDE, jamais « approximative » */
+  const rpcTroue = async (m, p) => {
+    if (m === 'eth_call') return '0x' + (1000n).toString(16).padStart(64, '0');
+    return rpcAvec(tous, [[2400, 2600]])(m, p);
+  };
+  const troue = await soldesAuBloc({ rpc: rpcTroue, jeton: JETON, naissance: 1500, auBloc: 4000, pas: 500 });
+  eq(troue.etat, 'INCOMPLET', 'une fenetre refusee rend le resultat INCOMPLET');
+  ok(/refused by the node/.test(troue.pourquoi), 'et la raison le dit');
+
+  /* le total est lu AU BLOC VISE : s il ne colle pas, on refuse, et le bloc est NOMME */
+  const faux = await soldesAuBloc({ rpc: total(999n), jeton: JETON, naissance: 1500, auBloc: 4000 });
+  eq(faux.etat, 'INCOMPLET', 'somme differente de totalSupply au bloc vise : refus');
+  ok(/at block 4000/.test(faux.pourquoi), 'et le bloc est nomme dans la raison');
+
+  /* totalSupply illisible : refus, jamais une fausse certitude */
+  const sansTotal = await soldesAuBloc({ rpc: async (m, p) => (m === 'eth_call' ? '0x' : rpcAvec(tous)(m, p)),
+    jeton: JETON, naissance: 1500, auBloc: 4000 });
+  eq(sansTotal.etat, 'INCOMPLET', 'totalSupply illisible : refus');
 }
 
 console.log('test-soldes-jeton : ' + n + ' assertions, OK');

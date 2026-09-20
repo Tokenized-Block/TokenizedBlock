@@ -65,6 +65,52 @@ export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas
 }
 
 /**
+ * Reconstruit les soldes A UN BLOC DONNE, et lit `totalSupply` AU MEME BLOC.
+ *
+ * ⛔⛔ POUR UNE RECOMPENSE, LA TETE DE CHAINE EST LA MAUVAISE REPONSE. Le tirage designe un bloc
+ *    precis ; payer d apres les soldes d aujourd hui paierait quelqu un qui a VENDU depuis, et
+ *    oublierait quelqu un qui tenait au bon moment. C est exactement le comportement que la
+ *    recompense est censee decourager.
+ * ⛔ ET `totalSupply` EST LU AU MEME BLOC. Le comparer au total d aujourd hui confronterait deux
+ *    instants differents : une reconstruction juste serait declaree FAUSSE, ou l inverse.
+ * ⛔ AUCUN CACHE ICI, EXPRES : ce calcul sert a ancrer de l argent. Il repart des logs a chaque fois,
+ *    et une seule fenetre refusee le rend INVALIDE.
+ *
+ * @returns {{etat:'COMPLET'|'INCOMPLET', soldes:Map, pourquoi?:string, somme?:bigint, total?:bigint}}
+ */
+export async function soldesAuBloc({ rpc, jeton, naissance, auBloc, pas = PAS_LOGS }) {
+  if (!Number.isInteger(auBloc) || !Number.isInteger(naissance) || auBloc < naissance) {
+    return { etat: 'INCOMPLET', soldes: new Map(),
+      pourquoi: 'bornes absurdes : naissance ' + naissance + ', bloc vise ' + auBloc };
+  }
+  const soldes = new Map();
+  const { ratees } = await rejouerTransferts({ rpc, jeton, deBloc: naissance, aBloc: auBloc, soldes, pas });
+  if (ratees) {
+    return { etat: 'INCOMPLET', soldes,
+      pourquoi: ratees + ' window(s) refused by the node — a holed replay would pay the wrong addresses' };
+  }
+  const negatifs = soldesNegatifs(soldes);
+  if (negatifs.length) {
+    return { etat: 'INCOMPLET', soldes,
+      pourquoi: negatifs.length + ' impossible negative balance(s) — logs are missing' };
+  }
+  /* ⛔ LE TOTAL EST LU AU BLOC VISE, avec le meme tag de bloc que le rejeu. */
+  let total = null;
+  try {
+    const t = await rpc('eth_call', [{ to: jeton, data: '0x18160ddd' }, '0x' + auBloc.toString(16)]);
+    if (typeof t === 'string' && t !== '0x') total = BigInt(t);
+  } catch (e) { total = null; }
+  const v = verifierSomme({ soldes, totalSupply: total });
+  if (v.etat !== 'JUSTE') {
+    return { etat: 'INCOMPLET', soldes, somme: v.somme, total,
+      pourquoi: v.etat === 'NON_LU'
+        ? 'totalSupply could not be read at block ' + auBloc
+        : 'reconstructed sum differs from totalSupply at block ' + auBloc + ' by ' + v.ecart };
+  }
+  return { etat: 'COMPLET', soldes, somme: v.somme, total };
+}
+
+/**
  * La somme des soldes positifs doit egaler `totalSupply`. Trois etats, jamais un booleen : « pas lu »
  * n est ni « juste » ni « faux », et le confondre avec l un des deux publierait une fausse certitude.
  */
