@@ -87,12 +87,60 @@ const rpc = async (methode, p) => {
 const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 let compte = null, enCours = false;
 
+/* ══ LE MONTANT, EN UNITES QU UN HUMAIN PEUT JUGER ═══════════════════════════════════════════════
+ * ⛔ LES DECIMALES ET LE SYMBOLE SONT LUS SUR LE JETON, JAMAIS SUPPOSES. Un jeton a 6 decimales
+ *    affiche 1 000 000 000 000 fois trop si on suppose 18. Lecture impossible -> on garde le brut. */
+let uniteRecompense = null; /* { sym, dec } ou null si illisible */
+
+async function lireUniteRecompense() {
+  if (JETON_RECOMPENSE === '0x0000000000000000000000000000000000000000') {
+    uniteRecompense = { sym: 'ETH', dec: 18 };
+    return;
+  }
+  try {
+    const d = await rpc('eth_call', [{ to: JETON_RECOMPENSE, data: '0x313ce567' }, 'latest']);
+    const s2 = await rpc('eth_call', [{ to: JETON_RECOMPENSE, data: '0x95d89b41' }, 'latest']);
+    const dec = d && d !== '0x' ? Number(BigInt(d)) : null;
+    if (dec === null || !Number.isInteger(dec) || dec < 0 || dec > 36) { uniteRecompense = null; return; }
+    uniteRecompense = { sym: decoderChaine(s2) || 'tokens', dec };
+  } catch { uniteRecompense = null; }
+}
+
+/** Decode une chaine ABI. ⛔ Rend null plutot que du charabia hexadecimal. */
+function decoderChaine(hex) {
+  try {
+    const d = String(hex || '').replace(/^0x/, '');
+    if (d.length < 128) return null;
+    const taille = Number(BigInt('0x' + d.slice(64, 128)));
+    if (!taille || taille > 64) return null;
+    const oct = d.slice(128, 128 + taille * 2).match(/.{2}/g) || [];
+    return new TextDecoder().decode(Uint8Array.from(oct.map((h) => parseInt(h, 16))));
+  } catch { return null; }
+}
+
+/**
+ * Le montant, lisible, SUIVI du nombre brut.
+ * ⛔ LE BRUT RESTE AFFICHE : c est lui qui est dans la feuille de merkle, donc le seul qui permette
+ *    a l utilisateur de recalculer et de nous contredire. L enlever ferait de la lisibilite une
+ *    perte de verifiabilite.
+ */
+function montantLisible(brutMontant) {
+  const n = String(brutMontant);
+  if (!uniteRecompense) return n + ' (raw units — could not read this token\'s decimals, so no conversion is shown)';
+  const v = BigInt(n);
+  const base = 10n ** BigInt(uniteRecompense.dec);
+  const ent = v / base;
+  const frac = (v % base).toString().padStart(uniteRecompense.dec, '0').replace(/0+$/, '');
+  const humain = ent.toLocaleString('en-US') + (frac ? '.' + frac.slice(0, 8) : '');
+  return humain + ' ' + uniteRecompense.sym + ' (' + n + ' raw)';
+}
+
 /** ⛔ Une phrase par etat. « rien a reclamer » a sept causes, et les confondre trompe l utilisateur. */
 function phrase(r, jeton) {
-  if (r.etat === 'PAYABLE') return { classe: 'ok', texte: 'You can claim ' + r.montant + ' (raw units).' };
+  if (r.etat === 'PAYABLE') return { classe: 'ok', texte: 'You can claim ' + montantLisible(r.montant) + '.' };
   if (r.etat === 'CONTESTATION') {
     const min = Math.ceil((r.resteSecondes || 0) / 60);
-    return { classe: 'tiede', texte: 'Your share is ' + r.montant + ', but claims open in about '
+    return { classe: 'tiede', texte: 'Your share is ' + montantLisible(r.montant) + ', but claims open in about '
       + min + ' min. That wait exists so anyone can recompute the root first.' };
   }
   if (r.etat === 'DEJA_RECLAME') return { classe: 'doux', texte: 'Already claimed by this wallet.' };
@@ -113,6 +161,8 @@ async function lire() {
   enCours = true;
   $('#adrPot').textContent = POT;
   $('#adrRecompense').textContent = JETON_RECOMPENSE;
+  /* ⛔ AVANT toute phrase de montant : sans l unite, chaque montant sortirait en unites brutes. */
+  await lireUniteRecompense();
   $('#adrJeton').textContent = JETON_HOLDERS;
   $('#titre').textContent = 'Reading the chain…';
   $('#tours').innerHTML = '';
