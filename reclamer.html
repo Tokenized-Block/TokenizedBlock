@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claim your share</title>
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b;--tiede:#e8c46a}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px} h2{font-size:15px;margin:0 0 8px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  code{font-size:12.5px;word-break:break-all;color:var(--doux)}
+  button{font:inherit;font-weight:700;padding:12px 18px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  button.sec{background:#123;color:var(--texte);border:1px solid var(--ligne)}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)} .tiede{color:var(--tiede)}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:4px 0}
+  .tour{border-top:1px solid var(--ligne);padding:12px 0}
+  .tour:first-child{border-top:0}
+  input{padding:10px;border-radius:10px;border:1px solid var(--ligne);background:#061217;color:var(--texte);width:100%;box-sizing:border-box}
+</style>
+</head>
+<body>
+<main>
+  <h1>Claim your share</h1>
+  <p class="doux">If you were holding a block when a reward round was drawn, this page finds your share
+    and builds the claim. It never holds a key — <b>your</b> wallet signs.</p>
+
+  <div class="carte">
+    <h2>What this page checks before it hands you anything</h2>
+    <ul class="doux">
+      <li>It <b>recomputes the whole tree from the chain</b> — the drawn block, the balances at that
+        block, the exclusions — and compares the root it gets to the one written in the contract.</li>
+      <li class="ko"><b>If the two roots disagree, you get nothing and a warning instead.</b> A proof
+        from a tree that does not match would fail in your wallet and cost you gas, and you would
+        think the problem was yours.</li>
+      <li>It replays your own proof to the root before showing you the button.</li>
+      <li>Nothing here is stored on my side. Anyone can redo this with public data.</li>
+    </ul>
+  </div>
+
+  <div class="carte">
+    <p class="doux">Pot: <code id="adrPot"></code></p>
+    <p class="doux">Block token: <code id="adrJeton"></code></p>
+    <div style="margin:10px 0">
+      <label class="doux" for="champJeton">Look at another block (paste its address):</label>
+      <input id="champJeton" type="text" spellcheck="false" placeholder="0xb20…">
+    </div>
+    <button id="connecter" type="button">Connect wallet</button>
+    <button id="relire" class="sec" type="button">Re-read</button>
+  </div>
+
+  <div class="carte">
+    <h2 id="titre">Reading the chain…</h2>
+    <div id="tours"></div>
+    <p id="etat" class="doux" style="margin:12px 0 0"></p>
+  </div>
+</main>
+<script type="module">
+/* ⛔ PAGE DE RECLAMATION (2026-09-20). Elle ne signe rien : elle recalcule, VERIFIE, puis passe une
+ *    transaction au wallet du detenteur.
+ * ⛔ ELLE REFUSE DE DONNER UNE PREUVE SI LA RACINE RECALCULEE NE CORRESPOND PAS A LA RACINE ANCREE.
+ *    Servir quand meme ferait echouer la reclamation chez l utilisateur, qui paierait du gas et
+ *    croirait que le probleme vient de lui. */
+import { periodesDuPot, etatReclamation } from './reclamation.js';
+import { envoyerDepuisWallet } from './envoi.js';
+
+const $ = (s) => document.querySelector(s);
+const RPC = 'https://mainnet.base.org';
+const POT = '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272';
+const PLANCHER = 50861088;
+const params = new URLSearchParams(location.search);
+let JETON = (params.get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+
+const rpc = async (methode, p) => {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params: p }) }).then((x) => x.json());
+  if (r.error) throw new Error(r.error.message || 'rpc error');
+  return r.result;
+};
+const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+let compte = null, enCours = false;
+
+/** ⛔ Une phrase par etat. « rien a reclamer » a sept causes, et les confondre trompe l utilisateur. */
+function phrase(r, jeton) {
+  if (r.etat === 'PAYABLE') return { classe: 'ok', texte: 'You can claim ' + r.montant + ' (raw units).' };
+  if (r.etat === 'CONTESTATION') {
+    const min = Math.ceil((r.resteSecondes || 0) / 60);
+    return { classe: 'tiede', texte: 'Your share is ' + r.montant + ', but claims open in about '
+      + min + ' min. That wait exists so anyone can recompute the root first.' };
+  }
+  if (r.etat === 'DEJA_RECLAME') return { classe: 'doux', texte: 'Already claimed by this wallet.' };
+  if (r.etat === 'RIEN_A_TOI') return { classe: 'doux', texte: r.pourquoi };
+  if (r.etat === 'PAS_ANCREE') return { classe: 'doux', texte: r.pourquoi };
+  /* ⛔ LE CAS GRAVE EST DIT COMME TEL, avec les deux racines quand on les a. */
+  if (r.etat === 'DESACCORD') {
+    return { classe: 'ko', texte: '⚠️ ' + r.pourquoi
+      + (r.racineRecalculee ? ' · recomputed ' + r.racineRecalculee.slice(0, 14) + '… vs anchored '
+        + String(r.racineAncree).slice(0, 14) + '…' : '')
+      + ' — do not claim, tell the operator.' };
+  }
+  return { classe: 'doux', texte: r.pourquoi || 'could not read this round' };
+}
+
+async function lire() {
+  if (enCours) return;
+  enCours = true;
+  $('#adrPot').textContent = POT;
+  $('#adrJeton').textContent = JETON;
+  $('#titre').textContent = 'Reading the chain…';
+  $('#tours').innerHTML = '';
+  $('#etat').textContent = '';
+  try {
+    const periodes = await periodesDuPot({ rpc, pot: POT });
+    /* ⛔ UNE LECTURE RATEE N EST PAS « AUCUN TOUR » : on le dit au lieu d afficher une page vide. */
+    if (periodes === null) {
+      $('#titre').textContent = 'Could not read the rounds';
+      $('#etat').innerHTML = '<span class="ko">The pot could not be read — that is us, not you. Try Re-read.</span>';
+      return;
+    }
+    const ancrees = periodes.filter((p) => p.ancreeLe);
+    $('#titre').textContent = ancrees.length
+      ? ancrees.length + (ancrees.length === 1 ? ' round has been drawn' : ' rounds have been drawn')
+      : 'No round has been drawn yet';
+    if (!ancrees.length) {
+      $('#etat').textContent = periodes.length
+        ? 'Round ' + (periodes.length - 1) + ' is still running. Come back when it has been drawn.'
+        : 'No round exists yet.';
+      return;
+    }
+    if (!compte) {
+      $('#etat').textContent = 'Connect your wallet to see whether any of these owe you something.';
+      return;
+    }
+    const maintenant = Math.floor(Date.now() / 1000);
+    for (const p of ancrees) {
+      const bloc = document.createElement('div');
+      bloc.className = 'tour';
+      bloc.innerHTML = '<b>Round ' + p.id + '</b> · drawn block <code>' + txt(p.cible)
+        + '</code><br><span class="doux">checking…</span>';
+      $('#tours').appendChild(bloc);
+      let r = null;
+      try { r = await etatReclamation({ rpc, pot: POT, periode: p, jeton: JETON, compte, plancher: PLANCHER, maintenant }); }
+      catch (e) { r = { etat: 'NON_LU', pourquoi: e.message || String(e) }; }
+      const ph = phrase(r, JETON);
+      bloc.innerHTML = '<b>Round ' + p.id + '</b> · drawn block <code>' + txt(p.cible) + '</code><br>'
+        + '<span class="' + ph.classe + '">' + txt(ph.texte) + '</span>';
+      if (r.etat === 'PAYABLE') {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.style.marginTop = '8px';
+        b.textContent = 'Claim — sign in your wallet';
+        b.addEventListener('click', () => void reclamer(p.id, r, b));
+        bloc.appendChild(b);
+      }
+    }
+  } catch (e) {
+    $('#titre').textContent = 'Could not read Base';
+    $('#etat').innerHTML = '<span class="ko">' + txt(e.message || e) + '</span>';
+  } finally { enCours = false; }
+}
+
+async function reclamer(id, r, bouton) {
+  bouton.disabled = true;
+  $('#etat').textContent = 'Opening your wallet — it should show this contract and no value sent.';
+  const res = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte,
+    to: POT, data: r.calldata, value: '0x0' });
+  /* ⛔ UN RECU A 0x1 NE SUFFIT PAS SUR UN SMART ACCOUNT : envoyerDepuisWallet lit desormais le
+   *    UserOperationEvent. Mesure du 2026-09-20 : une operation interne echouee sortait avec un
+   *    reçu « succes », et l ecran annoncait un versement qui n avait pas eu lieu. */
+  if (res.etat !== 'CONFIRME') {
+    $('#etat').innerHTML = '<span class="ko">Not done: ' + txt(res.pourquoi || res.etat) + '</span>';
+    bouton.disabled = false;
+    return;
+  }
+  $('#etat').innerHTML = '<span class="ok">Claimed.</span> Transaction: <code>' + txt(res.hash) + '</code>';
+  void lire();
+}
+
+$('#connecter').addEventListener('click', async () => {
+  if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
+  try {
+    const c = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
+    compte = c && c[0];
+    $('#connecter').textContent = compte ? String(compte).slice(0, 6) + '…' + String(compte).slice(-4) : 'Connect wallet';
+    await lire();
+  } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
+});
+
+/* ⛔ REPRENDRE UNE AUTORISATION DEJA DONNEE SANS REDEMANDER : `eth_accounts` n ouvre aucune fenetre. */
+if (window.ethereum) {
+  window.ethereum.request({ method: 'eth_accounts' }).then((c) => {
+    if (c && c[0]) { compte = c[0]; $('#connecter').textContent = String(c[0]).slice(0, 6) + '…' + String(c[0]).slice(-4); void lire(); }
+  }).catch(() => {});
+  if (window.ethereum.on) {
+    window.ethereum.on('accountsChanged', (c) => { compte = c && c[0]; void lire(); });
+    window.ethereum.on('chainChanged', () => { void lire(); });
+  }
+}
+
+$('#relire').addEventListener('click', () => { void lire(); });
+$('#champJeton').addEventListener('change', () => {
+  const v = String($('#champJeton').value || '').trim().toLowerCase();
+  /* ⛔ UNE ADRESSE MAL FORMEE EST REFUSEE ET DITE, jamais interrogee telle quelle. */
+  if (!/^0x[0-9a-f]{40}$/.test(v)) { $('#etat').innerHTML = '<span class="ko">That is not an address.</span>'; return; }
+  JETON = v;
+  void lire();
+});
+
+void lire();
+</script>
+</body>
+</html>

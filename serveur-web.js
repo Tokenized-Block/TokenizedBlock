@@ -53,6 +53,7 @@ async function lireOpenLaunch() {
 import { listerCreations } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
 import { prochaineFenetre } from './fenetre-scan.js';
+import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
 import { NOS_BLOCKS_GENESE } from './origine.js';
@@ -524,7 +525,7 @@ setInterval(() => {
 }, 30000).unref();
 
 const SERVIS = [
-  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'frais.html',
+  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'reclamer.html', 'reclamation.js', 'veille-pot.js', 'frais.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
@@ -770,6 +771,24 @@ createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, pourquoi: 'holders could not be read right now' }));
     });
+    return;
+  }
+
+  /* ⛔ LE VEILLEUR, EXPOSE. Il crie sur ce que le contrat ACCEPTE : un second ancrage sur la meme
+   *    periode. Le delai de contestation etant porte par la PERIODE et non par le jeton (trouvaille
+   *    d audit du 2026-09-20, confirmee sous forge), tout jeton ancre plus de 6 h apres le premier
+   *    n a AUCUNE fenetre. Le contrat n est pas modifiable : rendre visible est tout ce qui reste. */
+  if (chemin === '/api/veille') {
+    veiller({ rpc: rpcServeur, pot: '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272', depuis: 51571225 })
+      .then((v) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? x.toString() : x)));
+      })
+      .catch((e) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        /* ⛔ UNE VEILLE QUI ECHOUE LE DIT. « 0 alerte » sur une lecture ratee endort. */
+        res.end(JSON.stringify({ ok: false, complet: false, alertes: [], pourquoi: String(e && e.message || e).slice(0, 120) }));
+      });
     return;
   }
 
