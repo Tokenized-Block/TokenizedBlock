@@ -486,6 +486,9 @@ body:not(.surMap) .mapCta{display:none}
 .rangL{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--ligne)}
 /* ⛔ Phil 2026-09-20 : la ligne entiere ouvre le block. Pas de bouton en plus — la mise en page ne
  *    bouge pas d un pixel, seuls le curseur et le fond au survol changent. */
+/* ⛔ Un filtre a zero reste a sa place et se lit comme tel : la barre ne change jamais de forme. */
+.stadeLigne .puce.vide{opacity:.42}
+.stadeLigne .puce.vide.on{opacity:1}
 .rangL[data-block]{cursor:pointer}
 .rangL[data-block]:hover,.rangL[data-block]:focus-visible{background:rgb(var(--accentRgb) / .10);outline:none}
 .rangL[data-block]:hover .rangNom{text-decoration:underline}
@@ -1388,7 +1391,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0129" hidden>Build <code>20260920-0129</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0130" hidden>Build <code>20260920-0130</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4885,16 +4888,14 @@ function filtreLive(e) {
   /* tip 2310: All = fee-relevant feed for FEE_WALLET (address never shown).
    * Show: Launch/hook fee path (Feed/Kill · Messages · hooked swaps → FEE_WALLET). Free creates under Created chip.
    * Hide: free factory creates on All (no fee yet), GM/NOTE (chip GM). */
-  if (liveFiltre === 'TOUT') {
-    if (e.type === 'GM' || e.type === 'NOTE') return false;
-    if (e.type === 'CREATION') return e.paidCreate === true; /* CreateRouter → FEE_WALLET */
-    if (e.type === 'SWAP') {
-      /* Hooked pools now fee to FEE_WALLET (tip 2300 HOOK_PREVU) — must appear on All */
-      if (e.confiance === 'HOOK') return true;
-      return e.verifie === true;
-    }
-    return true; /* ACHAT · VENTE · MESSAGE */
-  }
+  /* ⛔⛔ PHIL (2026-09-20) : « qu on capte TOUT ». « All » veut dire TOUT — et c est le seul sens que
+   *    ce mot peut avoir a l ecran. Avant, il ecartait les creations gratuites (il exigeait
+   *    `paidCreate`, or le CreateRouter n est plus utilise : la condition etait TOUJOURS fausse), les
+   *    GM/NOTE, et les swaps non verifies. Mesure sur la capture de Phil : All 1238 = Swap 1238,
+   *    pendant que Created affichait 16 et Sent 8. « All » etait donc un doublon de « Swap », et les
+   *    24 evenements des deux autres n apparaissaient nulle part dans la vue par defaut.
+   * ⚠️ Ce filtre est un tri de LECTURE : il ne change ni ce qui est lu, ni ce qui est compte. */
+  if (liveFiltre === 'TOUT') return true;
   if (liveFiltre === 'NOUS') return estANous(e.jeton) || (e.type === 'MESSAGE' && (estANous(e.de) || estANous(e.a)));
   if (liveFiltre === 'TRUSTED') {
     const tset = lireTrusted();
@@ -5256,6 +5257,15 @@ function peindreCreateFeeHonesty() {
  *    Kill (ventes), Messages et Big rendaient 0 ligne (le fil ne recoit que des SWAP sans montant lu) et Trades donnait
  *    exactement Swap. Chaque filtre porte desormais SON NOMBRE, et un filtre a zero se cache (All et Created restent, ainsi
  *    que celui qui est ouvert) ; il revient seul des qu il a de la matiere. Le compte vient des memes evenements. */
+/** ⛔ Les categories qui se PARTAGENT les evenements (aucun evenement dans deux a la fois). « Big » et
+ *  « Trades » n en sont pas : ils recoupent les autres, et ils ne comptent donc pas dans la somme. */
+const FILTRES_PARTITION = ['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'MESSAGE'];
+/** Le total par type, calcule SANS passer par filtreLive : deux chemins qui doivent tomber d accord. */
+function comptesParType() {
+  const c = Object.create(null);
+  for (const e of liveEvts) { const t = String(e && e.type || '?'); c[t] = (c[t] || 0) + 1; }
+  return c;
+}
 function majComptesFiltres() {
   const garde = liveFiltre;
   const comptes = {};
@@ -5264,18 +5274,36 @@ function majComptesFiltres() {
     if (!b.dataset.nom) b.dataset.nom = b.textContent.trim();
     let n = 0;
     try { liveFiltre = f; n = liveEvts.filter(filtreLive).length; } catch (_) { n = 0; }
-    b.textContent = b.dataset.nom + (n ? ' ' + n : '');
-    b.hidden = n === 0 && f !== 'TOUT' && f !== 'CREATION' && f !== garde;
+    /* ⛔⛔ PHIL (2026-09-20) : « pourquoi t as tout retire ». Ma regle « cacher un filtre a zero »
+     *    faisait CHANGER LA BARRE DE FORME pendant le chargement : au depart tout vaut 0, donc il ne
+     *    restait que deux boutons. Un filtre vide reste desormais a l ecran et DIT 0 — un compte a
+     *    zero est une information, une absence n en est pas une. */
+    b.textContent = b.dataset.nom + ' ' + n;
+    b.hidden = false;
+    b.classList.toggle('vide', n === 0);
     comptes[f] = n;
   }
-  /* Trades = achats + ventes + swaps : tant qu il n y a que des swaps, c est le MEME contenu que Swap — un seul bouton */
-  const tr = document.querySelector('[data-filtre="ECHANGES"]');
-  if (tr && garde !== 'ECHANGES' && comptes.ECHANGES === comptes.SWAP) tr.hidden = true;
   liveFiltre = garde;
+  return comptes;
+}
+/** ⛔ L INSTRUMENT S ACCUSE LUI-MEME : si « All » ne vaut pas la somme des categories disjointes, la
+ *  phrase le dit, avec l ecart. Sans ca, un filtre qui perd des lignes ne se signale jamais. */
+function reconciliationFiltres(comptes) {
+  const total = comptes.TOUT;
+  if (typeof total !== 'number') return '';
+  const somme = FILTRES_PARTITION.reduce((a, f) => a + (comptes[f] || 0), 0);
+  const parType = comptesParType();
+  const connus = new Set(['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE']);
+  const autres = Object.keys(parType).filter((t) => !connus.has(t));
+  const detail = FILTRES_PARTITION.map((f) => f.toLowerCase() + ' ' + (comptes[f] || 0)).join(' + ');
+  if (somme === total && autres.length === 0) return ' · ' + total + ' = ' + detail;
+  return ' · ⚠️ ' + total + ' ≠ ' + detail + ' (' + somme + ')'
+    + (autres.length ? ' · types sans filtre : ' + autres.join(', ') : '')
+    + ' — un evenement n est compte par aucun bouton, dis-le moi';
 }
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
-  majComptesFiltres();
+  const comptesFiltres = majComptesFiltres();
   /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
    *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
    *    echanges neutres CONSECUTIFS d un meme block tiennent en UNE ligne, avec leur nombre et leur plage de blocs. */
@@ -5370,7 +5398,8 @@ function peindreLive() {
     + ' · ' + suivis.size + ' blocks followed · ' + pools.length + ' pools found on chain (' + parConf('NOTRE') + ' app format, '
     + parConf('SANS_HOOK') + ' without hook, ' + parConf('HOOK') + ' with a hook) plus the app\'s own market keys'
     + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '')
-    + (liveTrou ? ' · ' + liveTrou.toLocaleString('en-US') + ' chain blocks not read while you were away — a gap, not a quiet time' : '') + '.';
+    + (liveTrou ? ' · ' + liveTrou.toLocaleString('en-US') + ' chain blocks not read while you were away — a gap, not a quiet time' : '')
+    + reconciliationFiltres(comptesFiltres) + '.';
   /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-13) : le repere du bas etait DEJA visible avant la premiere
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
@@ -9045,7 +9074,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0129',
+    build: '20260920-0130',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
