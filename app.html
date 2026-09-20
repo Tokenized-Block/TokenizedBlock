@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0156" hidden>Build <code>20260920-0156</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0157" hidden>Build <code>20260920-0157</code> · leaderboard reads both sources in USD; refusal has its own line.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3820,12 +3820,28 @@ let profilNourriture = null;
 /* ⛔ LE CLASSEMENT SE CALCULE SUR CE QU ON A LU, ET RIEN D AUTRE. Les blocks sans vie lue partent en
  * NON MESURES — jamais au fond de la liste, ou ils se liraient comme « les moins bons ». */
 function classementCourant() {
-  return classer(habitants.map((h) => ({
-    adr: h.adr, symbole: h.sym,
-    capitalisation: typeof h.vie === 'number' ? h.vie : null,
-    devise: h.devise || null,
-    pourquoi: h.pourquoi || null,
-  })));
+  /* ⛔⛔ MESURE (2026-09-20, en ligne) : « None of the 177 blocks we read has a readable market yet »
+   *    s affichait pendant que les etages juste a cote annonçaient Trunk 30 · Branch 108 · Sprout 30 —
+   *    sur les MEMES blocks. `peindreStades` croisait deja une seconde source (FDV publique) ; ce
+   *    classement-ci ne lisait que la vie on-chain. Il rendait donc VIDE sans etre FAUX.
+   * ⛔ UNE SEULE UNITE : `vieEnUsd` est le convertisseur deja en place — on l appelle, on ne le
+   *    recopie pas. Sans unite commune, `classer()` voit ETH et USDC melanges et refuse, a raison.
+   * ⛔ LA SOURCE RESTE ATTACHEE A LA LIGNE : chaine ou agregateur, l ecran doit pouvoir le dire. */
+  return classer(habitants.map((h) => {
+    const surChaine = vieEnUsd(typeof h.vie === 'number' ? h.vie : null, h.devise);
+    const publique = (marcheParAdr.get(String(h.adr).toLowerCase()) || {}).fdvUsd;
+    const cap = surChaine != null ? surChaine
+      : (typeof publique === 'number' && Number.isFinite(publique) && publique > 0 ? publique : null);
+    return {
+      adr: h.adr, symbole: h.sym,
+      capitalisation: cap,
+      devise: cap == null ? null : 'USD',
+      source: cap == null ? null : (surChaine != null ? 'CHAINE' : 'AGREGATEUR'),
+      pourquoi: cap == null
+        ? (h.pourquoi || (h.vie == null ? 'market not read yet' : 'no USD price for this quote currency'))
+        : null,
+    };
+  }));
 }
 
 /* ⛔ `enTexte` N ECHAPPE PAS LE GUILLEMET : il passe par textContent, qui protege < > &, pas ". Un
@@ -3859,19 +3875,27 @@ function peindreClassement() {
     + '<span class="rangN">' + b.rang + '</span>'
     + '<div class="rangArt">' + dessin(b.adr, b.symbole) + '</div>'
     + '<span class="rangNom">' + enTexte(b.symbole || '?') + '</span>'
-    + '<span class="rangVie">' + (Math.round(b.capitalisation * 100) / 100).toLocaleString('en-US')
-    + ' ' + enTexte(b.devise || '') + '</span></li>').join('');
+    + '<span class="rangVie">$' + (Math.round(b.capitalisation * 100) / 100).toLocaleString('en-US')
+    /* ⛔ Un rang tire d un agregateur public n est pas un rang lu sur la chaine : la ligne le dit. */
+    + (b.source === 'AGREGATEUR' ? '<span class="filS" title="from a public aggregator, not read on chain"> ~</span>' : '')
+    + '</span></li>').join('');
   /* ⛔ « AUCUN CLASSE » SE DIT COMME UN FAIT SUR NOTRE LECTURE, pas sur les blocks. */
   /* ⛔ TROIS PHRASES, PAS DEUX. « Aucun classé sur 0 lu » se lisait comme un verdict alors que la map
    * n avait simplement pas fini de lire — un fait sur nous, presenté comme un fait sur les blocks. */
+  /* ⛔ QUATRE ETATS, QUATRE PHRASES. Le refus de classer (devises melangees) tombait dans le « pas
+   *    fini de lire » : un etat neuf dans le `else` d un autre. Il a sa branche maintenant. */
+  const nAgr = cl.classes.filter((b) => b.source === 'AGREGATEUR').length;
   $('#rangNote').textContent = cl.population === 0
     ? (lectureVieEnCours ? 'Reading markets on the chain…' : 'The map has not finished reading the chain yet.')
-    : cl.classes.length
-      ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
-        + ' with no readable market — unranked, which is not last.'
-      : (lectureVieEnCours
-        ? 'Still reading markets… ' + cl.population + ' touched so far — ranked when life is read.'
-        : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.');
+    : cl.devises.length > 1
+      ? 'Refusing to rank: markets quoted in ' + cl.devises.join(' vs ') + ' — comparing them would be a false ranking made of true numbers.'
+      : cl.classes.length
+        ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
+          + ' with no readable market — unranked, which is not last.'
+          + (nAgr ? ' ' + nAgr + ' of them (~) priced by a public aggregator, not read on chain.' : '')
+        : (lectureVieEnCours
+          ? 'Still reading markets… ' + cl.population + ' touched so far — ranked when life is read.'
+          : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.');
   /* ⛔ LA BORNE COURTE ICI, L EXPLICATION DANS LEARN (Phil, 2026-09-12 : six lignes sous un
    * classement se font sauter, et la borne part avec elles). Le texte long vit dans un seul endroit
    * — le module — et Learn l affiche en entier. */
