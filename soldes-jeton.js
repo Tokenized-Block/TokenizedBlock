@@ -65,6 +65,44 @@ export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas
 }
 
 /**
+ * Une passe incrementale ATOMIQUE sur un etat { soldes, jusqua, ratees }.
+ *
+ * ⛔⛔ CETTE FONCTION EXISTE A CAUSE D UNE TROUVAILLE D AUDIT (2026-09-20), reproduite a
+ *    l execution contre le vrai serveur : la version precedente passait la Map du cache
+ *    DIRECTEMENT a rejouerTransferts, qui MUTE EN PLACE. Une passe a moitie echouee laissait ses
+ *    mutations dedans pendant que le curseur, lui, n avancait pas — et la passe suivante
+ *    REAPPLIQUAIT les memes Transfer. Un detenteur ressortait credite de 25 000 au lieu de 15 000.
+ * ⛔ ET LES TROIS GARDES PASSAIENT. Un transfert entre deux adresses non nulles CONSERVE la somme,
+ *    donc verifierSomme rendait JUSTE ; aucun solde ne devenait negatif ; et ratees etait ECRASE a
+ *    zero par la passe suivante. Le faux sortait sans la moindre erreur.
+ *
+ * LA REGLE : on rejoue dans une Map NEUVE, et soldes + curseur + compteur changent ENSEMBLE ou pas
+ * du tout. Une passe sale est JETEE EN ENTIER — garder ses mutations « en attendant » est
+ * exactement ce qui produisait le double comptage.
+ *
+ * @param {object} e
+ * @param {{soldes:Map, jusqua:number|null, ratees:number}} e.etat  muté en place, atomiquement
+ * @returns {{publie:boolean, ratees:number, deBloc:number|null}}
+ */
+export async function passeIncrementale({ rpc, jeton, etat, naissance, fin, pas = PAS_LOGS }) {
+  const deBloc = etat.jusqua === null ? naissance : etat.jusqua + 1;
+  if (!Number.isInteger(deBloc) || !Number.isInteger(fin) || deBloc > fin) {
+    return { publie: false, ratees: etat.ratees || 0, deBloc: null };
+  }
+  /* ⛔ MAP NEUVE : rien de ce qui suit ne peut salir l etat publie si la passe echoue. */
+  const neuf = new Map(etat.soldes);
+  const passe = await rejouerTransferts({ rpc, jeton, deBloc, aBloc: fin, soldes: neuf, pas });
+  if (passe.ratees) {
+    etat.ratees = passe.ratees;
+    return { publie: false, ratees: passe.ratees, deBloc };
+  }
+  etat.soldes = neuf;
+  etat.jusqua = fin;
+  etat.ratees = 0;
+  return { publie: true, ratees: 0, deBloc };
+}
+
+/**
  * Reconstruit les soldes A UN BLOC DONNE, et lit `totalSupply` AU MEME BLOC.
  *
  * ⛔⛔ POUR UNE RECOMPENSE, LA TETE DE CHAINE EST LA MAUVAISE REPONSE. Le tirage designe un bloc

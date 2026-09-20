@@ -6,7 +6,7 @@
 // RPC simule : rien ne part sur un reseau.
 import assert from 'node:assert/strict';
 import { naissanceDuJeton, rejouerTransferts, verifierSomme, soldesNegatifs, soldesAuBloc,
-  TOPIC_TRANSFER, ADRESSE_ZERO } from './soldes-jeton.js';
+  passeIncrementale, TOPIC_TRANSFER, ADRESSE_ZERO } from './soldes-jeton.js';
 
 let n = 0;
 const eq = (a, b, m) => { assert.equal(a, b, m); n++; };
@@ -167,6 +167,57 @@ const rpcAvec = (tous, fenetresRefusees = []) => async (methode, params) => {
   const sansTotal = await soldesAuBloc({ rpc: async (m, p) => (m === 'eth_call' ? '0x' : rpcAvec(tous)(m, p)),
     jeton: JETON, naissance: 1500, auBloc: 4000 });
   eq(sansTotal.etat, 'INCOMPLET', 'totalSupply illisible : refus');
+}
+
+// ══ 9. LA TROUVAILLE D AUDIT : UNE PASSE SALE NE DOIT PAS ETRE COMPTEE DEUX FOIS ══════════════
+// ⛔⛔ SCENARIO EXACT REPRODUIT PAR L AUDIT DU 2026-09-20 contre le vrai serveur :
+//    passe 1 propre jusqu au bloc 4999 (mint 1000 vers A)
+//    passe 2 : la fenetre 5000-5499 passe et applique A->B de 10 ; la 5500-5999 est REFUSEE
+//    passe 3 : repart de 5000 et REAPPLIQUE le meme A->B de 10
+//    verite A=985 B=15 · servi avant correctif A=975 B=25
+// ⛔ ET LES TROIS GARDES PASSAIENT : un transfert entre deux adresses non nulles CONSERVE la somme,
+//    aucun solde ne devient negatif, et ratees est ECRASE a 0 par la passe suivante.
+{
+  const tous = [log(1500, ADRESSE_ZERO, A, 1000n), log(5200, A, B, 10n), log(5700, A, B, 5n)];
+  /* passe 1 : propre jusqu a 4999 */
+  const etat = { soldes: new Map(), jusqua: null, ratees: 0 };
+  await passeIncrementale({ rpc: rpcAvec(tous), jeton: JETON, etat, naissance: 1500, fin: 4999, pas: 500 });
+  eq(etat.jusqua, 4999, 'passe 1 propre : le curseur avance');
+  eq(etat.soldes.get(A), 1000n, 'A detient tout');
+
+  /* passe 2 : une fenetre passe, la suivante est REFUSEE */
+  const r2 = await passeIncrementale({ rpc: rpcAvec(tous, [[5500, 5999]]), jeton: JETON, etat,
+    naissance: 1500, fin: 5999, pas: 500 });
+  ok(!r2.publie, 'passe sale : rien n est publie');
+  eq(etat.jusqua, 4999, 'le curseur NE BOUGE PAS');
+  // ⛔ LE COEUR DU CORRECTIF : la Map publiee ne doit porter AUCUNE mutation de la passe sale.
+  eq(etat.soldes.get(A), 1000n, 'A est INTACT : la passe sale a ete jetee EN ENTIER');
+  ok(!etat.soldes.has(B), 'et B n existe pas encore');
+
+  /* passe 3 : tout passe */
+  const r3 = await passeIncrementale({ rpc: rpcAvec(tous), jeton: JETON, etat, naissance: 1500, fin: 5999, pas: 500 });
+  ok(r3.publie, 'passe 3 propre : publiee');
+  eq(etat.jusqua, 5999, 'le curseur avance');
+  // ⛔ LA VERITE, PAS LE DOUBLE COMPTAGE : A=1000-10-5=985, B=15.
+  eq(etat.soldes.get(A), 985n, 'A = 985, pas 975 : aucun Transfer n a ete compte deux fois');
+  eq(etat.soldes.get(B), 15n, 'B = 15, pas 25');
+
+  // ⛔ LE TEMOIN QUI PROUVE QUE LES GARDES ETAIENT AVEUGLES : sur les soldes FAUX du double
+  //    comptage, verifierSomme aurait rendu JUSTE et soldesNegatifs zero. Elles ne pouvaient donc
+  //    PAS attraper ce defaut — seul le rejeu dans une Map neuve le pouvait.
+  const faux = new Map([[A, 975n], [B, 25n]]);
+  eq(verifierSomme({ soldes: faux, totalSupply: 1000n }).etat, 'JUSTE',
+    'les soldes DOUBLES passent verifierSomme : la garde etait structurellement aveugle');
+  eq(soldesNegatifs(faux).length, 0, 'et aucun solde negatif non plus');
+}
+
+// ══ 10. passeIncrementale ne fait rien quand il n y a rien a lire ══════════════════════════════
+{
+  const etat = { soldes: new Map([[A, 42n]]), jusqua: 9000, ratees: 0 };
+  const r = await passeIncrementale({ rpc: rpcAvec([]), jeton: JETON, etat, naissance: 1500, fin: 9000 });
+  ok(!r.publie, 'deja a jour : rien n est publie');
+  eq(etat.soldes.get(A), 42n, 'et rien n est touche');
+  eq(etat.jusqua, 9000, 'le curseur reste');
 }
 
 console.log('test-soldes-jeton : ' + n + ' assertions, OK');

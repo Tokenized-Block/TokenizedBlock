@@ -53,7 +53,7 @@ async function lireOpenLaunch() {
 import { listerCreations } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
 import { prochaineFenetre } from './fenetre-scan.js';
-import { naissanceDuJeton, rejouerTransferts, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
+import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
 import { NOS_BLOCKS_GENESE } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -350,14 +350,9 @@ async function reconstruireHolders(jeton) {
       /* ⛔ Naissance introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
       if (e.naissance === null) { e.enCours = false; return e; }
     }
-    const deBloc = e.jusqua === null ? e.naissance : e.jusqua + 1;
-    if (deBloc <= fin) {
-      const passe = await rejouerTransferts({ rpc: rpcServeur, jeton, deBloc, aBloc: fin, soldes: e.soldes });
-      e.ratees = passe.ratees;
-      /* ⛔ LE CURSEUR N AVANCE QUE SUR UN BALAYAGE PROPRE : un trou recouvert par un « deja lu » ne se
-       *    rattrape jamais, et personne ne le verrait. */
-      if (!passe.ratees) e.jusqua = fin;
-    }
+    /* ⛔ LA PASSE VIT DANS soldes-jeton.js POUR ETRE TESTABLE. Une copie ici serait testee par un
+     *    test qui la recopie, ce qui ne prouverait rien. Voir passeIncrementale et son audit. */
+    await passeIncrementale({ rpc: rpcServeur, jeton, etat: e, naissance: e.naissance, fin });
     e.lu = new Date().toISOString();
   } catch (err) { e.ratees = (e.ratees || 0) + 1; }
   e.enCours = false;
@@ -377,6 +372,15 @@ async function holdersCorps(jeton) {
   }
   void reconstruireHolders(jeton).catch(() => {}); /* rafraichit en tache de fond */
   const e = dejaLa;
+  /* ⛔⛔ AUDIT DU 2026-09-20, SECONDE TROUVAILLE : cette fonction ne lisait jamais `enCours`. Pendant
+   *    un rejeu, la Map est deja mutee fenetre par fenetre alors que `ratees` et `jusqua` datent de
+   *    la passe PRECEDENTE. Un visiteur pouvait donc lire un etat ou un detenteur a 30 % de la supply
+   *    etait ABSENT, avec ratees=0 -- et le recevoir en PAYABLE.
+   *    Le drapeau existait (il garde l ECRIVAIN) ; il ne gardait pas le LECTEUR. */
+  if (e.enCours && e.jusqua === null) {
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
+      pourquoi: 'a replay is running — balances are not publishable until it finishes' });
+  }
   if (e.naissance === null) {
     return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
       pourquoi: 'no mint found for this token yet — reading, or it was never minted' });
