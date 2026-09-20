@@ -82,6 +82,20 @@
     </div>
     <p id="fEtat" class="doux" style="margin:10px 0 0"></p>
   </div>
+
+  <!-- ⛔ CARTE AJOUTEE LE 2026-09-21 apres une mesure : le wallet de frais detient ~0,002 ETH
+       d equivalent en jetons de block et seulement 0,000336 ETH. Le tour ne peut pas etre finance
+       en ETH ; il peut l etre avec ces jetons. Chemin prouve par eth_simulateV1 sur mainnet. -->
+  <div class="carte" id="carteJetons">
+    <h2>Fill this round with block tokens</h2>
+    <p class="doux">Every buy on a hooked market pays its fee in that block's own token, and those
+      tokens pile up unused. They can be the reward instead — holders of one block paid in another
+      block's token. Nothing is sold, and no ETH is spent.</p>
+    <p class="doux"><b>This takes two signatures:</b> one to let the pot take the tokens, one to send
+      them. Said here so the second one is not a surprise.</p>
+    <div id="jListe" class="doux">reading what this wallet holds…</div>
+    <p id="jEtat" class="doux" style="margin:10px 0 0"></p>
+  </div>
 </main>
 <script type="module">
 /* ⛔ PAGE DE PILOTAGE DES PERIODES DE RECOMPENSE (2026-09-20).
@@ -92,7 +106,10 @@
  *    du gas pour rien, et ferait croire a une action qui n a pas eu lieu.
  * ⛔ ET LA DATE LIMITE EST AFFICHEE : `ouvrirPeriode` refuse un debut devenu passe. Entre la
  *    preparation et la signature, Base avance d un bloc toutes les 2 s. */
-import { tour } from './boucle-pot.js';
+import { tour, prepararAlimentation } from './boucle-pot.js';
+/* ⛔ L ENCODEUR D APPROBATION VIENT DE pool.js, il n est pas recopie ici : une copie derive au
+ *    premier changement, et celle-ci porterait une transaction qui deplace des jetons reels. */
+import { encodeApprove } from './pool.js';
 import { envoyerDepuisWallet } from './envoi.js';
 
 const $ = (s) => document.querySelector(s);
@@ -253,8 +270,11 @@ async function appliquerCompte(nouveau) {
     $('#etat').textContent = '';
   }
   majBouton();
-  /* ⛔ LE CORRECTIF : la carte « Fill » se relit APRES la connexion, pas seulement avant. */
+  /* ⛔ LE CORRECTIF : les DEUX cartes « Fill » se relisent APRES la connexion, pas seulement avant.
+   *    Ajouter la carte des jetons sans ajouter sa relecture aurait reproduit mot pour mot le bug
+   *    du 2026-09-20 : « il me fait connecter en oublie ». */
   await lireFonds();
+  await lireJetons();
 }
 
 $('#connecter').addEventListener('click', async () => {
@@ -365,7 +385,103 @@ $('#fEnvoyer').addEventListener('click', async () => {
   await lireFonds();
 });
 
-void lire().then(() => lireFonds()).then(() => reprendreConnexion());
+/* ══ ALIMENTER AVEC LES FRAIS EN JETONS ═══════════════════════════════════════════════════════
+ * ⛔ LES SELECTEURS SONT ECRITS ICI PARCE QU ILS ONT ETE MESURES (keccak des signatures), et ils
+ *    sont relus par test-pot-jetons.mjs — pas seulement recopies d un souvenir. */
+/* ⛔ SEULES LES LECTURES SONT ENCODEES ICI. Les deux calldata qui DEPLACENT des jetons viennent des
+ *    helpers testes : `prepararAlimentation` (boucle-pot.js -> calldataAlimenter) et `encodeApprove`
+ *    (pool.js). Les recopier ferait perdre leurs gardes — jeton invalide et montant nul. */
+const SEL_BALANCE = '0x70a08231', SEL_ALLOWANCE = '0xdd62ed3e', SEL_SYMBOL = '0x95d89b41';
+/* ⛔ LA LISTE EST NOMMEE : ce sont les blocks dont NOS hooks ont encaisse des frais. Balayer « tous
+ *    les jetons » demanderait un index qu on n a pas, et un index absent rendrait une liste vide
+ *    qui se lirait comme « il n y a rien ». */
+const JETONS_FRAIS = [
+  '0xb2000000000000000000006d6f9102e9e4b221e0',
+  '0xb20000000000000000000071224edc6587e362d2',
+  '0xb200000000000000000000df3ffcd9be89b3843c',
+  '0xb2000000000000000000004ff41cbd5ef8e49f14',
+];
+const mot32 = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const num32 = (v) => BigInt(v).toString(16).padStart(64, '0');
+const enUnites = (v) => (Number(v) / 1e18).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+async function lireJetons() {
+  const hote = $('#jListe');
+  if (!compte) { hote.textContent = 'Connect the operator wallet to see what it holds.'; return; }
+  const idP = courant && courant.periode != null ? courant.periode : (courant ? courant.periodes - 1 : 0);
+  const lignes = [];
+  let ratees = 0;
+  for (const jeton of JETONS_FRAIS) {
+    let solde, allow, sym;
+    try {
+      solde = BigInt(await rpc('eth_call', [{ to: jeton, data: SEL_BALANCE + mot32(compte) }, 'latest']));
+      allow = BigInt(await rpc('eth_call', [{ to: jeton, data: SEL_ALLOWANCE + mot32(compte) + mot32(POT) }, 'latest']));
+      const s2 = await rpc('eth_call', [{ to: jeton, data: SEL_SYMBOL }, 'latest']);
+      sym = decoderSymbole(s2) || jeton.slice(0, 8) + '…';
+    } catch { ratees++; continue; }
+    if (solde === 0n) continue;
+    lignes.push({ jeton, solde, allow, sym });
+  }
+  /* ⛔ « RIEN A METTRE » ET « JE N AI PAS PU LIRE » SONT DEUX PHRASES DIFFERENTES. */
+  if (!lignes.length) {
+    hote.textContent = ratees
+      ? ratees + ' token(s) could not be read — that is us, not them. Reopen this page in a moment.'
+      : 'This wallet holds none of the fee tokens right now.';
+    return;
+  }
+  hote.innerHTML = lignes.map((l, i) =>
+    '<div class="ligne" style="margin:8px 0"><code>' + txt(l.sym) + '</code>'
+    + '<span style="flex:1">' + txt(enUnites(l.solde)) + ' tokens</span>'
+    + '<button type="button" data-i="' + i + '" class="jBtn">'
+    + (l.allow >= l.solde ? 'Fill with ' + txt(l.sym) : 'Approve ' + txt(l.sym)) + '</button></div>').join('')
+    + (ratees ? '<p class="doux">⛔ ' + ratees + ' token(s) unreadable — this list is a FLOOR.</p>' : '');
+  for (const b of hote.querySelectorAll('.jBtn')) {
+    b.addEventListener('click', () => versementJeton(lignes[Number(b.dataset.i)], idP));
+  }
+}
+
+/* ⛔ UN SYMBOLE EST UNE CHAINE ABI, PAS UN NOMBRE : le decoder a la main evite d afficher « 0x… »
+ *    la ou l utilisateur attend un nom. Une chaine vide rend null, jamais du charabia. */
+function decoderSymbole(hex) {
+  try {
+    const d = String(hex || '').replace(/^0x/, '');
+    if (d.length < 128) return null;
+    const taille = Number(BigInt('0x' + d.slice(64, 128)));
+    if (!taille || taille > 64) return null;
+    const oct = d.slice(128, 128 + taille * 2).match(/.{2}/g) || [];
+    return new TextDecoder().decode(Uint8Array.from(oct.map((h) => parseInt(h, 16))));
+  } catch { return null; }
+}
+
+async function versementJeton(l, idP) {
+  const besoinApprove = l.allow < l.solde;
+  $('#jEtat').textContent = besoinApprove
+    ? 'Signature 1 of 2 — letting the pot take ' + enUnites(l.solde) + ' ' + l.sym + '.'
+    : 'Sending ' + enUnites(l.solde) + ' ' + l.sym + ' into round ' + idP + '.';
+  let tx;
+  try {
+    tx = besoinApprove
+      ? { to: l.jeton, data: encodeApprove(POT, l.solde) }
+      : prepararAlimentation({ pot: POT, id: idP, jeton: l.jeton, montant: l.solde }).aSigner;
+  } catch (e) {
+    /* ⛔ LES GARDES DU HELPER REMONTENT A L ECRAN. Une exception avalee ici laisserait le bouton
+     *    muet ; l utilisateur cliquerait sans comprendre. */
+    $('#jEtat').innerHTML = '<span class="ko">Refused before your wallet opened: ' + txt(String(e.message || e)) + '</span>';
+    return;
+  }
+  const r2 = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte,
+    to: tx.to, data: tx.data, value: '0x0' });
+  if (r2.etat !== 'CONFIRME') {
+    $('#jEtat').innerHTML = '<span class="ko">Not done: ' + txt(r2.pourquoi || r2.etat) + '</span>';
+    return;
+  }
+  $('#jEtat').innerHTML = '<span class="ok">' + (besoinApprove ? 'Approved — now press the button again to send them.' : 'Filled.')
+    + '</span> Transaction: <code>' + txt(r2.hash) + '</code>';
+  await lireJetons();
+  if (!besoinApprove) await lire();
+}
+
+void lire().then(() => lireFonds()).then(() => lireJetons()).then(() => reprendreConnexion());
 </script>
 </body>
 </html>
