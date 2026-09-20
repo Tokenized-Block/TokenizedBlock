@@ -484,6 +484,11 @@ body:not(.surMap) .mapCta{display:none}
 /* ══ CLASSEMENT — l ego du plus gros, avec sa borne collee dessus ══ */
 .rangs{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
 .rangL{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--ligne)}
+/* ⛔ Phil 2026-09-20 : la ligne entiere ouvre le block. Pas de bouton en plus — la mise en page ne
+ *    bouge pas d un pixel, seuls le curseur et le fond au survol changent. */
+.rangL[data-block]{cursor:pointer}
+.rangL[data-block]:hover,.rangL[data-block]:focus-visible{background:rgb(var(--accentRgb) / .10);outline:none}
+.rangL[data-block]:hover .rangNom{text-decoration:underline}
 .rangN{font-weight:700;font-size:13px;color:var(--accent2);min-width:28px}
 .rangArt{width:30px;height:33px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux)}
 .rangArt svg{display:block;width:100%;height:100%}
@@ -1037,7 +1042,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <ul class="note noteBullets" id="cCostBullets" hidden>
           <li><b>Create</b>: free</li>
           <li><b>Bring life</b>: ≈ $1 in ETH</li>
-          <li><b>Buy/Sell</b>: 0.5%</li>
         </ul>
         <ol class="pmLignes" id="cApercuTx"></ol>
         <p class="note" id="cMintFeeHint" hidden></p>
@@ -1384,7 +1388,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0127" hidden>Build <code>20260920-0127</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0128" hidden>Build <code>20260920-0128</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1621,7 +1625,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <div class="infoPane" data-itabs-pane="peInfo" data-itab="exit" hidden>
           <!-- tip 2185: never blank Exit — static honesty always; peindreCapturePaths may refine -->
-          <p class="note" id="peUsdcPath"><b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.</p>
+          <p class="note" id="peUsdcPath"><b>Exit</b>: Sell pays out <b>ETH</b>. You can turn it into USDC right after.</p>
         </div>
         <!-- ⛔ DEUX COLONNES FACON DEX (Phil, capture 2026-09-18 : « Prepare buy » pleine largeur, « Prepare sell » a
              moitie — la grille de boutons se cassait). Chaque cote porte son champ, son solde et son bouton. -->
@@ -1662,7 +1666,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            avec minimums. Visible seulement sur un marche LU au format de l app. -->
       <div class="pJeu" id="pLiquidite" hidden>
         <div class="pJeuTete"><span class="pBadge" id="plqBadge">Liquidity</span><span class="pPV" id="plqDepth">you keep your position</span></div>
-        <p class="pProchain" id="plqIntro">Add blocks to the book. You keep this position (withdraw anytime). Deeper book → more Buy/Sell → 0.5%.</p>
+        <p class="pProchain" id="plqIntro">Add blocks to the book. You keep this position and can withdraw it anytime. A deeper book means buyers move the price less.</p>
         <!-- ⛔ tip 2140: short honesty — Launch lock ≠ this Add. -->
         <p class="note" id="plqLiqHonesty">🔓 <b>Withdrawable</b> · what you add here stays yours. The blocks placed when it came to life stay locked forever.</p>
         <div class="pActions" style="grid-template-columns:1fr 1fr">
@@ -3631,9 +3635,34 @@ function classementCourant() {
   })));
 }
 
+/* ⛔ `enTexte` N ECHAPPE PAS LE GUILLEMET : il passe par textContent, qui protege < > &, pas ". Un
+ *    symbole vient de la CHAINE, donc de n importe qui — dans un attribut entre guillemets, un " le
+ *    ferait sortir. Cet echappement-ci est pour les attributs, et il est ecrit ici, pas suppose. */
+const enAttr = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+/* ⛔ Un seul ecouteur sur la liste (delegation) : les lignes sont redessinees a chaque lecture de la
+ *    chaine, et recabler a chaque redessin fuirait des ecouteurs. */
+function ouvrirDepuisRang(el) {
+  if (!el) return;
+  const adr = el.getAttribute('data-block');
+  const sym = el.getAttribute('data-sym') || null;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) return;
+  void ouvrirProfil(adr, sym);
+}
+$('#rangs').addEventListener('click', (ev) => ouvrirDepuisRang(ev.target.closest('.rangL[data-block]')));
+$('#rangs').addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const li = ev.target.closest('.rangL[data-block]');
+  if (!li) return;
+  ev.preventDefault();
+  ouvrirDepuisRang(li);
+});
+
 function peindreClassement() {
   const cl = classementCourant();
-  $('#rangs').innerHTML = cl.classes.slice(0, 10).map((b) => '<li class="rangL">'
+  $('#rangs').innerHTML = cl.classes.slice(0, 10).map((b) => '<li class="rangL" tabindex="0" role="button"'
+    + ' data-block="' + enAttr(b.adr) + '" data-sym="' + enAttr(b.symbole || '') + '"'
+    + ' title="Open ' + enAttr(b.symbole || 'this block') + '">'
     + '<span class="rangN">' + b.rang + '</span>'
     + '<div class="rangArt">' + dessin(b.adr, b.symbole) + '</div>'
     + '<span class="rangNom">' + enTexte(b.symbole || '?') + '</span>'
@@ -4069,7 +4098,7 @@ function peindreCapturePaths(adr, v, hkInfo) {
   if (u) {
     u.hidden = false;
     u.innerHTML = CHAINE === 8453
-      ? '<b>Exit</b>: selling pays out <b>ETH</b> (0.5% fee, taken in ETH).'
+      ? '<b>Exit</b>: selling pays out <b>ETH</b>.'
       : 'Practice — Sell pays out test ETH.';
   }
 }
@@ -4100,8 +4129,8 @@ function proposerSortieUsdcApresVente(ethWei) {
   if ([...actions.querySelectorAll('button')].some((b) => /ETH→USDC/i.test(b.textContent || ''))) return;
   const b = document.createElement('button');
   b.className = 'bouton sec'; b.type = 'button';
-  b.textContent = 'Next: Prepare ETH→USDC (0.5 % → fee)';
-  b.title = 'Exit hop — same 0.5 % (quoter-gated; external DEX pays 0)';
+  b.textContent = 'Next: turn this ETH into USDC';
+  b.title = 'Prepares the swap; your wallet signs it.';
   b.addEventListener('click', () => void preparerEthUsdc());
   actions.appendChild(b);
 }
@@ -4413,6 +4442,11 @@ async function lireProfil(adr, sym, perime) {
   $('#pLiquidite').hidden = true;
   $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
   $('#peLignes').innerHTML = ''; $('#peActions').innerHTML = ''; $('#peEtat').textContent = ''; $('#peJournal').innerHTML = '';
+  /* ⛔ AUDIT 2026-09-20 (bloquant) : sans ces trois lignes, les soldes du block PRECEDENT restaient a
+   *    l ecran sous le nom du nouveau, et MAX remplissait un montant qu on ne detient pas. */
+  { const se = $('#peSoldeEth'); if (se) se.textContent = '—'; }
+  { const sb = $('#peSoldeBloc'); if (sb) sb.textContent = '—'; }
+  soldesDex = { eth: null, bloc: null, decimales: null };
   $('#peJournalTitre').hidden = true;
   echangeCourant = null;
   planCourant = null;
@@ -4626,7 +4660,7 @@ async function lireProfil(adr, sym, perime) {
     const u = $('#peUsdcPath');
     if (u) {
       u.hidden = false;
-      u.innerHTML = '<b>Exit</b>: Sell pays out <b>ETH</b> (0.5% in-app fee, taken in ETH). External DEX pays 0.';
+      u.innerHTML = '<b>Exit</b>: Sell pays out <b>ETH</b>. You can turn it into USDC right after.';
     }
   }
   /* ⛔ LA LECTURE EST NOTEE AVANT D ETRE COMMENTEE : c est elle qui, au fil des visites, rendra la
@@ -5112,7 +5146,7 @@ function peindreHookedRoute() {
   return;
   const n = hooked.length;
   /* Always offer TBGAS — hooked Launch live; DexScreener pairs may still be 0 (index lag). */
-  el.innerHTML = '<b>Hooked markets</b> · <b>Hooked</b> chip = Dex fees · trade <b>in-app Buy/Sell</b> (0.5%)'
+  el.innerHTML = '<b>Hooked markets</b> · trade with <b>Buy/Sell</b> right here'
     + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : ' · waiting for Live window / Dex index')
     + ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>'
     + '. Hooked Dex chops · unhooked Dex = $0 → profile <b>Launch hooked</b>.';
@@ -5156,8 +5190,11 @@ function filHookedTbgasHandlers() {
     stickyBtn.dataset.tbWired = '1';
     stickyBtn.addEventListener('click', ouvrirTbgasProfil);
   }
+  /* ⛔ AUDIT 2026-09-20 : ce paragraphe etait DEMASQUE sur mainnet, mais il tombe a 100 % sous la barre
+   *    de recherche fixe : ses deux boutons ne peuvent pas etre cliques, et son texte portait un
+   *    pourcentage de frais et du jargon interne dans la premiere page que lit un visiteur. */
   const mapPath = $('#mapHookedPath');
-  if (mapPath) mapPath.hidden = (CHAINE !== 8453);
+  if (mapPath) mapPath.hidden = true;
 }
 
 /** Social: blocks Feed each other (🟢) — trust root = fee-honest Create/Launch, not a score. */
@@ -5272,8 +5309,10 @@ function peindreLive() {
   }
   /* keep chronological: re-sort by blocHaut after GM merge */
   lignes.sort((a, b) => (b.blocHaut ?? b.bloc ?? 0) - (a.blocHaut ?? a.bloc ?? 0));
-  /* tip 0031 (Phil : « mets une limite, ca part a fond ») : 40 lignes a l ecran, pas 200 */
-  $('#sfLive').innerHTML = lignes.slice(0, 40).map((e) => {
+  /* tip 0031 (Phil : « mets une limite, ca part a fond ») : 40 lignes a l ecran, pas 200.
+   * ⛔ AUDIT 2026-09-20 : c etait un 40 EN DUR, donc « Load older » lisait 1 580 evenements de la
+   *    chaine et n ajoutait jamais une seule ligne — un bouton visible, actif, et sans effet. */
+  $('#sfLive').innerHTML = lignes.slice(0, liveAffiches).map((e) => {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     /* tip 2349: free create OK — nudge Launch to market (fee moment), not “spam kill create”. */
@@ -5345,6 +5384,9 @@ function peindreLive() {
   peindreRelais();
 }
 let liveAuto = 0;
+/* ⛔ AUDIT 2026-09-20 : combien de lignes du fil Live sont RENDUES. C etait un 40 EN DUR, donc
+ *    « Load older » lisait la chaine puis n affichait jamais une ligne de plus. +40 par clic. */
+let liveAffiches = 40;
 /* ⛔⛔ SECOND DEFAUT TROUVE EN VERIFIANT : meme le repere amene a l ecran ne declenchait rien — l observateur
  * ne se reveille pas toujours (page en arriere-plan, defilement programme). Le defilement appelle donc la
  * meme verification : on ne depend plus d un seul mecanisme.
@@ -5358,7 +5400,7 @@ function verifierBasLive() {
     setTimeout(() => { if (!liveEnCours) void lireLive('ancien'); }, 1500);
   }
 }
-$('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; void lireLive('ancien'); });
+$('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; liveAffiches += 40; void lireLive('ancien'); });
 /* ⛔ P0 2026-09-15: Keep trusted (CreateRouter paid) — fee-honest root, browser-local. */
 $('#sfLive').addEventListener('click', (ev) => {
   const keep = ev.target.closest('[data-keep-trust]');
@@ -5782,7 +5824,7 @@ async function preparerEchange(sens) {
           + formaterUnites(r.tblockRachetesAuMoins || 0n, 18)
           + ' TBLOCK, inside the same transaction (auto-buyback)')
         : (r.fraisDevise === 'TBLOCK'
-          ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK (0.5 %, taken between the two swaps), inside the same transaction'
+          ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK, taken inside the same transaction'
           : 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %), inside the same transaction'
             + (estTbProfil && sens === 'VENTE'
               ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
@@ -5868,8 +5910,7 @@ async function preparerEchange(sens) {
     const fraisOk = r && typeof r.frais === 'bigint' && r.frais > 0n;
     if (!bpsOk || !destOk || !fraisOk) {
       e.className = 'note wKo';
-      e.textContent = 'Refused: this swap plan is missing the 0.5 % · ' + feeLabel
-        + ' — nothing to sign. Try again.';
+      e.textContent = 'This trade could not be prepared safely. Nothing to sign — try again.';
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
@@ -5912,7 +5953,10 @@ async function preparerEchange(sens) {
   e.className = 'note wOk';
   e.textContent = estWalletDeFrais(compte)
     ? 'The chain accepts this exact buyback (no self-fee). Check it in your wallet before signing.'
-    : 'The chain accepts this exact transaction — ' + libelleFrais(p.cle).court.toLowerCase() + ', inside it. Check it in your wallet before signing.';
+    /* ⛔ AUDIT 2026-09-20 : le pourcentage etait revenu ICI, juste avant la signature — et pour une pool
+     *    V2/V3 il etait recopie d un autre contrat, donc non mesure. Les montants exacts sont deja dits
+     *    au-dessus (« You pay » / « You receive at least ») et dans le wallet. */
+    : 'The chain accepts this exact transaction. Check it in your wallet before signing.';
 }
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
@@ -6026,8 +6070,10 @@ async function preparerAjout() {
       ? ('Also needs ' + formaterUnites(p.ethRequis, 18) + ' of the quote token (measured).')
       : (viaTbLiq ? 'Quote side is TBLOCK — unilateral block range asks for blocks only (measured).' : 'Quote side ETH not required for this unilateral range (measured).'),
     estTbLiq
-      ? 'Deepening TBLOCK → more fills → more 0.5 %. No fee on the add itself.'
-      : 'The position belongs to YOU — withdraw anytime. No fee on liquidity; fees accrue when others Buy/Sell against this book.',
+      /* ⛔ AUDIT 2026-09-20 (bloquant) : ces deux lignes promettaient un revenu de trading au deposant.
+       * Sur nos marches le frais LP est 0 — la position ne gagne rien sur les echanges. On dit le vrai. */
+      ? 'The position belongs to YOU — withdraw anytime. It earns nothing on trades: this market has no pool fee.'
+      : 'The position belongs to YOU — withdraw anytime. It earns nothing on trades: this market has no pool fee. It keeps your blocks, and they sell as people buy.',
     ...[...(p.etapes || []), p.tx].filter(Boolean).map((tx, k) => {
       const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: p.dec });
       return 'Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ');
@@ -6141,15 +6187,14 @@ async function preparerEthUsdc() {
   const feeLabel = 'fee';
   $('#peLignes').innerHTML = [
     'Pay ' + formaterUnites(r.paye, 18) + ' ETH → receive at least ' + formaterUnites(r.recoitAuMoins, 6) + ' USDC',
-    'Interface fee ' + formaterUnites(r.frais, 18) + ' ETH · ' + feeLabel + ' (0.5 %) · ' + (r.via || 'ETH/USDC'),
-    'Includes the 0.5% fee.',
+    'Route: ' + (r.via || 'ETH/USDC'),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
   b.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
   $('#peActions').appendChild(b);
   e.className = 'note wOk';
-  e.textContent = 'Chain accepts this ETH→USDC — 0.5 % · ' + feeLabel + ' is inside it. Check your wallet before signing.';
+  e.textContent = 'The chain accepts this ETH→USDC. Check it in your wallet before signing.';
 }
 const _usdcBtn = $('#peUsdcPrep');
 if (_usdcBtn) _usdcBtn.addEventListener('click', () => void preparerEthUsdc());
@@ -7660,9 +7705,15 @@ function uriCreation() {
       kind: paireChoisie.type, verified: !!paireChoisie.verifiee } : null,
   };
   const uri = 'data:application/json,' + encodeURIComponent(JSON.stringify(meta));
-  /* ⛔ PLAFOND FACTORY ~12 Ko (mesure Pages 2026-09-06). Au-dela, la creation reverte APRES signature. */
-  if (new TextEncoder().encode(uri).length > 12000) {
-    throw new Error('Engraved metadata is over ~12 KB — simplify the face or shorten the name/symbol.');
+  /* ⛔⛔ PLAFOND CORRIGE LE 2026-09-20 (audit front-end). Il valait 12 000 octets, « plafond factory »
+   * mesure sur Pages le 2026-09-06 — et c etait FAUX : l audit a fait accepter 12,5 / 16 / 19 / 25 / 40 Ko
+   * par la VRAIE factory de Base en eth_call. Le plafond n etait donc pas celui de la chaine, c etait le
+   * notre, et il coupait 33,2 % des faces tirees par « Surprise me » (20 000 tirages, pire cas 19 135
+   * octets ; 34 % de l espace des curseurs, pire cas 18 492).
+   * 24 000 = au-dessus des deux pires cas mesures, et assez bas pour que le gas grave reste borne.
+   * ⚠️ CE JET DOIT RESTER ATTRAPE PAR SES APPELANTS : c est de l avoir laisse filer qui tuait le bouton. */
+  if (new TextEncoder().encode(uri).length > 24000) {
+    throw new Error('Engraved metadata is too big — simplify the face or shorten the name/symbol.');
   }
   return uri;
 }
@@ -7748,7 +7799,10 @@ async function assurerPrixEtFraisWei(force = false) {
 }
 
 async function lireSoldeEthNat(force = false) {
-  if (fraisCreationUsd(CHAINE) === 0 || !compte) { soldeEthNat = null; majFraisEtRecap(); return null; }
+  /* ⛔ AUDIT 2026-09-20 : la condition testait aussi `fraisCreationUsd(CHAINE) === 0`, or cette fonction
+   *    rend 0 EN DUR depuis que Create est gratuit — donc `soldeEthNat` restait null pour toujours et les
+   *    trois gardes « pas assez d ETH » de Launch, plus le blocage du premier achat, etaient du code mort. */
+  if (!compte) { soldeEthNat = null; majFraisEtRecap(); return null; }
   if (!force && soldeEthNat !== null) return soldeEthNat;
   profilEnLecture = true;
   try {
@@ -8381,7 +8435,17 @@ async function creerBlock() {
         ? 'Step 1 — create it. Check it in your wallet; bringing it to life (≈ $1) follows right after.'
         : 'Practice — create it. Check it in your wallet.';
     }
-    const calldata = calldataCreation(v);
+    /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
+     *    rien ne l attrapait entre le `try` du dessus et son `finally` — le bouton restait muet A JAMAIS,
+     *    juste apres avoir annonce que le wallet allait s ouvrir. Le message est deja en anglais lisible. */
+    let calldata;
+    try {
+      calldata = calldataCreation(v);
+    } catch (err) {
+      e.className = 'note wKo';
+      e.textContent = String((err && err.message) || err);
+      return;
+    }
     const to = cibleCreation();
     const value = utiliseCreateRouter() ? valeurCreation(fraisWei) : '0x0';
     let adresseCreee = null;
@@ -8981,7 +9045,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0127',
+    build: '20260920-0128',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

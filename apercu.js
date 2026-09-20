@@ -96,10 +96,10 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Permit2 approval', lignes };
   }
   if (sel === S.execute && ROUTEUR_SWAP[Number(chaine)] && to === ROUTEUR_SWAP[Number(chaine)].toLowerCase()) {
-    lignes.push('Swaps through the Uniswap v4 router. The amounts, the minimum you accept and the 0.5 % are listed with this transaction.');
-    const frais = FEE_WALLET.slice(2).toLowerCase();
-    lignes.push(data.includes(frais) ? 'Fee recipient inside this transaction: fee'
-      : 'No BaseAPP Holders fee inside this transaction.');
+    /* ⛔ AUDIT 2026-09-20 : ces trois lignes disaient « 0,5 % » — faux sur une pool de notre hook, ou
+     *    l interface ne prend rien — et nommaient le destinataire des frais, interdit a l ecran. Ce que
+     *    l apercu doit dire reste vrai : les montants et le minimum accepte sont DANS la transaction. */
+    lignes.push('Swaps through the Uniswap v4 router. The amounts and the minimum you accept are listed with this transaction.');
     return { etat: 'LUE', action: 'Swap', lignes };
   }
   if (sel === S.create && to === FACTORY.toLowerCase()) {
