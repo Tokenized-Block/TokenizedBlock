@@ -1124,6 +1124,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <li><b>Create</b> <span>its face and brain are engraved</span></li>
         <li><b>≈ $1 in ETH</b> <span>brings it to life, once</span></li>
         <li><b>Its market opens</b> <span>it lives on the map</span></li>
+        <!-- ⛔ LE CREATEUR EST PAYE, ET IL DOIT LE SAVOIR AVANT DE PAYER. Aucun pourcentage a
+             l ecran : regle de Phil. Le detail vit dans le plan de lancement, relu depuis la chaine. -->
+        <li><b>And it pays you</b> <span>every trade on your block sends you a share</span></li>
       </ol>
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
@@ -1510,7 +1513,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0172" hidden>Build <code>20260920-0172</code> · watcher on double anchors, and a claim page for holders.</p>
+      <p class="note" data-build="20260920-0173" hidden>Build <code>20260920-0173</code> · Create now tells the creator that trades pay them.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7198,6 +7201,14 @@ function peindrePlan(plan, adr) {
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     'You put in no ETH: buyers bring it.',
     'Locked forever: nobody can withdraw these blocks, and this value sets the starting price.',
+    /* ⛔⛔ LE CREATEUR EST PAYE, ET IL NE LE SAVAIT PAS. Cette ligne n existait QUE pour
+     *    legacyUpgrade, donc jamais pour un lancement normal. Quelqu un qui ignore qu il gagne
+     *    quelque chose ne va jamais le chercher : l omission coutait de l argent au CREATEUR.
+     * ⛔ AUCUN POURCENTAGE : regle de Phil. Ce qui compte est QU IL est paye et COMMENT.
+     * ⛔ ET LES DEUX CAS SONT DITS : le V5 verse pendant le swap quand la devise l accepte, et met
+     *    de cote quand elle refuse. « C est automatique » serait faux ; « tu reclameras » aussi. */
+    ...(avecHook ? ['Every trade here pays you a share, sent to you as it happens — or set aside for '
+      + 'you if the token refuses the transfer, so one broken token can never freeze the market.'] : []),
     ...(plan.legacyUpgrade ? ['Opens next to its outside market; only trades here pay its creator.'] : []),
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
