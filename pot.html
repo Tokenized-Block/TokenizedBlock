@@ -47,7 +47,7 @@
 
   <div class="carte">
     <div class="ligne"><b id="c1">…</b><span>Base reachable, pot contract read</span></div>
-    <div class="ligne"><b id="c2">…</b><span>The proposed transaction simulates without reverting</span></div>
+    <div class="ligne"><b id="c2">…</b><span id="c2Texte">The proposed transaction simulates without reverting</span></div>
     <div class="ligne"><b id="c3">…</b><span>Wallet connected on Base as the operator</span></div>
     <p class="doux" style="margin:10px 0 0">Pot: <code id="adrPot"></code></p>
     <p class="doux">Block <code id="tete"></code> · rounds so far <code id="nbPeriodes"></code></p>
@@ -64,6 +64,22 @@
       <button id="relire" class="sec" type="button">Re-read</button>
     </div>
     <p id="etat" class="doux" style="margin:12px 0 0"></p>
+  </div>
+
+  <!-- ⛔ MESURE (2026-09-20) : la periode 0 est ouverte et son pot contient 0 wei. Une periode sans
+       pot n a personne a payer. Alimenter etait la prochaine action reelle, et elle n existait
+       nulle part a l ecran. -->
+  <div class="carte" id="carteFonds">
+    <h2>Fill this round</h2>
+    <p class="doux">A round with an empty pot pays nobody. Anyone can fill it — the pot does not belong
+      to whoever fills it, and nobody can take it back out.</p>
+    <p class="doux">Round <code id="fId">—</code> · currently holds <code id="fSolde">—</code> wei of ETH</p>
+    <div class="ligne">
+      <input id="fMontant" type="text" inputmode="decimal" placeholder="0.001"
+        style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--ligne);background:#061217;color:var(--texte)">
+      <button id="fEnvoyer" type="button" disabled>Fill with ETH</button>
+    </div>
+    <p id="fEtat" class="doux" style="margin:10px 0 0"></p>
   </div>
 </main>
 <script type="module">
@@ -92,10 +108,35 @@ const rpc = async (methode, params) => {
   if (r.error) throw new Error(r.error.message || 'rpc error');
   return r.result;
 };
-const marque = (id, ok) => { const e = $(id); e.textContent = ok ? '✓' : '✗'; e.className = ok ? 'ok' : 'ko'; };
+/* ⛔ TROIS ETATS, PAS DEUX. « rien a verifier » n est ni un succes ni un echec : afficher une croix
+ *    rouge la ou il n y a simplement rien a faire se lit comme une panne — et Phil l a lu comme ca. */
+const marque = (id, etat) => {
+  const e = $(id);
+  if (etat === null) { e.textContent = '—'; e.className = 'doux'; return; }
+  e.textContent = etat ? '✓' : '✗';
+  e.className = etat ? 'ok' : 'ko';
+};
 const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 let courant = null, compte = null;
+
+/** Traduit l etat du keeper en une phrase pour l ecran. Les chiffres viennent de lui, pas d ici. */
+function enClair(t) {
+  if (t.action === 'ATTENDRE') {
+    const h = Math.round((t.blocsRestants || 0) * 2 / 3600);
+    return 'Round ' + t.periode + ' is running until block ' + (t.blocCourant + t.blocsRestants)
+      + ' — about ' + h + ' h left. Fill it while it runs; nothing to sign to let it run.';
+  }
+  if (t.action === 'OUVRIR') {
+    return 'No round is open. This opens one from block ' + t.debut + ' to ' + t.fin
+      + ' (about 24 h). It must be signed before block ' + t.valideJusqua + '.';
+  }
+  if (t.action === 'ANCRER') {
+    return 'Round ' + t.periode + ' has ended. This writes down who gets paid, from the balances at the drawn block.';
+  }
+  /* ⛔ UN REFUS GARDE SA RAISON TELLE QUELLE : la reformuler risquerait d en perdre le sens. */
+  return 'Nothing will be proposed. Reason from the keeper: ' + (t.pourquoi || 'not said');
+}
 
 async function lire() {
   $('#adrPot').textContent = POT;
@@ -112,7 +153,9 @@ async function lire() {
   $('#nbPeriodes').textContent = t.periodes;
   $('#titreAction').textContent = ({ OUVRIR: 'Open a new round', ANCRER: 'Anchor who gets paid',
     ATTENDRE: 'A round is running', REFUS: 'Nothing will be proposed' })[t.action] || t.action;
-  $('#resume').textContent = t.resume || t.pourquoi || '';
+  /* ⛔ L ECRAN PARLE ANGLAIS. Le keeper rend ses raisons en francais (c est un outil interne) ; les
+   *    recopier telles quelles melangeait deux langues sur la meme carte. */
+  $('#resume').textContent = enClair(t);
   $('#expire').textContent = t.valideJusqua
     ? 'This transaction is only valid until block ' + t.valideJusqua + '. After that it would revert — re-read and sign again.'
     : '';
@@ -129,7 +172,16 @@ async function lire() {
       + '<p class="doux">' + txt(t.arbre.borne) + '</p>';
   }
 
-  if (!t.aSigner) { marque('#c2', false); return; }
+  if (!t.aSigner) {
+    /* ⛔ RIEN A SIGNER N EST PAS UNE ERREUR. Une periode qui court, ou un refus motive, ne sont pas
+     *    des transactions qui reverteraient — il n y a simplement pas de transaction. */
+    marque('#c2', null);
+    $('#c2Texte').textContent = 'Nothing to sign right now — that is not an error';
+    $('#agir').style.display = 'none';
+    return;
+  }
+  $('#agir').style.display = '';
+  $('#c2Texte').textContent = 'The proposed transaction simulates without reverting';
   /* ⛔ ON SIMULE AVANT DE PROPOSER. Une transaction qui revert ferait payer du gas pour rien. */
   try {
     await rpc('eth_call', [{ to: t.aSigner.to, from: OPERATEUR, data: t.aSigner.data, value: t.aSigner.value }, 'latest']);
@@ -184,7 +236,49 @@ $('#agir').addEventListener('click', async () => {
 });
 
 $('#relire').addEventListener('click', () => { void lire(); });
-void lire();
+
+/* ── ALIMENTER EN ETH ──────────────────────────────────────────────────────────────────────────
+ * ⛔ ON LIT LE SOLDE DU POT AVANT ET APRES : annoncer « rempli » sans relire serait une affirmation
+ *    sur un ecran, pas sur la chaine. */
+async function lireFonds() {
+  if (!courant || courant.periodes < 1) { $('#carteFonds').hidden = true; return; }
+  $('#carteFonds').hidden = false;
+  const id = courant.periode != null ? courant.periode : courant.periodes - 1;
+  $('#fId').textContent = id;
+  try {
+    const d = await rpc('eth_call', [{ to: POT,
+      data: '0x721da62e' + BigInt(id).toString(16).padStart(64, '0') + '0'.repeat(64) }, 'latest']);
+    $('#fSolde').textContent = BigInt(d).toString();
+  } catch (e) { $('#fSolde').textContent = 'unreadable'; }
+  $('#fEnvoyer').disabled = !compte;
+}
+
+$('#fEnvoyer').addEventListener('click', async () => {
+  const brut = String($('#fMontant').value || '').trim();
+  /* ⛔ UN MONTANT ILLISIBLE EST REFUSE, PAS ARRONDI : envoyer autre chose que ce qui est ecrit est
+   *    la pire des surprises sur une transaction. */
+  if (!/^\d+(\.\d{1,18})?$/.test(brut) || Number(brut) <= 0) {
+    $('#fEtat').innerHTML = '<span class="ko">Type a plain amount in ETH, like 0.001</span>';
+    return;
+  }
+  const [ent, dec = ''] = brut.split('.');
+  const wei = BigInt(ent) * (10n ** 18n) + BigInt((dec + '0'.repeat(18)).slice(0, 18));
+  const id = courant.periode != null ? courant.periode : courant.periodes - 1;
+  const data = '0x38f980ef' + BigInt(id).toString(16).padStart(64, '0');
+  $('#fEnvoyer').disabled = true;
+  $('#fEtat').textContent = 'Opening your wallet — it should show ' + brut + ' ETH to this contract.';
+  const r2 = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte,
+    to: POT, data, value: '0x' + wei.toString(16) });
+  if (r2.etat !== 'CONFIRME') {
+    $('#fEtat').innerHTML = '<span class="ko">Not done: ' + txt(r2.pourquoi || r2.etat) + '</span>';
+    $('#fEnvoyer').disabled = false;
+    return;
+  }
+  $('#fEtat').innerHTML = '<span class="ok">Filled.</span> Transaction: <code>' + txt(r2.hash) + '</code>';
+  await lireFonds();
+});
+
+void lire().then(() => lireFonds());
 </script>
 </body>
 </html>
