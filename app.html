@@ -271,8 +271,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    est ouvert : sur large ecran elle passe a gauche du panneau, sur telephone elle remonte au-dessus. */
 .mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px;
   transition:right .16s ease, bottom .16s ease}
-.mapEnv:has(#cote:not([hidden])) .mapZoom{right:398px}
-@media (max-width:699px){.mapEnv:has(#cote:not([hidden])) .mapZoom{right:10px;bottom:calc(52dvh + 14px)}}
+/* ⛔⛔ MESURE, PAS SUPPOSITION : ma premiere regle visait `.mapEnv:has(#cote…)` et n a JAMAIS matche —
+   `#cote` n est pas DANS `.mapEnv`, c est une branche soeur. Mesure en prod (1280 px) : le bord droit
+   de la colonne restait a 1270 alors que le panneau commence a 906, donc le chevauchement etait intact
+   pendant que je croyais l avoir corrige. Le parent commun est `#scene`. */
+#scene:has(#cote:not([hidden])) .mapZoom{right:398px}
+@media (max-width:699px){#scene:has(#cote:not([hidden])) .mapZoom{right:10px;bottom:calc(52dvh + 14px)}}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -1409,7 +1413,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0137" hidden>Build <code>20260920-0137</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0138" hidden>Build <code>20260920-0138</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9225,7 +9229,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0137',
+    build: '20260920-0138',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
