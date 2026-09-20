@@ -1438,7 +1438,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0140" hidden>Build <code>20260920-0140</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0141" hidden>Build <code>20260920-0141</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1449,20 +1449,20 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT" title="Buys — the block left its pool for someone's wallet">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE" title="Sells — the block went back into its pool">🔴 Kill</button>
-        <!-- ⛔ RENOMME LE 2026-09-20. Depuis que le sens se lit sur toutes les pools (y compris a hook),
-             ce bouton ne compte plus « les echanges » : il compte ceux qu on n a PAS SU lire. Garder le
-             mot « Swap » en aurait fait un compteur toujours a 0 et incomprehensible. Un chiffre autre
-             que 0 ici est une ALARME, pas une categorie. -->
-        <button type="button" class="puce" data-filtre="SWAP" title="Trades whose side could not be proven from the chain. Zero is the good case; any number here means we lost some.">⚠ Unreadable</button>
+        <!-- ⛔ TROIS BOUTONS RETIRES LE 2026-09-20 (Phil les a barres sur sa capture) :
+             · « Unreadable » n est pas un filtre mais un DIAGNOSTIC — il vit dans la phrase du bas, et
+               seulement quand il a quelque chose a signaler ;
+             · « Messages » vaut 0 et le restera tant que personne n en envoie (mesure : 0 sur 120 000
+               blocs, les deux devises) — son compte reste dans la phrase de reconciliation ;
+             · « Trades » recopiait Feed + Kill.
+             Les BRANCHES de filtreLive restent : rien n est supprime, ce sont les boutons qui partent. -->
         <button type="button" class="puce" data-filtre="GM" title="Blocks moved between wallets, and free notes">➡️ Sent</button>
-        <button type="button" class="puce" data-filtre="MESSAGE" title="Paid messages between blocks. Measured 2026-09-20: none on chain in the last 120,000 blocks, on either currency">✉️ Messages</button>
         <!-- ⛔ PHIL (2026-09-17) : « Ours / Trusted / Alive here : on s en fout, refais ca et ajoute si besoin ».
              Les trois filtraient sur des listes a nous (nos deux blocks, une liste gardee dans le navigateur, un
              hook) — donc presque toujours vides, et ils prenaient la place de ce qui bouge vraiment. Les branches
              de code restent (rien n est supprime) ; ce sont les boutons qui partent.
              A LA PLACE, deux filtres qui portent sur la DONNEE de l evenement, pas sur nos listes. -->
         <button type="button" class="puce" data-filtre="GROS" title="Trades of 0.02 ETH or more — only those that carry a readable amount">💰 Big</button>
-        <button type="button" class="puce" data-filtre="ECHANGES" title="Buys + sells + the ones we could not read">📈 Trades</button>
       </div>
       <!-- tip 2357/2358/0013: hooked BuySell + unhooked → Launch beside · sticky Hooked=Dex fees. No fee addr. -->
       <p class="note" id="sfHookedRoute" hidden></p>
@@ -5372,16 +5372,9 @@ function majComptesFiltres() {
     /* ⛔ UN ZERO QUI EST UNE REUSSITE N A PAS LA MEME FORME QU UN ZERO QUI EST UNE ABSENCE.
      *    « Not read » compte les echanges qu on n a PAS SU lire : a zero, tout a ete lu — c est le
      *    meilleur resultat possible, et affiche « Not read 0 » il se lisait comme une panne. */
-    /* ⛔ PHIL, 2026-09-20 : « t as 2x all read ». « All 1805 » et « ✓ All read » se lisaient comme deux
-     *    versions du meme bouton. Le mot « all » appartient au PREMIER. Celui-ci compte ce qu on n a
-     *    PAS SU lire : son nom ne doit ressembler a aucun autre, et il porte son chiffre comme tous
-     *    les autres — c est la COULEUR qui dit si zero est bon (gris) ou si un chiffre est grave (rouge). */
-    const reussiteAZero = f === 'SWAP' && n === 0;
     b.textContent = b.dataset.nom + ' ' + n;
     b.hidden = false;
-    b.classList.toggle('vide', n === 0 && !reussiteAZero);
-    b.classList.toggle('reussi', reussiteAZero);
-    b.classList.toggle('alerte', f === 'SWAP' && n > 0);
+    b.classList.toggle('vide', n === 0);
     comptes[f] = n;
   }
   liveFiltre = garde;
@@ -5389,18 +5382,27 @@ function majComptesFiltres() {
 }
 /** ⛔ L INSTRUMENT S ACCUSE LUI-MEME : si « All » ne vaut pas la somme des categories disjointes, la
  *  phrase le dit, avec l ecart. Sans ca, un filtre qui perd des lignes ne se signale jamais. */
-function reconciliationFiltres(comptes) {
-  const total = comptes.TOUT;
-  if (typeof total !== 'number') return '';
-  const somme = FILTRES_PARTITION.reduce((a, f) => a + (comptes[f] || 0), 0);
+function reconciliationFiltres() {
+  /* ⛔ ON COMPTE PAR TYPE, PAS PAR BOUTON. Tant que la ligne lisait les chips, retirer un bouton
+   *    cassait la verification elle-meme — un correctif d affichage qui casse l instrument de verite
+   *    est pire que le defaut qu il corrige. */
   const parType = comptesParType();
+  const total = liveEvts.length;
+  const cat = { creation: parType.CREATION || 0, bought: parType.ACHAT || 0, sold: parType.VENTE || 0,
+    sent: (parType.GM || 0) + (parType.NOTE || 0), messages: parType.MESSAGE || 0 };
+  const illisibles = parType.SWAP || 0;
+  const somme = Object.values(cat).reduce((a, x) => a + x, 0) + illisibles;
   const connus = new Set(['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE']);
   const autres = Object.keys(parType).filter((t) => !connus.has(t));
-  const detail = FILTRES_PARTITION.map((f) => f.toLowerCase() + ' ' + (comptes[f] || 0)).join(' + ');
-  if (somme === total && autres.length === 0) return ' · ' + total + ' = ' + detail;
-  return ' · ⚠️ ' + total + ' ≠ ' + detail + ' (' + somme + ')'
-    + (autres.length ? ' · types sans filtre : ' + autres.join(', ') : '')
-    + ' — un evenement n est compte par aucun bouton, dis-le moi';
+  const detail = Object.entries(cat).map(([k, v]) => k + ' ' + v).join(' + ');
+  /* ⛔ L ALARME N APPARAIT QUE QUAND ELLE A QUELQUE CHOSE A DIRE. A zero, elle ne prend pas de place. */
+  const alarme = illisibles > 0
+    ? ' · ⚠️ ' + illisibles + ' trade(s) could not be read — their side is not proven'
+    : '';
+  if (somme === total && autres.length === 0) return alarme + ' · ' + total + ' = ' + detail;
+  return alarme + ' · ⚠️ ' + total + ' ≠ ' + detail + ' (' + somme + ')'
+    + (autres.length ? ' · types sans bouton : ' + autres.join(', ') : '')
+    + ' — un evenement n est compte nulle part, dis-le moi';
 }
 /** La ligne d un achat ou d une vente, montant par montant, sans jamais en inventer un.
  * ⛔ REGROUPEE (n > 1) : on ne montre AUCUN montant — additionner des textes deja formates donnerait
@@ -5528,7 +5530,7 @@ function basculerCarte(carte, ouvrir, garder) {
 
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
-  const comptesFiltres = majComptesFiltres();
+  majComptesFiltres();
   /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
    *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
    *    echanges neutres CONSECUTIFS d un meme block tiennent en UNE ligne, avec leur nombre et leur plage de blocs. */
@@ -5627,7 +5629,7 @@ function peindreLive() {
     + parConf('SANS_HOOK') + ' without hook, ' + parConf('HOOK') + ' with a hook) plus the app\'s own market keys'
     + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node — incomplete, not quiet' : '')
     + (liveTrou ? ' · ' + liveTrou.toLocaleString('en-US') + ' chain blocks not read while you were away — a gap, not a quiet time' : '')
-    + reconciliationFiltres(comptesFiltres) + '.';
+    + reconciliationFiltres() + '.';
   /* ⛔⛔ DEFAUT TROUVE EN VERIFIANT (2026-09-13) : le repere du bas etait DEJA visible avant la premiere
    * lecture ; l IntersectionObserver ne se redeclenche que sur un CHANGEMENT de visibilite — le passe ne se
    * chargeait donc jamais. Apres chaque rendu, si le bas du fil est encore a l ecran, on lit la fenetre
@@ -9353,7 +9355,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0140',
+    build: '20260920-0141',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
