@@ -74,8 +74,9 @@
     <p class="doux">A round with an empty pot pays nobody. Anyone can fill it — the pot does not belong
       to whoever fills it, and nobody can take it back out.</p>
     <p class="doux">Round <code id="fId">—</code> · currently holds <code id="fSolde">—</code> wei of ETH</p>
+    <p class="doux">Your wallet holds <code id="fMien">—</code> ETH · gas is paid on top, so leave a little.</p>
     <div class="ligne">
-      <input id="fMontant" type="text" inputmode="decimal" placeholder="0.001"
+      <input id="fMontant" type="text" inputmode="decimal" placeholder="amount in ETH"
         style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--ligne);background:#061217;color:var(--texte)">
       <button id="fEnvoyer" type="button" disabled>Fill with ETH</button>
     </div>
@@ -118,7 +119,7 @@ const marque = (id, etat) => {
 };
 const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-let courant = null, compte = null;
+let courant = null, compte = null, soldeWallet = null;
 
 /** Traduit l etat du keeper en une phrase pour l ecran. Les chiffres viennent de lui, pas d ici. */
 function enClair(t) {
@@ -288,6 +289,15 @@ async function lireFonds() {
       data: '0x721da62e' + BigInt(id).toString(16).padStart(64, '0') + '0'.repeat(64) }, 'latest']);
     $('#fSolde').textContent = BigInt(d).toString();
   } catch (e) { $('#fSolde').textContent = 'unreadable'; }
+  /* ⛔ LE SOLDE DU WALLET EST MONTRE. Mesure du 2026-09-20 : une operation a echoue en interne parce
+   *    que le montant depassait le solde, et l ecran ne donnait aucun moyen de le voir. */
+  if (compte) {
+    try {
+      const b = await rpc('eth_getBalance', [compte, 'latest']);
+      soldeWallet = BigInt(b);
+      $('#fMien').textContent = (Number(soldeWallet) / 1e18).toFixed(9);
+    } catch (e) { soldeWallet = null; $('#fMien').textContent = 'unreadable'; }
+  } else { soldeWallet = null; $('#fMien').textContent = '—'; }
   /* ⛔ UN BOUTON DESACTIVE SANS RAISON EST UNE IMPASSE. On dit ce qui manque. */
   $('#fEnvoyer').disabled = !compte;
   if (!compte && !$('#fEtat').textContent) {
@@ -307,6 +317,14 @@ $('#fEnvoyer').addEventListener('click', async () => {
   }
   const [ent, dec = ''] = brut.split('.');
   const wei = BigInt(ent) * (10n ** 18n) + BigInt((dec + '0'.repeat(18)).slice(0, 18));
+  /* ⛔⛔ REFUSER ICI COUTE ZERO ; LAISSER PARTIR COUTE DU GAS ET NE DIT RIEN. Mesure du 2026-09-20 :
+   *    une UserOperation a echoue en interne pour cette raison exacte, avec un recu externe a 0x1. */
+  if (soldeWallet !== null && wei >= soldeWallet) {
+    $('#fEtat').innerHTML = '<span class="ko">That is ' + (wei > soldeWallet ? 'more than' : 'exactly')
+      + ' what your wallet holds (' + txt((Number(soldeWallet) / 1e18).toFixed(9))
+      + ' ETH). Gas is paid on top — leave a little.</span>';
+    return;
+  }
   const id = courant.periode != null ? courant.periode : courant.periodes - 1;
   const data = '0x38f980ef' + BigInt(id).toString(16).padStart(64, '0');
   $('#fEnvoyer').disabled = true;

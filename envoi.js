@@ -174,6 +174,32 @@ async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, valu
   return { etat: 'EN_ATTENTE', pourquoi: 'smart wallet batch sent, not confirmed yet — do not resend', hash: null };
 }
 
+/** L evenement `UserOperationEvent` de l EntryPoint ERC-4337 (v0.6 et v0.7 partagent ce topic). */
+export const TOPIC_USER_OP = '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f';
+
+/**
+ * Lit le drapeau `success` d un UserOperationEvent dans un recu.
+ *
+ * ⛔ TROIS REPONSES, PAS DEUX : `true` reussi · `false` echoue · `null` il n y en a pas.
+ *    Une transaction ordinaire n a PAS cet evenement, et doit rester CONFIRME — rendre `false`
+ *    par defaut casserait tous les envois normaux.
+ * @param {object} recu
+ * @returns {boolean|null}
+ */
+export function verdictUserOp(recu) {
+  const logs = (recu && recu.logs) || [];
+  for (const l of logs) {
+    if (!l || !Array.isArray(l.topics) || l.topics[0] !== TOPIC_USER_OP) continue;
+    /* data = nonce, success, actualGasCost, actualGasUsed -> le 2e mot porte le drapeau */
+    const m = String(l.data || '').replace(/^0x/, '').match(/.{64}/g);
+    if (!m || m.length < 2) continue;
+    /* ⛔ PLUSIEURS UserOp peuvent tenir dans UNE transaction de bundler : si l une echoue, on le dit.
+     *    Ne regarder que la premiere ferait passer un echec pour un succes. */
+    if (BigInt('0x' + m[1]) !== 1n) return false;
+  }
+  return logs.some((l) => l && Array.isArray(l.topics) && l.topics[0] === TOPIC_USER_OP) ? true : null;
+}
+
 export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to, data = '0x',
   value = '0x0', attendre = true, delai = 2000, essais = 30 }) {
   if (!ADRESSE.test(String(to || ''))) {
@@ -233,5 +259,14 @@ export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to
     return { etat: 'ANNULE_SUR_CHAINE', hash, gaz, horsGaz: utilise !== null && utilise === gaz,
       pourquoi: 'the transaction reverted on chain' };
   }
-  return { etat: 'CONFIRME', hash, gaz };
+  /* ⛔⛔ UN RECU A 0x1 NE PROUVE RIEN SUR UN SMART ACCOUNT. Mesure sur une transaction reelle du
+   *    2026-09-20 : reçu 0x1, et pourtant l operation interne avait ECHOUE. Le reçu externe decrit
+   *    le travail du BUNDLER, pas le notre. Voir verdictUserOp. */
+  const uo = verdictUserOp(recu);
+  if (uo === false) {
+    return { etat: 'ANNULE_SUR_CHAINE', hash, gaz, viaSmartWallet: true,
+      pourquoi: 'the outer transaction succeeded but your smart wallet operation failed — '
+        + 'gas was paid and nothing happened. Most often: not enough ETH in the account.' };
+  }
+  return { etat: 'CONFIRME', hash, gaz, ...(uo === true ? { viaSmartWallet: true } : {}) };
 }
