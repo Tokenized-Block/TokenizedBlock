@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0155" hidden>Build <code>20260920-0155</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0156" hidden>Build <code>20260920-0156</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5543,7 +5543,13 @@ function reconciliationFiltres() {
   const somme = Object.values(cat).reduce((a, x) => a + x, 0) + illisibles;
   const connus = new Set(['CREATION', 'ACHAT', 'VENTE', 'SWAP', 'GM', 'NOTE', 'MESSAGE']);
   const autres = Object.keys(parType).filter((t) => !connus.has(t));
-  const detail = Object.entries(cat).map(([k, v]) => k + ' ' + v).join(' + ');
+  /* ⛔⛔ L ADDITION AFFICHEE DOIT TOMBER JUSTE, SINON C EST NOUS QUI AVONS L AIR FAUX.
+   *    Defaut vu par Phil le 2026-09-20 : « 574 = creation 6 + bought 324 + sold 223 + sent 20 +
+   *    messages 0 » — ca fait 573. Le 574e etait l echange ILLISIBLE : compte dans la somme interne,
+   *    absent du detail affiche. La ligne etait donc arithmetiquement fausse a l ecran alors que le
+   *    compte, lui, etait juste. Un verificateur qui a l air faux ne verifie plus rien. */
+  const detail = Object.entries(cat).map(([k, v]) => k + ' ' + v).join(' + ')
+    + (illisibles ? ' + unreadable ' + illisibles : '');
   /* ⛔ L ALARME N APPARAIT QUE QUAND ELLE A QUELQUE CHOSE A DIRE. A zero, elle ne prend pas de place. */
   const alarme = illisibles > 0
     ? ' · ⚠️ ' + illisibles + ' trade(s) could not be read — their side is not proven'
@@ -9686,7 +9692,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0155',
+    build: '20260920-0156',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
