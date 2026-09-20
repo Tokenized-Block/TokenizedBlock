@@ -1497,7 +1497,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0151" hidden>Build <code>20260920-0151</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0152" hidden>Build <code>20260920-0152</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1586,6 +1586,22 @@ details[open] > summary::before{transform:rotate(90deg)}
             <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce
                  que la liste montre, rien d autre. -->
             <p class="sous">The biggest blocks first, by the market value we can read on chain.</p>
+      <!-- ⛔⛔ LE BUT DE L APP, DIT PAR PHIL (2026-09-20) : « etre le plus gros cube, pour pouvoir pairer
+           cette liquidite, nourrir le cerveau, et pairer son cube a d autres B20 et actions tokenisees ».
+           Ecrit ICI parce que c est l ecran du classement — la ou on se demande pourquoi grossir compte.
+           ⛔ CHAQUE PHRASE EST VRAIE DANS LE CODE, et rien d autre n est promis :
+             · le cerveau mange vraiment ces faits : `courant()` (cerveau.js:118) prend vie, detenteurs,
+               achats, ventes, envois, messages. Un marche plus vivant lui donne plus a ressentir.
+             · « plus intelligent » N EST PAS ECRIT : le reseau fait 128 neurones, figes. Ce qui change,
+               c est ce qu il ressent, pas ce qu il est.
+             · les paires : ETH, TBLOCK et 15 devises (USDC, cbBTC, 13 actions tokenisees) — MESURE sur le
+               hook deploye le 2026-09-20 : block/DAI et block/block sont REFUSES. On n ecrit donc jamais
+               « n importe quel jeton ».
+             · AUCUN CONSEIL : on decrit ce que fait la chaine, jamais ce qu il faut faire de son argent. -->
+      <p class="note" style="margin:6px 0 10px">Why size matters: a block's market is what its brain feeds on —
+        buys, sells, holders, transfers and messages all reach it. The bigger and livelier the market, the more
+        its brain has to react to. A grown block can also open its market against another currency: ETH, USDC,
+        cbBTC or one of the tokenized stocks.</p>
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
@@ -9570,7 +9586,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0151',
+    build: '20260920-0152',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
