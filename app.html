@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0158" hidden>Build <code>20260920-0158</code> · V5 signing page; leaderboard reads both sources in USD.</p>
+      <p class="note" data-build="20260920-0159" hidden>Build <code>20260920-0159</code> · new markets open on hook V5; V1-V4 still recognised.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2022,7 +2022,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye, hookV4Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye, hookV4Deploye, hookV5Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -6952,19 +6952,25 @@ async function calculerLancement() {
     if (!mainnet && legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now.' };
     } else {
-      /* ⛔⛔ DEPUIS LE 2026-09-20 : UN SEUL HOOK POUR LES NOUVEAUX MARCHES, le V4 (ETH comme devises).
-       * Il porte la meme liste de 15 devises que le V3, plus les deux verrous (pool vide non echangeable,
-       * label exige). Les pools deja ouvertes sur V1/V2/V3 gardent leur hook et paient toujours a6cf. */
+      /* ⛔⛔ DEPUIS LE 2026-09-20 (2e passe) : LE V5 POUR LES NOUVEAUX MARCHES. Il reprend les 15 devises
+       * et les deux verrous du V4, et il AJOUTE le versement des frais pendant le swap (avec repli sur
+       * les claims si la devise refuse) plus la dime de 20 % sur le tiers du createur.
+       * ⛔ « DEPLOYE » en dur sur mainnet n est ecrit ICI que parce que le code a ete LU a l adresse :
+       *    tx 0x7fb52a1f…, recu 0x1, 12 463 octets, huit relectures justes dont le temoin negatif.
+       * ⚠️ Les pools deja ouvertes sur V1/V2/V3/V4 gardent leur hook et paient toujours a6cf : le hook
+       *    fait partie de la PoolKey, aucune migration n existe. */
+      const etatV5 = mainnet ? 'DEPLOYE' : await hookV5Deploye({ rpc });
       const etatV4 = mainnet ? 'DEPLOYE' : await hookV4Deploye({ rpc });
-      const hooks = etatV4 === 'DEPLOYE' ? HOOK_V4
-        : deviseLancement ? undefined
-          : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      const hooks = etatV5 === 'DEPLOYE' ? HOOK_V5
+        : etatV4 === 'DEPLOYE' ? HOOK_V4
+          : deviseLancement ? undefined
+            : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
        *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
-      const label = hooks === HOOK_V4 ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
+      const label = (hooks === HOOK_V5 || hooks === HOOK_V4) ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
       if (label === 'NON') {
         plan = { etat: 'REFUSE', pourquoi: 'this block was not engraved by this app\'s Create, so its market cannot open here' };
       } else if (deviseLancement && !hooks) {
@@ -6973,7 +6979,7 @@ async function calculerLancement() {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
           ...(deviseLancement ? { devise: deviseLancement } : {}),
           ...(hooks ? { hooks } : {}) });
-        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4) {
+        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
@@ -8853,10 +8859,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
   if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
-  /* ⛔ UN SEUL HOOK DEPUIS LE 2026-09-20 : le V4 accepte ETH ET les 15 devises. */
-  const hook = HOOK_V4;
+  /* ⛔ UN SEUL HOOK DEPUIS LE 2026-09-20 : le V5 accepte ETH ET les 15 devises, comme le V4. */
+  const hook = HOOK_V5;
   void devise;
-  /* le V4 est deploye pour toujours sur mainnet (voir calculerLancement) : plus de relecture qui pourrait echouer */
+  /* le V5 est deploye pour toujours sur mainnet (code LU le 2026-09-20) : plus de relecture qui pourrait echouer */
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);

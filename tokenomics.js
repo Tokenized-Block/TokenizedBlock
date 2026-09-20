@@ -40,11 +40,25 @@ export const HOOK_V3 = '0x7a7cEBB2Ccb84C9fBfa2730e6cB23Bb192166044';
  *    ⛔ IL REMPLACE V2 ET V3 POUR LES NOUVEAUX LANCEMENTS (il porte la meme liste de devises). Les pools
  *       deja ouvertes sur V1/V2/V3 continuent de tourner et de payer a6cf — rien n est casse. */
 export const HOOK_V4 = '0x11FCd588c96b1781cc88B8B9F349B6067D9BE4c4';
-/** Un marche est-il sur NOTRE hook (V1, V2, V3 ou V4) ? La seule fonction qui en decide. */
+/* ⛔ HOOK V5 — DEPLOYE ET RELU SUR LA CHAINE LE 2026-09-20.
+ *    tx 0x7fb52a1f449546e8babe55f7c9351c477735374694658b4c63a867b2859fed47, recu status 0x1,
+ *    bloc 51567449, 12 463 octets de code a l adresse.
+ *    Relectures faites une par une, pas prises sur un ecran : feeWallet a6cf · tailleMarqueur 16 ·
+ *    DIME_CREATEUR_POUR_CENT 20 · DIVISEUR_PART_CREATEUR 3 · HOOK_FEE 30 000 (3 %) ·
+ *    GAS_POUSSEE 150 000 · porteLeLabel(BASED)=true ET porteLeLabel(un block ne ailleurs)=FALSE.
+ *    ⛔ Ce dernier temoin est le seul qui donne sa valeur au precedent.
+ *    CE QUE LE V5 CHANGE : les frais sont VERSES pendant le swap (repli sur les claims si la devise
+ *    refuse, pour qu un jeton casse ne puisse pas tuer sa pool), et le wallet prend 20 % du tiers du
+ *    createur (33,33 % -> 26,67 % du frais).
+ *    ⚠️ IL NE REPARE RIEN DU PASSE : le hook est dans la PoolKey, donc chaque pool garde le sien. */
+export const HOOK_V5 = '0x799136c3F5f572f1597b5B7E067D3eE45Fe4A4C4';
+/** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
+ *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
+ *     Les retirer d ici ferait disparaitre nos propres marches du fil Live et des frais affiches. */
 export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
-    || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase();
+    || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase();
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
@@ -58,7 +72,10 @@ export async function blockPorteLeLabel({ rpc, jeton }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) return 'NON_LU';
   try {
     const data = SEL_PORTE_LABEL + String(jeton).replace(/^0x/, '').toLowerCase().padStart(64, '0');
-    const x = await rpc('eth_call', [{ to: HOOK_V4, data }, 'latest']);
+    /* ⛔ ON LIT LE VERROU DU HOOK QUI REFUSE. C est le V5 qui gate desormais les inscriptions ;
+     *    interroger le V4 repondrait pour un contrat qui ne decide plus rien. Les deux portent le
+     *    meme marqueur aujourd hui — ce sera faux le jour ou l un des deux changera. */
+    const x = await rpc('eth_call', [{ to: HOOK_V5, data }, 'latest']);
     if (typeof x !== 'string' || !/^0x[0-9a-f]*$/i.test(x) || x.length < 4) return 'NON_LU';
     return BigInt(x) === 1n ? 'OUI' : 'NON';
   } catch { return 'NON_LU'; }
@@ -67,6 +84,13 @@ export async function blockPorteLeLabel({ rpc, jeton }) {
 export async function hookV4Deploye({ rpc }) {
   try {
     const code = String(await rpc('eth_getCode', [HOOK_V4, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
+/** Le V5 est-il deploye ? Lu sur son code, jamais suppose. */
+export async function hookV5Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V5, 'latest']) || '');
     return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
   } catch { return 'NON_LU'; }
 }
