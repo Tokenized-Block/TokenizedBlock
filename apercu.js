@@ -29,6 +29,11 @@ const S = {
   execute: selecteur('execute(bytes,bytes[],uint256)'),
   multicall: selecteur('multicall(bytes[])'),
   modify: selecteur('modifyLiquidities(bytes,uint256)'),
+  /* ⛔ AUDIT 2026-09-19 (bloquant) : le paiement de la mise en vie s affichait « Unknown call — Do not sign what you cannot
+   *    read », juste avant que l ecran l annonce comme les ≈ $1. Il se lit : inscrire(PoolKey,uint160) — selecteur bb920fed,
+   *    verifie sur la vraie transaction de mainnet. */
+  inscrire: selecteur('inscrire((address,address,uint24,int24,address),uint160)'),
+  transfererPart: selecteur('transfererPart(bytes32,address)'),
 };
 
 const court = (a) => a.slice(0, 6) + '…' + a.slice(-4);
@@ -120,6 +125,16 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     lignes.push(permanent ? 'Position owner: dead address — nobody can ever withdraw or collect'
       : 'Position owner: NOT the dead address — this position can be withdrawn by its owner');
     return { etat: 'LUE', action: 'Launch a market', lignes };
+  }
+  if (sel === S.inscrire) {
+    lignes.push(valeur > 0n ? 'Pays the one-off ≈ $1 that brings your block to life' : 'Confirms the starting price (already paid)');
+    lignes.push('Records the starting price of its market, and you as its creator');
+    return { etat: 'LUE', action: 'Bring it to life', lignes };
+  }
+  if (sel === S.transfererPart && data.length >= 138) {
+    lignes.push('Gives your creator share of this market to ' + court(adresseDe(mot(data, 1))));
+    lignes.push('From then on, that address receives it — nobody else can undo it');
+    return { etat: 'LUE', action: 'Give away your creator share', lignes };
   }
   lignes.push('This call could not be read here. Do not sign what you cannot read.');
   return { etat: 'INCONNUE', action: 'Unknown call', lignes };

@@ -961,7 +961,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div id="cModeBlock">
     <div class="carte">
       <p class="titre"><span class="creaEtape">1</span> Name it</p>
-      <p class="sous">1 billion blocks, sealed at birth — nobody can ever mint more.</p>
+      <p class="sous">1 billion blocks, all minted to you at birth. Its cap equals that number — only its admin could raise it.</p>
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
       <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
       <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0122" hidden>Build <code>20260920-0122</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0123" hidden>Build <code>20260920-0123</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2731,8 +2731,8 @@ $('#fOuvrir').addEventListener('click', async () => {
     : f.estB20 ? 'native B20 (code 0xef — unforgeable)' : '⚠️ NOT a native B20, despite the address');
   const sup = supplyLisible(f.supply, f.decimales);
   l.push(sup ? 'supply ' + sup + ' (' + f.decimales + ' decimals)' : 'supply not read');
-  l.push(f.mintFerme === null ? 'sealed supply: not read'
-    : f.mintFerme ? 'supply sealed — nobody can make more' : 'more can still be minted');
+  l.push(f.mintFerme === null ? 'cap: not read'
+    : f.mintFerme ? 'cap = supply today — more only if its admin raises the cap' : 'more can still be minted');
   if (f.manques.length) l.push('not read: ' + f.manques.join(', ') + ' — click “Read its facts” again to retry');
   note.textContent = l.join(' · ');
 });
@@ -4461,7 +4461,7 @@ async function lireProfil(adr, sym, perime) {
     /* ⛔ LE MARQUEUR EST LE CODE, PAS LE PREFIXE D ADRESSE (EIP-3541 : `0xef` est infalsifiable). */
     $('#pB20').textContent = f.estB20 === null ? 'not read' : f.estB20 ? 'yes · code 0xef' : '⚠️ no';
     $('#pSupply').textContent = supplyLisible(f.supply, f.decimales) || 'not read';
-    $('#pScelle').textContent = f.mintFerme === null ? 'not read' : f.mintFerme ? '🔒 sealed — nobody can make more'
+    $('#pScelle').textContent = f.mintFerme === null ? 'not read' : f.mintFerme ? 'cap = supply today — only its admin could raise it'
       : '⚠️ open — more can still be minted by whoever holds the mint role';
   } else {
     for (const id of ['#pSupply', '#pScelle', '#pB20']) $(id).textContent = 'not read';
@@ -7371,7 +7371,7 @@ function peindreApercuCreation() {
   /* l apercu collant porte le nom et le symbole en cours de frappe : on voit ce qu on fabrique */
   $('#cApercuNom').textContent = String($('#cNom').value || '').trim() || 'Your block';
   $('#cApercuSym').textContent = String($('#cSym').value || '').trim()
-    ? String($('#cSym').value).trim().toUpperCase() + ' · 1,000,000,000 sealed'
+    ? String($('#cSym').value).trim().toUpperCase() + ' · 1,000,000,000 units'
     : 'no symbol yet';
   /* ⛔ LE NOMBRE DE COMBINAISONS VIENT DU MODULE, pas d un chiffre tape ici : c est lui qui sait ce
    * que le catalogue contient vraiment, et un test compare ce produit a des apparences reelles. */
@@ -7763,7 +7763,7 @@ function majFraisEtRecap() {
   const neutre = v.ko && !String($('#cNom').value || '').trim() && !String($('#cSym').value || '').trim();
   $('#cRecap').textContent = v.ko
     ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
-    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, sealed — all to you'
+    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.';
   $('#cRecap').className = 'note' + (v.ko && !neutre ? ' wKo' : '');
@@ -7790,7 +7790,7 @@ function majFraisEtRecap() {
         return m ? 'Role: ' + m.titre + ' (engraved in metadata)' : null;
       })();
       const extra = estCreate ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
-        'Supply: 1,000,000,000, sealed — all to you',
+        'Supply: 1,000,000,000, all to you (cap = supply)',
         'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
@@ -8941,7 +8941,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0122',
+    build: '20260920-0123',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
