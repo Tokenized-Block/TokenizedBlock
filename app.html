@@ -507,6 +507,29 @@ body:not(.surMap) .mapCta{display:none}
    Le titre devient un bouton pleine largeur : gros, tappable au pouce, et il DIT a quoi la section
    sert. Fermee, la carte tient en deux lignes. Ouverte, elle prend un halo doux — le meme accent que
    le reste de l app, jamais une couleur nouvelle. */
+/* ══ LES BULLES DU FEED (Phil 2026-09-20 : « change la forme, des bulles ») ════════════════════════
+   Une rangee qui defile horizontalement sur telephone, jamais coupee : chaque bulle est ronde, assez
+   grande pour le pouce (40 px), et celle qui est ouverte porte le halo d accent de l app. */
+.bulles{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;padding:2px}
+.bulle{appearance:none;border:1px solid var(--ligne);background:rgb(var(--fond2Rgb) / .7);color:var(--texte);
+  font:inherit;font-weight:700;font-size:13.5px;padding:9px 16px;border-radius:99px;cursor:pointer;
+  min-height:40px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;
+  transition:background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .12s ease}
+.bulle:hover{border-color:rgb(var(--accentRgb) / .5)}
+.bulle:active{transform:scale(.97)}
+.bulle:focus-visible{outline:2px solid rgb(var(--accentRgb) / .65);outline-offset:2px}
+.bulle.on{background:rgb(var(--accentRgb) / .16);border-color:rgb(var(--accentRgb) / .6);
+  box-shadow:0 0 0 1px rgb(var(--accentRgb) / .18), 0 10px 26px rgb(0 0 0 / .32)}
+.bulle .bulleN{font-weight:800;opacity:.85;font-size:12px}
+@media (max-width:620px){
+  /* ⛔ sur telephone on ne replie pas les bulles sur cinq lignes : une seule rangee qui defile */
+  .bulles{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    margin-left:-2px;padding-left:2px;padding-right:12px}
+  .bulles::-webkit-scrollbar{display:none}
+  .bulle{font-size:13px;padding:9px 14px}
+}
+/* la carte fermee disparait completement : c est la bulle qui la represente */
+.carte.plie:not(.ouverte){display:none}
 .plieTete{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
   padding:12px 4px;margin:0;font:inherit;color:inherit;cursor:pointer;border-radius:12px;min-height:52px}
 .plieTete:hover{background:rgb(var(--accentRgb) / .06)}
@@ -1438,7 +1461,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0141" hidden>Build <code>20260920-0141</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0142" hidden>Build <code>20260920-0142</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5444,9 +5467,17 @@ function riennDeTrouve() {
  *    ouvre UNE (Live), et le visiteur ouvre le reste s il veut. Son choix est garde dans son
  *    navigateur — et s il ne l est pas (navigation privee, stockage refuse), on retombe sur le meme
  *    defaut, jamais sur un ecran vide. */
-const PLI_CLE = 'tb-feed-plis-v1';
-/** Ce a quoi chaque section sert, en UNE phrase — c est ce que le bouton dit quand la carte est fermee. */
-const PLI_OUVERTES_PAR_DEFAUT = ['Live'];
+const PLI_CLE = 'tb-feed-bulle-v1';
+/** Celle qui s ouvre quand le visiteur arrive sans choix garde. */
+const PLI_PAR_DEFAUT = 'Live';
+/** ⛔ LE NOM COURT D UNE BULLE : le titre entier ne tient pas dans une pastille. Les deux cas qui ne se
+ *  coupent pas tout seuls sont ecrits ici, le reste se coupe au premier tiret ou point median. */
+const BULLE_NOMS = { 'The feed': 'Transfers', 'Who bought, and at what price': 'Who bought' };
+function nomCourt(titre) {
+  if (BULLE_NOMS[titre]) return BULLE_NOMS[titre];
+  const t = String(titre).split(/\s+[—·]\s+/)[0].trim();
+  return t.length > 22 ? t.slice(0, 21) + '…' : t;
+}
 function plisLus() {
   try { const x = JSON.parse(localStorage.getItem(PLI_CLE) || 'null'); return x && typeof x === 'object' ? x : null; }
   catch (_) { return null; }
@@ -5459,12 +5490,19 @@ function plierLesCartes() {
   const volet = document.querySelector('#v-social');
   if (!volet) return;
   const garde = plisLus();
+  /* la rangee de bulles, posee AVANT la premiere carte */
+  const barre = document.createElement('div');
+  barre.className = 'bulles';
+  barre.setAttribute('role', 'tablist');
+  barre.setAttribute('aria-label', 'Feeds');
+  volet.insertBefore(barre, volet.firstElementChild);
   let posees = 0;
   for (const carte of [...volet.querySelectorAll(':scope > .carte')]) {
     const titre = carte.querySelector(':scope > .titre');
     if (!titre || carte.classList.contains('plie')) continue;
     const sous = carte.querySelector(':scope > .sous');
     const nom = titre.textContent.trim();
+    const sousTexte = sous ? sous.textContent.trim() : '';
     /* le corps = tout ce qui suit le titre (et la phrase d explication, qui monte dans le bouton) */
     const corps = document.createElement('div');
     corps.className = 'plieCorps';
@@ -5507,13 +5545,49 @@ function plierLesCartes() {
     carte.classList.add('plie');
     carte.dataset.pli = nom;
 
-    const ouvrir = garde && typeof garde[nom] === 'boolean' ? garde[nom]
-      : PLI_OUVERTES_PAR_DEFAUT.some((x) => nom.startsWith(x));
-    basculerCarte(carte, ouvrir, false);
-    tete.addEventListener('click', () => basculerCarte(carte, !carte.classList.contains('ouverte'), true));
+    /* la bulle qui represente cette carte */
+    const bulle = document.createElement('button');
+    bulle.type = 'button';
+    bulle.className = 'bulle';
+    bulle.setAttribute('role', 'tab');
+    bulle.dataset.pli = nom;
+    bulle.title = sousTexte || nom;
+    bulle.textContent = nomCourt(nom);
+    barre.appendChild(bulle);
+    bulle.addEventListener('click', () => {
+      const dejaOuverte = carte.classList.contains('ouverte');
+      ouvrirSeule(dejaOuverte ? null : nom, true);
+      /* ⛔ « le feed descend en bas » : apres l ouverture, on amene la carte sous la rangee de bulles,
+       *    sinon sur telephone elle s ouvre hors de l ecran et le clic a l air sans effet. */
+      if (!dejaOuverte) {
+        try { carte.scrollIntoView({ behavior: mouvementReduit ? 'auto' : 'smooth', block: 'nearest' }); }
+        catch (_) { carte.scrollIntoView(); }
+      }
+    });
+    /* l entete de la carte referme (elle est deja la, autant qu elle serve) */
+    tete.addEventListener('click', () => ouvrirSeule(null, true));
     posees += 1;
   }
   plisPoses = posees > 0;
+  if (!plisPoses) return;
+  const voulu = garde && typeof garde.ouverte === 'string' ? garde.ouverte : PLI_PAR_DEFAUT;
+  const existe = [...volet.querySelectorAll('.carte.plie')].some((c) => c.dataset.pli === voulu);
+  ouvrirSeule(existe ? voulu : PLI_PAR_DEFAUT, false);
+}
+/** ⛔ UNE SEULE A LA FOIS — c est ce qui fait la difference entre choisir et subir. `nom` a null
+ *  referme tout : un visiteur doit pouvoir ne rien avoir sous les yeux. */
+function ouvrirSeule(nom, garder) {
+  const volet = document.querySelector('#v-social');
+  if (!volet) return;
+  for (const carte of volet.querySelectorAll('.carte.plie')) {
+    basculerCarte(carte, carte.dataset.pli === nom, false);
+  }
+  for (const bulle of volet.querySelectorAll('.bulle')) {
+    const active = bulle.dataset.pli === nom;
+    bulle.classList.toggle('on', active);
+    bulle.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+  if (garder) plisEcrits({ ouverte: nom });
 }
 function basculerCarte(carte, ouvrir, garder) {
   const corps = carte.querySelector(':scope > .plieCorps');
@@ -9355,7 +9429,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0141',
+    build: '20260920-0142',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
