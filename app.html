@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0125" hidden>Build <code>20260920-0125</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0126" hidden>Build <code>20260920-0126</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5217,6 +5217,7 @@ function peindreCreateFeeHonesty() {
  *    que celui qui est ouvert) ; il revient seul des qu il a de la matiere. Le compte vient des memes evenements. */
 function majComptesFiltres() {
   const garde = liveFiltre;
+  const comptes = {};
   for (const b of document.querySelectorAll('[data-filtre]')) {
     const f = b.getAttribute('data-filtre');
     if (!b.dataset.nom) b.dataset.nom = b.textContent.trim();
@@ -5224,7 +5225,11 @@ function majComptesFiltres() {
     try { liveFiltre = f; n = liveEvts.filter(filtreLive).length; } catch (_) { n = 0; }
     b.textContent = b.dataset.nom + (n ? ' ' + n : '');
     b.hidden = n === 0 && f !== 'TOUT' && f !== 'CREATION' && f !== garde;
+    comptes[f] = n;
   }
+  /* Trades = achats + ventes + swaps : tant qu il n y a que des swaps, c est le MEME contenu que Swap — un seul bouton */
+  const tr = document.querySelector('[data-filtre="ECHANGES"]');
+  if (tr && garde !== 'ECHANGES' && comptes.ECHANGES === comptes.SWAP) tr.hidden = true;
   liveFiltre = garde;
 }
 function peindreLive() {
@@ -8972,7 +8977,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0125',
+    build: '20260920-0126',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
