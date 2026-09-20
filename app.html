@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0123" hidden>Build <code>20260920-0123</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0124" hidden>Build <code>20260920-0124</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6218,7 +6218,16 @@ async function calculerLancement() {
    *    propre cle (planLancement le verifie) et le hook exige que ce soit l admin du block qui l ouvre. */
   const autrePaire = !!(deviseLancement && marcheAvant && marcheAvant.etat === 'LUE' && marcheAvant.cle
     && ![String(marcheAvant.cle.currency0).toLowerCase(), String(marcheAvant.cle.currency1).toLowerCase()].includes(String(deviseLancement).toLowerCase()));
-  if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade && !autrePaire)) {
+  /* ⛔⛔ AUDIT 2026-09-19 (bloquant) : le V1 n exige PAS de paiement — n importe qui peut y ouvrir une pool sur un de nos
+   *    blocks et s y inscrire comme createur. L app repondait alors « deja vivant sur TokenizedBlock », ce qui EMPECHAIT la
+   *    vraie mise en vie payante. Un marche V1 (ou sans hook) n empeche plus d ouvrir le marche V2/V3 paye, a cote. */
+  const marcheV1 = !!(marcheAvant && marcheAvant.etat === 'LUE' && marcheAvant.cle
+    && String(marcheAvant.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase());
+  /* ⛔ AUDIT (bloquant) : quelqu un peut aussi ouvrir la pool PAYEE avant le createur et la laisser vide, au prix plancher.
+   *    Une pool lue SANS liquidite n est pas un marche : on ne dit plus « deja vivant », on le dit et on laisse continuer. */
+  const poolVide = !!(marcheAvant && marcheAvant.etat === 'LUE' && marcheAvant.liquidite !== undefined
+    && marcheAvant.liquidite !== null && BigInt(marcheAvant.liquidite || 0) === 0n);
+  if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade && !autrePaire && !marcheV1 && !poolVide)) {
     e.className = 'note wKo'; vieAutoArreter();
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
       e.textContent = 'This block is already alive on TokenizedBlock. Nothing to do.';
@@ -6278,6 +6287,11 @@ async function calculerLancement() {
     }
   } catch (err) { plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
+  /* ⛔ AUDIT (bloquant) : si quelqu un a ouvert la pool PAYEE avant le createur et l a laissee vide au prix plancher, le plan
+   *    est refuse avec un message technique (« range collapses »). On dit ce qui s est passe, sans promettre de reparation. */
+  if (poolVide && plan && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
+    plan.pourquoi = 'someone opened this market before you and left it empty at the lowest price. Its starting price cannot be set from here any more — pick another pair to open a fresh market.';
+  }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
   if ($('#profil').dataset.block !== adr) return;
   if (fraisLancementUsd(CHAINE) > 0) {
@@ -8941,7 +8955,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0123',
+    build: '20260920-0124',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
