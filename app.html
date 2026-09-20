@@ -1497,7 +1497,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0150" hidden>Build <code>20260920-0150</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0151" hidden>Build <code>20260920-0151</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2086,7 +2086,12 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
    * donc dans une aire par defaut qui n est pas celle de l ecran. */
   if (nom === 'map') setTimeout(replacerDansLaMap, 50);
   /* le classement se refait a l ouverture de l onglet : les vies ont pu arriver entre-temps */
-  if (nom === 'mien') peindreClassement();
+  if (nom === 'mien') {
+    peindreClassement();
+    /* ⛔ Rien de classe a l ouverture = on RELANCE, on ne laisse pas le visiteur devant un verdict qui
+     *    n est qu une lecture inachevee. */
+    if (!lectureVieEnCours && habitants.length && !classementCourant().classes.length) void lireLaVie();
+  }
   /* ⛔ Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ». Sept listes d affilee, il n en lit
    *    aucune. Les cartes du Feed se plient a la premiere ouverture de l onglet — une seule ouverte. */
   if (nom === 'social') plierLesCartes();
@@ -3059,7 +3064,16 @@ async function rafraichirApresEchanges(evenements) {
 }
 
 let lectureVieEnCours = false;
+/** ⛔ Ou en est le tour de lecture. Chaque passe lit les 30 suivants ; au bout, on recommence — c est
+ *  ce qui rend le classement VIVANT au lieu de figer une premiere lecture. */
+let vieCurseur = 0;
+/** Combien de blocks par passe. 30 et 260 ms de pause viennent d une mesure (2026-09-10 : envoyees
+ *  d affilee, 19 lectures sur 22 refusees par le noeud public). On etale, on n elargit pas. */
+const VIE_PAR_PASSE = 30;
 async function lireLaVie() {
+  /* ⛔ GARDE DE CONCURRENCE : deux passes en parallele doublent les requetes sur un noeud qui refuse
+   *    deja sous charge. La seconde repart sans rien faire. */
+  if (lectureVieEnCours) return;
   let lus = 0, avecMarche = 0, nonLus = 0;
   lectureVieEnCours = true;
   /* ⛔⛔ ON RESPIRE ENTRE DEUX BLOCKS, ET C EST MESURE. Vingt-deux blocks x six cles = jusqu a 132
@@ -3072,7 +3086,11 @@ async function lireLaVie() {
   /* ⛔ RAKSHA 2026-09-14 : lire NOS genesis (TBLOCK/TTB) EN PREMIER — ils ne restent pas colles en « Not read ». */
   const ordre = [...habitants].sort((a, b) => Number(nosSet.has(String(b.adr).toLowerCase())) - Number(nosSet.has(String(a.adr).toLowerCase()))
     || Number(b.nous === true) - Number(a.nous === true));
-  for (const h of ordre.slice(0, 30)) {
+  /* au bout du tour on repart au debut : les vies deja lues se rafraichissent */
+  if (vieCurseur >= ordre.length) vieCurseur = 0;
+  const lot = ordre.slice(vieCurseur, vieCurseur + VIE_PAR_PASSE);
+  vieCurseur += VIE_PAR_PASSE;
+  for (const h of lot) {
     await souffler();
     /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
      * 25 a 40 s a s afficher, parce que cette boucle et le profil se partageaient le meme noeud
@@ -3126,10 +3144,21 @@ async function lireLaVie() {
   lectureVieEnCours = false;
   peindreClassement();
   const n = $('#mapNote');
-  n.textContent = (n.textContent || '') + ' · life read on ' + lus + '/' + habitants.length
-    + ' — ' + avecMarche + ' with a market'
+  /* ⛔ LA PHRASE DIT DESORMAIS OU ON EN EST DANS LE TOUR : « 30/181 » sans dire qu on continue se
+   *    lisait comme un verdict sur les 151 autres. */
+  const faits = Math.min(vieCurseur, habitants.length);
+  n.textContent = (n.textContent || '') + ' · life read on ' + lus + ' more (' + faits + '/'
+    + habitants.length + ' so far, still going) — ' + avecMarche + ' with a market'
     + (nonLus ? ', ' + nonLus + ' unreadable right now (not the same as having no market)' : '');
 }
+/* ⛔⛔ LA LECTURE CONTINUE, C EST LA DEMANDE DE PHIL : « doit etre live constamment ». Toutes les 90 s,
+ *    une passe de plus — seulement si la page est VISIBLE (un onglet en arriere-plan qui tape sur un
+ *    noeud public, c est de la charge que personne ne regarde) et si rien ne tourne deja. */
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  if (lectureVieEnCours || !habitants.length) return;
+  void lireLaVie();
+}, 90000);
 
 /* ══ CONNEXION — ET RIEN D AUTRE ════════════════════════════════════════════════════════════════
  * ⛔⛔ SE CONNECTER N EST PAS SIGNER. Cette page demande la PERMISSION DE LIRE une adresse ; elle
@@ -9541,7 +9570,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0150',
+    build: '20260920-0151',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
