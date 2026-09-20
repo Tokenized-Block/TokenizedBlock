@@ -1229,6 +1229,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <li><b>Death</b> — only when its creator held it and now holds none. A creator who never held it, or a balance we could not read, never kills a block.</li>
       </ul>
       <p class="note" id="bNourriture">Food not read yet.</p>
+      <!-- ⛔ PHIL (2026-09-20) : « rends-le comme un goal a atteindre ». Ce que le cerveau ATTEND, a cote de
+           ce qu il a deja mange. Rempli par le battement, jamais ecrit en dur. -->
+      <p class="note" id="bBut" style="font-weight:700">—</p>
       </details>
       <details class="bDetail" style="margin-top:8px"><summary class="note" style="cursor:pointer" id="bJournalResume">Its journal</summary>
       <p class="note">What it does, what it thinks, and what would help it — each line written from a fact read on chain, never invented.</p>
@@ -1497,7 +1500,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0152" hidden>Build <code>20260920-0152</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0153" hidden>Build <code>20260920-0153</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9475,6 +9478,30 @@ function battreBrain() {
       + n.messages + ' messages in ' + n.messagesLus + ' checked. '
       + (n.mort === true ? 'Dead: ' + n.pourquoiMort + '.' : n.mort === false ? 'Its creator still holds it.'
         : 'Death not judged: ' + n.pourquoiMort + '.');
+  /* ⛔⛔ PHIL (2026-09-20) : « alors c est quoi qui le nourrit ? rends-le comme un goal a atteindre ».
+   *    La ligne du dessus RACONTE ce qui a ete lu ; celle-ci dit ce que le cerveau ATTEND. Chaque cas
+   *    est une vraie branche de `courant()` (cerveau.js:118-165), pas une formule d encouragement :
+   *      · sans marche  -> `aMarche` faux, la phase tombe a DORMANT/EVEILLE ;
+   *      · rien de neuf -> `nouveaux` tous a zero et `delta` nul : le reseau retombe sur CALME ;
+   *      · du neuf      -> ce sont EXACTEMENT ces compteurs qui le poussent vers EXCITE.
+   * ⛔ AUCUN CONSEIL : on nomme ce qui atteint le cerveau, jamais ce qu il faut faire de son argent. */
+  const but = $('#bBut');
+  if (but) {
+    const nv = (r.vu && r.vu.nouveaux) || {};
+    const rien = ['gm', 'messages', 'detenteurs', 'achats', 'ventes'].every((k) => !Number(nv[k]));
+    const sansMarche = r.vu && (r.vu.phase === 'DORMANT' || r.vu.phase === 'EVEILLE');
+    but.textContent = r.vu && r.vu.phase === 'MORT'
+      ? 'Nothing reaches it any more.'
+      : sansMarche
+        ? 'What it is waiting for: its market. Until one opens, nothing from the chain reaches it.'
+        : rien
+          ? 'What it is waiting for: anything new — a buy, a sell, one more holder, a transfer, or a paid message. '
+            + 'Its mood only moves on what happened since the last read.'
+          : 'It is being fed right now: ' + ['achats', 'ventes', 'detenteurs', 'gm', 'messages']
+            .filter((k) => Number(nv[k])).map((k) => Number(nv[k]) + ' '
+              + ({ achats: 'buy(s)', ventes: 'sell(s)', detenteurs: 'new holder(s)', gm: 'transfer(s)', messages: 'message(s)' })[k])
+            .join(' · ') + ' since the last read.';
+  }
   brainEtat = r.etat;
   if (r.etat.tick % 10 === 0 && brainAdr) noterMemoire(brainAdr, r.etat);
   $('#bMemoire').textContent = Math.round(r.vu.memoire * 100) + ' %';
@@ -9586,7 +9613,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0152',
+    build: '20260920-0153',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
