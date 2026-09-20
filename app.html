@@ -1166,7 +1166,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="rang" style="margin-top:8px">
           <button class="bouton sec" id="tbOfferPrep" type="button" title="Prepare offer_food — preview + plan until deploy_status; never broadcasts OfferCircuit">Prepare offer (preview + plan)</button>
         </div>
-        <p class="note" id="tbOfferPrepNote" style="margin-top:4px">Preview + plan only until deploy_status — refreshes 32-signal 0/1 from the live snapshot. No approve / no offer tx / no OfferCircuit broadcast.</p>
+        <p class="note" id="tbOfferPrepNote" style="margin-top:4px">Preview only: it replays the 32 signals on what the chain says right now. Nothing is approved, nothing is sent.</p>
         <pre class="mono" id="tbOfferPlan" hidden style="max-height:140px;overflow:auto;white-space:pre-wrap;font-size:11px;margin-top:6px"></pre>
         <!-- ⛔ AUDIT 2026-09-20 : cette ligne portait des identifiants internes (CURRENT_TOY_V1, « O7 greenlit
              deploy ») sur un ecran public. Ce qu un visiteur a besoin de savoir, en anglais : ce que « Prepare »
@@ -1406,7 +1406,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0135" hidden>Build <code>20260920-0135</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0136" hidden>Build <code>20260920-0136</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8769,10 +8769,9 @@ function preparerOffreApercu() {
       const live = plan.mode === 'approve_then_offer';
       note.textContent = live
         ? ('Plan ready · ' + plan.decision_label + ' (score ' + plan.score + '/' + plan.threshold
-          + ') · ' + CURRENT_TOY_V1 + ' · approve+offer for user sign — app does not auto-send')
-        : ('Preview + plan · ' + (plan.decision_label || '?') + ' (score ' + plan.score + '/' + plan.threshold
-          + ') · ' + CURRENT_TOY_V1 + ' · deploy_status=' + (plan.deploy_status || OFFER_DEPLOY.status)
-          + ' · no wallet / no broadcast');
+          + ') · your wallet signs it — this page never sends on its own')
+        : ('Preview · ' + (plan.decision_label || '?') + ' (score ' + plan.score + '/' + plan.threshold
+          + ') · no wallet opened, nothing sent');
       note.className = plan.decision_label ? 'note wOk' : 'note wKo';
     }
     /* Honesty: real approve+offer only when OFFER_DEPLOY.status==='deployed' + address — not tonight. */
@@ -8824,10 +8823,10 @@ function peindreTasks(snap) {
     const op = resume.offer_preview;
     if (op) {
       lines.unshift('<li>' + (op.decision === 1 ? '🍽' : '⛔') + ' offer preview · <b>' + enTexte(op.decision_label) + '</b> (score '
-        + op.score + '/' + op.threshold + ') · ' + SIGNALS_COUNT + ' signals · ' + enTexte(CIRCUIT_VERSION)
-        + ' · ' + enTexte(CURRENT_TOY_V1)
-        + '<br><span class="filS">' + enTexte(op.pourquoi) + (op.lock ? ' · lock forever → dEaD (pending contract)' : '')
-        + ' · deploy_status=' + enTexte(OFFER_DEPLOY.status) + '</span></li>');
+        + op.score + '/' + op.threshold + ') · ' + SIGNALS_COUNT + ' signals'
+        + '<br><span class="filS">' + enTexte(op.pourquoi)
+        + (op.lock ? ' · if accepted, the food is locked away for good' : '')
+        + ' · preview only — nothing is sent</span></li>');
     }
     log.innerHTML = lines.length ? lines.join('') : '<li>No receipts yet — first beat writes the journal.</li>';
   }
@@ -8836,15 +8835,16 @@ function peindreTasks(snap) {
     pre.textContent = JSON.stringify(resume.offer_preview, null, 2);
   }
   if (sum) {
-    sum.textContent = 'Tasks · band ' + (resume.neuron_mass_band || '?')
-      + ' · ' + SIGNALS_COUNT + '-signal circuit · offchain 128 LIF · '
-      + (resume.offer_preview ? resume.offer_preview.decision_label : 'no preview');
+    /* « band ? » ne veut rien dire pour un visiteur ; le nombre de signaux et la decision, si. */
+    sum.textContent = 'Tasks · ' + SIGNALS_COUNT + ' signals · '
+      + (resume.offer_preview ? resume.offer_preview.decision_label : 'nothing offered yet');
   }
   if (note) {
-    note.textContent = 'Schema ' + (resume.schema || '') + ' · circuit ' + CIRCUIT_VERSION
-      + ' · ' + CURRENT_TOY_V1 + ' (threshold ' + THRESHOLD + ') · deploy_status='
-      + (resume.deploy_status || OFFER_DEPLOY.status)
-      + ' · full brain OFFCHAIN · decision 0/1 ONCHAIN · Prepare = preview + plan until O7.';
+    /* ⛔ AUDIT 2026-09-20 : ecrivait « Schema … · CURRENT_TOY_V1 · deploy_status=not_deployed … until O7 »
+     *    sur un ecran public. La substance reste, les identifiants internes partent. */
+    note.textContent = 'The brain runs in your browser, not on a server. On chain it would only ever write '
+      + 'one bit: yes or no. “Prepare” builds the transaction and shows it to you — nothing is sent '
+      + 'until your wallet signs.';
   }
   try { window.__TB_BRAIN_TASKS__ = resume; } catch (e) { /* agent surface */ }
 }
@@ -9216,7 +9216,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0135',
+    build: '20260920-0136',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
