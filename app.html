@@ -1456,6 +1456,16 @@ details[open] > summary::before{transform:rotate(90deg)}
       <ul class="fil trListe" id="trListe"><li class="filL"><p class="note">Reading the market…</p></li></ul>
       <p class="note" id="trNote"></p>
     </div>
+
+    <!-- ⛔ PHIL (2026-09-20) : « affiche les vraies stats ». Des NOMBRES D ACTES faits dans cette app,
+         pris sur /api/entonnoir (persistant). Aucun pourcentage de frais, aucune adresse. -->
+    <div class="carte" id="carteStats">
+      <p class="titre">What this app has actually done</p>
+      <p class="sous">Counted in this app, not on Base. The Live feed shows the whole chain; these numbers
+        are only what people did here.</p>
+      <div class="stadeLigne" id="statsLignes" style="margin-top:8px"></div>
+      <p class="note" id="statsNote">Reading…</p>
+    </div>
   </section>
 
   <section class="volet" id="v-social" aria-label="Social and collateral">
@@ -1500,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0154" hidden>Build <code>20260920-0154</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0155" hidden>Build <code>20260920-0155</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2114,6 +2124,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* ⛔ Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ». Sept listes d affilee, il n en lit
    *    aucune. Les cartes du Feed se plient a la premiere ouverture de l onglet — une seule ouverte. */
   if (nom === 'social') plierLesCartes();
+  if (nom === 'trade') void peindreStats();
   if (nom === 'map') suivreLeCote();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
@@ -5763,6 +5774,36 @@ function suivreLeCote() {
   window.addEventListener('resize', () => { if (!cote.hasAttribute('hidden')) zoom.style.transform = decalage(); }, { passive: true });
   coteSuivi = true;
   maj();
+}
+
+/** ⛔ Les vraies stats de l app. Un compteur sans sa DATE DE DEPART se lit comme un total de toujours :
+ *  la date est donc affichee avec. Un echec de lecture se DIT, il ne rend pas zero. */
+async function peindreStats() {
+  const zone = document.querySelector('#statsLignes');
+  const note = document.querySelector('#statsNote');
+  if (!zone || !note) return;
+  let d = null;
+  try { d = await fetch('/api/entonnoir', { cache: 'no-store' }).then((x) => x.json()); } catch (_) { d = null; }
+  if (!d || !d.ok || !d.total) { note.textContent = 'Could not read the counters right now — that is us, not the chain.'; return; }
+  const t = d.total;
+  const n = (k) => Number(t[k] || 0);
+  const lignes = [
+    ['Visits', n('visite')],
+    ['Opened Create', n('create_clic')],
+    ['Blocks created here', n('cree')],
+    ['Markets opened here', n('vivant')],
+    ['Trades made here', n('achat')],
+    ['Shared links opened', n('lien_recu')],
+  ];
+  zone.innerHTML = lignes.map(([nom, v]) => '<span class="puce' + (v ? '' : ' vide') + '">'
+    + enTexte(nom) + ' <b>' + v.toLocaleString('en-US') + '</b></span>').join('');
+  /* ⛔ LES ECHECS SE DISENT AUSSI. Un entonnoir qui ne montre que ses reussites est une brochure. */
+  const rates = n('cree_echec') + n('vie_echec');
+  const depuis = d.depuis ? new Date(d.depuis).toISOString().slice(0, 10) : '?';
+  note.textContent = 'Since ' + depuis + '. '
+    + (rates ? rates + ' attempt(s) failed on the way — counted, not hidden. ' : '')
+    + 'These are actions taken in this app. Everything else you see on the Live feed happened on Base, '
+    + 'through other apps.';
 }
 
 function peindreLive() {
@@ -9645,7 +9686,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0154',
+    build: '20260920-0155',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
