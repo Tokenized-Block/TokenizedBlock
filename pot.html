@@ -406,14 +406,17 @@ const mot32 = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0'
 const num32 = (v) => BigInt(v).toString(16).padStart(64, '0');
 const enUnites = (v) => (Number(v) / 1e18).toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-async function lireJetons() {
-  const hote = $('#jListe');
-  if (!compte) { hote.textContent = 'Connect the operator wallet to see what it holds.'; return; }
-  const idP = courant && courant.periode != null ? courant.periode : (courant ? courant.periodes - 1 : 0);
-  /* ⛔⛔ UN TOUR, UN JETON. `ancreeLe` est stocke PAR PERIODE alors que les racines et les pots sont
-   *    PAR JETON : une deuxieme devise ancree sur la meme periode aurait une fenetre de contestation
-   *    de ZERO. Et `rouler` exige la periode ancree PUIS 30 jours, donc la devise non ancree resterait
-   *    immobilisee un mois. On le DIT avant, on ne l apprend pas apres. */
+/**
+ * ⛔⛔ UN TOUR, UN JETON. `ancreeLe` est stocke PAR PERIODE alors que les racines et les pots sont PAR
+ *    JETON : une deuxieme devise ancree sur la meme periode aurait une fenetre de contestation de
+ *    ZERO. Et `rouler` exige la periode ancree PUIS 30 jours, donc la devise non ancree resterait
+ *    immobilisee un mois. On le DIT avant, on ne l apprend pas apres.
+ * ⛔ FONCTION SEPAREE EXPRES : dans sa premiere version cet avertissement vivait APRES le retour
+ *    anticipe « connecte ton wallet », donc la phrase la plus importante de la carte n apparaissait
+ *    JAMAIS tant qu on n etait pas connecte — alors qu elle ne demande qu une lecture de chaine.
+ *    Un avertissement invisible n avertit personne.
+ */
+async function avertirDevise(idP) {
   const dejaEth = await lireDepose(idP, ADRESSE_ETH);
   $('#jTour').innerHTML = dejaEth === null
     ? '<span class="ko">Could not read what round ' + idP + ' already holds — that is us, not the pot.</span>'
@@ -423,6 +426,13 @@ async function lireJetons() {
         + 'not per currency, so a second currency anchored here would have no window at all. And the '
         + 'one left unanchored cannot be moved for 30 days. Open a fresh round for these tokens instead.'
       : 'Round ' + idP + ' holds no ETH — safe to make it a token round.';
+}
+
+async function lireJetons() {
+  const hote = $('#jListe');
+  const idP = courant && courant.periode != null ? courant.periode : (courant ? courant.periodes - 1 : 0);
+  await avertirDevise(idP);
+  if (!compte) { hote.textContent = 'Connect the operator wallet to see what it holds.'; return; }
   const lignes = [];
   let ratees = 0;
   for (const jeton of JETONS_FRAIS) {
