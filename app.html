@@ -1438,7 +1438,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0139" hidden>Build <code>20260920-0139</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0140" hidden>Build <code>20260920-0140</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1453,7 +1453,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              ce bouton ne compte plus « les echanges » : il compte ceux qu on n a PAS SU lire. Garder le
              mot « Swap » en aurait fait un compteur toujours a 0 et incomprehensible. Un chiffre autre
              que 0 ici est une ALARME, pas une categorie. -->
-        <button type="button" class="puce" data-filtre="SWAP" title="Trades whose side could not be proven from the chain — this should stay at 0">↔ Not read</button>
+        <button type="button" class="puce" data-filtre="SWAP" title="Trades whose side could not be proven from the chain. Zero is the good case; any number here means we lost some.">⚠ Unreadable</button>
         <button type="button" class="puce" data-filtre="GM" title="Blocks moved between wallets, and free notes">➡️ Sent</button>
         <button type="button" class="puce" data-filtre="MESSAGE" title="Paid messages between blocks. Measured 2026-09-20: none on chain in the last 120,000 blocks, on either currency">✉️ Messages</button>
         <!-- ⛔ PHIL (2026-09-17) : « Ours / Trusted / Alive here : on s en fout, refais ca et ajoute si besoin ».
@@ -5372,8 +5372,12 @@ function majComptesFiltres() {
     /* ⛔ UN ZERO QUI EST UNE REUSSITE N A PAS LA MEME FORME QU UN ZERO QUI EST UNE ABSENCE.
      *    « Not read » compte les echanges qu on n a PAS SU lire : a zero, tout a ete lu — c est le
      *    meilleur resultat possible, et affiche « Not read 0 » il se lisait comme une panne. */
+    /* ⛔ PHIL, 2026-09-20 : « t as 2x all read ». « All 1805 » et « ✓ All read » se lisaient comme deux
+     *    versions du meme bouton. Le mot « all » appartient au PREMIER. Celui-ci compte ce qu on n a
+     *    PAS SU lire : son nom ne doit ressembler a aucun autre, et il porte son chiffre comme tous
+     *    les autres — c est la COULEUR qui dit si zero est bon (gris) ou si un chiffre est grave (rouge). */
     const reussiteAZero = f === 'SWAP' && n === 0;
-    b.textContent = reussiteAZero ? '✓ All read' : b.dataset.nom + ' ' + n;
+    b.textContent = b.dataset.nom + ' ' + n;
     b.hidden = false;
     b.classList.toggle('vide', n === 0 && !reussiteAZero);
     b.classList.toggle('reussi', reussiteAZero);
@@ -9349,7 +9353,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0139',
+    build: '20260920-0140',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
