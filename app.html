@@ -1500,7 +1500,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0153" hidden>Build <code>20260920-0153</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0154" hidden>Build <code>20260920-0154</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4564,6 +4564,31 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
 }
 
 /** Compte une etape de l entonnoir (anonyme : le nom de l etape, rien d autre). « une fois » = une fois par visite. */
+/** ⛔ UNE LIGNE QUE LA PERSONNE PEUT COLLER. Sans elle, « ca marche pas » est tout ce qui nous revient,
+ *  et on cherche a l aveugle. Elle porte l etape, l etat rendu par le wallet, la raison de la chaine,
+ *  le hash s il existe, et le build — RIEN d autre.
+ *  ⚠️ AUCUNE DONNEE PERSONNELLE : pas d adresse de wallet, pas de solde. */
+function ligneDiagnostic(etapeNom, r) {
+  try {
+    const bits = ['step=' + etapeNom, 'state=' + String((r && r.etat) || '?'),
+      'why=' + String((r && r.pourquoi) || '').replace(/\s+/g, ' ').slice(0, 120),
+      (r && r.hash ? 'tx=' + r.hash : 'tx=none'), 'build=' + (BUILD_PAGE || '?')];
+    const txt = bits.join(' · ');
+    return '<br><span class="filS">If this keeps happening, copy this line and send it:</span>'
+      + ' <code id="tbDiag">' + enTexte(txt) + '</code>'
+      + ' <button type="button" class="bouton sec" data-copier-diag="' + enTexte(txt) + '"'
+      + ' style="padding:2px 8px;font-size:.85em">Copy</button>';
+  } catch (_) { return ''; }
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-copier-diag]');
+  if (!b) return;
+  const t = b.getAttribute('data-copier-diag') || '';
+  /* ⛔ UN ECHEC DE COPIE SE DIT : croire avoir copie et coller autre chose fait perdre la trace. */
+  try { await navigator.clipboard.writeText(t); b.textContent = 'Copied'; }
+  catch (_) { b.textContent = 'Copy failed — select the line by hand'; }
+});
+
 function etape(nom, uneFois = false) {
   try {
     if (uneFois) { const k = 'tb.etape.' + nom; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); }
@@ -7081,7 +7106,11 @@ async function signerEtapeLancement(etape) {
   } finally { lancementEnCours = false; }
   if (r.etat !== 'CONFIRME') {
     e.className = 'note wKo';
-    e.textContent = 'Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || '');
+    /* ⛔ ON COMPTE L ECHEC DE LA MISE EN VIE, et on le rend copiable : c est l etape ou l argent
+     *    devait arriver. Sans trace, « ca marche pas chez les autres » reste une phrase. */
+    etape('vie_echec');
+    e.innerHTML = enTexte('Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || ''))
+      + ligneDiagnostic('bring-to-life', r);
     vieAutoArreter();
     return;
   }
@@ -9072,7 +9101,10 @@ async function creerBlock() {
       const feeKept = utiliseCreateRouter()
         ? ' Nothing was charged: the payment only goes through if creation succeeds.'
         : '';
-      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien;
+      /* ⛔ ON COMPTE L ECHEC, ET ON LE REND COPIABLE. Jusqu ici un echec de creation ne laissait
+       *    aucune trace : ni dans l entonnoir, ni dans une ligne que la personne puisse nous envoyer. */
+      etape('cree_echec');
+      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien + ligneDiagnostic('create', rc);
     }
   } finally {
     creationEnCours = false;
@@ -9613,7 +9645,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0153',
+    build: '20260920-0154',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }

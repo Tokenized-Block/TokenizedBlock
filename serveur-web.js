@@ -284,7 +284,10 @@ const TYPES = {
  * volontairement un peu penible : la meme discipline a deja evite qu un module importe mais non
  * declare parte en production en 404 silencieux. */
 /* l ordre de l entonnoir : visite -> pastille de la map -> clic Create -> cree -> vivant -> partage -> lien recu -> achat */
-const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'groupe_propose', 'groupe_ok', 'groupe_refus', 'groupe_echec', 'cree', 'vivant', 'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat'];
+/* ⛔ `cree_echec` et `vie_echec` ajoutes le 2026-09-20 : sans eux, un parcours qui casse chez un
+ *    visiteur se lit exactement comme un visiteur qui abandonne. On ne peut pas corriger ce qu on ne
+ *    compte pas. */
+const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'groupe_propose', 'groupe_ok', 'groupe_refus', 'groupe_echec', 'cree', 'cree_echec', 'vivant', 'vie_echec', 'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat'];
 /* ⛔ PERSISTANT (Phil, 2026-09-19 : « oui cree le volume ») : mesure — les compteurs repartaient de zero a CHAQUE deploiement
  *    (10 deploiements ce jour-la : aucun chiffre ne survivait). Volume Railway monte sur /data : lu au demarrage, ecrit
  *    au plus toutes les 30 s (fichier temporaire puis renommage : un arret brutal ne laisse jamais un JSON coupe).
