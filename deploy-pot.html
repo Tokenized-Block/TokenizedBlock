@@ -93,7 +93,7 @@ async function verifier() {
   $('#fee').textContent = tx.operateur;
   $('#vie').textContent = String(tx.delaiContestationHeures);
   $('#marq').textContent = String(tx.dureeReclamationJours);
-  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  const code = await rpc('eth_getCode', [tx.contrat, 'latest']);
   pret.vide = code === '0x';
   marque('#c1', pret.vide);
   if (!pret.vide) {
@@ -102,7 +102,7 @@ async function verifier() {
     return;
   }
   const r = await rpc('eth_call', [{ to: tx.deployeur, data: tx.data, gas: '0x4c4b40' }, 'latest']);
-  pret.simu = ('0x' + String(r).slice(-40)).toLowerCase() === tx.hook.toLowerCase();
+  pret.simu = ('0x' + String(r).slice(-40)).toLowerCase() === tx.contrat.toLowerCase();
   marque('#c2', pret.simu);
   majBouton();
 }
@@ -154,9 +154,9 @@ $('#deployer').addEventListener('click', async () => {
   $('#etat').textContent = 'Opening your wallet — check it shows Base and a contract call, then sign.';
   const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: tx.deployeur, data: tx.data, value: '0x0' });
   if (r.etat !== 'CONFIRME') { $('#etat').innerHTML = '<span class="ko">Not done: ' + (r.pourquoi || r.etat) + '</span>'; majBouton(); return; }
-  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  const code = await rpc('eth_getCode', [tx.contrat, 'latest']);
   $('#etat').innerHTML = code !== '0x'
-    ? '<span class="ok">Deployed. The pot is live at ' + tx.hook + '.</span> Transaction: <code>' + r.hash + '</code>'
+    ? '<span class="ok">Deployed. The pot is live at ' + tx.contrat + '.</span> Transaction: <code>' + r.hash + '</code>'
     : '<span class="ko">Transaction confirmed but no code at the address yet — send me the hash: </span><code>' + r.hash + '</code>';
   void relire();
 });
