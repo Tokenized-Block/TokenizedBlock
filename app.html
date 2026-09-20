@@ -963,7 +963,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="titre"><span class="creaEtape">1</span> Name it</p>
       <p class="sous">1 billion blocks, all minted to you at birth. Its cap equals that number — only its admin could raise it.</p>
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
-      <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="TBLOCK" autocomplete="off" spellcheck="false"></label>
+      <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="e.g. MOON" autocomplete="off" spellcheck="false"></label>
       <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
            creations avec le meme sel depuis le meme compte se heurtent, et la factory le dit.
            Auto-fill + « New salt » tirent un sel ALEATOIRE visible — jamais un secret cache : le
@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0126" hidden>Build <code>20260920-0126</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0127" hidden>Build <code>20260920-0127</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1466,7 +1466,9 @@ details[open] > summary::before{transform:rotate(90deg)}
          cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
-            <p class="sous">Ranked by readable market cap. Buying feeds growth. TBLOCK and TTB stay separate markets.</p>
+            <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce
+                 que la liste montre, rien d autre. -->
+            <p class="sous">The biggest blocks first, by the market value we can read on chain.</p>
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
@@ -1718,7 +1720,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="pmsgGate">Pick a block you hold to speak as, write, then Prepare.</p>
         <!-- ⛔ PHIL (2026-09-17/19) : « fais de l USDC ». Le message se paie en USDC (0.50) ou en TBLOCK (1000) : meme
              transaction, meme lecture ; l USDC est propose d abord, le TBLOCK reste pour ceux qui en ont. -->
-        <label class="champ">Pay with<select id="pmsgDevise"><option value="USDC">0.50 USDC</option><option value="TBLOCK">1,000 TBLOCK</option></select></label>
+        <!-- ⛔ Phil (2026-09-20) : TBLOCK est un residu ; l audit relevait aussi que l ecran de signature annoncait
+             « 1,000 TBLOCK » alors que le paiement par defaut est 0.50 USDC. Un seul moyen de paiement, celui qui part. -->
+        <label class="champ">Pay with<select id="pmsgDevise"><option value="USDC">0.50 USDC</option></select></label>
         <label class="champ">Speak as<select id="pmsgDe"></select></label>
         <label class="champ">Your message
           <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="gm, from my block" autocomplete="off" spellcheck="true"></textarea>
@@ -8977,7 +8981,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0126',
+    build: '20260920-0127',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
