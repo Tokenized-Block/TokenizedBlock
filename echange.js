@@ -308,8 +308,14 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
   const f = await formeAcceptee({ appelBrut, ur: R, de: compte, cle, zeroForOne, montant: resume.montantSwap, deadline,
     value: enEth ? '0x' + resume.montantSwap.toString(16) : undefined });
   if (f.forme === null) {
+    /* ⛔ capture de Phil (Rabby mobile) : « the router refuses this swap: {"avecMinHop":"EVM error: OutOfFunds",…} » — il
+     *    voulait acheter 0.001 ETH avec 0.00085 ETH. La cause se dit en clair ; le reste garde le detail technique. */
+    const brut = jsonSafe(f.causes);
+    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance/i.test(brut);
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
-      pourquoi: f.transport ? 'the node refused the check — try again' : 'the router refuses this swap: ' + jsonSafe(f.causes).slice(0, 160) };
+      pourquoi: f.transport ? 'the node refused the check — try again'
+        : sansFonds ? 'not enough ' + (enEth ? 'ETH' : 'funds') + ' in your wallet for this amount plus gas — try a smaller amount'
+          : 'the router refuses this swap: ' + brut.slice(0, 160) };
   }
   /* ⛔⛔ MESURE SUR FORK (2026-09-13, route via TBLOCK) : la forme sondee sur UN swap ne vaut pas pour les suivants —
    *    « avecMinHop » passait sur ETH -> TBLOCK et revertait SANS DONNEE sur TBLOCK -> block, ou « sansMinHop » passait.

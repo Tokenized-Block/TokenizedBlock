@@ -32,6 +32,13 @@
     <div id="boutons"></div>
     <p id="etat" class="doux" style="margin:12px 0 0"></p>
   </div>
+  <div class="carte">
+    <h1 style="font-size:17px">Your creator shares</h1>
+    <p class="doux">On TokenizedBlock markets, a third of each trade fee goes to the block's recorded creator. If you are that
+      creator, you can give your share to the fee wallet: from then on, 100% of that market's fees go there. Your wallet signs; it
+      cannot be undone by anyone else.</p>
+    <div id="parts" class="doux">Connect the creator wallet above to see its markets.</div>
+  </div>
 </main>
 <script type="module">
 /* ⛔ PAGE PRIVEE (noindex, non liee) : envoie au wallet de frais les parts en jeton qui attendent dans les hooks V2/V3.
@@ -81,6 +88,7 @@ $('#connecter').addEventListener('click', async () => {
     try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
     $('#compteTxt').textContent = 'Connected: ' + compte.slice(0, 6) + '…' + compte.slice(-4) + ' — any wallet can send; the fee wallet receives.';
     await charger();
+    await chargerParts();
   } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
 });
 document.addEventListener('click', async (ev) => {
@@ -92,6 +100,34 @@ document.addEventListener('click', async (ev) => {
   const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: b.getAttribute('data-hook'), data: encoder(h.devises), value: '0x0' });
   $('#etat').innerHTML = r.etat === 'CONFIRME' ? '<span class="ok">Sent. Transaction:</span> <code>' + esc(r.hash) + '</code>' : '<span class="ko">Not done: ' + esc(r.pourquoi || r.etat) + '</span>';
   setTimeout(() => { charger().catch(() => {}); }, 4000);
+});
+/* ⛔ parts createur : transfererPart(bytes32 id, address nouveau) — selecteur 003dbdae ; nouveau = le wallet de frais,
+ *    ecrit en dur ICI et relu dans la reponse du serveur : les deux doivent coincider, sinon rien n est propose. */
+const FEE = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+let partsLues = [];
+async function chargerParts() {
+  if (!compte) return;
+  $('#parts').textContent = 'Reading your markets…';
+  const d = await fetch('/api/parts-createur?compte=' + compte, { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+  if (!d || !d.ok) { $('#parts').textContent = 'Could not read your markets right now.'; return; }
+  if (String(d.feeWallet).toLowerCase() !== FEE) { $('#parts').textContent = 'Fee wallet mismatch — nothing offered.'; return; }
+  partsLues = d.pools;
+  $('#parts').innerHTML = d.pools.length
+    ? d.pools.map((p, i) => '<p style="margin:10px 0 4px"><b>' + esc(p.symbole || p.bloc.slice(0, 10) + '…') + '</b> · ' + esc(p.hookNom) + ' market</p>'
+      + '<button type="button" data-part="' + i + '">Give my share of ' + esc(p.symbole || 'this block') + ' to the fee wallet</button>').join('')
+    : 'This wallet is not the recorded creator of any TokenizedBlock market.';
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-part]');
+  if (!b || b.disabled) return;
+  const p = partsLues[Number(b.getAttribute('data-part'))];
+  if (!p || !/^0x[0-9a-f]{64}$/i.test(p.id)) return;
+  b.disabled = true;
+  $('#etat').textContent = 'Opening your wallet — this gives your creator share to the fee wallet.';
+  const data = '0x003dbdae' + p.id.slice(2).toLowerCase() + FEE.slice(2).padStart(64, '0');
+  const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: p.hook, data, value: '0x0' });
+  $('#etat').innerHTML = r.etat === 'CONFIRME' ? '<span class="ok">Done. Transaction:</span> <code>' + esc(r.hash) + '</code>' : '<span class="ko">Not done: ' + esc(r.pourquoi || r.etat) + '</span>';
+  setTimeout(() => { chargerParts().catch(() => {}); }, 4000);
 });
 $('#relire').addEventListener('click', () => { $('#liste').textContent = 'Reading the chain…'; charger().catch((e) => { $('#liste').textContent = 'Could not read the hooks: ' + (e.message || e); }); });
 charger().catch((e) => { $('#liste').textContent = 'Could not read the hooks: ' + (e.message || e); });

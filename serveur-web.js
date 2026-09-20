@@ -112,7 +112,7 @@ const WALLET_FRAIS = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 let fraisCache = null;
 /* balayage INCREMENTAL : les devises deja vues restent ; on ne relit que les blocs nouveaux. Une fenetre ratee arrete
  * l avancee (on la relira), jamais un trou recouvert par un « deja lu ». */
-const fraisScan = { jusqua: null, devises: new Map() };
+const fraisScan = { jusqua: null, devises: new Map(), pools: [] };
 async function fraisEnAttente() {
   if (fraisCache && Date.now() - fraisCache.t < 120000) return fraisCache.r;
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
@@ -129,6 +129,8 @@ async function fraisEnAttente() {
         if (!devises.has(hook)) continue;
         devises.get(hook).add('0x' + l.topics[2].slice(26));
         devises.get(hook).add('0x' + l.topics[3].slice(26));
+        /* la pool elle-meme (id = topic 1) : pour savoir QUI en est le createur enregistre (parts createur) */
+        if (!fraisScan.pools.some((x) => x.id === l.topics[1])) fraisScan.pools.push({ hook, id: l.topics[1], c0: '0x' + l.topics[2].slice(26), c1: '0x' + l.topics[3].slice(26) });
       }
       if (avance) fraisScan.jusqua = haut;
     } catch { fenetresRatees++; avance = false; }
@@ -724,6 +726,29 @@ createServer((req, res) => {
   if (chemin === '/api/entonnoir') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: true, persistant: !!FICHIER_ENTONNOIR, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
+    return;
+  }
+
+  /* ══ PARTS CREATEUR (Phil 2026-09-19 : « que a6cf soit l unique receveur ») ════════════════════════════════════════
+   * Sur V2/V3, 1/3 des frais de swap va au CREATEUR enregistre de la pool ; il peut ceder cette part (transfererPart).
+   * Lecture seule : les pools de nos hooks dont `compte` est le createur enregistre. Le serveur ne signe rien. */
+  if (chemin === '/api/parts-createur') {
+    const compte = String(new URL(req.url, 'http://x').searchParams.get('compte') || '').toLowerCase();
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (!/^0x[0-9a-f]{40}$/.test(compte)) { repondre({ ok: false, pourquoi: 'not an address' }); return; }
+    fraisEnAttente().then(async () => {
+      const pools = [];
+      for (const p of fraisScan.pools) {
+        let createur = null;
+        try { createur = '0x' + String(await rpcServeur('eth_call', [{ to: p.hook, data: '0x631245a7' /* createurDe(bytes32) */ + p.id.slice(2) }, 'latest'])).slice(-40); } catch { createur = null; }
+        if (!createur || createur.toLowerCase() !== compte) continue;
+        const bloc = [p.c0, p.c1].find((a) => a.startsWith('0xb2')) || p.c1;
+        let sym = null;
+        try { const x = await rpcServeur('eth_call', [{ to: bloc, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }
+        pools.push({ hook: p.hook, hookNom: (HOOKS_FRAIS.find((h) => h.adr === p.hook) || {}).nom || '?', id: p.id, bloc, symbole: sym });
+      }
+      repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS });
+    }).catch((e) => repondre({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
 

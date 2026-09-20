@@ -1384,7 +1384,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260919-0121" hidden>Build <code>20260919-0121</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0122" hidden>Build <code>20260920-0122</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5766,13 +5766,9 @@ async function preparerEchange(sens) {
       'You pay: ' + q(r.paye, r.payeDevise),
       'You receive at least: ' + q(r.recoitAuMoins, r.recoitDevise) + ' (1 % slippage)',
       ...(r.via === 'TBLOCK' ? ['Route: ' + (sens === 'ACHAT' ? 'ETH → TBLOCK → ' + (symProfil || 'block') : (symProfil || 'block') + ' → TBLOCK → ETH') + ', both swaps in one transaction'] : []),
-      ...(feeLigne ? [feeLigne] : []),
-      /* ⛔ LA PART DU MARCHE, MESUREE (2026-09-18) : sur une pool HOOK_PREVU, le hook preleve 3 % du swap en
-       * plus des 0,5 % ci-dessus. « You receive at least » l inclut deja (le devis passe par la pool) ;
-       * cette ligne dit POURQUOI il est plus bas que ce que le prix affiche laisserait croire. */
-      ...(p.cle && estNotreHook(p.cle.hooks)
-        ? ['Fee: ' + (HOOK_PREVU_FRAIS_BPS / 100) + '%, already inside “You receive at least”']
-        : []),
+      /* ⛔ PHIL (2026-09-19) : « retirer l affichage des fees ». Les lignes « Fee: … » ne s affichent plus ; « You pay » et
+       *    « You receive at least » restent (montants reels, frais deja inclus) et le wallet montre tout avant de signer. */
+      ...(false && feeLigne ? [feeLigne] : []),
       ...[...(p.etapes || []), p.tx].filter(Boolean).flatMap((tx, k) => {
         const a = apercuTransaction({ chaine: CHAINE, tx, compte, jeton: adr, symbole: symProfil, decimales: dec });
         return ['Signature ' + (k + 1) + ' — ' + a.action + ': ' + a.lignes.join(' · ')];
@@ -6240,20 +6236,22 @@ async function calculerLancement() {
     : 'No market on any key read — reading the block, its pool and your approvals…';
   /* ⛔ P0 2026-09-15 + tip 2340: MAIN Launch always attaches HOOK_PREVU when DEPLOYE → FEE_WALLET. */
   try {
-    const etatHook = await hookDeploye({ rpc });
-    const etatV2 = Number(CHAINE) === 8453 ? await hookV2Deploye({ rpc }) : 'ABSENT';
+    /* ⛔⛔ PLUS JAMAIS LE V1 POUR UN NOUVEAU MARCHE (audit 2026-09-19, Phil « fix tout ca ») : mesure — 2 pools V1 ouvertes par
+     *    un compte EIP-7702 via bundler ont enregistre un MAUVAIS createur (1/3 des frais de swap mal route, a jamais). Le V1
+     *    n etait choisi que si la LECTURE du V2 echouait (ou si un RPC de secours rendait « 0x »). Or V2 et V3 sont deployes
+     *    pour toujours (V2 bloc 51518785, V3 verifie 15/15 devises) : sur mainnet ils sont FIXES, jamais relus, et le V1 ne
+     *    peut plus etre choisi. Hors mainnet (Practice), l ancien choix reste. */
+    const mainnet = Number(CHAINE) === 8453;
+    const etatHook = mainnet ? 'DEPLOYE' : await hookDeploye({ rpc });
+    const etatV2 = mainnet ? 'DEPLOYE' : 'ABSENT';
     /* tip 2348: MAIN never Launch unhooked — no hook = no enduring fees to FEE_WALLET. */
-    if (Number(CHAINE) === 8453 && etatHook !== 'DEPLOYE') {
-      plan = { etat: 'REFUSE', pourquoi: etatHook === 'ABSENT'
-        ? 'Bringing life is not available right now.'
-        : 'Could not check the chain right now — try again in a moment.' };
-    } else if (legacyUpgrade && etatHook !== 'DEPLOYE') {
+    if (!mainnet && legacyUpgrade && etatHook !== 'DEPLOYE') {
       plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now.' };
     } else {
-      /* ETH -> hook V2 ; une devise de la liste -> hook V3 (et rien d autre : sans V3 deploye, pas de mise en vie) */
-      const etatV3 = deviseLancement ? await hookV3Deploye({ rpc }) : 'ABSENT';
+      /* ETH -> hook V2 ; une devise de la liste -> hook V3 (et rien d autre) */
+      const etatV3 = deviseLancement ? (mainnet ? 'DEPLOYE' : await hookV3Deploye({ rpc })) : 'ABSENT';
       const hooks = deviseLancement ? (etatV3 === 'DEPLOYE' ? HOOK_V3 : undefined)
-        : etatV2 === 'DEPLOYE' ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+        : mainnet ? HOOK_V2 : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
       if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
       } else {
@@ -6560,11 +6558,27 @@ function montrerPremierAcheteur(adr) {
   const ok = !$('#pEchange').hidden && !deviseEchange
     && String(($('#profil') || {}).dataset?.block || '').toLowerCase() === String(adr).toLowerCase();
   z.hidden = !ok;
-  if (ok) { etape('premier_propose'); z.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  if (ok) {
+    /* ⛔ capture de Phil (Rabby) : 0.001 ETH propose avec 0.00085 ETH en solde -> « OutOfFunds ». Un montant au-dessus du
+     *    solde (moins ~0.00015 ETH de gas) n est plus proposable ; si aucun ne l est, on le dit. */
+    void lireSoldeEthNat(true).then(() => {
+      const s = soldeEthNat != null ? Number(BigInt(soldeEthNat)) / 1e18 : null;
+      let possibles = 0;
+      z.querySelectorAll('[data-premier]').forEach((btn) => {
+        const trop = s !== null && Number(btn.getAttribute('data-premier')) + 0.00015 > s;
+        btn.disabled = trop; btn.style.opacity = trop ? '.4' : '';
+        if (!trop) possibles++;
+      });
+      let n = z.querySelector('.premierNote');
+      if (!n) { n = document.createElement('p'); n.className = 'note premierNote'; n.style.margin = '6px 0 0'; z.appendChild(n); }
+      n.textContent = possibles ? '' : 'Top up a little ETH to be its first buyer.';
+    }).catch(() => {});
+    etape('premier_propose'); z.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-premier]');
-  if (!b) return;
+  if (!b || b.disabled) return;
   const champ = $('#peAchat');
   champ.value = b.getAttribute('data-premier');
   champ.dispatchEvent(new Event('input', { bubbles: true }));
@@ -7995,6 +8009,34 @@ function peindreTrending() {
     + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
+/* ══ FACES GRAVEES DANS LES LISTES (Phil 2026-09-19, capture du Relay : « les blocks originaux ne suivent pas ») ══════════
+ * Mesure : BASED (face gravee par notre Create) s affichait avec la face calculee depuis son adresse — la face gravee n etait
+ * lue que pour les 30 premiers blocks de la map ou a l ouverture d un profil. Ici, pour l onglet VISIBLE (Feed, Blocks) :
+ * les blocks affiches sans face connue la demandent au serveur (/api/face, cache serveur), 12 par tour, une seule fois
+ * chacun ; si une face arrive, la liste est repeinte. Un block sans face gravee garde la face de son adresse. */
+const facesDemandees = new Set();
+let repeintFaces = null;
+function completerFaces(adrs, repeindre) {
+  const manque = [...new Set(adrs.map((a) => String(a || '').toLowerCase()))]
+    .filter((a) => /^0x[0-9a-f]{40}$/.test(a) && !faceConnue(a) && !facesDemandees.has(a)).slice(0, 12);
+  if (!manque.length) return;
+  manque.forEach((a) => facesDemandees.add(a));
+  Promise.all(manque.map((a) => fetch('/api/face/' + a).then((r) => r.json())
+    .then((d) => (d && d.etat === 'LU' && d.face ? noterFace(a, d.face) : false)).catch(() => false)))
+    .then((res) => { if (res.some(Boolean)) { clearTimeout(repeintFaces); repeintFaces = setTimeout(repeindre, 250); } });
+}
+setInterval(() => {
+  if (document.hidden) return;
+  try {
+    if ($('#v-social') && $('#v-social').classList.contains('on')) {
+      completerFaces([...liveEvts.slice(0, 80).map((e) => e.jeton), ...parolesFil.slice(0, 20).map((p) => p.de)],
+        () => { try { peindreLive(); peindreParoles(); peindreRelais(); } catch (_) {} });
+    }
+    if ($('#v-trade') && $('#v-trade').classList.contains('on') && trDonnees) {
+      completerFaces(trDonnees.lignes.slice(0, trAffiches).map((l) => l.adr), () => { try { peindreTrending(); } catch (_) {} });
+    }
+  } catch (_) { /* une liste pas encore prete : le tour suivant reessaie */ }
+}, 3000);
 $('#trTri').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tri]');
   if (!b) return;
@@ -8076,7 +8118,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
   if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
   const hook = devise ? HOOK_V3 : HOOK_V2;
-  if ((await (devise ? hookV3Deploye({ rpc }) : hookV2Deploye({ rpc }))) !== 'DEPLOYE') return 'SANS';
+  /* V2 et V3 sont deployes pour toujours sur mainnet (voir calculerLancement) : plus de relecture qui pourrait echouer */
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);
@@ -8244,7 +8286,9 @@ async function creerBlock() {
       e.className = 'note';
       e.textContent = 'One signature — Create + ' + ethLisible(fraisWei)
         + ' ETH (≈ $' + usd + '). Paid only if creation succeeds.';
-    } else if (Number(CHAINE) === 8453 && (await hookV2Deploye({ rpc })) !== 'DEPLOYE') {
+    /* ⛔ ce « payer d abord puis V1 » ne sert plus sur mainnet : V2 y est deploye pour toujours et encaisse lui-meme les ≈ 1 $
+     *    (audit 2026-09-19 : une lecture ratee du V2 menait ici, puis au V1 et a son createur mal enregistre). */
+    } else if (false && Number(CHAINE) === 8453) {
       /* ⚠️ Quand le hook V2 est deploye, c est SON inscription qui encaisse la mise en vie (le contrat l exige) :
        *    payer ici en plus ferait payer deux fois. Tant qu il ne l est pas, on paie ici, avant de creer. */
       /* ⛔⛔ AUCUN BLOCK SANS SA MISE EN VIE PAYEE : sur Base, les ≈ 1 $ partent AVANT la creation, verifies sur la chaine.
@@ -8897,7 +8941,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260919-0121',
+    build: '20260920-0122',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
@@ -9664,9 +9708,10 @@ function peindreCentre() {
   /* telephone : la meme information, courte, sur une ligne (capture de Phil : coupee et passee sous la recherche) */
   const etroit = window.matchMedia && window.matchMedia('(max-width:560px)').matches;
   el.textContent = etroit
-    ? '✦ Be the centre · 1 in ' + n.toLocaleString('en-US') + (centreActuel ? ' · ' + mmss : '')
-    : '✦ Be the centre of the universe · 1 in ' + n.toLocaleString('en-US')
-      + ' (' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '%)' + (centreActuel ? ' · next draw in ' + mmss : '');
+    /* Phil (2026-09-19, capture) : « retire le 1 in 189 » — la chance reste en pourcentage, sans le « 1 in N » */
+    ? '✦ Be the centre' + (centreActuel ? ' · next draw ' + mmss : '')
+    : '✦ Be the centre of the universe · ' + (pct >= 0.1 ? pct.toFixed(2) : pct.toFixed(3)) + '% chance'
+      + (centreActuel ? ' · next draw in ' + mmss : '');
   el.title = 'Every block on the map has exactly the same chance to become the centre of the universe.';
   /* la ligne peut changer la hauteur de l en-tete (telephone) : on recale la map a chaque peinture, sans dependre de
    * ResizeObserver (bride dans un onglet en arriere-plan) */
