@@ -270,23 +270,23 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    boutons de camera disparaissaient, et rien ne le disait. La colonne se decale tant que le panneau
    est ouvert : sur large ecran elle passe a gauche du panneau, sur telephone elle remonte au-dessus. */
 .mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px;
-  transition:right .16s ease, bottom .16s ease}
-/* ⛔⛔ CETTE REGLE NE PREND PAS EFFET — ecrit ici pour que personne (moi compris) ne le recroie.
-   Compte comme « fait » TROIS fois (0135 avec :has sur .mapEnv qui ne matchait rien, 0138 avec :has
-   sur #scene qui matchait, 0144 avec une classe posee en JS). Mesure du 2026-09-20 dans Chrome,
-   panneau ouvert, ecran 1536 px :
-     · la classe EST sur l element (className = « mapZoom decale ») ;
-     · la regle MATCHE et gagne la cascade (0-2-0 contre 0-1-0 ; la regle telephone est inactive) ;
-     · et « right » utilise vaut quand meme 10px — Y COMPRIS apres un setProperty('right','398px',
-       'important') pose EN LIGNE, ce qu aucune cascade ne peut perdre.
-   ELIMINES PAR LA MESURE : specificite, media query, un « left » qui sur-contraindrait la boite
-   (aucune regle n en pose, et forcer left:auto ne change rien), un second element (il n y en a qu un).
-   CE QUI RESTE : la colonne est creee et possedee par le moteur 3D (map3d.js, ui.className='mapZoom').
-   C est LUI qu il faut corriger, pas une feuille de style. NON FAIT.
-   CONSEQUENCE, dite franchement : quand la carte d un block est ouverte sur grand ecran, elle couvre
-   les quatre boutons de camera — il faut refermer la carte pour zoomer. */
-.mapZoom.decale{right:398px}
-@media (max-width:699px){.mapZoom.decale{right:10px;bottom:calc(52dvh + 14px)}}
+  transition:transform .18s ease}
+/* ⛔⛔ CE DECALAGE PASSE PAR `transform`, ET PAS PAR `right` — ET C EST MESURE, PAS PREFERE.
+   Comptee « faite » TROIS fois avant d etre mesuree : 0135 (:has sur .mapEnv, ne matchait rien),
+   0138 (:has sur #scene, MATCHAIT et ne bougeait pas), 0144 (classe posee en JS, idem).
+   Mesures du 2026-09-20 dans Chrome, sur cet element precis :
+     · une ecriture en ligne de `background-color` ARRIVE (style calcule = rouge) — donc l element
+       repond, et ma sonde ne ment pas ;
+     · `right:600px` en ligne, attendu 1,2 s : la boite NE BOUGE PAS, style calcule toujours 10px ;
+     · `bottom:200px !important` en ligne : ne bouge pas non plus (temoin de controle) ;
+     · `transform: translateX(-388px)` : bouge EXACTEMENT de 388 px, tout de suite.
+   Donc ce n est ni la specificite, ni une media query, ni un `left` sur-contraignant : sur cet
+   element, les offsets de mise en page sont neutralises par quelque chose que je n ai pas identifie,
+   et `transform` est le levier qui repond. On prend celui qui marche, et on ecrit pourquoi.
+   ⚠️ `transform` ne pousse pas les voisins : la colonne glisse par-dessus la carte, ce qui est
+      exactement ce qu on veut ici (elle doit rester visible AU-DESSUS du panneau). */
+.mapZoom.decale{transform:translateX(-388px)}
+@media (max-width:699px){.mapZoom.decale{transform:translateY(calc(-52dvh - 14px))}}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -1491,7 +1491,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0145" hidden>Build <code>20260920-0145</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0146" hidden>Build <code>20260920-0146</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9494,7 +9494,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0145',
+    build: '20260920-0146',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
