@@ -271,12 +271,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    est ouvert : sur large ecran elle passe a gauche du panneau, sur telephone elle remonte au-dessus. */
 .mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px;
   transition:right .16s ease, bottom .16s ease}
-/* ⛔⛔ MESURE, PAS SUPPOSITION : ma premiere regle visait `.mapEnv:has(#cote…)` et n a JAMAIS matche —
-   `#cote` n est pas DANS `.mapEnv`, c est une branche soeur. Mesure en prod (1280 px) : le bord droit
-   de la colonne restait a 1270 alors que le panneau commence a 906, donc le chevauchement etait intact
-   pendant que je croyais l avoir corrige. Le parent commun est `#scene`. */
-#scene:has(#cote:not([hidden])) .mapZoom{right:398px}
-@media (max-width:699px){#scene:has(#cote:not([hidden])) .mapZoom{right:10px;bottom:calc(52dvh + 14px)}}
+/* ⛔⛔ DEUX REGLES `:has()` ONT ETE ESSAYEES ICI ET N ONT JAMAIS DEPLACE LA COLONNE (0135, 0138) —
+   la seconde MATCHAIT pourtant, verifie a l execution, et `right` restait a 10px meme avec
+   `!important`. On ne garde pas une regle qui ment sur ce qu elle fait : le decalage est desormais
+   pose en JS, sur une classe, et il se mesure. Voir `suivreLeCote()`. */
+.mapZoom.decale{right:398px}
+@media (max-width:699px){.mapZoom.decale{right:10px;bottom:calc(52dvh + 14px)}}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -1481,7 +1481,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0143" hidden>Build <code>20260920-0143</code> · themes, logo PNG, centre at 0,0,0.</p>
+      <p class="note" data-build="20260920-0144" hidden>Build <code>20260920-0144</code> · themes, logo PNG, centre at 0,0,0.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2074,6 +2074,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* ⛔ Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ». Sept listes d affilee, il n en lit
    *    aucune. Les cartes du Feed se plient a la premiere ouverture de l onglet — une seule ouverte. */
   if (nom === 'social') plierLesCartes();
+  if (nom === 'map') suivreLeCote();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
@@ -5492,7 +5493,16 @@ const PLI_CLE = 'tb-feed-bulle-v1';
 const PLI_PAR_DEFAUT = 'Live';
 /** ⛔ LE NOM COURT D UNE BULLE : le titre entier ne tient pas dans une pastille. Les deux cas qui ne se
  *  coupent pas tout seuls sont ecrits ici, le reste se coupe au premier tiret ou point median. */
-const BULLE_NOMS = { 'The feed': 'Transfers', 'Who bought, and at what price': 'Who bought' };
+const BULLE_NOMS = {};
+/** ⛔ LES SECTIONS SANS BULLE — relues dans le CODE le 2026-09-20, pas dans leur titre :
+ *  · « Who bought, and at what price » : son seul rendu est une phrase qui dit que l ecran n existe
+ *    pas encore (« no screen shows its history yet »). Un chantier qui s annonce lui-meme n a rien a
+ *    faire sur un onglet public.
+ *  · « The feed » : liste les Transfer ERC-20 groupes par transaction — les MEMES evenements que Live
+ *    montre sous « Sent ». Deux portes vers la meme chose, sur un onglet deja nomme Feed.
+ *  Les cartes RESTENT dans le DOM (rien n est supprime, regle de Phil du 2026-09-17) : elles n ont
+ *  plus de bulle, donc plus de porte d entree. Rendre une bulle = retirer une ligne d ici. */
+const BULLE_SANS = new Set(['Who bought, and at what price', 'The feed']);
 function nomCourt(titre) {
   if (BULLE_NOMS[titre]) return BULLE_NOMS[titre];
   const t = String(titre).split(/\s+[—·]\s+/)[0].trim();
@@ -5568,6 +5578,9 @@ function plierLesCartes() {
     carte.classList.add('plie');
     carte.dataset.pli = nom;
 
+    /* ⛔ une section sans bulle reste enveloppee — donc fermee, donc invisible — mais son code et ses
+     *    id sont intacts. On compte quand meme la carte comme posee. */
+    if (BULLE_SANS.has(nom)) { posees += 1; continue; }
     /* la bulle qui represente cette carte */
     const bulle = document.createElement('button');
     bulle.type = 'button';
@@ -5623,6 +5636,25 @@ function basculerCarte(carte, ouvrir, garder) {
   const etat = plisLus() || {};
   etat[carte.dataset.pli] = !!ouvrir;
   plisEcrits(etat);
+}
+
+/* ⛔ LA COLONNE DE ZOOM NE DOIT PAS DISPARAITRE SOUS LA CARTE D UN BLOCK. Au moment precis ou on veut
+ *    s approcher du block qu on vient de choisir, les quatre boutons de camera passaient dessous.
+ *    Un MutationObserver suit l attribut `hidden` de `#cote` — peu importe QUI le change — et pose
+ *    la classe sur la colonne. Une classe ne peut pas « ne pas matcher » ; deux selecteurs `:has()`
+ *    ont echoue ici avant, dont un qui matchait. */
+let coteSuivi = false;
+function suivreLeCote() {
+  /* ⛔ UNE SEULE FOIS : l onglet map se rouvre souvent, et un observateur pose a chaque ouverture
+   *    fuirait en silence — le genre de defaut qui ne se signale jamais. */
+  if (coteSuivi) return;
+  const cote = document.querySelector('#cote');
+  const zoom = document.querySelector('.mapZoom');
+  if (!cote || !zoom || typeof MutationObserver === 'undefined') return;
+  const maj = () => zoom.classList.toggle('decale', !cote.hasAttribute('hidden'));
+  new MutationObserver(maj).observe(cote, { attributes: true, attributeFilter: ['hidden'] });
+  coteSuivi = true;
+  maj();
 }
 
 function peindreLive() {
@@ -9452,7 +9484,7 @@ function publierSnapshotBrain(vu, h) {
     vie: h ? h.vie : null,
     etatVie: h ? h.etatVie : null,
     marche: marcheExtra,
-    build: '20260920-0143',
+    build: '20260920-0144',
     at: new Date().toISOString(),
   });
   try { window.__TB_BRAIN_SNAPSHOT__ = snap; } catch (e) { /* agent surface */ }
