@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0160" hidden>Build <code>20260920-0160</code> · our blocks read from the chain back to block 0, not a 11h window.</p>
+      <p class="note" data-build="20260920-0161" hidden>Build <code>20260920-0161</code> · a block now shows who holds it and what a reward would pay.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1660,6 +1660,16 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button class="bouton sec" id="pcgMap" type="button">Show on map</button>
           <button class="bouton sec" id="pcgBrain" type="button">Open Brain AI</button>
         </div>
+      </div>
+      <!-- ⛔ QUI TIENT CE BLOCK. Montre qui SERAIT paye si une recompense etait versee aujourd hui.
+           Rien n est distribue : aucun contrat de recompense n existe, et la phrase est a l ecran. -->
+      <div class="pJeu" id="pHolders" hidden>
+        <div class="pJeuTete">
+          <span class="pBadge">Who holds it</span>
+          <span class="pPV" id="pHoldersCompte">—</span>
+        </div>
+        <div class="stadeLigne" id="pHoldersListe"></div>
+        <p class="note" id="pHoldersNote"></p>
       </div>
       <!-- ⛔ LE COMPAGNON : PV, palier, barre. Tout est derive de la capitalisation lue (pointsdevie.js) ;
            la barre descend quand le prix descend. -->
@@ -4018,6 +4028,7 @@ function peindreMetier(adr) {
   const tendance = momentum(lecturesDe(adr));
   const r = rangDe(classementCourant(), adr);
   const hM = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
+  void peindreHolders(adr);
   const rap = rapport({ metier: m, symbole: symProfil, vie: vieProfil, devise: deviseProfil,
     tendance, rang: r ? r.rang : null, population: r ? r.sur : null, solde: soldeProfil,
     echanges: hM && liveDernier !== null ? { achats: hM.achatsVus || 0, ventes: hM.ventesVus || 0 } : null,
@@ -4654,6 +4665,53 @@ function etape(nom, uneFois = false) {
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
   if (b) b.click();
+}
+
+/** ⛔ QUI TIENT CE BLOCK, ET CE QUE LA RECOMPENSE PAIERAIT.
+ *  Trois etats a l ecran, jamais confondus : lecture en cours · reconstruction incomplete (avec SA
+ *  raison) · pret. « Incomplet » qui ressemblerait a « personne » ferait croire un block abandonne.
+ *  ⛔ AUCUNE PROMESSE DE PAIEMENT : rien n est distribue, et l ecran le dit lui-meme. */
+async function peindreHolders(adr) {
+  const carte = $('#pHolders'), liste = $('#pHoldersListe'), note = $('#pHoldersNote'), compte = $('#pHoldersCompte');
+  if (!carte || !liste || !note || !compte) return;
+  carte.hidden = false;
+  liste.innerHTML = '';
+  compte.textContent = '…';
+  note.textContent = 'Reading every transfer of this block from its birth…';
+  let j = null;
+  try { j = await fetch('/api/holders/' + String(adr).toLowerCase(), { cache: 'no-store' }).then((x) => x.json()); }
+  catch (e) { j = null; }
+  if (!j || !j.ok) {
+    compte.textContent = '—';
+    note.textContent = 'Could not read the holders right now — that is us, not the block.';
+    return;
+  }
+  if (j.etat === 'NON_LU' || j.etat === 'INCOMPLET') {
+    compte.textContent = '—';
+    /* ⛔ LA RAISON VIENT DU SERVEUR, ELLE N EST PAS REINVENTEE ICI. */
+    note.textContent = 'Not shown yet: ' + (j.pourquoi || 'still reading')
+      + '. This is about our reading, not about the block.';
+    return;
+  }
+  if (j.etat === 'AUCUN_DETENTEUR') {
+    compte.textContent = '0 outside the pool';
+    note.textContent = 'Everything is still in the market pool — nobody holds this block in a wallet yet. '
+      + 'The first buyer would be the first to be paid.';
+    return;
+  }
+  const d = j.detenteurs || [];
+  compte.textContent = d.length + (d.length === 1 ? ' holder' : ' holders');
+  liste.innerHTML = d.slice(0, 12).map((x) => {
+    const part = (x.part / 100).toFixed(x.part < 100 ? 2 : 1);
+    const court = x.adr.slice(0, 6) + '…' + x.adr.slice(-4);
+    return '<span class="puce' + (x.part ? '' : ' vide') + '">' + enTexte(court) + ' <b>' + part + '%</b></span>';
+  }).join('');
+  /* ⛔ OU DORT LE RESTE : sans cette phrase, « 6 holders » laisserait croire que six adresses se
+   *    partagent le block entier. Mesure : la pool en detient 99,89 % a la naissance. */
+  const pool = j.partHorsBase === null || j.partHorsBase === undefined ? null : (j.partHorsBase / 100).toFixed(2);
+  note.textContent = 'Share of a reward if one were paid today, split between wallets that actually hold it. '
+    + (pool !== null ? pool + '% of this block sits in its market pool, which nobody can withdraw, so it is left out. ' : '')
+    + 'Nothing is being distributed: there is no reward contract yet.';
 }
 
 async function ouvrirProfil(adr, sym) {

@@ -53,6 +53,8 @@ async function lireOpenLaunch() {
 import { listerCreations } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
 import { prochaineFenetre } from './fenetre-scan.js';
+import { naissanceDuJeton, rejouerTransferts, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
+import { partsHolders } from './parts-holders.js';
 import { NOS_BLOCKS_GENESE } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { faceDuBlock } from './face.js';
@@ -315,6 +317,89 @@ function nosBlocksCorps() {
     comptesSurveilles: NOS_CREATEURS.length,
     borne: 'Blocks minted to any watched account between depuis and jusqua, plus the genesis pair. '
       + 'While couvertureComplete is false the walk back to block ' + PREMIER_BLOCK_TB + ' is still running.',
+  });
+}
+
+/* ══ QUI DETIENT UN BLOCK, ET QUELLE PART DE RECOMPENSE LUI REVIENDRAIT ═══════════════════════════
+ * ⛔ MESURE QUI JUSTIFIE TOUT CECI (2026-09-20, 5 marches, reconstruction verifiee au wei pres) :
+ *    le PoolManager detient 99,89 % de la supply d un block, parce que le lancement y place 99,9 %.
+ *    Un prorata BRUT enverrait donc la recompense dans une pool que personne ne peut vider.
+ *    `partsHolders` exclut une liste NOMMEE, et rend ce qui est exclu pour qu on puisse le dire.
+ * ⛔ LE POT EST FICTIF : 1 000 000 de dix-milliemes. Rien n est distribue, aucun contrat n existe.
+ * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la reconstruction repart. C est dit par `lu`. */
+const POT_FICTIF = 1000000n;
+const holdersCache = new Map(); /* jeton -> { soldes, naissance, jusqua, ratees, lu, enCours } */
+const HOLDERS_MAX = 200;
+
+async function reconstruireHolders(jeton) {
+  let e = holdersCache.get(jeton);
+  if (!e) {
+    /* ⛔ Une reconstruction ne demarre que pour un B20 : le prefixe est le seul filtre sur : il vient
+     *    de l adresse elle-meme, pas d une liste qu on tiendrait a jour. */
+    if (!/^0xb20[0-9a-f]{37}$/.test(jeton)) return null;
+    if (holdersCache.size >= HOLDERS_MAX) holdersCache.delete(holdersCache.keys().next().value);
+    e = { soldes: new Map(), naissance: null, jusqua: null, ratees: 0, lu: null, enCours: false };
+    holdersCache.set(jeton, e);
+  }
+  if (e.enCours) return e;
+  e.enCours = true;
+  try {
+    const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    if (e.naissance === null) {
+      e.naissance = await naissanceDuJeton({ rpc: rpcServeur, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });
+      /* ⛔ Naissance introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
+      if (e.naissance === null) { e.enCours = false; return e; }
+    }
+    const deBloc = e.jusqua === null ? e.naissance : e.jusqua + 1;
+    if (deBloc <= fin) {
+      const passe = await rejouerTransferts({ rpc: rpcServeur, jeton, deBloc, aBloc: fin, soldes: e.soldes });
+      e.ratees = passe.ratees;
+      /* ⛔ LE CURSEUR N AVANCE QUE SUR UN BALAYAGE PROPRE : un trou recouvert par un « deja lu » ne se
+       *    rattrape jamais, et personne ne le verrait. */
+      if (!passe.ratees) e.jusqua = fin;
+    }
+    e.lu = new Date().toISOString();
+  } catch (err) { e.ratees = (e.ratees || 0) + 1; }
+  e.enCours = false;
+  return e;
+}
+
+async function holdersCorps(jeton) {
+  const e = await reconstruireHolders(jeton);
+  if (!e) return JSON.stringify({ ok: false, pourquoi: 'not a B20 address' });
+  if (e.naissance === null) {
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
+      pourquoi: 'no mint found for this token yet — reading, or it was never minted' });
+  }
+  /* ⛔ TROIS RAISONS DE REFUSER D AFFICHER DES PARTS, chacune nommee. */
+  let total = null;
+  try {
+    const t = await rpcServeur('eth_call', [{ to: jeton, data: '0x18160ddd' }, 'latest']);
+    if (typeof t === 'string' && t !== '0x') total = BigInt(t);
+  } catch (err) { total = null; }
+  const somme = verifierSomme({ soldes: e.soldes, totalSupply: total });
+  const negatifs = soldesNegatifs(e.soldes);
+  const complet = e.ratees === 0 && e.jusqua !== null && somme.etat === 'JUSTE' && negatifs.length === 0;
+  if (!complet) {
+    return JSON.stringify({ ok: true, etat: 'INCOMPLET', jeton, lu: e.lu,
+      naissance: e.naissance, jusqua: e.jusqua,
+      pourquoi: e.ratees ? e.ratees + ' window(s) refused by the node'
+        : negatifs.length ? negatifs.length + ' impossible negative balance(s)'
+          : somme.etat === 'NON_LU' ? 'totalSupply could not be read'
+            : 'reconstructed sum differs from totalSupply by ' + somme.ecart,
+      borne: 'Balances are not trustworthy yet, so no share is shown. This is about our reading, '
+        + 'not about the block.' });
+  }
+  const parts = partsHolders({ soldes: [...e.soldes.entries()], pot: POT_FICTIF });
+  return JSON.stringify({
+    ok: true, etat: parts.etat, jeton, lu: e.lu, naissance: e.naissance, jusqua: e.jusqua,
+    /* parts en dix-milliemes : 10 000 = 100 % */
+    detenteurs: parts.parts.map((x) => ({ adr: x.adr, part: Number(x.montant / 100n) })),
+    horsBase: { adresses: parts.exclus.length, pourquoi: parts.exclus.map((x) => x.pourquoi) },
+    partHorsBase: total && total > 0n ? Number((parts.baseExclue * 10000n) / total) : null,
+    borne: 'Shares are pro rata of the supply held OUTSIDE the market pool and our own contracts. '
+      + 'At launch the pool holds 99.9% of a block by design. Nothing is distributed: no reward '
+      + 'contract exists yet. This only shows who WOULD be paid.',
   });
 }
 
@@ -650,6 +735,20 @@ createServer((req, res) => {
   /* ⛔ NOS BLOCKS — global, pas personnel. La page appelait une fenetre fixe de 20 000 blocs sans
    *    cache : un block cree par nous plus de ~11 h plus tot cessait d etre « a nous » en silence.
    *    La reponse porte sa propre BORNE (depuis / jusqua / couvertureComplete). */
+  /* ⛔ NE MONTRE QUE CE QU ON A VERIFIE : si la reconstruction est trouee, l etat vaut INCOMPLET et
+   *    aucune part n est rendue. Afficher des parts sur des soldes faux paierait la mauvaise adresse. */
+  if (chemin.startsWith('/api/holders/')) {
+    const jeton = chemin.slice('/api/holders/'.length).toLowerCase();
+    holdersCorps(jeton).then((corps) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(corps);
+    }).catch(() => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: 'holders could not be read right now' }));
+    });
+    return;
+  }
+
   if (chemin === '/api/nos-blocks') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     res.end(nosBlocksCorps());
