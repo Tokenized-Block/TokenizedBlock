@@ -144,12 +144,36 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     h._op = -1;
   }
 
+  /* ⛔⛔ AUDIT 2026-09-20 (mesure : environ une recherche sur cinq) : « Show on map » envoyait la camera
+   *    hors du monde et laissait un ecran NOIR, sans aucun bouton pour revenir. Cause : `zc` est la
+   *    profondeur du block DEVANT la camera ; quand le block est presque au niveau de l oeil, `zc`
+   *    tend vers zero et `x1 * f / zc` explose — le decalage devient enorme, et la vue part.
+   * ⛔ ON NE DIVISE PAS PAR UNE PROFONDEUR QU ON N A PAS BORNEE. Si `zc` est trop petit, on RECULE
+   *    d abord la camera pour que le block retombe a une profondeur sure, puis on vise. La vue reste
+   *    toujours dans le monde ; au pire elle est large, jamais vide.
+   * ⚠️ BORNE : ceci protege du cadrage impossible. Ca ne garantit pas que le block soit GRAND a
+   *    l ecran — un block tres loin restera petit, et c est le vrai etat des choses. */
+  const ZC_MIN_PART = 0.12; /* meme plancher que l affichage : sous 0,12 S la map masque deja le block */
   function vers(h, L, H) {
     const cx = L >= 700 ? (L - 380) / 2 : L / 2, cy = L >= 700 ? H / 2 : H * 0.28;
-    const distNeuve = cam.dist;
     const [x1, y2, z2] = tourner(h.wx, h.wy, h.wz);
+    const plancher = S * ZC_MIN_PART;
+    let distNeuve = cam.dist;
+    if (!Number.isFinite(distNeuve)) distNeuve = S * DIST_DEPART;
+    /* la profondeur visee : si elle passe sous le plancher, on recule juste ce qu il faut */
+    if (z2 + distNeuve < plancher) distNeuve = plancher - z2;
+    if (!Number.isFinite(distNeuve) || distNeuve > S * DIST_MAX) distNeuve = S * DIST_DEPART;
     const zc = z2 + distNeuve, f = focale(L, H);
-    return { yaw: cam.yaw, pitch: cam.pitch, dist: distNeuve, ox: cx - L / 2 - x1 * f / zc, oy: cy - H / 2 - y2 * f / zc };
+    /* ⛔ DERNIERE GARDE : un `zc` non fini ou nul ne produit pas un decalage, il produit un NaN — et un
+     *    NaN traverse toutes les bornes sans rien declencher. On rend alors la vue d ensemble. */
+    if (!Number.isFinite(zc) || zc <= 0) {
+      return { yaw: cam.yaw, pitch: cam.pitch, dist: S * DIST_DEPART, ox: 0, oy: 0 };
+    }
+    const ox = cx - L / 2 - x1 * f / zc, oy = cy - H / 2 - y2 * f / zc;
+    if (!Number.isFinite(ox) || !Number.isFinite(oy)) {
+      return { yaw: cam.yaw, pitch: cam.pitch, dist: S * DIST_DEPART, ox: 0, oy: 0 };
+    }
+    return { yaw: cam.yaw, pitch: cam.pitch, dist: distNeuve, ox, oy };
   }
   /* ⛔ MESURE (Chrome, build 0072) : centrerSur visait la position ACTUELLE du block tire — mais il glisse vers 0,0,0,
    *    et la camera restait sur la vue d ensemble. Le centre de l univers se montre en visant l ORIGINE, de pres. */
