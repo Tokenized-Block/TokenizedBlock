@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Reward rounds</title>
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px} h2{font-size:15px;margin:0 0 8px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  .ligne{display:flex;gap:10px;align-items:baseline;margin:6px 0}
+  code{font-size:12.5px;word-break:break-all;color:var(--doux)}
+  button{font:inherit;font-weight:700;padding:12px 18px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  button.sec{background:#123;color:var(--texte);border:1px solid var(--ligne)}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  td{padding:4px 6px;border-top:1px solid var(--ligne)} td:last-child{text-align:right}
+</style>
+</head>
+<body>
+<main>
+  <h1>Reward rounds</h1>
+  <p class="doux">One round at a time: open it, fill it, then anchor who gets paid. This page never holds
+    a key — it builds the transaction and <b>your</b> wallet signs it.</p>
+
+  <div class="carte">
+    <h2>How a round works</h2>
+    <ul class="doux">
+      <li><b>A round is committed before its own randomness exists.</b> The contract refuses a round
+        whose start or end is in the past, so nobody — including me — can know which block will be
+        photographed.</li>
+      <li><b>When it ends, one past block inside it is drawn</b> from the randomness the Ethereum beacon
+        chain wrote into that end block. It is already mined when the result is known, so buying after
+        the draw is useless.</li>
+      <li><b>Balances are read at that exact block</b>, not today. The market pool is left out — at
+        launch it holds 99.9% of a block, and nobody can withdraw it.</li>
+      <li><b>Claims open 6 hours after the root is posted</b>, so anyone can recompute it first.</li>
+      <li class="ko"><b>Nobody can take the pot out.</b> There is no withdraw function in the contract.
+        What is not claimed rolls into a later round, and anyone can trigger that.</li>
+    </ul>
+  </div>
+
+  <div class="carte">
+    <div class="ligne"><b id="c1">…</b><span>Base reachable, pot contract read</span></div>
+    <div class="ligne"><b id="c2">…</b><span>The proposed transaction simulates without reverting</span></div>
+    <div class="ligne"><b id="c3">…</b><span>Wallet connected on Base as the operator</span></div>
+    <p class="doux" style="margin:10px 0 0">Pot: <code id="adrPot"></code></p>
+    <p class="doux">Block <code id="tete"></code> · rounds so far <code id="nbPeriodes"></code></p>
+  </div>
+
+  <div class="carte">
+    <h2 id="titreAction">Reading the chain…</h2>
+    <p id="resume" class="doux"></p>
+    <p id="expire" class="doux"></p>
+    <div id="detail"></div>
+    <div style="margin-top:12px">
+      <button id="connecter" type="button">Connect wallet</button>
+      <button id="agir" type="button" disabled>Sign</button>
+      <button id="relire" class="sec" type="button">Re-read</button>
+    </div>
+    <p id="etat" class="doux" style="margin:12px 0 0"></p>
+  </div>
+</main>
+<script type="module">
+/* ⛔ PAGE DE PILOTAGE DES PERIODES DE RECOMPENSE (2026-09-20).
+ *    Elle ne signe rien elle-meme : elle appelle `tour()` qui LIT la chaine et rend une transaction,
+ *    puis elle la passe au wallet. Aucune cle ne transite ici.
+ * ⛔ LE BOUTON RESTE DESACTIVE tant que la transaction proposee n a pas ete SIMULEE sans revert et
+ *    que le wallet n est pas celui de l operateur. Proposer une transaction qui revert ferait payer
+ *    du gas pour rien, et ferait croire a une action qui n a pas eu lieu.
+ * ⛔ ET LA DATE LIMITE EST AFFICHEE : `ouvrirPeriode` refuse un debut devenu passe. Entre la
+ *    preparation et la signature, Base avance d un bloc toutes les 2 s. */
+import { tour } from './boucle-pot.js';
+import { envoyerDepuisWallet } from './envoi.js';
+
+const $ = (s) => document.querySelector(s);
+const RPC = 'https://mainnet.base.org';
+const POT = '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272';
+const OPERATEUR = '0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4';
+const PLANCHER = 50861088;
+/* le jeton par defaut : celui dont on veut recompenser les detenteurs. Reglable par ?jeton=0x… */
+const JETON = (new URLSearchParams(location.search).get('jeton') || '0xb2000000000000000000006d6f9102e9e4b221e0').toLowerCase();
+
+const rpc = async (methode, params) => {
+  const r = await fetch(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) }).then((x) => x.json());
+  if (r.error) throw new Error(r.error.message || 'rpc error');
+  return r.result;
+};
+const marque = (id, ok) => { const e = $(id); e.textContent = ok ? '✓' : '✗'; e.className = ok ? 'ok' : 'ko'; };
+const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+let courant = null, compte = null;
+
+async function lire() {
+  $('#adrPot').textContent = POT;
+  $('#etat').textContent = '';
+  $('#agir').disabled = true;
+  $('#titreAction').textContent = 'Reading the chain…';
+  $('#detail').innerHTML = '';
+  let t = null;
+  try { t = await tour({ rpc, pot: POT, jeton: JETON, plancher: PLANCHER }); }
+  catch (e) { $('#titreAction').textContent = 'Could not read Base'; $('#etat').textContent = e.message || String(e); marque('#c1', false); return; }
+  courant = t;
+  marque('#c1', true);
+  $('#tete').textContent = t.blocCourant;
+  $('#nbPeriodes').textContent = t.periodes;
+  $('#titreAction').textContent = ({ OUVRIR: 'Open a new round', ANCRER: 'Anchor who gets paid',
+    ATTENDRE: 'A round is running', REFUS: 'Nothing will be proposed' })[t.action] || t.action;
+  $('#resume').textContent = t.resume || t.pourquoi || '';
+  $('#expire').textContent = t.valideJusqua
+    ? 'This transaction is only valid until block ' + t.valideJusqua + '. After that it would revert — re-read and sign again.'
+    : '';
+
+  /* ⛔ L ARBRE EST MONTRE AVANT LA SIGNATURE : ce qu on s apprete a graver doit etre lisible. */
+  if (t.arbre) {
+    const lignes = t.arbre.preuves.slice(0, 15).map((p) =>
+      '<tr><td><code>' + txt(p.compte.slice(0, 8) + '…' + p.compte.slice(-4)) + '</code></td><td>' + txt(p.montant) + '</td></tr>').join('');
+    $('#detail').innerHTML = '<p class="doux" style="margin-top:10px">Drawn block <code>' + txt(t.arbre.cible)
+      + '</code> · root <code>' + txt(t.arbre.racine.slice(0, 18)) + '…</code> · '
+      + t.arbre.preuves.length + ' recipient(s), total ' + txt(t.arbre.total) + '</p>'
+      + '<table>' + lignes + '</table>'
+      + (t.arbre.preuves.length > 15 ? '<p class="doux">… and ' + (t.arbre.preuves.length - 15) + ' more</p>' : '')
+      + '<p class="doux">' + txt(t.arbre.borne) + '</p>';
+  }
+
+  if (!t.aSigner) { marque('#c2', false); return; }
+  /* ⛔ ON SIMULE AVANT DE PROPOSER. Une transaction qui revert ferait payer du gas pour rien. */
+  try {
+    await rpc('eth_call', [{ to: t.aSigner.to, from: OPERATEUR, data: t.aSigner.data, value: t.aSigner.value }, 'latest']);
+    marque('#c2', true);
+  } catch (e) {
+    marque('#c2', false);
+    $('#etat').innerHTML = '<span class="ko">The proposed transaction would revert: ' + txt(e.message) + '</span>';
+    return;
+  }
+  majBouton();
+}
+function majBouton() {
+  const pret = !!(courant && courant.aSigner && compte
+    && String(compte).toLowerCase() === OPERATEUR.toLowerCase()
+    && $('#c2').textContent === '✓');
+  $('#agir').disabled = !pret;
+  $('#agir').textContent = courant && courant.action === 'ANCRER' ? 'Anchor — sign in your wallet'
+    : courant && courant.action === 'OUVRIR' ? 'Open the round — sign in your wallet' : 'Sign';
+}
+
+$('#connecter').addEventListener('click', async () => {
+  if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
+  try {
+    const comptes = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    compte = comptes && comptes[0];
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
+    const chaine = await window.ethereum.request({ method: 'eth_chainId' });
+    const bonCompte = !!compte && String(compte).toLowerCase() === OPERATEUR.toLowerCase();
+    marque('#c3', bonCompte && Number(chaine) === 8453);
+    /* ⛔ ON NOMME LE PROBLEME : « bouton grise » sans raison est le pire des messages. */
+    if (!bonCompte) $('#etat').innerHTML = '<span class="ko">This wallet is not the operator. Only '
+      + txt(OPERATEUR) + ' can open or anchor.</span>';
+    else if (Number(chaine) !== 8453) $('#etat').textContent = 'Switch your wallet to Base.';
+    else $('#etat').textContent = '';
+  } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
+  majBouton();
+});
+
+$('#agir').addEventListener('click', async () => {
+  if (!courant || !courant.aSigner) return;
+  $('#agir').disabled = true;
+  $('#etat').textContent = 'Opening your wallet — check it shows Base and this contract, then sign.';
+  const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte,
+    to: courant.aSigner.to, data: courant.aSigner.data, value: courant.aSigner.value });
+  if (r.etat !== 'CONFIRME') {
+    $('#etat').innerHTML = '<span class="ko">Not done: ' + txt(r.pourquoi || r.etat) + '</span>';
+    majBouton();
+    return;
+  }
+  $('#etat').innerHTML = '<span class="ok">Done.</span> Transaction: <code>' + txt(r.hash) + '</code>';
+  void lire();
+});
+
+$('#relire').addEventListener('click', () => { void lire(); });
+void lire();
+</script>
+</body>
+</html>
