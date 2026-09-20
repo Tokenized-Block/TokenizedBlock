@@ -51,6 +51,10 @@ async function lireOpenLaunch() {
  * de la factory B20, lecture seule, 3 jours puis increments), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations } from './index-blocks.js';
+import { frappesVers } from './mes-blocks.js';
+import { prochaineFenetre } from './fenetre-scan.js';
+import { NOS_BLOCKS_GENESE } from './origine.js';
+import { FEE_WALLET } from './frais-creation.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
 /* ══ RASTERISEUR PNG, CHARGE A LA DEMANDE ══════════════════════════════════════════════════════════
@@ -213,6 +217,105 @@ async function resoudreFace(token) {
    * sinon une minute de noeud sature condamnerait la face d un block pour toute la vie du process. */
   if (r.etat !== 'NON_LUE') facesLues.set(t, rep);
   return rep;
+}
+
+/* ⛔⛔ « NOS BLOCKS », CALCULE ICI ET PAS DANS LA PAGE (Phil, 2026-09-20 : « faut expandre depuis le
+ *    debut »). Avant, la page scannait une fenetre FIXE de 20 000 blocs (~11 h) sans cache : un block
+ *    cree par nous plus tot cessait d etre « a nous » sans aucune erreur a l ecran.
+ * ⛔ PLANCHER VERIFIE SUR LA CHAINE, PAS RECITE : le Block 0 a ete mine au bloc 50861088
+ *    (tx 0x925bbfbb3c6b90362aed9dbd09816f6c3548a30938913f65f8025c46d1541c92, code 0xef). Rien de nous
+ *    ne peut etre anterieur, donc il est inutile de descendre plus bas.
+ * ⛔ PLAGE CONTIGUE [depuis, jusqua] QUI N AVANCE QUE SUR UN SCAN PROPRE : une fenetre refusee par le
+ *    noeud ne doit JAMAIS etre recouverte par un « deja lu ». Meme discipline que mesFrappes.
+ * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la couverture repart. C est DIT dans la reponse
+ *    (depuis / jusqua / couvertureComplete), jamais masque. */
+const PREMIER_BLOCK_TB = 50861088;
+const PAS_NOS_BLOCKS = 40000;
+/* ⛔⛔ MESURE (2026-09-20, 706 985 blocs, balayage complet, 0 fenetre ratee) : les blocks sont frappes
+ *    AU CREATEUR, pas au wallet de frais -- `repartitionFrappe` donne 100 % de la supply au compte qui
+ *    cree. Chercher les frappes vers a6cf ne trouve donc qu UN block, la ou le compte createur en a SIX.
+ *    La page affichait 2 « nos blocks » au lieu de 7, sans aucune erreur.
+ * ⛔ AUCUNE ADRESSE PERSONNELLE ECRITE ICI : la liste se configure par TB_NOS_CREATEURS (adresses
+ *    separees par des virgules). Le wallet de frais, lui, est deja public -- il est grave dans le hook.
+ * ⛔ UNE ADRESSE MAL FORMEE EST REFUSEE ET DITE : une faute de frappe dans la variable d env ferait
+ *    disparaitre des blocks en silence, ce qui est exactement le defaut qu on corrige. */
+const CREATEURS_REFUSES = [];
+const NOS_CREATEURS = (() => {
+  const brut = String(process.env.TB_NOS_CREATEURS || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const bons = [];
+  for (const a of brut) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(a)) bons.push(a);
+    else CREATEURS_REFUSES.push(a.slice(0, 12));
+  }
+  const tous = [FEE_WALLET, ...bons];
+  return [...new Map(tous.map((a) => [a.toLowerCase(), a])).values()];
+})();
+if (CREATEURS_REFUSES.length) console.log('[nos-blocks] ⛔ ' + CREATEURS_REFUSES.length + ' adresse(s) de TB_NOS_CREATEURS mal formee(s), ignoree(s) : ' + CREATEURS_REFUSES.join(', '));
+console.log('[nos-blocks] ' + NOS_CREATEURS.length + ' compte(s) surveille(s) · plancher bloc ' + PREMIER_BLOCK_TB);
+const nosBlocksEtat = { blocks: new Set(NOS_BLOCKS_GENESE), depuis: null, jusqua: null, ratees: 0, lu: null };
+let nbEnCours = null;
+async function etendreNosBlocks() {
+  const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  let deBloc, aBloc;
+  const f = prochaineFenetre({ fin, depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
+    plancher: PREMIER_BLOCK_TB, pas: PAS_NOS_BLOCKS });
+  if (!f) return; /* tout est couvert : plus rien a lire */
+  deBloc = f.deBloc; aBloc = f.aBloc;
+  /* ⛔ TOUS LES COMPTES, ET LES RATES DE CHACUN COMPTENT. Un seul compte qui echoue doit empecher la
+   *    plage d avancer — sinon un trou serait recouvert par un « deja lu ». */
+  let ratees = 0;
+  for (const compte of NOS_CREATEURS) {
+    const scan = await frappesVers({ rpc: rpcServeur, compte, deBloc, aBloc });
+    for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
+    ratees += (scan.fenetresRatees || []).length;
+  }
+  const scan = { blocks: [], fenetresRatees: ratees ? [{ n: ratees }] : [] };
+  /* ⛔ LES BLOCKS TROUVES SONT GARDES MEME SI UNE FENETRE A RATE : ils sont vrais. C est la PLAGE qui
+   *    n avance pas, pas l ensemble. */
+  for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
+  nosBlocksEtat.ratees = (scan.fenetresRatees || []).length;
+  if (!nosBlocksEtat.ratees) {
+    if (nosBlocksEtat.jusqua === null) { nosBlocksEtat.depuis = deBloc; nosBlocksEtat.jusqua = aBloc; }
+    else if (aBloc === fin) nosBlocksEtat.jusqua = aBloc;
+    else nosBlocksEtat.depuis = deBloc;
+  }
+  nosBlocksEtat.lu = new Date().toISOString();
+}
+/* ⛔ LE RATTRAPAGE SE CONDUIT SEUL, ET IL SAIT S ARRETER. Tant que la couverture n atteint pas le
+ *    plancher, on enchaine un morceau de plus apres une pause -- sinon la remontee n avancerait qu au
+ *    rythme des visites (18 morceaux = 18 visites). Quand c est complet, plus rien n est planifie. */
+let rattrapageArme = false;
+function rattraperNosBlocks() {
+  if (rattrapageArme) return;
+  rattrapageArme = true;
+  const pas = async () => {
+    try { await etendreNosBlocks(); } catch (e) { /* on reessaiera au prochain tour */ }
+    const complet = nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB;
+    if (complet) {
+      rattrapageArme = false;
+      console.log('[nos-blocks] couverture complete jusqu au bloc ' + PREMIER_BLOCK_TB
+        + ' · ' + nosBlocksEtat.blocks.size + ' block(s) a nous');
+      return;
+    }
+    setTimeout(pas, 4000).unref?.();
+  };
+  setTimeout(pas, 1500).unref?.();
+}
+function nosBlocksCorps() {
+  rattraperNosBlocks();
+  return JSON.stringify({
+    ok: true, lu: nosBlocksEtat.lu,
+    blocks: [...nosBlocksEtat.blocks],
+    depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
+    plancher: PREMIER_BLOCK_TB,
+    couvertureComplete: nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB,
+    fenetresRatees: nosBlocksEtat.ratees,
+    /* ⛔ LA BORNE VOYAGE AVEC LA REPONSE : un appelant qui lirait « blocks » sans « couvertureComplete »
+     *    croirait tenir la liste entiere alors que la remontee est encore en cours. */
+    comptesSurveilles: NOS_CREATEURS.length,
+    borne: 'Blocks minted to any watched account between depuis and jusqua, plus the genesis pair. '
+      + 'While couvertureComplete is false the walk back to block ' + PREMIER_BLOCK_TB + ' is still running.',
+  });
 }
 
 const blocksConnus = new Set();
@@ -541,6 +644,15 @@ createServer((req, res) => {
         repondre(r);
       })
       .catch((e) => repondre({ ok: false, pourquoi: 'price not read: ' + String((e && e.message) || e).slice(0, 80) }));
+    return;
+  }
+
+  /* ⛔ NOS BLOCKS — global, pas personnel. La page appelait une fenetre fixe de 20 000 blocs sans
+   *    cache : un block cree par nous plus de ~11 h plus tot cessait d etre « a nous » en silence.
+   *    La reponse porte sa propre BORNE (depuis / jusqua / couvertureComplete). */
+  if (chemin === '/api/nos-blocks') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    res.end(nosBlocksCorps());
     return;
   }
 

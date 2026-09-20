@@ -1510,7 +1510,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260920-0159" hidden>Build <code>20260920-0159</code> · new markets open on hook V5; V1-V4 still recognised.</p>
+      <p class="note" data-build="20260920-0160" hidden>Build <code>20260920-0160</code> · our blocks read from the chain back to block 0, not a 11h window.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2973,10 +2973,31 @@ $('#trouver').addEventListener('keydown', (e) => {
 const SYMBOLES_GENESE = { [NOS_BLOCKS_GENESE[0]]: 'TBLOCK', [NOS_BLOCKS_GENESE[1]]: 'TTB' };
 async function poserNosBlocks(fin) {
   if (CHAINE !== 8453) return;
+  /* ⛔⛔ PHIL (2026-09-20) : « ne lit que les 20 000 derniers blocs — faut expandre depuis le debut ».
+   *    L ancienne version scannait une fenetre FIXE de 20 000 blocs (~11 h) et REMPLACAIT nosSet. Un
+   *    block cree par nous plus tot en sortait : il perdait son 🟦 et sa place en tete, SANS ERREUR.
+   * ⛔ La liste vient maintenant du SERVEUR, qui remonte jusqu au bloc du Block 0 (50861088, verifie)
+   *    au fil de ses rafraichissements. C est une donnee GLOBALE : la faire calculer par chaque
+   *    visiteur couterait ~354 appels getLogs par visite.
+   * ⛔ ON N ECRASE JAMAIS : on UNIT. Une lecture qui echoue ne doit pas faire disparaitre ce qu on
+   *    savait deja — c est exactement comme ca que le bug precedent passait inapercu. */
+  const vus = new Set(nosSet);
+  let servi = false;
   try {
-    const r = await nosBlocks({ rpc, deBloc: Math.max(0, fin - 20000), aBloc: fin });
-    nosSet = new Set(r.blocks);
-  } catch (e) { /* genese seule */ }
+    const j = await fetch('/api/nos-blocks', { cache: 'no-store' }).then((x) => x.json());
+    if (j && j.ok && Array.isArray(j.blocks) && j.blocks.length) {
+      for (const b of j.blocks) if (/^0x[0-9a-f]{40}$/.test(String(b).toLowerCase())) vus.add(String(b).toLowerCase());
+      servi = true;
+    }
+  } catch (e) { /* le repli on-chain ci-dessous */ }
+  /* ⛔ REPLI, PAS DOUBLON : la lecture on-chain ne part QUE si le serveur n a rien rendu. */
+  if (!servi) {
+    try {
+      const r = await nosBlocks({ rpc, deBloc: Math.max(0, fin - 20000), aBloc: fin });
+      for (const b of r.blocks) vus.add(String(b).toLowerCase());
+    } catch (e) { /* genese seule */ }
+  }
+  nosSet = vus;
   for (const adr of nosSet) {
     let h = habitants.find((x) => String(x.adr).toLowerCase() === adr);
     if (!h) {
