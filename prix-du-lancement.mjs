@@ -99,8 +99,34 @@ const createurs = new Set(valeurs.map((v) => v.de));
 const cibles = new Map();
 for (const v of valeurs) cibles.set(v.vers, (cibles.get(v.vers) || 0) + 1);
 
+/* ══ 43 CREATEURS, OU 43 INCONNUS ? ══════════════════════════════════════════════════════════
+ * ⛔⛔ AJOUTE LE 2026-09-21 APRES UNE OBSERVATION DE ZERO 1 : « plusieurs wallets reviennent dans
+ *     la meme heure — usage repete, pas 43 inconnus froids chaque fois ». C est verifiable, donc
+ *     c est verifie plutot que cru. La distinction change tout : 43 nouveaux venus par jour, c est
+ *     de l ACQUISITION ; 43 ouvertures par une poignee d habitues, c est de la RETENTION. Les deux
+ *     se construisent avec des produits differents, et le meme chiffre les couvre.
+ * ⛔ CE QUE CE COMPTE NE PEUT PAS DIRE : si deux adresses appartiennent a la meme personne. Un
+ *    createur qui change de wallet compte double ici. La concentration mesuree est donc un
+ *    PLANCHER — la vraie est au moins aussi forte, jamais moins. */
+const parCreateur = new Map();
+for (const v of valeurs) parCreateur.set(v.de, (parCreateur.get(v.de) || 0) + 1);
+const rangs = [...parCreateur.values()].sort((a, b) => b - a);
+const uneSeule = rangs.filter((x) => x === 1).length;
+const plusieurs = rangs.filter((x) => x > 1).length;
+const partDesRepeteurs = valeurs.length
+  ? (100 * rangs.filter((x) => x > 1).reduce((s, x) => s + x, 0) / valeurs.length) : 0;
+
 console.log('\n=== CE QUE LES CREATEURS ONT ENVOYE POUR OUVRIR CES MARCHES ===');
 console.log('   transactions lues : ' + valeurs.length + ' · createurs distincts : ' + createurs.size);
+console.log('   ouvert UNE seule fois   : ' + uneSeule + ' createur(s)');
+console.log('   ouvert PLUSIEURS fois   : ' + plusieurs + ' createur(s) · le plus actif : '
+  + (rangs[0] || 0) + ' ouvertures');
+console.log('   part des ouvertures faite par des createurs qui REVIENNENT : '
+  + partDesRepeteurs.toFixed(1) + ' %');
+console.log('   ⛔ « ' + createurs.size + ' createurs par jour » n est donc PAS « '
+  + createurs.size + ' nouveaux venus » : ' + (partDesRepeteurs >= 50
+    ? 'la majorite des ouvertures vient d habitues — c est de la RETENTION, pas de l acquisition.'
+    : 'la majorite vient de createurs vus une seule fois sur la fenetre.'));
 console.log('   a valeur ZERO     : ' + aZero + '  (ouverture gratuite)');
 console.log('   mediane           : ' + eth(mediane) + ' ETH');
 console.log('   minimum           : ' + eth(valeurs[0].wei) + ' ETH');
