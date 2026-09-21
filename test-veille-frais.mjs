@@ -63,16 +63,25 @@ const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
     'un topic inconnu -> null, pas une invention');
 }
 
-// ══ 4. LA FORME DU V1 EST VERIFIEE, PAS SUPPOSEE ════════════════════════════════════════════════
-// ⛔ Mesure du 2026-09-21 : sur 39 evenements, data[1]*2 == data[0] sur les 39. Si un jour ce n est
-//    plus vrai, c est que notre lecture de la forme est fausse — et il vaut mieux rendre null.
+// ══ 4. LA FORME DU V1, ET LE SENS DE SES DEUX MOTS ══════════════════════════════════════════════
+// ⛔⛔ ERREUR CORRIGEE LE 2026-09-21. J avais lu « data[0] = frais total, data[1] = la moitie ».
+//    Le rapport data[0] == 2 x data[1] tient sur 39/39 — mais il est vrai dans les DEUX lectures,
+//    donc il ne prouve rien. Les SOLDES ont tranche, au wei pres : sur RNG, somme(data[0]) egale
+//    le solde du wallet de frais et somme(data[1]) celui de l adresse creatrice.
+//    => data[0] = part du WALLET (2/3), data[1] = part du CREATEUR (1/3).
+//    Consequence : j avais annonce la part du createur en croyant annoncer celle du wallet, et
+//    sous-estime de moitie ce que a6cf recoit.
 {
   const bon = { blockNumber: '0x10', transactionHash: '0xbb',
     topics: [TOPIC_FRAIS_V1, '0x' + m32(1), '0x' + motAdr(OK)],
     data: '0x' + m32(1000) + m32(500) + m32(0) };
   const d = decoderFrais(bon, 'V1');
   eq(d.type, 'FRAIS_V1', 'la forme du V1 est reconnue');
-  eq(d.montant, 1000n, 'le montant est le TOTAL, pas la moitie');
+  eq(d.montant, 1000n, 'le montant est la part du WALLET — c est elle qu un delta de solde confirme');
+  eq(d.partCreateur, 500n, 'la part du createur est rendue A PART, pas fondue dans le montant');
+  eq(d.fraisTotal, 1500n, 'et le frais TOTAL est la somme des deux — jamais data[0] seul');
+  ok(d.fraisTotal > d.montant, 'le total est strictement superieur a la part du wallet');
+  eq(Number(d.montant * 1000n / d.fraisTotal), 666, 'le wallet touche 66,6 % — pas 50 %');
   eq(d.devise, OK, 'la devise est le deuxieme argument indexe');
   // ⛔ TEMOIN : une forme qui ne tient pas rend null.
   const faux = { ...bon, data: '0x' + m32(1000) + m32(777) + m32(0) };

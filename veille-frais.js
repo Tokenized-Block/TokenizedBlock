@@ -25,8 +25,10 @@ export const TOPIC_PAYE = topicDe('Paye(address,address,uint256)');
 export const TOPIC_MIS_EN_ATTENTE = topicDe('MisEnAttente(address,address,uint256)');
 export const TOPIC_MISE_EN_VIE = topicDe('MiseEnViePayee(bytes32,address,uint256)');
 /** ⛔ Le V1 n a AUCUNE source dans le depot : son evenement de frais est identifie par sa FORME
- *  (2 arguments indexes — poolId puis devise — et 3 mots de donnees dont le second vaut la moitie
- *  du premier). Ce topic vient d une lecture de la chaine, pas d une signature qu on aurait devinee. */
+ *  (2 arguments indexes — poolId puis devise — et 3 mots de donnees dont le premier vaut le DOUBLE
+ *  du second). Ce topic vient d une lecture de la chaine, pas d une signature qu on aurait devinee.
+ *  ⛔ Et le sens des deux mots a ete etabli par les SOLDES, pas par leur rapport — voir decoderFrais :
+ *     le rapport « le double » est vrai dans les deux lectures possibles, donc il ne prouve rien. */
 export const TOPIC_FRAIS_V1 = '0x2c9f5d6d35737ca7ac4f06b6cfe73dce0ce7f6a99d38bc128a4e2a7986736c88';
 
 export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -105,17 +107,29 @@ export function decoderFrais(log, nomHook) {
     };
   }
   if (t0 === TOPIC_FRAIS_V1.toLowerCase()) {
-    /* ⛔ FORME MESUREE : indexe[1] = la devise, data[0] = le frais total, data[1] = la moitie.
-     *    Si la forme ne tient pas, on rend null plutot que d inventer une lecture. */
+    /* ⛔⛔ CORRECTION DU 2026-09-21, ET CE QUI L A TRANCHEE. J avais lu « data[0] = le frais TOTAL,
+     *     data[1] = la moitie », donc un partage 50/50. Le rapport data[0] == 2 x data[1] tient sur
+     *     39/39 encaissements — mais il est vrai dans les DEUX lectures, donc il ne departage RIEN.
+     *     Ce sont les SOLDES qui ont tranche, au wei pres :
+     *       RNG   somme(data[0]) == solde du wallet de frais
+     *             somme(data[1]) == solde de l adresse creatrice
+     *       TBGAS somme(data[0]) == solde du wallet de frais
+     *     Donc data[0] est la PART DU WALLET et data[1] la PART DU CREATEUR : 2/3 et 1/3, ce qui
+     *     colle avec DIVISEUR_PART_CREATEUR = 3 dans nos hooks.
+     * ⛔ `montant` PORTE DONC CE QUI ARRIVE AU WALLET, pas le frais total — c est ce qu il faut pour
+     *    confronter a un delta de solde. Le total est rendu a part, nomme, pour qu on ne les
+     *    confonde plus jamais. */
     if (log.topics.length < 3 || mots.length < 2) return null;
-    const total = BigInt('0x' + mots[0]);
-    const moitie = BigInt('0x' + mots[1]);
-    if (moitie * 2n !== total && moitie * 2n + 1n !== total) return null;
+    const partWallet = BigInt('0x' + mots[0]);
+    const partCreateur = BigInt('0x' + mots[1]);
+    if (partCreateur * 2n !== partWallet && partCreateur * 2n + 1n !== partWallet) return null;
     return {
       ...commun, type: 'FRAIS_V1',
       beneficiaire: null,
       devise: '0x' + String(log.topics[2]).slice(26).toLowerCase(),
-      montant: total,
+      montant: partWallet,
+      partCreateur,
+      fraisTotal: partWallet + partCreateur,
     };
   }
   return null;
