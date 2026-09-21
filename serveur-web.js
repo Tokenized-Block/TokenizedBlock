@@ -586,6 +586,16 @@ setInterval(() => {
 }, 30000).unref();
 
 const SERVIS = [
+  /* ⛔⛔ LE MANIFESTE FARCASTER ETAIT ABSENT DE CETTE LISTE (releve par Zero 1 depuis un terminal,
+   *     2026-09-21). Le fichier EXISTAIT sur le disque depuis le 8 septembre ; il n a simplement
+   *     jamais ete servi. Resultat : l app declarait `fc:miniapp` et `fc:frame` dans son HTML — donc
+   *     elle se presentait a Farcaster comme une Mini App — et rendait 404 quand Farcaster venait
+   *     verifier. Un fichier qui existe et qu on ne sert pas n existe pas.
+   * ⛔ ET SON CONTENU POINTAIT AILLEURS : toutes ses URL visaient tokenized-block.github.io,
+   *    l ancien host, qui redirige. Meme servi, il aurait envoye les visiteurs dans le vide.
+   * ⛔ C EST UN DEFAUT DE DECOUVRABILITE, et c est exactement le probleme qu on mesure par ailleurs :
+   *    0 de nos 8 blocks connus de l index public. Un canal ferme de plus. */
+  '.well-known/farcaster.json',
   'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-v6.html', 'deploy-v6.json', 'deploy-v7.html', 'deploy-v7.json', 'deploy-v8.html', 'deploy-v8.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'reclamer.html', 'reclamation.js', 'veille-pot.js', 'veille-frais.js', 'comparer-frais.js', 'frais.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
