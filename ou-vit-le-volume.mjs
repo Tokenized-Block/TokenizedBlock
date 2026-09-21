@@ -184,7 +184,10 @@ console.log('   ⛔ les ' + (pools.size - actives.length) + ' pools sans aucun s
 const nomDuHook = (h) => {
   const x = String(h).toLowerCase();
   if (/^0x0{40}$/.test(x)) return 'AUCUN (pool libre)';
-  return NOM_HOOK.get(x) || 'hook tiers ' + x.slice(0, 10) + '…';
+  /* ⛔ ADRESSE ENTIERE, JAMAIS TRONQUEE. Une adresse coupee oblige a la reconstituer pour aller la
+   *    lire ailleurs — et reconstituer la fin d une adresse de memoire est precisement comment une
+   *    enquete part sur une fausse piste. Ce qui est affiche doit pouvoir etre copie. */
+  return NOM_HOOK.get(x) || 'tiers ' + x;
 };
 const parHook = new Map();
 for (const p of vrais) {
@@ -194,22 +197,38 @@ for (const p of vrais) {
   for (const s of p.swappeurs) e.swappeurs.add(s);
   parHook.set(n, e);
 };
-console.log('   ' + 'hook'.padEnd(26) + 'pools  avec volume  swaps  swappeurs distincts');
-console.log('   ' + '-'.repeat(74));
+console.log('   ' + 'hook'.padEnd(50) + 'pools  avec volume  swaps  swappeurs distincts');
+console.log('   ' + '-'.repeat(98));
 const rangees = [...parHook.entries()].sort((a, b) => b[1].swaps - a[1].swaps);
 for (const [n, e] of rangees) {
-  console.log('   ' + n.padEnd(26) + String(e.pools).padEnd(7) + String(e.avecVolume).padEnd(12)
+  console.log('   ' + n.padEnd(50) + String(e.pools).padEnd(7) + String(e.avecVolume).padEnd(12)
     + String(e.swaps).padEnd(7) + e.swappeurs.size);
 }
 
-const libres = parHook.get('AUCUN (pool libre)') || { pools: 0, swaps: 0 };
-const hookees = rangees.filter(([n]) => n !== 'AUCUN (pool libre)')
-  .reduce((a, [, e]) => ({ pools: a.pools + e.pools, swaps: a.swaps + e.swaps }), { pools: 0, swaps: 0 });
+/* ⛔⛔ UN SWAP N EST PAS UN ACHETEUR, ET CETTE DISTINCTION A FAILLI ME COUTER UNE CONCLUSION FAUSSE.
+ *     Le 2026-09-21 j ai annonce « le volume B20 existe, a l echelle » en lisant 43 263 swaps sur des
+ *     pools hookees. La colonne d a cote disait 22 adresses distinctes pour 4 203 swaps, et plusieurs
+ *     hooks affichaient 285 swaps pour UNE SEULE adresse — une adresse qui echange contre sa propre
+ *     pool. Le COMPTE de swaps etait bien reel ; la DEMANDE, non. Le compteur d adresses distinctes
+ *     est donc remonte au verdict, ou il ne peut plus etre survole. */
+const cumul = (filtre) => rangees.filter(filtre).reduce((a, [, e]) => {
+  a.pools += e.pools; a.swaps += e.swaps;
+  for (const s of e.swappeurs) a.adresses.add(s);
+  return a;
+}, { pools: 0, swaps: 0, adresses: new Set() });
+const libres = cumul(([n]) => n === 'AUCUN (pool libre)');
+const hookees = cumul(([n]) => n !== 'AUCUN (pool libre)');
+const parAdresse = (x) => x.adresses.size ? (x.swaps / x.adresses.size).toFixed(1) : '—';
 
 console.log('\n=== 4. L ALLEGATION DE ZERO 1, JUGEE ===');
 console.log('   « gros volume Dex externe sur des blocks factory, sans passer par votre UI ni V8 »');
-console.log('   pools libres  : ' + libres.pools + ' pools · ' + libres.swaps + ' swaps');
-console.log('   pools hookees : ' + hookees.pools + ' pools · ' + hookees.swaps + ' swaps');
+console.log('   pools libres  : ' + libres.pools + ' pools · ' + libres.swaps + ' swaps · '
+  + libres.adresses.size + ' adresse(s) distincte(s) · ' + parAdresse(libres) + ' swaps/adresse');
+console.log('   pools hookees : ' + hookees.pools + ' pools · ' + hookees.swaps + ' swaps · '
+  + hookees.adresses.size + ' adresse(s) distincte(s) · ' + parAdresse(hookees) + ' swaps/adresse');
+console.log('   ⛔ un swap n est pas un acheteur : au-dela de ~20 swaps par adresse, ce compte');
+console.log('      decrit une activite automatisee, pas une demande. Le chiffre qui parle de');
+console.log('      demande est la colonne des ADRESSES, pas celle des swaps.');
 if (!LECTURE_COMPLETE) {
   /* ⛔⛔ LA BRANCHE QUI COMPTE. Le 2026-09-21, une premiere version a lu 19 fenetres sur 303 et
    *     s appretait a publier un ratio hookees/libres construit dessus. Les fenetres manquantes
