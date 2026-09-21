@@ -24,11 +24,28 @@ import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
  *    n en a pas grave une (changer leur longueur changerait le modulo, donc la tete de TOUS ces blocks),
  *    et un test les compare aux menus de `index.html`. Les nouvelles valeurs sont AJOUTEES A LA FIN :
  *    l indice de chaque valeur ancienne ne bouge pas. */
-export const ORBITES_CREATE = [...ORBITES, 'vortex', 'pluie', 'constellation', 'halo', 'escalier', 'ellipse'];
-export const FACETTES_CREATE = [...FACETTES, 'coeur', 'lune', 'soleil', 'oeil', 'couronne', 'infini', 'goutte', 'diamant'];
-export const MATIERES_CREATE = [...MATIERES, 'or', 'holo', 'nuit', 'acide', 'ombre', 'rose'];
+/* ⛔⛔ ELARGISSEMENT DU 2026-09-21 (Phil : « ajoute bcp de possibilite »). VINGT-DEUX motifs de
+ *     plus, et la raison pour laquelle ce ne sont PAS des emoji est ecrite ici une fois pour toutes :
+ *     un emoji est un GLYPHE DE POLICE. Le meme block s afficherait differemment sur iOS, Android et
+ *     Windows — trois dessins pour une seule face, alors que la face est GRAVEE et que personne ne
+ *     peut la changer ensuite. Embarquer une police d emoji poserait en plus une question de licence,
+ *     et le fichier porte deja la reponse : « une licence mal lue serait la seule erreur irreversible
+ *     du projet ». Les sujets sont donc ceux des emoji — fusee, flamme, chat, fantome — mais chacun
+ *     est TRACE en SVG dans logo.js, sans un seul octet importe.
+ * ⛔ AJOUTES A LA FIN, TOUJOURS. Les listes d apparence.js restent gelees : leur longueur sert de
+ *    modulo pour deriver la face de tout block qui n en a pas grave une. Inserer au milieu changerait
+ *    la tete de blocks deja nes. */
+export const ORBITES_CREATE = [...ORBITES, 'vortex', 'pluie', 'constellation', 'halo', 'escalier', 'ellipse',
+  'anneaux', 'comete', 'grappe', 'arc', 'nuee', 'pyramide'];
+export const FACETTES_CREATE = [...FACETTES, 'coeur', 'lune', 'soleil', 'oeil', 'couronne', 'infini', 'goutte', 'diamant',
+  'fusee', 'flamme', 'crane', 'planete', 'fantome', 'robot', 'chat', 'fleur', 'feuille', 'montagne',
+  'nuage', 'note', 'horloge', 'ampoule', 'engrenage', 'bouclier', 'epee', 'de', 'cube', 'trefle',
+  'ancre', 'champignon', 'papillon', 'pique'];
+export const MATIERES_CREATE = [...MATIERES, 'or', 'holo', 'nuit', 'acide', 'ombre', 'rose',
+  'lave', 'jade', 'argent', 'ambre', 'abysse', 'menthe'];
 export const ORNEMENTS_CREATE = [...ORNEMENTS, 'cercles', 'losanges', 'fleurs', 'eclairs', 'lignes', 'cadre',
-  'ondes', 'pixels', 'coeurs', 'lunes', 'soleils', 'couronnes'];
+  'ondes', 'pixels', 'coeurs', 'lunes', 'soleils', 'couronnes',
+  'bulles', 'plumes', 'flocons', 'triangles', 'anneaux', 'graines'];
 
 /** Bornes EXACTES des curseurs de Create — un test les compare a app.html.
  * ⚠️ Elargies le 2026-09-13 (division 5→8, eclats 6→12, ecart 4→8) : les anciennes valeurs restent

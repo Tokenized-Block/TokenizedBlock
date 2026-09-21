@@ -101,6 +101,58 @@ export function logoSvg(o) {
       infini: `<path d="M0 0C-6-10-20-10-20 0S-6 10 0 0 20-10 20 0 6 10 0 0Z" fill="none" stroke="${f}" stroke-width="6"/>`,
       goutte: `<path d="M0-21C8-8 15 0 15 7A15 15 0 0 1-15 7C-15 0-8-8 0-21Z" fill="${f}"/>`,
       diamant: `<g fill="none" stroke="${f}" stroke-width="5" stroke-linejoin="round"><path d="M-19-6-10-17H10L19-6 0 20Z"/><path d="M-19-6H19"/></g>`,
+      /* ── ajoutes le 2026-09-21 (Phil : « ajoute bcp de possibilite »). Les SUJETS sont ceux des
+         emoji ; le TRACE est a nous. Un emoji est un glyphe de police : il change de dessin selon
+         l appareil, or la face est GRAVEE et ne peut plus changer. Aucun octet importe, donc aucune
+         licence a verifier — et c est la seule politique tenable pour une image irreversible. ── */
+      fusee: `<g fill="${f}"><path d="M0-21c6 6 9 13 9 20l-4 6h-10l-4-6c0-7 3-14 9-20Z"/>`
+        + `<path d="M-9-2-17 8-9 7ZM9-2 17 8 9 7Z"/><circle cy="-6" r="3.5" fill="none" stroke="${f}" stroke-width="2.5"/>`
+        + `<path d="M-4 12 0 20 4 12Z"/></g>`,
+      flamme: `<path d="M0-21c8 8 13 13 13 21A13 13 0 0 1-13 0c0-8 5-13 13-21Zm0 12a6 6 0 0 0 0 12 6 6 0 0 0 0-12Z" fill="${f}" fill-rule="evenodd"/>`,
+      crane: `<g fill="${f}"><path d="M0-20a17 17 0 0 0-17 17c0 6 3 10 6 12v5a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3v-5c3-2 6-6 6-12A17 17 0 0 0 0-20Z"/>`
+        + `</g><g fill="#0b0d10"><circle cx="-6" cy="-3" r="4"/><circle cx="6" cy="-3" r="4"/><path d="M-2 5h4v6h-4Z"/></g>`,
+      planete: `<g><circle r="11" fill="${f}"/><ellipse rx="20" ry="6" fill="none" stroke="${f}" stroke-width="3.5" transform="rotate(-20)"/></g>`,
+      fantome: `<g fill="${f}"><path d="M0-20a15 15 0 0 0-15 15v22l5-5 5 5 5-5 5 5 5-5 5 5V-5A15 15 0 0 0 0-20Z"/></g>`
+        + `<g fill="#0b0d10"><circle cx="-5" cy="-5" r="3"/><circle cx="5" cy="-5" r="3"/></g>`,
+      robot: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round"><rect x="-15" y="-12" width="30" height="24" rx="5"/>`
+        + `<path d="M0-12v-6M-15 0h-5M15 0h5"/></g><g fill="${f}"><circle cx="-6" cy="-1" r="3"/><circle cx="6" cy="-1" r="3"/>`
+        + `<rect x="-6" y="5" width="12" height="3" rx="1.5"/><circle cy="-20" r="2.5"/></g>`,
+      chat: `<g fill="${f}"><path d="M-15-18-11-3a13 13 0 0 0 22 0L15-18 6-9a16 16 0 0 0-12 0Z"/>`
+        + `<path d="M-13 0a13 13 0 0 0 26 0 13 13 0 0 0-26 0Z"/></g>`
+        + `<g fill="#0b0d10"><circle cx="-5" cy="-1" r="2.5"/><circle cx="5" cy="-1" r="2.5"/><path d="M-2 5h4l-2 3Z"/></g>`,
+      fleur: `<g fill="${f}">` + [0, 60, 120, 180, 240, 300].map((r) =>
+        `<ellipse cx="0" cy="-11" rx="5.5" ry="9" transform="rotate(${r})"/>`).join('')
+        + `</g><circle r="4.5" fill="#0b0d10"/>`,
+      feuille: `<g><path d="M-14 16C-14-4 0-18 16-20 16-2 2 14-14 16Z" fill="${f}"/>`
+        + `<path d="M-9 13C-3 2 5-6 14-17" fill="none" stroke="#0b0d10" stroke-width="2.5"/></g>`,
+      montagne: `<g fill="${f}"><path d="M-20 16 -6-10 2 4 7-4 20 16Z"/></g>`
+        + `<path d="M-11 3-6-10-1 3Z" fill="#0b0d10" opacity=".55"/>`,
+      nuage: `<path d="M-13 12a8 8 0 0 1 0-16 11 11 0 0 1 21-3 8 8 0 0 1 5 19Z" fill="${f}"/>`,
+      note: `<g fill="${f}"><path d="M-2 10V-16l18-4v6l-14 3v21Z"/><ellipse cx="-8" cy="11" rx="8" ry="6.5"/></g>`,
+      horloge: `<g fill="none" stroke="${f}" stroke-width="4"><circle r="18"/><path d="M0-10V1l8 5" stroke-linecap="round"/></g>`,
+      ampoule: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M0-20a12 12 0 0 0-7 22v3h14v-3A12 12 0 0 0 0-20Z"/><path d="M-6 11h12M-4 17h8" stroke-linecap="round"/></g>`,
+      engrenage: `<g fill="${f}">` + [0, 45, 90, 135].map((r) =>
+        `<rect x="-3.5" y="-21" width="7" height="42" rx="2" transform="rotate(${r})"/>`).join('')
+        + `<circle r="13"/></g><circle r="5.5" fill="#0b0d10"/>`,
+      bouclier: `<path d="M0-20 17-14v12C17 8 9 16 0 20-9 16-17 8-17-2v-12Z" fill="none" stroke="${f}" stroke-width="5" stroke-linejoin="round"/>`,
+      epee: `<g fill="${f}"><path d="M-3-21h6l2 26-5 5-5-5Z"/><rect x="-13" y="5" width="26" height="5" rx="2.5"/>`
+        + `<rect x="-3" y="12" width="6" height="9" rx="2"/></g>`,
+      de: `<g><rect x="-17" y="-17" width="34" height="34" rx="7" fill="none" stroke="${f}" stroke-width="4.5"/>`
+        + `<g fill="${f}"><circle cx="-8" cy="-8" r="3.2"/><circle cx="8" cy="-8" r="3.2"/><circle r="3.2"/>`
+        + `<circle cx="-8" cy="8" r="3.2"/><circle cx="8" cy="8" r="3.2"/></g></g>`,
+      cube: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M0-20 18-10v20L0 20-18 10v-20Z"/><path d="M0-20 0 0M0 0 18-10M0 0-18-10"/></g>`,
+      trefle: `<g fill="${f}"><circle cx="-8" cy="-6" r="8"/><circle cx="8" cy="-6" r="8"/><circle cy="6" r="8"/>`
+        + `<rect x="-2" y="6" width="4" height="15" rx="2"/></g>`,
+      ancre: `<g fill="none" stroke="${f}" stroke-width="4.5" stroke-linecap="round">`
+        + `<circle cy="-15" r="5"/><path d="M0-10V18M-11 2H11M-16 6a16 16 0 0 0 32 0"/></g>`,
+      champignon: `<g fill="${f}"><path d="M-19-2a19 15 0 0 1 38 0Z"/><path d="M-6-2h12v15a6 6 0 0 1-12 0Z"/></g>`
+        + `<g fill="#0b0d10"><circle cx="-8" cy="-7" r="3"/><circle cx="7" cy="-9" r="2.4"/></g>`,
+      papillon: `<g fill="${f}"><path d="M-1-2C-6-16-20-18-20-7-20 2-10 6-1 2Z"/><path d="M1-2C6-16 20-18 20-7 20 2 10 6 1 2Z"/>`
+        + `<path d="M-1 2C-6 10-16 12-16 18-16 22-6 20-1 8Z"/><path d="M1 2C6 10 16 12 16 18 16 22 6 20 1 8Z"/>`
+        + `<rect x="-1.5" y="-8" width="3" height="26" rx="1.5"/></g>`,
+      pique: `<g fill="${f}"><path d="M0-21C-4-11-17-4-17 5a9 9 0 0 0 15 6v4l-5 6h14l-5-6v-4a9 9 0 0 0 15-6c0-9-13-16-17-26Z"/></g>`,
     }[o.facette];
     return `<g transform="matrix(${m})">`
       + (d || `<text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text>`)
