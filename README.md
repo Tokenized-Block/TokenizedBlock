@@ -95,9 +95,8 @@ And the part that is not flattering, published next to the rest:
 ## Fork it
 
 ```bash
-git clone https://github.com/Tokenized-Block/TokenizedBlock.git
-cd TokenizedBlock
-git switch feat/auto-salt-create
+git clone https://github.com/Tokenized-Block/tokenizedblock-app.git
+cd tokenizedblock-app
 python -m http.server 8000
 ```
 
@@ -115,13 +114,23 @@ permission bits, and pair your blocks with it.
 
 Every claim above has a script behind it, and each script states the bound of what it can prove.
 
-⛔ **They are not on this branch.** `main` holds the retired GitHub Pages stub and the historical
-app; the measurement scripts and the current application live on **`feat/auto-salt-create`**, which
-is what runs at https://tokenizedblock.space. Saying otherwise here would be the same kind of claim
-this file exists to remove.
+⛔ **They are not on `main`.** This branch still powers GitHub Pages — checked against the API on
+2026-09-21, it reports `status: built` and serves https://tokenized-block.github.io/TokenizedBlock/ —
+so it holds a redirect stub, not the app.
+
+The application and every measurement script live in a separate public repository, whose `main` *is*
+the code running at https://tokenizedblock.space:
+
+**https://github.com/Tokenized-Block/tokenizedblock-app**
+
+Its `DEPLOY.md` states exactly where a fork's fees go, and why a fork cannot redirect ours.
+
+(An earlier draft of this paragraph said Pages had been retired. It has not — the API says it is
+still built and serving. Corrected here rather than quietly dropped.)
 
 ```bash
-git switch feat/auto-salt-create
+git clone https://github.com/Tokenized-Block/tokenizedblock-app.git
+cd tokenizedblock-app
 node devises-admises.mjs
 node ou-vit-le-volume.mjs 1
 node reference-frais.mjs
