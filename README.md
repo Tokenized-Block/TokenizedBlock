@@ -95,8 +95,8 @@ And the part that is not flattering, published next to the rest:
 ## Fork it
 
 ```bash
-git clone https://github.com/Tokenized-Block/tokenized-block.github.io.git
-cd tokenized-block.github.io
+git clone https://github.com/Tokenized-Block/TokenizedBlock.git
+cd TokenizedBlock
 python -m http.server 8000
 ```
 
@@ -146,3 +146,31 @@ references are read from simulation artifacts, never transcribed by hand.
 No undated figures. No ARR, MRR or projection appears anywhere in this repository. A number that was
 not measured is not written down, and a measurement that went against us is printed next to one that
 did not.
+
+## Where B-20 volume actually lives
+
+A partner model (Grok / "Zero 1") claimed that B-20 volume goes to **unhooked** pools, reached
+through DexScreener and aggregators rather than through any app. If that were true, the fee rate
+would not be the lever — discoverability would be. It is a testable claim, so it was tested.
+
+`ou-vit-le-volume.mjs` reads every `Initialize` on the Uniswap v4 PoolManager over a window, keeps
+the pools with a B-20 side, then counts every `Swap` and splits them by hook.
+
+Measured over 2 days ending 2026-09-21, **100 % of blocks read** (zero unreadable):
+
+| | pools | swaps |
+|---|---|---|
+| pools with **no hook** | 28 | **282** |
+| pools **with a hook** | 420 | **43 263** |
+
+**The claim is refuted.** B-20 volume is not on free pools — it is overwhelmingly on hooked ones,
+belonging to other people's hooks. B-20 tokens do get traded, at scale, through pools that charge a
+fee. Ours are simply not among them.
+
+⛔ Two bounds, both load-bearing:
+- Only pools **born inside the window** are seen. An older, active pool does not appear.
+- A first version of this script read 19 windows out of 303 and would have published a ratio built
+  on 6 % of the period — and the windows that failed were the *busiest* ones, so the bias ran in the
+  direction of the conclusion. The script now splits a window in half on failure until it passes,
+  and **refuses to give a verdict at all** if a single block stayed unread. That refusal is what
+  makes the table above worth reading.

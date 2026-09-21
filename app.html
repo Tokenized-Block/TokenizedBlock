@@ -351,6 +351,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .mapBarre input{flex:1;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
   color:var(--texte);font:inherit;padding:11px 12px;min-height:44px}
 .mapLeg{display:flex;gap:14px;align-items:center;color:var(--doux);font-size:11.5px;margin:10px 0 0}
+/* ⛔ `margin-left:auto` pousse le lien a droite de la legende sans le sortir du flux : pas de
+   `position:absolute`, donc il ne peut pas recouvrir la map ni disparaitre sous elle. */
+.lienX{margin-left:auto;color:var(--doux);text-decoration:none;border-bottom:1px solid transparent;
+  white-space:nowrap}
+.lienX:hover,.lienX:focus-visible{color:var(--texte);border-bottom-color:var(--accent)}
 /* ⛔ UN LIEN, PAS UN BOUTON PLEIN : il propose une explication, il ne reclame pas l attention. */
 .lienLearn{appearance:none;border:0;background:none;color:var(--accent2);font:inherit;font-size:11.5px;
   font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
@@ -953,6 +958,12 @@ details[open] > summary::before{transform:rotate(90deg)}
                Replaying… ». -->
           <span id="mapEtat"></span>
           <!-- Phil (2026-09-19) : ce lien est devenu le bouton du haut « ? What am I looking at » — plus de doublon ici -->
+          <!-- ⛔ LIEN X DE PHIL — ADRESSE RECOPIEE DE SON MESSAGE DU 2026-09-21, jamais de memoire.
+               `rel="noopener noreferrer"` n est pas decoratif : sans `noopener`, la page ouverte
+               garde une poignee sur celle-ci via `window.opener` et peut la rediriger. Un lien
+               sortant se ferme derriere lui. -->
+          <a class="lienX" href="https://x.com/Clansy314495853" target="_blank" rel="noopener noreferrer"
+             aria-label="The builder on X — opens in a new tab">𝕏 @Clansy314495853</a>
         </div>
         <!-- tip 0013: Map surfaces Hooked / TBGAS deep link — gas/example fee path. No fee addr in UI. -->
         <p class="note" id="mapHookedPath" style="margin:8px 0 0" hidden>
@@ -1513,7 +1524,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260921-0188" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260921-0190" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
