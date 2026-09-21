@@ -1,0 +1,38 @@
+{
+  "ecritLe": "2026-09-21T05:08:53.030Z",
+  "pourquoi": "Reference gelee AVANT que le hook V6 ait le moindre marche. Elle existe pour qu une mesure ulterieure puisse prouver un CHANGEMENT, et non seulement un montant.",
+  "blocV6": 51586920,
+  "fenetre": {
+    "deBloc": 50982120,
+    "aBloc": 51586919,
+    "blocs": 604800,
+    "jours": 14
+  },
+  "scan": {
+    "complet": true,
+    "fenetres": 1818,
+    "fenetresRatees": 0,
+    "evenements": 41
+  },
+  "agregat": {
+    "evenements": 41,
+    "evenementsParJour": 2.9285714285714284,
+    "ethWalletWei": "2798464052929317",
+    "ethParJour": 0.0001998902894949512,
+    "externes": 17,
+    "payeursExternesDistincts": 5,
+    "ethExternesWei": "919401434626701",
+    "partExternePourCent": 32.8,
+    "parHook": [
+      {
+        "hook": "V1",
+        "n": 39
+      },
+      {
+        "hook": "V2",
+        "n": 2
+      }
+    ]
+  },
+  "borne": "Les montants ETH sont la PART DU WALLET (2/3 du frais), pas le frais total — le tiers du createur va a l adresse enregistree comme creatrice de la pool. Un payeur illisible n est PAS compte comme externe. Aucune fenetre ratee : ces chiffres sont des comptes, pas des planchers."
+}
