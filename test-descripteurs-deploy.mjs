@@ -90,6 +90,35 @@ for (const { json, version } of PAIRES) {
     ok(false, json + ' : artefact forge introuvable — le lien descripteur/contrat n est PAS verifie');
   }
 
+  // ══ UNE PAGE DOIT VERIFIER CE POUR QUOI SA VERSION EXISTE ══════════════════════════════════
+  // ⛔⛔ LE DEFAUT DU 2026-09-21, APRES LE V8. La page a rendu CINQ lignes vertes — wallet, label,
+  //    dime, topic de preuve, verrou du label — sans JAMAIS lire HOOK_FEE(). Or le taux de 0,5 %
+  //    etait la SEULE raison d etre du V8 : un hook reste a 3 % aurait passe tous ses controles et
+  //    serait parti avec un feu vert complet.
+  // ⛔ LA PARADE N EST PAS DE MIEUX SE SOUVENIR. Le descripteur DECLARE ce que la version change
+  //    (`tauxPourCent`), et cette garde exige que la page le LISE. Ce qu une version change doit
+  //    etre ce qu elle verifie en premier.
+  if (d.tauxPourCent !== undefined) {
+    const pf = new URL('deploy-v' + version + '.html', ICI);
+    ok(existsSync(pf), json + ' : un taux est declare, donc une page doit exister pour le verifier');
+    if (existsSync(pf)) {
+      const page = readFileSync(pf, 'utf8');
+      ok(/selecteurs\.hookFee/.test(page),
+        'deploy-v' + version + '.html DOIT lire le taux sur la chaine — c est ce que cette version change');
+      ok(/tauxPourCent/.test(page),
+        'et le confronter au taux DECLARE dans le descripteur, pas a une constante ecrite dans la page');
+      ok(d.selecteurs && d.selecteurs.hookFee,
+        json + ' : le selecteur `hookFee` doit etre fourni, sinon la page ne peut rien lire');
+    }
+    // ⛔ ET LE TAUX DECLARE DOIT CORRESPONDRE A LA SOURCE, comme la dime.
+    const enSource = cs.get('HOOK_FEE');
+    if (enSource !== undefined) {
+      eq(String(Math.round(d.tauxPourCent * 10000)), enSource,
+        json + ' : le taux ANNONCE (' + d.tauxPourCent + ' %) doit valoir ce que la source DECLARE ('
+        + enSource + ' / 1e6)');
+    }
+  }
+
   // ⛔⛔ LES CHAMPS EXIGES SONT CEUX QUE LA PAGE LIT VRAIMENT, pas une liste ecrite a la main. Une
   //    liste figee reclamait `fraisVieWei` au descripteur du V2, qui n en a jamais eu — et une garde
   //    qui echoue a tort finit par etre desactivee. Ici l exigence se DEDUIT de la page.

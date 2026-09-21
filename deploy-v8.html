@@ -129,6 +129,20 @@ async function relire() {
      *     loup — et on apprend a ignorer le rouge.
      * ⛔ ET LE MESSAGE RECLAMAIT L IMPOSSIBLE : l app lit l etat du hook sur la chaine et bascule
      *    toute seule. « DO NOT switch the app » demandait une action qui n existe pas. */
+    /* ⛔⛔ LE TAUX D ABORD : c est la raison d etre de cette version. La page precedente rendait
+     *     cinq lignes vertes sans jamais le lire — un hook reste a l ancien taux aurait passe tous
+     *     ses controles. Ce qu une version CHANGE doit etre ce qu elle VERIFIE en premier. */
+    if (tx.tauxPourCent !== undefined && tx.selecteurs.hookFee) {
+      const brutTaux = BigInt(await appel(tx.selecteurs.hookFee));
+      const attendu = BigInt(Math.round(tx.tauxPourCent * 10000));
+      lignes.push((brutTaux === attendu ? '✓' : '✗') + ' fee rate on chain: '
+        + (Number(brutTaux) / 10000) + '% (' + brutTaux + ' / 1e6)'
+        + (brutTaux === attendu ? '' : ' — expected ' + tx.tauxPourCent
+          + '%. This is NOT the hook you think it is; say so and it will be pinned back.'));
+    } else {
+      /* ⛔ ON NE FAIT PAS SEMBLANT : sans taux declare, ce controle n a PAS eu lieu. */
+      lignes.push('· no fee rate declared in the descriptor — the rate was NOT verified');
+    }
     const dime = BigInt(await appel(tx.selecteurs.dime));
     const tiers = BigInt(await appel(tx.selecteurs.diviseur));
     lignes.push('· creator tithe / divisor still declared: ' + dime + '% / ' + tiers
