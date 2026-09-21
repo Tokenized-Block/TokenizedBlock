@@ -56,6 +56,9 @@ import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
+/* ⛔ LA VEILLE DES FRAIS VIT DANS SON MODULE, TESTE (66 assertions) : la reecrire ici en ferait une
+ *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
+import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { faceDuBlock } from './face.js';
@@ -111,9 +114,19 @@ const TOPIC_INITIALIZE = '0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e
  *    s accumulent dans le hook (du[wallet][devise]) jusqu a handleHookFees — que n importe qui peut appeler, et qui paie
  *    TOUJOURS le wallet de frais. Ici : lecture seule de ce qui attend, pool par pool ouverte avec V2/V3 depuis leur
  *    deploiement. Rien n est signe ni envoye par le serveur. */
+/* ⛔⛔ LES SIX, PAS DEUX. Cette liste n en contenait que V2 et V3 — et la mesure du 2026-09-21 dit
+ *    que 39 des 39 encaissements des 72 dernieres heures viennent du V1, qui n y etait pas.
+ *    Un hook absent de cette liste rend un zero qui se lit comme « rien n arrive ».
+ * ⚠️ `depuis` est un PLANCHER de balayage, pas une date de deploiement : le bloc 50861088 est la
+ *    naissance du block 0, donc anterieur a tous nos hooks. Mieux vaut balayer un peu trop que de
+ *    rater des pools ouvertes avant une date qu on aurait devinee. */
 const HOOKS_FRAIS = [
+  { nom: 'V1', adr: '0xaa6d7bd9fc7d394bc717137936f2939834382044', depuis: 50861088 },
   { nom: 'V2', adr: '0x8e1eb57ad2a87a4f7bc89ce94efd5cd77aec2044', depuis: 51518785 },
   { nom: 'V3', adr: '0x7a7cebb2ccb84c9fbfa2730e6cb23bb192166044', depuis: 51518785 },
+  { nom: 'V4', adr: '0x11fcd588c96b1781cc88b8b9f349b6067d9be4c4', depuis: 51518785 },
+  { nom: 'V5', adr: '0x799136c3f5f572f1597b5b7e067d3ee45fe4a4c4', depuis: 51567449 },
+  { nom: 'V6', adr: '0xd71af554b5b3dcb6bb17946cfa3c41860a50a4cc', depuis: 51586920 },
 ];
 const WALLET_FRAIS = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
 let fraisCache = null;
@@ -161,6 +174,40 @@ async function fraisEnAttente() {
   fraisCache = { t: Date.now(), r };
   return r;
 }
+/* ⛔ CACHE COURT ET NOMME : un balayage de 72 h coute ~390 fenetres. Sans cache, chaque
+ *    rafraichissement d onglet relancerait tout et le noeud finirait par refuser — et des fenetres
+ *    refusees rendraient le total « PLANCHER » sans que personne ne comprenne pourquoi. */
+let recentsCache = new Map();
+async function fraisRecents(heures) {
+  const cle = String(heures);
+  const dansLeCache = recentsCache.get(cle);
+  if (dansLeCache && Date.now() - dansLeCache.t < 300000) return dansLeCache.r;
+  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  const scan = await scanFrais({ rpc: rpcServeur, deBloc: tete - Math.round(heures * 1800), aBloc: tete });
+  /* ⛔ ON NE VERIFIE PAS 400 SOLDES A CHAQUE APPEL : seuls les 25 derniers, et on DIT combien
+   *    n ont pas ete verifies. Un plafond silencieux se lirait comme « tout est verifie ». */
+  const aVerifier = scan.evenements.slice(-25);
+  const verifies = [];
+  for (const e of aVerifier) {
+    const v = await verifierArrivee({ rpc: rpcServeur, evenement: e, wallet: WALLET_FRAIS });
+    verifies.push({ hook: e.hook, bloc: e.bloc, tx: e.tx, type: e.type, devise: e.devise,
+      montant: e.montant.toString(), etat: v.etat, pourquoi: v.pourquoi || null });
+  }
+  const resume = resumerFrais(scan);
+  const r2 = {
+    ok: true, lu: new Date().toISOString(), heures, tete,
+    complet: scan.complet, fenetres: scan.fenetres, fenetresRatees: scan.fenetresRatees,
+    evenements: resume.evenements,
+    nonVerifies: Math.max(0, scan.evenements.length - aVerifier.length),
+    parDevise: resume.devises.map((d) => ({ devise: d.devise, n: d.n, total: d.total.toString() })),
+    derniers: verifies,
+    borne: scan.borne + '. Balance deltas confirm arrival; a beneficiary who paid the transaction '
+      + 'itself cannot be confirmed this way and is reported as NON_CONCLUANT, not as a failure.',
+  };
+  recentsCache.set(cle, { t: Date.now(), r: r2 });
+  return r2;
+}
+
 const clesPool = new Map();
 async function resoudreClePool(token, fenetres = 40) {
   const t = String(token).toLowerCase();
@@ -537,7 +584,7 @@ setInterval(() => {
 }, 30000).unref();
 
 const SERVIS = [
-  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-v6.html', 'deploy-v6.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'reclamer.html', 'reclamation.js', 'veille-pot.js', 'frais.html',
+  'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-v6.html', 'deploy-v6.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'reclamer.html', 'reclamation.js', 'veille-pot.js', 'veille-frais.js', 'frais.html',
   'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
@@ -1025,6 +1072,24 @@ createServer((req, res) => {
     fraisEnAttente().then((r) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
+    });
+    return;
+  }
+
+  /* ══ CE QUI EST REELLEMENT ARRIVE, ET SI C EST BIEN ARRIVE ══════════════════════════════════
+   * ⛔ DEUX QUESTIONS DIFFERENTES : /api/frais-hook dit ce qui DORT en claims, celui-ci dit ce qui
+   *    EST ARRIVE — et confronte chaque evenement au SOLDE du beneficiaire. Un hook emet ce qu il
+   *    veut ; seul un delta de solde prouve un encaissement.
+   * ⚠️ QUATRE ETATS : ARRIVE, PAS_ARRIVE, NON_CONCLUANT (le beneficiaire a paye lui-meme, l argent
+   *    fait un aller-retour et le gas rend le delta negatif), NON_LU. */
+  if (chemin === '/api/frais-recents') {
+    const heures = Math.min(168, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('h')) || 24));
+    fraisRecents(heures).then((r2) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(r2));
     }).catch((e) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
