@@ -120,9 +120,25 @@ export async function gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu }
 
 /** tip 2346: Base App / Coinbase Smart Wallet often reject eth_sendTransaction.
  *  Try EIP-5792 wallet_sendCalls → poll wallet_getCallsStatus for a tx hash. */
-async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value }) {
+/**
+ * tip 2346 + Instant Birth: EIP-5792 wallet_sendCalls.
+ * Accepts one call OR a batch [{to,data,value}]. atomicRequired: true on v2.
+ */
+export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value, calls = null }) {
   if (!eth || typeof eth.request !== 'function') return null;
   const chainId = '0x' + Number(chaineAttendue).toString(16);
+  const lot = Array.isArray(calls) && calls.length
+    ? calls.map((c) => ({
+      to: c.to,
+      data: c.data || '0x',
+      value: c.value || '0x0',
+    }))
+    : [{ to, data: data || '0x', value: value || '0x0' }];
+  for (const c of lot) {
+    if (!ADRESSE.test(String(c.to || ''))) {
+      return { etat: 'DESTINATION_INVALIDE', pourquoi: 'a batch call destination is not an address — nothing was sent' };
+    }
+  }
   let id;
   try {
     const r = await eth.request({
@@ -132,13 +148,13 @@ async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, valu
         from: compte,
         chainId,
         atomicRequired: true,
-        calls: [{ to, data: data || '0x', value: value || '0x0' }],
+        calls: lot,
       }],
     });
     id = (r && (r.id || r)) || null;
     if (typeof id === 'object' && id.id) id = id.id;
   } catch (e) {
-    /* older wallets: try 1.0 shape once */
+    /* older wallets: try 1.0 shape once (no atomicRequired) */
     try {
       const r = await eth.request({
         method: 'wallet_sendCalls',
@@ -146,12 +162,13 @@ async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, valu
           version: '1.0',
           from: compte,
           chainId,
-          calls: [{ to, data: data || '0x', value: value || '0x0' }],
+          calls: lot,
         }],
       });
       id = (typeof r === 'string') ? r : (r && r.id) || null;
     } catch (e2) {
-      return { etat: 'ECHEC_ENVOI', pourquoi: 'smart wallet sendCalls failed — ' + String((e2 && e2.message) || e2 || e) };
+      return { etat: 'ECHEC_ENVOI', pourquoi: 'smart wallet sendCalls failed — ' + String((e2 && e2.message) || e2 || e),
+        sendCallsUnsupported: /method|not supported|does not exist|4200/i.test(String((e2 && e2.message) || e2 || e) + String((e && e.message) || e)) };
     }
   }
   if (!id) return { etat: 'ECHEC_ENVOI', pourquoi: 'wallet_sendCalls returned no id' };
@@ -162,10 +179,9 @@ async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, valu
       st = await eth.request({ method: 'wallet_getCallsStatus', params: [id] });
     } catch (_) { continue; }
     const status = st && (st.status ?? st);
-    /* 200 = confirmed success in some implementations; "CONFIRMED" string in others */
     const receipts = (st && st.receipts) || [];
     const hash = receipts[0] && (receipts[0].transactionHash || receipts[0].hash);
-    if (hash) return { etat: 'ENVOYE_AA', hash: String(hash), gaz: null };
+    if (hash) return { etat: 'ENVOYE_AA', hash: String(hash), gaz: null, batchSize: lot.length };
     if (status === 100 || status === 'PENDING') continue;
     if (status === 400 || status === 500 || status === 'FAILED' || status === 'REVERTED') {
       return { etat: 'ANNULE_SUR_CHAINE', pourquoi: 'smart wallet batch failed (status ' + status + ')' };
@@ -173,6 +189,8 @@ async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, valu
   }
   return { etat: 'EN_ATTENTE', pourquoi: 'smart wallet batch sent, not confirmed yet — do not resend', hash: null };
 }
+
+
 
 /** L evenement `UserOperationEvent` de l EntryPoint ERC-4337 (v0.6 et v0.7 partagent ce topic). */
 export const TOPIC_USER_OP = '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f';
@@ -198,6 +216,41 @@ export function verdictUserOp(recu) {
     if (BigInt('0x' + m[1]) !== 1n) return false;
   }
   return logs.some((l) => l && Array.isArray(l.topics) && l.topics[0] === TOPIC_USER_OP) ? true : null;
+}
+
+/**
+ * Instant Birth: send an atomic batch when the wallet supports sendCalls.
+ * Does NOT fall back to sequential eth_sendTransaction — caller owns EOA fallback + honest N-sig copy.
+ */
+export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, calls, attendre = true, delai = 2000, essais = 30 }) {
+  if (!Array.isArray(calls) || calls.length < 1) {
+    return { etat: 'REFUSE', pourquoi: 'atomic batch is empty — nothing was sent' };
+  }
+  const garde = await gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu: compte });
+  if (!garde.ok) return { etat: garde.etat, pourquoi: garde.pourquoi };
+  noterWalletUtilise(compte);
+  const aa = await envoyerViaSendCalls({ eth, chaineAttendue, compte, calls });
+  if (!aa) return { etat: 'ECHEC_ENVOI', pourquoi: 'no ethereum provider for sendCalls', sendCallsUnsupported: true };
+  if (aa.etat === 'ENVOYE_AA' && aa.hash) {
+    if (!attendre) return { etat: 'ENVOYE_AA', hash: aa.hash, gaz: null, batchSize: calls.length };
+    let recu = null;
+    for (let i = 0; i < essais; i++) {
+      await pause(delai);
+      recu = await rpc('eth_getTransactionReceipt', [aa.hash]).catch(() => null);
+      if (recu) break;
+    }
+    if (!recu) return { etat: 'EN_ATTENTE', hash: aa.hash, gaz: null, pourquoi: 'atomic batch sent, not confirmed yet — do not resend' };
+    if (recu.status !== '0x1') {
+      return { etat: 'ANNULE_SUR_CHAINE', hash: aa.hash, gaz: null, pourquoi: 'the atomic batch reverted on chain' };
+    }
+    const uo = verdictUserOp(recu);
+    if (uo === false) {
+      return { etat: 'ANNULE_SUR_CHAINE', hash: aa.hash, gaz: null, viaSmartWallet: true,
+        pourquoi: 'the outer transaction succeeded but your smart wallet operation failed' };
+    }
+    return { etat: 'CONFIRME', hash: aa.hash, gaz: null, batchSize: calls.length, atomique: true };
+  }
+  return aa;
 }
 
 export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to, data = '0x',

@@ -680,6 +680,37 @@ export function montantsPosition(L, sqrtP, sqrtMin, sqrtMax) {
  * ⚠️ Rend `null` si le cote demande est vide dans ce regime : demander du jeton 1 a une position
  *    qui n en contient pas doit REFUSER, jamais rendre 0 — un L de 0 minterait une position vide.
  */
+/**
+ * L from a single token0 amount when price is INSIDE [sqrtMin, sqrtMax].
+ * Inverse of montantsPosition montant0 in-range. Null if not in range or amount<=0.
+ */
+export function liquiditeDepuisMontant0({ montant, sqrtP, sqrtMin, sqrtMax }) {
+  const m = BigInt(montant), p = BigInt(sqrtP), a = BigInt(sqrtMin), b = BigInt(sqrtMax);
+  if (m <= 0n || a >= b || p <= a || p >= b) return null;
+  const Q96 = 2n ** 96n;
+  return (m * p * b) / (Q96 * (b - p));
+}
+
+/**
+ * L from a single token1 amount when price is INSIDE [sqrtMin, sqrtMax].
+ */
+export function liquiditeDepuisMontant1({ montant, sqrtP, sqrtMin, sqrtMax }) {
+  const m = BigInt(montant), p = BigInt(sqrtP), a = BigInt(sqrtMin), b = BigInt(sqrtMax);
+  if (m <= 0n || a >= b || p <= a || p >= b) return null;
+  const Q96 = 2n ** 96n;
+  return (m * Q96) / (p - a);
+}
+
+/**
+ * Two-sided L = min(L0, L1) so both provided amounts fit. Null if either side fails.
+ */
+export function liquiditeBilaterale({ montant0, montant1, sqrtP, sqrtMin, sqrtMax }) {
+  const L0 = liquiditeDepuisMontant0({ montant: montant0, sqrtP, sqrtMin, sqrtMax });
+  const L1 = liquiditeDepuisMontant1({ montant: montant1, sqrtP, sqrtMin, sqrtMax });
+  if (L0 == null || L1 == null || L0 === 0n || L1 === 0n) return null;
+  return L0 < L1 ? L0 : L1;
+}
+
 export function liquiditeUnilaterale({ montant, cote, sqrtMin, sqrtMax }) {
   const m = BigInt(montant), a = BigInt(sqrtMin), b = BigInt(sqrtMax);
   if (m <= 0n) return null;

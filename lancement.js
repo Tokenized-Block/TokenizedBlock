@@ -23,6 +23,13 @@ export function tickMinAligne(espacement) {
   return Math.ceil(-887272 / e) * e;
 }
 
+/** Upper usable tick for a spacing, aligned down (<= MAX_TICK 887272). */
+export function tickMaxAligne(espacement) {
+  const e = Number(espacement);
+  if (!Number.isInteger(e) || e <= 0) return null;
+  return Math.floor(887272 / e) * e;
+}
+
 /**
  * Le tick correspondant a un prix (jeton1 par jeton0), aligne VERS LE BAS.
  * ⚠️ `Math.log` travaille en flottant : le tick rendu peut differer d une unite du tick exact.
