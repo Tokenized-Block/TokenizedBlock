@@ -124,17 +124,39 @@ async function relire() {
     lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + fee);
     const taille = BigInt(await appel(tx.selecteurs.tailleMarqueur));
     lignes.push((taille === BigInt(tx.marqueur.length) ? '✓' : '✗') + ' label length: ' + taille);
-    /* ⛔ LA DIME SE LIT SUR LA CHAINE. Ecrite dans le json, elle n est qu une intention ; lue dans le
-     *    contrat deploye, elle est un fait. Les deux doivent coincider ou on ne branche rien. */
+    /* ⛔⛔ CE QUI A ETE CORRIGE LE 2026-09-21, APRES UNE FAUSSE ALERTE. Cette page affichait
+     *     « ✗ creator tithe on chain: 20% — expected 0, DO NOT switch the app » sur un contrat
+     *     PARFAITEMENT BON. Les deux constantes sont restees DECLAREES expres, pour qu on puisse
+     *     diffuser le V6 et le V7 et voir ce qui change ; elles ne sont plus LUES dans la
+     *     repartition. Tester une valeur decorative comme si c etait la logique, c est crier au
+     *     loup — et on apprend a ignorer le rouge.
+     * ⛔ ET LE MESSAGE RECLAMAIT L IMPOSSIBLE : l app lit l etat du hook sur la chaine et bascule
+     *    toute seule. « DO NOT switch the app » demandait une action qui n existe pas. */
     const dime = BigInt(await appel(tx.selecteurs.dime));
-    lignes.push((dime === BigInt(tx.dimeCreateurPourCent) ? '✓' : '✗') + ' creator tithe on chain: ' + dime + '%'
-      + (dime === BigInt(tx.dimeCreateurPourCent) ? '' : ' — expected ' + tx.dimeCreateurPourCent + ', DO NOT switch the app'));
     const tiers = BigInt(await appel(tx.selecteurs.diviseur));
-    lignes.push((tiers === 3n ? '✓' : '✗') + ' creator share divisor: ' + tiers);
+    lignes.push('· creator tithe / divisor still declared: ' + dime + '% / ' + tiers
+      + ' — informational, this hook no longer reads them');
+    /* ⛔ LA VRAIE PREUVE : l evenement qui n existe QUE dans ce hook doit etre GRAVE dans son
+     *    bytecode. Une constante se lit ; un topic dans le code se verifie. */
+    const codeHook = String(await rpc('eth_getCode', [tx.hook, 'latest']) || '').toLowerCase();
+    const marque = String(tx.topicPreuve || '').toLowerCase().replace(/^0x/, '');
+    if (!marque) {
+      lignes.push('✗ no proof topic in the descriptor — cannot verify the payout logic');
+    } else {
+      const grave = codeHook.includes(marque);
+      lignes.push((grave ? '✓' : '✗') + ' the whole-fee-to-wallet event is engraved in the deployed code'
+        + (grave ? '' : ' — this is NOT the expected hook, do not use it'));
+    }
     const arg = tx.temoinLabel.replace(/^0x/, '').toLowerCase().padStart(64, '0');
     const porte = BigInt(await appel(tx.selecteurs.porteLeLabel + arg)) === 1n;
+    /* ⛔ LE REMEDE EST NOMME, ET IL EST FAISABLE. « DO NOT switch the app » etait impossible a
+     *    suivre : l app lit l etat du hook sur la chaine et bascule toute seule. Ce qui peut
+     *    vraiment etre fait, c est epingler l app sur le hook precedent et en deployer un corrige —
+     *    et ca se demande. */
     lignes.push((porte ? '✓' : '✗') + ' a block born through this app passes the label check ('
-      + tx.temoinLabel.slice(0, 10) + '…)' + (porte ? '' : ' — DO NOT switch the app to this hook'));
+      + tx.temoinLabel.slice(0, 10) + '…)'
+      + (porte ? '' : ' — this hook is not usable. The app picks it up on its own, so say so and it '
+        + 'will be pinned back to the previous hook while a corrected one is deployed.'));
   } catch (e) {
     lignes.push('✗ could not read the deployed hook: ' + (e.message || e));
   }

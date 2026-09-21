@@ -69,4 +69,61 @@ await hookV7Deploye({ rpc: async (m, p) => { vu = { m, adr: p[0] }; return '0x';
 eq(vu.m, 'eth_getCode', 'la sonde lit le CODE, pas un appel de fonction');
 eq(vu.adr, HOOK_V7, 'et elle le lit a l adresse du V6');
 
+// ══ 5. LE TOPIC DE PREUVE — CE QUI REMPLACE UNE FAUSSE ALERTE ══════════════════════════════════
+// ⛔⛔ CE QUI EST ARRIVE LE 2026-09-21. Apres le deploiement du V7, la page de signature a affiche
+//    « ✗ creator tithe on chain: 20% — expected 0, DO NOT switch the app ». Le contrat etait BON :
+//    DIME_CREATEUR_POUR_CENT est reste DECLARE expres, pour qu on puisse diffuser V6 et V7 et voir
+//    ce qui change. Il n est simplement plus LU dans la repartition. Ma garde testait une valeur
+//    DECORATIVE comme si c etait la logique.
+// ⛔ ET LE MESSAGE RECLAMAIT L IMPOSSIBLE : l app lit l etat du hook sur la chaine et bascule toute
+//    seule. « DO NOT switch the app » demandait une action qui n existe pas. Une alerte qui
+//    reclame l impossible est pire qu une alerte absente — on apprend a ignorer le rouge.
+// ⛔ CE QUI PROUVE VRAIMENT LA LOGIQUE : un evenement GRAVE dans le bytecode. Une constante se
+//    lit ; un topic dans le code se verifie.
+{
+  const { readFileSync } = await import('node:fs');
+  const { keccak256 } = await import('./keccak.js');
+  const enHex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const topicDe = (sig) => '0x' + enHex(keccak256(new TextEncoder().encode(sig)));
+
+  const d = JSON.parse(readFileSync(new URL('./deploy-v7.json', import.meta.url), 'utf8'));
+  const attendu = topicDe('ToutAuWallet(bytes32,address,uint256,address)');
+  eq(d.topicPreuve, attendu, 'le topic de preuve du descripteur est bien le keccak de la signature');
+  ok(d.pourquoiTopicPreuve && d.pourquoiTopicPreuve.length > 40,
+    'et le descripteur DIT pourquoi ce topic sert de preuve');
+
+  /* ⛔ LE TOPIC DOIT ETRE DANS LE BYTECODE DU V7 — sinon la page verifierait du vent. */
+  const art = (v) => JSON.parse(readFileSync(
+    new URL('../tblock-hook/out/TBlockFeeHook' + v + '.sol/TBlockFeeHook' + v + '.json', import.meta.url), 'utf8'));
+  let codeV7 = null, codeV6 = null;
+  try { codeV7 = String(art('V7').deployedBytecode.object).toLowerCase(); } catch { codeV7 = null; }
+  try { codeV6 = String(art('V6').deployedBytecode.object).toLowerCase(); } catch { codeV6 = null; }
+  if (codeV7 === null || codeV6 === null) {
+    /* ⛔ ON NE FAIT PAS SEMBLANT : sans les artefacts compiles, ce controle n a pas eu lieu. */
+    ok(false, 'artefacts forge introuvables — ce controle ne peut PAS etre considere comme passe');
+  } else {
+    const nu = attendu.replace(/^0x/, '');
+    ok(codeV7.includes(nu), 'le topic est GRAVE dans le bytecode du V7');
+    /* ⛔⛔ LE TEMOIN QUI DONNE SA VALEUR AU PRECEDENT : absent du V6. Sans lui, un topic present
+       partout ne distinguerait rien du tout. */
+    ok(!codeV6.includes(nu), 'et ABSENT de celui du V6 — c est ce qui en fait un discriminant');
+  }
+
+  /* ⛔ ET LES CONSTANTES DECORATIVES NE DOIVENT PLUS SERVIR DE VERDICT : le descripteur ne doit
+     plus porter une dime « attendue » qui ferait echouer une verification sur un contrat sain. */
+  const page = readFileSync(new URL('./deploy-v7.html', import.meta.url), 'utf8');
+  /* ⛔ ON COMPTE CE QUI EST AFFICHE, PAS CE QUI EST COMMENTE. Les occurrences restantes dans les
+     commentaires documentent le defaut et doivent SURVIVRE — une garde qui exigerait de les
+     effacer effacerait la memoire de ce qu elle garde. Le critere : aucune ligne qui POUSSE du
+     texte a l ecran ne doit reclamer une bascule manuelle. */
+  const affichees = page.split('\n')
+    .filter((l) => l.includes('lignes.push') && l.includes('DO NOT switch the app'));
+  eq(affichees.length, 0, 'aucune ligne AFFICHEE ne reclame une bascule manuelle');
+  ok(/DO NOT switch the app/.test(page), 'mais la trace du defaut reste dans les commentaires');
+  ok(/pinned back to the previous hook/.test(page),
+    'et le remede nomme est REELLEMENT faisable');
+  ok(/informational, this hook no longer reads them/.test(page),
+    'elle presente la dime comme informative, pas comme un verdict');
+}
+
 console.log('test-hook-v7 : ' + n + ' assertions, OK');
