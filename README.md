@@ -123,7 +123,7 @@ this file exists to remove.
 ```bash
 git switch feat/auto-salt-create
 node devises-admises.mjs
-node ou-vit-le-volume.mjs 2
+node ou-vit-le-volume.mjs 1
 node reference-frais.mjs
 ```
 
@@ -163,16 +163,26 @@ would not be the lever — discoverability would be. It is a testable claim, so 
 `ou-vit-le-volume.mjs` reads every `Initialize` on the Uniswap v4 PoolManager over a window, keeps
 the pools with a B-20 side, then counts every `Swap` and splits them by hook.
 
-Measured over 2 days ending 2026-09-21, **100 % of blocks read** (zero unreadable):
+Measured over 1 day ending 2026-09-21, **100 % of blocks read** (zero unreadable):
 
-| | pools | swaps |
-|---|---|---|
-| pools with **no hook** | 28 | **282** |
-| pools **with a hook** | 420 | **43 263** |
+| | pools | swaps | **distinct addresses** | swaps per address |
+|---|---|---|---|---|
+| pools with **no hook** | 20 | 282 | **19** | 4.3 |
+| pools **with a hook** | 242 | 25 395 | **35** | **725.6** |
 
-**The claim is refuted.** B-20 volume is not on free pools — it is overwhelmingly on hooked ones,
-belonging to other people's hooks. B-20 tokens do get traded, at scale, through pools that charge a
-fee. Ours are simply not among them.
+**The claim is refuted, and then the answer turns out to be worse than either side expected.**
+
+Swap *count* is not on free pools — it is overwhelmingly on hooked ones belonging to other teams, so
+a hook does not repel traders. But 725 swaps per address is automation, not demand. The column that
+describes buyers is the address column, and it says that across the whole of Base, in a day,
+**54 distinct addresses** touched a newly-born B-20 pool at all.
+
+So the problem is not our fee rate, not the pair currency, and not a missing card on-ramp. There is
+no large pool of B-20 buyers being captured by someone else. There is barely a pool of buyers.
+
+⛔ An earlier version of this section reported only the swap counts and concluded "B-20 tokens do get
+traded, at scale". That was wrong in the way that matters, and it is corrected here rather than
+edited away: 43 263 swaps looked like a crowd, and it was a handful of bots.
 
 ⛔ Two bounds, both load-bearing:
 - Only pools **born inside the window** are seen. An older, active pool does not appear.
