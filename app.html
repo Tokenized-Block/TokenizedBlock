@@ -2035,7 +2035,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookDeploye, hookV2Deploye, hookV3Deploye, hookV4Deploye, hookV5Deploye, hookV6Deploye, hookV7Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -7081,18 +7081,12 @@ async function calculerLancement() {
        *    le hook precedent, jamais l inverse. */
       /* ⛔ LE V8 EST LU AVANT LE V7 : c est lui qui porte le taux de 0,5 %. Tant qu il n est pas
        *    deploye, on reste sur le V7 — et « NON_LU » n est pas « DEPLOYE ». */
-      const etatV8 = await hookV8Deploye({ rpc });
-      const etatV7 = await hookV7Deploye({ rpc });
-      const etatV6 = await hookV6Deploye({ rpc });
-      const etatV5 = mainnet ? 'DEPLOYE' : await hookV5Deploye({ rpc });
-      const etatV4 = mainnet ? 'DEPLOYE' : await hookV4Deploye({ rpc });
-      const hooks = etatV8 === 'DEPLOYE' ? HOOK_V8
-        : etatV7 === 'DEPLOYE' ? HOOK_V7
-        : etatV6 === 'DEPLOYE' ? HOOK_V6
-        : etatV5 === 'DEPLOYE' ? HOOK_V5
-          : etatV4 === 'DEPLOYE' ? HOOK_V4
-            : deviseLancement ? undefined
-              : etatHook === 'DEPLOYE' ? HOOK_PREVU : undefined;
+      /* ⛔⛔ UN SEUL ENDROIT CHOISIT LE HOOK (tokenomics.js `hookCourant`). Cette echelle existait
+       *     ici en DOUBLE : l autre exemplaire, dans Create « une seule signature », ecrivait
+       *     HOOK_V5 EN DUR — et comme sa garde interroge un element absent de la page, ce chemin
+       *     tourne toujours. Tous les marches du chemin rapide s ouvraient donc sur le V5. C est la
+       *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
+      const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook });
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
        *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
@@ -8990,15 +8984,22 @@ let sansGroupe = false;
 async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, e }) {
   const eth = window.ethereum;
   if (sansGroupe || !eth || Number(CHAINE) !== 8453 || utiliseCreateRouter()) return 'SANS';
+  /* ⛔⛔ CETTE GARDE N A JAMAIS RIEN GARDE : `#cVieDirecte` n existe dans AUCUNE page servie, donc
+   *     `$('#cVieDirecte')` rend null et la condition est toujours fausse. Elle est laissee telle
+   *     quelle — elle ne nuit pas — mais elle est ECRITE ICI pour qu on cesse de croire que ce
+   *     chemin serait optionnel : sur mainnet, il tourne a chaque Create. */
   if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
-  /* ETH -> hook V2 ; USDC, cbBTC, actions (liste V3) -> hook V3 (Phil 2026-09-19 : « fais aussi USDC et actions ») */
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
   if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
-  /* ⛔ UN SEUL HOOK DEPUIS LE 2026-09-20 : le V5 accepte ETH ET les 15 devises, comme le V4. */
-  const hook = HOOK_V5;
-  void devise;
-  /* le V5 est deploye pour toujours sur mainnet (code LU le 2026-09-20) : plus de relecture qui pourrait echouer */
+  /* ⛔⛔ LE HOOK EST LU, PLUS ECRIT EN DUR. Il valait `HOOK_V5` ici pendant que le parcours pas a pas
+   *     lisait la chaine : le chemin RAPIDE — celui que tout le monde emprunte — ouvrait donc ses
+   *     marches sur le V5 (3 %, dont 26,67 % au createur) alors que les V6, V7 et V8 etaient
+   *     deployes et verifies. Mesure du 2026-09-21 : 0 marche sur les trois. La cause etait cette
+   *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
+   *     diverger — il n y en a plus qu un. */
+  const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise });
+  if (!hook) return 'SANS';
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);

@@ -52,7 +52,9 @@ export const HOOK_V4 = '0x11FCd588c96b1781cc88B8B9F349B6067D9BE4c4';
  *    createur (33,33 % -> 26,67 % du frais).
  *    ⚠️ IL NE REPARE RIEN DU PASSE : le hook est dans la PoolKey, donc chaque pool garde le sien. */
 export const HOOK_V5 = '0x799136c3F5f572f1597b5B7E067D3eE45Fe4A4C4';
-/* ⛔ HOOK V6 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+/* ⛔ HOOK V6 — DEPLOYE (code LU sur la chaine le 2026-09-21 ; le commentaire disait encore
+ *    « pas encore deploye » un jour apres la transaction — un commentaire perime ment aussi longtemps
+ *    qu on le lit).
  *    Adresse obtenue par CREATE2 et verifiee par DEUX chemins independants : HookMiner dans forge, et
  *    un recalcul keccak en JavaScript a partir du meme sel et du meme initcode. Bits de permission
  *    0x24cc = beforeInitialize, afterAddLiquidity, beforeSwap, afterSwap, afterSwapReturnsDelta et
@@ -65,7 +67,7 @@ export const HOOK_V5 = '0x799136c3F5f572f1597b5B7E067D3eE45Fe4A4C4';
  *    ⚠️ SON ETAT EST TOUJOURS LU SUR LA CHAINE, jamais ecrit en dur : tant que la transaction n est
  *       pas signee, l app doit continuer de lancer sur le V5. */
 export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
-/* ⛔ HOOK V7 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+/* ⛔ HOOK V7 — DEPLOYE (code LU sur la chaine le 2026-09-21).
  *    Adresse verifiee par DEUX chemins independants (HookMiner dans forge + recalcul keccak en JS),
  *    et un eth_call de la transaction rend exactement cette adresse.
  *    CE QUE LE V7 CHANGE : 100 % du frais va au wallet. La part du createur est SUPPRIMEE.
@@ -74,7 +76,7 @@ export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
  *       aucun createur exterieur sur la fenetre. Gain mesure : +0,001019868 ETH sur 14 j, soit +50 %.
  *    ⛔ Bits 0x24cc, IDENTIQUES au V6 : le V7 n ajoute aucune capacite, il ne touche aucun verrou. */
 export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
-/* ⛔ HOOK V8 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+/* ⛔ HOOK V8 — DEPLOYE (code LU sur la chaine le 2026-09-21) et HOOK_FEE() lu a 5000 / 1e6 = 0,5 %.
  *    CE QU IL CHANGE, ET RIEN D AUTRE : le taux passe de 3 % a 0,5 % (HOOK_FEE 30000 -> 5000).
  *    ⛔⛔ POURQUOI IL DOIT EXISTER AVANT LE PREMIER MARCHE : le taux est une CONSTANTE et le hook
  *       est dans la PoolKey. Un marche ouvert sur le V7 paierait 3 % POUR TOUJOURS — aucune
@@ -177,4 +179,42 @@ export async function hookDeploye({ rpc }) {
     const code = String(await rpc('eth_getCode', [HOOK_PREVU, 'latest']) || '');
     return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
   } catch { return 'NON_LU'; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * LE CHOIX DU HOOK D UN NOUVEAU MARCHE — UNE SEULE FONCTION, POUR LES DEUX CHEMINS.
+ *
+ * ⛔⛔ LE DEFAUT QUE CETTE FONCTION EXISTE POUR TUER (mesure du 2026-09-21). L app avait DEUX
+ *     chemins d ouverture de marche, et ils ne choisissaient pas le meme hook :
+ *       · Launch pas a pas (app.html:7089) lisait la chaine et prenait le plus recent deploye ;
+ *       · Create « une seule signature » (app.html:8999) ecrivait `const hook = HOOK_V5;` EN DUR.
+ *     Or la garde censee desactiver ce second chemin, `$('#cVieDirecte')`, interroge un element qui
+ *     N EXISTE PAS dans la page : elle est donc toujours fausse, et ce chemin tourne TOUJOURS.
+ *     Consequence mesuree : 0 marche sur les V6, V7 et V8 apres leur deploiement. On cherchait une
+ *     explication du cote de la demande ; elle etait dans une constante.
+ *
+ * ⛔ LA LECON, ECRITE ICI PARCE QU ELLE S EST DEJA PRODUITE AILLEURS : quand un choix existe en deux
+ *    exemplaires, le correctif applique a l un ne suit pas l autre. Le choix n a donc plus qu un
+ *    seul exemplaire, et un test refuse qu un second reapparaisse.
+ *
+ * ⛔ « NON_LU » N EST PAS « DEPLOYE » : un noeud qui tousse fait retomber sur le hook precedent,
+ *    jamais l inverse. Un hook absent ne doit jamais etre choisi par accident.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Le hook sur lequel un NOUVEAU marche doit s ouvrir. Rend `undefined` si aucun ne convient.
+ * @param {object} o
+ * @param {Function} o.rpc          appel JSON-RPC
+ * @param {boolean}  o.mainnet      sur Base mainnet, V4 et V5 sont deployes pour toujours (code LU)
+ * @param {boolean}  o.avecDevise   la paire n est pas l ETH natif — le V1 ne sait pas les traiter
+ * @param {string}   o.etatV1       etat deja lu du V1, pour ne pas le relire
+ */
+export async function hookCourant({ rpc, mainnet = false, avecDevise = false, etatV1 = 'NON_LU' }) {
+  if (await hookV8Deploye({ rpc }) === 'DEPLOYE') return HOOK_V8;
+  if (await hookV7Deploye({ rpc }) === 'DEPLOYE') return HOOK_V7;
+  if (await hookV6Deploye({ rpc }) === 'DEPLOYE') return HOOK_V6;
+  if ((mainnet ? 'DEPLOYE' : await hookV5Deploye({ rpc })) === 'DEPLOYE') return HOOK_V5;
+  if ((mainnet ? 'DEPLOYE' : await hookV4Deploye({ rpc })) === 'DEPLOYE') return HOOK_V4;
+  /* ⛔ Le V1 n admet que l ETH : lui donner une devise ouvrirait un marche qu il ne sait pas taxer. */
+  if (avecDevise) return undefined;
+  return etatV1 === 'DEPLOYE' ? HOOK_PREVU : undefined;
 }
