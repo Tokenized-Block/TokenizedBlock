@@ -80,7 +80,20 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   ui.innerHTML = '<button type="button" data-cam="plus" aria-label="Zoom in" title="Zoom in">+</button>'
     + '<button type="button" data-cam="moins" aria-label="Zoom out" title="Zoom out">−</button>'
     + '<button type="button" data-cam="tout" aria-label="Draw a new centre of the universe" title="Draw a new centre of the universe — every block has the same chance">⤢</button>'
-    + '<button type="button" data-cam="auto" aria-label="Auto-rotate" title="Auto-rotate on / off">⟳</button>';
+    + '<button type="button" data-cam="auto" aria-label="Auto-rotate" title="Auto-rotate on / off">⟳</button>'
+    /* ⛔⛔ LE LIEN X VIT DANS CETTE COLONNE, ET C EST LE CORRECTIF (Phil, 2026-09-21 : « deplace mon
+     *     X en bas a droite pour pas etre dans le champ et fais juste logo X »). Il etait pose dans
+     *     la legende de la carte, ou il chevauchait ces memes boutons de zoom. Le mettre DANS la
+     *     colonne le rend increvable : il est en bas a droite par CONSTRUCTION, il ne peut plus
+     *     recouvrir un controle puisqu il en est un voisin de flex, et il suit le decalage
+     *     `.mapZoom.decale` quand le panneau lateral s ouvre — sans qu on ait a le repositionner.
+     * ⛔ LOGO SEUL : la poignee ecrite prenait une ligne entiere par-dessus la carte. Le nom reste
+     *    dans `aria-label` et `title`, donc rien n est perdu pour un lecteur d ecran.
+     * ⛔ `rel="noopener noreferrer"` n est pas decoratif : sans `noopener`, la page ouverte garde une
+     *    poignee sur celle-ci via `window.opener` et peut la rediriger.
+     * ⛔ ADRESSE RECOPIEE du message de Phil du 2026-09-21, jamais de memoire. */
+    + '<a class="lienX" href="https://x.com/Clansy314495853" target="_blank" rel="noopener noreferrer"'
+    + ' aria-label="The builder on X — opens in a new tab" title="The builder on X">𝕏</a>';
   map.appendChild(ui);
   const compteur = document.createElement('div');
   compteur.className = 'mapAide';

@@ -361,9 +361,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    redemande donc les clics pour lui seul, sans les rendre a toute la legende.
    ⛔ LA LECON : « le lien est dans le HTML » et « le lien se clique » sont deux mesures
    differentes. La premiere etait verte pendant que la seconde etait rouge. */
-.lienX{margin-left:auto;pointer-events:auto;color:var(--doux);text-decoration:none;
-  border-bottom:1px solid transparent;white-space:nowrap}
-.lienX:hover,.lienX:focus-visible{color:var(--texte);border-bottom-color:var(--accent)}
+/* ⛔⛔ LE LIEN X EST UN VOISIN DES CONTROLES DE CARTE, pas un texte pose dessus. Il vivait dans
+   `.mapLeg`, qui porte `pointer-events:none` pour qu on puisse faire GLISSER la carte a travers la
+   legende : le lien en heritait et etait present, visible, et INCLIQUABLE — mesure le 2026-09-21
+   avec `document.elementFromPoint()`, qui rendait la carte et pas le lien.
+   ⛔ Depuis qu il est DANS `.mapZoom`, le probleme ne peut plus revenir : il est un enfant de flex
+   au meme titre que les boutons, donc il recoit les clics comme eux et ne peut pas les recouvrir.
+   `pointer-events:auto` reste par ceinture, au cas ou il serait replace ailleurs un jour. */
+.lienX{pointer-events:auto;display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
+  background:var(--fond2,rgba(12,15,20,.72));color:var(--doux);text-decoration:none;
+  font-size:16px;line-height:1;backdrop-filter:blur(6px)}
+.lienX:hover,.lienX:focus-visible{color:var(--texte);border-color:var(--accent)}
+.lienX:active{transform:scale(.92)}
 /* ⛔ UN LIEN, PAS UN BOUTON PLEIN : il propose une explication, il ne reclame pas l attention. */
 .lienLearn{appearance:none;border:0;background:none;color:var(--accent2);font:inherit;font-size:11.5px;
   font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
@@ -966,12 +976,8 @@ details[open] > summary::before{transform:rotate(90deg)}
                Replaying… ». -->
           <span id="mapEtat"></span>
           <!-- Phil (2026-09-19) : ce lien est devenu le bouton du haut « ? What am I looking at » — plus de doublon ici -->
-          <!-- ⛔ LIEN X DE PHIL — ADRESSE RECOPIEE DE SON MESSAGE DU 2026-09-21, jamais de memoire.
-               `rel="noopener noreferrer"` n est pas decoratif : sans `noopener`, la page ouverte
-               garde une poignee sur celle-ci via `window.opener` et peut la rediriger. Un lien
-               sortant se ferme derriere lui. -->
-          <a class="lienX" href="https://x.com/Clansy314495853" target="_blank" rel="noopener noreferrer"
-             aria-label="The builder on X — opens in a new tab">𝕏 @Clansy314495853</a>
+          <!-- ⛔ LE LIEN X A DEMENAGE dans la colonne des controles de la carte (map3d.js) :
+               ici il chevauchait les boutons de zoom. Phil, 2026-09-21 : « pas etre dans le champ ». -->
         </div>
         <!-- tip 0013: Map surfaces Hooked / TBGAS deep link — gas/example fee path. No fee addr in UI. -->
         <p class="note" id="mapHookedPath" style="margin:8px 0 0" hidden>
@@ -1532,7 +1538,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260921-0194" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260921-0195" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
