@@ -1532,7 +1532,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260921-0191" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260921-0192" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1951,7 +1951,7 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
 /* ⛔ Phil (test « Paired with ») : un bouton disait « Bring it to life — 0.000379689641686885 ETH ». A L ECRAN : 6 decimales
  *    au plus ; formaterEthCourt reste EXACT pour remplir un champ qui sera signe (bouton MAX). */
 const ethLisible = (w) => arrondiAffichage(w, 6);
@@ -7164,14 +7164,22 @@ async function assurerFraisLancementWei(force = false) {
   if (force || ethUsd === null) await lirePrixEth();
   if (ethUsd === null) return null;
   let w = weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
-  /* ⛔ P0 2026-09-15: same immutable floor as CreateRouter — Launch must not silently underpay FEE_WALLET. */
-  if (w != null && w < CREATE_FEE_WEI_FLOOR) w = CREATE_FEE_WEI_FLOOR;
+  /* ⛔⛔ LE PLANCHER EST LE PRIX MESURE DU MARCHE, PLUS LE MINIMUM DU CreateRouter (2026-09-21).
+   *     Il valait 0,0003 ETH, et comme ~1 $ vaut moins que ca au prix actuel de l ETH, c est ce
+   *     plancher qui s appliquait a chaque ouverture. La mediane LUE sur les 103 marches ouverts en
+   *     un jour par le hook le plus actif de Base vaut 0,001001 ETH : on demandait donc trois fois
+   *     moins que le marche, au seul cote qui paie. Decision de Phil, 2026-09-21.
+   * ⛔ ON PREND LE PLUS GRAND DES DEUX : si l ETH s effondrait, ~1 $ pourrait depasser 0,001 ETH, et
+   *    un plancher qui devient un PLAFOND serait exactement le defaut inverse. */
+  if (w != null && w < FRAIS_OUVERTURE_WEI) w = FRAIS_OUVERTURE_WEI;
   return w;
 }
 
-/** MAIN Launch life fee is ready only when wei is measured AND at/above CreateRouter floor. */
+/** Le frais d ouverture n est PRET que s il est mesure ET au moins au prix du marche. */
 function fraisLancementPret(wei) {
-  return wei != null && BigInt(wei) >= CREATE_FEE_WEI_FLOOR;
+  /* ⛔ `null` et `undefined` echouent ici AVANT le BigInt : `BigInt(null)` vaut 0n et passerait
+   *    silencieusement pour un montant valide si l ordre etait inverse. */
+  return wei != null && BigInt(wei) >= FRAIS_OUVERTURE_WEI;
 }
 
 /**

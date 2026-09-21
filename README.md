@@ -21,13 +21,24 @@ creator included — can mint more, or change its name, logo or description.
 
 | moment | cost | where it goes |
 |---|---|---|
-| **Create** | **free** — `createB20` on the B-20 factory, `value` = 0 | nowhere; only network gas |
-| **Launch** (open the market) | **0.0003 ETH** life fee, paid inside `inscrire` | the fee wallet |
+| **create a block and open its market** | **0.001 ETH**, once, in one signature | the fee wallet, in full |
 | **each swap** | **0.5 %** of the swap, taken by the hook | the fee wallet, in full |
 
-Creation has no service fee. An earlier version of this file claimed a `0.001 ETH` create fee; the
-code says otherwise — `utiliseCreateRouter()` returns `false`, so Create goes straight to the
-factory at value zero. That claim was wrong, and it is retracted here rather than quietly deleted.
+**Changed on 2026-09-21, and the reason is a measurement.** Opening a market used to cost
+0.0003 ETH — not by choice, but because that was a floor left over from an older contract, and a
+`$1` target in ETH falls below it at current prices. So the floor applied to every launch, silently.
+
+`prix-du-lancement.mjs` then read the 103 markets opened in one day by the busiest hook on Base:
+43 distinct creators, **median sent 0.001001 ETH**. We were asking three times less than the market,
+from the only side that actually pays — while charging 0.5 % to a swap side that, measured, barely
+exists. The new price is that median, rounded down.
+
+⛔ This is not a revenue forecast. It aligns our price with the market's; it brings in no creator by
+itself. The effect will be measured — creations before and after — and published either way.
+
+⛔ Two earlier claims in this file are retracted rather than deleted: it once said a `0.001 ETH`
+create fee existed when it did not, and then that "Create is free" when opening a market cost
+0.0003 ETH. Both were true to the letter of one call and wrong to anyone reading them.
 
 Fee wallet, and the only one: `0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4`.
 Read it yourself — `feeWallet()` on the hook returns it.

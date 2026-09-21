@@ -40,6 +40,35 @@ export const CREATE_ROUTER = '0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */
 export const CREATE_FEE_WEI_FLOOR = 300000000000000n;
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ LE PRIX D OUVERTURE D UN MARCHE — 0,001 ETH, ET CE CHIFFRE EST MESURE (2026-09-21).
+ *
+ * D OU IL VIENT, EXACTEMENT : `prix-du-lancement.mjs` a lu, sur UN jour et 22 fenetres sans une
+ * seule ratee, les 103 marches ouverts par le hook le plus actif de Base. 43 createurs distincts,
+ * et la MEDIANE de ce qu ils ont envoye vaut 0,001001 ETH. Ce n est donc ni un chiffre rond choisi
+ * pour faire joli, ni un prix recopie d un concurrent qui l annoncait : c est ce que le marche
+ * paie, lu sur les transactions elles-memes.
+ *
+ * POURQUOI ON CHANGE. Deux mesures du meme jour : ~885 pools B20 naissent par jour sur Base, et
+ * seulement ~54 adresses distinctes y echangent. Nous prenions 0,5 % aux swappeurs — le cote qui
+ * n existe presque pas — et ZERO aux createurs, le seul cote qui paie. Resultat mesure sur 14
+ * jours : 0,002798464 ETH. Le concurrent a encaisse 10,865 ETH de createurs en UNE journee.
+ *
+ * ⛔ DECISION DE PHIL DU 2026-09-21, et elle remplace explicitement la regle dure tip 2349
+ *    (« Creation stays FREE »). Je ne l ai pas prise seul : la mesure a ete posee, les options
+ *    aussi, et c est lui qui a tranche.
+ *
+ * ⛔ COMMENT C EST ENCAISSE, SANS UN SEUL CONTRAT NOUVEAU : le hook reverse l INTEGRALITE de
+ *    `msg.value` au wallet de frais, pas seulement son minimum — `feeWallet.call{value: msg.value}`
+ *    dans `inscrire`. L app envoie donc ce montant a `inscrire`, dans le MEME lot atomique que la
+ *    creation. Un seul paiement, une seule signature, et rien qui puisse arriver a moitie.
+ *
+ * ⛔ CE QUE CE CHIFFRE N EST PAS : une promesse de revenu. Il aligne notre prix sur celui du
+ *    marche ; il ne fait venir aucun createur. L effet doit etre MESURE apres coup — creations
+ *    avant / apres — et publie meme s il est negatif.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+export const FRAIS_OUVERTURE_WEI = 1000000000000000n;
+
 /** 0,00005 ETH — ancien ecran Pages (garde pour tests d alignement). */
 export const FRAIS_HERITE_WEI = 50000000000000n;
 export const FRAIS_REEL_WEI = FRAIS_HERITE_WEI;
@@ -72,12 +101,17 @@ export function fraisCreationUsd(chaine) {
  * @param {bigint|null} soldeEth  solde ETH natif LU, ou null
  */
 export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, soldeEth = null) {
-  /* tip 2349: Create free — phrase ignores create wei; Launch owns life fee. */
+  /* ⛔⛔ CETTE PHRASE EST LA PREMIERE QUE LIT UN CREATEUR, et elle annoncait « Create is free.
+   *     Bringing it to life costs ≈ $1 in ETH. » Les deux moities sont devenues fausses le
+   *     2026-09-21 : le prix d ouverture est passe a 0,001 ETH (mediane MESUREE du marche), et il
+   *     est paye dans la meme signature que la creation. Annoncer un prix puis en faire signer un
+   *     autre est la seule facon sure de perdre quelqu un au moment du wallet.
+   * ⛔ LE MONTANT EST DONNE EN ETH, pas en dollars : c est ce que le wallet affichera. */
   void ethUsd; void fraisWei; void soldeEth;
   const main = Number(chaine) === 8453;
   return main
-    ? 'Create is free. Bringing it to life costs ≈ $1 in ETH.'
-    : 'Create free (Practice).';
+    ? 'Creating a block and opening its market: 0.001 ETH, once, in one signature.'
+    : 'Free on Practice — nothing is paid here.';
 }
 
 /** Same FRAIS_USD on MAIN — Launch / wake market life fee (stage 2). Practice = 0. */
@@ -98,8 +132,16 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
     /* tip 0035 (Phil : pas de jargon, pas ou vont les frais — juste le montant) */
     return 'Reading the ETH price… bringing it to life costs ≈ $' + usd + '.';
   }
-  let base = 'Bringing it to life: ' + formaterEthCourt(fraisWei) + ' ETH'
-    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH). Create itself is free.';
+  /* ⛔⛔ « Create itself is free » A ETE RETIRE ICI LE 2026-09-21, et pas par gout du changement :
+   *     depuis que le frais d ouverture vaut 0,001 ETH, cette phrase restait vraie a la lettre —
+   *     l appel `createB20` part bien a value zero — et fausse pour celui qui la lit, puisqu il ne
+   *     peut pas creer un block AVEC son marche sans payer. Une phrase exacte qui trompe est pire
+   *     qu une phrase approximative : elle se defend.
+   * ⛔ ON DIT AUSSI OU VA L ARGENT, EN CLAIR. Le montant est affiche en ETH d abord parce que c est
+   *    ce que le wallet fera signer ; le dollar n est qu une aide a la lecture. */
+  let base = 'Opening its market: ' + formaterEthCourt(fraisWei) + ' ETH'
+    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH),'
+    + ' paid once, in the same signature that creates it.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Not enough ETH in your wallet yet.';
