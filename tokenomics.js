@@ -65,6 +65,15 @@ export const HOOK_V5 = '0x799136c3F5f572f1597b5B7E067D3eE45Fe4A4C4';
  *    ⚠️ SON ETAT EST TOUJOURS LU SUR LA CHAINE, jamais ecrit en dur : tant que la transaction n est
  *       pas signee, l app doit continuer de lancer sur le V5. */
 export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
+/* ⛔ HOOK V7 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+ *    Adresse verifiee par DEUX chemins independants (HookMiner dans forge + recalcul keccak en JS),
+ *    et un eth_call de la transaction rend exactement cette adresse.
+ *    CE QUE LE V7 CHANGE : 100 % du frais va au wallet. La part du createur est SUPPRIMEE.
+ *    ⚠️ CE QUE CA COUTE : c etait le seul argument d un createur exterieur pour lancer ici.
+ *       Mesure du 2026-09-21 (14 j, 303/303 fenetres) : 2 lancements, tous deux par nos wallets —
+ *       aucun createur exterieur sur la fenetre. Gain mesure : +0,001019868 ETH sur 14 j, soit +50 %.
+ *    ⛔ Bits 0x24cc, IDENTIQUES au V6 : le V7 n ajoute aucune capacite, il ne touche aucun verrou. */
+export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
 /** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
  *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
  *     Les retirer d ici ferait disparaitre nos propres marches du fil Live et des frais affiches. */
@@ -72,7 +81,7 @@ export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
     || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase()
-    || x === HOOK_V6.toLowerCase();
+    || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase();
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
@@ -102,6 +111,13 @@ export async function hookV4Deploye({ rpc }) {
   } catch { return 'NON_LU'; }
 }
 /** Le V5 est-il deploye ? Lu sur son code, jamais suppose. */
+export async function hookV7Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V7, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
+/** Le V6 est-il deploye ? Lu sur son code. */
 export async function hookV6Deploye({ rpc }) {
   try {
     const code = String(await rpc('eth_getCode', [HOOK_V6, 'latest']) || '');

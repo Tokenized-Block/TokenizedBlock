@@ -27,6 +27,7 @@ export const EXCLUS = Object.freeze({
   '0x11fcd588c96b1781cc88b8b9f349b6067d9be4c4': 'notre hook V4',
   '0x799136c3f5f572f1597b5b7e067d3ee45fe4a4c4': 'notre hook V5',
   '0xd71af554b5b3dcb6bb17946cfa3c41860a50a4cc': 'notre hook V6',
+  '0xb5680fc44ea440fc223d1ca62f2b4f261fda24cc': 'notre hook V7',
 });
 
 export const ETATS_PART = Object.freeze(['PAYABLE', 'AUCUN_DETENTEUR', 'RIEN_A_PARTAGER']);
