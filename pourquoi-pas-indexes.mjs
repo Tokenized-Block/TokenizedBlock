@@ -52,17 +52,56 @@ async function rpc(m, p) {
   throw new Error(dernier);
 }
 
-/** Les swaps d UNE pool, sur toute la plage. ⛔ Le filtre porte sur le poolId : peu de logs
- *  correspondent, donc une plage large passe la ou un balayage complet echouerait. Rend `null` si
- *  la question n a pas pu etre posee — un echec reseau n est pas un zero. */
-async function swapsDeLaPool(poolId, de, a) {
-  try {
-    const logs = await rpc('eth_getLogs', [{ address: POOLM, topics: [TOPIC_SWAP, poolId],
-      fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16) }]);
-    const par = new Set();
-    for (const l of logs || []) par.add(adr(l.topics[2]));
-    return { n: (logs || []).length, adresses: par.size };
-  } catch (e) { return null; }
+/* ⛔⛔ PREMIERE VERSION, ET ELLE A ECHOUE — ECRIT ICI PLUTOT QUE REMPLACE EN SILENCE. Elle
+ *     interrogeait les `Swap` POOL PAR POOL avec le poolId en topic, en pariant qu un filtre etroit
+ *     ferait passer une plage large. Le noeud a refuse LES 21 REQUETES : 7 des notres, 14 temoins.
+ *     Le script a affiche « illisible » et REFUSE de conclure — bon comportement, mais zero reponse.
+ *     La lecon : le plafond du noeud porte sur la PLAGE, pas sur le nombre de logs rendus.
+ *
+ * ⛔ LE CHEMIN QUI MARCHE : compter les `Transfer` DU JETON (`address` = le block), en coupant la
+ *    fenetre en deux a chaque echec. C est ce que fait `bridge-devises-liquidite.mjs`, qui a lu
+ *    16 devises sur 16 sans un seul trou.
+ * ⛔ ET C EST MEME PLUS SUR QUE COMPTER LES SWAPS : un jeton qui n a JAMAIS bouge ne peut pas avoir
+ *    ete echange. Un Transfer de plus qu une frappe initiale prouve qu il s est passe quelque chose.
+ *    La borne : un Transfer n est pas un swap — une distribution en produit aussi. On compte donc
+ *    les ADRESSES distinctes a cote, qui separent un vrai va-et-vient d un arrosage. */
+/* ⛔⛔ TROISIEME VERSION, ET LA RAISON DES DEUX PRECEDENTES EST MESUREE, PAS SUPPOSEE. Le noeud
+ *     repond textuellement : « eth_getLogs is limited to a 2,000 range ». Le plafond porte donc sur
+ *     la PLAGE et pas sur le volume rendu — c est pour ca qu un filtre etroit sur le poolId n a rien
+ *     sauve, et qu une plage large sur une adresse de jeton peu bavarde echoue tout autant.
+ *
+ * ⛔ Balayer 21 jetons x 303 fenetres ferait 6 363 requetes. Or `address` accepte un TABLEAU : un
+ *    SEUL balayage de 303 fenetres suffit pour tous les jetons a la fois, et on trie a l arrivee.
+ *    C est vingt fois moins d appels pour exactement la meme reponse. */
+const TOPIC_TRANSFER = topicDe('Transfer(address,address,uint256)');
+async function mouvementsDeTous(jetons, de, a) {
+  const par = new Map(jetons.map((j) => [j, { n: 0, adresses: new Set() }]));
+  let blocsNonLus = 0, appels = 0;
+  async function balayer(d, f) {
+    appels++;
+    let logs;
+    try {
+      logs = await rpc('eth_getLogs', [{ address: jetons, topics: [TOPIC_TRANSFER],
+        fromBlock: '0x' + d.toString(16), toBlock: '0x' + f.toString(16) }]);
+    } catch (e) {
+      if (f - d + 1 > 25) {
+        const m = d + Math.floor((f - d) / 2);
+        await balayer(d, m); await balayer(m + 1, f);
+        return;
+      }
+      blocsNonLus += f - d + 1;
+      return;
+    }
+    for (const l of logs || []) {
+      const e = par.get(String(l.address).toLowerCase());
+      if (!e) continue;
+      e.n++;
+      e.adresses.add(adr(l.topics[1]));
+      e.adresses.add(adr(l.topics[2]));
+    }
+  }
+  for (let b = de; b <= a; b += PAS_LOGS) await balayer(b, Math.min(b + PAS_LOGS - 1, a));
+  return { par, blocsNonLus, appels };
 }
 
 const JOURS = Number(process.argv[2] || 14);
@@ -105,23 +144,29 @@ if (!nos.length || !autres.length) {
 }
 
 /* ══ 2. LE SUSPECT (1) : ONT-ELLES ETE ECHANGEES ? ═══════════════════════════════════════════ */
-console.log('\n=== 2. SUSPECT (1) — LES SWAPS, POOL PAR POOL ===');
-async function compter(lignes, nom) {
-  let avecSwap = 0, total = 0, illisibles = 0, adresses = 0;
-  for (const p of lignes) {
-    const r = await swapsDeLaPool(p.poolId, p.bloc, tete);
-    if (r === null) { illisibles++; continue; }
-    p.swaps = r.n; p.swappeurs = r.adresses;
-    total += r.n; adresses += r.adresses;
-    if (r.n > 0) avecSwap++;
+console.log('\n=== 2. SUSPECT (1) — LE JETON A-T-IL JAMAIS BOUGE ? ===');
+/* ⛔ Un meme jeton peut avoir plusieurs pools : on ne l interroge qu UNE fois. */
+const jetonsNos = [...new Set(nos.map((p) => p.jeton))];
+const jetonsAutres = [...new Set(autres.map((p) => p.jeton))].filter((j) => !jetonsNos.includes(j));
+/* ⛔ LA FENETRE EST LA MEME POUR LES DEUX GROUPES. Interroger les notres depuis leur naissance et
+ *    les temoins depuis la leur donnerait a l un plus de temps qu a l autre — et l ecart mesure
+ *    viendrait de la duree, pas du produit. */
+const r = await mouvementsDeTous([...jetonsNos, ...jetonsAutres], DE, tete);
+console.log('   appels : ' + r.appels + ' · blocs non lus : ' + r.blocsNonLus
+  + (r.blocsNonLus ? '  ⛔ PLANCHER, verdict refuse' : '  ✅ lecture complete'));
+function resumer(jetons, nom) {
+  let avecSwap = 0, total = 0, adresses = 0;
+  for (const j of jetons) {
+    const e = r.par.get(j) || { n: 0, adresses: new Set() };
+    total += e.n; adresses += e.adresses.size;
+    if (e.n > 0) avecSwap++;
   }
-  console.log('   ' + nom.padEnd(16) + lignes.length + ' pool(s) · ' + avecSwap + ' avec au moins un swap · '
-    + total + ' swaps · ' + adresses + ' adresse(s)'
-    + (illisibles ? ' · ⛔ ' + illisibles + ' illisible(s)' : ''));
-  return { avecSwap, total, illisibles };
+  console.log('   ' + nom.padEnd(16) + jetons.length + ' jeton(s) · ' + avecSwap + ' qui ont bouge · '
+    + total + ' transfert(s) · ' + adresses + ' adresse(s)');
+  return { avecSwap, total, illisibles: 0, jetons: jetons.length };
 }
-const cNos = await compter(nos, 'NOS pools');
-const cAutres = await compter(autres, 'pools TEMOIN');
+const cNos = resumer(jetonsNos, 'NOS jetons');
+const cAutres = resumer(jetonsAutres, 'jetons TEMOIN');
 
 /* ══ 3. LE SUSPECT (2) : LA TAILLE A L OUVERTURE ═════════════════════════════════════════════
  * ⛔ On ne convertit PAS en dollars : il faudrait un prix par devise qu on n a pas mesure. On
@@ -135,16 +180,16 @@ console.log('   ⛔ un sqrtPrice n est pas un montant : il depend des decimales 
 console.log('      n est lu ici que pour voir un ecart d ORDRE DE GRANDEUR, pas pour chiffrer.');
 
 console.log('\n=== 4. LEQUEL DES TROIS ? ===');
-if (cNos.illisibles || cAutres.illisibles) {
+if (r.blocsNonLus) {
   console.log('   ⚠️ des pools illisibles des deux cotes : le compte est un plancher.');
 }
 if (cNos.avecSwap === 0 && cAutres.avecSwap > 0) {
-  console.log('   ⛔⛔ SUSPECT (1) CONFIRME : aucune de nos pools n a jamais ete echangee, pendant que');
-  console.log('        ' + cAutres.avecSwap + '/' + autres.length + ' des temoins l ont ete.');
+  console.log('   ⛔⛔ SUSPECT (1) CONFIRME : aucun de nos jetons n a jamais bouge, pendant que');
+  console.log('        ' + cAutres.avecSwap + '/' + cAutres.jetons + ' des temoins ont bouge.');
   console.log('        Un index qui liste a la premiere transaction n a litteralement RIEN a lister');
   console.log('        chez nous. LE CORRECTIF EST PETIT : un premier swap a l ouverture.');
 } else if (cNos.avecSwap > 0) {
-  console.log('   ⛔ SUSPECT (1) ECARTE : ' + cNos.avecSwap + ' de nos pools ONT ete echangees et');
+  console.log('   ⛔ SUSPECT (1) ECARTE : ' + cNos.avecSwap + ' de nos jetons ONT bouge et');
   console.log('      restent inconnues de l index. Ce n est donc pas « jamais echange ». Il faut');
   console.log('      chercher du cote de la taille ou de la lisibilite du jeton.');
 } else {
