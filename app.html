@@ -1532,7 +1532,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260921-0193" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260921-0194" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1633,10 +1633,19 @@ details[open] > summary::before{transform:rotate(90deg)}
                hook deploye le 2026-09-20 : block/DAI et block/block sont REFUSES. On n ecrit donc jamais
                « n importe quel jeton ».
              · AUCUN CONSEIL : on decrit ce que fait la chaine, jamais ce qu il faut faire de son argent. -->
-      <p class="note" style="margin:6px 0 10px">Why size matters: a block's market is what its brain feeds on —
-        buys, sells, holders, transfers and messages all reach it. The bigger and livelier the market, the more
-        its brain has to react to. A grown block can also open its market against another currency: ETH, USDC,
-        cbBTC or one of the tokenized stocks.</p>
+      <!-- ⛔ REECRIT LE 2026-09-21 (Phil : « reecris mieux pour un leaderboard »). L ancienne version
+           etait un paragraphe d explication pose sur un classement : quatre phrases pour dire ce que
+           la liste montre deja. Un classement se lit en diagonale — le texte doit tenir en une ligne
+           par idee, et chaque idee doit etre verifiable dans le code.
+           ⛔ CE QUI EST PROMIS RESTE EXACTEMENT CE QUI EST MESURE : `cerveau.js:118` prend bien vie,
+              detenteurs, achats, ventes, envois et messages. « Plus intelligent » n est PAS ecrit :
+              le reseau fait 128 neurones FIGES — ce qui change, c est ce qu il ressent.
+           ⛔ LES PAIRES SONT CELLES DU HOOK DEPLOYE, pas une liste d intentions : block/DAI et
+              block/block sont REFUSES on-chain. On n ecrit donc jamais « n importe quel jeton ». -->
+      <p class="note" style="margin:6px 0 10px"><b>Size is food.</b> A block's brain eats its market —
+        every buy, sell, holder, transfer and message reaches it. A busier market simply gives it more to
+        feel. <b>Size is reach:</b> a grown block can open a second market against ETH, USDC, cbBTC or a
+        tokenized stock.</p>
       <ol class="rangs" id="rangs"></ol>
       <p class="note" id="rangNote"></p>
       <p class="note" id="rangBorne"></p>
@@ -3998,10 +4007,21 @@ function peindreStades() {
       + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">' + corps + '</div>';
   }).join('');
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
-  $('#stadesNote').textContent = r.total ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock'
-    + (r.parMarche ? ' · ' + r.parMarche + ' tier(s) from the public market (DexScreener), the rest read on chain' : '')
-    + (lectureVieEnCours ? ' · markets still loading' : '')
-    + ' · named when life is LUE (unread ≠ broken).'
+  /* ⛔⛔ CETTE LIGNE EST LUE PAR DES INCONNUS, et elle disait (releve par Phil, 2026-09-21) :
+   *     « 165 tier(s) from the public market (DexScreener) … named when life is LUE (unread ≠
+   *     broken) ». Trois fautes dans une phrase : « LUE » est du FRANCAIS en plein ecran anglais ;
+   *     « tier(s) » est un calque de « tiers » (= third-party) alors qu en anglais « tier » veut
+   *     dire « palier » — la phrase disait donc autre chose que ce qu elle croyait ; et
+   *     « (unread ≠ broken) » est une NOTE DE CONCEPTION, qui rassure un developpeur sur nos etats
+   *     internes et n apprend rien a quelqu un qui regarde une carte.
+   * ⛔ CE QUI RESTE : des faits utilisables. CE QUI PART : nos etats internes.
+   *    `test-texte-a-l-ecran.mjs` refuse desormais que ces motifs reviennent a l ecran. */
+  const source = r.parMarche
+    ? ' · ' + r.parMarche + ' sized from public market data, the rest read straight from the chain'
+    : '';
+  $('#stadesNote').textContent = r.total
+    ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock' + source
+      + (lectureVieEnCours ? ' · still reading markets' : '')
     : 'The map has not read any block yet.';
   /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
    *    read yet » pendant que les vies arrivaient. Il se reclasse avec les stades — sauf quand on est en train de choisir. */
@@ -8418,9 +8438,15 @@ async function majPaire() {
     if (!f || f.estB20 !== true) {
       paireChoisie = null;
       n.className = 'note wKo';
+      /* ⛔ DEUX ETATS DIFFERENTS, DEUX PHRASES DIFFERENTES, et c est le point : « ce n en est pas
+       *    un » et « on n a pas pu verifier » ne se disent pas pareil. La premiere version ecrivait
+       *    « code ≠ 0xef » — une notation de specification, vraie et illisible : elle dit a un
+       *    inconnu de comparer un octet qu il n a aucun moyen de lire.
+       * ⛔ ON GARDE LE REFUS, ON RETIRE LE JARGON. La raison reste verifiable pour qui veut : le
+       *    marqueur est documente, il n a simplement plus sa place dans un message d erreur. */
       n.textContent = (f && f.estB20 === false)
-        ? 'Refused: not a native B20 (code ≠ 0xef). Paste a block address only.'
-        : 'Could not prove native B20 yet (node unread) — pair stays closed until code 0xef is read. Not a random ERC-20.';
+        ? 'That address is not a native block, so it cannot be paired here. Paste a block address.'
+        : 'We could not check that address yet — the node did not answer. Pairing stays closed until it does.';
       const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
       majFraisEtRecap();
       return;

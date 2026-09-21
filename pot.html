@@ -458,7 +458,11 @@ async function lireJetons() {
     + '<span style="flex:1">' + txt(enUnites(l.solde)) + ' tokens</span>'
     + '<button type="button" data-i="' + i + '" class="jBtn">'
     + (l.allow >= l.solde ? 'Fill with ' + txt(l.sym) : 'Approve ' + txt(l.sym)) + '</button></div>').join('')
-    + (ratees ? '<p class="doux">⛔ ' + ratees + ' token(s) unreadable — this list is a FLOOR.</p>' : '');
+    /* ⛔ LE SIGNE ⛔ ET LE MOT << FLOOR >> SONT NOS MARQUES INTERNES, pas un langage d utilisateur.
+   *    L AVERTISSEMENT, LUI, RESTE ENTIER : dire << au moins >> est ce qui empeche de lire ce
+   *    total comme un compte complet. On retire la notation, jamais la reserve. */
+    + (ratees ? '<p class="doux">' + ratees + ' token(s) could not be read, so this list shows at '
+      + 'least what is here — there may be more.</p>' : '');
   for (const b of hote.querySelectorAll('.jBtn')) {
     b.addEventListener('click', () => versementJeton(lignes[Number(b.dataset.i)], idP));
   }
