@@ -74,6 +74,15 @@ export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
  *       aucun createur exterieur sur la fenetre. Gain mesure : +0,001019868 ETH sur 14 j, soit +50 %.
  *    ⛔ Bits 0x24cc, IDENTIQUES au V6 : le V7 n ajoute aucune capacite, il ne touche aucun verrou. */
 export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
+/* ⛔ HOOK V8 — MINE, PAS ENCORE DEPLOYE (2026-09-21).
+ *    CE QU IL CHANGE, ET RIEN D AUTRE : le taux passe de 3 % a 0,5 % (HOOK_FEE 30000 -> 5000).
+ *    ⛔⛔ POURQUOI IL DOIT EXISTER AVANT LE PREMIER MARCHE : le taux est une CONSTANTE et le hook
+ *       est dans la PoolKey. Un marche ouvert sur le V7 paierait 3 % POUR TOUJOURS — aucune
+ *       migration n existe, c est le piege ou sont enfermees les 5 pools du V1.
+ *    ⚠️ MESURE : a 3 %, 14 jours ont rendu 0,003059603 ETH de frais ; les memes volumes a 0,5 %
+ *       rendraient 0,000509934 ETH. Il faut SIX FOIS plus de volume pour egaler. C est un PARI.
+ *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
+export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
 /** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
  *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
  *     Les retirer d ici ferait disparaitre nos propres marches du fil Live et des frais affiches. */
@@ -81,7 +90,7 @@ export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
     || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase()
-    || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase();
+    || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase();
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
@@ -111,6 +120,13 @@ export async function hookV4Deploye({ rpc }) {
   } catch { return 'NON_LU'; }
 }
 /** Le V5 est-il deploye ? Lu sur son code, jamais suppose. */
+export async function hookV8Deploye({ rpc }) {
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V8, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
+/** Le V7 est-il deploye ? Lu sur son code. */
 export async function hookV7Deploye({ rpc }) {
   try {
     const code = String(await rpc('eth_getCode', [HOOK_V7, 'latest']) || '');

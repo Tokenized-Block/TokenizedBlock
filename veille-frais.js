@@ -42,6 +42,7 @@ export const HOOKS = Object.freeze({
   V5: '0x799136c3f5f572f1597b5b7e067d3ee45fe4a4c4',
   V6: '0xd71af554b5b3dcb6bb17946cfa3c41860a50a4cc',
   V7: '0xb5680fc44ea440fc223d1ca62f2b4f261fda24cc',
+  V8: '0x5926abdabf5d0006ee960a8270f3e124e5a764cc',
 });
 
 export const PAS_LOGS = 2000; /* mesure : la limite de getLogs sur mainnet.base.org */

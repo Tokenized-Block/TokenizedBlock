@@ -32,13 +32,14 @@ const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
 // ⛔⛔ EN OUBLIER UN REND UN ZERO QUI MENT. La version precedente en listait DEUX sur cinq, et le
 //    seul qui encaissait vraiment n y etait pas.
 {
-  eq(Object.keys(HOOKS).length, 7, 'sept hooks surveilles, pas deux');
-  for (const v of ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7']) ok(HOOKS[v], v + ' est surveille');
+  eq(Object.keys(HOOKS).length, 8, 'huit hooks surveilles, pas deux');
+  for (const v of ['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8']) ok(HOOKS[v], v + ' est surveille');
   eq(HOOKS.V1, '0xaa6d7bd9fc7d394bc717137936f2939834382044', 'le V1 — celui qui encaisse tout');
   eq(HOOKS.V6, '0xd71af554b5b3dcb6bb17946cfa3c41860a50a4cc', 'le V6, deploye le 2026-09-21');
   eq(HOOKS.V7, '0xb5680fc44ea440fc223d1ca62f2b4f261fda24cc', 'le V7, mine le 2026-09-21');
   const adr = Object.values(HOOKS);
-  eq(new Set(adr).size, 7, 'sept adresses DISTINCTES — pas deux fois la meme');
+  eq(HOOKS.V8, '0x5926abdabf5d0006ee960a8270f3e124e5a764cc', 'le V8, mine le 2026-09-21 — 0,5 %');
+  eq(new Set(adr).size, 8, 'huit adresses DISTINCTES — pas deux fois la meme');
   /* ⛔ ET LES ADRESSES SONT EN MINUSCULES : `eth_getLogs` filtre sur l adresse telle qu elle est
    *    donnee. Une majuscule ici et le hook devient invisible sans qu aucune erreur ne sorte. */
   for (const [nom, a] of Object.entries(HOOKS)) {
@@ -105,7 +106,7 @@ const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
     topics: [TOPIC_PAYE, '0x' + motAdr(A6CF), '0x' + motAdr(ETH_NATIF)], data: '0x' + m32(7) };
   const bon = await scanFrais({ rpc: async () => [logPaye], deBloc: 1, aBloc: 10, pas: 10 });
   eq(bon.complet, true, 'aucune fenetre ratee -> complet');
-  eq(bon.evenements.length, 7, 'un evenement par hook surveille — sept hooks, sept evenements');
+  eq(bon.evenements.length, 8, 'un evenement par hook surveille — huit hooks, huit evenements');
   ok(/every window/.test(bon.borne), 'et la borne le dit : ' + bon.borne);
 
   const boiteux = await scanFrais({ rpc: async () => { throw new Error('rate limit'); },
@@ -113,7 +114,7 @@ const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
   eq(boiteux.complet, false, 'une lecture qui echoue -> PAS complet');
   eq(boiteux.evenements.length, 0, 'et aucun evenement');
   ok(/FLOOR/.test(boiteux.borne), 'la borne dit PLANCHER, pas zero : ' + boiteux.borne);
-  eq(boiteux.fenetresRatees, 7, 'les sept fenetres ratees sont COMPTEES');
+  eq(boiteux.fenetresRatees, 8, 'les huit fenetres ratees sont COMPTEES');
 
   // ⛔ une reponse qui n est pas un tableau est une fenetre ratee, pas une fenetre vide
   const pasTableau = await scanFrais({ rpc: async () => null, deBloc: 1, aBloc: 10, pas: 10 });
