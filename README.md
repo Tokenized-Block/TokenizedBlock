@@ -59,13 +59,20 @@ itself. The effect will be measured — creations before and after — and publi
 The hook declares `address public immutable feeWallet`. Written once, in the constructor. **No
 setter, no owner, no admin role of its own.**
 
-| you do this | the fees go |
-|---|---|
-| fork the app, open markets **on the hooks it ships with** | to our wallet, always |
-| deploy **your own hook** | to whatever wallet *you* put in its constructor |
+| | can a fork change it | why |
+|---|---|---|
+| **where** the fees land | **no**, on our hooks | `immutable feeWallet`, no setter |
+| the **0.5 %** swap rate | **no**, on our hooks | `uint24 public constant HOOK_FEE = 5_000` |
+| **how much** is sent at launch | **yes** | the hook only requires `msg.value >= fraisVie`, and `fraisVie()` reads **0.0003 ETH**. The 0.001 ETH is *our app's* choice |
+| all of it, by deploying its own hook | **yes** | nothing prevents it — [DEPLOY.md](DEPLOY.md) has the recipe |
 
 Editing `FEE_WALLET` in this repository changes what the app *displays*. It changes nothing on
 chain, because the app does not route the fee — the hook does.
+
+⛔ **This section used to say a fork "cannot redirect the fees".** That was an overclaim twice over,
+and it is retracted rather than softened: a fork can deploy its own hook, and even on ours it can
+send the on-chain minimum instead of what we ask — **70 % less**. Measured on 2026-09-21 by calling
+`fraisVie()`. `test-frais-vont-au-wallet.mjs` now fails if this page claims otherwise.
 
 ```bash
 node test-frais-vont-au-wallet.mjs   # reads feeWallet() on 4 deployed hooks + checks the source
@@ -151,6 +158,7 @@ Every claim this file got wrong, kept next to what replaced it.
 | "Create is free" | true of one call, false for anyone reading it — opening a market cost 0.0003 ETH |
 | "B-20 tokens do get traded, at scale" | 43 263 swaps looked like a crowd; the address column said 35 addresses |
 | "`main` holds the retired GitHub Pages stub" | Pages reports `status: built` and is still serving |
+| "a fork cannot redirect the fees" | it can, two ways: its own hook, or sending the on-chain minimum (0.0003 ETH) instead of the 0.001 our app asks |
 
 ## Run the instruments
 

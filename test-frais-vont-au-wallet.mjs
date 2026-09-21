@@ -19,7 +19,7 @@
 //    qui ne prouve rien.
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { FEE_WALLET } from './frais-creation.js';
+import { FEE_WALLET, FRAIS_OUVERTURE_WEI } from './frais-creation.js';
 import { HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8 } from './tokenomics.js';
 
 let n = 0;
@@ -70,6 +70,49 @@ async function appel(to, data) {
     await new Promise((f) => setTimeout(f, 500 * (e + 1)));
   }
   return null;
+}
+
+/* ══ CE QUE LE CONTRAT EXIGE N EST PAS CE QUE L APP ENVOIE ═══════════════════════════════════
+ * ⛔⛔ LE DEFAUT QUE CE BLOC EXISTE POUR EMPECHER (Phil, 2026-09-21 : « t'as dit n'importe quoi,
+ *     recherche toujours »). J avais ecrit, dans le README, dans DEPLOY.md et dans la description
+ *     publique du depot, qu un fork « ne peut pas rediriger les frais ». C etait faux DEUX FOIS :
+ *       · un fork peut deployer SON hook — je le disais plus bas, puis je l ai aplati en absolu ;
+ *       · et meme sur NOS hooks, `inscrire` n exige que `msg.value >= fraisVie`. Or `fraisVie()`
+ *         rend 0,0003 ETH, pendant que notre app choisit d envoyer 0,001 ETH. Un fork peut donc
+ *         envoyer le minimum et nous payer 70 % de moins, sans rien deployer.
+ * ⛔ LA LECON : un montant decide dans l APP n est pas un montant garanti par la CHAINE. Les deux
+ *    se ressemblent dans une doc et n ont rien a voir. Ce test les confronte. */
+const SEL_FRAIS_VIE = '0xbb2c8161'; /* fraisVie() — keccak recalcule, pas recopie de memoire */
+{
+  const r = await appel(HOOK_V8, SEL_FRAIS_VIE);
+  if (r === null || !/^0x[0-9a-f]{64}$/i.test(r)) {
+    console.log('   · fraisVie() illisible — le minimum on-chain n est PAS verifie ce passage');
+  } else {
+    const minimum = BigInt(r);
+    ok(minimum > 0n, 'le hook exige un minimum non nul a l ouverture');
+    ok(minimum <= FRAIS_OUVERTURE_WEI,
+      'ce que l app envoie (' + FRAIS_OUVERTURE_WEI + ') couvre le minimum exige (' + minimum + ')');
+    /* ⛔ LA GARDE QUI COMPTE : si les deux divergent, la doc ne doit PAS parler d un montant
+     *    garanti. Elle ne bloque pas — elle force la phrase honnete. */
+    const DOC = readFileSync(new URL('./DEPLOY.md', import.meta.url), 'utf8');
+    if (minimum < FRAIS_OUVERTURE_WEI) {
+      ok(/fraisVie/.test(DOC) && /0\.0003 ETH/.test(DOC),
+        'le minimum on-chain (' + minimum + ') est INFERIEUR a ce que l app envoie ('
+        + FRAIS_OUVERTURE_WEI + ') : DEPLOY.md doit le dire, sinon la doc promet un montant que la '
+        + 'chaine n impose pas');
+      /* ⛔⛔ PREMIERE VERSION : `!/cannot redirect/i.test(DOC)`. Elle a virse au rouge sur MA PROPRE
+       *     RETRACTATION, qui cite forcement la phrase fautive pour dire qu elle etait fausse.
+       *     Interdire de citer une erreur reviendrait a interdire de la corriger — c est exactement
+       *     l inverse du but. La garde refuse donc l AFFIRMATION, pas la citation : une ligne qui
+       *     porte un marqueur de retractation est admise. */
+      const RETRACTATION = /earlier version|retracted|overclaim|was wrong|no longer/i;
+      const affirme = DOC.split('\n')
+        .filter((l) => /cannot redirect/i.test(l) && !RETRACTATION.test(l));
+      ok(affirme.length === 0,
+        'DEPLOY.md ne doit plus AFFIRMER qu un fork << cannot redirect >> — il le peut, de deux '
+        + 'facons mesurees. Ligne(s) fautive(s) : ' + affirme.map((l) => '« ' + l.trim() + ' »').join(' · '));
+    }
+  }
 }
 
 const HOOKS = [['V5', HOOK_V5], ['V6', HOOK_V6], ['V7', HOOK_V7], ['V8', HOOK_V8]];

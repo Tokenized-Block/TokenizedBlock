@@ -5,12 +5,27 @@ fees when you do — including the part we cannot control.
 
 ## The short version
 
-| you do this | the fees go |
-|---|---|
-| fork this app, deploy it, open markets **on the hooks it ships with** | to `0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4`, always |
-| deploy **your own hook** and point your blocks at it | to whatever wallet you put in *your* constructor |
+What a fork controls, and what it does not. Both columns are read from the deployed contract, not
+promised here.
 
-There is no third case, and no configuration file that changes the first one.
+| | a fork can change it | why |
+|---|---|---|
+| **where** the fees land | **no**, while using our hooks | `address public immutable feeWallet` — no setter, no owner |
+| **the 0.5 % swap rate** | **no**, while using our hooks | `uint24 public constant HOOK_FEE = 5_000` |
+| **how much is sent at launch** | **yes** | the hook only requires `msg.value >= fraisVie`, and `fraisVie()` reads **0.0003 ETH**. Our app chooses to send 0.001 ETH; a fork may send the minimum |
+| **everything**, by deploying its own hook | **yes** | nothing prevents it, and the recipe is below |
+
+⛔ **An earlier version of this page, and the repository description, said a fork "cannot redirect
+the fees".** That was an overclaim twice over: a fork can deploy its own hook, and even on ours it
+can send 0.0003 ETH instead of 0.001 — **70 % less** — because the 0.001 is an application choice,
+not an on-chain floor. Measured on 2026-09-21 with `eth_call` on `fraisVie()`. The claim is
+retracted here rather than quietly softened.
+
+Verify that number yourself:
+
+```bash
+node test-frais-vont-au-wallet.mjs   # reads feeWallet() AND fraisVie() on the deployed hooks
+```
 
 ## Why the first row cannot be changed from this repository
 
