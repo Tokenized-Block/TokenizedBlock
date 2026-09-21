@@ -47,6 +47,20 @@ ok(!/Create itself is free/i.test(lance),
   'la phrase de lancement ne dit plus « Create itself is free ». Lu : « ' + lance + ' »');
 ok(/0\.001/.test(lance), 'elle affiche le montant reellement envoye. Lu : « ' + lance + ' »');
 
+/* ⛔⛔ LE DOLLAR AFFICHE DOIT DECOULER DU MONTANT, PAS D UNE CIBLE FIGEE. Defaut attrape a l ecran
+ *     le 2026-09-21, dans le changement lui-meme : « 0.001 ETH (≈ $1 at ~$3,000/ETH) ». Chaque
+ *     nombre etait exact isolement, et la phrase mentait — 0,001 ETH a 3 000 $ vaut 3 $. Le « $1 »
+ *     venait de FRAIS_USD, l ancienne cible, que le nouveau plancher ne pilote plus. */
+for (const [prix, attendu] of [[3000, '$3.00'], [4000, '$4.00'], [1500, '$1.50']]) {
+  const p = phraseFraisLancement(8453, 'Base', prix, FRAIS_OUVERTURE_WEI, 10n ** 18n);
+  ok(p.includes(attendu),
+    'a ~$' + prix + '/ETH, 0,001 ETH doit s afficher ' + attendu + ' — lu : « ' + p + ' »');
+}
+/* ⛔ TEMOIN : la cible figee donnerait « $1 » a TOUS les prix. Si elle revenait, la boucle ci-dessus
+ *    echouerait des le premier prix — c est ce qui lui donne sa valeur. */
+ok(!phraseFraisLancement(8453, 'Base', 4000, FRAIS_OUVERTURE_WEI, 10n ** 18n).includes('$1 at'),
+  'temoin : la phrase ne contient plus le dollar fige de l ancienne cible');
+
 /* ⛔ Solde insuffisant : la phrase doit AVERTIR, pas laisser signer un echec. */
 const pauvre = phraseFraisLancement(8453, 'Base', 3000, FRAIS_OUVERTURE_WEI, 1n);
 ok(/⚠️|not enough/i.test(pauvre),

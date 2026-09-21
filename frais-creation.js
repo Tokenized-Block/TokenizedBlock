@@ -139,8 +139,16 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
    *     qu une phrase approximative : elle se defend.
    * ⛔ ON DIT AUSSI OU VA L ARGENT, EN CLAIR. Le montant est affiche en ETH d abord parce que c est
    *    ce que le wallet fera signer ; le dollar n est qu une aide a la lecture. */
+  /* ⛔⛔ LE DOLLAR EST CALCULE DEPUIS LE MONTANT REEL, PAS DEPUIS LA CIBLE. Defaut attrape a
+   *     l ecran le 2026-09-21, dans ce changement meme : la phrase affichait « 0.001 ETH (≈ $1 at
+   *     ~$3,000/ETH) ». Les trois nombres etaient exacts pris un par un, et la phrase etait fausse :
+   *     0,001 ETH a 3 000 $/ETH vaut 3 $. Le `$1` venait encore de `FRAIS_USD`, l ANCIENNE cible,
+   *     que le nouveau plancher a cesse de piloter. Un chiffre affiche a cote d un autre doit en
+   *     DECOULER, sinon les deux derivent sans que rien ne casse. */
+  const usdReel = (Number(fraisWei) / 1e18) * Number(ethUsd);
+  const usdLisible = usdReel >= 1 ? usdReel.toFixed(2) : usdReel.toFixed(3);
   let base = 'Opening its market: ' + formaterEthCourt(fraisWei) + ' ETH'
-    + ' (≈ $' + usd + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH),'
+    + ' (≈ $' + usdLisible + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH),'
     + ' paid once, in the same signature that creates it.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
