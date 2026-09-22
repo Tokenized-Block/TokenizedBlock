@@ -36,6 +36,11 @@
  * ⛔ LECTURE SEULE : aucune ecriture on-chain, aucune signature, aucune cle.
  */
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+/* ⛔ DANS SON PROPRE MODULE, et pas au milieu de ce fichier : ce fichier balaie la chaine des qu on
+ *    l importe, donc une fonction ecrite ici ne pourrait pas etre testee sans declencher quinze
+ *    minutes de RPC. Une fonction qu on ne peut pas importer sans lancer une mesure ne se teste
+ *    pas — elle se prie. Et celle-la ne s executera pas avant la DEUXIEME execution. */
+import { comparerPanels } from './panel-indexation.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { HOOKS, PAS_LOGS, topicDe } from './veille-frais.js';
 import { BLOCS_PAR_JOUR } from './comparer-frais.js';
@@ -291,20 +296,12 @@ if (existsSync(PANEL)) {
   let avant = null;
   try { avant = JSON.parse(readFileSync(PANEL, 'utf8')); } catch (_) { avant = null; }
   if (avant && Array.isArray(avant.jetons)) {
-    const parAvant = new Map(avant.jetons.map((x) => [x.jeton, x]));
-    let perdus = 0, gagnes = 0, revus = 0;
-    const exemples = [];
-    for (const x of aujourdhui) {
-      const a = parAvant.get(x.jeton);
-      if (!a) continue;
-      revus++;
-      if (a.etat === 'CONNU' && x.etat === 'INCONNU') { perdus++; if (exemples.length < 6) exemples.push('PERDU  ' + x.jeton.slice(0, 10) + '… silence ' + x.silenceH + ' h'); }
-      if (a.etat === 'INCONNU' && x.etat === 'CONNU') { gagnes++; if (exemples.length < 6) exemples.push('GAGNE  ' + x.jeton.slice(0, 10) + '… silence ' + x.silenceH + ' h'); }
-    }
-    console.log('   panel precedent : ' + avant.quand + ' · ' + revus + ' jeton(s) revus');
-    console.log('   ⇒ ' + perdus + ' ont PERDU leur place · ' + gagnes + ' l ont GAGNEE');
-    for (const e of exemples) console.log('     ' + e);
-    if (!revus) console.log('   ⛔ aucun jeton en commun : les deux executions ne portent pas sur les memes individus, '
+    const r = comparerPanels(avant.jetons, aujourdhui);
+    console.log('   panel precedent : ' + avant.quand + ' · ' + r.revus + ' jeton(s) revus');
+    console.log('   ⇒ ' + r.perdus.length + ' ont PERDU leur place · ' + r.gagnes.length + ' l ont GAGNEE');
+    for (const x of r.perdus.slice(0, 4)) console.log('     PERDU  ' + x.jeton.slice(0, 10) + '… silence ' + x.silenceH + ' h');
+    for (const x of r.gagnes.slice(0, 4)) console.log('     GAGNE  ' + x.jeton.slice(0, 10) + '… silence ' + x.silenceH + ' h');
+    if (!r.revus) console.log('   ⛔ aucun jeton en commun : les deux executions ne portent pas sur les memes individus, '
       + 'donc rien ne se compare. Relancer avec la meme fenetre.');
   }
 } else {
