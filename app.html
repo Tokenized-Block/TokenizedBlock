@@ -1631,7 +1631,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-ib-batch" hidden>Build <code>20260922-ib-batch</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-ib-paid" hidden>Build <code>20260922-ib-paid</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9504,9 +9504,11 @@ function validerCreation() {
   return { nom, sym, sel };
 }
 
+/* tip 20260922-ib-paid: Instant Birth DIRECT forces CreateRouter paid when one-sig batch unavailable. */
+let forcerCreateRouterIb = false;
 function utiliseCreateRouter() {
-  /* tip 2349 HARD RULE: Creation stays FREE — factory createB20 on MAIN + Practice.
-   * CreateRouter (createPaid) stays optional/legacy; default UX = free factory. Fee moment = Launch (FEE_WALLET). */
+  /* tip 2349: default free factory. tip 20260922-ib-paid: Instant Birth fallback = CreateRouter createPaid. */
+  if (forcerCreateRouterIb && Number(CHAINE) === 8453) return true;
   return false;
 }
 function calldataCreation(v) {
@@ -9530,7 +9532,8 @@ function cibleCreation() {
 function valeurCreation(fraisWei) {
   if (!utiliseCreateRouter()) return '0x0';
   const w = fraisWei != null ? BigInt(fraisWei) : 0n;
-  const floor = CREATE_FEE_WEI_FLOOR;
+  /* tip 20260922-ib-paid: Instant Birth CreateRouter pays FRAIS_OUVERTURE_WEI (0.001), not only floor 0.0003. */
+  const floor = forcerCreateRouterIb ? FRAIS_OUVERTURE_WEI : CREATE_FEE_WEI_FLOOR;
   const pay = w > floor ? w : floor;
   return '0x' + pay.toString(16);
 }
@@ -10400,66 +10403,53 @@ async function creerBlock() {
       const g = await creerEtVivreUneSignature({ v, calldata, to, adresse: adresseCreee, faceGravee, e });
       if (g !== 'SANS') return;
     }
-    /* tip 20260922-ib-batch HARD: Instant Birth must NEVER present solitary createB20 value 0 as the IB wallet request.
-     * eth-fixe defined refuseSiCreateB20ValeurZero but it was dead on this live path — wire it.
-     * Multi-step only: factory create as unlabeled prep, then auto-chain vieAuto Instant Birth (0.001 · V8). */
-    const ibDirect = Number(CHAINE) === 8453 && !creerSansVie && !utiliseCreateRouter()
+    /* tip 20260922-ib-paid HARD (measured 0x9dedc502… EFIX createB20 value 0, no fee to sink):
+     * Instant Birth DIRECT must NEVER solicit solitary factory createB20 value 0.
+     * Prefer: (1) one-sig batch with FRAIS_OUVERTURE (above). Fallback: (2) CreateRouter createPaid 0.001 ETH. */
+    const ibDirect = Number(CHAINE) === 8453 && !creerSansVie
       && (!$('#cVieDirecte') || $('#cVieDirecte').checked);
-    if (ibDirect && estCreateB20ValeurZero(to, value)) {
-      /* tip 20260922-ib-batch + eth-fixe HARD: Instant Birth must not open Rabby on lone createB20 value 0.
-       * refuse runs on this live path. Multi-step only via explicit prep button below (not labeled Instant Birth). */
-      refuseSiCreateB20ValeurZero({ to, value, e, contexte: 'creerBlock IB sequential live path' });
-      if (adresseCreee) {
-        e.innerHTML = (e.textContent || '')
-          + '<p class="note" style="margin-top:8px">Need this wallet without one-sig batch? '
-          + '<button type="button" class="bouton" id="cIbPrepCreate" style="margin-top:6px;display:block;width:100%">'
-          + 'Create block first (factory · free · not Instant Birth), then Instant Birth · 0.001 ETH · V8</button></p>';
-        const prep = $('#cIbPrepCreate');
-        if (prep) prep.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          void (async () => {
-            e.className = 'note';
-            e.textContent = 'Creating block (factory · free · not Instant Birth). Instant Birth fee follows…';
-            const rcPrep = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-              to, data: calldata, value: '0x0' });
-            if (rcPrep.etat !== 'CONFIRME') {
-              e.className = 'note wKo';
-              e.textContent = rcPrep.pourquoi || rcPrep.etat || 'Create was not confirmed.';
-              return;
-            }
-            etape('cree');
-            noterFace(adresseCreee, faceGravee);
-            if (Number(CHAINE) === 8453) aLancerAjouter(adresseCreee, v.sym);
-            e.className = 'note wOk';
-            e.textContent = 'Block created. Opening Instant Birth · 0.001 ETH · V8…';
-            try {
-              lancementLien = String(adresseCreee).toLowerCase();
-              await ouvrirProfil(adresseCreee, v.sym);
-              const d = $('#plDevise');
-              if (d) {
-                const voulue = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? paireChoisie.adr : 'ETH';
-                d.value = [...d.options].some((o) => o.value.toLowerCase() === String(voulue).toLowerCase())
-                  ? [...d.options].find((o) => o.value.toLowerCase() === String(voulue).toLowerCase()).value : 'ETH';
-                d.dispatchEvent(new Event('change'));
-              }
-              const part = $('#plPart'); if (part) part.value = '99.9';
-              ouvrirLancement();
-              vieAuto = true;
-              majProgressionVie('Instant Birth — reading market and open fee…');
-              void calculerLancement();
-            } catch (err) {
-              e.className = 'note wKo';
-              e.textContent = String((err && err.message) || err);
-            }
-          })();
-        });
+    let toSend = to, dataSend = calldata, valueSend = value, adrSend = adresseCreee;
+    if (ibDirect && estCreateB20ValeurZero(toSend, valueSend)) {
+      refuseSiCreateB20ValeurZero({ to: toSend, value: valueSend, e, contexte: 'creerBlock IB → switch CreateRouter paid' });
+      forcerCreateRouterIb = true;
+      try {
+        dataSend = calldataCreation(v);
+        toSend = cibleCreation();
+        valueSend = valeurCreation(FRAIS_OUVERTURE_WEI);
+        if (estCreateB20ValeurZero(toSend, valueSend) || BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI) {
+          e.className = 'note wKo';
+          e.textContent = 'Instant Birth refused: could not build CreateRouter paid tx (≥ 0.001 ETH). Nothing was sent.';
+          return;
+        }
+        try {
+          const q2 = await adresseOuRefus(appelBrut, compte, dataSend, { to: CREATE_ROUTER, value: valueSend });
+          adrSend = q2.adresse || null;
+        } catch (_) { adrSend = null; }
+        if (!adrSend) {
+          e.className = 'note wKo';
+          e.textContent = 'Instant Birth CreateRouter could not predict the token address — nothing was sent.';
+          return;
+        }
+        adresseCreee = adrSend;
+        e.className = 'note';
+        e.textContent = 'Instant Birth — CreateRouter · 0.001 ETH once · Fees for Dev. Check your wallet (paid create — not factory value 0).';
+        try { console.info('[Instant Birth] CreateRouter paid', toSend, valueSend, adrSend); } catch (_) {}
+      } finally {
+        forcerCreateRouterIb = false;
       }
+    }
+    if (ibDirect && estCreateB20ValeurZero(toSend, valueSend)) {
+      refuseSiCreateB20ValeurZero({ to: toSend, value: valueSend, e, contexte: 'creerBlock IB final guard' });
       return;
     }
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to, data: calldata, value });
+      to: toSend, data: dataSend, value: valueSend });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
+      /* tip 20260922-ib-paid: CreateRouter Instant Birth fee already to sink — remember as prepaye for this block. */
+      if (ibDirect && BigInt(valueSend || '0x0') >= FRAIS_OUVERTURE_WEI && rc.hash) {
+        prepayeCourant = { hash: rc.hash, wei: String(FRAIS_OUVERTURE_WEI), compte: String(compte).toLowerCase(), t: Date.now(), via: 'CreateRouter' };
+      }
       /* le paiement fait avant la creation appartient desormais a CE block : la mise en vie ne le redemandera pas */
       if (prepayeCourant) { noterPrepayeBlock(adresseCreee, prepayeCourant); oublierPrepayeEnAttente(compte); prepayeCourant = null; }
       noterFace(adresseCreee, faceGravee);
