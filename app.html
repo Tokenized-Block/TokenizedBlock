@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0214" hidden>Build <code>20260922-0214</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0216" hidden>Build <code>20260922-0216</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4086,7 +4086,7 @@ function peindreStades() {
     ? ' · ' + r.parMarche + ' sized from public market data, the rest read straight from the chain'
     : '';
   $('#stadesNote').textContent = r.total
-    ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock' + source
+    ? r.total + ' block(s) on the map' + source
       + (lectureVieEnCours ? ' · still reading markets' : '')
     : 'The map has not read any block yet.';
   /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
@@ -4655,7 +4655,7 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: not read yet.');
   }
   lignes.push(trusted ? 'Trusted: <b>✦ yes</b> (saved in this browser).' : 'Trusted: not yet.');
-  lignes.push(madeHere ? 'Origin: made with <b>TokenizedBlock</b>.' : 'Origin: made elsewhere.');
+  /* tip 0216: no Origin made-with / elsewhere brag */
   ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
   if (badge) {
     badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? ' · TokenizedBlock market' : '');
@@ -7381,11 +7381,15 @@ function peindrePlan(plan, adr) {
   const d = plan.dec;
   const usdLaunch = fraisLancementUsd(CHAINE);
   const fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : null;
+  /* tip 0212: when inscriptionPayee, the 0.001 ETH open fee is already on chain — do not re-promise it. */
+  const feeDejaPaye = !!(plan.v2 && plan.inscriptionPayee);
   const feeLignes = usdLaunch > 0
-    ? ['Review: 0.001 ETH, once — your wallet shows the exact request.',
-      ...(!fraisLancementPret(fraisL)
-        ? ['Could not read the ETH price right now — try again in a moment.']
-        : ['Review: 0.001 ETH, once (checked on chain), then bring it to life.'])]
+    ? (feeDejaPaye
+      ? ['Open fee already paid on chain — next signatures only seed the pool and bring it to life.']
+      : ['Review: 0.001 ETH, once — your wallet shows the exact request.',
+        ...(!fraisLancementPret(fraisL)
+          ? ['Could not read the ETH price right now — try again in a moment.']
+          : ['Review: 0.001 ETH, once (checked on chain), then bring it to life.'])])
     : ['Practice — bringing life is free here.'];
   const txsApercu = [];
   if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2) {
@@ -7402,7 +7406,10 @@ function peindrePlan(plan, adr) {
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     (plan.naissance
-      ? ('Instant Birth puts ' + ethLisible(plan.ethRequis) + ' ETH into the locked pool, plus a tiny first buy so indexers see a trade. That is on top of the 0.001 ETH opening fee, paid once, and it stays in your market.')
+      ? ('Instant Birth puts ' + ethLisible(plan.quoteEthWei || plan.ethRequis) + ' ETH into the locked pool, plus a tiny first buy so indexers see a trade.'
+        + (feeDejaPaye
+          ? ' The 0.001 ETH opening fee is already paid — this seed stays in your market.'
+          : ' That is on top of the 0.001 ETH opening fee, paid once, and it stays in your market.'))
       : 'You put in no ETH: buyers bring it.'),
     'Locked forever: nobody can withdraw these blocks, and this value sets the starting price.',
     /* ⛔⛔ LE CREATEUR EST PAYE, ET IL NE LE SAVAIT PAS. Cette ligne n existait QUE pour
@@ -7445,11 +7452,16 @@ function peindrePlan(plan, adr) {
     return;
   }
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
-    const besoin = BigInt(fraisL) + (plan.naissance ? BigInt(plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n);
+    /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains. */
+    const fraisEncore = feeDejaPaye ? 0n : BigInt(fraisL);
+    const seedBesoin = plan.naissance ? BigInt(plan.quoteEthWei || plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n;
+    const besoin = fraisEncore + seedBesoin;
     if (BigInt(soldeEthNat) < besoin) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = plan.naissance
-      ? 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.'
+      ? (feeDejaPaye
+        ? 'Not enough ETH for pool seed + first micro-swap — top up, then work it out again.'
+        : 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.')
       : 'Not enough ETH for the one-time 0.001 ETH life fee — top up, then work it out again.';
     return;
     }
@@ -7464,7 +7476,11 @@ function peindrePlan(plan, adr) {
     b.addEventListener('click', () => void signerEtapeLancement(etape));
     actions.appendChild(b);
     e.className = 'note';
-    e.textContent = 'Review approvals first, then the one-time 0.001 ETH fee, then bring it to life. Your wallet opens for each request.';
+    e.textContent = feeDejaPaye
+      ? 'Review approvals first, then bring it to life (open fee already paid). Your wallet opens for each request.'
+      : (plan.v2
+        ? 'Review approvals first, then the open-fee / starting-price step, then bring it to life. Your wallet opens for each request.'
+        : 'Review approvals first, then the one-time 0.001 ETH fee, then bring it to life. Your wallet opens for each request.');
     if (vieAuto) {
       majProgressionVie('Step 2 — allowing the market to hold your block (' + plan.etapes.length + ' approval'
         + (plan.etapes.length > 1 ? 's' : '') + '). Your wallet opens now.');
@@ -7484,9 +7500,11 @@ function peindrePlan(plan, adr) {
   }
   e.className = 'note';
   e.textContent = 'Approvals are in place. The chain will run the launch WITHOUT sending it, before your wallet ever opens.'
-    + (usdLaunch > 0 && fraisLancementPret(fraisL)
+    + (usdLaunch > 0 && fraisLancementPret(fraisL) && !feeDejaPaye && !plan.v2
       ? ' Then: the one-time 0.001 ETH fee, then bring it to life.'
-      : '');
+      : (feeDejaPaye || plan.v2
+        ? ' Open fee is already handled — next is bring it to life.'
+        : ''));
 }
 
 async function signerEtapeLancement(etape) {
@@ -7556,20 +7574,26 @@ async function verifierLancement(adr) {
   b.className = 'bouton';
   b.type = 'button';
   const fraisL = planCourant.fraisLancementWei;
-  b.textContent = (usdLaunch > 0 && fraisLancementPret(fraisL))
+  /* tip 0212: v2 / inscriptionPayee — fee already on chain; button must not re-promise 0.001 ETH. */
+  const feeDeja = !!(planCourant.v2 && (planCourant.inscriptionPayee || planCourant.etat === 'PRET'));
+  b.textContent = (usdLaunch > 0 && fraisLancementPret(fraisL) && !feeDeja && !planCourant.v2)
     ? 'Bring it to life — 0.001 ETH, once'
     : 'Bring it to life — sign in my wallet';
   b.addEventListener('click', () => void lancerMarcheBlock(adr));
   actions.appendChild(b);
   if (vieAuto) {
-    majProgressionVie('Step 4 — the one-time 0.001 ETH fee, then the market opens. Your wallet opens now.');
+    majProgressionVie(feeDeja || planCourant.v2
+      ? 'Step 4 — bring it to life (open fee already paid). Your wallet opens now.'
+      : 'Step 4 — the one-time 0.001 ETH fee, then the market opens. Your wallet opens now.');
     setTimeout(() => { if (vieAuto) void lancerMarcheBlock(adr); }, 0);
   }
   e.className = 'note' + (CHAINE === 8453 ? ' wKo' : ' wOk');
   e.textContent = 'The chain accepts this launch'
     + (sim.gasUtilise ? ' (about ' + Number(sim.gasUtilise).toLocaleString('en-US') + ' gas)' : '') + '. '
     + (CHAINE === 8453
-      ? '⚠️ Base: the one-time 0.001 ETH fee first, then bring it to life. The starting price is permanent.'
+      ? (feeDeja || planCourant.v2
+        ? '⚠️ Base: open fee already paid — this signature seeds the pool and brings it to life. The starting price is permanent.'
+        : '⚠️ Base: the one-time 0.001 ETH fee first, then bring it to life. The starting price is permanent.')
       : 'Practice network — nothing here is real money.');
 }
 
@@ -7643,8 +7667,9 @@ async function lancerMarcheBlock(adr) {
   const dejaPaye = !planCourant.v2 && !!prepayePour(adr) && String((prepayePour(adr) || {}).compte || '') === String(compte || '').toLowerCase();
   const usdLaunch = dejaPaye ? 0 : fraisLancementUsd(CHAINE);
   let fraisL = null;
+  /* tip 0212: seed wallet check uses quoteEthWei (= mint tx.value), not ethRequis (39 wei short). */
   const besoinSeed = naissance
-    ? BigInt(planCourant.ethRequis || 0n) + (planCourant.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n)
+    ? BigInt(planCourant.quoteEthWei || planCourant.ethRequis || 0n) + (planCourant.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n)
     : 0n;
   if (naissance && (!planCourant.ethRequis || planCourant.ethRequis <= 0n || planCourant.tx.value === '0x0')) {
     e.className = 'note wKo'; vieAutoArreter();

@@ -368,7 +368,13 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
      * permanente. Instant Birth keeps dead-address lock. */
     proprietaire, deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S) });
   const donnee = sqrtExistant !== 0n ? mint : encodeMulticall([encodeInitializePool(cle, sqrtVise), mint]);
-  const txValue = modeNaissance && ethRequis > 0n ? ('0x' + ethRequis.toString(16)) : '0x0';
+  /* tip 0212: Instant Birth mint value MUST be quoteEthWei (the seed), not ethRequis.
+   * Measured IB022 on Base: ethRequis from JS float sqrt math was 39 wei SHORT of what
+   * PoolManager+SETTLE actually pulls — eth_estimateGas / eth_simulateV1 both revert with
+   * empty data (PoolNotInitialized after a swallowed init, or settle shortfall). Sending the
+   * full seed accepts; dust above ethRequis is negligible vs the seed. */
+  const txValue = modeNaissance && quoteEthWei > 0n ? ('0x' + quoteEthWei.toString(16))
+    : '0x0';
   const tx = { to: V.posm, data: donnee, value: txValue };
 
   /* Mandatory micro first-swap call (appended by UI into atomic batch). Fail-closed if unbuildable. */
