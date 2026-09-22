@@ -74,6 +74,12 @@ export const BORNES = {
 /** ⛔ CHAMPS OPTIONNELS : les faces gravees AVANT leur ajout ne les portent pas, et doivent rester
  *  valides. Absent ⇒ le dessin d avant, au pixel pres. */
 export const OPTIONNELS = { saturation: [20, 100] };
+
+/** Le plafond de la photo gravee, en caracteres de l URI `data:`.
+ * ⛔ 4096 octets de base64 = ~3 Ko de PNG = un carre de 64x64 transparent, ce qui suffit sur une
+ *    face de cube. Le chiffre vient de la mesure ecrite dans `validerFace` : 16 Ko coutaient
+ *    16 millions de gas. Ce n est donc pas une limite prudente, c est une limite MESUREE. */
+export const PHOTO_MAX = 4096;
 export const LISTES = { orbite: ORBITES_CREATE, facette: FACETTES_CREATE, matiere: MATIERES_CREATE, ornement: ORNEMENTS_CREATE };
 
 /** Le nombre de faces que Create peut graver — publie, jamais le mot « unique ». */
@@ -108,6 +114,46 @@ export function validerFace(f) {
   for (const [cle, liste] of Object.entries(LISTES)) {
     if (!liste.includes(f[cle])) return { etat: 'INVALIDE', pourquoi: cle + ' is not a known value' };
     propre[cle] = f[cle];
+  }
+  /* ⛔⛔ LA PHOTO GRAVEE — AJOUTEE LE 2026-09-22, ET MESUREE AVANT D ETRE AJOUTEE. Avant ca, une
+   *     image posee sur une face etait LOCALE ET PERDUE : `face.js` ne connaissait aucun champ
+   *     `photo`, donc le block ne la gravait jamais. La mettre ici la fait entrer dans le
+   *     `contractURI`, donc dans le calldata de creation — et le calldata se paie.
+   *
+   * ⛔ LE PLAFOND VIENT D UNE MESURE, PAS D UN GOUT. `eth_estimateGas` sur la vraie chaine, le
+   *    2026-09-22 a 0,006 gwei :
+   *      sans image          374 376 gas
+   *      ~1 Ko de base64   1 399 998 gas   (+$0,017)
+   *      ~4 Ko             4 318 079 gas   (+$0,065)
+   *      ~16 Ko           15 990 403 gas   (+$0,256)
+   *    Seize kilo-octets demandent SEIZE MILLIONS de gas : une transaction enorme, que beaucoup de
+   *    wallets refuseraient d estimer et qui echouerait au moindre changement de conditions. Le
+   *    plafond est donc pose a 4 Ko de base64 — soit un PNG transparent de 64x64, exactement la
+   *    taille utile sur une face de cube.
+   * ⛔ CE QUE CE CHIFFRE N EST PAS : le cout final. `estimateGas` sur Base ne facture pas la part
+   *    L1 du calldata comme une vraie transaction. Les valeurs ci-dessus sont un PLANCHER.
+   *
+   * ⛔ ET C EST IRREVERSIBLE : une image gravee ne se retire plus, jamais. C est pourquoi le format
+   *    est ferme a `data:image/png;base64,` — pas de `https://`, pas d `ipfs://`, pas de SVG.
+   *      · une URL distante pourrait changer de contenu, ou mourir : la face ne serait plus la face ;
+   *      · un SVG peut porter du script et des references externes. Dans une image que personne ne
+   *        peut plus retirer, c est la seule erreur qu on ne pourrait pas corriger.
+   * ⛔ CHAMP OPTIONNEL : une face gravee AVANT aujourd hui n en a pas, et reste valide. */
+  if (f.photo !== undefined) {
+    if (typeof f.photo !== 'string') {
+      return { etat: 'INVALIDE', pourquoi: 'photo must be a string' };
+    }
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(f.photo)) {
+      return { etat: 'INVALIDE',
+        pourquoi: 'photo must be an inline data:image/png;base64 — a remote URL could change or '
+          + 'die, and an SVG can carry script; neither belongs in an image nobody can remove' };
+    }
+    if (f.photo.length > PHOTO_MAX) {
+      return { etat: 'INVALIDE',
+        pourquoi: 'photo is ' + f.photo.length + ' characters, over the ' + PHOTO_MAX
+          + ' cap (measured: 16 Ko of base64 costs 16 million gas)' };
+    }
+    propre.photo = f.photo;
   }
   return { etat: 'OK', face: propre };
 }
