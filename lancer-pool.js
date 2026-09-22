@@ -372,16 +372,16 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
   const tx = { to: V.posm, data: donnee, value: txValue };
 
   /* Mandatory micro first-swap call (appended by UI into atomic batch). Fail-closed if unbuildable. */
+  /* tip 0211: micro first-swap is best-effort for indexers. A failed build must NOT block
+   * seed+fee Launch — measured IB022: mint path stuck while open fee already paid. */
   let microSwap = null;
   if (modeNaissance) {
     const ms = construireAppelMicroSwapNaissance({
       cle, chaine, montantEth: MICRO_SWAP_ETH_WEI, blockEst1,
       deadline: BigInt(Math.floor(maintenant / 1000) + DELAI_S),
     });
-    if (ms.etat !== 'OK') {
-      return { etat: 'REFUSE', pourquoi: ms.pourquoi || 'Instant Birth micro first-swap could not be built' };
-    }
-    microSwap = ms.call;
+    if (ms.etat === 'OK') microSwap = ms.call;
+    /* else: leave null — UI launches mint+seed without micro */
   }
 
   return { ...base, etat: etapes.length ? 'APPROBATIONS' : 'PRET', etapes, tx, microSwap,
@@ -395,18 +395,36 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
  * ⛔ FAIL-CLOSED : « je n ai pas pu verifier » n est jamais « c est accepte ».
  */
 export async function simulerLancement({ rpc, compte, tx }) {
-  let sim;
+  /* tip 0211: eth_simulateV1 alone has been seen to REFUSE Instant Birth mint after a paid V8
+   * inscription while eth_estimateGas on the same mint accepts (and the mint would land). Ask
+   * estimateGas as a second opinion before locking the user out. Mint only — micro-swap is
+   * best-effort and is not part of this simulation. */
+  const call = { from: compte, to: tx.to, data: tx.data, value: tx.value || '0x0' };
+  let simPourquoi = null;
+  let simDonnees = null;
   try {
-    sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls: [{ from: compte, to: tx.to, data: tx.data, value: tx.value || '0x0' }] }],
+    const sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls: [call] }],
       validation: false, traceTransfers: false }, 'latest']);
+    const appels = (sim && sim[0] && sim[0].calls) || [];
+    if (appels.length >= 1 && appels[0].status === '0x1') {
+      return { etat: 'ACCEPTE', gasUtilise: appels[0].gasUsed ? BigInt(appels[0].gasUsed) : null, via: 'simulateV1' };
+    }
+    if (appels.length >= 1) {
+      const err = appels[0].error || {};
+      simPourquoi = String(err.message || 'the chain refuses this launch');
+      simDonnees = err.data || null;
+    } else {
+      simPourquoi = 'the node returned no result for the launch';
+    }
   } catch (e) {
-    return { etat: 'NON_MESURE', pourquoi: 'the chain was not asked: ' + String((e && e.message) || e) };
+    simPourquoi = 'the chain was not asked: ' + String((e && e.message) || e);
   }
-  const appels = (sim && sim[0] && sim[0].calls) || [];
-  if (appels.length < 1) return { etat: 'NON_MESURE', pourquoi: 'the node returned no result for the launch' };
-  if (appels[0].status !== '0x1') {
-    const err = appels[0].error || {};
-    return { etat: 'REFUSE', pourquoi: String(err.message || 'the chain refuses this launch'), donnees: err.data || null };
+  try {
+    const gas = await rpc('eth_estimateGas', [call]);
+    return { etat: 'ACCEPTE', gasUtilise: gas ? BigInt(gas) : null, via: 'estimateGas',
+      note: simPourquoi ? ('simulateV1 said no (' + simPourquoi + '); estimateGas accepted') : null };
+  } catch (e2) {
+    const estPourquoi = String((e2 && e2.message) || e2);
+    return { etat: 'REFUSE', pourquoi: (simPourquoi ? simPourquoi + ' · ' : '') + estPourquoi, donnees: simDonnees };
   }
-  return { etat: 'ACCEPTE', gasUtilise: appels[0].gasUsed ? BigInt(appels[0].gasUsed) : null };
 }
