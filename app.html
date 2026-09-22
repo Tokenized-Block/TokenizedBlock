@@ -1189,6 +1189,11 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- ⛔ PHIL (2026-09-19) : « plus de free block, un seul chemin — celui qui a prouve l entree d ETH sur a6cf ».
              La case « bring it to life right after » est retiree : sur Base, creer ENCHAINE toujours la mise en vie. -->
         <button class="bouton creaGo" id="cCreer" type="button">Create and bring it to life — ≈ $1</button>
+        <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
+             No TB custody, no Instant Birth / fee math change, never show fee sink.
+             Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
+        <a class="bouton sec" id="cFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get USDC on Base</a>
+        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy with a card via Coinbase — it goes to <b>your</b> wallet. Then come back to Connect and Create. Tokenized Block never holds your fiat.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -1538,7 +1543,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260922-0201" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0203" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
