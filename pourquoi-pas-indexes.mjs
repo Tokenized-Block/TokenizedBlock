@@ -2,6 +2,21 @@
  *
  *   node pourquoi-pas-indexes.mjs [jours]      defaut : 14
  *
+ * ⛔⛔⛔ CORRECTION DU 2026-09-22 — LA PREMISSE DE CE FICHIER EST MORTE. Elle est GARDEE ici plutot
+ *      que remplacee, pour que la correction se lise contre ce qu elle corrige.
+ *      `seuil-d-indexation.mjs` a mesure la POPULATION au lieu de deux groupes choisis : sur
+ *      5 812 jetons B20 nes en 14 jours (echantillon de 303, ages de plus de 12 h), le taux
+ *      d indexation de FOND vaut 19/296 = 6,4 %.
+ *      ⇒ P(observer 0 indexe sur 8 jetons) = 58,8 %. Notre « 0 sur 8 » est le resultat LE PLUS
+ *        PROBABLE au taux de base. Ce n a jamais ete une anomalie — et ce fichier a ete ecrit
+ *        pour expliquer un ecart qui n existe pas.
+ *      ⛔ LE TEMOIN N ETAIT PAS REPRESENTATIF, ET C EST LUI QUI FABRIQUAIT L ECART : 4 sur 12 font
+ *         33 %, soit CINQ FOIS le taux de la population. Il etait SUPPOSE representatif ; ca n a
+ *         jamais ete prouve. Un temoin non prouve ne mesure pas la cible, il mesure lui-meme.
+ *      ⛔ CE QUI RESTE VALIDE ICI : l ecartement du suspect (1) tient — nos jetons ONT bouge — et
+ *         le suspect (3) tombe toujours pour la meme raison. Seule la QUESTION etait mal posee.
+ *
+ * — texte d origine du 2026-09-21 —
  * ⛔⛔ CE QUI EST DEJA ETABLI (`sommes-nous-indexes.mjs`, 2026-09-21) : aucun de nos 8 blocks n est
  *     connu de l index public, pendant que 4 temoins sur 12 — des B20 apparies sur les hooks
  *     D AUTRES equipes, meme fenetre, meme forme — le sont, et que les QUATRE ont du volume.

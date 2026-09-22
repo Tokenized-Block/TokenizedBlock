@@ -2,6 +2,14 @@
  *
  *   node sommes-nous-indexes.mjs [jours]      defaut : 30
  *
+ * ⛔⛔⛔ A LIRE AVANT SON RESULTAT (correction du 2026-09-22). Ce fichier compte combien de NOS
+ *      blocks sont indexes. Il n a jamais eu de DENOMINATEUR : « 0 sur 8 » ne veut rien dire sans
+ *      le taux de la population. `seuil-d-indexation.mjs` l a mesure — 19/296 = 6,4 % chez les
+ *      jetons B20 de plus de 12 h — et a ce taux, P(observer 0 sur 8) = 58,8 %.
+ *      ⇒ Le resultat de ce fichier reste JUSTE et cesse d etre ALARMANT. Lu seul, il fait croire a
+ *        une anomalie ; lu avec le taux de base, il dit que nous sommes dans la norme.
+ *      ⛔ Un chiffre sans son denominateur n est pas une mesure, c est une impression.
+ *
  * ⛔⛔ POURQUOI CE FICHIER EXISTE (2026-09-21). Tout est prouve de notre cote : le frais part, le
  *     wallet encaisse, la chaine complete passe. Et 54 adresses distinctes par jour touchent une
  *     pool B20 neuve sur TOUT Base. La question qui reste n est donc plus « est-ce que ca marche »
@@ -67,6 +75,11 @@ console.log('nos hooks : ' + NOS_HOOKS.size + '\n');
  *     l index qui ne regarde pas par ici, et il faut le dire au lieu de s accuser. */
 const temoins = new Map();
 const nos = new Map();
+/* ⛔ LES poolId SONT RETENUS DES LA PREMIERE LECTURE. Sans eux, compter les swaps imposerait de
+ *    relire tous les Initialize une seconde fois — et une seconde lecture d une autre fenetre ne
+ *    porterait pas sur le meme ensemble. */
+const nosPools = new Set();
+const temoinPools = new Set();
 let fenetres = 0, ratees = 0;
 for (let b = DE; b <= tete; b += PAS_LOGS) {
   const fin = Math.min(b + PAS_LOGS - 1, tete);
@@ -85,11 +98,13 @@ for (let b = DE; b <= tete; b += PAS_LOGS) {
     if (NOS_HOOKS.has(hook)) {
       if (!nos.has(jeton)) nos.set(jeton, { jeton, hooks: new Set(), bloc: Number(BigInt(l.blockNumber)) });
       nos.get(jeton).hooks.add(hook);
+      nosPools.add(l.topics[1]);
     } else if (!/^0x0{40}$/.test(hook) && temoins.size < 12 && !temoins.has(jeton)) {
       /* ⛔ LE TEMOIN A LA MEME FORME QUE NOUS : un B20, apparie, sur un hook custom, dans la MEME
        *    fenetre. S il avait une autre forme (pool libre, jeton non-B20), une difference de
        *    resultat ne prouverait rien — elle pourrait venir de la forme et pas de nous. */
       temoins.set(jeton, { jeton, hook });
+      temoinPools.add(l.topics[1]);
     }
   }
 }
@@ -147,6 +162,43 @@ for (const x of nos.values()) {
     + liq.toFixed(2).padEnd(13) + vol.toFixed(2));
   await new Promise((f) => setTimeout(f, 250));
 }
+
+/* ══ 2ter. POURQUOI ? LE PREMIER SUSPECT SE MESURE : UNE POOL SANS AUCUN SWAP ═════════════════
+ * ⛔⛔ AJOUTE LE 2026-09-21. Constater « 0/8 indexes » sans chercher la cause laisserait le champ
+ *     libre a l explication la plus flatteuse. Zero 1 dit qu un index public liste des qu il y a
+ *     UNE transaction sur une pool supportee. C est donc le premier suspect, et il se compte.
+ * ⛔ CE QUE CA SEPARE : si nos pools ont ZERO swap et que celles des temoins en ont, la cause est
+ *    « jamais echange », pas « pas assez liquide ». Si nos pools ONT des swaps et restent inconnues,
+ *    le suspect tombe et il faut chercher ailleurs — c est aussi un resultat. */
+const TOPIC_SWAP = topicDe('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)');
+const swapsParPool = new Map();
+let fSwap = 0, rSwap = 0;
+async function balayerSwaps(de, a) {
+  let logs;
+  try {
+    logs = await rpc('eth_getLogs', [{ address: POOLM, topics: [TOPIC_SWAP],
+      fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16) }]);
+  } catch (e) {
+    /* ⛔ Une fenetre trop chargee se COUPE, elle ne se jette pas : un trou ici ferait passer une
+     *    pool active pour une pool morte, et c est exactement la conclusion qu on teste. */
+    if (a - de + 1 > 25) {
+      const m = de + Math.floor((a - de) / 2);
+      await balayerSwaps(de, m); await balayerSwaps(m + 1, a);
+      return;
+    }
+    rSwap += a - de + 1;
+    return;
+  }
+  for (const l of logs || []) swapsParPool.set(l.topics[1], (swapsParPool.get(l.topics[1]) || 0) + 1);
+}
+for (let b = DE; b <= tete; b += PAS_LOGS) { fSwap++; await balayerSwaps(b, Math.min(b + PAS_LOGS - 1, tete)); }
+const swapsDe = (pools) => [...pools].reduce((s, id) => s + (swapsParPool.get(id) || 0), 0);
+const nosSwaps = swapsDe(nosPools);
+const temoinSwaps = swapsDe(temoinPools);
+console.log('\n=== 2ter. NOS POOLS ONT-ELLES JAMAIS ETE ECHANGEES ? ===');
+console.log('   blocs non lus : ' + rSwap + (rSwap ? '  ⛔ PLANCHER' : '  ✅ lecture complete'));
+console.log('   swaps sur NOS pools      : ' + nosSwaps + '  (' + nosPools.size + ' pool(s))');
+console.log('   swaps sur les pools TEMOIN : ' + temoinSwaps + '  (' + temoinPools.size + ' pool(s))');
 
 /* ══ 2bis. LE TEMOIN — les B20 des AUTRES, meme fenetre, meme forme ══════════════════════════ */
 console.log('\n=== 2bis. LE TEMOIN : des B20 apparies sur les hooks D AUTRES equipes ===');
