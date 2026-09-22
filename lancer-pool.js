@@ -22,6 +22,7 @@ import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale
   encodeSwapExactInSingle, SANS_MINHOP, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
+import { HOOK_V8 } from './tokenomics.js';
 
 /* ══ CONSTANTES — RECOPIEES DE index.html, COMPAREES PAR UN TEST ═════════════════════════════ */
 export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -215,13 +216,13 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
   if (!ADRESSE.test(String(jeton || ''))) return { etat: 'REFUSE', pourquoi: 'the block is not an address' };
   if (!ADRESSE.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (!ADRESSE.test(String(devise || '')) || !ADRESSE.test(String(hooks || ''))) return { etat: 'REFUSE', pourquoi: 'pair or hook is not an address' };
-  /* tip 20260922-1934: MAIN permanent Launch (dead-address LP) must never mint hooks=0x0.
-   * Hole: default hooks=ADRESSE_NULLE + app omit-spread → PositionManager unhooked pools
-   * (Dex volume, ZERO sink fees). Add-liquidity keeps proprietaire=compte → still allowed. */
+  /* tip 20260922-1934 + 20260922-2023: MAIN permanent Launch / Instant Birth = HOOK_V8 only.
+   * Hole1: hooks=0x0 → Dex volume, ZERO sink fees. Hole2: any estNotreHook (legacy V1–V7) is not Birth=V8.
+   * Add-liquidity keeps proprietaire=compte → still allowed on legacy pools. */
   if (Number(chaine) === 8453
-    && String(hooks).toLowerCase() === ADRESSE_NULLE
-    && String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase()) {
-    return { etat: 'REFUSE', pourquoi: 'Base Launch refused: new markets must use TbFeeHook (hookCourant) — zero-hook mint blocked' };
+    && String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase()
+    && String(hooks).toLowerCase() !== HOOK_V8.toLowerCase()) {
+    return { etat: 'REFUSE', pourquoi: 'Base Launch refused: Instant Birth / permanent Launch must use HOOK_V8 only — Birth=V8 only' };
   }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };
   const enEth = String(devise).toLowerCase() === ETH_NATIF;
