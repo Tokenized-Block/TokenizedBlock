@@ -1626,7 +1626,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2026" hidden>Build <code>20260922-2026</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-2112" hidden>Build <code>20260922-2112</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2190,6 +2190,29 @@ import { planMessagePaye } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 /* ⛔ 2026-09-14 Brain wake: RPC blips must not wipe a known market into permanent « market unread ». */
+
+/* tip 20260922-2112: « engraved » = on-chain porteLeLabel (contractURI contient le marqueur `"face":{`),
+ *    PAS une session Create locale / memoire-chaine. V8.inscrire refuse encore sans ce marqueur
+ *    (URI B20 immuable apres create). Created/OpenLaunch sans face → CTA cache, pas de faux ALLOW. */
+const labelNaissanceCache = new Map(); /* adr → { etat, quand } */
+const POURQUOI_PAS_LABEL = 'V8 birth needs a face engraved at Create (on-chain label). This block was born elsewhere — Create a new block here (free), then Give birth · V8 (0.001 ETH once · Fees for Dev).';
+async function etatLabelNaissance(adr) {
+  const a = String(adr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return 'NON_LU';
+  const hit = labelNaissanceCache.get(a);
+  if (hit && Date.now() - hit.quand < 5 * 60 * 1000) return hit.etat;
+  let etat = 'NON_LU';
+  try { etat = await blockPorteLeLabel({ rpc, jeton: a }); } catch { etat = 'NON_LU'; }
+  labelNaissanceCache.set(a, { etat, quand: Date.now() });
+  return etat;
+}
+async function eligibleNaissanceV8(adr) {
+  if (CHAINE !== 8453) return { ok: true, label: 'OUI' };
+  const label = await etatLabelNaissance(adr);
+  if (label === 'NON') return { ok: false, label, pourquoi: POURQUOI_PAS_LABEL };
+  return { ok: true, label }; /* OUI ou NON_LU (RPC cough — fail-open) */
+}
+
 const vieMarcheConnue = new Map(); /* adr → { vie, etatVie, quand } */
 function viePourCerveau(adr, vie, etatVie) {
   const a = String(adr || '').toLowerCase();
@@ -4706,20 +4729,36 @@ function peindreTrustFacts(adr, v, origine) {
   }
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
-    /* tip 20260922-fee-funnel */
+    /* tip 20260922-fee-funnel + 20260922-2112: V8 CTA only when porteLeLabel ≠ NON */
     cta.innerHTML = (CHAINE === 8453
       ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev.'
       : '<b>Next</b>: open its market — free in Practice.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
+    if (CHAINE === 8453) {
+      void eligibleNaissanceV8(adr).then((el) => {
+        if (!cta.isConnected || el.ok) return;
+        cta.innerHTML = '<b>V8 birth unavailable here</b> — ' + enTexte(el.pourquoi)
+          + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+          + '<button type="button" class="bouton" data-tf-act="create-here">Create a new block here (free)</button></div>';
+      });
+    }
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
-      /* tip 0017 + tip 20260922-fee-funnel: Give birth V8 first; external market secondary */
+      /* tip 0017 + tip 20260922-fee-funnel + 20260922-2112 */
       cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
         + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
         + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
         + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
+      void eligibleNaissanceV8(adr).then((el) => {
+        if (!cta.isConnected || el.ok) return;
+        cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
+          + '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi)
+          + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
+          + '<button type="button" class="bouton" data-tf-act="create-here">Create a new block here (free)</button>'
+          + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
+      });
     } else {
       /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
       cta.innerHTML = info.isTbFeeHook
@@ -5098,7 +5137,7 @@ async function lireProfil(adr, sym, perime) {
   /* tip 2340: also offer Launch when market is LUE but not fee hook — opens NEW hooked pool id → FEE_WALLET. */
   const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
   $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
-  /* tip 20260922-fee-funnel: wake / unhooked primary = Give birth V8 copy */
+  /* tip 20260922-fee-funnel + 20260922-2112: wake / unhooked = Give birth V8 only if porteLeLabel ≠ NON */
   if (etatVieProfil === 'NON_TROUVEE') {
     $('#pReveiller').textContent = CHAINE === 8453
       ? 'Give birth · V8 · 0.001 ETH once'
@@ -5119,6 +5158,18 @@ async function lireProfil(adr, sym, perime) {
       wg.innerHTML = 'Practice: opening a market is free.';
     } else { wg.hidden = true; wg.textContent = ''; }
   }
+  if (CHAINE === 8453 && (etatVieProfil === 'NON_TROUVEE' || legacySansHook)) {
+    const adrGate = adr;
+    void eligibleNaissanceV8(adrGate).then((el) => {
+      if ($('#profil').dataset.block !== adrGate) return;
+      if (el.ok) return;
+      $('#pReveiller').hidden = true;
+      if (wg) {
+        wg.hidden = false;
+        wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi);
+      }
+    });
+  }
   const gt = $('#pGarderTrusted');
   if (gt) {
     const canKeep = (etatVieProfil === 'LUE' && infoHookMarche(v).isTbFeeHook)
@@ -5134,8 +5185,19 @@ async function lireProfil(adr, sym, perime) {
   /* tip 20260922-fee-funnel: deep-link / Created V8 CTA also opens Give birth on unhooked LUE */
   if (lancementLien && lancementLien === String(adr).toLowerCase()
     && (etatVieProfil === 'NON_TROUVEE' || legacySansHook)) {
+    const lienAdr = lancementLien;
     lancementLien = null;
-    ouvrirLancement();
+    void eligibleNaissanceV8(lienAdr).then((el) => {
+      if ($('#profil').dataset.block !== lienAdr) return;
+      if (!el.ok) {
+        const e = $('#plEtat');
+        if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
+        const wg2 = $('#pWakeGate');
+        if (wg2) { wg2.hidden = false; wg2.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+        return;
+      }
+      ouvrirLancement();
+    });
   }
   /* ⛔⛔ MESURE EN PROD (2026-09-13, lien TTB de Phil) : ~80 s de reprises sans reponse du noeud sature — la carte ne
    *    s ouvrait jamais. Avec l intention du lien, la carte s ouvre quand meme ; « Work it out » relit le marche et
@@ -5348,11 +5410,28 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
   if (!b) return;
   const act = b.getAttribute('data-tf-act');
   const pe = $('#pEchange'), plq = $('#pLiquidite'), pl = $('#pLancement');
+  if (act === 'create-here') {
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
   if (act === 'wake' || act === 'hook-launch') {
-    const w = $('#pReveiller');
-    if (w && !w.hidden) { w.click(); return; }
-    if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-    try { ouvrirLancement(); } catch (_) {}
+    const adrTf = $('#profil') && $('#profil').dataset.block;
+    void (async () => {
+      if (adrTf && CHAINE === 8453) {
+        const el = await eligibleNaissanceV8(adrTf);
+        if (!el.ok) {
+          const wg = $('#pWakeGate');
+          if (wg) { wg.hidden = false; wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+          const e = $('#plEtat');
+          if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
+          return;
+        }
+      }
+      const w = $('#pReveiller');
+      if (w && !w.hidden) { w.click(); return; }
+      if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+      try { ouvrirLancement(); } catch (_) {}
+    })();
     return;
   }
   if (act === 'buy') {
@@ -6247,15 +6326,26 @@ $('#sfLive').addEventListener('click', (ev) => {
     peindreLive();
     return;
   }
-  /* tip 20260922-fee-funnel: Created row V8 CTA → same Give birth path as incomplete banner / hook-launch */
+  /* tip 20260922-fee-funnel + 20260922-2112: Created V8 CTA — gate on porteLeLabel before Give birth */
   const v8 = ev.target.closest('[data-v8-cta]');
   if (v8) {
     ev.preventDefault(); ev.stopPropagation();
     const adr = v8.getAttribute('data-v8-cta');
     if (!/^0x[0-9a-fA-F]{40}$/i.test(String(adr || ''))) return;
     const li = v8.closest('li.filL[data-block]');
-    lancementLien = String(adr).toLowerCase();
-    void ouvrirProfil(adr, (li && li.getAttribute('data-sym')) || null);
+    v8.disabled = true;
+    void eligibleNaissanceV8(adr).then((el) => {
+      v8.disabled = false;
+      if (!el.ok) {
+        v8.textContent = 'V8 birth unavailable — Create here';
+        v8.title = el.pourquoi;
+        const note = $('#sfLiveNote');
+        if (note) note.textContent = el.pourquoi;
+        return;
+      }
+      lancementLien = String(adr).toLowerCase();
+      void ouvrirProfil(adr, (li && li.getAttribute('data-sym')) || null);
+    });
     return;
   }
 
@@ -7267,11 +7357,13 @@ async function calculerLancement() {
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
-      const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4) ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
+      const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
+        ? await etatLabelNaissance(adr) : 'OUI';
       if (plan && plan.etat === 'REFUSE') {
         /* already refused: missing hook on MAIN */
       } else if (label === 'NON') {
-        plan = { etat: 'REFUSE', pourquoi: 'this block was not engraved by this app\'s Create, so its market cannot open here' };
+        /* tip 20260922-2112: engraved = porteLeLabel/on-chain face marker — V8 still gates; do not fake ALLOW for OpenLaunch B20 */
+        plan = { etat: 'REFUSE', pourquoi: POURQUOI_PAS_LABEL };
       } else if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
       } else {
