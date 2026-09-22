@@ -1538,7 +1538,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260922-0199" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0200" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1888,7 +1888,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           value="99.9" autocomplete="off"></label>
         <label class="champ" id="plQuoteWrap">ETH seed into the locked pool (Instant Birth)<input id="plQuoteEth" inputmode="decimal"
           placeholder="e.g. 0.0003" autocomplete="off"></label>
-        <p class="note" id="plQuoteHint">Instant Birth spends (1) life / open fee 0.001 ETH to the protocol sink + (2) this quote ETH into the pool book. Distinct. Seed ≠ fee. MAIN refuses dust / unread oracle.</p>
+        <p class="note" id="plQuoteHint">Instant Birth spends two separate amounts: the <b>0.001 ETH opening fee</b>, and the <b>ETH you put into the pool</b>. The second one stays in your market — it is not a fee. On Base, an amount too small to matter is refused, and so is a price the app could not read.</p>
         </details>
         <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
           the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
@@ -7345,7 +7345,7 @@ function peindrePlan(plan, adr) {
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
     (plan.naissance
-      ? ('Instant Birth seeds ' + ethLisible(plan.ethRequis) + ' ETH into the locked pool (plus a tiny first buy so indexers see a swap). Seed ≠ open fee 0.001 ETH.')
+      ? ('Instant Birth puts ' + ethLisible(plan.ethRequis) + ' ETH into the locked pool, plus a tiny first buy so indexers see a trade. That is on top of the 0.001 ETH opening fee, and it stays in your market.')
       : 'You put in no ETH: buyers bring it.'),
     'Locked forever: nobody can withdraw these blocks, and this value sets the starting price.',
     /* ⛔⛔ LE CREATEUR EST PAYE, ET IL NE LE SAVAIT PAS. Cette ligne n existait QUE pour
@@ -9263,7 +9263,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   let balAvant = null;
   try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
   e.className = 'note';
-  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (sink) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + first micro-swap — all or nothing. Seed ≠ fee.';
+  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (sink) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + a first small buy — all or nothing. The pool amount is yours, the opening fee is not.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
   etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
