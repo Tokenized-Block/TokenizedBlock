@@ -109,8 +109,9 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
    * ⛔ LE MONTANT EST DONNE EN ETH, pas en dollars : c est ce que le wallet affichera. */
   void ethUsd; void fraisWei; void soldeEth;
   const main = Number(chaine) === 8453;
+  /* tip 20260922-fee-funnel: Create funnel phrase — fiat + Fees for Dev, never fee addr */
   return main
-    ? 'Creating a block and opening its market: 0.001 ETH, once, in one signature.'
+    ? 'Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev — create and open its market in one signature.'
     : 'Free on Practice — nothing is paid here.';
 }
 
