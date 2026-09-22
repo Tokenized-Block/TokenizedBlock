@@ -650,7 +650,8 @@ for (const nom of SERVIS) {
 function buildServi() {
   const e = cache.get('/' + RACINE);
   if (!e) return null;
-  const m = /data-build="([0-9-]{6,32})"/.exec(e.corps.toString('utf8').slice(0, 200000));
+  /* tip 20260922-eth-fixe: allow named tips e.g. 20260922-eth-fixe (not only digits). */
+  const m = /data-build="([0-9A-Za-z_-]{6,40})"/.exec(e.corps.toString('utf8').slice(0, 200000));
   return m ? m[1] : null;
 }
 
