@@ -1631,7 +1631,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2141" hidden>Build <code>20260922-2141</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-eth-fixe" hidden>Build <code>20260922-eth-fixe</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7411,13 +7411,13 @@ async function calculerLancement() {
           quoteEthWei = await preparerQuoteEthDefaut(false);
           if (Number(CHAINE) === 8453) {
             if (quoteEthWei == null) {
-              plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+              /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
             } else if (quoteEthWei <= 0n) {
               plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — quote dust / empty refused' };
             } else {
               const minOracle = weiPourDollars(1, ethUsd);
               if (minOracle == null) {
-                plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+                /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
               } else if (quoteEthWei < CREATE_FEE_WEI_FLOOR || quoteEthWei < minOracle) {
                 plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least ≈$1 in ETH (and ≥ 0.0003 ETH floor) in the pool' };
               }
@@ -7499,11 +7499,11 @@ async function preparerQuoteEthDefaut(force = false) {
   if (!el) return null;
   if (String(el.value || '').trim() && !force) return lireQuoteEthWeiChamp();
   if (Number(CHAINE) === 8453) {
+    /* tip 20260922-eth-fixe: seed floor when oracle unread — never block Instant Birth on price. */
+    const SEED_FIXE_SANS_ORACLE = CREATE_FEE_WEI_FLOOR; /* 0.0003 ETH floor; ~$1 often ≈0.00036 */
     if (force || ethUsd === null) await lirePrixEth();
-    if (ethUsd == null) return null;
-    let w = weiPourDollars(1, ethUsd);
-    if (w == null) return null;
-    if (w < CREATE_FEE_WEI_FLOOR) w = CREATE_FEE_WEI_FLOOR;
+    let w = ethUsd != null ? weiPourDollars(1, ethUsd) : null;
+    if (w == null || w < SEED_FIXE_SANS_ORACLE) w = SEED_FIXE_SANS_ORACLE;
     el.value = weiVersEthDecimal(w);
     return w;
   }
@@ -7519,9 +7519,12 @@ function estNaissanceInstantaneeUi() {
  * Practice 84532 stays free. Fail-closed if oracle unread or balance too low. */
 async function assurerFraisLancementWei(force = false) {
   if (fraisLancementUsd(CHAINE) === 0) return null;
+  /* tip 20260922-eth-fixe HARD: Instant Birth / open fee = fixed FRAIS_OUVERTURE_WEI (0.001 ETH).
+   * Oracle is OPTIONAL — never refuse Instant Birth with «Could not read the price».
+   * If ethUsd live: max($1 wei, floor). If unread: floor only. Balance gate is wei-only. */
   if (force || ethUsd === null) await lirePrixEth();
-  if (ethUsd === null) return null;
-  let w = weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
+  let w = null;
+  if (ethUsd != null) w = weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
   /* ⛔⛔ LE PLANCHER EST LE PRIX MESURE DU MARCHE, PLUS LE MINIMUM DU CreateRouter (2026-09-21).
    *     Il valait 0,0003 ETH, et comme ~1 $ vaut moins que ca au prix actuel de l ETH, c est ce
    *     plancher qui s appliquait a chaque ouverture. La mediane LUE sur les 103 marches ouverts en
@@ -7529,7 +7532,7 @@ async function assurerFraisLancementWei(force = false) {
    *     moins que le marche, au seul cote qui paie. Decision de Phil, 2026-09-21.
    * ⛔ ON PREND LE PLUS GRAND DES DEUX : si l ETH s effondrait, ~1 $ pourrait depasser 0,001 ETH, et
    *    un plancher qui devient un PLAFOND serait exactement le defaut inverse. */
-  if (w != null && w < FRAIS_OUVERTURE_WEI) w = FRAIS_OUVERTURE_WEI;
+  if (w == null || w < FRAIS_OUVERTURE_WEI) w = FRAIS_OUVERTURE_WEI;
   return w;
 }
 
@@ -7582,16 +7585,16 @@ function peindrePlan(plan, adr) {
   }
   const d = plan.dec;
   const usdLaunch = fraisLancementUsd(CHAINE);
-  const fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : null;
+  /* tip 20260922-eth-fixe: fee wei from plan or fixed floor — never «Could not read the price» copy. */
+  let fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : (usdLaunch > 0 ? FRAIS_OUVERTURE_WEI : null);
+  if (usdLaunch > 0 && !fraisLancementPret(fraisL)) fraisL = FRAIS_OUVERTURE_WEI;
   /* tip 0212: when inscriptionPayee, the 0.001 ETH open fee is already on chain — do not re-promise it. */
   const feeDejaPaye = !!(plan.v2 && plan.inscriptionPayee);
   const feeLignes = usdLaunch > 0
     ? (feeDejaPaye
       ? ['Open fee already paid on chain — next signatures only seed the pool and bring it to life.']
       : ['Review: 0.001 ETH, once — your wallet shows the exact request.',
-        ...(!fraisLancementPret(fraisL)
-          ? ['Could not read the ETH price right now — try again in a moment.']
-          : ['Review: 0.001 ETH, once (checked on chain), then bring it to life.'])])
+        'Review: 0.001 ETH, once (Fees for Dev), then bring it to life.'])
     : ['Practice — bringing life is free here.'];
   const txsApercu = [];
   if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2) {
@@ -7647,18 +7650,7 @@ function peindrePlan(plan, adr) {
     return;
   }
 
-  /* ⛔ MAIN Launch fail-closed: no measured life-fee wei → nothing to sign past approvals. */
-  if (usdLaunch > 0 && (ethUsd == null || !fraisLancementPret(fraisL))) {
-    e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Could not read the ETH price right now — work it out again in a moment.';
-    void assurerFraisLancementWei(true).then(async (w) => {
-      if ($('#profil').dataset.block !== adr || !planCourant) return;
-      planCourant.fraisLancementWei = w;
-      await lireSoldeEthNat(true);
-      peindrePlan(planCourant, adr);
-    });
-    return;
-  }
+  /* tip 20260922-eth-fixe: fee floor already applied above — balance gate only. */
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
     /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains. */
     const fraisEncore = feeDejaPaye ? 0n : BigInt(fraisL);
@@ -7749,13 +7741,10 @@ async function verifierLancement(adr) {
     const w = await assurerFraisLancementWei(true);
     planCourant.fraisLancementWei = w;
     await lireSoldeEthNat(true);
-    if (ethUsd == null || !fraisLancementPret(w)) {
-      e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Could not read the ETH price right now. Nothing was sent.';
-      peindrePlan(planCourant, adr);
-      return;
-    }
-    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(w)) {
+    /* tip 20260922-eth-fixe: never abort on unread oracle — floor fee always. */
+    const wOk = fraisLancementPret(w) ? w : (FRAIS_OUVERTURE_WEI);
+    planCourant.fraisLancementWei = wOk;
+    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(wOk)) {
       e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Not enough ETH for the one-time 0.001 ETH life fee. Nothing was sent.';
       peindrePlan(planCourant, adr);
@@ -7892,10 +7881,10 @@ async function lancerMarcheBlock(adr) {
     fraisL = await assurerFraisLancementWei(true);
     planCourant.fraisLancementWei = fraisL;
     await lireSoldeEthNat(true);
-    if (ethUsd == null || !fraisLancementPret(fraisL)) {
-      e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Could not read the ETH price right now. Nothing was sent — try again.';
-      return;
+    /* tip 20260922-eth-fixe: fee floor always available — never abort Launch on unread oracle. */
+    if (!fraisLancementPret(fraisL)) {
+      fraisL = await assurerFraisLancementWei(true) || FRAIS_OUVERTURE_WEI;
+      planCourant.fraisLancementWei = fraisL;
     }
     /* v2: open fee already handled via inscription etape; still need seed+micro for Instant Birth.
      * Non-v2: need open fee (unless dejaPaye) + seed+micro when naissance. */
@@ -9575,6 +9564,106 @@ async function lireSoldeEthNat(force = false) {
   return soldeEthNat;
 }
 
+/** tip 20260922-eth-fixe / ib-preflight: eth_getBalance via APP rpc + each secours URL (never wallet-only). */
+async function lireSoldeEthAppRobuste() {
+  let s = await lireSoldeEthNat(true);
+  if (s != null) return s;
+  const R = RESEAUX[CHAINE];
+  const urls = [R.rpc, ...(R.secours || [])].filter(Boolean);
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: 'eth_getBalance', params: [compte, 'latest'] }) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j && j.result != null && !j.error) {
+        soldeEthNat = BigInt(j.result);
+        majFraisEtRecap();
+        return soldeEthNat;
+      }
+    } catch (_) { /* next node */ }
+  }
+  return null;
+}
+
+/** tip 20260922-eth-fixe: scroll Fund wallet CTA into view (Create tab). */
+function montrerFundWalletCourt() {
+  try {
+    const a = $('#cFundWallet');
+    if (a) { a.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); a.focus({ preventScroll: true }); }
+  } catch (_) {}
+}
+
+/**
+ * tip 20260922-ib-preflight + 20260922-eth-fixe HARD:
+ * Before wallet on Instant Birth DIRECT — balance gate in ETH wei only:
+ *   besoin = FRAIS_OUVERTURE_WEI + seed (quote or CREATE_FEE_WEI_FLOOR) + gas buffer.
+ * No oracle required. Exact shortfall + Fund wallet CTA if short.
+ * Returns { ok, solde, besoin, frais, seed, gas, pourquoi } — never «Could not read the price».
+ */
+async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
+  const gasBuf = 500000000000000n; /* ~0.0005 ETH Create+Launch headroom */
+  const frais = FRAIS_OUVERTURE_WEI;
+  let seed = seedWei != null ? BigInt(seedWei) : null;
+  if (seed == null) {
+    try { seed = await preparerQuoteEthDefaut(true); } catch (_) { seed = null; }
+  }
+  if (seed == null || seed <= 0n) seed = CREATE_FEE_WEI_FLOOR;
+  const besoin = frais + BigInt(seed) + gasBuf;
+  const solde = await lireSoldeEthAppRobuste();
+  if (solde === null) {
+    if (e) {
+      e.className = 'note wKo';
+      e.innerHTML = 'Could not read your ETH balance on Base (app RPC + backups). Nothing was started — try again in a moment.'
+        + ' Or <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
+      const link = $('#cFundShort'); if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
+      montrerFundWalletCourt();
+    }
+    return { ok: false, solde: null, besoin, frais, seed, gas: gasBuf, pourquoi: 'balance_unread' };
+  }
+  if (solde < besoin) {
+    const manque = besoin - solde;
+    if (e) {
+      e.className = 'note wKo';
+      e.innerHTML = 'Need ≈ ' + ethLisible(besoin) + ' ETH (0.001 fee · Fees for Dev + seed '
+        + ethLisible(seed) + ' + gas). This account holds ' + ethLisible(solde)
+        + ' ETH — short by ' + ethLisible(manque) + '. Nothing was started.'
+        + ' <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
+      const link = $('#cFundShort'); if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
+      montrerFundWalletCourt();
+    }
+    return { ok: false, solde, besoin, frais, seed, gas: gasBuf, pourquoi: 'balance_short', manque };
+  }
+  return { ok: true, solde, besoin, frais, seed, gas: gasBuf };
+}
+
+/** tip 20260922-ib-preflight: refuse Instant Birth if planned solitary tx is factory createB20 value 0. */
+function refuseSiCreateB20ValeurZero({ to, value, e, contexte }) {
+  const factory = '0xb20f000000000000000000000000000000000000';
+  const toN = String(to || '').toLowerCase();
+  const val = BigInt(value || '0x0');
+  if (toN === factory && val === 0n) {
+    if (e) {
+      e.className = 'note wKo';
+      e.textContent = 'Instant Birth refused: planned tx is factory createB20 with value 0 — that is Advanced free create, not vieAuto / V8 inscription. Use Instant Birth · 0.001 ETH · Fees for Dev · V8.';
+    }
+    try { console.warn('[Instant Birth] abort createB20 value-0', contexte || ''); } catch (_) {}
+    return true;
+  }
+  return false;
+}
+
+/** tip 20260922-ib-preflight: eth_call / estimateGas on our RPC before wallet (best-effort). */
+async function preflightEthCallTx(tx) {
+  if (!tx || !tx.to || !tx.data) return { ok: true, skip: true };
+  try {
+    await rpc('eth_call', [{ from: compte, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 'latest']);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, pourquoi: String((err && err.message) || err) };
+  }
+}
+
 function majFraisEtRecap() {
   const R = RESEAUX[CHAINE];
   const v = validerCreation();
@@ -10028,22 +10117,15 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
     let quoteW = null;
     if (!devise) {
       quoteW = await preparerQuoteEthDefaut(true);
-      if (quoteW == null || quoteW <= 0n) {
-        e.className = 'note wKo';
-        e.textContent = 'Instant Birth needs a positive ETH seed (oracle/seed unread or dust) — Create refused fail-closed.';
-        return 'STOP';
-      }
-      if (quoteW < CREATE_FEE_WEI_FLOOR) {
-        e.className = 'note wKo';
-        e.textContent = 'ETH seed is dust — Instant Birth closed.';
-        return 'STOP';
-      }
+      /* tip 20260922-eth-fixe: seed floor if still empty — never refuse Instant Birth on oracle. */
+      if (quoteW == null || quoteW <= 0n) quoteW = CREATE_FEE_WEI_FLOOR;
+      if (quoteW < CREATE_FEE_WEI_FLOOR) quoteW = CREATE_FEE_WEI_FLOOR;
     }
     plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999,
       ...(devise ? { devise } : {}), hooks: hook,
       ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
-    const w = await assurerFraisLancementWei(true);
-    if (!fraisLancementPret(w)) { e.className = 'note wKo'; e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.'; return 'STOP'; }
+    /* tip 20260922-eth-fixe: fee = FRAIS_OUVERTURE_WEI even if oracle unread — never STOP on price. */
+    const w = await assurerFraisLancementWei(true) || FRAIS_OUVERTURE_WEI;
     plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook });
     plan.fraisW = BigInt(w);
   } catch (_) { return 'SANS'; }
@@ -10065,10 +10147,28 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
     ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
     { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' },
     ...(plan.microSwap ? [plan.microSwap] : [])];
+  /* tip 20260922-ib-preflight: Instant Birth batch must include a non-zero value leg (V8/PM), not factory-only. */
+  const hasValueLeg = calls.some((c) => BigInt(c.value || '0x0') > 0n);
+  if (!hasValueLeg) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth refused: batch has no ETH value — would look like factory createB20 value 0 in the wallet. Use Instant Birth · 0.001 ETH · Fees for Dev · V8.';
+    return 'STOP';
+  }
+  const seedPourGate = plan.quoteEthWei || plan.ethRequis || CREATE_FEE_WEI_FLOOR;
+  const pf = await preflightInstantBirthEthFixe({ e, seedWei: seedPourGate });
+  if (!pf.ok) return 'STOP';
+  /* Prefer eth_call on our RPC before Rabby — show refuse early when sim fails. */
+  const mintTx = { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' };
+  const sim = await preflightEthCallTx(mintTx);
+  if (!sim.ok && sim.pourquoi) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth preflight eth_call refused before wallet: ' + sim.pourquoi.slice(0, 180);
+    return 'STOP';
+  }
   let balAvant = null;
   try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
   e.className = 'note';
-  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (sink) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + a first small buy — all or nothing. The pool amount is yours, the opening fee is not.';
+  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (Fees for Dev) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + a first small buy — all or nothing. The pool amount is yours, the opening fee is not.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
   etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
@@ -10187,27 +10287,13 @@ async function creerBlock() {
     }
     creationEnCoursPayante = true;
   }
-  /* ⛔ tip 0023 — PHIL 2026-09-16 « Launch obligatoire des la creation : yes fais le ». Mesure du meme jour : 22 creations,
-   *    0 avec une pool fee hook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
-   *    frais de vie du Launch + gaz des deux transactions, lus AVANT la signature. Prix ou solde illisible = refus. */
-  if (Number(CHAINE) === 8453 && !utiliseCreateRouter() && (!$('#cVieDirecte') || $('#cVieDirecte').checked)) {
+  /* tip 20260922-eth-fixe + ib-preflight: Instant Birth DIRECT — fixed 0.001 ETH fee, wei-only balance gate.
+   * NEVER refuse with «Could not read the price». Oracle optional. Fund wallet CTA on shortfall. */
+  if (Number(CHAINE) === 8453 && !utiliseCreateRouter() && !creerSansVie && (!$('#cVieDirecte') || $('#cVieDirecte').checked)) {
     e.className = 'note';
-    e.textContent = 'A block is created to be brought to life — checking you can pay for both before anything is signed…';
-    const fraisL = await assurerFraisLancementWei(true);
-    let solde = null;
-    try { solde = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { solde = null; }
-    const gazDeux = 500000000000000n; /* ~0.0005 ETH : Create + Launch sur Base, marge comprise */
-    if (fraisL === null || solde === null) {
-      e.className = 'note wKo';
-      e.textContent = 'Could not read the price or your ETH balance, so nothing was started. Try again in a moment.';
-      return;
-    }
-    if (solde < fraisL + gazDeux) {
-      e.className = 'note wKo';
-      e.textContent = 'Create, then bring it to life (one-time 0.001 ETH fee + gas). You need about '
-        + ethLisible(fraisL + gazDeux) + ' ETH and this account holds ' + ethLisible(solde) + ' ETH. Nothing was started.';
-      return;
-    }
+    e.textContent = 'Instant Birth preflight — checking ETH balance (0.001 fee · Fees for Dev + seed + gas)…';
+    const pf = await preflightInstantBirthEthFixe({ e });
+    if (!pf.ok) return;
   }
   creationEnCours = true;
   $('#cCreer').disabled = true;
