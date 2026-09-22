@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+assert.match(html, /data-build="20260922-2141"/);
+assert.doesNotMatch(html, /Launch hooked V8/);
+assert.match(html, /unhookedCreate\s*\n\s*\? ' · <span class="filOpen">Open profile<\/span>'/);
+const i = html.indexOf('const openHint');
+const chunk = html.slice(i, i + 450);
+assert.equal(chunk.includes('Instant Birth on TB'), false);
+assert.equal(chunk.includes('data-v8-cta='), false);
+assert.equal(chunk.includes('data-tf-act="instant-birth-tb"'), false);
+console.log('PASS tip 20260922-2141 Created unhooked Open profile only');
