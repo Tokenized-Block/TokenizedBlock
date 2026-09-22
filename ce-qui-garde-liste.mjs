@@ -170,16 +170,64 @@ console.log('   fenetres : ' + fenetres + ' · ratees : ' + ratees
   + (ratees ? '  ⛔ POPULATION INCOMPLETE' : '  ✅ complete'));
 let jetons = [...parJeton.values()];
 console.log('   jetons B20 distincts : ' + jetons.length);
+
+/* ══⛔⛔ LE PANEL PRECEDENT PASSE AVANT L ECHANTILLON, ET SANS CA L ATTENTE SERAIT PERDUE ═══════
+ *      DEFAUT TROUVE LE 2026-09-22, AVANT LA DEUXIEME EXECUTION — de justesse. Ce script tire un
+ *      echantillon A CHAQUE passage. Or la fenetre de 14 jours GLISSE : quelques heures plus tard,
+ *      des jetons neufs entrent, des vieux sortent, et un tirage « a pas constant » retombe sur
+ *      D AUTRES individus. Le deuxieme passage aurait donc mesure une autre population, `revus`
+ *      serait tombe a presque zero, et le panel — la seule chose qui puisse prouver un retrait —
+ *      n aurait rien pu comparer. On aurait attendu pour rien, et il aurait fallu re-attendre.
+ *      ⛔ C est exactement le defaut que `revus` existait pour DETECTER. Le detecter apres coup
+ *         aurait coute le delai ; le corriger avant ne coute rien.
+ * ⛔ LES JETONS DU PANEL SONT DONC RE-MESURES D OFFICE, avant tout tirage. Un panel qui
+ *    re-echantillonne n est pas un panel, c est deux sondages sans rapport.
+ * ⛔ ET LE TIRAGE DE FOND CONTINUE A COTE : sans lui, la population se figerait au premier jour et
+ *    on ne verrait jamais entrer les marches nes depuis. Les deux servent, ils ne se remplacent
+ *    pas — le panel repond « qui a perdu sa place », le tirage « a quoi ressemble la population ». */
+let duPanel = new Set();
+if (existsSync(PANEL)) {
+  try {
+    const p = JSON.parse(readFileSync(PANEL, 'utf8'));
+    if (p && Array.isArray(p.jetons)) duPanel = new Set(p.jetons.map((x) => String(x.jeton).toLowerCase()));
+  } catch (_) { duPanel = new Set(); }
+}
+const repris = jetons.filter((j) => duPanel.has(j.jeton));
+if (duPanel.size) {
+  console.log('   panel precedent : ' + duPanel.size + ' jeton(s) · encore dans la fenetre : ' + repris.length);
+  /* ⛔ CEUX QUI SONT SORTIS DE LA FENETRE SONT NOMMES, PAS PASSES SOUS SILENCE : ils ne seront pas
+   *    re-mesures, donc ils ne compteront ni comme perdus ni comme gardes. Ne pas le dire ferait
+   *    lire un panel retreci comme un panel stable. */
+  if (repris.length < duPanel.size) {
+    console.log('   ⛔ ' + (duPanel.size - repris.length) + ' jeton(s) du panel sont SORTIS de la '
+      + 'fenetre de ' + JOURS + ' j : ils ne seront pas revus, et ne compteront nulle part.');
+  }
+}
 if (jetons.length > MAX_JETONS) {
-  jetons.sort((a, b) => a.bloc - b.bloc);
-  const pas = jetons.length / MAX_JETONS;
+  /* ⛔ LE PANEL SE SERT EN PREMIER, LE TIRAGE REMPLIT LE RESTE — et le total reste borne a
+   *    MAX_JETONS. Additionner les deux ferait 600 adresses dans un seul `eth_getLogs` : le noeud
+   *    refuserait, le halving se mettrait a couper des fenetres de 2 000 blocs en 25, et une
+   *    mesure de quinze minutes en deviendrait une d une heure — pour les memes reponses. */
+  const dejaLa = new Set(repris.map((j) => j.jeton));
+  const place = Math.max(0, MAX_JETONS - repris.length);
+  const fond = jetons.filter((j) => !dejaLa.has(j.jeton)).sort((a, b) => a.bloc - b.bloc);
   const pris = [];
-  for (let i = 0; pris.length < MAX_JETONS && Math.floor(i * pas) < jetons.length; i++) pris.push(jetons[Math.floor(i * pas)]);
-  const dejaLa = new Set(pris.map((j) => j.jeton));
+  if (place > 0 && fond.length) {
+    const pas = fond.length / place;
+    for (let i = 0; pris.length < place && Math.floor(i * pas) < fond.length; i++) pris.push(fond[Math.floor(i * pas)]);
+  }
+  for (const x of pris) dejaLa.add(x.jeton);
   const notres = jetons.filter((j) => [...j.hooks].some((h) => NOS_HOOKS.has(h)) && !dejaLa.has(j.jeton));
-  console.log('   ⛔ ECHANTILLON : ' + pris.length + ' sur ' + jetons.length + ', a pas constant dans '
-    + 'l ordre de NAISSANCE (jamais par taille) · + ' + notres.length + ' des notres d office');
-  jetons = pris.concat(notres);
+  console.log('   ⛔ ECHANTILLON : ' + repris.length + ' du PANEL (re-mesures d office) + '
+    + pris.length + ' tires a pas constant dans l ordre de NAISSANCE (jamais par taille) sur '
+    + fond.length + ' · + ' + notres.length + ' des notres');
+  /* ⛔ ET SI LE PANEL REMPLIT TOUT LE BUDGET, ON LE DIT : la population de fond cesserait d etre
+   *    observee, et les sections 4 et 5 ne parleraient plus que d anciens jetons. */
+  if (!pris.length) {
+    console.log('   ⛔ le panel occupe TOUT le budget : aucun jeton neuf observe ce tour. Les '
+      + 'sections « necessaire » et « suffisant » ne decrivent plus la population, seulement le panel.');
+  }
+  jetons = repris.concat(pris, notres);
 }
 
 /* ══ 2. DATER LA DERNIERE ACTIVITE, SUR LA CHAINE ════════════════════════════════════════════ */
@@ -337,6 +385,33 @@ if (existsSync(PANEL)) {
  *    precisement le chiffre qu on viendra lire pour savoir combien de temps a passe.
  * ⛔ Le bloc de tete est garde A COTE : lui ne depend d aucune horloge locale, et c est lui qui
  *    permet de calculer l ecart reel entre deux executions si les horloges divergent. */
+/* ⛔⛔ LE PANEL PRECEDENT EST ARCHIVE AVANT D ETRE REMPLACE, JAMAIS ECRASE. DEFAUT COMMIS ET
+ *     CONSTATE LE 2026-09-22 : un essai a blanc sur une fenetre de 0,25 jour a remplace un panel de
+ *     306 jetons par un de 40, en silence et avec un exit 0. Il n a ete recupere que parce qu il
+ *     avait ete commite quelques minutes plus tot — c est-a-dire par chance.
+ *     Un panel coute une ATTENTE : le detruire ne se repare pas en relancant, ca se repare en
+ *     attendant a nouveau. Une donnee dont le cout se compte en delai ne doit pas pouvoir partir
+ *     sur un essai.
+ * ⛔ L ARCHIVE PORTE LE BLOC DE TETE, PAS LA DATE : deux executions le meme jour porteraient le
+ *    meme nom de fichier et la seconde effacerait la premiere — le defaut qu on vient de corriger,
+ *    reintroduit par son propre correctif. */
+if (existsSync(PANEL)) {
+  try {
+    const avant = JSON.parse(readFileSync(PANEL, 'utf8'));
+    const nom = 'panel-indexation-' + (avant.blocTete || 'inconnu') + '.json';
+    if (!existsSync(nom)) {
+      writeFileSync(nom, JSON.stringify(avant, null, 1));
+      console.log('   archive : ' + nom + ' (' + (avant.jetons || []).length + ' jetons) — rien n est ecrase');
+    } else {
+      console.log('   archive deja presente : ' + nom + ' — laissee intacte');
+    }
+  } catch (e) {
+    /* ⛔ SI L ARCHIVE ECHOUE, ON N ECRIT PAS. Remplacer un panel qu on n a pas su sauver, c est
+     *    exactement la perte qu on essaie d empecher — et elle serait silencieuse. */
+    console.log('   ⛔ le panel precedent n a pas pu etre archive (' + e.message + ') : on N ECRIT PAS.');
+    process.exit(1);
+  }
+}
 writeFileSync(PANEL, JSON.stringify({ quand: new Date().toISOString(),
   blocTete: tete, jours: JOURS, jetons: aujourdhui }, null, 1));
 console.log('   ecrit : ' + PANEL + ' (' + aujourdhui.length + ' jetons)');
