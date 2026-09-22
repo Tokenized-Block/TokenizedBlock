@@ -71,7 +71,7 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
   const aJour = payee && inscrit.toLowerCase() === String(compte).toLowerCase() && prix === BigInt(plan.sqrtVise);
   if (!aJour) {
     etapes.push({
-      nom: payee ? 'Confirm the starting price' : 'Bring it to life — ≈ $1, paid on chain',
+      nom: payee ? 'Confirm the starting price' : 'Bring it to life — 0.001 ETH, paid on chain',
       to: hook, data: encodeInscrire(plan.cle, plan.sqrtVise),
       value: payee ? '0x0' : '0x' + fraisWei.toString(16),
       payant: !payee,
