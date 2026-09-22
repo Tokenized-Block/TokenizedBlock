@@ -12,12 +12,18 @@
 
 ## Fix
 
-- `openFeeDejaPayePour` + `recupererPrepayeCreateRouter` (on-chain createPaid → prepaye).
+- `openFeeDejaPayePour` + `recupererPrepayeCreateRouter` (on-chain createPaid → prepaye; survives reconnect via localStorage keyed by block).
 - peindrePlan / verifierLancement / lancerMarcheBlock skip 2nd 0.001 when prepaye.
 - Before paint: zero `payant` inscription etapes when prepaye.
 - Test: `test-prepaye-skip-0922.mjs`.
 
-## SS7K3P desk (after tip live)
+## Ship
 
-Token `0xb200000000000000000000baa5356bfc210cc30a` · createPaid `0x1490c139…` · smoke `0x6Acc…d186` ~0.002217 ETH.  
-Sign: approvals + seed (~0.0003 ETH) — **not** second 0.001. Pool prove via vieDuBlock / Brain.
+- PR #28 MERGED · commit `71f864d` / merge `55a41a5`
+- Live: `/sante` build `20260922-prepaye-skip` · Railway deploy `783f7864` SUCCESS (forced `railway up` — GitHub auto-deploy was stuck on `20260922-0220`)
+- Verified CEST 2026-09-22 ~23:04: `openFeeDejaPayePour` + `recupererPrepayeCreateRouter` present on live `app.html`
+
+## SS7K3P desk (Zero 1 after tip live — no desk smoke in this task)
+
+Token `0xb200000000000000000000baa5356bfc210cc30a` · createPaid `0x1490c139…`  
+Success: Give birth → Permit2 + mint/seed only — **no** second 0.001 to fee wallet. Pool prove via vieDuBlock / Brain.
