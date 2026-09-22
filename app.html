@@ -1501,7 +1501,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="wActifsNote"></p>
     </div>
 
-    <!-- tip 20260922-1955 — TokenizedBank MVP (Raksha) : B20 = fund wallet ; graft → proof of hold
+    <!-- tip 20260922-1958 — TokenizedBank MVP (Raksha) : B20 = fund wallet ; graft → proof of hold
          (balanceOf) → Open credit USDC stub ; agent handoff. No bank contract yet. Never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
       <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
@@ -1614,7 +1614,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-1955" hidden>Build <code>20260922-1955</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-1958" hidden>Build <code>20260922-1958</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7970,7 +7970,7 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
   $('#plEtat').className = 'note';
   $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. The one-time 0.001 ETH fee opens this new market.';
 });
-/* ══ TokenizedBank MVP (tip 20260922-1955) ═══════════════════════════════════════════════════════
+/* ══ TokenizedBank MVP (tip 20260922-1958) ═══════════════════════════════════════════════════════
  * Hold → proofOfHold(balanceOf) → graft (local) → Open credit USDC stub → one-click confirm.
  * ⛔ No BANK_CONTRACT yet. Never show fee sink. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
 let tbPreuve = null;
@@ -8093,7 +8093,7 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
   /* one-click confirm: prefer personal_sign placeholder; fall back to recording the eth_call proof */
   let sig = null;
   const msg = 'TokenizedBank confirm\nblock=' + block + '\nholder=' + compte
-    + '\nproof=' + String(tbPreuve.balance) + '\nbuild=20260922-1955';
+    + '\nproof=' + String(tbPreuve.balance) + '\nbuild=20260922-1958';
   try {
     if (window.ethereum && compte) {
       sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
