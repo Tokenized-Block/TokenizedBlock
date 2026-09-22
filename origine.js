@@ -70,10 +70,8 @@ export async function lireOrigineEtScellement({ rpc, jeton }) {
 
 /** Les phrases a l ecran. */
 export function phrasesOrigine({ origine, scellement }) {
-  const o = origine === 'TOKENIZEDBLOCK' ? '🟦 Made with TokenizedBlock — its face was engraved by our Create.'
-    /* ⛔ Phil, 2026-09-13 : « non mets pas ca » — aucune phrase pour un block cree ailleurs ; seuls les notres portent une marque. */
-    : origine === 'AILLEURS' ? ''
-      : '';
+  /* tip 0216 Raksha: drop «🟦 Made with TokenizedBlock» — serves nothing now. Keep ORIGINES for logic. */
+  const o = '';
   const s = scellement.etat === 'SCELLE' ? '🔒 Sealed: the supply is at its cap — nobody can mint more.'
     : scellement.etat === 'OUVERT' ? '⚠️ Not sealed: more can still be minted (the cap is above the supply) by whoever holds the mint role.'
       : 'Seal not read.';

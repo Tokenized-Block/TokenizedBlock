@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0215" hidden>Build <code>20260922-0215</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0216" hidden>Build <code>20260922-0216</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4086,7 +4086,7 @@ function peindreStades() {
     ? ' · ' + r.parMarche + ' sized from public market data, the rest read straight from the chain'
     : '';
   $('#stadesNote').textContent = r.total
-    ? r.total + ' block(s) on the map · ' + nous + ' made with TokenizedBlock' + source
+    ? r.total + ' block(s) on the map' + source
       + (lectureVieEnCours ? ' · still reading markets' : '')
     : 'The map has not read any block yet.';
   /* ⛔ mesure en navigateur (2026-09-14) : le choix des cerveaux, peint a l ouverture de l onglet, restait tout en « not
@@ -4655,7 +4655,7 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: not read yet.');
   }
   lignes.push(trusted ? 'Trusted: <b>✦ yes</b> (saved in this browser).' : 'Trusted: not yet.');
-  lignes.push(madeHere ? 'Origin: made with <b>TokenizedBlock</b>.' : 'Origin: made elsewhere.');
+  /* tip 0216: no Origin made-with / elsewhere brag */
   ul.innerHTML = lignes.map((x) => '<li>' + x + '</li>').join('');
   if (badge) {
     badge.textContent = trusted ? '✦ trusted' : (etat === 'LUE' && info.isTbFeeHook ? ' · TokenizedBlock market' : '');
