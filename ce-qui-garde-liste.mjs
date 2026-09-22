@@ -255,6 +255,30 @@ console.log('\n=== 5. ECHANGER RECEMMENT SUFFIT-IL ? (suffisant) ===');
   const rates = recents24.filter((j) => j.index.etat === 'INCONNU');
   console.log('   ⇒ ' + rates.length + ' jeton(s) ont echange dans les 24 h et NE SONT PAS listes'
     + (rates.length ? '  ⛔ echanger recemment NE SUFFIT PAS.' : '  ✅ echanger recemment suffit, sur cette fenetre.'));
+
+  /* ⛔⛔ LA MEME QUESTION, MAIS EN SEPARANT « A BOUGE » DE « A ETE ECHANGE ». La borne de tout cet
+   *     instrument est qu un `Transfer` n est PAS un swap : un mint et une mise en pool en
+   *     produisent deux, sans qu un seul echange ait eu lieu. On refait donc le compte par nombre
+   *     de transferts, pour voir si les exceptions sont des marches ignores ou des jetons qui
+   *     n ont jamais ete echanges.
+   * ⚠️ ET LA COUPURE A ETE CHOISIE APRES AVOIR VU LES DONNEES — ca doit etre dit, pas cache. Elle
+   *    n est pas arbitraire (2 = le mint plus un mouvement, ce que l instrument appelait deja « pas
+   *    un swap »), mais une coupure post hoc ne se valide pas sur les donnees qui l ont suggeree.
+   *    C est la PROCHAINE execution, sur d autres jetons, qui la testera vraiment. */
+  console.log('   — le meme compte, par nombre de transferts (un Transfer n est pas un swap) :');
+  for (const [a, b] of [[2, 2], [3, 5], [6, 20], [21, 100], [101, Infinity]]) {
+    const g = recents24.filter((j) => j.transferts >= a && j.transferts <= b);
+    if (!g.length) continue;
+    const c = g.filter((j) => j.index.etat === 'CONNU').length;
+    console.log('     ' + (b === Infinity ? a + '+' : a + '-' + b).padStart(8) + ' transferts : '
+      + String(c).padStart(3) + ' liste(s) · ' + String(g.length - c).padStart(3) + ' ignore(s)');
+  }
+  const vrais = recents24.filter((j) => j.transferts >= 3);
+  const vraisListes = vrais.filter((j) => j.index.etat === 'CONNU').length;
+  if (vrais.length) {
+    console.log('     ⇒ actifs < 24 h ET au moins 3 transferts : ' + vraisListes + ' liste(s) sur '
+      + vrais.length + (vraisListes === vrais.length ? '  — AUCUNE exception' : ''));
+  }
 }
 
 /* ══ 6. NOS JETONS SUR LA MEME ECHELLE ═══════════════════════════════════════════════════════ */
