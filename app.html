@@ -1633,7 +1633,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-fee-label-clean" hidden>Build <code>20260922-fee-label-clean</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-no-approx-dollar-step" hidden>Build <code>20260922-no-approx-dollar-step</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7474,7 +7474,8 @@ async function calculerLancement() {
   if (plan && openFeeDejaPayePour(adr, plan) && Array.isArray(plan.etapes)) {
     plan.etapes = plan.etapes.map((et) => {
       if (!et || !et.payant) return et;
-      return { ...et, value: '0x0', payant: false, nom: (et.nom || 'Register') + ' (open fee already paid via CreateRouter)' };
+      /* tip 20260922-no-approx-dollar-step: never keep ≈ $1 in the approval label when fee already paid */
+      return { ...et, value: '0x0', payant: false, nom: 'Bring it to life — open fee already paid on chain' };
     });
   }
   planCourant = plan;

@@ -131,7 +131,7 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   }
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
     /* tip 0035 (Phil : pas de jargon, pas ou vont les frais — juste le montant) */
-    return 'Reading the ETH price… bringing it to life costs ≈ $' + usd + '.';
+    return 'Reading the ETH price… bringing it to life costs 0.001 ETH, once.';
   }
   /* ⛔⛔ « Create itself is free » A ETE RETIRE ICI LE 2026-09-21, et pas par gout du changement :
    *     depuis que le frais d ouverture vaut 0,001 ETH, cette phrase restait vraie a la lettre —
