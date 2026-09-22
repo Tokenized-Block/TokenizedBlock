@@ -55,14 +55,14 @@
     "launch_lp": "Dead-address owner — permanently locked; nobody can withdraw Launch LP.",
     "add_liquidity_later": "Position belongs to the wallet that added — withdrawable anytime. Not forever-locked.",
     "do_not_claim": "Do not tell users every TB LP is permanently locked. Launch lock ≠ later Add.",
-    "not_zero_fee": "TB is fee-opposite to OpenLaunch: life Create/Launch, hook 2%, app 0.5% · Fees for BaseAPP Holders. Never market zero platform fee."
+    "not_zero_fee": "TB is fee-opposite to OpenLaunch: life Create/Launch, hook 2%, app 0.5% · Fees for Dev. Never market zero platform fee."
   },
   "trust_facts": {
     "trusted_means": "Browser-local Keep only when CreateRouter-paid create OR TbFeeHook pool — not a score, not KYC.",
-    "fee_honest_path": "Trusted / Launch / Deepen TBLOCK · Fees for BaseAPP Holders",
+    "fee_honest_path": "Trusted / Launch / Deepen TBLOCK · Fees for Dev",
     "holders": "Use chain Transfer window + vitalite porteurs when measured — never invent holder counts or trust scores.",
     "profile_panel": "#pTrustFacts — holders (nourriture window), hooked/unhooked, Trusted, origin; CTA → Wake/Launch or Buy/Sell",
-    "funnel": "Dormant → Launch (life fee + hook). Live → in-app Buy/Sell 0.5% · Fees for BaseAPP Holders. Never zero platform fee."
+    "funnel": "Dormant → Launch (life fee + hook). Live → in-app Buy/Sell 0.5% · Fees for Dev. Never zero platform fee."
   },
   "onchain_tasks": {
     "schema": "tblock-brain-tasks/1",
@@ -92,23 +92,23 @@
       },
       {
         "id": "offer_food",
-        "fee": "gas (+ optional life dust · Fees for BaseAPP Holders)",
+        "fee": "gas (+ optional life dust · Fees for Dev)",
         "signs": true,
         "decision": "0|1"
       },
       {
         "id": "trade_tblock",
-        "fee": "0.5% · Fees for BaseAPP Holders",
+        "fee": "0.5% · Fees for Dev",
         "signs": true
       },
       {
         "id": "launch_wake",
-        "fee": "≈$1 ETH life · Fees for BaseAPP Holders",
+        "fee": "≈$1 ETH life · Fees for Dev",
         "signs": true
       },
       {
         "id": "feed_trusted",
-        "fee": "gas + 1000 TBLOCK if paid msg · Fees for BaseAPP Holders",
+        "fee": "gas + 1000 TBLOCK if paid msg · Fees for Dev",
         "signs": true
       },
       {
@@ -129,7 +129,7 @@
   },
   "fee_sinks": {
     "app": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
-    "label": "Fees for BaseAPP Holders",
+    "label": "Fees for Dev",
     "create_router": "0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5",
     "create_router_onchain": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
     "tb_fee_hook": "0xaa6D7bD9FC7D394bc717137936f2939834382044",

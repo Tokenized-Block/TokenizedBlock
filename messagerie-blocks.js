@@ -77,7 +77,7 @@ export async function planMessagePaye({ rpc, compte, de, a, texte, detientDe = n
   const dev = deviseMessage(devise);
   if (!dev) return { etat: 'REFUSE', pourquoi: 'unknown currency for the message fee' };
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
-  if (String(compte).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REFUSE', pourquoi: 'BaseAPP Holders fee path cannot send paid messages to itself' };
+  if (String(compte).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REFUSE', pourquoi: 'Fees for Dev path cannot send paid messages to itself' };
   const enc = encoderMessageBlock({ de, a, texte });
   if (enc.etat !== 'OK') return enc;
   if (detientDe === false) return { etat: 'REFUSE', pourquoi: 'you hold none of the block you speak as' };
@@ -107,9 +107,9 @@ export function messageDepuisTransfert(t, tx, devise = 'TBLOCK') {
   const dev = deviseMessage(devise);
   if (!dev) return { etat: 'REJETE', pourquoi: 'unknown currency for the message fee' };
   if (!t || !tx) return { etat: 'REJETE', pourquoi: 'transaction not read' };
-  if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent as Fees for BaseAPP Holders' };
+  if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'not sent as Fees for Dev' };
   if (typeof t.value !== 'bigint' || t.value < dev.frais) return { etat: 'REJETE', pourquoi: 'below the message fee' };
-  if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the BaseAPP Holders fee path itself' };
+  if (String(t.from).toLowerCase() === FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'sent by the Fees for Dev path itself' };
   /* ⛔ LE JETON DE LA TRANSACTION DOIT ETRE CELUI DE LA DEVISE ATTENDUE : sinon un transfert d USDC
    * passerait pour un message en TBLOCK (et le contraire), et les deux compteurs se melangeraient. */
   const direct = String(tx.to).toLowerCase() === dev.token.toLowerCase();
@@ -117,7 +117,7 @@ export function messageDepuisTransfert(t, tx, devise = 'TBLOCK') {
     /* tip 2347: AA / bundler — Transfer still paid FEE_WALLET; chat text opaque */
     return { etat: 'MESSAGE_FEE', signataire: String(t.from).toLowerCase(), de: null, a: null, texte: null,
       frais: t.value, tx: t.tx, bloc: t.bloc ?? null, aaOpaque: true,
-      pourquoi: 'fee → BaseAPP Holders; message text not readable on smart-wallet relay' };
+      pourquoi: 'fee → Fees for Dev; message text not readable on smart-wallet relay' };
   }
   if (String(tx.from).toLowerCase() !== String(t.from).toLowerCase()) return { etat: 'REJETE', pourquoi: 'the signer is not the sender of the transfer' };
   const m = lireMemo(tx.input);
