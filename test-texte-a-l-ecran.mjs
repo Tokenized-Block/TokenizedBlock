@@ -72,6 +72,25 @@ const MOTIFS = [
    *    parfaitement correct. Une garde qui crie au loup se fait elaguer par le premier qui la
    *    croise — et le trou qu elle bouchait revient avec elle. */
   { re: motsFrancais(), quoi: 'mot francais en minuscules — de la prose francaise est partie a l ecran anglais' },
+  /* ⛔⛔ AJOUTE LE 2026-09-22, APRES AVOIR TROUVE « ≈ $1 (0.001 ETH) » A 51 ENDROITS DE L ECRAN.
+   *     Le frais facture est `FRAIS_OUVERTURE_WEI` = 0,001 ETH — decision de Phil du 2026-09-21,
+   *     alignee sur la mediane du marche. Le « $1 » venait de `FRAIS_USD`, une CIBLE en dollars
+   *     devenue vestige : le code prend `max(weiPourDollars($1), 0,001 ETH)`, et comme 1 $ vaut
+   *     moins que 0,001 ETH au prix actuel, c est TOUJOURS le plancher qui s applique.
+   *     ⇒ L ecran annoncait 1 $ et le wallet prelevait 0,001 ETH. Au prix LU par l app elle-meme
+   *       (`prixEthUsd`, 4 lectures, 2741,48 $/ETH, ecart 0,16 %), ca fait 2,74 $ : un prix
+   *       sous-annonce d un facteur 2,74, dans le sens qui nous arrange, sur le bouton d achat,
+   *       la `meta description` et le titre du frame Farcaster.
+   *     C est la DECISION qui avait ete corrigee, pas la DIVULGATION.
+   * ⛔ POURQUOI LE MOTIF EST CE COUPLE-LA, et pas « aucun $ a l ecran » : un montant en dollars
+   *    peut etre parfaitement juste quand le code le CALCULE — le refus « need at least ≈$1 in ETH »
+   *    derive d un `weiPourDollars(1, ethUsd)` lu en direct, et l accuser serait accuser du code
+   *    correct. Ce qui est FAUX par construction, c est un prix en dollars FIGE colle a un montant
+   *    en ETH : l un bouge avec le marche, l autre non, donc ils divergent forcement un jour.
+   * ⚠️ BORNE : un dollar fige ecrit LOIN du montant en ETH passerait. La garde attrape la forme
+   *    exacte qui s est produite, pas toutes les manieres de mentir sur un prix. */
+  { re: /\$\s?\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?\d/,
+    quoi: 'un prix en DOLLARS fige colle au frais en ETH — l un bouge avec le marche, l autre non' },
 ];
 
 /** Les mots francais en MINUSCULES, avec une majuscule initiale toleree (debut de phrase).
