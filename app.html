@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0210" hidden>Build <code>20260922-0210</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0211" hidden>Build <code>20260922-0211</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7445,7 +7445,7 @@ function peindrePlan(plan, adr) {
     return;
   }
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
-    const besoin = BigInt(fraisL) + (plan.naissance ? BigInt(plan.ethRequis || 0n) + BigInt(MICRO_SWAP_ETH_WEI) : 0n);
+    const besoin = BigInt(fraisL) + (plan.naissance ? BigInt(plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n);
     if (BigInt(soldeEthNat) < besoin) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = plan.naissance
@@ -7643,16 +7643,17 @@ async function lancerMarcheBlock(adr) {
   const dejaPaye = !planCourant.v2 && !!prepayePour(adr) && String((prepayePour(adr) || {}).compte || '') === String(compte || '').toLowerCase();
   const usdLaunch = dejaPaye ? 0 : fraisLancementUsd(CHAINE);
   let fraisL = null;
-  const besoinSeed = naissance ? BigInt(planCourant.ethRequis || 0n) + BigInt(MICRO_SWAP_ETH_WEI) : 0n;
+  const besoinSeed = naissance
+    ? BigInt(planCourant.ethRequis || 0n) + (planCourant.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n)
+    : 0n;
   if (naissance && (!planCourant.ethRequis || planCourant.ethRequis <= 0n || planCourant.tx.value === '0x0')) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Instant Birth mint has no ETH value — Launch refused (fail-closed).';
     return;
   }
+  /* tip 0211: micro-swap optional — seed + open fee still bring it to life if micro cannot be built. */
   if (naissance && !planCourant.microSwap) {
-    e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Instant Birth micro first-swap missing — Launch refused (fail-closed for indexers).';
-    return;
+    try { console.info('[Instant Birth] no micro-swap call — launching seed mint only'); } catch (_) {}
   }
   if (usdLaunch > 0) {
     fraisL = await assurerFraisLancementWei(true);
@@ -7695,15 +7696,10 @@ async function lancerMarcheBlock(adr) {
       const lot = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, calls });
       if (lot.etat === 'CONFIRME' || (lot.etat === 'ENVOYE_AA' && lot.hash)) {
         r = lot; atomiqueOk = true;
-      } else if (!(lot.sendCallsUnsupported || lot.etat === 'ECHEC_ENVOI')) {
-        r = lot;
-        e.className = 'note wKo'; vieAutoArreter();
-        const lienL = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
-          + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-        e.innerHTML = enTexte(r.pourquoi || r.etat) + lienL;
-        return;
       } else {
-        e.textContent = 'Wallet has no atomic batch — Instant Birth continues with honest separate signatures…';
+        /* tip 0211: atomic mint+micro often reverts on the micro leg while seed mint alone would
+         * succeed — fall through to sequential mint (micro best-effort after). Never abort here. */
+        e.textContent = 'Atomic Instant Birth did not land — continuing with seed mint alone…';
       }
     }
     if (!atomiqueOk) {
@@ -7751,17 +7747,19 @@ async function lancerMarcheBlock(adr) {
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to: planCourant.tx.to, data: planCourant.tx.data, value: mintValue });
     if ((r.etat === 'CONFIRME' || r.etat === 'ENVOYE_AA') && naissance && planCourant.microSwap) {
-      e.textContent = 'Seeded mint confirmed. Next signature: mandatory first micro-swap (indexers)…';
+      e.textContent = 'Seeded mint confirmed. Next signature: first micro-swap for indexers (optional)…';
       const rs = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
         to: planCourant.microSwap.to, data: planCourant.microSwap.data, value: planCourant.microSwap.value || '0x0' });
-      if (rs.etat !== 'CONFIRME' && rs.etat !== 'ENVOYE_AA') {
-        e.className = 'note wKo'; vieAutoArreter();
+      if (rs.etat === 'CONFIRME' || rs.etat === 'ENVOYE_AA') {
+        r = rs;
+      } else {
+        /* tip 0211: seed+fee already alive — do NOT fail the Launch on micro-swap. */
         const lienS = rs.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rs.hash)
           + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-        e.innerHTML = 'Pool seeded but first micro-swap failed — Dex may stay dark. ' + enTexte(rs.pourquoi || rs.etat) + lienS;
-        return;
+        e.innerHTML = 'It is alive (ETH seeded + LP locked). First micro-swap did not land — Dex may stay dark until someone trades. '
+          + enTexte(rs.pourquoi || rs.etat) + lienS;
+        /* keep r as mint success so success path below clears aLancer */
       }
-      r = rs;
     }
     } /* end !atomiqueOk */
   } finally { lancementEnCours = false; }
@@ -7771,7 +7769,7 @@ async function lancerMarcheBlock(adr) {
     aLancerRetirer(adr);
     e.className = 'note wOk';
     etape('vivant');
-    e.innerHTML = (naissance ? 'Instant Birth complete — ETH seeded + first micro-swap + LP locked. ' : 'It is alive. Its market is open. ')
+    e.innerHTML = (naissance ? 'Instant Birth complete — ETH seeded + LP locked' + (planCourant.microSwap ? ' (+ indexer micro-swap when it lands)' : '') + '. ' : 'It is alive. Its market is open. ')
       + (atomiqueOk ? '(atomic) ' : '') + lien + blocPartage(adr, symProfil);
     $('#plActions').innerHTML = '';
     planCourant = null;
@@ -9024,10 +9022,15 @@ function majFraisEtRecap() {
      *    telephone n affiche jamais. Un bouton mort sans explication : c est le « ca bug » de Phil.
      *    Un refus de validation ne desactive plus le bouton : le clic connecte le wallet, ou dit ce qui
      *    manque en clair. Seuls un prix ou un solde MESURES insuffisants le ferment encore. */
-    boutonCreer.disabled = !prixOk || !soldeOk;
-    boutonCreer.title = (usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : '');
+    /* tip 0211: while any not-alive block sits in tb.aLancer on mainnet, block Create —
+     * finish Bring life / dismiss first. Create stays free when allowed; this is not a fee. */
+    const aLancerBloque = Number(CHAINE) === 8453 && aLancerLire().length > 0;
+    boutonCreer.disabled = aLancerBloque || !prixOk || !soldeOk;
+    boutonCreer.title = aLancerBloque
+      ? 'Finish Bring life on your existing block(s), or dismiss them first'
+      : ((usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : ''));
     if (!compte) boutonCreer.textContent = 'Connect wallet → review → Bring it to life';
-    else if (Number(CHAINE) === 8453 && aLancerLire().length) boutonCreer.textContent = 'Create another block (free)';
+    else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
     else boutonCreer.textContent = Number(CHAINE) === 8453 ? 'Review → Bring it to life — 0.001 ETH, once' : 'Review → Bring it to life (practice, free)';
   }
   const feeTxt = usd > 0
@@ -9176,6 +9179,8 @@ function peindreALancer() {
     });
   }));
   boite.querySelectorAll('[data-a-oublier]').forEach((btn) => btn.addEventListener('click', () => aLancerRetirer(btn.getAttribute('data-a-oublier'))));
+  /* tip 0211: Create button state depends on aLancer — refresh after paint/dismiss. */
+  try { majFraisEtRecap(); } catch (_) { /* Create tab may not be painted yet */ }
 }
 queueMicrotask(peindreALancer);
 
@@ -9463,10 +9468,9 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
     e.textContent = 'Instant Birth mint has no ETH value — Create+Launch refused (fail-closed).';
     return 'STOP';
   }
+  /* tip 0211: micro-swap optional on Create+Launch one-shot too — seed+fee still OK. */
   if (!devise && !plan.microSwap) {
-    e.className = 'note wKo';
-    e.textContent = 'Instant Birth micro first-swap missing — Create+Launch refused (fail-closed for indexers).';
-    return 'STOP';
+    try { console.info('[Instant Birth] Create+Launch without micro-swap'); } catch (_) {}
   }
   const calls = [{ to, data: calldata, value: '0x0' },
     ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
@@ -9520,6 +9524,16 @@ async function creerBlock() {
   etape('create_clic');
   if (creationEnCours) return;
   const e = $('#cEtat');
+  /* tip 0211 — HARD RULE: Create is free when allowed, but while any not-alive block sits in
+   * tb.aLancer (aLancerLire) on mainnet, refuse Create early so they Bring life / dismiss first.
+   * Nothing signed. Measured 2026-09-22: IB022 open fee paid, Launch mint sim reverted, Create still
+   * offered free → infinite asleep blocks. */
+  if (Number(CHAINE) === 8453 && aLancerLire().length > 0) {
+    e.className = 'note wKo';
+    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Create stays free after that — nothing was signed.';
+    majFraisEtRecap();
+    return;
+  }
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local + wallet injecte) : sans wallet connecte, le
    *    clic sur Create ne faisait RIEN — la validation refusait (« connect your wallet first »), et
    *    cette fonction effacait le message puis sortait en silence. Phil avait demande que ce cas ouvre
@@ -9769,7 +9783,8 @@ async function creerBlock() {
     }
   } finally {
     creationEnCours = false;
-    $('#cCreer').disabled = false;
+    /* tip 0211: do not blindly re-enable — majFraisEtRecap respects aLancer lock on mainnet. */
+    majFraisEtRecap();
   }
 }
 
