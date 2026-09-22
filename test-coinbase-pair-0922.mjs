@@ -1,9 +1,9 @@
-// tip 20260922-coinbase-pair — Create offers Coinbase ACTION pairs; CreateRouter Instant Birth path.
+// tip 20260922-stock-pair-ux — Create offers Coinbase ACTION pairs; CreateRouter Instant Birth path.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { ACTIONS_COINBASE, pairesProposees, etiquettePaire } from './paires.js';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-const tip = '20260922-coinbase-pair';
+const tip = '20260922-stock-pair-ux';
 assert.match(html, new RegExp('data-build="' + tip + '"'));
 assert.match(html, /Coinbase tokenized stocks/);
 assert.match(html, /id="cPaireChips"/);
