@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0216" hidden>Build <code>20260922-0216</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0218" hidden>Build <code>20260922-0218</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4059,13 +4059,29 @@ function peindreStades() {
       : (g.titre + ' · ' + g.blocks.length);
     let corps;
     if (mute) {
+      /* ⛔⛔ REECRIT LE 2026-09-22. L ancienne phrase disait « each market is LUE. Silence ≠ broken. »
+       *     — un etat interne en francais (`LUE`) et une notation de specification (`≠`) en plein
+       *     ecran anglais. La garde de texte interdit les deux DEPUIS DES SEMAINES et ne les voyait
+       *     pas : elle ne lisait que les `.textContent =` directs, jamais le markup construit dans
+       *     une variable — c est-a-dire presque tout cet ecran. Elle a ete elargie dans le meme
+       *     passage, et c est elle qui a nomme ces deux chaines.
+       * ⛔ ET ON NE DIT PLUS « pas casse ». Nier un defaut le SUGGERE : personne ne pensait que
+       *    c etait casse avant qu on le dise. On dit ce qui se passe et ce que l utilisateur peut
+       *    faire, rien d autre. */
       corps = lectureVieEnCours
-        ? '<span class="note" style="align-self:center">Still reading — TokenizedBlock names appear when each market is LUE. Silence ≠ broken.</span>'
-        : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
-          + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
+        ? '<span class="note" style="align-self:center">Still reading the markets — names appear as each one comes back.</span>'
+        : '<span class="note" style="align-self:center">Some markets did not come back this pass — our node was slow or rate-limited. '
+          + g.blocks.length + ' still waiting: open a profile, or retry.</span>';
     } else {
       corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-        + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
+        /* ⛔⛔ CORRIGE LE 2026-09-22 (capture de Phil). L ancien repli etait `b.adr.slice(0, 8)`, qui
+         *     rendait « 0xb20000 » — LE MEME TEXTE POUR TOUS LES BLOCKS SANS SYMBOLE, puisque
+         *     toutes les adresses B20 commencent ainsi. Ce n etait pas un nom, c etait un debut
+         *     d adresse deguise en nom : deux blocks differents s affichaient a l identique, et
+         *     l utilisateur ne pouvait ni les distinguer ni comprendre ce qu il lisait.
+         * ⛔ LA FIN DE L ADRESSE EST CE QUI DISTINGUE, pas le debut. Le « … » devant dit que c est
+         *    une adresse tronquee et pas un nom — sinon on remplace un faux nom par un autre. */
+        + '🟦 ' + enTexte(b.sym ? String(b.sym).slice(0, 14) : '…' + String(b.adr).slice(-8))
         + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
         + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '');
     }
@@ -9756,7 +9772,16 @@ async function creerBlock() {
         e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH, once separate).'
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
           + 'Instant Birth — seed ETH + open hooked market</button>'
-          + '<p class="note" style="margin-top:6px">Seed into the book ≠ open fee 0.001 ETH, once. No fee address in UI.</p>'
+          /* ⛔ REECRIT LE 2026-09-22. L ancienne phrase disait : « Seed into the book ≠ open fee
+           *    0.001 ETH, once. No fee address in UI. » Trois defauts dans une ligne :
+           *      · `≠` est une notation de specification, elle appartient au code ;
+           *      · « No fee address in UI » est une NOTE DE CONCEPTION — un rappel qu on s ecrit a
+           *        soi-meme, affiche a l utilisateur, qui n a aucune idee de ce que ca veut dire ;
+           *      · et la distinction qui compte vraiment — ton argent reste a toi / le frais part —
+           *        etait exprimee par un symbole au lieu d une phrase.
+           *    Elle est maintenant dite en clair, dans l ordre ou l utilisateur la vit. */
+          + '<p class="note" style="margin-top:6px">Two amounts, and only one is a fee: the ETH you '
+          + 'put into the pool <b>stays in your market</b>, and <b>0.001 ETH</b> is paid once to open it.</p>'
           + lien;
         const goLaunch = () => {
           try {
@@ -10381,7 +10406,10 @@ function publierSnapshotBrain(vu, h) {
   }
   const sum = $('#tbBrainSummary');
   if (sum && snap) {
-    sum.textContent = 'Agent dump · ' + (snap.symbole || (snap.address || '').slice(0, 10))
+    /* ⛔ LE MEME DEFAUT QUE LE REPLI DES PUCES DE STADE, corrige dans le meme passage : un
+     *    `slice(0, 10)` sur une adresse B20 rend « 0xb2000000 » pour TOUT LE MONDE. Le correctif
+     *    qui rate son jumeau ne corrige rien — c est la fin de l adresse qui distingue. */
+    sum.textContent = 'Agent dump · ' + (snap.symbole || '…' + String(snap.address || '').slice(-8))
       + ' · ' + (snap.phase || '?') + ' · tick ' + (snap.tick ?? '?')
       + (snap.marche && snap.marche.hooked === true ? ' · alive on TokenizedBlock'
         : snap.marche && snap.marche.hooked === false ? ' · outside market' : '')

@@ -144,6 +144,33 @@ function chainesVisibles(src) {
     const t = m[1].replace(/\s+/g, ' ').trim();
     if (t.length > 3 && /[a-zA-Z]/.test(t)) out.push({ t, ou: 'HTML' });
   }
+  /* 3. ⛔⛔ TOUTE CHAINE QUI CONTIENT UNE BALISE EST DU MARKUP, DONC DESTINEE A L ECRAN.
+   *    AJOUTE LE 2026-09-22, APRES QUE PHIL A ENTOURE UN TEXTE QUE CE FICHIER LAISSAIT PASSER :
+   *        corps = '<span class="note">… each market is LUE. Silence ≠ broken.</span>'
+   *    Elle contient `LUE` ET `≠` — DEUX motifs interdits depuis des semaines — et la garde restait
+   *    VERTE.
+   *    ⇒ Parce que les regles 1 et 2 ne voient que `.textContent =` / `.innerHTML =` DIRECTS et le
+   *      texte des balises du document. Or cette app construit presque tout son HTML dans des
+   *      VARIABLES (`corps = ...`, un `return`, un `.map()`), assignees a `innerHTML` bien plus
+   *      loin. C etait donc la plus grande moitie de l ecran qui n etait pas gardee : la regle 3 a
+   *      fait passer le compte de 1804 a 2298 chaines lues — 494 de plus, soit 27 %.
+   *    ⛔ C est le defaut « la garde est VRAIE et couvre la MAUVAISE MOITIE ». Elle n a jamais menti
+   *      sur ce qu elle lisait ; elle lisait ailleurs. Un vert ne vaut que par le compte de ce qui a
+   *      ete INSPECTE — c est pour ca que `total` est asserte plus bas, et ce compte est la seule
+   *      chose qui aurait pu reveler le trou sans une capture d ecran de Phil.
+   * ⛔ LE CRITERE EST LA BALISE, PAS LA VARIABLE : suivre `corps` jusqu a son `innerHTML` demande
+   *    d analyser le flot, ce qu une regexp ne fait pas. Une chaine qui porte `<span`, `<b>`,
+   *    `<button`… est du markup PAR CONSTRUCTION — on n a pas besoin de savoir ou elle atterrit.
+   * ⚠️ BORNE : une chaine de texte pur assignee a une variable puis affichee passe toujours. La
+   *    regle attrape le markup, pas tout ce qui finit a l ecran. */
+  const sansCommJs = src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1 ');
+  const BALISE = /<\/?(?:span|b|i|u|em|strong|div|p|button|a|li|ul|ol|br|code|small|h[1-6]|img|label|table|tr|td|th)\b/i;
+  for (const m of sansCommJs.matchAll(/'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"/g)) {
+    const t = (m[1] ?? m[2] ?? '').trim();
+    if (t.length > 3 && BALISE.test(t)) out.push({ t, ou: 'MARKUP' });
+  }
   return out;
 }
 

@@ -10,12 +10,24 @@
 // ⚠️ Un palier suit le prix, dans les deux sens : c est un etat, pas une recompense acquise.
 import { progressionPalier, PALIERS } from './pointsdevie.js';
 
+/* ⛔⛔ REECRITS LE 2026-09-22 (capture de Phil). TROIS DES CINQ TITRES NIAIENT UN DEFAUT :
+ *     « not worthless », « not a broken block », et plus loin « Silence ≠ broken ».
+ *     NIER UN DEFAUT LE SUGGERE. Personne ne pensait qu un block sans marche etait sans valeur
+ *     avant qu on ecrive « pas sans valeur » a cote de son nom — la denegation plante l idee, puis
+ *     la laisse. Un titre dit ce qui EST, et ce que le lecteur peut en faire ; jamais ce qu il ne
+ *     faut pas croire.
+ * ⛔ ET LE JARGON PART AVEC : « node/RPC lag » nomme NOTRE infrastructure a quelqu un qui n a
+ *    aucune raison de savoir ce qu est un RPC. Ce qui le concerne, c est que la lecture n a pas
+ *    abouti et qu elle se retente.
+ * ⛔ CE QUI NE CHANGE PAS : la SEMANTIQUE. « Dead » reste dit sur le meme fait mesure — le createur
+ *    a DETENU puis est tombe a zero — parce que 40 createurs sur 43 a zero n ont jamais rien
+ *    detenu, et les confondre accuserait des gens a tort. Seule la formulation change. */
 export const STADES_HORS_PALIER = Object.freeze([
-  { cle: 'PRIX_NON_LU', titre: 'Tier not judged — the ETH/USD price is not read yet' },
+  { cle: 'PRIX_NON_LU', titre: 'Tier pending — waiting on the ETH price' },
   { cle: 'NOURRI', titre: 'Awake — no market yet, fed by its community' },
-  { cle: 'SANS_MARCHE', titre: 'No market yet — never traded, not worthless' },
-  { cle: 'NON_LU', titre: 'Market unread — node/RPC lag, not a broken block' },
-  { cle: 'MORT', titre: 'Dead — its creator held it and holds none now' },
+  { cle: 'SANS_MARCHE', titre: 'No market yet — it has never been traded' },
+  { cle: 'NON_LU', titre: 'Market not read — our reader did not come back' },
+  { cle: 'MORT', titre: 'Gone quiet — its creator held it, and holds none now' },
 ]);
 /* ⛔⛔ UN EMOJI QUI NE S AFFICHE PAS N EST PAS UN EMOJI (Phil, 2026-09-17 : capture d un carre vide a la
  * place de 🪵 devant « ARC · Trunk »). 🪵 (Emoji 12.0, 2019) et 🏞 manquent dans les polices de
