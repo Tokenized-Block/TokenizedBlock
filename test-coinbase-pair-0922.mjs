@@ -1,0 +1,24 @@
+// tip 20260922-coinbase-pair — Create offers Coinbase ACTION pairs; CreateRouter Instant Birth path.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { ACTIONS_COINBASE, pairesProposees, etiquettePaire } from './paires.js';
+const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+const tip = '20260922-coinbase-pair';
+assert.match(html, new RegExp('data-build="' + tip + '"'));
+assert.match(html, /Coinbase tokenized stocks/);
+assert.match(html, /id="cPaireChips"/);
+assert.match(html, /data-paire-chip/);
+assert.match(html, /PAIRES_CHIP_QUICK = \['ETH', 'AAPLc', 'GOOGLc', 'NVDAc', 'COINc'\]/);
+assert.match(html, /hookV8Deploye/);
+assert.match(html, /deviseOk = v3Pret \|\| Number\(CHAINE\) === 8453/);
+assert.match(html, /quoteAction/);
+assert.match(html, /function openFeeDejaPayePour/);
+assert.match(html, /function majFundWalletPourPaire/);
+assert.match(html, /Fees for Dev/);
+assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);
+const actions = pairesProposees(8453).filter((p) => p.type === 'ACTION');
+assert.equal(actions.length, ACTIONS_COINBASE.length);
+assert.match(etiquettePaire(actions[0]), /Coinbase tokenized stock/);
+const lp = readFileSync(new URL('./lancer-pool.js', import.meta.url), 'utf8');
+assert.match(lp, /Instant Birth only pairs against native ETH/);
+console.log('ALL PASS tip ' + tip);
