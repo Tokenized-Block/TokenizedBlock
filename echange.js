@@ -1,6 +1,7 @@
 // echange.js — acheter / vendre un block DANS l app, avec le frais d interface de 0,5 %, et le buyback.
 // ================================================================================================
-// ⛔ HARD RULE tip 2349/2350: every in-app Buy/Sell 0.5% → FEE_WALLET only (never 37eb, never skip).
+// ⛔ HARD RULE tip 2349/2350 / 20260922-2023: every in-app Buy/Sell 0.5% → FEE_WALLET only (never 37eb, never skip — including hooked pools).
+//    Hooked Dex may add hook chop on top; zero interface fees worse than stacked. Birth=V8 only on MAIN.
 //    External Dex on unhooked pools = 0 forever — chop that volume only via TbFeeHook Launch (new pool id).
 // ⛔ DECISION DE PHIL (2026-09-13) : 0,5 % de chaque achat / vente fait via l app va au wallet de frais, DIT avant
 //    la signature. Mesure qui l a motivee : 459 creations B20 en 22 h sur la factory publique de Base, 2 chez nous.
@@ -49,11 +50,10 @@ export function fraisSur(total, bps) {
  * smart wallet qui rachete du TBLOCK. */
 export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === WALLET_TRESOR_SMART.toLowerCase();
 
-/** tip 2350: fail-closed — un trade hors tresor doit porter un TAKE/TAKE_PORTION vers le wallet de frais, montant non nul. */
-function assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaieDeja = false }) {
+/** tip 2350 / 20260922-2023: fail-closed — un trade hors tresor doit porter un TAKE/TAKE_PORTION vers le wallet de frais, montant non nul.
+ *  Hooked pools may ALSO chop on-chain; zero interface fees were worse than stacked fees (live dig: a6cf got 0 Buy/Sell). */
+function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
-  /* le hook de nos pools paie deja le wallet de frais sur ce swap : l interface ne s y ajoute pas (voir planEchange) */
-  if (hookPaieDeja && bps === 0n) return null;
   if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
@@ -105,19 +105,19 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: marche.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
   }
-  /* ⛔⛔ PHIL (2026-09-19) : « 3,5 %, c est de trop — entre 0,5 % et 3 % ». Mesure du 2026-09-18 : sur une pool de
-   *    notre hook HOOK_PREVU, le swap paie DEJA 3 % (2 % au wallet de frais, 1 % au createur). Ajouter nos 0,5 %
-   *    d interface faisait 3,5 %. Sur ces pools, l interface ne prend plus rien : total 3 %, et le wallet de frais
-   *    est deja paye par le hook. Partout ailleurs : 0,5 % d interface, comme avant. */
+  /* tip 20260922-2023: ALWAYS take interface 0.5% → FEE_WALLET on in-app Buy/Sell (unless fee-wallet buyback).
+   *    Prior skip when estNotreHook assumed hook TAKE ~3% already hit a6cf — live dig 2026-09-22: sink got 0
+   *    from Buy/Sell volume (hooked path skipped interface AND hook was not depositing). Stacked fees
+   *    (hook chop + 0.5% interface) beat zero fees. hooked Dex may add hook chop on top. Birth=V8 only. */
   const hookPaieDeja = !!(marche.cle && estNotreHook(marche.cle.hooks));
-  const bps = (estWalletDeFrais(compte) || hookPaieDeja) ? 0n : FRAIS_INTERFACE_BPS;
+  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
   /* ⛔⛔ ACHAT VIA TBLOCK (Phil, 2026-09-13 : « fait l achat via TBLOCK ») : un block apparie a TBLOCK se paie en ETH
    *    et se vend pour de l ETH, en DEUX sauts dans UNE transaction — ETH -> TBLOCK -> block, ou l inverse. */
   if (marche.paire === 'TBLOCK') {
     const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
     if (!route.actions) return route;
-    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions, hookPaieDeja });
+    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions });
     if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume: route.resume };
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
   }
@@ -130,21 +130,43 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
     const devise = c0 === j ? c1 : c0;
     const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne
+    /* tip 20260922-2023: interface 0.5% even on hooked ERC-20 pairs (hook may stack on top). */
+    const { frais: fraisPair, net: netPair } = sens === 'ACHAT' ? fraisSur(m, bps) : { frais: 0n, net: m };
+    const montantQuote = sens === 'ACHAT' ? netPair : m;
     let q;
     try {
-      const rq = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: zf, montant: m }) }, 'latest']);
+      const rq = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: zf, montant: montantQuote }) }, 'latest']);
       q = BigInt('0x' + String(rq).slice(2, 66));
     } catch (e) {
       return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
     }
     if (q <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
-    const min = (q * (10000n - tol)) / 10000n;
     const entree = sens === 'ACHAT' ? devise : j, sortie = sens === 'ACHAT' ? j : devise;
-    const actionsD = [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
-      { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
-    const resumeD = { paye: m, payeDevise: sens === 'ACHAT' ? 'pair' : 'block', recoitAuMoins: min, recoitDevise: sens === 'ACHAT' ? 'block' : 'pair',
-      quote: q, frais: 0n, fraisDevise: null, montantSwap: m, devise, fraisBps: 0n, beneficiaireFrais: null, fraisMarcheBps: 300 };
-    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: 0n, resume: resumeD,
+    let actionsD, resumeD, valeurD = 0n;
+    if (sens === 'ACHAT') {
+      const min = (q * (10000n - tol)) / 10000n;
+      actionsD = bps > 0n
+        ? [{ code: ACTIONS_V4.SETTLE, params: paramsAction.settle(devise, m, true) },
+          { code: ACTIONS_V4.TAKE, params: paramsAction.take(devise, FEE_WALLET, fraisPair) },
+          { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }]
+        : [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
+          { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
+      resumeD = { paye: m, payeDevise: 'pair', recoitAuMoins: min, recoitDevise: 'block',
+        quote: q, frais: fraisPair, fraisDevise: 'pair', montantSwap: netPair, devise,
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
+    } else {
+      const fraisVente = (q * bps) / 10000n;
+      const min = ((q - fraisVente) * (10000n - tol)) / 10000n;
+      actionsD = [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
+        ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(sortie, FEE_WALLET, bps) }] : []),
+        { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
+      resumeD = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'pair',
+        quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
+    }
+    const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD });
+    if (koPair) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koPair, resume: resumeD };
+    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: valeurD, resume: resumeD,
       cle, zeroForOne: zf, sortieMinTete: 0n, jetonPaye: entree, valeurEth: false });
   }
   const zeroForOne = sens === 'ACHAT'; // ETH est currency0 : acheter = payer currency0
@@ -233,7 +255,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
   resume.fraisMarcheBps = hookPaieDeja ? 300 : null;
-  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaieDeja });
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
 }
