@@ -1625,7 +1625,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2023" hidden>Build <code>20260922-2023</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-2026" hidden>Build <code>20260922-2026</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6741,7 +6741,7 @@ async function preparerEchange(sens) {
     return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
-  /* ⛔ P0 2026-09-15 / tip 20260922-2023: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback).
+  /* ⛔ P0 2026-09-15 / tip 20260922-2026: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback).
    * Hooked pools no longer exempt — interface 0.5% always; hook may stack on top. */
   const feeLabel = 'fee';
   if (!estWalletDeFrais(compte)) {
@@ -7230,7 +7230,7 @@ async function calculerLancement() {
        *     tourne toujours. Tous les marches du chemin rapide s ouvraient donc sur le V5. C est la
        *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
       const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook });
-      /* tip 20260922-1934 + 20260922-2023: MAIN never falls through to hooks=0x0; Birth=V8 only. */
+      /* tip 20260922-1934 + 20260922-2026: MAIN never falls through to hooks=0x0; Birth=V8 only. */
       if (mainnet && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — fee hook unread (will not open an unhooked market)' };
       } else if (mainnet && String(hooks).toLowerCase() !== String(HOOK_V8).toLowerCase()) {
@@ -9833,7 +9833,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
    *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
    *     diverger — il n y en a plus qu un. */
   const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise });
-  /* tip 20260922-1934 + 20260922-2023: never one-shot Create+Launch into hooks=0x0; MAIN Birth=V8 only. */
+  /* tip 20260922-1934 + 20260922-2026: never one-shot Create+Launch into hooks=0x0; MAIN Birth=V8 only. */
   if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
   if (Number(CHAINE) === 8453 && String(hook).toLowerCase() !== String(HOOK_V8).toLowerCase()) return 'SANS';
   e.className = 'note';
