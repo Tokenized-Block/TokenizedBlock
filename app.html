@@ -1501,6 +1501,33 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="wActifsNote"></p>
     </div>
 
+    <!-- tip 20260922-1955 — TokenizedBank MVP (Raksha) : B20 = fund wallet ; graft → proof of hold
+         (balanceOf) → Open credit USDC stub ; agent handoff. No bank contract yet. Never show a6cf. -->
+    <div class="carte" id="wBankCarte" style="margin-top:14px">
+      <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
+      <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft it onto TokenizedBank to hold it —
+        then open <b>USDC credit</b> from on-chain <b>proof of hold</b> (your balance), not traditional underwriting.
+        The agent runs the ops — you only one-click confirm.</p>
+      <ol class="note" style="margin:10px 0 8px 1.2em; padding:0; line-height:1.45">
+        <li><b>Hold</b> — pick a B20 from My blocks</li>
+        <li><b>Proof of hold</b> — read <code>balanceOf</code> on Base</li>
+        <li><b>Graft block</b> — register it on TokenizedBank (local until contract)</li>
+        <li><b>Open credit USDC</b> — stub until the credit contract ships</li>
+        <li><b>Confirm</b> — one click (wallet sign placeholder)</li>
+      </ol>
+      <label class="champ">My block (hold)
+        <select id="tbBlock"><option value="">Connect wallet to list your blocks…</option></select>
+      </label>
+      <p class="note mono" id="tbProof">Proof of hold: —</p>
+      <div class="wActions" style="margin-top:8px; flex-wrap:wrap; gap:8px">
+        <button class="bouton sec" id="tbProofBtn" type="button">Read proof of hold</button>
+        <button class="bouton sec" id="tbGraftBtn" type="button" disabled>Graft block</button>
+        <button class="bouton" id="tbOpenBtn" type="button" disabled>Open TokenizedBank</button>
+      </div>
+      <p class="note" id="tbEtat" style="margin-top:8px"></p>
+      <p class="note" id="tbAgent">After confirm, <b>Zero 1 / Brain</b> will run ops. Credit mint path is not deployed yet — this screen stays honest.</p>
+    </div>
+
     <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
          ca »). C etait une note de conception, pas une information pour l utilisateur.
          La decision elle-meme TIENT : un wallet par block, detenant des fonds, pilote par un agent
@@ -1587,7 +1614,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-1934" hidden>Build <code>20260922-1934</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-1955" hidden>Build <code>20260922-1955</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2129,6 +2156,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
+import { proofOfHold, preuvePositive, grefferBlock, lireGreffes, ouvrirCreditUsdcStub, BANK_CONTRACT } from './tokenized-bank.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
@@ -2239,6 +2267,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
+  if (nom === 'wallet') void peindreTokenizedBank();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -3406,6 +3435,7 @@ async function connecter() {
 
   void listerMesBlocks();
   void majWallet();
+  void peindreTokenizedBank();
 }
 
 /* ⛔ UNE SEULE LECTURE POUR DEUX ONGLETS. My block et Wallet ont besoin des memes creations ; les
@@ -3922,6 +3952,7 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     $('#sEtat').textContent = '';
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
     void majWallet();
+    void peindreTokenizedBank();
   });
 }
 
@@ -7939,6 +7970,146 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
   $('#plEtat').className = 'note';
   $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. The one-time 0.001 ETH fee opens this new market.';
 });
+/* ══ TokenizedBank MVP (tip 20260922-1955) ═══════════════════════════════════════════════════════
+ * Hold → proofOfHold(balanceOf) → graft (local) → Open credit USDC stub → one-click confirm.
+ * ⛔ No BANK_CONTRACT yet. Never show fee sink. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
+let tbPreuve = null;
+let tbGreffe = false;
+
+async function peindreTokenizedBank() {
+  const sel = $('#tbBlock');
+  const etat = $('#tbEtat');
+  if (!sel) return;
+  if (!compte) {
+    sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
+    $('#tbProof').textContent = 'Proof of hold: —';
+    $('#tbGraftBtn').disabled = true;
+    $('#tbOpenBtn').disabled = true;
+    tbPreuve = null; tbGreffe = false;
+    if (etat) etat.textContent = '';
+    return;
+  }
+  sel.innerHTML = '<option value="">Reading My blocks…</option>';
+  const vus = new Map();
+  try {
+    const { gardees } = await mesCreations();
+    for (const c of gardees || []) if (c && c.jeton) vus.set(String(c.jeton).toLowerCase(), c.symbole || null);
+  } catch (_) {}
+  try {
+    const fr = await mesFrappes(false, true);
+    for (const x of (fr && fr.blocks) || []) if (!vus.has(x.jeton)) vus.set(x.jeton, null);
+  } catch (_) {}
+  /* also surface assets already listed as blocks in the wallet */
+  for (const a of actifs || []) {
+    if (a && a.bloc && a.adr) vus.set(String(a.adr).toLowerCase(), a.nom || null);
+  }
+  const opts = [];
+  for (const [jeton, sym] of vus) {
+    let label = sym;
+    if (!label) {
+      try {
+        const h = String(await rpc('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2);
+        const n = parseInt(h.slice(64, 128), 16);
+        if (n > 0 && n < 64) {
+          let s = '';
+          for (let i = 0; i < n; i++) s += String.fromCharCode(parseInt(h.slice(128 + i * 2, 130 + i * 2), 16));
+          label = s;
+        }
+      } catch (_) {}
+    }
+    opts.push({ jeton, symbole: label || court(jeton) });
+  }
+  sel.innerHTML = opts.length
+    ? '<option value="">Pick a block you hold…</option>' + opts.map((o) =>
+      '<option value="' + enTexte(o.jeton) + '">' + enTexte(o.symbole) + ' · ' + enTexte(court(o.jeton)) + '</option>').join('')
+    : '<option value="">No B20 found for this wallet yet</option>';
+  const greffes = lireGreffes(localStorage, compte);
+  if (etat) etat.textContent = greffes.length
+    ? ('Grafted locally: ' + greffes.map(court).join(', ') + (BANK_CONTRACT ? '' : ' · on-chain bank contract: not deployed'))
+    : (BANK_CONTRACT ? '' : 'TokenizedBank credit contract: not deployed yet — proof + graft + confirm are live reads / local state.');
+  tbPreuve = null; tbGreffe = false;
+  $('#tbProof').textContent = 'Proof of hold: —';
+  $('#tbGraftBtn').disabled = true;
+  $('#tbOpenBtn').disabled = true;
+}
+
+async function tbLirePreuve() {
+  const etat = $('#tbEtat');
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
+  if (!ADRESSE.test(block)) { if (etat) etat.textContent = 'Pick a block from My blocks.'; return; }
+  $('#tbProof').textContent = 'Proof of hold: reading balanceOf on Base…';
+  $('#tbGraftBtn').disabled = true;
+  $('#tbOpenBtn').disabled = true;
+  tbPreuve = null; tbGreffe = false;
+  try {
+    tbPreuve = await proofOfHold({ rpc, block, holder: compte });
+  } catch (e) {
+    tbPreuve = { etat: 'NON_LU', balance: null, pourquoi: String((e && e.message) || e) };
+  }
+  if (tbPreuve.etat === 'LU') {
+    const u = typeof formaterUnites === 'function' ? formaterUnites(tbPreuve.balance, 18) : String(tbPreuve.balance);
+    $('#tbProof').textContent = 'Proof of hold: ' + u + ' (raw balanceOf) · ' + court(block);
+    if (preuvePositive(tbPreuve)) {
+      $('#tbGraftBtn').disabled = false;
+      if (etat) etat.textContent = 'Hold proven on-chain. Graft this block, then Open TokenizedBank.';
+    } else {
+      if (etat) etat.textContent = 'Proof is zero — Open TokenizedBank stays gated until balanceOf > 0.';
+    }
+  } else {
+    $('#tbProof').textContent = 'Proof of hold: unread' + (tbPreuve.pourquoi ? (' · ' + tbPreuve.pourquoi) : '');
+    if (etat) etat.textContent = 'Could not prove hold — try again or pick another block.';
+  }
+}
+
+$('#tbProofBtn') && $('#tbProofBtn').addEventListener('click', () => { void tbLirePreuve(); });
+$('#tbBlock') && $('#tbBlock').addEventListener('change', () => {
+  tbPreuve = null; tbGreffe = false;
+  $('#tbProof').textContent = 'Proof of hold: —';
+  $('#tbGraftBtn').disabled = true;
+  $('#tbOpenBtn').disabled = true;
+  $('#tbEtat').textContent = '';
+});
+$('#tbGraftBtn') && $('#tbGraftBtn').addEventListener('click', () => {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
+    $('#tbEtat').textContent = 'Read a positive proof of hold first.';
+    return;
+  }
+  const r = grefferBlock(localStorage, compte, block);
+  if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Graft failed.'; return; }
+  tbGreffe = true;
+  $('#tbOpenBtn').disabled = false;
+  $('#tbEtat').textContent = 'Block grafted onto TokenizedBank (local registry). Ready to open credit — one-click confirm next.';
+});
+$('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  const etat = $('#tbEtat');
+  if (!tbGreffe || !preuvePositive(tbPreuve)) {
+    if (etat) etat.textContent = 'Graft a block with proof > 0 first.';
+    return;
+  }
+  const credit = ouvrirCreditUsdcStub({ holder: compte, block, preuve: tbPreuve });
+  /* one-click confirm: prefer personal_sign placeholder; fall back to recording the eth_call proof */
+  let sig = null;
+  const msg = 'TokenizedBank confirm\nblock=' + block + '\nholder=' + compte
+    + '\nproof=' + String(tbPreuve.balance) + '\nbuild=20260922-1955';
+  try {
+    if (window.ethereum && compte) {
+      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
+    }
+  } catch (e) {
+    if (etat) etat.textContent = 'Confirm cancelled in wallet — ' + String((e && e.message) || e);
+    return;
+  }
+  if (etat) {
+    etat.textContent = credit.etat === 'PENDING_CONTRACT'
+      ? ('Confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Credit USDC: stub — no mint contract yet. '
+        + 'Zero 1 / Brain will run ops. proof=' + String(tbPreuve.balance) + '.')
+      : ('Refused: ' + (credit.pourquoi || credit.etat));
+  }
+});
+
 $('#pCompte').addEventListener('click', async () => {
   if (!compte) { await connecter(); return; }
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
