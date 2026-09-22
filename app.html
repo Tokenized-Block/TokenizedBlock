@@ -1631,7 +1631,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-same-sig" hidden>Build <code>20260922-same-sig</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-no-unhooked" hidden>Build <code>20260922-no-unhooked</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5784,7 +5784,7 @@ function peindreHookedRoute() {
   el.innerHTML = '<b>Hooked markets</b> · trade with <b>Buy/Sell</b> right here'
     + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : ' · waiting for Live window / Dex index')
     + ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>'
-    + '. Hooked Dex chops · unhooked Dex = $0 → profile <b>Launch hooked</b>.';
+    + '. Hooked Dex chops · external Dex = $0 → profile <b>Launch hooked</b>.';
   const b = $('#sfOpenTbgas');
   if (b) {
     b.addEventListener('click', (ev) => {
@@ -6264,7 +6264,7 @@ function peindreLive() {
             ? (poolDecouvertPour(e.jeton).isTbFeeHook
               ? '🧱 <b>' + nom + '</b> was born here · market open'
               /* tip 20260922-fee-funnel: Created→IB — unhooked label + V8 CTA on the row */
-              : '🧱 <b>' + nom + '</b> was born on another launchpad · unhooked')
+              : '🧱 <b>' + nom + '</b> was born on another launchpad')
             : '🧱 <b>' + nom + '</b> was born')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')

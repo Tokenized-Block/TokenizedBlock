@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-assert.match(html, /data-build="20260922-(ib-paid|ib-batch|eth-fixe|2141)"/);
+assert.match(html, /data-build="20260922-(no-unhooked|ib-paid|ib-batch|eth-fixe|2141)"/);
 assert.doesNotMatch(html, /Launch hooked V8/);
+assert.match(html, /was born on another launchpad'/);
+assert.doesNotMatch(html, /was born on another launchpad · unhooked/);
 assert.match(html, /unhookedCreate\s*\n\s*\? ' · <span class="filOpen">Open profile<\/span>'/);
 const i = html.indexOf('const openHint');
 const chunk = html.slice(i, i + 450);

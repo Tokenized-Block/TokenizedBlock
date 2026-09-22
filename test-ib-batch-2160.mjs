@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
-assert.match(html, /data-build="20260922-same-sig"/);
+assert.match(html, /data-build="20260922-(same-sig|no-unhooked)"/);
 assert.match(html, /forcerCreateRouterIb/);
 assert.match(html, /function estCreateB20ValeurZero/);
 assert.match(html, /function refuseSiCreateB20ValeurZero/);
