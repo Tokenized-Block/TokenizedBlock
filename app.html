@@ -1634,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-bridge-tab" hidden>Build <code>20260922-bridge-tab</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-prepaye-inscrire-dust" hidden>Build <code>20260922-prepaye-inscrire-dust</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2039,7 +2039,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <!-- ══ BRIDGE (tip 20260922-bridge-tab · Raksha / Zero 1) ═══════════════════════════════════
+  <!-- ══ BRIDGE (tip 20260922-prepaye-inscrire-dust · Raksha / Zero 1) ═══════════════════════════════════
        Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
        On-chain confirm is STUB — Instant Birth / CreateRouter / V8 untouched. -->
@@ -2241,7 +2241,7 @@ let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
-/* tip 20260922-bridge-tab */
+/* tip 20260922-prepaye-inscrire-dust */
 import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL } from './bridge.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
@@ -2377,7 +2377,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void peindreTokenizedBank();
-  /* tip 20260922-bridge-tab */
+  /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'bridge') { peindreBridgeActifs(); void peindreBridgeBlocks(); majBridgeQuote(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
@@ -7537,11 +7537,22 @@ async function calculerLancement() {
   } else {
     plan.fraisLancementWei = null;
   }
-  /* tip 20260922-prepaye-skip: recover CreateRouter createPaid → prepaye; zero paid inscrire etape (fee already at sink). */
+  /* tip 20260922-prepaye-skip: recover CreateRouter createPaid → prepaye.
+   * tip 20260922-prepaye-inscrire-dust: CreateRouter 0.001 hits the sink, but V8.inscrire still
+   * requires msg.value >= fraisVie (CREATE_FEE_WEI_FLOOR = 0.0003) while payee=false. Zeroing the
+   * etape to 0x0 reverts MontantInsuffisant (SS7K3P 0x03002ed3…). Keep floor dust on inscrire;
+   * only fully zero when hook inscriptionPayee is already true. */
   try { await recupererPrepayeCreateRouter(adr); } catch (_) {}
   if (plan && openFeeDejaPayePour(adr, plan) && Array.isArray(plan.etapes)) {
+    const hookPayee = !!(plan.v2 && plan.inscriptionPayee);
     plan.etapes = plan.etapes.map((et) => {
       if (!et || !et.payant) return et;
+      const isInscrire = et.data && String(et.data).toLowerCase().startsWith('0xbb920fed');
+      if (isInscrire && !hookPayee) {
+        const minV = CREATE_FEE_WEI_FLOOR;
+        return { ...et, value: '0x' + minV.toString(16), payant: true,
+          nom: 'Register on V8 — 0.0003 ETH min (open fee already paid via Create)' };
+      }
       /* tip 20260922-no-approx-dollar-step: never keep ≈ $1 in the approval label when fee already paid */
       return { ...et, value: '0x0', payant: false, nom: 'Bring it to life — open fee already paid on chain' };
     });
@@ -7732,16 +7743,21 @@ function peindrePlan(plan, adr) {
 
   /* tip 20260922-eth-fixe: fee floor already applied above — balance gate only. */
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
-    /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains. */
-    const fraisEncore = feeDejaPaye ? 0n : BigInt(fraisL);
+    /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains.
+     * tip 20260922-prepaye-inscrire-dust: CreateRouter prepay still needs fraisVie dust on inscrire. */
+    const inscrireDust = (plan.etapes || []).some((et) => et && et.payant && et.data
+      && String(et.data).toLowerCase().startsWith('0xbb920fed'));
+    const fraisEncore = inscrireDust ? CREATE_FEE_WEI_FLOOR : (feeDejaPaye ? 0n : BigInt(fraisL));
     const seedBesoin = plan.naissance ? BigInt(plan.quoteEthWei || plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n;
     const besoin = fraisEncore + seedBesoin;
     if (BigInt(soldeEthNat) < besoin) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = plan.naissance
-      ? (feeDejaPaye
+      ? (feeDejaPaye && !inscrireDust
         ? 'Not enough ETH for pool seed + first micro-swap — top up, then work it out again.'
-        : 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.')
+        : (inscrireDust
+          ? 'Not enough ETH for V8 register dust (0.0003) + pool seed + first micro-swap — top up, then work it out again.'
+          : 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.'))
       : 'Not enough ETH for the one-time 0.001 ETH life fee — top up, then work it out again.';
     return;
     }
@@ -7795,7 +7811,12 @@ async function signerEtapeLancement(etape) {
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
   let r;
   try {
-    if (etape.payant) e.textContent = 'Opening your wallet — the one-time 0.001 ETH fee brings it to life (paid on chain).';
+    if (etape.payant) {
+      const v = BigInt(etape.value || '0x0');
+      e.textContent = (v > 0n && v <= CREATE_FEE_WEI_FLOOR)
+        ? 'Opening your wallet — V8 register dust (0.0003 ETH; open fee already paid via Create).'
+        : 'Opening your wallet — the one-time 0.001 ETH fee brings it to life (paid on chain).';
+    }
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to: etape.to, data: etape.data, value: etape.value || '0x0' });
   } finally { lancementEnCours = false; }
@@ -7971,7 +7992,11 @@ async function lancerMarcheBlock(adr) {
     }
     /* v2: open fee already handled via inscription etape; still need seed+micro for Instant Birth.
      * Non-v2: need open fee (unless dejaPaye) + seed+micro when naissance. */
-    const fraisEncore = (!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n;
+    /* tip 20260922-prepaye-inscrire-dust: if a payant inscrire etape remains, keep fraisVie floor. */
+    const inscrireDustL = (planCourant.etapes || []).some((et) => et && et.payant && et.data
+      && String(et.data).toLowerCase().startsWith('0xbb920fed'));
+    const fraisEncore = inscrireDustL ? CREATE_FEE_WEI_FLOOR
+      : ((!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n);
     const besoinTotal = fraisEncore + besoinSeed;
     if (soldeEthNat != null && BigInt(soldeEthNat) < besoinTotal) {
       e.className = 'note wKo'; vieAutoArreter();
@@ -11963,7 +11988,7 @@ if (presetLien) {
 if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') {
   setTimeout(() => allerA('creer'), 0);
 }
-/* tip 20260922-bridge-tab */
+/* tip 20260922-prepaye-inscrire-dust */
 if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'bridge') {
   setTimeout(() => allerA('bridge'), 0);
 }
@@ -11973,7 +11998,7 @@ window.addEventListener('hashchange', () => {
   if (h === 'bridge') allerA('bridge');
 });
 
-/* ── Bridge (tip 20260922-bridge-tab) ───────────────────────────────────────────────────────── */
+/* ── Bridge (tip 20260922-prepaye-inscrire-dust) ───────────────────────────────────────────────────────── */
 function peindreBridgeActifs() {
   const from = $('#brFrom'), to = $('#brTo');
   if (!from || !to) return;
