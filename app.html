@@ -1632,7 +1632,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2140" hidden>Build <code>20260922-2140</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-2141" hidden>Build <code>20260922-2141</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6288,9 +6288,10 @@ function peindreLive() {
       && poolDecouvertPour(e.jeton) && !poolDecouvertPour(e.jeton).isTbFeeHook;
     /* tip 20260922-2140: never promise V8 birth on a foreign unlabeled token.
      * Instant Birth on TB → #creer (paid); Open profile secondary. No Create here (free). */
+    /* tip 20260922-2141 MINIMAL: Created unhooked = Open profile / tap to open ONLY.
+     * No Launch-hooked-V8 button · no Instant Birth CTA on foreign unlabeled tokens. */
     const openHint = unhookedCreate
-      ? (' · <button type="button" class="puce on" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button>'
-        + ' · <span class="filOpen">Open profile</span>')
+      ? ' · <span class="filOpen">Open profile</span>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
