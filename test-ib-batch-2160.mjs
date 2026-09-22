@@ -18,7 +18,7 @@ assert.match(html, /Do NOT call creerEtVivreUneSignature/);
 assert.match(html, /creerBlock IB final guard/);
 assert.match(html, /CreateRouter · 0\.001 ETH once/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
-assert.match(html, /Fees for Dev/);
+assert.doesNotMatch(html, /Fees for Dev/);
 assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);
 assert.doesNotMatch(html, /cIbPrepCreate/);
 assert.doesNotMatch(html, /Create block first \(factory · free · not Instant Birth\)/);

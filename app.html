@@ -1633,7 +1633,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-no-dollar-dedupe" hidden>Build <code>20260922-no-dollar-dedupe</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-fee-label-clean" hidden>Build <code>20260922-fee-label-clean</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9450,7 +9450,7 @@ async function majPaire() {
   } else if (q.paire.type === 'ACTION') {
     /* tip 20260922-stock-pair-ux: quote stock ≠ Birth fee; Launch is unilateral (blocks only) + V8 */
     suite = 'Market quoted in ' + (q.paire.symbole || 'that stock')
-      + ' (Coinbase tokenized stock). Instant Birth = CreateRouter 0.001 ETH once · Fees for Dev, then open V8 pool '
+      + ' (Coinbase tokenized stock). Instant Birth = CreateRouter 0.001 ETH once, then open V8 pool '
       + q.paire.symbole + '↔your block (no ETH seed — buyers need ' + (q.paire.symbole || 'the stock') + ' to trade).';
   }
   n.textContent = suite;
@@ -9460,7 +9460,7 @@ async function majPaire() {
     if (q.paire.type === 'TBLOCK') chip.textContent = 'Quote = TBLOCK — buyers need TBLOCK';
     else if (q.paire.type === 'B20') chip.textContent = 'Quote = B20 ' + (q.paire.symbole || '·');
     else if (q.paire.type === 'ACTION') {
-      chip.textContent = 'Quote = ' + (q.paire.symbole || 'stock') + ' · fee 0.001 ETH · Fees for Dev';
+      chip.textContent = 'Quote = ' + (q.paire.symbole || 'stock') + ' · fee 0.001 ETH';
     } else chip.textContent = 'Quote = ' + (q.paire.symbole || 'custom');
   }
   /* le resume replie porte le choix en cours, jamais « TBLOCK by default » pose en dur */
@@ -9479,20 +9479,20 @@ function majFundWalletPourPaire() {
   if (p && p.type === 'ACTION') {
     const sym = p.symbole || 'that stock';
     a.textContent = 'Fund wallet — Get ETH on Base (Birth fee)';
-    if (h) h.innerHTML = 'Birth fee is 0.001 ETH, once · Fees for Dev — paid in <b>ETH</b>. '
+    if (h) h.innerHTML = 'Birth fee is 0.001 ETH, once — paid in <b>ETH</b>. '
       + 'Your market will be quoted in <b>' + enTexte(sym) + '</b> (buyers need that Coinbase stock to trade). '
       + 'Buy ETH through Coinbase into <b>your</b> wallet — Tokenized Block never holds your money. '
       + 'Coinbase published rates: <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread. '
       + 'Then come back to Connect and Instant Birth.';
   } else if (p && p.symbole === 'USDC') {
     a.textContent = 'Fund wallet — Get USDC on Base';
-    if (h) h.innerHTML = 'Need USDC on Base for this pair, plus ETH for the Birth fee (0.001 ETH once · Fees for Dev)? '
+    if (h) h.innerHTML = 'Need USDC on Base for this pair, plus ETH for the Birth fee (0.001 ETH once)? '
       + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
       + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
       + 'Then come back to Connect and Instant Birth.';
   } else {
     a.textContent = 'Fund wallet — Get ETH on Base';
-    if (h) h.innerHTML = 'Need ETH on Base for Instant Birth (Birth fee 0.001 ETH once · Fees for Dev)? '
+    if (h) h.innerHTML = 'Need ETH on Base for Instant Birth (Birth fee 0.001 ETH once)? '
       + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
       + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
       + 'Then come back to Connect and Instant Birth.';
@@ -9826,7 +9826,7 @@ function majFraisEtRecap() {
   /* tip 20260922-stock-pair-ux: when ACTION, lead with Instant Birth · quoted in SYM · fee honesty */
   const actionRecap = (!v.ko && paireChoisie && paireChoisie.type === 'ACTION')
     ? ('Instant Birth · quoted in ' + (paireChoisie.symbole || 'stock')
-      + ' · Birth fee 0.001 ETH · Fees for Dev. ')
+      + ' · Birth fee 0.001 ETH. ')
     : '';
   $('#cRecap').textContent = v.ko
     ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
@@ -9861,7 +9861,7 @@ function majFraisEtRecap() {
         'Supply: 1,000,000,000, all to you (cap = supply)',
         'Pair: ' + etiquettePaire(paireChoisie)
         + (paireChoisie && paireChoisie.type === 'ACTION'
-          ? (' · Instant Birth fee 0.001 ETH · Fees for Dev (not in ' + (paireChoisie.symbole || 'stock') + ')')
+          ? (' · Instant Birth fee 0.001 ETH (not in ' + (paireChoisie.symbole || 'stock') + ')')
           : ''),
         'Face: engraved SVG image (shared look — not an NFT)',
         ...(roleTxt ? [roleTxt] : []),
@@ -10633,11 +10633,11 @@ async function creerBlock() {
           : (quoteAction ? ('Instant Birth — open V8 vs ' + symQ) : 'Instant Birth — seed ETH + open hooked market');
         const noteTxt = ibDirect
           ? (quoteAction
-            ? ('CreateRouter already sent the open fee. This step opens the ' + enTexte(symQ) + '↔block V8 pool. No fee address in UI.')
-            : 'CreateRouter already sent the open fee. This step only seeds the pool. No fee address in UI.')
+            ? ('CreateRouter already sent the open fee. This step opens the ' + enTexte(symQ) + '↔block V8 pool.')
+            : 'CreateRouter already sent the open fee. This step only seeds the pool.')
           : (quoteAction
-            ? ('Quote = ' + enTexte(symQ) + ' · Birth fee 0.001 ETH once · Fees for Dev. No fee address in UI.')
-            : 'Seed into the book ≠ open fee 0.001 ETH, once. No fee address in UI.');
+            ? ('Quote = ' + enTexte(symQ) + ' · Birth fee 0.001 ETH once.')
+            : 'Seed into the book ≠ open fee 0.001 ETH, once.');
         e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created' + nextTxt
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
           + enTexte(btnTxt) + '</button>'
