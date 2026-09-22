@@ -1501,20 +1501,23 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="wActifsNote"></p>
     </div>
 
-    <!-- tip 20260922-2005 — TokenizedBank basket model (Raksha): credit on totality of grafted
-         blocks; hold to maintain; one lost ≠ dead; yield shared with early holders. Never show a6cf. -->
+    <!-- tip 20260922-2010 — TokenizedBank add-liquidity graft (Raksha/Zero 1): any wallet with proof
+         may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
+         hold; one lost ≠ dead; never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
       <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
       <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
         then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
         You must <b>keep holding</b> to maintain credit. <b>One block lost ≠ credit dead</b> — surviving linked blocks still back it.
-        Yield is <b>shared with early holders</b> who pooled to open this bank.
+        Credit contracts with Σ hold (dies only if zero survivors).
+        <b>Early holders</b> (snapshot at Open) share yield — badge separate from grafting.
+        After Open, <b>any wallet with proof</b> may <b>graft again to add liquidity</b> to the same basket.
         The agent runs the ops — you only one-click confirm.</p>
       <ol class="note" style="margin:10px 0 8px 1.2em; padding:0; line-height:1.45">
         <li><b>Hold</b> — pick a B20 from My blocks</li>
         <li><b>Proof of hold</b> — read <code>balanceOf</code> on Base</li>
-        <li><b>Graft into basket</b> — link it with your other blocks on TokenizedBank</li>
-        <li><b>Open credit USDC</b> — on the basket totality (stub until contract)</li>
+        <li><b>Graft</b> — into basket (Open) or <b>Add liquidity</b> (same basket, any wallet)</li>
+        <li><b>Open / Add-liquidity credit</b> — on basket totality (stub until contract)</li>
         <li><b>Confirm</b> — one click (wallet sign placeholder)</li>
       </ol>
       <label class="champ">My block (hold)
@@ -1527,11 +1530,12 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="wActions" style="margin-top:8px; flex-wrap:wrap; gap:8px">
         <button class="bouton sec" id="tbProofBtn" type="button">Read proof of hold</button>
         <button class="bouton sec" id="tbGraftBtn" type="button" disabled>Graft into basket</button>
+        <button class="bouton sec" id="tbAddLiqBtn" type="button" disabled hidden>Add liquidity — graft another block</button>
         <button class="bouton sec" id="tbBasketProofBtn" type="button">Read basket proofs</button>
         <button class="bouton" id="tbOpenBtn" type="button" disabled>Open TokenizedBank</button>
       </div>
       <p class="note" id="tbEtat" style="margin-top:8px"></p>
-      <p class="note" id="tbEarly">Early holders share yield (who pooled to open) — listed after confirm. Contract not deployed yet.</p>
+      <p class="note" id="tbEarly">Early holders = yield share at Open (frozen) — listed after confirm. Grafting is open to any wallet with proof.</p>
       <p class="note" id="tbAgent">After confirm, <b>Zero 1 / Brain</b> will run ops. Credit mint path is not deployed yet — this screen stays honest.</p>
     </div>
 
@@ -1621,7 +1625,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2005" hidden>Build <code>20260922-2005</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-2010" hidden>Build <code>20260922-2010</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2163,7 +2167,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, BANK_CONTRACT } from './tokenized-bank.js';
+import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
@@ -7977,12 +7981,36 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
   $('#plEtat').className = 'note';
   $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. The one-time 0.001 ETH fee opens this new market.';
 });
-/* ══ TokenizedBank MVP (tip 20260922-2005) — basket credit model ═══════════════════════════════
- * Hold → proofOfHold → graft into basket → credit on totality → one-click confirm.
- * Hold to maintain; one lost ≠ dead; yield shared with early holders.
- * ⛔ No BANK_CONTRACT yet. Never show fee sink. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
+/* ══ TokenizedBank (tip 20260922-2010) — basket + add-liquidity graft ═══════════════════════════
+ * Hold → proofOfHold → graft (Open) or Add liquidity (any wallet, same basket) → one-click confirm.
+ * Early = yield share frozen at Open (badge separate). Credit on totality; hold; one lost ≠ dead.
+ * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
 let tbPreuve = null;
 let tbPanierPreuves = [];
+
+function tbBankOuvertIci() {
+  return !!(compte && lireBankOuvert(localStorage, compte));
+}
+
+function tbSyncGraftButtons() {
+  const open = tbBankOuvertIci();
+  const graft = $('#tbGraftBtn');
+  const add = $('#tbAddLiqBtn');
+  const openBtn = $('#tbOpenBtn');
+  if (graft) {
+    graft.hidden = !!open;
+    if (open) graft.disabled = true;
+  }
+  if (add) {
+    add.hidden = !open;
+    /* enabled only with positive proof — never gated by early list */
+    if (!open) add.disabled = true;
+    else add.disabled = !preuvePositive(tbPreuve);
+  }
+  if (openBtn) {
+    openBtn.hidden = !!open;
+  }
+}
 
 function peindrePanierBank() {
   const ul = $('#tbBasket');
@@ -7992,14 +8020,16 @@ function peindrePanierBank() {
   if (!compte) {
     ul.innerHTML = '<li class="note">Connect wallet to see your linked basket.</li>';
     if (note) note.textContent = 'Credit backs the basket. Remove one → survivors keep backing.';
-    if (early) early.textContent = 'Early holders share yield (who pooled to open) — listed after confirm.';
-    $('#tbOpenBtn').disabled = true;
+    if (early) early.textContent = 'Early holders = yield share at Open (frozen). Grafting is open to any wallet with proof.';
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
+    tbSyncGraftButtons();
     return;
   }
   const greffes = lireGreffes(localStorage, compte);
+  const ouvert = tbBankOuvertIci();
   if (!greffes.length) {
     ul.innerHTML = '<li class="note">No blocks grafted yet — proof a hold, then Graft into basket.</li>';
-    $('#tbOpenBtn').disabled = true;
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
   } else {
     ul.innerHTML = greffes.map((b) => {
       const pr = tbPanierPreuves.find((p) => p && String(p.block).toLowerCase() === b);
@@ -8015,20 +8045,23 @@ function peindrePanierBank() {
         + '<button type="button" class="puce" data-tb-ungraft="' + enTexte(b) + '">Remove</button></li>';
     }).join('');
     const positifs = tbPanierPreuves.filter(preuvePositive);
-    $('#tbOpenBtn').disabled = positifs.length === 0;
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = ouvert || positifs.length === 0;
   }
   if (note) {
     note.textContent = greffes.length
-      ? ('Basket: ' + greffes.length + ' linked · one block lost ≠ credit dead if another still holds · contract: '
-        + (BANK_CONTRACT || 'not deployed'))
+      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · one lost ≠ dead · '
+        + (ouvert ? 'bank open — any wallet with proof may add liquidity · ' : 'not open yet · ')
+        + 'contract: ' + (BANK_CONTRACT || 'not deployed'))
       : 'Credit backs the basket. Remove one → survivors keep backing.';
   }
   if (early) {
     const eh = lireEarlyHolders(localStorage, compte);
+    const badge = compte && estEarlyHolder(localStorage, compte, compte) ? ' · you: early (yield)' : '';
     early.textContent = eh.length
-      ? ('Early holders (yield share): ' + eh.map(court).join(', '))
-      : 'Early holders share yield (who pooled to open) — recorded on confirm. Contract not deployed yet.';
+      ? ('Early holders (yield share, frozen at Open)' + badge + ': ' + eh.map(court).join(', '))
+      : 'Early holders = yield share at Open (frozen) — recorded on Open confirm. Graft not early-gated.';
   }
+  tbSyncGraftButtons();
 }
 
 async function peindreTokenizedBank() {
@@ -8038,8 +8071,9 @@ async function peindreTokenizedBank() {
   if (!compte) {
     sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
     $('#tbProof').textContent = 'Proof of hold: —';
-    $('#tbGraftBtn').disabled = true;
-    $('#tbOpenBtn').disabled = true;
+    if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+    if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
     tbPreuve = null; tbPanierPreuves = [];
     if (etat) etat.textContent = '';
     peindrePanierBank();
@@ -8080,10 +8114,13 @@ async function peindreTokenizedBank() {
     : '<option value="">No B20 found for this wallet yet</option>';
   tbPreuve = null;
   $('#tbProof').textContent = 'Proof of hold: —';
-  $('#tbGraftBtn').disabled = true;
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
   if (etat) etat.textContent = BANK_CONTRACT
     ? ''
-    : 'Credit is on the basket totality. Hold to maintain. One lost ≠ dead. Yield shared with early holders.';
+    : (tbBankOuvertIci()
+      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; one lost ≠ dead.'
+      : 'Credit is on the basket totality. Hold to maintain. One lost ≠ dead. Open freezes early (yield). Then any wallet may add liquidity.');
   peindrePanierBank();
 }
 
@@ -8093,7 +8130,8 @@ async function tbLirePreuve() {
   if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
   if (!ADRESSE.test(block)) { if (etat) etat.textContent = 'Pick a block from My blocks.'; return; }
   $('#tbProof').textContent = 'Proof of hold: reading balanceOf on Base…';
-  $('#tbGraftBtn').disabled = true;
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
   tbPreuve = null;
   try {
     tbPreuve = await proofOfHold({ rpc, block, holder: compte });
@@ -8104,8 +8142,12 @@ async function tbLirePreuve() {
     const u = typeof formaterUnites === 'function' ? formaterUnites(tbPreuve.balance, 18) : String(tbPreuve.balance);
     $('#tbProof').textContent = 'Proof of hold: ' + u + ' (raw balanceOf) · ' + court(block);
     if (preuvePositive(tbPreuve)) {
-      $('#tbGraftBtn').disabled = false;
-      if (etat) etat.textContent = 'Hold proven. Graft into the basket — credit will back all linked blocks together.';
+      tbSyncGraftButtons();
+      if (etat) {
+        etat.textContent = tbBankOuvertIci()
+          ? 'Hold proven. Add liquidity — graft another block into the same basket (any wallet; early = yield only).'
+          : 'Hold proven. Graft into the basket — then Open TokenizedBank (freezes early yield shares).';
+      }
     } else {
       if (etat) etat.textContent = 'Proof is zero — graft stays gated until balanceOf > 0 (you must hold).';
     }
@@ -8128,11 +8170,28 @@ async function tbLirePanier() {
     if (etat) {
       etat.textContent = panier.survivants.length
         ? ('Basket backing: ' + panier.survivants.length + ' / ' + greffes.length
-          + ' linked blocks with hold > 0. Open TokenizedBank uses this totality.')
+          + ' linked blocks with hold > 0. Credit uses this totality'
+          + (tbBankOuvertIci() ? ' (add-liquidity mode).' : ' — Open TokenizedBank when ready.'))
         : 'No positive hold in basket — keep holding at least one linked block to maintain credit.';
     }
   } catch (e) {
     if (etat) etat.textContent = 'Basket proofs unread — ' + String((e && e.message) || e);
+  }
+}
+
+function tbApresGreffe(r, mode) {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (tbPreuve) {
+    tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== block.toLowerCase());
+    tbPanierPreuves.push(tbPreuve);
+  }
+  peindrePanierBank();
+  const etat = $('#tbEtat');
+  if (!etat) return;
+  if (mode === 'ADD_LIQUIDITY') {
+    etat.textContent = 'Add-liquidity graft (' + r.grafts.length + ' linked). Credit backs basket totality — early shares stay frozen. Confirm optional stub note.';
+  } else {
+    etat.textContent = 'Grafted into basket (' + r.grafts.length + ' linked). Credit backs the totality — read basket proofs, then Open.';
   }
 }
 
@@ -8141,7 +8200,9 @@ $('#tbBasketProofBtn') && $('#tbBasketProofBtn').addEventListener('click', () =>
 $('#tbBlock') && $('#tbBlock').addEventListener('change', () => {
   tbPreuve = null;
   $('#tbProof').textContent = 'Proof of hold: —';
-  $('#tbGraftBtn').disabled = true;
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  tbSyncGraftButtons();
 });
 $('#tbGraftBtn') && $('#tbGraftBtn').addEventListener('click', () => {
   const block = ($('#tbBlock') && $('#tbBlock').value) || '';
@@ -8149,13 +8210,52 @@ $('#tbGraftBtn') && $('#tbGraftBtn').addEventListener('click', () => {
     $('#tbEtat').textContent = 'Read a positive proof of hold first.';
     return;
   }
+  if (tbBankOuvertIci()) {
+    $('#tbEtat').textContent = 'Bank already open — use Add liquidity — graft another block.';
+    return;
+  }
   const r = grefferBlock(localStorage, compte, block);
   if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Graft failed.'; return; }
-  /* keep this proof in basket view */
-  tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== block.toLowerCase());
-  tbPanierPreuves.push(tbPreuve);
+  tbApresGreffe(r, 'OPEN');
+});
+$('#tbAddLiqBtn') && $('#tbAddLiqBtn').addEventListener('click', async () => {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  const etat = $('#tbEtat');
+  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
+    if (etat) etat.textContent = 'Read a positive proof of hold first — add liquidity is not early-gated.';
+    return;
+  }
+  if (!peutAjouterLiquidite(localStorage, compte, compte)) {
+    if (etat) etat.textContent = 'Open TokenizedBank first — then any wallet with proof may add liquidity.';
+    return;
+  }
+  const r = grefferAjouterLiquidite(localStorage, compte, block);
+  if (!r.ok) { if (etat) etat.textContent = r.pourquoi || 'Add-liquidity graft failed.'; return; }
+  tbApresGreffe(r, 'ADD_LIQUIDITY');
+  const greffes = r.grafts;
+  const credit = ouvrirCreditUsdcStub({
+    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage,
+    geste: 'ADD_LIQUIDITY',
+  });
+  let sig = null;
+  const msg = 'TokenizedBank add-liquidity\nbasket=' + greffes.join(',')
+    + '\nholder=' + compte + '\nbuild=20260922-2010';
+  try {
+    if (window.ethereum && compte) {
+      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
+    }
+  } catch (e) {
+    if (etat) etat.textContent = 'Add-liquidity confirm cancelled — graft kept. ' + String((e && e.message) || e);
+    return;
+  }
   peindrePanierBank();
-  $('#tbEtat').textContent = 'Grafted into basket (' + r.grafts.length + ' linked). Credit backs the totality — read basket proofs, then Open.';
+  if (etat) {
+    etat.textContent = credit.etat === 'PENDING_CONTRACT'
+      ? ('Add-liquidity confirmed' + (sig ? ' (signed)' : '') + '. Basket ' + greffes.length
+        + ' · early frozen (yield) · ' + (credit.note ? 'stub note recorded · ' : '')
+        + 'Zero 1 / Brain will run ops.')
+      : ('Refused: ' + (credit.pourquoi || credit.etat));
+  }
 });
 $('#tbBasket') && $('#tbBasket').addEventListener('click', (e) => {
   const btn = e.target && e.target.closest ? e.target.closest('[data-tb-ungraft]') : null;
@@ -8175,6 +8275,10 @@ $('#tbBasket') && $('#tbBasket').addEventListener('click', (e) => {
 $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
   const etat = $('#tbEtat');
   if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
+  if (tbBankOuvertIci()) {
+    if (etat) etat.textContent = 'Bank already open — use Add liquidity to graft more blocks.';
+    return;
+  }
   const greffes = lireGreffes(localStorage, compte);
   if (!greffes.length) { if (etat) etat.textContent = 'Graft at least one block into the basket.'; return; }
   if (!tbPanierPreuves.filter(preuvePositive).length) {
@@ -8186,12 +8290,12 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
     return;
   }
   const credit = ouvrirCreditUsdcStub({
-    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage,
+    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage, geste: 'OPEN',
   });
   let sig = null;
-  const msg = 'TokenizedBank confirm\nbasket=' + greffes.join(',')
+  const msg = 'TokenizedBank open\nbasket=' + greffes.join(',')
     + '\nsurvivors=' + positifs.map((p) => p.block).join(',')
-    + '\nholder=' + compte + '\nbuild=20260922-2005';
+    + '\nholder=' + compte + '\nbuild=20260922-2010';
   try {
     if (window.ethereum && compte) {
       sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
@@ -8203,9 +8307,9 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
   peindrePanierBank();
   if (etat) {
     etat.textContent = credit.etat === 'PENDING_CONTRACT'
-      ? ('Confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Credit USDC stub on basket of '
+      ? ('Open confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Early shares frozen · credit USDC stub on basket of '
         + greffes.length + ' · survivors ' + positifs.length
-        + ' · early holders share yield · Zero 1 / Brain will run ops.')
+        + ' · any wallet may now add liquidity · Zero 1 / Brain will run ops.')
       : ('Refused: ' + (credit.pourquoi || credit.etat));
   }
 });

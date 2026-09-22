@@ -1,12 +1,15 @@
-// tokenized-bank.js — TokenizedBank MVP: proof of hold = ERC-20 balanceOf on Base.
+// tokenized-bank.js — TokenizedBank: proof of hold = ERC-20 balanceOf on Base.
 // ================================================================================================
-// PRODUCT (Raksha 2026-09-22 + model update same day):
+// PRODUCT (Raksha 2026-09-22 · Zero 1 mechanics locked tip 2010):
 //   · B20 = fund wallet. Graft onto TokenizedBank to hold.
 //   · Credit / yield is on the TOTALITY of linked/grafted blocks (basket), not a single block.
+//   · Early shares FROZEN at Open (yield share only).
+//   · ANY wallet with proof of hold may graft to ADD LIQUIDITY to the same basket (not early-gated).
+//   · Credit contracts with Σ positive hold; dies only if zero survivors.
 //   · User must HOLD to maintain credit.
 //   · Losing ONE block does NOT kill credit — surviving linked blocks keep backing.
-//   · Yield is SHARED with early holders (who pooled to create/open that TokenizedBank).
-//   · Agent runs ops; user one-click confirms. Base.
+//   · Yield is SHARED with early holders (snapshot at Open).
+//   · Agent runs ops; user one-click confirms. Base. USDC mint still stub until contract.
 //
 // ⛔ NO BANK / CREDIT CONTRACT YET. This module only READs balanceOf. Opening credit is UI stub.
 // ⛔ NEVER invent a balance. Illisible / invalid → etat NON_LU or INVALIDE, balance null.
@@ -73,6 +76,7 @@ export function preuvePositive(preuve) {
 /**
  * Proof of hold across a basket of grafted blocks.
  * Credit backs on survivors with balance > 0 — unread/zero do not invent backing.
+ * Credit contracts with Σ survivors; empty survivors = dead.
  *
  * @returns {Promise<{etat:'LU'|'PARTIEL'|'VIDE'|'INVALIDE', preuves:object[],
  *   survivants:string[], pourquoi?:string}>}
@@ -161,7 +165,7 @@ export function retirerGreffe(stockage, holder, block) {
   return { ok: true, grafts };
 }
 
-/** Early holders who pooled to open this bank (local stub until contract). */
+/** Early holders who pooled to open this bank (frozen at Open — local stub until contract). */
 export function lireEarlyHolders(stockage, holderBank) {
   const h = String(holderBank || '').toLowerCase();
   if (!adrOk(h) || !stockage) return [];
@@ -185,13 +189,71 @@ export function noterEarlyHolder(stockage, holderBank, early) {
   return { ok: true, early: list };
 }
 
+/** Bank open flag (local stub). Early shares freeze when this flips true. */
+export function lireBankOuvert(stockage, holderBank) {
+  const h = String(holderBank || '').toLowerCase();
+  if (!adrOk(h) || !stockage) return false;
+  try {
+    return stockage.getItem('tb.tokenizedBank.open.' + h) === '1';
+  } catch { return false; }
+}
+
+export function marquerBankOuvert(stockage, holderBank) {
+  const h = String(holderBank || '').toLowerCase();
+  if (!adrOk(h) || !stockage) return { ok: false, pourquoi: 'invalid address or storage' };
+  stockage.setItem('tb.tokenizedBank.open.' + h, '1');
+  return { ok: true, open: true };
+}
+
+export function estEarlyHolder(stockage, holderBank, wallet) {
+  const w = String(wallet || '').toLowerCase();
+  if (!adrOk(w)) return false;
+  return lireEarlyHolders(stockage, holderBank).includes(w);
+}
+
 /**
- * Stub credit open on the BASKET — no mint path until credit contract ships.
- * Requires ≥1 grafted block with positive proof. Yield shared with early holders (stub list).
+ * Add-liquidity graft is available once the bank is open — ANY connected wallet (not early-gated).
+ * Early list is yield share only (frozen at Open); it does not gate grafts.
+ */
+export function peutAjouterLiquidite(stockage, holderBank, _wallet = null) {
+  if (!stockage || !adrOk(holderBank)) return false;
+  return lireBankOuvert(stockage, holderBank);
+}
+
+/**
+ * Graft another block into an already-open bank basket (add liquidity).
+ * Same local graft registry as Open — early list is NOT mutated. Not early-gated.
+ */
+export function grefferAjouterLiquidite(stockage, holder, block) {
+  if (!lireBankOuvert(stockage, holder)) {
+    return { ok: false, grafts: lireGreffes(stockage, holder), mode: null,
+      pourquoi: 'bank not open — open first, then any wallet with proof may add liquidity' };
+  }
+  const r = grefferBlock(stockage, holder, block);
+  if (!r.ok) return { ...r, mode: null };
+  return { ok: true, grafts: r.grafts, mode: 'ADD_LIQUIDITY', earlyFrozen: true };
+}
+
+function noteCredit(geste) {
+  if (geste === 'ADD_LIQUIDITY') {
+    return 'Add-liquidity graft: any wallet with proof may enlarge the same basket; credit backs basket '
+      + 'totality (Σ hold); early shares stay frozen at Open (yield only); hold to maintain; '
+      + 'one block lost ≠ credit dead; yield shared with early holders. Mint path not deployed — '
+      + 'agent runs ops after confirm.';
+  }
+  return 'Open Bank: early shares frozen now (yield share); USDC credit is on the basket totality; '
+    + 'hold to maintain; one block lost ≠ credit dead; yield shared with early holders. '
+    + 'Later: any wallet with proof may graft to add liquidity. Mint path not deployed — agent runs ops after confirm.';
+}
+
+/**
+ * Stub credit open / add-liquidity note on the BASKET — no mint path until credit contract ships.
+ * geste 'OPEN' (default) freezes early shares + marks bank open.
+ * geste 'ADD_LIQUIDITY' enlarges basket backing only — does not touch early list (any wallet).
  */
 export function ouvrirCreditUsdcStub({
   holder, block = null, preuve = null, blocks = null, preuves = null,
-  stockage = null, agent = 'Zero 1 / Brain',
+  stockage = null, agent = 'Zero 1 / Brain', geste = 'OPEN',
 }) {
   const basket = [...new Set([...(blocks || []), block].filter(Boolean)
     .map((a) => String(a).toLowerCase()).filter(adrOk))];
@@ -204,26 +266,32 @@ export function ouvrirCreditUsdcStub({
   if (!positifs.length) {
     return { etat: 'REFUSE', pourquoi: 'proof of hold must be > 0 on at least one linked block', creditUsdc: null };
   }
+  const g = geste === 'ADD_LIQUIDITY' ? 'ADD_LIQUIDITY' : 'OPEN';
   let early = [];
   if (stockage && adrOk(holder)) {
-    noterEarlyHolder(stockage, holder, holder);
+    if (g === 'OPEN') {
+      noterEarlyHolder(stockage, holder, holder);
+      marquerBankOuvert(stockage, holder);
+    }
     early = lireEarlyHolders(stockage, holder);
   }
   return {
     etat: 'PENDING_CONTRACT',
+    geste: g,
     creditUsdc: null,
     holder: String(holder).toLowerCase(),
     basket,
     survivants: positifs.map((p) => p.block),
     proofBalances: Object.fromEntries(positifs.map((p) => [p.block, String(p.balance)])),
     earlyHolders: early,
+    earlySharesFrozenAtOpen: true,
     holdRequired: true,
     oneLostDoesNotKill: true,
+    creditContractsWithHold: true,
     yieldSharedWithEarlyHolders: true,
     bankContract: BANK_CONTRACT,
     usdc: USDC_BASE,
     agent,
-    note: 'USDC credit is on the basket totality; hold to maintain; one block lost ≠ credit dead; '
-      + 'yield shared with early holders. Mint path not deployed — agent runs ops after confirm.',
+    note: noteCredit(g),
   };
 }
