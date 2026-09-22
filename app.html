@@ -1240,6 +1240,7 @@ details[open] > summary::before{transform:rotate(90deg)}
                 veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
                 ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
         <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Instant Birth.</p>
+        <p class="note" id="cBridgeRetarget">Tokenized↔tokenized after funding? Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab — 0.01% via your Bridge block.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -1633,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-no-approx-dollar-step" hidden>Build <code>20260922-no-approx-dollar-step</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-bridge-tab" hidden>Build <code>20260922-bridge-tab</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2037,6 +2038,68 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div id="mesBlocks" style="margin-top:14px"></div>
     </div>
   </section>
+
+  <!-- ══ BRIDGE (tip 20260922-bridge-tab · Raksha / Zero 1) ═══════════════════════════════════
+       Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
+       Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
+       On-chain confirm is STUB — Instant Birth / CreateRouter / V8 untouched. -->
+  <section class="volet" id="v-bridge" aria-label="Bridge">
+    <div class="carte">
+      <p class="titre">Bridge</p>
+      <p class="sous">Move value through a <b>Bridge block</b> — a normal Tokenized Block that hubs the path.
+        Fiat on-ramp lands in <b>your</b> wallet. Tokenized↔tokenized swaps go <b>via the Bridge block</b>
+        (not a naked external Dex). Fee: <b>0.01%</b> of volume — amount only.</p>
+      <label class="champ">Bridge block
+        <select id="brBlock"><option value="">Pick or create a block to use as hub…</option></select>
+      </label>
+      <div class="wActions" style="margin-top:8px;flex-wrap:wrap;gap:8px">
+        <button class="bouton sec" id="brRefreshBlocks" type="button">Refresh my blocks</button>
+        <button class="bouton sec" id="brCreateBlock" type="button">Create a Bridge block</button>
+      </div>
+      <p class="note" id="brBlockNote">A Bridge block is any TB block you choose as hub. Create opens Instant Birth — unchanged.</p>
+    </div>
+
+    <div class="carte" role="tablist" aria-label="Bridge flow" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="creaMode on" role="tab" aria-selected="true" data-brmode="fund" id="brModeFund">
+        <span class="creaModeIc">💳</span><b>Fund</b>
+        <span>Fiat → ETH / USDC on Base (Coinbase). Then bridge from your wallet.</span>
+      </button>
+      <button type="button" class="creaMode" role="tab" aria-selected="false" data-brmode="swap" id="brModeSwap">
+        <span class="creaModeIc">⇄</span><b>Swap</b>
+        <span>Sell / swap tokenized assets via the Bridge block — 0.01% fee.</span>
+      </button>
+    </div>
+
+    <div class="carte" id="brFundCarte">
+      <p class="titre">Fund wallet</p>
+      <p class="sous">Buy ETH or USDC through Coinbase — it lands in <b>your</b> wallet.
+        Tokenized Block never holds your money. Coinbase shows their total before you confirm.</p>
+      <a class="bouton" id="brFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH / USDC on Base</a>
+      <p class="note" id="brFundHint" style="margin-top:10px">After funding, use <b>Swap</b> to move tokenized assets through your Bridge block (0.01%).</p>
+    </div>
+
+    <div class="carte" id="brSwapCarte" hidden>
+      <p class="titre">Swap via Bridge</p>
+      <p class="note">Quote only for now — wallet confirm lands next. Fee settles as ETH or USDC when possible.</p>
+      <label class="champ">From
+        <select id="brFrom"></select>
+      </label>
+      <label class="champ">To
+        <select id="brTo"></select>
+      </label>
+      <label class="champ">Amount
+        <input id="brAmount" inputmode="decimal" placeholder="0.0" autocomplete="off">
+      </label>
+      <div class="carte" id="brQuote" style="margin-top:10px;background:transparent">
+        <p class="note" id="brQuoteFee">Fee (0.01%): —</p>
+        <p class="note" id="brQuoteNet">You receive: —</p>
+        <p class="note" id="brQuoteSettle">Settlement: —</p>
+      </div>
+      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Confirm (wallet soon)</button>
+      <p class="note" id="brEtat" style="margin-top:8px"></p>
+    </div>
+  </section>
+
 </div>
 
 <nav class="nav" aria-label="Sections">
@@ -2044,6 +2107,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button class="navB" role="tab" aria-selected="true"  data-volet="map"><b>◈</b>Map</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Blocks</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="bridge"><b>⇄</b>Bridge</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain AI</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>
@@ -2177,6 +2241,8 @@ let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
+/* tip 20260922-bridge-tab */
+import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL } from './bridge.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
@@ -2311,6 +2377,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void peindreTokenizedBank();
+  /* tip 20260922-bridge-tab */
+  if (nom === 'bridge') { peindreBridgeActifs(); void peindreBridgeBlocks(); majBridgeQuote(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -11895,9 +11963,176 @@ if (presetLien) {
 if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') {
   setTimeout(() => allerA('creer'), 0);
 }
+/* tip 20260922-bridge-tab */
+if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'bridge') {
+  setTimeout(() => allerA('bridge'), 0);
+}
 window.addEventListener('hashchange', () => {
-  if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') allerA('creer');
+  const h = (location.hash || '').replace(/^#/, '').split('?')[0];
+  if (h === 'creer') allerA('creer');
+  if (h === 'bridge') allerA('bridge');
 });
+
+/* ── Bridge (tip 20260922-bridge-tab) ───────────────────────────────────────────────────────── */
+function peindreBridgeActifs() {
+  const from = $('#brFrom'), to = $('#brTo');
+  if (!from || !to) return;
+  let opts = [];
+  try {
+    const list = (typeof pairesProposees === 'function') ? pairesProposees(CHAINE) : [];
+    opts = list.map((p) => '<option value="' + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + (p.nom || p.symbole)) + '</option>');
+  } catch (_) { opts = []; }
+  if (!opts.length) {
+    opts = ['<option value="ETH">ETH</option>', '<option value="USDC">USDC</option>',
+      '<option value="AAPLc">AAPLc</option>', '<option value="TBLOCK">TBLOCK</option>'];
+  }
+  const fv = from.value || 'ETH', tv = to.value || 'USDC';
+  from.innerHTML = opts.join('');
+  to.innerHTML = opts.join('');
+  if ([...from.options].some((o) => o.value === fv)) from.value = fv; else from.value = 'ETH';
+  if ([...to.options].some((o) => o.value === tv)) to.value = tv;
+  else {
+    const alt = [...to.options].map((o) => o.value).find((v) => v !== from.value);
+    to.value = alt || 'USDC';
+  }
+}
+
+async function peindreBridgeBlocks() {
+  const sel = $('#brBlock'), note = $('#brBlockNote');
+  if (!sel) return;
+  const saved = lireBridgeBlock();
+  const hold = sel.value || saved;
+  if (!compte) {
+    sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
+    if (saved) {
+      sel.innerHTML += '<option value="' + enTexte(saved) + '">' + enTexte(saved.slice(0, 6) + '…' + saved.slice(-4)) + ' (saved)</option>';
+      sel.value = saved;
+    }
+    if (note) note.textContent = 'Connect a wallet to pick a Bridge hub, or Create a new block.';
+    return;
+  }
+  sel.innerHTML = '<option value="">Reading your blocks…</option>';
+  const blocks = [];
+  for (const id of ['#tbBlock', '#wpBlock']) {
+    const s = $(id);
+    if (!s) continue;
+    for (const o of s.options || []) {
+      if (/^0x[0-9a-fA-F]{40}$/.test(o.value)) blocks.push({ jeton: o.value.toLowerCase(), label: o.textContent });
+    }
+  }
+  /* My block list cards — data-adr if present */
+  try {
+    for (const el of document.querySelectorAll('#mesBlocks [data-adr], #mesBlocks .mono')) {
+      const a = (el.getAttribute && el.getAttribute('data-adr')) || (el.textContent || '');
+      const m = String(a).match(/0x[0-9a-fA-F]{40}/);
+      if (m) blocks.push({ jeton: m[0].toLowerCase(), label: m[0].slice(0, 6) + '…' + m[0].slice(-4) });
+    }
+  } catch (_) {}
+  const seen = new Set();
+  const uniq = [];
+  for (const b of blocks) {
+    const j = String(b.jeton || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || seen.has(j)) continue;
+    seen.add(j);
+    uniq.push({ jeton: j, label: b.label || (j.slice(0, 6) + '…' + j.slice(-4)) });
+  }
+  if (!uniq.length) {
+    sel.innerHTML = '<option value="">No blocks yet — Create a Bridge block</option>';
+    if (saved) {
+      sel.innerHTML += '<option value="' + enTexte(saved) + '">' + enTexte(saved.slice(0, 6) + '…' + saved.slice(-4)) + ' (saved)</option>';
+      sel.value = saved;
+    }
+    if (note) note.textContent = 'Create a block (Instant Birth), then return here to set it as Bridge hub.';
+    return;
+  }
+  sel.innerHTML = '<option value="">Pick a Bridge hub…</option>'
+    + uniq.map((b) => '<option value="' + enTexte(b.jeton) + '">' + enTexte(b.label) + '</option>').join('');
+  if (hold && [...sel.options].some((o) => o.value === hold)) sel.value = hold;
+  else if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved;
+  if (sel.value) ecrireBridgeBlock(sel.value);
+  if (note) note.textContent = sel.value
+    ? ('Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee 0.01% on Bridge volume.')
+    : 'Pick any of your TB blocks as the Bridge hub.';
+}
+
+function majBridgeQuote() {
+  const amountEl = $('#brAmount'), feeEl = $('#brQuoteFee'), netEl = $('#brQuoteNet');
+  const settleEl = $('#brQuoteSettle'), btn = $('#brConfirm'), etat = $('#brEtat');
+  if (!amountEl || !feeEl || !netEl) return;
+  const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
+  const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
+  const q = quoteBridge({ amount: amountEl.value, fromSym, toSym });
+  if (!q.ok) {
+    feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): —';
+    netEl.textContent = 'You receive: —';
+    if (settleEl) settleEl.textContent = 'Settlement: —';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): ' + formatBridgeAmount(q.fee, q.settleSym);
+  netEl.textContent = 'You receive: ' + formatBridgeAmount(q.net, toSym);
+  if (settleEl) settleEl.textContent = 'Settlement: ' + q.settleSym + ' preferred · fee amount only';
+  const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
+  if (btn) btn.disabled = !(q.amount > 0 && hub && fromSym && toSym && fromSym !== toSym);
+  if (etat && !etat.dataset.locked) etat.textContent = '';
+}
+
+function basculerBridgeMode(mode) {
+  const fund = $('#brFundCarte'), swap = $('#brSwapCarte');
+  const bf = $('#brModeFund'), bs = $('#brModeSwap');
+  const isFund = mode !== 'swap';
+  if (fund) fund.hidden = !isFund;
+  if (swap) swap.hidden = isFund;
+  if (bf) { bf.classList.toggle('on', isFund); bf.setAttribute('aria-selected', isFund ? 'true' : 'false'); }
+  if (bs) { bs.classList.toggle('on', !isFund); bs.setAttribute('aria-selected', !isFund ? 'true' : 'false'); }
+}
+
+(function filBridge() {
+  const bf = $('#brModeFund'), bs = $('#brModeSwap');
+  if (bf) bf.addEventListener('click', () => basculerBridgeMode('fund'));
+  if (bs) bs.addEventListener('click', () => basculerBridgeMode('swap'));
+  const sel = $('#brBlock');
+  if (sel) sel.addEventListener('change', () => {
+    ecrireBridgeBlock(sel.value);
+    const note = $('#brBlockNote');
+    if (note && sel.value) note.textContent = 'Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee 0.01% on Bridge volume.';
+    majBridgeQuote();
+  });
+  const r = $('#brRefreshBlocks');
+  if (r) r.addEventListener('click', () => { void peindreBridgeBlocks(); });
+  const c = $('#brCreateBlock');
+  if (c) c.addEventListener('click', () => {
+    etape('bridge_create');
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+  });
+  for (const id of ['#brFrom', '#brTo', '#brAmount']) {
+    const el = $(id);
+    if (!el) continue;
+    el.addEventListener('input', majBridgeQuote);
+    el.addEventListener('change', majBridgeQuote);
+  }
+  const conf = $('#brConfirm');
+  if (conf) conf.addEventListener('click', () => {
+    etape('bridge_confirm_stub');
+    const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
+    const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
+    const q = quoteBridge({ amount: ($('#brAmount') && $('#brAmount').value) || 0, fromSym, toSym });
+    const res = confirmerBridgeStub(q);
+    const etat = $('#brEtat');
+    if (etat) {
+      etat.dataset.locked = '1';
+      etat.textContent = res.pourquoi
+        + (q.ok ? (' · fee ' + formatBridgeAmount(q.fee, q.settleSym) + ' · net ' + formatBridgeAmount(q.net, toSym)) : '');
+    }
+  });
+  const cFund = $('#cFundWallet');
+  if (cFund) cFund.addEventListener('click', () => { try { etape('create_fund_bridge'); } catch (_) {} });
+  const cGo = $('#cGoBridge');
+  if (cGo) cGo.addEventListener('click', (e) => { e.preventDefault(); etape('create_go_bridge'); allerA('bridge'); });
+  peindreBridgeActifs();
+  basculerBridgeMode('fund');
+})();
+
 
 /* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */
 $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
