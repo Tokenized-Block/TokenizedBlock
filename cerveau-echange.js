@@ -123,7 +123,7 @@ export function decisionEchange(faits) {
       'muet depuis ' + arr(silenceH) + ' h, au-dela des ' + SILENCE_MAX_MESURE_H
       + ' h qui bornaient les marches listes le 2026-09-22',
       'Your block has been quiet for ' + arr(silenceH) + ' hours. On the day this was measured, no '
-      + 'market in the public index had been quiet for more than ' + SILENCE_MAX_MESURE_H + '.');
+      + 'market in the public index had been quiet for more than ' + SILENCE_MAX_MESURE_H + ' hours.');
   }
 
   if (silenceH >= RECLAMER_A_H) {
@@ -139,6 +139,25 @@ export function decisionEchange(faits) {
 }
 
 const arr = (x) => Math.round(x * 10) / 10;
+
+/**
+ * Convertit « dernier bloc vu » en « heures de silence ».
+ * ⛔ CETTE CONVERSION EST ICI, ET PAS DANS L ECRAN, PARCE QUE L ECRAN NE SE TESTE PAS. Trois
+ *    regressions sont deja parties en production par le chemin de Create ; ce qui peut vivre dans
+ *    un module pur y vit, et la colle ne fait plus que passer des valeurs.
+ * ⛔ REND `null` DANS TOUS LES CAS DOUTEUX, jamais un nombre : `cerveau-echange` traite `null`
+ *    comme « aucun mouvement dans la fenetre », qui est un etat nomme. Un nombre faux, lui,
+ *    traverserait les bornes et ferait reclamer un echange sans raison.
+ * ⛔ UN `dernierBloc` PLUS GRAND QUE `blocFin` REND `null` ET PAS UN NEGATIF : ca veut dire que les
+ *    deux nombres viennent de lectures differentes, donc qu on ne sait pas. Un silence negatif
+ *    passerait pour « tres recent » et endormirait le block exactement quand il ne faut pas.
+ */
+export function silenceDepuisBlocs({ dernierBloc, blocFin, blocsParJour = 43200 }) {
+  if (!Number.isFinite(dernierBloc) || !Number.isFinite(blocFin)) return null;
+  if (!Number.isFinite(blocsParJour) || blocsParJour <= 0) return null;
+  if (dernierBloc > blocFin) return null;
+  return ((blocFin - dernierBloc) * 24) / blocsParJour;
+}
 
 /** ⛔ CHAQUE SORTIE PORTE `signeParUtilisateur: true`, comme tout ce que le cerveau propose. Ce
  *  n est pas decoratif : `test-cerveau-ne-signe-pas.mjs` refuse qu une proposition existe sans. */

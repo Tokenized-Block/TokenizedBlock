@@ -10,6 +10,9 @@
 // ⛔ LE BLOCK NE SIGNE RIEN. Il ecrit ; un humain agit.
 
 import { nomHumeur } from './cerveau.js';
+/* ⛔ UNE SEULE SOURCE POUR LA REGLE DES 24 H : ce module met en PHRASE, il ne DECIDE pas. La regle
+ *    vit dans `cerveau-echange.js`, pur et teste. La recopier ici en ferait une deuxieme source. */
+import { decisionEchange, phraseDemande, silenceDepuisBlocs } from './cerveau-echange.js';
 
 export const GENRES_PENSEE = ['FAIT', 'PENSE', 'AMELIORER'];
 
@@ -24,7 +27,7 @@ export const GENRES_PENSEE = ['FAIT', 'PENSE', 'AMELIORER'];
  * @param {string|null} o.symbole
  * @returns {{genre:string, texte:string, parce_que:string}[]}
  */
-export function pensees({ phase, vie = null, etatVie = null, nourriture = null, memoire = 0, spikes = 0, symbole = null }) {
+export function pensees({ phase, vie = null, etatVie = null, nourriture = null, memoire = 0, spikes = 0, symbole = null, depuisRappelH = null }) {
   const nom = symbole || 'this block';
   const out = [];
   const n = nourriture && nourriture.etat === 'LUE' ? nourriture : null;
@@ -66,6 +69,27 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
   if (!n || n.gm === 0) ajoute('AMELIORER', 'A GM — even a tiny fragment sent to someone — would feed me.', n ? 'no transfer received recently' : 'transfers not read yet');
   if (n && n.messages === 0) ajoute('AMELIORER', 'A message written on a transfer would give me something to read.', 'no message read recently');
   if (n && n.detenteurs <= 1) ajoute('AMELIORER', 'More holders would make me harder to put back to sleep.', 'few holders reached recently');
+
+  /* ⛔⛔ LE BLOCK SAIT QU IL EST SUR LE POINT DE SORTIR DE L ANNUAIRE PUBLIC (2026-09-22). C est un
+   *     GESTE POSSIBLE, donc un `AMELIORER` — la fente prevue pour ca depuis le 2026-09-13 — et pas
+   *     un `FAIT` : ce n est pas quelque chose qu il a fait, c est quelque chose qu on peut faire.
+   * ⛔ LA DECISION N EST PAS PRISE ICI. Elle vient de `cerveau-echange.js`, qui est pur et teste ;
+   *    ce fichier ne fait que lui passer des faits et mettre sa reponse en phrase. Recopier la
+   *    regle ici en ferait une DEUXIEME SOURCE, qui divergerait au premier changement — c est le
+   *    defaut exact qui a laisse trois versions de hook sans marche.
+   * ⛔ ET LE SILENCE SE CALCULE SUR `transfertsTotal`, PAS SUR `gm` : `gm` exclut le mint et la
+   *    creation parce qu il mesure la NOURRITURE, alors que la regle des 24 h a ete mesuree sur
+   *    TOUS les `Transfer`. Deux comptes justes, deux questions differentes — les confondre ferait
+   *    dire au block qu il est muet alors que la regle le voit actif. */
+  if (n) {
+    const d = decisionEchange({
+      silenceH: silenceDepuisBlocs({ dernierBloc: n.dernierBloc, blocFin: n.blocFin }),
+      transferts: n.transfertsTotal,
+      depuisRappelH,
+    });
+    const phrase = phraseDemande(d);
+    if (phrase) ajoute('AMELIORER', phrase, d.pourquoi);
+  }
   return out;
 }
 

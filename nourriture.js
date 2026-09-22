@@ -21,10 +21,29 @@ export const ETATS_NOURRITURE = ['LUE', 'NON_LUE'];
 
 /**
  * @returns {Promise<{etat:'LUE'|'NON_LUE', gm:number, messages:number, messagesLus:number,
- *   detenteurs:number, mort:boolean|null, pourquoiMort:string|null, pourquoi:string|null}>}
+ *   detenteurs:number, mort:boolean|null, pourquoiMort:string|null, pourquoi:string|null,
+ *   dernierBloc:number|null, blocFin:number|null, transfertsTotal:number|null}>}
+ *
+ * ⛔⛔ `dernierBloc` / `transfertsTotal` AJOUTES LE 2026-09-22, ET ILS NE COUTENT PAS UNE REQUETE.
+ *     Cette fonction lisait DEJA tous les `Transfer` du jeton — elle en tirait `gm`, `detenteurs`
+ *     et `mort` — puis elle JETAIT le numero de bloc que chaque transfert porte. Une valeur lue
+ *     puis jetee est un defaut : `cerveau-echange.js` a besoin de savoir depuis QUAND le block se
+ *     tait, et sans ces champs il aurait fallu refaire le meme balayage une deuxieme fois.
+ *
+ * ⛔ LA DEFINITION EST CELLE DE LA MESURE, PAS UNE AUTRE, ET C EST LE POINT DELICAT. La regle des
+ *    24 h (`ce-qui-garde-liste.mjs`, 2026-09-22) a ete etablie en comptant TOUS les logs
+ *    `Transfer`, mint compris, sans aucun filtrage. `gm` ci-dessous compte autre chose : il exclut
+ *    le mint et la transaction de creation, parce qu il mesure la NOURRITURE, pas l activite.
+ *    Les deux comptes sont justes et ils ne repondent pas a la meme question — donc
+ *    `transfertsTotal` est rendu A COTE de `gm`, jamais confondu avec lui. Comparer `gm` au seuil
+ *    mesure ferait dire au block qu il est muet alors que la regle le voit actif.
  */
 export async function nourritureDuBlock({ rpc, jeton, blocs = 8000, fin = null, messagesMax = 6, creation = null }) {
-  const vide = { gm: 0, messages: 0, messagesLus: 0, detenteurs: 0, mort: null, pourquoiMort: null };
+  /* ⛔ `null` ET PAS `0` DANS LE CAS NON LU : un `0` se lit « aucun transfert, il se tait depuis
+   *    toujours » et ferait reclamer un echange sur une lecture ratee — c est-a-dire faire ouvrir
+   *    un wallet et payer du gas a quelqu un pour une raison inventee. */
+  const vide = { gm: 0, messages: 0, messagesLus: 0, detenteurs: 0, mort: null, pourquoiMort: null,
+    dernierBloc: null, blocFin: null, transfertsTotal: null };
   const adr = String(jeton || '').toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(adr)) return { etat: 'NON_LUE', ...vide, pourquoi: 'not an address' };
 
@@ -77,5 +96,17 @@ export async function nourritureDuBlock({ rpc, jeton, blocs = 8000, fin = null, 
       pourquoiMort = 'creator balance unread — death not judged';
     }
   }
-  return { etat: 'LUE', gm: txs.length, messages, messagesLus, detenteurs, mort, pourquoiMort, pourquoi: null };
+  /* ⛔ LE DERNIER BLOC SE PREND SUR **TOUS** LES TRANSFERTS, mint compris — c est la definition
+   *    exacte avec laquelle la regle des 24 h a ete mesuree. Le prendre sur `hors` (qui exclut le
+   *    mint) donnerait un silence plus long que la realite pour un jeton tout neuf, et le block
+   *    reclamerait un echange le jour de sa naissance.
+   * ⛔ ET `null` QUAND IL N Y A AUCUN TRANSFERT, jamais `0` : `Math.max()` sur une liste vide rend
+   *    `-Infinity`, qui traverserait toutes les bornes de `cerveau-echange.js` sans en declencher
+   *    une seule. `null` y est un etat nomme (« aucun mouvement dans la fenetre »), pas un nombre
+   *    qui se compare. */
+  const blocs2 = t.transfers.map((x) => x.bloc).filter((b) => Number.isFinite(b));
+  const dernierBloc = blocs2.length ? Math.max(...blocs2) : null;
+  return { etat: 'LUE', gm: txs.length, messages, messagesLus, detenteurs, mort, pourquoiMort, pourquoi: null,
+    dernierBloc, blocFin: (t.fenetre && Number.isFinite(t.fenetre.a)) ? t.fenetre.a : null,
+    transfertsTotal: t.transfers.length };
 }
