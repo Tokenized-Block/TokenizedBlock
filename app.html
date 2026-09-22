@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0209" hidden>Build <code>20260922-0209</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0210" hidden>Build <code>20260922-0210</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9027,6 +9027,7 @@ function majFraisEtRecap() {
     boutonCreer.disabled = !prixOk || !soldeOk;
     boutonCreer.title = (usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : '');
     if (!compte) boutonCreer.textContent = 'Connect wallet → review → Bring it to life';
+    else if (Number(CHAINE) === 8453 && aLancerLire().length) boutonCreer.textContent = 'Create another block (free)';
     else boutonCreer.textContent = Number(CHAINE) === 8453 ? 'Review → Bring it to life — 0.001 ETH, once' : 'Review → Bring it to life (practice, free)';
   }
   const feeTxt = usd > 0
@@ -9156,12 +9157,22 @@ function peindreALancer() {
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
         + enTexte(b.sym || court(b.adr)) + '</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
-  boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', () => {
+  boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', (ev) => {
+    /* tip 0210: same Instant Birth path as post-Create goLaunch — not Create (0 ETH factory). */
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
     const adr = btn.getAttribute('data-a-lancer');
     const b = aLancerLire().find((x) => x.adr === adr);
     lancementLien = adr;
     void ouvrirProfil(adr, b && b.sym).then(() => {
-      try { const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); } ouvrirLancement(); } catch (_) {}
+      try {
+        const d = $('#plDevise');
+        if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+        const part = $('#plPart'); if (part) part.value = '99.9';
+        ouvrirLancement();
+        vieAuto = true;
+        majProgressionVie('Step 1 — reading its market and your approvals…');
+        void calculerLancement();
+      } catch (_) {}
     });
   }));
   boite.querySelectorAll('[data-a-oublier]').forEach((btn) => btn.addEventListener('click', () => aLancerRetirer(btn.getAttribute('data-a-oublier'))));
