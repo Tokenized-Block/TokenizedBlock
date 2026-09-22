@@ -24,8 +24,8 @@
 | Select / create Bridge block | **Live UI** — create jumps to Create (IB unchanged); list scrapes wallet selects / My blocks |
 | Fund wallet CTA (Coinbase) | **Live link** (external Onramp) |
 | Quote math 0.01% fee + net | **Live stub math** (`bridge.js` `quoteBridge`) |
-| Confirm / wallet / on-chain transfer | **Stub** — `confirmerBridgeStub` honest message; no calldata |
-| Fee → sink on Bridge volume | **Not wired on-chain yet** (Create/hook paths unchanged) |
+| Confirm / wallet / on-chain transfer | **Fee skim live** (tip `20260923-bridge-fee-skim`) when From=ETH/USDC; net hub swap still Phil GO |
+| Fee → sink on Bridge volume | **Client-side 0.01% skim** → a6cf; net swap Phil-blocked |
 
 ## Ship files
 

@@ -1634,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-prepaye-inscrire-dust" hidden>Build <code>20260922-prepaye-inscrire-dust</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-bridge-fee-skim" hidden>Build <code>20260923-bridge-fee-skim</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2039,10 +2039,11 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <!-- ══ BRIDGE (tip 20260922-prepaye-inscrire-dust · Raksha / Zero 1) ═══════════════════════════════════
+  <!-- ══ BRIDGE (tip 20260923-bridge-fee-skim · Raksha / Zero 1) ═══════════════════════════════════
        Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
-       On-chain confirm is STUB — Instant Birth / CreateRouter / V8 untouched. -->
+       Fee skim LIVE (ETH/USDC From → client-side send). Net hub swap = Phil GO 1 bps.
+       Instant Birth / CreateRouter / V8 / BuySell 0.5% untouched. -->
   <section class="volet" id="v-bridge" aria-label="Bridge">
     <div class="carte">
       <p class="titre">Bridge</p>
@@ -2080,7 +2081,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte" id="brSwapCarte" hidden>
       <p class="titre">Swap via Bridge</p>
-      <p class="note">Quote only for now — wallet confirm lands next. Fee settles as ETH or USDC when possible.</p>
+      <p class="note">Fee 0.01% skim is live when <b>From</b> is ETH or USDC (wallet signs). Net swap via hub needs Phil 1 bps router. Fee settles as ETH or USDC — amount only.</p>
       <label class="champ">From
         <select id="brFrom"></select>
       </label>
@@ -2095,7 +2096,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="brQuoteNet">You receive: —</p>
         <p class="note" id="brQuoteSettle">Settlement: —</p>
       </div>
-      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Confirm (wallet soon)</button>
+      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Confirm Bridge fee</button>
       <p class="note" id="brEtat" style="margin-top:8px"></p>
     </div>
   </section>
@@ -2129,7 +2130,7 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
+import { FEE_WALLET, USDC_BASE, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
 /* ⛔ Phil (test « Paired with ») : un bouton disait « Bring it to life — 0.000379689641686885 ETH ». A L ECRAN : 6 decimales
  *    au plus ; formaterEthCourt reste EXACT pour remplir un champ qui sera signe (bouton MAX). */
 const ethLisible = (w) => arrondiAffichage(w, 6);
@@ -2242,7 +2243,7 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 /* tip 20260922-prepaye-inscrire-dust */
-import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL } from './bridge.js';
+import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL } from './bridge.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
@@ -12098,6 +12099,7 @@ function majBridgeQuote() {
   netEl.textContent = 'You receive: ' + formatBridgeAmount(q.net, toSym);
   if (settleEl) settleEl.textContent = 'Settlement: ' + q.settleSym + ' preferred · fee amount only';
   const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
+  /* Live fee skim when From is ETH/USDC; other From stays clickable for honest stub copy. */
   if (btn) btn.disabled = !(q.amount > 0 && hub && fromSym && toSym && fromSym !== toSym);
   if (etat && !etat.dataset.locked) etat.textContent = '';
 }
@@ -12137,17 +12139,68 @@ function basculerBridgeMode(mode) {
     el.addEventListener('change', majBridgeQuote);
   }
   const conf = $('#brConfirm');
-  if (conf) conf.addEventListener('click', () => {
-    etape('bridge_confirm_stub');
+  if (conf) conf.addEventListener('click', async () => {
     const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
     const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
-    const q = quoteBridge({ amount: ($('#brAmount') && $('#brAmount').value) || 0, fromSym, toSym });
-    const res = confirmerBridgeStub(q);
+    const amount = ($('#brAmount') && $('#brAmount').value) || 0;
+    const q = quoteBridge({ amount, fromSym, toSym });
     const etat = $('#brEtat');
-    if (etat) {
-      etat.dataset.locked = '1';
-      etat.textContent = res.pourquoi
-        + (q.ok ? (' · fee ' + formatBridgeAmount(q.fee, q.settleSym) + ' · net ' + formatBridgeAmount(q.net, toSym)) : '');
+    const setEtat = (t) => { if (etat) { etat.dataset.locked = '1'; etat.textContent = t; } };
+    const plan = planBridgeFeeSkim({ amount, fromSym, toSym });
+    if (!plan.ok || !plan.live) {
+      etape('bridge_confirm_stub');
+      const stub = confirmerBridgeStub(q);
+      setEtat((plan.pourquoi || stub.pourquoi)
+        + (q.ok ? (' · fee ' + formatBridgeAmount(q.fee, q.settleSym) + ' · net ' + formatBridgeAmount(q.net, toSym)) : ''));
+      return;
+    }
+    if (!compte) {
+      etape('bridge_fee_need_wallet');
+      setEtat('Connect your wallet to sign the 0.01% Bridge fee.');
+      try { await connecter(); } catch (_) {}
+      if (!compte) return;
+    }
+    if (CHAINE !== 8453) {
+      etape('bridge_fee_wrong_chain');
+      setEtat('Bridge fee skim runs on Base mainnet — switch network in your wallet.');
+      return;
+    }
+    const call = buildBridgeFeeCall({
+      plan, feeWallet: FEE_WALLET, usdc: USDC_BASE, encodeTransfer,
+    });
+    if (!call.ok) {
+      etape('bridge_fee_plan_ko');
+      setEtat(call.pourquoi || 'Fee plan failed — nothing sent');
+      return;
+    }
+    etape('bridge_fee_sign');
+    setEtat('Open your wallet — sign the 0.01% fee only. Net swap via hub still needs Phil.');
+    conf.disabled = true;
+    try {
+      const eth = window.ethereum;
+      if (!eth) { setEtat('No wallet provider — install or unlock a wallet.'); return; }
+      const r = await envoyerDepuisWallet({
+        eth, rpc, chaineAttendue: 8453, compte,
+        to: call.to, data: call.data, value: call.value, attendre: true,
+      });
+      if (r.etat === 'CONFIRME' || r.etat === 'ENVOYE' || r.etat === 'EN_ATTENTE') {
+        etape('bridge_fee_ok');
+        const feeTxt = formatBridgeAmount(q.fee, plan.asset);
+        setEtat('Bridge fee confirmed (' + feeTxt + ')'
+          + (r.hash ? (' · ' + String(r.hash).slice(0, 10) + '…') : '')
+          + ' · net swap via hub still Phil-blocked (1 bps router GO).');
+      } else if (r.etat === 'REFUSE_PAR_UTILISATEUR') {
+        etape('bridge_fee_refuse');
+        setEtat(r.pourquoi || 'You declined — nothing sent');
+      } else {
+        etape('bridge_fee_fail');
+        setEtat((r.pourquoi || 'Send failed') + ' — nothing assumed paid');
+      }
+    } catch (e) {
+      etape('bridge_fee_err');
+      setEtat('Fee send error — ' + String((e && e.message) || e));
+    } finally {
+      majBridgeQuote();
     }
   });
   const cFund = $('#cFundWallet');
