@@ -1631,7 +1631,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-eth-fixe" hidden>Build <code>20260922-eth-fixe</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-ib-batch" hidden>Build <code>20260922-ib-batch</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9637,20 +9637,21 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
   return { ok: true, solde, besoin, frais, seed, gas: gasBuf };
 }
 
-/** tip 20260922-ib-preflight: refuse Instant Birth if planned solitary tx is factory createB20 value 0. */
-function refuseSiCreateB20ValeurZero({ to, value, e, contexte }) {
+/** tip 20260922-ib-batch / eth-fixe: solitary factory createB20 value 0 (not Instant Birth). */
+function estCreateB20ValeurZero(to, value) {
   const factory = '0xb20f000000000000000000000000000000000000';
-  const toN = String(to || '').toLowerCase();
-  const val = BigInt(value || '0x0');
-  if (toN === factory && val === 0n) {
-    if (e) {
-      e.className = 'note wKo';
-      e.textContent = 'Instant Birth refused: planned tx is factory createB20 with value 0 — that is Advanced free create, not vieAuto / V8 inscription. Use Instant Birth · 0.001 ETH · Fees for Dev · V8.';
-    }
-    try { console.warn('[Instant Birth] abort createB20 value-0', contexte || ''); } catch (_) {}
-    return true;
+  return String(to || '').toLowerCase() === factory && BigInt(value || '0x0') === 0n;
+}
+
+/** tip 20260922-ib-preflight + 20260922-ib-batch HARD: refuse Instant Birth if planned solitary tx is factory createB20 value 0. */
+function refuseSiCreateB20ValeurZero({ to, value, e, contexte }) {
+  if (!estCreateB20ValeurZero(to, value)) return false;
+  if (e) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth refused: planned tx is factory createB20 with value 0 — that is free factory create, not Instant Birth · 0.001 ETH · V8 inscription. Use Instant Birth (one-sig batch) or Give birth · V8 on an asleep block.';
   }
-  return false;
+  try { console.warn('[Instant Birth] abort createB20 value-0', contexte || ''); } catch (_) {}
+  return true;
 }
 
 /** tip 20260922-ib-preflight: eth_call / estimateGas on our RPC before wallet (best-effort). */
@@ -9753,7 +9754,7 @@ function majFraisEtRecap() {
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Create + 0.001 ETH, once (your wallet shows the exact request)']
-          : ['Create costs nothing; bringing it to life costs 0.001 ETH, once'])] : [];
+          : ['Instant Birth = create + open fee 0.001 ETH · V8 · Fees for Dev (one batch when wallet allows; never Instant Birth = createB20 value 0 alone)'])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>Once alive, anyone can buy and sell it here.</li>';
   }
@@ -10091,7 +10092,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
-  if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
+  /* tip 20260922-ib-batch HARD: do NOT early-return on !peutGrouper.
+   * Rabby/EOA often omit wallet_getCapabilities; Instant Birth still tries wallet_sendCalls so the
+   * first wallet request can include open fee 0.001 (V8) instead of lone createB20 value 0. */
+  const capsOk = await peutGrouper({ eth, compte, chaineHex: '0x2105' });
   /* ⛔⛔ LE HOOK EST LU, PLUS ECRIT EN DUR. Il valait `HOOK_V5` ici pendant que le parcours pas a pas
    *     lisait la chaine : le chemin RAPIDE — celui que tout le monde emprunte — ouvrait donc ses
    *     marches sur le V5 (3 %, dont 26,67 % au createur) alors que les V6, V7 et V8 etaient
@@ -10103,7 +10107,9 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
   if (Number(CHAINE) === 8453 && String(hook).toLowerCase() !== String(HOOK_V8).toLowerCase()) return 'SANS';
   e.className = 'note';
-  e.textContent = 'Preparing everything for one signature…';
+  e.textContent = capsOk
+    ? 'Preparing Instant Birth — one signature (create + 0.001 ETH · V8 · Fees for Dev)…'
+    : 'Preparing Instant Birth — trying one wallet batch (create + 0.001 ETH · V8); caps unread on this wallet…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);
   const k = rep.destinataires.findIndex((d) => String(d).toLowerCase() === String(compte).toLowerCase());
   const solde = k >= 0 ? BigInt(rep.montants[k]) : 0n;
@@ -10143,8 +10149,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (!devise && !plan.microSwap) {
     try { console.info('[Instant Birth] Create+Launch without micro-swap'); } catch (_) {}
   }
+  /* tip 20260922-ib-batch: payant (V8 open fee) etapes first after create — first non-zero value = fee, not seed. */
+  const etapesOrd = [...(plan.etapes || [])].sort((a, b) => Number(!!b.payant) - Number(!!a.payant));
   const calls = [{ to, data: calldata, value: '0x0' },
-    ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
+    ...etapesOrd.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
     { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' },
     ...(plan.microSwap ? [plan.microSwap] : [])];
   /* tip 20260922-ib-preflight: Instant Birth batch must include a non-zero value leg (V8/PM), not factory-only. */
@@ -10153,6 +10161,12 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
     e.className = 'note wKo';
     e.textContent = 'Instant Birth refused: batch has no ETH value — would look like factory createB20 value 0 in the wallet. Use Instant Birth · 0.001 ETH · Fees for Dev · V8.';
     return 'STOP';
+  }
+  /* tip 20260922-ib-batch: first non-zero value should be open fee (payant etape sorted first). */
+  const firstVal = calls.find((c) => BigInt(c.value || '0x0') > 0n);
+  const feeWeiBat = plan.fraisW != null ? BigInt(plan.fraisW) : FRAIS_OUVERTURE_WEI;
+  if (firstVal && BigInt(firstVal.value) < feeWeiBat) {
+    try { console.warn('[Instant Birth] first value leg < open fee', String(firstVal.value), String(feeWeiBat)); } catch (_) {}
   }
   const seedPourGate = plan.quoteEthWei || plan.ethRequis || CREATE_FEE_WEI_FLOOR;
   const pf = await preflightInstantBirthEthFixe({ e, seedWei: seedPourGate });
@@ -10353,8 +10367,11 @@ async function creerBlock() {
     } else {
       e.className = 'note';
       /* ⛔ BUG vu par Phil (capture, mainnet) : avec le hook V2 deploye, on tombait ici et l ecran disait « Practice » */
+      /* tip 20260922-ib-batch: never sell factory create as Instant Birth — fee moment is V8 inscription. */
       e.textContent = Number(CHAINE) === 8453
-        ? 'Step 1 — create it. Check it in your wallet; bringing it to life (0.001 ETH, once) follows right after.'
+        ? (creerSansVie
+          ? 'Advanced — create asleep (factory · free). Give birth · V8 later.'
+          : 'Preparing Instant Birth — trying one wallet request (create + 0.001 ETH open fee · V8 · Fees for Dev)…')
         : 'Practice — create it. Check it in your wallet.';
     }
     /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
@@ -10382,6 +10399,62 @@ async function creerBlock() {
     if (adresseCreee && !creerSansVie) {
       const g = await creerEtVivreUneSignature({ v, calldata, to, adresse: adresseCreee, faceGravee, e });
       if (g !== 'SANS') return;
+    }
+    /* tip 20260922-ib-batch HARD: Instant Birth must NEVER present solitary createB20 value 0 as the IB wallet request.
+     * eth-fixe defined refuseSiCreateB20ValeurZero but it was dead on this live path — wire it.
+     * Multi-step only: factory create as unlabeled prep, then auto-chain vieAuto Instant Birth (0.001 · V8). */
+    const ibDirect = Number(CHAINE) === 8453 && !creerSansVie && !utiliseCreateRouter()
+      && (!$('#cVieDirecte') || $('#cVieDirecte').checked);
+    if (ibDirect && estCreateB20ValeurZero(to, value)) {
+      /* tip 20260922-ib-batch + eth-fixe HARD: Instant Birth must not open Rabby on lone createB20 value 0.
+       * refuse runs on this live path. Multi-step only via explicit prep button below (not labeled Instant Birth). */
+      refuseSiCreateB20ValeurZero({ to, value, e, contexte: 'creerBlock IB sequential live path' });
+      if (adresseCreee) {
+        e.innerHTML = (e.textContent || '')
+          + '<p class="note" style="margin-top:8px">Need this wallet without one-sig batch? '
+          + '<button type="button" class="bouton" id="cIbPrepCreate" style="margin-top:6px;display:block;width:100%">'
+          + 'Create block first (factory · free · not Instant Birth), then Instant Birth · 0.001 ETH · V8</button></p>';
+        const prep = $('#cIbPrepCreate');
+        if (prep) prep.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          void (async () => {
+            e.className = 'note';
+            e.textContent = 'Creating block (factory · free · not Instant Birth). Instant Birth fee follows…';
+            const rcPrep = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+              to, data: calldata, value: '0x0' });
+            if (rcPrep.etat !== 'CONFIRME') {
+              e.className = 'note wKo';
+              e.textContent = rcPrep.pourquoi || rcPrep.etat || 'Create was not confirmed.';
+              return;
+            }
+            etape('cree');
+            noterFace(adresseCreee, faceGravee);
+            if (Number(CHAINE) === 8453) aLancerAjouter(adresseCreee, v.sym);
+            e.className = 'note wOk';
+            e.textContent = 'Block created. Opening Instant Birth · 0.001 ETH · V8…';
+            try {
+              lancementLien = String(adresseCreee).toLowerCase();
+              await ouvrirProfil(adresseCreee, v.sym);
+              const d = $('#plDevise');
+              if (d) {
+                const voulue = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? paireChoisie.adr : 'ETH';
+                d.value = [...d.options].some((o) => o.value.toLowerCase() === String(voulue).toLowerCase())
+                  ? [...d.options].find((o) => o.value.toLowerCase() === String(voulue).toLowerCase()).value : 'ETH';
+                d.dispatchEvent(new Event('change'));
+              }
+              const part = $('#plPart'); if (part) part.value = '99.9';
+              ouvrirLancement();
+              vieAuto = true;
+              majProgressionVie('Instant Birth — reading market and open fee…');
+              void calculerLancement();
+            } catch (err) {
+              e.className = 'note wKo';
+              e.textContent = String((err && err.message) || err);
+            }
+          })();
+        });
+      }
+      return;
     }
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to, data: calldata, value });
