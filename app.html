@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0210" hidden>Build <code>20260922-0210</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0213" hidden>Build <code>20260922-0213</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9789,8 +9789,28 @@ function journalLu(adr) {
 function ecrireJournal(adr, vu, h) {
   const nourr = h && h.nourriture ? h.nourriture
     : brainNourriture && brainNourriture.adr === String(adr).toLowerCase() ? brainNourriture.n : null;
+  /* ⛔⛔ « UNE FOIS PAR JOUR » (Phil, 2026-09-22) SE TIENT ICI, PARCE QUE C EST ICI QU EST LA
+   *     MEMOIRE. `cerveau-echange.js` est PUR : il ne lit aucune horloge et ne garde rien — c est
+   *     ce qui le rend recalculable par n importe qui, la regle n°2 du 2026-09-13. Il faut donc
+   *     lui DONNER depuis quand le block a demande, et ce souvenir vit dans le navigateur.
+   * ⛔ `null` QUAND LE SOUVENIR EST ILLISIBLE OU ABSENT, jamais `0` : `0` voudrait dire « il vient
+   *     de demander » et ferait taire un block qui n a jamais rien demande — pour toujours. `null`
+   *     veut dire « jamais demande », et le decideur le laisse parler. */
+  const CLE_RAPPEL = 'tb-rappel-echange-';
+  const cleR = CLE_RAPPEL + String(adr).toLowerCase();
+  let depuisRappelH = null;
+  try {
+    const t = Number(localStorage.getItem(cleR));
+    if (Number.isFinite(t) && t > 0) depuisRappelH = (Date.now() - t) / 3600000;
+  } catch (e) { depuisRappelH = null; }
   const nouvelles = pensees({ phase: vu.phase, vie: h ? h.vie : null, etatVie: h ? h.etatVie : null, nourriture: nourr,
-    memoire: vu.memoire, spikes: vu.spikes, symbole: h ? h.sym : null });
+    memoire: vu.memoire, spikes: vu.spikes, symbole: h ? h.sym : null, depuisRappelH });
+  /* ⛔ LE SOUVENIR NE S ECRIT QUE SI LA DEMANDE A VRAIMENT ETE PRODUITE. L ecrire a chaque
+   *    battement ferait taire le block pour 24 h sans qu il ait rien demande — une garde qui
+   *    empeche exactement ce qu elle doit permettre. */
+  if (nouvelles.some((p) => p.genre === 'AMELIORER' && /quiet for|moved \d+ time/i.test(p.texte))) {
+    try { localStorage.setItem(cleR, String(Date.now())); } catch (e) { /* page seulement */ }
+  }
   const j = ajouterAuJournal(journalLu(adr), vu.tick, nouvelles);
   try { localStorage.setItem(CLE_JOURNAL + String(adr).toLowerCase(), JSON.stringify(j)); } catch (e) { /* journal de la page seulement */ }
   peindreJournal(adr, j);
