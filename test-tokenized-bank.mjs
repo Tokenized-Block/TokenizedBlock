@@ -1,8 +1,9 @@
-// test-tokenized-bank.mjs — proofOfHold + basket credit model (Raksha 2026-09-22).
+// test-tokenized-bank.mjs — proofOfHold + basket + add-liquidity (tip 2010).
 import assert from 'node:assert/strict';
 import {
   proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe,
   ouvrirCreditUsdcStub, creditSurvitPerte, noterEarlyHolder, lireEarlyHolders, BANK_CONTRACT,
+  lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder,
 } from './tokenized-bank.js';
 
 let n = 0;
@@ -11,6 +12,7 @@ const ok = (c, m) => { assert.ok(c, m); n++; };
 
 const BLOCK = '0xb2' + '11'.repeat(19);
 const BLOCK2 = '0xb2' + '22'.repeat(19);
+const BLOCK3 = '0xb2' + '33'.repeat(19);
 const HOLDER = '0x' + 'a1'.repeat(20);
 const pad = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
 const hexBal = (v) => '0x' + BigInt(v).toString(16).padStart(64, '0');
@@ -116,7 +118,7 @@ function memStore() {
   ok(!dead.survit, 'last block lost → credit dies');
 }
 
-// 9. credit stub on basket + early holders share
+// 9. credit stub OPEN — freezes early + marks bank open
 {
   eq(BANK_CONTRACT, null, 'no bank contract invented');
   const stockage = memStore();
@@ -125,15 +127,21 @@ function memStore() {
     { etat: 'LU', balance: 1n, block: BLOCK2.toLowerCase() },
   ];
   const c = ouvrirCreditUsdcStub({
-    holder: HOLDER, blocks: [BLOCK, BLOCK2], preuves, stockage,
+    holder: HOLDER, blocks: [BLOCK, BLOCK2], preuves, stockage, geste: 'OPEN',
   });
   eq(c.etat, 'PENDING_CONTRACT', 'stub until credit contract');
+  eq(c.geste, 'OPEN', 'open geste');
   eq(c.creditUsdc, null, 'no fake USDC amount');
   eq(c.basket.length, 2, 'credit on basket totality');
   ok(c.holdRequired, 'must hold to maintain');
   ok(c.oneLostDoesNotKill, 'resilience flag');
+  ok(c.creditContractsWithHold, 'credit contracts with Σ hold');
+  ok(c.earlySharesFrozenAtOpen, 'early frozen at open');
   ok(c.yieldSharedWithEarlyHolders, 'early holders share yield');
   ok(c.earlyHolders.includes(HOLDER.toLowerCase()), 'opener recorded as early holder');
+  ok(lireBankOuvert(stockage, HOLDER), 'bank marked open');
+  ok(String(c.note).includes('Open Bank'), 'Open note distinguished');
+  ok(!String(c.note).toLowerCase().includes('a6cf'), 'no a6cf in note');
   const refuse = ouvrirCreditUsdcStub({
     holder: HOLDER, blocks: [BLOCK], preuves: [{ etat: 'LU', balance: 0n, block: BLOCK }],
   });
@@ -143,13 +151,66 @@ function memStore() {
   eq(one.etat, 'PENDING_CONTRACT', 'single-block API still works');
 }
 
-// 10. early holders accumulate
+// 10. early holders list helper still works (Open freezes; this is direct API)
 {
   const stockage = memStore();
   noterEarlyHolder(stockage, HOLDER, HOLDER);
   const other = '0x' + 'b3'.repeat(20);
   noterEarlyHolder(stockage, HOLDER, other);
   eq(lireEarlyHolders(stockage, HOLDER).length, 2, 'pooled early holders listed');
+}
+
+// 11. add-liquidity graft — any wallet after open; early frozen (yield only)
+{
+  const stockage = memStore();
+  const preuves = [{ etat: 'LU', balance: 5n, block: BLOCK.toLowerCase() }];
+  ouvrirCreditUsdcStub({
+    holder: HOLDER, blocks: [BLOCK], preuves, stockage, geste: 'OPEN',
+  });
+  grefferBlock(stockage, HOLDER, BLOCK);
+  ok(peutAjouterLiquidite(stockage, HOLDER, HOLDER), 'open bank → add liquidity allowed');
+  ok(estEarlyHolder(stockage, HOLDER, HOLDER), 'opener is early (yield)');
+  const earlyAvant = lireEarlyHolders(stockage, HOLDER).join(',');
+  const add = grefferAjouterLiquidite(stockage, HOLDER, BLOCK2);
+  ok(add.ok, 'add-liquidity graft ok');
+  eq(add.mode, 'ADD_LIQUIDITY', 'mode add liquidity');
+  ok(add.earlyFrozen, 'early stays frozen');
+  eq(lireGreffes(stockage, HOLDER).length, 2, 'basket grew');
+  eq(lireEarlyHolders(stockage, HOLDER).join(','), earlyAvant, 'early list unchanged after add-liq');
+  const stub = ouvrirCreditUsdcStub({
+    holder: HOLDER, blocks: lireGreffes(stockage, HOLDER),
+    preuves: [
+      { etat: 'LU', balance: 5n, block: BLOCK.toLowerCase() },
+      { etat: 'LU', balance: 2n, block: BLOCK2.toLowerCase() },
+    ],
+    stockage, geste: 'ADD_LIQUIDITY',
+  });
+  eq(stub.geste, 'ADD_LIQUIDITY', 'add-liq geste');
+  ok(String(stub.note).includes('Add-liquidity'), 'Add-liquidity note distinguished');
+  ok(String(stub.note).includes('any wallet'), 'note says any wallet');
+  eq(lireEarlyHolders(stockage, HOLDER).join(','), earlyAvant, 'ADD_LIQUIDITY stub does not expand early');
+  grefferAjouterLiquidite(stockage, HOLDER, BLOCK3);
+  eq(lireGreffes(stockage, HOLDER).length, 3, 'third graft still add-liq');
+}
+
+// 12. add-liq gated by open only — NOT by early list; plain graft always ok with proof path
+{
+  const stockage = memStore();
+  const stranger = '0x' + 'c4'.repeat(20);
+  ok(!peutAjouterLiquidite(stockage, stranger, stranger), 'closed bank blocks add-liq mode');
+  const r = grefferAjouterLiquidite(stockage, stranger, BLOCK);
+  ok(!r.ok, 'add-liq mode refused before open');
+  /* any wallet may still grefferBlock (UI graft) — early does not gate graft */
+  const g = grefferBlock(stockage, stranger, BLOCK);
+  ok(g.ok, 'plain graft not early-gated');
+  /* after OPEN on HOLDER bank, add-liq does not require caller to be early */
+  ouvrirCreditUsdcStub({
+    holder: HOLDER, blocks: [BLOCK],
+    preuves: [{ etat: 'LU', balance: 1n, block: BLOCK.toLowerCase() }],
+    stockage, geste: 'OPEN',
+  });
+  ok(peutAjouterLiquidite(stockage, HOLDER, stranger), 'non-early wallet may add liquidity once open');
+  ok(!estEarlyHolder(stockage, HOLDER, stranger), 'stranger is not early — yield separate');
 }
 
 console.log('ok — ' + n + ' asserts (tokenized-bank)');
