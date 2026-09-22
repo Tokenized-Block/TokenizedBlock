@@ -932,7 +932,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ « LEARN » EST DANS LA TETE, PAS DANS LA BARRE DU BAS. Six onglets tiennent deja mal sur
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
-      <button type="button" id="mapCta" class="mapCta">✦ Create your own block — 0.001 ETH, once</button>
+      <!-- tip 20260922-create-sign-ux: map CTA sells Instant Birth + fee, not free create -->
+      <button type="button" id="mapCta" class="mapCta">✦ Instant Birth — 0.001 ETH, once</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
       <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at">?<span class="long"> What am I looking at</span></button>
@@ -1069,6 +1070,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
+      <!-- tip 20260922-fee-funnel -->
       <p class="creaPrix"><b>0.001 ETH, once</b><span>born, face and brain engraved, market open</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
@@ -1168,7 +1170,8 @@ details[open] > summary::before{transform:rotate(90deg)}
          creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
          elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
     <div class="carte">
-      <p class="titre"><span class="creaEtape">3</span> Bring it to life</p>
+      <!-- tip 20260922-create-sign-ux: Instant Birth > vague Bring it to life -->
+      <p class="titre"><span class="creaEtape">3</span> Instant Birth</p>
       <ol class="creaPas">
         <!-- ⛔ Phil (capture 2026-09-19) : l ordre « payer d abord » etait celui de l ancien hook ; aujourd hui creation,
              ≈ $1 et marche partent ensemble (une signature quand le wallet sait grouper). -->
@@ -1193,16 +1196,16 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
-      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the one-time 0.001 ETH fee. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: 0.001 ETH, once. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
       </div>
       <div class="infoPane" data-itabs-pane="cCost" data-itab="cost">
         <p class="note" id="cFrais"></p>
+        <!-- tip 20260922-create-sign-ux: only Instant Birth cost — kill free-asleep bullet -->
         <ul class="note noteBullets" id="cCostBullets" hidden>
-          <li><b>Create</b>: free</li>
-          <li><b>Bring life</b>: 0.001 ETH, once</li>
+          <li><b>Instant Birth</b>: 0.001 ETH, once · V8 — create + open market</li>
         </ul>
         <ol class="pmLignes" id="cApercuTx"></ol>
         <p class="note" id="cMintFeeHint" hidden></p>
@@ -1215,7 +1218,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0041 (Phil : « la mise en vie cochee par defaut ») -->
         <!-- ⛔ PHIL (2026-09-19) : « plus de free block, un seul chemin — celui qui a prouve l entree d ETH sur a6cf ».
              La case « bring it to life right after » est retiree : sur Base, creer ENCHAINE toujours la mise en vie. -->
-        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Bring it to life</button>
+        <!-- tip 20260922-2140 HARD: Instant Birth hooked V8 DIRECT on Create — primary CTA only.
+             One path: create + open V8 market + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET (vieAuto / one-sig). -->
+        <!-- tip 20260922-create-sign-ux: kill Advanced free-asleep CTA; Connect→review→sign Instant Birth -->
+        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Instant Birth · 0.001 ETH</button>
         <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
@@ -1231,7 +1237,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              ⛔ ET NOUS NE TOUCHONS RIEN DESSUS : « Coinbase Onramp is free for developers to use »
                 veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
                 ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
-        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Create.</p>
+        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Instant Birth.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -1501,6 +1507,44 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="wActifsNote"></p>
     </div>
 
+    <!-- tip 20260922-2010 — TokenizedBank add-liquidity graft (Raksha/Zero 1): any wallet with proof
+         may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
+         hold; losing one still leaves the rest; never show a6cf. -->
+    <div class="carte" id="wBankCarte" style="margin-top:14px">
+      <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
+      <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
+        then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
+        You must <b>keep holding</b> to maintain credit. <b>Losing one block does not end it</b> — the linked blocks you still hold keep backing it.
+        Credit contracts with Σ hold (dies only if zero survivors).
+        <b>Early holders</b> (snapshot at Open) share yield — badge separate from grafting.
+        After Open, <b>any wallet with proof</b> may <b>graft again to add liquidity</b> to the same basket.
+        The agent runs the ops — you only one-click confirm.</p>
+      <ol class="note" style="margin:10px 0 8px 1.2em; padding:0; line-height:1.45">
+        <li><b>Hold</b> — pick a B20 from My blocks</li>
+        <li><b>Proof of hold</b> — read <code>balanceOf</code> on Base</li>
+        <li><b>Graft</b> — into basket (Open) or <b>Add liquidity</b> (same basket, any wallet)</li>
+        <li><b>Open / Add-liquidity credit</b> — on basket totality (stub until contract)</li>
+        <li><b>Confirm</b> — one click (wallet sign placeholder)</li>
+      </ol>
+      <label class="champ">My block (hold)
+        <select id="tbBlock"><option value="">Connect wallet to list your blocks…</option></select>
+      </label>
+      <p class="note mono" id="tbProof">Proof of hold: —</p>
+      <p class="titre" style="font-size:1em; margin-top:12px">Linked blocks (basket)</p>
+      <ul class="wListe" id="tbBasket"><li class="note">No blocks grafted yet.</li></ul>
+      <p class="note" id="tbBasketNote">Credit backs the basket. Remove one → survivors keep backing.</p>
+      <div class="wActions" style="margin-top:8px; flex-wrap:wrap; gap:8px">
+        <button class="bouton sec" id="tbProofBtn" type="button">Read proof of hold</button>
+        <button class="bouton sec" id="tbGraftBtn" type="button" disabled>Graft into basket</button>
+        <button class="bouton sec" id="tbAddLiqBtn" type="button" disabled hidden>Add liquidity — graft another block</button>
+        <button class="bouton sec" id="tbBasketProofBtn" type="button">Read basket proofs</button>
+        <button class="bouton" id="tbOpenBtn" type="button" disabled>Open TokenizedBank</button>
+      </div>
+      <p class="note" id="tbEtat" style="margin-top:8px"></p>
+      <p class="note" id="tbEarly">Early holders = yield share at Open (frozen) — listed after confirm. Grafting is open to any wallet with proof.</p>
+      <p class="note" id="tbAgent">After confirm, <b>Zero 1 / Brain</b> will run ops. Credit mint path is not deployed yet — this screen stays honest.</p>
+    </div>
+
     <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
          ca »). C etait une note de conception, pas une information pour l utilisateur.
          La decision elle-meme TIENT : un wallet par block, detenant des fonds, pilote par un agent
@@ -1587,7 +1631,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0218" hidden>Build <code>20260922-0218</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0220" hidden>Build <code>20260922-0220</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1921,8 +1965,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0039 (Phil : « c est le Brain AI qui le fait, comme give birth — pas un formulaire alors que Create existe ») :
              une phrase, un bouton « Give birth ». Les reglages (paire, valeur de depart, part) sont prerempli et replies.
              ⛔ Tous les id sont gardes : la logique de plan / signature ne change pas. -->
-        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. 0.001 ETH, once.</p>
+        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth · V8</span><span class="pPV" id="plReseau"></span></div>
+        <!-- tip 20260922-fee-funnel -->
+        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. Birth fee: 0.001 ETH, once.</p>
         <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px" hidden>
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="lock">Lock</button>
         </div>
@@ -2129,6 +2174,7 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
+import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
@@ -2149,6 +2195,29 @@ import { planMessagePaye } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 /* ⛔ 2026-09-14 Brain wake: RPC blips must not wipe a known market into permanent « market unread ». */
+
+/* tip 20260922-2112: « engraved » = on-chain porteLeLabel (contractURI contient le marqueur `"face":{`),
+ *    PAS une session Create locale / memoire-chaine. V8.inscrire refuse encore sans ce marqueur
+ *    (URI B20 immuable apres create). Created/OpenLaunch sans face → CTA cache, pas de faux ALLOW. */
+const labelNaissanceCache = new Map(); /* adr → { etat, quand } */
+const POURQUOI_PAS_LABEL = 'V8 birth needs a face engraved at Create (on-chain label). This block was born elsewhere — Instant Birth a new block on TB (0.001 ETH once · V8).';
+async function etatLabelNaissance(adr) {
+  const a = String(adr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return 'NON_LU';
+  const hit = labelNaissanceCache.get(a);
+  if (hit && Date.now() - hit.quand < 5 * 60 * 1000) return hit.etat;
+  let etat = 'NON_LU';
+  try { etat = await blockPorteLeLabel({ rpc, jeton: a }); } catch { etat = 'NON_LU'; }
+  labelNaissanceCache.set(a, { etat, quand: Date.now() });
+  return etat;
+}
+async function eligibleNaissanceV8(adr) {
+  if (CHAINE !== 8453) return { ok: true, label: 'OUI' };
+  const label = await etatLabelNaissance(adr);
+  if (label === 'NON') return { ok: false, label, pourquoi: POURQUOI_PAS_LABEL };
+  return { ok: true, label }; /* OUI ou NON_LU (RPC cough — fail-open) */
+}
+
 const vieMarcheConnue = new Map(); /* adr → { vie, etatVie, quand } */
 function viePourCerveau(adr, vie, etatVie) {
   const a = String(adr || '').toLowerCase();
@@ -2239,6 +2308,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
+  if (nom === 'wallet') void peindreTokenizedBank();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -3406,6 +3476,7 @@ async function connecter() {
 
   void listerMesBlocks();
   void majWallet();
+  void peindreTokenizedBank();
 }
 
 /* ⛔ UNE SEULE LECTURE POUR DEUX ONGLETS. My block et Wallet ont besoin des memes creations ; les
@@ -3922,6 +3993,7 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     $('#sEtat').textContent = '';
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
     void majWallet();
+    void peindreTokenizedBank();
   });
 }
 
@@ -4678,18 +4750,36 @@ function peindreTrustFacts(adr, v, origine) {
   }
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
+    /* tip 20260922-fee-funnel + 20260922-2112: V8 CTA only when porteLeLabel ≠ NON */
     cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next</b>: open its market (0.001 ETH, once) — every trade then pays its creator.'
+      ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: 0.001 ETH, once.'
       : '<b>Next</b>: open its market — free in Practice.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-      + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
+      + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
+    if (CHAINE === 8453) {
+      void eligibleNaissanceV8(adr).then((el) => {
+        if (!cta.isConnected || el.ok) return;
+        cta.innerHTML = '<b>V8 birth unavailable here</b> — ' + enTexte(el.pourquoi)
+          + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+          + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button></div>';
+      });
+    }
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
-      /* tip 0017: FREE-like unhooked volume → short Launch hooked (MAIN primary) */
-      cta.innerHTML = 'Trades on its outside market pay nothing back. Open a <b>TokenizedBlock market</b> next to it.'
+      /* tip 0017 + tip 20260922-fee-funnel + 20260922-2112 */
+      cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
+        + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="hook-launch">Open TokenizedBlock market</button>'
-        + '<button type="button" class="bouton sec" data-tf-act="buy">Buy/Sell in-app</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
+      void eligibleNaissanceV8(adr).then((el) => {
+        if (!cta.isConnected || el.ok) return;
+        cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
+          + '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi)
+          + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
+          + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button>'
+          + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
+      });
     } else {
       /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
       cta.innerHTML = info.isTbFeeHook
@@ -5068,25 +5158,38 @@ async function lireProfil(adr, sym, perime) {
   /* tip 2340: also offer Launch when market is LUE but not fee hook — opens NEW hooked pool id → FEE_WALLET. */
   const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
   $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
+  /* tip 20260922-fee-funnel + 20260922-2112: wake / unhooked = Give birth V8 only if porteLeLabel ≠ NON */
   if (etatVieProfil === 'NON_TROUVEE') {
     $('#pReveiller').textContent = CHAINE === 8453
-      ? 'Open its market — 0.001 ETH, once'
+      ? 'Give birth · V8 · 0.001 ETH once'
       : 'Open its market (Practice, free)';
   } else if (legacySansHook) {
-    $('#pReveiller').textContent = 'Open a TokenizedBlock market';
+    $('#pReveiller').textContent = 'Give birth · V8 · 0.001 ETH once';
   }
   const wg = $('#pWakeGate');
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = 'Opening its market costs <b>0.001 ETH, once</b>, then the wallet reviews the transaction that places its blocks in the pool.';
+      wg.innerHTML = 'Birth fee: <b>0.001 ETH, once</b>. Then the wallet reviews the transaction that places its blocks in the pool.';
     } else if (legacySansHook) {
       wg.hidden = false;
-      wg.innerHTML = 'Its current market is outside TokenizedBlock: trades there pay nothing back.';
+      wg.innerHTML = 'Outside market — trades here do not feed this block. <b>Give birth · V8 · 0.001 ETH once</b>.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
       wg.innerHTML = 'Practice: opening a market is free.';
     } else { wg.hidden = true; wg.textContent = ''; }
+  }
+  if (CHAINE === 8453 && (etatVieProfil === 'NON_TROUVEE' || legacySansHook)) {
+    const adrGate = adr;
+    void eligibleNaissanceV8(adrGate).then((el) => {
+      if ($('#profil').dataset.block !== adrGate) return;
+      if (el.ok) return;
+      $('#pReveiller').hidden = true;
+      if (wg) {
+        wg.hidden = false;
+        wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi);
+      }
+    });
   }
   const gt = $('#pGarderTrusted');
   if (gt) {
@@ -5100,9 +5203,26 @@ async function lireProfil(adr, sym, perime) {
   }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
   /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
-  if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
+  /* tip 20260922-fee-funnel: deep-link / Created V8 CTA also opens Give birth on unhooked LUE */
+  if (lancementLien && lancementLien === String(adr).toLowerCase()
+    && (etatVieProfil === 'NON_TROUVEE' || legacySansHook)) {
+    const lienAdr = lancementLien;
     lancementLien = null;
-    ouvrirLancement();
+    void eligibleNaissanceV8(lienAdr).then((el) => {
+      if ($('#profil').dataset.block !== lienAdr) return;
+      if (!el.ok) {
+        const e = $('#plEtat');
+        if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
+        const wg2 = $('#pWakeGate');
+        if (wg2) { wg2.hidden = false; wg2.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+        return;
+      }
+      ouvrirLancement();
+      /* tip 20260922-2125: Created/deep-link Give birth must run Instant Birth, not stop at panel */
+      vieAuto = true;
+      majProgressionVie('Step 1 — reading its market and your approvals…');
+      void calculerLancement();
+    });
   }
   /* ⛔⛔ MESURE EN PROD (2026-09-13, lien TTB de Phil) : ~80 s de reprises sans reponse du noeud sature — la carte ne
    *    s ouvrait jamais. Avec l intention du lien, la carte s ouvre quand meme ; « Work it out » relit le marche et
@@ -5315,11 +5435,47 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
   if (!b) return;
   const act = b.getAttribute('data-tf-act');
   const pe = $('#pEchange'), plq = $('#pLiquidite'), pl = $('#pLancement');
+  if (act === 'create-here' || act === 'instant-birth-tb') {
+    /* tip 20260922-2140: profile nudge → Instant Birth on TB (#creer paid), never free-create promise.
+     * Asleep local blocks still run vieAuto Instant Birth on that block. */
+    const asleep = Number(CHAINE) === 8453 ? aLancerLire() : [];
+    if (asleep.length) {
+      const b = asleep[0];
+      lancementLien = b.adr;
+      void ouvrirProfil(b.adr, b.sym).then(() => {
+        try {
+          const d = $('#plDevise');
+          if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+          const part = $('#plPart'); if (part) part.value = '99.9';
+          ouvrirLancement();
+          vieAuto = true;
+          majProgressionVie('Step 1 — reading its market and your approvals…');
+          void calculerLancement();
+        } catch (_) {}
+      });
+      return;
+    }
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
   if (act === 'wake' || act === 'hook-launch') {
-    const w = $('#pReveiller');
-    if (w && !w.hidden) { w.click(); return; }
-    if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-    try { ouvrirLancement(); } catch (_) {}
+    const adrTf = $('#profil') && $('#profil').dataset.block;
+    void (async () => {
+      if (adrTf && CHAINE === 8453) {
+        const el = await eligibleNaissanceV8(adrTf);
+        if (!el.ok) {
+          const wg = $('#pWakeGate');
+          if (wg) { wg.hidden = false; wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+          const e = $('#plEtat');
+          if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
+          return;
+        }
+      }
+      const w = $('#pReveiller');
+      if (w && !w.hidden) { w.click(); return; }
+      if (pl) { pl.hidden = false; pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+      try { ouvrirLancement(); } catch (_) {}
+    })();
     return;
   }
   if (act === 'buy') {
@@ -5644,7 +5800,7 @@ function peindreHookedRoute() {
   el.innerHTML = '<b>Hooked markets</b> · trade with <b>Buy/Sell</b> right here'
     + (n ? (' · <b>' + n + '</b> hooked pool' + (n === 1 ? '' : 's') + ' in window') : ' · waiting for Live window / Dex index')
     + ' · <button type="button" class="puce" id="sfOpenTbgas">Open TBGAS</button>'
-    + '. Hooked Dex chops · unhooked Dex = $0 → profile <b>Launch hooked</b>.';
+    + '. Hooked Dex chops · external Dex = $0 → profile <b>Launch hooked</b>.';
   const b = $('#sfOpenTbgas');
   if (b) {
     b.addEventListener('click', (ev) => {
@@ -6123,6 +6279,7 @@ function peindreLive() {
           ? (poolDecouvertPour(e.jeton)
             ? (poolDecouvertPour(e.jeton).isTbFeeHook
               ? '🧱 <b>' + nom + '</b> was born here · market open'
+              /* tip 20260922-fee-funnel: Created→IB — unhooked label + V8 CTA on the row */
               : '🧱 <b>' + nom + '</b> was born on another launchpad')
             : '🧱 <b>' + nom + '</b> was born')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
@@ -6141,8 +6298,17 @@ function peindreLive() {
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     /* tip 2358: unhooked ACHAT/VENTE → Launch hooked beside (fee capture); hooked/TBGAS → Buy/Sell */
     /* tip 0028 : une seule invitation, sans jargon */
-    const openHint = (e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
-      ? ' · <span class="filOpen">tap to open</span>' : '';
+    /* tip 20260922-fee-funnel: Created unhooked row — primary V8 CTA, Open profile secondary (same profile path) */
+    const unhookedCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true
+      && poolDecouvertPour(e.jeton) && !poolDecouvertPour(e.jeton).isTbFeeHook;
+    /* tip 20260922-2140: never promise V8 birth on a foreign unlabeled token.
+     * Instant Birth on TB → #creer (paid); Open profile secondary. No Create here (free). */
+    /* tip 20260922-2141 MINIMAL: Created unhooked = Open profile / tap to open ONLY.
+     * No Launch-hooked-V8 button · no Instant Birth CTA on foreign unlabeled tokens. */
+    const openHint = unhookedCreate
+      ? ' · <span class="filOpen">Open profile</span>'
+      : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
+        ? ' · <span class="filOpen">tap to open</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
       ? (estTrusted(e.jeton)
         ? ' · <span class="filOpen">✦ trusted</span>'
@@ -6205,6 +6371,35 @@ $('#sfLive').addEventListener('click', (ev) => {
     ev.preventDefault(); ev.stopPropagation();
     garderTrusted(keep.getAttribute('data-keep-trust'), 'CreateRouter paid');
     peindreLive();
+    return;
+  }
+  /* tip 20260922-2140: Instant Birth on TB → Create tab paid path (never foreign-token V8 birth) */
+  const ibTb = ev.target.closest('[data-tf-act="instant-birth-tb"]');
+  if (ibTb) {
+    ev.preventDefault(); ev.stopPropagation();
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
+  /* tip 20260922-fee-funnel + 20260922-2112: legacy V8 CTA — gate on porteLeLabel before Give birth */
+  const v8 = ev.target.closest('[data-v8-cta]');
+  if (v8) {
+    ev.preventDefault(); ev.stopPropagation();
+    const adr = v8.getAttribute('data-v8-cta');
+    if (!/^0x[0-9a-fA-F]{40}$/i.test(String(adr || ''))) return;
+    const li = v8.closest('li.filL[data-block]');
+    v8.disabled = true;
+    void eligibleNaissanceV8(adr).then((el) => {
+      v8.disabled = false;
+      if (!el.ok) {
+        v8.textContent = 'V8 birth unavailable — Instant Birth on TB';
+        v8.title = el.pourquoi;
+        const note = $('#sfLiveNote');
+        if (note) note.textContent = el.pourquoi;
+        return;
+      }
+      lancementLien = String(adr).toLowerCase();
+      void ouvrirProfil(adr, (li && li.getAttribute('data-sym')) || null);
+    });
     return;
   }
 
@@ -6715,14 +6910,10 @@ async function preparerEchange(sens) {
     return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
-  /* ⛔ P0 2026-09-15 fee harden: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback). */
+  /* ⛔ P0 2026-09-15 / tip 20260922-2026: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback).
+   * Hooked pools no longer exempt — interface 0.5% always; hook may stack on top. */
   const feeLabel = 'fee';
-  /* ⛔ LE HOOK PAIE DEJA (2026-09-19) : sur une pool HOOK_PREVU, le swap verse lui-meme 2 % au wallet de frais ; le plan
-   * porte alors fraisBps 0 et fraisMarcheBps 300. Ce garde exigeait les 0,5 % et REFUSAIT ce cas — vu sur fork. On
-   * l exempte seulement quand la cle de la pool est bien celle du hook : ailleurs, l exigence reste entiere. */
-  const hookPaie = !!(r && r.fraisMarcheBps === 300 && p.cle
-    && estNotreHook(p.cle.hooks));
-  if (!estWalletDeFrais(compte) && !hookPaie) {
+  if (!estWalletDeFrais(compte)) {
     const bpsOk = r && r.fraisBps === FRAIS_INTERFACE_BPS;
     const destOk = r && r.beneficiaireFrais
       && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
@@ -7079,13 +7270,14 @@ function ouvrirLancement() {
   const real = CHAINE === 8453;
   $('#plReseau').textContent = (real ? 'Real · ' : 'Practice · ') + RESEAUX[CHAINE].nom;
   const badge = $('#plBadge');
-  /* tip 0039 : « Give birth » — une phrase, un bouton ; les details du plan s affichent apres le clic */
-  if (badge) badge.textContent = real ? 'Give birth · 0.001 ETH, once' : 'Give birth · free in Practice';
+  /* tip 0039 + tip 20260922-fee-funnel: Give birth · V8 fee copy (no fee addr) */
+  if (badge) badge.textContent = real ? 'Give birth · V8 · 0.001 ETH once' : 'Give birth · free in Practice';
   const intro = $('#plIntro');
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = 'Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">'
-      + contre + '</span>, locked forever.' + (real ? ' 0.001 ETH, once.' : ' Free in Practice.');
+      + contre + '</span>, locked forever.'
+      + (real ? ' Birth fee: 0.001 ETH, once.' : ' Free in Practice.');
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
@@ -7208,14 +7400,24 @@ async function calculerLancement() {
        *     tourne toujours. Tous les marches du chemin rapide s ouvraient donc sur le V5. C est la
        *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
       const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook });
+      /* tip 20260922-1934 + 20260922-2026: MAIN never falls through to hooks=0x0; Birth=V8 only. */
+      if (mainnet && !hooks) {
+        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — fee hook unread (will not open an unhooked market)' };
+      } else if (mainnet && String(hooks).toLowerCase() !== String(HOOK_V8).toLowerCase()) {
+        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available — Birth=V8 only (fee hook is not V8)' };
+      }
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
        *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
-      const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4) ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
-      if (label === 'NON') {
-        plan = { etat: 'REFUSE', pourquoi: 'this block was not engraved by this app\'s Create, so its market cannot open here' };
+      const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
+        ? await etatLabelNaissance(adr) : 'OUI';
+      if (plan && plan.etat === 'REFUSE') {
+        /* already refused: missing hook on MAIN */
+      } else if (label === 'NON') {
+        /* tip 20260922-2112: engraved = porteLeLabel/on-chain face marker — V8 still gates; do not fake ALLOW for OpenLaunch B20 */
+        plan = { etat: 'REFUSE', pourquoi: POURQUOI_PAS_LABEL };
       } else if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
       } else {
@@ -7225,13 +7427,13 @@ async function calculerLancement() {
           quoteEthWei = await preparerQuoteEthDefaut(false);
           if (Number(CHAINE) === 8453) {
             if (quoteEthWei == null) {
-              plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+              /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
             } else if (quoteEthWei <= 0n) {
               plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — quote dust / empty refused' };
             } else {
               const minOracle = weiPourDollars(1, ethUsd);
               if (minOracle == null) {
-                plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+                /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
               } else if (quoteEthWei < CREATE_FEE_WEI_FLOOR || quoteEthWei < minOracle) {
                 plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least ≈$1 in ETH (and ≥ 0.0003 ETH floor) in the pool' };
               }
@@ -7243,7 +7445,7 @@ async function calculerLancement() {
         if (!plan) {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
           ...(deviseLancement ? { devise: deviseLancement } : {}),
-          ...(hooks ? { hooks } : {}),
+          hooks, /* tip 1934: always pass — never omit (omit → 0x0 default) */
           ...(quoteEthWei != null && !deviseLancement ? { quoteEthWei } : {}) });
         }
         if (plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
@@ -7313,11 +7515,11 @@ async function preparerQuoteEthDefaut(force = false) {
   if (!el) return null;
   if (String(el.value || '').trim() && !force) return lireQuoteEthWeiChamp();
   if (Number(CHAINE) === 8453) {
+    /* tip 20260922-eth-fixe: seed floor when oracle unread — never block Instant Birth on price. */
+    const SEED_FIXE_SANS_ORACLE = CREATE_FEE_WEI_FLOOR; /* 0.0003 ETH floor; ~$1 often ≈0.00036 */
     if (force || ethUsd === null) await lirePrixEth();
-    if (ethUsd == null) return null;
-    let w = weiPourDollars(1, ethUsd);
-    if (w == null) return null;
-    if (w < CREATE_FEE_WEI_FLOOR) w = CREATE_FEE_WEI_FLOOR;
+    let w = ethUsd != null ? weiPourDollars(1, ethUsd) : null;
+    if (w == null || w < SEED_FIXE_SANS_ORACLE) w = SEED_FIXE_SANS_ORACLE;
     el.value = weiVersEthDecimal(w);
     return w;
   }
@@ -7333,9 +7535,12 @@ function estNaissanceInstantaneeUi() {
  * Practice 84532 stays free. Fail-closed if oracle unread or balance too low. */
 async function assurerFraisLancementWei(force = false) {
   if (fraisLancementUsd(CHAINE) === 0) return null;
+  /* tip 20260922-eth-fixe HARD: Instant Birth / open fee = fixed FRAIS_OUVERTURE_WEI (0.001 ETH).
+   * Oracle is OPTIONAL — never refuse Instant Birth with «Could not read the price».
+   * If ethUsd live: max($1 wei, floor). If unread: floor only. Balance gate is wei-only. */
   if (force || ethUsd === null) await lirePrixEth();
-  if (ethUsd === null) return null;
-  let w = weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
+  let w = null;
+  if (ethUsd != null) w = weiPourDollars(fraisLancementUsd(CHAINE), ethUsd);
   /* ⛔⛔ LE PLANCHER EST LE PRIX MESURE DU MARCHE, PLUS LE MINIMUM DU CreateRouter (2026-09-21).
    *     Il valait 0,0003 ETH, et comme ~1 $ vaut moins que ca au prix actuel de l ETH, c est ce
    *     plancher qui s appliquait a chaque ouverture. La mediane LUE sur les 103 marches ouverts en
@@ -7343,7 +7548,7 @@ async function assurerFraisLancementWei(force = false) {
    *     moins que le marche, au seul cote qui paie. Decision de Phil, 2026-09-21.
    * ⛔ ON PREND LE PLUS GRAND DES DEUX : si l ETH s effondrait, ~1 $ pourrait depasser 0,001 ETH, et
    *    un plancher qui devient un PLAFOND serait exactement le defaut inverse. */
-  if (w != null && w < FRAIS_OUVERTURE_WEI) w = FRAIS_OUVERTURE_WEI;
+  if (w == null || w < FRAIS_OUVERTURE_WEI) w = FRAIS_OUVERTURE_WEI;
   return w;
 }
 
@@ -7396,16 +7601,16 @@ function peindrePlan(plan, adr) {
   }
   const d = plan.dec;
   const usdLaunch = fraisLancementUsd(CHAINE);
-  const fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : null;
+  /* tip 20260922-eth-fixe: fee wei from plan or fixed floor — never «Could not read the price» copy. */
+  let fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : (usdLaunch > 0 ? FRAIS_OUVERTURE_WEI : null);
+  if (usdLaunch > 0 && !fraisLancementPret(fraisL)) fraisL = FRAIS_OUVERTURE_WEI;
   /* tip 0212: when inscriptionPayee, the 0.001 ETH open fee is already on chain — do not re-promise it. */
   const feeDejaPaye = !!(plan.v2 && plan.inscriptionPayee);
   const feeLignes = usdLaunch > 0
     ? (feeDejaPaye
       ? ['Open fee already paid on chain — next signatures only seed the pool and bring it to life.']
       : ['Review: 0.001 ETH, once — your wallet shows the exact request.',
-        ...(!fraisLancementPret(fraisL)
-          ? ['Could not read the ETH price right now — try again in a moment.']
-          : ['Review: 0.001 ETH, once (checked on chain), then bring it to life.'])])
+        'Review: 0.001 ETH, once, then bring it to life.'])
     : ['Practice — bringing life is free here.'];
   const txsApercu = [];
   if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2) {
@@ -7414,6 +7619,12 @@ function peindrePlan(plan, adr) {
   txsApercu.push(...(plan.etapes || []), plan.tx);
   const hookAdr = plan.cle && plan.cle.hooks ? String(plan.cle.hooks).toLowerCase() : '0x0000000000000000000000000000000000000000';
   const avecHook = hookAdr !== '0x0000000000000000000000000000000000000000';
+  /* tip 20260922-1934: MAIN new-pool plan without TbFeeHook → nothing to sign (blocks unhooked mint UX). */
+  if (Number(CHAINE) === 8453 && plan && !plan.poolExiste && !avecHook) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'Launch refused: this plan would open an unhooked market (no fee hook). Work it out again.';
+    return;
+  }
   $('#plLignes').innerHTML = [
     /* tip 2352: « fee 0 % » = Uniswap pool fee TIER only — NOT protocol/life/BuySell fees. */
     'Market on ' + RESEAUX[CHAINE].nom + ', paired with ' + (plan.symDevise || (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
@@ -7455,18 +7666,7 @@ function peindrePlan(plan, adr) {
     return;
   }
 
-  /* ⛔ MAIN Launch fail-closed: no measured life-fee wei → nothing to sign past approvals. */
-  if (usdLaunch > 0 && (ethUsd == null || !fraisLancementPret(fraisL))) {
-    e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Could not read the ETH price right now — work it out again in a moment.';
-    void assurerFraisLancementWei(true).then(async (w) => {
-      if ($('#profil').dataset.block !== adr || !planCourant) return;
-      planCourant.fraisLancementWei = w;
-      await lireSoldeEthNat(true);
-      peindrePlan(planCourant, adr);
-    });
-    return;
-  }
+  /* tip 20260922-eth-fixe: fee floor already applied above — balance gate only. */
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
     /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains. */
     const fraisEncore = feeDejaPaye ? 0n : BigInt(fraisL);
@@ -7557,13 +7757,10 @@ async function verifierLancement(adr) {
     const w = await assurerFraisLancementWei(true);
     planCourant.fraisLancementWei = w;
     await lireSoldeEthNat(true);
-    if (ethUsd == null || !fraisLancementPret(w)) {
-      e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Could not read the ETH price right now. Nothing was sent.';
-      peindrePlan(planCourant, adr);
-      return;
-    }
-    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(w)) {
+    /* tip 20260922-eth-fixe: never abort on unread oracle — floor fee always. */
+    const wOk = fraisLancementPret(w) ? w : (FRAIS_OUVERTURE_WEI);
+    planCourant.fraisLancementWei = wOk;
+    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(wOk)) {
       e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Not enough ETH for the one-time 0.001 ETH life fee. Nothing was sent.';
       peindrePlan(planCourant, adr);
@@ -7700,10 +7897,10 @@ async function lancerMarcheBlock(adr) {
     fraisL = await assurerFraisLancementWei(true);
     planCourant.fraisLancementWei = fraisL;
     await lireSoldeEthNat(true);
-    if (ethUsd == null || !fraisLancementPret(fraisL)) {
-      e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Could not read the ETH price right now. Nothing was sent — try again.';
-      return;
+    /* tip 20260922-eth-fixe: fee floor always available — never abort Launch on unread oracle. */
+    if (!fraisLancementPret(fraisL)) {
+      fraisL = await assurerFraisLancementWei(true) || FRAIS_OUVERTURE_WEI;
+      planCourant.fraisLancementWei = fraisL;
     }
     /* v2: open fee already handled via inscription etape; still need seed+micro for Instant Birth.
      * Non-v2: need open fee (unless dejaPaye) + seed+micro when naissance. */
@@ -7839,7 +8036,20 @@ async function lancerMarcheBlock(adr) {
   }
 }
 
-$('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#pReveiller').addEventListener('click', () => {
+  /* tip 20260922-2125: Give birth · V8 = Instant Birth vieAuto (open fee + seed), NEVER Create/createB20 */
+  try {
+    const d = $('#plDevise');
+    if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+    const part = $('#plPart'); if (part) part.value = '99.9';
+    ouvrirLancement();
+    vieAuto = true;
+    majProgressionVie('Step 1 — reading its market and your approvals…');
+    void calculerLancement();
+  } catch (_) {
+    try { ouvrirLancement(); } catch (__) {}
+  }
+});
 $('#bEcrireBlock') && $('#bEcrireBlock').addEventListener('click', () => {
   const g = $('#bGraver');
   if (!g) return;
@@ -7942,6 +8152,339 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
   $('#plEtat').className = 'note';
   $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. The one-time 0.001 ETH fee opens this new market.';
 });
+/* ══ TokenizedBank (tip 20260922-2010) — basket + add-liquidity graft ═══════════════════════════
+ * Hold → proofOfHold → graft (Open) or Add liquidity (any wallet, same basket) → one-click confirm.
+ * Early = yield share frozen at Open (badge separate). Credit on totality; hold; losing one still leaves the rest.
+ * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
+let tbPreuve = null;
+let tbPanierPreuves = [];
+
+function tbBankOuvertIci() {
+  return !!(compte && lireBankOuvert(localStorage, compte));
+}
+
+function tbSyncGraftButtons() {
+  const open = tbBankOuvertIci();
+  const graft = $('#tbGraftBtn');
+  const add = $('#tbAddLiqBtn');
+  const openBtn = $('#tbOpenBtn');
+  if (graft) {
+    graft.hidden = !!open;
+    if (open) graft.disabled = true;
+  }
+  if (add) {
+    add.hidden = !open;
+    /* enabled only with positive proof — never gated by early list */
+    if (!open) add.disabled = true;
+    else add.disabled = !preuvePositive(tbPreuve);
+  }
+  if (openBtn) {
+    openBtn.hidden = !!open;
+  }
+}
+
+function peindrePanierBank() {
+  const ul = $('#tbBasket');
+  const note = $('#tbBasketNote');
+  const early = $('#tbEarly');
+  if (!ul) return;
+  if (!compte) {
+    ul.innerHTML = '<li class="note">Connect wallet to see your linked basket.</li>';
+    if (note) note.textContent = 'Credit backs the basket. Remove one → survivors keep backing.';
+    if (early) early.textContent = 'Early holders = yield share at Open (frozen). Grafting is open to any wallet with proof.';
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
+    tbSyncGraftButtons();
+    return;
+  }
+  const greffes = lireGreffes(localStorage, compte);
+  const ouvert = tbBankOuvertIci();
+  if (!greffes.length) {
+    ul.innerHTML = '<li class="note">No blocks grafted yet — proof a hold, then Graft into basket.</li>';
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
+  } else {
+    ul.innerHTML = greffes.map((b) => {
+      const pr = tbPanierPreuves.find((p) => p && String(p.block).toLowerCase() === b);
+      let statut = 'not proven yet';
+      if (pr && pr.etat === 'LU') {
+        statut = preuvePositive(pr)
+          ? ('hold ' + (typeof formaterUnites === 'function' ? formaterUnites(pr.balance, 18) : String(pr.balance)))
+          : 'hold 0 — not backing';
+      } else if (pr) statut = 'unread';
+      return '<li class="filL" style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
+        + '<span class="mono">' + enTexte(court(b)) + '</span>'
+        + '<span class="note" style="margin:0">' + enTexte(statut) + '</span>'
+        + '<button type="button" class="puce" data-tb-ungraft="' + enTexte(b) + '">Remove</button></li>';
+    }).join('');
+    const positifs = tbPanierPreuves.filter(preuvePositive);
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = ouvert || positifs.length === 0;
+  }
+  if (note) {
+    note.textContent = greffes.length
+      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · losing one still leaves the rest · '
+        + (ouvert ? 'bank open — any wallet with proof may add liquidity · ' : 'not open yet · ')
+        + 'contract: ' + (BANK_CONTRACT || 'not deployed'))
+      : 'Credit backs the basket. Remove one → survivors keep backing.';
+  }
+  if (early) {
+    const eh = lireEarlyHolders(localStorage, compte);
+    const badge = compte && estEarlyHolder(localStorage, compte, compte) ? ' · you: early (yield)' : '';
+    early.textContent = eh.length
+      ? ('Early holders (yield share, frozen at Open)' + badge + ': ' + eh.map(court).join(', '))
+      : 'Early holders = yield share at Open (frozen) — recorded on Open confirm. Graft not early-gated.';
+  }
+  tbSyncGraftButtons();
+}
+
+async function peindreTokenizedBank() {
+  const sel = $('#tbBlock');
+  const etat = $('#tbEtat');
+  if (!sel) return;
+  if (!compte) {
+    sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
+    $('#tbProof').textContent = 'Proof of hold: —';
+    if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+    if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
+    tbPreuve = null; tbPanierPreuves = [];
+    if (etat) etat.textContent = '';
+    peindrePanierBank();
+    return;
+  }
+  sel.innerHTML = '<option value="">Reading My blocks…</option>';
+  const vus = new Map();
+  try {
+    const { gardees } = await mesCreations();
+    for (const c of gardees || []) if (c && c.jeton) vus.set(String(c.jeton).toLowerCase(), c.symbole || null);
+  } catch (_) {}
+  try {
+    const fr = await mesFrappes(false, true);
+    for (const x of (fr && fr.blocks) || []) if (!vus.has(x.jeton)) vus.set(x.jeton, null);
+  } catch (_) {}
+  for (const a of actifs || []) {
+    if (a && a.bloc && a.adr) vus.set(String(a.adr).toLowerCase(), a.nom || null);
+  }
+  const opts = [];
+  for (const [jeton, sym] of vus) {
+    let label = sym;
+    if (!label) {
+      try {
+        const h = String(await rpc('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2);
+        const n = parseInt(h.slice(64, 128), 16);
+        if (n > 0 && n < 64) {
+          let s = '';
+          for (let i = 0; i < n; i++) s += String.fromCharCode(parseInt(h.slice(128 + i * 2, 130 + i * 2), 16));
+          label = s;
+        }
+      } catch (_) {}
+    }
+    opts.push({ jeton, symbole: label || court(jeton) });
+  }
+  sel.innerHTML = opts.length
+    ? '<option value="">Pick a block you hold…</option>' + opts.map((o) =>
+      '<option value="' + enTexte(o.jeton) + '">' + enTexte(o.symbole) + ' · ' + enTexte(court(o.jeton)) + '</option>').join('')
+    : '<option value="">No B20 found for this wallet yet</option>';
+  tbPreuve = null;
+  $('#tbProof').textContent = 'Proof of hold: —';
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  if (etat) etat.textContent = BANK_CONTRACT
+    ? ''
+    : (tbBankOuvertIci()
+      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; losing one still leaves the rest.'
+      : 'Credit is on the basket totality. Hold to maintain. One lost ≠ dead. Open freezes early (yield). Then any wallet may add liquidity.');
+  peindrePanierBank();
+}
+
+async function tbLirePreuve() {
+  const etat = $('#tbEtat');
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
+  if (!ADRESSE.test(block)) { if (etat) etat.textContent = 'Pick a block from My blocks.'; return; }
+  $('#tbProof').textContent = 'Proof of hold: reading balanceOf on Base…';
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  tbPreuve = null;
+  try {
+    tbPreuve = await proofOfHold({ rpc, block, holder: compte });
+  } catch (e) {
+    tbPreuve = { etat: 'NON_LU', balance: null, pourquoi: String((e && e.message) || e) };
+  }
+  if (tbPreuve.etat === 'LU') {
+    const u = typeof formaterUnites === 'function' ? formaterUnites(tbPreuve.balance, 18) : String(tbPreuve.balance);
+    $('#tbProof').textContent = 'Proof of hold: ' + u + ' (raw balanceOf) · ' + court(block);
+    if (preuvePositive(tbPreuve)) {
+      tbSyncGraftButtons();
+      if (etat) {
+        etat.textContent = tbBankOuvertIci()
+          ? 'Hold proven. Add liquidity — graft another block into the same basket (any wallet; early = yield only).'
+          : 'Hold proven. Graft into the basket — then Open TokenizedBank (freezes early yield shares).';
+      }
+    } else {
+      if (etat) etat.textContent = 'Proof is zero — graft stays gated until balanceOf > 0 (you must hold).';
+    }
+  } else {
+    $('#tbProof').textContent = 'Proof of hold: unread' + (tbPreuve.pourquoi ? (' · ' + tbPreuve.pourquoi) : '');
+    if (etat) etat.textContent = 'Could not prove hold — try again or pick another block.';
+  }
+}
+
+async function tbLirePanier() {
+  const etat = $('#tbEtat');
+  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
+  const greffes = lireGreffes(localStorage, compte);
+  if (!greffes.length) { if (etat) etat.textContent = 'Basket empty — graft a block first.'; return; }
+  if (etat) etat.textContent = 'Reading basket proofs on Base…';
+  try {
+    const panier = await proofOfHoldPanier({ rpc, blocks: greffes, holder: compte });
+    tbPanierPreuves = panier.preuves || [];
+    peindrePanierBank();
+    if (etat) {
+      etat.textContent = panier.survivants.length
+        ? ('Basket backing: ' + panier.survivants.length + ' / ' + greffes.length
+          + ' linked blocks with hold > 0. Credit uses this totality'
+          + (tbBankOuvertIci() ? ' (add-liquidity mode).' : ' — Open TokenizedBank when ready.'))
+        : 'No positive hold in basket — keep holding at least one linked block to maintain credit.';
+    }
+  } catch (e) {
+    if (etat) etat.textContent = 'Basket proofs unread — ' + String((e && e.message) || e);
+  }
+}
+
+function tbApresGreffe(r, mode) {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (tbPreuve) {
+    tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== block.toLowerCase());
+    tbPanierPreuves.push(tbPreuve);
+  }
+  peindrePanierBank();
+  const etat = $('#tbEtat');
+  if (!etat) return;
+  if (mode === 'ADD_LIQUIDITY') {
+    etat.textContent = 'Add-liquidity graft (' + r.grafts.length + ' linked). Credit backs basket totality — early shares stay frozen. Confirm optional stub note.';
+  } else {
+    etat.textContent = 'Grafted into basket (' + r.grafts.length + ' linked). Credit backs the totality — read basket proofs, then Open.';
+  }
+}
+
+$('#tbProofBtn') && $('#tbProofBtn').addEventListener('click', () => { void tbLirePreuve(); });
+$('#tbBasketProofBtn') && $('#tbBasketProofBtn').addEventListener('click', () => { void tbLirePanier(); });
+$('#tbBlock') && $('#tbBlock').addEventListener('change', () => {
+  tbPreuve = null;
+  $('#tbProof').textContent = 'Proof of hold: —';
+  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  tbSyncGraftButtons();
+});
+$('#tbGraftBtn') && $('#tbGraftBtn').addEventListener('click', () => {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
+    $('#tbEtat').textContent = 'Read a positive proof of hold first.';
+    return;
+  }
+  if (tbBankOuvertIci()) {
+    $('#tbEtat').textContent = 'Bank already open — use Add liquidity — graft another block.';
+    return;
+  }
+  const r = grefferBlock(localStorage, compte, block);
+  if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Graft failed.'; return; }
+  tbApresGreffe(r, 'OPEN');
+});
+$('#tbAddLiqBtn') && $('#tbAddLiqBtn').addEventListener('click', async () => {
+  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
+  const etat = $('#tbEtat');
+  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
+    if (etat) etat.textContent = 'Read a positive proof of hold first — add liquidity is not early-gated.';
+    return;
+  }
+  if (!peutAjouterLiquidite(localStorage, compte, compte)) {
+    if (etat) etat.textContent = 'Open TokenizedBank first — then any wallet with proof may add liquidity.';
+    return;
+  }
+  const r = grefferAjouterLiquidite(localStorage, compte, block);
+  if (!r.ok) { if (etat) etat.textContent = r.pourquoi || 'Add-liquidity graft failed.'; return; }
+  tbApresGreffe(r, 'ADD_LIQUIDITY');
+  const greffes = r.grafts;
+  const credit = ouvrirCreditUsdcStub({
+    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage,
+    geste: 'ADD_LIQUIDITY',
+  });
+  let sig = null;
+  const msg = 'TokenizedBank add-liquidity\nbasket=' + greffes.join(',')
+    + '\nholder=' + compte + '\nbuild=20260922-2010';
+  try {
+    if (window.ethereum && compte) {
+      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
+    }
+  } catch (e) {
+    if (etat) etat.textContent = 'Add-liquidity confirm cancelled — graft kept. ' + String((e && e.message) || e);
+    return;
+  }
+  peindrePanierBank();
+  if (etat) {
+    etat.textContent = credit.etat === 'PENDING_CONTRACT'
+      ? ('Add-liquidity confirmed' + (sig ? ' (signed)' : '') + '. Basket ' + greffes.length
+        + ' · early frozen (yield) · ' + (credit.note ? 'stub note recorded · ' : '')
+        + 'Zero 1 / Brain will run ops.')
+      : ('Refused: ' + (credit.pourquoi || credit.etat));
+  }
+});
+$('#tbBasket') && $('#tbBasket').addEventListener('click', (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest('[data-tb-ungraft]') : null;
+  if (!btn || !compte) return;
+  const block = btn.getAttribute('data-tb-ungraft');
+  const avant = lireGreffes(localStorage, compte);
+  const r = retirerGreffe(localStorage, compte, block);
+  if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Remove failed.'; return; }
+  const surv = creditSurvitPerte(avant, block, tbPanierPreuves);
+  tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== String(block).toLowerCase());
+  peindrePanierBank();
+  $('#tbEtat').textContent = surv.survit
+    ? ('Removed ' + court(block) + '. Credit still alive — surviving linked blocks: '
+      + surv.survivants.map(court).join(', ') + '.')
+    : ('Removed ' + court(block) + '. No surviving positive hold — credit backing is empty until you hold again.');
+});
+$('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
+  const etat = $('#tbEtat');
+  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
+  if (tbBankOuvertIci()) {
+    if (etat) etat.textContent = 'Bank already open — use Add liquidity to graft more blocks.';
+    return;
+  }
+  const greffes = lireGreffes(localStorage, compte);
+  if (!greffes.length) { if (etat) etat.textContent = 'Graft at least one block into the basket.'; return; }
+  if (!tbPanierPreuves.filter(preuvePositive).length) {
+    await tbLirePanier();
+  }
+  const positifs = tbPanierPreuves.filter(preuvePositive);
+  if (!positifs.length) {
+    if (etat) etat.textContent = 'Need proof > 0 on at least one linked block (hold to maintain credit).';
+    return;
+  }
+  const credit = ouvrirCreditUsdcStub({
+    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage, geste: 'OPEN',
+  });
+  let sig = null;
+  const msg = 'TokenizedBank open\nbasket=' + greffes.join(',')
+    + '\nsurvivors=' + positifs.map((p) => p.block).join(',')
+    + '\nholder=' + compte + '\nbuild=20260922-2010';
+  try {
+    if (window.ethereum && compte) {
+      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
+    }
+  } catch (e) {
+    if (etat) etat.textContent = 'Confirm cancelled in wallet — ' + String((e && e.message) || e);
+    return;
+  }
+  peindrePanierBank();
+  if (etat) {
+    etat.textContent = credit.etat === 'PENDING_CONTRACT'
+      ? ('Open confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Early shares frozen · credit USDC stub on basket of '
+        + greffes.length + ' · survivors ' + positifs.length
+        + ' · any wallet may now add liquidity · Zero 1 / Brain will run ops.')
+      : ('Refused: ' + (credit.pourquoi || credit.etat));
+  }
+});
+
 $('#pCompte').addEventListener('click', async () => {
   if (!compte) { await connecter(); return; }
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
@@ -8977,9 +9520,11 @@ function validerCreation() {
   return { nom, sym, sel };
 }
 
+/* tip 20260922-same-sig: Instant Birth DIRECT forces CreateRouter createPaid FIRST (same signature as create). */
+let forcerCreateRouterIb = false;
 function utiliseCreateRouter() {
-  /* tip 2349 HARD RULE: Creation stays FREE — factory createB20 on MAIN + Practice.
-   * CreateRouter (createPaid) stays optional/legacy; default UX = free factory. Fee moment = Launch (FEE_WALLET). */
+  /* tip 2349: default free factory. tip 20260922-same-sig: Instant Birth fallback = CreateRouter createPaid. */
+  if (forcerCreateRouterIb && Number(CHAINE) === 8453) return true;
   return false;
 }
 function calldataCreation(v) {
@@ -9003,7 +9548,8 @@ function cibleCreation() {
 function valeurCreation(fraisWei) {
   if (!utiliseCreateRouter()) return '0x0';
   const w = fraisWei != null ? BigInt(fraisWei) : 0n;
-  const floor = CREATE_FEE_WEI_FLOOR;
+  /* tip 20260922-same-sig: Instant Birth CreateRouter pays FRAIS_OUVERTURE_WEI (0.001), not only floor 0.0003. */
+  const floor = forcerCreateRouterIb ? FRAIS_OUVERTURE_WEI : CREATE_FEE_WEI_FLOOR;
   const pay = w > floor ? w : floor;
   return '0x' + pay.toString(16);
 }
@@ -9035,6 +9581,107 @@ async function lireSoldeEthNat(force = false) {
   finally { profilEnLecture = false; }
   majFraisEtRecap();
   return soldeEthNat;
+}
+
+/** tip 20260922-eth-fixe / ib-preflight: eth_getBalance via APP rpc + each secours URL (never wallet-only). */
+async function lireSoldeEthAppRobuste() {
+  let s = await lireSoldeEthNat(true);
+  if (s != null) return s;
+  const R = RESEAUX[CHAINE];
+  const urls = [R.rpc, ...(R.secours || [])].filter(Boolean);
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: 'eth_getBalance', params: [compte, 'latest'] }) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j && j.result != null && !j.error) {
+        soldeEthNat = BigInt(j.result);
+        majFraisEtRecap();
+        return soldeEthNat;
+      }
+    } catch (_) { /* next node */ }
+  }
+  return null;
+}
+
+/** tip 20260922-eth-fixe: scroll Fund wallet CTA into view (Create tab). */
+function montrerFundWalletCourt() {
+  try {
+    const a = $('#cFundWallet');
+    if (a) { a.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); a.focus({ preventScroll: true }); }
+  } catch (_) {}
+}
+
+/**
+ * tip 20260922-ib-preflight + 20260922-eth-fixe HARD:
+ * Before wallet on Instant Birth DIRECT — balance gate in ETH wei only:
+ *   besoin = FRAIS_OUVERTURE_WEI + seed (quote or CREATE_FEE_WEI_FLOOR) + gas buffer.
+ * No oracle required. Exact shortfall + Fund wallet CTA if short.
+ * Returns { ok, solde, besoin, frais, seed, gas, pourquoi } — never «Could not read the price».
+ */
+async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
+  const gasBuf = 500000000000000n; /* ~0.0005 ETH Create+Launch headroom */
+  const frais = FRAIS_OUVERTURE_WEI;
+  let seed = seedWei != null ? BigInt(seedWei) : null;
+  if (seed == null) {
+    try { seed = await preparerQuoteEthDefaut(true); } catch (_) { seed = null; }
+  }
+  if (seed == null || seed <= 0n) seed = CREATE_FEE_WEI_FLOOR;
+  const besoin = frais + BigInt(seed) + gasBuf;
+  const solde = await lireSoldeEthAppRobuste();
+  if (solde === null) {
+    if (e) {
+      e.className = 'note wKo';
+      e.innerHTML = 'Could not read your ETH balance on Base (app RPC + backups). Nothing was started — try again in a moment.'
+        + ' Or <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
+      const link = $('#cFundShort'); if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
+      montrerFundWalletCourt();
+    }
+    return { ok: false, solde: null, besoin, frais, seed, gas: gasBuf, pourquoi: 'balance_unread' };
+  }
+  if (solde < besoin) {
+    const manque = besoin - solde;
+    if (e) {
+      e.className = 'note wKo';
+      e.innerHTML = 'Need ≈ ' + ethLisible(besoin) + ' ETH (0.001 fee + seed '
+        + ethLisible(seed) + ' + gas). This account holds ' + ethLisible(solde)
+        + ' ETH — short by ' + ethLisible(manque) + '. Nothing was started.'
+        + ' <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
+      const link = $('#cFundShort'); if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
+      montrerFundWalletCourt();
+    }
+    return { ok: false, solde, besoin, frais, seed, gas: gasBuf, pourquoi: 'balance_short', manque };
+  }
+  return { ok: true, solde, besoin, frais, seed, gas: gasBuf };
+}
+
+/** tip 20260922-ib-batch / eth-fixe: solitary factory createB20 value 0 (not Instant Birth). */
+function estCreateB20ValeurZero(to, value) {
+  const factory = '0xb20f000000000000000000000000000000000000';
+  return String(to || '').toLowerCase() === factory && BigInt(value || '0x0') === 0n;
+}
+
+/** tip 20260922-ib-preflight + 20260922-ib-batch HARD: refuse Instant Birth if planned solitary tx is factory createB20 value 0. */
+function refuseSiCreateB20ValeurZero({ to, value, e, contexte }) {
+  if (!estCreateB20ValeurZero(to, value)) return false;
+  if (e) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth refused: planned tx is factory createB20 with value 0 — that is free factory create, not Instant Birth · 0.001 ETH · V8 inscription. Use Instant Birth (one-sig batch) or Give birth · V8 on an asleep block.';
+  }
+  try { console.warn('[Instant Birth] abort createB20 value-0', contexte || ''); } catch (_) {}
+  return true;
+}
+
+/** tip 20260922-ib-preflight: eth_call / estimateGas on our RPC before wallet (best-effort). */
+async function preflightEthCallTx(tx) {
+  if (!tx || !tx.to || !tx.data) return { ok: true, skip: true };
+  try {
+    await rpc('eth_call', [{ from: compte, to: tx.to, data: tx.data, value: tx.value || '0x0' }, 'latest']);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, pourquoi: String((err && err.message) || err) };
+  }
 }
 
 function majFraisEtRecap() {
@@ -9070,17 +9717,23 @@ function majFraisEtRecap() {
     boutonCreer.title = aLancerBloque
       ? 'Finish Bring life on your existing block(s), or dismiss them first'
       : ((usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : ''));
-    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Bring it to life';
+    /* tip 20260922-2140 HARD: primary Create CTA = Instant Birth hooked V8 DIRECT
+     * (create + open V8 + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET via creerEtVivreUneSignature / vieAuto). */
+    /* tip 20260922-create-sign-ux: Connect→review→sign Instant Birth; Advanced free-asleep CTA removed.
+     * Practice stays honest free-wake — never invent MAIN free. #cCreerFree gone (null-guarded below). */
+    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Instant Birth · 0.001 ETH';
     else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
-    else boutonCreer.textContent = Number(CHAINE) === 8453 ? 'Review → Bring it to life — 0.001 ETH, once' : 'Review → Bring it to life (practice, free)';
+    else boutonCreer.textContent = Number(CHAINE) === 8453
+      ? 'Review → sign Instant Birth · 0.001 ETH'
+      : 'Instant Birth (practice, free)';
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
       ? ', after ' + ethLisible(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
-      ? ' — 0.001 ETH, once brings it to life'
-      : ' — Create free (Practice)');
+      ? ' — Instant Birth 0.001 ETH, once · V8'
+      : ' — Instant Birth free (Practice)');
   /* tip 2354: when ko, just the ko — never paste fee story */
   /* ⛔ PAS D ERREUR ROUGE AVANT LE PREMIER GESTE (capture de Phil, 2026-09-18 : « A block needs a name. » deux fois,
    * en rouge, sur une page qu on vient d ouvrir). Un champ vide n est pas une faute tant qu on n a rien tente : on
@@ -9120,12 +9773,13 @@ function majFraisEtRecap() {
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Create + 0.001 ETH, once (your wallet shows the exact request)']
-          : ['Create costs nothing; bringing it to life costs 0.001 ETH, once'])] : [];
+          : ['Instant Birth = create + open fee 0.001 ETH · V8 (one batch when wallet allows; never Instant Birth = createB20 value 0 alone)'])] : [];
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>Once alive, anyone can buy and sell it here.</li>';
   }
+  /* tip 20260922-fee-funnel */
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base — 0.001 ETH, once brings your block to life. Cannot be undone.'
+    ? '⚠️ Base — Birth fee: 0.001 ETH, once. Cannot be undone.'
     : 'Practice — everything is free.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -9197,9 +9851,10 @@ function peindreALancer() {
   const l = Number(CHAINE) === 8453 ? aLancerLire() : [];
   boite.hidden = !l.length;
   boite.innerHTML = l.length
-    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Bring it to life:'
+    /* tip 20260922-fee-funnel: incomplete Created banner */
+    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: 0.001 ETH, once. Bring it to life:'
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
-        + enTexte(b.sym || court(b.adr)) + '</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
+        + enTexte(b.sym || court(b.adr)) + ' — 0.001 ETH, once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
   boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', (ev) => {
     /* tip 0210: same Instant Birth path as post-Create goLaunch — not Create (0 ETH factory). */
@@ -9456,7 +10111,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
-  if (!(await peutGrouper({ eth, compte, chaineHex: '0x2105' }))) return 'SANS';
+  /* tip 20260922-ib-batch HARD: do NOT early-return on !peutGrouper.
+   * Rabby/EOA often omit wallet_getCapabilities; Instant Birth still tries wallet_sendCalls so the
+   * first wallet request can include open fee 0.001 (V8) instead of lone createB20 value 0. */
+  const capsOk = await peutGrouper({ eth, compte, chaineHex: '0x2105' });
   /* ⛔⛔ LE HOOK EST LU, PLUS ECRIT EN DUR. Il valait `HOOK_V5` ici pendant que le parcours pas a pas
    *     lisait la chaine : le chemin RAPIDE — celui que tout le monde emprunte — ouvrait donc ses
    *     marches sur le V5 (3 %, dont 26,67 % au createur) alors que les V6, V7 et V8 etaient
@@ -9464,9 +10122,13 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
    *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
    *     diverger — il n y en a plus qu un. */
   const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise });
-  if (!hook) return 'SANS';
+  /* tip 20260922-1934 + 20260922-2026: never one-shot Create+Launch into hooks=0x0; MAIN Birth=V8 only. */
+  if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
+  if (Number(CHAINE) === 8453 && String(hook).toLowerCase() !== String(HOOK_V8).toLowerCase()) return 'SANS';
   e.className = 'note';
-  e.textContent = 'Preparing everything for one signature…';
+  e.textContent = capsOk
+    ? 'Preparing Instant Birth — one signature (create + 0.001 ETH · V8)…'
+    : 'Preparing Instant Birth — trying one wallet batch (create + 0.001 ETH · V8); caps unread on this wallet…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);
   const k = rep.destinataires.findIndex((d) => String(d).toLowerCase() === String(compte).toLowerCase());
   const solde = k >= 0 ? BigInt(rep.montants[k]) : 0n;
@@ -9480,22 +10142,15 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
     let quoteW = null;
     if (!devise) {
       quoteW = await preparerQuoteEthDefaut(true);
-      if (quoteW == null || quoteW <= 0n) {
-        e.className = 'note wKo';
-        e.textContent = 'Instant Birth needs a positive ETH seed (oracle/seed unread or dust) — Create refused fail-closed.';
-        return 'STOP';
-      }
-      if (quoteW < CREATE_FEE_WEI_FLOOR) {
-        e.className = 'note wKo';
-        e.textContent = 'ETH seed is dust — Instant Birth closed.';
-        return 'STOP';
-      }
+      /* tip 20260922-eth-fixe: seed floor if still empty — never refuse Instant Birth on oracle. */
+      if (quoteW == null || quoteW <= 0n) quoteW = CREATE_FEE_WEI_FLOOR;
+      if (quoteW < CREATE_FEE_WEI_FLOOR) quoteW = CREATE_FEE_WEI_FLOOR;
     }
     plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999,
       ...(devise ? { devise } : {}), hooks: hook,
       ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
-    const w = await assurerFraisLancementWei(true);
-    if (!fraisLancementPret(w)) { e.className = 'note wKo'; e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.'; return 'STOP'; }
+    /* tip 20260922-eth-fixe: fee = FRAIS_OUVERTURE_WEI even if oracle unread — never STOP on price. */
+    const w = await assurerFraisLancementWei(true) || FRAIS_OUVERTURE_WEI;
     plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook });
     plan.fraisW = BigInt(w);
   } catch (_) { return 'SANS'; }
@@ -9513,14 +10168,40 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (!devise && !plan.microSwap) {
     try { console.info('[Instant Birth] Create+Launch without micro-swap'); } catch (_) {}
   }
+  /* tip 20260922-ib-batch: payant (V8 open fee) etapes first after create — first non-zero value = fee, not seed. */
+  const etapesOrd = [...(plan.etapes || [])].sort((a, b) => Number(!!b.payant) - Number(!!a.payant));
   const calls = [{ to, data: calldata, value: '0x0' },
-    ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
+    ...etapesOrd.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
     { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' },
     ...(plan.microSwap ? [plan.microSwap] : [])];
+  /* tip 20260922-ib-preflight: Instant Birth batch must include a non-zero value leg (V8/PM), not factory-only. */
+  const hasValueLeg = calls.some((c) => BigInt(c.value || '0x0') > 0n);
+  if (!hasValueLeg) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth refused: batch has no ETH value — would look like factory createB20 value 0 in the wallet. Use Instant Birth · 0.001 ETH · V8.';
+    return 'STOP';
+  }
+  /* tip 20260922-ib-batch: first non-zero value should be open fee (payant etape sorted first). */
+  const firstVal = calls.find((c) => BigInt(c.value || '0x0') > 0n);
+  const feeWeiBat = plan.fraisW != null ? BigInt(plan.fraisW) : FRAIS_OUVERTURE_WEI;
+  if (firstVal && BigInt(firstVal.value) < feeWeiBat) {
+    try { console.warn('[Instant Birth] first value leg < open fee', String(firstVal.value), String(feeWeiBat)); } catch (_) {}
+  }
+  const seedPourGate = plan.quoteEthWei || plan.ethRequis || CREATE_FEE_WEI_FLOOR;
+  const pf = await preflightInstantBirthEthFixe({ e, seedWei: seedPourGate });
+  if (!pf.ok) return 'STOP';
+  /* Prefer eth_call on our RPC before Rabby — show refuse early when sim fails. */
+  const mintTx = { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' };
+  const sim = await preflightEthCallTx(mintTx);
+  if (!sim.ok && sim.pourquoi) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth preflight eth_call refused before wallet: ' + sim.pourquoi.slice(0, 180);
+    return 'STOP';
+  }
   let balAvant = null;
   try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
   e.className = 'note';
-  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (sink) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + a first small buy — all or nothing. The pool amount is yours, the opening fee is not.';
+  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + a first small buy — all or nothing. The pool amount is yours, the opening fee is not.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
   etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
@@ -9639,27 +10320,16 @@ async function creerBlock() {
     }
     creationEnCoursPayante = true;
   }
-  /* ⛔ tip 0023 — PHIL 2026-09-16 « Launch obligatoire des la creation : yes fais le ». Mesure du meme jour : 22 creations,
-   *    0 avec une pool fee hook -> $0. Sur Base, on ne lance plus un Create que ce wallet ne pourra pas LANCER juste apres :
-   *    frais de vie du Launch + gaz des deux transactions, lus AVANT la signature. Prix ou solde illisible = refus. */
-  if (Number(CHAINE) === 8453 && !utiliseCreateRouter() && (!$('#cVieDirecte') || $('#cVieDirecte').checked)) {
+    /* tip 20260922-same-sig + eth-fixe: Instant Birth DIRECT — fixed 0.001 ETH fee, wei-only balance gate.
+   * NEVER refuse with «Could not read the price». Oracle optional. Fund wallet CTA on shortfall.
+   * tip 20260922-same-sig: force CreateRouter BEFORE preflight so paid path is set. */
+  const ibDirectPre = Number(CHAINE) === 8453 && !creerSansVie && (!$('#cVieDirecte') || $('#cVieDirecte').checked);
+  if (ibDirectPre) forcerCreateRouterIb = true;
+  if (ibDirectPre) {
     e.className = 'note';
-    e.textContent = 'A block is created to be brought to life — checking you can pay for both before anything is signed…';
-    const fraisL = await assurerFraisLancementWei(true);
-    let solde = null;
-    try { solde = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { solde = null; }
-    const gazDeux = 500000000000000n; /* ~0.0005 ETH : Create + Launch sur Base, marge comprise */
-    if (fraisL === null || solde === null) {
-      e.className = 'note wKo';
-      e.textContent = 'Could not read the price or your ETH balance, so nothing was started. Try again in a moment.';
-      return;
-    }
-    if (solde < fraisL + gazDeux) {
-      e.className = 'note wKo';
-      e.textContent = 'Create, then bring it to life (one-time 0.001 ETH fee + gas). You need about '
-        + ethLisible(fraisL + gazDeux) + ' ETH and this account holds ' + ethLisible(solde) + ' ETH. Nothing was started.';
-      return;
-    }
+    e.textContent = 'Instant Birth preflight — checking ETH balance (0.001 fee + seed + gas)…';
+    const pf = await preflightInstantBirthEthFixe({ e });
+    if (!pf.ok) { forcerCreateRouterIb = false; return; }
   }
   creationEnCours = true;
   $('#cCreer').disabled = true;
@@ -9667,7 +10337,7 @@ async function creerBlock() {
     /* tip 2349: default free factory on MAIN + Practice. CreateRouter only if utiliseCreateRouter(). */
     if (utiliseCreateRouter()) {
       e.className = 'note';
-      e.textContent = 'Review in your wallet — Create + 0.001 ETH, once. Paid only if creation succeeds.';
+      e.textContent = 'Review in your wallet — CreateRouter createPaid · 0.001 ETH, once. Paid only if creation succeeds.';
     /* ⛔ ce « payer d abord puis V1 » ne sert plus sur mainnet : V2 y est deploye pour toujours et encaisse lui-meme les ≈ 1 $
      *    (audit 2026-09-19 : une lecture ratee du V2 menait ici, puis au V1 et a son createur mal enregistre). */
     } else if (false && Number(CHAINE) === 8453) {
@@ -9719,8 +10389,11 @@ async function creerBlock() {
     } else {
       e.className = 'note';
       /* ⛔ BUG vu par Phil (capture, mainnet) : avec le hook V2 deploye, on tombait ici et l ecran disait « Practice » */
+      /* tip 20260922-ib-batch: never sell factory create as Instant Birth — fee moment is V8 inscription. */
       e.textContent = Number(CHAINE) === 8453
-        ? 'Step 1 — create it. Check it in your wallet; bringing it to life (0.001 ETH, once) follows right after.'
+        ? (creerSansVie
+          ? 'Advanced — create asleep (factory · free). Give birth · V8 later.'
+          : 'Preparing Instant Birth — CreateRouter · 0.001 ETH once · V8…')
         : 'Practice — create it. Check it in your wallet.';
     }
     /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
@@ -9743,16 +10416,68 @@ async function creerBlock() {
       adresseCreee = q.adresse || null;
     } catch (errPeek) { adresseCreee = null; }
     const faceGravee = { ...apparenceChoisie };
-    /* ⛔ UNE SIGNATURE (Phil 2026-09-19) : si le wallet sait grouper (EIP-5792, atomique), creation + mise en vie partent
-     *    ensemble ; sinon, le parcours etape par etape ci-dessous, inchange. */
-    if (adresseCreee) {
+        /* tip 20260922-same-sig HARD (measured 0x9dedc502… EFIX factory createB20 value 0 first in Rabby):
+     * Instant Birth DIRECT on MAIN: CreateRouter createPaid FIRST — same signature as create.
+     * Do NOT call creerEtVivreUneSignature (EIP-5792 batch leads with factory createB20 value 0). */
+    const ibDirect = Number(CHAINE) === 8453 && !creerSansVie
+      && (!$('#cVieDirecte') || $('#cVieDirecte').checked);
+    let toSend = to, dataSend = calldata, valueSend = value, adrSend = adresseCreee;
+    if (ibDirect) {
+      /* Force CreateRouter paid before any wallet solicit — never factory-first batch. */
+      forcerCreateRouterIb = true;
+      try {
+        dataSend = calldataCreation(v);
+        toSend = cibleCreation();
+        valueSend = valeurCreation(FRAIS_OUVERTURE_WEI);
+        if (estCreateB20ValeurZero(toSend, valueSend) || BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
+          || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase()) {
+          e.className = 'note wKo';
+          e.textContent = 'Instant Birth refused: could not build CreateRouter paid tx (≥ 0.001 ETH). Nothing was sent.';
+          return;
+        }
+        try {
+          const q2 = await adresseOuRefus(appelBrut, compte, dataSend, { to: CREATE_ROUTER, value: valueSend });
+          adrSend = q2.adresse || null;
+        } catch (_) { adrSend = null; }
+        if (!adrSend) {
+          e.className = 'note wKo';
+          e.textContent = 'Instant Birth CreateRouter could not predict the token address — nothing was sent.';
+          return;
+        }
+        adresseCreee = adrSend;
+        e.className = 'note';
+        e.textContent = 'Instant Birth — CreateRouter · 0.001 ETH once. Check your wallet (paid create — not factory value 0).';
+        try { console.info('[Instant Birth] CreateRouter same-sig paid', toSend, valueSend, adrSend); } catch (_) {}
+      } catch (errIb) {
+        e.className = 'note wKo';
+        e.textContent = 'Instant Birth CreateRouter build failed — nothing was sent. ' + String((errIb && errIb.message) || errIb).slice(0, 160);
+        return;
+      }
+      /* keep forcerCreateRouterIb true through envoyerDepuisWallet; cleared in creerBlock finally */
+    } else if (adresseCreee && !creerSansVie) {
+      /* Non-IB / Advanced / Practice may still try one-sig batch */
       const g = await creerEtVivreUneSignature({ v, calldata, to, adresse: adresseCreee, faceGravee, e });
       if (g !== 'SANS') return;
     }
+    /* tip 20260922-same-sig final guard: never solicit factory createB20 value 0 for Instant Birth */
+    if (ibDirect && estCreateB20ValeurZero(toSend, valueSend)) {
+      refuseSiCreateB20ValeurZero({ to: toSend, value: valueSend, e, contexte: 'creerBlock IB final guard' });
+      return;
+    }
+    if (ibDirect && (BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
+      || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase())) {
+      e.className = 'note wKo';
+      e.textContent = 'Instant Birth refused: first wallet prompt must be CreateRouter ≥ 0.001 ETH. Nothing was sent.';
+      return;
+    }
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to, data: calldata, value });
+      to: toSend, data: dataSend, value: valueSend });
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
+      /* tip 20260922-same-sig: CreateRouter Instant Birth fee already to sink — remember as prepaye for this block. */
+      if (ibDirect && BigInt(valueSend || '0x0') >= FRAIS_OUVERTURE_WEI && rc.hash) {
+        prepayeCourant = { hash: rc.hash, wei: String(FRAIS_OUVERTURE_WEI), compte: String(compte).toLowerCase(), t: Date.now(), via: 'CreateRouter' };
+      }
       /* le paiement fait avant la creation appartient desormais a CE block : la mise en vie ne le redemandera pas */
       if (prepayeCourant) { noterPrepayeBlock(adresseCreee, prepayeCourant); oublierPrepayeEnAttente(compte); prepayeCourant = null; }
       noterFace(adresseCreee, faceGravee);
@@ -9768,7 +10493,11 @@ async function creerBlock() {
       e.className = 'note wOk';
       void listerMesBlocks();
       /* tip 0021 / index-launch: Instant Birth ETH seed + mandatory micro first-swap; open fee 0.001 ETH unchanged. */
-      if (Number(CHAINE) === 8453 && adresseCreee) {
+      if (Number(CHAINE) === 8453 && adresseCreee && creerSansVie) {
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created (Advanced · free, asleep). Open its profile and run <b>Give birth · V8</b> when ready.'
+          + lien;
+        try { ouvrirProfil(adresseCreee, v.sym); } catch (_) {}
+      } else if (Number(CHAINE) === 8453 && adresseCreee) {
         e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH, once separate).'
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
           + 'Instant Birth — seed ETH + open hooked market</button>'
@@ -9811,7 +10540,7 @@ async function creerBlock() {
         if (btn) btn.addEventListener('click', (ev) => { ev.preventDefault(); goLaunch(); });
         /* tip 0017: auto-open fee moment; button remains one-tap retry
          * tip 0041 : seulement si « bring it to life right after » est coche (coche par defaut) */
-        if (!$('#cVieDirecte') || $('#cVieDirecte').checked) goLaunch();
+        if (!creerSansVie && (!$('#cVieDirecte') || $('#cVieDirecte').checked)) goLaunch();
       } else {
         const nextLaunch = Number(CHAINE) === 8453
           ? ' <b>Next:</b> open it and <b>bring it to life</b>.'
@@ -9832,6 +10561,7 @@ async function creerBlock() {
       e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien + ligneDiagnostic('create', rc);
     }
   } finally {
+    forcerCreateRouterIb = false;
     creationEnCours = false;
     /* tip 0211: do not blindly re-enable — majFraisEtRecap respects aLancer lock on mainnet. */
     majFraisEtRecap();
@@ -10981,7 +11711,11 @@ for (const id of ['#cNom', '#cSym', '#cSel']) {
     }, 600);
   });
 }
-$('#cCreer').addEventListener('click', () => void creerBlock());
+let creerSansVie = false; /* tip 20260922-2140 Advanced escape (removed tip 20260922-create-sign-ux); leave flag dead */
+$('#cCreer').addEventListener('click', () => { creerSansVie = false; void creerBlock(); });
+/* tip 20260922-create-sign-ux: #cCreerFree removed from DOM — null-guard so paint/handlers never throw */
+const cCreerFree = $('#cCreerFree');
+if (cCreerFree) cCreerFree.addEventListener('click', () => { creerSansVie = true; void creerBlock(); });
 /* ⛔ PRE-REMPLISSAGE PAR LIEN (Phil, 2026-09-13 : « preenregistre tout » pour creer TBLOCK sur une autre
  *    machine). Le lien REMPLIT les champs, il ne signe rien et ne clique rien : l utilisateur relit l apercu
  *    « What your wallet will sign » et signe lui-meme. Seuls des presets nommes ici sont acceptes — un lien

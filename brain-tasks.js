@@ -383,7 +383,7 @@ export function planOfferFood({
             evidenceHash: receipt.evidence_hash,
             signalsPacked: 'pack(signals32) — browser helper when live',
           },
-          note: 'offer(...) — optional life dust → FEE_WALLET · Fees for BaseAPP Holders',
+          note: 'offer(...) — optional life dust → FEE_WALLET · Fees for Dev',
         },
       ]
     : [
@@ -440,7 +440,7 @@ export function resumeTaches(snap, opts = {}) {
   });
   return {
     schema: TASKS_SCHEMA,
-    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Fees for BaseAPP Holders when tools execute.',
+    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Fees for Dev when tools execute.',
     fee_wallet: FEE_WALLET_TASKS,
     neuron_mass_band: band,
     neurones_offchain: 128,
