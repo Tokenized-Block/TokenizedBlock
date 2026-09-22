@@ -1,6 +1,6 @@
 // frais-creation.js — life fee source for Create + Launch (tip 2349 product rule).
 // ================================================================================================
-// ⛔ BETA FREE 2026-09-16 tip 0019: Create FREE. Fee moment = Launch life ≈$1 ETH + TbFeeHook HOOK_PREVU aa6D→a6cf.
+// ⛔ BETA FREE 2026-09-16 tip 0019: Create FREE. Fee moment = Launch life 0.001 ETH + TbFeeHook HOOK_PREVU aa6D→a6cf.
 //    Prefer in-app ETH→USDC exit so FEE_WALLET shows USDC (hook chops swap currency; TBGAS smokes left tokens not dollars).
 // ⛔ HARD RULE Raksha 2026-09-15 tip 2349: Creation stays FREE (factory createB20 on MAIN + Practice).
 //    Fee moment = Launch / mise en market (life fee ETH ≈ FRAIS_USD + TbFeeHook → a6cf).
@@ -111,7 +111,7 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   const main = Number(chaine) === 8453;
   /* tip 20260922-fee-funnel: Create funnel phrase — fiat + amount, never fee addr */
   return main
-    ? 'Birth fee: ≈$1 (0.001 ETH), once — create and open its market in one signature.'
+    ? 'Birth fee: 0.001 ETH, once — create and open its market in one signature.'
     : 'Free on Practice — nothing is paid here.';
 }
 
