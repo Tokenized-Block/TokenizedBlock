@@ -21,6 +21,12 @@ import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'n
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+/* ⛔⛔ AJOUTE LE 2026-09-22, APRES MESURE ET PAS PAR PRINCIPE. Le serveur n envoyait AUCUNE
+ * compression : une requete HEAD avec Accept-Encoding gzip ne rendait pas de content-encoding, et
+ * app.html partait en 672 523 octets BRUTS a chaque visite — la ou il en fait 213 210 en gzip.
+ * 459 Ko de trop, pour chaque visiteur, sur la page d accueil d un produit qu on essaie justement
+ * de faire decouvrir. Mesure faite avant le correctif, et refaite apres. */
+import { gzipSync } from 'node:zlib';
 import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
 
 /* ⛔ PONT OPENLAUNCH (tip 0022). Leur API ne renvoie aucun en-tete CORS : la page ne peut pas la lire. Ce serveur la
@@ -621,11 +627,22 @@ for (const nom of SERVIS) {
     continue;
   }
   const corps = readFileSync(chemin);
+  const image = nom.endsWith('.png');
+  /* ⛔ ON PRE-COMPRESSE UNE FOIS, AU DEMARRAGE. Les fichiers ne changent pas pendant la vie du
+   *    processus — c est deja l hypothese du cache juste au-dessus — donc gzipper a chaque requete
+   *    brulerait du CPU pour un resultat identique.
+   * ⛔ PAS LES IMAGES : un PNG est deja compresse. Le regzipper coute du temps et rend parfois un
+   *    fichier PLUS GROS, donc la condition est explicite au lieu d etre devinee.
+   * ⛔ ET ON GARDE LE GZIP SEULEMENT S IL EST PLUS PETIT. Sur un fichier minuscule, l en-tete gzip
+   *    depasse le gain : servir une version plus lourde en croyant optimiser serait le defaut
+   *    inverse, et il passerait inapercu. */
+  const gz = image ? null : gzipSync(corps, { level: 9 });
   cache.set('/' + nom, {
     corps,
+    gz: gz && gz.length < corps.length ? gz : null,
     type: TYPES[nom.slice(nom.lastIndexOf('.'))] || 'application/octet-stream',
     etag: '"' + createHash('sha256').update(corps).digest('hex').slice(0, 24) + '"',
-    image: nom.endsWith('.png'),
+    image,
   });
 }
 
@@ -731,8 +748,13 @@ async function apercuBlock(adr) {
   return tags;
 }
 
-const entete = (e) => ({
+/** ⛔ `gz` dit si on envoie la version compressee. `vary: accept-encoding` est OBLIGATOIRE des
+ *  qu une reponse depend de cet en-tete : sans lui, un cache intermediaire pourrait servir un corps
+ *  gzip a un client qui ne l a pas demande, et celui-la ne verrait que du binaire. */
+const entete = (e, gz = false) => ({
   'content-type': e.type,
+  ...(gz ? { 'content-encoding': 'gzip' } : {}),
+  vary: 'accept-encoding',
   etag: e.etag,
   /* ⛔ LES IMAGES PEUVENT DORMIR, LE CODE NON. Une icone qui change est un evenement rare ; un
    * module JavaScript qui change est le quotidien de ce projet, et le servir depuis un cache
@@ -1138,13 +1160,31 @@ createServer((req, res) => {
     res.end();
     return;
   }
+  /* ⛔ LE CLIENT DOIT AVOIR DEMANDE LE GZIP. On ne le devine pas : un client qui ne l annonce pas
+   *    recevra le corps brut, exactement comme avant. */
+  const accepteGz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
   const blocDemande = cle === '/' + RACINE ? (String(req.url || '').match(/[?&]block=(0x[0-9a-fA-F]{40})(?:&|$)/) || [])[1] : null;
   if (blocDemande) {
+    /* ⛔ CE CHEMIN REECRIT LE HTML PAR REQUETE (les balises og du block demande) : le gzip
+     *    pre-calcule ne correspond donc PLUS au corps envoye. On compresse a la volee ici, et
+     *    seulement ici — servir le gzip du fichier d origine enverrait les mauvaises balises, ce
+     *    qui est precisement le genre d erreur qu un cache rendrait indebuggable. */
     apercuBlock(blocDemande).then((tags) => {
       const html = String(e.corps).replace(/<!--og:debut-->[\s\S]*?<!--og:fin-->/, () => '<!--og:debut-->\n' + tags + '\n<!--og:fin-->');
+      if (accepteGz) {
+        const c = gzipSync(Buffer.from(html, 'utf8'), { level: 6 });
+        res.writeHead(200, entete(e, true));
+        res.end(req.method === 'HEAD' ? undefined : c);
+        return;
+      }
       res.writeHead(200, entete(e));
       res.end(req.method === 'HEAD' ? undefined : html);
     }).catch(() => { res.writeHead(200, entete(e)); res.end(req.method === 'HEAD' ? undefined : e.corps); });
+    return;
+  }
+  if (accepteGz && e.gz) {
+    res.writeHead(200, entete(e, true));
+    res.end(req.method === 'HEAD' ? undefined : e.gz);
     return;
   }
   res.writeHead(200, entete(e));
