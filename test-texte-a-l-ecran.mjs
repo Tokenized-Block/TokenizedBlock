@@ -58,7 +58,47 @@ const MOTIFS = [
   { re: /\b(unread|unreadable)\s*[≠!=]/i, quoi: 'note de conception sur nos etats de lecture' },
   { re: /\b(fallback|nullish|undefined|NaN|boolean|bigint|calldata|selector|topic0)\b/i,
     quoi: 'jargon d implementation' },
+  /* ⛔⛔ AJOUTE LE 2026-09-22, APRES UNE MUTATION QUI EST PASSEE AU VERT.
+   *     J avais ecrit « 0.5% par virement bancaire » en plein ecran anglais pour verifier que ce
+   *     fichier l attraperait. Il ne l a PAS attrape — et il avait raison au sens strict : le motif
+   *     du haut dit « mot francais EN MAJUSCULES », parce qu il a ete ecrit pour nos noms d etats
+   *     internes (LUE, NON_LU). De la prose francaise en MINUSCULES n a jamais ete dans sa portee.
+   *     ⇒ La garde n etait pas cassee ; elle etait plus ETROITE que son nom ne le laissait croire.
+   *     Et le trou est REEL : cette app est ecrite par un francophone, toute son ecriture interne
+   *     est en francais, et une phrase mal recopiee part a l ecran sans rien declencher.
+   * ⛔ LA LISTE EXCLUT VOLONTAIREMENT LES MOTS QUI SONT AUSSI ANGLAIS, et c est la moitie du
+   *    travail : « pour » (to pour), « sans » (sans serif), « sous » (sous vide), « encore »,
+   *    « son », « la », « est » (EST, le fuseau horaire) declencheraient sur de l anglais
+   *    parfaitement correct. Une garde qui crie au loup se fait elaguer par le premier qui la
+   *    croise — et le trou qu elle bouchait revient avec elle. */
+  { re: motsFrancais(), quoi: 'mot francais en minuscules — de la prose francaise est partie a l ecran anglais' },
 ];
+
+/** Les mots francais en MINUSCULES, avec une majuscule initiale toleree (debut de phrase).
+ * ⛔⛔ VOLONTAIREMENT SENSIBLE A LA CASSE, ET C EST LA CORRECTION D UN FAUX POSITIF QUE CETTE REGLE
+ *     A PRODUIT DES SA PREMIERE EXECUTION. Elle a accuse « NOTRE » — qui n est pas de la prose mais
+ *     une VALEUR D ENUMERATION interne, lue dans `conf === 'NOTRE'` et `parConf('NOTRE')`. Ce qui
+ *     part a l ecran la, c est le NOMBRE que `parConf` rend, jamais le mot.
+ *     C est le meme faux positif que celui deja documente plus bas : l extracteur ramasse des
+ *     litteraux de chaine adjacents a une concatenation, sans savoir lesquels sont affiches.
+ * ⛔ LA CORRECTION N EST PAS UNE EXCEPTION AJOUTEE A LA MAIN — ce serait la porte ouverte a en
+ *    ajouter une par accusation genante, jusqu a ce que la regle ne garde plus rien. C est la
+ *    PORTEE qui est precisee : cette regle parle de PROSE, la prose est en minuscules, et nos etats
+ *    internes sont en CAPITALES. Le francais en capitales reste le travail du premier motif.
+ * ⚠️ BORNE ASSUMEE : un etat interne qui serait un jour nomme en minuscules passerait ici. */
+function motsFrancais() {
+  const MOTS = ['vous', 'votre', 'nous', 'notre', 'avec', 'dans', 'cette', 'chaque', 'jamais',
+    'toujours', 'aucune', 'ainsi', 'alors', 'mais', 'tous', 'toute', 'toutes', 'leur', 'leurs',
+    'depuis', 'lorsque', 'pendant', 'plusieurs', 'quelques', 'très', 'voici', 'être',
+    'avoir', 'peut', 'doit', 'sera', 'sont', 'virement', 'bancaire', 'banque', 'portefeuille',
+    'jeton', 'jetons', 'créer', 'écran'];
+  /* ⛔ CE QUI N EST PAS DANS LA LISTE COMPTE AUTANT QUE CE QUI Y EST : « pour » (to pour), « sans »
+   *    (sans serif), « sous » (sous vide), « encore », « son », « la », « est » (EST, le fuseau
+   *    horaire) sont du francais ET de l anglais. Les inclure ferait crier la garde sur de
+   *    l anglais correct — et une garde qui crie au loup se fait elaguer par le premier qui la
+   *    croise, avec le trou qu elle bouchait. */
+  return new RegExp('\\b(' + MOTS.map((m) => '[' + m[0] + m[0].toUpperCase() + ']' + m.slice(1)).join('|') + ')\\b');
+}
 
 /** Les chaines qui finissent a l ecran : `textContent`, `innerHTML` et le texte des balises. */
 function chainesVisibles(src) {
@@ -102,6 +142,36 @@ for (const nom of PAGES) {
   }
 }
 ok(total > 50, total + ' chaines visibles extraites — pas une liste vide');
+
+/* ══ LE NUMERO DE BUILD DIT DEUX FOIS LA MEME CHOSE ═══════════════════════════════════════════
+ * ⛔⛔ TROUVE LE 2026-09-22 : l attribut `data-build` disait 20260922-0203 pendant que le texte
+ *     affiche a cote disait 20260920-0174 — deux jours d ecart. L attribut est bouge a chaque
+ *     deploiement parce que c est LUI que la verification en ligne lit ; le texte, que personne ne
+ *     lit, ne l avait pas ete. La ligne est `hidden`, donc rien ne l a jamais signale.
+ * ⛔ POURQUOI CA COMPTE MALGRE `hidden` : ce numero sert a DATER. Le jour ou quelqu un ouvre la
+ *    source pour savoir quelle version tournait pendant un incident, il tombe sur deux reponses et
+ *    n a aucun moyen de savoir laquelle ment. Un chiffre faux que rien n affiche ne previent pas —
+ *    il attend. */
+let lignesBuild = 0;
+for (const nom of PAGES) {
+  const src = readFileSync(new URL('./' + nom, import.meta.url), 'utf8');
+  const ligne = src.match(/data-build="([^"]+)"[^>]*>[^<]*<code>([^<]+)<\/code>/);
+  if (!ligne) continue;
+  lignesBuild++;
+  ok(ligne[1] === ligne[2],
+    nom + ' : l attribut data-build et le numero affiche doivent etre le MEME — '
+    + 'attribut « ' + ligne[1] + ' », affiche « ' + ligne[2] + ' »');
+}
+/* ⛔⛔ SANS CETTE LIGNE, LA GARDE CI-DESSUS SERAIT VERTE POUR TOUJOURS SANS RIEN GARDER. Le
+ *     `continue` sur `!ligne` est un RETOUR NEUTRE : si la structure de la ligne change — un
+ *     attribut insere entre `data-build` et `<code>`, un espace, `<code>` remplace par `<b>` — la
+ *     regex cesse de matcher, la boucle passe, et zero assertion s execute. Vert, et aveugle.
+ *     C est le motif qui nous a deja coute une garde qui ne bornait rien : on compte donc ce qui a
+ *     ete REELLEMENT inspecte, et on exige que ce ne soit pas zero. */
+ok(lignesBuild >= 1,
+  'la ligne de build a ete TROUVEE et comparee sur ' + lignesBuild + ' page(s) — si ce compte '
+  + 'tombe a zero, la regex ne reconnait plus la ligne et la garde du dessus ne garde plus rien');
+
 ok(fautes.length === 0,
   fautes.length + ' texte(s) a l ecran a corriger :\n'
   + fautes.map((f) => '      ' + f.page + ' [' + f.ou + '] ' + f.quoi

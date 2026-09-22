@@ -1219,7 +1219,18 @@ details[open] > summary::before{transform:rotate(90deg)}
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
         <a class="bouton sec" id="cFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get USDC on Base</a>
-        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy with a card via Coinbase — it goes to <b>your</b> wallet. Then come back to Connect and Create. Tokenized Block never holds your fiat.</p>
+        <!-- ⛔ LE PRIX EST DIT AVANT LE CLIC, ET LE RAIL LE MOINS CHER EST NOMME EN PREMIER.
+             Cite la FAQ Onramp CDP, lue A LA SOURCE le 2026-09-21, textuellement :
+               « There is a 2.5% fee for credit card transactions, and 0.5% fee for ACH »
+             Le texte precedent disait « buy with a card » SANS le prix : il poussait le rail CINQ
+             FOIS plus cher vers quelqu un qui n avait aucun moyen de le savoir avant de payer.
+             ⛔ ON DEFERE QUAND MEME AU TOTAL AFFICHE PAR COINBASE. Ces taux sont les LEURS : ils
+                peuvent changer sans que cette page l apprenne, et un spread s y ajoute. Un chiffre
+                recopie ici vieillirait en mensonge ; la phrase de renvoi, elle, reste vraie.
+             ⛔ ET NOUS NE TOUCHONS RIEN DESSUS : « Coinbase Onramp is free for developers to use »
+                veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
+                ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
+        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Create.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -1569,7 +1580,13 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260922-0203" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <!-- ⛔ LES DEUX NUMEROS DOIVENT ETRE LE MEME, et ils ne l etaient plus : l attribut disait
+           20260922-0203 pendant que le texte affichait 20260920-0174 — deux jours et sept builds
+           d ecart. L attribut est bouge a chaque deploiement (c est lui que la verification lit),
+           le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
+           `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
+           quelqu un le lit pour dater un incident. -->
+      <p class="note" data-build="20260922-0205" hidden>Build <code>20260922-0205</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
