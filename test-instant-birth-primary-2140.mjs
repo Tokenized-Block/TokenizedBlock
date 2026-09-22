@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
-assert.match(html, /data-build="20260922-(ib-batch|eth-fixe)"/);
+assert.match(html, /data-build="20260922-(ib-paid|ib-batch|eth-fixe)"/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
 assert.match(html, /preflightInstantBirthEthFixe/);
 assert.match(html, /tip 20260922-eth-fixe HARD/);
