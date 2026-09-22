@@ -933,7 +933,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
       <!-- tip 20260922-create-sign-ux: map CTA sells Instant Birth + fee, not free create -->
-      <button type="button" id="mapCta" class="mapCta">✦ Instant Birth — 0.001 ETH, once</button>
+      <button type="button" id="mapCta" class="mapCta">✦ Instant Birth — ≈$1 (0.001 ETH), once</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
       <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at">?<span class="long"> What am I looking at</span></button>
@@ -1071,7 +1071,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
       <!-- tip 20260922-fee-funnel -->
-      <p class="creaPrix"><b>0.001 ETH, once</b><span>born, face and brain engraved, market open</span></p>
+      <p class="creaPrix"><b>≈$1 (0.001 ETH), once</b><span>born, face and brain engraved, market open</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
            bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
@@ -1088,7 +1088,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte creaChoix" role="tablist" aria-label="What do you want to create">
       <button type="button" class="creaMode on" role="tab" aria-selected="true" data-cmode="block">
         <span class="creaModeIc">🧱</span><b>A block</b>
-        <span>Its own face, a living brain, a place on the map — born and brought to life for 0.001 ETH, once.</span>
+        <span>Its own face, a living brain, a place on the map — born and brought to life for ≈$1 (0.001 ETH), once.</span>
       </button>
       <button type="button" class="creaMode" role="tab" aria-selected="false" data-cmode="token">
         <span class="creaModeIc">🚀</span><b>A plain token</b>
@@ -1176,7 +1176,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- ⛔ Phil (capture 2026-09-19) : l ordre « payer d abord » etait celui de l ancien hook ; aujourd hui creation,
              ≈ $1 et marche partent ensemble (une signature quand le wallet sait grouper). -->
         <li><b>Create</b> <span>its face and brain are engraved</span></li>
-        <li><b>0.001 ETH, once</b> <span>brings it to life</span></li>
+        <li><b>≈$1 (0.001 ETH), once</b> <span>brings it to life</span></li>
         <li><b>Its market opens</b> <span>it lives on the map</span></li>
         <!-- ⛔ LE CREATEUR EST PAYE, ET IL DOIT LE SAVOIR AVANT DE PAYER. Aucun pourcentage a
              l ecran : regle de Phil. Le detail vit dans le plan de lancement, relu depuis la chaine. -->
@@ -1186,7 +1186,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
       <!-- ⛔ LE RESUME REPLIE DISAIT « TBLOCK by default » MEME QUAND ETH ETAIT CHOISI (Phil, 2026-09-17).
            Un resume qui ne suit pas le choix est un mensonge poli : `majPaire` l ecrit desormais. -->
-      <details class="bDetail" style="margin-top:10px"><summary class="note" id="cPaireResume">Paired with · ETH</summary>
+      <!-- tip 20260922-coinbase-pair: chips OUTSIDE collapsed details so AAPLc/GOOGLc/NVDAc/COINc stay discoverable -->
+      <div id="cPaireChips" class="stadeLigne" style="margin-top:10px;flex-wrap:wrap" hidden></div>
+      <details class="bDetail" id="cPaireDetail" style="margin-top:8px"><summary class="note" id="cPaireResume">Paired with · ETH</summary>
       <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
            creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
            elle est dans le registre Coinbase ; un jeton tape a la main est dit non verifie. -->
@@ -1196,7 +1198,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
-      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: 0.001 ETH, once. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: ≈$1 (0.001 ETH), once. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
@@ -1205,7 +1207,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="cFrais"></p>
         <!-- tip 20260922-create-sign-ux: only Instant Birth cost — kill free-asleep bullet -->
         <ul class="note noteBullets" id="cCostBullets" hidden>
-          <li><b>Instant Birth</b>: 0.001 ETH, once · V8 — create + open market</li>
+          <li><b>Instant Birth</b>: ≈$1 (0.001 ETH), once · V8 — create + open market</li>
         </ul>
         <ol class="pmLignes" id="cApercuTx"></ol>
         <p class="note" id="cMintFeeHint" hidden></p>
@@ -1221,11 +1223,11 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 20260922-2140 HARD: Instant Birth hooked V8 DIRECT on Create — primary CTA only.
              One path: create + open V8 market + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET (vieAuto / one-sig). -->
         <!-- tip 20260922-create-sign-ux: kill Advanced free-asleep CTA; Connect→review→sign Instant Birth -->
-        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Instant Birth · 0.001 ETH</button>
+        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Instant Birth · ≈$1 (0.001 ETH)</button>
         <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
-        <a class="bouton sec" id="cFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get USDC on Base</a>
+        <a class="bouton sec" id="cFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH on Base</a>
         <!-- ⛔ LE PRIX EST DIT AVANT LE CLIC, ET LE RAIL LE MOINS CHER EST NOMME EN PREMIER.
              Cite la FAQ Onramp CDP, lue A LA SOURCE le 2026-09-21, textuellement :
                « There is a 2.5% fee for credit card transactions, and 0.5% fee for ACH »
@@ -1509,12 +1511,12 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <!-- tip 20260922-2010 — TokenizedBank add-liquidity graft (Raksha/Zero 1): any wallet with proof
          may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
-         hold; losing one still leaves the rest; never show a6cf. -->
+         hold; one lost ≠ dead; never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
       <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
       <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
         then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
-        You must <b>keep holding</b> to maintain credit. <b>Losing one block does not end it</b> — the linked blocks you still hold keep backing it.
+        You must <b>keep holding</b> to maintain credit. <b>One block lost ≠ credit dead</b> — surviving linked blocks still back it.
         Credit contracts with Σ hold (dies only if zero survivors).
         <b>Early holders</b> (snapshot at Open) share yield — badge separate from grafting.
         After Open, <b>any wallet with proof</b> may <b>graft again to add liquidity</b> to the same basket.
@@ -1631,7 +1633,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0220" hidden>Build <code>20260922-0220</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-coinbase-pair" hidden>Build <code>20260922-coinbase-pair</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1967,7 +1969,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              ⛔ Tous les id sont gardes : la logique de plan / signature ne change pas. -->
         <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth · V8</span><span class="pPV" id="plReseau"></span></div>
         <!-- tip 20260922-fee-funnel -->
-        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. Birth fee: 0.001 ETH, once.</p>
+        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. Birth fee: ≈$1 (0.001 ETH), once.</p>
         <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px" hidden>
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="lock">Lock</button>
         </div>
@@ -2175,7 +2177,7 @@ let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -4131,29 +4133,13 @@ function peindreStades() {
       : (g.titre + ' · ' + g.blocks.length);
     let corps;
     if (mute) {
-      /* ⛔⛔ REECRIT LE 2026-09-22. L ancienne phrase disait « each market is LUE. Silence ≠ broken. »
-       *     — un etat interne en francais (`LUE`) et une notation de specification (`≠`) en plein
-       *     ecran anglais. La garde de texte interdit les deux DEPUIS DES SEMAINES et ne les voyait
-       *     pas : elle ne lisait que les `.textContent =` directs, jamais le markup construit dans
-       *     une variable — c est-a-dire presque tout cet ecran. Elle a ete elargie dans le meme
-       *     passage, et c est elle qui a nomme ces deux chaines.
-       * ⛔ ET ON NE DIT PLUS « pas casse ». Nier un defaut le SUGGERE : personne ne pensait que
-       *    c etait casse avant qu on le dise. On dit ce qui se passe et ce que l utilisateur peut
-       *    faire, rien d autre. */
       corps = lectureVieEnCours
-        ? '<span class="note" style="align-self:center">Still reading the markets — names appear as each one comes back.</span>'
-        : '<span class="note" style="align-self:center">Some markets did not come back this pass — our node was slow or rate-limited. '
-          + g.blocks.length + ' still waiting: open a profile, or retry.</span>';
+        ? '<span class="note" style="align-self:center">Still reading — TokenizedBlock names appear when each market is LUE. Silence ≠ broken.</span>'
+        : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
+          + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
     } else {
       corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-        /* ⛔⛔ CORRIGE LE 2026-09-22 (capture de Phil). L ancien repli etait `b.adr.slice(0, 8)`, qui
-         *     rendait « 0xb20000 » — LE MEME TEXTE POUR TOUS LES BLOCKS SANS SYMBOLE, puisque
-         *     toutes les adresses B20 commencent ainsi. Ce n etait pas un nom, c etait un debut
-         *     d adresse deguise en nom : deux blocks differents s affichaient a l identique, et
-         *     l utilisateur ne pouvait ni les distinguer ni comprendre ce qu il lisait.
-         * ⛔ LA FIN DE L ADRESSE EST CE QUI DISTINGUE, pas le debut. Le « … » devant dit que c est
-         *    une adresse tronquee et pas un nom — sinon on remplace un faux nom par un autre. */
-        + '🟦 ' + enTexte(b.sym ? String(b.sym).slice(0, 14) : '…' + String(b.adr).slice(-8))
+        + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
         + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
         + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '');
     }
@@ -4752,7 +4738,7 @@ function peindreTrustFacts(adr, v, origine) {
   if (etat === 'NON_TROUVEE') {
     /* tip 20260922-fee-funnel + 20260922-2112: V8 CTA only when porteLeLabel ≠ NON */
     cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: 0.001 ETH, once.'
+      ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: ≈$1 (0.001 ETH), once.'
       : '<b>Next</b>: open its market — free in Practice.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
@@ -5170,7 +5156,7 @@ async function lireProfil(adr, sym, perime) {
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = 'Birth fee: <b>0.001 ETH, once</b>. Then the wallet reviews the transaction that places its blocks in the pool.';
+      wg.innerHTML = 'Birth fee: <b>≈$1 (0.001 ETH), once</b>. Then the wallet reviews the transaction that places its blocks in the pool.';
     } else if (legacySansHook) {
       wg.hidden = false;
       wg.innerHTML = 'Outside market — trades here do not feed this block. <b>Give birth · V8 · 0.001 ETH once</b>.';
@@ -7277,7 +7263,7 @@ function ouvrirLancement() {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = 'Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">'
       + contre + '</span>, locked forever.'
-      + (real ? ' Birth fee: 0.001 ETH, once.' : ' Free in Practice.');
+      + (real ? ' Birth fee: ≈$1 (0.001 ETH), once.' : ' Free in Practice.');
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
@@ -7483,6 +7469,14 @@ async function calculerLancement() {
   } else {
     plan.fraisLancementWei = null;
   }
+  /* tip 20260922-prepaye-skip: recover CreateRouter createPaid → prepaye; zero paid inscrire etape (fee already at sink). */
+  try { await recupererPrepayeCreateRouter(adr); } catch (_) {}
+  if (plan && openFeeDejaPayePour(adr, plan) && Array.isArray(plan.etapes)) {
+    plan.etapes = plan.etapes.map((et) => {
+      if (!et || !et.payant) return et;
+      return { ...et, value: '0x0', payant: false, nom: (et.nom || 'Register') + ' (open fee already paid via CreateRouter)' };
+    });
+  }
   planCourant = plan;
   peindrePlan(plan, adr);
 }
@@ -7605,7 +7599,8 @@ function peindrePlan(plan, adr) {
   let fraisL = plan.fraisLancementWei != null ? plan.fraisLancementWei : (usdLaunch > 0 ? FRAIS_OUVERTURE_WEI : null);
   if (usdLaunch > 0 && !fraisLancementPret(fraisL)) fraisL = FRAIS_OUVERTURE_WEI;
   /* tip 0212: when inscriptionPayee, the 0.001 ETH open fee is already on chain — do not re-promise it. */
-  const feeDejaPaye = !!(plan.v2 && plan.inscriptionPayee);
+  /* tip 20260922-prepaye-skip: also honor CreateRouter prepaye (not only v2 inscriptionPayee). */
+  const feeDejaPaye = openFeeDejaPayePour(adr, plan);
   const feeLignes = usdLaunch > 0
     ? (feeDejaPaye
       ? ['Open fee already paid on chain — next signatures only seed the pool and bring it to life.']
@@ -7613,7 +7608,7 @@ function peindrePlan(plan, adr) {
         'Review: 0.001 ETH, once, then bring it to life.'])
     : ['Practice — bringing life is free here.'];
   const txsApercu = [];
-  if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2) {
+  if (usdLaunch > 0 && fraisLancementPret(fraisL) && !plan.v2 && !feeDejaPaye) {
     txsApercu.push({ to: FEE_WALLET, data: '0x', value: '0x' + BigInt(fraisL).toString(16) });
   }
   txsApercu.push(...(plan.etapes || []), plan.tx);
@@ -7760,7 +7755,9 @@ async function verifierLancement(adr) {
     /* tip 20260922-eth-fixe: never abort on unread oracle — floor fee always. */
     const wOk = fraisLancementPret(w) ? w : (FRAIS_OUVERTURE_WEI);
     planCourant.fraisLancementWei = wOk;
-    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(wOk)) {
+    /* tip 20260922-prepaye-skip: CreateRouter already paid — do not demand another 0.001 balance. */
+    const feeDejaVerif = openFeeDejaPayePour(adr, planCourant);
+    if (!feeDejaVerif && soldeEthNat != null && BigInt(soldeEthNat) < BigInt(wOk)) {
       e.className = 'note wKo'; vieAutoArreter();
       e.textContent = 'Not enough ETH for the one-time 0.001 ETH life fee. Nothing was sent.';
       peindrePlan(planCourant, adr);
@@ -7788,7 +7785,7 @@ async function verifierLancement(adr) {
   b.type = 'button';
   const fraisL = planCourant.fraisLancementWei;
   /* tip 0212: v2 / inscriptionPayee — fee already on chain; button must not re-promise 0.001 ETH. */
-  const feeDeja = !!(planCourant.v2 && (planCourant.inscriptionPayee || planCourant.etat === 'PRET'));
+  const feeDeja = openFeeDejaPayePour(adr, planCourant) || !!(planCourant.v2 && planCourant.etat === 'PRET');
   b.textContent = (usdLaunch > 0 && fraisLancementPret(fraisL) && !feeDeja && !planCourant.v2)
     ? 'Bring it to life — 0.001 ETH, once'
     : 'Bring it to life — sign in my wallet';
@@ -7877,7 +7874,8 @@ async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
   const naissance = !!planCourant.naissance;
-  const dejaPaye = !planCourant.v2 && !!prepayePour(adr) && String((prepayePour(adr) || {}).compte || '') === String(compte || '').toLowerCase();
+  /* tip 20260922-prepaye-skip */
+  const dejaPaye = openFeeDejaPayePour(adr, planCourant);
   const usdLaunch = dejaPaye ? 0 : fraisLancementUsd(CHAINE);
   let fraisL = null;
   /* tip 0212: seed wallet check uses quoteEthWei (= mint tx.value), not ethRequis (39 wei short). */
@@ -8154,7 +8152,7 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
 });
 /* ══ TokenizedBank (tip 20260922-2010) — basket + add-liquidity graft ═══════════════════════════
  * Hold → proofOfHold → graft (Open) or Add liquidity (any wallet, same basket) → one-click confirm.
- * Early = yield share frozen at Open (badge separate). Credit on totality; hold; losing one still leaves the rest.
+ * Early = yield share frozen at Open (badge separate). Credit on totality; hold; one lost ≠ dead.
  * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
 let tbPreuve = null;
 let tbPanierPreuves = [];
@@ -8220,7 +8218,7 @@ function peindrePanierBank() {
   }
   if (note) {
     note.textContent = greffes.length
-      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · losing one still leaves the rest · '
+      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · one lost ≠ dead · '
         + (ouvert ? 'bank open — any wallet with proof may add liquidity · ' : 'not open yet · ')
         + 'contract: ' + (BANK_CONTRACT || 'not deployed'))
       : 'Credit backs the basket. Remove one → survivors keep backing.';
@@ -8290,7 +8288,7 @@ async function peindreTokenizedBank() {
   if (etat) etat.textContent = BANK_CONTRACT
     ? ''
     : (tbBankOuvertIci()
-      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; losing one still leaves the rest.'
+      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; one lost ≠ dead.'
       : 'Credit is on the basket totality. Hold to maintain. One lost ≠ dead. Open freezes early (yield). Then any wallet may add liquidity.');
   peindrePanierBank();
 }
@@ -9085,7 +9083,7 @@ function appliquerStyle(i) {
  * ⛔ LE BUDGET EST CALCULE, JAMAIS DEVINE. `photo.js` connait le mur MESURE du precompile B20 —
  *    12 Ko de fichier passent, 13 Ko sont REFUSES, et le refus persiste en offrant cent millions
  *    de gas — et `budgetSurFace()` en deduit la place restante une fois le SVG de la face compte.
- * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+ * ══════════════════════════════════════��═══════════════════════════════════════════════════════ */
 
 /** Le plus grand cote de l image gravee, en pixels.
  * ⛔ 96 ET PAS 512 : une face de cube fait 70 a 140 unites dans le SVG. Au-dela de ~96 px, chaque
@@ -9268,45 +9266,93 @@ function peindreDevisesLancement() {
   const d = $('#plDevise');
   if (!d) return;
   const avant = d.value;
-  const autres = v3Pret ? pairesProposees(CHAINE).filter((p) => p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION') : [];
+  const deviseOkLance = v3Pret || Number(CHAINE) === 8453;
+  const autres = deviseOkLance ? pairesProposees(CHAINE).filter((p) => p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION') : [];
   d.innerHTML = '<option value="ETH">ETH</option>' + autres.map((p) => '<option value="' + enTexte(p.adr) + '" data-sym="'
     + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + p.nom) + '</option>').join('');
   if ([...d.options].some((o) => o.value === avant)) d.value = avant;
 }
 /* le V3 est-il sur la chaine ? lu une fois au demarrage, puis toutes les 5 min : les paires s ouvrent seules */
 async function lireV3() {
-  try { const e = await hookV3Deploye({ rpc }); const avant = v3Pret; v3Pret = e === 'DEPLOYE'; if (v3Pret !== avant) { peindrePaires(); peindreDevisesLancement(); } } catch (_) {}
+  /* tip 20260922-coinbase-pair: V8 opens devise/stock pairs (hookCourant→V8). Legacy gate was
+   * hookV3Deploye only — when V3 absent but V8 live, USDC/stocks wrongly stayed « soon ». */
+  try {
+    const e = await hookV3Deploye({ rpc });
+    const v8 = await hookV8Deploye({ rpc });
+    const avant = v3Pret;
+    v3Pret = e === 'DEPLOYE' || v8 === 'DEPLOYE';
+    if (v3Pret !== avant) { peindrePaires(); peindreDevisesLancement(); }
+  } catch (_) {}
 }
+void lireV3(); /* tip 20260922-coinbase-pair: unlock stocks ASAP, not after 3s */
 setTimeout(() => { void lireV3(); }, 3000);
 setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
 function peindrePaires() {
   const s = $('#cPaire');
   const avant = s.value;
   const liste = pairesProposees(CHAINE);
-  /* ⛔ UNE PAIRE N EST PROPOSEE QUE SI LA MISE EN VIE SAIT L OUVRIR. ETH et TBLOCK : hook V2. Le reste (USDC, cbBTC,
-   *    actions, autre B20) attend le hook V3 : « soon » tant que son code n est pas sur la chaine (v3Pret, lu au demarrage). */
-  /* Phil (2026-09-19) : « ne propose plus TBLOCK — aucune liquidite injectee, on fera plus tard ». ETH, puis la liste du V3. */
-  const ouverte = (p) => p.type === 'NATIF' || (v3Pret && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION'));
-  s.innerHTML = liste.filter((p) => p.type !== 'TBLOCK').map((p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
-      + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>').join('')
+  /* ⛔ UNE PAIRE N EST PROPOSEE QUE SI LA MISE EN VIE SAIT L OUVRIR. ETH : toujours. Le reste
+   *    (USDC, cbBTC, actions) attend un hook devise (v3Pret = V3 ou V8 deploye). */
+  /* Phil (2026-09-19) : « ne propose plus TBLOCK — aucune liquidite injectee, on fera plus tard ». */
+  /* tip 20260922-coinbase-pair: MAIN Birth=V8 admits stocks — do not leave AAPLc/… as « soon » for 3s */
+  const deviseOk = v3Pret || Number(CHAINE) === 8453;
+  const ouverte = (p) => p.type === 'NATIF' || (deviseOk && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION'));
+  const base = liste.filter((p) => p.type === 'NATIF' || p.type === 'STABLE' || p.type === 'MAJEUR');
+  const actions = liste.filter((p) => p.type === 'ACTION');
+  const opt = (p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
+      + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>';
+  /* tip 20260922-coinbase-pair: optgroups — Base currencies vs Coinbase tokenized stocks */
+  s.innerHTML = '<optgroup label="Base currencies">' + base.map(opt).join('') + '</optgroup>'
+    + (actions.length
+      ? '<optgroup label="Coinbase tokenized stocks">' + actions.map(opt).join('') + '</optgroup>'
+      : '')
     /* ⛔ UN AUTRE B20 QUELCONQUE : le hook V3 n admet qu une liste FIXE — la paire serait refusee par la chaine. « soon ». */
     + '<option value="' + AUTRE_PAIRE + '" disabled>Another B20 — paste native B20 address — soon</option>';
-  /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ».
-   *    Mesure du probleme : un block paire a TBLOCK ne s achete qu avec du TBLOCK ; un nouvel utilisateur
-   *    n en a pas, donc son propre block lui etait inachetable des la naissance. ETH d abord, partout.
-   *    (Ancienne regle, remplacee : « STANDARD RAKSHA 2026-09-14 : TBLOCK en tete sur mainnet ».) */
+  /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ». */
   const ethOption = [...s.options].find((o) => /^0x0{40}$/i.test(o.value) || /^ETH\b/.test(o.textContent));
   if ([...s.options].some((o) => o.value === avant) && avant) s.value = avant;
   else if (ethOption) s.value = ethOption.value;
+  /* tip 20260922-coinbase-pair: open pair details on MAIN so stocks are not buried in collapsed accordion */
+  const det = $('#cPaireDetail');
+  if (det && Number(CHAINE) === 8453) det.open = true;
+  peindrePaireChips();
   majPaire();
 }
 
+/** tip 20260922-coinbase-pair: quick picks ETH / AAPLc / GOOGLc / NVDAc / COINc — hide if off Base or option disabled */
+const PAIRES_CHIP_QUICK = ['ETH', 'AAPLc', 'GOOGLc', 'NVDAc', 'COINc'];
+function peindrePaireChips() {
+  const box = $('#cPaireChips');
+  if (!box) return;
+  if (Number(CHAINE) !== 8453) { box.hidden = true; box.innerHTML = ''; return; }
+  const sel = $('#cPaire');
+  if (!sel) { box.hidden = true; box.innerHTML = ''; return; }
+  const opts = [...sel.options];
+  const htmlChips = PAIRES_CHIP_QUICK.map((sym) => {
+    const o = opts.find((x) => {
+      if (sym === 'ETH') return /^0x0{40}$/i.test(x.value);
+      return new RegExp('^' + sym + '\\b').test(String(x.textContent || ''));
+    });
+    if (!o || o.disabled) return '';
+    const on = sel.value === o.value ? ' on' : '';
+    return '<button type="button" class="puce' + on + '" data-paire-chip="' + enTexte(o.value)
+      + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + enTexte(sym) + '</button>';
+  }).filter(Boolean);
+  if (!htmlChips.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = htmlChips.join('');
+}
+
 /** Le titre replie de la carte « Paired with » : il dit ce qui est choisi MAINTENANT. */
-function majResumePaire(sym) {
+function majResumePaire(sym, type) {
   const r = $('#cPaireResume');
   if (!r) return;
   const s = String(sym || '').trim();
-  r.textContent = s ? 'Paired with · ' + s : 'Paired with · not chosen yet';
+  if (!s) { r.textContent = 'Paired with · not chosen yet'; return; }
+  /* tip 20260922-coinbase-pair */
+  r.textContent = type === 'ACTION'
+    ? ('Paired with · ' + s + ' · Coinbase stock')
+    : ('Paired with · ' + s);
 }
 
 /* ══ LA VRAIE CLE DE POOL ═══════════════════════════════════════════════════════════════════════════
@@ -9401,18 +9447,56 @@ async function majPaire() {
     suite = 'Paired with TBLOCK. Its market opens when you bring it to life.';
   } else if (q.paire.type === 'B20') {
     suite = 'Paired with another block (checked on chain). Its market opens when you bring it to life.';
+  } else if (q.paire.type === 'ACTION') {
+    /* tip 20260922-coinbase-pair: quote stock ≠ Birth fee; Launch is unilateral (blocks only) + V8 */
+    suite = 'Market quoted in ' + (q.paire.symbole || 'that stock')
+      + ' (Coinbase tokenized stock). Instant Birth = CreateRouter 0.001 ETH once · Fees for Dev, then open V8 pool '
+      + q.paire.symbole + '↔your block (no ETH seed — buyers need ' + (q.paire.symbole || 'the stock') + ' to trade).';
   }
   n.textContent = suite;
   const chip = $('#cPaireChip');
   if (chip) {
     chip.hidden = false;
-    chip.textContent = q.paire.type === 'TBLOCK' ? 'Quote = TBLOCK — buyers need TBLOCK'
-      : q.paire.type === 'B20' ? ('Quote = B20 ' + (q.paire.symbole || '·'))
-        : ('Quote = ' + (q.paire.symbole || 'custom'));
+    if (q.paire.type === 'TBLOCK') chip.textContent = 'Quote = TBLOCK — buyers need TBLOCK';
+    else if (q.paire.type === 'B20') chip.textContent = 'Quote = B20 ' + (q.paire.symbole || '·');
+    else if (q.paire.type === 'ACTION') {
+      chip.textContent = 'Quote = ' + (q.paire.symbole || 'stock') + ' · fee 0.001 ETH · Fees for Dev';
+    } else chip.textContent = 'Quote = ' + (q.paire.symbole || 'custom');
   }
   /* le resume replie porte le choix en cours, jamais « TBLOCK by default » pose en dur */
-  majResumePaire(q.paire.symbole || null);
+  majResumePaire(q.paire.symbole || null, q.paire.type);
+  peindrePaireChips();
+  majFundWalletPourPaire();
   majFraisEtRecap();
+}
+
+/** tip 20260922-coinbase-pair: Fund wallet CTA matches selected pair — never invent custody / stock onramp */
+function majFundWalletPourPaire() {
+  const a = $('#cFundWallet');
+  const h = $('#cFundHint');
+  if (!a) return;
+  const p = paireChoisie;
+  if (p && p.type === 'ACTION') {
+    const sym = p.symbole || 'that stock';
+    a.textContent = 'Fund wallet — Get ETH on Base (Birth fee)';
+    if (h) h.innerHTML = 'Birth fee is ≈$1 (0.001 ETH), once · Fees for Dev — paid in <b>ETH</b>. '
+      + 'Your market will be quoted in <b>' + enTexte(sym) + '</b> (buyers need that Coinbase stock to trade). '
+      + 'Buy ETH through Coinbase into <b>your</b> wallet — Tokenized Block never holds your money. '
+      + 'Coinbase published rates: <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread. '
+      + 'Then come back to Connect and Instant Birth.';
+  } else if (p && p.symbole === 'USDC') {
+    a.textContent = 'Fund wallet — Get USDC on Base';
+    if (h) h.innerHTML = 'Need USDC on Base for this pair, plus ETH for the Birth fee (≈$1 / 0.001 ETH once · Fees for Dev)? '
+      + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
+      + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
+      + 'Then come back to Connect and Instant Birth.';
+  } else {
+    a.textContent = 'Fund wallet — Get ETH on Base';
+    if (h) h.innerHTML = 'Need ETH on Base for Instant Birth (Birth fee ≈$1 / 0.001 ETH once · Fees for Dev)? '
+      + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
+      + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
+      + 'Then come back to Connect and Instant Birth.';
+  }
 }
 
 function hasardApparence() {
@@ -9721,10 +9805,10 @@ function majFraisEtRecap() {
      * (create + open V8 + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET via creerEtVivreUneSignature / vieAuto). */
     /* tip 20260922-create-sign-ux: Connect→review→sign Instant Birth; Advanced free-asleep CTA removed.
      * Practice stays honest free-wake — never invent MAIN free. #cCreerFree gone (null-guarded below). */
-    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Instant Birth · 0.001 ETH';
+    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Instant Birth · ≈$1 (0.001 ETH)';
     else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
     else boutonCreer.textContent = Number(CHAINE) === 8453
-      ? 'Review → sign Instant Birth · 0.001 ETH'
+      ? 'Review → sign Instant Birth · ≈$1 (0.001 ETH)'
       : 'Instant Birth (practice, free)';
   }
   const feeTxt = usd > 0
@@ -9732,19 +9816,25 @@ function majFraisEtRecap() {
       ? ', after ' + ethLisible(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
-      ? ' — Instant Birth 0.001 ETH, once · V8'
+      ? ' — Instant Birth ≈$1 (0.001 ETH), once · V8'
       : ' — Instant Birth free (Practice)');
   /* tip 2354: when ko, just the ko — never paste fee story */
   /* ⛔ PAS D ERREUR ROUGE AVANT LE PREMIER GESTE (capture de Phil, 2026-09-18 : « A block needs a name. » deux fois,
    * en rouge, sur une page qu on vient d ouvrir). Un champ vide n est pas une faute tant qu on n a rien tente : on
    * dit ce qui reste a faire, en neutre. Le rouge revient au clic sur Create (creerBlock l ecrit alors). */
   const neutre = v.ko && !String($('#cNom').value || '').trim() && !String($('#cSym').value || '').trim();
+  /* tip 20260922-coinbase-pair: when ACTION, lead with Instant Birth · quoted in SYM · fee honesty */
+  const actionRecap = (!v.ko && paireChoisie && paireChoisie.type === 'ACTION')
+    ? ('Instant Birth · quoted in ' + (paireChoisie.symbole || 'stock')
+      + ' · Birth fee 0.001 ETH · Fees for Dev. ')
+    : '';
   $('#cRecap').textContent = v.ko
     ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
-    : 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
+    : actionRecap + 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.';
   $('#cRecap').className = 'note' + (v.ko && !neutre ? ' wKo' : '');
+  majFundWalletPourPaire();
   const liste = $('#cApercuTx');
   if (v.ko) { liste.innerHTML = ''; }
   else if (!compte) { liste.innerHTML = '<li>Connect your wallet to see the exact transactions before you sign.</li>'; }
@@ -9769,7 +9859,11 @@ function majFraisEtRecap() {
       })();
       const extra = estCreate ? ['Name: ' + v.nom + ' · symbol ' + v.sym,
         'Supply: 1,000,000,000, all to you (cap = supply)',
-        'Pair: ' + etiquettePaire(paireChoisie), 'Face: engraved SVG image (shared look — not an NFT)',
+        'Pair: ' + etiquettePaire(paireChoisie)
+        + (paireChoisie && paireChoisie.type === 'ACTION'
+          ? (' · Instant Birth fee 0.001 ETH · Fees for Dev (not in ' + (paireChoisie.symbole || 'stock') + ')')
+          : ''),
+        'Face: engraved SVG image (shared look — not an NFT)',
         ...(roleTxt ? [roleTxt] : []),
         ...(toL === String(CREATE_ROUTER).toLowerCase()
           ? ['Create + 0.001 ETH, once (your wallet shows the exact request)']
@@ -9779,7 +9873,7 @@ function majFraisEtRecap() {
   }
   /* tip 20260922-fee-funnel */
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base — Birth fee: 0.001 ETH, once. Cannot be undone.'
+    ? '⚠️ Base — Birth fee: ≈$1 (0.001 ETH), once. Cannot be undone.'
     : 'Practice — everything is free.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -9852,9 +9946,9 @@ function peindreALancer() {
   boite.hidden = !l.length;
   boite.innerHTML = l.length
     /* tip 20260922-fee-funnel: incomplete Created banner */
-    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: 0.001 ETH, once. Bring it to life:'
+    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: ≈$1 (0.001 ETH), once. Bring it to life:'
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
-        + enTexte(b.sym || court(b.adr)) + ' — 0.001 ETH, once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
+        + enTexte(b.sym || court(b.adr)) + ' — ≈$1 once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
   boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', (ev) => {
     /* tip 0210: same Instant Birth path as post-Create goLaunch — not Create (0 ETH factory). */
@@ -10090,6 +10184,32 @@ function oublierPrepayeEnAttente(c) { try { localStorage.removeItem(CLE_PREPAYE 
 function noterPrepayeBlock(adr, v) { try { localStorage.setItem(CLE_PREPAYE + String(adr).toLowerCase(), JSON.stringify(v)); } catch (_) {} }
 function prepayePour(adr) {
   try { const v = JSON.parse(localStorage.getItem(CLE_PREPAYE + String(adr || '').toLowerCase()) || 'null'); return v && v.hash ? v : null; } catch (_) { return null; }
+}
+/* tip 20260922-prepaye-skip: CreateRouter createPaid already sent FRAIS_OUVERTURE to sink — do not re-charge at Launch.
+ * honor localStorage prepaye OR v2 inscriptionPayee; recover from on-chain createPaid if storage cleared. */
+function openFeeDejaPayePour(adr, plan) {
+  if (plan && plan.v2 && plan.inscriptionPayee) return true;
+  const p = prepayePour(adr);
+  return !!(p && p.hash && String(p.compte || '').toLowerCase() === String(compte || '').toLowerCase());
+}
+async function recupererPrepayeCreateRouter(adr) {
+  if (prepayePour(adr)) return prepayePour(adr);
+  if (!compte || Number(CHAINE) !== 8453 || !adr) return null;
+  try {
+    const info = await createurDuJeton({ rpc, token: adr, blocs: 20000 });
+    if (!info || !info.tx) return null;
+    const tx = await rpc('eth_getTransactionByHash', [info.tx]);
+    if (!tx) return null;
+    const to = String(tx.to || '').toLowerCase();
+    const from = String(tx.from || '').toLowerCase();
+    const val = BigInt(tx.value || '0x0');
+    if (to !== String(CREATE_ROUTER).toLowerCase()) return null;
+    if (val < FRAIS_OUVERTURE_WEI) return null;
+    if (from !== String(compte).toLowerCase()) return null;
+    const v = { hash: info.tx, wei: String(val), compte: from, t: Date.now(), via: 'CreateRouter-onchain' };
+    noterPrepayeBlock(adr, v);
+    return v;
+  } catch (_) { return null; }
 }
 /* ══ CREER ET METTRE EN VIE EN UNE SIGNATURE ═══════════════════════════════════════════════════════════════════════
  * ⛔ MESURE (fork + interface, build 0109) : 5 signatures d affilee (creation, approve, Permit2, inscription payee, marche),
@@ -10498,19 +10618,30 @@ async function creerBlock() {
           + lien;
         try { ouvrirProfil(adresseCreee, v.sym); } catch (_) {}
       } else if (Number(CHAINE) === 8453 && adresseCreee) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH, once separate).'
+        /* tip 20260922-coinbase-pair: ACTION quote = unilateral V8 open (no ETH seed); ETH quote = two-sided seed */
+        const quoteAction = !!(paireChoisie && paireChoisie.type === 'ACTION');
+        const symQ = quoteAction ? (paireChoisie.symbole || 'stock') : 'ETH';
+        const nextTxt = ibDirect
+          ? (quoteAction
+            ? ('. Open fee already paid via CreateRouter — next = <b>open V8 market vs ' + enTexte(symQ) + '</b> (no second 0.001 · no ETH seed).')
+            : '. Open fee already paid via CreateRouter — next = <b>seed ETH + open hooked V8 market</b> (no second 0.001).')
+          : (quoteAction
+            ? ('. Next = <b>Instant Birth</b> (open V8 vs ' + enTexte(symQ) + ' · open fee 0.001 ETH, once).')
+            : '. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH, once separate).');
+        const btnTxt = ibDirect
+          ? (quoteAction ? ('Open V8 market — ' + symQ + ' quote (fee already paid)') : 'Open V8 market — seed ETH (fee already paid)')
+          : (quoteAction ? ('Instant Birth — open V8 vs ' + symQ) : 'Instant Birth — seed ETH + open hooked market');
+        const noteTxt = ibDirect
+          ? (quoteAction
+            ? ('CreateRouter already sent the open fee. This step opens the ' + enTexte(symQ) + '↔block V8 pool. No fee address in UI.')
+            : 'CreateRouter already sent the open fee. This step only seeds the pool. No fee address in UI.')
+          : (quoteAction
+            ? ('Quote = ' + enTexte(symQ) + ' · Birth fee 0.001 ETH once · Fees for Dev. No fee address in UI.')
+            : 'Seed into the book ≠ open fee 0.001 ETH, once. No fee address in UI.');
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created' + nextTxt
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
-          + 'Instant Birth — seed ETH + open hooked market</button>'
-          /* ⛔ REECRIT LE 2026-09-22. L ancienne phrase disait : « Seed into the book ≠ open fee
-           *    0.001 ETH, once. No fee address in UI. » Trois defauts dans une ligne :
-           *      · `≠` est une notation de specification, elle appartient au code ;
-           *      · « No fee address in UI » est une NOTE DE CONCEPTION — un rappel qu on s ecrit a
-           *        soi-meme, affiche a l utilisateur, qui n a aucune idee de ce que ca veut dire ;
-           *      · et la distinction qui compte vraiment — ton argent reste a toi / le frais part —
-           *        etait exprimee par un symbole au lieu d une phrase.
-           *    Elle est maintenant dite en clair, dans l ordre ou l utilisateur la vit. */
-          + '<p class="note" style="margin-top:6px">Two amounts, and only one is a fee: the ETH you '
-          + 'put into the pool <b>stays in your market</b>, and <b>0.001 ETH</b> is paid once to open it.</p>'
+          + enTexte(btnTxt) + '</button>'
+          + '<p class="note" style="margin-top:6px">' + noteTxt + '</p>'
           + lien;
         const goLaunch = () => {
           try {
@@ -11136,10 +11267,7 @@ function publierSnapshotBrain(vu, h) {
   }
   const sum = $('#tbBrainSummary');
   if (sum && snap) {
-    /* ⛔ LE MEME DEFAUT QUE LE REPLI DES PUCES DE STADE, corrige dans le meme passage : un
-     *    `slice(0, 10)` sur une adresse B20 rend « 0xb2000000 » pour TOUT LE MONDE. Le correctif
-     *    qui rate son jumeau ne corrige rien — c est la fin de l adresse qui distingue. */
-    sum.textContent = 'Agent dump · ' + (snap.symbole || '…' + String(snap.address || '').slice(-8))
+    sum.textContent = 'Agent dump · ' + (snap.symbole || (snap.address || '').slice(0, 10))
       + ' · ' + (snap.phase || '?') + ' · tick ' + (snap.tick ?? '?')
       + (snap.marche && snap.marche.hooked === true ? ' · alive on TokenizedBlock'
         : snap.marche && snap.marche.hooked === false ? ' · outside market' : '')
@@ -11613,6 +11741,19 @@ peindreRolesCreate();
 peindreApercuCreation();
 $('#cPaire').addEventListener('change', () => void majPaire());
 $('#cPaireAutre').addEventListener('input', () => void majPaire());
+/* tip 20260922-coinbase-pair: chip → set select + majPaire */
+const chipsBox = $('#cPaireChips');
+if (chipsBox) chipsBox.addEventListener('click', (ev) => {
+  const b = ev.target && ev.target.closest && ev.target.closest('[data-paire-chip]');
+  if (!b) return;
+  const v = b.getAttribute('data-paire-chip');
+  const sel = $('#cPaire');
+  if (!sel || !v) return;
+  const o = [...sel.options].find((x) => x.value === v && !x.disabled);
+  if (!o) return;
+  sel.value = v;
+  void majPaire();
+});
 $('#cHasard').addEventListener('click', hasardApparence);
 /* « Manual settings » : ouvrir le volet des cadrans, y descendre, et le dire au bouton. */
 $('#cManuel').addEventListener('click', () => {
