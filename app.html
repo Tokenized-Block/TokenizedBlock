@@ -1587,7 +1587,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-0216" hidden>Build <code>20260922-0216</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-1934" hidden>Build <code>20260922-1934</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7192,13 +7192,20 @@ async function calculerLancement() {
        *     tourne toujours. Tous les marches du chemin rapide s ouvraient donc sur le V5. C est la
        *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
       const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook });
+      /* tip 20260922-1934: MAIN never falls through to planLancement default hooks=0x0.
+       * Previous hole: `...(hooks ? {hooks}:{})` omitted the field → ADRESSE_NULLE mint. */
+      if (mainnet && !hooks) {
+        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — fee hook unread (will not open an unhooked market)' };
+      }
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
        *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
       const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4) ? await blockPorteLeLabel({ rpc, jeton: adr }) : 'OUI';
-      if (label === 'NON') {
+      if (plan && plan.etat === 'REFUSE') {
+        /* already refused: missing hook on MAIN */
+      } else if (label === 'NON') {
         plan = { etat: 'REFUSE', pourquoi: 'this block was not engraved by this app\'s Create, so its market cannot open here' };
       } else if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
@@ -7227,7 +7234,7 @@ async function calculerLancement() {
         if (!plan) {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
           ...(deviseLancement ? { devise: deviseLancement } : {}),
-          ...(hooks ? { hooks } : {}),
+          hooks, /* tip 1934: always pass — never omit (omit → 0x0 default) */
           ...(quoteEthWei != null && !deviseLancement ? { quoteEthWei } : {}) });
         }
         if (plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
@@ -7398,6 +7405,12 @@ function peindrePlan(plan, adr) {
   txsApercu.push(...(plan.etapes || []), plan.tx);
   const hookAdr = plan.cle && plan.cle.hooks ? String(plan.cle.hooks).toLowerCase() : '0x0000000000000000000000000000000000000000';
   const avecHook = hookAdr !== '0x0000000000000000000000000000000000000000';
+  /* tip 20260922-1934: MAIN new-pool plan without TbFeeHook → nothing to sign (blocks unhooked mint UX). */
+  if (Number(CHAINE) === 8453 && plan && !plan.poolExiste && !avecHook) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'Launch refused: this plan would open an unhooked market (no fee hook). Work it out again.';
+    return;
+  }
   $('#plLignes').innerHTML = [
     /* tip 2352: « fee 0 % » = Uniswap pool fee TIER only — NOT protocol/life/BuySell fees. */
     'Market on ' + RESEAUX[CHAINE].nom + ', paired with ' + (plan.symDevise || (plan.cle && String(plan.cle.currency0).toLowerCase() !== '0x0000000000000000000000000000000000000000'
@@ -9448,7 +9461,8 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
    *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
    *     diverger — il n y en a plus qu un. */
   const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise });
-  if (!hook) return 'SANS';
+  /* tip 20260922-1934: never one-shot Create+Launch into hooks=0x0. */
+  if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
   e.className = 'note';
   e.textContent = 'Preparing everything for one signature…';
   const rep = repartitionFrappe(SUPPLY_FIXE, compte);

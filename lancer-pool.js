@@ -215,6 +215,14 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
   if (!ADRESSE.test(String(jeton || ''))) return { etat: 'REFUSE', pourquoi: 'the block is not an address' };
   if (!ADRESSE.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (!ADRESSE.test(String(devise || '')) || !ADRESSE.test(String(hooks || ''))) return { etat: 'REFUSE', pourquoi: 'pair or hook is not an address' };
+  /* tip 20260922-1934: MAIN permanent Launch (dead-address LP) must never mint hooks=0x0.
+   * Hole: default hooks=ADRESSE_NULLE + app omit-spread → PositionManager unhooked pools
+   * (Dex volume, ZERO sink fees). Add-liquidity keeps proprietaire=compte → still allowed. */
+  if (Number(chaine) === 8453
+    && String(hooks).toLowerCase() === ADRESSE_NULLE
+    && String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase()) {
+    return { etat: 'REFUSE', pourquoi: 'Base Launch refused: new markets must use TbFeeHook (hookCourant) — zero-hook mint blocked' };
+  }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };
   const enEth = String(devise).toLowerCase() === ETH_NATIF;
   const classement = enEth ? classementValoLancement(valorisationEth)
