@@ -1,6 +1,7 @@
-// tip 20260922-2023 — hooked pool Buy/Sell still encodes interface 0.5% TAKE/TAKE_PORTION → a6cf.
+// tip 20260922-2023 / 20260922-2026 — hooked pool Buy/Sell still encodes interface 0.5% TAKE/TAKE_PORTION → a6cf.
 import assert from 'node:assert/strict';
-import { planEchange, FRAIS_INTERFACE_BPS, QUOTEUR, ROUTEUR } from './echange.js';
+import { planEchange, FRAIS_INTERFACE_BPS, QUOTEUR, ROUTEUR, RACHAT_AUTO } from './echange.js';
+import { readFileSync } from 'node:fs';
 import { FEE_WALLET } from './frais-creation.js';
 import { HOOK_V8, HOOK_PREVU } from './tokenomics.js';
 import { cleDePool } from './pool.js';
@@ -56,6 +57,7 @@ for (const hooks of [HOOK_V8, HOOK_PREVU]) {
     eq(plan.resume && plan.resume.fraisBps, FRAIS_INTERFACE_BPS, 'ACHAT fraisBps=50 on hooked ' + label);
     eq(String(plan.resume.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(), 'ACHAT fee → a6cf');
     ok(plan.resume.frais > 0n, 'ACHAT frais > 0');
+    eq(plan.resume.fraisDevise, 'ETH', 'ACHAT fee asset ETH (not TBLOCK/TBGAS)');
     ok(String(plan.tx && plan.tx.data || '').toLowerCase().includes(sink),
       'ACHAT calldata carries TAKE to fee sink (assertFraisInterfaceA6cf already required it)');
   }
@@ -70,6 +72,7 @@ for (const hooks of [HOOK_V8, HOOK_PREVU]) {
     eq(plan.resume && plan.resume.fraisBps, FRAIS_INTERFACE_BPS, 'VENTE fraisBps=50 on hooked ' + label);
     eq(String(plan.resume.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(), 'VENTE fee → a6cf');
     ok(plan.resume.frais > 0n, 'VENTE frais > 0');
+    eq(plan.resume.fraisDevise, 'ETH', 'VENTE fee asset ETH (not TBLOCK/TBGAS)');
     if (plan.etat === 'PRET') {
       ok(String(plan.tx && plan.tx.data || '').toLowerCase().includes(sink),
         'VENTE calldata carries TAKE_PORTION to fee sink');
@@ -85,6 +88,15 @@ for (const hooks of [HOOK_V8, HOOK_PREVU]) {
     montant: 10n ** 16n, marcheLu, maintenant: Date.now(),
   });
   eq(plan.resume && plan.resume.fraisBps, 0n, 'fee-wallet buyback exempt (bps=0)');
+}
+
+eq(RACHAT_AUTO, false, 'RACHAT_AUTO must stay false — fee is ETH/USDC not TBLOCK buyback');
+{
+  const src = readFileSync(new URL('./echange.js', import.meta.url), 'utf8');
+  ok(!/takePortion\(TBLOCK,\s*FEE_WALLET/.test(src), 'no TAKE_PORTION(TBLOCK, FEE_WALLET) in source');
+  const liveTakes = [...src.matchAll(/paramsAction\.take\(TBLOCK,\s*FEE_WALLET/g)];
+  ok(liveTakes.length === 0 || src.includes('RACHAT_AUTO &&'),
+    'TAKE(TBLOCK, FEE_WALLET) only behind RACHAT_AUTO guard');
 }
 
 console.log('test-plan-echange-hooked-frais: ' + n + ' assertions, OK');

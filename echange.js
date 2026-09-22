@@ -2,6 +2,7 @@
 // ================================================================================================
 // ⛔ HARD RULE tip 2349/2350 / 20260922-2023: every in-app Buy/Sell 0.5% → FEE_WALLET only (never 37eb, never skip — including hooked pools).
 //    Hooked Dex may add hook chop on top; zero interface fees worse than stacked. Birth=V8 only on MAIN.
+//    tip 20260922-2026: fee asset ETH or USDC only at FEE_WALLET — never TBLOCK/TBGAS/block tokens.
 //    External Dex on unhooked pools = 0 forever — chop that volume only via TbFeeHook Launch (new pool id).
 // ⛔ DECISION DE PHIL (2026-09-13) : 0,5 % de chaque achat / vente fait via l app va au wallet de frais, DIT avant
 //    la signature. Mesure qui l a motivee : 459 creations B20 en 22 h sur la factory publique de Base, 2 chez nous.
@@ -26,7 +27,7 @@ import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
 export const ROUTEUR = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
 export const QUOTEUR = { 84532: '0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba', 8453: '0x0d5e0F971ED27FBfF6c2837bf31316121532048D' };
 export const FRAIS_INTERFACE_BPS = 50n;
-/** tip 0036 : false = le frais de 0,5 % est livre en ETH au wallet de frais (pas de rachat automatique de TBLOCK). */
+/** tip 0036 / 20260922-2026: MUST stay false — fee lands ETH/USDC at a6cf; never auto-buy TBLOCK/TBGAS as fee asset. */
 export const RACHAT_AUTO = false;
 export const ETATS_ECHANGE = ['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE'];
 const ETH = '0x0000000000000000000000000000000000000000';
@@ -50,17 +51,30 @@ export function fraisSur(total, bps) {
  * smart wallet qui rachete du TBLOCK. */
 export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() === WALLET_TRESOR_SMART.toLowerCase();
 
-/** tip 2350 / 20260922-2023: fail-closed — un trade hors tresor doit porter un TAKE/TAKE_PORTION vers le wallet de frais, montant non nul.
- *  Hooked pools may ALSO chop on-chain; zero interface fees were worse than stacked fees (live dig: a6cf got 0 Buy/Sell). */
+/** tip 2350 / 20260922-2023 / 20260922-2026: fail-closed — TAKE/TAKE_PORTION → FEE_WALLET in ETH or USDC only (never TBLOCK/TBGAS/block).
+ *  Hooked pools may ALSO chop on-chain; zero interface fees were worse than stacked fees. */
 function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
   if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
   }
+  const asset = String(resume && resume.fraisDevise || '');
+  const pairIsUsdc = asset === 'pair'
+    && String(resume && resume.devise || '').toLowerCase() === USDC_BASE.toLowerCase();
+  if (asset !== 'ETH' && asset !== 'USDC' && !pairIsUsdc) {
+    return 'fee asset must be ETH or USDC (not block tokens / TBGAS / TBLOCK)';
+  }
   const blob = jsonSafe(actions || []).toLowerCase();
   const sink = FEE_WALLET.slice(2).toLowerCase();
   if (!blob.includes(sink)) return 'fee TAKE/TAKE_PORTION to the fee wallet missing from actions';
+  const usdc = USDC_BASE.slice(2).toLowerCase();
+  const ethWord = '0'.repeat(64); /* native ETH currency padded in TAKE params */
+  const takeEth = blob.includes(ethWord + '000000000000000000000000' + sink)
+    || blob.includes('0000000000000000000000000000000000000000000000000000000000000000'
+      + '000000000000000000000000' + sink);
+  const takeUsdc = blob.includes(usdc) && blob.includes(sink);
+  if (!takeEth && !takeUsdc) return 'fee TAKE/TAKE_PORTION must be ETH or USDC to the fee wallet';
   if (resume.frais == null || BigInt(resume.frais) <= 0n) return 'fee amount is zero — amount too small for 0.5%';
   return null;
 }
@@ -130,7 +144,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
     const devise = c0 === j ? c1 : c0;
     const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne
-    /* tip 20260922-2023: interface 0.5% even on hooked ERC-20 pairs (hook may stack on top). */
+    /* tip 20260922-2023/2026: interface 0.5% even on hooked pairs — fee asset ETH or USDC only (never block tokens). */
+    if (String(devise).toLowerCase() !== USDC_BASE.toLowerCase()) {
+      return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee must land as ETH or USDC — this pair cannot take the interface fee in an allowed asset' };
+    }
     const { frais: fraisPair, net: netPair } = sens === 'ACHAT' ? fraisSur(m, bps) : { frais: 0n, net: m };
     const montantQuote = sens === 'ACHAT' ? netPair : m;
     let q;
@@ -152,7 +169,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         : [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
           { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'pair', recoitAuMoins: min, recoitDevise: 'block',
-        quote: q, frais: fraisPair, fraisDevise: 'pair', montantSwap: netPair, devise,
+        quote: q, frais: fraisPair, fraisDevise: 'USDC', montantSwap: netPair, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
     } else {
       const fraisVente = (q * bps) / 10000n;
@@ -161,7 +178,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(sortie, FEE_WALLET, bps) }] : []),
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'pair',
-        quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
+        quote: q, frais: fraisVente, fraisDevise: 'USDC', montantSwap: m, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
     }
     const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD });
@@ -261,11 +278,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
 }
 
 /**
- * Route a deux sauts pour un block dont le marche est TBLOCK/block. Rend `{ actions, valeur, resume, cle, zeroForOne,
- * sortieMinTete }` (le premier saut est le swap de tete), ou un refus `{ etat, pourquoi }`.
- * ⛔ LE FRAIS EST PRELEVE EN TBLOCK, ENTRE LES DEUX SAUTS (TAKE_PORTION, lu dans V4Router : bips du credit ENTIER) :
- *    c est le buyback direct, sans troisieme swap. Le second saut prend TOUT le credit TBLOCK restant (OPEN_DELTA).
- * ⛔ DEUX MINIMUMS : le premier saut garantit le TBLOCK (donc le frais), TAKE_ALL garantit ce que recoit l utilisateur.
+ * Route a deux sauts pour un block dont le marche est TBLOCK/block.
+ * tip 20260922-2026: interface fee ALWAYS lands as ETH at FEE_WALLET (never TBLOCK/TBGAS TAKE).
+ *  · ACHAT: SETTLE ETH total, TAKE ETH fee, head-swap net ETH→TBLOCK, then TBLOCK→block.
+ *  · VENTE: block→TBLOCK→ETH, TAKE_PORTION ETH fee, TAKE_ALL remaining ETH to user.
  */
 async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) {
   let mt;
@@ -278,27 +294,49 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
   const saut1 = sens === 'ACHAT' ? { cle: cleT, zeroForOne: true } : { cle: cleB, zeroForOne: !tblockEst0 };
   const saut2 = sens === 'ACHAT' ? { cle: cleB, zeroForOne: tblockEst0 } : { cle: cleT, zeroForOne: false };
   const moinsTol = (x) => (x * (10000n - tol)) / 10000n;
+  if (sens === 'ACHAT') {
+    const { frais, net } = fraisSur(m, bps);
+    let t, sortie;
+    try {
+      t = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut1, montant: net }) }, 'latest'])).slice(2, 66));
+      if (t <= 0n) return { etat: 'REFUSE', pourquoi: 'the first pool returns nothing for this amount' };
+      sortie = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut2, montant: t }) }, 'latest'])).slice(2, 66));
+    } catch (e) {
+      return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
+    }
+    if (sortie <= 0n) return { etat: 'REFUSE', pourquoi: 'the second pool returns nothing for this amount' };
+    const min = moinsTol(sortie);
+    const actions = [
+      { code: ACTIONS_V4.SETTLE, params: paramsAction.settle(ETH, m, true) },
+      ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE, params: paramsAction.take(ETH, FEE_WALLET, frais) }] : []),
+      { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP__', swap: { ...saut2, montant: 0n, sortieMin: 0n } },
+      { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(jeton, min) }];
+    const resume = { paye: m, payeDevise: 'ETH', recoitAuMoins: min, recoitDevise: 'block',
+      quote: sortie, frais, fraisDevise: 'ETH', montantSwap: net, via: 'TBLOCK',
+      fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null };
+    return { actions, valeur: m, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t) };
+  }
+  /* VENTE: fee in ETH from the final hop */
   let t, sortie;
   try {
     t = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut1, montant: m }) }, 'latest'])).slice(2, 66));
     if (t <= 0n) return { etat: 'REFUSE', pourquoi: 'the first pool returns nothing for this amount' };
-    sortie = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut2, montant: t - (t * bps) / 10000n }) }, 'latest'])).slice(2, 66));
+    sortie = BigInt('0x' + String(await lire('eth_call', [{ to: Q, data: encodeQuote({ ...saut2, montant: t }) }, 'latest'])).slice(2, 66));
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
   }
   if (sortie <= 0n) return { etat: 'REFUSE', pourquoi: 'the second pool returns nothing for this amount' };
-  const tMin = moinsTol(t), min = moinsTol(sortie);
-  const entree = sens === 'ACHAT' ? ETH : jeton, recu = sens === 'ACHAT' ? jeton : ETH;
+  const fraisVente = (sortie * bps) / 10000n;
+  const min = ((sortie - fraisVente) * (10000n - tol)) / 10000n;
   const actions = [
-    ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(TBLOCK, FEE_WALLET, bps) }] : []),
     { code: ACTIONS_V4.SWAP_EXACT_IN_SINGLE, params: '__SWAP__', swap: { ...saut2, montant: 0n, sortieMin: 0n } },
-    { code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
-    { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(recu, min) }];
-  const resume = { paye: m, payeDevise: sens === 'ACHAT' ? 'ETH' : 'block', recoitAuMoins: min, recoitDevise: sens === 'ACHAT' ? 'block' : 'ETH',
-    quote: sortie, frais: (t * bps) / 10000n, fraisDevise: 'TBLOCK', montantSwap: m, via: 'TBLOCK',
-    rachatAuto: bps > 0n ? true : undefined, tblockRachetesAuMoins: (tMin * bps) / 10000n,
+    { code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(jeton, m) },
+    ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(ETH, FEE_WALLET, bps) }] : []),
+    { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(ETH, min) }];
+  const resume = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'ETH',
+    quote: sortie, frais: fraisVente, fraisDevise: 'ETH', montantSwap: m, via: 'TBLOCK',
     fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null };
-  return { actions, valeur: sens === 'ACHAT' ? m : 0n, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: tMin };
+  return { actions, valeur: 0n, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t) };
 }
 
 /** Approbations mesurees (vente), forme de struct demandee a la chaine, encodage, simulation de la transaction exacte. */
