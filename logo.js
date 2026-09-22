@@ -35,7 +35,15 @@ export function paramsLogoDepuisApparence(a, lettre) {
     teinte: a.teinte, accent: a.accent, division: a.division, eclats: a.eclats,
     orbite: a.orbite, facette: a.facette, matiere: a.matiere, ornement: a.ornement,
     ecart: a.ecart, lettre: (lettre || 'T').toUpperCase().slice(0, 1),
-    photoOu: 'aucune', photo: null,
+    /* ⛔⛔ LA PHOTO GRAVEE TRAVERSE JUSQU AU DESSIN (2026-09-22). Avant, ces deux champs etaient
+     *     ecrits en dur a « aucune » et « null » : le dessin ne pouvait donc JAMAIS montrer une
+     *     image, meme gravee. Le champ existait dans logo.js, personne ne le remplissait — du code
+     *     mort qui donnait l illusion d une fonctionnalite.
+     * ⛔ ET LES DEUX VONT ENSEMBLE : sans `photoOu`, la meme face gravee se dessinerait sur une
+     *    face differente selon un defaut, donc differemment d un appareil a l autre. Une face
+     *    gravee doit rendre le MEME dessin partout, toujours. */
+    photoOu: a.photoOu || 'aucune',
+    photo: typeof a.photo === 'string' ? a.photo : null,
     /* ⛔ ABSENT SUR LES FACES D AVANT : `undefined` rend le dessin d avant (voir `sat` ci-dessous). */
     ...(a.saturation !== undefined ? { saturation: a.saturation } : {}),
   };
@@ -367,7 +375,17 @@ export function logoSvg(o) {
   const surFace = face && photo
     ? `<clipPath id="tbf-${o.photoOu}"><path d="${face.d}"/></clipPath>`
       + `<image href="${photo}" x="${face.x}" y="${face.y}" width="${face.w}" height="${face.h}"`
-      + ` preserveAspectRatio="xMidYMid slice" clip-path="url(#tbf-${o.photoOu})"/>`
+      /* ⛔⛔ `meet` ET PAS `slice`, ET C EST MESURE (2026-09-22). `slice` REMPLIT la face et
+       *     recadre ce qui depasse : sur le losange du haut (140x80) il ne montre que **57 %** de
+       *     l image, 58 % sur les faces laterales. Pour une photo opaque qui doit couvrir la face,
+       *     c etait le bon choix. Pour un SUJET DETOURE, c est l inverse de ce qu on veut : le
+       *     disque rouge de mon essai ressortait en RECTANGLE, ampute de 42 % de lui-meme.
+       *     `meet` contient l image entiere, et les marges transparentes laissent voir le cube —
+       *     ce qui n a de sens QUE depuis que le fond est retire, donc depuis aujourd hui.
+       * ⛔ ET CA NE PEUT CHANGER AUCUN DESSIN EXISTANT : avant ce jour, `validerFace` ne recopiait
+       *    jamais le champ `photo` dans la face propre, donc `logoSvg` recevait toujours
+       *    `photo: null`. Aucune face gravee ne passe par cette ligne. */
+      + ` preserveAspectRatio="xMidYMid meet" clip-path="url(#tbf-${o.photoOu})"/>`
       + `<path d="${face.d}" fill="none" stroke="${ca(90, 70)}" stroke-width="2" stroke-linejoin="round" opacity=".9"/>`
     : '';
 

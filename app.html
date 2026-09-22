@@ -1129,6 +1129,32 @@ details[open] > summary::before{transform:rotate(90deg)}
       <label class="champ">Style<select id="cStyle"></select></label>
       <div id="cStyles" hidden></div>
       <p class="note" id="cCombinaisons" style="margin:0 0 6px"></p>
+      <!-- ⛔⛔ L IMAGE GRAVEE (Phil, 2026-09-22). Avant ce jour, une image posee sur un cube etait
+           LOCALE ET PERDUE : ni app.html ni la face gravee ne connaissaient de champ photo, alors
+           que logo.js savait deja en dessiner une. Du code mort qui donnait l illusion d une
+           fonctionnalite — le createur croyait tokeniser son image, il decorait un navigateur.
+           ⛔ TOUT SE PASSE DANS LE NAVIGATEUR. L image finit gravee dans le contractURI, donc
+              irretirable : l envoyer a un service de detourage voudrait dire confier a un tiers
+              une image que son auteur va rendre permanente. Le fond se retire sur un canvas, ici.
+           ⛔ LE BUDGET EST CALCULE, PAS DEVINE : photo.js connait le mur mesure du precompile B20
+              (12 Ko passent, 13 sont refuses) et budgetSurFace() en deduit la place restante une
+              fois le SVG de la face compte. -->
+      <details class="bDetail" id="cImageDetail">
+        <summary class="note">Put your own image on a face — engraved with the block</summary>
+        <label class="champ">Which side
+          <select id="cPhotoOu">
+            <option value="aucune">No image</option>
+            <option value="haut">Top</option>
+            <option value="gauche">Left</option>
+            <option value="droite">Right</option>
+          </select>
+        </label>
+        <label class="champ">Image file<input type="file" id="cPhotoFichier" accept="image/png,image/jpeg,image/webp"></label>
+        <label class="note" style="display:flex;align-items:center;gap:8px;margin:2px 0 6px">
+          <input type="checkbox" id="cPhotoFond" checked> Remove the background
+        </label>
+        <p class="note" id="cPhotoEtat" style="margin:0 0 6px"></p>
+      </details>
       <details class="bDetail" id="cReglagesDetail" open><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
@@ -1538,7 +1564,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte">
       <p class="titre">Live</p>
-      <p class="note" data-build="20260922-0201" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-0203" hidden>Build <code>20260920-0174</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1985,6 +2011,14 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 /* la feuille du cube 3D, posee une fois */
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
+/* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
+ * precompile B20 : 12 Ko de fichier passent, 13 Ko sont refuses, et le refus persiste en offrant
+ * cent millions de gas. Calculer le budget ici plutot que le deviner evite de faire SIGNER une
+ * transaction qui echouerait au precompile — apres la signature, donc sans retour.
+ * ⛔ Le detourage est PUR et teste hors navigateur (`test-retirer-fond.mjs`, 23 assertions) :
+ *   il vit dans le chemin qui signe, et ce chemin a deja envoye trois regressions en production. */
+import { budgetSurFace } from './photo.js';
+import { fondEchantillonne, effacerFond, verdictFond } from './retirer-fond.js';
 import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE as MATIERES,
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
@@ -8427,6 +8461,148 @@ function appliquerStyle(i) {
   apparenceChoisie = { ...apparenceChoisie, ...s.a };
   dessinerReglages();
   peindreApercuCreation();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * L IMAGE GRAVEE — Phil, 2026-09-22 : « cable le parcours dans Create avec retrait du fond ».
+ *
+ * ⛔⛔ CE QUI N EXISTAIT PAS AVANT CE JOUR. `app.html` ne contenait pas une seule occurrence de
+ *     « photo », et la face gravee n avait aucun champ pour en porter une. `logo.js` savait
+ *     pourtant en dessiner : le champ existait, personne ne le remplissait. Du code mort qui
+ *     donnait l illusion d une fonctionnalite — le createur croyait tokeniser son image, il
+ *     decorait un navigateur, et rien ne le lui disait.
+ *
+ * ⛔ TOUT SE PASSE ICI, DANS LE NAVIGATEUR, ET CE N EST PAS UN CHOIX D ESTHETE. L image finit
+ *    gravee dans le `contractURI` : elle est permanente, personne ne peut plus la retirer.
+ *    L envoyer a un service de detourage voudrait dire confier a un tiers une image que son auteur
+ *    va rendre publique pour toujours, sans savoir ce que ce tiers en garde.
+ *
+ * ⛔ LE BUDGET EST CALCULE, JAMAIS DEVINE. `photo.js` connait le mur MESURE du precompile B20 —
+ *    12 Ko de fichier passent, 13 Ko sont REFUSES, et le refus persiste en offrant cent millions
+ *    de gas — et `budgetSurFace()` en deduit la place restante une fois le SVG de la face compte.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Le plus grand cote de l image gravee, en pixels.
+ * ⛔ 96 ET PAS 512 : une face de cube fait 70 a 140 unites dans le SVG. Au-dela de ~96 px, chaque
+ *    pixel ajoute coute du calldata sans rien ajouter a l ecran — et le calldata est ce qui se
+ *    paie. La reduction n est donc pas une degradation, c est la taille utile. */
+const PHOTO_COTE = 96;
+
+/** Lit un fichier image et rend ses pixels, reduits pour tenir sur une face.
+ * ⛔ REND `null` PLUTOT QU UNE EXCEPTION : un fichier corrompu, un format que le navigateur refuse,
+ *    un canvas indisponible — l appelant doit pouvoir le DIRE a l utilisateur, pas planter. */
+async function pixelsReduits(fichier) {
+  try {
+    const bitmap = await createImageBitmap(fichier);
+    const k = Math.min(1, PHOTO_COTE / Math.max(bitmap.width, bitmap.height));
+    const l = Math.max(1, Math.round(bitmap.width * k));
+    const h = Math.max(1, Math.round(bitmap.height * k));
+    const c = document.createElement('canvas');
+    c.width = l; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, l, h);
+    return { pixels: ctx.getImageData(0, 0, l, h).data, largeur: l, hauteur: h, ctx, canvas: c };
+  } catch (_) { return null; }
+}
+
+/** L etat courant de l image choisie.
+ * ⛔ GARDE LES PIXELS D ORIGINE : recocher « retirer le fond » ne doit pas repartir d une image
+ *    deja detouree, sinon chaque bascule mangerait un peu plus du sujet, sans retour possible. */
+let photoSource = null;
+
+/** Applique le detourage (ou non), verifie le budget, et grave — ou refuse en DISANT pourquoi. */
+async function appliquerPhoto() {
+  const e = $('#cPhotoEtat');
+  const sel = $('#cPhotoOu');
+  const ou = String((sel && sel.value) || 'aucune');
+  if (!photoSource || ou === 'aucune') {
+    /* ⛔ LES DEUX CHAMPS PARTENT ENSEMBLE : un `photoOu` sans photo est refuse par `validerFace`,
+     *    donc laisser l un sans l autre graverait une face invalide. */
+    delete apparenceChoisie.photo;
+    delete apparenceChoisie.photoOu;
+    if (e) { e.className = 'note'; e.textContent = photoSource ? 'Pick a side to put it on.' : ''; }
+    peindreApercuCreation();
+    return;
+  }
+  const { largeur, hauteur, ctx } = photoSource;
+  const pixels = new Uint8ClampedArray(photoSource.pixels);
+  let verdict = { etat: 'DEJA_TRANSPARENT', part: 0 };
+  if ($('#cPhotoFond') && $('#cPhotoFond').checked) {
+    const fond = fondEchantillonne(pixels, largeur, hauteur);
+    const r = effacerFond(pixels, largeur, hauteur, fond);
+    verdict = verdictFond({ fond, effaces: r.effaces, total: r.total });
+    /* ⛔ UN DETOURAGE QUI A MANGE LE SUJET N EST PAS APPLIQUE. On garde l image ENTIERE et on le
+     *    dit : graver un cube vide serait definitif, et l utilisateur n aurait rien vu venir. */
+    if (verdict.etat === 'TROP_EFFACE' || verdict.etat === 'NON_MESURE') pixels.set(photoSource.pixels);
+  }
+  ctx.putImageData(new ImageData(pixels, largeur, hauteur), 0, 0);
+  const uri = photoSource.canvas.toDataURL('image/png');
+
+  /* ⛔ LE BUDGET, MESURE SUR LA VRAIE FACE. On rend le SVG que cette face produira SANS l image,
+   *    puis on demande a `photo.js` combien d octets de fichier il reste. Deviner ici ferait
+   *    signer une transaction qui echouerait au precompile — APRES la signature. */
+  const sym = String($('#cSym').value || 'T').toUpperCase();
+  const sansPhoto = { ...apparenceChoisie, photo: null, photoOu: 'aucune' };
+  const budget = budgetSurFace(logoSvg(paramsLogoDepuisApparence(sansPhoto, sym)).length);
+  const octetsFichier = Math.ceil((uri.length - 'data:image/png;base64,'.length) * 3 / 4);
+  if (!Number.isInteger(budget) || octetsFichier > budget) {
+    delete apparenceChoisie.photo;
+    delete apparenceChoisie.photoOu;
+    if (e) {
+      e.className = 'note wKo';
+      e.textContent = !Number.isInteger(budget)
+        ? 'Could not work out how much room is left, so nothing was attached.'
+        : 'That image is ' + octetsFichier + ' bytes once shrunk, and only ' + budget
+          + ' fit beside this face. Try a simpler image — flat colours compress far better than a photo.';
+    }
+    peindreApercuCreation();
+    return;
+  }
+  apparenceChoisie.photo = uri;
+  apparenceChoisie.photoOu = ou;
+  if (e) {
+    e.className = 'note';
+    /* ⛔ CHAQUE ETAT A SA PHRASE. Dire « ok » dans les cinq cas cacherait qu un detourage a echoue
+     *    et que l image part avec son fond — sur une image qu on ne peut plus changer. */
+    const dit = {
+      RETIRE: verdict.pourquoi,
+      DEJA_TRANSPARENT: 'the background was already transparent',
+      PAS_DE_FOND_UNI: 'no plain background to remove, so the whole image is kept',
+      TROP_EFFACE: 'removing the background ate the picture, so the whole image is kept',
+      NON_MESURE: 'the background could not be read, so the whole image is kept',
+    }[verdict.etat] || 'kept as it is';
+    e.textContent = 'Attached · ' + octetsFichier + ' bytes of ' + budget + ' available · ' + dit
+      + '. It is engraved with the block and cannot be changed afterwards.';
+  }
+  peindreApercuCreation();
+}
+
+for (const id of ['#cPhotoOu', '#cPhotoFond']) {
+  const el = $(id);
+  if (el) el.addEventListener('change', () => { appliquerPhoto(); });
+}
+{
+  const f = $('#cPhotoFichier');
+  if (f) {
+    f.addEventListener('change', async () => {
+      const e = $('#cPhotoEtat');
+      const fichier = f.files && f.files[0];
+      if (!fichier) { photoSource = null; await appliquerPhoto(); return; }
+      if (e) { e.className = 'note'; e.textContent = 'Reading the image…'; }
+      photoSource = await pixelsReduits(fichier);
+      if (!photoSource) {
+        /* ⛔ ON NE DIT PAS « erreur » : on dit ce que l utilisateur peut faire. */
+        if (e) { e.className = 'note wKo'; e.textContent = 'That file could not be read as an image. Try a PNG or a JPEG.'; }
+        return;
+      }
+      /* ⛔ CHOISIR UN FICHIER SANS AVOIR CHOISI DE FACE NE DOIT PAS ETRE UN CUL-DE-SAC : on propose
+       *    le haut, la face la plus visible sur la carte. */
+      const sel = $('#cPhotoOu');
+      if (sel && sel.value === 'aucune') sel.value = 'haut';
+      await appliquerPhoto();
+    });
+  }
 }
 
 function peindreApercuCreation() {

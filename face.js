@@ -16,6 +16,7 @@
 //    `data:application/json` se lisent sans reseau tiers — c est ce que Create grave. Les autres
 //    rendent AUTRE_SOURCE, jamais une face inventee.
 import { selecteur } from './pool.js';
+import { PHOTO_MAX } from './photo.js';
 import { chaineA } from './index-blocks.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
 
@@ -75,11 +76,27 @@ export const BORNES = {
  *  valides. Absent ⇒ le dessin d avant, au pixel pres. */
 export const OPTIONNELS = { saturation: [20, 100] };
 
-/** Le plafond de la photo gravee, en caracteres de l URI `data:`.
- * ⛔ 4096 octets de base64 = ~3 Ko de PNG = un carre de 64x64 transparent, ce qui suffit sur une
- *    face de cube. Le chiffre vient de la mesure ecrite dans `validerFace` : 16 Ko coutaient
- *    16 millions de gas. Ce n est donc pas une limite prudente, c est une limite MESUREE. */
-export const PHOTO_MAX = 4096;
+/* ⛔⛔ MA PREMIERE VERSION DEFINISSAIT ICI SON PROPRE `PHOTO_MAX = 4096`, ET C ETAIT UN DEFAUT.
+ *     `photo.js` porte deja LE plafond du projet, mesure bien plus finement que le mien :
+ *        0 Ko ->    350 515 gas   ·   5 Ko ->  6 847 635 gas
+ *       12 Ko -> 15 921 140 gas ✅ ·  13 Ko -> REFUSE, « out of gas: gas exhausted during
+ *                                             precompiled contract execution »
+ *     Et le meme essai a 13 Ko en offrant CENT MILLIONS de gas echoue a l identique : c est une
+ *     limite INTRINSEQUE du precompile B20, pas un plafond d estimation du noeud. 712 gas par octet
+ *     ajoute, pas 16, parce que le precompile STOCKE l URI.
+ *     Ma constante valait 4096, la sienne 19257. J aurais donc plafonne les images au cinquieme de
+ *     ce que la chaine accepte, sans que rien ne le signale : deux constantes du meme nom dans la
+ *     meme app, et c est la plus faible qui aurait gagne ici.
+ *
+ * ⛔ CE QUE CE PLAFOND BORNE, ET CE QU IL NE BORNE PAS. Le `PHOTO_MAX` de `photo.js` mesure l URI
+ *    COMPLET — le `contractURI` entier. Le champ `photo` d une face n en est qu une PARTIE, et il
+ *    subit encore une inflation base64 quand le JSON est encode. Le controle de `validerFace` est
+ *    donc un refus GROSSIER, qui arrete l absurde tot ; le budget exact se calcule avec
+ *    `budgetSurFace()` dans le parcours de Create, qui seul connait la taille du reste du JSON.
+ *    ⛔ Confondre ces deux grandeurs est l erreur que `photo.js` documente lui-meme, et elle avait
+ *       coute la moitie de la qualite d image : les deux sont des nombres d octets, seul le SENS
+ *       differe, et aucune garde ne peut le voir. */
+export { PHOTO_MAX } from './photo.js';
 export const LISTES = { orbite: ORBITES_CREATE, facette: FACETTES_CREATE, matiere: MATIERES_CREATE, ornement: ORNEMENTS_CREATE };
 
 /** Le nombre de faces que Create peut graver — publie, jamais le mot « unique ». */
@@ -151,9 +168,26 @@ export function validerFace(f) {
     if (f.photo.length > PHOTO_MAX) {
       return { etat: 'INVALIDE',
         pourquoi: 'photo is ' + f.photo.length + ' characters, over the ' + PHOTO_MAX
-          + ' cap (measured: 16 Ko of base64 costs 16 million gas)' };
+          + ' cap. Measured on chain: 12 Ko of file passes, 13 Ko is refused by the B20 precompile.' };
     }
     propre.photo = f.photo;
+    /* ⛔⛔ SUR QUELLE FACE — GRAVE AVEC LA PHOTO, JAMAIS DEDUIT. Sans ce champ, la meme face
+     *     gravee se dessinerait sur une face differente selon le defaut de la version qui la lit :
+     *     le block changerait de tete d un appareil a l autre, et c est exactement le bug du
+     *     2026-09-12 que ce fichier existe pour avoir corrige.
+     * ⛔ LISTE FERMEE, et `aucune` en fait partie : une photo gravee avec `photoOu: 'aucune'` est
+     *    un choix legitime — l image voyage dans les metadonnees sans etre posee sur le cube. */
+    const OU = ['aucune', 'haut', 'gauche', 'droite'];
+    if (!OU.includes(f.photoOu)) {
+      return { etat: 'INVALIDE',
+        pourquoi: 'photoOu must be one of ' + OU.join(', ') + ' — a face carrying a photo has to '
+          + 'say which side it sits on, or the same engraved face would draw differently elsewhere' };
+    }
+    propre.photoOu = f.photoOu;
+  } else if (f.photoOu !== undefined) {
+    /* ⛔ UN `photoOu` SANS PHOTO EST UN DEFAUT, PAS UN DETAIL : il annonce une image a un lecteur
+     *    qui n en trouvera pas. On refuse, au lieu de l ignorer en silence. */
+    return { etat: 'INVALIDE', pourquoi: 'photoOu was given without a photo' };
   }
   return { etat: 'OK', face: propre };
 }
