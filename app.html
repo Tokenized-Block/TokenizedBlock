@@ -1069,7 +1069,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
-      <p class="creaPrix"><b>0.001 ETH, once</b><span>born, face and brain engraved, market open</span></p>
+      <!-- tip 20260922-fee-funnel -->
+      <p class="creaPrix"><b>≈$1 (0.001 ETH), once · Fees for Dev</b><span>born, face and brain engraved, market open</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
            bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
@@ -1086,7 +1087,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte creaChoix" role="tablist" aria-label="What do you want to create">
       <button type="button" class="creaMode on" role="tab" aria-selected="true" data-cmode="block">
         <span class="creaModeIc">🧱</span><b>A block</b>
-        <span>Its own face, a living brain, a place on the map — born and brought to life for 0.001 ETH, once.</span>
+        <span>Its own face, a living brain, a place on the map — born and brought to life for ≈$1 (0.001 ETH), once · Fees for Dev.</span>
       </button>
       <button type="button" class="creaMode" role="tab" aria-selected="false" data-cmode="token">
         <span class="creaModeIc">🚀</span><b>A plain token</b>
@@ -1173,7 +1174,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- ⛔ Phil (capture 2026-09-19) : l ordre « payer d abord » etait celui de l ancien hook ; aujourd hui creation,
              ≈ $1 et marche partent ensemble (une signature quand le wallet sait grouper). -->
         <li><b>Create</b> <span>its face and brain are engraved</span></li>
-        <li><b>0.001 ETH, once</b> <span>brings it to life</span></li>
+        <li><b>≈$1 (0.001 ETH), once · Fees for Dev</b> <span>brings it to life</span></li>
         <li><b>Its market opens</b> <span>it lives on the map</span></li>
         <!-- ⛔ LE CREATEUR EST PAYE, ET IL DOIT LE SAVOIR AVANT DE PAYER. Aucun pourcentage a
              l ecran : regle de Phil. Le detail vit dans le plan de lancement, relu depuis la chaine. -->
@@ -1193,7 +1194,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
-      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the one-time 0.001 ETH fee. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
@@ -1202,7 +1203,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="cFrais"></p>
         <ul class="note noteBullets" id="cCostBullets" hidden>
           <li><b>Create</b>: free</li>
-          <li><b>Bring life</b>: 0.001 ETH, once</li>
+          <li><b>Bring life</b>: ≈$1 (0.001 ETH), once · Fees for Dev</li>
         </ul>
         <ol class="pmLignes" id="cApercuTx"></ol>
         <p class="note" id="cMintFeeHint" hidden></p>
@@ -1959,8 +1960,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0039 (Phil : « c est le Brain AI qui le fait, comme give birth — pas un formulaire alors que Create existe ») :
              une phrase, un bouton « Give birth ». Les reglages (paire, valeur de depart, part) sont prerempli et replies.
              ⛔ Tous les id sont gardes : la logique de plan / signature ne change pas. -->
-        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth</span><span class="pPV" id="plReseau"></span></div>
-        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. 0.001 ETH, once.</p>
+        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth · V8</span><span class="pPV" id="plReseau"></span></div>
+        <!-- tip 20260922-fee-funnel -->
+        <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev.</p>
         <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px" hidden>
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="lock">Lock</button>
         </div>
@@ -4704,18 +4706,20 @@ function peindreTrustFacts(adr, v, origine) {
   }
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
+    /* tip 20260922-fee-funnel */
     cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next</b>: open its market (0.001 ETH, once) — every trade then pays its creator.'
+      ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev.'
       : '<b>Next</b>: open its market — free in Practice.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-      + '<button type="button" class="bouton" data-tf-act="wake">Wake — open its market</button></div>';
+      + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
-      /* tip 0017: FREE-like unhooked volume → short Launch hooked (MAIN primary) */
-      cta.innerHTML = 'Trades on its outside market pay nothing back. Open a <b>TokenizedBlock market</b> next to it.'
+      /* tip 0017 + tip 20260922-fee-funnel: Give birth V8 first; external market secondary */
+      cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
+        + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="hook-launch">Open TokenizedBlock market</button>'
-        + '<button type="button" class="bouton sec" data-tf-act="buy">Buy/Sell in-app</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
+        + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
     } else {
       /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
       cta.innerHTML = info.isTbFeeHook
@@ -5094,21 +5098,22 @@ async function lireProfil(adr, sym, perime) {
   /* tip 2340: also offer Launch when market is LUE but not fee hook — opens NEW hooked pool id → FEE_WALLET. */
   const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
   $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
+  /* tip 20260922-fee-funnel: wake / unhooked primary = Give birth V8 copy */
   if (etatVieProfil === 'NON_TROUVEE') {
     $('#pReveiller').textContent = CHAINE === 8453
-      ? 'Open its market — 0.001 ETH, once'
+      ? 'Give birth · V8 · 0.001 ETH once'
       : 'Open its market (Practice, free)';
   } else if (legacySansHook) {
-    $('#pReveiller').textContent = 'Open a TokenizedBlock market';
+    $('#pReveiller').textContent = 'Give birth · V8 · 0.001 ETH once';
   }
   const wg = $('#pWakeGate');
   if (wg) {
     if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
       wg.hidden = false;
-      wg.innerHTML = 'Opening its market costs <b>0.001 ETH, once</b>, then the wallet reviews the transaction that places its blocks in the pool.';
+      wg.innerHTML = 'Birth fee: <b>≈$1 (0.001 ETH), once · Fees for Dev</b>. Then the wallet reviews the transaction that places its blocks in the pool.';
     } else if (legacySansHook) {
       wg.hidden = false;
-      wg.innerHTML = 'Its current market is outside TokenizedBlock: trades there pay nothing back.';
+      wg.innerHTML = 'Outside market — trades here do not feed this block. <b>Give birth · V8 · 0.001 ETH once</b>.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
       wg.innerHTML = 'Practice: opening a market is free.';
@@ -5126,7 +5131,9 @@ async function lireProfil(adr, sym, perime) {
   }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
   /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
-  if (etatVieProfil === 'NON_TROUVEE' && lancementLien && lancementLien === String(adr).toLowerCase()) {
+  /* tip 20260922-fee-funnel: deep-link / Created V8 CTA also opens Give birth on unhooked LUE */
+  if (lancementLien && lancementLien === String(adr).toLowerCase()
+    && (etatVieProfil === 'NON_TROUVEE' || legacySansHook)) {
     lancementLien = null;
     ouvrirLancement();
   }
@@ -6149,7 +6156,8 @@ function peindreLive() {
           ? (poolDecouvertPour(e.jeton)
             ? (poolDecouvertPour(e.jeton).isTbFeeHook
               ? '🧱 <b>' + nom + '</b> was born here · market open'
-              : '🧱 <b>' + nom + '</b> was born on another launchpad')
+              /* tip 20260922-fee-funnel: Created→IB — unhooked label + V8 CTA on the row */
+              : '🧱 <b>' + nom + '</b> was born on another launchpad · unhooked')
             : '🧱 <b>' + nom + '</b> was born')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
@@ -6167,8 +6175,14 @@ function peindreLive() {
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     /* tip 2358: unhooked ACHAT/VENTE → Launch hooked beside (fee capture); hooked/TBGAS → Buy/Sell */
     /* tip 0028 : une seule invitation, sans jargon */
-    const openHint = (e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
-      ? ' · <span class="filOpen">tap to open</span>' : '';
+    /* tip 20260922-fee-funnel: Created unhooked row — primary V8 CTA, Open profile secondary (same profile path) */
+    const unhookedCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true
+      && poolDecouvertPour(e.jeton) && !poolDecouvertPour(e.jeton).isTbFeeHook;
+    const openHint = unhookedCreate
+      ? (' · <button type="button" class="puce on" data-v8-cta="' + enTexte(e.jeton) + '">Launch hooked V8 — 0.001 ETH once</button>'
+        + ' · <span class="filOpen">Open profile</span>')
+      : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
+        ? ' · <span class="filOpen">tap to open</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
       ? (estTrusted(e.jeton)
         ? ' · <span class="filOpen">✦ trusted</span>'
@@ -6231,6 +6245,17 @@ $('#sfLive').addEventListener('click', (ev) => {
     ev.preventDefault(); ev.stopPropagation();
     garderTrusted(keep.getAttribute('data-keep-trust'), 'CreateRouter paid');
     peindreLive();
+    return;
+  }
+  /* tip 20260922-fee-funnel: Created row V8 CTA → same Give birth path as incomplete banner / hook-launch */
+  const v8 = ev.target.closest('[data-v8-cta]');
+  if (v8) {
+    ev.preventDefault(); ev.stopPropagation();
+    const adr = v8.getAttribute('data-v8-cta');
+    if (!/^0x[0-9a-fA-F]{40}$/i.test(String(adr || ''))) return;
+    const li = v8.closest('li.filL[data-block]');
+    lancementLien = String(adr).toLowerCase();
+    void ouvrirProfil(adr, (li && li.getAttribute('data-sym')) || null);
     return;
   }
 
@@ -7101,13 +7126,14 @@ function ouvrirLancement() {
   const real = CHAINE === 8453;
   $('#plReseau').textContent = (real ? 'Real · ' : 'Practice · ') + RESEAUX[CHAINE].nom;
   const badge = $('#plBadge');
-  /* tip 0039 : « Give birth » — une phrase, un bouton ; les details du plan s affichent apres le clic */
-  if (badge) badge.textContent = real ? 'Give birth · 0.001 ETH, once' : 'Give birth · free in Practice';
+  /* tip 0039 + tip 20260922-fee-funnel: Give birth · V8 fee copy (no fee addr) */
+  if (badge) badge.textContent = real ? 'Give birth · V8 · 0.001 ETH once' : 'Give birth · free in Practice';
   const intro = $('#plIntro');
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
     intro.innerHTML = 'Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">'
-      + contre + '</span>, locked forever.' + (real ? ' 0.001 ETH, once.' : ' Free in Practice.');
+      + contre + '</span>, locked forever.'
+      + (real ? ' Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev.' : ' Free in Practice.');
   }
   $('#plLignes').innerHTML = '';
   $('#plActions').innerHTML = '';
@@ -9439,9 +9465,12 @@ function majFraisEtRecap() {
     boutonCreer.title = aLancerBloque
       ? 'Finish Bring life on your existing block(s), or dismiss them first'
       : ((usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : ''));
+    /* tip 20260922-fee-funnel: Create primary CTA — fiat + ETH, no fee addr */
     if (!compte) boutonCreer.textContent = 'Connect wallet → review → Bring it to life';
     else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
-    else boutonCreer.textContent = Number(CHAINE) === 8453 ? 'Review → Bring it to life — 0.001 ETH, once' : 'Review → Bring it to life (practice, free)';
+    else boutonCreer.textContent = Number(CHAINE) === 8453
+      ? 'Review → Bring it to life — ≈$1 (0.001 ETH), once'
+      : 'Review → Bring it to life (practice, free)';
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
@@ -9493,8 +9522,9 @@ function majFraisEtRecap() {
       return '<li><b>' + (k + 1) + '. ' + enTexte(a.action) + '</b><br>' + [...a.lignes, ...extra].map(enTexte).join('<br>') + '</li>';
     }).join('') + '<li>Once alive, anyone can buy and sell it here.</li>';
   }
+  /* tip 20260922-fee-funnel */
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base — 0.001 ETH, once brings your block to life. Cannot be undone.'
+    ? '⚠️ Base — Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev. Cannot be undone.'
     : 'Practice — everything is free.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -9566,9 +9596,10 @@ function peindreALancer() {
   const l = Number(CHAINE) === 8453 ? aLancerLire() : [];
   boite.hidden = !l.length;
   boite.innerHTML = l.length
-    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Bring it to life:'
+    /* tip 20260922-fee-funnel: incomplete Created banner */
+    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: ≈$1 (0.001 ETH), once · Fees for Dev. Bring it to life:'
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
-        + enTexte(b.sym || court(b.adr)) + '</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
+        + enTexte(b.sym || court(b.adr)) + ' — ≈$1 once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
   boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', (ev) => {
     /* tip 0210: same Instant Birth path as post-Create goLaunch — not Create (0 ETH factory). */
