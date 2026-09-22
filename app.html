@@ -1216,7 +1216,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0041 (Phil : « la mise en vie cochee par defaut ») -->
         <!-- ⛔ PHIL (2026-09-19) : « plus de free block, un seul chemin — celui qui a prouve l entree d ETH sur a6cf ».
              La case « bring it to life right after » est retiree : sur Base, creer ENCHAINE toujours la mise en vie. -->
-        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Bring it to life</button>
+        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → Create this block (free)</button>
         <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
@@ -1626,7 +1626,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-2112" hidden>Build <code>20260922-2112</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-2125" hidden>Build <code>20260922-2125</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5197,6 +5197,10 @@ async function lireProfil(adr, sym, perime) {
         return;
       }
       ouvrirLancement();
+      /* tip 20260922-2125: Created/deep-link Give birth must run Instant Birth, not stop at panel */
+      vieAuto = true;
+      majProgressionVie('Step 1 — reading its market and your approvals…');
+      void calculerLancement();
     });
   }
   /* ⛔⛔ MESURE EN PROD (2026-09-13, lien TTB de Phil) : ~80 s de reprises sans reponse du noeud sature — la carte ne
@@ -5411,6 +5415,24 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
   const act = b.getAttribute('data-tf-act');
   const pe = $('#pEchange'), plq = $('#pLiquidite'), pl = $('#pLancement');
   if (act === 'create-here') {
+    /* tip 20260922-2125: asleep Created blocks → Instant Birth (vieAuto), not free Create again */
+    const asleep = Number(CHAINE) === 8453 ? aLancerLire() : [];
+    if (asleep.length) {
+      const b = asleep[0];
+      lancementLien = b.adr;
+      void ouvrirProfil(b.adr, b.sym).then(() => {
+        try {
+          const d = $('#plDevise');
+          if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+          const part = $('#plPart'); if (part) part.value = '99.9';
+          ouvrirLancement();
+          vieAuto = true;
+          majProgressionVie('Step 1 — reading its market and your approvals…');
+          void calculerLancement();
+        } catch (_) {}
+      });
+      return;
+    }
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
     return;
   }
@@ -7993,7 +8015,20 @@ async function lancerMarcheBlock(adr) {
   }
 }
 
-$('#pReveiller').addEventListener('click', ouvrirLancement);
+$('#pReveiller').addEventListener('click', () => {
+  /* tip 20260922-2125: Give birth · V8 = Instant Birth vieAuto (open fee + seed), NEVER Create/createB20 */
+  try {
+    const d = $('#plDevise');
+    if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+    const part = $('#plPart'); if (part) part.value = '99.9';
+    ouvrirLancement();
+    vieAuto = true;
+    majProgressionVie('Step 1 — reading its market and your approvals…');
+    void calculerLancement();
+  } catch (_) {
+    try { ouvrirLancement(); } catch (__) {}
+  }
+});
 $('#bEcrireBlock') && $('#bEcrireBlock').addEventListener('click', () => {
   const g = $('#bGraver');
   if (!g) return;
@@ -9557,19 +9592,21 @@ function majFraisEtRecap() {
     boutonCreer.title = aLancerBloque
       ? 'Finish Bring life on your existing block(s), or dismiss them first'
       : ((usd > 0 && !prixOk) ? 'Reading the ETH price…' : (!soldeOk ? 'Not enough ETH' : ''));
-    /* tip 20260922-fee-funnel: Create primary CTA — fiat + ETH, no fee addr */
-    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Bring it to life';
+    /* tip 20260922-2125: Create CTA must NEVER say Bring it to life / promise 0.001 ETH —
+     * factory createB20 is free (value 0). Birth fee lives on Give birth · V8 / vieAuto only.
+     * Measured desk smoke 2112: Rabby showed Send 0 ETH → factory createB20 under Instant Birth. */
+    if (!compte) boutonCreer.textContent = 'Connect wallet → Create this block (free)';
     else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
     else boutonCreer.textContent = Number(CHAINE) === 8453
-      ? 'Review → Bring it to life — ≈$1 (0.001 ETH), once'
-      : 'Review → Bring it to life (practice, free)';
+      ? 'Create this block (free) — then Give birth · V8 ≈$1 once'
+      : 'Create this block (practice, free)';
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null
       ? ', after ' + ethLisible(fraisWeiCalcule) + ' ETH'
       : ' — Create closed until life-fee price is measured')
     : (Number(CHAINE) === 8453
-      ? ' — 0.001 ETH, once brings it to life'
+      ? ' — Create is free; Give birth · V8 is ≈$1 (0.001 ETH), once · Fees for Dev'
       : ' — Create free (Practice)');
   /* tip 2354: when ko, just the ko — never paste fee story */
   /* ⛔ PAS D ERREUR ROUGE AVANT LE PREMIER GESTE (capture de Phil, 2026-09-18 : « A block needs a name. » deux fois,
