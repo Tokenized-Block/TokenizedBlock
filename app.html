@@ -1633,7 +1633,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260922-stock-pair-ux" hidden>Build <code>20260922-stock-pair-ux</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260922-no-dollar-dedupe" hidden>Build <code>20260922-no-dollar-dedupe</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4723,7 +4723,7 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: <b>outside</b> — trades there pay nothing back to this block.');
   } else if (etat === 'NON_TROUVEE') {
     lignes.push(CHAINE === 8453
-      ? 'Market: <b>none yet</b> — open one for 0.001 ETH, once.'
+      ? 'Market: <b>none yet</b>.'
       : 'Market: <b>none yet</b> — open one for free (Practice).');
   } else {
     lignes.push('Market: not read yet.');
@@ -4737,8 +4737,9 @@ function peindreTrustFacts(adr, v, origine) {
   /* tip 2165: CTAs are real buttons — plain “Next → …” text looked clickable but did nothing. */
   if (etat === 'NON_TROUVEE') {
     /* tip 20260922-fee-funnel + 20260922-2112: V8 CTA only when porteLeLabel ≠ NON */
+    /* tip 20260922-no-dollar-dedupe: one Next + one button — fee once on the button only */
     cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next</b>: Give birth · V8 · 0.001 ETH once — Birth fee: 0.001 ETH, once.'
+      ? '<b>Next</b>: open its V8 market.'
       : '<b>Next</b>: open its market — free in Practice.')
       + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
       + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
@@ -5143,23 +5144,22 @@ async function lireProfil(adr, sym, perime) {
    * enverrait creer une pool qui existe peut-etre deja. */
   /* tip 2340: also offer Launch when market is LUE but not fee hook — opens NEW hooked pool id → FEE_WALLET. */
   const legacySansHook = etatVieProfil === 'LUE' && v && marcheLegacySansTbFeeHook(v) && CHAINE === 8453;
-  $('#pReveiller').hidden = !(etatVieProfil === 'NON_TROUVEE' || legacySansHook);
-  /* tip 20260922-fee-funnel + 20260922-2112: wake / unhooked = Give birth V8 only if porteLeLabel ≠ NON */
-  if (etatVieProfil === 'NON_TROUVEE') {
-    $('#pReveiller').textContent = CHAINE === 8453
-      ? 'Give birth · V8 · 0.001 ETH once'
-      : 'Open its market (Practice, free)';
+  /* tip 20260922-no-dollar-dedupe: Base NON_TROUVEE uses trust-feed wake button only — hide #pReveiller twin */
+  const useTfWake = etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453;
+  $('#pReveiller').hidden = !(legacySansHook || (etatVieProfil === 'NON_TROUVEE' && CHAINE !== 8453));
+  if (etatVieProfil === 'NON_TROUVEE' && CHAINE !== 8453) {
+    $('#pReveiller').textContent = 'Open its market (Practice, free)';
   } else if (legacySansHook) {
     $('#pReveiller').textContent = 'Give birth · V8 · 0.001 ETH once';
   }
   const wg = $('#pWakeGate');
   if (wg) {
-    if (etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453) {
-      wg.hidden = false;
-      wg.innerHTML = 'Birth fee: <b>0.001 ETH, once</b>. Then the wallet reviews the transaction that places its blocks in the pool.';
+    if (useTfWake) {
+      /* fee copy lives on the single trust-feed button — no second Birth fee paragraph here */
+      wg.hidden = true; wg.textContent = '';
     } else if (legacySansHook) {
       wg.hidden = false;
-      wg.innerHTML = 'Outside market — trades here do not feed this block. <b>Give birth · V8 · 0.001 ETH once</b>.';
+      wg.innerHTML = 'Outside market — trades here do not feed this block.';
     } else if (etatVieProfil === 'NON_TROUVEE') {
       wg.hidden = false;
       wg.innerHTML = 'Practice: opening a market is free.';
@@ -7421,7 +7421,7 @@ async function calculerLancement() {
               if (minOracle == null) {
                 /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
               } else if (quoteEthWei < CREATE_FEE_WEI_FLOOR || quoteEthWei < minOracle) {
-                plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least ≈$1 in ETH (and ≥ 0.0003 ETH floor) in the pool' };
+                plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least 0.0003 ETH in the pool' };
               }
             }
           } else if (quoteEthWei == null || quoteEthWei <= 0n) {
@@ -7525,7 +7525,7 @@ function estNaissanceInstantaneeUi() {
   return $('#plDevise') && $('#plDevise').value === 'ETH';
 }
 
-/* ⛔ LIFE FEE Launch (8453): same ≈$1 ETH as Create birth → FEE_WALLET, then existing Launch tx.
+/* ⛔ LIFE FEE Launch (8453): same 0.001 ETH as Create birth → FEE_WALLET, then existing Launch tx.
  * Practice 84532 stays free. Fail-closed if oracle unread or balance too low. */
 async function assurerFraisLancementWei(force = false) {
   if (fraisLancementUsd(CHAINE) === 0) return null;
@@ -9948,7 +9948,7 @@ function peindreALancer() {
     /* tip 20260922-fee-funnel: incomplete Created banner */
     ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: 0.001 ETH, once. Bring it to life:'
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
-        + enTexte(b.sym || court(b.adr)) + ' — ≈$1 once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
+        + enTexte(b.sym || court(b.adr)) + ' — 0.001 ETH once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
   boite.querySelectorAll('[data-a-lancer]').forEach((btn) => btn.addEventListener('click', (ev) => {
     /* tip 0210: same Instant Birth path as post-Create goLaunch — not Create (0 ETH factory). */
@@ -10415,7 +10415,7 @@ async function creerBlock() {
       e.textContent = 'Could not read your ETH balance, so nothing was started.';
       return;
     }
-    /* tip 2356: CreateRouter on-chain FEE_WALLET = a6cf. If wallet cannot cover the ≈$1 quote
+    /* tip 2356: CreateRouter on-chain FEE_WALLET = a6cf. If wallet cannot cover the 0.001 ETH fee
      * but can cover floor + gas, charge the floor — fail-closed only below floor. */
     const gasBuf = 250000000000000n; /* ~0.00025 ETH headroom for Base gas */
     if (utiliseCreateRouter() && s < fraisWei) {
