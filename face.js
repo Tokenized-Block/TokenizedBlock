@@ -40,7 +40,25 @@ export const ORBITES_CREATE = [...ORBITES, 'vortex', 'pluie', 'constellation', '
 export const FACETTES_CREATE = [...FACETTES, 'coeur', 'lune', 'soleil', 'oeil', 'couronne', 'infini', 'goutte', 'diamant',
   'fusee', 'flamme', 'crane', 'planete', 'fantome', 'robot', 'chat', 'fleur', 'feuille', 'montagne',
   'nuage', 'note', 'horloge', 'ampoule', 'engrenage', 'bouclier', 'epee', 'de', 'cube', 'trefle',
-  'ancre', 'champignon', 'papillon', 'pique'];
+  'ancre', 'champignon', 'papillon', 'pique',
+  /* ⛔ DEUXIEME SERIE, 2026-09-22. Phil a valide la premiere a l ecran (« nice j aime bien ») et
+   *    demande d y mettre les emoji d Apple. REFUSE, et la raison tient en une ligne : leurs dessins
+   *    sont une oeuvre PROPRIETAIRE, et les copier les graverait dans une image on-chain
+   *    IRREVERSIBLE — le seul risque que ce fichier interdit depuis le debut. Les SUJETS, eux, ne
+   *    s appartiennent a personne : ce sont ceux que tout le monde attend d un jeu d emoji, et
+   *    chaque trace reste le notre, en SVG, sans un octet importe. */
+  'pouce', 'main', 'poing', 'bouche', 'alien', 'ovni', 'atome', 'adn', 'cadeau', 'ballon',
+  'bombe', 'cadenas', 'enveloppe', 'casque', 'camera', 'livre', 'crayon', 'manette', 'avion',
+  'voiture', 'bateau', 'maison', 'arbre', 'cactus', 'poisson', 'oiseau', 'abeille', 'patte',
+  'trophee', 'medaille', 'foot', 'guitare', 'baguette', 'potion', 'tornade', 'volcan', 'terre',
+  'flocon', 'pomme', 'cerise', 'pizza', 'glace', 'cafe', 'arcenciel',
+  /* ⛔ LES 29 SILHOUETTES NOTO (Apache-2.0, licence lue — voir NOTICE.md et logo.js). Vingt autres
+   *    ont ete ecartees APRES les avoir regardees : aplatis en une couleur, les visages rendent
+   *    tous le meme disque. Ce qui est garde ici a ete VU et se lit. */
+  'singe', 'licorne', 'dragon', 'pingouin', 'hibou', 'renard', 'baleine', 'poulpe', 'crabe',
+  'scarabee', 'dinosaure', 'cerveau', 'muscle', 'priere', 'applaudir', 'feu', 'eclipse',
+  'cerisier', 'trefle4', 'palmier', 'volant', 'aimant', 'boussole', 'telescope', 'loupe',
+  'cle2', 'sablier', 'satellite', 'mappemonde'];
 export const MATIERES_CREATE = [...MATIERES, 'or', 'holo', 'nuit', 'acide', 'ombre', 'rose',
   'lave', 'jade', 'argent', 'ambre', 'abysse', 'menthe'];
 export const ORNEMENTS_CREATE = [...ORNEMENTS, 'cercles', 'losanges', 'fleurs', 'eclairs', 'lignes', 'cadre',

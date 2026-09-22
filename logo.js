@@ -17,6 +17,18 @@
 // ⚠️ FONCTION PURE : aucun DOM, aucun reseau, aucune horloge. Le meme objet de reglages rend
 //    TOUJOURS exactement le meme texte SVG — c est ce qui permet de le graver.
 
+/* ⛔⛔ VINGT-NEUF SILHOUETTES IMPORTEES, SOUS APACHE-2.0, ET LA LICENCE A ETE LUE — pas supposee.
+ * `googlefonts/noto-emoji`, dossier `2D/svg`, qui porte son propre LICENSE : « Copyright 2013
+ * Google, Inc. … Licensed under the Apache License, Version 2.0 ». Reutilisation et modification
+ * permises, AUCUN share-alike, l avis conserve dans NOTICE.md.
+ * ⛔ POURQUOI PAS LES EMOJI D APPLE, demandes d abord : leurs dessins sont une oeuvre proprietaire,
+ *    et les copier les graverait dans une image on-chain irreversible. Refuse, et remplace par un
+ *    jeu dont la licence permet cet usage.
+ * ⛔ VINGT ONT ETE ECARTEES APRES LES AVOIR REGARDEES : les visages rendent tous le meme disque
+ *    quand on les aplatit, parce que ce qui les distingue est leur couleur interieure. Une
+ *    silhouette ne porte le sens que si la FORME le porte. */
+import { MOTIFS_NOTO } from './motifs-noto.js';
+
 /** Les reglages de logo derives d une apparence deterministe (voir `apparence.js`). */
 export function paramsLogoDepuisApparence(a, lettre) {
   return {
@@ -153,7 +165,129 @@ export function logoSvg(o) {
         + `<path d="M-1 2C-6 10-16 12-16 18-16 22-6 20-1 8Z"/><path d="M1 2C6 10 16 12 16 18 16 22 6 20 1 8Z"/>`
         + `<rect x="-1.5" y="-8" width="3" height="26" rx="1.5"/></g>`,
       pique: `<g fill="${f}"><path d="M0-21C-4-11-17-4-17 5a9 9 0 0 0 15 6v4l-5 6h14l-5-6v-4a9 9 0 0 0 15-6c0-9-13-16-17-26Z"/></g>`,
-    }[o.facette];
+      /* ── deuxieme serie, 2026-09-22. Phil demandait les emoji d Apple ; leurs dessins sont une
+         oeuvre proprietaire et la face est GRAVEE, donc irreversible : on garde les SUJETS, qui
+         n appartiennent a personne, et on trace tout soi-meme. Meme politique qu au-dessus. ── */
+      pouce: `<g fill="${f}"><path d="M-3-20c3 0 5 2 5 5v6h9a4 4 0 0 1 4 5l-3 13a5 5 0 0 1-5 4H-3Z"/>`
+        + `<rect x="-17" y="-8" width="11" height="28" rx="3"/></g>`,
+      main: `<g fill="${f}"><rect x="-15" y="-11" width="6" height="18" rx="3"/><rect x="-7" y="-19" width="6" height="26" rx="3"/>`
+        + `<rect x="1" y="-21" width="6" height="28" rx="3"/><rect x="9" y="-16" width="6" height="23" rx="3"/>`
+        + `<path d="M-15 2h30v5a13 13 0 0 1-13 13h-4A13 13 0 0 1-15 7Z"/></g>`,
+      poing: `<g fill="${f}"><rect x="-17" y="-7" width="34" height="24" rx="8"/><circle cx="-10" cy="-9" r="5.5"/>`
+        + `<circle cx="0" cy="-11" r="5.5"/><circle cx="10" cy="-9" r="5.5"/></g>`,
+      bouche: `<g><path d="M-20 0Q-12-11 0-4 12-11 20 0 10 12 0 12-10 12-20 0Z" fill="${f}"/>`
+        + `<path d="M-20 0H20" fill="none" stroke="#0b0d10" stroke-width="2.5"/></g>`,
+      alien: `<g fill="${f}"><path d="M0-20c11 0 19 8 19 18 0 12-11 22-19 22S-19 10-19-2c0-10 8-18 19-18Z"/></g>`
+        + `<g fill="#0b0d10"><ellipse cx="-7" cy="0" rx="5" ry="7.5" transform="rotate(-20 -7 0)"/>`
+        + `<ellipse cx="7" cy="0" rx="5" ry="7.5" transform="rotate(20 7 0)"/></g>`,
+      ovni: `<g fill="${f}"><ellipse cy="3" rx="21" ry="7"/><path d="M-11 1a11 10 0 0 1 22 0Z"/></g>`
+        + `<g fill="#0b0d10"><circle cx="-11" cy="4" r="2.5"/><circle cy="5" r="2.5"/><circle cx="11" cy="4" r="2.5"/></g>`,
+      atome: `<g fill="none" stroke="${f}" stroke-width="3.5"><ellipse rx="20" ry="8"/>`
+        + `<ellipse rx="20" ry="8" transform="rotate(60)"/><ellipse rx="20" ry="8" transform="rotate(-60)"/></g>`
+        + `<circle r="4.5" fill="${f}"/>`,
+      /* ⛔ REDESSINE LE 2026-09-22 : Phil a juge la premiere version faible, et il avait raison —
+       *    deux courbes croisees sans BARREAUX rendaient un simple X, illisible comme ADN. Les
+       *    montants sont plus fins, les barreaux font le motif, et l espacement est regulier. */
+      adn: `<g fill="none" stroke="${f}" stroke-linecap="round"><g stroke-width="3.5">`
+        + `<path d="M-8-21C6-14-6-7 8 0-6 7 6 14-8 21"/><path d="M8-21C-6-14 6-7-8 0 6 7-6 14 8 21"/></g>`
+        + `<g stroke-width="3"><path d="M-6-16 6-16M-7-8 7-8M-7 8 7 8M-6 16 6 16"/></g></g>`,
+      cadeau: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<rect x="-17" y="-5" width="34" height="23" rx="3"/><path d="M-17 3h34M0-5v23"/>`
+        + `<path d="M0-5c-4-12-14-12-14-6M0-5c4-12 14-12 14-6" stroke-linecap="round"/></g>`,
+      ballon: `<g><ellipse cy="-6" rx="13" ry="15" fill="${f}"/>`
+        + `<path d="M0 9v12" fill="none" stroke="${f}" stroke-width="3"/><path d="M-3.5 8h7L0 13Z" fill="${f}"/></g>`,
+      bombe: `<g fill="${f}"><circle cx="-2" cy="6" r="14"/><rect x="5" y="-9" width="9" height="7" rx="2" transform="rotate(45 9 -5)"/></g>`
+        + `<path d="M13-9q7-6 3-12" fill="none" stroke="${f}" stroke-width="3" stroke-linecap="round"/>`,
+      cadenas: `<g fill="none" stroke="${f}" stroke-width="4.5" stroke-linejoin="round">`
+        + `<rect x="-14" y="-2" width="28" height="21" rx="4"/><path d="M-8-2v-7a8 8 0 0 1 16 0v7"/></g>`
+        + `<circle cy="8" r="3" fill="${f}"/>`,
+      enveloppe: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<rect x="-19" y="-13" width="38" height="26" rx="3"/><path d="M-19-11 0 3 19-11"/></g>`,
+      casque: `<path d="M-17 7V-2a17 17 0 0 1 34 0v9" fill="none" stroke="${f}" stroke-width="4.5"/>`
+        + `<g fill="${f}"><rect x="-21" y="4" width="9" height="16" rx="4"/><rect x="12" y="4" width="9" height="16" rx="4"/></g>`,
+      camera: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<rect x="-18" y="-9" width="36" height="24" rx="4"/><path d="M-7-9-4-15h8l3 6"/></g><circle cy="3" r="6" fill="${f}"/>`,
+      /* ⛔ REDESSINE LE 2026-09-22 : la premiere version rendait un rectangle avec une ligne au
+       *    milieu — ca pouvait etre une porte, une carte, n importe quoi. Ce qui fait un livre est
+       *    le CREUX de la reliure et les pages qui remontent de chaque cote. Il est donc rempli,
+       *    pas trace, et les deux pages se voient separement. */
+      livre: `<g fill="${f}"><path d="M-2-14C-7-19-14-19-19-16v25c5-3 12-3 17 1V-14Z"/>`
+        + `<path d="M2-14C7-19 14-19 19-16v25c-5-3-12-3-17 1V-14Z"/></g>`
+        + `<g fill="none" stroke="#0b0d10" stroke-width="2.2" stroke-linecap="round">`
+        + `<path d="M-15-11-6-9M-15-5-6-3M-15 1-6 3M15-11 6-9M15-5 6-3M15 1 6 3"/></g>`,
+      crayon: `<g fill="${f}"><path d="M6-21 21-6 0 15-15 0Z"/><path d="M-15 0-20 20 0 15Z"/></g>`
+        + `<path d="M-10 5-5 10" fill="none" stroke="#0b0d10" stroke-width="3"/>`,
+      manette: `<g fill="${f}"><path d="M-14-6h28a10 10 0 0 1 8 15l-3 6a6 6 0 0 1-9 1l-4-4H-6l-4 4a6 6 0 0 1-9-1l-3-6a10 10 0 0 1 8-15Z"/></g>`
+        + `<g fill="#0b0d10"><rect x="-12" y="1" width="10" height="3" rx="1.5"/><rect x="-8.5" y="-2.5" width="3" height="10" rx="1.5"/>`
+        + `<circle cx="7" cy="3" r="2.5"/><circle cx="12" cy="-2" r="2.5"/></g>`,
+      avion: `<path d="M0-20 4-2 21 4v4L4 5 3 17l6 4v3l-9-3-9 3v-3l6-4L-4 5-21 8V4L-4-2Z" fill="${f}"/>`,
+      voiture: `<g fill="${f}"><path d="M-19 4-15-7a4 4 0 0 1 4-3h22a4 4 0 0 1 4 3L19 4v7a3 3 0 0 1-3 3h-2a5 5 0 0 0-10 0H-4a5 5 0 0 0-10 0h-2a3 3 0 0 1-3-3Z"/>`
+        + `<circle cx="-9" cy="14" r="5"/><circle cx="9" cy="14" r="5"/></g>`
+        + `<g fill="#0b0d10"><path d="M-12-6h9v7h-12ZM3-6h9l3 7H3Z"/></g>`,
+      bateau: `<g fill="${f}"><path d="M-19 4h38l-6 11a4 4 0 0 1-3 2H-10a4 4 0 0 1-3-2Z"/>`
+        + `<rect x="-2" y="-20" width="4" height="22"/><path d="M3-17 17 0H3Z"/><path d="M-4-11-16 0h12Z"/></g>`,
+      maison: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M-19 0 0-18 19 0v18H-19Z"/><path d="M-6 18V5h12v13"/></g>`,
+      arbre: `<g fill="${f}"><circle cy="-6" r="13"/><circle cx="-9" cy="2" r="9"/><circle cx="9" cy="2" r="9"/>`
+        + `<rect x="-3" y="4" width="6" height="16" rx="2"/></g>`,
+      cactus: `<g fill="${f}"><rect x="-5" y="-18" width="10" height="38" rx="5"/>`
+        + `<path d="M-5-6h-4a6 6 0 0 1-6-6v-3a3 3 0 0 1 6 0v3h4Z"/><path d="M5-1h4a6 6 0 0 0 6-6v-5a3 3 0 0 0-6 0v5H5Z"/></g>`,
+      poisson: `<g fill="${f}"><path d="M-6 0C-6-9 2-14 10-14c7 0 11 6 11 14s-4 14-11 14C2 14-6 9-6 0Z"/>`
+        + `<path d="M-6 0-21-12v24Z"/></g><circle cx="12" cy="-4" r="2.5" fill="#0b0d10"/>`,
+      oiseau: `<g fill="none" stroke="${f}" stroke-width="5" stroke-linecap="round">`
+        + `<path d="M-20 2q10-13 20 0"/><path d="M0 2q10-13 20 0"/></g>`,
+      abeille: `<g><ellipse cx="1" cy="5" rx="13" ry="10" fill="${f}"/>`
+        + `<g fill="#0b0d10"><path d="M-3-4h4v18h-4ZM5-3h4v15H5Z"/></g>`
+        + `<g fill="${f}" opacity=".65"><ellipse cx="-5" cy="-8" rx="8" ry="5" transform="rotate(-25 -5 -8)"/>`
+        + `<ellipse cx="7" cy="-9" rx="8" ry="5" transform="rotate(25 7 -9)"/></g></g>`,
+      patte: `<g fill="${f}"><path d="M0 3c7 0 12 4 12 9s-5 7-12 7-12-2-12-7 5-9 12-9Z"/>`
+        + `<circle cx="-13" cy="-4" r="5"/><circle cx="-5" cy="-12" r="5"/><circle cx="5" cy="-12" r="5"/><circle cx="13" cy="-4" r="5"/></g>`,
+      trophee: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M-11-18h22v8a11 11 0 0 1-22 0Z"/><path d="M-11-14h-6v4a6 6 0 0 0 6 6M11-14h6v4a6 6 0 0 1-6 6"/>`
+        + `<path d="M0 1v8M-9 18h18l-2-9H-7Z"/></g>`,
+      medaille: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round"><path d="M-10-20-2-4M10-20 2-4"/>`
+        + `<circle cy="7" r="12"/></g><path d="M0 0 3 5H8L4 8 5 13 0 10-5 13-4 8-8 5H-3Z" fill="${f}"/>`,
+      foot: `<g><circle r="18" fill="none" stroke="${f}" stroke-width="4"/>`
+        + `<path d="M0-10 8-4 5 6H-5L-8-4Z" fill="${f}"/>`
+        + `<path d="M0-18v8M-17-5-8-4M17-5 8-4M-10 17-5 6M10 17 5 6" fill="none" stroke="${f}" stroke-width="3.5"/></g>`,
+      guitare: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round"><circle cy="10" r="10"/>`
+        + `<circle cy="-3" r="7"/><path d="M0-10V-20M-4-21h8"/></g><circle cy="10" r="3.5" fill="${f}"/>`,
+      baguette: `<g fill="${f}"><rect x="-3" y="-2" width="6" height="24" rx="3" transform="rotate(-30 0 10)"/>`
+        + `<path d="M8-19 11-12 18-9 11-6 8 1 5-6-2-9 5-12Z"/></g>`,
+      potion: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M-5-19h10v7l7 13a11 11 0 0 1-24 0l7-13Z"/><path d="M-7-19h14"/></g>`
+        + `<path d="M-9 4a11 11 0 0 0 18 0Z" fill="${f}"/>`,
+      tornade: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linecap="round">`
+        + `<path d="M-19-14H19M-15-6H15M-10 2H10M-5 10H5M-2 18H2"/></g>`,
+      volcan: `<g fill="${f}"><path d="M-20 17-8-4h16L20 17Z"/><path d="M-5-5c0-6 5-9 5-15 0 6 5 9 5 15Z"/></g>`,
+      terre: `<g fill="none" stroke="${f}" stroke-width="4"><circle r="18"/>`
+        + `<path d="M-18 0H18" stroke-width="3"/><path d="M0-18a26 26 0 0 1 0 36" stroke-width="3"/>`
+        + `<path d="M0-18a26 26 0 0 0 0 36" stroke-width="3"/></g>`,
+      flocon: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linecap="round">`
+        + [0, 60, 120].map((r) => `<g transform="rotate(${r})"><path d="M0-20V20"/>`
+          + `<path d="M-6-14 0-20 6-14"/><path d="M-6 14 0 20 6 14"/></g>`).join('') + `</g>`,
+      pomme: `<g fill="${f}"><path d="M0-9c4-4 12-4 14 3 2 8-4 20-8 22-3 1-4-1-6-1s-3 2-6 1c-4-2-10-14-8-22 2-7 10-7 14-3Z"/></g>`
+        + `<path d="M0-9c0-6 4-10 8-11" fill="none" stroke="${f}" stroke-width="3" stroke-linecap="round"/>`,
+      cerise: `<g fill="${f}"><circle cx="-7" cy="10" r="8"/><circle cx="9" cy="12" r="7"/></g>`
+        + `<g fill="none" stroke="${f}" stroke-width="3" stroke-linecap="round"><path d="M-7 2C-7-8 0-14 6-18M9 5C9-4 4-12 6-18"/></g>`,
+      pizza: `<g><path d="M0-20 19 14a40 40 0 0 1-38 0Z" fill="${f}"/>`
+        + `<g fill="#0b0d10"><circle cx="-5" cy="2" r="3"/><circle cx="6" cy="4" r="3"/><circle cy="-6" r="2.5"/></g></g>`,
+      glace: `<g fill="${f}"><circle cx="-5" cy="-8" r="7"/><circle cx="5" cy="-8" r="7"/>`
+        + `<path d="M-11-4a11 11 0 0 1 22 0Z"/><path d="M-10-2h20L0 20Z"/></g>`,
+      cafe: `<g fill="none" stroke="${f}" stroke-width="4" stroke-linejoin="round">`
+        + `<path d="M-14-8h24v13a11 11 0 0 1-11 11h-2A11 11 0 0 1-14 5Z"/><path d="M10-3h5a5 5 0 0 1 0 10h-5"/></g>`
+        + `<path d="M-6-14q3-4 0-7M2-14q3-4 0-7" fill="none" stroke="${f}" stroke-width="3" stroke-linecap="round"/>`,
+      arcenciel: `<g fill="none" stroke="${f}" stroke-linecap="round" stroke-width="4">`
+        + `<path d="M-19 14a19 19 0 0 1 38 0"/><path d="M-12 14a12 12 0 0 1 24 0"/><path d="M-5 14a5 5 0 0 1 10 0"/></g>`,
+    }[o.facette]
+    /* ⛔⛔ LES SILHOUETTES NOTO SONT CHERCHEES EN SECOND, ET C EST DELIBERE. Nos traces a nous
+     *     gagnent toujours : si un nom existait des deux cotes, changer de gagnant changerait la
+     *     tete de blocks DEJA GRAVES. L ordre est donc une garantie, pas une preference.
+     * ⛔ `__F__` est remplace par la couleur d accent du createur : c est ce qui integre un dessin
+     *    importe a NOTRE systeme de personnalisation, au lieu de plaquer une image figee.
+     * ⛔ PROVENANCE : googlefonts/noto-emoji, 2D/svg, Apache-2.0 (licence lue le 2026-09-22, voir
+     *    NOTICE.md). Rien ne part on-chain : la chaine ne grave que le NOM de la facette. */
+      || (MOTIFS_NOTO[o.facette] ? MOTIFS_NOTO[o.facette].split('__F__').join(f) : null);
     return `<g transform="matrix(${m})">`
       + (d || `<text x="0" y="14" font-family="ui-sans-serif,sans-serif" font-size="46" font-weight="800" text-anchor="middle" fill="${f}">${L}</text>`)
       + `</g>`;

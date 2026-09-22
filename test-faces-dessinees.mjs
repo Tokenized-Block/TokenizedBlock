@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { FACETTES_CREATE, ORBITES_CREATE, MATIERES_CREATE, ORNEMENTS_CREATE, LISTES, combinaisonsCreate }
   from './face.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
+import { MOTIFS_NOTO } from './motifs-noto.js';
 
 let n = 0;
 const eq = (a, b, m) => { assert.equal(a, b, m); n++; };
@@ -66,7 +67,25 @@ const src = readFileSync(new URL('./logo.js', import.meta.url), 'utf8');
 const traces = new Set([...src.matchAll(/(?:^|[{\s])([a-z]+):\s*`</gm)].map((m) => m[1]));
 ok(traces.size > 20, traces.size + ' motif(s) trouve(s) dans logo.js — pas une table vide');
 
-const sansTrace = FACETTES_CREATE.filter((f) => f !== 'lettre' && f !== 'vide' && !traces.has(f));
+/* ⛔⛔ IL Y A DEUX SOURCES DE DESSINS DEPUIS LE 2026-09-22, et la garde doit connaitre les deux.
+ *     Quand les 29 silhouettes Noto ont ete cablees, ce test a signale 29 facettes « sans dessin » :
+ *     il ne lisait que la table en ligne de logo.js. Ce n etait PAS un faux positif — sa
+ *     connaissance etait incomplete, et il a eu raison de crier. On l etend, on ne l assouplit pas.
+ * ⛔ ET ON VERIFIE QUE LE SECOND JEU EST BIEN BRANCHE : un motif present dans `motifs-noto.js` mais
+ *    que `logo.js` n irait jamais chercher retomberait quand meme sur la lettre. */
+ok(/MOTIFS_NOTO\[o\.facette\]/.test(src),
+  'logo.js va bien chercher les silhouettes Noto quand sa table en ligne ne connait pas le nom');
+ok(/split\('__F__'\)\.join\(f\)/.test(src),
+  "le marqueur `__F__` est remplace par la couleur d accent — sinon le dessin sortirait sans couleur");
+/* ⛔ L ORDRE COMPTE ET IL EST VERIFIE : nos traces a nous doivent gagner. Si un nom existait des
+ *    deux cotes et que Noto passait devant, la tete de blocks DEJA GRAVES changerait. */
+const posInline = src.indexOf('}[o.facette]');
+const posNoto = src.indexOf('MOTIFS_NOTO[o.facette]');
+ok(posInline > 0 && posNoto > posInline,
+  'la table en ligne est consultee AVANT les silhouettes importees — nos traces gagnent toujours');
+
+const sansTrace = FACETTES_CREATE.filter((f) => f !== 'lettre' && f !== 'vide'
+  && !traces.has(f) && !(f in MOTIFS_NOTO));
 ok(sansTrace.length === 0,
   sansTrace.length + ' facette(s) offerte(s) au menu SANS dessin : ' + sansTrace.join(', ')
   + '\n      Elles retomberaient sur la lettre du symbole, sans erreur ni log.');
@@ -97,9 +116,21 @@ ok(distantes.length === 0,
   'aucune URL distante dans le dessin — trouve : ' + distantes.join(' · '));
 /* ⛔ LE CONTROLE DES EMOJI PORTE SUR LA TABLE DES MOTIFS, pas sur les commentaires : ce fichier en
  *    contient, et ils expliquent justement pourquoi on n en met pas dans les traces. */
-const tableMotifs = /const d = \{[\s\S]*?\n    \}\[o\.facette\];/.exec(src);
+/* ⛔ L ANCRE DE FIN A CHANGE quand les silhouettes Noto ont ete cablees : la table ne se termine
+ *    plus par `}[o.facette];` mais par `}[o.facette]` suivi du repli `|| MOTIFS_NOTO[...]`. Le
+ *    point-virgule etait donc une ancre FRAGILE — elle a fait echouer ce controle sur du code sain.
+ *    Il est retire, et la borne de la table est le crochet lui-meme. */
+const tableMotifs = /const d = \{[\s\S]*?\n    \}\[o\.facette\]/.exec(src);
 ok(tableMotifs !== null, 'la table des motifs est lisible pour etre controlee');
-const emoji = tableMotifs && tableMotifs[0].match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu);
+/* ⛔⛔ LES COMMENTAIRES SONT RETIRES AVANT LE CONTROLE, et l en-tete de ce bloc le disait deja :
+ *     « le controle porte sur la table des motifs, PAS sur les commentaires ». La table en contient
+ *     desormais — ceux qui expliquent pourquoi `adn` et `livre` ont ete redessines — et ils portent
+ *     des ⛔. Le detecteur les a signales comme des emoji dans un trace : faux, et il aurait fait
+ *     supprimer l explication pour satisfaire le test. Ce qui est interdit, c est un emoji DESSINE. */
+const tableSansCommentaires = tableMotifs
+  ? tableMotifs[0].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  : '';
+const emoji = tableSansCommentaires.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu);
 ok(!emoji,
   'aucun emoji DANS LES TRACES — un emoji est un glyphe de police : il changerait de dessin selon '
   + "l appareil, sur une image gravee pour toujours. Trouve : " + (emoji || []).join(' '));
