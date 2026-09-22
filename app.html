@@ -1886,6 +1886,9 @@ details[open] > summary::before{transform:rotate(90deg)}
           value="10" placeholder="e.g. 10" autocomplete="off"></label>
         <label class="champ">Share of its blocks to place, in %<input id="plPart" inputmode="decimal"
           value="99.9" autocomplete="off"></label>
+        <label class="champ" id="plQuoteWrap">ETH seed into the locked pool (Instant Birth)<input id="plQuoteEth" inputmode="decimal"
+          placeholder="e.g. 0.0003" autocomplete="off"></label>
+        <p class="note" id="plQuoteHint">Instant Birth spends (1) life / open fee 0.001 ETH to the protocol sink + (2) this quote ETH into the pool book. Distinct. Seed ≠ fee. MAIN refuses dust / unread oracle.</p>
         </details>
         <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
           the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
@@ -1994,7 +1997,7 @@ import { faceDuBlock, validerFace } from './face.js';
  * a index.html par un test) ; il ne signe rien. Chaque signature passe par `envoi.js`, et la chaine
  * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
-import { planLancement, simulerLancement, PERMIT2 } from './lancer-pool.js';
+import { planLancement, simulerLancement, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu } from './groupe-wallet.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
@@ -2008,7 +2011,7 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
 /* ⛔⛔ ENVOYER PASSE PAR UN MODULE TESTE, JAMAIS PAR UN `eth_sendTransaction` ECRIT ICI. `envoi.js`
  * verifie chaine ET compte, estime, fixe une limite de gas explicite et relit le recu ; la regle 8
  * surveille qu aucun envoi ne s en passe. Le wallet de l utilisateur signe — cette page, jamais. */
-import { encodeTransfer, envoyerDepuisWallet, noterWalletUtilise } from './envoi.js';
+import { encodeTransfer, envoyerDepuisWallet, envoyerLotAtomique, noterWalletUtilise } from './envoi.js';
 /* ⛔ LE MESSAGE VOYAGE DANS LE CALLDATA DU TRANSFERT : public, definitif, relisible sans nous. */
 import { encodeTransferAvecMemo, lireMemo, validerMemo, AVERTISSEMENT as AVERT_MEMO } from './messages.js';
 import { montantHumain, formaterUnites } from './montants.js';
@@ -7143,15 +7146,41 @@ async function calculerLancement() {
       } else if (deviseLancement && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'this pair is not open yet — pick ETH' };
       } else {
+        /* Instant Birth default on ETH (Real): two-sided seed. Non-ETH stays unilateral Add path. */
+        let quoteEthWei = null;
+        if (!deviseLancement) {
+          quoteEthWei = await preparerQuoteEthDefaut(false);
+          if (Number(CHAINE) === 8453) {
+            if (quoteEthWei == null) {
+              plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+            } else if (quoteEthWei <= 0n) {
+              plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — quote dust / empty refused' };
+            } else {
+              const minOracle = weiPourDollars(1, ethUsd);
+              if (minOracle == null) {
+                plan = { etat: 'REFUSE', pourquoi: 'ETH/USD oracle unread — Instant Birth closed on mainnet (will not launch with unknown dollar seed)' };
+              } else if (quoteEthWei < CREATE_FEE_WEI_FLOOR || quoteEthWei < minOracle) {
+                plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least ≈$1 in ETH (and ≥ 0.0003 ETH floor) in the pool' };
+              }
+            }
+          } else if (quoteEthWei == null || quoteEthWei <= 0n) {
+            plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — zero-ETH books refused' };
+          }
+        }
+        if (!plan) {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
           ...(deviseLancement ? { devise: deviseLancement } : {}),
-          ...(hooks ? { hooks } : {}) });
+          ...(hooks ? { hooks } : {}),
+          ...(quoteEthWei != null && !deviseLancement ? { quoteEthWei } : {}) });
+        }
+        if (plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
+        }
       }
       /* plancher en dollars pour une devise (planLancement ne le juge qu en ETH) : meme plancher, converti */
       if (deviseLancement && plan && plan.classement && plan.classement.etat === 'NON_APPLICABLE') {
@@ -7181,6 +7210,50 @@ async function calculerLancement() {
   }
   planCourant = plan;
   peindrePlan(plan, adr);
+}
+
+
+/* ══ Instant Birth index-launch 2026-09-21 — quote ETH seed (into pool) ≠ open fee 0.001 ETH (to sink) ══ */
+function ethDecimalVersWei(s) {
+  const raw = String(s || '').trim().replace(',', '.');
+  if (!raw || !/^\d+(\.\d+)?$/.test(raw)) return null;
+  const [a, b = ''] = raw.split('.');
+  const frac = (b + '000000000000000000').slice(0, 18);
+  try { return BigInt(a) * 10n ** 18n + BigInt(frac); } catch { return null; }
+}
+function weiVersEthDecimal(w) {
+  w = BigInt(w);
+  const ent = w / 10n ** 18n;
+  let frac = (w % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '');
+  return frac ? ent.toString() + '.' + frac : ent.toString();
+}
+function lireQuoteEthWeiChamp() {
+  const el = $('#plQuoteEth');
+  if (!el) return null;
+  const raw = String(el.value || '').trim();
+  if (!raw) return null;
+  return ethDecimalVersWei(raw);
+}
+/** Default Instant Birth seed ≈ $1 ETH when oracle live; Practice 0.0001 ETH. Fail-closed on MAIN if unread. */
+async function preparerQuoteEthDefaut(force = false) {
+  const el = $('#plQuoteEth');
+  if (!el) return null;
+  if (String(el.value || '').trim() && !force) return lireQuoteEthWeiChamp();
+  if (Number(CHAINE) === 8453) {
+    if (force || ethUsd === null) await lirePrixEth();
+    if (ethUsd == null) return null;
+    let w = weiPourDollars(1, ethUsd);
+    if (w == null) return null;
+    if (w < CREATE_FEE_WEI_FLOOR) w = CREATE_FEE_WEI_FLOOR;
+    el.value = weiVersEthDecimal(w);
+    return w;
+  }
+  const prat = 100000000000000n; /* 0.0001 ETH */
+  if (!String(el.value || '').trim()) el.value = weiVersEthDecimal(prat);
+  return lireQuoteEthWeiChamp() || prat;
+}
+function estNaissanceInstantaneeUi() {
+  return $('#plDevise') && $('#plDevise').value === 'ETH';
 }
 
 /* ⛔ LIFE FEE Launch (8453): same ≈$1 ETH as Create birth → FEE_WALLET, then existing Launch tx.
@@ -7271,7 +7344,9 @@ function peindrePlan(plan, adr) {
       + (plan.poolExiste ? ' · already exists, its current price applies' : ''),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
-    'You put in no ETH: buyers bring it.',
+    (plan.naissance
+      ? ('Instant Birth seeds ' + ethLisible(plan.ethRequis) + ' ETH into the locked pool (plus a tiny first buy so indexers see a swap). Seed ≠ open fee 0.001 ETH.')
+      : 'You put in no ETH: buyers bring it.'),
     'Locked forever: nobody can withdraw these blocks, and this value sets the starting price.',
     /* ⛔⛔ LE CREATEUR EST PAYE, ET IL NE LE SAVAIT PAS. Cette ligne n existait QUE pour
      *    legacyUpgrade, donc jamais pour un lancement normal. Quelqu un qui ignore qu il gagne
@@ -7312,10 +7387,15 @@ function peindrePlan(plan, adr) {
     });
     return;
   }
-  if (usdLaunch > 0 && soldeEthNat != null && fraisL != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
+  if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
+    const besoin = BigInt(fraisL) + (plan.naissance ? BigInt(plan.ethRequis || 0n) + BigInt(MICRO_SWAP_ETH_WEI) : 0n);
+    if (BigInt(soldeEthNat) < besoin) {
     e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Not enough ETH to bring it to life (≈ $1) — top up, then work it out again.';
+    e.textContent = plan.naissance
+      ? 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.'
+      : 'Not enough ETH to bring it to life (≈ $1) — top up, then work it out again.';
     return;
+    }
   }
 
   if (plan.etat === 'APPROBATIONS') {
@@ -7502,9 +7582,21 @@ document.addEventListener('click', (ev) => {
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;
   const e = $('#plEtat');
+  const naissance = !!planCourant.naissance;
   const dejaPaye = !planCourant.v2 && !!prepayePour(adr) && String((prepayePour(adr) || {}).compte || '') === String(compte || '').toLowerCase();
   const usdLaunch = dejaPaye ? 0 : fraisLancementUsd(CHAINE);
   let fraisL = null;
+  const besoinSeed = naissance ? BigInt(planCourant.ethRequis || 0n) + BigInt(MICRO_SWAP_ETH_WEI) : 0n;
+  if (naissance && (!planCourant.ethRequis || planCourant.ethRequis <= 0n || planCourant.tx.value === '0x0')) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'Instant Birth mint has no ETH value — Launch refused (fail-closed).';
+    return;
+  }
+  if (naissance && !planCourant.microSwap) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'Instant Birth micro first-swap missing — Launch refused (fail-closed for indexers).';
+    return;
+  }
   if (usdLaunch > 0) {
     fraisL = await assurerFraisLancementWei(true);
     planCourant.fraisLancementWei = fraisL;
@@ -7514,20 +7606,57 @@ async function lancerMarcheBlock(adr) {
       e.textContent = 'Could not read the ETH price right now. Nothing was sent — try again.';
       return;
     }
-    if (soldeEthNat != null && BigInt(soldeEthNat) < BigInt(fraisL)) {
+    /* v2: open fee already handled via inscription etape; still need seed+micro for Instant Birth.
+     * Non-v2: need open fee (unless dejaPaye) + seed+micro when naissance. */
+    const fraisEncore = (!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n;
+    const besoinTotal = fraisEncore + besoinSeed;
+    if (soldeEthNat != null && BigInt(soldeEthNat) < besoinTotal) {
       e.className = 'note wKo'; vieAutoArreter();
-      e.textContent = 'Not enough ETH to bring it to life. Nothing was sent.';
+      e.textContent = naissance
+        ? 'Not enough ETH for open fee + Instant Birth pool seed + first micro-swap. Nothing was sent.'
+        : 'Not enough ETH to bring it to life. Nothing was sent.';
       return;
     }
+  } else if (naissance && soldeEthNat != null && BigInt(soldeEthNat) < besoinSeed) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'Not enough ETH for Instant Birth pool seed + first micro-swap. Nothing was sent.';
+    return;
   }
   lancementEnCours = true;
   e.className = 'note';
-  let r;
+  let r = { etat: 'ECHEC_ENVOI', pourquoi: 'nothing was sent' };
+  let atomiqueOk = false;
   try {
+    const mintValue = planCourant.tx.value || '0x0';
+    /* Instant Birth: try atomic mint + micro-swap (open fee already in v2 etapes or separate). */
+    if (naissance && planCourant.microSwap) {
+      const calls = [
+        { to: planCourant.tx.to, data: planCourant.tx.data, value: mintValue },
+        planCourant.microSwap,
+      ];
+      e.textContent = 'Trying atomic Instant Birth (seeded mint + first micro-swap)…';
+      const lot = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, calls });
+      if (lot.etat === 'CONFIRME' || (lot.etat === 'ENVOYE_AA' && lot.hash)) {
+        r = lot; atomiqueOk = true;
+      } else if (!(lot.sendCallsUnsupported || lot.etat === 'ECHEC_ENVOI')) {
+        r = lot;
+        e.className = 'note wKo'; vieAutoArreter();
+        const lienL = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
+          + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+        e.innerHTML = enTexte(r.pourquoi || r.etat) + lienL;
+        return;
+      } else {
+        e.textContent = 'Wallet has no atomic batch — Instant Birth continues with honest separate signatures…';
+      }
+    }
+    if (!atomiqueOk) {
     if (planCourant.v2 || dejaPaye) {
-      e.textContent = 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid).';
+      e.textContent = naissance
+        ? 'Opening your wallet — ETH-seeded Launch + first micro-swap (open fee already handled).'
+        : 'Opening your wallet — this signature opens its market (the ≈ $1 is already paid).';
     } else if (usdLaunch > 0 && fraisLancementPret(fraisL)) {
-      e.textContent = 'Opening your wallet — ' + ethLisible(fraisL) + ' ETH first, then bring it to life.';
+      e.textContent = 'Opening your wallet — ' + ethLisible(fraisL) + ' ETH open fee first, then bring it to life'
+        + (naissance ? ' with ETH seed.' : '.');
       const feeVal = '0x' + BigInt(fraisL).toString(16);
       let balAvant = null;
       try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); }
@@ -7543,7 +7672,7 @@ async function lancerMarcheBlock(adr) {
         e.className = 'note wKo'; vieAutoArreter();
         const lienF = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
           + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-        e.innerHTML = 'The ≈ $1 payment was not confirmed, so nothing else was sent. ' + enTexte(r.pourquoi || r.etat) + lienF;
+        e.innerHTML = 'The open fee was not confirmed, so nothing else was sent. ' + enTexte(r.pourquoi || r.etat) + lienF;
         return;
       }
       const verif = await verifierLifeFeeAuWallet({ hash: r.hash, weiMin: fraisL, balAvant });
@@ -7554,20 +7683,39 @@ async function lancerMarcheBlock(adr) {
         e.innerHTML = enTexte(verif.pourquoi) + lienF;
         return;
       }
-      e.textContent = 'Payment confirmed. Opening your wallet — this signature brings it to life.';
+      e.textContent = naissance
+        ? 'Open fee confirmed. Next: ETH-seeded Launch (sequential; not one-tx).'
+        : 'Payment confirmed. Opening your wallet — this signature brings it to life.';
     } else {
-      e.textContent = 'Opening your wallet — one transaction creates the pool and places your blocks.';
+      e.textContent = naissance
+        ? 'Opening your wallet — ETH-seeded Launch (sequential).'
+        : 'Opening your wallet — one transaction creates the pool and places your blocks.';
     }
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to: planCourant.tx.to, data: planCourant.tx.data, value: '0x0' });
+      to: planCourant.tx.to, data: planCourant.tx.data, value: mintValue });
+    if ((r.etat === 'CONFIRME' || r.etat === 'ENVOYE_AA') && naissance && planCourant.microSwap) {
+      e.textContent = 'Seeded mint confirmed. Next signature: mandatory first micro-swap (indexers)…';
+      const rs = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+        to: planCourant.microSwap.to, data: planCourant.microSwap.data, value: planCourant.microSwap.value || '0x0' });
+      if (rs.etat !== 'CONFIRME' && rs.etat !== 'ENVOYE_AA') {
+        e.className = 'note wKo'; vieAutoArreter();
+        const lienS = rs.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(rs.hash)
+          + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
+        e.innerHTML = 'Pool seeded but first micro-swap failed — Dex may stay dark. ' + enTexte(rs.pourquoi || rs.etat) + lienS;
+        return;
+      }
+      r = rs;
+    }
+    } /* end !atomiqueOk */
   } finally { lancementEnCours = false; }
   const lien = r.hash ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash)
     + '" target="_blank" rel="noopener">See it on the explorer</a>' : '';
-  if (r.etat === 'CONFIRME') {
+  if (r.etat === 'CONFIRME' || r.etat === 'ENVOYE_AA') {
     aLancerRetirer(adr);
     e.className = 'note wOk';
     etape('vivant');
-    e.innerHTML = 'It is alive. Its market is open.' + lien + blocPartage(adr, symProfil);
+    e.innerHTML = (naissance ? 'Instant Birth complete — ETH seeded + first micro-swap + LP locked. ' : 'It is alive. Its market is open. ')
+      + (atomiqueOk ? '(atomic) ' : '') + lien + blocPartage(adr, symProfil);
     $('#plActions').innerHTML = '';
     planCourant = null;
     vieAutoArreter();
@@ -9070,8 +9218,24 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (!(valo > 0)) return 'SANS';
   let plan;
   try {
+    /* Instant Birth on ETH Create: real two-sided seed + mandatory micro first-swap in same batch. */
+    let quoteW = null;
+    if (!devise) {
+      quoteW = await preparerQuoteEthDefaut(true);
+      if (quoteW == null || quoteW <= 0n) {
+        e.className = 'note wKo';
+        e.textContent = 'Instant Birth needs a positive ETH seed (oracle/seed unread or dust) — Create refused fail-closed.';
+        return 'STOP';
+      }
+      if (quoteW < CREATE_FEE_WEI_FLOOR) {
+        e.className = 'note wKo';
+        e.textContent = 'ETH seed is dust — Instant Birth closed.';
+        return 'STOP';
+      }
+    }
     plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999,
-      ...(devise ? { devise } : {}), hooks: hook });
+      ...(devise ? { devise } : {}), hooks: hook,
+      ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
     const w = await assurerFraisLancementWei(true);
     if (!fraisLancementPret(w)) { e.className = 'note wKo'; e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.'; return 'STOP'; }
     plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook });
@@ -9081,13 +9245,25 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (!plan || !plan.tx || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS') || plan.poolExiste
     || (plan.classement && plan.classement.etat === 'TROP_BON_MARCHE')) return 'SANS';
   if (!(plan.etapes || []).some((x) => x.payant)) return 'SANS';
+  /* Instant Birth CTA refuses unilateral (ethRequis==0 / no seed). */
+  if (!devise && (!plan.naissance || !plan.ethRequis || plan.ethRequis <= 0n || plan.tx.value === '0x0')) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth mint has no ETH value — Create+Launch refused (fail-closed).';
+    return 'STOP';
+  }
+  if (!devise && !plan.microSwap) {
+    e.className = 'note wKo';
+    e.textContent = 'Instant Birth micro first-swap missing — Create+Launch refused (fail-closed for indexers).';
+    return 'STOP';
+  }
   const calls = [{ to, data: calldata, value: '0x0' },
     ...plan.etapes.map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
-    { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' }];
+    { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' },
+    ...(plan.microSwap ? [plan.microSwap] : [])];
   let balAvant = null;
   try { balAvant = BigInt(await rpc('eth_getBalance', [FEE_WALLET, 'latest'])); } catch (_) { balAvant = null; }
   e.className = 'note';
-  e.textContent = 'One signature: it is created, ≈ $1 (' + ethLisible(plan.fraisW) + ' ETH) brings it to life, and its market opens — all or nothing. Check it in your wallet.';
+  e.textContent = 'One signature: Create + open fee ' + ethLisible(plan.fraisW) + ' ETH (sink) + ETH seed into pool' + (plan.ethRequis ? ' (' + ethLisible(plan.ethRequis) + ')' : '') + ' + first micro-swap — all or nothing. Seed ≠ fee.';
   majProgressionVie('One signature — create, bring to life and open its market, all at once.');
   etape('groupe_propose');
   const r = await envoyerGroupe({ eth, compte, chaineHex: '0x2105', calls });
@@ -9121,7 +9297,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   }
   etape('vivant');
   e.className = 'note wOk';
-  e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is alive. Its market is open — one signature.' + lien + blocPartage(adresse, v.sym);
+  e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is alive — Instant Birth (ETH seeded + first micro-swap + open fee). One signature.' + lien + blocPartage(adresse, v.sym);
   majProgressionVie('Done — it is alive.');
   lancementLien = String(adresse).toLowerCase();
   void ouvrirProfil(adresse, v.sym).then(() => { setTimeout(() => montrerPremierAcheteur(adresse), 1500); });
@@ -9325,11 +9501,12 @@ async function creerBlock() {
     if (rc.etat === 'CONFIRME') {
       e.className = 'note wOk';
       void listerMesBlocks();
-      /* tip 0020 Instant Birth (OL-like): free Create → ETH pair · 99.9% supply · hooked Launch · ≈$1 life. */
+      /* tip 0021 / index-launch: Instant Birth ETH seed + mandatory micro first-swap; open fee 0.001 ETH unchanged. */
       if (Number(CHAINE) === 8453 && adresseCreee) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created. Now <b>bring it to life</b> (≈ $1 in ETH).'
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH separate).'
           + '<button type="button" class="bouton" id="cLaunchNow" style="margin-top:10px;display:block;width:100%;font-size:1.08em;padding:14px 16px;font-weight:700">'
-          + 'Bring it to life</button>'
+          + 'Instant Birth — seed ETH + open hooked market</button>'
+          + '<p class="note" style="margin-top:6px">Seed into the book ≠ open fee 0.001 ETH. No fee address in UI.</p>'
           + lien;
         const goLaunch = () => {
           try {
