@@ -1,8 +1,8 @@
 import { readFileSync } from 'fs';
 const h = readFileSync('./app.html', 'utf8');
 const need = [
-  ['tip', 'data-build="20260923-reclaim-volume"'],
-  ['tip comment', 'tip 20260923-reclaim-volume'],
+  ['tip', 'data-build="20260923-wallet-intent-market"'],
+  ['tip comment', 'tip 20260923-wallet-intent-market'],
   ['OL IB copy', 'TB earns $0 there. Want a hooked market? Instant Birth on TB · 0.001 ETH'],
   ['OL IB button', 'data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'],
   ['OL wire', 'OpenLaunch Feed IB reclaim'],
@@ -24,5 +24,5 @@ if (h.includes('id="peFrais" hidden style="display:none"')) throw new Error('peF
 if (h.includes('Fees for Dev')) throw new Error('Fees for Dev');
 const ui = h.match(/<(?:button|a|span|b|p)[^>]*>[^<]*a6cf[^<]*</gi) || [];
 if (ui.length) throw new Error('a6cf in UI: ' + ui.join('|'));
-if (h.includes('data-build="20260923-feed-catch-router"')) throw new Error('old tip left');
-console.log('ok reclaim-volume');
+if (h.includes('data-build="20260923-reclaim-volume"')) throw new Error('old reclaim tip left');
+console.log('ok reclaim-guards-on-wallet-intent');
