@@ -463,11 +463,17 @@ body:not(.surMap) .mapCentre{visibility:hidden}
 /* la pastille de l entonnoir : sur la map seulement, au-dessus de la barre du bas */
 /* Phil (2026-09-19) : en bas, la pastille cachait le nom des gros blocks — en haut au centre sur ordinateur */
 /* la pastille de l entonnoir, DANS la barre du haut (Phil, 2026-09-19) */
-.mapCta{padding:8px 16px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13.5px;color:#fff;white-space:nowrap;
-  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 4px 16px rgb(var(--boutonRgb) / .45)}
-.mapCta:hover{filter:brightness(1.1)}
+.mapCta{padding:10px 18px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:14.5px;color:#fff;white-space:nowrap;
+  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 6px 22px rgb(var(--boutonRgb) / .55),0 0 0 1px rgb(var(--accentRgb) / .35)}
+.mapCta:hover{filter:brightness(1.12)}
 body:not(.surMap) .mapCta{display:none}
-@media (max-width:760px){.mapCta{font-size:11.5px;padding:6px 10px}}
+/* tip 20260923-map-buy-cta: sticky Map footer IB — visible when Map populated / on Map tab */
+.mapCtaDock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--mapBas,72px) + 10px);z-index:25;
+  padding:11px 20px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13.5px;color:#fff;white-space:nowrap;
+  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 8px 28px rgb(var(--boutonRgb) / .5),0 0 0 1px rgb(var(--accentRgb) / .4)}
+.mapCtaDock:hover{filter:brightness(1.1)}
+body:not(.surMap) .mapCtaDock{display:none}
+@media (max-width:760px){.mapCta{font-size:12px;padding:7px 12px}.mapCtaDock{font-size:12px;padding:9px 14px;max-width:92vw}}
 /* ⛔ TELEPHONE (Phil, 2026-09-19 : « regarde bien la correction UX sur tel ») — mesure a 375 px : la barre du haut
    debordait, la page defilait en largeur, le texte du centre etait ecrase en une colonne d une lettre.
    Trois rangees : la marque ; les boutons (qui defilent a l horizontale, sans barre) ; le texte du centre, pleine largeur. */
@@ -933,6 +939,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            un telephone ; un septieme rendrait chaque cible trop petite pour un doigt. Et cette page
            se lit de partout : chaque borne longue de l app pointe ICI. -->
       <!-- tip 20260922-create-sign-ux: map CTA sells Instant Birth + fee, not free create -->
+      <!-- tip 20260923-map-buy-cta: amplify Instant Birth Map CTA (size + sticky dock) -->
       <button type="button" id="mapCta" class="mapCta">✦ Instant Birth — 0.001 ETH, once</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
@@ -987,6 +994,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           · Buy/Sell in-app (0.5%) · hooked Dex chops · unhooked Dex = $0 → Launch hooked.
           <a class="lienLearn" id="mapTbgasDeep" href="/?block=0xb200000000000000000000df3ffcd9be89b3843c&amp;chain=8453">deep link</a>
         </p>
+        <!-- tip 20260923-map-buy-cta: second sticky IB when Map is the lander (populated or empty) -->
+        <button type="button" id="mapCtaDock" class="mapCtaDock">Map works — Instant Birth · 0.001 ETH</button>
       </div>
 
       <!-- ⛔ FERME PAR DEFAUT. Le sujet est la map ; l explication est disponible, pas imposee. -->
@@ -1022,7 +1031,8 @@ details[open] > summary::before{transform:rotate(90deg)}
                  nouveau block qui ne s acheterait QU avec celui-ci — un piege, pas une fonction. La carte garde deux
                  gestes : acheter, ouvrir. GM et faits restent dans le profil ; les boutons sont caches, pas supprimes. -->
             <div class="fActions fActionsMain">
-              <button class="bouton" id="fAcheter" type="button">Buy</button>
+              <button class="bouton" id="fAcheter" type="button">Buy · 0.5%</button>
+              <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
             </div>
@@ -1634,7 +1644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-created-ib-cta" hidden>Build <code>20260923-created-ib-cta</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-map-buy-cta" hidden>Build <code>20260923-map-buy-cta</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3017,10 +3027,17 @@ $('#map').addEventListener('click', (e) => {
     : '';
   $('#fiche').dataset.block = adr;
   $('#fiche').dataset.sym = (h && h.sym) || '';
+  /* tip 20260923-map-buy-cta: Buy · 0.5% only when a live public market exists (in-app path chops);
+   * no market → Instant Birth companion, never a fee-blind Buy promise. */
+  const aBuy = $('#fAcheter'), aIb = $('#fIb');
+  const aMarche = Boolean(mk);
+  if (aBuy) aBuy.hidden = !aMarche;
+  if (aIb) aIb.hidden = aMarche;
 });
 
 /* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;
  * Pair with it : onglet Create, block en mode block, paire = ce block (adresse collee, verifiee par la page Create) */
+/* tip 20260923-map-buy-cta: Map cube Buy → in-app 0.5% path when #pEchange opens (echangeAutorise). */
 $('#fAcheter').addEventListener('click', () => {
   const adr = $('#fiche').dataset.block, sym = $('#fiche').dataset.sym;
   if (!adr) return;
@@ -3039,6 +3056,7 @@ $('#fAcheter').addEventListener('click', () => {
     attendre();
   });
 });
+$('#fIb') && $('#fIb').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
 $('#fPairer').addEventListener('click', () => {
   const adr = $('#fiche').dataset.block;
   if (!adr) return;
@@ -4855,12 +4873,13 @@ function peindreTrustFacts(adr, v, origine) {
           + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
       });
     } else {
-      /* tip 2357: hooked → primary in-app Buy/Sell; Dex on this pool also chops (external volume pays). */
-      cta.innerHTML = info.isTbFeeHook
-        ? ('Buy or sell right here')
-        : ('Buy/Sell in-app · deepen if thin')
+      /* tip 2357 + tip 20260923-map-buy-cta: hooked (and other LUE allowed) → primary Buy · 0.5%; deepen secondary.
+       * Parens fix: hooked branch previously dropped the action buttons (ternary + concat precedence). */
+      cta.innerHTML = (info.isTbFeeHook
+        ? 'Buy or sell right here · 0.5% in-app'
+        : 'Buy/Sell in-app · deepen if thin')
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="buy">Buy/Sell in-app</button>'
+        + '<button type="button" class="bouton" data-tf-act="buy">Buy · 0.5%</button>'
         + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
     }
   } else {
@@ -10199,8 +10218,9 @@ function peindreTrending() {
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
     + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · ' + (bouge(l) ? 'vol 1h ' + usdCourt(l.volume1hUsd) : 'no trade in the last hour') + ' · 24h ' + usdCourt(l.volume24hUsd)
     + '<span class="trPlus"> · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</span></p></div>'
-    /* mesure 2026-09-17 : la plupart de ces marches n acceptent que leur propre app -> « Open », pas une promesse d achat */
-    + '<button type="button" class="bouton sec trAcheter" data-ouvrir="' + enTexte(l.adr) + '">Open</button></li>').join('')
+    /* tip 20260923-map-buy-cta: one-tap Buy · 0.5% → profile in-app path (data-acheter; echange.js FEE_WALLET).
+     * Gate: #pEchange only when echangeAutorise (LUE + not TB-unhooked). Row tap still opens profile. */
+    + '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy · 0.5%</button></li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     || (d.lotsMarche && d.lotsMarche.ko
       ? '<li class="filL"><p class="note">⚠️ Market data was not fully read (' + d.lotsMarche.ko + ' of '
@@ -12400,6 +12420,9 @@ function peindreCentre() {
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
 $('#mapCentre').addEventListener('click', () => { if (habitants.length) nouveauCentre(true); });
 $('#mapCta').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+/* tip 20260923-map-buy-cta: sticky Map footer = same Instant Birth funnel as header chip */
+const mapCtaDock = $('#mapCtaDock');
+if (mapCtaDock) mapCtaDock.addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
 etape('visite', true);
 /* le bouton ⤢ de la map fait le meme tirage */
 (function brancherTout() {
