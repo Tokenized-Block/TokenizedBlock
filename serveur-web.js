@@ -678,6 +678,12 @@ const ETAPES_ENTONNOIR = [
   /* creation */
   'create_sign_propos', 'create_sign_refus', 'create_fund_bridge', 'create_go_bridge',
   'ib_preflight_ok', 'ib_preflight_fail', 'ib_balance_short',
+  /* ⛔⛔ POURQUOI une creation echoue — mesure du 2026-09-23 : `cree` = 6, `cree_echec` = 8, et
+   *     aucun moyen de savoir si ces 8 sont des refus polis dans le wallet ou des transactions qui
+   *     revertent en brulant du gas. Les deux appellent des reponses OPPOSEES. Categories fermees
+   *     produites par `causes-echec.js` ; `test-causes-echec.mjs` echoue si l une manque ici. */
+  'cree_ko_refus', 'cree_ko_revert', 'cree_ko_envoi', 'cree_ko_reseau',
+  'cree_ko_compte', 'cree_ko_attente', 'cree_ko_autre',
   /* achat — l etape qui rapporte */
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
   /* bridge et frais */
@@ -727,7 +733,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

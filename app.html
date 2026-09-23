@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-onramp-funnel" hidden>Build <code>20260923-onramp-funnel</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-causes-echec" hidden>Build <code>20260923-causes-echec</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2346,6 +2346,8 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
  * verifie chaine ET compte, estime, fixe une limite de gas explicite et relit le recu ; la regle 8
  * surveille qu aucun envoi ne s en passe. Le wallet de l utilisateur signe — cette page, jamais. */
 import { encodeTransfer, envoyerDepuisWallet, envoyerLotAtomique, noterWalletUtilise } from './envoi.js';
+/* la cause d un echec de creation, en categories fermees — voir causes-echec.js */
+import { etapeEchec } from './causes-echec.js';
 /* ⛔ LE MESSAGE VOYAGE DANS LE CALLDATA DU TRANSFERT : public, definitif, relisible sans nous. */
 import { encodeTransferAvecMemo, lireMemo, validerMemo, AVERTISSEMENT as AVERT_MEMO } from './messages.js';
 import { montantHumain, formaterUnites } from './montants.js';
@@ -11701,6 +11703,14 @@ async function creerBlock() {
       /* ⛔ ON COMPTE L ECHEC, ET ON LE REND COPIABLE. Jusqu ici un echec de creation ne laissait
        *    aucune trace : ni dans l entonnoir, ni dans une ligne que la personne puisse nous envoyer. */
       etape('cree_echec');
+      /* ⛔⛔ ET ON COMPTE SA CAUSE — mesure du 2026-09-23 : `cree` = 6 contre `cree_echec` = 8 en
+       *     production, sans aucun moyen de savoir si ces 8 sont des gens qui declinent dans leur
+       *     wallet (sain) ou des transactions qui revertent en brulant leur gas (grave). Le chiffre
+       *     existait depuis le debut et ne disait rien.
+       *   ⛔ CATEGORIE FERMEE, jamais `rc.etat` brut : un etat inconnu inventerait un nom de
+       *     compteur que la liste blanche rejetterait EN SILENCE — le defaut qu on vient de
+       *     corriger, reproduit le jour meme. Rien d identifiant ne part : une categorie, point. */
+      try { etape(etapeEchec(rc && rc.etat)); } catch (_) {}
       e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien + ligneDiagnostic('create', rc);
     }
   } finally {

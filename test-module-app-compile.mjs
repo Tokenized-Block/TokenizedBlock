@@ -13,7 +13,7 @@
  *    Elle attrape la classe d erreurs la plus bete et la plus frequente, rien de plus. Un vert ici
  *    ne veut PAS dire « la page marche » — seul un navigateur le dit.
  */
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -57,8 +57,44 @@ v('chaque module passe l analyse syntaxique de node', () => {
   });
 });
 
-assert.equal(n, 2, 'compte de cas inattendu : ' + n);
+/* ── LES IMPORTS ─────────────────────────────────────────────────────────────────────────────────
+ * ⛔⛔ POURQUOI C EST ICI ET PAS AILLEURS. `node --check` est AVEUGLE aux imports : il valide la
+ *     syntaxe et s arrete la. Or `serveur-web.js` sert une LISTE BLANCHE explicite de fichiers —
+ *     un module importe par app.html mais absent de cette liste rend 404, et un seul import en 404
+ *     tue le module ENTIER : page blanche, sans message, en production. C est arrive a deux doigts
+ *     aujourd hui en ajoutant `causes-echec.js`.
+ *   ⇒ La porte de syntaxe passait au vert sur exactement ce cas. Une garde qui mesure le transport
+ *     et pas l execution, encore. */
+const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
+const mFichiers = /const FICHIERS[A-Z_]* = \[([\s\S]*?)\n\];/.exec(srv)
+  || /\n\s*'app\.html',([\s\S]*?)\n\];/.exec(srv);
+const servis = new Set(mFichiers
+  ? [...mFichiers[1].matchAll(/'([^']+\.(?:js|json|html|png))'/g)].map((m) => m[1])
+  : []);
+
+const importes = [...blocs.join('\n').matchAll(/\bfrom\s+'\.\/([^']+)'/g)].map((m) => m[1]);
+
+v('la liste des fichiers servis a bien ete lue', () => {
+  /* ⛔ sans ce cas, une regex cassee rendrait `servis` vide et le cas suivant accuserait TOUS les
+   *   imports — un rouge bruyant qui ferait desactiver la garde. */
+  assert.ok(servis.size >= 50, 'seulement ' + servis.size + ' fichiers servis lus : lecture suspecte');
+  assert.ok(importes.length >= 20, 'seulement ' + importes.length + ' imports lus : lecture suspecte');
+});
+
+v('⛔ CHAQUE module importe par app.html existe ET est SERVI', () => {
+  const absentsDuDisque = importes.filter((f) => !existsSync(new URL('./' + f, import.meta.url)));
+  assert.deepEqual(absentsDuDisque, [], 'import(s) introuvable(s) sur le disque : '
+    + absentsDuDisque.join(', '));
+  const nonServis = [...new Set(importes)].filter((f) => !servis.has(f)).sort();
+  assert.deepEqual(nonServis, [], nonServis.length + ' module(s) importe(s) par app.html mais ABSENT(S)'
+    + ' de la liste blanche de serveur-web.js : ' + nonServis.join(', ')
+    + '\n   ⇒ chacun rendra 404 en production et tuera le module ENTIER : page blanche.');
+});
+
+assert.equal(n, 4, 'compte de cas inattendu : ' + n);
 console.log('ok module-app-compile — ' + n + ' cas : ' + blocs.length + ' module(s), '
   + blocs.reduce((a, b) => a + b.length, 0).toLocaleString('fr-FR') + ' caracteres compiles.');
-console.log('⚠️ NE PROUVE PAS que la page marche : ni import manquant, ni appel a une fonction');
-console.log('   inexistante, ni aucune erreur d execution ne sont vus ici.');
+console.log('   ' + importes.length + ' imports verifies : tous presents sur le disque et servis.');
+console.log('⚠️ NE PROUVE TOUJOURS PAS que la page marche : un appel a une fonction inexistante, un');
+console.log('   export mal nomme, ou toute erreur d EXECUTION restent invisibles ici. Seul un');
+console.log('   navigateur sur la page deployee le dit.');
