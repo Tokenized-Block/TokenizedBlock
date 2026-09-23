@@ -571,7 +571,7 @@ async function lireTrending() {
   try {
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     /* cold: 12h first (not 3d) so public RPC can finish; then incremental */
-    const blocs = blocsLusJusqua === null ? 6 * 1800 : Math.max(1, fin - blocsLusJusqua);
+    const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua); /* tip map-alive: 3d cold OK now fenetre≤999 */
     console.log('[trending] scan start · blocs=' + blocs + ' · connus=' + blocksConnus.size);
     const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
