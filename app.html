@@ -1743,7 +1743,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-no-rate-on-buttons" hidden>Build <code>20260923-no-rate-on-buttons</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-cheapest-route" hidden>Build <code>20260923-cheapest-route</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4837,7 +4837,31 @@ function poolDecouvertPour(adr) {
     const isTb = estNotreHook(hk);
     /* Prefer fee hook if somehow present; else any ETH pair we can trade/upgrade. */
     const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : (conf === 'SANS_HOOK' ? 100 : 50));
-    if (!best || score > best._score) best = { ...p, confiance: conf, _score: score, isTbFeeHook: isTb };
+    /* ⛔⛔ A CONFIANCE EGALE, LA MOINS CHERE GAGNE. Ce choix ne regardait QUE la confiance : entre
+     *     plusieurs pools du meme rang, la PREMIERE rencontree l emportait, quel que soit son prix.
+     *     MESURE DU 2026-09-23 sur SPIKE (0xb200…d601), 7 pools v4 lues sur la chaine :
+     *         77,00 %  <- celle que l app avait choisie
+     *         88,73 % · 87,84 % · 50,00 %   (sans hook)
+     *         0,00 % x3                     (avec hook)
+     *     Elle proposait donc un achat a 77 % de frais alors qu une pool a 50 % existait, et le
+     *     badge affichait « Fee 77.5% » : un chiffre VRAI, sur une route qu on n avait pas choisie
+     *     pour son prix. On routait un achat sans regarder ce qu il coute.
+     *     ⛔ LE FRAIS ILLISIBLE PERD TOUJOURS : MAX_SAFE_INTEGER en repli, donc une pool dont on n a
+     *       pas su lire le prix ne peut jamais battre une pool dont on l a lu. Un NaN qui gagnerait
+     *       ferait l inverse exact de ce correctif — `nan-walks-through-every-bound`.
+     *     ⚠️ CE QUE CA NE FAIT PAS : refuser un achat trop cher. Choisir la moins chere de sept
+     *        mauvaises reste un achat a 50 %. Le SEUIL de refus est une decision produit. */
+    /* ⛔⛔ `Number(null)` VAUT 0, ET `Number.isFinite(0)` EST VRAI. Ma premiere version ecrivait
+     *     `Number.isFinite(Number(p.cle.fee)) ? … : MAX` : une pool sans frais lisible devenait
+     *     donc une pool a 0 %, c est-a-dire LA MOINS CHERE DU MONDE, et gagnait toujours —
+     *     l inverse exact de l intention. Mon propre test l a attrape. Meme piege avec `''` et
+     *     `false`. On refuse donc les valeurs vides AVANT de convertir. */
+    const feeBrut = p.cle.fee;
+    const feeP = (feeBrut !== null && feeBrut !== undefined && feeBrut !== ''
+      && Number.isFinite(Number(feeBrut))) ? Number(feeBrut) : Number.MAX_SAFE_INTEGER;
+    if (!best || score > best._score || (score === best._score && feeP < best._fee)) {
+      best = { ...p, confiance: conf, _score: score, _fee: feeP, isTbFeeHook: isTb };
+    }
   }
   return best;
 }
