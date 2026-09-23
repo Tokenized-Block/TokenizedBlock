@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-new-offer" hidden>Build <code>20260923-new-offer</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-discover-on-blocks" hidden>Build <code>20260923-discover-on-blocks</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -10808,9 +10808,43 @@ async function lireTrending() {
   }
   peindreTrending();
 }
+/* ⛔⛔ LA DECOUVERTE DES POOLS NE TOURNAIT QUE SUR LE FEED, ET TOUTE L OFFRE EN DEPEND (2026-09-23).
+ *     MESURE, en production, sur un chargement froid qui va DIRECTEMENT sur Blocks :
+ *         0 bouton « Buy » sur 52 lignes — toutes disaient « Pair a block with it ».
+ *     Apres un simple passage par le Feed (qui appelle `lireLive`, seul endroit ou
+ *     `decouvrirPools` etait lance) : 32 « Buy » sur 50. Le bouton n etait pas casse — il etait
+ *     INVISIBLE a qui n avait pas visite un autre onglet.
+ *     ⇒ C est le coeur de la nouvelle offre (« we read every pool and route the cheapest ») :
+ *       sans pools decouvertes, on ne lit rien, on ne route rien, et on affiche un repli.
+ *     ⛔ UN SEUL TOUR, ET SEULEMENT SI RIEN N A ETE DECOUVERT : la condition est `poolsLive.size`
+ *       a zero, pas un minuteur. Relancer a chaque rendu ferait un balayage par tri de colonne.
+ *     ⛔ IL NE BLOQUE RIEN : le rendu se fait tout de suite avec ce qu on a, la decouverte repeint
+ *       APRES. Un ecran vide pendant dix secondes serait pire que le repli.
+ *     ⛔ ET UN ECHEC N EST PAS UNE ABSENCE DE POOL : on rouvre le droit de reessayer au lieu de
+ *       conclure « pas de marche » sur une panne de lecture. */
+let decouverteTrendingLancee = false;
+async function decouvrirPourTrending() {
+  if (decouverteTrendingLancee || Number(CHAINE) !== 8453) return;
+  const V = V4_ADRESSES[CHAINE];
+  if (!V || !V.poolm || (poolsLive && poolsLive.size)) return;
+  decouverteTrendingLancee = true;
+  try {
+    const head = parseInt(await rpc('eth_blockNumber', []), 16);
+    if (!Number.isSafeInteger(head)) { decouverteTrendingLancee = false; return; }
+    const d = await decouvrirPools({ rpc, poolManager: V.poolm,
+      deBloc: Math.max(0, head - DECOUVERTE_INITIALE), aBloc: head, jetons: null, pause: 250 });
+    (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
+    /* ⛔ on ne repeint QUE si on a trouve : un repaint a vide ferait clignoter la liste sans rien
+     *   changer, et ferait croire a un rafraichissement utile. */
+    if (d.pools && d.pools.size) { try { peindreTrending(); } catch (_) { /* rien */ } }
+  } catch (_) {
+    decouverteTrendingLancee = false;
+  }
+}
 function peindreTrending() {
   const ul = $('#trListe'), note = $('#trNote'), d = trDonnees;
   if (!ul || !d) return;
+  void decouvrirPourTrending();
   const cle = { h1: (l) => l.volume1hUsd, h24: (l) => l.volume24hUsd, gain: (l) => l.change1h ?? -1e9, liq: (l) => l.liquiditeUsd }[trTri];
   /* tip 0039 (Phil « montre tous les blocks qui ont ete chiffres ») : tous, par pages de 50 (« Show more ») */
   /* ⛔ PHIL (2026-09-19, capture « toujours buge ») : mesure — 8 lignes sur 194 ont bouge dans l heure (DexScreener
