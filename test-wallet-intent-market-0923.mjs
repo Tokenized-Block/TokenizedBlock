@@ -1,10 +1,14 @@
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : la table des chaines obligatoires contenait une
+ *    entree `['tip', 'data-build="<tip>"']` — elle exigeait un numero de build PRECIS, donc elle
+ *    rougissait des qu un autre agent deployait. Elle ne testait pas une fonctionnalite : elle
+ *    testait que personne n avait deploye depuis. Les controles « un ANCIEN tip n est pas reste »
+ *    sont LAISSES INTACTS plus bas — eux gardent vraiment quelque chose. */
 import { readFileSync } from 'fs';
 import { CLES_MARCHE } from './marche.js';
 import { HOOK_V8, HOOK_V3 } from './tokenomics.js';
 
 const h = readFileSync('./app.html', 'utf8');
 const need = [
-  ['tip', 'data-build="20260923-created-history"'],
   ['wallet-intent retained', 'tip 20260923-wallet-intent-market'],
   ['pret fail-closed', 'basculerChaine(CHAINE)'],
   ['pret Switch copy', 'Switch to Base to continue'],

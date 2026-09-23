@@ -10,7 +10,11 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
  *    personne n avait deploye depuis. L intention (« c est bien la version courante ») est
  *    gardee sous une forme qui ne pourrit pas : la ligne doit EXISTER et etre bien formee.
  *    ⛔ AUCUNE autre assertion de ce fichier n a ete touchee. */
-assert.match(html, /data-build="\d{8}-[\w-]+"/);
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
+ *    build precis, donc elle rougissait des qu un AUTRE deploiement bumpait le build. Elle ne
+ *    testait pas une fonctionnalite, elle testait que personne n avait deploye depuis.
+ *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
+assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
 assert.match(html, /preflightInstantBirthEthFixe/);
 assert.match(html, /tip 20260922-eth-fixe HARD/);

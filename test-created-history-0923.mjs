@@ -1,8 +1,12 @@
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : la table des chaines obligatoires contenait une
+ *    entree `['tip', 'data-build="<tip>"']` — elle exigeait un numero de build PRECIS, donc elle
+ *    rougissait des qu un autre agent deployait. Elle ne testait pas une fonctionnalite : elle
+ *    testait que personne n avait deploye depuis. Les controles « un ANCIEN tip n est pas reste »
+ *    sont LAISSES INTACTS plus bas — eux gardent vraiment quelque chose. */
 import { readFileSync } from 'fs';
 const h = readFileSync('./app.html', 'utf8');
 
 const need = [
-  ['tip', 'data-build="20260923-created-history"'],
   ['tip comment', 'tip 20260923-created-history'],
   ['Created all births', "if (liveFiltre === 'CREATION') return e.type === 'CREATION';"],
   ['TB paid partition', "liveFiltre === 'CREATION_TB') return e.type === 'CREATION' && e.paidCreate === true"],

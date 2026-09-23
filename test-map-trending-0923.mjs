@@ -6,7 +6,11 @@ if (!s.includes('sauverTrendingDisque')) throw new Error('no disk save');
 if (!s.includes('RPC_LIST')) throw new Error('no RPC_LIST');
 if (!/blocsLusJusqua === null \? 3 \* 43200/.test(s)) throw new Error('cold window not shortened');
 if (!/FENETRE_MAX = 999/.test(readFileSync('./index-blocks.js','utf8'))) throw new Error('FENETRE_MAX not 1000');
-if (!/data-build="20260923-map-dense"/.test(h) && !h.includes('data-build="20260923-created-history"')) throw new Error('tip fenetre1k missing');
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : elle exigeait un numero de build precis, donc
+ *    elle rougissait des qu un AUTRE deploiement bumpait le build. Ce qui est garde : la ligne
+ *    doit exister et etre bien formee. Les controles « un ANCIEN tip n est pas reste » sont
+ *    laisses intacts — eux gardent vraiment quelque chose. */
+if (!/data-build="[\w-]+"/.test(h)) throw new Error('ligne de build absente ou mal formee');
 if (!s.includes('NEVER hang HTTP')) throw new Error('hang comment missing');
 if (s.includes("return trCache.corps ? Promise.resolve(trCache.corps) : trEnCours")) throw new Error('old hang path still present');
 if (!s.includes('TRENDING_CACHE_VER')) throw new Error('no cache ver');

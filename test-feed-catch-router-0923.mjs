@@ -1,6 +1,10 @@
 import { readFileSync } from 'fs';
 const h = readFileSync('./app.html', 'utf8');
-if (!h.includes('data-build="20260923-feed-catch-router"') && !h.includes('data-build="20260923-created-history"')) throw new Error('tip');
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
+ *    build precis, donc elle rougissait des qu un AUTRE deploiement bumpait le build. Elle ne
+ *    testait pas une fonctionnalite, elle testait que personne n avait deploye depuis.
+ *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
+if (!/data-build="[\w-]+"/.test(h)) throw new Error('ligne de build absente ou mal formee');
 if (!h.includes('tip 20260923-feed-catch-router')) throw new Error('comment');
 if (!h.includes('data-filtre="CREATION_TB"')) throw new Error('TB paid chip');
 if (!h.includes('was born on TB · paid')) throw new Error('paid label');

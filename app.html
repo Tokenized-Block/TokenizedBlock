@@ -468,12 +468,7 @@ body:not(.surMap) .mapCentre{visibility:hidden}
 .mapCta:hover{filter:brightness(1.12)}
 body:not(.surMap) .mapCta{display:none}
 /* tip 20260923-map-buy-cta: sticky Map footer IB — visible when Map populated / on Map tab */
-.mapCtaDock{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--mapBas,72px) + 10px);z-index:25;
-  padding:11px 20px;border-radius:999px;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:13.5px;color:#fff;white-space:nowrap;
-  background:linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 8px 28px rgb(var(--boutonRgb) / .5),0 0 0 1px rgb(var(--accentRgb) / .4)}
-.mapCtaDock:hover{filter:brightness(1.1)}
-body:not(.surMap) .mapCtaDock{display:none}
-@media (max-width:760px){.mapCta{font-size:12px;padding:7px 12px}.mapCtaDock{font-size:12px;padding:9px 14px;max-width:92vw}}
+@media (max-width:760px){.mapCta{font-size:12px;padding:7px 12px}}
 /* ⛔ TELEPHONE (Phil, 2026-09-19 : « regarde bien la correction UX sur tel ») — mesure a 375 px : la barre du haut
    debordait, la page defilait en largeur, le texte du centre etait ecrase en une colonne d une lettre.
    Trois rangees : la marque ; les boutons (qui defilent a l horizontale, sans barre) ; le texte du centre, pleine largeur. */
@@ -995,7 +990,6 @@ details[open] > summary::before{transform:rotate(90deg)}
           <a class="lienLearn" id="mapTbgasDeep" href="/?block=0xb200000000000000000000df3ffcd9be89b3843c&amp;chain=8453">deep link</a>
         </p>
         <!-- tip 20260923-map-buy-cta: second sticky IB when Map is the lander (populated or empty) -->
-        <button type="button" id="mapCtaDock" class="mapCtaDock">Map works — Instant Birth · 0.001 ETH</button>
       </div>
 
       <!-- ⛔ FERME PAR DEFAUT. Le sujet est la map ; l explication est disponible, pas imposee. -->
@@ -1644,7 +1638,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-ecran-propre" hidden>Build <code>20260923-ecran-propre</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-un-seul-cta" hidden>Build <code>20260923-un-seul-cta</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12656,9 +12650,6 @@ function peindreCentre() {
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
 $('#mapCentre').addEventListener('click', () => { if (habitants.length) nouveauCentre(true); });
 $('#mapCta').addEventListener('click', () => { etape('map_cta'); poserIntent({ kind: 'ib' }); allerA('creer'); });
-/* tip 20260923-map-buy-cta: sticky Map footer = same Instant Birth funnel as header chip */
-const mapCtaDock = $('#mapCtaDock');
-if (mapCtaDock) mapCtaDock.addEventListener('click', () => { etape('map_cta'); poserIntent({ kind: 'ib' }); allerA('creer'); });
 etape('visite', true);
 /* le bouton ⤢ de la map fait le meme tirage */
 (function brancherTout() {

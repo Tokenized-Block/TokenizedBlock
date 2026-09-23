@@ -6,6 +6,10 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
  *    travaillent. Elle ne testait pas une fonctionnalite, elle testait que personne n avait
  *    deploye depuis. L intention est gardee sous une forme qui ne pourrit pas.
  *    ⛔ AUCUNE autre assertion de ce fichier n a ete touchee (compte verifie avant/apres). */
+/* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
+ *    build precis, donc elle rougissait des qu un AUTRE deploiement bumpait le build. Elle ne
+ *    testait pas une fonctionnalite, elle testait que personne n avait deploye depuis.
+ *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
 assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /tip 20260922-prepaye-inscrire-dust/);
 assert.match(html, /Register on V8 — 0\.0003 ETH min/);
