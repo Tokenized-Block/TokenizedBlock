@@ -31,8 +31,17 @@ const need = [
    *    bouton-la n echange rien : son `data-tf-act="instant-birth-tb"` OUVRE un marche.
    *    ⛔ Le controle reste : le bouton de repli doit exister et porter son prix. Ce qui change,
    *      c est qu il doit maintenant dire ce qu il FAIT. */
-  ['trending repli = ouvrir un marche', 'Open its market · 0.001 ETH'],
-  ['trending repli branche sur Instant Birth', 'data-tf-act="instant-birth-tb">Open its market'],
+  /* ⛔⛔ LE REPLI DE TRENDING A CHANGE DE NATURE LE 2026-09-23, et l ancien controle exigeait un
+   *     texte FAUX. Il disait « Open its market · 0.001 ETH » sur des lignes qui affichent juste a
+   *     cote leur volume 24 h, leur liquidite et leur nombre d echanges : ces blocks ONT un marche.
+   *     Ce que le repli voulait dire, c est « leur marche n est pas sur notre hook » — ca nous
+   *     regarde, pas le lecteur. Phil : « ca sert a rien ».
+   *     ⇒ Le repli propose desormais l APPAIRAGE, qui est un geste reel et dont le marche naissant
+   *       est sur notre hook. Le controle suit, et il exige en plus que le bouton porte l adresse :
+   *       un bouton d appairage sans adresse ne pourrait rien appairer. */
+  ['trending repli = appairer', 'Pair a block with it'],
+  ['trending repli porte l adresse', 'data-pairer="'],
+  ['appairage = une seule fonction', 'function pairerAvec(adr)'],
   ["etape('achat')", "etape('achat')"],
 ];
 for (const [label, s] of need) {

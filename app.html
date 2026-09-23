@@ -1689,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-companion-role" hidden>Build <code>20260923-companion-role</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-pair-not-ad" hidden>Build <code>20260923-pair-not-ad</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3125,19 +3125,29 @@ $('#fIb') && $('#fIb').addEventListener('click', () => {
   poserIntent({ kind: 'ib' });
   allerA('creer');
 });
-$('#fPairer').addEventListener('click', () => {
-  const adr = $('#fiche').dataset.block;
-  if (!adr) return;
+/* ⛔⛔ EXTRAIT EN FONCTION LE 2026-09-23. Ce geste — « appairer mon block avec celui-la » —
+ *     n existait qu au fond d une fiche, derriere un bouton que presque personne n ouvre.
+ *     Phil : « pouvoir se connecter entre blocks avec paired, parce que [le bouton actuel] ca sert
+ *     a rien » et « la pub de creer est deja en avant sur le 1er visuel, ca suffit, fais le vrai
+ *     code ».
+ *     ⇒ La meme logique, appelee de deux endroits au lieu d etre recopiee. Une copie diverge au
+ *       premier changement — c est le motif qui a deja laisse trois versions de hook sans marche. */
+function pairerAvec(adr) {
+  if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(String(adr))) return false;
   allerA('creer');
   const bloc = document.querySelector('[data-cmode="block"]'); if (bloc) bloc.click();
   const s = $('#cPaire');
-  if (s) {
-    if ([...s.options].some((o) => o.value.toLowerCase() === adr.toLowerCase())) s.value = [...s.options].find((o) => o.value.toLowerCase() === adr.toLowerCase()).value;
-    else { s.value = AUTRE_PAIRE; $('#cPaireAutre').value = adr; }
-    s.dispatchEvent(new Event('change'));
-    const det = s.closest('details'); if (det) det.open = true;
-  }
-});
+  if (!s) return false;
+  const deja = [...s.options].find((o) => o.value.toLowerCase() === String(adr).toLowerCase());
+  if (deja) s.value = deja.value;
+  /* ⛔ SINON ON PASSE PAR « autre » ET ON ECRIT L ADRESSE ENTIERE : un block absent de la liste doit
+   *    rester appairable, sinon le bouton mentirait sur ce qu il sait faire. */
+  else { s.value = AUTRE_PAIRE; const a = $('#cPaireAutre'); if (a) a.value = adr; }
+  s.dispatchEvent(new Event('change'));
+  const det = s.closest('details'); if (det) det.open = true;
+  return true;
+}
+$('#fPairer').addEventListener('click', () => { pairerAvec($('#fiche').dataset.block); });
 
 /* ══ GM — LE GESTE QUOTIDIEN ═══════════════════════════════════════════════════════════════════
  * ⛔⛔ UN GM EST UN VRAI TRANSFERT, PAS UN COMPTEUR. C est la difference entre un jeu et une
@@ -10591,7 +10601,18 @@ function peindreTrending() {
          *     `data-tf-act="instant-birth-tb"` ouvre un marche. « Trade » etait donc faux, et le
          *     « 0.001 ETH » a cote d un « 0.5% » rendait la confusion invisible.
          * ⛔ L action ne change pas, seulement son nom — et le nom dit maintenant ce qui se passe. */
-        return '<button type="button" class="bouton sec trAcheter" data-tf-act="instant-birth-tb">Open its market · 0.001 ETH</button>';
+        /* ⛔⛔ REMPLACE LE 2026-09-23 (Phil : « ca sert a rien » — il a raison, et c etait FAUX).
+         *     Ce repli disait « Open its market · 0.001 ETH » sur des lignes qui affichent, juste a
+         *     cote, le volume 24 h, la liquidite et le nombre d echanges. Higgsfield AI : 1,7 M$ de
+         *     volume, 4 811 echanges — et on lui proposait d OUVRIR son marche. Il en a un.
+         *     Ce que ce repli veut dire en verite, c est « son marche n est pas sur notre hook,
+         *     donc on ne peut pas y prendre 0,5 % ». Ca nous regarde, pas le lecteur.
+         * ⇒ L ACTION UTILE EST L APPAIRAGE : ouvrir un marche entre le block de l utilisateur et
+         *   celui-la. C est reel, ca existe deja, et le marche qui en nait est sur NOTRE hook —
+         *   donc c est aussi le seul repli qui puisse rapporter quelque chose.
+         * ⛔ ET CE N EST PLUS UNE PUB POUR CREATE : « la pub de creer est deja en avant sur le 1er
+         *    visuel, ca suffit ». Elle n a rien a faire repetee sur chaque ligne d un classement. */
+        return '<button type="button" class="bouton sec trAcheter" data-pairer="' + enTexte(l.adr) + '">Pair a block with it</button>';
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     || (d.lotsMarche && d.lotsMarche.ko
@@ -10643,6 +10664,19 @@ $('#trListe').addEventListener('click', (e) => {
   const li = e.target.closest('.trLigne');
   if (!li) return;
   const adr = li.getAttribute('data-block'), sym = li.getAttribute('data-sym');
+  /* ⛔⛔ APPAIRER, PAS FAIRE DE LA PUB (Phil, 2026-09-23 : « la pub de creer est deja en avant sur
+   *     le 1er visuel, ca suffit, fais le vrai code »). Ces lignes-la portent un marche VIVANT —
+   *     volume, liquidite, nombre d echanges sont affiches juste a cote. Leur proposer « ouvre ton
+   *     marche » etait faux ET inutile : ils en ont un.
+   *     Ce qu on peut vraiment faire avec eux, c est s y APPAIRER : ouvrir un marche entre le block
+   *     de l utilisateur et celui-la. C est un geste reel, il existe deja (`pairerAvec`), et le
+   *     marche qui en nait est sur NOTRE hook. */
+  const pr = e.target.closest('[data-pairer]');
+  if (pr) {
+    try { etape('pairer_clic'); } catch (_) {}
+    pairerAvec(pr.getAttribute('data-pairer'));
+    return;
+  }
   const ibTr = e.target.closest('[data-tf-act="instant-birth-tb"]');
   if (ibTr) {
     try { etape('create_clic'); } catch (_) {}
