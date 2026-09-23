@@ -1,14 +1,278 @@
 {
- "quand": "2026-09-23T09:50:11.487Z",
- "blocTete": 51683459,
+ "quand": "2026-09-22T16:05:28.934Z",
+ "blocTete": 51651615,
  "jours": 14,
  "jetons": [
+  {
+   "jeton": "0xb200000000000000000000f8a31c11d37c945e3d",
+   "bloc": 51046819,
+   "aNous": false,
+   "transferts": 202,
+   "silenceH": 101.35,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000002d0ba3164cc74f58b7",
+   "bloc": 51047277,
+   "aNous": false,
+   "transferts": 421254,
+   "silenceH": 0,
+   "etat": "CONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000472d1898178e681bc6",
+   "bloc": 51047704,
+   "aNous": false,
+   "transferts": 192,
+   "silenceH": 314.55,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000c0e45b9d38716c9001",
+   "bloc": 51048079,
+   "aNous": false,
+   "transferts": 2,
+   "silenceH": 335.3,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000e639f537ea63e42701",
+   "bloc": 51048423,
+   "aNous": false,
+   "transferts": 2,
+   "silenceH": 335.11,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000234bd98b6d3601dcc0",
+   "bloc": 51048773,
+   "aNous": false,
+   "transferts": 177,
+   "silenceH": 95.15,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000008f0940d0e07a74b101",
+   "bloc": 51049118,
+   "aNous": false,
+   "transferts": 2,
+   "silenceH": 334.72,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000008c5b96a4e72a359fc4",
+   "bloc": 51049427,
+   "aNous": false,
+   "transferts": 2066,
+   "silenceH": 334.46,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000006754f17265f2d28627",
+   "bloc": 51049854,
+   "aNous": false,
+   "transferts": 3,
+   "silenceH": 334.31,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000009cbb6ea29a47d65395",
+   "bloc": 51050282,
+   "aNous": false,
+   "transferts": 188,
+   "silenceH": 333.56,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000be71016c555e029401",
+   "bloc": 51050976,
+   "aNous": false,
+   "transferts": 2,
+   "silenceH": 333.69,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000cf7e947c58bd296beb",
+   "bloc": 51051462,
+   "aNous": false,
+   "transferts": 2079,
+   "silenceH": 287.87,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000b6cc4b264d6face401",
+   "bloc": 51052379,
+   "aNous": false,
+   "transferts": 199,
+   "silenceH": 188.73,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000676a1ca35e1e457d1b",
+   "bloc": 51052974,
+   "aNous": false,
+   "transferts": 3,
+   "silenceH": 332.58,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000dcf71d6476b278c6a8",
+   "bloc": 51053237,
+   "aNous": false,
+   "transferts": 2067,
+   "silenceH": 285.34,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000b1732b3b8e536aff01",
+   "bloc": 51053763,
+   "aNous": false,
+   "transferts": 13,
+   "silenceH": 331.63,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000046390aed221043f01",
+   "bloc": 51054466,
+   "aNous": false,
+   "transferts": 13589,
+   "silenceH": 0.49,
+   "etat": "CONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000f1b67d638085a7f4f2",
+   "bloc": 51056017,
+   "aNous": false,
+   "transferts": 258,
+   "silenceH": 330.38,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000bde024532fde61ae01",
+   "bloc": 51058200,
+   "aNous": false,
+   "transferts": 13,
+   "silenceH": 328.07,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb20000000000000000000025ff796237cc3c5b01",
+   "bloc": 51059808,
+   "aNous": false,
+   "transferts": 106,
+   "silenceH": 52.64,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000009fc6778693a18b8f01",
+   "bloc": 51060834,
+   "aNous": false,
+   "transferts": 5,
+   "silenceH": 326.98,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000f10a2e49cb8b8af434",
+   "bloc": 51061315,
+   "aNous": false,
+   "transferts": 3,
+   "silenceH": 327.94,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb20000000000000000000044345074a8c59d8201",
+   "bloc": 51062068,
+   "aNous": false,
+   "transferts": 5,
+   "silenceH": 325.58,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000003c7e3b3936558d6343",
+   "bloc": 51063958,
+   "aNous": false,
+   "transferts": 189,
+   "silenceH": 326.2,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000005835fffdea9d318c14",
+   "bloc": 51065561,
+   "aNous": false,
+   "transferts": 2107,
+   "silenceH": 324.56,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000c4bd323aaea5a07772",
+   "bloc": 51067229,
+   "aNous": false,
+   "transferts": 193,
+   "silenceH": 324.39,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000002773a04e223072a601",
+   "bloc": 51068564,
+   "aNous": false,
+   "transferts": 108,
+   "silenceH": 0.15,
+   "etat": "CONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000a10a56472474e1db01",
+   "bloc": 51070017,
+   "aNous": false,
+   "transferts": 94,
+   "silenceH": 309.55,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000001c770677669d7c8888",
+   "bloc": 51072134,
+   "aNous": false,
+   "transferts": 193,
+   "silenceH": 321.66,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000007e2a9a4499cf69cee2",
+   "bloc": 51073224,
+   "aNous": false,
+   "transferts": 197,
+   "silenceH": 321.06,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000c0ba67222b93d509c9",
+   "bloc": 51074500,
+   "aNous": false,
+   "transferts": 2091,
+   "silenceH": 310.31,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000f814fe81db197ec801",
+   "bloc": 51076043,
+   "aNous": false,
+   "transferts": 8,
+   "silenceH": 318.56,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000cf8644f11b80713efc",
+   "bloc": 51078034,
+   "aNous": false,
+   "transferts": 189,
+   "silenceH": 318.38,
+   "etat": "INCONNU"
+  },
   {
    "jeton": "0xb2000000000000000000003cf5fc18465c18e701",
    "bloc": 51079070,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 335.77,
+   "silenceH": 318.08,
    "etat": "INCONNU"
   },
   {
@@ -16,7 +280,7 @@
    "bloc": 51079263,
    "aNous": false,
    "transferts": 28,
-   "silenceH": 335.15,
+   "silenceH": 317.45,
    "etat": "INCONNU"
   },
   {
@@ -24,7 +288,7 @@
    "bloc": 51080314,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 334.8,
+   "silenceH": 317.11,
    "etat": "INCONNU"
   },
   {
@@ -32,7 +296,7 @@
    "bloc": 51081420,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 334.44,
+   "silenceH": 316.75,
    "etat": "INCONNU"
   },
   {
@@ -40,7 +304,7 @@
    "bloc": 51082045,
    "aNous": false,
    "transferts": 147,
-   "silenceH": 317.21,
+   "silenceH": 299.52,
    "etat": "INCONNU"
   },
   {
@@ -48,7 +312,7 @@
    "bloc": 51083082,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 329.64,
+   "silenceH": 311.95,
    "etat": "INCONNU"
   },
   {
@@ -56,7 +320,7 @@
    "bloc": 51083807,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 332.23,
+   "silenceH": 314.54,
    "etat": "INCONNU"
   },
   {
@@ -64,7 +328,7 @@
    "bloc": 51084198,
    "aNous": false,
    "transferts": 25,
-   "silenceH": 332.5,
+   "silenceH": 314.81,
    "etat": "INCONNU"
   },
   {
@@ -72,7 +336,7 @@
    "bloc": 51085053,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 332.45,
+   "silenceH": 314.76,
    "etat": "INCONNU"
   },
   {
@@ -80,7 +344,7 @@
    "bloc": 51085368,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 332.27,
+   "silenceH": 314.58,
    "etat": "INCONNU"
   },
   {
@@ -88,7 +352,7 @@
    "bloc": 51086137,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 331.78,
+   "silenceH": 314.09,
    "etat": "INCONNU"
   },
   {
@@ -96,7 +360,7 @@
    "bloc": 51086713,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 331.37,
+   "silenceH": 313.68,
    "etat": "INCONNU"
   },
   {
@@ -104,7 +368,7 @@
    "bloc": 51087397,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 331.12,
+   "silenceH": 313.43,
    "etat": "INCONNU"
   },
   {
@@ -112,7 +376,7 @@
    "bloc": 51088215,
    "aNous": false,
    "transferts": 36,
-   "silenceH": 325.4,
+   "silenceH": 307.71,
    "etat": "INCONNU"
   },
   {
@@ -120,23 +384,15 @@
    "bloc": 51089521,
    "aNous": false,
    "transferts": 236,
-   "silenceH": 294.14,
+   "silenceH": 276.45,
    "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000002d0ba3164cc74f58b7",
-   "bloc": 51089867,
-   "aNous": false,
-   "transferts": 418780,
-   "silenceH": 0,
-   "etat": "CONNU"
   },
   {
    "jeton": "0xb200000000000000000000c939857f1c43873501",
    "bloc": 51090477,
    "aNous": false,
    "transferts": 185,
-   "silenceH": 290.85,
+   "silenceH": 273.16,
    "etat": "INCONNU"
   },
   {
@@ -144,7 +400,7 @@
    "bloc": 51091779,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 328.66,
+   "silenceH": 310.97,
    "etat": "INCONNU"
   },
   {
@@ -152,7 +408,7 @@
    "bloc": 51093496,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 327.76,
+   "silenceH": 310.07,
    "etat": "INCONNU"
   },
   {
@@ -160,7 +416,7 @@
    "bloc": 51095078,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 326.88,
+   "silenceH": 309.19,
    "etat": "INCONNU"
   },
   {
@@ -168,7 +424,7 @@
    "bloc": 51095766,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 326.5,
+   "silenceH": 308.81,
    "etat": "INCONNU"
   },
   {
@@ -176,7 +432,7 @@
    "bloc": 51096063,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 326.33,
+   "silenceH": 308.64,
    "etat": "INCONNU"
   },
   {
@@ -184,7 +440,7 @@
    "bloc": 51096778,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 325.93,
+   "silenceH": 308.24,
    "etat": "INCONNU"
   },
   {
@@ -192,7 +448,7 @@
    "bloc": 51098872,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 324.08,
+   "silenceH": 306.39,
    "etat": "INCONNU"
   },
   {
@@ -200,7 +456,7 @@
    "bloc": 51100177,
    "aNous": false,
    "transferts": 7,
-   "silenceH": 323.79,
+   "silenceH": 306.1,
    "etat": "INCONNU"
   },
   {
@@ -208,23 +464,23 @@
    "bloc": 51102318,
    "aNous": false,
    "transferts": 21,
-   "silenceH": 322.55,
+   "silenceH": 304.86,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb200000000000000000000a42f70152904a4e601",
    "bloc": 51104110,
    "aNous": false,
-   "transferts": 76,
-   "silenceH": 38.69,
-   "etat": "INCONNU"
+   "transferts": 87,
+   "silenceH": 21,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000008c04d193d8eef3cf01",
    "bloc": 51104944,
    "aNous": false,
    "transferts": 358,
-   "silenceH": 58.06,
+   "silenceH": 40.37,
    "etat": "INCONNU"
   },
   {
@@ -232,7 +488,7 @@
    "bloc": 51106276,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 320.66,
+   "silenceH": 302.97,
    "etat": "INCONNU"
   },
   {
@@ -240,7 +496,7 @@
    "bloc": 51108331,
    "aNous": false,
    "transferts": 11,
-   "silenceH": 319.44,
+   "silenceH": 301.75,
    "etat": "INCONNU"
   },
   {
@@ -248,7 +504,7 @@
    "bloc": 51109462,
    "aNous": false,
    "transferts": 566,
-   "silenceH": 77.95,
+   "silenceH": 60.26,
    "etat": "INCONNU"
   },
   {
@@ -256,7 +512,7 @@
    "bloc": 51109975,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 318.58,
+   "silenceH": 300.89,
    "etat": "INCONNU"
   },
   {
@@ -264,7 +520,7 @@
    "bloc": 51111063,
    "aNous": false,
    "transferts": 12,
-   "silenceH": 317.98,
+   "silenceH": 300.29,
    "etat": "INCONNU"
   },
   {
@@ -272,7 +528,7 @@
    "bloc": 51113180,
    "aNous": false,
    "transferts": 584,
-   "silenceH": 314.83,
+   "silenceH": 297.14,
    "etat": "INCONNU"
   },
   {
@@ -280,7 +536,7 @@
    "bloc": 51114563,
    "aNous": false,
    "transferts": 2087,
-   "silenceH": 302.39,
+   "silenceH": 284.7,
    "etat": "INCONNU"
   },
   {
@@ -288,7 +544,7 @@
    "bloc": 51117206,
    "aNous": false,
    "transferts": 183,
-   "silenceH": 314.32,
+   "silenceH": 296.62,
    "etat": "INCONNU"
   },
   {
@@ -296,7 +552,7 @@
    "bloc": 51119567,
    "aNous": false,
    "transferts": 26,
-   "silenceH": 313.06,
+   "silenceH": 295.37,
    "etat": "INCONNU"
   },
   {
@@ -304,15 +560,15 @@
    "bloc": 51120859,
    "aNous": false,
    "transferts": 35,
-   "silenceH": 312.29,
+   "silenceH": 294.6,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb2000000000000000000005caf2824391bb74601",
    "bloc": 51122996,
    "aNous": false,
-   "transferts": 662,
-   "silenceH": 2.69,
+   "transferts": 892,
+   "silenceH": 7.72,
    "etat": "CONNU"
   },
   {
@@ -320,7 +576,7 @@
    "bloc": 51126195,
    "aNous": false,
    "transferts": 250,
-   "silenceH": 309.09,
+   "silenceH": 291.4,
    "etat": "INCONNU"
   },
   {
@@ -328,7 +584,7 @@
    "bloc": 51127975,
    "aNous": false,
    "transferts": 58,
-   "silenceH": 100.33,
+   "silenceH": 82.64,
    "etat": "INCONNU"
   },
   {
@@ -336,7 +592,7 @@
    "bloc": 51129180,
    "aNous": false,
    "transferts": 11,
-   "silenceH": 307.68,
+   "silenceH": 289.98,
    "etat": "INCONNU"
   },
   {
@@ -344,7 +600,7 @@
    "bloc": 51131060,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 306.89,
+   "silenceH": 289.2,
    "etat": "INCONNU"
   },
   {
@@ -352,7 +608,7 @@
    "bloc": 51131928,
    "aNous": false,
    "transferts": 264,
-   "silenceH": 305.89,
+   "silenceH": 288.2,
    "etat": "INCONNU"
   },
   {
@@ -360,7 +616,7 @@
    "bloc": 51132937,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 305.75,
+   "silenceH": 288.06,
    "etat": "INCONNU"
   },
   {
@@ -368,7 +624,7 @@
    "bloc": 51134383,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 305.04,
+   "silenceH": 287.35,
    "etat": "INCONNU"
   },
   {
@@ -376,7 +632,7 @@
    "bloc": 51135416,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 304.44,
+   "silenceH": 286.75,
    "etat": "INCONNU"
   },
   {
@@ -384,7 +640,7 @@
    "bloc": 51136174,
    "aNous": false,
    "transferts": 45,
-   "silenceH": 244.04,
+   "silenceH": 226.34,
    "etat": "INCONNU"
   },
   {
@@ -392,7 +648,7 @@
    "bloc": 51136352,
    "aNous": false,
    "transferts": 138,
-   "silenceH": 178.96,
+   "silenceH": 161.26,
    "etat": "INCONNU"
   },
   {
@@ -400,7 +656,7 @@
    "bloc": 51137451,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 303.33,
+   "silenceH": 285.64,
    "etat": "INCONNU"
   },
   {
@@ -408,7 +664,7 @@
    "bloc": 51137812,
    "aNous": false,
    "transferts": 33,
-   "silenceH": 274.11,
+   "silenceH": 256.42,
    "etat": "INCONNU"
   },
   {
@@ -416,7 +672,7 @@
    "bloc": 51138000,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 303.03,
+   "silenceH": 285.34,
    "etat": "INCONNU"
   },
   {
@@ -424,7 +680,7 @@
    "bloc": 51138113,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 302.97,
+   "silenceH": 285.28,
    "etat": "INCONNU"
   },
   {
@@ -432,7 +688,7 @@
    "bloc": 51138367,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 302.44,
+   "silenceH": 284.75,
    "etat": "INCONNU"
   },
   {
@@ -440,7 +696,7 @@
    "bloc": 51138819,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 302.57,
+   "silenceH": 284.88,
    "etat": "INCONNU"
   },
   {
@@ -448,7 +704,7 @@
    "bloc": 51139281,
    "aNous": false,
    "transferts": 23,
-   "silenceH": 290.85,
+   "silenceH": 273.16,
    "etat": "INCONNU"
   },
   {
@@ -456,7 +712,7 @@
    "bloc": 51139709,
    "aNous": false,
    "transferts": 119,
-   "silenceH": 280,
+   "silenceH": 262.31,
    "etat": "INCONNU"
   },
   {
@@ -464,7 +720,7 @@
    "bloc": 51141371,
    "aNous": false,
    "transferts": 136,
-   "silenceH": 288.25,
+   "silenceH": 270.56,
    "etat": "INCONNU"
   },
   {
@@ -472,7 +728,7 @@
    "bloc": 51142203,
    "aNous": false,
    "transferts": 43,
-   "silenceH": 234.68,
+   "silenceH": 216.99,
    "etat": "INCONNU"
   },
   {
@@ -480,7 +736,7 @@
    "bloc": 51143360,
    "aNous": false,
    "transferts": 220,
-   "silenceH": 299.55,
+   "silenceH": 281.86,
    "etat": "INCONNU"
   },
   {
@@ -488,7 +744,7 @@
    "bloc": 51144420,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 299.47,
+   "silenceH": 281.77,
    "etat": "INCONNU"
   },
   {
@@ -496,7 +752,7 @@
    "bloc": 51146796,
    "aNous": false,
    "transferts": 533,
-   "silenceH": 297.86,
+   "silenceH": 280.17,
    "etat": "INCONNU"
   },
   {
@@ -504,7 +760,7 @@
    "bloc": 51149771,
    "aNous": false,
    "transferts": 427,
-   "silenceH": 296.23,
+   "silenceH": 278.54,
    "etat": "INCONNU"
   },
   {
@@ -512,7 +768,7 @@
    "bloc": 51152032,
    "aNous": false,
    "transferts": 273,
-   "silenceH": 294.97,
+   "silenceH": 277.28,
    "etat": "INCONNU"
   },
   {
@@ -520,7 +776,7 @@
    "bloc": 51154220,
    "aNous": false,
    "transferts": 14,
-   "silenceH": 292.16,
+   "silenceH": 274.47,
    "etat": "INCONNU"
   },
   {
@@ -528,7 +784,7 @@
    "bloc": 51156080,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 52.26,
+   "silenceH": 34.57,
    "etat": "INCONNU"
   },
   {
@@ -536,7 +792,7 @@
    "bloc": 51157270,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 292.06,
+   "silenceH": 274.37,
    "etat": "INCONNU"
   },
   {
@@ -544,7 +800,7 @@
    "bloc": 51159391,
    "aNous": false,
    "transferts": 421,
-   "silenceH": 290.72,
+   "silenceH": 273.03,
    "etat": "INCONNU"
   },
   {
@@ -552,7 +808,7 @@
    "bloc": 51161523,
    "aNous": false,
    "transferts": 184,
-   "silenceH": 289.69,
+   "silenceH": 272,
    "etat": "INCONNU"
   },
   {
@@ -560,7 +816,7 @@
    "bloc": 51163152,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 288.79,
+   "silenceH": 271.1,
    "etat": "INCONNU"
   },
   {
@@ -568,7 +824,7 @@
    "bloc": 51164686,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 288.04,
+   "silenceH": 270.34,
    "etat": "INCONNU"
   },
   {
@@ -576,7 +832,7 @@
    "bloc": 51165752,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 287.56,
+   "silenceH": 269.87,
    "etat": "INCONNU"
   },
   {
@@ -584,7 +840,7 @@
    "bloc": 51167972,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 286.25,
+   "silenceH": 268.55,
    "etat": "INCONNU"
   },
   {
@@ -592,7 +848,7 @@
    "bloc": 51168741,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 282.87,
+   "silenceH": 265.18,
    "etat": "INCONNU"
   },
   {
@@ -600,7 +856,7 @@
    "bloc": 51170324,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 284.96,
+   "silenceH": 267.27,
    "etat": "INCONNU"
   },
   {
@@ -608,7 +864,7 @@
    "bloc": 51171738,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 284.29,
+   "silenceH": 266.6,
    "etat": "INCONNU"
   },
   {
@@ -616,7 +872,7 @@
    "bloc": 51172522,
    "aNous": false,
    "transferts": 207,
-   "silenceH": 282.73,
+   "silenceH": 265.04,
    "etat": "INCONNU"
   },
   {
@@ -624,7 +880,7 @@
    "bloc": 51174126,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 282.96,
+   "silenceH": 265.27,
    "etat": "INCONNU"
   },
   {
@@ -632,7 +888,7 @@
    "bloc": 51175502,
    "aNous": false,
    "transferts": 224,
-   "silenceH": 281.69,
+   "silenceH": 264,
    "etat": "INCONNU"
   },
   {
@@ -640,7 +896,7 @@
    "bloc": 51176666,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 281.47,
+   "silenceH": 263.78,
    "etat": "INCONNU"
   },
   {
@@ -648,7 +904,7 @@
    "bloc": 51178804,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 280.36,
+   "silenceH": 262.67,
    "etat": "INCONNU"
   },
   {
@@ -656,7 +912,7 @@
    "bloc": 51180149,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 278.37,
+   "silenceH": 260.68,
    "etat": "INCONNU"
   },
   {
@@ -664,7 +920,7 @@
    "bloc": 51181222,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 278.33,
+   "silenceH": 260.64,
    "etat": "INCONNU"
   },
   {
@@ -672,7 +928,7 @@
    "bloc": 51182335,
    "aNous": false,
    "transferts": 573,
-   "silenceH": 83.63,
+   "silenceH": 65.94,
    "etat": "INCONNU"
   },
   {
@@ -680,7 +936,7 @@
    "bloc": 51182789,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 274.33,
+   "silenceH": 256.64,
    "etat": "INCONNU"
   },
   {
@@ -688,7 +944,7 @@
    "bloc": 51184659,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 260.62,
+   "silenceH": 242.93,
    "etat": "INCONNU"
   },
   {
@@ -696,7 +952,7 @@
    "bloc": 51186903,
    "aNous": false,
    "transferts": 189,
-   "silenceH": 275.36,
+   "silenceH": 257.67,
    "etat": "INCONNU"
   },
   {
@@ -704,7 +960,7 @@
    "bloc": 51188673,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 274.88,
+   "silenceH": 257.19,
    "etat": "INCONNU"
   },
   {
@@ -712,7 +968,7 @@
    "bloc": 51189872,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 274.21,
+   "silenceH": 256.52,
    "etat": "INCONNU"
   },
   {
@@ -720,7 +976,7 @@
    "bloc": 51193214,
    "aNous": false,
    "transferts": 195,
-   "silenceH": 272.09,
+   "silenceH": 254.4,
    "etat": "INCONNU"
   },
   {
@@ -728,7 +984,7 @@
    "bloc": 51194975,
    "aNous": false,
    "transferts": 76,
-   "silenceH": 174.81,
+   "silenceH": 157.12,
    "etat": "INCONNU"
   },
   {
@@ -736,7 +992,7 @@
    "bloc": 51196109,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 270.48,
+   "silenceH": 252.79,
    "etat": "INCONNU"
   },
   {
@@ -744,7 +1000,7 @@
    "bloc": 51197098,
    "aNous": false,
    "transferts": 198,
-   "silenceH": 269.93,
+   "silenceH": 252.24,
    "etat": "INCONNU"
   },
   {
@@ -752,7 +1008,7 @@
    "bloc": 51198178,
    "aNous": false,
    "transferts": 197,
-   "silenceH": 269.33,
+   "silenceH": 251.64,
    "etat": "INCONNU"
   },
   {
@@ -760,7 +1016,7 @@
    "bloc": 51200436,
    "aNous": false,
    "transferts": 192,
-   "silenceH": 268.08,
+   "silenceH": 250.39,
    "etat": "INCONNU"
   },
   {
@@ -768,7 +1024,7 @@
    "bloc": 51202486,
    "aNous": false,
    "transferts": 273,
-   "silenceH": 266.94,
+   "silenceH": 249.25,
    "etat": "INCONNU"
   },
   {
@@ -776,7 +1032,7 @@
    "bloc": 51204585,
    "aNous": false,
    "transferts": 192,
-   "silenceH": 265.77,
+   "silenceH": 248.08,
    "etat": "INCONNU"
   },
   {
@@ -784,7 +1040,7 @@
    "bloc": 51206301,
    "aNous": false,
    "transferts": 191,
-   "silenceH": 264.82,
+   "silenceH": 247.13,
    "etat": "INCONNU"
   },
   {
@@ -792,7 +1048,7 @@
    "bloc": 51208564,
    "aNous": false,
    "transferts": 159,
-   "silenceH": 262.5,
+   "silenceH": 244.8,
    "etat": "INCONNU"
   },
   {
@@ -800,7 +1056,7 @@
    "bloc": 51211461,
    "aNous": false,
    "transferts": 4,
-   "silenceH": 262.06,
+   "silenceH": 244.36,
    "etat": "INCONNU"
   },
   {
@@ -808,7 +1064,7 @@
    "bloc": 51214493,
    "aNous": false,
    "transferts": 240,
-   "silenceH": 260.04,
+   "silenceH": 242.35,
    "etat": "INCONNU"
   },
   {
@@ -816,7 +1072,7 @@
    "bloc": 51217186,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 258.99,
+   "silenceH": 241.3,
    "etat": "INCONNU"
   },
   {
@@ -824,7 +1080,7 @@
    "bloc": 51218558,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 258.28,
+   "silenceH": 240.59,
    "etat": "INCONNU"
   },
   {
@@ -832,7 +1088,7 @@
    "bloc": 51220078,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 257.43,
+   "silenceH": 239.74,
    "etat": "INCONNU"
   },
   {
@@ -840,7 +1096,7 @@
    "bloc": 51220601,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 257.14,
+   "silenceH": 239.45,
    "etat": "INCONNU"
   },
   {
@@ -848,7 +1104,7 @@
    "bloc": 51222026,
    "aNous": false,
    "transferts": 234,
-   "silenceH": 255.84,
+   "silenceH": 238.15,
    "etat": "INCONNU"
   },
   {
@@ -856,7 +1112,7 @@
    "bloc": 51224113,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 255.19,
+   "silenceH": 237.5,
    "etat": "INCONNU"
   },
   {
@@ -864,7 +1120,7 @@
    "bloc": 51224906,
    "aNous": false,
    "transferts": 217,
-   "silenceH": 254.24,
+   "silenceH": 236.55,
    "etat": "INCONNU"
   },
   {
@@ -872,7 +1128,7 @@
    "bloc": 51225980,
    "aNous": false,
    "transferts": 344,
-   "silenceH": 253.65,
+   "silenceH": 235.96,
    "etat": "INCONNU"
   },
   {
@@ -880,7 +1136,7 @@
    "bloc": 51227763,
    "aNous": false,
    "transferts": 228,
-   "silenceH": 252.66,
+   "silenceH": 234.96,
    "etat": "INCONNU"
   },
   {
@@ -888,7 +1144,7 @@
    "bloc": 51229610,
    "aNous": false,
    "transferts": 467,
-   "silenceH": 251.86,
+   "silenceH": 234.17,
    "etat": "INCONNU"
   },
   {
@@ -896,7 +1152,7 @@
    "bloc": 51230899,
    "aNous": false,
    "transferts": 4,
-   "silenceH": 251.42,
+   "silenceH": 233.73,
    "etat": "INCONNU"
   },
   {
@@ -904,7 +1160,7 @@
    "bloc": 51233616,
    "aNous": false,
    "transferts": 205,
-   "silenceH": 249.4,
+   "silenceH": 231.71,
    "etat": "INCONNU"
   },
   {
@@ -912,7 +1168,7 @@
    "bloc": 51234766,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 249.27,
+   "silenceH": 231.58,
    "etat": "INCONNU"
   },
   {
@@ -920,7 +1176,7 @@
    "bloc": 51236168,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 248.5,
+   "silenceH": 230.8,
    "etat": "INCONNU"
   },
   {
@@ -928,7 +1184,7 @@
    "bloc": 51237635,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 247.68,
+   "silenceH": 229.99,
    "etat": "INCONNU"
   },
   {
@@ -936,7 +1192,7 @@
    "bloc": 51239068,
    "aNous": false,
    "transferts": 14,
-   "silenceH": 226.03,
+   "silenceH": 208.34,
    "etat": "INCONNU"
   },
   {
@@ -944,7 +1200,7 @@
    "bloc": 51240369,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 245.89,
+   "silenceH": 228.2,
    "etat": "INCONNU"
   },
   {
@@ -952,7 +1208,7 @@
    "bloc": 51242430,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 244.75,
+   "silenceH": 227.06,
    "etat": "INCONNU"
   },
   {
@@ -960,7 +1216,7 @@
    "bloc": 51245145,
    "aNous": false,
    "transferts": 191,
-   "silenceH": 243.24,
+   "silenceH": 225.54,
    "etat": "INCONNU"
   },
   {
@@ -968,7 +1224,7 @@
    "bloc": 51248065,
    "aNous": false,
    "transferts": 67,
-   "silenceH": 239.02,
+   "silenceH": 221.32,
    "etat": "INCONNU"
   },
   {
@@ -976,7 +1232,7 @@
    "bloc": 51252578,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 239.38,
+   "silenceH": 221.69,
    "etat": "INCONNU"
   },
   {
@@ -984,7 +1240,7 @@
    "bloc": 51255731,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 237.63,
+   "silenceH": 219.94,
    "etat": "INCONNU"
   },
   {
@@ -992,7 +1248,7 @@
    "bloc": 51257507,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 236.64,
+   "silenceH": 218.95,
    "etat": "INCONNU"
   },
   {
@@ -1000,7 +1256,7 @@
    "bloc": 51259774,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 234.2,
+   "silenceH": 216.51,
    "etat": "INCONNU"
   },
   {
@@ -1008,7 +1264,7 @@
    "bloc": 51261573,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 234.38,
+   "silenceH": 216.69,
    "etat": "INCONNU"
   },
   {
@@ -1016,7 +1272,7 @@
    "bloc": 51263418,
    "aNous": false,
    "transferts": 22,
-   "silenceH": 232.78,
+   "silenceH": 215.08,
    "etat": "INCONNU"
   },
   {
@@ -1024,7 +1280,7 @@
    "bloc": 51265411,
    "aNous": false,
    "transferts": 51,
-   "silenceH": 155.87,
+   "silenceH": 138.18,
    "etat": "INCONNU"
   },
   {
@@ -1032,7 +1288,7 @@
    "bloc": 51266988,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 231.35,
+   "silenceH": 213.66,
    "etat": "INCONNU"
   },
   {
@@ -1040,7 +1296,7 @@
    "bloc": 51269934,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 229.74,
+   "silenceH": 212.04,
    "etat": "INCONNU"
   },
   {
@@ -1048,7 +1304,7 @@
    "bloc": 51273806,
    "aNous": false,
    "transferts": 43,
-   "silenceH": 45.97,
+   "silenceH": 28.27,
    "etat": "INCONNU"
   },
   {
@@ -1056,7 +1312,7 @@
    "bloc": 51276192,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 226.25,
+   "silenceH": 208.56,
    "etat": "INCONNU"
   },
   {
@@ -1064,7 +1320,7 @@
    "bloc": 51278521,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 224.97,
+   "silenceH": 207.27,
    "etat": "INCONNU"
   },
   {
@@ -1072,7 +1328,7 @@
    "bloc": 51281007,
    "aNous": false,
    "transferts": 191,
-   "silenceH": 223.32,
+   "silenceH": 205.62,
    "etat": "INCONNU"
   },
   {
@@ -1080,7 +1336,7 @@
    "bloc": 51282817,
    "aNous": false,
    "transferts": 191,
-   "silenceH": 222.31,
+   "silenceH": 204.62,
    "etat": "INCONNU"
   },
   {
@@ -1088,7 +1344,7 @@
    "bloc": 51284866,
    "aNous": false,
    "transferts": 10,
-   "silenceH": 318.43,
+   "silenceH": 300.74,
    "etat": "INCONNU"
   },
   {
@@ -1096,7 +1352,7 @@
    "bloc": 51287466,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 220,
+   "silenceH": 202.31,
    "etat": "INCONNU"
   },
   {
@@ -1104,7 +1360,7 @@
    "bloc": 51289300,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 218.98,
+   "silenceH": 201.29,
    "etat": "INCONNU"
   },
   {
@@ -1112,7 +1368,7 @@
    "bloc": 51291950,
    "aNous": false,
    "transferts": 193,
-   "silenceH": 217.23,
+   "silenceH": 199.54,
    "etat": "INCONNU"
   },
   {
@@ -1120,7 +1376,7 @@
    "bloc": 51293767,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 216.5,
+   "silenceH": 198.8,
    "etat": "INCONNU"
   },
   {
@@ -1128,7 +1384,7 @@
    "bloc": 51296177,
    "aNous": false,
    "transferts": 126,
-   "silenceH": 215.02,
+   "silenceH": 197.33,
    "etat": "INCONNU"
   },
   {
@@ -1136,7 +1392,7 @@
    "bloc": 51299325,
    "aNous": false,
    "transferts": 455,
-   "silenceH": 213.07,
+   "silenceH": 195.38,
    "etat": "INCONNU"
   },
   {
@@ -1144,7 +1400,7 @@
    "bloc": 51301682,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 212.1,
+   "silenceH": 194.41,
    "etat": "INCONNU"
   },
   {
@@ -1152,7 +1408,7 @@
    "bloc": 51303569,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 131.17,
+   "silenceH": 113.48,
    "etat": "INCONNU"
   },
   {
@@ -1160,7 +1416,7 @@
    "bloc": 51305212,
    "aNous": false,
    "transferts": 273,
-   "silenceH": 209.87,
+   "silenceH": 192.18,
    "etat": "INCONNU"
   },
   {
@@ -1168,7 +1424,7 @@
    "bloc": 51306603,
    "aNous": false,
    "transferts": 123,
-   "silenceH": 208.86,
+   "silenceH": 191.17,
    "etat": "INCONNU"
   },
   {
@@ -1176,7 +1432,7 @@
    "bloc": 51308475,
    "aNous": false,
    "transferts": 290,
-   "silenceH": 207.82,
+   "silenceH": 190.13,
    "etat": "INCONNU"
   },
   {
@@ -1184,7 +1440,7 @@
    "bloc": 51309919,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 207.52,
+   "silenceH": 189.83,
    "etat": "INCONNU"
   },
   {
@@ -1192,7 +1448,7 @@
    "bloc": 51311583,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 206.6,
+   "silenceH": 188.91,
    "etat": "INCONNU"
   },
   {
@@ -1200,7 +1456,7 @@
    "bloc": 51312810,
    "aNous": false,
    "transferts": 273,
-   "silenceH": 205.65,
+   "silenceH": 187.96,
    "etat": "INCONNU"
   },
   {
@@ -1208,23 +1464,23 @@
    "bloc": 51314863,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 204.78,
+   "silenceH": 187.08,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb20000000000000000000047f57bc93d7f130101",
    "bloc": 51316493,
    "aNous": false,
-   "transferts": 61,
-   "silenceH": 9.27,
+   "transferts": 63,
+   "silenceH": 1.3,
    "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000000ee9988edd75453501",
    "bloc": 51316496,
    "aNous": false,
-   "transferts": 209,
-   "silenceH": 19.24,
+   "transferts": 234,
+   "silenceH": 1.55,
    "etat": "CONNU"
   },
   {
@@ -1232,7 +1488,7 @@
    "bloc": 51316500,
    "aNous": false,
    "transferts": 15,
-   "silenceH": 68.73,
+   "silenceH": 51.04,
    "etat": "INCONNU"
   },
   {
@@ -1240,79 +1496,55 @@
    "bloc": 51316505,
    "aNous": false,
    "transferts": 14,
-   "silenceH": 44.25,
+   "silenceH": 26.55,
    "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000046390aed221043f01",
-   "bloc": 51316534,
-   "aNous": false,
-   "transferts": 12836,
-   "silenceH": 0.75,
-   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000000d2fd39b1e6e5dd301",
    "bloc": 51316537,
    "aNous": false,
-   "transferts": 39,
-   "silenceH": 90.47,
+   "transferts": 43,
+   "silenceH": 72.78,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb20000000000000000000037bb3c4fbf09514801",
    "bloc": 51316546,
    "aNous": false,
-   "transferts": 13,
-   "silenceH": 190.89,
+   "transferts": 14,
+   "silenceH": 173.2,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb20000000000000000000052566bd29ffcee2801",
    "bloc": 51316560,
    "aNous": false,
-   "transferts": 17,
-   "silenceH": 45.91,
+   "transferts": 18,
+   "silenceH": 28.22,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb2000000000000000000007ab5bf182b1f897401",
    "bloc": 51316573,
    "aNous": false,
-   "transferts": 548,
-   "silenceH": 9.95,
-   "etat": "CONNU"
-  },
-  {
-   "jeton": "0xb20000000000000000000025ff796237cc3c5b01",
-   "bloc": 51316585,
-   "aNous": false,
-   "transferts": 85,
-   "silenceH": 15.16,
+   "transferts": 535,
+   "silenceH": 4.43,
    "etat": "CONNU"
   },
   {
    "jeton": "0xb200000000000000000000575ce52d9bf771f401",
    "bloc": 51316588,
    "aNous": false,
-   "transferts": 93,
-   "silenceH": 158.71,
+   "transferts": 122,
+   "silenceH": 141.02,
    "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000002773a04e223072a601",
-   "bloc": 51316593,
-   "aNous": false,
-   "transferts": 39,
-   "silenceH": 17.84,
-   "etat": "CONNU"
   },
   {
    "jeton": "0xb200000000000000000000f6337fa84f1671fc01",
    "bloc": 51318008,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 202.94,
+   "silenceH": 185.24,
    "etat": "INCONNU"
   },
   {
@@ -1320,7 +1552,7 @@
    "bloc": 51319433,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 202.04,
+   "silenceH": 184.35,
    "etat": "INCONNU"
   },
   {
@@ -1328,7 +1560,7 @@
    "bloc": 51320651,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 201.56,
+   "silenceH": 183.87,
    "etat": "INCONNU"
   },
   {
@@ -1336,7 +1568,7 @@
    "bloc": 51322129,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 200.74,
+   "silenceH": 183.05,
    "etat": "INCONNU"
   },
   {
@@ -1344,7 +1576,7 @@
    "bloc": 51323282,
    "aNous": false,
    "transferts": 52,
-   "silenceH": 185.57,
+   "silenceH": 167.88,
    "etat": "INCONNU"
   },
   {
@@ -1352,7 +1584,7 @@
    "bloc": 51325437,
    "aNous": false,
    "transferts": 110,
-   "silenceH": 198.74,
+   "silenceH": 181.04,
    "etat": "INCONNU"
   },
   {
@@ -1360,7 +1592,7 @@
    "bloc": 51327649,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 197.67,
+   "silenceH": 179.98,
    "etat": "INCONNU"
   },
   {
@@ -1368,7 +1600,7 @@
    "bloc": 51329690,
    "aNous": false,
    "transferts": 387,
-   "silenceH": 195.76,
+   "silenceH": 178.07,
    "etat": "INCONNU"
   },
   {
@@ -1376,7 +1608,7 @@
    "bloc": 51332288,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 195.09,
+   "silenceH": 177.4,
    "etat": "INCONNU"
   },
   {
@@ -1384,7 +1616,7 @@
    "bloc": 51334216,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 194.02,
+   "silenceH": 176.33,
    "etat": "INCONNU"
   },
   {
@@ -1392,7 +1624,7 @@
    "bloc": 51336214,
    "aNous": false,
    "transferts": 105,
-   "silenceH": 192.74,
+   "silenceH": 175.05,
    "etat": "INCONNU"
   },
   {
@@ -1400,7 +1632,7 @@
    "bloc": 51338402,
    "aNous": false,
    "transferts": 143,
-   "silenceH": 191.41,
+   "silenceH": 173.71,
    "etat": "INCONNU"
   },
   {
@@ -1408,7 +1640,7 @@
    "bloc": 51341247,
    "aNous": false,
    "transferts": 232,
-   "silenceH": 189.61,
+   "silenceH": 171.91,
    "etat": "INCONNU"
   },
   {
@@ -1416,7 +1648,7 @@
    "bloc": 51343738,
    "aNous": false,
    "transferts": 529,
-   "silenceH": 188.45,
+   "silenceH": 170.76,
    "etat": "INCONNU"
   },
   {
@@ -1424,7 +1656,7 @@
    "bloc": 51345720,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 187.63,
+   "silenceH": 169.94,
    "etat": "INCONNU"
   },
   {
@@ -1432,7 +1664,7 @@
    "bloc": 51346346,
    "aNous": false,
    "transferts": 44,
-   "silenceH": 186.83,
+   "silenceH": 169.14,
    "etat": "INCONNU"
   },
   {
@@ -1440,7 +1672,7 @@
    "bloc": 51347850,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 186.42,
+   "silenceH": 168.73,
    "etat": "INCONNU"
   },
   {
@@ -1448,7 +1680,7 @@
    "bloc": 51349816,
    "aNous": false,
    "transferts": 10,
-   "silenceH": 185.32,
+   "silenceH": 167.63,
    "etat": "INCONNU"
   },
   {
@@ -1456,7 +1688,7 @@
    "bloc": 51350048,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 185.08,
+   "silenceH": 167.39,
    "etat": "INCONNU"
   },
   {
@@ -1464,7 +1696,7 @@
    "bloc": 51350699,
    "aNous": false,
    "transferts": 328,
-   "silenceH": 184.69,
+   "silenceH": 167,
    "etat": "INCONNU"
   },
   {
@@ -1472,7 +1704,7 @@
    "bloc": 51352160,
    "aNous": false,
    "transferts": 321,
-   "silenceH": 183.81,
+   "silenceH": 166.12,
    "etat": "INCONNU"
   },
   {
@@ -1480,7 +1712,7 @@
    "bloc": 51352943,
    "aNous": false,
    "transferts": 17,
-   "silenceH": 182.61,
+   "silenceH": 164.92,
    "etat": "INCONNU"
   },
   {
@@ -1488,7 +1720,7 @@
    "bloc": 51353619,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 183.24,
+   "silenceH": 165.55,
    "etat": "INCONNU"
   },
   {
@@ -1496,7 +1728,7 @@
    "bloc": 51354783,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 180.73,
+   "silenceH": 163.04,
    "etat": "INCONNU"
   },
   {
@@ -1504,7 +1736,7 @@
    "bloc": 51356939,
    "aNous": false,
    "transferts": 139,
-   "silenceH": 180.89,
+   "silenceH": 163.2,
    "etat": "INCONNU"
   },
   {
@@ -1512,15 +1744,7 @@
    "bloc": 51358612,
    "aNous": false,
    "transferts": 11,
-   "silenceH": 180.43,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000df3ffcd9be89b3843c",
-   "bloc": 51360108,
-   "aNous": true,
-   "transferts": 10,
-   "silenceH": 160.32,
+   "silenceH": 162.74,
    "etat": "INCONNU"
   },
   {
@@ -1528,7 +1752,7 @@
    "bloc": 51360903,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 179.13,
+   "silenceH": 161.44,
    "etat": "INCONNU"
   },
   {
@@ -1536,7 +1760,7 @@
    "bloc": 51363238,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 177.9,
+   "silenceH": 160.21,
    "etat": "INCONNU"
   },
   {
@@ -1544,15 +1768,15 @@
    "bloc": 51366917,
    "aNous": false,
    "transferts": 107,
-   "silenceH": 175.69,
+   "silenceH": 158,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb2000000000000000000001e35e36073e278a41e",
    "bloc": 51368897,
    "aNous": false,
-   "transferts": 19699,
-   "silenceH": 0.87,
+   "transferts": 19697,
+   "silenceH": 4.69,
    "etat": "CONNU"
   },
   {
@@ -1560,7 +1784,7 @@
    "bloc": 51371431,
    "aNous": false,
    "transferts": 109,
-   "silenceH": 173.18,
+   "silenceH": 155.49,
    "etat": "INCONNU"
   },
   {
@@ -1568,7 +1792,7 @@
    "bloc": 51374424,
    "aNous": false,
    "transferts": 109,
-   "silenceH": 171.52,
+   "silenceH": 153.83,
    "etat": "INCONNU"
   },
   {
@@ -1576,7 +1800,7 @@
    "bloc": 51377561,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 169.94,
+   "silenceH": 152.25,
    "etat": "INCONNU"
   },
   {
@@ -1584,7 +1808,7 @@
    "bloc": 51379847,
    "aNous": false,
    "transferts": 138,
-   "silenceH": 168.38,
+   "silenceH": 150.69,
    "etat": "INCONNU"
   },
   {
@@ -1592,7 +1816,7 @@
    "bloc": 51382166,
    "aNous": false,
    "transferts": 139,
-   "silenceH": 166.98,
+   "silenceH": 149.29,
    "etat": "INCONNU"
   },
   {
@@ -1600,7 +1824,7 @@
    "bloc": 51385630,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 165.46,
+   "silenceH": 147.77,
    "etat": "INCONNU"
   },
   {
@@ -1608,7 +1832,7 @@
    "bloc": 51388268,
    "aNous": false,
    "transferts": 216,
-   "silenceH": 163.49,
+   "silenceH": 145.8,
    "etat": "INCONNU"
   },
   {
@@ -1616,7 +1840,7 @@
    "bloc": 51390434,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 162.79,
+   "silenceH": 145.1,
    "etat": "INCONNU"
   },
   {
@@ -1624,7 +1848,7 @@
    "bloc": 51392199,
    "aNous": false,
    "transferts": 44,
-   "silenceH": 159.87,
+   "silenceH": 142.18,
    "etat": "INCONNU"
   },
   {
@@ -1632,7 +1856,7 @@
    "bloc": 51394411,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 160.58,
+   "silenceH": 142.89,
    "etat": "INCONNU"
   },
   {
@@ -1640,7 +1864,7 @@
    "bloc": 51396794,
    "aNous": false,
    "transferts": 184,
-   "silenceH": 158.76,
+   "silenceH": 141.07,
    "etat": "INCONNU"
   },
   {
@@ -1648,7 +1872,7 @@
    "bloc": 51399351,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 157.81,
+   "silenceH": 140.12,
    "etat": "INCONNU"
   },
   {
@@ -1656,7 +1880,7 @@
    "bloc": 51401526,
    "aNous": false,
    "transferts": 205,
-   "silenceH": 156.12,
+   "silenceH": 138.43,
    "etat": "INCONNU"
   },
   {
@@ -1664,7 +1888,7 @@
    "bloc": 51405908,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 154.19,
+   "silenceH": 136.5,
    "etat": "INCONNU"
   },
   {
@@ -1672,7 +1896,7 @@
    "bloc": 51409232,
    "aNous": false,
    "transferts": 108,
-   "silenceH": 152.18,
+   "silenceH": 134.49,
    "etat": "INCONNU"
   },
   {
@@ -1680,7 +1904,7 @@
    "bloc": 51412597,
    "aNous": false,
    "transferts": 96,
-   "silenceH": 150.31,
+   "silenceH": 132.62,
    "etat": "INCONNU"
   },
   {
@@ -1688,7 +1912,7 @@
    "bloc": 51415372,
    "aNous": false,
    "transferts": 142,
-   "silenceH": 148.65,
+   "silenceH": 130.96,
    "etat": "INCONNU"
   },
   {
@@ -1696,7 +1920,7 @@
    "bloc": 51418779,
    "aNous": false,
    "transferts": 3,
-   "silenceH": 147.04,
+   "silenceH": 129.35,
    "etat": "INCONNU"
   },
   {
@@ -1704,7 +1928,7 @@
    "bloc": 51421333,
    "aNous": false,
    "transferts": 107,
-   "silenceH": 145.46,
+   "silenceH": 127.77,
    "etat": "INCONNU"
   },
   {
@@ -1712,7 +1936,7 @@
    "bloc": 51423284,
    "aNous": false,
    "transferts": 8,
-   "silenceH": 144.46,
+   "silenceH": 126.77,
    "etat": "INCONNU"
   },
   {
@@ -1720,7 +1944,7 @@
    "bloc": 51425010,
    "aNous": false,
    "transferts": 107,
-   "silenceH": 143.42,
+   "silenceH": 125.72,
    "etat": "INCONNU"
   },
   {
@@ -1728,7 +1952,7 @@
    "bloc": 51429127,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 139.92,
+   "silenceH": 122.23,
    "etat": "INCONNU"
   },
   {
@@ -1736,7 +1960,7 @@
    "bloc": 51432072,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 139.51,
+   "silenceH": 121.82,
    "etat": "INCONNU"
   },
   {
@@ -1744,7 +1968,7 @@
    "bloc": 51435778,
    "aNous": false,
    "transferts": 9,
-   "silenceH": 137.48,
+   "silenceH": 119.78,
    "etat": "INCONNU"
   },
   {
@@ -1752,7 +1976,7 @@
    "bloc": 51437983,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 136.36,
+   "silenceH": 118.67,
    "etat": "INCONNU"
   },
   {
@@ -1760,7 +1984,7 @@
    "bloc": 51441038,
    "aNous": false,
    "transferts": 289,
-   "silenceH": 134.18,
+   "silenceH": 116.49,
    "etat": "INCONNU"
   },
   {
@@ -1768,7 +1992,7 @@
    "bloc": 51443819,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 133.12,
+   "silenceH": 115.43,
    "etat": "INCONNU"
   },
   {
@@ -1776,7 +2000,7 @@
    "bloc": 51448686,
    "aNous": false,
    "transferts": 299,
-   "silenceH": 129.91,
+   "silenceH": 112.22,
    "etat": "INCONNU"
   },
   {
@@ -1784,7 +2008,7 @@
    "bloc": 51466020,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 120.8,
+   "silenceH": 103.11,
    "etat": "INCONNU"
   },
   {
@@ -1792,7 +2016,7 @@
    "bloc": 51468804,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 119.25,
+   "silenceH": 101.56,
    "etat": "INCONNU"
   },
   {
@@ -1800,7 +2024,7 @@
    "bloc": 51473725,
    "aNous": false,
    "transferts": 191,
-   "silenceH": 116.02,
+   "silenceH": 98.33,
    "etat": "INCONNU"
   },
   {
@@ -1808,7 +2032,7 @@
    "bloc": 51475753,
    "aNous": false,
    "transferts": 14,
-   "silenceH": 114.82,
+   "silenceH": 97.13,
    "etat": "INCONNU"
   },
   {
@@ -1816,15 +2040,7 @@
    "bloc": 51478831,
    "aNous": true,
    "transferts": 13,
-   "silenceH": 96.98,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb20000000000000000000071224edc6587e362d2",
-   "bloc": 51479454,
-   "aNous": true,
-   "transferts": 41,
-   "silenceH": 96.11,
+   "silenceH": 79.29,
    "etat": "INCONNU"
   },
   {
@@ -1832,7 +2048,7 @@
    "bloc": 51480646,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 112.4,
+   "silenceH": 94.7,
    "etat": "INCONNU"
   },
   {
@@ -1840,15 +2056,7 @@
    "bloc": 51483159,
    "aNous": false,
    "transferts": 297,
-   "silenceH": 110.78,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000006d6f9102e9e4b221e0",
-   "bloc": 51484540,
-   "aNous": true,
-   "transferts": 61,
-   "silenceH": 108.74,
+   "silenceH": 93.09,
    "etat": "INCONNU"
   },
   {
@@ -1856,15 +2064,7 @@
    "bloc": 51485361,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 110.05,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000a3f3e63b48ef57c481",
-   "bloc": 51486012,
-   "aNous": true,
-   "transferts": 2,
-   "silenceH": 109.69,
+   "silenceH": 92.36,
    "etat": "INCONNU"
   },
   {
@@ -1872,7 +2072,7 @@
    "bloc": 51487813,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 108.69,
+   "silenceH": 91,
    "etat": "INCONNU"
   },
   {
@@ -1880,7 +2080,7 @@
    "bloc": 51490542,
    "aNous": false,
    "transferts": 10,
-   "silenceH": 98.87,
+   "silenceH": 81.18,
    "etat": "INCONNU"
   },
   {
@@ -1888,7 +2088,7 @@
    "bloc": 51493170,
    "aNous": false,
    "transferts": 86,
-   "silenceH": 80.18,
+   "silenceH": 62.49,
    "etat": "INCONNU"
   },
   {
@@ -1896,7 +2096,7 @@
    "bloc": 51502042,
    "aNous": false,
    "transferts": 109,
-   "silenceH": 100.62,
+   "silenceH": 82.93,
    "etat": "INCONNU"
   },
   {
@@ -1904,7 +2104,7 @@
    "bloc": 51503822,
    "aNous": false,
    "transferts": 104,
-   "silenceH": 99.63,
+   "silenceH": 81.94,
    "etat": "INCONNU"
   },
   {
@@ -1912,7 +2112,7 @@
    "bloc": 51507157,
    "aNous": false,
    "transferts": 101,
-   "silenceH": 97.78,
+   "silenceH": 80.08,
    "etat": "INCONNU"
   },
   {
@@ -1920,7 +2120,7 @@
    "bloc": 51510169,
    "aNous": false,
    "transferts": 107,
-   "silenceH": 96.11,
+   "silenceH": 78.41,
    "etat": "INCONNU"
   },
   {
@@ -1928,7 +2128,7 @@
    "bloc": 51514991,
    "aNous": false,
    "transferts": 165,
-   "silenceH": 93.09,
+   "silenceH": 75.4,
    "etat": "INCONNU"
   },
   {
@@ -1936,23 +2136,15 @@
    "bloc": 51519249,
    "aNous": false,
    "transferts": 99,
-   "silenceH": 26.96,
-   "etat": "INCONNU"
+   "silenceH": 9.27,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000003e0ff6f4723f60ca01",
    "bloc": 51524568,
    "aNous": false,
    "transferts": 14,
-   "silenceH": 86.88,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000ab549fa65ad4edae3f",
-   "bloc": 51527429,
-   "aNous": true,
-   "transferts": 2,
-   "silenceH": 86.68,
+   "silenceH": 69.19,
    "etat": "INCONNU"
   },
   {
@@ -1960,15 +2152,7 @@
    "bloc": 51530148,
    "aNous": false,
    "transferts": 263,
-   "silenceH": 84.67,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000809778b2d38d114351",
-   "bloc": 51531218,
-   "aNous": true,
-   "transferts": 2,
-   "silenceH": 84.58,
+   "silenceH": 66.98,
    "etat": "INCONNU"
   },
   {
@@ -1976,7 +2160,7 @@
    "bloc": 51534903,
    "aNous": false,
    "transferts": 249,
-   "silenceH": 82.02,
+   "silenceH": 64.33,
    "etat": "INCONNU"
   },
   {
@@ -1984,7 +2168,7 @@
    "bloc": 51540391,
    "aNous": false,
    "transferts": 100,
-   "silenceH": 79.31,
+   "silenceH": 61.62,
    "etat": "INCONNU"
   },
   {
@@ -1992,7 +2176,7 @@
    "bloc": 51544131,
    "aNous": false,
    "transferts": 104,
-   "silenceH": 77.24,
+   "silenceH": 59.55,
    "etat": "INCONNU"
   },
   {
@@ -2000,7 +2184,7 @@
    "bloc": 51547425,
    "aNous": false,
    "transferts": 106,
-   "silenceH": 75.41,
+   "silenceH": 57.72,
    "etat": "INCONNU"
   },
   {
@@ -2008,7 +2192,7 @@
    "bloc": 51550850,
    "aNous": false,
    "transferts": 143,
-   "silenceH": 73.38,
+   "silenceH": 55.69,
    "etat": "INCONNU"
   },
   {
@@ -2016,7 +2200,7 @@
    "bloc": 51553378,
    "aNous": false,
    "transferts": 106,
-   "silenceH": 68.29,
+   "silenceH": 50.6,
    "etat": "INCONNU"
   },
   {
@@ -2024,7 +2208,7 @@
    "bloc": 51560135,
    "aNous": false,
    "transferts": 211,
-   "silenceH": 68,
+   "silenceH": 50.31,
    "etat": "INCONNU"
   },
   {
@@ -2032,7 +2216,7 @@
    "bloc": 51567015,
    "aNous": false,
    "transferts": 200,
-   "silenceH": 64.19,
+   "silenceH": 46.5,
    "etat": "INCONNU"
   },
   {
@@ -2040,7 +2224,7 @@
    "bloc": 51570635,
    "aNous": false,
    "transferts": 224,
-   "silenceH": 62.17,
+   "silenceH": 44.48,
    "etat": "INCONNU"
   },
   {
@@ -2048,7 +2232,7 @@
    "bloc": 51573760,
    "aNous": false,
    "transferts": 20,
-   "silenceH": 52.8,
+   "silenceH": 35.11,
    "etat": "INCONNU"
   },
   {
@@ -2056,7 +2240,7 @@
    "bloc": 51578239,
    "aNous": false,
    "transferts": 235,
-   "silenceH": 57.95,
+   "silenceH": 40.25,
    "etat": "INCONNU"
   },
   {
@@ -2064,7 +2248,7 @@
    "bloc": 51584257,
    "aNous": false,
    "transferts": 106,
-   "silenceH": 54.95,
+   "silenceH": 37.25,
    "etat": "INCONNU"
   },
   {
@@ -2072,7 +2256,7 @@
    "bloc": 51587527,
    "aNous": false,
    "transferts": 105,
-   "silenceH": 53.13,
+   "silenceH": 35.44,
    "etat": "INCONNU"
   },
   {
@@ -2080,7 +2264,7 @@
    "bloc": 51590312,
    "aNous": false,
    "transferts": 140,
-   "silenceH": 51.45,
+   "silenceH": 33.76,
    "etat": "INCONNU"
   },
   {
@@ -2088,7 +2272,7 @@
    "bloc": 51593987,
    "aNous": false,
    "transferts": 143,
-   "silenceH": 49.41,
+   "silenceH": 31.72,
    "etat": "INCONNU"
   },
   {
@@ -2096,7 +2280,7 @@
    "bloc": 51596480,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 48.32,
+   "silenceH": 30.63,
    "etat": "INCONNU"
   },
   {
@@ -2104,7 +2288,7 @@
    "bloc": 51601398,
    "aNous": false,
    "transferts": 217,
-   "silenceH": 45.09,
+   "silenceH": 27.4,
    "etat": "INCONNU"
   },
   {
@@ -2112,7 +2296,7 @@
    "bloc": 51605145,
    "aNous": false,
    "transferts": 5,
-   "silenceH": 43.51,
+   "silenceH": 25.82,
    "etat": "INCONNU"
   },
   {
@@ -2120,7 +2304,7 @@
    "bloc": 51607078,
    "aNous": false,
    "transferts": 206,
-   "silenceH": 41.92,
+   "silenceH": 24.23,
    "etat": "INCONNU"
   },
   {
@@ -2128,15 +2312,15 @@
    "bloc": 51608951,
    "aNous": false,
    "transferts": 274,
-   "silenceH": 40.89,
-   "etat": "INCONNU"
+   "silenceH": 23.19,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb200000000000000000000fcb266b6f892f7f00f",
    "bloc": 51610914,
    "aNous": false,
-   "transferts": 10,
-   "silenceH": 9.27,
+   "transferts": 4,
+   "silenceH": 22.61,
    "etat": "CONNU"
   },
   {
@@ -2144,7 +2328,7 @@
    "bloc": 51612859,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 39.22,
+   "silenceH": 21.53,
    "etat": "INCONNU"
   },
   {
@@ -2152,47 +2336,47 @@
    "bloc": 51615173,
    "aNous": false,
    "transferts": 15,
-   "silenceH": 37.5,
-   "etat": "INCONNU"
+   "silenceH": 19.81,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000002f5b00309f8b6e1201",
    "bloc": 51618449,
    "aNous": false,
    "transferts": 204,
-   "silenceH": 27.58,
-   "etat": "INCONNU"
+   "silenceH": 9.89,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb20000000000000000000025d20d457523647501",
    "bloc": 51620623,
    "aNous": false,
    "transferts": 17,
-   "silenceH": 31.52,
-   "etat": "INCONNU"
+   "silenceH": 13.83,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000008e84deaeafea443ec3",
    "bloc": 51621275,
    "aNous": false,
    "transferts": 290,
-   "silenceH": 34.05,
-   "etat": "INCONNU"
+   "silenceH": 16.36,
+   "etat": "CONNU"
   },
   {
    "jeton": "0xb2000000000000000000005bd006393808e06901",
    "bloc": 51629804,
    "aNous": false,
    "transferts": 2,
-   "silenceH": 29.81,
+   "silenceH": 12.12,
    "etat": "INCONNU"
   },
   {
    "jeton": "0xb200000000000000000000b0c26f36fba0b03106",
    "bloc": 51645232,
    "aNous": false,
-   "transferts": 5610,
-   "silenceH": 0,
+   "transferts": 1349,
+   "silenceH": 0.01,
    "etat": "CONNU"
   },
   {
@@ -2200,7 +2384,7 @@
    "bloc": 51648139,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 19.58,
+   "silenceH": 1.89,
    "etat": "CONNU"
   },
   {
@@ -2208,7 +2392,7 @@
    "bloc": 51649020,
    "aNous": false,
    "transferts": 6,
-   "silenceH": 19.12,
+   "silenceH": 1.43,
    "etat": "CONNU"
   },
   {
@@ -2216,208 +2400,56 @@
    "bloc": 51650433,
    "aNous": false,
    "transferts": 7,
-   "silenceH": 18.32,
+   "silenceH": 0.63,
    "etat": "CONNU"
   },
   {
-   "jeton": "0xb200000000000000000000f08311cabceea8164d",
-   "bloc": 51078665,
-   "aNous": false,
-   "transferts": 2111,
-   "silenceH": 330.6,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000c7c59b61886490d301",
-   "bloc": 51086622,
-   "aNous": false,
-   "transferts": 15,
-   "silenceH": 329.1,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000fa351f5edc3ac98e01",
-   "bloc": 51099237,
-   "aNous": false,
-   "transferts": 6,
-   "silenceH": 323.65,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000198d403bd853b44f8e",
-   "bloc": 51118212,
-   "aNous": false,
-   "transferts": 45,
-   "silenceH": 313.76,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000008a5d5642a60c644e01",
-   "bloc": 51136208,
-   "aNous": false,
-   "transferts": 4,
-   "silenceH": 303.95,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000ef544383db4e6b1201",
-   "bloc": 51143867,
-   "aNous": false,
-   "transferts": 5,
-   "silenceH": 298.95,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000005bb60e7554aaa8049d",
-   "bloc": 51166870,
-   "aNous": false,
-   "transferts": 3,
-   "silenceH": 286.99,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000889ddca2a6db5a1901",
-   "bloc": 51182487,
-   "aNous": false,
-   "transferts": 8,
-   "silenceH": 275.02,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000764b8fb4422296eb46",
-   "bloc": 51203689,
-   "aNous": false,
-   "transferts": 191,
-   "silenceH": 266.27,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000d701faf64ca9898cfd",
-   "bloc": 51225249,
-   "aNous": false,
-   "transferts": 3,
-   "silenceH": 254.56,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb20000000000000000000029cf11f9f15a64c6fa",
-   "bloc": 51246776,
-   "aNous": false,
-   "transferts": 193,
-   "silenceH": 242.33,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000c3994f0662214475f6",
-   "bloc": 51277300,
-   "aNous": false,
-   "transferts": 3,
-   "silenceH": 225.64,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000a2471389d91731e001",
-   "bloc": 51304235,
-   "aNous": false,
-   "transferts": 5,
-   "silenceH": 202.13,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000fd0f7b169a9d6ef901",
-   "bloc": 51316542,
-   "aNous": false,
-   "transferts": 7,
-   "silenceH": 195.72,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb20000000000000000000084a02d3dea24035247",
-   "bloc": 51329950,
-   "aNous": false,
-   "transferts": 143,
-   "silenceH": 196.1,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000d9f64b7acd74600a63",
-   "bloc": 51350744,
-   "aNous": false,
-   "transferts": 233,
-   "silenceH": 184.33,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000663375e37f595d426a",
-   "bloc": 51374911,
-   "aNous": false,
-   "transferts": 143,
-   "silenceH": 171.12,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000008eb9e4dc22872d8eb0",
-   "bloc": 51406259,
-   "aNous": false,
-   "transferts": 232,
-   "silenceH": 153.5,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000008df63c28a5da50fbfb",
-   "bloc": 51441893,
-   "aNous": false,
-   "transferts": 228,
-   "silenceH": 133.7,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000845d9c6a0f5c854c01",
-   "bloc": 51490641,
-   "aNous": false,
-   "transferts": 13,
-   "silenceH": 107.09,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000967490ab982ae9edc9",
-   "bloc": 51545263,
-   "aNous": false,
-   "transferts": 3,
-   "silenceH": 76.78,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000eee1d152bbdb6b2501",
-   "bloc": 51594833,
-   "aNous": false,
-   "transferts": 22,
-   "silenceH": 33.81,
-   "etat": "INCONNU"
-  },
-  {
-   "jeton": "0xb2000000000000000000007adca02290cbf52101",
-   "bloc": 51642411,
-   "aNous": false,
-   "transferts": 5,
-   "silenceH": 22.8,
-   "etat": "CONNU"
-  },
-  {
-   "jeton": "0xb200000000000000000000e4b0c5fbe9c8df579e",
-   "bloc": 51653364,
+   "jeton": "0xb200000000000000000000df3ffcd9be89b3843c",
+   "bloc": 51360108,
    "aNous": true,
-   "transferts": 5,
-   "silenceH": 15.05,
-   "etat": "CONNU"
+   "transferts": 10,
+   "silenceH": 142.63,
+   "etat": "INCONNU"
   },
   {
-   "jeton": "0xb200000000000000000000baa5356bfc210cc30a",
-   "bloc": 51662444,
+   "jeton": "0xb20000000000000000000071224edc6587e362d2",
+   "bloc": 51479454,
    "aNous": true,
-   "transferts": 3,
-   "silenceH": 11.25,
-   "etat": "CONNU"
+   "transferts": 41,
+   "silenceH": 78.42,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb2000000000000000000006d6f9102e9e4b221e0",
+   "bloc": 51484540,
+   "aNous": true,
+   "transferts": 61,
+   "silenceH": 91.05,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000a3f3e63b48ef57c481",
+   "bloc": 51486012,
+   "aNous": true,
+   "transferts": 2,
+   "silenceH": 92,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000ab549fa65ad4edae3f",
+   "bloc": 51527429,
+   "aNous": true,
+   "transferts": 2,
+   "silenceH": 68.99,
+   "etat": "INCONNU"
+  },
+  {
+   "jeton": "0xb200000000000000000000809778b2d38d114351",
+   "bloc": 51531218,
+   "aNous": true,
+   "transferts": 2,
+   "silenceH": 66.89,
+   "etat": "INCONNU"
   }
  ]
 }
