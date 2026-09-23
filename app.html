@@ -999,7 +999,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="mapHookedPath" style="margin:8px 0 0" hidden>
           <b>Hooked markets</b> · example
           <button type="button" class="puce" id="mapOpenTbgas">Open TBGAS</button>
-          · Buy/Sell in-app (0.5%) · hooked Dex chops · unhooked Dex = $0 → Launch hooked.
+          <!-- ⛔ « (0.5%) » retire (Phil, 2026-09-23 : « retire 0.5% partout, gene de trop »). -->
+          · Buy/Sell in-app · hooked Dex chops · unhooked Dex = $0 → Launch hooked.
           <a class="lienLearn" id="mapTbgasDeep" href="/?block=0xb200000000000000000000df3ffcd9be89b3843c&amp;chain=8453">deep link</a>
         </p>
         <!-- tip 20260923-map-buy-cta: second sticky IB when Map is the lander (populated or empty) -->
@@ -1038,7 +1039,7 @@ details[open] > summary::before{transform:rotate(90deg)}
                  nouveau block qui ne s acheterait QU avec celui-ci — un piege, pas une fonction. La carte garde deux
                  gestes : acheter, ouvrir. GM et faits restent dans le profil ; les boutons sont caches, pas supprimes. -->
             <div class="fActions fActionsMain">
-              <button class="bouton" id="fAcheter" type="button">Buy · 0.5%</button>
+              <button class="bouton" id="fAcheter" type="button">Buy</button>
               <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
@@ -1460,7 +1461,11 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton" id="bBotJournal" type="button" disabled>3 · Write journal</button>
       </div>
       <p class="note" id="bBotEtat" style="margin-top:8px">No propose yet — Option A waits for you.</p>
-      <p class="note" id="bX402Note">x402 recognition: ETH/USDC micropay for data/tools only · never Instant Birth 0.001 ETH · never Buy/Sell 0.5% · never a second Bridge 0.01% skim.</p>
+      <!-- ⛔ « 0.5% » RETIRE DU LIBELLE (Phil, 2026-09-23 : « retire 0.5% partout, gene de trop »).
+           La reserve reste ENTIERE : x402 ne remplace ni la naissance, ni l echange, ni le skim du
+           Bridge. C est le CHIFFRE qui part, pas la phrase — repeter un taux a chaque ecran le
+           transforme en argument de vente alors que ce n est qu une mecanique. -->
+      <p class="note" id="bX402Note">x402 recognition: ETH/USDC micropay for data/tools only · never Instant Birth · never Buy/Sell · never a second Bridge skim.</p>
     </div>
 
     <div class="carte">
@@ -1738,7 +1743,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-one-counter" hidden>Build <code>20260923-one-counter</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-no-rate-on-buttons" hidden>Build <code>20260923-no-rate-on-buttons</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2011,7 +2016,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="pJeu" id="pEchange" hidden>
         <!-- ⛔ PHIL (2026-09-19, capture « Fee 0.8%+ ») : « retirer l affichage des fees ». Le badge reste dans le DOM (le code
              l ecrit) mais n est plus montre ; les montants exacts restent dans la fenetre du wallet avant de signer. -->
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5%</span></div>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais"></span></div>
         <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
@@ -2038,12 +2043,12 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="dexCol">
             <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
-            <button class="bouton" id="peAcheter" type="button">Prepare buy · 0.5%</button>
+            <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
           </div>
           <div class="dexCol">
             <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
-            <button class="bouton sec" id="peVendre" type="button">Prepare sell · 0.5%</button>
+            <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
           </div>
         </div>
         <!-- ⛔ P0 tip 2250: ETH→USDC exit — 0.5% → FEE_WALLET; external DEX pays wallet nothing. Quoter-gated. -->
@@ -5160,10 +5165,10 @@ function peindreTrustFacts(adr, v, origine) {
       /* tip 2357 + tip 20260923-map-buy-cta: hooked (and other LUE allowed) → primary Buy · 0.5%; deepen secondary.
        * Parens fix: hooked branch previously dropped the action buttons (ternary + concat precedence). */
       cta.innerHTML = (info.isTbFeeHook
-        ? 'Buy or sell right here · 0.5% in-app'
+        ? 'Buy or sell right here'
         : 'Buy/Sell in-app · deepen if thin')
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="buy">Buy · 0.5%</button>'
+        + '<button type="button" class="bouton" data-tf-act="buy">Buy</button>'
         + '<button type="button" class="bouton sec" data-tf-act="deepen">Deepen liquidity</button></div>';
     }
   } else {
@@ -10748,7 +10753,7 @@ function peindreTrending() {
         const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE' || pool.confiance === 'SANS_HOOK' || pool.confiance === 'HOOK'));
         const liqOk = (l.liquiditeUsd || 0) >= 500;
         if (feeOk && liqOk) {
-          return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy · 0.5%</button>';
+          return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>';
         }
         /* ⛔⛔ LIBELLE CORRIGE LE 2026-09-23 (Phil : « ca aussi pourquoi ? »). Il disait « Trade on
          *     TB · 0.001 ETH », a cote de lignes qui disent « Buy · 0.5% ». Le lecteur croyait
@@ -12889,7 +12894,7 @@ function basculerBridgeMode(mode) {
     const action = (sel && sel.value) || 'watch_feed';
     /* Refuse marking pay for rails that must stay on-chain-only as if x402 replaced them */
     if (action === 'propose_launch' || action === 'propose_buy') {
-      setEtat('Launch / Buy-Sell stay on-chain (0.001 ETH / 0.5%). Use wallet rails — x402 does not replace them. You can still write a journal note.');
+      setEtat('Launch and Buy/Sell stay on-chain. Use wallet rails — x402 does not replace them. You can still write a journal note.');
       return;
     }
     const dub = assertNoDoubleChargeWithBridge({ x402Used: true, bridgeSkimUsed: false });
