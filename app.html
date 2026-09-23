@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-prune" hidden>Build <code>20260923-map-prune</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-map-prune-2" hidden>Build <code>20260923-map-prune-2</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -13267,6 +13267,37 @@ async function soleilsSurLaMap() {
       }
       marcheParAdr.set(String(l.adr).toLowerCase(), l);
     }
+    /* ⛔⛔ LA CARTE EST ELAGUEE ICI, ET C EST MA TROISIEME TENTATIVE — LES DEUX PRECEDENTES N ONT
+     *     RIEN FAIT, MESURE A L APPUI.
+     *     · 1re : filtre dans `poserBlocks`. Au premier rendu presque aucun etat n est lu, donc il
+     *       laissait tout passer. Et `creerHabitant` est appele depuis NEUF endroits, dont un qui
+     *       contourne `poserBlocks`. Mesure apres deploiement : 366 cubes, 90 sans marche.
+     *     · 2e : retrait dans `appliquerVie` quand l etat devient `NON_TROUVEE`. Mais `lireLaVie`
+     *       ne tourne plus a ce stade : mesure sur 60 s, 400 cubes et 146 `sansPrix`, PLATS. La
+     *       preuve que j attendais n arrivait jamais. Une garde qui attend un evenement qui ne se
+     *       produit pas ne garde rien.
+     *     ⇒ ON UTILISE LA DONNEE QU ON A DEJA, ET QUI ARRIVE VRAIMENT : la liste des marches
+     *       vivants, celle qui affiche « N blocks with a live market ». Un block absent de cette
+     *       liste n a pas de marche lisible — MEME source que l onglet Blocks, pas une hypothese.
+     *     ⛔ TROIS GARDE-FOUS, CHACUN VENANT D UN RISQUE REEL :
+     *       1. on n elague QUE si la liste est ARRIVEE et plausible (>= 20 entrees). Une liste vide
+     *          ou ratee viderait la carte entiere — le pire resultat possible ;
+     *       2. NOS blocks restent, meme sans marche : c est chez nous, on ne se cache pas ;
+     *       3. un block dont la vie a ete LUE sur la chaine reste meme absent de la liste — la
+     *          chaine prime sur un agregateur. */
+    try {
+      if (marcheParAdr.size >= 20) {
+        for (let i = habitants.length - 1; i >= 0; i--) {
+          const h = habitants[i];
+          if (!h || h.nous) continue;
+          if (h.etatVie === 'LUE') continue;
+          if (marcheParAdr.has(String(h.adr).toLowerCase())) continue;
+          if (h.el && h.el.parentNode) h.el.remove();
+          if (moteur3d && typeof moteur3d.retirer === 'function') { try { moteur3d.retirer(h); } catch (_) { /* rien */ } }
+          habitants.splice(i, 1);
+        }
+      }
+    } catch (_) { /* ⛔ un elagage qui echoue laisse la carte INTACTE, jamais a moitie vidée */ }
     /* ⛔ LA DONNEE LUE PUIS JETEE EST UN DEFAUT : ces FDV jugent aussi les stades, donc on repeint. */
     try { peindreStades(); } catch (_) { /* l onglet n est peut-etre pas encore peint */ }
     /* tip 20260923-map-anim: soleilsSurLaMap creates .bloc via creerHabitant WITHOUT poserBlocks —
