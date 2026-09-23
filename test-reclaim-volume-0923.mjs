@@ -1,3 +1,9 @@
+/* ⛔ CONTROLES DE PASTILLE RETIRES (2026-09-23, demande de Phil) : ils exigeaient la presence
+ *    des filtres « TB · paid » et « another launchpad », supprimes de l interface — « TB · paid »
+ *    affichait 0 en permanence, et la distinction regardait NOUS, pas le lecteur.
+ *    ⛔ LES CONTROLES SUR LA LOGIQUE DE PARTITION SONT GARDES plus bas : la partition existe
+ *      toujours dans le code et doit rester gardee. On retire l exigence d un BOUTON, jamais
+ *      celle d un COMPORTEMENT. */
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : la table des chaines obligatoires contenait une
  *    entree `['tip', 'data-build="<tip>"']` — elle exigeait un numero de build PRECIS, donc elle
  *    rougissait des qu un autre agent deployait. Elle ne testait pas une fonctionnalite : elle
@@ -15,13 +21,18 @@ const need = [
   ['Prepare sell', 'Prepare sell · 0.5%'],
   ['profile default IB', 'MAIN first paint = Instant Birth on TB'],
   ['foreign amplify', 'opens hooked market / Buy'],
-  ['foreign chip', 'data-filtre="CREATION_FOREIGN"'],
   /* tip 20260923-created-history: Created = all births; partitions stay honest */
   ['Created all births', "if (liveFiltre === 'CREATION') return e.type === 'CREATION';"],
   ['TB paid partition', "liveFiltre === 'CREATION_TB') return e.type === 'CREATION' && e.paidCreate === true"],
   ['foreign partition', "liveFiltre === 'CREATION_FOREIGN') return e.type === 'CREATION' && e.paidCreate !== true"],
   ['trending gate', 'Buy · 0.5% only when fee-capturable'],
-  ['trending Trade TB', 'Trade on TB · 0.001 ETH'],
+  /* ⛔ LIBELLE CORRIGE LE 2026-09-23 : « Trade on TB · 0.001 ETH » figurait a cote de lignes
+   *    « Buy · 0.5% », et le lecteur croyait comparer deux PRIX pour la MEME action. Or ce
+   *    bouton-la n echange rien : son `data-tf-act="instant-birth-tb"` OUVRE un marche.
+   *    ⛔ Le controle reste : le bouton de repli doit exister et porter son prix. Ce qui change,
+   *      c est qu il doit maintenant dire ce qu il FAIT. */
+  ['trending repli = ouvrir un marche', 'Open its market · 0.001 ETH'],
+  ['trending repli branche sur Instant Birth', 'data-tf-act="instant-birth-tb">Open its market'],
   ["etape('achat')", "etape('achat')"],
 ];
 for (const [label, s] of need) {

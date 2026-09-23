@@ -1103,7 +1103,15 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div id="cModeBlock">
     <div class="carte">
       <p class="titre"><span class="creaEtape">1</span> Name it</p>
-      <p class="sous">1 billion blocks, all minted to you at birth. Its cap equals that number — only its admin could raise it.</p>
+      <!-- ⛔ « — only its admin could raise it » RETIRE (Phil, 2026-09-23 : « retire ca de l app sur
+           l onglet create, t as trop de truc perso »). C etait une precision de mecanique interne
+           sur un ecran ou quelqu un choisit un nom : elle n aide pas a nommer un block, et elle
+           evoque un « admin » dont le lecteur ne sait rien.
+           ⛔ ET JE NE LA REMPLACE PAS PAR « personne ne peut l augmenter » : nos blocks sont sans
+              admin d apres la verification de Block 0 (3 roles absents), mais je n ai PAS verifie
+              que le chemin payant actuel produit le meme resultat. Affirmer l un ou l autre sans
+              l avoir mesure serait remplacer une phrase inutile par une phrase fausse. -->
+      <p class="sous">1 billion blocks, all minted to you at birth. Its cap equals that number.</p>
       <label class="champ">Name<input id="cNom" maxlength="32" placeholder="Tokenized Block" autocomplete="off"></label>
       <label class="champ">Symbol<input id="cSym" maxlength="12" placeholder="e.g. MOON" autocomplete="off" spellcheck="false"></label>
       <!-- ⛔ LE SEL FIXE L ADRESSE, et c est pour ca qu il est un CHAMP et pas un secret : deux
@@ -1638,7 +1646,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-un-seul-cta" hidden>Build <code>20260923-un-seul-cta</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-ux-live" hidden>Build <code>20260923-ux-live</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1647,9 +1655,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="puce on" data-filtre="TOUT" title="Everything this page read on chain in this window">All</button>
         <!-- tip 20260923-feed-catch-router: Created = honesty (foreign secondary); TB · paid = CreateRouter only -->
         <!-- tip 20260923-created-history: Created = all factory births in Live window; TB·paid / another launchpad stay honest partitions -->
-        <button type="button" class="puce" data-filtre="CREATION" title="All factory births in this Live window (labels stay honest — TB·paid vs another launchpad)">🧱 Created</button>
-        <button type="button" class="puce" data-filtre="CREATION_TB" title="Only creates that paid via CreateRouter Instant Birth on Tokenized Block">✦ TB · paid</button>
-        <button type="button" class="puce" data-filtre="CREATION_FOREIGN" title="Creates from another launchpad — reclaim with Instant Birth on TB">another launchpad</button>
+        <button type="button" class="puce" data-filtre="CREATION" title="Every block born on Base in this window — each row says where it was born">🧱 Created</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT" title="Buys — the block left its pool for someone's wallet">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE" title="Sells — the block went back into its pool">🔴 Kill</button>
@@ -6528,7 +6534,7 @@ function peindreLive() {
     const foreignCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
     /* tip 20260923-reclaim-volume: stronger primary IB — birth on TB opens hooked market / Buy path */
     const openHint = foreignCreate
-      ? ' · <button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
+      ? ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
         + ' · <span class="filOpen">opens hooked market / Buy</span>'
         + ' · <span class="filOpen">Open profile</span>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
@@ -10423,7 +10429,13 @@ function peindreTrending() {
         if (feeOk && liqOk) {
           return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy · 0.5%</button>';
         }
-        return '<button type="button" class="bouton sec trAcheter" data-tf-act="instant-birth-tb">Trade on TB · 0.001 ETH</button>';
+        /* ⛔⛔ LIBELLE CORRIGE LE 2026-09-23 (Phil : « ca aussi pourquoi ? »). Il disait « Trade on
+         *     TB · 0.001 ETH », a cote de lignes qui disent « Buy · 0.5% ». Le lecteur croyait
+         *     comparer DEUX PRIX POUR LA MEME ACTION — alors que ce bouton-ci n echange RIEN : son
+         *     `data-tf-act="instant-birth-tb"` ouvre un marche. « Trade » etait donc faux, et le
+         *     « 0.001 ETH » a cote d un « 0.5% » rendait la confusion invisible.
+         * ⛔ L action ne change pas, seulement son nom — et le nom dit maintenant ce qui se passe. */
+        return '<button type="button" class="bouton sec trAcheter" data-tf-act="instant-birth-tb">Open its market · 0.001 ETH</button>';
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     || (d.lotsMarche && d.lotsMarche.ko

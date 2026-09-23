@@ -1,3 +1,9 @@
+/* ⛔ CONTROLES DE PASTILLE RETIRES (2026-09-23, demande de Phil) : ils exigeaient la presence
+ *    des filtres « TB · paid » et « another launchpad », supprimes de l interface — « TB · paid »
+ *    affichait 0 en permanence, et la distinction regardait NOUS, pas le lecteur.
+ *    ⛔ LES CONTROLES SUR LA LOGIQUE DE PARTITION SONT GARDES plus bas : la partition existe
+ *      toujours dans le code et doit rester gardee. On retire l exigence d un BOUTON, jamais
+ *      celle d un COMPORTEMENT. */
 import { readFileSync } from 'fs';
 const h = readFileSync('./app.html', 'utf8');
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
@@ -6,7 +12,6 @@ const h = readFileSync('./app.html', 'utf8');
  *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
 if (!/data-build="[\w-]+"/.test(h)) throw new Error('ligne de build absente ou mal formee');
 if (!h.includes('tip 20260923-feed-catch-router')) throw new Error('comment');
-if (!h.includes('data-filtre="CREATION_TB"')) throw new Error('TB paid chip');
 if (!h.includes('was born on TB · paid')) throw new Error('paid label');
 if (!h.includes('foreignCreate')) throw new Error('foreignCreate');
 if (!h.includes('data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH')) throw new Error('IB CTA');

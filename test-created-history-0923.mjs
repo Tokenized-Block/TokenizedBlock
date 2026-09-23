@@ -1,3 +1,9 @@
+/* ⛔ CONTROLES DE PASTILLE RETIRES (2026-09-23, demande de Phil) : ils exigeaient la presence
+ *    des filtres « TB · paid » et « another launchpad », supprimes de l interface — « TB · paid »
+ *    affichait 0 en permanence, et la distinction regardait NOUS, pas le lecteur.
+ *    ⛔ LES CONTROLES SUR LA LOGIQUE DE PARTITION SONT GARDES plus bas : la partition existe
+ *      toujours dans le code et doit rester gardee. On retire l exigence d un BOUTON, jamais
+ *      celle d un COMPORTEMENT. */
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : la table des chaines obligatoires contenait une
  *    entree `['tip', 'data-build="<tip>"']` — elle exigeait un numero de build PRECIS, donc elle
  *    rougissait des qu un autre agent deployait. Elle ne testait pas une fonctionnalite : elle
@@ -14,11 +20,16 @@ const need = [
   ['LIVE_HISTOIRE', 'LIVE_HISTOIRE_BLOCS = 12000'],
   ['auto ancien budget', 'liveAuto * LIVE_FENETRE < LIVE_HISTOIRE_BLOCS'],
   ['LIVE_FENETRE 999', 'LIVE_FENETRE = 999'],
-  ['Created title', 'All factory births in this Live window'],
+  /* ⛔ TITRE MIS A JOUR (2026-09-23) : l ancien annonçait « labels stay honest — TB·paid vs another
+   *    launchpad », c est-a-dire un decoupage retire de l interface a la demande de Phil. Un titre
+   *    qui promet un tri qui n existe plus est un faux, meme discret.
+   *    ⛔ CE QUI EST TOUJOURS EXIGE, et c est ajoute juste en dessous : que chaque LIGNE dise ou le
+   *      block est ne. La promesse d honnetete ne disparait pas, elle change de place — de l onglet
+   *      vers la ligne, la ou le lecteur la voit vraiment. */
+  ['Created title', 'Every block born on Base in this window'],
+  ['origine dite par ligne', 'was born on another launchpad'],
   ['IB CTA 0.001', 'data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH'],
   ['paid-first sort', "liveFiltre === 'CREATION' || liveFiltre === 'CREATION_TB' || liveFiltre === 'CREATION_FOREIGN'"],
-  ['foreign chip', 'data-filtre="CREATION_FOREIGN"'],
-  ['TB paid chip', 'data-filtre="CREATION_TB"'],
 ];
 for (const [label, s] of need) {
   if (!h.includes(s)) throw new Error('missing ' + label + ': ' + s.slice(0, 120));
