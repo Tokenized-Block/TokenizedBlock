@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-living-map" hidden>Build <code>20260923-living-map</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-map-prune" hidden>Build <code>20260923-map-prune</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3607,6 +3607,26 @@ function appliquerVie(h, r) {
   /* ⛔ mesure en navigateur (2026-09-14) : peinte seulement a la FIN de la lecture de tous les blocks, la carte des stades
    *    restait vide plus de 40 s sous saturation. Elle se repeint a chaque vie lue : on voit les blocks monter de stade. */
   queueMicrotask(peindreStades);
+  /* ⛔⛔ C EST ICI QUE LE BLOCK QUITTE LA CARTE, PAS AU PREMIER RENDU. Mon premier correctif
+   *     filtrait dans `poserBlocks` : au premier rendu, presque aucun `etatVie` n est lu, donc le
+   *     filtre laissait tout passer et rien ne le rejouait. Mesure apres deploiement : 366 cubes,
+   *     dont 90 a la taille « sans marche » — le filtre n avait RIEN retire.
+   *     Et `creerHabitant` est appele depuis NEUF endroits, dont un qui contourne explicitement
+   *     `poserBlocks` (« creates .bloc via creerHabitant WITHOUT poserBlocks »). Une garde posee
+   *     chez UN appelant ne garde pas les huit autres — `ssrf-guard-must-run-per-hop`.
+   *     ⇒ Le retrait se fait au moment ou l absence de marche est PROUVEE, quel que soit le chemin
+   *       par lequel le block est arrive.
+   *     ⛔ `NON_TROUVEE` SEULEMENT : c est « on a cherche, il n y a rien ». Un etat non lu ou une
+   *       lecture ratee laissent le block en place — on ne retire jamais sur ce qu on n a pas vu. */
+  if (r.etat === 'NON_TROUVEE') {
+    try {
+      if (h.el && h.el.parentNode) h.el.remove();
+      if (moteur3d && typeof moteur3d.retirer === 'function') moteur3d.retirer(h);
+      const i = habitants.indexOf(h);
+      if (i >= 0) habitants.splice(i, 1);
+    } catch (_) { /* ⛔ un retrait qui echoue laisse le block VISIBLE, jamais a moitie efface */ }
+    return;
+  }
   if (r.etat !== 'LUE') return;
   h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
   const t = Math.round(tailleDe(r.vie, r.devise) * (h.nous ? 1.25 : 1));
