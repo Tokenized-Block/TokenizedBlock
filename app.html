@@ -1169,6 +1169,26 @@ details[open] > summary::before{transform:rotate(90deg)}
         </label>
         <p class="note" id="cPhotoEtat" style="margin:0 0 6px"></p>
       </details>
+      <!-- ⛔⛔ TOKENIZED X — idee de Phil (2026-09-23) : « on peut ajouter le lien X d un tweet pour
+           tokeniser du contenu web2, X est parfait comme exemple a utiliser SANS BESOIN D API ».
+           Elle marche parce que l URL porte DEJA tout ce qui identifie le post :
+               https://x.com/<handle>/status/<id>
+           L identifiant et le handle sont dans la chaine. Aucune requete, aucune cle, aucun tiers.
+           ⛔ CE QUI EST GRAVE EST UNE REFERENCE, PAS UNE PREUVE : rien n ouvre le lien, donc rien
+              ne sait si le post existe ni a qui il est. La phrase a l ecran le DIT — c est la seule
+              chose vraie qu on puisse affirmer sans appeler X, et la taire laisserait croire a une
+              verification qui n a pas eu lieu.
+           ⛔ MEME IDIOME QUE LE BLOC IMAGE JUSTE AU-DESSUS (Phil : « sois pas un bourrin, adapte-toi
+              a ce qui existe ») : meme `details.bDetail`, meme `label.champ`, meme case a cocher en
+              `label.note` avec le meme style en ligne, meme `p.note` d etat. Aucun style nouveau. -->
+      <details class="bDetail" id="cTweetDetail">
+        <summary class="note">Tokenize a post from X — engraved with the block</summary>
+        <label class="note" style="display:flex;align-items:center;gap:8px;margin:2px 0 6px">
+          <input type="checkbox" id="cTweetOui"> Tokenize a post
+        </label>
+        <label class="champ">Post link<input type="url" id="cTweetLien" placeholder="https://x.com/name/status/123…" autocomplete="off" spellcheck="false" disabled></label>
+        <p class="note" id="cTweetEtat" style="margin:0 0 6px"></p>
+      </details>
       <details class="bDetail" id="cReglagesDetail" open><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
@@ -1646,7 +1666,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-plain-words" hidden>Build <code>20260923-plain-words</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-tokenized-x" hidden>Build <code>20260923-tokenized-x</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2173,6 +2193,8 @@ import { apparenceDepuisAdresse } from './apparence.js';
  *   il vit dans le chemin qui signe, et ce chemin a deja envoye trois regressions en production. */
 import { budgetSurFace } from './photo.js';
 import { fondEchantillonne, effacerFond, verdictFond } from './retirer-fond.js';
+/* ⛔ UNE SEULE SOURCE POUR LA LECTURE D UN LIEN X : l ecran met en phrase, il ne decide pas. */
+import { lireLienX, phraseTweet } from './tweet-grave.js';
 import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE as MATIERES,
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
@@ -9521,6 +9543,49 @@ async function appliquerPhoto() {
 for (const id of ['#cPhotoOu', '#cPhotoFond']) {
   const el = $(id);
   if (el) el.addEventListener('change', () => { appliquerPhoto(); });
+}
+
+/* ══ TOKENIZED X — le lien du post grave avec le block ════════════════════════════════════════
+ * ⛔⛔ LA DECISION N EST PAS PRISE ICI. `tweet-grave.js` est pur et teste (82 assertions) ; cette
+ *     colle ne fait que lui passer la saisie et mettre sa reponse a l ecran. Recopier la regle de
+ *     validation ici en ferait une deuxieme source, qui divergerait au premier changement.
+ * ⛔ ET RIEN N OUVRE LE LIEN : pas de `fetch`, pas d `<img>`, pas d aperçu. C est tout l interet
+ *    de l idee (« sans besoin d api ») — et ca veut dire qu on ne sait PAS si le post existe. La
+ *    phrase rendue par `phraseTweet` le dit en toutes lettres, et un test refuse toute promesse de
+ *    verification. */
+function appliquerTweet() {
+  const coche = $('#cTweetOui'), champ = $('#cTweetLien'), etat = $('#cTweetEtat');
+  if (!coche || !champ || !etat) return;
+  /* ⛔ LE CHAMP SUIT LA CASE : laisser saisir un lien qui ne sera pas grave ferait croire a
+   *    quelqu un qu il a tokenise son post alors que non. */
+  champ.disabled = !coche.checked;
+  if (!coche.checked) {
+    delete apparenceChoisie.tweet;
+    etat.className = 'note';
+    etat.textContent = '';
+    peindreApercuCreation();
+    return;
+  }
+  const v = lireLienX(champ.value);
+  if (v.etat !== 'OK') {
+    /* ⛔ ON EFFACE LA GRAVURE DES QUE LE LIEN CESSE D ETRE VALIDE. Garder la precedente graverait
+     *    un post que l utilisateur a justement remplace. */
+    delete apparenceChoisie.tweet;
+    etat.className = v.etat === 'VIDE' ? 'note' : 'note wKo';
+    etat.textContent = v.etat === 'VIDE' ? 'Paste the link to the post.' : phraseTweet(v);
+    peindreApercuCreation();
+    return;
+  }
+  apparenceChoisie.tweet = v.canonique;
+  etat.className = 'note';
+  etat.textContent = phraseTweet(v);
+  peindreApercuCreation();
+}
+for (const id of ['#cTweetOui', '#cTweetLien']) {
+  const el = $(id);
+  if (!el) continue;
+  el.addEventListener('change', () => { appliquerTweet(); });
+  el.addEventListener('input', () => { appliquerTweet(); });
 }
 {
   const f = $('#cPhotoFichier');

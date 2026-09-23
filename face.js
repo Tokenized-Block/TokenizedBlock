@@ -17,6 +17,9 @@
 //    rendent AUTRE_SOURCE, jamais une face inventee.
 import { selecteur } from './pool.js';
 import { PHOTO_MAX } from './photo.js';
+/* ⛔ UNE SEULE SOURCE POUR LA BORNE DU LIEN X : la recopier ici la ferait diverger du module qui
+ *    l a derivee de la FORME (handle 15 + identifiant 25). */
+import { LIEN_MAX as TWEET_MAX } from './tweet-grave.js';
 import { chaineA } from './index-blocks.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
 
@@ -188,6 +191,34 @@ export function validerFace(f) {
     /* ⛔ UN `photoOu` SANS PHOTO EST UN DEFAUT, PAS UN DETAIL : il annonce une image a un lecteur
      *    qui n en trouvera pas. On refuse, au lieu de l ignorer en silence. */
     return { etat: 'INVALIDE', pourquoi: 'photoOu was given without a photo' };
+  }
+
+  /* ══ LE POST X GRAVE (idee de Phil, 2026-09-23) ═══════════════════════════════════════════
+   * ⛔⛔ CE QUI EST GRAVE EST UNE REFERENCE, PAS UNE PREUVE. Rien ici n ouvre le lien : ni le
+   *     module qui le lit, ni ce validateur. On ne sait donc PAS si le post existe, ni qui l a
+   *     ecrit. Le block dit « je renvoie a ce post-la » — jamais « ce post est a moi ».
+   *     C est tout l interet de l idee (« sans besoin d api ») et c est aussi sa borne.
+   * ⛔ ON N ACCEPTE QUE LA FORME CANONIQUE `https://x.com/<handle>/status/<id>` : pas de
+   *    `twitter.com`, pas de `?s=20`, pas de sous-domaine mobile. La normalisation se fait AVANT,
+   *    dans `tweet-grave.js` ; ici on refuse tout ce qui n est pas DEJA canonique, pour que deux
+   *    liens du meme post ne puissent jamais produire deux gravures differentes.
+   * ⛔ LA FORME EST UNE LISTE FERMEE : handle en `[A-Za-z0-9_]`, identifiant en chiffres. Un
+   *    `javascript:` ou un `data:` ne peut pas la satisfaire — et un lien grave reste clicable
+   *    pour toujours, dans le contractURI de quelqu un. */
+  if (f.tweet !== undefined) {
+    if (typeof f.tweet !== 'string') {
+      return { etat: 'INVALIDE', pourquoi: 'tweet must be a string' };
+    }
+    if (f.tweet.length > TWEET_MAX) {
+      return { etat: 'INVALIDE',
+        pourquoi: 'tweet link is ' + f.tweet.length + ' characters, over the ' + TWEET_MAX + ' cap' };
+    }
+    if (!/^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(f.tweet)) {
+      return { etat: 'INVALIDE',
+        pourquoi: 'tweet must be a canonical https://x.com/<handle>/status/<id> link — anything '
+          + 'else could differ between two people sharing the same post, or carry a payload' };
+    }
+    propre.tweet = f.tweet;
   }
   return { etat: 'OK', face: propre };
 }

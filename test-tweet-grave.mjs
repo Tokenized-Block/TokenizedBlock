@@ -155,4 +155,47 @@ for (const mauvais of [null, undefined, 42, {}, [], true]) {
     + 'passerait les assertions une par une sans rien distinguer');
 }
 
+/* ══ 8. LA GRAVURE — le lien doit entrer dans la FACE, sinon tout ce qui precede est decoratif ══
+ * ⛔⛔ C EST LA MEME LECON QUE LA PHOTO : avant le 2026-09-22, `logo.js` savait dessiner un champ
+ *     `photo` que personne ne remplissait — du code mort qui donnait l illusion d une
+ *     fonctionnalite. Le createur croyait tokeniser son image ; il decorait un navigateur.
+ *     Ce test EXECUTE `validerFace` pour que le meme piege ne se reproduise pas avec le lien X. */
+{
+  const { validerFace, FACETTES_CREATE } = await import('./face.js');
+  const BASE = { teinte: 265, accent: 300, saturation: 95, division: 3, eclats: 3, ecart: 2,
+    orbite: 'sillage', facette: FACETTES_CREATE[0], matiere: 'plein', ornement: 'aucun' };
+  const v = (o) => validerFace({ ...BASE, ...o });
+
+  eq(v({}).etat, 'OK', 'une face SANS lien reste valide — les blocks deja graves d abord');
+  ok(v({}).face.tweet === undefined, 'et elle ne se voit pas attribuer un lien vide');
+
+  const bon = v({ tweet: 'https://x.com/jack/status/20' });
+  eq(bon.etat, 'OK', 'un lien canonique est accepte');
+  eq(bon.face.tweet, 'https://x.com/jack/status/20', 'et il est GRAVE tel quel dans la face');
+
+  /* ⛔ LA FACE N ACCEPTE QUE LE CANONIQUE. La normalisation se fait AVANT, dans ce module : si la
+   *    face acceptait `twitter.com` ou `?s=20`, deux personnes partageant le MEME post graveraient
+   *    deux valeurs differentes, et le meme post ferait deux blocks distincts. */
+  for (const [lien, pourquoi] of [
+    ['https://twitter.com/jack/status/20', 'ancien domaine — non canonique'],
+    ['https://x.com/jack/status/20?s=20', 'parametre de partage — il identifie QUI a partage'],
+    ['https://x.com/jack/status/20/', 'barre finale — deux ecritures du meme post'],
+    ['javascript://x.com/jack/status/20', 'charge utile deguisee en lien'],
+    ['https://x.com/jack', 'un profil, pas un post'],
+    [42, 'pas une chaine'],
+  ]) {
+    eq(v({ tweet: lien }).etat, 'INVALIDE', 'la face REFUSE : ' + pourquoi);
+  }
+  /* ⛔ ET LE CHEMIN COMPLET, DE LA SAISIE A LA GRAVURE : ce que le module normalise doit etre
+   *    exactement ce que la face accepte. Deux bornes qui ne se parlent pas laisseraient un lien
+   *    valide d un cote et refuse de l autre — l utilisateur verrait « OK » puis un refus. */
+  for (const saisie of ['https://twitter.com/jack/status/20', 'https://x.com/jack/status/20?s=20&t=x',
+    'mobile.twitter.com/jack/status/20']) {
+    const lu = lireLienX(saisie);
+    eq(lu.etat, 'OK', 'le module accepte : ' + saisie);
+    eq(v({ tweet: lu.canonique }).etat, 'OK',
+      '⇒ et la face accepte SA FORME NORMALISEE — les deux bornes se parlent : ' + saisie);
+  }
+}
+
 console.log('test-tweet-grave : ' + n + ' assertions, OK');
