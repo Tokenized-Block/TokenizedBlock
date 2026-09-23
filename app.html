@@ -858,7 +858,20 @@ details[open] > summary::before{transform:rotate(90deg)}
 @media (max-width:520px){.creaChoix{grid-template-columns:1fr}}
 .creaSticky[hidden],.stadeLigne[hidden],#cModeBlock[hidden],#cModeToken[hidden]{display:none!important}
 /* tip 0041 — le block au centre, comme un personnage */
-.creaSticky.creaHeros{position:sticky;top:4px;display:flex;flex-direction:column;align-items:center;text-align:center;
+/* ⛔⛔ LE HEROS N EST PLUS COLLE (Phil, 2026-09-23, capture a l appui : « bug toujours visible »).
+ *    `.creaHeros` heritait `position:sticky` de `.creaSticky` — la classe d une BARRE D OUTILS — et
+ *    la redeclarait. L intention ecrite juste au-dessus est « le block au centre, comme un
+ *    personnage » : centrer, pas coller. Le sticky etait recopie, pas voulu.
+ *    ⛔ CE QUE CA COUTAIT, MESURE A 375x812 (le format de la capture) : le heros fait 484 px, soit
+ *      60 % de la hauteur d ecran, avec `z-index:6`. Des qu on defile, le contenu passe DESSOUS.
+ *      Textes de contenu reellement recouverts (enfants du heros exclus du compte) :
+ *          scroll 0 -> 0 · 600 -> 6 · 900 -> 11 · 1400 -> 11 · 2000 -> 8
+ *      Et parmi eux « Name », « Symbol », « Image file » : les champs qu on est en train de
+ *      remplir etaient caches derriere le heros.
+ *    ⛔ UN HEROS EST FAIT POUR DEFILER. Une barre collee se justifie quand elle porte une action
+ *      permanente ; celle-ci ne porte qu une presentation. La rendre statique ne retire aucune
+ *      information — elle la rend atteignable. */
+.creaSticky.creaHeros{position:static;display:flex;flex-direction:column;align-items:center;text-align:center;
   gap:0;padding:26px 16px 18px;background:radial-gradient(ellipse at 50% 38%, rgb(var(--accentRgb) / .16), transparent 62%), rgb(var(--fondRgb) / .55);
   border:1px solid rgb(var(--accentRgb) / .18);backdrop-filter:none}
 .creaScene{position:relative;width:200px;height:236px;display:grid;place-items:center;margin-bottom:10px}
@@ -1725,7 +1738,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-no-free-tier" hidden>Build <code>20260923-no-free-tier</code> · The 0% market option is gone, and a 0% fee is refused at launch.</p>
+      <p class="note" data-build="20260923-hero-scrolls" hidden>Build <code>20260923-hero-scrolls</code> · The Create hero scrolls away instead of covering the form.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
