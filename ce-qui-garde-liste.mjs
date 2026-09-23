@@ -145,18 +145,35 @@ const DE = tete - Math.round(JOURS * BLOCS_PAR_JOUR);
 console.log('\n=== 1. LA POPULATION (chaine) ===');
 console.log('   fenetre : ' + DE + ' → ' + tete + '  (' + JOURS + ' j)');
 const parJeton = new Map();
-let fenetres = 0, ratees = 0;
-for (let b = DE; b <= tete; b += PAS_LOGS) {
-  const fin = Math.min(b + PAS_LOGS - 1, tete);
+/* ⛔⛔ HALVING AJOUTE LE 2026-09-23, APRES UNE EXECUTION QUI A RATE 302 FENETRES SUR 303.
+ *     Ce balayage-ci n avait PAS le halving adaptatif — `catch { ratees++; continue; }`, et une
+ *     fenetre refusee etait perdue. Le balayage des `Transfer`, LUI, l avait depuis le debut : dans
+ *     la meme execution il a fait 907 appels sans un seul trou. La difference n etait pas la
+ *     chaine, c etait le code.
+ *     ⇒ Resultat : 2 jetons trouves au lieu de 5 800, le panel entier declare « sorti de la
+ *       fenetre », et zero comparaison possible. Une nuit d attente perdue pour une boucle.
+ * ⛔ Les gardes ont TENU — « POPULATION INCOMPLETE » affiche, arret au §4 faute d un cote peuple,
+ *    et le panel n a PAS ete ecrase parce que l ecriture est au §7, jamais atteint. Rien n est
+ *    perdu sauf du temps. C est exactement ce que ces refus existent pour proteger. */
+let fenetres = 0, blocsNonLus = 0;
+async function balayerInit(d, f) {
   fenetres++;
   let logs;
   try {
     logs = await rpc('eth_getLogs', [{ address: POOLM, topics: [TOPIC_INITIALIZE],
-      fromBlock: '0x' + b.toString(16), toBlock: '0x' + fin.toString(16) }]);
-  } catch (e) { ratees++; continue; }
+      fromBlock: '0x' + d.toString(16), toBlock: '0x' + f.toString(16) }]);
+  } catch (e) {
+    if (f - d + 1 > 25) {
+      const m = d + Math.floor((f - d) / 2);
+      await balayerInit(d, m); await balayerInit(m + 1, f);
+      return;
+    }
+    blocsNonLus += f - d + 1;
+    return;
+  }
   for (const l of logs || []) {
-    const d = String(l.data).replace(/^0x/, '');
-    const hook = '0x' + d.slice(64 * 2 + 24, 64 * 3).toLowerCase();
+    const d2 = String(l.data).replace(/^0x/, '');
+    const hook = '0x' + d2.slice(64 * 2 + 24, 64 * 3).toLowerCase();
     const c0 = adr(l.topics[2]), c1 = adr(l.topics[3]);
     const jeton = estB20(c1) ? c1 : estB20(c0) ? c0 : null;
     if (!jeton) continue;
@@ -166,6 +183,8 @@ for (let b = DE; b <= tete; b += PAS_LOGS) {
     else { e.hooks.add(hook); if (bloc < e.bloc) e.bloc = bloc; }
   }
 }
+for (let b = DE; b <= tete; b += PAS_LOGS) await balayerInit(b, Math.min(b + PAS_LOGS - 1, tete));
+const ratees = blocsNonLus;
 console.log('   fenetres : ' + fenetres + ' · ratees : ' + ratees
   + (ratees ? '  ⛔ POPULATION INCOMPLETE' : '  ✅ complete'));
 let jetons = [...parJeton.values()];
@@ -199,8 +218,19 @@ if (duPanel.size) {
    *    re-mesures, donc ils ne compteront ni comme perdus ni comme gardes. Ne pas le dire ferait
    *    lire un panel retreci comme un panel stable. */
   if (repris.length < duPanel.size) {
-    console.log('   ⛔ ' + (duPanel.size - repris.length) + ' jeton(s) du panel sont SORTIS de la '
-      + 'fenetre de ' + JOURS + ' j : ils ne seront pas revus, et ne compteront nulle part.');
+    /* ⛔⛔ « SORTI DE LA FENETRE » ET « PAS LU » SONT DEUX CHOSES OPPOSEES, et le 2026-09-23 ce
+     *     message a dit la premiere en pensant la seconde : le balayage avait rate 302 fenetres sur
+     *     303, donc la population etait vide, donc les 306 jetons du panel « n y etaient pas » — et
+     *     l ecran a annonce qu ils etaient SORTIS. C est la meme faute que « aucune preuve » dit
+     *     sans avoir regarde : la phrase est vraie et ce qu elle fait croire est faux. */
+    if (blocsNonLus > 0) {
+      console.log('   ⛔ ' + (duPanel.size - repris.length) + ' jeton(s) du panel sont absents de '
+        + 'cette lecture — MAIS ' + blocsNonLus + ' bloc(s) n ont pas ete lus. On ne peut PAS dire '
+        + 'qu ils sont sortis de la fenetre : on ne les a pas cherches partout.');
+    } else {
+      console.log('   ⛔ ' + (duPanel.size - repris.length) + ' jeton(s) du panel sont SORTIS de la '
+        + 'fenetre de ' + JOURS + ' j : ils ne seront pas revus, et ne compteront nulle part.');
+    }
   }
 }
 if (jetons.length > MAX_JETONS) {
