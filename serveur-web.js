@@ -509,23 +509,40 @@ let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
+const TRENDING_CACHE_VER = 'fenetre1k-v2'; /* bump to drop bad /data caches after RPC fenetre change */
 function chargerTrendingDisque() {
   try {
     if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
     const x = JSON.parse(readFileSync(FICHIER_TRENDING, 'utf8'));
-    if (x && typeof x.corps === 'string' && x.corps.length > 20) {
-      trCache = { a: Number(x.a) || Date.now(), corps: x.corps };
-      for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
-      if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
-      console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size);
+    if (!x || x.ver !== TRENDING_CACHE_VER || typeof x.corps !== 'string' || x.corps.length < 20) {
+      console.log('[trending] disk cache ignored (ver/empty)');
+      return;
     }
+    let parsed = null;
+    try { parsed = JSON.parse(x.corps); } catch { parsed = null; }
+    /* never revive a failed empty scan — that is what hid Map soleils after tip map-trending */
+    if (parsed && parsed.ok === false) return;
+    if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
+      console.log('[trending] disk cache ignored (empty+ratees)');
+      return;
+    }
+    trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
+    for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
+    if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
+    console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
   } catch (e) { console.log('[trending] disk cache unread:', e.message); }
 }
 function sauverTrendingDisque() {
   if (!FICHIER_TRENDING || !trCache.corps) return;
   try {
+    let parsed = null;
+    try { parsed = JSON.parse(trCache.corps); } catch { parsed = null; }
+    if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
+      console.log('[trending] skip disk save (empty+ratees)');
+      return;
+    }
     const payload = JSON.stringify({
-      a: trCache.a, corps: trCache.corps, blocsLusJusqua,
+      ver: TRENDING_CACHE_VER, a: trCache.a, corps: trCache.corps, blocsLusJusqua,
       adrs: [...blocksConnus].slice(-2000),
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
@@ -598,7 +615,7 @@ async function lireTrending() {
   return corps;
 }
 /* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
-setTimeout(() => { void trending(); }, 2000);
+setTimeout(() => { void lireTrending(); }, 1500); /* always rescans on boot; HTTP stays fail-open via trending() */
 
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;

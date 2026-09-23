@@ -38,7 +38,7 @@ export const FACTORY = '0xb20f000000000000000000000000000000000000';
  * ⚠️ CE QUE CA COUTE, dit franchement : 2 000 blocs valent environ 66 minutes de chaine a 2 s le
  *    bloc. Une lecture de 9 000 blocs se fait donc maintenant en CINQ requetes au lieu d une. La
  *    boucle ci-dessous pagine deja — rien d autre ne change. */
-export const FENETRE_MAX = 1000 /* tip 20260923-map-trending: mainnet.base.org now 1k (was 2k→413) */;
+export const FENETRE_MAX = 999 /* tip 20260923-map-alive: Base public getLogs ≤1000 inclusive span */;
 
 const enc = new TextEncoder();
 const hexDe = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
