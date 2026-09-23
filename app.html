@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-route-and-refuse" hidden>Build <code>20260923-route-and-refuse</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-tweet-shown" hidden>Build <code>20260923-tweet-shown</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1903,6 +1903,15 @@ details[open] > summary::before{transform:rotate(90deg)}
           <p class="pNomLong" id="pNomLong"></p>
           <p class="mono pAdr" id="pAdr"></p>
           <p class="note" id="pOrigine"></p>
+          <!-- ⛔⛔ LE POST GRAVE N ETAIT JAMAIS MONTRE (Phil, 2026-09-23 : « je vois pas le block
+               associe au post sur X »). `face.js` VALIDE et STOCKE le champ `tweet`, Create
+               l ECRIT dans la face gravee — et rien ne le relisait pour l afficher. Une valeur
+               ecrite sur la chaine puis jamais rendue est un defaut : elle a coute du gas et
+               n informe personne.
+               ⛔ LA RESERVE VOYAGE AVEC LE LIEN : on n a jamais ouvert ce post. Rien ici ne
+                 verifie qu il existe, ni qu il appartient a celui qui a grave le block. Montrer
+                 le lien sans le dire fabriquerait une association qu on n a pas mesuree. -->
+          <p class="note" id="pTweet" hidden></p>
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
       </div>
@@ -3503,8 +3512,15 @@ function marquerNotre(h) {
   }
   h.nous = true;
   h.el.classList.add('nous');
-  const etiq = h.el.querySelector('.etiq');
-  if (etiq && !etiq.textContent.startsWith('🟦')) etiq.textContent = '🟦 ' + etiq.textContent;
+  /* ⛔⛔ LE MARQUEUR 🟦 EST RETIRE DE L ETIQUETTE (Phil, 2026-09-23 : « retire les carres bleus de
+   *     nos creations »). Il datait du 2026-09-13 (« nos blocks d abord »).
+   *     ⛔ CE QUI RESTE, ET QUI FAIT LE TRAVAIL : `h.nous = true` et la classe CSS `nous`. Le
+   *       classement en tete et la mise en avant ne dependaient PAS de l emoji — verifie : rien ne
+   *       relisait `startsWith('🟦')` ailleurs que cette ligne, qui ne servait qu a eviter de le
+   *       doubler. On retire un signe a l ecran, pas une distinction dans les donnees.
+   *     ⚠️ Un commentaire de ce fichier raconte qu un block avait deja perdu son 🟦 ET sa place en
+   *        tete, SANS ERREUR. Ce n est pas ce qui se passe ici : la place vient de `h.nous`, qui
+   *        est pose juste au-dessus et n est pas touche. */
 }
 
 async function charger() {
@@ -4507,7 +4523,7 @@ function peindreStades() {
           + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
     } else {
       corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-        + '🟦 ' + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
+        + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
         + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
         + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '');
     }
@@ -5606,6 +5622,38 @@ async function lireProfil(adr, sym, perime) {
     } catch (e) { /* non lue : l avatar reste celui de l adresse */ }
   }
   $('#pOrigine').textContent = phrasesOrigine({ origine: origineProfil, scellement: { etat: 'NON_LU' } }).origine;
+  /* ⛔⛔ LE POST GRAVE, ENFIN AFFICHE (Phil, 2026-09-23). Il etait valide, stocke et grave — et
+   *     jamais relu. Une valeur ecrite sur la chaine puis jamais rendue a coute du gas sans
+   *     informer personne.
+   *     ⛔ LE LIEN EST REVALIDE ICI, a la FORME CANONIQUE EXACTE, meme s il a deja ete valide a la
+   *       gravure : il peut venir du stockage local d une autre version, et `javascript://x.com/…`
+   *       passe un controle d hote. La garde appartient la ou le lien devient CLIQUABLE —
+   *       `ssrf-guard-must-run-per-hop`.
+   *     ⛔ ET LA RESERVE EST DITE AVEC LE LIEN, jamais separee : on n a pas ouvert ce post, rien
+   *       ne prouve qu il existe ni qu il appartient a qui a grave le block. Le montrer sans ca
+   *       fabriquerait une association qu on n a pas mesuree. */
+  const elTweet = $('#pTweet');
+  if (elTweet) {
+    elTweet.innerHTML = '';
+    elTweet.hidden = true;
+    try {
+      const f = faceConnue(adr);
+      const lien = f && typeof f.tweet === 'string' ? f.tweet : null;
+      if (lien && /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(lien)) {
+        const a = document.createElement('a');
+        a.href = lien;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'lienLearn';
+        a.textContent = 'Engraved post on X';
+        elTweet.appendChild(a);
+        elTweet.appendChild(document.createTextNode(
+          ' — engraved with this block, and it cannot be changed. We never opened it: nothing here '
+          + 'checks that the post exists or that it belongs to whoever made this block.'));
+        elTweet.hidden = false;
+      }
+    } catch (_) { /* ⛔ une face illisible ne montre RIEN, elle n invente pas de lien */ }
+  }
 
   await dormir(260);
   if (perime()) return;
@@ -6825,7 +6873,7 @@ function peindreLive() {
    * ⛔ AUDIT 2026-09-20 : c etait un 40 EN DUR, donc « Load older » lisait 1 580 evenements de la
    *    chaine et n ajoutait jamais une seule ligne — un bouton visible, actif, et sans effet. */
   $('#sfLive').innerHTML = lignes.slice(0, liveAffiches).map((e) => {
-    const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
+    const nom = enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     /* tip 2349: free create OK — nudge Launch to market (fee moment), not “spam kill create”. */
     /* tip 20260923-feed-catch-router: celebrate ONLY CreateRouter paidCreate.
@@ -7155,7 +7203,7 @@ function peindreRelais() {
    *    Meme lecture (hook de la pool decouverte) aux deux endroits. */
   const ailleurs = (adr) => { const p = poolDecouvertPour(adr); return !!(p && !p.isTbFeeHook); };
   $('#sfRelais').innerHTML = r.lignes.map((l) => '<li class="filL"><div class="filArt">' + dessin(l.adr, l.sym || nomDe(l.adr)) + '</div>'
-    + '<div style="min-width:0;flex:1"><p class="filT">' + (l.sens === 'KILL' ? '🔴' : EMOJI_PREUVE[l.preuve] || '·') + ' ' + (l.nous ? '🟦 ' : '') + '<b>'
+    + '<div style="min-width:0;flex:1"><p class="filT">' + (l.sens === 'KILL' ? '🔴' : EMOJI_PREUVE[l.preuve] || '·') + ' ' + '<b>'
     + enTexte(String(l.sym || nomDe(l.adr)).slice(0, 14)) + '</b> · ' + enTexte(l.texte) + (ailleurs(l.adr) ? ' · on another launchpad' : '') + '</p>'
     + '<p class="filS">' + enTexte(l.parce_que) + '</p><div class="stadeLigne" style="margin-top:4px">'
     + r.outils.filter((o) => o.adr === l.adr).map((o) => '<button type="button" class="puce" data-outil="' + o.quoi + '" data-adr="' + enTexte(o.adr)
