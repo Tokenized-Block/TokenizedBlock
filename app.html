@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-prune-2" hidden>Build <code>20260923-map-prune-2</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-onramp-funnel" hidden>Build <code>20260923-onramp-funnel</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -13129,7 +13129,13 @@ function basculerBridgeMode(mode) {
     }
   });
   const cFund = $('#cFundWallet');
-  if (cFund) cFund.addEventListener('click', () => { try { etape('create_fund_bridge'); } catch (_) {} });
+  if (cFund) cFund.addEventListener('click', (e) => { try { etape('create_fund_bridge'); } catch (_) {} ouvrirRailFiat(e, cFund, 'ETH'); });
+  /* ⛔ Le bouton du Bridge n avait AUCUN gestionnaire : il restait un lien nu vers la page publique.
+   *   ⚠️ CHOIX A CONFIRMER PAR PHIL : il annonce « ETH / USDC » et je pre-selectionne ETH. Raison —
+   *     sans ETH on ne peut pas payer le gas, donc pas meme deplacer de l USDC ; et `defaultAsset`
+   *     n est qu une PRE-SELECTION que l utilisateur peut changer chez Coinbase, pas un engagement. */
+  const brFund = $('#brFundWallet');
+  if (brFund) brFund.addEventListener('click', (e) => { try { etape('bridge_fund_wallet'); } catch (_) {} ouvrirRailFiat(e, brFund, 'ETH'); });
   const cGo = $('#cGoBridge');
   if (cGo) cGo.addEventListener('click', (e) => { e.preventDefault(); etape('create_go_bridge'); allerA('bridge'); });
   peindreBridgeActifs();
@@ -13137,6 +13143,60 @@ function basculerBridgeMode(mode) {
 })();
 
 
+
+/* ── LE RAIL FIAT -> BASE (tip 20260923-onramp-fail-closed) ──────────────────────────────────────
+ * Phil, 2026-09-23 : « la raison est le bridge fiat to block, les fonds via Visa Coinbase Onramp ».
+ *
+ * ⛔⛔ CE QUE CE BOUTON FAISAIT AVANT, ET POURQUOI C ETAIT FAIBLE. Un simple lien vers
+ *     `coinbase.com/onramp` — la page d accueil publique. Pas d adresse de destination, pas de
+ *     reseau, pas de montant. L utilisateur arrivait sur un formulaire vierge et devait recopier
+ *     son adresse a la main. Recopier une adresse a la main est exactement l endroit ou les gens
+ *     perdent des fonds.
+ *
+ * ⛔ CE QU IL FAIT MAINTENANT, ET SA LIMITE HONNETE. S il y a un wallet connecte, il demande au
+ *    serveur une session Onramp visant CETTE adresse sur Base. Si le serveur repond une url, on y
+ *    va. Sinon — pas de cle CDP, reseau coupe, Coinbase qui refuse — on ouvre le lien public
+ *    d origine. On ne montre JAMAIS d erreur bloquante et on ne fabrique JAMAIS d url : le pire cas
+ *    est exactement le comportement d avant, jamais pire.
+ */
+async function ouvrirRailFiat(evt, lien, actif) {
+  /* ⛔ Sans wallet connecte, on ne peut viser aucune adresse : le lien public est la reponse
+   *   HONNETE, et on laisse le navigateur le suivre normalement. */
+  const adr = String(compte || '');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
+  if (!evt || typeof evt.preventDefault !== 'function') return;
+  evt.preventDefault();
+  /* ⛔⛔ L ONGLET S OUVRE MAINTENANT, PAS APRES LE `await`. Un `window.open` appele apres une
+   *     attente n est plus rattache au clic : tous les navigateurs le bloquent comme une popup. On
+   *     ouvre donc un onglet vide dans le geste de l utilisateur, puis on le redirige. Si meme
+   *     celui-la est bloque (`null`), on retombe sur la navigation normale du lien. */
+  const onglet = window.open('', '_blank', 'noopener');
+  const repli = lien && lien.href ? lien.href : 'https://www.coinbase.com/onramp';
+  try {
+    /* ⛔ DELAI BORNE. Sans lui, un serveur muet laisserait un onglet blanc indefiniment — et
+     *   l utilisateur croirait que le produit est casse. 6 s puis on sert le lien public. */
+    const stop = new AbortController();
+    const minuteur = setTimeout(() => stop.abort(), 6000);
+    const r = await fetch('/api/onramp/session?adresse=' + encodeURIComponent(adr)
+      + '&actif=' + encodeURIComponent(actif || 'ETH'), { signal: stop.signal });
+    clearTimeout(minuteur);
+    const j = await r.json();
+    /* ⛔ ON N ACCEPTE QUE `ok === true` AVEC UNE URL COINBASE. Un objet a moitie rempli, ou une url
+     *   vers un autre domaine, ne doit jamais devenir une destination. */
+    const url = j && j.ok === true ? String(j.url || '') : '';
+    const bonne = /^https:\/\/pay\.coinbase\.com\//.test(url);
+    if (onglet) onglet.location = bonne ? url : repli;
+    else window.location.href = bonne ? url : repli;
+    try { etape(bonne ? 'onramp_session_ok' : 'onramp_session_repli'); } catch (_) {}
+  } catch (_) {
+    /* ⛔ AUCUNE ERREUR A L ECRAN. Le rail est un confort : quand il ne repond pas, l utilisateur
+     *   doit se retrouver exactement la ou l ancien lien l aurait mene, sans rien comprendre de
+     *   different. Une alerte technique ici ferait fuir quelqu un qui voulait juste payer. */
+    if (onglet) onglet.location = repli;
+    else window.location.href = repli;
+    try { etape('onramp_session_repli'); } catch (_) {}
+  }
+}
 
 /* ── Brain bot loop Option A + x402 recognition (tip 20260923-bridge-x402-brain) ─────────────── */
 (function filBotLoopOptionA() {

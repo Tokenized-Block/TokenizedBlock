@@ -14,8 +14,19 @@
 //    demande sert `../../.env` le jour ou quelqu un le demande. Ici un chemin absent de la table
 //    n existe pas, point — meme discipline que le serveur de developpement.
 //
-// ⛔ AUCUN SECRET, AUCUNE CLE, AUCUNE ECRITURE. Ce processus ne fait que lire des fichiers publics
-//    deja servis par GitHub Pages : rien de neuf n est expose par ce deploiement.
+// ⛔⛔ CE QUE CE PROCESSUS TOUCHE — corrige le 2026-09-23, parce que la phrase d avant etait FAUSSE.
+//    Elle disait « AUCUN SECRET, AUCUNE CLE, AUCUNE ECRITURE ». Or :
+//    · ECRITURE : il ecrit deja, en trois endroits (le cache trending et les compteurs d entonnoir,
+//      par remplacement atomique sur le volume). La phrase etait perimee depuis ces ajouts, et
+//      personne ne l avait remise a jour — un commentaire qui ment est pire qu un commentaire absent,
+//      parce qu on s en sert pour decider qu il n y a rien a verifier.
+//    · CLE : depuis /api/onramp/session, ce processus LIT une cle secrete CDP dans son environnement
+//      pour signer un jeton de deux minutes. C est le rail fiat->Base demande par Phil, et il ne peut
+//      pas exister autrement : la doc CDP impose un `sessionToken` fabrique cote serveur.
+//    ⛔ CE QUI RESTE VRAI, ET QUI EST GARDE PAR test-onramp-fail-closed / test-cdp-jwt :
+//      la cle ne traverse QUE `cdp-jwt.js`, elle n est jamais rendue, jamais journalisee, et aucune
+//      reponse HTTP ne la contient — meme en cas d erreur. Sans elle, la route REFUSE en nommant ce
+//      qui manque ; elle ne fabrique jamais d URL de secours.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
@@ -28,6 +39,9 @@ import { createHash } from 'node:crypto';
  * de faire decouvrir. Mesure faite avant le correctif, et refaite apres. */
 import { gzipSync } from 'node:zlib';
 import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
+/* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
+import { etatCdp, validerDemande, urlOnramp, creerSession } from './onramp-session.js';
+import { signerJwtCdp } from './cdp-jwt.js';
 
 /* ⛔ PONT OPENLAUNCH (tip 0022). Leur API ne renvoie aucun en-tete CORS : la page ne peut pas la lire. Ce serveur la
  * lit pour elle — GET seul, 8 s max, UNE lecture par minute quel que soit le trafic, et il ne renvoie que le RESUME
@@ -642,7 +656,39 @@ const TYPES = {
 /* ⛔ `cree_echec` et `vie_echec` ajoutes le 2026-09-20 : sans eux, un parcours qui casse chez un
  *    visiteur se lit exactement comme un visiteur qui abandonne. On ne peut pas corriger ce qu on ne
  *    compte pas. */
-const ETAPES_ENTONNOIR = ['visite', 'map_cta', 'create_clic', 'groupe_propose', 'groupe_ok', 'groupe_refus', 'groupe_echec', 'cree', 'cree_echec', 'vivant', 'vie_echec', 'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat'];
+/* ⛔⛔ CORRIGE LE 2026-09-23, APRES MESURE (`mesure-etapes-perdues.mjs`). Cette liste comptait 16
+ *     noms. L app en appelait 48. Les 34 absents etaient JETES EN SILENCE par `/api/etape` : le
+ *     serveur teste `includes(e)` et, si le nom manque, il ne compte rien et ne dit rien.
+ *     ⇒ Tout l entonnoir d ACHAT (`achat_prepare`, `achat_ok`), toute la connexion de wallet
+ *       (`wallet_connect_ok/refus`, `wallet_no_provider`), tout le Bridge et le clic « Fund wallet »
+ *       affichaient 0. Et un 0 aveugle se lit exactement comme un 0 sincere : « personne n a fait
+ *       ca ». C est la question que Phil pose depuis des jours — ou perd-on les gens — repondue
+ *       par un instrument qui ne regardait pas.
+ * ⛔ GARDE : `test-etapes-comptees.mjs` echoue si l app appelle un nom absent d ici. Sans elle,
+ *   la liste redivergera au prochain bouton ajoute — c est exactement comme ca qu on en est arrive
+ *   a 34. Une liste blanche sans garde n est pas une liste blanche, c est un souvenir. */
+const ETAPES_ENTONNOIR = [
+  'visite', 'map_cta', 'create_clic',
+  'groupe_propose', 'groupe_ok', 'groupe_refus', 'groupe_echec',
+  'cree', 'cree_echec', 'vivant', 'vie_echec',
+  'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat',
+  /* connexion du wallet — l entree de tout le reste, jamais comptee jusqu ici */
+  'wallet_connect_ok', 'wallet_connect_refus', 'wallet_no_provider',
+  'chain_switch_ok', 'chain_switch_refus', 'pairer_clic',
+  /* creation */
+  'create_sign_propos', 'create_sign_refus', 'create_fund_bridge', 'create_go_bridge',
+  'ib_preflight_ok', 'ib_preflight_fail', 'ib_balance_short',
+  /* achat — l etape qui rapporte */
+  'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
+  /* bridge et frais */
+  'bridge_create', 'bridge_confirm_stub', 'bridge_fund_wallet',
+  'bridge_fee_sign', 'bridge_fee_ok', 'bridge_fee_refuse', 'bridge_fee_fail',
+  'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
+  /* rail fiat -> Base */
+  'onramp_session_ok', 'onramp_session_repli',
+  /* brain */
+  'brain_bot_propose', 'brain_bot_journal', 'brain_bot_pay_recog',
+];
 /* ⛔ PERSISTANT (Phil, 2026-09-19 : « oui cree le volume ») : mesure — les compteurs repartaient de zero a CHAQUE deploiement
  *    (10 deploiements ce jour-la : aucun chiffre ne survivait). Volume Railway monte sur /data : lu au demarrage, ecrit
  *    au plus toutes les 30 s (fichier temporaire puis renommage : un arret brutal ne laisse jamais un JSON coupe).
@@ -1120,6 +1166,65 @@ createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
     });
+    return;
+  }
+
+  /* ══ LE RAIL FIAT -> BASE (Phil, 2026-09-23 : « la raison est le bridge fiat to block ») ═══════
+   * ⛔⛔ CETTE ROUTE NE RENVOIE RIEN DE FAUX. Sans cle CDP dans l environnement, elle repond
+   *     `pret:false` avec le NOM de la variable manquante, et AUCUNE url. Le client retombe alors
+   *     sur le lien public — un lien honnete qui ne pretend pas connaitre la destination.
+   * ⛔ LE SECRET N ARRIVE JAMAIS ICI : il est lu par `cdp-jwt.js`, qui rend un jeton signe. Aucune
+   *   reponse de cette route, y compris ses erreurs, ne peut le contenir.
+   * ⚠️ NON EXERCE EN PRODUCTION : aucune cle n existe au moment ou j ecris ceci. Le chemin « OK »
+   *   n a jamais tourne contre le vrai Coinbase. Personne ne doit lire cette route comme un revenu.
+   * ⚠️ `GET` EXPRES, ET SANS DONNEE PERSONNELLE EN PARAMETRE : seule une adresse publique de wallet
+   *   et un montant transitent. Rien d identifiant ne doit jamais entrer dans une query string. */
+  if (chemin === '/api/onramp/session') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const demande = validerDemande({ adresse: q.get('adresse'), actif: q.get('actif'),
+      montantFiat: q.get('montant') });
+    if (demande.etat !== 'OK') {
+      res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pret: false, pourquoi: demande.pourquoi }));
+      return;
+    }
+    const etat = etatCdp(process.env);
+    if (!etat.pret) {
+      /* ⛔ 200 ET PAS 500 : ce n est pas une panne, c est une capacite absente. Un 500 ferait
+       *   chercher un bug la ou il n y a qu une variable a poser. Le client lit `pret:false`. */
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pret: false, pourquoi: etat.pourquoi }));
+      return;
+    }
+    const HOTE = 'api.developer.coinbase.com', CHEMIN_CDP = '/onramp/v1/token';
+    const signe = signerJwtCdp({ cleId: process.env[etat.cle], secretPem: process.env[etat.secret],
+      methode: 'POST', hote: HOTE, chemin: CHEMIN_CDP });
+    if (signe.etat !== 'OK') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pret: false, pourquoi: signe.pourquoi }));
+      return;
+    }
+    /* ⛔ Le JWT signe est passe par un champ prive de l objet d environnement transmis, JAMAIS par
+     *   le vrai `process.env` : rien de ce qui sert a signer ne devient une variable globale. */
+    creerSession({ env: { [etat.cle]: '1', [etat.secret]: '1', __CDP_JWT: signe.jwt },
+      adresse: demande.adresse, actif: demande.actif })
+      .then((s) => {
+        if (s.etat !== 'OK') {
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(JSON.stringify({ ok: false, pret: true, etat: s.etat, pourquoi: s.pourquoi }));
+          return;
+        }
+        const u = urlOnramp({ sessionToken: s.sessionToken, actif: demande.actif,
+          montantFiat: demande.montantFiat, retour: 'https://tokenizedblock.space/' });
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(JSON.stringify(u.etat === 'OK' ? { ok: true, pret: true, url: u.url }
+          : { ok: false, pret: true, pourquoi: u.pourquoi }));
+      })
+      .catch((e) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, pret: true, etat: 'NON_MESURE',
+          pourquoi: 'onramp session failed: ' + String((e && e.message) || e).slice(0, 120) }));
+      });
     return;
   }
 
