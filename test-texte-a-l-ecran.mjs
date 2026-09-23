@@ -288,6 +288,16 @@ function chainesVisibles(src, balisage = true) {
  *       `lignes.push(...)` — la facon dont `apercu.js` compose ce que le wallet montre avant une
  *       signature. Le reste des chaines d un module (cles, selecteurs, causes internes) n est PAS
  *       du texte a l ecran et n a rien a faire ici. */
+/* ⚠️⚠️ CE QUE CETTE GARDE NE VOIT TOUJOURS PAS, ET QUI EST A L ECRAN. Elle lit les AFFECTATIONS
+ *      (`.textContent =`), les APPELS d affichage (`setEtat`, `lignes.push`, …) et les chaines qui
+ *      portent une balise. Elle ne lit PAS les TABLES DE LIBELLES — par exemple `nomDe()` dans
+ *      `apercu.js`, un tableau de paires `[adresse, 'libelle']` dont le texte s affiche sur la
+ *      ligne « Contract: … » sous chaque signature. C est ainsi que « TB CreateRouter » a pu
+ *      rester affichable apres l elargissement aux modules, et il a fallu le trouver a la main.
+ *      ⛔ POURQUOI CE N EST PAS CORRIGE PAR UNE REGLE : il faudrait un motif taille pour cette
+ *        table precise. Un motif trop etroit protege une PHRASE, pas une REGLE — c est exactement
+ *        le defaut qu on vient de corriger sur le dollar. La borne est donc ECRITE plutot que
+ *        maquillee : ni innocentee, ni accusee. */
 const MODULES = readdirSync(new URL('./', import.meta.url))
   .filter((f) => f.endsWith('.js') && !f.startsWith('test-') && !f.startsWith('mesure-'))
   .sort();

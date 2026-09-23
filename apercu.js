@@ -44,7 +44,16 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
   const V = V4_ADRESSES[Number(chaine)] || {};
   const connus = [
     [compte, 'you'], [jeton, symbole ? 'the block ' + symbole : 'this block'],
-    [FEE_WALLET, 'fee'], [CREATE_ROUTER, 'TB CreateRouter'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
+    /* ⛔ « TB CreateRouter » -> ce que le contrat FAIT. Ces libelles s affichent sur la ligne
+     *    « Contract: … » sous chaque signature, a cote de « Permit2 (Uniswap) » — un nom que le
+     *    lecteur peut aller verifier. « CreateRouter » n en est pas un : c est notre vocabulaire
+     *    interne, et il arrive au pire moment, juste avant que la personne signe.
+     *    ⚠️ CETTE TABLE EST UN SITE D AFFICHAGE QUE `test-texte-a-l-ecran` NE SAIT PAS LIRE : ce
+     *       n est ni une affectation `.textContent`, ni un appel d affichage, mais un tableau de
+     *       paires. La garde est donc AVEUGLE ici, et c est ecrit dans ses bornes plutot que
+     *       corrige par une regle taillee pour une seule table — un motif trop etroit protege une
+     *       phrase, pas une regle, et c est le defaut qu on vient de corriger ailleurs. */
+    [FEE_WALLET, 'fee'], [CREATE_ROUTER, 'TokenizedBlock (creates your block)'], [USDC_BASE, 'USDC'], [FACTORY, 'B20 factory'],
     [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'], [ROUTEUR_SWAP[Number(chaine)], 'Uniswap router'],
     [PROPRIETAIRE_PERMANENT, 'dead address (nobody)'],
   ];
