@@ -1644,7 +1644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-feed-catch-router" hidden>Build <code>20260923-feed-catch-router</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-reclaim-volume" hidden>Build <code>20260923-reclaim-volume</code> · reclaim foreign Creates + fee-honest Buy · 0.5%.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1652,8 +1652,10 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT" title="Everything this page read on chain in this window">All</button>
         <!-- tip 20260923-feed-catch-router: Created = honesty (foreign secondary); TB · paid = CreateRouter only -->
-        <button type="button" class="puce" data-filtre="CREATION" title="New blocks on Base — TB-paid first; foreign rows demoted with Instant Birth CTA">🧱 Created</button>
+        <!-- tip 20260923-reclaim-volume: default Created = TB·paid only (Bankr-honest); foreign under another launchpad -->
+        <button type="button" class="puce" data-filtre="CREATION" title="TB-paid creates via CreateRouter — Bankr-honest Created">🧱 Created</button>
         <button type="button" class="puce" data-filtre="CREATION_TB" title="Only creates that paid via CreateRouter Instant Birth on Tokenized Block">✦ TB · paid</button>
+        <button type="button" class="puce" data-filtre="CREATION_FOREIGN" title="Creates from another launchpad — reclaim with Instant Birth on TB">another launchpad</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT" title="Buys — the block left its pool for someone's wallet">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE" title="Sells — the block went back into its pool">🔴 Kill</button>
@@ -1690,7 +1692,7 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ Ce ne sont pas nos blocks : ERC-20, pool sans hook, TokenizedBlock touche $0 — l ecran le dit a chaque fois. -->
     <div class="carte">
       <p class="titre">OpenLaunch · live on Base</p>
-      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b>.</p>
+      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b> — TB earns $0 there. Want a hooked market? Instant Birth on TB · 0.001 ETH.</p>
       <ul class="fil" id="sfOl"></ul>
       <p class="note" id="sfOlNote">Open this tab to read OpenLaunch.</p>
     </div>
@@ -1912,7 +1914,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="pJeu" id="pEchange" hidden>
         <!-- ⛔ PHIL (2026-09-19, capture « Fee 0.8%+ ») : « retirer l affichage des fees ». Le badge reste dans le DOM (le code
              l ecrit) mais n est plus montre ; les montants exacts restent dans la fenetre du wallet avant de signer. -->
-        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais" hidden style="display:none">0.5%</span></div>
+        <div class="pJeuTete"><span class="pBadge" id="peBadge">Buy · Sell</span><span class="pPV" id="peFrais">0.5%</span></div>
         <div class="stadeLigne" data-itabs="peInfo" role="tablist" style="margin-top:6px">
           <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="fees">Fees</button>
           <button type="button" class="puce" role="tab" aria-selected="false" data-itab="exit">Exit</button>
@@ -1939,12 +1941,12 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="dexCol">
             <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
-            <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
+            <button class="bouton" id="peAcheter" type="button">Prepare buy · 0.5%</button>
           </div>
           <div class="dexCol">
             <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
-            <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
+            <button class="bouton sec" id="peVendre" type="button">Prepare sell · 0.5%</button>
           </div>
         </div>
         <!-- ⛔ P0 tip 2250: ETH→USDC exit — 0.5% → FEE_WALLET; external DEX pays wallet nothing. Quoter-gated. -->
@@ -4845,33 +4847,38 @@ function peindreTrustFacts(adr, v, origine) {
   if (etat === 'NON_TROUVEE') {
     /* tip 20260922-fee-funnel + 20260922-2112: V8 CTA only when porteLeLabel ≠ NON */
     /* tip 20260922-no-dollar-dedupe: one Next + one button — fee once on the button only */
-    cta.innerHTML = (CHAINE === 8453
-      ? '<b>Next</b>: open its V8 market.'
-      : '<b>Next</b>: open its market — free in Practice.')
-      + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-      + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
+    /* tip 20260923-reclaim-volume: MAIN first paint = Instant Birth on TB (no foreign V8 flash).
+     * Swap to Give birth · V8 only after eligibleNaissanceV8.ok. */
     if (CHAINE === 8453) {
+      cta.innerHTML = '<b>Next</b>: Instant Birth on TB.'
+        + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button></div>';
       void eligibleNaissanceV8(adr).then((el) => {
-        if (!cta.isConnected || el.ok) return;
-        cta.innerHTML = '<b>V8 birth unavailable here</b> — ' + enTexte(el.pourquoi)
+        if (!cta.isConnected || !el.ok) return;
+        cta.innerHTML = '<b>Next</b>: open its V8 market.'
           + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-          + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button></div>';
+          + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
       });
+    } else {
+      cta.innerHTML = '<b>Next</b>: open its market — free in Practice.'
+        + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
+        + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
     }
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
       /* tip 0017 + tip 20260922-fee-funnel + 20260922-2112 */
+      /* tip 20260923-reclaim-volume: outside LUE — Instant Birth first; V8 only if label gate ok */
       cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
-        + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
+        + '<b>Instant Birth on TB opens a hooked market / Buy path.</b>'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
+        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button>'
         + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
       void eligibleNaissanceV8(adr).then((el) => {
-        if (!cta.isConnected || el.ok) return;
+        if (!cta.isConnected || !el.ok) return;
         cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
-          + '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi)
+          + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
           + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-          + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button>'
+          + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
           + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
       });
     } else {
@@ -5673,6 +5680,9 @@ function filtreLive(e) {
   }
   /* tip 20260923-feed-catch-router: TB · paid chip — CreateRouter createPaid only */
   if (liveFiltre === 'CREATION_TB') return e.type === 'CREATION' && e.paidCreate === true;
+  /* tip 20260923-reclaim-volume: Created default = paid only; foreign under CREATION_FOREIGN */
+  if (liveFiltre === 'CREATION') return e.type === 'CREATION' && e.paidCreate === true;
+  if (liveFiltre === 'CREATION_FOREIGN') return e.type === 'CREATION' && e.paidCreate !== true;
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
@@ -5724,7 +5734,10 @@ async function lireOpenLaunch() {
       + '<p class="filT">🚀 <b>' + enTexte(l.symbole) + '</b> · paired with ' + enTexte(l.quote) + ' · vol ' + dollarsCourts(l.volumeUsd)
       + ' · FDV ' + dollarsCourts(l.fdvUsd) + ' · ' + (l.detenteurs === null ? '? holders' : l.detenteurs + ' holders') + '</p>'
       + '<p class="filS">' + enTexte(frais) + (l.palier ? ' · ' + enTexte(l.palier) : '')
-      + (l.lien ? ' · <a href="' + enTexte(l.lien) + '" target="_blank" rel="noopener noreferrer">open on OpenLaunch ↗</a>' : '') + '</p></div></li>';
+      + (l.lien ? ' · <a href="' + enTexte(l.lien) + '" target="_blank" rel="noopener noreferrer">open on OpenLaunch ↗</a>' : '')
+      /* tip 20260923-reclaim-volume: Dex-only OL dead end → Instant Birth reclaim beside */
+      + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
+      + '</p></div></li>';
   }).join('');
   note.textContent = d.lignes.length + ' launches shown (their "live" order)' + (d.ecartees ? ' · ' + d.ecartees + ' malformed rows skipped' : '')
     + ' · read ' + new Date(d.lu).toLocaleTimeString() + ' · figures are OpenLaunch\'s, not checked on chain by us.';
@@ -6321,7 +6334,7 @@ async function peindreStats() {
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
   /* tip 20260923-feed-catch-router: Created / TB·paid — TB CreateRouter rows first, foreign secondary */
-  if (liveFiltre === 'CREATION' || liveFiltre === 'CREATION_TB') {
+  if (liveFiltre === 'CREATION' || liveFiltre === 'CREATION_TB' || liveFiltre === 'CREATION_FOREIGN') {
     montres.sort((a, b) => {
       const ap = a.paidCreate === true ? 1 : 0;
       const bp = b.paidCreate === true ? 1 : 0;
@@ -6402,8 +6415,10 @@ function peindreLive() {
     /* tip 20260923-feed-catch-router: ANY unpaid MAIN Created row → primary Instant Birth on TB.
      * Still NO foreign V8 birth. Handler data-tf-act=instant-birth-tb → #creer. */
     const foreignCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
+    /* tip 20260923-reclaim-volume: stronger primary IB — birth on TB opens hooked market / Buy path */
     const openHint = foreignCreate
-      ? ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
+      ? ' · <button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
+        + ' · <span class="filOpen">opens hooked market / Buy</span>'
         + ' · <span class="filOpen">Open profile</span>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
@@ -6463,6 +6478,14 @@ function verifierBasLive() {
 }
 $('#sfLivePlus').addEventListener('click', () => { liveAuto = 0; liveAffiches += 40; void lireLive('ancien'); });
 /* ⛔ P0 2026-09-15: Keep trusted (CreateRouter paid) — fee-honest root, browser-local. */
+/* tip 20260923-reclaim-volume: OpenLaunch Feed IB reclaim → #creer CreateRouter (same as Created rows) */
+$('#sfOl') && $('#sfOl').addEventListener('click', (ev) => {
+  const ibTb = ev.target.closest('[data-tf-act="instant-birth-tb"]');
+  if (!ibTb) return;
+  ev.preventDefault(); ev.stopPropagation();
+  try { etape('create_clic'); } catch (_) {}
+  try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+});
 $('#sfLive').addEventListener('click', (ev) => {
   const keep = ev.target.closest('[data-keep-trust]');
   if (keep) {
@@ -10222,9 +10245,17 @@ function peindreTrending() {
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
     + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · ' + (bouge(l) ? 'vol 1h ' + usdCourt(l.volume1hUsd) : 'no trade in the last hour') + ' · 24h ' + usdCourt(l.volume24hUsd)
     + '<span class="trPlus"> · liq ' + usdCourt(l.liquiditeUsd) + (l.fdvUsd ? ' · FDV ' + usdCourt(l.fdvUsd) : '') + (l.trades24h ? ' · ' + l.trades24h + ' trades' : '') + '</span></p></div>'
-    /* tip 20260923-map-buy-cta: one-tap Buy · 0.5% → profile in-app path (data-acheter; echange.js FEE_WALLET).
-     * Gate: #pEchange only when echangeAutorise (LUE + not TB-unhooked). Row tap still opens profile. */
-    + '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy · 0.5%</button></li>').join('')
+    /* tip 20260923-reclaim-volume: Buy · 0.5% only when fee-capturable (TB hook / known live pool we can trade).
+     * Thin external / no pool → Trade on TB (IB reclaim) — never fake fee capture. */
+    + (function () {
+        const pool = poolDecouvertPour(l.adr);
+        const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE' || pool.confiance === 'SANS_HOOK' || pool.confiance === 'HOOK'));
+        const liqOk = (l.liquiditeUsd || 0) >= 500;
+        if (feeOk && liqOk) {
+          return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy · 0.5%</button>';
+        }
+        return '<button type="button" class="bouton sec trAcheter" data-tf-act="instant-birth-tb">Trade on TB · 0.001 ETH</button>';
+      })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     || (d.lotsMarche && d.lotsMarche.ko
       ? '<li class="filL"><p class="note">⚠️ Market data was not fully read (' + d.lotsMarche.ko + ' of '
@@ -10275,7 +10306,14 @@ $('#trListe').addEventListener('click', (e) => {
   const li = e.target.closest('.trLigne');
   if (!li) return;
   const adr = li.getAttribute('data-block'), sym = li.getAttribute('data-sym');
+  const ibTr = e.target.closest('[data-tf-act="instant-birth-tb"]');
+  if (ibTr) {
+    try { etape('create_clic'); } catch (_) {}
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
   const acheter = Boolean(e.target.closest('[data-acheter]'));
+  if (acheter) { try { etape('achat'); } catch (_) {} }
   void ouvrirProfil(adr, sym).then(() => {
     if (!acheter) return;
     /* le marche du profil se lit en arriere-plan : on attend la carte Buy/Sell (au plus ~40 s), puis on prepare */
