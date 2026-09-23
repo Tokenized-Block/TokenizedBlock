@@ -91,7 +91,8 @@ async function obtenirRasteriseur() {
 import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
-const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org,https://base.llamarpc.com,https://base.drpc.org,https://1rpc.io/base')
+/* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
+const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
 let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
@@ -553,9 +554,11 @@ async function lireTrending() {
   try {
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     /* cold: 12h first (not 3d) so public RPC can finish; then incremental */
-    const blocs = blocsLusJusqua === null ? 12 * 1800 : Math.max(1, fin - blocsLusJusqua);
+    const blocs = blocsLusJusqua === null ? 6 * 1800 : Math.max(1, fin - blocsLusJusqua);
+    console.log('[trending] scan start · blocs=' + blocs + ' · connus=' + blocksConnus.size);
     const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
+    console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
     const adrs = [...blocksConnus], paires = [];
@@ -595,7 +598,7 @@ async function lireTrending() {
   return corps;
 }
 /* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
-setTimeout(() => { void lireTrending(); }, 2000);
+setTimeout(() => { void trending(); }, 2000);
 
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
