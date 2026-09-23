@@ -1634,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-dense" hidden>Build <code>20260923-map-dense</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-map-prebridge" hidden>Build <code>20260923-map-prebridge</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2039,7 +2039,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <!-- ══ BRIDGE (tip 20260923-map-dense · Raksha / Zero 1) ═══════════════════════════════════
+  <!-- ══ BRIDGE (tip 20260923-map-prebridge · Raksha / Zero 1) ═══════════════════════════════════
        Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
        Fee skim LIVE (ETH/USDC From → client-side send). Net hub swap = Phil GO 1 bps.
@@ -3273,7 +3273,7 @@ function marquerNotre(h) {
 async function charger() {
   const etat = $('#mapEtat'), note = $('#mapNote');
   try {
-    const r = await listerCreations({ rpc, blocs: 9000 });
+    const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
     const vues = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || ''));
     const ratees = (r.fenetresRatees || []).length;
     creationsLues = vues;
@@ -3561,7 +3561,7 @@ function mesCreations() {
   const cle = CHAINE + ':' + String(compte).toLowerCase();
   if (lectureCreations && lectureCreations.cle === cle) return lectureCreations.promesse;
   const promesse = (async () => {
-    const r = await listerCreations({ rpc, blocs: 9000 });
+    const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
     const { gardees, nonResolues } = await creationsDe({ rpc, creations: r.creations || [], adresse: compte });
     return { r, gardees, nonResolues };
   })();
@@ -5574,7 +5574,7 @@ $('#pEnvoyer').addEventListener('click', () => {
  *    refuser les lectures que quelqu un regarde vraiment.
  * ⚠️ Un trou plus long qu une fenetre (onglet ferme longtemps) repart de zero plutot que de sauter en
  *    silence la periode manquee. */
-const LIVE_MS = 20000, LIVE_FENETRE = 1999;
+const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-prebridge: Base getLogs ≤1000 */
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
