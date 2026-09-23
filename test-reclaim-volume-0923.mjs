@@ -13,7 +13,7 @@ import { readFileSync } from 'fs';
 const h = readFileSync('./app.html', 'utf8');
 const need = [
   ['tip comment', 'tip 20260923-created-history'],
-  ['OL IB copy', 'TB earns $0 there. Want a hooked market? Instant Birth on TB · 0.001 ETH'],
+  ['OL IB copy', 'no trade pays their creator'],
   ['OL IB button', 'data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'],
   ['OL wire', 'OpenLaunch Feed IB reclaim'],
   ['peFrais visible', 'id="peFrais">0.5%'],

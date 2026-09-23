@@ -58,6 +58,23 @@ const MOTIFS = [
   { re: /\b(unread|unreadable)\s*[≠!=]/i, quoi: 'note de conception sur nos etats de lecture' },
   { re: /\b(fallback|nullish|undefined|NaN|boolean|bigint|calldata|selector|topic0)\b/i,
     quoi: 'jargon d implementation' },
+  /* ⛔⛔ AJOUTE LE 2026-09-23, APRES QUE PHIL A ENTOURE UNE PHRASE QUE CE FICHIER LAISSAIT PASSER :
+   *     « Instant Birth = CreateRouter 0.001 ETH once, then open V8 pool COINc↔your block (no ETH
+   *     seed — buyers need COINc to trade) », sur l ecran ou l on choisit sa paire.
+   *     Elle n avait ni `≠`, ni francais, ni dollar fige : aucun motif existant ne la voyait. Il
+   *     manquait celui qui compte le plus ici — NOS PROPRES NOMS D INFRASTRUCTURE.
+   * ⛔ CE SONT LES PIRES, et pas les plus visibles : « CreateRouter », « V8 pool », « PoolKey »,
+   *    « StateView » ne sonnent pas comme du jargon quand on les ecrit tous les jours. Ils ne font
+   *    pas rire un lecteur, ils lui font croire qu il lui MANQUE un savoir — et il s en va.
+   * ⛔ LES VERSIONS DE HOOK SONT VISEES PAR LEUR CONTEXTE (`V8 pool`, `hook V5`), pas par « V8 »
+   *    seul : « V8 » pourrait legitimement apparaitre ailleurs, et une garde qui crie au loup se
+   *    fait elaguer.
+   * ⚠️ BORNE : cette liste est celle de NOS noms d aujourd hui. Un contrat nomme demain ne sera pas
+   *    attrape tant qu on ne l aura pas ajoute ici. */
+  { re: /\b(CreateRouter|BridgeRouter|PoolManager|PoolKey|StateView|precompile|contractURI|beforeInitialize|beforeSwap|afterSwap|HOOK_FEE|FEE_WALLET|createPaid|sqrtPrice|poolId|initcode|CREATE2)\b/
+    , quoi: 'nom d infrastructure a nous — il ne fait pas rire le lecteur, il lui fait croire qu il lui manque un savoir' },
+  { re: /\b(?:hook|pool)\s+V\d\b|\bV\d\s+(?:hook|pool)\b/i,
+    quoi: 'version de hook a l ecran — le lecteur n a pas a connaitre nos versions' },
   /* ⛔⛔ AJOUTE LE 2026-09-22, APRES UNE MUTATION QUI EST PASSEE AU VERT.
    *     J avais ecrit « 0.5% par virement bancaire » en plein ecran anglais pour verifier que ce
    *     fichier l attraperait. Il ne l a PAS attrape — et il avait raison au sens strict : le motif

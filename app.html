@@ -1646,7 +1646,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-ux-live" hidden>Build <code>20260923-ux-live</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-plain-words" hidden>Build <code>20260923-plain-words</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1692,7 +1692,11 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ Ce ne sont pas nos blocks : ERC-20, pool sans hook, TokenizedBlock touche $0 — l ecran le dit a chaque fois. -->
     <div class="carte">
       <p class="titre">OpenLaunch · live on Base</p>
-      <p class="sous">Other launchpad, read from <b>openlaunch.lol</b>. ERC-20 tokens, 100% supply locked in a v4 pool with <b>no hook</b> — TB earns $0 there. Want a hooked market? Instant Birth on TB · 0.001 ETH.</p>
+      <!-- ⛔ REECRIT LE 2026-09-23. L ancien disait « 100% supply locked in a v4 pool with no hook
+           — TB earns $0 there ». Trois choses qui ne concernent pas le lecteur : la version du
+           protocole, le mot « hook », et surtout CE QUE NOUS GAGNONS. Ce qui le concerne, c est
+           que ces jetons ne paient rien a leur createur — et qu ouvrir un marche ici change ca. -->
+      <p class="sous">Tokens from <b>openlaunch.lol</b>, read on chain. Their whole supply is locked in a pool, and <b>no trade pays their creator</b>. Opening a market here changes that — Instant Birth · 0.001 ETH.</p>
       <ul class="fil" id="sfOl"></ul>
       <p class="note" id="sfOlNote">Open this tab to read OpenLaunch.</p>
     </div>
@@ -6120,7 +6124,7 @@ function peindreCreateFeeHonesty() {
       /* tip 0021: count creates that really reached a hooked market — the rest earned nothing. */
       const crochetes = creations.filter((e) => { const p = poolDecouvertPour(e.jeton); return p && p.isTbFeeHook; }).length;
       el.innerHTML = '<b>' + free + '</b> free create · <b>' + crochetes + '</b> with a hooked market seen (fee path) · the rest: no fee yet'
-        + (paid ? (' · <b>' + paid + '</b> legacy CreateRouter') : '') + '.';
+        + (paid ? (' · <b>' + paid + '</b> an older create path') : '') + '.';
     }
   } else {
     el.textContent = creations.length
@@ -6510,7 +6514,7 @@ function peindreLive() {
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
         : (CHAINE === 8453
           ? (poolDecouvertPour(e.jeton) && poolDecouvertPour(e.jeton).isTbFeeHook
-              ? '🧱 <b>' + nom + '</b> market open (hooked) · create was not via TB CreateRouter'
+              ? '🧱 <b>' + nom + '</b> market open · it was not created on TokenizedBlock'
               : '🧱 <b>' + nom + '</b> was born on another launchpad')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
@@ -9782,9 +9786,18 @@ async function majPaire() {
     suite = 'Paired with another block (checked on chain). Its market opens when you bring it to life.';
   } else if (q.paire.type === 'ACTION') {
     /* tip 20260922-stock-pair-ux: quote stock ≠ Birth fee; Launch is unilateral (blocks only) + V8 */
-    suite = 'Market quoted in ' + (q.paire.symbole || 'that stock')
-      + ' (Coinbase tokenized stock). Instant Birth = CreateRouter 0.001 ETH once, then open V8 pool '
-      + q.paire.symbole + '↔your block (no ETH seed — buyers need ' + (q.paire.symbole || 'the stock') + ' to trade).';
+    /* ⛔⛔ REECRIT LE 2026-09-23 (Phil : « ca doit plus exister, c est une note de toi-meme »).
+     *     L ancienne phrase disait « Instant Birth = CreateRouter 0.001 ETH once, then open V8 pool
+     *     COINc↔your block (no ETH seed) ». Trois noms d INFRASTRUCTURE — CreateRouter, V8 pool,
+     *     ETH seed — sur l ecran de quelqu un qui choisit contre quoi son block s echangera. Ils ne
+     *     l aident pas a choisir : ils lui font croire qu il lui manque un savoir.
+     * ⛔ CE QUI LE CONCERNE EST GARDE, et c est la seule vraie consequence du choix : il faudra
+     *    detenir CE jeton-la pour acheter son block, pas de l ETH.
+     * ⛔ ET MA GARDE DE TEXTE NE L A PAS VUE : aucun `≠`, aucun francais, aucun dollar fige — elle
+     *    n avait aucun motif pour NOS PROPRES noms de contrats. Motif ajoute dans le meme passage,
+     *    sinon la prochaine note interne repasse par la meme porte. */
+    suite = 'Priced in ' + (q.paire.symbole || 'that stock') + ' (a Coinbase tokenized stock), '
+      + 'so buyers will need ' + (q.paire.symbole || 'that stock') + ' to trade your block — not ETH.';
   }
   n.textContent = suite;
   const chip = $('#cPaireChip');
@@ -10734,7 +10747,7 @@ async function creerBlock() {
   if (Number(CHAINE) === 8453 && creerSansVie) {
     creerSansVie = false;
     e.className = 'note wKo';
-    e.textContent = 'Free factory create is retired on Base. Use Instant Birth · 0.001 ETH (CreateRouter) — nothing was signed.';
+    e.textContent = 'Free create is retired on Base. Use Instant Birth · 0.001 ETH — nothing was signed.';
     majFraisEtRecap();
     return;
   }
@@ -10744,7 +10757,7 @@ async function creerBlock() {
    * offered free → infinite asleep blocks. */
   if (Number(CHAINE) === 8453 && aLancerLire().length > 0) {
     e.className = 'note wKo';
-    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH via CreateRouter — nothing was signed.';
+    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH — nothing was signed.';
     majFraisEtRecap();
     return;
   }
@@ -10832,7 +10845,7 @@ async function creerBlock() {
     /* tip 20260923-feed-catch-router: MAIN always CreateRouter createPaid. Practice = free factory. */
     if (utiliseCreateRouter()) {
       e.className = 'note';
-      e.textContent = 'Review in your wallet — CreateRouter createPaid · 0.001 ETH, once. Paid only if creation succeeds.';
+      e.textContent = 'Review in your wallet — 0.001 ETH, once. You pay only if the block is created.';
     /* ⛔ ce « payer d abord puis V1 » ne sert plus sur mainnet : V2 y est deploye pour toujours et encaisse lui-meme les ≈ 1 $
      *    (audit 2026-09-19 : une lecture ratee du V2 menait ici, puis au V1 et a son createur mal enregistre). */
     } else if (false && Number(CHAINE) === 8453) {
@@ -10886,7 +10899,7 @@ async function creerBlock() {
       /* ⛔ BUG vu par Phil (capture, mainnet) : avec le hook V2 deploye, on tombait ici et l ecran disait « Practice » */
       /* tip 20260922-ib-batch: never sell factory create as Instant Birth — fee moment is V8 inscription. */
       e.textContent = Number(CHAINE) === 8453
-        ? 'Review — CreateRouter createPaid · Instant Birth · 0.001 ETH once · V8…'
+        ? 'Review — Instant Birth · 0.001 ETH, once…'
         : 'Practice — create it. Check it in your wallet.';
     }
     /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
@@ -10925,7 +10938,7 @@ async function creerBlock() {
         if (estCreateB20ValeurZero(toSend, valueSend) || BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
           || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase()) {
           e.className = 'note wKo';
-          e.textContent = 'Instant Birth refused: could not build CreateRouter paid tx (≥ 0.001 ETH). Nothing was sent.';
+          e.textContent = 'Instant Birth refused: the paid request could not be built. Nothing was sent.';
           return;
         }
         try {
@@ -10934,16 +10947,16 @@ async function creerBlock() {
         } catch (_) { adrSend = null; }
         if (!adrSend) {
           e.className = 'note wKo';
-          e.textContent = 'Instant Birth CreateRouter could not predict the token address — nothing was sent.';
+          e.textContent = 'Instant Birth could not work out your block address in advance — nothing was sent.';
           return;
         }
         adresseCreee = adrSend;
         e.className = 'note';
-        e.textContent = 'Instant Birth — CreateRouter · 0.001 ETH once. Check your wallet (paid create — not factory value 0).';
+        e.textContent = 'Instant Birth — 0.001 ETH, once. Check your wallet: it should ask for 0.001 ETH, not zero.';
         try { console.info('[Instant Birth] CreateRouter same-sig paid', toSend, valueSend, adrSend); } catch (_) {}
       } catch (errIb) {
         e.className = 'note wKo';
-        e.textContent = 'Instant Birth CreateRouter build failed — nothing was sent. ' + String((errIb && errIb.message) || errIb).slice(0, 160);
+        e.textContent = 'Instant Birth could not be prepared — nothing was sent. ' + String((errIb && errIb.message) || errIb).slice(0, 160);
         return;
       }
       /* keep forcerCreateRouterIb true through envoyerDepuisWallet; cleared in creerBlock finally */
@@ -10960,7 +10973,7 @@ async function creerBlock() {
     if (ibDirect && (BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
       || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase())) {
       e.className = 'note wKo';
-      e.textContent = 'Instant Birth refused: first wallet prompt must be CreateRouter ≥ 0.001 ETH. Nothing was sent.';
+      e.textContent = 'Instant Birth refused: the first wallet request must ask for at least 0.001 ETH. Nothing was sent.';
       return;
     }
     try { etape('create_sign_propos'); } catch (_) {}
@@ -11000,8 +11013,8 @@ async function creerBlock() {
         const symQ = quoteAction ? (paireChoisie.symbole || 'stock') : 'ETH';
         const nextTxt = ibDirect
           ? (quoteAction
-            ? ('. Open fee already paid via CreateRouter — next = <b>open V8 market vs ' + enTexte(symQ) + '</b> (no second 0.001 · no ETH seed).')
-            : '. Open fee already paid via CreateRouter — next = <b>seed ETH + open hooked V8 market</b> (no second 0.001).')
+            ? ('. Opening fee already paid — next: <b>open its market against ' + enTexte(symQ) + '</b> (no second 0.001 · no ETH seed).')
+            : '. Opening fee already paid — next: <b>put ETH in the pool and open its market</b>. You will not pay the 0.001 again.')
           : (quoteAction
             ? ('. Next = <b>Instant Birth</b> (open V8 vs ' + enTexte(symQ) + ' · open fee 0.001 ETH, once).')
             : '. Next = <b>Instant Birth</b> (ETH seed into hooked pool + first micro-swap · open fee 0.001 ETH, once separate).');

@@ -16,7 +16,10 @@ if (!h.includes('was born on TB · paid')) throw new Error('paid label');
 if (!h.includes('foreignCreate')) throw new Error('foreignCreate');
 if (!h.includes('data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH')) throw new Error('IB CTA');
 if (!h.includes("if (Number(CHAINE) === 8453) return true;")) throw new Error('utiliseCreateRouter MAIN');
-if (!h.includes('Free factory create is retired on Base')) throw new Error('refuse creerSansVie');
+/* ⛔ CHAINE D ECRAN MISE A JOUR (2026-09-23) : l ancienne portait un nom de contrat
+ *    (« CreateRouter ») ou ce que NOUS gagnons — deux choses qui ne concernent pas le lecteur.
+ *    Le controle vise la MEME phrase dans sa nouvelle formulation : rien n est retire. */
+if (!h.includes('Free create is retired on Base')) throw new Error('refuse creerSansVie');
 if (h.includes('Create stays free')) throw new Error('free create copy left');
 if (h.includes('Fees for Dev')) throw new Error('Fees for Dev');
 if (h.includes('a6cf99d35949c6cb911adb910078f4ca46f0f5d4') && h.match(/a6cf99d35949c6cb911adb910078f4ca46f0f5d4/g)?.length) {

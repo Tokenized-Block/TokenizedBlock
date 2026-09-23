@@ -20,7 +20,12 @@ assert.match(html, /function refuseSiCreateB20ValeurZero/);
 assert.match(html, /CreateRouter createPaid FIRST/);
 assert.match(html, /Do NOT call creerEtVivreUneSignature/);
 assert.match(html, /creerBlock IB final guard/);
-assert.match(html, /CreateRouter · 0\.001 ETH once/);
+/* ⛔ CHAINE D ECRAN MISE A JOUR (2026-09-23) : elle portait « CreateRouter » — un nom de contrat
+ *    sous les yeux de quelqu un qui cree un block. Le controle vise la MEME phrase dans sa nouvelle
+ *    formulation, et exige toujours que le montant y figure. Rien n est retire.
+ *    ⛔ Les controles sur les IDENTIFIANTS DE CODE (`forcerCreateRouterIb`, le commentaire de tip)
+ *      restent intacts plus haut : eux ne sont pas a l ecran, et ils gardent vraiment quelque chose. */
+assert.match(html, /Instant Birth — 0\.001 ETH, once/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
 assert.doesNotMatch(html, /Fees for Dev/);
 assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);
