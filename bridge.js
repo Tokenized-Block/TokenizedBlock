@@ -1,4 +1,4 @@
-// bridge.js — Bridge tab quote + 0.01% client-side fee skim plan (tip 20260923-bridge-fee-skim).
+// bridge.js — Bridge tab quote + 0.01% fee skim + honest legs (tip 20260923-bridge-x402-brain).
 // ================================================================================================
 // PRODUCT (Raksha / Zero 1 · 2026-09-22/23):
 //   · Bridge tab = fiat→tokenized Fund path + sell/swap tokenized↔tokenized VIA a Bridge block.
@@ -28,6 +28,48 @@ export const BRIDGE_FEE_LABEL = '0.01%';
 
 /** Settlement assets preferred for fee display (symbols only — never fee sink address). */
 export const BRIDGE_SETTLEMENT = ['ETH', 'USDC'];
+
+/**
+ * Dig §1 Bridge legs — UI labels only. Fee sink never appears here.
+ * Equity = future leg label (honest "later"), not a live broker / FINRA / C4A clone.
+ * Hub token↔token net swap stays Phil-blocked until BridgeRouter 1 bps GO.
+ */
+export const BRIDGE_LEGS = Object.freeze([
+  {
+    id: 'fund',
+    label: 'Fiat → wallet',
+    live: true,
+    fee: 'provider',
+    note: 'Fund mode — Coinbase/MoonPay lands ETH/USDC in YOUR wallet. Not a TB skim.',
+  },
+  {
+    id: 'skim',
+    label: 'ETH/USDC skim',
+    live: true,
+    fee: '0.01%',
+    note: 'Confirm sends 0.01% when From is ETH or USDC (wallet signs). Fail-closed if fee rounds to 0.',
+  },
+  {
+    id: 'hub',
+    label: 'Block / Token hub',
+    live: false,
+    fee: '0.01%',
+    goPhil: true,
+    note: 'Quote stub only — atomic token↔token net via hub needs Phil BridgeRouter 1 bps. Not live.',
+  },
+  {
+    id: 'equity',
+    label: 'Tokenized equity leg',
+    live: false,
+    fee: 'later',
+    note: 'Future Bridge leg when a real venue exists — not a TB equities broker, not C4A/FINRA.',
+  },
+]);
+
+/** Short honest legs blurb for Bridge panel (no sink, no ≈$1, no 2x/leverage). */
+export function phraseBridgeLegs() {
+  return 'Legs: Fund (fiat→your wallet) · ETH/USDC 0.01% skim (live) · Block/Token hub quote (net swap Phil-blocked) · tokenized equity later — not a broker.';
+}
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
 
@@ -221,7 +263,10 @@ export function confirmerBridgeStub(quote) {
   return {
     ok: false,
     stub: true,
-    pourquoi: 'Bridge net swap is not on-chain yet — fee skim is live when From is ETH or USDC. Full hub swap needs Phil 1 bps router.',
+    goPhil: true,
+    /* Retired: any copy that promised atomic tokenized↔tokenized without Phil GO */
+    pourquoi: 'Atomic token↔token net via Bridge hub is blocked until Phil BridgeRouter (1 bps). '
+      + 'Fee skim is live when From is ETH or USDC only. Equity leg = later — not a live trade.',
     quote: quote || null,
   };
 }
