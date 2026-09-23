@@ -1689,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-ghost-ids" hidden>Build <code>20260923-ghost-ids</code> · Companion role proven live; dead write handler removed.</p>
+      <p class="note" data-build="20260923-logs-node" hidden>Build <code>20260923-logs-node</code> · Multi-address log sweeps go straight to the node that serves them.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2471,6 +2471,21 @@ const RESEAUX = {
           /* tip 2165: keep publicnode first (mainnet.base.org 429 under map load — overnight fix).
            * Console 403 from some egresses is noisy but rpc() already rotates to secours.
            * Extra: drpc last. B20 factory still pins b20Rpc (official). */
+          /* ⛔⛔ LA NOTE CI-DESSUS AVAIT RAISON SUR LA CORRECTION ET N A JAMAIS MESURE LE PRIX.
+           *    Mesure du 2026-09-23, en production, avec un temoin pose sur `fetch` :
+           *      · 14 `eth_getLogs` multi-adresses par chargement (12 x 50 jetons, 2 x 45) ;
+           *      · 7 chaines sur 7 de forme IDENTIQUE — PUBLICNODE 403 puis BASEORG 200 ;
+           *      · le 403 coute 3057-3165 ms, contre 192-300 ms pour la reponse utile.
+           *    Donc : aucune donnee perdue, le failover fait son travail. Mais ~21 s de temps mort
+           *    par chargement, et precisement sur le Live feed. « Bruyant » etait vrai ; gratuit,
+           *    non — et personne n avait chronometre le bruit.
+           *    ⛔ LA CAUSE EST ARITHMETIQUE, PAS INTERMITTENTE. Plafond mesure de publicnode :
+           *      5,6,7,8,9 adresses -> 200 · 10,20,40,80 -> 403. `JETONS_PAR_REQUETE` vaut 50.
+           *      50 > 9, donc CENT POUR CENT de ces balayages sont refuses. Ce n est pas « selon
+           *      les egresses » : ca ne pouvait jamais marcher.
+           *    ⛔ ET LE TROISIEME NOEUD NE SAUVE PAS : drpc rend 400 sur la meme requete (mais en
+           *      60-240 ms). `mainnet.base.org` est le SEUL a servir un getLogs multi-adresses. */
+          logsMultiRpc: 'https://mainnet.base.org',
           secours: ['https://mainnet.base.org', 'https://base.drpc.org'],
           b20Rpc: 'https://mainnet.base.org',
           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71',
@@ -2626,9 +2641,23 @@ async function rpcReseau(methode, params) {
   const to = params && params[0] && typeof params[0] === 'object' ? String(params[0].to || '').toLowerCase() : '';
   const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
   const viseFactory = methode === 'eth_call' && to === FACTORY_B20;
-  const noeuds = viseFactory
+  /* ⛔ UN `eth_getLogs` A PLUSIEURS ADRESSES NE PEUT PAS ALLER CHEZ PUBLICNODE (mesure ci-dessus :
+   *    plafond 9, et `JETONS_PAR_REQUETE` vaut 50). On ne RETIRE aucun noeud — on met devant le
+   *    seul qui sert. Si base.org tombe, la rotation reprend comme avant : une optimisation qui
+   *    supprime un repli transforme un ralentissement en panne. */
+  const ADRESSES_MAX_PUBLICNODE = 9;
+  const filtreLogs = methode === 'eth_getLogs' && params && typeof params[0] === 'object' && params[0] ? params[0] : null;
+  const multiAdresses = !!filtreLogs && Array.isArray(filtreLogs.address)
+    && filtreLogs.address.length > ADRESSES_MAX_PUBLICNODE;
+  let noeuds = viseFactory
     ? [RESEAUX[CHAINE].b20Rpc || RESEAUX[CHAINE].rpc]
     : [RESEAUX[CHAINE].rpc, ...(RESEAUX[CHAINE].secours || [])];
+  if (!viseFactory && multiAdresses) {
+    const servant = RESEAUX[CHAINE].logsMultiRpc;
+    /* ⛔ sans `logsMultiRpc` declare (Sepolia), l ordre reste INCHANGE — pas de reordonnancement
+     *   devine sur une chaine ou rien n a ete mesure. */
+    if (servant) noeuds = [servant, ...noeuds.filter((u) => u !== servant)];
+  }
   let derniere = null;
   for (let i = 0; i < noeuds.length; i++) {
     const url = noeuds[i];
