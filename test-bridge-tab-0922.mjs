@@ -1,4 +1,4 @@
-// test-bridge-tab-0922.mjs — Bridge tab + 0.01% fee skim plan (tip 20260923-bridge-fee-skim)
+// test-bridge-tab-0922.mjs — Bridge tab + 0.01% fee skim plan (tip 20260923-nav-boot-fix)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -92,7 +92,7 @@ const servi = readFileSync('./serveur-web.js', 'utf8');
 assert.match(servi, /bridge\.js/);
 
 const build = /data-build="([^"]+)"/.exec(html);
-assert.ok(build && build[1].includes('bridge-fee-skim'), 'data-build tip includes bridge-fee-skim, got ' + (build && build[1]));
+assert.ok(build && build[1].includes('nav-boot-fix'), 'data-build tip includes bridge-fee-skim, got ' + (build && build[1]));
 
 /* plan helpers must not leak fee address into pourquoi */
 assert.doesNotMatch(planEth.pourquoi || '', /0xa6cf/i);
