@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-tweet-shown" hidden>Build <code>20260923-tweet-shown</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-living-map" hidden>Build <code>20260923-living-map</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3083,12 +3083,32 @@ function creerHabitant(c) {
   return h;
 }
 
+/* ⛔⛔ UN BLOCK DONT ON A PROUVE QU IL N A PAS DE MARCHE NE TIENT PAS DE PLACE SUR LA CARTE
+ *     PUBLIQUE (Phil, 2026-09-23 : « il existe pas et vit pas sur la map visible au public »).
+ *     MESURE QUI L A MOTIVE : 355 cubes affiches, dont 67 exactement a la taille « sans marche ».
+ *     Un cinquieme de la carte etait occupe par des blocks jamais echanges, et ils rendaient
+ *     illisibles ceux qui vivent.
+ *
+ *     ⛔⛔ ET C EST LA QUE TOUT SE JOUE : `etatVie` a TROIS etats, jamais deux.
+ *         · `LUE`          -> un marche existe : il reste ;
+ *         · `NON_TROUVEE`  -> on a CHERCHE et on n a rien trouve : il part ;
+ *         · tout le reste  -> on n a PAS ENCORE REGARDE : il RESTE.
+ *       Confondre les deux derniers viderait la carte pendant le chargement et ferait passer une
+ *       lecture non faite pour un fait sur le block de quelqu un d autre. On cache ce qu on a
+ *       PROUVE absent, jamais ce qu on n a pas regarde — `absence-of-evidence-vs-failure-to-look`.
+ *
+ *     ⛔ LES BLOCKS RETIRES NE DISPARAISSENT PAS DE L APP : ils restent dans « Blocks by stage »,
+ *       sous « No market yet — it has never been traded », et leur profil s ouvre normalement. On
+ *       leur retire une PLACE SUR LA CARTE, pas leur existence. */
+function aSaPlaceSurLaCarte(c) {
+  return String(c && c.etatVie) !== 'NON_TROUVEE';
+}
 function poserBlocks(liste) {
   /* tip 0025 : on retire les BLOCKS, pas le monde (le cube, la couche d impulsions et la camera restent) */
   mondeMap().querySelectorAll('.bloc').forEach((el) => el.remove());
   if (moteur3d) moteur3d.vider();
   habitants.length = 0;
-  for (const c of liste) creerHabitant(c);
+  for (const c of liste) { if (aSaPlaceSurLaCarte(c)) creerHabitant(c); }
   animer();
 }
 
