@@ -1689,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-logs-node" hidden>Build <code>20260923-logs-node</code> · Multi-address log sweeps go straight to the node that serves them.</p>
+      <p class="note" data-build="20260923-factory-twin" hidden>Build <code>20260923-factory-twin</code> · Factory log sweeps pinned like their eth_call twin.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2640,7 +2640,24 @@ async function rpcReseau(methode, params) {
    * « market unread ». Token eth_calls must rotate like StateView. */
   const to = params && params[0] && typeof params[0] === 'object' ? String(params[0].to || '').toLowerCase() : '';
   const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
-  const viseFactory = methode === 'eth_call' && to === FACTORY_B20;
+  /* ⛔⛔ LE PIN DE LA FACTORY AVAIT ETE ECRIT POUR `eth_call` SEUL, ET SON JUMEAU MANQUAIT.
+   *    Un `eth_getLogs` ne porte pas de champ `to` — chez lui l adresse s appelle `address` —
+   *    donc `viseFactory` etait toujours faux pour les balayages de la factory, qui partaient
+   *    chez publicnode. Mesure du 2026-09-23 en production : 34 `eth_getLogs` sur
+   *    `0xb20f00…` par chargement, 34 refus 403 (~55 ms chacun), puis 34 reprises sur base.org.
+   *    Cent pour cent des 403 qui restaient apres le correctif multi-adresses venaient de la.
+   *    ⛔ LE PIN EST DELIBERE ET NE ROTATE PAS, pour une raison PLUS FORTE ici que pour eth_call :
+   *      un secours qui se trompe sur un `eth_call` rend `0x`, visiblement faux ; sur un getLogs
+   *      il rendrait une LISTE VIDE, qu on ne distingue pas de « aucun evenement ». Mieux vaut
+   *      echouer que lire un zero qu on prendrait pour une mesure.
+   *    ⛔ EGALITE EXACTE, JAMAIS UN PREFIXE — voir le bug du 2026-09-14 juste au-dessus :
+   *      `startsWith('0xb20')` avait attrape TOUS les jetons (CREATE2 0xb200…), TBLOCK compris. */
+  const adresseLogs = methode === 'eth_getLogs' && params && typeof params[0] === 'object' && params[0]
+    ? params[0].address : null;
+  const uneAdresseLogs = typeof adresseLogs === 'string' ? adresseLogs.toLowerCase()
+    : (Array.isArray(adresseLogs) && adresseLogs.length === 1 ? String(adresseLogs[0]).toLowerCase() : '');
+  const viseFactory = (methode === 'eth_call' && to === FACTORY_B20)
+    || (methode === 'eth_getLogs' && uneAdresseLogs === FACTORY_B20);
   /* ⛔ UN `eth_getLogs` A PLUSIEURS ADRESSES NE PEUT PAS ALLER CHEZ PUBLICNODE (mesure ci-dessus :
    *    plafond 9, et `JETONS_PAR_REQUETE` vaut 50). On ne RETIRE aucun noeud — on met devant le
    *    seul qui sert. Si base.org tombe, la rotation reprend comme avant : une optimisation qui

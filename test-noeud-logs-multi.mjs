@@ -22,7 +22,11 @@ import { strict as assert } from 'node:assert';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
 /* --- extraction du bloc reel ------------------------------------------------------------- */
-const debut = html.indexOf('const ADRESSES_MAX_PUBLICNODE');
+/* ⛔ L EXTRACTION PART DE `const to =` ET NON DU PLAFOND : c est la que `viseFactory` est calcule,
+ *    et c est LUI qui portait le second defaut (le jumeau `eth_getLogs` manquant). Extraire plus
+ *    bas aurait laisse la regle de la factory hors de portee du test — un test qui s arrete juste
+ *    avant le code qu on vient de changer est vert sans rien garder. */
+const debut = html.indexOf('const to = params && params[0]');
 assert.ok(debut > 0, 'bloc de selection introuvable dans app.html');
 const ancre = html.indexOf('if (servant) noeuds =', debut);
 assert.ok(ancre > debut, 'reordonnancement introuvable');
@@ -38,11 +42,14 @@ assert.ok(source.length > 300, 'extraction suspecte : ' + source.length + ' cara
  *    `noeuds = [servant]`, ce controle tirait AVANT l assertion « aucun noeud supprime » et
  *    masquait la vraie garde. Un auto-controle qui epingle l implementation eteint le test de
  *    comportement qu il etait cense proteger. */
-for (const jeton of ['ADRESSES_MAX_PUBLICNODE', 'logsMultiRpc', 'noeuds']) {
+for (const jeton of ['ADRESSES_MAX_PUBLICNODE', 'logsMultiRpc', 'noeuds', 'viseFactory', 'FACTORY_B20']) {
   assert.ok(source.includes(jeton), 'extraction incomplete, il manque ' + jeton);
 }
 
-const choisir = new Function('RESEAUX', 'CHAINE', 'methode', 'params', 'viseFactory',
+/* ⛔ `viseFactory` N EST PLUS UN PARAMETRE : il est CALCULE par le code livre. Le lui passer de
+ *    l exterieur reviendrait a tester ma propre idee de ce qu est la factory au lieu de la sienne
+ *    — et c est justement cette regle-la qui etait fausse. */
+const choisir = new Function('RESEAUX', 'CHAINE', 'methode', 'params',
   source + '\n; return noeuds;');
 
 const PUB = 'https://base-rpc.publicnode.com';
@@ -60,57 +67,85 @@ const v = (nom, fn) => { fn(); n++; };
 
 /* 1. LE CAS QUI COUTE 21 s : 50 adresses. */
 v('50 adresses -> base.org en tete', () => {
-  const out = choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)), false);
+  const out = choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)));
   assert.equal(out[0], ORG, 'base.org doit passer devant');
 });
 
 /* 2. ⛔ ET AUCUN NOEUD N EST PERDU. Une optimisation qui supprime un repli transforme un
  *    ralentissement en panne le jour ou base.org tombe. */
 v('aucun noeud supprime', () => {
-  const out = choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)), false);
+  const out = choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)));
   assert.deepEqual([...out].sort(), [DRPC, ORG, PUB].sort(), 'un noeud a disparu');
   assert.equal(new Set(out).size, out.length, 'un noeud est en double');
 });
 
 /* 3. LE SEUIL, DES DEUX COTES — un test qui ne regarde qu un cote ne mesure pas un seuil. */
 v('9 adresses : ordre INCHANGE (publicnode sert encore)', () => {
-  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(9)), false)[0], PUB);
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(9)))[0], PUB);
 });
 v('10 adresses : base.org en tete (premier refus mesure)', () => {
-  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(10)), false)[0], ORG);
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(10)))[0], ORG);
 });
 
 /* 4. UNE SEULE ADRESSE EN CHAINE, PAS EN TABLEAU — la forme la plus courante de tout le code. */
 v('adresse unique (chaine) : inchange', () => {
-  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', [{ address: PUB, fromBlock: '0x1', toBlock: '0x2' }], false)[0], PUB);
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', [{ address: PUB, fromBlock: '0x1', toBlock: '0x2' }])[0], PUB);
 });
 v('tableau d UNE adresse : inchange', () => {
-  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(1)), false)[0], PUB);
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(1)))[0], PUB);
 });
 
 /* 5. UNE AUTRE METHODE NE DOIT RIEN DEPLACER, meme avec un tableau qui ressemble. */
 v('eth_call avec un params[0].address : inchange', () => {
-  assert.equal(choisir(RESEAUX, 8453, 'eth_call', [{ address: adresses(50) }, 'latest'], false)[0], PUB);
+  assert.equal(choisir(RESEAUX, 8453, 'eth_call', [{ address: adresses(50) }, 'latest'])[0], PUB);
 });
 
 /* 6. LES ENTREES TORDUES NE DOIVENT PAS JETER — `nan-walks-through-every-bound`. */
 v('params absent / vide / null : inchange et sans exception', () => {
   for (const p of [undefined, null, [], [null], ['latest'], [{}], [{ address: null }]]) {
-    assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', p, false)[0], PUB, 'casse sur ' + JSON.stringify(p));
+    assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', p)[0], PUB, 'casse sur ' + JSON.stringify(p));
   }
 });
 
-/* 7. ⛔ LA FACTORY B20 GARDE SA REGLE : elle est PINNEE, et le reordonnancement ne doit pas la
- *    elargir a trois noeuds — les secours ont deja rendu `0x` sur ces lectures. */
-v('viseFactory : un seul noeud, inchange', () => {
-  const out = choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)), true);
-  assert.deepEqual(out, [ORG], 'la factory ne doit jamais tourner');
+/* 7. ⛔⛔ LA FACTORY B20 EST PINNEE SUR LES DEUX METHODES. Le pin n existait que pour `eth_call` :
+ *     un `eth_getLogs` ne porte pas de `to`, donc les balayages de la factory partaient chez
+ *     publicnode — 34 refus 403 par chargement, mesures en production le 2026-09-23. */
+const FACTORY = '0xb20f000000000000000000000000000000000000';
+v('eth_call sur la factory : pinne', () => {
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_call', [{ to: FACTORY, data: '0x' }, 'latest']), [ORG]);
+});
+v('eth_getLogs sur la factory : pinne AUSSI (le jumeau qui manquait)', () => {
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY)), [ORG],
+    'le balayage de la factory doit etre pinne comme son jumeau eth_call');
+});
+v('la factory en MAJUSCULES est reconnue', () => {
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY.toUpperCase().replace('0X', '0x'))), [ORG]);
+});
+v('la factory dans un tableau d UNE entree est reconnue', () => {
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs([FACTORY])), [ORG]);
+});
+
+/* 8. ⛔⛔ ET LE PIEGE DU PREFIXE RESTE FERME. Le 2026-09-14, `to.startsWith('0xb20')` avait attrape
+ *     TOUS les jetons (CREATE2 0xb200…), TBLOCK compris, et les avait colles sur un noeud limite :
+ *     « market unread » permanent. L egalite doit rester EXACTE. */
+v('un jeton 0xb200… n est PAS la factory', () => {
+  const jeton = '0xb2000000000000000000005c3130457551052401';
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(jeton))[0], PUB,
+    'un jeton ne doit jamais etre pris pour la factory');
+  assert.equal(choisir(RESEAUX, 8453, 'eth_call', [{ to: jeton, data: '0x' }, 'latest']).length, 3,
+    'un eth_call sur un jeton doit garder ses trois noeuds');
+});
+v('la factory NOYEE dans un lot multi-adresses n est pas pinnee', () => {
+  /* ⛔ un lot qui contient la factory PARMI d autres n est pas « un balayage de la factory » :
+   *   le pinner priverait les 49 autres adresses de leur repli. */
+  const lot = [FACTORY, ...adresses(49)];
+  assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(lot)).length, 3);
 });
 
 /* 8. ⛔ UNE CHAINE SANS MESURE NE SE FAIT PAS REORDONNER. Sepolia n a pas de `logsMultiRpc` :
  *    deviner un noeud la-bas serait inventer une mesure qu on n a pas faite. */
 v('Sepolia (pas de logsMultiRpc) : inchange', () => {
-  const out = choisir(RESEAUX, 84532, 'eth_getLogs', logs(adresses(50)), false);
+  const out = choisir(RESEAUX, 84532, 'eth_getLogs', logs(adresses(50)));
   assert.equal(out[0], 'https://sepolia.base.org');
   assert.equal(out.length, 2);
 });
@@ -133,6 +168,6 @@ v('JETONS_PAR_REQUETE est bien au-dessus du plafond', () => {
   assert.ok(Number(m[1]) > 9, 'JETONS_PAR_REQUETE=' + m[1] + ' <= 9 : le reordonnancement ne sert plus a rien, le retirer');
 });
 
-assert.equal(n, 13, 'compte d assertions inattendu : ' + n);
+assert.equal(n, 18, 'compte d assertions inattendu : ' + n);
 console.log('ok noeud-logs-multi — ' + n + ' cas, bloc reel extrait de app.html ('
   + source.length + ' caracteres)');
