@@ -1644,7 +1644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-reclaim-volume" hidden>Build <code>20260923-reclaim-volume</code> · reclaim foreign Creates + fee-honest Buy · 0.5%.</p>
+      <p class="note" data-build="20260923-wallet-intent-market" hidden>Build <code>20260923-wallet-intent-market</code> · wallet-intent lane + No-market false-neg (CLES V8 · rescan).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1903,7 +1903,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="pWakeGate" hidden></p>
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
         <button class="bouton sec" id="pGarderTrusted" type="button" hidden style="grid-column:1/-1">Mark as trusted</button>
-        <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Read its market again — the public node refused the read</button>
+        <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Market unread — retry</button>
+        <button class="bouton sec" id="pRescanMarche" type="button" hidden style="grid-column:1/-1">Re-scan market</button>
         <a class="bouton sec" id="pExplorer" target="_blank" rel="noopener" style="grid-column:1/-1">Open in explorer ↗</a>
       </div>
       <!-- ⛔⛔ OUVRIR SON MARCHE — dans l app, plus jamais par l ancien site. Cache tant que le block
@@ -2458,7 +2459,7 @@ async function lirePrixEth() {
 /** La jauge d un block, en dollars. Rend le texte a afficher et la largeur de barre. */
 function jaugeDe(vieEth, etatVie) {
   if (!(typeof vieEth === 'number' && vieEth > 0)) {
-    return { pct: 0, texte: etatVie === 'NON_TROUVEE' ? 'No market yet — no tier, nothing locked.' : 'Tier not judged: life not read.' };
+    return { pct: 0, texte: etatVie === 'NON_TROUVEE' ? 'No TB-readable pool yet — no tier, nothing locked.' : (etatVie === 'NON_LUE' ? 'Market unread — retry.' : 'Tier not judged: life not read.') };
   }
   if (ethUsd === null) return { pct: 0, texte: 'Tier not judged: the ETH/USD price could not be read.' };
   const usd = vieEth * ethUsd;
@@ -2994,7 +2995,7 @@ $('#map').addEventListener('click', (e) => {
   $('#fVie').textContent = lueSurChaine
     ? Math.round(h.vie * 100) / 100 + ' ETH of life'
     : mkPublic && Number(mkPublic.fdvUsd) > 0 ? '≈ ' + usdCourt(mkPublic.fdvUsd) + ' market cap · public market'
-      : h && h.etatVie === 'NON_TROUVEE' ? 'no market yet — never traded, which is not the same as worthless'
+      : h && h.etatVie === 'NON_TROUVEE' ? 'No TB-readable pool yet — never traded, which is not the same as worthless'
         : h && h.etatVie === 'NON_LUE' ? 'life unreadable right now — not the same as none'
           : 'life not read yet';
   $('#fAdr').textContent = adr;
@@ -3045,6 +3046,8 @@ $('#map').addEventListener('click', (e) => {
 $('#fAcheter').addEventListener('click', () => {
   const adr = $('#fiche').dataset.block, sym = $('#fiche').dataset.sym;
   if (!adr) return;
+  /* tip 20260923-wallet-intent-market: preserve buy intent if connect interrupts */
+  poserIntent({ kind: 'buy', adr, sym, sens: 'ACHAT', amount: '0.01' });
   void ouvrirProfil(adr, sym).then(() => {
     let essais = 0;
     const attendre = () => {
@@ -3055,12 +3058,17 @@ $('#fAcheter').addEventListener('click', () => {
         $('#peAcheter').click();
         return;
       }
-      if (++essais < 80) setTimeout(attendre, 500);
+      if (++essais < 80) { setTimeout(attendre, 500); return; }
+      peindreMarcheUnreadRetry(adr, sym);
     };
     attendre();
   });
 });
-$('#fIb') && $('#fIb').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+$('#fIb') && $('#fIb').addEventListener('click', () => {
+  etape('map_cta');
+  poserIntent({ kind: 'ib' });
+  allerA('creer');
+});
 $('#fPairer').addEventListener('click', () => {
   const adr = $('#fiche').dataset.block;
   if (!adr) return;
@@ -3539,10 +3547,58 @@ async function basculerChaine(id) {
     return false;
   }
 }
-async function pret() {
+/* tip 20260923-wallet-intent-market: preserve CTA intent across connect (once). */
+const CLE_INTENT_RESUME = 'tb.intent.resume';
+function poserIntent(o) {
+  try {
+    if (!o || !o.kind) return;
+    sessionStorage.setItem(CLE_INTENT_RESUME, JSON.stringify({
+      kind: o.kind, adr: o.adr || null, sens: o.sens || null, amount: o.amount || null,
+      sym: o.sym || null, t: Date.now(),
+    }));
+  } catch (_) { /* private nav */ }
+}
+function prendreIntentUneFois() {
+  try {
+    const raw = sessionStorage.getItem(CLE_INTENT_RESUME);
+    if (!raw) return null;
+    sessionStorage.removeItem(CLE_INTENT_RESUME);
+    const o = JSON.parse(raw);
+    if (!o || !o.kind) return null;
+    if (Date.now() - (o.t || 0) > 15 * 60 * 1000) return null;
+    return o;
+  } catch (_) { return null; }
+}
+function peindrePretChaineKo(el) {
+  if (!el) return;
+  el.className = 'note wKo';
+  el.innerHTML = 'Switch to Base to continue. '
+    + '<button type="button" class="puce" id="pretRetryChain">Retry Base</button>';
+  const b = $('#pretRetryChain');
+  if (b) b.onclick = async () => {
+    const ok = await basculerChaine(CHAINE);
+    if (ok === true) {
+      try { etape('chain_switch_ok'); } catch (_) {}
+      el.className = 'note wOk';
+      el.textContent = 'Base selected — continue.';
+    } else {
+      try { etape('chain_switch_refus'); } catch (_) {}
+      el.className = 'note wKo';
+      el.textContent = 'Switch to Base to continue — your wallet stayed on another network.';
+    }
+  };
+}
+async function pret(opts) {
+  const el = opts && opts.e;
   if (!compte) await connecter();
   if (!compte) return false;
-  await basculerChaine(CHAINE);
+  const ok = await basculerChaine(CHAINE);
+  if (ok !== true) {
+    try { etape('chain_switch_refus'); } catch (_) {}
+    peindrePretChaineKo(el || $('#peEtat') || $('#cEtat') || $('#plEtat') || $('#mienNote') || $('#wNoteConnexion'));
+    return false;
+  }
+  try { etape('chain_switch_ok'); } catch (_) {}
   return true;
 }
 
@@ -3550,11 +3606,12 @@ async function connecter() {
   /* ⛔ UNE SEULE CONNEXION, DEUX ONGLETS. My block et Wallet ont chacun leur bouton, mais c est la
    * meme fonction et le meme `compte` : deux connexions separees finiraient par designer deux
    * adresses differentes dans la meme page. Le message s ecrit dans les deux. */
-  const dire = (t) => { for (const x of [$('#mienNote'), $('#wNoteConnexion')]) x.textContent = t; };
+  const dire = (txt) => { for (const x of [$('#mienNote'), $('#wNoteConnexion')]) if (x) x.textContent = txt; };
   const eth = window.ethereum;
   if (!eth) {
     /* ⛔ ON NOMME LA CAUSE. « Ca ne marche pas » envoie chercher un defaut chez soi ; « aucun
      * wallet dans ce navigateur » dit quoi faire. */
+    try { etape('wallet_no_provider'); } catch (_) {}
     dire('No wallet found in this browser. This page needs one to know which blocks are '
       + 'yours — it never asks for a key, only for permission to read an address.');
     return;
@@ -3565,10 +3622,12 @@ async function connecter() {
   } catch (e) {
     /* ⛔ UN REFUS N EST PAS UNE PANNE. L utilisateur a le droit de dire non, et l ecran ne doit pas
      * le gronder ni reessayer tout seul. */
+    try { etape('wallet_connect_refus'); } catch (_) {}
     dire('You declined, and that is fine — nothing happened.');
     return;
   }
-  if (!compte) { dire('The wallet returned no address.'); return; }
+  if (!compte) { try { etape('wallet_connect_refus'); } catch (_) {} dire('The wallet returned no address.'); return; }
+  try { etape('wallet_connect_ok'); } catch (_) {}
   try { noterWalletUtilise(compte); } catch (_) { /* airdrop log optional */ }
 
   let chaineWallet = null;
@@ -3587,6 +3646,8 @@ async function connecter() {
 
   void listerMesBlocks();
   void majWallet();
+  /* tip 20260923-wallet-intent-market: resume IB/Buy intent once after connect */
+  try { void reprendreIntentApresConnect(); } catch (_) {}
   void peindreTokenizedBank();
 }
 
@@ -4579,9 +4640,10 @@ async function enrichirMarcheSiDecouvert(adr, v) {
     try {
       const headHex = await rpc('eth_blockNumber', []);
       const head = parseInt(headHex, 16);
+      /* tip 20260923-wallet-intent-market: widen Initialize window (50k, chunked via decouvrirPools) so older live pools promote. */
       if (Number.isSafeInteger(head) && poolm) {
-        const de = Math.max(0, head - 8000);
-        const d = await decouvrirPools({ rpc, poolManager: poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 180 });
+        const de = Math.max(0, head - 50000);
+        const d = await decouvrirPools({ rpc, poolManager: poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 120 });
         (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
         ext = poolDecouvertPour(adr);
       }
@@ -4832,8 +4894,8 @@ function peindreTrustFacts(adr, v, origine) {
     lignes.push('Market: <b>outside</b> — trades there pay nothing back to this block.');
   } else if (etat === 'NON_TROUVEE') {
     lignes.push(CHAINE === 8453
-      ? 'Market: <b>none yet</b>.'
-      : 'Market: <b>none yet</b> — open one for free (Practice).');
+      ? 'Market: <b>No TB-readable pool yet</b>.'
+      : 'Market: <b>No TB-readable pool yet</b> — open one for free (Practice).');
   } else {
     lignes.push('Market: not read yet.');
   }
@@ -4918,16 +4980,19 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
   const i = e.palier ? PALIERS.indexOf(e.palier) : -1;
   $('#pPV').textContent = pv === null ? '—' : pv.toLocaleString('en-US');
   if (!e.palier) {
+    /* tip 20260923-wallet-intent-market: never say « No market yet » for NON_LUE — that is unread, not absence. */
     $('#pPalier').textContent = prixManque ? 'Tier not judged — no USD price for ' + deviseLue
-      : etat === 'NON_TROUVEE' ? 'No market yet' : 'Life not read';
+      : etat === 'NON_TROUVEE' ? 'No TB-readable pool yet'
+      : etat === 'NON_LUE' ? 'Market unread — retry'
+      : 'Life not read';
     $('#pBarre').style.width = '0';
     /* ⛔ ON N ACCUSE LE RESEAU QUE QUAND C EST LE RESEAU. Un prix de devise qu on n a pas su lire est
      *    NOTRE limite, et l ecran doit dire laquelle — la capitalisation, elle, est affichee au-dessus. */
     $('#pProchain').textContent = etat === 'NON_TROUVEE'
-      ? 'Its life starts with its first trade. Nothing is locked, nothing is unlocked.'
+      ? 'No Tokenized Block-readable pool among tried keys yet — Instant Birth opens a hooked market, or Re-scan market.'
       : prixManque
         ? 'Its market cap is shown above, in ' + deviseLue + '. The tier is measured in dollars, and no USD price for ' + deviseLue + ' could be read.'
-        : 'Unreadable right now — that is about the network, not about this block.';
+        : 'Market unread — that is about the network, not about this block. Use Retry.';
     $('#pNotePalier').textContent = '';
   } else {
     $('#pPalier').textContent = 'Tier ' + (i + 1) + '/' + PALIERS.length + ' · ' + e.palier.titre;
@@ -4981,6 +5046,45 @@ function etape(nom, uneFois = false) {
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
   if (b) b.click();
+}
+/** tip 20260923-wallet-intent-market: after connect/pret, resume IB or Buy once. */
+async function reprendreIntentApresConnect() {
+  const o = prendreIntentUneFois();
+  if (!o) return;
+  if (o.kind === 'ib') {
+    try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
+  if (o.kind === 'buy' && o.adr && /^0x[0-9a-fA-F]{40}$/.test(String(o.adr))) {
+    await ouvrirProfil(o.adr, o.sym || null);
+    const carte = $('#pEchange'), champ = $('#peAchat');
+    if (carte && !carte.hidden && champ) {
+      if (o.amount) champ.value = String(o.amount);
+      else if (!champ.value) champ.value = '0.01';
+      try { carte.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+      if (o.sens === 'VENTE') { try { $('#peVendre').click(); } catch (_) {} }
+      else { try { $('#peAcheter').click(); } catch (_) {} }
+    } else {
+      peindreMarcheUnreadRetry(o.adr, o.sym || null);
+    }
+  }
+}
+/** tip 20260923-wallet-intent-market: Map/Trending Buy — explicit retry when Buy panel stays hidden. */
+function peindreMarcheUnreadRetry(adr, sym) {
+  const wg = $('#pWakeGate') || $('#peEtat');
+  if (!wg) return;
+  wg.hidden = false;
+  wg.className = 'note wKo';
+  wg.innerHTML = 'Market unread — retry. '
+    + '<button type="button" class="puce" id="marcheUnreadRetry">Retry market</button>';
+  const b = $('#marcheUnreadRetry');
+  if (b) b.onclick = () => {
+    try { etape('marche_rescan_ok'); } catch (_) {}
+    marcheProfil = null;
+    const k = String(adr || '').toLowerCase();
+    if (k && clesReelles.has(k)) clesReelles.delete(k);
+    void ouvrirProfil(adr, sym);
+  };
 }
 
 /** ⛔ QUI TIENT CE BLOCK, ET CE QUE LA RECOMPENSE PAIERAIT.
@@ -5224,8 +5328,9 @@ async function lireProfil(adr, sym, perime) {
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
    * fait sur notre lecture. Les fondre ferait dire au profil de quelqu un qu il ne vaut rien. */
-  $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'unreadable right now'
-    : v.etat === 'NON_TROUVEE' ? 'no market yet'
+  /* tip 20260923-wallet-intent-market: NON_LUE ≠ « no market yet »; NON_TROUVEE after enrich = no TB-readable pool. */
+  $('#pVie').textContent = !v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE' ? 'Market unread — retry'
+    : v.etat === 'NON_TROUVEE' ? 'No TB-readable pool yet'
       : (v.vie == null || !Number.isFinite(Number(v.vie))
         ? ('market found' + (v.decouvertExterne ? ' · outside market' : ''))
         : (Math.round(v.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v.devise || ''));
@@ -5303,6 +5408,11 @@ async function lireProfil(adr, sym, perime) {
     }
   }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
+  const rs = $('#pRescanMarche');
+  if (rs) {
+    rs.hidden = !(etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453);
+    if (!rs.hidden) rs.textContent = 'Re-scan market';
+  }
   /* le lien ?block=…&lancer=… ouvre la carte de lancement DES QUE l absence de marche est averee — rien n est calcule ni signe */
   /* tip 20260922-fee-funnel: deep-link / Created V8 CTA also opens Give birth on unhooked LUE */
   if (lancementLien && lancementLien === String(adr).toLowerCase()
@@ -5556,6 +5666,7 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
       });
       return;
     }
+    poserIntent({ kind: 'ib' });
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
     return;
   }
@@ -6484,6 +6595,7 @@ $('#sfOl') && $('#sfOl').addEventListener('click', (ev) => {
   if (!ibTb) return;
   ev.preventDefault(); ev.stopPropagation();
   try { etape('create_clic'); } catch (_) {}
+  poserIntent({ kind: 'ib' });
   try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
 });
 $('#sfLive').addEventListener('click', (ev) => {
@@ -6498,6 +6610,8 @@ $('#sfLive').addEventListener('click', (ev) => {
   const ibTb = ev.target.closest('[data-tf-act="instant-birth-tb"]');
   if (ibTb) {
     ev.preventDefault(); ev.stopPropagation();
+    try { etape('create_clic'); } catch (_) {}
+    poserIntent({ kind: 'ib' });
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
     return;
   }
@@ -6929,10 +7043,19 @@ async function preparerEchange(sens) {
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
   if (!echangeAutorise(marcheLuGate, etatVieProfil)) {
     e.className = 'note wKo';
-    e.textContent = 'This block has no market yet — bring it to life first.';
+    e.textContent = etatVieProfil === 'NON_LUE'
+      ? 'Market unread — retry.'
+      : 'No TB-readable pool yet — Instant Birth on TB, or Re-scan market.';
     return;
   }
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  if (!(await pret({ e }))) {
+    if (!e.textContent || !/Switch to Base/i.test(e.textContent)) {
+      e.className = 'note wKo';
+      e.textContent = 'Open your wallet to continue — it signs, this page never does.';
+    }
+    return;
+  }
+  try { if (sens === 'ACHAT') etape('achat_prepare'); } catch (_) {}
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; return; } }
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
@@ -7101,6 +7224,7 @@ async function signerEchange(tx, sens, estApprobation) {
   echangeEnCours = true;
   const e = $('#peEtat');
   e.className = 'note'; e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  try { etape('achat_sign_propos'); } catch (_) {}
   let r;
   try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: tx.to, data: tx.data, value: tx.value || '0x0' }); }
   catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
@@ -7117,13 +7241,16 @@ async function signerEchange(tx, sens, estApprobation) {
       echangeCourant = null;
       return;
     }
+    try {
+      if (r.etat === 'REFUSE_PAR_UTILISATEUR' || /user (rejected|denied)|declined|4001/i.test(String(r.pourquoi || ''))) etape('achat_sign_refus');
+    } catch (_) {}
     e.className = 'note wKo';
     e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
     return;
   }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
-  if (sens === 'ACHAT') etape('achat');
+  if (sens === 'ACHAT') { etape('achat'); try { etape('achat_ok'); } catch (_) {} }
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « Bought. », le bouton « Sign the buy »
    *    RESTAIT affiche avec la meme transaction — le harnais l a reclique et a achete QUATRE fois. Un
    *    utilisateur qui clique deux fois paierait deux fois. Une transaction confirmee quitte l ecran ;
@@ -7184,7 +7311,7 @@ async function preparerAjout() {
   const adr = $('#profil').dataset.block;
   const e = $('#plqEtat');
   $('#plqActions').innerHTML = ''; $('#plqLignes').innerHTML = '';
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } return; }
   const pct = Number(String($('#plqPart').value || '').trim().replace(',', '.'));
   if (!(pct >= 0.1 && pct <= 99.9)) { e.className = 'note wKo'; e.textContent = 'Enter a share between 0.1 and 99.9 %.'; return; }
   e.className = 'note'; e.textContent = 'Reading the pool, your balance and your approvals…';
@@ -7306,7 +7433,7 @@ async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } return; }
   const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
   const eth = Number(raw);
   if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
@@ -7412,7 +7539,7 @@ async function calculerLancement() {
   const adr = $('#profil').dataset.block;
   const e = $('#plEtat');
   e.className = 'note';
-  if (!(await pret())) { e.className = 'note wKo'; vieAutoArreter(); e.textContent = 'Open your wallet to continue — it signs, this page never does.'; return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } vieAutoArreter(); return; }
   try { await valoPrete; } catch (_) {}
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   /* ⛔ V3 (2026-09-19) : la devise choisie est une ADRESSE (USDC, cbBTC, action) ou ETH. Plus de TBLOCK a la mise en vie. */
@@ -8180,7 +8307,26 @@ async function lancerMarcheBlock(adr) {
      *    On relit le profil entier une fois la pool ouverte : palier, prix, Buy/Sell. */
     setTimeout(() => {
       if ($('#profil') && String($('#profil').dataset.block || '').toLowerCase() === String(adr).toLowerCase()) {
-        void ouvrirProfil(adr, symProfil).then(() => {
+        /* tip 20260923-wallet-intent-market: clear caches then reread; if still NON_TROUVEE, one enrich/rescan before hide Buy. */
+        marcheProfil = null;
+        const kk = String(adr).toLowerCase();
+        if (clesReelles.has(kk)) clesReelles.delete(kk);
+        void ouvrirProfil(adr, symProfil).then(async () => {
+          if (etatVieProfil === 'NON_TROUVEE') {
+            try {
+              let v2 = marcheProfil && marcheProfil.v;
+              if (v2 && v2.etat === 'NON_TROUVEE') v2 = await enrichirMarcheSiDecouvert(adr, v2);
+              if (v2 && v2.etat === 'LUE') {
+                marcheProfil = { adr: kk, chaine: CHAINE, v: v2 };
+                etatVieProfil = 'LUE';
+                $('#pEchange').hidden = !echangeAutorise(v2, 'LUE', null);
+                $('#pVie').textContent = (v2.vie != null && Number.isFinite(Number(v2.vie)))
+                  ? ((Math.round(v2.vie * 100) / 100).toLocaleString('en-US') + ' ' + (v2.devise || ''))
+                  : ('market found' + (v2.decouvertExterne ? ' · outside market' : ''));
+                try { etape('marche_rescan_ok'); } catch (_) {}
+              }
+            } catch (_) { /* keep painted state */ }
+          }
           majProgressionVie('Done — it is alive. Buy and sell are open below.');
           montrerPremierAcheteur(adr);
         });
@@ -8688,7 +8834,21 @@ if (_gtBtn) {
 }
 $('#pRelire').addEventListener('click', () => {
   const adr = $('#profil').dataset.block;
-  if (adr) void ouvrirProfil(adr, symProfil);
+  if (!adr) return;
+  marcheProfil = null;
+  const k = String(adr).toLowerCase();
+  if (clesReelles.has(k)) clesReelles.delete(k);
+  void ouvrirProfil(adr, symProfil);
+});
+/* tip 20260923-wallet-intent-market: Re-scan = clear caches, force enrich (50k/Dex), repaint — never invent LUE. */
+$('#pRescanMarche') && $('#pRescanMarche').addEventListener('click', () => {
+  const adr = $('#profil').dataset.block;
+  if (!adr) return;
+  try { etape('marche_rescan_ok'); } catch (_) {}
+  marcheProfil = null;
+  const k = String(adr).toLowerCase();
+  if (clesReelles.has(k)) clesReelles.delete(k);
+  void ouvrirProfil(adr, symProfil);
 });
 /* ⛔ RELIRE SANS QU ON LE DEMANDE, MAIS PAS SANS FIN : 3 essais espaces (8 s, 16 s, 24 s) par block. Au-dela,
  * le bouton reste — marteler un noeud sature ne le rend pas plus disponible. */
@@ -9533,11 +9693,11 @@ async function clesReellesDe(adr) {
   try {
     const r = await fetch('/api/cle/' + k, { cache: 'no-store' });
     const d = await r.json();
-    if (d && d.ok === true && Array.isArray(d.cles)) {
+    /* tip 20260923-wallet-intent-market: only cache positive cles — never session-cache ok:false → []. */
+    if (d && d.ok === true && Array.isArray(d.cles) && d.cles.length) {
       clesReelles.set(k, d.cles);
       return d.cles;
     }
-    if (d && d.ok === false) clesReelles.set(k, []);
     return [];
   } catch (_) {
     return []; /* rien en cache : on reessaiera */
@@ -9876,6 +10036,7 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
   const besoin = frais + BigInt(seed) + gasBuf;
   const solde = await lireSoldeEthAppRobuste();
   if (solde === null) {
+    try { etape('ib_preflight_fail'); } catch (_) {}
     if (e) {
       e.className = 'note wKo';
       e.innerHTML = 'Could not read your ETH balance on Base (app RPC + backups). Nothing was started — try again in a moment.'
@@ -9887,6 +10048,7 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
   }
   if (solde < besoin) {
     const manque = besoin - solde;
+    try { etape('ib_balance_short'); } catch (_) {}
     if (e) {
       e.className = 'note wKo';
       e.innerHTML = 'Need ≈ ' + ethLisible(besoin) + ' ETH (0.001 fee + seed '
@@ -9898,6 +10060,7 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
     }
     return { ok: false, solde, besoin, frais, seed, gas: gasBuf, pourquoi: 'balance_short', manque };
   }
+  try { etape('ib_preflight_ok'); } catch (_) {}
   return { ok: true, solde, besoin, frais, seed, gas: gasBuf };
 }
 
@@ -10309,14 +10472,18 @@ $('#trListe').addEventListener('click', (e) => {
   const ibTr = e.target.closest('[data-tf-act="instant-birth-tb"]');
   if (ibTr) {
     try { etape('create_clic'); } catch (_) {}
+    poserIntent({ kind: 'ib' });
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
     return;
   }
   const acheter = Boolean(e.target.closest('[data-acheter]'));
-  if (acheter) { try { etape('achat'); } catch (_) {} }
+  if (acheter) {
+    try { etape('achat_prepare'); } catch (_) {}
+    poserIntent({ kind: 'buy', adr, sym, sens: 'ACHAT', amount: '0.01' });
+  }
   void ouvrirProfil(adr, sym).then(() => {
     if (!acheter) return;
-    /* le marche du profil se lit en arriere-plan : on attend la carte Buy/Sell (au plus ~40 s), puis on prepare */
+    /* tip 20260923-wallet-intent-market: wait Buy panel; else explicit Market unread — retry (not silent). */
     let essais = 0;
     const attendre = () => {
       const carte = $('#pEchange'), champ = $('#peAchat');
@@ -10327,7 +10494,8 @@ $('#trListe').addEventListener('click', (e) => {
         $('#peAcheter').click();
         return;
       }
-      if (++essais < 80) setTimeout(attendre, 500);
+      if (++essais < 80) { setTimeout(attendre, 500); return; }
+      peindreMarcheUnreadRetry(adr, sym);
     };
     attendre();
   });
@@ -10569,9 +10737,12 @@ async function creerBlock() {
   if (!compte) {
     e.className = 'note';
     e.textContent = 'Opening your wallet to connect…';
-    if (!(await pret())) {
-      e.className = 'note wKo';
-      e.textContent = 'Your wallet did not connect, so nothing was started.';
+    poserIntent({ kind: 'ib' });
+    if (!(await pret({ e }))) {
+      if (!/Switch to Base/i.test(e.textContent || '')) {
+        e.className = 'note wKo';
+        e.textContent = 'Your wallet did not connect, so nothing was started.';
+      }
       return;
     }
     majFraisEtRecap();
@@ -10774,8 +10945,12 @@ async function creerBlock() {
       e.textContent = 'Instant Birth refused: first wallet prompt must be CreateRouter ≥ 0.001 ETH. Nothing was sent.';
       return;
     }
+    try { etape('create_sign_propos'); } catch (_) {}
     const rc = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
       to: toSend, data: dataSend, value: valueSend });
+    if (rc.etat === 'REFUSE_PAR_UTILISATEUR') {
+      try { etape('create_sign_refus'); } catch (_) {}
+    }
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
       /* tip 20260922-same-sig: CreateRouter Instant Birth fee already to sink — remember as prepaye for this block. */
@@ -12468,10 +12643,10 @@ function peindreCentre() {
 }
 setTimeout(() => { if (!centreActuel) nouveauCentre(); }, 15000);
 $('#mapCentre').addEventListener('click', () => { if (habitants.length) nouveauCentre(true); });
-$('#mapCta').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+$('#mapCta').addEventListener('click', () => { etape('map_cta'); poserIntent({ kind: 'ib' }); allerA('creer'); });
 /* tip 20260923-map-buy-cta: sticky Map footer = same Instant Birth funnel as header chip */
 const mapCtaDock = $('#mapCtaDock');
-if (mapCtaDock) mapCtaDock.addEventListener('click', () => { etape('map_cta'); allerA('creer'); });
+if (mapCtaDock) mapCtaDock.addEventListener('click', () => { etape('map_cta'); poserIntent({ kind: 'ib' }); allerA('creer'); });
 etape('visite', true);
 /* le bouton ⤢ de la map fait le meme tirage */
 (function brancherTout() {
