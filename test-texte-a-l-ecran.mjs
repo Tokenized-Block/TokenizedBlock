@@ -128,6 +128,16 @@ const MOTIFS = [
    *    perd les vraies prises avec. */
   { re: /\$\s?(?!0(?![.\d]))\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?(?!0(?![.\d]))\d/,
     quoi: 'un prix en DOLLARS fige colle au frais en ETH — l un bouge avec le marche, l autre non' },
+  /* ⛔⛔ UN « ≈ $N » ECRIT EN DUR EST UNE APPROXIMATION QUE LE CODE NE CALCULE PAS. La regle
+   *     ci-dessus ne mordait QUE si le dollar etait colle a « 0.001 ETH » dans la meme chaine —
+   *     donc `apercu.js` pouvait ecrire « Pays the one-off ≈ $1 that brings your block to life »
+   *     sous une signature sans que rien ne bronche, pendant que CINQ fichiers de test
+   *     interdisaient `≈$1` ailleurs. Un motif etroit protege une phrase, pas une regle.
+   *     ⛔ LE CHIFFRE EST EXIGE JUSTE APRES LE `$` : un prix CALCULE s ecrit `'≈ $' + usd`, donc la
+   *       chaine extraite finit par `$` et n est pas accusee. C est ce qui separe « on mesure et on
+   *       affiche » de « on affirme ». */
+  { re: /[≈~]\s*\$\s?\d/,
+    quoi: 'un « ≈ $N » ecrit en dur — le code n a pas mesure ce dollar, il l affirme' },
 ];
 
 /** Les mots francais en MINUSCULES, avec une majuscule initiale toleree (debut de phrase).
@@ -157,7 +167,14 @@ function motsFrancais() {
 }
 
 /** Les chaines qui finissent a l ecran : `textContent`, `innerHTML` et le texte des balises. */
-function chainesVisibles(src) {
+/* ⛔⛔ `balisage` EST FAUX POUR UN MODULE `.js`, ET J AI FAILLI LIVRER L INVERSE. En etendant la
+ *     garde aux modules, j ai d abord applique TOUTES les regles — dont celle qui lit le texte
+ *     entre `>` et `<`. Dans du JavaScript, ces deux caracteres sont des COMPARAISONS : la regle a
+ *     remonte des commentaires entiers comme s ils etaient a l ecran. 45 « fautes », dont une
+ *     seule vraie.
+ *     ⇒ Une garde elargie au mauvais endroit ne trouve pas plus de defauts, elle en INVENTE — et
+ *       un rouge qui ne designe aucun defaut apprend a ignorer les rouges. */
+function chainesVisibles(src, balisage = true) {
   const out = [];
   /* 1. affectations de texte en JS.
    * ⛔⛔ LES COMPARAISONS SONT RETIREES D ABORD. Premiere version : elle signalait « undefined »
@@ -212,7 +229,7 @@ function chainesVisibles(src) {
    *      ressemble a un ecrivain d ecran est balaye. Une liste figee reproduirait exactement le
    *      defaut qu on corrige — elle vieillirait en silence au prochain `setXxx` ajoute. */
   for (const m of sansComparaisons.matchAll(
-    /\b(?:setEtat|majProgressionVie|setNote|setMsg|setStatut|afficherEtat)\s*\(([\s\S]{0,3000}?)\)\s*;/g)) {
+    /\b(?:setEtat|majProgressionVie|setNote|setMsg|setStatut|afficherEtat|lignes\.push)\s*\(([\s\S]{0,3000}?)\)\s*;/g)) {
     for (const s of m[1].matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)) {
       const t = (s[1] ?? s[2] ?? '').trim();
       if (t.length > 3) out.push({ t, ou: 'JS' });
@@ -224,7 +241,7 @@ function chainesVisibles(src) {
   const sansCommentaires = src.replace(/<!--[\s\S]*?-->/g, '');
   const sansScript = sansCommentaires.replace(/<script[\s\S]*?<\/script>/g, '')
     .replace(/<style[\s\S]*?<\/style>/g, '');
-  for (const m of sansScript.matchAll(/>([^<>{}]{4,})</g)) {
+  for (const m of balisage ? sansScript.matchAll(/>([^<>{}]{4,})</g) : []) {
     const t = m[1].replace(/\s+/g, ' ').trim();
     if (t.length > 3 && /[a-zA-Z]/.test(t)) out.push({ t, ou: 'HTML' });
   }
@@ -258,8 +275,26 @@ function chainesVisibles(src) {
   return out;
 }
 
+/* ⛔⛔ LES MODULES `.js` SONT BALAYES AUSSI — ILS NE L ETAIENT PAS, ET C ETAIT LA CAUSE RACINE.
+ *     Cette garde filtrait `f.endsWith('.html')` : QUATRE-VINGTS modules hors de sa vue, alors que
+ *     c est la que vit la plupart du texte affiche. Deux defauts en sont sortis le 2026-09-23 :
+ *       · « Fees for Dev » dans `messagerie-blocks.js` — affiche a Phil, alors que DEUX gardes
+ *         interdisaient la chaine (toutes deux scopees a un slice de `app.html`) ;
+ *       · « Pays the one-off ≈ $1 » dans `apercu.js` — affiche sous une signature, alors que CINQ
+ *         fichiers de test interdisent `≈$1` et qu AUCUN ne lit `apercu.js`.
+ *     ⇒ Une garde qui nomme son terrain ne voit pas le terrain d a cote. Le motif etait bon ; c est
+ *       la LISTE DES FICHIERS qui mentait — et elle mentait en silence, en rendant un joli total.
+ *     ⛔ CE QUI EST LU DANS UN MODULE : les memes sites d affichage que dans les pages, plus
+ *       `lignes.push(...)` — la facon dont `apercu.js` compose ce que le wallet montre avant une
+ *       signature. Le reste des chaines d un module (cles, selecteurs, causes internes) n est PAS
+ *       du texte a l ecran et n a rien a faire ici. */
+const MODULES = readdirSync(new URL('./', import.meta.url))
+  .filter((f) => f.endsWith('.js') && !f.startsWith('test-') && !f.startsWith('mesure-'))
+  .sort();
+ok(MODULES.length >= 40, MODULES.length + ' module(s) .js balaye(s) — pas une poignee');
+
 ok(PAGES.length >= 3, PAGES.length + ' page(s) publique(s) balayee(s) : ' + PAGES.join(', '));
-let total = 0;
+let total = 0, totalModules = 0;
 const fautes = [];
 for (const nom of PAGES) {
   const src = readFileSync(new URL('./' + nom, import.meta.url), 'utf8');
@@ -271,7 +306,20 @@ for (const nom of PAGES) {
     }
   }
 }
-ok(total > 50, total + ' chaines visibles extraites — pas une liste vide');
+for (const nom of MODULES) {
+  const src = readFileSync(new URL('./' + nom, import.meta.url), 'utf8');
+  /* ⛔ `false` : AUCUNE regle de balisage sur un module — dans du JS, `>` et `<` sont des
+   *    comparaisons, et la regle remontait des commentaires entiers. Voir `chainesVisibles`. */
+  const visibles = chainesVisibles(src, false);
+  totalModules += visibles.length;
+  for (const v of visibles) {
+    for (const m of MOTIFS) {
+      if (m.re.test(v.t)) fautes.push({ ...v, page: nom, quoi: m.quoi });
+    }
+  }
+}
+ok(total > 50, total + ' chaines visibles extraites des pages — pas une liste vide');
+ok(totalModules > 20, totalModules + ' chaines visibles extraites des modules — pas une liste vide');
 
 /* ══ LE NUMERO DE BUILD DIT DEUX FOIS LA MEME CHOSE ═══════════════════════════════════════════
  * ⛔⛔ TROUVE LE 2026-09-22 : l attribut `data-build` disait 20260922-0203 pendant que le texte
@@ -319,4 +367,10 @@ ok(fautes.length === 0,
     'temoin inverse : une phrase anglaise saine n est PAS signalee a tort');
 }
 
-console.log('test-texte-a-l-ecran : ' + n + ' assertions, ' + PAGES.length + ' page(s), ' + total + ' chaines lues, OK');
+/* ⛔ LE RESUME NOMME LES DEUX TERRAINS. Il disait « 5 page(s), 2837 chaines » alors que 80 modules
+ *    venaient d entrer dans le balayage : un compte qui tait la moitie de ce qu il couvre laisse
+ *    croire que l autre moitie est regardee depuis toujours — c est exactement l illusion qui a
+ *    laisse passer « Fees for Dev » et « ≈ $1 ». */
+console.log('test-texte-a-l-ecran : ' + n + ' assertions · '
+  + PAGES.length + ' page(s) -> ' + total + ' chaines · '
+  + MODULES.length + ' module(s) .js -> ' + totalModules + ' chaines · OK');

@@ -107,7 +107,16 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Create a block', lignes };
   }
   if (sel === S.createPaid && to === String(CREATE_ROUTER).toLowerCase()) {
-    lignes.push('Creates via CreateRouter: sealed 1B all to you; life fee ≈ $1 ETH (birth, USDC/ETH oracle) only after create succeeds.');
+    /* ⛔⛔ DEUX CHOSES RETIREES DE CETTE LIGNE (2026-09-23), et elles etaient a l ECRAN, sous une
+     *     signature que l utilisateur s apprete a donner :
+     *     · « CreateRouter » — le nom d un de nos contrats. Le lecteur n a aucun moyen de savoir
+     *       ce que c est : ca ne l informe pas, ca lui fait croire qu il lui manque un savoir.
+     *     · « ≈ $1 » — un dollar ECRIT EN DUR. Le montant reel en ETH est deja affiche sur la
+     *       ligne « ETH sent with it » juste au-dessus : cette approximation n ajoutait aucune
+     *       information, elle ajoutait une AFFIRMATION que le code ne mesure pas ici.
+     *     ⛔ CINQ FICHIERS DE TEST INTERDISAIENT DEJA `≈$1` — aucun ne lisait `apercu.js`. Le
+     *       motif etait bon, c est la LISTE DES FICHIERS qui mentait. */
+    lignes.push('Creates your block: 1B units, all to you, sealed. The life fee is charged only if the create succeeds.');
     return { etat: 'LUE', action: 'Create a block (life fee)', lignes };
   }
   /* Native ETH transfer (no calldata) — Launch life fee → FEE_WALLET. */
@@ -127,7 +136,10 @@ export function apercuTransaction({ chaine, tx, compte = null, jeton = null, sym
     return { etat: 'LUE', action: 'Launch a market', lignes };
   }
   if (sel === S.inscrire) {
-    lignes.push(valeur > 0n ? 'Pays the one-off ≈ $1 that brings your block to life' : 'Confirms the starting price (already paid)');
+    /* ⛔ « ≈ $1 » RETIRE : le montant exact en ETH figure deja sur la ligne « ETH sent with it »
+     *    juste au-dessus. Ecrire un dollar en dur a cote d un montant variable, c est promettre un
+     *    prix qu on ne mesure pas — et le jour ou l ETH double, l ecran dit toujours « $1 ». */
+    lignes.push(valeur > 0n ? 'Pays the one-off fee that brings your block to life' : 'Confirms the starting price (already paid)');
     lignes.push('Records the starting price of its market, and you as its creator');
     return { etat: 'LUE', action: 'Bring it to life', lignes };
   }
