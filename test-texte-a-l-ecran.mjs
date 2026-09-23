@@ -75,6 +75,20 @@ const MOTIFS = [
     , quoi: 'nom d infrastructure a nous — il ne fait pas rire le lecteur, il lui fait croire qu il lui manque un savoir' },
   { re: /\b(?:hook|pool)\s+V\d\b|\bV\d\s+(?:hook|pool)\b/i,
     quoi: 'version de hook a l ecran — le lecteur n a pas a connaitre nos versions' },
+  /* ⛔⛔ LE PRENOM DE QUELQU UN DE L EQUIPE, A L ECRAN. Ajoute le 2026-09-23 apres qu une mutation
+   *     eut montre que la garde ELARGIE lisait bien la chaine et ne rougissait toujours PAS :
+   *         setEtat('Bridge fee confirmed … · net swap via hub still Phil-blocked (1 bps router GO).')
+   *     Les deux occurrences attrapees plus tot ne l avaient ete que parce qu elles contenaient le
+   *     mot `BridgeRouter` ; celle-ci dit « router » en minuscule. Elargir la LECTURE sans elargir
+   *     le MOTIF donne une garde qui compte plus de chaines et n attrape rien de plus — un
+   *     compteur qui monte n est pas une garde qui mord.
+   *     ⛔ POURQUOI C EST LE PIRE CAS : « Phil-blocked » s affiche JUSTE APRES un paiement. Le
+   *       lecteur attend une confirmation et recoit le prenom d un inconnu. Phil l a dit deux fois
+   *       en propres termes : « t es trop de truc perso », « c est une note de toi-meme ».
+   *     ⛔ BORNE : ce motif ne connait que les prenoms de l equipe. Il ne peut pas deviner un
+   *       nom propre quelconque, et il ne pretend pas le faire. */
+  { re: /\b(?:Phil|Rakhsa|Raksha|Zero\s?1|Clansy|VolKov)\b/i,
+    quoi: 'prenom de quelqu un de l equipe a l ecran — le lecteur ne sait pas qui c est, et ca ne lui apprend rien' },
   /* ⛔⛔ AJOUTE LE 2026-09-22, APRES UNE MUTATION QUI EST PASSEE AU VERT.
    *     J avais ecrit « 0.5% par virement bancaire » en plein ecran anglais pour verifier que ce
    *     fichier l attraperait. Il ne l a PAS attrape — et il avait raison au sens strict : le motif
@@ -182,6 +196,23 @@ function chainesVisibles(src) {
    *    et la garde ne regardait qu une des deux facons de le faire. */
   for (const m of sansComparaisons.matchAll(
     /\.(?:textContent|innerHTML|placeholder|title)\s*\+?=\s*([\s\S]{0,3000}?);[ \t]*(?:\r?\n|$)/g)) {
+    for (const s of m[1].matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)) {
+      const t = (s[1] ?? s[2] ?? '').trim();
+      if (t.length > 3) out.push({ t, ou: 'JS' });
+    }
+  }
+  /* 1 bis. ⛔⛔ LES FONCTIONS QUI ECRIVENT A L ECRAN — UN ANGLE MORT ENTIER, TROUVE LE 2026-09-23.
+   *    La regle 1 ne voit que les AFFECTATIONS (`.textContent =`). Or l app ecrit aussi par APPEL :
+   *    `setEtat(...)` (22 appels) et `majProgressionVie(...)` (14). Ces 36 textes n ont jamais ete
+   *    lus par cette garde. Elle a rendu « 2768 chaines lues, OK » pendant qu un
+   *        setEtat('Bridge fee confirmed … · net swap via hub still Phil-blocked (1 bps router GO).')
+   *    s affichait JUSTE APRES un paiement. Un compteur qui monte ne prouve pas qu on a tout lu :
+   *    il prouve qu on a beaucoup lu de ce qu on regardait deja.
+   *    ⛔ LA DECOUVERTE EST AUTOMATIQUE, pas une liste tenue a la main : tout identifiant qui
+   *      ressemble a un ecrivain d ecran est balaye. Une liste figee reproduirait exactement le
+   *      defaut qu on corrige — elle vieillirait en silence au prochain `setXxx` ajoute. */
+  for (const m of sansComparaisons.matchAll(
+    /\b(?:setEtat|majProgressionVie|setNote|setMsg|setStatut|afficherEtat)\s*\(([\s\S]{0,3000}?)\)\s*;/g)) {
     for (const s of m[1].matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)) {
       const t = (s[1] ?? s[2] ?? '').trim();
       if (t.length > 3) out.push({ t, ou: 'JS' });

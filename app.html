@@ -1623,7 +1623,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="note" id="tbEtat" style="margin-top:8px"></p>
       <p class="note" id="tbEarly">Early holders = yield share at Open (frozen) — listed after confirm. Grafting is open to any wallet with proof.</p>
-      <p class="note" id="tbAgent">After confirm, <b>Zero 1 / Brain</b> will run ops. Credit mint path is not deployed yet — this screen stays honest.</p>
+      <!-- ⛔ « Zero 1 / Brain » RETIRE : « Zero 1 » est le nom interne d un de nos agents. Le
+           lecteur ne sait pas qui c est et ne peut pas l apprendre — nommer l operateur ne
+           l informe pas, ca lui fait croire qu il lui manque un savoir. Ce qui l interesse, c est
+           QUE ca tourne automatiquement, pas QUI le fait tourner. -->
+      <p class="note" id="tbAgent">After confirm, the <b>Brain</b> runs ops automatically. Credit mint path is not deployed yet — this screen stays honest.</p>
     </div>
 
     <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
@@ -1712,7 +1716,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-merge-rpc-bridge" hidden>Build <code>20260923-merge-rpc-bridge</code> · Bridge legs + x402 stub + Brain journal, back on the RPC node fixes.</p>
+      <p class="note" data-build="20260923-no-first-names" hidden>Build <code>20260923-no-first-names</code> · No team first names or internal contract names on screen.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8926,7 +8930,7 @@ $('#tbAddLiqBtn') && $('#tbAddLiqBtn').addEventListener('click', async () => {
     etat.textContent = credit.etat === 'PENDING_CONTRACT'
       ? ('Add-liquidity confirmed' + (sig ? ' (signed)' : '') + '. Basket ' + greffes.length
         + ' · early frozen (yield) · ' + (credit.note ? 'stub note recorded · ' : '')
-        + 'Zero 1 / Brain will run ops.')
+        + 'The Brain runs ops automatically.')
       : ('Refused: ' + (credit.pourquoi || credit.etat));
   }
 });
@@ -8982,7 +8986,7 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
     etat.textContent = credit.etat === 'PENDING_CONTRACT'
       ? ('Open confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Early shares frozen · credit USDC stub on basket of '
         + greffes.length + ' · survivors ' + positifs.length
-        + ' · any wallet may now add liquidity · Zero 1 / Brain will run ops.')
+        + ' · any wallet may now add liquidity · the Brain runs ops automatically.')
       : ('Refused: ' + (credit.pourquoi || credit.etat));
   }
 });
@@ -12732,7 +12736,10 @@ function basculerBridgeMode(mode) {
       return;
     }
     etape('bridge_fee_sign');
-    setEtat('Open your wallet — sign the 0.01% fee only. Net swap via hub still needs Phil.');
+    /* ⛔ « still needs Phil » RETIRE : ce texte s affiche au moment ou l utilisateur ouvre son
+     *    wallet pour signer. Lui repondre par le prenom de quelqu un qu il ne connait pas, juste
+     *    avant une signature, est le pire endroit possible pour du jargon interne. */
+    setEtat('Open your wallet — sign the 0.01% fee only. Net swap via hub is not live yet.');
     conf.disabled = true;
     try {
       const eth = window.ethereum;
@@ -12746,7 +12753,12 @@ function basculerBridgeMode(mode) {
         const feeTxt = formatBridgeAmount(q.fee, plan.asset);
         setEtat('Bridge fee confirmed (' + feeTxt + ')'
           + (r.hash ? (' · ' + String(r.hash).slice(0, 10) + '…') : '')
-          + ' · net swap via hub still Phil-blocked (1 bps router GO).');
+          /* ⛔ « still Phil-blocked (1 bps router GO) » RETIRE : ce texte s affiche JUSTE APRES que
+           *    l utilisateur a paye son frais. Lui repondre par un prenom, un nom de contrat
+           *    interne et un tarif pour une route qui n existe pas, c est le laisser croire qu il
+           *    lui manque un savoir au moment exact ou il attend une confirmation.
+           *    ⛔ LA RESERVE RESTE, en mots qui se comprennent sans nous connaitre. */
+          + ' · net swap via hub is not live yet.');
       } else if (r.etat === 'REFUSE_PAR_UTILISATEUR') {
         etape('bridge_fee_refuse');
         setEtat(r.pourquoi || 'You declined — nothing sent');
