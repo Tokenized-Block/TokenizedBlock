@@ -114,7 +114,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Launch / Wake',
     does: 'Life fee then open hooked market',
     signs: true,
-    fee: '≈ $1 in ETH, once',
+    fee: '0.001 ETH once (Instant Birth / Launch)',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'sleep_or_unpaid',
   },
@@ -383,7 +383,7 @@ export function planOfferFood({
             evidenceHash: receipt.evidence_hash,
             signalsPacked: 'pack(signals32) — browser helper when live',
           },
-          note: 'offer(...) — optional life dust → FEE_WALLET · Fees for Dev',
+          note: 'offer(...) — optional life dust → on-chain fee wallet (user signs)',
         },
       ]
     : [
@@ -440,7 +440,13 @@ export function resumeTaches(snap, opts = {}) {
   });
   return {
     schema: TASKS_SCHEMA,
-    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Fees for Dev when tools execute.',
+    honesty: '128 LIF offchain decision core · onchain = 32-signal 0/1 circuit. Option A: Brain proposes; user wallet signs; Brain writes journal — never freestyle-signs markets.',
+    option_a: {
+      brain: 'watch / propose / write journal',
+      signer: 'user wallet or capped session pays',
+      brain_signs_markets: false,
+      option_b_auto_pay: false,
+    },
     fee_wallet: FEE_WALLET_TASKS,
     neuron_mass_band: band,
     neurones_offchain: 128,

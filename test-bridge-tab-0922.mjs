@@ -87,6 +87,7 @@ const bridgePanel = html.slice(brStart, brEnd);
 assert.doesNotMatch(bridgePanel, /0xa6cf|Fees for Dev|≈\s*\$1|≈\$1/i);
 assert.doesNotMatch(bridgePanel, /Fees for Dev/i);
 assert.match(bridgePanel, /Fee[\s\S]*0\.01%/);
+assert.match(bridgePanel, /Phil/i);
 
 const servi = readFileSync('./serveur-web.js', 'utf8');
 assert.match(servi, /bridge\.js/);

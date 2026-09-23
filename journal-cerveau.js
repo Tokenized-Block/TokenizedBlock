@@ -17,6 +17,26 @@ import { decisionEchange, phraseDemande, silenceDepuisBlocs } from './cerveau-ec
 export const GENRES_PENSEE = ['FAIT', 'PENSE', 'AMELIORER'];
 
 /**
+ * Option A bot-loop journal line — Brain WRITES after propose (and optional pay).
+ * Never implies Brain signed / freestyle-signed a market.
+ * @param {{action:string, paid?:boolean, resultat?:string, parce_que?:string}} p
+ * @returns {{genre:string, texte:string, parce_que:string, bot:true, signeParUtilisateur:true}}
+ */
+export function entreeBotAction(p) {
+  const action = String((p && p.action) || 'action').trim() || 'action';
+  const paid = !!(p && p.paid);
+  const resultat = String((p && p.resultat) || '').trim();
+  const texte = paid
+    ? ('Bot action « ' + action + ' » — pay recognized' + (resultat ? ('; ' + resultat) : '') + '.')
+    : ('Bot action proposed: « ' + action + ' » — waiting for signer (Brain does not sign).');
+  const parce_que = String((p && p.parce_que) || '').trim()
+    || (paid
+      ? 'Option A · user/capped session paid · Brain journal write only'
+      : 'Option A · Brain proposes only · no freestyle market sign');
+  return { genre: 'FAIT', texte, parce_que, bot: true, signeParUtilisateur: true };
+}
+
+/**
  * @param {object} o
  * @param {string} o.phase           phase du cerveau (cerveau.js)
  * @param {number|null} o.vie        capitalisation en ETH, null si pas de marche / non lue
