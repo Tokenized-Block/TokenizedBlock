@@ -1634,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-3dplace" hidden>Build <code>20260923-map-3dplace</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-map-anim" hidden>Build <code>20260923-map-anim</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2039,7 +2039,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <!-- ══ BRIDGE (tip 20260923-map-3dplace · Raksha / Zero 1) ═══════════════════════════════════
+  <!-- ══ BRIDGE (tip 20260923-map-anim · Raksha / Zero 1) ═══════════════════════════════════
        Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
        Fee skim LIVE (ETH/USDC From → client-side send). Net hub swap = Phil GO 1 bps.
@@ -2859,7 +2859,7 @@ function creerHabitant(c) {
   };
   if (moteur3d) moteur3d.placer(h);
   else {
-    /* tip 20260923-map-3dplace: queue until moteur exists — avoid top-left DOM stack */
+    /* tip 20260923-map-anim: queue until moteur exists — avoid top-left DOM stack */
     const wait = setInterval(() => {
       if (!moteur3d) return;
       clearInterval(wait);
@@ -3300,13 +3300,15 @@ async function charger() {
      *    secondes. Les blocks apparaissent d abord, la vie arrive ensuite — et tant qu elle n est
      *    pas lue, ils sont PALES, jamais « a zero ». */
     /* tip 0026 (Phil « accueillir TOUS les blocks vivants ») : tous les blocks lus sont poses ; la vie n est lue que pour les 30 premiers (limite du noeud public) */
-    /* tip 20260923-map-3dplace: browser RPC often returns ≪ server trending; full poserBlocks
+    /* tip 20260923-map-anim: browser RPC often returns ≪ server trending; full poserBlocks
      * was WIPING ~150 soleils down to ~20. Only full-replace when the chain list is denser. */
     const pose = vues.map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null }));
     if (vues.length >= Math.max(80, habitants.length)) {
       poserBlocks(pose);
     } else {
       for (const c of pose) { if (!habitantDe(c.jeton)) creerHabitant(c); }
+      /* tip 20260923-map-anim: thin merge skips poserBlocks → animer never started */
+      if (habitants.length && !anim) animer();
     }
     etat.textContent = '';
     void poserNosBlocks(r.fenetre.a);
@@ -5590,7 +5592,7 @@ $('#pEnvoyer').addEventListener('click', () => {
  *    refuser les lectures que quelqu un regarde vraiment.
  * ⚠️ Un trou plus long qu une fenetre (onglet ferme longtemps) repart de zero plutot que de sauter en
  *    silence la periode manquee. */
-const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-3dplace: Base getLogs ≤1000 */
+const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-anim: Base getLogs ≤1000 */
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
@@ -12248,7 +12250,7 @@ document.addEventListener('click', (e) => {
 });
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
-/* tip 20260923-map-3dplace: NEVER seed soleils before moteur3d — creerHabitant without
+/* tip 20260923-map-anim: NEVER seed soleils before moteur3d — creerHabitant without
  * moteur3d.placer stacks every .bloc in the DOM top-left (Raksha screenshot 2026-09-23).
  * Wait for demarrerBattement / creerMoteur3D, THEN seed + charger. */
 function quandMoteurPret(fn) {
@@ -12292,6 +12294,11 @@ async function soleilsSurLaMap() {
     }
     /* ⛔ LA DONNEE LUE PUIS JETEE EST UN DEFAUT : ces FDV jugent aussi les stades, donc on repeint. */
     try { peindreStades(); } catch (_) { /* l onglet n est peut-etre pas encore peint */ }
+    /* tip 20260923-map-anim: soleilsSurLaMap creates .bloc via creerHabitant WITHOUT poserBlocks —
+     * placer only sets wx/wy/wz; CSS transform comes from moteur3d.image via animer(). Without
+     * animer, every tile stays left:0 top:0 (Raksha pile top-left, tip map-3dplace was not enough). */
+    if (habitants.length && !anim) animer();
+    else if (moteur3d && habitants.length) try { moteur3d.image(performance.now()); } catch (_) {}
   } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
 }
 /* ══ LES FACES DE LA MAP ════════════════════════════════════════════════════════════════════════════
