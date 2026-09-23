@@ -1288,11 +1288,20 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte" id="cModeToken" hidden>
       <p class="titre">A plain token with <a href="https://openlaunch.lol" target="_blank" rel="noopener">openlaunch.lol ↗</a></p>
       <p class="sous">Their contract, their rules: 1B supply, all of it locked in a pool paired with ETH. No face, no brain, not on the map.
-        The trading fee you pick goes <b>100% to you</b>, in ETH, forever. Pick 0% and nobody earns it.</p>
+        The trading fee you pick goes <b>100% to you</b>, in ETH, forever.</p>
       <label class="champ">Name<input id="olNom" maxlength="32" placeholder="My token" autocomplete="off"></label>
       <label class="champ">Symbol<input id="olSym" maxlength="11" placeholder="MYTKN" autocomplete="off"></label>
       <label class="champ">Starting value (whole supply)<select id="olFdv"><option value="3">≈ 3 ETH</option><option value="10" selected>≈ 10 ETH</option><option value="30">≈ 30 ETH</option></select></label>
-      <label class="champ">LP fee on trades<select id="olFee"><option value="10000" selected>1%</option><option value="30000">3%</option><option value="0">0% (no fee, nobody earns)</option></select></label>
+      <!-- ⛔⛔ L OPTION « 0 % (no fee, nobody earns) » EST RETIREE (Phil, 2026-09-23 : « evidemment
+           tout le monde va prendre free, enleve-le, c est fini le free modele »).
+           ⛔ CE N ETAIT PAS UN BOUTON, C ETAIT UN CHOIX DANS UNE LISTE — c est pour ca qu il avait
+             survecu au retrait du « free block » du 2026-09-19 : on avait cherche des boutons.
+             Offrir « payer » et « gratuit » cote a cote ne mesure pas une preference, ca la
+             fabrique : personne ne choisit de payer quand la case d a cote est vide.
+           ⛔ ET LE 0 % EST DEFINITIF : le taux est grave dans la PoolKey. Un marche ouvert a 0 %
+             ne rapporte JAMAIS rien, ni a son createur ni a nous — aucune migration n existe.
+             Ce n etait donc pas une option bon marche, c etait une option morte. -->
+      <label class="champ">LP fee on trades<select id="olFee"><option value="10000" selected>1%</option><option value="30000">3%</option></select></label>
       <button class="bouton" id="olPreparer" type="button">Prepare the OpenLaunch launch</button>
       <ol class="pmLignes" id="olLignes"></ol>
       <div id="olActions"></div>
@@ -1716,7 +1725,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-no-first-names" hidden>Build <code>20260923-no-first-names</code> · No team first names or internal contract names on screen.</p>
+      <p class="note" data-build="20260923-no-free-tier" hidden>Build <code>20260923-no-free-tier</code> · The 0% market option is gone, and a 0% fee is refused at launch.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -10572,9 +10581,22 @@ $('#olPreparer').addEventListener('click', async () => {
   const etat = $('#olEtat'), lignes = $('#olLignes'), actions = $('#olActions');
   lignes.innerHTML = ''; actions.innerHTML = '';
   if (Number(CHAINE) !== 8453) { etat.className = 'note wKo'; etat.textContent = 'OpenLaunch launches run on Base mainnet only — switch network.'; return; }
+  /* ⛔⛔ LE 0 % EST REFUSE ICI AUSSI, PAS SEULEMENT RETIRE DE LA LISTE. Retirer une `<option>` ne
+   *    ferme rien : un `select` garde la valeur d une session precedente, une extension ou un
+   *    outil de dev peut en poser une autre, et `Number('')` vaut 0. La garde appartient la ou la
+   *    DECISION se prend, pas la ou le choix s affiche.
+   *    ⛔ ET ELLE ECHOUE FERMEE, AVEC SA RAISON A L ECRAN : un `lpFee` illisible ne doit pas
+   *      devenir 0 en silence — `nan-walks-through-every-bound`. Un marche ouvert a 0 % ne
+   *      rapporte jamais rien, a personne, et aucune migration n existe pour le reparer. */
+  const lpFee = Number($('#olFee').value);
+  if (!Number.isFinite(lpFee) || lpFee <= 0) {
+    etat.className = 'note wKo';
+    etat.textContent = 'Pick a trading fee above 0% — a 0% market is engraved forever and can never pay anyone.';
+    return;
+  }
   const sel = crypto.getRandomValues(new Uint8Array(32));
   const plan = planLaunchOL({ nom: $('#olNom').value, symbole: $('#olSym').value, lanceur: compte,
-    startTick: tickPourFdv(Number($('#olFdv').value)), lpFee: Number($('#olFee').value),
+    startTick: tickPourFdv(Number($('#olFdv').value)), lpFee,
     salt: '0x' + [...sel].map((b) => b.toString(16).padStart(2, '0')).join('') });
   if (plan.etat !== 'OK') { etat.className = 'note wKo'; etat.textContent = plan.pourquoi + '. Nothing was prepared.'; return; }
   etat.className = 'note'; etat.textContent = 'Simulating on Base…';
@@ -10589,7 +10611,16 @@ $('#olPreparer').addEventListener('click', async () => {
   lignes.innerHTML = [
     '<b>' + enTexte(r.nom) + '</b> (' + enTexte(r.symbole) + ') · ' + r.supply + ' tokens, all locked in the pool',
     'Paired with ETH · starting value ≈ ' + r.fdvEth.toFixed(2) + ' ETH for the whole supply',
-    r.lpFeePct ? r.lpFeePct + '% trading fee → 100% to your wallet (fixed forever)' : '0% trading fee — nobody earns it',
+    /* ⛔ LA BRANCHE « 0 % » EST SUPPRIMEE, PAS RENOMMEE. Elle est devenue INATTEIGNABLE : le choix
+     *    n existe plus dans la liste et `olPreparer` refuse un lpFee <= 0 avant d arriver ici.
+     *    La laisser decrirait a l ecran un produit qu on n offre plus — et le prochain lecteur la
+     *    prendrait pour une option encore valable, exactement comme l `<option>` qui avait survecu
+     *    six jours au retrait du « free block ».
+     *    ⛔ ET ELLE NE DEVIENT PAS UN TEXTE NEUTRE : si un 0 % arrivait quand meme jusqu ici, il
+     *      faut que ca se VOIE, pas que ca s affiche joliment — `neutral-return-swallows-failure`. */
+    r.lpFeePct > 0
+      ? r.lpFeePct + '% trading fee → 100% to your wallet (fixed forever)'
+      : 'Unreadable trading fee — do not sign. Reload and pick a fee.',
     'Contract: OpenLaunch LaunchFactory · you pay gas only · no ETH sent',
     'Simulation passed on Base just now',
   ].map((t) => '<li>' + t + '</li>').join('');
