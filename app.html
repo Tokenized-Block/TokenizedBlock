@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-show-the-choice" hidden>Build <code>20260923-show-the-choice</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-route-and-refuse" hidden>Build <code>20260923-route-and-refuse</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4875,7 +4875,23 @@ function poolDecouvertPour(adr) {
     const hk = String(p.cle.hooks || '').toLowerCase();
     const isTb = estNotreHook(hk);
     /* Prefer fee hook if somehow present; else any ETH pair we can trade/upgrade. */
-    const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : (conf === 'SANS_HOOK' ? 100 : 50));
+    /* ⛔⛔ « SANS HOOK » NE PASSE PLUS DEVANT « AVEC HOOK » (Phil, 2026-09-23 : « fais au mieux »).
+     *     L ancien classement mettait `SANS_HOOK` (100) devant `HOOK` (50), donc une pool sans hook
+     *     a 50 % battait une pool hookee a 0 %. Le raisonnement etait sain — un hook etranger peut
+     *     prelever sans l annoncer — mais il produisait une PERTE CERTAINE pour eviter un INCONNU.
+     *     MESURE QUI A TRANCHE (24 h, 13 506 echanges sur des blocks B20, 36/44 fenetres lues) :
+     *         pools hookees a 0 % de frais de pool : 4 266 echanges (31,6 %)
+     *         pools SANS hook                      : 1 256 echanges ( 9,3 %)
+     *         frais de pool > 50 %                 :    19 echanges ( 0,1 %)
+     *     Envoyer quelqu un sur une pool a 50 % le met la ou va UN echange sur mille. Et le marche
+     *     lui-meme prouve que le prelevement de ces hooks est supportable : 4 266 personnes y sont
+     *     allees en 24 h. Ce n est plus un inconnu, c est un fait observe.
+     *     ⛔ CE QUI RESTE INCHANGE, ET C EST L ESSENTIEL : NOTRE hook garde la priorite absolue
+     *       (300), et « NOTRE » ensuite (200). On ne route jamais hors de notre propre marche.
+     *     ⛔ ET L OPACITE EST DITE, PAS IGNOREE : `libelleFrais` suffixe deja « %+ » sur une pool
+     *       hookee — « ce taux, plus ce que ce marche prend ». On cesse de FUIR l inconnu ; on
+     *       continue de l ANNONCER. */
+    const score = isTb ? 300 : (conf === 'NOTRE' ? 200 : 100);
     /* ⛔⛔ A CONFIANCE EGALE, LA MOINS CHERE GAGNE. Ce choix ne regardait QUE la confiance : entre
      *     plusieurs pools du meme rang, la PREMIERE rencontree l emportait, quel que soit son prix.
      *     MESURE DU 2026-09-23 sur SPIKE (0xb200…d601), 7 pools v4 lues sur la chaine :
@@ -7384,6 +7400,36 @@ async function preparerEchange(sens) {
     e.textContent = etatVieProfil === 'NON_LUE'
       ? 'Market unread — retry.'
       : 'No TB-readable pool yet — Instant Birth on TB, or Re-scan market.';
+    return;
+  }
+  /* ⛔⛔ AU-DESSUS DE 5 % DE FRAIS DE POOL, ON NE PREPARE RIEN (Phil, 2026-09-23 : « fais au mieux »).
+   *     LE SEUIL VIENT D UNE MESURE, PAS D UNE INTUITION. 24 h, 13 506 echanges sur des blocks
+   *     B20, repartis par frais de POOL et PONDERES PAR ECHANGE (une pool sans echange ne dit rien
+   *     de ce que les gens acceptent) :
+   *         0 %        4 266   31,6 %              cumul  31,6 %
+   *         0 – 1 %    8 027   59,4 %              cumul  91,0 %
+   *         1 – 5 %    1 017    7,5 %              cumul  98,5 %   <- le seuil est ICI
+   *         5 – 20 %      73    0,5 %              cumul  99,1 %
+   *         20 – 50 %     23    0,2 %              cumul  99,3 %
+   *         > 50 %        19    0,1 %              cumul  99,4 %
+   *     98,5 % du volume reel se fait a 5 % ou moins. Au-dessus, on est dans la queue : 115
+   *     echanges sur 13 506. Refuser la n empeche pas un marche, ca empeche une perte.
+   *     ⛔ ON REFUSE, ON NE PREVIENT PAS. Un avertissement a cote d un bouton actif se clique ;
+   *       c est exactement ce qui vient de se passer avec « Fee 77.5% », affiche et ignore.
+   *       Le chemin reste ouvert par le marche externe, qui est nomme.
+   *     ⛔ LE REFUS PORTE LE CHIFFRE. « trop cher » sans le taux ne se verifie pas et se lit comme
+   *       une panne — la personne recommencerait.
+   *     ⚠️ UN FRAIS DYNAMIQUE N EST PAS REFUSE : son taux est fixe au swap, donc INCONNU ici.
+   *        Le refuser sur un nombre qu on n a pas serait inventer une mesure ; `libelleFrais` dit
+   *        deja qu il est fixe a chaque echange. */
+  const FRAIS_POOL_MAX = 50000;   /* 5 %, en centiemes de point de base */
+  const feeRoute = marcheLuGate && marcheLuGate.cle ? Number(marcheLuGate.cle.fee) : null;
+  if (Number.isFinite(feeRoute) && !fraisEstDynamique(feeRoute) && feeRoute > FRAIS_POOL_MAX) {
+    e.className = 'note wKo';
+    e.textContent = 'Not prepared: the cheapest pool we found for this block charges '
+      + (feeRoute / 10000).toFixed(2) + '% per trade. Measured on Base over 24h, 98.5% of trading in '
+      + 'blocks happens at 5% or less — this one is far outside that. Nothing was sent. '
+      + 'Use the external market if you still want it.';
     return;
   }
   if (!(await pret({ e }))) {
