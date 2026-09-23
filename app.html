@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-private-stats-off" hidden>Build <code>20260923-private-stats-off</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-dynamic-fee" hidden>Build <code>20260923-dynamic-fee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4768,6 +4768,22 @@ function peindreCerveau() {
  * ⚠️ Pour une pool d un AUTRE lanceur, son hook peut prendre sa propre part, que nous ne mesurons pas :
  *    on le dit (« + this market's own fees »), sans inventer de chiffre. */
 const HOOK_PREVU_FRAIS_BPS = 300; /* 2 % + 1 %, mesures ; le contrat ne l expose pas (HOOK_FEE() revert) */
+/* ⛔⛔ LE DRAPEAU DE FRAIS DYNAMIQUE D UNISWAP v4. Une PoolKey dont le champ `fee` porte le bit
+ *     0x800000 (8 388 608) n annonce AUCUN taux : c est le hook qui le fixe a CHAQUE swap.
+ *     ⛔ CE QUE CA CASSAIT. Le code divisait ce champ par 10 000 comme un taux ordinaire, donc une
+ *       pool a frais dynamiques s affichait « Fee 839.36% ». Ce n est pas un frais choquant, c est
+ *       un nombre FAUX — et il est apparu dans une vraie mesure du 2026-09-23 : 82 pools B20 en
+ *       24 h portent ce drapeau (hook 0xbdf938…), plus 8 sur un autre.
+ *     ⛔ ET CA CORROMPAIT AUSSI LE CLASSEMENT : `poolDecouvertPour` voyait 8 388 608 et rangeait
+ *       ces pools comme les plus cheres du monde, alors que leur taux est simplement INCONNU
+ *       d avance. Le connaitre exige de simuler le swap.
+ *     ⇒ UN TAUX INCONNU N EST NI ZERO NI L INFINI : on ne l affiche pas comme un nombre, et il ne
+ *       gagne jamais un classement par prix. Fail-closed des deux cotes. */
+const FRAIS_DYNAMIQUE_V4 = 0x800000;
+function fraisEstDynamique(fee) {
+  const n = Number(fee);
+  return Number.isFinite(n) && (n & FRAIS_DYNAMIQUE_V4) !== 0;
+}
 function libelleFrais(cle) {
   const zero = '0x0000000000000000000000000000000000000000';
   const hk = cle && cle.hooks ? String(cle.hooks).toLowerCase() : zero;
@@ -4778,11 +4794,16 @@ function libelleFrais(cle) {
     const total = (HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
     return { court: 'Fee ' + total + '%', long: '' };
   }
-  const pool = tier !== null ? ' + ' + (tier / 10000) + '% pool' : '';
+  /* ⛔⛔ UNE POOL A FRAIS DYNAMIQUES N ANNONCE AUCUN TAUX. Sans ce cas, `8 388 608 / 10 000`
+   *     s affichait « Fee 839.36% » — un nombre FAUX, pas un frais eleve. Mesure du 2026-09-23 :
+   *     82 pools B20 en 24 h portent ce drapeau. On dit ce qu on sait : le hook fixe le taux a
+   *     chaque echange, et nous ne l avons pas simule. */
+  if (fraisEstDynamique(tier)) {
+    return { court: 'Fee set by this market at each trade', long: '' };
+  }
   const base = Math.round((0.5 + (tier !== null ? tier / 10000 : 0)) * 100) / 100;
   if (hk !== zero) return { court: 'Fee ' + base + '%+', long: '' };
   return { court: 'Fee ' + base + '%', long: '' };
-  void pool;
 }
 
 /** Read pool-key hook status from a vieDuBlock result (facts only). */
@@ -4875,8 +4896,16 @@ function poolDecouvertPour(adr) {
      *     l inverse exact de l intention. Mon propre test l a attrape. Meme piege avec `''` et
      *     `false`. On refuse donc les valeurs vides AVANT de convertir. */
     const feeBrut = p.cle.fee;
+    /* ⛔⛔ UN FRAIS DYNAMIQUE EST INCONNU, PAS ENORME. Le drapeau v4 vaut 8 388 608 : sans ce cas,
+     *     ces pools etaient rangees comme les plus cheres du monde et perdaient toujours, alors
+     *     que leur taux est simplement fixe par le hook a chaque swap. Les connaitre exigerait de
+     *     simuler l echange — ce qu on ne fait pas ici.
+     *     ⛔ ELLES PERDENT QUAND MEME, ET C EST VOULU : a confiance egale, on prefere une pool dont
+     *       on a LU le prix a une pool dont on ne le sait pas. Mais la raison est « inconnu », pas
+     *       « 838 % » — et l ecran le dit desormais en toutes lettres. */
     const feeP = (feeBrut !== null && feeBrut !== undefined && feeBrut !== ''
-      && Number.isFinite(Number(feeBrut))) ? Number(feeBrut) : Number.MAX_SAFE_INTEGER;
+      && Number.isFinite(Number(feeBrut)) && !fraisEstDynamique(feeBrut))
+      ? Number(feeBrut) : Number.MAX_SAFE_INTEGER;
     if (!best || score > best._score || (score === best._score && feeP < best._fee)) {
       best = { ...p, confiance: conf, _score: score, _fee: feeP, isTbFeeHook: isTb };
     }

@@ -29,8 +29,19 @@ for (const j of ['_score', 'MAX_SAFE_INTEGER', 'confiance']) {
   assert.ok(source.includes(j), 'extraction incomplete, il manque ' + j);
 }
 
-/* ⛔ on fournit les dependances que la fonction attend, sans en recopier la logique */
-const choisir = new Function('poolsLive', 'estNotreHook', 'confianceDe', 'adr',
+/* ⛔ on fournit les dependances que la fonction attend, sans en recopier la logique.
+ * ⛔⛔ `fraisEstDynamique` EST EXTRAIT D `app.html`, PAS REECRIT ICI. Ce test a rougi quand cette
+ *     dependance est apparue — c est exactement ce qu on veut : une garde qui fabrique elle-meme
+ *     ses dependances ne remarque jamais que le vrai code en a gagne une. En la recopiant, on
+ *     testerait notre version du drapeau dynamique pendant que la livree pourrait diverger
+ *     (`canonical-helper-weaker-copy`). */
+const dDyn = html.indexOf('function fraisEstDynamique(');
+assert.ok(dDyn > 0, 'fraisEstDynamique introuvable dans app.html');
+const srcDyn = html.slice(dDyn, html.indexOf('\n}', dDyn) + 2);
+assert.ok(srcDyn.includes('FRAIS_DYNAMIQUE_V4'), 'extraction de fraisEstDynamique incomplete');
+const fraisEstDynamique = new Function('FRAIS_DYNAMIQUE_V4', srcDyn + '\nreturn fraisEstDynamique;')(0x800000);
+
+const choisir = new Function('poolsLive', 'estNotreHook', 'confianceDe', 'fraisEstDynamique', 'adr',
   source + '\nreturn poolDecouvertPour(adr);');
 
 const JETON = '0xb200000000000000000000fac1a85ab57681d601';
@@ -48,15 +59,15 @@ const v = (nom, fn) => { fn(); n++; };
 v('entre sept pools sans hook, la moins chere gagne (le cas SPIKE reel)', () => {
   const m = new Map([[1, pool(770000, ZERO)], [2, pool(887323, ZERO)], [3, pool(878449, ZERO)],
     [4, pool(500000, ZERO)]].map(([k, p]) => [k, p]));
-  const r = choisir(m, estNotreHook, confianceDe, JETON);
+  const r = choisir(m, estNotreHook, confianceDe, fraisEstDynamique, JETON);
   assert.equal(r.cle.fee, 500000, 'la pool choisie coute ' + (r.cle.fee / 10000) + ' % au lieu de 50 %');
 });
 
 v('l ordre de rencontre ne decide plus', () => {
   /* ⛔ Le defaut d origine : la PREMIERE gagnait. On presente donc la chere en premier ET en
    *    dernier — les deux doivent rendre la meme reponse. */
-  const a = choisir(new Map([[1, pool(770000, ZERO)], [2, pool(30000, ZERO)]]), estNotreHook, confianceDe, JETON);
-  const b = choisir(new Map([[1, pool(30000, ZERO)], [2, pool(770000, ZERO)]]), estNotreHook, confianceDe, JETON);
+  const a = choisir(new Map([[1, pool(770000, ZERO)], [2, pool(30000, ZERO)]]), estNotreHook, confianceDe, fraisEstDynamique, JETON);
+  const b = choisir(new Map([[1, pool(30000, ZERO)], [2, pool(770000, ZERO)]]), estNotreHook, confianceDe, fraisEstDynamique, JETON);
   assert.equal(a.cle.fee, 30000, 'la chere gagne quand elle est presentee en premier');
   assert.equal(b.cle.fee, 30000, 'la chere gagne quand elle est presentee en dernier');
 });
@@ -64,7 +75,7 @@ v('l ordre de rencontre ne decide plus', () => {
 v('NOTRE hook passe devant, meme si une autre pool est moins chere', () => {
   /* ⛔ Notre pool est a 0 % de frais de POOL (le hook preleve a part) : la confiance doit rester
    *    prioritaire, sinon ce correctif nous ferait router hors de notre propre marche. */
-  const r = choisir(new Map([[1, pool(0, ZERO)], [2, pool(0, NOTRE)]]), estNotreHook, confianceDe, JETON);
+  const r = choisir(new Map([[1, pool(0, ZERO)], [2, pool(0, NOTRE)]]), estNotreHook, confianceDe, fraisEstDynamique, JETON);
   assert.equal(String(r.cle.hooks).toLowerCase(), NOTRE, 'notre hook a perdu la priorite');
   assert.equal(r.isTbFeeHook, true);
 });
@@ -73,20 +84,20 @@ v('un frais ILLISIBLE ne gagne jamais', () => {
   /* ⛔ `nan-walks-through-every-bound` : sans repli, `NaN < x` est faux mais `x < NaN` aussi —
    *    l ordre deviendrait dependant de la rencontre, c est-a-dire du defaut qu on corrige. */
   for (const mauvais of [undefined, null, NaN, 'beaucoup', {}]) {
-    const r = choisir(new Map([[1, pool(mauvais, ZERO)], [2, pool(100000, ZERO)]]), estNotreHook, confianceDe, JETON);
+    const r = choisir(new Map([[1, pool(mauvais, ZERO)], [2, pool(100000, ZERO)]]), estNotreHook, confianceDe, fraisEstDynamique, JETON);
     assert.equal(r.cle.fee, 100000, 'un frais illisible (' + String(mauvais) + ') a gagne');
   }
 });
 
 v('une seule pool, meme chere, reste choisie (on ne casse pas le cas simple)', () => {
-  const r = choisir(new Map([[1, pool(770000, ZERO)]]), estNotreHook, confianceDe, JETON);
+  const r = choisir(new Map([[1, pool(770000, ZERO)]]), estNotreHook, confianceDe, fraisEstDynamique, JETON);
   assert.ok(r && r.cle.fee === 770000, 'la seule pool disponible n est plus rendue');
 });
 
 v('aucune pool pour ce jeton : null, pas un repli au hasard', () => {
   const autre = { jeton: '0xb200000000000000000000000000000000000099',
     cle: { currency0: ZERO, currency1: '0xb200000000000000000000000000000000000099', fee: 0, hooks: ZERO } };
-  assert.equal(choisir(new Map([[1, autre]]), estNotreHook, confianceDe, JETON), null);
+  assert.equal(choisir(new Map([[1, autre]]), estNotreHook, confianceDe, fraisEstDynamique, JETON), null);
 });
 
 assert.equal(n, 6, 'compte de cas inattendu : ' + n);
