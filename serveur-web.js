@@ -54,7 +54,7 @@ async function lireOpenLaunch() {
 
 /* ⛔ TRENDING (tip 0034). Mesure 2026-09-17 : ~5,4 M$ de volume 24 h sur les blocks B20 nes en 24 h, lances AILLEURS ;
  * on ne capte leurs frais que si le trade passe par notre Buy/Sell. Ce serveur tient la liste des blocks crees (logs
- * de la factory B20, lecture seule, 3 jours puis increments), lit DexScreener par lots de 30 et renvoie le classement.
+ * de la factory B20, lecture seule, ~12 h puis increments (tip 20260923-map-trending)), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
@@ -90,18 +90,26 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
-const RPC_BASE = 'https://mainnet.base.org';
-let rpcId = 0;
+/* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
+const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org,https://base.llamarpc.com,https://base.drpc.org,https://1rpc.io/base')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
-  for (let k = 0; k < 5; k++) {
-    const r = await fetch(RPC_BASE, { method: 'POST', signal: AbortSignal.timeout(15000),
-      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
-    const j = await r.json();
-    if (!j.error) return j.result;
-    if (!/rate|limit|timeout/i.test(String(j.error.message))) throw new Error(j.error.message);
-    await new Promise((ok) => setTimeout(ok, 1200 * (k + 1)));
+  let dernier = null;
+  for (let k = 0; k < Math.max(5, RPC_LIST.length * 2); k++) {
+    const url = RPC_LIST[rpcTour % RPC_LIST.length];
+    rpcTour++;
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000),
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
+      const j = await r.json();
+      if (!j.error) return j.result;
+      dernier = new Error(j.error.message || 'rpc error');
+      if (!/rate|limit|timeout|413|too large|range/i.test(String(j.error.message))) throw dernier;
+    } catch (e) { dernier = e; }
+    await new Promise((ok) => setTimeout(ok, 400 * (k + 1)));
   }
-  throw new Error('node rate limit');
+  throw dernier || new Error('node rate limit');
 }
 /* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
  * ⛔⛔ MESURE DU 2026-09-17, ET ELLE RENVERSE UNE CONCLUSION QUE J AVAIS PUBLIEE. On croyait que les
@@ -497,20 +505,59 @@ async function holdersCorps(jeton) {
 
 const blocksConnus = new Set();
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
+/* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
+const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
+function chargerTrendingDisque() {
+  try {
+    if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
+    const x = JSON.parse(readFileSync(FICHIER_TRENDING, 'utf8'));
+    if (x && typeof x.corps === 'string' && x.corps.length > 20) {
+      trCache = { a: Number(x.a) || Date.now(), corps: x.corps };
+      for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
+      if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
+      console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size);
+    }
+  } catch (e) { console.log('[trending] disk cache unread:', e.message); }
+}
+function sauverTrendingDisque() {
+  if (!FICHIER_TRENDING || !trCache.corps) return;
+  try {
+    const payload = JSON.stringify({
+      a: trCache.a, corps: trCache.corps, blocsLusJusqua,
+      adrs: [...blocksConnus].slice(-2000),
+    });
+    writeFileSync(FICHIER_TRENDING + '.tmp', payload);
+    renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
+  } catch (e) { console.log('[trending] disk cache write failed:', e.message); }
+}
+chargerTrendingDisque();
+function trendingPlaceholder() {
+  return JSON.stringify({
+    ok: true, lu: new Date().toISOString(), blocksSuivis: blocksConnus.size,
+    fenetresRatees: 0, lotsMarche: { ok: 0, ko: 0, statuts: {} },
+    lignes: [], blocksAvecPaire: 0, volume24hUsd: 0,
+    enCours: true,
+    pourquoi: 'Trending refresh in progress — Map soleils will fill when the scan finishes.',
+  });
+}
 function trending() {
   if (trCache.corps && Date.now() - trCache.a < 300_000) return Promise.resolve(trCache.corps);
   if (!trEnCours) trEnCours = lireTrending().finally(() => { trEnCours = null; });
-  /* une ancienne liste vaut mieux qu une attente de 2 min : on la rend pendant le rafraichissement */
-  return trCache.corps ? Promise.resolve(trCache.corps) : trEnCours;
+  /* tip 20260923-map-trending: NEVER hang HTTP on cold scan — return disk/memory cache or placeholder */
+  if (trCache.corps) return Promise.resolve(trCache.corps);
+  return Promise.resolve(trendingPlaceholder());
 }
 async function lireTrending() {
   let corps;
   try {
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
-    const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua);
+    /* cold: 12h first (not 3d) so public RPC can finish; then incremental */
+    const blocs = blocsLusJusqua === null ? 12 * 1800 : Math.max(1, fin - blocsLusJusqua);
     const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
-    if (!(cr.fenetresRatees || []).length) blocsLusJusqua = fin;
+    /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
+    if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
     const adrs = [...blocksConnus], paires = [];
     /* ⛔⛔ BUG EN PROD (2026-09-19, capture de Phil) : « 0 blocks with a live market · $0 traded » et « Nothing is
      *    moving right now » — alors que 1 095 blocks etaient suivis. DexScreener n avait rien rendu, et `if (r.ok)`
@@ -544,10 +591,11 @@ async function lireTrending() {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
   trCache = { a: Date.now(), corps };
+  sauverTrendingDisque();
   return corps;
 }
-/* premiere lecture des le demarrage : le premier visiteur n attend pas 3 jours de logs */
-setTimeout(() => { void trending(); }, 2000);
+/* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
+setTimeout(() => { void lireTrending(); }, 2000);
 
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;

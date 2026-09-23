@@ -1,0 +1,11 @@
+import { readFileSync } from 'fs';
+const s = readFileSync('./serveur-web.js', 'utf8');
+const h = readFileSync('./app.html', 'utf8');
+if (!s.includes('trendingPlaceholder')) throw new Error('no placeholder');
+if (!s.includes('sauverTrendingDisque')) throw new Error('no disk save');
+if (!s.includes('RPC_LIST')) throw new Error('no RPC_LIST');
+if (!/blocsLusJusqua === null \? 12 \* 1800/.test(s)) throw new Error('cold window not shortened');
+if (!s.includes('NEVER hang HTTP')) throw new Error('hang comment missing');
+if (!/data-build="20260923-map-trending"/.test(h)) throw new Error('tip missing');
+if (s.includes("return trCache.corps ? Promise.resolve(trCache.corps) : trEnCours")) throw new Error('old hang path still present');
+console.log('ok map-trending fail-open + disk + rpc rotate');
