@@ -1738,7 +1738,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-contract-labels" hidden>Build <code>20260923-contract-labels</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-one-counter" hidden>Build <code>20260923-one-counter</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8178,7 +8178,25 @@ function peindrePlan(plan, adr) {
     const b = document.createElement('button');
     b.className = 'bouton';
     b.type = 'button';
-    b.textContent = 'Approval 1 of ' + plan.etapes.length + ' — ' + etape.nom;
+    /* ⛔⛔ CE BOUTON DISAIT « Approval 1 of 3 » SOUS UNE LISTE NUMEROTEE « Signature 1 a 4 »
+     *     (capture de Phil, 2026-09-23). Quatre defauts dans une seule ligne :
+     *     · « Approval » est FAUX pour une partie des etapes. `plan.etapes` melange des
+     *       approbations (`value: 0x0`) et une etape PAYANTE — « Register on V8 — 0.0003 ETH ».
+     *       Une approbation ne coute que du gas ; appeler « approbation » un envoi d ETH prepare
+     *       le lecteur a signer autre chose que ce qu on lui annonce.
+     *     · Le total ignorait la transaction finale : la liste en montre N+1, le bouton disait N.
+     *     · Le `1` etait ECRIT EN DUR. Comme `etapes` retrecit a chaque signature, on lisait
+     *       « 1 of 3 », puis « 1 of 2 », puis « 1 of 1 » : un compteur qui n avance jamais.
+     *     · Et quand une ligne de frais ouvre la liste, `etapes[0]` est la Signature 2 — c est
+     *       exactement ce que montre la capture : le bouton annonce « 1 » pour la ligne « 2 ».
+     *     ⇒ UN SEUL COMPTEUR, celui de la liste, et le RANG REEL de l etape dedans. `indexOf`
+     *       fonctionne parce que `txsApercu` porte les MEMES objets que `plan.etapes`.
+     *     ⛔ ET SI LE RANG EST INTROUVABLE, ON N INVENTE PAS DE NUMERO : le bouton dit seulement
+     *       ce qu il fait. Un numero faux est pire que pas de numero. */
+    const signaturesVisibles = txsApercu.filter(Boolean);
+    const rang = signaturesVisibles.indexOf(etape) + 1;
+    b.textContent = (rang > 0 ? 'Signature ' + rang + ' of ' + signaturesVisibles.length + ' — ' : 'Next signature — ')
+      + etape.nom;
     b.addEventListener('click', () => void signerEtapeLancement(etape));
     actions.appendChild(b);
     e.className = 'note';
@@ -8188,8 +8206,11 @@ function peindrePlan(plan, adr) {
         ? 'Review approvals first, then the open-fee / starting-price step, then bring it to life. Your wallet opens for each request.'
         : 'Review approvals first, then the one-time 0.001 ETH fee, then bring it to life. Your wallet opens for each request.');
     if (vieAuto) {
-      majProgressionVie('Step 2 — allowing the market to hold your block (' + plan.etapes.length + ' approval'
-        + (plan.etapes.length > 1 ? 's' : '') + '). Your wallet opens now.');
+      /* ⛔ MEME CORRECTION ICI : « N approval(s) » comptait des etapes dont une PAIE. On dit
+       *    « signature », qui est vrai des deux, et on garde le compte des etapes restantes —
+       *    c est bien ce qui reste a signer avant la transaction finale. */
+      majProgressionVie('Step 2 — allowing the market to hold your block (' + plan.etapes.length + ' signature'
+        + (plan.etapes.length > 1 ? 's' : '') + ' left). Your wallet opens now.');
       void signerEtapeLancement(etape);
     }
     return;
