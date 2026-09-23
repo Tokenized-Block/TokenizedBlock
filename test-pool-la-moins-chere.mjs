@@ -100,5 +100,20 @@ v('aucune pool pour ce jeton : null, pas un repli au hasard', () => {
   assert.equal(choisir(new Map([[1, autre]]), estNotreHook, confianceDe, fraisEstDynamique, JETON), null);
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+/* ⛔⛔ LA PROMESSE A L ECRAN ET LE CODE QUI LA REND VRAIE VIVENT OU MEURENT ENSEMBLE.
+ *     Depuis le 2026-09-23 le fil Live annonce « we read every pool of this block and route the
+ *     cheapest ». C est une PROMESSE : si quelqu un revoque le classement par prix demain, cette
+ *     phrase devient un mensonge affiche, et rien ne le signalerait.
+ *     ⇒ Les deux sont gardes par le MEME test. On ne peut plus retirer l un sans casser l autre. */
+v('la phrase affichee et le routage ne peuvent pas diverger', () => {
+  const promesse = /route the cheapest/;
+  const ditLaPhrase = promesse.test(html);
+  const faitLeTravail = /score === best\._score && feeP < best\._fee/.test(html);
+  assert.equal(ditLaPhrase, faitLeTravail,
+    ditLaPhrase
+      ? 'l ecran promet de router la moins chere, et le code ne le fait plus'
+      : 'le code route la moins chere, mais l ecran ne le dit plus — la promesse a disparu de l offre');
+});
+
+assert.equal(n, 7, 'compte de cas inattendu : ' + n);
 console.log('ok pool-la-moins-chere — ' + n + ' cas, fonction extraite d app.html et EXECUTEE');

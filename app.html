@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-dynamic-fee" hidden>Build <code>20260923-dynamic-fee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-new-offer" hidden>Build <code>20260923-new-offer</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6817,9 +6817,28 @@ function peindreLive() {
      * Still NO foreign V8 birth. Handler data-tf-act=instant-birth-tb → #creer. */
     const foreignCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
     /* tip 20260923-reclaim-volume: stronger primary IB — birth on TB opens hooked market / Buy path */
+    /* ⛔⛔ L OFFRE A CHANGE, ET C EST UNE MESURE QUI L A DICTEE (2026-09-23, Phil : « change
+     *     l offre, dig toi-meme »). Cette ligne proposait « Instant Birth on TB · 0.001 ETH ·
+     *     opens hooked market » a des blocks nes AILLEURS.
+     *     CE QUE LA MESURE A MONTRE : sur 6 naissances etrangeres prises dans ce fil, QUATRE
+     *     ouvrent leur marche DANS LA MEME TRANSACTION, sur une pool a 0,00 % de frais. On leur
+     *     proposait donc de PAYER pour ouvrir un SECOND marche, vide, a cote du leur, pendant que
+     *     leur liquidite est ailleurs. Ce n est pas un prix trop eleve : c est une offre SANS
+     *     OBJET. Baisser les 0,001 ETH n y aurait rien change.
+     *     CE QUI A UN OBJET, ET QUI EXISTE MAINTENANT : sur 24 h, 872 pools B20 ouvertes par 342
+     *     hooks differents, avec des frais de pool MESURES a 0 %, 0,30 %, 2,89 %, 4,89 %, 50 %,
+     *     77 %, 88,73 % — et des pools a frais DYNAMIQUES qui n annoncent aucun taux. L acheteur n
+     *     a aucun moyen de savoir par ou il passe ni ce que ca lui coute. Nous si :
+     *     `poolDecouvertPour` lit toutes les pools du block, prend la MOINS CHERE a confiance
+     *     egale, et le badge nomme le frais avant la signature — « inconnu » quand il l est.
+     *     ⇒ On arrete de vendre une naissance a qui en a deja une. On propose la seule chose que
+     *       personne d autre ne fait : dire par ou passe l argent, AVANT de signer.
+     *     ⛔ LE CHEMIN NAISSANCE RESTE, EN SECONDAIRE, et son libelle dit ce qu il FAIT : un block
+     *       sans marche en a encore besoin, et le retirer casserait le seul rail qui ait jamais
+     *       rapporte quoi que ce soit. */
     const openHint = foreignCreate
-      ? ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
-        + ' · <span class="filOpen">opens hooked market / Buy</span>'
+      ? ' · <span class="filOpen">Buy here — we read every pool of this block and route the cheapest</span>'
+        + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open a market on TB · 0.001 ETH</button>'
         + ' · <span class="filOpen">Open profile</span>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
