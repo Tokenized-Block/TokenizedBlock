@@ -115,5 +115,19 @@ v('la phrase affichee et le routage ne peuvent pas diverger', () => {
       : 'le code route la moins chere, mais l ecran ne le dit plus — la promesse a disparu de l offre');
 });
 
-assert.equal(n, 7, 'compte de cas inattendu : ' + n);
+
+/* ⛔⛔ LE CHOIX EST DIT A CELUI QUI SIGNE, PAS SEULEMENT FAIT (2026-09-23).
+ *     Le fil Live promet « we read every pool of this block and route the cheapest ». Tant que
+ *     l ecran ne montre pas ce choix, c est une affirmation INVERIFIABLE par la personne qui
+ *     s apprete a payer. Mesure sur SPIKE : 7 pools existent, a 0 %, 50 %, 77 % et 88,73 %.
+ *     ⛔ ET LA LIGNE NE S AFFICHE QUE S IL Y A EU UN CHOIX : a une seule pool, on n ecrit rien
+ *       plutot que d annoncer une comparaison qui n a pas eu lieu. */
+v('l ecran dit combien de pools ont ete lues, et seulement s il y a eu un choix', () => {
+  assert.match(html, /Cheapest of ' \+ combien \+ ' pools we read on chain/,
+    'la ligne qui expose le choix a disparu : la promesse redevient invérifiable');
+  assert.match(html, /combien > 1/,
+    'la ligne s afficherait meme sans choix reel — annoncer une comparaison qui n a pas eu lieu');
+});
+
+assert.equal(n, 8, 'compte de cas inattendu apres ajout : ' + n);
 console.log('ok pool-la-moins-chere — ' + n + ' cas, fonction extraite d app.html et EXECUTEE');

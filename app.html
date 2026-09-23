@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-discover-on-blocks" hidden>Build <code>20260923-discover-on-blocks</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-show-the-choice" hidden>Build <code>20260923-show-the-choice</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5759,7 +5759,34 @@ async function lireProfil(adr, sym, perime) {
     $('#peBadge').textContent = bb ? 'Buyback · protocol fee path' : 'Buy · Sell';
     const lf = libelleFrais(v && v.cle);
     $('#peFrais').textContent = bb ? 'no fee' : lf.court;
-    if ($('#peFraisTexte')) { $('#peFraisTexte').innerHTML = ''; $('#peFraisTexte').hidden = true; }
+    /* ⛔⛔ ON DIT COMBIEN DE POOLS ON A LUES, ET QU ON A PRIS LA MOINS CHERE. Le fil Live promet
+     *     « we read every pool of this block and route the cheapest » : tant que l ecran ne montre
+     *     pas ce choix, c est une affirmation invérifiable par celui qui signe. Mesure du
+     *     2026-09-23 sur SPIKE : 7 pools v4 existent, a 0 %, 50 %, 77 % et 88,73 %. Choisir en
+     *     silence, c est demander une confiance qu on ne donne aucun moyen de verifier.
+     *     ⛔ LE COMPTE VIENT DE `poolsLive`, pas d une estimation : s il est a zero ou a un, on
+     *       n ecrit RIEN plutot que d annoncer un choix qui n a pas eu lieu.
+     *     ⚠️ CE QUE CETTE LIGNE NE DIT PAS, ET QUI RESTE OUVERT : entre une pool SANS hook a 50 %
+     *        et une pool AVEC hook a 0 % dont le prelevement est inconnu, le classement prend
+     *        encore la premiere. C est une decision qui engage l argent de quelqu un ; elle
+     *        appartient a Phil, pas a ce correctif. */
+    if ($('#peFraisTexte')) {
+      const txt = $('#peFraisTexte');
+      let combien = 0;
+      try {
+        const cible = String(adr).toLowerCase();
+        for (const p of (poolsLive || new Map()).values()) {
+          if (!p || !p.cle) continue;
+          const c0 = String(p.cle.currency0 || '').toLowerCase();
+          const c1 = String(p.cle.currency1 || '').toLowerCase();
+          if (String(p.jeton || '').toLowerCase() === cible || c0 === cible || c1 === cible) combien++;
+        }
+      } catch (_) { combien = 0; }
+      if (!bb && combien > 1) {
+        txt.textContent = 'Cheapest of ' + combien + ' pools we read on chain for this block.';
+        txt.hidden = false;
+      } else { txt.innerHTML = ''; txt.hidden = true; }
+    }
     peindreCapturePaths(adr, v, hkInfo);
     if (String(adr).toLowerCase() === TBLOCK.toLowerCase()) void peindreJournalBuyback(adr);
     /* tip 2357: hooked / TBGAS → surface in-app BuySell (no fee addr). */
