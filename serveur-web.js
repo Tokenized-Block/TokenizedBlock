@@ -97,18 +97,25 @@ const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
 let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
   let dernier = null;
-  for (let k = 0; k < Math.max(5, RPC_LIST.length * 2); k++) {
+  const maxEssais = Math.max(3, RPC_LIST.length);
+  for (let k = 0; k < maxEssais; k++) {
     const url = RPC_LIST[rpcTour % RPC_LIST.length];
     rpcTour++;
     try {
-      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000),
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000),
         headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
       const j = await r.json();
       if (!j.error) return j.result;
-      dernier = new Error(j.error.message || 'rpc error');
-      if (!/rate|limit|timeout|413|too large|range/i.test(String(j.error.message))) throw dernier;
-    } catch (e) { dernier = e; }
-    await new Promise((ok) => setTimeout(ok, 400 * (k + 1)));
+      const msg = String(j.error.message || 'rpc error');
+      dernier = new Error(msg);
+      /* tip 20260923-map-prebridge: NEVER retry range/413 — same window will always fail and hung Map 3d scan */
+      if (/413|too large|range/i.test(msg)) throw dernier;
+      if (!/rate|limit|timeout/i.test(msg)) throw dernier;
+    } catch (e) {
+      dernier = e;
+      if (/413|too large|range/i.test(String(e && e.message || e))) throw e;
+    }
+    await new Promise((ok) => setTimeout(ok, 300 * (k + 1)));
   }
   throw dernier || new Error('node rate limit');
 }
@@ -157,8 +164,8 @@ async function fraisEnAttente() {
   const devises = fraisScan.devises;
   const depuis = fraisScan.jusqua === null ? Math.min(...HOOKS_FRAIS.map((h) => h.depuis)) : fraisScan.jusqua + 1;
   let fenetresRatees = 0, avance = true;
-  for (let bas = depuis; bas <= tete; bas += 2000) {
-    const haut = Math.min(tete, bas + 1999);
+  for (let bas = depuis; bas <= tete; bas += 999) {
+    const haut = Math.min(tete, bas + 998);
     try {
       const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
       for (const l of logs || []) {
@@ -233,7 +240,7 @@ async function resoudreClePool(token, fenetres = 40) {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   const trouvees = [];
   for (let i = 0; i < fenetres && !trouvees.length; i++) {
-    const fin = tete - i * 2000, deb = fin - 1999;
+    const fin = tete - i * 999, deb = fin - 998;
     const enHex = (n) => '0x' + n.toString(16);
     for (const topics of [[TOPIC_INITIALIZE, null, null, t32], [TOPIC_INITIALIZE, null, t32]]) {
       const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(deb), toBlock: enHex(fin), address: PM_V4, topics }]);
@@ -509,7 +516,7 @@ let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
-const TRENDING_CACHE_VER = 'fenetre1k-v2'; /* bump to drop bad /data caches after RPC fenetre change */
+const TRENDING_CACHE_VER = 'prebridge-v3'; /* bump to drop bad /data caches after RPC fenetre change */
 function chargerTrendingDisque() {
   try {
     if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
