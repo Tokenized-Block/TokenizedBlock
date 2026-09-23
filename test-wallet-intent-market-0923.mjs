@@ -46,7 +46,9 @@ if (/≈\s*\$1|~\s*\$1/.test(horsScript.replace(/<!--[\s\S]*?-->/g, ''))) throw 
 if (/Fees for Dev/i.test(horsScript)) throw new Error('Fees for Dev');
 const ui = horsScript.match(/<(?:button|a|span|b|p)[^>]*>[^<]*a6cf[^<]*</gi) || [];
 if (ui.length) throw new Error('a6cf in UI');
-if (!h.includes('grid-template-columns:repeat(8,1fr)')) throw new Error('nav not 8 cols');
+/* ⛔ NAV A 9 ONGLETS DEPUIS LE 2026-09-23 (Phil : « fait un autre onglet » — l onglet Post).
+ *    Le compte reste EXIGE : ce qui change, c est la valeur decidee, pas la garde. */
+if (!h.includes('grid-template-columns:repeat(9,1fr)')) throw new Error('nav not 9 cols');
 if (h.includes('data-build="20260923-reclaim-volume"')) throw new Error('old reclaim tip left');
 if (h.includes('data-build="20260923-wallet-intent-market"')) throw new Error('old wallet-intent tip left');
 

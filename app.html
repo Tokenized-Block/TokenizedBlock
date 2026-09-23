@@ -684,7 +684,7 @@ button.mienTuile:hover{border-color:var(--accent)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:rgb(var(--fondRgb) / .93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
-.navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(8,1fr);gap:2px}
+.navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(9,1fr);gap:2px}
 .navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
   font-weight:700;padding:7px 3px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;gap:3px;min-height:48px}
@@ -1444,6 +1444,29 @@ details[open] > summary::before{transform:rotate(90deg)}
           lignes sous un classement se fait sauter, et la borne qu elle portait avec elle.
        ⛔ ET CETTE PAGE DIT AUSSI CE QUI N EXISTE PAS ENCORE. Un tutoriel qui decrit un parcours
           complet alors que deux etapes manquent apprend a ne plus le croire. -->
+  <!-- ⛔⛔ ONGLET « POST » — demande de Phil (2026-09-23). Il ne DUPLIQUE pas le bloc de Create : il
+       l explique et y renvoie. Deux formulaires pour la meme gravure, ce serait le doublon de CTA
+       que Phil a fait retirer ce matin. Un seul endroit grave — celui de Create, ou le lien part
+       avec le nom, le symbole et la face dans la MEME transaction.
+       ⛔ AUCUN STYLE NOUVEAU : meme `section.volet`, meme `div.carte`, meme `p.titre` / `p.sous`,
+          meme `ol.creaPas` et meme `button.bouton` que les onglets existants. -->
+  <section class="volet" id="v-tokenx" aria-label="Tokenize a post from X">
+    <div class="carte">
+      <p class="titre">Tokenize a post</p>
+      <p class="sous">A block can carry a link to a post on X, engraved with it. Paste the link when you create the block — it goes on chain with the name, the symbol and the face, in the same transaction.</p>
+      <ol class="creaPas">
+        <li><b>Copy the post link</b> <span>the address bar of any post on x.com</span></li>
+        <li><b>Tick “Tokenize a post”</b> <span>in Create, under the face settings</span></li>
+        <li><b>Paste and create</b> <span>the link is engraved and cannot be changed after</span></li>
+      </ol>
+      <!-- ⛔ LA MEME PHRASE QUE LE MODULE, ET ELLE DIT CE QU ON NE SAIT PAS. Rien n ouvre le lien :
+           ni ici, ni dans Create, ni dans le validateur. On ne sait donc pas si le post existe ni a
+           qui il est. Le taire laisserait croire a une verification qui n a jamais eu lieu — et le
+           lien, lui, est permanent. -->
+      <p class="note">Nothing here opens the link. We do not check that the post exists, and we cannot tell whether it is yours — the block simply points at it, for good.</p>
+      <button type="button" class="bouton" id="tkGo">Create a block with a post</button>
+    </div>
+  </section>
   <section class="volet" id="v-learn" aria-label="Learn">
     <div class="carte">
       <p class="titre">What am I looking at?</p>
@@ -1666,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-tokenized-x" hidden>Build <code>20260923-tokenized-x</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-post-tab" hidden>Build <code>20260923-post-tab</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2152,6 +2175,13 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="mien"><b>★</b>My block</button>
+    <!-- ⛔ L ICONE EST UN CARACTERE DE 1993 (Dingbats), PAS « 𝕏 ». La regle est deja ecrite dans
+         `stades.js` : un glyphe absent d une police sort en carre vide, et Phil en a envoye une
+         capture le 2026-09-17. Le logo de X est bien plus recent que la plupart des polices systeme.
+         ⛔ ET LE LIBELLE EST COURT PAR NECESSITE MESUREE : a 375 px, huit onglets font deja 43 px
+            chacun et « My block » passe a la ligne. A neuf il reste 37,7 px — « TokenizedX »
+            (10 caracteres) serait le pire libelle de la barre. « Post » tient sur une ligne. -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>❞</b>Post</button>
   </div>
 </nav>
 
@@ -9586,6 +9616,21 @@ for (const id of ['#cTweetOui', '#cTweetLien']) {
   if (!el) continue;
   el.addEventListener('change', () => { appliquerTweet(); });
   el.addEventListener('input', () => { appliquerTweet(); });
+}
+/* ⛔ L ONGLET « POST » RENVOIE VERS CREATE, il ne grave pas lui-meme : un seul formulaire pour une
+ *    seule gravure. Il ouvre le bloc, coche la case et met le curseur dans le champ — trois gestes
+ *    que l utilisateur n a plus a chercher.
+ * ⛔ CHAQUE ELEMENT EST TESTE AVANT D ETRE TOUCHE : si l un manquait, on aurait un onglet dont le
+ *    bouton ne fait rien, et rien ne le dirait. */
+{
+  const go = $('#tkGo');
+  if (go) go.addEventListener('click', () => {
+    allerA('creer');
+    const d = $('#cTweetDetail'), c = $('#cTweetOui'), l = $('#cTweetLien');
+    if (d) d.open = true;
+    if (c && !c.checked) { c.checked = true; appliquerTweet(); }
+    if (l) { try { l.focus(); } catch (_) { /* focus refuse sur certains navigateurs */ } }
+  });
 }
 {
   const f = $('#cPhotoFichier');
