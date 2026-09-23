@@ -20,6 +20,7 @@ assert.doesNotMatch(html, /Launch hooked V8/);
 assert.match(html, /Give birth · V8 = Instant Birth vieAuto/);
 assert.match(html, /Birth = V8|HOOK_V8/i);
 assert.doesNotMatch(html, /Fees for Dev/);
+assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);
 /* ⛔⛔ CETTE ASSERTION EXIGEAIT « ≈$1 (0.001 ETH) », ET ELLE VERROUILLAIT UN CHIFFRE FAUX.
  *     Le frais facture est `FRAIS_OUVERTURE_WEI` = 0,001 ETH (decision de Phil du 2026-09-21,
  *     alignee sur la mediane mesuree du marche). Le « $1 » vient de `FRAIS_USD`, une CIBLE en

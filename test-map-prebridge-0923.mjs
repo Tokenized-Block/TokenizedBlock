@@ -1,0 +1,12 @@
+import { readFileSync } from 'fs';
+const s = readFileSync('./serveur-web.js', 'utf8');
+const h = readFileSync('./app.html', 'utf8');
+const ib = readFileSync('./index-blocks.js', 'utf8');
+if (!/FENETRE_MAX = 999/.test(ib)) throw new Error('FENETRE_MAX');
+if (!h.includes('LIVE_FENETRE = 999')) throw new Error('LIVE_FENETRE');
+if (!h.includes('data-build="20260923-map-prebridge"') && !h.includes('data-build="20260923-created-history"')) throw new Error('tip');
+if (!s.includes('NEVER retry range')) throw new Error('no range throw');
+if (!s.includes("prebridge-v3")) throw new Error('cache ver');
+if (s.includes('bas += 2000')) throw new Error('frais still 2000');
+if (!h.includes('blocs: 43200')) throw new Error('client scan not widened');
+console.log('ok map-prebridge');

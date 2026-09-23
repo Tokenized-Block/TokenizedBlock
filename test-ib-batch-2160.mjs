@@ -1,4 +1,4 @@
-// tip 20260922-same-sig — Instant Birth CreateRouter createPaid FIRST; never factory createB20 value 0; no Fees for Dev.
+// tip 20260922-same-sig — Instant Birth CreateRouter createPaid FIRST; never factory createB20 value 0; fees→wallet · no sink addr.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
@@ -19,7 +19,8 @@ assert.match(html, /creerBlock IB final guard/);
 assert.match(html, /CreateRouter · 0\.001 ETH once/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
 assert.doesNotMatch(html, /Fees for Dev/);
+assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);
 assert.doesNotMatch(html, /cIbPrepCreate/);
 assert.doesNotMatch(html, /Create block first \(factory · free · not Instant Birth\)/);
 assert.match(html, /never solicit factory createB20 value 0 for Instant Birth/);
-console.log('PASS tip 20260922-same-sig Instant Birth CreateRouter first · refuse createB20-0 · no Fees for Dev');
+console.log('PASS tip 20260922-same-sig Instant Birth CreateRouter first · refuse createB20-0 · fees→wallet · no sink addr');

@@ -20,7 +20,7 @@
 // ✅ 2026-09-15 P0: App Launch attaches HOOK_PREVU — try that key first (ETH + TBLOCK), then legacy zero-hook.
 import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
-import { TBLOCK, HOOK_PREVU, HOOK_V2 } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8 } from './tokenomics.js';
 import { pairesProposees } from './paires.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -53,7 +53,14 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
   const lire = rpc;
   const sel = selecteur('getSlot0(bytes32)');
   /* ⛔ P0 2026-09-15: Launch may open TBLOCK/block with HOOK_PREVU — try hooked key first, then legacy zero. */
+  /* tip 20260923-wallet-intent-market: Instant Birth opens HOOK_V8 — try current hooks before legacy. */
   const variants = [
+    { hooks: HOOK_V8, via: 'TBLOCK · 0 % · TbFeeHook v8' },
+    { hooks: HOOK_V7, via: 'TBLOCK · 0 % · TbFeeHook v7' },
+    { hooks: HOOK_V6, via: 'TBLOCK · 0 % · TbFeeHook v6' },
+    { hooks: HOOK_V5, via: 'TBLOCK · 0 % · TbFeeHook v5' },
+    { hooks: HOOK_V4, via: 'TBLOCK · 0 % · TbFeeHook v4' },
+    { hooks: HOOK_V3, via: 'TBLOCK · 0 % · TbFeeHook v3' },
     { hooks: HOOK_PREVU, via: 'TBLOCK · 0 % · TbFeeHook' },
     { hooks: HOOK_V2, via: 'TBLOCK · 0 % · TbFeeHook v2' },
     { hooks: null, via: 'TBLOCK · 0 %' },
@@ -94,7 +101,14 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
 /** Les cles de pool lues, dans l ordre. ⛔ NOTRE Launch d abord : un block lance ici doit etre lu
  *  sur SA pool plutot que sur une pool tierce ouverte au meme jeton. */
 export const CLES_MARCHE = [
-  /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) first — hooked when TbFeeHook DEPLOYE (P0 2026-09-15), then legacy zero-hook. */
+  /* tip 20260923-wallet-intent-market: HOOK_V8 first (Instant Birth / Give birth · V8), then older TB hooks, then legacy. */
+  /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) — hooked when TbFeeHook DEPLOYE, then legacy zero-hook. */
+  { nom: 'ETH · 0 % · TbFeeHook v8 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V8 },
+  { nom: 'ETH · 0 % · TbFeeHook v7 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V7 },
+  { nom: 'ETH · 0 % · TbFeeHook v6 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V6 },
+  { nom: 'ETH · 0 % · TbFeeHook v5 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V5 },
+  { nom: 'ETH · 0 % · TbFeeHook v4 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V4 },
+  { nom: 'ETH · 0 % · TbFeeHook v3 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V3 },
   { nom: 'ETH · 0 % · TbFeeHook v2 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V2 },
   { nom: 'ETH · 0 % · TbFeeHook (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_PREVU },
   { nom: 'ETH · 0 % (legacy Launch)', fee: 0, tickSpacing: 200 },

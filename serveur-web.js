@@ -54,7 +54,7 @@ async function lireOpenLaunch() {
 
 /* ⛔ TRENDING (tip 0034). Mesure 2026-09-17 : ~5,4 M$ de volume 24 h sur les blocks B20 nes en 24 h, lances AILLEURS ;
  * on ne capte leurs frais que si le trade passe par notre Buy/Sell. Ce serveur tient la liste des blocks crees (logs
- * de la factory B20, lecture seule, 3 jours puis increments), lit DexScreener par lots de 30 et renvoie le classement.
+ * de la factory B20, lecture seule, ~12 h puis increments (tip 20260923-map-trending)), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
@@ -90,18 +90,34 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
-const RPC_BASE = 'https://mainnet.base.org';
-let rpcId = 0;
+/* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
+/* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
+const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
-  for (let k = 0; k < 5; k++) {
-    const r = await fetch(RPC_BASE, { method: 'POST', signal: AbortSignal.timeout(15000),
-      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
-    const j = await r.json();
-    if (!j.error) return j.result;
-    if (!/rate|limit|timeout/i.test(String(j.error.message))) throw new Error(j.error.message);
-    await new Promise((ok) => setTimeout(ok, 1200 * (k + 1)));
+  let dernier = null;
+  const maxEssais = Math.max(3, RPC_LIST.length);
+  for (let k = 0; k < maxEssais; k++) {
+    const url = RPC_LIST[rpcTour % RPC_LIST.length];
+    rpcTour++;
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000),
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
+      const j = await r.json();
+      if (!j.error) return j.result;
+      const msg = String(j.error.message || 'rpc error');
+      dernier = new Error(msg);
+      /* tip 20260923-map-prebridge: NEVER retry range/413 — same window will always fail and hung Map 3d scan */
+      if (/413|too large|range/i.test(msg)) throw dernier;
+      if (!/rate|limit|timeout/i.test(msg)) throw dernier;
+    } catch (e) {
+      dernier = e;
+      if (/413|too large|range/i.test(String(e && e.message || e))) throw e;
+    }
+    await new Promise((ok) => setTimeout(ok, 300 * (k + 1)));
   }
-  throw new Error('node rate limit');
+  throw dernier || new Error('node rate limit');
 }
 /* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
  * ⛔⛔ MESURE DU 2026-09-17, ET ELLE RENVERSE UNE CONCLUSION QUE J AVAIS PUBLIEE. On croyait que les
@@ -148,8 +164,8 @@ async function fraisEnAttente() {
   const devises = fraisScan.devises;
   const depuis = fraisScan.jusqua === null ? Math.min(...HOOKS_FRAIS.map((h) => h.depuis)) : fraisScan.jusqua + 1;
   let fenetresRatees = 0, avance = true;
-  for (let bas = depuis; bas <= tete; bas += 2000) {
-    const haut = Math.min(tete, bas + 1999);
+  for (let bas = depuis; bas <= tete; bas += 999) {
+    const haut = Math.min(tete, bas + 998);
     try {
       const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
       for (const l of logs || []) {
@@ -224,7 +240,7 @@ async function resoudreClePool(token, fenetres = 40) {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   const trouvees = [];
   for (let i = 0; i < fenetres && !trouvees.length; i++) {
-    const fin = tete - i * 2000, deb = fin - 1999;
+    const fin = tete - i * 999, deb = fin - 998;
     const enHex = (n) => '0x' + n.toString(16);
     for (const topics of [[TOPIC_INITIALIZE, null, null, t32], [TOPIC_INITIALIZE, null, t32]]) {
       const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(deb), toBlock: enHex(fin), address: PM_V4, topics }]);
@@ -497,20 +513,78 @@ async function holdersCorps(jeton) {
 
 const blocksConnus = new Set();
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
+/* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
+const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
+const TRENDING_CACHE_VER = 'prebridge-v3'; /* bump to drop bad /data caches after RPC fenetre change */
+function chargerTrendingDisque() {
+  try {
+    if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
+    const x = JSON.parse(readFileSync(FICHIER_TRENDING, 'utf8'));
+    if (!x || x.ver !== TRENDING_CACHE_VER || typeof x.corps !== 'string' || x.corps.length < 20) {
+      console.log('[trending] disk cache ignored (ver/empty)');
+      return;
+    }
+    let parsed = null;
+    try { parsed = JSON.parse(x.corps); } catch { parsed = null; }
+    /* never revive a failed empty scan — that is what hid Map soleils after tip map-trending */
+    if (parsed && parsed.ok === false) return;
+    if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
+      console.log('[trending] disk cache ignored (empty+ratees)');
+      return;
+    }
+    trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
+    for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
+    if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
+    console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
+  } catch (e) { console.log('[trending] disk cache unread:', e.message); }
+}
+function sauverTrendingDisque() {
+  if (!FICHIER_TRENDING || !trCache.corps) return;
+  try {
+    let parsed = null;
+    try { parsed = JSON.parse(trCache.corps); } catch { parsed = null; }
+    if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
+      console.log('[trending] skip disk save (empty+ratees)');
+      return;
+    }
+    const payload = JSON.stringify({
+      ver: TRENDING_CACHE_VER, a: trCache.a, corps: trCache.corps, blocsLusJusqua,
+      adrs: [...blocksConnus].slice(-2000),
+    });
+    writeFileSync(FICHIER_TRENDING + '.tmp', payload);
+    renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
+  } catch (e) { console.log('[trending] disk cache write failed:', e.message); }
+}
+chargerTrendingDisque();
+function trendingPlaceholder() {
+  return JSON.stringify({
+    ok: true, lu: new Date().toISOString(), blocksSuivis: blocksConnus.size,
+    fenetresRatees: 0, lotsMarche: { ok: 0, ko: 0, statuts: {} },
+    lignes: [], blocksAvecPaire: 0, volume24hUsd: 0,
+    enCours: true,
+    pourquoi: 'Trending refresh in progress — Map soleils will fill when the scan finishes.',
+  });
+}
 function trending() {
   if (trCache.corps && Date.now() - trCache.a < 300_000) return Promise.resolve(trCache.corps);
   if (!trEnCours) trEnCours = lireTrending().finally(() => { trEnCours = null; });
-  /* une ancienne liste vaut mieux qu une attente de 2 min : on la rend pendant le rafraichissement */
-  return trCache.corps ? Promise.resolve(trCache.corps) : trEnCours;
+  /* tip 20260923-map-trending: NEVER hang HTTP on cold scan — return disk/memory cache or placeholder */
+  if (trCache.corps) return Promise.resolve(trCache.corps);
+  return Promise.resolve(trendingPlaceholder());
 }
 async function lireTrending() {
   let corps;
   try {
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
-    const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua);
+    /* cold: 12h first (not 3d) so public RPC can finish; then incremental */
+    const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua); /* tip map-alive: 3d cold OK now fenetre≤999 */
+    console.log('[trending] scan start · blocs=' + blocs + ' · connus=' + blocksConnus.size);
     const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
-    if (!(cr.fenetresRatees || []).length) blocsLusJusqua = fin;
+    console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
+    /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
+    if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
     const adrs = [...blocksConnus], paires = [];
     /* ⛔⛔ BUG EN PROD (2026-09-19, capture de Phil) : « 0 blocks with a live market · $0 traded » et « Nothing is
      *    moving right now » — alors que 1 095 blocks etaient suivis. DexScreener n avait rien rendu, et `if (r.ok)`
@@ -544,10 +618,11 @@ async function lireTrending() {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
   trCache = { a: Date.now(), corps };
+  sauverTrendingDisque();
   return corps;
 }
-/* premiere lecture des le demarrage : le premier visiteur n attend pas 3 jours de logs */
-setTimeout(() => { void trending(); }, 2000);
+/* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
+setTimeout(() => { void lireTrending(); }, 1500); /* always rescans on boot; HTTP stays fail-open via trending() */
 
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
@@ -606,7 +681,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
