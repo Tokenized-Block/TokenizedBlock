@@ -1522,12 +1522,12 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <!-- tip 20260922-2010 — TokenizedBank add-liquidity graft (Raksha/Zero 1): any wallet with proof
          may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
-         hold; one lost ≠ dead; never show a6cf. -->
+         hold; losing one still leaves the rest; never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
       <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
       <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
         then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
-        You must <b>keep holding</b> to maintain credit. <b>One block lost ≠ credit dead</b> — surviving linked blocks still back it.
+        You must <b>keep holding</b> to maintain credit. <b>Losing one block does not end it</b> — surviving linked blocks still back it.
         Credit contracts with Σ hold (dies only if zero survivors).
         <b>Early holders</b> (snapshot at Open) share yield — badge separate from grafting.
         After Open, <b>any wallet with proof</b> may <b>graft again to add liquidity</b> to the same basket.
@@ -1644,7 +1644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-created-history" hidden>Build <code>20260923-created-history</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-ecran-propre" hidden>Build <code>20260923-ecran-propre</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4304,7 +4304,7 @@ function peindreStades() {
     let corps;
     if (mute) {
       corps = lectureVieEnCours
-        ? '<span class="note" style="align-self:center">Still reading — TokenizedBlock names appear when each market is LUE. Silence ≠ broken.</span>'
+        ? '<span class="note" style="align-self:center">Still reading the markets — names appear as each one comes back.</span>'
         : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
           + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
     } else {
@@ -4764,7 +4764,12 @@ function peindreMarcheHook(v) {
   else el.textContent = 'Outside market' + viaCourt.replace(/\s*\((hooked|legacy|fee hook) Launch( pool)?\)/g, '') + '.';
   const lo = ordreLiquidite(v.liquidite);
   if (lo) {
-    el.textContent += ' · LP depth L≈' + lo + ' (StateView getLiquidity — not ETH; thin book ≠ market-cap).';
+    /* ⛔ REECRIT LE 2026-09-23. L ancienne phrase disait « LP depth L≈… (StateView getLiquidity —
+     *    not ETH; thin book ≠ market-cap) » : le nom d un appel de contrat, une unite que personne
+     *    ne connait, et un `≠` de specification — le tout sur l ecran d un utilisateur. Ce qui le
+     *    concerne, c est qu une pool peu fournie ne permet pas d echanger beaucoup a ce prix-la.
+     * ⛔ ET CE N EST PAS DE L ETH : le nombre reste affiche tel quel, sans unite inventee. */
+    el.textContent += ' · pool depth ' + lo + ' — a thin pool means you cannot trade much at this price.';
   } else if (v.liquidite === 0n || v.liquidite === 0 || v.liquidite === '0') {
     el.textContent += ' · LP depth L=0 (empty book).';
   }
@@ -8462,7 +8467,7 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
 });
 /* ══ TokenizedBank (tip 20260922-2010) — basket + add-liquidity graft ═══════════════════════════
  * Hold → proofOfHold → graft (Open) or Add liquidity (any wallet, same basket) → one-click confirm.
- * Early = yield share frozen at Open (badge separate). Credit on totality; hold; one lost ≠ dead.
+ * Early = yield share frozen at Open (badge separate). Credit on totality; hold; losing one still leaves the rest.
  * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
 let tbPreuve = null;
 let tbPanierPreuves = [];
@@ -8528,7 +8533,7 @@ function peindrePanierBank() {
   }
   if (note) {
     note.textContent = greffes.length
-      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · one lost ≠ dead · '
+      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · losing one still leaves the rest · '
         + (ouvert ? 'bank open — any wallet with proof may add liquidity · ' : 'not open yet · ')
         + 'contract: ' + (BANK_CONTRACT || 'not deployed'))
       : 'Credit backs the basket. Remove one → survivors keep backing.';
@@ -8598,8 +8603,12 @@ async function peindreTokenizedBank() {
   if (etat) etat.textContent = BANK_CONTRACT
     ? ''
     : (tbBankOuvertIci()
-      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; one lost ≠ dead.'
-      : 'Credit is on the basket totality. Hold to maintain. One lost ≠ dead. Open freezes early (yield). Then any wallet may add liquidity.');
+      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; losing one still leaves the rest.'
+      /* ⛔ REECRIT LE 2026-09-23 : « One lost ≠ dead » portait un `≠` de specification, et le reste
+       *    de la phrase (« basket totality », « Open freezes early (yield) ») disait la mecanique
+       *    interne au lieu de ce que le lecteur doit faire. Meme sens, en clair. */
+      : 'Your credit counts the whole basket. Keep holding it — losing one block does not end it. '
+        + 'Opening locks who gets the early share; after that, any wallet can add liquidity.');
   peindrePanierBank();
 }
 

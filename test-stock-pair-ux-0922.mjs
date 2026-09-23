@@ -2,7 +2,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-assert.match(html, /data-build="20260922-fee-label-clean"/);
+/* ⛔ EPINGLE RETIREE : cette ligne verifiait un numero de build precis, donc elle rougissait
+ *    des qu UN AUTRE deploiement bumpait le build — plusieurs fois par jour quand deux agents
+ *    travaillent. Elle ne testait pas une fonctionnalite, elle testait que personne n avait
+ *    deploye depuis. L intention est gardee sous une forme qui ne pourrit pas.
+ *    ⛔ AUCUNE autre assertion de ce fichier n a ete touchee (compte verifie avant/apres). */
+assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /id="cPaireChips"/);
 assert.match(html, /optgroup label="Coinbase tokenized stocks"/);
 assert.match(html, /PAIRES_CHIP_QUICK/);

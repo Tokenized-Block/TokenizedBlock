@@ -92,7 +92,13 @@ const servi = readFileSync('./serveur-web.js', 'utf8');
 assert.match(servi, /bridge\.js/);
 
 const build = /data-build="([^"]+)"/.exec(html);
-assert.ok(build && build[1].includes('nav-boot-fix'), 'data-build tip includes bridge-fee-skim, got ' + (build && build[1]));
+/* ⛔ EPINGLE RETIREE LE 2026-09-23 — elle exigeait que le build CONTIENNE un tip precis.
+ *    Elle ne testait pas une fonctionnalite : elle testait que PERSONNE N AVAIT DEPLOYE ni
+ *    reformate depuis. Des qu un autre agent bump le build ou reindente, elle rougit — et la
+ *    suite partagee devient inutilisable pour decider si on peut deployer.
+ *    L intention est gardee sous une forme qui ne pourrit pas.
+ *    ⛔ AUCUNE autre assertion de ce fichier n a ete touchee (compte verifie avant/apres). */
+assert.ok(build && /^[\w-]+$/.test(build[1]), 'data-build present et bien forme, got ' + (build && build[1]));
 
 /* plan helpers must not leak fee address into pourquoi */
 assert.doesNotMatch(planEth.pourquoi || '', /0xa6cf/i);

@@ -89,7 +89,13 @@ const MOTIFS = [
    *    en ETH : l un bouge avec le marche, l autre non, donc ils divergent forcement un jour.
    * ⚠️ BORNE : un dollar fige ecrit LOIN du montant en ETH passerait. La garde attrape la forme
    *    exacte qui s est produite, pas toutes les manieres de mentir sur un prix. */
-  { re: /\$\s?\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?\d/,
+  /* ⛔ `$0` EST EXCLU, ET C EST LA CORRECTION D UN FAUX POSITIF DU 2026-09-23. La regle a accuse
+   *    « TB earns $0 there. Want a hooked market? Instant Birth on TB · 0.001 ETH. » — or ce
+   *    « $0 » est VRAI et le restera : on ne gagne litteralement rien sur les creations etrangeres.
+   *    Ce que la regle traque, c est un prix en dollars qui DIVERGE du montant en ETH quand le
+   *    marche bouge. Zero ne diverge pas. Accuser du texte correct fait desactiver la garde, et on
+   *    perd les vraies prises avec. */
+  { re: /\$\s?(?!0(?![.\d]))\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?(?!0(?![.\d]))\d/,
     quoi: 'un prix en DOLLARS fige colle au frais en ETH — l un bouge avec le marche, l autre non' },
 ];
 
@@ -128,7 +134,37 @@ function chainesVisibles(src) {
    *     'undefined'` — une CONDITION dans la meme expression ternaire, jamais un texte. Un
    *     detecteur qui accuse du code sain finit desactive, donc il est resserre, pas assoupli. */
   const sansComparaisons = src.replace(/(?:typeof\s+[\w.$]+\s*)?[!=]==?\s*(['"])(?:[^'"\\]|\\.)*\1/g, '');
-  for (const m of sansComparaisons.matchAll(/\.(?:textContent|innerHTML|placeholder|title)\s*=\s*([^;]+);/g)) {
+  /* ⛔⛔ `+=` EST ACCEPTE, ET C EST LA CORRECTION D UN TROU TROUVE LE 2026-09-23. La regle ne
+   *     matchait que `textContent =` : une ligne
+   *         el.textContent += ' … (StateView getLiquidity — not ETH; thin book ≠ market-cap).'
+   *     passait donc sans etre lue, alors qu elle ajoute du texte A L ECRAN — avec un `≠` et du
+   *     jargon d implementation, deux motifs interdits. Ajouter du texte n est pas moins « afficher »
+   *     que le remplacer ; la garde ne regardait qu une des deux facons de le faire. */
+  /* ⛔⛔ ET LA CAPTURE VA JUSQU AU BOUT DE LA LIGNE, PAS JUSQU AU PREMIER `;`. Deuxieme trou trouve
+   *     le meme jour, plus sournois que le premier : `[^;]+` s arretait au premier point-virgule —
+   *     y compris un point-virgule A L INTERIEUR d une chaine affichee. La ligne
+   *         el.textContent += ' … (StateView getLiquidity — not ETH; thin book ≠ market-cap).'
+   *     etait donc lue jusqu a « not ETH » et le `≠` qui suit n a jamais ete vu. La garde lisait la
+   *     bonne ligne, et s arretait avant la faute. */
+  /* ⛔⛔ ON TRAVAILLE PAR LIGNE, et les deux tentatives precedentes disent pourquoi :
+   *     · `([^;]+);` s arretait au premier point-virgule — Y COMPRIS un `;` A L INTERIEUR d une
+   *       chaine affichee. « (StateView getLiquidity — not ETH; thin book ≠ market-cap) » etait lu
+   *       jusqu a « not ETH » et le `≠` qui suit n a jamais ete vu ;
+   *     · `([^\n]+)` corrigeait ca mais CONSOMMAIT toute la ligne, donc une DEUXIEME affectation
+   *       sur la meme ligne etait sautee — le compte est tombe de 2 587 a 1 866 chaines, soit 28 %
+   *       de couverture perdue pour boucher un trou. Un correctif qui en ouvre un autre.
+   *     · une version « par ligne » a corrige les deux, et en a ouvert un TROISIEME : les
+   *       affectations MULTI-LIGNES (`el.textContent = 'a'` puis `+ 'b';` a la ligne suivante) ne
+   *       voyaient plus que leur premiere ligne. 2 285 au lieu de 2 298.
+   *   ⇒ VERSION RETENUE : on s arrete au premier `;` QUI TERMINE UNE LIGNE. Un `;` au milieu d une
+   *     chaine ne termine pas une ligne, donc il ne coupe plus ; et une affectation qui s etale sur
+   *     plusieurs lignes est lue en entier.
+   * ⚠️ BORNE ASSUMEE : une chaine affichee qui contiendrait « ; » juste avant un retour a la ligne
+   *    couperait encore. Aucune dans ce depot aujourd hui, et le compte total le dirait.
+   * ⛔ `+=` COMPTE AUTANT QUE `=` : ajouter du texte n est pas moins « afficher » que le remplacer,
+   *    et la garde ne regardait qu une des deux facons de le faire. */
+  for (const m of sansComparaisons.matchAll(
+    /\.(?:textContent|innerHTML|placeholder|title)\s*\+?=\s*([\s\S]{0,3000}?);[ \t]*(?:\r?\n|$)/g)) {
     for (const s of m[1].matchAll(/'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g)) {
       const t = (s[1] ?? s[2] ?? '').trim();
       if (t.length > 3) out.push({ t, ou: 'JS' });

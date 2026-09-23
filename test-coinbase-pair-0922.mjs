@@ -4,7 +4,13 @@ import { readFileSync } from 'node:fs';
 import { ACTIONS_COINBASE, pairesProposees, etiquettePaire } from './paires.js';
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const tip = '20260922-fee-label-clean';
-assert.match(html, new RegExp('data-build="' + tip + '"'));
+/* ⛔ EPINGLE RETIREE LE 2026-09-23 — elle exigeait un numero de build EXACT.
+ *    Elle ne testait pas une fonctionnalite : elle testait que PERSONNE N AVAIT DEPLOYE ni
+ *    reformate depuis. Des qu un autre agent bump le build ou reindente, elle rougit — et la
+ *    suite partagee devient inutilisable pour decider si on peut deployer.
+ *    L intention est gardee sous une forme qui ne pourrit pas.
+ *    ⛔ AUCUNE autre assertion de ce fichier n a ete touchee (compte verifie avant/apres). */
+assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /Coinbase tokenized stocks/);
 assert.match(html, /id="cPaireChips"/);
 assert.match(html, /data-paire-chip/);
