@@ -1634,7 +1634,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-prebridge" hidden>Build <code>20260923-map-prebridge</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-map-seed" hidden>Build <code>20260923-map-seed</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2039,7 +2039,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <!-- ══ BRIDGE (tip 20260923-map-prebridge · Raksha / Zero 1) ═══════════════════════════════════
+  <!-- ══ BRIDGE (tip 20260923-map-seed · Raksha / Zero 1) ═══════════════════════════════════
        Fiat → tokenized (Coinbase Fund) + sell/swap tokenized↔tokenized VIA a Bridge block.
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
        Fee skim LIVE (ETH/USDC From → client-side send). Net hub swap = Phil GO 1 bps.
@@ -3291,12 +3291,19 @@ async function charger() {
      *    secondes. Les blocks apparaissent d abord, la vie arrive ensuite — et tant qu elle n est
      *    pas lue, ils sont PALES, jamais « a zero ». */
     /* tip 0026 (Phil « accueillir TOUS les blocks vivants ») : tous les blocks lus sont poses ; la vie n est lue que pour les 30 premiers (limite du noeud public) */
-    poserBlocks(vues.map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null })));
+    /* tip 20260923-map-seed: browser RPC often returns ≪ server trending; full poserBlocks
+     * was WIPING ~150 soleils down to ~20. Only full-replace when the chain list is denser. */
+    const pose = vues.map((c) => ({ jeton: c.jeton, symbole: c.symbole, vie: null }));
+    if (vues.length >= Math.max(80, habitants.length)) {
+      poserBlocks(pose);
+    } else {
+      for (const c of pose) { if (!habitantDe(c.jeton)) creerHabitant(c); }
+    }
     etat.textContent = '';
     void poserNosBlocks(r.fenetre.a);
     note.textContent = vues.length + ' blocks made in the last '
-      + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · showing '
-      + vues.length + " (life read for the first " + Math.min(30, vues.length) + ")"
+      + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · on map '
+      + habitants.length + " (life read for the first " + Math.min(30, habitants.length) + ")"
       + (ratees ? ' · ' + ratees + ' window(s) unread — this map is incomplete' : '');
     void lireLaVie();
   } catch (e) {
@@ -5574,7 +5581,7 @@ $('#pEnvoyer').addEventListener('click', () => {
  *    refuser les lectures que quelqu un regarde vraiment.
  * ⚠️ Un trou plus long qu une fenetre (onglet ferme longtemps) repart de zero plutot que de sauter en
  *    silence la periode manquee. */
-const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-prebridge: Base getLogs ≤1000 */
+const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-seed: Base getLogs ≤1000 */
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
@@ -12232,7 +12239,9 @@ document.addEventListener('click', (e) => {
 });
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;
-/* tip 0037 : poserBlocks (dans charger) remet la map a zero — les soleils se posent APRES, sinon ils seraient effaces */
+/* tip 20260923-map-seed: seed soleils from /api/trending FIRST (server already has hundreds),
+ * then charger merges — never let a thin browser eth_getLogs wipe the living map. */
+void soleilsSurLaMap();
 charger().then(() => { void soleilsSurLaMap(); });
 demarrerBattement();
 /* tip 0025 : le fil Live demarre avec la map (apres la premiere lecture des blocks, pour laisser le noeud a la map) */
