@@ -1689,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-pair-not-ad" hidden>Build <code>20260923-pair-not-ad</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-ghost-ids" hidden>Build <code>20260923-ghost-ids</code> · Companion role proven live; dead write handler removed.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8462,14 +8462,17 @@ $('#pReveiller').addEventListener('click', () => {
     try { ouvrirLancement(); } catch (__) {}
   }
 });
-$('#bEcrireBlock') && $('#bEcrireBlock').addEventListener('click', () => {
-  const g = $('#bGraver');
-  if (!g) return;
-  g.click();
-  /* l etat de l ecriture est celui du chemin commun ; on le reflete ici */
-  const suivre = () => { const src = $('#bGraverEtat'), dst = $('#bEcrireEtat'); if (src && dst) { dst.innerHTML = src.innerHTML; dst.className = src.className; } };
-  let n = 0; const t = setInterval(() => { suivre(); if (++n > 120) clearInterval(t); }, 1000);
-});
+/* ⛔ LE SECOND BOUTON D ECRITURE A ETE RETIRE PAR `833ed7a` (« un seul bouton pour ecrire ») et son
+ *    gestionnaire etait reste ici, garde par `$('#bEcrireBlock') && …`. Cette garde ne protegeait
+ *    rien : l element n existe dans AUCUN fichier, donc la condition etait toujours fausse et les
+ *    huit lignes ne pouvaient jamais s executer — y compris un `setInterval` de 120 secondes qui
+ *    n a jamais demarre. Une garde dont la condition est constante n est pas une garde, c est un
+ *    interrupteur colle sur ARRET, et elle fait croire a une fonctionnalite qui n existe plus.
+ *    ⛔ LE CHEMIN REEL EST INCHANGE : `#bGraver` existe, porte son propre gestionnaire et reste le
+ *      seul bouton d ecriture. Rien de visible ne change — c est precisement pourquoi ce code mort
+ *      pouvait survivre indefiniment sans que personne le remarque.
+ *    ⛔ `test-ids-fantomes.mjs` garde desormais cette classe entiere. */
+
 const TEINTES = [
   { cle: 'a', nom: 'Night purple', p1: '#1a1228', p2: '#a78bfa' },
   { cle: 'b', nom: 'Night blue', p1: '#0e1830', p2: '#7ea6ff' },
