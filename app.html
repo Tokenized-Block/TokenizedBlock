@@ -1673,6 +1673,13 @@ details[open] > summary::before{transform:rotate(90deg)}
   <section class="volet" id="v-trade" aria-label="Trade blocks">
     <div class="carte">
       <p class="titre">Trending blocks</p>
+      <!-- ⛔ LE RESUME CHIFFRE MONTE SOUS LE TITRE (Phil, 2026-09-23). Il vivait tout en BAS de la
+           carte, apres une liste de plusieurs dizaines de lignes : personne ne le voyait. C est
+           pourtant la seule ligne qui dit la TAILLE de ce qu on regarde — combien de blocks ont un
+           marche, et combien s y echange. Un chiffre juste mais illisible n avertit pas.
+           ⛔ MEME ELEMENT, MEME `id`, MEME TEXTE : on le DEPLACE, on ne le duplique pas. Deux
+             `#trNote` feraient diverger l un des deux en silence. -->
+      <p class="note" id="trNote" style="margin:2px 0 0"></p>
       <p class="sous">Every block on Base with a live market, ranked by what is moving right now — read from the chain and DexScreener.</p>
       <div class="stadeLigne" id="trTri" style="margin-top:4px">
         <button type="button" class="puce on" data-tri="h1">🔥 Last hour</button>
@@ -1681,17 +1688,28 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="puce" data-tri="liq">💧 Liquidity</button>
       </div>
       <ul class="fil trListe" id="trListe"><li class="filL"><p class="note">Reading the market…</p></li></ul>
-      <p class="note" id="trNote"></p>
+      <!-- ⛔ L ANCIEN `#trNote` EST RETIRE D ICI : il est remonte sous le titre. Deux elements du
+           meme `id` sur une page, c est UN SEUL que `querySelector` atteint — l autre reste vide
+           pour toujours, sans que rien ne le signale. -->
     </div>
 
     <!-- ⛔ PHIL (2026-09-20) : « affiche les vraies stats ». Des NOMBRES D ACTES faits dans cette app,
          pris sur /api/entonnoir (persistant). Aucun pourcentage de frais, aucune adresse. -->
-    <div class="carte" id="carteStats">
-      <p class="titre">What this app has actually done</p>
-      <p class="sous">Counted in this app, not on Base. The Live feed shows the whole chain; these numbers
-        are only what people did here.</p>
-      <div class="stadeLigne" id="statsLignes" style="margin-top:8px"></div>
-      <p class="note" id="statsNote">Reading…</p>
+    <!-- ⛔⛔ CARTE RETIREE DE L ECRAN (Phil, 2026-09-23 : « retire, c est donnee privee »).
+         Elle publiait nos chiffres d exploitation : visites, ouvertures de Create, blocks crees
+         ici, marches ouverts, echanges faits, liens partages, et le nombre de tentatives echouees.
+         Ce n est pas une information pour le lecteur — publiee, elle dit a n importe qui
+         exactement ou en est le produit.
+         ⛔ LA CARTE PART, LA MESURE RESTE : `/api/entonnoir` continue de compter et se lit cote
+           serveur. On retire l AFFICHAGE, jamais l instrument — se priver de la mesure pour cacher
+           le resultat serait le pire des deux.
+         ⛔ LES DEUX ELEMENTS RESTENT DANS LA PAGE, VIDES ET CACHES. `peindreStats` ecrit dans
+           `#statsLignes` et `#statsNote` : les SUPPRIMER en ferait des id fantomes, et une garde
+           sur un element absent est TOUJOURS fausse — c est exactement ce qui avait tue le
+           Companion et trois hooks (`garde-sur-element-absent-toujours-fausse`). -->
+    <div class="carte" id="carteStats" hidden>
+      <div class="stadeLigne" id="statsLignes"></div>
+      <p class="note" id="statsNote"></p>
     </div>
   </section>
 
@@ -1743,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-cheapest-route" hidden>Build <code>20260923-cheapest-route</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260923-private-stats-off" hidden>Build <code>20260923-private-stats-off</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
