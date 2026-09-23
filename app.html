@@ -1689,7 +1689,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-post-tab" hidden>Build <code>20260923-post-tab</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
+      <p class="note" data-build="20260923-companion-role" hidden>Build <code>20260923-companion-role</code> · Created = all births + Live history ~12k (chunk ≤999).</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4518,14 +4518,47 @@ function battreProfil() {
  * ⛔ No new score — reads existing DOM only. No invented lines. Future LLM (if any) may only
  *    rephrase these facts — never decide mood/phase/rules/advice.
  */
+/* ⛔⛔ BUG SIGNALE PAR PHIL (2026-09-23) : « le role companion existe pas, a chaque fois le
+ *     compagnon est en mode free ». C etait vrai, et la cause n est pas le role — c est D OU il
+ *     etait lu.
+ *     L ANCIENNE VERSION RECOPIAIT L AFFICHAGE D UN AUTRE PANNEAU :
+ *         role.textContent = $('#pmTitre').textContent || '—';
+ *     `#pmTitre` est peint par `peindreMetier()`, donc seulement quand un PROFIL a ete ouvert. Tant
+ *     que ca n etait pas arrive, il valait son `—` d origine — et le Companion affichait `—` pour
+ *     toujours, sans que rien ne dise pourquoi.
+ *     ⇒ Le role se CALCULE maintenant a la source (`roleDe` + `METIERS`), exactement comme le
+ *       profil. Les deux lisent la meme chose, au lieu que l un recopie l ecran de l autre.
+ * ⛔ CE QUI RESTE LU DANS LE DOM, ET POURQUOI : l humeur vient du cerveau et les PV de la lecture
+ *    de vie, qui n ont pas de source exportee ici. Quand ils ne sont pas encore la, on le DIT
+ *    (« not read yet ») au lieu d un tiret muet — un tiret laisse croire a une valeur nulle, la
+ *    phrase dit qu aucune lecture n a eu lieu. C est la meme distinction que partout ailleurs :
+ *    « pas lu » n est pas « zero ». */
 function peindreCompanion() {
   const mood = $('#pcgMood'), hp = $('#pcgHp'), role = $('#pcgRole');
   if (!mood || !hp || !role) return;
-  mood.textContent = ($('#pcPhase') && $('#pcPhase').textContent) || '—';
-  const pv = ($('#pPV') && $('#pPV').textContent) || '—';
-  const palier = ($('#pPalier') && $('#pPalier').textContent) || '—';
-  hp.textContent = (pv === '—' || pv === '…') ? palier : (pv + ' HP · ' + palier);
-  role.textContent = ($('#pmTitre') && $('#pmTitre').textContent) || '—';
+  const vide = (t) => !t || t === '—' || t === '…' || t === '';
+
+  const phase = $('#pcPhase') && $('#pcPhase').textContent;
+  mood.textContent = vide(phase) ? 'not read yet' : phase;
+
+  const pv = $('#pPV') && $('#pPV').textContent;
+  const palier = $('#pPalier') && $('#pPalier').textContent;
+  hp.textContent = vide(pv)
+    ? (vide(palier) ? 'not read yet' : palier)
+    : (pv + ' HP · ' + (vide(palier) ? '—' : palier));
+
+  /* ⛔ LE ROLE VIENT DE LA MEME SOURCE QUE LE PROFIL, plus jamais de son affichage. */
+  const adr = String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase();
+  let titre = null;
+  if (/^0x[0-9a-f]{40}$/.test(adr)) {
+    try {
+      const m = METIERS.find((x) => x.cle === roleDe(adr));
+      if (m) titre = m.titre;
+    } catch (e) { titre = null; }
+  }
+  /* ⛔ AUCUN BLOCK OUVERT EST UN ETAT, PAS UNE PANNE : on le dit, au lieu d un tiret qui ferait
+   *    croire que ce block-la n a pas de role. */
+  role.textContent = titre || (adr ? 'not read yet' : 'open a block to see its role');
 }
 /* ⛔ LA BANDE DU PROFIL : 48 battements x 16 rangees (8 neurones par rangee). On ne dessine que ce qui
  * a tire — jamais un point pose pour faire joli, et rien du tout tant qu aucun battement n est arrive. */
