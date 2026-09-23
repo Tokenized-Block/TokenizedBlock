@@ -1644,14 +1644,16 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-map-buy-cta" hidden>Build <code>20260923-map-buy-cta</code> · who holds and what pays are two different tokens now.</p>
+      <p class="note" data-build="20260923-feed-catch-router" hidden>Build <code>20260923-feed-catch-router</code> · who holds and what pays are two different tokens now.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
       <!-- ⛔ PHIL (2026-09-14) : « bien trier pour la facilite de lecture des donnees de Social ». -->
       <div class="stadeLigne" id="sfLiveFiltres" style="margin-top:8px">
         <button type="button" class="puce on" data-filtre="TOUT" title="Everything this page read on chain in this window">All</button>
-        <button type="button" class="puce" data-filtre="CREATION" title="New blocks born on Base — every launchpad, not only this app">🧱 Created</button>
+        <!-- tip 20260923-feed-catch-router: Created = honesty (foreign secondary); TB · paid = CreateRouter only -->
+        <button type="button" class="puce" data-filtre="CREATION" title="New blocks on Base — TB-paid first; foreign rows demoted with Instant Birth CTA">🧱 Created</button>
+        <button type="button" class="puce" data-filtre="CREATION_TB" title="Only creates that paid via CreateRouter Instant Birth on Tokenized Block">✦ TB · paid</button>
         <!-- noms choisis par Phil (2026-09-14) : acheter nourrit le block, vendre le tue un peu -->
         <button type="button" class="puce" data-filtre="ACHAT" title="Buys — the block left its pool for someone's wallet">🟢 Feed</button>
         <button type="button" class="puce" data-filtre="VENTE" title="Sells — the block went back into its pool">🔴 Kill</button>
@@ -5669,6 +5671,8 @@ function filtreLive(e) {
     }
     return false;
   }
+  /* tip 20260923-feed-catch-router: TB · paid chip — CreateRouter createPaid only */
+  if (liveFiltre === 'CREATION_TB') return e.type === 'CREATION' && e.paidCreate === true;
   return e.type === liveFiltre;
 }
 $('#sfLiveFiltres').addEventListener('click', (ev) => {
@@ -6316,6 +6320,15 @@ async function peindreStats() {
 
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
+  /* tip 20260923-feed-catch-router: Created / TB·paid — TB CreateRouter rows first, foreign secondary */
+  if (liveFiltre === 'CREATION' || liveFiltre === 'CREATION_TB') {
+    montres.sort((a, b) => {
+      const ap = a.paidCreate === true ? 1 : 0;
+      const bp = b.paidCreate === true ? 1 : 0;
+      if (bp !== ap) return bp - ap;
+      return (b.bloc ?? 0) - (a.bloc ?? 0);
+    });
+  }
   majComptesFiltres();
   /* ⛔⛔ MESURE EN NAVIGATEUR (2026-09-14) : avec les vraies pools, 1 153 lignes sur 1 184 etaient des echanges NEUTRES
    *    (pool a hook), presque tous d un seul block — illisible, et n importe qui peut remplir le fil de poussiere. Les
@@ -6358,22 +6371,17 @@ function peindreLive() {
     const nom = (estANous(e.jeton) ? '🟦 ' : '') + enTexte(String(e.sym || '?').slice(0, 14));
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     /* tip 2349: free create OK — nudge Launch to market (fee moment), not “spam kill create”. */
+    /* tip 20260923-feed-catch-router: celebrate ONLY CreateRouter paidCreate.
+     * Foreign / factory-raw = secondary honesty (never plain « was born » as TB create). */
     const quoi = e.type === 'CREATION'
       ? (e.paidCreate === true
         ? (CHAINE === 8453
-          ? '🧱 <b>' + nom + '</b> was born'
+          ? '🧱 <b>' + nom + '</b> was born on TB · paid'
           : '🧱 <b>' + nom + '</b> was created · Create path (Practice)')
-        /* tip 0021 (Phil 2026-09-16: « c est ecrit fees mais ya rien ») : the old line promised a fee on EVERY free
-         * create. Say a fee path exists only when a fee hook pool for this block was actually seen on chain. */
         : (CHAINE === 8453
-          /* ⛔ Phil 2026-09-19 (TENZ) : un block ne via un AUTRE launchpad (RWAB20LaunchpadFactory + son LaunchHook)
-           * s affichait « market open » comme s il etait a nous. Le hook de la pool dit ou il est ne. */
-          ? (poolDecouvertPour(e.jeton)
-            ? (poolDecouvertPour(e.jeton).isTbFeeHook
-              ? '🧱 <b>' + nom + '</b> was born here · market open'
-              /* tip 20260922-fee-funnel: Created→IB — unhooked label + V8 CTA on the row */
+          ? (poolDecouvertPour(e.jeton) && poolDecouvertPour(e.jeton).isTbFeeHook
+              ? '🧱 <b>' + nom + '</b> market open (hooked) · create was not via TB CreateRouter'
               : '🧱 <b>' + nom + '</b> was born on another launchpad')
-            : '🧱 <b>' + nom + '</b> was born')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
       : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note')
@@ -6391,14 +6399,10 @@ function peindreLive() {
     /* tip 2358: unhooked ACHAT/VENTE → Launch hooked beside (fee capture); hooked/TBGAS → Buy/Sell */
     /* tip 0028 : une seule invitation, sans jargon */
     /* tip 20260922-fee-funnel: Created unhooked row — primary V8 CTA, Open profile secondary (same profile path) */
-    const unhookedCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true
-      && poolDecouvertPour(e.jeton) && !poolDecouvertPour(e.jeton).isTbFeeHook;
-    /* tip 20260922-2140: never promise V8 birth on a foreign unlabeled token.
-     * Instant Birth on TB → #creer (paid); Open profile secondary. No Create here (free). */
-    /* tip 20260923-created-ib-cta: restore Instant Birth on TB for unhooked Created rows
-     * (tip 2141 had stripped it → Open profile only → 0 create_clic). Still NO foreign V8 birth.
-     * Handler data-tf-act=instant-birth-tb → #creer already wired. */
-    const openHint = unhookedCreate
+    /* tip 20260923-feed-catch-router: ANY unpaid MAIN Created row → primary Instant Birth on TB.
+     * Still NO foreign V8 birth. Handler data-tf-act=instant-birth-tb → #creer. */
+    const foreignCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
+    const openHint = foreignCreate
       ? ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
         + ' · <span class="filOpen">Open profile</span>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
@@ -9738,11 +9742,11 @@ function validerCreation() {
   return { nom, sym, sel };
 }
 
-/* tip 20260922-same-sig: Instant Birth DIRECT forces CreateRouter createPaid FIRST (same signature as create). */
+/* tip 20260923-feed-catch-router: MAIN create ALWAYS CreateRouter createPaid (Bankr rails).
+ * Practice stays free factory. forcerCreateRouterIb kept for IB value floor / legacy callers. */
 let forcerCreateRouterIb = false;
 function utiliseCreateRouter() {
-  /* tip 2349: default free factory. tip 20260922-same-sig: Instant Birth fallback = CreateRouter createPaid. */
-  if (forcerCreateRouterIb && Number(CHAINE) === 8453) return true;
+  if (Number(CHAINE) === 8453) return true;
   return false;
 }
 function calldataCreation(v) {
@@ -9766,8 +9770,8 @@ function cibleCreation() {
 function valeurCreation(fraisWei) {
   if (!utiliseCreateRouter()) return '0x0';
   const w = fraisWei != null ? BigInt(fraisWei) : 0n;
-  /* tip 20260922-same-sig: Instant Birth CreateRouter pays FRAIS_OUVERTURE_WEI (0.001), not only floor 0.0003. */
-  const floor = forcerCreateRouterIb ? FRAIS_OUVERTURE_WEI : CREATE_FEE_WEI_FLOOR;
+  /* tip 20260923-feed-catch-router: MAIN CreateRouter always pays FRAIS_OUVERTURE_WEI (0.001). */
+  const floor = FRAIS_OUVERTURE_WEI;
   const pay = w > floor ? w : floor;
   return '0x' + pay.toString(16);
 }
@@ -9929,7 +9933,7 @@ function majFraisEtRecap() {
      *    Un refus de validation ne desactive plus le bouton : le clic connecte le wallet, ou dit ce qui
      *    manque en clair. Seuls un prix ou un solde MESURES insuffisants le ferment encore. */
     /* tip 0211: while any not-alive block sits in tb.aLancer on mainnet, block Create —
-     * finish Bring life / dismiss first. Create stays free when allowed; this is not a fee. */
+     * finish Bring life / dismiss first. Then Instant Birth · CreateRouter (not a free factory create). */
     const aLancerBloque = Number(CHAINE) === 8453 && aLancerLire().length > 0;
     boutonCreer.disabled = aLancerBloque || !prixOk || !soldeOk;
     boutonCreer.title = aLancerBloque
@@ -10501,13 +10505,22 @@ async function creerBlock() {
   etape('create_clic');
   if (creationEnCours) return;
   const e = $('#cEtat');
+  /* tip 20260923-feed-catch-router: free asleep factory createB20 value-0 RETIRED on MAIN.
+   * Any TB-visible create must shop CreateRouter createPaid · 0.001 ETH. */
+  if (Number(CHAINE) === 8453 && creerSansVie) {
+    creerSansVie = false;
+    e.className = 'note wKo';
+    e.textContent = 'Free factory create is retired on Base. Use Instant Birth · 0.001 ETH (CreateRouter) — nothing was signed.';
+    majFraisEtRecap();
+    return;
+  }
   /* tip 0211 — HARD RULE: Create is free when allowed, but while any not-alive block sits in
    * tb.aLancer (aLancerLire) on mainnet, refuse Create early so they Bring life / dismiss first.
    * Nothing signed. Measured 2026-09-22: IB022 open fee paid, Launch mint sim reverted, Create still
    * offered free → infinite asleep blocks. */
   if (Number(CHAINE) === 8453 && aLancerLire().length > 0) {
     e.className = 'note wKo';
-    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Create stays free after that — nothing was signed.';
+    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH via CreateRouter — nothing was signed.';
     majFraisEtRecap();
     return;
   }
@@ -10589,7 +10602,7 @@ async function creerBlock() {
   creationEnCours = true;
   $('#cCreer').disabled = true;
   try {
-    /* tip 2349: default free factory on MAIN + Practice. CreateRouter only if utiliseCreateRouter(). */
+    /* tip 20260923-feed-catch-router: MAIN always CreateRouter createPaid. Practice = free factory. */
     if (utiliseCreateRouter()) {
       e.className = 'note';
       e.textContent = 'Review in your wallet — CreateRouter createPaid · 0.001 ETH, once. Paid only if creation succeeds.';
@@ -10646,9 +10659,7 @@ async function creerBlock() {
       /* ⛔ BUG vu par Phil (capture, mainnet) : avec le hook V2 deploye, on tombait ici et l ecran disait « Practice » */
       /* tip 20260922-ib-batch: never sell factory create as Instant Birth — fee moment is V8 inscription. */
       e.textContent = Number(CHAINE) === 8453
-        ? (creerSansVie
-          ? 'Advanced — create asleep (factory · free). Give birth · V8 later.'
-          : 'Preparing Instant Birth — CreateRouter · 0.001 ETH once · V8…')
+        ? 'Review — CreateRouter createPaid · Instant Birth · 0.001 ETH once · V8…'
         : 'Practice — create it. Check it in your wallet.';
     }
     /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
