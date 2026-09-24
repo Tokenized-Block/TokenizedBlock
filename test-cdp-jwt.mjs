@@ -11,7 +11,7 @@
  *    n est fait. 0 dollar n est passe. Des cas verts ici ne veulent pas dire que le rail encaisse.
  */
 import { strict as assert } from 'node:assert';
-import { generateKeyPairSync, createVerify } from 'node:crypto';
+import { generateKeyPairSync, createVerify, verify as verifierBrut } from 'node:crypto';
 import { signerJwtCdp, DUREE_JWT_S } from './cdp-jwt.js';
 
 let n = 0;
@@ -150,8 +150,73 @@ v('le secret ne se retrouve dans AUCUN champ du resultat', () => {
   assert.ok(morceau.length === 24 && !rendu.includes(morceau), 'un fragment de la cle privee a fuite');
 });
 
-assert.equal(n, 13, 'compte de cas inattendu : ' + n + ' — un cas a ete ajoute ou perdu');
-console.log('ok cdp-jwt — ' + n + ' cas : signature ES256 VERIFIEE (format JOSE 64 octets), temoin');
-console.log('   negatif rouge, fenetre de 120 s, et le secret ne sort pas.');
+/* ═══ LA SECONDE GENERATION DE CLES CDP : Ed25519 ═══════════════════════════════════════════════
+ * ⛔⛔ CE BLOC EXISTE A CAUSE D UNE PANNE REELLE, EN PRODUCTION, LE 2026-09-24. La cle enfin posee,
+ *     la route a cesse de repondre « no CDP credentials » — donc elle etait bien chargee — pour
+ *     repondre « CDP key could not sign: ERR_OSSL_UNSUPPORTED ».
+ *     Le code ne connaissait qu une generation de cles : EC P-256 au format PEM, signee en ES256.
+ *     Celle de Phil est une Ed25519 encodee en base64 brut. Deux erreurs en une : `createPrivateKey`
+ *     la refuse telle quelle, et `createSign('SHA256')` ne s applique pas a Ed25519 — qui integre
+ *     son propre hachage et se signe EN UN COUP.
+ *   ⛔ Et si on avait seulement corrige la lecture de la cle sans changer `alg`, on aurait produit
+ *     un jeton annoncant ES256 sur une signature Ed25519 : accepte par node, rejete par Coinbase
+ *     avec un 401 muet. La meme classe de panne que la signature DER, aussi indiagnosticable. */
+const { privateKey: edPriv, publicKey: edPub } = generateKeyPairSync('ed25519');
+/* la forme REELLE d un secret CDP de seconde generation : 64 octets en base64 (graine + publique) */
+const graine = edPriv.export({ type: 'pkcs8', format: 'der' }).subarray(-32);
+const publiqueBrute = edPub.export({ type: 'spki', format: 'der' }).subarray(-32);
+const SECRET_ED_B64 = Buffer.concat([graine, publiqueBrute]).toString('base64');
+
+v('une cle Ed25519 en base64 est acceptee, et le jeton annonce EdDSA', () => {
+  const r = signerJwtCdp({ ...APPEL, secretPem: SECRET_ED_B64, maintenantS: T0 });
+  assert.equal(r.etat, 'OK', r.pourquoi || '');
+  const h = dec(r.jwt.split('.')[0]);
+  assert.equal(h.alg, 'EdDSA',
+    "le jeton annonce « " + h.alg + " » sur une cle Ed25519 : Coinbase le rejettera par un 401 muet");
+});
+
+v('⛔ LE CAS CENTRAL : la signature Ed25519 se VERIFIE avec la cle publique', () => {
+  const r = signerJwtCdp({ ...APPEL, secretPem: SECRET_ED_B64, maintenantS: T0 });
+  const [h, c, sig] = r.jwt.split('.');
+  const brut = Buffer.from(sig.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+  assert.equal(brut.length, 64, 'une signature Ed25519 fait 64 octets — ' + brut.length + ' est autre chose');
+  assert.equal(verifierBrut(null, Buffer.from(h + '.' + c, 'utf8'), edPub, brut), true,
+    'la signature Ed25519 ne se verifie pas avec la cle publique correspondante');
+});
+
+v('⛔ TEMOIN NEGATIF Ed25519 : une charge modifiee CASSE la verification', () => {
+  /* ⛔ Sans lui, le cas precedent pourrait etre vert par accident. */
+  const r = signerJwtCdp({ ...APPEL, secretPem: SECRET_ED_B64, maintenantS: T0 });
+  const [h, c, sig] = r.jwt.split('.');
+  const faux = dec(c); faux.sub = 'quelqu-un-d-autre';
+  const cFaux = Buffer.from(JSON.stringify(faux)).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  assert.equal(verifierBrut(null, Buffer.from(h + '.' + cFaux, 'utf8'), edPub,
+    Buffer.from(sig.replace(/-/g, '+').replace(/_/g, '/'), 'base64')), false,
+    'une charge falsifiee passe la verification Ed25519 : la garde ne prouve rien');
+});
+
+v('un secret de taille inattendue est REFUSE, avec une raison nommee', () => {
+  /* ⛔ « unsupported » tout seul a coute une demi-heure en production. Le refus doit NOMMER ce qui
+   *   ne va pas, sinon on cherche du cote de la cle alors que c est le format. */
+  for (const mauvais of [Buffer.alloc(10).toString('base64'), Buffer.alloc(100).toString('base64')]) {
+    const r = signerJwtCdp({ ...APPEL, secretPem: mauvais, maintenantS: T0 });
+    assert.equal(r.etat, 'REFUSE');
+    assert.match(r.pourquoi, /format not recognised/i, 'le refus ne nomme pas le probleme');
+  }
+});
+
+v('le secret Ed25519 ne fuite dans AUCUN champ du resultat', () => {
+  const r = signerJwtCdp({ ...APPEL, secretPem: SECRET_ED_B64, maintenantS: T0 });
+  assert.equal(r.etat, 'OK');
+  const rendu = JSON.stringify(r);
+  assert.ok(!rendu.includes(SECRET_ED_B64), 'le secret complet est rendu par la fonction');
+  assert.ok(!rendu.includes(SECRET_ED_B64.slice(0, 24)), 'un fragment du secret a fuite');
+});
+
+assert.equal(n, 18, 'compte de cas inattendu : ' + n + ' — un cas a ete ajoute ou perdu');
+console.log('ok cdp-jwt — ' + n + ' cas : LES DEUX generations de cles CDP signent et se verifient —');
+console.log('   EC P-256/ES256 (format JOSE 64 octets) et Ed25519/EdDSA — avec leur temoin negatif');
+console.log('   chacune, fenetre de 120 s, et le secret ne sort d aucune des deux branches.');
 console.log('⚠️ NON PROUVE : que Coinbase accepte ce jeton. Aucune cle CDP ici, aucun appel reel,');
 console.log('   0 $ encaisse. Ces cas verts ne disent RIEN sur le revenu.');
