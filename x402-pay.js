@@ -127,9 +127,43 @@ export function recordPay(p) {
   if (!X402_SETTLEMENT.includes(asset)) {
     return { ok: false, pourquoi: 'Pay settlement is ETH or USDC only' };
   }
+  /* ⛔⛔ UNE PREUVE EST DESORMAIS OBLIGATOIRE, ET C EST LE CORRECTIF CENTRAL DE CE FICHIER.
+   *     Avant, `txHash` etait FACULTATIF : l interface n en passait jamais, et cette fonction
+   *     ecrivait quand meme un evenement portant `signeParUtilisateur: true`. L application
+   *     affirmait donc qu un paiement avait eu lieu alors que RIEN n avait bouge et que RIEN
+   *     n avait ete verifie. Le seul controle existant testait la FORME du hash quand il etait
+   *     fourni — c est-a-dire jamais.
+   *
+   *   ⛔ CE REGISTRE N EST PAS LE VERIFICATEUR, et c est volontaire : il ENREGISTRE un paiement
+   *     deja demontre. La verification est asynchrone (elle lit la chaine) et vit dans
+   *     `verif-paiement.js`. Les melanger rendrait cette fonction asynchrone et, surtout,
+   *     placerait la preuve et son enregistrement au meme endroit — un verificateur qui ecrit son
+   *     propre verdict ne garde rien.
+   *
+   *   ⛔ LA PREUVE DOIT PARLER DE LA MEME TRANSACTION : un verdict valide accompagne d un autre
+   *     hash serait une preuve empruntee. On compare les deux.
+   *
+   *   ⛔⛔ BORNE A DIRE : ce registre vit dans le navigateur. Il se vide, se modifie, se fabrique.
+   *     Une reconnaissance enregistree ici est un CONFORT d interface, jamais un titre a un
+   *     service payant. Pour qu un paiement ouvre un droit, c est le SERVEUR qui doit verifier. */
   const txHash = String((p && p.txHash) || '').trim();
-  if (txHash && !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-    return { ok: false, pourquoi: 'txHash looks invalid — nothing recognized' };
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    return { ok: false, pourquoi: 'a whole transaction hash is required — a payment is a transaction, not a checkbox' };
+  }
+  const preuve = p && p.preuve;
+  if (!preuve || preuve.etat !== 'PAYE') {
+    return { ok: false,
+      pourquoi: 'no verified payment for this hash' + (preuve && preuve.pourquoi ? ' — ' + preuve.pourquoi : '')
+        + '. Nothing is recognized on trust.' };
+  }
+  if (String(preuve.txHash || txHash).toLowerCase() !== txHash.toLowerCase()) {
+    return { ok: false, pourquoi: 'the proof does not describe this transaction — nothing recognized' };
+  }
+  /* ⛔ REJEU : un meme paiement ne peut pas etre reconnu deux fois. Sans ce controle, un hash
+   *   valide servirait indefiniment — le paiement serait reel, et compte autant de fois qu on le
+   *   recolle. */
+  if (events.some((e) => e.kind === 'pay' && String(e.txHash || '').toLowerCase() === txHash.toLowerCase())) {
+    return { ok: false, pourquoi: 'this transaction was already recognized — one payment counts once' };
   }
   const ev = {
     schema: X402_SCHEMA,
@@ -138,8 +172,16 @@ export function recordPay(p) {
     proposeId,
     at: Date.now(),
     asset,
-    amountHuman: p && p.amountHuman != null ? String(p.amountHuman) : prop.amountHuman,
-    txHash: txHash || null,
+    /* ⛔⛔ LE MONTANT VIENT DE LA CHAINE, PLUS DE L APPELANT. Avant, `amountHuman` etait recopie tel
+     *     quel depuis l appelant ou depuis le propose : le registre enregistrait donc le montant
+     *     que quelqu un DISAIT avoir paye, pas celui qui avait bouge. Un « paiement » de zero
+     *     etait reconnu comme un paiement. On prend le montant CONSTATE par le verificateur ; le
+     *     souhait de l appelant n est garde que pour memoire, et sous un autre nom. */
+    montantConstate: String(preuve.paye),
+    montantAnnonce: p && p.amountHuman != null ? String(p.amountHuman) : (prop.amountHuman ?? null),
+    confirmations: preuve.confirmations ?? null,
+    bloc: preuve.bloc ?? null,
+    txHash,
     tip: X402_TIP,
     signeParUtilisateur: true,
     brainSigns: false,
@@ -217,10 +259,20 @@ export function listX402Events(lim = 12) {
 /**
  * Honest UI blurb — no sink addr, no Fees for Dev, no ≈$1, no "Brain signs markets".
  */
+/* ⛔⛔ REECRITE LE 2026-09-24. Phil la trouvait illisible, et elle l etait — mais le probleme
+ *     n etait pas seulement le style : elle promettait quelque chose que le code ne faisait pas.
+ *     « x402 may recognize ETH/USDC micropay » laissait entendre qu un paiement etait RECONNU. En
+ *     verite le bouton ecrivait « paye » sans rien demander ni verifier : ni hash, ni montant, ni
+ *     destinataire. Depuis, la reconnaissance exige une transaction et va la LIRE sur la chaine.
+ *   ⛔ La phrase dit donc maintenant les trois choses vraies : ce que le cerveau fait (proposer,
+ *     ecrire), ce qu il ne fait JAMAIS (signer un marche), et ce qui est verifie (la transaction).
+ *   ⛔ Plus de taux dans cette phrase : repeter « 0.5% » et « 0.01% » a chaque ecran transforme une
+ *     mecanique en argument de vente. Les rails proteges sont nommes, pas tarifes. */
 export function phraseOptionA() {
-  return 'Option A: Brain proposes · you (or a capped session) pay · Brain writes the journal. '
-    + 'Brain never freestyle-signs markets. x402 may recognize ETH/USDC micropay for data/tools — '
-    + 'never Instant Birth 0.001 ETH, never Buy/Sell 0.5%, never a second Bridge 0.01% skim.';
+  return 'The Brain suggests, you pay, the Brain writes the note. It never signs a market by itself. '
+    + 'To recognize a payment we read the transaction on chain: who signed it, to whom, how much, '
+    + 'and whether it went through — nothing is taken on trust. Creating a block, buying, selling '
+    + 'and the Bridge keep their own wallet steps; this never replaces them.';
 }
 
 /** Sanity: module strings must not leak sink / banned labels (used by tip test). */

@@ -69,8 +69,41 @@ assert.equal(prop.event.signeParUtilisateur, true);
 const badAsset = recordPropose({ action: 'tool', rail: 'brain_data_tool', asset: 'TBGAS' });
 assert.equal(badAsset.ok, false);
 
-const pay = recordPay({ proposeId: prop.event.id, asset: 'ETH' });
-assert.equal(pay.ok, true);
+/* ⛔⛔ CE BLOC AFFIRMAIT L INVERSE, ET IL PROUVAIT L ABSENCE DE VERIFICATION.
+ *     Il appelait `recordPay` SANS hash de transaction et exigeait `ok === true`. Autrement dit,
+ *     le test verrouillait la possibilite d enregistrer un paiement dont rien ne prouvait
+ *     l existence — et l evenement ecrit portait `signeParUtilisateur: true`. Tant qu il passait
+ *     au vert, personne n allait regarder. C est le meme motif que la jambe « skim » du Bridge
+ *     annoncee `live` : un test peut etre VERT et tenir exactement la mauvaise moitie.
+ *   ⇒ Un paiement est une transaction, pas une case cochee. */
+const sansPreuve = recordPay({ proposeId: prop.event.id, asset: 'ETH' });
+assert.equal(sansPreuve.ok, false, 'un paiement sans hash est de nouveau accepte');
+assert.match(sansPreuve.pourquoi, /transaction hash is required/i);
+
+const HASH_TEST = '0x' + 'b'.repeat(64);
+const faussePreuve = recordPay({ proposeId: prop.event.id, asset: 'ETH', txHash: HASH_TEST });
+assert.equal(faussePreuve.ok, false, 'un hash sans verdict de verification a ete accepte');
+assert.match(faussePreuve.pourquoi, /no verified payment/i);
+
+/* ⛔ le verdict doit parler de CETTE transaction : une preuve valable empruntee a un autre
+ *   paiement ne vaut rien. */
+const preuveEmpruntee = recordPay({ proposeId: prop.event.id, asset: 'ETH', txHash: HASH_TEST,
+  preuve: { etat: 'PAYE', paye: '5', txHash: '0x' + 'c'.repeat(64) } });
+assert.equal(preuveEmpruntee.ok, false, 'une preuve decrivant une AUTRE transaction a ete acceptee');
+
+const pay = recordPay({ proposeId: prop.event.id, asset: 'ETH', txHash: HASH_TEST,
+  preuve: { etat: 'PAYE', paye: '1000', confirmations: 20, bloc: 900, txHash: HASH_TEST } });
+assert.equal(pay.ok, true, pay.pourquoi || '');
+/* ⛔ le montant enregistre est celui CONSTATE sur la chaine, pas celui annonce par l appelant */
+assert.equal(pay.event.montantConstate, '1000');
+
+/* ⛔⛔ REJEU : le meme paiement ne compte qu une fois. Sans ce controle, un hash valide servirait
+ *     indefiniment — le paiement serait reel, et compte autant de fois qu on le recolle. */
+const rejeu = recordPay({ proposeId: prop.event.id, asset: 'ETH', txHash: HASH_TEST,
+  preuve: { etat: 'PAYE', paye: '1000', txHash: HASH_TEST } });
+assert.equal(rejeu.ok, false, 'le meme paiement a ete reconnu deux fois');
+assert.match(rejeu.pourquoi, /already recognized/i);
+
 const recog = feeAlreadyRecognized('brain_data_tool', 'watch_feed');
 assert.equal(recog.recognized, true);
 
@@ -84,7 +117,19 @@ assert.equal(line.bot, true);
 assert.match(line.texte, /pay recognized/i);
 assert.doesNotMatch(line.texte, /Brain signs|freestyle-sign markets/i);
 
-assert.match(phraseOptionA(), /Option A/i);
+/* ⛔⛔ CE CAS EXIGEAIT LE MOT « Option A » — un nom interne qui ne dit rien a quelqu un qui ouvre
+ *     l app. Verrouiller un libelle de conception dans une phrase d ecran empeche de la rendre
+ *     lisible, ce qui etait precisement la demande de Phil. On exige donc ce que la phrase doit
+ *     AFFIRMER, pas le vocabulaire de l equipe. */
+assert.doesNotMatch(phraseOptionA(), /Option A|x402|rail\b/i,
+  'jargon interne dans une phrase affichee : « Option A », « x402 » et « rail » ne veulent rien dire '
+  + 'pour quelqu un qui decouvre l app');
+assert.match(phraseOptionA(), /never signs a market/i,
+  'la phrase ne dit plus que le cerveau ne signe jamais un marche — c est la garantie la plus importante');
+/* ⛔ et elle doit dire que le paiement est LU sur la chaine : avant, le bouton ecrivait « paye »
+ *   sans rien verifier, et la phrase laissait croire l inverse. */
+assert.match(phraseOptionA(), /read the transaction on chain/i,
+  'la phrase ne dit plus que le paiement est verifie sur la chaine');
 assert.doesNotMatch(phraseOptionA(), /0xa6cf|Fees for Dev|≈\s*\$1|Brain signs markets/i);
 assert.equal(assertCleanCopy().ok, true);
 assert.ok(X402_FEE_MATRIX.instant_birth_0001.x402 === false);

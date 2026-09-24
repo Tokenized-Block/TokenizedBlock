@@ -1455,9 +1455,19 @@ details[open] > summary::before{transform:rotate(90deg)}
           <option value="propose_buy">Propose Buy/Sell (you still sign)</option>
         </select>
       </label>
+      <!-- ⛔⛔ CE CHAMP EST LE CORRECTIF VISIBLE. Le bouton d a cote s appelait « Mark pay
+           recognized » et ecrivait « paye » SANS RIEN DEMANDER : ni hash, ni montant, ni
+           destinataire. L application affirmait qu un paiement avait eu lieu alors qu aucun
+           centime n avait bouge, et le registre notait meme « signe par l utilisateur ».
+           ⇒ Un paiement est une TRANSACTION. On demande donc son hash, et on va LIRE la chaine :
+             qui a signe, vers qui, combien, et si elle a reussi. Sans hash, il n y a rien a
+             verifier, donc rien n est reconnu. -->
+      <label class="champ" style="margin-top:8px">Payment transaction
+        <input id="bBotTx" placeholder="0x… the hash of the transaction you sent" autocomplete="off" spellcheck="false">
+      </label>
       <div class="rang" style="margin-top:8px;flex-wrap:wrap;gap:8px">
         <button class="bouton sec" id="bBotPropose" type="button">1 · Propose</button>
-        <button class="bouton sec" id="bBotPayRecog" type="button" disabled>2 · Mark pay recognized</button>
+        <button class="bouton sec" id="bBotPayRecog" type="button" disabled>2 · Check the payment</button>
         <button class="bouton" id="bBotJournal" type="button" disabled>3 · Write journal</button>
       </div>
       <p class="note" id="bBotEtat" style="margin-top:8px">No propose yet — Option A waits for you.</p>
@@ -1768,7 +1778,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
              precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
              moment ou on en a besoin. -->
-      <p class="note" data-build="20260924-encodage-repare" hidden>Build <code>20260924-encodage-repare</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-paiement-verifie" hidden>Build <code>20260924-paiement-verifie</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2363,6 +2373,15 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
 import { encodeTransfer, envoyerDepuisWallet, envoyerLotAtomique, noterWalletUtilise } from './envoi.js';
 /* la cause d un echec de creation, en categories fermees — voir causes-echec.js */
 import { etapeEchec } from './causes-echec.js';
+/* ⛔ un paiement est une transaction : ce module va LIRE la chaine, il ne croit aucun log seul */
+import { verifierPaiement } from './verif-paiement.js';
+
+/* ⛔⛔ LE PLANCHER D UN MICRO-PAIEMENT x402, NOMME ET BORNE. Sans plancher, `montantMin` vaudrait
+ *     zero et n importe quelle transaction vers le wallet de frais passerait pour un paiement —
+ *     c est exactement ce que faisait l ancien chemin, qui n en demandait aucun.
+ *   ⚠️ 0,000001 ETH est un ordre de grandeur choisi a la main pour un micro-paiement de donnee ou
+ *     d outil, PAS un tarif mesure. Le jour ou un vrai prix existe, il vient d ici. */
+const MONTANT_MIN_X402_WEI = 1_000_000_000_000n;
 /* ⛔ LE MESSAGE VOYAGE DANS LE CALLDATA DU TRANSFERT : public, definitif, relisible sans nous. */
 import { encodeTransferAvecMemo, lireMemo, validerMemo, AVERTISSEMENT as AVERT_MEMO } from './messages.js';
 import { montantHumain, formaterUnites } from './montants.js';
@@ -13482,7 +13501,7 @@ async function ouvrirRailFiat(evt, lien, actif) {
       + ' · Brain has not signed anything.');
     try { etape('brain_bot_propose'); } catch (_) {}
   });
-  if (btnPay) btnPay.addEventListener('click', () => {
+  if (btnPay) btnPay.addEventListener('click', async () => {
     if (!lastProposeId) { setEtat('Propose first.'); return; }
     const action = (sel && sel.value) || 'watch_feed';
     /* Refuse marking pay for rails that must stay on-chain-only as if x402 replaced them */
@@ -13492,10 +13511,47 @@ async function ouvrirRailFiat(evt, lien, actif) {
     }
     const dub = assertNoDoubleChargeWithBridge({ x402Used: true, bridgeSkimUsed: false });
     if (!dub.ok) { setEtat(dub.pourquoi); return; }
-    const r = recordPay({ proposeId: lastProposeId, asset: 'ETH', bridgeSkimUsed: false });
+    /* ⛔⛔ ON VA LIRE LA CHAINE. Avant, cette ligne appelait `recordPay` avec un actif code en dur
+     *     et rien d autre — pas de hash, pas de montant, pas de destinataire — et l application
+     *     ecrivait « payé ». Aucun centime n avait bouge, et le registre notait meme
+     *     « signe par l utilisateur ». C etait, litteralement, une affirmation sans objet.
+     *   ⛔ Le verificateur controle ce qu un log ne peut pas prouver : `tx.from` (qui a SIGNE),
+     *     le statut (une tx incluse peut avoir reverte), le destinataire, le montant, et — pour
+     *     l USDC — que le mouvement vienne du VRAI contrat et non d un jeton qui s en reclame. */
+    const champTx = $('#bBotTx');
+    const tx = String((champTx && champTx.value) || '').trim();
+    if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) {
+      setEtat('Paste the hash of the transaction you sent. A payment is a transaction — '
+        + 'nothing is recognized without one.');
+      return;
+    }
+    if (!compte) {
+      setEtat('Connect your wallet: we check that YOU signed that transaction, not just that it exists.');
+      try { await connecter(); } catch (_) {}
+      if (!compte) return;
+    }
+    setEtat('Reading the chain: who signed it, to whom, how much, and whether it succeeded…');
+    let preuve;
+    try {
+      preuve = await verifierPaiement({
+        rpc, txHash: tx, payeur: compte, destinataire: FEE_WALLET,
+        actif: 'ETH', montantMin: MONTANT_MIN_X402_WEI,
+      });
+    } catch (e) {
+      preuve = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) };
+    }
+    if (preuve.etat !== 'PAYE') {
+      /* ⛔ TROIS FAMILLES DE REPONSE, ET ELLES NE SE DISENT PAS PAREIL : pas paye · pas encore sur ·
+       *   pas pu lire. Ecrire « refuse » sur une panne de noeud ferait perdre son paiement a
+       *   quelqu un qui a vraiment paye. */
+      setEtat((preuve.pourquoi || 'this payment could not be verified')
+        + (preuve.etat === 'NON_MESURE' ? ' — that is about us reading the chain, not about you.' : ''));
+      return;
+    }
+    const r = recordPay({ proposeId: lastProposeId, asset: 'ETH', bridgeSkimUsed: false, txHash: tx, preuve });
     if (!r.ok) { setEtat(r.pourquoi || 'Pay recognition refused'); return; }
-    setEtat('Pay recognized for propose ' + lastProposeId.slice(0, 10)
-      + ' · ETH/USDC sink settlement (address never shown) · ready to write journal.');
+    setEtat('Payment verified on chain — ' + preuve.confirmations + ' confirmations. '
+      + 'Ready to write the journal.');
     try { etape('brain_bot_pay_recog'); } catch (_) {}
   });
   if (btnJ) btnJ.addEventListener('click', () => {
