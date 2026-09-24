@@ -1489,7 +1489,14 @@ details[open] > summary::before{transform:rotate(90deg)}
            La reserve reste ENTIERE : x402 ne remplace ni la naissance, ni l echange, ni le skim du
            Bridge. C est le CHIFFRE qui part, pas la phrase — repeter un taux a chaque ecran le
            transforme en argument de vente alors que ce n est qu une mecanique. -->
-      <p class="note" id="bX402Note">x402 recognition: ETH/USDC micropay for data/tools only · never Instant Birth · never Buy/Sell · never a second Bridge skim.</p>
+      <!-- ⛔⛔ « x402 » RETIRE DE L ECRAN, parce que nous ne l implementons pas. Mesure du
+           2026-09-24 : aucune reponse HTTP 402 dans le serveur, aucun en-tete X-PAYMENT, aucun
+           facilitateur, aucune primitive EIP-3009, et aucune liaison paiement↔ressource
+           (`routeKey`). Ce qu on fait est plus simple et parfaitement defendable — vous payez par
+           une transaction ordinaire, et on va la LIRE sur la chaine — mais ce n est pas le
+           protocole x402, et lui emprunter son nom est une affirmation qu on ne peut pas tenir.
+           ⛔ Le nom reste dans le code (`x402-pay.js`) : c est de l interne, ca ne s affiche pas. -->
+      <p class="note" id="bX402Note">Micropayments here are for data and tools only — never the birth fee, never Buy/Sell, never a second Bridge fee. You pay with an ordinary transaction and we read the chain to check it.</p>
     </div>
 
     <div class="carte">
@@ -1815,7 +1822,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
              precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
              moment ou on en a besoin. -->
-      <p class="note" data-build="20260924-ou-meurt-la-vie" hidden>Build <code>20260924-ou-meurt-la-vie</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-reste-dans-create" hidden>Build <code>20260924-reste-dans-create</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2291,7 +2298,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              plus un prix (1 bps) pour une route qui n existe pas encore. Annoncer le tarif d un
              service non livre est une promesse, pas une information. La reserve reste ENTIERE. -->
         Atomic token↔token net via hub is <b>not live</b> — quote only, not a live atomic promise.
-        Equity leg = later. Fee settles as ETH or USDC — amount only. x402 does not replace this skim.</p>
+        Equity leg = later. Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never replace this fee.</p>
       <label class="champ">From
         <select id="brFrom"></select>
       </label>
@@ -8238,12 +8245,31 @@ let vieAuto = false;
  *     moins une etape a ete annoncee. Sans ce filtre, chaque arret defensif — il y en a a
  *     l ouverture d un profil — gonflerait le compteur d un echec qui n a jamais eu lieu. */
 let etapeVieCourante = 0;
+/* ⛔ Vrai UNIQUEMENT pendant un parcours lance depuis l onglet Create. Il commande le miroir de
+ *   progression et la navigation de fin : hors de ce cas, on ne touche ni a Create ni a l onglet. */
+let miroirVieDansCreate = false;
 function vieAutoArreter(reussi) {
   const atteinte = etapeVieCourante;
   vieAuto = false;
   majProgressionVie(null);
   if (!reussi && atteinte > 0) {
     try { etape('vie_ko_etape' + Math.min(4, atteinte)); } catch (_) {}
+    /* ⛔⛔ UN ECHEC NE DOIT PAS LAISSER QUELQU UN DEVANT UN ECRAN FIGE. C est le risque nomme par
+     *     l enquete : en gardant l utilisateur dans Create, le panneau garderait son texte de
+     *     SUCCES (« is created… next: put ETH in the pool ») pendant que la mise en vie a echoue
+     *     ailleurs, dans un panneau qu il ne voit pas. Il attendrait quelque chose qui ne viendra
+     *     jamais — un echec silencieux, donc PIRE que le defaut qu on corrige.
+     *   ⇒ On le DIT dans Create, et on le renvoie vers le profil ou le bouton manuel existe. Le
+     *     detail de l erreur y est deja ecrit ; on ne le recopie pas ici, on y mene. */
+    if (miroirVieDansCreate) {
+      miroirVieDansCreate = false;
+      const c = $('#cVieProgression');
+      if (c) {
+        c.hidden = false;
+        c.textContent = 'It stopped at step ' + Math.min(4, atteinte)
+          + ' and it is not alive yet. Nothing is lost — open its profile to see why and try again.';
+      }
+    }
   }
 }
 /** Une ligne de progression au-dessus du plan : ou on en est, et ce que le wallet va demander. */
@@ -8254,6 +8280,18 @@ function majProgressionVie(texte) {
   const m = texte ? /\bStep\s+(\d)\b/.exec(String(texte)) : null;
   if (m) etapeVieCourante = Number(m[1]);
   else if (!texte) etapeVieCourante = 0;
+  /* ⛔⛔ LA PROGRESSION EST AUSSI REFLETEE DANS CREATE, et c est la moitie qui manquait.
+   *     Mesure : `#plProgression`, `#plEtat` et `#plActions` vivent tous dans `section#v-mien`, et
+   *     le CSS fait `.volet{display:none}` — donc TOUT ce que la mise en vie raconte est invisible
+   *     depuis l onglet Create. Jusqu ici ca ne se voyait pas, parce que le parcours TELEPORTAIT
+   *     l utilisateur vers le profil. Le garder dans Create sans refleter le texte l aurait laisse
+   *     devant un ecran muet pendant quatre signatures — pire que la teleportation.
+   *   ⛔ Le miroir ne s allume QUE pendant un parcours lance depuis Create : autrement on ecrirait
+   *     dans le panneau de creation de quelqu un qui n a rien demande. */
+  if (miroirVieDansCreate) {
+    const c = $('#cVieProgression');
+    if (c) { c.hidden = !texte; c.textContent = texte || ''; }
+  }
   const el = $('#plProgression');
   if (!el) return;
   el.hidden = !texte;
@@ -9069,6 +9107,16 @@ async function lancerMarcheBlock(adr) {
      *   atteinte, et chaque block qui prend vie gonflerait le compteur des morts. Un instrument
      *   qui compte les succes comme des echecs est pire qu un instrument absent. */
     vieAutoArreter(true);
+    /* ⛔⛔ C EST ICI, ET SEULEMENT ICI, QU ON MONTRE LE PROFIL. Phil : « quand le block est sur le
+     *     marche, affiche le profil ». Avant, la navigation avait lieu AU DEBUT — on deplacait
+     *     quelqu un vers un ecran qui n avait encore rien a lui montrer, au milieu de son geste.
+     *     Maintenant le block est vivant, son marche existe : il y a une raison de l emmener. */
+    if (miroirVieDansCreate) {
+      miroirVieDansCreate = false;
+      const c = $('#cVieProgression');
+      if (c) { c.hidden = false; c.textContent = 'It is alive — opening its profile.'; }
+      try { allerA('mien'); } catch (_) { /* onglet absent : on reste, le texte suffit */ }
+    }
     majProgressionVie('Done — it is alive. Your blocks are below.');
     void peindreMesAvoirsProfil(adr);
     lancementLien = null; /* le lien de lancement est consomme : relire le profil ne doit pas rouvrir la carte */
@@ -11929,7 +11977,26 @@ async function creerBlock() {
         const goLaunch = () => {
           try {
             lancementLien = String(adresseCreee).toLowerCase();
-            void ouvrirProfil(adresseCreee, v.sym).then(() => {
+            /* ⛔⛔ ON RESTE DANS CREATE. Mesure de production : `cree` = 6, `vivant` = 2 — deux
+             *     blocks crees sur trois ne prennent jamais vie. Phil decrit le symptome sans
+             *     avoir vu les compteurs : « il t emene au profil […] et l user est perdu car il
+             *     fait 1 action et se retrouve a chercher ».
+             *     La cause tenait en une ligne : `lireProfil` appelait `allerA('mien')`, donc lire
+             *     un profil DEPLACAIT forcement quelqu un. La mise en vie a besoin des donnees du
+             *     profil — elle teleportait donc l utilisateur hors de son geste, au milieu.
+             *   ⇒ On charge les donnees SANS naviguer, on reflete la progression ici, et on
+             *     n affiche le profil qu une fois le block vivant : quand il y a enfin quelque
+             *     chose a montrer. */
+            miroirVieDansCreate = true;
+            const zoneEtat = $('#cEtat');
+            if (zoneEtat && !$('#cVieProgression')) {
+              const p = document.createElement('p');
+              p.className = 'note';
+              p.id = 'cVieProgression';
+              p.style.marginTop = '8px';
+              zoneEtat.appendChild(p);
+            }
+            void ouvrirProfil(adresseCreee, v.sym, { sansNaviguer: true }).then(() => {
               try {
                 const d = $('#plDevise');
                 if (d) {
@@ -11947,6 +12014,10 @@ async function creerBlock() {
               } catch (_) {}
             });
           } catch (_) {
+            /* ⛔ LE REPLI NAVIGUE, LUI, ET C EST VOULU : si le parcours automatique n a pas pu
+             *   demarrer, laisser quelqu un dans Create devant un ecran qui ne bougera plus serait
+             *   pire que de l emmener au profil, ou le bouton manuel existe. */
+            miroirVieDansCreate = false;
             try { lancementLien = String(adresseCreee).toLowerCase(); void ouvrirProfil(adresseCreee, v.sym); } catch (__) {}
           }
         };
