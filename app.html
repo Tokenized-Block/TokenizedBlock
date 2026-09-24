@@ -1761,7 +1761,14 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260924-onglet-blocks" hidden>Build <code>20260924-onglet-blocks</code> · Contract labels say what they do, not our internal names.</p>
+      <!-- ⛔⛔ UN REPERE QUI VAUT PAREIL DANS DEUX ETATS NE MESURE RIEN. Le 2026-09-24, j ai livre
+           une version corrompue puis sa reparation SOUS LE MEME `data-build`. Ma sonde de
+           deploiement a donc repondu « build servi = le bon » en regardant la cassee, et j ai cru
+           la production reparee alors qu elle ne l etait pas.
+           ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
+             precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
+             moment ou on en a besoin. -->
+      <p class="note" data-build="20260924-encodage-repare" hidden>Build <code>20260924-encodage-repare</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
