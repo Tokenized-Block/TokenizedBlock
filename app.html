@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260924-post-sur-chaine" hidden>Build <code>20260924-post-sur-chaine</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-post-deux-boutons" hidden>Build <code>20260924-post-deux-boutons</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1911,7 +1911,7 @@ details[open] > summary::before{transform:rotate(90deg)}
                ⛔ LA RESERVE VOYAGE AVEC LE LIEN : on n a jamais ouvert ce post. Rien ici ne
                  verifie qu il existe, ni qu il appartient a celui qui a grave le block. Montrer
                  le lien sans le dire fabriquerait une association qu on n a pas mesuree. -->
-          <p class="note" id="pTweet" hidden></p>
+          <div id="pTweet" hidden></div>
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
       </div>
@@ -2871,6 +2871,18 @@ function faceConnue(adr) {
  *   condamnerait l affichage du post pour toute la session.
  * ⛔ Ce qui revient est REVALIDE par `noterFace` avant d etre garde : une reponse deformee ne doit
  *   pas entrer dans le cache par la porte de derriere. */
+/* ⛔ UN SEUL CHEMIN POUR « graver un post », appele de deux endroits. Il existait deja, cable en dur
+ *   dans le gestionnaire du bouton `#tkGo` ; le recopier pour le nouveau bouton aurait cree un
+ *   jumeau plus faible qui se serait desynchronise au premier changement de champ
+ *   (`canonical-helper-weaker-copy`). Extrait, pas duplique. */
+function allerTokeniserUnPost() {
+  allerA('creer');
+  const d = $('#cTweetDetail'), c = $('#cTweetOui'), l = $('#cTweetLien');
+  if (d) d.open = true;
+  if (c && !c.checked) { c.checked = true; appliquerTweet(); }
+  if (l) { try { l.focus(); } catch (_) { /* focus refuse sur certains navigateurs */ } }
+}
+
 async function faceDeLaChaine(adr) {
   const a = String(adr || '').toLowerCase();
   if (!ADRESSE.test(a)) return null;
@@ -5791,19 +5803,52 @@ async function lireProfil(adr, sym, perime, opts) {
         if (surChaine) f = surChaine;
       }
       const lien = f && typeof f.tweet === 'string' ? f.tweet : null;
-      if (lien && /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(lien)) {
+      const valide = !!lien && /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(lien);
+      /* ⛔⛔ UNE PHRASE EST DEVENUE DEUX BOUTONS (Phil, 2026-09-24 : « reecris mieux, glow up le lien
+       *     cliquable, un bouton créer le post tokenizé et un bouton voir celui du block »).
+       *     L ancienne version noyait le lien au milieu de trente-cinq mots de reserve : la seule
+       *     chose a FAIRE — l ouvrir — avait exactement le meme poids visuel que l avertissement.
+       *   ⛔ LA RESERVE N EST PAS SUPPRIMEE, ELLE EST DEPLACEE SOUS LES BOUTONS et raccourcie. Elle
+       *     dit toujours les deux choses qui comptent et qu on ne peut pas prouver : on n a jamais
+       *     ouvert ce post, et rien n etablit a qui il appartient. Raccourcir n est pas adoucir. */
+      const boite = document.createElement('div');
+      boite.className = 'partage';
+      const titre = document.createElement('b');
+      titre.style.flexBasis = '100%';
+      titre.textContent = valide ? 'Engraved post' : 'No post engraved on this block';
+      boite.appendChild(titre);
+      if (valide) {
         const a = document.createElement('a');
         a.href = lien;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
-        a.className = 'lienLearn';
-        a.textContent = 'Engraved post on X';
-        elTweet.appendChild(a);
-        elTweet.appendChild(document.createTextNode(
-          ' — engraved with this block, and it cannot be changed. We never opened it: nothing here '
-          + 'checks that the post exists or that it belongs to whoever made this block.'));
-        elTweet.hidden = false;
+        a.textContent = 'See the post on X';
+        boite.appendChild(a);
       }
+      /* ⛔ Le bouton de creation existe dans les DEUX cas : sur un block sans post, c est la reponse
+       *   a « et le mien ? » ; sur un block qui en a un, c est la suite naturelle. */
+      const bCreer = document.createElement('button');
+      bCreer.type = 'button';
+      bCreer.textContent = 'Tokenize a post';
+      bCreer.addEventListener('click', () => {
+        try { etape('tokenx_depuis_profil'); } catch (_) {}
+        allerTokeniserUnPost();
+      });
+      boite.appendChild(bCreer);
+      const note = document.createElement('span');
+      note.className = 'note';
+      note.style.flexBasis = '100%';
+      note.style.margin = '0';
+      note.textContent = valide
+        ? 'Engraved with this block — it cannot be changed. We have not opened it: nothing here '
+          + 'checks that the post exists, or who it belongs to.'
+        /* ⛔ VRAI ET UTILE : un lien ne se grave qu A LA CREATION. Aucun chemin d ecriture du
+         *   contractURI n existe apres coup — verifie dans le depot. Le dire evite a quelqu un de
+         *   chercher un bouton « ajouter un post » qui ne peut pas exister. */
+        : 'A post link can only be engraved when a block is created — it cannot be added later.';
+      boite.appendChild(note);
+      elTweet.appendChild(boite);
+      elTweet.hidden = false;
     } catch (_) { /* ⛔ une face illisible ne montre RIEN, elle n invente pas de lien */ }
   }
 
@@ -10168,13 +10213,7 @@ for (const id of ['#cTweetOui', '#cTweetLien']) {
  *    bouton ne fait rien, et rien ne le dirait. */
 {
   const go = $('#tkGo');
-  if (go) go.addEventListener('click', () => {
-    allerA('creer');
-    const d = $('#cTweetDetail'), c = $('#cTweetOui'), l = $('#cTweetLien');
-    if (d) d.open = true;
-    if (c && !c.checked) { c.checked = true; appliquerTweet(); }
-    if (l) { try { l.focus(); } catch (_) { /* focus refuse sur certains navigateurs */ } }
-  });
+  if (go) go.addEventListener('click', allerTokeniserUnPost);
 }
 {
   const f = $('#cPhotoFichier');

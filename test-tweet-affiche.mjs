@@ -24,9 +24,17 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 let n = 0;
 const v = (nom, fn) => { fn(); n++; };
 
-v('la page porte l element qui recoit le lien', () => {
-  assert.match(html, /<p class="note" id="pTweet" hidden><\/p>/,
-    'l element #pTweet a disparu : le lien grave redeviendrait invisible');
+v('la page porte l element qui recoit le lien, et il demarre CACHE', () => {
+  /* ⛔⛔ CE CAS EPINGLAIT LA BALISE EXACTE (`<p class="note" …>`). Le jour ou l element a du porter
+   *     des boutons, il est devenu un `<div>` — et le test a accuse sa DISPARITION alors qu il
+   *     etait la. Une garde qui verifie la forme plutot que la propriete casse a chaque evolution
+   *     legitime, et on finit par la desactiver. On verifie donc ce qui COMPTE : l element existe,
+   *     et il demarre cache — sinon un reste du block precedent resterait a l ecran. */
+  assert.match(html, /id="pTweet"/, 'l element #pTweet a disparu : le lien grave redeviendrait invisible');
+  const i = html.indexOf('id="pTweet"');
+  const balise = html.slice(html.lastIndexOf('<', i), html.indexOf('>', i) + 1);
+  assert.match(balise, /\bhidden\b/,
+    'l element #pTweet ne demarre plus cache : le post du block precedent resterait visible');
 });
 
 const d = html.indexOf("const elTweet = $('#pTweet');");
@@ -74,9 +82,40 @@ v('le lien s ouvre sans donner la main a la page cible', () => {
 });
 
 v('la reserve est affichee AVEC le lien, jamais separee', () => {
-  assert.match(src, /We never opened it/,
-    'la reserve a disparu : montrer le lien deviendrait une affirmation d appartenance');
+  /* ⛔⛔ CE CAS EPINGLAIT LA PHRASE EXACTE « We never opened it ». Reformuler la reserve — la
+   *     raccourcir, la deplacer sous les boutons — le faisait rougir alors que la reserve etait
+   *     toujours la, et toujours vraie. Un test qui verrouille des MOTS empeche d ameliorer un
+   *     texte ; il doit verrouiller ce que le texte AFFIRME.
+   *   ⇒ On exige les trois choses qu on ne peut pas prouver et qu il faut donc dire :
+   *     on n a pas ouvert le post · on n etablit pas a qui il appartient · la gravure est definitive. */
+  assert.match(src, /not opened it|never opened it/i,
+    'la reserve « on n a pas ouvert ce post » a disparu : le montrer deviendrait un aval');
+  assert.match(src, /belongs to/i,
+    'la reserve sur l APPARTENANCE a disparu : afficher le lien fabriquerait une association '
+    + 'qu on n a jamais mesuree');
   assert.match(src, /cannot be changed/, 'le caractere definitif de la gravure n est plus dit');
+});
+
+v('⛔ les deux boutons existent, et celui qui cree mene au bon champ', () => {
+  /* Phil, 2026-09-24 : « un bouton creer le post tokenize et un bouton voir celui du block ».
+   * ⛔ Le bouton de creation reutilise le chemin DEJA cable pour `#tkGo` : un jumeau recopie se
+   *   serait desynchronise au premier changement de champ (`canonical-helper-weaker-copy`). */
+  assert.match(src, /See the post on X/, 'le bouton qui ouvre le post a disparu');
+  assert.match(src, /Tokenize a post/, 'le bouton qui lance la creation a disparu');
+  assert.match(src, /allerTokeniserUnPost\(\)/,
+    'le bouton de creation ne passe plus par le chemin commun : il pourrait mener nulle part');
+  assert.match(html, /function allerTokeniserUnPost\(\)[\s\S]{0,400}cTweetLien/,
+    'le chemin commun ne vise plus le champ du lien dans Create');
+});
+
+v('sans post, on le DIT et on explique que ca ne se rattrape pas', () => {
+  /* ⛔ Vrai et verifie dans le depot : aucun chemin d ecriture du contractURI n existe apres la
+   *   creation. Le dire evite a quelqu un de chercher un bouton « ajouter un post » qui ne peut
+   *   pas exister — et l absence de ce bouton cesse de ressembler a un oubli. */
+  assert.match(src, /No post engraved on this block/,
+    'un block sans post n affiche plus rien : l utilisateur ne sait pas si on a regarde');
+  assert.match(src, /can only be engraved when a block is created/i,
+    'on ne dit plus qu un post ne peut pas etre ajoute apres coup');
 });
 
 v('une face illisible ne montre RIEN', () => {
@@ -111,5 +150,5 @@ v('la distinction « nos blocks » survit dans les DONNEES', () => {
   assert.match(html, /classList\.add\('nous'\)/, 'la classe CSS qui met en avant a disparu');
 });
 
-assert.equal(n, 9, 'compte de cas inattendu : ' + n);
+assert.equal(n, 11, 'compte de cas inattendu : ' + n);
 console.log('ok tweet-affiche — ' + n + ' cas : le post grave est montre, les carres bleus sont partis');
