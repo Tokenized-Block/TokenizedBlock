@@ -689,6 +689,8 @@ const ETAPES_ENTONNOIR = [
   /* bridge et frais */
   'bridge_create', 'bridge_confirm_stub', 'bridge_fund_wallet',
   'bridge_fee_sign', 'bridge_fee_ok', 'bridge_fee_refuse', 'bridge_fee_fail',
+  /* sortie d un block par sa propre pool — les refus AVANT signature, pour savoir ou ca bloque */
+  'bridge_swap_sans_block', 'bridge_swap_montant', 'bridge_swap_ko', 'bridge_swap_approbations',
   'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
   /* rail fiat -> Base */
   'onramp_session_ok', 'onramp_session_repli',

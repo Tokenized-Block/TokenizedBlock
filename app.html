@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260924-bridge-honnete" hidden>Build <code>20260924-bridge-honnete</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-sortie-reelle" hidden>Build <code>20260924-sortie-reelle</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2410,7 +2410,7 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 /* tip 20260922-prepaye-inscrire-dust */
-import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS, HUB_SWAP_LIVE } from './bridge.js';
+import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
@@ -13104,53 +13104,95 @@ function basculerBridgeMode(mode) {
     const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
     const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
     const amount = ($('#brAmount') && $('#brAmount').value) || 0;
+    /* le block a sortir : c est LUI qu on vend par sa propre pool, pas une devise generique */
+    const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
     const q = quoteBridge({ amount, fromSym, toSym });
     const etat = $('#brEtat');
     const setEtat = (t) => { if (etat) { etat.dataset.locked = '1'; etat.textContent = t; } };
-    const plan = planBridgeFeeSkim({ amount, fromSym, toSym });
-    if (!plan.ok || !plan.live) {
-      etape('bridge_confirm_stub');
-      const stub = confirmerBridgeStub(q);
-      setEtat((plan.pourquoi || stub.pourquoi)
-        + (q.ok ? (' · fee ' + formatBridgeAmount(q.fee, q.settleSym) + ' · net ' + formatBridgeAmount(q.net, toSym)) : ''));
-      return;
-    }
+    /* ⛔⛔ L ANCIEN GARDE-FOU EST RETIRE, ET IL FAUT DIRE POURQUOI PLUTOT QUE DE LE LAISSER TRAINER.
+     *     `planBridgeFeeSkim({ fromSym })` decidait si le FRAIS pouvait partir selon la devise
+     *     « From » — une question qui n avait de sens que tant que ce bouton envoyait un frais tout
+     *     seul. Desormais il vend un BLOCK par sa propre pool : la devise « From » ne commande plus
+     *     rien, et ce garde-fou aurait refuse toute sortie des qu un utilisateur laissait autre
+     *     chose que ETH/USDC dans un selecteur qui ne sert plus a ca. Une garde survivante du
+     *     chemin qu elle protegeait devient un refus arbitraire. */
     if (!compte) {
       etape('bridge_fee_need_wallet');
-      setEtat('Connect your wallet to sign the 0.01% Bridge fee.');
+      setEtat('Connect your wallet to move a block out.');
       try { await connecter(); } catch (_) {}
       if (!compte) return;
     }
     if (CHAINE !== 8453) {
       etape('bridge_fee_wrong_chain');
-      setEtat('Bridge fee skim runs on Base mainnet — switch network in your wallet.');
+      setEtat('Moving a block out runs on Base mainnet — switch network in your wallet.');
       return;
     }
-    /* ⛔⛔ ON NE PREND PAS D ARGENT POUR UN ECHANGE QUI N AURA PAS LIEU.
-     *     Mesure du 2026-09-24 : ce gestionnaire ne construit QU UNE transaction — le frais — et il
-     *     n existe aucun calldata de swap dans tout le chemin. L utilisateur signait un frais, ne
-     *     recevait rien, et lisait « net swap is not live yet » APRES coup.
-     *   ⇒ La reserve remonte AVANT la signature et devient un REFUS. Une divulgation qui arrive
-     *     une fois l argent parti n est pas une divulgation, c est une excuse. */
-    if (!HUB_SWAP_LIVE) {
-      etape('bridge_fee_plan_ko');
-      setEtat('No swap would happen, so no fee is taken. The hub that swaps one token for another '
-        + 'is not running yet — until it is, this button cannot charge you. Nothing was sent.');
+    /* ⛔⛔ L ECHANGE PASSE PAR LA POOL QUI EXISTE DEJA — Phil, 2026-09-24 : « tu charges avec les
+     *     relais existants d echange de pool ; nous on prend le frais sur le fait que tu uses les
+     *     blocks en dehors de l app ».
+     *     Il n y avait donc RIEN a construire. `planEchange` vend deja un block par sa propre pool
+     *     Uniswap v4 et preleve le frais d interface vers le wallet de frais DANS LA MEME
+     *     TRANSACTION. Le defaut n etait pas qu il manquait un hub : c est que ce bouton ne s en
+     *     servait pas. Il fabriquait un transfert de frais tout seul, et rien d autre.
+     *
+     *   ⛔ LE FRAIS NE PEUT PLUS PARTIR SEUL, par construction : il n existe plus de chemin ou il
+     *     parte seul. Il est DANS le swap, ou il n est pas. C est ce qui remplace la garde
+     *     precedente — une garde qui bloquait tout valait mieux que facturer dans le vide, mais
+     *     faire l echange vaut mieux que bloquer.
+     *
+     *   ⚠️ CE QUE CE CHEMIN NE COUVRE PAS : le From/To generique entre deux devises. Seule la
+     *     SORTIE d un block par son propre marche est cablee ici, parce que c est celle-la que
+     *     Phil decrit et la seule dont le code existe et soit prouve. */
+    if (!/^0x[0-9a-fA-F]{40}$/.test(String(hub || ''))) {
+      etape('bridge_swap_sans_block');
+      setEtat('Pick one of your blocks above first — the Bridge moves a block out through its own '
+        + 'market. Nothing was sent.');
       return;
     }
-    const call = buildBridgeFeeCall({
-      plan, feeWallet: FEE_WALLET, usdc: USDC_BASE, encodeTransfer,
-    });
-    if (!call.ok) {
-      etape('bridge_fee_plan_ko');
-      setEtat(call.pourquoi || 'Fee plan failed — nothing sent');
+    let unites = 0n;
+    try { unites = unitsFromHuman(amount, 18); } catch (_) { unites = 0n; }
+    if (unites <= 0n) {
+      etape('bridge_swap_montant');
+      setEtat('Enter how many blocks you want to move out. Nothing was sent.');
       return;
     }
+    setEtat('Reading its market and asking the chain for a real price…');
+    let sortie;
+    try {
+      sortie = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites });
+    } catch (err) {
+      /* ⛔ une panne de lecture n est pas « ce block n a pas de marche » : on ne conclut pas a sa place */
+      sortie = { etat: 'NON_MESURE', pourquoi: 'its market could not be read: ' + String((err && err.message) || err).slice(0, 120) };
+    }
+    if (sortie.etat !== 'PRET' || !sortie.tx) {
+      etape('bridge_swap_ko');
+      setEtat((sortie.pourquoi || 'its market could not be read') + ' — nothing was sent.');
+      return;
+    }
+    /* ⛔ Les approbations manquantes ne sont pas un detail : signer sans elles echouerait SUR LA
+     *   CHAINE, apres avoir demande un geste et brule du gas. On le dit AVANT, et on renvoie vers
+     *   l ecran qui sait les enchainer plutot que d en refaire une version plus faible ici. */
+    if (Array.isArray(sortie.etapes) && sortie.etapes.length) {
+      etape('bridge_swap_approbations');
+      setEtat('This exit needs ' + sortie.etapes.length + ' approval step(s) first. Open the block '
+        + 'and use Sell there — it walks through them. Nothing was sent.');
+      return;
+    }
+    const sortieResume = sortie.resume || {};
+    const call = { ok: true, to: sortie.tx.to, data: sortie.tx.data, value: sortie.tx.value };
     etape('bridge_fee_sign');
     /* ⛔ « still needs Phil » RETIRE : ce texte s affiche au moment ou l utilisateur ouvre son
      *    wallet pour signer. Lui repondre par le prenom de quelqu un qu il ne connait pas, juste
      *    avant une signature, est le pire endroit possible pour du jargon interne. */
-    setEtat('Open your wallet — sign the 0.01% fee only. Net swap via hub is not live yet.');
+    /* ⛔⛔ CE TEXTE EST LE DERNIER QUE QUELQU UN LIT AVANT DE SIGNER. Il disait « sign the 0.01%
+     *     fee only » pour une transaction qui n echangeait rien — la phrase etait exacte et le
+     *     geste etait vide. Maintenant elle decrit l echange REEL, avec les chiffres que la chaine
+     *     vient de rendre, pas ceux d une estimation. */
+    setEtat('Open your wallet — this sells ' + formaterUnites(sortieResume.paye || 0n, 18)
+      + ' blocks through its own market. You receive at least '
+      + formaterUnites(sortieResume.recoitAuMoins || 0n, 18) + ' '
+      + (sortieResume.recoitDevise === 'pair' ? 'in the paired asset' : (sortieResume.recoitDevise || 'ETH'))
+      + '. The fee is taken inside the same transaction.');
     conf.disabled = true;
     try {
       const eth = window.ethereum;
@@ -13161,15 +13203,15 @@ function basculerBridgeMode(mode) {
       });
       if (r.etat === 'CONFIRME' || r.etat === 'ENVOYE' || r.etat === 'EN_ATTENTE') {
         etape('bridge_fee_ok');
-        const feeTxt = formatBridgeAmount(q.fee, plan.asset);
-        setEtat('Bridge fee confirmed (' + feeTxt + ')'
+        setEtat('Sent — your blocks left through their own market'
           + (r.hash ? (' · ' + String(r.hash).slice(0, 10) + '…') : '')
           /* ⛔ « still Phil-blocked (1 bps router GO) » RETIRE : ce texte s affiche JUSTE APRES que
            *    l utilisateur a paye son frais. Lui repondre par un prenom, un nom de contrat
            *    interne et un tarif pour une route qui n existe pas, c est le laisser croire qu il
            *    lui manque un savoir au moment exact ou il attend une confirmation.
-           *    ⛔ LA RESERVE RESTE, en mots qui se comprennent sans nous connaitre. */
-          + ' · net swap via hub is not live yet.');
+           *    ⛔ ET LA RESERVE N A PLUS LIEU D ETRE : l echange a vraiment eu lieu, par la pool du
+           *       block. On ne colle plus « not live yet » sous une transaction qui a abouti. */
+          + '.');
       } else if (r.etat === 'REFUSE_PAR_UTILISATEUR') {
         etape('bridge_fee_refuse');
         setEtat(r.pourquoi || 'You declined — nothing sent');
