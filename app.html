@@ -1815,7 +1815,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
              precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
              moment ou on en a besoin. -->
-      <p class="note" data-build="20260924-bank-plan" hidden>Build <code>20260924-bank-plan</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-ou-meurt-la-vie" hidden>Build <code>20260924-ou-meurt-la-vie</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8219,9 +8219,41 @@ let planCourant = null, lancementEnCours = false;
  * ⛔ FAIL-CLOSED : au premier refus, au premier echec, a la premiere lecture ratee, le mode auto
  *    s ARRETE et le bouton manuel reste la. Il ne relance jamais une etape qui a echoue. */
 let vieAuto = false;
-function vieAutoArreter() { vieAuto = false; majProgressionVie(null); }
+/* ⛔⛔ OU MEURT LA MISE EN VIE ? MESURE DU 2026-09-24, ET C EST LE TROU LE PLUS CHER DE L APP.
+ *     L entonnoir de production dit `cree` = 6 et `vivant` = 2 : deux blocks crees sur trois ne
+ *     prennent jamais vie. Et `vie_echec` n apparait meme pas dans les totaux — les quatre perdus
+ *     n ont laisse AUCUNE trace. Sonde : 21 points d arret dans cette chaine, DEUX seulement
+ *     comptent quelque chose (dont la reussite). Dix-neuf portes de sortie muettes.
+ *
+ *   ⛔ ON N INSTRUMENTE PAS LES 19 SITES UN PAR UN : dix-neuf edits, dix-neuf occasions d en
+ *     oublier un, et le premier oubli serait invisible. Ils passent TOUS par `vieAutoArreter()` —
+ *     c est donc la, dans l entonnoir, que la mesure se pose. Un seul endroit a maintenir.
+ *
+ *   ⛔ CE QU ON COMPTE EST L ETAPE ATTEINTE, pas une cause. Savoir qu un parcours meurt a l etape 2
+ *     (les approbations) plutot qu a l etape 1 (la lecture du marche) change ce qu il faut
+ *     reparer ; une cause libre aurait une cardinalite non bornee et serait rejetee en silence par
+ *     la liste blanche du serveur — le defaut qu on vient de corriger ailleurs.
+ *
+ *   ⛔ ET ON NE COMPTE QUE SI LE PARCOURS AVAIT COMMENCE : `etapeVieCourante > 0` veut dire qu au
+ *     moins une etape a ete annoncee. Sans ce filtre, chaque arret defensif — il y en a a
+ *     l ouverture d un profil — gonflerait le compteur d un echec qui n a jamais eu lieu. */
+let etapeVieCourante = 0;
+function vieAutoArreter(reussi) {
+  const atteinte = etapeVieCourante;
+  vieAuto = false;
+  majProgressionVie(null);
+  if (!reussi && atteinte > 0) {
+    try { etape('vie_ko_etape' + Math.min(4, atteinte)); } catch (_) {}
+  }
+}
 /** Une ligne de progression au-dessus du plan : ou on en est, et ce que le wallet va demander. */
 function majProgressionVie(texte) {
+  /* ⛔ L ETAPE SE LIT DANS LE TEXTE DEJA AFFICHE, plutot que d etre passee en plus a chaque appel :
+   *   sept endroits annoncent « Step N », et leur demander un argument de plus aurait recree le
+   *   probleme des dix-neuf sites. `null` remet a zero — la fin du parcours n est pas une etape. */
+  const m = texte ? /\bStep\s+(\d)\b/.exec(String(texte)) : null;
+  if (m) etapeVieCourante = Number(m[1]);
+  else if (!texte) etapeVieCourante = 0;
   const el = $('#plProgression');
   if (!el) return;
   el.hidden = !texte;
@@ -9033,7 +9065,10 @@ async function lancerMarcheBlock(adr) {
       + (atomiqueOk ? '(atomic) ' : '') + lien + blocPartage(adr, symProfil);
     $('#plActions').innerHTML = '';
     planCourant = null;
-    vieAutoArreter();
+    /* ⛔ `true` = REUSSITE : sans ça, l arret de fin de parcours compterait un echec a l etape
+     *   atteinte, et chaque block qui prend vie gonflerait le compteur des morts. Un instrument
+     *   qui compte les succes comme des echecs est pire qu un instrument absent. */
+    vieAutoArreter(true);
     majProgressionVie('Done — it is alive. Your blocks are below.');
     void peindreMesAvoirsProfil(adr);
     lancementLien = null; /* le lien de lancement est consomme : relire le profil ne doit pas rouvrir la carte */

@@ -696,6 +696,11 @@ const ETAPES_ENTONNOIR = [
   'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
   /* rail fiat -> Base */
   'onramp_session_ok', 'onramp_session_repli',
+  /* ⛔⛔ OU MEURT LA MISE EN VIE. `cree`=6 / `vivant`=2 en production, et `vie_echec` ABSENT des
+   *     totaux : les quatre blocks perdus sortaient par 19 portes qui ne comptaient rien. On compte
+   *     desormais l ETAPE ATTEINTE — mourir a l etape 2 (les approbations) n appelle pas la meme
+   *     reparation que mourir a l etape 1 (la lecture du marche). Cardinalite fermee : 4 valeurs. */
+  'vie_ko_etape1', 'vie_ko_etape2', 'vie_ko_etape3', 'vie_ko_etape4',
   /* brain */
   'brain_bot_propose', 'brain_bot_journal', 'brain_bot_pay_recog',
 ];
