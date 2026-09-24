@@ -31,11 +31,36 @@ v('la page porte l element qui recoit le lien', () => {
 
 const d = html.indexOf("const elTweet = $('#pTweet');");
 assert.ok(d > 0, 'le rendu du post grave est introuvable');
-const src = html.slice(d, d + 1800);
+/* ⛔⛔ FENETRE BORNEE PAR LE CODE, PAS PAR UN NOMBRE. Elle valait 1 800 caracteres en dur ; le jour
+ *     ou le rendu a gagne un commentaire, `catch (_)` est tombe DEHORS et le test a accuse son
+ *     absence — une garde qui rate sa cible par cadrage, pas par defaut du code. Un nombre choisi
+ *     a la main se perime au premier ajout. On s arrete a la fin reelle du bloc. */
+const finBloc = html.indexOf('await dormir(', d);
+const src = html.slice(d, finBloc > d ? finBloc : d + 4000);
+assert.ok(src.length > 800 && src.length < 8000,
+  'extraction du rendu suspecte (' + src.length + ' car.) : le test lirait autre chose');
 
 v('le lien est relu depuis la FACE, pas reconstruit', () => {
   assert.match(src, /faceConnue\(adr\)/, 'le rendu ne lit plus la face gravee');
   assert.match(src, /f\.tweet/, 'le champ grave n est plus lu');
+});
+
+v('⛔ quand le cache local est muet, on DEMANDE A LA CHAINE', () => {
+  /* ⛔⛔ LE DEFAUT QUE CE CAS EMPECHE DE REVENIR, mesure le 2026-09-24. Le rendu ne lisait que
+   *     `faceConnue()` — la memoire de CE navigateur, remplie uniquement quand c est lui qui a cree
+   *     le block. Ouvert depuis une autre machine, ou apres un vidage, un post pourtant grave
+   *     devenait invisible. Verifie sur un block reel : `/api/face/0xb2…a042` rend bien son post,
+   *     et l ecran n affichait rien.
+   *   ⛔ ET LE PIRE ETAIT LA PHRASE D A COTE : « it cannot be changed » est une affirmation sur la
+   *     CHAINE, appuyee sur une valeur lue dans un cache local. On ne peut pas promettre
+   *     l immuabilite a partir d une source mutable. */
+  assert.match(src, /faceDeLaChaine\(adr\)/,
+    'le rendu ne consulte plus la chaine quand le cache est muet : un post grave sur une autre '
+    + 'machine redevient invisible, sous une phrase qui promet qu il ne peut pas changer');
+  assert.match(html, /async function faceDeLaChaine\(/,
+    'la lecture on-chain de la face a disparu');
+  assert.match(html, /'\/api\/face\/'/,
+    'plus aucune lecture de la route qui resout la face sur la chaine');
 });
 
 v('le lien est REVALIDE a la forme canonique avant de devenir cliquable', () => {
@@ -86,5 +111,5 @@ v('la distinction « nos blocks » survit dans les DONNEES', () => {
   assert.match(html, /classList\.add\('nous'\)/, 'la classe CSS qui met en avant a disparu');
 });
 
-assert.equal(n, 8, 'compte de cas inattendu : ' + n);
+assert.equal(n, 9, 'compte de cas inattendu : ' + n);
 console.log('ok tweet-affiche — ' + n + ' cas : le post grave est montre, les carres bleus sont partis');

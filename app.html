@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260924-sortie-reelle" hidden>Build <code>20260924-sortie-reelle</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-post-sur-chaine" hidden>Build <code>20260924-post-sur-chaine</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -1845,7 +1845,7 @@ details[open] > summary::before{transform:rotate(90deg)}
   </section>
 
   <!-- ══ MY BLOCK — EN DERNIER, comme demande ═══════════════════════════════════════════════ -->
-  <section class="volet" id="v-mien" aria-label="My block">
+  <section class="volet" id="v-mien" aria-label="Blocks">
     <!-- ⛔ LE PROFIL NE DEMANDE PAS DE WALLET. Il se lit depuis la chaine pour n importe quel block,
          et s ouvre par un lien (`?block=…&chain=…`) : un profil qu on ne peut pas partager n est pas
          un profil. Seule la tuile « You hold » a besoin d une adresse connectee. -->
@@ -2173,7 +2173,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
 
     <div class="carte">
-      <p class="titre">My block</p>
+      <p class="titre">Blocks</p>
       <p class="sous">Everything about you: the blocks you made, their life, and what you can do.</p>
       <button class="bouton" id="bConnecter">Connect wallet</button>
       <p class="note" id="mienNote">Nothing is stored here. This page never holds a key — your
@@ -2863,6 +2863,30 @@ function faceConnue(adr) {
   } catch (e) { /* stockage illisible : on retombe sur l adresse */ }
   return null;
 }
+/* ⛔⛔ LA FACE TELLE QUE LA CHAINE LA PORTE, pas telle que ce navigateur s en souvient.
+ *     `/api/face/<adr>` lit les metadonnees du contrat cote serveur. C est la seule source qui
+ *     autorise a ecrire « gravé, et ça ne peut plus changer » — un cache local ne le prouve pas.
+ * ⛔ TROIS ETATS, JAMAIS DEUX : face lue · pas de face · LECTURE RATEE. On rend `null` dans les
+ *   deux derniers cas mais on ne MEMORISE rien sur un echec : sinon une minute de noeud sature
+ *   condamnerait l affichage du post pour toute la session.
+ * ⛔ Ce qui revient est REVALIDE par `noterFace` avant d etre garde : une reponse deformee ne doit
+ *   pas entrer dans le cache par la porte de derriere. */
+async function faceDeLaChaine(adr) {
+  const a = String(adr || '').toLowerCase();
+  if (!ADRESSE.test(a)) return null;
+  try {
+    const r = await fetch('/api/face/' + a, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || j.ok !== true || !j.face) return null;
+    noterFace(a, j.face); /* revalide ; un refus n ecrit rien */
+    return faceConnue(a);
+  } catch (_) {
+    /* ⛔ une panne reseau n est pas « ce block n a pas de post » : on ne conclut rien et on ne cache rien */
+    return null;
+  }
+}
+
 function noterFace(adr, face) {
   const v = validerFace(face);
   if (v.etat !== 'OK') return false;
@@ -3982,6 +4006,57 @@ document.addEventListener('click', (e) => {
  *    l emetteur n appartient a personne tant qu on ne l a pas lue. Les compter comme « pas les
  *    tiennes » ferait disparaitre les blocks de quelqu un a cause de notre reseau.
  */
+/* ⛔⛔ LES POSTS GRAVES, SUR LA FICHE DE CHAQUE BLOCK (Phil, 2026-09-24 : « ajoute le post sur la
+ *     fiche du block dans l onglet blocks »).
+ *     Mesure qui a rendu ca possible : `/api/face/<adr>` rend bien le champ `tweet` — verifie sur
+ *     un block reel qui en porte un. Ce qui manquait n etait pas la donnee, c etait de la demander.
+ *
+ * ⛔ TROIS ETATS, ET DEUX D ENTRE EUX N AFFICHENT RIEN : ce block porte un post · il n en porte pas ·
+ *   on n a pas pu lire. Ecrire « aucun post » sur une lecture ratee serait une affirmation sur la
+ *   chaine appuyee sur un echec reseau. Le silence est la seule reponse honnete pour les deux
+ *   derniers cas — et c est pour ca qu on ne met pas de ligne vide.
+ *
+ * ⛔ LA RESERVE VOYAGE AVEC LE LIEN, toujours : on n ouvre jamais ce post, rien ne prouve qu il
+ *   existe ni qu il appartient a qui a grave le block. Afficher le lien sans le dire fabriquerait
+ *   une association qu on n a pas mesuree.
+ *
+ * ⛔ SEQUENTIEL ET BORNE : douze lectures d un coup se font refuser par le noeud (« over rate
+ *   limit » m a deja rendu 7 reponses vides d affilee sur une autre route). Une par une, et on
+ *   s arrete a ce que la liste affiche. */
+async function peindrePostsDesBlocks(jetons) {
+  const boite = $('#mesPosts');
+  if (!boite || !Array.isArray(jetons) || !jetons.length) return;
+  const lignes = [];
+  for (const j of jetons.slice(0, 12)) {
+    let f = faceConnue(j);
+    if (!f || typeof f.tweet !== 'string') f = await faceDeLaChaine(j);
+    /* ⛔ le DOM peut avoir ete repeint entre deux lectures (changement de compte, de reseau) :
+     *   on abandonne plutot que d ecrire dans un ecran qui n est plus celui qu on remplissait. */
+    if ($('#mesPosts') !== boite) return;
+    const lien = f && typeof f.tweet === 'string' ? f.tweet : null;
+    if (!lien || !/^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(lien)) continue;
+    const a = document.createElement('a');
+    a.href = lien;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'post on X';
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.appendChild(document.createTextNode(String(j).slice(0, 6) + '…' + String(j).slice(-4) + ' — '));
+    p.appendChild(a);
+    p.appendChild(document.createTextNode(' engraved with it, and it cannot be changed.'));
+    lignes.push(p);
+  }
+  if (!lignes.length) return;
+  const titre = document.createElement('p');
+  titre.className = 'note';
+  titre.innerHTML = '<b>Engraved posts</b> — we never opened them: nothing here checks that a post '
+    + 'exists, or that it belongs to whoever made the block.';
+  boite.innerHTML = '';
+  boite.appendChild(titre);
+  for (const p of lignes) boite.appendChild(p);
+}
+
 async function listerMesBlocks() {
   const boite = $('#mesBlocks');
   if (!compte) return;
@@ -4015,15 +4090,21 @@ async function listerMesBlocks() {
         catch (e) { c.symbole = null; }
       }
     }
-    boite.innerHTML = '<div class="grilleMien">' + gardees.slice(0, 12).map((c) =>
+    const montres = gardees.slice(0, 12);
+    boite.innerHTML = '<div class="grilleMien">' + montres.map((c) =>
       '<button type="button" class="mienTuile" data-block="' + enTexte(c.jeton) + '" data-sym="'
       + enTexte(String(c.symbole || '').slice(0, 32)) + '"><div class="mienArt">' + dessin(c.jeton, c.symbole) + '</div>'
       + '<b>' + enTexte(String(c.symbole || '?').slice(0, 12)) + '</b></button>').join('') + '</div>'
+      + '<div id="mesPosts"></div>'
       + '<p class="note">' + creees.length + ' block(s) you created in the last '
       + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks · '
       + fr.blocks.length + ' minted to you'
       + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, '
         + 'not « not yours »' : '') + '.</p>' + noteFrappes(fr);
+    /* ⛔ APRES la peinture, jamais avant : les posts se lisent sur la chaine, et une lecture lente
+     *   ou refusee ne doit pas retarder la liste. Sans post, on n affiche RIEN — ni ligne vide, ni
+     *   « aucun post », qui laisserait croire qu on a verifie pour chacun. */
+    void peindrePostsDesBlocks(montres.map((c) => c.jeton));
   } catch (e) {
     console.warn('[mes blocks] lecture interrompue :', e && e.message ? e.message : e);
     boite.innerHTML = '<p class="note">Could not read the chain right now. That is about us, not '
@@ -5693,7 +5774,22 @@ async function lireProfil(adr, sym, perime, opts) {
     elTweet.innerHTML = '';
     elTweet.hidden = true;
     try {
-      const f = faceConnue(adr);
+      /* ⛔⛔ ON DEMANDE A LA CHAINE, PLUS SEULEMENT AU CACHE DU NAVIGATEUR. Mesure du 2026-09-24 :
+       *     `/api/face/0xb2…a042` rend bien le post grave
+       *     (x.com/…/status/2102752171326640353), et pourtant l ecran n affichait rien. Cause :
+       *     cette ligne ne lisait que `faceConnue()`, c est-a-dire la memoire du navigateur, remplie
+       *     UNIQUEMENT quand c est ce navigateur-la qui a cree le block. Ouvert depuis une autre
+       *     machine — ou apres un vidage — le post gravé devenait invisible.
+       *   ⛔ ET C ETAIT PIRE QUE DE NE RIEN MONTRER : la phrase affichee a cote dit « it cannot be
+       *     changed », une affirmation sur la CHAINE, appuyee sur une valeur lue dans un cache
+       *     local. Affirmer l immuabilite a partir d une source mutable, c est exactement le genre
+       *     d ecart qu on ne voit jamais tant que le cache est chaud. */
+      let f = faceConnue(adr);
+      if (!f || typeof f.tweet !== 'string') {
+        const surChaine = await faceDeLaChaine(adr);
+        if (perime()) return;
+        if (surChaine) f = surChaine;
+      }
       const lien = f && typeof f.tweet === 'string' ? f.tweet : null;
       if (lien && /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}$/.test(lien)) {
         const a = document.createElement('a');
