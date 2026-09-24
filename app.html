@@ -335,10 +335,24 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  * montrer autre chose que ce qui est grave.
  * ⇒ La tuile garde le RATIO du dessin (220/200 = 1.1), et le SVG remplit sans deformation. */
 .bloc svg{display:block;width:100%;height:100%}
-.bloc .etiq{position:absolute;left:0;right:0;bottom:0;
+/* ⛔⛔ L ETIQUETTE PREND LA LARGEUR DE SON TEXTE, PLUS CELLE DU CUBE. Mesure du 2026-09-24 sur la
+ *     page LIVE : `left:0;right:0` epinglait le nom aux bords du cube, donc un petit cube donnait
+ *     une boite minuscule et le nom partait en points de suspension — 32 noms coupes sur 179.
+ *     `BASEBULL` dans 11 px s affichait « BASEB… », exactement la capture envoyee par Phil.
+ *     ⇒ Un block rendait son propre nom illisible precisement quand il etait petit, c est-a-dire
+ *       quand on avait le plus besoin du nom pour le reconnaitre.
+ *   ⛔ `max-width` garde la borne : un nom tres long ne doit pas barrer la carte. L ellipse reste
+ *     donc possible, mais elle devient l exception au lieu d etre la regle. */
+.bloc .etiq{position:absolute;left:50%;transform:translateX(-50%);right:auto;bottom:0;
+  width:max-content;max-width:130px;
   background:linear-gradient(transparent,hsl(var(--h) 40% 4% / .8) 55%);
   color:#fff;font-size:11px;font-weight:700;padding:10px 3px 3px;text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ⛔⛔ SOUS UNE CERTAINE TAILLE, PAS DE NOM DU TOUT. Mesure : 55 etiquettes tenaient dans moins de
+ *     30 px — a cette taille un nom n est plus un nom, c est un moignon de deux lettres suivi de
+ *     points. Un fragment illisible informe moins que rien et occupe autant de place.
+ *   ⛔ LE BLOCK RESTE ENTIEREMENT CLIQUABLE : on retire le nom, jamais l acces. */
+.bloc[data-minuscule="1"] .etiq{display:none}
 /* ⛔ SANS MARCHE, LE BLOCK EST PALE — jamais absent, jamais « mort ». Il n a pas ete echange, ce
  *    qui n est pas la meme chose que ne rien valoir.
  * ⛔⛔ ET LE POINTILLE A ETE RETIRE, sur remarque de Phil : sur une map ou presque aucun block n a
@@ -1630,6 +1644,20 @@ details[open] > summary::before{transform:rotate(90deg)}
          hold; losing one still leaves the rest; never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
       <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
+      <!-- ⛔⛔ CET AVERTISSEMENT EST EN HAUT, ET C EST TOUT LE POINT. Il existait deja — mais EN BAS,
+           apres quatre paragraphes promettant du credit USDC, un partage de rendement et un agent
+           qui « fait tourner les operations ». Une reserve qui arrive apres l argument n est pas
+           une reserve : c est exactement le defaut du Bridge, ou « not live yet » s affichait
+           APRES la signature.
+           ⛔ ETAT REEL, MESURE LE 2026-09-24 : `BANK_CONTRACT` vaut `null`. Le seul morceau qui
+             touche la chaine est la lecture de `balanceOf` — celui-la est vrai. Tout le reste
+             (panier, early holders, ouverture) vit dans le localStorage de CE navigateur.
+           ⛔ Phil, 2026-09-24 : « mets en mode faux le temps de build ». C est ce bandeau. -->
+      <p class="note" id="tbApercu" style="border:1px solid var(--accent2);border-radius:10px;padding:8px 10px;margin:0 0 10px">
+        <b>Preview — not built yet.</b> Reading how many blocks you hold is real and happens on
+        chain. Everything else here is a sketch kept in this browser: there is no bank contract,
+        no credit, no yield, and nothing is sent or signed. Clearing your browser clears it all.
+      </p>
       <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
         then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
         You must <b>keep holding</b> to maintain credit. <b>Losing one block does not end it</b> — surviving linked blocks still back it.
@@ -1659,7 +1687,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton" id="tbOpenBtn" type="button" disabled>Open TokenizedBank</button>
       </div>
       <p class="note" id="tbEtat" style="margin-top:8px"></p>
-      <p class="note" id="tbEarly">Early holders = yield share at Open (frozen) — listed after confirm. Grafting is open to any wallet with proof.</p>
+      <!-- ⛔ AU CONDITIONNEL, PARCE QUE RIEN N EST ACQUIS. Ce texte promettait une « part de
+           rendement gelee » — un droit financier — alors que la liste vit dans le localStorage de
+           ce navigateur et qu aucun contrat n existe. On decrit une REGLE PREVUE, pas un titre. -->
+      <p class="note" id="tbEarly">If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.</p>
       <!-- ⛔ « Zero 1 / Brain » RETIRE : « Zero 1 » est le nom interne d un de nos agents. Le
            lecteur ne sait pas qui c est et ne peut pas l apprendre — nommer l operateur ne
            l informe pas, ca lui fait croire qu il lui manque un savoir. Ce qui l interesse, c est
@@ -1778,7 +1809,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
              precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
              moment ou on en a besoin. -->
-      <p class="note" data-build="20260924-paiement-verifie" hidden>Build <code>20260924-paiement-verifie</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-bank-apercu" hidden>Build <code>20260924-bank-apercu</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2653,7 +2684,7 @@ async function lirePrixEth() {
       if (!h || h.etatVie !== 'LUE' || typeof h.vie !== 'number') continue;
       const t = Math.round(tailleDe(h.vie, h.devise) * (h.nous ? 1.25 : 1));
       if (t === h.t) continue;
-      h.t = t; h.el.style.width = t + 'px'; h.el.style.height = Math.round(t * 1.1) + 'px';
+      h.t = t; poserTailleBloc(h.el, t);
     }
   }
   return ethUsd;
@@ -2941,6 +2972,24 @@ function noterFace(adr, face) {
   try { localStorage.setItem(CLE_FACE + a, JSON.stringify(v.face)); } catch (e) { /* sans memoire */ }
   return true;
 }
+/* ⛔⛔ UN SEUL ENDROIT POSE LA TAILLE D UNE TUILE. Elle etait posee a QUATRE endroits differents,
+ *     chacun repetant `style.width` et `style.height` — le motif `single-and-batch-twins-diverge` :
+ *     ajouter une regle liee a la taille (ici, cacher le nom sous 28 px) obligeait a la recopier
+ *     quatre fois, et le premier oubli l aurait rendue invisible sur un des chemins sans qu aucun
+ *     test ne le dise.
+ * ⛔ LE SEUIL EST UNE CONSTANTE NOMMEE, pas un nombre perdu dans une condition : mesure du
+ *   2026-09-24, 55 etiquettes sur 179 tenaient dans moins de 30 px, et a cette taille un nom n est
+ *   plus lisible. 28 px est un choix, pas une loi — et il se change ici, une fois. */
+const TAILLE_MIN_ETIQUETTE = 28;
+function poserTailleBloc(el, t) {
+  if (!el) return;
+  el.style.width = t + 'px';
+  el.style.height = Math.round(t * 1.1) + 'px';
+  /* ⛔ l attribut porte la DECISION, le CSS porte l apparence : on ne cache pas en JS, on marque. */
+  if (t < TAILLE_MIN_ETIQUETTE) el.setAttribute('data-minuscule', '1');
+  else el.removeAttribute('data-minuscule');
+}
+
 /** Sur la MAP : le block en volume (cube qui tourne, eclats en orbite, sans fond). Ailleurs, le logo grave (dessin). */
 const dessinMap = (adr, sym) => {
   try {
@@ -3124,8 +3173,7 @@ function creerHabitant(c) {
   el.className = 'bloc' + (typeof c.vie === 'number' && c.vie > 0 ? '' : ' sansPrix');
   /* ⛔ RATIO DU DESSIN, PAS UN CARRE : le SVG fait 200x220 et le forcer dans une case carree le
    * rognait — c est le defaut visuel signale sur la capture du 2026-09-10. */
-  el.style.width = t + 'px';
-  el.style.height = Math.round(t * 1.1) + 'px';
+  poserTailleBloc(el, t);
   el.setAttribute('data-block', c.jeton);
   el.innerHTML = dessinMap(c.jeton, c.symbole) + '<span class="etiq">'
     + enTexte(String(c.symbole || '?').slice(0, 10)) + '</span>';
@@ -3599,8 +3647,7 @@ async function poserNosBlocks(fin) {
 function marquerNotre(h) {
   if (!h.nous) {
     h.t = Math.round(h.t * 1.25);
-    h.el.style.width = h.t + 'px';
-    h.el.style.height = Math.round(h.t * 1.1) + 'px';
+    poserTailleBloc(h.el, h.t);
   }
   h.nous = true;
   h.el.classList.add('nous');
@@ -3703,8 +3750,7 @@ function appliquerVie(h, r) {
   h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
   const t = Math.round(tailleDe(r.vie, r.devise) * (h.nous ? 1.25 : 1));
   h.t = t;
-  h.el.style.width = t + 'px';
-  h.el.style.height = Math.round(t * 1.1) + 'px';
+  poserTailleBloc(h.el, t);
   h.el.classList.remove('sansPrix');
 }
 
@@ -9183,7 +9229,7 @@ function peindrePanierBank() {
   if (!compte) {
     ul.innerHTML = '<li class="note">Connect wallet to see your linked basket.</li>';
     if (note) note.textContent = 'Credit backs the basket. Remove one → survivors keep backing.';
-    if (early) early.textContent = 'Early holders = yield share at Open (frozen). Grafting is open to any wallet with proof.';
+    if (early) early.textContent = 'If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.';
     if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
     tbSyncGraftButtons();
     return;
@@ -9219,10 +9265,14 @@ function peindrePanierBank() {
   }
   if (early) {
     const eh = lireEarlyHolders(localStorage, compte);
-    const badge = compte && estEarlyHolder(localStorage, compte, compte) ? ' · you: early (yield)' : '';
+    /* ⛔ « you: early (yield) » etait un BADGE DE DROIT sur une liste de navigateur. Quelqu un
+     *   pouvait se croire titulaire d une part de rendement parce qu une ligne de localStorage le
+     *   disait. On nomme ce que c est : une note locale, sur une regle qui n existe pas encore. */
+    const badge = compte && estEarlyHolder(localStorage, compte, compte) ? ' · including you' : '';
     early.textContent = eh.length
-      ? ('Early holders (yield share, frozen at Open)' + badge + ': ' + eh.map(court).join(', '))
-      : 'Early holders = yield share at Open (frozen) — recorded on Open confirm. Graft not early-gated.';
+      ? ('Noted in this browser as linked before opening' + badge + ': ' + eh.map(court).join(', ')
+        + '. This grants nothing today — there is no contract behind it.')
+      : 'If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.';
   }
   tbSyncGraftButtons();
 }
@@ -9355,10 +9405,13 @@ function tbApresGreffe(r, mode) {
   peindrePanierBank();
   const etat = $('#tbEtat');
   if (!etat) return;
+  /* ⛔ « Credit backs basket totality » et « early shares stay frozen » decrivaient un mecanisme
+   *   de credit qui n existe pas, au present de l indicatif. On dit ce qui vient de se passer —
+   *   une ligne ajoutee dans ce navigateur — et rien de plus. */
   if (mode === 'ADD_LIQUIDITY') {
-    etat.textContent = 'Add-liquidity graft (' + r.grafts.length + ' linked). Credit backs basket totality — early shares stay frozen. Confirm optional stub note.';
+    etat.textContent = 'Linked in this browser (' + r.grafts.length + ' block(s)). Nothing was sent.';
   } else {
-    etat.textContent = 'Grafted into basket (' + r.grafts.length + ' linked). Credit backs the totality — read basket proofs, then Open.';
+    etat.textContent = 'Linked in this browser (' + r.grafts.length + ' block(s)). Next: read the proofs of hold on chain — that part is real.';
   }
 }
 
@@ -9404,23 +9457,14 @@ $('#tbAddLiqBtn') && $('#tbAddLiqBtn').addEventListener('click', async () => {
     holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage,
     geste: 'ADD_LIQUIDITY',
   });
-  let sig = null;
-  const msg = 'TokenizedBank add-liquidity\nbasket=' + greffes.join(',')
-    + '\nholder=' + compte + '\nbuild=20260922-2010';
-  try {
-    if (window.ethereum && compte) {
-      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
-    }
-  } catch (e) {
-    if (etat) etat.textContent = 'Add-liquidity confirm cancelled — graft kept. ' + String((e && e.message) || e);
-    return;
-  }
+  /* ⛔ MEME CORRECTIF QUE POUR « Open » : la demande de signature est retiree. Elle ouvrait une
+   *   vraie fenetre de wallet pour un geste qui n ecrit que dans ce navigateur. Voir le
+   *   commentaire complet sur le gestionnaire de `#tbOpenBtn`. */
   peindrePanierBank();
   if (etat) {
     etat.textContent = credit.etat === 'PENDING_CONTRACT'
-      ? ('Add-liquidity confirmed' + (sig ? ' (signed)' : '') + '. Basket ' + greffes.length
-        + ' · early frozen (yield) · ' + (credit.note ? 'stub note recorded · ' : '')
-        + 'The Brain runs ops automatically.')
+      ? ('Saved in this browser only — ' + greffes.length + ' block(s) linked. Nothing was signed '
+        + 'and nothing was sent: this adds no liquidity anywhere and freezes no share.')
       : ('Refused: ' + (credit.pourquoi || credit.etat));
   }
 });
@@ -9459,24 +9503,25 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
   const credit = ouvrirCreditUsdcStub({
     holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage, geste: 'OPEN',
   });
-  let sig = null;
-  const msg = 'TokenizedBank open\nbasket=' + greffes.join(',')
-    + '\nsurvivors=' + positifs.map((p) => p.block).join(',')
-    + '\nholder=' + compte + '\nbuild=20260922-2010';
-  try {
-    if (window.ethereum && compte) {
-      sig = await window.ethereum.request({ method: 'personal_sign', params: [msg, compte] });
-    }
-  } catch (e) {
-    if (etat) etat.textContent = 'Confirm cancelled in wallet — ' + String((e && e.message) || e);
-    return;
-  }
+  /* ⛔⛔ LA DEMANDE DE SIGNATURE EST RETIREE, ET C EST LE CORRECTIF LE PLUS IMPORTANT DE CE PANNEAU.
+   *     Ce bouton ouvrait une VRAIE fenetre de wallet (`personal_sign`) pour une fonctionnalite qui
+   *     n existe pas : `BANK_CONTRACT` vaut `null`, aucun credit n est emis, rien ne part sur la
+   *     chaine. La signature obtenue n etait ni verifiee, ni envoyee, ni conservee — elle finissait
+   *     dans une variable aussitot oubliee.
+   *   ⛔ POURQUOI C EST GRAVE ET PAS SEULEMENT INUTILE : demander une signature habitue les gens a
+   *     signer ce qu on leur presente. Le faire pour un geste vide use exactement la prudence dont
+   *     ils auront besoin le jour ou une vraie signature comptera. Une demande de signature se
+   *     merite ; celle-ci ne se meritait pas.
+   *   ⛔ ET LE MESSAGE D APRES ETAIT FAUX TROIS FOIS : « Open confirmed » — rien n est confirme
+   *     nulle part ; « Early shares frozen » — le registre vit dans CE navigateur et se vide ;
+   *     « the Brain runs ops automatically » — aucune operation ne tourne. */
   peindrePanierBank();
   if (etat) {
     etat.textContent = credit.etat === 'PENDING_CONTRACT'
-      ? ('Open confirmed' + (sig ? ' (signed)' : ' (proof recorded)') + '. Early shares frozen · credit USDC stub on basket of '
-        + greffes.length + ' · survivors ' + positifs.length
-        + ' · any wallet may now add liquidity · the Brain runs ops automatically.')
+      ? ('Saved in this browser only — ' + greffes.length + ' block(s) linked, ' + positifs.length
+        + ' with a proof of hold read on chain. Nothing was signed and nothing was sent: the credit '
+        + 'contract does not exist yet, so this opens no credit and freezes no share. Clearing this '
+        + 'browser clears this list.')
       : ('Refused: ' + (credit.pourquoi || credit.etat));
   }
 });
@@ -13626,7 +13671,7 @@ async function soleilsSurLaMap() {
        *    suite. Une vie lue sur la chaine par la map (LUE) garde la priorite. */
       if (h && h.etatVie !== 'LUE' && typeof l.fdvUsd === 'number' && l.fdvUsd > 0) {
         const t = Math.round(tailleDeUsd(l.fdvUsd) * (h.nous ? 1.25 : 1));
-        if (t !== h.t) { h.t = t; h.el.style.width = t + 'px'; h.el.style.height = Math.round(t * 1.1) + 'px'; }
+        if (t !== h.t) { h.t = t; poserTailleBloc(h.el, t); }
         h.el.classList.remove('sansPrix');
       }
       marcheParAdr.set(String(l.adr).toLowerCase(), l);
