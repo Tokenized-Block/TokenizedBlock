@@ -1822,7 +1822,10 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⇒ TOUT redeploiement porte une empreinte NOUVELLE, meme — surtout — quand il corrige le
              precedent. Reutiliser l empreinte d un build casse aveugle l instrument exactement au
              moment ou on en a besoin. -->
-      <p class="note" data-build="20260924-reste-dans-create" hidden>Build <code>20260924-reste-dans-create</code> · Contract labels say what they do, not our internal names.</p>
+      <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
+           la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
+           l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
+      <p class="note" data-build="20260924-scale-and-rate" hidden>Build <code>20260924-scale-and-rate</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2899,8 +2902,17 @@ async function rpcReseau(methode, params) {
  *    une vie lue en ETH : un block a 20 ETH (≈ 50 000 $) etait « sous 50 000 » — presque tous les blocks avaient la
  *    MEME taille minimale. L echelle compare maintenant des DOLLARS : vie x prix de l ETH (ou la vie telle quelle
  *    si la pool est en USDC). De 1 000 $ (petit) a 1 000 000 $ (gros), en log. */
-const TAILLE_MIN = 30, TAILLE_MAX = 170;
-const SEUIL_FAIBLE_USD = 1000, SEUIL_GROS_USD = 1000000;
+/* ⛔ PLAFOND RELEVE DE 170 A 220 le 2026-09-24 : avec une echelle en racine carree, la marge du
+ *   haut est ce qui fait exister l ecart. A 170 px, le plus gros block du classement ne depassait
+ *   le dixieme que de moitie ; a 220, il le double — pour un ecart de valeur de huit fois.
+ * ⛔ LE PLANCHER NE BOUGE PAS : 30 px reste au-dessus du seuil d etiquette (28 px) et d un doigt
+ *   sur un ecran tactile. Un block qui vaut peu doit rester lisible et cliquable. */
+const TAILLE_MIN = 30, TAILLE_MAX = 220;
+/* ⛔ `SEUIL_FAIBLE_USD` RETIRE le 2026-09-24 : il ne servait qu a l ancienne echelle log, qui avait
+ *   besoin d un plancher de decade. La racine carree n en a pas : elle part de zero. Laisser la
+ *   constante aurait fait croire qu un seuil bas gouverne encore la taille — une constante morte
+ *   qui a l air vivante coute plus cher qu une ligne en moins. */
+const SEUIL_GROS_USD = 1000000;
 function vieEnUsd(vie, devise) {
   if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return null;
   if (devise === 'USDC') return vie;
@@ -2913,9 +2925,27 @@ function tailleDe(vie, devise = 'ETH') {
   if (usd == null) return typeof vie === 'number' && vie > 0 ? TAILLE_MIN : 24;
   return tailleDeUsd(usd);
 }
+/* ⛔⛔ ECHELLE CHANGEE LE 2026-09-24 — LOG -> RACINE CARREE. Phil : « adapte avec une echelle pour
+ *     faire grossir les cubes plus gros, pour faire reellement confronter ». Sur le classement
+ *     reel, le 1er vaut 316 438 $ et le 10e 38 797 $ : HUIT FOIS moins. A l ecran, les deux cubes
+ *     se ressemblaient.
+ *     La cause etait l echelle log : elle ECRASE par construction — c est sa qualite quand on veut
+ *     tout faire tenir, et son defaut quand on veut faire COMPARER. Mesure (`mesure-echelle-cubes.mjs`,
+ *     sur les vrais chiffres) : 8,15× d argent ne donnait que 1,41× de largeur.
+ *
+ *   ⛔ POURQUOI LA RACINE CARREE, ET PAS « plus gros » au jugé : c est l AIRE de la marque qui suit
+ *     la valeur. L oeil compare des surfaces, pas des largeurs — c est la convention etablie pour
+ *     encoder une quantite par la taille d un objet. La racine cubique (le VOLUME du cube suit la
+ *     valeur) a ete mesuree aussi : 1,69×, elle compresse presque autant que le log.
+ *     Resultat mesure : 2,04× de largeur pour 8,15× d argent.
+ *
+ *   ⚠️ CE QUE CE CHOIX COUTE, ET IL FAUT LE DIRE : tout ce qui est en dessous de ~10 000 $ se
+ *     resserre vers le plancher. C est FIDELE — ces blocks valent effectivement peu a cote du
+ *     premier — mais ca rend le bas du classement moins distinguable qu avant. On echange de la
+ *     nuance en bas contre de la verite en haut, et c est le sens de la demande.
+ *   ⛔ Le plancher reste au-dessus du seuil d etiquette (28 px) : un petit block garde son nom. */
 function tailleDeUsd(usd) {
-  const bas = Math.log10(SEUIL_FAIBLE_USD), haut = Math.log10(SEUIL_GROS_USD);
-  const p = (Math.log10(usd) - bas) / (haut - bas);
+  const p = Math.sqrt(Math.max(0, Number(usd) || 0) / SEUIL_GROS_USD);
   return Math.round(TAILLE_MIN + Math.max(0, Math.min(1, p)) * (TAILLE_MAX - TAILLE_MIN));
 }
 

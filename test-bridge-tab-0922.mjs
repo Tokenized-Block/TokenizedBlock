@@ -8,15 +8,29 @@ import {
 import { encodeTransfer } from './envoi.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
 
-assert.equal(BRIDGE_FEE_BPS, 1n);
-assert.equal(BRIDGE_FEE_RATE, 0.0001);
-assert.equal(BRIDGE_FEE_LABEL, '0.01%');
+/* ⛔⛔ 0,5 % DEPUIS LE 2026-09-24 (decision de Phil). Le panneau annoncait 0,01 % alors que le
+ *     chemin reellement cable en preleve 0,5 % — sortir un block par sa pool est exactement ce que
+ *     fait Buy/Sell, et l annoncer moins cher ailleurs etait faux.
+ *   ⛔⛔ ET LA GARDE QUI COMPTE VRAIMENT EST CELLE D EN DESSOUS : le taux AFFICHE doit egaler le
+ *     taux PRELEVE. Epingler « 0.5% » tout seul ne protegerait de rien — c est leur DIVERGENCE qui
+ *     ferait mentir l ecran, et c est elle qu on interdit. */
+assert.equal(BRIDGE_FEE_BPS, 50n);
+assert.equal(BRIDGE_FEE_RATE, 0.005);
+assert.equal(BRIDGE_FEE_LABEL, '0.5%');
+
+const { FRAIS_INTERFACE_BPS } = await import('./echange.js');
+assert.equal(BRIDGE_FEE_BPS, FRAIS_INTERFACE_BPS,
+  'le taux AFFICHE par le Bridge (' + BRIDGE_FEE_BPS + ' bps) a diverge du taux reellement PRELEVE '
+  + 'par le chemin de sortie (' + FRAIS_INTERFACE_BPS + ' bps). Un tarif affiche qui derive du tarif '
+  + 'reel est la forme la plus banale du mensonge dans une app.');
+assert.equal(BRIDGE_FEE_RATE, Number(FRAIS_INTERFACE_BPS) / 10000,
+  'le taux decimal ne correspond plus aux bps : une des deux ecritures a ete oubliee');
 
 const q = quoteBridge({ amount: 1000, fromSym: 'ETH', toSym: 'USDC' });
 assert.equal(q.ok, true);
-assert.equal(q.fee, 0.1); // 1000 * 0.0001
-assert.equal(q.net, 999.9);
-assert.equal(q.feeLabel, '0.01%');
+assert.equal(q.fee, 5); // 1000 * 0.005
+assert.equal(q.net, 995);
+assert.equal(q.feeLabel, '0.5%');
 assert.equal(q.settleSym, 'ETH');
 
 const q0 = quoteBridge({ amount: 0, fromSym: 'USDC', toSym: 'AAPLc' });
@@ -52,7 +66,10 @@ const planEth = planBridgeFeeSkim({ amount: 1, fromSym: 'ETH', toSym: 'USDC' });
 assert.equal(planEth.ok, true);
 assert.equal(planEth.live, true);
 assert.equal(planEth.asset, 'ETH');
-assert.equal(planEth.feeUnits, 100000000000000n); // 1e18 / 10000
+/* ⛔ 50 bps : 1e18 * 50 / 10000. L ancienne valeur (1e18/10000) etait celle de 1 bp — elle a
+ *   change avec le taux, et c est normal : ce qui ne doit PAS changer, c est l egalite entre le
+ *   taux affiche et le taux preleve, verifiee plus haut. */
+assert.equal(planEth.feeUnits, 5000000000000000n);
 assert.equal(planEth.goPhil, true);
 
 const callEth = buildBridgeFeeCall({
@@ -65,7 +82,7 @@ assert.equal(BigInt(callEth.value), planEth.feeUnits);
 
 const planUsdc = planBridgeFeeSkim({ amount: 100, fromSym: 'USDC', toSym: 'ETH' });
 assert.equal(planUsdc.ok, true);
-assert.equal(planUsdc.feeUnits, 10000n); // 100e6 * 1 / 10000
+assert.equal(planUsdc.feeUnits, 500000n); // 100e6 * 50 / 10000
 const callUsdc = buildBridgeFeeCall({
   plan: planUsdc, feeWallet: FEE_WALLET, usdc: USDC_BASE, encodeTransfer,
 });

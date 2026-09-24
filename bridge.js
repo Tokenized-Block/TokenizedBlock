@@ -22,9 +22,18 @@
 //   · FEE_WALLET address never appears in UI strings returned here.
 
 /** Bridge fee = 0.01% of volume = 1 basis point. */
-export const BRIDGE_FEE_BPS = 1n;
-export const BRIDGE_FEE_RATE = 0.0001;
-export const BRIDGE_FEE_LABEL = '0.01%';
+/* ⛔⛔ 0,5 % — DECISION DE PHIL, 2026-09-24 : « écris 0.5% alors ».
+ *     Le panneau annonçait 0,01 % alors que le chemin reellement cable en preleve 0,5 %
+ *     (`FRAIS_INTERFACE_BPS` dans echange.js) : sortir un block par sa pool est exactement ce que
+ *     fait Buy/Sell, et l annoncer moins cher ailleurs aurait ete une porte moins chere vers la
+ *     meme chose — en plus d etre faux.
+ *   ⛔ LE CHIFFRE AFFICHE SUIT LE CHIFFRE PRELEVE, jamais l inverse. Si `FRAIS_INTERFACE_BPS`
+ *     bouge un jour, ces trois constantes doivent bouger avec lui : `test-bridge-tab-0922.mjs`
+ *     compare les deux et echoue si elles divergent. Un tarif affiche qui derive du tarif reel est
+ *     la forme la plus banale du mensonge dans une app. */
+export const BRIDGE_FEE_BPS = 50n;
+export const BRIDGE_FEE_RATE = 0.005;
+export const BRIDGE_FEE_LABEL = '0.5%';
 
 /** Settlement assets preferred for fee display (symbols only — never fee sink address). */
 export const BRIDGE_SETTLEMENT = ['ETH', 'USDC'];
