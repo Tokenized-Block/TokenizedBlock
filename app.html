@@ -1658,13 +1658,19 @@ details[open] > summary::before{transform:rotate(90deg)}
         chain. Everything else here is a sketch kept in this browser: there is no bank contract,
         no credit, no yield, and nothing is sent or signed. Clearing your browser clears it all.
       </p>
-      <p class="sous">A Tokenized Block is a <b>fund wallet</b>. Graft blocks onto TokenizedBank to hold them —
-        then open <b>USDC credit</b> from on-chain <b>proof of hold</b> on the <b>whole linked basket</b>, not traditional underwriting.
-        You must <b>keep holding</b> to maintain credit. <b>Losing one block does not end it</b> — surviving linked blocks still back it.
-        Credit contracts with Σ hold (dies only if zero survivors).
-        <b>Early holders</b> (snapshot at Open) share yield — badge separate from grafting.
-        After Open, <b>any wallet with proof</b> may <b>graft again to add liquidity</b> to the same basket.
-        The agent runs the ops — you only one-click confirm.</p>
+      <!-- ⛔⛔ TOUT CE PARAGRAPHE ETAIT AU PRESENT DE L INDICATIF pour un produit qui n existe pas :
+           « open USDC credit », « credit contracts with Σ hold », « early holders share yield »,
+           « the agent runs the ops ». Ecrit comme ca, ce n est pas une description d intention —
+           c est une offre. Phil, 2026-09-24 : « t as juste traduit ». Exactement : l idee avait ete
+           mise en mots, pas construite, et les mots choisis etaient ceux d un produit livre.
+           ⛔ PASSE AU CONDITIONNEL, phrase par phrase. Le plan reste entier et lisible ; ce qui
+             change, c est qu on ne peut plus le lire comme une promesse tenue. -->
+      <p class="sous">The idea: a Tokenized Block could work as a <b>fund wallet</b>. You would link blocks you hold,
+        and borrow <b>USDC</b> against the proof that you hold them — the whole linked set, not your credit history.
+        You would have to <b>keep holding</b>. Losing one block would not end it: the ones you still hold would keep backing it,
+        and it would only die if none were left. Whoever linked blocks before it opened would share the yield;
+        afterwards anyone holding a block could link more. The agent would run the operations, with you confirming.
+        <b>None of this exists yet</b> — the paragraph above is the plan, not what the buttons below do.</p>
       <ol class="note" style="margin:10px 0 8px 1.2em; padding:0; line-height:1.45">
         <li><b>Hold</b> — pick a B20 from My blocks</li>
         <li><b>Proof of hold</b> — read <code>balanceOf</code> on Base</li>

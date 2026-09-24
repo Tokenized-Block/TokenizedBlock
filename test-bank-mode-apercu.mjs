@@ -108,6 +108,26 @@ v('⛔ le bandeau « pas construit » est EN HAUT du panneau, avant les promesse
   assert.match(texte, /no yield/i, 'le bandeau ne dit plus qu il n y a pas de rendement');
 });
 
+v('⛔ le PANNEAU ENTIER ne decrit plus la banque au present', () => {
+  /* ⛔⛔ TROU DANS MA PROPRE GARDE, trouve en verifiant la production : les cas precedents ne
+   *     lisaient que les deux GESTIONNAIRES. « The agent runs the ops » vivait dans le paragraphe
+   *     de presentation, en HTML statique — donc toujours a l ecran, garde verte. Une garde qui
+   *     couvre la moitie du chemin laisse passer l autre moitie, et rassure sur les deux.
+   *   ⇒ On lit maintenant la carte ENTIERE. */
+  const i = html.indexOf('id="wBankCarte"');
+  assert.ok(i > 0, 'la carte de la banque est introuvable');
+  const j = html.indexOf('</section>', i);
+  const carte = html.slice(i, j > i ? j : i + 9000)
+    .replace(/<!--[\s\S]*?-->/g, ' '); /* les commentaires citent les defauts corriges */
+  assert.ok(carte.length > 1500, 'extraction de la carte suspecte (' + carte.length + ' car.)');
+  assert.doesNotMatch(carte, /The agent runs the ops|Brain runs ops/i,
+    'le panneau affirme de nouveau que des operations tournent : aucune ne tourne');
+  /* ⛔ le present de l indicatif est ce qui transforme un plan en offre. On exige la phrase qui
+   *   coupe court, plutot que d essayer d interdire une grammaire. */
+  assert.match(carte, /None of this exists yet/i,
+    'le panneau ne dit plus, dans le paragraphe de presentation, que rien de tout cela n existe');
+});
+
 v('ce qui est VRAI reste dit comme vrai : la preuve de detention est lue sur la chaine', () => {
   /* ⛔ Un bandeau qui dirait « tout est faux » serait aussi trompeur que l inverse : la lecture de
    *   `balanceOf` est reelle, et c est la seule chose sur laquelle quelqu un peut s appuyer ici. */
@@ -116,7 +136,7 @@ v('ce qui est VRAI reste dit comme vrai : la preuve de detention est lue sur la 
     'le bandeau ne dit plus que la preuve de detention, elle, est reelle');
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+assert.equal(n, 7, 'compte de cas inattendu : ' + n);
 console.log('ok bank-mode-apercu — ' + n + ' cas : aucune signature, aucune fausse confirmation,');
 console.log('   et le « pas construit » est en haut, avant les promesses.');
 console.log('⚠️ NE PROUVE PAS que le panneau sera juste quand la banque existera : il garde l etat');
