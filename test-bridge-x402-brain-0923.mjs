@@ -12,12 +12,28 @@ import { entreeBotAction } from './journal-cerveau.js';
 
 assert.equal(BRIDGE_LEGS.length, 4);
 assert.ok(BRIDGE_LEGS.some((l) => l.id === 'fund' && l.live));
-assert.ok(BRIDGE_LEGS.some((l) => l.id === 'skim' && l.live));
+/* ⛔⛔ CETTE LIGNE EXIGEAIT `skim.live === true`, ET ELLE GARDAIT UN MENSONGE.
+ *     Mesure du 2026-09-24 : ce prelevement partait bel et bien — mais SEUL, sans aucun echange en
+ *     face, jamais. « Live » disait « ce prelevement fonctionne » la ou l utilisateur lisait « cet
+ *     echange fonctionne ». Le test verrouillait donc la propriete exacte qui faisait payer les
+ *     gens pour rien : tant qu il passait au vert, personne n allait regarder.
+ *   ⇒ Un test peut etre VERT et tenir la mauvaise moitie. Celui-ci en est l exemple. */
+assert.ok(BRIDGE_LEGS.some((l) => l.id === 'skim' && !l.live),
+  'la jambe « skim » est de nouveau annoncee vivante : elle preleverait sans rien echanger');
 assert.ok(BRIDGE_LEGS.some((l) => l.id === 'hub' && l.goPhil));
 assert.ok(BRIDGE_LEGS.some((l) => l.id === 'equity' && !l.live));
-assert.match(phraseBridgeLegs(), /Phil|later|0\.01%/i);
+/* ⛔⛔ ET CELLE-CI AUTORISAIT LE PRENOM A L ECRAN : le motif `/Phil|later|0.01%/` etait SATISFAIT
+ *     par « Phil ». Le test n a donc pas seulement laisse passer « Phil-blocked » dans un texte
+ *     public — il l acceptait explicitement comme une reponse valable. La garde anti-jargon d a
+ *     cote ne lisait, elle, que le HTML statique, et cette phrase-ci est injectee a l execution :
+ *     les deux gardes se croyaient couvertes par l autre. */
+assert.doesNotMatch(phraseBridgeLegs(), /\bPhil\b|BridgeRouter|\bbps\b/i,
+  'jargon interne ou prenom de l equipe dans une phrase affichee aux utilisateurs');
 assert.doesNotMatch(phraseBridgeLegs(), /0xa6cf|Fees for Dev|≈\s*\$1|\b2x\b|leverage|FINRA/i);
 assert.match(phraseBridgeLegs(), /not a broker/i);
+/* la phrase doit dire ce qui se passe VRAIMENT : rien n est preleve tant que l echange n existe pas */
+assert.match(phraseBridgeLegs(), /nothing is charged|not built yet/i,
+  'la phrase ne dit plus que rien n est preleve tant que l echange n existe pas');
 
 const stub = confirmerBridgeStub(quoteBridge({ amount: 1, fromSym: 'AAPLc', toSym: 'USDC' }));
 assert.equal(stub.goPhil, true);

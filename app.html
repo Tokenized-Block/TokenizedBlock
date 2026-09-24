@@ -1761,7 +1761,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            le texte ne l avait pas ete depuis le 20. Personne ne l a vu parce que la ligne est
            `hidden` : un chiffre faux que rien n affiche ne previent rien, il attend le jour ou
            quelqu un le lit pour dater un incident. -->
-      <p class="note" data-build="20260923-causes-echec" hidden>Build <code>20260923-causes-echec</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260924-bridge-honnete" hidden>Build <code>20260924-bridge-honnete</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2323,7 +2323,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
-import { pairesProposees, qualifierPaire, etiquettePaire } from './paires.js';
+import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange } from './paires.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
 import { faceDuBlock, validerFace } from './face.js';
@@ -2410,7 +2410,7 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 /* tip 20260922-prepaye-inscrire-dust */
-import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS } from './bridge.js';
+import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS, HUB_SWAP_LIVE } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
@@ -5524,7 +5524,18 @@ async function peindreHolders(adr, essai = 0) {
     + 'Which block a round pays is decided when that round is anchored, not here.';
 }
 
-async function ouvrirProfil(adr, sym) {
+/* ⛔⛔ `sansNaviguer` AJOUTE LE 2026-09-24, SUR UN DEFAUT MESURE DANS L ENTONNOIR DE PRODUCTION.
+ *     Chiffres reels : `cree` = 6, `vivant` = 2. DEUX TIERS des blocks crees ne prennent jamais vie,
+ *     et ils se perdent exactement ici. Phil, le meme jour, decrit le symptome sans avoir vu les
+ *     compteurs : « entre 1er birth il fait pas la connexion a la pool directement car il t emene
+ *     au profil […] et users est perdu car il fait 1 action et se retrouve a chercher ».
+ *     La cause tient en une ligne : `lireProfil` faisait `allerA('mien')` — le CHARGEMENT des
+ *     donnees et le SAUT D ONGLET etaient soudes. Impossible de lire un profil sans deplacer
+ *     quelqu un. Donc la mise en vie, qui a besoin des donnees du profil, teleportait l utilisateur
+ *     hors de Create au milieu de son geste.
+ *   ⇒ On separe les deux. Lire n est pas naviguer. La navigation devient une decision de
+ *     l appelant, prise quand il y a quelque chose a montrer — c est-a-dire quand le marche existe. */
+async function ouvrirProfil(adr, sym, opts) {
   if (!ADRESSE.test(String(adr || ''))) return;
   if ($('#pePremier')) $('#pePremier').hidden = true;
   const moi = ++jetonProfil;
@@ -5532,12 +5543,15 @@ async function ouvrirProfil(adr, sym) {
   /* ⛔ LE DRAPEAU EST RENDU PAR CELUI QUI L A PRIS, ET SEULEMENT S IL EST TOUJOURS LE DERNIER : un
    * profil perime qui rendrait la main liberait la map pendant que le suivant lit encore. */
   profilEnLecture = true;
-  try { await lireProfil(adr, sym, perime); }
+  try { await lireProfil(adr, sym, perime, opts); }
   finally { if (!perime()) profilEnLecture = false; }
 }
 
-async function lireProfil(adr, sym, perime) {
-  allerA('mien');
+async function lireProfil(adr, sym, perime, opts) {
+  /* ⛔ LE DEFAUT EST DE NAVIGUER : tous les appelants existants gardent leur comportement d avant,
+   *   et seul celui qui demande explicitement le silence reste sur place. Inverser ce defaut
+   *   casserait les huit autres appels sans qu aucun test ne le dise. */
+  if (!(opts && opts.sansNaviguer)) allerA('mien');
   const p = $('#profil');
   p.hidden = false;
   p.dataset.block = adr;
@@ -12933,11 +12947,18 @@ function peindreBridgeActifs() {
   let opts = [];
   try {
     const list = (typeof pairesProposees === 'function') ? pairesProposees(CHAINE) : [];
-    opts = list.map((p) => '<option value="' + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + (p.nom || p.symbole)) + '</option>');
+    /* ⛔ On ne PROPOSE que ce qui s echange vraiment (Phil, 2026-09-24 : « retirer le TBLOCK de la,
+     *   le coin est pas reellement lance au public »). Le filtre vit dans paires.js pour que les
+     *   deux listes ci-dessous — la dynamique ET le repli — ne puissent pas diverger. */
+    opts = list.filter(proposableEnEchange)
+      .map((p) => '<option value="' + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + (p.nom || p.symbole)) + '</option>');
   } catch (_) { opts = []; }
   if (!opts.length) {
+    /* ⛔⛔ LE REPLI PORTAIT LE MEME DEFAUT, et c est le piege `single-and-batch-twins-diverge` :
+     *     filtrer la liste dynamique en laissant TBLOCK code en dur ici aurait rendu le correctif
+     *     invisible exactement quand la liste dynamique echoue — c est-a-dire au pire moment. */
     opts = ['<option value="ETH">ETH</option>', '<option value="USDC">USDC</option>',
-      '<option value="AAPLc">AAPLc</option>', '<option value="TBLOCK">TBLOCK</option>'];
+      '<option value="AAPLc">AAPLc</option>'];
   }
   const fv = from.value || 'ETH', tv = to.value || 'USDC';
   from.innerHTML = opts.join('');
@@ -13022,9 +13043,22 @@ function majBridgeQuote() {
     if (btn) btn.disabled = true;
     return;
   }
-  feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): ' + formatBridgeAmount(q.fee, q.settleSym);
-  netEl.textContent = 'You receive: ' + formatBridgeAmount(q.net, toSym);
-  if (settleEl) settleEl.textContent = 'Settlement: ' + q.settleSym + ' preferred · fee amount only';
+  /* ⛔⛔ « You receive » DISPARAIT TANT QUE RIEN N EST LIVRE. Cette ligne promettait un montant net
+   *     recu alors que le seul mouvement possible etait le frais QUITTANT le wallet. Elle etait
+   *     affichee juste au-dessus du bouton de confirmation : l endroit exact ou quelqu un decide
+   *     de payer. Montrer un chiffre qu on ne remettra jamais est la forme la plus chere de
+   *     malentendu — et c est nous qui l ecrivions.
+   *   ⇒ Tant que le hub n echange pas, on annonce ce qui se passerait VRAIMENT : rien. Le chiffre
+   *     net revient de lui-meme le jour ou l echange existe. */
+  feeEl.textContent = HUB_SWAP_LIVE
+    ? ('Fee (' + BRIDGE_FEE_LABEL + '): ' + formatBridgeAmount(q.fee, q.settleSym))
+    : ('Fee (' + BRIDGE_FEE_LABEL + '): none — nothing is charged while the swap is off');
+  netEl.textContent = HUB_SWAP_LIVE
+    ? ('You receive: ' + formatBridgeAmount(q.net, toSym))
+    : 'You receive: nothing yet — the swap hub is not running';
+  if (settleEl) settleEl.textContent = HUB_SWAP_LIVE
+    ? ('Settlement: ' + q.settleSym + ' preferred · fee amount only')
+    : 'Settlement: none — this quote is an estimate for later, not an offer';
   const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
   /* Live fee skim when From is ETH/USDC; other From stays clickable for honest stub copy. */
   if (btn) btn.disabled = !(q.amount > 0 && hub && fromSym && toSym && fromSym !== toSym);
@@ -13090,6 +13124,18 @@ function basculerBridgeMode(mode) {
     if (CHAINE !== 8453) {
       etape('bridge_fee_wrong_chain');
       setEtat('Bridge fee skim runs on Base mainnet — switch network in your wallet.');
+      return;
+    }
+    /* ⛔⛔ ON NE PREND PAS D ARGENT POUR UN ECHANGE QUI N AURA PAS LIEU.
+     *     Mesure du 2026-09-24 : ce gestionnaire ne construit QU UNE transaction — le frais — et il
+     *     n existe aucun calldata de swap dans tout le chemin. L utilisateur signait un frais, ne
+     *     recevait rien, et lisait « net swap is not live yet » APRES coup.
+     *   ⇒ La reserve remonte AVANT la signature et devient un REFUS. Une divulgation qui arrive
+     *     une fois l argent parti n est pas une divulgation, c est une excuse. */
+    if (!HUB_SWAP_LIVE) {
+      etape('bridge_fee_plan_ko');
+      setEtat('No swap would happen, so no fee is taken. The hub that swaps one token for another '
+        + 'is not running yet — until it is, this button cannot charge you. Nothing was sent.');
       return;
     }
     const call = buildBridgeFeeCall({

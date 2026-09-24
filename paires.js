@@ -31,8 +31,29 @@ export const DEVISES_BASE = [
   { adr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbole: 'USDC', nom: 'USD Coin', type: 'STABLE', chaines: [8453] },
   /* cbBTC : adresse lue sur Blockscout (« Coinbase Wrapped BTC », 623 614 detenteurs, 8 decimales) — les homonymes sont des imitations */
   { adr: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', symbole: 'cbBTC', nom: 'Coinbase Wrapped BTC', type: 'MAJEUR', chaines: [8453] },
-  { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock — buyers need TBLOCK to buy', type: 'TBLOCK', chaines: [8453] },
+  /* ⛔⛔ `lancePubliquement: false` — DECISION DE PHIL, 2026-09-24 : « retirer le TBLOCK de la, car
+   *     le coin est pas reellement lance au public ». Il le disait du selecteur « From » du Swap.
+   *   ⇒ MESURE QUI VA DANS LE MEME SENS, faite le meme jour : TBLOCK fait partie des 7 jetons
+   *     detenus par le wallet de frais, et AUCUN des 7 n a de marche vivant (croise avec les 268
+   *     marches suivis). Proposer TBLOCK comme monnaie d echange, c est proposer d echanger quelque
+   *     chose qui ne s echange pas.
+   *   ⛔ Le jeton RESTE dans cette liste : d autres ecrans s en servent legitimement, et le retirer
+   *     d un coup casserait les blocks deja cotes en TBLOCK. C est le drapeau qui le retire des
+   *     endroits ou on PROPOSE un echange. */
+  { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock — buyers need TBLOCK to buy', type: 'TBLOCK', chaines: [8453], lancePubliquement: false },
 ];
+
+/**
+ * Peut-on PROPOSER d echanger cet actif ? Un actif sans marche public ne se propose pas : le
+ * choisir menerait a un echange impossible, decouvert apres coup.
+ * ⛔ FAIL-OPEN ASSUME ET EXPLIQUE : l absence de drapeau vaut « lance ». Les dizaines d entrees
+ *   existantes (ETH, USDC, cbBTC, actions) n en portent pas, et exiger le drapeau les ferait TOUTES
+ *   disparaitre des listes d echange — un vide total serait bien pire que le defaut corrige. Seul
+ *   ce qui est explicitement marque non lance est retire.
+ */
+export function proposableEnEchange(p) {
+  return !(p && p.lancePubliquement === false);
+}
 
 /** ⛔ RECOPIE de STOCKS_BASE_REGISTRY (index.html). Un test compare les deux listes, adresse par adresse. */
 export const ACTIONS_COINBASE = [

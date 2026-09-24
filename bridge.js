@@ -29,6 +29,24 @@ export const BRIDGE_FEE_LABEL = '0.01%';
 /** Settlement assets preferred for fee display (symbols only — never fee sink address). */
 export const BRIDGE_SETTLEMENT = ['ETH', 'USDC'];
 
+/* ⛔⛔ LA CONSTANTE QUI EMPECHE DE FACTURER UN SERVICE QU ON NE REND PAS.
+ *     Mesure du 2026-09-24 : le bouton de confirmation du Swap construisait UNE seule transaction —
+ *     le frais vers le puits — et l envoyait. Aucun second appel, aucune route, aucun calldata de
+ *     swap n existait nulle part dans le chemin. Pendant ce temps l ecran affichait
+ *     « You receive: <net> » juste au-dessus du bouton, et la reserve « net swap is not live yet »
+ *     ne s affichait qu APRES la signature.
+ *     ⇒ L utilisateur payait un frais, ne recevait rien, et l apprenait une fois l argent parti.
+ *       La divulgation existait ; la DECISION l ignorait.
+ *
+ * ⛔ TANT QUE CECI EST `false`, LE FRAIS NE PEUT PAS PARTIR. Ce n est pas un reglage de confort :
+ *   c est la garde qui separe « prendre un frais pour un echange » de « prendre de l argent ».
+ *   Le jour ou le hub echange vraiment, on passe cette constante a `true` — un seul endroit, et la
+ *   garde s ouvre d elle-meme. La remettre a `true` sans que le swap parte reintroduirait le
+ *   defaut ENTIER, et `test-bridge-pas-de-frais-sans-echange.mjs` echouerait.
+ * ⚠️ NON MESURE : rien ici ne verifie que le hub echange vraiment. Cette constante est une
+ *   DECLARATION humaine, pas une observation — elle vaut ce que vaut la personne qui la change. */
+export const HUB_SWAP_LIVE = false;
+
 /**
  * Dig §1 Bridge legs — UI labels only. Fee sink never appears here.
  * Equity = future leg label (honest "later"), not a live broker / FINRA / C4A clone.
@@ -43,11 +61,16 @@ export const BRIDGE_LEGS = Object.freeze([
     note: 'Fund mode — Coinbase/MoonPay lands ETH/USDC in YOUR wallet. Not a TB skim.',
   },
   {
+    /* ⛔⛔ `live: false` DEPUIS LE 2026-09-24. Cette jambe etait annoncee vivante, et elle l etait
+     *     au sens le plus litteral : la transaction de frais partait vraiment. Mais elle partait
+     *     SEULE — aucun echange en face, jamais. « Live » disait donc « ce prelevement fonctionne »
+     *     la ou l utilisateur lisait « cet echange fonctionne ». Un frais qui ne finance rien n est
+     *     pas une jambe vivante ; c est de l argent qui sort. */
     id: 'skim',
-    label: 'ETH/USDC skim',
-    live: true,
+    label: 'Swap fee',
+    live: false,
     fee: '0.01%',
-    note: 'Confirm sends 0.01% when From is ETH or USDC (wallet signs). Fail-closed if fee rounds to 0.',
+    note: 'Charged only once swapping actually works. Nothing is taken while the hub is off.',
   },
   {
     id: 'hub',
@@ -55,7 +78,9 @@ export const BRIDGE_LEGS = Object.freeze([
     live: false,
     fee: '0.01%',
     goPhil: true,
-    note: 'Quote stub only — atomic token↔token net via hub needs Phil BridgeRouter 1 bps. Not live.',
+    /* ⛔ Le nom interne du contrat et le prenom de l equipe sont retires : cette note peut finir a
+     *   l ecran, et elle ne doit rien supposer de connu. */
+    note: 'Swapping one token for another is not built yet. The quote is an estimate for later.',
   },
   {
     id: 'equity',
@@ -66,9 +91,27 @@ export const BRIDGE_LEGS = Object.freeze([
   },
 ]);
 
-/** Short honest legs blurb for Bridge panel (no sink, no ≈$1, no 2x/leverage). */
+/** Short honest legs blurb for Bridge panel (no sink, no ≈$1, no 2x/leverage).
+ *
+ * ⛔⛔ REECRIT LE 2026-09-24, POUR DEUX RAISONS MESUREES.
+ *  1. « Phil-blocked » s affichait AUX UTILISATEURS. Le prenom avait ete retire du HTML statique,
+ *     mais cette phrase-ci ECRASE le paragraphe au demarrage (app.html appelle phraseBridgeLegs()
+ *     sur #brLegsNote). Le nettoyage avait donc corrige la source qu on voyait en relisant le HTML,
+ *     pas celle qui gagne a l ecran. Une garde qui ne lit que le HTML statique ne peut pas voir ca.
+ *  2. « ETH/USDC 0.01% skim (live) » etait FAUX. Ce prelevement partait seul, sans aucun echange en
+ *     face. Annoncer « live » pour un frais qui ne finance rien, c est le mot le plus cher de tout
+ *     le panneau. Tant que HUB_SWAP_LIVE est false, plus rien n est preleve — et le texte le dit.
+ *
+ * ⛔ REGLE QUI TIENT CETTE PHRASE : elle ne decrit que ce que le code FAIT. Pas de nom interne, pas
+ *   de nom de contrat, pas de tarif pour une route qui n existe pas. Quelqu un qui ne nous connait
+ *   pas doit pouvoir la lire entierement.
+ */
 export function phraseBridgeLegs() {
-  return 'Legs: Fund (fiat→your wallet) · ETH/USDC 0.01% skim (live) · Block/Token hub quote (net swap Phil-blocked) · tokenized equity later — not a broker.';
+  return HUB_SWAP_LIVE
+    ? 'Legs: Fund (fiat → your wallet) · swap between tokens, with a 0.01% fee · tokenized equity later — not a broker.'
+    : 'Legs: Fund (fiat → your wallet) is the only one running. Swapping one token for another is '
+      + 'not built yet, so nothing is charged for it — the quote below is an estimate for later, '
+      + 'not an offer. Tokenized equity comes after that. We are not a broker.';
 }
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
@@ -188,7 +231,10 @@ export function planBridgeFeeSkim(p) {
       ok: false, live: false, stub: true, goPhil: true,
       settleSym: q.settleSym, fromSym: q.fromSym, toSym: q.toSym,
       feeBps: q.feeBps, feeLabel: q.feeLabel,
-      pourquoi: 'Bridge fee path is live for ETH / USDC From only. Tokenized↔tokenized net swap via hub needs a 1 bps on-chain router (Phil).',
+      /* ⛔ Ce texte ARRIVE A L ECRAN (app.html le passe a setEtat). Il portait un prenom de
+       *   l equipe, un nom de contrat interne et un tarif pour une route qui n existe pas — au
+       *   moment precis ou quelqu un essaie de comprendre pourquoi son choix ne marche pas. */
+      pourquoi: 'Swapping from this asset is not available. Swapping one token for another is not built yet.',
     };
   }
   const decimals = from === 'USDC' ? 6 : 18;
@@ -219,7 +265,8 @@ export function planBridgeFeeSkim(p) {
     toSym: q.toSym,
     feeBps: Number(BRIDGE_FEE_BPS),
     feeLabel: BRIDGE_FEE_LABEL,
-    pourquoi: 'Fee skim ready — wallet will send 0.01% only. Net swap via Bridge hub needs Phil 1 bps router.',
+    /* ⛔ Texte affiche. Il annonçait un frais « pret a partir » pour un echange qui n a jamais lieu. */
+    pourquoi: 'Nothing is charged: swapping one token for another is not built yet, so there is no fee to take.',
   };
 }
 
@@ -265,8 +312,9 @@ export function confirmerBridgeStub(quote) {
     stub: true,
     goPhil: true,
     /* Retired: any copy that promised atomic tokenized↔tokenized without Phil GO */
-    pourquoi: 'Atomic token↔token net via Bridge hub is blocked until Phil BridgeRouter (1 bps). '
-      + 'Fee skim is live when From is ETH or USDC only. Equity leg = later — not a live trade.',
+    /* ⛔ Texte affiche : ni prenom, ni nom de contrat, ni tarif d une route inexistante. */
+    pourquoi: 'Swapping one token for another is not built yet, so nothing is charged and nothing '
+      + 'is swapped. The tokenized equity leg comes later — this is not a live trade.',
     quote: quote || null,
   };
 }

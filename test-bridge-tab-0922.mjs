@@ -33,7 +33,16 @@ assert.equal(formatBridgeAmount(null, 'ETH'), '—');
 const stub = confirmerBridgeStub(q);
 assert.equal(stub.stub, true);
 assert.equal(stub.ok, false);
-assert.match(stub.pourquoi, /Phil|not on-chain|fee skim/i);
+/* ⛔⛔ CETTE LIGNE ACCEPTAIT « Phil » COMME REPONSE VALABLE, dans un texte qui arrive a l ecran par
+ *     setEtat. C etait la TROISIEME garde du depot a le permettre — les autres etaient dans
+ *     test-bridge-x402-brain-0923.mjs. Et plus bas dans CE MEME fichier, la ligne 110 INTERDIT le
+ *     prenom dans le panneau Bridge : le fichier se contredisait, en interdisant cote HTML ce qu il
+ *     exigeait cote module. Chaque garde se croyait couverte par l autre.
+ *   ⇒ On exige maintenant ce que le texte doit DIRE, et on interdit le jargon partout. */
+assert.match(stub.pourquoi, /not built yet/i,
+  'le refus n explique plus pourquoi rien ne se passe');
+assert.doesNotMatch(stub.pourquoi, /\bPhil\b|BridgeRouter|\bbps\b/i,
+  'prenom de l equipe ou nom de contrat interne dans un texte affiche a l utilisateur');
 
 /* units + skim plan */
 assert.equal(unitsFromHuman('1.5', 18), 1500000000000000000n);

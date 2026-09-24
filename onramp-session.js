@@ -79,13 +79,28 @@ export function validerDemande(d) {
   if (!ACTIFS_ONRAMP.includes(actif)) {
     return { etat: 'REFUSE', pourquoi: 'asset must be one of ' + ACTIFS_ONRAMP.join(', ') };
   }
-  /* ⛔ `Number(null)` vaut 0 et `Number('')` aussi : on refuse les valeurs vides AVANT de
-   *   convertir, sinon un champ non rempli passerait pour un montant de zero — le meme piege qui
-   *   avait fait gagner une pool « gratuite » au classement des frais. */
+  /* ⛔⛔ LE MONTANT EST FACULTATIF, ET MA PREMIERE VERSION LE RENDAIT OBLIGATOIRE. Ca a tue le rail
+   *     ENTIER pendant une journee, en production : le seul appelant (`ouvrirRailFiat` dans
+   *     app.html) n envoie pas de montant, donc la route rendait 400 a CHAQUE clic, donc le client
+   *     retombait toujours sur le lien public. Le bouton avait l air de marcher — il ne faisait
+   *     rien de ce pour quoi il avait ete ecrit.
+   *     ⛔ Et ma verification d hier n a pas vu le defaut parce qu elle regardait le COMPTEUR
+   *       d entonnoir monter. Or le chemin de REPLI incremente lui aussi (`onramp_session_repli`) :
+   *       j ai mesure que l ecouteur partait, pas que le rail aboutissait.
+   *     ⇒ La doc CDP est claire : `presetFiatAmount` est FACULTATIF. Exiger le montant etait ma
+   *       decision, pas la leur, et elle rendait la route inatteignable. Coinbase demande le
+   *       montant sur son propre ecran ; le pre-remplir est un confort, jamais une condition.
+   *
+   * ⛔ ABSENT et VIDE restent distincts, comme pour l actif juste au-dessus. `URLSearchParams.get`
+   *   rend `null` quand le parametre MANQUE (pas de preference : on accepte) et `''` quand il est
+   *   present mais blanc (un champ soumis vide : defaut de l appelant, on refuse). Et on refuse
+   *   AVANT de convertir, sinon `Number('')` vaudrait 0 et un champ vide passerait pour « zero
+   *   dollar » — le meme piege que la pool « gratuite » au classement des frais. */
   const brut = o.montantFiat;
-  if (brut === null || brut === undefined || brut === '') {
-    return { etat: 'REFUSE', pourquoi: 'a fiat amount is required' };
+  if (brut === null || brut === undefined) {
+    return { etat: 'OK', adresse: String(o.adresse).toLowerCase(), actif, montantFiat: null };
   }
+  if (brut === '') return { etat: 'REFUSE', pourquoi: 'fiat amount was sent but left blank' };
   const montant = Number(brut);
   if (!Number.isFinite(montant)) return { etat: 'REFUSE', pourquoi: 'fiat amount is not a number' };
   if (montant < FIAT_MIN || montant > FIAT_MAX) {

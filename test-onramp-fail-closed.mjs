@@ -70,16 +70,28 @@ v('pas d adresse entiere, pas de session', () => {
   }
 });
 
-v('un montant ABSENT est refuse, pas lu comme zero', () => {
-  /* ⛔⛔ LE PIEGE QUI M A DEJA EU AUJOURD HUI : `Number(null) === 0` et `Number('') === 0`. Sans ce
-   *     cas, un champ non rempli passerait la borne basse comme un « montant de 0 » et on
-   *     enverrait l utilisateur acheter zero dollar. C est exactement la faute qui avait fait
-   *     gagner une pool a frais illisibles au classement « la moins chere ». */
-  for (const creux of [undefined, null, '']) {
-    const r = validerDemande({ adresse: '0x' + 'a'.repeat(40), montantFiat: creux });
-    assert.equal(r.etat, 'REFUSE', 'montant ' + JSON.stringify(creux) + ' accepte');
-    assert.match(r.pourquoi, /required/i);
+v('un montant ABSENT est ACCEPTE — mais un champ blanc est refuse', () => {
+  /* ⛔⛔ CE CAS A CHANGE DE SENS LE 2026-09-24, ET IL FAUT DIRE POURQUOI. Il exigeait un montant, y
+   *     compris ABSENT. C etait une erreur de ma part, et elle a tue le rail entier pendant une
+   *     journee en production : le seul appelant n envoie pas de montant, donc la route rendait 400
+   *     a chaque clic et le client retombait toujours sur le lien public. Un test vert gardait une
+   *     regle fausse — le pire cas, parce qu il donnait confiance.
+   *     ⇒ `presetFiatAmount` est FACULTATIF chez CDP. Coinbase demande le montant sur son propre
+   *       ecran ; le pre-remplir est un confort, jamais une condition d existence du rail.
+   *
+   * ⛔ CE QUI RESTE, ET QUI COMPTE AUTANT : `Number(null) === 0` et `Number('') === 0`. Un champ
+   *   PRESENT mais blanc ne doit donc jamais devenir « zero dollar » — c est la faute qui avait
+   *   fait gagner une pool a frais illisibles au classement « la moins chere ». Absent et vide
+   *   sont deux choses differentes et le restent. */
+  const adr = '0x' + 'a'.repeat(40);
+  for (const absent of [undefined, null]) {
+    const r = validerDemande({ adresse: adr, montantFiat: absent });
+    assert.equal(r.etat, 'OK', 'montant ' + String(absent) + ' refuse : le rail redevient inatteignable');
+    assert.equal(r.montantFiat, null, 'un montant absent est devenu un nombre — il vaudrait 0');
   }
+  const blanc = validerDemande({ adresse: adr, montantFiat: '' });
+  assert.equal(blanc.etat, 'REFUSE', 'un champ soumis blanc a ete lu comme un montant');
+  assert.match(blanc.pourquoi, /blank/i);
 });
 
 v('NaN et l infini sont refuses — ils passent a travers toutes les bornes', () => {
