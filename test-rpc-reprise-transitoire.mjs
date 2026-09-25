@@ -52,10 +52,15 @@ function fabriquer({ noeuds, secours = [], reponses, b20Rpc = null }) {
     return { status: r.statut, ok: r.statut >= 200 && r.statut < 300, json: async () => r.corps };
   };
   const RESEAUX = { 8453: { rpc: noeuds, secours, b20Rpc, logsMultiRpc: null } };
-  const faire = new Function('RESEAUX', 'CHAINE', 'ESSAIS_429', 'fetch', 'setTimeout',
+  /* ⛔ `rpcCompte` est injecte pour que le test puisse LIRE les compteurs de diagnostic. Dans l app
+   *   ils sont exposes sur `window.__tbRpc` : c est le seul moyen de savoir en production si la
+   *   reprise sert a quelque chose, parce que le navigateur journalise le 403 meme quand elle
+   *   reussit. Un correctif qu on ne peut pas mesurer est un correctif qu on croit. */
+  const compte = { reseau: 0, cache: 0, fusion: 0, reprises: 0, reprisesOk: 0 };
+  const faire = new Function('RESEAUX', 'CHAINE', 'ESSAIS_429', 'fetch', 'setTimeout', 'rpcCompte',
     'let idRpc = 0; return (' + source + ');')(
-    RESEAUX, 8453, 5, fetchLabo, (k, ms) => { dodos.push(ms); k(); });
-  return { faire, appels, dodos };
+    RESEAUX, 8453, 5, fetchLabo, (k, ms) => { dodos.push(ms); k(); }, compte);
+  return { faire, appels, dodos, compte };
 }
 
 let n = 0;
@@ -144,6 +149,31 @@ asynchrone('⛔⛔ la lecture EPINGLEE de la factory B20 profite de la reprise',
     'la lecture de la factory a quitte son noeud epingle ou n a pas ete reprise');
 });
 
+asynchrone('⛔⛔ les compteurs distinguent une TENTATIVE d un SAUVETAGE', async () => {
+  /* ⛔⛔ `reprises` seul mentirait par omission : il compterait aussi les reprises qui n ont rien
+   *     sauve. C est `reprisesOk` — une lecture qui ABOUTIT apres un hoquet — qui dit ce que le
+   *     correctif rattrape. Les deux cas ci-dessous ont le MEME nombre de reprises et des
+   *     sauvetages opposes ; sans la distinction, un noeud mort ressemblerait a un succes.
+   *   ⛔ `constant-output-is-not-a-measurement` : un compteur qui ne bouge jamais, ou qui bouge
+   *     toujours pareil, ne mesure rien. On verifie les deux sens. */
+  const sauve = fabriquer({ noeuds: 'https://a.example', reponses: [
+    { statut: 403 }, { statut: 403 }, { statut: 200, corps: { result: '0x1' } }] });
+  await sauve.faire('eth_blockNumber', []);
+  assert.equal(sauve.compte.reprises, 2, 'les reprises ne sont pas comptees');
+  assert.equal(sauve.compte.reprisesOk, 1, 'un sauvetage reel n est pas compte');
+
+  const perdu = fabriquer({ noeuds: 'https://a.example', reponses: [{ statut: 503 }] });
+  await assert.rejects(() => perdu.faire('eth_blockNumber', []));
+  assert.equal(perdu.compte.reprises, 2, 'les reprises perdues ne sont pas comptees');
+  assert.equal(perdu.compte.reprisesOk, 0, 'un echec est compte comme un sauvetage');
+
+  const direct = fabriquer({ noeuds: 'https://a.example', reponses: [
+    { statut: 200, corps: { result: '0x9' } }] });
+  await direct.faire('eth_blockNumber', []);
+  assert.equal(direct.compte.reprises, 0, 'une lecture sans hoquet compte une reprise');
+  assert.equal(direct.compte.reprisesOk, 0, 'une lecture sans hoquet compte un sauvetage');
+});
+
 v('le 429 garde sa politique mesuree, intacte', () => {
   /* ⛔⛔ NON-CHANGEMENT DELIBERE, consigne ici pour qu il ne soit pas « corrige » plus tard : elargir
    *     la reprise du 429 au dernier noeud ferait attendre ~22 s par lecture quand les trois noeuds
@@ -154,7 +184,7 @@ v('le 429 garde sa politique mesuree, intacte', () => {
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
-assert.equal(n, 9, 'compte de cas inattendu : ' + n);
+assert.equal(n, 10, 'compte de cas inattendu : ' + n);
 console.log('ok rpc-reprise-transitoire — ' + n + ' cas, fonction REELLE executee : 403/5xx/coupure');
 console.log('   repris deux fois max (~1 s), 400 et revert jamais, repli toujours prioritaire.');
 console.log('⚠️ NE PROUVE PAS que les echecs de mise en vie du 09-24 venaient de la : leur cause');

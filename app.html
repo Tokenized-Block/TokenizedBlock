@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-rpc-retry-once" hidden>Build <code>20260925-rpc-retry-once</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-retry-counted" hidden>Build <code>20260925-retry-counted</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2844,7 +2844,12 @@ function rpcCleLogs(p) {
   return CHAINE + ':' + JSON.stringify(f);
 }
 /* compteur de diagnostic (lecture seule, dans la console : __tbRpc) — pour MESURER le gain au lieu de le supposer */
-const rpcCompte = { reseau: 0, cache: 0, fusion: 0, t0: Date.now() };
+/* ⛔ `reprises` / `reprisesOk` : SANS EUX, la reprise sur hoquet transitoire ajoutee le 2026-09-25
+ *   serait invisible — on ne saurait jamais si elle sauve une lecture ou ne sert a rien. Le
+ *   navigateur continue de journaliser le 403 meme quand la reprise reussit : la console ne peut
+ *   donc PAS repondre a la question. `reprisesOk` compte les lectures qui ont abouti APRES un
+ *   hoquet ; c est le seul chiffre qui dit ce que le correctif rattrape vraiment. */
+const rpcCompte = { reseau: 0, cache: 0, fusion: 0, reprises: 0, reprisesOk: 0, t0: Date.now() };
 try { window.__tbRpc = rpcCompte; } catch (_) { /* rien */ }
 async function rpc(methode, params) {
   const deCache = (v) => { rpcCompte.cache++; return v; };
@@ -2955,6 +2960,7 @@ async function rpcReseau(methode, params) {
         if (dernierNoeud && transitoire && reprises < REPRISES_TRANSITOIRE && essai < ESSAIS_429) {
           await new Promise((ok) => setTimeout(ok, ATTENTE_TRANSITOIRE[reprises]));
           reprises++;
+          try { rpcCompte.reprises++; } catch (_) { /* compteur absent : la lecture passe avant */ }
           continue; /* `essai` avance aussi : la boucle reste bornee, aucune reprise infinie */
         }
         break; /* try next node */
@@ -2969,6 +2975,9 @@ async function rpcReseau(methode, params) {
         break; /* next node */
       }
       if (j.error) throw new Error(j.error.message);
+      /* ⛔ ICI ET NULLE PART AILLEURS : une lecture qui aboutit APRES un hoquet est exactement ce que
+       *   le correctif rattrape. `reprises` seul compterait aussi les tentatives perdues. */
+      if (reprises > 0) { try { rpcCompte.reprisesOk++; } catch (_) { /* rien */ } }
       return j.result;
     }
   }
