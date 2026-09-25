@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-one-birth-button" hidden>Build <code>20260925-one-birth-button</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-rpc-retry-once" hidden>Build <code>20260925-rpc-retry-once</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2913,11 +2913,36 @@ async function rpcReseau(methode, params) {
   let derniere = null;
   for (let i = 0; i < noeuds.length; i++) {
     const url = noeuds[i];
+    /* ⛔⛔ UN HOQUET TRANSITOIRE N AVAIT AUCUNE REPRISE QUAND IL N Y AVAIT PLUS DE NOEUD OU ALLER.
+     *     Mesure du 2026-09-25, chargement neuf en production : UN `403`. Chez publicnode le 403 est
+     *     un etranglement deguise, pas un refus definitif — le commentaire du pin de la factory,
+     *     juste au-dessus, en comptait 34 par chargement. Or `ESSAIS_429` ne couvrait QUE le 429 :
+     *     un 403, un 502 ou un `Failed to fetch` faisaient `break` vers le noeud suivant. Quand il
+     *     n y en a pas — et c est EXACTEMENT le cas des lectures epinglees de la factory B20, un
+     *     seul noeud par decision — la lecture echouait au premier hoquet, sans reessayer une fois.
+     *   ⛔ BUDGET COURT ET SEPARE : deux reprises, 250 ms puis 700 ms. Pas les cinq essais du 429,
+     *     dont le recul exponentiel atteint ~22 s : un noeud VRAIMENT mort ne doit pas figer la
+     *     page, sinon on remplace une lecture ratee par une app qui ne rend plus la main. Le cout
+     *     maximal ajoute est ~1 s, et seulement sur un chemin qui echouait deja.
+     *   ⛔ SEULEMENT SUR LE DERNIER NOEUD : tant qu il reste un secours, y aller tout de suite est
+     *     plus rapide ET plus sur que d insister sur celui qui vient de refuser.
+     *   ⛔ ET LA POLITIQUE DU 429 N EST PAS TOUCHEE, volontairement. L elargir au dernier noeud
+     *     ferait attendre ~22 s par lecture quand les trois noeuds etranglent en meme temps — sous
+     *     la charge d une map vivante, ca transformerait un ralentissement en gel. Ce reglage a ete
+     *     mesure le 2026-09-13, je ne le rejoue pas a l aveugle. */
+    const dernierNoeud = i === noeuds.length - 1;
+    const REPRISES_TRANSITOIRE = 2, ATTENTE_TRANSITOIRE = [250, 700];
+    /* 403/408/425 : etranglement ou attente. 5xx : panne cote noeud. Tous peuvent disparaitre en
+     * 250 ms. ⛔ Ni 400 ni 404 ni 401 : une requete mal formee le restera, et la rejouer ne serait
+     * que de la latence offerte. */
+    const STATUTS_TRANSITOIRES = new Set([403, 408, 425, 500, 502, 503, 504]);
+    let reprises = 0;
     for (let essai = 0; essai <= ESSAIS_429; essai++) {
-      let r, j = null, limite = false;
+      let r, j = null, limite = false, statut = 0;
       try {
         r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
+        statut = r.status;
         limite = r.status === 429;
         if (!limite) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -2925,6 +2950,13 @@ async function rpcReseau(methode, params) {
         }
       } catch (e) {
         derniere = e;
+        /* `statut === 0` = le fetch lui-meme a jete : coupure reseau, DNS, CORS. Transitoire aussi. */
+        const transitoire = statut === 0 || STATUTS_TRANSITOIRES.has(statut);
+        if (dernierNoeud && transitoire && reprises < REPRISES_TRANSITOIRE && essai < ESSAIS_429) {
+          await new Promise((ok) => setTimeout(ok, ATTENTE_TRANSITOIRE[reprises]));
+          reprises++;
+          continue; /* `essai` avance aussi : la boucle reste bornee, aucune reprise infinie */
+        }
         break; /* try next node */
       }
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
