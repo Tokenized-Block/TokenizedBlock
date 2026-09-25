@@ -13,6 +13,8 @@
 //    devise admise (17 SPCXc, 4 METAc, 3 USDC) — dont MUc, 155 446 $ de FDV, cote en USDC. Ces 24
 //    tombaient dans PRIX_NON_LU. 131 des 227 lectures de cles ont ete refusees (« over rate limit ») a
 //    la premiere passe : elles ne comptent ni pour ni contre, et le chiffre est un PLANCHER.
+//    Rejeu de `stadesDesBlocks` sur ces 24 : tous sortent de PRIX_NON_LU — 3 par la conversion USDC
+//    (source CHAINE), 21 par la FDV publique que l ancien cul-de-sac n essayait jamais (source MARCHE).
 //
 // ⛔ CE QUE CE TEST NE PROUVE PAS : que l ecran affiche le bon palier. Il porte sur le classement rendu
 //    par `stades.js`, pas sur le HTML qui le peint.

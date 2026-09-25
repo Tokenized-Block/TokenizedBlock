@@ -1915,7 +1915,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-holders-persistent" hidden>Build <code>20260925-holders-persistent</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-actions-la-verite" hidden>Build <code>20260925-actions-la-verite</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3079,11 +3079,51 @@ const TAILLE_MIN = 30, TAILLE_MAX = 220;
  *   constante aurait fait croire qu un seuil bas gouverne encore la taille — une constante morte
  *   qui a l air vivante coute plus cher qu une ligne en moins. */
 const SEUIL_GROS_USD = 1000000;
+/* ⛔ LES PRIX DE DEVISE DEJA LUS, par SYMBOLE. Rempli paresseusement, UNE fois par devise
+ *   rencontree — jamais une rafale : la carte peut porter deux cents blocks, mais seulement une
+ *   poignee de devises distinctes. Une devise dont le prix n a pas pu etre lu reste ABSENTE de la
+ *   table (jamais zero) : c est ce qui fait la difference entre « pas de marche » et « prix non
+ *   lu », et ces deux-la ne doivent jamais se confondre. */
+const prixUsdDeviseLus = new Map();
+const prixDeviseEnVol = new Set();
+function assurerPrixDevise(sym) {
+  const s = String(sym || '');
+  if (!s || s === 'ETH' || s === 'USDC' || prixUsdDeviseLus.has(s) || prixDeviseEnVol.has(s)) return;
+  let adr = null;
+  try {
+    const p = pairesProposees(CHAINE).find((x) => String(x.symbole) === s);
+    adr = p && p.adr ? p.adr : null;
+  } catch (_) { adr = null; }
+  /* ⛔ une devise absente du registre n est pas cherchee : on ne devine pas une adresse a partir
+   *   d un symbole lu sur la chaine — c est exactement ainsi qu on se ferait passer un jeton pour
+   *   un autre. */
+  if (!adr) return;
+  prixDeviseEnVol.add(s);
+  void prixUsdDevise(adr).then((p) => {
+    if (typeof p === 'number' && Number.isFinite(p) && p > 0) prixUsdDeviseLus.set(s, p);
+  }).catch(() => { /* non lu : la devise reste absente, et le block garde « sans marche » */ })
+    .finally(() => prixDeviseEnVol.delete(s));
+}
+
+/* ⛔⛔ LA TROISIEME COPIE DU MEME CALCUL, et c est la plus visible : elle gouverne la TAILLE DES
+ *     TUILES sur la carte et le classement. `peindreJeu` convertit toutes les devises depuis le
+ *     2026-09-20, `stades.js` depuis aujourd hui — celle-ci ne connaissait que l ETH et l USDC, et
+ *     rendait `null` pour cbBTC et les treize actions tokenisees. Un block reellement cote tombait
+ *     donc a la taille minimale, indistinguable d un block sans marche.
+ *     MESURE DU 2026-09-25 : sur 96 blocks dont les cles ont pu etre lues, VINGT-QUATRE n ont
+ *     aucune pool ETH native mais une pool contre une devise admise — 17 SPCXc, 4 METAc, 3 USDC.
+ *     Dont un a 155 446 $ de capitalisation, affiche comme une poussiere.
+ *   ⛔ ON N INVENTE TOUJOURS AUCUN PRIX : une devise dont le prix n a pas ete lu rend `null`, et le
+ *     block garde la taille « sans marche ». Ce qui change, c est qu on essaie AVANT d abandonner —
+ *     `prixUsdDeviseLus` est aliment par les lectures deja faites, jamais par une supposition.
+ *   ⛔ `single-and-batch-twins-diverge` : c est la copie qu on ne relit pas qui reste fausse. Les
+ *     trois font maintenant la meme chose, et c est le registre `paires.js` qui arbitre. */
 function vieEnUsd(vie, devise) {
   if (typeof vie !== 'number' || !Number.isFinite(vie) || vie <= 0) return null;
   if (devise === 'USDC') return vie;
   if (!devise || devise === 'ETH') return typeof ethUsd === 'number' && ethUsd > 0 ? vie * ethUsd : null;
-  return null;
+  const p = prixUsdDeviseLus.get(String(devise));
+  return typeof p === 'number' && Number.isFinite(p) && p > 0 ? vie * p : null;
 }
 function tailleDe(vie, devise = 'ETH') {
   const usd = vieEnUsd(vie, devise);
@@ -4099,6 +4139,9 @@ function appliquerVie(h, r) {
   }
   if (r.etat !== 'LUE') return;
   h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
+  /* ⛔ ON DEMANDE LE PRIX DE SA DEVISE, une seule fois par devise : sans lui, un block cote en
+   *   SPCXc ou METAc tombe a la taille minimale et se confond avec un block sans marche. */
+  assurerPrixDevise(r.devise);
   /* ⛔ LE CLIQUET SE POSE ICI, et une seule fois : au moment ou une vie reelle a ete LUE. C est le
    *   seul endroit du fichier qui peut l affirmer sur une mesure. */
   if (r.vie != null && Number(r.vie) > 0) h.futVivant = true;
@@ -5081,7 +5124,11 @@ function peindreStades() {
       ? (lectureVieEnCours
         ? ('Reading markets… · ' + g.blocks.length + ' waiting')
         : (g.cle === 'PRIX_NON_LU'
-          ? ('Tier not judged — ETH/USD unread · ' + g.blocks.length)
+          /* ⛔ NOMMAIT UNE FAUSSE CAUSE : devant un block cote en cbBTC ou en action tokenisee, ce
+           *   n est pas le prix de l ETH qui manque, c est celui de SA devise. Le titre envoyait
+           *   chercher le probleme au mauvais endroit. `stades.js` a ete corrige aujourd hui ; ce
+           *   titre-ci l ECRASE, donc c est lui qu on lit a l ecran. */
+          ? ('Tier pending — waiting on a USD price for its currency · ' + g.blocks.length)
           : ('Market unread — about our node/RPC, not that these blocks are broken · ' + g.blocks.length)))
       : (g.titre + ' · ' + g.blocks.length);
     let corps;
@@ -8328,10 +8375,17 @@ async function preparerEchange(sens) {
   }
   if (p.etat === 'REFUSE') {
     e.className = 'note wKo';
-    e.textContent = 'Not possible: ' + (p.pourquoi || p.etat)
-      + (String(p.pourquoi || '').includes('returns nothing')
-        ? ' — the pool quoted zero for this size (thin book or empty), not a network blip.'
-        : '');
+    /* ⛔⛔ DU JARGON INTERNE SUR L ECRAN DE QUELQU UN QUI VOULAIT ACHETER. Le refus d un marche cote
+     *     en action remontait tel quel : « Buy/Sell fee must land as ETH or USDC — this pair cannot
+     *     take the interface fee in an allowed asset ». C est NOTRE contrainte de frais, pas la
+     *     sienne, et elle ne lui apprend rien de ce qu il peut faire. */
+    e.textContent = /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+      ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
+        + 'available yet — its market is real on Uniswap. Nothing was sent.'
+      : 'Not possible: ' + (p.pourquoi || p.etat)
+        + (String(p.pourquoi || '').includes('returns nothing')
+          ? ' — the pool quoted zero for this size (thin book or empty), not a network blip.'
+          : '');
     /* ⛔ LA POOL A REPONDU, et sa reponse est « non » — carnet trop mince, taille trop grande. Rien
      *   a reparer dans notre code : c est de la liquidite qui manque, et ce compteur le dira. */
     try { etape('echange_refus_pool'); } catch (_) {}
@@ -11152,7 +11206,18 @@ function peindrePaires() {
 }
 
 /** tip 20260922-stock-pair-ux: quick picks ETH / AAPLc / GOOGLc / NVDAc / COINc — hide if off Base or option disabled */
-const PAIRES_CHIP_QUICK = ['ETH', 'AAPLc', 'GOOGLc', 'NVDAc', 'COINc'];
+/* ⛔⛔ MESURE DU 2026-09-25, `/api/prix-usd` rejoue sur les treize actions : CINQ n ont AUCUN prix
+ *     lisible — COINc, CRCLc, INTCc, MSTRc et SNDKc (pas de paire cotee, ou liquidite sous le seuil
+ *     de 10 000 $). Et COINc etait l une des cinq puces mises en avant.
+ *     Consequence mesuree : Create reussit, puis l ecran de mise en vie demande de taper une valeur
+ *     de depart EN COINc — une devise dont l app ne connait pas le prix. Le parcours automatique
+ *     s arrete la, et le plancher anti-brade disparait avec lui.
+ *   ⛔ LES PUCES NE PORTENT QUE DES ACTIONS DONT LE PRIX A ETE LU. Les treize restent dans la liste
+ *     deroulante : on ne retire pas un choix, on arrete seulement de pousser vers un cul-de-sac.
+ *   ⚠️ CETTE LISTE EST UNE PHOTO D UN JOUR. Si une de ces cinq gagne un marche liquide, elle
+ *     redevient legitime — et si AAPLc perd le sien, elle doit sortir. C est a re-mesurer, pas a
+ *     graver. */
+const PAIRES_CHIP_QUICK = ['ETH', 'AAPLc', 'GOOGLc', 'NVDAc', 'METAc'];
 function peindrePaireChips() {
   const box = $('#cPaireChips');
   if (!box) return;
@@ -11291,8 +11356,20 @@ async function majPaire() {
      * ⛔ ET MA GARDE DE TEXTE NE L A PAS VUE : aucun `≠`, aucun francais, aucun dollar fige — elle
      *    n avait aucun motif pour NOS PROPRES noms de contrats. Motif ajoute dans le meme passage,
      *    sinon la prochaine note interne repasse par la meme porte. */
+    /* ⛔⛔ CETTE PHRASE ETAIT VRAIE SUR LA CHAINE ET FAUSSE DANS L APP, ce qui est la pire des deux.
+     *     Mesure du 2026-09-25 : `echange.js:149` REFUSE tout achat et toute vente sur un marche
+     *     cote en action — « Buy/Sell fee must land as ETH or USDC ». Les 0,5 % de frais d interface
+     *     ne peuvent se prendre qu en ETH ou en USDC, donc la porte est fermee AVANT le trade.
+     *     On promettait donc des acheteurs qui, depuis ces ecrans, ne peuvent pas acheter — juste
+     *     avant de demander 0,001 ETH. La pool, elle, est bien reelle et echangeable sur Uniswap.
+     *   ⛔ ON LE DIT AVANT DE PRENDRE L ARGENT. Le correctif de fond (laisser passer le trade sans
+     *     prendre les 0,5 % sur ces marches) renonce a un revenu : c est une decision produit, pas
+     *     un patch — elle appartient a Phil, et elle demandera sa propre garde. En attendant, la
+     *     seule chose honnete est de ne pas laisser croire le contraire. */
     suite = 'Priced in ' + (q.paire.symbole || 'that stock') + ' (a Coinbase tokenized stock), '
-      + 'so buyers will need ' + (q.paire.symbole || 'that stock') + ' to trade your block — not ETH.';
+      + 'so buyers will need ' + (q.paire.symbole || 'that stock') + ' to trade your block — not ETH. '
+      + 'Read this before you pay: Buy and Sell inside this app do not work on a stock-quoted market '
+      + 'today. Your pool is real and tradable on Uniswap, but not from these screens.';
   }
   n.textContent = suite;
   const chip = $('#cPaireChip');
@@ -11784,7 +11861,17 @@ function aLancerLire() {
 function aLancerEcrire(l) { try { localStorage.setItem(CLE_A_LANCER, JSON.stringify(l.slice(-20))); } catch (_) { /* rappel perdu, rien d autre */ } peindreALancer(); }
 function aLancerAjouter(adr, sym) {
   const a = String(adr).toLowerCase();
-  aLancerEcrire([...aLancerLire().filter((b) => b.adr !== a), { adr: a, sym: String(sym || '').slice(0, 14) }]);
+  /* ⛔⛔ LA PAIRE VOYAGE AVEC LE BLOCK, et sans elle le defaut etait DEFINITIF. Mesure du 2026-09-25 :
+   *     `uriCreation` grave `pair: { address, symbol }` dans le contractURI — pour toujours. Mais
+   *     cette liste ne retenait que `{ adr, sym }`, et la banniere de reprise force `d.value = 'ETH'`
+   *     pour tous. Un block cree appaire INTCc, puis repris depuis la banniere, ouvrait donc un
+   *     marche ETH alors que ses metadonnees gravees disent INTCc. Les deux se contrediraient sur la
+   *     chaine sans aucun rattrapage possible : une pool ne se re-initialise pas.
+   *   ⛔ On ne grave rien ici — on se SOUVIENT de ce qui a ete grave ailleurs. */
+  const paireGravee = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(String(paireChoisie.adr))
+    ? String(paireChoisie.adr) : null;
+  aLancerEcrire([...aLancerLire().filter((b) => b.adr !== a),
+    { adr: a, sym: String(sym || '').slice(0, 14), paire: paireGravee }]);
 }
 function aLancerRetirer(adr) { const a = String(adr || '').toLowerCase(); aLancerEcrire(aLancerLire().filter((b) => b.adr !== a)); }
 function peindreALancer() {
@@ -11807,7 +11894,17 @@ function peindreALancer() {
     void ouvrirProfil(adr, b && b.sym).then(() => {
       try {
         const d = $('#plDevise');
-        if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+        /* ⛔⛔ LA PAIRE GRAVEE COMMANDE, PAS « ETH » EN DUR. Le contractURI du block porte deja sa
+         *     paire ; rouvrir en ETH creerait un marche qui contredit ses metadonnees, pour
+         *     toujours — une pool ne se re-initialise pas. On retombe sur ETH SEULEMENT si la paire
+         *     memorisee n est pas dans la liste : mieux vaut un marche ETH assume qu une option
+         *     inexistante qui laisserait le champ vide sans rien dire. */
+        if (d) {
+          const voulue = b && b.paire ? String(b.paire) : 'ETH';
+          const opt = [...d.options].find((o) => String(o.value).toLowerCase() === voulue.toLowerCase());
+          d.value = opt ? opt.value : 'ETH';
+          d.dispatchEvent(new Event('change'));
+        }
         const part = $('#plPart'); if (part) part.value = '99.9';
         ouvrirLancement();
         vieAuto = true;
