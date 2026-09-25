@@ -1825,7 +1825,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260924-scale-and-rate" hidden>Build <code>20260924-scale-and-rate</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-link-lands-on-block" hidden>Build <code>20260925-link-lands-on-block</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4780,10 +4780,19 @@ function peindreStades() {
         : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
           + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
     } else {
-      corps = g.blocks.filter((b) => b.nous).map((b) => '<button type="button" class="puce on" data-block="' + enTexte(b.adr) + '" data-sym="' + enTexte(b.sym || '') + '">'
-        + enTexte(String(b.sym || b.adr.slice(0, 8)).slice(0, 14))
-        + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</button>').join('')
-        + (g.autres ? '<span class="note" style="align-self:center">' + (g.nous ? '+ ' : '') + g.autres + ' other block' + (g.autres > 1 ? 's' : '') + '</span>' : '');
+      /* ⛔⛔ ON NE MET PLUS NOS PROPRES BLOCKS EN AVANT ICI. Phil, 2026-09-24 : « ne mets plus en
+       *     évidence, ils ont du mal à évoluer ».
+       *     Cette ligne filtrait sur `b.nous` : elle ne nommait QUE les blocks du projet, avec leur
+       *     pourcentage de progression, dans un panneau que lisent des inconnus. Un visiteur voyait
+       *     donc nos creations designees par leur nom — et, en l occurrence, a 34 % et 9 %.
+       *   ⛔ C EST DEUX FOIS DE TROP. D abord parce que se citer soi-meme dans un classement public
+       *     est de la promotion deguisee en information (meme motif que les carres bleus retires le
+       *     2026-09-23). Ensuite parce que le chiffre affiche etait FAIBLE : on se mettait en
+       *     vitrine pour montrer qu on stagne.
+       *   ⇒ Le palier et son NOMBRE restent — c est l information. Les noms partent, tous, sans
+       *     exception : afficher ceux des autres a la place aurait juste deplace le probleme. */
+      corps = '<span class="note" style="align-self:center">' + g.blocks.length
+        + ' block' + (g.blocks.length > 1 ? 's' : '') + ' at this stage</span>';
     }
     return '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
       + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">' + corps + '</div>';
@@ -5751,6 +5760,29 @@ async function peindreHolders(adr, essai = 0) {
  *     hors de Create au milieu de son geste.
  *   ⇒ On separe les deux. Lire n est pas naviguer. La navigation devient une decision de
  *     l appelant, prise quand il y a quelque chose a montrer — c est-a-dire quand le marche existe. */
+/* ⛔ Amene un element en vue et le REAFFIRME tant que la page bouge au-dessus de lui — mais
+ *   JAMAIS contre la volonte de l utilisateur.
+ * ⛔ COMMENT ON DISTINGUE NOTRE SCROLL DU SIEN : on note la position juste apres chaque scroll
+ *   qu on provoque. Les evenements `scroll` arrivent APRES, donc ils trouvent la valeur a jour et
+ *   ne declenchent pas de faux positif. Un ecart de plus de 4 px veut dire que quelqu un d autre a
+ *   bouge la page — et a ce moment-la on se tait.
+ * ⛔ BORNE : quatre tentatives sur ~1,5 s. Au-dela, ou bien la page a fini de bouger, ou bien
+ *   quelque chose de plus grave se passe et insister ne le reparera pas. */
+function amenerEnVue(el) {
+  if (!el || typeof el.scrollIntoView !== 'function') return;
+  let dernierY = -1, arrete = false, essais = 0;
+  const surScroll = () => { if (!arrete && Math.abs(window.scrollY - dernierY) > 4) arrete = true; };
+  window.addEventListener('scroll', surScroll, { passive: true });
+  const essayer = () => {
+    if (arrete || essais >= 4 || el.hidden) { window.removeEventListener('scroll', surScroll); return; }
+    essais++;
+    try { el.scrollIntoView({ block: 'start', behavior: 'auto' }); } catch (_) { /* element detache */ }
+    dernierY = Math.round(window.scrollY);
+    setTimeout(essayer, essais === 1 ? 280 : 520);
+  };
+  essayer();
+}
+
 async function ouvrirProfil(adr, sym, opts) {
   if (!ADRESSE.test(String(adr || ''))) return;
   if ($('#pePremier')) $('#pePremier').hidden = true;
@@ -5839,7 +5871,24 @@ async function lireProfil(adr, sym, perime, opts) {
    * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
    * qui ne la concerne pas. Les chiffres, eux, arriveront quand ils arriveront. */
   peindreMetier(adr);
-  p.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  /* ⛔⛔ LE SCROLL EST REAFFIRME, PARCE QU UNE SEULE FOIS NE SUFFIT PAS — mesure du 2026-09-25 sur
+   *     la page LIVE, en 375 px.
+   *     Un visiteur qui ouvre un lien partage (`/?block=0x…`) atterrit sur l onglet Blocks, ou le
+   *     block qu il venait voir se trouve a 927 px — plus d un ecran sous la ligne de flottaison,
+   *     derriere « Biggest blocks » et « Blocks by stage ». Et le scroll reste a ZERO : observe sur
+   *     12 secondes, `scrollY` ne bouge jamais.
+   *     Ce n est pas le mecanisme qui est casse : appele a la main sur la meme page, il scrolle a
+   *     982 px et met le profil en haut. C est le MOMENT de l appel — il part avant que les ~900 px
+   *     de classement au-dessus ne soient peints, donc il scrolle vers une position qui n existe
+   *     pas encore, et plus rien ne le corrige.
+   *   ⇒ ENJEU MESURE : hier, 7 visiteurs sur 30 sont arrives par un lien de block (`lien_recu`), et
+   *     0 a clique sur Create. Ils atterrissaient sur un classement generique.
+   *
+   * ⛔ ON NE SE BAT PAS CONTRE L UTILISATEUR : des qu il scrolle lui-meme, on arrete. Une page qui
+   *   ramene de force quelqu un ou il ne veut pas aller est pire que celle qui ne l y amene jamais.
+   * ⛔ `behavior: 'auto'`, pas `smooth` : une animation en cours se fait annuler par le prochain
+   *   repaint, et c est precisement ce qui se passait. */
+  if (!(opts && opts.sansNaviguer)) amenerEnVue(p);
   /* ⛔⛔ LIEN DE LANCEMENT : la carte s ouvre TOUT DE SUITE (mesure prod 2026-09-13 : le profil lit d abord ses faits et
    *    sa face, puis le marche — sous saturation, la carte n arrivait jamais). « Work it out » verifie le marche avant
    *    tout plan : rien n est propose a signer tant que l absence de marche n est pas averee. */
