@@ -41,6 +41,9 @@ import { gzipSync } from 'node:zlib';
 import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession } from './onramp-session.js';
+/* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
+import { lirePostPublie } from './post-grave.js';
+const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
 
 /* ⛔ PONT OPENLAUNCH (tip 0022). Leur API ne renvoie aucun en-tete CORS : la page ne peut pas la lire. Ce serveur la
@@ -693,6 +696,8 @@ const ETAPES_ENTONNOIR = [
   'bridge_swap_sans_block', 'bridge_swap_montant', 'bridge_swap_ko', 'bridge_swap_approbations',
   /* « Tokenize a post » lance depuis la fiche d un block — mesure si ce bouton amene des creations */
   'tokenx_depuis_profil',
+  /* le composeur de l onglet Post : mesure si preparer un message amene vraiment des gens a publier */
+  'tokenx_composer',
   'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
   /* rail fiat -> Base */
   'onramp_session_ok', 'onramp_session_repli',
@@ -1162,6 +1167,49 @@ createServer((req, res) => {
     }).catch((e) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, etat: 'NON_LUE', pourquoi: 'face not read: ' + String(e.message || e).slice(0, 120) }));
+    });
+    return;
+  }
+
+  /* ══ LE POST GRAVE, RECONSTITUE CHEZ NOUS : /api/post/0x… ═══════════════════════════════════════
+   * ⛔⛔ POURQUOI COTE SERVEUR. Le widget officiel de X chargerait `platform.twitter.com` chez
+   *     CHAQUE visiteur : un script externe, du pistage, et une dependance qui peut tomber ou
+   *     changer sans prevenir. Trois refus d integration ont deja ete essuyes ici pour cette raison
+   *     exacte. On demande donc a X une fois, d ici, et la page redessine avec ses propres balises.
+   * ⛔ ON NE RENVOIE JAMAIS LEUR HTML : seulement l auteur et le TEXTE, extraits et bornes.
+   * ⛔ CACHE : une reponse LUE ou INTROUVABLE decrit un fait stable, elle se garde. Un NON_MESURE
+   *   est un echec de LECTURE : jamais cache, sinon une minute de reseau coupe condamnerait
+   *   l affichage d un post pour toute la vie du processus. Meme discipline que les faces. */
+  if (chemin.startsWith('/api/post/')) {
+    const token = chemin.slice('/api/post/'.length);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(token)) {
+      res.writeHead(400, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: 'whole address required' }));
+      return;
+    }
+    const t = token.toLowerCase();
+    const rendre = (corps) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps));
+    };
+    if (postsLus.has(t)) { rendre(postsLus.get(t)); return; }
+    resoudreFace(t).then(async (f) => {
+      const lien = f && f.face && typeof f.face.tweet === 'string' ? f.face.tweet : null;
+      if (!lien) {
+        /* ⛔ « ce block ne porte pas de post » est un FAIT stable, pas un echec : on le garde. */
+        const rep = { ok: true, etat: 'AUCUN', pourquoi: 'no post engraved on this block' };
+        postsLus.set(t, rep);
+        rendre(rep);
+        return;
+      }
+      const p = await lirePostPublie({ lien });
+      const rep = p.etat === 'LU'
+        ? { ok: true, etat: 'LU', auteur: p.auteur, auteurLien: p.auteurLien, texte: p.texte, lien }
+        : { ok: true, etat: p.etat, lien, pourquoi: p.pourquoi };
+      if (p.etat !== 'NON_MESURE') postsLus.set(t, rep);
+      rendre(rep);
+    }).catch((e) => {
+      rendre({ ok: false, etat: 'NON_MESURE', pourquoi: 'post not read: ' + String(e.message || e).slice(0, 120) });
     });
     return;
   }

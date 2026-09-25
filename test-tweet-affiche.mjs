@@ -88,11 +88,23 @@ v('la reserve est affichee AVEC le lien, jamais separee', () => {
    *     texte ; il doit verrouiller ce que le texte AFFIRME.
    *   ⇒ On exige les trois choses qu on ne peut pas prouver et qu il faut donc dire :
    *     on n a pas ouvert le post · on n etablit pas a qui il appartient · la gravure est definitive. */
-  assert.match(src, /not opened it|never opened it/i,
-    'la reserve « on n a pas ouvert ce post » a disparu : le montrer deviendrait un aval');
-  assert.match(src, /belongs to/i,
-    'la reserve sur l APPARTENANCE a disparu : afficher le lien fabriquerait une association '
+  /* ⛔⛔ CE CAS A ETE RETOURNE LE 2026-09-25, ET C EST LE POINT LE PLUS IMPORTANT DU FICHIER.
+   *     Il exigeait la phrase « we have not opened it ». Elle etait vraie tant qu on affichait un
+   *     LIEN. Depuis qu on affiche le CONTENU — demande a X par notre serveur — elle est FAUSSE.
+   *     Garder un texte rassurant qui ne decrit plus ce qu on fait serait pire que l ancien
+   *     silence : c est precisement le genre de phrase qu on ne relit jamais.
+   *   ⇒ On INTERDIT desormais cette affirmation, et on exige celle qui reste vraie : la gravure
+   *     prouve le LIEN, jamais l appartenance. */
+  const rendu = html.slice(html.indexOf('async function peindrePostGrave('),
+    html.indexOf('function allerTokeniserUnPost('));
+  assert.ok(rendu.length > 800, 'le rendu du post est introuvable : ce test ne garde plus rien');
+  assert.doesNotMatch(rendu + src, /we have not opened it|we never opened it/i,
+    'la page affirme encore ne pas avoir ouvert le post, alors qu elle en affiche le contenu');
+  assert.match(rendu, /never who the post belongs to/i,
+    'la reserve sur l APPARTENANCE a disparu : montrer le contenu fabriquerait une association '
     + 'qu on n a jamais mesuree');
+  assert.match(rendu, /fetched by us/i,
+    'on ne dit plus que c est NOUS qui sommes alles chercher ce contenu');
   assert.match(src, /cannot be changed/, 'le caractere definitif de la gravure n est plus dit');
 });
 

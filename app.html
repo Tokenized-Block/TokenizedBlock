@@ -1544,8 +1544,37 @@ details[open] > summary::before{transform:rotate(90deg)}
            ni ici, ni dans Create, ni dans le validateur. On ne sait donc pas si le post existe ni a
            qui il est. Le taire laisserait croire a une verification qui n a jamais eu lieu — et le
            lien, lui, est permanent. -->
-      <p class="note">Nothing here opens the link. We do not check that the post exists, and we cannot tell whether it is yours — the block simply points at it, for good.</p>
+      <!-- ⛔ PRECISE LE 2026-09-25 : cette phrase disait « nothing here opens the link ». C est
+           toujours vrai AU MOMENT DE LA GRAVURE — rien ne verifie le lien avant de l ecrire sur la
+           chaine — mais l app ouvre desormais le post sur la fiche du block, pour l afficher. Une
+           phrase globale serait devenue fausse par omission. -->
+      <p class="note">Nothing is checked when the link is engraved: we do not verify that the post exists, and we cannot tell whether it is yours — the block simply points at it, for good. Later, on the block's page, we do fetch what X publishes for that link, to show it.</p>
       <button type="button" class="bouton" id="tkGo">Create a block with a post</button>
+    </div>
+
+    <!-- ⛔⛔ LE COMPOSEUR (Phil, 2026-09-25 : « une sorte de pop avec ".@users… a tokenized un
+         block" »). Il PREPARE un post, il n en publie AUCUN : le bouton ouvre la fenetre de
+         redaction de X, ou la personne relit et decide. Publier a la place de quelqu un, meme avec
+         son accord, est un geste qu on ne prend pas.
+         ⛔ LE POINT DEVANT LE @ N EST PAS UNE COQUETTERIE : sans lui, X traite le message comme une
+           reponse et ne le montre qu aux abonnes communs. Avec, tous les abonnes le voient. C est
+           la difference entre un message prive par accident et un message public. -->
+    <div class="carte" style="margin-top:14px">
+      <p class="titre">Say it on X</p>
+      <p class="sous">Write it, read it, then decide. Nothing is published from here — the button opens X
+        with the text ready, and you send it yourself.</p>
+      <label class="champ">Their handle
+        <input id="tkQui" placeholder="someone" autocomplete="off" spellcheck="false" maxlength="15">
+      </label>
+      <label class="champ">Block link (optional)
+        <input id="tkLien" placeholder="https://tokenizedblock.space/?block=0x…" autocomplete="off" spellcheck="false">
+      </label>
+      <p class="note" id="tkApercu" style="border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:10px 12px;white-space:pre-wrap"></p>
+      <div class="rang" style="flex-wrap:wrap;gap:8px">
+        <button type="button" class="bouton" id="tkPoster">Open X with this post</button>
+        <button type="button" class="bouton sec" id="tkCopier">Copy the text</button>
+      </div>
+      <p class="note" id="tkEtat" style="margin-top:6px"></p>
     </div>
   </section>
   <section class="volet" id="v-learn" aria-label="Learn">
@@ -1825,7 +1854,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-link-lands-on-block" hidden>Build <code>20260925-link-lands-on-block</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-post-visible" hidden>Build <code>20260925-post-visible</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2983,6 +3012,71 @@ function faceConnue(adr) {
  *   dans le gestionnaire du bouton `#tkGo` ; le recopier pour le nouveau bouton aurait cree un
  *   jumeau plus faible qui se serait desynchronise au premier changement de champ
  *   (`canonical-helper-weaker-copy`). Extrait, pas duplique. */
+/* ⛔⛔ LA RECONSTITUTION DU POST, DESSINEE PAR NOUS. Le contenu vient de `/api/post/<adr>`, que NOTRE
+ *     serveur a demande a X. Aucun script de X n entre dans cette page : leur widget chargerait
+ *     `platform.twitter.com` chez chaque visiteur — script externe, pistage, et une dependance qui
+ *     peut tomber sans prevenir. Trois refus d integration ont deja ete essuyes ici pour cette
+ *     raison exacte.
+ * ⛔ ON N INJECTE JAMAIS DE HTML : le serveur ne renvoie que du texte, et tout est pose par
+ *   `textContent` sur des noeuds qu on cree. Un post est du contenu de tiers ; le traiter comme du
+ *   balisage serait une porte ouverte dans la page de tout le monde.
+ * ⛔⛔ TROIS ETATS, ET ILS NE DISENT PAS LA MEME CHOSE :
+ *     LU          → on montre, et la reserve devient exacte : on l a ouvert, on ne prouve pas a qui
+ *                   il appartient.
+ *     INTROUVABLE → X ne le sert plus (supprime, compte protege). C est un fait sur le POST.
+ *     NON_MESURE  → on n a pas pu demander. C est un fait sur NOUS. Ecrire « ce post n existe pas »
+ *                   sur une panne reseau serait une accusation gratuite sur le block d un autre. */
+async function peindrePostGrave(adr, carte, note) {
+  const RESERVE_FIN = ' Engraving proves the link, never who the post belongs to.';
+  let j = null;
+  try {
+    const r = await fetch('/api/post/' + String(adr).toLowerCase(), { cache: 'no-store' });
+    if (r.ok) j = await r.json();
+  } catch (_) { j = null; }
+  /* ⛔ le profil a pu changer entre-temps : on n ecrit pas dans l ecran d un autre block */
+  if (!carte.isConnected) return;
+  if (!j || j.ok !== true || j.etat === 'NON_MESURE') {
+    note.textContent = 'Engraved with this block — it cannot be changed. We could not fetch what it '
+      + 'says right now; that is about our reading, not about the post.' + RESERVE_FIN;
+    return;
+  }
+  if (j.etat === 'INTROUVABLE') {
+    note.textContent = 'Engraved with this block — it cannot be changed. X does not serve it publicly '
+      + 'any more: it may be deleted, or the account may be protected.' + RESERVE_FIN;
+    return;
+  }
+  if (j.etat !== 'LU' || typeof j.texte !== 'string' || !j.texte) return;
+
+  carte.style.border = '1px solid rgba(255,255,255,.18)';
+  carte.style.borderRadius = '12px';
+  carte.style.padding = '10px 12px';
+  carte.style.margin = '6px 0 2px';
+  if (j.auteur) {
+    const a = document.createElement('p');
+    a.className = 'note';
+    a.style.margin = '0 0 4px';
+    a.style.fontWeight = '700';
+    /* ⛔ le lien d auteur a deja ete borne a x.com cote serveur ; on ne le recolle pas nous-memes */
+    if (j.auteurLien) {
+      const lienAuteur = document.createElement('a');
+      lienAuteur.href = j.auteurLien;
+      lienAuteur.target = '_blank';
+      lienAuteur.rel = 'noopener noreferrer';
+      lienAuteur.textContent = j.auteur;
+      a.appendChild(lienAuteur);
+    } else { a.textContent = j.auteur; }
+    carte.appendChild(a);
+  }
+  const p = document.createElement('p');
+  p.style.margin = '0';
+  p.style.whiteSpace = 'pre-wrap'; /* le post avait des retours a la ligne : les perdre le reecrit */
+  p.textContent = j.texte;
+  carte.appendChild(p);
+  carte.hidden = false;
+  note.textContent = 'Engraved with this block — it cannot be changed. This is what X publishes for '
+    + 'that link, fetched by us just now.' + RESERVE_FIN;
+}
+
 function allerTokeniserUnPost() {
   allerA('creer');
   const d = $('#cTweetDetail'), c = $('#cTweetOui'), l = $('#cTweetLien');
@@ -6007,13 +6101,24 @@ async function lireProfil(adr, sym, perime, opts) {
         allerTokeniserUnPost();
       });
       boite.appendChild(bCreer);
+      /* ⛔⛔ LA CARTE DU POST, REMPLIE APRES COUP. Phil, 2026-09-25 : « ajoute l encadre avec le
+       *     tweet visible, ou une reconstitution ». On demande le contenu a NOTRE serveur, qui l a
+       *     demande a X — jamais par un script de X dans cette page.
+       *   ⛔ ET LA RESERVE CHANGE EN MEME TEMPS QUE L AFFICHAGE : tant qu on montrait un lien, « we
+       *     have not opened it » etait vrai. Montrer le contenu la rend FAUSSE. Garder une phrase
+       *     rassurante qui ne decrit plus ce qu on fait serait pire que l ancien silence. */
+      const carte = document.createElement('div');
+      carte.id = 'pTweetCarte';
+      carte.style.flexBasis = '100%';
+      carte.hidden = true;
+      boite.appendChild(carte);
+
       const note = document.createElement('span');
       note.className = 'note';
       note.style.flexBasis = '100%';
       note.style.margin = '0';
       note.textContent = valide
-        ? 'Engraved with this block — it cannot be changed. We have not opened it: nothing here '
-          + 'checks that the post exists, or who it belongs to.'
+        ? 'Engraved with this block — it cannot be changed. Reading it…'
         /* ⛔ VRAI ET UTILE : un lien ne se grave qu A LA CREATION. Aucun chemin d ecriture du
          *   contractURI n existe apres coup — verifie dans le depot. Le dire evite a quelqu un de
          *   chercher un bouton « ajouter un post » qui ne peut pas exister. */
@@ -6021,6 +6126,9 @@ async function lireProfil(adr, sym, perime, opts) {
       boite.appendChild(note);
       elTweet.appendChild(boite);
       elTweet.hidden = false;
+      /* ⛔ APRES la peinture : la carte se remplit quand la reponse arrive, et une lecture lente ou
+       *   refusee ne retarde jamais l affichage du profil. */
+      if (valide) void peindrePostGrave(adr, carte, note);
     } catch (_) { /* ⛔ une face illisible ne montre RIEN, elle n invente pas de lien */ }
   }
 
@@ -10461,6 +10569,57 @@ for (const id of ['#cTweetOui', '#cTweetLien']) {
 {
   const go = $('#tkGo');
   if (go) go.addEventListener('click', allerTokeniserUnPost);
+
+  /* ⛔⛔ LE COMPOSEUR PREPARE, IL NE PUBLIE PAS. Le bouton ouvre la fenetre de redaction de X avec
+   *     le texte pret ; la personne relit et envoie. Publier a la place de quelqu un, meme avec son
+   *     accord, est un geste qu on ne prend pas — et l ouverture reste un clic, donc jamais une
+   *     popup bloquee ni un post parti tout seul. */
+  const qui = $('#tkQui'), lien = $('#tkLien'), apercu = $('#tkApercu'), etatTk = $('#tkEtat');
+  if (qui && apercu) {
+    /* ⛔ Le handle est NETTOYE, pas fait confiance : X n accepte que [A-Za-z0-9_] sur 15 signes.
+     *   Laisser passer le reste fabriquerait un lien mort — ou pire, ferait mentionner quelqu un
+     *   d autre que celui qu on visait. */
+    const propre = (s) => String(s || '').trim().replace(/^\.?@/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 15);
+    const texteDuPost = () => {
+      const h = propre(qui.value);
+      const l = String((lien && lien.value) || '').trim();
+      /* ⛔ Sans handle, pas de « .@ » vide : on ecrit une phrase qui se tient toute seule. */
+      const debut = h ? '.@' + h + ' tokenized a block.' : 'Someone tokenized a block.';
+      /* ⛔ On ne colle QUE nos propres liens : un lien arbitraire tape ici partirait signe de notre
+       *   nom dans le post de quelqu un. */
+      const bon = /^https:\/\/tokenizedblock\.space\/\?block=0x[0-9a-fA-F]{40}$/.test(l);
+      return debut + '\nA real token on Base, with a face and a market.\n'
+        + (bon ? l : 'https://tokenizedblock.space');
+    };
+    const repeindre = () => {
+      apercu.textContent = texteDuPost();
+      const l = String((lien && lien.value) || '').trim();
+      if (etatTk) {
+        etatTk.textContent = (l && !/^https:\/\/tokenizedblock\.space\/\?block=0x[0-9a-fA-F]{40}$/.test(l))
+          ? 'That link is not a block page here, so the post will point at the app instead.'
+          : '';
+      }
+    };
+    for (const el of [qui, lien]) { if (el) { el.addEventListener('input', repeindre); el.addEventListener('change', repeindre); } }
+    repeindre();
+    const poster = $('#tkPoster');
+    if (poster) poster.addEventListener('click', () => {
+      try { etape('tokenx_composer'); } catch (_) {}
+      const u = 'https://x.com/intent/post?text=' + encodeURIComponent(texteDuPost());
+      window.open(u, '_blank', 'noopener');
+    });
+    const copier = $('#tkCopier');
+    if (copier) copier.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(texteDuPost());
+        if (etatTk) etatTk.textContent = 'Copied.';
+      } catch (_) {
+        /* ⛔ le presse-papier est refuse dans certains contextes : on le DIT plutot que de laisser
+         *   croire que ca a marche. */
+        if (etatTk) etatTk.textContent = 'Your browser refused the clipboard — select the text above and copy it.';
+      }
+    });
+  }
 }
 {
   const f = $('#cPhotoFichier');
