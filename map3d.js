@@ -529,6 +529,21 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     fixerCentre,
     montrerOrigine,
     surBoutonTout: (fn) => { rappelTout = typeof fn === 'function' ? fn : null; },
-    vider: () => { effets = []; liens = []; },
+    vider: () => { effets = []; liens = []; centre = null; },
+    /* ⛔⛔⛔ `retirer` N EXISTAIT PAS, et app.html l appelait depuis des jours.
+     *      L appel est garde par `typeof moteur3d.retirer === 'function'` — il ne s executait donc
+     *      JAMAIS, en silence. Et `test-retrait-carte-un-seul-chemin.mjs` restait VERT parce qu il
+     *      cherche la CHAINE `moteur3d.retirer` dans la source, pas son execution : la garde
+     *      prouvait que la ligne existe, pas qu elle agit. Deux motifs connus du depot a la fois —
+     *      `garde-sur-element-absent-toujours-fausse` et `guards-measured-transport-not-execution`.
+     *    ⛔ CE QUE CA CORRIGE VRAIMENT : apres le retrait d un block, les faisceaux, les ondes et le
+     *      centre de l univers gardaient une poignee sur un habitant qui n existe plus. `vider()`
+     *      ne relachait jamais `centre` non plus — c est corrige sur la ligne au-dessus. */
+    retirer: (h) => {
+      if (!h) return;
+      liens = liens.filter((x) => x.de !== h && x.a !== h);
+      effets = effets.filter((e) => e.h !== h && e.de !== h && e.a !== h);
+      if (centre === h) centre = null;
+    },
   };
 }

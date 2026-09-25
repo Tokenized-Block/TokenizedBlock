@@ -63,6 +63,52 @@ v('le moteur 3D lache EN MEME TEMPS que le DOM, pas avant', () => {
   const lacher = f.slice(f.indexOf('const lacher'), f.indexOf('};', f.indexOf('const lacher')));
   assert.match(lacher, /h\.el\.remove\(\)/, 'le DOM n est plus libere');
   assert.match(lacher, /moteur3d\.retirer/, 'le moteur 3D n est plus libere');
+  /* ⛔⛔⛔ CE CAS ETAIT VERT SUR DU CODE JAMAIS EXECUTE, et c est moi qui l ai ecrit.
+   *      `moteur3d.retirer` N EXISTAIT PAS : `creerMoteur3D` ne l exportait pas, et l appel dans
+   *      app.html est garde par `typeof moteur3d.retirer === 'function'`. La garde ci-dessus
+   *      cherchait la CHAINE dans la source — elle prouvait que la ligne est ecrite, jamais
+   *      qu elle agit. Pendant ce temps, apres chaque retrait, faisceaux, ondes et centre de
+   *      l univers gardaient une poignee sur un habitant disparu.
+   *    ⇒ ON EXIGE L EXPORT REEL. Une fonction appelee derriere un `typeof` doit exister, sinon la
+   *      garde est toujours fausse (`garde-sur-element-absent-toujours-fausse`). */
+  const m3 = readFileSync(new URL('./map3d.js', import.meta.url), 'utf8');
+  const rendu = m3.slice(m3.lastIndexOf('return {'));
+  assert.match(rendu, /\bretirer\s*:/,
+    'app.html appelle moteur3d.retirer derriere un typeof, mais map3d.js ne l exporte pas : '
+    + 'la branche est MORTE et ce test etait vert sur du code jamais execute');
+});
+
+v('⛔⛔ toute fonction appelee derriere un `typeof` du moteur existe vraiment', () => {
+  /* ⛔⛔ LA GENERALISATION DU DEFAUT CI-DESSUS. Chaque `typeof moteur3d.X === 'function'` est une
+   *     garde qui, si X n existe pas, est TOUJOURS fausse — donc silencieuse, donc invisible en
+   *     relecture comme en test. On les verifie toutes d un coup plutot que d attendre la prochaine. */
+  const m3 = readFileSync(new URL('./map3d.js', import.meta.url), 'utf8');
+  const rendu = m3.slice(m3.lastIndexOf('return {'));
+  const manquants = [];
+  for (const m of html.matchAll(/typeof moteur3d\.([A-Za-z0-9_$]+) === 'function'/g)) {
+    const nom = m[1];
+    if (!new RegExp('\\b' + nom + '\\s*[:,]').test(rendu)) manquants.push(nom);
+  }
+  assert.deepEqual(manquants, [],
+    'appelees derriere un typeof mais absentes de map3d.js — ces gardes sont toujours fausses : '
+    + manquants.join(', '));
+});
+
+v('⛔⛔ le fondu gagne sur le style EN LIGNE du moteur', () => {
+  /* ⛔⛔ AUTRE GARDE QUE J AI LIVREE VERTE SUR UN EFFET INVISIBLE. `map3d.js` ecrit
+   *     `h.el.style.opacity` en ligne a chaque image ; un style en ligne bat une classe. Le block
+   *     gardait donc son opacite et disparaissait D UN COUP — precisement ce que ce fondu devait
+   *     corriger. Lire la regle CSS ne disait rien de ce qui se passe a l ecran. */
+  const i = html.indexOf('.bloc.sEteint{');
+  assert.ok(i > 0, 'la regle d extinction a disparu');
+  const regle = html.slice(i, html.indexOf('}', i) + 1);
+  assert.match(regle, /opacity:\s*0\s*!important/,
+    'le fondu ne porte plus !important : le style en ligne du moteur 3D le neutralise, et '
+    + 'le block disparaitra de nouveau d un coup');
+  const m3 = readFileSync(new URL('./map3d.js', import.meta.url), 'utf8');
+  assert.match(m3, /\.el\.style\.opacity\s*=/,
+    'le moteur n ecrit plus l opacite en ligne : si c est voulu, le !important ci-dessus peut '
+    + 'partir — mais il faut le verifier, pas le supposer');
 });
 
 v('⛔ le fondu ne touche QUE l opacite', () => {
@@ -88,7 +134,7 @@ v('un element deja detache ne fait pas tomber le retrait', () => {
   assert.match(f, /if \(!h\) return/, 'un habitant nul ferait jeter des la premiere ligne');
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok retrait-carte-un-seul-chemin — ' + n + ' cas : une seule porte de sortie, la logique');
 console.log('   part d abord, et le fondu ne dispute rien au moteur 3D.');
 console.log('⚠️ NE PROUVE PAS que le fondu se voit : ca se regarde dans un navigateur.');
