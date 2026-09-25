@@ -353,6 +353,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  *     points. Un fragment illisible informe moins que rien et occupe autant de place.
  *   ⛔ LE BLOCK RESTE ENTIEREMENT CLIQUABLE : on retire le nom, jamais l acces. */
 .bloc[data-minuscule="1"] .etiq{display:none}
+/* ⛔⛔ UN BLOCK QUI QUITTE LA CARTE S ETEINT, IL NE S EVANOUIT PAS. Phil, 2026-09-25 : « je vois
+ *     beaucoup disparaitre ». Mesure : ce n est PAS une fuite — 184 cubes au chargement, 174 apres
+ *     le premier balayage, puis 174 CONSTANT sur 58 secondes. Une dizaine part, une seule fois,
+ *     pendant que les marches se lisent. C est l elagage demande, et il fonctionne.
+ *     Mais disparaitre d un coup se lit comme un BUG. Un fondu de 450 ms dit « il s en va » au lieu
+ *     de « quelque chose a casse » — pour le meme resultat, et sans rien cacher.
+ *   ⛔ ON NE TOUCHE QU A L OPACITE : le moteur 3D pilote `transform` sur ces memes elements. Lui
+ *     disputer la propriete ferait sauter le cube au lieu de l eteindre.
+ *   ⛔ ET SURTOUT PAS « peindre seulement apres lecture » : la lecture prend ~20 s (c est la duree
+ *     de l elagage). La carte serait VIDE pendant vingt secondes a chaque arrivee — bien pire que
+ *     dix cubes qui s effacent, pour des visiteurs qui repartent vite. */
+.bloc.sEteint{opacity:0;transition:opacity .45s ease;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.bloc.sEteint{transition:none}}
 /* ⛔ SANS MARCHE, LE BLOCK EST PALE — jamais absent, jamais « mort ». Il n a pas ete echange, ce
  *    qui n est pas la meme chose que ne rien valoir.
  * ⛔⛔ ET LE POINTILLE A ETE RETIRE, sur remarque de Phil : sur une map ou presque aucun block n a
@@ -1856,7 +1869,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-post-un-seul-champ" hidden>Build <code>20260925-post-un-seul-champ</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-fade-out" hidden>Build <code>20260925-fade-out</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3359,6 +3372,30 @@ function creerHabitant(c) {
  *     ⛔ LES BLOCKS RETIRES NE DISPARAISSENT PAS DE L APP : ils restent dans « Blocks by stage »,
  *       sous « No market yet — it has never been traded », et leur profil s ouvre normalement. On
  *       leur retire une PLACE SUR LA CARTE, pas leur existence. */
+/* ⛔⛔ UN SEUL CHEMIN POUR RETIRER UN BLOCK DE LA CARTE. Il y avait DEUX endroits qui faisaient
+ *     `el.remove()` + `moteur3d.retirer()` + `habitants.splice()`, chacun a sa facon : y ajouter un
+ *     fondu aurait demande de le recopier, et le premier oubli aurait laisse la moitie des blocks
+ *     s evanouir sans transition — un defaut invisible en relecture (`single-and-batch-twins-diverge`).
+ *
+ * ⛔ LA LOGIQUE PART TOUT DE SUITE, L IMAGE S ETEINT ENSUITE. `habitants.splice` est immediat :
+ *   pendant le fondu, plus aucun code ne doit considerer ce block comme present, sinon on le
+ *   compterait, on le viserait, on le redessinerait. Seul le pixel traine, et il ne decide de rien.
+ * ⛔ LE MOTEUR 3D LACHE EN MEME TEMPS QUE LE DOM, pas avant : le retirer d abord figerait le cube
+ *   en pleine course, et un cube fige qui palit se lit comme un plantage, pas comme un depart. */
+function retirerDeLaCarte(h) {
+  if (!h) return;
+  const i = habitants.indexOf(h);
+  if (i >= 0) habitants.splice(i, 1);
+  const lacher = () => {
+    try { if (h.el && h.el.parentNode) h.el.remove(); } catch (_) { /* deja detache */ }
+    try { if (moteur3d && typeof moteur3d.retirer === 'function') moteur3d.retirer(h); } catch (_) { /* rien */ }
+  };
+  /* ⛔ mouvement reduit : on respecte le reglage systeme et on part sans fondu */
+  if (!h.el || !h.el.classList || mouvementReduit) { lacher(); return; }
+  h.el.classList.add('sEteint');
+  setTimeout(lacher, 480);
+}
+
 function aSaPlaceSurLaCarte(c) {
   return String(c && c.etatVie) !== 'NON_TROUVEE';
 }
@@ -3877,12 +3914,8 @@ function appliquerVie(h, r) {
    *     ⛔ `NON_TROUVEE` SEULEMENT : c est « on a cherche, il n y a rien ». Un etat non lu ou une
    *       lecture ratee laissent le block en place — on ne retire jamais sur ce qu on n a pas vu. */
   if (r.etat === 'NON_TROUVEE') {
-    try {
-      if (h.el && h.el.parentNode) h.el.remove();
-      if (moteur3d && typeof moteur3d.retirer === 'function') moteur3d.retirer(h);
-      const i = habitants.indexOf(h);
-      if (i >= 0) habitants.splice(i, 1);
-    } catch (_) { /* ⛔ un retrait qui echoue laisse le block VISIBLE, jamais a moitie efface */ }
+    /* ⛔ un retrait qui echoue laisse le block VISIBLE, jamais a moitie efface */
+    try { retirerDeLaCarte(h); } catch (_) { /* rien */ }
     return;
   }
   if (r.etat !== 'LUE') return;
@@ -14090,9 +14123,10 @@ async function soleilsSurLaMap() {
           if (!h || h.nous) continue;
           if (h.etatVie === 'LUE') continue;
           if (marcheParAdr.has(String(h.adr).toLowerCase())) continue;
-          if (h.el && h.el.parentNode) h.el.remove();
-          if (moteur3d && typeof moteur3d.retirer === 'function') { try { moteur3d.retirer(h); } catch (_) { /* rien */ } }
-          habitants.splice(i, 1);
+          /* ⛔ MEME CHEMIN QUE L AUTRE RETRAIT. Un fondu ici et pas la-bas ferait passer la moitie
+           *   des departs pour un defaut d affichage — et c est precisement la moitie qu on ne
+           *   regarde jamais. Le helper enleve aussi de `habitants`, donc la boucle reste juste. */
+          retirerDeLaCarte(h);
         }
       }
     } catch (_) { /* ⛔ un elagage qui echoue laisse la carte INTACTE, jamais a moitie vidée */ }
