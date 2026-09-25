@@ -707,6 +707,33 @@ const ETAPES_ENTONNOIR = [
   'cree_refus_solde', 'cree_refus_lecture', 'cree_refus_frais', 'cree_refus_preparation',
   /* achat — l etape qui rapporte */
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
+  /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
+   *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
+   *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait
+   *     essaye ou si on avait dit non a tout le monde. Les frais viennent des trades : c est le
+   *     chemin le plus cher a laisser aveugle.
+   *   ⛔ PREFIXE `echange_` ET NON `achat_` : la fonction sert l achat ET la vente, avec les memes
+   *     causes. Les nommer « achat » ferait mentir la moitie des lignes.
+   *   ⛔ NEUF NOMS, ENSEMBLE CLOS, UNE REPARATION CHACUN — et surtout des paires qui se ressemblent
+   *     a l ecran et s opposent dans la cause :
+   *     · marche_illisible / pas_de_pool  lecture ratee  vs  rien a lire
+   *     · prix            / pool          lecture ratee  vs  la pool a repondu « non »
+   *     · frais_pool                      NOTRE refus delibere au-dela de 5 % — savoir ce qu il coute
+   *     · hors_app                        le hook d une autre app refuse notre routeur. Mesure du
+   *       2026-09-17 : 0 des 56 blocks du Trending achetables ici. Si celui-la domine, le defaut est
+   *       dans ce QU ON AFFICHE, pas dans ce chemin.
+   *     · wallet · montant · plan (fourre-tout, a ouvrir seulement s il monte) */
+  'echange_refus_marche_illisible', 'echange_refus_pas_de_pool', 'echange_refus_frais_pool',
+  'echange_refus_wallet', 'echange_refus_montant', 'echange_refus_hors_app',
+  'echange_refus_prix', 'echange_refus_pool', 'echange_refus_plan',
+  /* ⛔⛔ LES DEUX GARDES QUI SE TIENNENT ENTRE UN TRADE ET NOTRE REVENU. Elles refusent d offrir Sign
+   *     quand les 0,5 % vers FEE_WALLET manquent — le bon choix, mais un echange qui n a pas eu lieu
+   *     ne se voyait NULLE PART. Ces deux compteurs disent combien ce garde-fou nous coute, et s il
+   *     se declenche a tort.
+   *   ⛔ DEUX NOMS POUR UNE MEME PHRASE A L ECRAN : `resume` = le recapitulatif du plan ne porte pas
+   *     les 0,5 % ou le mauvais destinataire ; `calldata` = le resume le disait mais les OCTETS ne
+   *     nomment pas FEE_WALLET. Un resume n est pas une preuve, seul le calldata part sur la chaine. */
+  'echange_refus_frais_resume', 'echange_refus_frais_calldata',
   /* bridge et frais */
   'bridge_create', 'bridge_confirm_stub', 'bridge_fund_wallet',
   'bridge_fee_sign', 'bridge_fee_ok', 'bridge_fee_refuse', 'bridge_fee_fail',

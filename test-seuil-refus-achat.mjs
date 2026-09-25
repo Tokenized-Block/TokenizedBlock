@@ -32,7 +32,28 @@ const v = (nom, fn) => { fn(); n++; };
 
 const d = html.indexOf('async function preparerEchange(');
 assert.ok(d > 0, 'preparerEchange introuvable — cette garde ne protege plus rien');
-const src = html.slice(d, d + 4500);
+/* ⛔⛔ LA FENETRE ETAIT UN NOMBRE FIXE — `html.slice(d, d + 4500)` — ET ELLE A POURRI LE 2026-09-25.
+ *     En instrumentant les refus de ce chemin, j ai ajoute des commentaires : l ancre
+ *     `if (!(await pret(` est passee au-dela du 4500e caractere, et ce test est tombe sur « bloc
+ *     suivant introuvable ». Le code etait intact — c est la BORNE qui avait glisse
+ *     (`handoff-figures-rot`).
+ *   ⛔ UNE BORNE DOIT ETRE STRUCTURELLE, jamais numerique : on prend le corps ENTIER de la fonction
+ *     par equilibrage d accolades. Un commentaire ajoute ne peut plus faire mentir la mesure. Et
+ *     surtout : un test qui rougit pour une raison qui n est pas la sienne apprend a etre ignore,
+ *     ce qui coute beaucoup plus cher que le defaut qu il garde. */
+function blocDepuis(texteSource, i) {
+  let prof = 0, dans = null;
+  for (let k = texteSource.indexOf('{', i); k < texteSource.length; k++) {
+    const c = texteSource[k];
+    if (dans) { if (c === dans && texteSource[k - 1] !== '\\') dans = null; continue; }
+    if (c === '"' || c === "'" || c === '`') { dans = c; continue; }
+    if (c === '{') prof++;
+    else if (c === '}' && !--prof) return texteSource.slice(i, k + 1);
+  }
+  return null;
+}
+const src = blocDepuis(html, d);
+assert.ok(src, 'les accolades de preparerEchange ne s equilibrent pas : extraction abandonnee');
 assert.ok(src.includes('FRAIS_POOL_MAX'), 'extraction ratee : le seuil n est pas dans la fenetre lue');
 
 v('le seuil livre est bien 5 % (50 000 centiemes de point de base)', () => {
@@ -60,13 +81,27 @@ v('le refus ARRETE la preparation', () => {
    *     (celui de `pret({ e })`), donc elle restait VERTE quand on supprimait le vrai. Une
    *     mutation l a montre — retirer le `return` ne rougissait rien. Un motif qui cherche « un
    *     return quelque part » ne garde pas « CE return ». */
+  /* ⛔⛔ ET LE « moins de 600 caracteres » ETAIT LUI AUSSI UN PROXY QUI A POURRI, le 2026-09-25 :
+   *     ajouter le compteur de ce refus a porte la fenetre a 646 caracteres et fait rougir un test
+   *     dont le sujet n avait pas bouge. Une longueur n etait qu une APPROXIMATION de « ce return
+   *     appartient bien a ce bloc ». On mesure maintenant la chose elle-meme : le bloc du `if`,
+   *     borne par ses propres accolades. Remplacer un proxy par son objet, c est la seule facon de
+   *     ne pas avoir a l ajuster a chaque commentaire (`instrument-before-conclusion`). */
+  const garde = src.indexOf('if (Number.isFinite(feeRoute)');
+  assert.ok(garde > 0, 'la garde du seuil est introuvable');
+  const bloc = blocDepuis(src, garde);
+  assert.ok(bloc, 'les accolades de la garde du seuil ne s equilibrent pas');
+  assert.ok(bloc.includes('Not prepared:'), 'le message de refus n est plus dans le bloc de la garde');
+  assert.match(bloc, /\breturn;/, 'le refus n arrete rien : la preparation continuerait');
+  /* ⛔ ET LE `return` EST DANS CE BLOC, pas emprunte au suivant — c est le defaut que ce test a deja
+   *   eu : il lisait 700 caracteres apres le message et attrapait le `return` du bloc d apres, donc
+   *   il restait VERT quand on supprimait le vrai. Le bloc s arretant a sa propre accolade
+   *   fermante, aucun `return` voisin ne peut plus le faire verdir par erreur. */
+  const suivant = src.indexOf('if (!(await pret(', garde);
+  assert.ok(suivant > garde, 'bloc suivant introuvable — la borne ne peut pas etre verifiee');
+  assert.ok(garde + bloc.length <= suivant,
+    'le bloc de la garde deborde sur le bloc suivant : la mesure redevient approximative');
   const i = src.indexOf('Not prepared:');
-  assert.ok(i > 0, 'message de refus introuvable');
-  const finBloc = src.indexOf('if (!(await pret(', i);
-  assert.ok(finBloc > i, 'bloc suivant introuvable — la fenetre ne peut pas etre bornee');
-  const suite = src.slice(i, finBloc);
-  assert.ok(suite.length < 600, 'fenetre suspecte : ' + suite.length + ' caracteres');
-  assert.match(suite, /\breturn;/, 'le refus n arrete rien : la preparation continuerait');
   const avant = src.slice(Math.max(0, i - 300), i);
   assert.match(avant, /wKo/, 'le refus ne passe pas l etat en erreur');
 });

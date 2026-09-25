@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-create-refusals" hidden>Build <code>20260925-create-refusals</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-trade-refusals" hidden>Build <code>20260925-trade-refusals</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8009,11 +8009,28 @@ async function preparerEchange(sens) {
   $('#peActions').innerHTML = '';
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
+  /* ⛔⛔ TOUS LES REFUS DE CE CHEMIN ETAIENT MUETS, et c est le chemin qui RAPPORTE : les frais
+   *     viennent des trades, pas des creations. Mesure du 2026-09-25 par balayage de l app (317
+   *     fonctions) : `preparerEchange` etait la premiere du classement, et les refus tombaient TOUS
+   *     avant `achat_prepare` — donc un achat refuse ne laissait aucune trace, et `achat_prepare`
+   *     = 0 ne disait pas si personne n avait essaye ou si on avait dit non a tout le monde.
+   *   ⛔ PREFIXE `echange_refus_` ET NON `achat_refus_` : cette fonction sert l ACHAT ET LA VENTE.
+   *     Les causes sont identiques dans les deux sens ; les nommer « achat » ferait mentir la
+   *     moitie des lignes. `achat_prepare` / `achat_ok`, eux, restent propres a l achat.
+   *   ⛔ SEPT NOMS, ENSEMBLE CLOS, groupes par REPARATION : illisible / pas de pool / frais de pool
+   *     / wallet / montant / verrouille ailleurs / pas de prix. */
   if (!echangeAutorise(marcheLuGate, etatVieProfil)) {
     e.className = 'note wKo';
-    e.textContent = etatVieProfil === 'NON_LUE'
+    /* ⛔⛔ DEUX CAUSES OPPOSEES DANS UNE SEULE BRANCHE, et c est pour ca qu elles ont deux compteurs :
+     *     « je n ai pas REUSSI a lire le marche » et « il n y a PAS de pool » n appellent pas la
+     *     meme reparation — reseau d un cote, lancement de l autre
+     *     (`absence-of-evidence-vs-failure-to-look`). Un compteur commun les rendrait indiscernables
+     *     au moment exact ou la difference compte. */
+    const pasLu = etatVieProfil === 'NON_LUE';
+    e.textContent = pasLu
       ? 'Market unread — retry.'
       : 'No TB-readable pool yet — Instant Birth on TB, or Re-scan market.';
+    try { etape(pasLu ? 'echange_refus_marche_illisible' : 'echange_refus_pas_de_pool'); } catch (_) {}
     return;
   }
   /* ⛔⛔ AU-DESSUS DE 5 % DE FRAIS DE POOL, ON NE PREPARE RIEN (Phil, 2026-09-23 : « fais au mieux »).
@@ -8044,6 +8061,10 @@ async function preparerEchange(sens) {
       + (feeRoute / 10000).toFixed(2) + '% per trade. Measured on Base over 24h, 98.5% of trading in '
       + 'blocks happens at 5% or less — this one is far outside that. Nothing was sent. '
       + 'Use the external market if you still want it.';
+    /* ⛔ CE REFUS EST VOULU, et c est justement pour ca qu il faut le compter : il dit combien de
+     *   trades nous refusons pour proteger quelqu un. Un refus delibere non mesure est un choix
+     *   dont on ne connait jamais le prix. */
+    try { etape('echange_refus_frais_pool'); } catch (_) {}
     return;
   }
   if (!(await pret({ e }))) {
@@ -8051,14 +8072,17 @@ async function preparerEchange(sens) {
       e.className = 'note wKo';
       e.textContent = 'Open your wallet to continue — it signs, this page never does.';
     }
+    /* ⛔ hors du `if` : le cas « mauvaise chaine » garde son propre message mais reste le MEME
+     *   refus — sortir sans compter dans cette moitie laisserait la moitie qu on ne regarde pas. */
+    try { etape('echange_refus_wallet'); } catch (_) {}
     return;
   }
   try { if (sens === 'ACHAT') etape('achat_prepare'); } catch (_) {}
   let dec = 18;
-  if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; return; } }
+  if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; try { etape('echange_refus_marche_illisible'); } catch (_) {} return; } }
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
   const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
-  if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; return; }
+  if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
   profilEnLecture = true;
   let p;
@@ -8124,11 +8148,20 @@ async function preparerEchange(sens) {
   if ((p.etat === 'NON_MESURE' || p.etat === 'REFUSE') && verrouilleAilleurs) {
     e.className = 'note wKo';
     e.textContent = 'This block can only be traded from the app that launched it — its market refuses other apps. Nothing to sign.';
+    /* ⛔⛔ LE COMPTEUR LE PLUS PARLANT DE CETTE FONCTION. La mesure du 2026-09-17 disait DEJA :
+     *     0 des 56 blocks du Trending etaient achetables ici, leur hook n acceptant que le routeur
+     *     de leur propre app. Si ce compteur domine, le defaut n est pas dans ce chemin — c est que
+     *     nos ecrans proposent des blocks que personne ne peut acheter chez nous. Ca ne se repare
+     *     pas avec du code ici, et on ne pouvait pas le savoir. */
+    try { etape('echange_refus_hors_app'); } catch (_) {}
     return;
   }
   if (p.etat === 'NON_MESURE') {
     e.className = 'note wKo';
     e.textContent = 'Could not get a price right now (nothing to sign) — try again.';
+    /* ⛔ « je n ai pas pu mesurer le prix » ≠ « la pool refuse » (juste en dessous). Le premier est
+     *   une panne de lecture chez nous, le second est une REPONSE du marche. */
+    try { etape('echange_refus_prix'); } catch (_) {}
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => {
@@ -8145,13 +8178,21 @@ async function preparerEchange(sens) {
       + (String(p.pourquoi || '').includes('returns nothing')
         ? ' — the pool quoted zero for this size (thin book or empty), not a network blip.'
         : '');
+    /* ⛔ LA POOL A REPONDU, et sa reponse est « non » — carnet trop mince, taille trop grande. Rien
+     *   a reparer dans notre code : c est de la liquidite qui manque, et ce compteur le dira. */
+    try { etape('echange_refus_pool'); } catch (_) {}
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange(sens));
     $('#peActions').appendChild(br);
     return;
   }
-  if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
+  /* ⛔ LE FOURRE-TOUT, et il est nomme comme tel : tout etat de plan qui n est ni PRET, ni les cas
+   *   ci-dessus. S il monte, c est ce compteur qu il faudra ouvrir en sous-categories — pas avant.
+   * ⛔ DEUX JUMEAUX EXISTENT AILLEURS avec le MEME texte a l ecran (`retirerPosition`,
+   *   `preparerEthUsdc`). Ils ne sont PAS instrumentes : ce sont d autres chemins, et les compter
+   *   sous le meme nom melangerait un achat, un retrait de liquidite et une sortie en USDC. */
+  if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); try { etape('echange_refus_plan'); } catch (_) {} return; }
   /* ⛔ P0 2026-09-15 / tip 20260922-2026: never offer Sign if the plan omitted the 0.5% → FEE_WALLET (unless fee wallet buyback).
    * Hooked pools no longer exempt — interface 0.5% always; hook may stack on top. */
   const feeLabel = 'fee';
@@ -8171,6 +8212,14 @@ async function preparerEchange(sens) {
         const feeEl = $('#peFrais');
         if (feeEl) feeEl.textContent = '0.5 % MISSING — refused';
       } catch (err) { /* badge optional */ }
+      /* ⛔⛔ CE REFUS-LA SE TIENT ENTRE UN TRADE ET NOTRE REVENU, et il etait muet. Le plan ne porte
+       *     pas les 0,5 % vers FEE_WALLET : on refuse d offrir Sign plutot que de laisser passer un
+       *     echange gratuit. Le bon choix — mais un echange qui n a pas eu lieu ne se voit NULLE
+       *     PART, alors que c est exactement le chiffre qui dirait combien de revenu ce garde-fou
+       *     nous coute et s il se declenche a tort.
+       *   ⛔ SEPARE DU JUMEAU CALLDATA plus bas : meme phrase a l ecran, cause differente (le
+       *     resume ici, les octets la-bas). Un seul compteur rendrait le diagnostic impossible. */
+      try { etape('echange_refus_frais_resume'); } catch (_) {}
       return;
     }
     /* Honesty: show exact fee + short wallet on badge before Sign. */
@@ -8191,6 +8240,10 @@ async function preparerEchange(sens) {
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
       $('#peActions').appendChild(br);
+      /* ⛔ LE JUMEAU : le resume disait bien 0,5 % mais les OCTETS ne nomment pas FEE_WALLET. Un
+       *   resume n est pas une preuve — seul le calldata part sur la chaine. Meme phrase a l ecran,
+       *   compteur distinct, sinon on ne saurait pas laquelle des deux gardes a parle. */
+      try { etape('echange_refus_frais_calldata'); } catch (_) {}
       return;
     }
   }
