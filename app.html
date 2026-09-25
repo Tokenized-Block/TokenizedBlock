@@ -1333,7 +1333,18 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
-        <a class="bouton sec" id="cFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH on Base</a>
+        <!-- ⛔⛔ RETIRE DE L ECRAN LE 2026-09-25, sur demande de Phil (capture, bouton entoure).
+             Il sortait de l app au moment precis ou quelqu un allait creer — la sortie la plus
+             chere qu un ecran de conversion puisse offrir. Et la mesure du meme jour comptait
+             TREIZE boutons visibles dans Create pour UNE seule action utile.
+           ⛔ L ELEMENT RESTE DANS LE DOM, MASQUE, ET CE N EST PAS DE LA PARESSE : six endroits du
+             code le referencent (`#cFundWallet`), dont deux liens « Or Fund wallet » qui pointent
+             vers son ancre et un peintre qui ecrit dedans. Le supprimer casserait ces chemins en
+             SILENCE — `garde-sur-element-absent-toujours-fausse`. On retire ce que le visiteur
+             VOIT ; nettoyer les six references est un autre travail, avec sa propre garde.
+           ⚠️ LE RAIL FIAT N EST PAS RETIRE : le Bridge le porte toujours, et c est le seul endroit
+             ou il a du sens — on n y arrive pas en voulant creer un block. -->
+        <a class="bouton sec" id="cFundWallet" hidden href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH on Base</a>
         <!-- ⛔ LE PRIX EST DIT AVANT LE CLIC, ET LE RAIL LE MOINS CHER EST NOMME EN PREMIER.
              Cite la FAQ Onramp CDP, lue A LA SOURCE le 2026-09-21, textuellement :
                « There is a 2.5% fee for credit card transactions, and 0.5% fee for ACH »
@@ -1904,7 +1915,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-brain-reads-market" hidden>Build <code>20260925-brain-reads-market</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-roles-neuf" hidden>Build <code>20260925-roles-neuf</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5148,7 +5159,12 @@ function roleDe(adr) {
   try { return metierDe(adr).cle; } catch (e) { return null; }
 }
 const SENS_ROLE = { SENTINELLE: 'sells and price drops', ACCUEIL: 'new holders and transfers', MOMENTUM: 'price moves, buys and sells',
-  GARDIEN: 'price moves', ECLAIREUR: 'its size', HERAUT: 'messages and transfers', COMPTABLE: 'nothing more than the others' };
+  GARDIEN: 'price moves', ECLAIREUR: 'its size', HERAUT: 'messages and transfers', COMPTABLE: 'nothing more than the others',
+  /* ⛔ LES DEUX ROLES AJOUTES LE 2026-09-25 ONT LEUR PHRASE ICI, sinon `SENS_ROLE[cle] || 'what it
+   *   reads'` les decrirait par un repli vague — un role qui ne sait pas dire ce qu il pese est un
+   *   role qu on ne peut pas choisir en connaissance de cause. Une garde verifie que la table
+   *   couvre TOUS les metiers, pour que le prochain ajout ne retombe pas dans le repli. */
+  CHASSEUR: 'buys and price moves', GRIMPEUR: 'its size against the tier thresholds' };
 function peindreMetier(adr) {
   const cle = roleDe(adr);
   const m = METIERS.find((x) => x.cle === cle);
@@ -11501,8 +11517,12 @@ async function lireSoldeEthAppRobuste() {
 /** tip 20260922-eth-fixe: scroll Fund wallet CTA into view (Create tab). */
 function montrerFundWalletCourt() {
   try {
-    const a = $('#cFundWallet');
-    if (a) { a.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); a.focus({ preventScroll: true }); }
+    /* ⛔ LE BOUTON EST MASQUE DEPUIS LE 2026-09-25 : defiler vers un element cache ne fait RIEN, et
+     *   ce chemin-ci sert quand le solde est trop court — c est-a-dire au moment ou la personne a
+     *   le plus besoin qu on lui montre quelque chose. On vise donc le TEXTE, qui dit encore quoi
+     *   faire et a quel prix. Retirer un bouton ne doit pas retirer la sortie de secours. */
+    const a = $('#cFundHint') || $('#cFundWallet');
+    if (a) { a.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); try { a.focus({ preventScroll: true }); } catch (_) {} }
   } catch (_) {}
 }
 

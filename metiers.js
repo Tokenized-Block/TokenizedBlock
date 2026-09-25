@@ -65,6 +65,30 @@ export const METIERS = [
     fait: 'notices new holders and transfers, and suggests a GM back',
     propose: 'a GM you send yourself',
     jamais: 'never sends a GM by itself' },
+  /* ⛔⛔ DEUX ROLES AJOUTES LE 2026-09-25 (Phil : « une grande variete de blocks avec des
+   *     intelligences differentes »). ILS NE SONT LA QUE PARCE QU UN TROU ETAIT MESURABLE — pas
+   *     pour faire nombre. Les sept roles precedents se partagent sept capteurs, et deux etaient
+   *     a decouvert :
+   *       · `achat` n etait DOMINANT chez personne. Le Sentinel a un cote vendeur fort (2,5) sans
+   *         miroir acheteur, alors que l app compte DEJA les deux (`echangesDe` rend `achats` ET
+   *         `ventes`). C etait une asymetrie dans des donnees qu on mesure deja.
+   *       · `taille` plafonnait a 1,5, chez le Scout — qui regarde les AUTRES blocks. Rien ne
+   *         suivait sa PROPRE montee de palier, alors que l echelle Seed -> Canopee existe avec des
+   *         seuils reels (`pointsdevie.js`) et que `progressionPalier` sait deja dire la distance.
+   *   ⛔ UN ROLE DE PLUS DOIT AVOIR QUELQUE CHOSE DE VRAI A DIRE, sinon c est un decor. Chacun de
+   *     ces deux-la s appuie sur une mesure que l app produit deja, et sur rien d autre.
+   *   ⛔⛔ ET ILS SONT AJOUTES EN FIN DE LISTE, JAMAIS AU MILIEU. `METIERS_DERIVES` prend les CINQ
+   *     PREMIERS et le tirage fait `% METIERS_DERIVES.length` : changer ce nombre reattribuerait en
+   *     silence le metier de TOUS les blocks qui n en ont jamais choisi un — un block changerait de
+   *     personnage sans que personne ne l ait decide. L ordre de ce tableau est porteur. */
+  { cle: 'CHASSEUR', regarde: 'the buys and sells on its own market', titre: 'Hunter',
+    fait: 'watches the buys and sells on its market and says when buying outweighs selling',
+    propose: null,
+    jamais: 'never buys or sells — it only reports what it counted' },
+  { cle: 'GRIMPEUR', regarde: 'its own market cap against the tier thresholds', titre: 'Climber',
+    fait: 'says which tier its market cap sits in and how far the next one is',
+    propose: null,
+    jamais: 'never promises it will get there' },
 ];
 /** ⛔ LES METIERS TIRES DE L ADRESSE : les cinq d origine, dans leur ordre — un block garde le metier qu il avait. */
 export const METIERS_DERIVES = METIERS.slice(0, 5);
@@ -81,6 +105,13 @@ export const SENSIBILITES = Object.freeze({
   COMPTABLE: Object.freeze({}),
   SENTINELLE: Object.freeze({ vente: 2.5, delta: 1.5 }),
   ACCUEIL: Object.freeze({ detenteur: 2.5, transfert: 2 }),
+  /* ⛔ LE MIROIR EXACT DU SENTINEL, memes valeurs de l autre cote : c est ce qui rend les deux
+   *   comparables. Un chasseur « un peu » sensible a l achat n aurait rien dit de plus que le
+   *   Momentum (achat 1,5) — il faut que le capteur DOMINE pour que le role se distingue. */
+  CHASSEUR: Object.freeze({ achat: 2.5, delta: 1.5 }),
+  /* ⛔ `taille` domine ici, la ou le Scout plafonne a 1,5 sur les AUTRES blocks. C est le seul role
+   *   dont le sujet est sa propre position dans l echelle des paliers. */
+  GRIMPEUR: Object.freeze({ taille: 2.5 }),
 });
 const NEUTRE = { delta: 1, taille: 1, transfert: 1, message: 1, detenteur: 1, achat: 1, vente: 1 };
 /** La sensibilite d un role ; un role inconnu ou absent = neutre (le cerveau d avant). */
