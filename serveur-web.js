@@ -687,6 +687,24 @@ const ETAPES_ENTONNOIR = [
    *     produites par `causes-echec.js` ; `test-causes-echec.mjs` echoue si l une manque ici. */
   'cree_ko_refus', 'cree_ko_revert', 'cree_ko_envoi', 'cree_ko_reseau',
   'cree_ko_compte', 'cree_ko_attente', 'cree_ko_autre',
+  /* ⛔⛔ CE QUE NOUS REFUSONS AVANT MEME D ESSAYER — mesure du 2026-09-25 : `create_clic` = 45,
+   *     `cree` = 6, `cree_echec` = 8. TRENTE-UN clics sans aucune trace. Or trois des sorties
+   *     precoces de `creerBlock()` sont des refus que NOUS produisons : formulaire incomplet,
+   *     create gratuit retire sur Base, un block encore a lancer. Un refus qu on s inflige sans le
+   *     compter ressemble a « personne n a essaye » alors qu il veut dire « on a dit non ».
+   *   ⛔ `cree_refus_*` et `cree_ko_*` ne disent PAS la meme chose : refuser avant d essayer et
+   *     echouer en essayant ne se reparent pas de la meme facon. Le prefixe les separe. */
+  'cree_refus_forme', 'cree_refus_gratuit', 'cree_refus_a_lancer', 'cree_refus_encours',
+  /* ⛔⛔ ET LA SONDE M A CORRIGE : j avais dit TROIS refus muets, elle en a trouve DIX-HUIT dans la
+   *     version d avant. Ces quatre noms-la regroupent les treize autres par REPARATION, pas par
+   *     message — quatre familles, quatre reponses differentes :
+   *     · `solde`       pas assez d ETH -> la reponse est l onramp / le Bridge, pas du code ;
+   *     · `lecture`     prix ou chaine illisible -> la reponse est la resilience RPC ;
+   *     · `frais`       les 0,001 ETH n ont pas abouti ou ne se prouvent pas -> le plus cher : le
+   *                     geste a eu lieu, le resultat non ;
+   *     · `preparation` notre requete n a pas pu etre construite -> defaut CHEZ NOUS, jamais chez
+   *                     le visiteur. C est la distinction qui evite de chercher au mauvais endroit. */
+  'cree_refus_solde', 'cree_refus_lecture', 'cree_refus_frais', 'cree_refus_preparation',
   /* achat — l etape qui rapporte */
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
   /* bridge et frais */

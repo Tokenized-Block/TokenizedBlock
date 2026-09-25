@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-retry-counted" hidden>Build <code>20260925-retry-counted</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-create-refusals" hidden>Build <code>20260925-create-refusals</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12043,9 +12043,27 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   return 'FAIT';
 }
 
+/* ⛔⛔ OU PARTENT LES CLICS SUR CREATE ? MESURE DU 2026-09-25, entonnoir de production depuis le
+ *     2026-09-19 : `create_clic` = 45, `cree` = 6, `cree_echec` = 8. TRENTE-UN clics n ont laisse
+ *     AUCUNE trace — ni succes, ni echec. C est le meme defaut que les dix-neuf sorties muettes de
+ *     la mise en vie, mais place la ou l argent commence.
+ *   ⛔ ET LA CAUSE N EST PAS UNE PANNE : parmi ces sorties, TROIS sont des refus que nous
+ *     produisons nous-memes (formulaire incomplet, create gratuit retire, un block encore a
+ *     lancer). Un refus qu on s inflige sans le compter est le pire des deux mondes : il ressemble
+ *     a « personne n a essaye » alors qu il veut dire « on a dit non ».
+ *   ⛔ QUATRE NOMS, ENSEMBLE CLOS, prefixe `cree_refus_` pour les distinguer des `cree_ko_` qui,
+ *     eux, disent qu une tentative REELLE a echoue. Refuser avant d essayer et echouer en essayant
+ *     ne se reparent pas de la meme facon.
+ *   ⛔⛔ LES QUATRE NOMS DOIVENT EXISTER DANS `ETAPES_ENTONNOIR` cote serveur, sinon ils sont jetes
+ *     SANS ERREUR (le defaut du 2026-09-23 : 34 noms sur 48 rejetes en silence).
+ *     `test-etapes-comptees.mjs` compare les deux listes et c est lui qui garde ce couplage.
+ *   ⚠️ CE QUE CA NE RATTRAPE PAS : les 31 clics deja perdus. Ils n ont jamais ete captures, et
+ *     rien ici ne les recupere. La mesure commence maintenant. */
 async function creerBlock() {
   etape('create_clic');
-  if (creationEnCours) return;
+  /* ⛔ un double-clic n est pas un refus : on le compte a part, sinon il gonflerait un compteur de
+   *   refus avec quelque chose qui est en fait une creation EN TRAIN de reussir. */
+  if (creationEnCours) { try { etape('cree_refus_encours'); } catch (_) {} return; }
   const e = $('#cEtat');
   /* tip 20260923-feed-catch-router: free asleep factory createB20 value-0 RETIRED on MAIN.
    * Any TB-visible create must shop CreateRouter createPaid · 0.001 ETH. */
@@ -12054,6 +12072,7 @@ async function creerBlock() {
     e.className = 'note wKo';
     e.textContent = 'Free create is retired on Base. Use Instant Birth · 0.001 ETH — nothing was signed.';
     majFraisEtRecap();
+    try { etape('cree_refus_gratuit'); } catch (_) {}
     return;
   }
   /* tip 0211 — HARD RULE: Create is free when allowed, but while any not-alive block sits in
@@ -12064,6 +12083,7 @@ async function creerBlock() {
     e.className = 'note wKo';
     e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH — nothing was signed.';
     majFraisEtRecap();
+    try { etape('cree_refus_a_lancer'); } catch (_) {}
     return;
   }
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local + wallet injecte) : sans wallet connecte, le
@@ -12087,7 +12107,12 @@ async function creerBlock() {
   /* l adresse prevue est RECALCULEE juste avant la creation : c est elle qui part dans l URL du logo grave */
   if (!v.ko && Number(CHAINE) === 8453) { try { await verifierAdresseCreation(); } catch (_) { adressePrevue = null; } }
   /* ⛔ UN REFUS SE DIT : on n efface plus le message pour sortir sans rien afficher. */
-  if (v.ko) { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; majFraisEtRecap(); return; }
+  /* ⛔⛔ LE REFUS LE PLUS PROBABLE DES 31 CLICS PERDUS, et celui qu on ne voyait pas du tout : un
+   *     formulaire incomplet. Le 2026-09-19, 17 clics sur Create ont donne 2 blocks. Si la plupart
+   *     butaient ici, ca ne se distinguait de rien. On le compte — la cause exacte reste dans le
+   *     message a l ecran, elle n a pas de cardinalite bornee et n a donc pas sa place dans
+   *     l entonnoir. */
+  if (v.ko) { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; majFraisEtRecap(); try { etape('cree_refus_forme'); } catch (_) {} return; }
   /* ⛔⛔ SUR CHAINE PAYANTE: prix ETH/USD + solde ETH lus AVANT toute signature. Fail-closed. */
   const usd = fraisCreationUsd(CHAINE);
   let creationEnCoursPayante = false;
@@ -12100,12 +12125,16 @@ async function creerBlock() {
       e.className = 'note wKo';
       e.textContent = 'Could not get a reliable ETH/USD price from Uniswap pools, so nothing was started. Try again in a moment.';
       majFraisEtRecap();
+      try { etape('cree_refus_lecture'); } catch (_) {}
       return;
     }
     const s = await lireSoldeEthNat(true);
     if (s === null) {
       e.className = 'note wKo';
       e.textContent = 'Could not read your ETH balance, so nothing was started.';
+      /* ⛔ une lecture ratee, pas un solde insuffisant : les deux mots se ressemblent a l ecran et
+       *   appellent des reparations opposees — reseau d un cote, argent de l autre. */
+      try { etape('cree_refus_lecture'); } catch (_) {}
       return;
     }
     /* tip 2356: CreateRouter on-chain FEE_WALLET = a6cf. If wallet cannot cover the 0.001 ETH fee
@@ -12123,12 +12152,20 @@ async function creerBlock() {
         e.className = 'note wKo';
         e.textContent = 'Need at least ' + ethLisible(besoinFloor) + ' ETH (including gas). This account holds '
           + ethLisible(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+        /* ⛔⛔ CELUI-LA MENE DIRECTEMENT AU RAIL FIAT. Si ce compteur monte, la reparation n est pas
+         *     dans le code : c est que des gens veulent creer et n ont pas l ETH. C est exactement
+         *     ce que l onramp et le Bridge existent pour resoudre — et on ne le savait pas. */
+        try { etape('cree_refus_solde'); } catch (_) {}
         return;
       }
     } else if (s < fraisWei) {
       e.className = 'note wKo';
       e.textContent = 'The fee is ' + ethLisible(fraisWei) + ' ETH (≈ $' + usd + ') and this account holds '
         + ethLisible(s) + ' ETH on ' + RESEAUX[CHAINE].nom + '. Nothing was started.';
+      /* ⛔ MEME CAUSE, MEME COMPTEUR que la branche CreateRouter ci-dessus : les deux disent « pas
+       *   assez d ETH ». Deux noms differents feraient croire a deux problemes
+       *   (`single-and-batch-twins-diverge` : c est le jumeau qu on oublie d instrumenter). */
+      try { etape('cree_refus_solde'); } catch (_) {}
       return;
     }
     creationEnCoursPayante = true;
@@ -12170,6 +12207,7 @@ async function creerBlock() {
         if (!fraisLancementPret(fraisP)) {
           e.className = 'note wKo';
           e.textContent = 'Could not read the ETH price right now, so nothing was started. Try again in a moment.';
+          try { etape('cree_refus_lecture'); } catch (_) {}
           return;
         }
         let balAvant = null;
@@ -12177,6 +12215,9 @@ async function creerBlock() {
         if (balAvant === null) {
           e.className = 'note wKo';
           e.textContent = 'Could not check the chain right now, so nothing was started. Try again in a moment.';
+          /* ⛔ une lecture de chaine qui echoue : c est le compteur que la reprise RPC ajoutee le
+           *   2026-09-25 est censee faire baisser. Sans lui, on ne le saurait jamais. */
+          try { etape('cree_refus_lecture'); } catch (_) {}
           return;
         }
         e.className = 'note';
@@ -12186,12 +12227,18 @@ async function creerBlock() {
         if (rf.etat !== 'CONFIRME') {
           e.className = 'note wKo';
           e.textContent = 'The 0.001 ETH fee was not confirmed, so nothing was created. ' + (rf.pourquoi || '');
+          /* ⛔⛔ CE COMPTEUR EST LE PLUS CHER DE TOUS : quelqu un est alle jusqu au wallet et la
+           *     transaction de frais n a pas abouti. C est le dernier metre avant l argent. */
+          try { etape('cree_refus_frais'); } catch (_) {}
           return;
         }
         const verifP = await verifierLifeFeeAuWallet({ hash: rf.hash, weiMin: fraisP, balAvant });
         if (!verifP.ok) {
           e.className = 'note wKo';
           e.textContent = verifP.pourquoi;
+          /* ⛔ le paiement existe peut-etre mais ne se PROUVE pas (mauvais payeur, montant court,
+           *   recu absent). Meme famille que ci-dessus : le geste a eu lieu, le resultat non. */
+          try { etape('cree_refus_frais'); } catch (_) {}
           return;
         }
         prepayeCourant = { hash: rf.hash, wei: String(fraisP), compte: String(compte).toLowerCase(), t: Date.now() };
@@ -12216,6 +12263,10 @@ async function creerBlock() {
     } catch (err) {
       e.className = 'note wKo';
       e.textContent = String((err && err.message) || err);
+      /* ⛔ construire le calldata a jete : c est notre encodage, jamais le visiteur. Meme famille
+       *   que les autres refus de preparation — et ce site avait deja ete repare une fois (le
+       *   bouton restait muet A JAMAIS), preuve qu il vaut la peine d etre compte. */
+      try { etape('cree_refus_preparation'); } catch (_) {}
       return;
     }
     const to = cibleCreation();
@@ -12244,6 +12295,10 @@ async function creerBlock() {
           || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase()) {
           e.className = 'note wKo';
           e.textContent = 'Instant Birth refused: the paid request could not be built. Nothing was sent.';
+          /* ⛔⛔ CELUI-LA, S IL MONTE, EST DE NOTRE FAUTE — pas un reseau, pas un solde. La garde a
+           *     bien fonctionne (rien n a ete envoye), mais elle a refuse notre propre requete.
+           *     Le distinguer d un manque d ETH evite de chercher le probleme chez le visiteur. */
+          try { etape('cree_refus_preparation'); } catch (_) {}
           return;
         }
         try {
@@ -12253,6 +12308,9 @@ async function creerBlock() {
         if (!adrSend) {
           e.className = 'note wKo';
           e.textContent = 'Instant Birth could not work out your block address in advance — nothing was sent.';
+          /* ⛔ l adresse se lit par une simulation : un hoquet RPC suffit a la perdre. Meme famille
+           *   que « la requete n a pas pu etre construite » — c est notre cote qui n a pas abouti. */
+          try { etape('cree_refus_preparation'); } catch (_) {}
           return;
         }
         adresseCreee = adrSend;
@@ -12262,6 +12320,7 @@ async function creerBlock() {
       } catch (errIb) {
         e.className = 'note wKo';
         e.textContent = 'Instant Birth could not be prepared — nothing was sent. ' + String((errIb && errIb.message) || errIb).slice(0, 160);
+        try { etape('cree_refus_preparation'); } catch (_) {}
         return;
       }
       /* keep forcerCreateRouterIb true through envoyerDepuisWallet; cleared in creerBlock finally */
@@ -12279,6 +12338,10 @@ async function creerBlock() {
       || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase())) {
       e.className = 'note wKo';
       e.textContent = 'Instant Birth refused: the first wallet request must ask for at least 0.001 ETH. Nothing was sent.';
+      /* ⛔⛔ LA DERNIERE GARDE AVANT LE WALLET, et elle protege le revenu : elle refuse une requete
+       *     qui demanderait moins que les frais. Si ce compteur monte, quelque chose en amont
+       *     construit une requete a zero — et c est un defaut chez nous, jamais chez le visiteur. */
+      try { etape('cree_refus_preparation'); } catch (_) {}
       return;
     }
     try { etape('create_sign_propos'); } catch (_) {}
