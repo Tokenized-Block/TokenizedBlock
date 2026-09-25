@@ -146,6 +146,53 @@ export const CLES_MARCHE = [
  *    « sans marche » (mesure sur fork). Ici la cle est lue TELLE QUELLE si sa devise est dans la liste (USDC, cbBTC, actions),
  *    et la capitalisation est dite DANS CETTE DEVISE, decimales lues des deux cotes. Rien trouve = null (le reste decide).
  */
+/* ⛔⛔ DEUX LECTURES QUI NE SE DEVINENT PAS, et un cache qui ne garde QUE les reponses.
+ *     Le code d un contrat et son symbole ne changent jamais : les garder est sur. Mais on ne garde
+ *     PAS un echec — une lecture ratee mise en cache condamnerait ce block pour toute la session, et
+ *     ce depot a deja paye ca une fois (une face lue en erreur, cachee, definitive). */
+const codeConnu = new Map();
+const symboleConnu = new Map();
+
+/** ⛔ EGALITE STRICTE A `0xef`. L EIP-3541 interdit ce premier octet a tout deploiement normal :
+ *  c est le seul marqueur B20 infalsifiable. Un prefixe d adresse, lui, se choisit avec CREATE2. */
+async function codeEstB20(rpc, adresse) {
+  const a = String(adresse).toLowerCase();
+  if (codeConnu.has(a)) return codeConnu.get(a);
+  try {
+    const code = await rpc('eth_getCode', [a, 'latest']);
+    const est = String(code) === '0xef';
+    codeConnu.set(a, est); /* une REPONSE, pas un echec : elle ne changera plus */
+    return est;
+  } catch { return false; } /* non lu : on ne conclut pas, et on ne garde rien */
+}
+
+/** Le symbole tel que le contrat le dit. ⛔ Jamais deduit de l adresse. */
+async function symboleSurChaine(rpc, adresse) {
+  const a = String(adresse).toLowerCase();
+  if (symboleConnu.has(a)) return symboleConnu.get(a);
+  try {
+    const r = await rpc('eth_call', [{ to: a, data: '0x' + selecteur('symbol()') }, 'latest']);
+    if (!r || r === '0x' || String(r).length < 130) return null;
+    const hex = String(r).slice(2);
+    /* chaine ABI : offset dans le premier mot, longueur au mot suivant, octets ensuite */
+    const off = Number(BigInt('0x' + hex.slice(0, 64)));
+    const len = Number(BigInt('0x' + hex.slice(off * 2, off * 2 + 64)));
+    if (!Number.isFinite(len) || len <= 0 || len > 32) return null;
+    let s = '';
+    const corps = hex.slice(off * 2 + 64, off * 2 + 64 + len * 2);
+    for (let i = 0; i < corps.length; i += 2) {
+      const o = parseInt(corps.slice(i, i + 2), 16);
+      /* ⛔ on ne garde que l imprimable ASCII : un symbole plein d octets de controle deviendrait
+       *   un nom illisible a l ecran, ou pire, imiterait un autre jeton. */
+      if (o >= 32 && o < 127) s += String.fromCharCode(o);
+    }
+    s = s.trim().slice(0, 12);
+    if (!s) return null;
+    symboleConnu.set(a, s);
+    return s;
+  } catch { return null; }
+}
+
 async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
   const j = String(jeton).toLowerCase();
   const connues = new Map(pairesProposees(8453).filter((p) => p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION')
@@ -155,8 +202,24 @@ async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
     const c0 = String(c.currency0).toLowerCase(), c1 = String(c.currency1).toLowerCase();
     if (c0 !== j && c1 !== j) continue;
     const devise = c0 === j ? c1 : c0;
-    const sym = connues.get(devise);
-    if (!sym) continue;
+    /* ⛔⛔ UN BLOCK PEUT ETRE APPAIRE A UN AUTRE BLOCK, et jusqu ici ce marche etait INVISIBLE.
+     *     L UI acceptait deja une paire B20 (`qualifierPaire` rend le type SAISIE, et Create verifie
+     *     le code 0xef avant de laisser signer) — mais cette lecture-ci n acceptait que les devises
+     *     du registre. Un block ainsi appaire naissait, sa pool existait sur la chaine, et l app le
+     *     montrait « sans marche » POUR TOUJOURS : on pouvait le creer et ne jamais le voir vivre.
+     *   ⛔⛔ LE MARQUEUR EST LE CODE, JAMAIS LE PREFIXE D ADRESSE. `0xb2…` s usurpe — on choisit son
+     *     adresse avec CREATE2. `eth_getCode` valant EXACTEMENT `0xef` est infalsifiable :
+     *     l EIP-3541 interdit ce premier octet a tout deploiement normal. EGALITE STRICTE — pas un
+     *     `startsWith`, pas une longueur : c est par un prefixe que ce depot s est deja fait avoir.
+     *   ⛔ ET LE SYMBOLE EST LU SUR LA CHAINE, jamais deduit de l adresse : c est le block lui-meme
+     *     qui dit comment il s appelle. Sans symbole lisible, on ne lui en invente pas un. */
+    let sym = connues.get(devise);
+    if (!sym) {
+      const estB20 = await codeEstB20(rpc, devise);
+      if (!estB20) continue; /* ni du registre, ni un B20 natif : on ne lit pas cette cle */
+      sym = await symboleSurChaine(rpc, devise);
+      if (!sym) continue;
+    }
     const cle = { currency0: c.currency0, currency1: c.currency1, fee: Number(c.fee), tickSpacing: Number(c.tickSpacing), hooks: c.hooks };
     try {
       const s0 = await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + poolId(cle).slice(2) }, 'latest']);
