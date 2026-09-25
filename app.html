@@ -1230,7 +1230,20 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="champ">Post link<input type="url" id="cTweetLien" placeholder="https://x.com/name/status/123…" autocomplete="off" spellcheck="false" disabled></label>
         <p class="note" id="cTweetEtat" style="margin:0 0 6px"></p>
       </details>
-      <details class="bDetail" id="cReglagesDetail" open><summary class="note">Manual settings — every dial</summary>
+      <!-- ⛔⛔ FERME PAR DEFAUT DEPUIS LE 2026-09-25. Phil, plusieurs fois : « normalement y a que
+           le bouton birth et il fait tout ».
+           MESURE, page live, 375 px : l onglet Create exposait TREIZE boutons visibles et
+           4,5 ECRANS a faire defiler. Un seul agit (`#cCreer`) ; les douze autres sont deux
+           bascules de reglages, deux choix de mode, un sel, CINQ puces de devise et deux sorties
+           « trouver de l argent ». Quelqu un qui arrive pour creer un block devait choisir avant
+           d avoir compris.
+         ⛔ ON NE SUPPRIME RIEN : le repli existait deja, il etait juste ouvert — et l attribut
+           `aria-expanded="false"` du bouton, lui, disait deja « ferme ». Le balisage se
+           contredisait. Tout reste a UNE tape, et rien ne change pour qui sait ce qu il cherche ;
+           ce qui change, c est le premier ecran de ceux qui ne savent pas encore.
+         ⛔ Le contenu d un `<details>` ferme RESTE dans le DOM : aucun champ ne devient
+           inaccessible au code, seule la VUE change. -->
+      <details class="bDetail" id="cReglagesDetail"><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
       <label class="wConsent" style="color:var(--doux);margin-top:12px"><input type="checkbox" id="cCerveau" checked>
@@ -1869,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-fade-out" hidden>Build <code>20260925-fade-out</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-one-birth-button" hidden>Build <code>20260925-one-birth-button</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
