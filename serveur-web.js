@@ -537,8 +537,27 @@ async function holdersCorps(jeton) {
    *    etait ABSENT, avec ratees=0 -- et le recevoir en PAYABLE.
    *    Le drapeau existait (il garde l ECRIVAIN) ; il ne gardait pas le LECTEUR. */
   if (e.enCours && e.jusqua === null) {
-    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
-      pourquoi: 'a replay is running — balances are not publishable until it finishes' });
+    /* ⛔⛔ UNE BOUCLE MUETTE N EST PAS UN ETAT, C EST UNE PANNE QU ON NE VOIT PAS. Mesure du
+     *     2026-09-25 en production : sur un block a 4 185 transferts, `lu` etait DATE — donc une
+     *     passe s etait bien terminee — mais `jusqua` restait null. Signe que la passe RATE des
+     *     fenetres, se fait jeter en entier, et recommence. Indefiniment. De l exterieur, la route
+     *     repetait « a replay is running » sans jamais dire qu elle n avancait pas d un bloc.
+     *     C est ce que Phil voyait : « Reading every transfer of this block from its birth… (7) ».
+     *   ⛔ ON EXPOSE `ratees` : un nombre transforme « ca tourne » en « ca tourne ET ca rate ».
+     *     C est la difference entre attendre et diagnostiquer.
+     *   ⚠️ CE QU ON NE FAIT PAS ICI, ET POURQUOI : avancer le curseur sur les fenetres reussies.
+     *     Ce serait le vrai correctif — une passe qui s arrete a la PREMIERE fenetre ratee laisse
+     *     un prefixe CONTIGU, donc un point de reprise sur, et le rejeu finirait par aboutir.
+     *     Mais `passeIncrementale` est ATOMIQUE par decision, prise apres un audit ou des mutations
+     *     gardees sans curseur avance avaient fait RECOMPTER des Transfer : un detenteur credite
+     *     25 000 au lieu de 15 000, avec les trois gardes au vert. Retourner cet invariant demande
+     *     sa propre garde et sa propre mesure — consigne dans REPRISE plutot que bricole ici. */
+    const ratees = Number(e.ratees || 0);
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees,
+      pourquoi: ratees > 0
+        ? 'a replay is running but ' + ratees + ' window(s) were refused by the node, so it starts '
+          + 'over each time — balances stay unpublishable until one full pass succeeds'
+        : 'a replay is running — balances are not publishable until it finishes' });
   }
   if (e.naissance === null) {
     return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
