@@ -1563,11 +1563,13 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="titre">Say it on X</p>
       <p class="sous">Write it, read it, then decide. Nothing is published from here — the button opens X
         with the text ready, and you send it yourself.</p>
-      <label class="champ">Their handle
-        <input id="tkQui" placeholder="someone" autocomplete="off" spellcheck="false" maxlength="15">
-      </label>
-      <label class="champ">Block link (optional)
-        <input id="tkLien" placeholder="https://tokenizedblock.space/?block=0x…" autocomplete="off" spellcheck="false">
+      <!-- ⛔ UN SEUL CHAMP. Phil, 2026-09-25 : « tu regardes simplement le lien que l user va
+           remplir, et y a le nom de l utilisateur, donc t as la donnee ». Exact : un lien de post
+           X contient deja le handle (x.com/<handle>/status/…), et un lien de block mene au post
+           grave, donc a son auteur. Demander le handle a cote, c etait faire retaper une donnee
+           qu on avait deja — et ouvrir la porte a ce que les deux se contredisent. -->
+      <label class="champ">Paste a link
+        <input id="tkLien" placeholder="a post on x.com, or a block page here" autocomplete="off" spellcheck="false">
       </label>
       <p class="note" id="tkApercu" style="border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:10px 12px;white-space:pre-wrap"></p>
       <div class="rang" style="flex-wrap:wrap;gap:8px">
@@ -1854,7 +1856,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-post-visible" hidden>Build <code>20260925-post-visible</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-post-un-seul-champ" hidden>Build <code>20260925-post-un-seul-champ</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -10574,34 +10576,71 @@ for (const id of ['#cTweetOui', '#cTweetLien']) {
    *     le texte pret ; la personne relit et envoie. Publier a la place de quelqu un, meme avec son
    *     accord, est un geste qu on ne prend pas — et l ouverture reste un clic, donc jamais une
    *     popup bloquee ni un post parti tout seul. */
-  const qui = $('#tkQui'), lien = $('#tkLien'), apercu = $('#tkApercu'), etatTk = $('#tkEtat');
-  if (qui && apercu) {
-    /* ⛔ Le handle est NETTOYE, pas fait confiance : X n accepte que [A-Za-z0-9_] sur 15 signes.
-     *   Laisser passer le reste fabriquerait un lien mort — ou pire, ferait mentionner quelqu un
-     *   d autre que celui qu on visait. */
-    const propre = (s) => String(s || '').trim().replace(/^\.?@/, '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 15);
+  const lien = $('#tkLien'), apercu = $('#tkApercu'), etatTk = $('#tkEtat');
+  if (lien && apercu) {
+    /* ⛔ DEUX FORMES ACCEPTEES, ET RIEN D AUTRE. Un lien arbitraire tape ici partirait, signe de
+     *   notre nom, dans le post de quelqu un : on ne colle que ce qu on reconnait. */
+    const POST_X = /^https:\/\/(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,25})/;
+    const BLOCK_ICI = /^https:\/\/tokenizedblock\.space\/\?block=(0x[0-9a-fA-F]{40})/;
+    /* le handle trouve pour un lien de block, rempli quand la reponse arrive */
+    let handleDuBlock = null, blockVu = null;
+
+    const lu = () => {
+      const l = String(lien.value || '').trim();
+      const mx = POST_X.exec(l);
+      if (mx) return { genre: 'POST', handle: mx[1], url: l };
+      const mb = BLOCK_ICI.exec(l);
+      if (mb) return { genre: 'BLOCK', adr: mb[1].toLowerCase(), url: l };
+      return { genre: l ? 'INCONNU' : 'VIDE', url: l };
+    };
+
     const texteDuPost = () => {
-      const h = propre(qui.value);
-      const l = String((lien && lien.value) || '').trim();
+      const r = lu();
+      const h = r.genre === 'POST' ? r.handle : (r.genre === 'BLOCK' ? handleDuBlock : null);
       /* ⛔ Sans handle, pas de « .@ » vide : on ecrit une phrase qui se tient toute seule. */
       const debut = h ? '.@' + h + ' tokenized a block.' : 'Someone tokenized a block.';
-      /* ⛔ On ne colle QUE nos propres liens : un lien arbitraire tape ici partirait signe de notre
-       *   nom dans le post de quelqu un. */
-      const bon = /^https:\/\/tokenizedblock\.space\/\?block=0x[0-9a-fA-F]{40}$/.test(l);
-      return debut + '\nA real token on Base, with a face and a market.\n'
-        + (bon ? l : 'https://tokenizedblock.space');
+      const url = r.genre === 'BLOCK' ? r.url : 'https://tokenizedblock.space';
+      return debut + '\nA real token on Base, with a face and a market.\n' + url;
     };
-    const repeindre = () => {
-      apercu.textContent = texteDuPost();
-      const l = String((lien && lien.value) || '').trim();
-      if (etatTk) {
-        etatTk.textContent = (l && !/^https:\/\/tokenizedblock\.space\/\?block=0x[0-9a-fA-F]{40}$/.test(l))
-          ? 'That link is not a block page here, so the post will point at the app instead.'
-          : '';
-      }
+
+    const repeindre = () => { apercu.textContent = texteDuPost(); };
+
+    /* ⛔ POUR UN LIEN DE BLOCK, ON VA CHERCHER L AUTEUR — c est la donnee que Phil signalait :
+     *   elle existe deja, il suffit de la demander. Et on ne fait qu UNE lecture par block :
+     *   repeindre a chaque frappe declencherait une rafale de requetes. */
+    const chercherAuteur = async () => {
+      const r = lu();
+      if (r.genre !== 'BLOCK') { handleDuBlock = null; blockVu = null; repeindre(); majEtat(); return; }
+      if (blockVu === r.adr) return;
+      blockVu = r.adr;
+      handleDuBlock = null;
+      repeindre(); majEtat();
+      try {
+        const rep = await fetch('/api/post/' + r.adr, { cache: 'no-store' });
+        const j = rep.ok ? await rep.json() : null;
+        /* ⛔ on n a pas change de lien entre-temps ? sinon on ecrirait le handle d un autre block */
+        if (blockVu !== r.adr) return;
+        const m = j && j.auteurLien ? /^https:\/\/x\.com\/([A-Za-z0-9_]{1,15})$/.exec(j.auteurLien) : null;
+        handleDuBlock = m ? m[1] : null;
+      } catch (_) { handleDuBlock = null; }
+      repeindre(); majEtat();
     };
-    for (const el of [qui, lien]) { if (el) { el.addEventListener('input', repeindre); el.addEventListener('change', repeindre); } }
-    repeindre();
+
+    const majEtat = () => {
+      if (!etatTk) return;
+      const r = lu();
+      /* ⛔ TROIS SITUATIONS, TROIS PHRASES. « rien trouve » et « pas encore cherche » ne se disent
+       *   pas pareil : la premiere informe, la seconde fait attendre. */
+      etatTk.textContent = r.genre === 'INCONNU'
+        ? 'That is neither a post on x.com nor a block page here — the post will just point at the app.'
+        : (r.genre === 'BLOCK' && !handleDuBlock
+          ? 'Looking for who posted it… if we find nothing, the text stays without a mention.'
+          : '');
+    };
+
+    lien.addEventListener('input', () => { repeindre(); majEtat(); void chercherAuteur(); });
+    lien.addEventListener('change', () => { repeindre(); majEtat(); void chercherAuteur(); });
+    repeindre(); majEtat();
     const poster = $('#tkPoster');
     if (poster) poster.addEventListener('click', () => {
       try { etape('tokenx_composer'); } catch (_) {}

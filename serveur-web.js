@@ -1194,9 +1194,25 @@ createServer((req, res) => {
     };
     if (postsLus.has(t)) { rendre(postsLus.get(t)); return; }
     resoudreFace(t).then(async (f) => {
-      const lien = f && f.face && typeof f.face.tweet === 'string' ? f.face.tweet : null;
+      /* ⛔⛔ BUG QUE J AI MOI-MEME INTRODUIT ET LIVRE, corrige le 2026-09-25 apres mesure en
+       *     production : `/api/face/` rendait bien le post grave de ce block, et `/api/post/`
+       *     repondait « AUCUN ». Cause : `resoudreFace` rend `face: null` quand la LECTURE echoue,
+       *     et mon code lisait ce `null` comme « pas de post grave ».
+       *     C est `absence-of-evidence-vs-failure-to-look`, et j avais meme ecrit en commentaire
+       *     que « pas de post est un fait stable » — ce qui n est vrai QUE si la face a ete lue.
+       *   ⛔⛔ ET LE CACHE RENDAIT LA FAUTE DEFINITIVE : une seule lecture ratee condamnait
+       *     l affichage du post de ce block pour toute la vie du processus. Une erreur qu on garde
+       *     coute infiniment plus cher que la meme erreur oubliee.
+       *   ⇒ On exige que la face ait ETE LUE avant de conclure quoi que ce soit sur son post. */
+      if (!f || f.etat !== 'LU') {
+        rendre({ ok: true, etat: 'NON_MESURE',
+          pourquoi: 'this block\'s face could not be read right now — that is about our reading, not about the post' });
+        return;
+      }
+      const lien = f.face && typeof f.face.tweet === 'string' ? f.face.tweet : null;
       if (!lien) {
-        /* ⛔ « ce block ne porte pas de post » est un FAIT stable, pas un echec : on le garde. */
+        /* ⛔ ICI seulement « aucun post » est un FAIT : la face a ete lue, et elle ne porte pas de
+         *   lien. C est stable, donc cachable. */
         const rep = { ok: true, etat: 'AUCUN', pourquoi: 'no post engraved on this block' };
         postsLus.set(t, rep);
         rendre(rep);
