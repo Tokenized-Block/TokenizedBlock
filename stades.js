@@ -4,11 +4,21 @@
 //    impression de progression et d evolution du block ».
 // ⛔ UN SEUL BAREME : les paliers de `pointsdevie.js` (en dollars), convertis depuis la vie en ETH par un prix ETH/USD
 //    MESURE. Sans ce prix, aucun palier n est juge — le block va dans « tier not judged », jamais dans Seed.
+// ⛔⛔ ET LA VIE N EST PAS TOUJOURS EN ETH (corrige le 2026-09-25). Ce fichier ne convertissait QUE l ETH :
+//    `if (x.devise !== 'ETH' || !prixOk)`. Un block dont la pool est cotee en USDC, en cbBTC ou dans une action
+//    tokenisee (`marche.js ▸ vieEnDevise` rend alors `devise: 'USDC' | 'cbBTC' | 'AAPLc'…`) tombait dans
+//    « prix non lu » — et il y tombait SANS MEME essayer la FDV du marche public, qui est deja en dollars.
+//    `peindreJeu` (app.html) avait ete corrige le 2026-09-20 ; le meme calcul vivait ici, non corrige.
+//    C est `canonical-helper-weaker-copy` : la copie faible est celle qui reste en arriere.
+//    ⛔ ON N INVENTE AUCUN PRIX. Une devise sans prix connu reste sans prix — voir `prixUsdDeLaDevise`.
 // ⛔⛔ « PAS LU » N EST PAS LE PLUS BAS STADE. Un block dont la vie n a pas ete lue n est pas range en Seed ni en
 //    « sans marche » : il a son propre groupe, dit comme un fait sur NOTRE lecture. Meme regle pour la mort : elle
 //    n est dite que sur `mort === true` (le createur a detenu puis tombe a zero).
 // ⚠️ Un palier suit le prix, dans les deux sens : c est un etat, pas une recompense acquise.
 import { progressionPalier, PALIERS } from './pointsdevie.js';
+/* ⛔ LA LISTE DES DEVISES EST IMPORTEE, JAMAIS RECOPIEE : `paires.js` est le registre, et c est le meme que
+ *    `marche.js` interroge pour nommer la devise d une pool. Deux listes divergeraient en silence. */
+import { pairesProposees } from './paires.js';
 
 /* ⛔⛔ REECRITS LE 2026-09-22 (capture de Phil). TROIS DES CINQ TITRES NIAIENT UN DEFAUT :
  *     « not worthless », « not a broken block », et plus loin « Silence ≠ broken ».
@@ -23,7 +33,10 @@ import { progressionPalier, PALIERS } from './pointsdevie.js';
  *    a DETENU puis est tombe a zero — parce que 40 createurs sur 43 a zero n ont jamais rien
  *    detenu, et les confondre accuserait des gens a tort. Seule la formulation change. */
 export const STADES_HORS_PALIER = Object.freeze([
-  { cle: 'PRIX_NON_LU', titre: 'Tier pending — waiting on the ETH price' },
+  /* ⛔ LE TITRE NOMMAIT L ETH ALORS QUE LE GROUPE CONTIENT AUSSI DES BLOCKS COTES AILLEURS (2026-09-25) :
+   *    « waiting on the ETH price » devant un block cote en cbBTC dit une fausse cause. Il dit maintenant
+   *    ce qui manque : un prix en dollars POUR LA DEVISE DE CE BLOCK, quelle qu elle soit. */
+  { cle: 'PRIX_NON_LU', titre: 'Tier pending — waiting on a USD price for its currency' },
   { cle: 'NOURRI', titre: 'Awake — no market yet, fed by its community' },
   { cle: 'SANS_MARCHE', titre: 'No market yet — it has never been traded' },
   { cle: 'NON_LU', titre: 'Market not read — our reader did not come back' },
@@ -37,6 +50,39 @@ export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🌲', CANO
   GRAINE: '🌱', PRIX_NON_LU: '⏳', NOURRI: '✨', SANS_MARCHE: '💤', NON_LU: '⏳', MORT: '⚫' });
 
 /**
+ * LE PRIX EN DOLLARS D UNE DEVISE DE COTATION — ou `null`, jamais un chiffre devine.
+ * ⛔⛔ TROIS SOURCES, DANS CET ORDRE, ET AUCUNE QUATRIEME :
+ *   1. ETH : le prix ETH/USD mesure que l appelant passe (`ethUsd`).
+ *   2. un prix lu par l appelant pour cette devise (`prixUsdParDevise`, symbole -> dollars). C est
+ *      l equivalent de `prixDeviseUsd` que `peindreJeu` recoit deja dans l app, lu sur /api/prix-usd.
+ *      ⚠️ AUCUN APPELANT NE LE PASSE ENCORE : le dire ici plutot que de le laisser croire.
+ *   3. une devise de type STABLE du registre `paires.js` : parite 1 $. ⚠️ C EST UNE HYPOTHESE, et c est
+ *      la MEME que celle deja prise par l app (son convertisseur rend 1 pour l adresse de l USDC, et
+ *      `vieEnUsd` rend la vie telle quelle en USDC). Elle est ici pour ne pas etre plus faible que
+ *      l ecran, pas parce qu un depeg serait impossible.
+ * ⛔ UNE DEVISE NON NOMMEE N EST PAS DE L ETH. Sans nom de devise, on ne convertit pas : convertir au
+ *    prix de l ETH une vie libellee on ne sait pas en quoi rangerait le block dans un faux palier.
+ *    (L app, elle, traite `!devise` comme de l ETH dans `vieEnUsd` — ici on reste ferme.)
+ * ⛔ cbBTC, les actions tokenisees : PAS de prix sans (2). Elles restent « prix non lu » — une lecture
+ *    qui n a pas eu lieu, jamais un zero.
+ * @param {string|null|undefined} devise symbole rendu par `marche.js` ('ETH', 'USDC', 'cbBTC', 'AAPLc'…)
+ * @param {number|null} ethUsd prix ETH/USD mesure
+ * @param {Record<string, number>|null} prixUsdParDevise prix en dollars deja lus par l appelant
+ * @returns {number|null}
+ */
+export function prixUsdDeLaDevise(devise, ethUsd = null, prixUsdParDevise = null) {
+  const bon = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0;
+  if (devise === 'ETH') return bon(ethUsd) ? ethUsd : null;
+  if (!devise || typeof devise !== 'string') return null;
+  if (prixUsdParDevise && Object.prototype.hasOwnProperty.call(prixUsdParDevise, devise)) {
+    const p = prixUsdParDevise[devise];
+    if (bon(p)) return p;
+  }
+  const connue = pairesProposees(8453).find((q) => q.symbole === devise);
+  return connue && connue.type === 'STABLE' ? 1 : null;
+}
+
+/**
  * ⛔ DEUXIEME SOURCE DE CAP (2026-09-17) : notre noeud ne lit la vie que des premiers blocks — en prod
  *    251 blocks tombaient dans « market unread » alors que le marche public en cote plus de 200. Un
  *    `capUsdMarche` (FDV lue par le serveur chez DexScreener) juge alors le palier, et le block porte
@@ -45,12 +91,13 @@ export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🌲', CANO
  *    pas lu. Sans aucune des deux, le block reste dans NON_LU — jamais range en Seed.
  * @param {{ blocks: {adr:string, sym?:string|null, vie?:number|null, devise?:string|null, etatVie?:string|null,
  *   capUsdMarche?:number|null,
- *   nourriture?:{etat:string, gm:number, messages:number, detenteurs:number, mort:boolean|null}|null}[], ethUsd: number|null }} o
+ *   nourriture?:{etat:string, gm:number, messages:number, detenteurs:number, mort:boolean|null}|null}[], ethUsd: number|null,
+ *   prixUsdParDevise?: Record<string, number>|null }} o `devise` est le symbole rendu par `marche.js` ; `prixUsdParDevise`
+ *   porte les prix en dollars que l appelant a su lire pour les devises autres que l ETH (facultatif).
  * @returns {{ groupes: {cle:string, titre:string, blocks:{adr:string, sym:string|null, capUsd:number|null, pct:number|null,
  *   prochain:string|null, source:string}[]}[], total:number, parMarche:number }}
  */
-export function stadesDesBlocks({ blocks, ethUsd = null }) {
-  const prixOk = typeof ethUsd === 'number' && Number.isFinite(ethUsd) && ethUsd > 0;
+export function stadesDesBlocks({ blocks, ethUsd = null, prixUsdParDevise = null }) {
   const par = new Map();
   const mettre = (cle, b) => { if (!par.has(cle)) par.set(cle, []); par.get(cle).push(b); };
   let total = 0, parMarche = 0;
@@ -63,12 +110,19 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
     if (n && n.mort === true) { mettre('MORT', base); continue; }
     const vieLue = x.etatVie === 'LUE' && typeof x.vie === 'number' && Number.isFinite(x.vie) && x.vie > 0;
     if (vieLue) {
-      if (x.devise !== 'ETH' || !prixOk) { mettre('PRIX_NON_LU', base); continue; }
-      const capUsd = x.vie * ethUsd;
-      const p = progressionPalier(capUsd);
-      if (p.etat !== 'LU') { mettre('PRIX_NON_LU', base); continue; }
-      mettre(p.palier.cle, { ...base, capUsd, pct: p.prochain ? p.pct : null, prochain: p.prochain ? p.prochain.titre : null, source: 'CHAINE' });
-      continue;
+      /* ⛔ LA VIE EST LIBELLEE DANS LA DEVISE DE SA POOL : elle est convertie par le prix de CETTE devise. */
+      const prixDevise = prixUsdDeLaDevise(x.devise, ethUsd, prixUsdParDevise);
+      const capUsd = prixDevise === null ? null : x.vie * prixDevise;
+      const p = capUsd === null ? null : progressionPalier(capUsd);
+      if (p && p.etat === 'LU') {
+        mettre(p.palier.cle, { ...base, capUsd, pct: p.prochain ? p.pct : null, prochain: p.prochain ? p.prochain.titre : null, source: 'CHAINE' });
+        continue;
+      }
+      /* ⛔⛔ PAS DE CUL-DE-SAC ICI (2026-09-25). L ancien code faisait `continue` vers PRIX_NON_LU sans jamais
+       *     essayer la FDV du marche public — alors qu elle est DEJA EN DOLLARS et n a besoin d aucun prix de
+       *     devise. Un block cote en cbBTC avec une FDV publique lue restait « prix non lu » pour rien.
+       *     On ne conclut donc pas ici : on laisse la seconde source parler, et PRIX_NON_LU reste le mot final
+       *     si elle ne dit rien non plus (voir plus bas) — jamais NON_LU, car la vie, elle, a bien ete lue. */
     }
     /* seconde source : la FDV du marche public, quand notre noeud n a pas lu ce block */
     const capMarche = typeof x.capUsdMarche === 'number' && Number.isFinite(x.capUsdMarche) && x.capUsdMarche > 0
@@ -82,6 +136,10 @@ export function stadesDesBlocks({ blocks, ethUsd = null }) {
         continue;
       }
     }
+    /* ⛔ VIE LUE, MAIS PAS DE PRIX POUR SA DEVISE ET PAS DE FDV : « palier en attente d un prix », et surtout
+     *    PAS « marche non lu ». Le marche de ce block a ete lu — c est NOTRE prix de devise qui manque, et la
+     *    difference entre les deux phrases est celle entre accuser le block et nommer notre limite. */
+    if (vieLue) { mettre('PRIX_NON_LU', base); continue; }
     if (x.etatVie === 'NON_TROUVEE') {
       mettre(n && n.gm + n.messages + n.detenteurs > 0 ? 'NOURRI' : 'SANS_MARCHE', base);
       continue;
