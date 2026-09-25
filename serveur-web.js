@@ -424,6 +424,62 @@ const POT_FICTIF = 10n ** 18n;
 const holdersCache = new Map(); /* jeton -> { soldes, naissance, jusqua, ratees, lu, enCours } */
 const HOLDERS_MAX = 200;
 
+/* ⛔⛔ CE CACHE NE SURVIVAIT A AUCUN REDEPLOIEMENT, et c est ce que Phil a vu : « Reading every
+ *     transfer of this block from its birth… (7) ». Le rejeu coute ~42 lectures et des dizaines de
+ *     secondes PAR BLOCK ; il etait refait a froid apres chaque mise en ligne — huit fois rien que
+ *     le 2026-09-25. Le magasin existait, il etait juste volatil.
+ *   ⛔ MEME MOTIF QUE L ENTONNOIR ET LE TRENDING : volume /data, ecriture atomique (.tmp puis
+ *     rename). On ne reinvente pas un mecanisme de persistance a cote de deux qui marchent.
+ *   ⛔⛔ ET ON ECHOUE OUVERT, TOUJOURS. Sans volume (local, ou volume absent), tout se comporte
+ *     exactement comme avant : memoire seule. Un incident passe de ce depot est un VOLUME PLEIN qui
+ *     a corrompu une base — donc ici : rien ne jette, on borne le nombre d entrees, et un echec
+ *     d ecriture ne doit jamais empecher une lecture de reussir.
+ *   ⛔ ON NE GARDE QUE LES PASSES COMPLETES (`jusqua` pose et zero fenetre ratee). Persister une
+ *     passe partielle la ferait revivre a chaque demarrage, et un etat incomplet ressuscite est
+ *     pire qu un etat absent : il a l air d une mesure. */
+const FICHIER_HOLDERS = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'holders-cache.json') : null;
+/* ⛔ borne dure du fichier : au-dela on n ecrit pas plutot que de remplir le volume */
+const HOLDERS_FICHIER_MAX_OCTETS = 4 * 1024 * 1024;
+let holdersEcritureEnCours = false;
+
+function ecrireHolders() {
+  if (!FICHIER_HOLDERS || holdersEcritureEnCours) return;
+  holdersEcritureEnCours = true;
+  try {
+    const entrees = [];
+    for (const [jeton, e] of holdersCache) {
+      if (e.jusqua === null || e.ratees !== 0) continue; /* jamais une passe partielle */
+      entrees.push([jeton, { soldes: [...e.soldes].map(([a, v]) => [a, String(v)]),
+        naissance: e.naissance, jusqua: e.jusqua, ratees: 0, lu: e.lu }]);
+    }
+    const payload = JSON.stringify(entrees);
+    if (payload.length > HOLDERS_FICHIER_MAX_OCTETS) return; /* ⛔ plutot rien qu un volume plein */
+    writeFileSync(FICHIER_HOLDERS + '.tmp', payload);
+    renameSync(FICHIER_HOLDERS + '.tmp', FICHIER_HOLDERS);
+  } catch (err) { /* ⛔ une ecriture ratee ne casse pas une lecture : on retombe sur la memoire */ }
+  finally { holdersEcritureEnCours = false; }
+}
+
+(function relireHolders() {
+  if (!FICHIER_HOLDERS || !existsSync(FICHIER_HOLDERS)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_HOLDERS, 'utf8'));
+    if (!Array.isArray(brut)) return;
+    for (const [jeton, e] of brut.slice(0, HOLDERS_MAX)) {
+      /* ⛔ on revalide l adresse a la relecture : un fichier est une entree comme une autre */
+      if (!/^0xb20[0-9a-f]{37}$/.test(String(jeton))) continue;
+      if (!e || typeof e !== 'object' || e.jusqua === null || e.ratees !== 0) continue;
+      const soldes = new Map();
+      for (const [a, v] of Array.isArray(e.soldes) ? e.soldes : []) {
+        try { soldes.set(String(a), BigInt(v)); } catch (_) { /* une entree illisible est ignoree */ }
+      }
+      holdersCache.set(String(jeton), { soldes, naissance: e.naissance, jusqua: e.jusqua,
+        ratees: 0, lu: e.lu, enCours: false });
+    }
+  } catch (err) { /* fichier absent ou abime : on repart de la memoire, comme avant */ }
+})();
+
 async function reconstruireHolders(jeton) {
   let e = holdersCache.get(jeton);
   if (!e) {
@@ -449,6 +505,9 @@ async function reconstruireHolders(jeton) {
     e.lu = new Date().toISOString();
   } catch (err) { e.ratees = (e.ratees || 0) + 1; }
   e.enCours = false;
+  /* ⛔ ON GARDE LA PASSE SUR LE VOLUME, mais SEULEMENT si elle est complete : une passe partielle
+   *   ecrite sur disque ressusciterait a chaque demarrage un etat qu on refuse deja d afficher. */
+  if (e.jusqua !== null && e.ratees === 0) ecrireHolders();
   return e;
 }
 
