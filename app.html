@@ -1904,7 +1904,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-retry-on-the-spot" hidden>Build <code>20260925-retry-on-the-spot</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-brain-reads-market" hidden>Build <code>20260925-brain-reads-market</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2649,7 +2649,16 @@ function viePourCerveau(adr, vie, etatVie) {
     return { vie, etatVie };
   }
   const k = vieMarcheConnue.get(a);
-  if (k && (etatVie === 'NON_LUE' || etatVie === 'LUE' && !(vie > 0))) {
+  /* ⛔⛔ CETTE GARDE ETAIT TOUJOURS FAUSSE POUR LES BLOCKS QUI EN AVAIENT LE PLUS BESOIN. Elle a ete
+   *     ecrite pour le cas ou l appelant tient un etat (`NON_LUE` ou `LUE`) — mais quand le block
+   *     n est pas sur la carte, l appelant passait `null`, et aucune des deux branches ne matchait.
+   *     Le dernier bon relevé dormait donc dans `vieMarcheConnue` sans jamais etre rendu, et le
+   *     cerveau repartait a « market unread » a chaque battement.
+   *   ⛔ `null`/`undefined` VEUT DIRE « je ne tiens aucune lecture », ce qui est exactement le cas
+   *     ou un relevé recent de moins de 15 minutes doit servir. On l ajoute explicitement plutot
+   *     que d elargir le test : les trois situations restent nommees. */
+  const sansLecture = etatVie === null || etatVie === undefined;
+  if (k && (sansLecture || etatVie === 'NON_LUE' || etatVie === 'LUE' && !(vie > 0))) {
     /* keep up to 15 min */
     if (Date.now() - k.quand < 15 * 60 * 1000) return { vie: k.vie, etatVie: 'LUE' };
   }
@@ -4048,12 +4057,35 @@ function appliquerVie(h, r) {
    *     ⛔ `NON_TROUVEE` SEULEMENT : c est « on a cherche, il n y a rien ». Un etat non lu ou une
    *       lecture ratee laissent le block en place — on ne retire jamais sur ce qu on n a pas vu. */
   if (r.etat === 'NON_TROUVEE') {
+    /* ⛔⛔⛔ UN BLOCK QU ON A DEJA VU VIVANT NE QUITTE PLUS LA CARTE. Phil, 2026-09-25 : « j ai des
+     *      blocks a gros MC qui sont partis, ils ont tout vendu ? ». La reponse honnete est NON —
+     *      ou plutot : on n en sait rien, et c est precisement le probleme. Un retrait disait
+     *      « ce block n a pas de marche » alors qu il ne prouve que « NOTRE lecture n a rien
+     *      trouve cette fois-ci ».
+     *    ⛔⛔ ET `NON_TROUVEE` N EST PAS FIABLE : ce fichier contient deja, plus bas, un correctif
+     *      qui PROMEUT `NON_TROUVEE` en `LUE` quand l initialisation retrouve une pool. Autrement
+     *      dit, on savait que cet etat se trompe — mais l elagage, lui, le croyait sur parole et
+     *      agissait de facon IRREVERSIBLE a l ecran.
+     *    ⇒ `futVivant` est un cliquet : une fois qu une vie superieure a zero a ete LUE, aucune
+     *      lecture ulterieure ne peut faire disparaitre le block. Entre deux lectures qui se
+     *      contredisent, on garde celle qui a VU quelque chose — une absence ne peut pas effacer
+     *      une presence deja constatee.
+     *    ⛔ CE QUE CA NE FAIT PAS : pretendre que le marche est toujours la. Le block reste, et son
+     *      etat affiche dira « unread » tant qu on ne le relit pas. On ne remplace pas un faux
+     *      « il est parti » par un faux « tout va bien ». */
+    if (h.futVivant) {
+      h.el.classList.add('sansPrix');
+      return;
+    }
     /* ⛔ un retrait qui echoue laisse le block VISIBLE, jamais a moitie efface */
     try { retirerDeLaCarte(h); } catch (_) { /* rien */ }
     return;
   }
   if (r.etat !== 'LUE') return;
   h.vie = r.vie; h.devise = r.devise; h.via = r.via; h.cle = r.cle || null; h.liquidite = r.liquidite != null ? r.liquidite : null;
+  /* ⛔ LE CLIQUET SE POSE ICI, et une seule fois : au moment ou une vie reelle a ete LUE. C est le
+   *   seul endroit du fichier qui peut l affirmer sur une mesure. */
+  if (r.vie != null && Number(r.vie) > 0) h.futVivant = true;
   const t = Math.round(tailleDe(r.vie, r.devise) * (h.nous ? 1.25 : 1));
   h.t = t;
   poserTailleBloc(h.el, t);
@@ -12712,7 +12744,11 @@ let brainAdr = null, brainEtat = null, brainHisto = [];
  * `actifs.length` sont comptes dans la meme boucle). Deux cases pour un chiffre ne disent rien de
  * plus : l une devient le cumul depuis l ouverture. */
 let brainTotal = 0, brainDernier = null;
-let brainPhaseJournal = null, brainNourriture = null;
+/* ⛔⛔ `brainMarche` EST LE JUMEAU MANQUANT DE `brainNourriture`, ajoute le meme jour et oublie.
+ *     Les deux servent le meme cas : un block hors `habitants` — ce qui est le cas NORMAL, le
+ *     selecteur du Brain sert aussi les creations et ce que le Live a vu. Sans lui, la lecture de
+ *     marche d un block hors carte etait jetee, et son cerveau restait « market unread » a vie. */
+let brainPhaseJournal = null, brainNourriture = null, brainMarche = null;
 const CLE_JOURNAL = 'tblock.journal.';
 function journalLu(adr) {
   try { return JSON.parse(localStorage.getItem(CLE_JOURNAL + String(adr).toLowerCase()) || '[]'); } catch (e) { return []; }
@@ -13072,8 +13108,23 @@ function choisirBrain(adr) {
           hB.etatVie = marche.etat;
           if (marche.etat === 'NON_LUE') viePourCerveau(adr, hB.vie, 'NON_LUE');
         }
-      } else if (marche && marche.etat === 'LUE') {
-        viePourCerveau(adr, marche.vie, 'LUE');
+      } else if (marche) {
+        /* ⛔⛔⛔ ON GARDE LE RESULTAT QUEL QU IL SOIT, et c est tout le correctif.
+         *      Cette branche ne retenait que `LUE` : pour un block hors carte — le cas NORMAL, le
+         *      selecteur sert aussi les creations et ce que le Live a vu — un `NON_TROUVEE` etait
+         *      JETE. Or « on a cherche, il n y a pas de pool » est un FAIT MESURE sur un block pas
+         *      encore lance ; le jeter le laissait a « market unread » pour toujours.
+         *      MESURE DU 2026-09-25 en production : 379 blocks dans le selecteur, 180 marques
+         *      « Market not read » — dont 162 qui ne sont sur AUCUNE carte, donc qu aucun lecteur
+         *      ne lit jamais. C est le « pas de brain reel pour les nouveaux » de Phil.
+         *    ⛔⛔ ET C EST MON PROPRE CORRECTIF A MOITIE LIVRE. J ai ajoute `brainNourriture` ce
+         *      matin pour exactement ce probleme, cote nourriture, en ecrivant qu une lecture
+         *      reussie doit atteindre le reseau. La moitie MARCHE n a pas ete faite le meme jour.
+         *      `single-and-batch-twins-diverge` : c est le jumeau qu on ne relit pas qui reste faux.
+         *    ⛔ « pas de marche » et « marche illisible » restent DISTINCTS : on transmet l etat
+         *      mesure, on ne le remplace pas par un etat commode. */
+        brainMarche = { adr: String(adr).toLowerCase(), v: marche };
+        viePourCerveau(adr, marche.etat === 'LUE' ? marche.vie : null, marche.etat);
       }
     } catch (err) {
       try { console.warn('[brain] market read failed', adr, err && err.message); } catch (_) {}
@@ -13112,7 +13163,16 @@ function battreBrain() {
   /* ⛔ 2026-09-14: while mood is market-unread, re-read the pool every ~12s — cache alone can't wake a cold start. */
   if ((brainEtat.tick % 20) === 1) void relireMarcheBrainSiNonLu();
   /* ⛔ 2026-09-14 wake: Brain panel must use the same last-good market as the map — otherwise RPC blips stick « market unread ». */
-  const vc = viePourCerveau(brainAdr, h ? h.vie : null, h ? h.etatVie : null);
+  /* ⛔⛔ LE MARCHE LU POUR UN BLOCK HORS CARTE ARRIVE ENFIN JUSQU ICI. On passait `(null, null)` des
+   *     que `h` etait absent — donc la lecture faite a la selection ne servait a rien, et le
+   *     dernier bon relevé garde en memoire restait lui aussi inatteignable : la garde des 15 min
+   *     dans `viePourCerveau` teste `etatVie === 'NON_LUE'`, ce qui est FAUX quand on passe `null`.
+   *     Une garde ecrite pour le cas ou `h` existe, toujours fausse pour celui ou il manque. */
+  const mB = brainMarche && brainMarche.adr === String(brainAdr || '').toLowerCase() ? brainMarche.v : null;
+  const vc = viePourCerveau(
+    brainAdr,
+    h ? h.vie : (mB && mB.etat === 'LUE' ? mB.vie : null),
+    h ? h.etatVie : (mB ? mB.etat : null));
   /* ⛔⛔ LUE PUIS JETEE — mesure du 2026-09-25. Pour un block absent de `habitants` (cas normal : le
    *     selecteur sert aussi les blocks vus par le Live et les creations), `choisirBrain` range la
    *     nourriture LUE dans `brainNourriture`. Le journal la lit, l instantane la lit — le RESEAU,
