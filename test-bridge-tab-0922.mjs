@@ -1,4 +1,4 @@
-// test-bridge-tab-0922.mjs — Bridge tab + 0.01% fee skim plan (tip 20260923-nav-boot-fix)
+// test-bridge-tab-0922.mjs — Bridge tab + fee skim plan (tip 20260923-nav-boot-fix)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
@@ -103,10 +103,19 @@ const html = readFileSync('./app.html', 'utf8');
 assert.match(html, /data-volet="bridge"/);
 assert.match(html, /id="v-bridge"/);
 assert.match(html, /from\s+'\.\/bridge\.js'/);
-assert.match(html, /0\.01%/);
+/* ⛔⛔ DEUX ASSERTIONS DE PLUS VERROUILLAIENT LE DEFAUT, et elles etaient les pires du lot :
+ *     · `assert.match(html, /0\.01%/)` exigeait l ANCIEN tarif quelque part dans le fichier ;
+ *     · `assert.match(html, /Confirm Bridge fee/)` exigeait l ANCIENNE etiquette du bouton — celle
+ *       qui annonçait « un frais » pour un geste qui VEND les blocks de quelqu un.
+ *     Apres correction de l ecran, toutes deux passaient encore — satisfaites par les COMMENTAIRES
+ *     qui documentent justement le retrait. C est le piege decrit vingt lignes plus bas dans ce
+ *     meme fichier, retombe a l identique : une garde satisfaite par le commentaire qui explique sa
+ *     propre violation ne garde rien, et empeche en plus de corriger l ecran.
+ *   ⇒ On garde ce qui compte : le cablage du module, et un tarif qui vient de la constante. */
 assert.match(html, /planBridgeFeeSkim/);
 assert.match(html, /buildBridgeFeeCall/);
-assert.match(html, /Confirm Bridge fee/);
+assert.match(html, /data-frais-bridge/,
+  'app.html n a plus d emplacement de tarif peint depuis la constante : le chiffre est revenu en dur');
 const brStart = html.indexOf('id="v-bridge"');
 const brEnd = html.indexOf('</section>', brStart) + '</section>'.length;
 const bridgePanel = html.slice(brStart, brEnd);
@@ -126,7 +135,20 @@ assert.ok(ecranBridge.length < bridgePanel.length, 'depouillement sans effet —
 assert.ok(ecranBridge.length > 800, 'panneau Bridge suspect apres depouillement : ' + ecranBridge.length);
 
 assert.doesNotMatch(ecranBridge, /0xa6cf|Fees for Dev|≈\s*\$1|≈\$1/i);
-assert.match(ecranBridge, /Fee[\s\S]*0\.01%/);
+/* ⛔⛔ CETTE ASSERTION EXIGEAIT « 0.01% » — ET C EST ELLE QUI A PROTEGE LE FAUX TARIF.
+ *     Le 2026-09-24 le prelevement est passe a 0,5 % (`BRIDGE_FEE_BPS = 50n`), et les lignes 11-18
+ *     de CE FICHIER l ont acte. Mais ici, 110 lignes plus bas, on exigeait encore l ANCIEN chiffre
+ *     a l ecran. Le test restait donc VERT sur un panneau qui annonçait un tarif cinquante fois
+ *     trop bas : la bonne regle ecrite en tete, le litteral contraire garde en bas.
+ *     Un test peut verrouiller un defaut tout en ayant l air de garder quelque chose — et pendant
+ *     ce temps « tout vert » s affichait au-dessus d un ecran d argent qui mentait.
+ *   ⇒ Ce qu on veut garder n a jamais ete « le panneau dit 0.01% » mais « le panneau annonce un
+ *     tarif, et c est celui qui sera preleve ». Le chiffre vient donc de la constante. */
+assert.match(ecranBridge, /[Ff]ee/, 'le panneau Bridge ne parle plus de frais du tout');
+assert.ok(
+  ecranBridge.includes(BRIDGE_FEE_LABEL) || /data-frais-bridge/.test(ecranBridge),
+  'le panneau Bridge n annonce ni le tarif reel (' + BRIDGE_FEE_LABEL + ') ni un emplacement peint '
+  + 'depuis la constante : il ne peut donc plus dire ce qui sera preleve');
 /* ⛔ L INTENTION D ORIGINE : le panneau doit DIRE que l echange net via le hub n est pas livre.
  *    Elle est gardee — en mots qui se comprennent sans nous connaitre. */
 assert.match(ecranBridge, /not live( yet)?/i,
@@ -152,4 +174,4 @@ assert.ok(build && /^[\w-]+$/.test(build[1]), 'data-build present et bien forme,
 assert.doesNotMatch(planEth.pourquoi || '', /0xa6cf/i);
 assert.doesNotMatch(stub.pourquoi || '', /0xa6cf/i);
 
-console.log('ok — bridge tab 0.01% quote + fee skim plan + UI wiring');
+console.log('ok — bridge tab quote (' + BRIDGE_FEE_LABEL + ') + fee skim plan + UI wiring');

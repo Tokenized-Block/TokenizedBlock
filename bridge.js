@@ -1,8 +1,16 @@
-// bridge.js — Bridge tab quote + 0.01% fee skim + honest legs (tip 20260923-bridge-x402-brain).
+// bridge.js — Bridge tab quote + fee skim + honest legs (tip 20260923-bridge-x402-brain).
 // ================================================================================================
+// ⛔⛔ LE TARIF NE S ECRIT PLUS EN DUR. MESURE DU 2026-09-25 : ce fichier et app.html annonçaient
+//     « 0.01% » a DIX-HUIT endroits alors que `BRIDGE_FEE_BPS` vaut 50n — soit 0,5 %. Un facteur
+//     CINQUANTE entre le tarif affiche et le tarif preleve, sur des ecrans ou quelqu un decide de
+//     payer. Le chiffre a change le 2026-09-24 (decision de Phil) ; les phrases sont restees.
+//     C est la forme la plus banale du mensonge dans une app : personne ne l a ecrit, il a derive.
+//   ⇒ Tout affichage passe par `BRIDGE_FEE_LABEL`. Un litteral qui reapparait est un tarif qui
+//     recommencera a deriver, donc `test-bridge-tarif-unique.mjs` le refuse.
+//
 // PRODUCT (Raksha / Zero 1 · 2026-09-22/23):
 //   · Bridge tab = fiat→tokenized Fund path + sell/swap tokenized↔tokenized VIA a Bridge block.
-//   · Fee = 0.01% of transfer volume (bps = 1) → same fee sink as Create/hook (a6cf on-chain).
+//   · Fee = BRIDGE_FEE_BPS of transfer volume → same fee sink as Create/hook (a6cf on-chain).
 //   · Prefer ETH or USDC settlement. NEVER surface fee address in UI.
 //   · Amount-only labels — no « Fees for Dev », no ≈$1.
 //   · Instant Birth / CreateRouter / openFeeDejaPayePour / V8 / BuySell 0.5% untouched.
@@ -18,10 +26,10 @@
 //   · Full tokenized↔tokenized swap of the NET via hub is NOT on-chain yet → GO Phil: BridgeRouter
 //     (or 1 bps TAKE_PORTION) so fee+swap are atomic. Confirm still sends the fee skim only when
 //     From is ETH/USDC; net swap stays blocked with clear copy.
-//   · Fail-closed if fee rounds to 0 wei/units (amount too small for 1 bps).
+//   · Fail-closed if fee rounds to 0 wei/units (amount too small for BRIDGE_FEE_BPS).
 //   · FEE_WALLET address never appears in UI strings returned here.
 
-/** Bridge fee = 0.01% of volume = 1 basis point. */
+/** Bridge fee = BRIDGE_FEE_BPS centiemes de point de base du volume. SOURCE UNIQUE DU TARIF. */
 /* ⛔⛔ 0,5 % — DECISION DE PHIL, 2026-09-24 : « écris 0.5% alors ».
  *     Le panneau annonçait 0,01 % alors que le chemin reellement cable en preleve 0,5 %
  *     (`FRAIS_INTERFACE_BPS` dans echange.js) : sortir un block par sa pool est exactement ce que
@@ -78,14 +86,14 @@ export const BRIDGE_LEGS = Object.freeze([
     id: 'skim',
     label: 'Swap fee',
     live: false,
-    fee: '0.01%',
+    fee: BRIDGE_FEE_LABEL,
     note: 'Charged only once swapping actually works. Nothing is taken while the hub is off.',
   },
   {
     id: 'hub',
     label: 'Block / Token hub',
     live: false,
-    fee: '0.01%',
+    fee: BRIDGE_FEE_LABEL,
     goPhil: true,
     /* ⛔ Le nom interne du contrat et le prenom de l equipe sont retires : cette note peut finir a
      *   l ecran, et elle ne doit rien supposer de connu. */
@@ -117,7 +125,12 @@ export const BRIDGE_LEGS = Object.freeze([
  */
 export function phraseBridgeLegs() {
   return HUB_SWAP_LIVE
-    ? 'Legs: Fund (fiat → your wallet) · swap between tokens, with a 0.01% fee · tokenized equity later — not a broker.'
+    /* ⛔ LA BRANCHE « LIVE » EST UNE BOMBE A RETARDEMENT SI ON Y ECRIT UN TARIF EN DUR : elle ne
+     *   s affiche pas aujourd hui (HUB_SWAP_LIVE est false), donc personne ne la relit — et le jour
+     *   ou le hub s allume, c est un chiffre vieux de plusieurs mois qui part a l ecran. Elle avait
+     *   d ailleurs garde « 0.01% » trois semaines apres que le tarif soit passe a 0,5 %. */
+    ? ('Legs: Fund (fiat → your wallet) · swap between tokens, with a ' + BRIDGE_FEE_LABEL
+      + ' fee · tokenized equity later — not a broker.')
     : 'Legs: Fund (fiat → your wallet) is the only one running. Swapping one token for another is '
       + 'not built yet, so nothing is charged for it — the quote below is an estimate for later, '
       + 'not an offer. Tokenized equity comes after that. We are not a broker.';
@@ -161,7 +174,7 @@ export function quoteBridge(p) {
 
 /**
  * Format a quote amount for UI — amount + unit only (no dollar approx, no fee-addr).
- * Trims trailing zeros; keeps enough decimals for tiny 0.01% fees.
+ * Trims trailing zeros; keeps enough decimals for tiny fees at BRIDGE_FEE_BPS.
  */
 export function formatBridgeAmount(n, sym) {
   if (n == null || !Number.isFinite(n)) return '—';
@@ -212,7 +225,7 @@ export function unitsFromHuman(amount, decimals) {
 }
 
 /**
- * Plan client-side 0.01% fee skim for Bridge confirm.
+ * Plan client-side fee skim (BRIDGE_FEE_BPS) for Bridge confirm.
  * Caller fills `to` / calldata with FEE_WALLET (never pass the address into UI copy).
  *
  * Live path only when From is ETH or USDC (user holds the settlement asset).
@@ -258,7 +271,9 @@ export function planBridgeFeeSkim(p) {
   if (feeUnits <= 0n) {
     return { ok: false, live: false, settleSym: q.settleSym, fromSym: q.fromSym, toSym: q.toSym,
       feeBps: q.feeBps, feeLabel: q.feeLabel,
-      pourquoi: 'Amount too small for 0.01% fee — raise the amount' };
+      /* ⛔ CE TEXTE ARRIVE A L ECRAN. Il nommait un tarif faux au moment precis ou quelqu un essaie
+       *   de comprendre pourquoi son montant est refuse — donc il l empechait de calculer le bon. */
+      pourquoi: 'Amount too small for the ' + BRIDGE_FEE_LABEL + ' fee — raise the amount' };
   }
   return {
     ok: true,

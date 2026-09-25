@@ -1326,7 +1326,7 @@ details[open] > summary::before{transform:rotate(90deg)}
                 veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
                 ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
         <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Instant Birth.</p>
-        <p class="note" id="cBridgeRetarget">Tokenized↔tokenized after funding? Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab — 0.01% via your Bridge block.</p>
+        <p class="note" id="cBridgeRetarget">Tokenized↔tokenized after funding? Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab — <b data-frais-bridge>—</b> via your Bridge block.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-buy-intent-split" hidden>Build <code>20260925-buy-intent-split</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-bridge-true-rate" hidden>Build <code>20260925-bridge-true-rate</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2312,8 +2312,17 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte">
       <p class="titre">Bridge</p>
       <p class="sous">Move value through a <b>Bridge block</b> hub — not a naked external Dex.
-        <b>Legs:</b> Fund (fiat → <b>your</b> wallet) · ETH/USDC <b>0.01%</b> skim (live) ·
-        Block/Token hub quote (net swap <b>not live yet</b>) ·
+        <!-- ⛔⛔ CETTE PHRASE PORTAIT DEUX MENSONGES, mesures le 2026-09-25 en production.
+             1. « 0.01% » alors que `BRIDGE_FEE_BPS` vaut 50n, soit 0,5 % : un facteur CINQUANTE
+                entre le tarif lu et le tarif preleve, sur l ecran ou quelqu un decide de payer.
+             2. « skim (live) » alors que le module marque cette jambe `live: false`. Le fichier
+                bridge.js avait DEJA corrige ce mot dans sa propre phrase — mais celle-ci, juste
+                au-dessus, en gardait une copie. Corriger une source d un texte duplique laisse
+                l autre gagner a l ecran ; c est exactement le piege deja documente dans bridge.js.
+             ⇒ Le tarif vient desormais de `BRIDGE_FEE_LABEL` (emplacement peint au demarrage), et
+               la description des jambes vient de `phraseBridgeLegs()`, source unique. -->
+        <b>Legs:</b> Fund (fiat → <b>your</b> wallet) · ETH/USDC <b data-frais-bridge>—</b> swap fee
+        (<b>not live</b>) · Block/Token hub quote (net swap <b>not live yet</b>) ·
         tokenized equity <b>later</b> (not a broker). Fee amount only — no leveraged legs.</p>
       <!-- ⛔ « Phil-blocked », « until BridgeRouter », « hub quote (Phil) » RETIRES DE L ECRAN :
            un prenom et le nom d un contrat interne. Le lecteur n a aucun moyen de savoir qui est
@@ -2321,7 +2330,11 @@ details[open] > summary::before{transform:rotate(90deg)}
            manque un savoir. Ce qu il doit savoir tient en trois mots : ce n est pas encore live.
            ⛔ LA RESERVE EST GARDEE, C EST LE JARGON QUI PART : dire « pas encore live » est aussi
              honnete que « Phil-blocked » et se comprend sans nous connaitre. -->
-      <p class="note" id="brLegsNote">Fund · ETH/USDC skim 0.01% · hub quote (not live yet) · equity later</p>
+      <!-- ⛔ Ce paragraphe est ECRASE au demarrage par `phraseBridgeLegs()`. Son contenu statique
+           doit quand meme etre vrai : il s affiche pendant le premier instant, et surtout il est ce
+           qu on lit en relisant le fichier. Un HTML qui ment « seulement une seconde » finit par
+           etre la version qu on croit livree. -->
+      <p class="note" id="brLegsNote">Fund (fiat → your wallet) is the only leg running.</p>
       <label class="champ">Bridge block
         <select id="brBlock"><option value="">Pick or create a block to use as hub…</option></select>
       </label>
@@ -2339,7 +2352,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       </button>
       <button type="button" class="creaMode" role="tab" aria-selected="false" data-brmode="swap" id="brModeSwap">
         <span class="creaModeIc">⇄</span><b>Swap</b>
-        <span>Sell / swap tokenized assets via the Bridge block — 0.01% fee.</span>
+        <span>Sell a block through its own market — <b data-frais-bridge>—</b> fee, taken inside the same transaction.</span>
       </button>
     </div>
 
@@ -2348,12 +2361,20 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="sous">Buy ETH or USDC through Coinbase — it lands in <b>your</b> wallet.
         Tokenized Block never holds your money. Coinbase shows their total before you confirm.</p>
       <a class="bouton" id="brFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH / USDC on Base</a>
-      <p class="note" id="brFundHint" style="margin-top:10px">After funding, use <b>Swap</b> to move tokenized assets through your Bridge block (0.01%).</p>
+      <p class="note" id="brFundHint" style="margin-top:10px">After funding, use <b>Swap</b> to sell a block through its own market (<b data-frais-bridge>—</b> fee).</p>
     </div>
 
     <div class="carte" id="brSwapCarte" hidden>
       <p class="titre">Swap via Bridge</p>
-      <p class="note">Fee 0.01% skim is live when <b>From</b> is ETH or USDC (wallet signs; fail-closed if fee rounds to 0).
+      <!-- ⛔⛔ CE PARAGRAPHE DECRIVAIT UN GESTE QUI N EXISTE PLUS. Il annonçait un « skim » — un
+           frais preleve TOUT SEUL — alors que le bouton ci-dessous vend reellement des blocks par
+           leur propre pool, frais pris DANS la meme transaction. Le commentaire du gestionnaire le
+           dit noir sur blanc : « ce chemin ne couvre pas le From/To generique ; seule la SORTIE
+           d un block par son propre marche est cablee ici ». L ecran, lui, vendait autre chose.
+           ⛔ Et il portait le tarif d avant (0,01 % au lieu de 0,5 %), sur le dernier ecran lu
+             avant une signature. -->
+      <p class="note">Selling a block through its own market is live: the fee is taken inside the
+        same transaction, never as a separate charge (fail-closed if it rounds to 0).
         <!-- ⛔ « until Phil BridgeRouter (1 bps) » RETIRE : un prenom et un nom de contrat interne,
              plus un prix (1 bps) pour une route qui n existe pas encore. Annoncer le tarif d un
              service non livre est une promesse, pas une information. La reserve reste ENTIERE. -->
@@ -2369,11 +2390,16 @@ details[open] > summary::before{transform:rotate(90deg)}
         <input id="brAmount" inputmode="decimal" placeholder="0.0" autocomplete="off">
       </label>
       <div class="carte" id="brQuote" style="margin-top:10px;background:transparent">
-        <p class="note" id="brQuoteFee">Fee (0.01%): —</p>
+        <p class="note" id="brQuoteFee">Fee (<span data-frais-bridge>—</span>): —</p>
         <p class="note" id="brQuoteNet">You receive: —</p>
         <p class="note" id="brQuoteSettle">Settlement: —</p>
       </div>
-      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Confirm Bridge fee</button>
+      <!-- ⛔⛔ L ETIQUETTE DISAIT « Confirm Bridge fee » ET LE GESTE VEND LES BLOCKS. Quelqu un qui
+           confirme « un frais » ne s attend pas a se separer de ce qu il detient : c est un
+           probleme de CONSENTEMENT, pas de formulation. Le gestionnaire appelle `planEchange` en
+           VENTE sur le block choisi et envoie la transaction de sortie par sa propre pool.
+           ⛔ Un bouton porte le nom de ce qu il FAIT. Si le geste change, c est le nom qui suit. -->
+      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Sell these blocks through their market</button>
       <p class="note" id="brEtat" style="margin-top:8px"></p>
     </div>
   </section>
@@ -13841,7 +13867,7 @@ async function peindreBridgeBlocks() {
   else if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved;
   if (sel.value) ecrireBridgeBlock(sel.value);
   if (note) note.textContent = sel.value
-    ? ('Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee 0.01% on Bridge volume.')
+    ? ('Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee ' + BRIDGE_FEE_LABEL + ' on Bridge volume.')
     : 'Pick any of your TB blocks as the Bridge hub.';
 }
 
@@ -13899,7 +13925,10 @@ function basculerBridgeMode(mode) {
   if (sel) sel.addEventListener('change', () => {
     ecrireBridgeBlock(sel.value);
     const note = $('#brBlockNote');
-    if (note && sel.value) note.textContent = 'Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee 0.01% on Bridge volume.';
+    /* ⛔ LE JUMEAU de la ligne ci-dessus : meme phrase, deux endroits. Le tarif y avait survecu au
+     *   changement de 0,01 % vers 0,5 % — c est toujours la copie qu on ne relit pas qui reste
+     *   fausse (`single-and-batch-twins-diverge`). Les deux lisent maintenant la meme constante. */
+    if (note && sel.value) note.textContent = 'Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee ' + BRIDGE_FEE_LABEL + ' on Bridge volume.';
     majBridgeQuote();
   });
   const r = $('#brRefreshBlocks');
@@ -14119,6 +14148,15 @@ async function ouvrirRailFiat(evt, lien, actif) {
     if (phrase) phrase.textContent = phraseOptionA();
     const legs = $('#brLegsNote');
     if (legs && typeof phraseBridgeLegs === 'function') legs.textContent = phraseBridgeLegs();
+    /* ⛔⛔ LE TARIF DU BRIDGE N EXISTE QU A UN SEUL ENDROIT, et c est `BRIDGE_FEE_LABEL`. Mesure du
+     *     2026-09-25 : « 0.01% » etait ecrit en dur a DIX-HUIT endroits alors que le prelevement
+     *     vaut 50 centiemes de point de base, soit 0,5 %. Un facteur CINQUANTE, sur des ecrans ou
+     *     quelqu un decide de payer. Personne n avait menti : le chiffre avait bouge le 09-24 et
+     *     les phrases etaient restees. C est la forme la plus banale du faux dans une app.
+     *   ⛔ L EMPLACEMENT VAUT « — » DANS LE HTML, PAS UN CHIFFRE. Si ce peintre ne tourne jamais,
+     *     l ecran montre un tiret : un prix manquant est honnete, un prix faux ne l est pas. Mettre
+     *     « 0.5% » en dur comme valeur de repli aurait recree exactement le defaut qu on corrige. */
+    for (const el of document.querySelectorAll('[data-frais-bridge]')) el.textContent = BRIDGE_FEE_LABEL;
   } catch (_) {}
   let lastProposeId = '';
   const etat = () => $('#bBotEtat');
