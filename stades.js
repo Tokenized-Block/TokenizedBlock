@@ -40,6 +40,12 @@ export const STADES_HORS_PALIER = Object.freeze([
   { cle: 'NOURRI', titre: 'Awake — no market yet, fed by its community' },
   { cle: 'SANS_MARCHE', titre: 'No market yet — it has never been traded' },
   { cle: 'NON_LU', titre: 'Market not read — our reader did not come back' },
+  /* ⛔⛔ LE GROUPE QUI MANQUAIT, et il contenait la grande majorite. Mesure du 2026-09-25 : 180
+   *     blocks etiquetes « Market not read », dont 162 que RIEN n a jamais lus. Les ranger sous
+   *     « our reader did not come back » accusait notre lecteur d une panne qui n a pas eu lieu, et
+   *     surtout envoyait vers « Retry » — un geste sans objet quand aucune lecture n a ete tentee.
+   *     Le bon geste, lui, est d ouvrir le block : c est ce qui declenche sa lecture. */
+  { cle: 'PAS_REGARDE', titre: 'Not looked at yet — open one to read its market' },
   { cle: 'MORT', titre: 'Gone quiet — its creator held it, and holds none now' },
 ]);
 /* ⛔⛔ UN EMOJI QUI NE S AFFICHE PAS N EST PAS UN EMOJI (Phil, 2026-09-17 : capture d un carre vide a la
@@ -47,7 +53,7 @@ export const STADES_HORS_PALIER = Object.freeze([
  * plusieurs systemes Windows : ils sortent en tofu. Ici, uniquement des caracteres d Emoji 1.0 (2015),
  * presents partout — et la progression reste lisible : bosquet, arbre, palmier, feuille, herbe, pousse. */
 export const EMOJI_STADE = Object.freeze({ MONUMENT: '🏛', FORET: '🌲', CANOPEE: '🌳', TRONC: '🌴', BRANCHE: '🍃', POUSSE: '🌿',
-  GRAINE: '🌱', PRIX_NON_LU: '⏳', NOURRI: '✨', SANS_MARCHE: '💤', NON_LU: '⏳', MORT: '⚫' });
+  GRAINE: '🌱', PRIX_NON_LU: '⏳', NOURRI: '✨', SANS_MARCHE: '💤', NON_LU: '⏳', PAS_REGARDE: '·', MORT: '⚫' });
 
 /**
  * LE PRIX EN DOLLARS D UNE DEVISE DE COTATION — ou `null`, jamais un chiffre devine.
@@ -144,7 +150,16 @@ export function stadesDesBlocks({ blocks, ethUsd = null, prixUsdParDevise = null
       mettre(n && n.gm + n.messages + n.detenteurs > 0 ? 'NOURRI' : 'SANS_MARCHE', base);
       continue;
     }
-    mettre('NON_LU', base);
+    /* ⛔⛔ « ON A ESSAYE ET RATE » N EST PAS « ON N A JAMAIS REGARDE », et l ecran disait le premier
+     *     pour les deux. Mesure du 2026-09-25 en production : 180 blocks marques « Market not read »
+     *     dans le selecteur, dont CENT SOIXANTE-DEUX qui ne sont sur aucune carte — donc qu aucun
+     *     lecteur n a jamais lus. Le titre « our reader did not come back » affirmait qu un lecteur
+     *     etait parti sans revenir : faux pour 162 d entre eux, et il accusait notre infrastructure
+     *     d une panne qui n a jamais eu lieu.
+     *   ⛔ `NON_LUE` = une lecture a ETE TENTEE et a echoue ; la, « retry » a un sens.
+     *     `undefined` = on n a pas encore regarde ; il n y a rien a reessayer, il faut l ouvrir.
+     *     Deux etats, deux phrases, deux gestes. */
+    mettre(x.etatVie === 'NON_LUE' ? 'NON_LU' : 'PAS_REGARDE', base);
   }
   const ordre = [...PALIERS].reverse().map((p) => ({ cle: p.cle, titre: p.titre }))
     .concat(STADES_HORS_PALIER.map((s) => ({ cle: s.cle, titre: s.titre })));

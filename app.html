@@ -1915,7 +1915,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-actions-echangeables" hidden>Build <code>20260925-actions-echangeables</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-actions-payables" hidden>Build <code>20260925-actions-payables</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -10340,6 +10340,21 @@ $('#plDevise').addEventListener('change', () => {
   $('#plContre').textContent = t;
   $('#plUnite').textContent = t;
   $('#plValo').placeholder = t === 'ETH' ? 'e.g. 10' : t === 'USDC' ? 'e.g. 20000' : 'e.g. 5';
+  /* ⛔⛔ LE SEED N EXISTE QUE POUR L ETH — `lancer-pool.js` refuse explicitement Instant Birth hors
+   *     ETH natif. Or le champ « ETH seed into the locked pool » restait VISIBLE, et le preflight
+   *     le REMPLISSAIT a chaque Create : un montant annonce, jamais paye, juste au-dessus du bouton
+   *     qui ouvre le wallet. Montrer un chiffre qu on ne prendra pas est la forme la plus chere de
+   *     malentendu — on l a deja corrigee sur le Bridge ce matin, elle vivait encore ici.
+   *   ⛔ `estNaissanceInstantaneeUi()` existait EXACTEMENT pour ca et n etait appelee NULLE PART :
+   *     du code mort ecrit pour ce defaut precis, jamais branche. */
+  try {
+    const seedUtile = estNaissanceInstantaneeUi();
+    if ($('#plQuoteWrap')) $('#plQuoteWrap').hidden = !seedUtile;
+    if ($('#plQuoteHint')) $('#plQuoteHint').hidden = !seedUtile;
+    /* ⛔ on VIDE le champ quand il devient inutile : une valeur laissee dedans pourrait etre relue
+     *   par un chemin qui ne sait pas qu elle ne s applique plus. */
+    if (!seedUtile && $('#plQuoteEth')) $('#plQuoteEth').value = '';
+  } catch (_) { /* le champ reste comme il est : jamais bloquer le changement de devise */ }
   if (valoParDefaut) {
     const d = $('#plDevise').value;
     if (d === 'ETH' || d === 'TBLOCK') { $('#plValo').value = String(VALO_DEFAUT_ETH); valoPrete = Promise.resolve(); }
@@ -11658,7 +11673,16 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
   if (seed == null) {
     try { seed = await preparerQuoteEthDefaut(true); } catch (_) { seed = null; }
   }
-  if (seed == null || seed <= 0n) seed = CREATE_FEE_WEI_FLOOR;
+  /* ⛔⛔ `0n` EXPLICITE N EST PAS « NON LU », et les confondre REFUSAIT DES CREATIONS PAYABLES.
+   *     Un block appaire a une action Coinbase se lance en UNILATERAL : mesure du 2026-09-25 sur le
+   *     plan reel, `tx.value = 0x0` et `ethRequis = 0` — il n y a AUCUN seed a financer. Or ce
+   *     preflight ramenait tout `seed <= 0n` au plancher : il exigeait donc ~0,0018 ETH au lieu de
+   *     ~0,0013, refusait des comptes qui avaient de quoi payer, et nommait dans son message une
+   *     depense qui n arrive jamais.
+   *   ⛔ SEUL `null` RETOMBE AU PLANCHER : `null` = « je n ai pas su lire le seed », `0n` = « il n y
+   *     en a pas ». Un negatif reste une lecture aberrante et retombe aussi. */
+  if (seed == null) seed = CREATE_FEE_WEI_FLOOR;
+  else if (seed < 0n) seed = CREATE_FEE_WEI_FLOOR;
   const besoin = frais + BigInt(seed) + gasBuf;
   const solde = await lireSoldeEthAppRobuste();
   if (solde === null) {
@@ -12584,7 +12608,15 @@ async function creerBlock() {
   if (ibDirectPre) {
     e.className = 'note';
     e.textContent = 'Instant Birth preflight — checking ETH balance (0.001 fee + seed + gas)…';
-    const pf = await preflightInstantBirthEthFixe({ e });
+    /* ⛔⛔ PAIRE ACTION = LANCEMENT UNILATERAL, DONC AUCUN SEED. Mesure du 2026-09-25 sur le plan
+     *     reel (INTCc, valo 5) : `etat = APPROBATIONS`, `ethRequis = 0`, `tx.value = 0x0`. Le
+     *     preflight exigeait pourtant le seed par defaut, refusait des comptes solvables et
+     *     annonçait une depense inexistante. `lancer-pool.js` le dit lui-meme : « Instant Birth only
+     *     pairs against native ETH » — le seed n existe que pour l ETH.
+     *   ⛔ On passe `0n` EXPLICITEMENT, et non `null` : la nuance est justement ce que le preflight
+     *     vient d apprendre a distinguer. */
+    const sansSeed = !!(paireChoisie && paireChoisie.type === 'ACTION');
+    const pf = await preflightInstantBirthEthFixe({ e, ...(sansSeed ? { seedWei: 0n } : {}) });
     if (!pf.ok) { forcerCreateRouterIb = false; return; }
   }
   creationEnCours = true;
