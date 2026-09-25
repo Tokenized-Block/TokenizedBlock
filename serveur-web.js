@@ -266,7 +266,12 @@ async function resoudreClePool(token, fenetres = 40) {
   }
   if (!trouvees.length) {
     /* pas de cache : la pool peut etre plus ancienne que la fenetre, et demain la fenetre bougera */
-    return { ok: false, pourquoi: 'no Initialize found in the last ' + (fenetres * 2000) + ' blocks', balaye: fenetres * 2000 };
+    /* ⛔ LE CHIFFRE ANNONCAIT LE DOUBLE DE CE QUI EST BALAYE : la boucle avance de 999 blocs par
+     *   fenetre (ligne 260), pas 2000. C est le message que lit un createur dont la pool n est pas
+     *   trouvee — il en concluait que sa pool a plus de 22 h alors que c est possiblement 11 h, et
+     *   donc qu il fallait chercher ailleurs. Un chiffre faux dans un diagnostic envoie enqueter
+     *   au mauvais endroit. */
+    return { ok: false, pourquoi: 'no Initialize found in the last ' + (fenetres * 999) + ' blocks', balaye: fenetres * 999 };
   }
   const cles = trouvees.map((l) => {
     const d = l.data.slice(2), mot = (i) => d.slice(i * 64, (i + 1) * 64);
@@ -280,7 +285,9 @@ async function resoudreClePool(token, fenetres = 40) {
       bloc: parseInt(l.blockNumber, 16),
     };
   });
-  const r = { ok: true, cles, balaye: fenetres * 2000 };
+  /* ⛔ meme correction que ci-dessus : 999 par fenetre, pas 2000. Le jumeau du chemin qui REUSSIT —
+   *   c est toujours celui qu on oublie, parce qu on ne lit ses chiffres que quand tout va bien. */
+  const r = { ok: true, cles, balaye: fenetres * 999 };
   clesPool.set(t, r);
   return r;
 }

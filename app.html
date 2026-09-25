@@ -1915,7 +1915,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-actions-payables" hidden>Build <code>20260925-actions-payables</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-plancher-devise" hidden>Build <code>20260925-plancher-devise</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2284,8 +2284,14 @@ details[open] > summary::before{transform:rotate(90deg)}
           placeholder="e.g. 0.0003" autocomplete="off"></label>
         <p class="note" id="plQuoteHint">Instant Birth spends two separate amounts: the <b>0.001 ETH opening fee, paid once</b>, and the <b>ETH you put into the pool</b>. The second one stays in your market — it is not a fee. On Base, an amount too small to matter is refused, and so is a price the app could not read.</p>
         </details>
-        <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> Below 1 ETH for
-          the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</label>
+        <!-- ⛔⛔ CE TEXTE EST REECRIT AU MOMENT OU LE CLASSEMENT EST CONNU, et il le doit : il
+             disait « Below 1 ETH for the whole supply » devant une valeur libellee en INTCc, ou en
+             toute autre action tokenisee. Le seuil de 1 ETH n a de sens que sur la voie ETH ; le
+             citer ailleurs nomme un chiffre qui ne s applique pas a ce qu on est en train de faire.
+           ⛔ Le texte statique reste le cas ETH, qui est vrai : si le peintre ne tourne pas, on lit
+             quelque chose d exact, pas un vide. -->
+        <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> <span id="plConfirmTexte">Below 1 ETH for
+          the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</span></label>
         <button class="bouton creaGo" id="plCalculer" type="button" style="margin-top:10px">✨ Give birth</button>
         <ul class="pmLignes" id="plLignes"></ul>
         <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
@@ -4014,7 +4020,16 @@ async function poserNosBlocks(fin) {
       h = creerHabitant({ jeton: adr, symbole: (c && c.symbole) || SYMBOLES_GENESE[adr] || null, vie: null });
     }
     marquerNotre(h);
-    habitants.splice(habitants.indexOf(h), 1);
+    /* ⛔⛔ `indexOf` A -1 FERAIT `splice(-1, 1)`, QUI RETIRE LE DERNIER HABITANT — en silence, et
+     *     sans toucher a son element DOM. Ce block deviendrait un ORPHELIN DEFINITIF : rien ne le
+     *     re-projette (`image()` ne parcourt que `habitants`), rien ne le cache, et rien ne peut le
+     *     retirer (`retirerDeLaCarte` part de `habitants.indexOf`). Il resterait fige a l ecran.
+     *   ⚠️ PAS ATTEIGNABLE AUJOURD HUI : la boucle est synchrone apres ses `await`, et
+     *     `creerHabitant` inscrit `h` dans `habitants` AVANT de le poser (change le 2026-09-25).
+     *     Donc `indexOf(h) >= 0`. Ce garde-fou borne le MOTIF, pas la chance — il redeviendrait
+     *     necessaire au premier `await` ajoute ici, et ce jour-la personne ne s en souviendra. */
+    const iNotre = habitants.indexOf(h);
+    if (iNotre >= 0) habitants.splice(iNotre, 1);
     habitants.unshift(h);
   }
   if (!anim) animer();
@@ -9088,6 +9103,18 @@ async function calculerLancement() {
         const p = await prixUsdDevise(deviseLancement);
         if (ethUsd === null) await lirePrixEth();
         if (p > 0 && ethUsd > 0 && valo * p < VALO_PLANCHER_ETH * ethUsd) plan.classement = { etat: 'TROP_BON_MARCHE', valo, plancherEth: VALO_PLANCHER_ETH };
+        /* ⛔⛔ PRIX NON LU = PLANCHER ABSENT, ET C ETAIT LE CAS DE 5 DES 13 ACTIONS PROPOSEES.
+         *     Mesure du 2026-09-25 : COINc, CRCLc, INTCc, MSTRc et SNDKc n ont AUCUN prix lisible
+         *     (pas de paire cotee, ou liquidite sous le seuil). `p` valait donc `null`, le
+         *     classement restait `NON_APPLICABLE`, et le plancher ne s appliquait PAS : on pouvait
+         *     ouvrir un marche a n importe quel prix de depart et se faire racheter toute sa supply
+         *     en quelques secondes, SANS UN MOT. La voie ETH, elle, refuse sous 1 ETH — l asymetrie
+         *     etait reelle et silencieuse.
+         *   ⛔ SANS PRIX ON NE PEUT PAS JUGER, DONC ON DEMANDE. On ne laisse pas passer une valeur
+         *     de depart non jugee : fail-closed vers la CONFIRMATION, jamais vers le silence.
+         *   ⛔ `plancherEth: null` PORTE L INFORMATION « il n y a pas de seuil a citer » — c est ce
+         *     qui empeche l ecran d ecrire « Below 1 ETH » devant une valeur libellee en INTCc. */
+        else if (!(p > 0)) plan.classement = { etat: 'TROP_BON_MARCHE', valo, plancherEth: null, prixDeviseNonLu: true };
       }
       if (legacyUpgrade && plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
         plan.legacyUpgrade = true;
@@ -9315,6 +9342,26 @@ function peindrePlan(plan, adr) {
   /* ⛔ LE PLANCHER DE VALORISATION EST UNE CONFIRMATION, PAS UN BLOCAGE : repris de l ecran qui a marche. */
   const tropBas = plan.classement && plan.classement.etat === 'TROP_BON_MARCHE';
   $('#plConfirmRang').hidden = !tropBas;
+  /* ⛔⛔ DEUX RAISONS DE DEMANDER CETTE CONFIRMATION, ET ELLES NE SE DISENT PAS PAREIL.
+   *     · un plancher CHIFFRE a ete franchi -> on cite le seuil, c est verifiable ;
+   *     · le prix de la devise n a PAS PU ETRE LU -> il n y a aucun seuil a citer, et le dire
+   *       autrement serait inventer une mesure. On nomme notre limite, pas un chiffre.
+   *   ⛔ Citer « 1 ETH » devant une valeur en INTCc etait le defaut : un seuil juste, applique au
+   *     mauvais referentiel, se lit comme une erreur de l app — et il empeche de comprendre le
+   *     vrai risque, qui est le meme dans les deux cas : n importe qui peut racheter la supply. */
+  const txtConfirm = $('#plConfirmTexte');
+  if (txtConfirm && tropBas) {
+    const sansSeuil = plan.classement.plancherEth == null;
+    txtConfirm.textContent = sansSeuil
+      /* ⛔ `plan.symDevise` ET NON `symDevise` : ce dernier vit dans `calculerLancement`, pas ici.
+       *   Ca compile (une autre liaison du meme nom existe ailleurs) et ca jetterait a l EXECUTION,
+       *   sur le chemin d un refus — donc au moment le moins observe. Le plan porte la valeur,
+       *   posee juste apres le classement : c est la seule source qui suit ce plan-la. */
+      ? 'We could not read a USD price for ' + (plan.symDevise || 'this currency') + ', so we cannot judge '
+        + 'this starting value at all. Anyone could buy up the whole supply in seconds. I understand.'
+      : 'Below ' + plan.classement.plancherEth + ' ETH for the whole supply: a very cheap start that '
+        + 'anyone can buy up in seconds. I understand.';
+  }
   if (tropBas && !$('#plConfirm').checked) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Tick the confirmation above to go on with such a cheap start, then work it out again.';

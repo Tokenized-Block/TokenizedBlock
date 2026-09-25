@@ -242,7 +242,9 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
       dec = 18;
       supply = soldePresume;
       solde = soldePresume;
-      s0 = '0x' + '0' * 128; /* empty slot0 */
+      /* ⛔ `'0' * 128` valait le NOMBRE 0 : on obtenait '0x0'. sqrtExistant tombait bien a 0n, mais
+       *   PAR ACCIDENT — toute lecture au-dela du premier mot (tick, liquidite) aurait lu du vide. */
+      s0 = '0x' + '0'.repeat(128); /* empty slot0 */
     } else {
       supply = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('totalSupply()')));
       dec = Number(BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('decimals()'))));
