@@ -1882,7 +1882,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-trade-refusals" hidden>Build <code>20260925-trade-refusals</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-buy-intent-split" hidden>Build <code>20260925-buy-intent-split</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -11867,7 +11867,17 @@ $('#trListe').addEventListener('click', (e) => {
   }
   const acheter = Boolean(e.target.closest('[data-acheter]'));
   if (acheter) {
-    try { etape('achat_prepare'); } catch (_) {}
+    /* ⛔⛔ C ETAIT `achat_prepare`, ET LE MEME NOM SERVAIT DEUX SENS OPPOSES. Ici on compte une
+     *     INTENTION : quelqu un vient de cliquer « Buy » dans Market, avant tout controle.
+     *     `preparerEchange` compte `achat_prepare` APRES les gardes — marche lisible, frais de pool
+     *     acceptables, wallet pret. Un compteur qui additionne les deux bouts d un entonnoir ne
+     *     permet plus d en calculer le taux : 1 clic + 1 preparation = 2, indistinguable de
+     *     2 clics sans aucune preparation.
+     *   ⛔ `achat_clic` reprend exactement la convention de `create_clic`, qui dit deja l intention
+     *     du cote creation. Meme entonnoir, memes mots.
+     *   ⚠️ LES TOTAUX D `achat_prepare` ANTERIEURS A CE BUILD MELANGENT LES DEUX SENS : ils ne sont
+     *      pas comparables a ceux d apres. C est ecrit ici pour que personne ne les compare. */
+    try { etape('achat_clic'); } catch (_) {}
     poserIntent({ kind: 'buy', adr, sym, sens: 'ACHAT', amount: '0.01' });
   }
   void ouvrirProfil(adr, sym).then(() => {

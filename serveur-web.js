@@ -706,6 +706,11 @@ const ETAPES_ENTONNOIR = [
    *                     le visiteur. C est la distinction qui evite de chercher au mauvais endroit. */
   'cree_refus_solde', 'cree_refus_lecture', 'cree_refus_frais', 'cree_refus_preparation',
   /* achat — l etape qui rapporte */
+  /* ⛔ `achat_clic` = l INTENTION (clic sur Buy dans Market) · `achat_prepare` = on a passe les
+   *   gardes et on prepare vraiment. Les deux partageaient le nom `achat_prepare` jusqu au
+   *   2026-09-25, ce qui additionnait les deux bouts de l entonnoir et empechait d en calculer le
+   *   taux. ⚠️ Les totaux d `achat_prepare` d avant ce build melangent les deux sens. */
+  'achat_clic',
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
