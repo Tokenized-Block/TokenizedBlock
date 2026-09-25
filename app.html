@@ -1381,7 +1381,9 @@ details[open] > summary::before{transform:rotate(90deg)}
            on-chain. Quand les deux divergent, cette ligne dit laquelle est laquelle. -->
       <p class="note" id="bSource"></p>
       <canvas id="bRaster" width="640" height="200" class="toile"></canvas>
-      <p class="note" style="margin-top:6px">Each column is one beat, each dot a neuron that fired.</p>
+      <!-- ⛔ Cette note porte un id depuis le 2026-09-25 : elle doit pouvoir DIRE pourquoi la bande
+           est vide, au lieu de decrire une bande qui ne montre rien. -->
+      <p class="note" style="margin-top:6px" id="bRasterNote">Each column is one beat, each dot a neuron that fired.</p>
       <div class="pcStats">
         <span>≋ <b id="bG">—</b> Hz left</span>
         <span>≋ <b id="bD">—</b> Hz right</span>
@@ -1882,7 +1884,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-bridge-true-rate" hidden>Build <code>20260925-bridge-true-rate</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-wake-unblocked" hidden>Build <code>20260925-wake-unblocked</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5222,8 +5224,18 @@ function peindreCerveau() {
   $('#pcPhase').textContent = nomHumeur(v.phase);
   /* ⛔ MARCHE NON LU : on ne juge pas d humeur, et on ne laisse pas une phrase morte a la place. La
    * bande montre le battement, qui ne depend que du cablage — et le dit. */
+  /* ⛔⛔ LA PROMESSE NE DOIT PAS PRECEDER LA MESURE. « The beat below is real » s affichait au-dessus
+   *     d une bande VIDE — c est la phrase exacte que Phil avait sous les yeux en signalant un bug.
+   *     Elle devient vraie vers le 7e-10e battement, pas avant : tant que rien n a tire, on le dit.
+   *   ⛔ `aTire` regarde la TRACE, pas le battement courant : meme reveille, ce reseau a des
+   *     battements a zero (mesure : environ un sur deux sans marche). Juger sur l instant ferait
+   *     clignoter la phrase entre « reel » et « rien » toutes les demi-secondes. */
+  const aTire = v.actifs > 0 || traceProfil.some((x) => x && x.indices && x.indices.length > 0);
   $('#pcPhrase').textContent = v.phase === 'NON_LU'
-    ? 'Market unread, so no mood is judged. The beat below is real: it comes from its wiring, not from its price.'
+    ? (aTire
+      ? 'Market unread, so no mood is judged. The beat below is real: it comes from its wiring, not from its price.'
+      : 'Market unread, so no mood is judged. No neuron has fired yet either — its potentials are still '
+        + 'charging from zero, which takes about 7 to 10 beats. The band below is empty because nothing fired.')
     : phraseDePhase(v.phase, symProfil || 'This block');
   traceProfilAjouter(v.indices);
   $('#pcG').textContent = v.gauche_hz.toFixed(1);
@@ -9158,7 +9170,28 @@ function peindrePlan(plan, adr) {
         : ''));
 }
 
-async function signerEtapeLancement(etape) {
+/* ⛔⛔⛔ LE PARAMETRE S APPELAIT `etape` ET IL MASQUAIT LA FONCTION `etape()` DU COMPTEUR.
+ *      C EST LE DEFAUT QUI TUAIT LA MISE EN VIE, et il a ete reproduit a l execution le
+ *      2026-09-25, pas deduit : `etape('vie_echec')` levait `TypeError: etape is not a function`
+ *      — l objet du plan n est pas appelable. Consequences, TOUTES les trois, en cascade :
+ *        1. la ligne suivante n etait JAMAIS atteinte : aucun message n arrivait a l ecran ;
+ *        2. `vieAutoArreter()` n etait JAMAIS atteint : le parcours ne s arretait pas proprement,
+ *           `vieAuto` restait vrai et plus rien ne relancait `calculerLancement()` ;
+ *        3. aucun compteur ne partait — ni `vie_echec`, ni `vie_ko_etape2`.
+ *      L appel est en `void signerEtapeLancement(...)` : le rejet etait une promesse non geree,
+ *      donc SILENCIEUSE. L utilisateur restait devant « Step 2 — … Your wallet opens now. » POUR
+ *      TOUJOURS, apres avoir refuse ou rate une signature.
+ *    ⛔⛔ ET CA EXPLIQUE UN TROU DANS LES CHIFFRES : l entonnoir montre `vie_ko_etape1` et
+ *      `vie_ko_etape4`, jamais `vie_ko_etape2` — alors que l etape 2 porte TROIS des cinq
+ *      signatures, donc l endroit le plus probable d un refus. Ce n etait pas « personne n echoue
+ *      a l etape 2 » : c etait « l etape 2 ne peut pas se compter ».
+ *      ⇒ Les 4 blocks crees et jamais vivants ne peuvent PAS etre attribues sur la foi des
+ *        compteurs actuels. Ce correctif ouvre la mesure ; il ne la remplace pas.
+ *    ⛔ LE PARAMETRE S APPELLE MAINTENANT `etapePlan`, et `test-etape-jamais-masquee.mjs` refuse
+ *      qu un identifiant `etape` reapparaisse en portee. Deux `const etape = …` de bloc existent
+ *      ailleurs dans ce fichier : inoffensifs aujourd hui parce qu aucun compteur n y est appele,
+ *      mais ce sont deux pieges armes. */
+async function signerEtapeLancement(etapePlan) {
   if (lancementEnCours) return;
   lancementEnCours = true;
   const e = $('#plEtat');
@@ -9166,20 +9199,23 @@ async function signerEtapeLancement(etape) {
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
   let r;
   try {
-    if (etape.payant) {
-      const v = BigInt(etape.value || '0x0');
+    if (etapePlan.payant) {
+      const v = BigInt(etapePlan.value || '0x0');
       e.textContent = (v > 0n && v <= CREATE_FEE_WEI_FLOOR)
         ? 'Opening your wallet — V8 register dust (0.0003 ETH; open fee already paid via Create).'
         : 'Opening your wallet — the one-time 0.001 ETH fee brings it to life (paid on chain).';
     }
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
-      to: etape.to, data: etape.data, value: etape.value || '0x0' });
+      to: etapePlan.to, data: etapePlan.data, value: etapePlan.value || '0x0' });
   } finally { lancementEnCours = false; }
   if (r.etat !== 'CONFIRME') {
     e.className = 'note wKo';
     /* ⛔ ON COMPTE L ECHEC DE LA MISE EN VIE, et on le rend copiable : c est l etape ou l argent
-     *    devait arriver. Sans trace, « ca marche pas chez les autres » reste une phrase. */
-    etape('vie_echec');
+     *    devait arriver. Sans trace, « ca marche pas chez les autres » reste une phrase.
+     *  ⛔ SOUS try/catch comme les vingt autres appels du fichier : sans lui, un futur defaut dans
+     *    `etape()` rejouerait EXACTEMENT ce bug — une statistique qui tue le parcours qu elle
+     *    observe. C est la garde qui manquait, pas seulement le nom. */
+    try { etape('vie_echec'); } catch (_) {}
     e.innerHTML = enTexte('Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || ''))
       + ligneDiagnostic('bring-to-life', r);
     vieAutoArreter();
@@ -12986,9 +13022,22 @@ function battreBrain() {
   if ((brainEtat.tick % 20) === 1) void relireMarcheBrainSiNonLu();
   /* ⛔ 2026-09-14 wake: Brain panel must use the same last-good market as the map — otherwise RPC blips stick « market unread ». */
   const vc = viePourCerveau(brainAdr, h ? h.vie : null, h ? h.etatVie : null);
-  const r = cerveauPas(brainEtat, entreesCerveau(vc.vie, h ? h.vieAvant : null, h ? h.nourriture : null, vc.etatVie,
+  /* ⛔⛔ LUE PUIS JETEE — mesure du 2026-09-25. Pour un block absent de `habitants` (cas normal : le
+   *     selecteur sert aussi les blocks vus par le Live et les creations), `choisirBrain` range la
+   *     nourriture LUE dans `brainNourriture`. Le journal la lit, l instantane la lit — le RESEAU,
+   *     lui, recevait `null`. Une lecture reussie etait jetee entre le moment ou elle arrive et le
+   *     moment ou elle sert.
+   *   ⛔ CE QUE CA COUTAIT, mesure en rejouant cerveau.js sur 30 adresses : premier spike au 9e
+   *     battement au lieu du 3e, et 4,4 % du raster allume au lieu de 12,0 %. Autrement dit,
+   *     l ecran noir que Phil a photographie durait trois fois plus longtemps que necessaire. */
+  const nBrain = h && h.nourriture ? h.nourriture
+    : (brainNourriture && brainNourriture.adr === String(brainAdr || '').toLowerCase()
+      ? brainNourriture.n : null);
+  const r = cerveauPas(brainEtat, entreesCerveau(vc.vie, h ? h.vieAvant : null, nBrain, vc.etatVie,
     h ? h.nourritureAvant : null, h || { adr: brainAdr }));
-  const n = h && h.nourriture;
+  /* ⛔ MEME SOURCE QUE LE RESEAU : sinon l ecran annonce « Food not read yet » sur une lecture
+   *   REUSSIE, et « pas encore lu » devient indiscernable de « lu puis perdu ». */
+  const n = nBrain;
   $('#bNourriture').textContent = !n ? 'Food not read yet — the map reads it block by block.'
     : n.etat !== 'LUE' ? 'Food not read (' + (n.pourquoi || 'unknown') + ') — counted as none, never as death.'
     : 'Food read on chain (recent window): ' + n.gm + ' transfers · ' + n.detenteurs + ' holders reached · '
@@ -13050,6 +13099,27 @@ function battreBrain() {
   brainDernier = r.vu;
   $('#bSpikes').textContent = brainTotal;
   $('#bActifs').textContent = r.vu.actifs + ' / 128';
+  /* ⛔⛔ UN CARRE NOIR NE DIT RIEN — capture de Phil, 2026-09-25 : 6 battements, 0 spike, bande vide,
+   *     et il a lu « bug ». Il avait raison de le lire comme ca, et le modele avait raison aussi :
+   *     MESURE (cerveau.js rejoue sur 30 adresses, marche non lu et nourriture non lue) le premier
+   *     neurone franchit son seuil entre le 7e et le 10e battement. Avant, la bande est HONNETEMENT
+   *     vide — les 128 potentiels se chargent depuis zero.
+   *   ⛔⛔ LE DEFAUT N EST DONC PAS LE DESSIN, C EST LE SILENCE : « en train de se charger »,
+   *     « mort » et « canvas casse » donnaient le MEME ecran. Trois etats, une seule image, aucune
+   *     facon de les distinguer. On nomme l etat ; on n invente aucun pixel et on ne dessine rien
+   *     qui n ait tire. */
+  const noteR = $('#bRasterNote');
+  if (noteR) {
+    const battus = brainHisto.filter((x) => x && x.spikes > 0).length;
+    noteR.textContent = r.vu.phase === 'MORT'
+      ? 'Nothing is drawn, and nothing should be: this block is dead, so its network receives no current at all.'
+      : brainTotal === 0
+        ? 'Nothing has fired yet, ' + r.vu.tick + ' beat(s) in. The 128 potentials are still charging from zero '
+          + 'and none has reached its threshold — from a cold start that takes about 7 to 10 beats with no market '
+          + 'and no food read. This band is empty because nothing fired, not because it failed to draw.'
+        : 'Each column is one beat, each dot a neuron that fired. ' + battus + ' of the last '
+          + brainHisto.length + ' beat(s) had at least one neuron fire.';
+  }
   /* ⛔ DEUX EMPREINTES, PAS UNE. « input … replay it and you get the same beat » etait faux entre
    * deux blocks : l empreinte des faits ne porte pas l adresse, donc elle est la MEME pour deux
    * blocks nourris des memes chiffres (mesure 2026-09-17) — ce qui donnait l impression que tous les
