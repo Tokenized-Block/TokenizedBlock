@@ -53,17 +53,29 @@ export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() =
 
 /** tip 2350 / 20260922-2023 / 20260922-2026: fail-closed — TAKE/TAKE_PORTION → FEE_WALLET in ETH or USDC only (never TBLOCK/TBGAS/block).
  *  Hooked pools may ALSO chop on-chain; zero interface fees were worse than stacked fees. */
-function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
+function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk = null }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
   if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
   }
   const asset = String(resume && resume.fraisDevise || '');
-  const pairIsUsdc = asset === 'pair'
-    && String(resume && resume.devise || '').toLowerCase() === USDC_BASE.toLowerCase();
-  if (asset !== 'ETH' && asset !== 'USDC' && !pairIsUsdc) {
-    return 'fee asset must be ETH or USDC (not block tokens / TBGAS / TBLOCK)';
+  const deviseResume = String(resume && resume.devise || '').toLowerCase();
+  const pairIsUsdc = asset === 'pair' && deviseResume === USDC_BASE.toLowerCase();
+  /* ⛔⛔ LA DEVISE DE FRAIS EST AUTORISEE PAR L APPELANT, SUR MESURE — jamais par une liste ecrite
+   *     ici. Ce verrou n existait pas pour embeter : a6cf a DEJA ete paye en jetons invendables
+   *     (mesure d aout 2026 — 7 detentions verifiees, ZERO avec un marche, part reelle 0 $). Un
+   *     frais paye dans un jeton qu on ne peut pas vendre n est pas un revenu, c est un decor.
+   *   ⛔ MAIS TOUT REFUSER ETAIT FAUX AUSSI : mesure du 2026-09-25, 8 des 13 actions Coinbase ont
+   *     un marche reel (prix lisible, liquidite au-dessus du seuil). Les refuser fermait des
+   *     echanges qui nous auraient payes en quelque chose de VENDABLE.
+   *   ⇒ L appelant passe l ensemble des devises dont il a LU le prix. Absent ou vide, on retombe
+   *     exactement sur le comportement d avant : ETH ou USDC. Fail-closed par construction — une
+   *     devise qu on n a pas su mesurer n entre jamais dans cet ensemble. */
+  const pairAutorisee = asset === 'pair' && deviseResume
+    && fraisDevisesOk instanceof Set && fraisDevisesOk.has(deviseResume);
+  if (asset !== 'ETH' && asset !== 'USDC' && !pairIsUsdc && !pairAutorisee) {
+    return 'fee asset must be ETH, USDC or a currency with a measured market (not block tokens)';
   }
   const blob = jsonSafe(actions || []).toLowerCase();
   const sink = FEE_WALLET.slice(2).toLowerCase();
@@ -74,7 +86,12 @@ function assertFraisInterfaceA6cf({ compte, bps, resume, actions }) {
     || blob.includes('0000000000000000000000000000000000000000000000000000000000000000'
       + '000000000000000000000000' + sink);
   const takeUsdc = blob.includes(usdc) && blob.includes(sink);
-  if (!takeEth && !takeUsdc) return 'fee TAKE/TAKE_PORTION must be ETH or USDC to the fee wallet';
+  /* ⛔ LE CALLDATA DOIT NOMMER LA DEVISE AUTORISEE, pas seulement le resume. Un resume est une
+   *   promesse ; seuls les OCTETS partent sur la chaine. Meme lecon que sur le Bridge ce matin. */
+  const takeDeviseOk = !!pairAutorisee && blob.includes(deviseResume.slice(2)) && blob.includes(sink);
+  if (!takeEth && !takeUsdc && !takeDeviseOk) {
+    return 'fee TAKE/TAKE_PORTION must reach the fee wallet in an allowed currency';
+  }
   if (resume.frais == null || BigInt(resume.frais) <= 0n) return 'fee amount is zero — amount too small for 0.5%';
   return null;
 }
@@ -90,7 +107,7 @@ async function appelOuErreur(rpc, tx) {
  * @param {bigint} o.montant  achat : wei d ETH payes (frais compris) ; vente : unites brutes du block vendues
  */
 export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, toleranceBps = 100n, maintenant = Date.now(),
-  marcheLu = null, cleImposee = null }) {
+  marcheLu = null, cleImposee = null, fraisDevisesOk = null }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)], V = V4_ADRESSES[Number(chaine)];
   if (!R || !Q || !V) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
@@ -144,9 +161,18 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
     const devise = c0 === j ? c1 : c0;
     const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne
-    /* tip 20260922-2023/2026: interface 0.5% even on hooked pairs — fee asset ETH or USDC only (never block tokens). */
-    if (String(devise).toLowerCase() !== USDC_BASE.toLowerCase()) {
-      return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee must land as ETH or USDC — this pair cannot take the interface fee in an allowed asset' };
+    /* ⛔⛔ CE REFUS FERMAIT TOUT MARCHE COTE AUTREMENT QU EN USDC, actions Coinbase comprises —
+     *     alors que l ecran de Create promettait « buyers will need INTCc to trade your block ».
+     *     Vrai sur la chaine, FAUX dans l app, et affiche juste avant de demander 0,001 ETH.
+     *   ⇒ On accepte desormais une devise dont l appelant a MESURE le prix (`fraisDevisesOk`), et
+     *     on refuse toujours le reste. Le frais atterrit dans cette devise — c est deja ce que fait
+     *     le plan ci-dessous — donc la seule question qui compte est : saura-t-on la revendre ?
+     *     a6cf a deja ete paye en jetons invendables une fois ; ca n arrivera pas par ce chemin. */
+    const deviseBas = String(devise).toLowerCase();
+    const deviseMesuree = fraisDevisesOk instanceof Set && fraisDevisesOk.has(deviseBas);
+    if (deviseBas !== USDC_BASE.toLowerCase() && !deviseMesuree) {
+      return { etat: 'REFUSE', pourquoi: 'this market is priced in a currency we could not price in '
+        + 'dollars, so the 0.5% fee could not be taken in something sellable — nothing was sent' };
     }
     const { frais: fraisPair, net: netPair } = sens === 'ACHAT' ? fraisSur(m, bps) : { frais: 0n, net: m };
     const montantQuote = sens === 'ACHAT' ? netPair : m;
@@ -169,7 +195,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         : [{ code: ACTIONS_V4.SETTLE_ALL, params: paramsAction.settleAll(entree, m) },
           { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'pair', recoitAuMoins: min, recoitDevise: 'block',
-        quote: q, frais: fraisPair, fraisDevise: 'USDC', montantSwap: netPair, devise,
+        quote: q, frais: fraisPair, fraisDevise: 'pair', montantSwap: netPair, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
     } else {
       const fraisVente = (q * bps) / 10000n;
@@ -178,10 +204,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         ...(bps > 0n ? [{ code: ACTIONS_V4.TAKE_PORTION, params: paramsAction.takePortion(sortie, FEE_WALLET, bps) }] : []),
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'pair',
-        quote: q, frais: fraisVente, fraisDevise: 'USDC', montantSwap: m, devise,
+        quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
     }
-    const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD });
+    const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk });
     if (koPair) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koPair, resume: resumeD };
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: valeurD, resume: resumeD,
       cle, zeroForOne: zf, sortieMinTete: 0n, jetonPaye: entree, valeurEth: false });

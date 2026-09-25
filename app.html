@@ -1915,7 +1915,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-actions-la-verite" hidden>Build <code>20260925-actions-la-verite</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260925-actions-echangeables" hidden>Build <code>20260925-actions-echangeables</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8288,7 +8288,23 @@ async function preparerEchange(sens) {
   profilEnLecture = true;
   let p;
   const marcheLu = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
-  try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu }); }
+  /* ⛔⛔ LES DEVISES DE FRAIS AUTORISEES SONT CELLES DONT ON A LU LE PRIX, et l ensemble est
+   *     construit ICI parce que c est ici qu on sait ce qui a ete mesure. Avant, tout marche cote
+   *     autrement qu en USDC etait refuse — actions Coinbase comprises — alors que l ecran de
+   *     Create promettait le contraire. Ouvrir sans mesure aurait rejoue un defaut qui a deja
+   *     coute : a6cf paye en jetons invendables, 7 detentions, 0 avec un marche, part reelle 0 $.
+   *   ⛔ ENSEMBLE VIDE = COMPORTEMENT D AVANT. Une devise dont le prix n a pas pu etre lu n y entre
+   *     jamais : le refus reste, et il dit maintenant pourquoi. */
+  const fraisDevisesOk = (() => {
+    const s = new Set([USDC_BASE.toLowerCase()]);
+    try {
+      for (const p2 of pairesProposees(CHAINE)) {
+        if (p2 && p2.adr && prixUsdDeviseLus.has(String(p2.symbole))) s.add(String(p2.adr).toLowerCase());
+      }
+    } catch (_) { /* registre illisible : on garde l USDC seul, donc le comportement d avant */ }
+    return s;
+  })();
+  try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu, fraisDevisesOk }); }
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
   if ($('#profil').dataset.block !== adr) return;
@@ -8306,6 +8322,15 @@ async function preparerEchange(sens) {
           + ' TBLOCK, inside the same transaction (auto-buyback)')
         : (r.fraisDevise === 'TBLOCK'
           ? 'Fee: ' + formaterUnites(r.frais, 18) + ' TBLOCK, taken inside the same transaction'
+          /* ⛔⛔ LE FRAIS D UN MARCHE COTE EN DEVISE ETAIT IMPRIME EN « ETH » A 18 DECIMALES, alors
+           *     qu il est libelle dans LA devise du marche. Pour une action Coinbase (8 decimales)
+           *     c est un facteur 10^10 ET un faux nom — exactement l ecart que
+           *     `test-decimales-lancement.mjs` a ete ecrit pour empecher ailleurs. Il etait
+           *     inatteignable jusqu a aujourd hui SEULEMENT parce que le refus fermait la porte :
+           *     en l ouvrant, ce defaut sortait avec elle. On le corrige dans le meme mouvement. */
+          : r.fraisDevise === 'pair' && deviseEchange
+            ? 'Fee: ' + formaterUnites(r.frais, deviseEchange.dec) + ' ' + deviseEchange.sym
+              + ' (0.5 %), inside the same transaction'
           : 'Fee: ' + formaterUnites(r.frais, 18) + ' ETH (0.5 %), inside the same transaction'
             + (estTbProfil && sens === 'VENTE'
               ? ' — selling TBLOCK itself: fee stays ETH here (not circular buyback)'
