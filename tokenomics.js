@@ -70,8 +70,20 @@ export const HOOK_V6 = '0xD71af554b5b3dCb6bb17946cfA3C41860A50a4cC';
 /* ⛔ HOOK V7 — DEPLOYE (code LU sur la chaine le 2026-09-21).
  *    Adresse verifiee par DEUX chemins independants (HookMiner dans forge + recalcul keccak en JS),
  *    et un eth_call de la transaction rend exactement cette adresse.
- *    CE QUE LE V7 CHANGE : 100 % du frais va au wallet. La part du createur est SUPPRIMEE.
- *    ⚠️ CE QUE CA COUTE : c etait le seul argument d un createur exterieur pour lancer ici.
+ *    CE QUE LE V7 DEVAIT CHANGER : 100 % du frais au wallet, part du createur SUPPRIMEE.
+ *    ⛔⛔ CETTE PHRASE EST CONTREDITE PAR LA CHAINE, mesure du 2026-09-26. `dime()` — selecteur
+ *        `0xfabd2365`, LU dans `deploy-v8.json` et non calcule — rend **20** sur le V6, le V7 ET le
+ *        V8. Les trois manifestes de deploiement disent la meme chose : `"dimeCreateurPourCent": 20`.
+ *        Seul ce commentaire dit le contraire, et c est lui qu on relit.
+ *      ⚠️ ET SON ARITHMETIQUE NE TIENT PAS : il annonce « +50 % ». Supprimer une part de 20 % fait
+ *        passer notre prise de 80 % a 100 %, soit **+25 %**. Un +50 % supposerait une part de 33 %.
+ *      ⛔ CE QUI N EST PAS PROUVE POUR AUTANT : que le hook APPLIQUE cette part. Un getter peut
+ *        survivre a la logique qui le lisait, et la source des hooks n est pas dans ce depot. Seule
+ *        une trace de versement a un createur trancherait.
+ *      ⇒ AUCUN DES DEUX CHIFFRES NE SE PUBLIE tant que ce n est pas tranche : dire « 0 % au
+ *        createur » comme « 20 % au createur » serait une affirmation non mesuree.
+ *        Sonde : `mesure-frais-des-deux-cotes.mjs`.
+ *    ⚠️ CE QUE CA COUTERAIT SI C ETAIT VRAI : c etait le seul argument d un createur exterieur.
  *       Mesure du 2026-09-21 (14 j, 303/303 fenetres) : 2 lancements, tous deux par nos wallets —
  *       aucun createur exterieur sur la fenetre. Gain mesure : +0,001019868 ETH sur 14 j, soit +50 %.
  *    ⛔ Bits 0x24cc, IDENTIQUES au V6 : le V7 n ajoute aucune capacite, il ne touche aucun verrou. */
