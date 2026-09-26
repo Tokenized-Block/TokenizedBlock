@@ -1998,7 +1998,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-ten-stocks" hidden>Build <code>20260927-ten-stocks</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-door-first" hidden>Build <code>20260927-door-first</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4555,10 +4555,49 @@ async function pret(opts) {
  *   sans copie reelle serait un mensonge a l ecran.
  * ⛔ Le bloc se REFERME si un wallet finit par apparaitre : une alerte qui survit a sa cause devient
  *   du bruit, et le prochain refus vrai sera lu comme du decor. */
+/* ⛔⛔ L ORDRE DE L ECRAN ETAIT INVERSE, ET C EST UNE MESURE QUI LE DIT. Releve du premier ecran en
+ *     production, 375 px, `window.ethereum` retire (2026-09-27) :
+ *         y=235  [Connect wallet]                         <- le bouton qui NE PEUT PAS aboutir
+ *         y=293  « No wallet found... Open this page from inside your wallet app »
+ *         y=381  [Create a Base Account — no app needed]   <- la seule porte qui marche
+ *     Le visiteur sans wallet voyait donc D ABORD l action impossible, puis un refus qui lui
+ *     demandait le chemin LE PLUS DUR, et seulement 88 px plus bas le chemin facile.
+ *   ⇒ ENTONNOIR DU 2026-09-26 : 24 visites, 29 `wallet_no_provider`, 2 `wallet_connect_ok`,
+ *     1 `wallet_base_clic`, ZERO ouverture de deeplink. Un bouton qui echoue et qui reste le plus
+ *     visible se fait RETAPER : c est ce que « 29 pour 24 visites » raconte.
+ *
+ * ⛔ ON NE CACHE PAS LE BOUTON, ET C EST DELIBERE. Le depot l ecrit deja quelques lignes plus haut :
+ *   certaines extensions s injectent APRES le chargement, et cacher le bouton enfermerait celui
+ *   dont le wallet arrive en retard. On le DEPLACE et on le DEMOTE — aucune porte n est fermee,
+ *   l ordre cesse seulement de mentir sur ce qui est possible.
+ * ⛔ ET C EST REVERSIBLE : si un wallet finit par apparaitre, l ordre d origine revient. Un ecran
+ *   qui garde la forme d un refus apres la fin du refus devient du bruit, et le prochain vrai refus
+ *   sera lu comme du decor. */
+function ordonnerSansWallet(sans) {
+  const zone = $('#wDeconnecte'), bouton = $('#bConnecterW');
+  const note = $('#wNoteConnexion'), bloc = $('#wSansWallet');
+  if (!zone || !bouton || !bloc) return;
+  /* ⛔ IDEMPOTENT : cette fonction passe a CHAQUE refus. Deplacer sans verifier reordonnerait le DOM
+   *   a chaque appel — du travail pour rien, et un point de scintillement a l ecran. */
+  const boutonApres = !!(bloc.compareDocumentPosition(bouton) & Node.DOCUMENT_POSITION_FOLLOWING);
+  if (sans) {
+    if (!boutonApres) {
+      if (note) zone.insertBefore(note, bouton);
+      zone.insertBefore(bloc, bouton);
+      if (note) zone.insertBefore(note, bloc);
+    }
+    bouton.className = 'bouton sec';
+  } else if (boutonApres) {
+    zone.insertBefore(bouton, note || bloc);
+    bouton.className = 'bouton';
+  }
+}
+
 function montrerSansWallet(sans) {
   const bloc = $('#wSansWallet');
   if (!bloc) return; /* volet Wallet absent : rien a montrer, rien a casser */
   bloc.hidden = !sans;
+  ordonnerSansWallet(!!sans);
   if (!sans) return;
   const u = $('#wSansWalletUrl');
   if (u) u.textContent = location.href;
