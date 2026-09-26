@@ -197,7 +197,93 @@ v('⛔⛔ les deux portes de sortie sont construites, pas recopiees, et au bon f
   }
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+v('⛔⛔ la porte passkey existe, est servie par NOUS, et ne recouvre aucun wallet', () => {
+  /* ⛔⛔ CE QUI L A DECIDE : 55 sessions du 2026-09-24 au 09-26, 29 `wallet_no_provider`, et
+   *     `wallet_connect_ok` = ZERO. Les deeplinks supposent une application deja installee ; ce
+   *     chemin-ci n en suppose aucune. */
+  assert.match(nu, /id="wBaseAccount"/, 'le bouton Base Account a disparu du volet Wallet');
+
+  const c = corpsNuDe('function chargerBaseAccount(');
+  assert.ok(c, 'chargerBaseAccount() est introuvable');
+  /* ⛔ SERVI PAR NOUS, PAS PAR UN CDN. Ce bundle fabrique les signatures de wallet de nos
+   *   utilisateurs : un rebundle cote CDN changerait des octets sans qu on l ait decide. */
+  assert.ok(!/cdn\.jsdelivr|unpkg|esm\.sh|https:\/\//.test(c),
+    'le SDK est charge depuis une origine externe : un rebundle passerait sans decision');
+  assert.match(nu, /const BASE_ACCOUNT_SRC = '\/npm\/@base-org\/account@2\.5\.13\/dist\/base-account\.min\.js'/,
+    'le chemin du SDK a change : il doit rester celui du manifeste verifie');
+  /* ⛔ UN ECHEC NE SE MET PAS EN CACHE : sinon un reseau qui tousse une fois ferme la porte pour
+   *   toute la session, et le visiteur reclique dans le vide — 25 taps, on connait. */
+  assert.match(c, /baseAccountCharge\.catch\(\(\) => \{ baseAccountCharge = null; \}\)/,
+    'un echec de chargement reste en cache : la porte se fermerait pour toute la session');
+
+  const o = corpsNuDe('async function ouvrirBaseAccount(');
+  assert.ok(o, 'ouvrirBaseAccount() est introuvable');
+  /* ⛔⛔ ON NE RECOUVRE JAMAIS UN WALLET EXISTANT. Sans ce garde, une extension injectee entre-temps
+   *     serait ecrasee : l utilisateur a choisi son wallet, pas nous. */
+  assert.match(o, /if \(!window\.ethereum\) \{\s*Object\.defineProperty\(window, 'ethereum'/,
+    'le provider est pose sans verifier qu aucun wallet n est deja la : on ecraserait le sien');
+  assert.match(o, /configurable: true/,
+    'la propriete n est plus configurable : une extension injectee plus tard ne pourrait plus la remplacer');
+  /* ⛔ ON PASSE PAR `connecter()`. Court-circuiter sauterait `wallet_connect_ok`, la bascule de
+   *   chaine et la peinture — et on ne saurait pas si la porte sert. */
+  /* ⛔ CETTE ASSERTION TESTAIT L ORTHOGRAPHE, PAS L INTENTION. Elle exigeait littéralement
+   *   `await connecter()` ; quand j ai ajoute le filet anti-bouton-mort, l appel est devenu
+   *   `connecter().then(…)` puis `await promesse` — strictement equivalent, et la garde a crie.
+   *   Une garde qui nomme une FORME plutot qu une PROPRIETE bloque les bons correctifs et laisse
+   *   passer les mauvais ecrits autrement. On exige donc : l appel existe, et il est attendu. */
+  assert.match(o, /const promesse = connecter\(\)/,
+    'la porte court-circuite connecter() : le succes ne serait plus compte, et le reste non plus');
+  /* ⛔ ET L ECHEC NOMME SA CAUSE au lieu de renvoyer chercher un defaut chez soi. */
+  assert.match(o, /Base Account did not open: /,
+    'l echec ne nomme plus sa cause');
+
+  /* ⛔ LES DEUX COMPTEURS DOIVENT ETRE ACCEPTES : /api/etape rend 204 pour un nom inconnu comme
+   *   pour un nom connu, donc un compteur hors liste blanche disparait en silence. */
+  /* ⛔⛔ LE BOUTON NE DOIT JAMAIS RESTER MORT. Mesure au banc le 2026-09-26 : la fenetre de
+   *     connexion du SDK n a pas pu s ouvrir, `eth_requestAccounts` n a jamais resolu, et le bouton
+   *     est reste « Opening… » DESACTIVE 25 secondes — sans aucun geste possible. C est la faute
+   *     que toute cette journee a servi a corriger, et elle allait partir en production.
+   *   ⛔ La garde exige les DEUX moities : rendre le bouton, ET ne pas abandonner la promesse (un
+   *     vrai Face ID prend du temps ; couper refuserait une connexion en cours). */
+  assert.match(o, /const relance = setTimeout\(/,
+    'aucun filet : une fenetre de connexion bloquee laisserait le bouton mort pour toujours');
+  /* ⛔⛔ CETTE ASSERTION TENAIT LA MAUVAISE MOITIE, et une mutation l a prouve. La ligne qui rend le
+   *     bouton existe DEUX fois : dans le filet, et dans le `finally` de fin de fonction. Chercher
+   *     la chaine dans toute la fonction verdissait donc meme en SUPPRIMANT celle du filet — or
+   *     c est la seule qui compte, parce que le `finally` n est jamais atteint tant que la promesse
+   *     ne rend pas la main. On borne donc la lecture au CORPS DU FILET.
+   *   ⇒ « une garde peut etre VRAIE et couvrir la mauvaise moitie ». */
+  const iF = o.indexOf('const relance = setTimeout(');
+  const jF = o.indexOf('}, 12000);', iF);
+  assert.ok(iF > 0 && jF > iF, 'le corps du filet est introuvable : bornes ' + iF + ' / ' + jF);
+  const filet = o.slice(iF, jF);
+  assert.match(filet, /b\.disabled = false; b\.textContent = 'Create a Base Account/,
+    'le filet lui-meme ne rend pas le bouton : le visiteur resterait sans geste');
+  assert.match(filet, /etape\('wallet_base_attente'\)/,
+    'le filet ne compte pas : « la fenetre ne s ouvre pas » se lirait comme « personne n a essaye »');
+  assert.match(o, /try \{ await promesse; \} finally \{ clearTimeout\(relance\); \}/,
+    'la promesse est abandonnee au lieu d etre attendue : une connexion lente serait refusee');
+  assert.match(o, /your browser blocked the pop-up/,
+    'le filet ne nomme plus la cause probable : « ca ne marche pas » renvoie chercher un defaut chez soi');
+
+  const serveur = depouiller(readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8'));
+  for (const nom of ['wallet_base_clic', 'wallet_base_ko', 'wallet_base_attente']) {
+    assert.ok(serveur.includes("'" + nom + "'"),
+      nom + ' manque a ETAPES_ENTONNOIR : le beacon repondrait 204 sans rien enregistrer');
+  }
+  /* ⛔⛔ ET PAS DE SECOND COMPTEUR DE SUCCES. Le succes passe par `connecter()`, donc par
+   *     `wallet_connect_ok`. Deux compteurs de succes concurrents finissent par faire publier le
+   *     plus flatteur des deux. */
+  assert.ok(!/wallet_base_ok/.test(nu + serveur),
+    'un second compteur de succes est apparu : le rapport clic -> wallet_connect_ok cesserait de decider');
+
+  /* ⛔ LE SDK EST DANS LE MANIFESTE VERIFIE, sinon le serveur ne le sert pas et le bouton est mort. */
+  const manif = JSON.parse(readFileSync(new URL('./xmtp-manifeste.json', import.meta.url), 'utf8'));
+  assert.ok(manif.fichiers['/npm/@base-org/account@2.5.13/dist/base-account.min.js'],
+    'le SDK Base Account est absent du manifeste : le serveur refuserait de le servir');
+});
+
+assert.equal(n, 7, 'compte de cas inattendu : ' + n);
 console.log('ok sans-wallet-dit-quoi-faire — ' + n + ' cas.');
 console.log('   Les neuf refus ont UNE phrase, la puce du header mene au volet ou elle est ecrite,');
 console.log('   et le seul chemin restant (le lien de la page) est donne avec son echec de copie visible.');

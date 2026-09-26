@@ -1703,6 +1703,16 @@ details[open] > summary::before{transform:rotate(90deg)}
                ⚠️ ON NE PROMET PAS QUE L APPLICATION S OUVRE. Rien ici ne peut le mesurer : il n y a
                  pas de telephone dans le banc. La phrase est donc CONDITIONNELLE, et le lien a
                  copier reste dessous — lui, il est vrai dans tous les cas. -->
+          <!-- ⛔⛔ LE PASSKEY EST EN PREMIER, ET C EST LA MESURE QUI LE PLACE LA. Du 2026-09-24 au
+               09-26 : 55 sessions, 29 `wallet_no_provider`, `wallet_connect_ok` = ZERO. Les deux
+               liens ci-dessous supposent une application DEJA installee ; ce bouton-ci n en suppose
+               aucune — un Base Account s ouvre avec la biometrie de l appareil, sans extension et
+               sans app. C est le seul chemin qui marche pour quelqu un qui arrive d un lien
+               partage, et ils arrivent tous comme ca (19 `lien_recu`).
+               ⚠️ ON NE PROMET PAS QUE CA REUSSIT : le bouton dit ce qu il tente, et son echec
+                 s ecrit au meme endroit. Seul `wallet_connect_ok` dira s il a servi. -->
+          <button class="bouton" id="wBaseAccount" type="button">Create a Base Account — no app needed</button>
+          <p class="note" id="wBaseNote" style="margin:6px 0 10px">Uses your device sign-in (Face ID, fingerprint or screen lock). It never asks for a key or a seed phrase.</p>
           <p class="note" style="margin:0 0 6px">If you already have one of these apps, this opens the page inside it:</p>
           <div class="partage">
             <a id="wOuvrirCbw" target="_blank" rel="noopener" href="#">Open in Coinbase Wallet</a>
@@ -1953,7 +1963,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-une-porte-pour-sans-wallet" hidden>Build <code>20260926-une-porte-pour-sans-wallet</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-passkey-base-account" hidden>Build <code>20260926-passkey-base-account</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4502,6 +4512,114 @@ function montrerSansWallet(sans) {
   const mm = $('#wOuvrirMm');
   if (mm) mm.href = 'https://link.metamask.io/dapp/' + location.host + location.pathname + location.search;
 }
+/* ══ BASE ACCOUNT — LA PORTE QUI NE DEMANDE RIEN D INSTALLE ══════════════════════════════════════
+ * ⛔⛔ CE QUI L A DECIDE : 55 sessions du 2026-09-24 au 09-26, 29 `wallet_no_provider`, et
+ *     `wallet_connect_ok` = ZERO. Pas une connexion en trois jours. Les deeplinks supposent une
+ *     application deja installee ; un Base Account s ouvre avec la biometrie de l appareil.
+ *
+ * ⛔ LE PROVIDER DEVIENT `window.ethereum`, ET C EST TOUT LE DESIGN. Vingt-neuf endroits de cette
+ *   page lisent `window.ethereum` ; les reecrire pour un second fournisseur aurait ete vingt-neuf
+ *   occasions d en oublier un — et l oubli se serait vu en production, sur le chemin qui signe.
+ *   On ne l ecrit QUE s il est absent : on ne recouvre jamais le wallet de quelqu un.
+ *   `configurable: true` pour qu une extension injectee plus tard puisse encore le remplacer.
+ *
+ * ⛔ LE SDK EST SERVI PAR NOUS, avec son empreinte verifiee au demarrage (meme fail-closed que
+ *   XMTP). Il fabrique des signatures de wallet : un rebundle cote CDN changerait des octets sans
+ *   qu on l ait decide.
+ * ⛔ CHARGE A LA DEMANDE, jamais au chargement de la page : 822 ko sur le chemin critique de chaque
+ *   visite, pour une porte que la plupart n ouvriront pas, serait payer le prix a tout le monde.
+ *
+ * ⚠️ CE QU ON NE PROMET PAS : que ca aboutisse. Le passkey depend de l appareil et du navigateur.
+ *   L echec s ecrit a l ecran, au meme endroit que le bouton. */
+const BASE_ACCOUNT_SRC = '/npm/@base-org/account@2.5.13/dist/base-account.min.js';
+let baseAccountCharge = null;
+function chargerBaseAccount() {
+  /* ⛔ UNE SEULE FOIS : deux <script> identiques reevalueraient le bundle et creeraient deux SDK. */
+  if (baseAccountCharge) return baseAccountCharge;
+  baseAccountCharge = new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = BASE_ACCOUNT_SRC;
+    s.async = true;
+    s.onload = () => (typeof window.createBaseAccountSDK === 'function'
+      ? ok(window.createBaseAccountSDK)
+      /* ⛔ CHARGE N EST PAS PRET. Un script qui repond 200 sans poser sa fonction laisserait la
+       *   suite jeter un `TypeError` illisible ; on nomme la cause tout de suite. */
+      : ko(new Error('le SDK a ete charge mais n a pas publie createBaseAccountSDK')));
+    s.onerror = () => ko(new Error('le SDK ne se charge pas depuis ' + BASE_ACCOUNT_SRC));
+    document.head.appendChild(s);
+  });
+  /* ⛔ UN ECHEC NE SE MET PAS EN CACHE : sinon un reseau qui tousse une fois fermerait la porte
+   *   pour toute la session, et le visiteur recliquerait dans le vide. */
+  baseAccountCharge.catch(() => { baseAccountCharge = null; });
+  return baseAccountCharge;
+}
+
+async function ouvrirBaseAccount() {
+  const b = $('#wBaseAccount'), note = $('#wBaseNote');
+  const dire = (txt) => { if (note) note.textContent = txt; };
+  if (b) { b.disabled = true; b.textContent = 'Opening…'; }
+  try { etape('wallet_base_clic'); } catch (_) {}
+  try {
+    const creer = await chargerBaseAccount();
+    const sdk = creer({
+      appName: 'TokenizedBlock',
+      /* ⛔ LE LOGO EST CONSTRUIT DEPUIS L ORIGINE COURANTE, jamais ecrit en dur : une URL recopiee
+       *   afficherait l icone d un autre site dans la fenetre qui demande une signature.
+       * ⛔⛔ ET LE NOM DU FICHIER EST CELUI QUE LA PAGE DECLARE DEJA (`<link rel="icon">`), pas un
+       *     nom plausible. Ma premiere version ecrivait `/icone-192.png`, qui N EXISTE PAS dans ce
+       *     depot : la fenetre de signature aurait montre une icone morte, au moment precis ou le
+       *     visiteur doit reconnaitre a qui il parle. */
+      appLogoUrl: new URL(
+        (($('link[rel="icon"]') && $('link[rel="icon"]').getAttribute('href')) || 'icon.png'),
+        location.origin).href,
+      appChainIds: [CHAINE],
+    });
+    const fournisseur = sdk.getProvider();
+    /* ⛔ ON NE RECOUVRE JAMAIS UN WALLET EXISTANT. Si une extension s est injectee entre-temps,
+     *   c est elle qui garde la main — l utilisateur a choisi son wallet, pas nous. */
+    if (!window.ethereum) {
+      Object.defineProperty(window, 'ethereum', { value: fournisseur, configurable: true, writable: true });
+    }
+    dire('Waiting for your device sign-in…');
+    /* ⛔⛔ CE BOUTON EST RESTE MORT 25 SECONDES DANS LE BANC, ET C EST MESURE. Le SDK ouvre une
+     *     fenetre de connexion ; si le navigateur la BLOQUE, `eth_requestAccounts` ne resout
+     *     JAMAIS — `await connecter()` ne rend jamais la main, le bouton reste « Opening… »
+     *     desactive, et le visiteur n a plus aucun geste. C est exactement la faute que cette
+     *     journee entiere a servi a corriger, et j allais la livrer moi-meme.
+     *   ⛔ ON N ABANDONNE PAS LA PROMESSE POUR AUTANT : un vrai Face ID peut prendre du temps, et
+     *     couper au bout de douze secondes refuserait une connexion en cours. On REND LE BOUTON,
+     *     on dit la cause probable, et on laisse la promesse aboutir si elle le peut.
+     *   ⛔ ET ON LE COMPTE : `wallet_base_attente` est le seul chiffre qui dira « la fenetre ne
+     *     s ouvre pas chez nos visiteurs », ce qui est l echec le plus probable et le plus muet. */
+    let abouti = false;
+    const promesse = connecter().then(() => { abouti = true; });
+    const relance = setTimeout(() => {
+      if (abouti || compte) return;
+      if (b) { b.disabled = false; b.textContent = 'Create a Base Account — no app needed'; }
+      dire('Still waiting. If no sign-in window opened, your browser blocked the pop-up — tap again, '
+        + 'or use one of the links below.');
+      try { etape('wallet_base_attente'); } catch (_) {}
+    }, 12000);
+    try { await promesse; } finally { clearTimeout(relance); }
+    if (compte) {
+      montrerSansWallet(false);
+      dire('');
+    } else {
+      /* ⛔ `connecter()` a deja ecrit SA raison dans les notes du volet. On ne la recopie pas ici :
+       *   deux messages differents pour un seul echec laissent choisir celui qui arrange. */
+      dire('');
+    }
+  } catch (e) {
+    /* ⛔ ON NOMME CE QUI A LACHE. « Something went wrong » renvoie chercher un defaut chez soi. */
+    dire('Base Account did not open: ' + String((e && e.message) || e)
+      + ' — the two links below still work if you have one of those apps.');
+    try { etape('wallet_base_ko'); } catch (_) {}
+  } finally {
+    if (b) { b.disabled = false; b.textContent = 'Create a Base Account — no app needed'; }
+  }
+}
+$('#wBaseAccount') && $('#wBaseAccount').addEventListener('click', () => void ouvrirBaseAccount());
+
 /* ⛔ ON COMPTE LES DEUX SEPAREMENT. Un seul nom pour les deux portes reproduirait le defaut que
  *   cette journee a couté : `wallet_no_provider` porte UN nom pour NEUF chemins, et on ne peut donc
  *   pas dire lequel a ete tape 25 fois. Ici on saura laquelle des deux sert — ou si aucune ne sert,

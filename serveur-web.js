@@ -808,6 +808,18 @@ const ETAPES_ENTONNOIR = [
    *   ⚠️ UN CLIC N EST PAS UNE CONNEXION. Ces deux-la diront qu on a tape le lien ; seul
    *     `wallet_connect_ok` qui remonte dira que la porte menait quelque part. */
   'wallet_ouvrir_cbw', 'wallet_ouvrir_mm',
+  /* ⛔⛔ LA PORTE QUI NE DEMANDE RIEN D INSTALLE. `wallet_base_clic` compte la tentative,
+   *     `wallet_base_ko` l echec NOMME (SDK qui ne charge pas, passkey refuse par l appareil).
+   *   ⛔ LE SUCCES N A PAS DE NOM A LUI, ET C EST VOULU : il passe par `connecter()`, donc il
+   *     s ecrit dans `wallet_connect_ok`. Lui donner un nom separe aurait fait deux compteurs de
+   *     succes concurrents, et on aurait fini par publier le plus flatteur des deux.
+   *   ⇒ LE RAPPORT QUI DECIDE : `wallet_base_clic` -> `wallet_connect_ok`. Si le premier monte et
+   *     que le second reste a zero, le passkey ne sert pas et il faut chercher ailleurs. */
+  /* ⛔⛔ `wallet_base_attente` EST LE PLUS IMPORTANT DES TROIS, et il n existe que parce que le banc
+   *     l a montre : la fenetre de connexion bloquee par le navigateur laissait le bouton mort
+   *     25 secondes. C est l echec le plus probable ET le plus muet — sans ce compteur, il se
+   *     lirait comme « personne n a essaye ». */
+  'wallet_base_clic', 'wallet_base_ko', 'wallet_base_attente',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
    *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait

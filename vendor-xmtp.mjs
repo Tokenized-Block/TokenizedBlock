@@ -30,8 +30,26 @@ const MANIFESTE = join(ici, 'xmtp-manifeste.json');
 const CDN = 'https://cdn.jsdelivr.net';
 const MAX_FICHIERS = 200;
 
-/* Chemin SERVI -> source CDN. Les workers sont servis sans extension : c est ce que le code calcule. */
+/* Chemin SERVI -> source CDN. Les workers sont servis sans extension : c est ce que le code calcule.
+ * ⚠️ CE MANIFESTE N EST PLUS SEULEMENT XMTP (2026-09-26). Il porte aussi le bundle Base Account, qui
+ *   n a rien a voir avec la messagerie. Le fichier garde son nom parce que `serveur-web.js`,
+ *   `package.json` et `.gitignore` le referencent, et qu un renommage en pleine livraison casse le
+ *   deploiement pour un gain cosmetique. Le nom ment un peu : c est ecrit ici plutot que taire.
+ * ⛔ AJOUT CHIRURGICAL, PAS UN RE-FIGEAGE. `--figer` reecrit TOUTES les empreintes : le relancer
+ *   pour ajouter une ligne accepterait en silence un rebundle CDN des 45 fichiers XMTP — exactement
+ *   ce que ce fail-closed existe pour empecher. L entree Base Account a ete inseree seule, et les
+ *   45 autres empreintes n ont pas bouge (verifie par diff). */
 const DEPART = [
+  /* ⛔⛔ BASE ACCOUNT — LE SEUL CHEMIN POUR UN VISITEUR SANS WALLET. Mesure des 2026-09-24 au 09-26 :
+   *     55 sessions, 29 `wallet_no_provider`, `wallet_connect_ok` = ZERO. Le passkey ne demande ni
+   *     extension ni application installee.
+   *   ⛔ VENDORISE, PAS CHARGE DEPUIS LE CDN : ce code fabrique les signatures de wallet de nos
+   *     utilisateurs. Un rebundle cote CDN changerait des octets sans qu on l ait decide. Meme
+   *     doctrine que XMTP, meme fail-closed.
+   *   ⛔ Bundle UMD autonome (822 ko) : verifie, il ne contient AUCUNE chaine `/npm/`, donc le crawl
+   *     d imports ne partira pas chercher de dependances parasites. */
+  ['/npm/@base-org/account@2.5.13/dist/base-account.min.js',
+    '/npm/@base-org/account@2.5.13/dist/base-account.min.js'],
   ['/npm/@xmtp/browser-sdk@7.1.0/+esm', '/npm/@xmtp/browser-sdk@7.1.0/+esm'],
   ['/npm/@xmtp/browser-sdk@7.1.0/dist/workers/client', '/npm/@xmtp/browser-sdk@7.1.0/dist/workers/client.js/+esm'],
   ['/npm/@xmtp/browser-sdk@7.1.0/dist/workers/opfs', '/npm/@xmtp/browser-sdk@7.1.0/dist/workers/opfs.js/+esm'],

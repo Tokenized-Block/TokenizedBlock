@@ -1,8 +1,13 @@
 {
   "fige_le": "2026-09-13",
-  "total": 13999186,
-  "nombre": 45,
+  "total": 14821826,
+  "nombre": 46,
   "fichiers": {
+    "/npm/@base-org/account@2.5.13/dist/base-account.min.js": {
+      "source": "/npm/@base-org/account@2.5.13/dist/base-account.min.js",
+      "octets": 822640,
+      "sha256": "c279fa763dc92d1d61b99fd5b8c98d7c34499e0582c1b1f6a87f1eb22e6d76fd"
+    },
     "/npm/@noble/curves@1.9.0/abstract/modular/+esm": {
       "source": "/npm/@noble/curves@1.9.0/abstract/modular/+esm",
       "octets": 7785,
