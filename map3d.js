@@ -147,14 +147,54 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     return { sx: L / 2 + cam.ox + x1 * f / zc, sy: H / 2 + cam.oy + y2 * f / zc, zc, z2, k: f / zc };
   }
 
-  /** place un block neuf dans le cube (position et derive 3D) */
+  /** place un block neuf dans le cube (position, derive 3D, rotation propre)
+   * ⛔⛔ CETTE FONCTION NE POSAIT QUE `vz`, ET C ETAIT UN BUG A NaN. La derive fait
+   *     `h.wx += h.vx * vit` — or `vx`/`vy` sont ecrits par le CERVEAU (dans `app.html`), pas ici.
+   *     Un block dessine AVANT son premier battement faisait donc `undefined * vit` = NaN.
+   *   ⛔ ET CE NaN NE SE CORRIGE JAMAIS TOUT SEUL : `Math.abs(NaN) > SX - m` est FAUX, donc aucun
+   *     rebond ne le rattrape ; le test de visibilite `p.zc < S * 0.12` est FAUX aussi, donc rien
+   *     ne le masque. Le block disparait EN SILENCE — pas d erreur, pas de trace. Un NaN traverse
+   *     toutes les bornes parce qu il est faux des DEUX cotes de chaque comparaison.
+   *   ⛔ LA PREUVE QUE QUELQU UN L AVAIT DEJA RENCONTRE : la ligne de derive ecrit `(h.vz || 0)`
+   *     pour la profondeur… et RIEN pour `vx`/`vy`. Un correctif applique a UN SEUL des trois
+   *     jumeaux — exactement le motif ou la reparation rate ses copies.
+   *
+   * ⛔ LES VITESSES SONT TIREES DE L ADRESSE, PAS DU HASARD : deux personnes qui ouvrent la meme
+   *   map doivent voir le meme univers bouger pareil. (La POSITION reste aleatoire, comme avant —
+   *   ce commit repare un NaN, il ne refait pas le placement.) */
   function placer(h) {
     const m = h.t * 0.8;
     h.wx = (Math.random() * 2 - 1) * (SX - m);
     h.wy = (Math.random() * 2 - 1) * (SY - m);
     h.wz = (Math.random() * 2 - 1) * (SZ - m);
-    h.vz = (Math.random() - 0.5) * 0.22;
+    const a = String(h.adr || '').toLowerCase().replace(/^0x/, '');
+    const bon = /^[0-9a-f]{40}$/.test(a);
+    const g = (i) => (bon ? parseInt(a.slice(i, i + 8), 16) / 0xffffffff : Math.random()) * 2 - 1;
+    /* ⛔ UNE VITESSE NULLE EST UN BLOCK FIGE : un plancher garantit que chacun derive vraiment. */
+    const plancher = (v, min) => (Math.abs(v) < min ? (v < 0 ? -min : min) : v);
+    h.vx = plancher(g(0) * 0.11, 0.02);
+    h.vy = plancher(g(8) * 0.11, 0.02);
+    h.vz = plancher(g(16) * 0.11, 0.02);
+    /* ⛔ SA ROTATION PROPRE, tiree de l adresse elle aussi : meme block, meme tournoiement partout.
+     *   Phil : « pourquoi les cubes sur la map n ont plus les effets de deplacement libre sur
+     *   eux-memes ? rajoute-les » — « ca fait plus vivant ». */
+    h.spin = plancher(g(24) * 7, 1.6);
+    h.spin0 = (g(32) + 1) * 180;
     h._op = -1;
+  }
+
+  /* ⛔⛔ UN BLOCK DEJA CASSE DOIT POUVOIR REVENIR, ET C EST LA MOITIE QUI MANQUERAIT. Corriger
+   *     `placer()` ne suffit pas : un block dont la vitesse est DEJA NaN — cerveau ayant battu
+   *     avant le placement — resterait perdu pour TOUTE la session, puisque le cerveau recalcule
+   *     son angle avec `Math.atan2(h.vy, h.vx)` et que `Math.atan2(NaN, NaN)` rend encore NaN.
+   *     Le NaN s auto-entretient.
+   *   ⇒ On verifie la finitude a chaque image et on REPLACE ce qui est sorti du reel. C est une
+   *     reparation, pas un camouflage : sans elle, ce block n existe plus a l ecran. */
+  function saine(h) {
+    if (Number.isFinite(h.wx) && Number.isFinite(h.wy) && Number.isFinite(h.wz)
+      && Number.isFinite(h.vx) && Number.isFinite(h.vy) && Number.isFinite(h.vz)) return true;
+    placer(h);
+    return false;
   }
 
   /* ⛔⛔ AUDIT 2026-09-20 (mesure : environ une recherche sur cinq) : « Show on map » envoyait la camera
@@ -282,6 +322,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     const f = focale(L, H), R = Math.hypot(SX, SY, SZ);
     for (const h of habitants) {
       if (h.wx === undefined) placer(h);
+      /* ⛔ ET ON RATTRAPE CE QUI A DERIVE HORS DU REEL : un NaN arrive ici ne repartirait jamais. */
+      saine(h);
       /* derive : vx/vy viennent du cerveau (battre), vz est la profondeur ; x3 pour que le mouvement se voie dans un grand cube */
       const vit = 3 * (S / DEMI_COTE);
       if (h.centreFixe) {
@@ -313,7 +355,23 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const petit = h.t * k < 64;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
-      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
+      /* ⛔⛔ LA ROTATION PROPRE DU CUBE. Phil : « pourquoi les cubes sur la map n ont plus les effets
+       *     de deplacement libre sur eux-memes ? rajoute-les » — « ca fait plus vivant ».
+       *   ⛔ ELLE EST REFUSEE SI L UTILISATEUR A DEMANDE MOINS DE MOUVEMENT : `mouvementReduit`
+       *     existe pour ca, et un effet « vivant » impose a quelqu un qui a dit non est un defaut,
+       *     pas une touche de vie.
+       *   ⛔ ET ELLE S ARRETE SOUS 64 px (`petit`) : a cette taille elle ne se voit pas, et la
+       *     calculer pour chacun des ~175 blocs couterait sans rien montrer. La regle existait deja
+       *     pour les satellites — on la reutilise au lieu d en inventer un second seuil qui
+       *     deriverait du premier.
+       *   ⛔ DETERMINISTE : `spin` et `spin0` viennent de l adresse, donc le meme block tourne
+       *     pareil chez tout le monde. Un `Math.random()` ici rendrait deux ecrans incomparables. */
+      let tourne = '';
+      if (!mouvementReduit && !petit && Number.isFinite(h.spin)) {
+        const deg = (h.spin0 + maintenant * h.spin * 0.006) % 360;
+        tourne = ' rotate(' + deg.toFixed(1) + 'deg)';
+      }
+      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')' + tourne;
       const z = Math.max(1, Math.round(200000 / p.zc));
       if (z !== h._z) { h.el.style.zIndex = String(z); h._z = z; }
       const loin = Math.min(1, Math.max(0, (p.z2 + R) / (2 * R)));
