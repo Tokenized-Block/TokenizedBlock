@@ -681,6 +681,18 @@ body:not(.surMap) .mapCta{display:none}
 .toile{display:block;width:100%;height:auto;margin-top:10px;background:var(--creux);
   border:1px solid var(--ligne);border-radius:var(--rs)}
 .toileRonde{max-width:340px;margin-left:auto;margin-right:auto}
+/* ⛔ LE PANNEAU PASSE DESSOUS EN TELEPHONE, il ne se serre pas. `flex-wrap` + une base de 240 px :
+     a 375 px la toile prend la largeur et le texte va dessous, lisible. Un panneau « a cote » a
+     tout prix aurait donne deux colonnes de 160 px illisibles — ce depot se mesure a 375 px. */
+.bwRang{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-top:10px}
+/* ⛔ `touch-action:none` : sans lui, le doigt fait defiler la page au lieu de tourner la sphere. */
+.bwToile{flex:1 1 280px;max-width:430px;margin-top:0;touch-action:none;cursor:grab}
+.bwToile:active{cursor:grabbing}
+.bwDit{flex:1 1 240px;min-width:0}
+.bwListe{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
+.bwListe li{font-size:.92em;color:var(--doux);display:flex;justify-content:space-between;gap:10px;
+  border-bottom:1px solid var(--ligne);padding-bottom:4px}
+.bwListe b{color:var(--texte);font-variant-numeric:tabular-nums;font-weight:600}
 /* ══ LEARN ══ */
 .etapes{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .etape{display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--ligne);padding-top:10px}
@@ -1567,7 +1579,26 @@ details[open] > summary::before{transform:rotate(90deg)}
         <b>write into itself</b> with “Write this beat into the block” above: one signature, stored on chain for good.</p>
       <!-- ⛔ CARRE ET BORNE EN HAUTEUR : un cercle dans une toile 640x300 debordait sur un grand
            ecran, et on n en voyait que la moitie. -->
-      <canvas id="bReseau" width="520" height="520" class="toile toileRonde"></canvas>
+      <!-- ⛔⛔ DEVENU UNE VRAIE SPHERE (Phil, 2026-09-26 : « la sphere tu vas la faire ronde en 3d et
+             decrire ce qui se passe avec les neurons sur le cote, garde cote 2d comme avant »).
+             Le cercle plat posait les 128 neurones sur un ANNEAU : toutes les cordes traversaient le
+             meme disque et on ne voyait qu un noeud de fils. Sur une sphere, la profondeur separe
+             les liens — et ce qui s allume redevient lisible.
+           ⛔ LE CUBE DU BLOCK EST A COTE, DANS LA MEME TOILE ET SOUS LA MEME ROTATION (Phil : « le
+             cube c est le users cube a cote que tu peux faire bouger »). Deux toiles auraient tourne
+             separement ; ici un seul geste oriente les deux.
+           ⛔ AUCUNE BIBLIOTHEQUE 3D : la projection tient en quelques lignes, et ce depot vendorise
+             ses dependances avec verification d empreinte. Charger 600 ko pour ca serait un mauvais
+             echange, et une dependance de plus sur le chemin qui parle du cerveau.
+           ⚠️ LE RASTER 2D DES BATTEMENTS N EST PAS TOUCHE : il vit ailleurs et garde son dessin. -->
+      <div class="bwRang">
+        <canvas id="bReseau" width="560" height="420" class="toile bwToile"></canvas>
+        <div class="bwDit">
+          <p class="note" id="bwEtat">Waiting for the first beat…</p>
+          <ul class="bwListe" id="bwListe"></ul>
+          <p class="note" id="bwAide">Drag it to turn. The sphere is its wiring; the cube is the block.</p>
+        </div>
+      </div>
       <p class="note mono" id="bEmpreinte"></p>
     </div>
 
@@ -1963,7 +1994,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-ecran-sans-apport" hidden>Build <code>20260926-ecran-sans-apport</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-sphere-3d" hidden>Build <code>20260926-sphere-3d</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -13866,7 +13897,9 @@ function battreBrain() {
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
+  brainDernierVu = r.vu;
   dessinerReseau(r.vu);
+  dessinerReseauDit(r.vu);
   $('#bPhase').textContent = nomHumeur(r.vu.phase);
   /* ⛔ LA CHAINE EST LA VERITE POUR L HUMEUR. Si le marche public cote ce block alors que notre noeud
    * ne l a pas lu, on le dit ici au lieu de laisser « Trunk » et « asleep » se contredire a l ecran. */
@@ -14344,42 +14377,199 @@ function dessinerRasterSur(c, histoTout) {
  * ⚠️ Le fond (tous les liens) est trace en premier et tres faible : sans lui, on ne verrait pas la
  *    forme du reseau entre deux impulsions.
  */
+/* ⛔⛔ LES NEURONES SUR UNE SPHERE, PAS SUR UN ANNEAU. Le dessin plat posait les 128 points sur un
+ *     cercle : toutes les cordes traversaient le meme disque, et un reseau a 8 liens par neurone
+ *     devenait un noeud de fils ou rien ne se distinguait. Sur une sphere, la profondeur separe.
+ *   ⛔ REPARTITION DE FIBONACCI, ET PAS UN TIRAGE ALEATOIRE : elle est DETERMINISTE. Deux visites du
+ *     meme block doivent montrer la meme sphere — sinon « meme cablage, meme battement », la phrase
+ *     affichee sous le dessin, deviendrait fausse a l ecran.
+ *   ⛔ L ORDRE DES INDICES EST CONSERVE : le neurone i est le neurone i. Le melanger aurait fait
+ *     mentir les liens, qui pointent par indice. */
+function posSphere(n) {
+  const p = [], phi = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - (i / Math.max(1, n - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = phi * i;
+    p.push([Math.cos(th) * r, y, Math.sin(th) * r]);
+  }
+  return p;
+}
+/** Rotation courante, partagee par la sphere ET le cube : un seul geste oriente les deux. */
+const bwVue = { rx: -0.35, ry: 0.6, glisse: false, x0: 0, y0: 0, auto: true };
+let bwSphere = null, bwSphereN = 0;
+
+/** Tourne puis projette. ⛔ La perspective est FAIBLE (d = 3.2) : trop forte, les neurones du fond
+ *  deviennent des points et on ne lit plus la forme ; trop faible, la sphere redevient un disque. */
+function bwProjeter([x, y, z], cx, cy, r) {
+  const { rx, ry } = bwVue;
+  const x1 = x * Math.cos(ry) - z * Math.sin(ry);
+  const z1 = x * Math.sin(ry) + z * Math.cos(ry);
+  const y1 = y * Math.cos(rx) - z1 * Math.sin(rx);
+  const z2 = y * Math.sin(rx) + z1 * Math.cos(rx);
+  const d = 3.2, k = d / (d - z2);
+  return [cx + x1 * r * k, cy + y1 * r * k, z2, k];
+}
+
 function dessinerReseau(vu = null) {
   const c = $('#bReseau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   if (!brainEtat) return;
   const liens = brainEtat.c.liens;
   const th = teinteH();
-  const cx = c.width / 2, cy = c.height / 2, r = Math.min(cx, cy) - 14;
-  const pos = liens.map((_, i) => {
-    const a = (i / liens.length) * Math.PI * 2 - Math.PI / 2;
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
-  });
+  /* la sphere occupe la gauche, le cube la droite — memes proportions a toute largeur */
+  const cx = c.width * 0.36, cy = c.height / 2, r = Math.min(c.width * 0.30, c.height * 0.42);
+  if (!bwSphere || bwSphereN !== liens.length) { bwSphere = posSphere(liens.length); bwSphereN = liens.length; }
+  const pos = bwSphere.map((v) => bwProjeter(v, cx, cy, r));
   const actifs = new Set(vu && vu.indices ? vu.indices : []);
 
-  ctx.lineWidth = 0.5;
+  /* ⛔⛔ DU FOND VERS L AVANT. Sans ce tri, un lien de l arriere se dessine par-dessus un lien de
+   *     l avant et la sphere s aplatit : on retrouve exactement le noeud de fils qu on voulait
+   *     defaire. C est le tri qui fait la 3D, pas la projection. */
+  const aretes = [];
   for (let i = 0; i < liens.length; i++) {
-    const vif = actifs.has(i);
     for (const l of liens[i]) {
-      /* ⛔ LE SIGNE DU POIDS SE VOIT : l inhibition est ce qui empeche tout le reseau de tirer
-       * ensemble, la cacher donnerait a croire a un reseau qui ne fait qu exciter. */
-      ctx.strokeStyle = l.poids >= 0
-        ? (vif ? 'hsl(' + th + ' 85% 78% / .75)' : 'hsl(' + th + ' 70% 70% / .10)')
-        : (vif ? 'hsl(38 85% 70% / .55)' : 'hsl(38 80% 65% / .08)');
-      ctx.lineWidth = vif ? 1.1 : 0.5;
-      ctx.beginPath();
-      ctx.moveTo(pos[i][0], pos[i][1]);
-      ctx.lineTo(pos[l.vers][0], pos[l.vers][1]);
-      ctx.stroke();
+      if (!pos[l.vers]) continue;
+      aretes.push({ i, j: l.vers, poids: l.poids, z: (pos[i][2] + pos[l.vers][2]) / 2 });
     }
   }
-  for (let i = 0; i < pos.length; i++) {
-    const vif = actifs.has(i);
-    ctx.fillStyle = vif ? 'hsl(' + th + ' 100% 88%)' : 'hsl(' + th + ' 40% 62% / .55)';
+  aretes.sort((a, b) => a.z - b.z);
+
+  for (const e of aretes) {
+    const vif = actifs.has(e.i);
+    /* ⛔ LA PROFONDEUR SE VOIT DANS L OPACITE : un lien du fond doit s effacer, sinon la sphere
+     *   redevient plate. `prof` va de 0 (dos) a 1 (face). */
+    const prof = (e.z + 1) / 2;
+    const a = (vif ? 0.30 + 0.55 * prof : 0.03 + 0.10 * prof);
+    /* ⛔ LE SIGNE DU POIDS SE VOIT : l inhibition est ce qui empeche tout le reseau de tirer
+     * ensemble, la cacher donnerait a croire a un reseau qui ne fait qu exciter. */
+    ctx.strokeStyle = e.poids >= 0
+      ? 'hsl(' + th + ' ' + (vif ? 85 : 70) + '% ' + (vif ? 78 : 70) + '% / ' + a.toFixed(3) + ')'
+      : 'hsl(38 ' + (vif ? 85 : 80) + '% ' + (vif ? 70 : 65) + '% / ' + (a * 0.8).toFixed(3) + ')';
+    ctx.lineWidth = vif ? 0.7 + 0.8 * prof : 0.35 + 0.35 * prof;
     ctx.beginPath();
-    ctx.arc(pos[i][0], pos[i][1], vif ? 3.4 : 1.8, 0, Math.PI * 2);
+    ctx.moveTo(pos[e.i][0], pos[e.i][1]);
+    ctx.lineTo(pos[e.j][0], pos[e.j][1]);
+    ctx.stroke();
+  }
+
+  const ordre = pos.map((p, i) => i).sort((a, b) => pos[a][2] - pos[b][2]);
+  for (const i of ordre) {
+    const vif = actifs.has(i);
+    const prof = (pos[i][2] + 1) / 2;
+    ctx.fillStyle = vif
+      ? 'hsl(' + th + ' 100% ' + (72 + 16 * prof).toFixed(0) + '%)'
+      : 'hsl(' + th + ' 40% 62% / ' + (0.20 + 0.45 * prof).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(pos[i][0], pos[i][1], (vif ? 2.2 : 1.1) * pos[i][3], 0, Math.PI * 2);
     ctx.fill();
   }
+
+  dessinerCubeDuBlock(ctx, c, th);
+}
+
+/** Le cube du block, a cote de la sphere et sous la MEME rotation.
+ *  ⚠️ CE N EST PAS SA FACE GRAVEE. La face vient de la chaine et se dessine ailleurs ; ici c est un
+ *    cube aux couleurs du theme, qui montre l orientation. Le dire evite qu on lise une identite
+ *    dans une forme qui n en porte aucune. */
+function dessinerCubeDuBlock(ctx, c, th) {
+  const cx = c.width * 0.83, cy = c.height / 2, r = Math.min(c.width * 0.13, c.height * 0.22);
+  const S = [-1, 1], coins = [];
+  for (const x of S) for (const y of S) for (const z of S) coins.push([x, y, z]);
+  const p = coins.map((v) => bwProjeter(v, cx, cy, r));
+  /* les 12 aretes : deux coins voisins ne different que par UNE coordonnee */
+  const faces = [];
+  for (let i = 0; i < 8; i++) {
+    for (let j = i + 1; j < 8; j++) {
+      const d = coins[i].reduce((s, v, k) => s + (v !== coins[j][k] ? 1 : 0), 0);
+      if (d === 1) faces.push({ i, j, z: (p[i][2] + p[j][2]) / 2 });
+    }
+  }
+  faces.sort((a, b) => a.z - b.z);
+  for (const f of faces) {
+    const prof = (f.z + 1) / 2;
+    ctx.strokeStyle = 'hsl(' + th + ' 70% ' + (58 + 26 * prof).toFixed(0) + '% / ' + (0.30 + 0.60 * prof).toFixed(2) + ')';
+    ctx.lineWidth = 0.9 + 1.3 * prof;
+    ctx.beginPath();
+    ctx.moveTo(p[f.i][0], p[f.i][1]);
+    ctx.lineTo(p[f.j][0], p[f.j][1]);
+    ctx.stroke();
+  }
+}
+
+/* ⛔⛔ TOURNER A LA MAIN, ET LE DIRE. Phil : « le cube c est le users cube a cote que tu peux faire
+ *     bouger ». Un objet 3D qu on ne peut pas orienter est une image de plus — c est exactement le
+ *     reproche qui a fait bouger ce panneau la premiere fois (« c est juste une image la »).
+ *   ⛔ POINTER EVENTS, PAS MOUSE : sans eux le doigt ne tourne rien sur telephone, et c est en
+ *     telephone que ce depot se mesure. `setPointerCapture` garde le geste meme si le doigt sort de
+ *     la toile — sinon la sphere se fige en plein mouvement.
+ *   ⛔ LA ROTATION AUTOMATIQUE S ARRETE DES QU ON TOUCHE, ET NE REPREND PAS : reprendre la main sur
+ *     un objet que l utilisateur vient d orienter, c est lui dire que son geste ne compte pas. */
+(function brancherRotationCablage() {
+  const c = $('#bReseau');
+  if (!c) return;
+  const bouger = (e) => {
+    if (!bwVue.glisse) return;
+    bwVue.ry += (e.clientX - bwVue.x0) * 0.01;
+    bwVue.rx += (e.clientY - bwVue.y0) * 0.01;
+    /* ⛔ LE HAUT ET LE BAS SE BORNENT : au-dela d un quart de tour la sphere se retourne et le
+     *   geste devient inverse — on croit avoir casse quelque chose. */
+    bwVue.rx = Math.max(-1.45, Math.min(1.45, bwVue.rx));
+    bwVue.x0 = e.clientX; bwVue.y0 = e.clientY;
+    dessinerReseau(brainDernierVu);
+  };
+  c.addEventListener('pointerdown', (e) => {
+    bwVue.glisse = true; bwVue.auto = false;
+    bwVue.x0 = e.clientX; bwVue.y0 = e.clientY;
+    try { c.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  c.addEventListener('pointermove', bouger);
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+    c.addEventListener(ev, () => { bwVue.glisse = false; });
+  }
+  /* ⛔ UN TOUR LENT TANT QUE PERSONNE N A TOUCHE : sans lui, au premier chargement, une sphere vue
+   *   de face ressemble encore a un disque — et on ne saurait pas qu elle tourne. */
+  setInterval(() => {
+    if (!bwVue.auto || bwVue.glisse) return;
+    if (document.hidden) return;   /* ⛔ un onglet cache ne doit pas redessiner pour personne */
+    const vol = $('#v-brain');
+    if (!vol || vol.offsetParent === null) return;
+    bwVue.ry += 0.004;
+    dessinerReseau(brainDernierVu);
+  }, 60);
+})();
+
+/** ⛔ LE DERNIER BATTEMENT EST RETENU pour que la rotation puisse redessiner SANS inventer : sans
+ *  lui, tourner la sphere entre deux battements eteindrait tous les neurones, et on croirait que le
+ *  cerveau s est arrete parce qu on a bouge la souris. */
+let brainDernierVu = null;
+
+/** Ce que font les neurones, en toutes lettres, a cote du dessin.
+ *  ⛔⛔ CHAQUE LIGNE EST UN CHIFFRE QUE LE MODULE VIENT DE RENDRE — aucune n est decorative, aucune
+ *      n est calculee ici. Une ligne inventee dans ce panneau serait un mensonge a cote d une
+ *      mesure, c est-a-dire le pire endroit pour en mettre un.
+ *  ⚠️ « firing » est le nombre de neurones qui ont tire A CE BATTEMENT, pas depuis l ouverture. */
+function dessinerReseauDit(vu) {
+  const etat = $('#bwEtat'), liste = $('#bwListe');
+  if (!etat || !liste) return;
+  if (!vu) { etat.textContent = 'Waiting for the first beat…'; liste.innerHTML = ''; return; }
+  const n = brainEtat && brainEtat.c && brainEtat.c.liens ? brainEtat.c.liens.length : 0;
+  const combien = Array.isArray(vu.indices) ? vu.indices.length : (vu.actifs || 0);
+  etat.textContent = combien === 0
+    /* ⛔ UN SILENCE SE DIT. Un panneau vide se lirait comme une panne. */
+    ? 'No neuron fired on this beat — the network is quiet, not broken.'
+    : combien + ' of ' + n + ' neurons fired on this beat. Their links light up on the sphere.';
+  const lignes = [
+    ['firing now', combien + ' / ' + n],
+    ['spikes this beat', String(vu.spikes ?? '—')],
+    ['left wing', (vu.gauche_hz ?? '—') + ' Hz'],
+    ['right wing', (vu.droite_hz ?? '—') + ' Hz'],
+    ['steering', typeof vu.virage === 'number' ? vu.virage.toFixed(3) : '—'],
+    ['working memory', typeof vu.memoire === 'number' ? Math.round(vu.memoire * 100) + ' %' : '—'],
+    ['mood', vu.phase ? nomHumeur(vu.phase) : '—'],
+  ];
+  liste.innerHTML = lignes.map(([k, v]) =>
+    '<li><span>' + enTexte(k) + '</span><b>' + enTexte(String(v)) + '</b></li>').join('');
 }
 
 /* ══ LEARN ═══════════════════════════════════════════════════════════════════════════════════
