@@ -109,6 +109,42 @@ export const ADRESSE_NULLE = '0x0000000000000000000000000000000000000000';
  * Pure Instant Birth range math (no RPC) — used by planLancement and unit tests.
  * quoteEthWei > 0 ⇒ two-sided full-range straddle; ethRequis must be > 0.
  */
+/**
+ * Prix, plage et liquidite pour une position UNILATERALE — 100 % block, zero devise.
+ *
+ * ⛔⛔ UNE SEULE FONCTION POUR DEUX APPELANTS, ET C EST LE POINT. Ce calcul servait au « Add
+ *     liquidity » depuis toujours ; il sert maintenant AUSSI a la naissance sans seed. Le recopier
+ *     aurait fait deriver la moitie qu on relit le moins — le motif qui a deja coute cher ici.
+ *
+ * ⛔ IL GERE DEJA UNE POOL QUI N EXISTE PAS : quand `sqrtExistant` vaut 0, le prix d ouverture est
+ *   derive de la VALORISATION visee. C est ce qui rend la naissance sans seed possible sans
+ *   inventer une seule ligne de mathematiques.
+ *
+ * ⛔ LES TROIS REFUS SONT GARDES TELS QUELS. `ethRequis !== 0` en est un VRAI : si la plage tombe du
+ *   mauvais cote du prix, la position reclamerait de la devise — et une naissance annoncee « sans
+ *   apport » demanderait soudain de l ETH. C est exactement la promesse qu on ne veut pas casser.
+ */
+function calculUnilateral({ entiere, valo, tickCourant, blockEst1, dec, decDevise, aPlacer, sqrtExistant, solde }) {
+  const pm = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: TICK_SPACING_POOL,
+    tickCourant: tickCourant === null ? null : (blockEst1 ? tickCourant : -tickCourant), ecartDecimales: dec - decDevise });
+  if (pm.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pm.pourquoi };
+  const p = blockEst1 ? pm : { ...pm, tickBas: -pm.tickHaut, tickHaut: -pm.tickBas, tickPrix: -pm.tickPrix };
+  const sqrtVise = sqrtExistant !== 0n ? sqrtExistant
+    : sqrtPriceDepuisPrix({ prixNum: BigInt(Math.round(valo * 1e6)), prixDen: entiere * 1000000n,
+      decDevise, decBlock: dec, deviseEst0: blockEst1 });
+  const sqA = sqrtDeTick(p.tickBas), sqB = sqrtDeTick(p.tickHaut);
+  const L = liquiditeUnilaterale({ montant: aPlacer, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
+  if (!L) return { etat: 'REFUSE', pourquoi: 'no liquidity is computable for this range' };
+  const m = montantsPosition(L, sqrtVise, sqA, sqB);
+  const ethRequis = blockEst1 ? m.montant0 : m.montant1;
+  const blocksRequis = blockEst1 ? m.montant1 : m.montant0;
+  /* ⛔ TROIS REFUS, AUCUN REDONDANT — repris tels quels de l ecran qui a marche. */
+  if (ethRequis !== 0n) return { etat: 'REFUSE', pourquoi: 'the range is on the wrong side of the price — it would ask for ETH' };
+  if (blocksRequis === 0n) return { etat: 'REFUSE', pourquoi: 'this would place nothing at all' };
+  if (blocksRequis > solde) return { etat: 'REFUSE', pourquoi: 'it would place more blocks than you hold' };
+  return { etat: 'OK', p, sqrtVise, L, ethRequis, blocksRequis };
+}
+
 export function mathsNaissanceInstantanee({ aPlacer, quoteEthWei, blockEst1 = true, espacement = TICK_SPACING_POOL }) {
   if (typeof aPlacer !== 'bigint' || aPlacer <= 0n) {
     return { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive token amount to place' };
@@ -285,15 +321,41 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     if (typeof quoteEthWei !== 'bigint') {
       return { etat: 'REFUSE', pourquoi: 'Instant Birth quoteEthWei must be a bigint' };
     }
-    if (quoteEthWei <= 0n) {
-      return { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — quote dust refused' };
-    }
-    /* MAIN: floor 0.0003 ETH seed (CreateRouter floor). Life fee FRAIS_OUVERTURE stays separate. */
-    if (Number(chaine) === 8453 && quoteEthWei < CREATE_FEE_WEI_FLOOR) {
-      return { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least 0.0003 ETH in the pool (CreateRouter floor)' };
+    if (quoteEthWei < 0n) {
+      return { etat: 'REFUSE', pourquoi: 'Instant Birth seed cannot be negative' };
     }
     if (sqrtExistant !== 0n) {
       return { etat: 'REFUSE', pourquoi: 'Instant Birth opens a new pool — this market already exists (use Add liquidity)' };
+    }
+    /* ⛔⛔ NAISSANCE SANS APPORT : `quoteEthWei === 0n` OUVRE LA POOL A 100 % BLOCK, et c est ce que
+     *     Phil a demande le 2026-09-26 — « branche liquiditeUnilaterale sur Instant Birth, 0.001 ETH
+     *     pour le createur ». Le createur ne paie plus QUE le frais de naissance ; il ne met plus un
+     *     wei dans la pool. Les acheteurs font monter le prix.
+     *   ⛔ POURQUOI CE CHANGEMENT EXISTE, ET C EST UNE MESURE, PAS UN GOUT : 558 transactions de
+     *     creation B20 sur Base en 44 h, ZERO par notre chemin paye ; 685 pools B20 ouvertes en
+     *     24 h, ZERO sur notre hook. Le concurrent ouvre en 100 % coin sans apport et l ecrit sur
+     *     sa page (« The pool starts 100% coin — buyers walk the price up »). Nous exigions
+     *     0,0003 ETH de seed EN PLUS du frais : on demandait un apport a des gens qui n en mettent
+     *     nulle part ailleurs.
+     *   ⛔ LE CALCUL N EST PAS NEUF : c est EXACTEMENT celui du « Add liquidity », qui sait deja
+     *     ouvrir une pool inexistante en derivant le prix de la valorisation visee. Aucune
+     *     mathematique nouvelle n a ete ecrite pour ce chemin — c est le cas ou il ne faut surtout
+     *     pas inventer.
+     *   ⛔ LE SEED A DEUX COTES RESTE POSSIBLE : passer un `quoteEthWei > 0` garde l ancien chemin,
+     *     plancher compris. On ajoute une porte, on n en ferme aucune. */
+    if (quoteEthWei === 0n) {
+      const u = calculUnilateral({ entiere, valo, tickCourant, blockEst1, dec, decDevise, aPlacer,
+        sqrtExistant, solde });
+      if (u.etat !== 'OK') return u;
+      p = { ...u.p, prixImpose: false, espacement: TICK_SPACING_POOL, naissance: true, sansApport: true };
+      sqrtVise = u.sqrtVise;
+      L = u.L;
+      ethRequis = u.ethRequis;      /* ⛔ vaut 0 par construction : `calculUnilateral` le REFUSE sinon */
+      blocksRequis = u.blocksRequis;
+    } else {
+    /* MAIN: floor 0.0003 ETH seed (CreateRouter floor). Life fee FRAIS_OUVERTURE stays separate. */
+    if (Number(chaine) === 8453 && quoteEthWei < CREATE_FEE_WEI_FLOOR) {
+      return { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least 0.0003 ETH in the pool (CreateRouter floor)' };
     }
     const math = mathsNaissanceInstantanee({ aPlacer, quoteEthWei, blockEst1, espacement: TICK_SPACING_POOL });
     if (math.etat !== 'OK') return { etat: 'REFUSE', pourquoi: math.pourquoi };
@@ -304,25 +366,14 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     ethRequis = math.ethRequis;
     blocksRequis = math.blocksRequis;
     if (blocksRequis > solde) return { etat: 'REFUSE', pourquoi: 'it would place more blocks than you hold' };
+    }
   } else {
-    /* ── prix, plage, liquidite — UNILATERAL (Add liquidity / non-birth Launch) ── */
-    const pm = parametresLancement({ supply: entiere, valorisationEth: valo, espacement: TICK_SPACING_POOL,
-      tickCourant: tickCourant === null ? null : (blockEst1 ? tickCourant : -tickCourant), ecartDecimales: dec - decDevise });
-    if (pm.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pm.pourquoi };
-    p = blockEst1 ? pm : { ...pm, tickBas: -pm.tickHaut, tickHaut: -pm.tickBas, tickPrix: -pm.tickPrix };
-    sqrtVise = sqrtExistant !== 0n ? sqrtExistant
-      : sqrtPriceDepuisPrix({ prixNum: BigInt(Math.round(valo * 1e6)), prixDen: entiere * 1000000n,
-        decDevise, decBlock: dec, deviseEst0: blockEst1 });
-    const sqA = sqrtDeTick(p.tickBas), sqB = sqrtDeTick(p.tickHaut);
-    L = liquiditeUnilaterale({ montant: aPlacer, cote: blockEst1 ? 1 : 0, sqrtMin: sqA, sqrtMax: sqB });
-    if (!L) return { etat: 'REFUSE', pourquoi: 'no liquidity is computable for this range' };
-    const m = montantsPosition(L, sqrtVise, sqA, sqB);
-    ethRequis = blockEst1 ? m.montant0 : m.montant1;
-    blocksRequis = blockEst1 ? m.montant1 : m.montant0;
-    /* ⛔ TROIS REFUS, AUCUN REDONDANT — repris tels quels de l ecran qui a marche. */
-    if (ethRequis !== 0n) return { etat: 'REFUSE', pourquoi: 'the range is on the wrong side of the price — it would ask for ETH' };
-    if (blocksRequis === 0n) return { etat: 'REFUSE', pourquoi: 'this would place nothing at all' };
-    if (blocksRequis > solde) return { etat: 'REFUSE', pourquoi: 'it would place more blocks than you hold' };
+    /* ⛔ LE MEME CALCUL QUE LA NAISSANCE SANS SEED — une seule fonction, deux appelants. L ecrire
+     *   deux fois aurait fait deriver la moitie qu on relit le moins. */
+    const u = calculUnilateral({ entiere, valo, tickCourant, blockEst1, dec, decDevise, aPlacer,
+      sqrtExistant, solde });
+    if (u.etat !== 'OK') return u;
+    p = u.p; sqrtVise = u.sqrtVise; L = u.L; ethRequis = u.ethRequis; blocksRequis = u.blocksRequis;
   }
 
   const base = { cle, blockEst1, supply, dec, solde, entiere, poolExiste: sqrtExistant !== 0n, tickCourant,
@@ -366,7 +417,37 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     const slack1 = blockEst1 ? blocksRequis : ethRequis;
     max0 = (slack0 * 102n) / 100n;
     max1 = (slack1 * 102n) / 100n;
-    if (max0 === 0n || max1 === 0n) {
+    /* ⛔⛔ DEUX NAISSANCES, DEUX ATTENTES OPPOSEES SUR CE MEME ZERO — et c est le commentaire
+     *     au-dessus qui l avait deja vu : « Unilateral keeps 0n on ETH ».
+     *
+     *     NAISSANCE A DEUX COTES : un plafond nul est un DEFAUT. Le mint ne pourrait pas tirer le
+     *     cote devise, et la pool naitrait amputee. Le refus fail-closed reste, mot pour mot.
+     *
+     *     NAISSANCE SANS APPORT : un plafond nul du cote devise est la valeur VOULUE. On ne depense
+     *     aucun ETH, donc le plafond doit etre exactement zero — et c est un plafond NON NUL qui
+     *     serait le defaut, parce qu il autoriserait le mint a tirer de l ETH qu on n a pas promis.
+     *   ⇒ La garde n est pas affaiblie, elle est RETOURNEE pour ce chemin : on exige zero d un cote
+     *     ET strictement positif de l autre. Un plan ou LES DEUX seraient nuls ne place rien, et
+     *     reste refuse dans les deux cas. */
+    const capBlock = blockEst1 ? max1 : max0;
+    const capDevise = blockEst1 ? max0 : max1;
+    if (p && p.sansApport) {
+      /* ⛔⛔ CE REFUS-CI EST INATTEIGNABLE DEPUIS LE CODE ACTUEL, ET C EST DIT PLUTOT QUE TU.
+       *     `calculUnilateral` refuse deja en amont tout plan dont `ethRequis` n est pas nul, donc
+       *     `capDevise` vaut forcement 0 quand on arrive ici. Une mutation qui DESACTIVE ce test ne
+       *     fait echouer aucun cas — verifie, pas suppose.
+       *   ⇒ Il reste comme defense en profondeur : le jour ou quelqu un assouplira la garde amont,
+       *     c est celui-ci qui empechera le mint de tirer de la devise jamais promise. Mais il ne
+       *     faut pas le compter comme « teste » : il ne l est pas, et un test qui pretendrait le
+       *     couvrir serait un test vert sur un chemin mort. */
+      if (capDevise !== 0n) {
+        return { etat: 'REFUSE', pourquoi: 'no-seed Instant Birth refused: the currency cap is not zero — '
+          + 'the mint could pull currency the creator never offered (fail-closed)' };
+      }
+      if (capBlock === 0n) {
+        return { etat: 'REFUSE', pourquoi: 'no-seed Instant Birth refused: it would place no blocks at all (fail-closed)' };
+      }
+    } else if (max0 === 0n || max1 === 0n) {
       return { etat: 'REFUSE', pourquoi: 'Instant Birth mint caps refused — ETH or token max would be 0 (fail-closed)' };
     }
   } else {
