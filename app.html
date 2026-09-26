@@ -1998,7 +1998,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-door-first" hidden>Build <code>20260927-door-first</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-offer-first" hidden>Build <code>20260927-offer-first</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4737,9 +4737,22 @@ document.addEventListener('click', (ev) => {
 
 function texteRefusConnexion(siWalletPresent) {
   if (window.ethereum) return siWalletPresent;
-  return 'No wallet found in this browser. Open this page from inside your wallet app '
-    + '(Coinbase Wallet, MetaMask…), or install one first — it never asks for a key, only for '
-    + 'permission to read an address.';
+  /* ⛔⛔ CETTE PHRASE MENAIT AVEC LE CHEMIN LE PLUS DUR, ET C ETAIT LA MOITIE RESTANTE DU DEFAUT
+   *     D ORDRE. Le bloc a ete reordonne le 2026-09-27 pour que la porte sans application passe
+   *     devant le bouton impossible — mais le TEXTE disait toujours d abord « ouvre cette page
+   *     depuis ton application wallet », c est-a-dire exactement ce que quelqu un sans wallet ne
+   *     PEUT PAS faire. Deplacer des elements sans corriger la phrase laisse le refus pointer vers
+   *     l impasse : la moitie d un correctif ressemble a un correctif.
+   *   ⇒ ON OFFRE D ABORD CE QUI EST POSSIBLE ICI, et on garde l autre chemin pour ceux qui ont
+   *     DEJA l application. Rien n est retire : les deux sorties restent nommees, dans l ordre ou
+   *     elles sont FAISABLES.
+   * ⛔ LA REASSURANCE SUR LA CLE N EST PAS PERDUE : elle vit sous le bouton de la porte — « It never
+   *   asks for a key or a seed phrase ». La repeter ici allongerait un refus que personne ne lit en
+   *   entier, et un texte qu on saute revient a ne rien dire.
+   * ⛔ UNE SEULE PHRASE POUR LES NEUF REFUS : c est tout l objet de cette fonction. La dupliquer
+   *   ferait deriver celle qu on relit le moins. */
+  return 'No wallet in this browser — you can make one right here in a few seconds, no app to '
+    + 'install. If you already have Coinbase Wallet or MetaMask, open this page inside it instead.';
 }
 
 async function connecter() {

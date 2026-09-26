@@ -72,17 +72,31 @@ const nu = depouiller(html);
 v('⛔ la phrase du cas « aucun wallet » existe une seule fois, dans une seule fonction', () => {
   const corps = corpsNuDe('function texteRefusConnexion(');
   assert.ok(corps, 'texteRefusConnexion() est introuvable : les neuf refus n ont plus de source unique');
-  assert.match(corps, /No wallet found in this browser/,
+  /* ⛔⛔ LA PHRASE A CHANGE LE 2026-09-27, ET LA RAISON EST MESUREE. L ancienne menait avec « Open
+   *     this page from inside your wallet app » — exactement ce que quelqu un SANS wallet ne peut
+   *     pas faire. Le bloc avait deja ete reordonne pour mettre la porte sans application devant le
+   *     bouton impossible ; le TEXTE, lui, pointait encore vers l impasse. La moitie d un correctif
+   *     ressemble a un correctif.
+   *   ⇒ L ordre des deux sorties suit maintenant leur FAISABILITE : d abord ce qui marche ici,
+   *     ensuite l application pour qui l a deja. AUCUNE sortie n a ete retiree. */
+  assert.match(corps, /No wallet in this browser/,
     'la fonction ne porte plus la phrase du cas sans wallet');
-  /* ⛔ ELLE DOIT DIRE QUOI FAIRE, pas seulement ce qui manque. « aucun wallet » sans suite laisse
-   *   le visiteur devant un mur ; c est ce mur qui a ete tape 25 fois. */
-  assert.match(corps, /Open this page from inside your wallet app/,
-    'la phrase ne donne plus de suite possible : nommer la cause sans dire quoi faire, c est un mur');
+  /* ⛔ ELLE DOIT DIRE QUOI FAIRE, pas seulement ce qui manque. « aucun wallet » sans suite laisse le
+   *   visiteur devant un mur ; c est ce mur qui a ete tape 29 fois pour 24 visites le 2026-09-26. */
+  assert.match(corps, /make one right here/,
+    'la phrase ne donne plus de suite POSSIBLE : nommer la cause sans dire quoi faire, c est un mur');
+  /* ⛔⛔ ET LE CHEMIN FAISABLE DOIT VENIR EN PREMIER, pas seulement etre present. Une phrase qui
+   *     contient les deux sorties mais COMMENCE par la plus dure reconduit le defaut en le
+   *     documentant. On compare donc les POSITIONS, pas la presence. */
+  assert.ok(corps.indexOf('make one right here') < corps.indexOf('open this page inside it'),
+    'la phrase mene encore avec le chemin le plus dur : le possible doit passer devant');
+  assert.match(corps, /Coinbase Wallet or MetaMask/,
+    'la phrase ne nomme plus l autre sortie pour qui a deja une application');
   /* ⛔ ET ELLE DOIT RENDRE L AUTRE PHRASE QUAND UN WALLET EST LA : une fonction qui repond toujours
    *   pareil n est pas une mesure, c est une constante. */
   assert.match(corps, /if \(window\.ethereum\) return siWalletPresent;/,
     'le cas « wallet present » ne rend plus le message d origine : tous les refus diraient la meme chose');
-  const combien = (nu.match(/No wallet found in this browser/g) || []).length;
+  const combien = (nu.match(/No wallet in this browser/g) || []).length;
   assert.equal(combien, 1,
     'la phrase est ecrite ' + combien + ' fois : une copie a la main derive, et c est la copie faible qui reste');
 });
