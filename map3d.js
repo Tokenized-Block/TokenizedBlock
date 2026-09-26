@@ -398,12 +398,51 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
        *   ⛔ LE SEUIL PROPRE EST DONC BAS, ET IL RESTE : sous 14 px une rotation ne se voit pas, et
        *     la calculer serait du bruit. Le plancher de 20 px le rend inoffensif en pratique — mais
        *     il protege si le plancher change un jour. */
-      let tourne = '';
-      if (!mouvementReduit && h.t * k >= 14 && Number.isFinite(h.spin)) {
-        const deg = (h.spin0 + maintenant * h.spin * 0.006) % 360;
-        tourne = ' rotate(' + deg.toFixed(1) + 'deg)';
+      /* ⛔⛔ LA ROTATION VA SUR LE CUBE SEUL, PAS SUR LA TUILE. Premiere version : je l ajoutais a la
+       *     transformation de `.bloc` — qui contient le dessin ET l etiquette du nom. Resultat vu
+       *     par Phil sur sa capture : tous les NOMS penchaient avec les cubes, illisibles.
+       *     « garde les noms droits, juste les cubes qui flottent ».
+       *   ⇒ Un effet applique au bon endroit visuellement peut etre applique au mauvais endroit
+       *     dans l arbre. Le conteneur porte la POSITION ; seul le dessin porte la ROTATION.
+       *   ⛔ Le SVG est retenu une fois (`h._svg`) : le rechercher a chaque image, pour ~170 blocks
+       *     a 60 images par seconde, serait 10 000 recherches par seconde pour un resultat
+       *     invariant. Et l origine doit etre posee explicitement : un SVG tourne autour de son
+       *     coin (0 0) par defaut, pas de son centre — il partirait en orbite au lieu de pivoter. */
+      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
+      if (h._svg === undefined) {
+        h._svg = h.el.querySelector('svg') || null;
+        if (h._svg) h._svg.style.transformOrigin = '50% 50%';
       }
-      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')' + tourne;
+      if (h._svg) {
+        /* ⛔⛔ IL FLOTTE EN X, Y ET Z — PAS EN ROND SUR UN PLAN. Phil : « il flotte en X Y Z ». Ma
+         *     premiere version posait un `rotate(Ndeg)` plat : une toupie vue de face, pas un objet
+         *     qui derive dans l espace. Un seul axe ne peut pas donner l impression de volume.
+         *   ⛔ MAIS CE DESSIN EST UN SVG ISOMETRIQUE, DONC PLAT, et je ne le cache pas : pousse
+         *     loin, une carte plate qui bascule se trahit — elle s aplatit en trait au passage des
+         *     90°. Les amplitudes sont donc PETITES (9°, 12°, 5°) : a ces angles l oeil lit un
+         *     flottement, jamais une feuille qui tourne. C est une limite du support, pas un
+         *     reglage de gout.
+         *   ⛔ TROIS PERIODES DIFFERENTES ET PREMIERES ENTRE ELLES : avec un seul rythme les trois
+         *     axes reviendraient ensemble au point de depart et le mouvement se lirait comme une
+         *     boucle. Decalees, il ne se repete jamais a l oeil.
+         *   ⛔ LA PERSPECTIVE EST OBLIGATOIRE : sans elle, `rotateX`/`rotateY` ne font que
+         *     COMPRESSER le dessin — une deformation, pas une profondeur. */
+        let tourne = '';
+        if (!mouvementReduit && h.t * k >= 14 && Number.isFinite(h.spin)) {
+          /* ⛔ LA PHASE EST EN RADIANS, ET C EST UNE CORRECTION. Ma premiere formule multipliait la
+           *   phase par 0,017453 — le facteur degre->radian — en le traitant comme une frequence.
+           *   Resultat mesure par le test : 0,40 deg/s pour le cube le plus lent, c est-a-dire
+           *   immobile a l oeil. Un facteur juste employe pour autre chose que ce qu il signifie
+           *   donne un resultat qui a l air raisonnable et ne l est pas. */
+          const b = (h.spin0 + maintenant * h.spin * 0.012) * (Math.PI / 180);
+          const ax = 9 * Math.sin(b);
+          const ay = 12 * Math.sin(b * 0.61 + 1.1);
+          const az = 5 * Math.sin(b * 0.37 + 2.3);
+          tourne = 'perspective(420px) rotateX(' + ax.toFixed(1) + 'deg) rotateY(' + ay.toFixed(1)
+            + 'deg) rotateZ(' + az.toFixed(1) + 'deg)';
+        }
+        if (tourne !== h._tourne) { h._svg.style.transform = tourne; h._tourne = tourne; }
+      }
       const z = Math.max(1, Math.round(200000 / p.zc));
       if (z !== h._z) { h.el.style.zIndex = String(z); h._z = z; }
       const loin = Math.min(1, Math.max(0, (p.z2 + R) / (2 * R)));
