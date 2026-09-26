@@ -1963,7 +1963,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-naissance-sans-apport" hidden>Build <code>20260926-naissance-sans-apport</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-ecran-sans-apport" hidden>Build <code>20260926-ecran-sans-apport</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9421,23 +9421,21 @@ async function calculerLancement() {
         /* Instant Birth default on ETH (Real): two-sided seed. Non-ETH stays unilateral Add path. */
         let quoteEthWei = null;
         if (!deviseLancement) {
-          quoteEthWei = await preparerQuoteEthDefaut(false);
-          if (Number(CHAINE) === 8453) {
-            if (quoteEthWei == null) {
-              /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
-            } else if (quoteEthWei <= 0n) {
-              plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — quote dust / empty refused' };
-            } else {
-              const minOracle = weiPourDollars(1, ethUsd);
-              if (minOracle == null) {
-                /* tip 20260922-eth-fixe: oracle unread → fixed seed floor, do not REFUSE */ quoteEthWei = CREATE_FEE_WEI_FLOOR;
-              } else if (quoteEthWei < CREATE_FEE_WEI_FLOOR || quoteEthWei < minOracle) {
-                plan = { etat: 'REFUSE', pourquoi: 'ETH seed is dust — need at least 0.0003 ETH in the pool' };
-              }
-            }
-          } else if (quoteEthWei == null || quoteEthWei <= 0n) {
-            plan = { etat: 'REFUSE', pourquoi: 'Instant Birth needs a positive ETH seed for the pool — zero-ETH books refused' };
-          }
+          /* ⛔⛔ NAISSANCE SANS APPORT — Phil, 2026-09-26 : « branche l ecran sur la naissance sans
+           *     apport », « 0.001 ETH pour le createur ». La pool s ouvre a 100 % block ; le
+           *     createur ne met plus un wei dedans et ne paie que le frais de naissance.
+           *   ⛔ CE N EST PAS UN GOUT, C EST UNE MESURE. 558 creations B20 sur Base en 44 h, ZERO
+           *     par notre chemin paye ; 685 pools B20 en 24 h, ZERO sur notre hook. Le concurrent
+           *     ouvre en 100 % coin sans apport et l ecrit sur sa page. Nous exigions 0,0003 ETH de
+           *     seed EN PLUS du frais : on demandait un apport a des gens qui n en mettent nulle
+           *     part ailleurs.
+           *   ⛔ TOUT LE CALCUL D ORACLE ET SES REFUS DE POUSSIERE DISPARAISSENT AVEC LE SEED. Ils
+           *     n existaient que pour borner un apport qu on ne demande plus. Les garder aurait
+           *     laisse du code qui refuse au nom d une regle abolie — et un jour quelqu un aurait
+           *     lu le refus comme la regle.
+           *   ⚠️ Le module accepte toujours un `quoteEthWei > 0` (chemin a deux cotes, plancher
+           *     compris) : la porte reste ouverte, c est seulement l ecran qui ne la prend plus. */
+          quoteEthWei = 0n;
         }
         if (!plan) {
         plan = await planLancement({ rpc, chaine: CHAINE, jeton: adr, compte, valorisationEth: valo, partPourMille,
@@ -9670,11 +9668,24 @@ function peindrePlan(plan, adr) {
       + (plan.poolExiste ? ' · already exists, its current price applies' : ''),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
+    /* ⛔⛔ CETTE PHRASE ANNONCAIT UN APPORT QUI N EXISTE PLUS. Elle disait « Instant Birth puts X ETH
+     *     into the locked pool » ; avec la naissance sans apport elle aurait affiche « puts 0 ETH »,
+     *     ce qui est vrai au chiffre et faux au sens — le lecteur comprendrait qu on a rate quelque
+     *     chose, pas qu on ne lui demande rien.
+     *   ⛔ ET ELLE NE PROMET PAS UNE POOL GRATUITE : le frais de naissance reste du, et le micro-achat
+     *     qui fait voir une premiere transaction aux indexeurs coute quelques wei. On les nomme tous
+     *     les deux, parce qu une depense tue est une mauvaise surprise au moment de signer. */
     (plan.naissance
-      ? ('Instant Birth puts ' + ethLisible(plan.quoteEthWei || plan.ethRequis) + ' ETH into the locked pool, plus a tiny first buy so indexers see a trade.'
-        + (feeDejaPaye
-          ? ' The 0.001 ETH opening fee is already paid — this seed stays in your market.'
-          : ' That is on top of the 0.001 ETH opening fee, paid once, and it stays in your market.'))
+      ? ((plan.p && plan.p.sansApport)
+        ? ('You put NO ETH into the pool: it opens 100 % blocks, and buyers walk the price up. '
+          + (feeDejaPaye
+            ? 'The 0.001 ETH opening fee is already paid.'
+            : 'You pay the 0.001 ETH opening fee, once.')
+          + ' A tiny first buy is added so indexers see a trade.')
+        : ('Instant Birth puts ' + ethLisible(plan.quoteEthWei || plan.ethRequis) + ' ETH into the locked pool, plus a tiny first buy so indexers see a trade.'
+          + (feeDejaPaye
+            ? ' The 0.001 ETH opening fee is already paid — this seed stays in your market.'
+            : ' That is on top of the 0.001 ETH opening fee, paid once, and it stays in your market.')))
       : 'You put in no ETH: buyers bring it.'),
     'Locked forever: nobody can withdraw these blocks, and this value sets the starting price.',
     /* ⛔⛔ LE CREATEUR EST PAYE, ET IL NE LE SAVAIT PAS. Cette ligne n existait QUE pour
@@ -9735,12 +9746,24 @@ function peindrePlan(plan, adr) {
     const besoin = fraisEncore + seedBesoin;
     if (BigInt(soldeEthNat) < besoin) {
     e.className = 'note wKo'; vieAutoArreter();
+    /* ⛔ CE REFUS NOMMAIT UN « pool seed » QU ON NE DEMANDE PLUS. Sans apport, ce qui manque est le
+     *   frais de naissance et le micro-achat — dire « seed » enverrait le createur chercher une
+     *   somme qu on ne lui reclame pas, et il conclurait qu il n a pas assez alors que le montant
+     *   reel est bien plus petit. On nomme donc EXACTEMENT ce qui manque, selon le chemin pris. */
+    const sansApport = !!(plan.p && plan.p.sansApport);
     e.textContent = plan.naissance
-      ? (feeDejaPaye && !inscrireDust
-        ? 'Not enough ETH for pool seed + first micro-swap — top up, then work it out again.'
-        : (inscrireDust
-          ? 'Not enough ETH for V8 register dust (0.0003) + pool seed + first micro-swap — top up, then work it out again.'
-          : 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.'))
+      ? (sansApport
+        ? ((feeDejaPaye && !inscrireDust)
+          ? 'Not enough ETH for the first micro-swap — top up, then work it out again.'
+          : (inscrireDust
+            ? 'Not enough ETH for the V8 register dust (0.0003) + the first micro-swap — top up, then work it out again.'
+            : 'Not enough ETH for the 0.001 ETH opening fee + the first micro-swap — top up, then work it out again. '
+              + 'The pool itself costs you nothing.'))
+        : (feeDejaPaye && !inscrireDust
+          ? 'Not enough ETH for pool seed + first micro-swap — top up, then work it out again.'
+          : (inscrireDust
+            ? 'Not enough ETH for V8 register dust (0.0003) + pool seed + first micro-swap — top up, then work it out again.'
+            : 'Not enough ETH for open fee + pool seed + first micro-swap — top up, then work it out again.')))
       : 'Not enough ETH for the one-time 0.001 ETH life fee — top up, then work it out again.';
     return;
     }

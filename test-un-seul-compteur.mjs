@@ -30,7 +30,28 @@ const v = (nom, fn) => { fn(); n++; };
  *    vide. C est le vert qui a deja fait passer un site mort pour deploye. */
 const d = html.indexOf('function peindrePlan(');
 assert.ok(d > 0, 'peindrePlan introuvable — cette garde ne protege plus rien');
-const bloc = html.slice(d, d + 12000);
+/* ⛔⛔ LA FENETRE FIXE A CASSE, ET PAS SUR LE BON DEFAUT. Elle lisait `html.slice(d, d + 12000)`.
+ *     Le 2026-09-26, la naissance sans apport a allonge `peindrePlan` et `signaturesVisibles` est
+ *     passe a 12 738 caracteres du debut : le test est devenu ROUGE alors que l invariant qu il
+ *     garde etait INTACT — verifie a la main AVANT de toucher quoi que ce soit, parce qu un rouge
+ *     se comprend avant de se corriger.
+ *   ⛔ ON NE MONTE PAS LE NOMBRE. Un 12 000 devenu 14 000 recasserait au prochain commentaire, et
+ *     entre-temps il aurait pu deborder sur la fonction SUIVANTE et verdir sur elle — un faux vert
+ *     est pire qu un faux rouge. On borne par EQUILIBRAGE D ACCOLADES, comme les autres sondes de
+ *     ce depot : la borne devient la fonction elle-meme, pas une longueur devinee. */
+function corpsEquilibre(src, depart) {
+  let prof = 0, dans = null;
+  for (let i = src.indexOf('{', depart); i < src.length; i++) {
+    const c = src[i];
+    if (dans) { if (c === dans && src[i - 1] !== '\\') dans = null; continue; }
+    if (c === '"' || c === "'" || c === '`') { dans = c; continue; }
+    if (c === '{') prof++;
+    else if (c === '}' && !--prof) return src.slice(depart, i + 1);
+  }
+  return null;
+}
+const bloc = corpsEquilibre(html, d);
+assert.ok(bloc, 'le corps de peindrePlan n a pas pu etre borne — cette garde ne protege plus rien');
 assert.ok(bloc.includes('txsApercu'), 'txsApercu absent de peindrePlan — extraction ratee');
 
 v('le bouton ne dit plus « Approval N of M »', () => {
