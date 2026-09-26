@@ -60,7 +60,7 @@
       <tr><td>creation bytes</td><td><b id="vOctets">—</b></td></tr>
       <tr><td>gas (simulated)</td><td><b>714 192</b></td></tr>
     </table>
-    <p class="note">⛔ Any wallet with gas can send this. The contract has <b>no owner</b>, so the sender
+    <p class="note">Any wallet with gas can send this. The contract has <b>no owner</b>, so the sender
       gains nothing — <b>do not sign from the fee wallet</b>, it would expose it for no reason.</p>
   </div>
 
@@ -101,7 +101,7 @@ let compte = null;
 function dire(el, txt, cls) { el.textContent = txt; el.className = 'note' + (cls ? ' ' + cls : ''); }
 
 try {
-  if (!P) throw new Error('payload absent — regenerer avec: node preparer-locker-a-signer.mjs');
+  if (!P) throw new Error('Payload missing — regenerate this page with the preparation script');
   document.getElementById('vWallet').textContent = P.constructeur.feeWallet;
   document.getElementById('vPosm').textContent = P.constructeur.posm;
   document.getElementById('vPart').textContent = P.constructeur.partCreateurPourCent
@@ -109,7 +109,7 @@ try {
   /* ⛔ LA LONGUEUR EST RECALCULEE, PAS RECOPIEE : si un octet manquait, ce chiffre ne tomberait pas
    *   juste et la page le dirait au lieu de laisser signer. */
   const octets = (P.data.length - 2) / 2;
-  document.getElementById('vOctets').textContent = octets + (octets === P.octetsDeCreation ? ' ✓' : ' ⛔ ATTENDU ' + P.octetsDeCreation);
+  document.getElementById('vOctets').textContent = octets + (octets === P.octetsDeCreation ? ' ✓' : ' — EXPECTED ' + P.octetsDeCreation);
   if (octets !== P.octetsDeCreation) {
     dire(sortie, '⛔ The payload length does not match what was measured at build time. Do not sign.', 'ko');
     document.getElementById('bConnecter').disabled = true;

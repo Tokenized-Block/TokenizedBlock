@@ -1994,7 +1994,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-sphere-3d" hidden>Build <code>20260926-sphere-3d</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-bourse-fermee" hidden>Build <code>20260926-bourse-fermee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2597,6 +2597,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
 import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange } from './paires.js';
+import { phraseMarcheActions } from './heures-marche.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
 import { faceDuBlock, validerFace } from './face.js';
@@ -8571,7 +8572,16 @@ function majDeviseEchange(v) {
   const nAction = $('#peAction');
   if (nAction) {
     nAction.hidden = !action;
-    if (action) nAction.textContent = 'Coinbase tokenized stocks are only for eligible jurisdictions outside the U.S.; the issuer can block an address, and then the trade fails before anything moves. One ' + sym + ' is not always one share (dividends and splits change the ratio).';
+    /* ⛔⛔ ET L ETAT DE LA BOURSE, AU MEME ENDROIT ET AU MEME MOMENT. Notre prix vient du marche
+     *     ON-CHAIN de l action (DexScreener), qui s echange 24/7 : il n est donc PAS fige, et il ne
+     *     faut pas laisser croire le contraire. Mais quand la bourse est fermee, RIEN n arbitre ce
+     *     prix vers l action : c est un marche sur la prochaine ouverture, pas le cours du titre.
+     *     Quelqu un qui echange un samedi doit le lire ICI, pas le deviner.
+     *   ⛔ ET LA PHRASE NE DIT JAMAIS « OUVERT » : un calendrier local ignore les feries et les
+     *     haltes — la doc Chainlink le dit de ses propres feeds. `heures-marche.js` ne rend que
+     *     FERME (certain) ou HEURES_NORMALES (avec ce qu il n a PAS verifie). Une affirmation plus
+     *     forte que la mesure serait exactement le defaut qu on corrige. */
+    if (action) nAction.textContent = 'Coinbase tokenized stocks are only for eligible jurisdictions outside the U.S.; the issuer can block an address, and then the trade fails before anything moves. One ' + sym + ' is not always one share (dividends and splits change the ratio). ' + phraseMarcheActions();
   }
   void majSoldeDeviseEchange();
 }
