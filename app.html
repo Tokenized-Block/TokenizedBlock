@@ -1599,7 +1599,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- ⛔ LA LEGENDE PARLAIT ENCORE DU CUBE APRES SON RETRAIT. Une legende qui nomme un objet
                absent fait chercher au visiteur quelque chose qui n existe pas — et c est Phil qui
                l a vu sur sa propre capture, pas moi. -->
-          <p class="note" id="bwAide">Drag it to turn. The sphere is its wiring — each dot a neuron, each line a link.
+          <p class="note" id="bwAide">Drag it to turn. The block is the cube; its brain lives inside — each dot a neuron, each line a link.
             The glow around it is its mood, and it leans toward whichever wing is firing faster.</p>
         </div>
       </div>
@@ -1998,7 +1998,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-sphere-sans-cube" hidden>Build <code>20260926-bourse-fermee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-brain-inside-cube" hidden>Build <code>20260926-brain-inside-cube</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14471,6 +14471,42 @@ function bwProjeter([x, y, z], cx, cy, r) {
   return [cx + x1 * r * k, cy + y1 * r * k, z2, k];
 }
 
+/* Le cube du block : ses huit coins, ses douze aretes, et la profondeur de chacune.
+ * ⚠️ CE N EST PAS SA FACE GRAVEE. La face vient de la chaine et se dessine ailleurs ; ici c est la
+ *   BOITE, aux couleurs du theme. Le dire evite qu on lise une identite dans une forme qui n en
+ *   porte aucune.
+ * ⛔ MEME PROJECTION QUE LA SPHERE, donc MEME rotation : deux projections separees tourneraient
+ *   independamment et la sphere sortirait du cube en plein geste. */
+function aretesDuCube(cx, cy, R) {
+  const S = [-1, 1], coins = [];
+  for (const x of S) for (const y of S) for (const z of S) coins.push([x, y, z]);
+  const p = coins.map((v) => bwProjeter(v, cx, cy, R));
+  const out = [];
+  /* les 12 aretes : deux coins voisins ne different que par UNE coordonnee */
+  for (let i = 0; i < 8; i++) {
+    for (let j = i + 1; j < 8; j++) {
+      const d = coins[i].reduce((s, v, k) => s + (v !== coins[j][k] ? 1 : 0), 0);
+      if (d === 1) out.push({ a: p[i], b: p[j], z: (p[i][2] + p[j][2]) / 2 });
+    }
+  }
+  return out.sort((u, v) => u.z - v.z);
+}
+
+/* ⛔ L ARRIERE DU CUBE EST PLUS PALE QUE L AVANT, ET C EST CE QUI DONNE LE VOLUME. Une boite peinte
+ *   d une seule densite se lit comme un hexagone plat : c est le contraste avant/arriere qui dit
+ *   qu il y a un dedans. */
+function traitCube(ctx, f, th, arriere) {
+  const prof = (f.z + 1) / 2;
+  ctx.strokeStyle = arriere
+    ? 'hsl(' + th + ' 55% 55% / ' + (0.10 + 0.14 * prof).toFixed(3) + ')'
+    : 'hsl(' + th + ' 75% ' + (62 + 24 * prof).toFixed(0) + '% / ' + (0.34 + 0.46 * prof).toFixed(2) + ')';
+  ctx.lineWidth = arriere ? 0.7 : 1.0 + 1.1 * prof;
+  ctx.beginPath();
+  ctx.moveTo(f.a[0], f.a[1]);
+  ctx.lineTo(f.b[0], f.b[1]);
+  ctx.stroke();
+}
+
 /* ⛔⛔ CE QUE LE CERVEAU RESSENT, MONTRE AU LIEU D ETRE LISTE. Phil, 2026-09-26 : « essaie de
  *     montrer d une autre maniere ce que ressent le brain ». La liste de droite donne sept nombres
  *     justes et muets : « mood curious » n evoque rien tant qu on ne le relie pas a ce qu on voit.
@@ -14510,14 +14546,25 @@ function dessinerReseau(vu = null) {
   if (!brainEtat) return;
   const liens = brainEtat.c.liens;
   const th = teinteH();
-  /* ⛔⛔ LE CUBE A ETE RETIRE LE 2026-09-26, A LA DEMANDE DE PHIL (capture : cube barre en rouge,
-   *     fleche vers la sphere, « glow up la sphere et retirer le block »). Il avait ete demande par
-   *     lui aussi — « le cube c est le users cube a cote que tu peux faire bouger » — et un test
-   *     VERT exigeait sa presence. Ce test a donc ete RETOURNE : il exige maintenant son ABSENCE,
-   *     pour qu un retour du cube soit un choix et pas une rechute.
-   *   ⇒ La sphere recupere toute la toile : centree, et son rayon n est plus bride par la place
-   *     qu il fallait laisser a cote. */
-  const cx = c.width / 2, cy = c.height / 2, r = Math.min(c.width * 0.42, c.height * 0.46);
+  /* ⛔⛔ TROIS ETATS SUCCESSIFS, ET C EST PHIL QUI TRANCHE. Je note l historique pour que personne
+   *     ne « repare » ceci en croyant corriger une erreur :
+   *       1. cube A COTE de la sphere — « le users cube a cote que tu peux faire bouger » ;
+   *       2. cube RETIRE — capture, cube barre en rouge, « glow up la sphere et retirer le block » ;
+   *       3. cube REMIS AVEC LE CERVEAU DEDANS — « remets le cube et a l interieur le brain en 3d ».
+   *   ⇒ Le troisieme est le meilleur, et pas seulement en gout : le block CONTIENT son cerveau,
+   *     ce qui est exactement ce que l application raconte. Deux objets cote a cote juxtaposaient
+   *     des formes sans dire leur rapport.
+   *
+   * ⛔⛔ CE QUI FAIT QUE LA SPHERE EST « DEDANS » N EST PAS SA TAILLE, C EST L ORDRE DE DESSIN :
+   *     aretes ARRIERE du cube, PUIS la sphere, PUIS aretes AVANT. Tout peindre d un bloc — avant
+   *     ou apres — donnerait une sphere posee devant, ou cachee derriere, jamais CONTENUE. Meme
+   *     principe que le tri des liens : c est l ordre qui fait la 3D, pas la projection. */
+  const cx = c.width / 2, cy = c.height / 2;
+  const R = Math.min(c.width * 0.33, c.height * 0.40);   /* demi-cote du cube */
+  /* ⛔ LE RAYON EST CALCULE POUR TENIR DEDANS, pas choisi a l oeil : les faces sont a la distance R
+   *   du centre, donc une sphere de rayon R les toucherait exactement. 0,62 laisse un jeu visible
+   *   sous TOUTE rotation, y compris quand un coin passe au plus pres. */
+  const r = R * 0.62;
   if (!bwSphere || bwSphereN !== liens.length) { bwSphere = posSphere(liens.length); bwSphereN = liens.length; }
   const pos = bwSphere.map((v) => bwProjeter(v, cx, cy, r));
   const actifs = new Set(vu && vu.indices ? vu.indices : []);
@@ -14531,7 +14578,13 @@ function dessinerReseau(vu = null) {
   const gz = Number(vu && vu.gauche_hz), dz = Number(vu && vu.droite_hz);
   const somme = (Number.isFinite(gz) ? gz : 0) + (Number.isFinite(dz) ? dz : 0);
   const biais = somme > 0 && Number.isFinite(gz) && Number.isFinite(dz) ? (dz - gz) / somme : 0;
-  haloDeLHumeur(ctx, cx, cy, r, vu && vu.phase, part, biais, th);
+  haloDeLHumeur(ctx, cx, cy, R, vu && vu.phase, part, biais, th);
+
+  /* ⛔ LES ARETES DU CUBE SONT CALCULEES UNE FOIS, PUIS COUPEES EN DEUX MOITIES PAR LA PROFONDEUR.
+   *   La moitie arriere se peint AVANT la sphere, l avant APRES — c est tout ce qui separe « le
+   *   cerveau est dans le block » de « deux dessins superposes ». */
+  const aretesCube = aretesDuCube(cx, cy, R);
+  for (const f of aretesCube) if (f.z < 0) traitCube(ctx, f, th, true);
 
   /* ⛔⛔ DU FOND VERS L AVANT. Sans ce tri, un lien de l arriere se dessine par-dessus un lien de
    *     l avant et la sphere s aplatit : on retrouve exactement le noeud de fils qu on voulait
@@ -14575,6 +14628,23 @@ function dessinerReseau(vu = null) {
     ctx.fill();
   }
 
+  /* ⛔⛔ LA MOITIE AVANT DU CUBE, APRES LA SPHERE. C est cette ligne-ci qui fait la difference entre
+   *     « le cerveau est DANS le block » et « une sphere posee sur un dessin de cube » : une arete
+   *     qui passe DEVANT les neurones prouve a l oeil qu il y a une paroi entre lui et eux. */
+  for (const f of aretesCube) if (f.z >= 0) traitCube(ctx, f, th, false);
+
+  /* ⛔ LES SOMMETS AVANT, PETITS ET NETS. Sans eux les aretes flottent : l oeil a besoin des coins
+   *   pour fermer la boite, surtout la ou une arete disparait derriere la sphere. */
+  for (const f of aretesCube) {
+    if (f.z < 0) continue;
+    const prof = (f.z + 1) / 2;
+    ctx.fillStyle = 'hsl(' + th + ' 85% ' + (74 + 16 * prof).toFixed(0) + '% / ' + (0.40 + 0.45 * prof).toFixed(2) + ')';
+    for (const p of [f.a, f.b]) {
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 1.4 * p[3], 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 /* ⛔⛔ TOURNER A LA MAIN, ET LE DIRE. Phil : « le cube c est le users cube a cote que tu peux faire

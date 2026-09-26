@@ -62,14 +62,40 @@ v('⛔⛔ le tri par profondeur existe — c est lui qui fait la 3D', () => {
  *     retrait, et on l aurait « repare » en le supprimant, sans trace. On le RETOURNE : il exige
  *     desormais l ABSENCE. Un retour du cube sera donc un CHOIX — quelqu un devra retoucher ce
  *     test — et jamais une rechute silencieuse. */
-v('⛔ le cube est RETIRE, et son retour serait un choix explicite', () => {
-  assert.ok(!/function dessinerCubeDuBlock\(/.test(nu),
-    'le cube du block est revenu : si c est voulu, ce test doit etre retourne AVEC la raison');
-  assert.ok(!/dessinerCubeDuBlock\(/.test(nu), 'le cube est encore appele quelque part');
-  /* ⛔ ET LA LEGENDE NE DOIT PLUS LE NOMMER : une legende qui designe un objet absent fait chercher
-   *   au visiteur quelque chose qui n existe pas. C est Phil qui l a vu sur sa capture, pas moi. */
-  assert.ok(!/the cube is the block/.test(nu),
-    'la legende parle encore du cube alors qu il n est plus dessine');
+/* ⛔⛔ CE CAS A ETE RETOURNE DEUX FOIS LE MEME JOUR, ET L HISTORIQUE RESTE ECRIT ICI POUR QU IL NE
+ *     SOIT JAMAIS LU COMME UNE ERREUR A CORRIGER. C est Phil qui tranche, pas le test :
+ *       1. cube A COTE — « le users cube a cote que tu peux faire bouger » ;
+ *       2. cube RETIRE — capture, cube barre en rouge, « glow up la sphere et retirer le block » ;
+ *       3. cube REMIS, CERVEAU DEDANS — « remets le cube et a l interieur le brain en 3d ».
+ *   ⇒ Le test suit la decision PRODUIT et en garde la trace. Sans ca, le prochain lecteur verrait
+ *     un aller-retour inexplicable et « nettoierait » l un des deux.
+ *
+ * ⛔⛔ ET CE QU IL TIENT VRAIMENT N EST PAS « le cube existe » : c est L ORDRE DE DESSIN. Un cube
+ *     peint entierement avant ou apres la sphere donnerait une sphere POSEE devant ou CACHEE
+ *     derriere — jamais CONTENUE. Le contenant se prouve par l entrelacement, pas par la presence. */
+v('⛔ le cube contient la sphere : arriere AVANT, avant APRES', () => {
+  assert.ok(/function aretesDuCube\(/.test(nu), 'le cube du block a disparu');
+  const i = nu.indexOf('const aretesCube = aretesDuCube(');
+  assert.notEqual(i, -1, 'les aretes du cube ne sont plus calculees dans le dessin');
+  const jSphere = nu.indexOf('aretes.sort((a, b) => a.z - b.z)');
+  const jArriere = nu.indexOf('if (f.z < 0) traitCube(');
+  const jAvant = nu.indexOf('if (f.z >= 0) traitCube(');
+  assert.notEqual(jArriere, -1, 'la moitie ARRIERE du cube n est plus dessinee');
+  assert.notEqual(jAvant, -1, 'la moitie AVANT du cube n est plus dessinee');
+  /* ⛔ L ORDRE DANS LE SOURCE EST L ORDRE DE PEINTURE : arriere < sphere < avant. Si quelqu un
+   *   deplace une de ces lignes, la sphere cesse d etre dedans SANS qu aucune autre garde bronche. */
+  assert.ok(jArriere < jSphere, 'la moitie arriere du cube se peint APRES la sphere : elle la masquerait');
+  assert.ok(jAvant > jSphere, 'la moitie avant du cube se peint AVANT la sphere : rien ne passerait devant');
+});
+
+v('⛔ la sphere TIENT dans le cube, et son rayon est calcule', () => {
+  /* ⛔ UNE GARDE PEUT ETRE CORRECTE PAR ACCIDENT : un rayon ecrit en dur tomberait juste a une
+   *   taille de toile et deborderait a une autre. Il doit etre DERIVE du demi-cote du cube. */
+  assert.ok(/const r = R \* 0\.\d+;/.test(nu),
+    'le rayon de la sphere n est plus derive du cube : elle pourrait en sortir');
+  const m = nu.match(/const r = R \* (0\.\d+);/);
+  assert.ok(m && Number(m[1]) < 1,
+    'le rayon vaut au moins le demi-cote : la sphere toucherait ou traverserait les faces');
 });
 
 /* ⛔ CE QUE LE CERVEAU RESSENT DOIT ETRE DERIVE D UNE VALEUR REELLE, JAMAIS DECORATIF. */
@@ -144,11 +170,12 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 8, 'compte de cas inattendu : ' + n);
+assert.equal(n, 9, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
 console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
-console.log('   mesures, et le raster 2D intact. Le CUBE A ETE RETIRE : ce test exige maintenant son');
-console.log('   ABSENCE, pour qu un retour soit un choix et pas une rechute.');
-console.log('   Le halo d humeur est derive de la phase — et NON_LU comme MORT n en recoivent aucun.');
+console.log('   mesures, et le raster 2D intact.');
+console.log('   LE CERVEAU EST DANS LE CUBE, et ce qui le prouve est l ORDRE : aretes arriere, puis');
+console.log('   la sphere, puis aretes avant. Le rayon est DERIVE du demi-cote, jamais ecrit en dur.');
+console.log('   Le halo d humeur vient de la phase — et NON_LU comme MORT n en recoivent aucun.');
 console.log('⚠️ NE PROUVE PAS le rendu : ca a ete mesure en navigateur (77 992 pixels peints,');
 console.log('   signature du canvas qui change apres un glissement, 310x233 sans debordement a 375 px).');
