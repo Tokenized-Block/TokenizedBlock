@@ -108,9 +108,37 @@ v('⛔ toutes les adresses sont bien formees', () => {
   }
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+/* ⛔⛔ LES TROIS RETIREES NE DOIVENT PAS REVENIR PAR ACCIDENT. Mesure du 2026-09-26 : les treize
+ *     adresses EXISTENT, sont toutes des B20 natifs (`0xef` exactement) et leurs symboles
+ *     concordent — mais COINc, CRCLc et INTCc ont une supply EXACTEMENT NULLE. Pairer un block a un
+ *     jeton sans une seule unite en circulation ouvre une pool contre du VIDE : elle ne pourra
+ *     JAMAIS s echanger. Decision de Phil le 2026-09-27 : « retire COINc CRCLc INTCc de la liste ».
+ *   ⇒ Ce cas FIGE le retrait. Si une de ces trois gagne une supply un jour, elle peut revenir —
+ *     mais quelqu un devra retoucher ce test ET ecrire pourquoi. Un retour SILENCIEUX est
+ *     impossible : c est toute la difference entre une decision et une rechute. */
+v('⛔⛔ COINc, CRCLc et INTCc restent HORS de la liste (supply nulle mesuree)', () => {
+  const dehors = ['COINc', 'CRCLc', 'INTCc'];
+  const dedans = new Set(ACTIONS_COINBASE.map((a) => a.symbole));
+  for (const s of dehors) {
+    assert.ok(!dedans.has(s), s + ' est revenu dans la liste : sa supply etait NULLE le 2026-09-26. '
+      + 'Si elle ne l est plus, remesurer et le DIRE ici avant de le remettre.');
+    /* ⛔ ET LE JUMEAU AUSSI. Le cas de comparaison plus haut l attraperait, mais la raison doit
+     *   vivre au meme endroit que la decision — sinon le prochain lecteur voit un echec de parite
+     *   sans savoir POURQUOI la coupe a eu lieu. */
+    assert.ok(!new RegExp("symbol: '" + s + "'").test(html),
+      s + ' est encore publie dans index.html : les deux copies ont diverge');
+  }
+  /* ⛔ MSTRc ET SNDKc RESTENT, ET CE N EST PAS UN OUBLI. Ils n ont pas de prix lisible (mesure du
+   *   2026-09-25) mais ils EXISTENT et circulent — 8 632 et 616 unites. « Pas de prix cote » et
+   *   « pas d unites » sont deux defauts differents, et un seul rend le pairage impossible. */
+  assert.ok(dedans.has('MSTRc') && dedans.has('SNDKc'),
+    'MSTRc ou SNDKc a ete retire : ils circulent, seul leur PRIX manque — ce n est pas le meme defaut');
+});
+
+assert.equal(n, 7, 'compte de cas inattendu : ' + n);
 console.log('ok paires — ' + n + ' cas · ' + ACTIONS_COINBASE.length
   + ' actions comparees adresse par adresse, dans LES DEUX SENS.');
 console.log('⚠️ NE PROUVE PAS que ces adresses soient les vraies actions Coinbase : il prouve que');
-console.log('   les deux copies du depot disent la meme chose. La chaine a tranche le 2026-09-25 —');
-console.log('   13/13 symboles et decimales lus, 0 divergence.');
+console.log('   les deux copies du depot disent la meme chose. La chaine a tranche le 2026-09-26 sur');
+console.log('   les TREIZE d alors — 13 existent, 13 sont des B20 natifs, 13 symboles concordent.');
+console.log('   TROIS ont ete retirees depuis (COINc, CRCLc, INTCc) : supply EXACTEMENT NULLE.');

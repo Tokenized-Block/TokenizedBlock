@@ -5915,12 +5915,14 @@ const DEVISES = {
  * Pairing a created block with a chosen stock as Uniswap v4 quote = OpenLaunch LaunchForm path
  * (HOSTED-BLOCK.md: keep GH Pages create track separate from OL Instant skin). */
 const STOCKS_BASE_REGISTRY = [
+  /* ⛔⛔ COINc, CRCLc et INTCc retires le 2026-09-27 : supply EXACTEMENT NULLE, mesuree sur la
+   *     chaine. Pairer a un jeton sans une seule unite en circulation ouvre une pool contre du VIDE.
+   *     Les dix restantes circulent. CETTE LISTE EST LE JUMEAU de `ACTIONS_COINBASE` (paires.js) et
+   *     un test les compare ADRESSE PAR ADRESSE : toute coupe faite ici doit l etre la-bas, sinon
+   *     la suite tombe — et c est exactement ce qu on veut d un jumeau. */
   { symbol: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
   { symbol: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
-  { symbol: 'COINc', nom: 'Coinbase', adr: '0xb200000000000000000000c85a31389d71f3ecfb' },
-  { symbol: 'CRCLc', nom: 'Circle', adr: '0xb20000000000000000000019f6e7c675b73c2e4d' },
   { symbol: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
-  { symbol: 'INTCc', nom: 'Intel', adr: '0xb2000000000000000000004aff16039ba04bdfbc' },
   { symbol: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
   { symbol: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
   { symbol: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },

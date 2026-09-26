@@ -1998,7 +1998,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-names-upright" hidden>Build <code>20260927-names-upright</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-ten-stocks" hidden>Build <code>20260927-ten-stocks</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -11744,8 +11744,12 @@ function peindrePaires() {
   majPaire();
 }
 
-/** tip 20260922-stock-pair-ux: quick picks ETH / AAPLc / GOOGLc / NVDAc / COINc — hide if off Base or option disabled */
-/* ⛔⛔ MESURE DU 2026-09-25, `/api/prix-usd` rejoue sur les treize actions : CINQ n ont AUCUN prix
+/** tip 20260922-stock-pair-ux: quick picks ETH / AAPLc / GOOGLc / NVDAc / METAc — hide if off Base or option disabled */
+/* ⛔ CET EN-TETE CITAIT ENCORE COINc, alors que la liste des puces ne le portait plus depuis la
+ *   mesure du 2026-09-25 — et que l action a ete RETIREE du registre le 2026-09-27 (supply nulle).
+ *   Un commentaire qui nomme un element disparu envoie le prochain lecteur chercher un bug qui
+ *   n existe pas : c est le meme defaut qu une legende qui designe un objet retire de l ecran.
+ * ⛔⛔ MESURE DU 2026-09-25, `/api/prix-usd` rejoue sur les treize actions d alors : CINQ n ont AUCUN prix
  *     lisible — COINc, CRCLc, INTCc, MSTRc et SNDKc (pas de paire cotee, ou liquidite sous le seuil
  *     de 10 000 $). Et COINc etait l une des cinq puces mises en avant.
  *     Consequence mesuree : Create reussit, puis l ecran de mise en vie demande de taper une valeur

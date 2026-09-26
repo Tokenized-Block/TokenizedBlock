@@ -57,12 +57,31 @@ export function proposableEnEchange(p) {
 
 /** ⛔ RECOPIE de STOCKS_BASE_REGISTRY (index.html). Un test compare les deux listes, adresse par adresse. */
 export const ACTIONS_COINBASE = [
+  /* ⛔⛔ COINc, CRCLc ET INTCc ONT ETE RETIRES LE 2026-09-27, ET UNE MESURE L A DECIDE. Les treize
+   *     adresses ont ete interrogees sur la chaine : les treize EXISTENT, les treize sont des B20
+   *     natifs (`0xef` EXACTEMENT) et les treize symboles concordent avec ce qu on annonce — ma
+   *     suspicion de depart (« le prefixe `0xb2…` est imitable, ce sont peut-etre des homonymes »)
+   *     etait INFONDEE. Mais CES TROIS-LA ONT UNE SUPPLY EXACTEMENT NULLE. Les dix autres
+   *     circulent : NVDAc 19 486 · SPCXc 11 359 · MSTRc 8 632 · GOOGLc 8 005 · AMZNc 7 667 ·
+   *     AAPLc 6 966 · TSLAc 4 115 · METAc 4 106 · MSFTc 2 452 · SNDKc 616.
+   *   ⇒ Pairer un block neuf a un jeton sans une seule unite en circulation ouvre une pool contre
+   *     du VIDE : elle ne pourra JAMAIS s echanger. Ce n est pas un mauvais choix, c est un choix
+   *     impossible. Decision de Phil : « retire COINc CRCLc INTCc de la liste ».
+   *
+   * ⛔ CE N EST PAS LA MEME RAISON QUE LA POLITIQUE DES PUCES, et la confusion serait facile a
+   *   faire. Les puces ecartent CINQ actions (ces trois + MSTRc + SNDKc) parce qu elles n ont AUCUN
+   *   PRIX LISIBLE — mesure du 2026-09-25 — et la regle y est « on ne retire pas un choix, on
+   *   arrete seulement de pousser vers un cul-de-sac ». Ici la raison est autre : un jeton sans
+   *   supply n est pas un choix difficile, c est un choix VIDE. MSTRc et SNDKc RESTENT donc dans la
+   *   liste — ils existent et circulent, ils n ont simplement pas de prix cote.
+   *
+   * ⛔ ET LA GARDE ON-CHAIN RESTE LA VRAIE PROTECTION. Cette liste est une PHOTO : une supply peut
+   *   tomber a zero demain sur n importe laquelle des dix restantes, et la liste ne le saurait pas.
+   *   `majPaire` lit donc la supply a chaque choix. Retirer ces trois entrees evite de PROPOSER une
+   *   impasse ; c est la garde qui empeche d y ENTRER. */
   { symbole: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
   { symbole: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
-  { symbole: 'COINc', nom: 'Coinbase', adr: '0xb200000000000000000000c85a31389d71f3ecfb' },
-  { symbole: 'CRCLc', nom: 'Circle', adr: '0xb20000000000000000000019f6e7c675b73c2e4d' },
   { symbole: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
-  { symbole: 'INTCc', nom: 'Intel', adr: '0xb2000000000000000000004aff16039ba04bdfbc' },
   { symbole: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
   { symbole: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
   { symbole: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
