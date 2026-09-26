@@ -11830,9 +11830,21 @@ async function majPaire() {
     return;
   }
   /* ⛔ RAKSHA 2026-09-15: custom paste must prove native B20 — no ERC-20 sprawl diluting fee markets. */
-  if (q.paire.type === 'SAISIE' || q.paire.besoinB20) {
+  /* ⛔⛔ LES ACTIONS DU REGISTRE PASSENT MAINTENANT PAR LE MEME CONTROLE, ET UNE MESURE L A IMPOSE
+   *     (2026-09-26). Les treize actions declarees existent bien, sont toutes des B20 natifs et
+   *     leurs symboles concordent — mais TROIS ont une supply EXACTEMENT NULLE : COINc, CRCLc,
+   *     INTCc. Or `qualifierPaire` les rendait avec `verifiee: true`, parce que « verifiee » y veut
+   *     dire « DANS NOTRE REGISTRE », pas « EXISTE COMME ACTIF ». On proposait donc de pairer un
+   *     block neuf a du VIDE : la pool s ouvrirait contre zero jeton et ne pourrait jamais
+   *     s echanger. Le registre dit ce qu on CONNAIT ; seule la chaine dit ce qui EXISTE.
+   *   ⛔ La sonde qui l a trouve ne le voyait pas non plus au depart : elle affichait « 0.000 » en
+   *     divisant par 1e18 sans lire `decimals()`. Un chiffre juste mais illisible n avertit pas. */
+  if (q.paire.type === 'SAISIE' || q.paire.besoinB20 || q.paire.type === 'ACTION') {
+    const estAction = q.paire.type === 'ACTION';
     n.className = 'note';
-    n.textContent = 'Checking native B20 (code 0xef) on chain…';
+    n.textContent = estAction
+      ? 'Checking that stock on chain — it must exist and have units in circulation…'
+      : 'Checking native B20 (code 0xef) on chain…';
     paireChoisie = null;
     majFraisEtRecap();
     let f = null;
@@ -11847,18 +11859,52 @@ async function majPaire() {
        *    inconnu de comparer un octet qu il n a aucun moyen de lire.
        * ⛔ ON GARDE LE REFUS, ON RETIRE LE JARGON. La raison reste verifiable pour qui veut : le
        *    marqueur est documente, il n a simplement plus sa place dans un message d erreur. */
+      /* ⛔ ET LA PHRASE DOIT PARLER A QUI LA LIT : dire « collez une adresse de block » a quelqu un
+       *   qui a CHOISI DANS UNE LISTE lui demande une action qu il n a pas faite. Meme refus, meme
+       *   raison, phrase differente selon la porte empruntee. */
       n.textContent = (f && f.estB20 === false)
-        ? 'That address is not a native block, so it cannot be paired here. Paste a block address.'
-        : 'We could not check that address yet — the node did not answer. Pairing stays closed until it does.';
+        ? (estAction
+          ? 'That stock is not a native block on chain, so it cannot be paired here. Pick another one.'
+          : 'That address is not a native block, so it cannot be paired here. Paste a block address.')
+        : (estAction
+          ? 'We could not check that stock yet — the node did not answer. Pairing stays closed until it does.'
+          : 'We could not check that address yet — the node did not answer. Pairing stays closed until it does.');
       const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
+      majFraisEtRecap();
+      return;
+    }
+    /* ⛔⛔ LA SUPPLY, ET TROIS ETATS QUI NE SE DISENT PAS PAREIL. `faitsDuBlock` rend un BigInt ou
+     *     `null`, et son propre commentaire le dit : « `null` veut dire non lu, jamais 18 ». Donc :
+     *       · supply === 0n   -> le jeton existe mais AUCUNE unite ne circule : pairer serait
+     *                            ouvrir une pool contre du vide. REFUS, et on dit quoi.
+     *       · supply === null -> on n a PAS PU lire. Ce n est pas « zero » — c est « pas regarde ».
+     *                            REFUS AUSSI (echec ferme), mais avec une autre phrase.
+     *       · supply > 0n     -> la seule qui passe.
+     *   ⛔ CONFONDRE LES DEUX PREMIERS SERAIT LE DEFAUT : accuser un jeton sain parce que le noeud
+     *     a hoquete, ou pire, laisser passer un jeton vide le jour ou la logique serait inversee. */
+    if (f.supply === null || f.supply === 0n) {
+      paireChoisie = null;
+      n.className = 'note wKo';
+      n.textContent = f.supply === 0n
+        ? (estAction
+          ? 'That stock has no units in circulation yet, so a market paired to it could never trade. '
+            + 'Pick another one — the list is not a promise that all of them are live.'
+          : 'That block has no units in circulation, so a market paired to it could never trade.')
+        : 'We could not read how many units exist yet — the node did not answer. Pairing stays closed until it does.';
+      const chipVide = $('#cPaireChip'); if (chipVide) chipVide.hidden = true;
       majFraisEtRecap();
       return;
     }
     q.paire.estB20 = true;
     q.paire.symbole = f.symbole || q.paire.symbole;
     q.paire.nom = f.nom || q.paire.nom;
+    q.paire.supply = f.supply;
     q.paire.verifiee = true;
-    q.paire.type = 'B20';
+    /* ⛔ UNE ACTION RESTE UNE ACTION. La promotion en `B20` existe pour une adresse SAISIE, qui
+     *   n avait pas de type avant la lecture. L appliquer a une action du registre lui ferait perdre
+     *   son etiquette « Coinbase tokenized stock » et la phrase de recapitulatif qui va avec — un
+     *   controle ajoute ne doit pas effacer une information deja juste. */
+    if (!estAction) q.paire.type = 'B20';
     q.paire.avertissement = null;
   }
   if (seq !== majPaireSeq) return;
