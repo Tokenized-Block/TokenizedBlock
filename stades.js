@@ -44,8 +44,13 @@ export const STADES_HORS_PALIER = Object.freeze([
    *     blocks etiquetes « Market not read », dont 162 que RIEN n a jamais lus. Les ranger sous
    *     « our reader did not come back » accusait notre lecteur d une panne qui n a pas eu lieu, et
    *     surtout envoyait vers « Retry » — un geste sans objet quand aucune lecture n a ete tentee.
-   *     Le bon geste, lui, est d ouvrir le block : c est ce qui declenche sa lecture. */
-  { cle: 'PAS_REGARDE', titre: 'Not looked at yet — open one to read its market' },
+   *     Le bon geste, lui, est d ouvrir le block : c est ce qui declenche sa lecture.
+   *   ⛔ 2026-09-26 : « open one to read its market » etait juste POUR UN, et ce groupe en comptait
+   *     360 a l ecran (mesure a l execution, page chargee en local). Une instruction a suivre 360
+   *     fois n est pas une instruction ; et elle taisait le fait que le tour de lecture y vient
+   *     tout seul, 30 toutes les 90 s. Le titre dit maintenant l ETAT ; le geste est un bouton dans
+   *     le panneau, qui en lit une tranche tout de suite (`RELISIBLES`, app.html). */
+  { cle: 'PAS_REGARDE', titre: 'Not looked at yet — the rolling read has not reached them' },
   { cle: 'MORT', titre: 'Gone quiet — its creator held it, and holds none now' },
 ]);
 /* ⛔⛔ UN EMOJI QUI NE S AFFICHE PAS N EST PAS UN EMOJI (Phil, 2026-09-17 : capture d un carre vide a la

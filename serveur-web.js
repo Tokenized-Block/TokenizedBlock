@@ -797,6 +797,11 @@ const ETAPES_ENTONNOIR = [
    *   taux. ⚠️ Les totaux d `achat_prepare` d avant ce build melangent les deux sens. */
   'achat_clic',
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
+  /* ⛔ UN NOM DISTINCT, PAS UN NOM RECYCLE. `marche_rescan_ok` est la relecture d UN block depuis sa
+   *   fiche ; `stades_relire` est le rattrapage EN LOT depuis le panneau des paliers. Les fondre
+   *   aurait reproduit le defaut que je venais de nommer le 2026-09-26 : `wallet_no_provider` porte
+   *   un seul nom pour neuf chemins, et on ne peut donc pas dire lequel a ete tape 25 fois. */
+  'stades_relire',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
    *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait

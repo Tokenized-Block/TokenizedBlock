@@ -1930,7 +1930,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-sans-wallet-mene-quelque-part" hidden>Build <code>20260926-sans-wallet-mene-quelque-part</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-le-geste-existe" hidden>Build <code>20260926-le-geste-existe</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4218,6 +4218,23 @@ let vieCurseur = 0;
 /** Combien de blocks par passe. 30 et 260 ms de pause viennent d une mesure (2026-09-10 : envoyees
  *  d affilee, 19 lectures sur 22 refusees par le noeud public). On etale, on n elargit pas. */
 const VIE_PAR_PASSE = 30;
+/** Adresses a lire EN PRIORITE a la prochaine passe. Videe des qu elle est servie.
+ *  ⛔⛔ POURQUOI UNE FILE, ET PAS UN LANCEMENT IMMEDIAT — et c est une MESURE qui l a impose, pas un
+ *      gout. Le panneau des paliers disait « Open a profile or Retry » sans contenir un seul bouton
+ *      (meme faute que « Open your wallet » dit a qui n en a pas, corrigee le meme jour). Ma
+ *      premiere version y mettait un bouton garde par `!lectureVieEnCours`.
+ *      Page chargee en local le 2026-09-26 : le groupe est passe de 361 a 344 pendant que je
+ *      regardais, soit ~6 s par block sur le noeud public. Une passe de 30 blocks depasse donc
+ *      largement l intervalle de 90 s : la lecture tourne EN CONTINU, `lectureVieEnCours` est vrai
+ *      presque tout le temps, et ce bouton aurait ete desactive en permanence.
+ *      ⇒ J aurais remplace une instruction morte par un bouton mort.
+ *    ⛔ UNE FILE PEUT TOUJOURS ETRE HONOREE. Le clic ne lutte pas contre la passe en cours : il dit
+ *      quoi lire ENSUITE, et le bouton l annonce dans ces termes.
+ *    ⛔ LE CURSEUR NE BOUGE PAS QUAND LA FILE EST SERVIE. L avancer ferait sauter 30 blocks du tour
+ *      normal a chaque clic : le rattrapage volerait la rotation, en silence.
+ *    ⛔ PLAFONNEE A `VIE_PAR_PASSE`. Demander 344 lectures d un coup au noeud qui vient de les
+ *      refuser, c est promettre ce qu on ne peut pas tenir. */
+let filePrioritaire = [];
 async function lireLaVie() {
   /* ⛔ GARDE DE CONCURRENCE : deux passes en parallele doublent les requetes sur un noeud qui refuse
    *    deja sous charge. La seconde repart sans rien faire. */
@@ -4234,10 +4251,21 @@ async function lireLaVie() {
   /* ⛔ RAKSHA 2026-09-14 : lire NOS genesis (TBLOCK/TTB) EN PREMIER — ils ne restent pas colles en « Not read ». */
   const ordre = [...habitants].sort((a, b) => Number(nosSet.has(String(b.adr).toLowerCase())) - Number(nosSet.has(String(a.adr).toLowerCase()))
     || Number(b.nous === true) - Number(a.nous === true));
-  /* au bout du tour on repart au debut : les vies deja lues se rafraichissent */
-  if (vieCurseur >= ordre.length) vieCurseur = 0;
-  const lot = ordre.slice(vieCurseur, vieCurseur + VIE_PAR_PASSE);
-  vieCurseur += VIE_PAR_PASSE;
+  /* ⛔ LA FILE EST VIDEE AVANT LA BOUCLE, pas apres. Une passe qui echoue ne doit pas rejouer la
+   *   meme demande en boucle : le visiteur reclique s il veut reessayer, et on le voit au compteur. */
+  const cible = filePrioritaire.length
+    ? new Set(filePrioritaire.map((a) => String(a).toLowerCase()))
+    : null;
+  filePrioritaire = [];
+  let lot;
+  if (cible) {
+    lot = ordre.filter((h) => cible.has(String(h.adr).toLowerCase())).slice(0, VIE_PAR_PASSE);
+  } else {
+    /* au bout du tour on repart au debut : les vies deja lues se rafraichissent */
+    if (vieCurseur >= ordre.length) vieCurseur = 0;
+    lot = ordre.slice(vieCurseur, vieCurseur + VIE_PAR_PASSE);
+    vieCurseur += VIE_PAR_PASSE;
+  }
   for (const h of lot) {
     await souffler();
     /* ⛔ LE PROFIL OUVERT PASSE D ABORD. Mesure en prod le 2026-09-11 : les faits de Block 0 ont mis
@@ -4295,8 +4323,15 @@ async function lireLaVie() {
   /* ⛔ LA PHRASE DIT DESORMAIS OU ON EN EST DANS LE TOUR : « 30/181 » sans dire qu on continue se
    *    lisait comme un verdict sur les 151 autres. */
   const faits = Math.min(vieCurseur, habitants.length);
-  n.textContent = (n.textContent || '') + ' · life read on ' + lus + ' more (' + faits + '/'
-    + habitants.length + ' so far, still going) — ' + avecMarche + ' with a market'
+  /* ⛔ UNE PASSE CIBLEE NE PARLE PAS DU TOUR. Le curseur n a pas bouge, donc « 30/181 so far » y
+   *   serait faux dans les deux sens : il annoncerait une avancee qui n a pas eu lieu, et il
+   *   cacherait ce qui vient d etre relu. Chaque passe raconte ce qu ELLE a fait. */
+  n.textContent = (n.textContent || '')
+    + (cible
+      ? (' · retried ' + lot.length + ' unread block' + (lot.length > 1 ? 's' : '')
+        + (cible.size > lot.length ? ' of ' + cible.size + ' (rest on the next click)' : ''))
+      : (' · life read on ' + lus + ' more (' + faits + '/' + habitants.length + ' so far, still going)'))
+    + ' — ' + avecMarche + ' with a market'
     + (nonLus ? ', ' + nonLus + ' unreadable right now (not the same as having no market)' : '');
 }
 /* ⛔⛔ LA LECTURE CONTINUE, C EST LA DEMANDE DE PHIL : « doit etre live constamment ». Toutes les 90 s,
@@ -5142,6 +5177,14 @@ $('#rangs').addEventListener('keydown', (ev) => {
   ouvrirDepuisRang(li);
 });
 
+/** Adresses non lues, par groupe de palier, pour le bouton de relecture.
+ *  ⛔ HORS DU HTML A DESSEIN : 251 adresses dans un attribut `data-` font ~10 ko de DOM recrees a
+ *    chaque peinture, et une adresse tronquee par un echappement passerait pour une autre. */
+const stadesRelireCibles = new Map();
+/** Les groupes ou une lecture de plus peut encore changer quelque chose.
+ *  ⛔ `SANS_MARCHE` et `MORT` n y sont PAS : relire n y changerait rien, et un bouton qui ne peut
+ *    rien changer est la meme faute que la phrase qu on vient de retirer. */
+const RELISIBLES = new Set(['NON_LU', 'PRIX_NON_LU', 'PAS_REGARDE']);
 function peindreClassement() {
   const cl = classementCourant();
   $('#rangs').innerHTML = cl.classes.slice(0, 10).map((b) => '<li class="rangL" tabindex="0" role="button"'
@@ -5212,8 +5255,13 @@ function peindreStades() {
     if (mute) {
       corps = lectureVieEnCours
         ? '<span class="note" style="align-self:center">Still reading the markets — names appear as each one comes back.</span>'
-        : '<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. Open a profile or Retry; '
-          + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>';
+        /* ⛔⛔ CETTE PHRASE DISAIT « Open a profile or Retry » DANS UN PANNEAU SANS AUCUN BOUTON.
+         *     Un ecran qui nomme un geste introuvable envoie chercher un defaut chez soi — meme
+         *     faute que « Open your wallet » dit a qui n en a pas, corrigee le meme jour.
+         *     Le geste est maintenant un vrai bouton, ajoute plus bas pour TOUS les groupes
+         *     relisibles — voir `RELISIBLES`. */
+        : ('<span class="note" style="align-self:center">Pass finished with unread markets — node lag / rate-limit, not a verdict on the blocks. '
+          + g.blocks.length + ' waiting. TokenizedBlock count is separate from “life read”.</span>');
     } else {
       /* ⛔⛔ ON NE MET PLUS NOS PROPRES BLOCKS EN AVANT ICI. Phil, 2026-09-24 : « ne mets plus en
        *     évidence, ils ont du mal à évoluer ».
@@ -5229,9 +5277,54 @@ function peindreStades() {
       corps = '<span class="note" style="align-self:center">' + g.blocks.length
         + ' block' + (g.blocks.length > 1 ? 's' : '') + ' at this stage</span>';
     }
+    /* ⛔⛔ LE GESTE VIT ICI, POUR LES TROIS GROUPES QUI PEUVENT ENCORE ETRE LUS, et c est une mesure
+     *     a l execution qui l a impose. J avais d abord cable le bouton sur les seuls groupes
+     *     « mute » (`NON_LU`, `PRIX_NON_LU`). Page chargee en local le 2026-09-26 : ces deux
+     *     groupes etaient VIDES, et le seul affiche etait `PAS_REGARDE` — 360 blocks, titre
+     *     « open one to read its market ». Mon correctif ne touchait pas l ecran reel.
+     *   ⛔ ET LE VERBE CHANGE AVEC L ETAT : `NON_LUE` = on a tente et rate, donc « Re-read » ;
+     *     jamais regarde = « Read ». Les confondre effacerait la distinction que `stades.js` a ete
+     *     corrige le 2026-09-25 pour etablir (162 blocks accusaient notre lecteur d une panne qui
+     *     n avait pas eu lieu). */
+    let bouton = '';
+    if (RELISIBLES.has(g.cle) && g.blocks.length) {
+      stadesRelireCibles.set(g.cle, g.blocks.map((b) => b.adr));
+      /* ⛔ PAS DE GARDE SUR `lectureVieEnCours` ICI, ET C EST LE POINT : la lecture tourne presque
+       *   tout le temps (mesure du 2026-09-26, ~6 s par block), donc une telle garde aurait rendu
+       *   ce bouton invisible ou mort en permanence. Il met en FILE, ce qui marche dans les deux
+       *   etats — et il le dit au clic, sans promettre « maintenant ». */
+      bouton = '<button type="button" class="puce" data-relire="' + enTexte(g.cle) + '">'
+        + (g.cle === 'PAS_REGARDE' ? 'Read ' : 'Re-read ')
+        + Math.min(g.blocks.length, VIE_PAR_PASSE) + ' next</button>';
+    }
     return '<p class="titre" style="font-size:1em;margin:12px 0 6px">'
-      + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">' + corps + '</div>';
+      + (EMOJI_STADE[g.cle] || '·') + ' ' + enTexte(titre) + '</p><div class="stadeLigne">'
+      + corps + bouton + '</div>';
   }).join('');
+  /* ⛔ LE BOUTON EST RECREE A CHAQUE PEINTURE (`innerHTML` ecrase tout), donc il se recable ici et
+   *   pas ailleurs. Un `addEventListener` pose une seule fois au demarrage viserait un element
+   *   detruit a la premiere mise a jour du panneau — la garde le verifie. */
+  for (const b of $('#stades').querySelectorAll('[data-relire]')) {
+    b.onclick = () => {
+      const adrs = stadesRelireCibles.get(b.getAttribute('data-relire')) || [];
+      if (!adrs.length) { b.textContent = 'Nothing to read'; return; }
+      try { etape('stades_relire'); } catch (_) {}
+      filePrioritaire = adrs.slice(0, VIE_PAR_PASSE);
+      /* ⛔⛔ LE BOUTON DIT CE QUI VA SE PASSER, PAS CE QU ON VOUDRAIT ENTENDRE. « Reading… » pendant
+       *     qu une autre passe occupe le noeud serait faux ; « queued » est vrai dans les deux cas,
+       *     et la phrase nomme le delai au lieu de le cacher. Un bouton muet pendant une minute se
+       *     fait recliquer — c est litteralement ce qui a produit 25 taps sur la puce de connexion
+       *     le 2026-09-26. */
+      b.disabled = true;
+      b.textContent = lectureVieEnCours
+        ? 'Queued — the pass running now finishes first'
+        : 'Queued — reading these next';
+      /* ⛔ ON NE LANCE UNE PASSE QUE S IL N Y EN A PAS : `lireLaVie` repartirait sans rien faire, et
+       *   la file resterait servie au prochain tour de toute facon. */
+      if (!lectureVieEnCours) void lireLaVie();
+      /* la peinture suivante remplace ce bouton : rien a restaurer au-dela de ce que dit l ecran */
+    };
+  }
   const nous = r.groupes.reduce((s, g) => s + g.nous, 0);
   /* ⛔⛔ CETTE LIGNE EST LUE PAR DES INCONNUS, et elle disait (releve par Phil, 2026-09-21) :
    *     « 165 tier(s) from the public market (DexScreener) … named when life is LUE (unread ≠
