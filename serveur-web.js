@@ -444,6 +444,54 @@ const HOLDERS_MAX = 200;
  *   ⛔ ON NE GARDE QUE LES PASSES COMPLETES (`jusqua` pose et zero fenetre ratee). Persister une
  *     passe partielle la ferait revivre a chaque demarrage, et un etat incomplet ressuscite est
  *     pire qu un etat absent : il a l air d une mesure. */
+/* ⛔⛔ LES CLES DE POOL, GARDEES POUR TOUJOURS — et c est legitime parce qu une PoolKey est
+ *     IMMUABLE : le poolId est le hash de ses propres champs. Ce n est pas un cache de prix, c est
+ *     un annuaire. Le prix, lui, est relu a chaque visite et n entre jamais ici.
+ *   ⛔ POURQUOI CE FICHIER EXISTE. Mesure du 2026-09-26 : `/api/cle/` rendait « over rate limit »
+ *     pour MUc — 806 446 $ de volume 24 h, pool v4 lisible par notre propre StateView. Sans cle, le
+ *     client devine, et 432 combinaisons essayees a la main ne retrouvent pas le poolId. Resultat a
+ *     l ecran : « Market unread … Use Retry », ou Retry retape la meme route etranglee.
+ *     Le meme etranglement cassait AU MOINS trois autres ecrans le meme jour : « 5 window(s)
+ *     refused » sur les detenteurs, « 17 window(s) refused » sur les blocks du visiteur, et la
+ *     lecture de vie. UN seul point de defaillance, quatre ecrans muets.
+ *   ⚠️ CE QUE CE FICHIER NE REPARE PAS : les trois autres ecrans, qui relisent des LOGS et non une
+ *     cle. Le remede de fond leur appartient — un noeud a cle (`BASE_RPC` est deja une variable
+ *     d environnement, donc c est une CONFIGURATION, pas du code). */
+const FICHIER_CLES = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'cles-pool.json') : null;
+const CLES_FICHIER_MAX_OCTETS = 2 * 1024 * 1024;
+const clesCache = new Map();
+let clesEcritureEnCours = false;
+
+function ecrireCles() {
+  if (!FICHIER_CLES || clesEcritureEnCours) return;
+  clesEcritureEnCours = true;
+  try {
+    const payload = JSON.stringify([...clesCache]);
+    /* ⛔ plutot rien qu un volume plein — meme borne dure que les detenteurs */
+    if (payload.length > CLES_FICHIER_MAX_OCTETS) return;
+    writeFileSync(FICHIER_CLES + '.tmp', payload);
+    renameSync(FICHIER_CLES + '.tmp', FICHIER_CLES);
+  } catch (err) { /* ⛔ une ecriture ratee ne casse pas une lecture : la memoire suffit */ }
+  finally { clesEcritureEnCours = false; }
+}
+
+(function relireCles() {
+  if (!FICHIER_CLES || !existsSync(FICHIER_CLES)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_CLES, 'utf8'));
+    if (!Array.isArray(brut)) return;
+    for (const [jeton, v] of brut) {
+      /* ⛔ ON NE RECHARGE QUE DES SUCCES BIEN FORMES : un fichier abime ne doit pas injecter des
+       *   cles vides qui feraient croire au client qu il a une reponse. */
+      if (typeof jeton === 'string' && v && v.ok === true && Array.isArray(v.cles) && v.cles.length) {
+        clesCache.set(jeton.toLowerCase(), { ok: true, cles: v.cles });
+      }
+    }
+    console.log('[cles] ' + clesCache.size + ' cle(s) de pool relue(s) du volume');
+  } catch (err) { console.warn('[cles] fichier illisible, on repart a vide : ' + err.message); }
+})();
+
 const FICHIER_HOLDERS = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'holders-cache.json') : null;
 /* ⛔ borne dure du fichier : au-dela on n ecrit pas plutot que de remplir le volume */
@@ -1396,7 +1444,32 @@ createServer((req, res) => {
       res.end(JSON.stringify({ ok: false, pourquoi: 'whole address required' }));
       return;
     }
+    /* ⛔⛔ UNE CLE LUE UNE FOIS NE SE RELIT JAMAIS. Mesure du 2026-09-26 : cette route repondait
+     *     `{"ok":false,"pourquoi":"pool key not read: over rate limit"}` pour MUc — un block qui
+     *     trade 806 446 $ par 24 h et dont la pool v4 est PARFAITEMENT LISIBLE par notre propre
+     *     StateView (`sqrtPriceX96 = 23726964141923096624193324578`, lu a la main).
+     *     Sans cle, le client retombe sur ses devinettes de PoolKey ; 432 combinaisons essayees a la
+     *     main n ont pas retrouve son poolId — un poolId est un HASH, on ne l inverse pas.
+     *     ⇒ La fiche affichait « Market unread — that is about the network. Use Retry. » et le
+     *       Retry retapait la MEME route etranglee. Un geste qui ne pouvait pas aboutir.
+     *   ⛔ UNE CLE DE POOL EST IMMUABLE : elle est le hash de ses propres champs. La mettre en
+     *     cache pour toujours n est donc pas un pari sur la fraicheur — c est un fait qui ne
+     *     change pas. Le PRIX, lui, n est jamais cache ici : il est relu a chaque visite.
+     *   ⛔ ON NE CACHE QUE LES SUCCES. Un `ok:false` mis en cache figerait un echec reseau en
+     *     verdict permanent — exactement le defaut qu on corrige. */
+    const cleCache = clesCache.get(token.toLowerCase());
+    if (cleCache) {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify({ ...cleCache, depuisCache: true }));
+      return;
+    }
     resoudreClePool(token).then((r) => {
+      try {
+        if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
+          clesCache.set(token.toLowerCase(), { ok: true, cles: r.cles });
+          ecrireCles();
+        }
+      } catch (_) { /* ⛔ une mise en cache ratee ne doit pas priver le client de sa reponse */ }
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(JSON.stringify(r));
     }).catch((e) => {
