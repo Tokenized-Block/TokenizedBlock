@@ -79,8 +79,16 @@ for (const l of init.logs) {
   const d = String(l.data || '').replace(/^0x/, '');
   if (d.length < 5 * 64) continue;
   const hook = '0x' + d.slice(2 * 64 + 24, 3 * 64);
+  /* ⛔⛔ LA DEVISE D EN FACE EST RETENUE, ET ELLE DECIDE D UN REFUS DE NOTRE APP. `echange.js`
+   *     refuse de tracer un marche apparie a un ERC-20 quand le hook n est pas le notre :
+   *       `if (!hookPaieDeja) return { etat: 'REFUSE', … }`
+   *     Sa justification est PERIMEE — « c est lui qui preleve (3 %) ; l interface n ajoute rien » —
+   *     alors que le V8 preleve 0,5 % et que le correctif du 2026-09-22 dit de TOUJOURS prendre le
+   *     frais d interface (« stacked fees beat zero fees »).
+   *   ⇒ On mesure ce que ce refus coute AVANT d y toucher. */
+  const enFace = b20(c0) ? c1 : c0;
   pools.push({ id: l.topics[1], jeton: b20(c0) ? c0 : c1, hook, notre: NOTRES.get(hook) || null,
-    bloc: parseInt(l.blockNumber, 16) });
+    enFace, ethNatif: /^0x0{40}$/.test(enFace), bloc: parseInt(l.blockNumber, 16) });
 }
 const notres = pools.filter((p) => p.notre);
 const etrangeres = pools.filter((p) => !p.notre);
@@ -109,6 +117,34 @@ console.log('  ⇒ part des echanges B20 qui NE nous paient RIEN : '
   + (tot ? (sE.n / tot * 100).toFixed(1) + ' %' : 'aucun echange B20 sur la fenetre'));
 if (sN.ratees || sE.ratees || init.ratees) {
   console.log('  ⛔ des fenetres ont ete ratees : ces comptes sont des MINIMA.');
+}
+
+/* 2bis. ⛔⛔ CE QUE NOTRE PROPRE REFUS NOUS COUTE. Sur un hook etranger, `echange.js` trace le
+ *       marche s il est apparie a l ETH, et le REFUSE s il est apparie a un ERC-20. Cette moitie-la
+ *       est donc de l argent qu on ne peut pas prendre MEME si le visiteur vient chez nous.
+ *     ⛔ Ce chiffre ne dit PAS que ces echanges nous reviendraient : il faudrait que le trader passe
+ *       par notre interface. Il borne le HAUT de ce qui est capturable, rien de plus. */
+const etrEth = etrangeres.filter((p) => p.ethNatif);
+const etrErc = etrangeres.filter((p) => !p.ethNatif);
+console.log('\n── CE QUE NOTRE PROPRE REFUS EXCLUT (hook etranger) ──');
+console.log('  pools appariees a l ETH natif (notre app les trace) : ' + etrEth.length);
+console.log('  pools appariees a un ERC-20  (notre app REFUSE)     : ' + etrErc.length);
+if (etrErc.length) {
+  const sErc = await swapsDe(etrErc.map((p) => p.id), 'Swap (etrangeres ERC-20)');
+  console.log('  echanges dans les pools que nous REFUSONS : ' + sErc.n
+    + '   (fenetres ' + sErc.lues + '/' + sErc.attendues + ', ratees ' + sErc.ratees + ')');
+  console.log('  ⇒ part des echanges B20 hors de portee de notre interface : '
+    + (sE.n ? (sErc.n / sE.n * 100).toFixed(1) + ' %' : 'non calculable'));
+  const devises = [...new Set(etrErc.map((p) => p.enFace.toLowerCase()))];
+  console.log('  devises distinctes en face : ' + devises.length);
+  for (const d of devises.slice(0, 6)) {
+    console.log('     · ' + d + '  (' + etrErc.filter((p) => p.enFace.toLowerCase() === d).length + ' pool(s))');
+  }
+  if (devises.length > 6) console.log('     … et ' + (devises.length - 6) + ' autre(s)');
+  console.log('  ⛔ Les adresses ci-dessus sont COPIEES des logs, jamais reconstruites.');
+} else {
+  console.log('  ⇒ aucune pool ERC-20 sur la fenetre : ce refus ne coute rien AUJOURD HUI.');
+  console.log('  ⛔ « aujourd hui » : 24 h ne font pas une regle. A relire avant d en conclure quoi que ce soit.');
 }
 
 /* 3. ⛔ ET LA QUESTION QUI DECIDE DE LA SUITE : ces pools etrangeres portent-elles des blocks nes
