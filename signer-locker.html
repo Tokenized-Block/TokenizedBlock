@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign — TBlockFeeLocker deployment</title>
+<!--
+  ⛔⛔ PAGE LOCALE, JAMAIS PUBLIEE. Elle ne sert qu a UNE transaction : deployer le locker de frais.
+      Elle n est pas servie par le serveur de l app (le serveur ne sert que les fichiers de son
+      manifeste) ; elle s ouvre depuis le disque. Mettre un outil de signature sur une page publique
+      serait une surface offerte pour rien.
+
+  ⛔ CETTE PAGE NE DETIENT AUCUNE CLE ET N EN DEMANDE AUCUNE. Elle demande la permission de lire une
+     adresse, puis passe la transaction au wallet — c est LUI qui affiche ce qui est signe, et c est
+     l humain qui decide. Aucune boucle, aucun envoi automatique, aucun retry.
+
+  ⛔ LE `data` EST COLLE ICI DEPUIS `A-SIGNER-locker-frais.json`, qui l a lui-meme lu dans l artefact
+     de compilation. Il n a ete ni retape ni reconstruit. La page recalcule sa longueur et l affiche :
+     si un octet manquait, le chiffre ne tomberait pas juste.
+
+  ⚠️ DEPLOYER NE FAIT ARRIVER AUCUN ARGENT PAR SOI-MEME. Ce qu il reste a faire ensuite est ecrit
+     dans le fichier JSON et rappele en bas de cette page.
+-->
+<style>
+  :root{--fond:#0a0f1a;--carte:#111a2b;--ligne:#1e2c45;--texte:#e8eefc;--doux:#93a4c4;--bleu:#7ea6ff;
+    --ko:#ff8a8a;--ok:#7ee0a8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;padding:16px}
+  .w{max-width:760px;margin:0 auto}
+  .c{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin-bottom:14px}
+  h1{font-size:1.25rem;margin:0 0 4px} h2{font-size:1rem;margin:0 0 8px}
+  .m{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;word-break:break-all;color:var(--doux)}
+  table{width:100%;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid var(--ligne);vertical-align:top}
+  td:first-child{color:var(--doux);width:42%} b{font-variant-numeric:tabular-nums}
+  button{width:100%;padding:13px;border-radius:12px;border:1px solid var(--ligne);background:var(--bleu);
+    color:#06122b;font-weight:700;font-size:1rem;cursor:pointer;margin-top:10px}
+  button[disabled]{opacity:.5;cursor:not-allowed}
+  button.sec{background:transparent;color:var(--texte)}
+  .note{color:var(--doux);font-size:.9rem;margin:8px 0 0}
+  .ko{color:var(--ko)} .ok{color:var(--ok)}
+  ol{margin:8px 0 0;padding-left:20px;color:var(--doux)} li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="c">
+    <h1>Deploy TBlockFeeLocker</h1>
+    <p class="note">The liquidity stays locked. Only the trading fees become collectable.</p>
+  </div>
+
+  <div class="c">
+    <h2>What you are about to sign</h2>
+    <table>
+      <tr><td>network</td><td><b>Base mainnet · 8453</b></td></tr>
+      <tr><td>to</td><td><b>empty — this creates a contract</b></td></tr>
+      <tr><td>value</td><td><b>0 ETH</b></td></tr>
+      <tr><td>fees go to</td><td class="m" id="vWallet">—</td></tr>
+      <tr><td>position manager</td><td class="m" id="vPosm">—</td></tr>
+      <tr><td>creator share</td><td><b id="vPart">—</b> <span class="note">— immutable once deployed</span></td></tr>
+      <tr><td>creation bytes</td><td><b id="vOctets">—</b></td></tr>
+      <tr><td>gas (simulated)</td><td><b>714 192</b></td></tr>
+    </table>
+    <p class="note">⛔ Any wallet with gas can send this. The contract has <b>no owner</b>, so the sender
+      gains nothing — <b>do not sign from the fee wallet</b>, it would expose it for no reason.</p>
+  </div>
+
+  <div class="c">
+    <h2>Your wallet</h2>
+    <p class="note" id="etat">Not connected.</p>
+    <button id="bConnecter">Connect wallet</button>
+    <button id="bEnvoyer" class="sec" disabled>Review in wallet, then send</button>
+    <p class="note" id="sortie"></p>
+  </div>
+
+  <div class="c">
+    <h2>⚠️ Deploying does not make money arrive</h2>
+    <ol>
+      <li>New positions must be minted <b>to this contract</b> instead of the dead address.</li>
+      <li><code>FEE_POOL</code> must stop being 0 — a pool fee only becomes honest <i>because</i> this contract makes collection possible.</li>
+      <li>The published rule changes, and must be rewritten in plain words: “nobody can withdraw the liquidity; trading fees go to addresses fixed in advance.”</li>
+      <li>Verify the source on the explorer — nothing here proves the deployed contract is this one.</li>
+    </ol>
+    <p class="note">Positions already burnt to the dead address stay lost. Nothing recovers them.</p>
+  </div>
+</div>
+
+<script type="module">
+/* ⛔⛔ LE PAYLOAD EST INJECTE ICI PAR `preparer-locker-a-signer.mjs`, QUI LE LIT DANS L ARTEFACT DE
+ *     COMPILATION. Il n est JAMAIS retape : un bytecode de 3 419 octets recopie a la main est
+ *     exactement le geste ou un caractere se perd — et le contrat deploye ne serait plus celui qui a
+ *     ete teste et mute.
+ *   ⛔ POURQUOI INJECTE PLUTOT QUE LU DANS LE FICHIER VOISIN : cette page s ouvre depuis le DISQUE,
+ *     et un `fetch` sur une origine `file://` est refuse par le navigateur. Mesure faite : le
+ *     serveur local rend 404 sur cette page ET sur le JSON, parce qu il ne sert que son manifeste —
+ *     et on ne l affaiblit pas pour une page de signature. Elle doit donc se suffire a elle-meme. */
+const P = {"reseau":"Base mainnet","chainId":8453,"to":null,"value":"0x0","data":"0x60e060405234801561000f575f80fd5b50604051610cfb380380610cfb83398101604081905261002e916100ab565b6001600160a01b0382166100555760405163f69f8c0360e01b815260040160405180910390fd5b620f424081111561007957604051630a81ff1360e21b815260040160405180910390fd5b6001600160a01b03928316608052911660a05260c0526100eb565b6001600160a01b03811681146100a8575f80fd5b50565b5f805f606084860312156100bd575f80fd5b83516100c881610094565b60208501519093506100d981610094565b80925050604084015190509250925092565b60805160a05160c051610bc46101375f395f818161012f01526105d101525f818160b0015261062c01525f8181610191015281816101bf0152818161030c015261047d0152610bc45ff3fe608060405260043610610057575f3560e01c8063150b7a021461006257806344cd79481461009f578063589a1743146100ea5780635b50d7871461011e578063ce3f865f1461015f578063fbe8cc4214610180575f80fd5b3661005e57005b5f80fd5b34801561006d575f80fd5b5061008161007c366004610825565b6101b3565b6040516001600160e01b031990911681526020015b60405180910390f35b3480156100aa575f80fd5b506100d27f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b039091168152602001610096565b3480156100f5575f80fd5b506100d26101043660046108be565b5f602081905290815260409020546001600160a01b031681565b348015610129575f80fd5b506101517f000000000000000000000000000000000000000000000000000000000000000081565b604051908152602001610096565b34801561016a575f80fd5b5061017e6101793660046108be565b6102bf565b005b34801561018b575f80fd5b506100d27f000000000000000000000000000000000000000000000000000000000000000081565b5f336001600160a01b037f000000000000000000000000000000000000000000000000000000000000000016146101fd57604051630c8a99df60e01b815260040160405180910390fd5b5f848152602081905260409020546001600160a01b03161561023257604051633c4b94a360e01b815260040160405180910390fd5b6001600160a01b0385166102595760405163f69f8c0360e01b815260040160405180910390fd5b5f8481526020819052604080822080546001600160a01b0319166001600160a01b0389169081179091559051909186917fdd67f326f26468245c1778c9e66467a1e59e8ed2f3aa040511c03fe0c07daaa19190a350630a85bd0160e11b95945050505050565b5f818152602081905260409020546001600160a01b0316806102f457604051631928cfa560e21b815260040160405180910390fd5b604051637ba03aad60e01b8152600481018390525f907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031690637ba03aad9060240160c060405180830381865afa158015610359573d5f803e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061037d9190610908565b5060408051600160f81b6020820152601160f81b602182015281516002818303810182526022830181815260828401909452939450925f92916042015b60608152602001906001900390816103ba57505060408051602080820183525f80835292519394506103f39389939283928392016109e7565b604051602081830303815290604052815f8151811061041457610414610a2e565b602090810291909101810191909152835184820151604080516001600160a01b03938416948101949094529116908201523060608201526080016040516020818303038152906040528160018151811061047057610470610a2e565b60200260200101819052507f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031663dd46508f83836040516020016104bd929190610a42565b604051602081830303815290604052426040518363ffffffff1660e01b81526004016104ea929190610ab7565b5f604051808303815f87803b158015610501575f80fd5b505af1158015610513573d5f803e3d5ffd5b5050505061052585845f01518661053b565b6105348584602001518661053b565b5050505050565b5f6001600160a01b038316156105b6576040516370a0823160e01b81523060048201526001600160a01b038416906370a0823190602401602060405180830381865afa15801561058d573d5f803e3d5ffd5b505050506040513d601f19601f820116820180604052508101906105b19190610ad8565b6105b8565b475b9050805f036105c75750505050565b5f620f42406105f67f000000000000000000000000000000000000000000000000000000000000000084610b03565b6106009190610b20565b90505f61060d8284610b3f565b90508115610620576106208585846106a5565b801561065157610651857f0000000000000000000000000000000000000000000000000000000000000000836106a5565b604080516001600160a01b03871681526020810184905290810182905286907f1df95d0058852523ea13aa1809224af942bd446ce86d3e431bf193c2bec269f19060600160405180910390a2505050505050565b6001600160a01b038316610729575f826001600160a01b0316826040515f6040518083038185875af1925050503d805f81146106fc576040519150601f19603f3d011682016040523d82523d5f602084013e610701565b606091505b505090508061072357604051633d2cec6f60e21b815260040160405180910390fd5b50505050565b604080516001600160a01b038481166024830152604480830185905283518084039091018152606490920183526020820180516001600160e01b031663a9059cbb60e01b17905291515f928392908716916107849190610b52565b5f604051808303815f865af19150503d805f81146107bd576040519150601f19603f3d011682016040523d82523d5f602084013e6107c2565b606091505b50915091508115806107f057505f81511180156107f05750808060200190518101906107ee9190610b68565b155b1561053457604051633d2cec6f60e21b815260040160405180910390fd5b6001600160a01b0381168114610822575f80fd5b50565b5f805f805f60808688031215610839575f80fd5b85356108448161080e565b945060208601356108548161080e565b935060408601359250606086013567ffffffffffffffff811115610876575f80fd5b8601601f81018813610886575f80fd5b803567ffffffffffffffff81111561089c575f80fd5b8860208284010111156108ad575f80fd5b959894975092955050506020019190565b5f602082840312156108ce575f80fd5b5035919050565b80516108e08161080e565b919050565b805162ffffff811681146108e0575f80fd5b8051600281900b81146108e0575f80fd5b5f8082840360c081121561091a575f80fd5b60a0811215610927575f80fd5b5060405160a0810181811067ffffffffffffffff8211171561095757634e487b7160e01b5f52604160045260245ffd5b604052610963846108d5565b8152610971602085016108d5565b6020820152610982604085016108e5565b6040820152610993606085016108f7565b60608201526109a4608085016108d5565b608082015260a0939093015192949293505050565b5f81518084528060208401602086015e5f602082860101526020601f19601f83011685010191505092915050565b8581528460208201526001600160801b03841660408201526001600160801b038316606082015260a060808201525f610a2360a08301846109b9565b979650505050505050565b634e487b7160e01b5f52603260045260245ffd5b604081525f610a5460408301856109b9565b828103602084015280845180835260208301915060208160051b840101602087015f5b83811015610aa957601f19868403018552610a938383516109b9565b6020958601959093509190910190600101610a77565b509098975050505050505050565b604081525f610ac960408301856109b9565b90508260208301529392505050565b5f60208284031215610ae8575f80fd5b5051919050565b634e487b7160e01b5f52601160045260245ffd5b8082028115828204841417610b1a57610b1a610aef565b92915050565b5f82610b3a57634e487b7160e01b5f52601260045260245ffd5b500490565b81810381811115610b1a57610b1a610aef565b5f82518060208501845e5f920191825250919050565b5f60208284031215610b78575f80fd5b81518015158114610b87575f80fd5b939250505056fea2646970667358221220b8ec6098ba96bfc1efd7ddb1fd3d2ae7b55843a972ac74e8af2c6e5c41c955cb64736f6c634300081a00330000000000000000000000007c5f5a4bbd8fd63184577525326123b519429bdc000000000000000000000000a6cf99d35949c6cb911adb910078f4ca46f0f5d40000000000000000000000000000000000000000000000000000000000030d40","quoi":"Deploiement de TBlockFeeLocker — la liquidite reste enfermee, les frais deviennent collectables","constructeur":{"posm":"0x7C5f5A4bBd8fD63184577525326123B519429bDc","feeWallet":"0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4","creatorSharePpm":200000,"partCreateurPourCent":"20.0 %","partWalletPourCent":"80.0 %"},"surfaceCompilee":["CREATOR_SHARE_PPM","FEE_WALLET","POSM","collect","creatorOf","onERC721Received"],"octetsDeCreation":3419,"preuves":{"compilation":"solc 0.8.26, optimizer 200 — compilation propre","testsForge":"8 tests verts, ROUGE prouve par 4 mutations (liquidite 0 -> 1, TAKE_PAIR detourne, depot etranger, partage inverse)","surface":"test-locker-surface-fermee.mjs, 6 cas, ROUGE prouve par 4 mutations","abi":"aucune fonction de retrait, de transfert, d approbation ni d administration dans l ABI compilee"},"aFaireAPRES_sinon_rien_narrive":["1. frapper les NOUVELLES positions vers ce contrat au lieu de 0x…dEaD (PROPRIETAIRE_PERMANENT dans lancer-pool.js)","2. cesser de mettre FEE_POOL a 0 — un frais de pool ne devient honnete QUE parce que ce contrat rend la collecte possible","3. reecrire la regle publiee : « personne ne peut retirer la liquidite ; les frais vont a des adresses fixees d avance »","4. verifier la source sur l explorateur : rien ici ne prouve que le contrat deploye soit celui-ci"],"bornes":["DEPLOYER NE FAIT PAS ARRIVER L ARGENT : sans les etapes ci-dessus, ce contrat ne recoit aucune position.","Les positions DEJA brulees a 0x…dEaD restent perdues — rien ne les recupere.","La part du createur est IMMUABLE une fois deployee : la changer demandera un nouveau contrat.","Ce contrat DETIENT de la valeur. C est une classe de risque que ce projet n a jamais portee — relire avant de signer."],"prepareLe":"2026-09-26"};
+const etat = document.getElementById('etat');
+const sortie = document.getElementById('sortie');
+let compte = null;
+
+function dire(el, txt, cls) { el.textContent = txt; el.className = 'note' + (cls ? ' ' + cls : ''); }
+
+try {
+  if (!P) throw new Error('payload absent — regenerer avec: node preparer-locker-a-signer.mjs');
+  document.getElementById('vWallet').textContent = P.constructeur.feeWallet;
+  document.getElementById('vPosm').textContent = P.constructeur.posm;
+  document.getElementById('vPart').textContent = P.constructeur.partCreateurPourCent
+    + ' to the creator · ' + P.constructeur.partWalletPourCent + ' to the fee wallet';
+  /* ⛔ LA LONGUEUR EST RECALCULEE, PAS RECOPIEE : si un octet manquait, ce chiffre ne tomberait pas
+   *   juste et la page le dirait au lieu de laisser signer. */
+  const octets = (P.data.length - 2) / 2;
+  document.getElementById('vOctets').textContent = octets + (octets === P.octetsDeCreation ? ' ✓' : ' ⛔ ATTENDU ' + P.octetsDeCreation);
+  if (octets !== P.octetsDeCreation) {
+    dire(sortie, '⛔ The payload length does not match what was measured at build time. Do not sign.', 'ko');
+    document.getElementById('bConnecter').disabled = true;
+  }
+} catch (e) {
+  dire(sortie, '⛔ A-SIGNER-locker-frais.json could not be read: ' + e.message
+    + ' — open this page from the same folder as that file.', 'ko');
+}
+
+document.getElementById('bConnecter').addEventListener('click', async () => {
+  if (!window.ethereum) {
+    /* ⛔ ON NOMME LA CAUSE ET LA SUITE. « Ca ne marche pas » envoie chercher un defaut chez soi. */
+    dire(etat, 'No wallet in this browser. Open this page in a browser where your wallet is installed.', 'ko');
+    return;
+  }
+  try {
+    const c = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    compte = (c && c[0]) || null;
+    if (!compte) { dire(etat, 'The wallet returned no address.', 'ko'); return; }
+    const chaine = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+    if (chaine !== 8453) {
+      dire(etat, 'Connected on chain ' + chaine + ' — switching to Base…');
+      /* ⛔ ON DEMANDE, ON NE BASCULE PAS DANS SON DOS. Un refus est une reponse valide. */
+      try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); }
+      catch (_) { dire(etat, 'Still not on Base. Switch to Base in your wallet, then reconnect.', 'ko'); return; }
+    }
+    dire(etat, 'Connected: ' + compte.slice(0, 6) + '…' + compte.slice(-4) + ' on Base.', 'ok');
+    /* ⛔ ON PREVIENT SI C EST LE WALLET DE FRAIS : rien ne l interdit, mais rien ne le justifie. */
+    if (P && compte.toLowerCase() === String(P.constructeur.feeWallet).toLowerCase()) {
+      dire(sortie, '⚠️ This is the fee wallet. It does not need to be the deployer — the contract has no '
+        + 'owner. Signing from another wallet keeps this one out of the transaction.', 'ko');
+    }
+    document.getElementById('bEnvoyer').disabled = !P;
+  } catch (e) { dire(etat, 'Not connected: ' + (e && e.message ? e.message : e), 'ko'); }
+});
+
+document.getElementById('bEnvoyer').addEventListener('click', async () => {
+  if (!P || !compte) return;
+  const b = document.getElementById('bEnvoyer');
+  b.disabled = true;
+  dire(sortie, 'Your wallet opens now. Read what it shows — it is the only thing that signs.');
+  try {
+    const tx = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      /* ⛔ PAS DE `to` : c est une creation de contrat. Pas de `gas` impose : le wallet estime, et
+       *   c est lui qui a le dernier mot sur ce que coute la transaction. */
+      params: [{ from: compte, value: '0x0', data: P.data }],
+    });
+    dire(sortie, '✅ Sent: ' + tx + ' — wait for it to be mined, then verify the source on Basescan.', 'ok');
+  } catch (e) {
+    /* ⛔ UN REFUS N EST PAS UNE PANNE. L utilisateur a le droit de dire non. */
+    dire(sortie, 'Nothing was sent: ' + (e && e.message ? e.message : e), 'ko');
+    b.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

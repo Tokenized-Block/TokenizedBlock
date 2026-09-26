@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign — TBlockFeeLocker deployment</title>
+<!--
+  ⛔⛔ PAGE LOCALE, JAMAIS PUBLIEE. Elle ne sert qu a UNE transaction : deployer le locker de frais.
+      Elle n est pas servie par le serveur de l app (le serveur ne sert que les fichiers de son
+      manifeste) ; elle s ouvre depuis le disque. Mettre un outil de signature sur une page publique
+      serait une surface offerte pour rien.
+
+  ⛔ CETTE PAGE NE DETIENT AUCUNE CLE ET N EN DEMANDE AUCUNE. Elle demande la permission de lire une
+     adresse, puis passe la transaction au wallet — c est LUI qui affiche ce qui est signe, et c est
+     l humain qui decide. Aucune boucle, aucun envoi automatique, aucun retry.
+
+  ⛔ LE `data` EST COLLE ICI DEPUIS `A-SIGNER-locker-frais.json`, qui l a lui-meme lu dans l artefact
+     de compilation. Il n a ete ni retape ni reconstruit. La page recalcule sa longueur et l affiche :
+     si un octet manquait, le chiffre ne tomberait pas juste.
+
+  ⚠️ DEPLOYER NE FAIT ARRIVER AUCUN ARGENT PAR SOI-MEME. Ce qu il reste a faire ensuite est ecrit
+     dans le fichier JSON et rappele en bas de cette page.
+-->
+<style>
+  :root{--fond:#0a0f1a;--carte:#111a2b;--ligne:#1e2c45;--texte:#e8eefc;--doux:#93a4c4;--bleu:#7ea6ff;
+    --ko:#ff8a8a;--ok:#7ee0a8}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;padding:16px}
+  .w{max-width:760px;margin:0 auto}
+  .c{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin-bottom:14px}
+  h1{font-size:1.25rem;margin:0 0 4px} h2{font-size:1rem;margin:0 0 8px}
+  .m{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;word-break:break-all;color:var(--doux)}
+  table{width:100%;border-collapse:collapse} td{padding:6px 0;border-bottom:1px solid var(--ligne);vertical-align:top}
+  td:first-child{color:var(--doux);width:42%} b{font-variant-numeric:tabular-nums}
+  button{width:100%;padding:13px;border-radius:12px;border:1px solid var(--ligne);background:var(--bleu);
+    color:#06122b;font-weight:700;font-size:1rem;cursor:pointer;margin-top:10px}
+  button[disabled]{opacity:.5;cursor:not-allowed}
+  button.sec{background:transparent;color:var(--texte)}
+  .note{color:var(--doux);font-size:.9rem;margin:8px 0 0}
+  .ko{color:var(--ko)} .ok{color:var(--ok)}
+  ol{margin:8px 0 0;padding-left:20px;color:var(--doux)} li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="c">
+    <h1>Deploy TBlockFeeLocker</h1>
+    <p class="note">The liquidity stays locked. Only the trading fees become collectable.</p>
+  </div>
+
+  <div class="c">
+    <h2>What you are about to sign</h2>
+    <table>
+      <tr><td>network</td><td><b>Base mainnet · 8453</b></td></tr>
+      <tr><td>to</td><td><b>empty — this creates a contract</b></td></tr>
+      <tr><td>value</td><td><b>0 ETH</b></td></tr>
+      <tr><td>fees go to</td><td class="m" id="vWallet">—</td></tr>
+      <tr><td>position manager</td><td class="m" id="vPosm">—</td></tr>
+      <tr><td>creator share</td><td><b id="vPart">—</b> <span class="note">— immutable once deployed</span></td></tr>
+      <tr><td>creation bytes</td><td><b id="vOctets">—</b></td></tr>
+      <tr><td>gas (simulated)</td><td><b>714 192</b></td></tr>
+    </table>
+    <p class="note">⛔ Any wallet with gas can send this. The contract has <b>no owner</b>, so the sender
+      gains nothing — <b>do not sign from the fee wallet</b>, it would expose it for no reason.</p>
+  </div>
+
+  <div class="c">
+    <h2>Your wallet</h2>
+    <p class="note" id="etat">Not connected.</p>
+    <button id="bConnecter">Connect wallet</button>
+    <button id="bEnvoyer" class="sec" disabled>Review in wallet, then send</button>
+    <p class="note" id="sortie"></p>
+  </div>
+
+  <div class="c">
+    <h2>⚠️ Deploying does not make money arrive</h2>
+    <ol>
+      <li>New positions must be minted <b>to this contract</b> instead of the dead address.</li>
+      <li><code>FEE_POOL</code> must stop being 0 — a pool fee only becomes honest <i>because</i> this contract makes collection possible.</li>
+      <li>The published rule changes, and must be rewritten in plain words: “nobody can withdraw the liquidity; trading fees go to addresses fixed in advance.”</li>
+      <li>Verify the source on the explorer — nothing here proves the deployed contract is this one.</li>
+    </ol>
+    <p class="note">Positions already burnt to the dead address stay lost. Nothing recovers them.</p>
+  </div>
+</div>
+
+<script type="module">
+/* ⛔⛔ LE PAYLOAD EST INJECTE ICI PAR `preparer-locker-a-signer.mjs`, QUI LE LIT DANS L ARTEFACT DE
+ *     COMPILATION. Il n est JAMAIS retape : un bytecode de 3 419 octets recopie a la main est
+ *     exactement le geste ou un caractere se perd — et le contrat deploye ne serait plus celui qui a
+ *     ete teste et mute.
+ *   ⛔ POURQUOI INJECTE PLUTOT QUE LU DANS LE FICHIER VOISIN : cette page s ouvre depuis le DISQUE,
+ *     et un `fetch` sur une origine `file://` est refuse par le navigateur. Mesure faite : le
+ *     serveur local rend 404 sur cette page ET sur le JSON, parce qu il ne sert que son manifeste —
+ *     et on ne l affaiblit pas pour une page de signature. Elle doit donc se suffire a elle-meme. */
+const P = /*__PAYLOAD__*/ null;
+const etat = document.getElementById('etat');
+const sortie = document.getElementById('sortie');
+let compte = null;
+
+function dire(el, txt, cls) { el.textContent = txt; el.className = 'note' + (cls ? ' ' + cls : ''); }
+
+try {
+  if (!P) throw new Error('payload absent — regenerer avec: node preparer-locker-a-signer.mjs');
+  document.getElementById('vWallet').textContent = P.constructeur.feeWallet;
+  document.getElementById('vPosm').textContent = P.constructeur.posm;
+  document.getElementById('vPart').textContent = P.constructeur.partCreateurPourCent
+    + ' to the creator · ' + P.constructeur.partWalletPourCent + ' to the fee wallet';
+  /* ⛔ LA LONGUEUR EST RECALCULEE, PAS RECOPIEE : si un octet manquait, ce chiffre ne tomberait pas
+   *   juste et la page le dirait au lieu de laisser signer. */
+  const octets = (P.data.length - 2) / 2;
+  document.getElementById('vOctets').textContent = octets + (octets === P.octetsDeCreation ? ' ✓' : ' ⛔ ATTENDU ' + P.octetsDeCreation);
+  if (octets !== P.octetsDeCreation) {
+    dire(sortie, '⛔ The payload length does not match what was measured at build time. Do not sign.', 'ko');
+    document.getElementById('bConnecter').disabled = true;
+  }
+} catch (e) {
+  dire(sortie, '⛔ A-SIGNER-locker-frais.json could not be read: ' + e.message
+    + ' — open this page from the same folder as that file.', 'ko');
+}
+
+document.getElementById('bConnecter').addEventListener('click', async () => {
+  if (!window.ethereum) {
+    /* ⛔ ON NOMME LA CAUSE ET LA SUITE. « Ca ne marche pas » envoie chercher un defaut chez soi. */
+    dire(etat, 'No wallet in this browser. Open this page in a browser where your wallet is installed.', 'ko');
+    return;
+  }
+  try {
+    const c = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    compte = (c && c[0]) || null;
+    if (!compte) { dire(etat, 'The wallet returned no address.', 'ko'); return; }
+    const chaine = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+    if (chaine !== 8453) {
+      dire(etat, 'Connected on chain ' + chaine + ' — switching to Base…');
+      /* ⛔ ON DEMANDE, ON NE BASCULE PAS DANS SON DOS. Un refus est une reponse valide. */
+      try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); }
+      catch (_) { dire(etat, 'Still not on Base. Switch to Base in your wallet, then reconnect.', 'ko'); return; }
+    }
+    dire(etat, 'Connected: ' + compte.slice(0, 6) + '…' + compte.slice(-4) + ' on Base.', 'ok');
+    /* ⛔ ON PREVIENT SI C EST LE WALLET DE FRAIS : rien ne l interdit, mais rien ne le justifie. */
+    if (P && compte.toLowerCase() === String(P.constructeur.feeWallet).toLowerCase()) {
+      dire(sortie, '⚠️ This is the fee wallet. It does not need to be the deployer — the contract has no '
+        + 'owner. Signing from another wallet keeps this one out of the transaction.', 'ko');
+    }
+    document.getElementById('bEnvoyer').disabled = !P;
+  } catch (e) { dire(etat, 'Not connected: ' + (e && e.message ? e.message : e), 'ko'); }
+});
+
+document.getElementById('bEnvoyer').addEventListener('click', async () => {
+  if (!P || !compte) return;
+  const b = document.getElementById('bEnvoyer');
+  b.disabled = true;
+  dire(sortie, 'Your wallet opens now. Read what it shows — it is the only thing that signs.');
+  try {
+    const tx = await window.ethereum.request({
+      method: 'eth_sendTransaction',
+      /* ⛔ PAS DE `to` : c est une creation de contrat. Pas de `gas` impose : le wallet estime, et
+       *   c est lui qui a le dernier mot sur ce que coute la transaction. */
+      params: [{ from: compte, value: '0x0', data: P.data }],
+    });
+    dire(sortie, '✅ Sent: ' + tx + ' — wait for it to be mined, then verify the source on Basescan.', 'ok');
+  } catch (e) {
+    /* ⛔ UN REFUS N EST PAS UNE PANNE. L utilisateur a le droit de dire non. */
+    dire(sortie, 'Nothing was sent: ' + (e && e.message ? e.message : e), 'ko');
+    b.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

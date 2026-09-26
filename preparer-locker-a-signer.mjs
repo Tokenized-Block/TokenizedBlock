@@ -117,6 +117,27 @@ const sortie = {
 const fichier = join(ici, 'A-SIGNER-locker-frais.json');
 writeFileSync(fichier, JSON.stringify(sortie, null, 2) + '\n');
 console.log('ecrit : ' + fichier);
+
+/* ⛔⛔ LA PAGE DE SIGNATURE EST GENEREE, PAS REMPLIE A LA MAIN. Elle s ouvre depuis le DISQUE (un
+ *     `fetch` sur `file://` est refuse par le navigateur, et le serveur local rend 404 sur elle
+ *     comme sur le JSON parce qu il ne sert que son manifeste). Elle doit donc porter le payload —
+ *     et le seul moyen sur de l y mettre est de l injecter depuis l artefact, jamais de le recopier.
+ *   ⛔ LE MARQUEUR DOIT EXISTER : sans lui on ecrirait une page qui a l air prete et ne l est pas. */
+const modele = join(ici, 'signer-locker.modele.html');
+try {
+  const src = readFileSync(modele, 'utf8');
+  if (!src.includes('/*__PAYLOAD__*/')) {
+    console.error('⛔ marqueur /*__PAYLOAD__*/ absent du modele — page NON generee.');
+    process.exit(1);
+  }
+  const page = src.replace('/*__PAYLOAD__*/ null', JSON.stringify(sortie));
+  const cible = join(ici, 'signer-locker.html');
+  writeFileSync(cible, page);
+  console.log('ecrit : ' + cible + '  (a ouvrir depuis le disque, dans un navigateur avec le wallet)');
+} catch (e) {
+  console.error('⛔ page de signature NON generee : ' + (e && e.message));
+  process.exit(1);
+}
 console.log('  octets de creation : ' + sortie.octetsDeCreation);
 console.log('  part createur      : ' + sortie.constructeur.partCreateurPourCent
   + '  ·  part a6cf : ' + sortie.constructeur.partWalletPourCent);
