@@ -1674,6 +1674,21 @@ details[open] > summary::before{transform:rotate(90deg)}
           your wallet, and it shows you what it signs.</p>
         <button class="bouton" id="bConnecterW" type="button">Connect wallet</button>
         <p class="note" id="wNoteConnexion"></p>
+        <!-- ⛔⛔ SANS WALLET DANS CE NAVIGATEUR, « Connect wallet » NE PEUT RIEN FAIRE — JAMAIS, PAS
+             « pas encore ». Production du 2026-09-26 : `wallet_no_provider` = 25 pour 7 sessions ;
+             quelqu un a tape encore et encore un bouton qui ne pouvait pas aboutir.
+             ⛔ « Ouvre cette page dans ton wallet » sans le LIEN sous la main, sur telephone, c est
+               demander de retaper une URL de memoire. Le lien se copie donc ici, et il s affiche en
+               clair juste en dessous pour le cas ou la copie echoue (presse-papier refuse hors
+               contexte securise : ca arrive, et ca doit se voir).
+             ⚠️ CE BLOC N EST PAS UN DEEPLINK. Il ne promet pas d ouvrir une application : on ne
+               peut pas le mesurer d ici, donc on ne le dit pas.
+             ⛔ `#bConnecterW` reste VISIBLE : certaines extensions s injectent apres le chargement,
+               et cacher le bouton enfermerait celui dont le wallet arrive en retard. -->
+        <div id="wSansWallet" hidden style="margin-top:10px">
+          <button class="bouton sec" id="wCopierLien" type="button">Copy this page's link</button>
+          <p class="note mono" id="wSansWalletUrl" style="word-break:break-all;margin-top:6px"></p>
+        </div>
       </div>
       <div id="wConnecte" hidden>
         <div class="wAdr"><span class="mono" id="wAdr"></span>
@@ -1915,7 +1930,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260925-rejeu-parle" hidden>Build <code>20260925-rejeu-parle</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-sans-wallet-mene-quelque-part" hidden>Build <code>20260926-sans-wallet-mene-quelque-part</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3859,9 +3874,11 @@ $('#fConnecter').addEventListener('click', async () => {
   try { await connecter(); } finally { $('#fConnecter').disabled = false; }
   if (compte) { $('#fConnecter').hidden = true; $('#fGM').click(); return; }
   /* mesure en navigateur : sans wallet, la raison s ecrivait dans l onglet Wallet, invisible depuis la fiche */
-  $('#fNote').textContent = typeof window.ethereum === 'undefined'
-    ? 'No wallet found in this browser. Open this page where your wallet is installed (Coinbase Wallet, MetaMask…) — it never asks for a key.'
-    : 'The wallet did not connect — nothing was shared. Try again and approve the connection in your wallet.';
+  /* ⛔ CE FUT LE PREMIER ENDROIT A DIRE LA VERITE (2026-09-13), et il la disait en dur. Il passe
+   *   maintenant par `texteRefusConnexion()` pour que les neuf refus de l app aient UNE phrase :
+   *   une bonne formulation recopiee a la main derive, et c est la copie faible qui reste. */
+  $('#fNote').textContent = texteRefusConnexion(
+    'The wallet did not connect — nothing was shared. Try again and approve the connection in your wallet.');
 });
 $('#fGM').addEventListener('click', () => {
   const adr = $('#fAdr').textContent.trim();
@@ -4386,6 +4403,46 @@ async function pret(opts) {
   return true;
 }
 
+/* ⛔⛔ « OPEN YOUR WALLET » A ETE DIT NEUF FOIS A DES GENS QUI N EN AVAIENT AUCUN.
+ *     Mesure de PRODUCTION du 2026-09-26 : `wallet_no_provider` = 25 pour `visite` = 7. Les deux ne
+ *     se comparent pas naivement — `visite` est dedoublonne par session (`etape(nom, true)`), ce
+ *     compteur-la non — mais c est justement le point : quelqu un a tape encore et encore.
+ *     ⚠️ Et ce n est PAS un compteur neuf qui demarre : il existe depuis le 2026-09-23 (08b629a),
+ *     et il a fait 0, 0, 4, 25. La hausse est reelle, pas un artefact de naissance.
+ *     Reproduit en navigateur a 375 px, `window.ethereum` retire : trois taps sur la puce du header,
+ *     trois beacons `wallet_no_provider`, et `document.body.innerText` IDENTIQUE au caractere.
+ *     La phrase juste existait a UN seul endroit (le GM de la map, 2026-09-13) ; les huit autres
+ *     refus disaient « Open your wallet to continue », ce qui est INFAISABLE sans wallet.
+ *   ⇒ UNE SEULE PHRASE, ICI, pour les neuf. Un refus qui demande l impossible est pire qu un refus
+ *     muet : il envoie chercher un defaut chez soi.
+ *   ⚠️ CE QUE CETTE FONCTION NE PROUVE PAS : qu un wallet s ouvre. Elle dit ou aller ; c est
+ *     l application du visiteur qui decide. Aucun deeplink fournisseur n est fabrique ici. */
+/* ⛔ LE LIEN EST LE SEUL CHEMIN RESTANT. Un navigateur sans provider ne connectera rien, quoi qu on
+ *   peigne : la seule suite possible est d ouvrir CETTE page ailleurs. On donne donc le lien, et on
+ *   l affiche aussi en clair — `navigator.clipboard` jette hors contexte securise, et un « Copied »
+ *   sans copie reelle serait un mensonge a l ecran.
+ * ⛔ Le bloc se REFERME si un wallet finit par apparaitre : une alerte qui survit a sa cause devient
+ *   du bruit, et le prochain refus vrai sera lu comme du decor. */
+function montrerSansWallet(sans) {
+  const bloc = $('#wSansWallet');
+  if (!bloc) return; /* volet Wallet absent : rien a montrer, rien a casser */
+  bloc.hidden = !sans;
+  if (!sans) return;
+  const u = $('#wSansWalletUrl');
+  if (u) u.textContent = location.href;
+  /* ⛔ on se greffe sur le SEUL gestionnaire de copie de l app (`data-copier-diag`), qui dit deja un
+   *   echec de copie au lieu de le taire. Deux gestionnaires de copie finiraient par diverger. */
+  const b = $('#wCopierLien');
+  if (b) { b.setAttribute('data-copier-diag', location.href); b.textContent = "Copy this page's link"; }
+}
+
+function texteRefusConnexion(siWalletPresent) {
+  if (window.ethereum) return siWalletPresent;
+  return 'No wallet found in this browser. Open this page from inside your wallet app '
+    + '(Coinbase Wallet, MetaMask…), or install one first — it never asks for a key, only for '
+    + 'permission to read an address.';
+}
+
 async function connecter() {
   /* ⛔ UNE SEULE CONNEXION, DEUX ONGLETS. My block et Wallet ont chacun leur bouton, mais c est la
    * meme fonction et le meme `compte` : deux connexions separees finiraient par designer deux
@@ -4394,12 +4451,17 @@ async function connecter() {
   const eth = window.ethereum;
   if (!eth) {
     /* ⛔ ON NOMME LA CAUSE. « Ca ne marche pas » envoie chercher un defaut chez soi ; « aucun
-     * wallet dans ce navigateur » dit quoi faire. */
+     * wallet dans ce navigateur » dit quoi faire.
+     * ⛔⛔ MAIS LA CAUSE ETAIT NOMMEE DANS UN VOLET MASQUE. `#mienNote` vit dans `v-mien`,
+     *   `#wNoteConnexion` dans `v-wallet` ; la puce qui declenche ca vit dans le HEADER, au-dessus
+     *   de tous les volets. Un tap depuis la map ne changeait donc RIEN a l ecran. C est
+     *   l appelant qui doit amener le visiteur la ou la phrase est ecrite — voir `#pCompte`. */
     try { etape('wallet_no_provider'); } catch (_) {}
-    dire('No wallet found in this browser. This page needs one to know which blocks are '
-      + 'yours — it never asks for a key, only for permission to read an address.');
+    dire(texteRefusConnexion(''));
+    montrerSansWallet(true);
     return;
   }
+  montrerSansWallet(false);
   try {
     const comptes = await eth.request({ method: 'eth_requestAccounts' });
     compte = (comptes && comptes[0]) || null;
@@ -7942,7 +8004,7 @@ $('#sfParoles').addEventListener('click', async (ev) => {
   const p = parolesFil.find((x) => x.id === b.getAttribute('data-parole'));
   if (!p) return;
   const note = $('#sfParolesNote');
-  if (!(await pret())) { note.className = 'note wKo'; note.textContent = 'Open your wallet to continue — it signs the message, this page never does.'; return; }
+  if (!(await pret())) { note.className = 'note wKo'; note.textContent = texteRefusConnexion('Open your wallet to continue — it signs the message, this page never does.'); return; }
   const memo = validerMemo(p.texte);
   if (memo.etat !== 'OK') { note.className = 'note wKo'; note.textContent = 'This line cannot be a message: ' + (memo.pourquoi || 'refused') + '.'; return; }
   paroleEnvoi = true;
@@ -8286,7 +8348,7 @@ async function preparerEchange(sens) {
   if (!(await pret({ e }))) {
     if (!e.textContent || !/Switch to Base/i.test(e.textContent)) {
       e.className = 'note wKo';
-      e.textContent = 'Open your wallet to continue — it signs, this page never does.';
+      e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.');
     }
     /* ⛔ hors du `if` : le cas « mauvaise chaine » garde son propre message mais reste le MEME
      *   refus — sortir sans compter dans cette moitie laisserait la moitie qu on ne regarde pas. */
@@ -8610,7 +8672,7 @@ async function preparerAjout() {
   const adr = $('#profil').dataset.block;
   const e = $('#plqEtat');
   $('#plqActions').innerHTML = ''; $('#plqLignes').innerHTML = '';
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } return; }
   const pct = Number(String($('#plqPart').value || '').trim().replace(',', '.'));
   if (!(pct >= 0.1 && pct <= 99.9)) { e.className = 'note wKo'; e.textContent = 'Enter a share between 0.1 and 99.9 %.'; return; }
   e.className = 'note'; e.textContent = 'Reading the pool, your balance and your approvals…';
@@ -8732,7 +8794,7 @@ async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } return; }
   const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
   const eth = Number(raw);
   if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
@@ -8932,7 +8994,7 @@ async function calculerLancement() {
   const adr = $('#profil').dataset.block;
   const e = $('#plEtat');
   e.className = 'note';
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs, this page never does.'; } vieAutoArreter(); return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } vieAutoArreter(); return; }
   try { await valoPrete; } catch (_) {}
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   /* ⛔ V3 (2026-09-19) : la devise choisie est une ADRESSE (USDC, cbBTC, action) ou ETH. Plus de TBLOCK a la mise en vie. */
@@ -10288,7 +10350,17 @@ $('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
 });
 
 $('#pCompte').addEventListener('click', async () => {
-  if (!compte) { await connecter(); return; }
+  /* ⛔⛔ CE `return` TUAIT L INTENTION ECRITE JUSTE AU-DESSUS DU BOUTON. Le commentaire du header dit
+   *     (Phil, 2026-09-18) : « il connecte, PUIS montre l adresse courte et ouvre l onglet Wallet ».
+   *     Mais `connecter()` ecrit sa raison dans `#mienNote` (volet `v-mien`) et `#wNoteConnexion`
+   *     (volet `v-wallet`), et la puce vit dans le HEADER, au-dessus de tous les volets : un tap
+   *     depuis la map partait en `return` AVANT le `allerA('wallet')`. Mesure en navigateur a 375 px
+   *     le 2026-09-26, `window.ethereum` retire : 3 taps, 3 beacons `wallet_no_provider`,
+   *     `document.body.innerText` inchange au caractere. 25 taps de ce genre en production ce
+   *     jour-la, pour 7 sessions.
+   *   ⇒ LE VOYAGE SE FAIT DANS LES DEUX CAS : connecte on va voir son adresse, pas connecte on va
+   *     voir POURQUOI. Un bouton qui ne mene nulle part se fait taper encore et encore. */
+  if (!compte) await connecter();
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
 });
 
@@ -12574,7 +12646,7 @@ async function creerBlock() {
     if (!(await pret({ e }))) {
       if (!/Switch to Base/i.test(e.textContent || '')) {
         e.className = 'note wKo';
-        e.textContent = 'Your wallet did not connect, so nothing was started.';
+        e.textContent = texteRefusConnexion('Your wallet did not connect, so nothing was started.');
       }
       return;
     }
@@ -13719,7 +13791,7 @@ let gravureEnCours = false;
 $('#bGraver').addEventListener('click', async () => {
   const e = $('#bGraverEtat');
   if (gravureEnCours) return;
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue.'); return; }
   const vu = brainDernier;
   if (!brainAdr || !vu) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   /* ⛔ LA MEMOIRE GRAVEE (decision de Phil, 2026-09-13) : instantane des 128 neurones + empreinte de la memoire
@@ -13752,7 +13824,7 @@ let fragmentsAGraver = null, fragmentEnCours = false;
 $('#bFragmenter').addEventListener('click', async () => {
   const e = $('#bFragmenterEtat');
   if (fragmentEnCours) return;
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = 'Open your wallet to continue — it signs each fragment, this page never does.'; return; }
+  if (!(await pret())) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs each fragment, this page never does.'); return; }
   if (!brainAdr || !brainEtat) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   if (!fragmentsAGraver || fragmentsAGraver.adr !== brainAdr) {
     fragmentsAGraver = { adr: brainAdr, textes: fragmenterMemoire(brainEtat), fait: 0, tick: brainEtat.tick, liens: [] };
