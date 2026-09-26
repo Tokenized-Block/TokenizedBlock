@@ -117,6 +117,31 @@ v('⛔⛔ le seuil de rotation N EST PAS `petit` — cette garde couvrait la mau
     'le seuil de rotation est au-dessus du plancher de taille : il couperait des blocks visibles');
 });
 
+v('⛔⛔ l angle AVANCE avec le temps — un cube tourne ne tourne pas', () => {
+  /* ⛔⛔ J AI FAILLI CRIER VICTOIRE SUR DU STATIQUE. Mesure en production : 67 blocks sur 67
+   *     portaient bien un `rotate(...)`. Mais les angles etaient IDENTIQUES a 1,5 s d intervalle.
+   *     « Un cube TOURNE » et « un cube QUI TOURNE » sont deux choses differentes, et le compteur
+   *     « combien en portent un » ne distingue pas les deux : UNE SORTIE CONSTANTE N EST PAS UNE
+   *     MESURE.
+   *   ⛔ LA CAUSE ETAIT MON INSTRUMENT, PAS LE CODE : le panneau du navigateur repondait
+   *     `document.hidden === true`, ce qui suspend `requestAnimationFrame`. Le depot le DOCUMENTE
+   *     deja — « l animation s arrete quand l onglet est cache ». Je ne pouvais donc rien voir
+   *     bouger, et j ai failli en conclure que rien ne bougeait.
+   *   ⇒ Ce cas verifie ce qui EST verifiable sans navigateur : que l angle depend du TEMPS. Il ne
+   *     prouve pas que ca tourne a l ecran — seul un onglet visible le montrerait. */
+  assert.ok(/maintenant \* h\.spin/.test(map),
+    'l angle ne depend plus du temps : les cubes seraient tournes une fois, puis figes');
+  /* on rejoue la formule : deux instants differents doivent donner deux angles differents */
+  const formule = (maintenant, spin0, spin) => (spin0 + maintenant * spin * 0.006) % 360;
+  const a = formule(1000, 180, 1.6), b = formule(2000, 180, 1.6);
+  assert.notEqual(a.toFixed(1), b.toFixed(1), 'la formule rend le meme angle a une seconde d ecart');
+  /* ⛔ ET LA VITESSE MINIMALE DOIT SE VOIR : un plancher de spin trop bas donnerait un mouvement
+   *   indiscernable de l immobilite — une rotation qu on ne voit pas ne vaut pas mieux que rien. */
+  const parSeconde = Math.abs(formule(2000, 0, 1.6) - formule(1000, 0, 1.6));
+  assert.ok(parSeconde >= 3, 'le cube le plus lent tourne de ' + parSeconde.toFixed(1)
+    + ' deg/s : indiscernable de l immobilite');
+});
+
 v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
   /* ⛔ SANS BORNE, un block tres lointain bondirait a la taille d un proche et MENTIRAIT sur sa
    *   distance. Le plancher rend lisible ; il ne doit pas rendre faux. */
@@ -124,7 +149,7 @@ v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
     'la hausse du plancher n est plus bornee : un block lointain pourrait passer pour un proche');
 });
 
-assert.equal(n, 8, 'compte de cas inattendu : ' + n);
+assert.equal(n, 9, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');
