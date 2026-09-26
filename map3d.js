@@ -350,7 +350,26 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
         continue;
       }
       if (!h.visible) { h.el.style.visibility = ''; h.visible = true; }
-      const k = Math.min(2.2, p.k * 1.8);
+      /* ⛔⛔ UN PLANCHER DE LISIBILITE, ET C EST UNE MESURE QUI L A IMPOSE. Phil voyait « un grand
+       *     vide » a gauche de la map. Mesure en production (1280x900, 2026-09-26) : 173 blocks,
+       *     69 visibles, et 49 DE CES 69 FAISAIENT MOINS DE 14 px — taille MEDIANE 11 px, minimum
+       *     7 px. Ce n etait donc pas un vide : c etait de la poussiere. Un carre de 11 px ne se
+       *     voit pas, ne se lit pas, et ne se clique pas (le minimum tactile usuel est ~24 px).
+       *   ⛔ LES 94 MASQUES NE SONT PAS UN BUG, et je l ai verifie avant d y toucher : la camera est
+       *     DANS le cube, donc environ la moitie des blocks est derriere elle. Les cacher est
+       *     correct — les agrandir ne l aurait pas ete.
+       *
+       * ⛔⛔ CE QUE CE PLANCHER COUTE, ET JE LE DIS : sous le plancher, deux blocks de marches
+       *     DIFFERENTS s affichent a la MEME taille. La taille cesse donc d y etre comparable.
+       *     C est un echange assume, pas un gain gratuit — mais a 7 et 11 px ils n etaient DEJA pas
+       *     comparables, et en plus ils etaient invisibles et incliquables. L ordre reste juste
+       *     partout AU-DESSUS du plancher.
+       *   ⛔ ET LA HAUSSE EST BORNEE A 2,5x : sans cette borne, un block tres lointain bondirait a
+       *     la taille d un proche et mentirait sur sa distance. La profondeur reste portee par le
+       *     `z-index`, qui vient de `zc` et que ceci ne touche pas. */
+      const PX_MIN = 20;
+      let k = Math.min(2.2, p.k * 1.8);
+      if (h.t > 0 && h.t * k < PX_MIN) k = Math.min(2.2, Math.max(k, Math.min(PX_MIN / h.t, k * 2.5)));
       /* un cube de moins de 44 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
       const petit = h.t * k < 64;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
