@@ -94,21 +94,37 @@ v('⛔ la rotation propre s arrete si l utilisateur a demande moins de mouvement
   /* ⛔ UN EFFET « VIVANT » IMPOSE A QUELQU UN QUI A DIT NON EST UN DEFAUT, pas une touche de vie.
    *   `mouvementReduit` existe deja dans ce module : on l honore au lieu d ajouter un effet qui
    *   l ignore. */
-  assert.ok(/if \(!mouvementReduit && !petit && Number\.isFinite\(h\.spin\)\)/.test(map),
-    'la rotation propre ignore `mouvementReduit`, ou tourne des cubes trop petits pour la montrer');
+  assert.ok(/if \(!mouvementReduit && h\.t \* k >= 14 && Number\.isFinite\(h\.spin\)\)/.test(map),
+    'la rotation propre ignore `mouvementReduit`, ou son seuil de taille a change sans raison ecrite');
 });
 
-v('⛔ la rotation reutilise le seuil `petit` au lieu d en inventer un second', () => {
-  /* ⛔ DEUX SEUILS POUR LA MEME IDEE DIVERGENT : celui qu on relit le moins finit par mentir. Le
-   *   module avait deja `petit` (moins de 64 px) pour couper les satellites — la rotation s y
-   *   raccroche au lieu d ouvrir une seconde regle. */
-  const i = map.indexOf('const petit = h.t * k <');
-  assert.notEqual(i, -1, 'le seuil `petit` a disparu : la rotation s appuie sur une regle absente');
-  const j = map.indexOf('!mouvementReduit && !petit');
-  assert.ok(j > i, 'la rotation est calculee avant que `petit` ne soit connu');
+v('⛔⛔ le seuil de rotation N EST PAS `petit` — cette garde couvrait la mauvaise moitie', () => {
+  /* ⛔⛔ CE CAS EXISTE PARCE QUE JE ME SUIS TROMPE, ET QUE LA MESURE L A DIT. La rotation etait
+   *     gardee par `!petit` (moins de 64 px), « pour ne pas inventer un second seuil ». Mesure en
+   *     production juste apres : 63 blocks visibles, UN SEUL tournait — la taille MEDIANE est de
+   *     20 px, donc presque tout est « petit ». La garde etait VRAIE et couvrait la MAUVAISE
+   *     MOITIE.
+   *   ⇒ `petit` coupe les SATELLITES, qui coutent cher. Une rotation est une valeur de plus dans
+   *     une transformation deja ecrite a chaque image. Deux couts differents, deux seuils. */
+  assert.ok(!/!mouvementReduit && !petit/.test(map),
+    'la rotation est de nouveau gardee par `petit` : un seul cube sur soixante tournerait');
+  /* ⛔ ET LE SEUIL PROPRE DOIT RESTER SOUS LE PLANCHER DE TAILLE, sinon il ne garde rien du tout —
+   *   une garde qui ne peut jamais etre fausse ne borne rien. */
+  const mSeuil = map.match(/h\.t \* k >= (\d+)/);
+  const mPlancher = map.match(/const PX_MIN = (\d+);/);
+  assert.ok(mSeuil && mPlancher, 'le seuil de rotation ou le plancher de taille a disparu');
+  assert.ok(Number(mSeuil[1]) < Number(mPlancher[1]),
+    'le seuil de rotation est au-dessus du plancher de taille : il couperait des blocks visibles');
 });
 
-assert.equal(n, 7, 'compte de cas inattendu : ' + n);
+v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
+  /* ⛔ SANS BORNE, un block tres lointain bondirait a la taille d un proche et MENTIRAIT sur sa
+   *   distance. Le plancher rend lisible ; il ne doit pas rendre faux. */
+  assert.ok(/Math\.min\(PX_MIN \/ h\.t, k \* 2\.5\)/.test(map),
+    'la hausse du plancher n est plus bornee : un block lointain pourrait passer pour un proche');
+});
+
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');

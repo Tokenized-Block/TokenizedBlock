@@ -385,8 +385,21 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
        *     deriverait du premier.
        *   ⛔ DETERMINISTE : `spin` et `spin0` viennent de l adresse, donc le meme block tourne
        *     pareil chez tout le monde. Un `Math.random()` ici rendrait deux ecrans incomparables. */
+      /* ⛔⛔ CE SEUIL A ETE CORRIGE PAR LA MESURE, ET MA JUSTIFICATION DE DEPART ETAIT FAUSSE. Je
+       *     m etais appuye sur `petit` (moins de 64 px) « pour ne pas inventer un second seuil ».
+       *     Mesure en production juste apres : 63 blocks visibles, UN SEUL tournait. Avec une
+       *     taille MEDIANE de 20 px, presque tout est « petit » — la garde etait VRAIE et couvrait
+       *     LA MAUVAISE MOITIE.
+       *   ⇒ `petit` existe pour couper les SATELLITES, qui coutent cher a dessiner. Une rotation
+       *     est UNE valeur dans une chaine de transformation deja ecrite a chaque image : le cout
+       *     n est pas comparable, et reutiliser le seuil confondait deux problemes differents.
+       *     « Ne pas inventer un second seuil » est une bonne regle ; l appliquer a deux questions
+       *     qui n ont pas le meme cout ne l etait pas.
+       *   ⛔ LE SEUIL PROPRE EST DONC BAS, ET IL RESTE : sous 14 px une rotation ne se voit pas, et
+       *     la calculer serait du bruit. Le plancher de 20 px le rend inoffensif en pratique — mais
+       *     il protege si le plancher change un jour. */
       let tourne = '';
-      if (!mouvementReduit && !petit && Number.isFinite(h.spin)) {
+      if (!mouvementReduit && h.t * k >= 14 && Number.isFinite(h.spin)) {
         const deg = (h.spin0 + maintenant * h.spin * 0.006) % 360;
         tourne = ' rotate(' + deg.toFixed(1) + 'deg)';
       }
