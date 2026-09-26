@@ -802,6 +802,12 @@ const ETAPES_ENTONNOIR = [
    *   aurait reproduit le defaut que je venais de nommer le 2026-09-26 : `wallet_no_provider` porte
    *   un seul nom pour neuf chemins, et on ne peut donc pas dire lequel a ete tape 25 fois. */
   'stades_relire',
+  /* ⛔⛔ LES DEUX PORTES DE SORTIE POUR UN NAVIGATEUR SANS WALLET. Mesure du 2026-09-26 : sur les
+   *     trois jours pleins ou le compteur existe, 55 sessions, 29 `wallet_no_provider` et
+   *     `wallet_connect_ok` = ZERO. Deux noms distincts, pas un : on veut savoir laquelle sert.
+   *   ⚠️ UN CLIC N EST PAS UNE CONNEXION. Ces deux-la diront qu on a tape le lien ; seul
+   *     `wallet_connect_ok` qui remonte dira que la porte menait quelque part. */
+  'wallet_ouvrir_cbw', 'wallet_ouvrir_mm',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
    *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait

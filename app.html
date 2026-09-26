@@ -1686,6 +1686,29 @@ details[open] > summary::before{transform:rotate(90deg)}
              ⛔ `#bConnecterW` reste VISIBLE : certaines extensions s injectent apres le chargement,
                et cacher le bouton enfermerait celui dont le wallet arrive en retard. -->
         <div id="wSansWallet" hidden style="margin-top:10px">
+          <!-- ⛔⛔ CE QUE LA MESURE DIT, ET POURQUOI CES DEUX LIENS EXISTENT. Sur les trois jours
+               pleins ou le compteur existe (2026-09-24 au 09-26) : 55 sessions, 29
+               `wallet_no_provider`, et `wallet_connect_ok` = ZERO. Pas une connexion reussie.
+               `connecter()` est la SEULE porte qui pose `compte` (verifie : deux sites
+               d affectation, le second garde par `if (!compte) return`), et le compteur a ete
+               prouve atteignable a l execution, beacon ET enregistrement serveur — donc ce zero
+               est un vrai zero, pas un trou d instrumentation.
+               ⇒ Le trafic arrive dans des navigateurs SANS provider injecte (19 `lien_recu` :
+                 des liens partages, donc des navigateurs in-app). Une phrase honnete ne suffit
+                 pas : il leur faut une porte.
+               ⛔ LES DEUX FORMATS SONT LUS DANS LA DOCUMENTATION, PAS RECITES. De memoire j aurais
+                 ecrit `metamask.app.link`, qui est l ANCIEN hote ; le format documente aujourd hui
+                 est `link.metamask.io/dapp/<hote+chemin, SANS schema>`. Coinbase Wallet :
+                 `go.cb-w.com/dapp?cb_url=<URL complete, percent-encodee>`.
+               ⚠️ ON NE PROMET PAS QUE L APPLICATION S OUVRE. Rien ici ne peut le mesurer : il n y a
+                 pas de telephone dans le banc. La phrase est donc CONDITIONNELLE, et le lien a
+                 copier reste dessous — lui, il est vrai dans tous les cas. -->
+          <p class="note" style="margin:0 0 6px">If you already have one of these apps, this opens the page inside it:</p>
+          <div class="partage">
+            <a id="wOuvrirCbw" target="_blank" rel="noopener" href="#">Open in Coinbase Wallet</a>
+            <a id="wOuvrirMm" target="_blank" rel="noopener" href="#">Open in MetaMask</a>
+          </div>
+          <p class="note" style="margin:8px 0 6px">Otherwise, copy the link and paste it in your wallet app's browser:</p>
           <button class="bouton sec" id="wCopierLien" type="button">Copy this page's link</button>
           <p class="note mono" id="wSansWalletUrl" style="word-break:break-all;margin-top:6px"></p>
         </div>
@@ -1930,7 +1953,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260926-le-geste-existe" hidden>Build <code>20260926-le-geste-existe</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260926-une-porte-pour-sans-wallet" hidden>Build <code>20260926-une-porte-pour-sans-wallet</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4469,7 +4492,27 @@ function montrerSansWallet(sans) {
    *   echec de copie au lieu de le taire. Deux gestionnaires de copie finiraient par diverger. */
   const b = $('#wCopierLien');
   if (b) { b.setAttribute('data-copier-diag', location.href); b.textContent = "Copy this page's link"; }
+  /* ⛔ LES DEUX LIENS SONT CONSTRUITS ICI, A PARTIR DE `location`, jamais ecrits en dur : une URL
+   *   recopiee a la main enverrait le visiteur sur une AUTRE page que celle qu il regarde — et il
+   *   n aurait aucun moyen de s en apercevoir.
+   * ⛔ FORMATS LUS DANS LA DOC : MetaMask veut l hote+chemin SANS le schema ; Coinbase Wallet veut
+   *   l URL COMPLETE, percent-encodee. Les intervertir donnerait deux liens qui ont l air bons. */
+  const cbw = $('#wOuvrirCbw');
+  if (cbw) cbw.href = 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(location.href);
+  const mm = $('#wOuvrirMm');
+  if (mm) mm.href = 'https://link.metamask.io/dapp/' + location.host + location.pathname + location.search;
 }
+/* ⛔ ON COMPTE LES DEUX SEPAREMENT. Un seul nom pour les deux portes reproduirait le defaut que
+ *   cette journee a couté : `wallet_no_provider` porte UN nom pour NEUF chemins, et on ne peut donc
+ *   pas dire lequel a ete tape 25 fois. Ici on saura laquelle des deux sert — ou si aucune ne sert,
+ *   ce qui est une reponse aussi.
+ * ⚠️ UN CLIC N EST PAS UN RETOUR. Ces compteurs diront qu on a tape le lien, jamais que
+ *   l application s est ouverte : ca, seul un `wallet_connect_ok` qui remonte le dira. */
+document.addEventListener('click', (ev) => {
+  const a = ev.target.closest && ev.target.closest('#wOuvrirCbw, #wOuvrirMm');
+  if (!a) return;
+  try { etape(a.id === 'wOuvrirCbw' ? 'wallet_ouvrir_cbw' : 'wallet_ouvrir_mm'); } catch (_) {}
+});
 
 function texteRefusConnexion(siWalletPresent) {
   if (window.ethereum) return siWalletPresent;

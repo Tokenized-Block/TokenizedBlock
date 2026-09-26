@@ -162,7 +162,42 @@ v('⛔ le bloc se montre sur le refus mesure, et se referme quand un wallet appa
   assert.match(m, /bloc\.hidden = !sans;/, 'le bloc ne suit plus l etat mesure');
 });
 
-assert.equal(n, 5, 'compte de cas inattendu : ' + n);
+v('⛔⛔ les deux portes de sortie sont construites, pas recopiees, et au bon format', () => {
+  /* ⛔⛔ POURQUOI ELLES EXISTENT : mesure de production du 2026-09-26. Sur les trois jours pleins ou
+   *     le compteur existe (09-24 -> 09-26) : 55 sessions, 29 `wallet_no_provider`, et
+   *     `wallet_connect_ok` = ZERO. `connecter()` est la SEULE porte qui pose `compte`, et le
+   *     compteur a ete prouve atteignable a l execution (beacon ET enregistrement serveur) : ce
+   *     zero est donc un vrai zero. Une phrase honnete ne suffisait pas ; il fallait une porte. */
+  const m = corpsNuDe('function montrerSansWallet(');
+  assert.ok(m, 'montrerSansWallet() est introuvable');
+  /* ⛔ LES FORMATS SONT LUS DANS LA DOC, PAS RECITES — et c est la mutation qui compte, parce qu une
+   *   URL fausse a exactement l air d une URL vraie.
+   *   · MetaMask : `link.metamask.io/dapp/<hote+chemin>`, SANS le schema. De memoire j aurais ecrit
+   *     `metamask.app.link`, qui est l ANCIEN hote.
+   *   · Coinbase Wallet : `go.cb-w.com/dapp?cb_url=<URL complete, percent-encodee>`. */
+  assert.match(m, /'https:\/\/go\.cb-w\.com\/dapp\?cb_url=' \+ encodeURIComponent\(location\.href\)/,
+    'le lien Coinbase Wallet a change de forme : il veut l URL COMPLETE, percent-encodee');
+  assert.match(m, /'https:\/\/link\.metamask\.io\/dapp\/' \+ location\.host \+ location\.pathname/,
+    'le lien MetaMask a change de forme : hote documente `link.metamask.io`, et hote+chemin SANS schema');
+  assert.ok(!/metamask\.app\.link/.test(m),
+    'l ancien hote `metamask.app.link` est revenu : c est celui que la memoire propose, pas celui que la doc donne');
+  /* ⛔ ET RIEN N EST ECRIT EN DUR : une URL recopiee enverrait le visiteur sur une AUTRE page que
+   *   celle qu il regarde, sans qu il puisse s en apercevoir. */
+  assert.ok(!/cb_url=https/.test(nu), 'une URL de destination est ecrite en dur dans le lien');
+  /* ⛔ ON NE PROMET PAS QUE L APPLICATION S OUVRE : rien ici ne peut le mesurer. */
+  assert.match(nu, /If you already have one of these apps/,
+    'la phrase n est plus conditionnelle : elle promettrait une ouverture qu on ne mesure pas');
+  /* ⛔ DEUX COMPTEURS, PAS UN — sinon on reproduit le defaut du jour meme (un nom, neuf chemins). */
+  assert.match(nu, /etape\(a\.id === 'wOuvrirCbw' \? 'wallet_ouvrir_cbw' : 'wallet_ouvrir_mm'\)/,
+    'les deux portes ne sont plus comptees separement : on ne saura pas laquelle sert');
+  const serveur = depouiller(readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8'));
+  for (const nom of ['wallet_ouvrir_cbw', 'wallet_ouvrir_mm']) {
+    assert.ok(serveur.includes("'" + nom + "'"),
+      nom + ' manque a ETAPES_ENTONNOIR : /api/etape rendrait 204 sans rien enregistrer');
+  }
+});
+
+assert.equal(n, 6, 'compte de cas inattendu : ' + n);
 console.log('ok sans-wallet-dit-quoi-faire — ' + n + ' cas.');
 console.log('   Les neuf refus ont UNE phrase, la puce du header mene au volet ou elle est ecrite,');
 console.log('   et le seul chemin restant (le lien de la page) est donne avec son echec de copie visible.');
