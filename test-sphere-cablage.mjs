@@ -54,15 +54,42 @@ v('⛔⛔ le tri par profondeur existe — c est lui qui fait la 3D', () => {
     'la profondeur ne module plus l opacite des liens : le tri ne se verrait pas');
 });
 
-v('⛔ le cube tourne avec la sphere, sous le MEME geste', () => {
-  assert.ok(/function dessinerCubeDuBlock\(/.test(nu), 'le cube du block a disparu');
-  assert.ok(/dessinerCubeDuBlock\(ctx, c, th\);/.test(nu), 'le cube n est plus dessine avec le cablage');
-  /* ⛔ MEME PROJECTION DONC MEME ROTATION : deux projections auraient tourne separement, et le
-   *   geste unique promis a l ecran serait faux. */
-  const i = nu.indexOf('function dessinerCubeDuBlock(');
-  const corps = nu.slice(i, i + 1400);
-  assert.ok(/bwProjeter\(v, cx, cy, r\)/.test(corps),
-    'le cube n utilise plus la projection commune : il tournerait independamment de la sphere');
+/* ⛔⛔ CE CAS A ETE RETOURNE LE 2026-09-26, ET C EST VOLONTAIRE. Il exigeait la PRESENCE du cube —
+ *     Phil l avait demande : « le cube c est le users cube a cote que tu peux faire bouger ». Il a
+ *     ensuite demande son RETRAIT, capture a l appui : cube barre en rouge, fleche vers la sphere,
+ *     « glow up la sphere et retirer le block ».
+ *   ⇒ Un test vert qui exige une chose retiree tient la MAUVAISE MOITIE : il serait passe rouge au
+ *     retrait, et on l aurait « repare » en le supprimant, sans trace. On le RETOURNE : il exige
+ *     desormais l ABSENCE. Un retour du cube sera donc un CHOIX — quelqu un devra retoucher ce
+ *     test — et jamais une rechute silencieuse. */
+v('⛔ le cube est RETIRE, et son retour serait un choix explicite', () => {
+  assert.ok(!/function dessinerCubeDuBlock\(/.test(nu),
+    'le cube du block est revenu : si c est voulu, ce test doit etre retourne AVEC la raison');
+  assert.ok(!/dessinerCubeDuBlock\(/.test(nu), 'le cube est encore appele quelque part');
+  /* ⛔ ET LA LEGENDE NE DOIT PLUS LE NOMMER : une legende qui designe un objet absent fait chercher
+   *   au visiteur quelque chose qui n existe pas. C est Phil qui l a vu sur sa capture, pas moi. */
+  assert.ok(!/the cube is the block/.test(nu),
+    'la legende parle encore du cube alors qu il n est plus dessine');
+});
+
+/* ⛔ CE QUE LE CERVEAU RESSENT DOIT ETRE DERIVE D UNE VALEUR REELLE, JAMAIS DECORATIF. */
+v('⛔ le halo d humeur vient de la PHASE, et `NON_LU` n en recoit AUCUN', () => {
+  assert.ok(/TEINTE_HUMEUR/.test(nu), 'le halo d humeur a disparu');
+  const i = nu.indexOf('const TEINTE_HUMEUR');
+  const table = nu.slice(i, nu.indexOf('}', i));
+  /* ⛔⛔ LE CAS QUI COMPTE : peindre une humeur sur un marche ILLISIBLE inventerait un sentiment.
+   *     Le cerveau le dit lui-meme : « no mood is judged until it is ». `MORT` non plus — on ne
+   *     fait pas briller un mort. */
+  assert.ok(!/NON_LU/.test(table), '`NON_LU` recoit une teinte : on peindrait une humeur non jugee');
+  assert.ok(!/MORT/.test(table), '`MORT` recoit une teinte : on ferait briller un mort');
+  assert.ok(/CURIEUX|EXCITE|INQUIET/.test(table), 'aucune phase reelle n est mappee');
+});
+
+v('⛔ le biais des ailes ne peut pas produire un NaN', () => {
+  /* ⛔ UN NaN TRAVERSE TOUTES LES BORNES : `Math.min(1, NaN)` rend NaN, et le halo se dessinerait
+   *   hors du canvas sans que rien ne le signale. Deux ailes a zero doivent donner exactement 0. */
+  assert.ok(/somme > 0 && Number\.isFinite\(gz\) && Number\.isFinite\(dz\)/.test(nu),
+    'le biais des ailes ne se garde pas contre un denominateur nul ou une valeur absente');
 });
 
 v('⛔ on peut la tourner au doigt, et l auto ne reprend pas la main', () => {
@@ -117,9 +144,11 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
-console.log('   Sphere deterministe, tri par profondeur, cube sous la meme rotation, geste au doigt,');
-console.log('   panneau qui ne dit que des mesures, et le raster 2D intact.');
+console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
+console.log('   mesures, et le raster 2D intact. Le CUBE A ETE RETIRE : ce test exige maintenant son');
+console.log('   ABSENCE, pour qu un retour soit un choix et pas une rechute.');
+console.log('   Le halo d humeur est derive de la phase — et NON_LU comme MORT n en recoivent aucun.');
 console.log('⚠️ NE PROUVE PAS le rendu : ca a ete mesure en navigateur (77 992 pixels peints,');
 console.log('   signature du canvas qui change apres un glissement, 310x233 sans debordement a 375 px).');
