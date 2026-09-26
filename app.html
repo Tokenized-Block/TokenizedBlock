@@ -3381,6 +3381,14 @@ const dessin = (adr, sym) => {
 const habitants = [];
 /* tip 0042 : marche condense par block (adresse minuscule -> ligne /api/trending), lu pour les soleils et la fiche */
 const marcheParAdr = new Map();
+/** Profondeur minimale, en dollars, pour qu un marche soit traite comme utilisable.
+ *  ⛔⛔ UNE SEULE VALEUR POUR DEUX DECISIONS, ET C EST LE POINT. Elle decide (a) si la liste montre
+ *      « Buy » plutot que le repli, et (b) si un block peut servir de DEVISE DE FRAIS. Deux seuils
+ *      separes auraient derive : on proposerait d acheter un marche dont on refuserait le frais, ou
+ *      l inverse — et personne ne verrait la contradiction avant qu elle coute.
+ *    ⛔ POURQUOI UN SEUIL TOUT COURT : un prix sans profondeur ne rend rien vendable. a6cf a deja
+ *      ete paye en jetons invendables (7 detentions, 0 avec un marche, part reelle 0 $). */
+const LIQ_MIN_BUY_USD = 500;
 let anim = null;
 /* ⛔ TOUTES LES CREATIONS LUES, pas seulement les 22 affichees : la recherche doit trouver un block que la
  * map a lu sans avoir la place de le montrer (mesure du 2026-09-13 : 87 lues, 22 affichees, et « TTB »
@@ -3850,6 +3858,16 @@ function pairerAvec(adr) {
   else { s.value = AUTRE_PAIRE; const a = $('#cPaireAutre'); if (a) a.value = adr; }
   s.dispatchEvent(new Event('change'));
   const det = s.closest('details'); if (det) det.open = true;
+  /* ⛔⛔ SANS CETTE LIGNE, LE CLIC EST INVISIBLE — et c est la faute de toute cette journee, une
+   *     fois de plus. `allerA('creer')` fait `window.scrollTo({ top: 0 })` ; or TOUT l effet de ce
+   *     geste (le selecteur, la ligne d adresse, la note, la puce) vit dans la carte « Instant
+   *     Birth », que ce depot a lui-meme mesuree a plusieurs ecrans de defilement en 375 px. Le
+   *     visiteur etait donc renvoye en HAUT d un formulaire de creation, sans rien voir bouger.
+   *   ⛔ ET LE CHEMIN « Buy » DE LA MEME LISTE LE FAISAIT DEJA, trente lignes plus bas
+   *     (`carte.scrollIntoView({ block: 'center' })`). Deux gestes voisins, un seul amenait son
+   *     resultat sous les yeux : c est la moitie qu on ne regarde pas qui casse.
+   *   ⛔ DANS UN `try` : un navigateur sans defilement doux ne doit pas faire tomber l appairage. */
+  try { (det || s).scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
   return true;
 }
 $('#fPairer').addEventListener('click', () => { pairerAvec($('#fiche').dataset.block); });
@@ -8626,6 +8644,22 @@ async function preparerEchange(sens) {
    *     coute : a6cf paye en jetons invendables, 7 detentions, 0 avec un marche, part reelle 0 $.
    *   ⛔ ENSEMBLE VIDE = COMPORTEMENT D AVANT. Une devise dont le prix n a pas pu etre lu n y entre
    *     jamais : le refus reste, et il dit maintenant pourquoi. */
+  /* ⛔⛔ ET UN BLOCK PEUT EN ETRE UNE, AUX MEMES CONDITIONS QUE LES AUTRES — pas a des conditions
+   *     plus douces. Phil, 2026-09-26 : « le paired with block est casse, build it ».
+   *     Diagnostic : un marche cote en block etait refuse a 100 %, parce que cet ensemble n etait
+   *     peuple QUE depuis `pairesProposees()` — un block n y entrait jamais. « Pair a block with
+   *     it » produisait donc un marche REEL sur la chaine et INECHANGEABLE dans l app : le « piege,
+   *     pas une fonction » que Phil avait lui-meme nomme le 2026-09-18.
+   *   ⛔ LA GARDE N EST PAS RETIREE, ELLE EST APPLIQUEE. Sa raison tient toujours : a6cf a ete paye
+   *     en jetons invendables — 7 detentions, 0 avec un marche, part reelle 0 $. La regle reste
+   *     « la devise doit etre vendable » ; on cesse seulement de SUPPOSER qu un block ne peut
+   *     jamais l etre. MUc, mesure le meme jour : 806 446 $ de volume sur 24 h.
+   *   ⛔ DEUX CONDITIONS, PAS UNE. Un PRIX sans LIQUIDITE ne rend rien vendable : un frais preleve
+   *     dans un jeton cote 1 000 $ avec 40 $ de profondeur reste un frais qu on ne touchera pas.
+   *     Le seuil est LE MEME que celui qui decide deja du bouton « Buy » de la liste, pour qu un
+   *     block utilisable ici soit exactement celui qu on propose d acheter la-bas.
+   *   ⚠️ CE QUE CA NE PROUVE PAS : que le frais se vendra. Ca prouve qu au moment du plan, un prix
+   *     ET une profondeur ont ete LUS. Le marche peut s evaporer apres. */
   const fraisDevisesOk = (() => {
     const s = new Set([USDC_BASE.toLowerCase()]);
     try {
@@ -8633,6 +8667,12 @@ async function preparerEchange(sens) {
         if (p2 && p2.adr && prixUsdDeviseLus.has(String(p2.symbole))) s.add(String(p2.adr).toLowerCase());
       }
     } catch (_) { /* registre illisible : on garde l USDC seul, donc le comportement d avant */ }
+    try {
+      for (const [adrBlock, l] of marcheParAdr) {
+        if (!l || !(Number(l.prixUsd) > 0) || !(Number(l.liquiditeUsd) >= LIQ_MIN_BUY_USD)) continue;
+        s.add(String(adrBlock).toLowerCase());
+      }
+    } catch (_) { /* ⛔ liste illisible : on retombe sur l ensemble d avant, jamais sur « tout ouvert » */ }
     return s;
   })();
   try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu, fraisDevisesOk }); }
@@ -11606,7 +11646,15 @@ function peindrePaires() {
       ? '<optgroup label="Coinbase tokenized stocks">' + actions.map(opt).join('') + '</optgroup>'
       : '')
     /* ⛔ UN AUTRE B20 QUELCONQUE : le hook V3 n admet qu une liste FIXE — la paire serait refusee par la chaine. « soon ». */
-    + '<option value="' + AUTRE_PAIRE + '" disabled>Another B20 — paste native B20 address — soon</option>';
+    /* ⛔⛔ CETTE OPTION ETAIT `disabled` ET LIBELLEE « — soon », ALORS QUE LE CODE QUI S EN SERT
+     *     EXISTE ET TOURNE. `pairerAvec()` la SELECTIONNE (`s.value = AUTRE_PAIRE`) pour tout block
+     *     hors registre, et `majPaire()` verifie ensuite le marqueur `0xef` sur la chaine avant
+     *     d accepter. Le seul effet du `disabled` etait donc de rendre muet le chemin que le bouton
+     *     « Pair a block with it » emprunte a chaque clic : un selecteur qui affiche « soon » pour
+     *     une fonction qui tourne.
+     *   ⛔ LE LIBELLE DIT CE QUI SERA VERIFIE, pas une promesse : c est la chaine qui tranche, et
+     *     un jeton qui n est pas un B20 natif est refuse avec sa raison. */
+    + '<option value="' + AUTRE_PAIRE + '">Another block — paste its address (checked on chain)</option>';
   /* ⛔⛔ PHIL (2026-09-18) : « regle bien la pool sur ETH par defaut, oublie le TBLOCK paired — gros probleme ». */
   const ethOption = [...s.options].find((o) => /^0x0{40}$/i.test(o.value) || /^ETH\b/.test(o.textContent));
   if ([...s.options].some((o) => o.value === avant) && avant) s.value = avant;
@@ -12512,7 +12560,7 @@ function peindreTrending() {
     + (function () {
         const pool = poolDecouvertPour(l.adr);
         const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE' || pool.confiance === 'SANS_HOOK' || pool.confiance === 'HOOK'));
-        const liqOk = (l.liquiditeUsd || 0) >= 500;
+        const liqOk = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;
         if (feeOk && liqOk) {
           return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>';
         }
