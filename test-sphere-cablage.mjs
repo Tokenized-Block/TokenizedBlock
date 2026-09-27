@@ -88,6 +88,23 @@ v('⛔ le cube contient la sphere : arriere AVANT, avant APRES', () => {
   assert.ok(jAvant > jSphere, 'la moitie avant du cube se peint AVANT la sphere : rien ne passerait devant');
 });
 
+v('⛔⛔ on peut zoomer ET revenir — un zoom sans retour enferme', () => {
+  /* ⛔⛔ `passive: false` EST LE PIEGE DE CE GESTE. Sans lui le navigateur refuse
+   *     `preventDefault()` sur la molette : le cerveau zoomerait ET la page defilerait sous lui.
+   *     Un zoom qui marche sur une page qui s enfuit est intenable a l usage, et ca se lit tres
+   *     bien dans le code sans se voir. */
+  assert.ok(/'wheel'[\s\S]{0,220}\{ passive: false \}/.test(nu),
+    'la molette n est plus en `passive: false` : zoomer ferait defiler la page sous le cerveau');
+  /* ⛔ LE PINCEMENT COMPTE AUTANT : ce panneau se regarde surtout au telephone, et un zoom reserve
+   *   a la souris n existerait pas pour la moitie des visiteurs. */
+  assert.ok(/pointerType !== 'touch'/.test(nu), 'le pincement a disparu : plus de zoom au telephone');
+  /* ⛔⛔ ET UNE SORTIE DE SECOURS. Quelqu un perdu au fond du cerveau n a aucun moyen de revenir —
+   *     fermer le volet ne remet pas le zoom. Un zoom sans retour est une impasse. */
+  assert.ok(/'dblclick'/.test(nu), 'plus de retour a la vue d origine : on peut rester enferme dedans');
+  /* ⛔ BORNE DES DEUX COTES : une seule borne laisse une des deux impasses ouverte. */
+  assert.ok(/BW_ZOOM_MIN/.test(nu) && /BW_ZOOM_MAX/.test(nu), 'le zoom n est plus borne des deux cotes');
+});
+
 v('⛔ la sphere TIENT dans le cube, et son rayon est calcule', () => {
   /* ⛔ UNE GARDE PEUT ETRE CORRECTE PAR ACCIDENT : un rayon ecrit en dur tomberait juste a une
    *   taille de toile et deborderait a une autre. Il doit etre DERIVE du demi-cote du cube. */
@@ -170,7 +187,7 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 9, 'compte de cas inattendu : ' + n);
+assert.equal(n, 10, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
 console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
 console.log('   mesures, et le raster 2D intact.');

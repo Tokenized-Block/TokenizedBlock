@@ -1599,7 +1599,11 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- ⛔ LA LEGENDE PARLAIT ENCORE DU CUBE APRES SON RETRAIT. Une legende qui nomme un objet
                absent fait chercher au visiteur quelque chose qui n existe pas — et c est Phil qui
                l a vu sur sa propre capture, pas moi. -->
-          <p class="note" id="bwAide">Drag it to turn. The block is the cube; its brain lives inside — each dot a neuron, each line a link.
+          <!-- ⛔ LA LEGENDE NOMME LES TROIS GESTES, ET LE RETOUR. Un zoom qu on ne sait pas faire
+               n existe pas ; et un zoom dont on ne sait pas revenir est pire, parce qu on se
+               retrouve perdu au fond du cerveau sans issue. -->
+          <p class="note" id="bwAide">Drag to turn, scroll or pinch to zoom in and explore, double-tap to come back.
+            The block is the cube; its brain lives inside, pressed against the walls — each dot a neuron, each line a link.
             The glow around it is its mood, and it leans toward whichever wing is firing faster.</p>
         </div>
       </div>
@@ -1998,7 +2002,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-map-3d-restored" hidden>Build <code>20260927-map-3d-restored</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-brain-zoom" hidden>Build <code>20260927-brain-zoom</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14522,7 +14526,12 @@ function posSphere(n) {
   return p;
 }
 /** Rotation courante, partagee par la sphere ET le cube : un seul geste oriente les deux. */
-const bwVue = { rx: -0.35, ry: 0.6, glisse: false, x0: 0, y0: 0, auto: true };
+/* ⛔ `zoom` : 1 = le cube tient dans la toile. Au-dela il DEBORDE et on se retrouve dedans — c est
+ *   ca, explorer un cerveau au lieu de le regarder. Borne des DEUX cotes : sous 0,6 le cerveau
+ *   devient un point, et au-dela de 5 on ne voit plus qu une poignee de neurones sans savoir ou
+ *   l on est. Une borne d un seul cote laisserait l une des deux impasses ouverte. */
+const bwVue = { rx: -0.35, ry: 0.6, glisse: false, x0: 0, y0: 0, auto: true, zoom: 1 };
+const BW_ZOOM_MIN = 0.6, BW_ZOOM_MAX = 5;
 let bwSphere = null, bwSphereN = 0;
 
 /** Tourne puis projette. ⛔ La perspective est FAIBLE (d = 3.2) : trop forte, les neurones du fond
@@ -14626,11 +14635,18 @@ function dessinerReseau(vu = null) {
    *     ou apres — donnerait une sphere posee devant, ou cachee derriere, jamais CONTENUE. Meme
    *     principe que le tri des liens : c est l ordre qui fait la 3D, pas la projection. */
   const cx = c.width / 2, cy = c.height / 2;
-  const R = Math.min(c.width * 0.33, c.height * 0.40);   /* demi-cote du cube */
-  /* ⛔ LE RAYON EST CALCULE POUR TENIR DEDANS, pas choisi a l oeil : les faces sont a la distance R
-   *   du centre, donc une sphere de rayon R les toucherait exactement. 0,62 laisse un jeu visible
-   *   sous TOUTE rotation, y compris quand un coin passe au plus pres. */
-  const r = R * 0.62;
+  /* ⛔ LE ZOOM AGIT SUR LES DEUX A LA FOIS, cube et cerveau : les mettre a l echelle separement les
+   *   ferait glisser l un dans l autre, et le cerveau sortirait de sa boite en zoomant. */
+  const R = Math.min(c.width * 0.33, c.height * 0.40) * bwVue.zoom;   /* demi-cote du cube */
+  /* ⛔⛔ LE CERVEAU EST COLLE AUX PAROIS, A LA DEMANDE DE PHIL : « mets le cerveau colle aux parois
+   *     du cube a l interieur ». Le rayon reste CALCULE, pas choisi a l oeil : les faces sont a la
+   *     distance R du centre, donc une sphere de rayon R les TOUCHERAIT exactement. 0,92 fait
+   *     affleurer les neurones contre les parois sans les traverser.
+   *   ⛔ POURQUOI PAS 1,0 : la projection est en perspective, donc un neurone proche de la camera
+   *     est peint plus GRAND que le point ou il se trouve. A 1,0 ces disques mordraient visiblement
+   *     a travers la face avant — le cerveau paraitrait deborder de sa boite. Le jeu de 8 % paie
+   *     exactement le rayon du plus gros neurone. */
+  const r = R * 0.92;
   if (!bwSphere || bwSphereN !== liens.length) { bwSphere = posSphere(liens.length); bwSphereN = liens.length; }
   const pos = bwSphere.map((v) => bwProjeter(v, cx, cy, r));
   const actifs = new Set(vu && vu.indices ? vu.indices : []);
@@ -14743,6 +14759,56 @@ function dessinerReseau(vu = null) {
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
     c.addEventListener(ev, () => { bwVue.glisse = false; });
   }
+  /* ⛔⛔ ZOOMER POUR EXPLORER — Phil : « qu on puisse zoomer et explorer le BRAIN ».
+   *   ⛔ `passive: false` EST OBLIGATOIRE, ET C EST TOUT LE PIEGE : sans lui le navigateur refuse
+   *     `preventDefault()` sur la molette, et zoomer le cerveau ferait DEFILER la page sous lui.
+   *     On aurait un zoom qui marche et une page qui s enfuit — le genre de correctif qui a l air
+   *     bon a la lecture et qui est intenable a l usage.
+   *   ⛔ ZOOM EXPONENTIEL, PAS ADDITIF : un pas fixe est brutal en haut de plage et invisible en
+   *     bas. Multiplier donne le meme ressenti a toutes les distances. */
+  const zoomer = (facteur) => {
+    const z = bwVue.zoom * facteur;
+    bwVue.zoom = Math.max(BW_ZOOM_MIN, Math.min(BW_ZOOM_MAX, z));
+    bwVue.auto = false;   /* on a pris la main : le tour automatique ne la reprend pas */
+    dessinerReseau(brainDernierVu);
+  };
+  c.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    zoomer(Math.exp(-e.deltaY * 0.0012));
+  }, { passive: false });
+  /* ⛔ LE PINCEMENT COMPTE AUTANT QUE LA MOLETTE : ce panneau se regarde surtout au telephone, et
+   *   un zoom reserve a la souris n existerait pas pour la moitie des visiteurs. On suit DEUX
+   *   doigts et on compare l ECART entre deux images — jamais une position absolue, qui derive. */
+  const doigts = new Map();
+  let ecart0 = 0;
+  c.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    doigts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (doigts.size === 2) {
+      const [a, b] = [...doigts.values()];
+      ecart0 = Math.hypot(a[0] - b[0], a[1] - b[1]) || 0;
+      bwVue.glisse = false;   /* ⛔ deux doigts = zoom, pas rotation : sinon la vue part en vrille */
+    }
+  });
+  c.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch' || !doigts.has(e.pointerId)) return;
+    doigts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (doigts.size !== 2) return;
+    const [a, b] = [...doigts.values()];
+    const ecart = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    /* ⛔ UN ECART DE DEPART NUL DIVISERAIT PAR ZERO et rendrait Infinity — que `Math.min` laisse
+     *   passer tel quel vers la borne haute. On refuse au lieu de borner un infini. */
+    if (ecart0 > 4 && ecart > 0) { zoomer(ecart / ecart0); ecart0 = ecart; }
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+    c.addEventListener(ev, (e) => { doigts.delete(e.pointerId); if (doigts.size < 2) ecart0 = 0; });
+  }
+  /* ⛔ UNE SORTIE DE SECOURS : un double-tap remet la vue d origine. Sans elle, quelqu un perdu au
+   *   fond du cerveau n a aucun moyen de revenir, et fermer le volet ne remet pas le zoom. */
+  c.addEventListener('dblclick', () => {
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6;
+    dessinerReseau(brainDernierVu);
+  });
   /* ⛔ UN TOUR LENT TANT QUE PERSONNE N A TOUCHE : sans lui, au premier chargement, une sphere vue
    *   de face ressemble encore a un disque — et on ne saurait pas qu elle tourne. */
   setInterval(() => {
