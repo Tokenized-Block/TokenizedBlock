@@ -1111,6 +1111,10 @@ const SERVIS = [
    *   garde ci-dessous ne relit QUE les imports DIRECTS de `app.html`, donc elle ne dirait rien
    *   d un manque transitif. C est ici qu il faut le declarer, et nulle part ailleurs. */
   'pool-cl.js',
+  /* ⛔ `routage.js` CLASSE POURQUOI UN MARCHE N EST PAS ECHANGEABLE ICI. Il n a AUCUNE dependance,
+   *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
+   *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
+  'routage.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

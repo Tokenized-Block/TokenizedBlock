@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-decouverte-repeinte" hidden>Build <code>20260927-decouverte-repeinte</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-verdict-routage" hidden>Build <code>20260927-verdict-routage</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2681,6 +2681,10 @@ import { selecteur } from './pool.js';
  *     etaient donc invisibles a notre propre lecture ; on n en connaissait le prix que par
  *     DexScreener. Verifie en production : 1092,944620140072 USDC contre 1092,94 chez eux. */
 import { lirePoolCL } from './pool-cl.js';
+/* ⛔ LE VERDICT DE ROUTAGE VIT DANS SON PROPRE MODULE, pur et testable hors ligne (12 cas,
+ * 6/6 mutations attrapees). Recopie ici, il serait invisible a la suite et derivrait de la
+ * repartition mesuree qui le justifie. */
+import { verdictRoutage, phraseRoutage } from './routage.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
  * donneraient deux niveaux au meme block selon l ecran. */
 import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
@@ -4108,20 +4112,41 @@ $('#map').addEventListener('click', (e) => {
    *     pas promettre plutot que promettre un chemin dont on a MESURE qu il tourne 62 secondes puis
    *     propose de creer un autre block. Et MUc a bascule d Aerodrome vers Uniswap v4 dans la
    *     journee meme : ce champ suit le marche, il ne le fige pas. */
-  const pasDePoolV4 = Boolean(mkPublic && mkPublic.poolAdr);
-  const tenable = aMarche && !pasDePoolV4;
-  if (aBuy) aBuy.hidden = !tenable;
+  /* ⛔⛔ CORRECTION DU 2026-09-27, ET ELLE NE CHANGE PAS QUI VOIT « BUY » — ELLE CHANGE CE QU ON
+   *     DIT. L ancienne phrase melangeait deux causes sous « a pool this app cannot route through
+   *     yet ». Mesure du bytecode du router 0x6ff5693b…99b43 (19 499 octets), deux temoins positifs
+   *     presents et un temoin negatif absent :
+   *         PoolManager v4      0x498581ff…  PRESENTE
+   *         factory Uniswap v3  0x33128a8f…  PRESENTE
+   *         factory Aerodrome   0xf8f2eb49…  ABSENTE
+   *     ⇒ Le router qu on utilise DEJA atteint Uniswap v3. Sur une pool v3, ce qui manque est CHEZ
+   *       NOUS (notre constructeur n ecrit que du v4) — 3 blocks, 78 284 $. Sur Aerodrome, c est le
+   *       router lui-meme qui ne peut pas adresser la pool — 12 blocks, 12 166 295 $.
+   *     Dire « on ne sait pas router » des deux cotes faisait passer un travail non fait pour une
+   *     limite technique, et cachait le seul des deux qui est bon marche a lever.
+   *   ⚠️ CE QUI N A PAS CHANGE, VOLONTAIREMENT : `achetableIci` reste faux sur v3. Le router y
+   *     arrive, notre calldata non — promettre Buy avant d avoir ecrit la commande v3 refabriquerait
+   *     exactement le parcours mesure de 62 secondes qui finissait par « creez un autre block ». */
+  /* ⛔⛔ LES DEUX LECTURES SONT SORTIES DE L APPEL EXPRES, ET CE N EST PAS DU STYLE. Ecrit en une
+   *     ligne, l appel se terminait par `poolAdr: … });` — or `test-buy-tenable-seulement.mjs`
+   *     delimite le bloc de la garde par le PREMIER `});` apres `const aBuy = …`. Mon appel aurait
+   *     donc coupe ce bloc a la deuxieme ligne, et ses deux assertions NEGATIVES (« pas de
+   *     `etatVie` dans la garde ») auraient continue a passer en ne couvrant plus rien.
+   *   ⇒ Une borne de sonde peut etre cassee par du code qui n a rien a voir avec ce qu elle garde.
+   *     Ici c est le code qui s adapte a la sonde, parce que la sonde protege une lecon payee. */
+  const dexLu = mk && mk.dex;
+  const poolAdrLu = mkPublic && mkPublic.poolAdr;
+  const entreeRoutage = { aMarche, dex: dexLu, poolAdr: poolAdrLu };
+  const vRoutage = verdictRoutage(entreeRoutage);
+  if (aBuy) aBuy.hidden = !vRoutage.achetableIci;
   /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
    *   Proposer d en creer un autre etait exactement la reponse hors-sujet mesuree ci-dessus. */
   if (aIb) aIb.hidden = aMarche;
-  /* ⛔ LA PHRASE DIT OU IL S ECHANGE, parce qu un bouton qui disparait sans explication laisse
-   *   croire a une panne de l app. On nomme le marche lu par le serveur — c est verifiable. */
-  if (aMarche && pasDePoolV4) {
-    const ou = (mk.dex || '').replace(/[^a-z0-9 .-]/gi, '').slice(0, 18);
-    $('#fNote').textContent = 'This block trades' + (ou ? ' on ' + ou : '')
-      + ', on a pool this app cannot route through yet — so Buy and Sell are not offered here. '
-      + 'The price above is our own read of that pool.';
-  }
+  /* ⛔ LA PHRASE DIT OU IL S ECHANGE ET POURQUOI PAS ICI : un bouton qui disparait sans explication
+   *   laisse croire a une panne de l app. Elle est nulle quand tout va bien — expliquer un succes
+   *   occuperait la place de la note qui sert vraiment. */
+  const noteRoutage = phraseRoutage(vRoutage);
+  if (noteRoutage) $('#fNote').textContent = noteRoutage;
 });
 
 /* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;
