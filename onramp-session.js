@@ -96,9 +96,28 @@ export function validerDemande(d) {
    *   present mais blanc (un champ soumis vide : defaut de l appelant, on refuse). Et on refuse
    *   AVANT de convertir, sinon `Number('')` vaudrait 0 et un champ vide passerait pour « zero
    *   dollar » — le meme piege que la pool « gratuite » au classement des frais. */
+  /* ⛔⛔ LE BLOCK DE RETOUR — ET C EST UN PARAMETRE DE REDIRECTION, DONC ON LE TRAITE COMME TEL.
+   *     Mesure du 2026-09-27 : `retour` etait code en dur sur la page d accueil. Quelqu un qui
+   *     finance depuis l ecran d un block revient donc SUR RIEN et doit le retrouver a la main.
+   *     L intention (`poserIntent`) ne peut pas l aider : elle vit en `sessionStorage`, et l onramp
+   *     s ouvre dans un NOUVEL onglet `noopener`, dont le stockage est vierge. Le seul support qui
+   *     traverse un aller-retour inter-onglets est l URL elle-meme.
+   *   ⛔⛔ ON NE REFLECHIT JAMAIS UN HOTE FOURNI PAR L APPELANT. Le domaine de retour reste decide
+   *       par le serveur ; on n accepte ici qu une ADRESSE DE BLOCK, validee par la meme regle que
+   *       partout ailleurs. Accepter une url de retour serait une porte d open-redirect sur un
+   *       ecran qui parle d argent — precisement l endroit ou on n en veut pas.
+   *   ⛔ ABSENT et VIDE restent distincts, comme au-dessus. */
+  const blocBrut = o.retourBlock;
+  let retourBlock = null;
+  if (blocBrut !== null && blocBrut !== undefined) {
+    if (!ADR.test(String(blocBrut))) {
+      return { etat: 'REFUSE', pourquoi: 'return block was sent but is not a whole address' };
+    }
+    retourBlock = String(blocBrut).toLowerCase();
+  }
   const brut = o.montantFiat;
   if (brut === null || brut === undefined) {
-    return { etat: 'OK', adresse: String(o.adresse).toLowerCase(), actif, montantFiat: null };
+    return { etat: 'OK', adresse: String(o.adresse).toLowerCase(), actif, montantFiat: null, retourBlock };
   }
   if (brut === '') return { etat: 'REFUSE', pourquoi: 'fiat amount was sent but left blank' };
   const montant = Number(brut);
@@ -107,7 +126,7 @@ export function validerDemande(d) {
     return { etat: 'REFUSE',
       pourquoi: 'fiat amount must be between ' + FIAT_MIN + ' and ' + FIAT_MAX + ' (our own caution bound, not a Coinbase limit)' };
   }
-  return { etat: 'OK', adresse: String(o.adresse).toLowerCase(), actif, montantFiat: montant };
+  return { etat: 'OK', adresse: String(o.adresse).toLowerCase(), actif, montantFiat: montant, retourBlock };
 }
 
 /**

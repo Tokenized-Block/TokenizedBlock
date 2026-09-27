@@ -1032,6 +1032,12 @@ const ETAPES_ENTONNOIR = [
   'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
   /* rail fiat -> Base */
   'onramp_session_ok', 'onramp_session_repli',
+  /* ⛔ `onramp_retour_block` AJOUTE LE 2026-09-27, ET C EST LA SUITE DE TESTS QUI L A EXIGE, pas
+   *   moi : une etape appelee par l app et absente de cette liste est JETEE EN SILENCE par
+   *   /api/etape et affiche 0 pour toujours — un zero qui ne peut pas monter, donc indiscernable
+   *   d un zero de succes. C est l etape qui mesure la SECONDE jambe du rail fiat : combien de
+   *   personnes reviennent effectivement sur le block d ou elles etaient parties. */
+  'onramp_retour_block',
   /* ⛔⛔ OU MEURT LA MISE EN VIE. `cree`=6 / `vivant`=2 en production, et `vie_echec` ABSENT des
    *     totaux : les quatre blocks perdus sortaient par 19 portes qui ne comptaient rien. On compte
    *     desormais l ETAPE ATTEINTE — mourir a l etape 2 (les approbations) n appelle pas la meme
@@ -1672,7 +1678,7 @@ createServer((req, res) => {
   if (chemin === '/api/onramp/session') {
     const q = new URL(req.url, 'http://x').searchParams;
     const demande = validerDemande({ adresse: q.get('adresse'), actif: q.get('actif'),
-      montantFiat: q.get('montant') });
+      montantFiat: q.get('montant'), retourBlock: q.get('block') });
     if (demande.etat !== 'OK') {
       res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, pret: false, pourquoi: demande.pourquoi }));
@@ -1704,8 +1710,17 @@ createServer((req, res) => {
           res.end(JSON.stringify({ ok: false, pret: true, etat: s.etat, pourquoi: s.pourquoi }));
           return;
         }
+        /* ⛔⛔ LE DOMAINE DE RETOUR EST DECIDE ICI, JAMAIS PAR L APPELANT. Seul un block DEJA
+         *     VALIDE par `validerDemande` (0x + 40 hex, minuscules) s ajoute en query. Reflechir
+         *     une url fournie par le client serait un open-redirect sur un ecran qui parle
+         *     d argent. La concatenation ci-dessous ne peut produire que notre propre origine.
+         *   ⇒ Sans ce parametre, quelqu un qui finance depuis l ecran d un block revenait sur la
+         *     page d accueil et devait le retrouver a la main : le rail fiat marchait, et le
+         *     parcours fiat -> BLOCK s arretait la. */
+        const retour = 'https://tokenizedblock.space/'
+          + (demande.retourBlock ? '?block=' + demande.retourBlock : '');
         const u = urlOnramp({ sessionToken: s.sessionToken, actif: demande.actif,
-          montantFiat: demande.montantFiat, retour: 'https://tokenizedblock.space/' });
+          montantFiat: demande.montantFiat, retour });
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         res.end(JSON.stringify(u.etat === 'OK' ? { ok: true, pret: true, url: u.url }
           : { ok: false, pret: true, pourquoi: u.pourquoi }));
