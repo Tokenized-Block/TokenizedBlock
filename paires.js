@@ -41,6 +41,23 @@ export const DEVISES_BASE = [
    *     d un coup casserait les blocks deja cotes en TBLOCK. C est le drapeau qui le retire des
    *     endroits ou on PROPOSE un echange. */
   { adr: TBLOCK_MAINNET, symbole: 'TBLOCK', nom: 'TokenizedBlock — buyers need TBLOCK to buy', type: 'TBLOCK', chaines: [8453], lancePubliquement: false },
+  /* ⛔⛔ TOSHI, AJOUTE LE 2026-09-27 (Phil : « ajoute Toshi »), ET *PAS* COMME UN B20.
+   *     L adresse a ete RESOLUE par l API DexScreener, jamais rappelee de memoire — completer une
+   *     adresse de tete a deja envoye une enquete entiere sur une fausse piste dans ce projet.
+   *   ⛔⛔ CE QU IL EST, TECHNIQUEMENT, avec temoin positif le meme jour :
+   *         TOSHI  `eth_getCode` = 0x608060405260… (23 898 caracteres de bytecode ordinaire)
+   *         TBLOCK `eth_getCode` = 0xef  ← le marqueur B20, EXACTEMENT
+   *       TOSHI n a pas le prefixe `0xb2` et n est donc PAS un B20. On ne l affichera JAMAIS comme
+   *       tel — ce serait l usurpation que ce depot chasse ailleurs. Type MAJEUR, rang de cbBTC.
+   *   ⛔ MAIS CETTE DISTINCTION EST INTERNE, ET N A RIEN A FAIRE DANS LE NOM QUE L UTILISATEUR LIT.
+   *     Le produit, c est qu on rend N IMPORTE QUEL actif en block : les actions tokenisees sont
+   *     exactement ca. Coter un block en TOSHI est donc le concept, pas une exception a excuser.
+   *     Un libelle « not a B20 » dans un selecteur de paire repond a une question que personne ne
+   *     se pose et jette un doute la ou il n y en a pas.
+   *   ✅ CE QUI JUSTIFIE SA PRESENCE : un marche REEL, mesure le jour meme — 1 230 755 $ de
+   *     liquidite sur Uniswap. C est la seule chose qui compte pour une devise de paire : qu on
+   *     sache lire son prix, et qu il y ait de quoi echanger en face. */
+  { adr: '0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4', symbole: 'TOSHI', nom: 'Toshi — quote your block in TOSHI', type: 'MAJEUR', chaines: [8453] },
 ];
 
 /**
@@ -100,7 +117,17 @@ const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
  */
 export function pairesProposees(chaine) {
   const c = Number(chaine);
-  const base = DEVISES_BASE.filter((d) => d.chaines.includes(c));
+  /* ⛔⛔ « PROPOSEES » N EST PAS « CONNUES », ET CETTE FONCTION CONFONDAIT LES DEUX.
+   *     TBLOCK porte `lancePubliquement: false` depuis le 2026-09-24 — decision de Phil, appuyee
+   *     par une mesure : aucun des 7 jetons detenus par le wallet de frais n a de marche vivant.
+   *     Le drapeau etait pose, et PERSONNE NE LE LISAIT ICI : TBLOCK restait propose a la creation.
+   *     Re-mesure du 2026-09-27 : `/tokens/v1/base/0xb20000…272e` rend AUCUNE PAIRE. Proposer de
+   *     coter un block en TBLOCK, c est promettre un marche qui n existe pas — et l acheteur ne
+   *     l apprend qu apres avoir paye la naissance.
+   *   ⛔ LE JETON RESTE DANS `DEVISES_BASE` : d autres ecrans s en servent legitimement, et les
+   *     blocks deja cotes en TBLOCK ne doivent pas perdre leur libelle. On filtre ce qu on
+   *     PROPOSE, on ne supprime pas ce qu on CONNAIT. */
+  const base = DEVISES_BASE.filter((d) => d.chaines.includes(c) && d.lancePubliquement !== false);
   const actions = c === 8453 ? ACTIONS_COINBASE.map((s) => ({ ...s, type: 'ACTION' })) : [];
   return [...base, ...actions];
 }

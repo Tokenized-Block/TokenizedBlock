@@ -1380,7 +1380,19 @@ createServer((req, res) => {
 
   if (chemin === '/api/prix-usd') {
     const adr = String(new URL(req.url, 'http://x').searchParams.get('adr') || '').toLowerCase();
-    const admise = pairesProposees(8453).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === adr);
+    /* ── ⛔⛔ LA PORTE S OUVRE AUX BLOCKS QU ON SUIT, ET A RIEN D AUTRE ──────────────────────────
+     *     Le concept du produit est qu on rend N IMPORTE QUEL actif en block — donc n importe quel
+     *     block doit pouvoir servir de paire. Un registre grave de 14 entrees ne peut pas porter ca :
+     *     notre index suit deja ~2 000 blocks B20 decouverts SUR LA CHAINE.
+     *   ⛔⛔ MAIS CET ENDPOINT RELAIE VERS DEXSCREENER, donc son filtre est une frontiere, pas une
+     *       formalite. L ouvrir a une adresse arbitraire ferait de nous un proxy de prix pour
+     *       n importe qui. `blocksConnus` n est PAS une entree utilisateur : c est l ensemble des
+     *       creations B20 que NOTRE indexeur a lues sur la chaine. L appartenance a ce Set EST la
+     *       validation — une adresse mal formee n y entre jamais (ligne 712 : regex a l insertion).
+     *   ⛔ LE REGISTRE RESTE EN PREMIER : ETH, USDC, cbBTC et TOSHI ne sont pas des B20 et ne sont
+     *     donc pas dans `blocksConnus`. Les deux sources sont complementaires, pas redondantes. */
+    const admise = pairesProposees(8453).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === adr)
+      || blocksConnus.has(adr);
     const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
     if (!admise) { repondre({ ok: false, pourquoi: 'not a pair currency of this app' }); return; }
     const c = prixUsdCache.get(adr);
