@@ -135,7 +135,20 @@ export const REVEIL_IMPULSION = 0.9;
 
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
   scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null,
-  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null, role = null, reveil = false } = {}) {
+  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null, role = null, reveil = false,
+  /* ⛔⛔ LA HAUTEUR DE BLOC A LAQUELLE CES FAITS ONT ETE LUS. Ajoutee le 2026-09-27.
+   *     POURQUOI : ce cerveau est entierement DETERMINISTE — zero `Math.random`, zero `Date.now`,
+   *     zero `performance.now`, graine `keccak256(adresse en minuscules)`, et meme son bruit est
+   *     seme par `empreinte ^ tick`. N importe qui peut donc le re-derouler et comparer. Mais ses
+   *     FAITS n etaient dates de rien : deux personnes qui rejouent a deux instants lisent une
+   *     `vie` differente, obtiennent une sortie differente, ET NE PEUVENT PAS DIRE si le desaccord
+   *     vient d un defaut ou du moment. La verifiabilite etait vraie en principe et inexercable.
+   *   ⛔⛔ ELLE NE CALCULE RIEN, ET C EST LA REGLE : `bloc` n entre dans AUCUNE formule de neurone.
+   *       Un cerveau dont l humeur dependrait de la hauteur cesserait d etre comparable d un block
+   *       a l autre — c est tout le sens de la taille FIXE du reseau. Elle se TRANSPORTE.
+   *   ⛔ ET SON ABSENCE SE DIT : sans hauteur, la sortie porte `bloc: null`. Pas un zero, pas une
+   *     valeur inventee — « on ne sait pas a quand ceci remonte » est une information. */
+  bloc = null } = {}) {
   /* ⛔⛔ LE CERVEAU S ADAPTE A SON ROLE (Phil, 2026-09-14) : multiplicateurs de `metiers.js`, neutres sans role */
   const s = sensibiliteDe(role);
   /* ⛔⛔ L HUMEUR SUR LE NOUVEAU (Phil, 2026-09-13, apres mesure : TBLOCK et WOFI EXCITE 40/40 battements a prix stable,
@@ -184,6 +197,13 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
      *   donc il ne peut pas se faire passer pour un evenement de marche. Il n allume que le
      *   courant, le temps d un battement. */
     reveil: reveil === true,
+    /* ⛔⛔ LA HAUTEUR VOYAGE, ELLE NE CALCULE PAS. Elle n apparait dans AUCUNE formule ci-dessus et
+     *     ne doit jamais y apparaitre : un cerveau dont l humeur dependrait de la hauteur cesserait
+     *     d etre comparable d un block a l autre. Elle sert a une seule chose — dire A QUAND ces
+     *     faits remontent, pour qu un tiers puisse relire la chaine a ce bloc et rejouer le pas.
+     *   ⛔ ENTIER POSITIF OU `null`. Un `0` ou une chaine se glisserait dans l empreinte d entree et
+     *     donnerait deux empreintes differentes pour la meme lecture. */
+    bloc: Number.isInteger(bloc) && bloc > 0 ? bloc : null,
     sensibilite: s,
     role: typeof role === 'string' && role ? role : null,
     nouveaux,
@@ -300,7 +320,19 @@ export function pas(etat, faits = {}) {
         /* le nouveau n entre dans l empreinte que s il a ete fourni : un pas d avant se rejoue a l identique */
         ...(f.avecAvant ? [f.nouveaux.gm, f.nouveaux.messages, f.nouveaux.detenteurs] : []),
         ...(f.avecEchanges ? ['echanges', f.nouveaux.achats, f.nouveaux.ventes] : []),
-        ...(f.role ? ['role', f.role] : [])])),
+        ...(f.role ? ['role', f.role] : []),
+        /* ⛔⛔ LA HAUTEUR N ENTRE DANS L EMPREINTE QUE SI ELLE A ETE FOURNIE — exactement le motif
+         *     deja utilise pour `avecAvant`, `avecEchanges` et `role` trois lignes plus haut. Ce
+         *     n est pas une precaution de style : sans cette condition, TOUS les pas deja graves
+         *     changeraient d empreinte, et le rejeu d un enregistrement d hier echouerait sans
+         *     qu aucun fait n ait bouge. Un correctif de verifiabilite qui casse la verifiabilite
+         *     du passe se retourne contre lui-meme.
+         *   ⇒ Un pas date se rejoue AVEC sa date, un pas d avant se rejoue comme avant. */
+        ...(f.bloc ? ['bloc', f.bloc] : [])])),
+      /* ⛔ ET LA HAUTEUR EST LISIBLE A COTE DE L EMPREINTE, pas seulement fondue dedans : un tiers
+       *   doit savoir OU relire la chaine avant de pouvoir comparer quoi que ce soit. `null` dit
+       *   « non date » — ce qui est une information, pas un defaut a cacher. */
+      bloc: f.bloc,
     },
   };
 }
