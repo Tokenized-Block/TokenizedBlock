@@ -175,11 +175,10 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     h.vx = plancher(g(0) * 0.11, 0.02);
     h.vy = plancher(g(8) * 0.11, 0.02);
     h.vz = plancher(g(16) * 0.11, 0.02);
-    /* ⛔ SA ROTATION PROPRE, tiree de l adresse elle aussi : meme block, meme tournoiement partout.
-     *   Phil : « pourquoi les cubes sur la map n ont plus les effets de deplacement libre sur
-     *   eux-memes ? rajoute-les » — « ca fait plus vivant ». */
-    h.spin = plancher(g(24) * 7, 1.6);
-    h.spin0 = (g(32) + 1) * 180;
+    /* ⛔ PAS DE `spin` ICI, ET C EST VOLONTAIRE. J en avais pose un le 2026-09-27 pour faire tourner
+     *   les cubes — avant de decouvrir que `cube3d.js` le fait DEJA, en vrai volume et avec des
+     *   satellites en orbite. Les deux champs ont ete retires avec le code qui les lisait : un
+     *   champ pose et jamais lu fait croire au prochain lecteur qu une rotation vit ici. */
     h._op = -1;
   }
 
@@ -374,75 +373,25 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const petit = h.t * k < 64;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
-      /* ⛔⛔ LA ROTATION PROPRE DU CUBE. Phil : « pourquoi les cubes sur la map n ont plus les effets
-       *     de deplacement libre sur eux-memes ? rajoute-les » — « ca fait plus vivant ».
-       *   ⛔ ELLE EST REFUSEE SI L UTILISATEUR A DEMANDE MOINS DE MOUVEMENT : `mouvementReduit`
-       *     existe pour ca, et un effet « vivant » impose a quelqu un qui a dit non est un defaut,
-       *     pas une touche de vie.
-       *   ⛔ ET ELLE S ARRETE SOUS 64 px (`petit`) : a cette taille elle ne se voit pas, et la
-       *     calculer pour chacun des ~175 blocs couterait sans rien montrer. La regle existait deja
-       *     pour les satellites — on la reutilise au lieu d en inventer un second seuil qui
-       *     deriverait du premier.
-       *   ⛔ DETERMINISTE : `spin` et `spin0` viennent de l adresse, donc le meme block tourne
-       *     pareil chez tout le monde. Un `Math.random()` ici rendrait deux ecrans incomparables. */
-      /* ⛔⛔ CE SEUIL A ETE CORRIGE PAR LA MESURE, ET MA JUSTIFICATION DE DEPART ETAIT FAUSSE. Je
-       *     m etais appuye sur `petit` (moins de 64 px) « pour ne pas inventer un second seuil ».
-       *     Mesure en production juste apres : 63 blocks visibles, UN SEUL tournait. Avec une
-       *     taille MEDIANE de 20 px, presque tout est « petit » — la garde etait VRAIE et couvrait
-       *     LA MAUVAISE MOITIE.
-       *   ⇒ `petit` existe pour couper les SATELLITES, qui coutent cher a dessiner. Une rotation
-       *     est UNE valeur dans une chaine de transformation deja ecrite a chaque image : le cout
-       *     n est pas comparable, et reutiliser le seuil confondait deux problemes differents.
-       *     « Ne pas inventer un second seuil » est une bonne regle ; l appliquer a deux questions
-       *     qui n ont pas le meme cout ne l etait pas.
-       *   ⛔ LE SEUIL PROPRE EST DONC BAS, ET IL RESTE : sous 14 px une rotation ne se voit pas, et
-       *     la calculer serait du bruit. Le plancher de 20 px le rend inoffensif en pratique — mais
-       *     il protege si le plancher change un jour. */
-      /* ⛔⛔ LA ROTATION VA SUR LE CUBE SEUL, PAS SUR LA TUILE. Premiere version : je l ajoutais a la
-       *     transformation de `.bloc` — qui contient le dessin ET l etiquette du nom. Resultat vu
-       *     par Phil sur sa capture : tous les NOMS penchaient avec les cubes, illisibles.
-       *     « garde les noms droits, juste les cubes qui flottent ».
-       *   ⇒ Un effet applique au bon endroit visuellement peut etre applique au mauvais endroit
-       *     dans l arbre. Le conteneur porte la POSITION ; seul le dessin porte la ROTATION.
-       *   ⛔ Le SVG est retenu une fois (`h._svg`) : le rechercher a chaque image, pour ~170 blocks
-       *     a 60 images par seconde, serait 10 000 recherches par seconde pour un resultat
-       *     invariant. Et l origine doit etre posee explicitement : un SVG tourne autour de son
-       *     coin (0 0) par defaut, pas de son centre — il partirait en orbite au lieu de pivoter. */
-      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,' + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
-      if (h._svg === undefined) {
-        h._svg = h.el.querySelector('svg') || null;
-        if (h._svg) h._svg.style.transformOrigin = '50% 50%';
-      }
-      if (h._svg) {
-        /* ⛔⛔ IL FLOTTE EN X, Y ET Z — PAS EN ROND SUR UN PLAN. Phil : « il flotte en X Y Z ». Ma
-         *     premiere version posait un `rotate(Ndeg)` plat : une toupie vue de face, pas un objet
-         *     qui derive dans l espace. Un seul axe ne peut pas donner l impression de volume.
-         *   ⛔ MAIS CE DESSIN EST UN SVG ISOMETRIQUE, DONC PLAT, et je ne le cache pas : pousse
-         *     loin, une carte plate qui bascule se trahit — elle s aplatit en trait au passage des
-         *     90°. Les amplitudes sont donc PETITES (9°, 12°, 5°) : a ces angles l oeil lit un
-         *     flottement, jamais une feuille qui tourne. C est une limite du support, pas un
-         *     reglage de gout.
-         *   ⛔ TROIS PERIODES DIFFERENTES ET PREMIERES ENTRE ELLES : avec un seul rythme les trois
-         *     axes reviendraient ensemble au point de depart et le mouvement se lirait comme une
-         *     boucle. Decalees, il ne se repete jamais a l oeil.
-         *   ⛔ LA PERSPECTIVE EST OBLIGATOIRE : sans elle, `rotateX`/`rotateY` ne font que
-         *     COMPRESSER le dessin — une deformation, pas une profondeur. */
-        let tourne = '';
-        if (!mouvementReduit && h.t * k >= 14 && Number.isFinite(h.spin)) {
-          /* ⛔ LA PHASE EST EN RADIANS, ET C EST UNE CORRECTION. Ma premiere formule multipliait la
-           *   phase par 0,017453 — le facteur degre->radian — en le traitant comme une frequence.
-           *   Resultat mesure par le test : 0,40 deg/s pour le cube le plus lent, c est-a-dire
-           *   immobile a l oeil. Un facteur juste employe pour autre chose que ce qu il signifie
-           *   donne un resultat qui a l air raisonnable et ne l est pas. */
-          const b = (h.spin0 + maintenant * h.spin * 0.012) * (Math.PI / 180);
-          const ax = 9 * Math.sin(b);
-          const ay = 12 * Math.sin(b * 0.61 + 1.1);
-          const az = 5 * Math.sin(b * 0.37 + 2.3);
-          tourne = 'perspective(420px) rotateX(' + ax.toFixed(1) + 'deg) rotateY(' + ay.toFixed(1)
-            + 'deg) rotateZ(' + az.toFixed(1) + 'deg)';
-        }
-        if (tourne !== h._tourne) { h._svg.style.transform = tourne; h._tourne = tourne; }
-      }
+      /* ⛔⛔ LA TUILE NE PORTE QUE LA POSITION ET L ECHELLE — PLUS AUCUNE ROTATION, ET C EST UNE
+       *     REGRESSION QUE J AI CAUSEE PUIS RETIREE LE 2026-09-27.
+       *     J avais ajoute un basculement CSS `perspective(420px) rotateX/Y/Z` sur le dessin, pour
+       *     repondre a « les cubes doivent flotter en X Y Z ». DEUX erreurs dans un seul geste :
+       *       1. CE SYSTEME EXISTAIT DEJA, EN MIEUX. `dessinMap` rend un VRAI cube CSS 3D
+       *          (`cube3d.js` : six faces, `transform-style: preserve-3d`, et jusqu a deux
+       *          satellites en orbite, animes par le compositeur du navigateur). J ai ecrit un
+       *          jumeau plus faible d un systeme deja present — sans l avoir cherche.
+       *       2. ET LE JUMEAU A CASSE L ORIGINAL. Une `perspective()` posee sur un ANCETRE APLATIT
+       *          tout le contexte 3D descendant : le cube s ecrasait en parallelogramme cisaille et
+       *          les satellites perdaient leur orbite. C est ce que Phil a vu — « ca te cree des
+       *          bugs visuels comme ca » — et il avait raison.
+       *   ⇒ LA LECON N EST PAS « le CSS 3D est delicat ». C est CHERCHER CE QUI EXISTE AVANT
+       *     D AJOUTER : `cube3d.js` porte le mot « satellite » a huit endroits, et un seul grep
+       *     avant d ecrire aurait evite les deux erreurs.
+       *   ⛔ NE PAS REMETTRE DE TRANSFORMATION 3D ICI. La rotation des blocks appartient a
+       *     `cube3d.js`, ou elle est animee par le navigateur et ou le contexte 3D reste intact. */
+      h.el.style.transform = 'translate(' + (p.sx - h.t * k / 2).toFixed(1) + 'px,'
+        + (p.sy - h.t * 1.1 * k / 2).toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
       const z = Math.max(1, Math.round(200000 / p.zc));
       if (z !== h._z) { h.el.style.zIndex = String(z); h._z = z; }
       const loin = Math.min(1, Math.max(0, (p.z2 + R) / (2 * R)));

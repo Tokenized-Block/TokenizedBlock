@@ -52,7 +52,7 @@ v('⛔ `placer()` pose vx, vy ET vz — pas un seul des trois jumeaux', () => {
   for (const cle of ['h.vx =', 'h.vy =', 'h.vz =']) {
     assert.ok(corps.includes(cle), '`placer()` ne pose pas ' + cle + ' : la derive rendrait NaN');
   }
-  assert.ok(corps.includes('h.spin'), '`placer()` ne pose pas la rotation propre du cube');
+  
 });
 
 v('⛔ les vitesses viennent de l ADRESSE, pas du hasard', () => {
@@ -90,116 +90,6 @@ v('⛔⛔ le cerveau ne fabrique plus un angle a partir de rien', () => {
 });
 
 /* ── 5. la rotation respecte le mouvement reduit ────────────────────────────────────────────── */
-v('⛔ la rotation propre s arrete si l utilisateur a demande moins de mouvement', () => {
-  /* ⛔ UN EFFET « VIVANT » IMPOSE A QUELQU UN QUI A DIT NON EST UN DEFAUT, pas une touche de vie.
-   *   `mouvementReduit` existe deja dans ce module : on l honore au lieu d ajouter un effet qui
-   *   l ignore. */
-  assert.ok(/!mouvementReduit && h\.t \* k >= 14 && Number\.isFinite\(h\.spin\)/.test(map),
-    'la rotation propre ignore `mouvementReduit`, ou son seuil de taille a change sans raison ecrite');
-});
-
-v('⛔⛔ la rotation va sur le CUBE seul — le nom doit rester droit', () => {
-  /* ⛔⛔ DEFAUT VU PAR PHIL SUR SA CAPTURE, PAS PAR MOI. J avais mis la rotation dans la
-   *     transformation de `.bloc` — qui contient le dessin ET l etiquette du nom. Tous les noms
-   *     penchaient avec les cubes, illisibles : « garde les noms droits, juste les cubes qui
-   *     flottent ».
-   *   ⇒ Un effet juste peut etre applique au mauvais NOEUD de l arbre. Le conteneur porte la
-   *     POSITION ; seul le dessin porte la ROTATION. */
-  assert.ok(!/scale\('[^']*'\) \+ tourne|\)' \+ tourne;/.test(map),
-    'la rotation est de nouveau collee a la tuile : les noms pencheraient avec les cubes');
-  assert.ok(/h\._svg\.style\.transform = tourne/.test(map),
-    'la rotation n est plus posee sur le dessin seul');
-  /* ⛔ UN SVG TOURNE AUTOUR DE SON COIN (0 0) PAR DEFAUT, pas de son centre : sans origine
-   *   explicite il partirait en orbite au lieu de pivoter sur lui-meme. */
-  assert.ok(/transformOrigin = '50% 50%'/.test(map),
-    'l origine de rotation du dessin n est pas posee : le cube partirait en orbite');
-  /* ⛔ ET LE SVG EST RETENU UNE FOIS : le rechercher a chaque image pour ~170 blocks a 60 i/s
-   *   ferait 10 000 recherches par seconde pour un resultat invariant. */
-  assert.ok(/h\._svg === undefined/.test(map),
-    'le dessin est recherche a chaque image au lieu d etre retenu une fois');
-});
-
-v('⛔⛔ le seuil de rotation N EST PAS `petit` — cette garde couvrait la mauvaise moitie', () => {
-  /* ⛔⛔ CE CAS EXISTE PARCE QUE JE ME SUIS TROMPE, ET QUE LA MESURE L A DIT. La rotation etait
-   *     gardee par `!petit` (moins de 64 px), « pour ne pas inventer un second seuil ». Mesure en
-   *     production juste apres : 63 blocks visibles, UN SEUL tournait — la taille MEDIANE est de
-   *     20 px, donc presque tout est « petit ». La garde etait VRAIE et couvrait la MAUVAISE
-   *     MOITIE.
-   *   ⇒ `petit` coupe les SATELLITES, qui coutent cher. Une rotation est une valeur de plus dans
-   *     une transformation deja ecrite a chaque image. Deux couts differents, deux seuils. */
-  assert.ok(!/!mouvementReduit && !petit/.test(map),
-    'la rotation est de nouveau gardee par `petit` : un seul cube sur soixante tournerait');
-  /* ⛔ ET LE SEUIL PROPRE DOIT RESTER SOUS LE PLANCHER DE TAILLE, sinon il ne garde rien du tout —
-   *   une garde qui ne peut jamais etre fausse ne borne rien. */
-  const mSeuil = map.match(/h\.t \* k >= (\d+)/);
-  const mPlancher = map.match(/const PX_MIN = (\d+);/);
-  assert.ok(mSeuil && mPlancher, 'le seuil de rotation ou le plancher de taille a disparu');
-  assert.ok(Number(mSeuil[1]) < Number(mPlancher[1]),
-    'le seuil de rotation est au-dessus du plancher de taille : il couperait des blocks visibles');
-});
-
-v('⛔⛔ l angle AVANCE avec le temps — un cube tourne ne tourne pas', () => {
-  /* ⛔⛔ J AI FAILLI CRIER VICTOIRE SUR DU STATIQUE. Mesure en production : 67 blocks sur 67
-   *     portaient bien un `rotate(...)`. Mais les angles etaient IDENTIQUES a 1,5 s d intervalle.
-   *     « Un cube TOURNE » et « un cube QUI TOURNE » sont deux choses differentes, et le compteur
-   *     « combien en portent un » ne distingue pas les deux : UNE SORTIE CONSTANTE N EST PAS UNE
-   *     MESURE.
-   *   ⛔ LA CAUSE ETAIT MON INSTRUMENT, PAS LE CODE : le panneau du navigateur repondait
-   *     `document.hidden === true`, ce qui suspend `requestAnimationFrame`. Le depot le DOCUMENTE
-   *     deja — « l animation s arrete quand l onglet est cache ». Je ne pouvais donc rien voir
-   *     bouger, et j ai failli en conclure que rien ne bougeait.
-   *   ⇒ Ce cas verifie ce qui EST verifiable sans navigateur : que l angle depend du TEMPS. Il ne
-   *     prouve pas que ca tourne a l ecran — seul un onglet visible le montrerait. */
-  assert.ok(/maintenant \* h\.spin/.test(map),
-    'l angle ne depend plus du temps : les cubes seraient tournes une fois, puis figes');
-  /* on rejoue la formule : deux instants differents doivent donner trois angles differents */
-  /* ⛔⛔ CETTE FORMULE EST UNE COPIE DE CELLE DU CODE, ET UNE COPIE PEUT DIVERGER EN SILENCE : le
-   *     test resterait vert en mesurant une formule que plus personne n execute. On ANCRE donc les
-   *     constantes sur la source — si quelqu un change le rythme dans `map3d.js` sans toucher ici,
-   *     ce test tombe au lieu de mentir. */
-  const mMul = map.match(/maintenant \* h\.spin \* ([\d.]+)\)/);
-  assert.ok(mMul, 'le multiplicateur de phase a disparu de la source');
-  assert.equal(mMul[1], '0.012',
-    'la source utilise ' + mMul[1] + ' et ce test rejoue 0.012 : la copie a diverge');
-  const axes = (maintenant, spin0, spin) => {
-    const b = (spin0 + maintenant * spin * 0.012) * (Math.PI / 180);
-    return [9 * Math.sin(b), 12 * Math.sin(b * 0.61 + 1.1), 5 * Math.sin(b * 0.37 + 2.3)];
-  };
-  const a = axes(1000, 180, 1.6), b = axes(2000, 180, 1.6);
-  assert.notEqual(a.map((x) => x.toFixed(2)).join(), b.map((x) => x.toFixed(2)).join(),
-    'les trois axes rendent la meme chose a une seconde d ecart : le cube serait fige');
-  /* ⛔ ET LE MOUVEMENT DU PLUS LENT DOIT SE VOIR : une derive indiscernable de l immobilite ne vaut
-   *   pas mieux que pas de mouvement du tout. On mesure le plus grand pas sur une seconde. */
-  const lent = Math.max(...axes(2000, 0, 1.6).map((x, i) => Math.abs(x - axes(1000, 0, 1.6)[i])));
-  assert.ok(lent >= 0.5, 'le cube le plus lent bouge de ' + lent.toFixed(2)
-    + ' deg/s : indiscernable de l immobilite');
-});
-
-v('⛔⛔ il flotte en X, Y ET Z — un seul axe ne fait pas du volume', () => {
-  /* ⛔⛔ Phil : « il flotte en X Y Z ». Ma premiere version posait un `rotate(Ndeg)` PLAT : une
-   *     toupie vue de face, pas un objet qui derive dans l espace.
-   *   ⛔ LA PERSPECTIVE EST OBLIGATOIRE : sans elle, `rotateX`/`rotateY` ne font que COMPRESSER le
-   *     dessin — une deformation, pas une profondeur. */
-  for (const axe of ['rotateX(', 'rotateY(', 'rotateZ(']) {
-    assert.ok(map.includes(axe), 'le flottement a perdu son axe ' + axe.replace('rotate', '').replace('(', ''));
-  }
-  assert.ok(/perspective\(\d+px\)/.test(map),
-    'pas de perspective : les rotations 3D ne feraient qu aplatir le dessin');
-  /* ⛔⛔ ET LES AMPLITUDES RESTENT PETITES, PARCE QUE LE DESSIN EST PLAT. Un SVG isometrique pousse
-   *     au-dela de ~20 deg se trahit : il s aplatit en trait au passage des 90 deg. C est une
-   *     limite du support, pas un reglage de gout — si quelqu un monte ces valeurs, ce test doit
-   *     l arreter et lui dire pourquoi. */
-  const amp = [...map.matchAll(/const a[xyz] = (\d+) \* Math\.sin/g)].map((m) => Number(m[1]));
-  assert.equal(amp.length, 3, 'les trois amplitudes du flottement ne sont plus lisibles');
-  assert.ok(Math.max(...amp) <= 20,
-    'amplitude de ' + Math.max(...amp) + ' deg : un dessin PLAT pousse si loin se lit comme une '
-    + 'feuille qui tourne, pas comme un cube qui flotte');
-  /* ⛔ TROIS PERIODES DIFFERENTES : un seul rythme ramenerait les trois axes ensemble au point de
-   *   depart, et le mouvement se lirait comme une boucle. */
-  const per = [...map.matchAll(/Math\.sin\(b \* ([\d.]+)/g)].map((m) => m[1]);
-  assert.equal(new Set(per).size, per.length, 'deux axes partagent la meme periode : ca bouclerait');
-});
-
 v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
   /* ⛔ SANS BORNE, un block tres lointain bondirait a la taille d un proche et MENTIRAIT sur sa
    *   distance. Le plancher rend lisible ; il ne doit pas rendre faux. */
@@ -207,10 +97,54 @@ v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
     'la hausse du plancher n est plus bornee : un block lointain pourrait passer pour un proche');
 });
 
-assert.equal(n, 11, 'compte de cas inattendu : ' + n);
+v('⛔⛔ AUCUNE transformation 3D dans map3d.js — elle APLATIRAIT le vrai cube', () => {
+  /* ⛔⛔ CE CAS EXISTE PARCE QUE J AI CASSE LA MAP LE 2026-09-27, ET QUE PHIL L A VU AVANT MOI.
+   *     Pour repondre a « les cubes doivent flotter en X Y Z », j ai pose un
+   *     `perspective(420px) rotateX/rotateY/rotateZ` sur le dessin de chaque tuile. DEUX erreurs
+   *     dans un seul geste :
+   *       1. LE SYSTEME EXISTAIT DEJA, EN MIEUX : `cube3d.js` rend un VRAI cube CSS 3D — six
+   *          faces, `transform-style: preserve-3d`, et jusqu a DEUX SATELLITES en orbite, animes
+   *          par le compositeur. J ai ecrit un jumeau plus faible sans l avoir cherche.
+   *       2. ET LE JUMEAU A CASSE L ORIGINAL : une `perspective()` sur un ANCETRE aplatit tout le
+   *          contexte 3D descendant. Le cube s ecrasait en parallelogramme cisaille et les
+   *          satellites perdaient leur orbite — « ca te cree des bugs visuels comme ca ».
+   *   ⇒ LA LECON N EST PAS « le CSS 3D est delicat » : c est CHERCHER CE QUI EXISTE AVANT
+   *     D AJOUTER. `cube3d.js` porte le mot « satellite » a huit endroits. Un grep suffisait.
+   *   ⛔ CE TEST NE PROTEGE PAS UN GOUT, IL PROTEGE UN CONTEXTE 3D : toute transformation 3D
+   *     reintroduite ici reproduirait exactement la meme casse. */
+  /* ⛔⛔ ON DEPOUILLE LES COMMENTAIRES D ABORD, ET CE TEST ME L A APPRIS SUR LUI-MEME : sa premiere
+   *     version a accuse map3d.js parce que MON PROPRE COMMENTAIRE cite le code retire
+   *     (« perspective(420px) rotateX/Y/Z ») pour expliquer pourquoi il ne doit pas revenir. Une
+   *     sonde textuelle qui lit la DOCUMENTATION d un defaut et l accuse transforme l honnetete du
+   *     code en source de faux positifs — et une sonde qui crie sur le correctif desarme celle qui
+   *     criera sur la regression. Le depot avait deja cette regle ailleurs ; elle vaut ici aussi. */
+  const codeNu = map.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  for (const interdit of ['perspective(', 'rotateX(', 'rotateY(', 'rotate3d(']) {
+    assert.ok(!codeNu.includes(interdit),
+      'map3d.js contient « ' + interdit + ' » : une transformation 3D sur la tuile APLATIT le cube '
+      + 'de cube3d.js et tue ses satellites. La rotation des blocks appartient a cube3d.js.');
+  }
+  /* ⛔ ET LE VRAI SYSTEME DOIT TOUJOURS ETRE BRANCHE : le retrait ne doit pas avoir emporte la
+   *   source du volume en meme temps que ma copie. */
+  assert.ok(/cube3dHtml\(/.test(app), 'le vrai cube 3D n est plus appele : la map perdrait son volume');
+});
+
+v('⛔ la tuile porte toujours sa POSITION — le retrait ne doit pas l avoir emportee', () => {
+  /* ⛔⛔ EN RETIRANT MA ROTATION J AI D ABORD SUPPRIME LA LIGNE DE POSITION AVEC ELLE : sans elle
+   *     aucun block ne se place, et la map serait vide. Un retrait trop large est un defaut comme
+   *     un autre — ce cas le rendrait visible immediatement. */
+  assert.ok(/h\.el\.style\.transform = 'translate\(/.test(map),
+    'la tuile ne porte plus sa transformation de position : aucun block ne se placerait');
+  assert.ok(/scale\(' \+ k\.toFixed\(3\) \+ '\)/.test(map),
+    'la tuile ne porte plus son echelle : la perspective serait perdue');
+});
+
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');
 console.log('   AUX DEUX BOUTS — map et cerveau.');
+console.log('   Et AUCUNE transformation 3D ne peut revenir dans map3d.js : elle aplatirait le vrai');
+console.log('   cube de cube3d.js et tuerait ses satellites — c est la regression du 2026-09-27.');
 console.log('⚠️ NE PROUVE PAS le rendu : ce test lit le source et rejoue l arithmetique, il ne');
 console.log('   peint rien. Que la map bouge se regarde en navigateur.');
