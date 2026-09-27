@@ -14,7 +14,9 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /id="cPaireChips"/);
 assert.match(html, /optgroup label="Coinbase tokenized stocks"/);
-assert.match(html, /PAIRES_CHIP_QUICK/);
+/* ⛔ la liste des puces n est plus une constante gravee mais une fonction CALCULEE depuis les prix
+ *   reellement lus (2026-09-27) : on verifie la fonction, pas le nom de l ancienne constante. */
+assert.match(html, /function pairesChipQuick()/);
 assert.match(html, /majFundWalletPourPaire/);
 assert.doesNotMatch(html, /Fees for Dev/);
 assert.doesNotMatch(html, /No fee address in UI/);

@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-buy-options" hidden>Build <code>20260927-buy-options</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-puces-calculees" hidden>Build <code>20260927-puces-calculees</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3235,7 +3235,15 @@ function assurerPrixDevise(sym) {
   if (!adr) return;
   prixDeviseEnVol.add(s);
   void prixUsdDevise(adr).then((p) => {
-    if (typeof p === 'number' && Number.isFinite(p) && p > 0) prixUsdDeviseLus.set(s, p);
+    if (typeof p === 'number' && Number.isFinite(p) && p > 0) {
+      prixUsdDeviseLus.set(s, p);
+      /* ⛔⛔ ON REPEINT LES PUCES QUAND UN PRIX ARRIVE. Depuis que la liste des puces est CALCULEE
+       *     a partir des prix lus, elle serait vide au premier rendu — les lectures sont
+       *     asynchrones. Sans ce rappel, « calculee » voudrait dire « toujours reduite a l ETH » :
+       *     un correctif juste dans le code et invisible a l ecran, exactement le defaut inerte
+       *     attrape sur la carte quelques heures plus tot le meme jour. */
+      try { peindrePaireChips(); } catch (_) { /* ecran Create absent : rien a repeindre */ }
+    }
   }).catch(() => { /* non lu : la devise reste absente, et le block garde « sans marche » */ })
     .finally(() => prixDeviseEnVol.delete(s));
 }
@@ -12169,11 +12177,12 @@ function peindrePaires() {
   /* tip 20260922-stock-pair-ux: open pair details on MAIN so stocks are not buried in collapsed accordion */
   const det = $('#cPaireDetail');
   if (det && Number(CHAINE) === 8453) det.open = true;
+  amorcerPrixActions();
   peindrePaireChips();
   majPaire();
 }
 
-/** tip 20260922-stock-pair-ux: quick picks ETH / AAPLc / GOOGLc / NVDAc / METAc — hide if off Base or option disabled */
+/** tip 20260922-stock-pair-ux: quick picks CALCULEES depuis les prix lus — hide if off Base or option disabled */
 /* ⛔ CET EN-TETE CITAIT ENCORE COINc, alors que la liste des puces ne le portait plus depuis la
  *   mesure du 2026-09-25 — et que l action a ete RETIREE du registre le 2026-09-27 (supply nulle).
  *   Un commentaire qui nomme un element disparu envoie le prochain lecteur chercher un bug qui
@@ -12189,7 +12198,45 @@ function peindrePaires() {
  *   ⚠️ CETTE LISTE EST UNE PHOTO D UN JOUR. Si une de ces cinq gagne un marche liquide, elle
  *     redevient legitime — et si AAPLc perd le sien, elle doit sortir. C est a re-mesurer, pas a
  *     graver. */
-const PAIRES_CHIP_QUICK = ['ETH', 'AAPLc', 'GOOGLc', 'NVDAc', 'METAc'];
+/* ⛔⛔ CETTE LISTE ETAIT GRAVEE, ET SON PROPRE COMMENTAIRE DISAIT DE NE PAS LA GRAVER :
+ *     « CETTE LISTE EST UNE PHOTO D UN JOUR… c est a re-mesurer, pas a graver ». Deux jours plus
+ *     tard elle etait fausse.
+ *     RE-MESURE DU 2026-09-27, `/api/prix-usd` rejoue sur les DIX actions du registre — HUIT ont un
+ *     prix lisible, pas quatre :
+ *         AAPLc 340,33 (1,87 M de liquidite) · GOOGLc 344,43 (2,04 M) · METAc 749,99 (2,37 M)
+ *         MSFTc 517,77 (1,15 M) · MSTRc 162,00 (1,42 M) · NVDAc 225,49 (2,22 M)
+ *         SNDKc 1782,06 (1,13 M) · SPCXc 148,92 (26 k)
+ *         AMZNc et TSLAc : « no liquid enough market read » — reellement illiquides (7 957 $ et 623 $)
+ *     Les DEUX PLUS GROS MARCHES du jeu — MSTRc, 4,9 M$ de volume 24 h, et SNDKc, 3,0 M$ — etaient
+ *     donc EXCLUS des puces, sur la foi d une mesure du 2026-09-25 devenue caduque.
+ *   ⇒ ON NE GRAVE PLUS : la liste se calcule a partir des prix REELLEMENT LUS, par la meme porte
+ *     que partout (`prixUsdDeviseLus`). Elle ne peut plus vieillir sans qu on le voie.
+ * ⛔ LA REGLE D ORIGINE EST GARDEE INTACTE, et c est elle qui compte : une puce ne pousse que vers
+ *   une action DONT LE PRIX EST CONNU. Sans prix, l ecran de mise en vie demande une valeur de
+ *   depart dans une devise que l app ne sait pas evaluer, et le parcours s arrete la. On ne retire
+ *   aucun choix pour autant : les dix restent dans la liste deroulante.
+ * ⛔ ET L ORDRE SUIT LE REGISTRE, pas l ordre d arrivee des prix : sinon la position d une puce
+ *   sauterait d un chargement a l autre selon quelle lecture revient la premiere. */
+/* ⛔ ET ON AMORCE LES LECTURES, sinon la liste calculee resterait vide pour toujours :
+ *   `assurerPrixDevise` n est appelee ailleurs que pour la devise DEJA choisie. Une puce ne peut
+ *   pas apparaitre pour une action dont personne n a jamais demande le prix. Chaque lecture est
+ *   dedoublonnee par `prixDeviseEnVol`, donc appeler pour les dix ne coute rien de plus. */
+function amorcerPrixActions() {
+  try {
+    for (const p of pairesProposees(CHAINE)) {
+      if (p && p.type === 'ACTION') assurerPrixDevise(String(p.symbole));
+    }
+  } catch (_) { /* registre illisible : les puces resteront a l ETH, ce qui est honnete */ }
+}
+function pairesChipQuick() {
+  const out = ['ETH'];
+  try {
+    for (const p of pairesProposees(CHAINE)) {
+      if (p && p.type === 'ACTION' && prixUsdDeviseLus.has(String(p.symbole))) out.push(String(p.symbole));
+    }
+  } catch (_) { /* registre illisible : on garde au moins l ETH, jamais une liste inventee */ }
+  return out;
+}
 function peindrePaireChips() {
   const box = $('#cPaireChips');
   if (!box) return;
@@ -12197,7 +12244,7 @@ function peindrePaireChips() {
   const sel = $('#cPaire');
   if (!sel) { box.hidden = true; box.innerHTML = ''; return; }
   const opts = [...sel.options];
-  const htmlChips = PAIRES_CHIP_QUICK.map((sym) => {
+  const htmlChips = pairesChipQuick().map((sym) => {
     const o = opts.find((x) => {
       if (sym === 'ETH') return /^0x0{40}$/i.test(x.value);
       return new RegExp('^' + sym + '\\b').test(String(x.textContent || ''));

@@ -28,17 +28,30 @@ assert.match(html, /data-paire-chip/);
  *     aucune puce qui ne soit une paire reellement proposee. Les symboles sont une MESURE, a refaire
  *     quand la liquidite bouge ; la STRUCTURE est la regle. */
 {
-  const m = /PAIRES_CHIP_QUICK = \[([^\]]+)\]/.exec(html);
-  assert.ok(m, 'la liste des puces rapides a disparu');
-  const symboles = m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
-  assert.equal(symboles.length, 5, 'il n y a plus cinq puces rapides : ' + symboles.join(', '));
-  assert.equal(symboles[0], 'ETH', 'l ETH n est plus la premiere puce');
-  const connus = new Set(pairesProposees(8453).map((p) => p.symbole));
-  connus.add('ETH');
-  for (const s of symboles) {
-    assert.ok(connus.has(s),
-      'la puce « ' + s + ' » ne correspond a aucune paire proposee : elle mene nulle part');
-  }
+  /* ⛔⛔ LA LISTE N EST PLUS UNE CONSTANTE (2026-09-27), ET CE FICHIER AVAIT DEJA ECRIT POURQUOI :
+   *     « ce qui compte n a jamais ete ces cinq symboles-la mais : l ETH en premier, et aucune puce
+   *     qui ne soit une paire reellement proposee. Les symboles sont une MESURE, a refaire quand la
+   *     liquidite bouge ; la STRUCTURE est la regle. »
+   *     La liquidite a bouge. Re-mesure du 2026-09-27 : HUIT des dix actions ont un prix lisible,
+   *     dont MSTRc (4,9 M$ de volume 24 h) et SNDKc (3,0 M$) que la constante excluait — les deux
+   *     plus gros marches du jeu. La liste se CALCULE desormais depuis les prix reellement lus.
+   *   ⇒ ON GARDE LA STRUCTURE, ON ABANDONNE LE COMPTE. Exiger « cinq puces » rendrait de nouveau
+   *     une MESURE obligatoire — exactement le defaut que ce fichier reprochait a sa propre version
+   *     precedente, qui figeait un cul-de-sac. */
+  const i = html.indexOf('function pairesChipQuick');
+  assert.notEqual(i, -1, 'la liste calculee des puces a disparu');
+  const bloc = html.slice(i, html.indexOf('function peindrePaireChips', i));
+  assert.ok(/const out = \['ETH'\]/.test(bloc), 'l ETH n est plus la premiere puce');
+  assert.ok(/pairesProposees\(CHAINE\)/.test(bloc),
+    'les puces ne viennent plus du registre des paires : une puce pourrait ne mener nulle part');
+  assert.ok(/prixUsdDeviseLus\.has\(String\(p\.symbole\)\)/.test(bloc),
+    'une puce peut de nouveau pointer une action SANS PRIX LU : c est le cul-de-sac mesure le '
+    + '2026-09-25 — Create reussit, puis la mise en vie demande une valeur dans une devise que '
+    + 'l app ne sait pas evaluer');
+  /* ⛔ TEMOIN : le registre doit encore porter des actions, sinon tout ce qui precede passerait sur
+   *   une liste vide sans rien signaler. */
+  assert.ok(pairesProposees(8453).some((p) => p.type === 'ACTION'),
+    'le registre ne porte plus aucune action : ce cas ne mesure plus rien');
 }
 assert.match(html, /hookV8Deploye/);
 assert.match(html, /deviseOk = v3Pret \|\| Number\(CHAINE\) === 8453/);
