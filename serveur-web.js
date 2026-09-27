@@ -73,7 +73,7 @@ async function lireOpenLaunch() {
  * on ne capte leurs frais que si le trade passe par notre Buy/Sell. Ce serveur tient la liste des blocks crees (logs
  * de la factory B20, lecture seule, ~12 h puis increments (tip 20260923-map-trending)), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
-import { listerCreations } from './index-blocks.js';
+import { listerCreations, createurDe } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
@@ -662,6 +662,23 @@ async function holdersCorps(jeton) {
 }
 
 const blocksConnus = new Set();
+/* ⛔⛔ QUI A CREE QUOI — L INDEX QUI MANQUAIT, ET SON ABSENCE RENDAIT LES BLOCKS DES GENS INVISIBLES.
+ *     Phil, 2026-09-27 : « je vais sur My blocks et je vois pas le block que j ai cree sur l autre
+ *     machine, et le bug doit etre partout ». Il l est.
+ *   ⛔ LA CAUSE, MESUREE : le navigateur cherchait les creations avec `listerCreations({ blocs:
+ *     43200 })`. A ~2 s par bloc sur Base, 43 200 blocs font EXACTEMENT 24 heures. Un block cree il
+ *     y a plus d un jour disparaissait donc de « mes blocks » — sur TOUTES les machines, pas
+ *     seulement la seconde. Ce n est pas un defaut de synchronisation, c est une FENETRE.
+ *   ⛔ ET ON NE POUVAIT PAS SIMPLEMENT L ELARGIR : le noeud plafonne les fenetres de logs, donc
+ *     trente jours depuis un navigateur feraient des centaines de requetes. Le serveur, lui, scanne
+ *     DEJA les creations en continu — il lui manquait seulement de retenir QUI a cree.
+ *   ⛔⛔ ET L EVENEMENT DE CREATION NE PORTE PAS LE CREATEUR : `index-blocks.js` le dit en toutes
+ *       lettres, « seule la transaction dit QUI A PAYE ». On reutilise donc `createurDe`, l aide
+ *       canonique deja ecrite et deja eprouvee, plutot qu une version plus faible ecrite ici.
+ *   ⚠️ BORNE HONNETE, ET ELLE EST DITE PAR L ENDPOINT : cet index ne connait que les creations vues
+ *     depuis le premier scan du serveur. Il grandit avec le temps, il ne remonte pas le passe tout
+ *     seul. « pas encore indexe » n est pas « pas a toi ». */
+const createurParBlock = new Map();
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
@@ -685,6 +702,13 @@ function chargerTrendingDisque() {
     }
     trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
     for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
+    /* ⛔ ON RELIT L INDEX DES CREATEURS, ET ON VALIDE LES DEUX COTES : une entree mal formee gravee
+     *   par une ancienne version ferait repondre l endpoint avec des adresses qui n en sont pas. */
+    for (const [j, c] of (x.createurs || [])) {
+      if (/^0x[0-9a-fA-F]{40}$/.test(j || '') && /^0x[0-9a-fA-F]{40}$/.test(c || '')) {
+        createurParBlock.set(String(j).toLowerCase(), String(c).toLowerCase());
+      }
+    }
     if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
     console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
   } catch (e) { console.log('[trending] disk cache unread:', e.message); }
@@ -701,6 +725,13 @@ function sauverTrendingDisque() {
     const payload = JSON.stringify({
       ver: TRENDING_CACHE_VER, a: trCache.a, corps: trCache.corps, blocsLusJusqua,
       adrs: [...blocksConnus].slice(-2000),
+      /* ⛔⛔ L INDEX DES CREATEURS EST PERSISTE, SINON IL REPART DE ZERO A CHAQUE DEPLOIEMENT — et
+       *     comme il ne se remplit qu avec les creations VUES depuis le dernier scan, un index
+       *     volatil ne rattraperait JAMAIS le passe. Les gens reperdraient leurs blocks a chaque
+       *     mise en ligne : exactement le defaut qu on repare.
+       *   ⛔ 5000 ENTREES AU PLUS, et c est dit : le fichier reste borne. Un plafond tacite qui
+       *     ferait disparaitre des entrees sans le signaler serait le meme defaut sous un autre nom. */
+      createurs: [...createurParBlock.entries()].slice(-5000),
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
     renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
@@ -732,6 +763,30 @@ async function lireTrending() {
     console.log('[trending] scan start · blocs=' + blocs + ' · connus=' + blocksConnus.size);
     const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
+    /* ⛔⛔ ON RETIENT LE CREATEUR DE CHAQUE NOUVELLE CREATION. C est ce qui permet a n importe qui de
+     *     retrouver SES blocks, d une machine ou d une autre, sans fenetre de 24 h.
+     *   ⛔ SEULEMENT LES NOUVELLES : re-resoudre tout l index a chaque scan ferait des milliers
+     *     d appels pour un resultat qui ne change jamais. Un createur ne change pas.
+     *   ⛔ ET UN ECHEC DE RESOLUTION N EST PAS UN CREATEUR NUL : `createurDe` rend `null` avec une
+     *     raison quand la transaction n a pas pu etre lue. On ne l enregistre PAS — sinon on
+     *     graverait « personne » pour un block dont on n a simplement pas pu lire la tx, et la
+     *     prochaine passe ne reessaierait jamais. */
+    try {
+      const aResoudre = (cr.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')
+        && !createurParBlock.has(c.jeton.toLowerCase()));
+      for (let i = 0; i < aResoudre.length; i += 8) {
+        const lot = aResoudre.slice(i, i + 8);
+        const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
+        for (let j = 0; j < lot.length; j++) {
+          const cre = res[j] && res[j].createur;
+          if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase());
+        }
+      }
+      if (aResoudre.length) {
+        console.log('[createurs] ' + createurParBlock.size + ' block(s) rattache(s) a un createur ('
+          + aResoudre.length + ' resolu(s) ce scan)');
+      }
+    } catch (e) { console.log('[createurs] resolution partielle : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
@@ -1179,6 +1234,36 @@ createServer((req, res) => {
    *    un block a 10 USDC (10 $) au lieu de ~26 000 $ en ETH, sans aucun plancher. La valeur par defaut est desormais la
    *    MEME en dollars, convertie avec ce prix. Seulement les devises de la liste V3 ; paire la plus liquide sur Base
    *    (DexScreener), au moins 10 000 $ de liquidite, sinon « non lu ». Cache 5 min. */
+  /* ⛔⛔ LES BLOCKS DE N IMPORTE QUI, SANS FENETRE DE 24 HEURES.
+   *     Le navigateur cherchait les creations sur 43 200 blocs — EXACTEMENT 24 h a ~2 s le bloc.
+   *     Un block cree la veille disparaissait donc de « mes blocks », sur toutes les machines.
+   *     Le serveur scanne les creations en continu ; il retient desormais QUI a cree, et repond ici.
+   *   ⛔ LA BORNE PART AVEC LA REPONSE, TOUJOURS. `indexeDepuis` dit a partir de quand l index
+   *     existe, et `couvertureComplete` dit s il a rattrape le premier block de TBLOCK. Tant que
+   *     c est faux, une liste VIDE ne veut PAS dire « tu n as rien cree » — elle veut dire « pas
+   *     encore indexe ». Les deux se ressemblent a l ecran et n ont rien a voir.
+   *   ⛔ AUCUNE DONNEE PERSONNELLE : on rend des adresses de contrats, jamais un lien vers une
+   *     identite. L adresse demandee n est ni journalisee ni conservee. */
+  if (chemin === '/api/blocks-de') {
+    const adr = String(new URL(req.url, 'http://x').searchParams.get('adr') || '').toLowerCase();
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (!/^0x[0-9a-f]{40}$/.test(adr)) { repondre({ ok: false, pourquoi: 'an address is required' }); return; }
+    const blocks = [];
+    for (const [jeton, createur] of createurParBlock) if (createur === adr) blocks.push(jeton);
+    repondre({
+      ok: true,
+      lu: new Date().toISOString(),
+      blocks,
+      /* ⛔ CE QUE L INDEX SAIT, ET CE QU IL NE SAIT PAS — les deux, sinon le vide ment. */
+      blocksIndexes: createurParBlock.size,
+      blocksSuivis: blocksConnus.size,
+      couvertureComplete: false,
+      borne: 'Blocks whose creation transaction was read since this server started indexing. '
+        + 'An empty list means "not indexed yet", never "you created nothing".',
+    });
+    return;
+  }
+
   if (chemin === '/api/prix-usd') {
     const adr = String(new URL(req.url, 'http://x').searchParams.get('adr') || '').toLowerCase();
     const admise = pairesProposees(8453).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === adr);

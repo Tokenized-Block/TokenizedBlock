@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-neurone-detail" hidden>Build <code>20260927-neurone-detail</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-mes-blocks" hidden>Build <code>20260927-mes-blocks</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4859,6 +4859,36 @@ function mesCreations() {
   const promesse = (async () => {
     const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
     const { gardees, nonResolues } = await creationsDe({ rpc, creations: r.creations || [], adresse: compte });
+    /* ⛔⛔ LA FENETRE DE 43 200 BLOCS FAIT EXACTEMENT 24 HEURES a ~2 s le bloc sur Base. Un block
+     *     cree la veille disparaissait donc de « mes blocks » — sur TOUTES les machines, pas
+     *     seulement celle ou on ne l avait pas cree. Phil : « je vais sur My blocks et je vois pas
+     *     le block que j ai cree sur l autre machine, et le bug doit etre partout ». Il l etait.
+     *   ⛔ ON NE PEUT PAS SIMPLEMENT ELARGIR LA FENETRE : le noeud plafonne les pages de logs, donc
+     *     trente jours depuis un navigateur feraient des centaines de requetes. Le serveur, lui,
+     *     scanne les creations en continu et retient desormais QUI a cree (`/api/blocks-de`).
+     *   ⛔⛔ ON FUSIONNE, ON NE REMPLACE PAS. Le scan local voit un block cree il y a trente
+     *       SECONDES, que le serveur n a pas encore scanne ; l index serveur voit ceux de la
+     *       semaine derniere, que la fenetre locale a perdus. Chacun couvre l angle mort de
+     *       l autre — n en garder qu un recreerait un trou, juste ailleurs.
+     *   ⛔ ET UN ECHEC DE L INDEX NE DOIT RIEN CASSER : si l appel rate, on garde EXACTEMENT le
+     *     comportement d avant. Une amelioration qui peut faire pire que l etat anterieur n en est
+     *     pas une. */
+    let deLIndex = [];
+    try {
+      const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()),
+        { cache: 'no-store' });
+      const j = rep.ok ? await rep.json() : null;
+      if (j && j.ok && Array.isArray(j.blocks)) deLIndex = j.blocks;
+    } catch (_) { /* index indisponible : on garde le scan local seul, comme avant */ }
+    const vus = new Set(gardees.map((c) => String(c.jeton).toLowerCase()));
+    for (const adr of deLIndex) {
+      const bas = String(adr || '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(bas) || vus.has(bas)) continue;
+      vus.add(bas);
+      /* ⛔ `createur` EST RENSEIGNE : l index ne rend QUE les blocks de cette adresse, et le
+       *   prochain lecteur doit pouvoir le savoir sans deviner d ou vient l entree. */
+      gardees.push({ jeton: bas, createur: String(compte).toLowerCase(), depuisIndex: true });
+    }
     return { r, gardees, nonResolues };
   })();
   lectureCreations = { cle, promesse };
