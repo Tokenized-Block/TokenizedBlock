@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-cl-branche" hidden>Build <code>20260927-cl-branche</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-cl-repeint" hidden>Build <code>20260927-cl-repeint</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3518,9 +3518,36 @@ async function metaJeton(jeton) {
   metaJetons.set(bas, m);
   return m;
 }
+/** Peint la ligne de vie avec NOTRE lecture, si la fiche montre encore ce block.
+ *  ⛔⛔ SEPAREE DE LA LECTURE, ET C EST UN DEFAUT MESURE EN PRODUCTION, PAS UNE PRECAUTION. Premiere
+ *      version : la peinture etait un `.then()` accroche a la promesse AU MOMENT DE LA MISE EN
+ *      CACHE — donc une seule fois, a la premiere resolution. A la REOUVERTURE de la carte, la
+ *      ligne synchrone reecrivait « ≈ $336.9k market cap · public market » et plus rien ne
+ *      repassait derriere. Mesure sur les six blocks Aerodrome : cinq disaient « read on chain »,
+ *      MUc — le seul deja ouvert une fois — etait retombe sur le repli.
+ *    ⇒ LE CACHE GARDE LA LECTURE, L APPEL FAIT LA PEINTURE. Une valeur lue puis jetee est un defaut,
+ *      et ici elle etait lue, gardee, et jetee quand meme. */
+function peindreVieCL(bas, r) {
+  /* ⛔ ON N ECRIT QUE SI LA FICHE MONTRE ENCORE CE BLOCK : entre le clic et la reponse du noeud,
+   *   une autre carte a pu s ouvrir. Sans ce test on ecrirait le prix d un block sur la fiche d un
+   *   autre — un nombre vrai qui decrit autre chose, le defaut qui ne se voit jamais. */
+  try {
+    const f = $('#fiche');
+    if (!r || r.etat !== 'LUE' || !f || f.hidden) return;
+    if (String(f.dataset.block || '').toLowerCase() !== bas) return;
+    const e = $('#fVie');
+    /* ⛔ UN PRIX SANS SON UNITE NE DIT RIEN : « 1092 » se lit en dollars par reflexe. On nomme la
+     *   devise lue sur la chaine, et si on n a pas su la nommer on ne l invente pas. */
+    if (e) e.textContent = Number(r.prix.toPrecision(6)) + (r.deviseSym ? ' ' + r.deviseSym : '')
+      + ' per block · read on chain';
+  } catch (_) {}
+}
 async function lireMarcheCL(adr, mk) {
   const bas = String(adr || '').toLowerCase();
-  if (marcheCL.has(bas)) return marcheCL.get(bas);
+  /* ⛔ LE CACHE RETIENT LA PROMESSE, PAS LE RESULTAT : dix cartes ouvertes d affilee lanceraient
+   *   sinon dix lectures simultanees du meme block, et c est la simultaneite qui declenche la limite
+   *   de debit du noeud public — donc le faux verdict « la pool ne repond pas ». */
+  if (marcheCL.has(bas)) { const dejaLu = await marcheCL.get(bas); peindreVieCL(bas, dejaLu); return dejaLu; }
   const promesse = (async () => {
     const pool = mk && mk.poolAdr;
     if (!pool) return null;
@@ -3538,24 +3565,19 @@ async function lireMarcheCL(adr, mk) {
     const r = md.dec === mj.dec ? sonde   /* memes decimales : la premiere passe etait deja juste */
       : await lirePoolCL({ rpc, pool, jeton: bas, decJeton: mj.dec, decDevise: md.dec });
     return r && r.etat === 'LUE' ? { ...r, deviseSym: md.sym, deviseAdr: devise } : r;
-  })().then((r) => {
-    /* ⛔ ON N ECRIT QUE SI LA FICHE MONTRE ENCORE CE BLOCK : entre le clic et la reponse du noeud,
-     *   Phil a pu ouvrir une autre carte. Sans ce test on ecrirait le prix d un block sur la fiche
-     *   d un autre — un nombre vrai qui decrit autre chose, le defaut qui ne se voit jamais. */
-    try {
-      const f = $('#fiche');
-      if (r && r.etat === 'LUE' && f && !f.hidden && String(f.dataset.block || '').toLowerCase() === bas) {
-        const e = $('#fVie');
-        /* ⛔ UN PRIX SANS SON UNITE NE DIT RIEN : « 1092 » se lit en dollars par reflexe. On nomme la
-         *   devise lue sur la chaine, et si on n a pas su la nommer on ne l invente pas. */
-        if (e) e.textContent = Number(r.prix.toPrecision(6)) + (r.deviseSym ? ' ' + r.deviseSym : '')
-          + ' per block · read on chain';
-      }
-    } catch (_) {}
-    return r;
-  });
+  })().catch(() => null);
   marcheCL.set(bas, promesse);
-  return promesse;
+  const r = await promesse;
+  /* ⛔⛔ ON NE GRAVE QUE CE QUI NE CHANGERA PAS. « LUE » est la reponse ; « PAS_UNE_POOL_CL » et
+   *     « REFUSE » sont des faits (pool Solidly, pool sans le jeton, decimales manquantes) qui ne
+   *     bougeront pas d une ouverture a l autre. « NON_LUE » et l absence de reponse sont des
+   *     PANNES DE NOTRE COTE : les garder condamnerait le block pour toute la session sur un simple
+   *     hoquet du noeud — et « pas pu regarder » deviendrait « n existe pas », l erreur meme que
+   *     `pool-cl.js` est ecrit pour eviter. Mesure du jour : 59 des 167 appels RPC de la page sont
+   *     refuses par le noeud public. Ce n est donc pas un cas theorique. */
+  if (!r || r.etat === 'NON_LUE') marcheCL.delete(bas);
+  peindreVieCL(bas, r);
+  return r;
 }
 /** Profondeur minimale, en dollars, pour qu un marche soit traite comme utilisable.
  *  ⛔⛔ UNE SEULE VALEUR POUR DEUX DECISIONS, ET C EST LE POINT. Elle decide (a) si la liste montre

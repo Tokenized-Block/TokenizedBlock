@@ -75,9 +75,9 @@ cas('⛔⛔ la lecture ne TOUCHE PAS `h.vie`', () => {
   /* ⛔⛔ `h.vie` nourrit le cerveau ET dimensionne la map, et sa conversion d unite est un piege
    *     identifie : elle est en devise de pool, pas en dollars. Y ecrire un prix CL changerait la
    *     taille des cubes et l humeur des blocks — un rayon d impact enorme pour un affichage. */
-  const f = corpsDe('async function lireMarcheCL');
+  const f = corpsDe('async function lireMarcheCL') + corpsDe('function peindreVieCL');
   assert.ok(!/\.vie\s*=/.test(f) && !/h\.vie/.test(f),
-    'lireMarcheCL ecrit dans `h.vie` : la map et le cerveau se mettraient a bouger sur une lecture '
+    'la lecture CL ecrit dans `h.vie` : la map et le cerveau se mettraient a bouger sur une lecture '
     + 'dont l unite n est pas celle qu ils attendent');
 });
 
@@ -85,17 +85,19 @@ cas('⛔⛔ l ecriture est gardee sur LA FICHE ENCORE OUVERTE SUR CE BLOCK', () 
   /* ⛔⛔ ENTRE LE CLIC ET LA REPONSE DU NOEUD, PHIL A PU OUVRIR UNE AUTRE CARTE. Sans cette garde on
    *     ecrirait le prix d un block sur la fiche d un autre : un nombre VRAI qui decrit autre chose,
    *     le defaut qui ne se voit jamais. C est le meme motif que la garde de `pool-cl.js` qui refuse
-   *     une pool ne contenant pas le jeton. */
-  const f = corpsDe('async function lireMarcheCL');
-  assert.ok(/String\(f\.dataset\.block \|\| ''\)\.toLowerCase\(\) === bas/.test(f),
+   *     une pool ne contenant pas le jeton. Le rejeu plus bas l EXERCE ; ici on tient la forme. */
+  const f = corpsDe('function peindreVieCL');
+  assert.ok(/String\(f\.dataset\.block \|\| ''\)\.toLowerCase\(\) !== bas/.test(f),
     'la garde d identite a disparu : le prix d un block pourrait s ecrire sur la fiche d un autre');
-  assert.ok(/!f\.hidden/.test(f), 'on ecrit dans une fiche fermee — le prix apparaitrait a la reouverture');
+  assert.ok(/\|\| f\.hidden\) return;/.test(f),
+    'on ecrit dans une fiche FERMEE : le prix d un block apparaitrait a la prochaine ouverture, '
+    + 'sur la carte de quelqu un d autre');
 });
 
 cas('⛔ la phrase dit « read on chain », PAS « public market »', () => {
   /* ⛔ C EST TOUT L INTERET DU CHANGEMENT. Une lecture qui ne se distingue pas de celle d un tiers
    *   n apporte rien : le chiffre existait deja, via DexScreener, via le serveur. */
-  const f = corpsDe('async function lireMarcheCL');
+  const f = corpsDe('function peindreVieCL');
   assert.ok(/read on chain/.test(f), 'la ligne ne dit plus que le chiffre vient de NOTRE lecture');
   assert.ok(!/public market/.test(f),
     'la ligne CL dit « public market » : elle se confondrait avec le repli DexScreener, et le travail '
@@ -106,7 +108,7 @@ cas('⛔ un prix sans son UNITE ne dit rien — la devise est nommee', () => {
   /* ⛔ « 1092 » se lit en dollars par reflexe. MUc/USDC tombe juste par accident ; une pool contre
    *   WETH afficherait 0,4 et personne ne saurait en quoi. Et on ne l invente pas : si le symbole
    *   n a pas pu etre lu, on n ecrit pas d unite. */
-  const f = corpsDe('async function lireMarcheCL');
+  const f = corpsDe('function peindreVieCL');
   assert.ok(/r\.deviseSym \? ' ' \+ r\.deviseSym : ''/.test(f),
     'l unite n est plus conditionnee a un symbole REELLEMENT lu : soit elle disparait, soit elle '
     + 'serait devinee — et un prix mal etiquete est pire qu un prix absent');
@@ -129,17 +131,107 @@ cas('⛔⛔ les DECIMALES sont lues des DEUX cotes, jamais supposees', () => {
     'un echec de lecture est mis en cache : un hoquet du noeud condamnerait ce jeton pour la session');
 });
 
-cas('⛔ une SEULE lecture par adresse, meme quand elle echoue', () => {
-  /* ⛔ LE CACHE RETIENT LA PROMESSE, PAS LE RESULTAT. Retenir le resultat laisserait dix cartes
-   *   ouvertes lancer dix lectures simultanees du meme block — et c est la simultaneite qui declenche
-   *   la limite de debit du noeud public, donc le faux verdict « la pool ne repond pas ». */
-  const f = corpsDe('async function lireMarcheCL');
-  assert.ok(/if \(marcheCL\.has\(bas\)\) return marcheCL\.get\(bas\)/.test(f),
-    'le cache ne court-circuite plus : chaque ouverture de carte relancerait la lecture');
-  assert.ok(/marcheCL\.set\(bas, promesse\)/.test(f),
-    'le cache retient autre chose que la promesse : deux lectures du meme block pourraient partir '
-    + 'en parallele avant que la premiere revienne');
-});
+/* ⛔⛔ REJEU REEL DE `lireMarcheCL`, ET C EST UNE REGEX QUI M A LAISSE PASSER LE DEFAUT.
+ *     Premiere version : le cache ET la peinture etaient tenus par des expressions regulieres, qui
+ *     etaient VRAIES — et la fonction etait quand meme cassee. La peinture etait un `.then()`
+ *     accroche a la promesse au moment de la mise en cache, donc executee UNE SEULE FOIS. A la
+ *     reouverture de la carte, la ligne synchrone reecrivait le repli « public market » et plus
+ *     rien ne repassait derriere. Mesure en production : des six blocks Aerodrome, cinq disaient
+ *     « read on chain » et MUc — le seul deja ouvert une fois — etait retombe sur le repli.
+ *   ⇒ On execute la vraie fonction, avec un faux DOM et un faux lecteur de pool. */
+function monter() {
+  const i = src.indexOf('async function lireMarcheCL');
+  assert.notEqual(i, -1, 'lireMarcheCL introuvable');
+  const debut = src.indexOf('{', i);
+  let p = 0, fin = -1;
+  for (let k = debut; k < src.length; k++) {
+    if (src[k] === '{') p++;
+    else if (src[k] === '}') { p--; if (p === 0) { fin = k + 1; break; } }
+  }
+  const source = src.slice(i, fin);
+  const peint = src.slice(src.indexOf('function peindreVieCL'),
+    (() => { const j = src.indexOf('function peindreVieCL'); const d = src.indexOf('{', j); let q = 0;
+      for (let k = d; k < src.length; k++) { if (src[k] === '{') q++; else if (src[k] === '}') { q--; if (!q) return k + 1; } } })());
+  const etat = { fiche: { hidden: false, dataset: { block: '' } }, vie: { textContent: '' }, lectures: 0 };
+  const $ = (s) => (s === '#fiche' ? etat.fiche : s === '#fVie' ? etat.vie : null);
+  const marcheCL = new Map();
+  const metaJeton = async () => ({ dec: 8, sym: 'USDC' });
+  const lirePoolCL = async () => { etat.lectures++; return etat.reponse; };
+  const rpc = async () => '0x';
+  const f = new Function('$', 'marcheCL', 'metaJeton', 'lirePoolCL', 'rpc',
+    peint + '\n' + source + '\nreturn { lireMarcheCL, marcheCL };')($, marcheCL, metaJeton, lirePoolCL, rpc);
+  return { ...f, etat };
+}
+
+await (async () => {
+  n++;
+  const titre = '⛔⛔ REJOUE : une carte REOUVERTE reaffiche notre lecture';
+  try {
+    const { lireMarcheCL, etat } = monter();
+    const adr = '0xb200000000000000000000fd2f87532b90095211';
+    etat.fiche.dataset.block = adr;
+    etat.reponse = { etat: 'LUE', prix: 1094.04, jetonEst0: false, token0: '0xusdc', token1: adr };
+    /* premiere ouverture */
+    etat.vie.textContent = '≈ $336.9k market cap · public market';
+    await lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.match(etat.vie.textContent, /read on chain/, 'la premiere ouverture ne peint pas');
+    const apres1 = etat.lectures;
+    /* ⛔ REOUVERTURE : l ecran a deja ete reecrit par la ligne synchrone du repli */
+    etat.vie.textContent = '≈ $336.9k market cap · public market';
+    await lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.match(etat.vie.textContent, /read on chain/,
+      'LE DEFAUT MESURE EN PRODUCTION EST REVENU : a la reouverture la carte reste sur « public '
+      + 'market ». La lecture est en cache et n est pas repeinte — valeur lue, gardee, et jetee.');
+    assert.equal(etat.lectures, apres1,
+      'la reouverture RELIT la chaine : le cache ne sert plus a rien, et dix ouvertures feraient dix '
+      + 'lectures simultanees — ce qui declenche la limite de debit du noeud public');
+  } catch (e) { console.error('✗ ' + titre); throw e; }
+})();
+
+await (async () => {
+  n++;
+  const titre = '⛔⛔ REJOUE : une PANNE n est pas gravee — la reouverture reessaie';
+  try {
+    const { lireMarcheCL, etat } = monter();
+    const adr = '0xb200000000000000000000fd2f87532b90095211';
+    etat.fiche.dataset.block = adr;
+    /* ⛔⛔ 59 DES 167 APPELS RPC DE LA PAGE SONT REFUSES PAR LE NOEUD PUBLIC (mesure du jour). Graver
+     *     un `NON_LUE` condamnerait le block pour toute la session sur un hoquet, et « pas pu
+     *     regarder » deviendrait « n existe pas » — l erreur meme que `pool-cl.js` evite. */
+    etat.reponse = { etat: 'NON_LUE', pourquoi: 'over rate limit' };
+    await lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.equal(etat.lectures, 1);
+    etat.reponse = { etat: 'LUE', prix: 1094.04, jetonEst0: false, token0: '0xusdc', token1: adr };
+    await lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.equal(etat.lectures, 2,
+      'une panne passagere est mise en cache : ce block restera illisible pour toute la session');
+    assert.match(etat.vie.textContent, /read on chain/, 'la seconde tentative ne peint pas');
+    /* ⛔ TEMOIN INVERSE : un FAIT, lui, se grave — sinon on relirait a chaque ouverture une pool
+     *   dont on sait deja qu elle n en est pas une. */
+    const b = monter();
+    b.etat.fiche.dataset.block = adr;
+    b.etat.reponse = { etat: 'PAS_UNE_POOL_CL', pourquoi: 'this pool does not hold that token' };
+    await b.lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    await b.lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.equal(b.etat.lectures, 1,
+      'un FAIT sur la chaine est relu a chaque ouverture : le cache ne distingue plus une panne d un fait');
+  } catch (e) { console.error('✗ ' + titre); throw e; }
+})();
+
+await (async () => {
+  n++;
+  const titre = '⛔ REJOUE : la fiche a change de block entre-temps — on n ecrit pas';
+  try {
+    const { lireMarcheCL, etat } = monter();
+    const adr = '0xb200000000000000000000fd2f87532b90095211';
+    etat.fiche.dataset.block = '0xb200000000000000000000e6a331992bd9eace01'; /* une AUTRE carte */
+    etat.vie.textContent = 'intact';
+    etat.reponse = { etat: 'LUE', prix: 1094.04, jetonEst0: false, token0: '0xusdc', token1: adr };
+    await lireMarcheCL(adr, { poolAdr: '0x' + '1'.repeat(40) });
+    assert.equal(etat.vie.textContent, 'intact',
+      'le prix d un block s ecrit sur la fiche d un AUTRE : un nombre vrai qui decrit autre chose');
+  } catch (e) { console.error('✗ ' + titre); throw e; }
+})();
 
 cas('⛔⛔ `trending.js` TRANSPORTE l adresse de la pool, validee', () => {
   /* ⛔⛔ UNE VALEUR LUE PUIS JETEE EST UN DEFAUT, et c etait le cas ici : on gardait `dex:
@@ -170,8 +262,8 @@ cas('⛔ le symbole se decode dans les DEUX formes ABI — rejoue', () => {
   assert.equal(texteAbi('0x' + '01'.repeat(32)), '', 'des octets de controle traversent le filtre');
 });
 
-assert.equal(n, 11, 'compte de cas inattendu : ' + n);
-console.log('ok lecteur-cl-branche — ' + n + ' cas.');
+assert.equal(n, 13, 'compte de cas inattendu : ' + n);
+console.log('ok lecteur-cl-branche — ' + n + ' cas, dont 3 REJOUES sur la vraie fonction.');
 console.log('   pool-cl.js est SERVI, importe, declenche sur `poolAdr`, ne touche pas `h.vie`, garde');
 console.log('   l identite de la fiche, dit « read on chain » et nomme la devise lue.');
 console.log('⚠️ NE PROUVE PAS qu on puisse ECHANGER sur Aerodrome (fork v3 : aucun point d accroche');
