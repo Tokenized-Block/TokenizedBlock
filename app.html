@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-note-action" hidden>Build <code>20260927-note-action</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-buy-tenable" hidden>Build <code>20260927-buy-tenable</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4053,8 +4053,37 @@ $('#map').addEventListener('click', (e) => {
    * no market → Instant Birth companion, never a fee-blind Buy promise. */
   const aBuy = $('#fAcheter'), aIb = $('#fIb');
   const aMarche = Boolean(mk);
-  if (aBuy) aBuy.hidden = !aMarche;
+  /* ⛔⛔ « BUY » ETAIT UNE PROMESSE QUE L APP NE POUVAIT PAS TENIR, et c est MESURE (2026-09-27).
+   *     Le bouton s affichait des que DexScreener connaissait un marche — quel que soit le DEX.
+   *     Or le chemin in-app passe par `echangeAutorise`, qui exige `etatVie === 'LUE'`, c est-a-dire
+   *     NOTRE lecture Uniswap v4. Sur les 6 blocks dont la pool est Aerodrome (un fork v3), cette
+   *     lecture ne peut pas aboutir.
+   *     Parcours mesure sur MUc — 384 812 $ de volume sur 24 h : clic sur « Buy », le profil
+   *     s ouvre, `#pEchange` reste MASQUE, la boucle reessaie 80 fois toutes les 500 ms, et au bout
+   *     de 62 secondes l ecran propose... de CREER UN AUTRE BLOCK pour 0,001 ETH. Temoin de
+   *     controle : LAYA, pool v4, `#pEchange` s ouvre en 14 s. Le defaut est donc bien la, et
+   *     seulement la.
+   *
+   * ⛔⛔ ON NE MASQUE QUE SUR UN FAIT, JAMAIS SUR NOTRE PROPRE PANNE. `NON_TROUVEE` dit « aucune
+   *     pool v4 » — c est definitif, le bouton ne peut pas marcher. `NON_LUE` dit « on n a pas pu
+   *     lire » — transitoire, et le noeud public refuse ~35 % des appels : masquer dessus
+   *     retirerait Buy de blocks parfaitement echangeables, a chaque hoquet. Le profil, lui,
+   *     reessaie. Voir la meme distinction dans `pool-cl.js`.
+   *   ⇒ Buy reste visible sur NON_LUE et sur LUE. Il ne disparait que sur NON_TROUVEE. */
+  const pasDePoolV4 = Boolean(h) && h.etatVie === 'NON_TROUVEE';
+  const tenable = aMarche && !pasDePoolV4;
+  if (aBuy) aBuy.hidden = !tenable;
+  /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
+   *   Proposer d en creer un autre etait exactement la reponse hors-sujet mesuree ci-dessus. */
   if (aIb) aIb.hidden = aMarche;
+  /* ⛔ LA PHRASE DIT OU IL S ECHANGE, parce qu un bouton qui disparait sans explication laisse
+   *   croire a une panne de l app. On nomme le marche lu par le serveur — c est verifiable. */
+  if (aMarche && pasDePoolV4) {
+    const ou = (mk.dex || '').replace(/[^a-z0-9 .-]/gi, '').slice(0, 18);
+    $('#fNote').textContent = 'This block trades' + (ou ? ' on ' + ou : '')
+      + ', on a pool this app cannot route through yet — so Buy and Sell are not offered here. '
+      + 'The price above is our own read of that pool.';
+  }
 });
 
 /* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;
