@@ -87,7 +87,23 @@ cas('⛔⛔ au retour, la fiche se rouvre — et l URL est NETTOYEE', () => {
     + 'entrerait telle quelle');
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+cas('⛔⛔ le retour REARME l achat — il ne se contente pas d ouvrir la fiche', () => {
+  /* ⛔⛔ SANS CA LE PARCOURS REPART DE ZERO. Quelqu un qui revient de l onramp vient d acheter de
+   *     l ETH et voulait un BLOCK : ouvrir la bonne fiche ne suffit pas, il devrait rouvrir
+   *     l echange et resaisir un montant — refaire ce qu il avait deja fait avant de partir payer.
+   *   ⛔ ET ON REUTILISE `poserIntent`, la mecanique qui existe : une seconde copie divergerait au
+   *     premier changement, motif deja paye plusieurs fois dans ce depot. */
+  assert.ok(/poserIntent\(\{ kind: 'buy', adr: blockRetour\.toLowerCase\(\), sens: 'ACHAT'/.test(nu),
+    'le retour n arme plus l intention d achat : le visiteur devra tout recommencer');
+  /* ⛔ ET ON NE PRETEND PAS QUE LES FONDS SONT ARRIVES : Coinbase ne nous le dit pas. Aucune phrase
+   *   affirmant une reception ne doit exister sur ce chemin. */
+  const i = nu.indexOf('const blockRetour');
+  const bloc = nu.slice(i, i + 900);
+  assert.ok(!/funds (have )?arrived|fonds sont (la|arrives)/i.test(bloc),
+    'le retour affirme une arrivee de fonds qu on n a PAS lue : Coinbase ne nous la communique pas');
+});
+
+assert.equal(n, 7, 'compte de cas inattendu : ' + n);
 console.log('ok retour-fiat-sur-le-block — ' + n + ' cas.');
 console.log('   Le retour vise le block d ou le clic est parti ; le domaine reste au serveur ; tout');
 console.log('   ce qui n est pas une adresse est refuse ; et l URL est nettoyee apres reprise.');

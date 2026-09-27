@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-porte-des-le-depart" hidden>Build <code>20260927-porte-des-le-depart</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-retour-rearme" hidden>Build <code>20260927-retour-rearme</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -15591,6 +15591,17 @@ try { verifierSansWalletAuChargement(); } catch (_) { /* volet wallet absent : r
 const blockRetour = String(paramsLien.get('block') || '');
 if (/^0x[0-9a-fA-F]{40}$/.test(blockRetour)) {
   try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) { /* ancien navigateur */ }
+  /* ⛔⛔ ON REARME L ACHAT, SINON LE PARCOURS REPART DE ZERO. Ouvrir la bonne fiche ne suffit pas :
+   *     quelqu un qui revient de l onramp vient d acheter de l ETH et voulait un BLOCK. Sans
+   *     intention posee, il doit rouvrir l echange et resaisir un montant — refaire exactement ce
+   *     qu il avait deja fait avant de partir payer.
+   *   ⛔ ON REUTILISE `poserIntent`, PAS UNE SECONDE MECANIQUE. Une copie divergerait au premier
+   *     changement, et ce depot a deja paye ce motif plusieurs fois. L intention est consommee UNE
+   *     FOIS par `reprendreIntentApresConnect`, qui existe deja et sait ouvrir l echange.
+   *   ⚠️ CE QUE CA NE FAIT PAS : verifier que des fonds sont ARRIVES. Coinbase ne nous le dit pas,
+   *     et un ecran qui affirmerait « vos fonds sont la » sans l avoir lu mentirait. Le montant
+   *     reste le defaut habituel ; c est le wallet qui refusera si le solde manque. */
+  try { poserIntent({ kind: 'buy', adr: blockRetour.toLowerCase(), sens: 'ACHAT', amount: '0.01' }); } catch (_) {}
   setTimeout(() => {
     try { etape('onramp_retour_block'); } catch (_) {}
     try { void ouvrirProfil(blockRetour.toLowerCase(), null); } catch (_) {}
