@@ -87,7 +87,24 @@ cas('⛔ l app FOURNIT la hauteur — sinon le champ reste `null` a vie', () => 
     'l app ne fournit plus la hauteur au cerveau : le champ existerait sans jamais etre rempli');
 });
 
-assert.equal(n, 5, 'compte de cas inattendu : ' + n);
+cas('⛔⛔ la hauteur est PUBLIEE la ou le rejeu est promis', () => {
+  /* ⛔⛔ DEUX LIGNES DE L ECRAN PROMETTENT LE REJEU : « same wiring and same facts replay the same
+   *     beat » et l empreinte de la fiche. Sans la hauteur a cote, elles promettent quelque chose
+   *     qu elles ne permettent pas — un lecteur ne sait pas OU relire la chaine. Publier
+   *     l empreinte sans la date, c est afficher un sha sans dire de quoi.
+   *   ⛔ « as of », PAS « at » : le client fournit la tete qu il connaissait, pas un `blockTag`
+   *     fige. « at » laisserait croire a un epinglage qu on ne fait pas. */
+  const n2 = (nuApp.match(/as of block ' \+ /g) || []).length;
+  assert.equal(n2, 2, 'la hauteur n est plus publiee sur les DEUX surfaces qui promettent le rejeu '
+    + '(trouve ' + n2 + ' sur 2)');
+  assert.ok(!/at block ' \+ /.test(nuApp),
+    'l ecran dit « at block » : ca annonce un epinglage exact, que cette hauteur ne fait pas');
+  assert.equal((nuApp.match(/\(undated\)/g) || []).length, 2,
+    'l absence de hauteur ne se dit plus sur les deux surfaces : un battement non datable doit le '
+    + 'dire, pas laisser un blanc');
+});
+
+assert.equal(n, 6, 'compte de cas inattendu : ' + n);
 console.log('ok cerveau-hauteur-de-bloc — ' + n + ' cas.');
 console.log('   La hauteur VOYAGE sans rien calculer, un pas non date garde son ancienne empreinte,');
 console.log('   et deux hauteurs donnent deux empreintes.');
