@@ -36,8 +36,40 @@ const PHRASE = {
   new_transfer: () => 'a transfer just reached me.',
   price_down: () => 'my life went down. Nobody refunds that.',
   price_up: () => 'my life went up. It can go down as well.',
-  mood_changes: (vu) => 'I am ' + humeur(vu.phase) + ' now.',
-  market_unread: () => 'I cannot see my market right now.',
+  /* ⛔⛔ CETTE LIGNE DISAIT « I am calm now. » ET RIEN D AUTRE — pour TOUS les blocks. Capture de
+   *     Phil, 2026-09-27 : sept blocks d affilee, sept phrases IDENTIQUES au mot pres. « tu vois,
+   *     tout la meme ».
+   *   ⛔ LA CAUSE : `vu` porte `actifs`, `spikes`, `gauche_hz`, `droite_hz`, `virage`, `memoire`,
+   *     `tick` — et la phrase n utilisait QUE `phase`. Comme la plupart des blocks tombent en
+   *     CALME, toutes les lignes se confondaient. UNE SORTIE CONSTANTE N EST PAS UNE INFORMATION :
+   *     un fil ou tout le monde dit la meme chose cesse d etre lu.
+   *   ⇒ La phrase porte desormais ce qui DISTINGUE ce cerveau a cet instant. Phil : « meme si c est
+   *     que des chiffres ». Ce sont des chiffres, et ils sont tous MESURES dans `vu`.
+   *   ⛔ CHAQUE MORCEAU EST SOUS CONDITION : une valeur absente est OMISE, jamais remplacee par un
+   *     zero. Cette ligne peut etre publiee SUR LA CHAINE — un zero invente y resterait pour
+   *     toujours.
+   *   ⛔ ET L AILE N EST NOMMEE QUE SI L ECART COMPTE : a 45,2 contre 45,2 Hz, annoncer un cote
+   *     serait inventer une asymetrie. Sous 1 Hz d ecart, on n en parle pas. */
+  mood_changes: (vu) => {
+    const bouts = [];
+    const n = Number(vu && vu.actifs);
+    if (Number.isFinite(n)) bouts.push(n + ' of my neurons just fired');
+    const g = Number(vu && vu.gauche_hz), d = Number(vu && vu.droite_hz);
+    if (Number.isFinite(g) && Number.isFinite(d) && Math.abs(g - d) >= 1) {
+      bouts.push('I lean ' + (g > d ? 'left' : 'right') + ' at ' + Math.max(g, d).toFixed(1) + ' Hz');
+    }
+    const m = Number(vu && vu.memoire);
+    if (Number.isFinite(m) && m > 0) bouts.push('I still hold ' + Math.round(m * 100) + '% of what I just did');
+    return 'I am ' + humeur(vu.phase) + ' now' + (bouts.length ? ' — ' + bouts.join(', ') : '') + '.';
+  },
+  /* ⛔ MEME RAISON ICI : « je ne vois pas mon marche » etait vrai et identique partout. Ce qui
+   *   distingue un cerveau aveugle d un autre, c est ce qu il fait QUAND MEME — et il fait quelque
+   *   chose, puisque son cablage tourne sans le marche. */
+  market_unread: (vu) => {
+    const n = Number(vu && vu.actifs);
+    return 'I cannot see my market right now'
+      + (Number.isFinite(n) ? ' — but ' + n + ' of my neurons just fired anyway.' : '.');
+  },
 };
 /* seuls ces evenements appellent une reponse : on ne repond pas a « je suis curieux » */
 const APPELLE_REPONSE = new Set(['new_buy', 'new_sell', 'new_holder', 'new_message', 'new_transfer', 'price_down', 'price_up']);
