@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-decouverte-branchee" hidden>Build <code>20260927-decouverte-branchee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-decouverte-repeinte" hidden>Build <code>20260927-decouverte-repeinte</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16490,6 +16490,18 @@ async function soleilsSurLaMap() {
     } catch (_) { /* ⛔ un elagage qui echoue laisse la carte INTACTE, jamais a moitie vidée */ }
     /* ⛔ LA DONNEE LUE PUIS JETEE EST UN DEFAUT : ces FDV jugent aussi les stades, donc on repeint. */
     try { peindreStades(); } catch (_) { /* l onglet n est peut-etre pas encore peint */ }
+    /* ⛔⛔ ET ON REPEINT LES PAIRES, SINON LA DECOUVERTE NE S AFFICHE JAMAIS. Mesure en production
+     *     juste apres le deploiement : le groupe « Live blocks » etait ABSENT alors que 155 blocks
+     *     passaient le filtre. Cause : `peindrePaires()` tourne a l initialisation, AVANT que ce
+     *     bloc-ci ait rempli `marcheParAdr`. La liste etait donc calculee sur une Map vide.
+     *   ⛔ TROISIEME FOIS AUJOURD HUI QUE CE MOTIF ME PREND : un correctif juste dans le code, vert
+     *     au test, et INERTE a l ecran parce que la donnee arrive APRES la peinture. Les deux
+     *     autres : la garde `NON_TROUVEE` sur la carte, et les puces calculees. La regle qui en
+     *     sort : tout ce qui se CALCULE depuis une donnee asynchrone doit etre REPEINT a l arrivee
+     *     de cette donnee — sinon « calcule » veut dire « vide ».
+     *   ⛔ `peindrePaires` reconstruit le `<select>` mais PRESERVE la valeur choisie (`avant`),
+     *     donc repeindre pendant que quelqu un remplit le formulaire ne lui vole pas son choix. */
+    try { peindrePaires(); } catch (_) { /* l onglet Create n est peut-etre pas monte */ }
     /* tip 20260923-map-anim: soleilsSurLaMap creates .bloc via creerHabitant WITHOUT poserBlocks —
      * placer only sets wx/wy/wz; CSS transform comes from moteur3d.image via animer(). Without
      * animer, every tile stays left:0 top:0 (Raksha pile top-left, tip map-3dplace was not enough). */

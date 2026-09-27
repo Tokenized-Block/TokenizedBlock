@@ -132,3 +132,27 @@ console.log('   plus vieillir en silence.');
   assert.equal(m, 3, 'compte de cas (ajouts) inattendu : ' + m);
   console.log('   + ' + m + ' cas : MAJEUR a droit a une puce, la decouverte est bornee et filtree.');
 }
+
+/* ── ⛔⛔ LA REGLE QUI M A PRIS TROIS FOIS LE MEME JOUR ──────────────────────────────────────── */
+{
+  let m = 0;
+  const casC = (titre, f) => { m++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
+
+  casC('⛔⛔ les paires sont REPEINTES a l arrivee du trending', () => {
+    /* ⛔⛔ MESURE EN PRODUCTION, juste apres deploiement : le groupe « Live blocks » etait ABSENT
+     *     alors que 155 blocks passaient le filtre. `peindrePaires()` tourne a l initialisation,
+     *     AVANT que `marcheParAdr` soit remplie — la liste etait calculee sur une Map vide.
+     *     Troisieme fois ce jour-la : la garde `NON_TROUVEE` sur la carte, les puces calculees,
+     *     puis ceci. REGLE : ce qui se CALCULE depuis une donnee asynchrone doit etre REPEINT a
+     *     l arrivee de cette donnee, sinon « calcule » veut dire « vide ». */
+    const i = nu.indexOf('marcheParAdr.set(');
+    assert.notEqual(i, -1, 'le point d arrivee du trending est introuvable');
+    const apres = nu.slice(i, i + 3000);
+    assert.ok(/peindrePaires\(\)/.test(apres),
+      'les paires ne sont plus repeintes quand le trending arrive : le groupe « Live blocks » '
+      + 'restera vide pour toujours, et le correctif sera inerte');
+  });
+
+  assert.equal(m, 1, 'compte de cas (repeinture) inattendu : ' + m);
+  console.log('   + ' + m + ' cas : les paires sont repeintes a l arrivee du trending.');
+}
