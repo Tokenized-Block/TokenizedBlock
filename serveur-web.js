@@ -1083,6 +1083,11 @@ const SERVIS = [
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
   'heures-marche.js',
+  /* ⛔ `pool-cl.js` LIT LES POOLS AERODROME CL (et tout fork Uniswap v3) — la ou `pool.js` ne sait
+   *   que le v4. Ses deux dependances (`keccak.js`, `pool.js`) sont deja servies plus haut ; la
+   *   garde ci-dessous ne relit QUE les imports DIRECTS de `app.html`, donc elle ne dirait rien
+   *   d un manque transitif. C est ici qu il faut le declarer, et nulle part ailleurs. */
+  'pool-cl.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

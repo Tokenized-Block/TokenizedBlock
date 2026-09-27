@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-lecteur-aerodrome" hidden>Build <code>20260927-lecteur-aerodrome</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-cl-branche" hidden>Build <code>20260927-cl-branche</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2673,6 +2673,14 @@ const MONTANT_MIN_X402_WEI = 1_000_000_000_000n;
 import { encodeTransferAvecMemo, lireMemo, validerMemo, AVERTISSEMENT as AVERT_MEMO } from './messages.js';
 import { montantHumain, formaterUnites } from './montants.js';
 import { selecteur } from './pool.js';
+/* ⛔⛔ LIRE LES POOLS QUE `pool.js` NE SAIT PAS LIRE. `pool.js` est exclusivement Uniswap v4 :
+ *     l etat de toutes les pools vit dans UN `PoolManager`, adresse par un `poolId` derive de la
+ *     PoolKey. Aerodrome CL est un fork Uniswap v3 : chaque pool EST son contrat, `slot0()`
+ *     s appelle SUR elle. Mesure sur MUc/USDC : `slot0()` repond, `extsload(bytes32)` REVERTE.
+ *   ⇒ Les 6 blocks les plus actifs du jeu (77 531 $ de volume chacun contre 6 974 $ chez Uniswap)
+ *     etaient donc invisibles a notre propre lecture ; on n en connaissait le prix que par
+ *     DexScreener. Verifie en production : 1092,944620140072 USDC contre 1092,94 chez eux. */
+import { lirePoolCL } from './pool-cl.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
  * donneraient deux niveaux au meme block selon l ecran. */
 import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
@@ -3454,6 +3462,101 @@ const dessin = (adr, sym) => {
 const habitants = [];
 /* tip 0042 : marche condense par block (adresse minuscule -> ligne /api/trending), lu pour les soleils et la fiche */
 const marcheParAdr = new Map();
+/* ⛔⛔ NOTRE PROPRE LECTURE DES POOLS NON-v4 (Aerodrome CL et tout fork Uniswap v3).
+ *     `vieDuBlock` est exclusivement Uniswap v4 : PoolKey, poolId, StateView. Une pool CL ne
+ *     s adresse pas ainsi — chaque pool EST son contrat, et `slot0()` s appelle SUR elle. Jusqu ici
+ *     ces marches n existaient pour nous que par DexScreener, via le serveur.
+ *   ⛔ UN CACHE PAR ADRESSE, ET IL RETIENT AUSSI LES ECHECS : sans ca, une carte rouverte dix fois
+ *     relancerait dix lectures identiques sur un noeud public qui plafonne — et c est exactement
+ *     ce qui declenche les limites de debit qu on vient d apprendre a ne pas confondre avec un fait.
+ *   ⛔ ET LES DECIMALES NE SONT PAS SUPPOSEES : USDC en a 6, un block en a 18. Supposer 18 partout
+ *     decalerait le prix de douze ordres de grandeur en ayant l air d un nombre normal. On les LIT,
+ *     et sans elles on ne calcule rien. */
+const marcheCL = new Map();
+const metaJetons = new Map();
+/** Decode un `string` ABI, ou un `bytes32` pour les vieux jetons qui repondent ainsi.
+ *  ⛔ LES DEUX FORMES EXISTENT SUR BASE. Ne gerer que la dynamique rendrait un symbole vide sur
+ *    ceux qui rendent un mot fixe, et la ligne dirait un prix « par block » sans dire en quoi. */
+function texteAbi(hex) {
+  const b = String(hex || '').slice(2);
+  if (b.length < 64) return '';
+  const lisible = (s) => s.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12);
+  try {
+    const off = Number(BigInt('0x' + b.slice(0, 64)));
+    if (off === 32 && b.length >= 128) {
+      const n = Number(BigInt('0x' + b.slice(64, 128)));
+      if (n > 0 && n <= 64 && b.length >= 128 + n * 2) {
+        let s = '';
+        for (let i = 0; i < n; i++) s += String.fromCharCode(parseInt(b.slice(128 + i * 2, 130 + i * 2), 16));
+        return lisible(s);
+      }
+    }
+  } catch (_) { /* pas une chaine dynamique : on tente le mot fixe */ }
+  let s = '';
+  for (let i = 0; i < 32; i++) {
+    const c = parseInt(b.slice(i * 2, i * 2 + 2), 16);
+    if (!c) break;
+    s += String.fromCharCode(c);
+  }
+  return lisible(s);
+}
+/** `decimals()` et `symbol()` d un jeton, une fois pour la session.
+ *  ⛔ ON NE RETIENT QUE CE QU ON A VRAIMENT LU : graver un `null` empecherait toute nouvelle
+ *    tentative apres un hoquet du noeud, et ce jeton resterait illisible pour toute la session. */
+async function metaJeton(jeton) {
+  const bas = String(jeton || '').toLowerCase();
+  if (metaJetons.has(bas)) return metaJetons.get(bas);
+  let dec = null, sym = '';
+  try {
+    const r = await rpc('eth_call', [{ to: bas, data: '0x' + selecteur('decimals()') }, 'latest']);
+    if (r && r !== '0x') { const n = Number(BigInt(r)); if (Number.isInteger(n) && n >= 0 && n <= 36) dec = n; }
+  } catch (_) { dec = null; }
+  if (dec === null) return { dec: null, sym: '' };
+  try { sym = texteAbi(await rpc('eth_call', [{ to: bas, data: '0x' + selecteur('symbol()') }, 'latest'])); }
+  catch (_) { sym = ''; }
+  const m = { dec, sym };
+  metaJetons.set(bas, m);
+  return m;
+}
+async function lireMarcheCL(adr, mk) {
+  const bas = String(adr || '').toLowerCase();
+  if (marcheCL.has(bas)) return marcheCL.get(bas);
+  const promesse = (async () => {
+    const pool = mk && mk.poolAdr;
+    if (!pool) return null;
+    /* la devise est celle d en face : on ne la connait qu APRES la lecture, donc le jeton d abord */
+    const mj = await metaJeton(bas);
+    if (mj.dec === null) return null;
+    /* ⛔ PREMIERE PASSE AVEC LES DECIMALES DU JETON DES DEUX COTES : elle sert UNIQUEMENT a savoir
+     *   QUI est en face. Le prix qu elle rend est faux si la devise a d autres decimales — on ne
+     *   l utilise donc PAS, et on relit avec les bonnes. Le dire evite qu on s en serve un jour. */
+    const sonde = await lirePoolCL({ rpc, pool, jeton: bas, decJeton: mj.dec, decDevise: mj.dec });
+    if (!sonde || sonde.etat !== 'LUE') return sonde || null;
+    const devise = sonde.jetonEst0 ? sonde.token1 : sonde.token0;
+    const md = await metaJeton(devise);
+    if (md.dec === null) return null;
+    const r = md.dec === mj.dec ? sonde   /* memes decimales : la premiere passe etait deja juste */
+      : await lirePoolCL({ rpc, pool, jeton: bas, decJeton: mj.dec, decDevise: md.dec });
+    return r && r.etat === 'LUE' ? { ...r, deviseSym: md.sym, deviseAdr: devise } : r;
+  })().then((r) => {
+    /* ⛔ ON N ECRIT QUE SI LA FICHE MONTRE ENCORE CE BLOCK : entre le clic et la reponse du noeud,
+     *   Phil a pu ouvrir une autre carte. Sans ce test on ecrirait le prix d un block sur la fiche
+     *   d un autre — un nombre vrai qui decrit autre chose, le defaut qui ne se voit jamais. */
+    try {
+      const f = $('#fiche');
+      if (r && r.etat === 'LUE' && f && !f.hidden && String(f.dataset.block || '').toLowerCase() === bas) {
+        const e = $('#fVie');
+        /* ⛔ UN PRIX SANS SON UNITE NE DIT RIEN : « 1092 » se lit en dollars par reflexe. On nomme la
+         *   devise lue sur la chaine, et si on n a pas su la nommer on ne l invente pas. */
+        if (e) e.textContent = Number(r.prix.toPrecision(6)) + (r.deviseSym ? ' ' + r.deviseSym : '')
+          + ' per block · read on chain';
+      }
+    } catch (_) {}
+    return r;
+  });
+  marcheCL.set(bas, promesse);
+  return promesse;
+}
 /** Profondeur minimale, en dollars, pour qu un marche soit traite comme utilisable.
  *  ⛔⛔ UNE SEULE VALEUR POUR DEUX DECISIONS, ET C EST LE POINT. Elle decide (a) si la liste montre
  *      « Buy » plutot que le repli, et (b) si un block peut servir de DEVISE DE FRAIS. Deux seuils
@@ -3870,6 +3973,20 @@ $('#map').addEventListener('click', (e) => {
    *    marche public cote le block, la carte le dit en une ligne, avec sa source, au lieu de trois refus. */
   const mkPublic = marcheParAdr.get(String(adr).toLowerCase());
   const lueSurChaine = h && typeof h.vie === 'number' && h.vie > 0;
+  /* ⛔⛔ ON LIT DESORMAIS NOUS-MEMES LES POOLS QUI NE SONT PAS DU v4. Mesure du 2026-09-27 : les six
+   *     blocks sur Aerodrome font 77 531 $ de volume CHACUN contre 6 974 $ pour les 130 d Uniswap —
+   *     et ce sont TOUS des actions tokenisees (RDDTc, MUc, NFLXc, GMEc, LLYc, AVGOc). Jusqu ici la
+   *     carte disait « public market » pour eux, parce que `vieDuBlock` est exclusivement Uniswap v4
+   *     (PoolKey, poolId, StateView) : une pool Aerodrome CL ne s adresse pas ainsi — chaque pool
+   *     EST son contrat, et `slot0()` s appelle SUR elle.
+   *   ⇒ `pool-cl.js` sait les lire (verifie contre DexScreener : 0,00 % d ecart). On declenche la
+   *     lecture EN ARRIERE-PLAN et on remplace la ligne quand elle aboutit.
+   *   ⛔ ON NE TOUCHE PAS A `h.vie` : elle nourrit le cerveau ET dimensionne la map, et sa
+   *     conversion d unite est un piege deja identifie. Ici on AJOUTE un affichage, on ne redefinit
+   *     rien — le rayon d impact est nul si la lecture echoue.
+   *   ⛔ ET LA PHRASE DIRA « read on chain », pas « public market » : une lecture qui ne se
+   *     distingue pas de celle d un tiers n apporterait rien. */
+  if (!lueSurChaine && mkPublic && mkPublic.poolAdr) { try { lireMarcheCL(adr, mkPublic); } catch (_) {} }
   $('#fVie').textContent = lueSurChaine
     ? Math.round(h.vie * 100) / 100 + ' ETH of life'
     : mkPublic && Number(mkPublic.fdvUsd) > 0 ? '≈ ' + usdCourt(mkPublic.fdvUsd) + ' market cap · public market'
