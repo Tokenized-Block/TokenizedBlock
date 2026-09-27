@@ -860,6 +860,23 @@ async function lireTrending() {
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
+    /* ── ⛔⛔ LES ACTIFS QU ON PROPOSE SOI-MEME EN PAIRE DOIVENT ETRE VUS ─────────────────────
+     *     MESURE DU 2026-09-27, DexScreener interroge adresse par adresse sur les dix actions du
+     *     registre `ACTIONS_COINBASE` : 10/10 ont une paire liquide, et 0/10 apparaissaient ici.
+     *         MSTRc 4 914 070 $ de volume 24 h · METAc 3 312 309 $ · SNDKc 3 008 424 $
+     *         GOOGLc 2 920 423 $ · AAPLc 2 792 105 $ · MSFTc 1 970 633 $ · NVDAc 1 765 509 $
+     *     ≈ 20 M$ PAR JOUR, toutes sur Aerodrome — invisibles dans notre propre ecran.
+     *   ⇒ CAUSE : `blocksConnus` ne contient que les creations B20 que NOTRE indexeur a scannees.
+     *     Ces dix sont anterieures a la fenetre, donc elles n y entrent jamais. Le filtre
+     *     `connus.has(adr)` de `resumerTrending` les jetait ensuite en silence — et c est un bon
+     *     filtre : sans lui, n importe quel jeton renvoye par DexScreener entrerait dans la liste.
+     *   ⇒ ON NE TOUCHE PAS AU FILTRE. On ajoute au jeu de reference les adresses que L APP ELLE-MEME
+     *     propose en paire : elles sont ecrites dans notre registre, pas devinees sur la chaine.
+     * ⛔ `Set` PUIS ETALEMENT : une adresse deja connue ne doit pas etre interrogee deux fois chez
+     *   DexScreener — les lots sont de 30 et chaque doublon coute une place a un vrai block. */
+    for (const p of pairesProposees(8453)) {
+      if (p && p.adr && /^0xb2[0-9a-fA-F]{38}$/i.test(String(p.adr))) blocksConnus.add(String(p.adr).toLowerCase());
+    }
     const adrs = [...blocksConnus], paires = [];
     /* ⛔⛔ BUG EN PROD (2026-09-19, capture de Phil) : « 0 blocks with a live market · $0 traded » et « Nothing is
      *    moving right now » — alors que 1 095 blocks etaient suivis. DexScreener n avait rien rendu, et `if (r.ok)`
