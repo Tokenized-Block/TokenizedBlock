@@ -679,6 +679,10 @@ const blocksConnus = new Set();
  *     depuis le premier scan du serveur. Il grandit avec le temps, il ne remonte pas le passe tout
  *     seul. « pas encore indexe » n est pas « pas a toi ». */
 const createurParBlock = new Map();
+/* ⛔ OU EN EST LE RATTRAPAGE DU PASSE. `null` = pas encore commence ; sinon, le plus BAS bloc deja
+ *   remonte. Persiste, sinon chaque deploiement recommencerait le rattrapage depuis le present et
+ *   ne finirait jamais. */
+let rattrapageDepuis = null;
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
@@ -709,7 +713,8 @@ function chargerTrendingDisque() {
         createurParBlock.set(String(j).toLowerCase(), String(c).toLowerCase());
       }
     }
-    if (typeof x.blocsLusJusqua === 'number') blocsLusJusqua = x.blocsLusJusqua;
+    if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
+    if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
     console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
   } catch (e) { console.log('[trending] disk cache unread:', e.message); }
 }
@@ -732,6 +737,9 @@ function sauverTrendingDisque() {
        *   ⛔ 5000 ENTREES AU PLUS, et c est dit : le fichier reste borne. Un plafond tacite qui
        *     ferait disparaitre des entrees sans le signaler serait le meme defaut sous un autre nom. */
       createurs: [...createurParBlock.entries()].slice(-5000),
+      /* ⛔ L AVANCEMENT DU RATTRAPAGE EST PERSISTE AVEC L INDEX : sans lui, chaque deploiement
+       *   recommencerait a remonter depuis le present et ne finirait JAMAIS le passe. */
+      rattrapageDepuis,
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
     renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
@@ -787,6 +795,43 @@ async function lireTrending() {
           + aResoudre.length + ' resolu(s) ce scan)');
       }
     } catch (e) { console.log('[createurs] resolution partielle : ' + e.message); }
+    /* ⛔⛔ ET LE PASSE, SANS QUOI LE CORRECTIF NE REPARE RIEN. L index ci-dessus ne se remplit que
+     *     vers L AVANT : il resout les createurs des creations qu il VOIT PASSER. Mesure juste
+     *     apres la mise en ligne : `blocksIndexes: 1` pour `blocksSuivis: 1967`. Les blocks deja
+     *     crees — c est-a-dire TOUS ceux des gens aujourd hui — n auraient jamais ete rattaches.
+     *     Un correctif qui ne couvre que l avenir laisse le probleme entier a ceux qui l ont signale.
+     *   ⇒ On remonte donc le temps par fenetres, UNE PAR PASSE, et on persiste l avancement. Le
+     *     serveur rattrape en tache de fond au lieu de marteler le noeud public d un coup.
+     *   ⛔ UNE SEULE FENETRE PAR PASSE, ET C EST DELIBERE : le noeud public plafonne, et un
+     *     rattrapage qui le fait tomber couterait la lecture de marche de tout le monde. Lent et
+     *     vivant vaut mieux que rapide et refuse.
+     *   ⛔ ET LE PLANCHER EST LE PREMIER BLOCK DE TBLOCK : au-dela il n y a rien a lire. Descendre
+     *     plus bas serait scanner le vide indefiniment. */
+    try {
+      if (rattrapageDepuis === null) rattrapageDepuis = fin;
+      if (rattrapageDepuis > PREMIER_BLOCK_TB) {
+        const haut = rattrapageDepuis;
+        const bas = Math.max(PREMIER_BLOCK_TB, haut - 43200);
+        const vieux = await listerCreations({ rpc: rpcServeur, blocs: haut - bas, fin: haut });
+        const aFaire = (vieux.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')
+          && !createurParBlock.has(c.jeton.toLowerCase()));
+        for (let i = 0; i < aFaire.length; i += 8) {
+          const lot = aFaire.slice(i, i + 8);
+          const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
+          for (let j = 0; j < lot.length; j++) {
+            const cre = res[j] && res[j].createur;
+            if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase());
+          }
+        }
+        /* ⛔ ON N AVANCE QUE SI LA FENETRE A ETE LUE. Avancer malgre des fenetres refusees
+         *   sauterait definitivement des creations, et personne ne le saurait jamais. */
+        if (!(vieux.fenetresRatees || []).length) rattrapageDepuis = bas;
+        console.log('[createurs] rattrapage ' + bas + '..' + haut + ' · +' + aFaire.length
+          + ' · index=' + createurParBlock.size + '/' + blocksConnus.size
+          + (rattrapageDepuis <= PREMIER_BLOCK_TB ? ' · COMPLET' : '')
+          + ((vieux.fenetresRatees || []).length ? ' · ⛔ ' + vieux.fenetresRatees.length + ' fenetre(s) refusee(s), on ne descend pas' : ''));
+      }
+    } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
@@ -1257,7 +1302,14 @@ createServer((req, res) => {
       /* ⛔ CE QUE L INDEX SAIT, ET CE QU IL NE SAIT PAS — les deux, sinon le vide ment. */
       blocksIndexes: createurParBlock.size,
       blocksSuivis: blocksConnus.size,
-      couvertureComplete: false,
+      /* ⛔⛔ LA COUVERTURE EST CALCULEE, PAS ECRITE EN DUR. Un `false` constant serait un aveu
+       *     permanent qui cesserait d informer ; un `true` en dur serait un mensonge. Elle devient
+       *     vraie quand le rattrapage a atteint le PREMIER block de TBLOCK — et c est seulement a
+       *     ce moment-la qu une liste vide signifie vraiment « tu n as rien cree ».
+       *   ⛔ UNE SORTIE CONSTANTE N EST PAS UNE MESURE : c est la meme regle que partout ailleurs
+       *     dans ce depot, et elle vaut aussi pour un booleen. */
+      couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB,
+      rattrapageDepuis,
       borne: 'Blocks whose creation transaction was read since this server started indexing. '
         + 'An empty list means "not indexed yet", never "you created nothing".',
     });

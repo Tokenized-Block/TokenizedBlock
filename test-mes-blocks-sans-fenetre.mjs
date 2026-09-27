@@ -117,7 +117,37 @@ v('⛔⛔ une liste VIDE ne doit jamais se lire comme « tu n as rien cree »', 
     'la reponse ne dit plus COMBIEN l index connait : impossible de juger ce que son vide vaut');
 });
 
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
+v('⛔⛔ le PASSE est rattrape — sans quoi le correctif ne repare rien pour personne', () => {
+  /* ⛔⛔ MESURE JUSTE APRES LA PREMIERE MISE EN LIGNE : `blocksIndexes: 1` pour
+   *     `blocksSuivis: 1967`. L index ne se remplissait que vers L AVANT — il resolvait les
+   *     createurs des creations qu il voyait PASSER. Les blocks DEJA crees, c est-a-dire tous ceux
+   *     des gens aujourd hui, n auraient JAMAIS ete rattaches.
+   *   ⇒ Un correctif qui ne couvre que l avenir laisse le probleme ENTIER a ceux qui l ont
+   *     signale. C est ce cas qui l empeche de repasser. */
+  assert.ok(/let rattrapageDepuis = null;/.test(srv), 'le rattrapage du passe a disparu');
+  assert.ok(/rattrapageDepuis > PREMIER_BLOCK_TB/.test(srv),
+    'le rattrapage ne s arrete plus au premier block de TBLOCK : il scannerait le vide indefiniment');
+  /* ⛔ ON N AVANCE QUE SI LA FENETRE A ETE LUE : avancer malgre des fenetres refusees sauterait
+   *   definitivement des creations, et PERSONNE ne le saurait jamais. */
+  assert.ok(/if \(!\(vieux\.fenetresRatees \|\| \[\]\)\.length\) rattrapageDepuis = bas;/.test(srv),
+    'le curseur avance meme quand des fenetres sont refusees : des creations seraient sautees en silence');
+  /* ⛔ ET L AVANCEMENT EST PERSISTE : sinon chaque deploiement recommencerait depuis le present et
+   *   ne finirait jamais le passe. */
+  assert.ok(/rattrapageDepuis,/.test(srv) && /x\.rattrapageDepuis === "number"/.test(srv),
+    'l avancement du rattrapage n est plus persiste : le passe ne serait jamais fini');
+});
+
+v('⛔⛔ `couvertureComplete` est CALCULEE — une sortie constante n est pas une mesure', () => {
+  /* ⛔⛔ Un `false` ecrit en dur serait un aveu permanent qui cesserait d informer ; un `true` en
+   *     dur serait un mensonge. Et c est precisement ce drapeau qui decide si une liste vide veut
+   *     dire « pas encore indexe » ou « tu n as rien cree ». */
+  assert.ok(!/couvertureComplete: false,/.test(srv),
+    'la couverture est de nouveau ecrite en dur : elle ne dirait plus rien de reel');
+  assert.ok(/couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB/.test(srv),
+    'la couverture n est plus derivee de l avancement reel du rattrapage');
+});
+
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok mes-blocks-sans-fenetre — ' + n + ' cas.');
 console.log('   La fenetre locale de 24 h est CALCULEE, l index serveur la complete, et les deux');
 console.log('   FUSIONNENT au lieu de se remplacer — chacun couvre l angle mort de l autre.');
