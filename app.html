@@ -2680,7 +2680,10 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  * de 166 700 neurones pilote un wallet qui SIGNE, avec des bornes affichees. Ici le cerveau fait
  * vivre le block : sa facon de bouger sur la map et son humeur, derivees de son adresse et de ce qui
  * lui arrive VRAIMENT sur la chaine. Aucun ordre, aucune signature, aucune cle. */
-import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur } from './cerveau.js';
+/* ⛔ `CAPTEURS` et `PARAMETRES` sont importes pour le panneau du neurone : sans eux, les lignes qui
+ *   les lisent jetteraient un ReferenceError et la page entiere serait MORTE. Un import manquant ne
+ *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES } from './cerveau.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
 const CLE_MEMOIRE = 'tblock.memoire.';
@@ -15053,9 +15056,62 @@ function dessinerReseauDit(vu) {
    *     tout le monde. La ligne ecrite porte l etat ; l anneau ne fait que montrer OU il est.
    *   ⛔ ET SON NUMERO EST DIT : sans lui, on ne peut ni en reparler ni le retrouver apres avoir
    *     tourne la sphere. */
+  /* ⛔⛔ TOUT CE QU UN NEURONE PORTE VRAIMENT — Phil : « ajoute le max de donnees que tu sais avoir
+   *     a propos des neurones, je veux tout comprendre de ce nouveau type d AI qu on a cree ».
+   *   ⛔ CHAQUE LIGNE EST LUE DANS L ETAT REEL, AUCUNE N EST DECORATIVE : `potentiels` et `memoire`
+   *     sont des tableaux de `cerveau.js`, les liens viennent du connectome tire de l adresse, les
+   *     capteurs et les ailes suivent des regles ECRITES dans le module.
+   *   ⛔ ET CE QU ON NE SAIT PAS, ON NE L ECRIT PAS : chaque ligne est sous condition. Si l etat
+   *     n est pas encore la, la ligne n apparait PAS — plutot qu un zero qui ressemble a une
+   *     mesure. */
   if (bwNeurone !== null && bwNeurone >= 0 && bwNeurone < n) {
-    const allume = Array.isArray(vu.indices) && vu.indices.includes(bwNeurone);
-    lignes.push(['◎ neuron #' + bwNeurone, allume ? 'firing now' : 'quiet on this beat']);
+    const i = bwNeurone;
+    const allume = Array.isArray(vu.indices) && vu.indices.includes(i);
+    lignes.push(['◎ neuron #' + i, allume ? 'firing now' : 'quiet on this beat']);
+    const c = brainEtat && brainEtat.c;
+    /* ⛔ LE ROLE CHANGE TOUT : les 16 premiers neurones recoivent les faits de la chaine EN DIRECT
+     *   (taille du marche, variation, nourriture, evenements neufs, bruit). Les 112 autres ne
+     *   voient QUE leurs voisins. Confondre les deux, c est croire que tout le reseau regarde le
+     *   marche — alors que la plupart ne regarde que le reseau. */
+    lignes.push(['⌁ role', i < CAPTEURS ? 'sensor — fed by the chain' : 'inner — sees only its neighbours']);
+    /* ⛔ LE POTENTIEL FACE A SON SEUIL : c est lui, et lui seul, qui decide du tir. Borne a [-4, 4]
+     *   dans `cerveau.js` — sans cette borne il diverge et les frequences d ailes rendent NaN. */
+    if (brainEtat && Array.isArray(brainEtat.potentiels)) {
+      const p = Number(brainEtat.potentiels[i]);
+      if (Number.isFinite(p)) lignes.push(['▮ potential', p.toFixed(2) + ' / ' + PARAMETRES.seuil + ' to fire']);
+    }
+    /* ⛔ LA TRACE N EST PAS UN SOUVENIR DE CE QU IL A VU, C EST UN SOUVENIR DE CE QU IL A FAIT :
+     *   moyenne glissante de ses PROPRES tirs. Re-injectee SOUS le seuil — elle amorce un neurone,
+     *   elle ne le fait JAMAIS tirer seule. Le dire evite de lire « memoire » comme « savoir ». */
+    if (brainEtat && Array.isArray(brainEtat.memoire)) {
+      const m = Number(brainEtat.memoire[i]);
+      if (Number.isFinite(m)) lignes.push(['🧠 its own trace', (m * 100).toFixed(1) + ' %']);
+    }
+    if (c && Array.isArray(c.liens) && Array.isArray(c.liens[i])) {
+      const sortants = c.liens[i];
+      const exc = sortants.filter((l) => Number(l.poids) >= 0).length;
+      /* ⛔ L INHIBITION EST CE QUI EMPECHE TOUT LE RESEAU DE TIRER ENSEMBLE. La cacher donnerait a
+       *   croire a un cerveau qui ne fait qu exciter — donc a un cerveau qui s emballe. */
+      lignes.push(['⇢ it drives', sortants.length + ' links · ' + exc + ' excite, '
+        + (sortants.length - exc) + ' inhibit']);
+      const somme = sortants.reduce((s, l) => s + (Number(l.poids) || 0), 0);
+      lignes.push(['Σ its net push', (somme >= 0 ? '+' : '') + somme.toFixed(2)]);
+      /* ⛔ QUI POINTE VERS LUI N EST PAS DANS SON PROPRE CABLAGE : il faut PARCOURIR les autres.
+       *   128 x 8 = 1024 comparaisons, une fois par dessin — negligeable, et c est la moitie de
+       *   l histoire : un neurone tres ECOUTE ne se voit pas dans ses propres liens. */
+      let entrants = 0;
+      for (let k = 0; k < c.liens.length; k++) {
+        for (const l of c.liens[k] || []) if (l.vers === i) entrants++;
+      }
+      lignes.push(['⇠ it listens to', entrants + ' link' + (entrants === 1 ? '' : 's')]);
+    }
+    /* ⛔ L AILE VIENT D UNE REGLE ECRITE, PAS D UNE MOITIE DE SPHERE : `(i + aileG) % 3 === 0`, ou
+     *   `aileG` est tire de l adresse. Un neurone peut donc appartenir aux DEUX ailes, ou a
+     *   AUCUNE — et c est dit, parce que supposer une gauche et une droite exclusives serait faux. */
+    if (c && typeof c.aileG === 'number' && typeof c.aileD === 'number') {
+      const g = (i + c.aileG) % 3 === 0, d = (i + c.aileD) % 3 === 0;
+      lignes.push(['⊣⊢ wing', g && d ? 'both' : g ? 'left' : d ? 'right' : 'neither']);
+    }
   }
   /* ⛔⛔ LE LIEN CHOISI SE LIT, ET IL DIT QUATRE CHOSES QU UNE COULEUR NE PEUT PAS DIRE : d ou a ou,
    *     s il EXCITE ou INHIBE, avec quelle force, et COMBIEN de chemins repartent ensuite. C est ce

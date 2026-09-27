@@ -138,6 +138,53 @@ v('⛔⛔ viser un neurone : un clic dans le VIDE ne doit pas en trouver un', ()
     'une rotation qui se termine selectionne un neurone : le glissement n est plus distingue du clic');
 });
 
+v('⛔⛔ tout ce que le panneau LIT doit etre IMPORTE — sinon la page est morte', () => {
+  /* ⛔⛔ UN IMPORT MANQUANT NE SE VOIT PAS A LA LECTURE, IL SE VOIT A L ECRAN — trop tard. J ai
+   *     ecrit les lignes du neurone en lisant `CAPTEURS` et `PARAMETRES` sans les importer : en
+   *     production, la premiere selection aurait jete un ReferenceError et tue le module ENTIER,
+   *     donc la page entiere. Ce n est pas une ligne qui manque, c est un ecran blanc.
+   *   ⇒ Ce cas verifie que chaque nom du cerveau lu par le panneau figure dans l import. Il est
+   *     mecanique, et c est exactement pour ca qu il vaut : l oeil ne fait pas ce controle. */
+  const impCerveau = (nu.match(/import \{[^}]*\} from '\.\/cerveau\.js'/) || [''])[0];
+  assert.ok(impCerveau, 'l import de cerveau.js a disparu');
+  for (const nom of ['CAPTEURS', 'PARAMETRES']) {
+    if (!new RegExp('\\b' + nom + '\\b').test(nu.split("from './cerveau.js'")[1] || '')) continue;
+    assert.ok(new RegExp('\\b' + nom + '\\b').test(impCerveau),
+      nom + ' est LU dans app.html mais PAS importe de cerveau.js : la page jetterait un '
+      + 'ReferenceError des la premiere selection de neurone');
+  }
+  /* ⛔ ET LES DEUX NOMS DOIVENT EXISTER EN FACE : un import d un nom absent rend `undefined` sans
+   *   erreur, et la ligne afficherait « undefined » au visiteur. */
+  const cerv = readFileSync(new URL('./cerveau.js', import.meta.url), 'utf8');
+  for (const nom of ['CAPTEURS', 'PARAMETRES']) {
+    assert.ok(new RegExp('export const ' + nom + '\\b').test(cerv),
+      nom + ' n est plus exporte par cerveau.js : l import rendrait `undefined` SANS erreur');
+  }
+});
+
+v('⛔ le panneau du neurone dit ce qui est MESURE, pas ce qui sonne bien', () => {
+  /* ⛔ CHAQUE LIGNE DOIT VENIR D UN CHAMP REEL DE L ETAT. Le potentiel et la trace sont des
+   *   tableaux de `cerveau.js` ; les liens viennent du connectome tire de l adresse. */
+  for (const [quoi, motif] of [
+    ['le role capteur/interne', /i < CAPTEURS \? 'sensor/],
+    ['le potentiel face au seuil', /brainEtat\.potentiels\[i\]/],
+    ['la trace propre du neurone', /brainEtat\.memoire\[i\]/],
+    /* ⛔ ON EPINGLE L INTENTION, PAS LA MISE EN PAGE. Ma premiere version de ce motif englobait un
+     *   saut de ligne et son indentation exacte : elle est tombee sur du code pourtant CORRECT. Un
+     *   test qui fige l espacement oblige a le reecrire a chaque reformatage, et on finit par le
+     *   desarmer au lieu de le lire. */
+    ['le partage excitation/inhibition', /sortants\.length - exc/],
+    ['les liens ENTRANTS, parcourus', /if \(l\.vers === i\) entrants\+\+/],
+  ]) {
+    assert.ok(motif.test(nu), 'le panneau du neurone a perdu ' + quoi);
+  }
+  /* ⛔⛔ L AILE PEUT ETRE « LES DEUX » OU « AUCUNE » : la regle est `(i + aileG) % 3 === 0`, pas une
+   *     moitie de sphere. Supposer une gauche et une droite exclusives serait FAUX, et le panneau
+   *     mentirait sur la structure meme du reseau. */
+  assert.ok(/g && d \? 'both' : g \? 'left' : d \? 'right' : 'neither'/.test(nu),
+    'le panneau suppose des ailes exclusives : un neurone peut etre dans les DEUX ou dans AUCUNE');
+});
+
 v('⛔⛔ `bwNeurone` : `null` et `0` sont DEUX choses differentes', () => {
   /* ⛔⛔ LE NEURONE D INDICE 0 EXISTE. Tester `if (bwNeurone)` le traiterait comme « aucun » — il
    *     serait le seul des 128 a ne jamais pouvoir etre choisi, et ca passerait inapercu longtemps.
@@ -314,7 +361,7 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 15, 'compte de cas inattendu : ' + n);
+assert.equal(n, 17, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
 console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
 console.log('   mesures, et le raster 2D intact.');
