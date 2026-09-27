@@ -390,8 +390,19 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const PX_MIN = 20;
       let k = Math.min(2.2, p.k * 1.8);
       if (h.t > 0 && h.t * k < PX_MIN) k = Math.min(2.2, Math.max(k, Math.min(PX_MIN / h.t, k * 2.5)));
-      /* un cube de moins de 44 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
-      const petit = h.t * k < 64;
+      /* un cube de moins de 64 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
+      /* ⛔⛔ SAUF CELUI QU ON REGARDE, ET C EST LE POINT. `.loin` met `animation-play-state: paused`
+       *     sur le cube ET ses satellites (`cube3d.js`), et remplace le volume par une face plate.
+       *     C est juste pour un block lointain — mais le block CENTRE ou SELECTIONNE est justement
+       *     celui qu on observe : le figer est exactement le contraire de ce qu on veut.
+       *     Phil : « le block ne bouge plus, il reste fige ».
+       *   ⛔ LE COUT EST NUL : c est UN block, pas les cent-soixante. L economie que `.loin` protege
+       *     vient du NOMBRE ; l exempter au singulier ne la touche pas.
+       *   ⛔ ET LA TAILLE NE SUFFISAIT PAS COMME CRITERE : un block centre peut rester sous 64 px
+       *     si la camera est loin ou l ecran etroit. Ce qui decide n est pas sa taille, c est le
+       *     fait qu on l ait choisi. */
+      const regarde = !!(h.centreFixe || (h.el && h.el.classList.contains('actif')));
+      const petit = !regarde && h.t * k < 64;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       /* ⛔⛔ LA TUILE NE PORTE QUE LA POSITION ET L ECHELLE — PLUS AUCUNE ROTATION, ET C EST UNE

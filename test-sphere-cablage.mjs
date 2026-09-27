@@ -105,6 +105,52 @@ v('⛔⛔ on peut zoomer ET revenir — un zoom sans retour enferme', () => {
   assert.ok(/BW_ZOOM_MIN/.test(nu) && /BW_ZOOM_MAX/.test(nu), 'le zoom n est plus borne des deux cotes');
 });
 
+v('⛔⛔ viser un neurone : un clic dans le VIDE ne doit pas en trouver un', () => {
+  /* ⛔⛔ LE PIEGE DE CE GESTE : « le plus proche » existe TOUJOURS. Une recherche du minimum sans
+   *     seuil ne peut JAMAIS rendre « rien » — donc un clic n importe ou dans le vide designerait
+   *     un neurone a l autre bout de la toile, et l anneau apparaitrait loin du doigt. C est un
+   *     faux positif GARANTI, pas un cas rare. */
+  assert.ok(/d2min <= TOLERANCE \* TOLERANCE/.test(nu),
+    'la recherche du neurone le plus proche n a plus de seuil : un clic dans le vide en trouverait un');
+  /* ⛔ ET LES COORDONNEES DOIVENT ETRE CELLES DE LA TOILE, pas de la page : la toile est mise a
+   *   l echelle par le CSS, et confondre les deux fait viser de plus en plus a cote en s eloignant
+   *   du centre — une erreur qui grandit au lieu de sauter aux yeux. */
+  assert.ok(/c\.width \/ box\.width/.test(nu) && /c\.height \/ box\.height/.test(nu),
+    'le clic ne convertit plus vers les coordonnees de la toile : la visee deriverait sur les bords');
+  /* ⛔ UN GLISSEMENT N EST PAS UN CLIC : tourner la sphere se termine par un relachement qui
+   *   ressemble a un clic, et selectionnerait un neurone a chaque rotation. */
+  assert.ok(/> 4\) \{ depart = null; return; \}/.test(nu),
+    'une rotation qui se termine selectionne un neurone : le glissement n est plus distingue du clic');
+});
+
+v('⛔⛔ `bwNeurone` : `null` et `0` sont DEUX choses differentes', () => {
+  /* ⛔⛔ LE NEURONE D INDICE 0 EXISTE. Tester `if (bwNeurone)` le traiterait comme « aucun » — il
+   *     serait le seul des 128 a ne jamais pouvoir etre choisi, et ca passerait inapercu longtemps.
+   *     Toute comparaison doit etre EXPLICITE contre `null`. */
+  assert.ok(/bwNeurone === i/.test(nu), 'le neurone choisi n est plus compare par identite a l indice');
+  assert.ok(/bwNeurone !== null/.test(nu),
+    'le neurone choisi est teste par verite : le neurone 0 serait invisible pour toujours');
+  /* ⛔ ET SON ETAT SE LIT EN TOUTES LETTRES : deux couleurs a 2 px de rayon ne se distinguent pas
+   *   pour tout le monde. L anneau montre OU il est ; la ligne ecrite dit CE QU IL FAIT. */
+  assert.ok(/firing now|quiet on this beat/.test(nu),
+    'l etat du neurone choisi n est plus ecrit : la couleur seule ne se lit pas');
+});
+
+v('⛔⛔ le block REGARDE n est jamais fige', () => {
+  /* ⛔⛔ `.loin` met `animation-play-state: paused` sur le cube ET ses satellites, et remplace le
+   *     volume par une face plate. C est juste pour un block lointain — mais le block CENTRE ou
+   *     SELECTIONNE est justement celui qu on observe. Phil : « le block ne bouge plus, il reste
+   *     fige ». Mesure : le cube du block clique rendait `animationPlayState: "paused"`.
+   *   ⛔ LA TAILLE NE SUFFISAIT PAS COMME CRITERE : un block centre peut rester sous 64 px si la
+   *     camera est loin ou l ecran etroit. Ce qui decide n est pas sa taille, c est qu on l ait
+   *     choisi. */
+  const m = readFileSync(new URL('./map3d.js', import.meta.url), 'utf8');
+  assert.ok(/const petit = !regarde && h\.t \* k < 64;/.test(m),
+    'le block centre ou selectionne peut de nouveau etre classe « loin », donc FIGE');
+  assert.ok(/h\.centreFixe \|\| \(h\.el && h\.el\.classList\.contains\('actif'\)\)/.test(m),
+    'la definition de « regarde » ne couvre plus les deux cas : centre ET selectionne');
+});
+
 v('⛔ la sphere TIENT dans le cube, et son rayon est calcule', () => {
   /* ⛔ UNE GARDE PEUT ETRE CORRECTE PAR ACCIDENT : un rayon ecrit en dur tomberait juste a une
    *   taille de toile et deborderait a une autre. Il doit etre DERIVE du demi-cote du cube. */
@@ -187,7 +233,7 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 10, 'compte de cas inattendu : ' + n);
+assert.equal(n, 13, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
 console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
 console.log('   mesures, et le raster 2D intact.');

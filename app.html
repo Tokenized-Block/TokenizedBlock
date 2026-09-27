@@ -686,7 +686,14 @@ body:not(.surMap) .mapCta{display:none}
      tout prix aurait donne deux colonnes de 160 px illisibles — ce depot se mesure a 375 px. */
 .bwRang{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-top:10px}
 /* ⛔ `touch-action:none` : sans lui, le doigt fait defiler la page au lieu de tourner la sphere. */
-.bwToile{flex:1 1 280px;max-width:430px;margin-top:0;touch-action:none;cursor:grab}
+.bwToileBoite{flex:1 1 280px;max-width:430px}
+.bwToile{width:100%;max-width:430px;margin-top:0;touch-action:none;cursor:grab}
+/* ⛔ LES BOUTONS SE POSENT SUR LA TOILE, PAS A COTE : a cote ils pousseraient le panneau de droite
+ *   sous la toile en etroit, et on aurait repare le zoom en cassant la lecture. */
+.bwZoom{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px}
+.bwZoom button{width:32px;height:32px;line-height:1;border-radius:8px;cursor:pointer;
+  border:1px solid var(--contour);background:rgb(var(--fondRgb) / .78);color:var(--texte);font-size:16px}
+.bwZoom button:hover{border-color:var(--accent)}
 .bwToile:active{cursor:grabbing}
 .bwDit{flex:1 1 240px;min-width:0}
 .bwListe{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:5px}
@@ -1592,7 +1599,19 @@ details[open] > summary::before{transform:rotate(90deg)}
              echange, et une dependance de plus sur le chemin qui parle du cerveau.
            ⚠️ LE RASTER 2D DES BATTEMENTS N EST PAS TOUCHE : il vit ailleurs et garde son dessin. -->
       <div class="bwRang">
-        <canvas id="bReseau" width="560" height="420" class="toile bwToile"></canvas>
+        <!-- ⛔⛔ DES BOUTONS, PAS SEULEMENT LA MOLETTE. Un zoom qui n existe qu a la molette
+             n existe pas pour qui est au doigt sans savoir pincer, ni pour qui navigue au clavier.
+             Trois boutons visibles disent aussi que le zoom EXISTE : un geste qu on ne devine pas
+             n est pas une fonctionnalite. `aria-label` parce que « + » seul ne se lit pas a voix
+             haute. -->
+        <div class="bwToileBoite" style="position:relative">
+          <canvas id="bReseau" width="560" height="420" class="toile bwToile"></canvas>
+          <div class="bwZoom">
+            <button type="button" id="bwPlus" aria-label="Zoom in">+</button>
+            <button type="button" id="bwMoins" aria-label="Zoom out">−</button>
+            <button type="button" id="bwReset" aria-label="Reset the view">⟳</button>
+          </div>
+        </div>
         <div class="bwDit">
           <p class="note" id="bwEtat">Waiting for the first beat…</p>
           <ul class="bwListe" id="bwListe"></ul>
@@ -2002,7 +2021,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-centre-fix" hidden>Build <code>20260927-centre-fix</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-neuron-click" hidden>Build <code>20260927-neuron-click</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14533,6 +14552,10 @@ function posSphere(n) {
 const bwVue = { rx: -0.35, ry: 0.6, glisse: false, x0: 0, y0: 0, auto: true, zoom: 1 };
 const BW_ZOOM_MIN = 0.6, BW_ZOOM_MAX = 5;
 let bwSphere = null, bwSphereN = 0;
+/* ⛔ `bwPos` : les positions PROJETEES du dernier dessin, pour que le clic vise ce qui est peint.
+ *   `bwNeurone` : le neurone choisi, ou `null`. ⛔ `null` et `0` sont DEUX choses differentes ici —
+ *   le neurone d indice 0 existe. Tout test doit comparer a `null`, jamais se fier a la verite. */
+let bwPos = null, bwNeurone = null;
 
 /** Tourne puis projette. ⛔ La perspective est FAIBLE (d = 3.2) : trop forte, les neurones du fond
  *  deviennent des points et on ne lit plus la forme ; trop faible, la sphere redevient un disque. */
@@ -14649,6 +14672,11 @@ function dessinerReseau(vu = null) {
   const r = R * 0.92;
   if (!bwSphere || bwSphereN !== liens.length) { bwSphere = posSphere(liens.length); bwSphereN = liens.length; }
   const pos = bwSphere.map((v) => bwProjeter(v, cx, cy, r));
+  /* ⛔ LES POSITIONS PROJETEES SONT RETENUES POUR LE CLIC. Sans elles, viser un neurone exigerait de
+   *   refaire toute la projection au moment du clic — c est-a-dire une SECONDE implementation de la
+   *   meme mathematique, qui deriverait de celle qui peint. On vise ce qui est DESSINE, jamais un
+   *   calcul parallele. */
+  bwPos = pos;
   const actifs = new Set(vu && vu.indices ? vu.indices : []);
 
   /* ⛔ LE HALO PASSE DERRIERE LES LIENS : dessine apres, il les noierait. Et il est nourri de
@@ -14708,6 +14736,20 @@ function dessinerReseau(vu = null) {
     ctx.beginPath();
     ctx.arc(pos[i][0], pos[i][1], (vif ? 2.2 : 1.1) * pos[i][3], 0, Math.PI * 2);
     ctx.fill();
+    /* ⛔⛔ LE NEURONE CHOISI SE VOIT, ET SA COULEUR DIT S IL A TIRE — Phil : « clic sur un neurone
+     *     et cible avec une couleur ce neurone, qui est lu ou pas ».
+     *   ⛔ DEUX COULEURS OPPOSEES, PAS DEUX NUANCES : vert s il a tire sur ce battement, ambre
+     *     sinon. Deux teintes proches se confondraient a 2 px de rayon, et l anneau ne dirait plus
+     *     rien — il montrerait seulement QUI est choisi, pas ce qu il fait.
+     *   ⛔ ET L ANNEAU EST DESSINE MEME QUAND LE NEURONE EST AU FOND : le cacher derriere la sphere
+     *     ferait croire que le clic a rate. On le veut toujours reperable. */
+    if (bwNeurone === i) {
+      ctx.strokeStyle = vif ? 'hsl(140 90% 62%)' : 'hsl(38 95% 62%)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(pos[i][0], pos[i][1], Math.max(6, 5 * pos[i][3]), 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   /* ⛔⛔ LA MOITIE AVANT DU CUBE, APRES LA SPHERE. C est cette ligne-ci qui fait la difference entre
@@ -14776,6 +14818,17 @@ function dessinerReseau(vu = null) {
     e.preventDefault();
     zoomer(Math.exp(-e.deltaY * 0.0012));
   }, { passive: false });
+  /* ⛔ LES BOUTONS PASSENT PAR LA MEME FONCTION `zoomer` que la molette et le pincement : trois
+   *   entrees, UNE mecanique. Trois chemins separes finiraient par borner differemment, et c est
+   *   celui qu on relit le moins qui laisserait sortir de la plage. */
+  const plus = $('#bwPlus'), moins = $('#bwMoins'), remise = $('#bwReset');
+  if (plus) plus.addEventListener('click', () => zoomer(1.35));
+  if (moins) moins.addEventListener('click', () => zoomer(1 / 1.35));
+  if (remise) remise.addEventListener('click', () => {
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null;
+    dessinerReseau(brainDernierVu);
+    try { dessinerReseauDit(brainDernierVu); } catch (_) {}
+  });
   /* ⛔ LE PINCEMENT COMPTE AUTANT QUE LA MOLETTE : ce panneau se regarde surtout au telephone, et
    *   un zoom reserve a la souris n existerait pas pour la moitie des visiteurs. On suit DEUX
    *   doigts et on compare l ECART entre deux images — jamais une position absolue, qui derive. */
@@ -14806,8 +14859,40 @@ function dessinerReseau(vu = null) {
   /* ⛔ UNE SORTIE DE SECOURS : un double-tap remet la vue d origine. Sans elle, quelqu un perdu au
    *   fond du cerveau n a aucun moyen de revenir, et fermer le volet ne remet pas le zoom. */
   c.addEventListener('dblclick', () => {
-    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6;
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null;
     dessinerReseau(brainDernierVu);
+  });
+  /* ⛔⛔ VISER UN NEURONE. On cherche le plus proche du clic PARMI CEUX QUI SONT DESSINES, dans les
+   *     coordonnees de la TOILE — pas celles de la page : la toile est mise a l echelle par le CSS,
+   *     et confondre les deux fait viser a cote de plus en plus loin du centre.
+   *   ⛔ UN RAYON DE TOLERANCE, ET UN CLIC HORS PORTEE DESELECTIONNE. Sans cette borne, un clic
+   *     n importe ou dans le vide « trouverait » toujours un neurone — le plus proche existe
+   *     TOUJOURS. Une recherche du minimum sans seuil ne peut jamais rendre « rien », et c est un
+   *     faux positif garanti.
+   *   ⛔ ET ON NE SELECTIONNE PAS PENDANT UN GLISSEMENT : tourner la sphere se termine par un
+   *     relachement, qui ressemble a un clic. On exige donc que rien n ait bouge. */
+  let depart = null;
+  c.addEventListener('pointerdown', (e) => { depart = [e.clientX, e.clientY]; });
+  c.addEventListener('click', (e) => {
+    if (!bwPos || !depart) return;
+    /* ⛔ un glissement de plus de 4 px n est pas un clic : c est une rotation qui se termine */
+    if (Math.hypot(e.clientX - depart[0], e.clientY - depart[1]) > 4) { depart = null; return; }
+    depart = null;
+    const box = c.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const x = (e.clientX - box.left) * (c.width / box.width);
+    const y = (e.clientY - box.top) * (c.height / box.height);
+    let meilleur = null, d2min = Infinity;
+    for (let i = 0; i < bwPos.length; i++) {
+      const p = bwPos[i];
+      if (!p) continue;
+      const d2 = (p[0] - x) * (p[0] - x) + (p[1] - y) * (p[1] - y);
+      if (d2 < d2min) { d2min = d2; meilleur = i; }
+    }
+    const TOLERANCE = 14;   /* px de toile : assez large au doigt, assez etroit pour ne pas mentir */
+    bwNeurone = (meilleur !== null && d2min <= TOLERANCE * TOLERANCE) ? meilleur : null;
+    dessinerReseau(brainDernierVu);
+    try { dessinerReseauDit(brainDernierVu); } catch (_) {}
   });
   /* ⛔ UN TOUR LENT TANT QUE PERSONNE N A TOUCHE : sans lui, au premier chargement, une sphere vue
    *   de face ressemble encore a un disque — et on ne saurait pas qu elle tourne. */
@@ -14854,6 +14939,15 @@ function dessinerReseauDit(vu) {
     ['🧠 working memory', typeof vu.memoire === 'number' ? Math.round(vu.memoire * 100) + ' %' : '—'],
     ['🌡 mood', vu.phase ? nomHumeur(vu.phase) : '—'],
   ];
+  /* ⛔⛔ LE NEURONE CHOISI SE LIT AUSSI EN TOUTES LETTRES. Un anneau de couleur dit « celui-ci »,
+   *     il ne dit pas CE QU IL FAIT — et deux couleurs a 2 px de rayon ne se distinguent pas pour
+   *     tout le monde. La ligne ecrite porte l etat ; l anneau ne fait que montrer OU il est.
+   *   ⛔ ET SON NUMERO EST DIT : sans lui, on ne peut ni en reparler ni le retrouver apres avoir
+   *     tourne la sphere. */
+  if (bwNeurone !== null && bwNeurone >= 0 && bwNeurone < n) {
+    const allume = Array.isArray(vu.indices) && vu.indices.includes(bwNeurone);
+    lignes.push(['◎ neuron #' + bwNeurone, allume ? 'firing now' : 'quiet on this beat']);
+  }
   liste.innerHTML = lignes.map(([k, v]) =>
     '<li><span>' + enTexte(k) + '</span><b>' + enTexte(String(v)) + '</b></li>').join('');
 }
