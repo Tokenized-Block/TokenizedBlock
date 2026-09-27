@@ -80,3 +80,55 @@ console.log('   La liste se CALCULE depuis les prix reellement lus, les lectures
 console.log('   les puces se repeignent a l arrivee d un prix.');
 console.log('⚠️ NE PROUVE PAS qu une action ait un marche aujourd hui — prouve que la liste ne peut');
 console.log('   plus vieillir en silence.');
+
+/* ── ⛔ AJOUTS DU 2026-09-27 — la decouverte, et la devise majeure oubliee ───────────────────── */
+{
+  let m = 0;
+  const casB = (titre, f) => { m++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
+
+  casB('⛔⛔ une devise MAJEURE peut avoir une puce — TOSHI n en avait aucune', () => {
+    /* ⛔⛔ OUBLI VISIBLE A L ECRAN : TOSHI, 1 230 755 $ de liquidite mesures, etait selectionnable
+     *     dans la liste deroulante et n avait AUCUNE puce — le filtre ne connaissait que `ACTION`.
+     *     cbBTC non plus. Une devise proposee sans raccourci est une devise cachee a moitie. */
+    const i = nu.indexOf('function pairesChipQuick');
+    const bloc = nu.slice(i, nu.indexOf('function peindrePaireChips', i));
+    assert.ok(/p\.type === 'ACTION' \|\| p\.type === 'MAJEUR'/.test(bloc),
+      'les devises MAJEURES ne peuvent plus avoir de puce : TOSHI et cbBTC redeviennent invisibles '
+      + 'dans les raccourcis alors qu ils sont proposes');
+    /* ⛔ ET L AMORCAGE SUIT LE MEME ENSEMBLE, sinon il ment par omission : une puce qui depend d un
+     *   prix jamais demande n apparaitra jamais. */
+    const j = nu.indexOf('function amorcerPrixActions');
+    const bloc2 = nu.slice(j, nu.indexOf('function pairesChipQuick', j));
+    assert.ok(/p\.type === 'ACTION' \|\| p\.type === 'MAJEUR'/.test(bloc2),
+      'l amorcage des prix ne couvre plus les devises majeures : leur puce ne pourrait jamais sortir');
+  });
+
+  casB('⛔⛔ la decouverte est BORNEE et filtree comme le reste', () => {
+    const i = nu.indexOf('function blocksDecouverts');
+    assert.notEqual(i, -1, 'la decouverte des blocks vivants a disparu');
+    const bloc = nu.slice(i, nu.indexOf('function peindrePaires', i));
+    assert.ok(/Number\(m\.liquiditeUsd\) >= LIQ_MIN_BUY_USD/.test(bloc),
+      'le seuil de profondeur a saute, ou un SECOND seuil a ete cree — son propre commentaire dit '
+      + 'qu une valeur separee deriverait');
+    assert.ok(/Number\(m\.prixUsd\) > 0/.test(bloc),
+      'un block sans prix LU peut de nouveau etre propose : cul-de-sac a la mise en vie');
+    assert.ok(/\/\^0xb2\[0-9a-fA-F\]\{38\}\$\/i\.test\(adr\)/.test(bloc),
+      'le prefixe B20 n est plus exige : la paire serait refusee par la CHAINE, apres le clic');
+    assert.ok(/slice\(0, PAIRES_DECOUVERTES_MAX\)/.test(bloc),
+      'la liste n est plus bornee : 148 lignes dans un menu deroulant, c est un mur, pas un choix');
+    assert.ok(/dejaAuRegistre\.has\(adr\)/.test(bloc), 'les doublons du registre reviennent dans la liste');
+  });
+
+  casB('⛔ le groupe « Live blocks » ne s affiche QUE s il contient quelque chose', () => {
+    /* ⛔ Un `optgroup` vide est un rayon vide : il fait croire a une panne. */
+    assert.ok(/vivants\.length\s*\n?\s*\? '<optgroup label="Live blocks/.test(nu)
+      || /\+ \(vivants\.length[\s\S]{0,80}Live blocks/.test(nu),
+      'le groupe des blocks vivants s affiche meme vide');
+    assert.ok(/' liquidity'/.test(nu),
+      'la profondeur n est plus dite dans le libelle : « pairer avec X » ne veut rien dire sans '
+      + 'savoir s il y a 600 $ ou 2 M$ en face');
+  });
+
+  assert.equal(m, 3, 'compte de cas (ajouts) inattendu : ' + m);
+  console.log('   + ' + m + ' cas : MAJEUR a droit a une puce, la decouverte est bornee et filtree.');
+}

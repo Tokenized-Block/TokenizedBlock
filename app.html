@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-paires-decouvertes" hidden>Build <code>20260927-paires-decouvertes</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-decouverte-branchee" hidden>Build <code>20260927-decouverte-branchee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12163,10 +12163,43 @@ async function lireV3() {
 void lireV3(); /* tip 20260922-stock-pair-ux: unlock stocks ASAP, not after 3s */
 setTimeout(() => { void lireV3(); }, 3000);
 setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
+/* ⛔⛔ LES BLOCKS VIVANTS, DECOUVERTS AU LIEU D ETRE GRAVES (Phil, 2026-09-27).
+ *     LE CONCEPT : on rend n importe quel actif en block, donc n importe quel block doit pouvoir
+ *     servir de paire. Un registre de 14 entrees ne peut pas porter ca — notre index en suit ~2 000.
+ *   ⚠️ CE N EST PAS UNE NOUVELLE CAPACITE, C EST DE LA DECOUVRABILITE. L option « Another block —
+ *     paste its address » existe deja et FONCTIONNE : `majPaire()` verifie le marqueur `0xef` sur
+ *     la chaine. Jusqu ici il fallait CONNAITRE l adresse. On arrete de la demander.
+ *   ⛔ MEME GARDE QUE PARTOUT : sous `LIQ_MIN_BUY_USD`, pas propose. On REUTILISE ce seuil — son
+ *     propre commentaire dit qu un second seuil deriverait, et il a raison : on proposerait de
+ *     pairer contre un marche dont on refuserait le frais.
+ *   ⛔ ET ON BORNE. 148 lignes dans un menu deroulant, ce n est pas un choix, c est un mur. Les plus
+ *     profondes d abord : ce sont celles ou un acheteur pourra reellement entrer. */
+const PAIRES_DECOUVERTES_MAX = 40;
+function blocksDecouverts() {
+  const dejaAuRegistre = new Set();
+  try { for (const p of pairesProposees(CHAINE)) dejaAuRegistre.add(String(p.adr || '').toLowerCase()); }
+  catch (_) { return []; /* registre illisible : rien plutot que proposer a l aveugle */ }
+  const out = [];
+  for (const [adr, m] of marcheParAdr) {
+    if (!m || dejaAuRegistre.has(adr)) continue;
+    if (!(Number(m.liquiditeUsd) >= LIQ_MIN_BUY_USD)) continue;
+    /* ⛔ LE PRIX DOIT AVOIR ETE LU, jamais suppose — meme porte que pour les actions. Un block sans
+     *   prix mene au cul-de-sac de la mise en vie : une valeur de depart non evaluable. */
+    if (!(Number(m.prixUsd) > 0)) continue;
+    /* ⛔ ET LE PREFIXE B20 EST EXIGE DES ICI. Le hook n admet que des B20 natifs ; proposer autre
+     *   chose ferait refuser la paire par la CHAINE, APRES le clic. Le marqueur `0xef` exact reste
+     *   verifie par `majPaire()` — ceci n est que le premier tamis, et il le dit. */
+    if (!/^0xb2[0-9a-fA-F]{38}$/i.test(adr)) continue;
+    out.push({ adr, symbole: String(m.sym || '?').slice(0, 14), nom: String(m.nom || m.sym || '').slice(0, 40),
+      type: 'BLOCK_VIVANT', liq: Number(m.liquiditeUsd) || 0, prixUsd: Number(m.prixUsd) });
+  }
+  return out.sort((a, b) => b.liq - a.liq).slice(0, PAIRES_DECOUVERTES_MAX);
+}
 function peindrePaires() {
   const s = $('#cPaire');
   const avant = s.value;
   const liste = pairesProposees(CHAINE);
+  const vivants = blocksDecouverts();
   /* ⛔ UNE PAIRE N EST PROPOSEE QUE SI LA MISE EN VIE SAIT L OUVRIR. ETH : toujours. Le reste
    *    (USDC, cbBTC, actions) attend un hook devise (v3Pret = V3 ou V8 deploye). */
   /* Phil (2026-09-19) : « ne propose plus TBLOCK — aucune liquidite injectee, on fera plus tard ». */
@@ -12181,6 +12214,19 @@ function peindrePaires() {
   s.innerHTML = '<optgroup label="Base currencies">' + base.map(opt).join('') + '</optgroup>'
     + (actions.length
       ? '<optgroup label="Coinbase tokenized stocks">' + actions.map(opt).join('') + '</optgroup>'
+      : '')
+    /* ⛔⛔ LES BLOCKS VIVANTS, DECOUVERTS. Le groupe n apparait QUE s il y a quelque chose dedans :
+     *     un `optgroup` vide est un rayon vide dans un magasin, il fait croire a une panne.
+     *   ⛔ LA PROFONDEUR EST DITE DANS LE LIBELLE. « pairer avec ZORAc » ne veut rien dire sans
+     *     savoir s il y a 600 $ ou 2 M$ en face : c est exactement ce qui separe une paire qu un
+     *     acheteur peut honorer d une paire ou il restera seul. Le chiffre vient de DexScreener,
+     *     lu par le serveur — et la mention `~` le dit ailleurs dans l app. */
+    + (vivants.length
+      ? '<optgroup label="Live blocks — discovered on chain">'
+        + vivants.map((b) => '<option value="' + enTexte(b.adr) + '"' + (deviseOk ? '' : ' disabled') + '>'
+          + enTexte(b.symbole) + ' — ' + enTexte(usdCourt(b.liq)) + ' liquidity'
+          + (deviseOk ? '' : ' — soon') + '</option>').join('')
+        + '</optgroup>'
       : '')
     /* ⛔ UN AUTRE B20 QUELCONQUE : le hook V3 n admet qu une liste FIXE — la paire serait refusee par la chaine. « soon ». */
     /* ⛔⛔ CETTE OPTION ETAIT `disabled` ET LIBELLEE « — soon », ALORS QUE LE CODE QUI S EN SERT
@@ -12246,7 +12292,10 @@ function peindrePaires() {
 function amorcerPrixActions() {
   try {
     for (const p of pairesProposees(CHAINE)) {
-      if (p && p.type === 'ACTION') assurerPrixDevise(String(p.symbole));
+      /* ⛔ MEME ENSEMBLE QUE LES PUCES, SINON L AMORCAGE MENT PAR OMISSION : une devise dont la
+       *   puce depend du prix, et dont le prix n est jamais demande, n aura jamais de puce. C est
+       *   le defaut inerte deja attrape deux fois aujourd hui. */
+      if (p && (p.type === 'ACTION' || p.type === 'MAJEUR')) assurerPrixDevise(String(p.symbole));
     }
   } catch (_) { /* registre illisible : les puces resteront a l ETH, ce qui est honnete */ }
 }
@@ -12254,7 +12303,15 @@ function pairesChipQuick() {
   const out = ['ETH'];
   try {
     for (const p of pairesProposees(CHAINE)) {
-      if (p && p.type === 'ACTION' && prixUsdDeviseLus.has(String(p.symbole))) out.push(String(p.symbole));
+      /* ⛔⛔ `MAJEUR` AJOUTE LE 2026-09-27, ET C ETAIT UN OUBLI VISIBLE A L ECRAN : TOSHI, avec
+       *     1 230 755 $ de liquidite mesures, etait selectionnable dans la liste deroulante et
+       *     n avait AUCUNE puce — parce que ce filtre ne connaissait que `ACTION`. cbBTC aussi.
+       *     Une devise proposee sans raccourci est une devise qu on cache a moitie.
+       *   ⛔ LA PORTE NE BOUGE PAS : prix reellement LU, sinon pas de puce. C est elle qui empeche
+       *     de pousser vers le cul-de-sac de la mise en vie. */
+      if (p && (p.type === 'ACTION' || p.type === 'MAJEUR') && prixUsdDeviseLus.has(String(p.symbole))) {
+        out.push(String(p.symbole));
+      }
     }
   } catch (_) { /* registre illisible : on garde au moins l ETH, jamais une liste inventee */ }
   return out;
