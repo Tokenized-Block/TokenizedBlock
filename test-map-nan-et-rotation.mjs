@@ -65,6 +65,32 @@ v('⛔ les vitesses viennent de l ADRESSE, pas du hasard', () => {
 });
 
 /* ── 3. un block DEJA casse doit revenir ────────────────────────────────────────────────────── */
+v('⛔⛔ une POSITION saine n est JAMAIS jetee parce qu une VITESSE manque', () => {
+  /* ⛔⛔ CE CAS EXISTE PARCE QUE MA REPARATION A CASSE LA MAP, ET QUE PHIL L A VU AVANT MOI.
+   *     Premiere version de `saine()` : des qu UN champ n etait pas fini, elle appelait `placer(h)`
+   *     EN ENTIER — donc elle redonnait une position ALEATOIRE. Or au premier rendu, `vx`/`vy` d un
+   *     block dont le cerveau n a pas encore battu sont absents. Resultat : au chargement, le block
+   *     CENTRE sautait hors du centre. « bug au lancement de la map, apparait pas au centre ».
+   *   ⇒ UNE REPARATION QUI EN FAIT TROP EST UNE PANNE. Position et vitesse sont deux champs
+   *     differents, avec deux causes differentes : on repare champ par champ. */
+  const i = map.indexOf('function saine(h)');
+  assert.notEqual(i, -1, 'le rattrapage a disparu');
+  const corps = map.slice(i, map.indexOf('\n  }', i));
+  assert.ok(/if \(!posOk\) \{ placer\(h\); return false; \}/.test(corps),
+    'le replacement complet n est plus reserve au cas ou la POSITION est cassee');
+  /* ⛔ ET LA BRANCHE « position bonne, vitesse absente » doit reparer SANS replacer : si `placer(`
+   *   apparait apres le test de position, on rejette une position saine. */
+  /* ⛔ ON COUPE A LA FIN DE LA LIGNE, PAS A UN DECALAGE EN CARACTERES. Ma premiere version faisait
+   *   `indexOf(...) + 12`, ce qui retombait AU MILIEU de `if (!posOk) { placer(h); ... }` : le test
+   *   accusait donc le correctif lui-meme. Un decalage en dur se decale des que la ligne change. */
+  const finLigne = corps.indexOf('\n', corps.indexOf('if (!posOk)'));
+  const apres = corps.slice(finLigne);
+  assert.ok(!/placer\(h\)/.test(apres),
+    'une position SAINE est encore jetee quand une vitesse manque : le block centre sauterait');
+  assert.ok(/if \(!Number\.isFinite\(h\.vx\)\) h\.vx =/.test(corps),
+    'les vitesses manquantes ne sont plus reparees une par une');
+});
+
 v('⛔⛔ un block deja NaN est REPLACE, pas abandonne', () => {
   /* ⛔ C EST LA MOITIE QU ON OUBLIE. Corriger `placer()` protege les futurs ; ca ne ramene pas
    *   celui qui est deja perdu — et il l est pour toute la session, puisque le cerveau recalcule
@@ -139,7 +165,7 @@ v('⛔ la tuile porte toujours sa POSITION — le retrait ne doit pas l avoir em
     'la tuile ne porte plus son echelle : la perspective serait perdue');
 });
 
-assert.equal(n, 8, 'compte de cas inattendu : ' + n);
+assert.equal(n, 9, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');

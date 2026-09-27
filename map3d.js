@@ -189,10 +189,31 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
    *     Le NaN s auto-entretient.
    *   ⇒ On verifie la finitude a chaque image et on REPLACE ce qui est sorti du reel. C est une
    *     reparation, pas un camouflage : sans elle, ce block n existe plus a l ecran. */
+  /* ⛔⛔ ELLE REPARE SEULEMENT CE QUI EST CASSE, ET C EST UNE CORRECTION D UN DEFAUT A MOI.
+   *     Premiere version : des qu UN champ n etait pas fini, elle appelait `placer(h)` EN ENTIER —
+   *     donc elle redonnait une position ALEATOIRE. Or au premier rendu, `vx`/`vy` d un block dont
+   *     le cerveau n a pas encore battu sont absents. Consequence vue par Phil : au chargement de
+   *     la map, le block centre SAUTAIT hors du centre. « bug au lancement de la map, apparait pas
+   *     au centre » — et c etait ma reparation, pas le bug d origine.
+   *   ⇒ UNE REPARATION QUI EN FAIT TROP EST UNE PANNE. Une position SAINE ne doit jamais etre
+   *     jetee parce qu une VITESSE manque : ce sont deux champs differents, avec deux causes
+   *     differentes. On repare donc champ par champ.
+   *   ⛔ Et le cas « tout est casse » reste couvert : si la position elle-meme est hors du reel, on
+   *     replace — c est la seule facon de ramener un block que le NaN a fait disparaitre. */
   function saine(h) {
-    if (Number.isFinite(h.wx) && Number.isFinite(h.wy) && Number.isFinite(h.wz)
-      && Number.isFinite(h.vx) && Number.isFinite(h.vy) && Number.isFinite(h.vz)) return true;
-    placer(h);
+    const posOk = Number.isFinite(h.wx) && Number.isFinite(h.wy) && Number.isFinite(h.wz);
+    const vitOk = Number.isFinite(h.vx) && Number.isFinite(h.vy) && Number.isFinite(h.vz);
+    if (posOk && vitOk) return true;
+    if (!posOk) { placer(h); return false; }
+    /* ⛔ LA POSITION EST BONNE : on ne la touche PAS. On ne rend que les vitesses manquantes, en
+     *   les tirant de l adresse comme `placer()` le fait — meme source, donc meme univers. */
+    const a = String(h.adr || '').toLowerCase().replace(/^0x/, '');
+    const bon = /^[0-9a-f]{40}$/.test(a);
+    const g = (i) => (bon ? parseInt(a.slice(i, i + 8), 16) / 0xffffffff : 0.5) * 2 - 1;
+    const plancher = (v, min) => (Math.abs(v) < min ? (v < 0 ? -min : min) : v);
+    if (!Number.isFinite(h.vx)) h.vx = plancher(g(0) * 0.11, 0.02);
+    if (!Number.isFinite(h.vy)) h.vy = plancher(g(8) * 0.11, 0.02);
+    if (!Number.isFinite(h.vz)) h.vz = plancher(g(16) * 0.11, 0.02);
     return false;
   }
 
