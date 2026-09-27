@@ -1621,7 +1621,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- ⛔ LA LEGENDE NOMME LES TROIS GESTES, ET LE RETOUR. Un zoom qu on ne sait pas faire
                n existe pas ; et un zoom dont on ne sait pas revenir est pire, parce qu on se
                retrouve perdu au fond du cerveau sans issue. -->
-          <p class="note" id="bwAide">Drag to turn, scroll or pinch to zoom in and explore, double-tap to come back.
+          <p class="note" id="bwAide">Drag to turn, scroll or pinch to zoom, double-tap to come back. Tap a neuron to target it, or tap a link to follow where it goes.
             The block is the cube; its brain lives inside, pressed against the walls — each dot a neuron, each line a link.
             The glow around it is its mood, and it leans toward whichever wing is firing faster.</p>
         </div>
@@ -2021,7 +2021,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-neuron-click" hidden>Build <code>20260927-neuron-click</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-follow-link" hidden>Build <code>20260927-follow-link</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14556,6 +14556,15 @@ let bwSphere = null, bwSphereN = 0;
  *   `bwNeurone` : le neurone choisi, ou `null`. ⛔ `null` et `0` sont DEUX choses differentes ici —
  *   le neurone d indice 0 existe. Tout test doit comparer a `null`, jamais se fier a la verite. */
 let bwPos = null, bwNeurone = null;
+/* ⛔ `bwAretes` : les liens du dernier dessin, pour pouvoir en VISER un au clic.
+ *   `bwLien` : le lien choisi `{i, j, poids}`, ou `null`.
+ * ⛔⛔ SUIVRE UN LIEN, PAS SEULEMENT LE COLORER. Phil : « appuyer sur une connexion met en couleur
+ *     la connexion entiere, pour cibler une connexion et pouvoir LA SUIVRE ». Colorer un segment
+ *     dirait « celui-ci » et rien de plus. Ce qu on veut voir, c est OU LE SIGNAL CONTINUE : on
+ *     eclaire donc le lien choisi, ses DEUX neurones, ET les liens qui repartent de son arrivee —
+ *     ceux-la plus pales, pour qu on distingue « la connexion » de « la suite possible ». Sans ce
+ *     troisieme niveau, « suivre » n est qu un mot. */
+let bwAretes = null, bwLien = null;
 
 /** Tourne puis projette. ⛔ La perspective est FAIBLE (d = 3.2) : trop forte, les neurones du fond
  *  deviennent des points et on ne lit plus la forme ; trop faible, la sphere redevient un disque. */
@@ -14707,8 +14716,20 @@ function dessinerReseau(vu = null) {
     }
   }
   aretes.sort((a, b) => a.z - b.z);
+  bwAretes = aretes;   /* ⛔ on vise ce qui est DESSINE, jamais un calcul parallele qui deriverait */
+
+  /* ⛔ LA SUITE DU CHEMIN : les liens qui REPARTENT de l arrivee du lien choisi. C est ce qui
+   *   transforme « colorer un trait » en « suivre un signal ». Un Set pour que le test dans la
+   *   boucle reste immediat, quel que soit le nombre de liens. */
+  const suite = new Set();
+  if (bwLien) for (const e of aretes) if (e.i === bwLien.j) suite.add(e);
 
   for (const e of aretes) {
+    /* ⛔⛔ LE LIEN CHOISI SE PEINT PAR-DESSUS TOUT LE RESTE, donc en DERNIER. Le peindre dans
+     *     l ordre de profondeur le laisserait passer derriere un lien de l avant — on l aurait
+     *     « selectionne » sans pouvoir le voir. C est le meme principe que le tri : ce qui compte
+     *     n est pas la couleur, c est l ordre. */
+    if (bwLien && e.i === bwLien.i && e.j === bwLien.j) continue;
     const vif = actifs.has(e.i);
     /* ⛔ LA PROFONDEUR SE VOIT DANS L OPACITE : un lien du fond doit s effacer, sinon la sphere
      *   redevient plate. `prof` va de 0 (dos) a 1 (face). */
@@ -14720,9 +14741,38 @@ function dessinerReseau(vu = null) {
       ? 'hsl(' + th + ' ' + (vif ? 85 : 70) + '% ' + (vif ? 78 : 70) + '% / ' + a.toFixed(3) + ')'
       : 'hsl(38 ' + (vif ? 85 : 80) + '% ' + (vif ? 70 : 65) + '% / ' + (a * 0.8).toFixed(3) + ')';
     ctx.lineWidth = vif ? 0.7 + 0.8 * prof : 0.35 + 0.35 * prof;
+    /* ⛔ LA SUITE POSSIBLE, PLUS PALE QUE LE LIEN CHOISI ET PLUS VIVE QUE LE FOND. Trois niveaux,
+     *   pas deux : sans le niveau intermediaire on ne distingue plus « la connexion » de « ce qui
+     *   part ensuite », et l idee de suivre un chemin disparait. */
+    if (suite.has(e)) {
+      ctx.strokeStyle = 'hsl(190 90% 70% / 0.55)';
+      ctx.lineWidth = 1.1 + 0.7 * prof;
+    }
     ctx.beginPath();
     ctx.moveTo(pos[e.i][0], pos[e.i][1]);
     ctx.lineTo(pos[e.j][0], pos[e.j][1]);
+    ctx.stroke();
+  }
+
+  /* ⛔ LE LIEN CHOISI, EN DERNIER ET EN PLEIN : sa couleur dit son SIGNE, comme les autres liens —
+   *   vert s il excite, ambre s il inhibe. Une couleur de selection qui effacerait le signe ferait
+   *   perdre l information la plus utile du lien qu on vient justement de choisir. */
+  if (bwLien && pos[bwLien.i] && pos[bwLien.j]) {
+    ctx.strokeStyle = bwLien.poids >= 0 ? 'hsl(140 95% 66%)' : 'hsl(38 98% 64%)';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(pos[bwLien.i][0], pos[bwLien.i][1]);
+    ctx.lineTo(pos[bwLien.j][0], pos[bwLien.j][1]);
+    ctx.stroke();
+    /* ⛔ ET SES DEUX EXTREMITES SE VOIENT : un trait seul ne dit pas OU il commence. Le depart est
+     *   plein, l arrivee est un anneau — sinon on ne sait pas dans quel sens le signal va. */
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(pos[bwLien.i][0], pos[bwLien.i][1], 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pos[bwLien.j][0], pos[bwLien.j][1], 6, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -14825,7 +14875,7 @@ function dessinerReseau(vu = null) {
   if (plus) plus.addEventListener('click', () => zoomer(1.35));
   if (moins) moins.addEventListener('click', () => zoomer(1 / 1.35));
   if (remise) remise.addEventListener('click', () => {
-    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null;
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null;
     dessinerReseau(brainDernierVu);
     try { dessinerReseauDit(brainDernierVu); } catch (_) {}
   });
@@ -14859,7 +14909,7 @@ function dessinerReseau(vu = null) {
   /* ⛔ UNE SORTIE DE SECOURS : un double-tap remet la vue d origine. Sans elle, quelqu un perdu au
    *   fond du cerveau n a aucun moyen de revenir, et fermer le volet ne remet pas le zoom. */
   c.addEventListener('dblclick', () => {
-    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null;
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null;
     dessinerReseau(brainDernierVu);
   });
   /* ⛔⛔ VISER UN NEURONE. On cherche le plus proche du clic PARMI CEUX QUI SONT DESSINES, dans les
@@ -14871,6 +14921,34 @@ function dessinerReseau(vu = null) {
    *     faux positif garanti.
    *   ⛔ ET ON NE SELECTIONNE PAS PENDANT UN GLISSEMENT : tourner la sphere se termine par un
    *     relachement, qui ressemble a un clic. On exige donc que rien n ait bouge. */
+  /* ⛔⛔ LA DISTANCE D UN POINT A UN SEGMENT, PAS A UNE DROITE. Deux liens peuvent etre portes par
+   *     la MEME droite tout en etant loin l un de l autre : la distance a la droite les rendrait
+   *     indiscernables, et on selectionnerait un lien situe a l autre bout de la sphere. On projette
+   *     donc sur le segment et on BORNE la projection a [0, 1] — c est ce clamp qui fait toute la
+   *     difference entre « ce trait-la » et « un trait quelque part sur cette ligne ».
+   *   ⛔ ET UN SEGMENT DE LONGUEUR NULLE DIVISERAIT PAR ZERO : les deux extremites confondues
+   *     donnent `len2 = 0`, et `t` vaudrait NaN — qui traverse ensuite toutes les comparaisons sans
+   *     rien declencher. On retombe sur la distance au point. */
+  function lienLePlusProche(x, y, tol) {
+    if (!bwAretes || !bwPos) return null;
+    let meilleur = null, d2min = Infinity;
+    for (const e of bwAretes) {
+      const a = bwPos[e.i], b = bwPos[e.j];
+      if (!a || !b) continue;
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy;
+      let t = len2 > 0 ? ((x - a[0]) * dx + (y - a[1]) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const px = a[0] + t * dx, py = a[1] + t * dy;
+      const d2 = (px - x) * (px - x) + (py - y) * (py - y);
+      if (d2 < d2min) { d2min = d2; meilleur = e; }
+    }
+    /* ⛔ MEME REGLE QUE POUR LES NEURONES : « le plus proche » existe TOUJOURS. Sans seuil, un clic
+     *   dans le vide selectionnerait un lien lointain — un faux positif garanti, pas un cas rare. */
+    if (meilleur === null || d2min > tol * tol) return null;
+    return { i: meilleur.i, j: meilleur.j, poids: meilleur.poids };
+  }
+
   let depart = null;
   c.addEventListener('pointerdown', (e) => { depart = [e.clientX, e.clientY]; });
   c.addEventListener('click', (e) => {
@@ -14890,7 +14968,16 @@ function dessinerReseau(vu = null) {
       if (d2 < d2min) { d2min = d2; meilleur = i; }
     }
     const TOLERANCE = 14;   /* px de toile : assez large au doigt, assez etroit pour ne pas mentir */
-    bwNeurone = (meilleur !== null && d2min <= TOLERANCE * TOLERANCE) ? meilleur : null;
+    /* ⛔⛔ LE NEURONE PASSE AVANT LE LIEN, ET C EST OBLIGATOIRE. Huit liens partent de chaque
+     *     neurone : au point exact d un neurone, huit segments sont a distance ZERO. Si le lien
+     *     gagnait, viser un neurone deviendrait IMPOSSIBLE — on tomberait toujours sur un de ses
+     *     liens. On ne cherche donc un lien que si AUCUN neurone n est a portee. */
+    if (meilleur !== null && d2min <= TOLERANCE * TOLERANCE) {
+      bwNeurone = meilleur; bwLien = null;
+    } else {
+      bwNeurone = null;
+      bwLien = lienLePlusProche(x, y, TOLERANCE);
+    }
     dessinerReseau(brainDernierVu);
     try { dessinerReseauDit(brainDernierVu); } catch (_) {}
   });
@@ -14947,6 +15034,20 @@ function dessinerReseauDit(vu) {
   if (bwNeurone !== null && bwNeurone >= 0 && bwNeurone < n) {
     const allume = Array.isArray(vu.indices) && vu.indices.includes(bwNeurone);
     lignes.push(['◎ neuron #' + bwNeurone, allume ? 'firing now' : 'quiet on this beat']);
+  }
+  /* ⛔⛔ LE LIEN CHOISI SE LIT, ET IL DIT QUATRE CHOSES QU UNE COULEUR NE PEUT PAS DIRE : d ou a ou,
+   *     s il EXCITE ou INHIBE, avec quelle force, et COMBIEN de chemins repartent ensuite. C est ce
+   *     dernier chiffre qui rend « suivre » possible : sans lui on voit des traits pales sans
+   *     savoir s il y en a deux ou dix.
+   *   ⛔ ET LE SENS EST DIT EN TOUTES LETTRES (#i -> #j) : un trait n a pas de direction visible,
+   *     et sans elle on ne sait pas si l on remonte ou si l on descend le chemin. */
+  if (bwLien && brainEtat && brainEtat.c && brainEtat.c.liens) {
+    const l = brainEtat.c.liens;
+    const sortants = Array.isArray(l[bwLien.j]) ? l[bwLien.j].length : 0;
+    const p = Number(bwLien.poids);
+    lignes.push(['⇢ link #' + bwLien.i + ' → #' + bwLien.j,
+      (p >= 0 ? 'excites' : 'inhibits') + (Number.isFinite(p) ? ' · ' + p.toFixed(3) : '')]);
+    lignes.push(['↳ carries on into', sortants + ' link' + (sortants === 1 ? '' : 's')]);
   }
   liste.innerHTML = lignes.map(([k, v]) =>
     '<li><span>' + enTexte(k) + '</span><b>' + enTexte(String(v)) + '</b></li>').join('');

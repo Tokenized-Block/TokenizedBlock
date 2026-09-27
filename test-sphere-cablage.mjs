@@ -136,6 +136,50 @@ v('⛔⛔ `bwNeurone` : `null` et `0` sont DEUX choses differentes', () => {
     'l etat du neurone choisi n est plus ecrit : la couleur seule ne se lit pas');
 });
 
+v('⛔⛔ viser un LIEN : distance au SEGMENT, et le neurone passe en premier', () => {
+  /* ⛔⛔ DISTANCE AU SEGMENT, PAS A LA DROITE. Deux liens peuvent etre portes par la MEME droite
+   *     tout en etant loin l un de l autre : la distance a la droite les rendrait indiscernables,
+   *     et on selectionnerait un lien a l autre bout de la sphere. C est le CLAMP de la projection
+   *     sur [0, 1] qui fait la difference entre « ce trait-la » et « un trait sur cette ligne ». */
+  assert.ok(/t = Math\.max\(0, Math\.min\(1, t\)\)/.test(nu),
+    'la projection sur le lien n est plus bornee au segment : on viserait des liens lointains');
+  /* ⛔ UN SEGMENT DE LONGUEUR NULLE DIVISERAIT PAR ZERO et rendrait NaN — qui traverse ensuite
+   *   toutes les comparaisons sans rien declencher. */
+  assert.ok(/len2 > 0 \?/.test(nu), 'un lien de longueur nulle diviserait par zero et rendrait NaN');
+  /* ⛔⛔ LE NEURONE PASSE AVANT LE LIEN, ET C EST OBLIGATOIRE : huit liens partent de chaque
+   *     neurone, donc au point exact d un neurone huit segments sont a distance ZERO. Si le lien
+   *     gagnait, viser un neurone deviendrait IMPOSSIBLE. */
+  const iN = nu.indexOf('bwNeurone = meilleur; bwLien = null;');
+  const iL = nu.indexOf('bwLien = lienLePlusProche(');
+  assert.ok(iN !== -1 && iL !== -1 && iN < iL,
+    'le lien est cherche avant le neurone : viser un neurone deviendrait impossible');
+  /* ⛔ ET LE SEUIL VAUT AUSSI POUR LES LIENS : « le plus proche » existe TOUJOURS. */
+  assert.ok(/d2min > tol \* tol\) return null/.test(nu),
+    'la recherche de lien n a plus de seuil : un clic dans le vide en trouverait un');
+});
+
+v('⛔⛔ SUIVRE un lien : la suite du chemin est montree ET comptee', () => {
+  /* ⛔⛔ COLORER UN SEGMENT DIRAIT « celui-ci » ET RIEN DE PLUS. Phil a demande de pouvoir SUIVRE la
+   *     connexion. Il faut donc un TROISIEME niveau : le lien choisi, ses deux neurones, et les
+   *     liens qui REPARTENT de son arrivee. Sans ce niveau, « suivre » n est qu un mot. */
+  assert.ok(/const suite = new Set\(\);/.test(nu), 'la suite du chemin n est plus calculee');
+  assert.ok(/e\.i === bwLien\.j/.test(nu),
+    'la suite ne part plus de l ARRIVEE du lien : on montrerait un voisinage, pas un chemin');
+  /* ⛔ ET ELLE EST COMPTEE EN TOUTES LETTRES : sans le nombre, on voit des traits pales sans savoir
+   *   s il y en a deux ou dix — donc sans savoir si le chemin se resserre ou se disperse. */
+  assert.ok(/carries on into/.test(nu), 'le nombre de chemins qui continuent n est plus ecrit');
+  /* ⛔ LE SENS EST DIT : un trait n a pas de direction visible, et sans elle on ne sait pas si l on
+   *   remonte ou si l on descend le chemin. */
+  assert.ok(/link #' \+ bwLien\.i \+ ' → #' \+ bwLien\.j/.test(nu),
+    'le sens du lien n est plus ecrit : on ne saurait pas dans quel sens le signal va');
+  /* ⛔⛔ ET LE LIEN CHOISI SE PEINT EN DERNIER : dans l ordre de profondeur il passerait derriere un
+   *     lien de l avant — selectionne sans etre visible. */
+  const iSaut = nu.indexOf("if (bwLien && e.i === bwLien.i && e.j === bwLien.j) continue;");
+  const iPlein = nu.indexOf('if (bwLien && pos[bwLien.i] && pos[bwLien.j])');
+  assert.ok(iSaut !== -1 && iPlein !== -1 && iSaut < iPlein,
+    'le lien choisi n est plus peint apres les autres : il pourrait disparaitre derriere eux');
+});
+
 v('⛔⛔ le block REGARDE n est jamais fige', () => {
   /* ⛔⛔ `.loin` met `animation-play-state: paused` sur le cube ET ses satellites, et remplace le
    *     volume par une face plate. C est juste pour un block lointain — mais le block CENTRE ou
@@ -233,7 +277,7 @@ v('⛔ le raster 2D des battements n a pas ete touche', () => {
   assert.ok(/dessinerRaster\(\);/.test(nu), 'le raster n est plus dessine a chaque battement');
 });
 
-assert.equal(n, 13, 'compte de cas inattendu : ' + n);
+assert.equal(n, 15, 'compte de cas inattendu : ' + n);
 console.log('ok sphere-cablage — ' + n + ' cas.');
 console.log('   Sphere deterministe, tri par profondeur, geste au doigt, panneau qui ne dit que des');
 console.log('   mesures, et le raster 2D intact.');
