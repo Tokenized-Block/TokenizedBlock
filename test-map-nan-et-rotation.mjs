@@ -171,14 +171,27 @@ v('⛔⛔ le block au CENTRE tourne plus large — mais JAMAIS en tour complet',
    *   ⇒ Le block regarde tourne PLUS LARGE (34 degres au lieu de 14), sur ses trois axes, et reste
    *     loin des 90 degres ou la forme se casse. */
   const cube = readFileSync(new URL('./cube3d.js', import.meta.url), 'utf8');
-  const m = cube.match(/\.bloc\.centre\{--c3amp:(\d+)deg\}/);
-  assert.ok(m, 'le block au centre n a plus son amplitude propre : il tournerait comme les autres');
-  const amp = Number(m[1]);
-  const base = Number((cube.match(/--c3amp:(\d+)deg/) || [])[1]);
-  assert.ok(amp > base, 'l amplitude du centre (' + amp + ') ne depasse plus celle des autres (' + base + ')');
-  assert.ok(amp < 90,
-    'amplitude de ' + amp + ' degres : passe 90, une face vue par la tranche devient un TRAIT — '
-    + 'le tour complet a deja ete rejete TROIS fois, ne pas le remettre');
+  /* ⛔⛔ UNE OSCILLATION N EST PAS UNE ROTATION, ET CE CAS A ETE REECRIT POUR CA. Il exigeait une
+   *     amplitude BORNEE sous 90 degres, parce que le tour complet avait ete rejete trois fois.
+   *     Mais `c3tourne` va de -amp a +amp : le cube revient TOUJOURS face a la camera. Quelle que
+   *     soit l amplitude, il ne tourne pas — il se balance. Phil : "le block reste en face, il
+   *     tourne pas", puis explicitement : "toute liberte de bouger, si les brains veulent du chaos
+   *     pas de probleme".
+   *   ⛔ ET LE BRIDAGE ETAIT ESTHETIQUE, PAS UN COUT : un tour complet coute EXACTEMENT le meme
+   *     prix qu une oscillation — meme animation, meme nombre d elements composes. Il n y avait
+   *     donc aucun argument de performance a lui opposer.
+   *   ⇒ Ce cas verifie maintenant le TOUR COMPLET, sur l axe propre de chaque block. */
+  assert.ok(/@keyframes c3libre\{/.test(cube),
+    'le tour complet a disparu : les cubes se contenteraient d osciller et resteraient face a la camera');
+  assert.ok(/from\{transform:rotate3d\(var\(--vx\),var\(--vy\),var\(--vz\),0deg\)\}/.test(cube)
+    && /to\{transform:rotate3d\(var\(--vx\),var\(--vy\),var\(--vz\),360deg\)\}/.test(cube),
+    'le tour n est plus complet (0 -> 360) ou n utilise plus l axe propre du block');
+  assert.ok(/\.bloc:not\(\.loin\) \.c3r\{animation-name:c3libre/.test(cube),
+    'le tour complet n est plus applique aux blocks en volume');
+  /* ⛔ LA LIMITE QUI RESTE EST CELLE DE PHIL : « sans depasser les limites de leur univers ». Elle
+   *   porte sur la POSITION, pas sur la rotation — le rebond garde chaque block dans le cube. */
+  assert.ok(/Math\.abs\(h\.wx\) > SX - m/.test(map),
+    'le rebond a disparu : un block pourrait sortir des limites de son univers');
   /* ⛔ ET SES SATELLITES TOURNENT : c est la seconde moitie de la « double rotation » demandee. */
   assert.ok(/\.bloc\.centre \.c3m\{display:block\}/.test(cube),
     'le block au centre peut perdre ses satellites : la double rotation ne serait qu une rotation');

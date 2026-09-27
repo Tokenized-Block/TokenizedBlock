@@ -176,6 +176,23 @@ export const CUBE3D_CSS = `
 .bloc.centre{--c3amp:34deg}
 .bloc.centre .c3m{display:block}
 .bloc.centre .c3r,.bloc.centre .c3o,.bloc.centre .c3m{animation-play-state:running}
+/* ⛔⛔ UNE OSCILLATION N EST PAS UNE ROTATION, ET C EST CA QUE PHIL VOYAIT.
+ *     c3tourne va de -amp a +amp : le cube revient TOUJOURS face a la camera. Quelle que soit
+ *     l amplitude, il ne tourne pas — il se balance. "le block reste en face, il tourne pas".
+ *   ⇒ c3libre fait un TOUR COMPLET sur l axe propre du block (--vx/--vy/--vz, tire de son
+ *     adresse) : chaque block tourne dans le sens et sur l axe qu il veut, sans jamais repasser
+ *     par la meme pose au meme moment que son voisin.
+ *   ⛔ LE BRIDAGE A 14 DEGRES ETAIT ESTHETIQUE, PAS UNE QUESTION DE COUT : un tour complet coute
+ *     EXACTEMENT le meme prix qu une oscillation — meme animation, meme nombre d elements
+ *     composes. Il n y a donc aucun argument de performance contre, et Phil leve explicitement la
+ *     contrainte : "toute liberte de bouger, si les brains veulent du chaos pas de probleme".
+ *   ⛔ ET LA LIMITE QUI RESTE EST CELLE QU IL A NOMMEE : "sans depasser les limites de leur
+ *     univers". Elle porte sur la POSITION, pas sur la rotation — le rebond de map3d.js garde
+ *     chaque block dans le cube. Tourner librement ne fait sortir personne de sa boite. */
+@keyframes c3libre{
+  from{transform:rotate3d(var(--vx),var(--vy),var(--vz),0deg)}
+  to{transform:rotate3d(var(--vx),var(--vy),var(--vz),360deg)}}
+.bloc:not(.loin) .c3r{animation-name:c3libre;animation-timing-function:linear}
 /* mini-cube satellite, en volume, qui tourne sur lui-meme */
 /* ⛔ LES SATELLITES GARDENT LEUR TOUR COMPLET. Ils partageaient l animation du gros cube : borner
  *    l angle la aussi les aurait figes, alors que le defaut signale ne venait QUE du cube
