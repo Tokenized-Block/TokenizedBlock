@@ -1303,9 +1303,20 @@ details[open] > summary::before{transform:rotate(90deg)}
         <li><b>Create</b> <span>its face and brain are engraved</span></li>
         <li><b>0.001 ETH, once</b> <span>brings it to life</span></li>
         <li><b>Its market opens</b> <span>it lives on the map</span></li>
-        <!-- ⛔ LE CREATEUR EST PAYE, ET IL DOIT LE SAVOIR AVANT DE PAYER. Aucun pourcentage a
-             l ecran : regle de Phil. Le detail vit dans le plan de lancement, relu depuis la chaine. -->
-        <li><b>And it pays you</b> <span>every trade on your block sends you a share</span></li>
+        <!-- ⛔⛔ CETTE LIGNE DISAIT « And it pays you — every trade on your block sends you a share ».
+             C ETAIT FAUX, ET C ETAIT SERVI EN PRODUCTION, SUR DE L ARGENT.
+             Mesure du 2026-09-26, LUE sur la chaine et non deduite : le hook V8 — le seul que la
+             naissance accepte sur mainnet — emet `ToutAuWallet` (topic grave dans son bytecode).
+             QUATRE emissions en 14 jours, et QUATRE hausses correspondantes du solde du wallet au
+             bloc EXACT. Le frais part a 100 %. `dime()` rend toujours 20, mais c est un GETTER
+             MORT : la repartition ne le lit plus.
+             ⛔ LA PHRASE AVAIT ETE ECRITE POUR LE V5, qui versait vraiment pendant le swap — le
+             commentaire du plan de lancement le dit encore. Le hook a change, le texte est reste.
+             Une promesse ecrite pour une ancienne configuration ne la suit pas quand elle change,
+             et ici elle portait sur le revenu de quelqu un d autre.
+             ⛔ AUCUN POURCENTAGE ET AUCUNE ADRESSE A L ECRAN : la regle tient toujours. On ne dit
+             pas ou va le frais ; on cesse seulement d affirmer qu il revient. -->
+        <li><b>And it has a market</b> <span>every trade there pays a fee that keeps it running — that fee does not come back to you today</span></li>
       </ol>
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
@@ -2021,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-2d-loin-3d-pres" hidden>Build <code>20260927-2d-loin-3d-pres</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-verite-et-centre" hidden>Build <code>20260927-verite-et-centre</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9824,8 +9835,19 @@ function peindrePlan(plan, adr) {
      * ⛔ AUCUN POURCENTAGE : regle de Phil. Ce qui compte est QU IL est paye et COMMENT.
      * ⛔ ET LES DEUX CAS SONT DITS : le V5 verse pendant le swap quand la devise l accepte, et met
      *    de cote quand elle refuse. « C est automatique » serait faux ; « tu reclameras » aussi. */
-    ...(avecHook ? ['Every trade here pays you a share, sent to you as it happens — or set aside for '
-      + 'you if the token refuses the transfer, so one broken token can never freeze the market.'] : []),
+    /* ⛔⛔ CETTE LIGNE PROMETTAIT AU CREATEUR UNE PART DE CHAQUE ECHANGE. ELLE ETAIT FAUSSE, ET
+     *     SERVIE EN PRODUCTION. Le commentaire juste au-dessus le trahit lui-meme : il parle du
+     *     V5, « qui verse pendant le swap ». Le hook accepte sur mainnet est le V8, et son bytecode
+     *     porte `ToutAuWallet` — 100 % au wallet. Mesure du 2026-09-26 : quatre emissions en 14
+     *     jours, quatre hausses du solde du wallet au bloc exact, zero versement au createur.
+     *   ⛔ ET LE PIEGE ETAIT DANS LA CONDITION : `avecHook` est vrai des qu un hook A NOUS est
+     *     present — elle ne distingue PAS le V5 du V8. La phrase suivait donc le hook sans jamais
+     *     verifier CE QU IL FAIT. Une garde vraie qui couvre la mauvaise moitie, encore une fois.
+     *   ⇒ On dit ce qui est verifiable aujourd hui : le frais est pris DANS la transaction, il ne
+     *     s ajoute pas par-dessus, et il ne revient pas au createur. Aucun pourcentage, aucune
+     *     adresse — la regle tient. */
+    ...(avecHook ? ['A fee is taken inside each trade here — never added on top, and it does not '
+      + 'come back to you today.'] : []),
     ...(plan.legacyUpgrade ? ['Opens next to its outside market; only trades here pay its creator.'] : []),
     ...feeLignes,
     ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),

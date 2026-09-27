@@ -163,6 +163,29 @@ v('⛔⛔ VOLUME et SATELLITES ont des seuils SEPARES — deux couts, deux regle
     'la classe `sobre` n a aucune regle CSS : elle serait posee sans rien couper');
 });
 
+v('⛔⛔ le block au CENTRE tourne plus large — mais JAMAIS en tour complet', () => {
+  /* ⛔⛔ LE TOUR COMPLET A DEJA ETE ESSAYE ET REJETE TROIS FOIS, et c est ecrit dans cube3d.js
+   *     au-dessus de --c3amp : passe 90 degres, une face vue par la tranche devient un TRAIT et le
+   *     cube se lit comme un parallelogramme. Refaire ce qui a ete refuse trois fois serait le
+   *     contraire d ecouter — ce test existe pour empecher la rechute.
+   *   ⇒ Le block regarde tourne PLUS LARGE (34 degres au lieu de 14), sur ses trois axes, et reste
+   *     loin des 90 degres ou la forme se casse. */
+  const cube = readFileSync(new URL('./cube3d.js', import.meta.url), 'utf8');
+  const m = cube.match(/\.bloc\.centre\{--c3amp:(\d+)deg\}/);
+  assert.ok(m, 'le block au centre n a plus son amplitude propre : il tournerait comme les autres');
+  const amp = Number(m[1]);
+  const base = Number((cube.match(/--c3amp:(\d+)deg/) || [])[1]);
+  assert.ok(amp > base, 'l amplitude du centre (' + amp + ') ne depasse plus celle des autres (' + base + ')');
+  assert.ok(amp < 90,
+    'amplitude de ' + amp + ' degres : passe 90, une face vue par la tranche devient un TRAIT — '
+    + 'le tour complet a deja ete rejete TROIS fois, ne pas le remettre');
+  /* ⛔ ET SES SATELLITES TOURNENT : c est la seconde moitie de la « double rotation » demandee. */
+  assert.ok(/\.bloc\.centre \.c3m\{display:block\}/.test(cube),
+    'le block au centre peut perdre ses satellites : la double rotation ne serait qu une rotation');
+  assert.ok(/classList\.toggle\('centre', centre\)/.test(map),
+    'la classe `centre` n est plus posee : la regle CSS ne s appliquerait a personne');
+});
+
 v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
   /* ⛔ SANS BORNE, un block tres lointain bondirait a la taille d un proche et MENTIRAIT sur sa
    *   distance. Le plancher rend lisible ; il ne doit pas rendre faux. */
@@ -212,7 +235,7 @@ v('⛔ la tuile porte toujours sa POSITION — le retrait ne doit pas l avoir em
     'la tuile ne porte plus son echelle : la perspective serait perdue');
 });
 
-assert.equal(n, 11, 'compte de cas inattendu : ' + n);
+assert.equal(n, 12, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');

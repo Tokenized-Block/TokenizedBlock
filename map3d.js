@@ -442,6 +442,11 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
       const sobre = !regarde && !petit && px < PX_SATELLITES;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
       if (sobre !== h._sobre) { h.el.classList.toggle('sobre', sobre); h._sobre = sobre; }
+      /* ⛔ LE BLOCK AU CENTRE PORTE SA PROPRE CLASSE : `cube3d.js` y elargit l amplitude de rotation
+       *   (34 degres au lieu de 14) et garantit ses satellites. C est le seul block qu on regarde
+       *   vraiment — il doit etre le plus vivant, et il ne doit dependre d aucun seuil de taille. */
+      const centre = !!h.centreFixe;
+      if (centre !== h._centre) { h.el.classList.toggle('centre', centre); h._centre = centre; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       /* ⛔⛔ LA TUILE NE PORTE QUE LA POSITION ET L ECHELLE — PLUS AUCUNE ROTATION, ET C EST UNE
        *     REGRESSION QUE J AI CAUSEE PUIS RETIREE LE 2026-09-27.

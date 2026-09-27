@@ -160,6 +160,22 @@ export const CUBE3D_CSS = `
  *   ⛔ AUCUN ACCENT GRAVE DANS CE BLOC : on est A L INTERIEUR du gabarit CUBE3D_CSS. */
 .bloc.sobre .c3m{display:none}
 .bloc.sobre .c3o{animation-play-state:paused}
+/* ⛔⛔ LE BLOCK AU CENTRE TOURNE PLUS LARGE — ET SURTOUT PAS EN TOUR COMPLET.
+ *     Phil : "le block centre, donne-lui la capacite de tourner sur place sur les differents axes
+ *     x y z, et les mini blocks tournent aussi autour, double rotation".
+ *   ⛔ LE TOUR COMPLET A DEJA ETE ESSAYE ET REJETE TROIS FOIS : c est ecrit au-dessus de --c3amp.
+ *     Passe 90 degres, une face vue par la tranche devient un TRAIT, et le cube se lit comme un
+ *     parallelogramme. Refaire ce qui a ete refuse trois fois serait le contraire d ecouter.
+ *   ⇒ On elargit l amplitude pour le SEUL block regarde : 34 degres au lieu de 14. Le mouvement
+ *     devient franc sur les trois axes — l axe lui-meme vient deja de l adresse, via
+ *     --vx/--vy/--vz — et on reste LOIN des 90 degres ou la forme se casse.
+ *   ⛔ ET SES SATELLITES TOURNENT, QUOI QU IL ARRIVE : c est la seconde moitie de la "double
+ *     rotation" demandee. Le block au centre ne doit jamais tomber dans le regime sobre qui les
+ *     coupe — cette regle le garantit meme si un seuil bouge plus tard.
+ *   ⛔ AUCUN ACCENT GRAVE DANS CE BLOC : on est A L INTERIEUR du gabarit CUBE3D_CSS. */
+.bloc.centre{--c3amp:34deg}
+.bloc.centre .c3m{display:block}
+.bloc.centre .c3r,.bloc.centre .c3o,.bloc.centre .c3m{animation-play-state:running}
 /* mini-cube satellite, en volume, qui tourne sur lui-meme */
 /* ⛔ LES SATELLITES GARDENT LEUR TOUR COMPLET. Ils partageaient l animation du gros cube : borner
  *    l angle la aussi les aurait figes, alors que le defaut signale ne venait QUE du cube
