@@ -127,9 +127,21 @@ v('⛔⛔ le seuil de VOLUME doit etre ATTEIGNABLE — sinon il eteint tout en s
   const mVol = map.match(/PX_VOLUME = (\d+)/);
   const mPlancher = map.match(/const PX_MIN = (\d+);/);
   assert.ok(mVol && mPlancher, 'le seuil de volume ou le plancher de taille a disparu');
-  assert.ok(Number(mVol[1]) <= Number(mPlancher[1]),
-    'PX_VOLUME (' + mVol[1] + ') depasse le plancher PX_MIN (' + mPlancher[1] + ') : comme tous les '
-    + 'blocks sont pousses AU plancher, aucun n atteindrait le volume — exactement le defaut du seuil a 64 px');
+  /* ⛔⛔ CETTE ASSERTION A ETE RETOURNEE, ET C EST MOI QUI AVAIS LA REGLE A L ENVERS.
+   *     J exigeais PX_VOLUME <= PX_MIN, en croyant garantir que le seuil soit atteignable. C etait
+   *     FAUX et ca a coute cher : le plancher epingle presque tous les blocks a PX_MIN (mesure :
+   *     p25 = mediane = p75 = 20). Donc avec PX_VOLUME <= PX_MIN, c est le PLANCHER qui fait passer
+   *     TOUT LE MONDE en 3D d un coup — 49 blocks sur 58, ~300 elements composes en continu.
+   *     Phil : « ca rame de trop maintenant ».
+   *   ⇒ L INVARIANT CORRECT EST L INVERSE : PX_MIN < PX_VOLUME. Le plancher rend les lointains
+   *     LISIBLES, il ne doit jamais les rendre VOLUMINEUX. C est la seule facon que la PROXIMITE
+   *     decide du passage en 3D — le comportement demande : loin = 2D, proche = 3D qui tourne.
+   *   ⛔ LES DEUX ERREURS ONT LA MEME FORME : un seuil qui ne depend plus de ce qu il est cense
+   *     mesurer. A 64 px il ne se declenchait jamais ; sous le plancher il se declenchait toujours. */
+  assert.ok(Number(mPlancher[1]) < Number(mVol[1]),
+    'PX_MIN (' + mPlancher[1] + ') n est plus STRICTEMENT sous PX_VOLUME (' + mVol[1] + ') : le '
+    + 'plancher pousserait tous les blocks en 3D d un coup, la proximite ne deciderait plus rien, '
+    + 'et la map ramerait — c est exactement ce qui est arrive le 2026-09-27');
 });
 
 v('⛔⛔ VOLUME et SATELLITES ont des seuils SEPARES — deux couts, deux regles', () => {

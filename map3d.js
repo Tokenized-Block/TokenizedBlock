@@ -387,7 +387,15 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
        *   ⛔ ET LA HAUSSE EST BORNEE A 2,5x : sans cette borne, un block tres lointain bondirait a
        *     la taille d un proche et mentirait sur sa distance. La profondeur reste portee par le
        *     `z-index`, qui vient de `zc` et que ceci ne touche pas. */
-      const PX_MIN = 20;
+      /* ⛔⛔ LE PLANCHER A ETE BAISSE DE 20 A 13, ET C EST UNE CORRECTION DE MON PROPRE CORRECTIF.
+       *     A 20 px il epinglait presque TOUS les blocks a la MEME taille : la mesure donnait
+       *     p25 = 20, mediane = 20, p75 = 20. Il ne rendait plus les lointains lisibles, il
+       *     EFFACAIT le degrade de profondeur — et du coup se rapprocher d un block ne le
+       *     grossissait plus assez pour qu il passe en 3D.
+       *   ⇒ Un plancher doit relever le PLUS PETIT, pas aplatir toute la distribution. A 13 px un
+       *     block lointain reste visible et cliquable a la limite, tout en laissant la perspective
+       *     faire son travail : c est elle qui doit decider qui est proche. */
+      const PX_MIN = 13;
       let k = Math.min(2.2, p.k * 1.8);
       if (h.t > 0 && h.t * k < PX_MIN) k = Math.min(2.2, Math.max(k, Math.min(PX_MIN / h.t, k * 2.5)));
       /* un cube de moins de 64 px a l ecran ne tourne pas et n a pas de satellites : invisible a cette taille, et cher */
@@ -416,7 +424,19 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
        *   ⛔ UN SEUL SEUIL POUR DEUX DEPENSES, C EST PAYER LE PRIX DU PLUS CHER SUR LES DEUX. C est
        *     la meme erreur que j ai commise ce matin en reutilisant `petit` pour la rotation : une
        *     regle juste, appliquee a deux questions qui n ont pas le meme cout. */
-      const PX_VOLUME = 20, PX_SATELLITES = 40;
+      /* ⛔⛔ J AVAIS LA REGLE A L ENVERS, ET PHIL A PAYE LES DEUX ERREURS SUCCESSIVES.
+       *     1er etat : seuil unique a 64 px -> INATTEIGNABLE, 0 block sur 58 en volume, « on dirait
+       *       une image ».
+       *     2e etat (le mien) : PX_VOLUME = 20 -> 49 blocks sur 58 en volume complet, ~300 elements
+       *       composes en continu -> « ca rame de trop maintenant ».
+       *   ⇒ LES DEUX ONT LA MEME CAUSE : le PLANCHER de taille epingle presque tout a PX_MIN. Tant
+       *     que PX_VOLUME <= PX_MIN, c est le PLANCHER qui decide du passage en 3D — et il le
+       *     decide pour TOUT LE MONDE, d un coup. La proximite ne joue plus aucun role.
+       *   ⇒ L INVARIANT CORRECT EST L INVERSE DE CELUI QUE J AVAIS ECRIT : PX_MIN < PX_VOLUME.
+       *     Le plancher rend les lointains LISIBLES ; il ne doit jamais les rendre VOLUMINEUX.
+       *     C est ce qui rend le comportement demande possible : loin = 2D bon marche, on se
+       *     rapproche = le cube prend du volume et tourne. */
+      const PX_VOLUME = 34, PX_SATELLITES = 56;
       const px = h.t * k;
       const petit = !regarde && px < PX_VOLUME;
       const sobre = !regarde && !petit && px < PX_SATELLITES;
