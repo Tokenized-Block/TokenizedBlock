@@ -115,9 +115,27 @@ const borne01 = (x, diviseur) => Math.max(0, Math.min(1, (Number(x) || 0) / divi
  * ⛔ TROIS ETATS, PAS DEUX : `vie` a `null` veut dire « pas de marche ou pas lu », et ce n est pas zero.
  * ⛔ `mort` n est vrai QUE s il vaut strictement `true` : un solde non lu (null, undefined) ne tue pas.
  */
+/* ⛔⛔ LE REVEIL DES DORMEURS — Phil, 2026-09-27 : « fais reveiller les dormeurs au moins une fois
+ *     toutes les 24 h, aligne-toi au fuseau horaire de la ou l app est ouverte ».
+ *     Un block DORMANT ne recoit que `reposSansMarche` (0,15) : son potentiel tourne autour de 1,1
+ *     et il tire TRES rarement. Vu de l exterieur il semble eteint, alors qu il est seulement calme.
+ *   ⇒ Une fois par JOUR LOCAL DU VISITEUR, il recoit une impulsion bornee : il tire, on le voit
+ *     vivre, et c est tout.
+ *   ⛔⛔ CE N EST PAS UNE ACTIVITE DE MARCHE, ET CA NE DOIT JAMAIS SE LIRE AINSI. L impulsion
+ *       n invente ni prix, ni echange, ni detenteur : elle n entre PAS dans `nouveau`, qui porte ce
+ *       qui est REELLEMENT arrive au block sur la chaine. Un reveil qui gonflerait `nouveau` ferait
+ *       passer le block d ENDORMI a EXCITE, et l ecran annoncerait une agitation qui n a pas eu
+ *       lieu. C est la frontiere a ne pas franchir.
+ *   ⛔ ELLE EST BORNEE COMME LE RESTE : 0,9, donc SOUS le seuil de 1 a elle seule. Elle s ajoute au
+ *     courant de repos pour faire passer le neurone au-dessus — elle ne force rien toute seule.
+ *   ⚠️ SA BORNE HONNETE : « une fois par jour » se compte DANS LE NAVIGATEUR de celui qui regarde.
+ *     Deux personnes dans deux fuseaux verront donc le reveil a deux moments differents — et c est
+ *     exactement ce qui est demande : l app s aligne sur la ou elle est ouverte. */
+export const REVEIL_IMPULSION = 0.9;
+
 export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, detenteurs = 0, part = 0,
   scelle = null, mort = null, etatVie = null, gmAvant = null, messagesAvant = null, detenteursAvant = null,
-  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null, role = null } = {}) {
+  achats = 0, achatsAvant = null, ventes = 0, ventesAvant = null, role = null, reveil = false } = {}) {
   /* ⛔⛔ LE CERVEAU S ADAPTE A SON ROLE (Phil, 2026-09-14) : multiplicateurs de `metiers.js`, neutres sans role */
   const s = sensibiliteDe(role);
   /* ⛔⛔ L HUMEUR SUR LE NOUVEAU (Phil, 2026-09-13, apres mesure : TBLOCK et WOFI EXCITE 40/40 battements a prix stable,
@@ -162,6 +180,10 @@ export function courant({ vie = null, vieAvant = null, gm = 0, messages = 0, det
       + nouveaux.detenteurs * 0.5 * s.detenteur + nouveaux.achats * 0.5 * s.achat),
     /* la pression vendeuse NOUVELLE, 0..1 : plus de ventes que d achats depuis le battement precedent */
     pression: Math.min(1, Math.max(0, nouveaux.ventes - nouveaux.achats) * 0.5 * s.vente),
+    /* ⛔ LE REVEIL VOYAGE A PART, ET C EST TOUT L INTERET : il ne touche NI `nouveau` NI `pression`,
+     *   donc il ne peut pas se faire passer pour un evenement de marche. Il n allume que le
+     *   courant, le temps d un battement. */
+    reveil: reveil === true,
     sensibilite: s,
     role: typeof role === 'string' && role ? role : null,
     nouveaux,
@@ -192,7 +214,10 @@ export function pas(etat, faits = {}) {
       const bruit = suivant() * PARAMETRES.bruitMax;
       /* ⛔ LE COURANT DE REPOS SEPARE « ENDORMI » DE « ETEINT » : avec 0,15 et un bruit jusqu a 0,10, le
        * potentiel tourne autour de 1,1 — il tire RAREMENT. La nourriture s ajoute, avec ou sans marche. */
-      p[i] += (f.aMarche ? 0.25 + f.taille * 0.5 * f.sensibilite.taille : PARAMETRES.reposSansMarche)
+      /* ⛔ LE REVEIL S AJOUTE AU COURANT DE REPOS, IL NE LE REMPLACE PAS : un dormeur reveille est
+       *   un dormeur qui tire une fois, pas un block qui a soudain un marche. */
+      p[i] += (f.reveil ? REVEIL_IMPULSION : 0)
+        + (f.aMarche ? 0.25 + f.taille * 0.5 * f.sensibilite.taille : PARAMETRES.reposSansMarche)
         + f.delta * 0.4 * f.sensibilite.delta + miam * 0.6 + bruit
         /* un evenement NOUVEAU (achat, vente, transfert, detenteur, message) secoue le reseau le battement ou il arrive */
         + (f.nouveau + f.pression) * 0.8;
