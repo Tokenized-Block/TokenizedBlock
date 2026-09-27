@@ -185,3 +185,65 @@ export async function creerSession({ env = {}, adresse, actif = 'ETH', fetchImpl
     return { etat: 'NON_MESURE', pourquoi: 'session call failed: ' + String((e && e.message) || e).slice(0, 120) };
   }
 }
+
+/** Le CHEMIN CDP du catalogue d achat. Sorti en constante parce que le JWT le signe : une
+ *  divergence entre le chemin signe et le chemin appele rend un 401 muet, et on chercherait le
+ *  defaut dans la cle. Voir `cdp-jwt.js` — `uri` = METHODE + hote + chemin. */
+export const CHEMIN_OPTIONS_ACHAT = '/onramp/v1/buy/options';
+
+/**
+ * Demande a Coinbase CE QU IL SAIT VENDRE, et sur quels reseaux.
+ *
+ * ⛔⛔ POURQUOI CETTE ROUTE EXISTE (Phil, 2026-09-27) : « le rail doit se faire fiat onramp Coinbase
+ *     puis Block tokenise OU ACTION TOKENISEE direct ». La question ne se tranche pas par
+ *     raisonnement — elle se demande a Coinbase. Trois chemins avaient echoue avant celui-ci : la
+ *     page d achat exige une connexion au compte (refusee), `buy/options` rend 401 sans JWT, et
+ *     `pay.coinbase.com/api/v1/buy/options` exige un app-id absent du depot.
+ *
+ * ⛔ CE MODULE NE MANIPULE PAS LE SECRET. Le JWT arrive deja signe, comme pour `creerSession` : la
+ *   cle ne doit jamais se trouver sur le chemin d une erreur journalisee.
+ * ⛔ ET LA QUERY N EST PAS DANS LE JWT. `uri` ne signe que METHODE + hote + CHEMIN ; ajouter le
+ *   `?country=` a la chaine signee produirait un 401 que rien n expliquerait.
+ *
+ * ⚠️ CE QU ELLE NE PROUVE PAS : qu un achat aboutisse. Elle dit ce que le catalogue CONTIENT.
+ * @returns {Promise<{etat:string, actifs?:object[], pourquoi?:string}>}
+ */
+export async function lireOptionsAchat({ env = {}, pays = 'US', subdivision = null, fetchImpl = null } = {}) {
+  const etat = etatCdp(env);
+  if (!etat.pret) return { etat: 'NON_CONFIGURE', pourquoi: etat.pourquoi };
+  /* ⛔ LE PAYS EST BORNE A DEUX LETTRES : il part dans une URL vers un tiers, et tout ce qui vient
+   *   de l appelant et voyage doit etre contraint avant, pas apres. */
+  const p = String(pays || '').toUpperCase();
+  if (!/^[A-Z]{2}$/.test(p)) return { etat: 'REFUSE', pourquoi: 'country must be a 2-letter code' };
+  const sub = subdivision === null || subdivision === undefined ? null : String(subdivision).toUpperCase();
+  if (sub !== null && !/^[A-Z]{2}$/.test(sub)) {
+    return { etat: 'REFUSE', pourquoi: 'subdivision must be a 2-letter code when present' };
+  }
+  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return { etat: 'NON_MESURE', pourquoi: 'no fetch available in this runtime' };
+  const jwt = typeof env.__CDP_JWT === 'string' ? env.__CDP_JWT : null;
+  if (!jwt) return { etat: 'NON_CONFIGURE', pourquoi: 'no signed CDP JWT was provided to this call' };
+  const q = '?country=' + encodeURIComponent(p) + (sub ? '&subdivision=' + encodeURIComponent(sub) : '');
+  try {
+    const r = await f('https://api.developer.coinbase.com' + CHEMIN_OPTIONS_ACHAT + q, {
+      method: 'GET', headers: { authorization: 'Bearer ' + jwt },
+    });
+    if (!r.ok) return { etat: 'REFUSE_PAR_COINBASE', pourquoi: 'Coinbase answered HTTP ' + r.status };
+    const j = await r.json().catch(() => null);
+    const brut = (j && (j.purchase_currencies || j.purchaseCurrencies)) || null;
+    if (!Array.isArray(brut)) return { etat: 'ILLISIBLE', pourquoi: 'Coinbase answered without a purchase list' };
+    /* ⛔ ON NE REND QUE CE QU ON A LU, et on garde les reseaux : « vendable » sans « sur quel
+     *   reseau » ne repond pas a la question posee — un actif vendable sur Ethereum seulement ne
+     *   sert a rien a un block sur Base. */
+    const actifs = brut.map((c) => ({
+      symbole: String((c && (c.symbol || c.id)) || '').toUpperCase().slice(0, 16),
+      nom: String((c && c.name) || '').slice(0, 40),
+      reseaux: Array.isArray(c && c.networks)
+        ? c.networks.map((n) => String((n && (n.name || n.display_name || n)) || '').toLowerCase().slice(0, 24))
+        : [],
+    })).filter((a) => a.symbole);
+    return { etat: 'OK', actifs };
+  } catch (e) {
+    return { etat: 'NON_MESURE', pourquoi: 'options call failed: ' + String((e && e.message) || e).slice(0, 120) };
+  }
+}

@@ -40,7 +40,7 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
-import { etatCdp, validerDemande, urlOnramp, creerSession } from './onramp-session.js';
+import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
 import { lirePostPublie } from './post-grave.js';
 const postsLus = new Map();
@@ -1675,6 +1675,49 @@ createServer((req, res) => {
    *   n a jamais tourne contre le vrai Coinbase. Personne ne doit lire cette route comme un revenu.
    * ⚠️ `GET` EXPRES, ET SANS DONNEE PERSONNELLE EN PARAMETRE : seule une adresse publique de wallet
    *   et un montant transitent. Rien d identifiant ne doit jamais entrer dans une query string. */
+  /* ── ⛔⛔ CE QUE COINBASE SAIT VENDRE — LA QUESTION QU ON NE POUVAIT PAS POSER ────────────────
+   *     Phil, 2026-09-27 : « le rail doit se faire fiat onramp Coinbase puis Block tokenise OU
+   *     ACTION TOKENISEE direct ». Trois chemins avaient echoue avant celui-ci : la page d achat
+   *     exige une connexion au compte Coinbase (refusee), `buy/options` rend 401 sans JWT, et
+   *     `pay.coinbase.com/api/v1/buy/options` exige un app-id absent du depot.
+   *     Ce serveur, lui, sait deja fabriquer le JWT — c est le meme signeur que pour la session.
+   *   ⚠️ LECTURE SEULE, AUCUNE DONNEE PERSONNELLE : un code pays sur deux lettres, rien d autre.
+   *     Aucun wallet, aucun montant, aucun identifiant ne transite.
+   *   ⛔ LE JWT SIGNE `GET + hote + CHEMIN` SANS LA QUERY : mettre `?country=` dans la chaine
+   *     signee rendrait un 401 que rien n expliquerait. Le chemin vient d une constante PARTAGEE
+   *     avec le module qui appelle, pour que les deux ne puissent pas diverger. */
+  if (chemin === '/api/onramp/options') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const etatO = etatCdp(process.env);
+    if (!etatO.pret) {
+      /* ⛔ 200 ET PAS 500, comme la route soeur : une capacite absente n est pas une panne. */
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pret: false, pourquoi: etatO.pourquoi }));
+      return;
+    }
+    const signeO = signerJwtCdp({ cleId: process.env[etatO.cle], secretPem: process.env[etatO.secret],
+      methode: 'GET', hote: 'api.developer.coinbase.com', chemin: CHEMIN_OPTIONS_ACHAT });
+    if (signeO.etat !== 'OK') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pret: false, pourquoi: signeO.pourquoi }));
+      return;
+    }
+    /* ⛔ Le JWT passe par un champ prive, JAMAIS par le vrai `process.env` — meme regle que la
+     *   route de session : rien de ce qui sert a signer ne devient une variable globale. */
+    lireOptionsAchat({ env: { [etatO.cle]: '1', [etatO.secret]: '1', __CDP_JWT: signeO.jwt },
+      pays: q.get('pays') || 'US', subdivision: q.get('sub') })
+      .then((r) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(JSON.stringify(r.etat === 'OK'
+          ? { ok: true, pret: true, n: r.actifs.length, actifs: r.actifs }
+          : { ok: false, pret: true, etat: r.etat, pourquoi: r.pourquoi }));
+      })
+      .catch((e) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, pret: true, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) }));
+      });
+    return;
+  }
   if (chemin === '/api/onramp/session') {
     const q = new URL(req.url, 'http://x').searchParams;
     const demande = validerDemande({ adresse: q.get('adresse'), actif: q.get('actif'),
