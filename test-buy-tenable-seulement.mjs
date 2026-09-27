@@ -48,7 +48,22 @@ cas('⛔⛔ on ne masque que sur un FAIT, jamais sur notre propre panne', () => 
   assert.ok(!/etatVie !== 'LUE'/.test(bloc),
     'la garde est passee a « pas LUE » : elle masquerait Buy sur `NON_LUE`, c est-a-dire sur notre '
     + 'incapacite a regarder, pas sur un fait de la chaine');
-  assert.ok(/NON_TROUVEE/.test(bloc), 'la garde du bloc ne repose plus sur le FAIT `NON_TROUVEE`');
+  assert.ok(/mkPublic.poolAdr/.test(bloc), 'la garde ne repose plus sur `poolAdr`, le seul signal disponible au moment de la peinture');
+});
+
+cas('⛔⛔ la garde ne depend pas d un etat NON ENCORE RESOLU a la peinture', () => {
+  /* ⛔⛔ C EST LA LECON QUI A COUTE UN DEPLOIEMENT INERTE. Ma premiere version testait
+   *     `h.etatVie === 'NON_TROUVEE'`. La garde etait JUSTE en principe et JAMAIS VRAIE en
+   *     pratique : quand la carte se peint, la lecture de la chaine n a pas abouti et l etat vaut
+   *     `NON_LU`. Livre, verifie en production : Buy restait promis sur RDDTc exactement comme
+   *     avant, alors que sa lecture CL s affichait a 480,264 USDC deux lignes plus haut.
+   *   ⇒ Une garde d affichage doit reposer sur une valeur DISPONIBLE AU MOMENT DE LA PEINTURE.
+   *     `mkPublic.poolAdr` vient du serveur avec la carte ; `h.etatVie` arrive plus tard. */
+  const i = nu.indexOf("const aBuy = $('#fAcheter')");
+  const bloc = nu.slice(i, nu.indexOf('});', i));
+  assert.ok(!/etatVie/.test(bloc),
+    'la visibilite de Buy depend de nouveau de `etatVie`, qui n est pas resolu quand la carte se '
+    + 'peint : la garde sera VRAIE dans le code et INERTE a l ecran');
 });
 
 cas('⛔ on ne pousse PAS « Instant Birth » a la place', () => {
@@ -70,9 +85,9 @@ cas('⛔ le bouton qui disparait est EXPLIQUE, et le marche est nomme', () => {
     + 'chose que ces ecrans apportent sur ces blocks');
 });
 
-assert.equal(n, 4, 'compte de cas inattendu : ' + n);
+assert.equal(n, 5, 'compte de cas inattendu : ' + n);
 console.log('ok buy-tenable — ' + n + ' cas.');
-console.log('   Buy ne s affiche que si l echange in-app peut s ouvrir ; il ne disparait que sur un');
-console.log('   FAIT (NON_TROUVEE), jamais sur NON_LUE ; et sa disparition est expliquee.');
+console.log('   Buy ne s affiche que si le marche le plus liquide est une pool v4 ; la garde repose sur');
+console.log('   `poolAdr`, disponible A LA PEINTURE, et sa disparition est expliquee.');
 console.log('⚠️ NE PROUVE PAS qu un achat aboutisse — prouve qu on ne promet plus ce qu on a mesure');
 console.log('   comme impossible, et qu on ne retire rien sur un hoquet.');

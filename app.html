@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-buy-tenable" hidden>Build <code>20260927-buy-tenable</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-buy-pooladr" hidden>Build <code>20260927-buy-pooladr</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4070,7 +4070,23 @@ $('#map').addEventListener('click', (e) => {
    *     retirerait Buy de blocks parfaitement echangeables, a chaque hoquet. Le profil, lui,
    *     reessaie. Voir la meme distinction dans `pool-cl.js`.
    *   ⇒ Buy reste visible sur NON_LUE et sur LUE. Il ne disparait que sur NON_TROUVEE. */
-  const pasDePoolV4 = Boolean(h) && h.etatVie === 'NON_TROUVEE';
+  /* ⛔⛔ PREMIERE VERSION DEPLOYEE PUIS CORRIGEE LE MEME JOUR — elle testait
+   *     `h.etatVie === 'NON_TROUVEE'`. Mesure en production : cette garde n est JAMAIS vraie au
+   *     moment ou la carte se peint, parce que la lecture de la chaine n a pas encore abouti (l
+   *     etat vaut `NON_LU`). Le correctif etait donc INERTE : Buy restait promis sur RDDTc
+   *     (Aerodrome, dont la lecture CL s affichait pourtant a 480,264 USDC) exactement comme avant.
+   *     J avais ecrit le risque dans mon propre commentaire, et je n avais pas mesure le rapport
+   *     cyclique de la garde avant de deployer.
+   *   ⇒ ON UTILISE LE SEUL SIGNAL DISPONIBLE SYNCHRONEMENT : `poolAdr`. Il porte une adresse de
+   *     CONTRAT quand le marche le plus liquide du block est une pool v3/CL — donc hors de portee
+   *     de notre routeur v4 — et `null` quand c est un poolId Uniswap v4. C est le meme champ qui
+   *     declenche `lireMarcheCL` plus haut : un seul discriminant pour les deux usages.
+   *   ⚠️ SA BORNE, DITE : `poolAdr` decrit la pool la PLUS LIQUIDE. Un block peut avoir EN PLUS une
+   *     pool v4 plus mince, auquel cas l achat in-app serait techniquement possible. On prefere ne
+   *     pas promettre plutot que promettre un chemin dont on a MESURE qu il tourne 62 secondes puis
+   *     propose de creer un autre block. Et MUc a bascule d Aerodrome vers Uniswap v4 dans la
+   *     journee meme : ce champ suit le marche, il ne le fige pas. */
+  const pasDePoolV4 = Boolean(mkPublic && mkPublic.poolAdr);
   const tenable = aMarche && !pasDePoolV4;
   if (aBuy) aBuy.hidden = !tenable;
   /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
