@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-passage-liquidite" hidden>Build <code>20260927-passage-liquidite</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-profondeur" hidden>Build <code>20260927-profondeur</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -9868,6 +9868,32 @@ function peindrePlan(plan, adr) {
       + (plan.poolExiste ? ' · already exists, its current price applies' : ''),
     'Places ' + formaterUnites(plan.blocksRequis, d) + ' blocks · ' + formaterUnites(plan.resteAuCreateur, d)
       + ' stay with you (a 0.1 % margin: placing 100 % is refused by the chain, measured).',
+    /* ⛔⛔ UN NOMBRE SANS ECHELLE NE DIT RIEN, ET C EST CE QUI RENDAIT LA SECONDE POOL DANGEREUSE.
+     *     Mesure : la premiere pool prend 99,9 % de la supply. Le champ de part s applique ensuite
+     *     au SOLDE RESTANT — donc 99,9 % d un reste de 0,1 % place 0,0999 % de la supply. Le
+     *     createur lisait « places 999 000 blocks » sans voir que c etait un MILLIEME de ce que
+     *     tient deja son premier marche. Une pool mille fois plus mince s arbitre contre lui, et il
+     *     ne peut ni retirer ni reequilibrer : sa position part a 0x…dEaD.
+     *   ⇒ On dit donc la PART DE LA SUPPLY TOTALE que cette pool tiendra : c est la seule grandeur
+     *     comparable entre un premier et un second marche. « 999 000 blocks » ne l est pas.
+     *   ⛔ ET ON NE CALCULE RIEN SI ON NE SAIT PAS : sans `supply` lue, la ligne n apparait pas du
+     *     tout, plutot qu un pourcentage devine. */
+    ...(() => {
+      const sup = plan.supply;
+      if (typeof sup !== 'bigint' || sup <= 0n || typeof plan.blocksRequis !== 'bigint') return [];
+      /* ⛔ EN ENTIERS : une supply de 1e27 depasse la precision d un nombre JS, et un `Number()`
+       *   direct rendrait un pourcentage faux. On passe par les pour-cent-mille, en BigInt. */
+      const pcm = Number((plan.blocksRequis * 100000n) / sup) / 1000;
+      const txt = pcm >= 0.1 ? pcm.toFixed(1) + ' %' : 'under 0.1 %';
+      /* ⛔⛔ LE SEUIL DE 1 % EST DIT, PAS DEVINE : en dessous, cette pool tient moins d un centieme
+       *     de ce que tient un marche ouvert a 99,9 %. C est cet ecart de profondeur qui devient
+       *     l arbitrage — 476 $ de profit pour 162 $ engages, mesure en rejouant le depot. */
+      return [pcm < 1
+        ? 'This market will hold ' + txt + ' of the whole supply. Your first market holds almost all of it, '
+          + 'so anyone can buy there and sell here — and you can withdraw neither. Place more blocks here, '
+          + 'or keep a single market.'
+        : 'This market will hold ' + txt + ' of the whole supply.'];
+    })(),
     /* ⛔⛔ CETTE PHRASE ANNONCAIT UN APPORT QUI N EXISTE PLUS. Elle disait « Instant Birth puts X ETH
      *     into the locked pool » ; avec la naissance sans apport elle aurait affiche « puts 0 ETH »,
      *     ce qui est vrai au chiffre et faux au sens — le lecteur comprendrait qu on a rate quelque
