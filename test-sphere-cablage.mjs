@@ -101,6 +101,21 @@ v('⛔⛔ on peut zoomer ET revenir — un zoom sans retour enferme', () => {
   /* ⛔⛔ ET UNE SORTIE DE SECOURS. Quelqu un perdu au fond du cerveau n a aucun moyen de revenir —
    *     fermer le volet ne remet pas le zoom. Un zoom sans retour est une impasse. */
   assert.ok(/'dblclick'/.test(nu), 'plus de retour a la vue d origine : on peut rester enferme dedans');
+  /* ⛔⛔ LA REMISE A ZERO DOIT RALLUMER LE TOUR AUTOMATIQUE, ET C EST UN BUG A MOI QUE PHIL A VU.
+   *     Ma premiere version remettait l angle et le zoom mais PAS `bwVue.auto` — que `zoomer()`
+   *     passe a false. Une fois qu on avait zoome une seule fois, le cerveau ne tournait PLUS
+   *     JAMAIS, et le bouton ⟳ ne le rallumait pas : « ca fait pas le mouvement du cerveau qui
+   *     tourne ».
+   *   ⛔ ET CE N EST PAS EN CONTRADICTION AVEC LA REGLE ECRITE PLUS HAUT (« la rotation automatique
+   *     ne reprend pas la main toute seule »). Elle interdit de REPRENDRE la main sans qu on le
+   *     demande. Le bouton de remise a zero EST la demande : il rend la vue par defaut, et le tour
+   *     lent EN FAIT PARTIE. Rendre la moitie de la vue par defaut, c est ne pas la rendre. */
+  const resets = nu.match(/bwVue\.zoom = 1;[^\n]*/g) || [];
+  assert.ok(resets.length >= 2, 'il n y a plus deux chemins de remise a zero (bouton et double-tap)');
+  for (const r of resets) {
+    assert.ok(/bwVue\.auto = true/.test(r),
+      'une remise a zero ne rallume pas le tour automatique : le cerveau resterait fige apres un zoom');
+  }
   /* ⛔ BORNE DES DEUX COTES : une seule borne laisse une des deux impasses ouverte. */
   assert.ok(/BW_ZOOM_MIN/.test(nu) && /BW_ZOOM_MAX/.test(nu), 'le zoom n est plus borne des deux cotes');
 });
@@ -189,8 +204,14 @@ v('⛔⛔ le block REGARDE n est jamais fige', () => {
    *     camera est loin ou l ecran etroit. Ce qui decide n est pas sa taille, c est qu on l ait
    *     choisi. */
   const m = readFileSync(new URL('./map3d.js', import.meta.url), 'utf8');
-  assert.ok(/const petit = !regarde && h\.t \* k < 64;/.test(m),
+  /* ⛔ ON EPINGLE L INTENTION, PAS L ORTHOGRAPHE. La premiere version de ce cas exigeait la ligne
+   *   EXACTE `h.t * k < 64` : elle est tombee des que le seuil a ete separe en PX_VOLUME /
+   *   PX_SATELLITES — un changement pourtant CORRECT. Un test qui fige une ecriture oblige a le
+   *   reecrire a chaque amelioration, et on finit par le desarmer au lieu de le lire. */
+  assert.ok(/const petit = !regarde && /.test(m),
     'le block centre ou selectionne peut de nouveau etre classe « loin », donc FIGE');
+  assert.ok(/const sobre = !regarde && /.test(m),
+    'le block regarde peut perdre ses satellites : ce qu on observe doit rester le plus vivant');
   assert.ok(/h\.centreFixe \|\| \(h\.el && h\.el\.classList\.contains\('actif'\)\)/.test(m),
     'la definition de « regarde » ne couvre plus les deux cas : centre ET selectionne');
 });
@@ -248,7 +269,23 @@ v('⛔ on peut la tourner au doigt, et l auto ne reprend pas la main', () => {
   /* ⛔ L AUTO S ARRETE ET NE REPREND PAS : reprendre la main sur un objet que l utilisateur vient
    *   d orienter, c est lui dire que son geste ne compte pas. */
   assert.ok(/bwVue\.auto = false;/.test(nu), 'la rotation automatique ne s arrete plus au premier geste');
-  assert.ok(!/bwVue\.auto = true;/.test(nu), 'quelque chose relance la rotation automatique apres un geste');
+  /* ⛔⛔ CETTE GARDE A ETE RESSERREE, PAS SUPPRIMEE, ET LA DISTINCTION EST TOUT LE SUJET.
+   *     Elle interdisait TOUT `bwVue.auto = true` — pour empecher la rotation de reprendre la main
+   *     sur un objet que l utilisateur vient d orienter. L intention est juste et elle reste.
+   *   ⇒ MAIS « reprendre la main TOUT SEUL » et « la rendre QUAND ON LE DEMANDE » sont deux choses
+   *     opposees. Le bouton ⟳ et le double-tap sont une demande EXPLICITE de revenir a la vue par
+   *     defaut — et le tour lent EN FAIT PARTIE. Rendre la moitie de la vue par defaut, c est ne
+   *     pas la rendre. Phil l a vu : apres un seul zoom, le cerveau ne tournait plus jamais.
+   *   ⇒ La garde verifie donc desormais que chaque `auto = true` est sur une ligne de REMISE A
+   *     ZERO. Un `auto = true` pose ailleurs — dans un `pointerup`, un `setInterval` — la ferait
+   *     tomber, ce qui est exactement ce qu elle protegeait. */
+  const relances = nu.match(/^.*bwVue\.auto = true.*$/gm) || [];
+  assert.ok(relances.length > 0, 'plus aucune remise a zero ne rallume le tour automatique');
+  for (const l of relances) {
+    assert.ok(/bwVue\.zoom = 1;/.test(l),
+      'un `bwVue.auto = true` est pose HORS d une remise a zero : la rotation reprendrait la main '
+      + 'sur un objet que l utilisateur vient d orienter — ligne : ' + l.trim().slice(0, 90));
+  }
   /* ⛔ ET ELLE NE TOURNE PAS POUR PERSONNE : onglet cache ou volet inactif, on ne redessine pas. */
   assert.ok(/if \(document\.hidden\) return;/.test(nu),
     'la boucle tourne meme quand l onglet est cache : du calcul pour personne');

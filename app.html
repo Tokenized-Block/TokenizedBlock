@@ -2021,7 +2021,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-follow-link" hidden>Build <code>20260927-follow-link</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260927-planetes-vivantes" hidden>Build <code>20260927-planetes-vivantes</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14875,7 +14875,7 @@ function dessinerReseau(vu = null) {
   if (plus) plus.addEventListener('click', () => zoomer(1.35));
   if (moins) moins.addEventListener('click', () => zoomer(1 / 1.35));
   if (remise) remise.addEventListener('click', () => {
-    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null;
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null; bwVue.auto = true;
     dessinerReseau(brainDernierVu);
     try { dessinerReseauDit(brainDernierVu); } catch (_) {}
   });
@@ -14909,7 +14909,7 @@ function dessinerReseau(vu = null) {
   /* ⛔ UNE SORTIE DE SECOURS : un double-tap remet la vue d origine. Sans elle, quelqu un perdu au
    *   fond du cerveau n a aucun moyen de revenir, et fermer le volet ne remet pas le zoom. */
   c.addEventListener('dblclick', () => {
-    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null;
+    bwVue.zoom = 1; bwVue.rx = -0.35; bwVue.ry = 0.6; bwNeurone = null; bwLien = null; bwVue.auto = true;
     dessinerReseau(brainDernierVu);
   });
   /* ⛔⛔ VISER UN NEURONE. On cherche le plus proche du clic PARMI CEUX QUI SONT DESSINES, dans les

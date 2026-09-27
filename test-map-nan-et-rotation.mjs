@@ -116,6 +116,41 @@ v('⛔⛔ le cerveau ne fabrique plus un angle a partir de rien', () => {
 });
 
 /* ── 5. la rotation respecte le mouvement reduit ────────────────────────────────────────────── */
+v('⛔⛔ le seuil de VOLUME doit etre ATTEIGNABLE — sinon il eteint tout en silence', () => {
+  /* ⛔⛔ CE CAS EXISTE PARCE QU UN SEUIL INATTEIGNABLE A ETEINT TOUTE LA GALAXIE. Mesure en
+   *     production (1280x900) : 58 blocks visibles, taille MEDIANE 20 px, MAXIMUM 58 px, et ZERO
+   *     au-dessus des 64 px que `.loin` exigeait. Les 58 etaient donc des IMAGES PLATES.
+   *     Une regle dont la condition n est JAMAIS remplie n est pas un arbitrage : c est un
+   *     interrupteur eteint, et rien ne le signale.
+   *   ⇒ Le seuil de volume doit rester AU NIVEAU du plancher de taille, sinon on retombe dedans :
+   *     tous les blocks sont pousses a PX_MIN, et un seuil au-dessus les exclut tous. */
+  const mVol = map.match(/PX_VOLUME = (\d+)/);
+  const mPlancher = map.match(/const PX_MIN = (\d+);/);
+  assert.ok(mVol && mPlancher, 'le seuil de volume ou le plancher de taille a disparu');
+  assert.ok(Number(mVol[1]) <= Number(mPlancher[1]),
+    'PX_VOLUME (' + mVol[1] + ') depasse le plancher PX_MIN (' + mPlancher[1] + ') : comme tous les '
+    + 'blocks sont pousses AU plancher, aucun n atteindrait le volume — exactement le defaut du seuil a 64 px');
+});
+
+v('⛔⛔ VOLUME et SATELLITES ont des seuils SEPARES — deux couts, deux regles', () => {
+  /* ⛔⛔ L ANCIEN SEUIL UNIQUE MELANGEAIT DEUX DEPENSES SANS RAPPORT : le volume (6 faces composees
+   *     par le navigateur) et les satellites (des elements en plus, en orbite). Les couper ensemble
+   *     revenait a payer le prix du plus cher pour economiser sur les deux.
+   *   ⛔ C est la MEME erreur que j ai commise ce matin en reutilisant `petit` pour la rotation :
+   *     une regle juste, appliquee a deux questions qui n ont pas le meme cout. */
+  assert.ok(/PX_SATELLITES = (\d+)/.test(map), 'le seuil propre aux satellites a disparu');
+  const mSat = map.match(/PX_SATELLITES = (\d+)/), mVol = map.match(/PX_VOLUME = (\d+)/);
+  assert.ok(Number(mSat[1]) > Number(mVol[1]),
+    'les satellites ne sont plus plus exigeants que le volume : le seuil ne borne plus la depense');
+  assert.ok(/classList\.toggle\('sobre', sobre\)/.test(map),
+    'la classe intermediaire n est plus posee : volume et satellites retomberaient sur un seul seuil');
+  /* ⛔ ET LE CSS DOIT LA TENIR : une classe posee que personne ne style ne borne rien — le depot a
+   *   deja eu `.loin` sans regle CSS dans app.html, et ca n economisait rien. */
+  const cube = readFileSync(new URL('./cube3d.js', import.meta.url), 'utf8');
+  assert.ok(/\.bloc\.sobre \.c3m\{display:none\}/.test(cube),
+    'la classe `sobre` n a aucune regle CSS : elle serait posee sans rien couper');
+});
+
 v('⛔ le plancher de taille est BORNE dans sa hausse', () => {
   /* ⛔ SANS BORNE, un block tres lointain bondirait a la taille d un proche et MENTIRAIT sur sa
    *   distance. Le plancher rend lisible ; il ne doit pas rendre faux. */
@@ -165,7 +200,7 @@ v('⛔ la tuile porte toujours sa POSITION — le retrait ne doit pas l avoir em
     'la tuile ne porte plus son echelle : la perspective serait perdue');
 });
 
-assert.equal(n, 9, 'compte de cas inattendu : ' + n);
+assert.equal(n, 11, 'compte de cas inattendu : ' + n);
 console.log('ok map-nan-et-rotation — ' + n + ' cas.');
 console.log('   Le NaN est REJOUE, pas suppose : il passe bien a travers le rebond ET le masquage.');
 console.log('   Les trois vitesses sont posees, un block deja casse est RAMENE, et la garde tient');

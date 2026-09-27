@@ -145,6 +145,21 @@ export const CUBE3D_CSS = `
 .bloc.loin .c2{opacity:1;visibility:visible;transform:none;transition:opacity .5s ease,transform .5s ease,visibility 0s}
 .bloc.loin .c3{opacity:0;visibility:hidden;transform:scale(.85);transition:opacity .5s ease,transform .5s ease,visibility 0s linear .5s}
 .bloc.loin .c3r,.bloc.loin .c3o,.bloc.loin .c3m{animation-play-state:paused}
+/* ⛔⛔ DEUX COUTS DIFFERENTS, DEUX SEUILS — ET C EST UNE MESURE QUI L A IMPOSE (2026-09-27).
+ *     Mesure en production, 1280x900 : 58 blocks visibles, taille MEDIANE 20 px, maximum 58 px, et
+ *     ZERO au-dessus des 64 px que .loin exigeait. Le seuil n etait donc pas rarement atteint : il
+ *     etait INATTEIGNABLE. Resultat, les 58 blocks etaient des IMAGES PLATES — et Phil le voyait :
+ *     "tous les blocks sont fiches, on dirait une image".
+ *   ⇒ Une regle dont la condition n est JAMAIS remplie n est pas un arbitrage, c est un
+ *     interrupteur eteint. Et elle melangeait deux depenses sans rapport : le VOLUME (6 faces,
+ *     composees par le navigateur) et les SATELLITES (des elements en plus, en orbite). Les couper
+ *     ensemble revenait a payer le prix du plus cher pour economiser sur les deux.
+ *   ⇒ .loin ne vise plus que les blocks vraiment minuscules. Entre les deux, .sobre : le cube est
+ *     EN VOLUME et il TOURNE — chacun sur son propre axe, via --vx/--vy/--vz — mais sans
+ *     satellites. C est le mouvement qui fait la galaxie vivante, pas les decorations.
+ *   ⛔ AUCUN ACCENT GRAVE DANS CE BLOC : on est A L INTERIEUR du gabarit CUBE3D_CSS. */
+.bloc.sobre .c3m{display:none}
+.bloc.sobre .c3o{animation-play-state:paused}
 /* mini-cube satellite, en volume, qui tourne sur lui-meme */
 /* ⛔ LES SATELLITES GARDENT LEUR TOUR COMPLET. Ils partageaient l animation du gros cube : borner
  *    l angle la aussi les aurait figes, alors que le defaut signale ne venait QUE du cube

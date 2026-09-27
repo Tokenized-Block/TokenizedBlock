@@ -402,8 +402,26 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
        *     si la camera est loin ou l ecran etroit. Ce qui decide n est pas sa taille, c est le
        *     fait qu on l ait choisi. */
       const regarde = !!(h.centreFixe || (h.el && h.el.classList.contains('actif')));
-      const petit = !regarde && h.t * k < 64;
+      /* ⛔⛔ DEUX SEUILS, PARCE QU IL Y A DEUX COUTS — ET UNE MESURE A IMPOSE LES DEUX NOMBRES.
+       *     Production, 1280x900 : 58 blocks visibles, MEDIANE 20 px, MAXIMUM 58 px, et ZERO
+       *     au-dessus de 64 px. L ancien seuil unique de 64 px n etait donc pas « rarement
+       *     atteint » : il etait INATTEIGNABLE, et il eteignait le volume des 58. Phil : « tous les
+       *     blocks sont fiches, on dirait une image ».
+       *   ⇒ PX_VOLUME = 20 : au-dessus, le cube est en VOLUME et il TOURNE sur son propre axe
+       *     (--vx/--vy/--vz, deja tires de l adresse par cube3d.js). A la mesure, 49 blocks sur 58
+       *     passent — la galaxie redevient vivante.
+       *   ⇒ PX_SATELLITES = 40 : les satellites, eux, restent reserves aux gros. Ils sont la partie
+       *     CHERE, et c etait l economie que l ancien seuil voulait vraiment faire. A la mesure,
+       *     2 blocks sur 58 — le cout reste borne.
+       *   ⛔ UN SEUL SEUIL POUR DEUX DEPENSES, C EST PAYER LE PRIX DU PLUS CHER SUR LES DEUX. C est
+       *     la meme erreur que j ai commise ce matin en reutilisant `petit` pour la rotation : une
+       *     regle juste, appliquee a deux questions qui n ont pas le meme cout. */
+      const PX_VOLUME = 20, PX_SATELLITES = 40;
+      const px = h.t * k;
+      const petit = !regarde && px < PX_VOLUME;
+      const sobre = !regarde && !petit && px < PX_SATELLITES;
       if (petit !== h._petit) { h.el.classList.toggle('loin', petit); h._petit = petit; }
+      if (sobre !== h._sobre) { h.el.classList.toggle('sobre', sobre); h._sobre = sobre; }
       h.sx = p.sx; h.sy = p.sy; h.k = k;
       /* ⛔⛔ LA TUILE NE PORTE QUE LA POSITION ET L ECHELLE — PLUS AUCUNE ROTATION, ET C EST UNE
        *     REGRESSION QUE J AI CAUSEE PUIS RETIREE LE 2026-09-27.
