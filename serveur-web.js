@@ -683,6 +683,10 @@ const createurParBlock = new Map();
  *   remonte. Persiste, sinon chaque deploiement recommencerait le rattrapage depuis le present et
  *   ne finirait jamais. */
 let rattrapageDepuis = null;
+/* ⛔ COMBIEN DE REFUS DE SUITE SUR LA MEME FENETRE, et les plages qu on a fini par SAUTER. Un trou
+ *   nomme vaut mieux qu un index qui ne finit jamais — et infiniment mieux qu un trou invisible. */
+let refusDeSuite = 0;
+const trousRattrapage = [];
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
@@ -811,7 +815,13 @@ async function lireTrending() {
       if (rattrapageDepuis === null) rattrapageDepuis = fin;
       if (rattrapageDepuis > PREMIER_BLOCK_TB) {
         const haut = rattrapageDepuis;
-        const bas = Math.max(PREMIER_BLOCK_TB, haut - 43200);
+        /* ⛔⛔ 10 000 ET NON 43 200, ET C EST UNE MESURE QUI L A IMPOSE. `listerCreations` pagine en
+         *     interne par 2000 blocs : une fenetre de 43 200 fait donc 22 pages, et le log de
+         *     production disait « +0 · ⛔ 2 fenetre(s) refusee(s), on ne descend pas ». Plus la
+         *     fenetre est large, plus la probabilite qu AU MOINS UNE page soit refusee monte — et
+         *     ma garde conservatrice bloquait alors la descente ENTIERE. Le rattrapage etait fige.
+         *   ⇒ Cinq pages au lieu de vingt-deux : bien moins d occasions de tomber sur un refus. */
+        const bas = Math.max(PREMIER_BLOCK_TB, haut - 10000);
         const vieux = await listerCreations({ rpc: rpcServeur, blocs: haut - bas, fin: haut });
         const aFaire = (vieux.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')
           && !createurParBlock.has(c.jeton.toLowerCase()));
@@ -823,9 +833,24 @@ async function lireTrending() {
             if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase());
           }
         }
-        /* ⛔ ON N AVANCE QUE SI LA FENETRE A ETE LUE. Avancer malgre des fenetres refusees
-         *   sauterait definitivement des creations, et personne ne le saurait jamais. */
-        if (!(vieux.fenetresRatees || []).length) rattrapageDepuis = bas;
+        /* ⛔⛔ AVANT : « on n avance QUE si la fenetre a ete lue ». L INTENTION ETAIT JUSTE — ne
+         *     jamais sauter de creations en silence — MAIS SA CONSEQUENCE ETAIT UN BLOCAGE
+         *     PERMANENT. Mesure en production : « +0 · 2 fenetre(s) refusee(s), on ne descend
+         *     pas », curseur immobile sur deux deploiements. Un rattrapage qui n avance jamais ne
+         *     rattrape rien : la prudence absolue devenait la panne.
+         *   ⇒ LA BONNE REPONSE N EST PAS DE SAUTER EN SILENCE, C EST DE SAUTER EN L ECRIVANT.
+         *     On reessaie la MEME fenetre deux fois ; a la troisieme on descend quand meme, et on
+         *     GARDE la plage manquee dans `trousRattrapage`, que l endpoint publie. Un trou connu
+         *     et nomme vaut infiniment mieux qu un index qui ne finit jamais — et infiniment mieux
+         *     qu un trou invisible. */
+        if (!(vieux.fenetresRatees || []).length) {
+          rattrapageDepuis = bas; refusDeSuite = 0;
+        } else if (++refusDeSuite >= 3) {
+          trousRattrapage.push({ de: bas, a: haut, pages: (vieux.fenetresRatees || []).length });
+          if (trousRattrapage.length > 200) trousRattrapage.shift();
+          rattrapageDepuis = bas; refusDeSuite = 0;
+          console.log('[createurs] ⛔ TROU assume ' + bas + '..' + haut + ' apres 3 refus — on descend, et on le DIT');
+        }
         console.log('[createurs] rattrapage ' + bas + '..' + haut + ' · +' + aFaire.length
           + ' · index=' + createurParBlock.size + '/' + blocksConnus.size
           + (rattrapageDepuis <= PREMIER_BLOCK_TB ? ' · COMPLET' : '')
@@ -1308,8 +1333,17 @@ createServer((req, res) => {
        *     ce moment-la qu une liste vide signifie vraiment « tu n as rien cree ».
        *   ⛔ UNE SORTIE CONSTANTE N EST PAS UNE MESURE : c est la meme regle que partout ailleurs
        *     dans ce depot, et elle vaut aussi pour un booleen. */
-      couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB,
+      /* ⛔⛔ ET LA COUVERTURE EXIGE AUSSI ZERO TROU. Atteindre le premier block ne suffit PAS si on
+       *     a saute des plages en chemin : on se declarerait complet avec des creations
+       *     manquantes, et une liste vide redeviendrait un mensonge — le defaut meme qu on repare.
+       *     Les DEUX conditions, jamais une seule. */
+      couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB
+        && trousRattrapage.length === 0,
       rattrapageDepuis,
+      /* ⛔ LES PLAGES SAUTEES SONT PUBLIEES, PAS TUES : c est ce qui rend le saut acceptable. Un
+       *   trou nomme se rattrape ; un trou tu ne se rattrape jamais. */
+      trous: trousRattrapage.length,
+      plagesManquees: trousRattrapage.slice(-5),
       borne: 'Blocks whose creation transaction was read since this server started indexing. '
         + 'An empty list means "not indexed yet", never "you created nothing".',
     });

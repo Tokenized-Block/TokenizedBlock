@@ -109,7 +109,19 @@ v('⛔⛔ une liste VIDE ne doit jamais se lire comme « tu n as rien cree »', 
    *     c est dire a quelqu un qu il n a rien fait parce que NOUS n avons pas regarde. */
   const i = srv.indexOf("chemin === '/api/blocks-de'");
   assert.notEqual(i, -1, 'l endpoint des blocks par createur a disparu');
-  const bloc = srv.slice(i, i + 1800);
+  /* ⛔⛔ EXTRACTION PAR EQUILIBRAGE D ACCOLADES, PAS PAR FENETRE DE N CARACTERES. Ma premiere
+   *     version coupait a 1800 caracteres : elle est tombee des que j ai ajoute `trous` et
+   *     `plagesManquees` a la reponse — sur du code pourtant CORRECT. Une fenetre fixe se met a
+   *     mesurer autre chose des que le bloc grossit, et le reflexe est d agrandir le nombre : ce
+   *     qui ne fait que repousser le moment ou elle debordera sur le bloc SUIVANT, en restant
+   *     verte sur lui. C est le meme piege qu un test qui tient la mauvaise moitie. */
+  const debut = srv.indexOf('{', i);
+  let prof = 0, fin = debut;
+  for (let k = debut; k < srv.length; k++) {
+    if (srv[k] === '{') prof++;
+    else if (srv[k] === '}') { prof--; if (prof === 0) { fin = k + 1; break; } }
+  }
+  const bloc = srv.slice(debut, fin);
   assert.ok(/borne:/.test(bloc), 'la reponse ne porte plus sa borne');
   assert.ok(/never "you created nothing"/.test(bloc),
     'la borne ne dit plus explicitement qu une liste vide n est pas une absence de creation');
@@ -127,10 +139,19 @@ v('⛔⛔ le PASSE est rattrape — sans quoi le correctif ne repare rien pour p
   assert.ok(/let rattrapageDepuis = null;/.test(srv), 'le rattrapage du passe a disparu');
   assert.ok(/rattrapageDepuis > PREMIER_BLOCK_TB/.test(srv),
     'le rattrapage ne s arrete plus au premier block de TBLOCK : il scannerait le vide indefiniment');
-  /* ⛔ ON N AVANCE QUE SI LA FENETRE A ETE LUE : avancer malgre des fenetres refusees sauterait
-   *   definitivement des creations, et PERSONNE ne le saurait jamais. */
-  assert.ok(/if \(!\(vieux\.fenetresRatees \|\| \[\]\)\.length\) rattrapageDepuis = bas;/.test(srv),
-    'le curseur avance meme quand des fenetres sont refusees : des creations seraient sautees en silence');
+  /* ⛔⛔ CETTE ASSERTION A ETE REECRITE, ET LA RAISON EST UNE MESURE. J exigeais « on n avance QUE
+   *     si la fenetre a ete lue » — intention juste, ne jamais sauter de creations en silence.
+   *     MAIS SA CONSEQUENCE ETAIT UN BLOCAGE PERMANENT. Log de production :
+   *     « rattrapage 51812621..51855821 · +0 · ⛔ 2 fenetre(s) refusee(s), on ne descend pas »,
+   *     curseur immobile sur deux deploiements. Un rattrapage qui n avance jamais ne rattrape rien :
+   *     la prudence absolue etait devenue la panne.
+   *   ⇒ LA BONNE REPONSE N EST PAS DE SAUTER EN SILENCE, C EST DE SAUTER EN L ECRIVANT. On reessaie
+   *     deux fois, puis on descend en GARDANT la plage manquee — et l endpoint la publie. */
+  assert.ok(/refusDeSuite/.test(srv), 'le compteur de refus a disparu : le rattrapage pourrait se figer');
+  assert.ok(/trousRattrapage\.push\(\{ de: bas, a: haut/.test(srv),
+    'les plages sautees ne sont plus gardees : un trou invisible vaut pire qu un index incomplet');
+  assert.ok(/\+\+refusDeSuite >= 3/.test(srv),
+    'le rattrapage descend sans avoir reessaye : une panne passagere creerait un trou evitable');
   /* ⛔ ET L AVANCEMENT EST PERSISTE : sinon chaque deploiement recommencerait depuis le present et
    *   ne finirait jamais le passe. */
   assert.ok(/rattrapageDepuis,/.test(srv) && /x\.rattrapageDepuis === "number"/.test(srv),
@@ -145,6 +166,15 @@ v('⛔⛔ `couvertureComplete` est CALCULEE — une sortie constante n est pas u
     'la couverture est de nouveau ecrite en dur : elle ne dirait plus rien de reel');
   assert.ok(/couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB/.test(srv),
     'la couverture n est plus derivee de l avancement reel du rattrapage');
+  /* ⛔⛔ ET ATTEINDRE LE PREMIER BLOCK NE SUFFIT PAS : si des plages ont ete sautees en chemin, on
+   *     se declarerait complet avec des creations manquantes, et une liste vide redeviendrait un
+   *     mensonge — exactement le defaut qu on repare. Les DEUX conditions, jamais une seule. */
+  assert.ok(/&& trousRattrapage\.length === 0/.test(srv),
+    'la couverture se dit complete malgre des plages sautees : le vide recommencerait a mentir');
+  /* ⛔ ET LES TROUS SONT PUBLIES : c est ce qui rend le saut acceptable. Un trou nomme se rattrape,
+   *   un trou tu ne se rattrape jamais. */
+  assert.ok(/plagesManquees: trousRattrapage\.slice/.test(srv),
+    'les plages manquees ne sont plus publiees : le saut redeviendrait invisible');
 });
 
 assert.equal(n, 8, 'compte de cas inattendu : ' + n);
