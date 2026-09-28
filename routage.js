@@ -53,7 +53,7 @@ const DEX_DU_ROUTER = /^uniswap$/i;
  * @returns {{verdict:string, dex:?string, famille:?string, achetableIci:boolean}}
  */
 export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
-  if (!aMarche) return { verdict: 'SANS_MARCHE', dex: null, famille: null, achetableIci: false, achetableEnUsdc: false };
+  if (!aMarche) return { verdict: 'SANS_MARCHE', dex: null, famille: null, achetableIci: false, achetableEnUsdc: false, achetableEnEth: false };
   const d = String(dex || '').trim() || null;
   /* ⛔ UNE ADRESSE VIDE OU MAL FORMEE NE COMPTE PAS COMME UNE POOL v3. `Boolean('')` serait faux
    *   par accident ; on exige la forme, sinon un champ vide basculerait le verdict en silence. */
@@ -75,9 +75,15 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
      *   ⚠️ ET LA DISTINCTION RESTE : `achetableIci` demeure FAUX, parce que le chemin v4 de l app ne
      *     sait pas parler a une pool Aerodrome — son routeur n a pas cette factory. */
     const surAerodrome = /^aerodrome$/i.test(d);
+    /* ⛔⛔ L ACHAT EN ETH N EST OUVERT QUE SUR AERODROME, ET C EST UNE CONTRAINTE DE CHEMIN, PAS UN
+     *     CHOIX. Il passe par `exactInput` du routeur Aerodrome : WETH -> USDC -> action, deux sauts
+     *     dans UN appel, avec les trois pools WETH/USDC mesurees comme pivot. Une action dont la pool
+     *     vit sur UNISWAP v3 n est pas atteignable par ce routeur — sa factory n est pas la sienne —
+     *     donc le drapeau reste faux la, meme si l achat en USDC y marche. */
     return { verdict: 'FRANCHISSEMENT', dex: d, famille, achetableIci: false,
-      achetableEnUsdc: surAerodrome && estV3 };
+      achetableEnUsdc: surAerodrome && estV3, achetableEnEth: surAerodrome && estV3 };
   }
+  /* ⛔ ET AILLEURS `achetableEnEth` EST FAUX : voir les deux retours ci-dessous. */
   /* ⛔⛔ DEUX DRAPEAUX DISTINCTS, ET LES CONFONDRE CASSERAIT L UN DES DEUX CHEMINS.
    *     `achetableIci` pilote le bouton Buy du chemin v4, qui exige NOTRE lecture on-chain
    *     (`etatVie === 'LUE'`) : le laisser vrai sur une pool v3 refabriquerait le parcours mesure de
@@ -88,8 +94,8 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
    *     d enveloppement dont l octet n est PAS prouve (2/14 transactions seulement).
    *   ⇒ Un seul drapeau pour les deux aurait soit tue le v4, soit promis un achat en ETH qu on ne
    *     sait pas construire. */
-  if (estV3) return { verdict: 'CALLDATA_MANQUANT', dex: d, famille, achetableIci: false, achetableEnUsdc: true };
-  return { verdict: 'IN_APP', dex: d, famille, achetableIci: true, achetableEnUsdc: false };
+  if (estV3) return { verdict: 'CALLDATA_MANQUANT', dex: d, famille, achetableIci: false, achetableEnUsdc: true, achetableEnEth: false };
+  return { verdict: 'IN_APP', dex: d, famille, achetableIci: true, achetableEnUsdc: false, achetableEnEth: false };
 }
 
 /** Une phrase pour l ecran, en anglais comme le reste de l app.

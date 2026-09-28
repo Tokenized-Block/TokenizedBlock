@@ -1114,6 +1114,15 @@ details[open] > summary::before{transform:rotate(90deg)}
                    ⛔ IL NE REMPLACE PAS `#fAcheter`, qui pilote le chemin v4 et exige NOTRE lecture
                      on-chain. Les deux drapeaux du verdict sont disjoints, et un test l exige. -->
               <button class="bouton" id="fAcheterUsdc" type="button" hidden>Buy with USDC</button>
+              <!-- ⛔⛔ L ACHAT EN ETH, ET SON LIBELLE DIT LE COUT REEL. Il passe par `exactInput` du
+                   routeur Aerodrome : WETH -> USDC -> action, deux sauts dans UN appel, le pivot
+                   choisi par DEVIS parmi les trois pools WETH/USDC mesurees. Mais l ETH doit d abord
+                   etre enveloppe, puis le routeur autorise : TROIS gestes, et ils ne sont PAS
+                   atomiques.
+                   ⛔ Ecrire « Buy with ETH » tout court laisserait croire a une signature unique. Le
+                     nombre de gestes est dans le libelle, et qui s arrete apres le premier detient du
+                     WETH — la note le dit avant qu on commence. -->
+              <button class="bouton" id="fAcheterEth" type="button" hidden>Buy with ETH · 3 steps</button>
               <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
@@ -2059,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260928-usdc-aerodrome" hidden>Build <code>20260928-usdc-aerodrome</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-achat-eth" hidden>Build <code>20260928-achat-eth</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2718,6 +2727,9 @@ import { echelleDesMarches } from './echelle-marche.js';
 /* ⛔ L ACHAT EN USDC SUR UNE POOL v3 : lit, fait PROUVER la pool par la factory, verifie les
  * autorisations AVANT de simuler, et ne propose de signer qu apres. 10 cas, 11/11 mutations. */
 import { planAchatUsdcV3 } from './echange-v3.js';
+/* ⛔ L ACHAT EN ETH : deux sauts en un appel Aerodrome, pivot choisi par DEVIS parmi trois pools
+ * mesurees, et TROIS gestes non atomiques que l ecran annonce. 13 cas, 11/11 mutations. */
+import { planAchatEthAction } from './echange-eth.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
  * donneraient deux niveaux au meme block selon l ecran. */
 import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
@@ -4177,6 +4189,10 @@ $('#map').addEventListener('click', (e) => {
    *     lecture on-chain), soit promis un achat en ETH qu on ne sait pas construire. */
   const aBuyUsdc = $('#fAcheterUsdc');
   if (aBuyUsdc) aBuyUsdc.hidden = !vRoutage.achetableEnUsdc;
+  /* ⛔ L ACHAT EN ETH A SON PROPRE DRAPEAU : il n est ouvert que sur Aerodrome, parce qu il passe par
+   *   `exactInput` de CE routeur. Une action sur Uniswap v3 reste achetable en USDC et pas en ETH. */
+  const aBuyEth = $('#fAcheterEth');
+  if (aBuyEth) aBuyEth.hidden = !vRoutage.achetableEnEth;
   /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
    *   Proposer d en creer un autre etait exactement la reponse hors-sujet mesuree ci-dessus. */
   if (aIb) aIb.hidden = aMarche;
@@ -4257,6 +4273,70 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
   note.textContent = env.etat === 'CONFIRME'
     ? 'Bought. At least ' + mini + ' of this block is in your wallet.'
     : 'Not sent: ' + String(env.pourquoi || env.etat).slice(0, 140);
+});
+
+/* ══ ACHAT EN ETH SUR UNE ACTION AERODROME : TROIS GESTES, ET ON DIT LESQUELS ═══════════════════
+ * ⛔⛔ CE CHEMIN NE SIGNE RIEN TOUT SEUL, ET IL NE CACHE PAS SON COUT. Il LIT les pools, les fait
+ *     PROUVER par leur factory, choisit le pivot par DEVIS parmi les trois WETH/USDC mesurees,
+ *     calcule le minimum en entiers avec le frais de CHAQUE pool sur SON segment, lit ce qui est
+ *     deja fait, et ne propose que les gestes RESTANTS.
+ * ⛔⛔ LES TROIS GESTES NE SONT PAS ATOMIQUES, ET C EST DIT AVANT DE COMMENCER. Qui s arrete apres le
+ *     premier detient du WETH, pas de l ETH et pas d action. Ce n est pas une perte — le WETH se
+ *     redeconvertit — mais c est un etat inattendu, et le taire serait la vraie faute.
+ * ⛔ LA SIMULATION N A LIEU QUE QUAND ELLE PEUT DIRE QUELQUE CHOSE : avant l enveloppement et
+ *   l approbation, elle reverterait sur le solde ou l allowance et le message accuserait le MARCHE.
+ *   `echange-eth.js` rend alors `simule: false` avec la raison, et l ecran la repete. */
+$('#fAcheterEth').addEventListener('click', async () => {
+  const adr = $('#fiche').dataset.block;
+  const note = $('#fNote');
+  if (!adr || !note) return;
+  const mk = marcheParAdr.get(String(adr).toLowerCase());
+  const pool = mk && mk.poolAdr;
+  if (!pool) { note.textContent = 'We have not resolved this pool yet — try again in a moment.'; return; }
+  if (!compte) { montrerSansWallet(true); note.textContent = 'Connect a wallet first — the ETH comes from it.'; return; }
+  note.textContent = 'Reading both pools and quoting three WETH/USDC routes…';
+  let r;
+  try {
+    r = await planAchatEthAction({ rpc, compte, action: adr, pool,
+      /* ⛔ 0,01 ETH, UN MONTANT D ESSAI ASSUME ET DIT A L ECRAN. Ce n est pas un choix de produit :
+       *   c est le plus petit montant qui, sur les pools mesurees, laisse un minimum garanti non nul
+       *   avec 1 % de tolerance et une sortie lisible. */
+      montantWei: 10000000000000000n, toleranceBps: 100,
+      maintenantSec: Math.floor(Date.now() / 1000) });
+  } catch (e) {
+    note.textContent = 'We could not read the chain just now — that is us, not the market.';
+    return;
+  }
+  if (r.etat === 'NON_MESURE') {
+    note.textContent = 'We could not read enough of the chain to offer this safely: ' + String(r.pourquoi || '').slice(0, 140);
+    return;
+  }
+  if (r.etat === 'REFUSE') { note.textContent = String(r.pourquoi || 'refused'); return; }
+
+  /* ── le devis, dit AVANT de faire signer quoi que ce soit ── */
+  const usdc = (Number(BigInt(r.plan.usdcIntermediaire)) / 1e6).toFixed(2);
+  const recu = (Number(BigInt(r.plan.sortieAttendue)) / 1e8).toFixed(6);
+  const mini = (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6);
+  note.textContent = '0.01 ETH → about ' + usdc + ' USDC → about ' + recu + ' of this block, '
+    + 'at least ' + mini + ' guaranteed. ' + r.appels.length + ' step(s) left. '
+    + (r.simule ? '' : String(r.pourquoiPasSimule || '') + ' ') + r.borne;
+
+  /* ⛔⛔ LES GESTES PARTENT DANS L ORDRE, ET ON S ARRETE AU PREMIER QUI N ABOUTIT PAS. Enchainer
+   *     apres un echec ferait signer une suite qui ne peut plus reussir. */
+  for (let i = 0; i < r.appels.length; i += 1) {
+    const a = r.appels[i];
+    note.textContent = 'Step ' + (i + 1) + ' of ' + r.appels.length + ' — ' + a.nom
+      + (a.role === 'wrap' ? ' (this one holds your ETH as WETH; it converts back)' : '');
+    const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
+      to: a.to, data: a.data, value: a.value });
+    if (env.etat !== 'CONFIRME') {
+      note.textContent = 'Stopped at step ' + (i + 1) + ' of ' + r.appels.length + ' (' + a.nom + '): '
+        + String(env.pourquoi || env.etat).slice(0, 130)
+        + (i > 0 ? ' — the earlier steps did go through, so you now hold WETH.' : '');
+      return;
+    }
+  }
+  note.textContent = 'Bought. At least ' + mini + ' of this block is in your wallet.';
 });
 
 /* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;

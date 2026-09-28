@@ -63,7 +63,7 @@ const adrDuMot = (h) => {
 
 /** ⛔ TROIS ETATS, JAMAIS DEUX. Confondre « la chaine a refuse » et « on n a pas pu lire » ferait
  *  passer nos pannes pour des faits de marche — et, ici, ferait refuser un achat parfaitement bon. */
-async function lire(rpc, to, data) {
+export async function lire(rpc, to, data) {
   /* ⛔⛔ LE PREFIXE `0x` EST AJOUTE ICI, UNE FOIS, ET C ETAIT UN VRAI DEFAUT. `selecteur()` rend HUIT
    *     caracteres hex SANS prefixe ; `echange.js` ecrit donc partout `'0x' + selecteur(…) + pad(…)`.
    *     Je l avais oublie sur mes six appels de lecture. Un `eth_call` dont le `data` n est pas

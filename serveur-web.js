@@ -1140,7 +1140,11 @@ const SERVIS = [
    *     (« calldata-aerodrome.js: command not found ») et a mange le debut de la phrase. Trois fois
    *     le meme motif, dans la meme session, en connaissant la regle. Les accents graves sont
    *     desormais retires de ce commentaire : le pire des deux serait qu ils reviennent. */
+  /* ⛔ Les six modules du chemin d achat. La garde de liste blanche a crie TROIS fois avant un
+   *   deploiement depuis qu ils existent — chaque fois qu un nouveau maillon est arrive. C est
+   *   exactement son travail : un import 404 ne degrade pas la page, il tue le module ENTIER. */
   'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js', 'calldata-aerodrome.js',
+  'echange-eth.js', 'plan-eth-block.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

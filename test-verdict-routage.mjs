@@ -184,6 +184,35 @@ cas('⛔⛔ DEUX drapeaux distincts : `achetableIci` (v4) et `achetableEnUsdc` (
   }
 });
 
+cas('⛔⛔ `achetableEnEth` n est ouvert QUE sur Aerodrome, et il est CABLE', () => {
+  /* ⛔⛔ CONTRAINTE DE CHEMIN, PAS CHOIX PRODUIT. L achat en ETH passe par `exactInput` du routeur
+   *     AERODROME : WETH -> USDC -> action, deux sauts dans UN appel, pivot choisi par devis parmi
+   *     les trois pools WETH/USDC mesurees. Une action dont la pool vit sur UNISWAP v3 n est pas
+   *     atteignable par ce routeur — sa factory n est pas la sienne — donc le drapeau y reste FAUX,
+   *     meme si l achat en USDC y marche. Confondre les deux ferait promettre un chemin inexistant. */
+  const aero = verdictRoutage({ aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'b'.repeat(40) });
+  assert.equal(aero.achetableEnEth, true, 'une pool Aerodrome doit ouvrir l achat en ETH');
+  assert.equal(aero.achetableEnUsdc, true);
+  const uniV3 = verdictRoutage({ aMarche: true, dex: 'uniswap', poolAdr: '0x' + 'c'.repeat(40) });
+  assert.equal(uniV3.achetableEnUsdc, true, 'une pool Uniswap v3 reste achetable en USDC');
+  assert.equal(uniV3.achetableEnEth, false,
+    'une pool Uniswap v3 ne doit PAS ouvrir l achat en ETH : le routeur Aerodrome ne l atteint pas');
+  /* ⛔ ET NULLE PART AILLEURS */
+  for (const e of [{ aMarche: false }, { aMarche: true, dex: 'uniswap', poolAdr: null },
+    { aMarche: true, dex: 'pancakeswap', poolAdr: '0x' + 'd'.repeat(40) }]) {
+    assert.equal(verdictRoutage(e).achetableEnEth, false, JSON.stringify(e) + ' ne doit pas ouvrir l ETH');
+  }
+  /* ⛔⛔ ET LE DRAPEAU EST CABLE A UN BOUTON QUI EXISTE. Un drapeau juste sur un bouton absent est
+   *     une garde sur un element absent — toujours fausse, et ca a deja tue trois hooks ici. */
+  const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  assert.match(app, /id="fAcheterEth"/, 'le bouton d achat en ETH est absent de la page');
+  const nu2 = app.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  assert.match(nu2, /aBuyEth\.hidden = !vRoutage\.achetableEnEth;/,
+    'la visibilite du bouton ETH n est plus pilotee par le verdict');
+  assert.equal((nu2.match(/#fAcheterEth'\)\.addEventListener/g) || []).length, 1,
+    'il doit y avoir EXACTEMENT un ecouteur sur le bouton ETH : deux feraient deux achats par clic');
+});
+
 cas('aucune phrase ne promet de date', () => {
   /* ⛔ « coming soon » est une dette qu on ne peut pas tenir et que personne ne vient effacer. */
   for (const e of [{ aMarche: true, dex: 'uniswap', poolAdr: '0x' + 'e'.repeat(40) },
