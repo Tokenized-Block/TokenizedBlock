@@ -52,7 +52,19 @@ export const SELECTEURS = Object.freeze({
   /* ⛔ `approve` n est PAS sur le routeur : c est le jeton qu on appelle. Selecteur ERC-20 standard,
    *   et une sonde le recalcule depuis `approve(address,uint256)` au lieu de croire cette ligne. */
   approve: '0x095ea7b3',
+  /* ⛔ `getPool` est sur la FACTORY, pas sur le routeur. Signature designee par la chaine : appelee
+   *   avec (token0, token1, tickSpacing) lus SUR une pool, elle a rendu l adresse de cette pool
+   *   meme — aller-retour verifie sur les 12 pools d actions, 12/12, et un tickSpacing absurde
+   *   (7777) rend l adresse nulle. La variante `uint24` REVERTE sur cette factory. */
+  getPool: '0x28af8d0b',
 });
+
+/** ⛔⛔ LES `tickSpacing` MESURES, EN DOCUMENTATION SEULEMENT — JAMAIS COMME VALEUR PAR DEFAUT.
+ *  Aller-retour du 2026-09-28 sur les 12 pools d actions : 10 pour les sept plus profondes
+ *  (NVDAc, GOOGLc, METAc, AAPLc, MSTRc, MSFTc, SNDKc) et 1 pour les cinq autres (RDDTc, LLYc,
+ *  NFLXc, GMEc, AVGOc). Un defaut a 10 aurait donc rate CINQ pools sur douze en revertant apres
+ *  signature — c est pour ca que ce module exige le triplet au lieu de le supposer. */
+export const TICKSPACINGS_MESURES = Object.freeze({ profondes: 10, petites: 1, mesureLe: '2026-09-28' });
 
 const ADR = /^0x[0-9a-fA-F]{40}$/;
 const bas = (a) => String(a || '').toLowerCase();
@@ -189,6 +201,26 @@ export function calldataApprove({ token, montant, beneficiaire = ROUTEUR_AERODRO
     + motAdresse(beneficiaire, 'spender') + motNombre(m, 'amount'), value: '0x0' };
 }
 
+/** L appel de LECTURE qui resout un triplet en adresse de pool, sur la factory.
+ *
+ * ⛔⛔ POURQUOI CE MODULE PUR EXPOSE UN APPEL DE LECTURE PLUTOT QUE DE LE FAIRE. Verifier un triplet
+ *     demande le reseau ; le faire ici rendrait le module impossible a rejouer et a tester hors
+ *     ligne, et c est le rejeu a l octet qui prouve tout le reste. On rend donc le calldata, et
+ *     l appelant fait l aller-retour. `planifierFranchissement` EXIGE ensuite le resultat.
+ * ⛔ L ORDRE DES DEUX JETONS N IMPORTE PAS pour cette lecture : la factory les trie elle-meme. C est
+ *   verifie — l aller-retour a reussi sur les 12 pools sans qu on trie quoi que ce soit ici.
+ */
+export function calldataGetPool({ tokenA, tokenB, tickSpacing } = {}) {
+  if (!ADR.test(String(tokenA || '')) || !ADR.test(String(tokenB || ''))) {
+    return { etat: 'REFUSE', pourquoi: 'two whole token addresses are required' };
+  }
+  const ts = BigInt(tickSpacing === undefined || tickSpacing === null ? 0 : tickSpacing);
+  if (ts <= 0n) return { etat: 'REFUSE', pourquoi: 'tickSpacing must be a positive pool spacing' };
+  return { etat: 'PRET', to: FACTORY_AERODROME_CL,
+    data: SELECTEURS.getPool + motAdresse(tokenA, 'tokenA') + motAdresse(tokenB, 'tokenB') + motInt24(ts, 'tickSpacing'),
+    value: '0x0' };
+}
+
 /* ── le franchissement : deux jambes, un seul geste ────────────────────────────────────────── */
 /**
  * Assemble la liste d appels d un franchissement « block (Uniswap) -> pivot -> action (Aerodrome) ».
@@ -205,9 +237,26 @@ export function calldataApprove({ token, montant, beneficiaire = ROUTEUR_AERODRO
  *   L appelant passe la jambe 1 deja construite.
  */
 export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpacing, recipient,
-  deadline, minSortie1, minSortie2, maintenant = null, entree2 = null } = {}) {
+  deadline, minSortie1, minSortie2, maintenant = null, entree2 = null, poolResolue = null } = {}) {
   if (!jambe1 || !ADR.test(String(jambe1.to || '')) || typeof jambe1.data !== 'string' || !jambe1.data) {
     return { etat: 'REFUSE', pourquoi: 'leg 1 must be an already-built call { to, data }' };
+  }
+  /* ⛔⛔ LA POOL DOIT AVOIR ETE RESOLUE, PAS SUPPOSEE. Mesure du 2026-09-28 : `tickSpacing` vaut 10
+   *     sur sept pools d actions et 1 sur cinq autres. Un appelant qui prendrait 10 « parce que
+   *     c est le plus courant » construirait un calldata vers une pool INEXISTANTE pour cinq actions
+   *     sur douze — et ca reverterait APRES la signature, donc apres le gas.
+   *   ⇒ On exige l adresse rendue par `getPool` (voir `calldataGetPool`), et on refuse l adresse
+   *     nulle explicitement : c est precisement ce que la factory rend pour un triplet inconnu, donc
+   *     la laisser passer serait accepter la reponse « cette pool n existe pas ». */
+  if (!ADR.test(String(poolResolue || ''))) {
+    return { etat: 'REFUSE', pourquoi: 'the target pool must be resolved on chain first via '
+      + 'calldataGetPool(tokenA, tokenB, tickSpacing) — tickSpacing was measured as 10 on seven '
+      + 'action pools and 1 on five others, so assuming one value builds calldata for a pool that '
+      + 'does not exist' };
+  }
+  if (/^0x0{40}$/i.test(String(poolResolue))) {
+    return { etat: 'REFUSE', pourquoi: 'getPool returned the zero address: the factory knows no pool '
+      + 'for this token pair and tickSpacing' };
   }
   const min1 = BigInt(minSortie1 === undefined || minSortie1 === null ? 0 : minSortie1);
   if (min1 <= 0n) {
@@ -239,6 +288,9 @@ export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpac
      *   dire avant qu on signe. On ne connait pas son montant (il depend de la sortie reelle de la
      *   jambe 1), seulement sa NATURE — et on le formule ainsi plutot que d inventer un chiffre. */
     poussiere: 'whatever leg 1 produces above ' + min1 + ' stays in the wallet as the pivot asset',
+    /* ⛔ LA POOL VISEE EST RENDUE, pour qu un ecran puisse la montrer et qu une sonde puisse la
+     *   re-verifier. Une cible de paiement qu on ne peut pas relire est une cible qu on croit. */
+    poolVisee: bas(poolResolue),
     /* ⛔ ET LE LOT EXIGE L ATOMICITE : sans elle, la jambe 1 peut passer seule et l utilisateur se
      *   retrouve avec le pivot au lieu de ce qu il voulait. L appelant doit le demander au wallet. */
     exigeAtomique: true,

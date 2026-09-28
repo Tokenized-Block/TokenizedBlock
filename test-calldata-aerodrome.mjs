@@ -19,7 +19,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement,
+import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement, calldataGetPool,
   ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, SELECTEURS } from './calldata-aerodrome.js';
 import { selecteur } from './keccak.js';
 
@@ -28,6 +28,10 @@ const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' +
 
 const NVDAc = '0xb20000000000000000000078ee7ce2fe4908108c';
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+/* ⛔ LA POOL MESUREE, pas une invention : `getPool(USDC, NVDAc, 10)` sur la factory Aerodrome CL a
+ *   rendu cette adresse, et `token0()`/`token1()`/`tickSpacing()` lus SUR elle rendent bien
+ *   (USDC, NVDAc, 10). Aller-retour verifie le 2026-09-28 sur les 12 pools d actions : 12/12. */
+const POOL_NVDAc_USDC = '0x853f5f1b92b16714fe6cda67caad0856b83c7ab9';
 
 /* ── les deux temoins, recopies mot par mot depuis la chaine ────────────────────────────────── */
 const TEMOIN_1 = {
@@ -166,7 +170,7 @@ cas('⛔⛔ L INVARIANT DU LOT : la jambe 2 ne depense jamais plus que le minimu
   const jambe1 = { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xdeadbeef', value: '0x0' };
   const commun = { jambe1, pivot: USDC, action: NVDAc, tickSpacing: 10,
     recipient: TEMOIN_1.entree.recipient, deadline: TEMOIN_1.blocTs + 300n,
-    maintenant: TEMOIN_1.blocTs, minSortie2: 1n };
+    maintenant: TEMOIN_1.blocTs, minSortie2: 1n, poolResolue: POOL_NVDAc_USDC };
   /* egal : accepte */
   assert.equal(planifierFranchissement({ ...commun, minSortie1: 1000n, entree2: 1000n }).etat, 'PRET');
   /* moins : accepte */
@@ -183,7 +187,8 @@ cas('⛔ le lot annonce sa poussiere et exige l atomicite', () => {
   const r = planifierFranchissement({
     jambe1: { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xabcd' },
     pivot: USDC, action: NVDAc, tickSpacing: 10, recipient: TEMOIN_1.entree.recipient,
-    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n, minSortie2: 7n });
+    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n, minSortie2: 7n,
+    poolResolue: POOL_NVDAc_USDC });
   assert.equal(r.etat, 'PRET');
   assert.equal(r.appels.length, 3, 'jambe 1, approbation, jambe 2');
   assert.equal(r.appels[1].to, USDC.toLowerCase(), 'l approbation porte sur le pivot');
@@ -196,8 +201,58 @@ cas('⛔ le lot annonce sa poussiere et exige l atomicite', () => {
   for (const mauvaise of [null, undefined, {}, { to: 'x', data: '0x1' }, { to: USDC, data: '' }]) {
     assert.equal(planifierFranchissement({ jambe1: mauvaise, pivot: USDC, action: NVDAc,
       tickSpacing: 10, recipient: TEMOIN_1.entree.recipient, deadline: TEMOIN_1.blocTs + 60n,
-      minSortie1: 10n, minSortie2: 1n }).etat, 'REFUSE');
+      minSortie1: 10n, minSortie2: 1n, poolResolue: POOL_NVDAc_USDC }).etat, 'REFUSE');
   }
+  assert.equal(r.poolVisee, POOL_NVDAc_USDC.toLowerCase(), 'la pool visee doit etre relisible');
+});
+
+cas('⛔⛔ le lot REFUSE de viser une pool qui n a pas ete resolue sur la chaine', () => {
+  /* ⛔⛔ CE REFUS VIENT D UNE MESURE, PAS D UN PRINCIPE. `tickSpacing` vaut 10 sur SEPT pools
+   *     d actions (NVDAc, GOOGLc, METAc, AAPLc, MSTRc, MSFTc, SNDKc) et 1 sur CINQ autres (RDDTc,
+   *     LLYc, NFLXc, GMEc, AVGOc) — aller-retour du 2026-09-28, 12/12. Un appelant qui prendrait 10
+   *     « parce que c est le plus courant » construirait un calldata vers une pool INEXISTANTE pour
+   *     cinq actions sur douze, et ca reverterait APRES la signature. */
+  const commun = { jambe1: { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xabcd' },
+    pivot: USDC, action: NVDAc, tickSpacing: 10, recipient: TEMOIN_1.entree.recipient,
+    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n, minSortie2: 7n };
+  for (const mauvaise of [null, undefined, '', '0x', 'pas-une-adresse']) {
+    const r = planifierFranchissement({ ...commun, poolResolue: mauvaise });
+    assert.equal(r.etat, 'REFUSE', 'poolResolue=' + JSON.stringify(mauvaise) + ' doit etre refuse');
+    assert.match(r.pourquoi, /resolved on chain/i);
+  }
+  /* ⛔ ET L ADRESSE NULLE EST REFUSEE A PART, avec son propre message : c est EXACTEMENT ce que la
+   *   factory rend pour un triplet inconnu (verifie : tickSpacing 7777 -> 0x000…0). L accepter
+   *   serait accepter la reponse « cette pool n existe pas » comme si c etait une pool. */
+  const nulle = planifierFranchissement({ ...commun, poolResolue: '0x' + '0'.repeat(40) });
+  assert.equal(nulle.etat, 'REFUSE');
+  assert.match(nulle.pourquoi, /zero address/i);
+  assert.match(nulle.pourquoi, /knows no pool/i);
+  /* temoin positif : la pool mesuree passe, sinon la garde refuserait tout */
+  assert.equal(planifierFranchissement({ ...commun, poolResolue: POOL_NVDAc_USDC }).etat, 'PRET');
+});
+
+cas('⛔ calldataGetPool reproduit l appel de lecture qui a VRAIMENT resolu cette pool', () => {
+  const r = calldataGetPool({ tokenA: USDC, tokenB: NVDAc, tickSpacing: 10 });
+  assert.equal(r.etat, 'PRET');
+  /* ⛔ LA LECTURE SE FAIT SUR LA FACTORY, pas sur le routeur — les confondre rendrait un revert
+   *   illisible au lieu d une adresse. */
+  assert.equal(r.to.toLowerCase(), FACTORY_AERODROME_CL.toLowerCase());
+  const attendu = SELECTEURS.getPool
+    + '000000000000000000000000' + USDC.replace(/^0x/, '')
+    + '000000000000000000000000' + NVDAc.replace(/^0x/, '')
+    + '000000000000000000000000000000000000000000000000000000000000000a';
+  assert.equal(r.data, attendu, 'calldata different de celui qui a resolu la pool sur la chaine');
+  /* ⛔ L ORDRE DES DEUX JETONS N IMPORTE PAS : la factory trie. Verifie — l aller-retour a reussi
+   *   sur les 12 pools sans qu on trie ici. Donc l inversion doit produire un calldata VALIDE,
+   *   simplement different. */
+  const inverse = calldataGetPool({ tokenA: NVDAc, tokenB: USDC, tickSpacing: 10 });
+  assert.equal(inverse.etat, 'PRET');
+  assert.notEqual(inverse.data, r.data);
+  /* refus : tickSpacing nul ou negatif, adresses incompletes */
+  for (const ts of [0, -1, null, undefined]) {
+    assert.equal(calldataGetPool({ tokenA: USDC, tokenB: NVDAc, tickSpacing: ts }).etat, 'REFUSE');
+  }
+  assert.equal(calldataGetPool({ tokenA: '0x12', tokenB: NVDAc, tickSpacing: 10 }).etat, 'REFUSE');
 });
 
 cas('⛔ la factory publiee est celle du routeur mesure', () => {
@@ -223,7 +278,12 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
 /* ⛔ LE COMPTE M A ATTRAPE : j avais ecrit 12, il y en a 13 — la boucle sur les deux temoins produit
  *   QUATRE cas, pas deux. Un compteur qui ne se verifie pas laisserait un cas disparaitre en silence
  *   lors d un refactor, et la suite resterait verte avec une assertion en moins. */
-assert.equal(n, 13, 'compte de cas inattendu : ' + n);
+assert.equal(n, 15, 'compte de cas inattendu : ' + n);
 console.log('✓ test-calldata-aerodrome : ' + n + ' cas');
 console.log('   2 transactions reelles rejouees A L OCTET, sens croise avec leur event Swap.');
-console.log('   ⚠️ NE PROUVE PAS qu un swap aboutisse, ni que la pool visee existe.');
+console.log('   Le lot EXIGE une pool resolue par getPool : tickSpacing vaut 10 sur 7 pools et 1 sur 5.');
+/* ⛔ CETTE LIGNE A ETE CORRIGEE : elle disait « ne prouve pas que la pool visee existe », ce qui est
+ *   devenu FAUX le jour ou le planificateur a exige `poolResolue`. Une borne perimee rassure a tort
+ *   dans un sens, et sous-vend la garde dans l autre. */
+console.log('   ⚠️ NE PROUVE PAS qu un swap aboutisse : une pool qui EXISTE peut etre vide, et ni le');
+console.log('      glissement ni la profondeur au bloc ne sont simules ici.');
