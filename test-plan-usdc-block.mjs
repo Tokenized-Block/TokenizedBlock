@@ -35,11 +35,11 @@ const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' +
 /* ── les trois pools, lues sur la chaine le 2026-09-28 ──────────────────────────────────────── */
 const POOLS = [
   { sym: 'MUc', block: '0xb200000000000000000000fd2f87532b90095211', pool: '0x8fAc72F692B6fA8ebc54806563883fB3265130aA',
-    sqrtPriceX96: '24536918604096807031392936937', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 1053 },
+    sqrtPriceX96: '24536918604096807031392936937', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 1053, famille: 'v3' },
   { sym: 'AMZNc', block: '0xb200000000000000000000d9192b6b456483c2e8', pool: '0x7F030e5fD657795C0937a3e8af2929Fd90DA91C7',
-    sqrtPriceX96: '50319545420281757870299458175', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 250 },
+    sqrtPriceX96: '50319545420281757870299458175', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 250, famille: 'v3' },
   { sym: 'SPCXc', block: '0xb2000000000000000000007b9fcbd005511acbd5', pool: '0x127a12FC0953ab2ab89558c67Ba6D597D7140431',
-    sqrtPriceX96: '65242800116692165469001967838', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 149 },
+    sqrtPriceX96: '65242800116692165469001967838', fee: 10000, blockEst0: false, decBlock: 8, prixAttenduUsd: 149, famille: 'v3' },
 ];
 const RECIPIENT = '0x041e9e88288c0c62b8549c50a759a74a1a65b6b7';
 const MAINTENANT = 1790604967n;
@@ -254,6 +254,101 @@ cas('⛔⛔ LA BORNE VOYAGE AVEC LE PLAN : le prix spot n est pas une simulation
   assert.match(r.borne, /guaranteed minimum/i);
 });
 
+/* ── les pools AERODROME, lues sur la chaine le 2026-09-28 ─────────────────────────────────────
+ * ⛔⛔ `fee()` ET `tickSpacing()` SONT DEUX NOMBRES DIFFERENTS, RAPPORT 50 A 100 :
+ *       tickSpacing 10 -> fee 500   (sept pools)   ·   tickSpacing 1 -> fee 100   (cinq pools)
+ *     Le CALCUL deduit le `fee` ; le CALLDATA porte le `tickSpacing`. Les echanger fausse soit le
+ *     minimum, soit la pool visee. */
+/* ⛔⛔⛔ CES VALEURS ONT ETE FABRIQUEES DANS MA PREMIERE VERSION, ET IL FAUT QUE CE SOIT ECRIT ICI.
+ *      J avais mis `sqrtPriceX96: '4139338229063001852240242'` pour NVDAc : la vraie valeur est
+ *      52267783314573183670416926724, soit un facteur 12 627. Et l adresse de GMEc etait fausse
+ *      aussi (`…6c8a3a1ba7a4b50da9` au lieu de `…7790ed6e48e06ed935`). Completer une valeur de
+ *      chaine de memoire est la regle dure de ce projet, et je l ai enfreinte.
+ *    ⇒ CE QUI M A ATTRAPE : mes propres gardes. « le prix spot ne donne aucune sortie » et « le
+ *      minimum garanti serait nul » ont REFUSE les entrees inventees. Un module permissif — ou avec
+ *      un `fee` par defaut — aurait rendu un plan d apparence normale sur des donnees fausses.
+ *    ⇒ Les valeurs ci-dessous viennent de `pools-aerodrome.json`, lu sur la chaine le 2026-09-28. */
+const AERO = [
+  { sym: 'NVDAc', block: '0xb20000000000000000000078ee7ce2fe4908108c', pool: '0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9',
+    sqrtPriceX96: '52267783314573183670416926724', fee: 500, tickSpacing: 10, blockEst0: false, famille: 'cl', prixAttenduUsd: 229.77 },
+  { sym: 'GMEc', block: '0xb2000000000000000000007790ed6e48e06ed935', pool: '0xbBe3491582DD226bB35C6bC14AfB825941390f45',
+    sqrtPriceX96: '134952653812477035413448086383', fee: 100, tickSpacing: 1, blockEst0: false, famille: 'cl', prixAttenduUsd: 34.47 },
+];
+const baseAero = { montantUsdc: CENT_USDC, recipient: RECIPIENT, deadline: DEADLINE, maintenant: MAINTENANT };
+
+cas('⛔⛔ LA FAMILLE EST EXIGEE : aucun defaut ne decide du routeur', () => {
+  /* ⛔⛔ Un defaut a 'v3' aurait construit du calldata Uniswap pour une pool Aerodrome. Le routeur
+   *     Uniswap ne connait PAS cette factory — mesure du 2026-09-27, factory Aerodrome ABSENTE de
+   *     son bytecode — donc la transaction reverterait APRES signature. */
+  for (const f of [undefined, null, '', 'V3', 'CL', 'uniswap', 'aerodrome', 0, true]) {
+    const r = planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: f });
+    assert.equal(r.etat, 'REFUSE', 'famille=' + JSON.stringify(f) + ' doit etre refuse');
+    assert.match(r.pourquoi, /famille must be given explicitly/i);
+  }
+  /* temoins positifs : les deux familles declarees passent */
+  assert.equal(planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3' }).etat, 'PRET');
+  assert.equal(planUsdcVersBlock({ ...AERO[0], ...baseAero }).etat, 'PRET');
+});
+
+cas('⛔⛔ `fee` ET `tickSpacing` NE SONT PAS INTERCHANGEABLES', () => {
+  const p = AERO[0];   /* tickSpacing 10, fee 500 */
+  /* ⛔ LE CALLDATA CHANGE AVEC LE tickSpacing, PAS AVEC LE fee : deux plans qui ne different que
+   *   par le tickSpacing doivent produire des calldata DIFFERENTS. */
+  const bon = planUsdcVersBlock({ ...p, ...baseAero });
+  const tsFaux = planUsdcVersBlock({ ...p, ...baseAero, tickSpacing: 1 });
+  assert.equal(bon.etat, 'PRET'); assert.equal(tsFaux.etat, 'PRET');
+  assert.notEqual(bon.appel.data, tsFaux.appel.data, 'le tickSpacing ne voyage pas dans le calldata');
+  /* ⛔ ET LE MINIMUM CHANGE AVEC LE fee, PAS AVEC LE tickSpacing : meme tickSpacing, fee different
+   *   ⇒ minimum different ; et la sortie doit suivre EXACTEMENT la reduction d entree. */
+  const feeFaux = planUsdcVersBlock({ ...p, ...baseAero, fee: 10 });
+  assert.notEqual(BigInt(bon.sortieAttendue), BigInt(feeFaux.sortieAttendue),
+    'le fee ne change pas le minimum : il est peut-etre pris du mauvais cote');
+  assert.equal(BigInt(bon.sortieAttendue),
+    sortieSpot({ entree: (CENT_USDC * 999500n) / 1000000n, sqrtPriceX96: p.sqrtPriceX96, entreeEst0: true }),
+    'la sortie ne correspond pas a une entree reduite de 500/1e6');
+  /* ⛔ ET LE PLAN REND LES DEUX SEPAREMENT, pour qu un ecran ne puisse pas les confondre */
+  assert.equal(bon.fee, 500);
+  assert.equal(bon.tickSpacing, 10);
+  assert.notEqual(bon.fee, bon.tickSpacing);
+});
+
+cas('⛔ une pool Aerodrome SANS tickSpacing lu est refusee', () => {
+  /* ⛔ Il ne se deduit pas du `fee`, et un defaut viserait une pool inexistante. */
+  for (const ts of [undefined, null, 0, -1, 'dix']) {
+    const r = planUsdcVersBlock({ ...AERO[0], ...baseAero, tickSpacing: ts });
+    assert.equal(r.etat, 'REFUSE', 'tickSpacing=' + JSON.stringify(ts) + ' doit etre refuse');
+    assert.match(r.pourquoi, /tickSpacing read from the pool/i);
+    assert.match(r.pourquoi, /NOT its fee/i, 'le refus doit nommer le piege');
+  }
+});
+
+cas('⛔⛔ Aerodrome NE PASSE PAS par Permit2, Uniswap OUI', () => {
+  /* ⛔⛔ MESURE DU 2026-09-28 : l adresse de Permit2 est ABSENTE du bytecode du routeur Aerodrome
+   *     (temoins : factory Aerodrome PRESENTE, adresse bidon absente) ⇒ une allowance DIRECTE au
+   *     routeur suffit, UNE signature de moins. Autoriser Permit2 pour un swap Aerodrome ferait
+   *     signer pour rien ET laisserait le swap echouer. */
+  assert.equal(planUsdcVersBlock({ ...AERO[0], ...baseAero }).viaPermit2, false);
+  assert.equal(planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3' }).viaPermit2, true);
+  /* et les deux routeurs cibles DIFFERENT : un calldata Aerodrome envoye au routeur Uniswap
+   * viserait une factory qu il ne connait pas */
+  assert.notEqual(planUsdcVersBlock({ ...AERO[0], ...baseAero }).appel.to.toLowerCase(),
+    planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3' }).appel.to.toLowerCase());
+});
+
+cas('⛔ le prix Aerodrome derive colle a l index sur les deux pools mesurees', () => {
+  /* ⛔ LE TEMOIN DU SENS, comme pour les pools Uniswap : le prix implicite doit egaler celui que
+   *   notre index affiche. Une division du mauvais cote donnerait son propre inverse. */
+  for (const p of AERO) {
+    const r = planUsdcVersBlock({ ...p, ...baseAero, toleranceBps: 0 });
+    assert.equal(r.etat, 'PRET', p.sym + ' : ' + (r.pourquoi || ''));
+    const recu = Number(BigInt(r.sortieAttendue)) / 1e8;
+    const utile = 100 * (1 - p.fee / 1e6);
+    const prix = utile / recu;
+    assert.ok(Math.abs(prix - p.prixAttenduUsd) / p.prixAttenduUsd < 0.02,
+      p.sym + ' : prix derive ' + prix.toFixed(2) + ' vs index ' + p.prixAttenduUsd);
+  }
+});
+
 cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
   const src = readFileSync(new URL('./plan-usdc-block.js', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
@@ -282,7 +377,7 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
   assert.ok(!corps.includes('Number('), 'sortieSpot utilise Number : le calcul doit rester en entiers');
 });
 
-assert.equal(n, 12, 'compte de cas inattendu : ' + n);
+assert.equal(n, 17, 'compte de cas inattendu : ' + n);
 console.log('✓ test-plan-usdc-block : ' + n + ' cas');
 console.log('   Trois pools REELLES ; le sens prouve par l ordre de grandeur (AMZNc ~$250).');
 console.log('   ⚠️ NE PROUVE PAS qu un swap aboutisse : le prix spot ignore la profondeur.');

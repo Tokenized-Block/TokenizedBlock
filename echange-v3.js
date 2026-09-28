@@ -26,12 +26,29 @@ import { selecteur, encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT16
 import { PERMIT2 } from './lancer-pool.js';
 import { ROUTEUR } from './echange.js';
 import { planUsdcVersBlock, USDC_BASE } from './plan-usdc-block.js';
+import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, calldataApprove } from './calldata-aerodrome.js';
 
 /** La factory des pools Uniswap v3 sur Base.
  * ⛔ LUE SUR LA CHAINE le 2026-09-27 : `factory()` sur trois pools `uniswap` de Base rend cette
  *   meme adresse, et elle est PRESENTE dans le bytecode du routeur qu on deploie. Publiee ici pour
  *   qu une sonde puisse la re-verifier, pas pour etre recopiee ailleurs. */
 export const FACTORY_UNISWAP_V3 = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
+
+/** ⛔⛔ LES DEUX FAMILLES, ET TOUT DIFFERE ENTRE ELLES SAUF LA MATHEMATIQUE. Mesures du 2026-09-27
+ *     et du 2026-09-28 :
+ *       'v3' Uniswap   : factory 0x33128a8f…, `getPool(address,address,uint24 fee)`,
+ *                        routeur 0x6ff5693b…, et l approbation passe par PERMIT2 (deux signatures).
+ *       'cl' Aerodrome : factory 0xf8f2eb49…, `getPool(address,address,int24 tickSpacing)`,
+ *                        routeur 0x698cb2b6…, et PERMIT2 est ABSENT de son bytecode ⇒ une allowance
+ *                        DIRECTE au routeur, UNE signature de moins.
+ *     ⛔ Les deux selecteurs de `getPool` DIFFERENT (uint24 vs int24), et sur la factory Aerodrome
+ *       la variante `uint24` REVERTE. Les confondre ne rend pas une mauvaise pool : ca ne rend RIEN.
+ *     ⛔ Et sur Aerodrome, `fee()` et `tickSpacing()` sont deux nombres, rapport 50 a 100 : le
+ *       CALCUL deduit le fee, le CALLDATA porte le tickSpacing. */
+export const REGLAGES_FAMILLE = Object.freeze({
+  v3: { factory: FACTORY_UNISWAP_V3, sigGetPool: 'getPool(address,address,uint24)', viaPermit2: true },
+  cl: { factory: FACTORY_AERODROME_CL, sigGetPool: 'getPool(address,address,int24)', viaPermit2: false },
+});
 
 export const ETATS_V3 = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']);
 
@@ -77,10 +94,21 @@ async function lire(rpc, to, data) {
  * @param {number} [o.chaine]
  */
 export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
-  toleranceBps = 100, maintenantSec = null, chaine = 8453, devise = USDC_BASE } = {}) {
+  toleranceBps = 100, maintenantSec = null, chaine = 8453, devise = USDC_BASE, famille = null } = {}) {
   if (typeof rpc !== 'function') return { etat: 'NON_MESURE', pourquoi: 'no chain reader provided' };
-  const R = ROUTEUR[Number(chaine)];
-  if (!R) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
+  /* ⛔⛔ LA FAMILLE EST EXIGEE EXPLICITEMENT. Un defaut a 'v3' interrogerait la factory Uniswap pour
+   *     une pool Aerodrome : elle ne la connait pas, la provenance serait refusee, et l ecran dirait
+   *     « cette pool n est pas fiable » alors qu elle l est parfaitement — un faux negatif sur
+   *     12,10 M$ de profondeur. */
+  const reglages = REGLAGES_FAMILLE[String(famille || '')];
+  if (!reglages) {
+    return { etat: 'REFUSE', pourquoi: 'famille must be "v3" (Uniswap) or "cl" (Aerodrome): the two '
+      + 'use different factories, different getPool signatures and different approval paths' };
+  }
+  /* ⛔ LE ROUTEUR SUIT LA FAMILLE. Envoyer un calldata Aerodrome au routeur Uniswap le ferait
+   *   chercher une pool dans une factory qu il ne connait pas. */
+  const R = reglages.viaPermit2 ? ROUTEUR[Number(chaine)] : ROUTEUR_AERODROME_CL;
+  if (!R) return { etat: 'REFUSE', pourquoi: 'no router measured for this family on this network' };
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (!ADR.test(String(block || ''))) return { etat: 'REFUSE', pourquoi: 'a whole block address is required' };
   if (!ADR.test(String(pool || ''))) return { etat: 'REFUSE', pourquoi: 'a whole pool address is required' };
@@ -117,9 +145,30 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
   }
   const blockEst0 = bas(a0) === bas(block);
 
-  /* ── 2. la POOL EST PROUVEE par aller-retour sur la factory ─────────────────────────────── */
-  const g = await lire(rpc, FACTORY_UNISWAP_V3,
-    selecteur('getPool(address,address,uint24)') + pad(a0) + pad(a1) + motNb(fee));
+  /* ⛔⛔ SUR AERODROME IL FAUT AUSSI LE `tickSpacing`, ET CE N EST PAS LE `fee`. Mesure du
+   *     2026-09-28 sur les 12 pools d actions : tickSpacing 10 -> fee 500, tickSpacing 1 -> fee 100
+   *     — un rapport de 50 a 100. Le CALCUL du minimum deduit le fee ; le CALLDATA et la recherche
+   *     de pool portent le tickSpacing. Utiliser l un pour l autre ne rend pas une mauvaise pool :
+   *     ca ne rend RIEN, et l ecran dirait « pool inconnue » sur une pool parfaitement valide. */
+  let tickSpacing = null;
+  if (famille === 'cl') {
+    const ts = await lire(rpc, pool, selecteur('tickSpacing()'));
+    if (ts.etat === 'NON_MESURE') {
+      return { etat: 'NON_MESURE', pourquoi: 'could not read tickSpacing on the pool: ' + ts.pourquoi };
+    }
+    if (ts.etat === 'REVERT') {
+      return { etat: 'REFUSE', pourquoi: 'this address does not answer like an Aerodrome CL pool (tickSpacing)' };
+    }
+    try { tickSpacing = Number(BigInt(ts.res)); } catch (_) { tickSpacing = 0; }
+    if (!tickSpacing || tickSpacing <= 0) {
+      return { etat: 'REFUSE', pourquoi: 'the pool answered an unusable tickSpacing' };
+    }
+  }
+
+  /* ── 2. la POOL EST PROUVEE par aller-retour sur la factory DE SA FAMILLE ──────────────── */
+  const g = await lire(rpc, reglages.factory,
+    selecteur(reglages.sigGetPool) + pad(a0) + pad(a1)
+    + motNb(famille === 'cl' ? tickSpacing : fee));
   if (g.etat === 'NON_MESURE') {
     return { etat: 'NON_MESURE', pourquoi: 'could not ask the factory whether this pool is its own: ' + g.pourquoi };
   }
@@ -129,12 +178,15 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
      *     l adresse n est pas une pool de CETTE factory, soit le `fee` lu ne lui correspond pas.
      *     Dans les deux cas, le routeur ne saura pas l atteindre — et un prix lu sur un contrat
      *     quelconque serait un prix invente. */
-    return { etat: 'REFUSE', pourquoi: 'the Uniswap v3 factory does not know this pool for this token '
-      + 'pair and fee — the router could not reach it, and its price cannot be trusted' };
+    return { etat: 'REFUSE', pourquoi: 'the ' + (famille === 'cl' ? 'Aerodrome CL' : 'Uniswap v3')
+      + ' factory does not know this pool for this token pair and '
+      + (famille === 'cl' ? 'tickSpacing' : 'fee')
+      + ' — the router could not reach it, and its price cannot be trusted' };
   }
 
   /* ── 3. le plan, PUR ───────────────────────────────────────────────────────────────────── */
   const plan = planUsdcVersBlock({
+    famille, tickSpacing,
     block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc, toleranceBps,
     recipient: compte, deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), devise,
   });
@@ -142,6 +194,29 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
 
   /* ── 4. LES AUTORISATIONS AVANT LA SIMULATION ──────────────────────────────────────────── */
   const m = BigInt(plan.montantUsdc);
+
+  /* ⛔⛔ AERODROME NE PASSE PAS PAR PERMIT2, ET LE VERIFIER QUAND MEME FERAIT SIGNER POUR RIEN.
+   *     Mesure du 2026-09-28 : l adresse de Permit2 est ABSENTE du bytecode du routeur Aerodrome
+   *     (temoins : factory Aerodrome PRESENTE, adresse bidon absente). Son `exactInputSingle` tire
+   *     les jetons par une allowance ERC-20 DIRECTE — donc UNE signature, pas deux.
+   *   ⛔ LE MONTANT EXACT, PAS LE MAXIMUM : `calldataApprove` refuse une approbation illimitee, parce
+   *     qu une allowance infinie survit a la transaction. Sur le chemin Uniswap on garde le MAX vers
+   *     PERMIT2 — c est son modele : Permit2 accorde ensuite au routeur une permission BORNEE dans
+   *     le temps. Les deux choix sont differents parce que les deux risques sont differents. */
+  if (!reglages.viaPermit2) {
+    const aDirecte = await lire(rpc, devise, selecteur('allowance(address,address)') + pad(compte) + pad(R));
+    if (aDirecte.etat !== 'OK') {
+      return { etat: 'NON_MESURE', pourquoi: 'an approval could not be read', plan };
+    }
+    let assez = false;
+    try { assez = BigInt(aDirecte.res) >= m; } catch (_) { assez = false; }
+    if (!assez) {
+      const appro = calldataApprove({ token: devise, montant: m, beneficiaire: R });
+      if (appro.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'approval refused: ' + appro.pourquoi, plan };
+      return { etat: 'APPROBATIONS', plan, pourquoi: null,
+        etapes: [{ nom: 'Allow the Aerodrome router to move exactly this USDC', to: appro.to, data: appro.data, value: '0x0' }] };
+    }
+  } else {
   const aP2 = await lire(rpc, devise, selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2));
   const aR = await lire(rpc, PERMIT2, selecteur('allowance(address,address,address)') + pad(compte) + pad(devise) + pad(R));
   if (aP2.etat !== 'OK' || aR.etat !== 'OK') {
@@ -165,6 +240,7 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
     if (!okP2) etapes.push({ nom: 'Allow Permit2 to move your USDC', to: bas(devise), data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
     if (!okR) etapes.push({ nom: 'Allow the Uniswap router (through Permit2)', to: bas(PERMIT2), data: encodePermit2Approve(devise, R, MAX_UINT160, MAX_UINT48), value: '0x0' });
     return { etat: 'APPROBATIONS', etapes, plan, pourquoi: null };
+  }
   }
 
   /* ── 5. LA SIMULATION DE LA TRANSACTION EXACTE ─────────────────────────────────────────── */

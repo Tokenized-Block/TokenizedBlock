@@ -125,10 +125,20 @@ cas('les deux phrases sont DIFFERENTES et nomment chacune sa cause', () => {
   assert.match(pV3, /buy it here with USDC/i, 'la phrase ne dit plus qu on peut acheter en USDC');
   assert.match(pV3, /not with ETH yet/i, 'la phrase ne dit plus ce qu on ne sait PAS faire');
   assert.match(pV3, /have not verified/i, 'la phrase ne dit plus POURQUOI l ETH manque');
-  /* ⛔ LE CAS AERODROME DOIT DIRE QUE C EST LE ROUTER QUI NE PEUT PAS, pas notre constructeur */
-  assert.match(pAero, /cannot address/i);
-  assert.match(pAero, /two different pool families/i);
+  /* ⛔⛔ LA PHRASE AERODROME A CHANGE LE 2026-09-28, ET L ANCIENNE ETAIT DEVENUE FAUSSE. Elle disait
+   *     « our router cannot address it at all — a swap would have to cross two pool families, which
+   *     is not built yet ». Mesure : les 12 pools Aerodrome sont TOUTES des paires block/USDC, donc
+   *     `USDC -> action` ne franchit RIEN et c est construit ET simule. Ce qui reste hors de portee
+   *     est l achat en ETH, qui lui exigerait le franchissement.
+   *   ⇒ La phrase doit dire ce qu on SAIT faire, et ce qu on ne sait PAS, sans confondre les deux. */
+  assert.match(pAero, /buy it here with USDC/i, 'la phrase ne dit plus qu on peut acheter en USDC');
+  assert.match(pAero, /not with ETH yet/i, 'la phrase ne dit plus ce qui manque');
+  assert.match(pAero, /two different pool families/i, 'la phrase ne dit plus POURQUOI l ETH manque');
+  /* ⛔ ET LA CAUSE v3 NE FUIT PAS : « notre constructeur n ecrit que du v4 » n a rien a voir ici. */
   assert.ok(!/only writes v4/i.test(pAero), 'la cause v3 ne doit pas fuir dans la phrase aerodrome');
+  /* ⛔ LE CAS v3 NE PARLE PAS DE FRANCHISSEMENT : sa pool est atteignable directement. */
+  assert.ok(!/two different pool families/i.test(pV3),
+    'la phrase v3 parle de franchissement : sa pool est pourtant atteignable sans traverser de famille');
 });
 
 cas('⛔⛔ DEUX drapeaux distincts : `achetableIci` (v4) et `achetableEnUsdc` (v3)', () => {
@@ -146,10 +156,24 @@ cas('⛔⛔ DEUX drapeaux distincts : `achetableIci` (v4) et `achetableEnUsdc` (
   const v3 = verdictRoutage({ aMarche: true, dex: 'uniswap', poolAdr: '0x' + 'a'.repeat(40) });
   assert.equal(v3.achetableIci, false, 'une pool v3 ne doit PAS ouvrir le Buy du chemin v4');
   assert.equal(v3.achetableEnUsdc, true, 'une pool v3 doit ouvrir l achat en USDC');
-  for (const e of [{ aMarche: false }, { aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'b'.repeat(40) }]) {
-    const v = verdictRoutage(e);
+  /* ⛔⛔ AERODROME EST PASSE A `achetableEnUsdc: true` LE 2026-09-28, et cette assertion encodait
+   *     l ancienne verite. Mesure : les 12 pools Aerodrome sont TOUTES des paires block/USDC,
+   *     provenance prouvee 12/12 ⇒ `USDC -> action` ne franchit AUCUNE frontiere.
+   *   ⚠️ MAIS `achetableIci` RESTE FAUX : le chemin v4 de l app ne sait pas parler a une pool
+   *     Aerodrome, son routeur n a pas cette factory dans son bytecode. */
+  const aero = verdictRoutage({ aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'b'.repeat(40) });
+  assert.equal(aero.achetableIci, false, 'le chemin v4 ne doit JAMAIS s ouvrir sur une pool Aerodrome');
+  assert.equal(aero.achetableEnUsdc, true, 'une pool Aerodrome block/USDC est achetable en USDC');
+  /* ⛔ ET SANS MARCHE, AUCUN DES DEUX */
+  const rien = verdictRoutage({ aMarche: false });
+  assert.equal(rien.achetableIci, false);
+  assert.equal(rien.achetableEnUsdc, false);
+  /* ⛔ UN DEX INCONNU N OUVRE RIEN : pancakeswap, sushiswap… ont leur propre factory, et on n a
+   *   mesure ni leur provenance ni leur routeur. */
+  for (const d of ['pancakeswap', 'sushiswap', 'hydrex', '', null]) {
+    const v = verdictRoutage({ aMarche: true, dex: d, poolAdr: '0x' + 'e'.repeat(40) });
+    assert.equal(v.achetableEnUsdc, false, 'dex=' + JSON.stringify(d) + ' ne doit pas ouvrir l achat USDC');
     assert.equal(v.achetableIci, false);
-    assert.equal(v.achetableEnUsdc, false, JSON.stringify(e) + ' ne doit pas ouvrir l achat USDC');
   }
   /* ⛔ LES DEUX NE SONT JAMAIS VRAIS ENSEMBLE : ce serait deux boutons pour un seul marche. */
   for (const e of [{ aMarche: false }, { aMarche: true, dex: 'uniswap', poolAdr: null },

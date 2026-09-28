@@ -23,6 +23,7 @@ import { selecteur } from './pool.js';
 import { PERMIT2 } from './lancer-pool.js';
 import { ROUTEUR } from './echange.js';
 import { USDC_BASE } from './plan-usdc-block.js';
+import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
 
 let n = 0;
 const cas = (titre, f) => { n++; return f().catch((e) => { console.error('✗ ' + titre); throw e; }); };
@@ -77,7 +78,7 @@ function faireRpc(sur = {}) {
   };
   return { rpc, journal };
 }
-const base = { compte: COMPTE, block: BLOCK, pool: POOL, montantUsdc: CENT_USDC,
+const base = { compte: COMPTE, block: BLOCK, pool: POOL, montantUsdc: CENT_USDC, famille: 'v3',
   toleranceBps: 100, maintenantSec: MAINTENANT };
 
 await cas('⛔ le chemin qui marche rend PRET, avec sa transaction et sa borne', async () => {
@@ -225,6 +226,127 @@ await cas('⛔ les entrees manquantes sont refusees avant tout appel', async () 
   assert.equal(sansRpc.etat, 'NON_MESURE', 'sans lecteur de chaine, on ne REFUSE pas : on ne sait pas');
 });
 
+/* ── AERODROME : la MEME fonction, une famille differente ───────────────────────────────────── */
+const POOL_A = '0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9';
+const BLOCK_A = '0xb20000000000000000000078ee7ce2fe4908108c';
+/* ⛔ VALEURS LUES SUR LA CHAINE le 2026-09-28 — et j ai deja fabrique un `sqrtPriceX96` dans cette
+ *   session, faux d un facteur 12 627. Celles-ci viennent de `pools-aerodrome.json`. */
+const SQRT_A = 52267783314573183670416926724n;
+function faireRpcAero(sur = {}) {
+  const journal = [];
+  const rpc = async (methode, params) => {
+    const p = (params && params[0]) || {};
+    const to = String(p.to || '').toLowerCase();
+    const data = String(p.data || '');
+    const sel = data.replace(/^0x/, '').slice(0, 8);
+    const estSimulation = !!p.from;
+    journal.push({ to, sel, estSimulation, data });
+    if (sur.jeter && sur.jeter(to, sel, estSimulation)) throw new Error(sur.message || 'execution reverted: boom');
+    if (estSimulation) return '0x';
+    if (to === POOL_A.toLowerCase()) {
+      if (sel === sansPrefixe('slot0()')) return '0x' + mot(SQRT_A) + mot(0).repeat(6);
+      if (sel === sansPrefixe('fee()')) return '0x' + mot(500);
+      if (sel === sansPrefixe('tickSpacing()')) return '0x' + mot(sur.tickSpacing !== undefined ? sur.tickSpacing : 10);
+      if (sel === sansPrefixe('token0()')) return '0x' + motAdr(USDC_BASE);
+      if (sel === sansPrefixe('token1()')) return '0x' + motAdr(BLOCK_A);
+    }
+    /* ⛔⛔ CE FAUX VERIFIE SES ARGUMENTS, ET C EST NE DE DEUX MUTATIONS QUI PASSAIENT. Il repondait
+     *     « voici la pool » quel que soit le TROISIEME MOT, donc echanger `fee` (500) et
+     *     `tickSpacing` (10) dans l appel a la factory ne se voyait pas. Et il rendait une allowance
+     *     enorme pour N IMPORTE QUEL beneficiaire, donc remplacer le routeur Aerodrome par celui
+     *     d Uniswap passait aussi.
+     *   ⇒ UN FAUX DOIT ETRE AUSSI EXIGEANT QUE LA CHOSE QU IL REMPLACE. La vraie factory Aerodrome
+     *     rend l adresse nulle sur un tickSpacing qui ne correspond a aucune pool — on fait pareil. */
+    if (to === FACTORY_AERODROME_CL.toLowerCase() && sel === sansPrefixe('getPool(address,address,int24)')) {
+      const troisieme = BigInt('0x' + data.replace(/^0x/, '').slice(8 + 128, 8 + 192));
+      const attendu = BigInt(sur.tickSpacing !== undefined ? sur.tickSpacing : 10);
+      /* ⛔ la vraie factory ne connait AUCUNE pool pour un mauvais espacement : adresse nulle */
+      if (troisieme !== attendu) return '0x' + motAdr('0x' + '0'.repeat(40));
+      return '0x' + motAdr(sur.poolRendue !== undefined ? sur.poolRendue : POOL_A);
+    }
+    if (to === USDC_BASE.toLowerCase() && sel === sansPrefixe('allowance(address,address)')) {
+      /* ⛔ L ALLOWANCE EST PROPRE A UN BENEFICIAIRE : un vrai jeton rend ZERO pour un autre spender.
+       *   Repondre pareil a tout le monde faisait passer un changement de routeur inapercu. */
+      const spender = '0x' + data.replace(/^0x/, '').slice(8 + 64 + 24, 8 + 128);
+      if (spender.toLowerCase() !== ROUTEUR_AERODROME_CL.toLowerCase()) return '0x' + mot(0);
+      return '0x' + mot(sur.allowance !== undefined ? sur.allowance : (1n << 200n));
+    }
+    throw new Error('execution reverted: unscripted ' + to + ' ' + sel);
+  };
+  return { rpc, journal };
+}
+const baseA = { compte: COMPTE, block: BLOCK_A, pool: POOL_A, montantUsdc: CENT_USDC,
+  toleranceBps: 100, maintenantSec: MAINTENANT, famille: 'cl' };
+
+await cas('⛔⛔ la FAMILLE est exigee : aucun defaut ne choisit la factory', async () => {
+  /* ⛔⛔ Un defaut a 'v3' interrogerait la factory Uniswap pour une pool Aerodrome. Elle ne la
+   *     connait pas ⇒ provenance refusee ⇒ l ecran dirait « cette pool n est pas fiable » sur une
+   *     pool parfaitement valide. Un faux negatif sur 12,10 M$ de profondeur. */
+  const { rpc, journal } = faireRpcAero();
+  for (const f of [undefined, null, '', 'V3', 'CL', 'aerodrome', 'uniswap', 0]) {
+    const r = await planAchatUsdcV3({ rpc, ...baseA, famille: f });
+    assert.equal(r.etat, 'REFUSE', 'famille=' + JSON.stringify(f) + ' doit etre refuse');
+    assert.match(r.pourquoi, /famille must be/i);
+  }
+  assert.equal(journal.length, 0, 'une famille invalide ne doit declencher AUCUNE lecture');
+});
+
+await cas('⛔⛔ AERODROME N INTERROGE JAMAIS PERMIT2, et n a QU UNE approbation', async () => {
+  /* ⛔⛔ LE CAS LE PLUS FORT DE CE FICHIER. Mesure du 2026-09-28 : l adresse de Permit2 est ABSENTE
+   *     du bytecode du routeur Aerodrome. Lui demander une allowance Permit2 ferait signer pour rien
+   *     ET laisserait le swap echouer. On COMPTE les appels pour le prouver — un commentaire ne le
+   *     prouverait pas. */
+  const { rpc, journal } = faireRpcAero({ allowance: 0n });
+  const r = await planAchatUsdcV3({ rpc, ...baseA });
+  assert.equal(r.etat, 'APPROBATIONS');
+  assert.equal(r.etapes.length, 1, 'Aerodrome n a qu UNE approbation, pas deux comme Uniswap');
+  assert.equal(r.etapes[0].to, USDC_BASE.toLowerCase(), 'l approbation porte sur l USDC');
+  assert.match(r.etapes[0].nom, /Aerodrome router/i);
+  assert.match(r.etapes[0].nom, /exactly this USDC/i, 'le montant EXACT, pas un maximum');
+  assert.equal(journal.filter((x) => x.to === PERMIT2.toLowerCase()).length, 0,
+    'PERMIT2 a ete interroge pour un swap Aerodrome : une signature pour rien, et le swap echouerait');
+  assert.equal(r.plan.viaPermit2, false);
+  assert.equal(journal.filter((x) => x.estSimulation).length, 0, 'aucune simulation avant l approbation');
+  /* temoin positif : avec l allowance, on va jusqu a PRET */
+  const ok = await planAchatUsdcV3({ rpc: faireRpcAero().rpc, ...baseA });
+  assert.equal(ok.etat, 'PRET', ok.pourquoi || '');
+  assert.equal(ok.tx.to.toLowerCase(), ROUTEUR_AERODROME_CL.toLowerCase(),
+    'le calldata Aerodrome doit partir vers le routeur AERODROME, pas vers celui d Uniswap');
+});
+
+await cas('⛔⛔ AERODROME lit le `tickSpacing`, et la factory est interrogee avec LUI', async () => {
+  /* ⛔ `fee()` = 500 et `tickSpacing()` = 10 sur cette pool : un rapport de 50. Interroger la
+   *   factory avec le fee ne rendrait pas une mauvaise pool — ca ne rendrait RIEN. */
+  const { rpc, journal } = faireRpcAero();
+  const r = await planAchatUsdcV3({ rpc, ...baseA });
+  assert.equal(r.etat, 'PRET');
+  assert.equal(r.plan.fee, 500, 'le fee sert au CALCUL');
+  assert.equal(r.plan.tickSpacing, 10, 'le tickSpacing sert au CALLDATA');
+  assert.notEqual(r.plan.fee, r.plan.tickSpacing);
+  /* ⛔ LA FACTORY AERODROME A BIEN ETE INTERROGEE, avec la signature `int24` */
+  const appelsFactory = journal.filter((x) => x.to === FACTORY_AERODROME_CL.toLowerCase());
+  assert.equal(appelsFactory.length, 1, 'la provenance n a pas ete demandee a la factory Aerodrome');
+  assert.equal(appelsFactory[0].sel, sansPrefixe('getPool(address,address,int24)'),
+    'la factory Aerodrome a ete interrogee avec la signature uint24 : elle REVERTE dessus');
+  /* ⛔ et le tickSpacing a bien ete LU sur la pool */
+  assert.ok(journal.some((x) => x.to === POOL_A.toLowerCase() && x.sel === sansPrefixe('tickSpacing()')),
+    'le tickSpacing n a pas ete lu : il serait suppose');
+  /* ⛔ un tickSpacing inutilisable est refuse, pas contourne */
+  const zero = await planAchatUsdcV3({ rpc: faireRpcAero({ tickSpacing: 0 }).rpc, ...baseA });
+  assert.equal(zero.etat, 'REFUSE');
+  assert.match(zero.pourquoi, /unusable tickSpacing/i);
+});
+
+await cas('⛔ la provenance Aerodrome est prouvee, et le refus nomme le tickSpacing', async () => {
+  const r = await planAchatUsdcV3({ rpc: faireRpcAero({ poolRendue: '0x' + '5'.repeat(40) }).rpc, ...baseA });
+  assert.equal(r.etat, 'REFUSE');
+  assert.match(r.pourquoi, /Aerodrome CL factory does not know/i);
+  /* ⛔ LE MESSAGE NOMME LE BON CHAMP : dire « fee » sur un refus Aerodrome enverrait chercher la
+   *   mauvaise cause, puisque c est le tickSpacing qui identifie la pool. */
+  assert.match(r.pourquoi, /tickSpacing/i);
+  assert.ok(!/and fee —/i.test(r.pourquoi), 'le refus Aerodrome parle du fee au lieu du tickSpacing');
+});
+
 await cas('⛔ la factory publiee est celle du routeur, pas celle d Aerodrome', async () => {
   /* ⛔ L erreur exactement inverse de celle qu on veut eviter : la factory Aerodrome porte un
    *   `int24 tickSpacing` a la place du `uint24 fee`, et son selecteur DIFFERE. */
@@ -233,7 +355,7 @@ await cas('⛔ la factory publiee est celle du routeur, pas celle d Aerodrome', 
   assert.notEqual(selecteur('getPool(address,address,uint24)'), selecteur('getPool(address,address,int24)'));
 });
 
-assert.equal(n, 10, 'compte de cas inattendu : ' + n);
+assert.equal(n, 14, 'compte de cas inattendu : ' + n);
 console.log('✓ test-echange-v3 : ' + n + ' cas');
 console.log('   L ordre est prouve en COMPTANT les appels : aucune simulation avant les approbations.');
 console.log('   ⚠️ NE PROUVE PAS qu un echange aboutisse : le rpc est scripte.');

@@ -2059,7 +2059,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260928-achat-usdc-v3" hidden>Build <code>20260928-achat-usdc-v3</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-usdc-aerodrome" hidden>Build <code>20260928-usdc-aerodrome</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4208,7 +4208,15 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
   note.textContent = 'Reading the pool and simulating the exact transaction…';
   let r;
   try {
-    r = await planAchatUsdcV3({ rpc, compte, block: adr, pool,
+    /* ⛔⛔ LA FAMILLE VIENT DU DEX LU, PAS D UN DEFAUT. Les deux familles n ont ni la meme factory,
+     *     ni la meme signature de `getPool`, ni le meme chemin d approbation : Uniswap passe par
+     *     PERMIT2 (deux signatures), Aerodrome par une allowance DIRECTE (une seule — mesure du
+     *     2026-09-28 : l adresse de Permit2 est ABSENTE de son bytecode).
+     *     Un defaut a 'v3' interrogerait la factory Uniswap pour une pool Aerodrome : elle ne la
+     *     connait pas, la provenance serait refusee, et l ecran dirait « cette pool n est pas
+     *     fiable » sur une pool parfaitement valide — un faux negatif sur 12,10 M$ de profondeur. */
+    const famille = /^aerodrome$/i.test(String((mk && mk.dex) || '')) ? 'cl' : 'v3';
+    r = await planAchatUsdcV3({ rpc, compte, block: adr, pool, famille,
       /* ⛔ 5 USDC, UN MONTANT D ESSAI ASSUME ET DIT A L ECRAN. Ce n est pas un choix de produit :
        *   c est le plus petit montant qui, sur les trois pools mesurees (block a 149 $ / 250 $ /
        *   1 053 $), laisse un minimum garanti non nul avec 1 % de tolerance. */

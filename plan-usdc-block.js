@@ -29,6 +29,15 @@
  *   l appelant doit simuler la transaction exacte avant de la proposer.
  */
 import { calldataV3ExactIn } from './calldata-v3.js';
+import { calldataExactInputSingleCL } from './calldata-aerodrome.js';
+
+/** Les deux familles de pool que ce planificateur sait servir.
+ * ⛔⛔ UN SEUL PLANIFICATEUR POUR LES DEUX, ET C EST DELIBERE. Le calcul du minimum, la deduction des
+ *     frais sur l entree, le plafond de tolerance et le refus d un minimum nul sont IDENTIQUES —
+ *     Slipstream est un fork de Uniswap v3 et partage la semantique de `sqrtPriceX96`. Un second
+ *     module aurait duplique ces quatre gardes, et un correctif aurait rate le jumeau.
+ *   ⛔ SEUL LE CALLDATA DIFFERE, et il differe sur un point qui coute cher : voir `FAMILLES`. */
+export const FAMILLES = Object.freeze(['v3', 'cl']);
 
 /** USDC sur Base. ⛔ Lue dans `prix-eth.js`, pas recitee — un test compare les deux. */
 export const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -69,7 +78,16 @@ export function sortieSpot({ entree, sqrtPriceX96, entreeEst0 }) {
  * @param {string} [p.devise]         par defaut USDC sur Base
  */
 export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc,
-  toleranceBps = 100, recipient, deadline, maintenant = null, devise = USDC_BASE } = {}) {
+  toleranceBps = 100, recipient, deadline, maintenant = null, devise = USDC_BASE,
+  famille = null, tickSpacing = null } = {}) {
+  /* ⛔⛔ LA FAMILLE EST EXIGEE EXPLICITEMENT, SANS DEFAUT. Un defaut a 'v3' aurait construit du
+   *     calldata Uniswap pour une pool Aerodrome : le routeur Uniswap ne connait pas cette factory
+   *     (mesure du 2026-09-27, factory Aerodrome ABSENTE de son bytecode), donc la transaction
+   *     reverterait APRES signature — ou, pire, viserait une pool Uniswap homonyme qui n existe pas. */
+  if (!FAMILLES.includes(famille)) {
+    return { etat: 'REFUSE', pourquoi: 'famille must be given explicitly: "v3" for a Uniswap pool, '
+      + '"cl" for an Aerodrome Slipstream pool — the two use different routers and different calldata' };
+  }
   if (!ADR.test(String(block || ''))) return { etat: 'REFUSE', pourquoi: 'a whole block address is required' };
   if (!ADR.test(String(devise || ''))) return { etat: 'REFUSE', pourquoi: 'a whole quote-currency address is required' };
   if (bas(block) === bas(devise)) return { etat: 'REFUSE', pourquoi: 'the block and the currency are the same asset' };
@@ -123,27 +141,53 @@ export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, m
       + 'would be zero — raise the amount' };
   }
 
-  const appel = calldataV3ExactIn({
-    sauts: [{ de: devise, vers: block, fee: Number(f) }],
-    recipient, amountIn: m, amountOutMinimum: minSortie, deadline,
+  /* ⛔⛔ SUR AERODROME, `fee()` ET `tickSpacing()` SONT DEUX NOMBRES DIFFERENTS, ET LE RAPPORT EST DE
+   *     50 A 100. Mesure du 2026-09-28 sur les 12 pools d actions :
+   *         tickSpacing 10 -> fee 500   (sept pools)
+   *         tickSpacing  1 -> fee 100   (cinq pools)
+   *     Le CALCUL du minimum deduit le `fee` ; le CALLDATA porte le `tickSpacing`. Utiliser l un
+   *     pour l autre fausse soit le minimum (50x trop optimiste), soit la pool visee (inexistante).
+   *   ⇒ Les deux sont exiges separement, et aucun n est deduit de l autre. */
+  const appel = famille === 'cl'
+    ? (() => {
+      const ts = entier(tickSpacing);
+      if (ts === null || ts <= 0n) {
+        return { etat: 'REFUSE', pourquoi: 'an Aerodrome pool needs its tickSpacing read from the pool, '
+          + 'which is NOT its fee: the measured pools are tickSpacing 10 with fee 500, and '
+          + 'tickSpacing 1 with fee 100' };
+      }
+      return calldataExactInputSingleCL({ tokenIn: devise, tokenOut: block, tickSpacing: Number(ts),
+        recipient, deadline, amountIn: m, amountOutMinimum: minSortie, maintenant });
+    })()
+    : calldataV3ExactIn({
+      sauts: [{ de: devise, vers: block, fee: Number(f) }],
+      recipient, amountIn: m, amountOutMinimum: minSortie, deadline,
     /* ⛔⛔ `payerIsUser: true` : les USDC viennent du PORTEFEUILLE, tires par le routeur a travers
      *     Permit2. `false` voudrait dire « paie depuis le solde du routeur », correct au milieu d une
      *     chaine de commandes et faux ici — et l erreur ne produit pas de revert parlant.
      *   ⇒ CE `true` A UNE CONSEQUENCE : deux autorisations Permit2 sont necessaires avant l envoi.
      *     `echange.js` les construit deja et les MESURE (`jetonPaye`) ; on ne les reecrit pas. */
-    payerIsUser: true,
-    maintenant,
-  });
+      payerIsUser: true,
+      maintenant,
+    });
   if (appel.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'calldata refused: ' + appel.pourquoi };
 
   return {
     etat: 'PRET',
+    famille,
     appel: { to: appel.to, data: appel.data, value: appel.value },
-    /* ⛔ LE JETON PAYE EST RENDU EXPLICITEMENT : c est lui qu il faut autoriser a Permit2, et le
-     *   confondre avec le block autoriserait le mauvais actif. */
+    /* ⛔ LE JETON PAYE EST RENDU EXPLICITEMENT : c est lui qu il faut autoriser, et le confondre avec
+     *   le block autoriserait le mauvais actif.
+     * ⛔⛔ ET LE BENEFICIAIRE DIFFERE SELON LA FAMILLE, mesure le 2026-09-28 : l adresse de PERMIT2
+     *     est ABSENTE du bytecode du routeur Aerodrome (temoins : factory Aerodrome presente, adresse
+     *     bidon absente) ⇒ une allowance DIRECTE au routeur suffit, UNE signature de moins que le
+     *     chemin Uniswap qui passe, lui, par Permit2. Autoriser Permit2 pour un swap Aerodrome
+     *     ferait signer pour rien et laisserait le swap echouer. */
+    viaPermit2: famille !== 'cl',
     jetonPaye: bas(devise),
     montantUsdc: m.toString(),
     fee: Number(f),
+    tickSpacing: famille === 'cl' ? Number(entier(tickSpacing)) : null,
     sortieAttendue: sortieAttendue.toString(),
     minSortie: minSortie.toString(),
     toleranceBps: Number(tol),

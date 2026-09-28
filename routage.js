@@ -63,7 +63,20 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
     /* ⛔ ON CLASSE SUR LE DEX AVANT LA FAMILLE, et c est l inverse de mon premier jet. J avais
      *   classe sur le jeton de cotation : la pool NVIDIA/USDC est cotee en USDC et vit sur
      *   AERODROME — « cotee en USDC » ne dit RIEN de l atteignabilite. Le DEX la dit. */
-    return { verdict: 'FRANCHISSEMENT', dex: d, famille, achetableIci: false, achetableEnUsdc: false };
+    /* ⛔⛔ AERODROME EST DEVENU ACHETABLE EN USDC LE 2026-09-28, ET LE MOT « FRANCHISSEMENT » EST
+     *     DESORMAIS TROMPEUR POUR CE CAS. Mesure : les 12 pools Aerodrome de notre index sont TOUTES
+     *     des paires block/USDC, provenance prouvee 12/12 par aller-retour sur leur factory. Donc
+     *     `USDC -> action` ne franchit AUCUNE frontiere — c est un swap sur une seule pool, sans
+     *     contrat et sans lot atomique, pour TOUS les wallets.
+     *     Le franchissement ne reste necessaire que pour `block (v4) <-> action (Aerodrome)`, qui
+     *     traverse bien deux familles.
+     *   ⛔ LE VERDICT GARDE SON NOM pour ne pas casser ce qui le lit, mais son drapeau change : ce
+     *     serait mentir de laisser `achetableEnUsdc` faux alors que le chemin existe et est simule.
+     *   ⚠️ ET LA DISTINCTION RESTE : `achetableIci` demeure FAUX, parce que le chemin v4 de l app ne
+     *     sait pas parler a une pool Aerodrome — son routeur n a pas cette factory. */
+    const surAerodrome = /^aerodrome$/i.test(d);
+    return { verdict: 'FRANCHISSEMENT', dex: d, famille, achetableIci: false,
+      achetableEnUsdc: surAerodrome && estV3 };
   }
   /* ⛔⛔ DEUX DRAPEAUX DISTINCTS, ET LES CONFONDRE CASSERAIT L UN DES DEUX CHEMINS.
    *     `achetableIci` pilote le bouton Buy du chemin v4, qui exige NOTRE lecture on-chain
@@ -97,6 +110,16 @@ export function phraseRoutage(v) {
      *     qu on ne sait pas construire. */
     return 'This block trades' + ou + ' in a v3 pool, priced in USDC. You can buy it here with USDC — '
       + 'not with ETH yet, because that route needs a step we have not verified. '
+      + 'The price above is our own read of that pool.';
+  }
+  /* ⛔⛔ CETTE PHRASE A CHANGE LE 2026-09-28, ET L ANCIENNE ETAIT DEVENUE FAUSSE. Elle disait « a swap
+   *     would have to cross two different pool families, which is not built yet ». Mesure : les 12
+   *     pools Aerodrome sont TOUTES des paires block/USDC ⇒ `USDC -> action` ne franchit RIEN, et
+   *     c est construit et simule. Ce qui reste hors de portee est l achat en ETH, qui exigerait le
+   *     franchissement — et lui n est pas fait. */
+  if (v.achetableEnUsdc) {
+    return 'This block trades' + ou + ', priced in USDC. You can buy it here with USDC — not with ETH '
+      + 'yet, because that route would have to cross two different pool families in one transaction. '
       + 'The price above is our own read of that pool.';
   }
   return 'This block trades' + ou + ', whose pools our router cannot address at all — a swap would have '

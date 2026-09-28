@@ -1131,7 +1131,16 @@ const SERVIS = [
   'echelle-marche.js',
   /* ⛔ Les trois modules du chemin USDC -> block. Les oublier ici rendrait la page MORTE : c est la
    *   garde de liste blanche qui l a deja crie deux fois avant un deploiement. */
-  'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js',
+  /* ⛔ calldata-aerodrome.js a rejoint cette liste le 2026-09-28 : il etait deliberement NON servi
+   *   tant qu il n etait pas branche, et c est la garde de graphe (test-imports-servis) qui a crie
+   *   des que plan-usdc-block.js et echange-v3.js ont commence a l importer. Sans elle, la page
+   *   serait MORTE en prod sur un import 404.
+   * ⛔⛔ ET CE COMMENTAIRE A ETE REPARE POUR LA TROISIEME FOIS AUJOURD HUI : je l ai injecte par une
+   *     chaine shell, bash a interprete les accents graves comme une substitution de commande
+   *     (« calldata-aerodrome.js: command not found ») et a mange le debut de la phrase. Trois fois
+   *     le meme motif, dans la meme session, en connaissant la regle. Les accents graves sont
+   *     desormais retires de ce commentaire : le pire des deux serait qu ils reviennent. */
+  'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js', 'calldata-aerodrome.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
