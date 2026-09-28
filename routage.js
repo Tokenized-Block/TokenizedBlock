@@ -53,7 +53,7 @@ const DEX_DU_ROUTER = /^uniswap$/i;
  * @returns {{verdict:string, dex:?string, famille:?string, achetableIci:boolean}}
  */
 export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
-  if (!aMarche) return { verdict: 'SANS_MARCHE', dex: null, famille: null, achetableIci: false };
+  if (!aMarche) return { verdict: 'SANS_MARCHE', dex: null, famille: null, achetableIci: false, achetableEnUsdc: false };
   const d = String(dex || '').trim() || null;
   /* ⛔ UNE ADRESSE VIDE OU MAL FORMEE NE COMPTE PAS COMME UNE POOL v3. `Boolean('')` serait faux
    *   par accident ; on exige la forme, sinon un champ vide basculerait le verdict en silence. */
@@ -63,10 +63,20 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
     /* ⛔ ON CLASSE SUR LE DEX AVANT LA FAMILLE, et c est l inverse de mon premier jet. J avais
      *   classe sur le jeton de cotation : la pool NVIDIA/USDC est cotee en USDC et vit sur
      *   AERODROME — « cotee en USDC » ne dit RIEN de l atteignabilite. Le DEX la dit. */
-    return { verdict: 'FRANCHISSEMENT', dex: d, famille, achetableIci: false };
+    return { verdict: 'FRANCHISSEMENT', dex: d, famille, achetableIci: false, achetableEnUsdc: false };
   }
-  if (estV3) return { verdict: 'CALLDATA_MANQUANT', dex: d, famille, achetableIci: false };
-  return { verdict: 'IN_APP', dex: d, famille, achetableIci: true };
+  /* ⛔⛔ DEUX DRAPEAUX DISTINCTS, ET LES CONFONDRE CASSERAIT L UN DES DEUX CHEMINS.
+   *     `achetableIci` pilote le bouton Buy du chemin v4, qui exige NOTRE lecture on-chain
+   *     (`etatVie === 'LUE'`) : le laisser vrai sur une pool v3 refabriquerait le parcours mesure de
+   *     62 secondes finissant par « creez un autre block ».
+   *     `achetableEnUsdc` pilote une affordance SEPAREE, branchee sur `echange-v3.js` : la pool v3
+   *     est atteignable par le routeur qu on deploie deja, mais seulement en payant en USDC — les
+   *     trois pools mesurees sont block/USDC, et un acheteur en ETH aurait besoin d une commande
+   *     d enveloppement dont l octet n est PAS prouve (2/14 transactions seulement).
+   *   ⇒ Un seul drapeau pour les deux aurait soit tue le v4, soit promis un achat en ETH qu on ne
+   *     sait pas construire. */
+  if (estV3) return { verdict: 'CALLDATA_MANQUANT', dex: d, famille, achetableIci: false, achetableEnUsdc: true };
+  return { verdict: 'IN_APP', dex: d, famille, achetableIci: true, achetableEnUsdc: false };
 }
 
 /** Une phrase pour l ecran, en anglais comme le reste de l app.
@@ -79,8 +89,14 @@ export function phraseRoutage(v) {
   if (v.verdict === 'SANS_MARCHE') return null;
   if (v.verdict === 'IN_APP') return null;
   if (v.verdict === 'CALLDATA_MANQUANT') {
-    return 'This block trades' + ou + ' in a v3 pool. The router this app already uses can reach it — '
-      + 'our swap builder only writes v4 calls so far, so Buy and Sell are not offered here yet. '
+    /* ⛔⛔ CETTE PHRASE A CHANGE LE 2026-09-28 : elle disait « Buy and Sell are not offered here yet ».
+     *     Ce n est plus vrai — `echange-v3.js` construit et SIMULE l achat sur ces pools. Mais il le
+     *     fait en USDC seulement : les trois pools mesurees sont block/USDC, et un achat en ETH
+     *     exigerait une commande d enveloppement dont l octet n est PAS prouve (present dans 2 des
+     *     14 transactions avec ETH). Dire « achetable » sans dire « en USDC » promettrait un chemin
+     *     qu on ne sait pas construire. */
+    return 'This block trades' + ou + ' in a v3 pool, priced in USDC. You can buy it here with USDC — '
+      + 'not with ETH yet, because that route needs a step we have not verified. '
       + 'The price above is our own read of that pool.';
   }
   return 'This block trades' + ou + ', whose pools our router cannot address at all — a swap would have '

@@ -1106,6 +1106,14 @@ details[open] > summary::before{transform:rotate(90deg)}
                  gestes : acheter, ouvrir. GM et faits restent dans le profil ; les boutons sont caches, pas supprimes. -->
             <div class="fActions fActionsMain">
               <button class="bouton" id="fAcheter" type="button">Buy</button>
+              <!-- ⛔⛔ UN BOUTON SEPARE, ET SON LIBELLE PORTE LA CONTRAINTE. Les trois blocks dont la
+                   pool est Uniswap v3 sont cotes en USDC ; l achat en ETH exigerait une commande
+                   d enveloppement dont l octet n est PAS prouve (present dans 2 des 14 transactions
+                   avec ETH mesurees sur 249 blocs). Ecrire « Buy » tout court promettrait un achat
+                   en ETH qu on ne sait pas construire — le libelle dit donc « with USDC ».
+                   ⛔ IL NE REMPLACE PAS `#fAcheter`, qui pilote le chemin v4 et exige NOTRE lecture
+                     on-chain. Les deux drapeaux du verdict sont disjoints, et un test l exige. -->
+              <button class="bouton" id="fAcheterUsdc" type="button" hidden>Buy with USDC</button>
               <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
@@ -2051,7 +2059,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260928-fiats-declares" hidden>Build <code>20260928-fiats-declares</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-achat-usdc-v3" hidden>Build <code>20260928-achat-usdc-v3</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2707,6 +2715,9 @@ import { verdictRoutage, phraseRoutage } from './routage.js';
 /* ⛔ L ECHELLE DES MARCHES SUIVIS : module pur, teste hors ligne. Le total et la phrase qui dit A QUI
  * il est viennent du meme appel — separes, le nombre se lirait comme le notre. */
 import { echelleDesMarches } from './echelle-marche.js';
+/* ⛔ L ACHAT EN USDC SUR UNE POOL v3 : lit, fait PROUVER la pool par la factory, verifie les
+ * autorisations AVANT de simuler, et ne propose de signer qu apres. 10 cas, 11/11 mutations. */
+import { planAchatUsdcV3 } from './echange-v3.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
  * donneraient deux niveaux au meme block selon l ecran. */
 import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
@@ -4161,6 +4172,11 @@ $('#map').addEventListener('click', (e) => {
   const entreeRoutage = { aMarche, dex: dexLu, poolAdr: poolAdrLu };
   const vRoutage = verdictRoutage(entreeRoutage);
   if (aBuy) aBuy.hidden = !vRoutage.achetableIci;
+  /* ⛔⛔ L AFFORDANCE USDC EST PILOTEE PAR UN DRAPEAU DISTINCT, et les deux ne sont jamais vrais
+   *     ensemble — un test l exige. Melanger les deux aurait soit tue le chemin v4 (qui exige NOTRE
+   *     lecture on-chain), soit promis un achat en ETH qu on ne sait pas construire. */
+  const aBuyUsdc = $('#fAcheterUsdc');
+  if (aBuyUsdc) aBuyUsdc.hidden = !vRoutage.achetableEnUsdc;
   /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
    *   Proposer d en creer un autre etait exactement la reponse hors-sujet mesuree ci-dessus. */
   if (aIb) aIb.hidden = aMarche;
@@ -4169,6 +4185,70 @@ $('#map').addEventListener('click', (e) => {
    *   occuperait la place de la note qui sert vraiment. */
   const noteRoutage = phraseRoutage(vRoutage);
   if (noteRoutage) $('#fNote').textContent = noteRoutage;
+});
+
+/* ══ ACHAT EN USDC SUR UNE POOL UNISWAP v3 ═════════════════════════════════════════════════════
+ * ⛔⛔ CE CHEMIN NE SIGNE RIEN TOUT SEUL. Il LIT la pool, la fait PROUVER par la factory, calcule le
+ *     minimum en entiers, verifie les autorisations Permit2, SIMULE la transaction exacte par
+ *     `eth_call` — et ne propose de signer qu apres. Chaque refus dit sa cause.
+ * ⛔ L ORDRE EST TENU PAR `echange-v3.js`, pas ici : les autorisations AVANT la simulation, sinon
+ *   un revert d allowance s afficherait comme un refus de marche. Un test compte les appels.
+ * ⚠️ CE QUE L ECRAN NE PROMET PAS : que l echange aboutisse. La simulation decrit l instant ; le
+ *   prix peut bouger avant la signature, et c est le minimum garanti qui protege alors. */
+$('#fAcheterUsdc').addEventListener('click', async () => {
+  const adr = $('#fiche').dataset.block;
+  const note = $('#fNote');
+  if (!adr || !note) return;
+  const mk = marcheParAdr.get(String(adr).toLowerCase());
+  const pool = mk && mk.poolAdr;
+  if (!pool) { note.textContent = 'We have not resolved this block’s pool yet — try again in a moment.'; return; }
+  /* ⛔ LE WALLET EST EXIGE AVANT TOUT APPEL : sans compte, il n y a ni destinataire ni autorisation
+   *   a lire, et la lecture couterait pour rien. */
+  if (!compte) { montrerSansWallet(true); note.textContent = 'Connect a wallet first — the USDC comes from it.'; return; }
+  note.textContent = 'Reading the pool and simulating the exact transaction…';
+  let r;
+  try {
+    r = await planAchatUsdcV3({ rpc, compte, block: adr, pool,
+      /* ⛔ 5 USDC, UN MONTANT D ESSAI ASSUME ET DIT A L ECRAN. Ce n est pas un choix de produit :
+       *   c est le plus petit montant qui, sur les trois pools mesurees (block a 149 $ / 250 $ /
+       *   1 053 $), laisse un minimum garanti non nul avec 1 % de tolerance. */
+      montantUsdc: 5000000n, toleranceBps: 100,
+      /* ⛔ L INSTANT VIENT D ICI, PAS DU MODULE : `echange-v3.js` reste rejouable, et son test peut
+       *   figer l heure. */
+      maintenantSec: Math.floor(Date.now() / 1000) });
+  } catch (e) {
+    note.textContent = 'We could not read the chain just now — that is us, not the market.';
+    return;
+  }
+  if (r.etat === 'NON_MESURE') {
+    /* ⛔⛔ « ON N A PAS PU LIRE » N EST PAS « C EST IMPOSSIBLE ». Le dire comme un refus enverrait
+     *     l utilisateur renoncer a un achat parfaitement bon. */
+    note.textContent = 'We could not read enough of the chain to offer this safely: ' + String(r.pourquoi || '').slice(0, 140);
+    return;
+  }
+  if (r.etat === 'REFUSE') { note.textContent = String(r.pourquoi || 'refused'); return; }
+  if (r.etat === 'APPROBATIONS') {
+    /* ⛔ LES APPROBATIONS SONT NOMMEES ET COMPTEES : « signez deux fois » sans dire quoi ni pourquoi
+     *   est exactement la porte de sortie qu on a mesuree sur le parcours de creation. */
+    note.textContent = r.etapes.length + ' one-time approval(s) first: '
+      + r.etapes.map((e) => e.nom).join(', ') + '. Nothing is swapped by these.';
+    for (const e of r.etapes) {
+      const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte, to: e.to, data: e.data, value: '0x0' });
+      if (env.etat !== 'CONFIRME') { note.textContent = 'Approval stopped: ' + String(env.pourquoi || env.etat).slice(0, 140); return; }
+    }
+    note.textContent = 'Approvals done. Tap Buy with USDC again to swap.';
+    return;
+  }
+  /* ── PRET : la chaine a accepte cette transaction exacte, a cet instant ── */
+  const attendu = (Number(BigInt(r.plan.sortieAttendue)) / 1e8).toFixed(6);
+  const mini = (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6);
+  note.textContent = '5 USDC → about ' + attendu + ' of this block, at least ' + mini
+    + ' guaranteed. ' + r.plan.borne;
+  const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
+    to: r.tx.to, data: r.tx.data, value: r.tx.value });
+  note.textContent = env.etat === 'CONFIRME'
+    ? 'Bought. At least ' + mini + ' of this block is in your wallet.'
+    : 'Not sent: ' + String(env.pourquoi || env.etat).slice(0, 140);
 });
 
 /* tip 0042 — Buy depuis la fiche : ouvre le profil, 0.01 ETH, prepare l achat (le wallet signe) ;

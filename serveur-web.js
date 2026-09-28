@@ -1129,6 +1129,9 @@ const SERVIS = [
   /* ⛔ `echelle-marche.js` : le total des marches suivis ET la phrase qui dit a qui il est. L oublier
    *   ici rendrait la page MORTE — c est la garde ci-dessous qui l a crie la derniere fois. */
   'echelle-marche.js',
+  /* ⛔ Les trois modules du chemin USDC -> block. Les oublier ici rendrait la page MORTE : c est la
+   *   garde de liste blanche qui l a deja crie deux fois avant un deploiement. */
+  'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

@@ -114,13 +114,50 @@ cas('les deux phrases sont DIFFERENTES et nomment chacune sa cause', () => {
   const pAero = phraseRoutage(verdictRoutage({ aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'd'.repeat(40) }));
   assert.ok(pV3 && pAero, 'les deux cas doivent produire une phrase');
   assert.notEqual(pV3, pAero, 'deux causes differentes ne peuvent pas partager une phrase');
-  /* ⛔ LE CAS v3 DOIT DIRE QUE LE ROUTER Y ARRIVE — c est l information qui change la priorite */
-  assert.match(pV3, /router this app already uses can reach it/i);
-  assert.match(pV3, /only writes v4/i);
+  /* ⛔⛔ CETTE ASSERTION A CHANGE LE 2026-09-28, ET LA RAISON EST QU ELLE VERROUILLAIT UNE PHRASE
+   *     DEVENUE FAUSSE. Elle exigeait « only writes v4 » et « the router can reach it » : c etait
+   *     vrai quand notre constructeur ne savait pas ecrire de commande v3. Depuis `echange-v3.js`,
+   *     l achat sur ces pools est construit ET simule — mais EN USDC SEULEMENT, parce que les trois
+   *     pools mesurees sont block/USDC et qu un achat en ETH exigerait une commande d enveloppement
+   *     dont l octet n est PAS prouve (present dans 2 des 14 transactions avec ETH).
+   *   ⇒ La phrase doit dire les DEUX : ce qu on sait faire, et ce qu on ne sait pas encore. Un test
+   *     qui garde une phrase perimee empeche de corriger un ecran qui ment. */
+  assert.match(pV3, /buy it here with USDC/i, 'la phrase ne dit plus qu on peut acheter en USDC');
+  assert.match(pV3, /not with ETH yet/i, 'la phrase ne dit plus ce qu on ne sait PAS faire');
+  assert.match(pV3, /have not verified/i, 'la phrase ne dit plus POURQUOI l ETH manque');
   /* ⛔ LE CAS AERODROME DOIT DIRE QUE C EST LE ROUTER QUI NE PEUT PAS, pas notre constructeur */
   assert.match(pAero, /cannot address/i);
   assert.match(pAero, /two different pool families/i);
   assert.ok(!/only writes v4/i.test(pAero), 'la cause v3 ne doit pas fuir dans la phrase aerodrome');
+});
+
+cas('⛔⛔ DEUX drapeaux distincts : `achetableIci` (v4) et `achetableEnUsdc` (v3)', () => {
+  /* ⛔⛔ LES CONFONDRE CASSERAIT L UN DES DEUX CHEMINS. `achetableIci` pilote le Buy du chemin v4,
+   *     qui exige NOTRE lecture on-chain : le laisser vrai sur une pool v3 refabriquerait le parcours
+   *     mesure de 62 secondes finissant par « creez un autre block ». `achetableEnUsdc` pilote une
+   *     affordance SEPAREE, branchee sur `echange-v3.js`, et seulement en USDC — les trois pools
+   *     mesurees sont block/USDC, et l achat en ETH exigerait une commande d enveloppement dont
+   *     l octet n est PAS prouve.
+   *   ⇒ Un seul drapeau pour les deux aurait soit tue le v4, soit promis un achat en ETH qu on ne
+   *     sait pas construire. */
+  const v4 = verdictRoutage({ aMarche: true, dex: 'uniswap', poolAdr: null });
+  assert.equal(v4.achetableIci, true);
+  assert.equal(v4.achetableEnUsdc, false, 'le chemin v4 ne passe pas par l achat USDC');
+  const v3 = verdictRoutage({ aMarche: true, dex: 'uniswap', poolAdr: '0x' + 'a'.repeat(40) });
+  assert.equal(v3.achetableIci, false, 'une pool v3 ne doit PAS ouvrir le Buy du chemin v4');
+  assert.equal(v3.achetableEnUsdc, true, 'une pool v3 doit ouvrir l achat en USDC');
+  for (const e of [{ aMarche: false }, { aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'b'.repeat(40) }]) {
+    const v = verdictRoutage(e);
+    assert.equal(v.achetableIci, false);
+    assert.equal(v.achetableEnUsdc, false, JSON.stringify(e) + ' ne doit pas ouvrir l achat USDC');
+  }
+  /* ⛔ LES DEUX NE SONT JAMAIS VRAIS ENSEMBLE : ce serait deux boutons pour un seul marche. */
+  for (const e of [{ aMarche: false }, { aMarche: true, dex: 'uniswap', poolAdr: null },
+    { aMarche: true, dex: 'uniswap', poolAdr: '0x' + 'c'.repeat(40) },
+    { aMarche: true, dex: 'aerodrome', poolAdr: '0x' + 'd'.repeat(40) }]) {
+    const v = verdictRoutage(e);
+    assert.ok(!(v.achetableIci && v.achetableEnUsdc), 'les deux drapeaux sont vrais ensemble');
+  }
 });
 
 cas('aucune phrase ne promet de date', () => {
