@@ -26,6 +26,7 @@ import { selecteur, encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT16
 import { PERMIT2 } from './lancer-pool.js';
 import { ROUTEUR } from './echange.js';
 import { planUsdcVersBlock, USDC_BASE } from './plan-usdc-block.js';
+import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, calldataApprove } from './calldata-aerodrome.js';
 
 /** La factory des pools Uniswap v3 sur Base.
@@ -187,6 +188,12 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
   /* ── 3. le plan, PUR ───────────────────────────────────────────────────────────────────── */
   const plan = planUsdcVersBlock({
     famille, tickSpacing,
+    /* ⛔⛔ LE FRAIS D INTERFACE PART D ICI, VERS LE WALLET DU DEPOT. Aucun defaut dans le module pur :
+     *     c est l appelant qui nomme le beneficiaire, pour qu une retenue ne puisse jamais s appliquer
+     *     sans que quelqu un l ait decidee. 0,1 % — voir FRAIS_INTERFACE_BPS_CL.
+     *   ⚠️ SUR UNISWAP v3 LE MONTAGE N EXISTE PAS : l Universal Router n a pas sweepTokenWithFee
+     *     (mesure du 2026-09-28). Le plan rendra alors fraisBps 0, et c est dit, pas tu. */
+    beneficiaireFrais: FEE_WALLET,
     block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc, toleranceBps,
     recipient: compte, deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), devise,
   });

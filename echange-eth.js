@@ -24,6 +24,7 @@ import { selecteur } from './pool.js';
 import { lire } from './echange-v3.js';
 import { USDC_BASE } from './plan-usdc-block.js';
 import { planEthVersAction, WETH_BASE } from './plan-eth-block.js';
+import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
 
 /** ⛔ Les espacements ou une pool WETH/USDC a ete MESUREE le 2026-09-28 (fee 80 / 500 / 550).
@@ -135,7 +136,10 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   }
 
   /* ── 3. le plan, PUR ──────────────────────────────────────────────────────────────────────── */
+  /* ⛔ LE FRAIS D INTERFACE VERS LE WALLET DU DEPOT : 0,1 %, nomme par l appelant et jamais par
+   *   defaut dans le module pur. */
   const plan = planEthVersAction({ action, montantWei, poolAction, poolsPivot, recipient: compte,
+    beneficiaireFrais: FEE_WALLET,
     deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise });
   if (plan.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: plan.pourquoi, plan: null };
 

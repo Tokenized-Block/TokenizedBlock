@@ -29,7 +29,8 @@
  *   l appelant doit simuler la transaction exacte avant de la proposer.
  */
 import { calldataV3ExactIn } from './calldata-v3.js';
-import { calldataExactInputSingleCL } from './calldata-aerodrome.js';
+import { calldataExactInputSingleCL, calldataExactInputAvecFrais,
+  FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 
 /** Les deux familles de pool que ce planificateur sait servir.
  * ⛔⛔ UN SEUL PLANIFICATEUR POUR LES DEUX, ET C EST DELIBERE. Le calcul du minimum, la deduction des
@@ -79,7 +80,8 @@ export function sortieSpot({ entree, sqrtPriceX96, entreeEst0 }) {
  */
 export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc,
   toleranceBps = 100, recipient, deadline, maintenant = null, devise = USDC_BASE,
-  famille = null, tickSpacing = null } = {}) {
+  famille = null, tickSpacing = null,
+  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null } = {}) {
   /* ⛔⛔ LA FAMILLE EST EXIGEE EXPLICITEMENT, SANS DEFAUT. Un defaut a 'v3' aurait construit du
    *     calldata Uniswap pour une pool Aerodrome : le routeur Uniswap ne connait pas cette factory
    *     (mesure du 2026-09-27, factory Aerodrome ABSENTE de son bytecode), donc la transaction
@@ -156,6 +158,21 @@ export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, m
           + 'which is NOT its fee: the measured pools are tickSpacing 10 with fee 500, and '
           + 'tickSpacing 1 with fee 100' };
       }
+      /* ⛔⛔ SUR AERODROME, LE SWAP PORTE LE FRAIS D INTERFACE quand un beneficiaire est fourni :
+       *     `multicall([ exactInput(vers le routeur), sweepTokenWithFee(...) ])`, les deux dans la
+       *     MEME transaction. Un saut unique passe par `exactInput` et non `exactInputSingle` —
+       *     l encodage d un chemin a UN saut est rejoue a l octet sur une transaction reelle.
+       *   ⛔ SANS BENEFICIAIRE, PAS DE MONTAGE ET PAS DE RETENUE : un frais qui s applique « par
+       *     defaut » est un frais qu on cache, et ce produit se vend sur l inverse.
+       *   ⚠️ L UNIVERSAL ROUTER D UNISWAP N A AUCUNE de ces fonctions — mesure du 2026-09-28. Les
+       *     blocks dont la pool est Uniswap v3 ne peuvent donc PAS porter ce frais, et c est dit
+       *     dans le plan (`fraisBps: 0`) plutot que passe sous silence. */
+      const avecFrais = ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n;
+      if (avecFrais) {
+        return calldataExactInputAvecFrais({ sauts: [{ de: devise, vers: block, tickSpacing: Number(ts) }],
+          recipient, deadline, amountIn: m, amountOutMinimum: minSortie, maintenant,
+          fraisBps, beneficiaireFrais });
+      }
       return calldataExactInputSingleCL({ tokenIn: devise, tokenOut: block, tickSpacing: Number(ts),
         recipient, deadline, amountIn: m, amountOutMinimum: minSortie, maintenant });
     })()
@@ -190,6 +207,11 @@ export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, m
     tickSpacing: famille === 'cl' ? Number(entier(tickSpacing)) : null,
     sortieAttendue: sortieAttendue.toString(),
     minSortie: minSortie.toString(),
+    /* ⛔ CE QUE L UTILISATEUR RECOIT VRAIMENT, APRES NOTRE RETENUE. Publier le minimum des pools
+     *   comme « ce que vous recevez » serait le chiffre juste au mauvais endroit. */
+    minUtilisateur: appel.minUtilisateur || minSortie.toString(),
+    fraisBps: appel.fraisBps || 0,
+    beneficiaireFrais: appel.beneficiaireFrais || null,
     toleranceBps: Number(tol),
     pool: bas(pool),
     /* ⛔⛔ LA BORNE VOYAGE AVEC LE PLAN, en anglais, prete pour l ecran. Un chiffre de sortie sans

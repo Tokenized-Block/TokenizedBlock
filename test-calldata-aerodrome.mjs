@@ -19,9 +19,10 @@
  */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement, calldataGetPool, calldataExactInputCL,
+import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement, calldataGetPool, calldataExactInputCL, calldataExactInputAvecFrais, FRAIS_INTERFACE_BPS_CL,
   ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, SELECTEURS } from './calldata-aerodrome.js';
 import { selecteur } from './keccak.js';
+import { FEE_WALLET } from './frais-creation.js';
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -363,6 +364,139 @@ cas('⛔ `exactInput` refuse un minimum nul, le routeur comme destinataire, et u
   assert.equal(calldataExactInputCL({ ...b, deadline: TEMOIN_MULTI.blocTs + 1800n }).etat, 'PRET');
 });
 
+/* ── LE FRAIS D INTERFACE : `multicall([ exactInput(vers le routeur), sweepTokenWithFee ])` ──── */
+const FEE_WALLET_TEST = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+const entreeFrais = { ...TEMOIN_MULTI.entree, maintenant: TEMOIN_MULTI.blocTs,
+  beneficiaireFrais: FEE_WALLET_TEST };
+const motDe = (hex, i) => hex.replace(/^0x/, '').slice(8 + i * 64, 8 + (i + 1) * 64);
+
+cas('⛔⛔ LE MULTICALL EST DECODE ENTIEREMENT, mot par mot', () => {
+  /* ⛔⛔ C EST DE L ARGENT : un offset faux fait pointer dans le vide, et un tableau mal encode
+   *     passerait peut-etre la simulation pour echouer a l envoi. On decode TOUT, on ne se fie pas
+   *     a « ca construit ». */
+  const r = calldataExactInputAvecFrais(entreeFrais);
+  assert.equal(r.etat, 'PRET', r.pourquoi || '');
+  assert.equal(r.to.toLowerCase(), ROUTEUR_AERODROME_CL.toLowerCase());
+  assert.equal(r.value, '0x0');
+  assert.ok(r.data.startsWith(SELECTEURS.multicall), 'l enveloppe n est pas un multicall');
+  const corps = r.data.replace(/^0x/, '').slice(8);
+  assert.equal(Number(BigInt('0x' + corps.slice(0, 64))), 32, 'offset du tableau');
+  const base = 32 * 2;   /* le tableau commence a l octet 32 du corps */
+  assert.equal(Number(BigInt('0x' + corps.slice(base, base + 64))), 2, 'il doit y avoir EXACTEMENT deux appels');
+  /* ⛔ LES DEUX OFFSETS SONT RELATIFS AU DEBUT DU TABLEAU, pas au debut du corps. Se tromper de base
+   *   est l erreur classique, et elle ne se voit pas a l oeil. */
+  const off0 = Number(BigInt('0x' + corps.slice(base + 64, base + 128)));
+  const off1 = Number(BigInt('0x' + corps.slice(base + 128, base + 192)));
+  const lire = (off) => {
+    const p = base + 64 + off * 2;
+    const lg = Number(BigInt('0x' + corps.slice(p, p + 64)));
+    return corps.slice(p + 64, p + 64 + lg * 2);
+  };
+  const a0 = lire(off0), a1 = lire(off1);
+
+  /* ⛔⛔ LE PREMIER APPEL EST UN `exactInput` IDENTIQUE AU TEMOIN, sauf son destinataire : le
+   *     ROUTEUR au lieu de l utilisateur. C est ce qui permet au balayage de retenir. */
+  const seul = calldataExactInputCL({ ...TEMOIN_MULTI.entree, recipient: ROUTEUR_AERODROME_CL,
+    maintenant: TEMOIN_MULTI.blocTs, suiviDUnBalayage: true });
+  assert.equal(seul.etat, 'PRET');
+  assert.equal('0x' + a0, seul.data, 'le premier appel n est pas l exactInput attendu');
+  assert.ok(a0.startsWith(SELECTEURS.exactInput.replace(/^0x/, '')));
+  assert.ok(a0.toLowerCase().includes(ROUTEUR_AERODROME_CL.replace(/^0x/, '').toLowerCase()),
+    'le swap ne depose pas chez le routeur : le balayage n aurait rien a reverser');
+
+  /* ⛔⛔ LE SECOND EST LE BALAYAGE, ET SES CINQ ARGUMENTS SONT VERIFIES UN PAR UN. */
+  assert.ok(a1.startsWith(SELECTEURS.sweepTokenWithFee.replace(/^0x/, '')), 'le second appel n est pas le balayage');
+  const argSweep = (i) => a1.slice(8 + i * 64, 8 + (i + 1) * 64);
+  assert.equal('0x' + argSweep(0).slice(24), USDC.toLowerCase(), 'le jeton balaye doit etre la SORTIE du chemin');
+  assert.equal(BigInt('0x' + argSweep(1)), BigInt(r.minUtilisateur), 'le minimum du balayage doit etre celui de l UTILISATEUR');
+  assert.equal('0x' + argSweep(2).slice(24), TEMOIN_MULTI.entree.recipient.toLowerCase(), 'le destinataire doit etre l utilisateur');
+  assert.equal(BigInt('0x' + argSweep(3)), 10n, 'le frais doit valoir 10 bps');
+  assert.equal('0x' + argSweep(4).slice(24), FEE_WALLET_TEST, 'le beneficiaire du frais');
+});
+
+cas('⛔⛔ DEUX MINIMUMS DIFFERENTS : celui des POOLS et celui de l UTILISATEUR', () => {
+  /* ⛔⛔ Mettre le meme des deux cotes ferait reverter tout swap au minimum exact, puisque le montant
+   *     apres retenue est TOUJOURS inferieur a celui qui sort des pools. Les confondre casse le
+   *     chemin sans rien dire. */
+  const r = calldataExactInputAvecFrais(entreeFrais);
+  assert.equal(BigInt(r.minPools), BigInt(TEMOIN_MULTI.entree.amountOutMinimum));
+  assert.ok(BigInt(r.minUtilisateur) < BigInt(r.minPools), 'le minimum utilisateur doit etre INFERIEUR');
+  /* ⛔ ET L ECART EST EXACTEMENT LA RETENUE, calcule en entiers, arrondi VERS LE BAS */
+  assert.equal(BigInt(r.minUtilisateur), (BigInt(r.minPools) * 9990n) / 10000n);
+  /* ⛔ 0,1 % A 0,001 % PRES : si l ecart derivait, la retenue reelle ne serait plus celle annoncee */
+  const retenue = Number(BigInt(r.minPools) - BigInt(r.minUtilisateur)) / Number(BigInt(r.minPools));
+  assert.ok(Math.abs(retenue - 0.001) < 0.00001, 'la retenue reelle vaut ' + (retenue * 100).toFixed(4) + ' %');
+});
+
+cas('⛔⛔ LA RETENUE EST DITE, EN CHIFFRES, DANS LA BORNE', () => {
+  /* ⛔⛔ Un frais silencieux est un frais qu on cache — et ce produit se vend sur le fait de ne rien
+   *     cacher. La borne doit porter le pourcentage ET dire que le minimum est APRES la retenue. */
+  const r = calldataExactInputAvecFrais(entreeFrais);
+  assert.match(r.borne, /keeps 0\.10% of the output/i, 'la borne ne dit plus combien on retient');
+  assert.match(r.borne, /AFTER that cut/i, 'la borne ne dit plus que le minimum est apres la retenue');
+  assert.equal(r.aSimuler, true, 'l enchainement n a pas de temoin : il doit etre simule');
+});
+
+cas('⛔⛔ LE DESTINATAIRE DU FRAIS N A AUCUN DEFAUT, et un frais enorme est refuse', () => {
+  /* ⛔ Un defaut enverrait la retenue quelque part sans que l appelant l ait decide. */
+  for (const b of [undefined, null, '', '0x', 'pas-une-adresse']) {
+    const r = calldataExactInputAvecFrais({ ...entreeFrais, beneficiaireFrais: b });
+    assert.equal(r.etat, 'REFUSE', 'beneficiaire=' + JSON.stringify(b) + ' doit etre refuse');
+    assert.match(r.pourquoi, /no default/i);
+  }
+  /* ⛔⛔ ET LA BORNE SUR LE FRAIS EST LA NOTRE, PAS UNE MESURE — le message doit le dire, sinon on
+   *     laisserait croire qu on a lu une limite du contrat. */
+  const trop = calldataExactInputAvecFrais({ ...entreeFrais, fraisBps: 101 });
+  assert.equal(trop.etat, 'REFUSE');
+  assert.match(trop.pourquoi, /this bound is OURS, not a measured contract limit/i);
+  assert.equal(calldataExactInputAvecFrais({ ...entreeFrais, fraisBps: 100 }).etat, 'PRET');
+  assert.equal(calldataExactInputAvecFrais({ ...entreeFrais, fraisBps: -1 }).etat, 'REFUSE');
+  /* ⛔ un frais NUL reste possible : c est le cas du wallet de frais lui-meme dans `echange.js` */
+  const sansFrais = calldataExactInputAvecFrais({ ...entreeFrais, fraisBps: 0 });
+  assert.equal(sansFrais.etat, 'PRET');
+  assert.equal(BigInt(sansFrais.minUtilisateur), BigInt(sansFrais.minPools), 'sans frais, les deux minimums sont egaux');
+});
+
+cas('⛔ le routeur comme destinataire reste refuse SANS le drapeau du balayage', () => {
+  /* ⛔⛔ LA GARDE PAR DEFAUT NE BOUGE PAS. Elle protege d une perte silencieuse, et elle ne cede que
+   *     pour la raison qui la rend inoffensive : un balayage dans la MEME transaction. */
+  const sans = calldataExactInputCL({ ...TEMOIN_MULTI.entree, recipient: ROUTEUR_AERODROME_CL,
+    maintenant: TEMOIN_MULTI.blocTs });
+  assert.equal(sans.etat, 'REFUSE');
+  assert.match(sans.pourquoi, /unless a sweep follows/i, 'le refus doit nommer la seule exception');
+  const avec = calldataExactInputCL({ ...TEMOIN_MULTI.entree, recipient: ROUTEUR_AERODROME_CL,
+    maintenant: TEMOIN_MULTI.blocTs, suiviDUnBalayage: true });
+  assert.equal(avec.etat, 'PRET');
+  /* ⛔ ET LE DRAPEAU NE CHANGE RIEN POUR UN DESTINATAIRE NORMAL : il n ouvre que ce cas-la */
+  const normal = calldataExactInputCL({ ...TEMOIN_MULTI.entree, maintenant: TEMOIN_MULTI.blocTs });
+  const normalAvecDrapeau = calldataExactInputCL({ ...TEMOIN_MULTI.entree,
+    maintenant: TEMOIN_MULTI.blocTs, suiviDUnBalayage: true });
+  assert.equal(normal.data, normalAvecDrapeau.data, 'le drapeau modifie un calldata qu il ne devrait pas toucher');
+});
+
+cas('⛔⛔ LE WALLET DE FRAIS ET LE TAUX NE PEUVENT PAS DERIVER', () => {
+  /* ⛔⛔ DEUX VALEURS QUE PERSONNE NE DOIT POUVOIR CHANGER SANS LE VOULOIR. Le wallet est celui du
+   *     depot (`frais-creation.js`), pas une constante recopiee ici : deux adresses qui divergent
+   *     enverraient la retenue ailleurs, et personne ne s en apercevrait avant de compter.
+   *   ⛔ Phil (2026-09-28) : « garde bien avec notre wallet 0xa6cF…f5d4 avec des frais a 0.1% ».
+   *     C est une decision, donc elle est verrouillee ici et pas seulement commentee. */
+  assert.equal(String(FEE_WALLET).toLowerCase(), '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4',
+    'le wallet de frais a change : la retenue partirait ailleurs');
+  assert.equal(FRAIS_INTERFACE_BPS_CL, 10n, '0,1 % = 10 bps — toute autre valeur est une decision, pas un detail');
+  /* ⛔ ET LES DEUX CHEMINS UTILISENT CE WALLET-LA, verifie dans le calldata produit. */
+  const r = calldataExactInputAvecFrais({ ...entreeFrais, beneficiaireFrais: FEE_WALLET });
+  assert.equal(r.etat, 'PRET');
+  assert.equal(r.beneficiaireFrais, String(FEE_WALLET).toLowerCase());
+  assert.ok(r.data.toLowerCase().includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase()),
+    'le wallet de frais n est pas dans le calldata');
+  /* ⛔ ET LES DEUX LECTEURS ASYNC LE PASSENT — sinon la retenue ne partirait jamais. */
+  for (const f of ['echange-v3.js', 'echange-eth.js']) {
+    const src = readFileSync(new URL('./' + f, import.meta.url), 'utf8');
+    assert.match(src, /beneficiaireFrais: FEE_WALLET/, f + ' ne passe plus le wallet de frais');
+    assert.match(src, /from '\.\/frais-creation\.js'/, f + ' n importe plus le wallet du depot');
+  }
+});
+
 cas('⛔ la factory publiee est celle du routeur mesure', () => {
   /* ⛔ Elle est exportee pour qu une sonde puisse la RE-verifier sur la chaine (`factory()`), pas
    *   pour etre recopiee. Ce cas verifie juste sa forme et qu elle n a pas ete confondue avec la
@@ -386,7 +520,7 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
 /* ⛔ LE COMPTE M A ATTRAPE : j avais ecrit 12, il y en a 13 — la boucle sur les deux temoins produit
  *   QUATRE cas, pas deux. Un compteur qui ne se verifie pas laisserait un cas disparaitre en silence
  *   lors d un refactor, et la suite resterait verte avec une assertion en moins. */
-assert.equal(n, 19, 'compte de cas inattendu : ' + n);
+assert.equal(n, 25, 'compte de cas inattendu : ' + n);
 console.log('✓ test-calldata-aerodrome : ' + n + ' cas');
 console.log('   2 transactions reelles rejouees A L OCTET, sens croise avec leur event Swap.');
 console.log('   Le lot EXIGE une pool resolue par getPool : tickSpacing vaut 10 sur 7 pools et 1 sur 5.');
