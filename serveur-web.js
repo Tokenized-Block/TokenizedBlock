@@ -952,6 +952,17 @@ const ETAPES_ENTONNOIR = [
   'premier_propose', 'premier_prepare', 'partage', 'lien_recu', 'achat',
   /* connexion du wallet — l entree de tout le reste, jamais comptee jusqu ici */
   'wallet_connect_ok', 'wallet_connect_refus', 'wallet_no_provider',
+  /* ⛔⛔ LA CAPACITE DE GROUPEMENT, MESUREE A LA CONNEXION — ajoutee le 2026-09-28 parce que
+   *     `groupe_propose` valait ZERO sur 354 visites. Ce zero n etait PAS « aucun wallet ne sait
+   *     grouper » : l evenement n est emis que dans Instant Birth, derriere un preflight de solde et
+   *     une simulation. Un compteur place derriere la porte la plus etroite rend un zero qui
+   *     ressemble a un fait de marche.
+   *   ⛔ TROIS ETATS ET PAS DEUX : `_non` est une REPONSE du wallet, `_illisible` est NOTRE
+   *     aveuglement (delai, provider muet, appel qui jette). Les additionner ferait passer nos
+   *     pannes pour un verdict, et on reparerait la mauvaise chose.
+   *   ⇒ Ces trois compteurs decident si echanger un block contre une action exige un CONTRAT ou si
+   *     un lot atomique suffit. Sans denominateur, cette question n a pas de reponse honnete. */
+  'capacite_lot_oui', 'capacite_lot_non', 'capacite_lot_illisible',
   'chain_switch_ok', 'chain_switch_refus', 'pairer_clic',
   /* creation */
   'create_sign_propos', 'create_sign_refus', 'create_fund_bridge', 'create_go_bridge',

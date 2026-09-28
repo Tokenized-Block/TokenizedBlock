@@ -2032,7 +2032,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260927-verdict-routage" hidden>Build <code>20260927-verdict-routage</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-capacite-lot" hidden>Build <code>20260928-capacite-lot</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2644,7 +2644,7 @@ import { faceDuBlock, validerFace } from './face.js';
  * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
 import { planLancement, simulerLancement, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
-import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu } from './groupe-wallet.js';
+import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, etapeDeCapacite } from './groupe-wallet.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
@@ -5106,6 +5106,33 @@ async function connecter() {
   if (!compte) { try { etape('wallet_connect_refus'); } catch (_) {} dire('The wallet returned no address.'); return; }
   try { etape('wallet_connect_ok'); } catch (_) {}
   try { noterWalletUtilise(compte); } catch (_) { /* airdrop log optional */ }
+  /* ⛔⛔ ON MESURE LA CAPACITE DE GROUPEMENT ICI, A LA CONNEXION, ET PAS AILLEURS. Mesure du
+   *     2026-09-28 : `groupe_propose` valait ZERO sur 354 visites — non pas parce qu aucun wallet ne
+   *     sait grouper, mais parce que cet evenement n est emis QUE dans Instant Birth, apres le
+   *     preflight de solde ET une simulation `eth_call`. Le compteur etait place derriere la porte la
+   *     plus etroite de l app, et son zero ressemblait trait pour trait a « aucun wallet n en est
+   *     capable ». Deux lectures opposees pour le meme chiffre.
+   *   ⇒ La capacite de groupement decide s il faut un CONTRAT pour echanger un block contre une
+   *     action, ou si un lot atomique suffit. C est une decision d architecture : elle a besoin d un
+   *     denominateur, donc d une mesure a l entree.
+   *   ⛔ TROIS ETATS, JAMAIS DEUX : `capaciteDeGroupement` separe « le wallet dit non » de « on n a
+   *     pas pu demander ». Compter un delai depasse comme un refus ferait passer nos pannes pour un
+   *     verdict du marche.
+   *   ⛔ ET CA NE BLOQUE RIEN : aucun `await`, aucune fenetre de wallet, aucune signature. Si l appel
+   *     echoue, la connexion continue exactement comme avant — une mesure ne doit jamais coûter
+   *     l usage qu elle mesure. */
+  /* ⛔⛔ L APPEL EST UNE INSTRUCTION NUE, JAMAIS SOUS UNE CONDITION, et une sonde l exige en DEBUT DE
+   *     LIGNE. Raison : la mutation `if (false) capaciteDeGroupement(…)` a PASSE mon premier test,
+   *     qui cherchait seulement `capaciteDeGroupement(` dans le texte. Un appel present mais
+   *     INATTEIGNABLE rendrait exactement le meme zero muet qu on vient de reparer.
+   *   ⛔ ET LA CORRESPONDANCE capacite -> etape VIT DANS `groupe-wallet.js`, testee en L APPELANT :
+   *     ecrite ici comme objet litteral, un ecrasement des trois etats en deux passait inapercu,
+   *     parce que la sonde retrouvait la chaine manquante quelques lignes plus bas dans le `.catch`. */
+  try {
+    capaciteDeGroupement({ eth, compte, chaineHex: '0x' + CHAINE.toString(16) })
+      .then((c) => { try { etape(etapeDeCapacite(c && c.capacite)); } catch (_) {} })
+      .catch(() => { try { etape(etapeDeCapacite(null)); } catch (_) {} });
+  } catch (_) { /* une mesure qui jette ne doit pas empecher de se connecter */ }
 
   let chaineWallet = null;
   try { chaineWallet = parseInt(await eth.request({ method: 'eth_chainId' }), 16); } catch { /* dit juste dessous */ }

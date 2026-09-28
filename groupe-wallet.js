@@ -17,20 +17,83 @@
 const DELAI = Symbol('delai');
 const avecDelai = (p, ms) => Promise.race([p, new Promise((ok) => setTimeout(() => ok(DELAI), ms))]);
 
-/** Le wallet sait-il executer un lot ATOMIQUE sur cette chaine ? Faux au moindre doute — et faux s il ne repond pas. */
-export async function peutGrouper({ eth, compte, chaineHex, delaiMs = 2500 }) {
-  if (!eth || typeof eth.request !== 'function' || !compte) return false;
+/** Les trois issues. ⛔ TROIS, PAS DEUX — la raison est juste en dessous. */
+export const CAPACITES_LOT = Object.freeze(['OUI', 'NON', 'ILLISIBLE']);
+
+/**
+ * La capacite de groupement, EN TROIS ETATS.
+ *
+ * ⛔⛔ POURQUOI TROIS, ET POURQUOI CA A ETE AJOUTE LE 2026-09-28. `peutGrouper` rendait `false` pour
+ *     TROIS situations distinctes : pas de provider, delai depasse, et « le wallet repond non ».
+ *     Pour DECIDER c est correct — on se replie sur l etape par etape dans les trois cas, et c est
+ *     fail-closed. Pour MESURER c est faux : un delai depasse serait compte comme « ce wallet ne
+ *     sait pas grouper », et le refus paraitrait plus repandu qu il ne l est.
+ *     « On n a pas pu demander » n est pas une reponse du wallet : c est notre aveuglement, et un
+ *     aveuglement compte a part d un fait, sinon on repare la mauvaise chose.
+ *   ⛔ LA LOGIQUE VIT ICI, UNE SEULE FOIS : `peutGrouper` delegue. Deux copies de cette regle
+ *     divergeraient au premier correctif, et c est la voie SIGNANTE qui paierait l ecart.
+ * ⚠️ CE QUE CA NE PROUVE PAS : qu un lot aboutisse. Un wallet qui declare `supported` peut encore
+ *   refuser, planter ou n appliquer qu une partie — c est `envoyerGroupe` qui le decouvre.
+ */
+export async function capaciteDeGroupement({ eth, compte, chaineHex, delaiMs = 2500 }) {
+  if (!eth || typeof eth.request !== 'function' || !compte) {
+    return { capacite: 'ILLISIBLE', pourquoi: 'no provider or no account to ask' };
+  }
   let caps;
   try { caps = await avecDelai(eth.request({ method: 'wallet_getCapabilities', params: [compte, [chaineHex]] }), delaiMs); }
-  catch (_) { return false; }
-  if (caps === DELAI) return false;
+  catch (e) {
+    /* ⛔⛔ ICI SE SEPARENT LES DEUX CAS QUI SE RESSEMBLENT LE PLUS. Un wallet qui ne CONNAIT PAS
+     *     `wallet_getCapabilities` repond par une erreur de METHODE (4200, -32601…) : c est une
+     *     REPONSE, et elle veut dire « je ne sais pas grouper ». Tout autre echec — reseau, provider
+     *     muet, exception interne — est notre aveuglement. Les compter ensemble ferait passer nos
+     *     pannes pour un verdict du marche. */
+    const m = String((e && (e.message || e.data)) || e || '');
+    const codeMethode = e && (e.code === 4200 || e.code === -32601 || e.code === -32004);
+    if (codeMethode || /unsupported|not supported|does not exist|unrecognized|unknown method|method not found/i.test(m)) {
+      return { capacite: 'NON', pourquoi: 'the wallet does not know wallet_getCapabilities' };
+    }
+    return { capacite: 'ILLISIBLE', pourquoi: 'asking failed: ' + m.slice(0, 80) };
+  }
+  if (caps === DELAI) return { capacite: 'ILLISIBLE', pourquoi: 'the wallet did not answer in time' };
   const c = caps && (caps[chaineHex] || caps[String(parseInt(chaineHex, 16))] || caps[parseInt(chaineHex, 16)]);
-  if (!c) return false;
+  /* ⛔ UNE REPONSE SANS NOTRE CHAINE EST UNE REPONSE, PAS UN SILENCE : le wallet a parle, il ne
+   *   declare simplement rien pour Base. */
+  if (!c) return { capacite: 'NON', pourquoi: 'the wallet declares nothing for this chain' };
   const st = c.atomic && c.atomic.status;
   /* ⛔ « ready » NE SUFFIT PAS (2026-09-19) : pour un compte classique (EOA), « ready » veut dire « possible APRES une mise
    *    a niveau du compte » (EIP-7702) — le wallet affiche alors une demande de conversion en smart account, surprenante et
    *    facile a refuser. Seul « supported » (deja capable) prend la voie une-signature ; le reste garde l etape par etape. */
-  return st === 'supported' || !!(c.atomicBatch && c.atomicBatch.supported === true);
+  if (st === 'supported' || !!(c.atomicBatch && c.atomicBatch.supported === true)) {
+    return { capacite: 'OUI', pourquoi: 'atomic batching is already supported' };
+  }
+  return { capacite: 'NON', pourquoi: 'atomic status is ' + JSON.stringify(st || null) + ', not "supported"' };
+}
+
+/** Le wallet sait-il executer un lot ATOMIQUE sur cette chaine ?
+ * ⛔ LA DECISION RESTE BINAIRE ET FAIL-CLOSED : tout ce qui n est pas un OUI franc — y compris
+ *   `ILLISIBLE` — prend l etape par etape. Seule la MESURE a besoin du troisieme etat. */
+export async function peutGrouper(args) {
+  const r = await capaciteDeGroupement(args);
+  return r.capacite === 'OUI';
+}
+
+/** L etape d entonnoir qui correspond a une capacite.
+ *
+ * ⛔⛔ CETTE FONCTION EXISTE PARCE QU UNE MUTATION EST PASSEE. La correspondance vivait dans un objet
+ *     litteral au milieu d `app.html`, et mon test la verifiait en cherchant les trois NOMS D ETAPES
+ *     dans le texte. Mutation appliquee : `ILLISIBLE: 'capacite_lot_non'` — les trois etats ecrases
+ *     en deux. Le test est reste VERT, parce que la chaine `'capacite_lot_illisible'` survivait
+ *     quelques lignes plus bas, dans le `.catch`. La sonde trouvait la bonne chaine au MAUVAIS
+ *     ENDROIT.
+ *   ⇒ Une correspondance qui doit etre garantie ne se verifie pas par recherche de texte : elle
+ *     s appelle. Sortie ici, un test la teste en l APPELANT, et l ecrasement casse immediatement.
+ * ⛔ FAIL-SAFE VERS `illisible` : une capacite inconnue est notre aveuglement, jamais un refus du
+ *   wallet. Se tromper dans ce sens sous-estime nos wallets capables ; dans l autre, on inventerait
+ *   des refus qui n existent pas et on irait construire un contrat pour rien. */
+export function etapeDeCapacite(capacite) {
+  if (capacite === 'OUI') return 'capacite_lot_oui';
+  if (capacite === 'NON') return 'capacite_lot_non';
+  return 'capacite_lot_illisible';
 }
 
 /** Lit un statut EIP-5792 (v2 : nombres 100/200/400/500/600 ; v1 : 'PENDING'/'CONFIRMED'). */
