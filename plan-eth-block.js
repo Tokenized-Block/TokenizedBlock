@@ -30,7 +30,10 @@
  *   sauts donnent DEUX occasions d echouer pour un seul clic. Le minimum porte sur la sortie FINALE.
  */
 import { sortieSpot, USDC_BASE, TOLERANCE_MAX_BPS } from './plan-usdc-block.js';
-import { calldataExactInputCL, calldataApprove, ROUTEUR_AERODROME_CL } from './calldata-aerodrome.js';
+import { calldataExactInputCL, calldataExactInputAvecFrais, calldataApprove,
+  ROUTEUR_AERODROME_CL, FRAIS_INTERFACE_BPS_CL, phraseDeRetenue } from './calldata-aerodrome.js';
+/** ⛔ Le wallet de frais, LU dans le depot (`frais-creation.js`) et pas recite — un test compare. */
+export { FEE_WALLET } from './frais-creation.js';
 
 /** WETH sur Base. ⛔ Lue dans le depot (`echange.js` / `prix-eth.js`), pas recitee — un test compare. */
 export const WETH_BASE = '0x4200000000000000000000000000000000000006';
@@ -103,7 +106,8 @@ export function meilleurePoolPivot({ entree, candidates, saut2 }) {
  * @param {bigint|number} [p.toleranceBps]
  */
 export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
-  recipient, deadline, maintenant = null, toleranceBps = 100, devise = USDC_BASE } = {}) {
+  recipient, deadline, maintenant = null, toleranceBps = 100, devise = USDC_BASE,
+  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null } = {}) {
   if (!ADR.test(String(action || ''))) return { etat: 'REFUSE', pourquoi: 'a whole action address is required' };
   if (bas(action) === bas(devise) || bas(action) === bas(WETH_BASE)) {
     return { etat: 'REFUSE', pourquoi: 'the action cannot be the pivot currency or WETH itself' };
@@ -164,13 +168,21 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
    *   et le message parlerait du marche au lieu de l approbation. */
   const appro = calldataApprove({ token: WETH_BASE, montant: m, beneficiaire: ROUTEUR_AERODROME_CL });
   if (appro.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'approval refused: ' + appro.pourquoi };
-  const swap = calldataExactInputCL({
-    sauts: [
-      { de: WETH_BASE, vers: devise, tickSpacing: Number(tsPivot) },
-      { de: devise, vers: action, tickSpacing: Number(tsAction) },
-    ],
-    recipient, deadline, amountIn: m, amountOutMinimum: minSortie, maintenant,
-  });
+  /* ⛔⛔ LE SWAP PORTE LE FRAIS D INTERFACE, ET C EST CE QUI REND CE CHEMIN RENTABLE. Le montage est
+   *     `multicall([ exactInput(vers le routeur), sweepTokenWithFee(...) ])` : les deux appels dans
+   *     la MEME transaction, donc l utilisateur ne peut pas prendre le swap sans la retenue —
+   *     contrairement a un transfert separe qu il pourrait refuser.
+   *   ⛔ SANS BENEFICIAIRE, PAS DE FRAIS ET PAS DE MONTAGE : on retombe sur le swap nu. C est
+   *     explicite, parce qu un frais qui s applique « par defaut » est un frais qu on cache. */
+  const sauts = [
+    { de: WETH_BASE, vers: devise, tickSpacing: Number(tsPivot) },
+    { de: devise, vers: action, tickSpacing: Number(tsAction) },
+  ];
+  const avecFrais = ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n;
+  const swap = avecFrais
+    ? calldataExactInputAvecFrais({ sauts, recipient, deadline, amountIn: m,
+      amountOutMinimum: minSortie, maintenant, fraisBps, beneficiaireFrais })
+    : calldataExactInputCL({ sauts, recipient, deadline, amountIn: m, amountOutMinimum: minSortie, maintenant });
   if (swap.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'swap refused: ' + swap.pourquoi };
 
   return {
@@ -192,15 +204,25 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
     usdcIntermediaire: devis.intermediaire.toString(),
     sortieAttendue: devis.sortie.toString(),
     minSortie: minSortie.toString(),
+    /* ⛔ CE QUE L UTILISATEUR RECOIT VRAIMENT, APRES NOTRE RETENUE. Publier le minimum des pools
+     *   comme « ce que vous recevez » serait le chiffre juste au mauvais endroit. */
+    minUtilisateur: swap.minUtilisateur || minSortie.toString(),
+    fraisBps: avecFrais ? Number(fraisBps) : 0,
+    beneficiaireFrais: avecFrais ? bas(beneficiaireFrais) : null,
     toleranceBps: Number(tol),
     /* ⛔ COMBIEN DE PIVOTS ONT ETE COMPARES : sans ce chiffre, « la meilleure » est une affirmation. */
     pivotsCompares: candidates.length,
-    /* ⛔⛔ LA BORNE PORTE LES DEUX CHOSES QUI PEUVENT SURPRENDRE : la non-atomicite, et le glissement
-     *     qui s accumule. Les taire serait la vraie faute. */
+    /* ⛔⛔ LA BORNE PORTE LES TROIS CHOSES QUI PEUVENT SURPRENDRE : la non-atomicite, le glissement
+     *     qui s accumule, et NOTRE RETENUE. Les taire serait la vraie faute.
+     *   ⛔⛔ LA RETENUE ETAIT APPLIQUEE SANS ETRE DITE ICI — un frais silencieux — parce que cette
+     *     borne ecrasait celle du swap. Une mutation l a montre : couper le frais dans ce
+     *     planificateur ne cassait aucun test. La phrase vient de `phraseDeRetenue`, donc du MEME
+     *     chiffre que le calldata, et elle est VIDE quand il n y a pas de frais. */
     borne: 'Three steps, and they are NOT one transaction: if you stop after the first you hold WETH '
       + 'instead of ETH — it converts back, but it is not what you asked for. The swap crosses two '
       + 'pools, slippage adds up on each, and the guaranteed minimum applies to the final block only. '
-      + 'The figures come from the pool prices right now, not from a depth simulation.',
+      + 'The figures come from the pool prices right now, not from a depth simulation.'
+      + (avecFrais ? ' ' + phraseDeRetenue(fraisBps) : ''),
     aSimuler: true,
   };
 }

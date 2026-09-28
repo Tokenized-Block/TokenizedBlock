@@ -52,6 +52,15 @@ export const SELECTEURS = Object.freeze({
   /* ⛔ `approve` n est PAS sur le routeur : c est le jeton qu on appelle. Selecteur ERC-20 standard,
    *   et une sonde le recalcule depuis `approve(address,uint256)` au lieu de croire cette ligne. */
   approve: '0x095ea7b3',
+  /* ⛔⛔ `sweepTokenWithFee` EST CE QUI REND UN FRAIS D INTERFACE POSSIBLE SANS CONTRAT A NOUS. Le
+   *     swap envoie sa sortie AU ROUTEUR, puis cette fonction la reverse a l utilisateur EN RETENANT
+   *     un pourcentage pour une adresse choisie. Selecteur LU dans le bytecode du routeur Aerodrome
+   *     le 2026-09-28, avec deux temoins positifs presents et 0/4 signatures inventees trouvees.
+   *   ⛔ L UNIVERSAL ROUTER D UNISWAP N A AUCUNE de ces fonctions — il a ses propres commandes. Le
+   *     meme test l a montre, ce qui prouve que les temoins discriminent vraiment. */
+  sweepTokenWithFee: '0xe0e189a0',
+  sweepToken: '0xdf2ab5bb',
+  unwrapWETH9WithFee: '0x9b2c0a37',
   /* ⛔ `getPool` est sur la FACTORY, pas sur le routeur. Signature designee par la chaine : appelee
    *   avec (token0, token1, tickSpacing) lus SUR une pool, elle a rendu l adresse de cette pool
    *   meme — aller-retour verifie sur les 12 pools d actions, 12/12, et un tickSpacing absurde
@@ -231,7 +240,7 @@ export function calldataApprove({ token, montant, beneficiaire = ROUTEUR_AERODRO
  *   un chemin a deux sauts a deux occasions d echouer. Le minimum porte sur la sortie FINALE.
  */
 export function calldataExactInputCL({ sauts, recipient, amountIn, amountOutMinimum, deadline,
-  maintenant = null } = {}) {
+  maintenant = null, suiviDUnBalayage = false } = {}) {
   /* ⛔ LE MEME REFUS QUE POUR LE SAUT UNIQUE, et pour la meme raison : un minimum nul laisse la
    *   derniere pool rendre presque rien pour la totalite de l entree. */
   const min = BigInt(amountOutMinimum === undefined || amountOutMinimum === null ? 0 : amountOutMinimum);
@@ -243,9 +252,18 @@ export function calldataExactInputCL({ sauts, recipient, amountIn, amountOutMini
   if (entree <= 0n) return { etat: 'REFUSE', pourquoi: 'amountIn must be greater than zero' };
   if (!ADR.test(String(recipient || ''))) return { etat: 'REFUSE', pourquoi: 'a whole recipient address is required' };
   if (/^0x0{40}$/i.test(String(recipient))) return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the zero address' };
-  if (bas(recipient) === bas(ROUTEUR_AERODROME_CL)) {
+  /* ⛔⛔ LE ROUTEUR COMME DESTINATAIRE EST REFUSE PAR DEFAUT, ET CE DEFAUT RESTE. Il accepte d etre
+   *     destinataire, donc l y mettre par erreur laisse la sortie chez lui SANS AUCUNE ERREUR.
+   *   ⛔ SAUF QUAND UN BALAYAGE SUIT DANS LA MEME TRANSACTION. C est exactement le montage a frais :
+   *     `multicall([ exactInput(recipient = routeur), sweepTokenWithFee(...) ])`. Le drapeau est
+   *     nomme d apres CETTE raison — « suivi d un balayage » — pour qu on ne puisse pas le poser par
+   *     confort sans savoir ce qu il autorise.
+   *   ⚠️ CE QUE LE DRAPEAU NE VERIFIE PAS : qu un balayage suive REELLEMENT. Cette fonction ne voit
+   *     pas le multicall qui l englobe. C est `calldataExactInputAvecFrais` qui construit les deux
+   *     ensemble, et c est la seule qui doit poser ce drapeau. */
+  if (bas(recipient) === bas(ROUTEUR_AERODROME_CL) && !suiviDUnBalayage) {
     return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the router itself: the output would '
-      + 'silently stay there' };
+      + 'silently stay there, unless a sweep follows in the same multicall' };
   }
   const dl = BigInt(deadline === undefined || deadline === null ? 0 : deadline);
   if (dl <= 0n) return { etat: 'REFUSE', pourquoi: 'an absolute deadline in seconds is required' };
@@ -321,6 +339,125 @@ export function calldataExactInputCL({ sauts, recipient, amountIn, amountOutMini
     borne: 'This route crosses ' + sauts.length + ' pool(s); slippage adds up on each one and the '
       + 'guaranteed minimum applies to the FINAL output only.',
   };
+}
+
+/** Le frais d interface des chemins v3 / Aerodrome, en points de base.
+ *
+ * ⛔⛔ 10 = 0,1 %, ET C EST UN CHOIX DE PHIL, PAS UNE VALEUR TECHNIQUE. Le chemin v4 de l app prend
+ *     0,5 % (`FRAIS_INTERFACE_BPS` dans `echange.js`) : l asymetrie est deliberee et il faut qu elle
+ *     soit visible ici, sinon quelqu un « harmonisera » un jour sans savoir que c etait voulu.
+ * ⚠️ ET LE PLAFOND DE `feeBips` N EST PAS VERIFIE. La peripherie Uniswap en impose un, mais je ne
+ *   l ai pas LU dans ce bytecode — le reciter serait exactement ce qu on s interdit. On refuse donc
+ *   au-dela de 100 par prudence, en disant que la borne vient de nous et pas d une mesure.
+ */
+export const FRAIS_INTERFACE_BPS_CL = 10n;
+export const FRAIS_BPS_MAX_PRUDENT = 100n;
+
+/**
+ * Un swap multi-sauts qui RETIENT un frais d interface, en UNE transaction et SANS contrat a nous.
+ *
+ * ⛔⛔ LE MONTAGE, ET POURQUOI IL TIENT. `multicall([ exactInput(recipient = LE ROUTEUR),
+ *     sweepTokenWithFee(jetonDeSortie, minimumUtilisateur, utilisateur, bips, notreWallet) ])`.
+ *     Le swap depose sa sortie chez le routeur ; le balayage la reverse en retenant notre part.
+ *     Les deux appels sont dans la MEME transaction : l utilisateur ne peut pas prendre le premier
+ *     sans le second, contrairement a un transfert separe qu il pourrait simplement refuser.
+ *
+ * ⛔⛔ DEUX MINIMUMS, ET ILS NE DISENT PAS LA MEME CHOSE. Celui de `exactInput` borne ce qui sort des
+ *     POOLS ; celui de `sweepTokenWithFee` borne ce que l UTILISATEUR recoit, donc apres notre
+ *     retenue. Mettre le meme des deux cotes ferait reverter tout swap au minimum exact, puisque le
+ *     second serait toujours inferieur au premier. Les confondre casse le chemin sans rien dire.
+ *   ⛔ ET ON NE MET PAS `0` DANS `exactInput` « puisque le balayage borne » : c est le motif courant,
+ *     et il laisse une transaction sans plancher entre les deux appels. Deux bornes valent mieux.
+ *
+ * ⚠️ CE QU IL NE PROUVE PAS : que le routeur accepte ce montage. Il declare les deux fonctions, et
+ *   l encodage est rejoue a l octet sur la partie `exactInput` — mais l enchainement lui-meme n a
+ *   PAS de transaction temoin. L appelant DOIT le simuler par `eth_call` avant de le proposer.
+ */
+export function calldataExactInputAvecFrais({ sauts, recipient, amountIn, amountOutMinimum,
+  deadline, maintenant = null, fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais } = {}) {
+  const bps = (() => { try { return BigInt(fraisBps); } catch (_) { return -1n; } })();
+  if (bps < 0n) return { etat: 'REFUSE', pourquoi: 'the interface fee must be a number of basis points' };
+  if (bps > FRAIS_BPS_MAX_PRUDENT) {
+    return { etat: 'REFUSE', pourquoi: 'refusing an interface fee above ' + FRAIS_BPS_MAX_PRUDENT
+      + ' bps — this bound is OURS, not a measured contract limit, and a large cut taken quietly '
+      + 'is the kind of thing that should never be easy to set' };
+  }
+  if (!ADR.test(String(beneficiaireFrais || ''))) {
+    /* ⛔ AUCUN DEFAUT POUR LE BENEFICIAIRE. Un defaut enverrait la retenue quelque part sans que
+     *   l appelant l ait decide — et « quelque part » est exactement ce qu on ne veut pas. */
+    return { etat: 'REFUSE', pourquoi: 'a whole fee-recipient address is required, with no default' };
+  }
+  const min = (() => { try { return BigInt(amountOutMinimum); } catch (_) { return 0n; } })();
+  if (min <= 0n) {
+    return { etat: 'REFUSE', pourquoi: 'amountOutMinimum must be greater than zero — it bounds what '
+      + 'comes out of the pools, before our cut' };
+  }
+  if (!Array.isArray(sauts) || !sauts.length) return { etat: 'REFUSE', pourquoi: 'a path needs at least one hop' };
+  const sortie = sauts[sauts.length - 1] && sauts[sauts.length - 1].vers;
+  if (!ADR.test(String(sortie || ''))) return { etat: 'REFUSE', pourquoi: 'the last hop has no output token' };
+  if (!ADR.test(String(recipient || ''))) return { etat: 'REFUSE', pourquoi: 'a whole recipient address is required' };
+  if (bas(recipient) === bas(ROUTEUR_AERODROME_CL)) {
+    return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the router itself' };
+  }
+
+  /* ⛔ LE SWAP DEPOSE CHEZ LE ROUTEUR : c est ce qui permet au balayage de retenir. Et son minimum
+   *   reste celui des POOLS, pas celui de l utilisateur. */
+  const swap = calldataExactInputCL({ sauts, recipient: ROUTEUR_AERODROME_CL, amountIn,
+    amountOutMinimum: min, deadline, maintenant, suiviDUnBalayage: true });
+  if (swap.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'inner swap refused: ' + swap.pourquoi };
+
+  /* ⛔⛔ CE QUE L UTILISATEUR RECOIT AU MINIMUM : le minimum des pools MOINS notre retenue. Calcule
+   *     en entiers, arrondi VERS LE BAS — un minimum arrondi vers le haut ferait reverter des swaps
+   *     parfaitement valides. */
+  const minUtilisateur = (min * (10000n - bps)) / 10000n;
+  if (minUtilisateur <= 0n) {
+    return { etat: 'REFUSE', pourquoi: 'after our cut the guaranteed minimum would be zero — the '
+      + 'amount is too small for this fee' };
+  }
+  const balayage = SELECTEURS.sweepTokenWithFee.replace(/^0x/, '')
+    + motAdresse(sortie, 'token')
+    + motNombre(minUtilisateur, 'amountMinimum')
+    + motAdresse(recipient, 'recipient')
+    + motNombre(bps, 'feeBips')
+    + motAdresse(beneficiaireFrais, 'feeRecipient');
+
+  /* ── l enveloppe `multicall(bytes[])` ──────────────────────────────────────────────────────
+   * ⛔ UN TABLEAU DYNAMIQUE DE BYTES : offset du tableau, longueur, puis un offset par element,
+   *   relatifs au DEBUT du tableau. Se tromper de base fait pointer dans le vide. */
+  const elements = [swap.data.replace(/^0x/, ''), balayage].map(dynamique);
+  let curseur = BigInt(32 * elements.length);
+  const offsets = elements.map((e) => { const o = motNombre(curseur, 'offset'); curseur += BigInt(e.length / 2); return o; });
+  const tableau = motNombre(elements.length, 'nombre d appels') + offsets.join('') + elements.join('');
+
+  return {
+    etat: 'PRET',
+    to: ROUTEUR_AERODROME_CL,
+    data: SELECTEURS.multicall + motNombre(0x20, 'offset du tableau') + tableau,
+    value: '0x0',
+    fraisBps: Number(bps),
+    beneficiaireFrais: bas(beneficiaireFrais),
+    minPools: min.toString(),
+    minUtilisateur: minUtilisateur.toString(),
+    champs: swap.champs,
+    /* ⛔⛔ LA RETENUE EST DITE, EN CLAIR ET EN CHIFFRES. Un frais silencieux est un frais qu on
+     *     cache — et ce produit se vend sur le fait de ne rien cacher. */
+    borne: swap.borne + ' ' + phraseDeRetenue(bps),
+    /* ⛔ L ENCHAINEMENT N A PAS DE TRANSACTION TEMOIN : il doit etre simule avant d etre propose. */
+    aSimuler: true,
+  };
+}
+
+/** La phrase qui dit combien on retient, DERIVEE des bps eux-memes.
+ * ⛔⛔ SORTIE EN FONCTION EXPORTEE PARCE QUE DEUX ECRANS L AFFICHENT : le chemin USDC et le chemin
+ *     ETH. Une phrase recopiee dans le second module aurait pu garder « 0,10 % » apres un changement
+ *     de `FRAIS_INTERFACE_BPS_CL` — un chiffre faux dans la phrase meme qui sert a ne pas mentir.
+ *   ⛔ ELLE PREND LES BPS, JAMAIS LA CONSTANTE : un plan peut porter un frais different de la valeur
+ *     par defaut, et c est SON frais qui doit etre annonce. */
+export function phraseDeRetenue(fraisBps) {
+  const bps = (() => { try { return BigInt(fraisBps); } catch (_) { return null; } })();
+  if (bps === null || bps <= 0n) return '';
+  return 'This app keeps ' + (Number(bps) / 100).toFixed(2) + '% of the output; the minimum above is '
+    + 'what reaches you AFTER that cut.';
 }
 
 /** Un mot dynamique : longueur puis contenu, rembourre a 32 octets.

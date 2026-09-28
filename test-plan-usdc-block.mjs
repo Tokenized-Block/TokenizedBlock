@@ -349,6 +349,36 @@ cas('⛔ le prix Aerodrome derive colle a l index sur les deux pools mesurees', 
   }
 });
 
+cas('⛔⛔ LE FRAIS D INTERFACE EST PORTE PAR LE CHEMIN AERODROME', () => {
+  /* ⛔⛔ CETTE ASSERTION EXISTE PARCE QU UNE MUTATION PASSAIT : couper le frais dans ce planificateur
+   *     ne cassait RIEN, parce que seul le module de calldata etait teste. Le frais aurait pu etre
+   *     desactive en silence — le trou le plus couteux possible, puisqu il ne se voit qu en comptant
+   *     des revenus qui n arrivent pas. */
+  const FEE = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+  const sans = planUsdcVersBlock({ ...AERO[0], ...baseAero });
+  const avec = planUsdcVersBlock({ ...AERO[0], ...baseAero, beneficiaireFrais: FEE });
+  assert.equal(sans.etat, 'PRET'); assert.equal(avec.etat, 'PRET');
+  /* ⛔ SANS BENEFICIAIRE : aucune retenue, et les deux minimums sont egaux. */
+  assert.equal(sans.fraisBps, 0, 'un frais s applique sans beneficiaire : il serait cache');
+  assert.equal(BigInt(sans.minUtilisateur), BigInt(sans.minSortie));
+  /* ⛔ AVEC : 10 bps, le wallet du depot, et un minimum utilisateur STRICTEMENT inferieur. */
+  assert.equal(avec.fraisBps, 10, 'le frais doit valoir 10 bps (0,1 %)');
+  assert.equal(avec.beneficiaireFrais, FEE);
+  assert.ok(BigInt(avec.minUtilisateur) < BigInt(avec.minSortie), 'le minimum utilisateur doit baisser');
+  assert.equal(BigInt(avec.minUtilisateur), (BigInt(avec.minSortie) * 9990n) / 10000n);
+  /* ⛔ ET LE CALLDATA CHANGE : sinon le frais serait decoratif. */
+  assert.notEqual(sans.appel.data, avec.appel.data, 'le calldata est identique : le frais ne part pas');
+  assert.ok(avec.appel.data.toLowerCase().includes(FEE.replace(/^0x/, '')),
+    'le wallet de frais n est pas dans le calldata');
+  /* ⛔⛔ ET SUR UNISWAP v3, LE FRAIS N EST PAS POSSIBLE — l Universal Router n a pas
+   *     `sweepTokenWithFee` (mesure du 2026-09-28). Le plan doit le DIRE par `fraisBps: 0`, pas
+   *     laisser croire qu il preleve. */
+  const surUniswap = planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3', beneficiaireFrais: FEE });
+  assert.equal(surUniswap.etat, 'PRET');
+  assert.equal(surUniswap.fraisBps, 0, 'un frais est annonce sur un chemin qui ne peut pas le prelever');
+  assert.equal(surUniswap.beneficiaireFrais, null);
+});
+
 cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
   const src = readFileSync(new URL('./plan-usdc-block.js', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
@@ -377,7 +407,7 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
   assert.ok(!corps.includes('Number('), 'sortieSpot utilise Number : le calcul doit rester en entiers');
 });
 
-assert.equal(n, 17, 'compte de cas inattendu : ' + n);
+assert.equal(n, 18, 'compte de cas inattendu : ' + n);
 console.log('✓ test-plan-usdc-block : ' + n + ' cas');
 console.log('   Trois pools REELLES ; le sens prouve par l ordre de grandeur (AMZNc ~$250).');
 console.log('   ⚠️ NE PROUVE PAS qu un swap aboutisse : le prix spot ignore la profondeur.');

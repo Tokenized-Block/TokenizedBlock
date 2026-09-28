@@ -281,6 +281,30 @@ cas('⛔⛔ LA SORTIE DU PLAN EST CELLE DU BON SENS DES DEUX POOLS', () => {
     toleranceBps: Number(TOLERANCE_MAX_BPS) }).etat, 'PRET');
 });
 
+cas('⛔⛔ LE FRAIS D INTERFACE EST PORTE PAR LE CHEMIN ETH', () => {
+  /* ⛔⛔ MEME RAISON QUE COTE USDC : une mutation coupant le frais dans ce planificateur ne cassait
+   *     RIEN. Un frais desactive en silence ne se voit qu en comptant des revenus qui n arrivent
+   *     pas — c est le defaut le plus cher a decouvrir tard. */
+  const FEE = '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4';
+  const sans = planEthVersAction(base);
+  const avec = planEthVersAction({ ...base, beneficiaireFrais: FEE });
+  assert.equal(sans.etat, 'PRET'); assert.equal(avec.etat, 'PRET');
+  assert.equal(sans.fraisBps, 0, 'un frais s applique sans beneficiaire : il serait cache');
+  assert.equal(avec.fraisBps, 10, 'le frais doit valoir 10 bps (0,1 %)');
+  assert.equal(avec.beneficiaireFrais, FEE);
+  assert.ok(BigInt(avec.minUtilisateur) < BigInt(avec.minSortie), 'le minimum utilisateur doit baisser');
+  assert.equal(BigInt(avec.minUtilisateur), (BigInt(avec.minSortie) * 9990n) / 10000n);
+  /* ⛔ LE TROISIEME APPEL (le swap) CHANGE, les deux premiers NON : envelopper et autoriser ne
+   *   dependent pas du frais, et les voir changer signalerait une confusion. */
+  assert.notEqual(sans.appels[2].data, avec.appels[2].data, 'le swap est identique : le frais ne part pas');
+  assert.equal(sans.appels[0].data, avec.appels[0].data, 'l enveloppement ne doit pas dependre du frais');
+  assert.equal(sans.appels[1].data, avec.appels[1].data, 'l approbation ne doit pas dependre du frais');
+  assert.ok(avec.appels[2].data.toLowerCase().includes(FEE.replace(/^0x/, '')),
+    'le wallet de frais n est pas dans le calldata du swap');
+  /* ⛔ ET LA RETENUE EST DITE DANS LA BORNE, en chiffres. */
+  assert.match(avec.borne, /keeps 0\.10%/i, 'la borne ne dit plus combien on retient');
+});
+
 cas('⛔ le module reste PUR, et les montants sortent en chaines exactes', () => {
   const src = readFileSync(new URL('./plan-eth-block.js', import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
@@ -299,7 +323,7 @@ cas('⛔ le module reste PUR, et les montants sortent en chaines exactes', () =>
     'sortieDeuxSauts utilise Number : le calcul doit rester en entiers');
 });
 
-assert.equal(n, 13, 'compte de cas inattendu : ' + n);
+assert.equal(n, 14, 'compte de cas inattendu : ' + n);
 console.log('✓ test-plan-eth-block : ' + n + ' cas');
 console.log('   Trois pools pivot REELLES (1 ETH ~ 2 679 USDC) ; chaque fee sur son propre segment.');
 console.log('   ⚠️ NE PROUVE PAS qu un achat aboutisse : deux sauts, deux occasions d echouer.');
