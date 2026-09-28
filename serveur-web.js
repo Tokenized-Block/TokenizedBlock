@@ -1126,6 +1126,9 @@ const SERVIS = [
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
   'routage.js',
+  /* ⛔ `echelle-marche.js` : le total des marches suivis ET la phrase qui dit a qui il est. L oublier
+   *   ici rendrait la page MORTE — c est la garde ci-dessous qui l a crie la derniere fois. */
+  'echelle-marche.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

@@ -1972,6 +1972,25 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="stadeLigne" id="statsLignes"></div>
       <p class="note" id="statsNote"></p>
     </div>
+
+    <!-- ⛔⛔ PHIL (2026-09-28) : « ecris dans l onglet market nos stats de l app, volume qui passe,
+         le nombre de block created ». Sa demande recouvre DEUX familles de chiffres que sa PROPRE
+         decision du 2026-09-23 separe — « retire, c est donnee privee » :
+           · nos chiffres d EXPLOITATION (visites, `cree`, `achat`) -> retires par lui, et ils le
+             restent. `#carteStats` au-dessus demeure `hidden` tant qu il ne revient pas sur cet appel.
+           · l ECHELLE DES MARCHES QU ON SUIT -> c est cette carte-ci. Chacun de ces nombres est
+             DEJA affiche bloc par bloc dans `#trListe`, juste au-dessus : en publier la somme ne
+             revele rien de neuf sur l etat du produit.
+         ⛔⛔ ET LE LIBELLE EST LA MOITIE DU TRAVAIL. 62,1 M$ de volume 24 h NE SONT PAS LES NOTRES :
+             c est le volume qui passe sur des marches que notre index SUIT, ouverts par n importe
+             qui sur Base. L ecrire sans le dire serait le mensonge le plus rentable de cet ecran.
+         ⚠️ BORNE DITE A L ECRAN : ces chiffres viennent de l index public et ne couvrent que les
+             blocks dont un marche est LISIBLE — pas tous ceux qui existent. -->
+    <div class="carte" id="carteEchelle">
+      <h3>The blocks this app tracks</h3>
+      <div class="stadeLigne" id="echelleLignes"></div>
+      <p class="note" id="echelleNote">Reading the market…</p>
+    </div>
   </section>
 
   <section class="volet" id="v-social" aria-label="Social and collateral">
@@ -2032,7 +2051,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260928-jambe-v3" hidden>Build <code>20260928-jambe-v3</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-echelle-market" hidden>Build <code>20260928-echelle-market</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2685,6 +2704,9 @@ import { lirePoolCL } from './pool-cl.js';
  * 6/6 mutations attrapees). Recopie ici, il serait invisible a la suite et derivrait de la
  * repartition mesuree qui le justifie. */
 import { verdictRoutage, phraseRoutage } from './routage.js';
+/* ⛔ L ECHELLE DES MARCHES SUIVIS : module pur, teste hors ligne. Le total et la phrase qui dit A QUI
+ * il est viennent du meme appel — separes, le nombre se lirait comme le notre. */
+import { echelleDesMarches } from './echelle-marche.js';
 /* ⛔ PV ET PALIERS : LE MODULE TESTE, pas une echelle recopiee ici. Deux baremes pour la meme vie
  * donneraient deux niveaux au meme block selon l ecran. */
 import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
@@ -2896,7 +2918,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* ⛔ Phil 2026-09-20 : « que le visiteur soit pas fatigue de voir ». Sept listes d affilee, il n en lit
    *    aucune. Les cartes du Feed se plient a la premiere ouverture de l onglet — une seule ouverte. */
   if (nom === 'social') plierLesCartes();
-  if (nom === 'trade') void peindreStats();
+  if (nom === 'trade') { void peindreStats(); peindreEchelle(); }
   if (nom === 'map') suivreLeCote();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
@@ -8419,6 +8441,43 @@ async function peindreStats() {
     + (rates ? rates + ' attempt(s) failed on the way — counted, not hidden. ' : '')
     + 'These are actions taken in this app. Everything else you see on the Live feed happened on Base, '
     + 'through other apps.';
+}
+
+/* ⛔⛔ L ECHELLE DES MARCHES SUIVIS. Le calcul ET la phrase viennent du MEME appel a
+ *     `echelleDesMarches` : le total se lirait comme le notre sans sa qualification, et c est
+ *     precisement ce qui arriverait si les deux vivaient a deux endroits.
+ *   ⛔ ELLE SE REPEINT QUAND LES DONNEES ARRIVENT. Calculee une seule fois a l ouverture de
+ *     l onglet, elle tomberait sur un `marcheParAdr` vide et afficherait « en cours de lecture »
+ *     pour toujours — le meme defaut que les puces de paires et que la decouverte, deux fois
+ *     corrige dans ce fichier. Tout ce qui se calcule sur des donnees asynchrones se repeint a
+ *     leur arrivee.
+ *   ⛔ ET UN ETAT NON LU N EST PAS UN ZERO : afficher 0 $ pendant le chargement serait un zero de
+ *     panne, indiscernable d un marche mort. */
+function peindreEchelle() {
+  const zone = document.querySelector('#echelleLignes');
+  const note = document.querySelector('#echelleNote');
+  if (!zone || !note) return;
+  const r = echelleDesMarches([...marcheParAdr.values()]);
+  if (r.etat !== 'LU') {
+    zone.innerHTML = '';
+    note.textContent = r.etat === 'NON_LU'
+      ? 'Reading the market…'
+      : 'No tracked block reaches the liquidity floor right now.';
+    return;
+  }
+  const usd = (v) => '$' + Math.round(v).toLocaleString('en-US');
+  const lignes = [
+    ['Blocks tracked', r.blocks.toLocaleString('en-US')],
+    ['24h volume', usd(r.volume24hUsd)],
+    ['Liquidity', usd(r.liquiditeUsd)],
+    ['24h trades', r.trades24h.toLocaleString('en-US')],
+  ];
+  /* ⛔ LA REPARTITION PAR DEX EST AFFICHEE : elle rend le total verifiable. Un lecteur retrouve ou
+   *   vit cet argent au lieu de nous croire sur un seul grand nombre. */
+  for (const d of r.parDex.slice(0, 3)) lignes.push(['on ' + d.dex, usd(d.liquiditeUsd)]);
+  zone.innerHTML = lignes.map(([nom, v]) => '<span class="puce">' + enTexte(nom)
+    + ' <b>' + enTexte(v) + '</b></span>').join('');
+  note.textContent = r.phrase;
 }
 
 function peindreLive() {
@@ -16554,6 +16613,11 @@ async function soleilsSurLaMap() {
      *   ⛔ `peindrePaires` reconstruit le `<select>` mais PRESERVE la valeur choisie (`avant`),
      *     donc repeindre pendant que quelqu un remplit le formulaire ne lui vole pas son choix. */
     try { peindrePaires(); } catch (_) { /* l onglet Create n est peut-etre pas monte */ }
+    /* ⛔⛔ ET L ECHELLE SE REPEINT ICI POUR LA MEME RAISON, QUATRIEME FOIS QUE CE MOTIF SE PRESENTE.
+     *     `peindreEchelle` somme `marcheParAdr` : appelee seulement a l ouverture de l onglet Market,
+     *     elle tomberait sur une Map vide et afficherait « Reading the market… » pour toujours.
+     *     Un affichage qui ne se contredit jamais ressemble a un chargement eternel, pas a un defaut. */
+    try { peindreEchelle(); } catch (_) { /* la carte n est peut-etre pas montee */ }
     /* tip 20260923-map-anim: soleilsSurLaMap creates .bloc via creerHabitant WITHOUT poserBlocks —
      * placer only sets wx/wy/wz; CSS transform comes from moteur3d.image via animer(). Without
      * animer, every tile stays left:0 top:0 (Raksha pile top-left, tip map-3dplace was not enough). */
