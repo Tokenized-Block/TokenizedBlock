@@ -142,6 +142,18 @@ cas('⛔ la carte des chiffres PRIVES reste cachee dans la page', () => {
     + 'la rouvrir est SA decision, pas la notre');
   assert.ok(app.includes('id="statsLignes"') && app.includes('id="statsNote"'),
     'les deux elements ont disparu : `peindreStats` ecrirait dans le vide');
+  /* ⛔⛔ ET ON N ECRIT PAS DANS UNE CARTE CACHEE — defaut trouve en PRODUCTION le 2026-09-28.
+   *     Le `hidden` etait bien pose, mais `peindreStats` remplissait quand meme la carte : les
+   *     chiffres d exploitation etaient LISIBLES DANS LE DOM servi (« Visits 362 · Opened Create 45
+   *     · Blocks created here 6 »). `hidden` cache a l oeil, pas a la page. La decision de Phil
+   *     avait obtenu « pas affiche » et non « pas divulgue », et l ecart etait invisible PARCE QUE
+   *     l ecran etait propre. */
+  const i = app.indexOf('async function peindreStats()');
+  assert.notEqual(i, -1, '`peindreStats` est introuvable');
+  const corps = app.slice(i, app.indexOf('\n}', i));
+  assert.match(corps, /if \(carte && carte\.hidden\) return;/,
+    '`peindreStats` ecrit de nouveau dans une carte cachee : les chiffres d exploitation '
+    + 'redeviendraient lisibles dans le DOM servi, alors que Phil les a fait retirer');
   /* ⛔ et la nouvelle carte, elle, est VISIBLE — sinon on aurait livre une carte morte */
   assert.match(app, /<div class="carte" id="carteEchelle">/, 'la carte d echelle est absente ou cachee');
 });

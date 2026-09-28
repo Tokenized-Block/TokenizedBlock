@@ -2051,7 +2051,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260928-echelle-market" hidden>Build <code>20260928-echelle-market</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260928-prive-pas-peint" hidden>Build <code>20260928-prive-pas-peint</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8419,6 +8419,19 @@ async function peindreStats() {
   const zone = document.querySelector('#statsLignes');
   const note = document.querySelector('#statsNote');
   if (!zone || !note) return;
+  /* ⛔⛔ DEFAUT TROUVE EN PRODUCTION LE 2026-09-28, ET IL VISAIT LA DECISION DE PHIL DU 09-23.
+   *     Il avait fait retirer cette carte — « retire, c est donnee privee » — et le `hidden` a bien
+   *     ete pose. Mais cette fonction CONTINUAIT d ecrire dedans. Mesure sur la page SERVIE, lue
+   *     dans le DOM : « Visits 362 · Opened Create 45 · Blocks created here 6 · Markets opened… ».
+   *     ⇒ `hidden` cache A L OEIL, pas A LA PAGE. N importe qui ouvrant les outils de developpement
+   *       lisait nos chiffres d exploitation. La decision avait obtenu « pas affiche » et non « pas
+   *       divulgue », et l ecart etait invisible PARCE QUE l ecran, lui, etait propre.
+   *   ⛔ ON NE PEINT PLUS DANS UNE CARTE CACHEE. Les deux elements RESTENT dans la page : les
+   *     supprimer ferait des id fantomes, et une garde sur un element absent est toujours fausse.
+   *   ⛔ ET LA MESURE RESTE INTACTE : `/api/entonnoir` compte toujours et se lit cote serveur. On
+   *     retire la DIVULGATION, jamais l instrument. */
+  const carte = document.querySelector('#carteStats');
+  if (carte && carte.hidden) return;
   let d = null;
   try { d = await fetch('/api/entonnoir', { cache: 'no-store' }).then((x) => x.json()); } catch (_) { d = null; }
   if (!d || !d.ok || !d.total) { note.textContent = 'Could not read the counters right now — that is us, not the chain.'; return; }
