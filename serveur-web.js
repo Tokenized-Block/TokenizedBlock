@@ -131,34 +131,67 @@ const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
 const FACTORY_AERODROME_CL_SRV = '0xf8f2eb4940cfe7d13603dddd87f123820fc061ef';
 const USDC_SRV = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const NON_MESURE_POOL = Object.freeze({ glissementBps: null, famille: 'NON_MESURE' });
+/* ⛔⛔ CE QUI A CASSE LA PRODUCTION LE 2026-09-29, ET LA LECON. Premiere version : cinq
+ *     `eth_call` en `Promise.all` par pool. La page demande ~14 prix d un coup ⇒ **70 appels
+ *     simultanes** sur un RPC public ⇒ « over rate limit » ⇒ `glissementBps: null` ⇒ la porte
+ *     refuse ⇒ LES PUCES SONT TOMBEES DE 13 A 2 EN PRODUCTION.
+ *   ✅ CE QUI A SAUVE LA SITUATION : les trois etats. La porte a refuse au lieu de s ouvrir sur
+ *     mon aveuglement, et l endpoint portait `pourquoiFaits: "over rate limit"` — donc la cause
+ *     etait LISIBLE au premier appel, sans deviner. Une garde qui echoue FERME et qui DIT
+ *     pourquoi transforme une panne en diagnostic.
+ *   ⛔ TROIS CORRECTIONS, ET AUCUNE NE CONSISTE A OUVRIR LA PORTE :
+ *       1. les lectures sont SEQUENTIELLES, plus jamais en rafale ;
+ *       2. `token0/token1/tickSpacing/famille` ne changent JAMAIS pour une pool donnee : on les
+ *          garde pour de bon, ce qui ramene les appels repetes de cinq a deux ;
+ *       3. un verrou a un seul fil : deux requetes concurrentes sur la meme pool ne la lisent
+ *          qu une fois. */
+const poolImmuables = new Map();   /* pool -> { t0, t1, ts, famille } — jamais expire */
+let filePoolFaits = Promise.resolve();
+function enFile(tache) {
+  const suite = filePoolFaits.then(tache, tache);
+  /* ⛔ la file ne doit pas se rompre sur un echec : on la rebranche sur une promesse resolue. */
+  filePoolFaits = suite.then(() => undefined, () => undefined);
+  return suite;
+}
+const motDePool = (h, i) => String(h || '').replace(/^0x/, '').slice(i * 64, (i + 1) * 64);
+const adrDePool = (h) => '0x' + motDePool(h, 0).slice(24);
+
 async function faitsDeLaPool(pool) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(pool || ''))) {
     return { ...NON_MESURE_POOL, pourquoiFaits: 'no pool address from the aggregator' };
   }
-  const un = async (sig4) => rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
-  let s0, lq, t0, t1, ts;
-  try {
-    [s0, lq, t0, t1, ts] = await Promise.all([
-      un('0x3850c7bd') /* slot0() */, un('0x1a686502') /* liquidity() */,
-      un('0x0dfe1681') /* token0() */, un('0xd21220a7') /* token1() */,
-      un('0xd0c93a7c') /* tickSpacing() */,
-    ]);
-  } catch (e) { return { ...NON_MESURE_POOL, pourquoiFaits: 'pool reads failed: ' + String((e && e.message) || e).slice(0, 60) }; }
-  const motDe = (h, i) => String(h || '').replace(/^0x/, '').slice(i * 64, (i + 1) * 64);
-  const adrDe = (h) => '0x' + motDe(h, 0).slice(24);
-  let famille = 'autre';
-  try {
-    const tsN = BigInt(ts);
-    const appel = '0x28af8d0b' /* getPool(address,address,int24) */
-      + motDe(t0, 0) + motDe(t1, 0) + tsN.toString(16).padStart(64, '0');
-    const rendu = await rpcServeur('eth_call', [{ to: FACTORY_AERODROME_CL_SRV, data: appel }, 'latest']);
-    if (adrDe(rendu).toLowerCase() === String(pool).toLowerCase()) famille = 'aerodrome';
-  } catch (_) { famille = 'autre'; /* la factory refuse un triplet inconnu : ce n est pas Aerodrome */ }
-  const gl = glissementBps({ sqrtPriceX96: BigInt('0x' + motDe(s0, 0)), liquidite: BigInt(lq),
-    entree: TAILLE_REFERENCE_USDC, entreeEst0: adrDe(t0).toLowerCase() === USDC_SRV });
-  if (gl.etat !== 'OK') return { glissementBps: null, famille, pourquoiFaits: gl.pourquoi };
-  return { glissementBps: Number(gl.bps), famille, pool: String(pool).toLowerCase(),
-    tickSpacing: Number(BigInt(ts)) };
+  return enFile(async () => {
+    const cle = String(pool).toLowerCase();
+    const un = (sig4) => rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
+    let fixe = poolImmuables.get(cle);
+    if (!fixe) {
+      let t0, t1, ts;
+      try {
+        t0 = await un('0x0dfe1681') /* token0() */;
+        t1 = await un('0xd21220a7') /* token1() */;
+        ts = await un('0xd0c93a7c') /* tickSpacing() */;
+      } catch (e) { return { ...NON_MESURE_POOL, pourquoiFaits: 'pool reads failed: ' + String((e && e.message) || e).slice(0, 60) }; }
+      let famille = 'autre';
+      try {
+        /* ⛔ `fee` N EST PAS `tickSpacing` : c est `tickSpacing()` qui entre dans `getPool`, et les
+         *   confondre designe une pool inexistante (mesure : la pool MUc a fee 10 000, ts 200). */
+        const appel = '0x28af8d0b' /* getPool(address,address,int24) */
+          + motDePool(t0, 0) + motDePool(t1, 0) + BigInt(ts).toString(16).padStart(64, '0');
+        const rendu = await rpcServeur('eth_call', [{ to: FACTORY_AERODROME_CL_SRV, data: appel }, 'latest']);
+        if (adrDePool(rendu).toLowerCase() === cle) famille = 'aerodrome';
+      } catch (_) { famille = 'autre'; /* la factory refuse un triplet inconnu : ce n est pas Aerodrome */ }
+      fixe = { t0, t1, ts: Number(BigInt(ts)), famille };
+      poolImmuables.set(cle, fixe);
+    }
+    /* seuls le prix et la liquidite bougent : deux appels, jamais plus */
+    let s0, lq;
+    try { s0 = await un('0x3850c7bd') /* slot0() */; lq = await un('0x1a686502') /* liquidity() */; }
+    catch (e) { return { glissementBps: null, famille: fixe.famille, pourquoiFaits: 'live pool reads failed: ' + String((e && e.message) || e).slice(0, 60) }; }
+    const gl = glissementBps({ sqrtPriceX96: BigInt('0x' + motDePool(s0, 0)), liquidite: BigInt(lq),
+      entree: TAILLE_REFERENCE_USDC, entreeEst0: adrDePool(fixe.t0).toLowerCase() === USDC_SRV });
+    if (gl.etat !== 'OK') return { glissementBps: null, famille: fixe.famille, pourquoiFaits: gl.pourquoi };
+    return { glissementBps: Number(gl.bps), famille: fixe.famille, pool: cle, tickSpacing: fixe.ts };
+  });
 }
 
 let rpcId = 0, rpcTour = 0;

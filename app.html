@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-porte-glissement" hidden>Build <code>20260929-porte-glissement</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-porte-ne-ferme-pas-sur-linconnu" hidden>Build <code>20260929-porte-ne-ferme-pas-sur-linconnu</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12654,9 +12654,22 @@ function pairesChipQuick() {
        *     ecartait MUc (8 bps). Mesure du 2026-09-28, les deux sur la chaine.
        *   ⛔ ON GARDE LES DEUX : sans prix lu, l ecran ne saurait rien afficher ; sans la porte, on
        *     pousserait vers un mauvais marche. */
-      if (p && (p.type === 'ACTION' || p.type === 'MAJEUR') && prixUsdDeviseLus.has(String(p.symbole))
-          && meriteUnePuce(verdictPorteDe(p.adr))) {
-        out.push(String(p.symbole));
+      /* ⛔⛔ FAIL-CLOSED ICI A SUPPRIME LE PRODUIT, ET J AI EXPEDIE LA PANNE EN PRODUCTION.
+       *     Premiere version : `meriteUnePuce(verdictPorteDe(...))` sans garde sur l inconnu. Les
+       *     faits de pool viennent d un RPC public ; il a repondu « over rate limit », le verdict
+       *     est tombe a `NON_MESURE` POUR TOUT LE MONDE, et LES PUCES SONT PASSEES DE 13 A 2 sur
+       *     le site deploye — actions et TOSHI comprises.
+       *   ⛔⛔ LA LECON N EST PAS « MOINS DE GARDES », C EST LA NATURE DE LA GARDE. Fail-closed est
+       *     juste pour une garde de SECURITE : ne pas signer, ne pas bouger des fonds, ou notre
+       *     ignorance doit bloquer. Ici la garde porte une AFFORDANCE : fermer sur l inconnu ne
+       *     protege personne, ca efface le seul chemin d achat de la page. Un refus n est donc
+       *     prononce que sur un verdict CONNU.
+       *   ⛔ ET LA PORTE MORD QUAND ON SAIT : des que les faits sont lus, `GLISSEMENT_TROP_FORT`
+       *     retire bien la puce (BEc, 385 bps). On ne perd le filtre que pendant notre cecite, et
+       *     on retombe alors EXACTEMENT sur le comportement d avant — jamais sur pire. */
+      if (p && (p.type === 'ACTION' || p.type === 'MAJEUR') && prixUsdDeviseLus.has(String(p.symbole))) {
+        const v = verdictPorteDe(p.adr);
+        if (v.verdict === 'NON_MESURE' || meriteUnePuce(v)) out.push(String(p.symbole));
       }
     }
   } catch (_) { /* registre illisible : on garde au moins l ETH, jamais une liste inventee */ }
@@ -12691,7 +12704,10 @@ function peindrePaireChips() {
     const v = verdictPorteDe(o.value);
     const sansFrais = v.verdict === 'ADMIS_SANS_FRAIS';
     return '<button type="button" class="puce' + on + '" data-paire-chip="' + enTexte(o.value)
-      + '" data-frais="' + (porteNotreFrais(v) ? 'oui' : 'non') + '"'
+      /* ⛔⛔ TROIS VALEURS, PAS DEUX. `non` quand on ne SAIT pas ferait compter comme « ne rapporte
+       *     rien » des marches qui rapportent, pendant une simple panne de lecture — et
+       *     l entonnoir en tirerait un chiffre faux dans les deux sens selon la sante du RPC. */
+      + '" data-frais="' + (v.verdict === 'NON_MESURE' ? 'inconnu' : (porteNotreFrais(v) ? 'oui' : 'non')) + '"'
       + (sansFrais ? ' title="' + enTexte(sym + ' — buyable here, this app takes no fee on it') + '"' : '')
       + ' aria-pressed="' + (on ? 'true' : 'false') + '">' + enTexte(sym) + '</button>';
   }).filter(Boolean);
