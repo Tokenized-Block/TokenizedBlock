@@ -75,6 +75,9 @@ async function lireOpenLaunch() {
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations, createurDe } from './index-blocks.js';
 import { frappesVers } from './mes-blocks.js';
+/* ⛔ LE CALCUL DE GLISSEMENT EST PARTAGE AVEC LE CLIENT, pas recopie ici : deux implementations du
+ *   meme calcul divergent, et c est le client qui ouvre ou ferme la puce. Une seule source. */
+import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
@@ -111,6 +114,53 @@ import { pairesProposees } from './paires.js';
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
 const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
+/** Les faits on-chain d une pool : son glissement a la taille de reference, et sa FAMILLE PROUVEE.
+ *
+ * ⛔⛔ TROIS ETATS, JAMAIS DEUX. Une pool illisible rend `glissementBps: null` et
+ *     `famille: 'NON_MESURE'`. Le client refuse alors la puce : notre aveuglement ne doit pas
+ *     ressembler a un bon marche. Rendre 0 bps par defaut aurait ouvert la porte sur une panne.
+ * ⛔ LA FAMILLE SE PROUVE PAR ALLER-RETOUR : on lit `token0/token1/tickSpacing` SUR la pool, on
+ *   demande `getPool(token0, token1, tickSpacing)` a la factory Aerodrome, et on exige qu elle
+ *   rende CETTE pool. Le `dexId` de l agregateur n est pas une preuve — et l adresse nulle est
+ *   exactement ce que la factory rend pour un triplet inconnu, donc l accepter serait accepter
+ *   « cette pool n existe pas ».
+ * ⛔ `fee` N EST PAS `tickSpacing` : c est `tickSpacing()` qui entre dans `getPool`, et les
+ *   confondre designe une pool inexistante (mesure : la pool MUc a un fee de 10 000 et un
+ *   tickSpacing de 200).
+ */
+const FACTORY_AERODROME_CL_SRV = '0xf8f2eb4940cfe7d13603dddd87f123820fc061ef';
+const USDC_SRV = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+const NON_MESURE_POOL = Object.freeze({ glissementBps: null, famille: 'NON_MESURE' });
+async function faitsDeLaPool(pool) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(pool || ''))) {
+    return { ...NON_MESURE_POOL, pourquoiFaits: 'no pool address from the aggregator' };
+  }
+  const un = async (sig4) => rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
+  let s0, lq, t0, t1, ts;
+  try {
+    [s0, lq, t0, t1, ts] = await Promise.all([
+      un('0x3850c7bd') /* slot0() */, un('0x1a686502') /* liquidity() */,
+      un('0x0dfe1681') /* token0() */, un('0xd21220a7') /* token1() */,
+      un('0xd0c93a7c') /* tickSpacing() */,
+    ]);
+  } catch (e) { return { ...NON_MESURE_POOL, pourquoiFaits: 'pool reads failed: ' + String((e && e.message) || e).slice(0, 60) }; }
+  const motDe = (h, i) => String(h || '').replace(/^0x/, '').slice(i * 64, (i + 1) * 64);
+  const adrDe = (h) => '0x' + motDe(h, 0).slice(24);
+  let famille = 'autre';
+  try {
+    const tsN = BigInt(ts);
+    const appel = '0x28af8d0b' /* getPool(address,address,int24) */
+      + motDe(t0, 0) + motDe(t1, 0) + tsN.toString(16).padStart(64, '0');
+    const rendu = await rpcServeur('eth_call', [{ to: FACTORY_AERODROME_CL_SRV, data: appel }, 'latest']);
+    if (adrDe(rendu).toLowerCase() === String(pool).toLowerCase()) famille = 'aerodrome';
+  } catch (_) { famille = 'autre'; /* la factory refuse un triplet inconnu : ce n est pas Aerodrome */ }
+  const gl = glissementBps({ sqrtPriceX96: BigInt('0x' + motDe(s0, 0)), liquidite: BigInt(lq),
+    entree: TAILLE_REFERENCE_USDC, entreeEst0: adrDe(t0).toLowerCase() === USDC_SRV });
+  if (gl.etat !== 'OK') return { glissementBps: null, famille, pourquoiFaits: gl.pourquoi };
+  return { glissementBps: Number(gl.bps), famille, pool: String(pool).toLowerCase(),
+    tickSpacing: Number(BigInt(ts)) };
+}
+
 let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
   let dernier = null;
@@ -1126,6 +1176,12 @@ const SERVIS = [
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
   'routage.js',
+  /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
+   *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
+   *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
+   *   ⛔ L oublier ici rendrait la page MORTE : la garde de liste blanche l a deja crie deux fois
+   *     avant un deploiement, et c est elle qui compte, pas ma relecture. */
+  'porte-achat.js',
   /* ⛔ `echelle-marche.js` : le total des marches suivis ET la phrase qui dit a qui il est. L oublier
    *   ici rendrait la page MORTE — c est la garde ci-dessous qui l a crie la derniere fois. */
   'echelle-marche.js',
@@ -1437,11 +1493,41 @@ createServer((req, res) => {
         const p = (Array.isArray(j) ? j : []).filter((x) => String(x.baseToken && x.baseToken.address).toLowerCase() === adr)
           .sort((a, b) => ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0))[0];
         const prix = p ? Number(p.priceUsd) : NaN, liq = p && p.liquidity ? Number(p.liquidity.usd) : 0;
-        const r = prix > 0 && Number.isFinite(prix) && liq >= 10000
-          ? { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() }
-          : { ok: false, pourquoi: 'no liquid enough market read' };
-        if (r.ok) prixUsdCache.set(adr, { t: Date.now(), r });
-        repondre(r);
+        /* ── ⛔⛔ LE SEUIL DE TVL N EST PLUS LA PORTE, ET UNE MESURE L A DECIDE ─────────────────
+         *     Il valait `liq >= 10000`. Mesure du 2026-09-28 en lisant `liquidity()` AU TICK
+         *     COURANT : il ADMETTAIT BEc (TVL 10 072 $, 385 bps de glissement sur un achat de
+         *     100 USDC) et REFUSAIT MUc (TVL 9 728 $, 8 bps) — quarante-huit fois mieux. En
+         *     liquidite concentree, toute la liquidite peut etre LOIN du prix courant : la TVL ne
+         *     dit pas le glissement, et le classement s inverse. La garde etait VRAIE et son
+         *     critere le mauvais.
+         *   ⛔ CE QUI RESTE ICI EST UN PLANCHER DE BRUIT, pas une politique : il ecarte les pools
+         *     de poussiere avant qu on ne paie des lectures on-chain pour elles. La vraie porte
+         *     est `porte-achat.js`, cote client, sur le GLISSEMENT — et elle ne peut pas vivre ici
+         *     parce que cet endpoint sert AUSSI a convertir des FDV : y refuser un prix legitime
+         *     casserait `valoDefautEnDevise`. LE PRIX EST UN FAIT, LA PORTE EST UNE POLITIQUE.
+         *   ⛔ LES FAITS AJOUTES (`glissementBps`, `famille`) SONT LUS SUR LA CHAINE, et `famille`
+         *     vient d un ALLER-RETOUR sur la factory Aerodrome, jamais du `dexId` de l agregateur :
+         *     un nom rendu par un tiers n est pas une preuve de provenance. */
+        const PLANCHER_DE_BRUIT_USD = 1000;
+        if (!(prix > 0 && Number.isFinite(prix) && liq >= PLANCHER_DE_BRUIT_USD)) {
+          repondre({ ok: false, pourquoi: 'no market above the ' + PLANCHER_DE_BRUIT_USD + ' USD noise floor' });
+          return;
+        }
+        const r = { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() };
+        void faitsDeLaPool(p && p.pairAddress).then((f) => {
+          /* ⛔ TROIS ETATS : une pool illisible rend `glissementBps: null` et
+           *   `famille: 'NON_MESURE'`. Le client refusera la puce — il ne doit JAMAIS lire
+           *   « non mesure » comme « bon marche ». */
+          const complet = { ...r, ...f };
+          prixUsdCache.set(adr, { t: Date.now(), r: complet });
+          repondre(complet);
+        }).catch(() => {
+          const sansFaits = { ...r, glissementBps: null, famille: 'NON_MESURE',
+            pourquoiFaits: 'pool facts not read' };
+          /* ⛔ PAS DE CACHE SUR UN RESULTAT INCOMPLET : le mettre en cache figerait notre
+           *   aveuglement pendant cinq minutes. */
+          repondre(sansFaits);
+        });
       })
       .catch((e) => repondre({ ok: false, pourquoi: 'price not read: ' + String((e && e.message) || e).slice(0, 80) }));
     return;
