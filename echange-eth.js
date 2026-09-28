@@ -139,6 +139,22 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise });
   if (plan.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: plan.pourquoi, plan: null };
 
+  /* ⛔⛔ TROU TROUVE EN PRODUCTION LE 2026-09-28, EN VERIFIANT CE MEME DEPLOIEMENT. Le plan annoncait
+   *     « la meilleure route » avec `pivotsCompares: 2` alors que TROIS espacements sont sondes : un
+   *     pivot n avait pas pu etre lu (noeud public), il avait ete ecarte EN SILENCE, et « le meilleur
+   *     de trois » etait devenu « le meilleur de deux » sans que personne ne le sache.
+   *     C est une lecture RATEE qui passe pour une ABSENCE — le motif que je chasse depuis ce matin,
+   *     et il etait dans mon propre code.
+   *   ⇒ LE MANQUE VOYAGE AVEC LE PLAN. On ne refuse pas : deux pivots sur trois donnent une route
+   *     utilisable. Mais l ecran doit pouvoir dire que le devis est INCOMPLET, parce qu un devis
+   *     presente comme le meilleur alors qu il lui manque un candidat est une sur-vente. */
+  const pivotsSondes = ESPACEMENTS_PIVOT_SONDES.length;
+  const devisIncomplet = pivotsNonMesures > 0;
+  const noteDevis = devisIncomplet
+    ? pivotsNonMesures + ' of ' + pivotsSondes + ' candidate routes could not be read just now, so this '
+      + 'is the best of ' + poolsPivot.length + ' — not necessarily the best there is.'
+    : null;
+
   /* ── 4. CE QUI EST DEJA FAIT ───────────────────────────────────────────────────────────────── */
   const m = BigInt(plan.montantWei);
   const bal = await lire(rpc, WETH_BASE, selecteur('balanceOf(address)') + pad(compte));
@@ -146,7 +162,8 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   if (bal.etat !== 'OK' || all.etat !== 'OK') {
     /* ⛔ ON NE DEVINE NI UN SOLDE NI UNE AUTORISATION. Supposer qu ils manquent ferait signer pour
      *   rien ; supposer qu ils sont la ferait simuler et afficher un faux refus de marche. */
-    return { etat: 'NON_MESURE', pourquoi: 'could not read your WETH balance or allowance', plan };
+    return { etat: 'NON_MESURE', pourquoi: 'could not read your WETH balance or allowance', plan,
+      pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis };
   }
   let assezWeth = false, assezAllowance = false;
   try { assezWeth = BigInt(bal.res) >= m; } catch (_) { assezWeth = false; }
@@ -164,7 +181,7 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
       /* ⛔ ON DIT POURQUOI ON N A PAS SIMULE, au lieu de laisser croire qu on a verifie. */
       pourquoiPasSimule: 'the swap cannot be simulated before you hold the WETH and have approved it — '
         + 'the earlier steps come first, and a simulation now would revert for the wrong reason',
-      borne: plan.borne };
+      pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis, borne: plan.borne };
   }
   const tx = plan.appels.find((a) => a.role === 'swap');
   let sim;
@@ -179,5 +196,6 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   }
   return { etat: 'PRET', plan, appels: restants, simule: true,
     dejaFait: { wethSuffisant: true, allowanceSuffisante: true },
+    pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis,
     borne: plan.borne + ' The chain accepted this exact swap just now.' };
 }
