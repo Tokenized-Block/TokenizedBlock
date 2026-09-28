@@ -202,7 +202,19 @@ async function faitsDeLaPool(pool) {
   }
   return enFile(async () => {
     const cle = String(pool).toLowerCase();
-    const un = (sig4) => rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
+    /* ⛔⛔ L ESPACEMENT EST ENTRE LES APPELS, PAS SEULEMENT ENTRE LES DEVISES. Premiere version :
+     *     1,5 s entre devises, mais les cinq `eth_call` d une meme pool partaient COLLES — donc
+     *     encore des micro-rafales. Resultat mesure du premier cycle en production :
+     *     « prechauffage des faits de pool : 0 lus, 16 inconnus, sur 16 devises ». Zero.
+     *   ⛔ 400 ms entre chaque lecture : cinq appels prennent 2 s, seize pools une trentaine de
+     *     secondes. Personne n attend ce chemin — il alimente un cache, il a tout son temps. Une
+     *     lecture lente qui ABOUTIT vaut infiniment mieux qu une rafale qui echoue. */
+    const RESPIRATION_MS = 400;
+    const un = async (sig4) => {
+      const r = await rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
+      await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+      return r;
+    };
     let fixe = poolImmuables.get(cle);
     if (!fixe) {
       let t0, t1, ts;
@@ -218,6 +230,7 @@ async function faitsDeLaPool(pool) {
         const appel = '0x28af8d0b' /* getPool(address,address,int24) */
           + motDePool(t0, 0) + motDePool(t1, 0) + BigInt(ts).toString(16).padStart(64, '0');
         const rendu = await rpcServeur('eth_call', [{ to: FACTORY_AERODROME_CL_SRV, data: appel }, 'latest']);
+        await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
         if (adrDePool(rendu).toLowerCase() === cle) famille = 'aerodrome';
       } catch (_) { famille = 'autre'; /* la factory refuse un triplet inconnu : ce n est pas Aerodrome */ }
       fixe = { t0, t1, ts: Number(BigInt(ts)), famille };
@@ -2196,7 +2209,7 @@ createServer((req, res) => {
  *     inconnus et la porte reste inerte. Elle ne fait alors pas PIRE qu avant, mais elle ne fait
  *     pas son travail — et c est `pourquoiFaits` qui le dira, pas un silence. */
 const INTERVALLE_PRECHAUFFE_MS = 4 * 60 * 1000;
-const ESPACEMENT_ENTRE_DEVISES_MS = 1500;
+const ESPACEMENT_ENTRE_DEVISES_MS = 4000;
 async function prechaufferFaitsDePool() {
   const devises = (() => {
     try {
