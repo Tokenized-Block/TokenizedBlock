@@ -21,12 +21,18 @@ const enc = new TextEncoder();
 const hexDe = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');
 export function selecteur(sig) { return hexDe(keccak256(enc.encode(sig))).slice(0, 8); }
 
-const mot = (v) => BigInt(v).toString(16).padStart(64, '0');
+/* ⛔⛔ CES TROIS HELPERS SONT EXPORTES DEPUIS LE 2026-09-28, ET LA RAISON COMPTE. `calldata-v3.js`
+ *     encode la MEME enveloppe `execute(bytes,bytes[],uint256)` pour le MEME routeur. Les recopier
+ *     la-bas creerait une deuxieme copie de `dyn` — celle qui porte le remplissage a 32 octets — et
+ *     ce fichier porte DEJA deux corrections d offset payees en production. Une copie plus faible
+ *     rejouerait ces deux bugs, en silence, sur un chemin qui deplace de l argent.
+ *   ⇒ Une seule definition, importee. Un test verifie que l autre module n en redefinit aucune. */
+export const mot = (v) => BigInt(v).toString(16).padStart(64, '0');
 /** ⛔ Un entier SIGNE se complete a deux sur 32 octets. Un tick negatif encode en non signe
  *  designerait une autre borne — et le revert ne parlerait pas de signe. */
-const motSigne = (v) => { const b = BigInt(v); return (b < 0n ? (1n << 256n) + b : b).toString(16).padStart(64, '0'); };
-const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
-const dyn = (h) => { const n = h.length / 2; return mot(n) + h + '00'.repeat((32 - (n % 32)) % 32); };
+export const motSigne = (v) => { const b = BigInt(v); return (b < 0n ? (1n << 256n) + b : b).toString(16).padStart(64, '0'); };
+export const motAdr = (a) => a.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+export const dyn = (h) => { const n = h.length / 2; return mot(n) + h + '00'.repeat((32 - (n % 32)) % 32); };
 
 /** PoolKey est une struct STATIQUE : ses 5 champs s inlinent, sans offset. */
 const cleInline = (k) => motAdr(k.currency0) + motAdr(k.currency1) + mot(k.fee) + motSigne(k.tickSpacing) + motAdr(k.hooks);
