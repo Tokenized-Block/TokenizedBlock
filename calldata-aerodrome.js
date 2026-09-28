@@ -201,6 +201,136 @@ export function calldataApprove({ token, montant, beneficiaire = ROUTEUR_AERODRO
     + motAdresse(beneficiaire, 'spender') + motNombre(m, 'amount'), value: '0x0' };
 }
 
+/**
+ * Un swap exact-in MULTI-SAUTS sur Aerodrome CL : un seul appel, un seul routeur.
+ *
+ * ⛔⛔ POURQUOI CETTE FONCTION EXISTE, ET CE QU ELLE DEBLOQUE. La plupart des visiteurs arrivent en
+ *     ETH, pas en USDC. Le chemin ETH exigeait jusqu ici un octet de commande d enveloppement que je
+ *     n ai PAS prouve — present dans 2 des 14 transactions mesurees sur 249 blocs, donc specificite
+ *     parfaite mais sensibilite insuffisante.
+ *     Mesure du 2026-09-28 : il existe TROIS pools Aerodrome WETH/USDC (tickSpacing 1 / fee 80,
+ *     tickSpacing 10 / fee 500, tickSpacing 50 / fee 725). Donc `WETH -> USDC -> action` tient en UN
+ *     appel `exactInput`, sur UN routeur, sans franchir aucune frontiere.
+ *   ⇒ Le parcours ETH devient : `deposit()` sur WETH (selecteur 0xd0e30db0, lu dans son bytecode
+ *     avec 2 temoins positifs et 0 faux positif), puis `approve`, puis CE swap. Trois signatures,
+ *     aucun octet non prouve, aucun contrat, aucun lot atomique.
+ *
+ * ⛔⛔ LE CHEMIN PORTE UN `tickSpacing` SUR TROIS OCTETS, ET CE N EST PAS LE `fee`. C est PROUVE, pas
+ *     suppose : les quatre transactions reelles observees portaient `0x0000c8` = 200 au milieu du
+ *     chemin, et `getPool(jeton0, USDC, 200)` sur la factory Aerodrome rend une VRAIE pool dont
+ *     `tickSpacing()` vaut 200 et dont `fee()` vaut 3000 — un nombre DIFFERENT. L aller-retour
+ *     tranche ce que l apparence ne pouvait pas : 200 etait plausible dans les deux jeux.
+ *
+ * ⛔ ET L ORDRE DES CHAMPS N EST PAS CELUI DE `exactInputSingle`. Decode sur une transaction REUSSIE
+ *   (status 0x1, 3 logs, 292 octets, 0xa2cc2798…4f74, bloc 51 918 206, ts 1 790 625 759, deadline a +598 s) :
+ *       (bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum)
+ *   ⛔ La structure se referme : l offset du `path` valait 160, soit EXACTEMENT les cinq mots de
+ *     tete, et le `recipient` etait egal au `from` de la transaction.
+ *
+ * ⚠️ CE QU ELLE NE PROUVE PAS : qu un swap aboutisse. Le glissement s accumule sur CHAQUE saut, et
+ *   un chemin a deux sauts a deux occasions d echouer. Le minimum porte sur la sortie FINALE.
+ */
+export function calldataExactInputCL({ sauts, recipient, amountIn, amountOutMinimum, deadline,
+  maintenant = null } = {}) {
+  /* ⛔ LE MEME REFUS QUE POUR LE SAUT UNIQUE, et pour la meme raison : un minimum nul laisse la
+   *   derniere pool rendre presque rien pour la totalite de l entree. */
+  const min = BigInt(amountOutMinimum === undefined || amountOutMinimum === null ? 0 : amountOutMinimum);
+  if (min <= 0n) {
+    return { etat: 'REFUSE', pourquoi: 'amountOutMinimum must be greater than zero — a zero minimum '
+      + 'lets the last pool return almost nothing for the whole input' };
+  }
+  const entree = BigInt(amountIn === undefined || amountIn === null ? 0 : amountIn);
+  if (entree <= 0n) return { etat: 'REFUSE', pourquoi: 'amountIn must be greater than zero' };
+  if (!ADR.test(String(recipient || ''))) return { etat: 'REFUSE', pourquoi: 'a whole recipient address is required' };
+  if (/^0x0{40}$/i.test(String(recipient))) return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the zero address' };
+  if (bas(recipient) === bas(ROUTEUR_AERODROME_CL)) {
+    return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the router itself: the output would '
+      + 'silently stay there' };
+  }
+  const dl = BigInt(deadline === undefined || deadline === null ? 0 : deadline);
+  if (dl <= 0n) return { etat: 'REFUSE', pourquoi: 'an absolute deadline in seconds is required' };
+  let noteDeadline = 'not judged — no reference instant was given';
+  if (maintenant !== null && maintenant !== undefined) {
+    const now = BigInt(maintenant);
+    if (dl <= now) return { etat: 'REFUSE', pourquoi: 'the deadline is already in the past' };
+    if (dl - now > 1800n) {
+      return { etat: 'REFUSE', pourquoi: 'the deadline is more than 30 minutes out; the measured real '
+        + 'call used 598 s, and a far deadline stays executable after the price has moved' };
+    }
+    noteDeadline = 'ok — ' + String(dl - now) + ' s ahead of the given instant';
+  }
+
+  /* ── le chemin : jeton, puis (tickSpacing, jeton) repete ──────────────────────────────────
+   * ⛔⛔ TROIS OCTETS POUR LE tickSpacing, comme dans la transaction temoin. Sur QUATRE octets le
+   *     chemin ferait 45 au lieu de 43 pour un saut, et la chaine le refuserait — l egalite des
+   *     longueurs EST le test. */
+  if (!Array.isArray(sauts) || sauts.length < 1) {
+    return { etat: 'REFUSE', pourquoi: 'a path needs at least one hop' };
+  }
+  let hex = '';
+  let precedent = null;
+  for (let i = 0; i < sauts.length; i += 1) {
+    const s = sauts[i] || {};
+    const de = bas(s.de), vers = bas(s.vers);
+    if (!ADR.test(de) || !ADR.test(vers)) {
+      return { etat: 'REFUSE', pourquoi: 'hop ' + i + ' needs two whole token addresses' };
+    }
+    if (de === vers) return { etat: 'REFUSE', pourquoi: 'hop ' + i + ' has the same token on both sides' };
+    /* ⛔ LES SAUTS SE CHAINENT, sinon la chaine refuse un chemin que l encodeur a accepte. */
+    if (precedent !== null && precedent !== de) {
+      return { etat: 'REFUSE', pourquoi: 'hop ' + i + ' starts at ' + de + ' but hop ' + (i - 1)
+        + ' ended at ' + precedent + ': the path does not chain' };
+    }
+    const ts = BigInt(s.tickSpacing === undefined || s.tickSpacing === null ? -1 : s.tickSpacing);
+    /* ⛔⛔ ON EXIGE `tickSpacing`, PAS `fee`, ET LE NOM DU CHAMP LE DIT. Passer un fee (500, 3000…)
+     *     designerait un espacement qui n existe pas, et la pool serait introuvable. */
+    if (ts <= 0n || ts >= (1n << 23n)) {
+      return { etat: 'REFUSE', pourquoi: 'hop ' + i + ' needs a positive tickSpacing that fits in three '
+        + 'bytes — this is the pool spacing (1, 10, 50, 200…), NOT its fee (80, 500, 725, 3000…)' };
+    }
+    if (i === 0) hex += de.replace(/^0x/, '');
+    hex += ts.toString(16).padStart(6, '0') + vers.replace(/^0x/, '');
+    precedent = vers;
+  }
+  const attendue = 20 + 23 * sauts.length;
+  if (hex.length / 2 !== attendue) {
+    return { etat: 'REFUSE', pourquoi: 'internal: path is ' + (hex.length / 2) + ' bytes, expected ' + attendue };
+  }
+
+  /* ── l enveloppe, dans l ORDRE DECODE ─────────────────────────────────────────────────────
+   * ⛔ CINQ MOTS DE TETE : offset(path), recipient, deadline, amountIn, amountOutMinimum. L offset
+   *   du path vaut donc 5 x 32 = 160 — exactement ce que portait la transaction temoin. */
+  const TETE = 5;
+  const tuple = motNombre(TETE * 32, 'offset du chemin')
+    + motAdresse(recipient, 'recipient')
+    + motNombre(dl, 'deadline')
+    + motNombre(entree, 'amountIn')
+    + motNombre(min, 'amountOutMinimum')
+    + dynamique(hex);
+  return {
+    etat: 'PRET',
+    to: ROUTEUR_AERODROME_CL,
+    data: SELECTEURS.exactInput + motNombre(0x20, 'offset du tuple') + tuple,
+    value: '0x0',
+    champs: { recipient: bas(recipient), deadline: String(dl), amountIn: String(entree),
+      amountOutMinimum: String(min), cheminOctets: attendue, sauts: sauts.length,
+      entree: bas(sauts[0].de), sortie: bas(sauts[sauts.length - 1].vers) },
+    noteDeadline,
+    /* ⛔ LA BORNE PROPRE AU MULTI-SAUTS : le glissement s accumule, et deux sauts donnent deux
+     *   occasions d echouer pour un seul clic. */
+    borne: 'This route crosses ' + sauts.length + ' pool(s); slippage adds up on each one and the '
+      + 'guaranteed minimum applies to the FINAL output only.',
+  };
+}
+
+/** Un mot dynamique : longueur puis contenu, rembourre a 32 octets.
+ * ⛔ SORTI EN FONCTION pour que `exactInput` et une eventuelle suite partagent LE MEME remplissage —
+ *   un rembourrage recopie est exactement le genre de jumeau qui divergerait. */
+function dynamique(hex) {
+  const n = hex.length / 2;
+  return motNombre(n, 'longueur') + hex + '00'.repeat((32 - (n % 32)) % 32);
+}
+
 /** L appel de LECTURE qui resout un triplet en adresse de pool, sur la factory.
  *
  * ⛔⛔ POURQUOI CE MODULE PUR EXPOSE UN APPEL DE LECTURE PLUTOT QUE DE LE FAIRE. Verifier un triplet

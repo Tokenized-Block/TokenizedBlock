@@ -19,7 +19,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement, calldataGetPool,
+import { calldataExactInputSingleCL, calldataApprove, planifierFranchissement, calldataGetPool, calldataExactInputCL,
   ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, SELECTEURS } from './calldata-aerodrome.js';
 import { selecteur } from './keccak.js';
 
@@ -255,6 +255,114 @@ cas('⛔ calldataGetPool reproduit l appel de lecture qui a VRAIMENT resolu cett
   assert.equal(calldataGetPool({ tokenA: '0x12', tokenB: NVDAc, tickSpacing: 10 }).etat, 'REFUSE');
 });
 
+/* ── `exactInput` MULTI-SAUTS : le chemin ETH sans octet non prouve ─────────────────────────── */
+const TEMOIN_MULTI = {
+  tx: '0xa2cc2798f8c0d7f954cbba3d683e3b524c9f82d8feabc4b04f0dda696d4b4f74',
+  statut: '0x1',
+  blocTs: 1790625759n,
+  entree: {
+    sauts: [{ de: '0x182fa643e5f29d5eca75e7b9cf9336a3fe4620b2', vers: USDC, tickSpacing: 200 }],
+    recipient: '0xd13da05b9288ba4961973110594bd0fe3428791f',
+    deadline: 0x6abaca35n, amountIn: 0x3dbecb50f743a8cde0n, amountOutMinimum: 0x23b54548n,
+  },
+  calldata: '0xc04b8d59'
+    + '0000000000000000000000000000000000000000000000000000000000000020'
+    + '00000000000000000000000000000000000000000000000000000000000000a0'
+    + '000000000000000000000000d13da05b9288ba4961973110594bd0fe3428791f'
+    + '000000000000000000000000000000000000000000000000000000006abaca35'
+    + '00000000000000000000000000000000000000000000003dbecb50f743a8cde0'
+    + '0000000000000000000000000000000000000000000000000000000023b54548'
+    + '000000000000000000000000000000000000000000000000000000000000002b'
+    + '182fa643e5f29d5eca75e7b9cf9336a3fe4620b20000c8833589fcd6edb6e08f'
+    + '4c7c32d4f71b54bda02913000000000000000000000000000000000000000000',
+};
+
+cas('⛔⛔ `exactInput` est reproduit A L OCTET sur une transaction REUSSIE', () => {
+  /* ⛔⛔ CE QUE CETTE FONCTION DEBLOQUE : `WETH -> USDC -> action` en UN appel, sur UN routeur. La
+   *     plupart des visiteurs arrivent en ETH, et le chemin ETH exigeait jusqu ici un octet de
+   *     commande d enveloppement present dans SEULEMENT 2 des 14 transactions mesurees.
+   *     Mesure du 2026-09-28 : trois pools Aerodrome WETH/USDC existent (tickSpacing 1 / 10 / 50).
+   *     Le parcours devient `deposit()` sur WETH, `approve`, puis CE swap — aucun octet suppose.
+   *   ⛔ LE TEMOIN A REUSSI : status 0x1, 3 logs. Rejouer un revert ne prouverait rien. */
+  assert.equal((TEMOIN_MULTI.calldata.length - 2) / 2, 292, 'le temoin recopie ne fait pas 292 octets');
+  assert.equal(TEMOIN_MULTI.statut, '0x1');
+  assert.equal(TEMOIN_MULTI.calldata.slice(2, 10), SELECTEURS.exactInput.replace(/^0x/, ''));
+  const r = calldataExactInputCL({ ...TEMOIN_MULTI.entree, maintenant: TEMOIN_MULTI.blocTs });
+  assert.equal(r.etat, 'PRET', r.pourquoi || '');
+  assert.equal(r.to.toLowerCase(), ROUTEUR_AERODROME_CL.toLowerCase());
+  assert.equal(r.value, '0x0');
+  assert.equal(r.data, TEMOIN_MULTI.calldata, 'calldata different de la transaction reelle');
+  assert.equal(r.champs.cheminOctets, 43, 'un saut = 20 + 3 + 20');
+  /* ⛔ LE DEADLINE MESURE EST A +598 s, pas +86 : j avais ecrit 86 dans un commentaire et le calcul
+   *   du module m a corrige. Un chiffre faux dans une doc de mesure pourrit comme le reste. */
+  assert.match(r.noteDeadline, /598 s/);
+});
+
+cas('⛔⛔ le chemin porte un `tickSpacing`, PAS un `fee` — et c est PROUVE', () => {
+  /* ⛔⛔ LES QUATRE TRANSACTIONS OBSERVEES portaient `0x0000c8` = 200 au milieu du chemin. 200 est
+   *     plausible comme tickSpacing ET comme fee : l apparence ne tranchait pas.
+   *     CE QUI A TRANCHE : `getPool(jeton0, USDC, 200)` sur la factory Aerodrome rend une VRAIE
+   *     pool dont `tickSpacing()` vaut 200 et dont `fee()` vaut 3000 — un nombre DIFFERENT.
+   *   ⇒ Le champ du chemin est bien l espacement. Passer un fee (500, 725, 3000…) designerait un
+   *     espacement inexistant et la pool serait introuvable. */
+  const r = calldataExactInputCL({ ...TEMOIN_MULTI.entree, maintenant: TEMOIN_MULTI.blocTs });
+  assert.ok(r.data.includes('0000c8'), '200 doit s ecrire sur TROIS octets');
+  assert.ok(!r.data.includes('000000c8'), 'sur quatre octets le chemin ferait 45 et non 43');
+  /* ⛔ ET LE CHAMP S APPELLE `tickSpacing` : un appelant qui passe `fee` obtient un refus nomme */
+  const avecFee = calldataExactInputCL({
+    sauts: [{ de: TEMOIN_MULTI.entree.sauts[0].de, vers: USDC, fee: 3000 }],
+    recipient: TEMOIN_MULTI.entree.recipient, deadline: TEMOIN_MULTI.entree.deadline,
+    amountIn: 1000n, amountOutMinimum: 1n, maintenant: TEMOIN_MULTI.blocTs });
+  assert.equal(avecFee.etat, 'REFUSE', 'un saut sans tickSpacing doit etre refuse');
+  assert.match(avecFee.pourquoi, /tickSpacing/i);
+  assert.match(avecFee.pourquoi, /NOT its fee/i, 'le refus doit nommer le piege');
+  /* ⛔ et un tickSpacing hors des trois octets est refuse */
+  for (const ts of [0, -1, 1 << 23, null, undefined]) {
+    assert.equal(calldataExactInputCL({ sauts: [{ de: USDC, vers: NVDAc, tickSpacing: ts }],
+      recipient: TEMOIN_MULTI.entree.recipient, deadline: TEMOIN_MULTI.entree.deadline,
+      amountIn: 1000n, amountOutMinimum: 1n }).etat, 'REFUSE', 'tickSpacing=' + String(ts));
+  }
+});
+
+cas('⛔ un chemin a DEUX sauts fait 66 octets et se chaine', () => {
+  /* ⛔ C EST LA FORME DU CHEMIN ETH : WETH -> USDC -> action, en un seul appel. */
+  const WETH = '0x4200000000000000000000000000000000000006';
+  const r = calldataExactInputCL({
+    sauts: [{ de: WETH, vers: USDC, tickSpacing: 50 }, { de: USDC, vers: NVDAc, tickSpacing: 10 }],
+    recipient: TEMOIN_MULTI.entree.recipient, deadline: TEMOIN_MULTI.blocTs + 300n,
+    amountIn: 10n ** 16n, amountOutMinimum: 1000n, maintenant: TEMOIN_MULTI.blocTs });
+  assert.equal(r.etat, 'PRET', r.pourquoi || '');
+  assert.equal(r.champs.cheminOctets, 66, 'deux sauts = 20 + 23 + 23');
+  assert.equal(r.champs.entree, WETH.toLowerCase());
+  assert.equal(r.champs.sortie, NVDAc.toLowerCase());
+  assert.equal(r.champs.sauts, 2);
+  /* ⛔ LA BORNE DIT QUE LE GLISSEMENT S ACCUMULE : deux sauts, deux occasions d echouer. */
+  assert.match(r.borne, /2 pool/);
+  assert.match(r.borne, /FINAL output only/i);
+  /* ⛔ un chemin qui ne se chaine pas est refuse ici, pas par un revert illisible plus tard */
+  const casse = calldataExactInputCL({
+    sauts: [{ de: WETH, vers: USDC, tickSpacing: 50 }, { de: NVDAc, vers: USDC, tickSpacing: 10 }],
+    recipient: TEMOIN_MULTI.entree.recipient, deadline: TEMOIN_MULTI.blocTs + 300n,
+    amountIn: 1000n, amountOutMinimum: 1n });
+  assert.equal(casse.etat, 'REFUSE');
+  assert.match(casse.pourquoi, /does not chain/i);
+});
+
+cas('⛔ `exactInput` refuse un minimum nul, le routeur comme destinataire, et un deadline lointain', () => {
+  const b = { ...TEMOIN_MULTI.entree, maintenant: TEMOIN_MULTI.blocTs };
+  for (const min of [0, 0n, null, undefined]) {
+    const r = calldataExactInputCL({ ...b, amountOutMinimum: min });
+    assert.equal(r.etat, 'REFUSE');
+    assert.match(r.pourquoi, /greater than zero/i);
+  }
+  const surLeRouteur = calldataExactInputCL({ ...b, recipient: ROUTEUR_AERODROME_CL });
+  assert.equal(surLeRouteur.etat, 'REFUSE');
+  assert.match(surLeRouteur.pourquoi, /router itself/i);
+  assert.equal(calldataExactInputCL({ ...b, deadline: TEMOIN_MULTI.blocTs + 1801n }).etat, 'REFUSE');
+  /* temoin positif a la borne exacte */
+  assert.equal(calldataExactInputCL({ ...b, deadline: TEMOIN_MULTI.blocTs + 1800n }).etat, 'PRET');
+});
+
 cas('⛔ la factory publiee est celle du routeur mesure', () => {
   /* ⛔ Elle est exportee pour qu une sonde puisse la RE-verifier sur la chaine (`factory()`), pas
    *   pour etre recopiee. Ce cas verifie juste sa forme et qu elle n a pas ete confondue avec la
@@ -278,7 +386,7 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
 /* ⛔ LE COMPTE M A ATTRAPE : j avais ecrit 12, il y en a 13 — la boucle sur les deux temoins produit
  *   QUATRE cas, pas deux. Un compteur qui ne se verifie pas laisserait un cas disparaitre en silence
  *   lors d un refactor, et la suite resterait verte avec une assertion en moins. */
-assert.equal(n, 15, 'compte de cas inattendu : ' + n);
+assert.equal(n, 19, 'compte de cas inattendu : ' + n);
 console.log('✓ test-calldata-aerodrome : ' + n + ' cas');
 console.log('   2 transactions reelles rejouees A L OCTET, sens croise avec leur event Swap.');
 console.log('   Le lot EXIGE une pool resolue par getPool : tickSpacing vaut 10 sur 7 pools et 1 sur 5.');
