@@ -145,6 +145,46 @@ const NON_MESURE_POOL = Object.freeze({ glissementBps: null, famille: 'NON_MESUR
  *          garde pour de bon, ce qui ramene les appels repetes de cinq a deux ;
  *       3. un verrou a un seul fil : deux requetes concurrentes sur la meme pool ne la lisent
  *          qu une fois. */
+/* ── ⛔⛔ UN VERDICT DATE SURVIT A UNE SECHERESSE DE RPC ──────────────────────────────────────────
+ *     MESURE LE 2026-09-29 : le RPC public a etrangle cette machine toute la journee. Faits lus en
+ *     rafale : refuses. Un a la fois, espaces de 1,5 s : refuses AUSSI. Le filtre restait donc
+ *     INERTE en production — 16 verdicts `NON_MESURE` sur 17 — et BEc gardait sa puce avec 385 bps.
+ *   ⛔ INSISTER N EST PAS LA REPONSE : la reponse est de PERSISTER ce qu on a reussi a lire, pour
+ *     qu UNE SEULE bonne fenetre suffise. Une pool a 2,4 M$ ne passe pas de 0 a 418 bps en une
+ *     heure ; un verdict d hier vaut infiniment mieux qu aucun verdict.
+ *   ⛔⛔ ET IL PORTE SON AGE. Un verdict dont on ignore l age serait une photo prise pour du
+ *     direct — la faute exacte qui avait grave une liste de puces « photo d un jour ». Le client
+ *     recoit `ageFaitsMs` et peut en tirer ses conclusions. */
+const FICHIER_FAITS_POOL = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'faits-pool.json') : null;
+const faitsPersistes = new Map();  /* jeton -> { glissementBps, famille, pool, tickSpacing, t } */
+(function chargerFaitsPersistes() {
+  /* ⛔⛔ LE JOURNAL DIT SI LA PERSISTANCE EXISTE. Sans volume monte, `FICHIER_FAITS_POOL` vaut
+   *     `null` et tout ce mecanisme est un NO-OP — exactement le genre de correctif inerte qu on
+   *     croit avoir livre. Un silence ici l aurait rendu indetectable. */
+  if (!FICHIER_FAITS_POOL) {
+    console.log('faits de pool : AUCUNE PERSISTANCE (pas de volume monte) — la porte redeviendra '
+      + 'inerte a chaque redemarrage et a chaque secheresse de RPC');
+    return;
+  }
+  if (!existsSync(FICHIER_FAITS_POOL)) { console.log('faits de pool : volume present, fichier encore vide'); return; }
+  try {
+    const j = JSON.parse(readFileSync(FICHIER_FAITS_POOL, 'utf8'));
+    for (const [k, v] of Object.entries(j || {})) {
+      if (v && typeof v.glissementBps === 'number') faitsPersistes.set(String(k).toLowerCase(), v);
+    }
+    console.log('faits de pool relus du disque : ' + faitsPersistes.size);
+  } catch (_) { /* fichier illisible : on repart a vide, jamais sur des valeurs a moitie lues */ }
+})();
+function ecrireFaitsPersistes() {
+  if (!FICHIER_FAITS_POOL) return;
+  try {
+    const payload = JSON.stringify(Object.fromEntries(faitsPersistes));
+    writeFileSync(FICHIER_FAITS_POOL + '.tmp', payload);
+    renameSync(FICHIER_FAITS_POOL + '.tmp', FICHIER_FAITS_POOL);
+  } catch (_) { /* disque plein ou volume absent : on garde la memoire vive, on ne casse pas la page */ }
+}
+
 const poolImmuables = new Map();   /* pool -> { t0, t1, ts, famille } — jamais expire */
 let filePoolFaits = Promise.resolve();
 function enFile(tache) {
@@ -1549,10 +1589,38 @@ createServer((req, res) => {
         const r = { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() };
         void faitsDeLaPool(p && p.pairAddress).then((f) => {
           /* ⛔ TROIS ETATS : une pool illisible rend `glissementBps: null` et
-           *   `famille: 'NON_MESURE'`. Le client refusera la puce — il ne doit JAMAIS lire
-           *   « non mesure » comme « bon marche ». */
+           *   `famille: 'NON_MESURE'`. Le client ne doit JAMAIS lire « non mesure » comme
+           *   « bon marche ». */
           const complet = { ...r, ...f };
-          prixUsdCache.set(adr, { t: Date.now(), r: complet });
+          /* ⛔⛔ ON NE MET EN CACHE QUE CE QU ON A REELLEMENT LU. `faitsDeLaPool` se RESOUT (elle ne
+           *     rejette pas) quand le RPC refuse, donc cacher sans regarder figerait un
+           *     `glissementBps: null` pendant cinq minutes — et le prechauffage ne pourrait plus
+           *     rien reparer. Mettre son propre aveuglement en cache est la facon la plus sure de
+           *     le rendre permanent. */
+          if (typeof f.glissementBps === 'number') {
+            prixUsdCache.set(adr, { t: Date.now(), r: complet });
+            /* ⛔ ON GARDE LA LECTURE REUSSIE SUR LE DISQUE : c est elle qui portera la porte pendant
+             *   la prochaine secheresse de RPC. */
+            faitsPersistes.set(adr, { glissementBps: f.glissementBps, famille: f.famille,
+              pool: f.pool || null, tickSpacing: f.tickSpacing || null, t: Date.now() });
+            ecrireFaitsPersistes();
+            repondre({ ...complet, ageFaitsMs: 0 });
+            return;
+          }
+          /* ⛔⛔ RIEN LU AUJOURD HUI : ON REND LE DERNIER VERDICT CONNU, AVEC SON AGE. Rendre
+           *     `NON_MESURE` alors qu on a un verdict d hier sur le disque serait jeter une mesure
+           *     qu on possede — et laisser la porte inerte pour rien. `pourquoiFaits` dit quand
+           *     meme pourquoi la lecture du jour a echoue : on ne cache pas la panne, on ne s en
+           *     sert juste pas comme d un verdict. */
+          const vieux = faitsPersistes.get(adr);
+          if (vieux) {
+            repondre({ ...r, glissementBps: vieux.glissementBps, famille: vieux.famille,
+              pool: vieux.pool, tickSpacing: vieux.tickSpacing,
+              ageFaitsMs: Date.now() - Number(vieux.t || 0),
+              pourquoiFaits: 'live read failed (' + String(f.pourquoiFaits || 'unknown').slice(0, 60)
+                + '), serving the last verdict read' });
+            return;
+          }
           repondre(complet);
         }).catch(() => {
           const sansFaits = { ...r, glissementBps: null, famille: 'NON_MESURE',
@@ -2112,4 +2180,45 @@ createServer((req, res) => {
 }).listen(PORT, '0.0.0.0', () => {
   console.log('tokenized-block sert ' + cache.size + ' fichier(s) sur le port ' + PORT);
   console.log('racine -> ' + RACINE + '  ·  HTML et JS en no-cache, images 24 h');
+  prechaufferFaitsDePool();
 });
+
+/* ── ⛔⛔ POURQUOI UN PRECHAUFFAGE, ET PAS UNE LECTURE A L OUVERTURE DE LA PAGE ──────────────────
+ *     MESURE EN PRODUCTION LE 2026-09-29 : les faits de pool lus a la demande echouaient en
+ *     « over rate limit » sur le RPC public, donc `glissementBps` valait `null`, donc la porte
+ *     d achat etait INERTE — 16 verdicts `NON_MESURE` sur 17 devises. Le filtre existait et ne
+ *     filtrait rien : BEc gardait sa puce avec 385 bps de glissement.
+ *   ⛔ LA FORME JUSTE EST DONC UN RYTHME LENT, PAS UNE RAFALE A CHAQUE VISITE. Dix-sept devises,
+ *     une a la fois, espacees : le RPC ne bronche pas, et les pages lisent un cache tiede.
+ *   ⛔ ET LE RESULTAT PORTE SON AGE. Un verdict vieux de dix minutes reste un verdict ; un verdict
+ *     dont on ignore l age serait une photo qu on prendrait pour du direct.
+ *   ⚠️ CE QUE CA NE CORRIGE PAS : si le RPC refuse pendant tout un cycle, les verdicts restent
+ *     inconnus et la porte reste inerte. Elle ne fait alors pas PIRE qu avant, mais elle ne fait
+ *     pas son travail — et c est `pourquoiFaits` qui le dira, pas un silence. */
+const INTERVALLE_PRECHAUFFE_MS = 4 * 60 * 1000;
+const ESPACEMENT_ENTRE_DEVISES_MS = 1500;
+async function prechaufferFaitsDePool() {
+  const devises = (() => {
+    try {
+      return pairesProposees(8453)
+        .filter((p) => p && (p.type === 'ACTION' || p.type === 'MAJEUR') && /^0x[0-9a-fA-F]{40}$/.test(String(p.adr)))
+        .map((p) => String(p.adr).toLowerCase());
+    } catch (_) { return []; }
+  })();
+  if (!devises.length) { console.log('prechauffage : aucune devise a lire'); return; }
+  let lus = 0, inconnus = 0;
+  for (const adr of devises) {
+    /* ⛔ ON PASSE PAR L ENDPOINT INTERNE : un second chemin de lecture aurait diverge du premier. */
+    try {
+      const j = await fetch('http://127.0.0.1:' + PORT + '/api/prix-usd?adr=' + adr,
+        { signal: AbortSignal.timeout(25000) }).then((r) => r.json());
+      if (j && typeof j.glissementBps === 'number') lus += 1; else inconnus += 1;
+    } catch (_) { inconnus += 1; }
+    await new Promise((ok) => setTimeout(ok, ESPACEMENT_ENTRE_DEVISES_MS));
+  }
+  /* ⛔ LE JOURNAL DIT LES DEUX CHIFFRES. « prechauffage fait » sans le nombre d inconnus serait la
+   *   phrase qui a laisse la porte inerte une journee entiere sans que rien ne le crie. */
+  console.log('prechauffage des faits de pool : ' + lus + ' lus, ' + inconnus + ' inconnus, sur '
+    + devises.length + ' devises');
+  setTimeout(prechaufferFaitsDePool, INTERVALLE_PRECHAUFFE_MS);
+}

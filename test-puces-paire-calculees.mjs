@@ -156,3 +156,55 @@ console.log('   plus vieillir en silence.');
   assert.equal(m, 1, 'compte de cas (repeinture) inattendu : ' + m);
   console.log('   + ' + m + ' cas : les paires sont repeintes a l arrivee du trending.');
 }
+
+/* ══ ⛔⛔ LA PANNE DU 2026-09-29, ET LA GARDE QUI L EMPECHE DE REVENIR ═══════════════════════════
+ *     CE QUI EST ARRIVE EN PRODUCTION. La porte d achat (`porte-achat.js`) a ete branchee sur des
+ *     faits lus sur un RPC public, en FAIL-CLOSED. Le RPC a rendu « over rate limit », le verdict
+ *     est tombe a `NON_MESURE` pour TOUTES les devises, et LES PUCES SONT PASSEES DE 13 A 2 sur le
+ *     site deploye — les dix actions et TOSHI comprises. Une garde JUSTE, posee sur une
+ *     AFFORDANCE, a efface le seul chemin d achat de la page.
+ *   ⛔ LA REGLE QUE CES CAS GRAVENT : fail-closed est pour une garde de SECURITE, ou notre
+ *     ignorance doit bloquer. Sur une affordance, un refus ne se prononce que sur un verdict
+ *     CONNU ; sur `NON_MESURE` on retombe exactement sur le comportement d avant, jamais pire.
+ * ⚠️ CE QUE CES CAS NE PROUVENT PAS : ce sont des assertions sur le TEXTE de `app.html`, pas une
+ *   execution. Elles attrapent la SUPPRESSION de la branche, pas une erreur d execution dedans.
+ *   Seul un navigateur sur la page deployee l a dit — et c est lui qui a crie, pas cette suite. */
+{
+  let m = 0;
+  const casD = (titre, f) => { m++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
+  const corpsChip = () => {
+    const i = nu.indexOf('function pairesChipQuick()');
+    assert.notEqual(i, -1, 'la liste calculee a disparu');
+    const j = nu.indexOf('function peindrePaireChips', i);
+    assert.notEqual(j, -1, 'la peinture des puces a disparu');
+    return nu.slice(i, j);
+  };
+
+  casD('⛔⛔ LA PORTE NE FERME PAS SUR UN VERDICT INCONNU', () => {
+    const corps = corpsChip();
+    assert.ok(/verdictPorteDe/.test(corps), 'la porte d achat n est plus consultee du tout');
+    /* ⛔ LE COEUR DE LA GARDE : la branche qui laisse passer l inconnu doit etre LA. */
+    assert.ok(/NON_MESURE/.test(corps),
+      'la branche qui laisse passer un verdict NON_MESURE a disparu : une panne du RPC de prix '
+      + 'effacera de nouveau toutes les puces, comme le 2026-09-29 (13 -> 2 en production)');
+  });
+
+  casD('⛔ mais la porte MORD quand le verdict est connu', () => {
+    assert.ok(/meriteUnePuce\(/.test(corpsChip()),
+      'plus aucun refus : un marche a 385 bps de glissement redeviendrait pousse comme les autres');
+  });
+
+  casD('⛔⛔ `data-frais` A TROIS VALEURS — « non » ne doit pas couvrir « inconnu »', () => {
+    const i = nu.indexOf('function peindrePaireChips');
+    const corps = nu.slice(i, i + 2600);
+    assert.ok(/data-frais=/.test(corps), 'la marque de frais a disparu de la puce');
+    assert.ok(/inconnu/.test(corps),
+      'l etat « inconnu » a disparu : pendant une panne de lecture, des marches qui RAPPORTENT '
+      + 'seraient comptes comme ne rapportant rien, et l entonnoir rendrait un chiffre faux');
+    assert.ok(/porteNotreFrais\(/.test(corps),
+      'la puce ne distingue plus les marches qui portent notre frais de ceux qui n en portent pas');
+  });
+
+  assert.equal(m, 3, 'compte de cas (fail-open) inattendu : ' + m);
+  console.log('   + ' + m + ' cas : la porte ne ferme pas sur l inconnu (panne du 2026-09-29).');
+}
