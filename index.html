@@ -5920,12 +5920,23 @@ const STOCKS_BASE_REGISTRY = [
    *     Les dix restantes circulent. CETTE LISTE EST LE JUMEAU de `ACTIONS_COINBASE` (paires.js) et
    *     un test les compare ADRESSE PAR ADRESSE : toute coupe faite ici doit l etre la-bas, sinon
    *     la suite tombe — et c est exactement ce qu on veut d un jumeau. */
+  /* ⛔⛔ QUATRE AJOUTEES LE 2026-09-28 -- AVGOc, BEc, HIMSc, MUc -- chacune mesuree sur la chaine :
+   *     `eth_getCode` == `0xef` EXACTEMENT, `symbol()` relu et concordant, `totalSupply()` > 0,
+   *     `decimals()` == 8, pool prouvee par aller-retour sur sa factory. MRVLc etait annoncee avec
+   *     elles et n entre PAS : aucune pool v3/CL a prouver (v4 seule). Supply lue : BEc 62 ·
+   *     AVGOc 85 · MUc 433,44 · HIMSc 581 -- minces, et « admise » ne veut pas dire « profonde ».
+   *     TOUT AJOUT ICI DOIT L ETRE DANS `ACTIONS_COINBASE` (paires.js) : un test compare les deux
+   *     ADRESSE PAR ADRESSE, et c est exactement ce qu on veut d un jumeau. */
   { symbol: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
   { symbol: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
+  { symbol: 'AVGOc', nom: 'Broadcom', adr: '0xb200000000000000000000fc737aea6196ab5a4c' },
+  { symbol: 'BEc', nom: 'Bloom Energy', adr: '0xb20000000000000000000016f9dfe862feba122b' },
   { symbol: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
+  { symbol: 'HIMSc', nom: 'Hims & Hers Health', adr: '0xb20000000000000000000043a599976181bcf336' },
   { symbol: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
   { symbol: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
   { symbol: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
+  { symbol: 'MUc', nom: 'Micron Technology', adr: '0xb200000000000000000000fd2f87532b90095211' },
   { symbol: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
   { symbol: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbol: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },

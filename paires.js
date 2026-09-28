@@ -96,12 +96,34 @@ export const ACTIONS_COINBASE = [
    *   tomber a zero demain sur n importe laquelle des dix restantes, et la liste ne le saurait pas.
    *   `majPaire` lit donc la supply a chaque choix. Retirer ces trois entrees evite de PROPOSER une
    *   impasse ; c est la garde qui empeche d y ENTRER. */
+  /* ── QUATRE AJOUTS DU 2026-09-28, ET LE COMPTE FERME ─────────────────────────────────────────
+   * ⛔⛔ CINQ ETAIENT ANNONCEES (MUc, MRVLc, BEc, HIMSc, AVGOc) ; QUATRE PASSENT. MRVLc n a pas de
+   *     pool v3/CL a prouver — elle est parmi les 82 candidates qui n existent qu en pool v4, donc
+   *     ni son prix ni sa provenance ne se lisent par notre chemin. L annoncer serait proposer un
+   *     choix qu on ne sait pas servir.
+   * ⛔⛔ ET LA DECOUVERTE MENTAIT AVANT D ETRE CORRIGEE : le script portait un `.slice(0, 40)` sur
+   *     86 candidats tout en imprimant « aucun silence ». 46 n etaient jamais regardes, et leur
+   *     absence du tableau se lisait comme « elles ne qualifient pas ». HIMSc et BEc etaient
+   *     precisement la. Le compte ferme maintenant : 86 examinees = 4 retenues + 82 en v4 seule.
+   * ⛔ CHAQUE ADRESSE MESUREE, PAS RECITEE : `eth_getCode` == `0xef` EXACTEMENT, `symbol()` relu
+   *   sur la chaine et concordant, `totalSupply()` > 0, `decimals()` == 8, et la pool prouvee par
+   *   aller-retour sur sa factory.
+   * ⚠️ LES FLOTTANTS SONT MINCES, et « admise » ne veut pas dire « profonde » — supply lue le
+   *   2026-09-28 : BEc 62 · AVGOc 85 · MUc 433,44 · HIMSc 581, contre NVDAc 19 486. Liquidite
+   *   ~9 000 a 10 000 $ chacune ; volume 24 h : MUc 27 125 $, HIMSc 916 $, AVGOc 948 $, BEc 50 $.
+   * ⛔ MUc EST SUR UNISWAP, PAS AERODROME : elle est achetable, mais elle NE PEUT PAS porter notre
+   *   frais de 0,1 % — `sweepTokenWithFee` n existe que sur le routeur Aerodrome. C est dit ici
+   *   parce qu une ligne de liste ne dit rien de l argent qu elle rapporte. */
   { symbole: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
   { symbole: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
+  { symbole: 'AVGOc', nom: 'Broadcom', adr: '0xb200000000000000000000fc737aea6196ab5a4c' },
+  { symbole: 'BEc', nom: 'Bloom Energy', adr: '0xb20000000000000000000016f9dfe862feba122b' },
   { symbole: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
+  { symbole: 'HIMSc', nom: 'Hims & Hers Health', adr: '0xb20000000000000000000043a599976181bcf336' },
   { symbole: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
   { symbole: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
   { symbole: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
+  { symbole: 'MUc', nom: 'Micron Technology', adr: '0xb200000000000000000000fd2f87532b90095211' },
   { symbole: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
   { symbole: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbole: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
