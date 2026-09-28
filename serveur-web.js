@@ -1756,7 +1756,16 @@ createServer((req, res) => {
       .then((r) => {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         res.end(JSON.stringify(r.etat === 'OK'
-          ? { ok: true, pret: true, n: r.actifs.length, actifs: r.actifs }
+          ? { ok: true, pret: true, n: r.actifs.length, actifs: r.actifs,
+              /* ⛔ LES DEUX LISTES VOYAGENT, ET LE COMPTE DES FIATS VAUT null QUAND ON N A PAS PU
+               *   LIRE : un 0 dirait « aucune devise » la ou il faut lire « Coinbase ne l a pas
+               *   rendue ». Deux faits opposes, et le second est notre ignorance.
+               * ⛔⛔ CE COMMENTAIRE A ETE REECRIT PARCE QUE JE L AI D ABORD INJECTE PAR UNE CHAINE
+               *     SHELL : bash a interprete les accents graves comme une substitution de commande
+               *     (« null: command not found ») et a MANGE deux mots. Le code a survecu par
+               *     chance — la substitution est tombee dans un commentaire. Toute edition passe par
+               *     Write/Edit, jamais par une chaine shell. La regle existe pour ca. */
+              fiatsDeclares: r.fiatsDeclares, nFiats: Array.isArray(r.fiatsDeclares) ? r.fiatsDeclares.length : null, pays: r.pays }
           : { ok: false, pret: true, etat: r.etat, pourquoi: r.pourquoi }));
       })
       .catch((e) => {

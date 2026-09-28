@@ -242,7 +242,27 @@ export async function lireOptionsAchat({ env = {}, pays = 'US', subdivision = nu
         ? c.networks.map((n) => String((n && (n.name || n.display_name || n)) || '').toLowerCase().slice(0, 24))
         : [],
     })).filter((a) => a.symbole);
-    return { etat: 'OK', actifs };
+
+    /* ⛔⛔ LES DEVISES FIAT ETAIENT LUES PUIS JETEES, ET C ETAIT UN DEFAUT. Coinbase rend DEUX listes
+     *     dans cette MEME reponse : `purchase_currencies` (ce qu on achete) et `payment_currencies`
+     *     (ce avec quoi on paie). On ne gardait que la premiere.
+     *     Consequence mesuree le 2026-09-28 : impossible de repondre a « avec combien de DEVISES ce
+     *     chemin marche-t-il ? » autrement qu en comptant des PAYS — 51 sondes, 51 servis, dont 50
+     *     avec USDC sur Base (⛔ le Japon n a AUCUN USDC dans sa liste). Or compter des pays pour
+     *     parler de devises repond a cote : vingt pays partagent l euro.
+     *   ⛔ UNE VALEUR LUE PUIS JETEE EST UN DEFAUT. La reponse la portait ; il suffisait de la garder.
+     *   ⚠️ ET LE NOM DIT SA BORNE : `fiatsDeclares`, pas `fiatsDisponibles`. Cette liste dit ce que
+     *     Coinbase DECLARE accepter pour ce pays — restent les moyens de paiement, les limites et la
+     *     conformite. Un nom qui promet plus que la mesure est un mensonge a retardement. */
+    const brutFiat = (j && (j.payment_currencies || j.paymentCurrencies)) || null;
+    const fiatsDeclares = Array.isArray(brutFiat)
+      ? [...new Set(brutFiat.map((c) => String((c && (c.id || c.symbol)) || '').toUpperCase().slice(0, 8))
+        .filter((s) => /^[A-Z]{3}$/.test(s)))]
+      : null;
+    /* ⛔ `null` ET PAS `[]` QUAND LA LISTE MANQUE : un tableau vide dirait « aucune devise », un
+     *   `null` dit « Coinbase ne l a pas rendue ». Deux faits opposes, et le second est notre
+     *   ignorance — les confondre ferait publier « 0 devise » sur une panne de lecture. */
+    return { etat: 'OK', actifs, fiatsDeclares, pays: p };
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'options call failed: ' + String((e && e.message) || e).slice(0, 120) };
   }
