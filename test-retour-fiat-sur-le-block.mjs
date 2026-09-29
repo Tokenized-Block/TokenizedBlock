@@ -121,6 +121,19 @@ cas('⛔⛔ L INTENTION EST CONSOMMEE AU RETOUR, PAS SEULEMENT ECRITE', () => {
   assert.ok(/reprendreIntentApresConnect\s*\(/.test(bloc),
     'le retour du rail fiat n ouvre plus le panneau d achat : le visiteur qui vient de payer devra '
     + 'de nouveau recliquer Buy et resaisir son montant, et l intention ecrite restera dormante');
+  /* ⛔⛔ ET ON ATTEND QUE LE PANNEAU EXISTE AVANT DE CONSOMMER. Ma premiere version consommait a
+   *     +1 200 ms : mesure en production (build `retour-fiat-reprend`), `intent_restant` = {} donc
+   *     l intention etait bien PRISE, mais `panneau_echange_visible` = false et le montant vide —
+   *     `reprendreIntentApresConnect` exige `#pEchange` DEJA visible, et le marche n etait pas lu.
+   *     L intention etait donc PERDUE sans rien ouvrir : pire qu avant, ou elle restait dormante.
+   *   ⛔ L ATTENTE DOIT ETRE BORNEE : sans borne, un marche illisible laisserait le visiteur devant
+   *     une attente muette — la faute de la porte passkey restee « Opening… » 25 secondes. */
+  assert.ok(/#pEchange/.test(bloc),
+    'le retour ne verifie plus que le panneau d achat EXISTE avant de consommer l intention : '
+    + 'elle serait de nouveau prise dans le vide et perdue');
+  assert.ok(/essais\s*>=|essais\s*>/.test(bloc),
+    'l attente n est plus BORNEE : un marche illisible laisserait le visiteur devant une attente '
+    + 'muette, sans geste et sans cause nommee');
   /* ⛔ ET LA FICHE NUE RESTE EN SECOURS : mieux vaut la fiche que rien si la reprise jette. */
   assert.ok(/ouvrirProfil\(blockRetour\.toLowerCase\(\)/.test(bloc),
     'le secours a disparu : si la reprise jette, le visiteur n atterrirait plus nulle part');

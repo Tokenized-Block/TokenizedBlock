@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-session-reprise" hidden>Build <code>20260929-session-reprise</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-attente-bornee" hidden>Build <code>20260929-attente-bornee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16209,8 +16209,33 @@ if (/^0x[0-9a-fA-F]{40}$/.test(blockRetour)) {
      *     il est DEJA sur le panneau d achat, donc rien n est perdu.
      *   ⚠️ CE QUE CA NE FAIT TOUJOURS PAS : verifier que les fonds sont ARRIVES. Coinbase ne nous
      *     le dit pas, et un ecran qui affirmerait « vos fonds sont la » sans l avoir lu mentirait. */
-    try { void reprendreIntentApresConnect(); }
-    catch (_) { try { void ouvrirProfil(blockRetour.toLowerCase(), null); } catch (__) {} }
+    /* ⛔⛔ ET ON ATTEND QUE LE PANNEAU EXISTE AVANT DE CONSOMMER, PARCE QUE MA PREMIERE VERSION
+     *     CONSOMMAIT DANS LE VIDE. Mesure en production, build `20260929-retour-fiat-reprend` :
+     *     `intent_restant` = {} — donc l intention etait bien PRISE — mais
+     *     `panneau_echange_visible` = false et le montant vide. Cause :
+     *     `reprendreIntentApresConnect` exige `#pEchange` DEJA visible, et a +1 200 ms le marche
+     *     n est pas encore lu. Elle tombait donc dans son repli et l intention etait PERDUE — donc
+     *     rien ne rouvrait le panneau quand le marche finissait d arriver. J avais rendu le cas
+     *     PIRE qu avant sur ce point precis : avant, l intention restait au moins dormante.
+     *   ⛔ ON N ATTEND PAS INDEFINIMENT : au bout de ~12 s on consomme quand meme, et le repli
+     *     `peindreMarcheUnreadRetry` affiche un bouton « Retry market ». Un etat nomme avec un
+     *     geste vaut mieux qu une attente muette — c est la lecon de la porte passkey restee
+     *     « Opening… » 25 secondes.
+     *   ⛔ ET LA FICHE S OUVRE TOUT DE SUITE, elle : le visiteur ne doit pas rester devant l accueil
+     *     pendant qu on attend le marche. `reprendreIntentApresConnect` la rouvrira sans dommage. */
+    try { void ouvrirProfil(blockRetour.toLowerCase(), null); } catch (_) {}
+    let essais = 0;
+    const tenter = () => {
+      essais += 1;
+      const carte = $('#pEchange');
+      const pret = !!(carte && !carte.hidden && $('#peAchat'));
+      if (pret || essais >= 24) {
+        try { void reprendreIntentApresConnect(); } catch (_) {}
+        return;
+      }
+      setTimeout(tenter, 500);
+    };
+    tenter();
   }, 1200);
 }
 /* ── Create ─────────────────────────────────────────────────────────────────────────────────── */
