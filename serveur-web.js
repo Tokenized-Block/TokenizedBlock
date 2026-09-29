@@ -112,8 +112,59 @@ import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
-const RPC_LIST = (process.env.BASE_RPC || 'https://mainnet.base.org')
+/* ⛔⛔ DEUX ENDPOINTS OFFICIELS PAR DEFAUT, ET PAS PLUS. Mesure du 2026-09-29 :
+ *     `mainnet.base.org` SEUL rendait « over rate limit » sur les lectures de pool, depuis cette
+ *     machine ET depuis l IP de Railway — la porte d achat restait inerte, 14 verdicts inconnus
+ *     sur 16. Sonde de dix endpoints publics : `mainnet.base.org` et
+ *     `developer-access-mainnet.base.org` sont les DEUX SEULS a servir les trois choses dont ce
+ *     serveur a besoin — `eth_call`, l ETAT ANCIEN, et `eth_getLogs`. La note ci-dessus (« only
+ *     mainnet.base.org still serves free eth_getLogs ») etait donc vraie A UN ENDPOINT PRES.
+ *   ⛔ POURQUOI LES AUTRES NE SONT PAS ICI : `base.drpc.org`, `1rpc.io/base` et
+ *     `base-mainnet.public.blastapi.io` servent `eth_call` mais REFUSENT `eth_getLogs` (HTTP 400).
+ *     Les mettre dans cette rotation globale ferait rater une fenetre de logs sur deux au scan du
+ *     trending : un degat qu on echangerait contre un peu de quota sans s en apercevoir. Ils sont
+ *     utilises a part, la ou seul `eth_call` compte — voir `RPC_FAITS_POOL`.
+ *   ⛔ ET LES B20 : ma regle « seul un noeud Base lit un B20 » etait MAL FORMULEE. Verifie le
+ *     2026-09-29 sur `totalSupply()` de TBLOCK et `balanceOf(a6cf)` : les quatre endpoints rendent
+ *     la MEME valeur au wei, et `eth_getCode` d un B20 rend `0xef` partout. L echec venait
+ *     d ANVIL (un EVM generique), pas des RPC tiers, qui font tourner le client Base. Mes deux
+ *     temoins negatifs ont ECHOUE A ECHOUER, et c est ce qui a corrige la regle.
+ *   ⛔ AUCUNE CLE : ces URL sont publiques, sans inscription. `BASE_RPC` reste prioritaire. */
+const RPC_LIST = (process.env.BASE_RPC
+  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
+/* ⛔ LA LISTE LARGE, RESERVEE AUX LECTURES QUI NE FONT QUE `eth_call` : quatre fois le quota pour
+ *   les faits de pool, sans toucher aux chemins qui ont besoin de `eth_getLogs`. */
+const RPC_FAITS_POOL = (process.env.BASE_RPC_LECTURE
+  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org,https://base.drpc.org,https://1rpc.io/base')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+let tourFaits = 0, idFaits = 0;
+/** `eth_call` sur la liste LARGE — pour les faits de pool, et rien d autre.
+ * ⛔⛔ ELLE TOURNE A CHAQUE ESSAI, et c est le point. `rpcServeur` tourne aussi, mais sa liste ne
+ *     contient que les endpoints capables de `eth_getLogs` : deux. Ici on en a quatre, donc un
+ *     endpoint etrangle ne bloque plus la lecture — exactement ce qui manquait quand le
+ *     prechauffage rendait « 0 lus, 16 inconnus ».
+ * ⛔ ELLE REFUSE `0x` COMME REPONSE : un endpoint qui rend une chaine vide au lieu d une valeur
+ *   ferait passer une non-reponse pour un zero, et la porte lirait un glissement de 0 bps sur une
+ *   pool qu elle n a pas lue. */
+async function callLarge(to, data) {
+  let dernier = 'aucun essai';
+  for (let k = 0; k < RPC_FAITS_POOL.length * 2; k += 1) {
+    const url = RPC_FAITS_POOL[tourFaits++ % RPC_FAITS_POOL.length];
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++idFaits, method: 'eth_call', params: [{ to, data }, 'latest'] }) });
+      if (r.ok) {
+        const j = await r.json().catch(() => null);
+        if (j && j.result !== undefined && j.result !== '0x') return j.result;
+        dernier = j && j.error ? String(j.error.message || '').slice(0, 40) : 'reponse vide';
+      } else dernier = 'HTTP ' + r.status;
+    } catch (e) { dernier = String((e && e.name) || e).slice(0, 24); }
+    await new Promise((ok) => setTimeout(ok, 200 * (k + 1)));
+  }
+  throw new Error('refused by all ' + RPC_FAITS_POOL.length + ' endpoints (' + dernier + ')');
+}
 /** Les faits on-chain d une pool : son glissement a la taille de reference, et sa FAMILLE PROUVEE.
  *
  * ⛔⛔ TROIS ETATS, JAMAIS DEUX. Une pool illisible rend `glissementBps: null` et
@@ -210,8 +261,10 @@ async function faitsDeLaPool(pool) {
      *     secondes. Personne n attend ce chemin — il alimente un cache, il a tout son temps. Une
      *     lecture lente qui ABOUTIT vaut infiniment mieux qu une rafale qui echoue. */
     const RESPIRATION_MS = 400;
+    /* ⛔ LISTE LARGE ICI, PAS `rpcServeur` : ces lectures ne font que `eth_call`, donc elles
+     *   peuvent profiter des quatre endpoints au lieu des deux capables de `eth_getLogs`. */
     const un = async (sig4) => {
-      const r = await rpcServeur('eth_call', [{ to: pool, data: sig4 }, 'latest']);
+      const r = await callLarge(pool, sig4);
       await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
       return r;
     };
@@ -229,12 +282,21 @@ async function faitsDeLaPool(pool) {
          *   confondre designe une pool inexistante (mesure : la pool MUc a fee 10 000, ts 200). */
         const appel = '0x28af8d0b' /* getPool(address,address,int24) */
           + motDePool(t0, 0) + motDePool(t1, 0) + BigInt(ts).toString(16).padStart(64, '0');
-        const rendu = await rpcServeur('eth_call', [{ to: FACTORY_AERODROME_CL_SRV, data: appel }, 'latest']);
+        const rendu = await callLarge(FACTORY_AERODROME_CL_SRV, appel);
         await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
-        if (adrDePool(rendu).toLowerCase() === cle) famille = 'aerodrome';
-      } catch (_) { famille = 'autre'; /* la factory refuse un triplet inconnu : ce n est pas Aerodrome */ }
+        /* ⛔ L ADRESSE NULLE EST LA REPONSE DE LA FACTORY POUR UN TRIPLET INCONNU : c est un FAIT
+         *   (« cette pool n est pas la mienne »), donc `autre`, et non une panne. */
+        famille = adrDePool(rendu).toLowerCase() === cle ? 'aerodrome' : 'autre';
+      } catch (_) {
+        /* ⛔⛔ UN REFUS DU RPC N EST PAS « PAS AERODROME ». Mettre `autre` ici marquerait une pool
+         *     Aerodrome comme ne portant pas notre frais pendant une simple panne de lecture, et
+         *     `porteNotreFrais` cesserait de compter un revenu REEL. Deux causes, deux verdicts. */
+        famille = 'NON_MESURE';
+      }
       fixe = { t0, t1, ts: Number(BigInt(ts)), famille };
-      poolImmuables.set(cle, fixe);
+      /* ⛔ ON NE GRAVE PAS UNE FAMILLE NON MESUREE DANS LE CACHE « JAMAIS EXPIRE » : elle y
+       *   resterait pour toute la vie du process. Seul un verdict LU merite d etre immuable. */
+      if (famille !== 'NON_MESURE') poolImmuables.set(cle, fixe);
     }
     /* seuls le prix et la liquidite bougent : deux appels, jamais plus */
     let s0, lq;
