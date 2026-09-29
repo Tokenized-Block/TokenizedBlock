@@ -28,6 +28,9 @@ import { ROUTEUR } from './echange.js';
 import { planUsdcVersBlock, USDC_BASE } from './plan-usdc-block.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, calldataApprove } from './calldata-aerodrome.js';
+/* ⛔ LA MEME PORTE QUE LES PUCES, importee et non recopiee : le frais et la puce doivent se decider
+ *   sur le MEME jugement, sinon les deux seuils divergent au premier reglage. */
+import { porteDAchat, porteNotreFrais, glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 
 /** La factory des pools Uniswap v3 sur Base.
  * ⛔ LUE SUR LA CHAINE le 2026-09-27 : `factory()` sur trois pools `uniswap` de Base rend cette
@@ -185,15 +188,45 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
       + ' — the router could not reach it, and its price cannot be trusted' };
   }
 
+  /* ── 2bis. LE FRAIS NE SE PREND QUE SUR UN MARCHE QU ON PEUT REVENDRE ──────────────────────
+   * ⛔⛔ DECISION DE PHIL, 2026-09-29 : « frais recu par les actions tokenized only », ou « b20
+   *     token mieux avec plus de liquidite ». LA RAISON EST MESUREE : le wallet de frais detient
+   *     1 000 000 000 de BASED et 999 999 de A, et AUCUN des deux n a de marche. Encaisser dans un
+   *     jeton qu on ne peut pas vendre, c est encaisser zero en affichant un solde.
+   *   ⛔ ON REUTILISE LA PORTE DES PUCES, jamais un second critere : `porteDAchat` sur le glissement
+   *     a la taille de reference. Un seul jugement pour « merite-t-on d y envoyer quelqu un » et
+   *     « merite-t-on d y prendre un frais » — deux seuils auraient diverge au premier reglage.
+   *   ⛔⛔ ET ICI LE FAIL-CLOSED EST LE BON SENS, A L INVERSE EXACT DES PUCES. Une puce fermee sur
+   *     l inconnu efface le produit — c est la panne du 2026-09-29, 13 puces tombees a 2. Un FRAIS
+   *     non pris ne blesse PERSONNE. Donc liquidite illisible = aucun frais, et on le dit.
+   *   ⚠️ SUR UNISWAP LE MONTAGE N EXISTE MEME PAS : l Universal Router n a pas `sweepTokenWithFee`
+   *     (mesure du 2026-09-28). Les 118 lignes de trending nees a quelques secondes d intervalle
+   *     avec ~4 000 $ de liquidite, toutes sur uniswap, ne nous payaient donc DEJA rien. Cette
+   *     garde ferme le cas restant : un B20 sur AERODROME mais trop mince. */
+  let porteFrais;
+  if (famille === 'cl') {
+    const lq = await lire(rpc, pool, selecteur('liquidity()'));
+    porteFrais = porteDAchat({
+      glissement: lq.etat === 'OK'
+        ? glissementBps({ sqrtPriceX96, liquidite: BigInt(lq.res), entree: TAILLE_REFERENCE_USDC,
+          entreeEst0: bas(a0) === bas(devise) })
+        : { etat: 'NON_MESURE', pourquoi: 'liquidity() ' + lq.etat },
+      familleProuvee: 'aerodrome',
+    });
+  } else {
+    /* ⛔ hors Aerodrome le frais est impossible PAR CONSTRUCTION — on le nomme, au lieu de le
+     *   laisser tomber dans un `NON_MESURE` qui ressemblerait a une panne de lecture. */
+    porteFrais = { verdict: 'ADMIS_SANS_FRAIS', bps: null,
+      pourquoi: 'this market is not on the Aerodrome router: no sweepTokenWithFee, so no fee' };
+  }
+
   /* ── 3. le plan, PUR ───────────────────────────────────────────────────────────────────── */
   const plan = planUsdcVersBlock({
     famille, tickSpacing,
-    /* ⛔⛔ LE FRAIS D INTERFACE PART D ICI, VERS LE WALLET DU DEPOT. Aucun defaut dans le module pur :
-     *     c est l appelant qui nomme le beneficiaire, pour qu une retenue ne puisse jamais s appliquer
-     *     sans que quelqu un l ait decidee. 0,1 % — voir FRAIS_INTERFACE_BPS_CL.
-     *   ⚠️ SUR UNISWAP v3 LE MONTAGE N EXISTE PAS : l Universal Router n a pas sweepTokenWithFee
-     *     (mesure du 2026-09-28). Le plan rendra alors fraisBps 0, et c est dit, pas tu. */
-    beneficiaireFrais: FEE_WALLET,
+    /* ⛔⛔ LE FRAIS PART D ICI, ET SEULEMENT SI LA PORTE DIT OUI. Aucun defaut dans le module pur :
+     *     c est l appelant qui nomme le beneficiaire, pour qu une retenue ne puisse jamais
+     *     s appliquer sans que quelqu un l ait decidee. 0,1 % — voir FRAIS_INTERFACE_BPS_CL. */
+    beneficiaireFrais: porteNotreFrais(porteFrais) ? FEE_WALLET : null,
     block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc, toleranceBps,
     recipient: compte, deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), devise,
   });

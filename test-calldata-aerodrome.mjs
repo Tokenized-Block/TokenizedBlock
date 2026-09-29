@@ -489,11 +489,28 @@ cas('⛔⛔ LE WALLET DE FRAIS ET LE TAUX NE PEUVENT PAS DERIVER', () => {
   assert.equal(r.beneficiaireFrais, String(FEE_WALLET).toLowerCase());
   assert.ok(r.data.toLowerCase().includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase()),
     'le wallet de frais n est pas dans le calldata');
-  /* ⛔ ET LES DEUX LECTEURS ASYNC LE PASSENT — sinon la retenue ne partirait jamais. */
+  /* ⛔ ET LES DEUX LECTEURS ASYNC LE PASSENT — sinon la retenue ne partirait jamais.
+   * ⛔⛔ LE MOTIF A ETE ELARGI LE 2026-09-29, ET IL N EN EST PAS AFFAIBLI. Il exigeait litterale-
+   *     ment `beneficiaireFrais: FEE_WALLET`. Or le frais est desormais CONDITIONNEL — decision de
+   *     Phil : « frais recu par les actions tokenized only », ou « b20 token mieux avec plus de
+   *     liquidite » — donc les lecteurs ecrivent
+   *     `beneficiaireFrais: porteNotreFrais(...) ? FEE_WALLET : null`. La garde a donc rougi sur un
+   *     changement VOULU : c est le symptome d une garde accrochee a la FORME du code.
+   *   ⛔ CE QU ELLE TIENT MAINTENANT EST PLUS FORT : le wallet reste CE wallet, il apparait dans
+   *     l expression qui alimente `beneficiaireFrais`, ET la condition passe par `porteNotreFrais`.
+   *     Personne ne peut donc ni detourner la retenue, ni la rendre inconditionnelle, sans faire
+   *     rougir ceci. */
   for (const f of ['echange-v3.js', 'echange-eth.js']) {
     const src = readFileSync(new URL('./' + f, import.meta.url), 'utf8');
-    assert.match(src, /beneficiaireFrais: FEE_WALLET/, f + ' ne passe plus le wallet de frais');
+    const ligne = src.split('\n').find((l) => /beneficiaireFrais\s*:/.test(l) && !/^\s*\*/.test(l));
+    assert.ok(ligne, f + ' ne passe plus rien a `beneficiaireFrais`');
+    assert.match(ligne, /FEE_WALLET/, f + ' ne passe plus le wallet de frais : ' + String(ligne).trim());
+    assert.match(ligne, /porteNotreFrais\s*\(/,
+      f + ' passe le wallet SANS la porte : on encaisserait de nouveau des jetons sans marche. '
+      + 'Ligne trouvee : ' + String(ligne).trim());
     assert.match(src, /from '\.\/frais-creation\.js'/, f + ' n importe plus le wallet du depot');
+    assert.match(src, /from '\.\/porte-achat\.js'/,
+      f + ' n importe plus la porte : elle serait recopiee, et les deux seuils divergeraient');
   }
 });
 

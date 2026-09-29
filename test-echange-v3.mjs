@@ -24,6 +24,9 @@ import { PERMIT2 } from './lancer-pool.js';
 import { ROUTEUR } from './echange.js';
 import { USDC_BASE } from './plan-usdc-block.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+/* ⛔ LE WALLET DE FRAIS EST IMPORTE, JAMAIS RECOPIE : une adresse recitee dans un test finit par
+ *   valider une adresse recitee dans le code, et les deux derivent ensemble. */
+import { FEE_WALLET } from './frais-creation.js';
 
 let n = 0;
 const cas = (titre, f) => { n++; return f().catch((e) => { console.error('✗ ' + titre); throw e; }); };
@@ -249,6 +252,17 @@ function faireRpcAero(sur = {}) {
       if (sel === sansPrefixe('tickSpacing()')) return '0x' + mot(sur.tickSpacing !== undefined ? sur.tickSpacing : 10);
       if (sel === sansPrefixe('token0()')) return '0x' + motAdr(USDC_BASE);
       if (sel === sansPrefixe('token1()')) return '0x' + motAdr(BLOCK_A);
+      /* ⛔⛔ `liquidity()` AJOUTE LE 2026-09-29, ET SON ABSENCE ETAIT UN TROU MUET. Le lecteur ne
+       *     prend le frais QUE si le glissement a la taille de reference passe la borne, donc il lit
+       *     la liquidite au tick courant. Un faux muet rend cette lecture NON_MESUREE, le frais
+       *     tombe a zero, et AUCUNE assertion ne le disait — exactement le « frais desactive en
+       *     silence » corrige la veille un etage plus bas.
+       *   ⛔ LE DEFAUT EST GENEREUX A DESSEIN (pool profonde ⇒ glissement nul ⇒ frais pris), et
+       *     `sur.liquidite` permet d exercer la pool MINCE et la pool ILLISIBLE. */
+      if (sel === sansPrefixe('liquidity()')) {
+        if (sur.liquidite === 'illisible') throw new Error('execution reverted: no liquidity here');
+        return '0x' + mot(sur.liquidite !== undefined ? sur.liquidite : 10n ** 15n);
+      }
     }
     /* ⛔⛔ CE FAUX VERIFIE SES ARGUMENTS, ET C EST NE DE DEUX MUTATIONS QUI PASSAIENT. Il repondait
      *     « voici la pool » quel que soit le TROISIEME MOT, donc echanger `fee` (500) et
@@ -355,7 +369,48 @@ await cas('⛔ la factory publiee est celle du routeur, pas celle d Aerodrome', 
   assert.notEqual(selecteur('getPool(address,address,uint24)'), selecteur('getPool(address,address,int24)'));
 });
 
-assert.equal(n, 14, 'compte de cas inattendu : ' + n);
+/* ══ ⛔⛔ LE FRAIS NE SE PREND QUE SUR UN MARCHE QU ON PEUT REVENDRE ═══════════════════════════════
+ *     DECISION DE PHIL, 2026-09-29 : « frais recu par les actions tokenized only », ou « b20 token
+ *     mieux avec plus de liquidite ». LA RAISON EST MESUREE : le wallet de frais detient
+ *     1 000 000 000 de BASED et 999 999 de A, et AUCUN des deux n a de marche. Encaisser dans un
+ *     jeton qu on ne peut pas vendre, c est encaisser zero en affichant un solde.
+ *   ⛔⛔ CES TROIS CAS N EXISTAIENT PAS, ET LEUR ABSENCE ETAIT LE VRAI DANGER : ce fichier ne disait
+ *     RIEN du frais, donc le brancher sur une lecture de liquidite l a silencieusement mis a zero
+ *     sans qu un seul test bronche. C est le defaut corrige la veille un etage plus bas, refait un
+ *     etage plus haut. */
+await cas('⛔⛔ POOL PROFONDE : le frais EST pris, et il va a notre wallet', async () => {
+  const { rpc } = faireRpcAero();
+  const r = await planAchatUsdcV3({ rpc, ...baseA });
+  assert.ok(r.etat === 'PRET' || r.etat === 'APPROBATIONS', 'etat inattendu : ' + r.etat);
+  assert.equal(Number(r.plan.fraisBps), 10, 'le frais de 0,1 % a disparu sur une pool profonde');
+  assert.equal(String(r.plan.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(),
+    'le beneficiaire n est plus notre wallet');
+});
+
+await cas('⛔⛔ POOL MINCE : AUCUN frais — on n encaisse pas un jeton qu on ne peut pas revendre', async () => {
+  /* ⛔ 1 000 de liquidite au tick sur cette pool fait un glissement enorme a 100 USDC : c est
+   *   exactement le profil des ~118 lignes de trending nees a quelques secondes d intervalle avec
+   *   ~4 000 $ de liquidite. */
+  const { rpc } = faireRpcAero({ liquidite: 1000n });
+  const r = await planAchatUsdcV3({ rpc, ...baseA });
+  assert.ok(r.etat === 'PRET' || r.etat === 'APPROBATIONS', 'etat inattendu : ' + r.etat);
+  assert.equal(Number(r.plan.fraisBps), 0, 'un frais est pris sur une pool trop mince');
+  assert.equal(r.plan.beneficiaireFrais, null, 'un beneficiaire subsiste sur une pool trop mince');
+});
+
+await cas('⛔⛔ LIQUIDITE ILLISIBLE : AUCUN frais — fail-closed, a l INVERSE des puces', async () => {
+  /* ⛔⛔ ET C EST LE SENS CORRECT ICI. Une PUCE fermee sur l inconnu efface le produit — panne du
+   *     2026-09-29, 13 puces tombees a 2. Un FRAIS non pris ne blesse personne. La meme incertitude
+   *     se resout donc dans des sens OPPOSES selon ce que la garde porte, et c est delibere. */
+  const { rpc } = faireRpcAero({ liquidite: 'illisible' });
+  const r = await planAchatUsdcV3({ rpc, ...baseA });
+  assert.ok(r.etat === 'PRET' || r.etat === 'APPROBATIONS',
+    'une liquidite illisible ne doit pas casser l achat, seulement le frais : ' + r.etat);
+  assert.equal(Number(r.plan.fraisBps), 0, 'un frais est pris alors que la liquidite est illisible');
+  assert.equal(r.plan.beneficiaireFrais, null, 'un beneficiaire subsiste sur une liquidite illisible');
+});
+
+assert.equal(n, 17, 'compte de cas inattendu : ' + n);
 console.log('✓ test-echange-v3 : ' + n + ' cas');
 console.log('   L ordre est prouve en COMPTANT les appels : aucune simulation avant les approbations.');
 console.log('   ⚠️ NE PROUVE PAS qu un echange aboutisse : le rpc est scripte.');

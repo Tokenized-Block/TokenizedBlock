@@ -26,6 +26,8 @@ import { USDC_BASE } from './plan-usdc-block.js';
 import { planEthVersAction, WETH_BASE } from './plan-eth-block.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+/* ⛔ LA MEME PORTE QUE LES PUCES ET QUE LE CHEMIN USDC, importee et jamais recopiee. */
+import { porteDAchat, porteNotreFrais, glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 
 /** ⛔ Les espacements ou une pool WETH/USDC a ete MESUREE le 2026-09-28 (fee 80 / 500 / 550).
  *  Publies pour qu une sonde puisse les re-verifier, et pour que « les trois » soit un fait. */
@@ -135,11 +137,31 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
       : { etat: 'REFUSE', pourquoi: 'no WETH/USDC pool exists at the measured spacings' };
   }
 
+  /* ── 2bis. LE FRAIS NE SE PREND QUE SUR UN MARCHE QU ON PEUT REVENDRE ─────────────────────────
+   * ⛔⛔ LE JUMEAU DU CHEMIN USDC, ET C EST POURQUOI IL EST ICI. La meme garde a ete posee dans
+   *     `echange-v3.js` le 2026-09-29 (decision de Phil : « frais recu par les actions tokenized
+   *     only », ou « b20 token mieux avec plus de liquidite »). La poser d un seul cote aurait fait
+   *     exactement ce que ce depot a deja paye : un correctif qui rate son jumeau, et un chemin qui
+   *     encaisse encore des jetons invendables pendant que l autre est propre.
+   *   ⛔ LA PORTE EST CELLE DES PUCES, importee : le glissement de la pool de SORTIE, parce que
+   *     c est elle qui determine EN QUOI on est paye. Le pivot WETH/USDC ne compte pas ici — la
+   *     retenue porte sur le dernier saut.
+   *   ⛔⛔ FAIL-CLOSED, a l inverse EXACT des puces : un frais non pris ne blesse personne, alors
+   *     qu une puce fermee sur l inconnu efface le produit — panne du 2026-09-29, 13 puces -> 2. */
+  const lqAction = await lire(rpc, pool, selecteur('liquidity()'));
+  const porteFrais = porteDAchat({
+    glissement: lqAction.etat === 'OK'
+      ? glissementBps({ sqrtPriceX96: poolAction.sqrtPriceX96, liquidite: BigInt(lqAction.res),
+        entree: TAILLE_REFERENCE_USDC, entreeEst0: !poolAction.actionEst0 })
+      : { etat: 'NON_MESURE', pourquoi: 'liquidity() ' + lqAction.etat },
+    familleProuvee: 'aerodrome',
+  });
+
   /* ── 3. le plan, PUR ──────────────────────────────────────────────────────────────────────── */
-  /* ⛔ LE FRAIS D INTERFACE VERS LE WALLET DU DEPOT : 0,1 %, nomme par l appelant et jamais par
-   *   defaut dans le module pur. */
+  /* ⛔ LE FRAIS D INTERFACE VERS LE WALLET DU DEPOT : 0,1 %, nomme par l appelant, jamais par
+   *   defaut dans le module pur — et seulement si la porte dit oui. */
   const plan = planEthVersAction({ action, montantWei, poolAction, poolsPivot, recipient: compte,
-    beneficiaireFrais: FEE_WALLET,
+    beneficiaireFrais: porteNotreFrais(porteFrais) ? FEE_WALLET : null,
     deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise });
   if (plan.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: plan.pourquoi, plan: null };
 
