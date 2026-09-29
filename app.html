@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-one-transaction" hidden>Build <code>20260929-one-transaction</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-usdc-one-tap" hidden>Build <code>20260929-usdc-one-tap</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4223,7 +4223,17 @@ $('#map').addEventListener('click', (e) => {
  *   un revert d allowance s afficherait comme un refus de marche. Un test compte les appels.
  * ⚠️ CE QUE L ECRAN NE PROMET PAS : que l echange aboutisse. La simulation decrit l instant ; le
  *   prix peut bouger avant la signature, et c est le minimum garanti qui protege alors. */
-$('#fAcheterUsdc').addEventListener('click', async () => {
+/* ⛔⛔ CE N EST PLUS UN ECOUTEUR ANONYME, ET C EST LE POINT. Apres une approbation confirmee, cet
+ *     ecran disait « Tap Buy with USDC again to swap. » — donc DEUX taps et DEUX signatures pour
+ *     UN achat, a CHAQUE achat sur Aerodrome, puisque l approbation y porte le montant EXACT et se
+ *     fait consommer par le swap. Le seul chemin qui nous paie le frais etait aussi le plus long.
+ *   ⛔ POURQUOI SE RAPPELER SOI-MEME PLUTOT QUE REUTILISER LE PLAN : entre l approbation et le swap
+ *     il s ecoule le temps d une confirmation on-chain. Le devis, la `deadline` et le `minSortie`
+ *     du plan sont datés d AVANT. Rejouer la fonction entiere relit la pool et RESIMULE ; reutiliser
+ *     l ancien plan enverrait une transaction contre un prix perime — le motif `handoff-figures-rot`.
+ *   ⛔ `apresApprobation` BORNE LA RECURRENCE A UN SEUL TOUR : si l allowance ne suffit toujours pas
+ *     au second passage, on s arrete et on le DIT, au lieu de boucler sur le wallet de quelqu un. */
+async function acheterAvecUsdc(apresApprobation = false) {
   const adr = $('#fiche').dataset.block;
   const note = $('#fNote');
   if (!adr || !note) return;
@@ -4279,12 +4289,56 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
     note.textContent = r.etapes.length + (uneSeuleFois ? ' one-time approval(s) first: ' : ' approval(s) first: ')
       + r.etapes.map((e) => e.nom).join(', ') + '. Nothing is swapped by these.'
       + (uneSeuleFois ? '' : ' This one is spent by the swap, so it comes back on each buy.');
+    /* ⛔⛔ UN SEUL GESTE D ABORD, ET SANS EXCLURE PERSONNE POUR L OBTENIR. Le lot EIP-5792 met
+     *     l approbation ET le swap dans UNE signature sans toucher au montant approuve : il reste
+     *     EXACT. C est le contraire de l autre solution possible, `selfPermit`, qui exige un v/r/s
+     *     ECDSA et laisserait donc les wallets passkey — notre porte d entree mesuree — dehors.
+     *   ⛔ ON ESSAIE SANS DEMANDER LA PERMISSION D ESSAYER : la lecon `tip 20260922-ib-batch HARD`
+     *     est deja ecrite dans ce fichier — ne JAMAIS sortir tot sur `!peutGrouper`. Des wallets
+     *     repondent mal a `wallet_getCapabilities` et savent pourtant grouper.
+     *   ⚠️ CE QUE LE LOT NE PORTE PAS : le swap n y est PAS simule, parce qu on ne peut pas simuler
+     *     un swap dont l allowance n existe pas encore. Un lot qui echoue coute du GAZ, jamais les
+     *     fonds, et on retombe alors sur le chemin sequentiel — lui, il est simule. */
+    const swap = r.plan && r.plan.appel;
+    if (swap && swap.to && swap.data) {
+      const calls = r.etapes.map((e) => ({ to: e.to, data: e.data, value: '0x0' }))
+        .concat([{ to: swap.to, data: swap.data, value: swap.value || '0x0' }]);
+      /* ⛔⛔ LE DEVIS AVANT LA SIGNATURE, ICI AUSSI. Ma premiere version de ce lot ouvrait le wallet
+       *     en disant seulement « Trying it as ONE signature » : le visiteur signait un achat sans
+       *     avoir jamais lu ce qu il recevait, alors que le chemin sequentiel le lui montre. Un
+       *     raccourci ne rachete pas une divulgation. Les deux chiffres viennent du plan mesure. */
+      note.textContent = '5 USDC → about ' + (Number(BigInt(r.plan.sortieAttendue)) / 1e8).toFixed(6)
+        + ' of this block, at least ' + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6)
+        + ' guaranteed. One signature: the approval and the swap together.';
+      let lot;
+      try { lot = await envoyerLotAtomique({ eth, rpc, chaineAttendue: CHAINE, compte, calls }); }
+      catch (e) { lot = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
+      if (lot.etat === 'CONFIRME' || (lot.etat === 'ENVOYE_AA' && lot.hash)) {
+        note.textContent = 'Bought in one signature. At least '
+          + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6) + ' of this block is in your wallet.';
+        return;
+      }
+      /* ⛔⛔⛔ ON NE RETOMBE QUE SUR UN SEUL CAS : le wallet DIT ne pas connaitre `sendCalls`. La
+       *      raison est exactement celle des trois issues de `messageEnvoi` — `ECHEC_ENVOI` ne
+       *      GARANTIT PAS que rien n est parti. Retomber sur le chemin sequentiel apres un lot
+       *      peut-etre en vol ferait signer une SECONDE fois le meme achat : double achat, sur le
+       *      seul chemin qui nous paie le frais. Ici le doute s arrete, il ne se re-signe pas. */
+      if (lot.sendCallsUnsupported !== true) { note.textContent = messageEnvoi(lot); return; }
+      note.textContent = 'One signature is not available on this wallet — doing it in two…';
+    }
     for (const e of r.etapes) {
       const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte, to: e.to, data: e.data, value: '0x0' });
       if (env.etat !== 'CONFIRME') { note.textContent = 'Approval stopped: ' + messageEnvoi(env); return; }
     }
-    note.textContent = 'Approvals done. Tap Buy with USDC again to swap.';
-    return;
+    if (apresApprobation) {
+      /* ⛔ DEUXIEME PASSAGE ET ON REDEMANDE UNE APPROBATION : quelque chose ne se comporte pas comme
+       *   on l a lu. On rend la main plutot que de boucler sur le wallet de quelqu un. */
+      note.textContent = 'The approval confirmed, but the swap still asks for one. Nothing was '
+        + 'swapped — tap Buy with USDC again.';
+      return;
+    }
+    note.textContent = 'Approval confirmed — reading the pool again and continuing to the swap…';
+    return acheterAvecUsdc(true);
   }
   /* ── PRET : la chaine a accepte cette transaction exacte, a cet instant ── */
   const attendu = (Number(BigInt(r.plan.sortieAttendue)) / 1e8).toFixed(6);
@@ -4303,7 +4357,8 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
   note.textContent = env.etat === 'CONFIRME'
     ? 'Bought. At least ' + mini + ' of this block is in your wallet.'
     : messageEnvoi(env);
-});
+}
+$('#fAcheterUsdc').addEventListener('click', () => { acheterAvecUsdc(false); });
 
 /* ══ ACHAT EN ETH SUR UNE ACTION AERODROME : TROIS GESTES, ET ON DIT LESQUELS ═══════════════════
  * ⛔⛔ CE CHEMIN NE SIGNE RIEN TOUT SEUL, ET IL NE CACHE PAS SON COUT. Il LIT les pools, les fait
