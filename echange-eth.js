@@ -1,16 +1,20 @@
-/* echange-eth.js — ACHETER UNE ACTION EN ETH : LIRE CE QUI EST DEJA FAIT, NE PROPOSER QUE LE RESTE.
+/* echange-eth.js — ACHETER UNE ACTION EN ETH : UNE TRANSACTION, SIMULEE TOUT DE SUITE.
  *
- * ⛔⛔ CE MODULE NE SIGNE RIEN. Il rend la liste des gestes RESTANTS et un devis. Un wallet humain
- *     execute.
+ * ⛔⛔ CE MODULE NE SIGNE RIEN. Il rend UN appel et un devis. Un wallet humain execute.
  *
- * ⛔⛔ LA DIFFICULTE REELLE DE CE CHEMIN, ET C EST ELLE QUI DICTE LA STRUCTURE. La simulation du swap
- *     ne peut PAS reussir avant l enveloppement et l approbation : sur un portefeuille neuf elle
- *     reverte sur le solde ou sur l allowance, et le message accuserait LE MARCHE au lieu de
- *     l etape manquante. C est la meme faute que j ai evitee sur le chemin USDC en verifiant les
- *     approbations AVANT de simuler — ici il y a une etape de plus.
- *   ⇒ ON LIT D ABORD CE QUI EST DEJA FAIT (solde WETH, allowance au routeur), on ne propose que les
- *     gestes RESTANTS, et on ne simule QUE si les prerequis sont reunis. Sinon on rend
- *     `simule: false` avec la raison — un « non simule » honnete vaut mieux qu un faux refus.
+ * ⛔⛔ CE MODULE S APPELAIT « LIRE CE QUI EST DEJA FAIT, NE PROPOSER QUE LE RESTE », ET TOUTE SA
+ *     STRUCTURE DECOULAIT DE CA. Il lisait le solde WETH et l allowance au routeur, ne proposait
+ *     que les gestes restants, et REFUSAIT DE SIMULER tant que les deux manquaient — parce qu une
+ *     simulation prematuree aurait accuse LE MARCHE au lieu de l etape manquante. Le raisonnement
+ *     etait juste tant que le chemin demandait trois transactions.
+ *   ⇒ MESURE DU 2026-09-29 : il n en demande plus qu UNE. Le routeur Aerodrome enveloppe l ETH
+ *     lui-meme (`WETH9()` rend le WETH de Base, `refundETH()` est dans son bytecode), prouve sur
+ *     fork avec temoin negatif. Il n y a donc NI WETH a detenir NI allowance a donner, et tout le
+ *     pre-controle a disparu.
+ *   ⛔⛔ ET C EST EXACTEMENT POURQUOI `simule: true` N AVAIT JAMAIS ETE OBSERVE SUR CE CHEMIN : la
+ *     simulation exigeait un etat que personne n avait. Elle est desormais faite AU PREMIER ECRAN,
+ *     avec la valeur dans le `eth_call` — la passer a `0x0` reverterait, c est precisement ce que
+ *     le temoin negatif du fork a montre.
  *
  * ⛔ LES POOLS SONT RESOLUES PAR LEUR FACTORY, jamais supposees : c est la pool de CETTE factory que
  *   le routeur sait atteindre, et n importe quel contrat peut repondre a `slot0()`.
@@ -181,47 +185,99 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
       + 'is the best of ' + poolsPivot.length + ' — not necessarily the best there is.'
     : null;
 
-  /* ── 4. CE QUI EST DEJA FAIT ───────────────────────────────────────────────────────────────── */
+  /* ── 4. LA SIMULATION, TOUT DE SUITE ──────────────────────────────────────────────────────────
+   * ⛔⛔ CE QUI A DISPARU ICI, ET POURQUOI C EST UN GAIN. Ce bloc lisait le solde WETH et
+   *     l allowance du compte pour n offrir que les etapes restantes, et il REFUSAIT DE SIMULER
+   *     tant que les deux manquaient — « a simulation now would revert for the wrong reason ».
+   *     C etait juste tant que le chemin faisait trois transactions. Ca ne l est plus : le routeur
+   *     enveloppe l ETH lui-meme (`WETH9()` rend le WETH de Base, `refundETH()` est dans son
+   *     bytecode), donc il n y a ni WETH a detenir ni allowance a donner.
+   *   ⛔⛔ ET C EST EXACTEMENT POURQUOI `simule: true` N AVAIT JAMAIS ETE OBSERVE sur ce chemin :
+   *     la simulation exigeait un etat que personne n avait. Elle devient atteignable des le
+   *     premier ecran.
+   *   ⛔ LA VALEUR DOIT PARTIR DANS LE `eth_call`. Simuler avec `value: '0x0'` reverterait — c est
+   *     precisement ce que mon temoin negatif sur fork a montre (`status 0x0` sans valeur). Une
+   *     simulation qui echoue pour la mauvaise raison ferait afficher « le marche refuse » sur un
+   *     swap parfaitement valide.
+   *   ⛔ ET LE COMPTE DOIT PORTER L ETH : le `from` est passe, donc un solde insuffisant se lit
+   *     comme un manque de fonds et non comme un refus de marche — les deux appellent des reponses
+   *     opposees. */
   const m = BigInt(plan.montantWei);
-  const bal = await lire(rpc, WETH_BASE, selecteur('balanceOf(address)') + pad(compte));
-  const all = await lire(rpc, WETH_BASE, selecteur('allowance(address,address)') + pad(compte) + pad(ROUTEUR_AERODROME_CL));
-  if (bal.etat !== 'OK' || all.etat !== 'OK') {
-    /* ⛔ ON NE DEVINE NI UN SOLDE NI UNE AUTORISATION. Supposer qu ils manquent ferait signer pour
-     *   rien ; supposer qu ils sont la ferait simuler et afficher un faux refus de marche. */
-    return { etat: 'NON_MESURE', pourquoi: 'could not read your WETH balance or allowance', plan,
+  const tx = plan.appels.find((a) => a.role === 'swap');
+  if (!tx) {
+    return { etat: 'NON_MESURE', pourquoi: 'the plan carries no swap call', plan,
       pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis };
   }
-  let assezWeth = false, assezAllowance = false;
-  try { assezWeth = BigInt(bal.res) >= m; } catch (_) { assezWeth = false; }
-  try { assezAllowance = BigInt(all.res) >= m; } catch (_) { assezAllowance = false; }
-  /* ⛔⛔ ON NE PROPOSE QUE CE QUI RESTE. Faire signer un enveloppement a quelqu un qui a DEJA du WETH
-   *     lui ferait immobiliser de l ETH pour rien — et une signature inutile est une porte de sortie,
-   *     comme les cinq du parcours de creation l ont montre. */
-  const restants = plan.appels.filter((a) => (a.role === 'wrap' ? !assezWeth
-    : (a.role === 'approve' ? !assezAllowance : true)));
-
-  /* ── 5. LA SIMULATION, SEULEMENT QUAND ELLE PEUT DIRE QUELQUE CHOSE ───────────────────────── */
-  if (!assezWeth || !assezAllowance) {
-    return { etat: 'PRET', plan, appels: restants, simule: false,
-      dejaFait: { wethSuffisant: assezWeth, allowanceSuffisante: assezAllowance },
-      /* ⛔ ON DIT POURQUOI ON N A PAS SIMULE, au lieu de laisser croire qu on a verifie. */
-      pourquoiPasSimule: 'the swap cannot be simulated before you hold the WETH and have approved it — '
-        + 'the earlier steps come first, and a simulation now would revert for the wrong reason',
-      pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis, borne: plan.borne };
-  }
-  const tx = plan.appels.find((a) => a.role === 'swap');
   let sim;
-  try { await rpc('eth_call', [{ from: compte, to: tx.to, data: tx.data, value: '0x0' }, 'latest']); sim = { ok: true }; }
-  catch (e) { sim = { ok: false, message: String((e && e.message) || e) }; }
+  try {
+    await rpc('eth_call', [{ from: compte, to: tx.to, data: tx.data, value: '0x' + m.toString(16) }, 'latest']);
+    sim = { ok: true };
+  } catch (e) { sim = { ok: false, message: String((e && e.message) || e) }; }
   if (!sim.ok) {
     /* ⛔ UN MANQUE DE FONDS ET UN REFUS DE MARCHE APPELLENT DES REPONSES OPPOSEES. */
     const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|STF/i.test(sim.message);
     return { etat: 'REFUSE', plan, sansFonds,
-      pourquoi: sansFonds ? 'not enough WETH in this wallet for that amount'
+      pourquoi: sansFonds ? 'not enough ETH in this wallet for that amount'
         : 'the chain refuses this exact swap: ' + sim.message.slice(0, 160) };
   }
-  return { etat: 'PRET', plan, appels: restants, simule: true,
-    dejaFait: { wethSuffisant: true, allowanceSuffisante: true },
+  /* ── ⛔⛔ LE GAZ, ET LA SIMULATION NE LE VOIT PAS ──────────────────────────────────────────────
+   *     MESURE DU 2026-09-29, par une relecture adversariale, sur trois RPC Base independants et
+   *     avec surcharge de solde : la borne d un `eth_call` avec `value` est EXACTEMENT
+   *     `solde >= value`. Avec un solde egal au montant exact, l appel PASSE — meme en imposant
+   *     600 000 de gaz a 1 000 Gwei, soit soixante fois le solde. Avec `value = montant + 1 wei`,
+   *     il rend `OutOfFunds`. LE GAZ EST DONC HORS DU CONTROLE. Et `eth_estimateGas` sans
+   *     `gasPrice` est aveugle de la meme facon.
+   *   ⛔⛔ CONSEQUENCE, ET ELLE VISE EXACTEMENT NOTRE VISITEUR : la borne disait « The chain accepted
+   *     this exact transaction just now » a quelqu un qui ne peut PAS envoyer. Le revenant du rail
+   *     fiat est le cas type — l onramp lui vend de l ETH, il achete pour TOUT, il ne reste rien
+   *     pour le gaz. Et cette phrase n etait JAMAIS atteignable avant : supprimer le pre-controle
+   *     WETH l a rendue atteignable au premier ecran.
+   *   ⛔ ON LIT DONC LE SOLDE, ET LE COUT DU GAZ, SEPAREMENT DE LA SIMULATION.
+   *   ⛔ ET ON NE BLOQUE PAS SUR NOTRE AVEUGLEMENT : si une de ces lectures echoue, on laisse
+   *     passer et on le DIT dans la borne. Fermer sur l inconnu a deja efface le produit une fois
+   *     aujourd hui ; ici la mesure sert a AVERTIR, pas a interdire. */
+  let soldeWei = null, gazUnites = null, prixGaz = null;
+  try { soldeWei = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { soldeWei = null; }
+  try {
+    gazUnites = BigInt(await rpc('eth_estimateGas', [{ from: compte, to: tx.to, data: tx.data,
+      value: '0x' + m.toString(16) }]));
+  } catch (_) { gazUnites = null; }
+  try { prixGaz = BigInt(await rpc('eth_gasPrice', [])); } catch (_) { prixGaz = null; }
+  /* ⛔ MARGE DE 25 % SUR LE GAZ : le prix bouge entre le devis et la signature, et une marge est la
+   *   seule facon honnete de ne pas promettre au wei pres. Elle est ECRITE, pas cachee. */
+  const coutGaz = (gazUnites !== null && prixGaz !== null) ? (gazUnites * prixGaz * 125n) / 100n : null;
+  const besoin = coutGaz === null ? null : m + coutGaz;
+  if (soldeWei !== null && besoin !== null && soldeWei < besoin) {
+    /* ⛔ ON NOMME LE GAZ, et on donne les deux chiffres : « pas assez » sans montant envoie
+     *   chercher l erreur chez soi. */
+    return { etat: 'REFUSE', plan, sansFonds: true,
+      pourquoi: 'not enough ETH: this buy needs about ' + besoin + ' wei (amount ' + m
+        + ' plus gas) and this wallet holds ' + soldeWei + ' wei' };
+  }
+  const gazVerifie = soldeWei !== null && besoin !== null;
+  return { etat: 'PRET', plan, appels: plan.appels, simule: true,
+    /* ⛔ TROIS ETATS SUR LE GAZ : verifie et suffisant / non verifie / (insuffisant a deja rendu
+     *   REFUSE ci-dessus). Un booleen aurait confondu « pas verifie » et « suffisant ». */
+    gaz: gazVerifie
+      ? { verifie: true, soldeWei: soldeWei.toString(), besoinWei: besoin.toString() }
+      : { verifie: false, pourquoi: 'could not read your balance or the gas price just now' },
+    /* ⛔⛔ LES DEUX BOOLEENS ONT ETE RETIRES, ET C ETAIT UN MENSONGE TRANQUILLE. Ce champ rendait
+     *     `wethSuffisant: true, allowanceSuffisante: true` — deux `true` ECRITS EN DUR, presentes
+     *     comme le resultat d une verification qui n a PLUS LIEU. Un appelant les lirait comme
+     *     « on a lu le solde et il suffit », alors que rien n est lu. Deux constantes ne sont pas
+     *     une mesure ([[constant-output-is-not-a-measurement]]).
+     *   ⛔ ET ILS N AVAIENT AUCUN LECTEUR : recherche dans tout le depot le 2026-09-29, `dejaFait`,
+     *     `wethSuffisant` et `allowanceSuffisante` n apparaissent QU ICI. « Conserve pour les
+     *     appelants » n avait aucun appelant derriere. Il ne reste donc que le fait vrai : ces
+     *     prerequis sont sans objet. */
+    dejaFait: { sansObjet: true },
     pivotsSondes, pivotsNonMesures, devisIncomplet, noteDevis,
-    borne: plan.borne + ' The chain accepted this exact swap just now.' };
+    /* ⛔⛔ LA BORNE NE PROMET PLUS CE QU ELLE NE SAIT PAS. Elle disait « The chain accepted this
+     *     exact transaction just now » — vrai pour la POOL, faux pour le compte : un `eth_call` ne
+     *     verifie que `solde >= value`, jamais le gaz. On dit donc precisement ce qui a ete
+     *     verifie, et on dit quand on n a pas pu verifier le gaz. */
+    borne: plan.borne + (gazVerifie
+      ? ' The pools accepted this exact transaction just now, and your balance covers the amount plus gas.'
+      : ' The pools accepted this exact transaction just now — but we could not check that your'
+        + ' balance also covers the gas, so your wallet may still refuse it.') };
 }

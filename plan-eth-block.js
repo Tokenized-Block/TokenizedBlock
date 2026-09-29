@@ -1,25 +1,26 @@
-/* plan-eth-block.js — ACHETER UNE ACTION TOKENISEE EN ETH, EN TROIS GESTES ET UN SEUL SWAP.
+/* plan-eth-block.js — ACHETER UNE ACTION TOKENISEE EN ETH, EN UNE SEULE TRANSACTION.
  *
- * ⛔⛔ CE MODULE NE SIGNE RIEN, N ENVOIE RIEN, N APPELLE AUCUN RESEAU. Il recoit DEUX pools deja lues
- *     et rend TROIS appels plus le minimum garanti. Un wallet humain execute, et l appelant doit
- *     simuler le troisieme appel avant de le proposer.
+ * ⛔⛔ CE MODULE NE SIGNE RIEN, N ENVOIE RIEN, N APPELLE AUCUN RESEAU. Il recoit DEUX pools deja
+ *     lues et rend UN appel plus le minimum garanti. Un wallet humain execute, et l appelant doit
+ *     le simuler avant de le proposer.
  *
- * ⛔⛔ POURQUOI TROIS GESTES, ET POURQUOI C EST LE MOINS MAUVAIS CHEMIN CONNU.
- *     Une pool v3/CL ne connait que WETH ; l ETH natif n existe que pour Uniswap v4. Le chemin ETH
- *     exigeait donc une commande d ENVELOPPEMENT dans le routeur Uniswap — octet present dans
- *     SEULEMENT 2 des 14 transactions mesurees sur 249 blocs : specificite parfaite, sensibilite
- *     insuffisante, donc NON prouve. Construire dessus serait deviner sur un chemin qui paie.
- *     Mesure du 2026-09-28 : le routeur Aerodrome declare `exactInput` (multi-sauts) et il existe
- *     TROIS pools Aerodrome WETH/USDC. Donc `WETH -> USDC -> action` tient en UN appel.
- *   ⇒ ETH : (1) `deposit()` sur WETH — selecteur 0xd0e30db0, lu dans son bytecode avec deux temoins
- *     positifs et zero faux positif ; (2) `approve` du montant EXACT au routeur Aerodrome — son
- *     bytecode ne contient PAS Permit2, donc allowance directe ; (3) `exactInput` a deux sauts.
- *     Trois signatures, aucun octet suppose, aucun contrat, aucun lot atomique.
+ * ⛔⛔ CE MODULE A RENDU TROIS APPELS JUSQU AU 2026-09-29, ET L EN-TETE LE DEFENDAIT. Il expliquait
+ *     qu une pool v3/CL ne connait que WETH, donc qu il fallait (1) `deposit()` sur WETH,
+ *     (2) `approve` au routeur, (3) `exactInput`. Le raisonnement etait juste sur les pools et FAUX
+ *     sur le routeur : il n avait jamais ete verifie que le ROUTEUR sait recevoir de l ETH.
+ *   ⇒ MESURE DU 2026-09-29. Le routeur Aerodrome CL declare `WETH9()` et rend EXACTEMENT le WETH de
+ *     Base ; `refundETH()` est dans son bytecode — une fonction qui n a de sens que s il RECOIT de
+ *     l ETH. Comme le SwapRouter d Uniswap v3 dont Slipstream est un fork, son chemin de paiement
+ *     enveloppe WETH9 quand `msg.value` couvre le montant. Ni enveloppement ni approbation.
+ *   ⇒ ET CE N EST PAS DEDUIT D UN SELECTEUR : prouve sur fork Base. UNE transaction avec `value`,
+ *     sans wrap ni approve : `status 0x1` (gas 477 355), l acheteur recoit 116 276 823 unites, le
+ *     wallet de frais recoit EXACTEMENT 116 393 = 10 bps. TEMOIN NEGATIF : la MEME transaction
+ *     SANS `value` rend `status 0x0` — c est donc bien l ETH envoye qui paie.
  *
- * ⛔⛔ LES TROIS GESTES NE SONT PAS ATOMIQUES, ET CE MODULE LE DIT. Qui s arrete apres le premier
- *     detient du WETH, pas de l ETH et pas d action. Ce n est pas une perte — le WETH se redeconverti
- *     par `withdraw` — mais c est un etat inattendu, et le taire serait la vraie faute. La phrase
- *     `borne` le porte jusqu a l ecran.
+ * ⛔⛔ L ACHAT EST DONC ATOMIQUE, ET CE MODULE LE DIT. Il aboutit, ou il ne se passe rien : plus de
+ *     WETH immobilise, plus d allowance pendante, plus d etat intermediaire a expliquer. L en-tete
+ *     precedent annoncait l inverse, et une borne fausse fait renoncer des gens pour un danger qui
+ *     n existe plus. La phrase `borne` porte la version vraie jusqu a l ecran.
  *
  * ⛔ LE MINIMUM TRAVERSE DEUX POOLS, ET CHAQUE POOL PREND SON PROPRE `fee` SUR SON PROPRE SEGMENT.
  *   Deduire les deux frais d un coup sur l entree donnerait un minimum trop haut ; n en deduire
@@ -162,12 +163,21 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
     return { etat: 'REFUSE', pourquoi: 'the chosen pivot pool has no usable tickSpacing' };
   }
 
-  /* ── les trois appels ──────────────────────────────────────────────────────────────────────
-   * ⛔ ORDRE IMPOSE : envelopper, autoriser, echanger. Autoriser avant d avoir du WETH passerait
-   *   quand meme (une allowance ne verifie pas le solde), mais echanger avant d autoriser echoue —
-   *   et le message parlerait du marche au lieu de l approbation. */
+  /* ── l appel unique, et les deux pieces de rechange ────────────────────────────────────────
+   * ⛔ CE BLOC S APPELAIT « les trois appels » ET IMPOSAIT UN ORDRE — envelopper, autoriser,
+   *   echanger. L ordre n a plus d objet : il n y a qu une transaction. Les deux calldata
+   *   d enveloppement et d approbation restent construits pour `appelsHeritage`, qui n est branche
+   *   nulle part (verifie) et qu il faudrait donc brancher, pas seulement garder. */
+  /* ⛔⛔ CET ARTEFACT NE PEUT PLUS OPPOSER SON VETO AU PLAN VIVANT, ET C ETAIT UN VRAI DEFAUT.
+   *     `appro` n est consomme QUE par `appelsHeritage`, qui n est branche nulle part — mais son
+   *     echec rendait `REFUSE: approval refused: …` et TUAIT le plan a une transaction. Le visiteur
+   *     aurait lu un refus d approbation sur un chemin qui n en demande AUCUNE. Non atteignable
+   *     avec les entrees d aujourd hui, mais le veto etait reel, et une garde qui peut refuser pour
+   *     une raison inexistante finit par refuser.
+   *   ⛔ ON NE LE SUPPRIME PAS POUR AUTANT : s il echoue, la piece de rechange est simplement
+   *     absente, et on le DIT dans le plan (`pourquoiPasDHeritage`) au lieu de le taire. */
   const appro = calldataApprove({ token: WETH_BASE, montant: m, beneficiaire: ROUTEUR_AERODROME_CL });
-  if (appro.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'approval refused: ' + appro.pourquoi };
+  const heritagePossible = appro.etat === 'PRET';
   /* ⛔⛔ LE SWAP PORTE LE FRAIS D INTERFACE, ET C EST CE QUI REND CE CHEMIN RENTABLE. Le montage est
    *     `multicall([ exactInput(vers le routeur), sweepTokenWithFee(...) ])` : les deux appels dans
    *     la MEME transaction, donc l utilisateur ne peut pas prendre le swap sans la retenue —
@@ -187,16 +197,49 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
 
   return {
     etat: 'PRET',
+    /* ── ⛔⛔ UNE SEULE TRANSACTION, ET C EST MESURE ─────────────────────────────────────────────
+     *     CE QUE CA REMPLACE : trois transactions NON ATOMIQUES — `deposit()` sur WETH, `approve`
+     *     au routeur, puis le swap. La friction maximale pour un premier achat, et c etait
+     *     precisement le chemin qu un revenant du rail fiat devait emprunter, puisque l onramp lui
+     *     vend de l ETH. Mesure du 2026-09-29 : `onramp_retour_block` = 8, `achat_ok` inexistant.
+     *   ⛔ POURQUOI C EST POSSIBLE, LU SUR LA CHAINE : le routeur declare `WETH9()` et rend
+     *     EXACTEMENT le WETH de Base, et `refundETH()` est dans son bytecode — une fonction qui n a
+     *     de sens que s il RECOIT de l ETH. Comme dans le SwapRouter d Uniswap v3 dont Slipstream
+     *     est un fork, son chemin de paiement enveloppe WETH9 quand `msg.value` couvre le montant.
+     *     Ni wrap ni approve ne sont donc necessaires.
+     *   ⛔⛔ ET CE N EST PAS DEDUIT D UN SELECTEUR : prouve sur fork Base, quatre conditions —
+     *     recu `status 0x1` (gas 477 355), l acheteur recoit 116 276 823 unites, a6cf recoit
+     *     EXACTEMENT 116 393 = 10 bps, et TEMOIN NEGATIF : la MEME transaction SANS `value` rend
+     *     `status 0x0`. C est donc bien l ETH envoye qui paie, et non un reste quelconque.
+     *   ⛔ PAS DE `refundETH()` DANS LE MULTICALL : `exactInput` est un exact-IN, il consomme tout
+     *     `amountIn`, donc il n y a aucun surplus a rendre. L ajouter changerait le calldata que je
+     *     viens de prouver — et il faudrait le reprouver. On garde EXACTEMENT ce qui a ete mesure.
+     *   ⛔ LA VALEUR PART SUR CET APPEL, et c est le seul : le routeur l enveloppe lui-meme. */
     appels: [
-      /* ⛔ LA VALEUR PART ICI, ET SEULEMENT ICI : `deposit()` prend l ETH en `msg.value`. Les deux
-       *   appels suivants echangent des ERC-20 et ne doivent porter aucune valeur. */
+      { nom: 'Buy this block with your ETH, in one transaction', to: swap.to, data: swap.data,
+        value: '0x' + m.toString(16), role: 'swap' },
+    ],
+    /* ⛔⛔ CE CHAMP N EST BRANCHE NULLE PART, ET JE LE DIS PLUTOT QUE DE LE LAISSER CROIRE. Mon
+     *     premier commentaire annonçait qu « un wallet qui refuserait la valeur pourrait retomber
+     *     dessus » : c est FAUX. Verifie par recherche dans tout le depot le 2026-09-29 —
+     *     `appelsHeritage` n est lu que par son propre test. Rien dans l app ni dans les lecteurs
+     *     ne s en sert. Un nom present n est pas un usage.
+     *   ⛔ POURQUOI IL RESTE QUAND MEME : les trois gestes sont la seule sortie connue si un wallet
+     *     refusait la valeur sur un `multicall`, et jeter un chemin verifie pour cause de
+     *     non-usage se paie le jour ou on en a besoin. Mais tant que personne ne le lit, c est une
+     *     PIECE DE RECHANGE, pas une porte de secours — et l appeler « secours » serait une
+     *     sur-vente. Le brancher est une decision, pas un detail. */
+    appelsHeritage: heritagePossible ? [
       { nom: 'Wrap your ETH into WETH', to: bas(WETH_BASE), data: SELECTEUR_DEPOSIT,
         value: '0x' + m.toString(16), role: 'wrap' },
       { nom: 'Allow the Aerodrome router to move exactly this WETH', to: appro.to, data: appro.data,
         value: '0x0', role: 'approve' },
       { nom: 'Swap WETH to USDC to this block, in one call', to: swap.to, data: swap.data,
         value: '0x0', role: 'swap' },
-    ],
+    ] : null,
+    /* ⛔ ET SI LA PIECE DE RECHANGE N A PAS PU ETRE CONSTRUITE, ON DIT POURQUOI. Rendre `null` sans
+     *   raison ferait chercher un bug ; rendre la raison permet de decider. */
+    pourquoiPasDHeritage: heritagePossible ? null : ('approval calldata refused: ' + appro.pourquoi),
     pivot: bas(devis.pivot.pool),
     tickSpacingPivot: Number(tsPivot),
     tickSpacingAction: Number(tsAction),
@@ -218,10 +261,17 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
      *     borne ecrasait celle du swap. Une mutation l a montre : couper le frais dans ce
      *     planificateur ne cassait aucun test. La phrase vient de `phraseDeRetenue`, donc du MEME
      *     chiffre que le calldata, et elle est VIDE quand il n y a pas de frais. */
-    borne: 'Three steps, and they are NOT one transaction: if you stop after the first you hold WETH '
-      + 'instead of ETH — it converts back, but it is not what you asked for. The swap crosses two '
-      + 'pools, slippage adds up on each, and the guaranteed minimum applies to the final block only. '
-      + 'The figures come from the pool prices right now, not from a depth simulation.'
+    /* ⛔⛔ CETTE BORNE DISAIT « Three steps, and they are NOT one transaction ». C EST DEVENU FAUX
+     *     le 2026-09-29, et une borne fausse est pire qu aucune borne : elle fait renoncer des gens
+     *     pour un danger qui n existe plus. Le routeur enveloppe l ETH lui-meme — prouve sur fork,
+     *     temoin negatif inclus — donc l achat est ATOMIQUE : il aboutit ou il ne se passe rien.
+     *   ⛔ CE QUI RESTE VRAI, ET QUI DOIT RESTER DIT : deux pools traversees, donc deux fois du
+     *     glissement, et un prix qui vient des pools MAINTENANT et non d une simulation de
+     *     profondeur. */
+    borne: 'One transaction: it either completes or nothing happens — your ETH is wrapped by the '
+      + 'router itself. The swap crosses two pools, slippage adds up on each, and the guaranteed '
+      + 'minimum applies to the final block only. The figures come from the pool prices right now, '
+      + 'not from a depth simulation.'
       + (avecFrais ? ' ' + phraseDeRetenue(fraisBps) : ''),
     aSimuler: true,
   };

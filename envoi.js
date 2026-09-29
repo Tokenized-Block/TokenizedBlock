@@ -323,3 +323,40 @@ export async function envoyerDepuisWallet({ eth, rpc, chaineAttendue, compte, to
   }
   return { etat: 'CONFIRME', hash, gaz, ...(uo === true ? { viaSmartWallet: true } : {}) };
 }
+
+/* ── ⛔⛔ CE QU ON DIT QUAND UN ENVOI N EST PAS CONFIRME, ET POURQUOI C EST UNE FONCTION PURE ─────
+ *     DEFAUT REEL, INTRODUIT PAR MOI LE 2026-09-29 ET TROUVE PAR UNE RELECTURE ADVERSARIALE.
+ *     L ecran de l achat en ETH testait `env.etat !== 'CONFIRME'` et affichait alors
+ *     « Not sent: … — nothing moved, your ETH is untouched. » Or `envoyerDepuisWallet` rend AUSSI
+ *     `EN_ATTENTE` (« sent, not confirmed yet — do not resend ») et `ANNULE_SUR_CHAINE`
+ *     (« reverted on chain », gaz PAYE). Le visiteur lisait donc :
+ *       « Not sent: sent, not confirmed yet — do not resend — nothing moved, your ETH is untouched »
+ *     Les deux moities se contredisent, et la seconde INVITE A RE-SIGNER : achat en double.
+ *   ⛔ L ATOMICITE PROUVEE DIT « le swap aboutit ou ne se passe rien », PAS « rien n est parti ».
+ *     Ma conclusion depassait la mesure d exactement un cran, et c est ce cran qui coute 0,01 ETH.
+ *   ⛔ POURQUOI PURE, ET ICI : les etats vivent dans ce module, donc le message aussi — un jumeau
+ *     dans `app.html` divergerait au premier etat ajoute. Et pure, elle se teste sans wallet. */
+export const ENVOI_RIEN_PARTI = Object.freeze([
+  'REFUSE_PAR_UTILISATEUR', 'DESTINATION_INVALIDE', 'REFUSE',
+]);
+export const ENVOI_PARTI = Object.freeze([
+  'EN_ATTENTE', 'ANNULE_SUR_CHAINE', 'ENVOYE', 'ENVOYE_AA', 'CONFIRME',
+]);
+
+/** Le message a afficher pour un resultat d envoi NON confirme.
+ * ⛔ TROIS ISSUES, JAMAIS DEUX : rien n est parti / quelque chose est parti / on ne sait pas.
+ *   `ECHEC_ENVOI` tombe dans la troisieme a dessein : son propre message dit « check your wallet
+ *   before retrying », donc il ne garantit PAS que rien n a ete envoye. Le ranger avec « rien
+ *   n est parti » serait exactement la faute qu on corrige. */
+export function messageEnvoi(env) {
+  const etat = String((env && env.etat) || '');
+  const pourquoi = String((env && env.pourquoi) || etat || 'unknown').slice(0, 130);
+  if (ENVOI_RIEN_PARTI.includes(etat)) {
+    return 'Not sent: ' + pourquoi + ' — nothing moved, your ETH is untouched.';
+  }
+  if (ENVOI_PARTI.includes(etat)) {
+    /* ⛔ ON NE DIT SURTOUT PAS DE RECOMMENCER : re-signer ici achete deux fois. */
+    return 'Sent: ' + pourquoi + ' — do NOT sign again. Check your wallet history before retrying.';
+  }
+  return 'Unclear: ' + pourquoi + ' — check your wallet history before retrying, it may have been sent.';
+}

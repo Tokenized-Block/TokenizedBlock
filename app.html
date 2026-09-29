@@ -1116,13 +1116,17 @@ details[open] > summary::before{transform:rotate(90deg)}
               <button class="bouton" id="fAcheterUsdc" type="button" hidden>Buy with USDC</button>
               <!-- ⛔⛔ L ACHAT EN ETH, ET SON LIBELLE DIT LE COUT REEL. Il passe par `exactInput` du
                    routeur Aerodrome : WETH -> USDC -> action, deux sauts dans UN appel, le pivot
-                   choisi par DEVIS parmi les trois pools WETH/USDC mesurees. Mais l ETH doit d abord
-                   etre enveloppe, puis le routeur autorise : TROIS gestes, et ils ne sont PAS
-                   atomiques.
-                   ⛔ Ecrire « Buy with ETH » tout court laisserait croire a une signature unique. Le
-                     nombre de gestes est dans le libelle, et qui s arrete apres le premier detient du
-                     WETH — la note le dit avant qu on commence. -->
-              <button class="bouton" id="fAcheterEth" type="button" hidden>Buy with ETH · 3 steps</button>
+                   choisi par DEVIS parmi les trois pools WETH/USDC mesurees.
+                   ⛔⛔ CE COMMENTAIRE DEFENDAIT « TROIS gestes, et ils ne sont PAS atomiques », et le
+                     libelle portait « · 3 steps ». Mesure du 2026-09-29 : le routeur enveloppe
+                     l ETH lui-meme — `WETH9()` rend le WETH de Base, `refundETH()` est dans son
+                     bytecode — et UNE transaction avec `value` aboutit sur fork, temoin negatif
+                     inclus (la meme sans `value` rend `status 0x0`). Il n y a plus de WETH
+                     intermediaire a annoncer.
+                   ⛔ LE LIBELLE DIT DONC CE QUI EST VRAI ET QUI SE VEND : une seule transaction.
+                     Ecrire « Buy with ETH » tout court laisserait le visiteur ignorer ce qu il vient
+                     de gagner. -->
+              <button class="bouton" id="fAcheterEth" type="button" hidden>Buy with ETH · one transaction</button>
               <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
@@ -2068,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-attente-bornee" hidden>Build <code>20260929-attente-bornee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-one-transaction" hidden>Build <code>20260929-one-transaction</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2693,7 +2697,7 @@ import { faitsDuBlock, supplyLisible } from './faits.js';
 /* ⛔⛔ ENVOYER PASSE PAR UN MODULE TESTE, JAMAIS PAR UN `eth_sendTransaction` ECRIT ICI. `envoi.js`
  * verifie chaine ET compte, estime, fixe une limite de gas explicite et relit le recu ; la regle 8
  * surveille qu aucun envoi ne s en passe. Le wallet de l utilisateur signe — cette page, jamais. */
-import { encodeTransfer, envoyerDepuisWallet, envoyerLotAtomique, noterWalletUtilise } from './envoi.js';
+import { encodeTransfer, envoyerDepuisWallet, envoyerLotAtomique, noterWalletUtilise, messageEnvoi } from './envoi.js';
 /* la cause d un echec de creation, en categories fermees — voir causes-echec.js */
 import { etapeEchec } from './causes-echec.js';
 /* ⛔ un paiement est une transaction : ce module va LIRE la chaine, il ne croit aucun log seul */
@@ -4261,12 +4265,23 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
   if (r.etat === 'REFUSE') { note.textContent = String(r.pourquoi || 'refused'); return; }
   if (r.etat === 'APPROBATIONS') {
     /* ⛔ LES APPROBATIONS SONT NOMMEES ET COMPTEES : « signez deux fois » sans dire quoi ni pourquoi
-     *   est exactement la porte de sortie qu on a mesuree sur le parcours de creation. */
-    note.textContent = r.etapes.length + ' one-time approval(s) first: '
-      + r.etapes.map((e) => e.nom).join(', ') + '. Nothing is swapped by these.';
+     *   est exactement la porte de sortie qu on a mesuree sur le parcours de creation.
+     * ⛔⛔ MAIS « one-time » ETAIT FAUX SUR AERODROME, ET C EST MESURE. Sur ce chemin l approbation
+     *     porte le montant EXACT du swap (`echange-v3.js`, et `calldata-aerodrome.js` REFUSE
+     *     explicitement `MAX_UINT256`) : elle est donc CONSOMMEE par le swap et redue A CHAQUE
+     *     ACHAT. Corroboration on-chain du 2026-09-29 : 154 evenements `Approval` USDC vers ce
+     *     routeur en UNE heure, venant de 20 adresses distinctes — environ 7,7 chacune — et aucune
+     *     de celles lues n avait d allowance restante. Promettre « une seule fois » a quelqu un qui
+     *     devra resigner a chaque achat est une sur-vente, sur le seul chemin qui nous paie.
+     *   ⛔ SUR UNISWAP v3 « one-time » EST VRAI (les deux approbations vont au plafond, sans
+     *     expiration), d ou le mot choisi PAR FAMILLE et non une formule unique. */
+    const uneSeuleFois = r.plan && r.plan.famille === 'v3';
+    note.textContent = r.etapes.length + (uneSeuleFois ? ' one-time approval(s) first: ' : ' approval(s) first: ')
+      + r.etapes.map((e) => e.nom).join(', ') + '. Nothing is swapped by these.'
+      + (uneSeuleFois ? '' : ' This one is spent by the swap, so it comes back on each buy.');
     for (const e of r.etapes) {
       const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte, to: e.to, data: e.data, value: '0x0' });
-      if (env.etat !== 'CONFIRME') { note.textContent = 'Approval stopped: ' + String(env.pourquoi || env.etat).slice(0, 140); return; }
+      if (env.etat !== 'CONFIRME') { note.textContent = 'Approval stopped: ' + messageEnvoi(env); return; }
     }
     note.textContent = 'Approvals done. Tap Buy with USDC again to swap.';
     return;
@@ -4278,9 +4293,16 @@ $('#fAcheterUsdc').addEventListener('click', async () => {
     + ' guaranteed. ' + r.plan.borne;
   const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
     to: r.tx.to, data: r.tx.data, value: r.tx.value });
+  /* ⛔⛔ CE SITE AVAIT LE MEME DEFAUT QUE CELUI DU CHEMIN ETH, ET IL EST ANTERIEUR : tout ce qui
+   *     n est pas `CONFIRME` etait annonce « Not sent ». Or `envoyerDepuisWallet` rend aussi
+   *     `EN_ATTENTE` (« sent, not confirmed yet — do not resend ») et `ANNULE_SUR_CHAINE` (gaz
+   *     PAYE). Dire « Not sent » a quelqu un dont la transaction est partie l invite a re-signer :
+   *     achat en double, sur le chemin qui nous paie justement le frais.
+   *   ⛔ UN SEUL MESSAGE POUR LES DEUX CHEMINS, et il vit dans `envoi.js` avec les etats qu il
+   *     nomme — un jumeau recopie ici divergerait au premier etat ajoute. */
   note.textContent = env.etat === 'CONFIRME'
     ? 'Bought. At least ' + mini + ' of this block is in your wallet.'
-    : 'Not sent: ' + String(env.pourquoi || env.etat).slice(0, 140);
+    : messageEnvoi(env);
 });
 
 /* ══ ACHAT EN ETH SUR UNE ACTION AERODROME : TROIS GESTES, ET ON DIT LESQUELS ═══════════════════
@@ -4326,8 +4348,16 @@ $('#fAcheterEth').addEventListener('click', async () => {
   const recu = (Number(BigInt(r.plan.sortieAttendue)) / 1e8).toFixed(6);
   const mini = (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6);
   note.textContent = '0.01 ETH → about ' + usdc + ' USDC → about ' + recu + ' of this block, '
-    + 'at least ' + mini + ' guaranteed. ' + r.appels.length + ' step(s) left. '
-    + (r.simule ? '' : String(r.pourquoiPasSimule || '') + ' ')
+    /* ⛔⛔ « N step(s) left » A DISPARU, ET C ETAIT DEVENU UN NON-SENS. Depuis que le chemin ETH
+     *     tient en UNE transaction, `r.appels` a exactement un element : l ecran affichait
+     *     « 1 step(s) left. » — un pluriel mort, et un « left » herite du modele supprime ou l on
+     *     lisait ce qui etait deja fait pour ne proposer que le reste. Il ne RESTE plus rien.
+     *   ⛔ ET `pourquoiPasSimule` AVAIT ZERO PRODUCTEUR DANS LE DEPOT : cette ligne etait sa seule
+     *     occurrence, et le seul retour `PRET` de `echange-eth.js` fixe `simule: true`. La branche
+     *     fausse etait donc INATTEIGNABLE — une affordance morte, qui n aurait rien dit le jour ou
+     *     la simulation redeviendrait conditionnelle. On la retire plutot que de la laisser
+     *     rassurer. Trouve par une relecture adversariale, pas par la suite. */
+    + 'at least ' + mini + ' guaranteed. One transaction to sign. '
     /* ⛔⛔ LE DEVIS INCOMPLET SE DIT A L ECRAN. Trou trouve en production sur ce meme deploiement :
      *     le plan annoncait « la meilleure route » avec DEUX pivots compares sur TROIS sondes — un
      *     candidat n avait pas pu etre lu et avait ete ecarte en silence. Presenter le meilleur de
@@ -4338,14 +4368,29 @@ $('#fAcheterEth').addEventListener('click', async () => {
    *     apres un echec ferait signer une suite qui ne peut plus reussir. */
   for (let i = 0; i < r.appels.length; i += 1) {
     const a = r.appels[i];
-    note.textContent = 'Step ' + (i + 1) + ' of ' + r.appels.length + ' — ' + a.nom
-      + (a.role === 'wrap' ? ' (this one holds your ETH as WETH; it converts back)' : '');
+    /* ⛔ UN COMPTEUR D ETAPES SUR UNE LISTE D UN SEUL ELEMENT est du bruit : l ecran disait
+     *   « Step 1 of 1 — Buy this block with your ETH, in one transaction », ou le compteur
+     *   contredisait le nom de l appel, qui dit deja « in one transaction ».
+     * ⛔ ET LA MENTION DU WETH EST RETIREE : le role `wrap` n existe plus que dans
+     *   `appelsHeritage`, jamais dans `appels` — la clause ne pouvait plus se declencher. */
+    note.textContent = 'Sign it in your wallet — ' + a.nom + '…';
     const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
       to: a.to, data: a.data, value: a.value });
     if (env.etat !== 'CONFIRME') {
-      note.textContent = 'Stopped at step ' + (i + 1) + ' of ' + r.appels.length + ' (' + a.nom + '): '
-        + String(env.pourquoi || env.etat).slice(0, 130)
-        + (i > 0 ? ' — the earlier steps did go through, so you now hold WETH.' : '');
+      /* ⛔⛔ CE MESSAGE PROMETTAIT L INVERSE EXACT DE LA NOUVELLE GARANTIE. Il disait « Stopped at
+       *     step 1 of 1 » — un non-sens — et surtout, sa clause `i > 0` annoncait « the earlier
+       *     steps did go through, so you now hold WETH » : un etat intermediaire que l atomicite a
+       *     SUPPRIME. Elle ne pouvait plus se declencher (`i` vaut toujours 0), mais c etait une
+       *     phrase posee dans le fichier, prete a mentir le jour ou la liste regrandirait.
+       *   ⛔⛔ ET MA PREMIERE CORRECTION DISAIT « nothing moved, your ETH is untouched » POUR TOUT
+       *     CE QUI N EST PAS `CONFIRME` — ce qui etait faux pour `EN_ATTENTE` (« sent, not
+       *     confirmed yet — do not resend ») et pour `ANNULE_SUR_CHAINE` (gaz PAYE). Le visiteur
+       *     lisait deux moities qui se contredisent, dont la seconde l invitait a RE-SIGNER : achat
+       *     en double. L atomicite prouvee dit « le swap aboutit ou ne se passe rien », PAS « rien
+       *     n est parti » — ma conclusion depassait la mesure d exactement un cran.
+       *   ⛔ LE MESSAGE VIT DESORMAIS DANS `envoi.js`, avec les etats qu il nomme, et il a trois
+       *     issues : rien parti / parti / incertain. */
+      note.textContent = messageEnvoi(env);
       return;
     }
   }

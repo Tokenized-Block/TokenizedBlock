@@ -151,10 +151,13 @@ const recuNu = await envoyer(appelNu.to, appelNu.data, 'exactInputSingle nu');
 const deltaNu = (await balanceOf(NVDAc, FEE_WALLET)) - avantNu;
 console.log('delta a6cf sans frais : ' + deltaNu);
 
-/* ── 6. LE CHEMIN ETH, TROIS APPELS, SUR LE MEME BANC ─────────────────────────────────────────
+/* ── 6. LE CHEMIN ETH, UNE SEULE TRANSACTION, SUR LE MEME BANC ────────────────────────────────
  * ⛔ LE MEME BANC, PAS UN SECOND SCRIPT : deux bancs jumeaux divergent, et le correctif d un
- *   chemin rate l autre. Une seule liste de verdicts, un seul controle negatif par chemin. */
-console.log('\n--- chemin ETH -> USDC -> NVDAc, trois appels ---');
+ *   chemin rate l autre. Une seule liste de verdicts, un seul controle negatif par chemin.
+ * ⛔ CE TITRE DISAIT « TROIS APPELS » jusqu au 2026-09-29 : le routeur enveloppe l ETH lui-meme,
+ *   donc le plan ne rend plus qu un appel. Un libelle perime dans un INSTRUMENT est de la
+ *   desinformation lente — il survit plus longtemps qu un bug. */
+console.log('\n--- chemin ETH -> USDC -> NVDAc, une seule transaction ---');
 const WETH = '0x4200000000000000000000000000000000000006';
 const POOLS_PIVOT_ADR = [
   '0x493e74eda2720e127baccc1a19b2d567bc14ab43',
@@ -228,7 +231,10 @@ console.log((c1 ? 'OK  ' : 'ROUGE ') + '1. la transaction avec frais a un statut
 console.log((c2 ? 'OK  ' : 'ROUGE ') + '2. le solde de a6cf en NVDAc a AUGMENTE (' + deltaA6cf + ')');
 console.log((c3 ? 'OK  ' : 'ROUGE ') + '3. l augmentation vaut exactement 10 bps de la sortie (' + attendu + ')');
 console.log((c4 ? 'OK  ' : 'ROUGE ') + '4. CONTROLE NEGATIF : sans frais, a6cf reste inchange (' + deltaNu + ')');
-console.log((cEth1 ? 'OK  ' : 'ROUGE ') + '5. CHEMIN ETH : le dernier des trois appels a un statut 0x1');
+/* ⛔ CE LIBELLE DISAIT « le dernier des TROIS appels », et c est devenu faux le 2026-09-29 : le
+ *   chemin ETH tient en UNE transaction depuis que le routeur enveloppe l ETH lui-meme. Un label
+ *   faux dans un instrument est de la desinformation lente — il survit plus longtemps qu un bug. */
+console.log((cEth1 ? 'OK  ' : 'ROUGE ') + '5. CHEMIN ETH : la transaction unique a un statut 0x1');
 console.log((cEth2 ? 'OK  ' : 'ROUGE ') + '6. CHEMIN ETH : le solde de a6cf a AUGMENTE (' + deltaEth + ')');
 console.log((cEth3 ? 'OK  ' : 'ROUGE ') + '7. CHEMIN ETH : l augmentation vaut exactement 10 bps (' + attenduEth + ')');
 const tout = c1 && c2 && c3 && c4 && cEth1 && cEth2 && cEth3;

@@ -1,4 +1,4 @@
-/* test-plan-eth-block.mjs — LE CHEMIN ETH : DEUX SAUTS, TROIS GESTES, ET UN MINIMUM PRUDENT.
+/* test-plan-eth-block.mjs — LE CHEMIN ETH : DEUX SAUTS, UNE TRANSACTION, UN MINIMUM PRUDENT.
  *
  * ⛔⛔ CE QUE CE FICHIER PROTEGE. Un chemin a deux sauts a DEUX endroits ou se tromper : chaque pool
  *     prend son propre `fee` sur son propre segment. Cumuler les deux frais sur l entree rendrait un
@@ -128,24 +128,46 @@ cas('⛔⛔ LE PIVOT EST CHOISI PAR DEVIS, PAS PAR `liquidity()`', () => {
   assert.equal(plan.pivot, max.pool.toLowerCase());
 });
 
-cas('⛔⛔ TROIS APPELS, DANS L ORDRE, ET LA VALEUR NE PART QU AU PREMIER', () => {
+cas('⛔⛔ UN SEUL APPEL, ET C EST LUI QUI PORTE LA VALEUR', () => {
+  /* ⛔⛔ CE CAS EXIGEAIT TROIS APPELS (`wrap`, `approve`, `swap`) JUSQU AU 2026-09-29, et il avait
+   *     raison tant que le chemin les demandait. Il ne les demande plus : le routeur Aerodrome
+   *     enveloppe l ETH lui-meme — `WETH9()` rend EXACTEMENT le WETH de Base, et `refundETH()` est
+   *     dans son bytecode, une fonction qui n a de sens que s il RECOIT de l ETH.
+   *   ⛔⛔ ET CE N EST PAS DEDUIT D UN SELECTEUR. Prouve sur fork Base : UNE transaction avec
+   *     `value`, sans wrap ni approve, rend `status 0x1` (gas 477 355) ; l acheteur recoit
+   *     116 276 823 unites ; a6cf recoit EXACTEMENT 116 393 = 10 bps ; et TEMOIN NEGATIF, la MEME
+   *     transaction SANS `value` rend `status 0x0`. C est donc bien l ETH envoye qui paie, et non
+   *     un reste quelconque sur l adresse.
+   *   ⛔ POURQUOI CETTE ASSERTION EST PLUS FORTE QU AVANT : trois appels non atomiques laissaient
+   *     deux etats intermediaires possibles — du WETH immobilise, une allowance pendante. Un seul
+   *     appel n en laisse aucun : il aboutit, ou il ne se passe rien. */
   const r = planEthVersAction(base);
   assert.equal(r.etat, 'PRET', r.pourquoi || '');
-  assert.equal(r.appels.length, 3);
-  assert.deepEqual(r.appels.map((a) => a.role), ['wrap', 'approve', 'swap']);
-  /* ⛔ `deposit()` prend l ETH en `msg.value` : la valeur part LA, et nulle part ailleurs. */
-  assert.equal(r.appels[0].to, WETH_BASE.toLowerCase());
-  assert.equal(r.appels[0].data, SELECTEUR_DEPOSIT);
+  assert.equal(r.appels.length, 1, 'le chemin ETH doit tenir en UNE transaction');
+  assert.deepEqual(r.appels.map((a) => a.role), ['swap']);
+  /* ⛔ LA VALEUR PART SUR CET APPEL, et vaut EXACTEMENT le montant demande : c est le routeur qui
+   *   enveloppe. Une valeur nulle ici ferait reverter — mesure, pas supposition. */
   assert.equal(BigInt(r.appels[0].value), UN_ETH);
-  /* ⛔ les deux suivants echangent des ERC-20 : aucune valeur, sinon elle resterait sur le contrat */
-  assert.equal(r.appels[1].value, '0x0');
-  assert.equal(r.appels[2].value, '0x0');
-  /* ⛔ l approbation porte sur le WETH et vise le routeur AERODROME */
-  assert.equal(r.appels[1].to, WETH_BASE.toLowerCase());
-  assert.ok(r.appels[1].data.toLowerCase().includes(ROUTEUR_AERODROME_CL.replace(/^0x/, '').toLowerCase()));
-  /* ⛔ le swap part vers le routeur Aerodrome avec le selecteur `exactInput` */
-  assert.equal(r.appels[2].to.toLowerCase(), ROUTEUR_AERODROME_CL.toLowerCase());
-  assert.ok(r.appels[2].data.startsWith(SELECTEURS.exactInput));
+  assert.equal(r.appels[0].to.toLowerCase(), ROUTEUR_AERODROME_CL.toLowerCase());
+  assert.ok(r.appels[0].data.startsWith(SELECTEURS.multicall)
+    || r.appels[0].data.startsWith(SELECTEURS.exactInput),
+    'le swap ne part plus vers le routeur avec exactInput ni son multicall');
+  /* ⛔⛔ LES TROIS ANCIENS GESTES RESTENT EN HERITAGE, ET ON LE VERIFIE : les supprimer d un coup
+   *     jetterait un chemin DEJA VERIFIE qu il faudrait reprouver le jour ou un wallet refuserait
+   *     la valeur sur un multicall. ⛔ MAIS IL N EST BRANCHE NULLE PART — verifie par recherche
+   *     dans tout le depot le 2026-09-29, `appelsHeritage` n est lu que par CE test. C est donc
+   *     une PIECE DE RECHANGE, pas une porte de secours, et l appeler « secours » serait une
+   *     sur-vente. Le brancher est une decision, pas un detail.
+   *     Mais ils ne sont PLUS sur le chemin, et c est tout le sens de `appels.length === 1`. */
+  assert.ok(Array.isArray(r.appelsHeritage) && r.appelsHeritage.length === 3,
+    'le chemin de secours en trois gestes a disparu');
+  assert.deepEqual(r.appelsHeritage.map((a) => a.role), ['wrap', 'approve', 'swap']);
+  assert.equal(r.appelsHeritage[0].to, WETH_BASE.toLowerCase());
+  assert.equal(r.appelsHeritage[0].data, SELECTEUR_DEPOSIT);
+  assert.equal(BigInt(r.appelsHeritage[0].value), UN_ETH);
+  assert.equal(r.appelsHeritage[1].value, '0x0');
+  assert.equal(r.appelsHeritage[1].to, WETH_BASE.toLowerCase());
+  assert.ok(r.appelsHeritage[1].data.toLowerCase().includes(ROUTEUR_AERODROME_CL.replace(/^0x/, '').toLowerCase()));
   /* ⛔⛔ LES TROIS `data` DOIVENT ETRE PREFIXES `0x`, ET LES TROIS `to` AUSSI. Un `data` non prefixe
    *     est refuse par un vrai noeud, et cette faute exacte a deja produit six `eth_call` invalides
    *     dans `echange-v3.js` — trouvee par un test, pas par une relecture. */
@@ -157,13 +179,21 @@ cas('⛔⛔ TROIS APPELS, DANS L ORDRE, ET LA VALEUR NE PART QU AU PREMIER', () 
   }
 });
 
-cas('⛔⛔ LA BORNE DIT LA NON-ATOMICITE ET LE GLISSEMENT CUMULE', () => {
-  /* ⛔⛔ Qui s arrete apres le premier geste detient du WETH. Ce n est pas une perte, mais c est un
-   *     etat inattendu, et le taire serait la vraie faute. */
+cas('⛔⛔ LA BORNE DIT L ATOMICITE ET LE GLISSEMENT CUMULE', () => {
+  /* ⛔⛔ CETTE ASSERTION EXIGEAIT « NOT one transaction », ET C EST DEVENU FAUX le 2026-09-29.
+   *     Une borne fausse est PIRE qu aucune borne : elle fait renoncer des gens pour un danger qui
+   *     n existe plus. L achat est desormais ATOMIQUE — prouve sur fork, temoin negatif inclus.
+   *   ⛔ ON EXIGE DONC L INVERSE, ET ON INTERDIT L ANCIENNE PHRASE : sans cette seconde garde, un
+   *     retour en arriere silencieux remettrait « vous detiendrez du WETH » sur un chemin qui ne
+   *     laisse plus aucun etat intermediaire.
+   *   ⛔ ET CE QUI RESTE VRAI RESTE DIT : deux pools, donc du glissement deux fois, et un prix qui
+   *     vient des pools MAINTENANT. */
   const r = planEthVersAction(base);
-  assert.match(r.borne, /NOT one transaction/i, 'la borne ne dit plus que les trois gestes sont separes');
-  assert.match(r.borne, /you hold WETH/i, 'la borne ne dit plus ce qu on detient si on s arrete');
-  assert.match(r.borne, /converts back/i, 'la borne ne dit plus que le WETH est reversible');
+  assert.match(r.borne, /One transaction/i, 'la borne ne dit plus que l achat tient en une transaction');
+  assert.doesNotMatch(r.borne, /NOT one transaction/i,
+    'la borne re-annonce une non-atomicite qui n existe plus : elle ferait renoncer pour rien');
+  assert.doesNotMatch(r.borne, /you hold WETH/i,
+    'la borne parle encore d un WETH intermediaire : il n y en a plus');
   assert.match(r.borne, /slippage adds up/i, 'la borne ne dit plus que le glissement s accumule');
   assert.match(r.borne, /final block only/i, 'la borne ne dit plus sur quoi porte le minimum');
   assert.match(r.borne, /not from a depth simulation/i);
@@ -176,7 +206,10 @@ cas('⛔ le chemin encode fait 66 octets : WETH -> USDC -> action', () => {
   assert.equal(r.tickSpacingPivot, 1, 'le pivot choisi est celui a tickSpacing 1');
   assert.equal(r.tickSpacingAction, 10, 'la pool NVDAc est a tickSpacing 10');
   /* ⛔ les deux jetons du milieu et les deux espacements doivent etre dans le calldata */
-  const d = r.appels[2].data.toLowerCase();
+  /* ⛔ LE SWAP EST DESORMAIS L APPEL UNIQUE : `appels[2]` n existe plus depuis que le chemin tient
+   *   en une transaction. On le prend par son ROLE, pas par son indice — un indice se casse a la
+   *   premiere refonte, un role survit. */
+  const d = r.appels.find((a) => a.role === 'swap').data.toLowerCase();
   assert.ok(d.includes(WETH_BASE.replace(/^0x/, '').toLowerCase()), 'WETH absent du chemin');
   assert.ok(d.includes(USDC_BASE.replace(/^0x/, '').toLowerCase()), 'USDC absent du chemin');
   assert.ok(d.includes(NVDAc.replace(/^0x/, '').toLowerCase()), 'l action est absente du chemin');
@@ -294,13 +327,24 @@ cas('⛔⛔ LE FRAIS D INTERFACE EST PORTE PAR LE CHEMIN ETH', () => {
   assert.equal(avec.beneficiaireFrais, FEE);
   assert.ok(BigInt(avec.minUtilisateur) < BigInt(avec.minSortie), 'le minimum utilisateur doit baisser');
   assert.equal(BigInt(avec.minUtilisateur), (BigInt(avec.minSortie) * 9990n) / 10000n);
-  /* ⛔ LE TROISIEME APPEL (le swap) CHANGE, les deux premiers NON : envelopper et autoriser ne
-   *   dependent pas du frais, et les voir changer signalerait une confusion. */
-  assert.notEqual(sans.appels[2].data, avec.appels[2].data, 'le swap est identique : le frais ne part pas');
-  assert.equal(sans.appels[0].data, avec.appels[0].data, 'l enveloppement ne doit pas dependre du frais');
-  assert.equal(sans.appels[1].data, avec.appels[1].data, 'l approbation ne doit pas dependre du frais');
-  assert.ok(avec.appels[2].data.toLowerCase().includes(FEE.replace(/^0x/, '')),
+  /* ⛔ LE SWAP CHANGE AVEC LE FRAIS, et on le prend par son ROLE : depuis que le chemin tient en
+   *   une transaction, `appels[2]` n existe plus, et un test accroche a un indice se casse a la
+   *   premiere refonte alors qu un role survit. */
+  const swapDe = (p) => p.appels.find((a) => a.role === 'swap').data;
+  assert.notEqual(swapDe(sans), swapDe(avec), 'le swap est identique : le frais ne part pas');
+  /* ⛔ ET LES DEUX GESTES D HERITAGE NE DEPENDENT PAS DU FRAIS : envelopper et autoriser sont
+   *   independants de la retenue, et les voir bouger signalerait une confusion. */
+  assert.equal(sans.appelsHeritage[0].data, avec.appelsHeritage[0].data,
+    'l enveloppement ne doit pas dependre du frais');
+  assert.equal(sans.appelsHeritage[1].data, avec.appelsHeritage[1].data,
+    'l approbation ne doit pas dependre du frais');
+  assert.ok(swapDe(avec).toLowerCase().includes(FEE.replace(/^0x/, '').toLowerCase()),
     'le wallet de frais n est pas dans le calldata du swap');
+  /* ⛔⛔ ET IL EST DANS L APPEL QUI PORTE LA VALEUR — donc dans la SEULE transaction que le
+   *     visiteur signe. Le verifier separement empeche un retour a un montage ou le frais vivrait
+   *     dans un appel que personne n envoie. */
+  const unique = avec.appels.find((a) => a.role === 'swap');
+  assert.equal(BigInt(unique.value) > 0n, true, 'l appel unique ne porte plus la valeur');
   /* ⛔ ET LA RETENUE EST DITE DANS LA BORNE, en chiffres. */
   assert.match(avec.borne, /keeps 0\.10%/i, 'la borne ne dit plus combien on retient');
 });
