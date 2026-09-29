@@ -2293,7 +2293,13 @@ async function prechaufferFaitsDePool() {
   }
   /* ⛔ LE JOURNAL DIT LES DEUX CHIFFRES. « prechauffage fait » sans le nombre d inconnus serait la
    *   phrase qui a laisse la porte inerte une journee entiere sans que rien ne le crie. */
+  /* ⛔⛔ LA TAILLE DU CACHE PERSISTE EST DITE ICI, ET C EST LE SEUL MOYEN DE SAVOIR SI L ECRITURE
+   *     MARCHE. Le journal de demarrage annonce « fichier encore vide » AVANT que le premier fait
+   *     n arrive : sans ce second chiffre, une ecriture qui echoue en silence laisserait la porte
+   *     redevenir inerte au prochain redemarrage, et rien ne le crierait. Deux chiffres cote a
+   *     cote : ce qu on vient de lire, et ce qui survivra. */
   console.log('prechauffage des faits de pool : ' + lus + ' lus, ' + inconnus + ' inconnus, sur '
-    + devises.length + ' devises');
+    + devises.length + ' devises · ' + faitsPersistes.size + ' verdict(s) gardes'
+    + (FICHIER_FAITS_POOL ? '' : ' (EN MEMOIRE SEULE, aucun volume)'));
   setTimeout(prechaufferFaitsDePool, INTERVALLE_PRECHAUFFE_MS);
 }
