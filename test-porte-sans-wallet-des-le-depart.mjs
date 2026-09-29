@@ -88,7 +88,33 @@ cas('⛔⛔ LE SDK EST PRECHAUFFE QUAND LE PANNEAU S AFFICHE, PAS AU CLIC', () =
     'le prechauffage n est plus protege : un reseau qui tousse empecherait le panneau de s afficher');
 });
 
-assert.equal(n, 5, 'compte de cas inattendu : ' + n);
+cas('⛔⛔ LA REPRISE DE SESSION NE DOIT JAMAIS OUVRIR UNE POPUP NON SOLLICITEE', () => {
+  /* ⛔⛔ LE MODE DE PANNE DANGEREUX DE CE CORRECTIF. Le retour du rail fiat rechargeait la page et
+   *     perdait la session : `onramp_retour_block` = 8, tous connectes avant de partir payer (le
+   *     rail EXIGE une adresse), et tous remis devant « Connect wallet ». On restaure donc la
+   *     session avec `eth_accounts`, qui n ouvre AUCUNE interface.
+   *   ⛔ MAIS `connecter()` APPELE SANS GARDE OUVRIRAIT UNE POPUP A CHAQUE VISITE, sur tout
+   *     visiteur equipe qui ne nous a jamais autorises. Ce serait pire que le defaut corrige : une
+   *     demande de wallet que personne n a declenchee, sur la page d accueil.
+   *   ⇒ La garde tenue ici : `eth_accounts` d abord, une adresse VALIDE exigee, et `connecter()`
+   *     seulement apres. Jamais `eth_requestAccounts` a l initiative de la page. */
+  const i = nu.indexOf('async function reprendreSessionSiDejaAutorisee');
+  assert.notEqual(i, -1, 'la reprise de session a disparu : le retour du rail fiat reperdra la session');
+  const corps = nu.slice(i, nu.indexOf('function verifierSansWalletAuChargement', i));
+  assert.ok(corps.length > 80, 'le corps de la reprise est introuvable');
+  assert.ok(/eth_accounts/.test(corps),
+    'la reprise n utilise plus `eth_accounts` : tout autre appel ouvrirait une interface');
+  assert.ok(!/eth_requestAccounts/.test(corps),
+    'la reprise appelle `eth_requestAccounts` : elle ouvrirait une popup non sollicitee a chaque '
+    + 'visite, chez tout visiteur equipe qui ne nous a jamais autorises');
+  assert.ok(/0x\[0-9a-fA-F\]\{40\}|\/\^0x/.test(corps) || /test\(String\(adr\)\)/.test(corps),
+    'la reprise ne valide plus l adresse rendue : une valeur vide ou bizarre passerait a `connecter`');
+  /* ⛔ ET ELLE NE DOIT PAS ECRASER UNE SESSION EN COURS. */
+  assert.ok(/\|\|\s*compte\)\s*return|compte\)\s*return/.test(corps),
+    'la garde `compte` a disparu : on relancerait une connexion par-dessus une session ouverte');
+});
+
+assert.equal(n, 6, 'compte de cas inattendu : ' + n);
 console.log('ok porte-sans-wallet — ' + n + ' cas.');
 console.log('   La porte praticable s affiche des le chargement quand aucun provider n est la ;');
 console.log('   Connect reste present ; et une injection tardive remet l ecran d aplomb.');

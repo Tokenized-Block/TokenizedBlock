@@ -1227,6 +1227,13 @@ const ETAPES_ENTONNOIR = [
    *     `wallet_base_pret` / `wallet_no_provider` : s il reste bas, le SDK n arrive pas a temps et
    *     le correctif n a rien change — livrer sans lui aurait ete livrer a l aveugle. */
   'wallet_base_pret',
+  /* ⛔⛔ `wallet_session_reprise` MESURE LE SECOND CORRECTIF DU RETOUR FIAT. Le rail exige une
+   *     adresse, donc les 8 `onramp_retour_block` etaient connectes AVANT de partir payer — mais la
+   *     page recharge au retour et rien ne restaurait la session : ils revoyaient « Connect wallet »
+   *     avec un wallet deja autorise sous la main. `eth_accounts` (sans popup) le rend maintenant.
+   *   ⛔ SANS CE COMPTEUR LE CORRECTIF SERAIT AVEUGLE : le rapport a lire est
+   *     `wallet_session_reprise` / `visite` chez les visiteurs equipes. */
+  'wallet_session_reprise',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
    *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait

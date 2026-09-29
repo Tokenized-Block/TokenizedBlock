@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-retour-fiat-reprend" hidden>Build <code>20260929-retour-fiat-reprend</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-session-reprise" hidden>Build <code>20260929-session-reprise</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5106,8 +5106,40 @@ function ordonnerSansWallet(sans) {
  *     retrograde, et tout revient en place si un wallet finit par apparaitre.
  * ⚠️ CE QUE CA NE PROUVE PAS : que quiconque cliquera. Ca retire une condition — avoir echoue —
  *   qui n avait aucune raison d exister devant la seule issue praticable. */
+/* ── ⛔⛔ REPRENDRE UNE AUTORISATION DEJA DONNEE, SANS JAMAIS OUVRIR UNE POPUP ──────────────────
+ *     LE TROU MESURE LE 2026-09-29. `onramp_retour_block` = 8 — plus que de blocks crees (6) — et
+ *     `achat_ok` n existe meme pas comme compteur. Or le rail fiat EXIGE une adresse de destination
+ *     (`validerDemande` : « funds must land somewhere real »), donc ces huit personnes ETAIENT
+ *     connectees avant de partir payer. Elles reviennent par une URL, LA PAGE RECHARGE, `compte`
+ *     repart a `null` — et l app leur remontre « Connect wallet » alors qu un wallet DEJA AUTORISE
+ *     est juste la, avec les fonds qu elles viennent d acheter.
+ *   ⛔⛔ `eth_accounts` N OUVRE AUCUNE POPUP, et c est toute la difference avec
+ *     `eth_requestAccounts` : il ne rend que ce qui est DEJA autorise, sans interface. On ne
+ *     sollicite donc personne — on arrete seulement d oublier ceux qui avaient deja dit oui.
+ *     Mesure : `eth_accounts` n etait appele NULLE PART ailleurs que dans la messagerie, donc rien
+ *     ne restaurait la session.
+ *   ⛔ ET ON PASSE PAR `connecter()`, PAS PAR UNE DEMI-CONNEXION. Poser `compte` a la main
+ *     laisserait l ecran a moitie a jour : c est `connecter()` qui peint, verifie la chaine et
+ *     reprend l intention. Sur un wallet deja autorise elle se resout SANS interface.
+ *   ⛔ ET SEULEMENT SI UNE ADRESSE REVIENT : sur un wallet non autorise `eth_accounts` rend une
+ *     liste VIDE et on ne fait rien. Sans cette garde, on ouvrirait a chaque visite une popup que
+ *     personne n a demandee. */
+async function reprendreSessionSiDejaAutorisee() {
+  try {
+    if (!window.ethereum || compte) return;
+    const l = await window.ethereum.request({ method: 'eth_accounts' });
+    const adr = (Array.isArray(l) ? l : [])[0];
+    if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(String(adr))) return;
+    try { etape('wallet_session_reprise'); } catch (_) {}
+    await connecter();
+  } catch (_) { /* provider muet ou hostile : on ne casse rien, l ecran reste comme avant */ }
+}
+
 function verifierSansWalletAuChargement() {
   if (typeof window.ethereum === 'undefined' || !window.ethereum) montrerSansWallet(true);
+  /* ⛔ ET SI UN WALLET EST LA, ON REGARDE S IL NOUS A DEJA AUTORISES — sans popup. C est le retour
+   *   du rail fiat qui l exige : voir le commentaire de `reprendreSessionSiDejaAutorisee`. */
+  else void reprendreSessionSiDejaAutorisee();
   /* ⛔ ON REVERIFIE UNE FOIS. Certaines extensions s injectent APRES le chargement : sans ce second
    *   regard, un visiteur parfaitement equipe garderait un ecran qui lui dit le contraire, et le
    *   prochain vrai refus se lirait comme du decor. */
