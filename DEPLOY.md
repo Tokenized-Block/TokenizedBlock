@@ -11,7 +11,7 @@ promised here.
 | | a fork can change it | why |
 |---|---|---|
 | **where** the fees land | **no**, while using our hooks | `address public immutable feeWallet` — no setter, no owner |
-| **the 0.5 % swap rate** | **no**, while using our hooks | `uint24 public constant HOOK_FEE = 5_000` |
+| **the swap rate** | **no**, but it is **not 0.5 % on every hook** — see below | `uint24 public constant HOOK_FEE`, read per hook |
 | **how much is sent at launch** | **yes** | the hook only requires `msg.value >= fraisVie`, and `fraisVie()` reads **0.0003 ETH**. Our app chooses to send 0.001 ETH; a fork may send the minimum |
 | **everything**, by deploying its own hook | **yes** | nothing prevents it, and the recipe is below |
 
@@ -20,6 +20,34 @@ the fees".** That was an overclaim twice over: a fork can deploy its own hook, a
 can send 0.0003 ETH instead of 0.001 — **70 % less** — because the 0.001 is an application choice,
 not an on-chain floor. Measured on 2026-09-21 with `eth_call` on `fraisVie()`. The claim is
 retracted here rather than quietly softened.
+
+⛔ **This page said "the 0.5 % swap rate … while using our hooks". That is true of the hook we run,
+and false of six of the eight we deployed.** `HOOK_FEE()` read on all eight on 2026-09-29:
+
+| hook | `HOOK_FEE()` | at the same 1e6 scale | `fraisVie()` | `feeWallet()` |
+|---|---|---|---|---|
+| V8 — **the one our app uses** (`deploy-v8.json`) | **5 000** | **0.5 %** | 0.0003 ETH | a6cf |
+| V2 · V3 · V4 · V5 · V6 · V7 | **30 000** | **3 %** | 0.0003 ETH | a6cf |
+| V1 | not declared (`FEE_WALLET()` in capitals, no `HOOK_FEE`) | — | — | a6cf |
+
+So a fork that points at V2–V7 charges its users **six times** what this page claimed. The word
+"our hooks" was doing the damage: one number was measured on one contract and written as if it
+governed all of them. **All eight do send to a6cf** — that column was right, and it was checked in
+both spellings, because V1 uses `FEE_WALLET()` where the others use `feeWallet()`.
+
+⚠️ What this table does **not** prove: that V2–V7 ever charged anyone. It reads the constant, not a
+swap. A declared rate on a hook that no live pool uses collects nothing — and on 2026-09-29 the fee
+wallet held **0.002293010 ETH**.
+
+⛔ **A balance is not an income statement, and this page nearly said it was.** A first draft of the
+line above added "from a wallet that has sent exactly one transaction in its life", reading
+`eth_getTransactionCount` as proof that whatever arrived was still there. **The fee wallet is a
+contract, not an EOA**: `eth_getCode` returns 61 bytes, an EIP-1967 minimal proxy that `SLOAD`s
+slot `0x360894a1…382bbc` and delegatecalls. A contract's nonce counts the contracts it creates, not
+the ETH it sends, so its balance can fall without the nonce moving — and a balance-grid walk back
+to block 50 861 088 shows **six** falls. Measured floors instead: **at least 0.005867 ETH credited
+and 0.004433 ETH debited**, plus **29 token transfers across 9 distinct tokens**. The word "total"
+was removed because nothing here establishes one.
 
 Verify that number yourself:
 
