@@ -1444,6 +1444,21 @@ try {
       type: servi.endsWith('.wasm') ? 'application/wasm' : 'text/javascript; charset=utf-8',
       etag: '"' + empreinte.slice(0, 24) + '"',
       image: false,
+      /* ⛔⛔ VENDOR EPINGLE PAR VERSION : ces fichiers sont servis depuis `/npm/<paquet>@<version>/`
+       *     et leur empreinte vient d etre verifiee juste au-dessus, fail-closed. Un cache ne peut
+       *     donc pas servir autre chose que ce qu on a controle, et un changement de version change
+       *     l URL. Sans ce drapeau, le SDK Base Account (822 ko) se retelechargeait a CHAQUE visite
+       *     sans wallet depuis que je l ai prechauffe — une dette que j ai creee moi-meme.
+       *   ⛔⛔ ET MON PREMIER MOTIF NE MATCHAIT RIEN, PARCE QUE LE PAQUET EST SCOPE. Le chemin reel
+       *     est `/npm/@base-org/account@2.5.13/dist/…` : le premier segment est `@base-org`, SANS
+       *     version, et la version est sur le SECOND. Un motif `[^/]+@[^/]+/` juste apres `/npm/`
+       *     echouait donc, `vendorEpingle` valait faux, et tout ce correctif etait un no-op muet.
+       *     Le scope est maintenant optionnel, et la version doit commencer par un CHIFFRE — sinon
+       *     `@base-org/account` sans version passerait pour epingle.
+       *   ⛔ VERIFIE SUR SEPT CHEMINS, DONT QUATRE NEGATIFS (`/npm/…` sans version, `/app.html`,
+       *     `/routage.js`) : sans temoin negatif, un motif trop large mettrait NOS modules en cache
+       *     d un an, et on reservirait du code mort pendant des mois. */
+      vendorEpingle: /^\/npm\/(?:@[^/]+\/)?[^/]+@\d[^/]*\//.test(servi),
     });
     xmtpServis++;
   }
@@ -1509,8 +1524,21 @@ const entete = (e, gz = false) => ({
   etag: e.etag,
   /* ⛔ LES IMAGES PEUVENT DORMIR, LE CODE NON. Une icone qui change est un evenement rare ; un
    * module JavaScript qui change est le quotidien de ce projet, et le servir depuis un cache
-   * remettrait exactement le probleme qu on vient de fuir. */
-  'cache-control': e.image ? 'public, max-age=86400' : 'no-store, max-age=0',
+   * remettrait exactement le probleme qu on vient de fuir.
+   * ⛔⛔ SAUF LE VENDOR EPINGLE PAR VERSION, ET C EST UNE DETTE QUE J AI CREEE MOI-MEME LE
+   *     2026-09-29. En avançant le chargement du SDK Base Account (822 ko) pour que la fenetre de
+   *     connexion s ouvre dans le geste de l utilisateur, j ai transforme un telechargement paye
+   *     par UNE personne en un telechargement paye par CHAQUE visiteur sans wallet — et
+   *     `no-store` le refaisait a chaque visite.
+   *   ⛔ POURQUOI C EST SUR ICI, ET SEULEMENT ICI : l URL contient la version exacte
+   *     (`@base-org/account@2.5.13`), donc un cache NE PEUT PAS servir une autre version — un
+   *     changement de version change l URL. Et l empreinte de ce bundle est verifiee au demarrage,
+   *     fail-closed, avant d etre servi.
+   *   ⛔ L EXCEPTION EST BORNEE AU CHEMIN `/npm/` : nos propres modules restent en `no-store`. Les
+   *     elargir serait remettre le probleme qu on vient de fuir, sur le code qui change tous les
+   *     jours. */
+  'cache-control': e.image ? 'public, max-age=86400'
+    : (e.vendorEpingle ? 'public, max-age=31536000, immutable' : 'no-store, max-age=0'),
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
 });
