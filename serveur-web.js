@@ -1219,6 +1219,14 @@ const ETAPES_ENTONNOIR = [
    *     25 secondes. C est l echec le plus probable ET le plus muet — sans ce compteur, il se
    *     lirait comme « personne n a essaye ». */
   'wallet_base_clic', 'wallet_base_ko', 'wallet_base_attente',
+  /* ⛔⛔ `wallet_base_pret` MESURE LE CORRECTIF DU MUR N°1, ET SANS LUI IL SERAIT AVEUGLE. Le SDK
+   *     (822 ko) se chargeait AU CLIC, donc le geste utilisateur expirait et le navigateur bloquait
+   *     la fenetre de connexion : `wallet_base_clic` = 1 avait donne `wallet_base_attente` = 1, un
+   *     sur un. Il est desormais prechauffe des que le panneau « sans wallet » s affiche.
+   *   ⛔ CE COMPTEUR DIT SI LE PRECHAUFFAGE ABOUTIT *AVANT* LE CLIC. Le rapport a lire est
+   *     `wallet_base_pret` / `wallet_no_provider` : s il reste bas, le SDK n arrive pas a temps et
+   *     le correctif n a rien change — livrer sans lui aurait ete livrer a l aveugle. */
+  'wallet_base_pret',
   /* ⛔⛔ LES REFUS DU CHEMIN QUI RAPPORTE — mesure du 2026-09-25, balayage des 317 fonctions de
    *     l app : `preparerEchange` etait premiere du classement des refus non comptes, et TOUS
    *     tombaient AVANT `achat_prepare`. Donc `achat_prepare` = 0 ne disait pas si personne n avait

@@ -64,7 +64,31 @@ cas('⛔ et elle ne se declenche pas sur quelqu un DEJA connecte', () => {
   assert.ok(/!compte/.test(bloc), 'la garde `!compte` a disparu de la reverification');
 });
 
-assert.equal(n, 4, 'compte de cas inattendu : ' + n);
+cas('⛔⛔ LE SDK EST PRECHAUFFE QUAND LE PANNEAU S AFFICHE, PAS AU CLIC', () => {
+  /* ⛔⛔ LE MUR N°1, MESURE EN PRODUCTION LE 2026-09-29 : `wallet_no_provider` = 39 contre
+   *     `wallet_connect_ok` = 2 — 87 % des visiteurs engages. UN SEUL des 39 a clique la porte
+   *     passkey, et ce clic unique a fini en `wallet_base_attente` = 1, « your browser blocked the
+   *     pop-up ». Un sur un.
+   *   ⛔ LA CAUSE ETAIT MECANIQUE, PAS COSMETIQUE : le SDK fait 822 ko et se chargeait AU CLIC, donc
+   *     le geste utilisateur expirait pendant le telechargement et le navigateur bloquait la fenetre
+   *     de connexion. Le prechauffage a l AFFICHAGE du panneau garde les deux contraintes : personne
+   *     ne paie 822 ko sans en avoir besoin, et le clic trouve le SDK deja pret.
+   *   ⚠️ ASSERTION SUR LE TEXTE : elle attrape la SUPPRESSION du prechauffage, pas une erreur
+   *     dedans. C est `wallet_base_pret / wallet_no_provider` en production qui dira s il aboutit. */
+  const i = nu.indexOf('function montrerSansWallet');
+  assert.notEqual(i, -1, 'montrerSansWallet a disparu');
+  const corps = nu.slice(i, i + 2200);
+  assert.ok(/chargerBaseAccount\s*\(/.test(corps),
+    'le SDK n est plus prechauffe a l affichage du panneau : le clic repayera 822 ko, le geste '
+    + 'utilisateur expirera, et la fenetre de connexion sera de nouveau bloquee');
+  assert.ok(/wallet_base_pret/.test(corps),
+    'le compteur du prechauffage a disparu : le correctif redeviendrait AVEUGLE, et on ne saurait '
+    + 'plus si le SDK arrive avant le clic');
+  assert.ok(/catch\s*\(/.test(corps),
+    'le prechauffage n est plus protege : un reseau qui tousse empecherait le panneau de s afficher');
+});
+
+assert.equal(n, 5, 'compte de cas inattendu : ' + n);
 console.log('ok porte-sans-wallet — ' + n + ' cas.');
 console.log('   La porte praticable s affiche des le chargement quand aucun provider n est la ;');
 console.log('   Connect reste present ; et une injection tardive remet l ecran d aplomb.');

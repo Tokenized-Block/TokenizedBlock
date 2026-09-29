@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-frais-revendable" hidden>Build <code>20260929-frais-revendable</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-sdk-prechauffe" hidden>Build <code>20260929-sdk-prechauffe</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5121,6 +5121,34 @@ function montrerSansWallet(sans) {
   bloc.hidden = !sans;
   ordonnerSansWallet(!!sans);
   if (!sans) return;
+  /* ── ⛔⛔ ON PRECHAUFFE LE SDK ICI, ET C EST LA CORRECTION DU MUR N°1 ─────────────────────────
+   *     MESURE DE PRODUCTION, 2026-09-29, depuis le 09-19 : `wallet_no_provider` = 39 contre
+   *     `wallet_connect_ok` = 2. Sur les 45 visiteurs qui cliquent Create, 39 n ont pas de wallet,
+   *     soit 87 %. Et sur ces 39, UN SEUL a clique la porte passkey (`wallet_base_clic` = 1) : ce
+   *     n est donc pas un probleme de visibilite — le panneau est au-dessus de la ligne de
+   *     flottaison a 375 px (bouton a y=307, verifie au navigateur). Mais cet UNIQUE clic a fini en
+   *     `wallet_base_attente` = 1, c est-a-dire « Still waiting, your browser blocked the pop-up ».
+   *     Un sur un.
+   *   ⛔ LA CAUSE EST MECANIQUE, PAS COSMETIQUE. Le SDK fait 822 ko et se chargeait AU CLIC. Le
+   *     temps du telechargement, LE GESTE UTILISATEUR A EXPIRE — et un navigateur n ouvre
+   *     `window.open` que dans un geste vivant. `eth_requestAccounts` attendait donc une fenetre
+   *     qui ne s ouvrirait jamais, et le bouton restait « Opening… ». Le commentaire du chargeur
+   *     avait raison de refuser 822 ko sur CHAQUE visite ; il avait tort de les mettre sur le
+   *     chemin du clic.
+   *   ⛔ CE PRECHAUFFAGE GARDE LES DEUX CONTRAINTES : on ne paie les 822 ko que pour les ~10 % de
+   *     visiteurs qui atteignent REELLEMENT ce panneau, et ils se telechargent pendant qu ils
+   *     LISENT — donc le clic suivant trouve le SDK pret, et la fenetre s ouvre dans le geste.
+   *   ⛔ SANS RIEN CASSER : `chargerBaseAccount` est idempotent et ne met pas ses echecs en cache.
+   *     On avale l erreur ici : un reseau qui tousse ne doit ni empecher le panneau de s afficher
+   *     ni casser les deux autres sorties. */
+  /* ⛔ ET ON LE COMPTE : `wallet_base_pret` / `wallet_no_provider` est le SEUL chiffre qui dira si
+   *   le SDK arrive AVANT le clic. Sans lui, ce correctif serait livre a l aveugle — et c est
+   *   exactement la faute qui a coute une journee aujourd hui. */
+  try {
+    void chargerBaseAccount()
+      .then(() => { try { etape('wallet_base_pret'); } catch (_) {} })
+      .catch(() => {});
+  } catch (_) { /* porte fermee : les deux autres sorties restent */ }
   const u = $('#wSansWalletUrl');
   if (u) u.textContent = location.href;
   /* ⛔ on se greffe sur le SEUL gestionnaire de copie de l app (`data-copier-diag`), qui dit deja un
