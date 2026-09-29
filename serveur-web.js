@@ -1286,6 +1286,20 @@ const ETAPES_ENTONNOIR = [
   'vie_ko_etape1', 'vie_ko_etape2', 'vie_ko_etape3', 'vie_ko_etape4',
   /* brain */
   'brain_bot_propose', 'brain_bot_journal', 'brain_bot_pay_recog',
+  /* ⛔⛔ D OU VIENNENT LES VISITES — le trou le plus gros de l app, mesure le 2026-09-29 : 384
+   *     visites en 11 jours et AUCUNE trace de leur origine. Ni `Referer` ici, ni
+   *     `document.referrer` dans la page, ni `utm_`, rien dans les logs. Consequence : le taux
+   *     clic/visite est tombe de 16,73 % a 0,87 % et il a ete IMPOSSIBLE de dire si c etait une
+   *     regression du bouton ou la fin de nos propres tests. Optimiser un entonnoir sans savoir qui
+   *     on y met, c est tirer a l aveugle.
+   *   ⛔ CATEGORIES FERMEES, PRODUITES PAR `source-visite.js`, jamais un hote ni une URL : un
+   *     referrer porte des chemins et des parametres, donc potentiellement un identifiant. On ne
+   *     garde que ce qui sert la decision. `test-source-visite.mjs` echoue si les deux listes
+   *     divergent — un nom absent d ici serait jete EN SILENCE et vaudrait 0 pour toujours.
+   *   ⚠️ `src_direct` veut dire « aucun referrer LU », PAS « la personne a tape l adresse » :
+   *     copie-coller, app mobile, messagerie, `rel=noreferrer` et navigation privee le vident tous. */
+  'src_direct', 'src_x', 'src_farcaster', 'src_telegram', 'src_discord', 'src_reddit',
+  'src_recherche', 'src_github', 'src_base', 'src_interne', 'src_autre',
 ];
 /* ⛔ PERSISTANT (Phil, 2026-09-19 : « oui cree le volume ») : mesure — les compteurs repartaient de zero a CHAQUE deploiement
  *    (10 deploiements ce jour-la : aucun chiffre ne survivait). Volume Railway monte sur /data : lu au demarrage, ecrit
@@ -1325,7 +1339,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js',
   /* ⛔ AJOUTE LE 2026-09-26 — et c est `test-imports-servis` qui l a EXIGE, pas moi : un module
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
