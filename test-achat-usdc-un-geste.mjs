@@ -25,7 +25,6 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
@@ -158,34 +157,51 @@ cas('⛔⛔ TEMOIN POSITIF : le lot atomique existe TOUJOURS sur Instant Birth',
     'l import du lot atomique a disparu');
 });
 
-cas('⛔⛔ ROUGE PROUVE SUR L ANCIENNE VERSION : ce fichier aurait echoue AVANT le correctif', () => {
-  /* ⛔⛔⛔ SANS CE CAS, LES SEPT AUTRES NE PROUVENT RIEN SUR LEUR PROPRE UTILITE. Un test ecrit
-   *      APRES un correctif est vert par construction : il faut montrer qu il rougit sur le code
-   *      d avant. On relit donc la version commitee precedente et on verifie que la phrase a deux
-   *      taps y ETAIT et que le rappel n y etait PAS.
-   *   ⚠️ SI `git` n est pas disponible, ce cas le DIT et ne se declare pas satisfait — un temoin
-   *      qu on ne peut pas lever n est pas un temoin vert. */
-  let ancien = null;
-  try {
-    ancien = execFileSync('git', ['show', 'HEAD:app.html'], {
-      cwd: new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
-      encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch (e) {
-    console.log('   ⚠️ TEMOIN NON LEVE : `git show HEAD:app.html` a echoue ('
-      + String((e && e.message) || e).slice(0, 90) + '). Les assertions ci-dessus restent vertes '
-      + 'mais LEUR POUVOIR DE DETECTION N EST PAS PROUVE sur ce passage.');
-    return;
+cas('⛔⛔ POUVOIR DE DETECTION PROUVE PAR MUTATION, pas par un HEAD qui bouge', () => {
+  /* ⛔⛔⛔ SANS CE CAS, LES HUIT AUTRES NE PROUVENT RIEN SUR LEUR PROPRE UTILITE : un test ecrit
+   *      APRES un correctif est vert par construction.
+   *   ⛔⛔ MA PREMIERE VERSION LISAIT `git show HEAD:app.html`, ET C ETAIT UNE BOMBE A RETARDEMENT
+   *      QUE J AI POSEE MOI-MEME : des que le correctif a ete commite, HEAD a contenu le correctif
+   *      et ce cas est devenu ROUGE, sur un code parfaitement bon. Ce depot a DEJA retire deux
+   *      epingles du meme genre de ses tests (« elle ne testait pas une fonctionnalite, elle testait
+   *      que personne n avait deploye depuis ») — et j ai refait la faute le meme jour.
+   *   ⇒ ON MUTE LE CODE COURANT EN MEMOIRE. Chaque mutation doit faire tomber la garde qui la
+   *     surveille. Aucune dependance a l historique, donc rien qui pourrisse.
+   *   ⛔ ET CHAQUE MUTATION VERIFIE D ABORD QU ELLE A CHANGE QUELQUE CHOSE : une mutation sans effet
+   *     prouverait « la garde detecte » alors qu on n a rien mute. */
+  const mutations = [
+    ['la phrase a deux taps revient et le rappel disparait',
+      (s) => s.replace('return acheterAvecUsdc(true)',
+        "note.textContent = 'Approvals done. Tap Buy with USDC again to swap.'; return"),
+      (m) => /Tap Buy with USDC again to swap/.test(m) || !/return\s+acheterAvecUsdc\(true\)/.test(m)],
+    ['la garde de retombee disparait',
+      (s) => s.replace('lot.sendCallsUnsupported !== true', 'false'),
+      (m) => !/lot\.sendCallsUnsupported\s*!==\s*true/.test(m)],
+    ['le lot ne contient plus le swap',
+      (s) => s.replace('.concat([{ to: swap.to', '.concat([{ to: swap.pasLeSwap'),
+      (m) => !/\.concat\(\[\{\s*to:\s*swap\.to/.test(m)],
+    ['le devis n est plus affiche avant le lot',
+      (s) => s.replace('r.plan.sortieAttendue', 'r.plan.PAS_DE_DEVIS'),
+      (m) => {
+        const i = m.indexOf('envoyerLotAtomique(');
+        const j = m.indexOf('r.plan.sortieAttendue');
+        return i > 0 && (j < 0 || j > i);
+      }],
+    ['la borne de recurrence disparait',
+      (s) => s.replace('if (apresApprobation)', 'if (false)'),
+      (m) => !/if \(apresApprobation\)/.test(m)],
+  ];
+  let attrapees = 0;
+  for (const [quoi, muter, detecte] of mutations) {
+    const m = muter(bloc);
+    assert.notEqual(m, bloc, 'mutation SANS EFFET (« ' + quoi + ' ») : le motif mute n existe plus '
+      + 'dans le code, donc ce controle ne mute rien et ne prouve rien');
+    assert.equal(detecte(m), true, 'la mutation « ' + quoi + ' » N EST PAS DETECTEE : la garde '
+      + 'correspondante est decorative');
+    attrapees += 1;
   }
-  assert.match(ancien, /Tap Buy with USDC again to swap/,
-    'la version precedente ne contient pas la phrase a deux taps : ce test ne garde peut-etre pas '
-    + 'le defaut que je crois, ou HEAD contient deja le correctif');
-  assert.doesNotMatch(ancien, /return acheterAvecUsdc\(true\)/,
-    'la version precedente enchainait deja : le correctif n en etait pas un');
-  assert.doesNotMatch(ancien, /lot\.sendCallsUnsupported/,
-    'la version precedente portait deja la garde de retombee');
-  console.log('   ✓ temoin leve : la version HEAD portait bien la phrase a deux taps et aucune '
-    + 'des trois gardes ajoutees.');
+  assert.equal(attrapees, mutations.length);
+  console.log('   ✓ ' + attrapees + '/' + mutations.length + ' mutations detectees, sans lire l historique.');
 });
 
 console.log('✓ test-achat-usdc-un-geste : ' + n + ' cas');

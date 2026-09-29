@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-usdc-one-tap" hidden>Build <code>20260929-usdc-one-tap</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-buy-funnel-visible" hidden>Build <code>20260929-buy-funnel-visible</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4237,12 +4237,31 @@ async function acheterAvecUsdc(apresApprobation = false) {
   const adr = $('#fiche').dataset.block;
   const note = $('#fNote');
   if (!adr || !note) return;
+  /* ⛔⛔ CE CHEMIN N EMETTAIT AUCUNE ETAPE, ET C EST CELUI QUI NOUS PAIE LE FRAIS. Mesure du
+   *     2026-09-29 sur `/api/entonnoir` : 384 visites en 11 jours, et les noms `achat_clic`,
+   *     `achat_prepare`, `achat_sign_propos`, `achat_ok` et toute la famille `echange_refus_*`
+   *     etaient DECLARES cote serveur et JAMAIS APPELES ici. Consequence : « zero achat sur ce
+   *     chemin » n etait pas une mesure, c etait une CECITE — et le travail de conversion livre
+   *     aujourd hui aurait ete impossible a juger.
+   *   ⛔ ON N INVENTE AUCUN NOM : `/api/etape` n accepte que sa liste blanche et JETTE EN SILENCE
+   *     tout le reste (34 noms sur 48 avaient ete perdus ainsi). Chaque nom ci-dessous existe deja.
+   *   ⛔ `achat_clic` NE COMPTE PAS LE SECOND PASSAGE : la fonction se rappelle elle-meme apres une
+   *     approbation, et compter ce rappel gonflerait le haut de l entonnoir d un facteur 2. */
+  if (!apresApprobation) { try { etape('achat_clic'); } catch (_) {} }
   const mk = marcheParAdr.get(String(adr).toLowerCase());
   const pool = mk && mk.poolAdr;
-  if (!pool) { note.textContent = 'We have not resolved this block’s pool yet — try again in a moment.'; return; }
+  if (!pool) {
+    try { etape('echange_refus_pas_de_pool'); } catch (_) {}
+    note.textContent = 'We have not resolved this block’s pool yet — try again in a moment.'; return;
+  }
   /* ⛔ LE WALLET EST EXIGE AVANT TOUT APPEL : sans compte, il n y a ni destinataire ni autorisation
    *   a lire, et la lecture couterait pour rien. */
-  if (!compte) { montrerSansWallet(true); note.textContent = 'Connect a wallet first — the USDC comes from it.'; return; }
+  if (!compte) {
+    /* ⛔ LE MUR SANS WALLET EST LA PERTE N°1 MESUREE (41 `wallet_no_provider` sur 384 visites) : il
+     *   doit se compter SUR CE CHEMIN aussi, sinon on ne saura jamais combien d achats il mange. */
+    try { etape('echange_refus_wallet'); } catch (_) {}
+    montrerSansWallet(true); note.textContent = 'Connect a wallet first — the USDC comes from it.'; return;
+  }
   note.textContent = 'Reading the pool and simulating the exact transaction…';
   let r;
   try {
@@ -4269,10 +4288,24 @@ async function acheterAvecUsdc(apresApprobation = false) {
   if (r.etat === 'NON_MESURE') {
     /* ⛔⛔ « ON N A PAS PU LIRE » N EST PAS « C EST IMPOSSIBLE ». Le dire comme un refus enverrait
      *     l utilisateur renoncer a un achat parfaitement bon. */
+    try { etape('echange_refus_marche_illisible'); } catch (_) {}
     note.textContent = 'We could not read enough of the chain to offer this safely: ' + String(r.pourquoi || '').slice(0, 140);
     return;
   }
-  if (r.etat === 'REFUSE') { note.textContent = String(r.pourquoi || 'refused'); return; }
+  /* ⛔ DEUX REFUS DISTINCTS, DEUX ETAPES : « je n ai pas pu lire » (juste au-dessus) et « la chaine
+   *   dit non » (ici) ne se corrigent pas de la meme facon. Les fondre en une seule ligne
+   *   d entonnoir rendrait les deux causes indiscernables — la regle des trois etats, appliquee a
+   *   la mesure et pas seulement au code. */
+  if (r.etat === 'REFUSE') { try { etape('echange_refus_plan'); } catch (_) {} note.textContent = String(r.pourquoi || 'refused'); return; }
+  /* ⛔⛔ PAS DE `achat_prepare` ICI, ET C EST UN TEST EXISTANT QUI ME L A APPRIS.
+   *     `test-achat-clic-vs-prepare.mjs` exige UN SEUL site pour ce nom : en production le
+   *     2026-09-25, l entonnoir a montre `achat_prepare: 1` ET `echange_refus_wallet: 1` en meme
+   *     temps, alors que les deux ne peuvent pas venir du meme endroit — le nom servait deux sens
+   *     opposes, et 1 clic + 1 preparation devenait indiscernable de 2 clics sans preparation.
+   *     J avais ajoute deux sites de plus ; le test a rougi, a juste titre.
+   *   ⇒ `achat_sign_propos`, juste avant chaque ouverture de wallet, dit DEJA « un plan existe et on
+   *     demande la signature ». C est la meme information, sans casser un compteur qui a deja coute
+   *     une correction. */
   if (r.etat === 'APPROBATIONS') {
     /* ⛔ LES APPROBATIONS SONT NOMMEES ET COMPTEES : « signez deux fois » sans dire quoi ni pourquoi
      *   est exactement la porte de sortie qu on a mesuree sur le parcours de creation.
@@ -4311,9 +4344,15 @@ async function acheterAvecUsdc(apresApprobation = false) {
         + ' of this block, at least ' + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6)
         + ' guaranteed. One signature: the approval and the swap together.';
       let lot;
+      try { etape('achat_sign_propos'); } catch (_) {}
       try { lot = await envoyerLotAtomique({ eth, rpc, chaineAttendue: CHAINE, compte, calls }); }
       catch (e) { lot = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
       if (lot.etat === 'CONFIRME' || (lot.etat === 'ENVOYE_AA' && lot.hash)) {
+        /* ⛔ LES DEUX NOMS, comme l autre ecran d achat : `achat` est la ligne comparable entre les
+         *   deux chemins, `achat_ok` la ligne detaillee. N en emettre qu un ferait diverger les
+         *   jumeaux et rendrait les deux ecrans incomparables. */
+        try { etape('achat'); } catch (_) {}
+        try { etape('achat_ok'); } catch (_) {}
         note.textContent = 'Bought in one signature. At least '
           + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6) + ' of this block is in your wallet.';
         return;
@@ -4323,7 +4362,10 @@ async function acheterAvecUsdc(apresApprobation = false) {
        *      GARANTIT PAS que rien n est parti. Retomber sur le chemin sequentiel apres un lot
        *      peut-etre en vol ferait signer une SECONDE fois le meme achat : double achat, sur le
        *      seul chemin qui nous paie le frais. Ici le doute s arrete, il ne se re-signe pas. */
-      if (lot.sendCallsUnsupported !== true) { note.textContent = messageEnvoi(lot); return; }
+      if (lot.sendCallsUnsupported !== true) {
+        if (lot.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
+        note.textContent = messageEnvoi(lot); return;
+      }
       note.textContent = 'One signature is not available on this wallet — doing it in two…';
     }
     for (const e of r.etapes) {
@@ -4345,8 +4387,11 @@ async function acheterAvecUsdc(apresApprobation = false) {
   const mini = (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6);
   note.textContent = '5 USDC → about ' + attendu + ' of this block, at least ' + mini
     + ' guaranteed. ' + r.plan.borne;
+  try { etape('achat_sign_propos'); } catch (_) {}
   const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
     to: r.tx.to, data: r.tx.data, value: r.tx.value });
+  if (env.etat === 'CONFIRME') { try { etape('achat'); } catch (_) {} try { etape('achat_ok'); } catch (_) {} }
+  else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
   /* ⛔⛔ CE SITE AVAIT LE MEME DEFAUT QUE CELUI DU CHEMIN ETH, ET IL EST ANTERIEUR : tout ce qui
    *     n est pas `CONFIRME` etait annonce « Not sent ». Or `envoyerDepuisWallet` rend aussi
    *     `EN_ATTENTE` (« sent, not confirmed yet — do not resend ») et `ANNULE_SUR_CHAINE` (gaz
@@ -4375,10 +4420,20 @@ $('#fAcheterEth').addEventListener('click', async () => {
   const adr = $('#fiche').dataset.block;
   const note = $('#fNote');
   if (!adr || !note) return;
+  /* ⛔⛔ MEME CECITE QUE LE CHEMIN USDC, MEME CORRECTIF. Ce handler n emettait qu UNE etape sur tout
+   *     son parcours. Les deux ecrans d achat doivent compter avec LE MEME VOCABULAIRE, sinon on ne
+   *     peut pas dire lequel convertit — c est le motif du jumeau qui diverge. */
+  try { etape('achat_clic'); } catch (_) {}
   const mk = marcheParAdr.get(String(adr).toLowerCase());
   const pool = mk && mk.poolAdr;
-  if (!pool) { note.textContent = 'We have not resolved this pool yet — try again in a moment.'; return; }
-  if (!compte) { montrerSansWallet(true); note.textContent = 'Connect a wallet first — the ETH comes from it.'; return; }
+  if (!pool) {
+    try { etape('echange_refus_pas_de_pool'); } catch (_) {}
+    note.textContent = 'We have not resolved this pool yet — try again in a moment.'; return;
+  }
+  if (!compte) {
+    try { etape('echange_refus_wallet'); } catch (_) {}
+    montrerSansWallet(true); note.textContent = 'Connect a wallet first — the ETH comes from it.'; return;
+  }
   note.textContent = 'Reading both pools and quoting three WETH/USDC routes…';
   let r;
   try {
@@ -4393,10 +4448,13 @@ $('#fAcheterEth').addEventListener('click', async () => {
     return;
   }
   if (r.etat === 'NON_MESURE') {
+    try { etape('echange_refus_marche_illisible'); } catch (_) {}
     note.textContent = 'We could not read enough of the chain to offer this safely: ' + String(r.pourquoi || '').slice(0, 140);
     return;
   }
-  if (r.etat === 'REFUSE') { note.textContent = String(r.pourquoi || 'refused'); return; }
+  if (r.etat === 'REFUSE') { try { etape('echange_refus_plan'); } catch (_) {} note.textContent = String(r.pourquoi || 'refused'); return; }
+  /* ⛔ PAS DE `achat_prepare` ICI NON PLUS — voir le commentaire du chemin USDC : un seul site, et
+   *   c est `preparerEchange` qui le detient. `achat_sign_propos` porte la meme information. */
 
   /* ── le devis, dit AVANT de faire signer quoi que ce soit ── */
   const usdc = (Number(BigInt(r.plan.usdcIntermediaire)) / 1e6).toFixed(2);
@@ -4429,8 +4487,19 @@ $('#fAcheterEth').addEventListener('click', async () => {
      * ⛔ ET LA MENTION DU WETH EST RETIREE : le role `wrap` n existe plus que dans
      *   `appelsHeritage`, jamais dans `appels` — la clause ne pouvait plus se declencher. */
     note.textContent = 'Sign it in your wallet — ' + a.nom + '…';
+    try { etape('achat_sign_propos'); } catch (_) {}
     const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
       to: a.to, data: a.data, value: a.value });
+    /* ⛔⛔ `i === r.appels.length - 1` N EST PAS UNE COQUETTERIE. Cette boucle parcourt `r.appels`, qui
+     *     contient UN seul appel aujourd hui — mais un `achat` emis a chaque tour compterait N achats
+     *     pour un seul le jour ou la liste regrandirait (`appelsHeritage` existe deja et porte trois
+     *     appels). Ce fichier met deja en garde, quelques lignes plus haut, contre « une phrase posee
+     *     dans le fichier, prete a mentir le jour ou la liste regrandirait ». Un achat est abouti
+     *     quand le DERNIER appel est confirme, pas a chaque appel. */
+    if (env.etat === 'CONFIRME' && i === r.appels.length - 1) {
+      try { etape('achat'); } catch (_) {}
+      try { etape('achat_ok'); } catch (_) {}
+    } else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
     if (env.etat !== 'CONFIRME') {
       /* ⛔⛔ CE MESSAGE PROMETTAIT L INVERSE EXACT DE LA NOUVELLE GARANTIE. Il disait « Stopped at
        *     step 1 of 1 » — un non-sens — et surtout, sa clause `i > 0` annoncait « the earlier
@@ -5230,7 +5299,9 @@ async function reprendreSessionSiDejaAutorisee() {
     const l = await window.ethereum.request({ method: 'eth_accounts' });
     const adr = (Array.isArray(l) ? l : [])[0];
     if (!adr || !/^0x[0-9a-fA-F]{40}$/.test(String(adr))) return;
-    try { etape('wallet_session_reprise'); } catch (_) {}
+    /* ⛔ `uneFois` ICI AUSSI : une reprise de session peut se produire a chaque rechargement d onglet.
+     *   Voir le commentaire de `wallet_base_pret` — meme faute, meme jour, meme correctif. */
+    try { etape('wallet_session_reprise', true); } catch (_) {}
     await connecter();
   } catch (_) { /* provider muet ou hostile : on ne casse rien, l ecran reste comme avant */ }
 }
@@ -5278,7 +5349,13 @@ function montrerSansWallet(sans) {
    *   exactement la faute qui a coute une journee aujourd hui. */
   try {
     void chargerBaseAccount()
-      .then(() => { try { etape('wallet_base_pret'); } catch (_) {} })
+      /* ⛔⛔ `uneFois` MANQUAIT, ET LE CHIFFRE L A DIT : 79 `wallet_base_pret` pour 14 `visite` le
+       *     2026-09-29. `montrerSansWallet` peut s appeler plusieurs fois par session, donc cette
+       *     etape comptait des AFFICHAGES DE PANNEAU, pas des visiteurs — et se divisait par
+       *     `visite` en donnant 564 %. Un compteur qu on ne peut pas diviser par les visites n est
+       *     pas une etape d entonnoir, c est du bruit qui fait paraitre la journee active.
+       *     `visite` utilise `true` depuis toujours ; ces deux-la ont ete ajoutees sans. */
+      .then(() => { try { etape('wallet_base_pret', true); } catch (_) {} })
       .catch(() => {});
   } catch (_) { /* porte fermee : les deux autres sorties restent */ }
   const u = $('#wSansWalletUrl');
