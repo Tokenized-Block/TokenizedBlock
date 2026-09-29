@@ -103,7 +103,30 @@ cas('⛔⛔ le retour REARME l achat — il ne se contente pas d ouvrir la fiche
     'le retour affirme une arrivee de fonds qu on n a PAS lue : Coinbase ne nous la communique pas');
 });
 
-assert.equal(n, 7, 'compte de cas inattendu : ' + n);
+cas('⛔⛔ L INTENTION EST CONSOMMEE AU RETOUR, PAS SEULEMENT ECRITE', () => {
+  /* ⛔⛔ LE TROU MESURE LE 2026-09-29. `onramp_retour_block` = 8 — plus que de blocks crees (6) —
+   *     et `achat_ok` N EXISTE PAS dans l entonnoir. Simule au navigateur, sans wallet, en 375 px :
+   *     le visiteur atterrissait bien sur la bonne fiche et `tb.intent.resume` etait bien ecrit
+   *     dans `sessionStorage` — mais L ECRAN N EN DISAIT RIEN. Il venait de payer en fiat, l app
+   *     savait exactement ce qu il voulait, et elle affichait une fiche ordinaire : il devait
+   *     recliquer « Buy it » et resaisir un montant, donc refaire ce qu il avait deja fait avant de
+   *     partir payer. Une valeur ECRITE puis JETEE.
+   *   ⛔ `reprendreIntentApresConnect` fait deja tout ce qui manque — fiche + montant prerempli +
+   *     panneau Buy ouvert — et n a besoin d AUCUN wallet : elle n etait gardee derriere la
+   *     connexion que par son POINT D APPEL.
+   * ⚠️ ASSERTION SUR LE TEXTE : elle attrape la SUPPRESSION de la reprise, pas une erreur dedans. */
+  const i = nu.indexOf("etape('onramp_retour_block')");
+  assert.notEqual(i, -1, 'le compteur du retour a disparu');
+  const bloc = nu.slice(i, i + 700);
+  assert.ok(/reprendreIntentApresConnect\s*\(/.test(bloc),
+    'le retour du rail fiat n ouvre plus le panneau d achat : le visiteur qui vient de payer devra '
+    + 'de nouveau recliquer Buy et resaisir son montant, et l intention ecrite restera dormante');
+  /* ⛔ ET LA FICHE NUE RESTE EN SECOURS : mieux vaut la fiche que rien si la reprise jette. */
+  assert.ok(/ouvrirProfil\(blockRetour\.toLowerCase\(\)/.test(bloc),
+    'le secours a disparu : si la reprise jette, le visiteur n atterrirait plus nulle part');
+});
+
+assert.equal(n, 8, 'compte de cas inattendu : ' + n);
 console.log('ok retour-fiat-sur-le-block — ' + n + ' cas.');
 console.log('   Le retour vise le block d ou le clic est parti ; le domaine reste au serveur ; tout');
 console.log('   ce qui n est pas une adresse est refuse ; et l URL est nettoyee apres reprise.');

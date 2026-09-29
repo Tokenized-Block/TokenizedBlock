@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-vendor-cachable" hidden>Build <code>20260929-vendor-cachable</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-retour-fiat-reprend" hidden>Build <code>20260929-retour-fiat-reprend</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16159,7 +16159,26 @@ if (/^0x[0-9a-fA-F]{40}$/.test(blockRetour)) {
   try { poserIntent({ kind: 'buy', adr: blockRetour.toLowerCase(), sens: 'ACHAT', amount: '0.01' }); } catch (_) {}
   setTimeout(() => {
     try { etape('onramp_retour_block'); } catch (_) {}
-    try { void ouvrirProfil(blockRetour.toLowerCase(), null); } catch (_) {}
+    /* ⛔⛔ ON CONSOMME L INTENTION TOUT DE SUITE, ET C ETAIT LE TROU. Mesure de production du
+     *     2026-09-29 : `onramp_retour_block` = 8 — plus que de blocks crees (6) — et `achat_ok`
+     *     N EXISTE PAS. Simule au navigateur sans wallet : le visiteur atterrissait bien sur la
+     *     bonne fiche, l intention etait bien ecrite (`tb.intent.resume` relu dans sessionStorage)
+     *     — et L ECRAN N EN DISAIT RIEN. Il venait de payer en fiat, l app savait exactement ce
+     *     qu il voulait, et elle lui montrait une fiche ordinaire. Il devait recliquer « Buy it »
+     *     puis resaisir un montant : refaire ce qu il avait deja fait avant de partir payer. Une
+     *     valeur ECRITE puis JETEE.
+     *   ⛔ `reprendreIntentApresConnect` FAIT DEJA TOUT CE QUI MANQUE — ouvrir la fiche, preremplir
+     *     le montant, ouvrir le panneau Buy — et n a besoin d AUCUN wallet pour ca : c est de l UI
+     *     pure. Elle n etait gardee derriere la connexion que par son POINT D APPEL.
+     *   ⛔ UN SEUL APPEL, PAS DEUX : elle ouvre la fiche elle-meme. Garder `ouvrirProfil` a cote
+     *     rejouerait la peinture, et ce depot a deja paye ce motif. Il ne reste qu en SECOURS si la
+     *     reprise jette — mieux vaut la fiche nue que rien.
+     *   ⛔ CONSOMMEE UNE FOIS : `prendreIntentUneFois` la retire. Si le visiteur connecte ensuite,
+     *     il est DEJA sur le panneau d achat, donc rien n est perdu.
+     *   ⚠️ CE QUE CA NE FAIT TOUJOURS PAS : verifier que les fonds sont ARRIVES. Coinbase ne nous
+     *     le dit pas, et un ecran qui affirmerait « vos fonds sont la » sans l avoir lu mentirait. */
+    try { void reprendreIntentApresConnect(); }
+    catch (_) { try { void ouvrirProfil(blockRetour.toLowerCase(), null); } catch (__) {} }
   }, 1200);
 }
 /* ── Create ─────────────────────────────────────────────────────────────────────────────────── */
