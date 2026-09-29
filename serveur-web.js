@@ -309,6 +309,77 @@ async function faitsDeLaPool(pool) {
   });
 }
 
+/* ══ L ALTERNATIVE AERODROME ══════════════════════════════════════════════════════════════════════
+ * ⛔⛔ POURQUOI ELLE EXISTE, EN CHIFFRES. Nos 0,1 % vivent dans `sweepTokenWithFee`, une fonction du
+ *     routeur Aerodrome CL. L Universal Router d Uniswap ne l a PAS (extraction PUSH4 : 11
+ *     selecteurs, `execute` present, `0xe0e189a0` ABSENT). Or la pool qu on sert vient de
+ *     l agregateur, qui designe la PLUS LIQUIDE — parfois Uniswap, et alors le frais est impossible.
+ *     Le 2026-09-29, les 138 transactions de Phil sont toutes parties vers l Universal Router :
+ *     aucune ne pouvait nous payer. Decision de Phil du 2026-09-30 : chercher l alternative.
+ *   ⛔ ON NE LA CHERCHE QUE SI ELLE MANQUE : `famille === 'aerodrome'` ⇒ rien a faire. Mesure du
+ *     2026-09-29 : 13 des 14 actions sont DEJA sur Aerodrome, seule MUc ne l est pas. Ce balayage
+ *     ne tournera donc presque jamais — et c est ce qui le rend acceptable sur un noeud public.
+ *   ⛔⛔ TROUVER LA POOL NE DECIDE RIEN. C est `choix-de-pool.js`, cote client, qui tranche — et il
+ *     ne devie que si le SURCOUT pour le visiteur reste sous le frais qu on prend. Ici on MESURE,
+ *     on ne choisit pas : rendre un glissement n est pas recommander une route.
+ * ⚠️ BORNE : on ne sonde que les espacements de cette liste. Une pool Aerodrome a un espacement
+ *    hors liste serait INVISIBLE, et son absence ici ne prouve pas son inexistence. */
+const ESPACEMENTS_ALTERNATIVE = Object.freeze([1, 10, 50, 100, 200, 2000]);
+const alternativeImmuable = new Map();   /* jeton -> { pool, ts } | { absente: true } — jamais expire */
+
+async function alternativeAerodrome(jeton, famille) {
+  const cle = String(jeton || '').toLowerCase();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(cle)) return null;
+  /* ⛔ DEJA SUR AERODROME : le frais tombe la ou on est, rien a arbitrer. */
+  if (famille === 'aerodrome') return null;
+  /* ⛔ FAMILLE NON MESUREE : on ne sait pas si l alternative manque. Chercher serait payer des
+   *   lectures pour une question qu on ne sait pas encore poser. */
+  if (famille !== 'autre') return { etat: 'NON_MESURE', pourquoi: 'the current pool family is ' + famille };
+  return enFile(async () => {
+    const RESPIRATION_MS = 400;
+    let fixe = alternativeImmuable.get(cle);
+    if (!fixe) {
+      let trouvee = null, refus = 0;
+      for (const ts of ESPACEMENTS_ALTERNATIVE) {
+        try {
+          const appel = '0x28af8d0b' /* getPool(address,address,int24) */
+            + cle.replace(/^0x/, '').padStart(64, '0') + USDC_SRV.replace(/^0x/, '').padStart(64, '0')
+            + BigInt(ts).toString(16).padStart(64, '0');
+          const rendu = await callLarge(FACTORY_AERODROME_CL_SRV, appel);
+          await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+          const p = adrDePool(rendu).toLowerCase();
+          /* ⛔ L ADRESSE NULLE EST UN FAIT (« pas de pool a cet espacement »), pas une panne. */
+          if (p && !/^0x0{40}$/.test(p)) { trouvee = { pool: p, ts }; break; }
+        } catch (_) { refus += 1; }
+      }
+      /* ⛔⛔ UN BALAYAGE OU TOUT A ETE REFUSE N EST PAS UNE ABSENCE. Graver `absente` apres six
+       *     refus de RPC condamnerait ce jeton a ne jamais porter notre frais, pour toujours, a
+       *     cause d une panne de cinq minutes. C est le motif du zero qui ne peut plus monter. */
+      if (!trouvee && refus >= ESPACEMENTS_ALTERNATIVE.length) {
+        return { etat: 'NON_MESURE', pourquoi: 'every tickSpacing probe was refused by the node' };
+      }
+      fixe = trouvee || { absente: true };
+      alternativeImmuable.set(cle, fixe);
+    }
+    if (fixe.absente) return { etat: 'ABSENTE', pourquoi: 'no Aerodrome CL pool for this block and USDC' };
+    /* le prix et la liquidite bougent : deux lectures, comme pour la pool servie */
+    try {
+      const t0 = await callLarge(fixe.pool, '0x0dfe1681');
+      await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+      const s0 = await callLarge(fixe.pool, '0x3850c7bd');
+      await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+      const lq = await callLarge(fixe.pool, '0x1a686502');
+      const gl = glissementBps({ sqrtPriceX96: BigInt('0x' + motDePool(s0, 0)), liquidite: BigInt(lq),
+        entree: TAILLE_REFERENCE_USDC, entreeEst0: adrDePool(t0).toLowerCase() === USDC_SRV });
+      if (gl.etat !== 'OK') return { etat: 'NON_MESURE', pool: fixe.pool, tickSpacing: fixe.ts, pourquoi: gl.pourquoi };
+      return { etat: 'OK', pool: fixe.pool, tickSpacing: fixe.ts, glissementBps: Number(gl.bps) };
+    } catch (e) {
+      return { etat: 'NON_MESURE', pool: fixe.pool, tickSpacing: fixe.ts,
+        pourquoi: 'alternative pool reads failed: ' + String((e && e.message) || e).slice(0, 60) };
+    }
+  });
+}
+
 let rpcId = 0, rpcTour = 0;
 async function rpcServeur(methode, params) {
   let dernier = null;
@@ -1339,7 +1410,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js',
   /* ⛔ AJOUTE LE 2026-09-26 — et c est `test-imports-servis` qui l a EXIGE, pas moi : un module
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
@@ -1719,11 +1790,20 @@ createServer((req, res) => {
           return;
         }
         const r = { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() };
-        void faitsDeLaPool(p && p.pairAddress).then((f) => {
+        void faitsDeLaPool(p && p.pairAddress).then(async (f) => {
           /* ⛔ TROIS ETATS : une pool illisible rend `glissementBps: null` et
            *   `famille: 'NON_MESURE'`. Le client ne doit JAMAIS lire « non mesure » comme
            *   « bon marche ». */
-          const complet = { ...r, ...f };
+          /* ⛔⛔ ET SI LA POOL SERVIE N EST PAS SUR AERODROME, ON CHERCHE CELLE QUI PORTE NOTRE
+           *     FRAIS — sans rien decider. Le client compare les deux glissements et ne devie que
+           *     si le surcout reste sous le frais (`choix-de-pool.js`). Rendre une alternative
+           *     n est PAS la recommander : c est un chiffre de plus, pas une route choisie.
+           *   ⛔ UNE ERREUR ICI NE DOIT PAS TUER LA REPONSE DE PRIX : le prix est un fait utile
+           *     meme sans alternative. On la marque NON_MESURE et on continue. */
+          let alt = null;
+          try { alt = await alternativeAerodrome(adr, f.famille); }
+          catch (e) { alt = { etat: 'NON_MESURE', pourquoi: 'alternative lookup failed: ' + String((e && e.message) || e).slice(0, 60) }; }
+          const complet = { ...r, ...f, ...(alt ? { alternativeAerodrome: alt } : {}) };
           /* ⛔⛔ ON NE MET EN CACHE QUE CE QU ON A REELLEMENT LU. `faitsDeLaPool` se RESOUT (elle ne
            *     rejette pas) quand le RPC refuse, donc cacher sans regarder figerait un
            *     `glissementBps: null` pendant cinq minutes — et le prechauffage ne pourrait plus

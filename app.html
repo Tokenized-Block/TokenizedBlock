@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-source-visite" hidden>Build <code>20260929-source-visite</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-pool-qui-paie" hidden>Build <code>20260930-pool-qui-paie</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2686,6 +2686,7 @@ import { faceDuBlock, validerFace } from './face.js';
 import { planLancement, simulerLancement, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, etapeDeCapacite } from './groupe-wallet.js';
 import { categorieSource } from './source-visite.js';
+import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
@@ -4273,8 +4274,33 @@ async function acheterAvecUsdc(apresApprobation = false) {
      *     Un defaut a 'v3' interrogerait la factory Uniswap pour une pool Aerodrome : elle ne la
      *     connait pas, la provenance serait refusee, et l ecran dirait « cette pool n est pas
      *     fiable » sur une pool parfaitement valide — un faux negatif sur 12,10 M$ de profondeur. */
-    const famille = /^aerodrome$/i.test(String((mk && mk.dex) || '')) ? 'cl' : 'v3';
-    r = await planAchatUsdcV3({ rpc, compte, block: adr, pool, famille,
+    /* ⛔⛔ ON CHOISIT LA POOL, ET ON DIT CE QUE LE CHOIX COUTE. `poolAdr` designe la plus PROFONDE
+     *     — souvent Uniswap, dont l Universal Router n a PAS `sweepTokenWithFee` : le frais y est
+     *     impossible. Mesure du 2026-09-29 : les 138 transactions de Phil sont toutes parties vers
+     *     ce routeur, aucune ne pouvait nous payer.
+     *   ⛔⛔⛔ MAIS ON NE DEVIE PAS EN SILENCE. `choix-de-pool.js` n accepte le detour que si le
+     *      surcout de glissement pour le visiteur reste SOUS le frais qu on prend. Au-dela, on
+     *      renonce au frais : un frais non pris ne blesse personne, un visiteur qui paie 2 % pour
+     *      qu on gagne 0,1 % si. Et la phrase du choix s affiche, toujours.
+     *   ⛔ LA FAMILLE VIENT DES FAITS LUS, PAS DU NOM DE L AGREGATEUR : le serveur la prouve par un
+     *     aller-retour sur la factory Aerodrome. `mk.dex` ne reste qu un defaut quand rien n a
+     *     ete lu — et dans ce cas `choisirPool` rend NON_MESURE et ne devie pas. */
+    const fp = faitsPoolLus.get(String(adr).toLowerCase()) || null;
+    const altLue = fp && fp.alternativeAerodrome && fp.alternativeAerodrome.etat === 'OK'
+      ? fp.alternativeAerodrome : null;
+    const familleLue = fp && fp.famille ? fp.famille : null;
+    const choix = choisirPool({
+      aerodrome: familleLue === 'aerodrome'
+        ? { pool: (fp && fp.pool) || pool, glissementBps: fp ? fp.glissementBps : null }
+        : (altLue ? { pool: altLue.pool, glissementBps: altLue.glissementBps } : null),
+      autre: familleLue === 'aerodrome' ? null
+        : { pool: (fp && fp.pool) || pool, glissementBps: fp ? fp.glissementBps : null },
+    });
+    const poolChoisie = choix.pool || pool;
+    const famille = choix.porteFrais ? 'cl'
+      : (familleLue === 'aerodrome' || /^aerodrome$/i.test(String((mk && mk.dex) || '')) ? 'cl' : 'v3');
+    note.textContent = phraseDuChoix(choix) + ' Reading the pool and simulating the exact transaction…';
+    r = await planAchatUsdcV3({ rpc, compte, block: adr, pool: poolChoisie, famille,
       /* ⛔ 5 USDC, UN MONTANT D ESSAI ASSUME ET DIT A L ECRAN. Ce n est pas un choix de produit :
        *   c est le plus petit montant qui, sur les trois pools mesurees (block a 149 $ / 250 $ /
        *   1 053 $), laisse un minimum garanti non nul avec 1 % de tolerance. */
@@ -11793,8 +11819,16 @@ async function prixUsdDevise(adr) {
   try {
     const d = await fetch('/api/prix-usd?adr=' + encodeURIComponent(adr), { cache: 'no-store' }).then((r) => r.json());
     if (d && (typeof d.glissementBps === 'number' || d.famille)) {
+      /* ⛔⛔ ON GARDE AUSSI LA POOL ET L ALTERNATIVE AERODROME. Sans elles, le chemin d achat ne
+       *     peut pas arbitrer entre « la pool la plus profonde » — souvent Uniswap, qui ne peut PAS
+       *     porter notre frais — et « celle qui nous paie ». Mesure du 2026-09-29 : les 138
+       *     transactions de Phil sont toutes parties vers l Universal Router, donc aucune ne
+       *     pouvait nous payer. L arbitrage vit dans `choix-de-pool.js` : ce cache STOCKE, il ne
+       *     decide pas, et il ne doit jamais se mettre a recommander une route. */
       faitsPoolLus.set(String(adr).toLowerCase(),
-        { glissementBps: typeof d.glissementBps === 'number' ? d.glissementBps : null, famille: d.famille || 'NON_MESURE' });
+        { glissementBps: typeof d.glissementBps === 'number' ? d.glissementBps : null, famille: d.famille || 'NON_MESURE',
+          pool: typeof d.pool === 'string' ? d.pool : null,
+          alternativeAerodrome: d.alternativeAerodrome || null });
     }
     return d && d.ok && d.prixUsd > 0 ? d.prixUsd : null;
   } catch (_) { return null; }
