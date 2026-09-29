@@ -6,10 +6,23 @@
  *     volume c est dingue » est une phrase testable, et elle repose sur un chiffre que personne
  *     n avait mesure. Notre 0,1 % vit dans `sweepTokenWithFee`, une fonction DU ROUTEUR Aerodrome CL,
  *     et notre app construit un calldata VERS ce routeur. Donc :
- *       — un swap qui arrive au pool VIA LE ROUTEUR est sur une surface qu une interface peut servir ;
- *       — un swap qu un contrat envoie DIRECTEMENT au pool ne passera JAMAIS par nous, quel que soit
- *         notre bouton. Il n est pas « pas encore capte », il est HORS D ATTEINTE.
- *     Additionner les deux fabrique un marche adressable imaginaire. Cet instrument les SEPARE.
+ *       — un swap qui arrive au pool VIA CE ROUTEUR est sur la surface exacte que notre app construit ;
+ *       — un swap qui arrive autrement ne passe pas par NOTRE calldata aujourd hui.
+ *     Cet instrument SEPARE ces deux-la, et c est tout ce qu il fait.
+ *
+ * ⛔⛔ CE QU IL NE DIT PAS, ET CE QUE SA PREMIERE VERSION AFFIRMAIT A TORT. Elle appelait la seconde
+ *     moitie « HORS D ATTEINTE D UNE INTERFACE ». C est FAUX, mesure le 2026-09-29 apres que Phil ait
+ *     soupconne une lecture fausse : plusieurs des plus gros senders ont CINQ payeurs de gas
+ *     distincts sur cinq transactions lues — ce sont des routeurs/agregateurs utilises par plein de
+ *     gens, pas des bots. Leur flux passe donc par une interface, juste pas la notre. Et notre propre
+ *     routeur ne montre que 2 payeurs sur 5 : une part du « servable » est du flux d agregateur qui
+ *     TRAVERSE Aerodrome. « Via notre routeur » n est donc NI « notre interface » NI « tout
+ *     l adressable ».
+ *   ⇒ Le bon axe est bot / interface, et il exige de lire les TRANSACTIONS (`tx.from` dit qui a paye
+ *     le gas ; un log ne le dit pas). C est `mesure-volume-par-structure.mjs`. Il a rendu 44,95 %
+ *     INTERFACE contre 13,37 % ici : trois fois et demi.
+ *   ⛔ UNE ETIQUETTE FAUSSE DANS UN INSTRUMENT COMMITE EST UN CHIFFRE FAUX PUBLIE. Celle-ci a vecu
+ *     une heure dans le depot.
  *
  * ⛔ LECTURE SEULE : aucun envoi, aucune signature, aucune preparation de transaction.
  * ⛔ TROIS ETATS, JAMAIS DEUX. Une fenetre refusee est COMPTEE et DITE ; un total incomplet est
@@ -156,7 +169,22 @@ if (sansVolume.length) {
 console.log('volume TOTAL, nos ' + servies.length + ' pools       : ' + usd(vT) + ' USDC  (' + nT.toLocaleString('en-US') + ' swaps)');
 console.log('dont VIA LE ROUTEUR (servable)   : ' + usd(vR) + ' USDC  (' + nR.toLocaleString('en-US') + ' swaps)');
 console.log('part servable                    : ' + (vT === 0n ? '[n/a]' : (Number(vR * 10000n / vT) / 100).toFixed(2) + ' %'));
-console.log('⛔ hors d atteinte d une interface : ' + usd(vT - vR) + ' USDC — arrive au pool SANS routeur.');
+/* ⛔⛔ CETTE LIGNE DISAIT « hors d atteinte d une interface », ET C ETAIT FAUX. Mesure du meme jour,
+ *     apres que Phil ait soupconne une lecture fausse : le sender `0x83d55acd…`, 3 376 swaps, a
+ *     CINQ payeurs de gas distincts sur cinq transactions lues — c est un ROUTEUR/AGREGATEUR utilise
+ *     par plein de gens, pas un bot. Idem `0xca7de682…` et `0x9e9ae7f8…`. Leur flux passe par une
+ *     interface : il n est pas hors d atteinte PAR NATURE, il passe juste par une AUTRE interface.
+ *     Et symetriquement, notre propre routeur ne montre que 2 payeurs sur 5 : une partie du
+ *     « servable » est du flux d agregateur qui TRAVERSE Aerodrome, donc pas notre interface non plus.
+ *   ⇒ « via notre routeur » n est ni « notre interface » ni « tout l adressable ». Le bon axe est
+ *     bot / interface, et il se lit dans `mesure-volume-par-structure.mjs` : 44,95 % INTERFACE,
+ *     40,03 % BOT, 15,00 % AMBIGU sur trois pools et 6,7 h. Trois fois et demi mon premier chiffre.
+ *   ⛔ ON NE RENOMME PAS SEULEMENT L ETIQUETTE : une etiquette fausse dans un instrument commite est
+ *     un chiffre faux publie. */
+console.log('⛔ NON ROUTE PAR NOUS : ' + usd(vT - vR) + ' USDC — arrive au pool sans passer par NOTRE');
+console.log('   routeur. ⛔⛔ CE N EST PAS « hors d atteinte » : une grande partie passe par d AUTRES');
+console.log('   routeurs/agregateurs, donc par une interface. Pour trancher bot / interface, lancer');
+console.log('   `mesure-volume-par-structure.mjs` — il lit les TRANSACTIONS, pas les evenements.');
 
 const j0 = Number(vR) / 1e6 * Number(BPS) / 10000;
 /* ⛔⛔ CETTE LIGNE ETAIT FAUSSE D UN FACTEUR 2, DANS LE SENS FLATTEUR. J avais ecrit
