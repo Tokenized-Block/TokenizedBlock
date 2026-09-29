@@ -29,7 +29,14 @@ const sel = (s) => selPrefixe(s).replace(/^0x/, '');
  *     module. */
 const BPS_DECIDES = 10n;
 
-const FORK = 'http://127.0.0.1:8545';
+/* ⛔⛔ MESURE DU 2026-09-29 : cette URL etait codee en dur, et j ai lance quatre passages en
+ *     prefixant `RPC_FORK=http://127.0.0.1:8547` en croyant piloter le banc. Le prefixe n a RIEN
+ *     pilote : les quatre passages ont tape 8545, un fork ouvert depuis des heures et mute par tous
+ *     les passages precedents. J ai cru mesurer un fork propre et j ai mesure l ancien.
+ *   ⛔ UNE VARIABLE D ENVIRONNEMENT IGNOREE EN SILENCE EST PIRE QU UNE ABSENTE : elle fait croire
+ *     que l instrument est dirige. Elle est lue ici, et l URL RETENUE EST IMPRIMEE a chaque
+ *     passage, pour qu un resultat ne puisse plus etre attribue au mauvais fork. */
+const FORK = process.env.RPC_FORK || 'http://127.0.0.1:8545';
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const NVDAc = '0xb20000000000000000000078ee7ce2fe4908108c';
 const POOL = '0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9';
@@ -53,7 +60,8 @@ for (let i = 0; i < 40 && tete === null; i += 1) {
   try { tete = BigInt(await rpc('eth_blockNumber', [])); } catch (_) { await pause(500); }
 }
 if (tete === null) { console.log('⛔ le fork ne repond pas sur ' + FORK); process.exit(1); }
-console.log('fork au bloc ' + tete);
+console.log('fork ' + FORK + ' au bloc ' + tete
+  + (process.env.RPC_FORK ? '  (RPC_FORK lu)' : '  (defaut, RPC_FORK absent)'));
 
 /* ── 1. le prix VIVANT de la pool, lu sur le fork ──────────────────────────────────────────── */
 const slot0 = await rpc('eth_call', [{ to: POOL, data: '0x' + sel('slot0()') }, 'latest']);
@@ -101,7 +109,63 @@ async function envoyer(to, data, quoi) {
   if (recu === null) { console.log('  ' + quoi + ' : AUCUN RECU apres 15 s — NON MESURE'); return { status: null }; }
   /* ⛔⛔ LE STATUT EST LU, PAS SUPPOSE. Un banc a deja rendu VERT sur un `status 0x0`. */
   console.log('  ' + quoi + ' : status ' + recu.status + (recu.status === '0x1' ? '' : '  <== ECHEC ON-CHAIN'));
+  if (recu.status !== '0x1') console.log('  ' + quoi + ' : cause -> ' + (await causeDuRevert(to, data, recu)));
   return recu;
+}
+
+/* ⛔⛔ MESURE DU 2026-09-29 : un passage sur cinq a rendu ROUGE sur les deux premieres conditions,
+ *     et le banc n a imprime QUE « status 0x0 ». Sans la raison, je ne pouvais rien faire du rouge :
+ *     je me suis mis a deviner (allowance consommee ? baleine drainee ?) et mes deux hypotheses
+ *     etaient fausses. UN ROUGE QUI NE NOMME PAS SA CAUSE FABRIQUE DES SUPPOSITIONS.
+ *   ⛔ ON REJOUE L APPEL PAR `eth_call` AU BLOC PRECEDENT — le meme etat que la transaction a vu.
+ *     Rejouer a `latest` mesurerait un etat que la transaction n a jamais connu.
+ *   ⚠️ BORNE : une revert sans donnee (`require` nu, ou panique hors `Error(string)`) rend
+ *     « aucune donnee de revert ». C est une reponse honnete, pas un succes. */
+async function causeDuRevert(to, data, recu) {
+  const bloc = recu && recu.blockNumber ? '0x' + (BigInt(recu.blockNumber) - 1n).toString(16) : 'latest';
+  let brut = null;
+  try {
+    brut = await rpc('eth_call', [{ from: baleine, to, data, gas: '0x' + (3_000_000).toString(16) }, bloc]);
+  } catch (e) { brut = (e && e.message) || String(e); }
+  if (typeof brut !== 'string') return 'reponse illisible au bloc ' + bloc;
+  const m = /0x08c379a0[0-9a-fA-F]*/.exec(brut);
+  if (m) {
+    const corps = m[0].slice(10);
+    try {
+      const longueur = Number(BigInt('0x' + corps.slice(64, 128)));
+      const octets = corps.slice(128, 128 + longueur * 2).replace(/../g, (h) => String.fromCharCode(parseInt(h, 16)));
+      if (octets) return 'Error(string) « ' + octets + ' » (bloc ' + bloc + ')';
+    } catch (_) { /* decodage impossible : on rend le brut ci-dessous */ }
+  }
+  return brut.slice(0, 300) + ' (bloc ' + bloc + ')';
+}
+
+/* ── 3 bis. LE BANC S ACCUSE D ABORD ──────────────────────────────────────────────────────────
+ * ⛔⛔ `causeDuRevert` ne se declenche que sur un echec. Une fonction qui ne tourne QUE dans le cas
+ *     rare peut etre cassee pendant des mois sans que personne le voie — et elle sera cassee
+ *     precisement le jour ou on en a besoin. On la force donc sur un revert CONNU, avant toute
+ *     mesure : transferer plus d USDC que la baleine n en detient.
+ *   ⛔ SI LE DECODEUR NE SAIT PAS NOMMER CE REVERT-LA, le banc le DIT et continue — mais tout rouge
+ *     ulterieur devra alors etre lu comme « cause inconnue », pas comme « pas de cause ».
+ *   ⚠️ CE QUE CA NE PROUVE PAS : que TOUT revert soit decodable. Ca prouve qu au moins la forme
+ *     `Error(string)` d un ERC-20 reel l est, sur ce fork, aujourd hui. */
+let decodeurProuve = false;
+{
+  const trop = (await balanceOf(USDC, baleine)) + 1n;
+  const recuTest = await envoyer(USDC,
+    '0x' + sel('transfer(address,uint256)') + mot32('0x' + '0'.repeat(39) + '1') + trop.toString(16).padStart(64, '0'),
+    'AUTO-CONTROLE : transfert volontairement impossible');
+  if (recuTest.status === '0x1') {
+    console.log('  ⛔ AUTO-CONTROLE INVALIDE : le transfert impossible a REUSSI — je ne conclus pas '
+      + 'sur la sante du decodeur, et le solde lu est peut-etre faux.');
+  } else {
+    const cause = await causeDuRevert(USDC,
+      '0x' + sel('transfer(address,uint256)') + mot32('0x' + '0'.repeat(39) + '1') + trop.toString(16).padStart(64, '0'),
+      recuTest);
+    decodeurProuve = /Error\(string\)|exceeds balance|revert/i.test(cause);
+    console.log('  AUTO-CONTROLE : decodeur ' + (decodeurProuve ? 'PROUVE' : 'MUET')
+      + ' — il a rendu : ' + cause.slice(0, 160));
+  }
 }
 
 /* ── 4. le plan, avec frais ────────────────────────────────────────────────────────────────── */
@@ -246,4 +310,9 @@ console.log('pivots compares sur le chemin ETH : ' + pivotsCompares + ' / ' + PO
  *   utilisateur reel ira jusqu au bout, ni que la pool aura de la profondeur a un autre montant. */
 console.log('\nborne : prouve sur un fork, a UN bloc, UNE pool, UN montant (' + MONTANT + ' USDC-6dec).');
 console.log('Ne prouve ni la profondeur a un autre montant, ni qu un utilisateur reel ira au bout.');
+console.log('fork interroge : ' + FORK + '   baleine : ' + baleine);
+console.log(decodeurProuve
+  ? 'diagnostic de revert : PROUVE sur un revert connu — un rouge ci-dessus nomme sa cause.'
+  : '⚠️ diagnostic de revert NON PROUVE sur ce passage : lire tout rouge ci-dessus comme « cause '
+    + 'inconnue », pas comme « sans cause ».');
 process.exit(tout ? 0 : 1);
