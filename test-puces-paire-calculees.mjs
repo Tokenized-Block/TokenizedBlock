@@ -121,9 +121,19 @@ console.log('   plus vieillir en silence.');
 
   casB('⛔ le groupe « Live blocks » ne s affiche QUE s il contient quelque chose', () => {
     /* ⛔ Un `optgroup` vide est un rayon vide : il fait croire a une panne. */
-    assert.ok(/vivants\.length\s*\n?\s*\? '<optgroup label="Live blocks/.test(nu)
-      || /\+ \(vivants\.length[\s\S]{0,80}Live blocks/.test(nu),
-      'le groupe des blocks vivants s affiche meme vide');
+    /* ⛔⛔ CE MOTIF A ETE ELARGI LE 2026-09-29, ET LA RAISON COMPTE : le rendu est passe d une
+     *     expression en ligne a une IIFE (pour desambiguiser les homonymes), et la garde a rougi
+     *     alors que le COMPORTEMENT etait intact — `vivants.length ? (() => {…})() : ''`. Une garde
+     *     accrochee a la FORME du code accuse une refonte innocente ; ce qu elle doit tenir, c est
+     *     que le groupe soit conditionne a `vivants.length`, quelle que soit la forme.
+     *   ⛔ ELLE N EST PAS AFFAIBLIE : la condition est toujours exigee, et « Live blocks » doit
+     *     toujours apparaitre APRES elle, dans la meme expression. */
+    const i = nu.indexOf('Live blocks — discovered on chain');
+    assert.notEqual(i, -1, 'le groupe des blocks vivants a disparu');
+    const avant = nu.slice(Math.max(0, i - 400), i);
+    assert.ok(/vivants\.length\s*\n?\s*\?/.test(avant),
+      'le groupe des blocks vivants s affiche meme vide : il doit rester conditionne a '
+      + '`vivants.length` — un optgroup vide est un rayon vide, il fait croire a une panne');
     assert.ok(/' liquidity'/.test(nu),
       'la profondeur n est plus dite dans le libelle : « pairer avec X » ne veut rien dire sans '
       + 'savoir s il y a 600 $ ou 2 M$ en face');
@@ -207,4 +217,41 @@ console.log('   plus vieillir en silence.');
 
   assert.equal(m, 3, 'compte de cas (fail-open) inattendu : ' + m);
   console.log('   + ' + m + ' cas : la porte ne ferme pas sur l inconnu (panne du 2026-09-29).');
+}
+
+/* ══ ⛔⛔ DEUX OPTIONS AU MEME LIBELLE SONT INDISCERNABLES ════════════════════════════════════════
+ *     Mesure sur la page SERVIE le 2026-09-29 : dans le selecteur de cotation, sept symboles
+ *     apparaissaient plusieurs fois (CALI 3, CSM 3, QNT, ZORA, RETARDIO, USFD, MCAT), et RETARDIO
+ *     portait DEUX FOIS exactement « RETARDIO — $12.0k liquidity » sur deux adresses differentes.
+ *     Le montant etant arrondi au dixieme de millier, deux jetons du meme seau s effondrent sur la
+ *     meme chaine — et l utilisateur choisit la cotation de son block a l aveugle.
+ * ⚠️ ASSERTION SUR LE TEXTE, pas sur un rendu : elle attrape la SUPPRESSION du desambiguateur, pas
+ *   une erreur dedans. C est le navigateur qui a trouve le defaut, et c est lui qui le reverifie. */
+{
+  let m = 0;
+  const casE = (titre, f) => { m++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
+
+  casE('⛔⛔ LES BLOCKS DECOUVERTS HOMONYMES SONT DESAMBIGUISES', () => {
+    const i = nu.indexOf('Live blocks — discovered on chain');
+    assert.notEqual(i, -1, 'le groupe des blocks decouverts a disparu du selecteur');
+    const bloc = nu.slice(Math.max(0, i - 900), i + 1400);
+    assert.ok(/combien/.test(bloc) && /slice\(-4\)/.test(bloc),
+      'le desambiguateur a disparu : deux blocks de meme symbole redeviendraient indiscernables '
+      + 'dans le selecteur de cotation, comme les deux RETARDIO du 2026-09-29');
+    /* ⛔ ET IL NE DOIT PAS S APPLIQUER A TOUT LE MONDE : une queue d adresse sur cinquante libelles
+     *   resoudrait sept cas en abimant l ecran. La garde exige donc la CONDITION. */
+    assert.ok(/>\s*1\s*\?/.test(bloc),
+      'la queue d adresse doit etre CONDITIONNELLE au fait que le symbole apparaisse plusieurs fois');
+  });
+
+  casE('⛔ le groupe nomme toujours ce que sont ces jetons', () => {
+    /* ⛔ C EST CE LIBELLE QUI EMPECHE DE LIRE « ZORA » COMME LE VRAI ZORA : un `0xb2…` peut porter
+     *   n importe quel nom, le prefixe n est pas une preuve de provenance. */
+    assert.ok(/Live blocks — discovered on chain/.test(nu),
+      'le groupe ne dit plus que ces jetons sont des blocks decouverts sur la chaine : un homonyme '
+      + 'd un vrai jeton se lirait alors comme le vrai');
+  });
+
+  assert.equal(m, 2, 'compte de cas (homonymes) inattendu : ' + m);
+  console.log('   + ' + m + ' cas : les blocks decouverts homonymes sont desambiguises.');
 }

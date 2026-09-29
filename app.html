@@ -2068,7 +2068,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260929-persistance-visible" hidden>Build <code>20260929-persistance-visible</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260929-homonymes-lisibles" hidden>Build <code>20260929-homonymes-lisibles</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12559,12 +12559,31 @@ function peindrePaires() {
      *     savoir s il y a 600 $ ou 2 M$ en face : c est exactement ce qui separe une paire qu un
      *     acheteur peut honorer d une paire ou il restera seul. Le chiffre vient de DexScreener,
      *     lu par le serveur — et la mention `~` le dit ailleurs dans l app. */
+    /* ⛔⛔ DEUX OPTIONS AU LIBELLE IDENTIQUE SONT INDISCERNABLES, ET C EST MESURE SUR LA PAGE
+     *     SERVIE LE 2026-09-29 : sept symboles apparaissaient plusieurs fois (CALI 3, CSM 3, QNT,
+     *     ZORA, RETARDIO, USFD, MCAT), et RETARDIO portait DEUX FOIS exactement
+     *     « RETARDIO — $12.0k liquidity » sur deux adresses differentes. Le montant est arrondi au
+     *     dixieme de millier, donc deux jetons du meme seau s effondrent sur la MEME chaine — et
+     *     l utilisateur choisit la cotation de son block a l aveugle.
+     *   ⛔ LA QUEUE D ADRESSE N EST AJOUTEE QUE QUAND ELLE EST NECESSAIRE : la mettre partout
+     *     alourdirait cinquante libelles pour resoudre sept cas, et un ecran charge se lit moins
+     *     bien qu un ecran clair.
+     *   ⛔ ET LE GROUPE DIT DEJA CE QUE SONT CES JETONS — « Live blocks — discovered on chain ».
+     *     C est lui qui empeche de lire « ZORA » comme le vrai Zora : un `0xb2…` peut porter
+     *     n importe quel nom, le prefixe n est pas une preuve. */
     + (vivants.length
-      ? '<optgroup label="Live blocks — discovered on chain">'
-        + vivants.map((b) => '<option value="' + enTexte(b.adr) + '"' + (deviseOk ? '' : ' disabled') + '>'
-          + enTexte(b.symbole) + ' — ' + enTexte(usdCourt(b.liq)) + ' liquidity'
-          + (deviseOk ? '' : ' — soon') + '</option>').join('')
-        + '</optgroup>'
+      ? (() => {
+        const combien = new Map();
+        for (const b of vivants) combien.set(String(b.symbole), (combien.get(String(b.symbole)) || 0) + 1);
+        return '<optgroup label="Live blocks — discovered on chain">'
+          + vivants.map((b) => {
+            const queue = (combien.get(String(b.symbole)) || 0) > 1 ? ' ·' + String(b.adr).slice(-4) : '';
+            return '<option value="' + enTexte(b.adr) + '"' + (deviseOk ? '' : ' disabled') + '>'
+              + enTexte(b.symbole) + enTexte(queue) + ' — ' + enTexte(usdCourt(b.liq)) + ' liquidity'
+              + (deviseOk ? '' : ' — soon') + '</option>';
+          }).join('')
+          + '</optgroup>';
+      })()
       : '')
     /* ⛔ UN AUTRE B20 QUELCONQUE : le hook V3 n admet qu une liste FIXE — la paire serait refusee par la chaine. « soon ». */
     /* ⛔⛔ CETTE OPTION ETAIT `disabled` ET LIBELLEE « — soon », ALORS QUE LE CODE QUI S EN SERT
