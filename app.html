@@ -2142,7 +2142,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-achat-qui-echoue-se-voit" hidden>Build <code>20260930-achat-qui-echoue-se-voit</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-entonnoir-sans-notre-trafic" hidden>Build <code>20260930-entonnoir-sans-notre-trafic</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7667,11 +7667,35 @@ document.addEventListener('click', async (ev) => {
   catch (_) { b.textContent = 'Copy failed — select the line by hand'; }
 });
 
+/* ⛔⛔⛔ NOTRE PROPRE TRAFIC SE MARQUE, ET C EST UNE MESURE QUI L A EXIGE. Le 2026-09-30 j ai passe
+ *      la journee a ouvrir cette page pour verifier mes deploiements — sans wallet dans ce
+ *      navigateur, donc en declenchant `echange_refus_wallet`, `gm_refus_wallet`, `achat_clic`…
+ *      L entonnoir affichait 9 `echange_refus_wallet` pour 10 `visite` ce jour-la, et j avais
+ *      commence a en tirer des conclusions PRODUIT avant de comprendre que je les avais
+ *      FABRIQUEES MOI-MEME. Rien ne distinguait mes taps de ceux d un visiteur.
+ *    ⛔ LE DRAPEAU EST PERSISTANT (`localStorage`) : un drapeau qu il faut reposer a chaque
+ *      verification est un drapeau qu on oublie, et un oubli repollue la mesure sans le dire.
+ *      `?interne=1` l arme, `?interne=0` le retire.
+ *    ⛔ ET IL NE SUPPRIME RIEN : le serveur compte dans un SECOND seau. Jeter notre trafic
+ *      cacherait son volume, et on ne saurait plus si un chiffre bas vient des visiteurs ou d un
+ *      filtre trop large.
+ *    ⚠️ Un visiteur qui tomberait sur `?interne=1` se compterait comme interne. Risque assume : le
+ *      lien n est ni publie ni devinable, et l erreur inverse — tout melanger — nous a deja fait
+ *      lire de travers une journee entiere. */
+const INTERNE = (() => {
+  try {
+    const v = new URLSearchParams(location.search).get('interne');
+    if (v === '1') localStorage.setItem('tb.interne', '1');
+    if (v === '0') localStorage.removeItem('tb.interne');
+    return localStorage.getItem('tb.interne') === '1';
+  } catch (_) { return false; }   /* ⛔ navigation privee : on compte comme VISITEUR, jamais l inverse */
+})();
+
 function etape(nom, uneFois = false) {
   try {
     if (uneFois) { const k = 'tb.etape.' + nom; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); }
   } catch (_) { /* navigation privee : on compte quand meme */ }
-  try { navigator.sendBeacon('/api/etape?e=' + encodeURIComponent(nom)); } catch (_) {}
+  try { navigator.sendBeacon('/api/etape?e=' + encodeURIComponent(nom) + (INTERNE ? '&i=1' : '')); } catch (_) {}
 }
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');

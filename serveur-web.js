@@ -1520,10 +1520,17 @@ const entonnoir = (() => {
   try {
     if (FICHIER_ENTONNOIR && existsSync(FICHIER_ENTONNOIR)) {
       const x = JSON.parse(readFileSync(FICHIER_ENTONNOIR, 'utf8'));
-      if (x && x.total && x.parJour) return x;
+      /* ⛔ LES SEAUX INTERNES PEUVENT MANQUER dans un fichier ecrit avant le 2026-09-30 : on les
+       *   AJOUTE sans toucher au reste. Refuser le fichier ferait repartir `depuis` a zero et on
+       *   perdrait onze jours de mesure pour deux cles absentes. */
+      if (x && x.total && x.parJour) {
+        x.interne = x.interne || {};
+        x.interneParJour = x.interneParJour || {};
+        return x;
+      }
     }
   } catch (e) { console.log('[entonnoir] fichier illisible, on repart de zero :', e.message); }
-  return { depuis: new Date().toISOString(), total: {}, parJour: {} };
+  return { depuis: new Date().toISOString(), total: {}, parJour: {}, interne: {}, interneParJour: {} };
 })();
 /* premiere ecriture des le demarrage : sinon, sans etape comptee, aucun fichier n existe et « depuis » repart a chaque deploiement */
 let entonnoirSale = !!FICHIER_ENTONNOIR && !existsSync(FICHIER_ENTONNOIR);
@@ -2410,14 +2417,29 @@ createServer((req, res) => {
    * ⚠️ BORNES : persistant sur le volume /data (≤ 30 s de pertes a l arret) ; un curieux peut gonfler
    *    un compteur a la main — ce sont des ordres de grandeur, jamais une preuve d argent (l argent se lit sur a6cf). */
   if (chemin === '/api/etape') {
-    const e = new URL(req.url, 'http://x').searchParams.get('e') || '';
+    const q = new URL(req.url, 'http://x').searchParams;
+    const e = q.get('e') || '';
+    /* ⛔⛔⛔ NOTRE PROPRE TRAFIC EST COMPTE A PART, ET C EST UNE MESURE QUI L A EXIGE. Le
+     *      2026-09-30 j ai passe la journee a ouvrir l app dans un navigateur pour verifier mes
+     *      deploiements — sans wallet, donc en declenchant `echange_refus_wallet`, `gm_refus_wallet`,
+     *      `achat_clic`… Le meme jour, l entonnoir affichait 9 `echange_refus_wallet` pour
+     *      10 `visite`, et j ai commence a en tirer des conclusions produit AVANT de realiser que
+     *      je les avais fabriquees moi-meme. Rien ne distinguait mes taps de ceux d un visiteur.
+     *    ⛔ ON SEPARE, ON NE JETTE PAS. Jeter notre trafic cacherait son volume : on ne saurait plus
+     *      si un chiffre bas vient des visiteurs ou d un filtre trop large. Deux seaux, et les deux
+     *      sont publies.
+     *    ⚠️ ET CA NE REPARE PAS LE PASSE : les journees d avant restent melangees, sans moyen de
+     *      les demeler. C est dit dans la reponse de `/api/entonnoir`, pas tu. */
+    const interne = q.get('i') === '1';
     if (ETAPES_ENTONNOIR.includes(e)) {
       const jour = new Date().toISOString().slice(0, 10);
-      entonnoir.total[e] = (entonnoir.total[e] || 0) + 1;
-      entonnoir.parJour[jour] = entonnoir.parJour[jour] || {};
-      entonnoir.parJour[jour][e] = (entonnoir.parJour[jour][e] || 0) + 1;
+      const seau = interne ? entonnoir.interne : entonnoir.total;
+      const seauJour = interne ? entonnoir.interneParJour : entonnoir.parJour;
+      seau[e] = (seau[e] || 0) + 1;
+      seauJour[jour] = seauJour[jour] || {};
+      seauJour[jour][e] = (seauJour[jour][e] || 0) + 1;
       entonnoirSale = true;
-      console.log('[entonnoir]', jour, e);
+      console.log('[entonnoir]', jour, e, interne ? '(INTERNE)' : '');
     }
     res.writeHead(204, { 'cache-control': 'no-store' });
     res.end();
@@ -2425,7 +2447,18 @@ createServer((req, res) => {
   }
   if (chemin === '/api/entonnoir') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, persistant: !!FICHIER_ENTONNOIR, depuis: entonnoir.depuis, etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour }));
+    /* ⛔⛔ LES DEUX SEAUX SONT PUBLIES, ET LA BORNE AVEC EUX. Ne rendre que `total` laisserait
+     *     croire qu il est propre depuis toujours ; ne rendre que le notre cacherait le volume.
+     *   ⛔ `melangeJusquau` DIT LA VERITE SUR LE PASSE : avant cette date, notre trafic de
+     *     verification est DANS `total` et rien ne permet de l en sortir. Un chiffre dont on ne
+     *     dit pas la borne se lit comme s il n en avait pas. */
+    res.end(JSON.stringify({ ok: true, persistant: !!FICHIER_ENTONNOIR, depuis: entonnoir.depuis,
+      etapes: ETAPES_ENTONNOIR, total: entonnoir.total, parJour: entonnoir.parJour,
+      interne: entonnoir.interne || {}, interneParJour: entonnoir.interneParJour || {},
+      melangeJusquau: '2026-09-30',
+      borne: 'Steps counted before 2026-09-30 mix visitors with our own verification traffic, and '
+        + 'they cannot be separated after the fact. From that date, our traffic is counted in '
+        + '`interne` instead — separated, never dropped.' }));
     return;
   }
 
