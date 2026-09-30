@@ -347,18 +347,70 @@ ok('un REFUS PARLE et dit qu on refuse de construire', (() => {
  *   50 bps pour un echange qui coute 3 % sur une pool ouverte ici (`HOOK_PREVU_FRAIS_BPS = 300`).
  *   Un test vert qui tient la mauvaise moitie empeche la correction au lieu de la proteger.
  *   Trouve par Zero 1 (2026-09-30) ; verifie dans le code avant de toucher au test. */
-ok('le succes dit l ouverture ET le cout REEL du marche', (() => {
+/* ⛔⛔ ET LA MEME FAUTE UNE SECONDE FOIS, SUR LA MEME PHRASE. L assertion d avant exigeait
+ *   « opening fee » et « 3% » — et passait donc VERTE sur « One-off market opening fee. », une
+ *   ligne de frais SANS AUCUN MONTANT. Elle tenait la moitie du sujet (le taux d echange) et
+ *   laissait l autre moitie vide (le prix a payer maintenant), alors que l onglet d a cote
+ *   annonce « 0.001 ETH ». Trouve par Phil sur l ecran AERO (2026-09-30).
+ *   ⇒ Le test exige desormais LE CHIFFRE. Un test qui ne reclame pas le montant autorise une
+ *     phrase qui le cache. */
+const FRAIS_OUVERTURE_WEI_TEST = 1000000000000000n; /* = frais-creation.js:70, 0,001 ETH */
+ok('le succes dit LE MONTANT du frais de naissance', (() => {
+  const s = phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST);
+  return /0\.001/.test(s) && /ETH/.test(s);
+})(), phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+ok('et il dit QUAND on le paie', (() => {
+  const s = phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST);
+  return /once/i.test(s) && /Create/.test(s);
+})(), phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+ok('et il garde le cout REEL du marche a cote', (() => {
+  const s = phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST);
+  return /3%/.test(s) && /whatever its market charges/i.test(s);
+})(), phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+/* ⛔ LE NOM EST CELUI DE L AUTRE ECRAN. Deux noms pour un seul frais, c est deux frais aux yeux
+ *   du lecteur. `app.html:1834` dit « Birth fee » — cet ecran-ci le dit pareil. */
+ok('le frais porte le MEME nom que sur l autre ecran',
+  /Birth fee/i.test(phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST)),
+  phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+/* ⛔⛔ LE CAS QUI COMPTE LE PLUS : montant non passe. La phrase ne doit PAS se contenter de parler
+ *   de frais sans chiffre — c est exactement l etat qu on vient de corriger. */
+ok('sans montant, elle DIT que le montant manque', (() => {
   const s = phraseFraisChemin(P);
-  return /opening fee/i.test(s) && /3%/.test(s) && /what its market charges|whatever its market charges/i.test(s);
+  return /not read/i.test(s) && /Create/.test(s);
 })(), phraseFraisChemin(P));
+ok('sans montant, elle n INVENTE aucun chiffre de frais de naissance',
+  !/0\.001/.test(phraseFraisChemin(P)), phraseFraisChemin(P));
+ok('un montant en Number est refuse comme un montant absent',
+  /not read/i.test(phraseFraisChemin(P, 0.001)), phraseFraisChemin(P, 0.001));
+ok('un montant nul est refuse comme un montant absent',
+  /not read/i.test(phraseFraisChemin(P, 0n)), phraseFraisChemin(P, 0n));
+/* ⛔ LE FORMATAGE NE PASSE PAS PAR LE FLOTTANT : un frais affiche faux est pire qu un frais cache. */
+ok('un wei entier s affiche sans decimale parasite',
+  / 1 ETH/.test(phraseFraisChemin(P, 1000000000000000000n)),
+  phraseFraisChemin(P, 1000000000000000000n));
+ok('un wei minuscule garde tous ses chiffres',
+  /0\.000000000000000001 ETH/.test(phraseFraisChemin(P, 1n)),
+  phraseFraisChemin(P, 1n));
 /* ⛔ LA GARDE ANTI-RETOUR : la phrase ne doit PLUS annoncer notre taux d interface comme si
  *   c etait le prix d un echange. « 50 bps » mis en avant ici sous-evaluait d un facteur six. */
 ok('la phrase n annonce PLUS « 50 bps » comme prix d un echange',
-  !/50\s*bps/i.test(phraseFraisChemin(P)), phraseFraisChemin(P));
+  !/50\s*bps/i.test(phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST)),
+  phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
 /* ⛔ ET ELLE DIT QUE LE TAUX DEPEND DU MARCHE : un chiffre unique serait faux des qu il y a
  *   plus d un marche possible, et il y en a plus d un. */
 ok('elle renvoie a l ecran du marche pour le taux exact',
-  /exact rate/i.test(phraseFraisChemin(P)), phraseFraisChemin(P));
+  /exact rate/i.test(phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST)),
+  phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+/* ⛔⛔ ET L ABSOLU NON PROUVE EST INTERDIT DE RETOUR. La phrase disait « EVERY screen shows the
+ *   exact rate » ; mesure : `libelleFrais` est appele sur TROIS ecrans d `app.html` (8479, 10326,
+ *   10433). Trois n est pas « tous », et je ne sais pas prouver « tous » — donc la phrase nomme
+ *   l ecran ou la mesure tient, et ce test refuse que l absolu revienne. */
+ok('elle ne promet PLUS « every screen »',
+  !/every screen/i.test(phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST)),
+  phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
+ok('elle nomme l ecran de marche',
+  /market screen/i.test(phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST)),
+  phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
 
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');

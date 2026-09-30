@@ -281,15 +281,50 @@ export function planDeFrais({ fraisOuvertureWei, bpsInterface, beneficiaire } = 
  *   pools hookees c est 3 % ; ailleurs, le marche fixe le sien et l ecran le lit pool par pool
  *   (`libelleFrais`). Une phrase qui donne UN chiffre pour TOUS les cas est fausse des qu il y a
  *   plus d un cas — et il y en a plus d un.
+ *
+ * ⛔⛔ ET TROIS DEFAUTS DE PLUS, TROUVES PAR PHIL SUR L ECRAN AERO (2026-09-30).
+ *
+ * 1. « One-off market opening fee. » N AVAIT AUCUN MONTANT. Et l onglet d a cote, `app.html:1834`,
+ *    ecrit « the same 0.001 ETH Birth fee as any block ». Donc DEUX NOMS et UN SEUL CHIFFRE pour
+ *    un seul geste — et c est l ecran qui fait SIGNER qui cachait le montant. Un facteur sans son
+ *    montant est une sur-vente : c est exactement le cas que la regle anti-hype vise.
+ *    ⇒ Le montant est desormais un ARGUMENT. Recopier « 0,001 ETH » dans la chaine ferait pourrir
+ *      la phrase le jour ou `FRAIS_OUVERTURE_WEI` bouge — en silence, sur l ecran de signature.
+ *      Et le nom est aligne sur « Birth fee », celui que l autre ecran emploie deja.
+ *
+ * 2. « EVERY screen shows the exact rate » ETAIT UN ABSOLU NON PROUVE. Mesure : `libelleFrais` est
+ *    appele sur TROIS ecrans (`app.html` 8479, 10326, 10433). Trois n est pas « tous », et je ne
+ *    sais pas prouver l absolu — donc je ne l ecris pas. La phrase nomme l ecran de marche, ou la
+ *    mesure tient.
+ *
+ * 3. ⛔ SANS MONTANT LU, ON NE SE TAIT PAS. Une ligne de frais sans chiffre se lit comme « c est
+ *    negligeable ». Elle DIT que le montant n a pas ete lu, et renvoie a l ecran qui le porte :
+ *    un manque VISIBLE, jamais un manque silencieux.
  */
-export function phraseFraisChemin(p) {
+export function phraseFraisChemin(p, fraisOuvertureWei) {
   if (!p || !ETATS.includes(p.etat)) return 'Fees: not computed.';
   if (p.etat === 'REFUSE') {
     return 'No fee line for this path (' + (p.pourquoi || 'unknown') + ') — refusing to build it.';
   }
-  return 'One-off market opening fee. Trading it then costs whatever its market charges — '
-    + 'a block opened here carries a 3% market fee, and every screen shows the exact rate of the '
-    + 'pool you are trading in.';
+  const suite = ' Trading it then costs whatever its market charges — a block opened here carries a '
+    + '3% market fee, and the market screen shows the exact rate of the pool you are trading in.';
+  if (typeof fraisOuvertureWei !== 'bigint' || fraisOuvertureWei <= 0n) {
+    return 'Birth fee: amount not read on this screen — check it in Create before you sign.' + suite;
+  }
+  return 'Birth fee ' + formaterEthExact(fraisOuvertureWei) + ' ETH, once, when you sign in Create.' + suite;
+}
+
+/**
+ * Le wei en ETH lisible, SANS virgule flottante.
+ * ⛔ `Number(wei) / 1e18` perd des chiffres des que le montant grossit, et un frais affiche faux
+ *   est pire qu un frais non affiche. On decoupe en entiers, et on ote les zeros de QUEUE
+ *   seulement — jamais un chiffre significatif.
+ */
+function formaterEthExact(wei) {
+  const s = wei.toString().padStart(19, '0');
+  const entier = s.slice(0, s.length - 18).replace(/^0+(?=\d)/, '');
+  const frac = s.slice(s.length - 18).replace(/0+$/, '');
+  return frac === '' ? entier : entier + '.' + frac;
 }
 
 /**

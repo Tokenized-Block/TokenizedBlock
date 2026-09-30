@@ -2226,7 +2226,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-ousd-is-a-native-b20" hidden>Build <code>20260930-ousd-is-a-native-b20</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-cobalt-bloc-52000927" hidden>Build <code>20260930-cobalt-bloc-52000927</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2883,6 +2883,12 @@ import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, et
 import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
 import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from './multiplicateur-action.js';
+/* ⛔ ALIAS DELIBERE : `cobalt.js` exporte AUSSI un `phraseMultiplicateur`, et les deux ne disent pas
+ *   la meme chose — celui de `multiplicateur-action.js` decrit UNE valeur, celui de `cobalt.js`
+ *   decrit l ACCORD entre deux accesseurs. Les importer sans alias laisserait le second ecraser le
+ *   premier en silence : un ecran continuerait a s afficher, avec la mauvaise phrase. */
+import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent,
+  phraseMultiplicateur as phraseAccordMultiplicateur } from './cobalt.js';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
 /* ⛔ NOM LONG VOULU : `phraseFrais` existe deja pour les frais de CREATION, avec une tout autre
  *   signature. Le compilateur a refuse le doublon — sans lui, l appel aurait vise la mauvaise
@@ -6369,14 +6375,33 @@ async function lireJeton(jeton, qui) {
    *   ⛔ UN ECHEC ICI NE DOIT JAMAIS FAIRE ECHOUER LA LECTURE DU SOLDE : le solde est l information
    *     principale, le multiplicateur une precision. `null` ⇒ `NON_MESURE` en aval, jamais « neutre ». */
   let multiplicateur = null;
+  let multiplicateurUi = null;
   if (/^0xb2[0-9a-fA-F]{38}$/.test(String(jeton || ''))) {
     await dormir(260);
     try {
       const m = await rpc('eth_call', [{ to: jeton, data: SELECTEUR_MULTIPLIER }, 'latest']);
       multiplicateur = (m && m !== '0x') ? BigInt(m) : null;
     } catch (_) { multiplicateur = null; }
+    /* ⭐ COBALT (bloc 52 000 927, 2026-09-30T18:00:01Z) AJOUTE `uiMultiplier()` A COTE DE
+     *   `multiplier()`. Mesure : ABSENT au bloc 52 000 926, PRESENT au 52 000 927, la MEME
+     *   frontiere sur AAPLc, OUSD et notre Block 0 — donc un hardfork, pas une mise a jour.
+     *   Base ecrit « Indexers will need to update to the new ABI » : cette app EST un indexeur.
+     * ⛔⛔ ET ON LIT LES DEUX POUR POUVOIR SE TAIRE. Aujourd hui ils concordent 15/15, dont deux
+     *   valeurs reellement chargees (GOOGLc 1,000377119, METAc 1,000313792) — l accord est donc
+     *   teste sur du non-neutre. MAIS ces deux valeurs sont a ~3 bps : rien ne prouve l accord a
+     *   2,0 ou 4,0, et `updateUIMultiplier` existe precisement pour PROGRAMMER un split. Le jour
+     *   ou les deux divergent, choisir silencieusement l un afficherait un equivalent en actions
+     *   faux de plusieurs centaines de pourcent, SANS SYMPTOME. Ne lire qu un accesseur, c est
+     *   choisir sans le savoir — donc on lit les deux, et `multiplicateurAccorde` refuse.
+     * ⛔ UN ECHEC ICI NE FAIT PAS ECHOUER LE SOLDE, comme pour `multiplier()` : `null` en aval
+     *   devient une lecture non corroboree, jamais un « neutre » invente. */
+    await dormir(260);
+    try {
+      const u = await rpc('eth_call', [{ to: jeton, data: SELECTEUR_UI_MULTIPLIER }, 'latest']);
+      multiplicateurUi = (u && u !== '0x') ? BigInt(u) : null;
+    } catch (_) { multiplicateurUi = null; }
   }
-  return { decimales, solde: BigInt(b), multiplicateur };
+  return { decimales, solde: BigInt(b), multiplicateur, multiplicateurUi };
 }
 
 /**
@@ -6503,9 +6528,26 @@ function peindreActifs() {
       ? (() => {
           const mu = etatMultiplicateur(a.multiplicateur);
           const note = phraseMultiplicateur(mu, a.nom || 'this token');
-          return '<span title="' + enTexte(formaterUnites(a.solde, a.decimales) + note) + '">'
+          /* ⭐⭐ COBALT : LES DEUX ACCESSEURS, ET UN MARQUEUR QUI NE MENT PAS.
+           *   `multiplier()` et `uiMultiplier()` concordent aujourd hui (15/15, dont GOOGLc
+           *   1,000377119 et METAc 1,000313792 — donc verifie sur du non-neutre). Le jour ou un
+           *   split programme par `updateUIMultiplier` les separe, montrer l un des deux sans le
+           *   dire afficherait un equivalent faux de plusieurs centaines de pourcent.
+           * ⛔⛔ ET CE MARQUEUR-CI PEUT ETRE VISIBLE SANS TUER L AFFORDANCE, contrairement a ce que
+           *   la regle au-dessus interdit pour `NON_MESURE` : un DESACCORD exige DEUX lectures
+           *   REUSSIES qui diffèrent. Une limite de debit ne le declenche pas — elle rend `null`,
+           *   donc SEUL_* ou AUCUNE, jamais DESACCORD. La garde n est donc pas « presque toujours
+           *   vraie » : elle est rare par construction, et c est ce qui la rend lisible.
+           * ⛔ LE SOLDE RESTE AFFICHE. Le solde est l information principale ; c est l equivalent
+           *   en actions qu on refuse, pas le nombre que la chaine detient. */
+          const acc = multiplicateurAccorde({ multiplier: a.multiplicateur, uiMultiplier: a.multiplicateurUi });
+          const desaccord = acc.etat === 'DESACCORD';
+          const noteAcc = (desaccord || !afficherEquivalent(acc)) ? ' ' + phraseAccordMultiplicateur(acc) : '';
+          return '<span title="' + enTexte(formaterUnites(a.solde, a.decimales) + note + noteAcc) + '">'
             + enTexte(abrege(formaterUnites(a.solde, a.decimales)))
-            + (mu.etat === 'DERIVE' ? ' <b title="dividend/split multiplier — raw count is not your share entitlement">±</b>' : '')
+            + (desaccord
+              ? ' <b title="this token reports two different multipliers on-chain — no share equivalent is shown">⚠</b>'
+              : (mu.etat === 'DERIVE' ? ' <b title="dividend/split multiplier — raw count is not your share entitlement">±</b>' : ''))
             + '</span>';
         })()
       /* ⛔ ILLISIBLE N EST PAS ZERO. Afficher 0 pour un solde qu on n a pas pu lire ferait croire a
@@ -17343,9 +17385,16 @@ async function lireJetonSource() {
     if (cs) { cs.value = symFinal; cs.dispatchEvent(new Event('input', { bubbles: true })); }
     if (cn) { cn.value = nomFinal; cn.dispatchEvent(new Event('input', { bubbles: true })); }
 
-    direTok('Read ' + symFinal + (nom ? ' (' + nomFinal + ')' : '') + '. '
+    /* ⛔ « Read AERO (Aerodrome). » SE LISAIT COMME UN ORDRE — « lis AERO » — alors que la phrase
+     *   veut dire « j ai lu AERO sur la chaine ». Trouve par Phil sur cet ecran (2026-09-30).
+     *   `Source token:` nomme ce que c est, et ne peut pas se lire comme une instruction.
+     * ⛔ ET LE MONTANT DU FRAIS EST PASSE, PAS RECOPIE : `phraseFraisChemin` refuse desormais de
+     *   parler de frais sans chiffre, donc l oublier ici rendrait un manque VISIBLE a l ecran, au
+     *   lieu d une ligne rassurante et vide. */
+    direTok('Source token: ' + symFinal + (nom ? ' (' + nomFinal + ')' : '') + '. '
       + (coupe ? 'Shortened to fit the Create fields. ' : '')
-      + phrasePlanScelle(plan) + ' ' + avertissementNonAdosse() + ' ' + phraseFraisChemin(frais));
+      + phrasePlanScelle(plan) + ' ' + avertissementNonAdosse() + ' '
+      + phraseFraisChemin(frais, FRAIS_OUVERTURE_WEI));
 
     /* ⛔ ON EMMENE VERS CREATE, sinon les champs sont remplis dans un onglet que personne ne
      *   regarde — « un message juste dans un volet masque » ne dit rien (25 taps / 7 sessions).

@@ -1609,6 +1609,12 @@ const SERVIS = [
    *   qui a un cerveau, puisque le selecteur du Brain se construit sur les memes habitants.
    *   L oublier ici tuerait TOUTE la page : un import 404 arrete le module entier. */
   'place-sur-la-map.js',
+  /* ⛔ `cobalt.js` porte la frontiere MESUREE du hardfork (bloc 52 000 927) et le REFUS d afficher
+   *   un equivalent en actions quand `multiplier()` et `uiMultiplier()` se contredisent. Ajoute a
+   *   la liste AVANT d etre importe, deliberement : un module servi et pas encore utilise ne coute
+   *   rien, alors qu un module importe et pas servi rend un 404 qui arrete le module ENTIER —
+   *   c est-a-dire toute la page. L ordre « servir d abord, cabler ensuite » est le seul sur. */
+  'cobalt.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
