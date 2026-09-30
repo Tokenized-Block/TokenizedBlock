@@ -2142,7 +2142,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-routes-elargies" hidden>Build <code>20260930-routes-elargies</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-achat-qui-echoue-se-voit" hidden>Build <code>20260930-achat-qui-echoue-se-voit</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4510,6 +4510,14 @@ async function acheterAvecUsdc(apresApprobation = false) {
        *      seul chemin qui nous paie le frais. Ici le doute s arrete, il ne se re-signe pas. */
       if (lot.sendCallsUnsupported !== true) {
         if (lot.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
+        /* ⛔⛔⛔ LE JUMEAU DE L AUTRE CHEMIN, ET C EST POURQUOI IL EST ICI. Un correctif qui rate son
+         *      jumeau laisse une moitie du produit aveugle pendant que l autre est propre — faute
+         *      deja payee dans ce depot. Ici le lot a ete signe et n a pas abouti : un client perdu
+         *      ET un frais non pris, qui n etaient comptes nulle part.
+         *    ⛔ `ECHEC_ENVOI` NE GARANTIT PAS QUE RIEN N EST PARTI — la ligne au-dessus le dit. On
+         *      compte donc un ECHEC DE NOTRE COTE, jamais « la transaction a reverte » : on ne sait
+         *      pas ce que la chaine a fait, et l affirmer serait inventer. */
+        else { try { etape('achat_echec'); } catch (_) {} }
         note.textContent = messageEnvoi(lot); return;
       }
       note.textContent = 'One signature is not available on this wallet — doing it in two…';
@@ -4683,6 +4691,13 @@ $('#fAcheterEth').addEventListener('click', async () => {
       try { etape('achat'); } catch (_) {}
       try { etape('achat_ok'); } catch (_) {}
     } else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
+    /* ⛔⛔⛔ UN ACHAT SIGNE QUI ECHOUE SUR LA CHAINE N ETAIT COMPTE NULLE PART. `achat_sign_propos`
+     *      partait, puis plus rien — indiscernable d un onglet ferme. Un client perdu ET un frais
+     *      non pris, invisibles tous les deux. On ne peut pas reparer ce qu on ne voit pas.
+     *    ⛔ LE REFUS DE L UTILISATEUR EST EXCLU : il a deja sa ligne, et confondre « il a dit non »
+     *      avec « ca n a pas marche » melangerait un probleme de PRODUIT et un probleme TECHNIQUE —
+     *      deux causes opposees derriere un seul chiffre. */
+    else if (env.etat !== 'CONFIRME') { try { etape('achat_echec'); } catch (_) {} }
     if (env.etat !== 'CONFIRME') {
       /* ⛔⛔ CE MESSAGE PROMETTAIT L INVERSE EXACT DE LA NOUVELLE GARANTIE. Il disait « Stopped at
        *     step 1 of 1 » — un non-sens — et surtout, sa clause `i > 0` annoncait « the earlier

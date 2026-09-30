@@ -1383,6 +1383,13 @@ const ETAPES_ENTONNOIR = [
    *   2026-09-25, ce qui additionnait les deux bouts de l entonnoir et empechait d en calculer le
    *   taux. ⚠️ Les totaux d `achat_prepare` d avant ce build melangent les deux sens. */
   'achat_clic',
+  /* ⛔⛔⛔ `achat_echec` AJOUTE LE 2026-09-30, ET IL COMBLE UN TROU QUI CACHAIT DE L ARGENT. Un
+   *      achat que le visiteur SIGNE et qui ECHOUE ensuite sur la chaine n etait compte NULLE PART :
+   *      `achat_sign_propos` partait, puis plus rien — exactement comme s il avait ferme l onglet.
+   *      Un client perdu et un frais non pris, indiscernables d un abandon.
+   *    ⛔ ET CE N EST PAS UNE REDEFINITION : `achat` et `achat_ok` gardent leur sens, sinon
+   *      l historique d avant deviendrait incomparable avec celui d apres. On AJOUTE une ligne. */
+  'achat_echec',
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
   /* ⛔ UN NOM DISTINCT, PAS UN NOM RECYCLE. `marche_rescan_ok` est la relecture d UN block depuis sa
    *   fiche ; `stades_relire` est le rattrapage EN LOT depuis le panneau des paliers. Les fondre
