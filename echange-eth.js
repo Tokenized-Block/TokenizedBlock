@@ -192,6 +192,42 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
       : { etat: 'REFUSE', pourquoi: 'no WETH/USDC pool exists at the measured spacings' };
   }
 
+  /* ── 2ter. LES POOLS WETH <-> ACTION DIRECTES : UN SAUT DE MOINS, QUAND ELLES RENDENT PLUS ─────
+   * ⛔⛔ MESURE DU 2026-09-30, apres le tweet d Aerodrome « Emissions are live » : `GOOGLc/WETH`
+   *     (ts 50), `NVDAc/WETH` (ts 50) et `SPCXc/WETH` (ts 200) existent, portent de la liquidite,
+   *     ET ONT LEUR PROPRE GAUGE — Aerodrome y envoie des emissions. Pour ces actions il existe
+   *     donc une route DIRECTE, sans passer par l USDC.
+   *   ⛔ MAIS « MOINS DE SAUTS » N EST PAS « PLUS DE SORTIE », et j ai failli le croire :
+   *     `GOOGLc/WETH` fait 78 349 $ de liquidite contre 1 782 500 $ pour `GOOGLc/USDC` — 23 fois
+   *     plus mince. On ne CHOISIT donc pas la route directe : on la propose au devis, qui garde la
+   *     meilleure SORTIE. Un saut de moins avec 23 fois moins de profondeur peut rendre MOINS.
+   *   ⛔ UNE POOL VIDE N EST PAS UNE ROUTE : `liquidity() > 0` exige, comme partout ailleurs ici.
+   *   ⚠️ ET SON ABSENCE N EST PAS UN ECHEC : la plupart des actions n ont PAS de pool WETH directe.
+   *     On n en refuse aucun plan — on cote ce qui existe. */
+  const poolsDirectes = [];
+  let directesNonMesurees = 0;
+  for (const esp of ESPACEMENTS_RETOMBEE) {
+    const gd = await lire(rpc, FACTORY_AERODROME_CL,
+      selecteur('getPool(address,address,int24)') + pad(action) + pad(WETH_BASE) + motNb(esp));
+    if (gd.etat === 'NON_MESURE') { directesNonMesurees += 1; continue; }
+    const pd = gd.etat === 'OK' ? adrDuMot(gd.res) : null;
+    if (!pd || /^0x0{40}$/i.test(pd)) continue;
+    const ds = await lire(rpc, pd, selecteur('slot0()'));
+    const df = await lire(rpc, pd, selecteur('fee()'));
+    const dt0 = await lire(rpc, pd, selecteur('token0()'));
+    const dl = await lire(rpc, pd, selecteur('liquidity()'));
+    if (ds.etat !== 'OK' || df.etat !== 'OK' || dt0.etat !== 'OK' || dl.etat !== 'OK') { directesNonMesurees += 1; continue; }
+    let liqD = 0n;
+    try { liqD = BigInt(dl.res); } catch (_) { directesNonMesurees += 1; continue; }
+    if (liqD === 0n) continue;
+    const d0 = adrDuMot(dt0.res);
+    if (!d0) { directesNonMesurees += 1; continue; }
+    poolsDirectes.push({ pool: pd, tickSpacing: esp,
+      fee: (() => { try { return Number(BigInt(df.res)); } catch (_) { return -1; } })(),
+      wethEst0: bas(d0) === bas(WETH_BASE),
+      sqrtPriceX96: BigInt('0x' + String(ds.res).replace(/^0x/, '').slice(0, 64)) });
+  }
+
   /* ── 2bis. LE FRAIS NE SE PREND QUE SUR UN MARCHE QU ON PEUT REVENDRE ─────────────────────────
    * ⛔⛔ LE JUMEAU DU CHEMIN USDC, ET C EST POURQUOI IL EST ICI. La meme garde a ete posee dans
    *     `echange-v3.js` le 2026-09-29 (decision de Phil : « frais recu par les actions tokenized
@@ -230,7 +266,9 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise,
     /* ⛔ LE TROISIEME SAUT NE PASSE QUE SI LA POOL A ETE LUE ET PROUVEE. `block` seul ne suffit
      *   pas : le plan REFUSE une pool non resolue, et c est la garde qu on veut. */
-    block: poolBlock ? block : null, poolBlock });
+    block: poolBlock ? block : null, poolBlock,
+    /* ⛔ LES ROUTES DIRECTES SONT PROPOSEES AU DEVIS, PAS IMPOSEES : il garde la meilleure SORTIE. */
+    poolsDirectes });
   if (plan.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: plan.pourquoi, plan: null };
 
   /* ⛔⛔ TROU TROUVE EN PRODUCTION LE 2026-09-28, EN VERIFIANT CE MEME DEPLOIEMENT. Le plan annoncait

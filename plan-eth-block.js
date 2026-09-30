@@ -147,7 +147,7 @@ export function meilleurePoolPivot({ entree, candidates, saut2, sautsApres = nul
 export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   recipient, deadline, maintenant = null, toleranceBps = 100, devise = USDC_BASE,
   fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null,
-  block = null, poolBlock = null } = {}) {
+  block = null, poolBlock = null, poolsDirectes = null } = {}) {
   if (!ADR.test(String(action || ''))) return { etat: 'REFUSE', pourquoi: 'a whole action address is required' };
   /* ⛔⛔⛔ LE TROISIEME SAUT, AJOUTE LE 2026-09-30 — ET IL EST ENTIEREMENT OPTIONNEL. Sans `block`,
    *      cette fonction fait EXACTEMENT ce qu elle faisait : WETH -> USDC -> action. Ses 14 cas de
@@ -230,21 +230,56 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
       /* l entree du 3e saut est l ACTION : elle est `token0` exactement quand le block ne l est pas */
       entreeEst0: !poolBlock.blockEst0 }
     : null;
-  const devis = meilleurePoolPivot({ entree: m, candidates, saut2, sautsApres: saut3 ? [saut2, saut3] : null });
+  /* ⛔⛔⛔ ON COTE DES ROUTES, PLUS DES PIVOTS — ET C EST CE QUI PERMET D ELARGIR LES POOLS.
+   *      Jusqu ici le module supposait qu USDC etait TOUJOURS le pivot : WETH -> USDC -> action.
+   *      Mesure du 2026-09-30 : `GOOGLc/WETH` (ts 50), `NVDAc/WETH` (ts 50) et `SPCXc/WETH`
+   *      (ts 200) existent, portent de la liquidite, ET ONT LEUR PROPRE GAUGE — Aerodrome y envoie
+   *      des emissions. Pour ces actions il existe donc une route DIRECTE, un saut de moins.
+   *    ⛔ MAIS « MOINS DE SAUTS » N EST PAS « PLUS DE SORTIE », et j ai failli le croire :
+   *      `GOOGLc/WETH` fait 78 349 $ de liquidite contre 1 782 500 $ pour `GOOGLc/USDC` — 23 fois
+   *      plus mince. Un saut de moins avec 23 fois moins de profondeur peut rendre MOINS.
+   *      On ne choisit donc pas par la forme : ON COTE LES DEUX ET ON GARDE LA MEILLEURE SORTIE.
+   *      C est un devis, pas un pari — exactement la regle deja posee pour les pivots.
+   *    ⛔ SANS `poolsDirectes`, RIEN NE CHANGE : la liste est vide, seule la route via le pivot est
+   *      cotee, et le calldata reste octet pour octet celui d avant. */
+  const routes = [];
+  for (const c of candidates) {
+    routes.push({ quotes: [c, saut2, ...(saut3 ? [saut3] : [])], via: 'PIVOT', pivot: c });
+  }
+  for (const d of (Array.isArray(poolsDirectes) ? poolsDirectes : [])) {
+    if (!d || !ADR.test(String(d.pool || '')) || typeof d.wethEst0 !== 'boolean') continue;
+    const tsD = entier(d.tickSpacing);
+    if (tsD === null || tsD <= 0n) continue;
+    routes.push({ quotes: [{ sqrtPriceX96: d.sqrtPriceX96, fee: d.fee, entreeEst0: d.wethEst0 },
+      ...(saut3 ? [saut3] : [])], via: 'DIRECT', direct: d });
+  }
+  let devis = null;
+  for (const r of routes) {
+    const q = sortieNSauts({ entree: m, sauts: r.quotes });
+    if (!q) continue;
+    if (!devis || q.sortie > devis.sortie) {
+      devis = { sortie: q.sortie, etapes: q.etapes, intermediaire: q.etapes[0],
+        via: r.via, pivot: r.pivot || null, direct: r.direct || null };
+    }
+  }
   if (!devis) {
     return { etat: 'REFUSE', pourquoi: troisSauts
-      ? 'no route gives an output for this amount across the three pools — too small, or a pool '
+      ? 'no route gives an output for this amount across the pools — too small, or a pool '
         + 'price is unusable'
-      : 'no pivot pool gives an output for this amount — too small, or a pool price is unusable' };
+      : 'no route gives an output for this amount — too small, or a pool price is unusable' };
   }
   const minSortie = (devis.sortie * (10000n - tol)) / 10000n;
   if (minSortie <= 0n) {
-    return { etat: 'REFUSE', pourquoi: 'after both pool fees and your tolerance, the guaranteed '
+    return { etat: 'REFUSE', pourquoi: 'after every pool fee and your tolerance, the guaranteed '
       + 'minimum would be zero — raise the amount' };
   }
-  const tsPivot = entier(devis.pivot.tickSpacing);
+  /* ⛔ L ESPACEMENT DU PREMIER SAUT DEPEND DE LA ROUTE RETENUE. Le lire sur `devis.pivot` quand la
+   *   route est DIRECTE designerait une pool qui n est pas dans le chemin — et la chaine
+   *   refuserait un chemin que l encodeur aurait accepte. */
+  const premier = devis.via === 'DIRECT' ? devis.direct : devis.pivot;
+  const tsPivot = entier(premier.tickSpacing);
   if (tsPivot === null || tsPivot <= 0n) {
-    return { etat: 'REFUSE', pourquoi: 'the chosen pivot pool has no usable tickSpacing' };
+    return { etat: 'REFUSE', pourquoi: 'the chosen first pool has no usable tickSpacing' };
   }
 
   /* ── l appel unique, et les deux pieces de rechange ────────────────────────────────────────
@@ -268,10 +303,15 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
    *     contrairement a un transfert separe qu il pourrait refuser.
    *   ⛔ SANS BENEFICIAIRE, PAS DE FRAIS ET PAS DE MONTAGE : on retombe sur le swap nu. C est
    *     explicite, parce qu un frais qui s applique « par defaut » est un frais qu on cache. */
-  const sauts = [
-    { de: WETH_BASE, vers: devise, tickSpacing: Number(tsPivot) },
-    { de: devise, vers: action, tickSpacing: Number(tsAction) },
-  ];
+  /* ⛔⛔ LE CHEMIN SUIT LA ROUTE RETENUE, PAS UNE FORME SUPPOSEE. Sur une route DIRECTE il n y a
+   *     qu un saut avant l action : graver le pivot quand meme ferait un chemin qui ne chaine pas,
+   *     et la chaine le refuserait avec une erreur illisible, loin de sa cause. */
+  const sauts = devis.via === 'DIRECT'
+    ? [{ de: WETH_BASE, vers: action, tickSpacing: Number(tsPivot) }]
+    : [
+      { de: WETH_BASE, vers: devise, tickSpacing: Number(tsPivot) },
+      { de: devise, vers: action, tickSpacing: Number(tsAction) },
+    ];
   /* ⛔ LE CHEMIN SE CHAINE : le 3e saut part de l ACTION ou le 2e est arrive. `calldataExactInputCL`
    *   le verifie aussi — deux gardes pour la meme propriete, parce qu un chemin qui ne chaine pas
    *   est refuse par la CHAINE avec une erreur illisible, loin de sa cause. */
@@ -328,7 +368,13 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
     /* ⛔ ET SI LA PIECE DE RECHANGE N A PAS PU ETRE CONSTRUITE, ON DIT POURQUOI. Rendre `null` sans
      *   raison ferait chercher un bug ; rendre la raison permet de decider. */
     pourquoiPasDHeritage: heritagePossible ? null : ('approval calldata refused: ' + appro.pourquoi),
-    pivot: bas(devis.pivot.pool),
+    /* ⛔⛔ CE CHAMP LEVAIT SUR UNE ROUTE DIRECTE, ET UN MODULE QUI LEVE TUE SON APPELANT. Il lisait
+     *     `devis.pivot.pool` sans condition ; sur une route DIRECTE il n y a pas de pivot, donc
+     *     `devis.pivot` vaut `null`. Le plan ne rendait pas `REFUSE` avec une raison lisible : il
+     *     jetait une `TypeError` au milieu de l ecran d achat. Une garde absente ne se voit pas
+     *     tant que le cas neuf n arrive pas — et il est arrive le jour meme.
+     *   ⛔ `premier` est la pool du PREMIER saut quelle que soit la route : c est elle qu on nomme. */
+    pivot: premier && premier.pool ? bas(premier.pool) : null,
     tickSpacingPivot: Number(tsPivot),
     tickSpacingAction: Number(tsAction),
     montantWei: m.toString(),
@@ -341,10 +387,19 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
      *      ne peut pas echouer ne mesure rien — elle rassure, ce qui est pire que rien.
      *    ⛔ `cheminOctets` est la LONGUEUR REELLE que la chaine verra : 20 + 23 x sauts. L egalite
      *      des longueurs est ce qui attrape un tickSpacing encode sur quatre octets au lieu de trois. */
+    /* ⛔ PAR OU PASSE LA ROUTE RETENUE, dit en clair. Sans ce champ, « la meilleure route » est une
+     *   affirmation que rien ne peut verifier — ni un test, ni l ecran, ni moi. */
+    via: devis.via,
     chemin: { sauts: sauts.length, cheminOctets: 20 + 23 * sauts.length,
       entree: bas(WETH_BASE), sortie: bas(troisSauts ? block : action),
-      /* ⛔ LE JETON DU MILIEU EST NOMME : a trois sauts, `usdcIntermediaire` ne dit plus tout. */
-      via: troisSauts ? [bas(devise), bas(action)] : [bas(devise)] },
+      /* ⛔⛔⛔ LES JETONS TRAVERSES SUIVENT LA ROUTE RETENUE, ET CE CHAMP A MENTI AVANT D ETRE
+       *      CORRIGE. Il rendait `[USDC]` meme sur une route DIRECTE, qui ne passe PAS par l USDC :
+       *      le plan aurait annonce a l ecran un chemin qu il n emprunte pas. Un champ qui ment est
+       *      pire qu un champ absent — on lui fait confiance.
+       *    ⛔ C est `test-routes-elargies.mjs` qui l a crie, pas ma relecture. */
+      via: devis.via === 'DIRECT'
+        ? (troisSauts ? [bas(action)] : [])
+        : (troisSauts ? [bas(devise), bas(action)] : [bas(devise)]) },
     /* ⛔ CE QUE L UTILISATEUR RECOIT VRAIMENT, APRES NOTRE RETENUE. Publier le minimum des pools
      *   comme « ce que vous recevez » serait le chiffre juste au mauvais endroit. */
     minUtilisateur: swap.minUtilisateur || minSortie.toString(),

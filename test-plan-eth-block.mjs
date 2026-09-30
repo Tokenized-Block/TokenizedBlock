@@ -305,9 +305,14 @@ cas('⛔⛔ LA SORTIE DU PLAN EST CELLE DU BON SENS DES DEUX POOLS', () => {
    *     au-dessus, le minimum reste positif. La garde n est atteignable QUE la. */
   const ecrase = planEthVersAction({ ...base, montantWei: 2000000000n, toleranceBps: Number(TOLERANCE_MAX_BPS) });
   assert.equal(ecrase.etat, 'REFUSE', 'le minimum ecrase a zero doit etre refuse');
-  assert.match(ecrase.pourquoi, /both pool fees and your tolerance/i,
-    'ce n est pas le PLAN qui refuse : son message nomme les DEUX frais, la couche basse ne parle '
-    + 'que du minimum');
+  /* ⛔ LE MARQUEUR A CHANGE DE MOT, PAS D INTENTION. Il disait « both pool fees » — une hypothese
+   *   a DEUX sauts figee dans un message d erreur. Depuis le 2026-09-30 une route peut traverser
+   *   UNE pool (WETH -> action en direct), DEUX (via USDC) ou TROIS (+ le block) : « both » etait
+   *   devenu faux dans deux cas sur trois. Ce que l assertion protege ne bouge pas — savoir QUELLE
+   *   COUCHE refuse, puisque la couche basse ne parle que du minimum. */
+  assert.match(ecrase.pourquoi, /every pool fee and your tolerance/i,
+    'ce n est pas le PLAN qui refuse : son message nomme les frais de pool, la couche basse ne '
+    + 'parle que du minimum');
   assert.match(ecrase.pourquoi, /raise the amount/i, 'le refus doit dire quoi corriger');
   /* temoin positif : un cran au-dessus, le plan passe — sinon la garde refuserait tout */
   assert.equal(planEthVersAction({ ...base, montantWei: 5000000000n,
