@@ -1595,6 +1595,10 @@ const SERVIS = [
   /* ⛔ `profondeur-logs.js` decide vers quel noeud part une lecture d historique profond.
    *   L oublier ici tuerait TOUTE la page : un import 404 arrete le module entier. */
   'profondeur-logs.js',
+  /* ⛔ `texte-onchain.js` decode les noms et symboles ecrits par n importe qui. L oublier ici
+   *   tuerait TOUTE la page — et c est `test-imports-servis.mjs` qui l a crie, pas ma relecture :
+   *   troisieme fois que cette garde paie. */
+  'texte-onchain.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

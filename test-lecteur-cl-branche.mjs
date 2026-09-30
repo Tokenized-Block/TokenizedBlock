@@ -16,6 +16,11 @@
  *   Il ne prouve pas non plus qu une vraie pool repond aujourd hui : il tient le cablage, pas le reseau.
  */
 import { strict as assert } from 'node:assert';
+/* ⛔ `texteAbi` DELEGUE desormais au module canonique (2026-09-30) : les trois decodages Latin-1
+ *   d app.html ont ete REPARES, pas deplaces. Le rejeu ci-dessous injecte donc ce module dans la
+ *   portee de la fonction extraite, plutot que d en recopier une version — une copie rendrait ce
+ *   test aveugle au jour ou l app changerait de decodeur, ce qu il est justement la pour voir. */
+import { symboleDepuisReponse } from './texte-onchain.js';
 import { readFileSync } from 'node:fs';
 
 let n = 0;
@@ -251,7 +256,7 @@ cas('⛔ le symbole se decode dans les DEUX formes ABI — rejoue', () => {
    *   pendant que l app rendrait des symboles vides. On enleve les accolades exterieures et on rend
    *   la fonction depuis son propre corps. */
   const corps = corpsDe('function texteAbi').slice(1, -1);
-  const texteAbi = new Function('hex', corps);
+  const texteAbi = new Function('symboleDepuisReponse', 'hex', corps).bind(null, symboleDepuisReponse);
   const mot = (s) => '0x' + Buffer.from(s, 'ascii').toString('hex').padEnd(64, '0');
   const dyn = '0x' + (32).toString(16).padStart(64, '0') + (4).toString(16).padStart(64, '0')
     + Buffer.from('USDC', 'ascii').toString('hex').padEnd(64, '0');

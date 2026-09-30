@@ -61,7 +61,13 @@ function sitesDeDecodageNaif(src) {
  * echouer ce test, ce qui est tout son objet.
  * ⛔ Ces trois-la existaient AVANT ce test ; il les constate, il ne les absout pas. */
 const SITES_GELES = new Map([
-  ['app.html', 3],        /* 3693 et 11924 (chaines dynamiques) + 3702 (mot fixe bytes32) */
+  /* ⛔⛔ C ETAIT 3, C EST MAINTENANT 0 — les trois ont ete REPARES le 2026-09-30, pas geles.
+   *   Deux vivaient dans `texteAbi` (chaine dynamique + mot fixe bytes32), le troisieme dans la
+   *   liste des blocks qu on DETIENT, c est-a-dire precisement la ou le nom d un inconnu
+   *   s affiche a quelqu un. Tous passent desormais par `texte-onchain.js`.
+   *   ⚠️ Ce zero n est pas « il n y en a jamais eu » : c est « il n y en a plus ». Le gel a
+   *     garde sa valeur — il empeche le quatrieme, et il a compte les trois avant leur mort. */
+  ['app.html', 0],
   /* ⛔⛔ CE QUI N EST PAS DANS CETTE LISTE, ET POURQUOI — j avais gele DEUX fichiers de trop,
    *   sur mon souvenir au lieu de la mesure. Le gel se lit maintenant sur la sonde :
    *   · `index-blocks.js` : sa seule mention vit dans le COMMENTAIRE qui raconte le bug.
@@ -93,9 +99,17 @@ console.log('');
 /* ⛔ LE TEMOIN D IMPOSSIBILITE : si le scan ne trouve RIEN, il ne prouve rien — ce serait
  *   le scan qui est casse, pas le code qui est propre. On sait qu il existe des copies. */
 console.log('temoin du scan — une sonde qui ne trouve rien ne prouve rien');
-ok('le scan trouve au moins un site (sinon c est LUI qui est casse)', trouves.size >= 1, trouves.size);
-ok('il voit les TROIS sites connus d app.html', (trouves.get('app.html') || []).length === 3,
-  trouves.get('app.html'));
+/* ⛔⛔ LE TEMOIN A DU CHANGER DE FORME, ET C EST IMPORTANT. Il disait « le scan trouve au
+ *   moins un site, sinon c est LUI qui est casse » — un temoin valable tant qu il RESTAIT des
+ *   sites. Maintenant qu il n y en a plus aucun, ce temoin serait ROUGE POUR LA BONNE RAISON,
+ *   et le garder aurait pousse a le desactiver — donc a perdre la garde entiere.
+ *   ⇒ Le temoin porte desormais sur des textes FABRIQUES : la sonde doit attraper le motif
+ *     quand on le lui donne, et ne pas l attraper sur un commentaire ou un encodage. Ca se
+ *     verifie sans dependre de l etat du depot. */
+ok('sur une ENTREE FABRIQUEE, la sonde attrape bien le motif (sinon elle est cassee)', (() => {
+  const mauvais = 's += String.fromCharCode(parseInt(b.slice(i * 2, i * 2 + 2), 16));';
+  return sitesDeDecodageNaif(mauvais).length === 1;
+})());
 /* ⛔ TEMOIN NEGATIF : un commentaire ne doit PAS compter, sinon le compte derive a chaque
  *   fois que quelqu un explique le bug — et j en ai ecrit deux moi-meme aujourd hui. */
 ok('un commentaire qui NOMME fromCharCode ne compte pas', (() => {
@@ -131,16 +145,25 @@ for (const f of ['index-blocks.js', 'reclamation.js']) {
  *   IMPORTER `decoderChaine`, pas s en ecrire un. */
 console.log('le nouveau chemin REUTILISE le decodeur canonique');
 const appSrc = readFileSync('app.html', 'utf8');
-ok('app.html importe decoderChaine depuis reclamation.js',
-  /import\s*\{[^}]*decoderChaine[^}]*\}\s*from\s*'\.\/reclamation\.js'/.test(appSrc));
-/* ⛔ CETTE ASSERTION COMPTAIT LES MENTIONS, PAS LES USAGES — elle rendait 5 en incluant
- *   mes deux propres commentaires. On compte les SITES, comme la sonde. */
-ok('le chemin du jeton source n ajoute AUCUN quatrieme site de decodage',
-  sitesDeDecodageNaif(appSrc).length === 3, sitesDeDecodageNaif(appSrc));
-/* ⛔ Et le nouveau chemin ne doit pas contenir son propre decodage : on verifie que la
- *   fonction `lireJetonSource` appelle `decoderChaine` et rien d autre. */
-ok('lireJetonSource passe par decoderChaine', /decoderChaine\(rSym\)/.test(appSrc)
-  && /decoderChaine\(rNom\)/.test(appSrc));
+ok('app.html importe le module canonique texte-onchain.js',
+  /import\s*\{[^}]*symboleDepuisReponse[^}]*\}\s*from\s*'\.\/texte-onchain\.js'/.test(appSrc));
+/* ⛔ CETTE ASSERTION COMPTAIT LES MENTIONS, PAS LES USAGES — elle rendait 5 en incluant mes
+ *   propres commentaires. On compte les SITES, comme la sonde. Et le compte attendu vient du
+ *   GEL, pas d un chiffre reecrit a la main a chaque fois. */
+ok('app.html n a AUCUN site de decodage naif', sitesDeDecodageNaif(appSrc).length === 0,
+  sitesDeDecodageNaif(appSrc));
+/* ⛔ LES TROIS SITES REPARES PASSENT TOUS PAR LE MODULE, et on le verifie NOMMEMENT : un
+ *   `texteAbi` reecrit a la main redeviendrait un quatrieme decodeur sans que le compte bouge,
+ *   puisqu il pourrait eviter le motif exact que la sonde cherche. */
+ok('texteAbi delegue au module canonique',
+  /function texteAbi\(hex\)\s*\{\s*return symboleDepuisReponse\(hex\)/.test(appSrc));
+ok('lireJetonSource passe par symboleDepuisReponse', /symboleDepuisReponse\(rSym\)/.test(appSrc)
+  && /symboleDepuisReponse\(rNom, 32\)/.test(appSrc));
+ok('la liste des blocks detenus passe par le module', /label = symboleDepuisReponse\(h\)/.test(appSrc));
+/* ⛔ ET `decoderChaine` NE DOIT PLUS ETRE IMPORTE ICI : un nom importe sans usage est
+ *   exactement `presence-dun-nom-nest-pas-son-usage`, et il ferait croire a un second chemin. */
+ok('decoderChaine n est PLUS importe dans app.html',
+  !/import\s*\{[^}]*decoderChaine[^}]*\}\s*from\s*'\.\/reclamation\.js'/.test(appSrc));
 
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');

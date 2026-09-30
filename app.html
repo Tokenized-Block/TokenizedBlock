@@ -1768,36 +1768,63 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ UNE SEULE COPIE DE CE CHAMP. Il a d abord vecu dans l onglet Create ; le garder aux
          deux endroits aurait fait deux jumeaux qui divergent. Il pre-remplit Create et t y
          emmene, donc le chemin de signature reste CELUI QUI MARCHE — un seul `#cCreer`. -->
+    <!-- ⛔ UNE SEULE CARTE, DEUX PUCES — et c est la demande de Phil (2026-09-30 : « fait en
+         bouton comme t as fait sur create », « Post or Token erc »). Deux cartes empilees
+         posaient la MEME question deux fois et laissaient croire a deux produits ; ici on
+         choisit CE QU ON TOKENISE, puis on lit la seule branche choisie.
+         ⛔ La machinerie `data-itabs` est celle qui existe deja (Create, Launch, Swap, Brain) :
+         on ne recopie pas un second commutateur qui divergerait du premier. -->
     <div class="carte">
-      <p class="titre">Tokenize a token</p>
-      <p class="sous">Paste any token on Base. Its name and symbol are read from the chain and fill in Create, so your block can be paired with it and routed through our pools.</p>
-      <label class="champ">Token address on Base
-        <span class="champSel">
-          <input id="cTokSrc" placeholder="0x…" autocomplete="off" spellcheck="false">
-          <button class="bouton sec" id="cTokLire" type="button" style="width:auto;padding:10px 14px">Read it</button>
-        </span>
-      </label>
-      <p class="note" id="cTokNote" style="margin:4px 0 0">Nothing is signed here — this only reads the token and fills in the Create form.</p>
-    </div>
+      <p class="titre">Tokenize</p>
+      <p class="sous">Turn something that already exists into a block on Base. Pick what you are starting from — the block is minted to you either way, and nothing here signs anything.</p>
+      <div class="stadeLigne" data-itabs="tkQuoi" role="tablist" style="margin-top:2px">
+        <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="jeton">🧊 A token</button>
+        <button type="button" class="puce" role="tab" aria-selected="false" data-itab="post">❞ A post on X</button>
+      </div>
 
-    <div class="carte" style="margin-top:14px">
-      <p class="titre">Tokenize a post</p>
-      <p class="sous">A block can carry a link to a post on X, engraved with it. Paste the link when you create the block — it goes on chain with the name, the symbol and the face, in the same transaction.</p>
-      <ol class="creaPas">
-        <li><b>Copy the post link</b> <span>the address bar of any post on x.com</span></li>
-        <li><b>Tick “Tokenize a post”</b> <span>in Create, under the face settings</span></li>
-        <li><b>Paste and create</b> <span>the link is engraved and cannot be changed after</span></li>
-      </ol>
-      <!-- ⛔ LA MEME PHRASE QUE LE MODULE, ET ELLE DIT CE QU ON NE SAIT PAS. Rien n ouvre le lien :
-           ni ici, ni dans Create, ni dans le validateur. On ne sait donc pas si le post existe ni a
-           qui il est. Le taire laisserait croire a une verification qui n a jamais eu lieu — et le
-           lien, lui, est permanent. -->
-      <!-- ⛔ PRECISE LE 2026-09-25 : cette phrase disait « nothing here opens the link ». C est
-           toujours vrai AU MOMENT DE LA GRAVURE — rien ne verifie le lien avant de l ecrire sur la
-           chaine — mais l app ouvre desormais le post sur la fiche du block, pour l afficher. Une
-           phrase globale serait devenue fausse par omission. -->
-      <p class="note">Nothing is checked when the link is engraved: we do not verify that the post exists, and we cannot tell whether it is yours — the block simply points at it, for good. Later, on the block's page, we do fetch what X publishes for that link, to show it.</p>
-      <button type="button" class="bouton" id="tkGo">Create a block with a post</button>
+      <!-- ── UN JETON ERC-20 ───────────────────────────────────────────────────────────── -->
+      <div class="infoPane" data-itabs-pane="tkQuoi" data-itab="jeton">
+        <p class="sous" style="margin-top:12px">Paste any ERC-20 on Base. Its name and symbol are read from the chain and fill in Create, so your block can be <b>paired with it</b> and routed through our pools.</p>
+        <label class="champ">Token address on Base
+          <span class="champSel">
+            <input id="cTokSrc" placeholder="0x…" autocomplete="off" spellcheck="false">
+            <button class="bouton sec" id="cTokLire" type="button" style="width:auto;padding:10px 14px">Read it</button>
+          </span>
+        </label>
+        <p class="note" id="cTokNote" style="margin:4px 0 0">Nothing is signed here — this only reads the token and fills in the Create form.</p>
+        <!-- ⛔⛔⛔ CE QUE CE N EST PAS, ET C EST A L ECRAN, PAS DANS UN COMMENTAIRE. Notre B20 n a
+             ni minter ni admin et le CreateRouter FORCE 1 milliard : on ne peut ni frapper contre
+             un depot, ni choisir la supply. Le block est une REPRESENTATION. Coinbase tokenise
+             VRAIMENT parce qu il est emetteur regule et detient le sous-jacent ; nous ne detenons
+             rien, et le taire serait vendre un adossement qui n existe pas. -->
+        <details class="bDetail" style="margin-top:10px"><summary class="note">What this does, and what it does not</summary>
+        <ul class="note noteBullets" style="margin:6px 0 0 18px">
+          <li><b>It makes a new block</b> that carries that token's name and symbol — it does not move, wrap or lock the token itself.</li>
+          <li><b>Nothing backs it.</b> No one redeems it, and its price can drift from the token from the first trade onward.</li>
+          <li><b>The supply is fixed</b> at 1 billion, minted to you at birth. You do not choose it.</li>
+          <li><b>Symbols of issued stocks are refused</b> — a block named like a real tokenized stock would back nothing.</li>
+          <li><b>Cost</b>: the same 0.001 ETH Birth fee as any block, once, when you sign in Create. Then 50 bps on trades made inside the app.</li>
+        </ul>
+        </details>
+      </div>
+
+      <!-- ── UN POST SUR X ─────────────────────────────────────────────────────────────── -->
+      <div class="infoPane" data-itabs-pane="tkQuoi" data-itab="post" hidden>
+        <p class="sous" style="margin-top:12px">A block can carry a link to a post on X, engraved with it. Paste the link when you create the block — it goes on chain with the name, the symbol and the face, in the same transaction.</p>
+        <ol class="creaPas">
+          <li><b>Copy the post link</b> <span>the address bar of any post on x.com</span></li>
+          <li><b>Tick “Tokenize a post”</b> <span>in Create, under the face settings</span></li>
+          <li><b>Paste and create</b> <span>the link is engraved and cannot be changed after</span></li>
+        </ol>
+        <!-- ⛔ LA MEME PHRASE QUE LE MODULE, ET ELLE DIT CE QU ON NE SAIT PAS. Rien n ouvre le lien
+             au moment de la gravure : ni ici, ni dans Create, ni dans le validateur. On ne sait
+             donc pas si le post existe ni a qui il est. Le taire laisserait croire a une
+             verification qui n a jamais eu lieu — et le lien, lui, est permanent.
+             ⛔ PRECISE LE 2026-09-25 : la phrase disait « nothing here opens the link », devenue
+             fausse par omission depuis que la fiche du block affiche le post. -->
+        <p class="note">Nothing is checked when the link is engraved: we do not verify that the post exists, and we cannot tell whether it is yours — the block simply points at it, for good. Later, on the block's page, we do fetch what X publishes for that link, to show it.</p>
+        <button type="button" class="bouton" id="tkGo" style="margin-top:12px">Create a block with a post</button>
+      </div>
     </div>
 
     <!-- ⛔⛔ LE COMPOSEUR (Phil, 2026-09-25 : « une sorte de pop avec ".@users… a tokenized un
@@ -2171,7 +2198,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-deep-reads-go-to-archive" hidden>Build <code>20260930-deep-reads-go-to-archive</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-names-in-every-language" hidden>Build <code>20260930-names-in-every-language</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2743,7 +2770,21 @@ details[open] > summary::before{transform:rotate(90deg)}
                mesure 9. Une prediction n est pas une mesure, et celle-la se trompait d un cran.
          ⛔ Si un dixieme onglet arrive, ce calcul est a REFAIRE : 55,6 px pris a neuf laissent
             deja moins d air aux voisins, et « Map » est descendu a 29,4 px. -->
-    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>❞</b>Tokenized</button>
+    <!-- ⛔⛔ UN CUBE, ET C EST `🧊` APRES UN DETOUR QUE JE NOTE PLUTOT QUE DE L EFFACER.
+         J avais d abord pris `❒` U+2752, un carre OMBRE de la meme famille Dingbats que le `❞`
+         qu il remplace — raisonnement sain sur la POLICE, faux sur le RENDU : a 17 px l ombre ne
+         se voit pas, et ca se lit « carre », pas « cube ». Phil demandait un cube.
+         ⛔ CE QUI A DECIDE, ET C EST MESURE (2026-09-30, 375 px emules) : l icone ne coute RIEN a
+         la mise en page. `❒`, `🧊`, `⬢` et `❞` donnent le MEME bouton a 55,6 px, la meme nav a
+         355 == 355, UNE rangee, hauteur 49,8 px — parce que la largeur de l onglet est fixee par
+         le LIBELLE, pas par le glyphe, qui vit sur sa propre ligne. Le cube etait donc gratuit,
+         et j ai failli choisir le moins lisible pour economiser une largeur qui n existait pas.
+         ⛔ ET IL REND : temoin tofu a 10,97 px, `🧊` mesure 22,75 — tres proche du `📈` de Market
+         (22,15) qui est DEJA un emoji couleur dans cette barre, donc ce chemin est prouve ici.
+         ⚠️ BORNE : `🧊` est un emoji de 2018, bien plus recent que les Dingbats. Sur un systeme
+         tres ancien il sortirait en carre vide — l ironie serait complete. Le repli MESURE est
+         `⬢` U+2B22 (hexagone, 1993) : c est la silhouette d un cube vu par le coin. -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>🧊</b>Tokenized</button>
   </div>
 </nav>
 
@@ -2944,7 +2985,15 @@ import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } f
  * octets, pas leurs noms. ⚠️ En ASCII pur les deux chemins sont IDENTIQUES, et c est pour ca
  * que le defaut a survecu a tous nos essais. `test-un-seul-decodeur-de-chaine.mjs` interdit
  * desormais qu une quatrieme copie naive apparaisse. */
-import { decoderChaine } from './reclamation.js';
+/* ⛔ LE DECODEUR CANONIQUE DES TEXTES ON-CHAIN, et il remplace les TROIS decodages Latin-1 qui
+ *   vivaient dans ce fichier (2026-09-30). Il decode en UTF-8, retombe sur le mot fixe bytes32,
+ *   retire ce qui SE CACHE (largeur nulle, BOM) ou RETOURNE l affichage (overrides bidi), et
+ *   GARDE les lettres du monde entier — la ou l ancien filtre `[^\x20-\x7e]` les EFFACAIT.
+ *   50 assertions, 8/8 mutations, dont une qui reintroduit le Latin-1 lui-meme.
+ * ⛔ `decoderChaine` (reclamation.js) N EST PLUS IMPORTE ICI : il etait devenu un nom present
+ *   et sans usage apres cette bascule, exactement ce que `presence-dun-nom-nest-pas-son-usage`
+ *   decrit. Il reste le decodeur de `reclamation.js`, ou il sert. */
+import { symboleDepuisReponse } from './texte-onchain.js';
 /* ⛔ Le routage des lectures d historique profond — publicnode refuse l archive des -10 000
  *   blocs (mesure du 2026-09-30, refus stables). Module teste : 38 assertions, 8/8 mutations. */
 import { etatProfondeur, ordreNoeuds } from './profondeur-logs.js';
@@ -3739,28 +3788,22 @@ const metaJetons = new Map();
 /** Decode un `string` ABI, ou un `bytes32` pour les vieux jetons qui repondent ainsi.
  *  ⛔ LES DEUX FORMES EXISTENT SUR BASE. Ne gerer que la dynamique rendrait un symbole vide sur
  *    ceux qui rendent un mot fixe, et la ligne dirait un prix « par block » sans dire en quoi. */
+/* ⛔⛔ CETTE FONCTION PORTAIT DEUX DES TROIS DECODAGES LATIN-1 DE CE FICHIER, ET UN FILTRE
+ *    QUI EFFACAIT LE RESTE. `String.fromCharCode(octet)` fait « un octet = un caractere » : un
+ *    `string` Solidity est de l UTF-8, ou un caractere chinois pese TROIS octets — des blocks
+ *    REELS de Base s affichaient « å°çç¶­å°¼ ». Et `replace(/[^\x20-\x7e]/g, '')` supprimait
+ *    tout le non-ASCII, donc un nom japonais ne devenait pas faux : il devenait VIDE.
+ *    Reparer le decodage sans toucher a ce filtre n aurait RIEN change a l ecran.
+ *  ⛔ `symboleDepuisReponse` decode en UTF-8, retombe sur le mot fixe `bytes32`, retire ce qui
+ *    SE CACHE (largeur nulle) ou RETOURNE l affichage (overrides bidi U+202A-E) — un nom qui se
+ *    lit autrement qu il n est grave, dans une app ou les gens achetent, n est pas cosmetique —
+ *    et GARDE les lettres du monde entier. 50 assertions, 8/8 mutations, dont le retour du
+ *    Latin-1 lui-meme.
+ *  ⛔ LE CONTRAT DE SORTIE NE CHANGE PAS : cette fonction rendait `''` quand elle ne savait pas
+ *    lire, et ses appelants en dependent. `symboleDepuisReponse` rend `null` — on le ramene a
+ *    `''` ici plutot que d aller modifier des appelants qu on n a pas relus. */
 function texteAbi(hex) {
-  const b = String(hex || '').slice(2);
-  if (b.length < 64) return '';
-  const lisible = (s) => s.replace(/[^\x20-\x7e]/g, '').trim().slice(0, 12);
-  try {
-    const off = Number(BigInt('0x' + b.slice(0, 64)));
-    if (off === 32 && b.length >= 128) {
-      const n = Number(BigInt('0x' + b.slice(64, 128)));
-      if (n > 0 && n <= 64 && b.length >= 128 + n * 2) {
-        let s = '';
-        for (let i = 0; i < n; i++) s += String.fromCharCode(parseInt(b.slice(128 + i * 2, 130 + i * 2), 16));
-        return lisible(s);
-      }
-    }
-  } catch (_) { /* pas une chaine dynamique : on tente le mot fixe */ }
-  let s = '';
-  for (let i = 0; i < 32; i++) {
-    const c = parseInt(b.slice(i * 2, i * 2 + 2), 16);
-    if (!c) break;
-    s += String.fromCharCode(c);
-  }
-  return lisible(s);
+  return symboleDepuisReponse(hex) || '';
 }
 /** `decimals()` et `symbol()` d un jeton, une fois pour la session.
  *  ⛔ ON NE RETIENT QUE CE QU ON A VRAIMENT LU : graver un `null` empecherait toute nouvelle
@@ -12000,14 +12043,15 @@ async function peindreTokenizedBank() {
   for (const [jeton, sym] of vus) {
     let label = sym;
     if (!label) {
+      /* ⛔ LE TROISIEME DECODAGE LATIN-1 DE CE FICHIER, dans la liste des blocks qu on DETIENT :
+       *   c est precisement la ou le nom d un inconnu s affiche a quelqu un. Meme correction que
+       *   `texteAbi` — UTF-8, retombee sur le mot fixe, invisibles et overrides retires.
+       * ⛔ ET LE `catch (_) {}` RESTE MUET VOLONTAIREMENT ICI : `label` retombe sur l adresse
+       *   courte juste en dessous, donc l option existe quand meme. Un symbole illisible ne doit
+       *   pas faire disparaitre un block que la personne possede. */
       try {
-        const h = String(await rpc('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2);
-        const n = parseInt(h.slice(64, 128), 16);
-        if (n > 0 && n < 64) {
-          let s = '';
-          for (let i = 0; i < n; i++) s += String.fromCharCode(parseInt(h.slice(128 + i * 2, 130 + i * 2), 16));
-          label = s;
-        }
+        const h = await rpc('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest']);
+        label = symboleDepuisReponse(h);
       } catch (_) {}
     }
     opts.push({ jeton, symbole: label || court(jeton) });
@@ -17134,8 +17178,13 @@ async function lireJetonSource() {
       rpc('eth_call', [{ to: brut, data: SEL_SUP_ERC20 }, 'latest']),
     ]);
 
-    const sym = decoderChaine(rSym);
-    const nom = decoderChaine(rNom);
+    /* ⛔ CE CHAMP LIT UN JETON ARBITRAIRE — c est exactement la ou un nom piege arriverait.
+     *   `symboleDepuisReponse` decode en UTF-8, retombe sur le mot fixe des vieux jetons, et
+     *   retire les overrides bidirectionnels : sans ca, un symbole pourrait se LIRE autrement
+     *   qu il n est grave sur la chaine, dans le champ qui pre-remplit une creation.
+     * ⛔ Le nom va dans un champ de 32 : on ne le coupe pas a 12 comme un symbole. */
+    const sym = symboleDepuisReponse(rSym);
+    const nom = symboleDepuisReponse(rNom, 32);
     /* ⛔ LES DECIMALES NE SE SUPPOSENT JAMAIS. Supposer 18 sur un jeton a 6 decimales
      *   fausserait la comparaison de supply d un facteur mille milliards. */
     let dec = null;
