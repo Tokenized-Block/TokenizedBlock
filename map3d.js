@@ -506,8 +506,25 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     /* ⛔ PHIL (2026-09-19) : « retire le quadrillage au fond ». Il n existait que sur la face du bas : le cube n avait pas
      * six faces pareilles. Il ne reste que les 12 aretes. */
     if (VOIR_CUBE) for (const [a, b] of aretes) html += seg(a, b, 2, 0.7, false);
-    /* tip 0037 — SOLEILS : un block a fort volume (h.eclat 0..1, fourni par l app depuis le volume 24 h lu) rayonne ;
-     * un block qui vient d emettre un signal (h.vifJusqua) brille plus fort quelques secondes. */
+    /* ⛔⛔⛔ CE COMMENTAIRE DECRIVAIT UNE FONCTIONNALITE RETIREE, ET IL A FABRIQUE UNE FAUSSE PISTE.
+     *   Il disait : « tip 0037 — SOLEILS : un block a fort volume (h.eclat 0..1, fourni par l app
+     *   depuis le volume 24 h lu) rayonne ». C EST FAUX DEPUIS LE TIP 0040, ou Phil a demande
+     *   « pas ca — seulement ceux qui create / swap, pas tous » : le halo permanent au volume a ete
+     *   retire et `e` ne vaut plus que `vif * 0.7` (douze lignes plus bas). `h.eclat` n est lu
+     *   NULLE PART dans ce fichier — et son calcul cote app a ete retire le 2026-09-30.
+     *   ⛔ ET LE PIEGE EST DOUBLE : la ligne ~564 declare un `eclat` LOCAL, calcule sur l AGE d un
+     *     signal, pour les trainees. Le mot `eclat` apparait cinq fois ici et pas une seule n est
+     *     `h.eclat`. Un lecteur qui greppe « eclat » conclut que le volume pilote la lumiere.
+     *   ⇒ C EST CE QUI M A TROMPE. Phil signalait « OUSD disparu de la map » ; j ai mesure dans
+     *     Chrome que NVDAc (n°1, 12 475 229 $) etait a `opacity 0.6` et OBC (26 $) a 1, et j ai
+     *     annonce « la luminosite ne suit pas le volume » comme un defaut. L opacite est la
+     *     PROFONDEUR (`1 - 0.6 * loin`, quantifiee a 1/20 — d ou l echelle 0,50 / 0,55 / … / 0,75,
+     *     et 0,49 = op * 0,75 sur un cube `sansPrix`). NVDAc etait au FOND de la sphere, OBC
+     *     devant, et la map tourne. J ai presente une decision produit comme un bug, sur la foi
+     *     d un commentaire que personne n avait mis a jour.
+     *
+     * CE QUI EST VRAI AUJOURD HUI : seul un block qui vient d emettre ou de recevoir un signal LU
+     * (`h.vifJusqua`) s allume, puis s eteint. Le volume ne joue AUCUN role dans la lumiere. */
     /* ⛔ PHIL (2026-09-19, capture du centre) : « fais la vraie 3D autour du bloc, ca fait bizarre a l oeil ». Mesure : deux
      *    DISQUES PLATS pleins derriere un cube qui tourne en 3D — un decor colle a l ecran. Desormais : une lueur en degrade
      *    (aucun bord dur) et, pour le centre de l univers, un ANNEAU EN ORBITE calcule dans l espace 3D du monde et projete

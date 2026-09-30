@@ -2246,7 +2246,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ILLISIBLE aveugle la sonde de deploiement exactement comme une empreinte REUTILISEE —
            j aurais verifie mes propres deploiements contre `null`. 23 caracteres desormais, et
            `test-empreinte-de-build.mjs` refuse le depassement. -->
-      <p class="note" data-build="20260930-famille-exigee" hidden>Build <code>20260930-famille-exigee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-opacite-profondeur" hidden>Build <code>20260930-opacite-profondeur</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -18167,7 +18167,9 @@ async function soleilsSurLaMap(essai = 0) {
       }
       return;
     }
-    const max = Math.max(...d.lignes.map((l) => l.volume24hUsd || 0), 1);
+    /* ⛔ `const max = Math.max(...d.lignes.map((l) => l.volume24hUsd || 0), 1);` ETAIT ICI. Il ne
+     *   servait QU AU calcul de `h.eclat`, lui-meme lu par personne depuis le tip 0040. Un parcours
+     *   complet des lignes a chaque rafraichissement, pour une valeur jetee. Retire avec lui. */
     for (const l of d.lignes) {
       let h = habitantDe(l.adr);
       /* tip 0038 (Phil « le max de blocks crees et vivants ») : jusqu a 450 sur la map ; l univers en expansion leur fait la place */
@@ -18189,7 +18191,27 @@ async function soleilsSurLaMap(essai = 0) {
       if (!h && placePourLeBlock({ dejaPoses: habitants.length, ligne: l }).verdict === 'POSER') {
         h = creerHabitant({ jeton: l.adr, symbole: l.sym, vie: null });
       }
-      if (h) h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
+      /* ⛔⛔⛔ `h.eclat` ETAIT CALCULE ICI ET LU PAR PERSONNE — RETIRE LE 2026-09-30.
+       *    La ligne etait :
+       *      h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
+       *    Elle alimentait le halo permanent au volume. ⇒ PHIL L A FAIT RETIRER (tip 0040 : « pas
+       *    ca — seulement ceux qui create / swap, pas tous »), et `map3d.js` ne lit plus que
+       *    `h.vifJusqua`. Le calcul, lui, est reste : une valeur produite a chaque rafraichissement
+       *    et jetee. Une valeur LUE PUIS JETEE est un defaut ; ce depot l a deja paye trois fois.
+       *  ⛔⛔ ET CE RESIDU M A COUTE UNE FAUSSE ACCUSATION. Phil signalait « OUSD disparu de la
+       *    map ». J ai mesure dans Chrome : NVDAc, n°1 a 12 475 229 $, a `opacity 0.6` pendant
+       *    qu OBC a 26 $ est a 1 — et j en ai conclu « la luminosite ne suit pas le volume », comme
+       *    d un defaut. FAUX : l opacite est la PROFONDEUR (`map3d.js` : 1 - 0,6 x loin, quantifiee
+       *    a 1/20, ce qui explique l echelle 0,50 / 0,55 / … / 0,75 et le 0,49 = op x 0,75 sur un
+       *    cube `sansPrix`). NVDAc etait au FOND de la sphere, OBC devant, et la map tourne.
+       *  ⛔ ET J AI ECRIT ICI « `max` reste utilise plus bas » AVANT DE VERIFIER — c etait FAUX.
+       *    `max` ne servait QU A ce calcul : un `Math.max` sur toutes les lignes a chaque
+       *    rafraichissement, pour une valeur jetee. Les deux sont partis. Un commentaire affirme
+       *    sans grep est une affirmation comme une autre, et celle-la a tenu trente secondes.
+       *  ⇒ Un commentaire qui decrit une fonctionnalite RETIREE, plus une variable qui la mime
+       *    (`map3d.js` a un `eclat` LOCAL calcule sur l age, ligne 564), font croire au lecteur —
+       *    et a moi — qu elle est branchee. Le mot `eclat` apparait cinq fois dans `map3d.js` et
+       *    pas une seule n est `h.eclat`. C est `la presence d un nom n est pas son usage`. */
       /* ⛔ MESURE (Chrome, 0077) : 229 blocks sur 231 restaient a la taille par defaut — la lecture de marche bloc par bloc,
        *    depuis le navigateur, n avancait pas. Le serveur a deja la FDV de ~200 blocks : elle dimensionne la map tout de
        *    suite. Une vie lue sur la chaine par la map (LUE) garde la priorite. */
