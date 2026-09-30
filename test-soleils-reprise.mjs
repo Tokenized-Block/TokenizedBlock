@@ -138,6 +138,27 @@ cas('⛔⛔⛔ LA PHRASE VA LA OU ELLE SE VOIT A 375 px — PAS DANS UN VOLET MA
     '`#mapCentre` est passe APRES le volet lateral : verifier qu il n y est pas entre');
 });
 
+cas('⛔⛔⛔ LE PREMIER ECRAN PARLE — LES DIX SECONDES ORDINAIRES, PAS SEULEMENT LE CAS RARE', () => {
+  /* ⛔⛔⛔ MESURE EN PRODUCTION, 375 px, 2026-09-30 : s=4 : 0 bloc · s=7 : 0 bloc · s=10 : 183
+   *      blocs. Dix secondes d ecran noir pendant lesquelles `#mapCentre` est VIDE. Ma reprise ne
+   *      couvrait PAS ce cas : elle ne parle que si `/api/trending` echoue ou pend, or en
+   *      production il REUSSIT. Je corrigeais un cas rare (44 s sur un fork froid) en laissant le
+   *      cas ORDINAIRE entier.
+   *    ⛔ Un ecran noir muet se lit « casse », et personne ne donne dix secondes a une page qui ne
+   *      dit rien. */
+  assert.match(html, /function direPremierEcran\(txt\)/, 'rien ne parle avant le premier bloc');
+  assert.match(html, /direPremierEcran\('Reading the chain/,
+    'le premier ecran ne dit pas qu une lecture est en cours');
+  /* ⛔⛔ ET IL COMPTE `.bloc`, PAS `[data-adr]`. Ce dernier designe les puces du Feed et les cartes
+   *     My blocks — JAMAIS les cubes de la map. Il rendait 0 pendant que 184 cubes etaient poses
+   *     et visibles, et j ai bati un diagnostic entier dessus. Compter la mauvaise chose donne un
+   *     chiffre qui a l air juste. */
+  assert.match(html, /if \(document\.querySelectorAll\('\.bloc'\)\.length\) return;/,
+    'le premier ecran ne verifie pas les VRAIS cubes de la map');
+  assert.ok(!/querySelectorAll\('\[data-adr\]'\)\.length\) return;/.test(html),
+    'le mauvais selecteur est revenu : `[data-adr]` ne compte pas les cubes de la map');
+});
+
 console.log('✓ test-soleils-reprise : ' + n + ' cas');
 console.log('   Une map vide reprend — 5 fois, delai croissant, 22,5 s au plus — et elle le DIT.');
 console.log('   Elle ne reprend pas sur une charge cassee, et n ecrase pas un ecran deja peuple.');
