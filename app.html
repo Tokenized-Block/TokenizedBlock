@@ -1750,8 +1750,37 @@ details[open] > summary::before{transform:rotate(90deg)}
        avec le nom, le symbole et la face dans la MEME transaction.
        ⛔ AUCUN STYLE NOUVEAU : meme `section.volet`, meme `div.carte`, meme `p.titre` / `p.sous`,
           meme `ol.creaPas` et meme `button.bouton` que les onglets existants. -->
-  <section class="volet" id="v-tokenx" aria-label="Tokenize a post from X">
+  <section class="volet" id="v-tokenx" aria-label="Tokenize a post, or a token, into a block">
+    <!-- ⛔⛔ TOKENISER UN JETON — ET LE BUT EST LA PAIRE, PAS LE NOM.
+         Phil, 2026-09-30 : « pour le paired et etre echangable par multi pools ». Un block
+         appairé a un ERC-20 deja echange AJOUTE un saut que notre routeur multi-sauts peut
+         emprunter, et nos 0,5 % roulent sur chaque saut in-app. C est la valeur ; le nom n en
+         est que l etiquette.
+         ⛔⛔⛔ CE QUE CE N EST PAS, ET IL FAUT LE DIRE A L ECRAN : aucun adossement. Notre B20
+         n a ni minter ni admin et le CreateRouter FORCE 1 milliard (« strips any cap/mint and
+         force-appends sealed 1B »), donc on ne peut ni frapper contre un depot ni choisir la
+         supply. Coinbase tokenise VRAIMENT parce qu il est emetteur regule sous Regulation S et
+         detient le sous-jacent ; nous ne detenons rien. La phrase vient de
+         `avertissementNonAdosse()` pour qu elle ne puisse pas etre oubliee.
+         ⛔⛔ ET LE SOSIE EST REFUSE : `collisionAvecEmetteur` bloque un « AAPL » pose a cote du
+         AAPLc REEL, dans les deux sens du suffixe. Sans la liste de reference il REFUSE aussi —
+         une garde sur une liste absente est toujours fausse.
+         ⛔ UNE SEULE COPIE DE CE CHAMP. Il a d abord vecu dans l onglet Create ; le garder aux
+         deux endroits aurait fait deux jumeaux qui divergent. Il pre-remplit Create et t y
+         emmene, donc le chemin de signature reste CELUI QUI MARCHE — un seul `#cCreer`. -->
     <div class="carte">
+      <p class="titre">Tokenize a token</p>
+      <p class="sous">Paste any token on Base. Its name and symbol are read from the chain and fill in Create, so your block can be paired with it and routed through our pools.</p>
+      <label class="champ">Token address on Base
+        <span class="champSel">
+          <input id="cTokSrc" placeholder="0x…" autocomplete="off" spellcheck="false">
+          <button class="bouton sec" id="cTokLire" type="button" style="width:auto;padding:10px 14px">Read it</button>
+        </span>
+      </label>
+      <p class="note" id="cTokNote" style="margin:4px 0 0">Nothing is signed here — this only reads the token and fills in the Create form.</p>
+    </div>
+
+    <div class="carte" style="margin-top:14px">
       <p class="titre">Tokenize a post</p>
       <p class="sous">A block can carry a link to a post on X, engraved with it. Paste the link when you create the block — it goes on chain with the name, the symbol and the face, in the same transaction.</p>
       <ol class="creaPas">
@@ -2142,7 +2171,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-first-screen-speaks" hidden>Build <code>20260930-first-screen-speaks</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-deep-reads-go-to-archive" hidden>Build <code>20260930-deep-reads-go-to-archive</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2705,8 +2734,16 @@ details[open] > summary::before{transform:rotate(90deg)}
          capture le 2026-09-17. Le logo de X est bien plus recent que la plupart des polices systeme.
          ⛔ ET LE LIBELLE EST COURT PAR NECESSITE MESUREE : a 375 px, huit onglets font deja 43 px
             chacun et « My block » passe a la ligne. A neuf il reste 37,7 px — « TokenizedX »
-            (10 caracteres) serait le pire libelle de la barre. « Post » tient sur une ligne. -->
-    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>❞</b>Post</button>
+            (10 caracteres) serait le pire libelle de la barre.
+         ✅ MAIS « Tokenized » (9 caracteres) TIENT, et c est MESURE, pas suppose (2026-09-30, 375 px
+            emules, 9 onglets) : bouton 55,6 px pour un contenu de 49,6 px, `scrollWidth 56 ==
+            clientWidth 56` donc AUCUN debordement, la nav reste a 355 == 355, UNE rangee, hauteur
+            inchangee a 49,8 px. Le flex absorbe en retrecissant les voisins (Map 36,6 -> 29,4).
+            ⚠️ La phrase ci-dessus PREDISAIT une casse pour 10 caracteres ; elle n avait jamais
+               mesure 9. Une prediction n est pas une mesure, et celle-la se trompait d un cran.
+         ⛔ Si un dixieme onglet arrive, ce calcul est a REFAIRE : 55,6 px pris a neuf laissent
+            deja moins d air aux voisins, et « Map » est descendu a 29,4 px. -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>❞</b>Tokenized</button>
   </div>
 </nav>
 
@@ -2754,7 +2791,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
-import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange } from './paires.js';
+import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE } from './paires.js';
 import { phraseMarcheActions } from './heures-marche.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
@@ -2901,6 +2938,18 @@ import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phra
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
+/* ⛔ LE DECODEUR DE CHAINE ABI EST CANONIQUE, ON N EN ECRIT PAS UN TROISIEME.
+ * `decoderChaine` rend de l UTF-8 et `null` plutot que du charabia. Un `String.fromCharCode`
+ * par octet donne du LATIN-1 : des blocks reels de Base s affichaient « å°çç¶­å°¼ » — leurs
+ * octets, pas leurs noms. ⚠️ En ASCII pur les deux chemins sont IDENTIQUES, et c est pour ca
+ * que le defaut a survecu a tous nos essais. `test-un-seul-decodeur-de-chaine.mjs` interdit
+ * desormais qu une quatrieme copie naive apparaisse. */
+import { decoderChaine } from './reclamation.js';
+/* ⛔ Le routage des lectures d historique profond — publicnode refuse l archive des -10 000
+ *   blocs (mesure du 2026-09-30, refus stables). Module teste : 38 assertions, 8/8 mutations. */
+import { etatProfondeur, ordreNoeuds } from './profondeur-logs.js';
+import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
+  avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -3092,6 +3141,22 @@ const RESEAUX = {
            *    ⛔ ET LE TROISIEME NOEUD NE SAUVE PAS : drpc rend 400 sur la meme requete (mais en
            *      60-240 ms). `mainnet.base.org` est le SEUL a servir un getLogs multi-adresses. */
           logsMultiRpc: 'https://mainnet.base.org',
+          /* ⛔⛔ UN SECOND REFUS DE PUBLICNODE, MESURE LE 2026-09-30, ET SANS RAPPORT AVEC LE
+           *    PLAFOND DE 9 ADRESSES CI-DESSUS : il refuse les requetes d ARCHIVE.
+           *      -0, -1 000, -5 000 blocs   -> 200
+           *      -10 000 et au-dela         -> 403 « Archive requests require a personal token »
+           *    Deux lectures par point, refus STABLES : c est une politique, pas un etranglement.
+           *    ⇒ La lecture de memoire du Brain balaie 60 000 blocs, DOUZE fois au-dela. Mesure en
+           *      local sur cette page : 75 appels HTTP pour 16 fenetres, 15 des 16 rejouees apres
+           *      un 403, 16 a 26 s par lecture. Et quand les reprises s epuisent, des fenetres se
+           *      perdent vraiment — un run a rendu « 13 window(s) could not be read ».
+           *    ⛔ NOM SEPARE, PAS `logsMultiRpc` RECYCLE : « sait servir 50 adresses » et « sait
+           *      servir l archive » sont DEUX proprietes. Les confondre sous un seul nom, c est
+           *      `presence-dun-nom-nest-pas-son-usage` — et le jour ou l une bouge sans l autre,
+           *      la regle se tromperait en silence.
+           *    ⚠️ drpc reste dans la rotation mais son comportement en archive N EST PAS MESURE :
+           *      on ne le met donc ni devant ni de cote. On ne retire jamais un repli. */
+          logsArchiveRpc: 'https://mainnet.base.org',
           secours: ['https://mainnet.base.org', 'https://base.drpc.org'],
           b20Rpc: 'https://mainnet.base.org',
           stateView: '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71',
@@ -3285,6 +3350,19 @@ async function rpcReseau(methode, params) {
     /* ⛔ sans `logsMultiRpc` declare (Sepolia), l ordre reste INCHANGE — pas de reordonnancement
      *   devine sur une chaine ou rien n a ete mesure. */
     if (servant) noeuds = [servant, ...noeuds.filter((u) => u !== servant)];
+  }
+  /* ⛔⛔ UNE LECTURE PROFONDE VA DEVANT CHEZ CELUI QUI SERT L ARCHIVE. Mesure du 2026-09-30 :
+   *    publicnode sert un getLogs jusqu a -5 000 blocs et refuse des -10 000. Le Brain balaie
+   *    60 000 blocs, donc CENT POUR CENT de ses fenetres partaient d abord vers un refus :
+   *    75 appels pour 16 fenetres, 16 a 26 s, et parfois des fenetres perdues pour de bon.
+   *  ⛔ ON REORDONNE, ON NE RETIRE RIEN — la regle du plafond d adresses juste au-dessus le dit
+   *    deja : « une optimisation qui supprime un repli transforme un ralentissement en panne ».
+   *  ⛔ ET SI LA PROFONDEUR N EST PAS CHIFFRABLE, ON NE TOUCHE A RIEN. `etatProfondeur` rend
+   *    INCONNUE sans tete de chaine connue ou sans `fromBlock` numerique : router sur une
+   *    profondeur devinee pourrait envoyer la lecture vers le noeud qui refuse. */
+  if (!viseFactory && filtreLogs) {
+    const prof = etatProfondeur(filtreLogs, rpcTete.n);
+    if (prof.etat === 'PROFONDE') noeuds = ordreNoeuds(noeuds, prof, RESEAUX[CHAINE].logsArchiveRpc);
   }
   let derniere = null;
   for (let i = 0; i < noeuds.length; i++) {
@@ -3636,6 +3714,14 @@ const dessin = (adr, sym) => {
 
 /* ── la map vivante ───────────────────────────────────────────────────────────────────────── */
 const habitants = [];
+/* ⛔ DECLARES ICI, AVANT `creerHabitant` QUI LES UTILISE. Mis apres la fonction, ils tombaient
+ *   dans la zone morte temporelle d un `const` : un appel precoce aurait leve une ReferenceError
+ *   que mon propre `try/catch` aurait avalee EN SILENCE — un correctif qui se cache tout seul.
+ * ⛔ 400 ms : assez pour avaler la rafale d arrivee (223 blocks en ~4 s, mesure du 2026-09-30),
+ *   assez court pour que personne ne reste devant une liste vide. Plus grand, le selecteur
+ *   resterait vide plus longtemps que le bug ne durait dans les cas favorables. */
+const ATTENTE_REPEINT_BRAIN = 400;
+let repeintChoixBrain = null;
 /* tip 0042 : marche condense par block (adresse minuscule -> ligne /api/trending), lu pour les soleils et la fiche */
 const marcheParAdr = new Map();
 /* ⛔⛔ NOTRE PROPRE LECTURE DES POOLS NON-v4 (Aerodrome CL et tout fork Uniswap v3).
@@ -3953,6 +4039,31 @@ function creerHabitant(c) {
    *     avant, construit le moteur — `moteur3d` y est toujours vrai. Une branche qui ne s execute
    *     jamais fait croire que le cas est couvert, et c est pire que pas de branche du tout. */
   habitants.push(h);
+  /* ⛔⛔ LE SELECTEUR DE CERVEAU SE REBATIT QUAND LES BLOCKS ARRIVENT, ET C EST UN BUG MESURE.
+   *    Reproduction du 2026-09-30, onglet NEUF, serveur local : on ouvre Brain a ~4 s, les blocks
+   *    arrivent a ~6 s. Resultat — `#bChoix` reste a **0 option pendant 24 s**, alors que la map
+   *    en affiche **223**. Quitter l onglet et y revenir le remplit d un coup : **476 options**.
+   *    Donc la liste etait batie une fois, sur un ensemble VIDE, et plus jamais.
+   *  ⛔ LA MAUVAISE DEPENDANCE ETAIT LA CAUSE : le seul rebati vivait a la fin de la peinture des
+   *    STADES, qui depend des lectures de VIE — pas de l arrivee des blocks. Un block qui apparait
+   *    ne declenchait donc rien.
+   *  ⛔ ET ON COALESCE, pour deux raisons opposees qui se seraient annulees : repeindre a chaque
+   *    block coutait 223 reconstructions completes (`stadesDesBlocks` sur toute la liste) ; ne
+   *    repeindre qu au PREMIER aurait figé la liste a une seule option — pire que le bug d origine.
+   *    Meme idiome que `repeintFaces` plus bas : on annule et on repousse.
+   *  ⛔ SEULEMENT SI L ONGLET EST OUVERT, et jamais pendant qu on choisit : voler le focus d un
+   *    `select` ouvert reprendrait la main a quelqu un en train de lire. */
+  if (typeof document !== 'undefined') {
+    try {
+      const v = $('#v-brain');
+      if (v && v.classList.contains('on') && document.activeElement !== $('#bChoix')) {
+        clearTimeout(repeintChoixBrain);
+        repeintChoixBrain = setTimeout(() => {
+          try { if ($('#v-brain').classList.contains('on')) peindreChoixBrain(); } catch (_) { /* l ecran ne doit pas tomber pour un repeint */ }
+        }, ATTENTE_REPEINT_BRAIN);
+      }
+    } catch (_) { /* pas de DOM pret : rien a repeindre */ }
+  }
   try { if (moteur3d) moteur3d.placer(h); }
   catch (e) { console.warn('[map] pose reportee a la prochaine image', e && e.message); }
   return h;
@@ -16015,7 +16126,26 @@ $('#bReconstruire').addEventListener('click', async () => {
 let repriseEnCours = false;
 $('#bReprendre').addEventListener('click', async () => {
   const e = $('#bReprendreEtat');
-  if (repriseEnCours || !brainAdr) return;
+  /* ⛔⛔ CE BOUTON ETAIT UN NO-OP MUET, ET JE L AI MESURE : `if (repriseEnCours || !brainAdr)
+   *    return;` sortait sans un mot. Dans un onglet neuf ou le selecteur n avait pas eu le temps
+   *    de se remplir, on cliquait « Read its memory back » et il ne se passait RIEN — ni texte, ni
+   *    erreur console, ni appel reseau. J ai moi-meme cru mesurer une lecture de 38 s qui n avait
+   *    jamais commence. Un refus muet passe pour un accord.
+   *  ⛔ DEUX CAUSES, DEUX PHRASES : « pas de block choisi » n est pas « lecture deja en cours ».
+   *    Les fondre laisserait le lecteur sans savoir s il doit choisir ou attendre. */
+  if (repriseEnCours) {
+    e.className = 'note';
+    e.textContent = 'Already reading this block\'s memory — one read at a time.';
+    return;
+  }
+  if (!brainAdr) {
+    e.className = 'note wKo';
+    const s = $('#bChoix');
+    e.textContent = (s && s.options.length)
+      ? 'Pick a block above first — its memory lives at its own address.'
+      : 'Still reading the chain for blocks — the list above fills in a moment, then pick one.';
+    return;
+  }
   repriseEnCours = true;
   e.className = 'note';
   e.textContent = 'Reading this block\'s recent transfers…';
@@ -16930,6 +17060,138 @@ $('#cSelNouveau').addEventListener('click', nouveauSel);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
 $('#cRole').addEventListener('change', () => { peindreRolesCreate(); majFraisEtRecap(); });
 $('#cVerifier').addEventListener('click', () => void verifierAdresseCreation());
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * FAIRE UN BLOCK DEPUIS UN JETON EXISTANT — et ne rien promettre qu on ne tienne.
+ *
+ * ⛔⛔ CE QUE CE CHEMIN NE FAIT PAS : il ne cree AUCUN adossement. Notre B20 n a ni minter
+ *   ni admin et le CreateRouter FORCE 1 milliard (« strips any cap/mint and force-appends
+ *   sealed 1B »). On ne peut donc pas frapper contre un depot, ni choisir la supply. Le
+ *   block produit est une REPRESENTATION. La phrase vient de `avertissementNonAdosse()`.
+ *
+ * ⛔⛔ ET IL NE PROMET PAS DE SPLIT. Mesure du 2026-09-30 : `multiplier()` existe sur
+ *   14/14 B20 lus — c est NATIF au standard, pas un ajout de l emetteur — et vaut
+ *   exactement 1,000000x sur notre block (4 lectures identiques), contre 1,000377119x sur
+ *   GOOGLc. Donc quelqu un peut l ecrire ; je n ai PAS prouve que NOUS pouvons, et nos
+ *   blocks sont sans admin. Annoncer des splits « comme Coinbase » serait une promesse
+ *   non mesuree.
+ *
+ * ⛔ LE FRAIS EST CALCULE EN PREMIER, ET C EST FAIL-CLOSED : si `planDeFrais` refuse, on
+ *   n offre PAS le pre-remplissage. Un chemin livre sans sa ligne de frais reste gratuit
+ *   pour toujours, et personne ne s en apercoit avant de lire le solde.
+ *
+ * ⛔ Le decodage des chaines passe par `decoderChaine` (reclamation.js), le decodeur
+ *   CANONIQUE : un `String.fromCharCode` par octet rend du LATIN-1, et des blocks reels
+ *   s affichaient « å°çç¶­å°¼ ». En ASCII pur les deux chemins sont identiques — c est pour
+ *   ca que le defaut avait survecu.
+ */
+const SEL_NOM_ERC20 = '0x06fdde03';       /* name()        */
+const SEL_SYM_ERC20 = '0x95d89b41';       /* symbol()      */
+const SEL_DEC_ERC20 = '0x313ce567';       /* decimals()    */
+const SEL_SUP_ERC20 = '0x18160ddd';       /* totalSupply() */
+
+function direTok(txt, ko = false) {
+  const n = $('#cTokNote');
+  if (!n) return;
+  n.className = ko ? 'note wKo' : 'note';
+  n.textContent = txt;
+}
+
+async function lireJetonSource() {
+  const b = $('#cTokLire');
+  const brut = String(($('#cTokSrc') || {}).value || '').trim();
+
+  /* ⛔ UNE ADRESSE TRONQUEE NE SE COMPLETE PAS. On exige les 40 hex, sinon on refuse. */
+  if (!/^0x[0-9a-fA-F]{40}$/.test(brut)) {
+    direTok('That is not a full token address — paste all 42 characters, starting with 0x.', true);
+    return;
+  }
+
+  /* ⛔ LE FRAIS D ABORD. Pas de ligne de frais ⇒ pas de chemin. */
+  const frais = planDeFrais({
+    fraisOuvertureWei: FRAIS_OUVERTURE_WEI,
+    bpsInterface: FRAIS_INTERFACE_BPS,
+    beneficiaire: FEE_WALLET,
+  });
+  if (frais.etat !== 'OK') { direTok(phraseFraisChemin(frais), true); return; }
+
+  if (b) { b.disabled = true; b.textContent = 'Reading…'; }
+  try {
+    const code = await rpc('eth_getCode', [brut, 'latest']);
+    if (typeof code !== 'string' || code === '0x') {
+      direTok('Nothing is deployed at that address on Base.', true); return;
+    }
+    /* ⛔ DEJA UN BLOCK : le marqueur B20 est `0xef` EXACTEMENT. Un prefixe 0xb2 ne prouve
+     *   rien, et proposer de « blockifier » un block serait absurde. */
+    if (String(code).toLowerCase() === '0xef') {
+      direTok('That address is already a block — nothing to make from it.', true); return;
+    }
+
+    const [rNom, rSym, rDec, rSup] = await Promise.all([
+      rpc('eth_call', [{ to: brut, data: SEL_NOM_ERC20 }, 'latest']),
+      rpc('eth_call', [{ to: brut, data: SEL_SYM_ERC20 }, 'latest']),
+      rpc('eth_call', [{ to: brut, data: SEL_DEC_ERC20 }, 'latest']),
+      rpc('eth_call', [{ to: brut, data: SEL_SUP_ERC20 }, 'latest']),
+    ]);
+
+    const sym = decoderChaine(rSym);
+    const nom = decoderChaine(rNom);
+    /* ⛔ LES DECIMALES NE SE SUPPOSENT JAMAIS. Supposer 18 sur un jeton a 6 decimales
+     *   fausserait la comparaison de supply d un facteur mille milliards. */
+    let dec = null;
+    try { if (typeof rDec === 'string' && rDec !== '0x') dec = Number(BigInt(rDec)); } catch (_) { dec = null; }
+    let sup = null;
+    try { if (typeof rSup === 'string' && rSup !== '0x') sup = BigInt(rSup); } catch (_) { sup = null; }
+
+    if (!sym || dec === null || sup === null) {
+      const manque = [!sym ? 'symbol' : null, dec === null ? 'decimals' : null, sup === null ? 'total supply' : null]
+        .filter(Boolean).join(', ');
+      direTok('That contract did not answer as an ERC-20 — could not read its ' + manque + '.', true);
+      return;
+    }
+
+    /* ⛔⛔⛔ PAS DE SOSIE D ACTION TOKENISEE. Un block « AAPL » sans adossement, pose a cote
+     *   du AAPLc REEL de l emetteur (actions Coinbase sous Regulation S, sous-jacent detenu),
+     *   se lit comme la meme chose : quelqu un achèterait le sosie en croyant acheter l action.
+     *   ⛔ Et si la liste de reference manque, on REFUSE : une garde sur une liste absente est
+     *     toujours fausse, et celle-la ne protegerait exactement rien. */
+    const col = collisionAvecEmetteur(sym, ACTIONS_COINBASE.map((a) => a.symbole));
+    if (col.verdict !== 'LIBRE') { direTok(phraseCollision(col), true); return; }
+
+    const plan = planDepuisJetonAvecSupplyScellee({
+      supplySource: sup, decimalesSource: dec, supplyScellee: SUPPLY_FIXE, decimalesB20: DECIMALES_FIXES,
+    });
+    if (plan.etat !== 'OK') { direTok(phrasePlanScelle(plan), true); return; }
+
+    /* PRE-REMPLISSAGE. ⛔ Les champs ont un maxlength : on tronque, et on LE DIT —
+     *   un nom coupe en silence ferait croire a une faute de frappe de l utilisateur. */
+    const cs = $('#cSym'); const cn = $('#cNom');
+    const symMax = Number((cs && cs.getAttribute('maxlength')) || 12);
+    const nomMax = Number((cn && cn.getAttribute('maxlength')) || 32);
+    const symFinal = sym.slice(0, symMax);
+    const nomFinal = (nom || sym).slice(0, nomMax);
+    const coupe = (symFinal !== sym) || (nomFinal !== (nom || sym));
+    if (cs) { cs.value = symFinal; cs.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (cn) { cn.value = nomFinal; cn.dispatchEvent(new Event('input', { bubbles: true })); }
+
+    direTok('Read ' + symFinal + (nom ? ' (' + nomFinal + ')' : '') + '. '
+      + (coupe ? 'Shortened to fit the Create fields. ' : '')
+      + phrasePlanScelle(plan) + ' ' + avertissementNonAdosse() + ' ' + phraseFraisChemin(frais));
+
+    /* ⛔ ON EMMENE VERS CREATE, sinon les champs sont remplis dans un onglet que personne ne
+     *   regarde — « un message juste dans un volet masque » ne dit rien (25 taps / 7 sessions).
+     *   Le chemin de signature reste le seul qui marche : `#cCreer`. */
+    try { etape('tokeniser_jeton_lu'); } catch (_) { /* l entonnoir ne doit jamais bloquer l ecran */ }
+    allerA('creer');
+  } catch (e) {
+    /* ⛔ ON NOMME L ECHEC. Un catch muet laisserait l ecran sur son texte d invite, et le
+     *   lecteur croirait que rien ne s est passe alors que la lecture a echoue. */
+    direTok('Could not read that token right now — the chain read failed. Try again.', true);
+  } finally {
+    if (b) { b.disabled = false; b.textContent = 'Read it'; }
+  }
+}
+if ($('#cTokLire')) $('#cTokLire').addEventListener('click', () => void lireJetonSource());
 
 /* ══ PLUS DE CHARGEMENTS MANUELS ════════════════════════════════════════════════════════════════════
  * ⛔⛔ PHIL (2026-09-18) : « fais le feed automatiquement, il y a plein de trucs que tu fais manuellement,

@@ -1390,6 +1390,13 @@ const ETAPES_ENTONNOIR = [
    *    ⛔ ET CE N EST PAS UNE REDEFINITION : `achat` et `achat_ok` gardent leur sens, sinon
    *      l historique d avant deviendrait incomparable avec celui d apres. On AJOUTE une ligne. */
   'achat_echec',
+  /* ⛔ SANS CETTE LIGNE, L ETAPE EST JETEE EN SILENCE. `/api/etape` rend 204 qu il accepte ou
+   *   qu il refuse : un nom hors liste blanche disparait sans un mot, et on croirait que
+   *   personne n emprunte le chemin alors qu on ne le compte pas. C est ce qui m est deja
+   *   arrive en postant du JSON a un endpoint qui lit `?e=` — le 204 ne prouve rien.
+   *   `tokeniser_jeton_lu` = un jeton existant a ete LU et Create a ete pre-rempli. Ca ne dit
+   *   RIEN d une creation : la signature reste un geste separe, compte par `cree`. */
+  'tokeniser_jeton_lu',
   'achat_prepare', 'achat_sign_propos', 'achat_sign_refus', 'achat_ok', 'marche_rescan_ok',
   /* ⛔ UN NOM DISTINCT, PAS UN NOM RECYCLE. `marche_rescan_ok` est la relecture d UN block depuis sa
    *   fiche ; `stades_relire` est le rattrapage EN LOT depuis le panneau des paliers. Les fondre
@@ -1581,6 +1588,13 @@ const SERVIS = [
    *      production — un import 404 arrete tout le module, silencieusement.
    *    ⇒ C est `test-imports-servis.mjs` qui l a crie, pas ma relecture. La garde a paye. */
   'espacements-cl.js',
+  /* ⛔ `tokeniser-un-jeton.js` porte le refus de sosie et le frais FAIL-CLOSED du chemin
+   *   « make a block from an existing token ». L oublier ici ne casserait pas ce champ :
+   *   ca tuerait TOUTE la page, puisqu un import 404 arrete le module entier. */
+  'tokeniser-un-jeton.js',
+  /* ⛔ `profondeur-logs.js` decide vers quel noeud part une lecture d historique profond.
+   *   L oublier ici tuerait TOUTE la page : un import 404 arrete le module entier. */
+  'profondeur-logs.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
