@@ -58,6 +58,37 @@ export const DEVISES_BASE = [
    *     liquidite sur Uniswap. C est la seule chose qui compte pour une devise de paire : qu on
    *     sache lire son prix, et qu il y ait de quoi echanger en face. */
   { adr: '0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4', symbole: 'TOSHI', nom: 'Toshi — quote your block in TOSHI', type: 'MAJEUR', chaines: [8453] },
+  /* ⛔⛔ OUSD, AJOUTE LE 2026-09-30 (Phil : « on ajoute au marche si c est le B20 qui est
+   *     autorise »), ET IL EST LE SEUL STABLECOIN INSTITUTIONNEL QUI PASSE NOTRE PROPRE REGLE.
+   *   ⛔ ADRESSE COPIEE de l annonce de l emetteur, jamais rappelee de memoire.
+   *   ✅ CE QU IL EST, MESURE LE JOUR MEME, avec temoin :
+   *        OUSD  `eth_getCode` = 0xef  ← le marqueur B20, EXACTEMENT
+   *        USDC  `eth_getCode` = 1852 octets de bytecode ordinaire — PAS un B20
+   *      symbol() « OUSD » · name() « OpenUSD » · decimals() 6 · supply 15 000 528,32
+   *      Emis par Bridge (Stripe). C est ce qui le rend appairable SANS exception : la regle de
+   *      Raksha du 2026-09-15 (« custom pair must prove native B20, no ERC-20 sprawl ») l admet
+   *      de plein droit, la ou USDC n est present que par cette liste blanche.
+   *   ✅ ET IL A UN MARCHE REEL — la seule chose qui compte pour une devise de paire, comme
+   *      ecrit pour TOSHI juste au-dessus. Mesure DexScreener du 2026-09-30 :
+   *        OUSD/USDC  Uniswap  liquidite 9 999 561 $   volume 24 h 5 234 $
+   *        OUSD/ETH   Uniswap  liquidite       289 $   volume 24 h     0 $
+   *      Huit fois la liquidite qui avait justifie TOSHI (1 230 755 $).
+   *   ⚠️⚠️ DEUX RESERVES QUI VOYAGENT AVEC LUI, et qui ne sont pas des details :
+   *      1. LE VOLUME EST MINUSCULE (5 234 $). Il est ne aujourd hui. Profondeur n est pas
+   *         activite : un block cote en OUSD trouvera de quoi s echanger, pas forcement quelqu un.
+   *      2. LA POOL OUSD/ETH EST VIDE (289 $). Toute route qui passerait par ETH -> OUSD taperait
+   *         dans le vide ; la profondeur est du cote USDC. Un routeur qui l ignore rendrait un
+   *         devis catastrophique — a traiter quand le multi-saut le prendra en compte.
+   *   ⛔ CE QUE JE N AI PAS VERIFIE, ET QUI N EST DONC PAS UN ARGUMENT :
+   *      · que le prefixe `0xB2` et le marqueur `0xef` signifient la MEME fabrique que nos blocks.
+   *        Meme format ne veut pas dire meme emetteur ni meme semantique — c est exactement
+   *        `b20-prefix-impersonation` : le code prouve le FORMAT, pas la parente ;
+   *      · les reserves BlackRock/BNY/Lead Bank viennent de la page de l emetteur, pas d une
+   *        mesure. Les attestations mensuelles sont a reserves.bridge.xyz/ousd ;
+   *      · le programme de « rewards proportional to the supply and activity » d Open Standard
+   *        vient de leur page aussi. C est une PISTE de revenu, pas un revenu : aucun montant,
+   *        aucun bareme, aucune inscription faite. Ne pas l ecrire comme acquis. */
+  { adr: '0xB2000000000000000000002fEb517dFeC7415344', symbole: 'OUSD', nom: 'Open USD — quote your block in OUSD', type: 'STABLE', chaines: [8453] },
 ];
 
 /**
