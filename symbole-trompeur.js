@@ -30,13 +30,27 @@ export const VERDICTS = Object.freeze(['TROMPEUR', 'LIBRE', 'NON_VERIFIABLE']);
  * ⛔ ET L ADRESSE COMPTE : la VRAIE devise porte le meme symbole et ne doit PAS etre marquee.
  *   C est tout le sujet — on distingue l original de son homonyme, pas on marque le mot.
  */
-export function symboleTrompeur(symbole, adresse, devises) {
+export function symboleTrompeur(symbole, adresse, devises, estANous = null) {
   const s = String(symbole || '').trim();
   if (!s) return { verdict: 'NON_VERIFIABLE', pourquoi: 'SYMBOLE_VIDE', devise: null };
   if (!Array.isArray(devises) || !devises.length) {
     return { verdict: 'NON_VERIFIABLE', pourquoi: 'LISTE_DEVISES_ABSENTE', devise: null };
   }
   const a = String(adresse || '').trim().toLowerCase();
+  /* ⛔⛔ ON NE MARQUE PAS LES SIENS (Phil, 2026-09-30 : « marque que ceux des autres »).
+   *   Mesure qui a declenche la regle : la garde avait marque « TBLOCK ⚠ · …5949 » — le block
+   *   que Phil etait en train de creer, visible sur sa propre capture. Avertir quelqu un contre
+   *   lui-meme use l avertissement : au bout de deux fois, on ne le lit plus, et le jour ou il
+   *   designe un vrai homonyme il ne sert plus a rien.
+   * ⛔ LE TEST PASSE AVANT LA LISTE DES DEVISES, mais APRES les refus : un symbole vide reste
+   *   NON_VERIFIABLE meme s il est a nous — on ne transforme pas une ignorance en accord.
+   * ⛔ ET SEUL UN `true` FRANC COMPTE : un lecteur qui leve, qui rend `undefined` ou autre chose
+   *   ne doit PAS faire taire la garde. Le doute profite au lecteur, pas au block. */
+  if (a && typeof estANous === 'function') {
+    let mien = false;
+    try { mien = estANous(a) === true; } catch (_) { mien = false; }
+    if (mien) return { verdict: 'LIBRE', pourquoi: 'EST_LE_NOTRE', devise: null };
+  }
   for (const d of devises) {
     if (!d || !d.symbole) continue;
     if (String(d.symbole).trim().toLowerCase() !== s.toLowerCase()) continue;
@@ -54,9 +68,9 @@ export function symboleTrompeur(symbole, adresse, devises) {
  * ⛔ ON N EFFACE PAS LE SYMBOLE : le cacher priverait le lecteur de ce que le block dit de
  *   lui-meme. On AJOUTE un marqueur, et la phrase d explication vit a cote.
  */
-export function symbolePourListe(symbole, adresse, devises) {
+export function symbolePourListe(symbole, adresse, devises, estANous = null) {
   const s = String(symbole || '').trim() || '?';
-  const v = symboleTrompeur(s, adresse, devises);
+  const v = symboleTrompeur(s, adresse, devises, estANous);
   return v.verdict === 'TROMPEUR' ? s + ' ' + MARQUEUR : s;
 }
 

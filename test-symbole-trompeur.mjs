@@ -81,6 +81,47 @@ ok('les entrees sans symbole dans la liste sont ignorees, pas fatales',
   symboleTrompeur('USDC', SOSIE_A, [{ adr: '0x1' }, ...DEVISES_BASE]).verdict === 'TROMPEUR');
 ok('les verdicts sont geles', Object.isFrozen(VERDICTS));
 
+console.log('symboleTrompeur — ON NE MARQUE PAS LES SIENS (Phil, « marque que ceux des autres »)');
+/* ⛔⛔ LE CAS QUI A DECLENCHE LA REGLE : la garde marquait « TBLOCK ⚠ · …5949 », le block que
+ *    Phil etait en train de creer — visible sur sa propre capture. Avertir quelqu un contre
+ *    lui-meme USE l avertissement : au bout de deux fois on ne le lit plus, et le jour ou il
+ *    designe un vrai homonyme il ne sert plus a rien. */
+const MIEN = () => true;
+const PAS_MIEN = () => false;
+ok('un block A NOUS n est PAS marque, meme au ticker d une devise', (() => {
+  const v = symboleTrompeur('TBLOCK', SOSIE_A, DEVISES_BASE, MIEN);
+  return v.verdict === 'LIBRE' && v.pourquoi === 'EST_LE_NOTRE';
+})(), symboleTrompeur('TBLOCK', SOSIE_A, DEVISES_BASE, MIEN));
+ok('celui d un AUTRE reste marque', symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE, PAS_MIEN).verdict === 'TROMPEUR');
+ok('sans lecteur d appartenance, le comportement ne change pas',
+  symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE).verdict === 'TROMPEUR');
+/* ⛔ SEUL UN `true` FRANC FAIT TAIRE LA GARDE : le doute profite au lecteur, pas au block. */
+ok('un lecteur qui rend undefined ne fait PAS taire la garde',
+  symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE, () => undefined).verdict === 'TROMPEUR');
+ok('un lecteur qui rend une chaine « true » ne suffit pas',
+  symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE, () => 'true').verdict === 'TROMPEUR');
+ok('un lecteur qui LEVE ne fait PAS taire la garde',
+  symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE, () => { throw new Error('liste absente'); }).verdict === 'TROMPEUR');
+ok('un non-fonction est ignore sans casser',
+  symboleTrompeur('USDC', SOSIE_A, DEVISES_BASE, 'oui').verdict === 'TROMPEUR');
+/* ⛔ ET LES REFUS PASSENT AVANT : on ne transforme pas une ignorance en accord. */
+ok('symbole vide reste NON_VERIFIABLE meme si le block est a nous',
+  symboleTrompeur('', SOSIE_A, DEVISES_BASE, MIEN).verdict === 'NON_VERIFIABLE');
+ok('liste absente reste NON_VERIFIABLE meme si le block est a nous',
+  symboleTrompeur('USDC', SOSIE_A, null, MIEN).verdict === 'NON_VERIFIABLE');
+ok('la VRAIE devise reste LIBRE quel que soit le lecteur',
+  symboleTrompeur('USDC', VRAI_USDC, DEVISES_BASE, PAS_MIEN).verdict === 'LIBRE');
+ok('le lecteur recoit l adresse en MINUSCULES', (() => {
+  let vu = null;
+  symboleTrompeur('USDC', SOSIE_A.toUpperCase().replace('0X', '0x'), DEVISES_BASE, (x) => { vu = x; return false; });
+  return vu === SOSIE_A.toLowerCase();
+})(), 'adresse transmise au lecteur');
+console.log('symbolePourListe — et la meme regle pour le libelle');
+ok('le libelle d un block A NOUS reste nu',
+  symbolePourListe('TBLOCK', SOSIE_A, DEVISES_BASE, MIEN) === 'TBLOCK');
+ok('celui d un autre garde son marqueur',
+  symbolePourListe('USDC', SOSIE_A, DEVISES_BASE, PAS_MIEN) === 'USDC ' + MARQUEUR);
+
 console.log('symbolePourListe');
 ok('le sosie recoit le marqueur', symbolePourListe('USDC', SOSIE_A, DEVISES_BASE) === 'USDC ' + MARQUEUR);
 /* ⛔ ON N EFFACE PAS LE SYMBOLE : le cacher priverait le lecteur de ce que le block dit de lui. */
