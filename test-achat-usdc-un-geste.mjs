@@ -25,6 +25,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { sansCommentaires } from './outils-test.js';
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
@@ -115,14 +116,10 @@ cas('⛔ LE MONTANT APPROUVE RESTE EXACT : le confort d un geste n a pas achete 
    *     justement le refus de l approbation illimitee. Une garde qui confond le mot et son emploi
    *     accuse la documentation et laisse passer le code — c est le motif
    *     `presence-dun-nom-nest-pas-son-usage`, dans le sens miroir. */
-  const codeSeul = bloc.replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
-  assert.ok(codeSeul.length > 1200, 'depouillement des commentaires suspect : ' + codeSeul.length);
-  /* ⛔ TEMOIN DU DEPOUILLEUR : il doit avoir RETIRE quelque chose, sinon il ne depouille rien et
-   *   l assertion suivante serait vraie par accident. */
-  assert.ok(codeSeul.length < bloc.length - 500,
-    'le depouillement n a presque rien retire : il ne fonctionne pas, donc la garde qui suit ne '
-    + 'prouve rien (' + bloc.length + ' -> ' + codeSeul.length + ')');
+  /* ⛔ LE DEPOUILLEMENT VIENT DE `outils-test.js` : il porte deja son propre temoin (il LEVE s il
+   *   n a rien retire), donc la garde qui suit ne peut plus etre vraie par accident. */
+  const codeSeul = sansCommentaires(bloc, { minRetire: 500 });
+  assert.ok(codeSeul.length > 1200, 'bloc depouille suspect : ' + codeSeul.length + ' caracteres');
   assert.doesNotMatch(codeSeul, /MAX_UINT256/,
     'le chemin d achat USDC introduit une approbation illimitee dans son CODE');
 });

@@ -20,6 +20,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { sansCommentaires } from './outils-test.js';
 
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
@@ -154,13 +155,11 @@ cas('⛔⛔ POUVOIR DE DETECTION PROUVE PAR MUTATION, pas par un HEAD qui bouge'
    *      pour expliquer la garde ; `String.replace` remplacait donc le COMMENTAIRE, le code restait
    *      intact, et la mutation paraissait « non detectee » sur une garde parfaitement bonne. Un
    *      controle textuel qui ne distingue pas le code de sa documentation accuse la documentation. */
-  const nu = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
-  const USDCnu = nu(USDC), ETHnu = nu(ETH), htmlNu = nu(html);
-  for (const [q, a, b] of [['USDC', USDC, USDCnu], ['ETH', ETH, ETHnu], ['html', html, htmlNu]]) {
-    assert.ok(b.length < a.length - 300, 'le depouillement de ' + q + ' n a presque rien retire ('
-      + a.length + ' -> ' + b.length + ') : il ne fonctionne pas, donc les mutations ci-dessous ne '
-      + 'prouvent rien');
-  }
+  /* ⛔ LE DEPOUILLEMENT VIENT DE `outils-test.js` : une copie locale par fichier, c est la faute
+   *   reintroduite a chaque fichier. Il s accuse lui-meme s il ne retire rien. */
+  const USDCnu = sansCommentaires(USDC, { minRetire: 300 });
+  const ETHnu = sansCommentaires(ETH, { minRetire: 300 });
+  const htmlNu = sansCommentaires(html, { minRetire: 5000 });
   const mutations = [
     ['un nom d etape devient inconnu du serveur',
       () => [...EMIS, 'achat_faux_nom_jamais_declare'],

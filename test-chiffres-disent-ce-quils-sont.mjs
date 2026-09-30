@@ -25,20 +25,14 @@ import { readFileSync } from 'node:fs';
 import { etatMultiplicateur, phraseMultiplicateur, MULTIPLICATEUR_NEUTRE, ETATS_MULTIPLICATEUR,
   SELECTEUR_MULTIPLIER } from './multiplicateur-action.js';
 
+/* ⛔⛔⛔ LE DEPOUILLEMENT VIENT DE `outils-test.js`, PAS D UNE COPIE LOCALE. Quatre gardes ont rougi
+ *      sur du code correct en un seul jour parce qu elles cherchaient une chaine que le COMMENTAIRE
+ *      voisin citait. Reecrire l outil dans chaque test, c est reintroduire la faute a chaque
+ *      fichier : il vit en UN endroit, et il s accuse lui-meme s il ne retire rien. */
+import { sansCommentaires } from './outils-test.js';
+
 const brut = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-/* ⛔⛔⛔ LE DEPOUILLEMENT EST EN HAUT DU FICHIER, ET C EST LA QUATRIEME FOIS EN UN JOUR QUE JE PAIE
- *      CE MOTIF. Mes commentaires CITENT le texte qu ils expliquent — ici la ligne ambigue
- *      « $64.9M traded in 24h ». Un `indexOf` sur la source brute trouve donc le COMMENTAIRE avant
- *      le code, et la garde rougit sur un code parfaitement corrige. Chercher dans un fichier qui
- *      documente ses propres chaines EXIGE de separer le code de sa documentation — une fois, en
- *      haut, pas a chaque assertion. */
-const sansCommentaires = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ')
-  .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
-const html = sansCommentaires(brut);
-if (!(html.length < brut.length - 5000)) {
-  throw new Error('le depouillement des commentaires n a presque rien retire ('
-    + brut.length + ' -> ' + html.length + ') : les gardes qui suivent ne prouveraient rien');
-}
+const html = sansCommentaires(brut, { minRetire: 5000 });
 let n = 0;
 const cas = (t, f) => { n += 1; try { f(); } catch (e) { console.error('✗ ' + t); throw e; } };
 
