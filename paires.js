@@ -125,6 +125,31 @@ export const ACTIONS_COINBASE = [
   { symbole: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
   { symbole: 'MUc', nom: 'Micron Technology', adr: '0xb200000000000000000000fd2f87532b90095211' },
   { symbole: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
+  /* ── PLTRc, AJOUTEE LE 2026-09-30, ET UNE MESURE SUR LES 40 L A ISOLEE ────────────────────────
+   * ⛔⛔ D OU VIENT LE CANDIDAT : la liste de l EMETTEUR lui-meme,
+   *     `https://api.coinbase.com/v1/tokenized-stocks` (HTTP 200, sondee avant d etre codee
+   *     contre). Elle porte 40 entrees ; nous en servions 14. `mesure-registre-emetteur.mjs` a
+   *     verifie les 40 SUR LA CHAINE : 39 passent les quatre preuves, BIRDc tombe (supply 0).
+   * ⛔⛔ ET LE CHIFFRE QUI A TRANCHE, PARCE QU IL DIT L INVERSE DE L INTUITION : nos 14 portent
+   *     deja 98,6 % du volume 24 h de la classe d actifs (79 897 835 $ sur 81 012 041 $) et 94,8 %
+   *     de la liquidite. Ajouter les 26 autres n ajouterait pas 65 % de surface — il ajouterait
+   *     1,4 % de volume. « 14 sur 40 » se lisait comme un trou de 65 % ; c est un trou de 1,4 %.
+   *   ⇒ UNE SEULE SORT DU LOT : PLTRc, 984 171 $ de volume 24 h et 562 201 $ de liquidite —
+   *     a elle seule PLUS que les 25 autres reunies. Les autres vont de 1 074 $ a 99 299 $.
+   * ⛔ ET LE VOISIN QUI RESSEMBLE MAIS N EN EST PAS UN : NFLXc affiche 99 299 $ de liquidite, ce
+   *   qui la place juste sous PLTRc dans un classement — mais c est 14 pools dont la plus grosse
+   *   fait 12 154 $, toutes en v4. Un total n est pas une profondeur. Elle n entre PAS.
+   * ⛔ LA POOL EST PROUVEE PAR TEMOIN DISCRIMINANT, pas par l etiquette de DexScreener :
+   *   sur `0x650cc267AA248191978013d5Ae421e5Dc2A6e242`, `slot0()` REPOND et `getReserves()`
+   *   REVERTE ⇒ Slipstream CL, pas v2. `tickSpacing()` == 10 (present dans
+   *   `ESPACEMENTS_ALTERNATIVE`, donc notre lecteur la trouve), `fee()` == 500, `token0` == USDC.
+   *   ⛔ Et `fee` n est PAS `tickSpacing` : 500 et 10 ici, la lecon est deja ecrite ailleurs.
+   * ✅ CE QUE CA VAUT POUR NOUS, ET C EST LE POINT : la pool est sur AERODROME. C est le seul
+   *   routeur qui porte `sweepTokenWithFee` — donc la seule famille ou notre 0,1 % peut tomber.
+   *   MUc, elle, est sur Uniswap : achetable, mais aveugle a notre frais.
+   * ⚠️ L adresse est EXTRAITE de la reponse JSON de l emetteur, jamais transcrite de tete.
+   * ⚠️ Supply lue le 2026-09-30 : 2 068,33 — mince, et « admise » ne veut pas dire « profonde ». */
+  { symbole: 'PLTRc', nom: 'Palantir Technologies', adr: '0xb2000000000000000000007d16372840df4dabbe' },
   { symbole: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbole: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
   { symbole: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },

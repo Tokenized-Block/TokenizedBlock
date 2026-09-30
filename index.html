@@ -5938,6 +5938,17 @@ const STOCKS_BASE_REGISTRY = [
   { symbol: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
   { symbol: 'MUc', nom: 'Micron Technology', adr: '0xb200000000000000000000fd2f87532b90095211' },
   { symbol: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
+  /* ⛔⛔ PLTRc AJOUTEE LE 2026-09-30 depuis la liste de l EMETTEUR (api.coinbase.com, 40 entrees,
+   *     sondee avant usage) : les 40 verifiees sur la chaine par `mesure-registre-emetteur.mjs`
+   *     (39 passent, BIRDc tombe a supply 0). ELLE SEULE sort du lot -- 984 171 $ de volume 24 h
+   *     et 562 201 $ de liquidite, plus que les 25 autres candidates REUNIES. Pool Slipstream CL
+   *     prouvee par temoin discriminant (`slot0()` repond, `getReserves()` REVERTE), tickSpacing
+   *     10, fee 500, token0 USDC -- et sur AERODROME, la seule famille ou notre 0,1 % peut tomber.
+   *   ⚠️ NFLXc n entre PAS : ses 99 299 $ sont 14 pools v4 dont la plus grosse fait 12 154 $.
+   *     Un total n est pas une profondeur.
+   *   ⛔ TOUT AJOUT ICI DOIT L ETRE DANS `ACTIONS_COINBASE` (paires.js) : un test compare les deux
+   *     ADRESSE PAR ADRESSE, et il est parti ROUGE avant que cette ligne existe. */
+  { symbol: 'PLTRc', nom: 'Palantir Technologies', adr: '0xb2000000000000000000007d16372840df4dabbe' },
   { symbol: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbol: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
   { symbol: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },
