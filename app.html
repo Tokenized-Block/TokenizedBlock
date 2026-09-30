@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-chiffres-attribues" hidden>Build <code>20260930-chiffres-attribues</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-trending-sobre" hidden>Build <code>20260930-trending-sobre</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14002,9 +14002,16 @@ function peindreTrending() {
    *   ⛔⛔ UN CHIFFRE JUSTE DONT L ATTRIBUTION EST AMBIGUE EST UNE SUR-VENTE. Citer la source ne
    *     suffit pas : il faut dire de QUI c est le volume. Quand notre propre fondateur se trompe en
    *     lisant notre ecran, ce n est pas lui qui a mal lu. */
+  /* ⛔ DECISION DE PHIL, 2026-09-30 : la phrase « that is the whole B20 market on Base, not this
+   *   app's volume » est RETIREE. J avais fait valoir qu un chiffre non attribue l avait lui-meme
+   *   induit en erreur ; il a tranche (« c est du marketing, faut pas toujours tout ecrire au
+   *   public ») et c est son produit. Reste `across these markets`, qui attribue le volume aux
+   *   marches listes sans ressembler a un avertissement — deux mots, pas une mise en garde.
+   * ⚠️ CE QUE CA VEUT DIRE POUR LA SUITE : ce chiffre n est PAS le notre et rien a l ecran ne le
+   *   dit plus. Ne jamais le reprendre dans un commit, une mesure ou une copie comme s il l etait. */
   note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd)
-    + ' traded across them in 24h — that is the whole B20 market on Base, not this app’s volume'
-    + ' · figures from DexScreener · updated ' + new Date(d.lu).toLocaleTimeString();
+    + ' traded across these markets in 24h · figures from DexScreener · updated '
+    + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
 /* ══ FACES GRAVEES DANS LES LISTES (Phil 2026-09-19, capture du Relay : « les blocks originaux ne suivent pas ») ══════════

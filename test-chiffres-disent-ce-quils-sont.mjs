@@ -37,24 +37,41 @@ let n = 0;
 const cas = (t, f) => { n += 1; try { f(); } catch (e) { console.error('✗ ' + t); throw e; } };
 
 /* ══ 1. LE VOLUME EST ATTRIBUE ═══════════════════════════════════════════════════════════════ */
-cas('⛔⛔ LE VOLUME DU TRENDING DIT DE QUI IL EST', () => {
+cas('⛔ LE VOLUME DU TRENDING EST RATTACHE AUX MARCHES, ET SA SOURCE EST CITEE', () => {
+  /* ⛔⛔ CETTE GARDE A ETE REDUITE LE 2026-09-30, SUR DECISION DE PHIL, ET JE LE DIS PLUTOT QUE DE
+   *     LA LAISSER POURRIR. Elle exigeait la phrase « not this app's volume ». Phil l a fait
+   *     retirer (« c est du marketing, faut pas toujours tout ecrire au public ») ; c est son
+   *     produit et il a tranche apres que j aie fait valoir le contraire. Affaiblir une garde en
+   *     silence pour qu elle passe serait pire que la retirer : elle est retiree, et la raison est
+   *     ecrite ici.
+   *   ⇒ CE QUI RESTE GARDE : le verbe rattache le volume AUX MARCHES LISTES, pas a l app, et la
+   *     source reste citee. Deux mots, pas une mise en garde.
+   *   ⚠️ CE QUI N EST PLUS GARDE, ET QUI RESTE VRAI : ce volume n est PAS le notre. a6cf n a recu
+   *     aucun jeton d action, le CreateRouter a 0 transaction, l entonnoir compte 2 achats au
+   *     total. Ne JAMAIS reprendre ce chiffre comme le notre dans un commit, une mesure ou une
+   *     copie. L ecran ne le dit plus ; nous, on le sait. */
   const i = html.indexOf('blocks with a live market');
   assert.ok(i > 0, 'la ligne du trending est introuvable : ce controle ne garde rien');
-  const ligne = html.slice(i, i + 420);
-  assert.match(ligne, /not this app/i,
-    'la ligne annonce un volume sans dire qu il n est PAS celui de cette app — c est exactement la '
-    + 'formulation qui a fait conclure « app a succes » sur un volume que nous ne routons pas');
-  /* ⛔ LA SOURCE RESTE CITEE : corriger l attribution ne doit pas faire perdre la provenance. */
-  assert.match(ligne, /DexScreener/, 'la source du chiffre a disparu en corrigeant son attribution');
+  const ligne = html.slice(i, i + 300);
+  assert.match(ligne, /traded across these markets/,
+    'le volume n est plus rattache aux marches listes : formule ainsi, il se lit comme celui de '
+    + 'cette app — c est exactement ce qui a fait conclure « app a succes »');
+  assert.match(ligne, /DexScreener/, 'la source du chiffre a disparu');
 });
 
-cas('⛔ TEMOIN : la garde d attribution DETECTE vraiment son absence', () => {
-  /* ⛔ Sans ce temoin, la garde serait verte meme si elle cherchait une chaine toujours presente. */
-  const mutant = html.replace('not this app’s volume', 'traded in 24h');
-  assert.notEqual(mutant, html, 'mutation sans effet : le motif n existe plus dans le code');
+cas('⛔ TEMOIN : la garde d attribution DETECTE vraiment le retour a la formule ambigue', () => {
+  /* ⛔ Sans ce temoin, la garde serait verte meme si elle cherchait une chaine toujours presente.
+   * ⛔⛔ ET IL MUTE LA FORMULE ACTUELLE, PAS L ANCIENNE : mon premier temoin remplacait encore
+   *     « not this app's volume », retiree entre-temps — la mutation etait donc un NO-OP et le
+   *     temoin ne prouvait plus rien. Un temoin qui mute une chaine disparue est un temoin mort,
+   *     et il meurt en silence. */
+  const mutant = html.replace('traded across these markets in 24h', 'traded in 24h');
+  assert.notEqual(mutant, html,
+    'mutation sans effet : la formule attendue n existe plus dans le code, donc ce temoin est mort');
   const i = mutant.indexOf('blocks with a live market');
-  assert.doesNotMatch(mutant.slice(i, i + 420), /not this app/i,
-    'la garde ne verrait pas le retour a la formulation ambigue');
+  assert.doesNotMatch(mutant.slice(i, i + 300), /traded across these markets/,
+    'la garde ne verrait pas le retour a « traded in 24h » tout court — la formulation qui a fait '
+    + 'lire ce volume comme le notre');
 });
 
 /* ══ 2. LE MULTIPLICATEUR ════════════════════════════════════════════════════════════════════ */
@@ -151,7 +168,8 @@ cas('⛔⛔⛔ LE MARQUEUR VISIBLE NE S ALLUME QUE SUR `DERIVE`', () => {
 });
 
 console.log('✓ test-chiffres-disent-ce-quils-sont : ' + n + ' cas');
-console.log('   Le volume du trending dit qu il n est pas le notre ; le solde brut d une action dit');
-console.log('   quand il n est plus l equivalent-action. Selecteur ' + SELECTEUR_MULTIPLIER + '.');
+console.log('   Le volume du trending est rattache AUX MARCHES listes (plus a « nous ou pas »,');
+console.log('   decision de Phil du 2026-09-30) ; le solde brut d une action dit quand il n est plus');
+console.log('   l equivalent-action. Selecteur ' + SELECTEUR_MULTIPLIER + '.');
 console.log('   ⚠️ NE PROUVE PAS qu un visiteur le lise — seulement que c est ecrit et non supprimable');
 console.log('      en silence.');
