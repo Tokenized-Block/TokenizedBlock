@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-pool-qui-paie" hidden>Build <code>20260930-pool-qui-paie</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-chiffres-attribues" hidden>Build <code>20260930-chiffres-attribues</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2687,6 +2687,7 @@ import { planLancement, simulerLancement, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNais
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, etapeDeCapacite } from './groupe-wallet.js';
 import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
+import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from './multiplicateur-action.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
@@ -5962,7 +5963,24 @@ async function lireJeton(jeton, qui) {
   const b = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('balanceOf(address)')
     + qui.slice(2).toLowerCase().padStart(64, '0') }, 'latest']);
   if (!b || b === '0x') throw new Error('no balance');
-  return { decimales, solde: BigInt(b) };
+  /* ⛔⛔ LE MULTIPLICATEUR DE DIVIDENDE/SPLIT, LU SEULEMENT POUR LES B20. L emetteur (Coinbase) le
+   *     declare sur son propre site : « dividends and splits [are handled] through an onchain
+   *     multiplier rather than by changing your token balance ». Mesure du 2026-09-30 sur nos 14
+   *     actions, 14/14 lues : GOOGLc 1,000377x et METAc 1,000314x ont DEJA derive — exactement les
+   *     deux que son registre marque « SPLIT 2 ».
+   *   ⛔ SEULEMENT LES B20 : ajouter un appel pour l ETH ou l USDC couterait une lecture par actif
+   *     pour une valeur qui n existe pas chez eux.
+   *   ⛔ UN ECHEC ICI NE DOIT JAMAIS FAIRE ECHOUER LA LECTURE DU SOLDE : le solde est l information
+   *     principale, le multiplicateur une precision. `null` ⇒ `NON_MESURE` en aval, jamais « neutre ». */
+  let multiplicateur = null;
+  if (/^0xb2[0-9a-fA-F]{38}$/.test(String(jeton || ''))) {
+    await dormir(260);
+    try {
+      const m = await rpc('eth_call', [{ to: jeton, data: SELECTEUR_MULTIPLIER }, 'latest']);
+      multiplicateur = (m && m !== '0x') ? BigInt(m) : null;
+    } catch (_) { multiplicateur = null; }
+  }
+  return { decimales, solde: BigInt(b), multiplicateur };
 }
 
 /**
@@ -6074,9 +6092,26 @@ function peindreActifs() {
   $('#wActifs').innerHTML = actifs.map((a) => '<li class="wLigne"><div class="wIc">'
     + (a.bloc ? dessin(a.adr, a.nom) : enTexte(a.ic || '•')) + '</div>'
     + '<div class="wNm"><b>' + enTexte(a.nom) + '</b><span class="mono">' + enTexte(a.sous) + '</span></div>'
+    /* ⛔⛔ LE SOLDE BRUT N EST PAS TOUJOURS L EQUIVALENT-ACTION, ET ON LE DIT ICI. Voir
+     *     `multiplicateur-action.js` : l emetteur scale les dividendes et splits par un
+     *     multiplicateur on-chain SANS toucher au solde.
+     *   ⛔⛔⛔ LE MARQUEUR VISIBLE NE S ALLUME QUE SUR `DERIVE`, ET C EST DELIBERE. Un avertissement
+     *      qui s afficherait aussi sur `NON_MESURE` se declencherait a chaque limite de debit du
+     *      noeud — donc presque toujours — et deviendrait invisible le jour d un vrai split. Ce
+     *      depot a deja paye ce motif : une garde presque toujours vraie tue l affordance.
+     *      L incertitude n est pas CACHEE pour autant : elle vit dans l infobulle, qui la porte
+     *      sans user l attention.
+     *   ⛔ ON NE RECALCULE RIEN : la formule officielle n a pas ete lue. On montre ce que la chaine
+     *     detient, et on nomme l ecart. */
     + '<div class="wQt">' + (a.etat === 'LU'
-      ? '<span title="' + enTexte(formaterUnites(a.solde, a.decimales)) + '">'
-        + enTexte(abrege(formaterUnites(a.solde, a.decimales))) + '</span>'
+      ? (() => {
+          const mu = etatMultiplicateur(a.multiplicateur);
+          const note = phraseMultiplicateur(mu, a.nom || 'this token');
+          return '<span title="' + enTexte(formaterUnites(a.solde, a.decimales) + note) + '">'
+            + enTexte(abrege(formaterUnites(a.solde, a.decimales)))
+            + (mu.etat === 'DERIVE' ? ' <b title="dividend/split multiplier — raw count is not your share entitlement">±</b>' : '')
+            + '</span>';
+        })()
       /* ⛔ ILLISIBLE N EST PAS ZERO. Afficher 0 pour un solde qu on n a pas pu lire ferait croire a
        * quelqu un qu il a perdu ses fonds — a cause de notre noeud. */
       : '<span class="wIllisible">unreadable</span>') + '</div></li>').join('');
@@ -13956,8 +13991,20 @@ function peindreTrending() {
       ? '<li class="filL"><p class="note">⚠️ Market data was not fully read (' + d.lotsMarche.ko + ' of '
         + (d.lotsMarche.ok + d.lotsMarche.ko) + ' reads refused) — retrying by itself. This is not a quiet market.</p></li>'
       : '<li class="filL"><p class="note">Nothing is moving right now.</p></li>');
-  note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd) + ' traded in 24h · figures from DexScreener · updated '
-    + new Date(d.lu).toLocaleTimeString();
+  /* ⛔⛔ CETTE LIGNE A TROMPE PHIL LE 2026-09-30, ET C EST LA PREUVE QU ELLE ETAIT MAL ECRITE.
+   *     Elle affichait « 224 blocks with a live market · $64.9M traded in 24h · figures from
+   *     DexScreener ». Le chiffre est VRAI et sa source etait citee — mais rien ne disait A QUI est
+   *     ce volume. Phil l a lu comme le notre et en a conclu « app a succes ». Or c est le volume
+   *     du MARCHE B20 ENTIER sur Base, que nous ne faisons qu AFFICHER.
+   *   ⛔ CE QUE LA MESURE DU MEME JOUR DIT DE NOTRE PART REELLE : a6cf n a recu AUCUN jeton d action
+   *     (132 fenetres lues, 0 refusee), notre CreateRouter a 0 transaction sur 14,1 jours de vie
+   *     (305 fenetres, 0 refusee), et l entonnoir compte 2 achats AU TOTAL, tous deux le 09-22.
+   *   ⛔⛔ UN CHIFFRE JUSTE DONT L ATTRIBUTION EST AMBIGUE EST UNE SUR-VENTE. Citer la source ne
+   *     suffit pas : il faut dire de QUI c est le volume. Quand notre propre fondateur se trompe en
+   *     lisant notre ecran, ce n est pas lui qui a mal lu. */
+  note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd)
+    + ' traded across them in 24h — that is the whole B20 market on Base, not this app’s volume'
+    + ' · figures from DexScreener · updated ' + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
 /* ══ FACES GRAVEES DANS LES LISTES (Phil 2026-09-19, capture du Relay : « les blocks originaux ne suivent pas ») ══════════
