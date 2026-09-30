@@ -441,6 +441,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .fChip b{font-size:14px;color:var(--texte);font-family:inherit}
 .fChip b.trUp{color:var(--vif)} .fChip b.trDown{color:var(--dur)}
 .fActionsMini .bouton{min-height:38px;font-size:13px;padding:8px 10px}
+/* ⛔ LES SALUTS SONT UNE RANGEE SECONDAIRE : quatre boutons de la taille du bouton Buy auraient
+   noye le geste principal. Ils tiennent sur une ligne, et se replient a 375 px — la largeur ou
+   ce depot a deja mesure qu un lien partage tombait sous la ligne de flottaison. */
+.fActionsSaluts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.fActionsSaluts .bouton{min-height:34px;font-size:12px;padding:6px 10px;flex:1 1 auto}
 .fiche details{margin-top:4px}
 
 /* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
@@ -1138,11 +1143,22 @@ details[open] > summary::before{transform:rotate(90deg)}
                  plus tard un compteur « bm » qui n a jamais existe.
                  ⛔ `data-salut` porte le mot : l ecran d envoi le reprend tel quel, il ne le
                  devine pas. -->
-            <div class="fActions fActionsMini" hidden>
-              <button class="bouton sec" id="fGM" data-salut="GM">Send GM 👋</button>
+            <!-- ⛔⛔ CETTE RANGEE ETAIT `hidden`, ET ELLE L ETAIT EXPRES. Phil, 2026-09-18 : « Send
+                 GM — pas utile ICI, la carte garde deux gestes : acheter, ouvrir ». Elle est
+                 RENDUE VISIBLE sur sa demande du 2026-09-30 (« ajoute sur le petit ecran d info
+                 quand tu cliques sur le block sur la map, crée le GM »). Ce n est donc pas un
+                 oubli qu on repare : c est une decision qui en remplace une autre, et les deux
+                 sont ecrites ici pour qu on ne refasse pas le tour.
+                 ⛔ J AVAIS MIS LES SALUTS DANS CETTE RANGEE SANS VOIR QU ELLE ETAIT CACHEE : j
+                 avais verifie qu ils existaient dans le DOM, jamais qu ils etaient VISIBLES. C est
+                 la faute « le bon message dans un volet masque », deja payee ici. -->
+            <div class="fActions fActionsSaluts">
+              <button class="bouton sec" id="fGM" data-salut="GM">GM 👋</button>
               <button class="bouton sec fSalut" data-salut="BM" type="button">BM 🌙</button>
               <button class="bouton sec fSalut" data-salut="GN" type="button">GN 😴</button>
               <button class="bouton sec fSalut" data-salut="Gmeow" type="button">Gmeow 🐱</button>
+            </div>
+            <div class="fActions fActionsMini" hidden>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
               <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
             </div>
@@ -2082,7 +2098,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-saluts-et-frais" hidden>Build <code>20260930-saluts-et-frais</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-un-bouton-et-saluts-visibles" hidden>Build <code>20260930-un-bouton-et-saluts-visibles</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4217,12 +4233,37 @@ $('#map').addEventListener('click', (e) => {
   /* ⛔⛔ L AFFORDANCE USDC EST PILOTEE PAR UN DRAPEAU DISTINCT, et les deux ne sont jamais vrais
    *     ensemble — un test l exige. Melanger les deux aurait soit tue le chemin v4 (qui exige NOTRE
    *     lecture on-chain), soit promis un achat en ETH qu on ne sait pas construire. */
+  /* ⛔⛔ UN SEUL BOUTON D ACHAT, ET C EST PHIL QUI L A VU AVANT MOI (capture du 2026-09-30) :
+   *     « Buy with USDC » et « Buy with ETH · one transaction » s affichaient COTE A COTE sur une
+   *     action Aerodrome, et se lisaient comme deux fois la meme chose. Deux boutons primaires pour
+   *     un seul geste, c est une question posee au visiteur a un moment ou il veut juste acheter.
+   *   ⇒ UN bouton qui dit « Buy », et la DEVISE va dans la phrase en dessous. L ETH est prefere
+   *     quand il est possible : c est UNE transaction au lieu de deux, mesure le 2026-09-29.
+   *   ⛔ LES DEUX ELEMENTS RESTENT, avec leurs handlers : fusionner les deux chemins aurait touche
+   *     a du code d achat teste. On choisit lequel s affiche, on ne reecrit pas l achat. */
   const aBuyUsdc = $('#fAcheterUsdc');
-  if (aBuyUsdc) aBuyUsdc.hidden = !vRoutage.achetableEnUsdc;
+  const ethPossible = !!vRoutage.achetableEnEth;
+  const usdcPossible = !!vRoutage.achetableEnUsdc;
+  if (aBuyUsdc) {
+    aBuyUsdc.hidden = !usdcPossible || ethPossible;
+    aBuyUsdc.textContent = 'Buy';
+  }
   /* ⛔ L ACHAT EN ETH A SON PROPRE DRAPEAU : il n est ouvert que sur Aerodrome, parce qu il passe par
    *   `exactInput` de CE routeur. Une action sur Uniswap v3 reste achetable en USDC et pas en ETH. */
   const aBuyEth = $('#fAcheterEth');
-  if (aBuyEth) aBuyEth.hidden = !vRoutage.achetableEnEth;
+  if (aBuyEth) {
+    aBuyEth.hidden = !ethPossible;
+    /* ⛔ LE LIBELLE NE PORTE PLUS LA DEVISE NI LE NOMBRE DE TRANSACTIONS : « Buy with ETH · one
+     *   transaction » a cote de « Buy with USDC » faisait DEUX boutons a lire. Ce qu il gagne — une
+     *   seule transaction — se dit dans la phrase, la ou il y a la place de l expliquer. */
+    aBuyEth.textContent = 'Buy';
+  }
+  /* ⛔⛔ LA DEVISE EST DITE, PAS DEVINEE. Un bouton « Buy » qui ouvre un achat en ETH sans l avoir
+   *     annonce enverrait quelqu un qui n a que de l USDC droit dans un mur. La phrase porte donc
+   *     ce que le bouton va faire, et l autre possibilite quand elle existe. */
+  const phraseDevise = ethPossible
+    ? ('Buy pays in ETH — one transaction.' + (usdcPossible ? ' USDC also works, from the profile.' : ''))
+    : (usdcPossible ? 'Buy pays in USDC.' : '');
   /* ⛔ ET ON NE POUSSE PAS « INSTANT BIRTH » A LA PLACE : ce block A un marche, il est vivant.
    *   Proposer d en creer un autre etait exactement la reponse hors-sujet mesuree ci-dessus. */
   if (aIb) aIb.hidden = aMarche;
@@ -4230,7 +4271,10 @@ $('#map').addEventListener('click', (e) => {
    *   laisse croire a une panne de l app. Elle est nulle quand tout va bien — expliquer un succes
    *   occuperait la place de la note qui sert vraiment. */
   const noteRoutage = phraseRoutage(vRoutage);
-  if (noteRoutage) $('#fNote').textContent = noteRoutage;
+  /* ⛔ LA DEVISE VIENT EN PREMIER : c est ce que le visiteur doit savoir AVANT de cliquer. La
+   *   phrase de routage explique le reste (ou ca s echange, pourquoi pas ici). */
+  const noteComplete = [phraseDevise, noteRoutage].filter(Boolean).join(' ');
+  if (noteComplete) $('#fNote').textContent = noteComplete;
 });
 
 /* ══ ACHAT EN USDC SUR UNE POOL UNISWAP v3 ═════════════════════════════════════════════════════

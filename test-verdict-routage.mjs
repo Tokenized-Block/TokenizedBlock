@@ -207,8 +207,21 @@ cas('⛔⛔ `achetableEnEth` n est ouvert QUE sur Aerodrome, et il est CABLE', (
   const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   assert.match(app, /id="fAcheterEth"/, 'le bouton d achat en ETH est absent de la page');
   const nu2 = app.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
-  assert.match(nu2, /aBuyEth\.hidden = !vRoutage\.achetableEnEth;/,
-    'la visibilite du bouton ETH n est plus pilotee par le verdict');
+  /* ⛔⛔ CETTE ASSERTION EPINGLAIT UNE LIGNE LITTERALE : `aBuyEth.hidden = !vRoutage.achetableEnEth;`.
+   *     Le 2026-09-30, les deux boutons d achat ont ete fondus en UN SEUL (Phil, capture : « t as
+   *     ecris 2 la meme chose ») et la visibilite passe par `ethPossible`, derive du MEME drapeau.
+   *     La ligne a change, l INVARIANT PAS — mais le test rougissait sur du code correct.
+   *   ⇒ ON GARDE L INVARIANT, PAS LA FORME. Une assertion qui epingle une ligne exacte transforme
+   *     chaque refactor en faux positif, et on finit par l affaiblir pour avoir la paix — ce qui est
+   *     pire que de l avoir bien ecrite. */
+  assert.match(nu2, /ethPossible = !!vRoutage\.achetableEnEth/,
+    'la visibilite du bouton ETH ne derive plus du verdict');
+  assert.match(nu2, /aBuyEth\.hidden = !ethPossible/,
+    'le bouton ETH n est plus cache selon ce drapeau derive');
+  /* ⛔⛔ ET LE BOUTON USDC S EFFACE QUAND L ETH EST POSSIBLE : c est CA qui garantit UN SEUL bouton.
+   *     Sans cette ligne, les deux reapparaitraient cote a cote — le defaut exact que Phil a vu. */
+  assert.match(nu2, /aBuyUsdc\.hidden = !usdcPossible \|\| ethPossible/,
+    'les deux boutons d achat peuvent redevenir visibles ensemble');
   assert.equal((nu2.match(/#fAcheterEth'\)\.addEventListener/g) || []).length, 1,
     'il doit y avoir EXACTEMENT un ecouteur sur le bouton ETH : deux feraient deux achats par clic');
 });
