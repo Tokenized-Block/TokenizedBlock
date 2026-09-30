@@ -39,6 +39,9 @@ import { createHash } from 'node:crypto';
  * de faire decouvrir. Mesure faite avant le correctif, et refaite apres. */
 import { gzipSync } from 'node:zlib';
 import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
+/* ⛔ LES ESPACEMENTS DE TICK VIENNENT DE LA FACTORY, plus d une liste ecrite a la main : elle en
+ *   oubliait trois (80, 150, 500) et cachait la moitie du volume des blocks cotes en action. */
+import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espacements-cl.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -322,9 +325,38 @@ async function faitsDeLaPool(pool) {
  *   ⛔⛔ TROUVER LA POOL NE DECIDE RIEN. C est `choix-de-pool.js`, cote client, qui tranche — et il
  *     ne devie que si le SURCOUT pour le visiteur reste sous le frais qu on prend. Ici on MESURE,
  *     on ne choisit pas : rendre un glissement n est pas recommander une route.
- * ⚠️ BORNE : on ne sonde que les espacements de cette liste. Une pool Aerodrome a un espacement
- *    hors liste serait INVISIBLE, et son absence ici ne prouve pas son inexistence. */
-const ESPACEMENTS_ALTERNATIVE = Object.freeze([1, 10, 50, 100, 200, 2000]);
+ * ⛔⛔⛔ CETTE LISTE A ETE LE BUG, ET IL A COUTE DES JOURS. Elle valait
+ *      `[1, 10, 50, 100, 200, 2000]` — SIX espacements ecrits a la main. La factory Aerodrome CL en
+ *      declare NEUF : `tickSpacings()` rend `1, 50, 100, 200, 2000, 500, 10, 80, 150`. Manquaient
+ *      **80, 150 et 500**. Mesure du 2026-09-30 sur les 13 blocks cotes en action ayant une pool CL :
+ *        · trouvables avec les six : 4
+ *        · INVISIBLES              : 9, dont TE/MUc a tickSpacing **80** et 107 505 $ de volume 24 h
+ *      La moitie du volume de cette categorie etait introuvable, et l ecran en concluait « pas de
+ *      pool » — un refus qui ressemblait a un fait de la chaine alors qu il etait un fait sur NOTRE
+ *      liste. Une liste blanche sans garde de derive DERIVE : elle n avait aucun tort le jour ou
+ *      elle a ete ecrite, la factory a simplement active de nouveaux espacements depuis.
+ *    ⇒ La liste n est plus ecrite ici : `espacements-cl.js` la DEMANDE a la factory, et sa retombee
+ *      porte les neuf. `test-espacements-cl.mjs` compare le code NU de ce fichier a la reponse
+ *      reelle de la factory — il est parti ROUGE sur l espacement 80 avant cette correction.
+ * ⚠️ BORNE : on ne sonde que les espacements rendus. Une pool a un espacement que la factory n a
+ *    pas active serait invisible — mais elle ne pourrait pas exister non plus. */
+const ESPACEMENTS_ALTERNATIVE = Object.freeze([...ESPACEMENTS_RETOMBEE]);
+/* ⛔ LA LECTURE VIVANTE, FAITE UNE FOIS. On garde le resultat ET son etat : si la factory est muette
+ *   on sonde la retombee, mais on n ecrit jamais qu on l a lue. */
+let espacementsLus = null;
+async function espacementsASonder() {
+  if (espacementsLus === null) {
+    espacementsLus = await lireEspacements(
+      async (to, data) => { try { return await callLarge(to, data); } catch (_) { return null; } },
+      FACTORY_AERODROME_CL_SRV);
+    const phrase = phraseEspacements(espacementsLus);
+    console.log('[espacements] ' + (phrase || 'factory : ' + espacementsLus.espacements.join(', ')));
+  }
+  /* ⛔⛔ ON PREND L UNION, PAS LA LECTURE SEULE. Une factory mal lue qui rendrait moins que la
+   *     retombee nous ramenerait au bug d origine EN SILENCE. Sonder un espacement desactive ne
+   *     coute qu une lecture sterile ; en manquer un coute la moitie du volume. */
+  return [...new Set([...espacementsLus.espacements, ...ESPACEMENTS_ALTERNATIVE])].sort((a, b) => a - b);
+}
 const alternativeImmuable = new Map();   /* jeton -> { pool, ts } | { absente: true } — jamais expire */
 
 async function alternativeAerodrome(jeton, famille) {
@@ -339,8 +371,10 @@ async function alternativeAerodrome(jeton, famille) {
     const RESPIRATION_MS = 400;
     let fixe = alternativeImmuable.get(cle);
     if (!fixe) {
+      /* ⛔ LES ESPACEMENTS VIENNENT DE LA FACTORY, plus d une liste ecrite a la main. */
+      const aSonder = await espacementsASonder();
       let trouvee = null, refus = 0;
-      for (const ts of ESPACEMENTS_ALTERNATIVE) {
+      for (const ts of aSonder) {
         try {
           const appel = '0x28af8d0b' /* getPool(address,address,int24) */
             + cle.replace(/^0x/, '').padStart(64, '0') + USDC_SRV.replace(/^0x/, '').padStart(64, '0')
@@ -349,13 +383,32 @@ async function alternativeAerodrome(jeton, famille) {
           await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
           const p = adrDePool(rendu).toLowerCase();
           /* ⛔ L ADRESSE NULLE EST UN FAIT (« pas de pool a cet espacement »), pas une panne. */
-          if (p && !/^0x0{40}$/.test(p)) { trouvee = { pool: p, ts }; break; }
+          if (!p || /^0x0{40}$/.test(p)) continue;
+          /* ⛔⛔⛔ EXISTER N EST PAS ETRE ECHANGEABLE, ET J AI LE TEMOIN : sur USDC/PLTRc la pool a
+           *      tickSpacing 1 EXISTE et porte `liquidity = 0`. Retenir la premiere adresse non
+           *      nulle gravait donc une pool MORTE — pour toujours, puisque ce cache n expire
+           *      jamais — et le glissement calcule dessus divisait par zero. ⛔ Un NaN traverse
+           *      toutes les bornes : il aurait fait passer une pool vide pour une route acceptable.
+           *   ⛔ ET UNE LIQUIDITE NON LUE N EST PAS UNE LIQUIDITE NULLE : on passe a l espacement
+           *     suivant sans compter ca comme un refus de pool, mais on ne grave rien. */
+          let liq = null;
+          try {
+            const l = await callLarge(p, '0x1a686502' /* liquidity() */);
+            liq = (!l || l === '0x') ? null : BigInt(l);
+            await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+          } catch (_) { liq = null; }
+          if (liq === null) { refus += 1; continue; }
+          if (liq === 0n) continue;
+          trouvee = { pool: p, ts };
+          break;
         } catch (_) { refus += 1; }
       }
-      /* ⛔⛔ UN BALAYAGE OU TOUT A ETE REFUSE N EST PAS UNE ABSENCE. Graver `absente` apres six
+      /* ⛔⛔ UN BALAYAGE OU TOUT A ETE REFUSE N EST PAS UNE ABSENCE. Graver `absente` apres neuf
        *     refus de RPC condamnerait ce jeton a ne jamais porter notre frais, pour toujours, a
-       *     cause d une panne de cinq minutes. C est le motif du zero qui ne peut plus monter. */
-      if (!trouvee && refus >= ESPACEMENTS_ALTERNATIVE.length) {
+       *     cause d une panne de cinq minutes. C est le motif du zero qui ne peut plus monter.
+       *   ⛔ LE SEUIL SUIT LA LISTE REELLEMENT SONDEE, pas une constante : avec neuf espacements et
+       *     un seuil reste a six, trois refus de trop auraient suffi a graver un faux `absente`. */
+      if (!trouvee && refus >= aSonder.length) {
         return { etat: 'NON_MESURE', pourquoi: 'every tickSpacing probe was refused by the node' };
       }
       fixe = trouvee || { absente: true };
