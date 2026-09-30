@@ -108,7 +108,10 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     return { etat: 'REFUSE', pourquoi: 'the Aerodrome CL factory does not know this pool for this token '
       + 'pair and tickSpacing — the router could not reach it, and its price cannot be trusted' };
   }
-  const poolAction = { pool, fee: feeAction, tickSpacing: tsAction,
+  /* ⛔ `famille` EST PROUVEE PAR L ALLER-RETOUR CI-DESSUS : la factory Aerodrome vient de rendre
+   *   CETTE adresse pour cette paire et cet espacement, et on a refuse si elle en rendait une
+   *   autre. On ne declare donc pas une provenance, on la transporte. */
+  const poolAction = { pool, fee: feeAction, tickSpacing: tsAction, famille: 'aerodrome',
     sqrtPriceX96: BigInt('0x' + String(s0.res).replace(/^0x/, '').slice(0, 64)),
     actionEst0: bas(a0) === bas(action) };
 
@@ -144,7 +147,11 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
       if (liq === 0n) continue;                      /* ⛔ exister n est pas etre echangeable */
       const b0 = adrDuMot(bt0.res);
       if (!b0) { blockNonMesure += 1; continue; }
-      poolBlock = { pool: pb, tickSpacing: esp, liquidite: liq,
+      /* ⛔ `famille` EST PROUVEE, PAS DECLAREE : cette pool vient de rendre son adresse par un
+       *   aller-retour sur `FACTORY_AERODROME_CL` quelques lignes plus haut. C est la seule
+       *   provenance que `plan-eth-block.js` accepte — il refuse un melange de factories, parce
+       *   qu un seul `exactInput` ne les traverse pas. */
+      poolBlock = { pool: pb, tickSpacing: esp, liquidite: liq, famille: 'aerodrome',
         fee: (() => { try { return Number(BigInt(bf.res)); } catch (_) { return -1; } })(),
         blockEst0: bas(b0) === bas(block),
         sqrtPriceX96: BigInt('0x' + String(bs.res).replace(/^0x/, '').slice(0, 64)) };
@@ -177,7 +184,8 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     if (ps.etat !== 'OK' || pf.etat !== 'OK' || pt0.etat !== 'OK') { pivotsNonMesures += 1; continue; }
     const pa0 = adrDuMot(pt0.res);
     if (!pa0) { pivotsNonMesures += 1; continue; }
-    poolsPivot.push({ pool: p, tickSpacing: esp,
+    /* ⛔ Meme provenance prouvee que les deux autres jambes : `getPool` sur la factory Aerodrome. */
+    poolsPivot.push({ pool: p, tickSpacing: esp, famille: 'aerodrome',
       /* ⛔ LE `fee` EST LU A CHAQUE FOIS, jamais cache : mesure du 2026-09-28, celui de la pool
        *   ts=50 a change entre deux lectures LE MEME JOUR (725 puis 550). Les frais Aerodrome bougent. */
       fee: (() => { try { return Number(BigInt(pf.res)); } catch (_) { return -1; } })(),
@@ -222,7 +230,11 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     if (liqD === 0n) continue;
     const d0 = adrDuMot(dt0.res);
     if (!d0) { directesNonMesurees += 1; continue; }
-    poolsDirectes.push({ pool: pd, tickSpacing: esp,
+    /* ⛔ Meme provenance prouvee que les trois autres jambes : `getPool` sur la factory Aerodrome.
+     *   Cette liste porte la route DIRECTE (WETH -> action), et elle compte autant que les autres :
+     *   `plan-eth-block.js` refuse un melange de factories, et une jambe non marquee serait un
+     *   trou dans cette garde. */
+    poolsDirectes.push({ pool: pd, tickSpacing: esp, famille: 'aerodrome',
       fee: (() => { try { return Number(BigInt(df.res)); } catch (_) { return -1; } })(),
       wethEst0: bas(d0) === bas(WETH_BASE),
       sqrtPriceX96: BigInt('0x' + String(ds.res).replace(/^0x/, '').slice(0, 64)) });

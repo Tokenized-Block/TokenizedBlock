@@ -74,8 +74,23 @@ export const DEVISES_BASE = [
    *        OUSD/ETH   Uniswap  liquidite       289 $   volume 24 h     0 $
    *      Huit fois la liquidite qui avait justifie TOSHI (1 230 755 $).
    *   ⚠️⚠️ DEUX RESERVES QUI VOYAGENT AVEC LUI, et qui ne sont pas des details :
-   *      1. LE VOLUME EST MINUSCULE (5 234 $). Il est ne aujourd hui. Profondeur n est pas
-   *         activite : un block cote en OUSD trouvera de quoi s echanger, pas forcement quelqu un.
+   *      1. ⛔⛔ CE CHIFFRE ETAIT PERIME D UN FACTEUR 35, ET IL DECOURAGEAIT D UN MARCHE QUI EXISTE.
+   *         J avais ecrit « LE VOLUME EST MINUSCULE (5 234 $) » le matin du 2026-09-30. Re-mesure
+   *         le soir, sur notre propre `/api/trending` : OUSD fait 181 424 $ de volume 24 h et
+   *         1 476 trades. Les chiffres pourrissent, et une reserve perimee ne devient pas
+   *         inoffensive en vieillissant : elle continue de dire « n y va pas ».
+   *         ⭐ ET CINQ BLOCKS SONT DEJA COTES EN OUSD, mesure le meme soir :
+   *              OHUSD      169 381 $ / 24 h · 1 371 trades
+   *              OUCAT        3 613 $ ·  30 trades
+   *              FIRSTOUSD    2 238 $ ·  31 trades
+   *              DANGEROUSD     105 $ ·   2 trades
+   *              OBC             26 $ ·   2 trades
+   *            Des gens lancent DEJA chez nous contre OUSD. La reserve qui reste vraie n est donc
+   *            pas « il n y a pas de marche » mais celle du point 2 : notre routage ne l atteint pas.
+   *         ⚠️ CE QUI RESTE VRAI DU DOUTE D ORIGINE : OUSD est ne le 2026-09-30. Cinq jours
+   *            d activite ne font pas une tendance, et les cinq lignes ci-dessus sont dominees par
+   *            UNE SEULE (OHUSD porte 93,4 % du volume des blocks cotes en OUSD). Un marche
+   *            concentre sur un block peut disparaitre avec lui.
    *      2. LA POOL OUSD/ETH EST VIDE (289 $). Toute route qui passerait par ETH -> OUSD taperait
    *         dans le vide ; la profondeur est du cote USDC. Un routeur qui l ignore rendrait un
    *         devis catastrophique — a traiter quand le multi-saut le prendra en compte.

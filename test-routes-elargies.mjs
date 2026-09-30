@@ -25,17 +25,22 @@ const cas = (t, f) => { n += 1; try { f(); } catch (e) { console.error('✗ ' + 
 const MUc = '0xb200000000000000000000fd2f87532b90095211';
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 /* ⛔ Fixtures MESUREES sur la chaine le 2026-09-30. */
+/* ⛔ `famille: 'aerodrome'` est FACTUEL : `0x4e392fbf…` est la pool USDC/WETH que la factory
+ *   Aerodrome CL rend a l espacement 1 (re-mesure du 2026-09-30 au soir). */
 const PIVOT = { pool: '0x4e392fbfe4d0557c82d2f97f02ec39daa31516dd', tickSpacing: 1, fee: 80,
-  wethEst0: true, sqrtPriceX96: '4101408828941892267032113' };
+  wethEst0: true, famille: 'aerodrome', sqrtPriceX96: '4101408828941892267032113' };
 const ACTION = { pool: '0x17e1beb2cd65493da73ed4bbbc7becaaa0f91c73', tickSpacing: 10, fee: 500,
-  actionEst0: false, sqrtPriceX96: '24238673428508397000179791066' };
+  actionEst0: false, famille: 'aerodrome', sqrtPriceX96: '24238673428508397000179791066' };
 const base = { action: MUc, montantWei: 10n ** 16n, poolAction: ACTION, poolsPivot: [PIVOT],
   recipient: '0x041e9e88288c0c62b8549c50a759a74a1a65b6b7',
   deadline: 1790626059n, maintenant: 1790625759n };
 
 /* Une directe qui rend BEAUCOUP (prix volontairement favorable) et une qui rend PEU. */
+/* ⛔⛔ LA ROUTE DIRECTE PORTE SA FAMILLE AUSSI, et c est le cas que ma premiere garde OUBLIAIT :
+ *   elle listait la pool d action, les pivots et la pool de block, et laissait passer les directes
+ *   — pourtant cotees, et susceptibles de GAGNER le devis. Garde vraie, mauvaise moitie. */
 const directe = (sqrt) => ([{ pool: '0x20e5fad2661ee9eb0c04824524030af31943b62d', tickSpacing: 50,
-  fee: 500, wethEst0: true, sqrtPriceX96: sqrt }]);
+  fee: 500, wethEst0: true, famille: 'aerodrome', sqrtPriceX96: sqrt }]);
 const FAVORABLE = directe('790000000000000000000000000000');
 const DEFAVORABLE = directe('7900000000000000000');
 

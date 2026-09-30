@@ -75,7 +75,23 @@ import { readFileSync } from 'node:fs';
 const src = readFileSync('./paires.js', 'utf8');
 ok('le fichier garde la mesure de liquidite OUSD/USDC', /9 999 561/.test(src));
 ok('le fichier garde l avertissement sur la pool ETH vide', /OUSD\/ETH[^\n]*289/.test(src));
-ok('le fichier dit que le volume est minuscule', /volume est minuscule|VOLUME EST MINUSCULE/i.test(src));
+/* ⛔⛔⛔ CETTE ASSERTION EXIGEAIT « le volume est minuscule », ET ELLE EST DEVENUE FAUSSE EN UN JOUR.
+ *    Le chiffre qu elle protegeait (5 234 $) etait perime d un facteur 35 le soir meme : 181 424 $
+ *    et 1 476 trades, mesures sur notre propre `/api/trending`. Une garde qui exige une PHRASE
+ *    PERIMEE empeche la correction au lieu de la proteger — exactement ce qui s est passe avec
+ *    « bps » sur la phrase de frais, deux fois dans la meme journee.
+ *    ⛔ ET ELLE SERAIT RESTEE VERTE : la phrase survit dans la CITATION de la reserve retiree. Une
+ *      garde qui accuse la citation d une faute au lieu de la faute ne mesure rien.
+ *    ⇒ CE QU IL FAUT TENIR N EST PAS LE CHIFFRE, C EST LA DISCIPLINE : que le chiffre perime soit
+ *      RETIRE A VOIX HAUTE, que le chiffre mesure soit la, et que le doute qui reste VRAI
+ *      (la concentration sur un seul block) soit ecrit. */
+ok('⛔ le fichier RETIRE le chiffre perime au lieu de le laisser vivre',
+  /PERIME D UN FACTEUR 35/i.test(src));
+ok('et il porte le volume REMESURE', /181 424/.test(src) && /1 476 trades/.test(src));
+ok('et il nomme les blocks deja cotes en OUSD', /OHUSD/.test(src) && /169 381/.test(src));
+/* ⛔ LE DOUTE QUI RESTE VRAI DOIT RESTER ECRIT : un marche concentre sur un block peut partir avec
+ *   lui. Sans cette ligne, « 181 424 $ » se lirait comme une profondeur etablie. */
+ok('et il dit que ce marche est CONCENTRE sur un seul block', /93,4 %/.test(src));
 /* ⛔ ET QUE LES « REWARDS » NE SONT PAS UN REVENU : sans cette ligne, quelqu un les compterait. */
 ok('le fichier dit que les rewards sont une PISTE, pas un revenu',
   /PISTE de revenu, pas un revenu/i.test(src));

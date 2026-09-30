@@ -213,6 +213,58 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
       + 'and the best of them is chosen by quoting, not by raw liquidity' };
   }
 
+  /* ── ⛔⛔⛔ UNE ROUTE, UNE FACTORY — ET CETTE FONCTION N EN CONSTRUIT QU UNE ──────────────────
+   * Tout ce qui suit fabrique du calldata AERODROME (`calldataExactInputCL`, `ROUTEUR_AERODROME_CL`).
+   * L invariant « toutes ces pools sont Aerodrome » etait donc VRAI mais IMPLICITE : il ne tenait
+   * qu a la discipline de l appelant, qui les resout par `getPool` sur la factory Aerodrome.
+   * ⛔ UN INVARIANT IMPLICITE N EST PAS UNE GARDE. Le jour ou un appelant passerait une pool
+   *   Uniswap V4 — et il y a de quoi : mesure du 2026-09-30, OUSD/USDC porte 10 M$ AU PAIR sur V4
+   *   et ZERO pool Aerodrome sur les NEUF espacements declares — cette fonction batirait un appel
+   *   Aerodrome sur une pool qui n y est pas. Un seul `exactInput` ne traverse pas deux factories :
+   *   l appel reverterait APRES signature, gas paye.
+   *   ⇒ Et le piege a l air CORRECT : chaque jambe existe, toutes les pools sont reelles. C est
+   *     exactement ce que `route-multi-factory.js` existe pour refuser (mutation M1). Ici on rend
+   *     l invariant EXPLICITE et verifiable, au lieu de le laisser tenir a une habitude.
+   * ⛔ ON EXIGE LA FAMILLE, ON NE LA SUPPOSE PAS : une pool sans provenance prouvee est refusee.
+   *   `echange-eth.js` la marque `aerodrome` APRES un aller-retour sur la factory — c est la seule
+   *   provenance acceptable, et le `dexId` d un agregateur n en est pas une.
+   * ⛔ CETTE GARDE NE PEUT QUE REFUSER PLUS, JAMAIS MOINS. C est le seul sens sur a ajouter sur un
+   *   chemin qui porte de l argent et qui fonctionne deja pour 13 blocks. */
+  /* ⛔⛔ ET `poolsDirectes` EN FAIT PARTIE — ma premiere version de cette garde l OUBLIAIT. Elle
+   *   listait `poolAction`, les pivots et `poolBlock`, et laissait passer la route DIRECTE
+   *   (WETH -> action), pourtant cotee plus bas et susceptible de GAGNER le devis : garde vraie,
+   *   mauvaise moitie.
+   * ⛔⛔⛔ MAIS L INCLURE DANS L EXIGENCE DURE ETAIT UNE REGRESSION PIRE QUE LE DEFAUT, et c est
+   *   mon propre test qui l a dit : « une directe mal formee est IGNOREE, pas acceptee ni fatale ».
+   *   Avec la famille exigee sur elles, UNE pool directe douteuse faisait REFUSER TOUT LE PLAN —
+   *   alors que la route par le pivot, elle, marchait. C est `fail-closed sur une affordance efface
+   *   le produit` : le motif qui a fait tomber les puces d achat de 13 a 2 EN PROD.
+   *   ⇒ DEUX REGIMES, ET C EST DELIBERE : sur les jambes OBLIGATOIRES la famille est EXIGEE (sans
+   *     elles il n y a pas de route du tout) ; sur les directes, qui sont un BONUS, elle FILTRE.
+   *     On refuse de S EN SERVIR, on ne tue pas l achat. Le resultat est le meme cote securite —
+   *     une pool d une autre factory ne peut pas etre choisie — sans coter le produit. */
+  const directesMemeFamille = (Array.isArray(poolsDirectes) ? poolsDirectes : [])
+    .filter((d) => d && typeof d.famille === 'string' && d.famille === 'aerodrome');
+  const poolsDeLaRoute = [poolAction, ...poolsPivot].concat(troisSauts ? [poolBlock] : []);
+  const sansFamille = poolsDeLaRoute.filter((p) => !p || typeof p.famille !== 'string' || p.famille === '');
+  if (sansFamille.length) {
+    return { etat: 'REFUSE', pourquoi: 'every pool must carry the market family it was proven on ('
+      + sansFamille.length + ' did not) — a swap cannot cross two factories in one call, and an '
+      + 'unproven venue is not a venue' };
+  }
+  const famillesRoute = [...new Set(poolsDeLaRoute.map((p) => p.famille))];
+  if (famillesRoute.length !== 1) {
+    /* ⛔ LE REFUS NOMME LES DEUX PLACES : « impossible » se lirait comme une panne de l app. */
+    return { etat: 'REFUSE', pourquoi: 'this route mixes ' + famillesRoute.join(' and ')
+      + ' pools, and one swap cannot cross them — each leg exists, and the call would revert' };
+  }
+  if (famillesRoute[0] !== 'aerodrome') {
+    /* ⛔ ET IL DIT OU C EST, pour que l ecran renvoie au bon chemin au lieu d annoncer
+     *   « pas achetable » : la profondeur peut etre bien reelle, ailleurs. */
+    return { etat: 'REFUSE', pourquoi: 'this route is on ' + famillesRoute[0] + ', and this path '
+      + 'only builds Aerodrome calldata — the Universal Router leg is where it belongs' };
+  }
+
   /* ── le devis : on interroge CHAQUE pivot et on garde la meilleure sortie ─────────────────── */
   const saut2 = { sqrtPriceX96: poolAction.sqrtPriceX96, fee: poolAction.fee,
     /* l entree du second saut est l USDC : il est `token0` exactement quand l action ne l est pas */
@@ -246,7 +298,10 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   for (const c of candidates) {
     routes.push({ quotes: [c, saut2, ...(saut3 ? [saut3] : [])], via: 'PIVOT', pivot: c });
   }
-  for (const d of (Array.isArray(poolsDirectes) ? poolsDirectes : [])) {
+  /* ⛔ `directesMemeFamille`, PAS `poolsDirectes` : une directe d une autre factory est ecartee ici
+   *   — un seul `exactInput` ne la traverserait pas, et ce chemin ne construit que de l Aerodrome.
+   *   L ecarter SANS tuer le plan est tout le point du double regime explique plus haut. */
+  for (const d of directesMemeFamille) {
     if (!d || !ADR.test(String(d.pool || '')) || typeof d.wethEst0 !== 'boolean') continue;
     const tsD = entier(d.tickSpacing);
     if (tsD === null || tsD <= 0n) continue;

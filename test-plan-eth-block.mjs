@@ -32,18 +32,23 @@ const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' +
  *     meilleur » coincidaient, donc remplacer le choix par `candidates[0]` ne se voyait pas.
  *     ⇒ La meilleure est desormais en DERNIER. L ordre des donnees d un test peut le rendre aveugle,
  *       et c est au test de s en proteger. */
+/* ⛔ `famille: 'aerodrome'` N EST PAS UN CHAMP AJOUTE POUR FAIRE PASSER LE TEST : ces trois
+ *   adresses sont EXACTEMENT celles que `getPool` de la factory Aerodrome CL rend pour USDC/WETH
+ *   aux espacements 10, 50 et 1 — re-mesure du 2026-09-30 au soir, 3 pools trouvees sur les neuf
+ *   espacements declares. La famille etait donc deja vraie dans ces donnees ; elle est maintenant
+ *   ECRITE, parce que `planEthVersAction` refuse desormais une pool sans provenance prouvee. */
 const PIVOTS = [
   { pool: '0x493e74eda2720e127baccc1a19b2d567bc14ab43', tickSpacing: 10, fee: 500, wethEst0: true,
-    sqrtPriceX96: '4102067387922704494368960' },
+    famille: 'aerodrome', sqrtPriceX96: '4102067387922704494368960' },
   { pool: '0x3fe04a59ebd38cf06080a6f60a98d124eb59392a', tickSpacing: 50, fee: 550, wethEst0: true,
-    sqrtPriceX96: '4101598917909346791088713' },
+    famille: 'aerodrome', sqrtPriceX96: '4101598917909346791088713' },
   { pool: '0x4e392fbfe4d0557c82d2f97f02ec39daa31516dd', tickSpacing: 1, fee: 80, wethEst0: true,
-    sqrtPriceX96: '4101408828941892267032113' },
+    famille: 'aerodrome', sqrtPriceX96: '4101408828941892267032113' },
 ];
 /* ── la pool de l action : NVDAc / USDC sur Aerodrome, LUE ──────────────────────────────────── */
 const NVDAc = '0xb20000000000000000000078ee7ce2fe4908108c';
 const POOL_ACTION = { pool: '0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9', tickSpacing: 10, fee: 500,
-  actionEst0: false, sqrtPriceX96: '52267783314573183670416926724' };
+  actionEst0: false, famille: 'aerodrome', sqrtPriceX96: '52267783314573183670416926724' };
 const RECIPIENT = '0x041e9e88288c0c62b8549c50a759a74a1a65b6b7';
 const MAINTENANT = 1790625759n;
 const DEADLINE = MAINTENANT + 300n;

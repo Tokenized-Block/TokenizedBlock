@@ -26,24 +26,27 @@ import { FEE_WALLET } from './frais-creation.js';
 let n = 0;
 const cas = (t, f) => { n += 1; try { f(); } catch (e) { console.error('✗ ' + t); throw e; } };
 
-/* ⛔ Pivots WETH/USDC : RECOPIES de `test-plan-eth-block.mjs`, qui les tient a jour. */
+/* ⛔ Pivots WETH/USDC : RECOPIES de `test-plan-eth-block.mjs`, qui les tient a jour.
+ * ⛔ `famille: 'aerodrome'` est FACTUEL, pas un champ ajoute pour faire passer le test : ces trois
+ *   adresses sont celles que `getPool` de la factory Aerodrome CL rend pour USDC/WETH aux
+ *   espacements 10, 50 et 1 — re-mesure du 2026-09-30 au soir, sur les NEUF espacements declares. */
 const PIVOTS = [
   { pool: '0x493e74eda2720e127baccc1a19b2d567bc14ab43', tickSpacing: 10, fee: 500, wethEst0: true,
-    sqrtPriceX96: '4102067387922704494368960' },
+    famille: 'aerodrome', sqrtPriceX96: '4102067387922704494368960' },
   { pool: '0x3fe04a59ebd38cf06080a6f60a98d124eb59392a', tickSpacing: 50, fee: 550, wethEst0: true,
-    sqrtPriceX96: '4101598917909346791088713' },
+    famille: 'aerodrome', sqrtPriceX96: '4101598917909346791088713' },
   { pool: '0x4e392fbfe4d0557c82d2f97f02ec39daa31516dd', tickSpacing: 1, fee: 80, wethEst0: true,
-    sqrtPriceX96: '4101408828941892267032113' },
+    famille: 'aerodrome', sqrtPriceX96: '4101408828941892267032113' },
 ];
 const MUc = '0xb200000000000000000000fd2f87532b90095211';
 const TE = '0x3c573bdd88008c94f025e5023212f28e5f39744c';
 /* ⛔ `actionEst0: false` — token0 de la pool est USDC, MESURE. L inverser echangerait le sens du
  *   swap et rendrait un devis a l envers, sans aucune erreur. */
 const POOL_ACTION = { pool: '0x17e1beb2cd65493da73ed4bbbc7becaaa0f91c73', tickSpacing: 10, fee: 500,
-  actionEst0: false, sqrtPriceX96: '24238673428508397000179791066' };
+  actionEst0: false, famille: 'aerodrome', sqrtPriceX96: '24238673428508397000179791066' };
 /* ⛔ `blockEst0: true` — token0 de la pool est TE (le block), MESURE. */
 const POOL_BLOCK = { pool: '0x8d6ad9946b9220e666690e77ce49f933e1ff15c9', tickSpacing: 80, fee: 10000,
-  blockEst0: true, sqrtPriceX96: '396113904605052806495' };
+  blockEst0: true, famille: 'aerodrome', sqrtPriceX96: '396113904605052806495' };
 
 const RECIPIENT = '0x041e9e88288c0c62b8549c50a759a74a1a65b6b7';
 const MAINTENANT = 1790625759n;
