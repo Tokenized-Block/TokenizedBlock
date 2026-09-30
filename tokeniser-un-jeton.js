@@ -264,14 +264,32 @@ export function planDeFrais({ fraisOuvertureWei, bpsInterface, beneficiaire } = 
   };
 }
 
-/** La phrase du frais. ⛔ Elle dit les DEUX lignes : l ouverture une fois, puis le taux. */
+/**
+ * La phrase du frais.
+ *
+ * ⛔⛔⛔ CETTE PHRASE SOUS-EVALUAIT LE COUT D UN FACTEUR SIX, ET C EST MOI QUI L AI ECRITE.
+ *   Elle disait « then 50 bps on every in-app trade » — 0,5 %, notre taux d INTERFACE. Mais sur
+ *   un block lance avec notre hook, c est le HOOK qui prend, et il prend 300 bps :
+ *     app.html:7268  `const HOOK_PREVU_FRAIS_BPS = 300;`
+ *     app.html:7289  « sur nos pools, l interface ne s ajoute plus au hook : TOTAL 3 % »
+ *   L ecran de marche affiche donc « Fee 3% » pendant que cet ecran-ci annonçait 0,5 %. Deux
+ *   chiffres pour le meme geste, et c est le plus petit qui etait mis en avant. Annoncer moins
+ *   que le vrai prix est exactement ce que la regle anti-hype interdit.
+ *   ⇒ Trouve par Zero 1 (2026-09-30), verifie dans le code avant correction.
+ *
+ * ⛔ ET ON NE PROMET PLUS UN TAUX UNIQUE : le frais depend du marche ou le block finit. Sur nos
+ *   pools hookees c est 3 % ; ailleurs, le marche fixe le sien et l ecran le lit pool par pool
+ *   (`libelleFrais`). Une phrase qui donne UN chiffre pour TOUS les cas est fausse des qu il y a
+ *   plus d un cas — et il y en a plus d un.
+ */
 export function phraseFraisChemin(p) {
   if (!p || !ETATS.includes(p.etat)) return 'Fees: not computed.';
   if (p.etat === 'REFUSE') {
     return 'No fee line for this path (' + (p.pourquoi || 'unknown') + ') — refusing to build it.';
   }
-  return 'One-off market opening fee, then ' + p.bps.toString()
-    + ' bps on every in-app trade of this block.';
+  return 'One-off market opening fee. Trading it then costs whatever its market charges — '
+    + 'a block opened here carries a 3% market fee, and every screen shows the exact rate of the '
+    + 'pool you are trading in.';
 }
 
 /**

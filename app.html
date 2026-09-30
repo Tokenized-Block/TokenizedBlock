@@ -1819,7 +1819,13 @@ details[open] > summary::before{transform:rotate(90deg)}
           <li><b>Nothing backs it.</b> No one redeems it, and its price can drift from the token from the first trade onward.</li>
           <li><b>The supply is fixed</b> at 1 billion, minted to you at birth. You do not choose it.</li>
           <li><b>Symbols of issued stocks are refused</b> — a block named like a real tokenized stock would back nothing.</li>
-          <li><b>Cost</b>: the same 0.001 ETH Birth fee as any block, once, when you sign in Create. Then 50 bps on trades made inside the app.</li>
+          <!-- ⛔⛔ CETTE LIGNE DISAIT « 50 bps » — notre taux d INTERFACE — pour un echange qui,
+               sur une pool ouverte ici, coute 3 % : `HOOK_PREVU_FRAIS_BPS = 300`, et le
+               commentaire de `libelleFrais` le dit deja (« l interface ne s ajoute plus au hook :
+               total 3 % »). L ecran de marche affichait donc « Fee 3% » pendant que celui-ci
+               annoncait 0,5 %. Deux chiffres pour le meme geste, et le plus petit etait mis en
+               avant. Trouve par Zero 1, verifie dans le code avant correction. -->
+          <li><b>Cost</b>: the same 0.001 ETH Birth fee as any block, once, when you sign in Create. Trading it then costs what its market charges — <b>3%</b> on a market opened here; each screen shows the exact rate of the pool you trade in.</li>
         </ul>
         </details>
       </div>
@@ -2847,7 +2853,12 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
-import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE } from './paires.js';
+import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
+/* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
+ *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
+ *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
+ *   symbole. 34 assertions, 5/5 mutations, dont une qui avait revele un trou dans mon test. */
+import { symboleTrompeur, symbolePourListe, phraseTrompeur } from './symbole-trompeur.js';
 import { phraseMarcheActions } from './heures-marche.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
@@ -15648,11 +15659,27 @@ function peindreChoixBrain() {
        * onchain, la verite ». Les deux etaient vrais, de sources differentes : le palier venait du
        * marche public, l humeur de la lecture ON-CHAIN (absente ⇒ endormi). On garde le palier et on
        * dit d ou il vient : « ≈ » = chiffre du marche public, pas une lecture de la chaine. */
-      + lignes.map((b) => '<option value="' + enTexte(tous.get(b.adr).adr) + '">'
+      /* ⛔⛔ UN TICKER QUI SE LIT COMME UNE DEVISE EST MARQUE ICI, et c est un cas MESURE :
+       *    cette liste proposait DEUX « · USDC · … » (0xb2…9901 et 0xb2…2701). Les deux sont de
+       *    VRAIS B20 (code 0xef) dont le `name()` est « UpSideDownCat » et « FatCatBatRatWifHat » —
+       *    des jeux de mots, pas des faux. Mais la liste n affichait QUE le symbole : deux blocks
+       *    differents s y lisaient « USDC », et aucun n est le stablecoin (0x833589fC…, qui n est
+       *    meme pas un B20). Le defaut est CHEZ NOUS, pas chez eux.
+       *  ⛔ ON N EFFACE PAS LE SYMBOLE — le cacher priverait le lecteur de ce que le block dit de
+       *    lui-meme. On AJOUTE un marqueur, et `title` porte la phrase qui l explique.
+       *  ⛔ Et la VRAIE devise n est jamais marquee : on distingue l original de son homonyme, on
+       *    ne marque pas le mot. La garde protege aussi TBLOCK, qui est dans `DEVISES_BASE`. */
+      + lignes.map((b) => {
+        const symBrut = String(b.sym || '?').slice(0, 14);
+        const verdictSym = symboleTrompeur(symBrut, tous.get(b.adr).adr, DEVISES_BASE);
+        const expli = phraseTrompeur(verdictSym);
+        return '<option value="' + enTexte(tous.get(b.adr).adr) + '"'
+        + (expli ? ' title="' + enTexte(expli) + '"' : '') + '>'
         + (b.source === 'MARCHE' ? '≈ ' : '') + (EMOJI_STADE[g.cle] || '·') + ' '
         /* tip 0031 : toutes les adresses B20 commencent par 0xb2000000… — on montre la FIN, la seule partie qui distingue */
-        + enTexte(String(b.sym || '?').slice(0, 14)) + ' · …' + enTexte(b.adr.slice(-4))
-        + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>').join('')
+        + enTexte(symbolePourListe(symBrut, tous.get(b.adr).adr, DEVISES_BASE)) + ' · …' + enTexte(b.adr.slice(-4))
+        + (b.pct !== null ? ' · ' + Math.round(b.pct * 100) + ' % → ' + enTexte(b.prochain) : '') + '</option>';
+      }).join('')
       + '</optgroup>';
   }).join('');
   /* ⛔ UN FILTRE QUI VIDE L ECRAN EST PIRE QUE LE FILTRE : au demarrage a froid, la page ne connait

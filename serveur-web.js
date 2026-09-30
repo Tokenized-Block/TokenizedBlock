@@ -1602,6 +1602,9 @@ const SERVIS = [
   /* ⛔ `blocks-a-lancer.js` decide si un block deja cree bloque encore la creation suivante.
    *   L oublier ici tuerait TOUTE la page — un import 404 arrete le module entier. */
   'blocks-a-lancer.js',
+  /* ⛔ `symbole-trompeur.js` marque les tickers qui se lisent comme une devise. L oublier ici
+   *   tuerait TOUTE la page — un import 404 arrete le module entier. */
+  'symbole-trompeur.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

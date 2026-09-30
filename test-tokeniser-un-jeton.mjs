@@ -342,10 +342,23 @@ ok('un REFUS PARLE et dit qu on refuse de construire', (() => {
   const s = phraseFraisChemin(planDeFrais());
   return /refusing to build/i.test(s) && /FRAIS_OUVERTURE_ABSENT/.test(s);
 })(), phraseFraisChemin(planDeFrais()));
-ok('le succes dit les DEUX lignes (ouverture + bps)', (() => {
+/* ⛔⛔⛔ CETTE ASSERTION TENAIT LA PHRASE FAUSSE, ET C EST PIRE QU UNE ABSENCE DE TEST.
+ *   Elle exigeait « bps » et « every in-app trade » — donc elle GARANTISSAIT que l ecran annonce
+ *   50 bps pour un echange qui coute 3 % sur une pool ouverte ici (`HOOK_PREVU_FRAIS_BPS = 300`).
+ *   Un test vert qui tient la mauvaise moitie empeche la correction au lieu de la proteger.
+ *   Trouve par Zero 1 (2026-09-30) ; verifie dans le code avant de toucher au test. */
+ok('le succes dit l ouverture ET le cout REEL du marche', (() => {
   const s = phraseFraisChemin(P);
-  return /opening fee/i.test(s) && /bps/.test(s) && /every in-app trade/i.test(s);
+  return /opening fee/i.test(s) && /3%/.test(s) && /what its market charges|whatever its market charges/i.test(s);
 })(), phraseFraisChemin(P));
+/* ⛔ LA GARDE ANTI-RETOUR : la phrase ne doit PLUS annoncer notre taux d interface comme si
+ *   c etait le prix d un echange. « 50 bps » mis en avant ici sous-evaluait d un facteur six. */
+ok('la phrase n annonce PLUS « 50 bps » comme prix d un echange',
+  !/50\s*bps/i.test(phraseFraisChemin(P)), phraseFraisChemin(P));
+/* ⛔ ET ELLE DIT QUE LE TAUX DEPEND DU MARCHE : un chiffre unique serait faux des qu il y a
+ *   plus d un marche possible, et il y en a plus d un. */
+ok('elle renvoie a l ecran du marche pour le taux exact',
+  /exact rate/i.test(phraseFraisChemin(P)), phraseFraisChemin(P));
 
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');
