@@ -451,8 +451,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    comme base. Il faut donc une BASE EXPLICITE.
    ⛔ DEUX PAR LIGNE, pas quatre : a 329 px de carte, quatre boutons feraient 76 px et « Gmeow 🐱 »
    deborderait. Deux lignes de deux tiennent, et restent lisibles. */
-.fActionsSaluts .bouton{min-height:34px;font-size:12px;padding:6px 8px;
-  flex:1 1 calc(50% - 3px);min-width:0;width:auto;white-space:nowrap}
+/* ⛔ UNE SEULE LIGNE DE QUATRE, pas deux de deux : mesure a 375 px, la carte fait 329 px de large,
+   donc quatre boutons a 78 px. « Gmeow 🐱 » y tient a 11 px. Deux lignes coutaient 40 px de plus,
+   et c est exactement ce qui faisait tomber la note sous la flottaison. */
+.fActionsSaluts .bouton{min-height:32px;font-size:11px;padding:6px 4px;
+  flex:1 1 0;min-width:0;width:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fiche details{margin-top:4px}
 
 /* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
@@ -1159,17 +1162,23 @@ details[open] > summary::before{transform:rotate(90deg)}
                  ⛔ J AVAIS MIS LES SALUTS DANS CETTE RANGEE SANS VOIR QU ELLE ETAIT CACHEE : j
                  avais verifie qu ils existaient dans le DOM, jamais qu ils etaient VISIBLES. C est
                  la faute « le bon message dans un volet masque », deja payee ici. -->
+            <div class="fActions fActionsMini" hidden>
+              <button class="bouton sec" id="fOuvrir">Read its facts</button>
+              <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
+            </div>
+            <p class="note" id="fNote"></p>
+            <!-- ⛔⛔ LES SALUTS SONT SOUS LA NOTE, ET C EST UNE MESURE QUI L A DECIDE. Places
+                 au-dessus, leurs 74 px poussaient `#fNote` a 884 px sur un ecran de 812 : la phrase
+                 qui EXPLIQUE pourquoi le bouton Buy est absent tombait sous la ligne de flottaison.
+                 J avais introduit ce defaut moi-meme en les rendant visibles.
+                 ⛔ L ORDRE SUIT L IMPORTANCE : acheter, comprendre pourquoi on ne peut pas, puis
+                 saluer. Un geste secondaire ne passe pas devant l explication du geste principal. -->
             <div class="fActions fActionsSaluts">
               <button class="bouton sec" id="fGM" data-salut="GM">GM 👋</button>
               <button class="bouton sec fSalut" data-salut="BM" type="button">BM 🌙</button>
               <button class="bouton sec fSalut" data-salut="GN" type="button">GN 😴</button>
               <button class="bouton sec fSalut" data-salut="Gmeow" type="button">Gmeow 🐱</button>
             </div>
-            <div class="fActions fActionsMini" hidden>
-              <button class="bouton sec" id="fOuvrir">Read its facts</button>
-              <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
-            </div>
-            <p class="note" id="fNote"></p>
           </div>
           <p class="note" id="mapNote"></p>
         </div>
@@ -2105,7 +2114,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-saluts-deux-par-ligne" hidden>Build <code>20260930-saluts-deux-par-ligne</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-note-au-dessus-des-saluts" hidden>Build <code>20260930-note-au-dessus-des-saluts</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
