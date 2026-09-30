@@ -145,7 +145,19 @@ export function meriteUnePuce(r) {
 /** Vrai seulement quand l achat porte NOTRE retenue de 0,1 %.
  * ⛔⛔ SEPARE DE `meriteUnePuce` A DESSEIN. Les confondre ferait l une des deux fautes : soit
  *     refuser un bon marche parce qu il ne nous paie pas, soit compter un revenu sur des achats
- *     qui n en produisent aucun. Deux questions, deux fonctions. */
+ *     qui n en produisent aucun. Deux questions, deux fonctions.
+ *
+ * ⛔⛔⛔ `ADMIS_SANS_FRAIS` NE VEUT PLUS DIRE « JAMAIS DE FRAIS » — IL VEUT DIRE « PAS PAR LE
+ *     ROUTEUR ». Mesure du 2026-09-30 : 15 blocks cotes contre une action tokenisee, 1 786 522 $
+ *     sur 24 h, TOUS sur Uniswap — donc hors du seul routeur qui sait porter la retenue dans le
+ *     swap. Le banc de fork a prouve 3/3 qu un `transfer` ORDINAIRE la fait tomber quand meme.
+ *   ⇒ Cette fonction repond a « le ROUTEUR porte-t-il le frais ? ». La question « peut-on le
+ *     prendre AUTREMENT ? » appartient a `frais-hors-routeur.js`, parce qu elle depend du
+ *     WALLET (lot atomique prouve) et non du marche. Deux causes, deux endroits — les fondre
+ *     ici ferait dependre un verdict de marche d une capacite de portefeuille.
+ *   ⛔ ET LE NOM DE LA PORTE RESTE VRAI : un marche `ADMIS_SANS_FRAIS` ne paie rien PAR LE
+ *     ROUTEUR. Si un frais tombe malgre tout, c est l autre module qui l a decide, et il exige
+ *     l atomicite — sans quoi on ne prend rien. */
 export function porteNotreFrais(r) {
   return !!r && r.verdict === 'ADMIS';
 }
