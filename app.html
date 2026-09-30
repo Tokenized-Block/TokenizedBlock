@@ -2246,7 +2246,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ILLISIBLE aveugle la sonde de deploiement exactement comme une empreinte REUTILISEE —
            j aurais verifie mes propres deploiements contre `null`. 23 caracteres desormais, et
            `test-empreinte-de-build.mjs` refuse le depassement. -->
-      <p class="note" data-build="20260930-opacite-profondeur" hidden>Build <code>20260930-opacite-profondeur</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-refus-partiel-se-dit" hidden>Build <code>20260930-refus-partiel-se-dit</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14647,6 +14647,14 @@ function peindreTrending() {
         return '<button type="button" class="bouton sec trAcheter" data-pairer="' + enTexte(l.adr) + '">Pair a block with it</button>';
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
+    /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
+     *   l avertissement de refus partiel apparaissait. Comme `+` lie plus fort que `||`, l ensemble
+     *   vaut `(liste) || (repli)` : des qu UNE ligne s affiche, ce repli est injoignable. La phrase
+     *   qui disait la verite etait ecrite et inatteignable dans le cas qui compte — une liste
+     *   AMPUTEE, pas une liste vide.
+     *   ⇒ LE SIGNAL GENERAL VIT MAINTENANT DANS LA NOTE DE SYNTHESE, qui est toujours visible (voir
+     *     plus bas, « are a FLOOR »). Ce repli-ci reste ce qu il doit etre : le message d ETAT VIDE,
+     *     et il distingue deja « refuse » de « calme » — ce qui est juste, et ne suffisait pas. */
     || (d.lotsMarche && d.lotsMarche.ko
       ? '<li class="filL"><p class="note">⚠️ Market data was not fully read (' + d.lotsMarche.ko + ' of '
         + (d.lotsMarche.ok + d.lotsMarche.ko) + ' reads refused) — retrying by itself. This is not a quiet market.</p></li>'
@@ -14669,9 +14677,26 @@ function peindreTrending() {
    *   marches listes sans ressembler a un avertissement — deux mots, pas une mise en garde.
    * ⚠️ CE QUE CA VEUT DIRE POUR LA SUITE : ce chiffre n est PAS le notre et rien a l ecran ne le
    *   dit plus. Ne jamais le reprendre dans un commit, une mesure ou une copie comme s il l etait. */
-  note.textContent = toutes.length + ' blocks with a live market · ' + usdCourt(d.volume24hUsd)
-    + ' traded across these markets in 24h · figures from DexScreener · updated '
-    + new Date(d.lu).toLocaleTimeString();
+  /* ⛔⛔⛔ UN REFUS PARTIEL N ETAIT SIGNALE SUR AUCUNE SURFACE, ET LE COMPTE SE LISAIT COMME UN
+   *      RECENSEMENT. Le serveur ne leve que si TOUS les lots echouent (`serveur-web.js` :
+   *      `if (!lotsOk && lotsKo) throw`) : un lot refuse sur 38 retire jusqu a 30 blocks VIVANTS de
+   *      la liste, et la publie avec `lotsMarche {ok, ko}`.
+   *    ⛔ L AVERTISSEMENT EXISTAIT, HUIT LIGNES PLUS HAUT, DANS UNE BRANCHE MORTE : il est place
+   *      derriere un `||` alors que `+` lie plus fort, donc `(liste) || (avertissement)` — des
+   *      qu UNE ligne s affiche, il ne peut plus jamais apparaitre. La chaine de caracteres qui
+   *      disait la verite etait deja ecrite et injoignable.
+   *    ⛔ ET LE COMPTE EST UN PLANCHER, PAS UN TOTAL, des que `ko > 0`. Le dire ici est le seul
+   *      endroit qui marche : cette note est TOUJOURS visible, la liste peut etre longue.
+   *    ⇒ Trouve par un audit adversarial (2026-09-30), confirme par deux sceptiques. Et ca
+   *      pourrait etre l autre moitie des « blocks disparus » que Phil signalait : `elaguer`
+   *      retire de la map 3D tout cube absent de cette meme liste. */
+  const koLots = (d.lotsMarche && d.lotsMarche.ko) || 0;
+  const totalLots = koLots ? (d.lotsMarche.ok + d.lotsMarche.ko) : 0;
+  note.textContent = toutes.length + (koLots ? '+' : '') + ' blocks with a live market · '
+    + usdCourt(d.volume24hUsd) + ' traded across these markets in 24h · figures from DexScreener'
+    + (koLots ? ' · ⚠️ ' + koLots + ' of ' + totalLots + ' market reads refused, so this list and '
+      + 'these totals are a FLOOR — up to ' + (koLots * 30) + ' live blocks may be missing' : '')
+    + ' · updated ' + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
 /* ══ FACES GRAVEES DANS LES LISTES (Phil 2026-09-19, capture du Relay : « les blocks originaux ne suivent pas ») ══════════
@@ -18240,8 +18265,26 @@ async function soleilsSurLaMap(essai = 0) {
      *       2. NOS blocks restent, meme sans marche : c est chez nous, on ne se cache pas ;
      *       3. un block dont la vie a ete LUE sur la chaine reste meme absent de la liste — la
      *          chaine prime sur un agregateur. */
+    /* ⛔⛔⛔ QUATRIEME GARDE-FOU, AJOUTE LE 2026-09-30 : ON N ELAGUE PAS SUR UNE LISTE QU ON SAIT
+     *      INCOMPLETE. Le garde-fou n°1 (`size >= 20`) ne protege QUE de la liste vide ou ratee.
+     *      Il ne voit pas le refus PARTIEL : le serveur ne leve que si TOUS les lots echouent
+     *      (`serveur-web.js` : `if (!lotsOk && lotsKo) throw`), donc un lot refuse sur 38 publie
+     *      une liste amputee de jusqu a 30 adresses — et 200 moins 30 passe `>= 20` sans broncher.
+     *      Ces 30 blocks ont un marche VIVANT, ils sont simplement absents de ce qu on a pu lire,
+     *      et on les effacait de la carte pour ca. Un block retire faute d AVOIR PU REGARDER, ce
+     *      n est pas la meme chose qu un block sans marche : c est `absence de preuve contre
+     *      defaut de regarder`.
+     *    ⚠️ ET LE COMPROMIS EST CHIFFRE, PAS SUPPOSE. Ne pas elaguer laisse passer quelques cubes
+     *      sans marche pendant un cycle — le defaut que cet elagage avait corrige (366 cubes, 90
+     *      sans marche). Mesure en production ce soir : `lotsMarche {ok: 38, ko: 0}`. Le cas ko > 0
+     *      est donc RARE, et pendant ce cycle-la le cout est quelques cubes de trop, contre
+     *      jusqu a 30 blocks reels effaces en silence. On prefere le trop-plein visible au vide
+     *      invisible.
+     *    ⛔ ET ON LE DIT : la note de l onglet Blocks porte desormais « this list and these totals
+     *      are a FLOOR », donc le visiteur sait pourquoi la carte est plus chargee. */
+    const listeIncomplete = Boolean(d && d.lotsMarche && d.lotsMarche.ko);
     try {
-      if (marcheParAdr.size >= 20) {
+      if (marcheParAdr.size >= 20 && !listeIncomplete) {
         for (let i = habitants.length - 1; i >= 0; i--) {
           const h = habitants[i];
           if (!h || h.nous) continue;
