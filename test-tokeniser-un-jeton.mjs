@@ -7,10 +7,15 @@
 import {
   DECIMALES_MIN, DECIMALES_MAX, ETATS,
   avertissementNonAdosse, dimensionner, prixInitialPourFdvEgale, ecartDeParite, phraseDimension,
-  planDeFrais, phraseFraisChemin,
+  planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
+  VERDICTS_COLLISION, collisionAvecEmetteur, phraseCollision,
 } from './tokeniser-un-jeton.js';
+/* ⛔ La liste des actions de l emetteur vient de sa source unique, jamais recopiee ici. */
+import { ACTIONS_COINBASE } from './paires.js';
 import { FEE_WALLET, FRAIS_OUVERTURE_WEI } from './frais-creation.js';
 import { FRAIS_INTERFACE_BPS } from './echange.js';
+/* ⛔ La supply SCELLEE vient de sa source unique, jamais ecrite a la main ici. */
+import { SUPPLY_FIXE } from './tokenomics.js';
 
 let n = 0, ko = 0;
 const j = (v) => JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? String(x) : x));
@@ -150,6 +155,142 @@ ok('le succes nomme le symbole source', (() => {
   return /TBLOCK/.test(p);
 })());
 ok('les etats sont geles', Object.isFrozen(ETATS));
+
+console.log('collisionAvecEmetteur — pas de sosie d action tokenisee');
+/* ⛔⛔ UNE GARDE SUR UNE LISTE ABSENTE EST TOUJOURS FAUSSE : ici elle doit REFUSER. */
+ok('liste absente -> NON_VERIFIABLE (jamais LIBRE)', (() => {
+  const c = collisionAvecEmetteur('MOON', null);
+  return c.verdict === 'NON_VERIFIABLE' && c.pourquoi === 'LISTE_EMETTEUR_ABSENTE';
+})(), collisionAvecEmetteur('MOON', null));
+ok('liste VIDE -> NON_VERIFIABLE (une liste vide laisserait tout passer)',
+  collisionAvecEmetteur('MOON', []).verdict === 'NON_VERIFIABLE');
+ok('symbole vide -> NON_VERIFIABLE', collisionAvecEmetteur('', ['AAPLc']).verdict === 'NON_VERIFIABLE');
+ok('symbole d espaces -> NON_VERIFIABLE', collisionAvecEmetteur('   ', ['AAPLc']).verdict === 'NON_VERIFIABLE');
+ok('un symbole libre -> LIBRE', collisionAvecEmetteur('MOON', ['AAPLc', 'METAc']).verdict === 'LIBRE');
+/* Les trois formes de collision. */
+ok('EGAL -> COLLISION et nomme le jeton reel', (() => {
+  const c = collisionAvecEmetteur('AAPLc', ['AAPLc']);
+  return c.verdict === 'COLLISION' && c.pourquoi === 'EGAL' && c.contre === 'AAPLc';
+})(), collisionAvecEmetteur('AAPLc', ['AAPLc']));
+/* ⛔ LE CAS DANGEREUX : « AAPL » a cote du vrai « AAPLc ». */
+ok('AAPL contre AAPLc -> COLLISION', (() => {
+  const c = collisionAvecEmetteur('AAPL', ['AAPLc']);
+  return c.verdict === 'COLLISION' && c.pourquoi === 'SUFFIXE_EMETTEUR' && c.contre === 'AAPLc';
+})(), collisionAvecEmetteur('AAPL', ['AAPLc']));
+ok('AAPLc contre AAPL -> COLLISION (sens inverse)', (() => {
+  const c = collisionAvecEmetteur('AAPLc', ['AAPL']);
+  return c.verdict === 'COLLISION' && c.pourquoi === 'SUFFIXE_AJOUTE';
+})(), collisionAvecEmetteur('AAPLc', ['AAPL']));
+ok('la casse est ignoree', collisionAvecEmetteur('aApLc', ['AAPLc']).verdict === 'COLLISION');
+ok('les espaces autour sont ignores', collisionAvecEmetteur('  AAPLc ', ['AAPLc']).verdict === 'COLLISION');
+/* ⛔ MON TEST S EST TROMPE ICI, PAS LE CODE. J avais ecrit « AAPLcc = deux lettres d ecart
+ *   donc LIBRE » : c est UNE lettre de plus que AAPLc, et un AAPLcc pose a cote d un AAPLc
+ *   reel est precisement le sosie qu on refuse. Le cas garde donc sa vraie valeur. */
+ok('AAPLcc contre AAPLc -> COLLISION (une lettre ajoutee)',
+  collisionAvecEmetteur('AAPLcc', ['AAPLc']).verdict === 'COLLISION',
+  collisionAvecEmetteur('AAPLcc', ['AAPLc']));
+/* ⛔ TEMOIN DE SUR-REFUS : la garde ne doit PAS refuser tout, sinon elle efface le produit
+ *   (13 puces tombees a 2 EN PROD). Deux lettres de plus ne collisionnent pas. */
+ok('DEUX lettres de plus -> LIBRE (la garde ne sur-refuse pas)',
+  collisionAvecEmetteur('AAPLczz', ['AAPLc']).verdict === 'LIBRE',
+  collisionAvecEmetteur('AAPLczz', ['AAPLc']));
+ok('un prefixe COMMUN mais plus court -> LIBRE', collisionAvecEmetteur('AA', ['AAPLc']).verdict === 'LIBRE');
+/* ⚠️ BORNE DECLAREE, PAS UN TROU CACHE : une variante de MEME longueur n est PAS attrapee.
+ *   `AAPLx` passe. La garde couvre l egalite et l ecart d UNE lettre en fin ; elle ne fait
+ *   pas de distance d edition. Je l ecris ici pour que personne ne la croie complete. */
+ok('BORNE : meme longueur, derniere lettre differente -> LIBRE (non couvert, et c est dit)',
+  collisionAvecEmetteur('AAPLx', ['AAPLc']).verdict === 'LIBRE',
+  collisionAvecEmetteur('AAPLx', ['AAPLc']));
+ok('les entrees vides de la liste sont ignorees, pas fatales',
+  collisionAvecEmetteur('MOON', ['', null, 'AAPLc']).verdict === 'LIBRE');
+ok('les verdicts sont geles', Object.isFrozen(VERDICTS_COLLISION));
+
+console.log('collisionAvecEmetteur — sur la VRAIE liste du produit');
+const SYMS = ACTIONS_COINBASE.map((a) => a.symbole);
+ok('la liste du produit n est pas vide', SYMS.length > 0, SYMS.length);
+ok('le premier symbole reel collisionne avec lui-meme',
+  collisionAvecEmetteur(SYMS[0], SYMS).verdict === 'COLLISION', SYMS[0]);
+ok('sa forme sans le suffixe collisionne aussi', (() => {
+  const s = SYMS.find((x) => /c$/.test(x));
+  if (!s) return true;   /* rien a tester si aucun ne finit par c */
+  return collisionAvecEmetteur(s.slice(0, -1), SYMS).verdict === 'COLLISION';
+})(), SYMS.find((x) => /c$/.test(x)));
+ok('un symbole inventé reste LIBRE sur la vraie liste',
+  collisionAvecEmetteur('ZZQXWV', SYMS).verdict === 'LIBRE');
+
+console.log('phraseCollision');
+ok('null PARLE', phraseCollision(null).length > 0);
+ok('NON_VERIFIABLE PARLE et dit qu on refuse de remplir', (() => {
+  const s = phraseCollision(collisionAvecEmetteur('MOON', null));
+  return /refusing to fill/i.test(s) && /LISTE_EMETTEUR_ABSENTE/.test(s);
+})(), phraseCollision(collisionAvecEmetteur('MOON', null)));
+/* ⛔ LE REFUS DOIT NOMMER LE JETON REEL, sinon il passe pour un bug. */
+ok('COLLISION nomme le jeton reel ET dit « back nothing »', (() => {
+  const s = phraseCollision(collisionAvecEmetteur('AAPL', ['AAPLc']));
+  return /AAPLc/.test(s) && /back nothing/i.test(s) && /will not fill it in/i.test(s);
+})(), phraseCollision(collisionAvecEmetteur('AAPL', ['AAPLc'])));
+ok('LIBRE est MUET (seul un succes a le droit de se taire)',
+  phraseCollision(collisionAvecEmetteur('MOON', ['AAPLc'])) === '');
+
+console.log('planDepuisJetonAvecSupplyScellee — la supply N EST PAS choisissable');
+/* ⛔⛔ LE CAS QUI M A ARRETE : sans supply scellee, un appelant supposerait la sienne. */
+ok('supply scellee ABSENTE -> REFUSE', (() => {
+  const p = planDepuisJetonAvecSupplyScellee({ supplySource: TBLOCK_SUPPLY, decimalesSource: 18 });
+  return p.etat === 'REFUSE' && p.pourquoi === 'SUPPLY_SCELLEE_ABSENTE';
+})(), planDepuisJetonAvecSupplyScellee({ supplySource: TBLOCK_SUPPLY, decimalesSource: 18 }));
+ok('supply scellee a 0 -> REFUSE', planDepuisJetonAvecSupplyScellee({
+  supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: 0n }).etat === 'REFUSE');
+/* Le cas REEL : le TBLOCK d openlaunch porte la MEME supply que nos blocks. */
+ok('TBLOCK : parite EXACTE (meme supply, memes decimales)', (() => {
+  const p = planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE });
+  return p.etat === 'OK' && p.pariteExacte === true && p.supplySourceRamenee === SUPPLY_FIXE;
+})(), planDepuisJetonAvecSupplyScellee({
+  supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+ok('une supply DIFFERENTE -> parite FAUSSE (pas de « 1 pour 1 » menteur)', (() => {
+  const p = planDepuisJetonAvecSupplyScellee({
+    supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE });
+  return p.etat === 'OK' && p.pariteExacte === false;
+})());
+ok('decimales differentes, meme nombre d unites -> parite EXACTE', (() => {
+  /* 1 milliard d unites a 6 decimales == 1 milliard d unites a 18 decimales. */
+  const p = planDepuisJetonAvecSupplyScellee({
+    supplySource: 1000000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE });
+  return p.etat === 'OK' && p.pariteExacte === true;
+})(), planDepuisJetonAvecSupplyScellee({
+  supplySource: 1000000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE }));
+ok('sans prix source -> prixInitial null (on n invente pas un prix)', (() => {
+  const p = planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE });
+  return p.prixInitial === null;
+})());
+ok('avec prix source -> une FRACTION entiere', (() => {
+  const p = planDepuisJetonAvecSupplyScellee({
+    supplySource: 1000n, decimalesSource: 18, supplyScellee: 2000n, prixSourceNumerateur: 8n });
+  return p.etat === 'OK' && typeof p.prixInitial.haut === 'bigint' && p.prixInitial.bas === 2000n;
+})(), planDepuisJetonAvecSupplyScellee({
+  supplySource: 1000n, decimalesSource: 18, supplyScellee: 2000n, prixSourceNumerateur: 8n }));
+ok('prix source invalide -> REFUSE', planDepuisJetonAvecSupplyScellee({
+  supplySource: 1000n, decimalesSource: 18, supplyScellee: 2000n,
+  prixSourceNumerateur: 0n }).etat === 'REFUSE');
+
+console.log('phrasePlanScelle');
+ok('null PARLE', phrasePlanScelle(null).length > 0);
+ok('un REFUS PARLE', /nothing to sign/i.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({}))));
+/* ⛔⛔ LA SUPPLY FIXE DOIT ETRE DITE DANS LES DEUX CAS — sinon on croit l avoir choisie. */
+ok('parite exacte : dit la supply FIXE ET « one block for one token »', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return /fixed 1 billion/i.test(s) && /do not choose/i.test(s) && /one block stands for one token/i.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+ok('parite FAUSSE : dit la supply fixe SANS promettre 1 pour 1', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return /fixed 1 billion/i.test(s) && !/one block stands for one token/i.test(s)
+    && /pool price carries the difference/i.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
 
 console.log('planDeFrais — fail-closed, un chemin gratuit ne se produit pas');
 /* ⛔⛔ LE CAS QUI PROTEGE LE REVENU : oublier le frais doit REFUSER, pas livrer gratuit. */

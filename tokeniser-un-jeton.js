@@ -95,6 +95,125 @@ export function prixInitialPourFdvEgale({ supplySource, prixSourceNumerateur, pr
 }
 
 /**
+ * ⛔⛔⛔ CE CHEMIN PEUT FABRIQUER UN SOSIE D ACTION TOKENISEE. IL DOIT REFUSER.
+ *
+ * Lire n importe quel ERC-20 et en faire un block qui porte SON symbole, c est du NOMMAGE,
+ * pas de la tokenisation : rien n adosse le block. Le danger est donc precis — un block
+ * « AAPL » sans adossement, pose a cote du `AAPLc` REEL de l emetteur (Coinbase, actions
+ * emises sous Regulation S, qui detient le sous-jacent), se lit comme la meme chose.
+ * Quelqu un achèterait un sosie en croyant acheter l action.
+ *
+ * ⇒ On refuse la collision de symbole, y compris la forme SUFFIXEE de l emetteur (`AAPL`
+ *   contre `AAPLc`) et l inverse, en ignorant la casse et les espaces.
+ *
+ * ⛔ `symbolesEmetteur` est OBLIGATOIRE : sans la liste, on rend NON_VERIFIABLE et
+ *   l appelant doit refuser. Une liste vide ferait passer TOUT symbole — une garde sur une
+ *   liste absente est toujours fausse, et celle-la protegerait exactement rien.
+ */
+export const VERDICTS_COLLISION = Object.freeze(['LIBRE', 'COLLISION', 'NON_VERIFIABLE']);
+
+export function collisionAvecEmetteur(symbole, symbolesEmetteur) {
+  const s = String(symbole || '').trim().toLowerCase();
+  if (!s) return { verdict: 'NON_VERIFIABLE', pourquoi: 'SYMBOLE_VIDE', contre: null };
+  if (!Array.isArray(symbolesEmetteur) || !symbolesEmetteur.length) {
+    return { verdict: 'NON_VERIFIABLE', pourquoi: 'LISTE_EMETTEUR_ABSENTE', contre: null };
+  }
+  for (const brut of symbolesEmetteur) {
+    const e = String(brut || '').trim().toLowerCase();
+    if (!e) continue;
+    /* Egalite franche, et les deux sens du suffixe d une lettre de l emetteur. */
+    if (s === e) return { verdict: 'COLLISION', pourquoi: 'EGAL', contre: brut };
+    if (e.length === s.length + 1 && e.startsWith(s)) {
+      return { verdict: 'COLLISION', pourquoi: 'SUFFIXE_EMETTEUR', contre: brut };
+    }
+    if (s.length === e.length + 1 && s.startsWith(e)) {
+      return { verdict: 'COLLISION', pourquoi: 'SUFFIXE_AJOUTE', contre: brut };
+    }
+  }
+  return { verdict: 'LIBRE', pourquoi: null, contre: null };
+}
+
+/** ⛔ La phrase DOIT nommer le jeton reel, sinon le refus passe pour un bug. */
+export function phraseCollision(c) {
+  if (!c || !VERDICTS_COLLISION.includes(c.verdict)) return 'Name check: not run.';
+  if (c.verdict === 'NON_VERIFIABLE') {
+    return 'Cannot check that symbol against the issued stocks (' + (c.pourquoi || 'unknown')
+      + ') — refusing to fill it in.';
+  }
+  if (c.verdict === 'COLLISION') {
+    return 'That symbol clashes with ' + c.contre + ', a real issued stock. A block named like it '
+      + 'would back nothing, so this page will not fill it in.';
+  }
+  return '';
+}
+
+/**
+ * ⛔⛔⛔ LA SUPPLY DU BLOCK N EST PAS CHOISISSABLE, ET J AI FAILLI CABLER LE CONTRAIRE.
+ *
+ * `dimensionner()` ci-dessus est de l arithmetique juste, mais le chemin de creation vivant
+ * NE L UTILISE PAS : « Router strips any cap/mint and force-appends sealed 1B » (app.html).
+ * Le CreateRouter FORCE 1 milliard a 18 decimales. Brancher `dimensionner` sur cet ecran
+ * aurait affiche une supply que la transaction ignore — une valeur LUE PUIS JETEE.
+ *
+ * ⇒ Ce qui s adapte vraiment, c est LE PRIX INITIAL DE LA POOL, pas la supply. Cette
+ *   fonction l exige donc explicitement : `supplyScellee` est OBLIGATOIRE, et un appelant
+ *   qui l oublie recoit un REFUS au lieu d un plan qui suppose ce qu il veut.
+ *
+ * Rend `pariteExacte` : vrai quand la supply source, ramenee aux decimales du block, EGALE
+ * la supply scellee. Pour ce cas-la seulement, « 1 pour 1 » peut s ecrire a l ecran.
+ */
+export function planDepuisJetonAvecSupplyScellee({
+  supplySource, decimalesSource, supplyScellee, decimalesB20 = 18,
+  prixSourceNumerateur = null, prixSourceDenominateur = 1n,
+} = {}) {
+  if (!estEntierPositif(supplyScellee)) {
+    return { etat: 'REFUSE', pourquoi: 'SUPPLY_SCELLEE_ABSENTE' };
+  }
+  if (!estEntierPositif(supplySource)) {
+    return { etat: 'REFUSE', pourquoi: 'SUPPLY_SOURCE_INVALIDE' };
+  }
+  if (!decimalesValides(decimalesSource) || !decimalesValides(decimalesB20)) {
+    return { etat: 'REFUSE', pourquoi: 'DECIMALES_HORS_BORNES' };
+  }
+  /* La source ramenee aux decimales du block, pour une comparaison qui a un sens. */
+  let ramenee = supplySource;
+  if (decimalesB20 >= decimalesSource) ramenee *= 10n ** BigInt(decimalesB20 - decimalesSource);
+  else ramenee /= 10n ** BigInt(decimalesSource - decimalesB20);
+
+  let prixInitial = null;
+  if (prixSourceNumerateur !== null) {
+    const p = prixInitialPourFdvEgale({
+      supplySource, prixSourceNumerateur, prixSourceDenominateur, supplyB20: supplyScellee,
+    });
+    if (p.etat !== 'OK') return { etat: 'REFUSE', pourquoi: p.pourquoi };
+    prixInitial = p.prix;
+  }
+  return {
+    etat: 'OK',
+    supplyScellee,
+    supplySourceRamenee: ramenee,
+    pariteExacte: ramenee === supplyScellee,
+    prixInitial,
+    pourquoi: null,
+  };
+}
+
+/**
+ * La phrase du plan. ⛔ Elle ne dit « 1 for 1 » QUE si la parite est exacte, et elle dit
+ * TOUJOURS que la supply est fixee — sinon le lecteur croirait l avoir choisie.
+ */
+export function phrasePlanScelle(p) {
+  if (!p || !ETATS.includes(p.etat)) return 'Plan: not computed.';
+  if (p.etat === 'REFUSE') {
+    return 'Cannot plan this block (' + (p.pourquoi || 'unknown') + ') — nothing to sign.';
+  }
+  const base = 'Every block is minted at a fixed 1 billion supply — you do not choose it. ';
+  return base + (p.pariteExacte
+    ? 'This token has the same supply, so one block stands for one token.'
+    : 'This token has a different supply, so the opening pool price carries the difference.');
+}
+
+/**
  * La parite est-elle exacte, ou y a-t-il une perte d arrondi ?
  * ⛔ Une perte SILENCIEUSE est le defaut a ne pas livrer : l utilisateur verrait « 1:1 »
  *   et recevrait autre chose. On rend l ecart, et il vaut 0n quand c est exact.
