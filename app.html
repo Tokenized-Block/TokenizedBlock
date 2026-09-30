@@ -1131,8 +1131,18 @@ details[open] > summary::before{transform:rotate(90deg)}
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
             </div>
+            <!-- ⛔⛔ LES QUATRE SALUTS SONT DES LIBELLES, PAS QUATRE GESTES. Chacun envoie le MEME
+                 transfert d un fragment ; seul le mot change. Les traiter comme quatre gestes
+                 aurait demande quatre compteurs dans DEUX listes pour un choix cosmetique —
+                 c est `gm_clic` qui les compte tous, et c est dit ici pour qu on ne cherche pas
+                 plus tard un compteur « bm » qui n a jamais existe.
+                 ⛔ `data-salut` porte le mot : l ecran d envoi le reprend tel quel, il ne le
+                 devine pas. -->
             <div class="fActions fActionsMini" hidden>
-              <button class="bouton sec" id="fGM">Send GM 👋</button>
+              <button class="bouton sec" id="fGM" data-salut="GM">Send GM 👋</button>
+              <button class="bouton sec fSalut" data-salut="BM" type="button">BM 🌙</button>
+              <button class="bouton sec fSalut" data-salut="GN" type="button">GN 😴</button>
+              <button class="bouton sec fSalut" data-salut="Gmeow" type="button">Gmeow 🐱</button>
               <button class="bouton sec" id="fOuvrir">Read its facts</button>
               <button class="bouton" id="fConnecter" type="button" hidden>Connect wallet to send the GM</button>
             </div>
@@ -2072,7 +2082,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-geste-envoi-compte" hidden>Build <code>20260930-geste-envoi-compte</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-saluts-et-frais" hidden>Build <code>20260930-saluts-et-frais</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2689,6 +2699,10 @@ import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
 import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from './multiplicateur-action.js';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
+/* ⛔ NOM LONG VOULU : `phraseFrais` existe deja pour les frais de CREATION, avec une tout autre
+ *   signature. Le compilateur a refuse le doublon — sans lui, l appel aurait vise la mauvaise
+ *   fonction en silence et affiche une phrase de creation a cote d un cadeau. */
+import { fraisDuGeste, phraseFraisDuGeste } from './frais-du-geste.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
@@ -4689,7 +4703,15 @@ $('#fConnecter').addEventListener('click', async () => {
   $('#fNote').textContent = texteRefusConnexion(
     'The wallet did not connect — nothing was shared. Try again and approve the connection in your wallet.');
 });
-$('#fGM').addEventListener('click', () => {
+/* ⛔⛔ QUATRE SALUTS, UN SEUL GESTE. GM, BM, GN et Gmeow envoient le MEME transfert d un fragment ;
+ *     seul le mot change. C est `gm_clic` qui les compte tous — quatre compteurs pour un choix
+ *     cosmetique auraient double la maintenance dans deux listes sans rien apprendre d actionnable.
+ *   ⛔ LE MOT VIENT DE `data-salut`, MAIS IL EST VALIDE CONTRE UNE LISTE FERMEE : un attribut du
+ *     DOM n est pas une entree de confiance, et ce depot a deja paye d avoir cru un attribut. */
+const SALUTS = Object.freeze(['GM', 'BM', 'GN', 'Gmeow']);
+let salutCourant = 'GM';
+function ouvrirSalut(salut) {
+  salutCourant = SALUTS.includes(salut) ? salut : 'GM';
   const adr = $('#fAdr').textContent.trim();
   const n = $('#fNote');
   if (!/^0x[0-9a-fA-F]{40}$/.test(adr)) return;
@@ -4698,11 +4720,17 @@ $('#fGM').addEventListener('click', () => {
     const amt = $('#sMontant');
     if (amt && !String(amt.value || '').trim()) amt.value = '1';
     const dest = $('#sDest');
-    if (dest) dest.placeholder = 'Friend wallet 0x… — GM is a real transfer of this block';
+    if (dest) dest.placeholder = 'Friend wallet 0x… — ' + salutCourant + ' is a real transfer of this block';
     $('#sEtat').className = 'note';
-    $('#sEtat').textContent = 'GM ready: paste who receives it. Default amount is 1 unit — change it, then sign in your wallet. Nothing leaves without you.';
+    $('#sEtat').textContent = salutCourant + ' ready: paste who receives it. Default amount is 1 unit'
+      + ' — change it, then sign in your wallet. Nothing leaves without you.';
+    try { majRecap(); } catch (_) { /* le recap se refera a la saisie */ }
   }
-});
+}
+$('#fGM').addEventListener('click', () => ouvrirSalut('GM'));
+for (const b of document.querySelectorAll('.fSalut')) {
+  b.addEventListener('click', () => ouvrirSalut(b.getAttribute('data-salut') || 'GM'));
+}
 /* ⛔⛔ CE BOUTON PROMETTAIT ET NE LIVRAIT PAS, et Phil l a signale : « le bouton sur le block qui
  * donne leur info marche pas ». Il ecrivait une phrase expliquant qu il n etait pas branche. Un
  * bouton qui repond par une excuse est pire qu un bouton absent — il apprend que les commandes de
@@ -6173,6 +6201,23 @@ function preparerEnvoi() {
   if (m.etat !== 'OK') return { ko: m.pourquoi };
   if (m.valeur === 0n) return { ko: 'Zero is not a send.' };
   if (m.valeur > a.solde) return { ko: 'More than your balance (' + formaterUnites(a.solde, a.decimales) + ' ' + a.nom + ').' };
+  /* ⛔⛔ LES 0,1 % DU GESTE, ET SEULEMENT SUR UN SALUT (GM/BM/GN/Gmeow) D UN JETON. Montage choisi
+   *     par Phil le 2026-09-30 : un SECOND TRANSFERT vers notre wallet, jamais une retenue sur le
+   *     montant. L ami recoit EXACTEMENT ce qui est affiche ; notre part est une ligne separee que
+   *     l expediteur voit et signe. L autre montage — reduire ce qui part — preleve en douce sur un
+   *     cadeau entre deux personnes, et il est refuse.
+   *   ⛔ PAS DE FRAIS SUR UN ENVOI D ETH (`!a.adr`) : il n y a pas de second transfert ERC-20 a
+   *     faire, et bricoler un envoi d ETH pour ca serait une autre mecanique, non mesuree.
+   *   ⛔⛔ ET LE SOLDE DOIT COUVRIR MONTANT + FRAIS. Sans ce controle, la seconde ligne reverterait
+   *     apres que la premiere soit partie : l ami aurait ses jetons, l expediteur aurait paye deux
+   *     gaz, et l ecran aurait annonce un frais qui n arrive pas. */
+  const fg = (gesteEnvoiCourant === 'gm' && a.adr)
+    ? fraisDuGeste({ montant: m.valeur })
+    : fraisDuGeste({ montant: m.valeur, actif: false });
+  if (fg.etat === 'AVEC_FRAIS' && (m.valeur + fg.frais) > a.solde) {
+    return { ko: 'Your balance covers the ' + formaterUnites(m.valeur, a.decimales) + ' but not the '
+      + 'extra 0.1% line (' + formaterUnites(fg.frais, a.decimales) + '). Send a little less.' };
+  }
   /* ⛔ LE MESSAGE EST VALIDE AVANT L ENCODAGE, et un refus arrete l envoi : on n envoie jamais un
    * texte tronque que personne n a ecrit. */
   const memo = validerMemo($('#sMessage').value);
@@ -6184,7 +6229,14 @@ function preparerEnvoi() {
   const texte = memo.etat === 'OK' ? memo.texte : '';
   const tx = a.adr ? { to: a.adr, data: encodeTransferAvecMemo(dest, m.valeur, texte), value: '0x0' }
     : { to: dest, data: '0x', value: '0x' + m.valeur.toString(16) };
-  return { a, dest, valeur: m.valeur, tx, memo: texte || null };
+  /* ⛔⛔ LA LIGNE DE FRAIS EST UNE TRANSACTION A PART, ET ELLE PART EN SECOND. L ordre n est pas un
+   *     detail : si la seconde echoue, l ami a recu son cadeau et nous n avons rien — un frais non
+   *     pris ne blesse personne. L inverse (frais d abord) ferait payer quelqu un pour un geste qui
+   *     pourrait ensuite ne pas partir. */
+  const txFrais = fg.etat === 'AVEC_FRAIS'
+    ? { to: a.adr, data: encodeTransfer(FEE_WALLET, fg.frais), value: '0x0' }
+    : null;
+  return { a, dest, valeur: m.valeur, tx, txFrais, frais: fg, memo: texte || null };
 }
 
 function majRecap() {
@@ -6200,7 +6252,12 @@ function majRecap() {
   r.textContent = 'You send ' + formaterUnites(p.valeur, p.a.decimales) + ' ' + p.a.nom + ' to '
     + court(p.dest) + ' on ' + RESEAUX[CHAINE].nom + '. Your wallet shows the same before you sign — '
     + 'check the whole address there.' + (p.a.adr ? ' The network fee is paid in ETH.' : ' The network fee comes on top.')
-    + (p.memo ? ' With the message « ' + p.memo + ' » — public, for good.' : '');
+    + (p.memo ? ' With the message « ' + p.memo + ' » — public, for good.' : '')
+    /* ⛔⛔ LE FRAIS EST ECRIT AVANT LA SIGNATURE, TOUJOURS. C est la seule chose qui distingue ce
+     *     montage d un prelevement silencieux : l expediteur voit la ligne, la somme, et qui la
+     *     recoit, et il signe les deux. Si cette phrase disparait, le montage devient celui qu on
+     *     a refuse. */
+    + (p.frais ? ' ' + phraseFraisDuGeste(p.frais, (v) => formaterUnites(v, p.a.decimales) + ' ' + p.a.nom) : '');
   /* ⛔ SUR MAINNET, LE CONSENTEMENT EST UN GESTE, PAS UN DEFAUT. La case n est jamais pre-cochee. */
   $('#bEnvoyer').disabled = envoiEnCours || (CHAINE === 8453 && !$('#sConsent').checked);
   return p;
@@ -6219,14 +6276,42 @@ async function envoyer() {
    *   par geste multiplierait les noms sans rien apprendre de plus que `*_clic` ne dit deja. */
   try { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_propos'); if (s) etape(s); } catch (_) {}
   let r;
-  try {
-    r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, ...p.tx });
-  } catch (err) {
-    r = { etat: 'ECHEC_ENVOI', pourquoi: 'Unexpected error — check your wallet before retrying. '
-      + String((err && err.message) || err) };
-  } finally {
-    envoiEnCours = false;
+  /* ⛔⛔ AVEC UNE LIGNE DE FRAIS, ON TENTE LE LOT : une seule signature pour le cadeau ET les
+   *     0,1 %. L ordre dans le lot place l ami EN PREMIER.
+   *   ⛔⛔⛔ ET ON NE RETOMBE QUE SI LE WALLET DIT NE PAS CONNAITRE `sendCalls`. Un `ECHEC_ENVOI`
+   *      ne GARANTIT PAS que rien n est parti (c est la troisieme issue de `messageEnvoi`) :
+   *      renvoyer apres un lot peut-etre en vol enverrait le cadeau DEUX FOIS. Meme garde que sur
+   *      le chemin d achat, meme raison. */
+  let lotTente = false;
+  if (p.txFrais) {
+    lotTente = true;
+    let lot;
+    try {
+      lot = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+        calls: [p.tx, p.txFrais] });
+    } catch (err2) { lot = { etat: 'ECHEC_ENVOI', pourquoi: String((err2 && err2.message) || err2) }; }
+    if (lot.etat === 'CONFIRME' || (lot.etat === 'ENVOYE_AA' && lot.hash)) r = lot;
+    else if (lot.sendCallsUnsupported !== true) r = lot;   /* parti ou incertain : on s arrete la */
+    else lotTente = false;                                  /* le wallet ne sait pas grouper : sequentiel */
   }
+  if (!r) {
+    try {
+      r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, ...p.tx });
+    } catch (err) {
+      r = { etat: 'ECHEC_ENVOI', pourquoi: 'Unexpected error — check your wallet before retrying. '
+        + String((err && err.message) || err) };
+    }
+    /* ⛔⛔ LA LIGNE DE FRAIS NE PART QU APRES UN CADEAU CONFIRME, et son echec ne change RIEN pour
+     *     l expediteur ni pour l ami. Un frais non pris ne blesse personne ; l inverse — prendre
+     *     alors que le cadeau n est pas parti — serait prendre pour rien.
+     *   ⛔ ON N ANNONCE PAS D ECHEC SUR CETTE LIGNE : elle est a NOUS. Alarmer quelqu un parce que
+     *     notre part n a pas abouti serait lui faire porter notre probleme. */
+    if (r.etat === 'CONFIRME' && p.txFrais) {
+      try { await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, ...p.txFrais }); }
+      catch (_) { /* notre part seulement : silencieux pour l expediteur */ }
+    }
+  }
+  envoiEnCours = false;
   /* ⛔ L ISSUE EST COMPTEE, ET SEULEMENT SUR UN ETAT CONNU. `CONFIRME` est le seul qui prouve que
    *   la chaine a accepte ; `REFUSE_PAR_UTILISATEUR` est le seul qui prouve un refus deliberé. Tout
    *   le reste (EN_ATTENTE, ANNULE_SUR_CHAINE, ECHEC_ENVOI) reste NON COMPTE plutot que range de

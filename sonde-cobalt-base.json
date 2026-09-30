@@ -1,0 +1,552 @@
+{
+ "quand": "2026-09-30T09:12:56.844Z",
+ "rpc": "https://mainnet.base.org",
+ "vu": {
+  "AAPLc": {
+   "decimals()": {
+    "groupe": "temoin+",
+    "sel": "0x313ce567",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "totalSupply()": {
+    "groupe": "temoin+",
+    "sel": "0x18160ddd",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "multiplier()": {
+    "groupe": "temoin+",
+    "sel": "0x1b3ed722",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "scheduledMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0a1f2a48",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6fe968a3",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6831455c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierSchedule()": {
+    "groupe": "multiplicateur",
+    "sel": "0x311108b9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierEffectiveAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0767c5c7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplierTime()": {
+    "groupe": "multiplicateur",
+    "sel": "0xa5b30342",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x07c4debd",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierUpdate()": {
+    "groupe": "multiplicateur",
+    "sel": "0xc24d0025",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "scheduledMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0xf2eca81a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierAt(uint256)": {
+    "groupe": "multiplicateur",
+    "sel": "0x5355dded",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "feeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x647846a5",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "gasToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xc91d59fe",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "payFeesIn()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1325a29a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeCurrency()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xb0aa6808",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isFeeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x5e17b26c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeConfig()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1e5eb1d0",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "canPayFees()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x4fd29750",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeEnabled()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xa771ebc7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policy()": {
+    "groupe": "conformite",
+    "sel": "0x0505c8c9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policies()": {
+    "groupe": "conformite",
+    "sel": "0x702e7e1f",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "unionPolicy()": {
+    "groupe": "conformite",
+    "sel": "0xde9cd171",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "intersectPolicy()": {
+    "groupe": "conformite",
+    "sel": "0x1a126f20",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isBlocked(address)": {
+    "groupe": "conformite",
+    "sel": "0xfbac3951",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "canTransfer(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xe46638e6",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "seize(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xb2a02ff1",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "burnBlocked(address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xec0cf3dc",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "cobaltSelecteurQuiNExistePas()": {
+    "groupe": "temoin-",
+    "sel": "0xa556c49b",
+    "etat": "REVERT",
+    "ambigu": false
+   }
+  },
+  "AMZNc": {
+   "decimals()": {
+    "groupe": "temoin+",
+    "sel": "0x313ce567",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "totalSupply()": {
+    "groupe": "temoin+",
+    "sel": "0x18160ddd",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "multiplier()": {
+    "groupe": "temoin+",
+    "sel": "0x1b3ed722",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "scheduledMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0a1f2a48",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6fe968a3",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6831455c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierSchedule()": {
+    "groupe": "multiplicateur",
+    "sel": "0x311108b9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierEffectiveAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0767c5c7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplierTime()": {
+    "groupe": "multiplicateur",
+    "sel": "0xa5b30342",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x07c4debd",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierUpdate()": {
+    "groupe": "multiplicateur",
+    "sel": "0xc24d0025",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "scheduledMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0xf2eca81a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierAt(uint256)": {
+    "groupe": "multiplicateur",
+    "sel": "0x5355dded",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "feeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x647846a5",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "gasToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xc91d59fe",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "payFeesIn()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1325a29a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeCurrency()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xb0aa6808",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isFeeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x5e17b26c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeConfig()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1e5eb1d0",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "canPayFees()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x4fd29750",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeEnabled()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xa771ebc7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policy()": {
+    "groupe": "conformite",
+    "sel": "0x0505c8c9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policies()": {
+    "groupe": "conformite",
+    "sel": "0x702e7e1f",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "unionPolicy()": {
+    "groupe": "conformite",
+    "sel": "0xde9cd171",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "intersectPolicy()": {
+    "groupe": "conformite",
+    "sel": "0x1a126f20",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isBlocked(address)": {
+    "groupe": "conformite",
+    "sel": "0xfbac3951",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "canTransfer(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xe46638e6",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "seize(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xb2a02ff1",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "burnBlocked(address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xec0cf3dc",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "cobaltSelecteurQuiNExistePas()": {
+    "groupe": "temoin-",
+    "sel": "0xa556c49b",
+    "etat": "REVERT",
+    "ambigu": false
+   }
+  },
+  "AVGOc": {
+   "decimals()": {
+    "groupe": "temoin+",
+    "sel": "0x313ce567",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "totalSupply()": {
+    "groupe": "temoin+",
+    "sel": "0x18160ddd",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "multiplier()": {
+    "groupe": "temoin+",
+    "sel": "0x1b3ed722",
+    "etat": "OK",
+    "ambigu": false
+   },
+   "scheduledMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0a1f2a48",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6fe968a3",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplier()": {
+    "groupe": "multiplicateur",
+    "sel": "0x6831455c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierSchedule()": {
+    "groupe": "multiplicateur",
+    "sel": "0x311108b9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierEffectiveAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x0767c5c7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "pendingMultiplierTime()": {
+    "groupe": "multiplicateur",
+    "sel": "0xa5b30342",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "nextMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0x07c4debd",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierUpdate()": {
+    "groupe": "multiplicateur",
+    "sel": "0xc24d0025",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "scheduledMultiplierAt()": {
+    "groupe": "multiplicateur",
+    "sel": "0xf2eca81a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "multiplierAt(uint256)": {
+    "groupe": "multiplicateur",
+    "sel": "0x5355dded",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "feeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x647846a5",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "gasToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xc91d59fe",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "payFeesIn()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1325a29a",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeCurrency()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xb0aa6808",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isFeeToken()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x5e17b26c",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeConfig()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x1e5eb1d0",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "canPayFees()": {
+    "groupe": "frais-en-b20",
+    "sel": "0x4fd29750",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "feeEnabled()": {
+    "groupe": "frais-en-b20",
+    "sel": "0xa771ebc7",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policy()": {
+    "groupe": "conformite",
+    "sel": "0x0505c8c9",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "policies()": {
+    "groupe": "conformite",
+    "sel": "0x702e7e1f",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "unionPolicy()": {
+    "groupe": "conformite",
+    "sel": "0xde9cd171",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "intersectPolicy()": {
+    "groupe": "conformite",
+    "sel": "0x1a126f20",
+    "etat": "REVERT",
+    "ambigu": false
+   },
+   "isBlocked(address)": {
+    "groupe": "conformite",
+    "sel": "0xfbac3951",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "canTransfer(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xe46638e6",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "seize(address,address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xb2a02ff1",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "burnBlocked(address,uint256)": {
+    "groupe": "conformite",
+    "sel": "0xec0cf3dc",
+    "etat": "REVERT",
+    "ambigu": true
+   },
+   "cobaltSelecteurQuiNExistePas()": {
+    "groupe": "temoin-",
+    "sel": "0xa556c49b",
+    "etat": "REVERT",
+    "ambigu": false
+   }
+  }
+ }
+}
