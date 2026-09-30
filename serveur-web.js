@@ -1605,6 +1605,10 @@ const SERVIS = [
   /* ⛔ `symbole-trompeur.js` marque les tickers qui se lisent comme une devise. L oublier ici
    *   tuerait TOUTE la page — un import 404 arrete le module entier. */
   'symbole-trompeur.js',
+  /* ⛔ `place-sur-la-map.js` decide qui entre sur la map quand elle est pleine — et donc aussi
+   *   qui a un cerveau, puisque le selecteur du Brain se construit sur les memes habitants.
+   *   L oublier ici tuerait TOUTE la page : un import 404 arrete le module entier. */
+  'place-sur-la-map.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

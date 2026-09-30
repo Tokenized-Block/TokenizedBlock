@@ -2220,7 +2220,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-warn-about-theirs-not-yours" hidden>Build <code>20260930-warn-about-theirs-not-yours</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-the-map-takes-every-block" hidden>Build <code>20260930-the-map-takes-every-block</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2859,6 +2859,11 @@ import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, A
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
  *   symbole. 34 assertions, 5/5 mutations, dont une qui avait revele un trou dans mon test. */
 import { symboleTrompeur, symbolePourListe, phraseTrompeur } from './symbole-trompeur.js';
+/* ⛔ QUI A SA PLACE SUR LA MAP QUAND ELLE EST PLEINE. Le plafond de 450 servait « premier arrive,
+ *   premier servi » : 461 creations de 24 h evinçaient les 15 actions tokenisees, dont NVDAc a
+ *   4,3 M$. Et comme le selecteur du Brain se construit sur `habitants`, le meme plafond vidait
+ *   AUSSI cet onglet. 27 assertions, 4/4 mutations. */
+import { placePourLeBlock } from './place-sur-la-map.js';
 import { phraseMarcheActions } from './heures-marche.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
@@ -18082,7 +18087,24 @@ async function soleilsSurLaMap(essai = 0) {
     for (const l of d.lignes) {
       let h = habitantDe(l.adr);
       /* tip 0038 (Phil « le max de blocks crees et vivants ») : jusqu a 450 sur la map ; l univers en expansion leur fait la place */
-      if (!h && habitants.length < 450) h = creerHabitant({ jeton: l.adr, symbole: l.sym, vie: null });
+      /* ⛔⛔⛔ CE PLAFOND EFFACAIT LES PLUS GROS BLOCKS DE L APP, ET C EST MESURE (2026-09-30,
+       *    signale par Phil qui ne les voyait plus). `charger()` pose d abord les creations des
+       *    dernieres 24 h — 461 ce jour-la, sa propre note l affiche : « 461 blocks made in the
+       *    last 43,200 chain blocks · on map 461 ». Le plafond de 450 etait donc DEJA franchi
+       *    quand cette ligne s executait, et les 15 actions tokenisees n entraient JAMAIS.
+       *    NVDAc, n°1 du classement a 4 346 212 $, etait INVISIBLE sur la carte.
+       *  ⛔ ET LE MEME PLAFOND VIDAIT L ONGLET BRAIN : son selecteur se construit sur `habitants`
+       *    (`for (const h of habitants) ajouter(...)`). Un block jamais pose n a pas de cerveau.
+       *    Un seul defaut, deux ecrans — c est pour ca qu il paraissait insaisissable.
+       *  ⇒ CE N EST PAS UN OUBLI, C EST UNE INVERSION DE PRIORITE : « premier arrive, premier
+       *    servi », et les premiers arrives sont les plus RECENTS, pas les plus importants.
+       *  ⛔ ON NE SUPPRIME PAS LE PLAFOND — une map sans limite fait tomber la fluidite pour tout
+       *    le monde. On RESERVE des places aux blocks qui ont un marche lisible, et leur nombre
+       *    est BORNE par le serveur (216 lignes cotees mesurees), donc la reserve ne peut pas
+       *    exploser. 27 assertions, 4/4 mutations. */
+      if (!h && placePourLeBlock({ dejaPoses: habitants.length, ligne: l }).verdict === 'POSER') {
+        h = creerHabitant({ jeton: l.adr, symbole: l.sym, vie: null });
+      }
       if (h) h.eclat = Math.max(0, Math.min(1, Math.log10(1 + (l.volume24hUsd || 0)) / Math.log10(1 + max)));
       /* ⛔ MESURE (Chrome, 0077) : 229 blocks sur 231 restaient a la taille par defaut — la lecture de marche bloc par bloc,
        *    depuis le navigateur, n avancait pas. Le serveur a deja la FDV de ~200 blocks : elle dimensionne la map tout de
