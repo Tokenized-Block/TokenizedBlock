@@ -1823,7 +1823,14 @@ details[open] > summary::before{transform:rotate(90deg)}
         <ul class="note noteBullets" style="margin:6px 0 0 18px">
           <li><b>It makes a new block</b> that carries that token's name and symbol — it does not move, wrap or lock the token itself.</li>
           <li><b>Nothing backs it.</b> No one redeems it, and its price can drift from the token from the first trade onward.</li>
-          <li><b>The supply is fixed</b> at 1 billion, minted to you at birth. You do not choose it.</li>
+          <!-- ⛔⛔ CETTE LIGNE DISAIT LA SUPPLY FIXE SANS SA CONSEQUENCE. Le block porte TOUJOURS
+               1 milliard ; le jeton source, non. Le rapport entre les deux est donc le fait le plus
+               concret de tout cet ecran, et il etait absent des deux cotes : ici, et dans la phrase
+               vivante qui disait « the opening pool price carries the difference » sans le facteur.
+               AERO : 1 988 034 890 unites contre le milliard fixe, soit ~1,988 par block — LU sur
+               la chaine. Un facteur sans son montant est une sur-vente ; `ratioParBlock` le calcule
+               desormais pour TOUT jeton source, et cette ligne dit qu il est montre. -->
+          <li><b>The supply is fixed</b> at 1 billion, minted to you at birth. You do not choose it — so one block stands for however much of the source token that billion covers, and the screen shows that ratio before you sign.</li>
           <li><b>Symbols of issued stocks are refused</b> — a block named like a real tokenized stock would back nothing.</li>
           <!-- ⛔⛔ CETTE LIGNE DISAIT « 50 bps » — notre taux d INTERFACE — pour un echange qui,
                sur une pool ouverte ici, coute 3 % : `HOOK_PREVU_FRAIS_BPS = 300`, et le
@@ -1831,7 +1838,15 @@ details[open] > summary::before{transform:rotate(90deg)}
                total 3 % »). L ecran de marche affichait donc « Fee 3% » pendant que celui-ci
                annoncait 0,5 %. Deux chiffres pour le meme geste, et le plus petit etait mis en
                avant. Trouve par Zero 1, verifie dans le code avant correction. -->
-          <li><b>Cost</b>: the same 0.001 ETH Birth fee as any block, once, when you sign in Create. Trading it then costs what its market charges — <b>3%</b> on a market opened here; each screen shows the exact rate of the pool you trade in.</li>
+          <!-- ⛔⛔ ET « each screen shows the exact rate » ETAIT LE MEME ABSOLU NON PROUVE QUE CELUI
+               retire de `phraseFraisChemin` le meme jour. Mesure : `libelleFrais` est appele sur
+               TROIS ecrans (8479, 10326, 10433 — numeros d avant cette edition). Trois n est pas
+               « chacun », et je ne sais pas prouver l absolu.
+               ⛔⛔⛔ LE JUMEAU AVAIT SURVECU A LA CORRECTION : j avais corrige la phrase VIVANTE et
+               laisse la phrase STATIQUE dire la meme chose en d autres mots. Deux copies d une
+               affirmation, une seule corrigee — le motif « le jumeau diverge », deja paye ici.
+               Toute correction de copie doit donc grep la formulation, pas seulement le fichier. -->
+          <li><b>Cost</b>: the same 0.001 ETH Birth fee as any block, once, when you sign in Create. Trading it then costs what its market charges — <b>3%</b> on a market opened here; the market screen shows the exact rate of the pool you trade in.</li>
         </ul>
         </details>
       </div>
@@ -2226,7 +2241,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-cobalt-bloc-52000927" hidden>Build <code>20260930-cobalt-bloc-52000927</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-le-ratio-de-supply-saffiche" hidden>Build <code>20260930-le-ratio-de-supply-saffiche</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -17393,7 +17408,7 @@ async function lireJetonSource() {
      *   lieu d une ligne rassurante et vide. */
     direTok('Source token: ' + symFinal + (nom ? ' (' + nomFinal + ')' : '') + '. '
       + (coupe ? 'Shortened to fit the Create fields. ' : '')
-      + phrasePlanScelle(plan) + ' ' + avertissementNonAdosse() + ' '
+      + phrasePlanScelle(plan, symFinal) + ' ' + avertissementNonAdosse() + ' '
       + phraseFraisChemin(frais, FRAIS_OUVERTURE_WEI));
 
     /* ⛔ ON EMMENE VERS CREATE, sinon les champs sont remplis dans un onglet que personne ne

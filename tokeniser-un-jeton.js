@@ -198,19 +198,94 @@ export function planDepuisJetonAvecSupplyScellee({
   };
 }
 
+/** Chiffres apres la virgule du ratio affiche. Assez pour distinguer 1,000377 de 1,0 sans bruit. */
+export const RATIO_DECIMALES = 6;
+
+/**
+ * COMBIEN DE JETONS SOURCE UN BLOCK REPRESENTE-T-IL, EN SUPPLY.
+ *
+ * ⛔⛔ CE RATIO ETAIT DEJA CALCULE, PUIS JETE. `planDepuisJetonAvecSupplyScellee` rend
+ *   `supplySourceRamenee`, et `phrasePlanScelle` ne s en servait que pour un BOOLEEN
+ *   (`pariteExacte`) avant d abandonner la grandeur. La phrase disait donc « the opening pool
+ *   price carries the difference » sans jamais dire NI LE SENS NI LE FACTEUR — un facteur sans son
+ *   montant, la faute exacte qu on vient de corriger sur le frais de naissance. Une valeur LUE
+ *   PUIS JETEE est un defaut ; ce depot l a deja paye deux fois (le refus portait l adresse,
+ *   `slot0` portait le prix).
+ *   ⇒ Trouve par Phil sur l ecran AERO (2026-09-30), et corrige AU GLOBAL : pour tout jeton
+ *     source, pas pour un cas.
+ *
+ * ⛔ EN ENTIERS, JAMAIS EN FLOTTANT. Une supply se compte en 1e27 ; `Number(a)/Number(b)` perd des
+ *   chiffres significatifs, et un ratio faux affiche est pire qu un ratio absent — il serait cru.
+ *
+ * ⛔⛔ ET LE ZERO EST INTERDIT. Un ratio reel mais plus petit que la precision affichee rendrait
+ *   « 0 », que le lecteur lirait « ce block ne represente rien ». On distingue donc SOUS_PRECISION
+ *   d un vrai zero : la premiere est une limite de l affichage, pas un fait sur le jeton.
+ */
+export function ratioParBlock(p) {
+  if (!p || p.etat !== 'OK') return { etat: 'REFUSE', texte: null, pourquoi: 'no plan' };
+  const haut = p.supplySourceRamenee;
+  const bas = p.supplyScellee;
+  if (!estEntierPositif(haut) || !estEntierPositif(bas)) {
+    return { etat: 'REFUSE', texte: null, pourquoi: 'supplies unreadable' };
+  }
+  const entier = haut / bas;
+  const reste = haut % bas;
+  const echelle = 10n ** BigInt(RATIO_DECIMALES);
+  const frac = (reste * echelle) / bas;
+  if (entier === 0n && frac === 0n) {
+    /* ⛔ Le ratio est > 0 (les deux supplies sont > 0) mais invisible a cette precision. */
+    return { etat: 'SOUS_PRECISION', texte: null,
+      pourquoi: 'the ratio is smaller than ' + (1 / Number(echelle)) };
+  }
+  const fracTexte = frac.toString().padStart(RATIO_DECIMALES, '0').replace(/0+$/, '');
+  /* ⛔⛔ `exact` VEUT DIRE « L AFFICHAGE EST EXACT », PAS « LE RATIO EST UN ENTIER ». Ma premiere
+   *   version testait `reste === 0n` : un ratio de 1,2 — exact a 6 decimales — sortait donc marque
+   *   approximatif, et l ecran affichait « ~1.2 ». Un « ~ » qui ment dans ce sens apprend au
+   *   lecteur a l ignorer, et il l ignorera le jour ou il compte vraiment (AERO : 1,988034890229…
+   *   coupe a 1,988034). Le vrai test est : le decimal affiche reconstitue-t-il `haut` ?
+   *   ⇒ Trouve en LISANT la sortie rendue, pas en relisant le code. */
+  const exact = (reste * echelle) % bas === 0n;
+  return { etat: 'OK', texte: entier.toString() + (fracTexte ? '.' + fracTexte : ''),
+    exact, pourquoi: null };
+}
+
 /**
  * La phrase du plan. ⛔ Elle ne dit « 1 for 1 » QUE si la parite est exacte, et elle dit
  * TOUJOURS que la supply est fixee — sinon le lecteur croirait l avoir choisie.
+ *
+ * ⛔⛔ LE RATIO SE DIT EN SUPPLY, ET LE VERBE EST LE MEME DANS LES DEUX BRANCHES : « one block
+ *   stands for ». C est delibere. La branche a parite exacte disait deja « one block stands for one
+ *   token » ; garder le meme verbe fait que seul LE NOMBRE change, et empeche le cas non-exact de
+ *   se lire comme une promesse d une autre nature. ⛔ Et « stands for » n est pas « is backed by » :
+ *   `avertissementNonAdosse()` suit IMMEDIATEMENT cette phrase partout ou elle est montree, et dit
+ *   que rien n adosse et que personne ne rachete. Un ratio de SUPPLY n est pas un ancrage de PRIX,
+ *   et la phrase le dit en nommant la supply.
  */
-export function phrasePlanScelle(p) {
+export function phrasePlanScelle(p, symboleSource) {
   if (!p || !ETATS.includes(p.etat)) return 'Plan: not computed.';
   if (p.etat === 'REFUSE') {
     return 'Cannot plan this block (' + (p.pourquoi || 'unknown') + ') — nothing to sign.';
   }
   const base = 'Every block is minted at a fixed 1 billion supply — you do not choose it. ';
-  return base + (p.pariteExacte
-    ? 'This token has the same supply, so one block stands for one token.'
-    : 'This token has a different supply, so the opening pool price carries the difference.');
+  /* ⛔ Le symbole est OPTIONNEL et n est jamais invente : sans lui on dit « source token ». */
+  const nom = (typeof symboleSource === 'string' && symboleSource.trim() !== '')
+    ? symboleSource.trim() : 'source token';
+  if (p.pariteExacte) {
+    return base + 'This token has the same supply, so one block stands for one ' + nom + '.';
+  }
+  const r = ratioParBlock(p);
+  if (r.etat === 'OK') {
+    return base + 'This token has a different supply: one block stands for '
+      + (r.exact ? '' : '~') + r.texte + ' ' + nom
+      + ' by supply, and the opening pool price carries that difference.';
+  }
+  /* ⛔ LE CAS MUET PARLE. Si le ratio n est pas calculable ou tombe sous la precision, on le DIT
+   *   au lieu de revenir a l ancienne phrase vague — sinon on aurait reintroduit le defaut pour
+   *   les cas rares, c est-a-dire exactement la ou personne ne regarde. */
+  return base + 'This token has a different supply, so the opening pool price carries the '
+    + 'difference. The exact ratio is not shown here ('
+    + (r.etat === 'SOUS_PRECISION' ? 'it is smaller than this screen can display' : (r.pourquoi || 'not computed'))
+    + ').';
 }
 
 /**

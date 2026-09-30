@@ -7,7 +7,7 @@
 import {
   DECIMALES_MIN, DECIMALES_MAX, ETATS,
   avertissementNonAdosse, dimensionner, prixInitialPourFdvEgale, ecartDeParite, phraseDimension,
-  planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
+  planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle, ratioParBlock,
   VERDICTS_COLLISION, collisionAvecEmetteur, phraseCollision,
 } from './tokeniser-un-jeton.js';
 /* ⛔ La liste des actions de l emetteur vient de sa source unique, jamais recopiee ici. */
@@ -278,12 +278,23 @@ console.log('phrasePlanScelle');
 ok('null PARLE', phrasePlanScelle(null).length > 0);
 ok('un REFUS PARLE', /nothing to sign/i.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({}))));
 /* ⛔⛔ LA SUPPLY FIXE DOIT ETRE DITE DANS LES DEUX CAS — sinon on croit l avoir choisie. */
-ok('parite exacte : dit la supply FIXE ET « one block for one token »', (() => {
+ok('parite exacte : dit la supply FIXE ET « one block stands for one <jeton> »', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO');
+  return /fixed 1 billion/i.test(s) && /do not choose/i.test(s)
+    && /one block stands for one AERO/.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO'));
+/* ⛔ LE SYMBOLE NE S INVENTE PAS : sans lui, « source token », jamais un ticker devine. */
+ok('sans symbole -> « source token », pas un nom invente', (() => {
   const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
     supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
-  return /fixed 1 billion/i.test(s) && /do not choose/i.test(s) && /one block stands for one token/i.test(s);
+  return /one source token/.test(s);
 })(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
   supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+ok('un symbole vide ou blanc retombe sur « source token »',
+  /source token/.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), '   ')));
 ok('parite FAUSSE : dit la supply fixe SANS promettre 1 pour 1', (() => {
   const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
     supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
@@ -291,6 +302,125 @@ ok('parite FAUSSE : dit la supply fixe SANS promettre 1 pour 1', (() => {
     && /pool price carries the difference/i.test(s);
 })(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
   supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+
+/* ⛔⛔ LE RATIO : UNE VALEUR QUI ETAIT CALCULEE PUIS JETEE.
+ *   `planDepuisJetonAvecSupplyScellee` rend `supplySourceRamenee` ; la phrase ne s en servait que
+ *   pour un booleen et abandonnait la grandeur. Le lecteur voyait « the opening pool price carries
+ *   the difference » sans le SENS ni le FACTEUR — un facteur sans son montant, la meme faute que
+ *   le frais sans chiffre. Trouve par Phil sur l ecran AERO (2026-09-30), corrige AU GLOBAL. */
+console.log('ratioParBlock — en entiers, et le zero est interdit');
+/* La vraie supply d AERO, LUE sur Base mainnet le 2026-09-30 : 1 988 034 890,229641792427930557 */
+const AERO_SUPPLY = 1988034890229641792427930557n;
+ok('AERO mesure -> 1.988034 (calcul en bigint, pas en flottant)', (() => {
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return r.etat === 'OK' && r.texte === '1.988034' && r.exact === false;
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+ok('un rapport EXACT est marque exact (pas de « ~ » en trop)', (() => {
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: 2000000000n * 10n ** 18n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return r.etat === 'OK' && r.texte === '2' && r.exact === true;
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: 2000000000n * 10n ** 18n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+ok('un ratio SOUS 1 s affiche (le sens compte autant que le chiffre)', (() => {
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: 500000000n * 10n ** 18n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return r.etat === 'OK' && r.texte === '0.5';
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: 500000000n * 10n ** 18n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+/* ⛔⛔ LE « ~ » NE DOIT PAS MENTIR, DANS LES DEUX SENS. Un ratio de 1,2 est EXACT a 6 decimales :
+ *   l afficher « ~1.2 » apprend au lecteur a ignorer le « ~ », et il l ignorera sur AERO, ou le
+ *   « ~ » est vrai. Defaut trouve en lisant la sortie rendue, pas le code. */
+ok('un ratio non entier mais EXACT a l affichage n est PAS marque approximatif', (() => {
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: 1200000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE }));
+  return r.etat === 'OK' && r.texte === '1.2' && r.exact === true;
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: 1200000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE })));
+ok('et la phrase ne porte alors AUCUN « ~ »',
+  !/~/.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: 1200000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE }), 'SIX')),
+  phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: 1200000000n * 10n ** 6n, decimalesSource: 6, supplyScellee: SUPPLY_FIXE }), 'SIX'));
+/* ⛔ ET DANS L AUTRE SENS : AERO est coupe, donc le « ~ » DOIT y etre. Sans cette moitie, un
+ *   `exact: true` constant passerait les deux assertions precedentes. */
+ok('un ratio COUPE porte bien le « ~ » (AERO)',
+  /~1\.988034/.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO')),
+  phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO'));
+/* ⛔⛔ LE CAS QUI COMPTE LE PLUS : un ratio reel mais invisible a cette precision. Rendre « 0 »
+ *   ferait lire « ce block ne represente rien », ce qui est FAUX — les deux supplies sont > 0. */
+ok('un ratio plus petit que la precision -> SOUS_PRECISION, JAMAIS « 0 »', (() => {
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  return r.etat === 'SOUS_PRECISION' && r.texte === null;
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+ok('et la phrase le DIT au lieu de rester vague', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'TINY');
+  return /not shown here/i.test(s) && /smaller than this screen/i.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: 42n, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'TINY'));
+ok('un plan REFUSE -> REFUSE, pas un ratio inventé',
+  ratioParBlock(planDepuisJetonAvecSupplyScellee({})).etat === 'REFUSE');
+ok('sans plan du tout -> REFUSE', ratioParBlock(null).etat === 'REFUSE'
+  && ratioParBlock().etat === 'REFUSE');
+/* ⛔⛔ MON PREMIER TEST ICI ETAIT FAUX, ET SA JUSTIFICATION ETAIT UN OVERCLAIM. Il prenait deux
+ *   supplies separees d un wei et attendait des ratios differents « impossibles en flottant ».
+ *   Or cet ecart tombe SOUS les 6 decimales affichees : les deux rendent « 1 », correctement, et
+ *   `a.exact === b.exact`. Et surtout : a 6 decimales sur un ratio proche de 1, le flottant a
+ *   largement assez de chiffres — il ne perdrait rien de VISIBLE. L assertion ne prouvait pas ce
+ *   qu elle annonçait.
+ * ✅ LA OU LE FLOTTANT CASSE VRAIMENT, C EST LA PARTIE ENTIERE D UN TRES GROS RATIO : au-dela de
+ *   2^53, `Number` ne represente plus les entiers exactement, et un ratio affiche serait faux dans
+ *   ses derniers chiffres — cru, parce qu il a l air precis. Le bigint, lui, les rend tous. */
+ok('un ratio au-dela de 2^53 garde TOUS ses chiffres (la ou le flottant casse)', (() => {
+  /* ramenee / scellee == 2^80 exactement : un entier que Number ne peut pas porter. */
+  const attendu = (2n ** 80n).toString();
+  const r = ratioParBlock(planDepuisJetonAvecSupplyScellee({
+    supplySource: (2n ** 80n) * SUPPLY_FIXE, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }));
+  const parFlottant = String(Number((2n ** 80n) * SUPPLY_FIXE) / Number(SUPPLY_FIXE));
+  /* ⛔ Le test ne vaut que si le flottant se trompe VRAIMENT ici — sinon il ne prouve rien. */
+  return r.etat === 'OK' && r.texte === attendu && r.exact === true && parFlottant !== attendu;
+})(), ratioParBlock(planDepuisJetonAvecSupplyScellee({
+  supplySource: (2n ** 80n) * SUPPLY_FIXE, decimalesSource: 18, supplyScellee: SUPPLY_FIXE })));
+
+console.log('phrasePlanScelle — le ratio a l ecran, et ce qu il ne promet PAS');
+ok('AERO : la phrase porte LE FACTEUR et LE SENS', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO');
+  return /1\.988034/.test(s) && /one block stands for/.test(s) && /AERO/.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO'));
+/* ⛔ ET ELLE DIT « by supply » : un ratio de SUPPLY n est pas un ancrage de PRIX. */
+ok('elle nomme la SUPPLY, pas une valeur',
+  /by supply/i.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO')));
+/* ⛔⛔ LA GARDE ANTI-ADOSSEMENT : le ratio ne doit JAMAIS se lire comme un rachat ou une garantie.
+ *   C est la seule crainte qui justifiait de ne pas l afficher — donc elle se teste. */
+ok('la phrase ne promet ni adossement, ni rachat, ni garantie', (() => {
+  const s = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO');
+  return !/backed/i.test(s) && !/redeem/i.test(s) && !/guarantee/i.test(s)
+    && !/worth/i.test(s) && !/equals/i.test(s) && !/pegged/i.test(s);
+})(), phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+  supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO'));
+/* ⛔ ET LE MEME VERBE DANS LES DEUX BRANCHES : seul le NOMBRE change. Un verbe different ferait
+ *   lire le cas non-exact comme une promesse d une autre nature. */
+ok('le verbe est le MEME a parite exacte et hors parite', (() => {
+  const exact = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: TBLOCK_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'X');
+  const pas = phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'X');
+  return /one block stands for/.test(exact) && /one block stands for/.test(pas);
+})());
+/* ⛔ ET LA SUPPLY FIXE RESTE DITE DANS TOUS LES CAS — sinon on croit l avoir choisie. */
+ok('la supply fixe est dite meme avec le ratio affiche',
+  /fixed 1 billion/i.test(phrasePlanScelle(planDepuisJetonAvecSupplyScellee({
+    supplySource: AERO_SUPPLY, decimalesSource: 18, supplyScellee: SUPPLY_FIXE }), 'AERO')));
 
 console.log('planDeFrais — fail-closed, un chemin gratuit ne se produit pas');
 /* ⛔⛔ LE CAS QUI PROTEGE LE REVENU : oublier le frais doit REFUSER, pas livrer gratuit. */
