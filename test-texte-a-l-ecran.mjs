@@ -49,6 +49,20 @@ const PAGES = readdirSync(new URL('./', import.meta.url))
  * ⛔ Chaque motif porte la raison de sa presence : une liste de mots interdits sans justification
  *    finit par etre elaguee par quelqu un qui ne sait pas pourquoi ils y etaient. */
 const MOTIFS = [
+  /* ⛔⛔⛔ AJOUTE LE 2026-09-30, APRES QUE PHIL A ECRIT « tu mens car il faut recreer un block ».
+   *     L ecran disait « Turn something that already exists INTO a block ». On ne transforme
+   *     RIEN : on MINTE UN BLOCK NEUF qui porte le nom d autre chose. Le jeton d origine n est
+   *     ni deplace, ni enveloppe, ni converti, et personne ne le detient pour nous — nous ne
+   *     sommes pas un emetteur regule, contrairement a celui des actions tokenisees.
+   *   ⛔ ET LA VERITE ETAIT DEJA ECRITE, DANS UN `<details>` REPLIE trois lignes plus bas. Une
+   *     verite cachee sous un titre faux reste un titre faux : c est le titre qu on lit.
+   *   ⚠️ Le motif vise « into a block / into blocks », PAS « turn it into USDC » — la, la
+   *     conversion est REELLE (un swap), et l interdire effacerait une phrase vraie. */
+  /* ⚠️ `tokeniz(e|ing)` est DANS la liste des verbes, mais seul « … INTO a block » declenche :
+   *    « Tokenize something » (le titre choisi par Phil) doit passer, sinon la garde effacerait
+   *    le mot meme du produit. C est la PROMESSE DE TRANSFORMATION qu on interdit, pas le verbe. */
+  { re: /\b(turn|convert|transform|change|tokeniz(?:e|ing))\b[^.]{0,40}\binto\s+(an?\s+)?blocks?\b/i,
+    quoi: 'promet une TRANSFORMATION qui n existe pas — on minte un block NEUF, l original ne bouge pas' },
   { re: /\b(LUE|LUES|LU|NON LU|ILLISIBLE|MESURE|AUCUN|POURQUOI|ETAT)\b/,
     quoi: 'mot francais en majuscules (nos etats internes portent ces noms)' },
   { re: /\btier\(s\)|\btiers\b(?! party)/i,

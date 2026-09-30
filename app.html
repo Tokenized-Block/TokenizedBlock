@@ -1750,7 +1750,10 @@ details[open] > summary::before{transform:rotate(90deg)}
        avec le nom, le symbole et la face dans la MEME transaction.
        ⛔ AUCUN STYLE NOUVEAU : meme `section.volet`, meme `div.carte`, meme `p.titre` / `p.sous`,
           meme `ol.creaPas` et meme `button.bouton` que les onglets existants. -->
-  <section class="volet" id="v-tokenx" aria-label="Tokenize a post, or a token, into a block">
+  <!-- ⛔ « into a block » PORTAIT LE MEME MENSONGE QUE LE TITRE, et un lecteur d ecran n a que
+       cette phrase-la. Corriger la copie visible en laissant l aria-label aurait reserve la
+       version fausse a ceux qui ne voient pas l ecran. -->
+  <section class="volet" id="v-tokenx" aria-label="Mint a new block named after a post or a token">
     <!-- ⛔⛔ TOKENISER UN JETON — ET LE BUT EST LA PAIRE, PAS LE NOM.
          Phil, 2026-09-30 : « pour le paired et etre echangable par multi pools ». Un block
          appairé a un ERC-20 deja echange AJOUTE un saut que notre routeur multi-sauts peut
@@ -1775,10 +1778,19 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ La machinerie `data-itabs` est celle qui existe deja (Create, Launch, Swap, Brain) :
          on ne recopie pas un second commutateur qui divergerait du premier. -->
     <div class="carte">
-      <!-- ⛔ « Tokenized asset / coin », PAS « Tokenize » (Phil, 2026-09-30). Le verbe decrivait
-           notre geste ; le titre nomme desormais la CHOSE qu on obtient, comme le reste de l app. -->
-      <p class="titre">Tokenized asset / coin</p>
-      <p class="sous">Turn something that already exists into a block on Base. Pick what you are starting from — the block is minted to you either way, and nothing here signs anything.</p>
+      <!-- ⛔ LE TITRE A BOUGE DEUX FOIS LE MEME JOUR, ET LES DEUX FOIS SUR DEMANDE DE PHIL :
+           « Tokenize » -> « Tokenized asset / coin » -> « Tokenize something ». Je note le chemin
+           plutot que de faire comme si le dernier etait le premier. -->
+      <p class="titre">Tokenize something</p>
+      <!-- ⛔⛔⛔ CETTE PHRASE MENTAIT, ET PHIL L A VUE (« tu mens car il faut recreer un block »).
+           Elle disait « Turn something that already exists INTO a block » — or on ne transforme
+           RIEN. On CREE UN BLOCK NEUF qui porte le nom d autre chose ; le jeton d origine ne bouge
+           pas, il n est ni deplace, ni enveloppe, ni converti, et personne ne le detient pour nous.
+           ⛔ LA VERITE ETAIT DEJA ECRITE — dans le `<details>` REPLIE juste en dessous (« it does
+           not move, wrap or lock the token itself »). Une verite CACHEE sous un titre FAUX reste
+           un titre faux : c est le titre qu on lit, pas le repli. La correction est en haut, et
+           visible sans cliquer. -->
+      <p class="sous">Mint a <b>new</b> block on Base, named after something that already exists. The original is never moved, wrapped or converted — your block is a new token that simply carries its name. Nothing here signs anything.</p>
       <div class="stadeLigne" data-itabs="tkQuoi" role="tablist" style="margin-top:2px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="jeton">🧊 A token</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="post">❞ A post on X</button>
@@ -1786,7 +1798,9 @@ details[open] > summary::before{transform:rotate(90deg)}
 
       <!-- ── UN JETON ERC-20 ───────────────────────────────────────────────────────────── -->
       <div class="infoPane" data-itabs-pane="tkQuoi" data-itab="jeton">
-        <p class="sous" style="margin-top:12px">Paste any ERC-20 on Base. Its name and symbol are read from the chain and fill in Create, so your block can be <b>paired with it</b> and routed through our pools.</p>
+        <!-- ⛔ MEME CORRECTION ICI : « so your block can be paired » laissait croire que le block
+             SORT du jeton. Il n en sort pas — on lit le jeton, et on en fabrique un AUTRE. -->
+        <p class="sous" style="margin-top:12px">Paste any ERC-20 on Base. We read its name and symbol from the chain and fill them into Create — you then mint a <b>separate</b> block with that name, which can be <b>paired with</b> the token and routed through our pools. The token itself is left untouched.</p>
         <label class="champ">Token address on Base
           <span class="champSel">
             <input id="cTokSrc" placeholder="0x…" autocomplete="off" spellcheck="false">
@@ -2200,7 +2214,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-no-wall-on-a-paid-create" hidden>Build <code>20260930-no-wall-on-a-paid-create</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-a-new-block-not-a-transformation" hidden>Build <code>20260930-a-new-block-not-a-transformation</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
