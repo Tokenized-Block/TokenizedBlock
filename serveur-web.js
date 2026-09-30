@@ -42,6 +42,8 @@ import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
 /* ⛔ LES ESPACEMENTS DE TICK VIENNENT DE LA FACTORY, plus d une liste ecrite a la main : elle en
  *   oubliait trois (80, 150, 500) et cachait la moitie du volume des blocks cotes en action. */
 import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espacements-cl.js';
+/* ⛔ L ORIGINE DES ACTIONS TOKENISEES, D APRES L EMETTEUR — 40 adresses, pas nos 15. */
+import { lireActionsEmetteur, phraseActionsEmetteur } from './actions-emetteur.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -358,6 +360,26 @@ async function espacementsASonder() {
   return [...new Set([...espacementsLus.espacements, ...ESPACEMENTS_ALTERNATIVE])].sort((a, b) => a - b);
 }
 const alternativeImmuable = new Map();   /* jeton -> { pool, ts } | { absente: true } — jamais expire */
+
+/* ⛔⛔ LA LISTE DE L EMETTEUR, RELUE TOUTES LES 24 H. Elle bouge — quatre actions y sont apparues en
+ *     une semaine — donc la figer une fois pour la vie du process la rendrait fausse en silence.
+ *   ⛔ ET UN ECHEC NE SE GRAVE PAS : sur `RETOMBEE` on garde l horodatage COURT (5 min) pour
+ *     reessayer bientot, au lieu de rester 24 h avec une marque partielle. Un zero qui ne peut
+ *     plus remonter est un motif deja paye cher dans ce depot. */
+let emCache = { r: null, a: 0 };
+async function actionsEmetteurServies() {
+  const frais = emCache.r && (Date.now() - emCache.a) < (emCache.r.etat === 'OK' ? 86_400_000 : 300_000);
+  if (frais) return emCache.r;
+  const r = await lireActionsEmetteur(async (url) => {
+    const rep = await fetch(url, { headers: { 'x-ms-monitor': '1' } });
+    if (!rep.ok) return null;
+    return await rep.json();
+  });
+  emCache = { r, a: Date.now() };
+  const phrase = phraseActionsEmetteur(r);
+  console.log('[emetteur] ' + (phrase || r.adresses.length + ' actions tokenisees, lues chez l emetteur'));
+  return r;
+}
 
 async function alternativeAerodrome(jeton, famille) {
   const cle = String(jeton || '').toLowerCase();
@@ -1225,9 +1247,16 @@ async function lireTrending() {
     if (!lotsOk && lotsKo) {
       throw new Error('DexScreener refused all ' + lotsKo + ' reads (' + JSON.stringify(statuts) + ')');
     }
+    /* ⛔⛔ LA LISTE DE L EMETTEUR, LUE ICI POUR QUE CHAQUE LIGNE PORTE SON ORIGINE. Decision de Phil
+     *     du 2026-09-30 : « Biggest blocks » garde les actions tokenisees, avec l origine DITE.
+     *   ⛔ Notre registre en porte 15, l emetteur en declare 40 : marquer seulement les 15
+     *     laisserait GMEc, DJTc, NFLXc, AMDc, RDDTc, HTZc, PFEc… non marquees, et une ligne non
+     *     marquee se lit « block lance ici ». La retombee le SIGNALE au lieu de le taire. */
+    const em = await actionsEmetteurServies();
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
-      ...resumerTrending(paires, adrs, { max: 400 }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+      emetteurEtat: em.etat, emetteurCompte: em.adresses.length,
+      ...resumerTrending(paires, adrs, { max: 400, actionsEmetteur: em.adresses }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
@@ -1491,6 +1520,12 @@ const SERVIS = [
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
   'routage.js',
+  /* ⛔⛔ `actions-emetteur.js` PORTE LE LIBELLE « issued by Coinbase » DE LA PAGE, et il est importe
+   *     PAR LE SERVEUR AUSSI (qui lit la liste des 40 et marque chaque ligne de trending). Le
+   *     libelle est ecrit UNE fois et importe des deux cotes : deux copies d une phrase visible
+   *     divergent, et c est alors l ecran qui mentira, pas le serveur.
+   *   ⛔ L OUBLIER ICI REND LA PAGE MORTE — un import 404 arrete tout le module. */
+  'actions-emetteur.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

@@ -680,6 +680,12 @@ body:not(.surMap) .mapCta{display:none}
 .rangArt{width:30px;height:33px;flex:0 0 auto;border-radius:10px;overflow:hidden;background:var(--creux)}
 .rangArt svg{display:block;width:100%;height:100%}
 .rangNom{flex:1;min-width:0;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ⛔⛔ L ORIGINE D UNE LIGNE (« issued by Coinbase »). `flex:0 0 auto` ET `white-space:nowrap` :
+   sans eux la marque se ferait ecraser a zero par `.rangNom` qui prend tout l espace — une marque
+   presente dans le DOM et invisible a l ecran n avertit personne, et c est une faute deja payee
+   ici (des saluts poses dans un panneau `hidden` et jamais montres). Mesuree a 375 px. */
+.rangOrig{flex:0 0 auto;white-space:nowrap;font-size:10px;margin-right:6px;opacity:.75}
+@media (max-width:420px){ .rangOrig{font-size:9px;margin-right:4px} }
 .rangVie{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
 /* ══ CREATE ══ */
 /* ⛔ COLLANT EN HAUT DE L ONGLET, translucide : on voit le block pendant qu on regle sa face, et le
@@ -2123,7 +2129,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-classement-honnete" hidden>Build <code>20260930-classement-honnete</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-origine-des-lignes" hidden>Build <code>20260930-origine-des-lignes</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2794,6 +2800,10 @@ import { lirePoolCL } from './pool-cl.js';
  * 6/6 mutations attrapees). Recopie ici, il serait invisible a la suite et derivrait de la
  * repartition mesuree qui le justifie. */
 import { verdictRoutage, phraseRoutage } from './routage.js';
+/* ⛔⛔ LE LIBELLE D ORIGINE EST IMPORTE, PAS RECOPIE. Le serveur s en sert pour marquer les lignes,
+ * la page pour les afficher : une seconde copie de cette phrase divergerait, et ce serait l ECRAN
+ * qui affirmerait autre chose que ce que le serveur a mesure. */
+import { LIBELLE_EMETTEUR as LIBELLE_EMETTEUR_UI } from './actions-emetteur.js';
 /* ⛔⛔ LA PORTE D ACHAT REMPLACE UN SEUIL DE TVL QUI CLASSAIT A L ENVERS. Mesure du 2026-09-28 :
  *     l ancienne porte (`liq >= 10000`) admettait BEc — 385 bps de glissement sur un achat de
  *     100 USDC — et refusait MUc, qui glisse de 8 bps, quarante-huit fois mieux. En liquidite
@@ -6494,6 +6504,9 @@ function classementCourant() {
       adr: h.adr, symbole: h.sym,
       capitalisation: cap,
       devise: cap == null ? null : 'USD',
+      /* ⛔ L ORIGINE VIENT DU SERVEUR, qui tient la liste des 40 de l emetteur. On ne la devine pas
+       *   ici a partir du symbole ni du prefixe d adresse. */
+      emetteur: (marcheParAdr.get(String(h.adr).toLowerCase()) || {}).emetteur === true,
       source: cap == null ? null : (surChaine != null ? 'CHAINE' : 'AGREGATEUR'),
       pourquoi: cap == null
         ? (h.pourquoi || (h.vie == null ? 'market not read yet' : 'no USD price for this quote currency'))
@@ -6520,7 +6533,7 @@ function classementCourant() {
       const fdv = mk && Number(mk.fdvUsd);
       if (!(typeof fdv === 'number' && Number.isFinite(fdv) && fdv > 0)) continue;
       enPlus.push({ adr, symbole: mk.sym || null, capitalisation: fdv, devise: 'USD',
-        source: 'AGREGATEUR', pourquoi: null });
+        emetteur: mk.emetteur === true, source: 'AGREGATEUR', pourquoi: null });
     }
     return enPlus;
   })()));
@@ -6559,15 +6572,33 @@ const stadesRelireCibles = new Map();
 const RELISIBLES = new Set(['NON_LU', 'PRIX_NON_LU', 'PAS_REGARDE']);
 function peindreClassement() {
   const cl = classementCourant();
-  $('#rangs').innerHTML = cl.classes.slice(0, 10).map((b) => '<li class="rangL" tabindex="0" role="button"'
+  /* ⛔⛔⛔ DIX LIGNES CACHAIENT TOUT BLOCK LANCE, ET C EST MESURE. Le 2026-09-30, les rangs 1 a 12
+   *      etaient TOUS des actions tokenisees de l emetteur (les dix premieres, puis MUc et PLTRc) ;
+   *      le premier block lance, `Aeon` a 181 298 $, tombait au rang 13. Une coupe a dix rendait
+   *      donc un ecran ou AUCUN block lance n apparaissait jamais — et c est exactement le
+   *      compromis que l option choisie annonçait. Trente lignes mettent `Aeon` (13), `BEGJEV` (25)
+   *      et `CCAT` (26) a portee, sans promettre une liste complete : la note dit le total.
+   *    ⚠️ CE N EST PAS UNE COUPE SUPPRIMEE, c est une coupe DEPLACEE : le 31e reste invisible. */
+  const MONTREES = 30;
+  $('#rangs').innerHTML = cl.classes.slice(0, MONTREES).map((b) => '<li class="rangL" tabindex="0" role="button"'
     + ' data-block="' + enAttr(b.adr) + '" data-sym="' + enAttr(b.symbole || '') + '"'
     + ' title="Open ' + enAttr(b.symbole || 'this block') + '">'
     + '<span class="rangN">' + b.rang + '</span>'
     + '<div class="rangArt">' + dessin(b.adr, b.symbole) + '</div>'
     + '<span class="rangNom">' + enTexte(b.symbole || '?') + '</span>'
+    /* ⛔⛔ L ORIGINE, DITE SUR LA LIGNE — DECISION DE PHIL DU 2026-09-30. Sans elle, `NVDAc` en
+     *     tete de « Biggest blocks » se lit comme le plus gros block LANCE ICI. Ce n en est pas
+     *     un : c est une action tokenisee emise par Coinbase. Le drapeau vient du SERVEUR, qui
+     *     tient la liste des 40 de l emetteur ; le deviner par symbole ou par prefixe d adresse
+     *     serait une heuristique alors qu on a la source.
+     *   ⛔ Et une ligne NON marquee n affirme rien : elle est absente de CETTE liste, pas prouvee
+     *     « lancee ici ». La marque s ajoute, elle ne se deduit pas a l envers. */
+    + (b.emetteur ? '<span class="filS rangOrig">' + enTexte(LIBELLE_EMETTEUR_UI) + '</span>' : '')
     + '<span class="rangVie">$' + (Math.round(b.capitalisation * 100) / 100).toLocaleString('en-US')
-    /* ⛔ Un rang tire d un agregateur public n est pas un rang lu sur la chaine : la ligne le dit. */
-    + (b.source === 'AGREGATEUR' ? '<span class="filS" title="from a public aggregator, not read on chain"> ~</span>' : '')
+    /* ⛔ Un rang tire d un agregateur public n est pas un rang lu sur la chaine : la ligne le dit.
+     *   ⛔ L INFOBULLE NE DIT PLUS « not read on chain » (Phil, 2026-09-30) : le titre de la carte
+     *     ne promet plus la chaine pour toute la liste, donc plus rien a nier ici. */
+    + (b.source === 'AGREGATEUR' ? '<span class="filS" title="priced by a public aggregator"> ~</span>' : '')
     + '</span></li>').join('');
   /* ⛔ « AUCUN CLASSE » SE DIT COMME UN FAIT SUR NOTRE LECTURE, pas sur les blocks. */
   /* ⛔ TROIS PHRASES, PAS DEUX. « Aucun classé sur 0 lu » se lisait comme un verdict alors que la map
