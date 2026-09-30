@@ -73,12 +73,43 @@ async function charger() {
     ? '<table>' + d.lignes.map((l) => '<tr><td>' + esc(l.hook) + '</td><td>' + esc(l.symbole || l.devise.slice(0, 10) + '…') + '</td><td class="n">'
       + esc(lisible(l.du, l.decimales)) + '</td></tr>').join('') + '</table>'
       + '<p class="doux" style="margin:8px 0 0">Read at ' + esc(d.lu) + (d.fenetresRatees ? ' · ' + d.fenetresRatees + ' read(s) failed — some amounts may be missing' : '') + '.</p>'
-    : 'Nothing is waiting in the hooks right now.';
+    /* ⛔⛔⛔ CETTE BRANCHE AFFIRMAIT « Nothing is waiting in the hooks right now. » MEME QUAND RIEN
+     *      N AVAIT ETE LU. Le serveur melange DEUX causes dans `fenetresRatees` : une fenetre de
+     *      logs refusee, ET l echec de l appel `du(hook, devise)` qui donne le MONTANT en attente —
+     *      ce second echec fait `continue` sans pousser la ligne. Si les `du(...)` sont tous
+     *      refuses (limite de debit), `lignes` sort VIDE et `fenetresRatees` vaut N > 0.
+     *      L operateur lisait alors « rien n attend », plus deux boutons « Nothing to send »
+     *      desactives, et concluait qu aucun frais n etait a encaisser. C est un ecran d ARGENT.
+     *    ⛔ ET LA NOTE D HONNETETE EXISTAIT — dans la branche « liste NON vide » seulement. L ecran
+     *      savait dire « some amounts may be missing », mais uniquement quand il avait deja un
+     *      montant a montrer : la phrase manquait exactement dans le cas ou elle compte.
+     *    ⛔ UN ZERO QUI PEUT VENIR D UN ECHEC N EST PAS UN ZERO, c est un PLANCHER — et ici ce
+     *      plancher PEUT monter, donc le taire est une affirmation gratuite sur de l argent.
+     *    ⇒ Trouve par un audit adversarial (2026-09-30), confirme par deux sceptiques. */
+    : (d.fenetresRatees
+      ? 'Could not read ' + esc(String(d.fenetresRatees)) + ' window(s) — this is a FLOOR, not a '
+        + 'verdict: fees may be waiting and unseen. Reload to try again.'
+      : 'Nothing is waiting in the hooks right now.');
   $('#boutons').innerHTML = HOOKS.map((h) => {
     const x = parHook.get(h.adr);
     const n = x ? x.devises.length : 0;
+    /* ⛔⛔ LE BOUTON PORTAIT LE MEME MENSONGE QUE LA PHRASE, ET C EST LA MOITIE LA PLUS ACTIONNABLE :
+     *   « Nothing to send on V2 », desactive, alors que `n` vaut 0 parce que les lectures ont ete
+     *   REFUSEES. Un libelle qui affirme et un bouton qui se desactive disent la meme chose deux
+     *   fois — et l operateur ferme l onglet. Le bouton reste desactive (on ne propose pas d envoyer
+     *   ce qu on n a pas lu), mais il DIT laquelle des deux raisons s applique.
+     *   ⛔ Corriger la phrase et laisser le bouton aurait ete « une garde vraie sur la mauvaise
+     *     moitie » : deux surfaces, une seule reparee.
+     *   ⚠️ ET LA BORNE DE CE LIBELLE, ECRITE PARCE QU ELLE EST REELLE : `fenetresRatees` est GLOBAL,
+     *     pas par hook. Si l echec porte sur V2 et que V3 est reellement vide, V3 dira quand meme
+     *     « not read, not empty ». L erreur est donc dans le sens PRUDENT — l operateur recharge et
+     *     ne perd rien, alors que l inverse (« nothing to send » sur des frais qui attendent) lui
+     *     fait rater un encaissement. Mais ce n est PAS une attribution par hook, et personne ne
+     *     doit le lire comme telle : il faudrait un compteur par hook cote serveur pour ca. */
+    const rienLu = !n && Boolean(d.fenetresRatees);
     return '<button type="button" data-hook="' + esc(h.adr) + '"' + (compte && n ? '' : ' disabled') + '>'
-      + (n ? 'Send ' + h.nom + ' shares (' + n + ')' : 'Nothing to send on ' + h.nom) + '</button>';
+      + (n ? 'Send ' + h.nom + ' shares (' + n + ')'
+        : (rienLu ? h.nom + ' — not read, not empty' : 'Nothing to send on ' + h.nom)) + '</button>';
   }).join('');
 }
 $('#connecter').addEventListener('click', async () => {
