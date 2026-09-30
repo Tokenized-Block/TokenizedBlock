@@ -28,6 +28,17 @@ export const ETATS_EMETTEUR = Object.freeze(['OK', 'RETOMBEE', 'NON_MESURE']);
 /** Le libelle montre a l ecran. ⛔ Ecrit UNE fois : deux copies divergent. */
 export const LIBELLE_EMETTEUR = 'issued by Coinbase';
 
+/* ⛔⛔⛔ LA FORME COURTE, ET ELLE VIENT D UNE MESURE, PAS D UN GOUT. Sur un ecran de 375 px, la
+ *      phrase longue prend 97 px et ne laisse que 39 px au NOM du block : SIX symboles sur douze
+ *      etaient TRONQUES (`GOOGLc` demandait 51 px, `AMZNc` 46, `NVDAc` 44…). Les lignes NON
+ *      marquees, elles, avaient 157 px — c etait donc entierement ma marque qui ecrasait le nom.
+ *    ⛔ LE NOM EST L IDENTITE, L ORIGINE EST SECONDAIRE. Une marque qui coupe ce qu elle qualifie
+ *      se retourne contre elle-meme : « GOOGL… issued by Coinbase » dit l origine d un block qu on
+ *      ne sait plus nommer.
+ *    ⛔ ET ELLE DIT LA MEME CHOSE : « Coinbase » a cote d une capitalisation nomme l emetteur. On
+ *      ne raccourcit pas en changeant l affirmation. */
+export const LIBELLE_EMETTEUR_COURT = 'Coinbase';
+
 /* ⛔⛔ LA RETOMBEE, ET ELLE EST SCIEMMENT INCOMPLETE — c est pour ca que l etat le dit. Ce sont les
  *     quinze adresses de `STOCKS_BASE_REGISTRY`, recopiees, chacune deja verifiee sur la chaine
  *     (`0xef` EXACTEMENT, `symbol()` concordant, `decimals()` == 8, `totalSupply()` > 0). */

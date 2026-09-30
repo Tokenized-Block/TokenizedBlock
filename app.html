@@ -685,7 +685,20 @@ body:not(.surMap) .mapCta{display:none}
    presente dans le DOM et invisible a l ecran n avertit personne, et c est une faute deja payee
    ici (des saluts poses dans un panneau `hidden` et jamais montres). Mesuree a 375 px. */
 .rangOrig{flex:0 0 auto;white-space:nowrap;font-size:10px;margin-right:6px;opacity:.75}
-@media (max-width:420px){ .rangOrig{font-size:9px;margin-right:4px} }
+.origCourt{display:none}
+/* ⛔⛔⛔ LE NOM NE DESCEND JAMAIS SOUS CE QU IL LUI FAUT. Mesure du 2026-09-30 a 375 px : la marque
+   longue prenait 97 px et laissait 39 px au nom — SIX symboles sur douze tronques, `GOOGLc` en
+   demandait 51. Les lignes NON marquees avaient 157 px : c etait ma marque, seule, qui ecrasait
+   l identite du block. Une marque qui coupe ce qu elle qualifie se retourne contre elle-meme.
+   ⛔ 56 px = le plus long symbole mesure (51) plus une marge. C est le nom qui gagne l espace ;
+   la marque, secondaire, cede la premiere. */
+.rangNom{min-width:56px}
+@media (max-width:420px){
+  /* ⛔ LES DEUX BASCULENT ENSEMBLE — meme piege que la puce « ? » : cacher l une sans montrer
+       l autre laisserait une marque VIDE, presente dans le DOM et muette a l ecran. */
+  .rangOrig{font-size:9px;margin-right:4px}
+  .origLong{display:none} .origCourt{display:inline}
+}
 .rangVie{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}
 /* ══ CREATE ══ */
 /* ⛔ COLLANT EN HAUT DE L ONGLET, translucide : on voit le block pendant qu on regle sa face, et le
@@ -2129,7 +2142,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-cache-de-la-bonne-forme" hidden>Build <code>20260930-cache-de-la-bonne-forme</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-le-nom-avant-la-marque" hidden>Build <code>20260930-le-nom-avant-la-marque</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2803,7 +2816,8 @@ import { verdictRoutage, phraseRoutage } from './routage.js';
 /* ⛔⛔ LE LIBELLE D ORIGINE EST IMPORTE, PAS RECOPIE. Le serveur s en sert pour marquer les lignes,
  * la page pour les afficher : une seconde copie de cette phrase divergerait, et ce serait l ECRAN
  * qui affirmerait autre chose que ce que le serveur a mesure. */
-import { LIBELLE_EMETTEUR as LIBELLE_EMETTEUR_UI } from './actions-emetteur.js';
+import { LIBELLE_EMETTEUR as LIBELLE_EMETTEUR_UI,
+  LIBELLE_EMETTEUR_COURT as LIBELLE_EMETTEUR_COURT_UI } from './actions-emetteur.js';
 /* ⛔⛔ LA PORTE D ACHAT REMPLACE UN SEUIL DE TVL QUI CLASSAIT A L ENVERS. Mesure du 2026-09-28 :
  *     l ancienne porte (`liq >= 10000`) admettait BEc — 385 bps de glissement sur un achat de
  *     100 USDC — et refusait MUc, qui glisse de 8 bps, quarante-huit fois mieux. En liquidite
@@ -6593,7 +6607,14 @@ function peindreClassement() {
      *     serait une heuristique alors qu on a la source.
      *   ⛔ Et une ligne NON marquee n affirme rien : elle est absente de CETTE liste, pas prouvee
      *     « lancee ici ». La marque s ajoute, elle ne se deduit pas a l envers. */
-    + (b.emetteur ? '<span class="filS rangOrig">' + enTexte(LIBELLE_EMETTEUR_UI) + '</span>' : '')
+    /* ⛔⛔⛔ DEUX FORMES EXCLUSIVES, ET C EST UNE MESURE QUI L EXIGE. A 375 px la phrase longue
+     *      prenait 97 px et ne laissait que 39 px au NOM : SIX symboles sur douze etaient tronques
+     *      (`GOOGLc` demandait 51 px, `AMZNc` 46, `NVDAc` 44). Les lignes NON marquees avaient
+     *      157 px — c etait donc ma marque, et rien d autre, qui ecrasait l identite du block.
+     *    ⛔ MEME PIEGE QUE LA PUCE « ? » UNE HEURE PLUS TOT : cacher l une sans montrer l autre
+     *      laisserait la marque VIDE. Les deux regles CSS basculent ensemble, et un test le tient. */
+    + (b.emetteur ? '<span class="filS rangOrig"><span class="origLong">' + enTexte(LIBELLE_EMETTEUR_UI)
+      + '</span><span class="origCourt">' + enTexte(LIBELLE_EMETTEUR_COURT_UI) + '</span></span>' : '')
     + '<span class="rangVie">$' + (Math.round(b.capitalisation * 100) / 100).toLocaleString('en-US')
     /* ⛔ Un rang tire d un agregateur public n est pas un rang lu sur la chaine : la ligne le dit.
      *   ⛔ L INFOBULLE NE DIT PLUS « not read on chain » (Phil, 2026-09-30) : le titre de la carte

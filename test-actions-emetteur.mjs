@@ -133,8 +133,13 @@ cas('⛔⛔⛔ L ECRAN MONTRE LA MARQUE, ET LA COUPE NE CACHE PLUS TOUT BLOCK LA
   const html = sansCommentaires(brut, { minRetire: 5000 });
   /* ⛔ LE LIBELLE EST IMPORTE, PAS RECOPIE : deux copies d une phrase visible divergent, et c est
    *   alors l ECRAN qui affirme autre chose que ce que le serveur a mesure. */
-  assert.match(html, /import \{ LIBELLE_EMETTEUR as LIBELLE_EMETTEUR_UI \} from '\.\/actions-emetteur\.js'/,
+  /* ⛔ L ASSERTION PORTE SUR LE LIEN, PAS SUR LA MISE EN FORME DE L IMPORT. La premiere version
+   *   exigeait la ligne EXACTE a un seul nom ; ajouter la forme courte l a fait rougir alors que
+   *   rien de ce qu elle protege n avait bouge. Une assertion qui tient la ponctuation plutot que
+   *   la propriete rougit sur du travail correct, et on apprend a l ignorer. */
+  assert.match(html, /LIBELLE_EMETTEUR as LIBELLE_EMETTEUR_UI/,
     'le libelle d origine n est pas importe : une seconde copie derivera');
+  assert.match(html, /from '\.\/actions-emetteur\.js'/, 'le libelle ne vient pas du module qui le definit');
   assert.match(html, /b\.emetteur \?/, 'la ligne de classement ne regarde pas `emetteur`');
   assert.match(html, /LIBELLE_EMETTEUR_UI/, 'le libelle importe n est jamais affiche');
   assert.ok(!/issued by Coinbase/.test(html),
@@ -144,6 +149,23 @@ cas('⛔⛔⛔ L ECRAN MONTRE LA MARQUE, ET LA COUPE NE CACHE PLUS TOUT BLOCK LA
    *     panneau `hidden`. `.rangNom` prend `flex:1`, donc la marque a besoin de `flex:0 0 auto`. */
   assert.match(html, /\.rangOrig\{[^}]*flex:0 0 auto/, '`.rangOrig` peut etre ecrasee par `.rangNom`');
   assert.match(html, /\.rangOrig\{[^}]*white-space:nowrap/, '`.rangOrig` peut etre coupee sur un mot');
+  /* ⛔⛔⛔ ET LA MARQUE NE DOIT PAS ECRASER CE QU ELLE QUALIFIE. Mesure du 2026-09-30 a 375 px sur
+   *      la PRODUCTION : la phrase longue prenait 97 px et laissait 39 px au nom — SIX symboles
+   *      sur douze TRONQUES (`GOOGLc` demandait 51 px, `AMZNc` 46, `NVDAc` 44). Les lignes non
+   *      marquees avaient 157 px : c etait ma marque, seule, qui coupait l identite du block.
+   *      « GOOGL… issued by Coinbase » dit l origine d un block qu on ne sait plus nommer. */
+  assert.match(html, /\.rangNom\{min-width:(\d+)px\}/, 'le nom du block n a pas de largeur plancher : la marque le tronquera');
+  const min = Number(/\.rangNom\{min-width:(\d+)px\}/.exec(html)[1]);
+  assert.ok(min >= 51, 'le plancher du nom est ' + min + ' px ; `GOOGLc` en demandait 51 a 375 px');
+  /* ⛔⛔ DEUX FORMES EXCLUSIVES, ET ELLES BASCULENT ENSEMBLE — meme piege que la puce « ? » une
+   *     heure plus tot : cacher l une sans montrer l autre laisse une marque VIDE, presente dans
+   *     le DOM et muette a l ecran. */
+  assert.match(html, /\.origCourt\{display:none\}/, 'la forme courte n est pas cachee par defaut : les DEUX s afficheraient');
+  assert.match(html, /\.origLong\{display:none\} \.origCourt\{display:inline\}/,
+    'sous la media query etroite, la forme longue est cachee SANS que la courte soit montree : marque vide');
+  assert.match(html, /LIBELLE_EMETTEUR_COURT as LIBELLE_EMETTEUR_COURT_UI/,
+    'la forme courte n est pas importee : une seconde copie de la phrase divergera');
+  assert.ok(!/>Coinbase</.test(html), 'la forme courte est RECOPIEE en dur dans app.html alors qu elle est importee');
   /* ⛔⛔⛔ ET LA COUPE. Mesure du 2026-09-30 : les rangs 1 a 12 etaient TOUS des actions de
    *      l emetteur, le premier block lance (`Aeon`, 181 298 $) tombait au rang 13. Une coupe a
    *      DIX rendait un ecran ou AUCUN block lance n apparaissait jamais. */
