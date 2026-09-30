@@ -1792,7 +1792,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            visible sans cliquer. -->
       <p class="sous">Mint a <b>new</b> block on Base, named after something that already exists. The original is never moved, wrapped or converted — your block is a new token that simply carries its name. Nothing here signs anything.</p>
       <div class="stadeLigne" data-itabs="tkQuoi" role="tablist" style="margin-top:2px">
-        <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="jeton">🧊 A token</button>
+        <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="jeton">⬢ A token</button>
         <button type="button" class="puce" role="tab" aria-selected="false" data-itab="post">❞ A post on X</button>
       </div>
 
@@ -2214,7 +2214,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-a-new-block-not-a-transformation" hidden>Build <code>20260930-a-new-block-not-a-transformation</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-hexagon-is-a-cube-from-the-corner" hidden>Build <code>20260930-hexagon-is-a-cube-from-the-corner</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2786,21 +2786,20 @@ details[open] > summary::before{transform:rotate(90deg)}
                mesure 9. Une prediction n est pas une mesure, et celle-la se trompait d un cran.
          ⛔ Si un dixieme onglet arrive, ce calcul est a REFAIRE : 55,6 px pris a neuf laissent
             deja moins d air aux voisins, et « Map » est descendu a 29,4 px. -->
-    <!-- ⛔⛔ UN CUBE, ET C EST `🧊` APRES UN DETOUR QUE JE NOTE PLUTOT QUE DE L EFFACER.
-         J avais d abord pris `❒` U+2752, un carre OMBRE de la meme famille Dingbats que le `❞`
-         qu il remplace — raisonnement sain sur la POLICE, faux sur le RENDU : a 17 px l ombre ne
-         se voit pas, et ca se lit « carre », pas « cube ». Phil demandait un cube.
-         ⛔ CE QUI A DECIDE, ET C EST MESURE (2026-09-30, 375 px emules) : l icone ne coute RIEN a
-         la mise en page. `❒`, `🧊`, `⬢` et `❞` donnent le MEME bouton a 55,6 px, la meme nav a
-         355 == 355, UNE rangee, hauteur 49,8 px — parce que la largeur de l onglet est fixee par
-         le LIBELLE, pas par le glyphe, qui vit sur sa propre ligne. Le cube etait donc gratuit,
-         et j ai failli choisir le moins lisible pour economiser une largeur qui n existait pas.
-         ⛔ ET IL REND : temoin tofu a 10,97 px, `🧊` mesure 22,75 — tres proche du `📈` de Market
-         (22,15) qui est DEJA un emoji couleur dans cette barre, donc ce chemin est prouve ici.
-         ⚠️ BORNE : `🧊` est un emoji de 2018, bien plus recent que les Dingbats. Sur un systeme
-         tres ancien il sortirait en carre vide — l ironie serait complete. Le repli MESURE est
-         `⬢` U+2B22 (hexagone, 1993) : c est la silhouette d un cube vu par le coin. -->
-    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>🧊</b>Tokenized</button>
+    <!-- ⛔⛔ UN CUBE, EN TROIS ETAPES QUE JE NOTE PLUTOT QUE D EFFACER.
+         `❞` (guillemet, il ne parlait que du cas « post ») -> `❒` U+2752, carre OMBRE de la meme
+         famille Dingbats : raisonnement sain sur la POLICE, faux sur le RENDU — a 17 px l ombre ne
+         se voit pas, ca se lit « carre ». -> `🧊`, lisible mais emoji de 2018. -> `⬢` U+2B22,
+         choisi par Phil, et c est le MEILLEUR des trois techniquement : un hexagone est la
+         silhouette exacte d un cube vu par le coin, et c est un caractere de 1993 — donc AUCUN
+         risque de carre vide, le defaut meme que ce commentaire existe pour eviter.
+         ⛔ CE QUI A DECIDE LA LIBERTE DE CHOISIR, ET C EST MESURE (375 px emules) : l icone ne
+         coute RIEN a la mise en page. `❒`, `🧊`, `⬢` et `❞` donnent le MEME bouton a 55,6 px, la
+         meme nav a 355 == 355, UNE rangee, hauteur 49,8 px — la largeur de l onglet est fixee par
+         le LIBELLE, pas par le glyphe, qui vit sur sa propre ligne. J ai failli choisir le moins
+         lisible pour economiser une largeur qui n existait pas.
+         ⛔ ET IL REND : temoin tofu a 10,97 px, `⬢` mesure 13,46 — donc pas un tofu. -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>⬢</b>Tokenized</button>
   </div>
 </nav>
 
