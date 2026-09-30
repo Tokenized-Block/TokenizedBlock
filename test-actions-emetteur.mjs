@@ -164,6 +164,32 @@ cas('⛔ LE SERVEUR SERT LE MODULE, SINON LA PAGE EST MORTE', () => {
     'l etat de la lecture ne voyage pas : le client ne saura pas que la marque est partielle');
 });
 
+cas('⛔⛔⛔ UN CORPS DE CACHE PERSISTE D UNE FORME PERIMEE EST REFUSE', () => {
+  /* ⛔⛔⛔ MESURE, PAS PRECAUTION. Le 2026-09-30, apres avoir ajoute `emetteur`/`emetteurEtat` et
+   *      deploye, la production rendait `emetteurEtat: ABSENT` et 0 ligne marquee sur 226 lignes.
+   *      Le code neuf tournait ; le CORPS venait du cache persiste sur le volume, ecrit par le code
+   *      d avant. La reponse etait bien formee, simplement d une forme PERIMEE — rien ne pouvait
+   *      le crier. Meme famille que l estampille de build reutilisee, qui aveugle la sonde.
+   *    ⛔ ET LA VERSION SEULE NE SUFFIT PAS : elle dependait de ma memoire, et j avais oublie de
+   *      l incrementer. Une liste blanche sans garde de derive tient jusqu au jour de l oubli. */
+  const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
+  assert.match(srv, /hasOwnProperty\.call\(parsed, 'emetteurEtat'\)/,
+    'le chargement du cache disque ne verifie PAS la forme du corps : un payload perime sera servi '
+    + 'apres deploiement, bien forme et faux');
+  assert.match(srv, /disk cache ignored \(shape/,
+    'le refus de forme ne se DIT pas dans les journaux : un cache ignore et un cache accepte se '
+    + 'ressembleraient');
+  /* ⛔ La garde ne doit pas jeter un cache LEGITIMEMENT vide (scan pas encore fait) : sinon on
+   *   perdrait le cache a chaque demarrage froid. Elle est bornee aux corps qui ONT des lignes. */
+  assert.match(srv, /\(parsed\.lignes \|\| \[\]\)\.length > 0/,
+    'la garde de forme jetterait aussi un cache vide legitime');
+  /* ⛔ Et la version reste bougee : elle couvre ce que la forme ne voit pas (un champ RENOMME). */
+  const v = /const TRENDING_CACHE_VER = '([^']+)'/.exec(srv);
+  assert.ok(v, '`TRENDING_CACHE_VER` a disparu');
+  assert.notEqual(v[1], 'prebridge-v3',
+    'la version du cache n a pas ete incrementee alors que la forme du payload a change');
+});
+
 cas('⛔ LA PHRASE EST VIDE SUR OK, ET PARLE SUR LES AUTRES', () => {
   assert.equal(phraseActionsEmetteur({ etat: 'OK', adresses: [] }), '');
   assert.match(phraseActionsEmetteur({ etat: 'RETOMBEE', pourquoi: 'muette' }), /not read/i);

@@ -1035,7 +1035,16 @@ let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
-const TRENDING_CACHE_VER = 'prebridge-v3'; /* bump to drop bad /data caches after RPC fenetre change */
+/* ⛔⛔⛔ CETTE VERSION EXISTE POUR LA FORME DU PAYLOAD, ET J AI OUBLIE DE L INCREMENTER — MESURE.
+ *      Le 2026-09-30 j ai ajoute `emetteur` par ligne et `emetteurEtat` a la charge utile, deploye,
+ *      puis constate en production : `emetteurEtat: ABSENT`, 0 ligne marquee, 226 lignes servies.
+ *      Le corps venait du cache PERSISTE sur le volume (`FICHIER_TRENDING`), ecrit par le code
+ *      d AVANT et recharge au demarrage. Le code neuf tournait ; c est l ANCIEN CORPS qui etait
+ *      servi. Rien ne l aurait dit : la reponse est bien formee, juste d une forme perimee.
+ *    ⇒ MEME FAMILLE QUE L ESTAMPILLE DE BUILD REUTILISEE, qui aveugle la sonde : un artefact
+ *      persiste dont la FORME change et dont la VERSION ne change pas se fait passer pour frais.
+ *      Tout ajout ou retrait de champ dans le payload de trending DOIT incrementer cette chaine. */
+const TRENDING_CACHE_VER = 'emetteur-v4'; /* bump to drop bad /data caches after RPC fenetre change */
 function chargerTrendingDisque() {
   try {
     if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
@@ -1050,6 +1059,22 @@ function chargerTrendingDisque() {
     if (parsed && parsed.ok === false) return;
     if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
       console.log('[trending] disk cache ignored (empty+ratees)');
+      return;
+    }
+    /* ⛔⛔⛔ LA FORME EST VERIFIEE, PAS SEULEMENT LA VERSION — ET C EST UNE MESURE, PAS UNE PRECAUTION.
+     *      Le 2026-09-30 j ai ajoute `emetteur`/`emetteurEtat`, deploye, et lu en production :
+     *      `emetteurEtat: ABSENT`, 0 ligne marquee, 226 lignes servies. Le code neuf tournait ; le
+     *      CORPS venait du cache persiste, ecrit par le code d avant. La reponse etait bien formee,
+     *      simplement d une forme PERIMEE — rien ne pouvait le crier.
+     *    ⛔ J avais oublie d incrementer `TRENDING_CACHE_VER`. Mais compter sur ma memoire pour
+     *      bouger une chaine a chaque changement de champ, c est une liste blanche sans garde de
+     *      derive : elle tiendra jusqu a la fois ou j oublierai. La garde SOLIDE est de refuser un
+     *      corps a qui manque un champ que le code d aujourd hui produit.
+     *    ⚠️ CE QU ELLE NE COUVRE PAS : un champ RENOMME cote ligne, ou un champ dont le SENS change
+     *      a nom constant. La version reste donc utile ; elle n est plus seule. */
+    if (parsed && !Object.prototype.hasOwnProperty.call(parsed, 'emetteurEtat')
+        && (parsed.lignes || []).length > 0) {
+      console.log('[trending] disk cache ignored (shape: no emetteurEtat — written by older code)');
       return;
     }
     trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
