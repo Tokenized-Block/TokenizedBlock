@@ -1775,7 +1775,9 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ La machinerie `data-itabs` est celle qui existe deja (Create, Launch, Swap, Brain) :
          on ne recopie pas un second commutateur qui divergerait du premier. -->
     <div class="carte">
-      <p class="titre">Tokenize</p>
+      <!-- ⛔ « Tokenized asset / coin », PAS « Tokenize » (Phil, 2026-09-30). Le verbe decrivait
+           notre geste ; le titre nomme desormais la CHOSE qu on obtient, comme le reste de l app. -->
+      <p class="titre">Tokenized asset / coin</p>
       <p class="sous">Turn something that already exists into a block on Base. Pick what you are starting from — the block is minted to you either way, and nothing here signs anything.</p>
       <div class="stadeLigne" data-itabs="tkQuoi" role="tablist" style="margin-top:2px">
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="jeton">🧊 A token</button>
@@ -2198,7 +2200,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-names-in-every-language" hidden>Build <code>20260930-names-in-every-language</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-no-wall-on-a-paid-create" hidden>Build <code>20260930-no-wall-on-a-paid-create</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2994,6 +2996,10 @@ import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } f
  *   et sans usage apres cette bascule, exactement ce que `presence-dun-nom-nest-pas-son-usage`
  *   decrit. Il reste le decodeur de `reclamation.js`, ou il sert. */
 import { symboleDepuisReponse } from './texte-onchain.js';
+/* ⛔ La liste « cree mais pas encore vivant » — reconciliee avec la chaine, et elle ne BLOQUE
+ *   plus la creation : son motif d origine (« Create still offered FREE ») a expire le jour ou
+ *   creer est devenu payant. 31 assertions, 5/5 mutations, dont « le mur revient ». */
+import { reconcilier, bloqueLaCreation, phraseRappel } from './blocks-a-lancer.js';
 /* ⛔ Le routage des lectures d historique profond — publicnode refuse l archive des -10 000
  *   blocs (mesure du 2026-09-30, refus stables). Module teste : 38 assertions, 8/8 mutations. */
 import { etatProfondeur, ordreNoeuds } from './profondeur-logs.js';
@@ -14107,9 +14113,16 @@ function majFraisEtRecap() {
      *    telephone n affiche jamais. Un bouton mort sans explication : c est le « ca bug » de Phil.
      *    Un refus de validation ne desactive plus le bouton : le clic connecte le wallet, ou dit ce qui
      *    manque en clair. Seuls un prix ou un solde MESURES insuffisants le ferment encore. */
-    /* tip 0211: while any not-alive block sits in tb.aLancer on mainnet, block Create —
-     * finish Bring life / dismiss first. Then Instant Birth · CreateRouter (not a free factory create). */
-    const aLancerBloque = Number(CHAINE) === 8453 && aLancerLire().length > 0;
+    /* ⛔⛔⛔ C EST CE BOUTON QUE PHIL A VU MOURIR (capture du 2026-09-30) : libelle « Finish Bring
+     *    life first », `disabled`, alors qu il venait de payer. Le mur venait d une liste
+     *    localStorage que RIEN ne reconciliait avec la chaine, et son motif d origine — « Create
+     *    still offered FREE -> infinite asleep blocks » — a EXPIRE le jour ou creer est devenu
+     *    payant. On reconcilie d abord, puis `bloqueLaCreation()` rend false : le frein, c est le
+     *    frais de 0,001 ETH, pas un bouton mort.
+     *  ⛔ LE RAPPEL RESTE AFFICHE juste en dessous (`peindreALancer`) : on retire le mur, pas
+     *    l information. */
+    if (Number(CHAINE) === 8453) { try { reconcilierALancer(); } catch (_) { /* jamais bloquant */ } }
+    const aLancerBloque = Number(CHAINE) === 8453 && aLancerLire().length > 0 && bloqueLaCreation();
     boutonCreer.disabled = aLancerBloque || !prixOk || !soldeOk;
     boutonCreer.title = aLancerBloque
       ? 'Finish Bring life on your existing block(s), or dismiss them first'
@@ -14262,6 +14275,27 @@ function aLancerAjouter(adr, sym) {
     { adr: a, sym: String(sym || '').slice(0, 14), paire: paireGravee }]);
 }
 function aLancerRetirer(adr) { const a = String(adr || '').toLowerCase(); aLancerEcrire(aLancerLire().filter((b) => b.adr !== a)); }
+/* ⛔⛔ LA RECONCILIATION QUI MANQUAIT DEPUIS TOUJOURS. Sans elle, un block DEJA VIVANT restait
+ *   dans la liste jusqu a un clic manuel sur « dismiss » — le commentaire d origine l avouait :
+ *   « un Launch fait ailleurs laisse la ligne jusqu a dismiss ». Une memoire locale que rien ne
+ *   confronte au reel finit toujours par mentir.
+ * ⛔ ASYMETRIE VOULUE : seule une PREUVE POSITIVE retire une ligne. Une absence ne prouve rien —
+ *   l index public ne cote un block qu au-dela d un seuil de transferts, et la decouverte de
+ *   pools ne voit que ce qu elle a eu le temps de lire. Retirer sur une absence effacerait des
+ *   rappels legitimes.
+ * ⛔ ZERO APPEL RESEAU : on se sert de ce que la page SAIT DEJA (`marcheParAdr` vient de
+ *   /api/trending, `poolDecouvertPour` des evenements Initialize). Une reconciliation qui
+ *   couterait des lectures se ferait couper au premier etranglement, donc jamais quand il faut. */
+function reconcilierALancer() {
+  const avant = aLancerLire();
+  if (!avant.length) return { retires: [] };
+  const { gardes, retires } = reconcilier(avant, {
+    marches: marcheParAdr,
+    poolPour: (a) => poolDecouvertPour(a),
+  });
+  if (retires.length) aLancerEcrire(gardes);
+  return { retires };
+}
 function peindreALancer() {
   const boite = $('#cALancer');
   if (!boite) return;
@@ -14269,7 +14303,12 @@ function peindreALancer() {
   boite.hidden = !l.length;
   boite.innerHTML = l.length
     /* tip 20260922-fee-funnel: incomplete Created banner */
-    ? '<b>⚠️ ' + l.length + ' block' + (l.length === 1 ? '' : 's') + ' created but not alive yet</b> — no market yet. Birth fee: 0.001 ETH, once. Bring it to life:'
+    /* ⛔ LE TON A CHANGE AVEC LE MUR. Tant que Create etait REFUSE, « ⚠️ » disait vrai : il
+     *   fallait agir pour avancer. Maintenant que la creation passe, le meme « ⚠️ » ferait croire
+     *   a un blocage qui n existe plus — et quelqu un cliquerait « dismiss » pour rien, ce qui est
+     *   exactement le geste qu on vient de rendre inutile. La phrase dit donc qu on peut creer
+     *   quand meme, et elle vient de `phraseRappel`, ou un test la tient. */
+    ? '<b>' + enTexte(phraseRappel(l)) + '</b>'
       + l.map((b) => '<span class="stadeLigne" style="margin-top:6px"><button type="button" class="puce on" data-a-lancer="' + enTexte(b.adr) + '">Bring life to '
         + enTexte(b.sym || court(b.adr)) + ' — 0.001 ETH once</button><button type="button" class="puce" data-a-oublier="' + enTexte(b.adr) + '">dismiss</button></span>').join('')
     : '';
@@ -14867,12 +14906,27 @@ async function creerBlock() {
    * tb.aLancer (aLancerLire) on mainnet, refuse Create early so they Bring life / dismiss first.
    * Nothing signed. Measured 2026-09-22: IB022 open fee paid, Launch mint sim reverted, Create still
    * offered free → infinite asleep blocks. */
-  if (Number(CHAINE) === 8453 && aLancerLire().length > 0) {
-    e.className = 'note wKo';
-    e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH — nothing was signed.';
-    majFraisEtRecap();
-    try { etape('cree_refus_a_lancer'); } catch (_) {}
-    return;
+  /* ⛔⛔⛔ CE MUR EST TOMBE LE 2026-09-30, ET LE MOTIF EST DANS LE COMMENTAIRE JUSTE AU-DESSUS :
+   *    il existait parce que « Create still offered FREE -> infinite asleep blocks ». Creer n est
+   *    plus gratuit — « Free create is retired on Base », 0,001 ETH par naissance. Le frein, c est
+   *    le frais ; le mur, lui, refusait une action PAYANTE sur la foi d une liste localStorage que
+   *    RIEN ne reconciliait avec la chaine. Une garde correcte PAR ACCIDENT hier devient fausse
+   *    quand la condition qui la justifiait disparait.
+   *  ⛔ LE DEFAUT VECU (Phil) : creation, transactions enchainees, paiement, puis casse. La ligne
+   *    restait, et au coup suivant il fallait cliquer « dismiss » sur un block peut-etre DEJA
+   *    VIVANT — parce que `aLancerRetirer` n etait appele que par un Launch confirme DANS CE
+   *    NAVIGATEUR ou par « dismiss ».
+   *  ⇒ On RECONCILIE d abord (retrait automatique de ce qu on peut PROUVER vivant), puis on
+   *    laisse passer. Le rappel reste affiche : on retire le mur, pas l information. */
+  if (Number(CHAINE) === 8453) {
+    try { reconcilierALancer(); } catch (_) { /* une reconciliation ratee ne doit pas bloquer */ }
+    if (aLancerLire().length > 0 && bloqueLaCreation()) {
+      e.className = 'note wKo';
+      e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH — nothing was signed.';
+      majFraisEtRecap();
+      try { etape('cree_refus_a_lancer'); } catch (_) {}
+      return;
+    }
   }
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local + wallet injecte) : sans wallet connecte, le
    *    clic sur Create ne faisait RIEN — la validation refusait (« connect your wallet first »), et

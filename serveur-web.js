@@ -1599,6 +1599,9 @@ const SERVIS = [
    *   tuerait TOUTE la page — et c est `test-imports-servis.mjs` qui l a crie, pas ma relecture :
    *   troisieme fois que cette garde paie. */
   'texte-onchain.js',
+  /* ⛔ `blocks-a-lancer.js` decide si un block deja cree bloque encore la creation suivante.
+   *   L oublier ici tuerait TOUTE la page — un import 404 arrete le module entier. */
+  'blocks-a-lancer.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
