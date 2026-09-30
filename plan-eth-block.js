@@ -52,25 +52,52 @@ const entier = (v) => { try { return BigInt(v); } catch (_) { return null; } };
  * @returns {?{intermediaire:bigint, sortie:bigint}}
  */
 export function sortieDeuxSauts({ entree, saut1, saut2 }) {
+  /* ⛔⛔ ENVELOPPE MINCE SUR `sortieNSauts`, ET C EST DELIBERE. Le 2026-09-30 il a fallu un
+   *     TROISIEME saut (WETH -> USDC -> action -> block). Recopier cette fonction en une version
+   *     « a trois » aurait cree un JUMEAU PLUS FAIBLE : deux calculs d ARGENT qui derivent en
+   *     silence des que l un est corrige. Motif deja paye dans ce depot.
+   *   ⛔ LA FORME DE RETOUR NE BOUGE PAS (`{ intermediaire, sortie }`) : ses appelants et ses tests
+   *     la connaissent, et generaliser ne doit rien couter a qui ne demandait rien. */
+  const r = sortieNSauts({ entree, sauts: [saut1, saut2] });
+  if (!r) return null;
+  return { intermediaire: r.etapes[0], sortie: r.sortie };
+}
+
+/**
+ * La sortie d un chemin a N sauts, EN ENTIERS, chaque pool prenant son propre `fee` sur son
+ * propre segment.
+ * ⛔⛔ EXPORTEE ET TESTEE SEULE : c est elle qui borne l argent, pour DEUX comme pour TROIS sauts.
+ * ⛔ LE FRAIS DE CHAQUE POOL S APPLIQUE SUR CE QUE LA PRECEDENTE A REELLEMENT RENDU. Les cumuler
+ *   sur l entree initiale fausserait tous les segments suivants — et cette erreur GRANDIT avec le
+ *   nombre de sauts : tolerable a deux, elle ne l est plus a trois.
+ * ⛔ ARRONDI VERS LE BAS a chaque division : le minimum reste PRUDENT. Vers le haut, il promettrait
+ *   plus que la chaine ne rend et la transaction reverterait chez le visiteur.
+ * @returns {?{sortie:bigint, etapes:bigint[]}} `etapes` = la sortie APRES chaque saut
+ */
+export function sortieNSauts({ entree, sauts }) {
   const e = entier(entree);
   if (e === null || e <= 0n) return null;
-  for (const s of [saut1, saut2]) {
+  if (!Array.isArray(sauts) || sauts.length < 1) return null;
+  for (const s of sauts) {
     if (!s) return null;
     const f = entier(s.fee), q = entier(s.sqrtPriceX96);
     if (f === null || q === null || f < 0n || f >= 1000000n || q <= 0n) return null;
     if (typeof s.entreeEst0 !== 'boolean') return null;
   }
-  /* ⛔ LE FRAIS DU PREMIER SAUT SUR L ENTREE DU PREMIER SAUT, celui du second sur ce que le premier
-   *   a REELLEMENT rendu. Les cumuler sur l entree initiale fausserait le second segment. */
-  const apres1 = (e * (1000000n - entier(saut1.fee))) / 1000000n;
-  if (apres1 <= 0n) return null;
-  const intermediaire = sortieSpot({ entree: apres1, sqrtPriceX96: saut1.sqrtPriceX96, entreeEst0: saut1.entreeEst0 });
-  if (intermediaire === null || intermediaire <= 0n) return null;
-  const apres2 = (intermediaire * (1000000n - entier(saut2.fee))) / 1000000n;
-  if (apres2 <= 0n) return null;
-  const sortie = sortieSpot({ entree: apres2, sqrtPriceX96: saut2.sqrtPriceX96, entreeEst0: saut2.entreeEst0 });
-  if (sortie === null || sortie <= 0n) return null;
-  return { intermediaire, sortie };
+  const etapes = [];
+  let courant = e;
+  for (const s of sauts) {
+    const apresFrais = (courant * (1000000n - entier(s.fee))) / 1000000n;
+    if (apresFrais <= 0n) return null;
+    const sortie = sortieSpot({ entree: apresFrais, sqrtPriceX96: s.sqrtPriceX96, entreeEst0: s.entreeEst0 });
+    /* ⛔⛔ UN SAUT QUI REND ZERO TUE LA ROUTE, et on le dit par `null` plutot que de continuer :
+     *     un zero qui traverserait les sauts suivants ressortirait en zero « bien calcule »,
+     *     impossible a distinguer d un prix reel. */
+    if (sortie === null || sortie <= 0n) return null;
+    etapes.push(sortie);
+    courant = sortie;
+  }
+  return { sortie: courant, etapes };
 }
 
 /**
@@ -83,14 +110,25 @@ export function sortieDeuxSauts({ entree, saut1, saut2 }) {
  * ⚠️ CE QUE CE CHOIX NE FAIT PAS : simuler la profondeur. A prix spot egal, la pool la plus mince
  *   « gagne » alors qu elle glisserait davantage. C est le role de la tolerance, et de la simulation.
  */
-export function meilleurePoolPivot({ entree, candidates, saut2 }) {
+export function meilleurePoolPivot({ entree, candidates, saut2, sautsApres = null }) {
   if (!Array.isArray(candidates) || !candidates.length) return null;
+  /* ⛔⛔ LE DEVIS DOIT PORTER SUR LA ROUTE ENTIERE, PAS SUR SES DEUX PREMIERS SAUTS. Avec un
+   *     troisieme saut (WETH -> USDC -> action -> block), choisir le pivot sur la sortie en ACTION
+   *     reviendrait a optimiser une etape intermediaire : deux pivots qui donnent la meme quantite
+   *     d action peuvent donner des quantites de BLOCK differentes si le troisieme saut n est pas
+   *     lineaire. On compare donc ce que le visiteur RECOIT, jamais ce qu il traverse.
+   *   ⛔ `saut2` seul reste accepte : c est la forme a deux sauts, et ses appelants n ont rien
+   *     demande. Une generalisation qui casse l existant n en est pas une. */
+  const suite = Array.isArray(sautsApres) && sautsApres.length ? sautsApres : (saut2 ? [saut2] : null);
+  if (!suite) return null;
   let meilleure = null;
   for (const c of candidates) {
     if (!c) continue;
-    const r = sortieDeuxSauts({ entree, saut1: c, saut2 });
+    const r = sortieNSauts({ entree, sauts: [c, ...suite] });
     if (!r) continue;
-    if (!meilleure || r.sortie > meilleure.sortie) meilleure = { ...r, pivot: c };
+    if (!meilleure || r.sortie > meilleure.sortie) {
+      meilleure = { intermediaire: r.etapes[0], sortie: r.sortie, etapes: r.etapes, pivot: c };
+    }
   }
   return meilleure;
 }
@@ -108,8 +146,44 @@ export function meilleurePoolPivot({ entree, candidates, saut2 }) {
  */
 export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   recipient, deadline, maintenant = null, toleranceBps = 100, devise = USDC_BASE,
-  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null } = {}) {
+  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null,
+  block = null, poolBlock = null } = {}) {
   if (!ADR.test(String(action || ''))) return { etat: 'REFUSE', pourquoi: 'a whole action address is required' };
+  /* ⛔⛔⛔ LE TROISIEME SAUT, AJOUTE LE 2026-09-30 — ET IL EST ENTIEREMENT OPTIONNEL. Sans `block`,
+   *      cette fonction fait EXACTEMENT ce qu elle faisait : WETH -> USDC -> action. Ses 14 cas de
+   *      test le prouvent, et c est la seule facon d etendre un chemin qui porte de l argent.
+   *    ⛔ POURQUOI IL FAUT CE SAUT : 123 blocks sont cotes dans une de nos actions tokenisees. Un
+   *      visiteur qui tient de l ETH ne pouvait PAS les acheter — le bouton Buy etait masque, ce
+   *      qui etait honnete et n etait pas une solution. Le chemin est WETH -> USDC -> action -> block.
+   *    ⛔ ET LA FRONTIERE EST DURE : un seul `exactInput` ne traverse que les pools de SA factory.
+   *      Sur les 123, seuls **13** ont leur pool sur Aerodrome CL et passent ici. Les 110 autres
+   *      (105 Uniswap) exigeraient un lot EIP-5792 de deux routeurs — ce n est PAS fait, et cette
+   *      fonction les REFUSE plutot que de construire un appel qui reverterait.
+   *    ⚠️ TROIS SAUTS = TROIS OCCASIONS D ECHOUER POUR UN SEUL CLIC, et le glissement s accumule. */
+  const troisSauts = block !== null || poolBlock !== null;
+  if (troisSauts) {
+    if (!ADR.test(String(block || ''))) {
+      return { etat: 'REFUSE', pourquoi: 'a whole block address is required for the third hop' };
+    }
+    /* ⛔ Un block qui SERAIT l action, la devise ou WETH ferait un chemin qui ne chaine pas —
+     *   `calldataExactInputCL` le refuserait plus loin, mais avec un message qui ne dirait pas ca. */
+    for (const [autre, nom] of [[action, 'the quote action'], [devise, 'the pivot currency'], [WETH_BASE, 'WETH']]) {
+      if (bas(block) === bas(autre)) {
+        return { etat: 'REFUSE', pourquoi: 'the block cannot be ' + nom + ' itself' };
+      }
+    }
+    if (!poolBlock || !ADR.test(String(poolBlock.pool || ''))) {
+      return { etat: 'REFUSE', pourquoi: 'the block pool must be resolved on chain first, not assumed' };
+    }
+    if (typeof poolBlock.blockEst0 !== 'boolean') {
+      return { etat: 'REFUSE', pourquoi: 'blockEst0 must be read from the pool (token0() === block)' };
+    }
+    const tsB = entier(poolBlock.tickSpacing);
+    if (tsB === null || tsB <= 0n) {
+      return { etat: 'REFUSE', pourquoi: 'the block pool needs its tickSpacing read from the pool, '
+        + 'which is NOT its fee' };
+    }
+  }
   if (bas(action) === bas(devise) || bas(action) === bas(WETH_BASE)) {
     return { etat: 'REFUSE', pourquoi: 'the action cannot be the pivot currency or WETH itself' };
   }
@@ -148,10 +222,20 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   if (!candidates.length) {
     return { etat: 'REFUSE', pourquoi: 'every pivot pool was missing its address, its price or its side' };
   }
-  const devis = meilleurePoolPivot({ entree: m, candidates, saut2 });
+  /* ⛔⛔ LE TROISIEME SAUT ENTRE DANS LE DEVIS, pas seulement dans le calldata. Le devis choisit le
+   *     pivot ET fixe le minimum garanti : l omettre ici ferait promettre une quantite d ACTION
+   *     alors que le visiteur recoit du BLOCK. Deux unites differentes, un seul chiffre a l ecran. */
+  const saut3 = troisSauts
+    ? { sqrtPriceX96: poolBlock.sqrtPriceX96, fee: poolBlock.fee,
+      /* l entree du 3e saut est l ACTION : elle est `token0` exactement quand le block ne l est pas */
+      entreeEst0: !poolBlock.blockEst0 }
+    : null;
+  const devis = meilleurePoolPivot({ entree: m, candidates, saut2, sautsApres: saut3 ? [saut2, saut3] : null });
   if (!devis) {
-    return { etat: 'REFUSE', pourquoi: 'no pivot pool gives an output for this amount — too small, '
-      + 'or a pool price is unusable' };
+    return { etat: 'REFUSE', pourquoi: troisSauts
+      ? 'no route gives an output for this amount across the three pools — too small, or a pool '
+        + 'price is unusable'
+      : 'no pivot pool gives an output for this amount — too small, or a pool price is unusable' };
   }
   const minSortie = (devis.sortie * (10000n - tol)) / 10000n;
   if (minSortie <= 0n) {
@@ -188,6 +272,10 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
     { de: WETH_BASE, vers: devise, tickSpacing: Number(tsPivot) },
     { de: devise, vers: action, tickSpacing: Number(tsAction) },
   ];
+  /* ⛔ LE CHEMIN SE CHAINE : le 3e saut part de l ACTION ou le 2e est arrive. `calldataExactInputCL`
+   *   le verifie aussi — deux gardes pour la meme propriete, parce qu un chemin qui ne chaine pas
+   *   est refuse par la CHAINE avec une erreur illisible, loin de sa cause. */
+  if (troisSauts) sauts.push({ de: action, vers: block, tickSpacing: Number(entier(poolBlock.tickSpacing)) });
   const avecFrais = ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n;
   const swap = avecFrais
     ? calldataExactInputAvecFrais({ sauts, recipient, deadline, amountIn: m,
@@ -247,6 +335,16 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
     usdcIntermediaire: devis.intermediaire.toString(),
     sortieAttendue: devis.sortie.toString(),
     minSortie: minSortie.toString(),
+    /* ⛔⛔⛔ LE CHEMIN, DIT EN CLAIR — ET CE CHAMP EXISTE PARCE QU UN TEST A MOI NE POUVAIT PAS
+     *      ROUGIR SANS LUI. J avais ecrit `a.chemin ? a.chemin.sauts : 2` : `chemin` n existait
+     *      pas, donc l assertion retombait sur `2` et passait QUOI QU IL ARRIVE. Une assertion qui
+     *      ne peut pas echouer ne mesure rien — elle rassure, ce qui est pire que rien.
+     *    ⛔ `cheminOctets` est la LONGUEUR REELLE que la chaine verra : 20 + 23 x sauts. L egalite
+     *      des longueurs est ce qui attrape un tickSpacing encode sur quatre octets au lieu de trois. */
+    chemin: { sauts: sauts.length, cheminOctets: 20 + 23 * sauts.length,
+      entree: bas(WETH_BASE), sortie: bas(troisSauts ? block : action),
+      /* ⛔ LE JETON DU MILIEU EST NOMME : a trois sauts, `usdcIntermediaire` ne dit plus tout. */
+      via: troisSauts ? [bas(devise), bas(action)] : [bas(devise)] },
     /* ⛔ CE QUE L UTILISATEUR RECOIT VRAIMENT, APRES NOTRE RETENUE. Publier le minimum des pools
      *   comme « ce que vous recevez » serait le chiffre juste au mauvais endroit. */
     minUtilisateur: swap.minUtilisateur || minSortie.toString(),

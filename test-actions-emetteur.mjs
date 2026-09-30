@@ -195,9 +195,16 @@ cas('⛔⛔⛔ UN CORPS DE CACHE PERSISTE D UNE FORME PERIMEE EST REFUSE', () =>
    *    ⛔ ET LA VERSION SEULE NE SUFFIT PAS : elle dependait de ma memoire, et j avais oublie de
    *      l incrementer. Une liste blanche sans garde de derive tient jusqu au jour de l oubli. */
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
-  assert.match(srv, /hasOwnProperty\.call\(parsed, 'emetteurEtat'\)/,
-    'le chargement du cache disque ne verifie PAS la forme du corps : un payload perime sera servi '
-    + 'apres deploiement, bien forme et faux');
+  assert.match(srv, /champsAttendus = \['emetteurEtat'\]/,
+    'le chargement du cache disque ne verifie PAS la forme de la CHARGE : un payload perime sera '
+    + 'servi apres deploiement, bien forme et faux');
+  /* ⛔⛔ ET LA GARDE DOIT PORTER SUR LA LIGNE AUSSI. Verifier seulement l enveloppe laisserait
+   *     passer un corps dont les LIGNES ont perdu un champ — et c est par ligne que l ecran decide :
+   *     `quoteAdr` choisit entre une route a deux sauts et une a trois. Une garde qui ne regarde
+   *     que l enveloppe est VRAIE et couvre la mauvaise moitie. */
+  assert.match(srv, /champsLigne = \['emetteur', 'quoteAdr'\]/,
+    'la garde de forme ne verifie pas les champs de LIGNE : un corps aux lignes amputees passerait');
+  assert.match(srv, /parsed\.lignes\[0\] \|\| \{\}/, 'la garde de ligne ne lit aucune ligne');
   assert.match(srv, /disk cache ignored \(shape/,
     'le refus de forme ne se DIT pas dans les journaux : un cache ignore et un cache accepte se '
     + 'ressembleraient');

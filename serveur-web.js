@@ -1044,7 +1044,7 @@ const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('
  *    ⇒ MEME FAMILLE QUE L ESTAMPILLE DE BUILD REUTILISEE, qui aveugle la sonde : un artefact
  *      persiste dont la FORME change et dont la VERSION ne change pas se fait passer pour frais.
  *      Tout ajout ou retrait de champ dans le payload de trending DOIT incrementer cette chaine. */
-const TRENDING_CACHE_VER = 'emetteur-v4'; /* bump to drop bad /data caches after RPC fenetre change */
+const TRENDING_CACHE_VER = 'quote-v5'; /* bump to drop bad /data caches after RPC fenetre change */
 function chargerTrendingDisque() {
   try {
     if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
@@ -1072,10 +1072,20 @@ function chargerTrendingDisque() {
      *      corps a qui manque un champ que le code d aujourd hui produit.
      *    ⚠️ CE QU ELLE NE COUVRE PAS : un champ RENOMME cote ligne, ou un champ dont le SENS change
      *      a nom constant. La version reste donc utile ; elle n est plus seule. */
-    if (parsed && !Object.prototype.hasOwnProperty.call(parsed, 'emetteurEtat')
-        && (parsed.lignes || []).length > 0) {
-      console.log('[trending] disk cache ignored (shape: no emetteurEtat — written by older code)');
-      return;
+    /* ⛔⛔ LA GARDE PORTE SUR LA CHARGE **ET** SUR LA LIGNE. Verifier seulement `emetteurEtat` en
+     *     tete laisserait passer un corps dont les LIGNES ont perdu un champ — et c est par ligne
+     *     que l ecran decide (`quoteAdr` choisit entre une route a deux sauts et une a trois). Une
+     *     garde qui ne regarde que l enveloppe est vraie et couvre la mauvaise moitie.
+     *   ⛔ TOUT AJOUT DE CHAMP DOIT ETRE AJOUTE ICI, et la version bumpee. Les deux, pas l une. */
+    const champsAttendus = ['emetteurEtat'];
+    const champsLigne = ['emetteur', 'quoteAdr'];
+    if (parsed && (parsed.lignes || []).length > 0) {
+      const manque = champsAttendus.find((c) => !Object.prototype.hasOwnProperty.call(parsed, c))
+        || champsLigne.find((c) => !Object.prototype.hasOwnProperty.call(parsed.lignes[0] || {}, c));
+      if (manque) {
+        console.log('[trending] disk cache ignored (shape: no ' + manque + ' — written by older code)');
+        return;
+      }
     }
     trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
     for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
@@ -1551,6 +1561,12 @@ const SERVIS = [
    *     divergent, et c est alors l ecran qui mentira, pas le serveur.
    *   ⛔ L OUBLIER ICI REND LA PAGE MORTE — un import 404 arrete tout le module. */
   'actions-emetteur.js',
+  /* ⛔⛔⛔ `espacements-cl.js` EST DEVENU UN MODULE DU NAVIGATEUR LE 2026-09-30 : `echange-eth.js`
+   *      l importe pour balayer les NEUF espacements de la factory en cherchant la pool du block.
+   *      Il n etait que cote serveur jusque-la, et l oublier ici aurait rendu la page MORTE en
+   *      production — un import 404 arrete tout le module, silencieusement.
+   *    ⇒ C est `test-imports-servis.mjs` qui l a crie, pas ma relecture. La garde a paye. */
+  'espacements-cl.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

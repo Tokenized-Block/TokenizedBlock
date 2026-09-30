@@ -67,14 +67,25 @@ export function echelleDesMarches(lignes) {
   };
 }
 
-/** La phrase qui dit A QUI est ce volume.
- * ⛔⛔ ELLE EST OBLIGATOIRE ET ELLE EST RENDUE AVEC LES NOMBRES. Sans elle, le total se lit comme le
- *     notre. Elle nomme trois choses : que ces marches sont ouverts par n importe qui, que le
- *     chiffre vient d un index public, et que les blocks sans marche lisible ne sont pas comptes. */
+/** La phrase qui dit D OU VIENT ce chiffre et ce qu il ne couvre pas.
+ * ⛔⛔ ELLE EST OBLIGATOIRE ET RENDUE AVEC LES NOMBRES. Elle nomme trois choses, et les trois sont
+ *     des BORNES DE MESURE : qui ouvre ces marches, d ou vient le chiffre, et ce qui n est pas
+ *     compte. Sans elles, le total passerait pour exhaustif.
+ *
+ * ⛔⛔⛔ DECISION DE PHIL, 2026-09-30 : « this is not our volume, and none of it is our revenue »
+ *      EST RETIRE. Sa raison, et elle est juste : « c est l inverse de ce qu on doit faire ». On
+ *      passe nos journees a cabler une route pour capter ce volume — un ecran qui le declare
+ *      etranger travaille contre le produit qu on construit.
+ *    ⛔ ET ON N A PAS ECRIT L INVERSE POUR AUTANT. J ai envisage « the market our router can route
+ *      into » : ce serait une SUR-VENTE. Ce qui est mesure, c est que 99,9 % de la liquidite des
+ *      ACTIONS tokenisees vit sur des pools Aerodrome CL traversables par `exactInput` — PAS que
+ *      les ~200 blocks de ce total le soient. On retire la denegation ; on ne la remplace par
+ *      aucune promesse. Chaque mot qui reste est mesure.
+ *    ⚠️ LES TROIS BORNES RESTENT, et un test les tient — plus une garde NEGATIVE, pour que la
+ *      denegation ne revienne pas par inadvertance dans six semaines. */
 export function phraseEchelle({ blocks, ecartees } = {}) {
   return 'Across the ' + Number(blocks || 0).toLocaleString('en-US') + ' blocks whose market this app '
-    + 'can read. These markets are opened by anyone on Base — this is not our volume, and none of it '
-    + 'is our revenue. Figures come from a public index'
-    + (ecartees ? ', and ' + Number(ecartees).toLocaleString('en-US') + ' thinner line(s) were left out' : '')
+    + 'can read. These markets are opened by anyone on Base, and the figures come from a public index'
+    + (ecartees ? ', with ' + Number(ecartees).toLocaleString('en-US') + ' thinner line(s) left out' : '')
     + '. Blocks with no readable market are not counted here.';
 }

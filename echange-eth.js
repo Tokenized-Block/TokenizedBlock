@@ -30,6 +30,9 @@ import { USDC_BASE } from './plan-usdc-block.js';
 import { planEthVersAction, WETH_BASE } from './plan-eth-block.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+/* ⛔ LES NEUF ESPACEMENTS QUE LA FACTORY DECLARE, pas une liste ecrite ici. Une liste a la main en
+ * portait SIX et cachait 9 pools sur 13, dont la plus echangee de la categorie. */
+import { ESPACEMENTS_RETOMBEE } from './espacements-cl.js';
 /* ⛔ LA MEME PORTE QUE LES PUCES ET QUE LE CHEMIN USDC, importee et jamais recopiee. */
 import { porteDAchat, porteNotreFrais, glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 
@@ -57,7 +60,7 @@ const adrDuMot = (h) => {
  * @param {number} [o.maintenantSec]
  */
 export async function planAchatEthAction({ rpc, compte, action, pool, montantWei,
-  toleranceBps = 100, maintenantSec = null, devise = USDC_BASE } = {}) {
+  toleranceBps = 100, maintenantSec = null, devise = USDC_BASE, block = null } = {}) {
   if (typeof rpc !== 'function') return { etat: 'NON_MESURE', pourquoi: 'no chain reader provided' };
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (!ADR.test(String(action || ''))) return { etat: 'REFUSE', pourquoi: 'a whole action address is required' };
@@ -109,6 +112,54 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
     sqrtPriceX96: BigInt('0x' + String(s0.res).replace(/^0x/, '').slice(0, 64)),
     actionEst0: bas(a0) === bas(action) };
 
+  /* ── 1bis. LE TROISIEME SAUT : la pool du BLOCK contre l ACTION ────────────────────────────────
+   * ⛔⛔⛔ POURQUOI IL EXISTE. 123 blocks sont cotes dans une de nos actions tokenisees. Un visiteur
+   *      qui tient de l ETH ne pouvait PAS les acheter : le bouton Buy etait MASQUE — honnete, et
+   *      pas une solution. Le chemin est WETH -> USDC -> action -> block.
+   *    ⛔ LES ESPACEMENTS VIENNENT DE `espacements-cl.js`, PAS D UNE LISTE ECRITE ICI. Une liste a
+   *      la main a deja cache 9 pools sur 13 dans ce depot — dont TE/MUc a ts=80 et 107 505 $ de
+   *      volume 24 h — parce qu elle en portait six quand la factory en declare neuf.
+   *    ⛔ ET UNE POOL QUI EXISTE N EST PAS ECHANGEABLE : sur USDC/PLTRc, celle a ts=1 porte
+   *      `liquidity = 0`. On exige une liquidite non nulle avant de la retenir, sinon le devis
+   *      diviserait par zero et un NaN traverserait toutes les bornes. */
+  let poolBlock = null;
+  let blockNonMesure = 0;
+  if (block !== null && block !== undefined) {
+    if (!ADR.test(String(block))) return { etat: 'REFUSE', pourquoi: 'a whole block address is required' };
+    if (bas(block) === bas(action)) return { etat: 'REFUSE', pourquoi: 'the block cannot be its own quote action' };
+    for (const esp of ESPACEMENTS_RETOMBEE) {
+      const gb = await lire(rpc, FACTORY_AERODROME_CL,
+        selecteur('getPool(address,address,int24)') + pad(block) + pad(action) + motNb(esp));
+      if (gb.etat === 'NON_MESURE') { blockNonMesure += 1; continue; }
+      const pb = gb.etat === 'OK' ? adrDuMot(gb.res) : null;
+      /* ⛔ ADRESSE NULLE = pas de pool a cet espacement. Un FAIT, pas une panne. */
+      if (!pb || /^0x0{40}$/i.test(pb)) continue;
+      const bs = await lire(rpc, pb, selecteur('slot0()'));
+      const bf = await lire(rpc, pb, selecteur('fee()'));
+      const bt0 = await lire(rpc, pb, selecteur('token0()'));
+      const bl = await lire(rpc, pb, selecteur('liquidity()'));
+      if (bs.etat !== 'OK' || bf.etat !== 'OK' || bt0.etat !== 'OK' || bl.etat !== 'OK') { blockNonMesure += 1; continue; }
+      let liq = 0n;
+      try { liq = BigInt(bl.res); } catch (_) { blockNonMesure += 1; continue; }
+      if (liq === 0n) continue;                      /* ⛔ exister n est pas etre echangeable */
+      const b0 = adrDuMot(bt0.res);
+      if (!b0) { blockNonMesure += 1; continue; }
+      poolBlock = { pool: pb, tickSpacing: esp, liquidite: liq,
+        fee: (() => { try { return Number(BigInt(bf.res)); } catch (_) { return -1; } })(),
+        blockEst0: bas(b0) === bas(block),
+        sqrtPriceX96: BigInt('0x' + String(bs.res).replace(/^0x/, '').slice(0, 64)) };
+      break;
+    }
+    if (!poolBlock) {
+      /* ⛔⛔ « PAS DE POOL » ET « PAS PU LIRE » SONT DEUX FAITS OPPOSES, et les confondre ferait
+       *     dire au visiteur que son block n est pas achetable sur une panne de noeud. */
+      return blockNonMesure
+        ? { etat: 'NON_MESURE', pourquoi: 'could not read the block pool (' + blockNonMesure + ' read failures)' }
+        : { etat: 'REFUSE', pourquoi: 'this block has no Aerodrome CL pool against its quote action — '
+          + 'a single exactInput only crosses pools of its own factory, so this route cannot be built' };
+    }
+  }
+
   /* ── 2. les pools pivot WETH/USDC, RESOLUES par la factory ────────────────────────────────── */
   const poolsPivot = [];
   let pivotsNonMesures = 0;
@@ -152,12 +203,22 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
    *     retenue porte sur le dernier saut.
    *   ⛔⛔ FAIL-CLOSED, a l inverse EXACT des puces : un frais non pris ne blesse personne, alors
    *     qu une puce fermee sur l inconnu efface le produit — panne du 2026-09-29, 13 puces -> 2. */
-  const lqAction = await lire(rpc, pool, selecteur('liquidity()'));
+  /* ⛔⛔⛔ AVEC UN TROISIEME SAUT, LA POOL DE SORTIE N EST PLUS CELLE DE L ACTION. Le commentaire
+   *      ci-dessus dit « la retenue porte sur le DERNIER saut, parce que c est lui qui determine EN
+   *      QUOI on est paye ». Garder la pool de l action ici aurait juge la profondeur de MUc/USDC
+   *      pour decider si on encaisse en TE — la bonne regle appliquee au mauvais actif. Une garde
+   *      peut etre VRAIE et couvrir la mauvaise moitie ; c est exactement ce cas.
+   *    ⛔ La liquidite de la pool du block est DEJA LUE (section 1bis) et non nulle, par
+   *      construction : on ne la relit pas, et on ne peut donc pas diviser par zero. */
+  const poolSortie = poolBlock || poolAction;
+  const sortieEst0 = poolBlock ? poolBlock.blockEst0 : poolAction.actionEst0;
+  let liqSortie = poolBlock ? { etat: 'OK', res: '0x' + poolBlock.liquidite.toString(16) } : null;
+  if (!liqSortie) liqSortie = await lire(rpc, pool, selecteur('liquidity()'));
   const porteFrais = porteDAchat({
-    glissement: lqAction.etat === 'OK'
-      ? glissementBps({ sqrtPriceX96: poolAction.sqrtPriceX96, liquidite: BigInt(lqAction.res),
-        entree: TAILLE_REFERENCE_USDC, entreeEst0: !poolAction.actionEst0 })
-      : { etat: 'NON_MESURE', pourquoi: 'liquidity() ' + lqAction.etat },
+    glissement: liqSortie.etat === 'OK'
+      ? glissementBps({ sqrtPriceX96: poolSortie.sqrtPriceX96, liquidite: BigInt(liqSortie.res),
+        entree: TAILLE_REFERENCE_USDC, entreeEst0: !sortieEst0 })
+      : { etat: 'NON_MESURE', pourquoi: 'liquidity() ' + liqSortie.etat },
     familleProuvee: 'aerodrome',
   });
 
@@ -166,7 +227,10 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
    *   defaut dans le module pur — et seulement si la porte dit oui. */
   const plan = planEthVersAction({ action, montantWei, poolAction, poolsPivot, recipient: compte,
     beneficiaireFrais: porteNotreFrais(porteFrais) ? FEE_WALLET : null,
-    deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise });
+    deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), toleranceBps, devise,
+    /* ⛔ LE TROISIEME SAUT NE PASSE QUE SI LA POOL A ETE LUE ET PROUVEE. `block` seul ne suffit
+     *   pas : le plan REFUSE une pool non resolue, et c est la garde qu on veut. */
+    block: poolBlock ? block : null, poolBlock });
   if (plan.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: plan.pourquoi, plan: null };
 
   /* ⛔⛔ TROU TROUVE EN PRODUCTION LE 2026-09-28, EN VERIFIANT CE MEME DEPLOIEMENT. Le plan annoncait

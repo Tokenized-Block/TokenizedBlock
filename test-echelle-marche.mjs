@@ -49,11 +49,22 @@ cas('⛔⛔ LA PHRASE EST RENDUE AVEC LES NOMBRES, TOUJOURS', () => {
   assert.ok(r.phrase && r.phrase.length > 40, 'un total sans phrase se lira comme le notre');
 });
 
-cas('⛔⛔ LA PHRASE DIT QUE CE VOLUME N EST PAS LE NOTRE', () => {
+cas('⛔⛔ LA PHRASE DIT SA SOURCE ET SES BORNES — ET NE SE DENIGRE PLUS', () => {
   const p = phraseEchelle({ blocks: 198, ecartees: 12 });
-  assert.match(p, /not our volume/i, 'la phrase ne dit plus que ce volume n est pas le notre');
+  /* ⛔⛔⛔ DECISION DE PHIL, 2026-09-30 : « this is not our volume, and none of it is our revenue »
+   *      est RETIRE. Sa raison, et elle est juste : « c est l inverse de ce qu on doit faire ». On
+   *      cable une route pour capter ce volume ; l ecran ne doit pas le declarer etranger.
+   *    ⛔ GARDE NEGATIVE, ET C EST ELLE QUI TIENT LA DECISION. Sans elle la phrase reviendrait dans
+   *      six semaines sans que personne s en apercoive : une decision produit qu aucun test ne
+   *      garde est une decision qui se defait toute seule. */
+  assert.ok(!/not our volume/i.test(p), 'la denegation « not our volume » est REVENUE');
+  assert.ok(!/none of it is our revenue/i.test(p), 'la denegation « none of it is our revenue » est REVENUE');
+  /* ⛔ ET ON N A PAS ECRIT L INVERSE : aucune promesse sur ce que le routeur atteint. 99,9 % de la
+   *   liquidite des ACTIONS tokenisees est routable par `exactInput` — PAS les ~200 blocks de ce
+   *   total. Retirer une denegation n autorise pas a la remplacer par une affirmation. */
+  assert.ok(!/\bour (router|volume|revenue)\b/i.test(p),
+    'la phrase s est mise a promettre quelque chose sur nous, et ce total ne le prouve pas');
   assert.match(p, /opened by anyone/i, 'la phrase ne dit plus qui ouvre ces marches');
-  assert.match(p, /none of it is our revenue/i, 'la phrase ne separe plus le volume du revenu');
   /* ⛔ ET ELLE DIT SA BORNE : les blocks sans marche lisible ne sont pas comptes. Sans ca, le total
    *   passerait pour exhaustif. */
   assert.match(p, /no readable market are not counted/i, 'la phrase ne dit plus sa borne');

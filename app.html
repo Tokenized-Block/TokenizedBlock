@@ -2142,7 +2142,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-le-nom-avant-la-marque" hidden>Build <code>20260930-le-nom-avant-la-marque</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-trois-sauts-cables" hidden>Build <code>20260930-trois-sauts-cables</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4580,14 +4580,51 @@ $('#fAcheterEth').addEventListener('click', async () => {
     try { etape('echange_refus_wallet'); } catch (_) {}
     montrerSansWallet(true); note.textContent = 'Connect a wallet first — the ETH comes from it.'; return;
   }
-  note.textContent = 'Reading both pools and quoting three WETH/USDC routes…';
+  /* ⛔⛔⛔ DEUX FORMES DE ROUTE, ET C EST LA COTATION DU BLOCK QUI TRANCHE — MESURE DU 2026-09-30 :
+   *      123 blocks sont cotes dans une de nos actions tokenisees, PAS en USDC. Pour eux le chemin
+   *      WETH -> USDC -> block n existe pas, et le lecteur refusait (« this pool does not hold both
+   *      the action and the pivot currency »). Le bouton Buy etait donc masque : honnete, et pas une
+   *      solution. Il leur faut TROIS sauts : WETH -> USDC -> action -> block.
+   *    ⛔ LA COTATION VIENT DU SERVEUR (`quoteAdr`), pas d une devinette sur le symbole. Elle etait
+   *      LUE PUIS JETEE : on gardait `dex` (le nom du marche) et `poolAdr` (ou il est) sans jamais
+   *      garder CONTRE QUOI le block s echange. Une valeur lue puis jetee est un defaut, et
+   *      celui-la coutait le bouton sur 123 blocks.
+   *    ⛔ ET LA COTATION DOIT ETRE UNE ACTION DU REGISTRE : on ne route que vers ce qu on sait lire.
+   *      Un block cote en un jeton inconnu reste sans bouton — c est la bonne reponse, pas une
+   *      promesse qu on ne tiendrait pas. */
+  const quote = mk && mk.quoteAdr ? String(mk.quoteAdr).toLowerCase() : null;
+  const estAction = Boolean(quote && typeof STOCKS_BASE_BY_ADR !== 'undefined' && STOCKS_BASE_BY_ADR.has(quote));
+  const mkAction = estAction ? marcheParAdr.get(quote) : null;
+  const troisSauts = Boolean(estAction && mkAction && mkAction.poolAdr);
+  if (estAction && !troisSauts) {
+    /* ⛔ ON NE DEVINE PAS LA POOL DE L ACTION. Sans elle il n y a pas de pivot lisible : on le DIT,
+     *   au lieu de construire un appel qui reverterait chez le visiteur. */
+    try { etape('echange_refus_pas_de_pool'); } catch (_) {}
+    note.textContent = 'This block is quoted in ' + String(mk.quoteSym || 'a tokenized stock')
+      + ', and we have not resolved that stock’s own pool yet — try again in a moment.';
+    return;
+  }
+  note.textContent = troisSauts
+    ? 'Quoting ETH → USDC → ' + String(mk.quoteSym || 'stock') + ' → this block, in one transaction…'
+    : 'Reading both pools and quoting three WETH/USDC routes…';
   let r;
   try {
-    r = await planAchatEthAction({ rpc, compte, action: adr, pool,
+    r = await planAchatEthAction({ rpc, compte,
+      /* ⛔ A TROIS SAUTS, « action » EST LA COTATION et `pool` SA pool — pas celle du block. Le
+       *   lecteur decouvre lui-meme la pool block/action, par aller-retour sur la factory. */
+      action: troisSauts ? quote : adr,
+      pool: troisSauts ? mkAction.poolAdr : pool,
+      block: troisSauts ? adr : null,
       /* ⛔ 0,01 ETH, UN MONTANT D ESSAI ASSUME ET DIT A L ECRAN. Ce n est pas un choix de produit :
        *   c est le plus petit montant qui, sur les pools mesurees, laisse un minimum garanti non nul
        *   avec 1 % de tolerance et une sortie lisible. */
-      montantWei: 10000000000000000n, toleranceBps: 100,
+      montantWei: 10000000000000000n,
+      /* ⛔⛔ TOLERANCE PLUS LARGE SUR TROIS SAUTS, ET ELLE EST MESUREE, PAS CHOISIE AU CONFORT.
+       *     Sur fork, l impact de prix REEL vaut 0 bps a 0,001 ETH, 6 bps a 0,01 et 60 bps a 0,1 —
+       *     trois pools donnent trois impacts qui s ajoutent, et la derniere est souvent la plus
+       *     mince. 300 bps couvrent le montant d essai avec une marge large, et restent tres en
+       *     dessous du plafond de 1000 du module. */
+      toleranceBps: troisSauts ? 300 : 100,
       maintenantSec: Math.floor(Date.now() / 1000) });
   } catch (e) {
     note.textContent = 'We could not read the chain just now — that is us, not the market.';
