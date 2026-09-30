@@ -2123,7 +2123,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-espacements-factory" hidden>Build <code>20260930-espacements-factory</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-classement-honnete" hidden>Build <code>20260930-classement-honnete</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2217,7 +2217,17 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="titre">Biggest blocks</p>
             <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce
                  que la liste montre, rien d autre. -->
-            <p class="sous">The biggest blocks first, by the market value we can read on chain.</p>
+            <!-- ⛔⛔ PHIL, 2026-09-30 : « "not read on chain" retire ca, ca a pas de sens que tu dis
+                 tu read et read pas ». Il avait raison, et la faute etait ICI autant que dans la note :
+                 ce titre disait « the market value WE CAN READ ON CHAIN » pendant que la note disait
+                 « 229 of them priced by a public aggregator, NOT READ ON CHAIN » — 229 sur 229, donc
+                 100 %. Le titre revendiquait la chaine pour une liste ou RIEN ne venait de la chaine.
+                 ⛔ ET JE N AI PAS SEULEMENT RETIRE L AVEU : effacer « not read on chain » en laissant
+                   le titre promettre la chaine aurait supprime la contradiction en gardant le
+                   MENSONGE. On retire la contradiction, pas la moitie vraie. La chaine reste
+                   prioritaire quand on sait la lire ; le « ~ » dit le reste, sans le nier. -->
+            <p class="sous">The biggest blocks first, by market value — read on chain when we can,
+              otherwise priced by a public aggregator (marked ~).</p>
       <!-- ⛔⛔ LE BUT DE L APP, DIT PAR PHIL (2026-09-20) : « etre le plus gros cube, pour pouvoir pairer
            cette liquidite, nourrir le cerveau, et pairer son cube a d autres B20 et actions tokenisees ».
            Ecrit ICI parce que c est l ecran du classement — la ou on se demande pourquoi grossir compte.
@@ -6489,7 +6499,31 @@ function classementCourant() {
         ? (h.pourquoi || (h.vie == null ? 'market not read yet' : 'no USD price for this quote currency'))
         : null,
     };
-  }));
+  /* ⛔⛔⛔ ET LES BLOCKS QUE L AGREGATEUR CONNAIT SANS QUE LA MAP LES AIT ENCORE POSES. C ETAIT LE
+   *      DEFAUT, ET IL SE VOYAIT : `Aeon` — `0xb2000000000000000000009f5206d54b428eb75b`, 181 298 $
+   *      de capitalisation, prefixe `0xb2`, ABSENTE de la liste des 40 de l emetteur donc vrai
+   *      block lance — n apparaissait NULLE PART, pendant que `STILL` (13 644 $) etait affiche n°1.
+   *      TREIZE FOIS le n°1. Idem `BEGJEV` 20 287 $ et `CCAT` 19 853 $.
+   *    ⇒ LA CAUSE, exactement : `marcheParAdr` servait de source de PRIX et jamais de source de
+   *      POPULATION. Un block avec un marche reel restait invisible tant que la map ne l avait pas
+   *      pose — et la map se vide et se remplit, donc « invisible » voulait dire « pas encore lu ».
+   *      Un classement « des plus gros » qui omet le plus gros n est pas un echantillon, c est une
+   *      fausse reponse a la question posee.
+   *    ⛔ ON N INVENTE RIEN : on n ajoute qu une ligne que le serveur a DEJA lue, avec une
+   *      capitalisation POSITIVE, et sa source reste marquee `AGREGATEUR` comme les autres.
+   *    ⛔ ET ON NE DOUBLE PERSONNE : `dejaLa` porte les adresses des habitants, en minuscules. */
+  }).concat((() => {
+    const dejaLa = new Set(habitants.map((h) => String(h.adr).toLowerCase()));
+    const enPlus = [];
+    for (const [adr, mk] of marcheParAdr) {
+      if (dejaLa.has(adr)) continue;
+      const fdv = mk && Number(mk.fdvUsd);
+      if (!(typeof fdv === 'number' && Number.isFinite(fdv) && fdv > 0)) continue;
+      enPlus.push({ adr, symbole: mk.sym || null, capitalisation: fdv, devise: 'USD',
+        source: 'AGREGATEUR', pourquoi: null });
+    }
+    return enPlus;
+  })()));
 }
 
 /* ⛔ `enTexte` N ECHAPPE PAS LE GUILLEMET : il passe par textContent, qui protege < > &, pas ". Un
@@ -6546,9 +6580,24 @@ function peindreClassement() {
     : cl.devises.length > 1
       ? 'Refusing to rank: markets quoted in ' + cl.devises.join(' vs ') + ' — comparing them would be a false ranking made of true numbers.'
       : cl.classes.length
-        ? cl.classes.length + ' ranked of ' + cl.population + ' read · ' + cl.nonMesures.length
-          + ' with no readable market — unranked, which is not last.'
-          + (nAgr ? ' ' + nAgr + ' of them (~) priced by a public aggregator, not read on chain.' : '')
+        /* ⛔⛔ « 229 ranked of 230 read » SE LISAIT COMME UN FAIT SUR LES BLOCKS, et c est un fait
+         *     sur NOTRE CHARGEMENT. Mesure du 2026-09-30 sur deux captures de Phil a quelques
+         *     minutes d ecart : « 367 read · n°1 STILL 13 644 $ » puis « 230 read · n°1 NVDAc
+         *     4 367 843 $ ». La population n avait pas change, notre lecture si — `habitants` se
+         *     vide (`habitants.length = 0`) et se remplit sous le classement. Un classement qui
+         *     bouge sans le dire fait passer sa propre progression pour un palmares.
+         *   ⇒ La phrase dit maintenant « read so far », et qu il en reste. */
+        ? cl.classes.length + ' ranked of ' + cl.population + ' read so far'
+          + (cl.nonMesures.length ? ' · ' + cl.nonMesures.length
+            + ' with no readable market — unranked, which is not last' : '') + '.'
+          /* ⛔ « not read on chain » RETIRE (Phil, 2026-09-30) : le titre ne promet plus la chaine
+           *   pour toute la liste, donc la note n a plus a le nier. Elle dit d ou vient le prix. */
+          + (nAgr ? ' ' + nAgr + ' of them (~) priced by a public aggregator.' : '')
+          /* ⛔ CONDITIONNE, ET C EST LA DIFFERENCE ENTRE UNE BORNE ET UN MENSONGE : « la map se
+           *   remplit encore » est FAUX une fois la lecture finie. Ecrit sans garde, c etait un
+           *   avertissement permanent qui devient faux — et un avertissement faux est pire
+           *   qu absent, parce qu il use la confiance des vrais. */
+          + (lectureVieEnCours ? ' Still reading — this list grows as the map fills.' : '')
         : (lectureVieEnCours
           ? 'Still reading markets… ' + cl.population + ' touched so far — ranked when life is read.'
           : 'None of the ' + cl.population + ' blocks we read has a readable market yet. Unranked is not last.');
