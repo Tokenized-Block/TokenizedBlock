@@ -445,7 +445,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    noye le geste principal. Ils tiennent sur une ligne, et se replient a 375 px — la largeur ou
    ce depot a deja mesure qu un lien partage tombait sous la ligne de flottaison. */
 .fActionsSaluts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.fActionsSaluts .bouton{min-height:34px;font-size:12px;padding:6px 10px;flex:1 1 auto}
+/* ⛔⛔ MESURE A 375 px APRES DEPLOIEMENT, PAS SUPPOSITION : avec `flex:1 1 auto` les quatre saluts
+   faisaient 329 px CHACUN — quatre lignes pleines, qui repoussaient « Open profile » et la note
+   sous la ligne de flottaison. La cause : `.bouton` porte une largeur pleine, et `auto` la prend
+   comme base. Il faut donc une BASE EXPLICITE.
+   ⛔ DEUX PAR LIGNE, pas quatre : a 329 px de carte, quatre boutons feraient 76 px et « Gmeow 🐱 »
+   deborderait. Deux lignes de deux tiennent, et restent lisibles. */
+.fActionsSaluts .bouton{min-height:34px;font-size:12px;padding:6px 8px;
+  flex:1 1 calc(50% - 3px);min-width:0;width:auto;white-space:nowrap}
 .fiche details{margin-top:4px}
 
 /* ══ PROFIL D UN BLOCK ═══════════════════════════════════════════════════════════════════════
@@ -2098,7 +2105,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-un-bouton-et-saluts-visibles" hidden>Build <code>20260930-un-bouton-et-saluts-visibles</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-saluts-deux-par-ligne" hidden>Build <code>20260930-saluts-deux-par-ligne</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
