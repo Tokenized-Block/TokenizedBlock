@@ -10,8 +10,8 @@
  *   4,0 et rien ne prouve l accord la-haut. Choisir silencieusement serait un solde faux sans
  *   symptome.
  */
-import { BLOC_COBALT, HORODATAGE_COBALT, ERREUR_DROITS, ROLES_LUS, etatCobalt,
-  formeDeLaReponse, multiplicateurAccorde, afficherEquivalent, phraseMultiplicateur } from './cobalt.js';
+import { BLOC_COBALT, HORODATAGE_COBALT, ERREUR_DROITS, ROLES_LUS, etatCobalt, formeDeLaReponse,
+  multiplicateurAccorde, afficherEquivalent, doitDireQuelqueChose, phraseMultiplicateur } from './cobalt.js';
 
 let n = 0, ko = 0;
 function ok(nom, cond, vu) {
@@ -132,6 +132,38 @@ ok('un accord ne porte PAS cette mention',
   !/one accessor only/.test(phraseMultiplicateur(multiplicateurAccorde({ multiplier: GOOGL, uiMultiplier: GOOGL }))));
 ok('AUCUNE parle aussi', /not read/.test(phraseMultiplicateur(multiplicateurAccorde({}))));
 ok('sans argument, la phrase existe quand meme', typeof phraseMultiplicateur() === 'string');
+
+console.log('');
+console.log('⛔⛔⛔ SEUL UN ACCORD COMPLET A LE DROIT D ETRE MUET');
+/* ⛔ CE BLOC EXISTE PARCE QUE MON SITE D APPEL S EST TROMPE, ET QUE SON SILENCE ETAIT INVISIBLE.
+ *   `app.html` calculait `(desaccord || !afficherEquivalent(acc))` — et `afficherEquivalent` rend
+ *   VRAI pour ACCORD **comme** pour SEUL_UI/SEUL_LEGACY. Une lecture non corroboree n affichait
+ *   donc RIEN : indistinguable d un accord confirme, alors que la phrase portant « one accessor
+ *   only » existait deja. Trouve par un audit adversarial, une heure apres l ecriture du module.
+ *   ⛔ ET C EST LE CAS FREQUENT : `uiMultiplier()` est l appel RPC SUPPLEMENTAIRE, donc le premier
+ *     a sauter sur une limite de debit. Le silence tombait pile ou il fallait parler. */
+ok('ACCORD -> muet (le seul cas qui y a droit)',
+  doitDireQuelqueChose(multiplicateurAccorde({ multiplier: N, uiMultiplier: N })) === false);
+ok('⛔ SEUL_UI -> PARLE', doitDireQuelqueChose(multiplicateurAccorde({ uiMultiplier: N })) === true,
+  multiplicateurAccorde({ uiMultiplier: N }));
+ok('⛔ SEUL_LEGACY -> PARLE', doitDireQuelqueChose(multiplicateurAccorde({ multiplier: N })) === true);
+ok('DESACCORD -> PARLE',
+  doitDireQuelqueChose(multiplicateurAccorde({ multiplier: N, uiMultiplier: 4n * N })) === true);
+ok('AUCUNE -> PARLE', doitDireQuelqueChose(multiplicateurAccorde({})) === true);
+ok('un objet absent -> PARLE (le doute ne se tait pas)', doitDireQuelqueChose(null) === true);
+ok('sans argument -> PARLE', doitDireQuelqueChose() === true);
+/* ⛔⛔ LA GARDE ANTI-RETOUR : la condition fautive, si elle revenait, rendrait SEUL_UI MUET.
+ *   On rejoue donc l ancienne expression et on verifie qu elle DIVERGE de la nouvelle — sinon ce
+ *   test passerait meme avec le bug remis. */
+ok('⛔ l ancienne condition fautive rendait SEUL_UI muet, la nouvelle non', (() => {
+  const acc = multiplicateurAccorde({ uiMultiplier: N });
+  const ancienne = (acc.etat === 'DESACCORD' || !afficherEquivalent(acc));
+  return ancienne === false && doitDireQuelqueChose(acc) === true;
+})());
+/* ⛔ ET LE CAS QUI PROTEGE LE SENS INVERSE : la nouvelle regle ne doit pas se mettre a parler sur
+ *   un ACCORD, sinon l avertissement deviendrait permanent et cesserait d avertir. */
+ok('⛔ elle ne bavarde PAS sur un accord charge (GOOGLc mesure)',
+  doitDireQuelqueChose(multiplicateurAccorde({ multiplier: GOOGL, uiMultiplier: GOOGL })) === false);
 
 console.log('');
 console.log('les hash de role viennent de la chaine');

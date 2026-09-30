@@ -2241,7 +2241,12 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-famille-exigee-directes-filtrees" hidden>Build <code>20260930-famille-exigee-directes-filtrees</code> · Contract labels say what they do, not our internal names.</p>
+      <!-- ⛔⛔ CETTE EMPREINTE A FAIT 41 CARACTERES ET `/sante` A RENDU `build: null`. La regex du
+           serveur (`serveur-web.js:1692`) plafonne a 40 : `[0-9A-Za-z_-]{6,40}`. Une empreinte
+           ILLISIBLE aveugle la sonde de deploiement exactement comme une empreinte REUTILISEE —
+           j aurais verifie mes propres deploiements contre `null`. 23 caracteres desormais, et
+           `test-empreinte-de-build.mjs` refuse le depassement. -->
+      <p class="note" data-build="20260930-famille-exigee" hidden>Build <code>20260930-famille-exigee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2902,7 +2907,7 @@ import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from '
  *   la meme chose — celui de `multiplicateur-action.js` decrit UNE valeur, celui de `cobalt.js`
  *   decrit l ACCORD entre deux accesseurs. Les importer sans alias laisserait le second ecraser le
  *   premier en silence : un ecran continuerait a s afficher, avec la mauvaise phrase. */
-import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent,
+import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent, doitDireQuelqueChose,
   phraseMultiplicateur as phraseAccordMultiplicateur } from './cobalt.js';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
 /* ⛔ NOM LONG VOULU : `phraseFrais` existe deja pour les frais de CREATION, avec une tout autre
@@ -6557,7 +6562,16 @@ function peindreActifs() {
            *   en actions qu on refuse, pas le nombre que la chaine detient. */
           const acc = multiplicateurAccorde({ multiplier: a.multiplicateur, uiMultiplier: a.multiplicateurUi });
           const desaccord = acc.etat === 'DESACCORD';
-          const noteAcc = (desaccord || !afficherEquivalent(acc)) ? ' ' + phraseAccordMultiplicateur(acc) : '';
+          /* ⛔⛔⛔ CETTE LIGNE ETAIT FAUSSE ET SON SILENCE ETAIT INVISIBLE. Elle disait
+           *      `(desaccord || !afficherEquivalent(acc))`, et `afficherEquivalent` rend VRAI pour
+           *      ACCORD **comme** pour SEUL_UI/SEUL_LEGACY : une lecture NON CORROBOREE n affichait
+           *      donc RIEN, exactement comme un accord confirme. La phrase « (read from one
+           *      accessor only) » existait dans `cobalt.js` et n etait jamais montree.
+           *    ⛔ Et c est le cas FREQUENT : `uiMultiplier()` est l appel RPC supplementaire, donc
+           *      le premier a sauter sur une limite de debit — le silence tombait pile ou il
+           *      fallait parler. La regle vit maintenant dans `doitDireQuelqueChose`, nommee et
+           *      testee, parce qu elle est trop facile a ecrire a l envers dans un ternaire. */
+          const noteAcc = doitDireQuelqueChose(acc) ? ' ' + phraseAccordMultiplicateur(acc) : '';
           return '<span title="' + enTexte(formaterUnites(a.solde, a.decimales) + note + noteAcc) + '">'
             + enTexte(abrege(formaterUnites(a.solde, a.decimales)))
             + (desaccord

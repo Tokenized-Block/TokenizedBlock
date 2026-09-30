@@ -137,6 +137,27 @@ export function afficherEquivalent(m) {
   return !!m && (m.etat === 'ACCORD' || m.etat === 'SEUL_UI' || m.etat === 'SEUL_LEGACY');
 }
 
+/**
+ * L ECRAN DOIT-IL DIRE QUELQUE CHOSE SUR CETTE LECTURE ?
+ *
+ * ⛔⛔⛔ CETTE FONCTION EXISTE PARCE QUE MON PROPRE SITE D APPEL S EST TROMPE, ET QUE LA FAUTE
+ *   ETAIT INVISIBLE. `app.html` calculait la condition a la main :
+ *       (desaccord || !afficherEquivalent(acc)) ? montrer la phrase : ''
+ *   Or `afficherEquivalent` rend VRAI pour ACCORD **et** pour SEUL_UI/SEUL_LEGACY. Donc une lecture
+ *   NON CORROBOREE — un seul accesseur lisible — passait `!true` = faux, et n affichait RIEN : elle
+ *   devenait indistinguable d un accord confirme. La phrase portant « (read from one accessor
+ *   only) » existait dans ce fichier et n etait JAMAIS montree. Une valeur ecrite puis jetee.
+ *   ⛔ ET C EST LE CAS FREQUENT, PAS LE CAS RARE : `uiMultiplier()` est l appel RPC SUPPLEMENTAIRE,
+ *     donc le premier a sauter sur une limite de debit. Le silence tombait exactement la ou il
+ *     fallait parler.
+ *   ⇒ La regle est trop facile a ecrire a l envers pour vivre dans une expression ternaire : elle
+ *     vit ici, elle est nommee, et elle est testee. SEUL UN ACCORD COMPLET A LE DROIT D ETRE MUET.
+ *   ⇒ Trouve par un audit adversarial, pas par moi, une heure apres avoir ecrit le module.
+ */
+export function doitDireQuelqueChose(m) {
+  return !m || m.etat !== 'ACCORD';
+}
+
 /** La phrase montree. ⛔ Le cas muet PARLE : un ecran vide n avertit personne. */
 export function phraseMultiplicateur(m) {
   if (!m) return 'Share multiplier: not read.';
