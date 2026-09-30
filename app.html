@@ -2142,7 +2142,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-funnel-splits-internal" hidden>Build <code>20260930-funnel-splits-internal</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-map-retries-when-cold" hidden>Build <code>20260930-map-retries-when-cold</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -17562,11 +17562,82 @@ setTimeout(() => { try { demarrerLive(); } catch (_) { /* Social le redemarrera 
 /* ══ tip 0037 — SOLEILS SUR LA MAP (Phil : « tout les blocks vivants, surbrillance plus forte sur gros volume, comme le
  * soleil dans notre galaxie ») : le classement Trending (volume 24 h DexScreener lu par le serveur) donne a chaque block
  * un eclat 0..1 (echelle log) ; les blocks qui tradent et ne sont pas encore sur la map y sont ajoutes (au plus 220 au total). */
-async function soleilsSurLaMap() {
+/* ⛔⛔⛔ LE SERVEUR REPOND « PAS ENCORE », ET ON L IGNORAIT — LA MAP POUVAIT RESTER VIDE POUR
+ *      TOUJOURS. Sur un demarrage a froid, `/api/trending` rend une charge PLACEHOLDER :
+ *      `{ ok: true, lignes: [], enCours: true }`. L ancienne ligne — `if (!d.lignes.length) return`
+ *      — abandonnait alors EN SILENCE : pas de reprise, pas de message, un univers vide sans
+ *      explication. Seul un rechargement manuel pouvait le reparer. Et le demarrage n a que DEUX
+ *      occasions de reussir (`soleilsSurLaMap()` puis `charger().then(...)`) : si le scan dure plus
+ *      longtemps que `charger()`, les deux tombent sur le placeholder et c est fini.
+ *    ⛔⛔ ET J AI AGGRAVE CE CAS LE 2026-09-30 : ma garde de forme du cache disque REJETTE le cache
+ *      des que la charge change de forme — c etait le bon correctif pour un corps perime, mais
+ *      chaque deploiement qui ajoute un champ fait desormais demarrer le serveur SANS cache, donc
+ *      en placeholder, donc avec une map VIDE pour tout visiteur arrivant pendant le scan. Quatre
+ *      fois ce jour-la. Une garde juste peut creuser un trou ailleurs.
+ *    ⇒ C est aussi ce que j avais MAL ATTRIBUE : « 0 cube apres 10 s » n etait pas de la lenteur,
+ *      c etait une reprise ABSENTE.
+ *    ⛔ LA REPRISE EST BORNEE : sans borne, un serveur durablement muet ferait tourner une boucle
+ *      de fetch dans le navigateur de quelqu un, pour rien. */
+const REPRISES_SOLEILS = 5;
+/* ⛔⛔⛔ UNE SEULE CHAINE DE REPRISE. `soleilsSurLaMap()` est appele DEUX fois au demarrage —
+ *      une fois tout de suite, une fois apres `charger()`. Ma premiere version lancait donc DEUX
+ *      chaines paralleles, et la trace reseau l a montre : les reprises partaient PAR PAIRES
+ *      (49,8 s · 53,9 s · 58,4 s · 64,4 s, deux requetes a chaque fois). Deux fois plus de charge
+ *      sur un serveur deja occupe a scanner, pour exactement la meme information. */
+let repriseSoleilsEnCours = false;
+/* ⛔⛔⛔ ET LE VRAI CAS N ETAIT PAS LA CHARGE VIDE, C ETAIT LA REQUETE QUI PEND. Le serveur porte
+ *      pourtant `NEVER hang HTTP on cold scan` et rend un placeholder — mais mesure au navigateur
+ *      sur un serveur FROID : les deux premiers `/api/trending` ont mis **44 SECONDES**
+ *      (4 465 ms -> 48 371 ms). Le scan RPC monopolise la boucle d evenements de Node, et la
+ *      reponse attend. Pendant ces 44 s, aucune reprise ne pouvait demarrer et l ecran restait
+ *      vide et MUET : mon correctif traitait un cas qui n arrive presque jamais.
+ *    ⇒ On borne l ATTENTE, pas seulement le nombre d essais. Une reponse qui ne vient pas en
+ *      quelques secondes est traitee comme « pas encore » — ce qu elle est. */
+const ATTENTE_SOLEILS_MS = 4000;
+async function soleilsSurLaMap(essai = 0) {
+  if (essai > 0 && !repriseSoleilsEnCours) return;   /* une chaine a deja ete abandonnee */
   try {
-    const r = await fetch('/api/trending', { cache: 'no-store' });
+    /* ⛔ `AbortController` : sans lui, `fetch` attend indefiniment et la reprise ne sert a rien. */
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const minuteur = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, ATTENTE_SOLEILS_MS) : null;
+    let r;
+    try { r = await fetch('/api/trending', { cache: 'no-store', ...(ctrl ? { signal: ctrl.signal } : {}) }); }
+    finally { if (minuteur) clearTimeout(minuteur); }
     const d = await r.json();
-    if (!d || d.ok !== true || !Array.isArray(d.lignes) || !d.lignes.length) return;
+    if (!d || d.ok !== true || !Array.isArray(d.lignes) || !d.lignes.length) {
+      /* ⛔ ON NE REPREND QUE SUR UNE REPONSE BIEN FORMEE ET VIDE — c est-a-dire le placeholder, ou
+       *   un scan qui n a encore rien. Une charge MAL formee ne se reparera pas toute seule :
+       *   la marteler serait du bruit. */
+      const reparable = Boolean(d && d.ok === true && Array.isArray(d.lignes));
+      /* ⛔⛔⛔ LA PHRASE VA DANS LES DEUX ENDROITS, ET J AI DU LE MESURER POUR LE SAVOIR. Ma
+       *      premiere version n ecrivait que dans `#mapNote` — qui vit dans `.cote`, un volet
+       *      MASQUE a 375 px. Mesure au navigateur : `visible: false`, largeur 0. Le message
+       *      partait donc dans le VIDE sur tout telephone, c est-a-dire exactement la ou un
+       *      univers vide fait partir les gens.
+       *    ⛔ MEME FAUTE QUE `message-juste-dans-un-volet-masque`, deja payee 25 taps sur 7
+       *      sessions ici. Connaitre la regle ne suffit pas : seul le navigateur l a dit.
+       *    ⛔ ET `#mapCentre` N EST PAS DETOURNE : `peindreCentre()` fait
+       *      `if (!n) { el.textContent = ''; return; }` — il VIDE cette ligne tant qu aucun block
+       *      n est pose, et la reprend des qu il y en a. Notre phrase occupe exactement le creux
+       *      et disparait d elle-meme. */
+      const dire = (txt) => {
+        if (habitants.length) return;          /* ⛔ jamais par-dessus une map deja peuplee */
+        for (const id of ['#mapNote', '#mapCentre']) { const e = $(id); if (e) e.textContent = txt; }
+      };
+      if (reparable && essai < REPRISES_SOLEILS) {
+        repriseSoleilsEnCours = true;
+        /* ⛔ ON LE DIT. Un visiteur devant un univers vide part ; un visiteur qui lit « ca se
+         *   remplit » attend. */
+        dire('Reading the markets — the map fills as they come in'
+          + (essai ? ' (' + (essai + 1) + '/' + (REPRISES_SOLEILS + 1) + ')' : '') + '…');
+        /* 1,5 s · 3 s · 4,5 s · 6 s · 7,5 s — 22,5 s au plus, puis on s arrete et on le dit */
+        setTimeout(() => { void soleilsSurLaMap(essai + 1); }, 1500 * (essai + 1));
+      } else {
+        /* ⛔ UN ECRAN VIDE SANS PHRASE SE LIT « CASSE ». On nomme qui a lache : nous, pas la chaine. */
+        dire('We could not read the markets just now — that is us, not the chain. Reload to try again.');
+      }
+      return;
+    }
     const max = Math.max(...d.lignes.map((l) => l.volume24hUsd || 0), 1);
     for (const l of d.lignes) {
       let h = habitantDe(l.adr);
@@ -17639,7 +17710,31 @@ async function soleilsSurLaMap() {
      * animer, every tile stays left:0 top:0 (Raksha pile top-left, tip map-3dplace was not enough). */
     if (habitants.length && !anim) animer();
     else if (moteur3d && habitants.length) try { moteur3d.image(performance.now()); } catch (_) {}
-  } catch (_) { /* pas de soleils cette fois : la map reste lisible sans */ }
+    repriseSoleilsEnCours = false;            /* ⛔ on a des lignes : plus rien a reprendre */
+  } catch (_) {
+    /* ⛔⛔⛔ C EST ICI QUE TOMBE L ABANDON APRES 4 s, ET L ANCIENNE VERSION LE MANGEAIT. Le
+     *      commentaire disait « pas de soleils cette fois : la map reste lisible sans » — sauf
+     *      qu une map SANS soleils et SANS blocks n est pas « lisible », c est un ecran vide. Et
+     *      sur un serveur froid c est le cas NORMAL : mesure, les deux premiers appels ont mis
+     *      44 secondes. Avaler cette erreur, c etait garantir l ecran vide.
+     *    ⛔ ON REPREND, avec la MEME borne que la charge vide — jamais deux mecaniques pour un
+     *      seul probleme, elles finiraient par diverger. */
+    if (!habitants.length && essai < REPRISES_SOLEILS) {
+      repriseSoleilsEnCours = true;
+      for (const id of ['#mapNote', '#mapCentre']) {
+        const e = $(id);
+        if (e) e.textContent = 'Reading the markets — the map fills as they come in ('
+          + (essai + 1) + '/' + (REPRISES_SOLEILS + 1) + ')…';
+      }
+      setTimeout(() => { void soleilsSurLaMap(essai + 1); }, 1500 * (essai + 1));
+    } else if (!habitants.length) {
+      repriseSoleilsEnCours = false;
+      for (const id of ['#mapNote', '#mapCentre']) {
+        const e = $(id);
+        if (e) e.textContent = 'We could not read the markets just now — that is us, not the chain. Reload to try again.';
+      }
+    }
+  }
 }
 /* ══ LES FACES DE LA MAP ════════════════════════════════════════════════════════════════════════════
  * ⛔⛔ PHIL (2026-09-17) : « regarde bien que les blocks correspondent a ce qu ils creent de base et a
