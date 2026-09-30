@@ -2072,7 +2072,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE DE BUILD EST EN ANGLAIS : elle s affiche a l ecran (masquee, mais lue par
            la garde anti-prose-francaise, et visible si quelqu un inspecte). « reste-dans-create »
            l a fait rougir a juste titre — deux mots francais sur un ecran anglais. -->
-      <p class="note" data-build="20260930-trending-sobre" hidden>Build <code>20260930-trending-sobre</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20260930-geste-envoi-compte" hidden>Build <code>20260930-geste-envoi-compte</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2688,6 +2688,7 @@ import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, et
 import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
 import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from './multiplicateur-action.js';
+import { GESTES, etapeDuGeste } from './geste-envoi.js';
 import { VALO_PLANCHER_ETH } from './lancement.js';
 /* ⛔ LA LECTURE DE MARCHE VIT DANS UN MODULE, PAS ICI. La recopier depuis l autre ecran aurait
  * donne deux capitalisations differentes pour le meme block sur deux pages. */
@@ -4630,7 +4631,16 @@ $('#fPairer').addEventListener('click', () => { pairerAvec($('#fiche').dataset.b
  * ⛔ UN SEUL CHEMIN D ENVOI POUR TOUTE L APP : le formulaire du Wallet, avec sa garde `envoi.js`.
  *    Un second chemin « special GM » aurait sa propre garde a maintenir, donc sa propre faille.
  */
+/* ⛔⛔ LE GESTE EST RETENU POUR L ISSUE. Le panneau d envoi est partage par GM, message et envoi
+ *     simple ; le code qui envoie ne sait donc pas d ou vient la demande. Sans cette memoire, on
+ *     compterait des envois sans jamais savoir LEQUEL des trois gestes domine — et c est justement
+ *     la question de Phil (« le send frag, c est ce qui se fait le plus »).
+ *   ⛔ UNE SEULE VARIABLE, ECRITE A L OUVERTURE : pas de file, pas d historique. Deux panneaux ne
+ *     peuvent pas etre ouverts a la fois. */
+let gesteEnvoiCourant = 'send';
 function ouvrirEnvoiPour(adr, dire, geste = 'send') {
+  gesteEnvoiCourant = GESTES.includes(geste) ? geste : 'send';
+  try { const e = etapeDuGeste(gesteEnvoiCourant, 'clic'); if (e) etape(e); } catch (_) {}
   if (!compte) {
     /* ⛔ LA PHRASE SUIT LE GESTE : parler de GM a quelqu un qui voulait ecrire un message, c est
      * repondre a une autre question que la sienne. */
@@ -4640,12 +4650,20 @@ function ouvrirEnvoiPour(adr, dire, geste = 'send') {
         ? 'A public message rides inside a transfer of this block, so it needs a little of it to send.'
         : 'Sending from this block is a real transfer.')
       + ' Connect your wallet first — it signs, this page never does.');
+    /* ⛔ LE MUR SANS WALLET SE COMPTE ICI AUSSI : c est la perte n°1 mesuree ailleurs (41
+     *   `wallet_no_provider` sur 384 visites), et rien ne la comptait sur le chemin d envoi. */
+    try { const e = etapeDuGeste(gesteEnvoiCourant, 'refus_wallet'); if (e) etape(e); } catch (_) {}
     return false;
   }
   const a = actifs.find((x) => x.etat === 'LU' && String(x.id).toLowerCase() === String(adr).toLowerCase());
   if (!a) {
     dire('You hold none of this block, or we could not read your balance — so there is nothing to '
       + 'send from it yet. Open its profile to buy some first.');
+    /* ⚠️ CE COMPTEUR MELANGE DEUX CAUSES, ET LE MESSAGE AUSSI : « vous n en detenez pas » et « on
+     *   n a pas pu lire votre solde ». Les separer demanderait de distinguer les deux ici, ce que le
+     *   code ne fait pas encore. Je le compte donc comme UN refus et je le DIS, plutot que
+     *   d inventer deux compteurs dont l un serait faux. */
+    try { const e = etapeDuGeste(gesteEnvoiCourant, 'refus_solde'); if (e) etape(e); } catch (_) {}
     return false;
   }
   allerA('wallet');
@@ -6197,6 +6215,9 @@ async function envoyer() {
   $('#bEnvoyer').disabled = true;
   e.className = 'note';
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
+  /* ⛔ LES ISSUES SONT PARTAGEES PAR LES TROIS GESTES : c est le meme code qui envoie. Les decliner
+   *   par geste multiplierait les noms sans rien apprendre de plus que `*_clic` ne dit deja. */
+  try { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_propos'); if (s) etape(s); } catch (_) {}
   let r;
   try {
     r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, ...p.tx });
@@ -6206,6 +6227,14 @@ async function envoyer() {
   } finally {
     envoiEnCours = false;
   }
+  /* ⛔ L ISSUE EST COMPTEE, ET SEULEMENT SUR UN ETAT CONNU. `CONFIRME` est le seul qui prouve que
+   *   la chaine a accepte ; `REFUSE_PAR_UTILISATEUR` est le seul qui prouve un refus deliberé. Tout
+   *   le reste (EN_ATTENTE, ANNULE_SUR_CHAINE, ECHEC_ENVOI) reste NON COMPTE plutot que range de
+   *   force d un cote : c est la meme discipline des trois issues que `messageEnvoi`. */
+  try {
+    if (r.etat === 'CONFIRME') { const s = etapeDuGeste(gesteEnvoiCourant, 'ok'); if (s) etape(s); }
+    else if (r.etat === 'REFUSE_PAR_UTILISATEUR') { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_refus'); if (s) etape(s); }
+  } catch (_) {}
   const mots = {
     CONFIRME: 'Sent and confirmed on chain.',
     ENVOYE: 'Sent.',

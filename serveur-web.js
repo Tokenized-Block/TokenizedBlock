@@ -1371,6 +1371,20 @@ const ETAPES_ENTONNOIR = [
    *     copie-coller, app mobile, messagerie, `rel=noreferrer` et navigation privee le vident tous. */
   'src_direct', 'src_x', 'src_farcaster', 'src_telegram', 'src_discord', 'src_reddit',
   'src_recherche', 'src_github', 'src_base', 'src_interne', 'src_autre',
+  /* ⛔⛔ LES GESTES D ENVOI — Phil, 2026-09-30 : « le send frag, c est ce qui se fait le plus sur
+   *     notre app ». Le « send frag » est le GM, un VRAI transfert d un fragment de block. Or au
+   *     moment ou il l a dit, RIEN ne le comptait : aucun nom d envoi dans cette liste, aucune des
+   *     36 etapes actives. « Ce qui se fait le plus » etait donc une croyance, pas une mesure —
+   *     comme « zero achat » l etait avant qu on instrumente le chemin d achat, ou il s est avere
+   *     qu il y avait eu 2 achats reels.
+   *   ⛔ LES TROIS GESTES PARTAGENT LE MEME PANNEAU, d ou trois `*_clic` distincts : sans eux on
+   *     saurait qu il y a des envois, pas lequel domine — donc rien d actionnable. Les ISSUES sont
+   *     partagees (`envoi_*`) parce que le code d envoi, lui, est le meme.
+   *   ⛔ Produits par `geste-envoi.js` ; `test-geste-envoi.mjs` echoue si les deux listes divergent. */
+  'gm_clic', 'gm_refus_wallet', 'gm_refus_solde',
+  'message_clic', 'message_refus_wallet', 'message_refus_solde',
+  'envoi_clic', 'envoi_refus_wallet', 'envoi_refus_solde',
+  'envoi_sign_propos', 'envoi_ok', 'envoi_sign_refus',
 ];
 /* ⛔ PERSISTANT (Phil, 2026-09-19 : « oui cree le volume ») : mesure — les compteurs repartaient de zero a CHAQUE deploiement
  *    (10 deploiements ce jour-la : aucun chiffre ne survivait). Volume Railway monte sur /data : lu au demarrage, ecrit
@@ -1410,7 +1424,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'multiplicateur-action.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'multiplicateur-action.js', 'geste-envoi.js',
   /* ⛔ AJOUTE LE 2026-09-26 — et c est `test-imports-servis` qui l a EXIGE, pas moi : un module
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
