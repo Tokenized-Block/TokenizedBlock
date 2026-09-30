@@ -79,6 +79,56 @@ export const DEVISES_BASE = [
    *      2. LA POOL OUSD/ETH EST VIDE (289 $). Toute route qui passerait par ETH -> OUSD taperait
    *         dans le vide ; la profondeur est du cote USDC. Un routeur qui l ignore rendrait un
    *         devis catastrophique — a traiter quand le multi-saut le prendra en compte.
+   *
+   *   ⭐⭐ OU EST CETTE POOL, EXACTEMENT — LU SUR LA CHAINE LE 2026-09-30 AU SOIR.
+   *      Les chiffres ci-dessus venaient de DexScreener, qui dit « Uniswap » sans dire LEQUEL.
+   *      La chaine dit lequel, et avec quelle cle :
+   *        Uniswap V4  poolId 0xdf5bde0fc414fcd1f803c9d1b52ebbb4db5982d8dca5316ae06b467e06fc429a
+   *                    currency0 USDC · currency1 OUSD · fee 100 · tickSpacing 1 · hooks 0x0
+   *                    tick -1  =>  1 USDC = 0,999999 OUSD — AU PAIR
+   *        decimales LUES, jamais supposees : OUSD 6, USDC 6 (un decalage aurait inverse le prix)
+   *      Temoin positif du lecteur : ETH/USDC rend 4 pools sur les memes cles. Il discrimine.
+   *
+   *   ⛔⛔ CE QUI DECIDE SI ON PEUT L ATTEINDRE, C EST LA FACTORY, PAS LA PROFONDEUR.
+   *      `planEthVersAction` fait WETH -> USDC -> action -> block en UN SEUL `exactInput`, et un
+   *      `exactInput` ne traverse que les pools de SA factory — c est la frontiere qui ne laisse
+   *      passer que 13 blocks sur 123. Mesure sur les NEUF espacements que la factory Aerodrome
+   *      DECLARE (`espacements-cl.js`), 0 non mesure :
+   *        USDC/WETH   3 pools Aerodrome CL   <- temoin positif
+   *        AAPLc/USDC  2 pools Aerodrome CL   <- temoin : une action tokenisee EN A
+   *        OUSD/USDC   0 pool Aerodrome CL
+   *        OUSD/ETH    0 pool Aerodrome CL
+   *      ⇒ OUSD n est PAS dans la situation des actions tokenisees : il est dans celle des 110
+   *        blocks refuses par ce chemin. Sa profondeur est reelle, mais sur une AUTRE factory.
+   *      ✅ ET LA ROUTE EXISTE SUR L AUTRE JAMBE : ETH -> USDC -> OUSD tient ENTIEREMENT dans
+   *        Uniswap V4 — une seule factory, donc franchissable en un seul `exactInput`. C est
+   *        `calldata-v3.js` / `echange-v3.js` (Universal Router) qui la portent.
+   *
+   *   ⇒ DECISION DE PHIL (2026-09-30) : « garde pool uniswap aussi », « multi pool ». Donc OUSD
+   *     RESTE propose, et c est la jambe Uniswap qu on cable — pas OUSD qu on retire. Le choix est
+   *     coherent avec la mesure : la profondeur est reelle et au pair, c est notre routage qui
+   *     etait borne a une seule factory.
+   *     ⛔ ET TANT QUE CETTE JAMBE N EST PAS CABLEE POUR OUSD, un visiteur qui tient de l ETH ne
+   *       peut pas acheter un block cote en OUSD par notre interface. Ce n est pas une opinion,
+   *       c est la consequence directe des quatre lignes de mesure ci-dessus, et ca doit rester
+   *       ecrit ici jusqu a ce que ce soit faux.
+   *     ⚠️ POURQUOI OUSD NE PREND PAS LE DRAPEAU DE TBLOCK, dans les deux sens : TBLOCK porte
+   *       `lancePubliquement: false` parce qu il n a de marche NULLE PART. OUSD en a un vrai, au
+   *       pair, 10 M$ — mais sur la factory que notre chemin d achat ne traversait pas. Les deux
+   *       cas se ressemblent a l ecran et ne se ressemblent pas sur la chaine.
+   *
+   *   ⛔ DEUX FAUTES A MOI DANS CETTE MESURE MEME, parce que la methode compte autant que le
+   *     resultat :
+   *      · ma premiere sonde ne testait que CINQ espacements (1, 50, 100, 200, 2000) et imprimait
+   *        « 0 pool » — ce qui se lit « aucune pool n existe ». Il en manquait QUATRE des neuf
+   *        declares (10, 80, 150, 500), et mon temoin positif lui-meme etait sous-compte (2 au lieu
+   *        de 3). C est la faute qui avait deja rendu 49,8 % du volume invisible. Les espacements
+   *        se LISENT dans `espacements-cl.js`, jamais a la main.
+   *      · avant ca, un appel POSITIONNEL a `calldataGetPool` (qui prend un OBJET) rendait
+   *        `tokenA: undefined` : cinq refus, pas un seul appel envoye, et mon compteur affichait
+   *        encore « 0 pool ». Ce qui m a sauve, c est que `calldataGetPool` rend un REFUS NOMME au
+   *        lieu d une valeur neutre. Un `null` m aurait fait publier « OUSD inatteignable ».
+   *
    *   ⛔ CE QUE JE N AI PAS VERIFIE, ET QUI N EST DONC PAS UN ARGUMENT :
    *      · que le prefixe `0xB2` et le marqueur `0xef` signifient la MEME fabrique que nos blocks.
    *        Meme format ne veut pas dire meme emetteur ni meme semantique — c est exactement

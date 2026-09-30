@@ -1615,6 +1615,11 @@ const SERVIS = [
    *   rien, alors qu un module importe et pas servi rend un 404 qui arrete le module ENTIER —
    *   c est-a-dire toute la page. L ordre « servir d abord, cabler ensuite » est le seul sur. */
   'cobalt.js',
+  /* ⛔ `route-multi-factory.js` refuse une route a cheval sur deux factories — le cas ou CHAQUE
+   *   jambe existe et ou l appel reverte quand meme (OUSD : 10 M$ au pair sur Uniswap V4, 0 pool
+   *   Aerodrome CL). Servi AVANT d etre importe, comme `cobalt.js` : un module servi et pas encore
+   *   utilise ne coute rien, un module importe et pas servi rend un 404 qui arrete toute la page. */
+  'route-multi-factory.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
