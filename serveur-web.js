@@ -1620,6 +1620,11 @@ const SERVIS = [
    *   Aerodrome CL). Servi AVANT d etre importe, comme `cobalt.js` : un module servi et pas encore
    *   utilise ne coute rien, un module importe et pas servi rend un 404 qui arrete toute la page. */
   'route-multi-factory.js',
+  /* ⛔ `route-v4-multi-sauts.js` assemble une route V4 de 2 a 4 sauts, frais dans la devise
+   *   d ENTREE. Servi AVANT d etre importe, comme les deux precedents : un module servi et pas
+   *   encore utilise ne coute rien, un module importe et pas servi rend un 404 qui arrete le
+   *   module ENTIER — donc toute la page. */
+  'route-v4-multi-sauts.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
