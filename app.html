@@ -5804,11 +5804,31 @@ async function basculerChaine(id) {
   try { actuelle = parseInt(await eth.request({ method: 'eth_chainId' }), 16); } catch (_) { return false; }
   if (actuelle === id) return true;
   const hex = '0x' + Number(id).toString(16);
+  /* ⛔⛔ SIGNALE PAR RAKSHA (2026-10-01) : Rabby se connecte sur Ethereum par defaut. Mesure du Grok Bot
+   *     avec un provider simule (chaine 0x1) contre la prod : `connecter()` DEMANDE bien
+   *     `wallet_switchEthereumChain 0x2105`, et `wallet_addEthereumChain` si la reponse est 4902.
+   *     DEUX TROUS reels, seulement :
+   *     · le 4902 EMBALLE — MetaMask mobile et plusieurs wallets rendent `code: -32603` avec le vrai
+   *       code dans `data.originalError.code`. On le lisait au premier niveau seulement : pas
+   *       d ajout de reseau, et la page restait « on chain 1 » ;
+   *     · « une demande est deja en cours » (-32002), frequent juste apres la popup de connexion :
+   *       on reessaie UNE fois, apres un court delai. Un refus de l utilisateur (4001) n est JAMAIS
+   *       reessaye — il a le droit de dire non. */
+  const reseauInconnu = (e) => !!e && (e.code === 4902
+    || (e.data && e.data.originalError && e.data.originalError.code === 4902)
+    || (e.data && e.data.code === 4902)
+    || /unrecognized|not added|unknown chain|try adding the chain/i.test(String(e.message)));
+  const demander = () => eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
   try {
-    await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+    try { await demander(); }
+    catch (e0) {
+      if (!(e0 && e0.code === -32002)) throw e0;
+      await new Promise((ok) => setTimeout(ok, 900));
+      await demander();
+    }
     return true;
   } catch (e) {
-    if (e && (e.code === 4902 || /unrecognized|not added|unknown chain/i.test(String(e.message)))) {
+    if (reseauInconnu(e)) {
       const R = RESEAUX[id];
       try {
         await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: R.nom,
