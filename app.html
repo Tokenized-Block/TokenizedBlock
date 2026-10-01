@@ -3226,7 +3226,35 @@ function viePourCerveau(adr, vie, etatVie) {
   return { vie, etatVie };
 }
 
+/* ⛔⛔⛔ LE CERVEAU NE DIT PLUS « MARKET UNREAD » SUR UN MARCHE QUE L APP A LU (Raksha, 2026-10-01 ;
+ *      handoff Claude §5.2). Le cerveau ne recevait QUE la lecture de chaine faite DEPUIS LE
+ *      NAVIGATEUR. Quand un noeud public la refuse (429 / 500, mesures le meme soir), `vie` arrive
+ *      `null` et `cerveau.js` conclut `NON_LU` — pendant que le MEME panneau affiche « Its market IS
+ *      read: … » a partir de `marcheParAdr` (lu par le serveur, `/api/trending`). Un echec de NOTRE
+ *      lecture presente comme une propriete du BLOCK.
+ *   ⇒ AVANT de conclure, on prend la MEME source et le MEME critere que la phrase du profil
+ *     (`marcheParAdr`, `prixUsd > 0`). La taille vient de `fdvUsd` (a defaut `liquiditeUsd`).
+ *   ⛔ `vieAvant` PASSE A `null` SUR CE REPLI : la lecture precedente est en devise de cotation
+ *     (ETH, USDC…), celle-ci en dollars. Les comparer fabriquerait une « hausse » ou une « baisse »
+ *     qui n a pas eu lieu — EXCITE ou INQUIET sur un changement d unite.
+ *   ⛔ ON NE TOUCHE NI A `NON_TROUVEE` NI A `MORT` : ce sont des faits de chaine, pas des echecs de
+ *     lecture. Le repli ne sert QUE la ou le cerveau aurait dit « non lu ».
+ *   ⚠️ BORNE : sans entree dans `marcheParAdr` (block hors classement, ou serveur pas encore lu),
+ *     le cerveau reste `NON_LU` — et l ecran dit alors « our read failed », pas « market unread ». */
+function vieServeurPourCerveau(adr) {
+  const mk = adr ? marcheParAdr.get(String(adr).toLowerCase()) : null;
+  if (!mk || !(Number(mk.prixUsd) > 0)) return null;
+  if (Number(mk.fdvUsd) > 0) return Number(mk.fdvUsd);
+  if (Number(mk.liquiditeUsd) > 0) return Number(mk.liquiditeUsd);
+  return null;
+}
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
+  const vieLue = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
+  const seraitNonLu = !etatVie || etatVie === 'NON_LUE' || etatVie === 'LUE';
+  if (!vieLue && seraitNonLu && h && h.adr) {
+    const vs = vieServeurPourCerveau(h.adr);
+    if (vs !== null) { vie = vs; vieAvant = null; etatVie = 'LUE'; }
+  }
   const lue = n && n.etat === 'LUE' ? n : null;
   /* ⛔ LE NOUVEAU = la lecture courante moins la PRECEDENTE lecture reussie ; sans precedente, rien n est nouveau */
   const avant = lue && nAvant && nAvant.etat === 'LUE' ? nAvant : null;
@@ -7551,7 +7579,7 @@ function peindreCerveau() {
   })();
   const ouverture = marcheLuIci
     ? 'No mood is judged: its price has not reached the brain yet, though its market is read.'
-    : 'Market unread, so no mood is judged.';
+    : 'Mood not judged — our read failed.';
   $('#pcPhrase').textContent = v.phase === 'NON_LU'
     ? (aTire
       ? ouverture + ' The beat below is real: it comes from its wiring, not from its price.'

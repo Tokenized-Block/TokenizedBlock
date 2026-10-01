@@ -368,7 +368,10 @@ export function restaurerMemoire(adresse, memo) {
 /* ⛔ LE NOM AFFICHE D UNE HUMEUR EST EN ANGLAIS (Phil, 2026-09-13 : « curieux ou calme, ecris en anglais, pas en francais »).
  *    Les identifiants internes (CALME, CURIEUX…) ne changent pas : regles gravees, tests et memoires en dependent. */
 export const NOMS_HUMEUR = Object.freeze({ DORMANT: 'asleep', EVEILLE: 'awake', CALME: 'calm', CURIEUX: 'curious',
-  EXCITE: 'excited', INQUIET: 'worried', MORT: 'dead', NON_LU: 'market unread' });
+  EXCITE: 'excited', INQUIET: 'worried', MORT: 'dead', NON_LU: 'Mood not judged — our read failed' });
+/* ⛔⛔ NON_LU NE S APPELLE PLUS « market unread » (Raksha, 2026-10-01). `NON_LU` veut dire que NOTRE
+ *   lecture a echoue — l app (`entreesCerveau`) essaie desormais aussi les donnees de marche du
+ *   serveur avant d en arriver la. « market unread » se lisait comme un fait sur le block. */
 export function nomHumeur(phase) {
   return NOMS_HUMEUR[phase] || 'quiet';
 }
