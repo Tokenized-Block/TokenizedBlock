@@ -169,9 +169,16 @@ cas('⛔⛔ une approbation ILLIMITEE est refusee', () => {
 
 cas('⛔⛔ L INVARIANT DU LOT : la jambe 2 ne depense jamais plus que le minimum garanti de la jambe 1', () => {
   const jambe1 = { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xdeadbeef', value: '0x0' };
+  /* ⛔ `minSortie2` passe de 1 a 10000, et ce n est pas un ajustement de confort : il designe
+   *   desormais le minimum des POOLS, AVANT notre retenue, et `minUtilisateur` doit rester
+   *   STRICTEMENT positif. A 1 unite, 10 bps donnent 0 et le constructeur refuse — a juste titre :
+   *   on ne batit pas un ordre dont le minimum garanti est nul.
+   * ⛔ ET `beneficiaireFrais` EST OBLIGATOIRE : sans lui, le plan REFUSE. C est la raison d etre de
+   *   ce changement — la jambe 2 ne payait rien. */
   const commun = { jambe1, pivot: USDC, action: NVDAc, tickSpacing: 10,
     recipient: TEMOIN_1.entree.recipient, deadline: TEMOIN_1.blocTs + 300n,
-    maintenant: TEMOIN_1.blocTs, minSortie2: 1n, poolResolue: POOL_NVDAc_USDC };
+    maintenant: TEMOIN_1.blocTs, minSortie2: 10000n, poolResolue: POOL_NVDAc_USDC,
+    beneficiaireFrais: FEE_WALLET };
   /* egal : accepte */
   assert.equal(planifierFranchissement({ ...commun, minSortie1: 1000n, entree2: 1000n }).etat, 'PRET');
   /* moins : accepte */
@@ -188,8 +195,8 @@ cas('⛔ le lot annonce sa poussiere et exige l atomicite', () => {
   const r = planifierFranchissement({
     jambe1: { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xabcd' },
     pivot: USDC, action: NVDAc, tickSpacing: 10, recipient: TEMOIN_1.entree.recipient,
-    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n, minSortie2: 7n,
-    poolResolue: POOL_NVDAc_USDC });
+    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n,
+    minSortie2: 70000n, poolResolue: POOL_NVDAc_USDC, beneficiaireFrais: FEE_WALLET });
   assert.equal(r.etat, 'PRET');
   assert.equal(r.appels.length, 3, 'jambe 1, approbation, jambe 2');
   assert.equal(r.appels[1].to, USDC.toLowerCase(), 'l approbation porte sur le pivot');
@@ -207,6 +214,56 @@ cas('⛔ le lot annonce sa poussiere et exige l atomicite', () => {
   assert.equal(r.poolVisee, POOL_NVDAc_USDC.toLowerCase(), 'la pool visee doit etre relisible');
 });
 
+cas('⭐⭐ LA JAMBE 2 NOUS PAIE — c est la jambe ou vit 96,4 % du volume, et elle etait GRATUITE', () => {
+  /* ⛔⛔⛔ LE DEFAUT CORRIGE : `planifierFranchissement` batissait sa jambe 2 avec
+   *   `calldataExactInputSingleCL`, qui ne porte AUCUN frais — alors que ce module exporte
+   *   `calldataExactInputAvecFrais`, deja utilise par `plan-eth-block.js` et `plan-usdc-block.js`.
+   *   Un franchissement OUSD -> action tokenisee prenait donc le frais sur la jambe 1 (Uniswap) et
+   *   RIEN sur la jambe 2 (Aerodrome).
+   *   ⇒ MESURE DU 2026-10-01 QUI DIT L ENJEU, sur nos 249 lignes servies :
+   *       aerodrome    11 marches    83 728 918 $ de volume 24 h   96,4 %
+   *       uniswap     238 marches     3 133 376 $ de volume 24 h    3,6 %
+   *     La jambe gratuite etait celle du volume. */
+  const base = { jambe1: { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xabcd' },
+    pivot: USDC, action: NVDAc, tickSpacing: 10, recipient: TEMOIN_1.entree.recipient,
+    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n,
+    minSortie2: 1000000n, poolResolue: POOL_NVDAc_USDC };
+
+  /* ⛔ SANS BENEFICIAIRE, ON REFUSE. Aucun defaut : un frais qui part « quelque part » sans que
+   *   l appelant l ait decide est pire qu un frais absent. */
+  const sansBenef = planifierFranchissement({ ...base });
+  assert.equal(sansBenef.etat, 'REFUSE', 'pas de beneficiaire => REFUSE, jamais un lot gratuit');
+  assert.match(sansBenef.pourquoi, /fee-recipient/i);
+
+  const r = planifierFranchissement({ ...base, beneficiaireFrais: FEE_WALLET });
+  assert.equal(r.etat, 'PRET');
+  /* ⛔⛔ LES OCTETS, PAS LE RESUME. Un plan peut annoncer un frais que son calldata ne prend pas :
+   *   c est exactement le jumeau qui a deja ete attrape ailleurs dans ce depot. On exige donc que
+   *   l adresse du beneficiaire soit PRESENTE dans les octets de la jambe 2. */
+  const octets2 = String(r.appels[2].data).toLowerCase();
+  assert.ok(octets2.includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase()),
+    'le beneficiaire du frais doit etre NOMME dans le calldata de la jambe 2');
+  assert.ok(octets2.includes(SELECTEURS.sweepTokenWithFee.replace(/^0x/, '')),
+    'la jambe 2 doit porter sweepTokenWithFee — c est lui qui preleve');
+  /* ⛔ ET LE TAUX EST CELUI DU MODULE, LU et pas suppose. */
+  assert.equal(BigInt(r.fraisBps), FRAIS_INTERFACE_BPS_CL);
+  assert.equal(String(r.beneficiaireFrais).toLowerCase(), String(FEE_WALLET).toLowerCase());
+
+  /* ⛔⛔ DEUX MINIMUMS, DEUX NOMS, ET ILS DIFFERENT. `minPools` sort des pools ; `minUtilisateur`
+   *   arrive chez l acheteur APRES notre retenue. Les confondre afficherait un montant qu il ne
+   *   recevra pas. L egalite des deux signifierait que rien n est preleve. */
+  assert.ok(BigInt(r.minPools) > BigInt(r.minUtilisateur),
+    'minUtilisateur doit etre STRICTEMENT inferieur a minPools, sinon rien n est preleve');
+  assert.equal(BigInt(r.minUtilisateur),
+    (BigInt(r.minPools) * (10000n - FRAIS_INTERFACE_BPS_CL)) / 10000n,
+    'la retenue doit etre exactement le taux annonce, au wei');
+  assert.match(String(r.retenue), /%/, 'le plan doit DIRE sa retenue en clair');
+
+  /* ⛔ UN TAUX ABSURDE EST REFUSE : la borne est la NOTRE, et elle doit mordre. */
+  const trop = planifierFranchissement({ ...base, beneficiaireFrais: FEE_WALLET, fraisBps: 5000n });
+  assert.equal(trop.etat, 'REFUSE', 'un frais de 50 % doit etre refuse');
+});
+
 cas('⛔⛔ le lot REFUSE de viser une pool qui n a pas ete resolue sur la chaine', () => {
   /* ⛔⛔ CE REFUS VIENT D UNE MESURE, PAS D UN PRINCIPE. `tickSpacing` vaut 10 sur SEPT pools
    *     d actions (NVDAc, GOOGLc, METAc, AAPLc, MSTRc, MSFTc, SNDKc) et 1 sur CINQ autres (RDDTc,
@@ -215,7 +272,8 @@ cas('⛔⛔ le lot REFUSE de viser une pool qui n a pas ete resolue sur la chain
    *     cinq actions sur douze, et ca reverterait APRES la signature. */
   const commun = { jambe1: { to: '0x6ff5693b99212DA76aD316178A184AB56D299b43', data: '0xabcd' },
     pivot: USDC, action: NVDAc, tickSpacing: 10, recipient: TEMOIN_1.entree.recipient,
-    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n, minSortie2: 7n };
+    deadline: TEMOIN_1.blocTs + 120n, maintenant: TEMOIN_1.blocTs, minSortie1: 5000n,
+    minSortie2: 70000n, beneficiaireFrais: FEE_WALLET };
   for (const mauvaise of [null, undefined, '', '0x', 'pas-une-adresse']) {
     const r = planifierFranchissement({ ...commun, poolResolue: mauvaise });
     assert.equal(r.etat, 'REFUSE', 'poolResolue=' + JSON.stringify(mauvaise) + ' doit etre refuse');
@@ -537,7 +595,10 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
 /* ⛔ LE COMPTE M A ATTRAPE : j avais ecrit 12, il y en a 13 — la boucle sur les deux temoins produit
  *   QUATRE cas, pas deux. Un compteur qui ne se verifie pas laisserait un cas disparaitre en silence
  *   lors d un refactor, et la suite resterait verte avec une assertion en moins. */
-assert.equal(n, 25, 'compte de cas inattendu : ' + n);
+/* ⛔ 25 -> 26 : le cas ajoute est « LA JAMBE 2 NOUS PAIE ». Ce compteur existe parce qu une suite
+ *   qui ne se compte pas peut PERDRE un cas sans rougir — un `cas()` supprime ou renomme passerait
+ *   inapercu, et la suite resterait verte en testant moins. */
+assert.equal(n, 26, 'compte de cas inattendu : ' + n);
 console.log('✓ test-calldata-aerodrome : ' + n + ' cas');
 console.log('   2 transactions reelles rejouees A L OCTET, sens croise avec leur event Swap.');
 console.log('   Le lot EXIGE une pool resolue par getPool : tickSpacing vaut 10 sur 7 pools et 1 sur 5.');

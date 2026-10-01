@@ -504,7 +504,8 @@ export function calldataGetPool({ tokenA, tokenB, tickSpacing } = {}) {
  *   L appelant passe la jambe 1 deja construite.
  */
 export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpacing, recipient,
-  deadline, minSortie1, minSortie2, maintenant = null, entree2 = null, poolResolue = null } = {}) {
+  deadline, minSortie1, minSortie2, maintenant = null, entree2 = null, poolResolue = null,
+  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null } = {}) {
   if (!jambe1 || !ADR.test(String(jambe1.to || '')) || typeof jambe1.data !== 'string' || !jambe1.data) {
     return { etat: 'REFUSE', pourquoi: 'leg 1 must be an already-built call { to, data }' };
   }
@@ -540,8 +541,30 @@ export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpac
 
   const appro = calldataApprove({ token: pivot, montant: e2 });
   if (appro.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'approval refused: ' + appro.pourquoi };
-  const jambe2 = calldataExactInputSingleCL({ tokenIn: pivot, tokenOut: action, tickSpacing,
-    recipient, deadline, amountIn: e2, amountOutMinimum: minSortie2, maintenant });
+
+  /* ⛔⛔⛔ LA JAMBE 2 EST CELLE QUI NE NOUS PAYAIT RIEN, ET C EST CELLE OU VIT L ARGENT.
+   *   Elle etait construite par `calldataExactInputSingleCL`, qui ne porte AUCUN frais — alors que
+   *   ce meme module exporte `calldataExactInputAvecFrais`, deja utilise par `plan-eth-block.js` et
+   *   `plan-usdc-block.js`. Un franchissement OUSD -> action tokenisee prenait donc le frais sur la
+   *   jambe 1 (Uniswap) et RIEN sur la jambe 2 (Aerodrome).
+   *   ⇒ MESURE DU 2026-10-01 QUI DIT L ENJEU : sur nos 249 lignes servies, les ONZE marches
+   *     Aerodrome portent 83 728 918 $ de volume 24 h — 96,4 % — contre 3 133 376 $ pour les 238
+   *     marches Uniswap. La jambe gratuite etait celle du volume.
+   *
+   * ⛔⛔ ET LE BENEFICIAIRE N A AUCUN DEFAUT : sans adresse, on REFUSE. Un defaut enverrait la
+   *   retenue « quelque part » sans que l appelant l ait decide, et un frais qui part tout seul est
+   *   pire qu un frais absent. C est la meme regle que `calldataExactInputAvecFrais` applique deja ;
+   *   la contourner ici aurait rouvert la porte qu il ferme.
+   *
+   * ⛔ ET LE SENS DE `minSortie2` CHANGE, DONC ON LE DIT. Avec le constructeur sans frais, c etait
+   *   le minimum recu par l UTILISATEUR. Avec celui-ci, c est le minimum des POOLS, AVANT notre
+   *   retenue ; l utilisateur recoit `minSortie2 * (10000 - bps) / 10000`. Les deux chiffres sont
+   *   rendus (`minPools`, `minUtilisateur`) pour qu aucun ecran n ait a deviner lequel il montre. */
+  const jambe2 = calldataExactInputAvecFrais({
+    sauts: [{ de: pivot, vers: action, tickSpacing }],
+    recipient, deadline, amountIn: e2, amountOutMinimum: minSortie2, maintenant,
+    fraisBps, beneficiaireFrais,
+  });
   if (jambe2.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'leg 2 refused: ' + jambe2.pourquoi };
 
   return {
@@ -551,6 +574,16 @@ export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpac
       { to: appro.to, data: appro.data, value: '0x0', role: 'approve the pivot for the Aerodrome router' },
       { to: jambe2.to, data: jambe2.data, value: '0x0', role: 'leg 2 — Aerodrome CL' },
     ],
+    /* ⛔⛔ LES FAITS DU FRAIS SONT RENDUS, PAS SUPPOSES PAR L APPELANT. Un ecran qui veut verifier
+     *   « ce lot nous paie-t-il ? » doit pouvoir le LIRE sur le plan, et une sonde doit pouvoir le
+     *   recouper avec les octets. Un plan qui tait son propre frais oblige a le croire. */
+    fraisBps: jambe2.fraisBps,
+    beneficiaireFrais: jambe2.beneficiaireFrais,
+    /* ⛔ DEUX MINIMUMS, DEUX NOMS. `minPools` sort des pools, `minUtilisateur` arrive chez
+     *   l acheteur APRES notre retenue. Les confondre afficherait un montant qu il ne recevra pas. */
+    minPools: jambe2.minPools,
+    minUtilisateur: jambe2.minUtilisateur,
+    retenue: jambe2.borne,
     /* ⛔ LA POUSSIERE EST ANNONCEE, PAS CACHEE : c est le prix du lot, et l ecran doit pouvoir le
      *   dire avant qu on signe. On ne connait pas son montant (il depend de la sortie reelle de la
      *   jambe 1), seulement sa NATURE — et on le formule ainsi plutot que d inventer un chiffre. */
