@@ -15635,6 +15635,26 @@ async function appelBrut(tx) {
   }
 }
 
+/* ⛔⛔ « EVM error: OutOfFunds » N EST PAS UN REFUS DE LA FACTORY, C EST UN SOLDE. Signale par Raksha
+ *     (2026-10-01, wallet neuf et vide, capture `create-outoffunds.png`) : le preflight disait la
+ *     verite — « Need ≈ 0.0015 ETH … Nothing was started. Fund wallet. » — puis, quelques secondes
+ *     plus tard, la ligne devenait « EVM error: OutOfFunds », en rouge, brute.
+ *   ⇒ CAUSE : `verifierAdresseCreation` SIMULE `createPaid` avec `value` = 0,001 ETH depuis le compte
+ *     connecte (pour demander l adresse a la factory). Un compte qui n a pas 0,001 ETH fait refuser
+ *     la SIMULATION par le noeud — et `adresseOuRefus` rend ce message tel quel dans `r.refus`, qui
+ *     etait ecrit dans `#cEtat`. Elle tourne a l ouverture de l onglet, 600 ms apres une saisie, et
+ *     au clic : elle ecrasait donc la phrase honnete du preflight.
+ *   ⛔ RIEN N A ETE ENVOYE : c est un `eth_call`. La phrase le dit, et elle mene au meme geste que
+ *     le preflight (approvisionner le wallet) — jamais un message de moteur EVM. */
+const RE_SIMULATION_SANS_FONDS = /OutOfFunds|insufficient funds|exceeds balance|insufficient balance/i;
+function refusSimulationSansFonds(texte) { return RE_SIMULATION_SANS_FONDS.test(String(texte || '')); }
+function direSimulationSansFonds(e) {
+  e.className = 'note wKo';
+  e.innerHTML = 'This wallet does not hold enough ETH yet for the 0.001 ETH fee + gas, so the block address '
+    + 'could not be checked. Nothing was sent. <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
+  const link = $('#cFundShort');
+  if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
+}
 async function verifierAdresseCreation() {
   const v = validerCreation();
   const e = $('#cEtat');
@@ -15649,6 +15669,7 @@ async function verifierAdresseCreation() {
       ? { to: CREATE_ROUTER, value: valeurCreation(fraisWeiCalcule != null ? fraisWeiCalcule : CREATE_FEE_WEI_FLOOR) }
       : {};
     const r = await adresseOuRefus(appelBrut, compte, data, opts);
+    if (r.refus && refusSimulationSansFonds(r.refus)) { direSimulationSansFonds(e); return null; }
     if (r.refus) { e.className = 'note wKo'; e.textContent = r.refus; return null; }
     /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY, jamais calculee ici. */
     e.className = 'note wOk';
@@ -15656,6 +15677,7 @@ async function verifierAdresseCreation() {
     adressePrevue = { adresse: r.adresse, sel: String($('#cSel').value || '').trim(), compte: String(compte || '').toLowerCase() };
     return r.adresse;
   } catch (err) {
+    if (refusSimulationSansFonds((err && err.message) || err)) { direSimulationSansFonds(e); return null; }
     e.className = 'note wKo';
     e.textContent = 'Could not ask the chain: ' + String((err && err.message) || err);
     return null;
