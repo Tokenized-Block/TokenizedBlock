@@ -2657,7 +2657,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 0039 (Phil : « c est le Brain AI qui le fait, comme give birth — pas un formulaire alors que Create existe ») :
              une phrase, un bouton « Give birth ». Les reglages (paire, valeur de depart, part) sont prerempli et replies.
              ⛔ Tous les id sont gardes : la logique de plan / signature ne change pas. -->
-        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth · V8</span><span class="pPV" id="plReseau"></span></div>
+        <div class="pJeuTete"><span class="pBadge" id="plBadge">Give birth</span><span class="pPV" id="plReseau"></span></div>
         <!-- tip 20260922-fee-funnel -->
         <p class="pProchain" id="plIntro">Its brain is ready. Give birth and it comes alive: its blocks go into a market paired with <span id="plContre">ETH</span>, locked forever. Birth fee: 0.001 ETH, once.</p>
         <div class="stadeLigne" data-itabs="plInfo" role="tablist" style="margin-top:6px" hidden>
@@ -3184,7 +3184,7 @@ import { planMessagePaye } from './messagerie-blocks.js';
  *    PAS une session Create locale / memoire-chaine. V8.inscrire refuse encore sans ce marqueur
  *    (URI B20 immuable apres create). Created/OpenLaunch sans face → CTA cache, pas de faux ALLOW. */
 const labelNaissanceCache = new Map(); /* adr → { etat, quand } */
-const POURQUOI_PAS_LABEL = 'V8 birth needs a face engraved at Create (on-chain label). This block was born elsewhere — Instant Birth a new block on TB (0.001 ETH once · V8).';
+const POURQUOI_PAS_LABEL = 'This block was created somewhere else, so its market can\'t be opened here. You can create a new one — 0.001 ETH, once.';
 async function etatLabelNaissance(adr) {
   const a = String(adr || '').toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(a)) return 'NON_LU';
@@ -8000,16 +8000,21 @@ function peindreMarcheHook(v) {
   const viaCourt = (() => {
     const s = info.via ? String(info.via) : '';
     if (!s) return '';
-    if (/TBLOCK/i.test(s) && /fee hook/i.test(s)) return ' · via TBLOCK (hooked Launch)';
-    if (/TBLOCK/i.test(s)) return ' · via TBLOCK (legacy Launch)';
-    if (/fee hook/i.test(s)) return ' · via ETH (fee hook Launch)';
-    if (/legacy Launch/i.test(s)) return ' · via ETH (legacy Launch pool)';
-    if (/^ETH/i.test(s)) return ' · via ETH';
-    return ' · via ' + s.replace(/\s*·\s*0\s*%[^·]*/gi, '').replace(/\s*·\s*0,5\s*%[^·]*/gi, '').trim();
+    /* ⛔⛔ LE JARGON NE SORT PLUS D ICI, AU LIEU D ETRE GOMME APRES COUP (Raksha, 2026-10-01 : V8 / hook /
+     *   on-chain label a l ecran). Avant, cette fonction FABRIQUAIT « (hooked Launch) », « (legacy
+     *   Launch) », « (fee hook Launch) », puis l affichage les retirait par une regex — et la derniere
+     *   ligne laissait passer tel quel ce que `marche.js` met dans `via` : « on-chain key · ETH »
+     *   (marche.js:235), ou « TbFeeHook v8 » si un jour il manquait le motif « fee hook ». On ne garde
+     *   que la DEVISE de la paire ; tout mot interne (hook, on-chain key, V4_…) est retire. */
+    if (/TBLOCK/i.test(s)) return ' · via TBLOCK';
+    if (/^ETH/i.test(s) || /fee hook|legacy Launch/i.test(s)) return ' · via ETH';
+    const propre = s.replace(/\s*·\s*0(,5)?\s*%[^·]*/gi, '')
+      .split('·').map((x) => x.trim()).filter((x) => x && !/hook|on-chain|^V\d|_/i.test(x)).join(' · ');
+    return propre ? ' · via ' + propre : '';
   })();
   /* tip 0028 : le public lit « TokenizedBlock market » ou « outside market », jamais le mot hook */
-  if (info.isTbFeeHook) el.textContent = 'TokenizedBlock market' + viaCourt.replace(/\s*\((hooked|legacy|fee hook) Launch( pool)?\)/g, '') + '.';
-  else el.textContent = 'Outside market' + viaCourt.replace(/\s*\((hooked|legacy|fee hook) Launch( pool)?\)/g, '') + '.';
+  if (info.isTbFeeHook) el.textContent = 'TokenizedBlock market' + viaCourt + '.';
+  else el.textContent = 'Outside market' + viaCourt + '.';
   const lo = ordreLiquidite(v.liquidite);
   if (lo) {
     /* ⛔ REECRIT LE 2026-09-23. L ancienne phrase disait « LP depth L≈… (StateView getLiquidity —
@@ -8185,33 +8190,33 @@ function peindreTrustFacts(adr, v, origine) {
     if (CHAINE === 8453) {
       cta.innerHTML = '<b>Next</b>: Instant Birth on TB.'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button></div>';
       void eligibleNaissanceV8(adr).then((el) => {
         if (!cta.isConnected || !el.ok) return;
-        cta.innerHTML = '<b>Next</b>: open its V8 market.'
+        cta.innerHTML = '<b>Next</b>: open its market.'
           + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-          + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
+          + '<button type="button" class="bouton" data-tf-act="wake">Give birth · 0.001 ETH once</button></div>';
       });
     } else {
       cta.innerHTML = '<b>Next</b>: open its market — free in Practice.'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr">'
-        + '<button type="button" class="bouton" data-tf-act="wake">Give birth · V8 · 0.001 ETH once</button></div>';
+        + '<button type="button" class="bouton" data-tf-act="wake">Give birth · 0.001 ETH once</button></div>';
     }
   } else if (etat === 'LUE') {
     if (!info.isTbFeeHook && CHAINE === 8453) {
       /* tip 0017 + tip 20260922-fee-funnel + 20260922-2112 */
       /* tip 20260923-reclaim-volume: outside LUE — Instant Birth first; V8 only if label gate ok */
       cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
-        + '<b>Instant Birth on TB opens a hooked market / Buy path.</b>'
+        + '<b>Instant Birth on TB opens a market that feeds this block.</b>'
         + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH · V8</button>'
+        + '<button type="button" class="bouton" data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH</button>'
         + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
       void eligibleNaissanceV8(adr).then((el) => {
         if (!cta.isConnected || !el.ok) return;
         cta.innerHTML = 'Outside market — trades here do not feed this block.<br>'
-          + '<b>Bring this block into a hooked TokenizedBlock market.</b>'
+          + '<b>Bring this block into a TokenizedBlock market.</b>'
           + '<div class="pActions" style="margin-top:8px;grid-template-columns:1fr 1fr">'
-          + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · V8 · 0.001 ETH once</button>'
+          + '<button type="button" class="bouton" data-tf-act="hook-launch">Give birth · 0.001 ETH once</button>'
           + '<button type="button" class="bouton sec" data-tf-act="buy">Open external market</button></div>';
       });
     } else {
@@ -8887,7 +8892,7 @@ async function lireProfil(adr, sym, perime, opts) {
   if (etatVieProfil === 'NON_TROUVEE' && CHAINE !== 8453) {
     $('#pReveiller').textContent = 'Open its market (Practice, free)';
   } else if (legacySansHook) {
-    $('#pReveiller').textContent = 'Give birth · V8 · 0.001 ETH once';
+    $('#pReveiller').textContent = 'Give birth · 0.001 ETH once';
   }
   const wg = $('#pWakeGate');
   if (wg) {
@@ -8910,7 +8915,7 @@ async function lireProfil(adr, sym, perime, opts) {
       $('#pReveiller').hidden = true;
       if (wg) {
         wg.hidden = false;
-        wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi);
+        wg.innerHTML = '<b>Can\'t be brought to life here</b> — ' + enTexte(el.pourquoi);
       }
     });
   }
@@ -8942,7 +8947,7 @@ async function lireProfil(adr, sym, perime, opts) {
         const e = $('#plEtat');
         if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
         const wg2 = $('#pWakeGate');
-        if (wg2) { wg2.hidden = false; wg2.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+        if (wg2) { wg2.hidden = false; wg2.innerHTML = '<b>Can\'t be brought to life here</b> — ' + enTexte(el.pourquoi); }
         return;
       }
       ouvrirLancement();
@@ -9242,7 +9247,7 @@ $('#pTrustFacts') && $('#pTrustFacts').addEventListener('click', (ev) => {
         const el = await eligibleNaissanceV8(adrTf);
         if (!el.ok) {
           const wg = $('#pWakeGate');
-          if (wg) { wg.hidden = false; wg.innerHTML = '<b>V8 birth unavailable</b> — ' + enTexte(el.pourquoi); }
+          if (wg) { wg.hidden = false; wg.innerHTML = '<b>Can\'t be brought to life here</b> — ' + enTexte(el.pourquoi); }
           const e = $('#plEtat');
           if (e) { e.className = 'note wKo'; e.textContent = el.pourquoi; }
           return;
@@ -9679,7 +9684,7 @@ function peindreCreateFeeHonesty() {
     } else {
       /* tip 0021: count creates that really reached a hooked market — the rest earned nothing. */
       const crochetes = creations.filter((e) => { const p = poolDecouvertPour(e.jeton); return p && p.isTbFeeHook; }).length;
-      el.innerHTML = '<b>' + free + '</b> free create · <b>' + crochetes + '</b> with a hooked market seen (fee path) · the rest: no fee yet'
+      el.innerHTML = '<b>' + free + '</b> free create · <b>' + crochetes + '</b> with a market that pays fees · the rest: no fee yet'
         + (paid ? (' · <b>' + paid + '</b> an older create path') : '') + '.';
     }
   } else {
@@ -10304,7 +10309,7 @@ $('#sfLive').addEventListener('click', (ev) => {
     void eligibleNaissanceV8(adr).then((el) => {
       v8.disabled = false;
       if (!el.ok) {
-        v8.textContent = 'V8 birth unavailable — Instant Birth on TB';
+        v8.textContent = 'Can\'t be brought to life here — create a new one';
         v8.title = el.pourquoi;
         const note = $('#sfLiveNote');
         if (note) note.textContent = el.pourquoi;
@@ -12155,7 +12160,7 @@ function ouvrirLancement() {
   $('#plReseau').textContent = (real ? 'Real · ' : 'Practice · ') + RESEAUX[CHAINE].nom;
   const badge = $('#plBadge');
   /* tip 0039 + tip 20260922-fee-funnel: Give birth · V8 fee copy (no fee addr) */
-  if (badge) badge.textContent = real ? 'Give birth · V8 · 0.001 ETH once' : 'Give birth · free in Practice';
+  if (badge) badge.textContent = real ? 'Give birth · 0.001 ETH once' : 'Give birth · free in Practice';
   const intro = $('#plIntro');
   if (intro) {
     const contre = $('#plContre') ? $('#plContre').textContent : 'ETH';
@@ -12286,9 +12291,9 @@ async function calculerLancement() {
       const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook, devise: deviseLancement || null });
       /* tip 20260922-1934 + 20260922-2026: MAIN never falls through to hooks=0x0; Birth=V8 only. */
       if (mainnet && !hooks) {
-        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — fee hook unread (will not open an unhooked market)' };
+        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — we could not read how its fee is paid, and will not open a market that pays no fee' };
       } else if (mainnet && !estHookDeNaissance(hooks)) {
-        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available — Birth=V8 only (fee hook is not V8)' };
+        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available — this market setup cannot take the birth fee' };
       }
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
        *    contractURI ne porte pas le marqueur de notre Create — un block ne ailleurs, ou ne chez nous
@@ -12545,7 +12550,7 @@ function peindrePlan(plan, adr) {
   /* tip 20260922-1934: MAIN new-pool plan without TbFeeHook → nothing to sign (blocks unhooked mint UX). */
   if (Number(CHAINE) === 8453 && plan && !plan.poolExiste && !avecHook) {
     e.className = 'note wKo'; vieAutoArreter();
-    e.textContent = 'Launch refused: this plan would open an unhooked market (no fee hook). Work it out again.';
+    e.textContent = 'Launch refused: this plan would open a market that pays no fee — rebuild the plan.';
     return;
   }
   $('#plLignes').innerHTML = [
@@ -15601,7 +15606,7 @@ function refuseSiCreateB20ValeurZero({ to, value, e, contexte }) {
   if (!estCreateB20ValeurZero(to, value)) return false;
   if (e) {
     e.className = 'note wKo';
-    e.textContent = 'Instant Birth refused: planned tx is factory createB20 with value 0 — that is free factory create, not Instant Birth · 0.001 ETH · V8 inscription. Use Instant Birth (one-sig batch) or Give birth · V8 on an asleep block.';
+    e.textContent = 'Instant Birth refused: this transaction would create a free block instead of opening its market. Nothing was sent — try Instant Birth again.';
   }
   try { console.warn('[Instant Birth] abort createB20 value-0', contexte || ''); } catch (_) {}
   return true;
@@ -16424,7 +16429,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   const hasValueLeg = calls.some((c) => BigInt(c.value || '0x0') > 0n);
   if (!hasValueLeg) {
     e.className = 'note wKo';
-    e.textContent = 'Instant Birth refused: batch has no ETH value — would look like factory createB20 value 0 in the wallet. Use Instant Birth · 0.001 ETH · V8.';
+    e.textContent = 'Instant Birth refused: this transaction would create a free block instead of opening its market (it carries no ETH). Nothing was sent — try Instant Birth again.';
     return 'STOP';
   }
   /* tip 20260922-ib-batch: first non-zero value should be open fee (payant etape sorted first). */
@@ -16844,7 +16849,7 @@ async function creerBlock() {
       void listerMesBlocks();
       /* tip 0021 / index-launch: Instant Birth ETH seed + mandatory micro first-swap; open fee 0.001 ETH unchanged. */
       if (Number(CHAINE) === 8453 && adresseCreee && creerSansVie) {
-        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created (Advanced · free, asleep). Open its profile and run <b>Give birth · V8</b> when ready.'
+        e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is created (Advanced · free, asleep). Open its profile and run <b>Give birth</b> when ready.'
           + lien;
         try { ouvrirProfil(adresseCreee, v.sym); } catch (_) {}
       } else if (Number(CHAINE) === 8453 && adresseCreee) {
