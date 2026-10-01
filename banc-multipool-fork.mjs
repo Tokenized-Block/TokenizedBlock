@@ -98,31 +98,57 @@ async function juger({ nom, plan, rc, tx, avant, apres, jetons, montant, de, ver
   const lignes = [], ko = [];
   const t = (c, txt) => { lignes.push((c ? 'ok ' : 'KO ') + txt); if (!c) ko.push(txt); };
   t(rc && rc.status === '0x1', 'J1 status ' + (rc && rc.status));
-  const bougent = jetons.filter((j) => apres[j].a6cf !== avant[j].a6cf);
-  const fd = plan.tx.fraisDevise; /* noeud : ETH couvre ETH natif ET WETH */
-  const fdJeton = bougent.length === 1 ? bougent[0] : null;
-  t(bougent.length === 1 && fdJeton === fd, 'J2 a6cf bouge dans UN actif : [' + bougent.map(sym).join(',') + (bougent.some((j) => j === WETH) ? '(WETH)' : '') + '] attendu ' + sym(fd));
-  t(!estBlock(fd) && rangFrais(fd, ADMISES) !== null, 'J3 devise du frais ' + sym(fd) + ' n est pas un block');
-  const delta = fdJeton ? apres[fdJeton].a6cf - avant[fdJeton].a6cf : 0n;
-  /* J4 (a) les logs */
+  /* ⛔⛔ LE FRAIS D INTERFACE = ce que le ROUTEUR verse a a6cf (Transfer from=routeur, ou CALL natif
+   *   routeur -> a6cf au callTracer). Tout autre versement a a6cf dans la tx (un de NOS hooks qui
+   *   preleve son frais de marche) est COMPTE A PART et NOMME : il n est pas le frais d interface,
+   *   et il n est pas cache non plus. J9 exige que les deux expliquent le delta de a6cf au wei. */
   const logs = (rc && rc.logs) || [];
-  const tr = (jeton) => logs.filter((l) => bas(l.address) === jeton && l.topics[0] === TRANSFER);
+  const src = (l) => '0x' + l.topics[1].slice(26);
   const dest = (l) => '0x' + l.topics[2].slice(26);
+  const estTr = (l) => l.topics[0] === TRANSFER && l.topics.length === 3;
+  let appels = [];
+  if (rc && rc.transactionHash && rc.status === '0x1') {
+    const tr = await rpc('debug_traceTransaction', [rc.transactionHash, { tracer: 'callTracer' }]);
+    const plat = (c) => { if (c.value && BigInt(c.value) > 0n && c.type !== 'DELEGATECALL') appels.push({ de: bas(c.from), vers: bas(c.to), v: BigInt(c.value) }); (c.calls || []).forEach(plat); };
+    plat(tr);
+  }
+  const iface = [
+    ...logs.filter((l) => estTr(l) && bas(src(l)) === R && bas(dest(l)) === A6CF).map((l) => ({ jeton: bas(l.address), v: BigInt(l.data) })),
+    ...appels.filter((c) => c.de === R && c.vers === A6CF).map((c) => ({ jeton: ETH, v: c.v })),
+  ];
+  const autresVersA6cf = [
+    ...logs.filter((l) => estTr(l) && bas(src(l)) !== R && bas(dest(l)) === A6CF).map((l) => ({ jeton: bas(l.address), v: BigInt(l.data), de: bas(src(l)) })),
+    ...appels.filter((c) => c.de !== R && c.vers === A6CF).map((c) => ({ jeton: ETH, v: c.v, de: c.de })),
+  ];
+  const fd = plan.tx.fraisDevise;
+  const fdJeton = iface.length === 1 ? iface[0].jeton : null;
+  t(iface.length === 1 && fdJeton === fd, 'J2 le routeur paie a6cf UNE fois : ' + iface.length + ' versement(s) [' + iface.map((x) => sym(x.jeton) + (x.jeton === WETH ? '(WETH)' : '')).join(',') + '] attendu 1 en ' + sym(fd));
+  t(!estBlock(fd) && rangFrais(fd, ADMISES) !== null && (!fdJeton || !estBlock(fdJeton)), 'J3 devise du frais ' + sym(fd) + ' n est pas un block');
+  const delta = iface.reduce((x, y) => x + y.v, 0n);
   let auNoeud = null, source = '';
   const poussiere = fdJeton ? avant[fdJeton].routeur : 0n;
   if (fdJeton && fdJeton !== ETH) {
-    const entrees = tr(fdJeton).filter((l) => bas(dest(l)) === R).reduce((s, l) => s + BigInt(l.data), 0n);
-    auNoeud = entrees + poussiere; source = 'logs : ' + entrees + ' entres + ' + poussiere + ' de poussiere';
+    const entrees = logs.filter((l) => estTr(l) && bas(l.address) === fdJeton && bas(dest(l)) === R).reduce((x, l) => x + BigInt(l.data), 0n);
+    auNoeud = entrees + poussiere; source = 'logs : ' + entrees + ' entres au routeur + ' + poussiere + ' de poussiere';
   } else if (fdJeton === ETH && noeud(de) === ETH && plan.tx.fraisIndice === 0) {
     auNoeud = montant + poussiere; source = 'msg.value ' + montant + ' + poussiere ' + poussiere;
   } else if (fdJeton === ETH) {
-    auNoeud = plan.meilleur.avantFrais[plan.tx.fraisIndice] + poussiere; source = 'devis meme etat (natif, pas de log) + poussiere ' + poussiere;
+    const entrees = appels.filter((c) => c.vers === R).reduce((x, c) => x + c.v, 0n);
+    auNoeud = entrees + poussiere; source = 'callTracer : ' + entrees + ' wei entres au routeur + poussiere ' + poussiere;
   }
   const attendu = auNoeud === null ? null : fraisSur(auNoeud);
-  t(attendu !== null && delta === attendu, 'J4 delta a6cf ' + delta + ' == floor(' + auNoeud + ' x 9 / 10000) = ' + attendu + ' (' + source + ')');
-  t(delta === plan.meilleur.frais || poussiere > 0n, 'J4b == frais du devis ' + plan.meilleur.frais + (poussiere > 0n ? ' (poussiere : non comparable)' : ''));
-  const versA6cf = logs.filter((l) => l.topics[0] === TRANSFER && l.topics.length === 3 && bas(dest(l)) === A6CF);
-  t(fdJeton === ETH ? versA6cf.length === 0 : versA6cf.length === 1, 'J5 Transfer ERC-20 vers a6cf : ' + versA6cf.length);
+  t(attendu !== null && delta === attendu, 'J4 frais d interface ' + delta + ' == floor(' + auNoeud + ' x 9 / 10000) = ' + attendu + ' (' + source + ')');
+  t(delta === plan.meilleur.frais || poussiere > 0n, 'J4b == frais du devis meme etat ' + plan.meilleur.frais + (poussiere > 0n ? ' (poussiere : non comparable)' : ''));
+  /* J9 : la comptabilite de a6cf, actif par actif */
+  const ecarts = [];
+  for (const j of jetons) {
+    const d = apres[j].a6cf - avant[j].a6cf;
+    const explique = [...iface, ...autresVersA6cf].filter((x) => x.jeton === j).reduce((x, y) => x + y.v, 0n);
+    if (d !== explique) ecarts.push(sym(j) + (j === WETH ? '(WETH)' : '') + ' delta ' + d + ' explique ' + explique);
+  }
+  t(ecarts.length === 0, 'J9 delta(a6cf) == frais d interface + frais de marche nommes, au wei : ' + (ecarts.join(' | ') || 'oui'));
+  const marche = autresVersA6cf.map((x) => x.v + ' ' + sym(x.jeton) + ' depuis ' + x.de.slice(0, 10)).join(', ');
+  lignes.push('-- frais de MARCHE (hook) recus par a6cf dans la meme tx : ' + (marche || 'aucun'));
   const out = noeud(vers);
   const gaz = rc ? BigInt(rc.gasUsed) * BigInt(rc.effectiveGasPrice) : 0n;
   const recu = apres[out].user - avant[out].user + (out === ETH ? gaz : 0n) + (noeud(de) === ETH ? montant : 0n) * (out === ETH ? 1n : 0n);
@@ -139,7 +165,7 @@ async function juger({ nom, plan, rc, tx, avant, apres, jetons, montant, de, ver
   console.log('   commandes ' + plan.tx.commandes.join(',') + ' · segments ' + plan.tx.segments.join('+') + ' · frais au noeud ' + plan.tx.fraisIndice + ' en ' + sym(fd) + ' · gaz ' + (rc ? Number(rc.gasUsed) : '?') + ' · tx ' + (rc && rc.transactionHash));
   for (const l of lignes) console.log('   ' + l);
   console.log('   => ' + verdict + (attenduKo ? (verdict === 'KO' ? '  (TEMOIN : KO attendu — le juge a dit non)' : '  ⛔ TEMOIN : le juge aurait du dire non') : ''));
-  return { nom, verdict, ko, delta: String(delta), attendu: attendu === null ? null : String(attendu), recu: String(recu), sortieDevis: String(plan.meilleur.sortie), gaz: rc ? Number(rc.gasUsed) : null, chemin: decrireChemin(plan.meilleur.chemin, symboles), fraisDevise: sym(fd), commandes: plan.tx.commandes.join(','), tx: rc && rc.transactionHash, signatures: plan.tx.signatures };
+  return { nom, verdict, ko, fraisMarche: marche || null, delta: String(delta), attendu: attendu === null ? null : String(attendu), recu: String(recu), sortieDevis: String(plan.meilleur.sortie), gaz: rc ? Number(rc.gasUsed) : null, chemin: decrireChemin(plan.meilleur.chemin, symboles), fraisDevise: sym(fd), commandes: plan.tx.commandes.join(','), tx: rc && rc.transactionHash, signatures: plan.tx.signatures };
 }
 
 async function executer({ nom, de, vers, montant, sautsMax = 3, modifier = null, attenduKo = false, planDonne = null }) {
