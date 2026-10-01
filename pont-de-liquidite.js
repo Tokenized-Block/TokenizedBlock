@@ -49,8 +49,13 @@
  *   des SEGMENTS. Melanger la lecture et la decision rendrait un refus indistinguable d une
  *   lecture ratee — le defaut numero un de ce depot.
  * ⛔ ET IL NE PROMET JAMAIS UNE SEULE TRANSACTION QUAND IL EN FAUT DEUX. Un chemin a deux
- *   segments demande deux signatures, ou un lot atomique que 40,5 % des wallets mesures ne
- *   tiennent pas. Le dire est tout l interet de ce fichier.
+ *   segments demande deux signatures, ou un lot atomique qu une PART IMPORTANTE des wallets ne
+ *   tient pas. Le dire est tout l interet de ce fichier.
+ *   ⛔⛔ CETTE LIGNE DISAIT « 40,5 % », ET CE N EST PAS UN TAUX. Relecture de l entonnoir servi le
+ *     2026-10-01, par jour : 2026-09-29 -> 15 non sur 24 (62,5 %) ; 2026-09-30 -> 3 non sur 16
+ *     (18,8 %) ; cumul 18/40 (45,0 %). Les DEUX seuls jours se CONTREDISENT, et n=24 puis n=16 ne
+ *     permettent pas de trancher entre bruit et changement reel. Un chiffre qui porte une decision
+ *     doit porter sa borne — voir `frais-hors-routeur.js` pour le detail et ce qui reste vrai.
  */
 
 /** Les familles de marche que nos calldata savent construire. ⛔ Rien d autre n est routable. */

@@ -431,7 +431,7 @@ export const ENVOI_PARTI = Object.freeze([
 export function messageEnvoi(env) {
   const etat = String((env && env.etat) || '');
   const pourquoi = String((env && env.pourquoi) || etat || 'unknown').slice(0, 130);
-  /* ⛔⛔⛔ UN FAIT STRICTEMENT PLUS FORT QUE L ETAT, ET IL CONCERNE 40,5 % DES WALLETS MESURES.
+  /* ⛔⛔⛔ UN FAIT STRICTEMENT PLUS FORT QUE L ETAT, ET IL CONCERNE UNE PART IMPORTANTE DES WALLETS.
    *   `ECHEC_ENVOI` tombe a dessein dans « on ne sait pas » : il ne GARANTIT pas que rien n est
    *   parti. Mais quand `sendCallsUnsupported` est VRAI, le wallet a repondu qu il ne CONNAIT PAS
    *   `wallet_sendCalls` — une methode inconnue ne peut pas avoir ete executee. On sait donc, et le
@@ -439,9 +439,16 @@ export function messageEnvoi(env) {
    *     · le message generique disait « it may have been sent, check your wallet history » a
    *       quelqu un dont le wallet n a RIEN envoye : alarmant et faux ;
    *     · il ne lui disait pas CE QU IL PEUT FAIRE, alors que la reponse est simple.
-   *   ⇒ MESURE QUI DONNE SON POIDS AU CAS : 22 « oui » pour 15 « non » sur les wallets sondes, soit
-   *     40,5 % qui ne tiennent pas `wallet_sendCalls`. Et le franchissement vers une action
-   *     tokenisee est le SEUL chemin de l app qui en a besoin.
+   *   ⇒ MESURE QUI DONNE SON POIDS AU CAS, relue dans l entonnoir SERVI le 2026-10-01 :
+   *         2026-09-29   oui  9   non 15   ->  62,5 % sans lot
+   *         2026-09-30   oui 13   non  3   ->  18,8 % sans lot
+   *         cumul        oui 22   non 18   ->  45,0 %
+   *     ⛔ CE N EST PAS UN TAUX : les DEUX seuls jours mesures se CONTREDISENT, et n=24 puis n=16
+   *       ne permettent pas de trancher entre bruit et changement reel. Ce depot citait « 40,5 % »
+   *       dans cinq modules comme un fait etabli ; c etait une precision que la donnee ne porte
+   *       pas. Ce qui suffit ici, et qui tient : la part n est PAS negligeable, donc ce message
+   *       sera lu par beaucoup de monde.
+   *     Et le franchissement vers une action tokenisee est le SEUL chemin de l app qui exige le lot.
    *   ⛔ LA CONDITION EST `=== true`, PAS UNE VERITE SOUPLE : `undefined` signifie « on n a pas
    *     regarde » et doit rester dans l incertain. Confondre les deux rendrait rassurant un cas
    *     qu on n a pas mesure. */

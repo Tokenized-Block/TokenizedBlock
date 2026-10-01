@@ -45,7 +45,7 @@
  *       9 hooks distincts, refus NOMME) : 0 sur 6
  *   Les 14 autres actions et la plupart des blocks vivent sur AERODROME, ou OUSD n a RIEN. Le
  *   multi-pool atteint donc plus de choses, mais JAMAIS a travers deux factories en un appel : il
- *   faudrait un lot atomique de deux routeurs, que 40,5 % des wallets mesures ne tiennent pas.
+ *   faudrait un lot atomique de deux routeurs, qu une part IMPORTANTE des wallets ne tient pas (le chiffre exact n est PAS etabli : voir la borne dans frais-hors-routeur.js).
  *   ⇒ CE MODULE NE SERT PAS LES 14, et il ne doit pas se lire comme s il les servait.
  *
  * ⛔⛔ DEUX FAUTES DE METHODE A MOI EN CHEMIN, retirees a voix haute :

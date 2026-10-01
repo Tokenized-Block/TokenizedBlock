@@ -13,7 +13,27 @@
  *       sans la retenue — contrairement a un transfert separe QU IL POURRAIT REFUSER. »
  *   Un `transfer` separe n est honnete QUE s il est indissociable du swap. Ca demande un lot
  *   ATOMIQUE, et l atomicite n est PAS acquise : `wallet_sendCalls` est une RPC de WALLET, et la
- *   mesure du jour donne 22 « oui » pour 15 « non » — 40,5 % des wallets ne la tiennent pas.
+ *   mesure du jour donne 22 « oui » pour 15 « non » — une PART IMPORTANTE des wallets ne tiennent pas.
+ *
+ *   ⛔⛔⛔ CE CHIFFRE A ETE CITE COMME « 40,5 % » DANS CINQ MODULES, ET CE N EST PAS UN TAUX.
+ *     Relecture de l entonnoir SERVI le 2026-10-01, par jour, sur `capacite_lot_oui` /
+ *     `capacite_lot_non` :
+ *         2026-09-29   oui  9   non 15   ->  62,5 % sans lot
+ *         2026-09-30   oui 13   non  3   ->  18,8 % sans lot
+ *         cumul        oui 22   non 18   ->  45,0 %
+ *     Les DEUX SEULS JOURS mesures se CONTREDISENT, avec n=24 et n=16. On ne peut pas trancher
+ *     entre le bruit d echantillon et un vrai changement, et annoncer « 40,5 % » comme une
+ *     propriete du parc de wallets est une precision que la donnee ne porte pas. Un chiffre qui
+ *     PORTE UNE DECISION doit porter sa borne, sinon il devient une constante de folklore que
+ *     personne ne reverifie.
+ *   ⇒ CE QUI RESTE VRAI ET SUFFIT A LA DECISION : une part IMPORTANTE des wallets ne groupe pas —
+ *     assez pour qu un chemin qui EXIGE le lot ne puisse pas etre le seul propose. Le refus
+ *     fail-closed ci-dessous ne depend PAS du chiffre exact, seulement du fait qu il n est pas
+ *     negligeable. C est pour ca qu il tient malgre l incertitude.
+ *   ⚠️ ET LE COMPTEUR MESURE CE QUE LE WALLET *DECLARE* via `wallet_getCapabilities`, pas ce qu il
+ *     SAIT faire : la lecon `tip 20260922-ib-batch` dit que des wallets repondent mal et groupent
+ *     quand meme. Le vrai taux d echec A L USAGE est donc AU PLUS celui-la, probablement moins.
+ *
  *   ⇒ SANS ATOMICITE PROUVEE, ON NE PREND RIEN. Un frais qu on ajoute en esperant que la personne
  *     signe les deux appels serait un frais qu on pourrait perdre, ou pire, qu elle subirait
  *     sans le swap. Fail-closed.

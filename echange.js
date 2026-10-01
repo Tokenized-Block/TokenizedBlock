@@ -585,7 +585,7 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
  *   Deux sauts, Uniswap V4, fee 100 / ts 1. Une seule factory, donc UN appel.
  *   ⛔ ET LA BORNE : 1 action sur 15 est atteignable ainsi (`USDC/<action>` en V4 = 1/15,
  *     `ETH/<action>` = 0/15). Les 14 autres sont sur Aerodrome, ou OUSD n a RIEN — il faudrait un
- *     lot atomique de DEUX routeurs, que 40,5 % des wallets mesures ne tiennent pas.
+ *     lot atomique de DEUX routeurs, qu une part IMPORTANTE des wallets ne tient pas (le chiffre exact n est PAS etabli : voir la borne dans frais-hors-routeur.js).
  *
  * ⛔⛔ POINT D ENTREE SEPARE, DELIBEREMENT. `planEchange` fonctionne et porte de l argent : on
  *   AJOUTE un chemin, on ne modifie pas celui qui marche. Une regression sur `planEchange` coute
