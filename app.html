@@ -15436,8 +15436,22 @@ function majFraisEtRecap() {
       + ' and one swap cannot cross two venues — '
       + phraseFraisDuPont(fraisDuPont(routeAcheteur.chemin)))
     : '';
+  /* ⛔⛔ « EVERYTHING ELSE IS ALREADY SET » ETAIT FAUX SANS WALLET (handoff Claude 2026-10-01, §5.3).
+   *   Mesure en production, Chrome sans `window.ethereum`, onglet Create a l ouverture : le recap
+   *   disait « Give it a name and a symbol — everything else is already set. » La phrase du wallet
+   *   n etait pas MORTE : le validateur rend le PREMIER prealable (le nom), et la branche `neutre`
+   *   (nom ET symbole vides) le recouvrait par une phrase qui affirmait que tout le reste etait
+   *   pret. Elle ne s affichait qu apres la saisie du nom et du symbole.
+   *   ⇒ Sans wallet, la phrase neutre le dit aussi. Toujours en `note` neutre : un prealable n est
+   *     pas un refus.
+   * ⛔ LA PHRASE WALLET EXISTE ICI ET DANS `validerCreation` : deux copies, et c est
+   *   `test-create-sans-wallet-le-dit.mjs` qui compare les DEUX a la meme valeur independante — une
+   *   divergence le fait rougir. */
   $('#cRecap').textContent = v.ko
-    ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
+    ? (neutre
+      ? (compte ? 'Give it a name and a symbol — everything else is already set.'
+        : 'Give it a name and a symbol. Connect your wallet first: it is the one that signs, and it receives the supply.')
+      : v.ko)
     : actionRecap + 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.' + motRoute;
