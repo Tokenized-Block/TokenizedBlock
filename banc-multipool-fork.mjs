@@ -28,7 +28,11 @@ import { selecteur, mot, motAdr } from './pool.js';
 const PORT = process.env.PORT_FORK || '8599';
 const URL = 'http://127.0.0.1:' + PORT;
 const GRAPHE = process.argv[2] || '/workspace/mp-data/graphe.json';
-const USER = '0x70997970c51812dc3a010c7d01b50e0d17dc79c8'; /* anvil #1 */
+/* ⛔⛔ PAS le compte anvil n°1 (0x7099…79c8) : sa cle est PUBLIQUE et, sur Base, il porte une
+ *   delegation EIP-7702 qui REEXPEDIE tout ETH recu vers 0xcc04…3b95 (vu au callTracer du 1er essai).
+ *   Un swap vers l ETH y « livrait » 0. On prend une adresse VIERGE, verifiee sans code, USURPEE sur le
+ *   fork (anvil_impersonateAccount) et creditee par anvil_setBalance. Aucune cle n existe pour elle. */
+const USER = '0x7e57000000000000000000000000000000c0ffee';
 const A6CF = ADRESSES.FEE_WALLET, R = ADRESSES.ROUTEUR, ETH = ADRESSES.ETH, WETH = ADRESSES.WETH, USDC = ADRESSES.USDC;
 if (USER === A6CF) throw new Error('jamais a6cf comme expediteur');
 const bas = (a) => String(a || '').toLowerCase();
@@ -50,14 +54,28 @@ async function solde(jeton, qui) {
 }
 async function envoyer(tx) {
   const h = await rpc('eth_sendTransaction', [{ from: USER, gas: '0x7a1200', ...tx }]);
-  const rc = await rpc('eth_getTransactionReceipt', [h]);
-  return rc;
+  for (let t = 0; t < 60; t += 1) {
+    const rc = await rpc('eth_getTransactionReceipt', [h]);
+    if (rc) return rc;
+    await new Promise((z) => setTimeout(z, 250));
+  }
+  throw new Error('pas de recu pour ' + h);
 }
 
 /* ── garde-fous ── */
 const chainId = Number(await rpc('eth_chainId'));
 let info = null; try { info = await rpc('anvil_nodeInfo'); } catch (_) { /* */ }
 if (chainId !== 8453 || !info) { console.log('KO : pas un fork anvil de Base — arret'); process.exit(1); }
+{ /* ⛔ temoin B20 : il faut base-anvil --base (un anvil standard rend OpcodeNotFound sur 0xef) */
+  let d = null; try { d = await rpc('eth_call', [{ to: '0xb200000000000000000000c2e324d24d7eecd1fb', data: '0x313ce567' }, 'latest']); } catch (e) { d = 'ERR ' + e.message; }
+  if (!/^0x[0-9a-f]{64}$/.test(String(d))) { console.log('KO : ce fork n execute pas les B20 (' + String(d).slice(0, 60) + ') — il faut base-anvil --base. NON MESURE'); process.exit(1); }
+}
+{
+  const code = await rpc('eth_getCode', [USER, 'latest']);
+  if (code !== '0x') { console.log('KO : le compte de test porte du code (' + code.slice(0, 20) + ') — arret'); process.exit(1); }
+  await rpc('anvil_impersonateAccount', [USER]);
+  await rpc('anvil_setBalance', [USER, '0x' + (100n * 10n ** 18n).toString(16)]);
+}
 const g = JSON.parse(readFileSync(GRAPHE, 'utf8'));
 console.log('=== BANC MULTIPOOL — fork ' + URL + ' · bloc fork ' + (info.forkConfig && info.forkConfig.forkBlockNumber) + ' · bloc courant ' + Number(await rpc('eth_blockNumber')) + ' · graphe bloc ' + g.bloc + ' ===');
 const aretes = g.aretes.map((e) => ({ ...e, liqUsd: Number(e.liqUsd) || 0 }));
