@@ -2215,7 +2215,49 @@ createServer((req, res) => {
      *     donc pas dans `blocksConnus`. Les deux sources sont complementaires, pas redondantes. */
     const admise = pairesProposees(8453).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === adr)
       || blocksConnus.has(adr);
-    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    /* ⛔⛔⛔ CET ENDPOINT A ETE MUET, MESURE EN PRODUCTION LE 2026-10-01 : quatre `curl` de suite,
+     *      HTTP 000 a 12 s puis 20 s, 20 s, 20 s — aucune reponse, jamais. Pas une lenteur : une
+     *      ABSENCE. Et `/sante` rendait 200 pendant tout ce temps.
+     *      ⇒ CONDITION : la fenetre FROIDE juste apres un deploiement. Le conteneur redemarre, le
+     *        cache chaud est perdu, et le noeud RPC amont nous refuse — le serveur le DIT lui-meme
+     *        sur ses voisins : `/api/cle` rendait « pool key not read: over rate limit » et
+     *        `/api/face` « over rate limit », a la meme seconde.
+     *      ⇒ ET LA FENETRE S EST REFERMEE SEULE : ~2 minutes plus tard, 0,44 s. J avais ecrit
+     *        « reproductible, donc pas du froid » — c etait FAUX, et je le laisse ecrit ici :
+     *        reproductible PENDANT la fenetre n est pas permanent. La correction de ce diagnostic
+     *        ne change rien au defaut, mais elle change ce qu on peut en dire.
+     *      ⚠️ ET LE 0,44 s NE PROUVE PAS LE CHEMIN FROID : `prixUsdCache` garde 300 s, donc cette
+     *        reussite peut n etre qu un cache hit. Ce qui est prouve, c est le MUTISME ; la guerison
+     *        est constatee, pas expliquee.
+     *
+     * ⛔⛔ LA CAUSE, ELLE, EST STRUCTURELLE. Le `fetch` DexScreener est borne
+     *   (`AbortSignal.timeout(8000)`), mais la reponse n est envoyee qu A L INTERIEUR du `.then` de
+     *   `faitsDeLaPool` puis de `alternativeAerodrome` — deux lectures ON-CHAIN sans aucune borne.
+     *   Le prix, deja acquis en moins de 8 s, etait retenu en otage par son ENRICHISSEMENT.
+     *   Ce fichier ecrit pourtant, vingt lignes plus bas : « LE PRIX EST UN FAIT, LA PORTE EST UNE
+     *   POLITIQUE ». La mecanique disait le contraire : pas de politique, pas de fait.
+     *   ⇒ C est le jumeau FAIBLE de `/api/trending`, qui porte « NEVER hang HTTP on cold scan » et
+     *     rend un placeholder. Meme serveur, meme froid, une porte gardee et l autre pas.
+     *
+     * ⛔⛔ `repondu` : LA REPONSE EST A UN SEUL COUP, et ce verrou est la CONDITION pour poser une
+     *   borne. Sans lui, la borne repond, puis l enrichissement se reveille et repond a son tour :
+     *   Node leve `Cannot set headers after they are sent`. Une garde qui transforme un mutisme en
+     *   crash n aurait rien repare — elle aurait change la FORME de la panne.
+     *   ⚠️ CE HELPER EST RECOPIE A L IDENTIQUE DANS DEUX AUTRES HANDLERS (`/api/blocks-de`,
+     *     `/api/parts-createur`), qui n ont PAS ce verrou. Mesure du jour : les deux repondent en
+     *     0,32 s et 0,53 s, donc je n ai PAS de mutisme a leur reprocher et je ne les touche pas
+     *     sur une symetrie. Nomme ici pour que le prochain qui pose une borne ailleurs sache
+     *     qu il lui faut d abord ce verrou. */
+    let repondu = false, borneFaits = null;
+    const repondre = (o) => {
+      if (repondu) return;
+      repondu = true;
+      /* ⛔ LE MINUTEUR SE DESARME ICI, PARCE QUE C EST LA SEULE SORTIE. Le desarmer dans chaque
+       *   branche serait cinq endroits a ne pas oublier ; ici c est un seul, et il est sur le
+       *   chemin de TOUTES. Un `setTimeout` laisse pendant retient le handler pour rien. */
+      if (borneFaits) { clearTimeout(borneFaits); borneFaits = null; }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o));
+    };
     if (!admise) { repondre({ ok: false, pourquoi: 'not a pair currency of this app' }); return; }
     const c = prixUsdCache.get(adr);
     if (c && Date.now() - c.t < 300000) { repondre(c.r); return; }
@@ -2246,6 +2288,29 @@ createServer((req, res) => {
           return;
         }
         const r = { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() };
+        /* ⛔⛔⛔ LA BORNE QUI EMPECHE LE MUTISME. A partir d ici le PRIX est acquis ; tout ce qui
+         *      suit est de l ENRICHISSEMENT on-chain, et c est lui qui pouvait ne jamais rendre.
+         *      Passe ce delai, on envoie le prix SANS les faits.
+         *   ⛔ LA CHARGE EST EXACTEMENT CELLE DE LA BRANCHE `.catch` DEJA ECRITE PLUS BAS
+         *     (`glissementBps: null`, `famille: 'NON_MESURE'`). Je n invente aucune semantique :
+         *     un enrichissement qui expire est un enrichissement qui a echoue, et le client sait
+         *     deja lire cet etat — `porte-achat.js` ne doit JAMAIS lire « non mesure » comme
+         *     « bon marche », et c est deja sa regle.
+         *   ⛔ `pourquoiFaits` DIT LA BORNE ET SA VALEUR, pas « unknown » : sans le delai dans la
+         *     phrase, on ne saurait pas, en lisant un journal, si la lecture a echoue ou si c est
+         *     NOUS qui avons coupe. Un chiffre absent de son propre message rend le message muet.
+         *   ⛔ ET RIEN N EST MIS EN CACHE SUR CE CHEMIN : le code en aval ne cache que si
+         *     `typeof f.glissementBps === 'number'`, donc la borne ne peut pas figer notre
+         *     aveuglement pendant cinq minutes. C etait deja la bonne regle ; elle couvre ce cas.
+         *   ⚠️ CE QUE LA BORNE NE FAIT PAS : elle n ANNULE pas la lecture on-chain, elle cesse de
+         *     l attendre. Si elle aboutit apres coup, son resultat remplira le cache disque par le
+         *     chemin normal et servira la requete SUIVANTE. Rien n est jete.
+         *   ⛔ 6 s, ET PAS 8 : la borne doit rester SOUS celle de DexScreener (8 000 ms), sinon le
+         *     pire des cas additionne les deux et depasse ce qu un navigateur attend sans broncher. */
+        const BORNE_FAITS_MS = 6000;
+        borneFaits = setTimeout(() => repondre({ ...r, glissementBps: null, famille: 'NON_MESURE',
+          pourquoiFaits: 'pool facts not read within ' + BORNE_FAITS_MS + ' ms (chain read still pending); '
+            + 'the price above is a measured fact, the missing ones are NOT a verdict' }), BORNE_FAITS_MS);
         /* ⛔ LES DEUX COTES DE LA PAIRE SONT PASSES, parce que la branche V4 en a besoin : depuis un
          *   `poolId` (un hash) on ne peut pas retrouver `currency0`, et sans lui le sens du
          *   glissement serait devine. Ils ne servent QU A cette lecture ; la famille, elle, reste
