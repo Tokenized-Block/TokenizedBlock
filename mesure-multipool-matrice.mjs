@@ -73,8 +73,14 @@ const ADMISES = devisesFraisAdmises([...STOCKS.keys()], { blocks: BLOCKS });
 const sym = (a) => (a === ETH ? 'ETH' : (N.get(a) && N.get(a).sym) || a.slice(0, 10));
 const symboles = Object.fromEntries([...N.values()].map((n) => [n.adr, n.sym || n.adr.slice(0, 8)]));
 const dec = (a) => (a === ETH ? 18 : a === USDC ? 6 : N.get(a) ? N.get(a).dec : null);
+/* ⛔ PRIX DES BLOCKS MESURE ON-CHAIN (ajout 2026-10-02) : le 1er passage dimensionnait les tailles en $ d un
+ *   block avec le prix AGREGE (/api/trending, DexScreener). Il s ecartait du prix on-chain (retenu > 1 sur
+ *   BLUEPILL -> HIMSc). On mesure donc, pour chaque block relie, le prix d ACHAT de 1 $ (depuis USDC, puis ETH)
+ *   par le meilleur chemin du graphe, frais d interface et frais LP COMPRIS : c est un prix « ask ». */
+const PRIX_BLOCK = new Map();
 const prix = (a) => {
   if (a === USDC) return { p: 1, src: 'USDC' };
+  { const pb = PRIX_BLOCK.get(a); if (pb) return { p: pb.p, src: 'devis on-chain : ' + pb.src }; }
   if (a === ETH) return { p: (ap.prix && ap.prix[ETH]) || (N.get(ETH) && N.get(ETH).prixMesure) || null, src: 'devis on-chain' };
   if (a === OUSD) return { p: ap.prix && ap.prix[OUSD] || null, src: 'devis on-chain' };
   const s = STOCKS.get(a); if (s && s.prix) return { p: s.prix, src: 'devis on-chain (meilleure pool)' };
@@ -94,6 +100,26 @@ const liqBlock = (b) => (N.get(b) && N.get(b).ligne && N.get(b).ligne.liquiditeU
 const TOP = BLOCKS_RELIES.slice().sort((x, y) => liqBlock(y) - liqBlock(x)).slice(0, TOP_BLOCKS);
 const TOPBB = TOP.slice(0, TOP_BB);
 console.log('=== MATRICE — bloc ' + g.bloc + ' · aretes ' + aretes.length + ' · blocks ' + BLOCKS.length + ' (relies ' + BLOCKS_RELIES.length + ') · actions ' + STOCKS.size + ' (reliees ' + STOCKS_RELIES.length + ') · frais 0,09 % net = 900 / 1e6 = ' + FRAIS_BPS + ' bps ===');
+
+await par(BLOCKS_RELIES, CONC, async (b) => {
+  const d = dec(b); if (d === null || d === undefined) return;
+  let best = null, src = null;
+  for (const [h, m] of [[USDC, 1000000n], [ETH, unites(ETH, 1)]]) {
+    if (!m) continue;
+    for (const ch of cheminsCandidats(aretes, h, b, { sautsMax: 3, max: 6 })) {
+      const pl = placerFrais(ch, ADMISES); if (pl.etat !== 'OK') continue;
+      const q = await coterChemin({ rpc, chemin: ch, montant: m, admises: ADMISES, placement: pl });
+      if (q.etat === 'OK' && q.sortie > 0n) { const p = 1 / (Number(q.sortie) / 10 ** d); if (best === null || p < best) { best = p; src = 'achat 1 $ depuis ' + (h === USDC ? 'USDC' : 'ETH') + ' par ' + decrireChemin(ch, symboles); } }
+    }
+  }
+  if (best !== null) PRIX_BLOCK.set(b, { p: best, src });
+});
+{
+  const ecarts = [...PRIX_BLOCK].map(([b, { p }]) => { const n = N.get(b); const ag = n && ((n.ligne && n.ligne.prixUsd) || n.prixDs); return ag ? p / ag : null; }).filter((x) => x).sort((x, y) => x - y);
+  const med = ecarts.length ? ecarts[Math.floor(ecarts.length / 2)] : null;
+  console.log('prix on-chain mesures pour ' + PRIX_BLOCK.size + '/' + BLOCKS_RELIES.length + ' blocks relies · ratio on-chain/agrege : mediane ' + (med && med.toFixed(3)) + ', min ' + (ecarts[0] && ecarts[0].toFixed(3)) + ', max ' + (ecarts.length && ecarts[ecarts.length - 1].toFixed(3)));
+  globalThis.__prixBlocks = { mesures: PRIX_BLOCK.size, relies: BLOCKS_RELIES.length, ratioMediane: med, ratioMin: ecarts[0] ?? null, ratioMax: ecarts[ecarts.length - 1] ?? null };
+}
 
 /* AVANT (modele du code de l app) */
 const etoile = new Set();
@@ -121,7 +147,7 @@ for (const a of BLOCKS_RELIES) for (const b of BLOCKS_RELIES) if (a !== b) ajout
 const nCote = travaux.filter((t) => t.coter).length;
 console.log('paires : ' + travaux.length + ' (cotees ' + nCote + ', graphe seulement ' + (travaux.length - nCote) + ')');
 
-const entete = ['categorie', 'niveau', 'de', 'de_classe', 'vers', 'vers_classe', 'avant_app', 'apres_route', 'n_chemins', 'sauts', 'venues', 'chemin', 'frais_noeud', 'frais_devise',
+const entete = ['categorie', 'niveau', 'de', 'de_classe', 'vers', 'vers_classe', 'avant_app', 'prix_de_usd', 'prix_de_source', 'prix_vers_usd', 'prix_vers_source', 'apres_route', 'n_chemins', 'sauts', 'venues', 'chemin', 'frais_noeud', 'frais_devise',
   ...TAILLES.flatMap(([t]) => [t + '_entree', t + '_sortie', t + '_frais', t + '_impact', t + '_retenu', t + '_etat']), 'raison_si_aucun_devis'].join(',');
 const NCOL = entete.split(',').length;
 const pad = (a) => { if (a.length > NCOL) throw new Error('ligne trop longue ' + a.length); return [...a, ...Array(NCOL - a.length).fill('')]; };
@@ -134,7 +160,8 @@ await par(travaux, CONC, async (t) => {
   st.paires += 1;
   const av = avant(t.de, t.vers); if (av.startsWith('oui')) st.avant += 1;
   const cands = cheminsCandidats(aretes, t.de, t.vers, { sautsMax: t.sautsMax, max: t.coter ? 6 : 2 });
-  const base = [t.cat, t.coter ? 'cote' : 'graphe', sym(t.de), classe(t.de), sym(t.vers), classe(t.vers), av];
+  const pd = prix(t.de), pv0 = prix(t.vers);
+  const base = [t.cat, t.coter ? 'cote' : 'graphe', sym(t.de), classe(t.de), sym(t.vers), classe(t.vers), av, pd.p ?? 'inconnu', pd.src || '', pv0.p ?? 'inconnu', pv0.src || ''];
   if (!cands.length) { lignes.push(pad([...base, 'aucune', 0]).map(csv).join(',')); return; }
   const plac = cands.map((ch) => ({ ch, pl: placerFrais(ch, ADMISES) })).filter((x) => x.pl.etat === 'OK');
   if (!plac.length) { st.refusFrais += 1; lignes.push(pad([...base, 'REFUSE: frais seulement en block', cands.length, cands[0].length, '', decrireChemin(cands[0], symboles)]).map(csv).join(',')); return; }
@@ -174,7 +201,7 @@ await par(travaux, CONC, async (t) => {
 lignes.sort();
 writeFileSync(SORTIE, entete + '\n' + lignes.join('\n') + '\n');
 const sansPool = [...STOCKS.values()].filter((s) => !adj.has(s.adr));
-const resume = { bloc: g.bloc, fraisBps: String(FRAIS_BPS), fraisPpm: '900', lu: new Date().toISOString(), aretes: aretes.length, blocks: BLOCKS.length, blocksRelies: BLOCKS_RELIES.length, actions: STOCKS.size, actionsReliees: STOCKS_RELIES.length,
+const resume = { bloc: g.bloc, fraisBps: String(FRAIS_BPS), fraisPpm: '900', lu: new Date().toISOString(), prixBlocks: globalThis.__prixBlocks, aretes: aretes.length, blocks: BLOCKS.length, blocksRelies: BLOCKS_RELIES.length, actions: STOCKS.size, actionsReliees: STOCKS_RELIES.length,
   actionsSansAucunePool: sansPool.length, sansPoolParEmetteur: sansPool.reduce((o, s) => { o[s.emetteur] = (o[s.emetteur] || 0) + 1; return o; }, {}),
   pairesImpossiblesFauteDePool: sansPool.length * (BLOCKS.length * 2 + STOCKS_RELIES.length * 2), paires: travaux.length, cotees: nCote, reessais, parCategorie: stats };
 writeFileSync('/workspace/mp-data/matrice-resume.json', JSON.stringify(resume, null, 1));
