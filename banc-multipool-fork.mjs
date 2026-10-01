@@ -3,8 +3,8 @@
  *   PORT_FORK=8599 node banc-multipool-fork.mjs [/workspace/mp-data/graphe.json]
  *
  * ⛔⛔ FORK UNIQUEMENT. Le banc refuse de tourner si le chainId n est pas 8453 ou si le noeud n est
- *   pas un anvil local (anvil_nodeInfo). Expediteur : le compte de test anvil n°1. JAMAIS a6cf.
- * ⛔⛔ LA REGLE DU FRAIS (Raksha, 2026-10-01 22:15) : 9 bps NET vers a6cf, UNE FOIS par swap, en
+ *   pas un anvil local (anvil_nodeInfo). Expediteur : une adresse vierge usurpee sur le fork. JAMAIS a6cf.
+ * ⛔⛔ LA REGLE DU FRAIS (Raksha, 2026-10-01 23:25) : 0,09 % NET vers a6cf (900 sur une base 1e6 = 9 bps), UNE FOIS par swap, en
  *   ETH / USDC / l action ou le B20 apparie, JAMAIS en token de block, pas de remise.
  *   Chaque swap est juge par `juger` :
  *     J1 status 0x1 ;
@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs';
 import { ADRESSES, devisesFraisAdmises, planifier, construireRoute, assemblerExecute, CMD, decrireChemin, fraisSur, noeud, rangFrais } from './multipool.js';
 import { ACTIONS_COINBASE } from './paires.js';
 import { selecteur, mot, motAdr } from './pool.js';
+import { OPTIONS, evaluerA, confirmerA, partsFraisPourOption, calldataPaiement } from './recompense-actions.js';
 
 const PORT = process.env.PORT_FORK || '8599';
 const URL = 'http://127.0.0.1:' + PORT;
@@ -265,6 +266,117 @@ for (const { b, st } of choisis) {
   res.push(await executer({ nom: 'S2 ' + sym(b) + ' -> ' + sym(st) + ' -> OUSD', de: b, vers: OUSD, montant: await solde(b, USER) }));
 }
 
+/* ── (3) PREUVE ANTI-FARMING + OPTION C + PAIEMENT DU COFFRE (Raksha 23:24 / 23:25) ──
+ *   ⛔ La recompense reste DESACTIVEE dans le code (RECOMPENSE_ACTIONS_ACTIVE = false). Ici on la
+ *   SIMULE avec `actif: true` passe EXPLICITEMENT a l evaluateur, sur des swaps REELLEMENT executes
+ *   sur le fork : le but est de montrer qu un aller-retour (wash) PERD de l argent, que le module lui
+ *   accorde 0, et que meme une recompense hypothetique sans la regle anti-wash (2 jambes x taux A)
+ *   reste sous la perte mesuree. */
+console.log('\n=== FARMING : un aller-retour PERD de l argent, et le module n accorde RIEN ===');
+const farm = [];
+const tsBloc = async () => Number((await rpc('eth_getBlockByNumber', ['latest', false])).timestamp);
+const prixMesure = (stock) => { const x = actionsMesurees.find((y) => y.adr === bas(stock)); return x && x.meilleures && x.meilleures.USDC ? x.meilleures.USDC.prix : null; };
+const decMesure = (stock) => { const x = actionsMesurees.find((y) => y.adr === bas(stock)); return x ? x.dec : null; };
+res.push(await executer({ nom: 'F0 approvisionnement ETH -> USDC (0.6 ETH, juge comme les autres)', de: ETH, vers: USDC, montant: (6n * E) / 10n }));
+async function allerRetour({ nom, de, via, montant, usdParUnite }) {
+  const r1 = await executer({ nom: nom + ' jambe 1 ' + sym(de) + ' -> ' + sym(via), de, vers: via, montant });
+  if (r1.verdict !== 'OK') return { nom, verdict: 'NON MESURE', pourquoi: 'jambe 1 ' + r1.verdict + ' ' + (r1.pourquoi || (r1.ko || []).join(' | ')) };
+  const t1 = await tsBloc();
+  const r2 = await executer({ nom: nom + ' jambe 2 ' + sym(via) + ' -> ' + sym(de), de: via, vers: de, montant: BigInt(r1.recu) });
+  if (r2.verdict !== 'OK') return { nom, verdict: 'NON MESURE', pourquoi: 'jambe 2 ' + r2.verdict + ' ' + (r2.pourquoi || (r2.ko || []).join(' | ')), r1 };
+  const t2 = await tsBloc();
+  const retour = BigInt(r2.recu);
+  const perte = montant - retour;
+  const perteBps = Number((perte * 1000000n) / montant) / 100;
+  const notionnelUsd = Number(montant) * usdParUnite;
+  /* le module, simule ACTIF, sur les deux jambes reelles */
+  const stock = STOCKS.has(bas(via)) ? bas(via) : bas(de);
+  const prix = prixMesure(stock), dec = decMesure(stock);
+  const s1 = { wallet: USER, action: stock, sens: STOCKS.has(bas(via)) ? 'ACHAT' : 'VENTE', notionnelUsd, ts: t1, tx: r1.tx };
+  const s2 = { wallet: USER, action: stock, sens: s1.sens === 'ACHAT' ? 'VENTE' : 'ACHAT', notionnelUsd, ts: t2, tx: r2.tx };
+  const parDefaut = evaluerA({ swap: s1, prixActionUsd: prix, decimalesAction: dec });
+  const a1 = evaluerA({ swap: s1, prixActionUsd: prix, decimalesAction: dec, actif: true });
+  const a2 = evaluerA({ swap: s2, historique: [s1], prixActionUsd: prix, decimalesAction: dec, actif: true });
+  const c1 = confirmerA({ attente: a1, historiqueApres: [s2], maintenant: t1 + OPTIONS.A.fenetreAnnulationS });
+  const accordeUsd = (c1.etat === 'PAYABLE' ? a1.montantUsd : 0) + (a2.etat === 'EN_ATTENTE' ? a2.montantUsd : 0);
+  const hypothetiqueSansRegleUsd = 2 * notionnelUsd * Number(OPTIONS.A.tauxBps) / 10000;
+  const perteUsd = Number(perte) * usdParUnite;
+  const fraisA6cf = [r1, r2].map((r) => r.delta + ' ' + r.fraisDevise).join(' + ');
+  const ok = perte > 0n && accordeUsd === 0 && parDefaut.etat === 'DESACTIVE' && hypothetiqueSansRegleUsd < perteUsd;
+  const o = { nom, verdict: ok ? 'OK' : 'KO', montant: String(montant), retour: String(retour), perte: String(perte), perteBps, perteUsd: +perteUsd.toFixed(6), notionnelUsd: +notionnelUsd.toFixed(4), fraisA6cf,
+    moduleParDefaut: parDefaut.etat, jambe1: a1.etat + (a1.montantUsd ? ' ' + a1.montantUsd + ' $' : '') + (a1.pourquoi ? ' (' + a1.pourquoi + ')' : ''), jambe2: a2.etat + ' (' + (a2.pourquoi || '') + ')', confirmationJambe1: c1.etat + ' (' + (c1.pourquoi || '') + ')',
+    accordeUsd, hypothetiqueSansRegleUsd: +hypothetiqueSansRegleUsd.toFixed(6), tx: [r1.tx, r2.tx] };
+  console.log('\n[' + nom + '] paye ' + montant + ' ' + sym(de) + ' · recupere ' + retour + ' · PERTE ' + perte + ' (' + perteBps + ' bps, ' + o.perteUsd + ' $) · frais a6cf ' + fraisA6cf);
+  console.log('   module par defaut : ' + parDefaut.etat + ' · simule actif : jambe 1 ' + o.jambe1 + ' · jambe 2 ' + o.jambe2 + ' · a l echeance jambe 1 ' + o.confirmationJambe1);
+  console.log('   accorde ' + accordeUsd + ' $ · meme SANS la regle anti-wash (2 x ' + OPTIONS.A.tauxBps + ' bps) : ' + o.hypothetiqueSansRegleUsd + ' $ < perte ' + o.perteUsd + ' $ => ' + o.verdict);
+  return o;
+}
+const usdcUsd = 1e-6; /* USDC : 1 unite = 1e-6 $ (USDC pris a 1 $ ; c est la devise de reference du banc) */
+farm.push(await allerRetour({ nom: 'F1 wash USDC -> AAPLc -> USDC 100 $', de: USDC, via: AAPL, montant: 100n * 10n ** 6n, usdParUnite: usdcUsd }));
+farm.push(await allerRetour({ nom: 'F2 wash USDC -> AAPLc -> USDC 1000 $', de: USDC, via: AAPL, montant: 1000n * 10n ** 6n, usdParUnite: usdcUsd }));
+if (choisis.length) {
+  const { b, st } = choisis[0];
+  const pst = prixMesure(st), dst = decMesure(st);
+  if (pst && dst !== null) {
+    const r0 = await executer({ nom: 'F3 approvisionnement USDC -> ' + sym(st), de: USDC, vers: st, montant: 150n * 10n ** 6n });
+    res.push(r0);
+    if (r0.verdict === 'OK') farm.push(await allerRetour({ nom: 'F3 wash ' + sym(st) + ' -> block ' + sym(b) + ' -> ' + sym(st), de: st, via: b, montant: BigInt(r0.recu), usdParUnite: pst / 10 ** dst }));
+  }
+}
+
+/* ── OPTION C : +1 bp au coffre, a6cf garde EXACTEMENT 9 bps (0,09 %) ── */
+console.log('\n=== OPTION C : surcharge 1 bp au coffre, a6cf reste a 0,09 % au wei ===');
+const COFFRE = '0x' + 'c0ffe' + '0'.repeat(32) + 'c0f';
+if ((await rpc('eth_getCode', [COFFRE, 'latest'])) !== '0x') throw new Error('le coffre de test porte du code');
+const optC = [];
+{
+  const M = 100n * 10n ** 6n;
+  const deadline = BigInt((await tsBloc()) + 3600);
+  const p = await planifier({ rpc, aretes, de: USDC, vers: AAPL, montant: M, destinataire: USER, admises: ADMISES, deadline, sautsMax: 2, max: 16 });
+  const parts = partsFraisPourOption('C', COFFRE);
+  const refusCbis = partsFraisPourOption('C-bis', COFFRE);
+  optC.push({ nom: 'C-bis (rognage) refuse sans drapeau explicite', verdict: refusCbis === null ? 'OK (refuse)' : 'KO' });
+  if (p.etat === 'PRET') {
+    /* minimum : la sortie du devis a 9 bps, moins 1 bp pour la surcharge, moins 1 unite */
+    const tx = construireRoute({ chemin: p.meilleur.chemin, montant: M, minSortie: (p.meilleur.sortie * 9999n) / 10000n - 1n, destinataire: USER, deadline, fraisIndice: p.tx.fraisIndice, admises: ADMISES, partsFrais: parts });
+    const ra = await envoyer({ to: USDC, data: S('approve(address,uint256)') + motAdr(R) + mot(M) });
+    const av = { a: await solde(USDC, A6CF), c: await solde(USDC, COFFRE), u: await solde(AAPL, USER), r: await solde(USDC, R) };
+    const rc = await envoyer({ to: tx.to, data: tx.data, value: tx.value });
+    const ap = { a: await solde(USDC, A6CF), c: await solde(USDC, COFFRE), u: await solde(AAPL, USER), r: await solde(USDC, R), rA: await solde(AAPL, R) };
+    const fa = ap.a - av.a, fc = ap.c - av.c;
+    const attA = (M * 9n) / 10000n; /* = floor(M x 900 / 1e6) */
+    const attC = ((M - attA) * 1n) / 10000n; /* PAY_PORTION 2 porte sur le solde RESTANT du routeur */
+    const ok = ra.status === '0x1' && rc.status === '0x1' && tx.fraisIndice === 0 && fa === attA && fc === attC && ap.u > av.u && ap.r === 0n && ap.rA === 0n;
+    console.log('C  USDC -> AAPLc 100 $ · commandes ' + tx.commandes.join(',') + ' · a6cf +' + fa + ' (attendu floor(1e8 x 900 / 1e6) = ' + attA + ') · coffre +' + fc + ' (attendu floor((1e8 - ' + attA + ') x 1 / 1e4) = ' + attC + ') · recu ' + (ap.u - av.u) + ' AAPLc · routeur vide ' + (ap.r === 0n && ap.rA === 0n) + ' => ' + (ok ? 'OK' : 'KO'));
+    optC.push({ nom: 'C surcharge 1 bp : a6cf 9 bps exacts + coffre 1 bp', verdict: ok ? 'OK' : 'KO', a6cf: String(fa), attenduA6cf: String(attA), coffre: String(fc), attenduCoffre: String(attC), recuAAPLc: String(ap.u - av.u), devisSans1bp: String(p.meilleur.sortie), gaz: Number(rc.gasUsed), tx: rc.transactionHash });
+  } else optC.push({ nom: 'C surcharge 1 bp', verdict: 'NON MESURE', pourquoi: p.pourquoi });
+}
+
+/* ── OPTION A : le paiement PAR LE COFFRE, dans l action appariee, au wei ── */
+console.log('\n=== OPTION A : paiement d une remise par le coffre (jamais par a6cf) ===');
+{
+  const prix = prixMesure(AAPL), dec = decMesure(AAPL);
+  const t = await tsBloc();
+  const swap = { wallet: USER, action: AAPL, sens: 'ACHAT', notionnelUsd: 100, ts: t, tx: (optC[1] && optC[1].tx) || null };
+  const a = evaluerA({ swap, prixActionUsd: prix, decimalesAction: dec, actif: true });
+  const c = confirmerA({ attente: a, historiqueApres: [], maintenant: t + OPTIONS.A.fenetreAnnulationS });
+  /* le coffre de test est approvisionne en AAPLc par le compte de test (transfer ERC-20 sur le fork) */
+  const fond = (await solde(AAPL, USER)) / 2n;
+  const rf = await envoyer({ to: AAPL, data: S('transfer(address,uint256)') + motAdr(COFFRE) + mot(fond) });
+  await rpc('anvil_impersonateAccount', [COFFRE]);
+  await rpc('anvil_setBalance', [COFFRE, '0x' + (10n ** 18n).toString(16)]);
+  const cd = calldataPaiement({ action: AAPL, destinataire: USER, montant: c.montantUnites });
+  const refusA6cf = calldataPaiement({ action: AAPL, destinataire: A6CF, montant: 1n });
+  const av = { u: await solde(AAPL, USER), c: await solde(AAPL, COFFRE), a: await solde(AAPL, A6CF) };
+  const h = await rpc('eth_sendTransaction', [{ from: COFFRE, gas: '0x200000', ...cd }]);
+  let rc = null; for (let k = 0; k < 60 && !rc; k += 1) { rc = await rpc('eth_getTransactionReceipt', [h]); if (!rc) await new Promise((z) => setTimeout(z, 250)); }
+  const ap = { u: await solde(AAPL, USER), c: await solde(AAPL, COFFRE), a: await solde(AAPL, A6CF) };
+  const ok = rf.status === '0x1' && a.etat === 'EN_ATTENTE' && c.etat === 'PAYABLE' && rc && rc.status === '0x1' && ap.u - av.u === c.montantUnites && av.c - ap.c === c.montantUnites && ap.a === av.a && refusA6cf === null;
+  console.log('A  remise ' + a.montantUsd + ' $ = ' + c.montantUnites + ' unites AAPLc (prix mesure ' + prix + ' $, ' + dec + ' dec.) · swapper +' + (ap.u - av.u) + ' · coffre -' + (av.c - ap.c) + ' · a6cf ' + (ap.a - av.a) + ' · paiement vers a6cf refuse ' + (refusA6cf === null) + ' => ' + (ok ? 'OK' : 'KO'));
+  optC.push({ nom: 'A paiement par le coffre, au wei', verdict: ok ? 'OK' : 'KO', remiseUsd: a.montantUsd, unites: String(c.montantUnites), tx: rc && rc.transactionHash });
+  await rpc('anvil_stopImpersonatingAccount', [COFFRE]);
+}
+
 /* ── temoins negatifs ── */
 console.log('\n=== TEMOINS NEGATIFS ===');
 const tem = [];
@@ -303,8 +415,11 @@ tem.push({ nom: 'T4 minimum trop haut', verdict: r4.verdict === 'KO' && r4.delta
 console.log('\n=== BILAN ===');
 for (const r of res) console.log((r.verdict === 'OK' ? 'OK   ' : r.verdict.padEnd(5)) + r.nom + (r.verdict === 'OK' ? ' · frais ' + r.delta + ' ' + r.fraisDevise + ' · gaz ' + r.gaz : ' ' + (r.pourquoi || (r.ko || []).join(' | '))));
 for (const t of tem) console.log('TEMOIN ' + t.verdict + ' · ' + t.nom);
-const json = JSON.stringify({ bloc: g.bloc, res, tem }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1);
+for (const f of farm) console.log('FARMING ' + f.verdict + ' · ' + f.nom + (f.perte ? ' · perte ' + f.perteBps + ' bps (' + f.perteUsd + ' $) · accorde ' + f.accordeUsd + ' $' : ' ' + (f.pourquoi || '')));
+for (const o of optC) console.log('OPTION ' + o.verdict + ' · ' + o.nom);
+const json = JSON.stringify({ bloc: g.bloc, lu: new Date().toISOString(), res, tem, farm, optC }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1);
 (await import('node:fs')).writeFileSync('/workspace/mp-data/banc-resultats.json', json);
 const nOk = res.filter((r) => r.verdict === 'OK').length;
 console.log(nOk + '/' + res.length + ' swaps OK · temoins ' + tem.filter((t) => t.verdict.startsWith('OK')).length + '/' + tem.length);
-process.exit(nOk === res.length && tem.every((t) => t.verdict.startsWith('OK')) ? 0 : 1);
+console.log('farming ' + farm.filter((f) => f.verdict === 'OK').length + '/' + farm.length + ' · options ' + optC.filter((o) => o.verdict.startsWith('OK')).length + '/' + optC.length);
+process.exit(nOk === res.length && tem.every((t) => t.verdict.startsWith('OK')) && farm.every((f) => f.verdict === 'OK') && optC.every((o) => o.verdict.startsWith('OK')) ? 0 : 1);

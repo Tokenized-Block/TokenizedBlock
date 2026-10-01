@@ -41,14 +41,14 @@ let id = 0, perdus = 0, reessais = 0;
 async function rpc(m, p) {
   for (let t = 0; t < 5; t += 1) {
     try {
-      const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: m, params: p }) });
+      const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(Number(process.env.TIMEOUT_MS || 90000)), body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: m, params: p }) });
       const j = await r.json();
       if (j.error) {
         if (/429|rate limit|Max retries|Transport|timed out/i.test(j.error.message || '') && t < 4) { reessais += 1; await dors(3000 * (t + 1)); continue; }
         const e = new Error(j.error.message); e.rpc = true; e.amont = /429|rate limit|Max retries|Transport/i.test(j.error.message || ''); throw e;
       }
       return j.result;
-    } catch (e) { if (e.rpc) throw e; await dors(500 * (t + 1)); }
+    } catch (e) { if (e.rpc) throw e; if (e && e.name === 'TimeoutError') { const x = new Error('TIMEOUT ' + (Number(process.env.TIMEOUT_MS || 90000) / 1000) + ' s (le devis traverse probablement des ticks vides : profondeur insuffisante)'); x.rpc = true; throw x; } await dors(500 * (t + 1)); }
   }
   throw new Error('transport');
 }
@@ -105,11 +105,12 @@ async function meilleurDevisVersUsdc(de, montant) {
   for (const fac of [3, 2]) for (const ts of [1, 10, 50, 100, 200, 2000]) { const q = devisSaut({ de, vers: USDC, e: { venue: 'aerodrome-cl', factory: fac, tickSpacing: ts, token0: tok(de), token1: USDC } }, montant); const o = w(await call(q.to, q.data)); if (o && o > best) { best = o; ou = 'cl' + fac + ':' + ts; } }
   return { best, ou };
 }
-const pEth = await meilleurDevisVersUsdc(ETH, 10n ** 16n);
-const pOusd = await meilleurDevisVersUsdc(OUSD, 10n ** 18n);
-const PRIX = { [USDC]: 1, [ETH]: Number(pEth.best) / 1e6 * 100, [OUSD]: Number(pOusd.best) / 1e6 };
+/* ⛔ les decimales D ABORD : OUSD en a 6, et un devis de 1e18 unites (= 1e12 OUSD) ne rend rien */
 const DEC = { [USDC]: 6, [ETH]: 18, [OUSD]: Number(w(await call(OUSD, S('decimals()')))) };
-PRIX[OUSD] = Number(pOusd.best) / 1e6 / (10 ** (DEC[OUSD] - 18) || 1);
+const pEth = await meilleurDevisVersUsdc(ETH, 10n ** 16n);
+const pOusd = await meilleurDevisVersUsdc(OUSD, 10n ** BigInt(DEC[OUSD]));
+const PRIX = { [USDC]: 1, [ETH]: Number(pEth.best) / 1e6 * 100, [OUSD]: Number(pOusd.best) / 1e6 };
+if (!(PRIX[ETH] > 0) || !(PRIX[OUSD] > 0)) { console.log('KO prix de devise non mesure (ETH ' + PRIX[ETH] + ', OUSD ' + PRIX[OUSD] + ') — arret'); process.exit(1); }
 console.log('prix mesures : ETH ' + PRIX[ETH].toFixed(2) + ' $ (' + pEth.ou + ') · OUSD ' + PRIX[OUSD].toFixed(6) + ' $ (' + pOusd.ou + ', decimales ' + DEC[OUSD] + ')');
 
 /* ── 3. candidats : balayage + cles V4 hookees de /api/cle ── */
