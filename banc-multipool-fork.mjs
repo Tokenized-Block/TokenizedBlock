@@ -101,7 +101,7 @@ async function juger({ nom, plan, rc, tx, avant, apres, jetons, montant, de, ver
   const bougent = jetons.filter((j) => apres[j].a6cf !== avant[j].a6cf);
   const fd = plan.tx.fraisDevise; /* noeud : ETH couvre ETH natif ET WETH */
   const fdJeton = bougent.length === 1 ? bougent[0] : null;
-  t(bougent.length === 1 && noeud(fdJeton) === fd, 'J2 a6cf bouge dans UN actif : [' + bougent.map(sym).join(',') + (bougent.some((j) => j === WETH) ? '(WETH)' : '') + '] attendu ' + sym(fd));
+  t(bougent.length === 1 && fdJeton === fd, 'J2 a6cf bouge dans UN actif : [' + bougent.map(sym).join(',') + (bougent.some((j) => j === WETH) ? '(WETH)' : '') + '] attendu ' + sym(fd));
   t(!estBlock(fd) && rangFrais(fd, ADMISES) !== null, 'J3 devise du frais ' + sym(fd) + ' n est pas un block');
   const delta = fdJeton ? apres[fdJeton].a6cf - avant[fdJeton].a6cf : 0n;
   /* J4 (a) les logs */
@@ -203,6 +203,8 @@ if (B_ETH) {
   res.push(await executer({ nom: 'C12 VENTE block -> USDC (' + sym(B_ETH) + ' -> USDC)', de: B_ETH, vers: USDC, montant: await solde(B_ETH, USER) }));
 }
 res.push(await executer({ nom: 'C13 NVDAc -> ETH (action -> ETH)', de: NVDA, vers: ETH, montant: await moitie(NVDA) }));
+res.push(await executer({ nom: 'C14 TOSHI -> ETH (V3 rend du WETH : frais en ETH NATIF apres UNWRAP)', de: TOSHI, vers: ETH, montant: await moitie(TOSHI) }));
+res.push(await executer({ nom: 'C15 TOSHI -> USDC (V3 puis V4, frais en ETH au noeud du milieu)', de: TOSHI, vers: USDC, montant: await solde(TOSHI, USER) }));
 
 /* ── temoins negatifs ── */
 console.log('\n=== TEMOINS NEGATIFS ===');

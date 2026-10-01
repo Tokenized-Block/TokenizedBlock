@@ -71,6 +71,9 @@ ok('3n. segments coupes au noeud du frais : [v4(2 sauts), cl3]', sg.map((s) => s
 const parts2 = construireRoute({ ...base, chemin: chBA, fraisIndice: 2, partsFrais: [{ qui: USER, bps: 9n }] });
 ok('3o. TEMOIN : une part de frais dont le 1er destinataire n est pas a6cf est refusee', parts2.etat === 'REFUSE');
 
+const tw = construireRoute({ ...base, chemin: [{ de: TOSHI, vers: ETH, e: G[5] }], fraisIndice: 1 });
+ok('3p. TOSHI -> ETH (v3 rend du WETH) : UNWRAP vers le routeur PUIS PAY_PORTION(ETH natif) PUIS SWEEP(ETH)', tw.commandes.join(',') === '07,00,0c,06,04', tw.commandes.join(','));
+ok('3q. a6cf n est jamais paye en WETH', !tw.data.includes(WETH.slice(2) + '000000000000000000000000' + FEE_WALLET.slice(2)));
 console.log('=== 4. devis (rpc simule) ===');
 const faux = async (m, [tx]) => { const amt = BigInt('0x' + tx.data.slice(-64 * 2 - 0, -64)); return '0x' + (amt * 2n).toString(16).padStart(64, '0'); };
 let vus = [];
