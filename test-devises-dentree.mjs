@@ -211,8 +211,54 @@ t('assemblage: UNE_TX ne suffit PAS — un segment aerodrome est refuse',
 t('assemblage: et le refus nomme la famille, pas « impossible »',
   /aerodrome/.test(peutEtreAssemblee(cAero).pourquoi)
   && /we proved|builder/i.test(peutEtreAssemblee(cAero).pourquoi));
-t('assemblage: deux segments => refuse, avec le chiffre',
-  peutEtreAssemblee(cPont).ok === false && /\b2 venues\b/.test(peutEtreAssemblee(cPont).pourquoi));
+/* ⭐⭐ OUVERT LE 2026-10-01 : `cPont` est exactement la forme uniswap-v4 PUIS un saut aerodrome,
+ *   c est-a-dire OUSD -> USDC -> une action tokenisee. C etait refuse ; c est desormais bati par
+ *   `planifierFranchissement` en UN LOT ATOMIQUE de trois appels.
+ *   ⛔ Cette assertion disait avant « deux segments => refuse ». Elle encodait une limite de notre
+ *     outillage, PAS une regle du produit — et c est pour ca qu elle devait changer quand
+ *     l outillage a change. Une assertion qui gele une limite temporaire finit par defendre le
+ *     defaut qu elle documentait. */
+t('assemblage: uniswap-v4 PUIS un saut aerodrome est un FRANCHISSEMENT',
+  peutEtreAssemblee(cPont).ok === true && peutEtreAssemblee(cPont).par === 'franchissement');
+t('assemblage: et il annonce TROIS appels, pas un',
+  peutEtreAssemblee(cPont).appels === 3);
+/* ⛔⛔ ET IL EXIGE L ATOMICITE. Sans elle, la jambe 1 peut passer seule et l acheteur se retrouve
+ *   avec le pivot au lieu de ce qu il voulait — il a paye un frais pour un actif qu il n a pas
+ *   demande. Le drapeau doit remonter pour que l ecran puisse refuser aux wallets qui ne groupent
+ *   pas, au lieu de les laisser decouvrir le probleme apres avoir signe. */
+t('assemblage: le franchissement EXIGE l atomicite', peutEtreAssemblee(cPont).exigeAtomique === true);
+t('assemblage: le rail a un seul segment ne l exige PAS',
+  peutEtreAssemblee(cV4).exigeAtomique === undefined && peutEtreAssemblee(cV4).appels === 1);
+/* ⛔ L ORDRE INVERSE RESTE REFUSE : aerodrome puis uniswap ferait un lot aux approbations fausses. */
+const inverseSeg = { etat: 'PLUSIEURS_TX', devise: ousd, tx: 2,
+  segments: [{ famille: 'aerodrome', sauts: [{}] }, { famille: 'uniswap-v4', sauts: [{}] }] };
+t('assemblage: aerodrome PUIS uniswap reste refuse', peutEtreAssemblee(inverseSeg).ok === false);
+t('assemblage: et le refus NOMME la forme vue',
+  /aerodrome then uniswap-v4/.test(peutEtreAssemblee(inverseSeg).pourquoi));
+/* ⛔⛔ UNE MUTATION A SURVECU ICI, ET ELLE M A MONTRE UN TROU DE COUVERTURE, PAS UN BUG.
+ *   En relachant le controle du SECOND segment, le test restait vert — parce que mon seul cas a
+ *   deux segments mettait `aerodrome` EN PREMIER : la condition sur segs[0] echouait deja, et
+ *   celle sur segs[1] n etait JAMAIS exercee. Une garde peut etre protegee par la garde d a cote
+ *   et n avoir aucun test a elle.
+ *   ⇒ Il faut donc un cas ou le PREMIER segment est bon et le SECOND ne l est pas. */
+const secondFaux = { etat: 'PLUSIEURS_TX', devise: ousd, tx: 2,
+  segments: [{ famille: 'uniswap-v4', sauts: [{}] }, { famille: 'uniswap-v4', sauts: [{}] }] };
+t('assemblage: premier segment bon, second pas aerodrome => refuse',
+  peutEtreAssemblee(secondFaux).ok === false);
+t('assemblage: et le refus nomme la forme vue',
+  /uniswap-v4 then uniswap-v4/.test(peutEtreAssemblee(secondFaux).pourquoi));
+
+/* ⛔ UN SEGMENT AERODROME A PLUSIEURS SAUTS RESTE REFUSE : l assembleur prend UNE pool. */
+const aeroLong = { etat: 'PLUSIEURS_TX', devise: ousd, tx: 2,
+  segments: [{ famille: 'uniswap-v4', sauts: [{}] }, { famille: 'aerodrome', sauts: [{}, {}] }] };
+t('assemblage: un segment aerodrome a deux sauts reste refuse',
+  peutEtreAssemblee(aeroLong).ok === false);
+/* ⛔ TROIS SEGMENTS RESTENT REFUSES, et le refus dit combien il en a vus. */
+const trois = { etat: 'PLUSIEURS_TX', devise: ousd, tx: 3,
+  segments: [{ famille: 'uniswap-v4', sauts: [{}] }, { famille: 'aerodrome', sauts: [{}] },
+    { famille: 'uniswap-v4', sauts: [{}] }] };
+t('assemblage: trois segments restent refuses',
+  peutEtreAssemblee(trois).ok === false && /3 venues/.test(peutEtreAssemblee(trois).pourquoi));
 t('assemblage: la DIRECTE passe par le chemin historique',
   peutEtreAssemblee(L.devises[0]).ok === true
   && peutEtreAssemblee(L.devises[0]).par === 'chemin historique');

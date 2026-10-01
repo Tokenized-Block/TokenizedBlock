@@ -199,17 +199,35 @@ export function peutEtreAssemblee(d) {
     return { ok: false, pourquoi: d.pourquoi || 'this currency is not offered' };
   }
   const segs = Array.isArray(d.segments) ? d.segments : [];
-  if (segs.length !== 1) {
-    return { ok: false,
-      pourquoi: 'this route crosses ' + segs.length + ' venues, so it needs ' + segs.length
-        + ' separate signatures — we only build single-venue routes for now' };
+  if (segs.length === 1) {
+    if (segs[0].famille !== 'uniswap-v4') {
+      return { ok: false,
+        pourquoi: 'this route runs on ' + segs[0].famille
+          + ', and the one-transaction builder we proved only covers Uniswap v4 so far' };
+    }
+    return { ok: true, pourquoi: null, par: 'route-v4-multi-sauts', appels: 1 };
   }
-  if (segs[0].famille !== 'uniswap-v4') {
-    return { ok: false,
-      pourquoi: 'this route runs on ' + segs[0].famille
-        + ', and the one-transaction builder we proved only covers Uniswap v4 so far' };
+  /* ⭐⭐ LE FRANCHISSEMENT A DEUX MONDES — ouvert le 2026-10-01 sur demande de Phil : « open OUSD a
+   *   tt les action tokenized ». Les actions tokenisees vivent sur AERODROME, OUSD sur UNISWAP V4,
+   *   et un seul `exactInput` ne traverse qu une factory. `planifierFranchissement` bati le lot
+   *   [jambe1 V4, approve(pivot), jambe2 Aerodrome], envoye en UN LOT ATOMIQUE.
+   *   ⛔ MESURE QUI DIT POURQUOI CETTE FORME-LA ET PAS UNE AUTRE : sur nos 249 lignes servies, les
+   *     ONZE marches Aerodrome portent 96,4 % du volume (83 728 918 $ / 24 h) contre 3,6 % pour les
+   *     238 marches Uniswap. Le rail a un seul segment atteignait 237 marches et 3,6 % de l argent.
+   *   ⛔⛔ L ORDRE EST EXIGE, PAS DEDUIT : uniswap-v4 PUIS aerodrome. L inverse produirait un lot
+   *     dont les approbations sont dans le mauvais ordre, et ca reverte APRES la signature — donc
+   *     apres le gaz de l acheteur. La forme exacte est verifiee par
+   *     `franchissement-depuis-chemin.js`, qui refuse aussi un segment Aerodrome a plusieurs sauts.
+   *   ⚠️ ET CE N EST PAS « UNE TRANSACTION » : trois appels sous UNE signature quand le wallet sait
+   *     grouper. Un wallet qui ne sait pas grouper ne peut pas prendre cette route — c est dit. */
+  if (segs.length === 2 && segs[0].famille === 'uniswap-v4' && segs[1].famille === 'aerodrome'
+    && segs[1].sauts.length === 1) {
+    return { ok: true, pourquoi: null, par: 'franchissement', appels: 3, exigeAtomique: true };
   }
-  return { ok: true, pourquoi: null, par: 'route-v4-multi-sauts' };
+  return { ok: false,
+    pourquoi: 'this route crosses ' + segs.length + ' venues as '
+      + segs.map((s) => s.famille).join(' then ')
+      + ', and the only crossing we build is uniswap-v4 then a single aerodrome hop' };
 }
 
 /**

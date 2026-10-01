@@ -1836,6 +1836,13 @@ const SERVIS = [
    *   LEQUEL — une route partielle produirait un calldata qui s arrete au milieu. 45 assertions,
    *   9/9 mutations attrapees. */
   'sauts-depuis-chemin.js',
+  /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement
+   *   uniswap-v4 PUIS un seul saut aerodrome. Pas « au moins deux », pas « dans n importe quel
+   *   ordre » — une forme differente produirait un lot dont les approbations sont dans le mauvais
+   *   ordre, et ca reverte APRES la signature, donc aux frais de l acheteur. C est le chemin des
+   *   actions tokenisees, celles qui portent 96,4 % du volume. Servi avant d etre importe.
+   *   43 assertions, 9/9 mutations attrapees. */
+  'franchissement-depuis-chemin.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
