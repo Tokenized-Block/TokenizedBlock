@@ -125,12 +125,28 @@ export function chaineTient(sauts) {
  *   taux affiche. L autre sens depasserait le taux annonce, et un taux depasse est une promesse
  *   rompue.
  */
-export function fraisEtNet({ montant, bps } = {}) {
+export function fraisEtNet({ montant, bps, fraisImpose = null } = {}) {
   const m = entier(montant);
   const b = entier(bps);
   if (m === null || m <= 0n) return { etat: 'REFUSE', pourquoi: 'the input amount must be above zero' };
   if (b === null || b < 0n) return { etat: 'REFUSE', pourquoi: 'the fee rate must be zero or more' };
   if (b > BPS_MAX) return { etat: 'REFUSE', pourquoi: 'a fee above ' + BPS_MAX + ' bps is not an interface fee' };
+  /* ⛔⛔ `fraisImpose` EXISTE PARCE QU UN BAREME DEGRESSIF NE SE RECALCULE PAS DEPUIS UN SEUL TAUX.
+   *   `frais-degressif.js` applique un PLANCHER (le frais ne baisse jamais quand le montant monte,
+   *   sinon un dollar de plus couterait moins — une falaise exploitable). Le montant exact ne vaut
+   *   donc pas `montant * bps / 10000`, et le recalculer ici donnerait un frais DIFFERENT de celui
+   *   annonce a l ecran : deux chiffres pour le meme prelevement.
+   *   ⛔ IL EST VERIFIE, PAS CRU : un frais impose qui ne serait pas un bigint positif, ou qui
+   *     mangerait tout le montant, est REFUSE. On ne prend pas un nombre sur parole parce qu il
+   *     vient de chez nous. */
+  if (fraisImpose !== null) {
+    const fi = entier(fraisImpose);
+    if (fi === null || fi < 0n) {
+      return { etat: 'REFUSE', pourquoi: 'the imposed fee must be a whole non-negative amount' };
+    }
+    if (fi >= m) return { etat: 'REFUSE', pourquoi: 'the imposed fee would consume the whole amount' };
+    return { etat: 'OK', frais: fi, net: m - fi, pourquoi: null };
+  }
   const frais = (m * b) / 10000n;
   /* ⛔ UN FRAIS QUI MANGE TOUT N EST PAS UN FRAIS. Avec `BPS_MAX` a 500 c est impossible, mais la
    *   garde ne doit pas dependre de cette valeur : elle serait « correcte par accident ». */
@@ -159,7 +175,7 @@ export function fraisEtNet({ montant, bps } = {}) {
  *   par ailleurs bonne. Le SEUL minimum qui protege l acheteur est celui du `TAKE_ALL` final.
  */
 export function actionsMultiSauts({ sauts, entree, sortie, montant, minSortie, bps,
-  beneficiaireFrais, actionsV4, paramsAction } = {}) {
+  beneficiaireFrais, actionsV4, paramsAction, fraisImpose = null } = {}) {
   if (!actionsV4 || !paramsAction) {
     /* ⛔ LES CODES VIENNENT DU DEPOT, PAS D ICI. Ce module ne les recopie pas : il les RECOIT, pour
      *   qu une divergence entre deux tables soit impossible. `pool.js` est la seule source. */
@@ -202,7 +218,7 @@ export function actionsMultiSauts({ sauts, entree, sortie, montant, minSortie, b
   if (mn === null || mn <= 0n) {
     return { etat: 'REFUSE', pourquoi: 'a positive minimum on the FINAL output is required' };
   }
-  const f = fraisEtNet({ montant, bps });
+  const f = fraisEtNet({ montant, bps, fraisImpose });
   if (f.etat !== 'OK') return { etat: 'REFUSE', pourquoi: f.pourquoi };
   const m = entier(montant);
   /* ⛔ UN FRAIS SANS BENEFICIAIRE EST UN FRAIS PERDU. On refuse plutot que de le laisser au

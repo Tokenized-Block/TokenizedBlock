@@ -1804,6 +1804,12 @@ const SERVIS = [
    *   le DECOUPE par factory (un segment = une transaction) et dit le frais TOTAL — 0,1 % PAR
    *   transaction, donc 0,2 % sur une route a deux segments. Servi avant d etre importe. */
   'pont-de-liquidite.js',
+  /* ⛔⛔ `frais-degressif.js` est IMPORTE PAR `echange.js`, qui est servi : l oublier ici rendrait un
+   *   404 qui arrete le module ENTIER, donc toute la page. C est `test-imports-servis.mjs` qui m a
+   *   attrape — la garde a fait son travail avant le deploiement.
+   *   Il porte le bareme : 0,2 % jusqu a 100 $ (p75 mesure), 0,1 % au-dela, et le PLANCHER qui
+   *   empeche qu un cent de plus coute moitie moins. */
+  'frais-degressif.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

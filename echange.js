@@ -23,6 +23,9 @@ import { vieDuBlock } from './marche.js';
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
 import { actionsMultiSauts, routePrete, SAUTS_MIN, SAUTS_MAX } from './route-v4-multi-sauts.js';
+/* ⛔ LE BAREME VIT A PART, avec son plancher monotone et ses paliers tires de la distribution
+ *   MESUREE. Le recopier ici ferait deux baremes qui divergeraient. */
+import { fraisPourMontant } from './frais-degressif.js';
 import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
@@ -57,9 +60,18 @@ export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() =
 
 /** tip 2350 / 20260922-2023 / 20260922-2026: fail-closed — TAKE/TAKE_PORTION → FEE_WALLET in ETH or USDC only (never TBLOCK/TBGAS/block).
  *  Hooked pools may ALSO chop on-chain; zero interface fees were worse than stacked fees. */
-function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk = null }) {
+/* ⛔⛔ `bpsAttendu` EXISTE PARCE QUE LES RAILS N ONT PAS LE MEME TAUX, ET IL EST EXIGE, PAS DEVINE.
+ *   Decision de Phil (2026-10-01) : le rail multi-sauts prend 0,1 % par transaction, la ou le
+ *   chemin in-app historique prend 0,5 %. Sans ce parametre, le garde refusait 10 bps et la route
+ *   entiere tombait.
+ * ⛔ CE N EST PAS UN ASSOUPLISSEMENT : le taux reste EXIGE A L IDENTIQUE, seule sa valeur attendue
+ *   est passee par l appelant. Tous les autres controles — beneficiaire, devise vendable, presence
+ *   d un TAKE vers a6cf — sont inchanges. Un appelant qui oublierait le parametre retombe sur
+ *   `FRAIS_INTERFACE_BPS`, donc sur le comportement d avant : le defaut est le plus strict. */
+function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk = null,
+  bpsAttendu = FRAIS_INTERFACE_BPS }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
-  if (bps !== FRAIS_INTERFACE_BPS) return 'interface fee bps missing (want 50)';
+  if (bps !== bpsAttendu) return 'interface fee bps missing (want ' + bpsAttendu + ')';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
   }
@@ -506,7 +518,11 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
  *   cette cecite deux fois aujourd hui. L appelant les lit ; cette fonction les cote et construit.
  */
 export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree, sortie, montant,
-  toleranceBps = 100n, maintenant = Date.now(), fraisDevisesOk = null }) {
+  toleranceBps = 100n, maintenant = Date.now(), fraisDevisesOk = null,
+  /* ⛔ LES DECIMALES ET LE PRIX DE LA DEVISE D ENTREE SONT LUS PAR L APPELANT, pas supposes ici :
+   *   ils servent a situer le montant dans le bareme degressif. 18 par defaut serait un pari — et
+   *   OUSD en a SIX. Sans PRIX, le bareme applique le taux le plus haut et le dit. */
+  decimalesEntree = 18, prixUsdEntree = null }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)];
   if (!R || !Q) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) {
@@ -521,9 +537,38 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   const tol = BigInt(toleranceBps);
   if (tol < 0n || tol >= 10000n) return { etat: 'REFUSE', pourquoi: 'slippage out of range' };
   const lire = rpc;
-  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
+  /* ⛔⛔ CE RAIL PREND 0,1 % PAR TRANSACTION, pas les 0,5 % du chemin in-app historique — decision
+   *   de Phil (2026-10-01), et le taux est LU dans `pont-de-liquidite.js` au lieu d etre tape ici.
+   *   ⛔ ET C EST PROPORTIONNEL, PAS FIXE : 0,1 % de 100 OUSD fait 0,1 OUSD, de 10 000 OUSD fait
+   *     10 OUSD. Un frais FIXE serait confiscatoire en bas (5 % sur un echange de 10) et
+   *     negligeable en haut — c est la confusion que le test de 100 OUSD avait rendue possible,
+   *     puisque 0,1 % de 100 vaut justement 0,1.
+   *   ⛔ LE CHEMIN HISTORIQUE N EST PAS TOUCHE : `planEchange` garde ses 0,5 %. Deux rails, deux
+   *     taux, et c est explicite — baisser le chemin existant aurait coupe un revenu qui existe. */
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
-  const { frais, net } = fraisSur(m, bps);
+  /* ⛔⛔ LE BAREME EST DEGRESSIF, ET SON PLANCHER EST 50 bps — decision de Phil (2026-10-01) :
+   *   « mini 50 bps pour petit montant et tu adaptes au montant ». Les paliers viennent de la
+   *   DISTRIBUTION MESUREE de nos tailles de trade (p75 = 95,94 $, p99 = 1 672,31 $), donc 100 $ et
+   *   1 700 $ — pas des nombres ronds choisis de tete.
+   *   ⛔ SANS PRIX LU POUR LA DEVISE D ENTREE, `frais-degressif.js` applique le taux LE PLUS HAUT et
+   *     le DIT : le doute nous coute un revenu potentiel sur les gros montants, jamais une surprise
+   *     a l utilisateur, et jamais une sous-facturation sur une supposition.
+   *   ⛔ ET LE MONTANT EXACT EST IMPOSE A L ASSEMBLEUR, pas recalcule : le plancher fait que le
+   *     frais ne vaut PAS `montant * bps / 10000`, et recalculer donnerait deux chiffres pour le
+   *     meme prelevement — celui annonce et celui preleve. */
+  let frais = 0n, bps = 0n, degressif = null;
+  if (!estWalletDeFrais(compte)) {
+    degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
+    if (degressif.etat !== 'OK') {
+      return { etat: 'REFUSE', pourquoi: 'fee could not be priced: ' + (degressif.pourquoi || 'unknown') };
+    }
+    frais = degressif.frais;
+    /* ⛔ LE TAUX QU ON DECLARE EST L EFFECTIF, celui qu on prend REELLEMENT — plancher compris. Le
+     *   taux du palier serait faux des que le plancher joue, et le garde `assertFraisInterfaceA6cf`
+     *   verifie justement la coherence entre ce taux et le TAKE. */
+    bps = BigInt(degressif.bpsEffectif === null ? degressif.bps : degressif.bpsEffectif);
+  }
+  const net = m - frais;
   const moinsTol = (x) => (x * (10000n - tol)) / 10000n;
 
   /* ── LE DEVIS, SAUT PAR SAUT : la sortie de l un est l entree du suivant ────────────────────
@@ -558,8 +603,12 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
     return { etat: 'REFUSE', pourquoi: 'the amount is too small for a meaningful minimum on the output' };
   }
 
+  /* ⛔ LE MONTANT EXACT EST IMPOSE, PAS RECALCULE : le plancher monotone du bareme fait que le frais
+   *   ne vaut PAS `montant * bps / 10000`. Le recalculer donnerait deux chiffres pour le meme
+   *   prelevement — celui annonce a l ecran et celui reellement pris. */
   const route = actionsMultiSauts({ sauts, entree, sortie, montant: m, minSortie: minFinal, bps,
-    beneficiaireFrais: bps > 0n ? FEE_WALLET : null, actionsV4: ACTIONS_V4, paramsAction });
+    fraisImpose: frais,
+    beneficiaireFrais: frais > 0n ? FEE_WALLET : null, actionsV4: ACTIONS_V4, paramsAction });
   if (!routePrete(route)) {
     return { etat: 'REFUSE', pourquoi: route.pourquoi || 'this route could not be assembled' };
   }
@@ -576,7 +625,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   NOMME la devise, il ne la juge pas : `assertFraisInterfaceA6cf` decide, et il n admet ETH,
    *   USDC, ou une devise dont L APPELANT A LU LE PRIX. a6cf a deja ete paye en jetons invendables
    *   (7 detentions, part reelle 0 $) — c est ce verrou qui l empeche de recommencer. */
-  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions, fraisDevisesOk });
+  /* ⛔ `bpsAttendu` EST LE TAUX EFFECTIF DE CE RAIL, pas les 50 bps du chemin historique. Le garde
+   *   verifie donc exactement ce qu on a declare — beneficiaire, devise vendable et presence d un
+   *   TAKE vers a6cf restent inchanges. Le defaut du parametre reste le plus strict. */
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
+    fraisDevisesOk, bpsAttendu: bps });
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'fee path broken: ' + koFrais, resume };
 
   /* ⛔ `sortieMinTete` BORNE LE PREMIER SAUT, et seulement lui : les suivants sont a 0 (OPEN_DELTA),
