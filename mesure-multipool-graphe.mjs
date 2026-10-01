@@ -22,19 +22,23 @@ const SITE = 'https://tokenizedblock.space';
 const SORTIE = process.argv[2] || '/workspace/mp-data/graphe.json';
 const dors = (ms) => new Promise((r) => setTimeout(r, ms));
 const bas = (a) => String(a || '').toLowerCase();
-let id = 0;
+let id = 0, erreursAmont = 0, appelsPerdus = 0;
 async function rpc(m, p) {
   for (let t = 0; t < 4; t += 1) {
     try {
       const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: m, params: p }) });
       const j = await r.json();
-      if (j.error) { const e = new Error(j.error.message); e.rpc = true; throw e; }
+      if (j.error) {
+        /* ⛔ un 429 du noeud amont N EST PAS un « pas de pool » : on reessaie, puis on COMPTE l erreur */
+        if (/429|rate limit|Max retries|Transport/i.test(j.error.message || '') && t < 3) { erreursAmont += 1; await dors(4000 * (t + 1)); continue; }
+        const e = new Error(j.error.message); e.rpc = true; e.amont = /429|rate limit|Max retries|Transport/i.test(j.error.message || ''); throw e;
+      }
       return j.result;
     } catch (e) { if (e.rpc) throw e; await dors(500 * (t + 1)); }
   }
   throw new Error('transport');
 }
-const call = async (to, data) => { try { return await rpc('eth_call', [{ to, data }, 'latest']); } catch (_) { return null; } };
+const call = async (to, data) => { try { return await rpc('eth_call', [{ to, data }, 'latest']); } catch (e) { if (!e.rpc || e.amont) appelsPerdus += 1; return null; } };
 const w = (r, i = 0) => (r && r.length >= 2 + 64 * (i + 1) ? BigInt('0x' + r.slice(2 + 64 * i, 66 + 64 * i)) : null);
 const a = (r, i = 0) => (r && r.length >= 2 + 64 * (i + 1) ? '0x' + r.slice(26 + 64 * i, 66 + 64 * i) : null);
 async function getJson(u) {
@@ -51,6 +55,14 @@ const bloc = parseInt(await rpc('eth_blockNumber', []), 16);
 const chainId = parseInt(await rpc('eth_chainId', []), 16);
 if (chainId !== 8453) { console.log('KO pas Base'); process.exit(1); }
 console.log('bloc ' + bloc);
+/* ⛔⛔ TEMOIN B20 : un anvil STANDARD rend OpcodeNotFound sur les actions tokenisees et les blocks
+ *   (code 0xef, precompile Base). Sans ce temoin, chaque devis qui touche un B20 serait un faux
+ *   « pas de pool ». Il faut base-anvil --base. */
+{
+  let d = null; try { d = await rpc('eth_call', [{ to: '0xb200000000000000000000c2e324d24d7eecd1fb', data: '0x313ce567' }, 'latest']); } catch (e) { d = 'ERR ' + e.message; }
+  if (!d || !/^0x[0-9a-f]{64}$/.test(d)) { console.log('KO ce fork ne sait pas executer un B20 (' + String(d).slice(0, 60) + ') : il faut base-anvil --base. NON MESURE'); process.exit(1); }
+  console.log('temoin B20 : AAPLc.decimals() lu (' + BigInt(d) + ') -> le fork execute les precompiles B20');
+}
 
 /* ── 1. LES NOEUDS ─────────────────────────────────────────────────────────────────────────── */
 const trending = await getJson(SITE + '/api/trending');
@@ -180,5 +192,5 @@ for (const e of aretes) {
   e.liqUsd = Number.isFinite(e.liqDs) && e.liqDs > 0 ? e.liqDs : (e.retenu1000 !== null && e.retenu1000 > 0.5 ? 1000 / Math.max(1 - e.retenu1000, 0.001) : 0);
 }
 console.log('devis ' + nDevis);
-writeFileSync(SORTIE, JSON.stringify({ bloc, lu: new Date().toISOString(), noeuds: [...noeuds.values()], aretes, rejets }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1));
-console.log('ecrit ' + SORTIE);
+writeFileSync(SORTIE, JSON.stringify({ bloc, lu: new Date().toISOString(), erreursAmont, appelsPerdus, noeuds: [...noeuds.values()], aretes, rejets }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1));
+console.log('ecrit ' + SORTIE + ' · erreurs amont reessayees ' + erreursAmont + ' · appels PERDUS (non mesures) ' + appelsPerdus);
