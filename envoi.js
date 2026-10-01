@@ -16,6 +16,17 @@
 //    saisie qu on n a pas faite.
 import { selecteur } from './pool.js';
 import { keccak256 } from './keccak.js';
+/* ⛔⛔⛔ `lireStatutGroupe` EST LE HELPER CANONIQUE DE LECTURE D UN LOT, et ce fichier en portait une
+ *   COPIE PLUS FAIBLE — le motif le plus cher de ce depot. La copie sortait sur `receipts[0]` sans
+ *   regarder le `status` d AUCUN appel, et ne connaissait pas le code 600 (« partiellement
+ *   applique »). Mesure de l audit adverse du 2026-10-01 : une jambe 1 reussie SEULE rendait
+ *   `CONFIRME, atomique: true`, l ecran annoncait « Bought in one signature », le compteur
+ *   `achat_ok` montait — et l acheteur n avait que le pivot, aucun frais n ayant ete preleve sur la
+ *   seconde jambe. Un achat rate compte comme un achat reussi, et un frais perdu passe pour un
+ *   revenu.
+ *   ⇒ ON IMPORTE LE CANONIQUE au lieu de reparer la copie : deux lectures du meme statut
+ *     divergeront toujours a nouveau, et c est deja arrive ici. */
+import { lireStatutGroupe } from './groupe-wallet.js';
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -154,6 +165,28 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
     id = (r && (r.id || r)) || null;
     if (typeof id === 'object' && id.id) id = id.id;
   } catch (e) {
+    /* ⛔⛔⛔ ON NE REJOUE LE LOT QUE SI LE WALLET DIT NE PAS CONNAITRE `wallet_sendCalls` EN 2.0.
+     *   Avant, ce `catch` renvoyait le MEME tableau d appels en version 1.0 apres N IMPORTE QUELLE
+     *   erreur. Le commentaire disait « older wallets » ; la condition, elle, n existait pas.
+     *   ⇒ SCENARIO MESURE PAR L AUDIT ADVERSE DU 2026-10-01 : l utilisateur approuve le lot
+     *     [jambe 1, approve, jambe 2], le lot EST SOUMIS, puis la reponse JSON-RPC se perd —
+     *     timeout du provider, onglet mis en veille, WalletConnect qui se deconnecte. `request()`
+     *     jette. Le wallet se rouvrait aussitot avec les TROIS MEMES appels. Si la personne signe,
+     *     le franchissement s execute DEUX FOIS : deux swaps V4, deux swaps Aerodrome, deux
+     *     retenues de frais, pour un seul achat voulu.
+     *   ⛔ ET LA DOCTRINE EST DEJA ECRITE DANS CE DEPOT, a deux endroits : « ECHEC_ENVOI NE GARANTIT
+     *     PAS QUE RIEN N EST PARTI » (app.html), et le chemin EOA jumeau teste le refus AVANT toute
+     *     retombee. Seule cette fonction l ignorait — et c est elle qui porte l achat.
+     *   ⇒ Le discriminant est le MEME que celui deja calcule plus bas pour `sendCallsUnsupported` :
+     *     il vivait dans ce fichier, applique UNE ETAPE TROP TARD, c est-a-dire apres que le risque
+     *     avait ete pris. */
+    const msg = String((e && e.message) || e || '');
+    if (!/method|not supported|does not exist|unsupported|4200|-32601/i.test(msg)) {
+      return { etat: 'ECHEC_ENVOI', sendCallsUnsupported: false,
+        pourquoi: 'the wallet did not answer this batch, and we will NOT re-open it: the batch may '
+          + 'already be on its way, and signing it again would run the whole thing twice. Check '
+          + 'your wallet before anything else. (' + msg.slice(0, 120) + ')' };
+    }
     /* older wallets: try 1.0 shape once (no atomicRequired) */
     try {
       const r = await eth.request({
@@ -178,14 +211,35 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
     try {
       st = await eth.request({ method: 'wallet_getCallsStatus', params: [id] });
     } catch (_) { continue; }
-    const status = st && (st.status ?? st);
-    const receipts = (st && st.receipts) || [];
-    const hash = receipts[0] && (receipts[0].transactionHash || receipts[0].hash);
-    if (hash) return { etat: 'ENVOYE_AA', hash: String(hash), gaz: null, batchSize: lot.length };
-    if (status === 100 || status === 'PENDING') continue;
-    if (status === 400 || status === 500 || status === 'FAILED' || status === 'REVERTED') {
-      return { etat: 'ANNULE_SUR_CHAINE', pourquoi: 'smart wallet batch failed (status ' + status + ')' };
+    /* ⛔⛔⛔ LA LECTURE PASSE PAR LE HELPER CANONIQUE. Avant, ce bloc faisait :
+     *       const hash = receipts[0] && (...);
+     *       if (hash) return { etat: 'ENVOYE_AA', ... };
+     *     — une sortie sur le PREMIER recu, AVANT tout controle de statut. Les tests d echec qui
+     *     suivaient etaient donc INATTEIGNABLES des qu un recu existait, et `receipts[0]` est la
+     *     JAMBE 1. Un lot [swap V4 reussi, swap Aerodrome reverte] rendait donc un succes.
+     *   ⛔ ET LE CODE 600 — « le wallet n a applique qu une partie » — n etait dans AUCUNE branche.
+     *     C est exactement l etat qui decrit un franchissement a moitie execute, celui ou
+     *     l acheteur garde le pivot. Le canonique le rend `PARTIEL`, et un PARTIEL ne doit JAMAIS
+     *     se lire comme un succes.
+     *   ⛔ UN `ECHEC` NE SE RE-SIGNE PAS TOUT SEUL : on le remonte, et c est l appelant — avec
+     *     l humain devant — qui decide. Reessayer ici rejouerait un lot dont on ne sait pas ce
+     *     qu il a deja applique. */
+    const v = lireStatutGroupe(st);
+    if (v.etat === 'EN_COURS') continue;
+    if (v.etat === 'CONFIRME') {
+      return { etat: 'ENVOYE_AA', hash: String(v.hash || ''), gaz: null, batchSize: lot.length,
+        /* ⛔ LE NOMBRE DE RECUS EST REMONTE : il permet a l appelant de verifier que le lot a bien
+         *   applique TOUS ses appels, au lieu de le supposer depuis `batchSize`. */
+        recusOk: (v.recus || []).length };
     }
+    if (v.etat === 'PARTIEL') {
+      return { etat: 'PARTIEL', pourquoi: v.pourquoi, partiel: true,
+        /* ⛔ ON NE REND PAS DE `hash` SUR UN PARTIEL. Un hash se lit comme « voila ta transaction »,
+         *   et l appelant irait le presenter comme un succes. Ici, une partie seulement a ete
+         *   appliquee : la seule chose honnete est de renvoyer la personne vers son wallet. */
+        recus: v.recus || [] };
+    }
+    return { etat: 'ANNULE_SUR_CHAINE', pourquoi: v.pourquoi || 'smart wallet batch failed' };
   }
   return { etat: 'EN_ATTENTE', pourquoi: 'smart wallet batch sent, not confirmed yet — do not resend', hash: null };
 }
@@ -248,8 +302,26 @@ export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, cal
       return { etat: 'ANNULE_SUR_CHAINE', hash: aa.hash, gaz: null, viaSmartWallet: true,
         pourquoi: 'the outer transaction succeeded but your smart wallet operation failed' };
     }
-    return { etat: 'CONFIRME', hash: aa.hash, gaz: null, batchSize: calls.length, atomique: true };
+    /* ⛔⛔⛔ `atomique: true` ETAIT UNE CONSTANTE LITTERALE. Aucun champ d atomicite n est lu nulle
+     *   part dans ce module — ni `st.atomic`, ni `wallet_getCapabilities`. On AFFIRMAIT donc une
+     *   propriete qu on n avait pas mesuree, sur le chemin exact ou elle decide si l acheteur peut
+     *   se retrouver avec le pivot au lieu de son actif.
+     *   ⇒ On rend desormais un FAIT VERIFIABLE a la place d une promesse : `appelsConfirmes`, le
+     *     nombre de recus a `0x1` lus par le helper canonique, et `tousConfirmes`, qui le compare au
+     *     nombre d appels envoyes. Un appelant qui veut savoir « tout est-il passe ? » le LIT au
+     *     lieu de le croire.
+     *   ⛔ ET ON NE REBAPTISE PAS LE DOUTE EN CERTITUDE : `tousConfirmes` ne prouve pas
+     *     l atomicite. Il prouve que tous les appels ont abouti CETTE FOIS. L atomicite est une
+     *     garantie du wallet sur l echec, pas une observation sur un succes. */
+    const confirmes = typeof aa.recusOk === 'number' ? aa.recusOk : null;
+    return { etat: 'CONFIRME', hash: aa.hash, gaz: null, batchSize: calls.length,
+      appelsConfirmes: confirmes,
+      tousConfirmes: confirmes === null ? null : confirmes === calls.length };
   }
+  /* ⛔ LE `PARTIEL` REMONTE TEL QUEL, et surtout il ne tombe pas dans un `else` qui le melangerait
+   *   a un echec propre. « Une partie a ete appliquee » demande a la personne d aller voir son
+   *   wallet AVANT toute autre action ; « rien n a ete applique » lui dit qu elle peut recommencer.
+   *   Les confondre fait recommencer quelqu un qui a deja la moitie de son lot sur la chaine. */
   return aa;
 }
 
@@ -341,6 +413,14 @@ export const ENVOI_RIEN_PARTI = Object.freeze([
 ]);
 export const ENVOI_PARTI = Object.freeze([
   'EN_ATTENTE', 'ANNULE_SUR_CHAINE', 'ENVOYE', 'ENVOYE_AA', 'CONFIRME',
+  /* ⛔⛔⛔ `PARTIEL` EST DANS CETTE FAMILLE, ET JAMAIS DANS « RIEN N EST PARTI ». C est le code 600
+   *   d un lot : le wallet n a applique QU UNE PARTIE des appels. Le ranger avec « nothing moved,
+   *   your ETH is untouched » serait un MENSONGE sur le seul ecran ou la personne decide si elle
+   *   doit agir — et elle a reellement de l actif deplace.
+   *   ⛔ ET IL A SA PROPRE PHRASE plus bas : le message generique de cette famille dit « do NOT sign
+   *     again », ce qui est juste mais insuffisant. Sur un PARTIEL, la personne doit savoir qu une
+   *     PARTIE a ete appliquee — sinon elle cherche une transaction entiere qui n existe pas. */
+  'PARTIEL',
 ]);
 
 /** Le message a afficher pour un resultat d envoi NON confirme.
@@ -353,6 +433,15 @@ export function messageEnvoi(env) {
   const pourquoi = String((env && env.pourquoi) || etat || 'unknown').slice(0, 130);
   if (ENVOI_RIEN_PARTI.includes(etat)) {
     return 'Not sent: ' + pourquoi + ' — nothing moved, your ETH is untouched.';
+  }
+  if (etat === 'PARTIEL') {
+    /* ⛔⛔ UN PARTIEL N EST NI UN SUCCES NI UN ECHEC, et le dire « envoye » tout court enverrait
+     *   chercher une transaction entiere qui n existe pas. La personne doit savoir qu une PARTIE a
+     *   ete appliquee — typiquement : le premier swap est passe, le second non, donc elle detient
+     *   maintenant le jeton intermediaire. C est la seule information qui lui permet d agir. */
+    return 'Partly applied: ' + pourquoi + ' — do NOT sign again. Some of the calls went through and '
+      + 'some did not, so you may now hold the in-between asset. Open your wallet and look at what '
+      + 'you actually hold before doing anything else.';
   }
   if (ENVOI_PARTI.includes(etat)) {
     /* ⛔ ON NE DIT SURTOUT PAS DE RECOMMENCER : re-signer ici achete deux fois. */

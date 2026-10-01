@@ -14443,15 +14443,33 @@ function validerCreation() {
   const sym = String($('#cSym').value || '').trim().toUpperCase();
   const sel = String($('#cSel').value || '').trim();
   const octets = (s) => new TextEncoder().encode(s).length;
-  if (!nom) return { ko: 'A block needs a name.' };
-  if (!sym) return { ko: 'A block needs a symbol.' };
+  /* ⛔⛔⛔ DEUX CHOSES DIFFERENTES SORTAIENT PAR LE MEME CANAL, ET L ECRAN NE POUVAIT PAS LES
+   *   DISTINGUER. `{ ko }` portait a la fois de VRAIES erreurs — « The name is over 32 bytes », ou
+   *   l utilisateur a tape quelque chose d invalide — et de simples PREALABLES : « choisis un sel »,
+   *   « connecte ton wallet ». Le rendu peignait tout en `wKo`, la couleur des refus.
+   *   ⇒ PHIL L A MONTRE DEUX FOIS, capture a l appui, sur l ecran de naissance : « Connect your
+   *     wallet first » en rouge sous le bouton. Rien n avait rate — il manquait une etape.
+   *   ⇒ ET LE COUT N EST PAS SEULEMENT QU ON CROIT L APP CASSEE : celui qui reste APPREND que le
+   *     rouge ne veut rien dire, et le jour ou un vrai refus s affiche il ne le lira plus. Le rouge
+   *     doit rester RARE pour rester lisible.
+   *   ⛔ J AVAIS DEJA « CORRIGE » CE DEFAUT CE MATIN, et je n avais corrige QU UNE FORMULATION
+   *     (« Open your wallet to continue ») sur sept sites. La CLASSE restait ouverte, et elle s est
+   *     rouverte ici par un autre chemin. Un correctif qui vise une phrase au lieu d une classe
+   *     laisse le defaut revenir par la porte d a cote.
+   *   ⇒ ON AJOUTE DONC LE CANAL MANQUANT : `prealable: true`. Le validateur DIT de quelle nature
+   *     est le blocage ; l ecran decide de la couleur. Aucun des deux ne devine. */
+  if (!nom) return { ko: 'A block needs a name.', prealable: true };
+  if (!sym) return { ko: 'A block needs a symbol.', prealable: true };
   /* ⛔ LA BORNE EST CELLE DE L ENCODEUR (32 octets), et elle compte des OCTETS, pas des lettres : un
-   * emoji en pese quatre. Laisser passer ferait lever l encodeur au moment de signer. */
+   * emoji en pese quatre. Laisser passer ferait lever l encodeur au moment de signer.
+   * ⛔ CELLES-CI RESTENT ROUGES, ET C EST LA MOITIE QUI COMPTE : l utilisateur a tape quelque chose
+   *   qui NE PASSERA PAS. Tout repeindre en neutre serait le defaut symetrique — on perdrait la
+   *   couleur qui dit « ca, il faut le changer ». */
   if (octets(nom) > 32) return { ko: 'The name is over 32 bytes (accents and emoji count more).' };
   if (octets(sym) > 32) return { ko: 'The symbol is over 32 bytes.' };
-  if (!sel) return { ko: 'Pick a salt — it is what fixes the address.' };
-  if (!paireChoisie) return { ko: 'Pick what it pairs with — or paste a valid token address.' };
-  if (!compte) return { ko: 'Connect your wallet first: it is the one that signs, and it receives the supply.' };
+  if (!sel) return { ko: 'Pick a salt — it is what fixes the address.', prealable: true };
+  if (!paireChoisie) return { ko: 'Pick what it pairs with — or paste a valid token address.', prealable: true };
+  if (!compte) return { ko: 'Connect your wallet first: it is the one that signs, and it receives the supply.', prealable: true };
   return { nom, sym, sel };
 }
 
@@ -14725,7 +14743,9 @@ function majFraisEtRecap() {
     : actionRecap + 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
       + ', paired with ' + etiquettePaire(paireChoisie)
       + feeTxt + '.' + motRoute;
-  $('#cRecap').className = 'note' + (v.ko && !neutre ? ' wKo' : '');
+  /* ⛔ `v.prealable` : le validateur DIT la nature du blocage, l ecran choisit la couleur. Un
+   *   prealable (« connecte ton wallet », « choisis un sel ») n est pas un refus — rien n a rate. */
+  $('#cRecap').className = 'note' + (v.ko && !neutre && !v.prealable ? ' wKo' : '');
   majFundWalletPourPaire();
   const liste = $('#cApercuTx');
   if (v.ko) { liste.innerHTML = ''; }
@@ -15545,7 +15565,11 @@ async function creerBlock() {
    *     butaient ici, ca ne se distinguait de rien. On le compte — la cause exacte reste dans le
    *     message a l ecran, elle n a pas de cardinalite bornee et n a donc pas sa place dans
    *     l entonnoir. */
-  if (v.ko) { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; majFraisEtRecap(); try { etape('cree_refus_forme'); } catch (_) {} return; }
+  /* ⛔ MEME REGLE QUE LE RECAP, et elle doit etre la MEME : deux rendus du meme verdict qui
+   *   choisissent des couleurs differentes apprendraient a l utilisateur que la couleur est du
+   *   hasard. Le compteur, lui, reste le meme dans les deux cas — un prealable non franchi est
+   *   une creation qui n a pas eu lieu, et ca se compte. */
+  if (v.ko) { if (v.prealable) direPrealable(e, typeof v.ko === 'string' ? v.ko : 'Not ready yet.'); else { e.className = 'note wKo'; e.textContent = typeof v.ko === 'string' ? v.ko : 'Not ready yet.'; } majFraisEtRecap(); try { etape('cree_refus_forme'); } catch (_) {} return; }
   /* ⛔⛔ SUR CHAINE PAYANTE: prix ETH/USD + solde ETH lus AVANT toute signature. Fail-closed. */
   const usd = fraisCreationUsd(CHAINE);
   let creationEnCoursPayante = false;

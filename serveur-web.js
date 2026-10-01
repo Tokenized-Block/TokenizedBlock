@@ -1533,7 +1533,13 @@ const ETAPES_ENTONNOIR = [
    *     revertent en brulant du gas. Les deux appellent des reponses OPPOSEES. Categories fermees
    *     produites par `causes-echec.js` ; `test-causes-echec.mjs` echoue si l une manque ici. */
   'cree_ko_refus', 'cree_ko_revert', 'cree_ko_envoi', 'cree_ko_reseau',
-  'cree_ko_compte', 'cree_ko_attente', 'cree_ko_autre',
+  'cree_ko_compte', 'cree_ko_attente',
+  /* ⛔⛔ `cree_ko_partiel` — ajoute le 2026-10-01 avec la cause `partiel`. C est le lot dont UNE
+   *   PARTIE seulement a ete appliquee : la personne detient un actif intermediaire qu elle n a pas
+   *   demande. S il monte, ce n est pas un bug de notre code mais un wallet qui a casse son propre
+   *   lot — et c est le seul compteur qui le dirait. Le noyer dans `cree_ko_revert` ferait chercher
+   *   un revert qui n a pas eu lieu. */
+  'cree_ko_partiel', 'cree_ko_autre',
   /* ⛔⛔ CE QUE NOUS REFUSONS AVANT MEME D ESSAYER — mesure du 2026-09-25 : `create_clic` = 45,
    *     `cree` = 6, `cree_echec` = 8. TRENTE-UN clics sans aucune trace. Or trois des sorties
    *     precoces de `creerBlock()` sont des refus que NOUS produisons : formulaire incomplet,

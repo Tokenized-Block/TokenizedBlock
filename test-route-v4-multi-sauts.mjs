@@ -228,9 +228,48 @@ cas('⛔ un minimum absent, nul ou negatif -> REFUSE', () => {
 console.log('');
 console.log('⛔ LES ENTREES ABSURDES REFUSENT AU LIEU DE SUPPOSER');
 cas('moins que SAUTS_MIN -> REFUSE', () => {
-  assert.equal(r({ sauts: [OUSD_VERS_NVDA[0]] }).etat, 'REFUSE');
+  /* ⛔⛔ `SAUTS_MIN` EST PASSE DE 2 A 1 le 2026-10-01 : l assertion « un seul saut est refuse » a
+   *   donc ete RETIREE, pas contournee. Elle encodait un choix de PERIMETRE (le nom du fichier dit
+   *   « multi-sauts »), pas une regle de surete — et elle refusait un cas CORRECT : la jambe 1 du
+   *   franchissement vers une action tokenisee, `OUSD -> USDC`, fait UN saut.
+   *   ⇒ Le cas POSITIF a un saut est teste juste en dessous, et il verifie la SEQUENCE D ACTIONS,
+   *     pas seulement l etat. Remplacer une assertion negative par un simple « c est OK » aurait
+   *     laisse passer un assemblage degenere qui rend OK en construisant n importe quoi. */
   assert.equal(r({ sauts: [] }).etat, 'REFUSE');
   assert.equal(r({ sauts: null }).etat, 'REFUSE');
+  assert.equal(r({ sauts: 'deux' }).etat, 'REFUSE');
+});
+
+cas('⭐ UN SEUL SAUT : la sequence d actions degenere CORRECTEMENT', () => {
+  /* ⛔⛔ LA SORTIE DOIT ETRE REDECLAREE : la base du fichier vise NVDA, qui est l arrivee du saut 2.
+   *   Avec le seul saut 1, la route arrive sur USDC — et le module a REFUSE ma premiere version de
+   *   ce cas pour cette raison exacte. C etait MON assertion qui avait tort, et la garde « la
+   *   sortie doit etre l arrivee du dernier saut » a fait precisement son travail : sans elle, le
+   *   `TAKE_ALL` aurait vise NVDA sur une route qui n en produit pas, et l acheteur aurait recu
+   *   ZERO sans qu aucun appel ne reverte. */
+  const un = r({ sauts: [OUSD_VERS_NVDA[0]], sortie: USDC });
+  assert.equal(un.etat, 'OK', un.pourquoi);
+  assert.equal(un.sauts, 1);
+  /* ⛔⛔ ON VERIFIE LA SEQUENCE, PAS L ETAT. A un saut, `sauts.slice(1)` est vide : il ne doit donc
+   *   rester AUCUN swap chaine dans `actions` — le swap de tete est encode a part par
+   *   `encodeV4Swap`. Un SWAP qui subsisterait ici ferait DEUX swaps pour un seul saut, et le
+   *   second prendrait le credit d une devise que personne n a produite. */
+  const codes = un.actions.map((a) => a.code);
+  assert.equal(codes.filter((c) => c === ACTIONS_V4.SWAP_EXACT_IN_SINGLE).length, 0,
+    'aucun swap chaine ne doit subsister dans actions a un seul saut');
+  assert.equal(codes[0], ACTIONS_V4.SETTLE, 'le SETTLE ouvre toujours la sequence');
+  assert.equal(codes[codes.length - 1], ACTIONS_V4.TAKE_ALL, 'le TAKE_ALL la ferme toujours');
+  /* ⛔ ET LE FRAIS EST TOUJOURS PRIS EN TETE, dans la devise d entree, avant le swap. */
+  assert.ok(codes.includes(ACTIONS_V4.TAKE), 'le frais doit etre pris a un saut aussi');
+  /* ⛔⛔ LES GARDES DE COHERENCE RESTENT ENTIERES A UN SAUT. Une sortie declaree qui n est pas
+   *   l arrivee du saut ferait un `TAKE_ALL` sur un jeton que la route ne produit pas : ZERO rendu
+   *   a l acheteur SANS QUE RIEN NE REVERTE — le defaut le plus cher de ce module. */
+  assert.equal(r({ sauts: [OUSD_VERS_NVDA[0]], sortie: ETH_NATIF }).etat, 'REFUSE');
+  assert.equal(r({ sauts: [OUSD_VERS_NVDA[0]], sortie: USDC, entree: ETH_NATIF }).etat, 'REFUSE');
+  /* ⛔ ET LE CAS QUI M A FAIT ROUGIR EST GARDE COMME ASSERTION : declarer la sortie du saut 2 sur
+   *   une route qui s arrete au saut 1 doit REFUSER. C est le defaut « TAKE_ALL sur un jeton que la
+   *   route ne produit pas », et il ne reverte pas — il rend zero. */
+  assert.equal(r({ sauts: [OUSD_VERS_NVDA[0]] }).etat, 'REFUSE');
 });
 /* ⛔⛔ MA PREMIERE VERSION DE CE CAS ETAIT VIDE, ET C EST LE BANC DE MUTATION QUI L A DIT (M11 :
  *   « les bornes du nombre de sauts ne tiennent plus » s est ECHAPPEE). Je passais
@@ -318,9 +357,9 @@ cas('null PARLE', () => { assert.ok(phraseRouteV4(null).length > 0); });
 
 console.log('');
 console.log('les constantes');
-cas('ETATS est gelee, et les bornes de sauts sont 2..4', () => {
+cas('ETATS est gelee, et les bornes de sauts sont 1..4', () => {
   assert.ok(Object.isFrozen(ETATS));
-  assert.equal(SAUTS_MIN, 2);
+  assert.equal(SAUTS_MIN, 1);
   assert.equal(SAUTS_MAX, 4);
 });
 cas('⛔ ETH_NATIF est l adresse ZERO, pas WETH', () => {

@@ -27,6 +27,14 @@ export const CAUSES = Object.freeze([
   'reseau',     // mauvaise chaine, ou chaine illisible
   'compte',     // mauvais compte, ou compte illisible
   'attente',    // envoyee, pas encore confirmee — pas un echec, un inconnu
+  /* ⛔⛔⛔ `partiel` A SA PROPRE CATEGORIE, et la ranger ailleurs ferait perdre le seul fait qui
+   *   compte. Un lot dont UNE PARTIE seulement a ete appliquee n est NI un `revert` — la personne
+   *   n a pas paye du gas pour rien, une partie a abouti — NI une `attente` : il n y a plus rien a
+   *   attendre. Elle detient maintenant un actif INTERMEDIAIRE qu elle n a jamais demande.
+   *   ⛔ ET C EST LE SEUL ETAT OU IL FAUT REGARDER SON WALLET AVANT D AGIR. Le fondre dans `revert`
+   *     dirait « rien n a bouge, recommence » — le pire conseil possible ici, puisque recommencer
+   *     rejouerait la moitie deja appliquee et prelevrait le frais une seconde fois. */
+  'partiel',    // une partie du lot est passee, l autre non — l actif intermediaire est detenu
   'autre',      // etat non classe : volontairement visible, pour qu on le remarque
 ]);
 
@@ -42,6 +50,11 @@ const TABLE = Object.freeze({
   AUTRE_COMPTE: 'compte',
   COMPTE_ILLISIBLE: 'compte',
   EN_ATTENTE: 'attente',
+  /* ⛔ Ajoute le 2026-10-01 avec l etat lui-meme. C est `test-causes-echec.mjs` qui a crie : un
+   *   etat de `envoi.js` absent de cette table tombait dans « autre » sans que personne le voie.
+   *   La garde a fait exactement son travail — elle existe parce que cette table rate quand
+   *   `envoi.js` bouge, et `envoi.js` venait de bouger. */
+  PARTIEL: 'partiel',
   REFUSE: 'autre',
 });
 

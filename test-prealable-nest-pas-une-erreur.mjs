@@ -78,6 +78,45 @@ t('la classe des refus existe toujours dans la feuille de style', /\.wKo\{color:
 t('« did not connect » n est pas traite comme un prealable',
   !/direPrealable[^;]*did not connect/.test(html));
 
+/* ══ 4. LA CLASSE, PAS LA PHRASE — le defaut est revenu par la porte d a cote ═════════════════
+ * ⛔⛔⛔ CE MATIN J AI « CORRIGE » CE DEFAUT EN NE VISANT QU UNE FORMULATION (« Open your wallet to
+ *   continue »), sur sept sites. Phil a ressorti une capture le meme jour : « Connect your wallet
+ *   first: it is the one that signs... » en ROUGE sur l ecran de naissance. La classe etait restee
+ *   ouverte. Un correctif qui vise une PHRASE au lieu d une CLASSE laisse le defaut revenir.
+ *   ⇒ Le validateur de creation porte maintenant `prealable: true`, et les DEUX rendus le lisent.
+ *     Ce bloc verifie la MECANIQUE, pas une chaine de caracteres : ajouter demain un sixieme
+ *     prealable le fera suivre sans toucher a ce test. */
+/* ⛔⛔⛔ ON NE SCANNE QUE LES LIGNES DE CODE DU VALIDATEUR, PAS LE FICHIER. Ma premiere version
+ *   cherchait les motifs dans tout `app.html` et une assertion a rougi sur MON PROPRE COMMENTAIRE :
+ *   il cite la phrase « The name is over 32 bytes » ET le mot `prealable` a quelques lignes, et un
+ *   commentaire ne contient aucune accolade pour borner la recherche. C est la TROISIEME fois dans
+ *   la journee qu une garde statique lit de la prose comme du code (deja vu sur un nom de compteur,
+ *   puis sur un motif cite en commentaire).
+ *   ⇒ On isole le corps de `validerCreation` et on jette les lignes de commentaire. Une garde qui
+ *     ne sait pas distinguer le code du commentaire accuse au hasard. */
+const corpsValidateur = (html.match(/function validerCreation\(\)[\s\S]*?\n\}/) || [''])[0]
+  .split('\n').filter((l) => !/^\s*(\/\*|\*|\/\/)/.test(l)).join('\n');
+t('le corps du validateur a bien ete isole', /if \(!compte\) return/.test(corpsValidateur));
+t('le validateur de creation marque ses prealables',
+  /return \{ ko: '[^']*', prealable: true \}/.test(corpsValidateur));
+/* ⛔ ET IL EN MARQUE PLUSIEURS : un seul marquage serait un cas particulier, pas un canal. */
+t('il y a au moins quatre prealables marques',
+  (corpsValidateur.match(/prealable: true \}/g) || []).length >= 4);
+/* ⛔⛔ LA MOITIE INVERSE, ENCORE : les vraies erreurs de saisie ne portent PAS le drapeau. Si tout
+ *   le portait, le canal ne distinguerait plus rien et on aurait juste tout repeint en neutre. */
+t('« over 32 bytes » reste une VRAIE erreur, sans le drapeau',
+  /ko: 'The name is over 32 bytes[^}]*\}/.test(corpsValidateur)
+  && !/The name is over 32 bytes[^}]*prealable/.test(corpsValidateur));
+t('« Connect your wallet first » porte le drapeau',
+  /Connect your wallet first[^}]*prealable: true/.test(corpsValidateur));
+/* ⛔ LES DEUX RENDUS LISENT LE DRAPEAU. Deux rendus du meme verdict qui choisiraient des couleurs
+ *   differentes apprendraient que la couleur est du hasard. */
+t('le recap lit le drapeau', /!neutre && !v\.prealable \? ' wKo'/.test(html));
+t('le second rendu lit le drapeau aussi', /if \(v\.prealable\) direPrealable\(e,/.test(html));
+/* ⛔ ET LE COMPTEUR RESTE : un prealable non franchi est une creation qui n a pas eu lieu. La
+ *   repeindre en neutre ne doit pas la rendre invisible dans l entonnoir. */
+t('un prealable de creation reste COMPTE', /cree_refus_forme/.test(html));
+
 console.log((ko.length ? 'KO ' + ko.length : 'OK') + ' — ' + ok + ' assertions');
 for (const k of ko) console.log('  KO ' + k);
 process.exit(ko.length ? 1 : 0);

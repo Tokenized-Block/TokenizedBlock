@@ -58,8 +58,27 @@
  *      `vieDuBlock`, qui couvre 9 hooks — et qui existait deja : j ecrivais une copie plus faible
  *      d un helper canonique. */
 
-/** Les bornes du nombre de sauts. ⛔ Plus de sauts = plus d occasions d echouer pour UN seul clic. */
-export const SAUTS_MIN = 2;
+/**
+ * Les bornes du nombre de sauts. ⛔ Plus de sauts = plus d occasions d echouer pour UN seul clic.
+ *
+ * ⛔⛔⛔ `SAUTS_MIN` EST PASSE DE 2 A 1 LE 2026-10-01, ET CE N EST PAS UN ASSOUPLISSEMENT DE
+ *   CONFORT. Le 2 n a JAMAIS ete un invariant de surete : c etait un choix de PERIMETRE, inscrit
+ *   dans le nom du fichier (« multi-sauts »). Rien dans l assemblage ne dependait de lui.
+ *   ⇒ CE QUI L A RENDU BLOQUANT : le franchissement vers une action tokenisee a pour jambe 1
+ *     `OUSD -> USDC`, qui fait UN saut. Avec `SAUTS_MIN = 2`, ce chemin etait refuse — pas parce
+ *     qu il est faux, mais parce que ce module ne s autorisait pas a le batir. Une borne de
+ *     perimetre qui refuse un cas CORRECT est un defaut, pas une prudence.
+ *   ⇒ CE QUI A ETE VERIFIE AVANT DE LA BAISSER, et pas apres : a un seul saut, `sauts.slice(1)`
+ *     est vide, donc la sequence devient SETTLE -> TAKE(frais) -> swap de TETE -> TAKE_ALL. Le
+ *     swap de tete n a jamais transite par `actions` : il est encode a part par `encodeV4Swap`.
+ *     La degenerescence est donc STRUCTURELLEMENT correcte, et elle est testee : un cas positif a
+ *     un saut verifie la sequence exacte, pas seulement l etat `OK`.
+ *   ⛔ ET LA GARDE DE CHAINAGE RESTE ENTIERE : `chaineTient` n a rien a chainer sur un seul saut,
+ *     mais l entree declaree doit toujours etre le depart du saut 1 et la sortie son arrivee. Ces
+ *     deux controles-la sont ceux qui empechent un `TAKE_ALL` sur un jeton que la route ne produit
+ *     pas — le defaut qui rendrait ZERO a l acheteur SANS que rien ne reverte.
+ */
+export const SAUTS_MIN = 1;
 export const SAUTS_MAX = 4;
 
 /** Les etats rendus. Aucun autre n est produit. */
