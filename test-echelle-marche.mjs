@@ -239,7 +239,54 @@ cas('⛔⛔⛔ LA PUCE PAR DEX DIT LEQUEL DES DEUX CHIFFRES ELLE PORTE', () => {
     'les deux montants sont dans des puces SEPAREES : la mise en page a 375 px peut les dissocier');
 });
 
-assert.equal(n, 11, 'compte de cas inattendu : ' + n);
+cas('⛔⛔⛔ LE PANNEAU COMPTE LA LISTE DU MOMENT, PAS TOUT CE QU ON A VU', () => {
+  /* ⛔⛔⛔ TROUVE PAR LE GROK BOT A L ECRAN, CONFIRME PAR PHIL DANS SON PROPRE TERMINAL
+   *      (2026-10-01). Les compteurs releves DEUX FOIS, a cinq minutes d intervalle :
+   *          21:45:29   en-tete Market 245   ·   bas de page « Blocks tracked » 258
+   *          21:50:33   en-tete Market 245   ·   bas de page « Blocks tracked » 260
+   *      L en-tete FIGE pendant que le bas GRANDIT. J avais d abord diagnostique « deux lectures
+   *      du meme endpoint qui derivent » — FAUX, et c est sa mesure qui l a dit : deux lectures qui
+   *      derivent donnent deux nombres qui BOUGENT. Un fige a cote d un qui monte, c est autre chose.
+   *      La preuve tient en une ligne, et elle a ete rejouee a la main :
+   *          Select-String -Path app.html -Pattern 'marcheParAdr\.(set|delete|clear)'
+   *          => une seule occurrence, un `set`. Aucun `delete`, aucun `clear`, dans 19 500 lignes.
+   *      ⇒ L en-tete est un INSTANTANE (`d.lignes` de la derniere lecture), le bas etait un CUMUL
+   *        (`marcheParAdr`, qui ne fait que grossir). Ils ne pouvaient jamais s accorder, et l ecart
+   *        ne pouvait que CROITRE tant que la page restait ouverte.
+   *
+   * ⛔⛔ ET CE N ETAIT PAS QU UN ECART DE COMPTAGE : le bas de page ecrit « Across the N blocks whose
+   *     market this app **can** read », au PRESENT, alors que le cumul gardait les blocks dont le
+   *     marche n etait PLUS lisible. Ce « can » mentait davantage a mesure que la personne restait —
+   *     donc precisement sur les visiteurs les plus attentifs.
+   *
+   * ⇒ PHIL A TRANCHE : « l instantane partout ». Le chiffre peut donc BAISSER quand un marche meurt,
+   *   et c est le but — un compteur qui ne sait que monter n est pas une mesure. */
+  const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  const i = app.indexOf('const r = echelleDesMarches(');
+  assert.notEqual(i, -1, 'l appel du panneau est introuvable');
+  const appel = app.slice(i, i + 200);
+  assert.ok(appel.includes('dernierTrending'), 'le panneau ne lit plus la photo du moment');
+  assert.ok(!appel.includes('marcheParAdr'),
+    'le panneau est revenu au CUMUL : le bas de page va redivergir de l en-tete');
+  /* ⛔ `null` N EST PAS UNE LISTE VIDE. Tant qu aucune lecture n est arrivee on passe `[]`, donc
+   *   `echelleDesMarches` rend NON_LU et l ecran dit « Reading the market… ». Lui donner un cumul
+   *   « pour avoir quelque chose a afficher » etait exactement le defaut. */
+  assert.match(appel, /Array\.isArray\(dernierTrending\.lignes\)/,
+    'une charge mal formee passerait pour une mesure');
+  /* ⛔⛔ LES DEUX LECTEURS DU MEME ENDPOINT DOIVENT POSER LA MEME PHOTO. `soleilsSurLaMap` lit
+   *   souvent EN PREMIER (la Map s ouvre avant Market) : si lui ne la posait pas, le panneau
+   *   resterait sur « Reading the market… » alors que la donnee est deja la. */
+  assert.ok((app.match(/dernierTrending = d;/g) || []).length >= 2,
+    'un seul des deux lecteurs de /api/trending pose la photo : le panneau dependra de l onglet ouvert');
+  /* ⛔ ET `marcheParAdr` RESTE CUMULATIF POUR SES AUTRES USAGES : 14 endroits font `.get(adr)` pour
+   *   retrouver LA ligne d un block precis, et un block qu on a ouvert ne doit pas disparaitre
+   *   parce que la liste a tourne. Le defaut n etait pas l accumulation, c etait de s en servir
+   *   comme d un DENOMBREMENT. */
+  assert.ok((app.match(/marcheParAdr\.get\(/g) || []).length > 5,
+    'marcheParAdr n est plus consulte par adresse : verifier qu on n a pas casse ses autres usages');
+});
+
+assert.equal(n, 12, 'compte de cas inattendu : ' + n);
 console.log('✓ test-echelle-marche : ' + n + ' cas');
 console.log('   Le total et la phrase qui dit A QUI il est sortent du MEME appel.');
 console.log('   ⚠️ NE PROUVE PAS que les chiffres soient justes : ils viennent d un index public.');

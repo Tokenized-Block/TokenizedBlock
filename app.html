@@ -4037,6 +4037,33 @@ const ATTENTE_REPEINT_BRAIN = 400;
 let repeintChoixBrain = null;
 /* tip 0042 : marche condense par block (adresse minuscule -> ligne /api/trending), lu pour les soleils et la fiche */
 const marcheParAdr = new Map();
+/* ⛔⛔⛔ LA DERNIERE LISTE LUE, TELLE QUELLE — ET POURQUOI ELLE NE PEUT PAS ETRE `marcheParAdr`.
+ *      TROUVE PAR LE GROK BOT A L ECRAN, CONFIRME PAR PHIL DANS SON PROPRE TERMINAL (2026-10-01).
+ *      Il a relevé les compteurs DEUX FOIS, a cinq minutes d intervalle :
+ *          21:45:29   en-tete Market 245   ·   bas de page « Blocks tracked » 258
+ *          21:50:33   en-tete Market 245   ·   bas de page « Blocks tracked » 260
+ *      L en-tete FIGE pendant que le bas GRANDIT. Ce n est pas une derive entre deux lectures —
+ *      c est un INSTANTANE a cote d un CUMUL, et la preuve tient en une ligne :
+ *          Select-String -Path app.html -Pattern 'marcheParAdr\.(set|delete|clear)'
+ *          => 19507 : marcheParAdr.set(...)      ... et RIEN D AUTRE.
+ *      Aucun `delete`, aucun `clear`, dans 19 500 lignes. `marcheParAdr` ne fait que GROSSIR.
+ *
+ *   ⛔⛔ ET CE N ETAIT PAS QU UN ECART DE COMPTAGE, C ETAIT UNE PHRASE QUI DEVENAIT FAUSSE. Le bas
+ *     de page ecrit « Across the N blocks whose market this app **can** read ». Au PRESENT. Or le
+ *     cumul garde aussi les blocks dont le marche etait lisible il y a vingt minutes et ne l est
+ *     plus : rien ne les retire. Plus la page restait ouverte, plus ce « can » mentait — et il
+ *     mentait DAVANTAGE a mesure que la personne restait, c est-a-dire exactement sur les visiteurs
+ *     les plus attentifs.
+ *
+ *   ⇒ PHIL A TRANCHE (« l instantane partout ») : les deux surfaces montrent la liste du MOMENT.
+ *     Le chiffre peut donc BAISSER quand un marche meurt, et c est le but — un compteur qui ne sait
+ *     que monter n est pas une mesure, c est un cumul deguise en mesure.
+ *
+ * ⛔ POURQUOI ON NE TOUCHE PAS `marcheParAdr` POUR AUTANT : 14 autres endroits font
+ *   `marcheParAdr.get(adr)` pour retrouver LA ligne d UN block precis. Y accumuler est legitime —
+ *   un block qu on a ouvert ne doit pas disparaitre parce que la liste a tourne. Le defaut n etait
+ *   pas l accumulation, c etait de s en servir comme d un DENOMBREMENT. */
+let dernierTrending = null;
 /* ⛔⛔ NOTRE PROPRE LECTURE DES POOLS NON-v4 (Aerodrome CL et tout fork Uniswap v3).
  *     `vieDuBlock` est exclusivement Uniswap v4 : PoolKey, poolId, StateView. Une pool CL ne
  *     s adresse pas ainsi — chaque pool EST son contrat, et `slot0()` s appelle SUR elle. Jusqu ici
@@ -9910,7 +9937,15 @@ function peindreEchelle() {
   const zone = document.querySelector('#echelleLignes');
   const note = document.querySelector('#echelleNote');
   if (!zone || !note) return;
-  const r = echelleDesMarches([...marcheParAdr.values()]);
+  /* ⛔⛔ LA LISTE DU MOMENT, PAS LE CUMUL — voir la note sur `dernierTrending`. Avant, cette ligne
+   *   lisait `marcheParAdr.values()`, qui ne fait que grossir : le bas de page annoncait 260 pendant
+   *   que l en-tete en annoncait 245, sur le MEME ecran, et l ecart grandissait tant que la page
+   *   restait ouverte.
+   * ⛔ ET `null` N EST PAS UNE LISTE VIDE : tant qu aucune lecture n est arrivee, on passe `[]` et
+   *   `echelleDesMarches` rend `NON_LU`, donc l ecran dit « Reading the market… ». C est vrai. Lui
+   *   passer un cumul pour « avoir quelque chose a afficher » etait precisement le defaut. */
+  const r = echelleDesMarches(dernierTrending && Array.isArray(dernierTrending.lignes)
+    ? dernierTrending.lignes : []);
   if (r.etat !== 'LU') {
     zone.innerHTML = '';
     note.textContent = r.etat === 'NON_LU'
@@ -15768,7 +15803,11 @@ async function lireTrending() {
     try {
       const r = await fetch('/api/trending', { cache: 'no-store' });
       const d = await r.json();
-      if (d && d.ok === true && Array.isArray(d.lignes)) { trDonnees = d; trLuA = Date.now(); }
+      /* ⛔ LES DEUX LECTEURS DE `/api/trending` ALIMENTENT LA MEME PHOTO. Si seul celui-ci le
+       *   faisait, le panneau du bas resterait vide tant que l onglet Market n a pas ete ouvert —
+       *   et `soleilsSurLaMap` lit le meme endpoint depuis la Map. Une seule source a l ecran,
+       *   deux chemins pour la remplir. */
+      if (d && d.ok === true && Array.isArray(d.lignes)) { trDonnees = d; trLuA = Date.now(); dernierTrending = d; }
       else if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ ' + ((d && d.pourquoi) || 'Market not read') + ' — retrying by itself in 30 s.'; relireTrendingPlusTard(); return; }
     } catch (_) {
       if (!trDonnees) { ul.innerHTML = ''; note.textContent = '⚠️ Market not reachable right now — retrying by itself in 30 s.'; relireTrendingPlusTard(); return; }
@@ -19548,6 +19587,13 @@ async function soleilsSurLaMap(essai = 0) {
       }
       marcheParAdr.set(String(l.adr).toLowerCase(), l);
     }
+    /* ⛔ LA PHOTO EST POSEE ICI AUSSI, APRES LA BOUCLE : `soleilsSurLaMap` lit le meme endpoint que
+     *   `lireTrending`, et c est souvent LUI qui lit en premier — la Map s ouvre avant Market. Sans
+     *   cette ligne, le panneau du bas resterait sur « Reading the market… » jusqu a ce que
+     *   quelqu un ouvre l onglet Market, alors que la donnee est deja la.
+     * ⛔ APRES la boucle et pas avant : `d` a ete validee plus haut (`ok === true`, lignes non vide),
+     *   donc on ne pose jamais une charge placeholder comme si c etait une mesure. */
+    dernierTrending = d;
     /* ⛔⛔ LA CARTE EST ELAGUEE ICI, ET C EST MA TROISIEME TENTATIVE — LES DEUX PRECEDENTES N ONT
      *     RIEN FAIT, MESURE A L APPUI.
      *     · 1re : filtre dans `poserBlocks`. Au premier rendu presque aucun etat n est lu, donc il
