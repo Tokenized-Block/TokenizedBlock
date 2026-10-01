@@ -98,6 +98,50 @@ ok('le fichier dit que les rewards sont une PISTE, pas un revenu',
 ok('le fichier dit que la parente avec nos blocks N EST PAS verifiee',
   /pas la parente|prouve le FORMAT/i.test(src));
 
+/* ══ OUSD ETAIT STRUCTURELLEMENT INOFFRABLE, ET C EST MESURE (2026-10-01) ═══════════════════════
+ *
+ * ⛔⛔⛔ LA CHAINE DU DEFAUT, BOUT A BOUT. Sur un profil ouvert, mesure par
+ *      `performance.getEntriesByType('resource')` : 17 appels distincts a `/api/prix-usd`,
+ *      couvrant TOUT le registre sauf ETH, USDC et **OUSD**.
+ *        `assurerPrixDevise` est pilote par les SYMBOLES vus dans le marche ;
+ *        OUSD ne cote presque aucun block, donc personne ne demande jamais son prix ;
+ *        sans appel, pas d entree dans `faitsPoolLus` ;
+ *        sans entree, `aretesMesurees()` ne produit AUCUNE arete — elle ne boucle que sur elle ;
+ *        sans arete, la devise n a pas de chemin et n est jamais offerte.
+ *      Et la route EXISTE : avec les modules deployes, OUSD -> SNDKc rend `ok: true`,
+ *      `par: 'franchissement'`, 2 sauts. La pool d OUSD fait 10 004 877 $.
+ *      ⇒ On refusait une devise de 10 M$ parce qu on ne s etait jamais demande son prix. C est la
+ *        forme la plus couteuse de « module correct mais inatteignable » : le rail etait bati,
+ *        teste et prouve sur fork, et le graphe n avait pas son noeud de depart.
+ *
+ * ⛔ CE QUE CES CAS GARDENT : le DECLENCHEMENT et ses bornes. Ils ne prouvent PAS qu OUSD soit
+ *   offert a l ecran — ca depend du serveur et du marche du jour. Ils prouvent qu on LE DEMANDE. */
+const appHtml = readFileSync('./app.html', 'utf8');
+ok('⭐ les devises non lues sont REELLEMENT demandees, au lieu de rester invisibles',
+  /for \(const c of candidates\)[\s\S]{0,900}?void prixUsdDevise\(c\.adr\)/.test(appHtml));
+/* ⛔⛔ LA BORNE EST LA CONDITION POUR LE FAIRE ICI. Sans registre, chaque repeint du selecteur
+ *     relancerait la lecture de toutes les devises non lues — et le selecteur se repeint a chaque
+ *     arrivee de prix : une boucle qui se nourrit elle-meme. Ce depot a passe la meme soiree a
+ *     retirer 12 appels IDENTIQUES en 24 ms ; on n en rajoute pas. */
+ok('et une adresse n est demandee QU UNE FOIS par page',
+  /const devisesSansFaitsEnVol = new Set\(\);/.test(appHtml)
+  && /if \(devisesSansFaitsEnVol\.has\(k\)\) continue;/.test(appHtml)
+  && /devisesSansFaitsEnVol\.add\(k\);/.test(appHtml));
+/* ⛔ L ETH N A PAS DE POOL A LIRE et l USDC est le pivot que `aretesMesurees` ecarte deja : les
+ *   demander ferait deux requetes refusees par le serveur a chaque session, pour rien. */
+ok('et ni l ETH ni l USDC ne sont demandes',
+  /k === String\(ETH_ADR\)\.toLowerCase\(\) \|\| k === String\(USDC_BASE\)\.toLowerCase\(\)/.test(appHtml));
+/* ⛔⛔ SANS REPEINT, LE CORRECTIF SERAIT JUSTE DANS LE CODE ET INVISIBLE A L ECRAN — le defaut que
+ *     Phil a nomme, et que j ai refait le meme jour. Et il ne doit se faire que si le profil est
+ *     TOUJOURS sur ce block, sinon on colle les devises d un block a l ecran d un autre. */
+ok('et l arrivee de la lecture REPEINT, mais seulement si on est encore sur ce block',
+  /dataset\.block[\s\S]{0,260}?majDevisesDentree\(v\)/.test(appHtml));
+/* ⛔ UNE LECTURE QUI ECHOUE LAISSE LA DEVISE « NON MESUREE », PAS « SANS ROUTE ». Confondre les deux
+ *   transformerait notre incompletude en accusation contre le jeton de quelqu un — c est la regle
+ *   que `devises-dentree.js` ecrit lui-meme, et elle doit survivre a ce correctif. */
+ok('et un echec de lecture est AVALE, pas transforme en refus',
+  /void prixUsdDevise\(c\.adr\)[\s\S]{0,500}?\.catch\(\(\) =>/.test(appHtml));
+
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');
 if (ko) process.exit(1);

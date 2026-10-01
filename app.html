@@ -10473,6 +10473,10 @@ let deviseDentree = null;
 /* ⛔ Les blocks dont on a DEMANDE les faits de pool, pour ne pas relancer la lecture a chaque
  *   repeinture. Un echec reste un refus AFFICHE, jamais une boucle silencieuse. */
 const faitsBlockEnVol = new Set();
+/* ⛔ UNE ADRESSE DE DEVISE N EST DEMANDEE QU UNE FOIS PAR PAGE. Sans ce registre, chaque repeint du
+ *   selecteur relancerait la lecture de toutes les devises non lues — et le selecteur se repeint a
+ *   chaque arrivee de prix, donc ce serait une boucle qui se nourrit elle-meme. */
+const devisesSansFaitsEnVol = new Set();
 /**
  * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
  *
@@ -10571,6 +10575,51 @@ function majDevisesDentree(v) {
       faitsLus: faitsPoolLus.has(String(p.adr).toLowerCase()),
     }));
   } catch (_) { candidates = []; }
+  /* ⛔⛔⛔ UNE DEVISE DU REGISTRE QUI N EST JAMAIS LUE NE PEUT JAMAIS ETRE OFFERTE — ET C ETAIT LE
+   *      CAS D OUSD, SUR TOUS LES BLOCKS, DEPUIS TOUJOURS. Mesure du 2026-10-01, par
+   *      `performance.getEntriesByType('resource')` sur un profil ouvert : 17 appels distincts a
+   *      `/api/prix-usd`, couvrant tout le registre SAUF ETH, USDC et **OUSD**.
+   *      ⇒ La chaine du defaut, bout a bout :
+   *          `assurerPrixDevise` est pilote par les SYMBOLES vus dans le marche ;
+   *          OUSD ne cote presque aucun block, donc personne ne demande jamais son prix ;
+   *          sans appel, pas d entree dans `faitsPoolLus` ;
+   *          sans entree, `aretesMesurees()` ne produit AUCUNE arete pour lui — elle ne boucle que
+   *          sur `faitsPoolLus` ;
+   *          sans arete, `classerDevise` ne trouve pas de chemin et la devise n est pas offerte.
+   *      Et pourtant la route EXISTE : mesure avec les modules deployes, OUSD -> SNDKc sort
+   *      `ok: true`, `par: 'franchissement'`, 2 sauts (uniswap-v4 puis aerodrome). Sa pool fait
+   *      10 004 877 $. On refusait une devise de 10 M$ parce qu on ne s etait jamais demande son prix.
+   *      ⛔ C est la forme la plus couteuse du motif « module correct mais inatteignable » : le rail
+   *        etait bati, teste, prouve sur fork — et le graphe ne contenait pas le noeud de depart.
+   *
+   * ⛔⛔ LA LECTURE EST BORNEE, ET C EST LA CONDITION POUR LA FAIRE ICI. Ce depot a passe la soiree
+   *     a reduire le volume de requetes (12 appels IDENTIQUES en 24 ms sur `/api/cle`). Trois
+   *     bornes se superposent :
+   *       · une adresse n est demandee QU UNE FOIS par page — `devisesSansFaitsEnVol` ;
+   *       · `prixUsdDevise` deduplique deja les appels EN VOL ;
+   *       · `faitsPoolLus` garde le resultat, donc un repeint ne redemande rien.
+   *     En pratique : au plus une poignee d appels par session, et zero sur les repeints.
+   * ⛔ ON SAUTE L ETH ET L USDC : le natif n a pas de pool a lire, et l USDC est le pivot du graphe
+   *   (`aretesMesurees` l ecarte explicitement). Les demander ferait deux requetes refusees par le
+   *   serveur a chaque session, pour rien.
+   * ⛔ ET ON REPEINT UNE SEULE FOIS, QUAND LA LECTURE ARRIVE : sans ca le correctif serait juste
+   *   dans le code et invisible a l ecran — le defaut que Phil a nomme et que j ai refait le meme
+   *   jour. Le repeint ne se fait que si le profil est TOUJOURS sur ce block, sinon on collerait
+   *   les devises d un block a l ecran d un autre. */
+  for (const c of candidates) {
+    if (c.faitsLus) continue;
+    const k = String(c.adr || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(k)) continue;
+    if (k === String(ETH_ADR).toLowerCase() || k === String(USDC_BASE).toLowerCase()) continue;
+    if (devisesSansFaitsEnVol.has(k)) continue;
+    devisesSansFaitsEnVol.add(k);
+    void prixUsdDevise(c.adr).then(() => {
+      const encore = $('#profil') && $('#profil').dataset.block;
+      if (String(encore || '').toLowerCase() === String(block).toLowerCase()) {
+        try { majDevisesDentree(v); } catch (_) { /* l ecran a bouge : rien a repeindre */ }
+      }
+    }).catch(() => { /* une lecture qui echoue laisse la devise NON_MESUREE, pas accusee */ });
+  }
   const r = devisesDentree({ block, deviseDeLaPool, familleDuBlock, candidates, aretes: aretesMesurees() });
   if (r.etat !== 'OK') return;
   /* ⛔ ON NE GARDE QUE CE QUI EST ASSEMBLABLE. « Offert » par le classement ne suffit pas : une
