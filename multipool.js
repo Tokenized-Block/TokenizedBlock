@@ -2,7 +2,8 @@
  * en UNE transaction, avec le frais du dev pris UNE SEULE FOIS.
  *
  * ⭐ DEMANDE DE RAKSHA (2026-10-01) : « build ce multipool swap entre all Tokenized stocks,
- *   memestocks (own Blocks) and paired all b20 ». Decision de frais (22:15) : 0,09 % NET vers a6cf,
+ *   memestocks (own Blocks) and paired all b20 ». Decision de frais (23:25, definitive) : 0,09 % NET vers a6cf
+ *   (900 sur une base 1e6 = 9 bps : PAY_PORTION du routeur compte en bips, base 1e4),
  *   pris EXACTEMENT UNE FOIS par swap, en ETH / USDC / l action ou le B20 apparie — JAMAIS en
  *   token de block. Pas de remise au swapper.
  *
@@ -52,11 +53,16 @@ export const VENUES = Object.freeze(['uniswap-v4', 'uniswap-v3', 'aerodrome-cl']
 export const SAUTS_MAX = 4;
 
 /* ══ LE FRAIS ═══════════════════════════════════════════════════════════════════════════════
- * ⛔⛔ 9 bps, NET, UNE FOIS — decision de Raksha 2026-10-01 22:15. Pas de remise.
+ * ⛔⛔ 0,09 % NET, UNE FOIS — decision DEFINITIVE de Raksha 2026-10-01 23:25 : « 900 sur une base 1e6 ».
+ *   Le routeur (PAY_PORTION) compte en bips (base 1e4) : 900 / 1e6 = 9 / 1e4 EXACTEMENT, donc
+ *   floor(m x 9 / 1e4) == floor(m x 900 / 1e6) pour tout m (verifie a l import ci-dessous et dans le test). Pas de remise.
  *   ⛔ Le taux est un PARAMETRE de `planifier` (defaut 9n) pour que le split V9 ne demande pas
  *     de toucher l assembleur : `partsFrais` est une LISTE de destinataires, aujourd hui un seul. */
 export const FRAIS_BPS = 9n;
 export const BASE_BPS = 10000n;
+export const FRAIS_PPM = 900n;
+export const BASE_PPM = 1000000n;
+if (FRAIS_BPS * BASE_PPM !== FRAIS_PPM * BASE_BPS) throw new Error('0,09 % : 9 / 1e4 doit egaler 900 / 1e6');
 export const PARTS_FRAIS = Object.freeze([Object.freeze({ qui: ADRESSES.FEE_WALLET, bps: FRAIS_BPS })]);
 
 /** Constantes du routeur (ActionConstants / Constants du depot source). */
@@ -201,6 +207,27 @@ export function fraisSur(montant, bps = FRAIS_BPS) { return (BigInt(montant) * B
 
 /* ══ LES DEVIS (lecture seule, rpc injecte) ════════════════════════════════════════════════ */
 
+/** Nomme un revert de quoter. Le V4Quoter enveloppe la vraie erreur dans UnexpectedRevertBytes(bytes)
+ *  (0x6190b2b0) ; on deballe et on nomme les selecteurs connus (calcules par keccak, verifies). */
+const ERREURS_CONNUES = Object.freeze({
+  '7a5ed734': ['NotEnoughLiquidity(bytes32)', 'la pool n a pas assez de liquidite dans ce sens pour ce montant', true],
+  '486aa307': ['PoolNotInitialized()', 'pool non initialisee', true],
+  '7c9c6e8f': ['PriceLimitAlreadyExceeded(uint160,uint160)', 'limite de prix deja depassee', false],
+  '90bfb865': ['WrappedError(address,bytes4,bytes,bytes)', 'le HOOK a reverte', false],
+});
+export function nommerRevert(err) {
+  const msg = String((err && err.message) || err);
+  const hex = (msg.match(/0x6190b2b0[0-9a-f]*|custom error 0x6190b2b0: ([0-9a-f]+)/i) || [])[0] || '';
+  const corps = hex.replace(/^custom error 0x6190b2b0: /i, '').replace(/^0x6190b2b0/i, '');
+  if (corps.length >= 136) {
+    const sel = corps.slice(128, 136).toLowerCase();
+    const k = ERREURS_CONNUES[sel];
+    if (k) return { texte: k[0] + ' — ' + k[1] + (sel === '7a5ed734' ? ' (pool ' + '0x' + corps.slice(136, 200) + ')' : ''), liquidite: k[2], selecteur: sel };
+    return { texte: 'UnexpectedRevertBytes, erreur interne 0x' + sel + ' (non nommee)', liquidite: false, selecteur: sel };
+  }
+  return { texte: msg.slice(0, 160), liquidite: false, selecteur: null };
+}
+
 const selQ3 = selecteur('quoteExactInputSingle((address,address,uint256,uint24,uint160))');
 const selQcl = selecteur('quoteExactInputSingle((address,address,uint256,int24,uint160))');
 
@@ -225,7 +252,8 @@ export function devisSaut(s, montant) {
 /**
  * COTE UN CHEMIN, saut par saut, AVEC le frais retenu au noeud choisi.
  * Rend `montants[i]` = ce que le routeur detient au noeud i APRES frais eventuel, et `sortie`.
- * ⛔ Une lecture ratee rend NON_MESURE (jamais 0) ; un devis nul rend REFUSE.
+ * ⛔ Une lecture ratee rend NON_MESURE (jamais 0) ; un devis nul rend REFUSE ; un quoter qui dit
+ *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null }) {
   const pl = placement || placerFrais(chemin, admises);
@@ -241,7 +269,7 @@ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_B
     const q = devisSaut(chemin[i], courant);
     let r;
     try { r = await rpc('eth_call', [{ to: q.to, data: q.data }, 'latest']); }
-    catch (err) { return { etat: 'NON_MESURE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' quote failed: ' + String(err && err.message || err).slice(0, 140) }; }
+    catch (err) { const n = nommerRevert(err); return { etat: n.liquidite ? 'SANS_LIQUIDITE' : 'NON_MESURE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' quote failed: ' + n.texte }; }
     let out;
     try { out = BigInt('0x' + String(r).slice(2, 66)); } catch (_) { out = 0n; }
     if (out <= 0n) return { etat: 'REFUSE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' returns nothing' };

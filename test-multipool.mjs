@@ -91,6 +91,25 @@ ok('5b. OUSD est admis, PYPLc (hors registre) aussi', adm.has(ADRESSES.OUSD) && 
 ok('5c. TEMOIN : une adresse a la fois action et block est RETIREE', !adm.has(HIMS));
 ok('5d. TBLOCK n est jamais admis', !adm.has('0xb20000000000000000000024c30d3fcb7931272e') && rangFrais('0xb20000000000000000000024c30d3fcb7931272e', adm) === null);
 ok('5e. TOSHI et cbBTC ne sont pas des devises de frais (ni action ni B20 devise)', !adm.has(TOSHI) && !adm.has(ADRESSES.CBBTC));
+/* 0,09 % = 900 / 1e6 (Raksha 23:25) : le frais au bips est IDENTIQUE au frais en ppm, au wei */
+{
+  const { FRAIS_PPM, BASE_PPM } = await import('./multipool.js');
+  let ecart = 0; let x = 0x9e3779b97f4a7c15n;
+  const ms = [0n, 1n, 111n, 112n, 999n, 1000n, 1111n, 10n ** 6n, 10n ** 17n, 123456789012345678901234567n];
+  for (let i = 0; i < 2000; i += 1) { x = (x * 6364136223846793005n + 1442695040888963407n) % (1n << 64n); ms.push(x * (BigInt(i) + 1n)); }
+  for (const m of ms) if (fraisSur(m) !== (m * FRAIS_PPM) / BASE_PPM) ecart += 1;
+  ok('0,09 % : floor(m x 9 / 1e4) == floor(m x 900 / 1e6) sur ' + ms.length + ' montants', ecart === 0, ecart);
+  ok('0,09 % : 1e8 unites USDC (100 $) -> 90000 (0,09 $)', fraisSur(10n ** 8n) === 90000n, fraisSur(10n ** 8n));
+}
+/* le revert du V4Quoter est NOMME : UnexpectedRevertBytes(NotEnoughLiquidity(poolId)) -> SANS_LIQUIDITE */
+{
+  const { nommerRevert } = await import('./multipool.js');
+  const brut = 'execution reverted: custom error 0x6190b2b0: 000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000247a5ed73416ae461fa509be8739e0da8e5c4bb8de490c56068eb9f87d2e5e553b01df30cf00000000000000000000000000000000000000000000000000000000';
+  const n = nommerRevert(new Error(brut));
+  ok('revert nomme : NotEnoughLiquidity (vu sur fork, BLUEAI -> NVDAc)', n.liquidite === true && /NotEnoughLiquidity/.test(n.texte) && n.selecteur === '7a5ed734', n.texte);
+  const m = nommerRevert(new Error('execution reverted: SPL'));
+  ok('revert inconnu : texte brut, pas classe SANS_LIQUIDITE', m.liquidite === false && m.texte.includes('SPL'), m.texte);
+}
 void faux; void noeud; void CONTRACT_BALANCE;
 console.log('\n' + n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

@@ -22,11 +22,11 @@ const SITE = 'https://tokenizedblock.space';
 const SORTIE = process.argv[2] || '/workspace/mp-data/graphe.json';
 const dors = (ms) => new Promise((r) => setTimeout(r, ms));
 const bas = (a) => String(a || '').toLowerCase();
-let id = 0, erreursAmont = 0, appelsPerdus = 0;
+let id = 0, erreursAmont = 0, appelsPerdus = 0, appelsTimeout = 0;
 async function rpc(m, p) {
   for (let t = 0; t < 4; t += 1) {
     try {
-      const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: m, params: p }) });
+      const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(Number(process.env.TIMEOUT_MS || 90000)), body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: m, params: p }) });
       const j = await r.json();
       if (j.error) {
         /* ⛔ un 429 du noeud amont N EST PAS un « pas de pool » : on reessaie, puis on COMPTE l erreur */
@@ -34,7 +34,7 @@ async function rpc(m, p) {
         const e = new Error(j.error.message); e.rpc = true; e.amont = /429|rate limit|Max retries|Transport/i.test(j.error.message || ''); throw e;
       }
       return j.result;
-    } catch (e) { if (e.rpc) throw e; await dors(500 * (t + 1)); }
+    } catch (e) { if (e.rpc) throw e; if (e && e.name === 'TimeoutError') { appelsTimeout += 1; const x = new Error('TIMEOUT'); x.rpc = true; x.amont = true; throw x; } await dors(500 * (t + 1)); }
   }
   throw new Error('transport');
 }
@@ -208,5 +208,5 @@ await par(aretes, CONC, async (e) => {
   e.liqUsd = Number.isFinite(e.liqDs) && e.liqDs > 0 ? e.liqDs : (e.retenu1000 !== null && e.retenu1000 > 0.5 ? 1000 / Math.max(1 - e.retenu1000, 0.001) : 0);
 });
 console.log('devis ' + nDevis);
-writeFileSync(SORTIE, JSON.stringify({ bloc, lu: new Date().toISOString(), erreursAmont, appelsPerdus, noeuds: [...noeuds.values()], aretes, rejets }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1));
+writeFileSync(SORTIE, JSON.stringify({ bloc, lu: new Date().toISOString(), erreursAmont, appelsPerdus, appelsTimeout, noeuds: [...noeuds.values()], aretes, rejets }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1));
 console.log('ecrit ' + SORTIE + ' · erreurs amont reessayees ' + erreursAmont + ' · appels PERDUS (non mesures) ' + appelsPerdus);
