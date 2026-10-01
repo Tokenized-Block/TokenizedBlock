@@ -49,7 +49,14 @@ for (const jeton of ['ADRESSES_MAX_PUBLICNODE', 'logsMultiRpc', 'noeuds', 'viseF
 /* ⛔ `viseFactory` N EST PLUS UN PARAMETRE : il est CALCULE par le code livre. Le lui passer de
  *    l exterieur reviendrait a tester ma propre idee de ce qu est la factory au lieu de la sienne
  *    — et c est justement cette regle-la qui etait fausse. */
-const choisir = new Function('RESEAUX', 'CHAINE', 'methode', 'params',
+/* ⛔⛔ `tourEthCall` EST PASSE EN PARAMETRE, ET CE N EST PAS UN CONTOURNEMENT. Le compteur de
+ *   rotation des `eth_call` vit en portee module dans `app.html`, donc HORS du bloc extrait : sans
+ *   lui, le bloc leve `ReferenceError` des qu on lui donne un `eth_call` — ce qui est exactement ce
+ *   qui est arrive la premiere fois, et c est le test qui l a dit.
+ * ⛔ Le passer le rend aussi TESTABLE : on peut demander « et au tour suivant ? » au lieu de le
+ *   deviner. En parametre il est LOCAL, donc le `+= 1` du code livre n a pas d effet d un cas sur
+ *   l autre et le test reste rejouable a l identique. */
+const choisir = new Function('RESEAUX', 'CHAINE', 'methode', 'params', 'tourEthCall',
   source + '\n; return noeuds;');
 
 const PUB = 'https://base-rpc.publicnode.com';
@@ -168,6 +175,65 @@ v('JETONS_PAR_REQUETE est bien au-dessus du plafond', () => {
   assert.ok(Number(m[1]) > 9, 'JETONS_PAR_REQUETE=' + m[1] + ' <= 9 : le reordonnancement ne sert plus a rien, le retirer');
 });
 
-assert.equal(n, 18, 'compte d assertions inattendu : ' + n);
+/* ══ LA ROTATION DES `eth_call` ENTRE LES NOEUDS ════════════════════════════════════════════════
+ *
+ * ⛔⛔⛔ LA MESURE QUI L A DECIDEE (2026-10-01, production, temoin pose sur `fetch` — l instrument
+ *      `performance.getEntriesByType('resource')` est AVEUGLE aux requetes cross-origin qui
+ *      echouent, il rendait « 0 requete » pendant que la console enregistrait 57 erreurs) :
+ *          76 requetes RPC en 14 s   ·   publicnode 61  ·  base.org 15  ·  drpc 0
+ *          eth_call 39  ·  eth_getLogs 33   ·   200 x 73, 429 x 3
+ *          pic : 14 requetes dans UNE seconde, concurrence max 2
+ *      ⇒ limite de DEBIT, pas de concurrence. Et les secours ne servaient qu APRES un echec : la
+ *        charge n etait jamais REPARTIE, seulement reparee.
+ *
+ * ⛔⛔ ET POURQUOI SEULEMENT LES `eth_call`. Les trois noeuds n ont PAS les memes capacites, rejoue
+ *     depuis le navigateur, formes reelles, appels espaces :
+ *         eth_call decimals()      publicnode 200 · base.org 200 · drpc 200
+ *         eth_getLogs 2 000 blocs  publicnode 500 APRES 30 s · base.org 413 · drpc 400
+ *         eth_getLogs archive      publicnode 403 · base.org 200 · drpc 400
+ *     Faire tourner les `getLogs` echangerait un ralentissement contre une PANNE. */
+v('eth_call : la tete TOURNE d un appel a l autre', () => {
+  const p = [{ to: '0xb200000000000000000000397293cb8cda9a10c5', data: '0x313ce567' }, 'latest'];
+  const tetes = [0, 1, 2, 3].map((t) => choisir(RESEAUX, 8453, 'eth_call', p, t)[0]);
+  assert.equal(new Set(tetes.slice(0, 3)).size, 3, 'trois tours doivent donner TROIS tetes differentes');
+  assert.equal(tetes[3], tetes[0], 'et le quatrieme revient au premier : c est un tour de role');
+});
+
+v('eth_call : AUCUN noeud n est perdu — le repli reste entier', () => {
+  /* ⛔ « UNE OPTIMISATION QUI SUPPRIME UN REPLI TRANSFORME UN RALENTISSEMENT EN PANNE » — la regle
+   *   que ce fichier porte deja deux fois. On reordonne, on ne retire pas. */
+  const p = [{ to: '0xb200000000000000000000397293cb8cda9a10c5', data: '0x313ce567' }, 'latest'];
+  for (const t of [0, 1, 2]) {
+    const out = choisir(RESEAUX, 8453, 'eth_call', p, t);
+    assert.equal(out.length, 3, 'tour ' + t + ' : il doit rester TROIS noeuds');
+    assert.equal(new Set(out).size, 3, 'tour ' + t + ' : aucun doublon');
+    for (const u of [PUB, ORG, DRPC]) assert.ok(out.includes(u), 'tour ' + t + ' : ' + u + ' a disparu');
+  }
+});
+
+v('⛔ les eth_getLogs ne tournent PAS : leurs contraintes sont differentes par noeud', () => {
+  /* ⛔⛔ CE CAS EST LE GARDE-FOU DE LA ROTATION. S il tombe, c est qu une rotation aveugle a ete
+   *     introduite et que les reordonnancements mesures (plafond de 9 adresses, archive) sont
+   *     court-circuites un tour sur trois — un defaut INTERMITTENT, le pire a diagnostiquer. */
+  for (const t of [0, 1, 2]) {
+    assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(50)), t)[0], ORG,
+      'tour ' + t + ' : base.org doit RESTER en tete pour un multi-adresses');
+    assert.equal(choisir(RESEAUX, 8453, 'eth_getLogs', logs(adresses(1)), t)[0], PUB,
+      'tour ' + t + ' : un getLogs simple ne doit pas bouger de tete');
+  }
+});
+
+v('⛔ la factory B20 reste EPINGLEE, quel que soit le tour', () => {
+  /* ⛔ Son pin ne rotate pas DELIBEREMENT : un secours qui se trompe rend `0x` sur un eth_call —
+   *   visiblement faux — mais sur un getLogs il rendrait une LISTE VIDE, indistinguable de
+   *   « aucun evenement ». La rotation ne doit pas l atteindre. */
+  const pf = [{ to: '0xb20f000000000000000000000000000000000000', data: '0x313ce567' }, 'latest'];
+  for (const t of [0, 1, 2]) {
+    const out = choisir(RESEAUX, 8453, 'eth_call', pf, t);
+    assert.equal(out.length, 1, 'tour ' + t + ' : la factory reste sur UN seul noeud');
+  }
+});
+
+assert.equal(n, 22, 'compte d assertions inattendu : ' + n);
 console.log('ok noeud-logs-multi — ' + n + ' cas, bloc reel extrait de app.html ('
   + source.length + ' caracteres)');

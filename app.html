@@ -3414,6 +3414,10 @@ function jaugeDe(vieEth, etatVie) {
 }
 
 let idRpc = 0;
+/* ⛔ LE TOUR DE ROLE DES `eth_call` ENTRE LES NOEUDS. Un compteur, pas un tirage au sort : le
+ *   hasard donnerait des rafales sur un meme noeud par pure malchance, ce qui est precisement la
+ *   chose qu on cherche a supprimer. Voir la mesure complete au point de rotation. */
+let tourEthCall = 0;
 /* ⛔⛔ UN 429 SE RETENTE, IL NE SE CONCLUT PAS. Mesure du 2026-09-11 sur le profil de Block 0 :
  * 10 lectures sur 10 refusees en HTTP 429 pendant que la map lisait ses vies — et le profil
  * affichait « not read » partout, alors que la meme lecture, au calme, rend le cap (1e27). La
@@ -3544,6 +3548,52 @@ async function rpcReseau(methode, params) {
   let noeuds = viseFactory
     ? [RESEAUX[CHAINE].b20Rpc || RESEAUX[CHAINE].rpc]
     : [RESEAUX[CHAINE].rpc, ...(RESEAUX[CHAINE].secours || [])];
+  /* ⛔⛔⛔ LES `eth_call` TOURNENT ENTRE LES NOEUDS — ET SEULEMENT EUX. MESURE DU 2026-10-01, EN
+   *      PRODUCTION, AVEC UN TEMOIN POSE SUR `fetch` (l instrument precedent,
+   *      `performance.getEntriesByType('resource')`, etait AVEUGLE aux requetes cross-origin qui
+   *      echouent : il rendait « 0 requete » pendant que la console enregistrait 57 erreurs) :
+   *          76 requetes RPC en 14 s sur l onglet Blocks
+   *          publicnode 61  ·  mainnet.base.org 15  ·  drpc 0
+   *          eth_call 39  ·  eth_getLogs 33  ·  eth_blockNumber 3  ·  eth_getCode 1
+   *          200 x 73, 429 x 3    pic : 14 requetes dans UNE seconde, concurrence max 2
+   *      ⇒ C est une limite de DEBIT, pas de concurrence. Et 61 requetes sur 76 partaient vers UN
+   *        SEUL noeud pendant que le troisieme en recevait ZERO — les secours ne servaient qu APRES
+   *        un echec, donc la charge n etait jamais repartie, seulement reparee.
+   *
+   * ⛔⛔⛔ ET LA ROTATION EST BORNEE AUX `eth_call`, PARCE QU UNE ROTATION AVEUGLE AURAIT ETE UNE
+   *      FAUTE. Les trois noeuds n ont PAS les memes capacites — rejoue depuis le navigateur du
+   *      visiteur, formes reelles, appels espaces pour ne tester que la FORME :
+   *          eth_call decimals()        publicnode 200 (56 ms) · base.org 200 (309 ms) · drpc 200 (112 ms)
+   *          eth_getLogs 2 000 blocs    publicnode 500 APRES 30 s · base.org 413 « limited to a
+   *                                     2,000 range » · drpc 400 « ranges over 10000 »
+   *          eth_getLogs archive        publicnode 403 « personal token » · base.org 200 · drpc 400
+   *      ⇒ `eth_call` est servi par les TROIS : le repartir est sans risque et retire 39 requetes
+   *        sur 76 du noeud sature.
+   *      ⇒ `eth_getLogs` a TROIS contraintes dures DIFFERENTES, deja cablees par des mesures
+   *        anterieures (`logsMultiRpc` pour le plafond de 9 adresses, `logsArchiveRpc` pour la
+   *        profondeur). Les faire tourner echangerait un ralentissement contre une PANNE — ce que
+   *        ce fichier interdit trois fois : « une optimisation qui supprime un repli transforme un
+   *        ralentissement en panne ». On n y touche pas.
+   *
+   * ⛔ ON REORDONNE, ON NE RETIRE RIEN : la liste complete reste, donc le repli est intact. Un
+   *   noeud qui refuse passe au suivant exactement comme avant.
+   * ⛔ ET CA NE PEUT PAS DERANGER LES DEUX REORDONNANCEMENTS CI-DESSOUS : ils ne concernent que
+   *   `eth_getLogs`, donc ils sont disjoints de cette branche par construction — pas par chance.
+   *
+   * ⚠️ `!viseFactory` EST REDONDANT ICI, ET JE LE DIS AU LIEU DE LE LAISSER CROIRE. Un temoin par
+   *   mutation l a montre : retirer `!viseFactory` ne change RIEN au comportement, parce que la
+   *   branche factory construit un tableau d UN seul noeud et que `noeuds.length > 1` l ecarte
+   *   deja. C est donc un mutant EQUIVALENT, pas un defaut — et je n ai pas ajoute d assertion
+   *   pour le « tuer » : epingler l implementation pour faire un vert est exactement ce que ce
+   *   depot reproche a ses propres auto-controles.
+   *   ⇒ Je le GARDE quand meme : il dit l INTENTION (« la factory ne tourne jamais ») a l endroit
+   *     ou on la lit, et il resterait vrai si quelqu un donnait un jour un secours a la factory.
+   *     Une garde redondante nommee comme telle vaut mieux qu une protection qui ne tient qu a un
+   *     detail d une autre ligne. */
+  if (!viseFactory && methode === 'eth_call' && noeuds.length > 1) {
+    const k = (tourEthCall += 1) % noeuds.length;
+    noeuds = noeuds.slice(k).concat(noeuds.slice(0, k));
+  }
   if (!viseFactory && multiAdresses) {
     const servant = RESEAUX[CHAINE].logsMultiRpc;
     /* ⛔ sans `logsMultiRpc` declare (Sepolia), l ordre reste INCHANGE — pas de reordonnancement
