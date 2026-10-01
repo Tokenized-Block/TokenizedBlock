@@ -186,7 +186,60 @@ cas('⛔ l echelle est REPEINTE a l arrivee des donnees, pas seulement a l ouver
     'l echelle ne se repeint pas a l arrivee du trending : elle restera sur « Reading the market… »');
 });
 
-assert.equal(n, 10, 'compte de cas inattendu : ' + n);
+cas('⛔⛔⛔ LA PUCE PAR DEX DIT LEQUEL DES DEUX CHIFFRES ELLE PORTE', () => {
+  /* ⛔⛔⛔ TROUVE PAR LE GROK BOT A L ECRAN, PAS DANS LE CODE (canal Obsidian, 2026-10-01 19:33).
+   *      Il a recopie les quatre chiffres affiches — `24h volume $99,244,632`,
+   *      `Liquidity $27,416,881`, `on aerodrome $15,123,888`, `on uniswap $12,292,993` — puis il a
+   *      fait l addition : 15 123 888 + 12 292 993 = 27 416 881, soit EXACTEMENT `Liquidity`.
+   *      La ventilation etait donc celle de la LIQUIDITE, posee sous un titre `24h volume`, sans
+   *      rien a l ecran pour le dire. Aucun test unitaire ne pouvait voir ca : le module rendait
+   *      bien `liquiditeUsd` ET `volume24hUsd`, et le cas « la somme des parts egale le total »
+   *      juste au-dessus passait — sur la liquidite. Le defaut etait dans l ETIQUETTE, c est-a-dire
+   *      dans la seule chose qu un test de module ne lit pas.
+   *
+   * ⛔⛔ ET L ENJEU N EST PAS COSMETIQUE, C EST UNE INVERSION. Mesure refaite sur `/api/trending`
+   *     le 2026-10-01 (249 lignes au-dessus du plancher, 0 ecartee) :
+   *         aerodrome  liquidite 55,1 %  VOLUME 98,4 %  (11 blocks)
+   *         uniswap    liquidite 44,9 %  VOLUME  1,6 %  (238 blocks)
+   *     L ecran annoncait un partage 55/45 la ou le mouvement fait 98/2. Onze blocks portent
+   *     presque tout, 238 ne portent rien : c est le fait le plus important de cet onglet, et
+   *     l etiquette le remplacait par son contraire.
+   *
+   * ⛔ CE CAS GARDE L ETIQUETTE, PAS LE CALCUL. Il ne prouve pas que les montants soient justes
+   *   (ils viennent d un index tiers) — il prouve qu on DIT lequel est lequel. */
+  const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  const i = app.indexOf("for (const d of r.parDex.slice(0, 3))");
+  assert.notEqual(i, -1, 'la boucle qui peint les puces par dex est introuvable');
+  const bloc = app.slice(i, i + 400);
+  assert.ok(bloc.includes('d.liquiditeUsd'), 'la puce ne porte plus la liquidite');
+  /* ⛔⛔ LE CHIFFRE QUI MANQUAIT. `volume24hUsd` par dex etait DEJA calcule dans ce module et
+   *   JETE a l affichage — une valeur lue puis jetee, le motif nomme de ce depot. Et son absence
+   *   ne la perdait pas seulement : elle laissait la liquidite se faire passer pour elle. */
+  assert.ok(bloc.includes('d.volume24hUsd'),
+    'le volume par dex est de nouveau JETE : la liquidite se fera passer pour lui');
+  /* ⛔ NOMMER LES DEUX, SINON DEUX MONTANTS COLLES SONT PIRES QU UN SEUL : on ne saurait meme plus
+   *   lequel est lequel.
+   *
+   * ⛔⛔⛔ ET CES DEUX ASSERTIONS ONT ETE ECRITES FAUSSES D ABORD — SORTIES PAR MUTATION, pas par
+   *      relecture. Elles etaient `assert.match(bloc, /liq/)` et `/vol/`, et une mutation qui
+   *      retirait TOUTE etiquette (`usd(d.liquiditeUsd) + ' · ' + usd(d.volume24hUsd)`) a SURVECU :
+   *      les sous-chaines « liq » et « vol » etaient fournies par les NOMS DE VARIABLES
+   *      `d.liquiditeUsd` et `d.volume24hUsd`. L assertion lisait le CODE et croyait lire la
+   *      SORTIE — la meme faute que la garde statique qui scannait ses propres commentaires.
+   *      ⇒ On exige donc un LITTERAL ENTRE QUOTES : ce qui sera reellement AFFICHE. Un nom de
+   *        variable n est jamais entre quotes, une etiquette l est toujours. */
+  assert.match(bloc, /'[^']*\bliq\b[^']*'/,
+    'aucune etiquette LITTERALE « liq » : le montant de liquidite part a l ecran sans son nom');
+  assert.match(bloc, /'[^']*\bvol\b[^']*'/,
+    'aucune etiquette LITTERALE « vol » : le montant de volume part a l ecran sans son nom');
+  /* ⛔ ET DANS LA MEME PUCE : separes, les deux montants se retrouveraient dans un ordre
+   *   quelconque apres passage a la ligne a 375 px, et la paire qui donne le sens serait cassee
+   *   par la mise en page. Un chiffre juste mais illisible n avertit pas. */
+  assert.equal((bloc.match(/lignes\.push\(/g) || []).length, 1,
+    'les deux montants sont dans des puces SEPAREES : la mise en page a 375 px peut les dissocier');
+});
+
+assert.equal(n, 11, 'compte de cas inattendu : ' + n);
 console.log('✓ test-echelle-marche : ' + n + ' cas');
 console.log('   Le total et la phrase qui dit A QUI il est sortent du MEME appel.');
 console.log('   ⚠️ NE PROUVE PAS que les chiffres soient justes : ils viennent d un index public.');

@@ -9812,8 +9812,41 @@ function peindreEchelle() {
     ['24h trades', r.trades24h.toLocaleString('en-US')],
   ];
   /* ⛔ LA REPARTITION PAR DEX EST AFFICHEE : elle rend le total verifiable. Un lecteur retrouve ou
-   *   vit cet argent au lieu de nous croire sur un seul grand nombre. */
-  for (const d of r.parDex.slice(0, 3)) lignes.push(['on ' + d.dex, usd(d.liquiditeUsd)]);
+   *   vit cet argent au lieu de nous croire sur un seul grand nombre.
+   *
+   * ⛔⛔⛔ ET ELLE A ETE LUE A L ENVERS PENDANT TOUT CE TEMPS — TROUVE PAR LE GROK BOT A L ECRAN
+   *      (canal Obsidian, 2026-10-01 19:33), PAS DANS LE CODE. Il a releve les quatre chiffres tels
+   *      qu affiches : `24h volume $99,244,632`, `Liquidity $27,416,881`, `on aerodrome
+   *      $15,123,888`, `on uniswap $12,292,993` — puis il a fait l addition :
+   *          15 123 888 + 12 292 993 = 27 416 881, soit EXACTEMENT la ligne `Liquidity`.
+   *      Donc la ventilation etait celle de la LIQUIDITE, posee juste sous un titre `24h volume`,
+   *      et rien a l ecran ne le disait. Le lecteur la rattache au titre : c est la seule lecture
+   *      possible quand l etiquette ne dit que « on aerodrome ».
+   *
+   * ⛔⛔ CE N EST PAS UNE IMPRECISION, C EST UNE INVERSION. Mesure refaite sur `/api/trending` le
+   *     2026-10-01 (249 lignes au-dessus du plancher, 0 ecartee) :
+   *          aerodrome   liquidite 55,1 %   VOLUME 98,4 %   (11 blocks)
+   *          uniswap     liquidite 44,9 %   VOLUME  1,6 %   (238 blocks)
+   *     L ecran montrait un partage 55/45 la ou le volume fait 98/2. Onze blocks portent presque
+   *     tout le mouvement et 238 n en portent rien — c est le fait le plus important de cet onglet,
+   *     et l etiquette le remplacait par son contraire.
+   *     ⛔ J AI MESURE AVANT D ECRIRE CETTE COPIE : ma memoire disait « 97,7 % » (une mesure
+   *       anterieure). Elle est proche, mais un chiffre de memoire ne se transporte pas dans une
+   *       copie destinee a l ecran. Celui qui est ecrit ici a ete relu aujourd hui.
+   *
+   * ⛔ `volume24hUsd` PAR DEX ETAIT DEJA CALCULE DANS `echelle-marche.js` (`e.volume24hUsd +=`)
+   *   ET JETE. Une valeur LUE puis JETEE est un defaut — le motif nomme de ce depot. Ici elle
+   *   n etait pas seulement perdue : son absence laissait l autre chiffre se faire passer pour elle.
+   *
+   * ⛔ LES DEUX DANS LA MEME PUCE, et pas deux puces par DEX : separees, elles se retrouveraient
+   *   dans un ordre quelconque apres passage a la ligne a 375 px, et la paire qui donne le sens
+   *   serait cassee par la mise en page. Un chiffre juste mais illisible n avertit pas.
+   * ⛔ ET LE TRI RESTE SUR LA LIQUIDITE, parce que c est lui qui ordonne les colonnes voisines ;
+   *   le volume est nomme dans la puce, pas impose comme ordre. Changer le tri serait une decision
+   *   d affichage, pas une correction de mensonge. */
+  for (const d of r.parDex.slice(0, 3)) {
+    lignes.push(['on ' + d.dex, usd(d.liquiditeUsd) + ' liq · ' + usd(d.volume24hUsd) + ' vol 24h']);
+  }
   zone.innerHTML = lignes.map(([nom, v]) => '<span class="puce">' + enTexte(nom)
     + ' <b>' + enTexte(v) + '</b></span>').join('');
   note.textContent = r.phrase;
