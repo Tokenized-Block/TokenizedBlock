@@ -7924,6 +7924,24 @@ function peindreTrustFacts(adr, v, origine) {
   const cta = $('#pTfCta');
   const badge = $('#pTfBadge');
   if (!box || !ul || !cta) return;
+  /* ⛔⛔⛔ PANNEAU RETIRE DE L ECRAN — DECISION DE PHIL, 2026-10-01 : « retirer ça ».
+   *   ⇒ ET LE CODE LUI DONNE RAISON, EN TOUTES LETTRES. Son propre commentaire d origine dit
+   *     « CTA → Launch or Buy (FEE FUNNEL) ». C etait un entonnoir PAYANT pose sur le profil du
+   *     block DE QUELQU UN D AUTRE, etiquete « Holders · trust facts » : un titre qui promet de la
+   *     mesure au-dessus d un bouton qui demande 0,001 ETH. Et « Trusted: not yet » est un verdict
+   *     sur le jeton d un tiers, rendu par nous, sans qu il l ait demande.
+   *   ⇒ Melanger une MESURE (detenteurs lus sur la chaine) et un ARGUMENTAIRE sous un meme badge
+   *     « measured only » use la credibilite de la mesure au profit de la vente. C est exactement
+   *     ce que l anti-hype interdit, applique a nous-memes.
+   *
+   * ⛔ ON MASQUE, ON NE SUPPRIME PAS, et ce n est pas de la timidite : le compte de detenteurs est
+   *   une VRAIE lecture on-chain, et le reste du fichier (`habitants`, `infoHookMarche`,
+   *   l ecouteur de clic) en depend. Un panneau efface ne revient pas en une ligne ; un panneau
+   *   masque, si. Le jour ou on voudra en garder la seule mesure, sans le bouton, tout est la.
+   * ⛔ ET ON SORT AVANT DE PEINDRE : laisser le peintre tourner sur un panneau cache depenserait
+   *   des lectures pour un ecran que personne ne voit. */
+  const TRUST_FACTS_A_L_ECRAN = false;
+  if (!TRUST_FACTS_A_L_ECRAN) { box.hidden = true; return; }
   box.hidden = false;
   const etat = v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE';
   const info = (v && etat === 'LUE') ? infoHookMarche(v) : { hooked: false, isTbFeeHook: false, via: null };
@@ -8042,8 +8060,21 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
   const phraseMarcheMesure = () => 'Its market IS read: ' + (mkLu.dex || 'an on-chain pool')
     + (Number(mkLu.liquiditeUsd) > 0
       ? ', ' + Math.round(Number(mkLu.liquiditeUsd)).toLocaleString('en-US') + ' $ of liquidity' : '')
-    + '. What did not come back is the in-app pool reading used for the tier — not the market, and '
-    + 'not the network.';
+    /* ⛔⛔⛔ CETTE PHRASE DISAIT « — not the market, and NOT THE NETWORK », ET LE GROK BOT M A DONNE
+     *   TORT SUR UN TEXTE QUE J AVAIS DEJA DEPLOYE. Sa console, le 2026-10-01 :
+     *       429 mainnet.base.org · 403 base-rpc.publicnode.com · 400 base.drpc.org
+     *   J ai mesure LES MEMES TROIS depuis ma machine dans la minute : HTTP 200 partout, meme bloc.
+     *   Ce ne sont donc pas des pannes — ce sont des refus PAR CLIENT. Et comme l app lit la chaine
+     *   DEPUIS LE NAVIGATEUR, chez lui c etait bel et bien LE RESEAU.
+     *   ⇒ J avais corrige un mensonge (« c est le reseau » sur un marche parfaitement lu) en en
+     *     ecrivant un autre, symetrique (« ce n est pas le reseau », alors que ca peut l etre). On
+     *     ne remplace pas une fausse cause par une autre — regle que j applique partout ailleurs et
+     *     que j ai ratee ici.
+     *   ⇒ CE QU ON SAIT VRAIMENT, et c est tout : le marche a ete lu PAR NOTRE SERVEUR. La lecture
+     *     in-app, elle, part du navigateur du visiteur — et peut echouer pour une raison qui lui
+     *     est propre. On nomme les deux cotes au lieu de disculper l un d eux. */
+    + '. What did not come back is the in-app reading, which your browser does directly against a '
+    + 'public Base node — that part can fail from your side even when the market itself is fine.';
   const aMontant = typeof mcDevise === 'number' && mcDevise > 0;
   const prix = devise === 'ETH' ? ethUsd
     : (typeof prixDeviseUsd === 'number' && prixDeviseUsd > 0 ? prixDeviseUsd : null);
