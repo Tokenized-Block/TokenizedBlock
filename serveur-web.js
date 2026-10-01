@@ -83,6 +83,10 @@ import { frappesVers } from './mes-blocks.js';
 /* ⛔ LE CALCUL DE GLISSEMENT EST PARTAGE AVEC LE CLIENT, pas recopie ici : deux implementations du
  *   meme calcul divergent, et c est le client qui ouvre ou ferme la puce. Une seule source. */
 import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
+/* ⛔ LE SELECTEUR SE CALCULE, IL NE SE TAPE PAS. `keccak.js` est pur (zero dependance) et c est la
+ *   seule source du depot : un selecteur ecrit a la main ne plante pas, il interroge une AUTRE
+ *   fonction et rend un silence qu on lirait comme un fait. */
+import { selecteur as selecteurSrv } from './keccak.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
@@ -187,6 +191,47 @@ async function callLarge(to, data) {
 const FACTORY_AERODROME_CL_SRV = '0xf8f2eb4940cfe7d13603dddd87f123820fc061ef';
 const USDC_SRV = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const NON_MESURE_POOL = Object.freeze({ glissementBps: null, famille: 'NON_MESURE' });
+
+/* ══ LES POOLS UNISWAP V4 N ONT PAS D ADRESSE ═════════════════════════════════════════════════════
+ * ⛔⛔⛔ LA CAUSE RACINE DE QUATRE SYMPTOMES, MESUREE LE 2026-10-01. `faitsDeLaPool` commencait par
+ *   `if (!/^0x[0-9a-fA-F]{40}$/.test(pool))` et rendait `famille: 'NON_MESURE'` avec
+ *   « no pool address from the aggregator ». Or une pool V4 N A PAS D ADRESSE : c est un `poolId`
+ *   de 32 octets dans le PoolManager singleton. DexScreener met donc ce poolId de 64 hex dans
+ *   `pairAddress` — mesure sur TRUMPFIFA :
+ *       dexId=uniswap  labels=["v4"]  pairAddress=0x6807fb21…b057   (66 caracteres)
+ *   ⇒ LA DONNEE ETAIT DEJA LA. On la jetait parce qu elle ne ressemblait pas a une adresse.
+ *
+ * ⛔⛔ L AMPLEUR, sur les 250 lignes de `/api/trending` :
+ *       `aerodrome` AVEC adresse :  13 lignes (5,2 %)   volume 24 h 101 870 174 $
+ *       `uniswap`  SANS adresse  : 237 lignes (94,8 %)  volume 24 h   3 393 356 $
+ *   94,8 % des lignes etaient `NON_MESURE` : pas de glissement, donc `porteDAchat` rendait
+ *   `NON_MESURE`, donc AUCUNE puce et aucun routage — pour rien, la pool etant lisible.
+ *   Quatre symptomes, un seul defaut : `poolAdr: null` sur OUSD, la pool d OHUSD « introuvable »,
+ *   TRUMPFIFA invisible, et les blocks cotes en OUSD sans chemin d achat.
+ *
+ * ⛔ LE FAIL-CLOSED RESTE INTACT, ET C EST VOULU : `NON_MESURE` ⇒ pas de puce. On n ouvre PAS la
+ *   porte, on MESURE ce qu on savait deja lire. Le reste du fichier n est pas touche.
+ *
+ * ⛔ LES DEUX ACCESSEURS SONT VERIFIES SUR LA CHAINE, PAS RECITES. Mesure avec temoin negatif :
+ *       TRUMPFIFA/ETH  sqrtPriceX96 146451473072240870738511709852470   liquidite 4327858818808…
+ *       USDC/OUSD      sqrtPriceX96 79228127470005035843928324941       liquidite 15572591403846543
+ *       poolId BIDON   sqrtPriceX96 0                                   liquidite 0
+ *   Un poolId inexistant rend ZERO, pas une erreur : c est ce qui rend le zero INTERPRETABLE.
+ *   (`getPoolLiquidity(bytes32)` REVERTE — donc `getLiquidity` est bien le nom.)
+ */
+const STATE_VIEW_SRV = '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71';
+const EST_POOL_ID_V4 = /^0x[0-9a-fA-F]{64}$/;
+/* ⛔ Selecteurs CALCULES par keccak au demarrage, jamais tapes a la main.
+ * ⛔⛔ ET ILS PORTENT DEJA LEUR `0x` — PIEGE REEL DU DEPOT, PAYE A L INSTANT : il existe DEUX
+ *   fonctions `selecteur`, de MEME NOM, qui ne rendent PAS le meme format :
+ *       `keccak.js` -> "0xc815641c"   (avec le prefixe)
+ *       `pool.js`   -> "c815641c"     (sans)
+ *   J ai importe celle de `keccak.js` ET rajoute `'0x'` : le calldata valait `0x0xc815641c…`, les
+ *   quatre endpoints ont repondu « Invalid params », et la branche entiere rendait NON_MESURE.
+ *   ⇒ Un meme nom pour deux contrats differents est exactement `la presence d un nom n est pas son
+ *     usage`. Les constantes ci-dessous sont donc des calldata COMPLETS, prefixe inclus. */
+const SEL_GET_SLOT0 = selecteurSrv('getSlot0(bytes32)');
+const SEL_GET_LIQUIDITE = selecteurSrv('getLiquidity(bytes32)');
 /* ⛔⛔ CE QUI A CASSE LA PRODUCTION LE 2026-09-29, ET LA LECON. Premiere version : cinq
  *     `eth_call` en `Promise.all` par pool. La page demande ~14 prix d un coup ⇒ **70 appels
  *     simultanes** sur un RPC public ⇒ « over rate limit » ⇒ `glissementBps: null` ⇒ la porte
@@ -252,9 +297,83 @@ function enFile(tache) {
 const motDePool = (h, i) => String(h || '').replace(/^0x/, '').slice(i * 64, (i + 1) * 64);
 const adrDePool = (h) => '0x' + motDePool(h, 0).slice(24);
 
-async function faitsDeLaPool(pool) {
+/**
+ * LES FAITS D UNE POOL UNISWAP V4, LUS PAR SON `poolId` SUR StateView.
+ *
+ * ⛔ UN POOLID EST UN HASH : on ne peut PAS en retrouver `currency0`. On ne le devine donc pas —
+ *   l ordre des devises est de l ARITHMETIQUE sur les deux adresses que l agregateur nomme
+ *   (`baseToken`/`quoteToken`), puisque V4 exige `currency0 < currency1`.
+ * ⛔⛔ ET LE GLISSEMENT NE SE CALCULE QUE DANS LES BONNES UNITES. `TAILLE_REFERENCE_USDC` est une
+ *   taille en USDC ; l appliquer a une pool jeton/ETH melangerait les unites et rendrait un
+ *   glissement qui a l air d un chiffre. Sans USDC d un cote, on rend `null` AVEC UNE RAISON
+ *   NOMMEE — jamais un nombre invente, jamais un zero.
+ * ⛔ LA FAMILLE, ELLE, EST PROUVEE : si `getSlot0(poolId)` rend un prix NON NUL, ce poolId existe
+ *   et est initialise dans le PoolManager. Un poolId inexistant rend ZERO (temoin negatif mesure),
+ *   et c est ce qui rend le zero interpretable.
+ */
+async function faitsPoolV4(poolId, infos) {
+  const id = String(poolId).toLowerCase();
+  return enFile(async () => {
+    const RESPIRATION_MS = 400;
+    const un = async (data) => {
+      const r = await callLarge(STATE_VIEW_SRV, data);
+      await new Promise((ok) => setTimeout(ok, RESPIRATION_MS));
+      return r;
+    };
+    let s0, lq;
+    try {
+      /* ⛔ PAS DE `'0x' +` ICI : le selecteur de `keccak.js` le porte deja (voir le commentaire de
+       *   SEL_GET_SLOT0). L ajouter donnait `0x0x…` et « Invalid params » sur les quatre endpoints. */
+      s0 = await un(SEL_GET_SLOT0 + id.slice(2));
+      lq = await un(SEL_GET_LIQUIDITE + id.slice(2));
+    } catch (e) {
+      /* ⛔ UN REFUS DU RPC N EST PAS « CETTE POOL N EXISTE PAS ». Deux causes, deux verdicts. */
+      return { ...NON_MESURE_POOL,
+        pourquoiFaits: 'v4 pool reads failed: ' + String((e && e.message) || e).slice(0, 60) };
+    }
+    let sqrt = 0n, liquidite = 0n;
+    try { sqrt = BigInt('0x' + String(s0).replace(/^0x/, '').slice(0, 64)); } catch (_) { sqrt = 0n; }
+    try { liquidite = BigInt(lq); } catch (_) { liquidite = 0n; }
+    if (sqrt === 0n) {
+      /* ⛔ CECI EST UN FAIT, PAS UNE PANNE : le PoolManager ne connait pas ce poolId. */
+      return { glissementBps: null, famille: 'autre', poolId: id,
+        pourquoiFaits: 'this poolId is not initialized in the v4 PoolManager' };
+    }
+    /* ⭐ LA FAMILLE EST PROUVEE PAR LA CHAINE : le poolId repond avec un prix. */
+    const base = String((infos && infos.base) || '').toLowerCase();
+    const quote = String((infos && infos.quote) || '').toLowerCase();
+    const aUsdc = base === USDC_SRV || quote === USDC_SRV;
+    if (!aUsdc) {
+      return { glissementBps: null, famille: 'uniswap-v4', poolId: id, liquiditeV4: String(liquidite),
+        pourquoiFaits: 'v4 pool read, but neither side is USDC so the USDC-sized reference '
+          + 'would mix units — slippage left unmeasured on purpose' };
+    }
+    const autre = base === USDC_SRV ? quote : base;
+    if (!/^0x[0-9a-f]{40}$/.test(autre)) {
+      return { glissementBps: null, famille: 'uniswap-v4', poolId: id, liquiditeV4: String(liquidite),
+        pourquoiFaits: 'the other side of the pair was not readable from the aggregator' };
+    }
+    /* ⛔ `currency0` EST LA PLUS PETITE ADRESSE — c est la regle de V4, donc une COMPARAISON, pas
+     *   une supposition. L inverser echangerait le sens et rendrait un glissement a l envers. */
+    const entreeEst0 = USDC_SRV < autre;
+    const gl = glissementBps({ sqrtPriceX96: sqrt, liquidite,
+      entree: TAILLE_REFERENCE_USDC, entreeEst0 });
+    if (gl.etat !== 'OK') {
+      return { glissementBps: null, famille: 'uniswap-v4', poolId: id, liquiditeV4: String(liquidite),
+        pourquoiFaits: gl.pourquoi };
+    }
+    return { glissementBps: Number(gl.bps), famille: 'uniswap-v4', poolId: id,
+      liquiditeV4: String(liquidite) };
+  });
+}
+
+async function faitsDeLaPool(pool, infos = null) {
+  /* ⛔⛔ LE POOLID V4 PASSE AVANT LA GARDE D ADRESSE, et c est tout le correctif : 64 hex au lieu
+   *   de 40, donc l ancienne garde le rejetait comme « pas d adresse » alors qu il porte TOUT ce
+   *   qu il faut pour lire la pool. */
+  if (EST_POOL_ID_V4.test(String(pool || ''))) return faitsPoolV4(pool, infos);
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(pool || ''))) {
-    return { ...NON_MESURE_POOL, pourquoiFaits: 'no pool address from the aggregator' };
+    return { ...NON_MESURE_POOL, pourquoiFaits: 'no pool address and no v4 poolId from the aggregator' };
   }
   return enFile(async () => {
     const cle = String(pool).toLowerCase();
@@ -1625,6 +1744,10 @@ const SERVIS = [
    *   encore utilise ne coute rien, un module importe et pas servi rend un 404 qui arrete le
    *   module ENTIER — donc toute la page. */
   'route-v4-multi-sauts.js',
+  /* ⛔ `pont-de-liquidite.js` trouve le chemin entre deux jetons sur le graphe des pools MESUREES,
+   *   le DECOUPE par factory (un segment = une transaction) et dit le frais TOTAL — 0,1 % PAR
+   *   transaction, donc 0,2 % sur une route a deux segments. Servi avant d etre importe. */
+  'pont-de-liquidite.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
@@ -1991,7 +2114,14 @@ createServer((req, res) => {
           return;
         }
         const r = { ok: true, prixUsd: prix, liquiditeUsd: liq, source: 'dexscreener', lu: new Date().toISOString() };
-        void faitsDeLaPool(p && p.pairAddress).then(async (f) => {
+        /* ⛔ LES DEUX COTES DE LA PAIRE SONT PASSES, parce que la branche V4 en a besoin : depuis un
+         *   `poolId` (un hash) on ne peut pas retrouver `currency0`, et sans lui le sens du
+         *   glissement serait devine. Ils ne servent QU A cette lecture ; la famille, elle, reste
+         *   prouvee par la chaine (`getSlot0` rend un prix non nul) et jamais par le `dexId`. */
+        void faitsDeLaPool(p && p.pairAddress, {
+          base: p && p.baseToken && p.baseToken.address,
+          quote: p && p.quoteToken && p.quoteToken.address,
+        }).then(async (f) => {
           /* ⛔ TROIS ETATS : une pool illisible rend `glissementBps: null` et
            *   `famille: 'NON_MESURE'`. Le client ne doit JAMAIS lire « non mesure » comme
            *   « bon marche ». */
