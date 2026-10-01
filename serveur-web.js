@@ -1630,6 +1630,17 @@ const ETAPES_ENTONNOIR = [
   'echange_refus_marche_illisible', 'echange_refus_pas_de_pool', 'echange_refus_frais_pool',
   'echange_refus_wallet', 'echange_refus_montant', 'echange_refus_hors_app',
   'echange_refus_prix', 'echange_refus_pool', 'echange_refus_plan',
+  /* ⛔⛔ LE RAIL MULTI-SAUTS A SES PROPRES COMPTEURS, SEPARES DE CEUX DU CHEMIN HISTORIQUE. Les
+   *     fondre melangerait deux rails qui ont deux taux, deux assembleurs et deux publics : un
+   *     achat en ETH sur la pool du block, et un achat en OUSD route sur trois sauts. On ne saurait
+   *     plus lequel echoue.
+   *   ⛔ `echange_refus_route_multi` est le SEUL qui dise quelque chose qu aucun autre ne dit : la
+   *     route existait, et une de ses jambes n a pas pu etre resolue en PoolKey. S il domine, le
+   *     defaut est dans la RESOLUTION des cles, pas dans la liquidite.
+   *   ⛔ ET `echange_multi_pret` EST LE SEUL COMPTEUR POSITIF DU LOT : sans lui, on ne saurait que
+   *     ce qui rate. Un entonnoir qui ne compte que ses echecs ne dit pas s il sert a quelqu un. */
+  'echange_refus_route_multi', 'echange_multi_refus_prix', 'echange_multi_refus_pool',
+  'echange_multi_refus_plan', 'echange_multi_refus_frais', 'echange_multi_pret',
   /* ⛔⛔ LES DEUX GARDES QUI SE TIENNENT ENTRE UN TRADE ET NOTRE REVENU. Elles refusent d offrir Sign
    *     quand les 0,5 % vers FEE_WALLET manquent — le bon choix, mais un echange qui n a pas eu lieu
    *     ne se voyait NULLE PART. Ces deux compteurs disent combien ce garde-fou nous coute, et s il
@@ -1819,6 +1830,12 @@ const SERVIS = [
    *   accusation. 60 assertions, ROUGE prouve par 9 mutations sur 10 — la 10e etait un temoin de
    *   non-sabotage, elle DEVAIT survivre. */
   'devises-dentree.js',
+  /* ⛔⛔ `sauts-depuis-chemin.js` est le dernier pas entre « une route existe » et « on la batit » :
+   *   il transforme un chemin `[{de, vers, famille}]` en sauts `[{cle, zeroForOne}]` en resolvant
+   *   chaque jambe par un resolveur INJECTE. Il refuse toute la route si UN saut manque, et il dit
+   *   LEQUEL — une route partielle produirait un calldata qui s arrete au milieu. 45 assertions,
+   *   9/9 mutations attrapees. */
+  'sauts-depuis-chemin.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

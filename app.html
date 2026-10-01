@@ -2936,6 +2936,13 @@ import { cheminEntre, transactionsNecessaires, segmenterParFactory,
  *   NOTRE ne doit pas se lire « impossible ». */
 import { devisesDentree, peutEtreAssemblee, phraseDevise, ETATS_OFFERTS }
   from './devises-dentree.js';
+/* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
+ *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
+ *   deviendrait fausse le jour ou le bareme change. */
+import { BPS_MAX as BPS_MAX_UI } from './frais-degressif.js';
+/* ⛔ `sautsDepuisChemin` RESOUT chaque jambe en PoolKey ; il ne lit rien lui-meme, on lui injecte
+ *   le resolveur. Et il refuse TOUTE la route si un seul saut manque, en disant lequel. */
+import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
 /** L ETH natif en V4 : l adresse zero. ⛔ Pas WETH — V4 manipule l ETH natif. */
 const ETH_ADR = '0x0000000000000000000000000000000000000000';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
@@ -3070,7 +3077,13 @@ import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
-import { planEchange, planEthVersUsdc, estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
+/* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
+ *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
+ *   Deux rails, deux taux, explicitement — baisser l existant aurait coupe un revenu qui existe.
+ * ⛔ `meilleureClePourMontant` est le resolveur CANONIQUE de pool V4, celui qu utilise deja
+ *   `planEthVersUsdc`. On l injecte au lieu d en ecrire une copie : deux resolveurs divergeraient. */
+import { planEchange, planEchangeMultiSauts, planEthVersUsdc, meilleureClePourMontant,
+  estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
 /* ⛔ LE DECODEUR DE CHAINE ABI EST CANONIQUE, ON N EN ECRIT PAS UN TROISIEME.
  * `decoderChaine` rend de l UTF-8 et `null` plutot que du charabia. Un `String.fromCharCode`
  * par octet donne du LATIN-1 : des blocks reels de Base s affichaient « å°çç¶­å°¼ » — leurs
@@ -3098,7 +3111,12 @@ import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phras
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
 import { V4_ADRESSES } from './lancer-pool.js';
-import { prixEthUsd, weiPourDollars } from './prix-eth.js';
+/* ⛔ `CLES_PRIX` est la liste des combinaisons fee/tickSpacing que le resolveur V4 essaie. Elle est
+ *   IMPORTEE et pas recopiee : une seconde liste divergerait de celle qu utilise `echange.js`, et
+ *   les deux chemins ne trouveraient plus les memes pools.
+ * ⚠️ SA BORNE : QUATRE combinaisons, toutes SANS hook. Une pool hookee n y est pas — d ou la cle
+ *   CONNUE ajoutee en tete par le resolveur du rail multi-sauts. */
+import { prixEthUsd, weiPourDollars, CLES_PRIX as CLES_PRIX_UI } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
@@ -5973,6 +5991,32 @@ document.addEventListener('click', (ev) => {
   try { etape(a.id === 'wOuvrirCbw' ? 'wallet_ouvrir_cbw' : 'wallet_ouvrir_mm'); } catch (_) {}
 });
 
+/**
+ * DIRE UN PREALABLE — en neutre, jamais dans la couleur des refus.
+ *
+ * ⭐ PHIL, 2026-10-01, deux fois de suite en pointant l ecran : « c est quoi ca ?? » puis « je vois
+ *   toujours l erreur sur frontend ». La phrase qu il montrait est « Open your wallet to
+ *   continue », affichee en ROUGE sous le bouton Give birth.
+ *
+ * ⛔⛔ LE DEFAUT N EST PAS LA PHRASE, C EST SA COULEUR. Rien n a rate : le wallet n est simplement
+ *   pas encore connecte. `.wKo` porte `var(--dur)`, la couleur des REFUS — celle qui dit « on a
+ *   essaye et ca n a pas marche ». L employer pour « il reste une etape » coute deux fois, et le
+ *   second cout est le pire :
+ *     1. le visiteur croit que l app est cassee et il part ;
+ *     2. celui qui reste APPREND que le rouge ne veut rien dire — et le jour ou un vrai refus
+ *        s affiche (la pool refuse, le frais manque, RIEN ne sera envoye), il ne le lira plus.
+ *   ⇒ Le rouge doit rester RARE pour rester lisible. C est la seule raison de ce helper.
+ *
+ * ⛔ CE QUI RESTE EN ROUGE : « Your wallet did not connect, so nothing was started. » La,
+ *   l utilisateur a AGI et ca a echoue — c est un refus, pas un prealable. Le test exige la
+ *   distinction DANS LES DEUX SENS : sans ca, on pourrait le faire passer en repeignant tout en
+ *   neutre, et on perdrait la couleur qui compte.
+ */
+function direPrealable(el, texte) {
+  if (!el) return;
+  el.className = 'note';
+  el.textContent = texte;
+}
 function texteRefusConnexion(siWalletPresent) {
   if (window.ethereum) return siWalletPresent;
   /* ⛔⛔ CETTE PHRASE MENAIT AVEC LE CHEMIN LE PLUS DUR, ET C ETAIT LA MOITIE RESTANTE DU DEFAUT
@@ -9965,7 +10009,7 @@ $('#sfParoles').addEventListener('click', async (ev) => {
   const p = parolesFil.find((x) => x.id === b.getAttribute('data-parole'));
   if (!p) return;
   const note = $('#sfParolesNote');
-  if (!(await pret())) { note.className = 'note wKo'; note.textContent = texteRefusConnexion('Open your wallet to continue — it signs the message, this page never does.'); return; }
+  if (!(await pret())) { direPrealable(note, texteRefusConnexion('Open your wallet to continue — it signs the message, this page never does.')); return; }
   const memo = validerMemo(p.texte);
   if (memo.etat !== 'OK') { note.className = 'note wKo'; note.textContent = 'This line cannot be a message: ' + (memo.pourquoi || 'refused') + '.'; return; }
   paroleEnvoi = true;
@@ -10311,7 +10355,14 @@ function majDevisesDentree(v) {
    *     raison — qui dit que la limite est chez NOUS. Cette ligne disparait le jour ou
    *     `preparerEchange` lit `deviseDentree` ; elle n est pas un choix de produit, c est l etat
    *     reel du cablage, ecrit la ou il se voit. */
-  const ASSEMBLEUR_CABLE_SUR_LE_BOUTON = false;
+  /* ⭐ BASCULE LE 2026-10-01 : `preparerEchange` consomme desormais `deviseDentree`. Il resout les
+   *   trois cles (OUSD/USDC par `/api/prix-usd`, USDC/ETH par `meilleureClePourMontant`,
+   *   ETH/block par `vieDuBlock`), assemble par `sautsDepuisChemin`, et passe a
+   *   `planEchangeMultiSauts`. L etiquette et ce qui est ENVOYE disent enfin la meme chose.
+   * ⛔ CE BOOLEEN RESTE, il ne disparait pas : c est lui qui documente qu une devise routee ne doit
+   *   JAMAIS etre offerte avant que le bouton la construise. Le remettre a `false` est le bon
+   *   geste si le rail casse — et c est un geste d une ligne. */
+  const ASSEMBLEUR_CABLE_SUR_LE_BOUTON = true;
   /* ⛔ UN SEUL BOOLEEN POUR LES DEUX LISTES — voir la note plus bas : deux predicats differents
    *   avaient deja ouvert un trou ou une route mesuree n etait ni offerte ni dite. */
   const offrable = (d) => peutEtreAssemblee(d).ok
@@ -10355,6 +10406,108 @@ function majDevisesDentree(v) {
     note.textContent = 'Read but not offered yet — ' + dits.join(' · ');
   }
 }
+/**
+ * L AFFICHAGE DU RAIL MULTI-SAUTS — avec SES gardes, pas celles du chemin historique.
+ *
+ * ⛔⛔⛔ POURQUOI UNE FONCTION SEPAREE PLUTOT QUE DE REUTILISER LE RENDU EXISTANT. Les gardes du
+ *   chemin historique exigent `fraisBps === FRAIS_INTERFACE_BPS` (50 bps). Le rail multi-sauts
+ *   prend le bareme DEGRESSIF — 20 bps ou 10 bps selon le montant, et parfois un taux EFFECTIF
+ *   entre les deux a cause du plancher. Passer par ce rendu referait systematiquement « 0.5 %
+ *   MISSING — refused » sur un plan parfaitement correct.
+ *   ⛔ MAIS ON NE RELACHE RIEN : on exige ici les MEMES TROIS CHOSES, avec la bonne borne.
+ *       1. un frais STRICTEMENT positif
+ *       2. un beneficiaire qui est EXACTEMENT `FEE_WALLET`
+ *       3. `FEE_WALLET` NOMME DANS LE CALLDATA — parce qu un resume n est pas une preuve : seuls
+ *          les octets partent sur la chaine. C est le jumeau qui a deja attrape un resume honnete
+ *          devant un calldata qui ne payait rien.
+ *   ⛔ ET LE TAUX EST BORNE PAR `BPS_MAX` : un plan qui reclamerait plus que le palier le plus haut
+ *     du bareme serait un prelevement qu on n a jamais annonce. On refuse plutot que de signer.
+ */
+function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
+  const r = p && p.resume;
+  /* ⛔⛔⛔ `refuser` NE COMPTE PAS, ET C EST VOLONTAIRE. Ma premiere version prenait le nom du
+   *   compteur en PARAMETRE et appelait `etape(compteur)`. Resultat : `test-etapes-comptees.mjs`,
+   *   qui ne reconnait un compteur que lorsque son nom est ecrit EN CLAIR dans l appel, ne voyait
+   *   que 2 de mes 5 compteurs — les
+   *   trois autres seraient partis vers `/api/etape`, auraient ete JETES EN SILENCE faute d etre
+   *   dans la liste blanche, et auraient affiche 0 POUR TOUJOURS sans qu aucune garde puisse le
+   *   dire. Une garde statique ne voit que ce qui est ecrit en clair : passer par une variable la
+   *   rend aveugle sans la faire rougir.
+   *   ⇒ Chaque site d appel ecrit donc son nom EN LITTERAL, a cote de sa condition. */
+  const refuser = (texte) => {
+    e.className = 'note wKo';
+    e.textContent = texte;
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+    br.addEventListener('click', () => void preparerEchange('ACHAT'));
+    $('#peActions').appendChild(br);
+  };
+  if (!p || p.etat === 'NON_MESURE') {
+    /* ⛔ « pas pu mesurer » n est PAS « la pool refuse ». Le premier est une panne chez nous. */
+    try { etape('echange_multi_refus_prix'); } catch (_) {}
+    return refuser('Could not price this route right now (nothing to sign) — try again.');
+  }
+  if (p.etat === 'REFUSE') {
+    try { etape('echange_multi_refus_pool'); } catch (_) {}
+    return refuser('Not possible: ' + (p.pourquoi || p.etat) + ' Nothing was sent.');
+  }
+  if (p.etat === 'APPROBATIONS' && Array.isArray(p.etapes) && p.etapes.length) {
+    /* ⛔ UN JETON ERC-20 EN ENTREE DEMANDE UNE AUTORISATION. L ETH natif n en demande pas — c est
+     *   justement pourquoi ce cas n existait pas sur le chemin ETH et qu il faut le tenir ici. */
+    const et = p.etapes[0];
+    const bt = document.createElement('button');
+    bt.className = 'bouton'; bt.type = 'button';
+    bt.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + et.nom;
+    bt.addEventListener('click', () => void signerEchange(et, 'ACHAT', true));
+    $('#peActions').appendChild(bt);
+    e.className = 'note';
+    e.textContent = 'This token needs an approval first, then the swap. Each one is measured again once done.';
+    return;
+  }
+  if (p.etat !== 'PRET') {
+    try { etape('echange_multi_refus_plan'); } catch (_) {}
+    return refuser('Nothing to sign: ' + ((p && p.pourquoi) || (p && p.etat) || 'unknown'));
+  }
+  /* ══ LES TROIS GARDES ══════════════════════════════════════════════════════════════════════ */
+  if (!estWalletDeFrais(compte)) {
+    const bps = r && typeof r.fraisBps === 'bigint' ? r.fraisBps : null;
+    const tauxOk = bps !== null && bps > 0n && bps <= BPS_MAX_UI;
+    const destOk = r && r.beneficiaireFrais
+      && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
+    const fraisOk = r && typeof r.frais === 'bigint' && r.frais > 0n;
+    /* ⛔⛔ LE CALLDATA EST LA SEULE PREUVE. Le resume est ce qu on se raconte ; les octets sont ce
+     *   qui part. Les deux ont deja diverge dans ce depot. */
+    const octetsOk = p.tx && feeWalletDansCalldata(p.tx);
+    if (!tauxOk || !destOk || !fraisOk || !octetsOk) {
+      /* ⛔ CE REFUS SE TIENT ENTRE UN TRADE ET NOTRE REVENU : il doit se COMPTER, sinon on ne
+       *   saura jamais combien il nous coute ni s il se declenche a tort. */
+      try { etape('echange_multi_refus_frais'); } catch (_) {}
+      return refuser('This trade could not be prepared safely. Nothing to sign — try again.');
+    }
+  }
+  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  const taux = r && typeof r.fraisBps === 'bigint' ? (Number(r.fraisBps) / 100) : null;
+  $('#peLignes').innerHTML = [
+    'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
+    'You receive at least: ' + formaterUnites(r.recoitAuMoins, 18) + ' ' + (symBlock || 'blocks')
+      + ' (1 % slippage)',
+    /* ⛔ LA ROUTE EST ECRITE EN ENTIER. Quelqu un qui paie en OUSD un block cote en ETH a le droit
+     *   de voir par ou passe son argent — c est ce que son wallet lui montrera de toute facon. */
+    'Route: ' + b.sauts.length + ' hops, one transaction',
+    /* ⚠️ ET LE CHIFFRE ANNONCE EST LE TAUX EFFECTIF, pas celui du palier : le plancher du bareme
+     *   peut le rendre superieur, et annoncer le palier serait annoncer un prix qu on ne prend pas. */
+    ...(taux !== null ? ['Fee: ' + taux + '% of what you pay, inside the same transaction'] : []),
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+  const bt = document.createElement('button');
+  bt.className = 'bouton'; bt.type = 'button';
+  bt.textContent = 'Sign — pay with ' + sym;
+  bt.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
+  $('#peActions').appendChild(bt);
+  e.className = 'note';
+  e.textContent = 'Your wallet signs — this page never does. It shows every amount before you confirm.';
+  try { etape('echange_multi_pret'); } catch (_) {}
+}
+
 /** ⛔ L ETIQUETTE DIT LE NOMBRE DE SIGNATURES. « Plusieurs » sans le chiffre ne se decide pas. */
 function majEtiquetteDeviseDentree(d, symBlock) {
   const lab = $('#peAchat') && $('#peAchat').closest('label');
@@ -10442,8 +10595,7 @@ async function preparerEchange(sens) {
   }
   if (!(await pret({ e }))) {
     if (!e.textContent || !/Switch to Base/i.test(e.textContent)) {
-      e.className = 'note wKo';
-      e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.');
+      direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'));
     }
     /* ⛔ hors du `if` : le cas « mauvaise chaine » garde son propre message mais reste le MEME
      *   refus — sortir sans compter dans cette moitie laisserait la moitie qu on ne regarde pas. */
@@ -10453,6 +10605,21 @@ async function preparerEchange(sens) {
   try { if (sens === 'ACHAT') etape('achat_prepare'); } catch (_) {}
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; try { etape('echange_refus_marche_illisible'); } catch (_) {} return; } }
+  else if (deviseDentree) {
+    /* ⛔⛔ LES DECIMALES DE LA DEVISE D ENTREE SONT LUES SUR LE JETON, JAMAIS SUPPOSEES. Le registre
+     *   `DEVISES_BASE` n en porte AUCUNE, et 18 par defaut serait un pari : OUSD en a SIX. L ecart
+     *   serait de 10^12 sur le montant — assez pour placer un echange de 100 $ dans le mauvais
+     *   palier du bareme ET pour coter une taille qui n a rien a voir.
+     * ⛔ UNE LECTURE RATEE REFUSE, elle ne retombe pas sur 18. Un defaut permissif ici signerait un
+     *   montant que personne n a verifie. */
+    try { dec = await decimalesDe(deviseDentree.devise); }
+    catch {
+      e.className = 'note wKo';
+      e.textContent = 'Decimals of ' + (deviseDentree.symbole || 'that token') + ' were not read — nothing to sign.';
+      try { etape('echange_refus_marche_illisible'); } catch (_) {}
+      return;
+    }
+  }
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
   const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
@@ -10498,6 +10665,66 @@ async function preparerEchange(sens) {
     } catch (_) { /* ⛔ liste illisible : on retombe sur l ensemble d avant, jamais sur « tout ouvert » */ }
     return s;
   })();
+  /* ══ LE RAIL MULTI-SAUTS : payer un block avec une devise qui n est PAS celle de sa pool ═══════
+   * ⭐⭐ C EST LE PAS QUI OUVRE LE PRODUIT A UN PORTEUR D OUSD. Jusqu ici il ne pouvait LITTERALEMENT
+   *   rien acheter chez nous : sa liquidite est sur Uniswap V4, la plupart de nos blocks sur
+   *   Aerodrome, et un seul `exactInput` ne traverse QU UNE factory. La route existait, personne ne
+   *   pouvait la prendre.
+   * ⛔⛔ CE CHEMIN NE TOUCHE PAS `planEchange`. Le chemin historique garde ses 0,5 % et son code ;
+   *   celui-ci prend le bareme degressif 0,2 % / 0,1 %. Melanger les deux ferait d une correction
+   *   de rail une baisse de revenu non demandee.
+   * ⛔ ET IL NE S ACTIVE QUE SUR UN CHOIX EXPLICITE : `deviseDentree` vaut `null` tant que personne
+   *   n a change le selecteur, donc le comportement par defaut est EXACTEMENT celui d avant. */
+  if (sens === 'ACHAT' && deviseDentree && Array.isArray(deviseDentree.chemin)) {
+    /* ⛔⛔ LE RESOLVEUR INJECTE : la cle CONNUE d abord, le balayage ensuite — jamais l un SANS
+     *   l autre. Les pools de blocks portent souvent un HOOK, et `CLES_PRIX` ne contient que
+     *   quatre combinaisons SANS hook : sans la cle connue, la jambe du block ne serait jamais
+     *   trouvee. Mais s en remettre a elle SEULE serait pire : une cle connue qui ne cote pas a
+     *   cette taille rendrait « aucune pool » alors qu une autre repondrait. On concatene. */
+    const cleConnuePour = (de, vers) => {
+      const paire = new Set([String(de).toLowerCase(), String(vers).toLowerCase()]);
+      const memePaire = (k) => k && paire.has(String(k.currency0).toLowerCase())
+        && paire.has(String(k.currency1).toLowerCase());
+      const cb = marcheLu && marcheLu.cle;
+      if (memePaire(cb)) return cb;
+      for (const bout of [de, vers]) {
+        const f = faitsPoolLus.get(String(bout).toLowerCase());
+        if (f && memePaire(f.cleV4)) return f.cleV4;
+      }
+      return null;
+    };
+    const resoudre = async ({ de, vers, montant }) => {
+      const k = cleConnuePour(de, vers);
+      /* ⛔ `hooks` EST REPORTE : une cle sans son hook est une AUTRE pool, et son poolId diffère. */
+      const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
+      return meilleureClePourMontant({ rpc, chaine: CHAINE, de, vers, montant,
+        candidates: sup.concat(CLES_PRIX_UI) });
+    };
+    const b = await sautsDepuisChemin({ chemin: deviseDentree.chemin, montant: m.valeur, resoudre });
+    if (b.etat !== 'OK') {
+      e.className = 'note wKo';
+      /* ⛔ LE REFUS PORTE LE SAUT QUI A MANQUE. « La route a echoue » envoie chercher partout. */
+      e.textContent = 'Not prepared — ' + b.pourquoi + '. Nothing was sent.';
+      try { etape('echange_refus_route_multi'); } catch (_) {}
+      profilEnLecture = false;
+      return;
+    }
+    /* ⛔⛔ LE PRIX EN DOLLARS DE LA DEVISE D ENTREE EST LU, et son absence n est pas fatale : le
+     *   bareme applique alors le taux LE PLUS HAUT et le DIT. Le doute nous coute un revenu
+     *   potentiel, jamais une surprise a l utilisateur, et jamais une sous-facturation supposee. */
+    let prixEntree = null;
+    try { prixEntree = await prixUsdDevise(deviseDentree.devise); } catch (_) { prixEntree = null; }
+    try {
+      p = await planEchangeMultiSauts({ rpc, chaine: CHAINE, compte, sauts: b.sauts,
+        entree: deviseDentree.devise, sortie: adr, montant: m.valeur,
+        fraisDevisesOk, decimalesEntree: dec, prixUsdEntree: prixEntree });
+    } catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+    finally { profilEnLecture = false; }
+    if ($('#profil').dataset.block !== adr) return;
+    echangeCourant = p;
+    afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec });
+    return;
+  }
   try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu, fraisDevisesOk }); }
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
@@ -10789,7 +11016,7 @@ async function preparerAjout() {
   const adr = $('#profil').dataset.block;
   const e = $('#plqEtat');
   $('#plqActions').innerHTML = ''; $('#plqLignes').innerHTML = '';
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } return; }
   const pct = Number(String($('#plqPart').value || '').trim().replace(',', '.'));
   if (!(pct >= 0.1 && pct <= 99.9)) { e.className = 'note wKo'; e.textContent = 'Enter a share between 0.1 and 99.9 %.'; return; }
   e.className = 'note'; e.textContent = 'Reading the pool, your balance and your approvals…';
@@ -10911,7 +11138,7 @@ async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } return; }
   const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
   const eth = Number(raw);
   if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
@@ -11111,7 +11338,7 @@ async function calculerLancement() {
   const adr = $('#profil').dataset.block;
   const e = $('#plEtat');
   e.className = 'note';
-  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'); } vieAutoArreter(); return; }
+  if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } vieAutoArreter(); return; }
   try { await valoPrete; } catch (_) {}
   const valo = Number(String($('#plValo').value || '').trim().replace(',', '.'));
   /* ⛔ V3 (2026-09-19) : la devise choisie est une ADRESSE (USDC, cbBTC, action) ou ETH. Plus de TBLOCK a la mise en vie. */
@@ -16485,7 +16712,7 @@ let gravureEnCours = false;
 $('#bGraver').addEventListener('click', async () => {
   const e = $('#bGraverEtat');
   if (gravureEnCours) return;
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue.'); return; }
+  if (!(await pret())) { direPrealable(e, texteRefusConnexion('Open your wallet to continue.')); return; }
   const vu = brainDernier;
   if (!brainAdr || !vu) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   /* ⛔ LA MEMOIRE GRAVEE (decision de Phil, 2026-09-13) : instantane des 128 neurones + empreinte de la memoire
@@ -16518,7 +16745,7 @@ let fragmentsAGraver = null, fragmentEnCours = false;
 $('#bFragmenter').addEventListener('click', async () => {
   const e = $('#bFragmenterEtat');
   if (fragmentEnCours) return;
-  if (!(await pret())) { e.className = 'note wKo'; e.textContent = texteRefusConnexion('Open your wallet to continue — it signs each fragment, this page never does.'); return; }
+  if (!(await pret())) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs each fragment, this page never does.')); return; }
   if (!brainAdr || !brainEtat) { e.className = 'note wKo'; e.textContent = 'Pick a block and let it beat once.'; return; }
   if (!fragmentsAGraver || fragmentsAGraver.adr !== brainAdr) {
     fragmentsAGraver = { adr: brainAdr, textes: fragmenterMemoire(brainEtat), fait: 0, tick: brainEtat.tick, liens: [] };
