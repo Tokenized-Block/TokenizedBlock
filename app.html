@@ -3591,8 +3591,31 @@ async function rpcReseau(methode, params) {
    *     Une garde redondante nommee comme telle vaut mieux qu une protection qui ne tient qu a un
    *     detail d une autre ligne. */
   if (!viseFactory && methode === 'eth_call' && noeuds.length > 1) {
-    const k = (tourEthCall += 1) % noeuds.length;
-    noeuds = noeuds.slice(k).concat(noeuds.slice(0, k));
+    /* ⛔⛔⛔ LE NOEUD DES getLogs EST EPARGNE PAR LA ROTATION, ET CA VIENT D UNE MESURE APRES
+     *      DEPLOIEMENT (2026-10-01). Ma premiere version faisait tourner les `eth_call` sur les
+     *      TROIS noeuds. Resultat mesure, meme instrument, meme onglet :
+     *          publicnode        25 requetes   0 refus
+     *          drpc              13 requetes   0 refus
+     *          mainnet.base.org  59 requetes  12 REFUS  (4 eth_call 429 + 8 getLogs 429)
+     *      Les douze refus etaient TOUS sur base.org — et aucun ailleurs.
+     *      ⇒ La cause est arithmetique, pas intermittente : base.org porte deja les `getLogs` que
+     *        LUI SEUL sait servir (plafond de 9 adresses chez publicnode, archive refusee par
+     *        publicnode et par drpc), soit 59 requetes. Ma rotation lui en ajoutait 9 de plus,
+     *        sur un noeud deja sature. C est exactement ce que la note de `RESEAUX` avertissait
+     *        depuis le debut : « mainnet.base.org 429 under map load ».
+     *      ⇒ On repartit donc les `eth_call` sur les noeuds qui ne portent PAS cette charge.
+     * ⛔ ET ON NE LE RETIRE PAS DE LA LISTE : il reste en repli, derriere. « Une optimisation qui
+     *   supprime un repli transforme un ralentissement en panne » — on le DEPLACE, on ne l enleve
+     *   pas. Si les deux autres tombent, il sert encore.
+     * ⛔ ET SI L EPARGNE NE LAISSE QU UN SEUL NOEUD, ON NE TOURNE PAS : une « rotation » sur un
+     *   element est un faux mecanisme qui aurait l air de marcher. */
+    const reserve = RESEAUX[CHAINE].logsMultiRpc || null;
+    const libres = reserve ? noeuds.filter((u) => u !== reserve) : noeuds.slice();
+    if (libres.length > 1) {
+      const k = (tourEthCall += 1) % libres.length;
+      const tournes = libres.slice(k).concat(libres.slice(0, k));
+      noeuds = tournes.concat(noeuds.filter((u) => !tournes.includes(u)));
+    }
   }
   if (!viseFactory && multiAdresses) {
     const servant = RESEAUX[CHAINE].logsMultiRpc;

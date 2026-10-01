@@ -192,11 +192,25 @@ v('JETONS_PAR_REQUETE est bien au-dessus du plafond', () => {
  *         eth_getLogs 2 000 blocs  publicnode 500 APRES 30 s · base.org 413 · drpc 400
  *         eth_getLogs archive      publicnode 403 · base.org 200 · drpc 400
  *     Faire tourner les `getLogs` echangerait un ralentissement contre une PANNE. */
-v('eth_call : la tete TOURNE d un appel a l autre', () => {
+v('eth_call : la tete TOURNE, et JAMAIS vers le noeud des getLogs', () => {
+  /* ⛔⛔⛔ CETTE ASSERTION A ETE ECRITE FAUSSE D ABORD, ET C EST LA MESURE APRES DEPLOIEMENT QUI
+   *      L A CORRIGEE. Ma premiere version exigeait TROIS tetes differentes — rotation sur les
+   *      trois noeuds. Deploye, mesure, meme instrument :
+   *          publicnode        25 requetes   0 refus
+   *          drpc              13 requetes   0 refus
+   *          mainnet.base.org  59 requetes  12 REFUS (4 eth_call 429 + 8 getLogs 429)
+   *      Les douze refus etaient TOUS sur base.org. Il porte deja les `getLogs` que LUI SEUL sait
+   *      servir ; lui ajouter des `eth_call` le saturait. L intention juste n est donc pas « tourner
+   *      partout » mais « tourner sur ce qui est LIBRE ».
+   *      ⇒ Le test dit maintenant la regle mesuree, pas celle que j avais devinee. */
   const p = [{ to: '0xb200000000000000000000397293cb8cda9a10c5', data: '0x313ce567' }, 'latest'];
-  const tetes = [0, 1, 2, 3].map((t) => choisir(RESEAUX, 8453, 'eth_call', p, t)[0]);
-  assert.equal(new Set(tetes.slice(0, 3)).size, 3, 'trois tours doivent donner TROIS tetes differentes');
-  assert.equal(tetes[3], tetes[0], 'et le quatrieme revient au premier : c est un tour de role');
+  const tetes = [0, 1, 2].map((t) => choisir(RESEAUX, 8453, 'eth_call', p, t)[0]);
+  assert.equal(new Set(tetes.slice(0, 2)).size, 2, 'deux tours doivent donner DEUX tetes differentes');
+  assert.equal(tetes[2], tetes[0], 'et le troisieme revient au premier : c est un tour de role');
+  for (const t of [0, 1, 2]) {
+    assert.notEqual(choisir(RESEAUX, 8453, 'eth_call', p, t)[0], ORG,
+      'tour ' + t + ' : base.org porte les getLogs, il ne doit JAMAIS etre en tete d un eth_call');
+  }
 });
 
 v('eth_call : AUCUN noeud n est perdu — le repli reste entier', () => {
