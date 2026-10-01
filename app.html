@@ -13379,7 +13379,25 @@ function transactionsDepuisEth(adrPaire) {
   if (r.etat !== 'OK') return null;
   return { tx: transactionsNecessaires(r.chemin), chemin: r.chemin, directe: false };
 }
+/* ⛔⛔⛔ MEME CORRECTION QUE `clesReellesDe`, ET POUR LA MEME MESURE : le journal reseau du
+ *   2026-10-01 montre ~17 appels a `/api/prix-usd` sur un seul chargement, et 24 732 requetes
+ *   abandonnees faute de tampon. Ce volume est ce qui fait limiter les noeuds publics — pas
+ *   l egress du visiteur, pas une panne.
+ * ⛔ ENVELOPPE MINCE, CORPS INTACT : la fonction d origine fait des dizaines de lignes et porte des
+ *   decisions delicates (la cle V4 gardee, l alternative Aerodrome). La reecrire pour y glisser une
+ *   deduplication serait prendre un risque sur du code qui marche, pour une raison qui n a rien a
+ *   voir avec lui. On l enveloppe, on ne la touche pas.
+ * ⛔ ET LA PROMESSE SORT DE LA CARTE AU REGLEMENT : la garder ferait un cache deguise, qui figerait
+ *   aussi les echecs — alors que le corps, lui, ne met en cache QUE les succes. */
+const prixUsdEnVol = new Map();
 async function prixUsdDevise(adr) {
+  const k = String(adr || '').toLowerCase();
+  if (prixUsdEnVol.has(k)) return prixUsdEnVol.get(k);
+  const p = prixUsdDeviseBrut(adr).finally(() => { prixUsdEnVol.delete(k); });
+  prixUsdEnVol.set(k, p);
+  return p;
+}
+async function prixUsdDeviseBrut(adr) {
   if (String(adr).toLowerCase() === '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913') {
     /* ⛔ L USDC EST LA DEVISE DE REFERENCE : pas de pool, donc pas de glissement a mesurer. On le
      *   nomme `interne` plutot que de lui inventer 0 bps sur une pool qui n existe pas. */
@@ -14613,22 +14631,47 @@ function majResumePaire(sym, type) {
  * ⛔ UN ECHEC N EST PAS UNE ABSENCE : on garde `null` en memoire seulement pour un « pas trouve »
  *    explicite, jamais pour une panne — sinon une coupure de reseau condamnerait le block. */
 const clesReelles = new Map();
+/* ⛔⛔⛔ LES APPELS EN VOL, DEDUPLIQUES — ET C EST LA CAUSE DES 429, MESUREE LE 2026-10-01.
+ *   Releve du journal reseau du navigateur, sur un seul chargement :
+ *       /api/cle/0xb200…0b01   12 appels IDENTIQUES en 24 ms
+ *       /api/prix-usd          ~17 appels
+ *       et 24 732 requetes anterieures abandonnees — le tampon de l onglet a deborde.
+ *   ⇒ Les erreurs `429` que le Grok Bot a relevees dans SA console, et que j ai ensuite reproduites
+ *     dans la MIENNE, ne viennent ni de son egress ni d une panne des noeuds : elles viennent de
+ *     NOTRE volume d appels. Un `curl` isole obtient 200 ; l app qui en tire des dizaines se fait
+ *     limiter.
+ *   ⇒ ET CA JUSTIFIE DE NE PAS AVOIR DEPLOYE LE RELAIS SERVEUR : il aurait deplace ces milliers de
+ *     requetes sur notre serveur, qui se serait fait limiter a son tour. On aurait masque la cause
+ *     au lieu de la corriger — exactement le risque que j avais nomme avant de la connaitre.
+ *
+ * ⛔⛔ LE CACHE NE SUFFIT PAS, ET C EST TOUT LE POINT. `clesReelles` ne repond qu APRES la premiere
+ *   reponse : N appelants simultanes trouvent le cache vide et partent tous. Il faut partager la
+ *   PROMESSE, pas seulement le resultat. `rpc()` le fait depuis longtemps avec `rpcEnVol` ; ces deux
+ *   helpers ont ete ecrits sans, et personne ne l avait vu parce qu on ne regardait pas le reseau.
+ * ⛔ ON RETIRE DE LA CARTE DES LE REGLEMENT (`finally`) : une promesse gardee apres coup ferait un
+ *   cache deguise, qui figerait meme les echecs. */
+const clesEnVol = new Map();
 async function clesReellesDe(adr) {
   const k = String(adr || '').toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(k)) return [];
   if (clesReelles.has(k)) return clesReelles.get(k) || [];
-  try {
-    const r = await fetch('/api/cle/' + k, { cache: 'no-store' });
-    const d = await r.json();
-    /* tip 20260923-wallet-intent-market: only cache positive cles — never session-cache ok:false → []. */
-    if (d && d.ok === true && Array.isArray(d.cles) && d.cles.length) {
-      clesReelles.set(k, d.cles);
-      return d.cles;
+  if (clesEnVol.has(k)) return clesEnVol.get(k);
+  const p = (async () => {
+    try {
+      const r = await fetch('/api/cle/' + k, { cache: 'no-store' });
+      const d = await r.json();
+      /* tip 20260923-wallet-intent-market: only cache positive cles — never session-cache ok:false → []. */
+      if (d && d.ok === true && Array.isArray(d.cles) && d.cles.length) {
+        clesReelles.set(k, d.cles);
+        return d.cles;
+      }
+      return [];
+    } catch (_) {
+      return []; /* rien en cache : on reessaiera */
     }
-    return [];
-  } catch (_) {
-    return []; /* rien en cache : on reessaiera */
-  }
+  })().finally(() => { clesEnVol.delete(k); });
+  clesEnVol.set(k, p);
+  return p;
 }
 
 let majPaireSeq = 0;
