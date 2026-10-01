@@ -19177,16 +19177,71 @@ let repriseSoleilsEnCours = false;
  *    ⇒ On borne l ATTENTE, pas seulement le nombre d essais. Une reponse qui ne vient pas en
  *      quelques secondes est traitee comme « pas encore » — ce qu elle est. */
 const ATTENTE_SOLEILS_MS = 4000;
-async function soleilsSurLaMap(essai = 0) {
-  if (essai > 0 && !repriseSoleilsEnCours) return;   /* une chaine a deja ete abandonnee */
-  try {
+/* ⛔⛔⛔ LA GARDE `repriseSoleilsEnCours` NE BORNE PAS CE QUE SON COMMENTAIRE ANNONCE, ET C EST
+ *      RAISONNE LIGNE A LIGNE (2026-10-01). Elle part a `false` ; la chaine A echoue, la met a
+ *      `true`, programme A1 ; la chaine B echoue, la trouve DEJA `true`, et programme B1. Les deux
+ *      reprises voient `true` et PASSENT. Son seul effet reel est d arreter une chaine qu un succes
+ *      a rendue inutile — jamais deux chaines nees ENSEMBLE, qui est precisement le cas du
+ *      demarrage (`void soleilsSurLaMap()` puis `charger().then(...)`, dos a dos).
+ *      ⇒ Une garde VRAIE qui couvre la mauvaise moitie. Le commentaire « UNE SEULE CHAINE DE
+ *        REPRISE » decrivait une intention, pas la mecanique.
+ *
+ * ⭐ LA MESURE QUI L A SORTI, sur la PRODUCTION, 8 s apres chargement, par
+ *   `performance.getEntriesByType('resource')` — appels, URL distinctes, redondants :
+ *       /api/prix-usd   17 · 17 · 0
+ *       /api/trending    2 ·  1 · 1 REDONDANT
+ *       /api/nos-blocks  1 ·  1 · 0
+ *   Un seul appel de trop — mais sur l endpoint LE PLUS CHER (il porte le scan RPC) et pendant le
+ *   pire moment (serveur froid, ou deux appels ont deja mis 44 s mesurees). C est exactement la
+ *   condition qui produit la map vide.
+ *
+ * ⛔⛔ POURQUOI JE PARTAGE LA REQUETE AU LIEU DE BARRER L ENTREE. Barrer l entree
+ *   (`if (chaineVivante) return`) tuerait vraiment la seconde chaine, mais il faudrait remettre le
+ *   drapeau a `false` sur QUATRE sorties (succes, charge vide sans reprise, echec sans reprise,
+ *   abandon). Un seul oubli et le rafraichissement des 300 s meurt EN SILENCE — c est
+ *   `fail-closed-sur-une-affordance`, deja paye ici en puces passees de 13 a 2 en production.
+ *   Le partage, lui, NE PEUT PAS FUIR : le vol se libere dans un `finally`, et il supprime le cout
+ *   reseau a CHAQUE etage, reprises comprises puisqu elles sont concurrentes elles aussi.
+ *   ⚠️ CE QU IL NE FAIT PAS, ET JE NE LE PRETENDS PAS : il ne reduit pas le nombre de CHAINES.
+ *     Deux chaines continuent de vivre et de repeindre la map. C est idempotent (`habitantDe`
+ *     retrouve l habitant existant) mais ce n est pas gratuit en CPU. Mesure, nomme, non corrige.
+ *
+ * ⛔ ET LA CHARGE PARSEE, PAS LA REPONSE. Un `Response` ne se lit QU UNE FOIS : partager l objet
+ *   ferait echouer le second appelant sur « body already read ». La promesse porte donc le JSON.
+ *
+ * ⛔ PERIMETRE ASSUME : `lireTrending()` appelle le MEME endpoint et ne rejoint PAS ce partage.
+ *   Il n a pas d `AbortController` ; le faire rejoindre une requete bornee a 4 s lui ferait heriter
+ *   d un abandon qu il ne demande pas, et afficher « Market not reachable » a tort. Deux
+ *   semantiques d attente differentes ne se mutualisent pas. */
+let trendingSoleilsEnVol = null;
+function trendingPourSoleils() {
+  if (trendingSoleilsEnVol) return trendingSoleilsEnVol;
+  const p = (async () => {
     /* ⛔ `AbortController` : sans lui, `fetch` attend indefiniment et la reprise ne sert a rien. */
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     const minuteur = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, ATTENTE_SOLEILS_MS) : null;
     let r;
     try { r = await fetch('/api/trending', { cache: 'no-store', ...(ctrl ? { signal: ctrl.signal } : {}) }); }
     finally { if (minuteur) clearTimeout(minuteur); }
-    const d = await r.json();
+    return r.json();
+  })();
+  /* ⛔ UN REJET LIBERE LE VOL AUSSI, sinon le premier echec condamnerait tous les appels suivants
+   *   a le rejouer — un cache d ERREUR permanent, et la reprise des 300 s ne reparerait plus rien.
+   * ⛔⛔ ET C EST `then(libere, libere)`, PAS `finally(libere)` : j ai ecrit `finally` d abord et
+   *   c etait un defaut. `p.finally()` rend une NOUVELLE promesse qui rejette a son tour, et
+   *   personne ne la tient — chaque abandon a 4 s aurait leve un `unhandled rejection` dans la
+   *   console de chaque visiteur. `then(a, b)` dont les deux branches rendent `undefined` rend
+   *   une promesse RESOLUE : rien a tenir.
+   * ⛔ `=== p` : si un vol plus recent a deja pris la place, l ancien ne doit pas l effacer. */
+  trendingSoleilsEnVol = p;
+  const libere = () => { if (trendingSoleilsEnVol === p) trendingSoleilsEnVol = null; };
+  p.then(libere, libere);
+  return p;
+}
+async function soleilsSurLaMap(essai = 0) {
+  if (essai > 0 && !repriseSoleilsEnCours) return;   /* une chaine a deja ete abandonnee */
+  try {
+    const d = await trendingPourSoleils();
     if (!d || d.ok !== true || !Array.isArray(d.lignes) || !d.lignes.length) {
       /* ⛔ ON NE REPREND QUE SUR UNE REPONSE BIEN FORMEE ET VIDE — c est-a-dire le placeholder, ou
        *   un scan qui n a encore rien. Une charge MAL formee ne se reparera pas toute seule :

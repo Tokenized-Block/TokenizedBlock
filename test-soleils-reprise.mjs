@@ -82,15 +82,69 @@ cas('⛔⛔⛔ L ATTENTE EST BORNEE — LE VRAI CAS N EST PAS LA CHARGE VIDE, C 
     'un fetch interrompu ne declenche aucune reprise : l erreur est avalee');
 });
 
-cas('⛔⛔ UNE SEULE CHAINE DE REPRISE, PAS DEUX', () => {
+cas('⛔⛔ LA CHAINE DE REPRISE EST MARQUEE — ET CE CAS NE PROUVE PAS PLUS QUE CA', () => {
   /* ⛔⛔ `soleilsSurLaMap()` est appele DEUX fois au demarrage (tout de suite, puis apres
    *     `charger()`). Ma premiere version lancait donc DEUX chaines paralleles — la trace reseau
    *     l a montre : les reprises partaient PAR PAIRES (49,8 s · 53,9 s · 58,4 s · 64,4 s, deux
-   *     requetes a chaque fois). Deux fois plus de charge sur un serveur deja occupe a scanner,
-   *     pour exactement la meme information. */
+   *     requetes a chaque fois).
+   *
+   * ⛔⛔⛔ CE CAS S APPELAIT « UNE SEULE CHAINE DE REPRISE, PAS DEUX » ET IL MENTAIT (corrige le
+   *      2026-10-01). Ses deux assertions constatent la PRESENCE de deux chaines de caracteres ;
+   *      son message d echec, lui, affirmait « une seconde chaine de reprise peut demarrer en
+   *      parallele » — une conclusion sur le COMPORTEMENT qu une recherche de texte ne peut pas
+   *      porter. C est `presence-dun-nom-nest-pas-son-usage`, dans un test.
+   *      ⇒ ET LA MECANIQUE NE TIENT PAS LA PROMESSE DU TITRE, raisonne ligne a ligne :
+   *          `repriseSoleilsEnCours` part a `false` ;
+   *          chaine A (essai 0) echoue -> la met a `true` -> programme A1 ;
+   *          chaine B (essai 0) echoue -> la trouve DEJA `true` -> programme B1 ;
+   *          A1 et B1 voient `true` et PASSENT toutes les deux.
+   *        La garde `if (essai > 0 && !repriseSoleilsEnCours) return;` n arrete donc qu une chaine
+   *        qu un SUCCES a desarmee (`repriseSoleilsEnCours = false` apres des lignes recues) —
+   *        jamais deux chaines nees ENSEMBLE, qui est exactement le cas du demarrage.
+   *      ⇒ Ce cas garde donc le MARQUEUR et l abandon-apres-succes. Rien de plus. Le titre le dit
+   *        maintenant, parce qu un test qui promet plus qu il ne tient est pire qu un test absent :
+   *        il ferme la question. */
   assert.match(html, /let repriseSoleilsEnCours = false;/, 'rien ne marque qu une chaine de reprise tourne');
   assert.match(html, /if \(essai > 0 && !repriseSoleilsEnCours\) return;/,
-    'une seconde chaine de reprise peut demarrer en parallele');
+    'une chaine desarmee par un succes n est plus arretee');
+});
+
+cas('⛔⛔ LE COUT RESEAU DES CHAINES CONCURRENTES EST PARTAGE', () => {
+  /* ⭐ MESURE EN PRODUCTION, 8 s apres chargement (`performance.getEntriesByType('resource')`),
+   *   en appels / URL distinctes / redondants :
+   *       /api/prix-usd   17 · 17 · 0
+   *       /api/trending    2 ·  1 · 1 REDONDANT
+   *       /api/nos-blocks  1 ·  1 · 0
+   *   Un seul appel de trop, mais sur l endpoint LE PLUS CHER (il porte le scan RPC) et au pire
+   *   moment (serveur froid : deux appels avaient deja mis 44 s mesurees). C est la condition qui
+   *   produit la map vide.
+   *
+   * ⛔ PUISQU ON NE PEUT PAS BORNER LE NOMBRE DE CHAINES SANS RISQUER UNE PANNE MUETTE (il faudrait
+   *   remettre un drapeau a `false` sur quatre sorties ; un oubli tue le rafraichissement des
+   *   300 s, c est `fail-closed-sur-une-affordance`), on borne ce qui COUTE : la requete. Les
+   *   chaines concurrentes partagent un seul `fetch` en vol, a chaque etage.
+   * ⚠️ CE CAS NE PROUVE PAS qu il n y a qu une chaine. Il prouve qu elles ne paient qu une fois. */
+  assert.match(html, /let trendingSoleilsEnVol = null;/, 'aucun registre du fetch trending en vol');
+  assert.match(html, /if \(trendingSoleilsEnVol\) return trendingSoleilsEnVol;/,
+    'un second appel concurrent relance un fetch au lieu de rejoindre celui qui vole');
+  assert.match(html, /const d = await trendingPourSoleils\(\);/,
+    'soleilsSurLaMap ne passe plus par le partage : il refait son propre fetch');
+  /* ⛔⛔ LE VOL DOIT SE LIBERER SUR UN REJET AUSSI, sinon le premier echec devient un cache
+   *   d ERREUR permanent et la reprise des 300 s ne repare plus rien. Et c est `then(a, b)` et
+   *   NON `finally(a)` : `p.finally()` rend une promesse qui rejette a son tour et que personne ne
+   *   tient — un `unhandled rejection` dans la console de chaque visiteur a chaque abandon. */
+  assert.match(html, /p\.then\(libere, libere\);/,
+    'le vol ne se libere pas sur les DEUX issues, ou il le fait par un `finally` non tenu');
+  assert.doesNotMatch(html, /trendingSoleilsEnVol\.finally\(/,
+    'le vol est libere par un `finally` dont la promesse derivee n est pas tenue');
+  /* ⛔ LA CHARGE PARSEE, PAS LA REPONSE : un `Response` ne se lit QU UNE FOIS, partager l objet
+   *   ferait echouer le second appelant sur « body already read ». */
+  assert.match(html, /return r\.json\(\);/, 'le partage porte la Response et non le JSON deja lu');
+  /* ⛔ PERIMETRE ASSUME, ET IL EST VERIFIE : `lireTrending()` garde SON propre fetch. Il n a pas
+   *   d AbortController ; le faire rejoindre une requete bornee a 4 s lui ferait heriter d un
+   *   abandon qu il ne demande pas, et afficher « Market not reachable » a tort. */
+  assert.match(html, /const r = await fetch\('\/api\/trending', \{ cache: 'no-store' \}\);/,
+    'lireTrending a rejoint le partage : il heriterait de la borne a 4 s qu il ne demande pas');
 });
 
 cas('⛔⛔ ON NE REPREND PAS SUR UNE REPONSE MAL FORMEE', () => {
