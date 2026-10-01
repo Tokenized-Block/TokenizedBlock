@@ -7447,10 +7447,25 @@ function peindreCerveau() {
    *     battements a zero (mesure : environ un sur deux sans marche). Juger sur l instant ferait
    *     clignoter la phrase entre « reel » et « rien » toutes les demi-secondes. */
   const aTire = v.actifs > 0 || traceProfil.some((x) => x && x.indices && x.indices.length > 0);
+  /* ⛔⛔ « MARKET UNREAD » NE DOIT PAS S AFFICHER QUAND LE MARCHE EST LU. Mesure du 2026-10-01 sur
+   *   NVDAc : 10 515 845 $ de volume 24 h et 2 309 929 $ de liquidite, lus par `/api/prix-usd` —
+   *   et cette ligne annoncait quand meme « Market unread ». Ce qui manque au cerveau, c est le
+   *   prix AU FORMAT QU IL ATTEND, pas le marche.
+   * ⛔ ON NE REMPLACE PAS UNE FAUSSE CAUSE PAR UNE AUTRE : on dit que le prix n a pas ete transmis
+   *   au cerveau, et on ne pretend pas savoir pourquoi. Le reste de la phrase — le battement, les
+   *   neurones — est inchange, il etait juste. */
+  const marcheLuIci = (() => {
+    const a = ($('#profil') && $('#profil').dataset.block) || '';
+    const mk = a ? marcheParAdr.get(String(a).toLowerCase()) : null;
+    return !!(mk && Number(mk.prixUsd) > 0);
+  })();
+  const ouverture = marcheLuIci
+    ? 'No mood is judged: its price has not reached the brain yet, though its market is read.'
+    : 'Market unread, so no mood is judged.';
   $('#pcPhrase').textContent = v.phase === 'NON_LU'
     ? (aTire
-      ? 'Market unread, so no mood is judged. The beat below is real: it comes from its wiring, not from its price.'
-      : 'Market unread, so no mood is judged. No neuron has fired yet either — its potentials are still '
+      ? ouverture + ' The beat below is real: it comes from its wiring, not from its price.'
+      : ouverture + ' No neuron has fired yet either — its potentials are still '
         + 'charging from zero, which takes about 7 to 10 beats. The band below is empty because nothing fired.')
     : phraseDePhase(v.phase, symProfil || 'This block');
   traceProfilAjouter(v.indices);
@@ -8001,6 +8016,30 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
    *    tokenisee tombait dans la branche « pas lu », et l ecran accusait le reseau alors que la
    *    capitalisation venait d etre lue et affichee juste au-dessus. Le prix de la devise est
    *    maintenant passe par l appelant (USDC = 1, le reste par /api/prix-usd). */
+  /* ⛔⛔⛔ AVANT D ACCUSER LE RESEAU, ON REGARDE CE QU ON A DEJA LU. Mesure du 2026-10-01 sur NVDAc
+   *   `0xb20000000000000000000078ee7ce2fe4908108c`, signale par Phil : l ecran affichait
+   *   « Market unread — that is about the network, not about this block » ET, deux lignes plus bas,
+   *   « Cheapest of 4 pools we read on chain for this block ». Deux lecteurs qui se contredisent
+   *   sur le MEME ecran.
+   *   ⇒ CE QUI EST VRAI, MESURE : ce block fait 10 515 845 $ de volume 24 h, 2 309 929 $ de
+   *     liquidite, 7 618 trades. `/api/prix-usd` le lit sans difficulte — famille `aerodrome`,
+   *     pool `0x853f5f1b…`. Sa seule pool Uniswap V4 est pairee avec CUBE (« Cube Dog »), vivante
+   *     (`sqrtPriceX96` non nul) mais inutilisable pour un prix.
+   *   ⇒ DONC LE MESSAGE ETAIT FAUX DEUX FOIS : on lit parfaitement ce marche, et ce n est « a
+   *     propos du reseau » ni du block — c est que cette ligne n etait branchee que sur le lecteur
+   *     V4. Accuser le reseau envoie la personne cliquer Retry indefiniment sur une chose qui
+   *     n echouera jamais.
+   *   ⛔ ET ON NE REMPLACE PAS UNE FAUSSE CAUSE PAR UNE AUTRE : on ne dit PAS « aucune pool
+   *     utilisable », puisque le chemin d achat en lit quatre. On dit ce qu on SAIT — le marche est
+   *     lu, voici son prix et son lieu — et on s arrete la. */
+  const adrOuverte = ($('#profil') && $('#profil').dataset.block) || '';
+  const mkLu = adrOuverte ? (marcheParAdr.get(String(adrOuverte).toLowerCase()) || null) : null;
+  const marcheMesure = !!(mkLu && Number(mkLu.prixUsd) > 0);
+  const phraseMarcheMesure = () => 'Its market IS read: ' + (mkLu.dex || 'an on-chain pool')
+    + (Number(mkLu.liquiditeUsd) > 0
+      ? ', ' + Math.round(Number(mkLu.liquiditeUsd)).toLocaleString('en-US') + ' $ of liquidity' : '')
+    + '. What did not come back is the in-app pool reading used for the tier — not the market, and '
+    + 'not the network.';
   const aMontant = typeof mcDevise === 'number' && mcDevise > 0;
   const prix = devise === 'ETH' ? ethUsd
     : (typeof prixDeviseUsd === 'number' && prixDeviseUsd > 0 ? prixDeviseUsd : null);
@@ -8014,9 +8053,13 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
   $('#pPV').textContent = pv === null ? '—' : pv.toLocaleString('en-US');
   if (!e.palier) {
     /* tip 20260923-wallet-intent-market: never say « No market yet » for NON_LUE — that is unread, not absence. */
+    /* ⛔ « Market unread » DISPARAIT QUAND LE MARCHE EST LU. Le dire alors que le prix, la
+     *   liquidite et le lieu viennent d etre mesures est simplement faux — et ca pousse a cliquer
+     *   Retry sur une chose qui n echouera jamais. */
     $('#pPalier').textContent = prixManque ? 'Tier not judged — no USD price for ' + deviseLue
       : etat === 'NON_TROUVEE' ? 'No TB-readable pool yet'
-      : etat === 'NON_LUE' ? 'Market unread — retry'
+      : etat === 'NON_LUE' ? (marcheMesure ? 'Tier not judged — in-app pool reading did not return'
+        : 'Market unread — retry')
       : 'Life not read';
     $('#pBarre').style.width = '0';
     /* ⛔ ON N ACCUSE LE RESEAU QUE QUAND C EST LE RESEAU. Un prix de devise qu on n a pas su lire est
@@ -8025,6 +8068,11 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
       ? 'No Tokenized Block-readable pool among tried keys yet — Instant Birth opens a hooked market, or Re-scan market.'
       : prixManque
         ? 'Its market cap is shown above, in ' + deviseLue + '. The tier is measured in dollars, and no USD price for ' + deviseLue + ' could be read.'
+        /* ⛔⛔ ON N ACCUSE LE RESEAU QUE SI ON N A RIEN LU. Si le marche a ete mesure ailleurs dans
+         *   l app — et il l est, avec son prix et sa liquidite — dire « c est le reseau » envoie la
+         *   personne cliquer Retry sur une chose qui n echouera jamais, et contredit la ligne
+         *   « 4 pools we read on chain » affichee deux lignes plus bas. */
+        : marcheMesure ? phraseMarcheMesure()
         : 'Market unread — that is about the network, not about this block. Use Retry.';
     $('#pNotePalier').textContent = '';
   } else {

@@ -70,11 +70,36 @@ v('⛔⛔ la promesse « the beat below is real » attend d avoir tire', () => {
    *     secondes plus tard, mais elle etait fausse au moment ou on l a lue. */
   const i = html.indexOf('const aTire = ');
   assert.ok(i > 0, 'la garde de la promesse a disparu');
-  const bloc = html.slice(i, i + 900);
+  /* ⛔⛔ LA FENETRE S ELARGIT PARCE QUE LE BLOC A GROSSI, pas parce que la garde faiblit : le
+   *   2026-10-01, l ouverture de la phrase est devenue conditionnelle elle aussi (« Market unread »
+   *   ne doit plus s afficher quand le marche EST lu — mesure sur NVDAc : 10,5 M$ de volume 24 h
+   *   lus pendant que l ecran annoncait « unread »). */
+  const bloc = html.slice(i, i + 2200);
   assert.match(bloc, /traceProfil\.some/,
     'la promesse se juge sur le battement courant : elle clignotera une fois sur deux');
-  assert.match(bloc, /aTire\s*\n?\s*\?\s*'Market unread[\s\S]{0,200}beat below is real/,
-    'la promesse n est plus conditionnee a ce que quelque chose ait tire');
+  /* ⛔⛔⛔ ON TESTE LA PROPRIETE, PLUS LE LITTERAL. L ancien motif exigeait
+   *   `aTire ? 'Market unread…beat below is real` — il collait a UNE formulation, et il a rougi le
+   *   jour ou cette formulation a change POUR UNE BONNE RAISON. Un test attache a une chaine de
+   *   caracteres defend l orthographe, pas la regle.
+   *   ⇒ CE QUI DOIT RESTER VRAI, et c est tout ce qui compte : « the beat below is real » n apparait
+   *     QUE dans la branche VRAIE de `aTire`. Une promesse affichee avant la mesure est un mensonge
+   *     a retardement — elle devient vraie deux secondes plus tard, mais elle etait fausse au moment
+   *     ou on l a lue. */
+  /* ⛔ ON ANCRE SUR LA TERNAIRE DE LA PHRASE, PAS SUR « la premiere `?` qui suit `aTire` ». Ma
+   *   premiere version attrapait une ternaire SANS RAPPORT — celle d un helper ajoute juste
+   *   au-dessus — et accusait un code correct. Une extraction approximative fabrique le faux
+   *   positif qu elle pretend detecter. */
+  const iTern = bloc.indexOf('(aTire');
+  assert.ok(iTern > 0, 'la ternaire de la phrase a disparu');
+  const iVrai = bloc.indexOf('beat below is real', iTern);
+  const iFaux = bloc.indexOf('No neuron has fired yet either', iTern);
+  assert.ok(iVrai > iTern, 'la promesse « beat below is real » a disparu de la ternaire');
+  assert.ok(iFaux > iTern, 'le cas « rien n a tire » a perdu sa propre phrase');
+  /* ⛔⛔ L ORDRE EST LA PREUVE : la branche VRAIE vient avant le `:`, donc avant la phrase du cas
+   *   « rien n a tire ». Si la promesse passait apres, elle s afficherait sans rien avoir tire —
+   *   un mensonge a retardement, vrai deux secondes plus tard et faux au moment de la lecture. */
+  assert.ok(iVrai < iFaux,
+    'la promesse n est plus dans la branche VRAIE de `aTire` : elle s afficherait sans rien avoir tire');
   assert.match(bloc, /No neuron has fired yet either/,
     'le cas « rien n a tire » n a plus sa propre phrase');
 });
