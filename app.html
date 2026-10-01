@@ -2975,6 +2975,10 @@ import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
  *   prix spot, et assemble le lot. Son execution est prouvee sur fork, a6cf paye sur les DEUX
  *   jambes au wei. */
 import { planFranchissement } from './plan-franchissement.js';
+/* ⛔ Le rail Aerodrome a segment unique : UNE transaction (plus l approbation), pas de lot, donc
+ *   aucune exigence d atomicite. C est le chemin de l acheteur en USDC vers une action tokenisee —
+ *   236/245 marches offerts depuis USDC mais 23,1 % du volume seulement, avant lui. */
+import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 /** L ETH natif en V4 : l adresse zero. ⛔ Pas WETH — V4 manipule l ETH natif. */
 const ETH_ADR = '0x0000000000000000000000000000000000000000';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
@@ -10661,6 +10665,80 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
 }
 
 /**
+ * L AFFICHAGE ET L ENVOI D UN SEGMENT AERODROME — deux appels, PAS de lot.
+ *
+ * ⭐ C est le rail de l acheteur en USDC vers une action tokenisee. Mesure du 2026-10-01 : depuis
+ *   USDC, 236/245 marches etaient offerts mais seulement 23,1 % du VOLUME ; les neuf manquants
+ *   portaient 76,9 %.
+ * ⛔⛔ IL NE DEMANDE PAS L ATOMICITE, et c est volontaire : l approbation et le swap sont deux
+ *   appels INDEPENDANTS. Une approbation qui passe seule ne coute que du gaz et ne laisse
+ *   l acheteur avec rien d inattendu — contrairement au franchissement, ou une jambe seule le
+ *   laisse detenir le pivot. On les envoie donc en SEQUENCE, et ce rail reste ouvert aux wallets
+ *   qui ne savent pas grouper.
+ */
+function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
+  const refuser = (texte, compteur) => {
+    e.className = 'note wKo';
+    e.textContent = texte;
+    try { etape(compteur); } catch (_) {}
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+    br.addEventListener('click', () => void preparerEchange('ACHAT'));
+    $('#peActions').appendChild(br);
+  };
+  if (!pa || pa.etat === 'NON_MESURE') {
+    return refuser('Could not price this route right now'
+      + (pa && pa.etape ? ' (' + pa.etape + ')' : '') + ' — nothing to sign, try again.',
+      'echange_multi_refus_prix');
+  }
+  if (pa.etat !== 'PRET') {
+    return refuser('Not possible: ' + (pa.pourquoi || pa.etat)
+      + (pa.etape ? ' (at ' + pa.etape + ')' : '') + ' Nothing was sent.', 'echange_multi_refus_pool');
+  }
+  const r = pa.resume;
+  /* ⛔⛔ LES MEMES GARDES QUE LES AUTRES RAILS, avec la bonne borne — et LES OCTETS, pas le resume. */
+  if (!estWalletDeFrais(compte)) {
+    const tauxOk = typeof r.fraisBps === 'bigint' && r.fraisBps > 0n && r.fraisBps <= BPS_MAX_UI;
+    const destOk = r.beneficiaireFrais
+      && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
+    const octetsOk = pa.appels[1] && String(pa.appels[1].data).toLowerCase()
+      .includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase());
+    if (!tauxOk || !destOk || !octetsOk) {
+      return refuser('This trade could not be prepared safely. Nothing to sign — try again.',
+        'echange_multi_refus_frais');
+    }
+  }
+  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  $('#peLignes').innerHTML = [
+    'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
+    /* ⚠️ « AT LEAST » VIENT D UN PRIX SPOT, PAS D UN DEVIS : il ignore la profondeur du carnet, donc
+     *   la sortie reelle sera inferieure sur un gros montant. On le DIT. */
+    'You receive at least: ' + formaterUnites(r.recoitAuMoins, 8) + ' ' + (symBlock || 'tokens')
+      + ' (floor from the pool price, not a quote)',
+    'Route: ' + r.sauts + (r.sauts > 1 ? ' hops' : ' hop') + ' on Aerodrome, one swap',
+    'Fee: ' + (Number(r.fraisBps) / 100) + '% on what comes out',
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+
+  /* ⛔ DEUX BOUTONS EN SEQUENCE, PAS UN LOT. L approbation d abord — elle porte le montant EXACT,
+   *   jamais l infini — puis le swap. On ne groupe pas : ce rail doit rester ouvert aux wallets qui
+   *   ne savent pas grouper, et c est precisement ce qui le distingue du franchissement. */
+  const bt = document.createElement('button');
+  bt.className = 'bouton'; bt.type = 'button';
+  bt.textContent = 'Approve ' + sym + ' (1 of 2)';
+  bt.addEventListener('click', () => void signerEchange(pa.appels[0], 'ACHAT', true));
+  $('#peActions').appendChild(bt);
+  const bs = document.createElement('button');
+  bs.className = 'bouton sec'; bs.type = 'button';
+  bs.textContent = 'Sign the swap (2 of 2)';
+  bs.addEventListener('click', () => void signerEchange(pa.appels[1], 'ACHAT', false));
+  $('#peActions').appendChild(bs);
+  e.className = 'note';
+  e.textContent = 'Two signatures: the approval for the exact amount, then the swap. '
+    + 'Your wallet shows both before you confirm.';
+  try { etape('echange_multi_pret'); } catch (_) {}
+}
+
+/**
  * L AFFICHAGE ET L ENVOI D UN FRANCHISSEMENT — trois appels, un lot, DEUX frais.
  *
  * ⛔⛔⛔ CE N EST PAS « UNE TRANSACTION », ET ON NE LE DIRA PAS. Le lot groupe TROIS appels sous UNE
@@ -10984,6 +11062,27 @@ async function preparerEchange(sens) {
      * ⛔ IL EST SEPARE DU RAIL V4 PARCE QUE CE N EST PAS LE MEME OBJET : trois appels au lieu d un,
      *   un lot atomique au lieu d une transaction, et DEUX frais au lieu d un. Les fondre ferait un
      *   chemin qui ment sur l un des deux. */
+    /* ══ UN SEGMENT AERODROME : UNE TRANSACTION, PAS DE LOT ════════════════════════════════════
+     * ⭐⭐ C EST LE CHEMIN DE L ACHETEUR EN USDC VERS UNE ACTION TOKENISEE, et la mesure du
+     *   2026-10-01 dit pourquoi il compte : depuis USDC, 236/245 marches etaient offerts mais
+     *   seulement 23,1 % du VOLUME — les neuf manquants (AAPLc, METAc, GOOGLc, AMZNc, SNDKc...)
+     *   portaient 76,9 %. Un payeur en USDC ne pouvait acheter aucune des actions qui font l argent.
+     * ⭐ ET IL N EXIGE PAS L ATOMICITE : approbation puis swap, deux appels independants. Une
+     *   approbation qui passe seule ne coute que du gaz. Ce rail est donc ouvert aux wallets qui ne
+     *   savent pas grouper — ceux a qui le franchissement est ferme. */
+    if (peutEtreAssemblee(deviseDentree).par === 'aerodrome-segment') {
+      let pa;
+      try {
+        pa = await planAerodromeSegment({ rpc, chemin: deviseDentree.chemin,
+          devise: deviseDentree.devise, block: adr, montant: m.valeur, compte,
+          beneficiaireFrais: FEE_WALLET });
+      } catch (err) { pa = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+      finally { profilEnLecture = false; }
+      if ($('#profil').dataset.block !== adr) return;
+      echangeCourant = pa;
+      afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil });
+      return;
+    }
     if (peutEtreAssemblee(deviseDentree).par === 'franchissement') {
       let prixE = null;
       try { prixE = await prixUsdDevise(deviseDentree.devise); } catch (_) { prixE = null; }

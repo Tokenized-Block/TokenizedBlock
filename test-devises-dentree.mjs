@@ -206,11 +206,31 @@ const aeroPur = [
   areteDuBlock({ block: BLOCK, deviseDeLaPool: ETH, famille: 'aerodrome' }),
 ];
 const cAero = classerDevise({ devise: ousd, block: BLOCK, aretes: aeroPur, faitsLus: true });
-t('assemblage: UNE_TX ne suffit PAS — un segment aerodrome est refuse',
-  cAero.etat === 'UNE_TX' && cAero.tx === 1 && peutEtreAssemblee(cAero).ok === false);
-t('assemblage: et le refus nomme la famille, pas « impossible »',
-  /aerodrome/.test(peutEtreAssemblee(cAero).pourquoi)
-  && /we proved|builder/i.test(peutEtreAssemblee(cAero).pourquoi));
+/* ⭐⭐ CETTE ASSERTION DISAIT « un segment aerodrome est REFUSE ». Elle encodait une limite de notre
+ *   OUTILLAGE, pas une regle — et elle a cesse d etre vraie le 2026-10-01, quand une mesure a
+ *   renverse ma decision de ne pas batir ce rail :
+ *       depuis OUSD   245/245 marches offerts   100 % du volume
+ *       depuis USDC   236/245 offerts  mais      23,1 % du volume
+ *   Les neuf manquants depuis USDC — AAPLc, METAc, GOOGLc, AMZNc, SNDKc... — portent 76,9 % du
+ *   volume, et tous echouaient avec ce « aerodrome only ». Une assertion qui gele une limite
+ *   temporaire finit par defendre le defaut qu elle documentait. */
+t('assemblage: un segment aerodrome est OFFERT',
+  cAero.etat === 'UNE_TX' && cAero.tx === 1 && peutEtreAssemblee(cAero).ok === true);
+t('assemblage: et il nomme son assembleur', peutEtreAssemblee(cAero).par === 'aerodrome-segment');
+/* ⛔⛔ DEUX APPELS, ET SURTOUT PAS D ATOMICITE EXIGEE. C est tout son interet : une approbation qui
+ *   passerait seule ne coute que du gaz et ne laisse l acheteur avec rien d inattendu. Ce rail est
+ *   donc ouvert aux wallets qui ne savent pas grouper — ceux a qui le franchissement est ferme. */
+t('assemblage: deux appels (approbation puis swap)', peutEtreAssemblee(cAero).appels === 2);
+t('assemblage: ⛔ et il N EXIGE PAS l atomicite',
+  peutEtreAssemblee(cAero).exigeAtomique === false);
+t('assemblage: le franchissement, lui, l exige TOUJOURS',
+  peutEtreAssemblee(cPont).exigeAtomique === true);
+/* ⛔ ET UNE FAMILLE QU ON NE SAIT PAS BATIR RESTE REFUSEE, avec son nom. */
+const exotique = { etat: 'UNE_TX', devise: ousd, tx: 1,
+  segments: [{ famille: 'un-lieu-inconnu', sauts: [{}] }] };
+t('assemblage: une famille inconnue reste refusee',
+  peutEtreAssemblee(exotique).ok === false
+  && /un-lieu-inconnu/.test(peutEtreAssemblee(exotique).pourquoi));
 /* ⭐⭐ OUVERT LE 2026-10-01 : `cPont` est exactement la forme uniswap-v4 PUIS un saut aerodrome,
  *   c est-a-dire OUSD -> USDC -> une action tokenisee. C etait refuse ; c est desormais bati par
  *   `planifierFranchissement` en UN LOT ATOMIQUE de trois appels.

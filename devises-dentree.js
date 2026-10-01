@@ -209,12 +209,33 @@ export function peutEtreAssemblee(d) {
   }
   const segs = Array.isArray(d.segments) ? d.segments : [];
   if (segs.length === 1) {
-    if (segs[0].famille !== 'uniswap-v4') {
-      return { ok: false, court: segs[0].famille + ' only',
-        pourquoi: 'this route runs on ' + segs[0].famille
-          + ', and the one-transaction builder we proved only covers Uniswap v4 so far' };
+    if (segs[0].famille === 'uniswap-v4') {
+      return { ok: true, pourquoi: null, court: null, par: 'route-v4-multi-sauts', appels: 1 };
     }
-    return { ok: true, pourquoi: null, court: null, par: 'route-v4-multi-sauts', appels: 1 };
+    /* ⭐⭐ UN SEGMENT AERODROME EST OUVERT DEPUIS LE 2026-10-01, ET UNE MESURE A RENVERSE MA
+     *   DECISION DE NE PAS LE BATIR. J avais chiffre le gain sur TOUTES les paires
+     *   (devise d entree x block) : 1,2 %, « ca ne vaut pas un module ». Re-mesure depuis les DEUX
+     *   devises que les gens detiennent reellement, sur les 245 marches servis :
+     *       depuis OUSD   245/245 offerts   100 % du volume
+     *       depuis USDC   236/245 offerts  mais 23,1 % du volume
+     *   Les NEUF non batis depuis USDC sont AAPLc, METAc, GOOGLc, AMZNc, SNDKc... et ils portent
+     *   76,9 % du volume. Un payeur en USDC — le cas le plus banal — ne pouvait acheter AUCUNE des
+     *   actions qui font l argent.
+     *   ⇒ « 1,2 % des paires » et « 76,9 % du volume depuis USDC » decrivent le MEME trou. Moyenner
+     *     sur des paires que personne ne fait avait noye le seul chemin que tout le monde prend.
+     *   ⇒ POURQUOI USDC ECHOUAIT LA OU OUSD REUSSISSAIT : `OUSD -> USDC -> action` traverse DEUX
+     *     factories, donc c est un franchissement, et il etait bati. `USDC -> action` tient sur
+     *     Aerodrome SEUL. Le plus simple etait le trou.
+     * ⭐ ET C EST LE MEILLEUR RAPPORT GAIN/RISQUE DU LOT : un segment unique tient en UNE
+     *   transaction (plus une approbation), donc AUCUNE exigence d atomicite — contrairement au
+     *   franchissement, ferme aux wallets qui ne groupent pas. */
+    if (segs[0].famille === 'aerodrome') {
+      return { ok: true, pourquoi: null, court: null, par: 'aerodrome-segment', appels: 2,
+        exigeAtomique: false };
+    }
+    return { ok: false, court: segs[0].famille + ' only',
+      pourquoi: 'this route runs on ' + segs[0].famille
+        + ', and we build Uniswap v4 and Aerodrome segments, not that venue' };
   }
   /* ⭐⭐ LE FRANCHISSEMENT A DEUX MONDES — ouvert le 2026-10-01 sur demande de Phil : « open OUSD a
    *   tt les action tokenized ». Les actions tokenisees vivent sur AERODROME, OUSD sur UNISWAP V4,

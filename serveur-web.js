@@ -1875,6 +1875,11 @@ const SERVIS = [
    *   `banc-franchissement-ousd-action-fork.mjs` (3 appels status 0x1, a6cf paye sur les DEUX
    *   jambes au wei). */
   'plan-franchissement.js',
+  /* ⛔⛔ `plan-aerodrome-segment.js` : un segment Aerodrome de bout en bout, en UNE transaction.
+   *   Mesure du 2026-10-01 : depuis USDC, 236/245 marches etaient offerts mais seulement 23,1 % du
+   *   VOLUME — les neuf manquants (AAPLc, METAc, GOOGLc...) portaient 76,9 %. 40 assertions,
+   *   10/10 mutations attrapees. */
+  'plan-aerodrome-segment.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
