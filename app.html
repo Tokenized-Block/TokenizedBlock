@@ -2246,7 +2246,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            ILLISIBLE aveugle la sonde de deploiement exactement comme une empreinte REUTILISEE —
            j aurais verifie mes propres deploiements contre `null`. 23 caracteres desormais, et
            `test-empreinte-de-build.mjs` refuse le depassement. -->
-      <p class="note" data-build="20261001-le-pont-est-usdc" hidden>Build <code>20261001-le-pont-est-usdc</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261001-pont-dans-lui" hidden>Build <code>20261001-pont-dans-lui</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2909,6 +2909,13 @@ import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from '
  *   premier en silence : un ecran continuerait a s afficher, avec la mauvaise phrase. */
 import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent, doitDireQuelqueChose,
   phraseMultiplicateur as phraseAccordMultiplicateur } from './cobalt.js';
+/* ⛔ LE PONT DECIDE, IL NE LIT RIEN : on lui FOURNIT les aretes qu on a mesurees. Un chemin bati
+ *   sur une arete supposee promettrait un echange impossible — et une cle devinee ne trouve meme
+ *   pas une pool hookee. */
+import { cheminEntre, transactionsNecessaires, segmenterParFactory,
+  fraisDuPont, phraseFraisDuPont } from './pont-de-liquidite.js';
+/** L ETH natif en V4 : l adresse zero. ⛔ Pas WETH — V4 manipule l ETH natif. */
+const ETH_ADR = '0x0000000000000000000000000000000000000000';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
 /* ⛔ NOM LONG VOULU : `phraseFrais` existe deja pour les frais de CREATION, avec une tout autre
  *   signature. Le compilateur a refuse le doublon — sans lui, l appel aurait vise la mauvaise
@@ -12471,6 +12478,53 @@ $('#plValo').addEventListener('input', () => { valoParDefaut = false; });
  *   ⛔ LE TYPE DE RETOUR DE `prixUsdDevise` NE CHANGE PAS : `valoDefautEnDevise` l attend en
  *     nombre, et le faire muter en objet aurait casse une conversion de FDV en silence. */
 const faitsPoolLus = new Map();
+
+/**
+ * LES ARETES DU GRAPHE, CONSTRUITES SUR CE QU ON A REELLEMENT MESURE.
+ *
+ * ⛔⛔ CHAQUE DEVISE DU REGISTRE A UNE POOL CONTRE USDC, et `faitsPoolLus` en porte la famille —
+ *   PROUVEE par un aller-retour sur la chaine, jamais par le `dexId` d un agregateur. Une devise
+ *   dont on n a rien lu n entre PAS dans le graphe : un chemin bati sur une arete supposee
+ *   promettrait un echange impossible.
+ * ⛔ ET `famille: 'interne'` N EST PAS UNE ARETE : c est le marqueur de notre devise de reference,
+ *   pas une pool. L inclure inventerait un lien.
+ * ⛔ L ARETE ETH <-> USDC EST LA SEULE ECRITE A LA MAIN, et elle est mesuree des deux cotes :
+ *   ETH/USDC rend 4 pools en V4 et USDC/WETH 3 pools sur Aerodrome (sonde du 2026-10-01, 0 non
+ *   mesuree). C est ce qui fait d USDC le pont — pas NVDAc, comme je l avais cru avant que le test
+ *   ne me corrige.
+ */
+function aretesMesurees() {
+  const aretes = [
+    { de: ETH_ADR, vers: USDC_BASE, famille: 'uniswap-v4' },
+    { de: ETH_ADR, vers: USDC_BASE, famille: 'aerodrome' },
+  ];
+  for (const [adr, f] of faitsPoolLus) {
+    if (!f || typeof f.famille !== 'string') continue;
+    if (f.famille !== 'aerodrome' && f.famille !== 'uniswap-v4') continue;
+    if (String(adr) === String(USDC_BASE).toLowerCase()) continue;
+    aretes.push({ de: USDC_BASE, vers: adr, famille: f.famille });
+  }
+  return aretes;
+}
+
+/**
+ * COMBIEN DE TRANSACTIONS UN ACHETEUR VENANT D ETH DEVRA-T-IL SIGNER POUR CETTE PAIRE ?
+ *
+ * ⛔⛔ C EST LA QUESTION QUI CHANGE UNE DECISION : coter son block en OUSD est legitime — la pool
+ *   fait 10 M$ au pair — mais un acheteur qui tient de l ETH devra passer par USDC, donc signer
+ *   DEUX fois. Le createur a le droit de le savoir AVANT, pas apres.
+ * ⛔ SANS ARETE MESUREE POUR CETTE PAIRE, ON SE TAIT. Rendre `null` plutot qu une phrase prudente
+ *   est le seul choix honnete : on ne sait pas, donc on n annonce rien. Inventer « 1 transaction »
+ *   serait exactement la promesse qu on ne peut pas tenir.
+ */
+function transactionsDepuisEth(adrPaire) {
+  const a = String(adrPaire || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return null;
+  if (a === String(ETH_ADR).toLowerCase()) return { tx: 1, chemin: null, directe: true };
+  const r = cheminEntre(ETH_ADR, a, aretesMesurees());
+  if (r.etat !== 'OK') return null;
+  return { tx: transactionsNecessaires(r.chemin), chemin: r.chemin, directe: false };
+}
 async function prixUsdDevise(adr) {
   if (String(adr).toLowerCase() === '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913') {
     /* ⛔ L USDC EST LA DEVISE DE REFERENCE : pas de pool, donc pas de glissement a mesurer. On le
@@ -14260,11 +14314,29 @@ function majFraisEtRecap() {
     ? ('Instant Birth · quoted in ' + (paireChoisie.symbole || 'stock')
       + ' · Birth fee 0.001 ETH. ')
     : '';
+  /* ⛔⛔ CE QU UN ACHETEUR VENANT D ETH DEVRA SIGNER, DIT AVANT LA CREATION ET PAS APRES.
+   *   Mesure du 2026-10-01 : les deux mondes sont disjoints. OUSD n a que des pools Uniswap V4,
+   *   14 des 15 actions n ont que des pools Aerodrome, et un seul `exactInput` ne traverse qu UNE
+   *   factory. Coter son block en OUSD est legitime — la pool fait 10 M$ au pair — mais l acheteur
+   *   passera par USDC, donc signera DEUX fois. Le createur a le droit de le savoir AVANT.
+   * ⛔ ET LE FRAIS EST PAR TRANSACTION : deux segments, c est 0,2 %, pas 0,1 %. On dit le TOTAL.
+   * ⛔ SANS ARETE MESUREE, ON SE TAIT. `transactionsDepuisEth` rend `null` quand on n a rien lu, et
+   *   la phrase n apparait pas : « je ne sais pas » ne doit jamais ressembler a « c est simple ».
+   *   Et on ne parle QUE si c est plus d une transaction — un avertissement permanent n avertit
+   *   plus, ce depot l a deja paye. */
+  const routeAcheteur = (!v.ko && paireChoisie && paireChoisie.adr)
+    ? transactionsDepuisEth(paireChoisie.adr) : null;
+  const motRoute = (routeAcheteur && routeAcheteur.tx > 1)
+    ? (' A buyer holding ETH will need ' + routeAcheteur.tx + ' transactions to reach it, because '
+      + 'its pools sit on ' + segmenterParFactory(routeAcheteur.chemin).map((s) => s.famille).join(' then ')
+      + ' and one swap cannot cross two venues — '
+      + phraseFraisDuPont(fraisDuPont(routeAcheteur.chemin)))
+    : '';
   $('#cRecap').textContent = v.ko
     ? (neutre ? 'Give it a name and a symbol — everything else is already set.' : v.ko)
     : actionRecap + 'You will create ' + v.sym + ' on ' + R.nom + ': 1,000,000,000 units, all to you (cap = supply)'
       + ', paired with ' + etiquettePaire(paireChoisie)
-      + feeTxt + '.';
+      + feeTxt + '.' + motRoute;
   $('#cRecap').className = 'note' + (v.ko && !neutre ? ' wKo' : '');
   majFundWalletPourPaire();
   const liste = $('#cApercuTx');

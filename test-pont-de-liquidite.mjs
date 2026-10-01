@@ -85,6 +85,50 @@ cas('⚠️ et NVDAc est un pont de SECOURS : retirer ses aretes ne casse rien',
 });
 
 console.log('');
+console.log('⛔⛔⛔ ON MINIMISE LES SEGMENTS, PAS LES SAUTS');
+/* ⛔ CE BLOC VIENT D UN DEFAUT REEL, TROUVE EN RENDANT LA PHRASE. ETH <-> USDC existe sur LES DEUX
+ *   factories. Un parcours qui minimise les SAUTS prend la premiere arete trouvee et peut creer un
+ *   changement de factory INUTILE : il annoncait 2 transactions pour ETH -> AAPLc alors que le
+ *   chemin tient entierement sur Aerodrome en UNE. Dire « 2 transactions » quand une suffit
+ *   decourage une paire parfaitement bonne — l anti-hype coupe dans les DEUX sens. */
+const ETH_T = '0x0000000000000000000000000000000000000000';
+const ARETES_DEUX_MONDES = [
+  { de: ETH_T, vers: USDC, famille: 'uniswap-v4' },   /* mesure : 4 pools V4 */
+  { de: ETH_T, vers: USDC, famille: 'aerodrome' },    /* mesure : 3 pools Aerodrome */
+  { de: USDC, vers: OUSD, famille: 'uniswap-v4' },
+  { de: USDC, vers: AAPL, famille: 'aerodrome' },
+];
+cas('⭐ ETH -> AAPLc tient en UNE transaction (tout Aerodrome), pas deux', () => {
+  const r = cheminEntre(ETH_T, AAPL, ARETES_DEUX_MONDES);
+  assert.equal(r.etat, 'OK', r.pourquoi);
+  assert.equal(transactionsNecessaires(r.chemin), 1,
+    'segments : ' + JSON.stringify(segmenterParFactory(r.chemin).map((s) => s.famille)));
+  assert.deepEqual(segmenterParFactory(r.chemin).map((s) => s.famille), ['aerodrome']);
+});
+cas('⭐ ETH -> OUSD tient en UNE transaction (tout V4)', () => {
+  const r = cheminEntre(ETH_T, OUSD, ARETES_DEUX_MONDES);
+  assert.equal(transactionsNecessaires(r.chemin), 1);
+  assert.deepEqual(segmenterParFactory(r.chemin).map((s) => s.famille), ['uniswap-v4']);
+});
+cas('⛔⛔ mais OUSD -> AAPLc exige VRAIMENT deux transactions, et on le dit', () => {
+  /* ⛔ L ENVERS DU CAS PRECEDENT, et il est obligatoire : si le module se mettait a rendre « 1 »
+   *   partout pour paraitre simple, ce test rougirait. OUSD n est QUE sur V4, AAPLc QUE sur
+   *   Aerodrome : aucun chemin ne peut tenir sur une seule factory. */
+  const r = cheminEntre(OUSD, AAPL, ARETES_DEUX_MONDES);
+  assert.equal(r.etat, 'OK', r.pourquoi);
+  assert.equal(transactionsNecessaires(r.chemin), 2);
+});
+cas('⛔ et a cout egal en segments, le chemin le plus COURT gagne', () => {
+  const r = cheminEntre(ETH_T, AAPL, [
+    ...ARETES_DEUX_MONDES,
+    { de: ETH_T, vers: NVDA, famille: 'aerodrome' },
+    { de: NVDA, vers: USDC, famille: 'aerodrome' },
+  ]);
+  assert.equal(transactionsNecessaires(r.chemin), 1);
+  assert.equal(r.chemin.length, 2, 'un detour a ete pris : ' + r.chemin.length + ' sauts');
+});
+
+console.log('');
 console.log('⛔ LES SEGMENTS NE SE REGROUPENT PAS SI ILS NE SE TOUCHENT PAS');
 cas('V4, Aerodrome, V4 fait TROIS segments, pas deux', () => {
   const segs = segmenterParFactory([

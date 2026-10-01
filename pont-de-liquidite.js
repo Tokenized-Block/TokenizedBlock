@@ -92,23 +92,53 @@ export function cheminEntre(de, vers, aretes) {
   };
   for (const e of bonnes) { ajouter(e.de, e.vers, e); ajouter(e.vers, e.de, e); }
 
-  /* ⛔ PARCOURS EN LARGEUR, et on BORNE la profondeur : un chemin de dix sauts n est pas une route,
-   *   c est une accumulation de glissement et d occasions d echouer. */
-  const file = [{ noeud: bas(de), sauts: [] }];
-  const vus = new Set([bas(de)]);
-  while (file.length) {
-    const { noeud, sauts } = file.shift();
-    if (sauts.length >= SAUTS_MAX) continue;
-    for (const v of (voisins.get(noeud) || [])) {
-      const suite = [...sauts, { de: noeud, vers: bas(v.vers), famille: v.famille }];
-      if (bas(v.vers) === bas(vers)) {
-        return { etat: 'OK', chemin: suite, ignorees, pourquoi: null };
+  /* ⛔⛔⛔ ON MINIMISE LES SEGMENTS, PAS LES SAUTS — ET C EST MA PROPRE SORTIE QUI L A EXIGE.
+   *   Ma premiere version faisait un simple parcours en largeur sur les NOEUDS : elle rendait le
+   *   chemin le plus court en SAUTS, et prenait la premiere arete trouvee. Resultat mesure pour
+   *   ETH -> AAPLc : elle empruntait ETH -> USDC en Uniswap V4 puis USDC -> AAPLc en Aerodrome,
+   *   soit DEUX segments donc DEUX transactions — alors que ETH <-> USDC existe AUSSI sur
+   *   Aerodrome, et que le chemin tient donc ENTIEREMENT sur une seule factory : UNE transaction.
+   *   ⇒ J aurais dit au createur « il faudra 2 transactions » quand UNE suffit. Une sous-vente
+   *     fausse decourage une paire parfaitement bonne, et l anti-hype coupe dans les DEUX sens :
+   *     on ne surestime pas le cout plus qu on ne le sous-estime.
+   *   ⇒ L etat du parcours est donc (NOEUD, FAMILLE COURANTE), et le cout est le NOMBRE DE
+   *     CHANGEMENTS de factory. A cout egal, le moins de sauts gagne.
+   * ⛔ ET LA PROFONDEUR RESTE BORNEE : un chemin de dix sauts n est pas une route, c est une
+   *   accumulation de glissement et d occasions d echouer. */
+  const cle = (noeud, famille) => noeud + '|' + (famille || '');
+  /* File par cout croissant : on traite d abord tout ce qui ne change pas de factory. */
+  let courant = [{ noeud: bas(de), famille: null, sauts: [] }];
+  const vus = new Map([[cle(bas(de), null), 0]]);
+  let meilleur = null;
+  for (let cout = 0; cout <= FAMILLES.length && courant.length; cout += 1) {
+    const suivant = [];
+    /* Parcours en largeur A COUT CONSTANT : on explore tout ce qui reste sur la meme factory. */
+    for (let i = 0; i < courant.length; i += 1) {
+      const { noeud, famille, sauts } = courant[i];
+      if (sauts.length >= SAUTS_MAX) continue;
+      for (const v of (voisins.get(noeud) || [])) {
+        const changement = famille !== null && v.famille !== famille;
+        const suite = [...sauts, { de: noeud, vers: bas(v.vers), famille: v.famille }];
+        if (bas(v.vers) === bas(vers)) {
+          /* ⛔ ON NE REND PAS LA PREMIERE ARRIVEE : on garde la MOINS CHERE en segments, et a cout
+           *   egal la plus COURTE. Rendre la premiere etait tout le defaut. */
+          if (!changement) return { etat: 'OK', chemin: suite, ignorees, pourquoi: null };
+          if (!meilleur || suite.length < meilleur.length) meilleur = suite;
+          continue;
+        }
+        const k = cle(bas(v.vers), v.famille);
+        const dejaVu = vus.get(k);
+        const coutIci = cout + (changement ? 1 : 0);
+        if (dejaVu !== undefined && dejaVu <= coutIci) continue;
+        vus.set(k, coutIci);
+        (changement ? suivant : courant).push({ noeud: bas(v.vers), famille: v.famille, sauts: suite });
       }
-      if (vus.has(bas(v.vers))) continue;
-      vus.add(bas(v.vers));
-      file.push({ noeud: bas(v.vers), sauts: suite });
     }
+    /* ⛔ Une arrivee trouvee a CE cout est deja optimale : tout ce qui suit coute plus cher. */
+    if (meilleur) return { etat: 'OK', chemin: meilleur, ignorees, pourquoi: null };
+    courant = suivant;
   }
+  if (meilleur) return { etat: 'OK', chemin: meilleur, ignorees, pourquoi: null };
   return { etat: 'REFUSE', chemin: null, ignorees,
     pourquoi: 'no path of ' + SAUTS_MAX + ' hops or fewer joins these two tokens' };
 }
