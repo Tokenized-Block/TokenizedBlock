@@ -10436,7 +10436,29 @@ function majDevisesDentree(v) {
   bloc.hidden = true; note.hidden = true; sel.innerHTML = '';
   const block = $('#profil') && $('#profil').dataset.block;
   if (!block) return;
-  const deviseDeLaPool = v && v.paire === 'DEVISE' && v.deviseAdr ? v.deviseAdr : ETH_ADR;
+  /* ⛔⛔⛔ CE `: ETH_ADR` ETAIT UN DEFAUT PERMISSIF, ET JE L AI VU A L ECRAN AVANT DE LE VOIR DANS
+   *   LE CODE. Sur SNDKc le selecteur affichait « Pay with : ETH » et « Buy — ETH to spend », alors
+   *   que ce block est cote en USDC (mesure : quote USDC, pool Aerodrome `0x5a8236f5…`,
+   *   13 598 198 $ de volume 24 h). `vieDuBlock` echoue sur ce block — la badge « MARKET UNREAD »
+   *   le dit — donc `v.paire` n etait pas `'DEVISE'`, et on RETOMBAIT sur l ETH.
+   *   ⇒ L ETH n est pas un defaut neutre : il construit un GRAPHE FAUX. Le selecteur proposait donc
+   *     des routes depuis une devise de pool qui n existe pas, et rendait « 2 no route » la ou il y
+   *     a un marche a 13,6 M$.
+   *
+   * ⛔⛔ LA DISTINCTION QUI COMPTE, et elle n est pas « ETH ou pas » :
+   *     · `v` a REPONDU et dit que la paire n est pas une DEVISE  -> l ETH est une CONCLUSION
+   *       mesuree, et c est le cas des 188 marches cotes en ETH natif. On la garde.
+   *     · `v` n a RIEN rendu                                      -> l ETH est une SUPPOSITION.
+   *   On prend alors la devise de cotation MESUREE, qui est deja dans `marcheParAdr` : la ligne
+   *   entiere du marche y est stockee, `quoteAdr` compris. On avait la reponse et on devinait.
+   * ⛔ ET S IL N Y A NI L UN NI L AUTRE, ON NE SUPPOSE PAS : `deviseDeLaPool` reste nul,
+   *   `areteDuBlock` rend `null`, et `devisesDentree` REFUSE. Un selecteur absent est honnete ;
+   *   un selecteur bati sur une devise inventee ne l est pas. */
+  const mkPourPool = marcheParAdr.get(String(block).toLowerCase()) || null;
+  const deviseDeLaPool = (v && v.paire === 'DEVISE' && v.deviseAdr) ? v.deviseAdr
+    : (v && v.etat && v.etat !== 'NON_LUE' && v.etat !== 'REFUSEE') ? ETH_ADR
+    : (mkPourPool && /^0x[0-9a-fA-F]{40}$/.test(String(mkPourPool.quoteAdr || ''))
+      ? String(mkPourPool.quoteAdr).toLowerCase() : null);
   const fb = faitsPoolLus.get(String(block).toLowerCase()) || null;
   /* ⛔ LA FAMILLE VIENT DES FAITS LUS, JAMAIS DU NOM D UN AGREGATEUR. `faitsDeLaPool` la prouve
    *   cote serveur par un aller-retour sur la factory ; sans ca elle vaut `NON_MESURE`, et
