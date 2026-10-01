@@ -9093,8 +9093,29 @@ $('#pMap').addEventListener('click', () => {
   let h = habitants.find((x) => x.adr.toLowerCase() === String(adr).toLowerCase());
   if (!h) {
     h = creerHabitant({ jeton: adr, symbole: symProfil, vie: vieProfil, etatVie: etatVieProfil });
-    if (!anim) animer();
   }
+  /* ⛔⛔⛔ LA RELANCE ETAIT A L INTERIEUR DU `if (!h)`, DONC ELLE NE COUVRAIT QUE LE CAS RARE.
+   *      SIGNALE PAR LE GROK BOT (2026-10-01, trois fois de suite) : apres « Show on map », la carte
+   *      reste VIDE pendant 7 a 10 s, puis revient toute seule.
+   *      ⇒ Elle n est pas vidée : elle n est plus PROJETEE. Les cubes n ont AUCUNE position tant que
+   *        `moteur3d.image()` ne tourne pas — ce fichier l ecrit deja : « placer only sets wx/wy/wz;
+   *        CSS transform comes from moteur3d.image via animer(). Without animer, every tile stays
+   *        left:0 top:0 ». Sans la boucle, tout est empile en haut a gauche. Phil l avait deja
+   *        signale, et le commentaire du depot le nomme « Raksha pile top-left ».
+   *      ⇒ Or `anim` peut valoir `null` : la ligne 4584 l annule des que le document est masque, et
+   *        sa relance est sur l evenement de VISIBILITE du navigateur — elle ne se declenche PAS sur
+   *        un changement d onglet INTERNE a l app.
+   *      ⇒ Et la relance d ici ne tirait QUE si le block n etait pas deja sur la carte. Pour un
+   *        marche suivi — le cas normal — `h` est trouve, la branche est sautee, et rien ne relance.
+   *        La carte revient 7 a 10 s plus tard parce qu une AUTRE relance finit par tirer, dans la
+   *        boucle des soleils, a l arrivee de `/api/trending`. Ca colle a la seconde pres.
+   *
+   * ⛔ LA GARDE EST VRAIE DANS LES DEUX CAS, ET C EST POUR CA QUE LE DEFAUT ETAIT INVISIBLE :
+   *   `if (!anim) animer()` est correct partout ou il est ecrit. Il etait juste au mauvais ENDROIT.
+   *   C est le motif « la garde couvre la mauvaise moitie », et celle-ci couvrait la moitie RARE.
+   * ⛔ ET LA DEPLACER NE COUTE RIEN : `animer()` est deja garde par `!anim`, donc l appeler quand la
+   *   boucle tourne deja ne fait rien. On elargit une garde, on n en ajoute pas une seconde. */
+  if (!anim) animer();
   h.el.click();
 });
 /* Companion glue links — same map path; Brain AI selects this profile block. No fee / Launch touch. */
