@@ -2566,6 +2566,14 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <div class="dexCols">
           <div class="dexCol">
+            <!-- ⛔⛔ « AVEC QUOI PAYER » — le selecteur n apparait QUE si une devise autre que celle
+                 de la pool a une route MESUREE ET assemblable. Un selecteur a une seule option est
+                 un faux choix, et un selecteur qui liste des devises qu on ne sait pas router est
+                 un bouton qui revert. `peDeviseNote` porte ce qui a ete LU mais pas offert, avec la
+                 raison : une route reelle que notre outillage ne couvre pas encore n est pas une
+                 impossibilite, et la taire ferait croire qu elle n existe pas. -->
+            <label class="champ" id="peDeviseBloc" hidden>Pay with<select id="peDevise"></select></label>
+            <p class="note" id="peDeviseNote" hidden></p>
             <label class="champ">Buy — ETH to spend<input id="peAchat" inputmode="decimal" placeholder="0.01" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeEth">—</b> <button type="button" class="maxDex" id="peMaxEth">MAX</button></span></label>
             <button class="bouton" id="peAcheter" type="button">Prepare buy</button>
@@ -2917,6 +2925,17 @@ import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent, doi
  *   pas une pool hookee. */
 import { cheminEntre, transactionsNecessaires, segmenterParFactory,
   fraisDuPont, phraseFraisDuPont } from './pont-de-liquidite.js';
+/* ⛔⛔ `devises-dentree.js` AJOUTE AU GRAPHE L ARETE DU BLOCK OUVERT — celle qui manquait. Sans
+ *   elle, `cheminEntre(OUSD, block)` rendait REFUSE : non pas parce qu aucune route n existe, mais
+ *   parce que `aretesMesurees()` ne posait que des aretes `USDC -> devise du registre` et que le
+ *   block n y entrait JAMAIS. Le pont etait complet ET inatteignable depuis cet ecran — un module
+ *   de decision correct, branche sur une entree qui ne contenait pas le cas qu il sert.
+ * ⛔ `peutEtreAssemblee` separe « il y a une route » de « on sait l assembler » : seul un segment
+ *   Uniswap V4 est OFFERT, parce que c est le seul cas prouve en execution (fork : OUSD -> USDC ->
+ *   ETH -> TBLOCK, status 0x1). Les autres se LISENT, avec leur raison — une limite qui est la
+ *   NOTRE ne doit pas se lire « impossible ». */
+import { devisesDentree, peutEtreAssemblee, phraseDevise, ETATS_OFFERTS }
+  from './devises-dentree.js';
 /** L ETH natif en V4 : l adresse zero. ⛔ Pas WETH — V4 manipule l ETH natif. */
 const ETH_ADR = '0x0000000000000000000000000000000000000000';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
@@ -10222,8 +10241,133 @@ function majDeviseEchange(v) {
     if (action) nAction.textContent = 'Coinbase tokenized stocks are only for eligible jurisdictions outside the U.S.; the issuer can block an address, and then the trade fails before anything moves. One ' + sym + ' is not always one share (dividends and splits change the ratio). ' + phraseMarcheActions();
   }
   void majSoldeDeviseEchange();
+  majDevisesDentree(v);
 }
 let deviseEchange = null;
+/** La devise d entree choisie dans le selecteur, ou `null` = celle de la pool (chemin historique). */
+let deviseDentree = null;
+/**
+ * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
+ *
+ * ⛔⛔⛔ C EST LE PAS QUI MANQUAIT, et il manquait depuis que le pont existe. `pont-de-liquidite.js`
+ *   trouvait la route, `route-v4-multi-sauts.js` l assemblait, un banc sur fork l avait prouvee en
+ *   execution — et AUCUN BOUTON NE L OFFRAIT. Un porteur d OUSD ne pouvait litteralement rien
+ *   acheter ici. Le code etait complet et le produit absent : c est le defaut le plus cher de la
+ *   serie, parce qu il est invisible a tous les tests unitaires.
+ *
+ * ⛔⛔ LE SELECTEUR NE S AFFICHE PAS S IL N A QU UNE OPTION. Un choix unique n est pas un choix, et
+ *   un controle inerte apprend au visiteur a ne plus le regarder. Mesure du 2026-09 sur cet ecran :
+ *   un selecteur vide pendant 24 s avec 223 blocks charges — exactement ce qu il ne faut pas
+ *   reproduire.
+ * ⛔ CE QUI EST LU MAIS PAS OFFRABLE EST **DIT**, pas cache. Une route qui existe sur la chaine et
+ *   que notre outillage ne couvre pas encore est une limite A NOUS ; la taire ferait lire
+ *   « impossible ». La phrase nomme la raison, route par route.
+ * ⛔ ET SANS FAMILLE DE POOL LUE POUR CE BLOCK, ON NE DIT RIEN DU TOUT. `devisesDentree` rend alors
+ *   REFUSE et non une liste vide : « on ne sait pas ou arrive ce block » n est pas « aucune devise
+ *   ne marche ». Afficher un selecteur vide serait transformer notre ignorance en verdict.
+ */
+function majDevisesDentree(v) {
+  const bloc = $('#peDeviseBloc'), sel = $('#peDevise'), note = $('#peDeviseNote');
+  if (!bloc || !sel || !note) return;
+  deviseDentree = null;
+  bloc.hidden = true; note.hidden = true; sel.innerHTML = '';
+  const block = $('#profil') && $('#profil').dataset.block;
+  if (!block) return;
+  const deviseDeLaPool = v && v.paire === 'DEVISE' && v.deviseAdr ? v.deviseAdr : ETH_ADR;
+  const fb = faitsPoolLus.get(String(block).toLowerCase()) || null;
+  /* ⛔ LA FAMILLE VIENT DES FAITS LUS, JAMAIS DU NOM D UN AGREGATEUR. `faitsDeLaPool` la prouve
+   *   cote serveur par un aller-retour sur la factory ; sans ca elle vaut `NON_MESURE`, et
+   *   `devisesDentree` refuse — ce qui est le bon comportement. */
+  const familleDuBlock = fb && typeof fb.famille === 'string' ? fb.famille : null;
+  let candidates = [];
+  try {
+    candidates = pairesProposees(CHAINE).map((p) => ({
+      adr: p.adr, symbole: p.symbole,
+      /* ⛔⛔ PAS DE `decimales` ICI, ET C EST VOLONTAIRE. Le registre `DEVISES_BASE` n en porte
+       *   AUCUN — seulement dans ses commentaires. Recopier `p.decimales` mettrait `undefined`
+       *   dans un champ qui porte ce nom, et un champ nomme finit toujours par etre cru : passe
+       *   plus loin il retomberait sur 18 par defaut, alors qu OUSD en a SIX. Un facteur 10^12 sur
+       *   le montant placerait le bareme degressif dans le mauvais palier.
+       *   ⇒ Les decimales sont LUES sur le jeton au moment de preparer l echange, par
+       *     `decimalesDe()`, et un echec de lecture REFUSE l echange au lieu d en supposer 18. */
+      /* ⛔ `faitsLus` EST UNE MESURE, PAS UNE SUPPOSITION : c est la presence de faits de pool
+       *   effectivement lus pour cette devise. C est lui qui separe SANS_ROUTE (on a regarde) de
+       *   NON_MESUREE (on n a pas regarde) — et confondre les deux transformerait notre
+       *   incompletude en accusation contre le jeton de quelqu un. */
+      faitsLus: faitsPoolLus.has(String(p.adr).toLowerCase()),
+    }));
+  } catch (_) { candidates = []; }
+  const r = devisesDentree({ block, deviseDeLaPool, familleDuBlock, candidates, aretes: aretesMesurees() });
+  if (r.etat !== 'OK') return;
+  /* ⛔ ON NE GARDE QUE CE QUI EST ASSEMBLABLE. « Offert » par le classement ne suffit pas : une
+   *   route a 2 segments est reelle et demande 2 signatures avec DEUX assembleurs differents. */
+  /* ⛔⛔⛔ ET UNE CONDITION DE PLUS, QUI EST LA NOTRE ET PAS CELLE DE LA CHAINE : le bouton
+   *     « Prepare buy » n appelle PAS ENCORE `planEchangeMultiSauts`. Tant que c est vrai, offrir
+   *     une devise routee changerait l etiquette SANS changer ce qui est envoye — l utilisateur
+   *     croirait payer en OUSD et signerait le chemin historique. Un controle qui ment est pire
+   *     qu un controle absent, et c est exactement le defaut « garde vraie mais qui tient la
+   *     mauvaise moitie ».
+   *   ⇒ ON N OFFRE DONC QUE LA DIRECTE, et les routes reelles descendent dans la note AVEC leur
+   *     raison — qui dit que la limite est chez NOUS. Cette ligne disparait le jour ou
+   *     `preparerEchange` lit `deviseDentree` ; elle n est pas un choix de produit, c est l etat
+   *     reel du cablage, ecrit la ou il se voit. */
+  const ASSEMBLEUR_CABLE_SUR_LE_BOUTON = false;
+  /* ⛔ UN SEUL BOOLEEN POUR LES DEUX LISTES — voir la note plus bas : deux predicats differents
+   *   avaient deja ouvert un trou ou une route mesuree n etait ni offerte ni dite. */
+  const offrable = (d) => peutEtreAssemblee(d).ok
+    && (ASSEMBLEUR_CABLE_SUR_LE_BOUTON || d.etat === 'DIRECTE');
+  const cliquables = r.devises.filter(offrable);
+  const symBlock = (symProfil || 'this block');
+  if (cliquables.length > 1) {
+    for (const d of cliquables) {
+      const o = document.createElement('option');
+      o.value = d.devise;
+      o.textContent = (d.symbole || d.devise.slice(0, 8)) + (d.etat === 'DIRECTE' ? '' : ' — routed');
+      sel.appendChild(o);
+    }
+    sel.value = String(deviseDeLaPool).toLowerCase();
+    bloc.hidden = false;
+    deviseDentree = null; /* le defaut reste la devise de la pool : le chemin historique, intact */
+    sel.onchange = () => {
+      const d = cliquables.find((x) => x.devise === sel.value) || null;
+      deviseDentree = d && d.etat !== 'DIRECTE' ? d : null;
+      majEtiquetteDeviseDentree(d, symBlock);
+    };
+    majEtiquetteDeviseDentree(cliquables.find((x) => x.devise === sel.value) || null, symBlock);
+  }
+  /* ⛔⛔ CE QUI A ETE LU ET N EST PAS OFFRABLE SE DIT, AVEC SA RAISON — et seulement ce qui a ete
+   *   LU. Une devise `NON_MESUREE` n entre pas dans cette phrase : nommer un jeton qu on n a pas
+   *   sonde comme « sans route » serait une accusation fondee sur notre propre incompletude. */
+  /* ⛔⛔ LE PREDICAT EST LE MEME QUE CELUI DU SELECTEUR, et ce n est pas un detail de style : avec
+   *   deux predicats differents, une route MESUREE pouvait n etre ni offerte ni dite. Je venais
+   *   de creer ce trou exactement — une route OUSD reelle serait passee entre les deux filtres et
+   *   aurait disparu de l ecran. Une valeur mesuree puis rendue invisible est le meme defaut
+   *   qu une valeur lue puis jetee, un cran plus loin : la mesure est faite, et personne ne la
+   *   voit. On derive donc les deux listes du MEME booleen. */
+  const raisonDeNePasOffrir = (d) => (peutEtreAssemblee(d).ok
+    ? 'a ' + d.tx + '-signature route exists and we priced it, but this button does not build it yet'
+    : peutEtreAssemblee(d).pourquoi);
+  const dits = r.devises
+    .filter((d) => d.etat !== 'NON_MESUREE' && !offrable(d))
+    .map((d) => (d.symbole || d.devise.slice(0, 8)) + ': ' + raisonDeNePasOffrir(d));
+  if (dits.length) {
+    note.hidden = false;
+    note.textContent = 'Read but not offered yet — ' + dits.join(' · ');
+  }
+}
+/** ⛔ L ETIQUETTE DIT LE NOMBRE DE SIGNATURES. « Plusieurs » sans le chiffre ne se decide pas. */
+function majEtiquetteDeviseDentree(d, symBlock) {
+  const lab = $('#peAchat') && $('#peAchat').closest('label');
+  if (lab && lab.firstChild && lab.firstChild.nodeType === 3 && d) {
+    lab.firstChild.textContent = 'Buy — ' + (d.symbole || 'tokens') + ' to spend';
+  }
+  const note = $('#peDeviseNote');
+  if (note && d && d.etat !== 'DIRECTE') {
+    note.hidden = false;
+    note.textContent = phraseDevise(d, symBlock)
+      + ' This rail takes 0.2% up to $100 and 0.1% above, inside the same transaction.';
+  }
+}
 async function majSoldeDeviseEchange() {
   if (!deviseEchange || !compte) return;
   try {
@@ -12547,6 +12691,20 @@ async function prixUsdDevise(adr) {
       faitsPoolLus.set(String(adr).toLowerCase(),
         { glissementBps: typeof d.glissementBps === 'number' ? d.glissementBps : null, famille: d.famille || 'NON_MESURE',
           pool: typeof d.pool === 'string' ? d.pool : null,
+          /* ⛔⛔⛔ `cleV4` ETAIT LUE PUIS JETEE — et c est le motif de defaut le plus cher de ce
+           *     depot. Le serveur la calcule (il lit l evenement `Initialize` du poolId, parce
+           *     qu une cle V4 ne se DEDUIT pas d un poolId : c est un hash), il la renvoie, et ce
+           *     `set` ne la gardait pas. J avais meme ECRIT dans `serveur-web.js` : « sans elle,
+           *     l ecran saurait qu une route existe et ne saurait pas la fabriquer ». C est
+           *     exactement ce qui se passait.
+           *   ⇒ Sans cette cle, une route multi-sauts est COTABLE et pas CONSTRUCTIBLE : on peut
+           *     dire « OUSD atteint ce block » et ne pas pouvoir produire le calldata. Un bouton
+           *     qui promet ce qu il ne peut pas tenir.
+           *   ⛔ ET SON ABSENCE RESTE UN FAIT NOMME : le serveur rend `cleV4: null` + `pourquoiCle`
+           *     quand l evenement n etait pas dans la fenetre lue. On garde les deux, pour que
+           *     l ecran distingue « pas de cle » de « pas regarde ». */
+          cleV4: d && d.cleV4 ? d.cleV4 : null,
+          pourquoiCle: d && typeof d.pourquoiCle === 'string' ? d.pourquoiCle : null,
           alternativeAerodrome: d.alternativeAerodrome || null });
     }
     return d && d.ok && d.prixUsd > 0 ? d.prixUsd : null;

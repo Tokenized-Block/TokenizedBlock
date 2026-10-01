@@ -1,26 +1,30 @@
-/* LE FRAIS DEGRESSIF : 50 bps EN BAS, 10 bps EN HAUT — ET JAMAIS DE FALAISE.
+/* LE FRAIS DEGRESSIF : 20 bps EN BAS, 10 bps EN HAUT — ET JAMAIS DE FALAISE.
  *
- * ⭐ DECISION DE PHIL (2026-10-01) : « mini 50 bps pour petit montant et tu adaptes au montant ».
- *   C est la structure de marche habituelle, et elle sert directement l objectif : la MEDIANE de
- *   nos echanges est petite, donc la plupart paient le taux haut.
+ * ⭐ DECISION DE PHIL (2026-10-01), DANS SA DERNIERE FORMULATION : « fait comme il a de mieux pour
+ *   peu taxer donc le 0.1 % 0.2 % et ca soit rentable pour dev ».
+ *   ⛔ ELLE REMPLACE une version precedente de ce bareme qui portait TROIS paliers 50/20/10 bps,
+ *     ecrite quand il avait dit « mini 50 bps pour petit montant ». Ce commentaire decrivait encore
+ *     ces trois paliers APRES que le code soit passe a deux : un en-tete qui contredit son propre
+ *     code est pire que pas d en-tete, parce que c est lui qu on croit. La seule source de verite
+ *     du bareme est `PALIERS`, juste en dessous.
  *
  * ⛔⛔ LES PALIERS VIENNENT DE LA DISTRIBUTION MESUREE, PAS DE MON INTUITION. Taille moyenne d un
  *   trade sur les 250 lignes servies le 2026-10-01 (volume 24 h / trades 24 h) :
  *       p0 0,0164 $ · p5 4,57 $ · p10 12,31 $ · p25 16,25 $ · p50 22,57 $
  *       p75 95,94 $ · p90 329,88 $ · p99 1 672,31 $ · max 1 965,51 $
- *   ⇒ Les paliers sont poses sur p75 (~100 $) et p99 (~1 700 $), donc :
- *       · les TROIS QUARTS des echanges paient 50 bps — c est la ou vit le volume reel ;
- *       · le quart superieur descend a 20 bps ;
- *       · le 1 % qui depasse 1 700 $ descend a 10 bps, le taux que Phil voulait « comme d hab ».
+ *   ⇒ Le seul palier est pose sur p75 (95,94 $ -> 100 $), donc :
+ *       · les TROIS QUARTS des echanges paient 20 bps — c est la ou vit le volume reel ;
+ *       · le quart superieur descend a 10 bps, le taux « comme d hab ».
  *   ⛔ ET CE SONT DES PALIERS SUR LE MONTANT EN DOLLARS, donc ils demandent un PRIX. Sans prix lu,
  *     on ne devine pas : on applique le taux LE PLUS HAUT (voir plus bas).
  *
  * ⛔⛔⛔ LE PIEGE QU UN BAREME NAIF OUVRE, ET QUI EST FERME ICI. Avec des taux par tranche appliques
  *   betement au montant entier :
- *       100 $ a 50 bps = 0,50 $        101 $ a 20 bps = 0,202 $
- *   Payer PLUS coutait MOINS, en valeur absolue. C est une falaise, et elle s exploite : il suffit
- *   de pousser son montant juste au-dessus du palier. Ou, pire pour l utilisateur, de le laisser
- *   juste en-dessous sans savoir qu un dollar de plus lui couterait deux fois moins.
+ *       100 $ a 20 bps = 0,20 $        100,01 $ a 10 bps = 0,10 $
+ *   Payer UN CENT de plus coutait MOITIE MOINS, en valeur absolue. C est une falaise, et elle
+ *   s exploite : il suffit de pousser son montant juste au-dessus du palier. Ou, pire pour
+ *   l utilisateur, de le laisser juste en-dessous sans savoir qu un cent de plus lui couterait
+ *   deux fois moins.
  *   ⇒ ON IMPOSE DONC LA MONOTONIE : le frais en valeur absolue ne DIMINUE JAMAIS quand le montant
  *     augmente. Techniquement, le frais d un palier est plancher-e par le frais MAXIMAL du palier
  *     precedent. Le taux effectif, lui, descend bien — c est le but.

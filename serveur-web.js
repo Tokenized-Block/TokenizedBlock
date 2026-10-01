@@ -1810,6 +1810,15 @@ const SERVIS = [
    *   Il porte le bareme : 0,2 % jusqu a 100 $ (p75 mesure), 0,1 % au-dela, et le PLANCHER qui
    *   empeche qu un cent de plus coute moitie moins. */
   'frais-degressif.js',
+  /* ⛔⛔ `devises-dentree.js` REPOND « avec quoi peut-on payer ce block ? ». Il ajoute au graphe des
+   *   pools l ARETE DU BLOCK LUI-MEME — celle qui manquait, et sans laquelle `cheminEntre(OUSD,
+   *   block)` rendait REFUSE non pas parce qu aucune route n existe, mais parce que personne n avait
+   *   mesure l arete d arrivee. Le pont etait complet ET inatteignable depuis l ecran d echange.
+   *   Il distingue SANS_ROUTE (on a REGARDE) de NON_MESUREE (on n a PAS regarde) : seule la
+   *   premiere est un verdict, et confondre les deux transformerait notre incompletude en
+   *   accusation. 60 assertions, ROUGE prouve par 9 mutations sur 10 — la 10e etait un temoin de
+   *   non-sabotage, elle DEVAIT survivre. */
+  'devises-dentree.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.

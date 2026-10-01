@@ -546,10 +546,15 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   ⛔ LE CHEMIN HISTORIQUE N EST PAS TOUCHE : `planEchange` garde ses 0,5 %. Deux rails, deux
    *     taux, et c est explicite — baisser le chemin existant aurait coupe un revenu qui existe. */
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
-  /* ⛔⛔ LE BAREME EST DEGRESSIF, ET SON PLANCHER EST 50 bps — decision de Phil (2026-10-01) :
-   *   « mini 50 bps pour petit montant et tu adaptes au montant ». Les paliers viennent de la
-   *   DISTRIBUTION MESUREE de nos tailles de trade (p75 = 95,94 $, p99 = 1 672,31 $), donc 100 $ et
-   *   1 700 $ — pas des nombres ronds choisis de tete.
+  /* ⛔⛔ LE BAREME EST DEGRESSIF : 0,2 % jusqu a 100 $, 0,1 % au-dela — decision de Phil
+   *   (2026-10-01), dans sa derniere formulation : « fait comme il a de mieux pour peu taxer donc
+   *   le 0.1 % 0.2 % et ca soit rentable pour dev ».
+   *   ⛔ CE COMMENTAIRE ANNONCAIT ENCORE « PLANCHER 50 bps » ET UN PALIER A 1 700 $, ecrits quand
+   *     Phil avait dit « mini 50 bps » — une version du bareme que le code a quittee. Le seul
+   *     palier reel est 100 $. Un commentaire qui survit a la decision qu il decrit est pire
+   *     qu aucun commentaire : c est lui qu on croit en relisant.
+   *   ⛔ ET LE PALIER VIENT DE LA DISTRIBUTION MESUREE, pas d un nombre rond : p75 = 95,94 $ sur
+   *     les 250 lignes servies le 2026-10-01. Les trois quarts des echanges paient donc 0,2 %.
    *   ⛔ SANS PRIX LU POUR LA DEVISE D ENTREE, `frais-degressif.js` applique le taux LE PLUS HAUT et
    *     le DIT : le doute nous coute un revenu potentiel sur les gros montants, jamais une surprise
    *     a l utilisateur, et jamais une sous-facturation sur une supposition.
