@@ -5712,6 +5712,16 @@ const VIE_PAR_PASSE = 30;
  *    ⛔ PLAFONNEE A `VIE_PAR_PASSE`. Demander 344 lectures d un coup au noeud qui vient de les
  *      refuser, c est promettre ce qu on ne peut pas tenir. */
 let filePrioritaire = [];
+/* La phrase de `charger()` sans la phrase de passe precedente, et avec « on map » au nombre du moment.
+ * ⛔ Le texte de base peut etre autre chose (une reponse de recherche) : on ne retire QUE nos suffixes. */
+function noteCarteSansPasse(texte, surLaCarte) {
+  let t = String(texte || '');
+  for (const m of [' · life read on ', ' · retried ']) {
+    const i = t.indexOf(m);
+    if (i >= 0) t = t.slice(0, i);
+  }
+  return t.replace(/ · on map \d+( \(life read for the first \d+\))?/, ' · on map ' + surLaCarte);
+}
 async function lireLaVie() {
   /* ⛔ GARDE DE CONCURRENCE : deux passes en parallele doublent les requetes sur un noeud qui refuse
    *    deja sous charge. La seconde repart sans rien faire. */
@@ -5799,15 +5809,30 @@ async function lireLaVie() {
   const n = $('#mapNote');
   /* ⛔ LA PHRASE DIT DESORMAIS OU ON EN EST DANS LE TOUR : « 30/181 » sans dire qu on continue se
    *    lisait comme un verdict sur les 151 autres. */
-  const faits = Math.min(vieCurseur, habitants.length);
+  /* ⛔⛔ LE PANNEAU DE LA MAP GRANDISSAIT SANS FIN, ET SES DEUX NOMBRES NE PARLAIENT PAS DU MEME MOMENT.
+   *   Signale par Raksha (2026-10-01). Mesure du Grok Bot (Chrome headless, prod, 1400 px) :
+   *       +20 s   « 349 blocks made … · on map 349 (life read for the first 30) »
+   *       +160 s  « … · on map 349 (life read for the first 30) · life read on 30 more (30/238 so far…) »
+   *   ⇒ DEUX CAUSES. (1) `n.textContent = (n.textContent || '') + …` AJOUTAIT une phrase a chaque passe
+   *     (toutes les 90 s, sans fin) au lieu de remplacer la precedente. (2) « on map 349 » etait ecrit
+   *     UNE FOIS par `charger()`, et « /238 » plus tard depuis `habitants.length` — la map avait ete
+   *     reposee entre-temps : un INSTANTANE fige a cote d un instantane neuf (meme famille de defaut que
+   *     celle diagnostiquee par Claude dans 63a8d43, « un INSTANTANE a cote d un CUMUL »).
+   *   ⇒ Chaque passe REMPLACE la phrase de la passe precedente, et « on map N » et « x/N » sortent du
+   *     MEME `habitants.length`, lu au moment ou l on ecrit.
+   *   ⛔ POURQUOI PAS `dernierTrending.lignes` ICI : x est un curseur dans `habitants` (les cubes poses),
+   *     pas dans les lignes du marche ; diviser l un par l autre donnerait un « 300/245 ». Le bon
+   *     instantane est celui que le curseur parcourt. */
+  const surLaCarte = habitants.length;
+  const faits = Math.min(vieCurseur, surLaCarte);
   /* ⛔ UNE PASSE CIBLEE NE PARLE PAS DU TOUR. Le curseur n a pas bouge, donc « 30/181 so far » y
    *   serait faux dans les deux sens : il annoncerait une avancee qui n a pas eu lieu, et il
    *   cacherait ce qui vient d etre relu. Chaque passe raconte ce qu ELLE a fait. */
-  n.textContent = (n.textContent || '')
+  n.textContent = noteCarteSansPasse(n.textContent, surLaCarte)
     + (cible
       ? (' · retried ' + lot.length + ' unread block' + (lot.length > 1 ? 's' : '')
         + (cible.size > lot.length ? ' of ' + cible.size + ' (rest on the next click)' : ''))
-      : (' · life read on ' + lus + ' more (' + faits + '/' + habitants.length + ' so far, still going)'))
+      : (' · life read on ' + lus + ' more (' + faits + '/' + surLaCarte + ' so far, still going)'))
     + ' — ' + avecMarche + ' with a market'
     + (nonLus ? ', ' + nonLus + ' unreadable right now (not the same as having no market)' : '');
 }
