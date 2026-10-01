@@ -1849,6 +1849,15 @@ const SERVIS = [
    *   actions tokenisees, celles qui portent 96,4 % du volume. Servi avant d etre importe.
    *   43 assertions, 9/9 mutations attrapees. */
   'franchissement-depuis-chemin.js',
+  /* ⛔⛔ `plan-franchissement.js` ORCHESTRE le passage complet : resoudre la pool Aerodrome (les
+   *   NEUF espacements declares, jamais une valeur supposee), batir la jambe 1 en V4 avec le bareme
+   *   degressif, deriver le minimum de la jambe 2 du prix spot, et assembler le lot. Il LIT, mais il
+   *   ne decide rien seul : la forme, la jambe 1 et le lot viennent des modules dedies. `rpc` lui
+   *   est injecte, donc il est testable hors reseau — ce qui manquait au chemin ou l audit adverse
+   *   a trouve deux defauts « gravite argent ». 25 assertions, et l EXECUTION est prouvee par
+   *   `banc-franchissement-ousd-action-fork.mjs` (3 appels status 0x1, a6cf paye sur les DEUX
+   *   jambes au wei). */
+  'plan-franchissement.js',
   /* ⛔⛔ `porte-achat.js` DECIDE QUI A UNE PUCE D ACHAT, et il est importe PAR LE SERVEUR AUSSI
    *     (`faitsDeLaPool` reutilise son `glissementBps` plutot que d en recopier un second). Deux
    *     implementations du meme calcul divergeraient, et c est le client qui ouvre la porte.
