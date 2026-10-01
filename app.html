@@ -1478,7 +1478,34 @@ details[open] > summary::before{transform:rotate(90deg)}
                 veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
                 ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
         <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Instant Birth.</p>
-        <p class="note" id="cBridgeRetarget">Tokenized↔tokenized after funding? Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab — <b data-frais-bridge>—</b> via your Bridge block.</p>
+        <!-- ⛔⛔⛔ CETTE PHRASE ANNONCAIT UN PRIX POUR UN SERVICE QU ON NE REND PAS. Elle disait
+             « Tokenized↔tokenized after funding? Open the Bridge tab — 0.5% via your Bridge block »
+             alors que `HUB_SWAP_LIVE` vaut `false` et que l onglet Bridge le dit lui-meme, DEUX
+             fois : « net swap not live yet » et « Atomic token↔token net via hub is not live —
+             quote only, not a live atomic promise ».
+             ⇒ On envoyait le visiteur dans une impasse, AVEC un tarif. Et un tarif a cote d une
+               capacite absente est ce qui transforme une reserve honnete en appat : la personne
+               retient le chiffre, pas la reserve.
+             ⇒ Le depot porte pourtant deja une constante dont le commentaire dit mot pour mot
+               « LA CONSTANTE QUI EMPECHE DE FACTURER UN SERVICE QU ON NE REND PAS ». Elle
+               existait, et cette phrase passait a cote d elle : une regle ecrite ne protege que ce
+               qu un controle EXTERNE verifie, et `test-pas-de-tarif-sans-service.mjs` le fait
+               desormais.
+             ⇒ LE TEXTE EST DERIVE DE `HUB_SWAP_LIVE`, jamais ecrit en dur : le jour ou le hub
+               echange vraiment, la phrase suit toute seule. L emplacement est VIDE ici — si le
+               peintre ne tourne pas, l ecran ne montre RIEN plutot qu une promesse figee, meme
+               regle que le « — » du tarif. -->
+        <!-- ⛔⛔⛔ LE BOUTON RESTE DANS LE BALISAGE, ET C EST UNE GARDE DU DEPOT QUI ME L A APPRIS.
+             Ma premiere correction remplacait tout le paragraphe par un `<p>` vide : elle
+             supprimait `#cGoBridge`, c est-a-dire le SEUL lien vers l onglet Bridge — alors que cet
+             onglet rend de vrais services (financement, vente d un block par sa propre pool).
+             `test-ids-fantomes.mjs` a crie : « ids lus par le JS et absents de TOUT balisage ».
+             ⇒ J effacais une affordance qui MARCHE en corrigeant un texte qui MENTAIT. C est le
+               motif « fail-closed sur une affordance efface le produit », deja paye ici.
+             ⇒ Donc : seule la PHRASE est derivee de `HUB_SWAP_LIVE`, le lien ne bouge pas. Le
+               `<span>` est vide dans le HTML — si le peintre ne tourne pas, on ne montre AUCUNE
+               promesse, et le lien reste utilisable. -->
+        <p class="note" id="cBridgeRetarget"><span id="cBridgeRetargetTexte"></span> Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -18667,6 +18694,28 @@ async function ouvrirRailFiat(evt, lien, actif) {
      *     l ecran montre un tiret : un prix manquant est honnete, un prix faux ne l est pas. Mettre
      *     « 0.5% » en dur comme valeur de repli aurait recree exactement le defaut qu on corrige. */
     for (const el of document.querySelectorAll('[data-frais-bridge]')) el.textContent = BRIDGE_FEE_LABEL;
+    /* ⛔⛔⛔ LA PHRASE DU RENVOI VERS LE BRIDGE SUIT LA CAPACITE REELLE, pas une intention.
+     *   Elle promettait « Tokenized↔tokenized — 0.5% via your Bridge block » alors que
+     *   `HUB_SWAP_LIVE` vaut `false` et que l onglet Bridge le dit deux fois lui-meme. On annoncait
+     *   un PRIX pour un service qu on ne rend pas, et on dirigeait vers une impasse.
+     *   ⛔ QUAND CE N EST PAS VIVANT, ON NE CITE AUCUN TARIF. Un chiffre a cote d une capacite
+     *     absente est retenu ; la reserve ne l est pas. C est ce qui transforme une divulgation
+     *     honnete en appat.
+     *   ⇒ ET ON POINTE VERS CE QUI MARCHE : vendre un block par SA PROPRE pool est vivant, et c est
+     *     probablement ce que le visiteur cherchait. Un renvoi honnete vaut mieux qu un silence —
+     *     supprimer la phrase aurait ete l autre moitie du defaut. */
+    /* ⛔ ON PEINT LE `<span>`, PAS LE PARAGRAPHE : ecraser le paragraphe entier emporterait le
+     *   bouton `#cGoBridge` avec lui — c est exactement ce que ma premiere version faisait, et
+     *   `test-ids-fantomes.mjs` l a attrape. Le lien vers le Bridge reste utilisable dans les deux
+     *   branches : l onglet rend de vrais services, c est la PROMESSE qui etait fausse. */
+    const br = document.getElementById('cBridgeRetargetTexte');
+    if (br) {
+      br.textContent = HUB_SWAP_LIVE
+        ? 'Tokenized↔tokenized after funding? ' + BRIDGE_FEE_LABEL + ' via your Bridge block.'
+        : 'Swapping one tokenized asset directly for another is not live yet — it is quoted there '
+          + 'but cannot be settled. What does work: funding, and selling a block through its own '
+          + 'market.';
+    }
   } catch (_) {}
   let lastProposeId = '';
   const etat = () => $('#bBotEtat');

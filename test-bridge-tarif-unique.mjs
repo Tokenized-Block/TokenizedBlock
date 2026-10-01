@@ -86,8 +86,20 @@ v('les emplacements du tarif existent et valent « — » au repos', () => {
   /* ⛔⛔ FAIL-CLOSED SUR LE PRIX. Si le peintre ne tourne jamais (erreur plus haut, module non
    *     charge), l ecran montre un tiret. Un prix manquant est honnete ; un prix faux ne l est pas.
    *     Mettre « 0.5% » en dur comme repli aurait recree le defaut qu on corrige. */
+  /* ⛔⛔ LE SEUIL PASSE DE 5 A 4, ET CE N EST PAS UN ASSOUPLISSEMENT : un emplacement a ete RETIRE
+   *   le 2026-10-01 parce qu il tarifait un service qui N EXISTE PAS. La phrase de renvoi de
+   *   l ecran de naissance promettait « Tokenized↔tokenized — 0.5% via your Bridge block » alors
+   *   que `HUB_SWAP_LIVE` vaut `false`, et que l onglet Bridge le dit DEUX fois lui-meme.
+   *   ⇒ UN TARIF A COTE D UNE CAPACITE ABSENTE EST CE QUI TRANSFORME UNE RESERVE EN APPAT : la
+   *     personne retient le chiffre, pas la reserve. Le retirer est le correctif, pas une perte.
+   *   ⛔ LE RESTE DU TEST NE BOUGE PAS : les quatre emplacements survivants doivent toujours valoir
+   *     « — » au repos et etre peints depuis `BRIDGE_FEE_LABEL`. La garde contre le tarif ECRIT EN
+   *     DUR reste entiere.
+   *   ⛔ ET `test-pas-de-tarif-sans-service.mjs` TIENT L AUTRE MOITIE : il exige qu aucune promesse
+   *     tokenized↔tokenized tarifee ne vive hors de la garde `HUB_SWAP_LIVE`. Baisser ce seuil sans
+   *     cette garde-la aurait simplement ouvert la porte au defaut. */
   const emplacements = [...html.matchAll(/<(b|span)\s+data-frais-bridge\s*>([^<]*)</g)];
-  assert.ok(emplacements.length >= 5,
+  assert.ok(emplacements.length >= 4,
     'seulement ' + emplacements.length + ' emplacement(s) de tarif : les autres sont-ils revenus en dur ?');
   for (const m of emplacements) {
     assert.equal(m[2].trim(), '—',
