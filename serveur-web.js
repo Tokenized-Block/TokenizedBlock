@@ -87,6 +87,15 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
  *   seule source du depot : un selecteur ecrit a la main ne plante pas, il interroge une AUTRE
  *   fonction et rend un silence qu on lirait comme un fait. */
 import { selecteur as selecteurSrv } from './keccak.js';
+/* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
+ *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
+ *   faute que j ai deja faite deux fois aujourd hui. */
+/* ⛔ ON N IMPORTE PAS `TOPIC_INITIALIZE` : ce fichier en declare DEJA un, ecrit en dur plus bas.
+ *   ⭐ VERIFIE avant de s y fier, parce qu une constante recitee qui divergerait serait un bug muet :
+ *     calcule par keccak  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
+ *     ecrit en dur ici    0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
+ *   IDENTIQUES. On garde celui du fichier pour ne pas creer deux sources du meme fait. */
+import { decoderInitialize } from './pools-du-jeton.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
@@ -220,6 +229,9 @@ const NON_MESURE_POOL = Object.freeze({ glissementBps: null, famille: 'NON_MESUR
  *   (`getPoolLiquidity(bytes32)` REVERTE — donc `getLiquidity` est bien le nom.)
  */
 const STATE_VIEW_SRV = '0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71';
+/* ⛔ LE POOLMANAGER N EST PAS REDECLARE ICI : ce fichier a deja `PM_V4` plus bas, et j ai VERIFIE
+ *   qu il vaut bien l adresse que StateView rend par `poolManager()` (0x498581ff…). Deux constantes
+ *   pour le meme fait divergeraient le jour ou l une bouge — c est `le jumeau diverge`. */
 const EST_POOL_ID_V4 = /^0x[0-9a-fA-F]{64}$/;
 /* ⛔ Selecteurs CALCULES par keccak au demarrage, jamais tapes a la main.
  * ⛔⛔ ET ILS PORTENT DEJA LEUR `0x` — PIEGE REEL DU DEPOT, PAYE A L INSTANT : il existe DEUX
@@ -311,6 +323,41 @@ const adrDePool = (h) => '0x' + motDePool(h, 0).slice(24);
  *   et est initialise dans le PoolManager. Un poolId inexistant rend ZERO (temoin negatif mesure),
  *   et c est ce qui rend le zero interpretable.
  */
+/* ⛔⛔ UN `poolId` EST UN HASH : LA CLE NE S EN DEDUIT PAS. Et sans la cle (fee, tickSpacing,
+ *   hooks), aucun calldata de swap n est constructible — `planEchangeMultiSauts` exige des sauts
+ *   RESOLUS. On va donc la chercher dans l evenement `Initialize` du PoolManager, filtre PAR le
+ *   poolId : UN seul topic en plus, donc des fenetres tres legeres.
+ * ⛔ `decoderInitialize` REFUSE une cle dont le poolId ne se RECALCULE pas — on ne garde que ce
+ *   qu on peut reconstruire. C est ce qui empeche une cle plausible et fausse de passer.
+ * ⛔ CACHE POUR TOUJOURS : une cle de pool ne change JAMAIS. Mais on ne cache que les SUCCES —
+ *   graver un echec de lecture figerait une cecite pour toute la vie du process. */
+const clesV4Lues = new Map();
+async function cleV4DuPoolId(id) {
+  const k = String(id).toLowerCase();
+  if (clesV4Lues.has(k)) return clesV4Lues.get(k);
+  let tete;
+  try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { return null; }
+  if (!Number.isSafeInteger(tete)) return null;
+  const PAS = 2000;
+  /* ⛔ ON REMONTE DANS LE TEMPS, et on BORNE : 120 000 blocs couvrent largement la vie des pools
+   *   qui nous interessent. Au-dela ce n est plus une lecture, c est un balayage. */
+  for (let de = tete - PAS; de > tete - 120000; de -= PAS) {
+    let logs;
+    try {
+      logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,
+        topics: [TOPIC_INITIALIZE, k],
+        fromBlock: '0x' + Math.max(0, de).toString(16),
+        toBlock: '0x' + Math.min(tete, de + PAS - 1).toString(16) }]);
+    } catch (_) { continue; /* ⛔ une fenetre refusee n est pas une fenetre vide : on continue */ }
+    if (!Array.isArray(logs) || !logs.length) continue;
+    const p = decoderInitialize(logs[0]);
+    /* ⛔ `p.erreur` veut dire « je ne sais pas reconstruire cette cle » : on ne la garde PAS. */
+    if (p && !p.erreur && p.cle) { clesV4Lues.set(k, p.cle); return p.cle; }
+    return null;
+  }
+  return null;
+}
+
 async function faitsPoolV4(poolId, infos) {
   const id = String(poolId).toLowerCase();
   return enFile(async () => {
@@ -362,8 +409,17 @@ async function faitsPoolV4(poolId, infos) {
       return { glissementBps: null, famille: 'uniswap-v4', poolId: id, liquiditeV4: String(liquidite),
         pourquoiFaits: gl.pourquoi };
     }
+    /* ⛔⛔ LA CLE EST RENDUE QUAND ON A SU LA LIRE, parce que c est elle — et pas le `poolId` — qui
+     *   permet de CONSTRUIRE un swap. Sans elle, l ecran saurait qu une route existe et ne saurait
+     *   pas la fabriquer : un bouton qui promet ce qu il ne peut pas tenir.
+     * ⛔ ET SON ABSENCE EST UN FAIT NOMME, pas un silence : `cleV4: null` + `pourquoiCle`. */
+    let cleV4 = null;
+    try { cleV4 = await cleV4DuPoolId(id); } catch (_) { cleV4 = null; }
     return { glissementBps: Number(gl.bps), famille: 'uniswap-v4', poolId: id,
-      liquiditeV4: String(liquidite) };
+      liquiditeV4: String(liquidite),
+      ...(cleV4 ? { cleV4 } : { cleV4: null,
+        pourquoiCle: 'the Initialize event for this poolId was not found in the window read — '
+          + 'the route can be priced but not built' }) };
   });
 }
 
