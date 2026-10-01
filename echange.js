@@ -442,6 +442,80 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
 }
 
 /**
+ * LA MEILLEURE POOL V4 POUR UNE PAIRE, A CE MONTANT — et la DIRECTION qui va avec.
+ *
+ * @param {function} p.rpc        le lecteur, injecte (donc testable hors reseau)
+ * @param {number}   p.chaine
+ * @param {string}   p.de         le jeton qu on PAIE
+ * @param {string}   p.vers       le jeton qu on VEUT
+ * @param {bigint}   p.montant    en unites du jeton paye
+ * @param {object[]} [p.candidates]  les combinaisons fee/tickSpacing a essayer
+ *
+ * ⛔⛔⛔ LA DIRECTION EST DERIVEE DE LA PAIRE, JAMAIS SUPPOSEE. Une PoolKey classe ses deux jetons
+ *   par ordre d adresse : `zeroForOne` est donc vrai si et seulement si le jeton PAYE est
+ *   `currency0`. Le code d ou vient cette fonction CALCULAIT cette valeur puis passait `true` en
+ *   dur — ce qui etait juste uniquement parce que l ETH vaut `0x000...0` et gagne donc toujours le
+ *   classement. Une garde correcte par accident d une valeur particuliere. Sur OUSD/USDC, le `true`
+ *   en dur serait FAUX dans un sens sur deux, et le swap irait a l envers.
+ *
+ * ⛔⛔ « ESSAYEES » ET « COTEES » SONT DEUX CHIFFRES DIFFERENTS. Le premier dit combien de
+ *   combinaisons on a tapees, le second combien ont REPONDU. Les confondre ferait lire « 4 pools
+ *   existent » la ou on a seulement frappe quatre fois dans le vide — la confusion exacte qui a
+ *   deja rendu 49,8 % du volume invisible ici.
+ * ⛔ UN DEVIS DE ZERO N EST PAS UN DEVIS. Le retenir ferait construire un ordre dont le minimum de
+ *   sortie est nul, c est-a-dire un ordre qui accepte de tout perdre. C est le motif
+ *   « Number(null) = 0 » qui a deja fait passer un glissement non mesure pour un marche parfait.
+ * ⛔ UNE POOL QUI LEVE N ARRETE PAS LE BALAYAGE : l absence d une combinaison ne dit rien des
+ *   autres, et s arreter au premier echec rendrait « aucune pool » sur un simple trou.
+ *
+ * ⚠️ SA BORNE, ECRITE ICI PARCE QU ELLE SE LIT MAL AILLEURS : `CLES_PRIX` ne porte que QUATRE
+ *   combinaisons, toutes SANS hook. Une pool hookee, ou a un tickSpacing hors de ces quatre, ne
+ *   sera pas trouvee — et ca ne veut pas dire qu elle n existe pas, ca veut dire qu on n a pas
+ *   regarde. Le resultat ne doit jamais se lire « il n y a pas de pool ».
+ */
+export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates = CLES_PRIX } = {}) {
+  const Q = QUOTEUR[Number(chaine)];
+  const adr = (x) => String(x || '').toLowerCase();
+  const estAdr = (x) => /^0x[0-9a-f]{40}$/.test(adr(x));
+  if (!Q) return { etat: 'REFUSE', cle: null, pourquoi: 'no v4 quoter on this network here' };
+  if (!estAdr(de) || !estAdr(vers)) {
+    return { etat: 'REFUSE', cle: null, pourquoi: 'both tokens must be whole addresses' };
+  }
+  if (adr(de) === adr(vers)) {
+    return { etat: 'REFUSE', cle: null, pourquoi: 'the two tokens are the same' };
+  }
+  let m;
+  try { m = BigInt(montant); } catch (_) { m = 0n; }
+  if (m <= 0n) return { etat: 'REFUSE', cle: null, pourquoi: 'the amount must be above zero' };
+
+  const liste = Array.isArray(candidates) ? candidates : [];
+  let best = null, cotees = 0;
+  for (const k of liste) {
+    const cle = cleDePool(adr(de), adr(vers), k);
+    const zeroForOne = adr(cle.currency0) === adr(de);
+    let quote;
+    try {
+      const r = await rpc('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: m }) }, 'latest']);
+      quote = BigInt('0x' + String(r).slice(2, 66));
+    } catch (_) {
+      continue; /* ⛔ une combinaison absente ne dit rien des autres */
+    }
+    if (quote <= 0n) continue;
+    cotees += 1;
+    if (!best || quote > best.quote) {
+      best = { cle, zeroForOne, quote, fee: k.fee, tickSpacing: k.tickSpacing };
+    }
+  }
+  if (!best) {
+    return { etat: 'NON_MESURE', cle: null, zeroForOne: null, quote: null,
+      essayees: liste.length, cotees,
+      pourquoi: 'no v4 pool among the ' + liste.length + ' tried combinations quoted this pair at this '
+        + 'size — that is what we looked at, not proof that none exists' };
+  }
+  return { etat: 'OK', ...best, essayees: liste.length, cotees, pourquoi: null };
+}
+
+/**
  * ETH → USDC on Base v4 — same 0.5% interface fee → FEE_WALLET.
  * ⛔ HARD OBJECTIVE: exit conversion that still pays FEE_WALLET (external DEX pays 0). tip 2220 → smart wallet a6cf….
  * ⛔ Fail-closed: no Sign unless Quoter returns >0 on a measured ETH/USDC key (CLES_PRIX).
@@ -460,20 +534,19 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
   const { frais: fraisAchat, net: netAchat } = fraisSur(m, bps);
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
 
-  let best = null;
-  for (const k of CLES_PRIX) {
-    const cle = cleDePool(ETH, USDC_BASE, k);
-    const zeroForOne = String(cle.currency0).toLowerCase() === ETH; // ETH is 0x0 → always currency0
-    let quote;
-    try {
-      const r = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: true, montant: netAchat }) }, 'latest']);
-      quote = BigInt('0x' + String(r).slice(2, 66));
-    } catch {
-      continue;
-    }
-    if (quote > 0n && (!best || quote > best.quote)) best = { cle, quote, fee: k.fee, tickSpacing: k.tickSpacing };
-  }
-  if (!best) {
+  /* ⛔⛔ CE BALAYAGE VIT MAINTENANT DANS `meilleureClePourMontant`, et ce n est pas une
+   *   reorganisation de confort : la MEME logique est necessaire au rail multi-sauts pour resoudre
+   *   la jambe USDC <-> ETH, et en ecrire un second exemplaire ferait DEUX resolveurs qui
+   *   divergeraient — le motif « helper canonique et sa copie plus faible », deja paye ici.
+   * ⛔⛔⛔ ET L EXTRACTION A SORTI UN DEFAUT DORMANT : ce code CALCULAIT `zeroForOne` puis passait
+   *   `true` EN DUR au quoter. La valeur calculee etait jetee. Le `true` n etait juste que parce
+   *   que l ETH vaut `0x000...0` et se classe donc TOUJOURS en `currency0` — une garde correcte
+   *   PAR ACCIDENT d une valeur particuliere. Inoffensif tant que cette fonction ne servait qu a
+   *   l ETH ; faux une fois sur deux des qu on la reutilise sur une paire quelconque, ce qui est
+   *   exactement ce qu on fait maintenant. Le helper DERIVE la direction, et son test exige que
+   *   les deux sens DIFFERENT. */
+  const best = await meilleureClePourMontant({ rpc: lire, chaine, de: ETH, vers: USDC_BASE, montant: netAchat });
+  if (best.etat !== 'OK') {
     return { etat: 'NON_MESURE', pourquoi: 'no ETH/USDC v4 pool quoted for this size — try again or a smaller amount' };
   }
   const min = (best.quote * (10000n - tol)) / 10000n;
@@ -495,7 +568,12 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({
     lire, R, compte, jeton: USDC_BASE, sens: 'ACHAT', m, maintenant, deadline,
-    actions, valeur: m, resume, cle: best.cle, zeroForOne: true, sortieMinTete: 0n,
+    /* ⛔ `best.zeroForOne` ET PLUS `true` EN DUR : la valeur est DERIVEE de la paire. Elle vaut
+     *   `true` ici — l ETH est `0x0`, donc toujours `currency0` — donc le comportement est
+     *   IDENTIQUE. C est voulu : une extraction qui change le resultat n est pas une extraction,
+     *   c est un changement deguise en refactor. Ce qui change, c est qu elle cesse d etre juste
+     *   par accident. */
+    actions, valeur: m, resume, cle: best.cle, zeroForOne: best.zeroForOne, sortieMinTete: 0n,
   });
 }
 
