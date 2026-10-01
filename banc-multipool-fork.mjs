@@ -41,7 +41,8 @@ const bas = (a) => String(a || '').toLowerCase();
 let id = 0;
 async function rpc(method, params = []) {
   for (let t = 0; t < 4; t += 1) {
-    const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) });
+    /* ⛔ un appel qui pend (devis qui traverse des ticks vides en lisant l amont) devient une ERREUR NOMMEE, pas un banc fige */
+    const r = await fetch(URL, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(Number(process.env.TIMEOUT_MS || 120000)), body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) });
     const j = await r.json();
     if (j.error) { if (/rate|429|timeout|header not found/i.test(j.error.message || '') && t < 3) { await new Promise((z) => setTimeout(z, 800 * (t + 1))); continue; } const e = new Error(j.error.message); e.data = j.error.data; throw e; }
     return j.result;
@@ -76,6 +77,11 @@ if (chainId !== 8453 || !info) { console.log('KO : pas un fork anvil de Base —
   if (code !== '0x') { console.log('KO : le compte de test porte du code (' + code.slice(0, 20) + ') — arret'); process.exit(1); }
   await rpc('anvil_impersonateAccount', [USER]);
   await rpc('anvil_setBalance', [USER, '0x' + (100n * 10n ** 18n).toString(16)]);
+  /* ⛔ SAUT D HORLOGE : le 1er bloc mine sur un fork vierge prend l heure MURALE (~1 h apres le bloc de
+   *   fork). Les pools Slipstream a frais DYNAMIQUE (module de frais d Aerodrome) changent alors de frais
+   *   entre le devis (etat au bloc de fork) et l execution : 1er essai, C1 recevait 269125435 pour un devis
+   *   de 269106805 (+0,007 %). On mine UN bloc vide d abord, pour que devis et execution voient la meme heure. */
+  await rpc('evm_mine', []);
 }
 const g = JSON.parse(readFileSync(GRAPHE, 'utf8'));
 console.log('=== BANC MULTIPOOL — fork ' + URL + ' · bloc fork ' + (info.forkConfig && info.forkConfig.forkBlockNumber) + ' · bloc courant ' + Number(await rpc('eth_blockNumber')) + ' · graphe bloc ' + g.bloc + ' ===');
@@ -255,10 +261,13 @@ for (const e of aretes) {
   paires.push({ b, st, liq: e.liqUsd });
 }
 const choisis = [];
-for (const p of paires.sort((u, v) => v.liq - u.liq)) if (!choisis.some((c) => c.st === p.st) && choisis.length < Number(process.env.N_STOCK_BLOCKS || 4)) choisis.push(p);
+for (const p of paires.sort((u, v) => v.liq - u.liq)) if (!choisis.some((c) => c.st === p.st) && choisis.length < Number(process.env.N_STOCK_BLOCKS || 6)) choisis.push(p);
 console.log('\n=== BLOCK -> ACTION -> USDC / OUSD : ' + paires.length + ' paires block/action mesurees, ' + choisis.length + ' testees ===');
+const sansRouteAttendu = [];
 for (const { b, st } of choisis) {
   const r0 = await executer({ nom: 'S0 achat ETH -> ' + sym(b) + ' (block de ' + sym(st) + ')', de: ETH, vers: b, montant: E / 50n, sautsMax: 4 });
+  /* ⛔ un block que SEULE une pool piege (frais LP > 10 %) relie au reste est SANS_ROUTE : c est voulu, on le NOMME */
+  if (r0.verdict === 'SANS_ROUTE') { sansRouteAttendu.push({ nom: r0.nom, pourquoi: r0.pourquoi }); continue; }
   res.push(r0);
   if (r0.verdict !== 'OK') continue;
   const tout = await solde(b, USER);
@@ -417,7 +426,8 @@ for (const r of res) console.log((r.verdict === 'OK' ? 'OK   ' : r.verdict.padEn
 for (const t of tem) console.log('TEMOIN ' + t.verdict + ' · ' + t.nom);
 for (const f of farm) console.log('FARMING ' + f.verdict + ' · ' + f.nom + (f.perte ? ' · perte ' + f.perteBps + ' bps (' + f.perteUsd + ' $) · accorde ' + f.accordeUsd + ' $' : ' ' + (f.pourquoi || '')));
 for (const o of optC) console.log('OPTION ' + o.verdict + ' · ' + o.nom);
-const json = JSON.stringify({ bloc: g.bloc, lu: new Date().toISOString(), res, tem, farm, optC }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1);
+for (const s of sansRouteAttendu) console.log('SANS_ROUTE (attendu) · ' + s.nom + ' — ' + s.pourquoi);
+const json = JSON.stringify({ bloc: g.bloc, lu: new Date().toISOString(), res, tem, farm, optC, sansRouteAttendu }, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1);
 (await import('node:fs')).writeFileSync('/workspace/mp-data/banc-resultats.json', json);
 const nOk = res.filter((r) => r.verdict === 'OK').length;
 console.log(nOk + '/' + res.length + ' swaps OK · temoins ' + tem.filter((t) => t.verdict.startsWith('OK')).length + '/' + tem.length);

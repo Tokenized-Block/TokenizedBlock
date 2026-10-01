@@ -48,6 +48,10 @@ async function rpc(method, params) {
 async function par(items, n, fn) { const it = [...items]; let k = 0; const t0 = Date.now(); await Promise.all(Array.from({ length: Math.min(n, it.length) }, async () => { while (k < it.length) { const x = it[k++]; await fn(x); if (k % 250 === 0) console.log('  ... ' + k + '/' + it.length + ' en ' + Math.round((Date.now() - t0) / 1000) + ' s · 429 ' + reessais); } })); }
 
 const g = JSON.parse(readFileSync(GRAPHE, 'utf8'));
+{ /* ⛔ meme etat que le graphe : bloc courant du fork == g.bloc (aucun bloc local mine par un banc) */
+  const b = parseInt(await rpc('eth_blockNumber', []), 16);
+  if (b !== g.bloc && process.env.ACCEPTER_ETAT_MODIFIE !== '1') { console.log('KO : fork au bloc ' + b + ', graphe au bloc ' + g.bloc + ' — etat different, NON MESURE'); process.exit(1); }
+}
 const ap = existsSync(AP) ? JSON.parse(readFileSync(AP, 'utf8')) : { actions: [], pools: [], prix: {} };
 if (ap.bloc && ap.bloc !== g.bloc) console.log('⚠️ blocs differents : graphe ' + g.bloc + ' / actions ' + ap.bloc);
 const N = new Map(g.noeuds.map((n) => [n.adr, { ...n }]));

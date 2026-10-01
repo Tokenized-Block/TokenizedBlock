@@ -67,6 +67,12 @@ const NOS_HOOKS = new Map([[HOOK_PREVU, 'V1'], [HOOK_V2, 'V2'], [HOOK_V3, 'V3'],
 
 console.log('=== ACTIONS TOKENISEES x OUSD / USDC / ETH — fork ' + URL + ' ===');
 const bloc = parseInt(await rpc('eth_blockNumber', []), 16);
+{ /* ⛔ ETAT VIERGE : un banc passe sur ce fork mine des blocs locaux et deplace les pools. Mesurer apres
+   *   lui, c est mesurer NOTRE etat, pas celui de Base. On exige bloc courant == bloc de fork. */
+  let fi = null; try { fi = await rpc('anvil_nodeInfo', []); } catch (_) { /* */ }
+  const fb = fi && fi.forkConfig && Number(fi.forkConfig.forkBlockNumber);
+  if (fb && bloc !== fb && process.env.ACCEPTER_ETAT_MODIFIE !== '1') { console.log('KO : le fork a mine ' + (bloc - fb) + ' bloc(s) local(aux) depuis ' + fb + ' — etat modifie, redemarrer le fork. NON MESURE'); process.exit(1); }
+}
 { const d = await call('0xb200000000000000000000c2e324d24d7eecd1fb', '0x313ce567'); if (!d) { console.log('KO : le fork n execute pas les B20 — il faut base-anvil --base. NON MESURE'); process.exit(1); } }
 console.log('bloc ' + bloc + ' · temoin B20 ok');
 
