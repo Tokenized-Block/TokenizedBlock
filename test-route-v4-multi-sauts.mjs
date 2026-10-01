@@ -20,7 +20,12 @@ import { SAUTS_MIN, SAUTS_MAX, ETATS, BPS_MAX, ETH_NATIF, departDuSaut, arriveeD
   chaineTient, fraisEtNet, actionsMultiSauts, routePrete, phraseRouteV4 } from './route-v4-multi-sauts.js';
 /* ⛔ LES CODES VIENNENT DE `pool.js`, LA SEULE SOURCE. Les recopier ici ferait divergier deux
  *   tables, et le test validerait sa propre copie. */
-import { ACTIONS_V4, paramsAction } from './pool.js';
+/* ⛔⛔ ET `cleDePool` CONSTRUIT LES CLES, JAMAIS MOI. Ma premiere version ecrivait
+ *   `{ currency0: NVDA, currency1: USDC }` a la main — un ordre que `cleDePool` NE PRODUIT JAMAIS,
+ *   puisqu il TRIE (0x8335… USDC < 0xb200… NVDAc). Le test validait donc sa propre fiction et
+ *   passait avec une direction FAUSSE ; c est le banc de fork, sur la vraie fonction, qui l a vu.
+ *   Une fixture ecrite a la main est une copie plus faible de ce que fait le code. */
+import { ACTIONS_V4, paramsAction, cleDePool } from './pool.js';
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -31,16 +36,29 @@ const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c';
 const FEE = '0xa6cF99D35949c6cB911adB910078F4Ca46F0f5d4';
 const CENT_OUSD = 100000000n; /* 100 OUSD, 6 decimales — le montant du devis mesure */
 
-/* Les cles MESUREES, `currency0 < currency1` comme V4 l exige. */
-const cleUsdcOusd = { currency0: USDC, currency1: OUSD, fee: 100, tickSpacing: 1, hooks: ETH_NATIF };
-const cleUsdcNvda = { currency0: NVDA, currency1: USDC, fee: 100, tickSpacing: 1, hooks: ETH_NATIF };
-const cleEthUsdc = { currency0: ETH_NATIF, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH_NATIF };
+/* Les cles MESUREES, construites par `cleDePool` — c est LUI qui ordonne les devises. */
+const cleUsdcOusd = cleDePool(USDC, OUSD, { fee: 100, tickSpacing: 1 });
+const cleUsdcNvda = cleDePool(USDC, NVDA, { fee: 100, tickSpacing: 1 });
+const cleEthUsdc = cleDePool(ETH_NATIF, USDC, { fee: 500, tickSpacing: 10 });
+
+/* ⛔⛔ LA DIRECTION SE DEDUIT DE LA CLE, ELLE NE S ECRIT PAS A LA MAIN. C est la faute que le banc
+ *   de fork a attrapee : j avais mis `zeroForOne: false` sur le 2e saut alors que `cleDePool` place
+ *   USDC en `currency0` (0x8335… < 0xb200…), donc USDC -> NVDAc est `true`. Un booleen ecrit a la
+ *   main est un pari sur un ordre qu on ne controle pas. */
+const versCurrency1 = (cle, depuis) => String(cle.currency0).toLowerCase() === String(depuis).toLowerCase();
 
 /* ⭐ LA ROUTE PRIORITAIRE : OUSD -> USDC -> NVDAc. */
 const OUSD_VERS_NVDA = [
-  { cle: cleUsdcOusd, zeroForOne: false }, /* OUSD -> USDC (OUSD est currency1) */
-  { cle: cleUsdcNvda, zeroForOne: false }, /* USDC -> NVDAc (USDC est currency1) */
+  { cle: cleUsdcOusd, zeroForOne: versCurrency1(cleUsdcOusd, OUSD) },
+  { cle: cleUsdcNvda, zeroForOne: versCurrency1(cleUsdcNvda, USDC) },
 ];
+cas('✅ TEMOIN : la direction des deux sauts est DEDUITE de la cle, et la chaine se tient', () => {
+  /* ⛔ Sans ce temoin, une fixture a la direction fausse ferait passer tout le fichier — c est
+   *   exactement ce qui s est produit avant que le banc de fork ne le dise. */
+  assert.equal(departDuSaut(OUSD_VERS_NVDA[0]).toLowerCase(), OUSD.toLowerCase());
+  assert.equal(arriveeDuSaut(OUSD_VERS_NVDA[1]).toLowerCase(), NVDA.toLowerCase());
+  assert.equal(chaineTient(OUSD_VERS_NVDA).ok, true);
+});
 const base = { sauts: OUSD_VERS_NVDA, entree: OUSD, sortie: NVDA, montant: CENT_OUSD,
   minSortie: 300000n, bps: 50n, beneficiaireFrais: FEE, actionsV4: ACTIONS_V4, paramsAction };
 const r = (sur) => actionsMultiSauts({ ...base, ...sur });
@@ -124,7 +142,8 @@ cas('entree en JETON -> valeur 0 (envoyer de l ETH le laisserait au routeur)', (
   assert.equal(r({}).devise, OUSD.toLowerCase());
 });
 cas('entree en ETH natif -> valeur = le montant total, et fraisDevise ETH', () => {
-  const x = r({ sauts: [{ cle: cleEthUsdc, zeroForOne: true }, { cle: cleUsdcNvda, zeroForOne: false }],
+  const x = r({ sauts: [{ cle: cleEthUsdc, zeroForOne: versCurrency1(cleEthUsdc, ETH_NATIF) },
+    { cle: cleUsdcNvda, zeroForOne: versCurrency1(cleUsdcNvda, USDC) }],
     entree: ETH_NATIF, sortie: NVDA, montant: 10n ** 16n });
   assert.equal(x.etat, 'OK', x.pourquoi);
   assert.equal(x.valeur, 10n ** 16n);

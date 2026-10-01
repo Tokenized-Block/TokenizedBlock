@@ -19,6 +19,10 @@ import { TBLOCK, HOOK_PREVU, estNotreHook } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
+/* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
+ *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
+ *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
+import { actionsMultiSauts, routePrete, SAUTS_MIN, SAUTS_MAX } from './route-v4-multi-sauts.js';
 import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
@@ -480,6 +484,111 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
   return finaliser({
     lire, R, compte, jeton: USDC_BASE, sens: 'ACHAT', m, maintenant, deadline,
     actions, valeur: m, resume, cle: best.cle, zeroForOne: true, sortieMinTete: 0n,
+  });
+}
+
+/**
+ * UNE ROUTE V4 DE 2 A 4 SAUTS, EN UNE TRANSACTION — pour atteindre ce qu un seul saut n atteint pas.
+ *
+ * ⭐ LE CAS QUI L A FAIT NAITRE, prouve par un devis REEL le 2026-10-01 :
+ *       100 OUSD -> 99,987552 USDC -> 328 166 unites NVDAc
+ *   Deux sauts, Uniswap V4, fee 100 / ts 1. Une seule factory, donc UN appel.
+ *   ⛔ ET LA BORNE : 1 action sur 15 est atteignable ainsi (`USDC/<action>` en V4 = 1/15,
+ *     `ETH/<action>` = 0/15). Les 14 autres sont sur Aerodrome, ou OUSD n a RIEN — il faudrait un
+ *     lot atomique de DEUX routeurs, que 40,5 % des wallets mesures ne tiennent pas.
+ *
+ * ⛔⛔ POINT D ENTREE SEPARE, DELIBEREMENT. `planEchange` fonctionne et porte de l argent : on
+ *   AJOUTE un chemin, on ne modifie pas celui qui marche. Une regression sur `planEchange` coute
+ *   tous les echanges ; un bug ici ne coute que ce chemin-ci, et il refuse plutot que de construire.
+ *
+ * ⛔ LES SAUTS ARRIVENT DEJA RESOLUS (`{ cle, zeroForOne }`), et c est voulu : la DECOUVERTE des
+ *   pools est un autre probleme — une cle devinee ne trouve pas une pool hookee, et j ai deja paye
+ *   cette cecite deux fois aujourd hui. L appelant les lit ; cette fonction les cote et construit.
+ */
+export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree, sortie, montant,
+  toleranceBps = 100n, maintenant = Date.now(), fraisDevisesOk = null }) {
+  const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)];
+  if (!R || !Q) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) {
+    return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
+  }
+  if (!Array.isArray(sauts) || sauts.length < SAUTS_MIN || sauts.length > SAUTS_MAX) {
+    return { etat: 'REFUSE',
+      pourquoi: 'between ' + SAUTS_MIN + ' and ' + SAUTS_MAX + ' resolved hops are required' };
+  }
+  const m = BigInt(montant);
+  if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'enter an amount above zero' };
+  const tol = BigInt(toleranceBps);
+  if (tol < 0n || tol >= 10000n) return { etat: 'REFUSE', pourquoi: 'slippage out of range' };
+  const lire = rpc;
+  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
+  const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
+  const { frais, net } = fraisSur(m, bps);
+  const moinsTol = (x) => (x * (10000n - tol)) / 10000n;
+
+  /* ── LE DEVIS, SAUT PAR SAUT : la sortie de l un est l entree du suivant ────────────────────
+   * ⛔⛔ UNE LECTURE RATEE N EST PAS UN PRIX NUL. Une limite de debit qui rendrait 0 ferait croire
+   *   a une pool vide, et on refuserait une route vivante — ou pire, on construirait sur un
+   *   minimum faux. On distingue donc NON_MESURE de REFUSE, et on NOMME le saut.
+   * ⛔ ET LE PREMIER SAUT PART DU NET : le frais est retenu AVANT, donc le coter sur le total
+   *   promettrait plus que ce qui sera reellement echange. */
+  const sorties = [];
+  let courant = net;
+  for (const [i, s] of sauts.entries()) {
+    let brut;
+    try {
+      brut = await lire('eth_call', [{ to: Q, data: encodeQuote({ ...s, montant: courant }) }, 'latest']);
+    } catch (e) {
+      return { etat: 'NON_MESURE',
+        pourquoi: 'hop ' + (i + 1) + ' could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
+    }
+    let out;
+    try { out = BigInt('0x' + String(brut).slice(2, 66)); } catch (_) { out = 0n; }
+    if (out <= 0n) {
+      return { etat: 'REFUSE', pourquoi: 'hop ' + (i + 1) + ' returns nothing for this amount' };
+    }
+    sorties.push(out);
+    courant = out;
+  }
+  const sortieFinale = sorties[sorties.length - 1];
+  const minFinal = moinsTol(sortieFinale);
+  /* ⛔ UN MINIMUM QUI TOMBE A ZERO N EST PAS UN MINIMUM : il laisserait passer n importe quelle
+   *   sortie. Ca arrive sur de tres petits montants, et c est un refus, pas un detail. */
+  if (minFinal <= 0n) {
+    return { etat: 'REFUSE', pourquoi: 'the amount is too small for a meaningful minimum on the output' };
+  }
+
+  const route = actionsMultiSauts({ sauts, entree, sortie, montant: m, minSortie: minFinal, bps,
+    beneficiaireFrais: bps > 0n ? FEE_WALLET : null, actionsV4: ACTIONS_V4, paramsAction });
+  if (!routePrete(route)) {
+    return { etat: 'REFUSE', pourquoi: route.pourquoi || 'this route could not be assembled' };
+  }
+  const enEth = route.fraisDevise === 'ETH';
+  const resume = {
+    paye: m, payeDevise: enEth ? 'ETH' : 'token',
+    recoitAuMoins: minFinal, recoitDevise: 'token',
+    quote: sortieFinale, montantSwap: route.montantTete,
+    frais, fraisDevise: route.fraisDevise, devise: route.devise,
+    via: 'V4_' + sauts.length + '_SAUTS', sauts: sauts.length,
+    fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null,
+  };
+  /* ⛔⛔ LE VERROU DE LA DEVISE DE FRAIS EST CELUI D ICI, PAS UNE SECONDE REGLE. `route-v4-multi-sauts`
+   *   NOMME la devise, il ne la juge pas : `assertFraisInterfaceA6cf` decide, et il n admet ETH,
+   *   USDC, ou une devise dont L APPELANT A LU LE PRIX. a6cf a deja ete paye en jetons invendables
+   *   (7 detentions, part reelle 0 $) — c est ce verrou qui l empeche de recommencer. */
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions, fraisDevisesOk });
+  if (koFrais) return { etat: 'REFUSE', pourquoi: 'fee path broken: ' + koFrais, resume };
+
+  /* ⛔ `sortieMinTete` BORNE LE PREMIER SAUT, et seulement lui : les suivants sont a 0 (OPEN_DELTA),
+   *   et le minimum qui protege l acheteur est celui du TAKE_ALL final, deja dans les actions. */
+  return finaliser({
+    lire, R, compte, jeton: sortie, sens: 'ACHAT', m, maintenant, deadline,
+    actions: route.actions, valeur: route.valeur, resume,
+    cle: route.cle, zeroForOne: route.zeroForOne, sortieMinTete: moinsTol(sorties[0]),
+    /* ⛔ LE JETON PAYE DECLENCHE LES AUTORISATIONS PERMIT2. Nul quand on paie en ETH natif : il n y
+     *   a rien a autoriser, et en demander une bloquerait l achat sur une etape inutile. */
+    jetonPaye: enEth ? null : entree,
+    valeurEth: enEth,
   });
 }
 
