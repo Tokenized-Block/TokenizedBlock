@@ -97,6 +97,38 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
  *       rendraient 0,000509934 ETH. Il faut SIX FOIS plus de volume pour egaler. C est un PARI.
  *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
+import { hookDeLancementPour } from './paires.js';
+/* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
+ *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
+ *    CE QU IL CHANGE PAR RAPPORT AU V8 : un frais de 0,09 % (9 bps) pris TOUJOURS dans la devise de
+ *    cotation, jamais dans le block, 100 % au wallet de frais (Raksha, 2026-10-01 22:15) — et sa liste admet les 7 devises que le V8 refuse (OUSD, TOSHI, AVGOc,
+ *    BEc, HIMSc, MUc, PLTRc). Memes bits 0x24cc, meme `inscrire` (0xbb920fed), memes getters
+ *    `payee` / `inscrit` / `prixInscrit` : lancer-pool-v2.js n a rien a changer.
+ *    Preuve sur fork et sur un vrai noeud Base : /workspace/tb-v9/V9-DESIGN-AND-FORK-PROOF-2026-10-01.md
+ * ⛔ Tant qu il vaut null, RIEN ne change : `hookCourant` rend le V8 comme avant. */
+export const HOOK_V9 = null;
+/** Un lancement cote dans cette devise doit-il aller sur le V9 ? ⛔ PAS DE SECONDE LISTE ICI : la
+ *  reponse vient de paires.js `hookDeLancementPour` (la liste du V9 y vit, a cote de celle du V8),
+ *  la meme source que la garde de Create et la garde de lancement. */
+export function deviseVaSurV9(devise) {
+  return hookDeLancementPour(devise, 8453, { v9: true }) === 'V9';
+}
+/** Les options de routage tant que l app tourne : le V9 compte seulement s il est pose. */
+export const OPTIONS_LANCEMENT = Object.freeze({ v9: !!HOOK_V9 });
+/** Le V9 est-il deploye ? `ABSENT` tant que HOOK_V9 vaut null — jamais suppose. */
+export async function hookV9Deploye({ rpc }) {
+  if (!HOOK_V9) return 'ABSENT';
+  try {
+    const code = String(await rpc('eth_getCode', [HOOK_V9, 'latest']) || '');
+    return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
+  } catch { return 'NON_LU'; }
+}
+/** Le hook d une Naissance permanente sur Base : le V8, ou le V9 une fois pose. */
+export function estHookDeNaissance(h) {
+  const x = String(h || '').toLowerCase();
+  if (!x) return false;
+  return x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
+}
 /** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
  *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
  *     Les retirer d ici ferait disparaitre nos propres marches du fil Live et des frais affiches. */
@@ -104,7 +136,8 @@ export function estNotreHook(h) {
   const x = String(h || '').toLowerCase();
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
     || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase()
-    || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase();
+    || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase()
+    || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
@@ -219,8 +252,12 @@ export async function hookDeploye({ rpc }) {
  * @param {boolean}  o.mainnet      sur Base mainnet, V4 et V5 sont deployes pour toujours (code LU)
  * @param {boolean}  o.avecDevise   la paire n est pas l ETH natif — le V1 ne sait pas les traiter
  * @param {string}   o.etatV1       etat deja lu du V1, pour ne pas le relire
+ * @param {string}   [o.devise]     adresse de la devise de cotation (route les actions/B20 vers le V9)
  */
-export async function hookCourant({ rpc, mainnet = false, avecDevise = false, etatV1 = 'NON_LU' }) {
+export async function hookCourant({ rpc, mainnet = false, avecDevise = false, etatV1 = 'NON_LU', devise = null }) {
+  /* ⛔ V9 D ABORD pour une action / un B20 de sa liste — et SEULEMENT s il est deploye (code LU).
+   *    « NON_LU » ou « ABSENT » : on retombe sur le V8, exactement comme avant. */
+  if (devise && deviseVaSurV9(devise) && await hookV9Deploye({ rpc }) === 'DEPLOYE') return HOOK_V9;
   if (await hookV8Deploye({ rpc }) === 'DEPLOYE') return HOOK_V8;
   if (await hookV7Deploye({ rpc }) === 'DEPLOYE') return HOOK_V7;
   if (await hookV6Deploye({ rpc }) === 'DEPLOYE') return HOOK_V6;

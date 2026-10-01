@@ -330,11 +330,28 @@ export const DEVISES_ADMISES_V8 = Object.freeze([
   '0xb2000000000000000000001e800a7f5189430cd0', // TSLAc
 ]);
 
-/** The hook a NEW block quoted in `adresse` opens on, or null if no deployed launch hook admits it.
- *  The ONLY place that decides — the Create guard and the launch guard both ask here. Off Base: null. */
-export function hookDeLancementPour(adresse, chaine) {
+/** HOOK V9 constructor list (src/V9Devises.sol: 19 addresses, ETH implicit). NOT deployed: it only
+ *  counts when the caller passes `{ v9: true }` (tokenomics `OPTIONS_LANCEMENT`, true once HOOK_V9 is set). */
+export const DEVISES_ADMISES_V9 = Object.freeze([
+  ...DEVISES_ADMISES_V8,
+  '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4', // TOSHI
+  '0xb2000000000000000000002feb517dfec7415344', // OUSD
+  '0xb200000000000000000000fc737aea6196ab5a4c', // AVGOc
+  '0xb20000000000000000000016f9dfe862feba122b', // BEc
+  '0xb20000000000000000000043a599976181bcf336', // HIMSc
+  '0xb200000000000000000000fd2f87532b90095211', // MUc
+  '0xb2000000000000000000007d16372840df4dabbe', // PLTRc
+]);
+
+/** The hook a NEW block quoted in `adresse` opens on ('V8' | 'V9'), or null if no launch hook admits it.
+ *  The ONLY place that decides — the Create guard, the launch guard (lancer-pool.js) and the hook
+ *  routing (tokenomics `hookCourant`) all ask here. Off Base: null.
+ *  With `{ v9: true }`: stock / B20 quotes (0xb2…) of the V9 list go to V9; ETH, TBLOCK, USDC, cbBTC
+ *  stay on V8; TOSHI (in the V9 list, not 0xb2) stays unrouted until its rail decides. */
+export function hookDeLancementPour(adresse, chaine, { v9 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
   const a = String(adresse || '').trim().toLowerCase();
+  if (v9 === true && a.startsWith('0xb2') && DEVISES_ADMISES_V9.includes(a)) return 'V9';
   if (a === ETH_NATIF || a === TBLOCK_MAINNET || DEVISES_ADMISES_V8.includes(a)) return 'V8';
   return null;
 }
@@ -348,9 +365,9 @@ export const COPIE_E0_SANS_ROUTE = "This currency can't price a new block yet, a
 /** null = this currency can price a new block (Base only); otherwise the sentence to show.
  *  `routable` MUST come from the app's own buy-routing data at display time (app.html:
  *  `transactionsDepuisEth`, the measured edge graph) — never assumed. Anything but `true` = factual phrase. */
-export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbole = null } = {}) {
+export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbole = null, v9 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
-  if (hookDeLancementPour(adresse, chaine) !== null) return null;
+  if (hookDeLancementPour(adresse, chaine, { v9 }) !== null) return null;
   const sym = typeof symbole === 'string' ? symbole.trim() : '';
   return routable === true && /^[A-Za-z0-9.]{1,12}$/.test(sym) ? copieE0Achat(sym) : COPIE_E0_SANS_ROUTE;
 }

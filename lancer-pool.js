@@ -22,7 +22,7 @@ import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale
   encodeSwapExactInSingle, SANS_MINHOP, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
-import { HOOK_V8 } from './tokenomics.js';
+import { HOOK_V8, HOOK_V9, estHookDeNaissance } from './tokenomics.js';
 import { hookDeLancementPour } from './paires.js';
 
 /* ══ CONSTANTES — RECOPIEES DE index.html, COMPAREES PAR UN TEST ═════════════════════════════ */
@@ -258,13 +258,17 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
    * Add-liquidity keeps proprietaire=compte → still allowed on legacy pools. */
   if (Number(chaine) === 8453
     && String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase()
-    && String(hooks).toLowerCase() !== HOOK_V8.toLowerCase()) {
+    && !estHookDeNaissance(hooks)) {
     return { etat: 'REFUSE', pourquoi: 'Base Launch refused: Instant Birth / permanent Launch must use HOOK_V8 only — Birth=V8 only' };
   }
-  /* E0 2026-10-01: the SAME source as the Create guard (paires.js `hookDeLancementPour`) — a quote V8
-   * does not admit would make inscrire revert PaireNonAdmise after the creator has paid. */
+  /* E0 2026-10-01 + V9: the SAME source as the Create guard (paires.js `hookDeLancementPour`) — a quote
+   * the chosen hook does not admit would make inscrire revert after the creator has paid. */
   if (Number(chaine) === 8453 && String(hooks).toLowerCase() === HOOK_V8.toLowerCase()
     && hookDeLancementPour(devise, chaine) !== 'V8') {
+    return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
+  }
+  if (Number(chaine) === 8453 && HOOK_V9 && String(hooks).toLowerCase() === String(HOOK_V9).toLowerCase()
+    && hookDeLancementPour(devise, chaine, { v9: true }) !== 'V9') {
     return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
   }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };

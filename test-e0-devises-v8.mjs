@@ -91,7 +91,7 @@ const corps = app.slice(app.indexOf('async function majPaire()'), app.indexOf('/
 const iGarde = corps.indexOf('refusPrixNouveauBlock(q.paire.adr, CHAINE');
 ok('majPaire calls the guard', iGarde > 0);
 ok('…with "routable" read from the buy-routing graph at display time',
-  /refusPrixNouveauBlock\(q\.paire\.adr, CHAINE,\s*\{ routable: transactionsDepuisEth\(q\.paire\.adr\) !== null, symbole: q\.paire\.symbole \}\)/.test(corps));
+  /refusPrixNouveauBlock\(q\.paire\.adr, CHAINE,\s*\{ routable: transactionsDepuisEth\(q\.paire\.adr\) !== null, symbole: q\.paire\.symbole(, \.\.\.OPTIONS_LANCEMENT)? \}\)/.test(corps));
 ok('…before the on-chain checks and before a pair is accepted',
   iGarde > 0 && iGarde < corps.indexOf('faitsDuBlock(') && iGarde < corps.indexOf('paireChoisie = q.paire;'));
 const blocE0 = corps.slice(iGarde, corps.indexOf('paireChoisie = q.paire;'));
@@ -137,7 +137,7 @@ async function simuler(adr, { routable }) {
     prixUsdDevise: async () => { appels.prixUsdDevise += 1; return null; },
     faitsDuBlock: async () => { appels.faitsDuBlock += 1; return { estB20: true, supply: 1n, symbole: 'X', nom: 'X' }; },
     rpc: async () => { throw new Error('no rpc'); }, majResumePaire() {}, majFraisEtRecap() {}, peindrePaireChips() {},
-    majFundWalletPourPaire() {},
+    majFundWalletPourPaire() {}, OPTIONS_LANCEMENT: { v9: false },
   });
   vm.runInContext(srcMaj + '\n' + srcVal, ctx);
   await vm.runInContext('majPaire()', ctx);
@@ -162,6 +162,7 @@ console.log('OUSD at display time, through the REAL routing graph (transactionsD
 const srcTx = extraire(app, 'function transactionsDepuisEth(adrPaire) {');
 ok('transactionsDepuisEth found in app.html', !!srcTx);
 const PONT = await import('./pont-de-liquidite.js');
+const TOK = await import('./tokenomics.js');
 const USDC_B = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 async function simulerGraphe(adr, aretesDepart, areteLue) {
   const aretes = [...aretesDepart];
@@ -179,6 +180,7 @@ async function simulerGraphe(adr, aretesDepart, areteLue) {
     prixUsdDevise: async () => { if (areteLue) aretes.push(...areteLue); return null; },
     faitsDuBlock: async () => ({ estB20: true, supply: 1n, symbole: 'X', nom: 'X' }),
     rpc: async () => { throw new Error('no rpc'); }, majResumePaire() {}, peindrePaireChips() {}, majFundWalletPourPaire() {},
+    OPTIONS_LANCEMENT: TOK.OPTIONS_LANCEMENT, /* the real one: HOOK_V9 is null -> { v9: false } */
     majFraisEtRecap() { notes.push(dom['#cPaireNote'].textContent); },
   });
   vm.runInContext(srcTx + '\n' + srcMaj + '\n' + srcVal, ctx);

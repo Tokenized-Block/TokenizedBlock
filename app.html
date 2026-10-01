@@ -3124,7 +3124,7 @@ import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreff
 /* tip 20260922-prepaye-inscrire-dust */
 import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -12178,11 +12178,11 @@ async function calculerLancement() {
        *     HOOK_V5 EN DUR — et comme sa garde interroge un element absent de la page, ce chemin
        *     tourne toujours. Tous les marches du chemin rapide s ouvraient donc sur le V5. C est la
        *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
-      const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook });
+      const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook, devise: deviseLancement || null });
       /* tip 20260922-1934 + 20260922-2026: MAIN never falls through to hooks=0x0; Birth=V8 only. */
       if (mainnet && !hooks) {
         plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — fee hook unread (will not open an unhooked market)' };
-      } else if (mainnet && String(hooks).toLowerCase() !== String(HOOK_V8).toLowerCase()) {
+      } else if (mainnet && !estHookDeNaissance(hooks)) {
         plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available — Birth=V8 only (fee hook is not V8)' };
       }
       /* ⛔ LE LABEL SE LIT AVANT DE DEMANDER UN PAIEMENT. Le V4 refuse « inscrire » a un block dont le
@@ -12190,7 +12190,7 @@ async function calculerLancement() {
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
-      const label = (hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
+      const label = ((HOOK_V9 && hooks === HOOK_V9) || hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
         ? await etatLabelNaissance(adr) : 'OUI';
       if (plan && plan.etat === 'REFUSE') {
         /* already refused: missing hook on MAIN */
@@ -12226,7 +12226,7 @@ async function calculerLancement() {
           ...(quoteEthWei != null && !deviseLancement ? { quoteEthWei } : {}) });
         }
         if (plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
-        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8) {
+        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8 || (HOOK_V9 && hooks === HOOK_V9)) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
@@ -14958,7 +14958,7 @@ async function majPaire() {
    * pasted alike. "You can already use it to buy" is said ONLY if the buy-routing graph has a measured
    * route at this moment (`transactionsDepuisEth`); otherwise the factual phrase. */
   const e0 = () => refusPrixNouveauBlock(q.paire.adr, CHAINE,
-    { routable: transactionsDepuisEth(q.paire.adr) !== null, symbole: q.paire.symbole });
+    { routable: transactionsDepuisEth(q.paire.adr) !== null, symbole: q.paire.symbole, ...OPTIONS_LANCEMENT });
   if (e0()) {
     const peindreE0 = () => {
       paireChoisie = null;
@@ -16189,10 +16189,10 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
    *     deployes et verifies. Mesure du 2026-09-21 : 0 marche sur les trois. La cause etait cette
    *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
    *     diverger — il n y en a plus qu un. */
-  const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise });
+  const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise, devise });
   /* tip 20260922-1934 + 20260922-2026: never one-shot Create+Launch into hooks=0x0; MAIN Birth=V8 only. */
   if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
-  if (Number(CHAINE) === 8453 && String(hook).toLowerCase() !== String(HOOK_V8).toLowerCase()) return 'SANS';
+  if (Number(CHAINE) === 8453 && !estHookDeNaissance(hook)) return 'SANS';
   e.className = 'note';
   e.textContent = capsOk
     ? 'Preparing Instant Birth — one signature (create + 0.001 ETH · V8)…'
