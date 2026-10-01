@@ -431,6 +431,24 @@ export const ENVOI_PARTI = Object.freeze([
 export function messageEnvoi(env) {
   const etat = String((env && env.etat) || '');
   const pourquoi = String((env && env.pourquoi) || etat || 'unknown').slice(0, 130);
+  /* ⛔⛔⛔ UN FAIT STRICTEMENT PLUS FORT QUE L ETAT, ET IL CONCERNE 40,5 % DES WALLETS MESURES.
+   *   `ECHEC_ENVOI` tombe a dessein dans « on ne sait pas » : il ne GARANTIT pas que rien n est
+   *   parti. Mais quand `sendCallsUnsupported` est VRAI, le wallet a repondu qu il ne CONNAIT PAS
+   *   `wallet_sendCalls` — une methode inconnue ne peut pas avoir ete executee. On sait donc, et le
+   *   taire couterait deux fois :
+   *     · le message generique disait « it may have been sent, check your wallet history » a
+   *       quelqu un dont le wallet n a RIEN envoye : alarmant et faux ;
+   *     · il ne lui disait pas CE QU IL PEUT FAIRE, alors que la reponse est simple.
+   *   ⇒ MESURE QUI DONNE SON POIDS AU CAS : 22 « oui » pour 15 « non » sur les wallets sondes, soit
+   *     40,5 % qui ne tiennent pas `wallet_sendCalls`. Et le franchissement vers une action
+   *     tokenisee est le SEUL chemin de l app qui en a besoin.
+   *   ⛔ LA CONDITION EST `=== true`, PAS UNE VERITE SOUPLE : `undefined` signifie « on n a pas
+   *     regarde » et doit rester dans l incertain. Confondre les deux rendrait rassurant un cas
+   *     qu on n a pas mesure. */
+  if (env && env.sendCallsUnsupported === true) {
+    return 'Your wallet cannot sign several calls together, so nothing was sent and nothing moved. '
+      + 'This route needs that ability — a wallet that supports batched calls can take it.';
+  }
   if (ENVOI_RIEN_PARTI.includes(etat)) {
     return 'Not sent: ' + pourquoi + ' — nothing moved, your ETH is untouched.';
   }

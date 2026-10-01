@@ -122,6 +122,31 @@ const rien = messageEnvoi({ etat: 'REFUSE_PAR_UTILISATEUR', pourquoi: 'you decli
 t('TEMOIN INVERSE : un refus utilisateur dit bien que rien n a bouge', /nothing moved/i.test(rien));
 t('et les deux messages DIFFERENT', m !== rien);
 
+/* ══ 5. LE WALLET QUI NE SAIT PAS GROUPER — 40,5 % DES WALLETS MESURES ════════════════════════
+ * ⛔⛔⛔ MESURE DU DEPOT : 22 « oui » pour 15 « non » sur les wallets sondes, soit 40,5 % qui ne
+ *   tiennent pas `wallet_sendCalls`. Le franchissement vers une action tokenisee est le SEUL chemin
+ *   de l app qui en a besoin — donc ce cas n est pas marginal, c est deux visiteurs sur cinq.
+ *   Avant, ils lisaient « it may have been sent, check your wallet history » : alarmant ET FAUX,
+ *   puisqu une methode que le wallet ne connait pas ne peut pas avoir ete executee. */
+const pasDeLot = messageEnvoi({ etat: 'ECHEC_ENVOI', sendCallsUnsupported: true,
+  pourquoi: 'method wallet_sendCalls does not exist' });
+t('wallet sans lot : on DIT que rien n a bouge', /nothing was sent and nothing moved/i.test(pasDeLot));
+t('wallet sans lot : on ne l envoie PAS fouiller son historique',
+  !/check your wallet history/i.test(pasDeLot));
+t('wallet sans lot : on lui dit ce qu il PEUT faire',
+  /supports batched calls/i.test(pasDeLot));
+/* ⛔⛔ LA MOITIE INVERSE, ET ELLE EST ESSENTIELLE : `undefined` veut dire « on n a pas regarde » et
+ *   doit RESTER dans l incertain. Rendre rassurant un cas non mesure serait exactement le defaut
+ *   qu on corrige, retourne. */
+const incertain = messageEnvoi({ etat: 'ECHEC_ENVOI', pourquoi: 'timeout' });
+t('⛔ sans mesure de capacite, le message reste INCERTAIN', /may have been sent/i.test(incertain));
+t('⛔ et il n affirme PAS que rien n a bouge', !/nothing moved/i.test(incertain));
+t('les deux messages DIFFERENT', pasDeLot !== incertain);
+/* ⛔ ET `sendCallsUnsupported: false` — mesure, et la reponse est « il connait la methode » — reste
+ *   incertain lui aussi : l appel a echoue pour une AUTRE raison, qui peut etre un envoi en vol. */
+const faux = messageEnvoi({ etat: 'ECHEC_ENVOI', sendCallsUnsupported: false, pourquoi: 'timeout' });
+t('⛔ sendCallsUnsupported FAUX reste incertain', /may have been sent/i.test(faux));
+
 console.log((ko.length ? 'KO ' + ko.length : 'OK') + ' — ' + ok + ' assertions');
 for (const k of ko) console.log('  KO ' + k);
 process.exit(ko.length ? 1 : 0);
