@@ -1477,7 +1477,20 @@ details[open] > summary::before{transform:rotate(90deg)}
              ⛔ ET NOUS NE TOUCHONS RIEN DESSUS : « Coinbase Onramp is free for developers to use »
                 veut dire « tu ne paies pas », PAS « tu touches ». Aucun partage de revenu n est
                 ecrit nulle part. Ce bouton rend un service, il n est pas une source de revenu. -->
-        <p class="note" id="cFundHint">Need ETH or USDC on Base? Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. Then come back to Connect and Instant Birth.</p>
+        <!-- ⛔⛔ PHIL, 2026-10-01 : « retire ca ». Cette note faisait quatre phrases et recitait le
+             bareme de Coinbase — 0,5 % par virement, 2,5 % par carte, « plus a spread », « they show
+             you the exact total before you confirm ». Un mur de texte, et ce n est MEME PAS notre
+             tarif : c est celui d un tiers, qui l affiche lui-meme avant que la personne confirme.
+             ⛔ CE QUI RESTE EST LE NOYAU QU ON NE PEUT PAS RETIRER, et il tient en deux faits :
+               · l argent va dans TON wallet — nous ne le tenons jamais ;
+               · Coinbase facture, et montre son total avant que tu confirmes.
+             Le premier est la propriete du produit. Le second est la divulgation. Le bareme, lui,
+             appartient a Coinbase et change sans nous : le reciter, c est prendre la responsabilite
+             d un chiffre qu on ne mesure pas. Aucun test ne l epinglait — verifie avant de couper.
+             ⛔ ET LA RESERVE « not live yet » JUSTE EN DESSOUS N EST PAS TOUCHEE : elle est gardee
+             par `test-pas-de-tarif-sans-service.mjs`, parce que son absence a DEJA fait afficher
+             « 0,5 % via your Bridge block » pour un echange que l app ne sait pas regler. -->
+        <p class="note" id="cFundHint">Need ETH on Base? Buy it through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. Coinbase charges a fee and shows you the total before you confirm.</p>
         <!-- ⛔⛔⛔ CETTE PHRASE ANNONCAIT UN PRIX POUR UN SERVICE QU ON NE REND PAS. Elle disait
              « Tokenized↔tokenized after funding? Open the Bridge tab — 0.5% via your Bridge block »
              alors que `HUB_SWAP_LIVE` vaut `false` et que l onglet Bridge le dit lui-meme, DEUX
@@ -15008,23 +15021,30 @@ function majFundWalletPourPaire() {
   if (p && p.type === 'ACTION') {
     const sym = p.symbole || 'that stock';
     a.textContent = 'Fund wallet — Get ETH on Base (Birth fee)';
-    if (h) h.innerHTML = 'Birth fee is 0.001 ETH, once — paid in <b>ETH</b>. '
-      + 'Your market will be quoted in <b>' + enTexte(sym) + '</b> (buyers need that Coinbase stock to trade). '
-      + 'Buy ETH through Coinbase into <b>your</b> wallet — Tokenized Block never holds your money. '
-      + 'Coinbase published rates: <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread. '
-      + 'Then come back to Connect and Instant Birth.';
+    /* ⛔⛔ PHIL, 2026-10-01 : « retire ca ». Les trois branches recitaient le bareme de Coinbase sur
+     *   quatre phrases. Ce n est pas notre tarif, il change sans nous, et Coinbase l affiche
+     *   lui-meme avant que la personne confirme : le reciter, c est prendre la responsabilite d un
+     *   chiffre qu on ne mesure pas — exactement ce que ce depot s interdit ailleurs.
+     * ⛔ CE QUI RESTE EST LE NOYAU, ET IL NE DOIT PAS MAIGRIR DAVANTAGE :
+     *     · le frais de naissance et sa devise — c est NOTRE chiffre, et il decide du geste ;
+     *     · la devise de cotation quand ce n est pas l ETH — elle change QUI pourra acheter ;
+     *     · « ton wallet », « nous ne tenons jamais ton argent » — la propriete du produit ;
+     *     · « Coinbase facture et montre son total » — la divulgation, sans le bareme.
+     * ⚠️ Aucun test n epinglait ces chaines : verifie l avoir mesure avant de couper, pas apres. */
+    if (h) h.innerHTML = 'Birth fee is 0.001 ETH, once. '
+      + 'Your market will be quoted in <b>' + enTexte(sym) + '</b> — buyers need that stock to trade it. '
+      + 'Buy ETH through Coinbase into <b>your</b> wallet: Tokenized Block never holds your money, '
+      + 'and Coinbase shows you its total before you confirm.';
   } else if (p && p.symbole === 'USDC') {
     a.textContent = 'Fund wallet — Get USDC on Base';
-    if (h) h.innerHTML = 'Need USDC on Base for this pair, plus ETH for the Birth fee (0.001 ETH once)? '
-      + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
-      + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
-      + 'Then come back to Connect and Instant Birth.';
+    if (h) h.innerHTML = 'This pair needs USDC, plus 0.001 ETH once for the Birth fee. '
+      + 'Buy through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
+      + 'and Coinbase shows you its total before you confirm.';
   } else {
     a.textContent = 'Fund wallet — Get ETH on Base';
-    if (h) h.innerHTML = 'Need ETH on Base for Instant Birth (Birth fee 0.001 ETH once)? '
-      + 'Buy through Coinbase — it lands in <b>your</b> wallet, and Tokenized Block never holds your money. '
-      + 'Coinbase charges for this: their published rates are <b>0.5% by bank transfer</b> and <b>2.5% by card</b>, plus a spread — they show you the exact total before you confirm. '
-      + 'Then come back to Connect and Instant Birth.';
+    if (h) h.innerHTML = 'Birth fee is 0.001 ETH, once. '
+      + 'Buy ETH through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
+      + 'and Coinbase shows you its total before you confirm.';
   }
 }
 
