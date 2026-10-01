@@ -6,7 +6,22 @@
  *
  * ⛔⛔ CE QUE LA MESURE DIT, 0 NON MESURE : il y a DEUX MONDES DISJOINTS sur Base.
  *       monde UNISWAP V4  : ETH, USDC, OUSD, NVDAc
- *       monde AERODROME   : ETH, USDC, les QUINZE actions tokenisees, la plupart des blocks
+ *       monde AERODROME   : ETH, USDC, les QUINZE actions tokenisees
+ *
+ *   ⛔⛔⛔ CETTE LIGNE DISAIT « ET LA PLUPART DES BLOCKS » SUR AERODROME. C EST FAUX EN NOMBRE, et
+ *     la mesure du 2026-10-01 sur nos 249 lignes servies le dit sans ambiguite :
+ *         aerodrome    11 marches    83 728 918 $ de volume 24 h    96,4 %
+ *         uniswap     238 marches     3 133 376 $ de volume 24 h     3,6 %
+ *     ⇒ NOMBRE DE MARCHES et PART DU VOLUME ne disent PAS la meme chose, et les confondre renverse
+ *       la conclusion. La quasi-totalite de nos MARCHES vit sur Uniswap ; la quasi-totalite de
+ *       l ARGENT vit sur les onze marches Aerodrome — les actions tokenisees.
+ *     ⇒ CE QUE CA CHANGE POUR LE RAIL OUSD : il atteint 237 des 249 marches EN UNE TRANSACTION,
+ *       soit 95,2 %... qui portent 3,6 % du volume. Les onze qui portent les 96,4 % demandent DEUX
+ *       transactions et DEUX assembleurs, et ce sont justement ceux qu on ne batit pas encore.
+ *       Annoncer « 95 % des marches atteignables » serait VRAI et TROMPEUR.
+ *     ⚠️ ET LA FAMILLE DE CES 249 LIGNES VIENT DE L AGREGATEUR, pas d une preuve on-chain : le
+ *       serveur ne prouve la famille que pour les DEVISES. Le compte est donc sous hypothese.
+ *
  *   OUSD a 0 pool Aerodrome (sonde sur les NEUF espacements declares, temoins : USDC/WETH 3,
  *   AAPLc/USDC 2). Et 14 des 15 actions ont 0 pool V4.
  *   ⇒ Un seul `exactInput` ne traverse QU UNE factory : OUSD -> AAPLc etait donc impossible.
