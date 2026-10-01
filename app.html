@@ -11222,6 +11222,14 @@ async function preparerEchange(sens) {
   $('#peActions').innerHTML = '';
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
+  /* ⛔⛔ UN MONTANT NUL EST REFUSE EN PREMIER (Raksha, 2026-10-01 : « 0 » rendait autre chose qu une
+   *     demande de montant). Le zero ne depend d aucune decimale, d aucun marche ni d aucun wallet :
+   *     le dire apres cinq gardes reseau faisait repondre a « 0 » par une phrase sur le marche. */
+  if (montantNulOuVide($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value)) {
+    e.className = 'note wKo'; e.textContent = PHRASE_MONTANT_NUL;
+    try { etape('echange_refus_montant'); } catch (_) {}
+    return;
+  }
   /* ⛔⛔ TOUS LES REFUS DE CE CHEMIN ETAIENT MUETS, et c est le chemin qui RAPPORTE : les frais
    *     viennent des trades, pas des creations. Mesure du 2026-09-25 par balayage de l app (317
    *     fonctions) : `preparerEchange` etait la premiere du classement, et les refus tombaient TOUS
@@ -11864,6 +11872,26 @@ $('#plqAjouter').addEventListener('click', () => void preparerAjout());
 
 $('#peAcheter').addEventListener('click', () => void preparerEchange('ACHAT'));
 $('#peVendre').addEventListener('click', () => void preparerEchange('VENTE'));
+/* ⛔⛔ « 0 » DEMANDE UN MONTANT, TOUT DE SUITE. Signale par Raksha (2026-10-01, profil SNDKc) : taper
+ *     « 0 » ou « 0.0 » dans Buy ne disait RIEN — la seule phrase visible restait celle du selecteur
+ *     « Pay with » (« Not offered yet — 2 no route »), qui parle des AUTRES devises et se lisait donc
+ *     comme la reponse au montant. Aucun ecouteur `input` ne regardait le champ, et le controle du
+ *     montant de `preparerEchange` ne venait qu apres cinq autres gardes.
+ *   ⛔ ON N EFFACE QUE NOTRE PROPRE PHRASE : un refus ou un devis deja affiche dans `#peEtat` n est
+ *     jamais ecrase par une frappe — seule la demande de montant s en va quand le montant devient bon. */
+const PHRASE_MONTANT_NUL = 'Enter an amount above zero.';
+function montantNulOuVide(texte) { return /^0*(?:[.,]0*)?$/.test(String(texte == null ? '' : texte).trim()); }
+for (const id of ['#peAchat', '#peVente']) {
+  const champ = $(id);
+  if (!champ) continue;
+  champ.addEventListener('input', () => {
+    const e = $('#peEtat');
+    if (!e) return;
+    const brut = String(champ.value || '').trim();
+    if (brut !== '' && montantNulOuVide(brut)) { e.className = 'note wKo'; e.textContent = PHRASE_MONTANT_NUL; }
+    else if (e.textContent === PHRASE_MONTANT_NUL) { e.className = 'note'; e.textContent = ''; }
+  });
+}
 
 /** ETH→USDC exit — 0.5% → FEE_WALLET. Quoter-gated; nothing to sign if pools unread. */
 async function preparerEthUsdc() {
