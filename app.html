@@ -8824,6 +8824,23 @@ async function lireProfil(adr, sym, perime, opts) {
     try { v = await enrichirMarcheSiDecouvert(adr, v); } catch (_) { /* keep NON_TROUVEE */ }
     if (perime()) return;
   }
+  /* ⛔⛔ UNE LECTURE RATEE MERITE LA MEME SECONDE CHANCE QU UNE ABSENCE. Signale par Raksha (2026-10-01) :
+   *     SNDKc ouvert depuis « Buy » dans Market — pas d onglets BUY/SELL, pas de montant, pas de devis.
+   *     Mesure du Grok Bot : sur un noeud qui repond, le profil passe par NON_TROUVEE (v4) puis la
+   *     decouverte trouve sa pool et ouvre Buy/Sell (« market found · outside market », ~20 s). Mais
+   *     quand les QUATRE lectures StateView sont refusees (429 du soir), `v` reste NON_LUE et la
+   *     decouverte n etait JAMAIS tentee — elle n etait branchee que sur NON_TROUVEE. Le panneau restait
+   *     cache alors que la cle de pool se retrouve par une autre voie (Initialize, DexScreener).
+   *   ⛔ ON NE TRANSFORME PAS UN ECHEC EN FAIT : si la decouverte ne trouve rien, `v` RESTE NON_LUE
+   *     (« Market unread — retry »), jamais « no pool ». Seule une cle effectivement trouvee ouvre Buy. */
+  if (!v || v.etat === 'NON_LUE' || v.etat === 'REFUSEE') {
+    $('#pVie').textContent = 'market not read — checking Live-discovered pools…';
+    try {
+      const vd = await enrichirMarcheSiDecouvert(adr, { etat: 'NON_TROUVEE' });
+      if (vd && vd.etat === 'LUE') v = vd;
+    } catch (_) { /* reste NON_LUE */ }
+    if (perime()) return;
+  }
   marcheProfil = v ? { adr: String(adr).toLowerCase(), chaine: CHAINE, v } : null;
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
