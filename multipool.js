@@ -359,7 +359,11 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   let tenue = entreeEth ? 'eth' : 'erc20';
   if (!entreeEth) ajoute(CMD.TRANSFER_FROM, motAdr(chemin[0].de) + motAdr(ADDRESS_THIS) + mot(m));
   const prendreFrais = (dev) => {
-    const jeton = dev === ADRESSES.ETH ? (tenue === 'eth' ? ADRESSES.ETH : ADRESSES.WETH) : dev;
+    /* ⛔ « en ETH » veut dire de l ETH NATIF : si le routeur tient du WETH a ce noeud, on le
+     *   DEBALLE d abord (UNWRAP vers le routeur, minimum 0). Le segment suivant le remballera s il
+     *   en a besoin. a6cf ne recoit jamais de WETH. */
+    if (dev === ADRESSES.ETH && tenue === 'weth') { ajoute(CMD.UNWRAP_WETH, motAdr(ADDRESS_THIS) + mot(0)); tenue = 'eth'; }
+    const jeton = dev === ADRESSES.ETH ? ADRESSES.ETH : dev;
     for (const p of parts) ajoute(CMD.PAY_PORTION, motAdr(jeton) + motAdr(p.qui) + mot(p.bps));
   };
   const segs = segments(chemin, fraisIndice);
