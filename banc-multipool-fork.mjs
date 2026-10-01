@@ -80,11 +80,23 @@ const g = JSON.parse(readFileSync(GRAPHE, 'utf8'));
 console.log('=== BANC MULTIPOOL — fork ' + URL + ' · bloc fork ' + (info.forkConfig && info.forkConfig.forkBlockNumber) + ' · bloc courant ' + Number(await rpc('eth_blockNumber')) + ' · graphe bloc ' + g.bloc + ' ===');
 const aretes = g.aretes.map((e) => ({ ...e, liqUsd: Number(e.liqUsd) || 0 }));
 const N = new Map(g.noeuds.map((n) => [n.adr, n]));
+/* + les pools action x USDC/OUSD/ETH mesurees par mesure-actions-ousd-usdc.mjs (meme bloc de fork) */
+const AP = process.env.ACTIONS_POOLS || '/workspace/mp-data/actions-pools.json';
+let actionsMesurees = [];
+if ((await import('node:fs')).existsSync(AP)) {
+  const ap = JSON.parse(readFileSync(AP, 'utf8'));
+  if (ap.bloc !== g.bloc) console.log('⚠️ actions-pools.json est au bloc ' + ap.bloc + ', le graphe au bloc ' + g.bloc);
+  actionsMesurees = ap.actions.filter((x) => x.dec !== null && x.dec !== undefined);
+  for (const x of actionsMesurees) if (!N.has(x.adr)) { const n = { adr: x.adr, sym: (x.symbole || x.ticker), classe: 'action', dec: x.dec }; N.set(x.adr, n); g.noeuds.push(n); }
+  const vus = new Set(aretes.map((e) => e.id));
+  for (const p of ap.pools) if (p.arete && !vus.has(p.id) && p.retenu1000 !== null) { aretes.push({ ...p.arete, liqUsd: p.tvlUsd || (p.retenu1000 > 0.5 ? 1000 / Math.max(1 - p.retenu1000, 0.001) : 0) }); vus.add(p.id); }
+  console.log('pools actions ajoutees : ' + ap.pools.length + ' mesurees · actions ' + actionsMesurees.length);
+}
 const sym = (a) => (noeud(a) === ETH ? 'ETH' : (N.get(noeud(a)) && N.get(noeud(a)).sym) || a.slice(0, 10));
 const symboles = Object.fromEntries(g.noeuds.map((n) => [n.adr, n.sym || n.adr.slice(0, 8)]));
 /* ⛔ LES DEVISES ADMISES POUR LE FRAIS : les 15 actions + OUSD (B20 devise). ETH et USDC sont
  *   implicites. Un block n y est JAMAIS — ni TBLOCK, ni aucun jeton de classe « block ». */
-const ADMISES = devisesFraisAdmises(ACTIONS_COINBASE, { blocks: g.noeuds.filter((n) => n.classe === 'block').map((n) => n.adr) });
+const ADMISES = devisesFraisAdmises([...ACTIONS_COINBASE, ...actionsMesurees.map((x) => x.adr)], { blocks: g.noeuds.filter((n) => n.classe === 'block').map((n) => n.adr) });
 const estBlock = (a) => { const n = N.get(noeud(a)); return !!n && n.classe === 'block'; };
 for (const a of ADMISES) if (estBlock(a)) throw new Error('admise ET block : ' + a);
 
@@ -232,6 +244,27 @@ res.push(await executer({ nom: 'C13 NVDAc -> ETH (action -> ETH)', de: NVDA, ver
 res.push(await executer({ nom: 'C14 TOSHI -> ETH (V3 rend du WETH : frais en ETH NATIF apres UNWRAP)', de: TOSHI, vers: ETH, montant: await moitie(TOSHI) }));
 res.push(await executer({ nom: 'C15 TOSHI -> USDC (V3 puis V4, frais en ETH au noeud du milieu)', de: TOSHI, vers: USDC, montant: await solde(TOSHI, USER) }));
 
+/* ── (2) LES ROUTES BLOCK -> ACTION -> USDC / OUSD (demande de Raksha 23:12) ── */
+const STOCKS = new Set(actionsMesurees.map((x) => x.adr).concat(ACTIONS_COINBASE.map((x) => bas(x.adr))));
+const paires = [];
+for (const e of aretes) {
+  const [x, y] = e.venue === 'uniswap-v4' ? [noeud(e.cle.currency0), noeud(e.cle.currency1)] : [noeud(e.token0), noeud(e.token1)];
+  const [b, st] = estBlock(x) && STOCKS.has(y) ? [x, y] : estBlock(y) && STOCKS.has(x) ? [y, x] : [null, null];
+  if (!b || !(e.devis && Object.values(e.devis).some((d) => d.etat === 'OK'))) continue;
+  paires.push({ b, st, liq: e.liqUsd });
+}
+const choisis = [];
+for (const p of paires.sort((u, v) => v.liq - u.liq)) if (!choisis.some((c) => c.st === p.st) && choisis.length < Number(process.env.N_STOCK_BLOCKS || 4)) choisis.push(p);
+console.log('\n=== BLOCK -> ACTION -> USDC / OUSD : ' + paires.length + ' paires block/action mesurees, ' + choisis.length + ' testees ===');
+for (const { b, st } of choisis) {
+  const r0 = await executer({ nom: 'S0 achat ETH -> ' + sym(b) + ' (block de ' + sym(st) + ')', de: ETH, vers: b, montant: E / 50n, sautsMax: 4 });
+  res.push(r0);
+  if (r0.verdict !== 'OK') continue;
+  const tout = await solde(b, USER);
+  res.push(await executer({ nom: 'S1 ' + sym(b) + ' -> ' + sym(st) + ' -> USDC', de: b, vers: USDC, montant: tout / 2n }));
+  res.push(await executer({ nom: 'S2 ' + sym(b) + ' -> ' + sym(st) + ' -> OUSD', de: b, vers: OUSD, montant: await solde(b, USER) }));
+}
+
 /* ── temoins negatifs ── */
 console.log('\n=== TEMOINS NEGATIFS ===');
 const tem = [];
@@ -257,6 +290,12 @@ const r2 = await executer({ nom: 'T2 route SANS PAY_PORTION (USDC -> AAPLc)', de
 tem.push({ nom: 'T2 sans frais', verdict: r2.verdict === 'KO' ? 'OK (le juge dit non)' : 'KO', ko: r2.ko });
 const r3 = await executer({ nom: 'T3 route avec DEUX PAY_PORTION (USDC -> AAPLc)', de: USDC, vers: AAPL, montant: 5n * 10n ** 6n, modifier: doubleFrais, attenduKo: true });
 tem.push({ nom: 'T3 double frais', verdict: r3.verdict === 'KO' ? 'OK (le juge dit non)' : 'KO', ko: r3.ko });
+if (choisis.length) {
+  const { b, st } = choisis[0];
+  await executer({ nom: 'T5 rachat pour le temoin', de: ETH, vers: b, montant: E / 100n, sautsMax: 4 });
+  const r5 = await executer({ nom: 'T5 ' + sym(b) + ' -> ' + sym(st) + ' -> USDC SANS PAY_PORTION', de: b, vers: USDC, montant: await solde(b, USER), modifier: sansFrais, attenduKo: true });
+  tem.push({ nom: 'T5 block->action->USDC sans frais', verdict: r5.verdict === 'KO' ? 'OK (le juge dit non)' : 'KO', ko: r5.ko });
+}
 const r4 = await executer({ nom: 'T4 minimum trop haut (sortie+1) : tout revert, a6cf ne touche rien', de: USDC, vers: AAPL, montant: 5n * 10n ** 6n, attenduKo: true,
   modifier: (tx) => { const c = [...tx.commandes], i = [...tx.entrees]; const k = c.lastIndexOf(CMD.SWEEP); const h = i[k]; const mn = BigInt('0x' + h.slice(128)); i[k] = h.slice(0, 128) + mot(mn * 10000n / 9900n + 2n); return { ...tx, entrees: i, data: assemblerExecute(c, i, 1n << 40n) }; } });
 tem.push({ nom: 'T4 minimum trop haut', verdict: r4.verdict === 'KO' && r4.delta === '0' ? 'OK (revert, a6cf 0)' : 'KO', ko: r4.ko });
