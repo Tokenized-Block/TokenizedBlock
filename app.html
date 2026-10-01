@@ -2934,7 +2934,7 @@ import { cheminEntre, transactionsNecessaires, segmenterParFactory,
  *   Uniswap V4 est OFFERT, parce que c est le seul cas prouve en execution (fork : OUSD -> USDC ->
  *   ETH -> TBLOCK, status 0x1). Les autres se LISENT, avec leur raison — une limite qui est la
  *   NOTRE ne doit pas se lire « impossible ». */
-import { devisesDentree, peutEtreAssemblee, phraseDevise, ETATS_OFFERTS }
+import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, ETATS_OFFERTS }
   from './devises-dentree.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
  *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
@@ -10365,8 +10365,25 @@ function majDevisesDentree(v) {
   const ASSEMBLEUR_CABLE_SUR_LE_BOUTON = true;
   /* ⛔ UN SEUL BOOLEEN POUR LES DEUX LISTES — voir la note plus bas : deux predicats differents
    *   avaient deja ouvert un trou ou une route mesuree n etait ni offerte ni dite. */
-  const offrable = (d) => peutEtreAssemblee(d).ok
-    && (ASSEMBLEUR_CABLE_SUR_LE_BOUTON || d.etat === 'DIRECTE');
+  /* ⛔⛔⛔ LE FRANCHISSEMENT EST OUVERT DANS `peutEtreAssemblee` ET PAS ENCORE DANS LE BOUTON.
+   *   La branche multi-sauts de `preparerEchange` passe par `sautsDepuisChemin`, qui n assemble
+   *   QU UN segment Uniswap V4 : une route a deux lieux y est refusee. Sans ce drapeau, le
+   *   selecteur offrirait une devise que le bouton ne sait pas batir — exactement le defaut
+   *   « l etiquette promet ce que le calldata ne fait pas », que je passe la journee a traquer. Je
+   *   l ai introduit moi-meme en ouvrant `peutEtreAssemblee` sans cabler l autre bout.
+   *   ⇒ C EST UN FAIT SUR NOTRE CABLAGE, PAS UNE DECISION PRODUIT. Il passe a `true` le jour ou
+   *     `preparerEchange` appelle `planifierFranchissement` et envoie par `envoyerLotAtomique`. Le
+   *     RAIL lui-meme est deja prouve sur fork : OUSD -> USDC -> AAPLc, 3 appels `status 0x1`,
+   *     a6cf paye sur LES DEUX jambes, au wei.
+   *   ⛔ ET LA ROUTE RESTE DITE : elle descend dans la note courte avec son compte. Fermer le
+   *     bouton n est pas cacher la route. */
+  const FRANCHISSEMENT_CABLE_SUR_LE_BOUTON = false;
+  const offrable = (d) => {
+    const a = peutEtreAssemblee(d);
+    if (!a.ok) return false;
+    if (a.par === 'franchissement' && !FRANCHISSEMENT_CABLE_SUR_LE_BOUTON) return false;
+    return ASSEMBLEUR_CABLE_SUR_LE_BOUTON || d.etat === 'DIRECTE';
+  };
   const cliquables = r.devises.filter(offrable);
   const symBlock = (symProfil || 'this block');
   if (cliquables.length > 1) {
@@ -10398,12 +10415,33 @@ function majDevisesDentree(v) {
   const raisonDeNePasOffrir = (d) => (peutEtreAssemblee(d).ok
     ? 'a ' + d.tx + '-signature route exists and we priced it, but this button does not build it yet'
     : peutEtreAssemblee(d).pourquoi);
-  const dits = r.devises
-    .filter((d) => d.etat !== 'NON_MESUREE' && !offrable(d))
-    .map((d) => (d.symbole || d.devise.slice(0, 8)) + ': ' + raisonDeNePasOffrir(d));
-  if (dits.length) {
+  /* ⛔⛔⛔ CECI ETAIT UN MUR DE TEXTE, ET PHIL L A ENTOURE EN ROUGE SUR SA CAPTURE. Ma version
+   *   precedente faisait un `.map()` PAR DEVISE : quinze devises donnaient quinze fois la MEME
+   *   phrase de quinze mots, bout a bout sous le selecteur. Personne ne lit ca — et le cout n est
+   *   pas seulement l illisibilite : une zone qui repete apprend a ne plus etre lue, donc la
+   *   prochaine information utile qui s y affichera sera sautee elle aussi.
+   *   ⇒ La raison est la MEME pour toutes celles qui echouent pour la meme cause. On GROUPE par
+   *     raison, on la dit UNE fois, on borne les noms et on COMPTE le reste.
+   *   ⛔ ON NE DIT PAS MOINS, ON CESSE DE REPETER : chaque devise lue reste nommee (ou comptee dans
+   *     « and N more »), et la raison reste entiere. Taire une devise mesuree serait retomber dans
+   *     le defaut d a cote — une route reelle ni offerte ni dite. */
+  /* ⛔⛔ ON GROUPE SUR L ETIQUETTE COURTE, PAS SUR LA PHRASE. Grouper sur la phrase entiere donnait
+   *   encore un paragraphe — Phil : « ya toujours ce, retirer ou resume en qlq mots ». */
+  const groupes = resumeDesNonOffertes(r.devises,
+    (d) => (offrable(d) ? null : (peutEtreAssemblee(d).court || 'other')));
+  if (groupes.length) {
     note.hidden = false;
-    note.textContent = 'Read but not offered yet — ' + dits.join(' · ');
+    /* ⛔⛔⛔ QUELQUES MOTS ET UN COMPTE, RIEN DE PLUS A L ECRAN. « 13 aerodrome only · 4 two venues »
+     *   se lit d un coup d oeil ; quinze phrases de quinze mots ne se lisent pas du tout, et
+     *   apprennent a ne plus regarder la zone.
+     *   ⛔ MAIS LA RAISON N EST PAS PERDUE : elle part dans `title`, donc au survol, avec les noms
+     *     des devises concernees. Raccourcir en SUPPRIMANT l explication serait l autre moitie du
+     *     defaut — un refus qu on ne peut plus comprendre. On range, on ne retire pas. */
+    note.textContent = 'Not offered yet — '
+      + groupes.map((g) => g.total + ' ' + g.raison).join(' · ');
+    note.title = groupes.map((g) => g.noms.join(', ') + ' — '
+      + (raisonDeNePasOffrir({ ...r.devises.find((d) => (d.symbole || '') === g.noms[0]) }) || g.raison))
+      .join('\n');
   }
 }
 /**

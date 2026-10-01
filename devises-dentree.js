@@ -190,22 +190,31 @@ export function devisesDentree({ block, deviseDeLaPool, familleDuBlock, candidat
  */
 export function peutEtreAssemblee(d) {
   if (!d || !ETATS.includes(d.etat)) {
-    return { ok: false, pourquoi: 'this route was not classified' };
+    return { ok: false, court: 'unknown', pourquoi: 'this route was not classified' };
   }
   if (d.etat === 'DIRECTE') {
-    return { ok: true, pourquoi: null, par: 'chemin historique' };
+    return { ok: true, pourquoi: null, court: null, par: 'chemin historique' };
   }
   if (!ETATS_OFFERTS.includes(d.etat)) {
-    return { ok: false, pourquoi: d.pourquoi || 'this currency is not offered' };
+    /* ⛔⛔ `court` EST UNE ETIQUETTE DE DEUX MOTS, ET ELLE EXISTE POUR UNE RAISON MESUREE : la
+     *   phrase entiere, repetee une fois par devise, a produit un MUR DE TEXTE que Phil a entoure
+     *   en rouge — puis, apres regroupement, un paragraphe encore trop long. Il a demande « resume
+     *   en quelques mots ». L ecran montre donc `court` + un COMPTE, et garde `pourquoi` entier
+     *   pour le survol.
+     *   ⛔ ON NE REMPLACE PAS LA RAISON, ON LA RANGE : `pourquoi` reste rendu, intact. Raccourcir
+     *     en PERDANT l explication serait l autre moitie du defaut — un refus qu on ne peut plus
+     *     comprendre. */
+    return { ok: false, pourquoi: d.pourquoi || 'this currency is not offered',
+      court: d.etat === 'SANS_ROUTE' ? 'no route' : 'not checked' };
   }
   const segs = Array.isArray(d.segments) ? d.segments : [];
   if (segs.length === 1) {
     if (segs[0].famille !== 'uniswap-v4') {
-      return { ok: false,
+      return { ok: false, court: segs[0].famille + ' only',
         pourquoi: 'this route runs on ' + segs[0].famille
           + ', and the one-transaction builder we proved only covers Uniswap v4 so far' };
     }
-    return { ok: true, pourquoi: null, par: 'route-v4-multi-sauts', appels: 1 };
+    return { ok: true, pourquoi: null, court: null, par: 'route-v4-multi-sauts', appels: 1 };
   }
   /* ⭐⭐ LE FRANCHISSEMENT A DEUX MONDES — ouvert le 2026-10-01 sur demande de Phil : « open OUSD a
    *   tt les action tokenized ». Les actions tokenisees vivent sur AERODROME, OUSD sur UNISWAP V4,
@@ -222,12 +231,61 @@ export function peutEtreAssemblee(d) {
    *     grouper. Un wallet qui ne sait pas grouper ne peut pas prendre cette route — c est dit. */
   if (segs.length === 2 && segs[0].famille === 'uniswap-v4' && segs[1].famille === 'aerodrome'
     && segs[1].sauts.length === 1) {
-    return { ok: true, pourquoi: null, par: 'franchissement', appels: 3, exigeAtomique: true };
+    return { ok: true, pourquoi: null, court: null, par: 'franchissement', appels: 3,
+      exigeAtomique: true };
   }
-  return { ok: false,
+  /* ⛔ L ETIQUETTE NE COMMENCE PAS PAR UN CHIFFRE : l ecran l affiche precedee d un COMPTE, et
+   *   « 4 2 venues » colle deux nombres et devient illisible. Le detail chiffre reste dans
+   *   `pourquoi`, au survol. */
+  return { ok: false, court: 'cross-venue',
     pourquoi: 'this route crosses ' + segs.length + ' venues as '
       + segs.map((s) => s.famille).join(' then ')
       + ', and the only crossing we build is uniswap-v4 then a single aerodrome hop' };
+}
+
+/**
+ * LE RESUME DE CE QU ON N OFFRE PAS — groupe par RAISON, pas une ligne par devise.
+ *
+ * ⛔⛔⛔ CE QUE J AI DEPLOYE ETAIT ILLISIBLE, ET PHIL L A ENTOURE EN ROUGE SUR SA CAPTURE : quinze
+ *   devises, quinze fois LA MEME phrase de quinze mots, bout a bout sous le selecteur. Personne ne
+ *   lit ca. Un bloc de texte repete n informe pas — il APPREND A NE PLUS LIRE la zone, et la
+ *   prochaine information utile qui s y affichera sera sautee elle aussi.
+ *   ⇒ ET LE DEFAUT EST DE CONCEPTION, PAS DE MISE EN FORME : j avais mappe une raison PAR devise
+ *     alors que la raison est la MEME pour toutes celles qui echouent pour la meme cause. On groupe
+ *     donc par raison, et on nomme les devises concernees une seule fois.
+ *
+ * ⛔ ON NE CACHE RIEN POUR AUTANT : chaque devise lue reste nommee, et la raison reste entiere. La
+ *   correction est de ne plus la REPETER, pas d en dire moins. Taire une devise mesuree serait
+ *   retomber dans le defaut d a cote — une route reelle ni offerte ni dite.
+ * ⛔ ET LA LISTE DE NOMS EST BORNEE, AVEC SON RESTE COMPTE : « et 9 autres » est une information ;
+ *   une enumeration de trente symboles n en est pas une. Le compte total est toujours dit, pour
+ *   qu on ne confonde jamais « on en montre 6 » avec « il y en a 6 ».
+ */
+export function resumeDesNonOffertes(devises, raisonDe, maxNoms = 6) {
+  const liste = Array.isArray(devises) ? devises : [];
+  const parRaison = new Map();
+  for (const d of liste) {
+    if (!d || d.etat === 'NON_MESUREE') continue; /* ⛔ on ne nomme pas ce qu on n a pas sonde */
+    let r;
+    try { r = raisonDe(d); } catch (_) { r = null; }
+    if (!r) continue;
+    const k = String(r);
+    if (!parRaison.has(k)) parRaison.set(k, []);
+    parRaison.get(k).push(d.symbole || String(d.devise).slice(0, 8));
+  }
+  /* ⛔ LA RAISON LA PLUS FREQUENTE D ABORD : c est celle qui concerne le plus de monde. */
+  const groupes = [...parRaison.entries()].sort((a, b) => b[1].length - a[1].length);
+  return groupes.map(([raison, noms]) => {
+    const montres = noms.slice(0, maxNoms);
+    const reste = noms.length - montres.length;
+    return {
+      raison,
+      noms,
+      total: noms.length,
+      texte: montres.join(', ') + (reste > 0 ? ' and ' + reste + ' more' : '')
+        + ' (' + noms.length + ') — ' + raison,
+    };
+  });
 }
 
 /**

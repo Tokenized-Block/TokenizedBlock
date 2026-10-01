@@ -6,7 +6,7 @@
  *   a cesse de tester le defaut — et c est exactement ce qui est arrive plusieurs fois dans ce
  *   depot : un test vert qui tenait la mauvaise moitie.
  */
-import { areteDuBlock, classerDevise, devisesDentree, phraseDevise, peutEtreAssemblee,
+import { areteDuBlock, classerDevise, devisesDentree, phraseDevise, peutEtreAssemblee, resumeDesNonOffertes,
   ETATS, ETATS_OFFERTS } from './devises-dentree.js';
 import { cheminEntre } from './pont-de-liquidite.js';
 
@@ -285,6 +285,51 @@ t('assemblage: rien du tout n est pas assemblable', peutEtreAssemblee(null).ok =
 t('assemblage: tout refus porte une raison non vide',
   [cAero, cPont, lueEtVide, pasLue, { etat: 'INVENTE' }, null]
     .every((x) => { const r = peutEtreAssemblee(x); return r.ok || (typeof r.pourquoi === 'string' && r.pourquoi.length > 10); }));
+
+/* ══ 8. LE RESUME DES NON OFFERTES — groupe, borne, et ne cache rien ══════════════════════════
+ * ⛔⛔⛔ CE BLOC EXISTE PARCE QUE J AI DEPLOYE UN MUR DE TEXTE. Phil l a entoure en rouge : quinze
+ *   devises, quinze fois la MEME phrase de quinze mots, bout a bout sous le selecteur. Un bloc
+ *   repete n informe pas — il apprend a ne plus lire la zone. */
+const quinze = Array.from({ length: 15 }, (_, i) => ({
+  etat: 'PLUSIEURS_TX', devise: '0x' + String(i).padStart(40, '0'), symbole: 'TOK' + i,
+}));
+const R1 = resumeDesNonOffertes(quinze, () => 'this route crosses 2 venues');
+t('resume: quinze devises a la MEME raison font UN SEUL groupe', R1.length === 1);
+t('resume: la raison n apparait qu UNE fois',
+  (R1[0].texte.match(/this route crosses 2 venues/g) || []).length === 1);
+t('resume: le TOTAL est dit, pas seulement les noms montres', R1[0].total === 15);
+t('resume: le texte porte le total entre parentheses', /\(15\)/.test(R1[0].texte));
+/* ⛔ LA LISTE EST BORNEE ET SON RESTE EST COMPTE : « et 9 autres » est une information. */
+t('resume: au plus 6 noms sont montres', (R1[0].texte.split(' and ')[0].match(/TOK/g) || []).length === 6);
+t('resume: le reste est COMPTE', /and 9 more/.test(R1[0].texte));
+/* ⛔⛔ ET AUCUNE DEVISE N EST PERDUE : on cesse de REPETER, on ne dit pas MOINS. */
+t('resume: les quinze noms restent accessibles', R1[0].noms.length === 15);
+
+/* ⛔ DEUX RAISONS DIFFERENTES FONT DEUX GROUPES, et la plus frequente passe devant. */
+const melange = [
+  { etat: 'PLUSIEURS_TX', devise: '0x' + '1'.repeat(40), symbole: 'A' },
+  { etat: 'PLUSIEURS_TX', devise: '0x' + '2'.repeat(40), symbole: 'B' },
+  { etat: 'SANS_ROUTE', devise: '0x' + '3'.repeat(40), symbole: 'C' },
+];
+const R2 = resumeDesNonOffertes(melange, (d) => (d.etat === 'SANS_ROUTE' ? 'no path' : 'two venues'));
+t('resume: deux raisons font deux groupes', R2.length === 2);
+t('resume: la raison la plus frequente passe devant', R2[0].total === 2 && R2[1].total === 1);
+
+/* ⛔⛔ CE QU ON N A PAS SONDE N EST PAS NOMME. Lister une devise `NON_MESUREE` comme « sans route »
+ *   serait une accusation fondee sur notre propre incompletude — la distinction que tout ce
+ *   fichier defend. */
+const avecNonMesuree = [
+  { etat: 'NON_MESUREE', devise: '0x' + '4'.repeat(40), symbole: 'INCONNU' },
+  { etat: 'SANS_ROUTE', devise: '0x' + '5'.repeat(40), symbole: 'VU' },
+];
+const R3 = resumeDesNonOffertes(avecNonMesuree, () => 'raison');
+t('resume: une devise NON_MESUREE n est PAS nommee', !JSON.stringify(R3).includes('INCONNU'));
+t('resume: mais celle qu on a regardee l est', JSON.stringify(R3).includes('VU'));
+/* ⛔ UNE RAISON ABSENTE N INVENTE PAS DE GROUPE. */
+t('resume: sans raison, pas de groupe', resumeDesNonOffertes(melange, () => null).length === 0);
+t('resume: une entree vide ne casse rien', resumeDesNonOffertes(null, () => 'x').length === 0);
+t('resume: un raisonDe qui leve ne casse rien',
+  resumeDesNonOffertes(melange, () => { throw new Error('boum'); }).length === 0);
 
 console.log((ko.length ? 'KO ' + ko.length : 'OK') + ' — ' + ok + ' assertions');
 for (const k of ko) console.log('  KO ' + k);
