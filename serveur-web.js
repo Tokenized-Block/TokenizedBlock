@@ -1647,6 +1647,11 @@ const ETAPES_ENTONNOIR = [
    *     ce qui rate. Un entonnoir qui ne compte que ses echecs ne dit pas s il sert a quelqu un. */
   'echange_refus_route_multi', 'echange_multi_refus_prix', 'echange_multi_refus_pool',
   'echange_multi_refus_plan', 'echange_multi_refus_frais', 'echange_multi_pret',
+  /* ⛔⛔ `echange_multi_sign_propos` EST LE DENOMINATEUR QUI MANQUAIT. Sans lui on saurait combien
+   *   de franchissements ABOUTISSENT, jamais combien ont ete PROPOSES a la signature — donc jamais
+   *   le taux d abandon devant le wallet. Un entonnoir sans son denominateur ne mesure rien : il
+   *   compte des succes dans le vide. */
+  'echange_multi_sign_propos',
   /* ⛔⛔ LES DEUX GARDES QUI SE TIENNENT ENTRE UN TRADE ET NOTRE REVENU. Elles refusent d offrir Sign
    *     quand les 0,5 % vers FEE_WALLET manquent — le bon choix, mais un echange qui n a pas eu lieu
    *     ne se voyait NULLE PART. Ces deux compteurs disent combien ce garde-fou nous coute, et s il

@@ -2943,6 +2943,11 @@ import { BPS_MAX as BPS_MAX_UI } from './frais-degressif.js';
 /* ⛔ `sautsDepuisChemin` RESOUT chaque jambe en PoolKey ; il ne lit rien lui-meme, on lui injecte
  *   le resolveur. Et il refuse TOUTE la route si un seul saut manque, en disant lequel. */
 import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
+/* ⛔ L orchestrateur du franchissement : il resout la pool Aerodrome sur les NEUF espacements
+ *   declares, bati la jambe 1 en V4 avec le bareme degressif, derive le minimum de la jambe 2 du
+ *   prix spot, et assemble le lot. Son execution est prouvee sur fork, a6cf paye sur les DEUX
+ *   jambes au wei. */
+import { planFranchissement } from './plan-franchissement.js';
 /** L ETH natif en V4 : l adresse zero. ⛔ Pas WETH — V4 manipule l ETH natif. */
 const ETH_ADR = '0x0000000000000000000000000000000000000000';
 import { GESTES, etapeDuGeste } from './geste-envoi.js';
@@ -10371,13 +10376,15 @@ function majDevisesDentree(v) {
    *   selecteur offrirait une devise que le bouton ne sait pas batir — exactement le defaut
    *   « l etiquette promet ce que le calldata ne fait pas », que je passe la journee a traquer. Je
    *   l ai introduit moi-meme en ouvrant `peutEtreAssemblee` sans cabler l autre bout.
-   *   ⇒ C EST UN FAIT SUR NOTRE CABLAGE, PAS UNE DECISION PRODUIT. Il passe a `true` le jour ou
-   *     `preparerEchange` appelle `planifierFranchissement` et envoie par `envoyerLotAtomique`. Le
-   *     RAIL lui-meme est deja prouve sur fork : OUSD -> USDC -> AAPLc, 3 appels `status 0x1`,
-   *     a6cf paye sur LES DEUX jambes, au wei.
-   *   ⛔ ET LA ROUTE RESTE DITE : elle descend dans la note courte avec son compte. Fermer le
-   *     bouton n est pas cacher la route. */
-  const FRANCHISSEMENT_CABLE_SUR_LE_BOUTON = false;
+   *   ⭐ BASCULE A `true` LE 2026-10-01 : `preparerEchange` appelle maintenant `planFranchissement`
+   *     et envoie le lot par `envoyerLotAtomique`. L etiquette et ce qui est ENVOYE disent enfin la
+   *     MEME chose — c etait la condition que ce booleen documentait, et elle est remplie. Le rail
+   *     est prouve sur fork : OUSD -> USDC -> AAPLc, 3 appels `status 0x1`, a6cf paye sur LES DEUX
+   *     jambes au wei (0,2 % puis 0,1 %).
+   *   ⛔ LE DRAPEAU RESTE, et ce n est pas un oubli : le remettre a `false` est le bon geste si le
+   *     rail casse, et c est un geste d UNE ligne. Un interrupteur qu on supprime une fois leve est
+   *     un interrupteur qu il faudra reecrire sous pression. */
+  const FRANCHISSEMENT_CABLE_SUR_LE_BOUTON = true;
   const offrable = (d) => {
     const a = peutEtreAssemblee(d);
     if (!a.ok) return false;
@@ -10543,6 +10550,130 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
   $('#peActions').appendChild(bt);
   e.className = 'note';
   e.textContent = 'Your wallet signs — this page never does. It shows every amount before you confirm.';
+  try { etape('echange_multi_pret'); } catch (_) {}
+}
+
+/**
+ * L AFFICHAGE ET L ENVOI D UN FRANCHISSEMENT — trois appels, un lot, DEUX frais.
+ *
+ * ⛔⛔⛔ CE N EST PAS « UNE TRANSACTION », ET ON NE LE DIRA PAS. Le lot groupe TROIS appels sous UNE
+ *   signature quand le wallet sait grouper ; ils restent trois appels on-chain. « One transaction »
+ *   serait plus vendeur et FAUX.
+ * ⛔⛔ ET SANS ATOMICITE, LA JAMBE 1 PEUT PASSER SEULE : l acheteur se retrouve alors avec le PIVOT
+ *   (de l USDC) au lieu de son action, apres avoir paye un frais. C est exactement ce que l etat
+ *   `PARTIEL` de `envoi.js` dit maintenant — corrige ce matin apres que l audit adverse a montre
+ *   qu un lot a moitie applique se declarait achat reussi.
+ * ⛔ ON TENTE SANS DEMANDER LA PERMISSION DE TENTER : la lecon `tip 20260922-ib-batch` est deja
+ *   ecrite dans ce fichier — ne JAMAIS sortir tot sur `!peutGrouper`. Des wallets repondent mal a
+ *   `wallet_getCapabilities` et savent pourtant grouper. On tente, et on LIT le resultat.
+ */
+function afficherFranchissement({ pf, e, dec, symBlock }) {
+  const refuser = (texte, compteur) => {
+    e.className = 'note wKo';
+    e.textContent = texte;
+    try { etape(compteur); } catch (_) {}
+    const br = document.createElement('button');
+    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
+    br.addEventListener('click', () => void preparerEchange('ACHAT'));
+    $('#peActions').appendChild(br);
+  };
+  if (!pf || pf.etat === 'NON_MESURE') {
+    /* ⛔ L ETAPE QUI A RATE EST DITE : « la route a echoue » envoie chercher partout. */
+    return refuser('Could not price this crossing right now'
+      + (pf && pf.etape ? ' (' + pf.etape + ')' : '') + ' — nothing to sign, try again.',
+      'echange_multi_refus_prix');
+  }
+  if (pf.etat === 'APPROBATIONS' && Array.isArray(pf.etapes) && pf.etapes.length) {
+    const et = pf.etapes[0];
+    const bt = document.createElement('button');
+    bt.className = 'bouton'; bt.type = 'button';
+    bt.textContent = 'Approval 1 of ' + pf.etapes.length + ' — ' + et.nom;
+    bt.addEventListener('click', () => void signerEchange(et, 'ACHAT', true));
+    $('#peActions').appendChild(bt);
+    e.className = 'note';
+    e.textContent = 'This token needs an approval first. The crossing is measured again once it is done.';
+    return;
+  }
+  if (pf.etat !== 'PRET') {
+    return refuser('Not possible: ' + (pf.pourquoi || pf.etat)
+      + (pf.etape ? ' (at ' + pf.etape + ')' : '') + ' Nothing was sent.', 'echange_multi_refus_pool');
+  }
+  const r = pf.resume;
+  /* ══ LES GARDES DE FRAIS, SUR LES DEUX JAMBES ══════════════════════════════════════════════ */
+  if (!estWalletDeFrais(compte)) {
+    const j1 = r && typeof r.fraisJambe1 === 'bigint' && r.fraisJambe1 > 0n
+      && typeof r.fraisBpsJambe1 === 'bigint' && r.fraisBpsJambe1 > 0n && r.fraisBpsJambe1 <= BPS_MAX_UI;
+    const j2 = r && typeof r.fraisBpsJambe2 === 'bigint' && r.fraisBpsJambe2 > 0n
+      && r.fraisBpsJambe2 <= BPS_MAX_UI;
+    /* ⛔⛔ LES OCTETS, PAS LE RESUME. Un plan peut annoncer un frais que son calldata ne prend pas :
+     *   ce jumeau a deja ete attrape dans ce depot. On exige FEE_WALLET dans la jambe 1 ET dans la
+     *   jambe 2 — c est la jambe 2 qui ne payait RIEN jusqu a ce matin, et c est celle du volume. */
+    const octets1 = pf.appels[0] && feeWalletDansCalldata(pf.appels[0]);
+    const octets2 = pf.appels[2] && String(pf.appels[2].data || '').toLowerCase()
+      .includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase());
+    if (!j1 || !j2 || !octets1 || !octets2) {
+      return refuser('This crossing could not be prepared safely. Nothing to sign — try again.',
+        'echange_multi_refus_frais');
+    }
+  }
+  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  $('#peLignes').innerHTML = [
+    'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
+    /* ⚠️ « AT LEAST » EST DERIVE D UN PRIX SPOT, PAS D UN DEVIS : il ignore la profondeur du
+     *   carnet. On le DIT, parce qu un minimum presente comme une cotation est une promesse qu on
+     *   ne tient pas sur un gros montant. */
+    'You receive at least: ' + formaterUnites(r.recoitAuMoins, 8) + ' ' + (symBlock || 'tokens')
+      + (r.minimumParPrixSpot ? ' (floor from the pool price, not a quote)' : ''),
+    'Route: through ' + (r.pivot ? 'USDC' : 'a bridge asset') + ', two venues, '
+      + pf.appels.length + ' calls in one signature',
+    /* ⛔⛔ DEUX FRAIS, ET ON LES DIT TOUS LES DEUX. Annoncer celui de la jambe 1 seul serait annoncer
+     *   la moitie de ce qu on prend. */
+    'Fee: ' + (Number(r.fraisBpsJambe1) / 100) + '% on what you pay, then '
+      + (Number(r.fraisBpsJambe2) / 100) + '% on what comes out',
+  ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
+
+  const bt = document.createElement('button');
+  bt.className = 'bouton'; bt.type = 'button';
+  bt.textContent = 'Sign — pay with ' + sym;
+  bt.addEventListener('click', async () => {
+    bt.disabled = true;
+    e.className = 'note'; e.textContent = 'Your wallet signs the three calls together…';
+    let lot;
+    try { etape('echange_multi_sign_propos'); } catch (_) {}
+    try {
+      lot = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte,
+        calls: pf.appels.map((a) => ({ to: a.to, data: a.data, value: a.value || '0x0' })) });
+    } catch (err) { lot = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    if (lot.etat === 'CONFIRME') {
+      /* ⛔⛔ ON VERIFIE QUE TOUS LES APPELS SONT PASSES, on ne le suppose pas. `tousConfirmes` vient
+       *   des recus LUS ; c est la correction de ce matin — avant, un lot a moitie applique se
+       *   declarait achat reussi parce que seul le PREMIER recu etait regarde. */
+      if (lot.tousConfirmes === false) {
+        e.className = 'note wKo';
+        e.textContent = 'Part of the crossing went through and part did not. Do NOT sign again — '
+          + 'open your wallet and look at what you actually hold before anything else.';
+        try { etape('echange_multi_refus_plan'); } catch (_) {}
+        return;
+      }
+      e.className = 'note';
+      e.textContent = 'Done — the crossing went through in one signature.';
+      try { etape('achat'); } catch (_) {}
+      try { etape('echange_multi_pret'); } catch (_) {}
+      return;
+    }
+    /* ⛔ `PARTIEL` A SA PROPRE PHRASE : elle nomme l actif intermediaire, sinon la personne cherche
+     *   une transaction entiere qui n existe pas. `messageEnvoi` la porte. */
+    e.className = 'note wKo';
+    e.textContent = messageEnvoi(lot);
+    try { etape(lot.etat === 'PARTIEL' ? 'echange_multi_refus_plan' : 'echange_multi_refus_pool'); } catch (_) {}
+    bt.disabled = false;
+  });
+  $('#peActions').appendChild(bt);
+  e.className = 'note';
+  /* ⛔ ON DIT LA CONDITION AVANT DE CLIQUER : un wallet qui ne groupe pas ne peut pas prendre cette
+   *   route en securite, et il vaut mieux le lire ici qu apres avoir signe la premiere jambe. */
+  e.textContent = 'Your wallet signs the three calls together. If it cannot batch them, do not '
+    + 'force it: a half-applied crossing leaves you holding the bridge asset.';
   try { etape('echange_multi_pret'); } catch (_) {}
 }
 
@@ -10738,6 +10869,30 @@ async function preparerEchange(sens) {
       return meilleureClePourMontant({ rpc, chaine: CHAINE, de, vers, montant,
         candidates: sup.concat(CLES_PRIX_UI) });
     };
+    /* ══ LE FRANCHISSEMENT : DEUX LIEUX, UN LOT ATOMIQUE ═══════════════════════════════════════
+     * ⭐⭐ C EST LE CHEMIN DES ACTIONS TOKENISEES, et donc celui de l argent : sur nos 249 lignes
+     *   servies, les ONZE marches Aerodrome portent 96,4 % du volume (83 728 918 $ / 24 h) contre
+     *   3,6 % pour les 238 marches Uniswap. Le rail a un seul segment atteint 237 marches... et
+     *   3,6 % de l argent.
+     * ⛔ IL EST SEPARE DU RAIL V4 PARCE QUE CE N EST PAS LE MEME OBJET : trois appels au lieu d un,
+     *   un lot atomique au lieu d une transaction, et DEUX frais au lieu d un. Les fondre ferait un
+     *   chemin qui ment sur l un des deux. */
+    if (peutEtreAssemblee(deviseDentree).par === 'franchissement') {
+      let prixE = null;
+      try { prixE = await prixUsdDevise(deviseDentree.devise); } catch (_) { prixE = null; }
+      let pf;
+      try {
+        pf = await planFranchissement({ rpc, chaine: CHAINE, compte,
+          chemin: deviseDentree.chemin, devise: deviseDentree.devise, block: adr,
+          montant: m.valeur, decimalesEntree: dec, prixUsdEntree: prixE,
+          resoudreV4: resoudre, beneficiaireFrais: FEE_WALLET, fraisDevisesOk });
+      } catch (err) { pf = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+      finally { profilEnLecture = false; }
+      if ($('#profil').dataset.block !== adr) return;
+      echangeCourant = pf;
+      afficherFranchissement({ pf, e, dec, symBlock: symProfil });
+      return;
+    }
     const b = await sautsDepuisChemin({ chemin: deviseDentree.chemin, montant: m.valeur, resoudre });
     if (b.etat !== 'OK') {
       e.className = 'note wKo';
