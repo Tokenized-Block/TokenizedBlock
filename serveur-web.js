@@ -1652,6 +1652,18 @@ const ETAPES_ENTONNOIR = [
    *   le taux d abandon devant le wallet. Un entonnoir sans son denominateur ne mesure rien : il
    *   compte des succes dans le vide. */
   'echange_multi_sign_propos',
+  /* ⛔⛔⛔ LA PERTE N°1 DEVIENT MESURABLE. `wallet_base_pret` melangeait DEUX populations : les
+   *   visiteurs sans aucun wallet, pour qui la porte passkey est LA reponse, et ceux qui ont un
+   *   wallet mais ne sont pas connectes, pour qui c est la MAUVAISE. Mesure du 2026-10-01 :
+   *   98 `wallet_base_pret` pour 43 `wallet_no_provider` — le panneau s affiche deux fois plus
+   *   souvent qu il n y a de visiteurs sans wallet.
+   *   ⇒ Sans separation, « 98 fois prete, 1 clic » se lit comme un echec de l affordance alors
+   *     qu on ignore combien de ces 98 etaient dans le groupe ou elle a un sens. Un numerateur
+   *     sans son denominateur ne juge rien.
+   *   ⛔ `wallet_base_pret` et `wallet_base_clic` RESTENT : ce sont les series historiques, et les
+   *     casser rendrait incomparable tout ce qui precede. On AJOUTE. */
+  'wallet_porte_sans', 'wallet_porte_deco',
+  'wallet_base_clic_sans', 'wallet_base_clic_deco',
   /* ⛔⛔ LES DEUX GARDES QUI SE TIENNENT ENTRE UN TRADE ET NOTRE REVENU. Elles refusent d offrir Sign
    *     quand les 0,5 % vers FEE_WALLET manquent — le bon choix, mais un echange qui n a pas eu lieu
    *     ne se voyait NULLE PART. Ces deux compteurs disent combien ce garde-fou nous coute, et s il

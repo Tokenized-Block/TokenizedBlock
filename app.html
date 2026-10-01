@@ -5820,12 +5820,37 @@ function verifierSansWalletAuChargement() {
     try { if (window.ethereum && !compte) montrerSansWallet(false); } catch (_) {}
   }, 2500);
 }
+/**
+ * ⛔⛔⛔ POURQUOI CETTE VARIABLE EXISTE : `wallet_base_pret` MELANGEAIT DEUX POPULATIONS, et son
+ *   rapport au clic etait donc ININTERPRETABLE. `montrerSansWallet(true)` est appele depuis TROIS
+ *   endroits : l absence reelle de `window.ethereum`, et DEUX flux « Connect a wallet first » qui
+ *   se declenchent sur `!compte` — donc pour des gens qui ONT un wallet, juste pas connecte.
+ *   ⇒ MESURE DU 2026-10-01 QUI L A RENDU VISIBLE : 98 `wallet_base_pret` pour seulement 43
+ *     `wallet_no_provider`. Le panneau s affiche DEUX FOIS PLUS souvent qu il n y a de visiteurs
+ *     sans wallet — la difference, ce sont des wallets presents et deconnectes.
+ *   ⇒ ET POUR EUX, LA PORTE PASSKEY EST LA MAUVAISE REPONSE : ils doivent connecter CE qu ils ont.
+ *     Un taux de clic bas dans ce groupe est donc NORMAL, pas un defaut d affordance. Les melanger
+ *     fait lire « 98 fois prete, 1 clic » comme un echec de l affordance alors qu on ne sait pas
+ *     combien de ces 98 etaient dans le groupe ou elle a du sens.
+ *   ⛔ LE COMMENTAIRE DU PRECHAUFFAGE, JUSTE EN DESSOUS, TIRE DEJA CETTE INFERENCE : « sur ces 39,
+ *     UN SEUL a clique la porte passkey : ce n est donc pas un probleme de visibilite ». Elle
+ *     repose sur le meme melange. Elle peut etre vraie — elle n est pas ETABLIE.
+ *   ⇒ LA CAUSE EST DERIVEE DE LA PRESENCE REELLE DU PROVIDER, jamais de ce que l appelant declare :
+ *     un appelant qui se trompe fausserait la mesure qu on met en place pour le corriger.
+ */
+let causePorteWallet = null;
 function montrerSansWallet(sans) {
   const bloc = $('#wSansWallet');
   if (!bloc) return; /* volet Wallet absent : rien a montrer, rien a casser */
   bloc.hidden = !sans;
   ordonnerSansWallet(!!sans);
   if (!sans) return;
+  causePorteWallet = (typeof window.ethereum === 'undefined' || !window.ethereum) ? 'sans' : 'deco';
+  /* ⛔ `uneFois` COMME `wallet_base_pret` : ce panneau peut s afficher plusieurs fois par session,
+   *   et un compteur qu on ne peut pas diviser par les visites n est pas une etape d entonnoir,
+   *   c est du bruit qui fait paraitre la journee active. La lecon est deja ecrite plus bas, elle
+   *   a coute 79 affichages lus comme 564 % de visiteurs. */
+  try { etape(causePorteWallet === 'sans' ? 'wallet_porte_sans' : 'wallet_porte_deco', true); } catch (_) {}
   /* ── ⛔⛔ ON PRECHAUFFE LE SDK ICI, ET C EST LA CORRECTION DU MUR N°1 ─────────────────────────
    *     MESURE DE PRODUCTION, 2026-09-29, depuis le 09-19 : `wallet_no_provider` = 39 contre
    *     `wallet_connect_ok` = 2. Sur les 45 visiteurs qui cliquent Create, 39 n ont pas de wallet,
@@ -5923,6 +5948,13 @@ async function ouvrirBaseAccount() {
   const dire = (txt) => { if (note) note.textContent = txt; };
   if (b) { b.disabled = true; b.textContent = 'Opening…'; }
   try { etape('wallet_base_clic'); } catch (_) {}
+  /* ⛔⛔ ET LE CLIC EST ATTRIBUE A SA POPULATION. Sans ca, on a un numerateur sans denominateur :
+   *   « 1 clic sur 98 panneaux » melange ceux pour qui cette porte est LA reponse (aucun wallet)
+   *   et ceux pour qui c est la mauvaise (wallet present, deconnecte). Les deux taux ne veulent
+   *   pas dire la meme chose, et seul le premier juge l affordance.
+   * ⛔ `wallet_base_clic` RESTE, inchange : il est la serie historique, et la casser rendrait
+   *   incomparable tout ce qui precede. On AJOUTE, on ne remplace pas. */
+  try { etape(causePorteWallet === 'deco' ? 'wallet_base_clic_deco' : 'wallet_base_clic_sans'); } catch (_) {}
   try {
     const creer = await chargerBaseAccount();
     const sdk = creer({
