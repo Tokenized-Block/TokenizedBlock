@@ -13260,6 +13260,8 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
  * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
 let tbPreuve = null;
 let tbPanierPreuves = [];
+/* jeton de peinture de la liste « My blocks » du Tokenized Bank : seule la plus recente ecrit */
+let tbBankGeneration = 0;
 
 function tbBankOuvertIci() {
   return !!(compte && lireBankOuvert(localStorage, compte));
@@ -13346,6 +13348,7 @@ async function peindreTokenizedBank() {
   const etat = $('#tbEtat');
   if (!sel) return;
   if (!compte) {
+    tbBankGeneration++; /* une lecture encore en cours pour l ancien compte n ecrira plus */
     sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
     $('#tbProof').textContent = 'Proof of hold: —';
     if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
@@ -13356,16 +13359,58 @@ async function peindreTokenizedBank() {
     peindrePanierBank();
     return;
   }
+  /* ⛔⛔ « Reading My blocks… » RESTAIT 40 A 70 SECONDES. Signale par Raksha (2026-10-01, wallet neuf et
+   *     vide : bloque > 20 s). Mesure du Grok Bot au navigateur (wallet simule vide, prod) : 72,6 s avant
+   *     « No B20 found », pour 345 `eth_getTransactionByHash` + 427 `eth_getLogs`.
+   *   ⇒ CAUSE : la liste attendait EN SERIE les deux balayages les plus lents de l app — `mesCreations()`
+   *     (43 200 blocs de creations, puis le createur de CHACUNE des ~340 creations, une transaction
+   *     par creation) PUIS `mesFrappes(recus)` (120 000 blocs de Transfer) — avant d ecrire quoi que ce
+   *     soit. Et l index SERVEUR (`/api/blocks-de`), qui repond en millisecondes, n arrivait qu au bout
+   *     du premier, a l interieur de `mesCreations`.
+   *   ⇒ On peint ce qu on sait DES qu on le sait : les avoirs deja lus et l index serveur d abord, puis
+   *     chaque balayage a son arrivee, en parallele. Tant qu un balayage court, la liste le DIT (« still
+   *     scanning ») au lieu de laisser un « Reading… » sans fin.
+   *   ⛔ UN JETON PAR PEINTURE : `connecter()` et l ouverture de l onglet Wallet l appellent tous les
+   *     deux ; une lecture plus ancienne ne doit pas ecraser une plus recente. Et le choix deja fait par
+   *     la personne est garde d une repeinture a l autre. */
+  const gen = ++tbBankGeneration;
   sel.innerHTML = '<option value="">Reading My blocks…</option>';
   const vus = new Map();
+  const ajouter = (jeton, sym) => {
+    const k = String(jeton || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(k)) return;
+    if (!vus.has(k) || (!vus.get(k) && sym)) vus.set(k, sym || null);
+  };
+  for (const a of actifs || []) {
+    if (a && a.bloc && a.adr) ajouter(a.adr, a.nom || null);
+  }
+  const peindreEnCours = () => {
+    if (gen !== tbBankGeneration) return;
+    const garde = sel.value;
+    sel.innerHTML = vus.size
+      ? '<option value="">Pick a block you hold…</option>' + [...vus].map(([j, s]) =>
+        '<option value="' + enTexte(j) + '">' + enTexte(s || court(j)) + ' · ' + enTexte(court(j)) + '</option>').join('')
+        + '<option value="" disabled>Still scanning the chain for older blocks…</option>'
+      : '<option value="">No B20 found yet — still scanning the chain…</option>';
+    if (garde && vus.has(garde)) sel.value = garde;
+  };
   try {
-    const { gardees } = await mesCreations();
-    for (const c of gardees || []) if (c && c.jeton) vus.set(String(c.jeton).toLowerCase(), c.symbole || null);
-  } catch (_) {}
-  try {
-    const fr = await mesFrappes(false, true);
-    for (const x of (fr && fr.blocks) || []) if (!vus.has(x.jeton)) vus.set(x.jeton, null);
-  } catch (_) {}
+    const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()), { cache: 'no-store' });
+    const j = rep.ok ? await rep.json() : null;
+    if (j && j.ok && Array.isArray(j.blocks)) for (const a of j.blocks) ajouter(a, null);
+  } catch (_) { /* index indisponible : les balayages ci-dessous restent */ }
+  peindreEnCours();
+  await Promise.allSettled([
+    mesCreations().then(({ gardees }) => {
+      for (const c of gardees || []) if (c && c.jeton) ajouter(c.jeton, c.symbole || null);
+      peindreEnCours();
+    }),
+    mesFrappes(false, true).then((fr) => {
+      for (const x of (fr && fr.blocks) || []) ajouter(x.jeton, null);
+      peindreEnCours();
+    }),
+  ]);
+  if (gen !== tbBankGeneration) return;
   for (const a of actifs || []) {
     if (a && a.bloc && a.adr) vus.set(String(a.adr).toLowerCase(), a.nom || null);
   }
@@ -13386,14 +13431,20 @@ async function peindreTokenizedBank() {
     }
     opts.push({ jeton, symbole: label || court(jeton) });
   }
+  if (gen !== tbBankGeneration) return;
+  const choixFait = sel.value;
   sel.innerHTML = opts.length
     ? '<option value="">Pick a block you hold…</option>' + opts.map((o) =>
       '<option value="' + enTexte(o.jeton) + '">' + enTexte(o.symbole) + ' · ' + enTexte(court(o.jeton)) + '</option>').join('')
     : '<option value="">No B20 found for this wallet yet</option>';
-  tbPreuve = null;
-  $('#tbProof').textContent = 'Proof of hold: —';
-  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
-  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  /* ⛔ un block choisi pendant le balayage reste choisi, et sa preuve deja lue n est pas jetee */
+  if (choixFait && opts.some((o) => o.jeton === choixFait)) sel.value = choixFait;
+  if (!sel.value) {
+    tbPreuve = null;
+    $('#tbProof').textContent = 'Proof of hold: —';
+    if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
+    if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
+  }
   if (etat) etat.textContent = BANK_CONTRACT
     ? ''
     : (tbBankOuvertIci()
