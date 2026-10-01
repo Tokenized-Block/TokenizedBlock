@@ -96,7 +96,11 @@ ok('…before the on-chain checks and before a pair is accepted',
   iGarde > 0 && iGarde < corps.indexOf('faitsDuBlock(') && iGarde < corps.indexOf('paireChoisie = q.paire;'));
 const blocE0 = corps.slice(iGarde, corps.indexOf('paireChoisie = q.paire;'));
 ok('…a refusal leaves no pair chosen, records the reason and RETURNS',
-  /paireChoisie = null;\s*motifRefusPaire = e0\(\);/.test(blocE0) && /\n    return;\n  \}/.test(blocE0));
+  /* ⛔ `\r?\n` DES DEUX COTES — meme cause que l extracteur plus haut : sur un checkout Windows
+   *   `app.html` est en CRLF, et un motif en `\n` seul ne matche JAMAIS. C est la SECONDE occurrence
+   *   dans ce fichier, trouvee parce que le test est passe de 79/80 a 80/80 en normalisant. La fin
+   *   de ligne est une propriete du CHECKOUT, pas du depot. */
+  /paireChoisie = null;\s*motifRefusPaire = e0\(\);/.test(blocE0) && /\r?\n    return;\r?\n  \}/.test(blocE0));
 ok('the note shows at pick time (same tick, before any await)', blocE0.indexOf('peindreE0();') > 0
   && blocE0.indexOf('peindreE0();') < blocE0.indexOf('await '));
 ok('the pasted path goes through the same majPaire (no second door)',
@@ -115,11 +119,30 @@ ok('the only click path to payment goes through validerCreation',
 console.log('behaviour: majPaire + validerCreation from app.html, EXECUTED in a sandbox');
 /* the real source text of the two functions, run against stubs: if the guard is bypassed, a refused
  * pair gets ACCEPTED (paireChoisie set) and validerCreation lets the 0.001 ETH path continue. */
+/* ⛔⛔⛔ CET EXTRACTEUR RENDAIT CE TEST ROUGE SUR WINDOWS — donc sur la machine de Phil, et donc
+ *      exactement la ou quelqu un l aurait cru. Il cherchait `'\n}\n'` ; or git convertit `app.html`
+ *      en CRLF a la sortie, donc le texte reel est `\r\n}\r\n` et le motif ne matchait JAMAIS.
+ *      `extraire` rendait `null`, les deux fonctions n etaient pas trouvees, et toute la moitie
+ *      COMPORTEMENTALE s ecroulait sur `ReferenceError: majPaire is not defined`.
+ *      ⇒ Mesure : rouge au premier lancement sur Windows ; apres normalisation d une copie en LF,
+ *        **80/80**. Le code de Zero 1 etait SAIN — c est le TEST qui ne traversait pas la frontiere.
+ *
+ * ⛔⛔ ET LE PIRE N ETAIT PAS LE ROUGE, C ETAIT SON LIBELLE. Il echouait en disant « both functions
+ *     found in app.html », ce qui se lit comme un defaut du CODE. Quelqu un pouvait « corriger » du
+ *     code qui marche pour faire taire un test casse. Un test qui accuse la mauvaise moitie est pire
+ *     qu un test absent.
+ * ✅ EN REVANCHE L ASSERTION `both functions found` EST BIEN PLACEE : sans elle, une extraction
+ *   ratee aurait fait passer toute la moitie comportementale sur du VIDE, en silence. Elle a crie —
+ *   c est la bonne conception, et c est ce qui m a permis de trouver la cause en dix minutes.
+ * ⛔ `\r?\n` DES DEUX COTES : la fin de ligne n est pas une propriete du DEPOT, c est une propriete
+ *   du CHECKOUT. Un test qui en depend ne prouve rien chez l autre. */
 function extraire(src, entete) {
   const i = src.indexOf(entete);
   if (i < 0) return null;
-  const j = src.indexOf('\n}\n', i);
-  return j < 0 ? null : src.slice(i, j + 2);
+  const m = /\r?\n\}\r?\n/.exec(src.slice(i));
+  if (!m) return null;
+  /* on garde l accolade fermante, pas la fin de ligne qui la suit */
+  return src.slice(i, i + m.index + m[0].indexOf('}') + 1);
 }
 const srcMaj = extraire(app, 'async function majPaire() {');
 const srcVal = extraire(app, 'function validerCreation() {');
