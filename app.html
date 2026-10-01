@@ -10406,6 +10406,9 @@ function majDeviseEchange(v) {
 let deviseEchange = null;
 /** La devise d entree choisie dans le selecteur, ou `null` = celle de la pool (chemin historique). */
 let deviseDentree = null;
+/* ⛔ Les blocks dont on a DEMANDE les faits de pool, pour ne pas relancer la lecture a chaque
+ *   repeinture. Un echec reste un refus AFFICHE, jamais une boucle silencieuse. */
+const faitsBlockEnVol = new Set();
 /**
  * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
  *
@@ -10439,6 +10442,31 @@ function majDevisesDentree(v) {
    *   cote serveur par un aller-retour sur la factory ; sans ca elle vaut `NON_MESURE`, et
    *   `devisesDentree` refuse — ce qui est le bon comportement. */
   const familleDuBlock = fb && typeof fb.famille === 'string' ? fb.famille : null;
+  /* ⛔⛔⛔ ET SI PERSONNE N A LU CES FAITS, ON LES LIT — SINON TOUT CE RAIL EST INVISIBLE.
+   *   Mesure du 2026-10-01, signalee par Phil sur SNDKc : 13 598 198 $ de volume 24 h, 12 381
+   *   trades, pool Aerodrome cotee en USDC... et AUCUN selecteur « Pay with » a l ecran.
+   *   ⇒ CAUSE : `prixUsdDevise` n est appele que pour les DEVISES DU REGISTRE, resolues par
+   *     symbole. Le BLOCK OUVERT n avait donc jamais ses faits lus, `familleDuBlock` valait `null`,
+   *     et `devisesDentree` refusait. Les trois rails livres aujourd hui etaient corrects et
+   *     INATTEIGNABLES a l ecran — le meme motif que le pont ce matin : un module juste, branche
+   *     sur une entree qu on n a pas remplie.
+   *   ⛔ ET LA LECON EST DEJA ECRITE DANS CE FICHIER, a propos des puces de paire : « sans ce
+   *     rappel, ce serait un correctif juste dans le code et invisible a l ecran ». J ai refait
+   *     exactement ca, le meme jour.
+   *   ⇒ ON LIT, PUIS ON REPEINT UNE SEULE FOIS. Le garde empeche la boucle : une lecture qui echoue
+   *     ne doit pas se relancer sans fin, et un echec reste un REFUS AFFICHE plutot qu une
+   *     tentative silencieuse. */
+  if (!fb && !faitsBlockEnVol.has(String(block).toLowerCase())) {
+    faitsBlockEnVol.add(String(block).toLowerCase());
+    void prixUsdDevise(block).then(() => {
+      /* ⛔ ON NE REPEINT QUE SI LE PROFIL EST TOUJOURS SUR CE BLOCK : repeindre un ecran que la
+       *   personne a quitte y collerait les devises d un AUTRE block. */
+      const encore = $('#profil') && $('#profil').dataset.block;
+      if (String(encore || '').toLowerCase() === String(block).toLowerCase()) {
+        try { majDevisesDentree(v); } catch (_) { /* l ecran a bouge : rien a repeindre */ }
+      }
+    }).catch(() => {});
+  }
   let candidates = [];
   try {
     candidates = pairesProposees(CHAINE).map((p) => ({
