@@ -1,0 +1,435 @@
+/* multipool.js — LE ROUTEUR MULTI-POOLS : de N IMPORTE QUEL actif vers N IMPORTE QUEL autre,
+ * en UNE transaction, avec le frais du dev pris UNE SEULE FOIS.
+ *
+ * ⭐ DEMANDE DE RAKSHA (2026-10-01) : « build ce multipool swap entre all Tokenized stocks,
+ *   memestocks (own Blocks) and paired all b20 ». Decision de frais (22:15) : 0,09 % NET vers a6cf,
+ *   pris EXACTEMENT UNE FOIS par swap, en ETH / USDC / l action ou le B20 apparie — JAMAIS en
+ *   token de block. Pas de remise au swapper.
+ *
+ * ⭐⭐ LA DECOUVERTE QUI REND « UNE TRANSACTION » POSSIBLE (mesuree, 2026-10-01) :
+ *   l Universal Router d AERODROME `0xC5b6786D7B64767D775877b0B6A319AD946B11B5` (source :
+ *   velodrome-finance/universal-router, deployment-addresses/base.json, parametres
+ *   script/deployParameters/DeployBase.s.sol) porte DANS LE MEME `execute` :
+ *     · V4_SWAP (0x10) sur le PoolManager Uniswap V4 `0x4985…2b2b` — donc nos pools HOOKEES (V8) ;
+ *     · V3_SWAP_EXACT_IN (0x00) avec un drapeau `isUni` : Uniswap V3 (TOSHI, cbBTC) OU Slipstream
+ *       (les actions tokenisees), les TROIS factories CL selectionnees par des bits du `poolParam` ;
+ *     · TRANSFER_FROM (0x07) par approbation ERC-20 ORDINAIRE (essai `transferFrom` avant Permit2) ;
+ *     · PAY_PORTION (0x06), SWEEP (0x04), WRAP_ETH (0x0b), UNWRAP_WETH (0x0c).
+ *   ⇒ Le mur « deux mondes, deux factories, un lot atomique » de `pont-de-liquidite.js` n est PAS
+ *     un mur de la chaine : c etait un mur de NOTRE routeur (celui d Uniswap, qui ne connait pas
+ *     Slipstream). Ce module ne le contourne pas, il change de routeur.
+ *   ⛔ CE N EST PROUVE QUE PAR LE BANC SUR FORK (`banc-multipool-fork.mjs`) : le bytecode deploye
+ *     pourrait differer du depot source. Rien ne s affiche avant ce banc vert.
+ *
+ * ⛔ CE MODULE NE SIGNE RIEN ET N ENVOIE RIEN. Les fonctions pures (graphe, chemins, frais,
+ *   calldata) ne lisent rien ; `coterChemin` lit par un `rpc` INJECTE. Un refus se dit avec sa
+ *   raison ; un « pas lu » n est jamais un « pas de route ».
+ */
+import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
+
+/* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
+export const ADRESSES = Object.freeze({
+  ROUTEUR: '0xc5b6786d7b64767d775877b0b6a319ad946b11b5',      /* Aerodrome Universal Router */
+  POOL_MANAGER: '0x498581ff718922c3f8e6a244956af099b2652b2b',
+  STATE_VIEW: '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71',
+  QUOTEUR_V4: '0x0d5e0f971ed27fbff6c2837bf31316121532048d',
+  QUOTEUR_V3: '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a',     /* factory() = 0x33128a8f… */
+  FACTORY_V3: '0x33128a8fc17869897dce68ed026d694621f6fdfd',
+  QUOTEUR_CL3: '0x514c8b5f54112481e28028f1166bd78501089259',    /* factory() = 0xf8f2eb49… */
+  FACTORY_CL3: '0xf8f2eb4940cfe7d13603dddd87f123820fc061ef',
+  QUOTEUR_CL2: '0x254cf9e1e6e233aa1ac962cb9b05b2cfeaae15b0',    /* factory() = 0x5e7bb104… */
+  FACTORY_CL2: '0x5e7bb104d84c7cb9b682aac2f3d509f5f406809a',
+  WETH: '0x4200000000000000000000000000000000000006',
+  ETH: '0x0000000000000000000000000000000000000000',
+  USDC: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+  OUSD: '0xb2000000000000000000002feb517dfec7415344',
+  CBBTC: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
+  FEE_WALLET: '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4',
+});
+
+/** Les trois lieux qu on sait construire. ⛔ Tout autre `venue` est ignore ET nomme. */
+export const VENUES = Object.freeze(['uniswap-v4', 'uniswap-v3', 'aerodrome-cl']);
+export const SAUTS_MAX = 4;
+
+/* ══ LE FRAIS ═══════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ 9 bps, NET, UNE FOIS — decision de Raksha 2026-10-01 22:15. Pas de remise.
+ *   ⛔ Le taux est un PARAMETRE de `planifier` (defaut 9n) pour que le split V9 ne demande pas
+ *     de toucher l assembleur : `partsFrais` est une LISTE de destinataires, aujourd hui un seul. */
+export const FRAIS_BPS = 9n;
+export const BASE_BPS = 10000n;
+export const PARTS_FRAIS = Object.freeze([Object.freeze({ qui: ADRESSES.FEE_WALLET, bps: FRAIS_BPS })]);
+
+/** Constantes du routeur (ActionConstants / Constants du depot source). */
+export const CONTRACT_BALANCE = 1n << 255n;
+export const OPEN_DELTA = 0n;
+export const MSG_SENDER = '0x0000000000000000000000000000000000000001';
+export const ADDRESS_THIS = '0x0000000000000000000000000000000000000002';
+/** Bits de selection de factory CL dans le `poolParam` (Constants.sol du depot source). */
+export const CL_FLAG = Object.freeze({ 1: 0, 2: 0x100000, 3: 0x080000 });
+export const CMD = Object.freeze({ V3_SWAP_EXACT_IN: '00', SWEEP: '04', TRANSFER: '05', PAY_PORTION: '06',
+  TRANSFER_FROM: '07', WRAP_ETH: '0b', UNWRAP_WETH: '0c', V4_SWAP: '10' });
+export const ACT = Object.freeze({ SWAP_EXACT_IN_SINGLE: '06', SETTLE: '0b', TAKE: '0e' });
+
+const bas = (a) => String(a || '').toLowerCase();
+const ADR = /^0x[0-9a-f]{40}$/;
+export const estAdresse = (a) => ADR.test(bas(a));
+/** ETH natif et WETH sont UN noeud du graphe : on passe de l un a l autre par WRAP/UNWRAP. */
+export const noeud = (a) => (bas(a) === ADRESSES.WETH ? ADRESSES.ETH : bas(a));
+
+/**
+ * LES DEVISES DANS LESQUELLES a6cf PEUT ETRE PAYE — et leur PREFERENCE.
+ * ⛔⛔ LISTE FERMEE, PASSEE PAR L APPELANT : ETH/WETH, USDC, puis les actions tokenisees et les B20
+ *   « devise » (OUSD, cbBTC) que l appelant a VERIFIES. Un block n y entre JAMAIS, meme liquide :
+ *   c est la regle de Raksha, et elle CONTREDIT `fraisDevisesOk` de app.html (qui admet des blocks
+ *   depuis le 2026-09-26) — voir le rapport.
+ * Rang : 0 = ETH, 1 = USDC, 2 = le reste admis. Plus petit = prefere (le plus liquide pour a6cf).
+ */
+export function rangFrais(adr, admises) {
+  const a = noeud(adr);
+  if (a === ADRESSES.ETH) return 0;
+  if (a === ADRESSES.USDC) return 1;
+  if (admises instanceof Set && admises.has(a)) return 2;
+  return null;
+}
+
+/**
+ * Actions tokenisees vues comme DEVISE DE COTATION dans /api/trending (2026-10-01) mais absentes du
+ * registre ACTIONS_COINBASE de paires.js. ⛔ Adresses copiees du trending, symboles du trending :
+ * a confirmer par Claude avant deploiement (voir le rapport). cbZEC, Basecat, BLUECHIP ne sont PAS ici :
+ * ce ne sont pas des actions, et la regle n admet qu « ETH, USDC, l action ou le B20 apparie ».
+ */
+export const ACTIONS_HORS_REGISTRE = Object.freeze([
+  ['PYPLc', '0xb200000000000000000000450ad3abe5d4846c6e'], ['MRVLc', '0xb200000000000000000000ec3c4c7395cc609813'],
+  ['RDDTc', '0xb20000000000000000000066242d4067724cb7a1'], ['LLYc', '0xb200000000000000000000f1a0f91e34892e4718'],
+  ['GMEc', '0xb2000000000000000000007790ed6e48e06ed935'],
+]);
+/**
+ * L ENSEMBLE DES DEVISES DE FRAIS ADMISES (hors ETH et USDC, implicites) : les actions du registre,
+ * les actions hors registre ci-dessus, et OUSD (le B20 devise). `blocks` (adresses) est RETIRE en
+ * dernier : si une adresse est a la fois listee et block, elle n est pas admise.
+ */
+export function devisesFraisAdmises(actionsRegistre = [], { blocks = [] } = {}) {
+  const s = new Set([...actionsRegistre.map((x) => bas(x.adr || x)), ...ACTIONS_HORS_REGISTRE.map(([, x]) => x), ADRESSES.OUSD]);
+  for (const b of blocks) s.delete(bas(b));
+  return s;
+}
+
+/* ══ LE GRAPHE ══════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Une arete = UNE pool MESUREE.
+ *   uniswap-v4  : { cle: { currency0, currency1, fee, tickSpacing, hooks } }
+ *   uniswap-v3  : { pool, fee, token0, token1 }
+ *   aerodrome-cl: { pool, tickSpacing, factory: 2|3, token0, token1 }
+ * ⛔ Une arete sans ses parametres de construction est REFUSEE : une route qu on ne sait pas
+ *   assembler n est pas une route.
+ */
+export function areteValide(e) {
+  if (!e || !VENUES.includes(e.venue)) return false;
+  if (e.venue === 'uniswap-v4') {
+    const k = e.cle;
+    return !!k && estAdresse(k.currency0) && estAdresse(k.currency1) && Number.isInteger(Number(k.fee))
+      && Number.isInteger(Number(k.tickSpacing)) && estAdresse(k.hooks);
+  }
+  if (e.venue === 'uniswap-v3') return estAdresse(e.token0) && estAdresse(e.token1) && Number.isInteger(Number(e.fee));
+  return estAdresse(e.token0) && estAdresse(e.token1) && Number.isInteger(Number(e.tickSpacing))
+    && (e.factory === 2 || e.factory === 3);
+}
+export function boutsArete(e) {
+  if (e.venue === 'uniswap-v4') return [noeud(e.cle.currency0), noeud(e.cle.currency1)];
+  return [noeud(e.token0), noeud(e.token1)];
+}
+
+/**
+ * TOUS LES CHEMINS SIMPLES de `de` a `vers`, au plus `sautsMax` sauts.
+ * ⛔ Pas de « plus court » ici : le plus court n est pas le meilleur prix. On ENUMERE, on cote,
+ *   on garde le meilleur. La borne `max` evite l explosion ; les chemins sont tries d abord par
+ *   nombre de sauts puis par la liquidite-goulot si l arete la porte (`e.liqUsd`).
+ */
+export function cheminsCandidats(aretes, de, vers, { sautsMax = 3, max = 12 } = {}) {
+  const A = noeud(de), B = noeud(vers);
+  if (!estAdresse(A) || !estAdresse(B) || A === B) return [];
+  const voisins = new Map();
+  for (const e of (aretes || []).filter(areteValide)) {
+    const [x, y] = boutsArete(e);
+    if (x === y) continue;
+    for (const [p, q] of [[x, y], [y, x]]) {
+      if (!voisins.has(p)) voisins.set(p, []);
+      voisins.get(p).push({ vers: q, e });
+    }
+  }
+  const out = [];
+  const pile = [{ n: A, sauts: [], vus: new Set([A]) }];
+  while (pile.length) {
+    const { n, sauts, vus } = pile.pop();
+    for (const v of (voisins.get(n) || [])) {
+      if (vus.has(v.vers)) continue;
+      const suite = [...sauts, { de: n, vers: v.vers, e: v.e }];
+      if (v.vers === B) { out.push(suite); continue; }
+      if (suite.length < sautsMax) pile.push({ n: v.vers, sauts: suite, vus: new Set([...vus, v.vers]) });
+    }
+  }
+  const goulot = (c) => Math.min(...c.map((s) => (Number.isFinite(s.e.liqUsd) ? s.e.liqUsd : 0)));
+  out.sort((a, b) => (goulot(b) - goulot(a)) || (a.length - b.length));
+  return out.slice(0, max);
+}
+
+/**
+ * OU PRENDRE LE FRAIS SUR CE CHEMIN ? — l indice du NOEUD (0 = entree, n = sortie).
+ * ⛔⛔ UNE FOIS. On choisit le noeud de MEILLEUR rang (ETH > USDC > admis) ; a rang egal, le PLUS
+ *   TOT (un frais pris a l entree est exact sans aucun prix). Aucun noeud admis => REFUSE : on ne
+ *   prend jamais le frais dans un block, et on ne fait pas non plus un swap gratuit en silence.
+ */
+export function placerFrais(chemin, admises) {
+  if (!Array.isArray(chemin) || !chemin.length) return { etat: 'REFUSE', pourquoi: 'no path' };
+  const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
+  let meilleur = null;
+  noeuds.forEach((n, i) => {
+    const r = rangFrais(n, admises);
+    if (r === null) return;
+    if (!meilleur || r < meilleur.rang) meilleur = { indice: i, rang: r, devise: noeud(n) };
+  });
+  if (!meilleur) {
+    return { etat: 'REFUSE', pourquoi: 'no node of this path is ETH, USDC or an admitted stock/B20 — '
+      + 'the fee would have to be taken in a block token, which is refused' };
+  }
+  return { etat: 'OK', ...meilleur };
+}
+
+/** Le frais sur un montant : tronque vers le bas (comme PAY_PORTION du routeur). */
+export function fraisSur(montant, bps = FRAIS_BPS) { return (BigInt(montant) * BigInt(bps)) / BASE_BPS; }
+
+/* ══ LES DEVIS (lecture seule, rpc injecte) ════════════════════════════════════════════════ */
+
+const selQ3 = selecteur('quoteExactInputSingle((address,address,uint256,uint24,uint160))');
+const selQcl = selecteur('quoteExactInputSingle((address,address,uint256,int24,uint160))');
+
+/** Le calldata de devis d UN saut, selon son lieu. ⛔ Le sens est DERIVE des adresses. */
+export function devisSaut(s, montant) {
+  const e = s.e;
+  if (e.venue === 'uniswap-v4') {
+    const entree = s.de === ADRESSES.ETH && bas(e.cle.currency0) !== ADRESSES.ETH && bas(e.cle.currency1) !== ADRESSES.ETH
+      ? ADRESSES.WETH : s.de;
+    const zeroForOne = noeud(e.cle.currency0) === noeud(entree);
+    return { to: ADRESSES.QUOTEUR_V4, data: encodeQuote({ cle: e.cle, zeroForOne, montant }) };
+  }
+  const tIn = s.de === ADRESSES.ETH ? ADRESSES.WETH : s.de;
+  const tOut = s.vers === ADRESSES.ETH ? ADRESSES.WETH : s.vers;
+  if (e.venue === 'uniswap-v3') {
+    return { to: ADRESSES.QUOTEUR_V3, data: '0x' + selQ3 + motAdr(tIn) + motAdr(tOut) + mot(montant) + mot(e.fee) + mot(0) };
+  }
+  return { to: e.factory === 2 ? ADRESSES.QUOTEUR_CL2 : ADRESSES.QUOTEUR_CL3,
+    data: '0x' + selQcl + motAdr(tIn) + motAdr(tOut) + mot(montant) + motSigne(e.tickSpacing) + mot(0) };
+}
+
+/**
+ * COTE UN CHEMIN, saut par saut, AVEC le frais retenu au noeud choisi.
+ * Rend `montants[i]` = ce que le routeur detient au noeud i APRES frais eventuel, et `sortie`.
+ * ⛔ Une lecture ratee rend NON_MESURE (jamais 0) ; un devis nul rend REFUSE.
+ */
+export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null }) {
+  const pl = placement || placerFrais(chemin, admises);
+  if (pl.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pl.pourquoi };
+  let courant = BigInt(montant);
+  if (courant <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
+  const avantFrais = [];
+  let frais = 0n;
+  for (let i = 0; i <= chemin.length; i += 1) {
+    avantFrais.push(courant);
+    if (i === pl.indice) { frais = fraisSur(courant, bps); courant -= frais; }
+    if (i === chemin.length) break;
+    const q = devisSaut(chemin[i], courant);
+    let r;
+    try { r = await rpc('eth_call', [{ to: q.to, data: q.data }, 'latest']); }
+    catch (err) { return { etat: 'NON_MESURE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' quote failed: ' + String(err && err.message || err).slice(0, 140) }; }
+    let out;
+    try { out = BigInt('0x' + String(r).slice(2, 66)); } catch (_) { out = 0n; }
+    if (out <= 0n) return { etat: 'REFUSE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' returns nothing' };
+    courant = out;
+  }
+  return { etat: 'OK', sortie: courant, frais, fraisIndice: pl.indice, fraisDevise: pl.devise, avantFrais };
+}
+
+/* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
+
+/** Decoupe en segments contigus de MEME execution (V4 / V3-uni / CL-fact) ET coupe au noeud du frais. */
+export function segments(chemin, fraisIndice) {
+  const cle = (s) => (s.e.venue === 'uniswap-v4' ? 'v4' : s.e.venue === 'uniswap-v3' ? 'uni' : 'cl' + s.e.factory);
+  const out = [];
+  chemin.forEach((s, i) => {
+    const d = out[out.length - 1];
+    const coupe = i === fraisIndice; /* le frais se prend ENTRE deux segments */
+    if (d && d.type === cle(s) && !coupe) d.sauts.push(s);
+    else out.push({ type: cle(s), sauts: [s], debut: i });
+  });
+  return out;
+}
+
+const cleV4Inline = (k) => motAdr(k.currency0) + motAdr(k.currency1) + mot(k.fee) + motSigne(k.tickSpacing) + motAdr(k.hooks);
+
+/** Le `path` V3 / Slipstream : token(20) | poolParam(3) | token(20)… */
+export function cheminV3(sauts) {
+  let hex = '';
+  sauts.forEach((s, i) => {
+    const tIn = s.de === ADRESSES.ETH ? ADRESSES.WETH : s.de;
+    const tOut = s.vers === ADRESSES.ETH ? ADRESSES.WETH : s.vers;
+    const param = s.e.venue === 'uniswap-v3' ? Number(s.e.fee)
+      : ((Number(s.e.tickSpacing) & 0x7ffff) | CL_FLAG[s.e.factory]);
+    if (i === 0) hex += tIn.slice(2);
+    hex += param.toString(16).padStart(6, '0') + tOut.slice(2);
+  });
+  return hex;
+}
+
+function entreeV4(sauts) {
+  /* les actions : SETTLE(entree, CONTRACT_BALANCE, payeur=routeur), un SWAP par saut en OPEN_DELTA,
+   * TAKE(sortie, ADDRESS_THIS, OPEN_DELTA). ⛔ La forme de struct est SANS minHop : c est celle du
+   * fork velodrome (IV4Router.ExactInputSingleParams, 5 champs). Prouve par le banc. */
+  const premier = sauts[0], dernier = sauts[sauts.length - 1];
+  const devIn = (s) => (s.de === ADRESSES.ETH && ![bas(s.e.cle.currency0), bas(s.e.cle.currency1)].includes(ADRESSES.ETH) ? ADRESSES.WETH : s.de);
+  const devOut = (s) => (s.vers === ADRESSES.ETH && ![bas(s.e.cle.currency0), bas(s.e.cle.currency1)].includes(ADRESSES.ETH) ? ADRESSES.WETH : s.vers);
+  const codes = [ACT.SETTLE], params = [motAdr(devIn(premier)) + mot(CONTRACT_BALANCE) + mot(0)];
+  for (const s of sauts) {
+    const zf = noeud(s.e.cle.currency0) === noeud(devIn(s));
+    codes.push(ACT.SWAP_EXACT_IN_SINGLE);
+    params.push(paramsSwapExactInSingle({ cle: s.e.cle, zeroForOne: zf, montant: OPEN_DELTA, sortieMin: 0n, forme: SANS_MINHOP }));
+  }
+  codes.push(ACT.TAKE);
+  params.push(motAdr(devOut(dernier)) + motAdr(ADDRESS_THIS) + mot(OPEN_DELTA));
+  const elements = params.map((p) => dyn(p));
+  let c = BigInt(32 * elements.length);
+  const offs = elements.map((e) => { const o = mot(c); c += BigInt(e.length / 2); return o; });
+  const tableau = mot(elements.length) + offs.join('') + elements.join('');
+  const actions = dyn(codes.join(''));
+  return { hex: mot(0x40) + mot(0x40 + actions.length / 2) + actions + tableau,
+    entreeNative: devIn(premier) === ADRESSES.ETH, sortieNative: devOut(dernier) === ADRESSES.ETH };
+}
+
+/**
+ * `execute(bytes commands, bytes[] inputs, uint256 deadline)` — l enveloppe ABI, SANS aucune regle.
+ * ⛔ Exportee pour les TEMOINS NEGATIFS du banc (une route sans PAY_PORTION, une route avec deux) :
+ *   l application n appelle QUE `construireRoute`, qui porte les verrous.
+ */
+export function assemblerExecute(cmds, ins, deadline) {
+  const commands = dyn(cmds.join(''));
+  const blocs = ins.map((h) => dyn(h));
+  let c = BigInt(blocs.length) * 32n;
+  const offs = blocs.map((b) => { const o = mot(c); c += BigInt(b.length / 2); return o; });
+  const offCommands = 0x60n, offInputs = offCommands + BigInt(commands.length / 2);
+  return '0x' + selecteur('execute(bytes,bytes[],uint256)') + mot(offCommands) + mot(offInputs) + mot(deadline)
+    + commands + mot(blocs.length) + offs.join('') + blocs.join('');
+}
+
+/**
+ * LE CALLDATA D UNE ROUTE COMPLETE, POUR L UNIVERSAL ROUTER D AERODROME.
+ *
+ * Le modele est UNIFORME : le routeur detient tout. On tire l entree (TRANSFER_FROM, ou msg.value),
+ * chaque segment consomme CONTRACT_BALANCE et rend au routeur, le frais est un PAY_PORTION AU
+ * NOEUD CHOISI, et un SWEEP final livre au destinataire avec SON minimum.
+ * ⛔⛔ LE FRAIS EST UN SEUL PAY_PORTION vers a6cf, dans la devise du noeud — jamais deux.
+ * ⛔ `partsFrais` : liste [{ qui, bps }] — aujourd hui UNE part (a6cf, 9). Le V9 ajoutera des parts
+ *   SANS changer la forme. Toutes les parts sont prises au MEME noeud, donc la regle « une fois »
+ *   tient par construction.
+ */
+export function construireRoute({ chemin, montant, minSortie, destinataire, deadline, fraisIndice,
+  partsFrais = PARTS_FRAIS, admises } = {}) {
+  if (!Array.isArray(chemin) || !chemin.length || chemin.length > SAUTS_MAX) return { etat: 'REFUSE', pourquoi: 'path must have 1..' + SAUTS_MAX + ' hops' };
+  if (!chemin.every((s) => areteValide(s.e))) return { etat: 'REFUSE', pourquoi: 'a hop has no buildable pool' };
+  if (!estAdresse(destinataire) || [ADDRESS_THIS, MSG_SENDER, ADRESSES.ROUTEUR].includes(bas(destinataire))) return { etat: 'REFUSE', pourquoi: 'a real recipient address is required' };
+  if (bas(destinataire) === ADRESSES.FEE_WALLET) return { etat: 'REFUSE', pourquoi: 'the fee wallet cannot be the swapper: the fee would be paid back to itself' };
+  const m = BigInt(montant), mn = BigInt(minSortie);
+  if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
+  if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
+  for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
+  const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
+  if (!Number.isInteger(fraisIndice) || fraisIndice < 0 || fraisIndice > chemin.length) return { etat: 'REFUSE', pourquoi: 'fee node index out of the path' };
+  /* ⛔⛔ LE VERROU : la devise du frais DOIT etre admise. On le reverifie ICI, meme si `placerFrais`
+   *   l a deja fait : un appelant qui passerait un indice a la main ne doit pas pouvoir payer a6cf
+   *   en block. C est le temoin negatif n°1 du banc. */
+  const devFrais = noeuds[fraisIndice];
+  if (rangFrais(devFrais, admises) === null) return { etat: 'REFUSE', pourquoi: 'refused: the fee would be taken in ' + devFrais + ', which is not ETH, USDC or an admitted stock/B20' };
+  const parts = Array.isArray(partsFrais) ? partsFrais : [];
+  if (!parts.length || parts.some((p) => !estAdresse(p.qui) || BigInt(p.bps) <= 0n || BigInt(p.bps) > 100n)) return { etat: 'REFUSE', pourquoi: 'fee parts must be 1..100 bps to whole addresses' };
+  if (bas(parts[0].qui) !== ADRESSES.FEE_WALLET) return { etat: 'REFUSE', pourquoi: 'the first fee part must go to the fee wallet' };
+
+  const cmds = [], ins = [];
+  const ajoute = (c, h) => { cmds.push(c); ins.push(h); };
+  const entreeEth = chemin[0].de === ADRESSES.ETH;
+  /* tenue courante du routeur : 'eth' (natif) ou 'weth' ou un ERC-20 */
+  let tenue = entreeEth ? 'eth' : 'erc20';
+  if (!entreeEth) ajoute(CMD.TRANSFER_FROM, motAdr(chemin[0].de) + motAdr(ADDRESS_THIS) + mot(m));
+  const prendreFrais = (dev) => {
+    const jeton = dev === ADRESSES.ETH ? (tenue === 'eth' ? ADRESSES.ETH : ADRESSES.WETH) : dev;
+    for (const p of parts) ajoute(CMD.PAY_PORTION, motAdr(jeton) + motAdr(p.qui) + mot(p.bps));
+  };
+  const segs = segments(chemin, fraisIndice);
+  const segIdx = new Map(segs.map((s, k) => [s.debut, k]));
+  for (let i = 0; i <= chemin.length; i += 1) {
+    if (i === fraisIndice) prendreFrais(noeuds[i]);
+    if (i === chemin.length) break;
+    if (!segIdx.has(i)) continue;
+    const sg = segs[segIdx.get(i)];
+    if (sg.type === 'v4') {
+      const v = entreeV4(sg.sauts);
+      if (v.entreeNative && tenue === 'weth') ajoute(CMD.UNWRAP_WETH, motAdr(ADDRESS_THIS) + mot(0));
+      if (!v.entreeNative && tenue === 'eth' && noeud(sg.sauts[0].de) === ADRESSES.ETH) ajoute(CMD.WRAP_ETH, motAdr(ADDRESS_THIS) + mot(CONTRACT_BALANCE));
+      ajoute(CMD.V4_SWAP, v.hex);
+      tenue = v.sortieNative ? 'eth' : (sg.sauts[sg.sauts.length - 1].vers === ADRESSES.ETH ? 'weth' : 'erc20');
+    } else {
+      if (tenue === 'eth') ajoute(CMD.WRAP_ETH, motAdr(ADDRESS_THIS) + mot(CONTRACT_BALANCE));
+      const path = cheminV3(sg.sauts);
+      const isUni = sg.type === 'uni';
+      ajoute(CMD.V3_SWAP_EXACT_IN, motAdr(ADDRESS_THIS) + mot(CONTRACT_BALANCE) + mot(0) + mot(0xc0)
+        + mot(0) + mot(isUni ? 1 : 0) + dyn(path));
+      tenue = sg.sauts[sg.sauts.length - 1].vers === ADRESSES.ETH ? 'weth' : 'erc20';
+    }
+  }
+  const sortie = noeuds[noeuds.length - 1];
+  /* ⛔ LE SEUL MINIMUM QUI PROTEGE L ACHETEUR : celui du SWEEP final, APRES le frais. */
+  if (sortie === ADRESSES.ETH && tenue === 'weth') ajoute(CMD.UNWRAP_WETH, motAdr(destinataire) + mot(mn));
+  else ajoute(CMD.SWEEP, motAdr(sortie === ADRESSES.ETH ? ADRESSES.ETH : sortie) + motAdr(destinataire) + mot(mn));
+
+  const data = assemblerExecute(cmds, ins, deadline);
+  return {
+    etat: 'PRET', to: ADRESSES.ROUTEUR, data, value: entreeEth ? '0x' + m.toString(16) : '0x0',
+    /* ⛔ L APPROBATION : une seule, ERC-20 ordinaire, du MONTANT EXACT (TRANSFER_FROM essaie
+     *   `transferFrom` avant Permit2). Aucune pour l ETH natif. */
+    approbation: entreeEth ? null : { jeton: chemin[0].de, spender: ADRESSES.ROUTEUR, montant: m },
+    commandes: cmds, entrees: ins, fraisDevise: noeud(devFrais), fraisIndice, segments: segs.map((s) => s.type),
+    signatures: entreeEth ? 1 : 2,
+  };
+}
+
+/**
+ * LE PLAN COMPLET : candidats -> devis -> meilleur -> calldata.
+ * ⛔ Le meilleur est celui qui rend LE PLUS au destinataire APRES notre frais. Les chemins non
+ *   cotables sont DITS (NON_MESURE / REFUSE), pas jetes.
+ */
+export async function planifier({ rpc, aretes, de, vers, montant, destinataire, admises, toleranceBps = 100n,
+  deadline, sautsMax = 3, max = 12, bps = FRAIS_BPS }) {
+  const cands = cheminsCandidats(aretes, de, vers, { sautsMax, max });
+  if (!cands.length) return { etat: 'SANS_ROUTE', pourquoi: 'no measured pool path of ' + sautsMax + ' hops or fewer', essais: [] };
+  const essais = [];
+  for (const ch of cands) {
+    const q = await coterChemin({ rpc, chemin: ch, montant, admises, bps });
+    essais.push({ chemin: ch, ...q });
+  }
+  const bons = essais.filter((x) => x.etat === 'OK').sort((a, b) => (b.sortie > a.sortie ? 1 : b.sortie < a.sortie ? -1 : 0));
+  if (!bons.length) {
+    const tous = essais.every((x) => x.etat === 'NON_MESURE');
+    return { etat: tous ? 'NON_MESURE' : 'REFUSE', pourquoi: essais.map((x) => x.pourquoi).filter(Boolean)[0] || 'no candidate quoted', essais };
+  }
+  const best = bons[0];
+  const tol = BigInt(toleranceBps);
+  const minSortie = (best.sortie * (10000n - tol)) / 10000n;
+  const tx = construireRoute({ chemin: best.chemin, montant, minSortie, destinataire, deadline, fraisIndice: best.fraisIndice, admises, partsFrais: [{ qui: ADRESSES.FEE_WALLET, bps }] });
+  return { etat: tx.etat === 'PRET' ? 'PRET' : 'REFUSE', meilleur: best, minSortie, tx, essais, pourquoi: tx.pourquoi || null };
+}
+
+/** Une ligne lisible d un chemin (pour l ecran et le rapport). */
+export function decrireChemin(chemin, symboles = {}) {
+  const nom = (a) => symboles[noeud(a)] || (noeud(a) === ADRESSES.ETH ? 'ETH' : a.slice(0, 8));
+  const lieu = (e) => (e.venue === 'uniswap-v4' ? 'v4' + (bas(e.cle.hooks) !== ADRESSES.ETH ? '+hook' : '') + ':' + e.cle.fee
+    : e.venue === 'uniswap-v3' ? 'v3:' + e.fee : 'cl' + e.factory + ':' + e.tickSpacing);
+  return [nom(chemin[0].de), ...chemin.map((s) => '-[' + lieu(s.e) + ']-> ' + nom(s.vers))].join(' ');
+}
