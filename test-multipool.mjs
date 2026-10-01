@@ -110,6 +110,18 @@ ok('5e. TOSHI et cbBTC ne sont pas des devises de frais (ni action ni B20 devise
   const m = nommerRevert(new Error('execution reverted: SPL'));
   ok('revert inconnu : texte brut, pas classe SANS_LIQUIDITE', m.liquidite === false && m.texte.includes('SPL'), m.texte);
 }
+/* pools pieges : un frais LP de 87,1 % (mesure : ETH/CC, ETH/BUCK, ETH/BLUEPILL) n est pas une arete */
+{
+  const { areteValide, cheminsCandidats: cc } = await import('./multipool.js');
+  const Z = '0x0000000000000000000000000000000000000000', T = '0xb2000000000000000000006226b3d65700000000';
+  const piege = { venue: 'uniswap-v4', cle: { currency0: Z, currency1: T, fee: 871435, tickSpacing: 9303, hooks: Z } };
+  const tb5 = { venue: 'uniswap-v4', cle: { currency0: Z, currency1: T, fee: 50000, tickSpacing: 500, hooks: Z } };
+  const dyn = { venue: 'uniswap-v4', cle: { currency0: Z, currency1: T, fee: 0x800000, tickSpacing: 60, hooks: '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc' } };
+  ok('pool piege 87,1 % refusee comme arete', areteValide(piege) === false);
+  ok('pool TB 5 % admise', areteValide(tb5) === true);
+  ok('frais dynamique V4 (0x800000) admis', areteValide(dyn) === true);
+  ok('aucun chemin ne passe par une pool piege', cc([piege], Z, T).length === 0);
+}
 void faux; void noeud; void CONTRACT_BALANCE;
 console.log('\n' + n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

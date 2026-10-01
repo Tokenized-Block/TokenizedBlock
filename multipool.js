@@ -130,8 +130,22 @@ export function devisesFraisAdmises(actionsRegistre = [], { blocks = [] } = {}) 
  * ⛔ Une arete sans ses parametres de construction est REFUSEE : une route qu on ne sait pas
  *   assembler n est pas une route.
  */
+/* ⛔⛔ POOLS PIEGES (mesure 2026-10-02, graphe au bloc 52047000) : 23 pools V4 SANS hook portent un frais
+ *   LP STATIQUE de 48 % a 89 % (ex. ETH/CC, ETH/BUCK, ETH/BLUEPILL a fee 871435 = 87,1 %). Le premier banc
+ *   complet les a EMPRUNTEES (S0/S1 CC et BUCK, S2 BLUEPILL) : le frais d interface etait juste au wei,
+ *   mais l utilisateur perdait ~87 % a chaque traversee. Une arete dont le frais LP depasse
+ *   FRAIS_LP_MAX (10 % = 100 000 pips) n est PLUS une arete. Le frais dynamique V4 (0x800000) reste
+ *   admis : c est le hook qui le fixe et le DEVIS le voit. Nos pools TB a 5 % (50 000) restent admises. */
+export const FRAIS_LP_MAX = 100000;
+export const FRAIS_DYNAMIQUE_V4 = 0x800000;
+export function fraisLpAdmis(e) {
+  const f = Number(e && (e.venue === 'uniswap-v4' ? e.cle && e.cle.fee : e.fee));
+  if (e && e.venue === 'aerodrome-cl') return true; /* Slipstream : frais lu par le pool, pas dans la cle */
+  return Number.isInteger(f) && (f === FRAIS_DYNAMIQUE_V4 || (f >= 0 && f <= FRAIS_LP_MAX));
+}
 export function areteValide(e) {
   if (!e || !VENUES.includes(e.venue)) return false;
+  if (!fraisLpAdmis(e)) return false;
   if (e.venue === 'uniswap-v4') {
     const k = e.cle;
     return !!k && estAdresse(k.currency0) && estAdresse(k.currency1) && Number.isInteger(Number(k.fee))

@@ -52,6 +52,12 @@ const NOS_HOOKS = new Map([[HOOK_PREVU, 'V1'], [HOOK_V2, 'V2'], [HOOK_V3, 'V3'],
 
 console.log('=== GRAPHE MULTIPOOL — fork ' + URL + ' ===');
 const bloc = parseInt(await rpc('eth_blockNumber', []), 16);
+{ /* ⛔ ETAT VIERGE : un banc passe sur ce fork mine des blocs locaux et deplace les pools. Mesurer apres
+   *   lui, c est mesurer NOTRE etat, pas celui de Base. On exige bloc courant == bloc de fork. */
+  let fi = null; try { fi = await rpc('anvil_nodeInfo', []); } catch (_) { /* */ }
+  const fb = fi && fi.forkConfig && Number(fi.forkConfig.forkBlockNumber);
+  if (fb && bloc !== fb && process.env.ACCEPTER_ETAT_MODIFIE !== '1') { console.log('KO : le fork a mine ' + (bloc - fb) + ' bloc(s) local(aux) depuis ' + fb + ' — etat modifie, redemarrer le fork. NON MESURE'); process.exit(1); }
+}
 const chainId = parseInt(await rpc('eth_chainId', []), 16);
 if (chainId !== 8453) { console.log('KO pas Base'); process.exit(1); }
 console.log('bloc ' + bloc);
@@ -134,7 +140,11 @@ for (let i = 0; i < coeur.length; i += 1) for (let j = i + 1; j < coeur.length; 
   for (const kp of [{ fee: 100, tickSpacing: 1 }, { fee: 500, tickSpacing: 10 }, { fee: 3000, tickSpacing: 60 }, { fee: 10000, tickSpacing: 200 }]) {
     const cle = cleDePool(coeur[i], coeur[j], kp);
     const pid = bas(poolId(cle));
-    if (!candV4.has(pid)) candV4.set(pid, { poolId: pid, currency0: bas(cle.currency0), currency1: bas(cle.currency1), fee: kp.fee, tickSpacing: kp.tickSpacing, hooks: ADRESSES.ETH, source: 'balayage-v4' });
+    /* ⛔ BUG CORRIGE 2026-10-02 : un poolId deja vu SANS cle (DexScreener ne donne que l id) n etait pas
+     *   complete par le balayage, puis rejete en « v4SansCle » — c est ainsi que la pool OUSD/USDC v4
+     *   (fee 100, ts 1, sans hook, liquidite 1,56e16) manquait au graphe. On complete la cle. */
+    const deja = candV4.get(pid);
+    if (!deja || !deja.currency0) candV4.set(pid, { ...(deja || {}), poolId: pid, currency0: bas(cle.currency0), currency1: bas(cle.currency1), fee: kp.fee, tickSpacing: kp.tickSpacing, hooks: ADRESSES.ETH, source: deja ? deja.source + '+cle-balayage' : 'balayage-v4' });
   }
 }
 console.log('balayage : ' + coeur.length + ' noeuds non-block, ' + taches.length + ' getPool');
