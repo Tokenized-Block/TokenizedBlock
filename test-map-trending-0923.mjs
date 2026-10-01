@@ -5,7 +5,8 @@ if (!s.includes('trendingPlaceholder')) throw new Error('no placeholder');
 if (!s.includes('sauverTrendingDisque')) throw new Error('no disk save');
 if (!s.includes('RPC_LIST')) throw new Error('no RPC_LIST');
 if (!/blocsLusJusqua === null \? 3 \* 43200/.test(s)) throw new Error('cold window not shortened');
-if (!/FENETRE_MAX = 999/.test(readFileSync('./index-blocks.js','utf8'))) throw new Error('FENETRE_MAX not 1000');
+/* 2026-10-01 : 999 -> 1999 (limite mesuree du noeud : 2000) — voir test-fenetre-getlogs-1999.mjs. */
+if (!/FENETRE_MAX = 1999;/.test(readFileSync('./index-blocks.js','utf8'))) throw new Error('FENETRE_MAX not 1999');
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23) : elle exigeait un numero de build precis, donc
  *    elle rougissait des qu un AUTRE deploiement bumpait le build. Ce qui est garde : la ligne
  *    doit exister et etre bien formee. Les controles « un ANCIEN tip n est pas reste » sont

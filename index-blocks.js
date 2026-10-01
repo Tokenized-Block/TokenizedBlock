@@ -38,7 +38,18 @@ export const FACTORY = '0xb20f000000000000000000000000000000000000';
  * ⚠️ CE QUE CA COUTE, dit franchement : 2 000 blocs valent environ 66 minutes de chaine a 2 s le
  *    bloc. Une lecture de 9 000 blocs se fait donc maintenant en CINQ requetes au lieu d une. La
  *    boucle ci-dessous pagine deja — rien d autre ne change. */
-export const FENETRE_MAX = 999 /* tip 20260923-map-alive: Base public getLogs ≤1000 inclusive span */;
+/* ⛔⛔ 999 ETAIT LA MOITIE DE LA VRAIE LIMITE (mesure de Claude, re-mesuree par le Grok Bot le
+ *     2026-10-01 a 22:55, filtre `address: FACTORY`, tete 52049395) :
+ *         mainnet.base.org     1000 -> 200 · 1999 -> 200 · 2000 -> 200 · 3000 -> 413 « limited to a 2,000 range »
+ *         base-rpc.publicnode  1000 -> 200 · 1999 -> 200 · 2000 -> 200 · 3000 -> 200
+ *     L en-tete de ce fichier disait deja 2000, et `mes-blocks.js` / `pools-du-jeton.js` paginent
+ *     deja a 2000. 1999 garde UN bloc de marge sous la borne du noeud le plus strict.
+ *   ⇒ Mesure par enveloppe sur `fetch`, `listerCreations({ blocs: 43200 })` sur mainnet.base.org :
+ *     999 -> 47 a 50 `eth_getLogs` (44 fenetres + reprises), 9,3 s ; 1999 -> 22, 2,2 s ; MEMES 352
+ *     creations, 0 fenetre ratee des deux cotes. Les fenetres restent ALIGNEES
+ *     (`Math.floor(haut / FENETRE_MAX) * FENETRE_MAX`), donc chaque fenetre fait <= FENETRE_MAX blocs.
+ *   ⛔ La profondeur d archive (`logsArchiveRpc`) n est PAS touchee ici. */
+export const FENETRE_MAX = 1999;
 
 const enc = new TextEncoder();
 const hexDe = (o) => [...o].map((b) => b.toString(16).padStart(2, '0')).join('');

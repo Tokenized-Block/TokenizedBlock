@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 const s = readFileSync('./serveur-web.js', 'utf8');
 const h = readFileSync('./app.html', 'utf8');
 const ib = readFileSync('./index-blocks.js', 'utf8');
-if (!/FENETRE_MAX = 999/.test(ib)) throw new Error('FENETRE_MAX');
+/* 2026-10-01 : 999 etait la moitie de la limite mesuree du noeud (2000) — voir index-blocks.js et test-fenetre-getlogs-1999.mjs. */
+if (!/FENETRE_MAX = 1999;/.test(ib)) throw new Error('FENETRE_MAX');
 if (!h.includes('LIVE_FENETRE = 999')) throw new Error('LIVE_FENETRE');
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
  *    build precis, donc elle rougissait des qu un AUTRE deploiement bumpait le build. Elle ne
