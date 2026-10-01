@@ -304,3 +304,53 @@ export function etiquettePaire(p) {
   if (p.type === 'ACTION') return p.symbole + ' — ' + p.nom + ' (Coinbase tokenized stock)';
   return p.symbole + ' — ' + p.nom;
 }
+
+/* ── E0 (2026-10-01) — WHICH HOOK CAN PRICE A NEW BLOCK IN THIS CURRENCY: ONE SOURCE, READ BY EVERY GUARD ──
+ * Every permanent Base launch opens on HOOK_V8, and V8 writes `deviseAdmise` ONLY in its constructor,
+ * with no setter: its list is final. Measured with `node devises-admises.mjs` (negative control
+ * 0x…beef read "not admitted", so the read discriminates) and proven again on a real Base node
+ * (eth_call: a fresh labelled block, V8.inscrire reverts PaireNonAdmise 0x9e16f763 for every
+ * offered currency outside this list, and passes for ETH, TBLOCK and these 12).
+ * ⛔ ONE LIST, NOT TWO. "Refused" is NOT stored anywhere: it is the complement of this set, so the
+ *    Create guard (`refusPrixNouveauBlock`) and the launch guard (lancer-pool.js) ask the SAME
+ *    function, `hookDeLancementPour`, and cannot drift. test-e0-devises-v8.mjs fails if they do.
+ * ⛔ Unknown = refused (a pasted address included): V8 would refuse it at Birth, after payment. */
+export const DEVISES_ADMISES_V8 = Object.freeze([
+  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC
+  '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', // cbBTC
+  '0xb200000000000000000000c2e324d24d7eecd1fb', // AAPLc
+  '0xb200000000000000000000d9192b6b456483c2e8', // AMZNc
+  '0xb2000000000000000000002d0ba3164cc74f58b7', // GOOGLc
+  '0xb2000000000000000000008bc8786b856e61707c', // METAc
+  '0xb200000000000000000000ab99cfa739e253872b', // MSFTc
+  '0xb2000000000000000000004884b426556b92883d', // MSTRc
+  '0xb20000000000000000000078ee7ce2fe4908108c', // NVDAc
+  '0xb200000000000000000000397293cb8cda9a10c5', // SNDKc
+  '0xb2000000000000000000007b9fcbd005511acbd5', // SPCXc
+  '0xb2000000000000000000001e800a7f5189430cd0', // TSLAc
+]);
+
+/** The hook a NEW block quoted in `adresse` opens on, or null if no deployed launch hook admits it.
+ *  The ONLY place that decides — the Create guard and the launch guard both ask here. Off Base: null. */
+export function hookDeLancementPour(adresse, chaine) {
+  if (Number(chaine) !== 8453) return null;
+  const a = String(adresse || '').trim().toLowerCase();
+  if (a === ETH_NATIF || a === TBLOCK_MAINNET || DEVISES_ADMISES_V8.includes(a)) return 'V8';
+  return null;
+}
+
+/** E0 copy. ⛔ No hook / version names, no dates, no "coming soon": statements of fact only. */
+export const copieE0Achat = (symbole) => symbole + " can't price a new block yet. You can already use it to buy.";
+/* ⛔ A STATEMENT OF FACT, NOT A PROMISE: used whenever the app cannot route a buy from that currency
+ *    AT DISPLAY TIME (TOSHI today, or any currency whose route is not measured, or with no symbol). */
+export const COPIE_E0_SANS_ROUTE = "This currency can't price a new block yet, and we can't route a buy from it yet either.";
+
+/** null = this currency can price a new block (Base only); otherwise the sentence to show.
+ *  `routable` MUST come from the app's own buy-routing data at display time (app.html:
+ *  `transactionsDepuisEth`, the measured edge graph) — never assumed. Anything but `true` = factual phrase. */
+export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbole = null } = {}) {
+  if (Number(chaine) !== 8453) return null;
+  if (hookDeLancementPour(adresse, chaine) !== null) return null;
+  const sym = typeof symbole === 'string' ? symbole.trim() : '';
+  return routable === true && /^[A-Za-z0-9.]{1,12}$/.test(sym) ? copieE0Achat(sym) : COPIE_E0_SANS_ROUTE;
+}

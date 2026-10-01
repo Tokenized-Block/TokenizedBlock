@@ -2930,7 +2930,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
-import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
+import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock } from './paires.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -14578,6 +14578,8 @@ function peindreApercuCreation() {
 /* ══ LA PAIRE ═══════════════════════════════════════════════════════════════════════════════ */
 const AUTRE_PAIRE = '__autre__';
 let paireChoisie = null;
+/** E0: why the chosen pair cannot price a new block (shown again at the create button). */
+let motifRefusPaire = null;
 
 function peindreRolesCreate() {
   const s = $('#cRole');
@@ -14929,6 +14931,7 @@ async function clesReellesDe(adr) {
 let majPaireSeq = 0;
 async function majPaire() {
   const seq = ++majPaireSeq;
+  motifRefusPaire = null;
   const autre = $('#cPaire').value === AUTRE_PAIRE;
   $('#cPaireAutreRang').hidden = !autre;
   const n = $('#cPaireNote');
@@ -14948,6 +14951,28 @@ async function majPaire() {
     n.textContent = q.pourquoi;
     const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
     majFraisEtRecap();
+    return;
+  }
+  /* E0 2026-10-01: no launch hook can price a new block in this currency (one source: paires.js
+   * `hookDeLancementPour`). It stays visible; creation stops HERE, before the 0.001 ETH — chosen or
+   * pasted alike. "You can already use it to buy" is said ONLY if the buy-routing graph has a measured
+   * route at this moment (`transactionsDepuisEth`); otherwise the factual phrase. */
+  const e0 = () => refusPrixNouveauBlock(q.paire.adr, CHAINE,
+    { routable: transactionsDepuisEth(q.paire.adr) !== null, symbole: q.paire.symbole });
+  if (e0()) {
+    const peindreE0 = () => {
+      paireChoisie = null;
+      motifRefusPaire = e0();
+      n.className = 'note wKo';
+      n.textContent = motifRefusPaire;
+      const chipE0 = $('#cPaireChip'); if (chipE0) chipE0.hidden = true;
+      majFraisEtRecap();
+    };
+    peindreE0();
+    if (transactionsDepuisEth(q.paire.adr) === null && q.paire.verifiee) {
+      try { await prixUsdDevise(q.paire.adr); } catch (_) { /* unread stays "can't route" */ }
+      if (seq === majPaireSeq) peindreE0();
+    }
     return;
   }
   /* ⛔ RAKSHA 2026-09-15: custom paste must prove native B20 — no ERC-20 sprawl diluting fee markets. */
@@ -15250,7 +15275,9 @@ function validerCreation() {
   if (octets(nom) > 32) return { ko: 'The name is over 32 bytes (accents and emoji count more).' };
   if (octets(sym) > 32) return { ko: 'The symbol is over 32 bytes.' };
   if (!sel) return { ko: 'Pick a salt — it is what fixes the address.', prealable: true };
-  if (!paireChoisie) return { ko: 'Pick what it pairs with — or paste a valid token address.', prealable: true };
+  /* E0: a pair no launch hook can price is NOT a missing prerequisite — it stays red (no `prealable`). */
+  if (!paireChoisie) return motifRefusPaire ? { ko: motifRefusPaire }
+    : { ko: 'Pick what it pairs with — or paste a valid token address.', prealable: true };
   if (!compte) return { ko: 'Connect your wallet first: it is the one that signs, and it receives the supply.', prealable: true };
   return { nom, sym, sel };
 }
@@ -15484,6 +15511,8 @@ function majFraisEtRecap() {
     else boutonCreer.textContent = Number(CHAINE) === 8453
       ? 'Review → sign Instant Birth · 0.001 ETH'
       : 'Instant Birth (practice, free)';
+    /* E0: a pair no launch hook can price closes payment — the 0.001 ETH is never requested. */
+    if (motifRefusPaire) { boutonCreer.disabled = true; boutonCreer.textContent = 'Pick another pair'; boutonCreer.title = ''; }
   }
   const feeTxt = usd > 0
     ? (fraisWeiCalcule != null

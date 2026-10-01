@@ -23,6 +23,7 @@ import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
 import { HOOK_V8 } from './tokenomics.js';
+import { hookDeLancementPour } from './paires.js';
 
 /* ══ CONSTANTES — RECOPIEES DE index.html, COMPAREES PAR UN TEST ═════════════════════════════ */
 export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -259,6 +260,12 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     && String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase()
     && String(hooks).toLowerCase() !== HOOK_V8.toLowerCase()) {
     return { etat: 'REFUSE', pourquoi: 'Base Launch refused: Instant Birth / permanent Launch must use HOOK_V8 only — Birth=V8 only' };
+  }
+  /* E0 2026-10-01: the SAME source as the Create guard (paires.js `hookDeLancementPour`) — a quote V8
+   * does not admit would make inscrire revert PaireNonAdmise after the creator has paid. */
+  if (Number(chaine) === 8453 && String(hooks).toLowerCase() === HOOK_V8.toLowerCase()
+    && hookDeLancementPour(devise, chaine) !== 'V8') {
+    return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
   }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };
   const enEth = String(devise).toLowerCase() === ETH_NATIF;
