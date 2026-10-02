@@ -31,7 +31,8 @@
 import { HOOK_V8, ensembleHooksFacturants, cheminsCandidats, areteValide, CMD, ADRESSES,
   unFraisParJambe, routeEntierementFactureeParHook, routeFactureeParHook } from './multipool.js';
 import { TBLOCK } from './tokenomics.js';
-import { pairesProposees } from './paires.js';
+import { TTB } from './origine.js';
+import { pairesProposees, proposableEnEchange, DEVISES_BASE } from './paires.js';
 
 let n = 0, ko = 0;
 const ok = (nom, cond, vu) => {
@@ -44,14 +45,49 @@ const bas = (x) => String(x || '').toLowerCase();
 const ETH = '0x0000000000000000000000000000000000000000';
 const WETH = bas(ADRESSES.WETH);
 const parSym = new Map(pairesProposees(8453).map((x) => [x.symbole, bas(x.adr)]));
-const BLOCK = bas(TBLOCK), USDC = parSym.get('USDC'), AAPL = parSym.get('AAPLc');
+const USDC = parSym.get('USDC'), AAPL = parSym.get('AAPLc');
 
-/* ⛔ TEMOIN ZERO : toutes les adresses resolues. Une adresse vide a deja fait rendre « 0 chemin » a
- *   une sonde, ce qui est indiscernable d un vrai « pas de route ». */
+/* ⛔⛔⛔ LE SUJET DE CE BANC EST « N IMPORTE QUEL B20 », PAS NOTRE JETON. Raksha, 2026-10-02 :
+ *      « le TBLOCK doit etre tt les autres b20 possible — pas le notre TBLOCK token ».
+ *      Ma premiere version prenait `TBLOCK` comme point de depart : c est precisement le jeton qu il
+ *      a fait RETIRER des echanges le 2026-09-24 (« le coin n est pas reellement lance au public »).
+ *      `paires.js` le filtre par `proposableEnEchange`, et `echange.js` porte deux fois
+ *      `marche.paire !== 'TBLOCK'`. Mon banc prouvait donc une route pour le SEUL jeton que l app
+ *      refuse de router — et en faisait l exemple canonique, ce qui le ramenait par la porte des
+ *      tests.
+ *   ⇒ ON PART DE TTB, un block de genese reel qui n est pas le notre, ET on verifie que la route
+ *     ne depend d AUCUNE adresse particuliere : la meme forme doit etre trouvee pour un B20
+ *     quelconque. Une route qui ne marcherait que pour un jeton nomme serait un cas special deguise
+ *     en regle. */
+const BLOCK = bas(TTB);
+const B20_QUELCONQUE = '0xb2000000000000000000001111111111111111ff';
+
 const ADR = /^0x[0-9a-f]{40}$/;
 ok('0. les adresses du test sont toutes resolues',
   [BLOCK, USDC, AAPL, WETH].every((a) => ADR.test(a)),
   JSON.stringify({ BLOCK, USDC, AAPL, WETH }));
+/* ⛔ ET LE SUJET N EST PAS NOTRE JETON. Si quelqu un remet TBLOCK ici, ce banc rougit. */
+ok('0b. ⭐ le block de depart n est PAS notre TBLOCK', BLOCK !== bas(TBLOCK), BLOCK);
+/* ⛔⛔ ET LA DECISION PRODUIT EST GARDEE A SA SOURCE : TBLOCK reste hors des echanges. Sans cette
+ *    assertion, le filtre pourrait sauter sans que rien ne crie — et le jeton reviendrait dans une
+ *    liste que personne ne relit. */
+/* ⛔⛔ ON TESTE L ENTREE REELLE DU REGISTRE, PAS UN OBJET NU — et ma premiere version s est trompee
+ *    de sujet. `proposableEnEchange({ symbole: 'TBLOCK' })` rend `true`, et c est VOULU : le filtre
+ *    est FAIL-OPEN par conception (une entree sans drapeau reste proposable, sinon les dizaines
+ *    d entrees existantes disparaitraient). Il juge `lancePubliquement`, pas le symbole.
+ *    L entree reelle porte `lancePubliquement: false` et le filtre rend bien `false`.
+ *  ⛔ J avais donc accuse le code pour une faute de MON assertion — et les deux moitiees etaient
+ *    dans un seul `&&`, ce qui rendait le message illisible : on ne savait pas laquelle tombait.
+ *    Une conjonction qui echoue ne dit pas QUI a echoue. Separees. */
+const entreeTblock = (DEVISES_BASE || []).find((x) => bas(x.adr) === bas(TBLOCK));
+ok('0c. TEMOIN — l entree TBLOCK existe dans le registre', !!entreeTblock,
+  entreeTblock ? 'trouvee' : 'absente du registre');
+ok('0d. ⛔ …et elle porte `lancePubliquement: false`',
+  !!entreeTblock && entreeTblock.lancePubliquement === false);
+ok('0e. ⛔ le filtre la refuse sur l entree REELLE',
+  !!entreeTblock && proposableEnEchange(entreeTblock) === false);
+ok('0f. ⛔⛔ TBLOCK est donc ABSENT des paires proposees (decision de Raksha, 2026-09-24)',
+  !pairesProposees(8453).some((p) => bas(p.adr) === bas(TBLOCK)));
 
 const v4 = (a, b, fee) => {
   const [c0, c1] = bas(a) < bas(b) ? [bas(a), bas(b)] : [bas(b), bas(a)];
@@ -87,6 +123,19 @@ ok('4. TEMOIN NEGATIF — une cible non connectee ne rend aucun chemin',
   cheminsCandidats(MIXTE, BLOCK, PYPL, { sautsMax: 3, max: 12 }).length === 0);
 const route = chemins[0] || [];
 ok('5. …et elle fait bien 3 sauts', route.length === 3, route.length + ' saut(s)');
+/* ⛔⛔⛔ LA ROUTE NE DOIT DEPENDRE D AUCUNE ADRESSE PARTICULIERE — c est la demande de Raksha : « tous
+ *      les autres b20 possible ». On rejoue la MEME forme avec un B20 quelconque : si elle ne sort
+ *      pas, c est que quelque chose est cable sur un jeton nomme, et la regle serait un cas special
+ *      deguise. */
+const MIXTE_Q = [v4(B20_QUELCONQUE, ETH, 3000), v3(WETH, USDC, 500), cl(USDC, AAPL, 100)];
+const cheminsQ = cheminsCandidats(MIXTE_Q, B20_QUELCONQUE, AAPL, { sautsMax: 3, max: 12 });
+ok('5b. ⭐ la MEME route sort pour un B20 quelconque : rien n est cable sur un jeton nomme',
+  cheminsQ.length === chemins.length && (cheminsQ[0] || []).length === 3,
+  cheminsQ.length + ' chemin(s), ' + (cheminsQ[0] || []).length + ' saut(s)');
+/* ⛔ ET LA REGLE DU FRAIS NE CHANGE PAS NON PLUS SELON LE JETON. */
+ok('5c. ⭐ …et la regle du frais y rend le meme verdict',
+  routeFactureeParHook(cheminsQ[0] || [], ensembleHooksFacturants()) === true
+  && routeEntierementFactureeParHook(cheminsQ[0] || [], ensembleHooksFacturants()) === false);
 
 /* ── LA CLASSIFICATION DE LA ROUTE ──────────────────────────────────────────────────────────── */
 ok('6. ⭐ la route est MIXTE : au moins une jambe hookee, mais pas toutes',
@@ -128,7 +177,7 @@ ok('15. ⭐ route SANS hook : exactement un PAY_PORTION, et zero est refuse',
 
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');
-console.log('   La route TBLOCK -> ETH -> USDC -> AAPLc existe en 3 sauts, et le frais y est pris');
+console.log('   La route <un B20> -> ETH -> USDC -> AAPLc existe en 3 sauts, et le frais y est pris');
 console.log('   EXACTEMENT une fois : ni zero (on ne prendrait rien), ni deux (double frais).');
 console.log('⚠️ NE PROUVE PAS que ces pools existent ni qu elles soient liquides : les aretes sont');
 console.log('   DECLAREES. Ce banc garde la REGLE du frais selon la forme de la route.');
