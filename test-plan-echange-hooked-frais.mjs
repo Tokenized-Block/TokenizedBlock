@@ -47,8 +47,10 @@ function makeRpc({ amountOut = 10n ** 18n } = {}) {
  *     (bloc 52072599, callTracer), le hook V8 verse 0,5 % ETH a a6cf a l achat ET a la vente, V1/V2 a la
  *     vente. L ancienne regle « stacked fees beat zero fees » (tip 20260922-2023) partait d un hook qui ne
  *     versait rien ; ce n est plus le cas, et l empilement faisait payer deux fois la meme jambe.
- *   Table attendue : V8 achat 0 · V8 vente 0 · V1 achat 50 (le hook prend du BLOCK) · V1 vente 0. */
-const ATTENDU = [[HOOK_V8, 'ACHAT', 0n], [HOOK_V8, 'VENTE', 0n], [HOOK_PREVU, 'ACHAT', FRAIS_INTERFACE_BPS], [HOOK_PREVU, 'VENTE', 0n]];
+ *   Table attendue : V8 achat 0 · V8 vente 0 · V1 achat REFUSE · V1 vente 0.
+ *   ⛔ 2026-10-02 (porte de livraison, revue Claude) : V1 a l achat prend son frais EN BLOCK (fork 52072599) ; avec le
+ *     routeur, c etait deux frais dont un en block. Il est REFUSE (« Not tradable here yet »), plus planifie a 50 bps. */
+const ATTENDU = [[HOOK_V8, 'ACHAT', 0n], [HOOK_V8, 'VENTE', 0n], [HOOK_PREVU, 'ACHAT', 'REFUSE'], [HOOK_PREVU, 'VENTE', 0n]];
 for (const [hooks, sens, bpsAttendu] of ATTENDU) {
   const cle = cleDePool(ETH, JETON, { fee: 5000, tickSpacing: 200, hooks });
   const marcheLu = { etat: 'LUE', cle, paire: null };
@@ -57,6 +59,11 @@ for (const [hooks, sens, bpsAttendu] of ATTENDU) {
     rpc: makeRpc(sens === 'VENTE' ? { amountOut: 5n * 10n ** 15n } : {}), chaine: 8453, jeton: JETON, compte: COMPTE,
     sens, montant: sens === 'VENTE' ? 10n ** 18n : 10n ** 16n, marcheLu, maintenant: Date.now(),
   });
+  if (bpsAttendu === 'REFUSE') {
+    ok(plan.etat === 'REFUSE' && plan.refusFraisEnBlock === true, label + ' → REFUSE (frais du hook en block) : ' + plan.etat);
+    eq(plan.pourquoi, 'Not tradable here yet', label + ' texte exact');
+    continue;
+  }
   ok(plan.etat === 'PRET' || plan.etat === 'APPROBATIONS', label + ' → ' + plan.etat + ' ' + (plan.pourquoi || ''));
   eq(plan.resume && plan.resume.fraisBps, bpsAttendu, label + ' fraisBps');
   if (bpsAttendu > 0n) {

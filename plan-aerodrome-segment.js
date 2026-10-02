@@ -35,6 +35,7 @@ import { calldataExactInputAvecFrais, calldataApprove, FRAIS_INTERFACE_BPS_CL }
 import { poolAerodromeDe } from './plan-franchissement.js';
 import { sortieSpot } from './plan-usdc-block.js';
 import { selecteur } from './keccak.js';
+import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /** Les etats rendus. ⛔ Aucun autre. */
 export const ETATS = Object.freeze(['PRET', 'REFUSE', 'NON_MESURE']);
@@ -86,6 +87,11 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
     return { etat: 'REFUSE', etape: 'forme',
       pourquoi: 'the path ends on ' + bas(chemin[chemin.length - 1].vers)
         + ' but we are buying ' + bas(block) };
+  }
+  /* ⛔⛔ 2026-10-02 (porte de livraison) : UN BLOCK ENTRE DEUX SAUTS AERODROME est une jonction : ses deux pools sont
+   *   Aerodrome, sans hook TB (regle du fondateur). Refus avant toute lecture. */
+  if (indexBlocAJonction(chemin.slice(1).map((s) => s.de)) >= 0) {
+    return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
   let m;
   try { m = BigInt(montant); } catch (_) { m = 0n; }

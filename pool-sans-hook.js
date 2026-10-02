@@ -7,7 +7,7 @@
  *   · Exception unique : le format OpenLaunch (frais 3 %, espacement 200) — pools partenaires, hors de notre perimetre.
  *   Fait mesure (fork 52074517) : TBLOCK n a AUCUNE pool ETH avec hook ; sa seule pool ETH (frais 0, espacement 200)
  *   est sans hook — elle n est donc plus jamais choisie, et ce qui en dependait est refuse avant le wallet. */
-import { TBLOCK, TBGAS, deviseFraisHook } from './tokenomics.js';
+import { TBLOCK, TBGAS, HOOK_PREVU, deviseFraisHook } from './tokenomics.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
 
 const bas = (a) => String(a || '').toLowerCase();
@@ -73,6 +73,29 @@ export const REFUS_FRAIS_HOOK_EN_BLOCK = true;
 export const MESSAGE_PAS_ICI = 'Not tradable here yet';
 /** Vrai = le hook de cette pool verserait son frais dans le block `jeton` pour ce sens. */
 export function fraisHookEnBlock(cle, jeton, sens, zeroForOne) {
-  const d = deviseFraisHook(cle, sens, zeroForOne);
+  const d = deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne);
   return !!d && bas(d) === bas(jeton);
+}
+/* ══ 2026-10-02 (porte de livraison, revue Claude) — LES HOOKS QUI PRELEVENT EN BLOCK SANS ETRE DANS LA LISTE DES PAYEURS ══
+ * ⛔ HOOK_PREVU (V1) a l ACHAT verse a6cf en BLOCK (fork 52072599 callTracer, tokenomics.js : « V1 achat : le hook prend du
+ *   BLOCK (non compte) »). Il n est pas dans HOOKS_PAIENT_DEJA_A6CF (le routeur garde son frais) : sans cette table, un achat
+ *   V1 payait deux frais, dont un en block, et `fraisHookEnBlock` ne le voyait pas. Devise prelevee : la SORTIE (le block). */
+export const HOOKS_FRAIS_EN_BLOCK_HORS_LISTE = Object.freeze([Object.freeze({ hook: bas(HOOK_PREVU), sens: 'ACHAT' })]);
+export function deviseFraisHookHorsListe(cle, sens, zeroForOne) {
+  if (!cle || !HOOKS_FRAIS_EN_BLOCK_HORS_LISTE.some((e) => e.hook === bas(cle.hooks) && e.sens === sens)) return null;
+  return bas(zeroForOne ? cle.currency1 : cle.currency0);
+}
+
+/* ══ 2026-10-02 (porte de livraison, revue Claude) — UN BLOCK A UNE JONCTION DE SEGMENTS ═════════════════════════════════
+ * ⛔⛔ Les rails qui enchainent Aerodrome et Uniswap (franchissement V4 -> Aerodrome, segment Aerodrome a plusieurs sauts,
+ *     ETH -> pivot -> action -> block, multipool) passaient un block A LA JONCTION : ETH ->(Aerodrome) blockC ->(V4 V8) NVDAc.
+ *     Meme classe que R4, et la regle du fondateur casse : la pool Aerodrome du block n a pas de hook TB. Refus,
+ *     texte exact MESSAGE_PAS_ICI. Un block ici = TBLOCK/TBGAS, ou un B20 (0xb2…) qui n est pas une devise connue — son prix
+ *     lu ne change rien (meme choix que estBlockDeRoute). Rend l indice du premier block parmi `noeuds`, ou -1. */
+export function estBlockAJonction(adr) {
+  const a = bas(adr);
+  return BLOCKS_TB.has(a) || (/^0xb2/.test(a) && !estDeviseConnue(a));
+}
+export function indexBlocAJonction(noeuds) {
+  return (Array.isArray(noeuds) ? noeuds : []).findIndex((t) => estBlockAJonction(t));
 }

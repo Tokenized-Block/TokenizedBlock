@@ -35,6 +35,7 @@ import { calldataExactInputCL, calldataExactInputAvecFrais, calldataApprove,
   ROUTEUR_AERODROME_CL, FRAIS_INTERFACE_BPS_CL, phraseDeRetenue } from './calldata-aerodrome.js';
 /** ⛔ Le wallet de frais, LU dans le depot (`frais-creation.js`) et pas recite — un test compare. */
 export { FEE_WALLET } from './frais-creation.js';
+import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /** WETH sur Base. ⛔ Lue dans le depot (`echange.js` / `prix-eth.js`), pas recitee — un test compare. */
 export const WETH_BASE = '0x4200000000000000000000000000000000000006';
@@ -186,6 +187,11 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   }
   if (bas(action) === bas(devise) || bas(action) === bas(WETH_BASE)) {
     return { etat: 'REFUSE', pourquoi: 'the action cannot be the pivot currency or WETH itself' };
+  }
+  /* ⛔⛔ 2026-10-02 (porte de livraison) : les jonctions de WETH -> devise -> action (-> block) sont la devise pivot, et
+   *   l action quand un troisieme saut suit. Un block a une jonction traverse des pools CL sans hook TB : refus. */
+  if (indexBlocAJonction(troisSauts ? [devise, action] : [devise]) >= 0) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
   const m = entier(montantWei);
   if (m === null || m <= 0n) return { etat: 'REFUSE', pourquoi: 'the ETH amount must be above zero' };

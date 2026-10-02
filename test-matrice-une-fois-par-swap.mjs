@@ -16,7 +16,11 @@
  *   (jeu de jetons [entree, sortie], pas de refus du block intermediaire ni des deux hooks) : elle DOIT y voir R5a/R5c.
  * ⚠️ NE PROUVE PAS : que ces pools existent, ni le montant reel verse par le hook (quoter simule, 1e18
  *   partout). Il garde la DECISION du planificateur sur la forme de la route, combinaison par combinaison.
- *   Non modelise : HOOK_PREVU a l ACHAT preleve du block sur la chaine (hors liste). */
+ * ⛔ 2026-10-02 (porte de livraison, revue Claude) :
+ *   D. HOOK_PREVU a l ACHAT preleve du BLOCK (fork 52072599 callTracer) : l oracle le compte comme un frais de hook EN BLOCK
+ *      (ecrit ici, sans appeler pool-sans-hook.js) — un plan qui le construit est une violation.
+ *   E. AU PLUS UNE JAMBE PAYANTE (hook qui verse a6cf, dans n importe quelle devise) : deux ou plus => le plan DOIT etre
+ *      REFUSE. Temoins negatifs : un mutant par garde (R4, PREVU, une jambe payante) doit rendre la matrice rouge. */
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
@@ -66,6 +70,8 @@ function oraclePaie(s) {
 /* C : la devise de CHAQUE frais de hook verse a6cf (block compris) — null si la jambe ne verse rien */
 function oracleFraisHook(s) {
   const sens = sensJambe(s);
+  /* D : HOOK_PREVU (V1) a l ACHAT verse a6cf dans la devise de SORTIE — le block — hors liste des payeurs */
+  if (bas(s.cle.hooks) === bas(T.HOOK_PREVU) && sens === 'ACHAT') return bas(s.zeroForOne ? s.cle.currency1 : s.cle.currency0);
   if (!T.hookPaieDejaA6cf(s.cle.hooks, sens)) return null;
   return T.deviseFraisHook(s.cle, sens, s.zeroForOne) || null;
 }
@@ -82,7 +88,18 @@ function juger(nom, sauts, p, ko) {
   const total = (frais > 0n ? 1 : 0) + hooks.length;
   if (total !== 1) ko.push(nom + ' : ' + total + ' FRAIS au total (routeur ' + frais + ', hooks ' + hooks.length + ')');
   if (hooks.some((d) => BLOCS.has(bas(d)))) ko.push(nom + ' : FRAIS DE HOOK EN BLOCK');
+  /* E : au plus UNE jambe payante, sinon REFUS (juger n est appele que sur un plan construit) */
+  if (hooks.length >= 2) ko.push(nom + ' : 2+ JAMBES PAYANTES non refuse (' + hooks.length + ')');
 }
+
+/* ── CAS D ORACLE (D) : la jambe V1 a l ACHAT est un frais EN BLOCK, a la VENTE elle paie en ETH (liste mesuree) ── */
+const casOracle = [];
+for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
+  const achat = jambe(ETH, bloc, HOOKS.PREVU), vente = jambe(bloc, ETH, HOOKS.PREVU);
+  casOracle.push(['PREVU ACHAT ETH>' + (bloc === BLOC_BAS ? 'blocBas' : 'blocHaut') + ' = frais de hook en block', sensJambe(achat) === 'ACHAT' && oracleFraisHook(achat) === bloc && !oraclePaie(achat)]);
+  casOracle.push(['PREVU VENTE ' + (bloc === BLOC_BAS ? 'blocBas' : 'blocHaut') + '>ETH = frais de hook en ETH', sensJambe(vente) === 'VENTE' && oracleFraisHook(vente) === ETH && oraclePaie(vente)]);
+}
+for (const [nom, ok] of casOracle) console.log((ok ? '  ok  ' : '  KO  ') + 'oracle : ' + nom);
 
 async function matrice(E) {
 let n = 0, nRefus = 0, nPlans = 0;
@@ -186,30 +203,42 @@ const reel = await matrice(await import(pathToFileURL(path.join(ICI, 'echange.js
 console.log('DEPOT : ' + reel.n + ' combinaisons · ' + reel.nPlans + ' plans · ' + reel.nRefus + ' refus · ' + reel.ko.length + ' violations');
 for (const k of reel.ko.slice(0, 40)) console.log('  KO  ' + k);
 
-/* ── TEMOIN NEGATIF : une copie du depot SANS les gardes R4 du 2026-10-02 doit etre rouge, et sur R5a/R5c ── */
-const MUTANT = [
-  ['echange.js', 'sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))', '[entree, sortie]'],
-  ['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)'],
-  ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+/* ── TEMOINS NEGATIFS : des copies du depot, chacune SANS une garde, doivent etre rouges, et la ou il faut ── */
+const MUTANTS = [
+  { nom: 'gardes R4 retirees', edits: [
+    ['echange.js', 'sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))', '[entree, sortie]'],
+    ['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)'],
+    ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+  ], doitVoir: [/^MILIEU USDC>blocBas>ACT \[sans,V8\]/, /^R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\]/] },
+  { nom: 'PREVU achat hors fraisHookEnBlock', edits: [
+    ['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)'],
+  ], doitVoir: [/^SIMPLE ACHAT blocBas\/ETH \[PREVU\] : FRAIS DE HOOK EN BLOCK/, /^SIMPLE ACHAT blocHaut\/ETH \[PREVU\] : FRAIS DE HOOK EN BLOCK/] },
+  { nom: 'regle une jambe payante retiree', edits: [
+    ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+  ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },
 ];
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-matrice-'));
-let mut = null, erreurMutant = null;
-try {
-  for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) || f === 'package.json') fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
-  for (const [f, de, vers] of MUTANT) {
-    const p = path.join(dir, f); const src = fs.readFileSync(p, 'utf8');
-    if (src.split(de).length - 1 !== 1) throw new Error('motif introuvable dans ' + f + ' : ' + de.slice(0, 50));
-    fs.writeFileSync(p, src.replace(de, vers));
-  }
-  mut = await matrice(await import(pathToFileURL(path.join(dir, 'echange.js')).href));
-} catch (e) { erreurMutant = e.message; } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-const vuR5a = mut && mut.ko.some((k) => /^MILIEU USDC>blocBas>ACT \[sans,V8\]/.test(k));
-const vuR5c = mut && mut.ko.some((k) => /^R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\]/.test(k));
-console.log('MUTANT (gardes R4 retirees) : ' + (mut ? mut.nPlans + ' plans · ' + mut.ko.length + ' violations · R5a vu=' + vuR5a + ' · R5c vu=' + vuR5c : 'NON EXECUTE ' + erreurMutant));
-for (const k of (mut ? mut.ko : []).filter((x) => /^(MILIEU USDC>blocBas>ACT \[sans,V8\]|R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\])/.test(x))) console.log('  (mutant) ' + k);
+const resultatsMutants = [];
+for (const M of MUTANTS) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-matrice-'));
+  let mut = null, erreurMutant = null;
+  try {
+    for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) || f === 'package.json') fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
+    for (const [f, de, vers] of M.edits) {
+      const p = path.join(dir, f); const src = fs.readFileSync(p, 'utf8');
+      if (src.split(de).length - 1 !== 1) throw new Error('motif introuvable dans ' + f + ' : ' + de.slice(0, 50));
+      fs.writeFileSync(p, src.replace(de, vers));
+    }
+    mut = await matrice(await import(pathToFileURL(path.join(dir, 'echange.js')).href));
+  } catch (e) { erreurMutant = e.message; } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const vus = M.doitVoir.map((re) => !!mut && mut.ko.some((k) => re.test(k)));
+  console.log('MUTANT (' + M.nom + ') : ' + (mut ? mut.nPlans + ' plans · ' + mut.ko.length + ' violations · attendus vus ' + vus.filter(Boolean).length + '/' + vus.length : 'NON EXECUTE ' + erreurMutant));
+  for (const re of M.doitVoir) { const k = mut && mut.ko.find((x) => re.test(x)); if (k) console.log('  (mutant) ' + k); }
+  resultatsMutants.push({ nom: M.nom, ok: !!mut && mut.ko.length > 0 && vus.every(Boolean) });
+}
 
 let echec = false;
+if (casOracle.some(([, ok]) => !ok)) { console.log('⛔ un cas d oracle est faux'); echec = true; }
 if (reel.nPlans === 0) { console.log('⛔ aucun plan construit : la matrice ne juge rien'); echec = true; }
 if (reel.ko.length) echec = true;
-if (!mut || !mut.ko.length || !vuR5a || !vuR5c) { console.log('⛔ TEMOIN NEGATIF : la matrice ne voit pas R5a/R5c sans les gardes R4'); echec = true; }
+for (const r of resultatsMutants) if (!r.ok) { console.log('⛔ TEMOIN NEGATIF (' + r.nom + ') : la matrice ne voit pas ce que la garde retiree laisse passer'); echec = true; }
 process.exit(echec ? 1 : 0);

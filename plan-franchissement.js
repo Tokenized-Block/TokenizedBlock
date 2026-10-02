@@ -27,6 +27,7 @@ import { planEchangeMultiSauts } from './echange.js';
 import { planifierFranchissement, calldataGetPool } from './calldata-aerodrome.js';
 import { sortieSpot } from './plan-usdc-block.js';
 import { selecteur } from './keccak.js';
+import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /** Les etats rendus. ⛔ Aucun autre n est produit. */
 export const ETATS = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']);
@@ -113,6 +114,12 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
      *   qui achete autre chose que ce que l ecran annonce — et rien ne reverterait. */
     return { etat: 'REFUSE', etape: 'forme',
       pourquoi: 'the path ends on ' + forme.action + ' but we are buying ' + bas(block) };
+  }
+  /* ⛔⛔ 2026-10-02 (porte de livraison) : LE PIVOT EST LA JONCTION V4 -> AERODROME. Un block ici est l entree d une pool
+   *   Aerodrome sans hook TB (regle du fondateur) ; la jambe 1 le voit comme une SORTIE, sa regle « block intermediaire »
+   *   ne le refuse donc pas. Refus avant toute lecture. */
+  if (indexBlocAJonction([forme.pivot]) >= 0) {
+    return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
 
   /* ── 1. LA POOL AERODROME, RESOLUE ─────────────────────────────────────────────────────── */

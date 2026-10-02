@@ -27,6 +27,7 @@
  *   raison ; un « pas lu » n est jamais un « pas de route ».
  */
 import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
+import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
 export const ADRESSES = Object.freeze({
@@ -328,6 +329,7 @@ export function devisSaut(s, montant) {
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
+  if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   /* « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : une jambe hookee facturante suffit — son frais est au DEVIS V4 et
    * a6cf est deja paye ; le routeur ne retient rien. Route sans hook : le routeur retient son frais une fois. */
   const hooks = ensembleHooksFacturants(hooksFacturants);
@@ -355,6 +357,19 @@ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_B
   }
   return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook, routeMixte: mixte };
 }
+
+/* ⛔⛔ 2026-10-02 (porte de livraison) — LES JONCTIONS : le noeud entre deux sauts dont l un au moins n est PAS une pool V4
+ *   (Uniswap V3, Aerodrome CL : aucune n a de hook TB). ETH ->(CL) blockC ->(V4 V8) NVDAc et son miroir : un block a une
+ *   jonction est REFUSE (regle du fondateur, meme classe que R4). Garde dans coterChemin ET construireRoute. */
+export function noeudsJonction(chemin) {
+  const out = [];
+  for (let i = 1; i < (Array.isArray(chemin) ? chemin.length : 0); i += 1) {
+    const a = chemin[i - 1] && chemin[i - 1].e, b = chemin[i] && chemin[i].e;
+    if (!(a && b && a.venue === 'uniswap-v4' && b.venue === 'uniswap-v4')) out.push(chemin[i].de);
+  }
+  return out;
+}
+export function blocAUneJonction(chemin) { return indexBlocAJonction(noeudsJonction(chemin)) >= 0; }
 
 /* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
 
@@ -458,6 +473,7 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
+  if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
   /* ⛔⛔ « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : des qu UNE jambe est facturee par son hook, le routeur ne preleve
    *   RIEN (ni PAY_PORTION ni part exacte) ; une part demandee en plus est REFUSEE (double frais). Route sans hook =>
