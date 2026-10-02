@@ -4,8 +4,9 @@
 //    met un 0 la ou l UR lit l offset de hookData : il lit alors la LONGUEUR a l offset 0, soit currency0 = ETH = 0
 //    -> hookData VIDE, en silence. Zero 1 l a mesure (0,0001 ETH : du 0 sans le correctif, +199 000 000 000 wei
 //    dus a a6cf avec, tokens de l acheteur inchanges).
-// ⛔ Le drapeau REFERENT_O1_ACTIF reste OFF dans le depot : on teste une COPIE temporaire des modules ou seul ce
-//    drapeau est mis a true. Temoin negatif : la meme copie SANS la ligne `formeTete` rend un hookData vide.
+// ⛔ 2026-10-02 (staging o1) : REFERENT_O1_ACTIF est ON dans le depot. Le cas ON est le depot lui-meme ; le cas OFF
+//    est une COPIE temporaire ou seul ce drapeau repasse a false. Temoin negatif : une copie SANS la ligne `formeTete`
+//    rend un hookData vide.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -78,7 +79,7 @@ function copie(remplacements) {
   }
   return dir;
 }
-const FLAG_ON = ['referent-o1.js', /export const REFERENT_O1_ACTIF = false;\r?\n/, 'export const REFERENT_O1_ACTIF = true;\n'];
+const FLAG_OFF = ['referent-o1.js', /export const REFERENT_O1_ACTIF = true;\r?\n/, 'export const REFERENT_O1_ACTIF = false;\n'];
 const SANS_CORRECTIF = ['echange.js', /\r?\n\s*const formeTete = hookData \? SANS_MINHOP : forme;\r?\n/, '\n'];
 const SANS_CORRECTIF_2 = ['echange.js', /forme: formeTete, actions: actionsEncodees, hookData/, 'forme, actions: actionsEncodees, hookData'];
 
@@ -87,15 +88,13 @@ const marcheLu = { etat: 'LUE', cle, paire: null };
 const args = { rpc: makeRpc(), chaine: 8453, jeton: JETON, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 14n, marcheLu, maintenant: 1_790_000_000_000 };
 const ATTENDU = FEE_WALLET.slice(2).toLowerCase().padStart(64, '0') + COMMENTAIRE_O1;
 
-ok(REFERENT_O1_ACTIF === false, 'drapeau REFERENT_O1_ACTIF OFF dans le depot');
+ok(REFERENT_O1_ACTIF === true, 'drapeau REFERENT_O1_ACTIF ON dans le depot (staging o1)');
 ok(cle.hooks.toLowerCase() === O1_LAUNCH_HOOK_STANDARD, 'pool sur le LaunchHook Standard o1');
 
 const dirs = [];
 try {
-  // ── 1. correctif + drapeau ON : le hook o1 recoit referrer = a6cf ──
-  const dOn = copie([FLAG_ON]); dirs.push(dOn);
-  const { planEchange: planOn } = await import(pathToFileURL(join(dOn, 'echange.js')).href);
-  const pOn = await planOn(args);
+  // ── 1. correctif + drapeau ON (le depot) : le hook o1 recoit referrer = a6cf ──
+  const pOn = await planEchange(args);
   eq(pOn.etat, 'PRET', 'planEchange (drapeau ON) -> PRET');
   const hdOn = hookDataLuParUr(pOn.tx.data);
   eq(hdOn.length, 128, 'hookData lu par l UR : 64 octets, NON vide');
@@ -105,18 +104,20 @@ try {
   eq(FRAIS_INTERFACE_BPS, 50n, 'ce frais vaut 50 bps (pas 20/10 : ce bareme est celui du rail multi-sauts)');
 
   // ── 2. TEMOIN NEGATIF : meme copie, ancienne forme (pas de formeTete) -> l UR lit un hookData VIDE ──
-  const dOld = copie([FLAG_ON, SANS_CORRECTIF, SANS_CORRECTIF_2]); dirs.push(dOld);
+  const dOld = copie([SANS_CORRECTIF, SANS_CORRECTIF_2]); dirs.push(dOld);
   const { planEchange: planOld } = await import(pathToFileURL(join(dOld, 'echange.js')).href);
   const pOld = await planOld(args);
   eq(pOld.etat, 'PRET', 'ancienne forme : PRET aussi (le defaut etait silencieux)');
   ok(pOld.tx.data.includes(ATTENDU), 'ancienne forme : les octets du referrer sont BIEN dans la calldata…');
   eq(hookDataLuParUr(pOld.tx.data), '', '…mais l UR de Base les lit VIDES (AVEC_MINHOP) : le referrer est perdu');
 
-  // ── 3. drapeau OFF (depot) : octets INCHANGES par rapport a l ancien code ──
-  const dOffOld = copie([SANS_CORRECTIF, SANS_CORRECTIF_2]); dirs.push(dOffOld);
+  // ── 3. drapeau OFF (copie) : octets INCHANGES par rapport a l ancien code ──
+  const dOff = copie([FLAG_OFF]); dirs.push(dOff);
+  const { planEchange: planOff } = await import(pathToFileURL(join(dOff, 'echange.js')).href);
+  const dOffOld = copie([FLAG_OFF, SANS_CORRECTIF, SANS_CORRECTIF_2]); dirs.push(dOffOld);
   const { planEchange: planOffOld } = await import(pathToFileURL(join(dOffOld, 'echange.js')).href);
-  const pOff = await planEchange(args), pOffOld = await planOffOld(args);
-  eq(pOff.etat, 'PRET', 'depot (drapeau OFF) -> PRET');
+  const pOff = await planOff(args), pOffOld = await planOffOld(args);
+  eq(pOff.etat, 'PRET', 'copie drapeau OFF -> PRET');
   eq(pOff.tx.data, pOffOld.tx.data, 'drapeau OFF : calldata identique octet pour octet a l ancien code');
   eq(hookDataLuParUr(pOff.tx.data), '', 'drapeau OFF : aucun hookData');
   // temoin : le lecteur n est pas aveugle — la meme comparaison detecte la difference ON/OFF

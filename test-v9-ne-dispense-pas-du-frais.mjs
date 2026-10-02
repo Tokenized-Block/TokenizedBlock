@@ -53,36 +53,25 @@ ok('2. …et c est une constante a trois etats, pas un booleen',
  *    plutot que de le cacher : ce que ce banc tient, c est la FORME de la decision. Le comportement
  *    ne sera testable qu une fois le V9 pose — et ce jour-la, `test-rails-frais` devra ajouter les
  *    deux sens a sa table, comme il l a fait pour V8. */
-ok('3. ⭐ la branche du V9 consulte la mesure, pas la seule presence de l adresse',
-  /if \(!!HOOK_V9 && x === String\(HOOK_V9\)\.toLowerCase\(\)\) return V9_PAIE_DEJA_A6CF === true;/
-    .test(src));
-/* ⛔ `=== true` ET NON UN TEST DE VERITE. Avec `V9_PAIE_DEJA_A6CF ?` un `null` resterait faux par
- *   chance, mais n importe quelle valeur non vide — une chaine, un 1 — passerait pour « il paie ».
- *   Une garde correcte PAR ACCIDENT ne tient qu a une valeur particuliere. */
+/* ⛔ 2026-10-02 (rebase o1 sur 87a49cb) : la decision vit maintenant dans LA LISTE `HOOKS_PAIENT_DEJA_A6CF`
+ *   (ee8de19), et `hookPaieDejaA6cf` ne fait que la lire. Le banc juge donc l entree V9 DE LA LISTE. */
+const mListe = /export const HOOKS_PAIENT_DEJA_A6CF = Object\.freeze\(\[([\s\S]*?)\n\]\.map/.exec(src.replace(/\r/g, ''));
+ok('6a. TEMOIN — le corps de la liste `HOOKS_PAIENT_DEJA_A6CF` est isole, pas le fichier entier',
+  !!mListe && mListe[1].length > 200 && mListe[1].length < 1500, mListe ? mListe[1].length + ' octets' : 'introuvable');
+const liste = mListe ? mListe[1] : '';
+ok('3. ⭐ l entree V9 de la liste consulte la mesure, pas la seule presence de l adresse',
+  /\.\.\.\(HOOK_V9 && V9_PAIE_DEJA_A6CF === true \? \[\{ hook: HOOK_V9,/.test(liste), liste.replace(/\s+/g, ' ').slice(0, 200));
+/* ⛔ `=== true` ET NON UN TEST DE VERITE (voir plus haut) ; et jamais « HOOK_V9 ? » seul. */
 ok('4. ⛔ et la comparaison est stricte : seule la mesure `true` dispense du frais',
-  /return V9_PAIE_DEJA_A6CF === true;/.test(src)
-  && !/return !!V9_PAIE_DEJA_A6CF/.test(src) && !/V9_PAIE_DEJA_A6CF \?/.test(src));
-/* ⛔ ET LE V8 N EST PLUS DANS LA MEME CONDITION QUE LE V9 : les melanger est ce qui avait fait
- *   heriter au V9 la mesure du V8. Deux questions differentes, deux lignes. */
-ok('5. ⭐ le V8 decide seul, sur SA mesure',
-  /if \(x === HOOK_V8\.toLowerCase\(\)\) return true;/.test(src));
-/* ⛔⛔⛔ CETTE ASSERTION VISAIT TOUT LE FICHIER ET ACCUSAIT UN VOISIN CORRECT. Elle a rougi sur
- *      `estNotreHook`, qui combine legitimement V8 et V9 dans une seule condition — parce que cette
- *      fonction-la demande « est-ce un de NOS hooks », une question a laquelle le V9 repond oui
- *      independamment de ce qu il verse. Deux fonctions, deux questions ; seule la seconde devait
- *      etre separee.
- *   ⛔ MEME CAUSE RACINE QUE LA FENETRE FIXE, EN MIROIR : la-bas je regardais trop PEU et
- *     l assertion cessait silencieusement de couvrir ; ici trop LARGE et elle accuse a cote. Dans
- *     les deux cas l assertion ne nommait pas la PORTEE ou sa pretention est vraie. Sixieme
- *     occurrence de ce reflexe dans la session.
- *   ⇒ On borne par la grammaire de la fonction, et on PROUVE l extraction avant de juger. */
-const mCorps = /export function hookPaieDejaA6cf\(h, sens\) \{([\s\S]*?)\n\}/.exec(src);
-ok('6a. TEMOIN — le corps de `hookPaieDejaA6cf` est isole, pas le fichier entier',
-  !!mCorps && mCorps[1].length > 200, mCorps ? mCorps[1].length + ' octets' : 'introuvable');
-const corps = mCorps ? mCorps[1] : '';
-ok('6. …et dans CE corps, le V8 n est plus melange au V9 dans une condition commune',
-  !/HOOK_V8\.toLowerCase\(\) \|\| \(!!HOOK_V9/.test(corps),
-  corps.replace(/\s+/g, ' ').trim().slice(0, 150));
+  /V9_PAIE_DEJA_A6CF === true/.test(liste) && !/!!V9_PAIE_DEJA_A6CF/.test(src) && !/V9_PAIE_DEJA_A6CF \?/.test(src)
+  && !/\.\.\.\(HOOK_V9 \?/.test(src));
+ok('5. ⭐ le V8 decide seul, sur SA mesure (sa propre entree, deux sens)',
+  /\{ hook: HOOK_V8, sens: DEUX_SENS, preuve: 'fork 52072599 callTracer' \}/.test(liste));
+const ligneV8 = liste.split('\n').find((l) => /hook: HOOK_V8\b/.test(l)) || '';
+ok('6. …et le V8 n est jamais melange au V9 dans une meme entree', !!ligneV8 && !/HOOK_V9/.test(ligneV8), ligneV8.trim());
+const mCorps = /export function hookPaieDejaA6cf\(h, sens, liste = HOOKS_PAIENT_DEJA_A6CF\) \{([\s\S]*?)\n\}/.exec(src.replace(/\r/g, ''));
+ok('6d. ⛔ `hookPaieDejaA6cf` ne decide rien en dur : elle LIT la liste (aucune adresse de hook dans son corps)',
+  !!mCorps && /liste\.some\(/.test(mCorps[1]) && !/HOOK_V[0-9]|HOOK_PREVU/.test(mCorps[1]), mCorps ? mCorps[1].replace(/\s+/g, ' ').trim() : 'introuvable');
 /* ⛔ ET LE VOISIN RESTE INTACT : `estNotreHook` DOIT continuer a reconnaitre le V9 comme un de nos
  *   hooks. Si ma correction l avait abime, le V9 pose cesserait d etre reconnu partout ailleurs. */
 /* ⛔⛔⛔ CETTE ASSERTION SEMBLAIT BORNEE ET NE L ETAIT PAS — une mutation survivante l a dit.

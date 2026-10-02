@@ -10,10 +10,11 @@
 //    Controle negatif : referrer = createur -> ignore par le hook (createur +5e13, plateforme +5e13).
 // ⛔ SEULEMENT le LaunchHook Standard ACTUEL (enveloppe lue a la source : referrer = 32 premiers octets,
 //    commentaire = 32 suivants). Les hooks o1 historiques et le hook Tax (« ignores that slot financially ») : non.
-// ⛔ DRAPEAU OFF : rien ne change tant que Phil n a pas dit GO.
+// ⛔ DRAPEAU ON (2026-10-02, staging o1 — demande explicite ; NON deploye). Le marche ouvert (V8-open) reste OFF :
+//    la garde refusMarcheOuvertIncoherent (tokenomics.js) refuse si son drapeau passe ON avec une liste V8-open vide.
 import { FEE_WALLET } from './frais-creation.js';
 
-export const REFERENT_O1_ACTIF = false;
+export const REFERENT_O1_ACTIF = true;
 export const O1_LAUNCH_HOOK_STANDARD = '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc';
 export const O1_FEE_ESCROW = '0xb3f11a3fb06a88059b7f7f423ec0dda506356866';
 /** part du referrer, en bps du montant echange (lue on-chain : feeComponents(2) = REFERRER, 20). */

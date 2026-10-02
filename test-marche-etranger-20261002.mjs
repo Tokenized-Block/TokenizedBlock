@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { classerLogs, filtresScan, interfaceClanker, frontO1, scannerLancements, decoderTexte, BANKR_INTEGRATEUR } from './lancements-etrangers.js';
-import { hookDataReferentO1, O1_LAUNCH_HOOK_STANDARD, COMMENTAIRE_O1 } from './referent-o1.js';
+import { hookDataReferentO1, O1_LAUNCH_HOOK_STANDARD, COMMENTAIRE_O1, REFERENT_O1_ACTIF } from './referent-o1.js';
 import { paramsSwapExactInSingle, encodeV4Swap } from './pool.js';
 import { planLaunchOL } from './openlaunch-launch.js';
 import { readdirSync } from 'node:fs';
@@ -68,9 +68,11 @@ eq(decoderTexte('0x'), '', 'illisible -> vide');
     'plafond d affinage : DIT, pas devine');
 }
 
-// ── 2. part referrer o1 : octets exacts, drapeau OFF par defaut ──
+// ── 2. part referrer o1 : octets exacts ; drapeau ON dans le depot (staging o1, 2026-10-02), OFF explicite = rien ──
 const cleO1 = { currency0: '0x0000000000000000000000000000000000000000', currency1: brian.jeton, fee: 0, tickSpacing: 200, hooks: O1_LAUNCH_HOOK_STANDARD };
-eq(hookDataReferentO1({ cle: cleO1 }), '', 'drapeau OFF : aucun hookData');
+eq(REFERENT_O1_ACTIF, true, 'depot : drapeau referent o1 ON');
+eq(hookDataReferentO1({ cle: cleO1 }), hookDataReferentO1({ cle: cleO1, actif: true }), 'defaut = drapeau du depot (ON)');
+eq(hookDataReferentO1({ cle: cleO1, actif: false }), '', 'temoin negatif : drapeau OFF -> aucun hookData');
 const hd = hookDataReferentO1({ cle: cleO1, actif: true });
 eq(hd, FEE_WALLET.slice(2).toLowerCase().padStart(64, '0') + COMMENTAIRE_O1, 'abi.encode(a6cf, bytes32 commentaire)');
 eq(hd.length, 128, '64 octets');
