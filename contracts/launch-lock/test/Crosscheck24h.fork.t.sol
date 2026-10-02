@@ -360,8 +360,9 @@ contract Crosscheck24hTest is LLBase {
         L memory a = _ouvrirB20V9(v9, "XCV9A");
         // same currency ordering on both sides (B20 addresses vary with mining): otherwise tick rounding differs
         L memory b = _ouvrirB20V9(address(off), "XCV9B");
-        string[6] memory alt = ["XCV9C", "XCV9D", "XCV9E", "XCV9F", "XCV9G", "XCV9H"];
-        for (uint256 i; b.devise0 != a.devise0 && i < 6; ++i) b = _ouvrirB20V9(address(off), alt[i]);
+        // ⛔ 2026-10-02 : 6 essais = ~1 echec sur 128 sur un fork NON epingle (adresses pseudo-aleatoires) — vu une fois,
+        //   88/89, sans rapport avec le hook. 24 essais : ~6e-8. Le banc cherche une ORIENTATION, il ne juge rien ici.
+        for (uint256 i; b.devise0 != a.devise0 && i < 24; ++i) b = _ouvrirB20V9(address(off), string.concat("XCV9", vm.toString(i)));
         require(b.devise0 == a.devise0, "no same-orientation block found");
         _fundStock(NVDAc, alice, 20 * UN);
         _approve(alice, address(a.t));
