@@ -1909,7 +1909,7 @@ const SERVIS = [
    *   empeche qu un cent de plus coute moitie moins. */
   'frais-degressif.js',
   /* ⛔ 2026-10-02 : importes par `echange.js` / `openlaunch-launch.js` / l app (part referrer o1, marque TB). */
-  'referent-o1.js', 'marque-tb.js', 'lancements-etrangers.js',
+  'referent-o1.js', 'marque-tb.js', 'lancements-etrangers.js', 'marche-ouvert.js',
   /* ⛔⛔ `devises-dentree.js` REPOND « avec quoi peut-on payer ce block ? ». Il ajoute au graphe des
    *   pools l ARETE DU BLOCK LUI-MEME — celle qui manquait, et sans laquelle `cheminEntre(OUSD,
    *   block)` rendait REFUSE non pas parce qu aucune route n existe, mais parce que personne n avait

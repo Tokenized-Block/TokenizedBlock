@@ -9,7 +9,7 @@ import { estMarqueTbEtendue, verdictMarque, phraseMarque, OFFICIELS_TB } from '.
 import { estMarqueTb } from './openlaunch-launch.js';
 import { choisirMarche, phraseChoix, HOOK_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF } from './marche-ouvert.js';
 import { FEE_WALLET } from './frais-creation.js';
-import { TBLOCK, TBGAS } from './tokenomics.js';
+import { TBLOCK, TBGAS, hookPaieDejaA6cf, HOOK_V8 } from './tokenomics.js';
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -116,5 +116,9 @@ ok(/less/.test(phraseChoix(pire)), 'ecart affiche');
 ok(/0.2 %/.test(phraseChoix(choisirMarche({ devisEtranger: 1n, devisA6cf: 2n, actif: true }), 'BRIAN')), 'frais nomme');
 eq(choisirMarche({ devisEtranger: null, devisA6cf: null, actif: true }).choix, 'AUCUN', 'rien lu');
 eq(choisirMarche({ devisEtranger: 5n, devisA6cf: null, actif: true }).choix, 'ETRANGER', 'TB non lu : pas de pari');
+
+ok(hookPaieDejaA6cf(HOOK_V8, 'ACHAT'), 'temoin : V8 paie deja a6cf');
+ok(!hookPaieDejaA6cf('0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc', 'ACHAT'), 'hook o1 : NE paie PAS a6cf (le referrer n est pas un frais TB a la place du routeur)');
+ok(!hookPaieDejaA6cf('0x0000000000000000000000000000000000000000', 'ACHAT'), 'marche ouvert non deploye : adresse nulle ne passe pas pour lui');
 
 console.log('test-marche-etranger-20261002 : ' + n + ' assertions, OK');
