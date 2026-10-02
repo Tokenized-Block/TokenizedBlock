@@ -2312,7 +2312,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261002-v9-pays-its-own-way" hidden>Build <code>20261002-v9-pays-its-own-way</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261002-birth-opens-wallet" hidden>Build <code>20261002-birth-opens-wallet</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -17032,10 +17032,12 @@ async function creerBlock() {
       refuseSiCreateB20ValeurZero({ to: toSend, value: valueSend, e, contexte: 'creerBlock IB final guard' });
       return;
     }
-    if (ibDirect && (BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
+    /* ⛔ 2026-10-02 (prod KO, build 20261002-one-fee-per-leg) : createPaid porte FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR
+     *   (0,0007), le reste part a inscrire. Cette garde comparait encore a 0,001 entier et refusait TOUTE naissance. */
+    if (ibDirect && (BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR
       || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase())) {
       e.className = 'note wKo';
-      e.textContent = 'Instant Birth refused: the first wallet request must ask for at least 0.001 ETH. Nothing was sent.';
+      e.textContent = 'Instant Birth refused: the first wallet request must ask for the opening fee. Nothing was sent.';
       /* ⛔⛔ LA DERNIERE GARDE AVANT LE WALLET, et elle protege le revenu : elle refuse une requete
        *     qui demanderait moins que les frais. Si ce compteur monte, quelque chose en amont
        *     construit une requete a zero — et c est un defaut chez nous, jamais chez le visiteur. */
@@ -17051,8 +17053,8 @@ async function creerBlock() {
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
       /* tip 20260922-same-sig: CreateRouter Instant Birth fee already to sink — remember as prepaye for this block. */
-      if (ibDirect && BigInt(valueSend || '0x0') >= FRAIS_OUVERTURE_WEI && rc.hash) {
-        prepayeCourant = { hash: rc.hash, wei: String(FRAIS_OUVERTURE_WEI), compte: String(compte).toLowerCase(), t: Date.now(), via: 'CreateRouter' };
+      if (ibDirect && BigInt(valueSend || '0x0') >= FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR && rc.hash) {
+        prepayeCourant = { hash: rc.hash, wei: String(BigInt(valueSend || '0x0')), compte: String(compte).toLowerCase(), t: Date.now(), via: 'CreateRouter' };
       }
       /* le paiement fait avant la creation appartient desormais a CE block : la mise en vie ne le redemandera pas */
       if (prepayeCourant) { noterPrepayeBlock(adresseCreee, prepayeCourant); oublierPrepayeEnAttente(compte); prepayeCourant = null; }
