@@ -1678,8 +1678,17 @@ details[open] > summary::before{transform:rotate(90deg)}
 
     <div class="carte" id="bBotLoopCarte">
       <p class="titre">Bot loop · Option A</p>
-      <p class="sous" id="bBotLoopPhrase">Brain proposes. You (or a capped session) pay. Brain writes the journal.
-        Brain never freestyle-signs markets. Option B auto-pay is not live.</p>
+      <!-- ⛔ CE FALLBACK EST ECRASE AU DEMARRAGE par `phraseOptionA()`, mais il doit rester VRAI :
+           il s affiche pendant le premier instant, et c est ce qu on lit en relisant le fichier.
+           ⛔ Il gardait « Option B auto-pay is not live » — une phrase que la version peinte a
+             ABANDONNEE, et le nom d une option interne que personne hors de l equipe ne peut situer.
+             Un fallback qui survit a la phrase qu il double est la forme la plus discrete du texte
+             qu on oublie : il ne ressemble pas a du contenu, donc on ne le relit jamais.
+           ⇒ Aligne sur la SUBSTANCE de `phraseOptionA()` : ce que le cerveau fait, ce qu il ne fait
+             jamais, et ce qui est verifie. Aucune option interne, aucun tarif. -->
+      <p class="sous" id="bBotLoopPhrase">The Brain suggests, you pay, the Brain writes the note.
+        It never signs a market by itself, and a payment counts only once we have read the
+        transaction on chain.</p>
       <label class="champ">Proposed action
         <select id="bBotAction">
           <option value="watch_feed">Watch feed / data</option>
@@ -2248,14 +2257,28 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="sfNote"></p>
     </div>
 
-    <!-- ⛔ PHIL (2026-09-14) : « un agent qui lit ce que chaque Brain AI dit et fait pour le relayer » — relais-cerveaux.js -->
-    <div class="carte">
-      <p class="titre">Relay — what the brains say, strongest proof first</p>
-            <p class="sous">Ranks brain lines + Live by on-chain proof (paid messages first). Not an AI model — empty stays empty.</p>
-      <ul class="fil" id="sfRelais"></ul>
-      <p class="note" id="sfRelaisNote">Nothing relayed yet.</p>
-    </div>
-
+    <!-- ⛔ LE PANNEAU « Relay » EST RETIRE, SUR DEMANDE DE RAKSHA (2026-10-02) : « retire relais qui
+         sert plus rien ». Il avait ete demande par lui le 2026-09-14 (« un agent qui lit ce que
+         chaque Brain AI dit et fait pour le relayer ») ; il classait les lignes de cerveau par force
+         de preuve on-chain. Son contenu etait entierement DERIVE de `liveEvts` et `parolesFil` —
+         les memes sources que « Blocks talking » juste en dessous, qui reste.
+         ⛔ CE QUI PART AVEC LUI, et il faut le dire : le classement PAR PREUVE (message paye >
+           echange verifie > nouveau) n existe plus nulle part dans l interface. `relais-cerveaux.js`
+           garde la logique et ses bancs ; elle est donc recuperable sans la reecrire, mais plus
+           personne ne la voit. Ce n est pas une suppression de code mort, c est le retrait d une
+           affordance — et c est une decision produit, celle de Raksha.
+         ⛔ LES QUATRE AUTRES ANCRAGES SONT PARTIS AVEC : le peintre `peindreRelais`, ses trois
+           appels, le gestionnaire de clic au niveau module, et l import de `resumeRelais`. Retirer
+           le HTML seul aurait laisse le gestionnaire appeler `addEventListener` sur un selecteur
+           rendant `null`, AU NIVEAU MODULE donc a l evaluation — ce qui tue TOUT le module inline,
+           pas seulement ce panneau. C est le motif « garde sur element absent » dans sa version la
+           plus chere, et il s applique a la suppression autant qu a l ajout.
+         ⚠️ CE COMMENTAIRE NE CITE PLUS LE SELECTEUR DANS SA FORME EXACTE, parce que
+           `test-ids-fantomes.mjs` NE DEPOUILLE PAS LES COMMENTAIRES : l ecrire en prose suffisait a
+           le faire crier « id lu par le JS, absent de tout balisage ». Angle mort reel de cette
+           garde — elle lit la documentation comme du code, donc elle accuse les traces qu on laisse
+           exprès. Signale au Grok Bot plutot que corrige ici : je ne touche pas a une garde dont je
+           n ai pas besoin pour livrer. -->
     <div class="carte">
       <p class="titre">Blocks talking</p>
       <p class="sous">What each block’s brain notices, live — newest first. “Say it on chain” publishes the line from your wallet.</p>
@@ -2289,7 +2312,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261002-gaz-unique-fenetre-fermee" hidden>Build <code>20261002-gaz-unique-fenetre-fermee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261002-reserve-derivee-relay-retire" hidden>Build <code>20261002-reserve-derivee-relay-retire</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2751,10 +2774,31 @@ details[open] > summary::before{transform:rotate(90deg)}
                 au-dessus, en gardait une copie. Corriger une source d un texte duplique laisse
                 l autre gagner a l ecran ; c est exactement le piege deja documente dans bridge.js.
              ⇒ Le tarif vient desormais de `BRIDGE_FEE_LABEL` (emplacement peint au demarrage), et
-               la description des jambes vient de `phraseBridgeLegs()`, source unique. -->
-        <b>Legs:</b> Fund (fiat → <b>your</b> wallet) · ETH/USDC <b data-frais-bridge>—</b> swap fee
-        (<b>not live</b>) · Block/Token hub quote (net swap <b>not live yet</b>) ·
-        tokenized equity <b>later</b> (not a broker). Fee amount only — no leveraged legs.</p>
+               la description des jambes vient de `phraseBridgeLegs()`, source unique.
+
+             ⛔⛔⛔ ET LA LISTE DES JAMBES A ETE RETIREE D ICI LE 2026-10-02, parce que ce paragraphe
+                  N A PAS D `id` : rien ne peut le repeindre. Il recitait « (not live) · (net swap
+                  not live yet) » en HTML STATIQUE, juste au-dessus de `#brLegsNote` qui dit la meme
+                  chose DERIVEE de `HUB_SWAP_LIVE`. L utilisateur lisait donc la reserve deux fois,
+                  et le jour ou le flag passe a `true`, la copie derivee s allume pendant que
+                  celle-ci continue d annoncer que rien ne marche. Personne ne se souvient d un
+                  texte statique : c est la definition du defaut que Raksha a nomme.
+                ⛔ LE COMMENTAIRE JUSTE AU-DESSUS AVERTISSAIT DEJA : « corriger une source d un
+                  texte duplique laisse l autre gagner a l ecran ». Il decrivait ce paragraphe sans
+                  le voir — la duplication etait DANS la ligne que le commentaire defendait.
+                ⇒ UNE SEULE SOURCE DESORMAIS, et elle est derivee : `phraseBridgeLegs()` sur
+                  `#brLegsNote`. Supprimer une phrase fausse et laisser sa jumelle serait la moitie
+                  du travail ; c est la raison pour laquelle on retire la copie, pas la reserve. -->
+        Fund lands in <b>your</b> wallet, and a block sells through its own market with the fee
+        taken inside the same transaction.
+        <!-- ⛔ « not a broker » ET « no leveraged legs » RESTENT SUR UNE SEULE LIGNE CHACUN. Ma
+             premiere redaction coupait « we are not a / broker » sur deux lignes, et
+             `test-bridge-x402-brain-0923.mjs` est devenu rouge : son motif `/not a broker/i` ne
+             traverse pas le retour a la ligne et l indentation. Le test avait raison et moi tort —
+             j ai rewrappe la phrase, je n ai PAS elargi le motif. Elargir un motif pour accepter sa
+             propre mise en page, c est affaiblir une garde pour une raison qui n a rien a voir avec
+             ce qu elle protege. -->
+        Fee amount only — no leveraged legs, and we are not a broker.</p>
       <!-- ⛔ « Phil-blocked », « until BridgeRouter », « hub quote (Phil) » RETIRES DE L ECRAN :
            un prenom et le nom d un contrat interne. Le lecteur n a aucun moyen de savoir qui est
            Phil ni ce qu est un BridgeRouter — ca ne l informe pas, ca lui fait croire qu il lui
@@ -2804,13 +2848,29 @@ details[open] > summary::before{transform:rotate(90deg)}
            d un block par son propre marche est cablee ici ». L ecran, lui, vendait autre chose.
            ⛔ Et il portait le tarif d avant (0,01 % au lieu de 0,5 %), sur le dernier ecran lu
              avant une signature. -->
-      <p class="note">Selling a block through its own market is live: the fee is taken inside the
-        same transaction, never as a separate charge (fail-closed if it rounds to 0).
-        <!-- ⛔ « until Phil BridgeRouter (1 bps) » RETIRE : un prenom et un nom de contrat interne,
-             plus un prix (1 bps) pour une route qui n existe pas encore. Annoncer le tarif d un
-             service non livre est une promesse, pas une information. La reserve reste ENTIERE. -->
-        Atomic token↔token net via hub is <b>not live</b> — quote only, not a live atomic promise.
-        Equity leg = later. Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never replace this fee.</p>
+      <!-- ⛔ « until Phil BridgeRouter (1 bps) » RETIRE : un prenom et un nom de contrat interne,
+           plus un prix (1 bps) pour une route qui n existe pas encore. Annoncer le tarif d un
+           service non livre est une promesse, pas une information. La reserve reste ENTIERE.
+
+           ⛔⛔⛔ CE PARAGRAPHE N AVAIT PAS D `id` ET IL RECITAIT UNE ABSENCE EN DUR : « Atomic
+                token↔token net via hub is not live ». Rien ne pouvait le repeindre. Le hub est en
+                construction ; le jour ou `HUB_SWAP_LIVE` passe a `true`, tout le reste de l ecran
+                s allume (le devis, le frais, le net, la phrase des jambes, la phrase du Create) et
+                CELUI-CI aurait continue d annoncer que rien ne marche, sur le dernier ecran lu
+                avant une signature.
+              ⇒ Il porte desormais `id="brSwapReserve"` et son texte est DERIVE de `HUB_SWAP_LIVE`,
+                comme les cinq autres emplacements. Plus aucune phrase de l onglet n est a modifier
+                a la main le jour de la bascule : c est le seul remede contre « on oublie le front ».
+              ⛔ LA RESERVE N EST PAS SUPPRIMEE, ELLE EST DEPLACEE D UN CRAN. Le panneau From/To
+                produit un VRAI devis et le bouton reste cliquable : retirer la reserve sans retirer
+                l offre afficherait un prix a cote d une capacite absente — le defaut que ce depot a
+                paye le plus souvent. Elle est donc dite UNE fois, a l endroit du devis, derivee.
+              ⛔ Et le contenu statique ci-dessous doit rester VRAI : il s affiche pendant le premier
+                instant, et c est ce qu on lit en relisant le fichier. -->
+      <p class="note" id="brSwapReserve">Selling a block through its own market is live: the fee is
+        taken inside the same transaction, never as a separate charge (fail-closed if it rounds
+        to 0). Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never
+        replace this fee.</p>
       <label class="champ">From
         <select id="brFrom"></select>
       </label>
@@ -3169,7 +3229,11 @@ import { prixEthUsd, weiPourDollars, CLES_PRIX as CLES_PRIX_UI } from './prix-et
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
 import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
-import { resumeRelais } from './relais-cerveaux.js';
+/* ⛔ `import { resumeRelais } from './relais-cerveaux.js'` RETIRE avec le panneau Relay le
+ *   2026-10-02. Le module et ses bancs restent dans le depot : la logique de classement par preuve
+ *   est conservee et rejouable, elle n est simplement plus cablee a un ecran. Laisser l import
+ *   aurait fait telecharger un module que rien n appelle, et surtout aurait laisse croire, a la
+ *   relecture, que le Relay existe encore quelque part. */
 import { dollarsCourts, lienOL } from './openlaunch.js';
 import { creerMoteur3D } from './map3d.js';
 import { usdCourt } from './trending.js';
@@ -10274,7 +10338,6 @@ function peindreLive() {
   filHookedTbgasHandlers();
   peindreFeeRecu();
   verifierBasLive();
-  peindreRelais();
 }
 let liveAuto = 0;
 /* ⛔ AUDIT 2026-09-20 : combien de lignes du fil Live sont RENDUES. C etait un 40 EN DUR, donc
@@ -10409,7 +10472,7 @@ function parlerCerveaux() {
    *    memoire d un telephone. Au-dela de 400, les plus vieilles sortent, et elles n ont jamais ete
    *    ailleurs que dans ce navigateur de toute facon. */
   parolesFil = parolesFil.slice(0, PAROLES_GARDEES);
-  if ($('#v-social').classList.contains('on')) { peindreParoles(); peindreRelais(); }
+  if ($('#v-social').classList.contains('on')) { peindreParoles(); }
 }
 function peindreParoles() {
   /* Paint: collapse any residual mood bursts to one row per token (All/Speaks quiet). */
@@ -10485,57 +10548,30 @@ $('#sfParoles').addEventListener('click', async (ev) => {
     : 'Not sent (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
 });
 
-/* ══ L AGENT RELAIS (relais-cerveaux.js) ══════════════════════════════════════════════════════════════════
- * ⛔ Il relit les paroles des cerveaux et le fil Live, classe par preuve, et ne propose que des gestes a signer. */
-const EMOJI_PREUVE = { MESSAGE_PAYE: '✉️', ECHANGE_VERIFIE: '🟢', NOUVEAU: '✨', ECHANGE: '↔', HUMEUR: '💭' };
-const LIBELLE_OUTIL = { OUVRIR_PROFIL: 'Open', PROPOSER_GM: 'GM', PROPOSER_MESSAGE_PAYE: 'Reply (paid)', PROPOSER_ENREGISTREMENT: 'Record brain' };
-function peindreRelais() {
-  /* tip 1915: do not feed Relay every mood burst — one mood parole per token (latest). */
-  const parolesPourRelais = [];
-  const moodDeja = new Set();
-  for (const p of parolesFil) {
-    if (estParoleMood(p) && p.type === 'DIT') {
-      const k = String(p.de).toLowerCase();
-      if (moodDeja.has(k)) continue;
-      moodDeja.add(k);
-    }
-    parolesPourRelais.push(p);
-  }
-  const entrees = [...liveEvts.slice(0, 400).map((e) => ({ source: 'live', e })), ...parolesPourRelais.map((p) => ({ source: 'parole', p }))];
-  const nous = new Set(entrees.map((x) => String((x.e && (x.e.jeton || x.e.a)) || (x.p && x.p.de) || '').toLowerCase()).filter((a) => a && estANous(a)));
-  const r = resumeRelais(entrees, { nous });
-  const nomDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === adr); return (h && h.sym) || court(adr); };
-  /* ⛔ 2026-09-19 : le Feed dit « born on another launchpad », le Relay disait « Born on chain » pour les MEMES blocks.
-   *    Meme lecture (hook de la pool decouverte) aux deux endroits. */
-  const ailleurs = (adr) => { const p = poolDecouvertPour(adr); return !!(p && !p.isTbFeeHook); };
-  $('#sfRelais').innerHTML = r.lignes.map((l) => '<li class="filL"><div class="filArt">' + dessin(l.adr, l.sym || nomDe(l.adr)) + '</div>'
-    + '<div style="min-width:0;flex:1"><p class="filT">' + (l.sens === 'KILL' ? '🔴' : EMOJI_PREUVE[l.preuve] || '·') + ' ' + '<b>'
-    + enTexte(String(l.sym || nomDe(l.adr)).slice(0, 14)) + '</b> · ' + enTexte(l.texte) + (ailleurs(l.adr) ? ' · on another launchpad' : '') + '</p>'
-    + '<p class="filS">' + enTexte(l.parce_que) + '</p><div class="stadeLigne" style="margin-top:4px">'
-    + r.outils.filter((o) => o.adr === l.adr).map((o) => '<button type="button" class="puce" data-outil="' + o.quoi + '" data-adr="' + enTexte(o.adr)
-      + '" title="' + enTexte(o.pourquoi) + '">' + enTexte(LIBELLE_OUTIL[o.quoi] || o.quoi) + '</button>').join('')
-    + '</div></div></li>').join('');
-  $('#sfRelaisNote').textContent = r.total
-    ? r.lignes.length + ' relayed of ' + r.total + ' · ' + r.parPreuve.MESSAGE_PAYE + ' paid message(s), ' + r.parPreuve.ECHANGE_VERIFIE
-      + ' verified trade(s), ' + r.parPreuve.NOUVEAU + ' new, ' + (r.parPreuve.ECHANGE || 0) + ' trade(s), ' + r.parPreuve.HUMEUR + ' mood(s)' + (r.coupees ? ' · ' + r.coupees + ' not shown' : '') + '.'
-    : 'Nothing relayed yet — it waits for a paid message, a verified trade or a brain seeing something new.';
-}
-$('#sfRelais').addEventListener('click', (ev) => {
-  const b = ev.target.closest('button[data-outil]');
-  if (!b) return;
-  const adr = b.getAttribute('data-adr');
-  const outil = b.getAttribute('data-outil');
-  /* ⛔ chaque outil OUVRE un ecran ; aucun n envoie ni ne signe */
-  if (outil === 'OUVRIR_PROFIL' || outil === 'PROPOSER_MESSAGE_PAYE') {
-    void ouvrirProfil(adr, null);
-    if (outil === 'PROPOSER_MESSAGE_PAYE') setTimeout(() => $('#pMessages').scrollIntoView({ block: 'start', behavior: 'smooth' }), 600);
-  } else if (outil === 'PROPOSER_GM') {
-    ouvrirEnvoiPour(adr, (t) => { $('#sfRelaisNote').textContent = t; }, 'gm');
-  } else if (outil === 'PROPOSER_ENREGISTREMENT') {
-    allerA('brain');
-    choisirBrain(adr);
-  }
-});
+/* ══ L AGENT RELAIS — RETIRE LE 2026-10-02 ════════════════════════════════════════════════════════
+ * ⛔ Raksha : « retire relais qui sert plus rien ». Le panneau classait les paroles de cerveau et le
+ *   fil Live par force de preuve on-chain (message paye > echange verifie > nouveau > echange >
+ *   humeur) et ne proposait que des gestes a SIGNER, jamais un envoi.
+ *
+ * ⛔⛔ CE QUI EST PARTI ENSEMBLE, ET POURQUOI IL FALLAIT LES CINQ :
+ *     · le `<div class="carte">` et ses deux elements `#sfRelais` / `#sfRelaisNote` ;
+ *     · `EMOJI_PREUVE` et `LIBELLE_OUTIL`, qui ne servaient qu ici ;
+ *     · `peindreRelais()` et ses TROIS appels (demarrage, bascule d onglet, fin de getLogs) ;
+ *     · le gestionnaire de clic, qui etait au NIVEAU MODULE ;
+ *     · l import de `resumeRelais`.
+ *   ⛔⛔⛔ LE GESTIONNAIRE EST LA RAISON POUR LAQUELLE ON NE POUVAIT PAS RETIRER LE HTML SEUL.
+ *        `$('#sfRelais').addEventListener(...)` s executait a l evaluation du module : sans son
+ *        element, `$(...)` rend `null` et l acces a `.addEventListener` LEVE. Pas « le panneau est
+ *        vide » — TOUT le module inline s arrete, donc toute l app. C est le motif « garde sur
+ *        element absent » dans sa version la plus chere, et il s applique a la suppression autant
+ *        qu a l ajout.
+ *
+ * ⚠️ CE QU ON PERD, DIT FRANCHEMENT : le classement PAR PREUVE n est plus visible nulle part. Les
+ *   memes evenements restent dans « Blocks talking » et dans Live, mais par ordre d arrivee, sans
+ *   hierarchie de preuve. `relais-cerveaux.js` garde la logique ET ses bancs
+ *   (`test-cerveau-ne-signe-pas.mjs`), donc elle est recuperable sans etre reecrite — elle n est
+ *   simplement plus cablee. Ce n est pas du code mort qu on nettoie, c est une affordance qu on
+ *   retire, et c est une decision produit. */
 
 function demarrerLive() {
   peindreParoles();
@@ -16277,7 +16313,7 @@ setInterval(() => {
   try {
     if ($('#v-social') && $('#v-social').classList.contains('on')) {
       completerFaces([...liveEvts.slice(0, 80).map((e) => e.jeton), ...parolesFil.slice(0, 20).map((p) => p.de)],
-        () => { try { peindreLive(); peindreParoles(); peindreRelais(); } catch (_) {} });
+        () => { try { peindreLive(); peindreParoles(); } catch (_) {} });
     }
     if ($('#v-trade') && $('#v-trade').classList.contains('on') && trDonnees) {
       completerFaces(trDonnees.lignes.slice(0, trAffiches).map((l) => l.adr), () => { try { peindreTrending(); } catch (_) {} });
@@ -19557,6 +19593,28 @@ async function ouvrirRailFiat(evt, lien, actif) {
     if (phrase) phrase.textContent = phraseOptionA();
     const legs = $('#brLegsNote');
     if (legs && typeof phraseBridgeLegs === 'function') legs.textContent = phraseBridgeLegs();
+    /* ⛔⛔⛔ LA RESERVE DU SWAP EST PEINTE ICI, DERIVEE DU FLAG — elle etait en HTML STATIQUE sans
+     *      `id`, donc impossible a repeindre. Le hub est en construction : le jour ou `HUB_SWAP_LIVE`
+     *      passe a `true`, le devis, le frais, le net, la phrase des jambes et celle du Create
+     *      s allument tous SEULS, et cette phrase-la aurait continue d annoncer que rien ne marche —
+     *      sur le dernier ecran lu avant une signature.
+     *   ⛔ ON DIT CE QUI MARCHE D ABORD, dans les deux branches. Une capacite en chantier ne se
+     *     raconte pas a l utilisateur : il n a aucun moyen d en faire quelque chose, et une reserve
+     *     repetee trois fois finit par couvrir le service qui fonctionne.
+     *   ⛔ MAIS LA RESERVE SURVIT UNE FOIS, et a l endroit du devis (voir `majBridgeDevis`), parce
+     *     que le panneau From/To produit un VRAI chiffre. Un prix a cote d une capacite absente est
+     *     le defaut le plus souvent paye dans ce depot ; ce n est pas celui qu on repare ici. */
+    const resv = $('#brSwapReserve');
+    if (resv) {
+      resv.textContent = 'Selling a block through its own market is live: the fee is taken inside '
+        + 'the same transaction, never as a separate charge (fail-closed if it rounds to 0). '
+        + (HUB_SWAP_LIVE
+          ? 'Token↔token through your hub settles in that same transaction, ' + BRIDGE_FEE_LABEL
+            + ' fee. '
+          : '')
+        + 'Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never '
+        + 'replace this fee.';
+    }
     /* ⛔⛔ LE TARIF DU BRIDGE N EXISTE QU A UN SEUL ENDROIT, et c est `BRIDGE_FEE_LABEL`. Mesure du
      *     2026-09-25 : « 0.01% » etait ecrit en dur a DIX-HUIT endroits alors que le prelevement
      *     vaut 50 centiemes de point de base, soit 0,5 %. Un facteur CINQUANTE, sur des ecrans ou
@@ -19582,11 +19640,23 @@ async function ouvrirRailFiat(evt, lien, actif) {
      *   branches : l onglet rend de vrais services, c est la PROMESSE qui etait fausse. */
     const br = document.getElementById('cBridgeRetargetTexte');
     if (br) {
+      /* ⛔⛔⛔ LA BRANCHE « PAS ENCORE » NE RACONTE PLUS LE CHANTIER. Elle disait « not live yet —
+       *      quoted there but cannot be settled ». Trois defauts dans une phrase :
+       *        1. elle vend une absence a quelqu un qui cherchait un service — il n a aucun moyen
+       *           d en faire quelque chose ;
+       *        2. elle etait la TROISIEME formulation de la meme reserve sur le parcours, et une
+       *           reserve repetee finit par couvrir le service qui FONCTIONNE ;
+       *        3. elle date : « on le build » (Raksha, 2026-10-02), donc elle sera fausse avant
+       *           d etre relue, et c est exactement la phrase qu on oublie de changer.
+       *    ⇒ ON NOMME LES DEUX GESTES VIVANTS, et rien d autre. Le jour ou le hub s allume, la
+       *      branche du dessus prend le relais SEULE.
+       *    ⛔ CE N EST PAS UNE SUR-VENTE : les deux gestes cites sont mesures vivants, et aucun prix
+       *      n est annonce pour une route qui n existe pas. La reserve du token↔token reste dite a
+       *      l endroit ou elle sert — sous le devis, la ou un chiffre apparait. */
       br.textContent = HUB_SWAP_LIVE
         ? 'Tokenized↔tokenized after funding? ' + BRIDGE_FEE_LABEL + ' via your Bridge block.'
-        : 'Swapping one tokenized asset directly for another is not live yet — it is quoted there '
-          + 'but cannot be settled. What does work: funding, and selling a block through its own '
-          + 'market.';
+        : 'Fund your wallet, then sell a block through its own market — the fee is taken inside '
+          + 'the same transaction.';
     }
   } catch (_) {}
   let lastProposeId = '';

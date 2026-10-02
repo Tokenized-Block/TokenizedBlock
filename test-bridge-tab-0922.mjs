@@ -149,10 +149,33 @@ assert.ok(
   ecranBridge.includes(BRIDGE_FEE_LABEL) || /data-frais-bridge/.test(ecranBridge),
   'le panneau Bridge n annonce ni le tarif reel (' + BRIDGE_FEE_LABEL + ') ni un emplacement peint '
   + 'depuis la constante : il ne peut donc plus dire ce qui sera preleve');
-/* ⛔ L INTENTION D ORIGINE : le panneau doit DIRE que l echange net via le hub n est pas livre.
- *    Elle est gardee — en mots qui se comprennent sans nous connaitre. */
-assert.match(ecranBridge, /not live( yet)?/i,
-  'le panneau Bridge ne dit plus que l echange net via le hub n est pas livre');
+/* ⛔⛔⛔ L INTENTION D ORIGINE TIENT, SON POINT DE LECTURE A CHANGE — ET CE N EST PAS UN
+ *      ASSOUPLISSEMENT, C EST LE CONTRAIRE.
+ *      Ce qu on protege n a jamais ete « le mot "not live" figure dans le HTML » : c est « on ne
+ *      vend pas un reglement qu on ne peut pas livrer ». Or cette assertion lisait `ecranBridge`,
+ *      c est-a-dire le HTML STATIQUE — exactement l angle mort que bridge.js documente lui-meme :
+ *      « une garde qui ne lit que le HTML statique ne peut pas voir ca ». Un texte statique ne
+ *      bascule JAMAIS le jour ou le hub s allume, et c est le defaut que Raksha a nomme le
+ *      2026-10-02 : « ecris pas que ca marche pas car on le build puis tu oublie le frontend ».
+ *   ⇒ La reserve vit desormais a UN seul endroit, DERIVE de `HUB_SWAP_LIVE`, et a l endroit ou elle
+ *     informe reellement : sous le devis, la ou un CHIFFRE apparait. On l exige donc la.
+ *   ⛔ POURQUOI C EST PLUS FORT : un litteral statique peut rester vrai par hasard et faux pour
+ *     toujours ; une branche du drapeau ne peut pas mentir sans que le drapeau mente. Et exiger la
+ *     reserve a l endroit du devis attrape le vrai danger — un prix a cote d une capacite absente —
+ *     que le HTML statique ne pouvait pas voir.
+ *   ⚠️ CE QU ON PERD, ET IL FAUT LE DIRE : ce fichier ne garde plus rien sur le texte d accueil du
+ *     panneau. `test-reserve-derivee-pas-ecrite.mjs` le fait (18 assertions, 5 mutants tues), et
+ *     c est lui qui interdit desormais toute annonce d absence hors de portee d une repeinture. */
+const appEntiere = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+assert.match(appEntiere, /You receive: nothing yet — the swap hub is not running/,
+  'la reserve a disparu de SOUS LE DEVIS : un montant net s afficherait sans dire qu il ne sera '
+  + 'pas regle. C est un prix a cote d une capacite absente — le defaut le plus cher de ce depot');
+assert.match(appEntiere, /this quote is an estimate for later, not an offer/,
+  'le devis ne se declare plus estimation : il se lit comme une offre');
+/* ⛔ ET LA RESERVE RESTE BRANCHEE SUR LE DRAPEAU, pas figee. Sans ca, elle survivrait au jour ou le
+ *   hub s allume et mentirait dans l autre sens. */
+assert.match(appEntiere, /netEl\.textContent = HUB_SWAP_LIVE/,
+  'la reserve du devis n est plus derivee de HUB_SWAP_LIVE : elle redevient une phrase figee');
 /* ⛔ ET LE CONTROLE INVERSE, QUI MANQUAIT : aucun prenom de l equipe a l ecran. Sans lui, remettre
  *    « Phil-blocked » demain ne ferait rougir personne ici. */
 assert.doesNotMatch(ecranBridge, /\b(?:Phil|Rakhsa|Raksha|Zero\s?1|Clansy|VolKov)\b/i,

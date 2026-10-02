@@ -60,19 +60,47 @@ if (!HUB_SWAP_LIVE) {
    *   erreur inverserait exactement le defaut qu on corrige. */
   const vraie = affectation.split(/:\s*'/)[0];
   t('⛔ et elle est dans la branche VRAIE de la garde', /Tokenized↔tokenized/.test(vraie));
-  /* ⛔ ET LE TEXTE DE REPLI DOIT EXISTER ET DIRE QUE CE N EST PAS VIVANT. Supprimer la phrase
-   *   aurait ete l autre moitie du defaut : le visiteur qui cherche cette fonction merite de
-   *   savoir qu elle n existe pas, au lieu de la chercher. */
-  t('un texte de repli dit que ce n est pas vivant',
-    /is not live yet/.test(sansCommentaires) && /cannot be settled/.test(sansCommentaires));
+  /* ⛔⛔⛔ CETTE ASSERTION A CHANGE DE FORME LE 2026-10-02, SUR DECISION DE RAKSHA, ET IL FAUT DIRE
+   *      EXACTEMENT CE QU ON PERD.
+   *      Elle exigeait que le repli dise « is not live yet » ET « cannot be settled ». Sa raison
+   *      etait bonne : « le visiteur qui cherche cette fonction merite de savoir qu elle n existe
+   *      pas, au lieu de la chercher ». Raksha a tranche l autre sens : « ecris pas que ca marche
+   *      pas car on le build puis tu oublie de modifier sur le frontend ». C est une semantique
+   *      produit — la sienne, pas la mienne.
+   *   ⚠️ CE QUI EST PERDU, NOMME ET NON MINIMISE : sur l ecran de naissance, quelqu un qui cherche
+   *     l echange tokenized↔tokenized ne lit plus qu il ne peut pas se regler. Il l apprend PLUS
+   *     TARD, sous le devis, au moment ou un chiffre apparait. Le deplacement est defendable — c est
+   *     la que l information sert — mais c est un deplacement, pas une equivalence.
+   *   ⛔ CE QUI NE SE NEGOCIE PAS, ET QUI RESTE GARDE ICI : aucun tarif a cote de la capacite
+   *     absente, et la reserve SURVIT a l endroit du devis. Les deux moities sont verifiees
+   *     ci-dessous. Retirer la reserve PARTOUT ferait rougir ce fichier, et c est voulu : un prix
+   *     affiche sans sa reserve est le defaut le plus cher de ce depot. */
+  t('⛔ la reserve survit a l endroit du DEVIS, la ou un chiffre apparait',
+    /You receive: nothing yet — the swap hub is not running/.test(sansCommentaires)
+    && /this quote is an estimate for later, not an offer/.test(sansCommentaires));
+  /* ⛔ ET ELLE Y EST DERIVEE DU DRAPEAU, pas figee : sinon elle mentirait dans l autre sens le jour
+   *   ou le hub s allume — et ce jour-la, personne ne relira cette ligne. */
+  t('⛔ …et elle y est derivee de HUB_SWAP_LIVE, pas ecrite en dur',
+    /netEl\.textContent = HUB_SWAP_LIVE/.test(sansCommentaires)
+    && /settleEl\.textContent = HUB_SWAP_LIVE/.test(sansCommentaires));
   /* ⛔ ET IL POINTE VERS CE QUI MARCHE : un renvoi honnete vaut mieux qu un silence. Supprimer la
    *   phrase aurait ete l autre moitie du defaut — le visiteur qui cherche cette fonction merite de
    *   savoir qu elle n existe pas, au lieu de la chercher. */
   t('et il nomme ce qui fonctionne vraiment', /through its own\s*'?\s*\+?\s*'?\s*market/.test(sansCommentaires));
   /* ⛔⛔ LE REPLI NE CITE AUCUN TARIF. C est tout le point : un chiffre a cote d une capacite
    *   absente est retenu, la reserve ne l est pas. */
-  const repli = (sansCommentaires.match(/is not live yet[\s\S]*?market\.'/) || [''])[0];
-  t('⛔ le texte de repli ne cite AUCUN pourcentage', !/%/.test(repli) && repli.length > 40);
+  /* ⛔⛔ LE REPLI EST DESORMAIS EXTRAIT PAR LA GRAMMAIRE DU TERNAIRE, pas par la phrase qu il
+   *    contenait — sinon changer le texte casse l extraction et l assertion devient vraie sur une
+   *    chaine VIDE. C est le piege que j ai paye deux fois aujourd hui : une extraction ratee rend
+   *    « aucun pourcentage dans rien » parfaitement vrai, et parfaitement inutile. */
+  const mT = /br\.textContent = HUB_SWAP_LIVE([\s\S]*?);/.exec(sansCommentaires);
+  t('la branche de repli est isolee par la grammaire du ternaire', !!mT);
+  const corps = mT ? mT[1] : '';
+  const iDP = corps.indexOf(':', corps.indexOf('?') + 1);
+  t('TEMOIN — les deux branches sont separees', corps.indexOf('?') > -1 && iDP > corps.indexOf('?'));
+  const repli = iDP > -1 ? corps.slice(iDP + 1) : '';
+  t('⛔ le texte de repli ne cite AUCUN pourcentage ni tarif',
+    repli.length > 40 && !/%/.test(repli) && !/BRIDGE_FEE_LABEL/.test(repli));
   /* ⛔⛔⛔ ET LE LIEN VERS L ONGLET SURVIT. Ma premiere correction remplacait tout le paragraphe par
    *   un `<p>` vide : elle supprimait `#cGoBridge`, le SEUL lien vers un onglet qui rend de VRAIS
    *   services. `test-ids-fantomes.mjs` l a crie. J effacais une affordance qui MARCHE en

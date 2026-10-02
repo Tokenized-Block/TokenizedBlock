@@ -157,8 +157,36 @@ assert.doesNotMatch(bridgePanel, /0xa6cf|Fees for Dev|≈\s*\$1|FINRA|C4A/i);
 assert.doesNotMatch(bridgePanel, /\b2x\b/i);
 assert.match(bridgePanel, /not a broker/i);
 assert.match(bridgePanel, /no leveraged legs/i);
-assert.match(bridgePanel, /Phil-blocked|Phil/);
-assert.match(bridgePanel, /later/i);
+/* ⛔⛔⛔ CETTE ASSERTION EXIGEAIT « Phil » A L ECRAN, ET LA LIGNE 30 DE CE MEME FICHIER L INTERDIT.
+ *      Elle ne passait que parce que `bridgePanel` n est PAS depouille de ses commentaires, et que
+ *      les commentaires du panneau racontent justement le retrait de « Phil-blocked ». Donc :
+ *        · elle etait VRAIE par accident, sur de la documentation, jamais sur du texte visible ;
+ *        · le jour ou quelqu un nettoie ces commentaires, elle reclame de REMETTRE le prenom de
+ *          Raksha sur un ecran public — un test qui exige le defaut qu un autre test refuse.
+ *      C est le motif « une garde peut etre correcte PAR ACCIDENT », dans sa forme la plus couteuse :
+ *      correcte aujourd hui, et prescriptrice du defaut demain.
+ *   ⇒ ON DEPOUILLE, ET ON INVERSE. Le panneau visible ne doit contenAUCUN prenom de l equipe. La
+ *     ligne 30 garde la meme chose sur la phrase INJECTEE ; les deux moities sont desormais du meme
+ *     signe, et aucune ne se croit couverte par l autre. */
+const bridgeVisible = bridgePanel.replace(/<!--[\s\S]*?-->/g, ' ');
+assert.ok(bridgeVisible.length > 800 && bridgeVisible.length < bridgePanel.length,
+  'depouillement sans effet ou panneau vide — le temoin de cette garde est casse');
+assert.doesNotMatch(bridgeVisible, /\b(?:Phil|Rakhsa|Raksha|Zero\s?1|Clansy|VolKov)\b/i,
+  'un prenom de l equipe est visible dans le panneau Bridge');
+/* ⛔⛔ « later » GARDE UNE PROPRIETE REELLE : la jambe equity est annoncee comme FUTURE, jamais au
+ *    present. C est la garde anti-sur-vente la plus ancienne de ce panneau — le paragraphe entier
+ *    etait au present de l indicatif pour un produit inexistant, et c est ce qui l a corrige.
+ *  ⛔ MAIS ELLE LISAIT LE HTML STATIQUE, et la recitation des jambes a ete retiree de la le
+ *    2026-10-02 : elle doublait `#brLegsNote` et, n ayant pas d `id`, elle ne pouvait pas basculer.
+ *  ⇒ La divulgation SURVIT, derivee, dans `phraseBridgeLegs()` — « Tokenized equity comes after
+ *    that ». On l exige donc la, ou elle bascule seule avec le drapeau au lieu de rester figee.
+ *  ⚠️ TENSION ASSUMEE ET SIGNALEE A RAKSHA : il a demande le 2026-10-02 de ne plus ecrire qu une
+ *    chose ne marche pas, « car on le build ». Ca vise le SWAP, en chantier. La jambe equity n est
+ *    pas en chantier — aucun venue reel n existe — donc l annoncer comme future reste la seule
+ *    phrase vraie. Je ne la retire pas de mon cote ; c est une decision produit, pas une mienne. */
+assert.match(phraseBridgeLegs(), /later|comes after/i,
+  'la jambe equity n est plus annoncee comme future : le panneau pourrait se lire comme si elle '
+  + 'existait deja, et aucun venue reel n existe');
 
 const brainStart = html.indexOf('id="v-brain"');
 const brainEnd = html.indexOf('id="v-bridge"'); // bridge follows? actually wallet etc — use bot card

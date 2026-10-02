@@ -98,9 +98,37 @@ v('les emplacements du tarif existent et valent « — » au repos', () => {
    *   ⛔ ET `test-pas-de-tarif-sans-service.mjs` TIENT L AUTRE MOITIE : il exige qu aucune promesse
    *     tokenized↔tokenized tarifee ne vive hors de la garde `HUB_SWAP_LIVE`. Baisser ce seuil sans
    *     cette garde-la aurait simplement ouvert la porte au defaut. */
+  /* ⛔⛔⛔ LE COMPTE EST REMPLACE PAR LA LISTE NOMMEE, LE 2026-10-02 — SEULE FACON HONNETE DE
+   *      BAISSER CE SEUIL UNE SECONDE FOIS.
+   *      Il est passe de 5 a 4 le 2026-10-01 (un tarif pour une route absente), puis de 4 a 3
+   *      aujourd hui pour la MEME raison : la ligne « Legs » tarifait un « ETH/USDC swap fee »
+   *      marque « (not live) » juste a cote. Un prix colle a une capacite absente est ce qui
+   *      transforme une reserve en appat — on retient le chiffre, pas la reserve.
+   *   ⛔ MAIS UN SEUIL QU ON BAISSE A CHAQUE CORRECTION NE GARDE PLUS RIEN. Deux baisses en deux
+   *     jours, et la troisieme passera sans que personne la discute : c est la mort ordinaire d un
+   *     cliquet. On n exige donc plus un NOMBRE, on exige QUI.
+   *   ⇒ Les trois emplacements survivants doivent etre exactement ceux qui tarifent le geste VIVANT
+   *     — vendre un block par sa propre pool — plus la ligne de frais du devis. En ajouter un
+   *     ailleurs, ou en retirer un de ceux-la, fait ROUGIR. Strictement plus fort qu un `>= 3` :
+   *     un compte se satisfait de n importe quels trois. */
   const emplacements = [...html.matchAll(/<(b|span)\s+data-frais-bridge\s*>([^<]*)</g)];
-  assert.ok(emplacements.length >= 4,
-    'seulement ' + emplacements.length + ' emplacement(s) de tarif : les autres sont-ils revenus en dur ?');
+  const porteurTarif = (i) => {
+    const amont = html.slice(Math.max(0, i - 300), i).replace(/<!--[\s\S]*?-->/g, ' ');
+    const ids = [...amont.matchAll(/\sid="([\w-]+)"/g)];
+    return ids.length ? ids[ids.length - 1][1] : null;
+  };
+  const ATTENDUS = ['brModeSwap', 'brFundHint', 'brQuoteFee'];
+  const vus = emplacements.map((m) => porteurTarif(m.index));
+  /* ⛔ TEMOIN D ABORD : si `porteurTarif` rendait toujours `null`, la liste serait [null,null,null]
+   *   et la comparaison echouerait pour la mauvaise raison. On le dit explicitement. */
+  assert.ok(vus.length > 0 && vus.every((v) => typeof v === 'string' && v.length > 0),
+    'un emplacement de tarif n a pas d element porteur identifiable : le temoin de ce test est '
+    + 'casse, il ne garde plus rien.  vus: ' + JSON.stringify(vus));
+  assert.deepEqual(vus, ATTENDUS,
+    'les emplacements de tarif ne sont plus ceux attendus.\n  attendus : ' + ATTENDUS.join(', ')
+    + '\n  vus      : ' + vus.join(', ')
+    + '\n  ⛔ un emplacement AJOUTE peut tarifer un service non livre ; un emplacement RETIRE peut '
+    + 'avoir emporte le tarif du service qui marche. Les deux sens comptent.');
   for (const m of emplacements) {
     assert.equal(m[2].trim(), '—',
       'un emplacement de tarif contient « ' + m[2].trim() +' » au repos au lieu d un tiret');
