@@ -10,6 +10,7 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {LiquidityAmounts} from "../src/lib/LiquidityAmounts.sol";
 import {V9Devises} from "../src/V9Devises.sol";
+import {Devises7030} from "../src/Devises7030.sol";
 import {TBlockLaunchLockHook as Hook} from "../src/TBlockLaunchLockHook.sol";
 import {TBlockBloc24h} from "../src/TBlockBloc24h.sol";
 import {IERC20L, IInscrireL} from "./LLBase.sol";
@@ -17,6 +18,16 @@ import {EconomieTest} from "./Economie.fork.t.sol";
 
 interface IDec {
     function decimals() external view returns (uint8);
+}
+
+interface IMeta {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+}
+
+/// B20Factory precompile (docs.base.org B20 spec): createB20(variant, salt, params, initCalls), selector 0x62975e6a
+interface IB20FactoryL {
+    function createB20(uint8 variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls) external returns (address);
 }
 
 /// FORK ONLY — fee lot 2 (founder 2026-10-02 14:34). The NEW hook: 0.07 % to the fee sink + 0.03 % to the block's
@@ -34,8 +45,9 @@ contract FeeLot2Test is EconomieTest {
     }
 
     /// the production config: 700 sink / 300 creator (escrowed minimum) / collateral mode 1, B20 blocks, no cradle
-    function _cfgProd() internal pure returns (Hook.Config memory) {
-        return _cfg(P_SINK, P_CREA, 0, 1, true, false);
+    function _cfgProd() internal pure returns (Hook.Config memory c) {
+        c = _cfg(P_SINK, P_CREA, 0, 1, true, false);
+        c.devises = Devises7030.liste(); // 2026-10-02: the V9 19 + the 18 new Coinbase stocks (fixed, no setter)
     }
 
     function _fund(address devise, address who, uint256 amt) internal {
@@ -151,6 +163,78 @@ contract FeeLot2Test is EconomieTest {
         _verifierSplit(l, a, 0, UN, dd, P_CREA, 0);
         assertEq(_sinkBloc(l), 0);
         _invariant(l);
+    }
+
+    // ── 2026-10-02 16:37 (founder): the 18 new Coinbase stocks with a real pool (0ea4661) ──────────────
+    /// (5) the fixed list: the 19 (ETH implicit) still admitted + each of the 18: birth with escrowed minimum, the 4
+    /// swap shapes, sink == floor(q*700/1e6) and creator == floor(q*300/1e6) IN THE STOCK, sink never holds the block.
+    function test_L3_dixHuit_admises_splitAuWei_jamaisEnBloc() public fork {
+        Hook h = _deployHook(_cfgProd());
+        address[] memory v9 = V9Devises.liste();
+        for (uint256 i; i < v9.length; ++i) assertTrue(h.deviseAdmise(v9[i]), "the 19 of the fixed list stay admitted");
+        assertTrue(h.deviseAdmise(address(0)), "ETH admitted");
+        address[18] memory n = Devises7030.nouvelles();
+        for (uint256 i; i < 18; ++i) {
+            string memory s = IMeta(n[i]).symbol();
+            assertTrue(h.deviseAdmise(n[i]), string.concat(s, " admitted by the new hook"));
+            assertTrue(h.estB20(n[i]), "a B20 precompile");
+            assertEq(IDec(n[i]).decimals(), 8, "8 decimals");
+            uint256 u = UN / 100;
+            L memory l = _ouvrirSur(address(h), n[i], _creerB20(string.concat("L3", s)), uint128(u));
+            assertTrue(h.createurActif(l.key.toId()), "creator active (minimum escrowed)");
+            _fund(n[i], alice, 10 * u);
+            uint256[4] memory m = [2 * u, 100 ether, 100 ether, u / 10];
+            for (uint256 cas; cas < 4; ++cas) {
+                Avant memory a = _avant(l);
+                BalanceDelta dd = _swapBrut(l, alice, cas < 2, cas == 0 || cas == 2, m[cas], false);
+                uint256 q = _verifierSplit(l, a, cas, m[cas], dd, P_CREA, 0);
+                assertEq(_sinkBloc(l), 0, string.concat(s, ": the sink NEVER holds the block token"));
+                assertGt(q * P_SINK / 1e6, 0, "non-dust leg");
+                _invariant(l);
+            }
+            console2.log(string.concat("L3 ", s, " quote0? / sink quote after 4 swaps"), l.devise0 ? 1 : 0, _sinkQ(l));
+        }
+    }
+
+    /// (5) negative control: the LIVE V8 refuses the 18 at registration (PaireNonAdmise).
+    function test_L3_controleNegatif_V8_refuseLes18() public fork {
+        address[18] memory n = Devises7030.nouvelles();
+        for (uint256 i; i < 18; ++i) {
+            address b = _creerB20(string.concat("N8x", IMeta(n[i]).symbol()));
+            PoolKey memory k = _cle(n[i], b, HOOK_V8);
+            (uint160 sp,) = _prix(Currency.unwrap(k.currency0) == n[i]);
+            vm.deal(adm, adm.balance + 1 ether);
+            vm.prank(adm);
+            (bool ok, bytes memory r) = HOOK_V8.call{value: FRAIS_VIE}(abi.encodeWithSelector(IInscrireL.inscrire.selector, k, sp));
+            assertFalse(ok, "V8 refuses the new stock");
+            assertEq(bytes4(r), bytes4(0x9e16f763), "PaireNonAdmise");
+        }
+    }
+
+    /// (5) WHY A FIXED LIST: a forged "NFLXc" from the SAME permissionless B20Factory — same variant, name, symbol,
+    /// 8 decimals, contractURI, any admin it likes — is indistinguishable on chain except by its address. The new hook
+    /// refuses it (PaireNonAdmise) and admits the genuine NFLXc. A "genuine Coinbase stock" probe would have accepted it.
+    function test_L3_fauxNFLXc_refuse() public fork {
+        Hook h = _deployHook(_cfgProd());
+        address vrai = Devises7030.NFLXc;
+        vm.prank(alice);
+        address faux = IB20FactoryL(0xB20f000000000000000000000000000000000000).createB20(
+            0, keccak256("faux-nflxc"), abi.encode(Params(1, IMeta(vrai).name(), "NFLXc", adm, 8)), new bytes[](0)
+        );
+        assertTrue(h.estB20(faux), "forgery is a real B20 precompile (code 0xef, prefix 0xb2, variant ASSET)");
+        assertEq(IMeta(faux).symbol(), IMeta(vrai).symbol(), "same symbol");
+        assertEq(IMeta(faux).name(), IMeta(vrai).name(), "same name");
+        assertEq(IDec(faux).decimals(), IDec(vrai).decimals(), "same decimals");
+        assertTrue(h.deviseAdmise(vrai), "genuine NFLXc admitted");
+        assertFalse(h.deviseAdmise(faux), "forged NFLXc not admitted");
+        address b = _creerB20("L3FX");
+        PoolKey memory k = _cle(faux, b, address(h));
+        (uint160 sp,) = _prix(Currency.unwrap(k.currency0) == faux);
+        vm.deal(adm, adm.balance + 1 ether);
+        vm.prank(adm);
+        (bool ok, bytes memory r) = address(h).call{value: FRAIS_VIE}(abi.encodeWithSelector(Hook.inscrireAvecCaution.selector, k, sp, uint128(1)));
+        assertFalse(ok, "registration refused");
+        assertEq(bytes4(r), bytes4(0x9e16f763), "PaireNonAdmise");
     }
 
     /// (4) THE DEPLOY PLAN: exact CREATE2 calldata through 0x4e59 (salt ++ initcode), mined address, gas used.
