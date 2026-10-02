@@ -12,6 +12,7 @@ import {
   nettoyerTexte, nettoyerVoix, voixPublique, lireVoixPublique, resumeSavoir, messageVoix, verifierEcriture,
   recupererSignataire, proprietaireDuBlock, reactionVoix, composerParole, BORNES_VOIX, PAROLE_MAX_OCTETS,
   etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, partageVoix,
+  EVENEMENTS_VOIX, grosEchangeEnEth, libelleGrosEchange,
 } from './voix-block.js';
 import { TOPIC_CREATED, FACTORY } from './index-blocks.js';
 
@@ -216,5 +217,55 @@ ok(bloc.includes("'Someone leaves it a message'") && !bloc.includes('A message a
 ok(bloc.includes("'Sounds like: '") && bloc.includes("'For example: '") && bloc.includes("'Other blocks hear only: “'"), '« Sounds like » / « For example » / « Other blocks hear only »');
 ok(partageVoix({ resume: 'We sell hats.' }, 0) === 'Creator says: “We sell hats.”', 'les nouvelles sont attribuees au createur');
 ok(!/Back to default|\(optional\)|placeholder="optional"/.test(carte + bloc), 'TEMOIN : les anciens textes ont disparu');
+
+console.log('— 9. revue v2 : puces « not on this page », gros echange hors ETH, bio sur 2 lignes, champ vide');
+/* ⛔ LE VRAI majAidesVoix DE LA PAGE (et lireFormulaireVoix, listeVoix), execute sur de faux elements */
+const fMaj = fonction('majAidesVoix'), fLire = fonction('lireFormulaireVoix');
+const fListe = (bloc.match(/const listeVoix = [^\r\n]*/) || [''])[0];
+ok(fMaj.length > 300 && fLire.length > 100 && fListe.length > 30, 'majAidesVoix, lireFormulaireVoix et listeVoix extraites de la page');
+const echapper = (t) => String(t).replace(/[&<>"]/g, (c) => '&#' + c.charCodeAt(0) + ';');
+const aides = ({ amis = '', devise = null, bio = '', connus = [] } = {}) => {
+  const el = {};
+  const $ = (q) => (el[q] = el[q] || { hidden: false, value: /data-voix-style/.test(q) ? 'normal' : '', textContent: '', innerHTML: '' });
+  $('#pvAmis').value = amis; $('#pvBio').value = bio;
+  new Function('$', 'nettoyerVoix', 'amisIntrouvables', 'resumeSavoir', 'resumeReactions', 'reactionDepuisChoix', 'EVENEMENTS_VOIX',
+    'libelleGrosEchange', 'habitants', 'creationsLive', 'deviseProfil', 'enTexte', fListe + ';\n' + fLire + fMaj + 'majAidesVoix();')(
+    $, nettoyerVoix, amisIntrouvables, resumeSavoir, resumeReactions, reactionDepuisChoix, EVENEMENTS_VOIX,
+    libelleGrosEchange, connus, new Map(), devise, echapper);
+  return { puces: el['#pvAmisPuces'].innerHTML, gros: el['[data-voix-libelle="big_trade"]'].textContent, bio: el['#pvBioCompte'].textContent };
+};
+const surPage = [{ adr: B, sym: 'MUC' }, { adr: C, sym: 'TBLOCK' }];
+const pp = aides({ amis: 'MUC, GATEWAY', connus: surPage }).puces;
+ok(pp.includes('>GATEWAY · not on this page</span>'), 'un nom absent de la page : « GATEWAY · not on this page »');
+ok(!/not found/i.test(pp) && !/not found/i.test(bloc), 'la puce n affirme plus jamais « not found »');
+ok(pp.includes('<span class="puce">MUC</span>'), 'TEMOIN : un block present sur la page garde sa puce normale, sans mention');
+ok(!aides({ amis: 'MUC, TBLOCK', connus: surPage }).puces.includes('not on this page'), 'TEMOIN : tous presents, aucune mention');
+ok(!aides({ amis: 'GATEWAY', connus: [] }).puces.includes('not on this page'), 'TEMOIN : page pas encore lue, on ne juge personne');
+eq(aides({ devise: 'TBLOCK' }).gros, 'A big trade (0.1 ETH or more · ETH markets only)', 'marche cote en TBLOCK : « · ETH markets only »');
+eq(aides({ devise: 'USDC' }).gros, 'A big trade (0.1 ETH or more · ETH markets only)', 'marche cote en USDC : « · ETH markets only »');
+eq(aides({ devise: 'ETH' }).gros, 'A big trade (0.1 ETH or more)', 'TEMOIN : marche ETH, libelle simple');
+eq(aides({ devise: null }).gros, 'A big trade (0.1 ETH or more)', 'TEMOIN : marche pas lu, libelle simple (rien d affirme)');
+const voixSrc = lire('voix-block.js');
+const fReaction = (voixSrc.match(/export function reactionVoix\([^)]*\) \{[\s\S]*?\r?\n\}\r?\n/) || [''])[0];
+ok(/grosEchangeEnEth\(ech\.devise\)/.test(fReaction) && !/ech\.devise === 'ETH'/.test(fReaction), 'reactionVoix lit la MEME regle (grosEchangeEnEth) que le libelle');
+ok(bloc.includes('libelleGrosEchange(deviseProfil)') && !bloc.includes("'≈ '"), 'la fiche pose le libelle depuis la devise du marche, plus de « ≈ »');
+/* le libelle et le declenchement ne peuvent pas se contredire : pour chaque devise, « ETH markets only » <=> ne se declenche pas */
+for (const devise of ['ETH', 'TBLOCK', 'USDC', null]) {
+  const g = blocs({ A: nettoyerVoix({ reactions: { big_trade: { ligne: 'Whale spotted!' } } }).voix });
+  g[0].echange = { quantite: '5000', eth: '5', devise };
+  const part = parolesDuTour({ blocks: g, tick: 7 }).paroles[0].texte.includes('Whale');
+  eq(aides({ devise }).gros.includes('ETH markets only'), !part, 'devise ' + devise + ' : le libelle dit ' + (part ? 'qu elle part' : 'qu elle ne part pas') + ', et c est ce qui arrive');
+  eq(grosEchangeEnEth(devise), part, 'devise ' + devise + ' : grosEchangeEnEth = declenchement reel');
+}
+ok(/<textarea id="pvBio" rows="2" maxlength="120"[^>]*>/.test(carte) && !/<input id="pvBio"/.test(carte), 'la bio est un champ de 2 lignes, toujours borne a 120');
+ok(/id="pvBioCompte"[^>]*>0 \/ 120</.test(carte), 'compteur « 0 / 120 » sous la bio');
+eq(aides({ bio: 'grows on every trade' }).bio, '20 / 120', 'le compteur suit la bio en direct');
+eq(aides({ bio: '' }).bio, '0 / 120', 'TEMOIN : bio vide, 0');
+ok(/\['#pvSavoir', '#pvAmis', '#pvBio'\]\) \$\(id\)\.addEventListener\('input', majAidesVoix\)/.test(bloc), 'taper dans la bio met le compteur a jour');
+eq(nettoyerVoix({ bio: 'line one\r\nline two' }).voix.bio, 'line one line two', 'un retour a la ligne dans la bio devient une espace (rien ne change cote serveur)');
+ok(bloc.includes('placeholder="What it says — empty uses its personality"') && !bloc.includes('placeholder="What it says"'), 'champ « own words » vide : « What it says — empty uses its personality »');
+eq(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisChoix('own', '') } }).voix }), tour({ A: nettoyerVoix({ ton: 'happy' }).voix }),
+  'et c est vrai : « own words » laisse vide = la personnalite');
+ok(JSON.stringify(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisChoix('own', 'Yay!') } }).voix })).includes('Yay!'), 'TEMOIN : des mots ecrits partent bien');
 
 console.log('\n' + n + ' assertions, 0 KO');
