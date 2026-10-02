@@ -89,4 +89,51 @@ contract MarqueurVideTest is Test {
         );
         new Hook(_cfg(bytes("x")));
     }
+    /// ⛔⛔⛔ LE PLAFOND DE LA PART CREATEUR — ajoute le 2026-10-02. On ne peut pas construire un hook
+    ///      vivant ici (adresse CREATE2 a miner), donc on prouve l ARITHMETIQUE de la borne, telle
+    ///      qu elle est ecrite dans `_parts` : `reste = caution - enAttente`, et le surplus va au
+    ///      collateral. C est une preuve de FORMULE, pas de comportement — les bancs fork tiennent
+    ///      l autre moitie, et je ne pretends pas le contraire.
+    function _borne(uint256 caution_, uint256 enAttente, uint256 cr)
+        internal pure returns (uint256 crBorne, uint256 versCollateral)
+    {
+        uint256 reste = caution_ > enAttente ? caution_ - enAttente : 0;
+        if (cr > reste) return (reste, cr - reste);
+        return (cr, 0);
+    }
+
+    function test_plafond_deposer_presque_rien_rapporte_presque_rien() public pure {
+        // une caution d UNE unite : la part due ne depasse jamais une unite
+        (uint256 cr, uint256 co) = _borne(1, 0, 1_000_000);
+        assertEq(cr, 1, "une caution de 1 doit plafonner la part a 1");
+        assertEq(co, 999_999, "tout le surplus doit aller au collateral");
+        assertEq(cr + co, 1_000_000, "rien ne doit disparaitre");
+    }
+
+    /// ⛔ TEMOIN POSITIF — une caution large ne bride RIEN. Sans lui, « ca plafonne » serait
+    ///   indiscernable d un plafond qui ecrase tout, et la part createur serait morte.
+    function test_TEMOIN_une_caution_large_ne_bride_rien() public pure {
+        (uint256 cr, uint256 co) = _borne(10_000_000, 0, 1_000_000);
+        assertEq(cr, 1_000_000, "une caution large ne doit rien plafonner");
+        assertEq(co, 0, "rien ne doit partir au collateral");
+    }
+
+    /// ⛔ ET L EN ATTENTE COMPTE : ce qui est deja du consomme le plafond. Sinon le plafond serait
+    ///   reinitialise a chaque swap et ne bornerait rien du tout.
+    function test_len_attente_consomme_le_plafond() public pure {
+        (uint256 cr, uint256 co) = _borne(100, 100, 50);
+        assertEq(cr, 0, "plafond deja atteint : plus rien n est du");
+        assertEq(co, 50, "tout part au collateral");
+        (uint256 cr2,) = _borne(100, 60, 50);
+        assertEq(cr2, 40, "il reste exactement 40 avant le plafond");
+    }
+
+    /// ⛔ AUCUNE PERTE, JAMAIS : la somme est conservee dans tous les cas. Un plafond qui ferait
+    ///   disparaitre la difference serait un vol silencieux.
+    function testFuzz_rien_ne_disparait(uint96 caution_, uint96 enAttente, uint96 cr) public pure {
+        (uint256 a, uint256 b) = _borne(caution_, enAttente, cr);
+        assertEq(a + b, cr, "la somme doit etre conservee");
+        assertLe(a, cr, "la part bornee ne peut pas depasser la part calculee");
+    }
+
 }

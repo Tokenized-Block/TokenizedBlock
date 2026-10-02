@@ -622,6 +622,33 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
                 // gate closed: the creator piece feeds the block's collateral (or is not charged at all)
                 if (MODE_COLLATERAL != 0) co = cr;
                 cr = 0;
+            } else {
+                // ⛔⛔⛔ PLAFOND AJOUTE LE 2026-10-02 : CE QUI EST DU AU CREATEUR NE DEPASSE JAMAIS CE
+                //      QU IL A VERROUILLE. Zero 1 : « quelqu un pourrait toucher la part createur en
+                //      deposant presque rien ». Verifie a la source : `minimumCaution[id] = recu` a
+                //      l inscription, donc `caution >= minimum` est vrai PAR CONSTRUCTION — le seuil
+                //      etait choisi par CELUI QU IL DOIT CONTRAINDRE. La garde existait et ne bornait
+                //      RIEN (`enforced-key-that-bounds-nothing`).
+                //   ⇒ ON NE CHOISIT AUCUN MONTANT, et c est tout l interet : la borne est la CAUTION
+                //     ELLE-MEME, dans la MEME devise. Aucune constante nouvelle, aucun slot de
+                //     stockage en plus. Deposer presque rien fait gagner presque rien.
+                //   ⛔ LE SURPLUS N EST PAS PERDU : il part au collateral du block, par le chemin qui
+                //     existe DEJA quand la porte est fermee. Aucun nouveau flux, aucune adresse
+                //     nouvelle, rien ne disparait.
+                //   ⚠️ CE QUE CE PLAFOND NE FAIT PAS, ET JE LE DIS PLUTOT QUE DE LE COUVRIR : il borne
+                //     l EN ATTENTE, pas le CUMUL. Un createur qui reclame sans cesse rouvre son
+                //     plafond a chaque fois. Ce qui l en dissuade est le gaz de chaque reclamation
+                //     face a un plafond egal a sa caution — un frein economique mesurable, PAS une
+                //     impossibilite. Un vrai plafond cumulatif couterait un slot par pool : c est une
+                //     decision de Raksha, pas la mienne.
+                uint256 enAttente = comptes[id].duCreateur;
+                uint256 plafond = caution[id];
+                uint256 reste = plafond > enAttente ? plafond - enAttente : 0;
+                if (cr > reste) {
+                    uint256 trop = cr - reste;
+                    cr = reste;
+                    if (MODE_COLLATERAL != 0) co = trop;
+                }
             }
         }
         if (MODE_COLLATERAL != 0) co += q * PART_COLLATERAL / DIVISEUR;
