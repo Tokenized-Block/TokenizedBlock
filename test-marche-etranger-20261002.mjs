@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { classerLogs, filtresScan, interfaceClanker, frontO1, scannerLancements, decoderTexte, BANKR_INTEGRATEUR } from './lancements-etrangers.js';
 import { hookDataReferentO1, O1_LAUNCH_HOOK_STANDARD, COMMENTAIRE_O1 } from './referent-o1.js';
 import { paramsSwapExactInSingle, encodeV4Swap } from './pool.js';
-import { estMarqueTbEtendue, verdictMarque, phraseMarque, OFFICIELS_TB } from './marque-tb.js';
+import { estMarqueTbEtendue, estMarqueTbForte, verdictMarque, phraseMarque, OFFICIELS_TB } from './marque-tb.js';
 import { estMarqueTb } from './openlaunch-launch.js';
 import { choisirMarche, phraseChoix, HOOK_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF } from './marche-ouvert.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -104,6 +104,10 @@ eq(verdictMarque({ adresse: '0x1', nom: 'TokenizedBlock', symbole: 'TBLOCK', ori
 eq(verdictMarque({ adresse: '0x1', nom: 'Doge', symbole: 'DOGE', origine: 'AILLEURS' }), 'SANS_OBJET', 'autre nom : rien');
 ok(/^Not official/.test(phraseMarque('NON_OFFICIEL', 'LaunchBlitz')) && /LaunchBlitz/.test(phraseMarque('NON_OFFICIEL', 'LaunchBlitz')), 'phrase');
 eq(phraseMarque('OFFICIEL'), '', 'officiel : silence');
+// cas reel 24 h : « Tadbit » (TB), 0xb20000000000000000000053f0e368ae2a70a04e — refuse dans NOTRE console, jamais accuse
+ok(estMarqueTb('Tadbit', 'TB'), 'console OpenLaunch : TB seul reste refuse (prudence chez nous)');
+eq(verdictMarque({ adresse: '0xb20000000000000000000053f0e368ae2a70a04e', nom: 'Tadbit', symbole: 'TB', origine: 'AILLEURS' }), 'SANS_OBJET', 'Tadbit (TB) : pas d etiquette « Not official »');
+eq(verdictMarque({ adresse: '0x2', nom: 'TB-Gas', symbole: 'TB', origine: 'AILLEURS' }), 'NON_OFFICIEL', 'TB + nom TB-… : etiquete');
 
 // ── 4. choix de marche : jamais un prix pire en silence ──
 ok(HOOK_MARCHE_OUVERT === null && MARCHE_OUVERT_ACTIF === false, 'non deploye, drapeau OFF');
