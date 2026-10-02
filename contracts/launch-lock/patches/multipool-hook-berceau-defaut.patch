@@ -1,0 +1,321 @@
+From f351ab89f8f448c542a83a026fbdbe704acdc4bd Mon Sep 17 00:00:00 2001
+From: grokbot <philpof102-svg@users.noreply.github.com>
+Date: Fri, 2 Oct 2026 13:26:58 +0200
+Subject: [PATCH] fix(multipool): hook berceau 24h dans la liste facturante par
+ defaut + jambe routeur payee sur route mixte
+
+- config-hooks-facturants.js : adresse du hook berceau 24h injectee par
+  TB_HOOK_BERCEAU_24H (env) / globalThis.TB_CONFIG.HOOK_BERCEAU_24H /
+  constante HOOK_BERCEAU_24H_DEPLOYE (remplie au deploy). Adresse invalide
+  ou bits de flags != 0x26cc => throw a l'import.
+- HOOKS_FACTURANTS = [V8, berceau 24h si configure]. Sans l'adresse, l'appel
+  par defaut payait routeur 90,000 + hook 69,937 = 159,937 (Buy 1 NVDAc).
+- Route mixte (une jambe hookee, une non hookee) : f0b4e91 ne facturait
+  rien sur la jambe routeur (fuite zero-frais, ex. AAPLc->NVDAc->bloc :
+  0 AAPLc). Desormais exactement un PAY_PORTION 9 bps a6cf, place sur un
+  noeud d'une jambe routeur ; noeud ne touchant que des jambes hookees =>
+  REFUSE ; part createur/extras toujours refuses des qu'une jambe est hookee.
+  Route 100% hookee : 0 frais routeur (inchange).
+- test-multipool.mjs section 7 (7a-7t) : temoin negatif sans config (doit
+  voir le double frais), route mixte, placement, refus. 61 -> 81 assertions.
+
+Fork-only, aucun deploy.
+---
+ config-hooks-facturants.js | 46 +++++++++++++++++++++++
+ multipool.js               | 74 ++++++++++++++++++++++++++++--------
+ test-multipool.mjs         | 77 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 182 insertions(+), 15 deletions(-)
+ create mode 100644 config-hooks-facturants.js
+
+diff --git a/config-hooks-facturants.js b/config-hooks-facturants.js
+new file mode 100644
+index 0000000..87bd392
+--- /dev/null
++++ b/config-hooks-facturants.js
+@@ -0,0 +1,46 @@
++/* config-hooks-facturants.js — L ADRESSE DU HOOK BERCEAU 24 H (TBlockLaunchLockHook, suivi24h), INJECTEE AU DEPLOIEMENT.
++ *
++ * ⭐ Pourquoi (Zero 1, crosscheck 2026-10-02) : f0b4e91 ne tenait « un seul frais par jambe » QUE si l appelant
++ *   passait l adresse du hook berceau dans `hooksFacturants`. Avec la liste par defaut (V8 seul), chaque jambe sur le
++ *   berceau etait facturee DEUX fois : achat de 1 NVDAc = routeur 90 000 + hook 69 937 = 159 937 au lieu de 70 000.
++ *   Le berceau entre donc dans la liste PAR DEFAUT (multipool.js `HOOKS_FACTURANTS`), depuis CETTE config.
++ *
++ * Sources, dans l ordre (la premiere non vide gagne) :
++ *   1. process.env.TB_HOOK_BERCEAU_24H         — Node : serveur, bancs, scripts, FFI des tests forge ;
++ *   2. globalThis.TB_CONFIG.HOOK_BERCEAU_24H   — navigateur : objet pose par la page AVANT l import du module ;
++ *   3. HOOK_BERCEAU_24H_DEPLOYE ci-dessous     — ecrit par le deploiement (adresse imprimee par le script de deploy).
++ *   Rien de tout cela => null : aucun hook berceau n est deploye, il n y a aucune jambe berceau a facturer.
++ * ⛔ JAMAIS DEVINEE. Une valeur PRESENTE mais invalide (pas une adresse, ou pas les bits de permission 0x26cc du hook
++ *   berceau) LEVE une erreur a l import : on ne retombe jamais en silence sur une liste sans le berceau (0,18 %).
++ * ⛔ Rien n est deploye au 2026-10-02 : la constante reste null. Le jour du deploiement : y ecrire l adresse ET
++ *   relancer test-multipool.mjs (section 7) + le banc forge `Z1XMultipoolOrdreTest`.
++ */
++export const HOOK_BERCEAU_24H_DEPLOYE = null;
++
++/** bits de permission V4 du hook berceau (Hooks.ALL_HOOK_MASK = 14 bits) : V9 0x24cc | beforeRemoveLiquidity 0x200 */
++export const BITS_HOOK_BERCEAU_24H = 0x26cc;
++const MASQUE_HOOK = 0x3fffn;
++
++/** rend l adresse en minuscules, ou null si `brut` est vide ; LEVE si `brut` est present mais invalide */
++export function validerHookBerceau(brut, origine = 'config') {
++  if (brut === undefined || brut === null) return null;
++  const a = String(brut).trim().toLowerCase();
++  if (a === '') return null;
++  if (!/^0x[0-9a-f]{40}$/.test(a)) throw new Error('TB_HOOK_BERCEAU_24H (' + origine + ') : pas une adresse : ' + a);
++  if ((BigInt(a) & MASQUE_HOOK) !== BigInt(BITS_HOOK_BERCEAU_24H)) {
++    throw new Error('TB_HOOK_BERCEAU_24H (' + origine + ') : ' + a + ' ne porte pas les bits 0x26cc du hook berceau 24 h');
++  }
++  if (/^0x0{40}$/.test(a)) throw new Error('TB_HOOK_BERCEAU_24H (' + origine + ') : adresse nulle');
++  return a;
++}
++
++function lire() {
++  const env = typeof process !== 'undefined' && process && process.env ? process.env.TB_HOOK_BERCEAU_24H : undefined;
++  if (env !== undefined && String(env).trim() !== '') return validerHookBerceau(env, 'env');
++  const g = typeof globalThis !== 'undefined' && globalThis.TB_CONFIG ? globalThis.TB_CONFIG.HOOK_BERCEAU_24H : undefined;
++  if (g !== undefined && g !== null && String(g).trim() !== '') return validerHookBerceau(g, 'TB_CONFIG');
++  return validerHookBerceau(HOOK_BERCEAU_24H_DEPLOYE, 'deploy');
++}
++
++/** l adresse effective (minuscules) ou null */
++export const HOOK_BERCEAU_24H = lire();
+diff --git a/multipool.js b/multipool.js
+index cb8e09d..6f9422d 100644
+--- a/multipool.js
++++ b/multipool.js
+@@ -27,6 +27,7 @@
+  *   raison ; un « pas lu » n est jamais un « pas de route ».
+  */
+ import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
++import { HOOK_BERCEAU_24H } from './config-hooks-facturants.js';
+ 
+ /* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
+ export const ADRESSES = Object.freeze({
+@@ -71,9 +72,23 @@ export const BPS_A6CF_SPLIT_BLOC = 7n;
+  * « Celui qui possede la jambe facture, UNE fois. » Une jambe V4 sur un hook TB QUI PRELEVE LUI-MEME le frais
+  *   a6cf dans la devise (V8, V9, le hook du berceau 24 h) est DEJA facturee par le hook : le routeur n y ajoute
+  *   AUCUN PAY_PORTION ni part exacte. Sans cela : 0,09 % (hook) + 0,09 % (routeur) = 0,18 % sur la meme jambe.
+- * ⛔ Liste FERMEE, en minuscules. V8 = le hook en production (feeWallet() = a6cf). Les hooks V9 / 24 h, pas encore
+- *   deployes, sont passes par l appelant (`hooksFacturants`) le jour de leur adresse — jamais devines. */
+-export const HOOKS_FACTURANTS = Object.freeze(['0x5926abdabf5d0006ee960a8270f3e124e5a764cc']);
++ * ⛔⛔ ET L INVERSE (crosscheck Zero 1 2026-10-02, corrige ici) : une jambe SANS hook facturant est la jambe DU
++ *   ROUTEUR — elle paie le frais du routeur, une fois, meme si une AUTRE jambe de la route est hookee. f0b4e91 coupait
++ *   le frais routeur de TOUTE la route des qu une jambe etait hookee : AAPLc -> NVDAc (sans hook) -> block (berceau)
++ *   ne payait rien sur AAPLc -> NVDAc (fuite a frais nul). Regle :
++ *     · toutes les jambes hookees        => 0 PAY_PORTION (chaque hook facture la sienne) ;
++ *     · au moins une jambe du routeur     => EXACTEMENT 1 PAY_PORTION de 9 bps vers a6cf, pris a un noeud d une jambe
++ *       du routeur (son entree ou sa sortie), jamais en block ; aucune part en plus (le split createur d un block
++ *       appartient au hook de la jambe block) ;
++ *     · aucune jambe hookee               => inchange (1 PAY_PORTION, parts possibles).
++ *   Plusieurs jambes du routeur sur une route paient UN frais routeur (la regle du 2026-10-01 23:25 : une fois par
++ *   swap pour ce que le routeur porte) — inchange pour les routes sans hook.
++ * ⛔ Liste FERMEE, en minuscules. V8 = le hook en production (feeWallet() = a6cf). Le hook BERCEAU 24 h entre dans la
++ *   liste PAR DEFAUT depuis `config-hooks-facturants.js` (adresse INJECTEE au deploiement : env TB_HOOK_BERCEAU_24H,
++ *   globalThis.TB_CONFIG, ou la constante ecrite par le deploy) — jamais devinee. V9 / autres : `hooksFacturants`. */
++export const HOOK_V8 = '0x5926abdabf5d0006ee960a8270f3e124e5a764cc';
++export { HOOK_BERCEAU_24H };
++export const HOOKS_FACTURANTS = Object.freeze([HOOK_V8, ...(HOOK_BERCEAU_24H ? [HOOK_BERCEAU_24H] : [])]);
+ export function ensembleHooksFacturants(extra = []) {
+   return new Set([...HOOKS_FACTURANTS, ...(extra || []).map((h) => bas(h))].filter((h) => ADR.test(h)));
+ }
+@@ -81,14 +96,27 @@ export function ensembleHooksFacturants(extra = []) {
+ export function jambeFactureeParHook(s, hooks = ensembleHooksFacturants()) {
+   return !!(s && s.e && s.e.venue === 'uniswap-v4' && s.e.cle && hooks.has(bas(s.e.cle.hooks)));
+ }
++/** au moins UNE jambe facturee par son hook */
+ export function routeFactureeParHook(chemin, hooks = ensembleHooksFacturants()) {
+   return Array.isArray(chemin) && chemin.some((s) => jambeFactureeParHook(s, hooks));
+ }
+-/** Garde AVANT envoi : PAY_PORTION / TRANSFER de parts presents si et seulement si aucune jambe n est facturee par son hook. */
++/** TOUTES les jambes facturees par leur hook : le routeur n a aucune jambe a lui, donc aucun frais */
++export function routeEntierementFactureeParHook(chemin, hooks = ensembleHooksFacturants()) {
++  return Array.isArray(chemin) && chemin.length > 0 && chemin.every((s) => jambeFactureeParHook(s, hooks));
++}
++/** les indices de NOEUDS qui touchent une jambe du ROUTEUR (sans hook facturant) : la ou le routeur facture SA jambe */
++export function noeudsJambesRouteur(chemin, hooks = ensembleHooksFacturants()) {
++  const s = new Set();
++  (Array.isArray(chemin) ? chemin : []).forEach((x, i) => { if (!jambeFactureeParHook(x, hooks)) { s.add(i); s.add(i + 1); } });
++  return s;
++}
++/** Garde AVANT envoi : toutes les jambes hookees => 0 PAY_PORTION et 0 part ; route mixte => EXACTEMENT 1 PAY_PORTION et
++ *  0 part ; route sans hook => EXACTEMENT 1 PAY_PORTION. */
+ export function unFraisParJambe(tx, chemin, hooks = ensembleHooksFacturants()) {
+   const n = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.PAY_PORTION).length;
+   const parts = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.TRANSFER).length;
+-  if (routeFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
++  if (routeEntierementFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
++  if (routeFactureeParHook(chemin, hooks)) return n === 1 && parts === 0;
+   return n === 1;
+ }
+ 
+@@ -227,16 +255,22 @@ export function cheminsCandidats(aretes, de, vers, { sautsMax = 3, max = 12 } =
+  *   TOT (un frais pris a l entree est exact sans aucun prix). Aucun noeud admis => REFUSE : on ne
+  *   prend jamais le frais dans un block, et on ne fait pas non plus un swap gratuit en silence.
+  */
+-export function placerFrais(chemin, admises) {
++export function placerFrais(chemin, admises, { candidats = null } = {}) {
+   if (!Array.isArray(chemin) || !chemin.length) return { etat: 'REFUSE', pourquoi: 'no path' };
+   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
+   let meilleur = null;
+   noeuds.forEach((n, i) => {
++    /* route mixte : seuls les noeuds d une jambe du ROUTEUR (`candidats`) peuvent porter SON frais */
++    if (candidats instanceof Set && !candidats.has(i)) return;
+     const r = rangFrais(n, admises);
+     if (r === null) return;
+     if (!meilleur || r < meilleur.rang) meilleur = { indice: i, rang: r, devise: noeud(n) };
+   });
+   if (!meilleur) {
++    if (candidats instanceof Set) {
++      return { etat: 'REFUSE', pourquoi: 'no node of the router legs of this path is ETH, USDC or an admitted stock/B20 — '
++        + 'the router leg would go unpaid or be paid in a block token, both refused' };
++    }
+     return { etat: 'REFUSE', pourquoi: 'no node of this path is ETH, USDC or an admitted stock/B20 — '
+       + 'the fee would have to be taken in a block token, which is refused' };
+   }
+@@ -297,9 +331,13 @@ export function devisSaut(s, montant) {
+  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
+  */
+ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
+-  /* une jambe facturee par son hook : le DEVIS V4 inclut deja le frais du hook, le routeur ne retient rien */
+-  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
+-  const pl = parHook ? { etat: 'OK', indice: -1, devise: null } : (placement || placerFrais(chemin, admises));
++  /* toutes les jambes hookees : le DEVIS V4 inclut deja chaque frais de hook, le routeur ne retient rien.
++   * route mixte : le routeur retient SON frais a un noeud d une de SES jambes ; les jambes hookees sont au devis V4. */
++  const hooks = ensembleHooksFacturants(hooksFacturants);
++  const parHook = routeEntierementFactureeParHook(chemin, hooks);
++  const mixte = !parHook && routeFactureeParHook(chemin, hooks);
++  const pl = parHook ? { etat: 'OK', indice: -1, devise: null }
++    : (placement || placerFrais(chemin, admises, mixte ? { candidats: noeudsJambesRouteur(chemin, hooks) } : {}));
+   if (pl.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pl.pourquoi };
+   let courant = BigInt(montant);
+   if (courant <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
+@@ -318,7 +356,7 @@ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_B
+     if (out <= 0n) return { etat: 'REFUSE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' returns nothing' };
+     courant = out;
+   }
+-  return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook };
++  return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook, routeMixte: mixte };
+ }
+ 
+ /* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
+@@ -424,18 +462,24 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
+   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
+   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
+   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
+-  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur ne preleve RIEN (ni PAY_PORTION ni part
+-   *   exacte). Une part demandee en plus sur une telle route est REFUSEE (ce serait 0,18 %). */
+-  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
+-  if (parHook) {
++  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur n y preleve RIEN (ni PAY_PORTION ni part
++   *   exacte). Une part demandee en plus sur une route hookee est REFUSEE (ce serait 0,18 %). Toutes les jambes hookees
++   *   => aucun frais routeur. Route MIXTE => le frais routeur de 9 bps, UNE fois, a un noeud d une jambe du routeur. */
++  const hooks = ensembleHooksFacturants(hooksFacturants);
++  const unHook = routeFactureeParHook(chemin, hooks);
++  const parHook = routeEntierementFactureeParHook(chemin, hooks);
++  if (unHook) {
+     if ((Array.isArray(partsExactes) && partsExactes.length) || BigInt(bpsA6cf) !== FRAIS_BPS
+       || (Array.isArray(partsFrais) && partsFrais !== PARTS_FRAIS && partsFrais.some((p) => bas(p.qui) !== ADRESSES.FEE_WALLET || BigInt(p.bps) !== FRAIS_BPS))
+       || (Array.isArray(partsFrais) && partsFrais.length > 1)) {
+       return { etat: 'REFUSE', pourquoi: 'refused: a leg of this path is on a TB hook that charges the fee itself — a router fee or share on top would charge the same leg twice (0.18 %)' };
+     }
+-    return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts: [], exactes: [], fraisIndice: -1, devFrais: null, parHook });
++    if (parHook) return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts: [], exactes: [], fraisIndice: -1, devFrais: null, parHook });
+   }
+   if (!Number.isInteger(fraisIndice) || fraisIndice < 0 || fraisIndice > chemin.length) return { etat: 'REFUSE', pourquoi: 'fee node index out of the path' };
++  if (unHook && !noeudsJambesRouteur(chemin, hooks).has(fraisIndice)) {
++    return { etat: 'REFUSE', pourquoi: 'refused: on a path mixing TB-hooked legs and router legs, the router fee must be taken at a node of a router leg (each leg pays exactly once)' };
++  }
+   /* ⛔⛔ LE VERROU : la devise du frais DOIT etre admise. On le reverifie ICI, meme si `placerFrais`
+    *   l a deja fait : un appelant qui passerait un indice a la main ne doit pas pouvoir payer a6cf
+    *   en block. C est le temoin negatif n°1 du banc. */
+diff --git a/test-multipool.mjs b/test-multipool.mjs
+index 390fa8e..3287cc9 100644
+--- a/test-multipool.mjs
++++ b/test-multipool.mjs
+@@ -179,6 +179,83 @@ console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
+   const iS = v3puisV4.commandes.lastIndexOf(CMD.V4_SWAP);
+   ok('6p. TEMOIN : V4 apres V3 (montant inconnu) => SETTLE(CONTRACT_BALANCE) PUIS SWAP (ancien ordre, nomme)', actionsV4(v3puisV4.entrees[iS]) === '0b,06,0e' && v3puisV4.entrees[iS].includes(CONTRACT_BALANCE.toString(16).padStart(64, '0')), actionsV4(v3puisV4.entrees[iS]));
+ }
++/* ══ 7. LE BERCEAU 24 H DANS LA LISTE PAR DEFAUT (config injectee) + ROUTE MIXTE (Zero 1 crosscheck 2026-10-02) ══ */
++console.log('=== 7. berceau 24 h par defaut (config) + chaque jambe paie une fois ===');
++{
++  const mp = await import('./multipool.js');
++  const { HOOKS_FACTURANTS, HOOK_V8, HOOK_BERCEAU_24H, routeFactureeParHook, routeEntierementFactureeParHook, noeudsJambesRouteur, unFraisParJambe, ensembleHooksFacturants } = mp;
++  const { execFileSync } = await import('node:child_process');
++  const { pathToFileURL } = await import('node:url');
++  const urlMp = pathToFileURL(new URL('./multipool.js', import.meta.url).pathname).href;
++  const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c', BLOC = '0xb2000000000000000000000000000000000b10c0';
++  /* une adresse de TEST aux bits du berceau (0x26cc) ; la vraie viendra du deploiement */
++  const BERCEAU = '0x' + 'b'.repeat(36) + '66cc';
++  const trie = (a, b) => (a < b ? [a, b] : [b, a]);
++  const jB = (x, y) => v4(...trie(x, y), 0, 200, BERCEAU);
++  const achat = [{ de: NVDA, vers: BLOC, e: jB(NVDA, BLOC) }];
++  /* un enfant Node, env CONTROLE : ce que construireRoute fait avec la liste PAR DEFAUT (aucun hooksFacturants) */
++  const enfant = (env, glob = null) => {
++    const code = `${glob ? 'globalThis.TB_CONFIG = ' + JSON.stringify(glob) + ';' : ''}
++      const mp = await import(${JSON.stringify(urlMp)});
++      const v4 = (c0, c1, hooks) => ({ venue: 'uniswap-v4', cle: { currency0: c0, currency1: c1, fee: 0, tickSpacing: 200, hooks } });
++      const [c0, c1] = ${JSON.stringify(trie(NVDA, BLOC))};
++      const ch = [{ de: ${JSON.stringify(NVDA)}, vers: ${JSON.stringify(BLOC)}, e: v4(c0, c1, ${JSON.stringify(BERCEAU)}) }];
++      const r = mp.construireRoute({ chemin: ch, montant: 100000000n, minSortie: 1n, destinataire: ${JSON.stringify(USER)}, deadline: 1n << 40n,
++        fraisIndice: 0, admises: new Set([${JSON.stringify(NVDA)}]) });
++      process.stdout.write(JSON.stringify({ liste: mp.HOOKS_FACTURANTS, berceau: mp.HOOK_BERCEAU_24H, etat: r.etat,
++        pp: r.commandes ? r.commandes.filter((c) => c === mp.CMD.PAY_PORTION).length : -1, parHook: r.fraisParHook, garde: mp.unFraisParJambe(r, ch) }));`;
++    const e = { ...process.env }; delete e.TB_HOOK_BERCEAU_24H; Object.assign(e, env);
++    try { return JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', code], { env: e, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })); }
++    catch (err) { return { erreur: String(err.stderr || err.message) }; }
++  };
++  ok('7a. sans config : la liste par defaut = [V8], aucun berceau devine', process.env.TB_HOOK_BERCEAU_24H ? true : (HOOK_BERCEAU_24H === null && HOOKS_FACTURANTS.length === 1 && HOOKS_FACTURANTS[0] === HOOK_V8), JSON.stringify(HOOKS_FACTURANTS));
++  const avec = enfant({ TB_HOOK_BERCEAU_24H: BERCEAU.toUpperCase().replace('0X', '0x') });
++  ok('7b. config injectee (env TB_HOOK_BERCEAU_24H) : le berceau est dans la liste PAR DEFAUT', avec.berceau === BERCEAU && Array.isArray(avec.liste) && avec.liste.includes(BERCEAU) && avec.liste.includes(HOOK_V8), JSON.stringify(avec));
++  ok('7c. config injectee : achat 1 NVDAc sur le berceau SANS hooksFacturants => 0 PAY_PORTION (le hook seul facture : 70000, pas 159937)', avec.etat === 'PRET' && avec.pp === 0 && avec.parHook === true && avec.garde === true, JSON.stringify(avec));
++  const sans = enfant({});
++  ok('7d. TEMOIN NEGATIF (config absente) : la meme route => 1 PAY_PORTION, la double facturation que 7c interdit', sans.etat === 'PRET' && sans.pp === 1 && sans.parHook === false && sans.berceau === null, JSON.stringify(sans));
++  const nav = enfant({}, { HOOK_BERCEAU_24H: BERCEAU });
++  ok('7e. navigateur : globalThis.TB_CONFIG.HOOK_BERCEAU_24H pose avant l import => meme effet que 7c', nav.pp === 0 && nav.parHook === true && nav.liste.includes(BERCEAU), JSON.stringify(nav));
++  const faux24cc = enfant({ TB_HOOK_BERCEAU_24H: '0x' + 'b'.repeat(36) + '24cc' });
++  ok('7f. TEMOIN : une adresse SANS les bits 0x26cc du berceau leve a l import (jamais une liste muette)', !!faux24cc.erreur && /0x26cc/.test(faux24cc.erreur), JSON.stringify(faux24cc).slice(0, 200));
++  const pasAdr = enfant({ TB_HOOK_BERCEAU_24H: '0x1234' });
++  ok('7g. TEMOIN : une valeur qui n est pas une adresse leve a l import', !!pasAdr.erreur && /pas une adresse/.test(pasAdr.erreur), JSON.stringify(pasAdr).slice(0, 200));
++  const vide = enfant({ TB_HOOK_BERCEAU_24H: '' });
++  ok('7h. env vide = absente (temoin du banc forge qui la remet a "")', vide.berceau === null && vide.pp === 1, JSON.stringify(vide));
++
++  /* ── ROUTE MIXTE : chaque jambe paie EXACTEMENT une fois ── */
++  const H = ensembleHooksFacturants([BERCEAU]);
++  const adm = new Set([...ADMISES, NVDA]);
++  const libre = (x, y) => v4(...trie(x, y), 500, 10, ETH); /* NVDAc/AAPLc sans hook */
++  const mixte = [{ de: AAPL, vers: NVDA, e: libre(AAPL, NVDA) }, { de: NVDA, vers: BLOC, e: jB(NVDA, BLOC) }];
++  ok('7i. AAPLc -> NVDAc (sans hook) -> block (berceau) : route MIXTE (une jambe hookee, pas toutes)', routeFactureeParHook(mixte, H) && !routeEntierementFactureeParHook(mixte, H) && [...noeudsJambesRouteur(mixte, H)].join(',') === '0,1');
++  const rm = construireRoute({ ...base, admises: adm, chemin: mixte, fraisIndice: 0, hooksFacturants: [BERCEAU] });
++  ok('7j. route mixte : EXACTEMENT 1 PAY_PORTION (9 bps) sur la jambe du routeur, en AAPLc, a a6cf ; le hook facture la sienne', rm.etat === 'PRET' && rm.commandes.filter((c) => c === CMD.PAY_PORTION).length === 1 && rm.fraisDevise === AAPL && rm.fraisParHook === false && !rm.commandes.includes(CMD.TRANSFER), rm.commandes && rm.commandes.join(','));
++  ok('7k. la garde unFraisParJambe accepte la route mixte a 1 PAY_PORTION', unFraisParJambe(rm, mixte, H) === true);
++  ok('7l. TEMOIN NEGATIF : la route mixte SANS frais routeur (le comportement de f0b4e91) est REFUSEE par la garde', unFraisParJambe({ commandes: ['07', '10', '04'] }, mixte, H) === false);
++  const rmBloc = construireRoute({ ...base, admises: adm, chemin: mixte, fraisIndice: 2, hooksFacturants: [BERCEAU] });
++  ok('7m. TEMOIN : frais force au noeud block => REFUSE (jamais en block)', rmBloc.etat === 'REFUSE', rmBloc.pourquoi);
++  /* NVDAc -(berceau)-> block -(berceau)-> AAPLc -(sans hook)-> USDC : le noeud 0 (NVDAc) ne touche que des jambes hookees */
++  const quatre = [{ de: NVDA, vers: BLOC, e: jB(NVDA, BLOC) }, { de: BLOC, vers: AAPL, e: jB(BLOC, AAPL) }, { de: AAPL, vers: USDC, e: cl(AAPL, USDC) }];
++  const r0 = construireRoute({ ...base, admises: adm, chemin: quatre, fraisIndice: 0, hooksFacturants: [BERCEAU] });
++  ok('7n. TEMOIN : frais routeur pris a un noeud qui ne touche QUE des jambes hookees (NVDAc) => REFUSE (ce serait la jambe du hook payee 2 fois)', r0.etat === 'REFUSE' && /router leg/.test(r0.pourquoi), r0.pourquoi);
++  const pQ = placerFrais(quatre, adm, { candidats: noeudsJambesRouteur(quatre, H) });
++  ok('7o. placerFrais (route mixte) : USDC au noeud 3 (jambe du routeur AAPLc -> USDC), pas NVDAc au noeud 0', pQ.etat === 'OK' && pQ.indice === 3 && pQ.devise === USDC, JSON.stringify(pQ));
++  const r3 = construireRoute({ ...base, admises: adm, chemin: quatre, fraisIndice: 3, hooksFacturants: [BERCEAU] });
++  ok('7p. ... et la route se construit : 1 PAY_PORTION en USDC', r3.etat === 'PRET' && r3.commandes.filter((c) => c === CMD.PAY_PORTION).length === 1 && r3.fraisDevise === USDC, r3.commandes && r3.commandes.join(','));
++  const rx = construireRoute({ ...base, admises: adm, chemin: mixte, fraisIndice: 0, hooksFacturants: [BERCEAU], partsExactes: [{ qui: USER, montant: 1n }], bpsA6cf: 7n });
++  ok('7q. TEMOIN : route mixte + part createur en plus => REFUSE (la part du block appartient au hook de la jambe block)', rx.etat === 'REFUSE' && /twice/.test(rx.pourquoi), rx.pourquoi);
++  const tous = [{ de: NVDA, vers: BLOC, e: jB(NVDA, BLOC) }, { de: BLOC, vers: AAPL, e: jB(BLOC, AAPL) }];
++  const rt = construireRoute({ ...base, admises: adm, chemin: tous, fraisIndice: 0, hooksFacturants: [BERCEAU] });
++  ok('7r. toutes les jambes hookees (NVDAc -> block -> AAPLc, berceau x2) => 0 PAY_PORTION, chaque hook facture la sienne', rt.etat === 'PRET' && !rt.commandes.includes(CMD.PAY_PORTION) && rt.fraisParHook === true && unFraisParJambe(rt, tous, H), rt.commandes && rt.commandes.join(','));
++  /* le devis d une route mixte retient le frais routeur a SON noeud */
++  vus = [];
++  const qm = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm, hooksFacturants: [BERCEAU] });
++  ok('7s. devis route mixte : frais routeur = floor(1e8 x 9 / 1e4) = 90000 en AAPLc au noeud 0, routeMixte', qm.etat === 'OK' && qm.frais === 90000n && qm.fraisIndice === 0 && qm.routeMixte === true && qm.fraisParHook === false && vus[0].data.includes((10n ** 8n - 90000n).toString(16).padStart(64, '0')), String(qm.frais));
++  vus = [];
++  const qa = await coterChemin({ rpc: espion, chemin: achat, montant: 10n ** 8n, admises: adm, hooksFacturants: [BERCEAU] });
++  ok('7t. devis jambe berceau seule : frais routeur 0 (inchange)', qa.etat === 'OK' && qa.frais === 0n && qa.fraisParHook === true, String(qa.frais));
++}
+ void faux; void noeud; void CONTRACT_BALANCE;
+ console.log('\n' + n + ' assertions, ' + ko + ' KO');
+ process.exit(ko ? 1 : 0);
+-- 
+2.47.3
+
