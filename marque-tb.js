@@ -32,11 +32,24 @@ export function estMarqueTbEtendue(nom, symbole) {
 }
 
 /**
+ * La marque FORTE : celle qu on peut afficher publiquement comme « uses the TokenizedBlock name ».
+ * ⛔ Le symbole « TB » SEUL n en fait pas partie : mesure du 2026-10-02, « Tadbit » (TB) a ete lance deux fois
+ *   en 24 h (tx 0x3cf50806…, 0x7446f135…) sans aucun rapport avec nous. Le refuser dans NOTRE console
+ *   partenaire est prudent ; l etiqueter « Not official » chez un tiers serait une accusation fausse.
+ */
+export function estMarqueTbForte(nom, symbole) {
+  const s = String(symbole || '').trim().toUpperCase();
+  if (!estMarqueTbEtendue(nom, symbole)) return false;
+  if (s === 'TB' && !plat(nom).includes('tokenizedblock') && !/^tb[-_ ]/i.test(String(nom || '').trim())) return false;
+  return true;
+}
+
+/**
  * Le verdict a l ecran pour un token : 'OFFICIEL' | 'NON_OFFICIEL' | 'SANS_OBJET'.
  * ⛔ 'NON_OFFICIEL' exige une origine LUE et differente de TB : une origine non lue ne condamne personne.
  */
 export function verdictMarque({ adresse, nom, symbole, origine }) {
-  if (!estMarqueTbEtendue(nom, symbole)) return 'SANS_OBJET';
+  if (!estMarqueTbForte(nom, symbole)) return 'SANS_OBJET';
   if (OFFICIELS_TB.has(String(adresse || '').toLowerCase()) || origine === 'TOKENIZEDBLOCK') return 'OFFICIEL';
   if (origine === 'AILLEURS' || origine === 'ELSEWHERE' || origine === 'ETRANGER') return 'NON_OFFICIEL';
   return 'SANS_OBJET';
