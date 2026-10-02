@@ -371,3 +371,43 @@ export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbo
   const sym = typeof symbole === 'string' ? symbole.trim() : '';
   return routable === true && /^[A-Za-z0-9.]{1,12}$/.test(sym) ? copieE0Achat(sym) : COPIE_E0_SANS_ROUTE;
 }
+
+/* ══ 2026-10-02 (fix-2) — PUCE DE PAIRE A CREATE, ORDRE DES ADRESSES, CHOIX « BUY HERE » ══════════════════════════ */
+/** Drapeau memestock multipool : ETEINT. Tant qu il l est, aucun partage app/createur n est affiche. */
+export const MEMESTOCK_MULTIPOOL_ACTIF = false;
+/** Taux que la pool V8 preleve AUJOURD HUI : HOOK_FEE() lu sur la chaine = 5000 / 1e6 (tokenomics.js, V8). */
+export const TAUX_ECHANGE_V8_LIBELLE = '0.5%';
+/** Puce de paire a Create. ⛔ Le frais de naissance et le frais d echange sont DEUX choses : « fee 0.001 ETH » les
+ *  confondait. Le partage « app 0.07% · creator 0.03% » ne s affiche QUE si le drapeau multipool est allume.
+ *  Jamais d adresse de frais, jamais le libelle interne du wallet de frais. */
+export function libellePuceCreation({ symbole, multipool = MEMESTOCK_MULTIPOOL_ACTIF } = {}) {
+  const s = String(symbole || 'stock');
+  return 'Quote = ' + s + ' · birth fee 0.001 ETH, once · swap fee ' + TAUX_ECHANGE_V8_LIBELLE + ' per trade'
+    + (multipool === true ? ' (app 0.07% · creator 0.03%)' : '');
+}
+/** Le block est-il APRES la devise dans la PoolKey (currency0 = devise) ? Le V8 preleve en currency0 : un block qui
+ *  passe devant ferait payer son frais en block. ETH natif (0x0) est toujours devant. */
+export function blockApresDevise(block, devise) {
+  const b = String(block || ''), d = String(devise || ETH_NATIF);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(b) || !/^0x[0-9a-fA-F]{40}$/.test(d)) return false;
+  return BigInt(b) > BigInt(d);
+}
+/** Mode « Buy here » pour les pools V8 EXISTANTES ou le block passe devant (frais du hook en block).
+ *  'EVITER_SI_ALTERNATIVE' (defaut) : on l ecarte SEULEMENT si une autre route payant a6cf existe ; sinon inchange.
+ *  'GARDER' : comportement d avant. ⛔ Decision produit (Phil) : ne pas changer le defaut sans lui. */
+export const BUY_HERE_V8_BLOCK_DEVANT = 'EVITER_SI_ALTERNATIVE';
+/** Une pool V8 ou le block est currency0 : le frais du hook y est pris en block. */
+export function v8BlockDevant(cle, block, hookV8) {
+  if (!cle) return false;
+  return String(cle.hooks || '').toLowerCase() === String(hookV8 || '').toLowerCase()
+    && String(cle.currency0 || '').toLowerCase() === String(block || '').toLowerCase();
+}
+/** Choix final de « Buy here » parmi les candidats deja classes : `meilleur` (le gagnant d avant) et `meilleurAutre`
+ *  (le meilleur candidat qui n est PAS une pool V8 block-devant — chaque candidat retenu par poolDecouvertPour paie
+ *  a6cf : routeur 0,5 % ETH sur une pool ETH, ou le hook en devise). */
+export function choixBuyHere({ meilleur, meilleurAutre, block, hookV8, mode = BUY_HERE_V8_BLOCK_DEVANT }) {
+  if (!meilleur) return null;
+  if (mode !== 'EVITER_SI_ALTERNATIVE') return meilleur;
+  if (!v8BlockDevant(meilleur.cle, block, hookV8)) return meilleur;
+  return meilleurAutre || meilleur;
+}

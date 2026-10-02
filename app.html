@@ -3058,7 +3058,9 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   reellement lance au public ») — c est son CABLAGE qui disparait, parce qu il n y a plus de liste
  *   a filtrer. `test-bridge-actifs-proposes.mjs` garde desormais le retour de cette liste : si les
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
-import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock } from './paires.js';
+import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
+  libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant } from './paires.js';
+import { poolSansHookInterdite } from './pool-sans-hook.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -8013,9 +8015,11 @@ function peindreVerrouMarche(v, origine) {
 function poolDecouvertPour(adr) {
   const want = String(adr || '').toLowerCase();
   if (!want || !poolsLive || !poolsLive.size) return null;
-  let best = null;
+  let best = null, bestAutre = null;
   for (const p of poolsLive.values()) {
     if (!p || !p.cle) continue;
+    /* ⛔⛔ 2026-10-02 (regle du fondateur) : une pool sans hook n est jamais choisie pour un block TB. */
+    if (poolSansHookInterdite(p.cle, [want])) continue;
     const c0 = String(p.cle.currency0 || '').toLowerCase();
     const c1 = String(p.cle.currency1 || '').toLowerCase();
     const j = String(p.jeton || '').toLowerCase();
@@ -8075,11 +8079,13 @@ function poolDecouvertPour(adr) {
     const feeP = (feeBrut !== null && feeBrut !== undefined && feeBrut !== ''
       && Number.isFinite(Number(feeBrut)) && !fraisEstDynamique(feeBrut))
       ? Number(feeBrut) : Number.MAX_SAFE_INTEGER;
-    if (!best || score > best._score || (score === best._score && feeP < best._fee)) {
-      best = { ...p, confiance: conf, _score: score, _fee: feeP, isTbFeeHook: isTb };
-    }
+    const cand = { ...p, confiance: conf, _score: score, _fee: feeP, isTbFeeHook: isTb };
+    if (!best || score > best._score || (score === best._score && feeP < best._fee)) best = cand;
+    /* ⛔ 2026-10-02 (fix-2) : meilleur candidat hors « V8 ou le block passe devant » (frais du hook en block). */
+    if (!v8BlockDevant(p.cle, want, HOOK_V8)
+      && (!bestAutre || score > bestAutre._score || (score === bestAutre._score && feeP < bestAutre._fee))) bestAutre = cand;
   }
-  return best;
+  return choixBuyHere({ meilleur: best, meilleurAutre: bestAutre, block: want, hookV8: HOOK_V8 });
 }
 
 /** When vieDuBlock says NON_TROUVEE but Initialize found a pool, promote to LUE for Buy/Sell + tip 2340. */
@@ -15853,8 +15859,9 @@ async function majPaire() {
     if (q.paire.type === 'TBLOCK') chip.textContent = 'Quote = TBLOCK — buyers need TBLOCK';
     else if (q.paire.type === 'B20') chip.textContent = 'Quote = B20 ' + (q.paire.symbole || '·');
     else if (q.paire.type === 'ACTION') {
-      chip.textContent = 'Quote = ' + (q.paire.symbole || 'stock') + ' · fee 0.001 ETH';
-    } else chip.textContent = 'Quote = ' + (q.paire.symbole || 'custom');
+      /* ⛔ 2026-10-02 (fix-2) : « fee 0.001 ETH » melait frais de naissance et frais d echange. */
+      chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'stock' });
+    } else chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'custom' });
   }
   /* le resume replie porte le choix en cours, jamais « TBLOCK by default » pose en dur */
   majResumePaire(q.paire.symbole || null, q.paire.type);
@@ -15978,13 +15985,20 @@ function selAleatoire() {
   crypto.getRandomValues(b);
   return 'block-' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 }
+/* ⛔ 2026-10-02 (fix-2) : un sel TIRE par l app peut etre retire ; un sel TAPE (ou venu d un lien) ne l est jamais. */
+let selAuto = false;
 function remplirSelSiVide() {
   const el = $('#cSel');
-  if (!String(el.value || '').trim()) el.value = selAleatoire();
+  if (!String(el.value || '').trim()) { el.value = selAleatoire(); selAuto = true; }
 }
 function nouveauSel() {
   $('#cSel').value = selAleatoire();
+  selAuto = true;
   majFraisEtRecap();
+}
+/** La devise de la paire choisie a Create (ETH natif = 0x0). */
+function deviseDeCreation() {
+  return paireChoisie && /^0x[0-9a-fA-F]{40}$/.test(String(paireChoisie.adr || '')) ? String(paireChoisie.adr) : '0x' + '0'.repeat(40);
 }
 
 function validerCreation() {
@@ -16451,7 +16465,16 @@ async function verifierAdresseCreation() {
     const opts = utiliseCreateRouter()
       ? { to: CREATE_ROUTER, value: valeurCreation(fraisWeiCalcule != null ? fraisWeiCalcule : CREATE_FEE_WEI_FLOOR) }
       : {};
-    const r = await adresseOuRefus(appelBrut, compte, data, opts);
+    let r = await adresseOuRefus(appelBrut, compte, data, opts);
+    /* ⛔⛔ 2026-10-02 (fix-2) : le V8 preleve en currency0. Un block dont l adresse passe DEVANT sa devise (action B20)
+     *   ferait payer chaque frais d echange en block. Un sel tire par l app est retire jusqu a passer derriere ;
+     *   ~50 % par essai, 32 essais = une chance sur 4 milliards d echouer. Un sel tape n est jamais change. */
+    for (let i = 0; selAuto && r && r.adresse && !blockApresDevise(r.adresse, deviseDeCreation()) && i < 32; i++) {
+      $('#cSel').value = selAleatoire();
+      const v2 = validerCreation();
+      if (v2.ko) break;
+      r = await adresseOuRefus(appelBrut, compte, calldataCreation(v2), opts);
+    }
     if (r.refus && refusSimulationSansFonds(r.refus)) { direSimulationSansFonds(e); return null; }
     if (r.refus) { e.className = 'note wKo'; e.textContent = r.refus; return null; }
     /* ⛔ L ADRESSE EST DEMANDEE A LA FACTORY, jamais calculee ici. */
@@ -16974,6 +16997,48 @@ async function recupererPrepayeCreateRouter(adr) {
  *    n est applique.
  * Rend 'SANS' (garder le parcours etape par etape), 'FAIT' ou 'STOP' (message deja affiche).
  * BORNES : ETH (hook V2) et les devises de la liste V3 (USDC, cbBTC, actions) ; un lot rate bascule sur le parcours classique. */
+/* ══ 2026-10-02 (fix-2, item 4) — TOUT VERIFIER AVANT createPaid ═════════════════════════════════════════════════════
+ * ⛔⛔ createPaid encaisse 0,0007 ETH tout de suite. Si la suite (approbations, inscrire, mint) ne peut pas aboutir, l argent
+ *     est parti et la pool jamais. Sans changer de contrat, on simule AVANT le wallet la sequence entiere, dans UN etat :
+ *       [createPaid (valeur reelle), approve, Permit2.approve, inscrire (reste = 0,001 - valeur envoyee), mint]
+ *     depuis CE compte : soldes, approbations, parametres de pool et frais y sont tous verifies par la chaine elle-meme.
+ *     Le plan est calcule sur le « block prevu » (lecture seule) ; la simulation tourne sur la chaine nue, ou createPaid
+ *     cree le block a l adresse predite.
+ *   Rend { etat: 'ACCEPTE' | 'REFUSE' | 'NON_MESURE', pourquoi }. REFUSE = on n envoie rien. NON_MESURE (noeud muet,
+ *   plan illisible) = on garde le comportement d avant et on le journalise : bloquer sur un hoquet RPC tuerait Create. */
+async function preverifierNaissancePayee({ adresse, appelCreate }) {
+  try {
+    const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
+    const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise, devise });
+    if (!hook || /^0x0{40}$/i.test(String(hook))) return { etat: 'NON_MESURE', pourquoi: 'no birth hook read' };
+    const rep = repartitionFrappe(SUPPLY_FIXE, compte);
+    const k = rep.destinataires.findIndex((d) => String(d).toLowerCase() === String(compte).toLowerCase());
+    const solde = k >= 0 ? BigInt(rep.montants[k]) : 0n;
+    const rpcPrevu = rpcAvecBlockPrevu(rpc, { jeton: adresse, compte, supply: SUPPLY_FIXE, dec: DECIMALES_FIXES, solde, permit2: PERMIT2 });
+    const valo = devise ? await valoDefautEnDevise(devise) : VALO_DEFAUT_ETH;
+    /* ⛔ sans valeur de depart lue, la mise en vie s arretera a l etape 1 APRES createPaid (mesure fork, paire NVDAc) :
+     *   ce n est pas un hoquet, c est un prealable — on refuse avant de payer. */
+    if (!(valo > 0)) return { etat: 'REFUSE', pourquoi: 'the starting price of this pair could not be read' };
+    let quoteW = null;
+    if (!devise) {
+      quoteW = await preparerQuoteEthDefaut(true);
+      if (quoteW == null || quoteW < CREATE_FEE_WEI_FLOOR) quoteW = CREATE_FEE_WEI_FLOOR;
+    }
+    let plan = await planLancement({ rpc: rpcPrevu, chaine: CHAINE, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999,
+      ...(devise ? { devise } : {}), hooks: hook,
+      ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
+    const reste = FRAIS_OUVERTURE_WEI - BigInt(appelCreate.value || '0x0');
+    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: reste > 0n ? reste : 0n, hook });
+    if (!plan || !plan.tx) return { etat: 'NON_MESURE', pourquoi: 'launch plan not built' };
+    if (!mintLancementRecevable(plan)) return { etat: 'REFUSE', pourquoi: 'the market could not open after the fee' };
+    const appels = [appelCreate, ...(plan.etapes || []).map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
+      { to: plan.tx.to, data: plan.tx.data, value: plan.tx.value || '0x0' }];
+    const sq = await simulerSequenceLancement({ rpc, compte, appels });
+    return { ...sq, n: appels.length };
+  } catch (err) {
+    return { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 160) };
+  }
+}
 let sansGroupe = false;
 async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, e }) {
   const eth = window.ethereum;
@@ -17191,9 +17256,20 @@ async function creerBlock() {
     }
     majFraisEtRecap();
   }
-  const v = validerCreation();
+  let v = validerCreation();
   /* l adresse prevue est RECALCULEE juste avant la creation : c est elle qui part dans l URL du logo grave */
   if (!v.ko && Number(CHAINE) === 8453) { try { await verifierAdresseCreation(); } catch (_) { adressePrevue = null; } }
+  /* ⛔ 2026-10-02 (fix-2) : verifierAdresseCreation a pu RETIRER un sel auto (ordre des adresses) — on relit le formulaire. */
+  if (!v.ko) v = validerCreation();
+  /* ⛔ un sel TAPE qui met le block devant sa devise : le frais d echange serait paye en block. Refus, rien d envoye. */
+  if (!v.ko && Number(CHAINE) === 8453 && adressePrevue && adressePrevue.sel === v.sel
+    && !blockApresDevise(adressePrevue.adresse, deviseDeCreation())) {
+    e.className = 'note wKo';
+    e.textContent = 'This salt puts your block before ' + ((paireChoisie && paireChoisie.symbole) || 'its pair')
+      + ' in its market, so every trading fee would be paid in your own block. Press New salt. Nothing was sent.';
+    try { etape('cree_refus_ordre_sel'); } catch (_) {}
+    return;
+  }
   /* ⛔ UN REFUS SE DIT : on n efface plus le message pour sortir sans rien afficher. */
   /* ⛔⛔ LE REFUS LE PLUS PROBABLE DES 31 CLICS PERDUS, et celui qu on ne voyait pas du tout : un
    *     formulaire incomplet. Le 2026-09-19, 17 clics sur Create ont donne 2 blocks. Si la plupart
@@ -17461,6 +17537,18 @@ async function creerBlock() {
           return;
         }
         adresseCreee = adrSend;
+        /* ⛔⛔ 2026-10-02 (fix-2, item 4) : TOUT est verifie AVANT createPaid — rien n est encaisse si la suite echouerait.
+         *   Une reprise (prepaye deja enregistre pour ce block) ne repasse pas par ici : elle va droit a la mise en vie. */
+        e.className = 'note';
+        e.textContent = 'Checking the whole birth on chain before any payment…';
+        const pre = await preverifierNaissancePayee({ adresse: adrSend, appelCreate: { to: toSend, data: dataSend, value: valueSend } });
+        try { console.info('[Instant Birth] pre-check before createPaid', pre.etat, pre.pourquoi || '', pre.n || ''); } catch (_) {}
+        if (pre.etat === 'REFUSE') {
+          e.className = 'note wKo';
+          e.textContent = 'The chain would not finish this birth (' + String(pre.pourquoi || '').slice(0, 160) + '), so nothing was sent.';
+          try { etape('cree_refus_presim'); } catch (_) {}
+          return;
+        }
         e.className = 'note';
         e.textContent = 'Instant Birth — 0.001 ETH in total: ' + ethLisible(BigInt(valueSend)) + ' ETH now, the rest when its market opens. Check your wallet: it should not ask for zero.';
         try { console.info('[Instant Birth] CreateRouter same-sig paid', toSend, valueSend, adrSend); } catch (_) {}
@@ -19483,7 +19571,7 @@ function autoRemplirNomDepuisSym() {
 $('#cSym').addEventListener('input', () => { peindreApercuCreation(); autoRemplirNomDepuisSym(); });
 $('#cSym').addEventListener('blur', autoRemplirNomDepuisSym);
 $('#cNom').addEventListener('input', peindreApercuCreation);
-$('#cSel').addEventListener('input', majFraisEtRecap);
+$('#cSel').addEventListener('input', (ev) => { if (ev && ev.isTrusted) selAuto = false; majFraisEtRecap(); });
 $('#cSelNouveau').addEventListener('click', nouveauSel);
 $('#cCerveau').addEventListener('change', majFraisEtRecap);
 $('#cRole').addEventListener('change', () => { peindreRolesCreate(); majFraisEtRecap(); });
@@ -19712,6 +19800,7 @@ if (presetLien) {
   $('#cNom').value = presetLien.nom;
   $('#cSym').value = presetLien.sym;
   $('#cSel').value = presetLien.sel;
+  selAuto = false;
   peindreApercuCreation();
   majFraisEtRecap();
   setTimeout(() => allerA('creer'), 0);

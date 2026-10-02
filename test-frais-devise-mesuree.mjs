@@ -37,11 +37,15 @@ const BLOCK = '0xb20000000000000000000016d09cd53724fc0601';
 const COMPTE = '0x1111111111111111111111111111111111111111';
 
 /** Un marche deja lu, cote dans `devise` : on evite tout reseau pour la decouverte. */
-const marcheEn = (devise) => ({
+const marcheEn = (devise, hooks = HOOK) => ({
   etat: 'LUE', vie: 10, devise: 'AAPLc', via: 'v4',
-  cle: { currency0: devise, currency1: BLOCK, fee: 3000, tickSpacing: 60, hooks: HOOK },
+  cle: { currency0: devise, currency1: BLOCK, fee: 3000, tickSpacing: 60, hooks },
 });
 const HOOK = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
+/* ⛔ 2026-10-02 (fix-2, item 1) : sur le V8 (HOOK), le hook verse deja a6cf dans la devise du marche ; une devise MESUREE
+ *   est vendable, donc le routeur ne prend plus ses 0,5 % (un frais par jambe). Les cas « le routeur prend 0,5 % dans la
+ *   devise » se jouent donc sur un de NOS hooks qui ne verse pas a a6cf (V5) — meme verrou de devise, meme taux. */
+const { HOOK_V5 } = await import('./tokenomics.js');
 
 /** RPC de laboratoire : un devis positif, et une simulation qui accepte. */
 function rpcLabo() {
@@ -79,7 +83,7 @@ v('⛔ un ensemble VIDE se comporte exactement comme avant', async () => {
 v('⛔⛔ une devise MESUREE ouvre le marche, et le frais y est libelle', async () => {
   /* ⛔⛔ LE CAS CENTRAL : c est ce qui rend les 8 actions liquides reellement echangeables. */
   const p = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
-    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr),
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr, HOOK_V5),
     fraisDevisesOk: new Set([String(AAPL.adr).toLowerCase()]) });
   assert.notEqual(p.etat, 'REFUSE', 'une devise mesuree reste refusee : ' + p.pourquoi);
   assert.ok(p.resume, 'aucun resume rendu');
@@ -95,7 +99,7 @@ v('⛔⛔ une devise MESUREE ouvre le marche, et le frais y est libelle', async 
 v('⛔ le taux ne bouge pas en ouvrant la porte', async () => {
   /* ⛔ Ouvrir un marche et changer le tarif au passage serait deux decisions dans un seul geste. */
   const p = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
-    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr),
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr, HOOK_V5),
     fraisDevisesOk: new Set([String(AAPL.adr).toLowerCase()]) });
   assert.equal(BigInt(p.resume.fraisBps), FRAIS_INTERFACE_BPS,
     'le taux du frais a change en meme temps que la devise : une decision a la fois');
@@ -110,8 +114,21 @@ v('⛔⛔ l USDC reste autorise SANS aucun ensemble — on ne casse pas ce qui m
   assert.notEqual(p.etat, 'REFUSE', 'un marche USDC est devenu refuse : regression : ' + p.pourquoi);
 });
 
+v('⛔⛔ V8 + devise MESUREE : le hook paie a6cf dans la devise, le routeur ne prend RIEN (un frais par jambe)', async () => {
+  const p = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr),
+    fraisDevisesOk: new Set([String(AAPL.adr).toLowerCase()]) });
+  assert.notEqual(p.etat, 'REFUSE', 'une devise mesuree reste refusee : ' + p.pourquoi);
+  assert.equal(BigInt(p.resume.fraisBps), 0n, 'le routeur empile encore ses 0,5 % sur le hook V8');
+  assert.equal(p.resume.beneficiaireFrais, null, 'un TAKE routeur vers a6cf subsiste');
+  /* controle negatif : sans mesure, le meme marche V8 reste REFUSE (le hook paierait dans une devise non mesuree) */
+  const q = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr) });
+  assert.equal(q.etat, 'REFUSE', 'V8 sans mesure : accepte');
+});
+
 for (const [nom, fn] of cas) { await fn(); n++; }
-assert.equal(n, 5, 'compte de cas inattendu : ' + n);
+assert.equal(n, 6, 'compte de cas inattendu : ' + n);
 console.log('ok frais-devise-mesuree — ' + n + ' cas, planificateur REEL execute : une devise');
 console.log('   mesuree ouvre le marche, une devise non mesuree reste refusee, l USDC intact.');
 console.log('⚠️ NE PROUVE PAS que les jetons encaisses seront revendus, ni a quel prix : seulement');

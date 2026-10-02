@@ -47,10 +47,20 @@ const srcDyn = html.slice(dDyn, indexEol(html, /\r?\n\}/, dDyn) + 2);
 assert.ok(srcDyn.includes('FRAIS_DYNAMIQUE_V4'), 'extraction de fraisEstDynamique incomplete');
 const fraisEstDynamique = new Function('FRAIS_DYNAMIQUE_V4', srcDyn + '\nreturn fraisEstDynamique;')(0x800000);
 
-const choisir = new Function('poolsLive', 'estNotreHook', 'confianceDe', 'fraisEstDynamique', 'adr',
+/* ⛔ 2026-10-02 (fix-2) : poolDecouvertPour applique la regle du fondateur (jamais une pool sans hook pour un block B20)
+ *   et le choix « Buy here » des V8 ou le block passe devant. Dependances REELLES, importees. Le classement ci-dessous se
+ *   teste donc sur un jeton HORS B20 (JETON) ; le cas SPIKE reel (B20) a son propre cas : il ne route plus sans hook. */
+const { poolSansHookInterdite } = await import('./pool-sans-hook.js');
+const { choixBuyHere, v8BlockDevant } = await import('./paires.js');
+const { HOOK_V8 } = await import('./tokenomics.js');
+const choisirBrut = new Function('poolsLive', 'estNotreHook', 'confianceDe', 'fraisEstDynamique', 'adr',
+  'poolSansHookInterdite', 'choixBuyHere', 'v8BlockDevant', 'HOOK_V8',
   source + '\nreturn poolDecouvertPour(adr);');
+const choisir = (m, e, c, f, adr) => choisirBrut(m, e, c, f, adr, poolSansHookInterdite, choixBuyHere, v8BlockDevant, HOOK_V8);
 
-const JETON = '0xb200000000000000000000fac1a85ab57681d601';
+const SPIKE = '0xb200000000000000000000fac1a85ab57681d601';
+/* jeton hors B20 : le classement entre pools sans hook s y applique toujours */
+const JETON = '0x4200000000000000000000fac1a85ab57681d601';
 const NOTRE = '0x5926abdabf5d0006ee960a8270f3e124e5a764cc';
 const estNotreHook = (h) => String(h || '').toLowerCase() === NOTRE;
 const confianceDe = (cle) => (String(cle.hooks || '').toLowerCase() === '0x0000000000000000000000000000000000000000'
@@ -160,5 +170,14 @@ v('l ecran dit combien de pools ont ete lues, et seulement s il y a eu un choix'
     'la ligne s afficherait meme sans choix reel — annoncer une comparaison qui n a pas eu lieu');
 });
 
-assert.equal(n, 9, 'compte de cas inattendu apres ajout : ' + n);
+v('regle du fondateur : SPIKE (B20) et ses sept pools sans hook -> aucune route ; une pool hookee reste choisie', () => {
+  const sp = (fee, hooks) => ({ jeton: SPIKE, cle: { currency0: ZERO, currency1: SPIKE, fee, tickSpacing: 200, hooks } });
+  const m = new Map([[1, sp(770000, ZERO)], [2, sp(887323, ZERO)], [3, sp(878449, ZERO)], [4, sp(500000, ZERO)]]);
+  assert.equal(choisir(m, estNotreHook, confianceDe, fraisEstDynamique, SPIKE), null, 'une pool sans hook a ete choisie pour un block B20');
+  /* controle negatif : la meme carte + une pool hookee -> la hookee */
+  m.set(5, sp(0, NOTRE));
+  const r = choisir(m, estNotreHook, confianceDe, fraisEstDynamique, SPIKE);
+  assert.ok(r && String(r.cle.hooks).toLowerCase() === NOTRE, 'la pool hookee n est pas choisie');
+});
+assert.equal(n, 10, 'compte de cas inattendu apres ajout : ' + n);
 console.log('ok pool-la-moins-chere — ' + n + ' cas, fonction extraite d app.html et EXECUTEE');
