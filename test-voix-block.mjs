@@ -11,6 +11,7 @@ import { parolesDuTour } from './parole-cerveaux.js';
 import {
   nettoyerTexte, nettoyerVoix, voixPublique, lireVoixPublique, resumeSavoir, messageVoix, verifierEcriture,
   recupererSignataire, proprietaireDuBlock, reactionVoix, composerParole, BORNES_VOIX, PAROLE_MAX_OCTETS,
+  etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, partageVoix,
 } from './voix-block.js';
 import { TOPIC_CREATED, FACTORY } from './index-blocks.js';
 
@@ -56,7 +57,7 @@ eq(tour({ A: vAmi }).paroles[1].de, C, 'le block prefere (CCC) repond avant le s
 eq(tour({ A: nettoyerVoix({ amis: ['ZZZ'] }).voix }).paroles[1].de, B, 'TEMOIN : un ami absent ne change pas le repondant');
 const vNews = lireVoixPublique(voixPublique(nettoyerVoix({ savoir: 'We open a shop in Brussels on Monday. Second sentence stays home.' }).voix));
 const tNews = tour({ A: vNews }, 0);
-ok(tNews.paroles[0].texte.includes('My news: “We open a shop in Brussels on Monday.”') && !tNews.paroles[0].texte.includes('Second'),
+ok(tNews.paroles[0].texte.includes('Creator says: “We open a shop in Brussels on Monday.”') && !tNews.paroles[0].texte.includes('Second'),
   'le savoir est partage en RESUME (premiere phrase) seulement');
 ok(tNews.paroles[1].texte.endsWith('Thanks for the news.'), 'l autre cerveau accuse reception');
 const tSujets = tour({ A: nettoyerVoix({ sujets: ['art', 'coffee'] }).voix }, 0);
@@ -165,6 +166,55 @@ ok(bloc.length > 1000, 'le code de la fiche est extrait (' + bloc.length + ' car
 ok(!/0x[0-9a-fA-F]{40}/.test(carte + bloc) && !/FEE_WALLET|Fees for Dev/i.test(carte + bloc), 'ni adresse de frais, ni « Fees for Dev » dans ce qui a ete ajoute');
 ok(/enTexte|textContent/.test(bloc) && !/innerHTML\s*=\s*[^;]*\b(voix|v|x|r)\.(bio|savoir|lignes|resume)/.test(bloc), 'le texte du createur n est jamais pose en innerHTML');
 ok(/voix: voixDe\(h\.adr\)/.test(app), 'la parole de la map recoit la voix de chaque block');
-ok(/nettoyerVoix\(effacer \? \{\} : lireFormulaireVoix\(\)\)/.test(bloc) && /messageVoix\(/.test(bloc), 'la page nettoie puis fait signer le meme texte que le serveur verifie');
+ok(/nettoyerVoix\(lireFormulaireVoix\(\)\)/.test(bloc) && /messageVoix\(/.test(bloc), 'la page nettoie puis fait signer le meme texte que le serveur verifie');
+
+console.log('— 7. fiche : qui voit quoi (etats caches / montres)');
+eq(etatEditeurVoix({ chaine: 8453, compte: AUTRE, createur: CREATEUR }), 'CACHE', 'un autre wallet que le createur : editeur CACHE');
+eq(etatEditeurVoix({ chaine: 8453, compte: CREATEUR.toUpperCase().replace('0X', '0x'), createur: CREATEUR }), 'EDITEUR', 'TEMOIN : le createur (casse differente) voit l editeur');
+eq(etatEditeurVoix({ chaine: 8453, compte: null, createur: CREATEUR }), 'CONNECTER', 'pas connecte : « Your block? Connect… »');
+ok(etatEditeurVoix({ chaine: 8453, compte: CREATEUR, createur: CREATEUR }) !== 'CONNECTER', 'TEMOIN : connecte, plus d invitation');
+eq(etatEditeurVoix({ chaine: 8453, compte: AUTRE, createur: null }), 'EDITEUR', 'createur inconnu : editeur (le serveur tranche)');
+eq(etatEditeurVoix({ chaine: 84532, compte: CREATEUR, createur: CREATEUR }), 'HORS_BASE', 'hors Base : ni editeur ni invitation');
+/* ⛔ LE VRAI CODE DE LA PAGE, execute sur de faux elements : extrait de app.html, pas recopie */
+const fonction = (nom) => (bloc.match(new RegExp('function ' + nom + '\\([^)]*\\) \\{[\\s\\S]*?\\r?\\n\\}\\r?\\n')) || [''])[0];
+const fAcces = fonction('peindreAccesVoix'), fBascule = fonction('basculerLigneVoix');
+ok(fAcces.length > 100 && fBascule.length > 50, 'peindreAccesVoix et basculerLigneVoix extraites de la page');
+const dom = () => { const el = {}; return { el, $: (q) => (el[q] = el[q] || { hidden: false, open: false, value: 'normal', dataset: { block: A } }) }; };
+const acces = (compte, voixCreateur) => { const d = dom();
+  new Function('$', 'createursConnus', 'CHAINE', 'compte', 'voixCreateur', 'etatEditeurVoix', fAcces + '; return peindreAccesVoix();')(d.$, new Map(), 8453, compte, voixCreateur, etatEditeurVoix);
+  return { editeur: d.el['#pvEditer'].hidden, invite: d.el['#pvConnecter'].hidden }; };
+eq(acces(AUTRE, CREATEUR), { editeur: true, invite: true }, 'page, non-createur : « Change how it talks » cache, aucune invitation');
+eq(acces(CREATEUR, CREATEUR), { editeur: false, invite: true }, 'TEMOIN page, createur : editeur montre');
+eq(acces(null, CREATEUR), { editeur: true, invite: false }, 'page, pas connecte : seule l invitation est montree');
+ok(/id="pvEditer" hidden/.test(carte) && /id="pvConnecter" hidden/.test(carte), 'les deux partent CACHES dans le HTML (rien ne s affiche avant de savoir)');
+const bascule = (valeur) => { const d = dom(); d.$('[data-voix-style="new_buy"]').value = valeur;
+  new Function('$', fBascule + '; basculerLigneVoix("new_buy");')(d.$); return d.el['[data-voix-ligne="new_buy"]'].hidden; };
+eq(bascule('own'), false, '« Its own words… » choisi : le champ apparait');
+eq(bascule('happy'), true, 'TEMOIN : un style choisi : le champ reste cache');
+ok((carte.match(/data-voix-ligne/g) || []).length === 0 && /hidden><\/label>/.test(bloc), 'plus de champ « optional » visible par defaut : chaque champ nait cache');
+eq(choixReaction({ ligne: 'Yay' }), 'own', 'une reaction ecrite rouvre le menu sur « Its own words… »');
+eq(choixReaction({ style: 'quiet' }), 'quiet', 'TEMOIN : un style reste un style');
+eq(reactionDepuisChoix('own', 'Yay'), { ligne: 'Yay' }, 'menu « own » + texte = la ligne');
+eq(reactionDepuisChoix('happy', 'texte oublie'), { style: 'happy' }, 'TEMOIN : un texte laisse dans un champ cache ne part PAS');
+eq(resumeReactions({ new_buy: { ligne: 'x' }, new_sell: { style: 'calm' }, price_up: { style: 'normal' } }), '8 events · 2 custom', 'resume « 8 events · 2 custom »');
+eq(resumeReactions({}), '8 events · 0 custom', 'TEMOIN : rien de regle, 0 custom');
+eq(amisIntrouvables(['MUC', 'NOPE'], [{ adr: B, sym: 'MUC' }]), ['NOPE'], 'un ami qui ne correspond a aucun block : « not found »');
+eq(amisIntrouvables(['NOPE'], []), [], 'TEMOIN : map pas encore lue, on ne juge personne');
+const grosT = blocs({ A: nettoyerVoix({ reactions: { big_trade: { ligne: 'Whale spotted!' } } }).voix });
+grosT[0].echange = { quantite: '5000', eth: '5', devise: 'TBLOCK' };
+ok(!parolesDuTour({ blocks: grosT, tick: 7 }).paroles[0].texte.includes('Whale'), '5 TBLOCK ne sont pas un gros echange (montant hors ETH)');
+grosT[0].echange.devise = 'ETH';
+ok(parolesDuTour({ blocks: grosT, tick: 7 }).paroles[0].texte.includes('Whale'), 'TEMOIN : 5 ETH en est un');
+
+console.log('— 8. textes de la fiche');
+ok(carte.includes('Save · free signature') && carte.includes('Reset to default') && carte.includes('not saved until you sign'), 'bouton « Save · free signature », lien « Reset to default »');
+ok(bloc.includes("'Everything here is public and read by other blocks. Signing is free and moves no money. Links, wallet addresses and price promises are removed.'"), 'pied de formulaire mot pour mot');
+ok(/Voice<\/b><\/summary>/.test(carte) && /id="pvSecVoix" open/.test(carte) && /id="pvSecReact">/.test(carte), 'trois sections ; « Voice » ouverte, « How it reacts » fermee');
+ok(/position:sticky;bottom:calc\(70px \+ env\(safe-area-inset-bottom\)\)/.test(carte), 'le bouton Save reste en bas de l ecran, au-dessus de la barre d onglets');
+ok(carte.includes('Topics it likes, separated by commas') && carte.includes('Blocks it talks to, names separated by commas') && carte.includes('up to 2000 characters'), 'libelles revus');
+ok(bloc.includes("'Someone leaves it a message'") && !bloc.includes('A message arrives'), '« Someone leaves it a message »');
+ok(bloc.includes("'Sounds like: '") && bloc.includes("'For example: '") && bloc.includes("'Other blocks hear only: “'"), '« Sounds like » / « For example » / « Other blocks hear only »');
+ok(partageVoix({ resume: 'We sell hats.' }, 0) === 'Creator says: “We sell hats.”', 'les nouvelles sont attribuees au createur');
+ok(!/Back to default|\(optional\)|placeholder="optional"/.test(carte + bloc), 'TEMOIN : les anciens textes ont disparu');
 
 console.log('\n' + n + ' assertions, 0 KO');

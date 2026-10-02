@@ -135,7 +135,7 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     paroles.push({ type: 'REPOND', de: autre.adr, sym: nom(autre), a: b.adr, symA: nom(b),
       /* humeur non lue (marche illisible) : on ne la dit pas — « I am unable to read my market myself » ne veut rien dire */
       texte: composerParole(base, reponseVoix === 'SILENCE' ? null : reponseVoix,
-        partage && partage.startsWith('My news:') ? 'Thanks for the news.' : null),
+        partage && partage.startsWith('Creator says:') ? 'Thanks for the news.' : null),
       parce_que: 'a reply — ' + deQui(b, e), evenement: e });
   }
   return { paroles, dernieres: d };
