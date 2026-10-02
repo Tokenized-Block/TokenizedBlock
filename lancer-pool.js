@@ -22,7 +22,7 @@ import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale
   encodeSwapExactInSingle, SANS_MINHOP, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
-import { HOOK_V8, HOOK_V9, estHookDeNaissance } from './tokenomics.js';
+import { HOOK_V8, HOOK_V9, estHookDeNaissance, hookPaieDejaA6cf } from './tokenomics.js';
 import { hookDeLancementPour } from './paires.js';
 
 /* ══ CONSTANTES — RECOPIEES DE index.html, COMPAREES PAR UN TEST ═════════════════════════════ */
@@ -222,6 +222,11 @@ export function construireAppelMicroSwapNaissance({ cle, chaine, montantEth = MI
   if (!cle || !cle.currency0) return { etat: 'REFUSE', pourquoi: 'Instant Birth micro-swap needs a pool key' };
   const m = typeof montantEth === 'bigint' ? montantEth : BigInt(montantEth || 0);
   if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'Instant Birth micro-swap amount must be > 0' };
+  /* ⛔ 2026-10-02 : ce swap ne porte AUCUN frais routeur — seul le hook peut payer a6cf. Sur Base, une cle dont le
+   *   hook ne verse pas a6cf a l achat serait un achat sans frais : refuse (jamais vu tant que Birth = V8). */
+  if (Number(chaine) === 8453 && !hookPaieDejaA6cf(cle.hooks, 'ACHAT')) {
+    return { etat: 'REFUSE', pourquoi: 'Instant Birth micro-swap refused: this pool hook does not pay the fee' };
+  }
   const dl = deadline != null ? BigInt(deadline) : BigInt(Math.floor(Date.now() / 1000) + DELAI_S);
   const zeroForOne = !!blockEst1; /* ETH is c0 ⇒ buy block (c1) = zeroForOne */
   const data = encodeSwapExactInSingle({
@@ -503,6 +508,37 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
  * Demande a la chaine d executer la transaction de lancement, SANS l envoyer.
  * ⛔ FAIL-CLOSED : « je n ai pas pu verifier » n est jamais « c est accepte ».
  */
+/** ⛔ 2026-10-02 (0x753d, 0,0003 ETH payes, aucune pool) : la MEME regle que la garde de `lancerMarcheBlock`, en un
+ *  seul endroit. Une naissance doit porter de l ETH dans le mint — SAUF la naissance sans apport (100 % block),
+ *  l ecran par defaut depuis le 2026-09-26, dont le mint part legitimement a 0. */
+export function mintLancementRecevable(plan) {
+  if (!plan || !plan.tx) return false;
+  if (!plan.naissance) return true;
+  if (plan.p && plan.p.sansApport) return true;
+  return !!plan.ethRequis && BigInt(plan.ethRequis) > 0n && String(plan.tx.value || '0x0') !== '0x0';
+}
+
+/** Avant de PAYER : la sequence entiere [etapes restantes…, mint] est-elle acceptee par la chaine, dans l ordre,
+ *  depuis ce compte ? Une seule reponse « oui » : chaque appel en 0x1. Tout le reste (refus, noeud muet) = non. */
+export async function simulerSequenceLancement({ rpc, compte, appels }) {
+  if (!Array.isArray(appels) || !appels.length) return { etat: 'REFUSE', pourquoi: 'nothing to simulate' };
+  const calls = appels.map((a) => ({ from: compte, to: a.to, data: a.data, value: a.value || '0x0' }));
+  let sim;
+  try {
+    sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls }], validation: false, traceTransfers: false }, 'latest']);
+  } catch (e) {
+    return { etat: 'NON_MESURE', pourquoi: 'the chain was not asked: ' + String((e && e.message) || e).slice(0, 160) };
+  }
+  const res = (sim && sim[0] && sim[0].calls) || [];
+  if (res.length !== calls.length) return { etat: 'NON_MESURE', pourquoi: 'the node did not answer for every step' };
+  const i = res.findIndex((c) => c.status !== '0x1');
+  if (i >= 0) {
+    return { etat: 'REFUSE', etape: i, pourquoi: 'step ' + (i + 1) + ' of ' + calls.length + ' would fail: '
+      + String((res[i].error && res[i].error.message) || 'reverted').slice(0, 160) };
+  }
+  return { etat: 'ACCEPTE' };
+}
+
 export async function simulerLancement({ rpc, compte, tx }) {
   /* tip 0211: eth_simulateV1 alone has been seen to REFUSE Instant Birth mint after a paid V8
    * inscription while eth_estimateGas on the same mint accepts (and the mint would land). Ask

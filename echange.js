@@ -15,7 +15,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU, estNotreHook } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, estNotreHook, hookPaieDejaA6cf } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -69,8 +69,14 @@ export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() =
  *   d un TAKE vers a6cf — sont inchanges. Un appelant qui oublierait le parametre retombe sur
  *   `FRAIS_INTERFACE_BPS`, donc sur le comportement d avant : le defaut est le plus strict. */
 function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk = null,
-  bpsAttendu = FRAIS_INTERFACE_BPS }) {
+  bpsAttendu = FRAIS_INTERFACE_BPS, hookPaie = false }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
+  /* ⛔ 2026-10-02 : le hook verse deja a6cf sur cette jambe -> le routeur ne prend RIEN (un frais par jambe). */
+  if (hookPaie) {
+    if (bps !== 0n) return 'double fee: the hook already pays the fee wallet on this leg';
+    return jsonSafe(actions || []).toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())
+      ? 'double fee: a router TAKE to the fee wallet on a leg the hook already pays' : null;
+  }
   if (bps !== bpsAttendu) return 'interface fee bps missing (want ' + bpsAttendu + ')';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {
     return 'fee beneficiary is not the configured fee wallet';
@@ -157,16 +163,21 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
    *    from Buy/Sell volume (hooked path skipped interface AND hook was not depositing). Stacked fees
    *    (hook chop + 0.5% interface) beat zero fees. hooked Dex may add hook chop on top. Birth=V8 only. */
   const hookPaieDeja = !!(marche.cle && estNotreHook(marche.cle.hooks));
-  const bps = estWalletDeFrais(compte) ? 0n : FRAIS_INTERFACE_BPS;
+  /* ⛔ 2026-10-02 : mesure fork — V8 achat/vente, V1/V2 vente : le hook verse deja a6cf en ETH. */
+  /*   Mesure faite sur des pools ETH seulement : une pool contre une devise ERC-20 garde le frais routeur. */
+  const hookPaie = marche.paire !== 'TBLOCK' && !!(marche.cle && String(marche.cle.currency0).toLowerCase() === ETH
+    && hookPaieDejaA6cf(marche.cle.hooks, sens));
+  const bps = (estWalletDeFrais(compte) || hookPaie) ? 0n : FRAIS_INTERFACE_BPS;
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
   /* ⛔⛔ ACHAT VIA TBLOCK (Phil, 2026-09-13 : « fait l achat via TBLOCK ») : un block apparie a TBLOCK se paie en ETH
    *    et se vend pour de l ETH, en DEUX sauts dans UNE transaction — ETH -> TBLOCK -> block, ou l inverse. */
   if (marche.paire === 'TBLOCK') {
     const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
     if (!route.actions) return route;
-    const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume: route.resume, actions: route.actions });
+    const koFrais = assertFraisInterfaceA6cf({ compte, bps: route.bps, resume: route.resume, actions: route.actions, hookPaie: route.hookPaie });
     if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume: route.resume };
-    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...route });
+    const { bps: _b, hookPaie: _h, ...routeF } = route;
+    return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...routeF });
   }
   const cle = marche.cle;
   if (String(cle.currency0).toLowerCase() !== ETH) {
@@ -223,7 +234,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
     }
-    const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk });
+    const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk, hookPaie });
     if (koPair) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koPair, resume: resumeD };
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: valeurD, resume: resumeD,
       cle, zeroForOne: zf, sortieMinTete: 0n, jetonPaye: entree, valeurEth: false });
@@ -314,7 +325,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
   resume.fraisMarcheBps = hookPaieDeja ? 300 : null;
-  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
+  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaie });
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
 }
@@ -332,6 +343,9 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
     return { etat: 'NON_MESURE', pourquoi: 'this block trades against TBLOCK, and the TBLOCK/ETH market could not be read' };
   }
   const cleB = marche.cle, cleT = mt.cle;
+  /* ⛔ 2026-10-02 : le frais ETH se prend sur la jambe TBLOCK/ETH ; si SON hook verse deja a6cf, rien de plus. */
+  const hookPaie = hookPaieDejaA6cf(cleT.hooks, sens);
+  if (hookPaie) bps = 0n;
   const tblockEst0 = String(cleB.currency0).toLowerCase() === TBLOCK.toLowerCase();
   const saut1 = sens === 'ACHAT' ? { cle: cleT, zeroForOne: true } : { cle: cleB, zeroForOne: !tblockEst0 };
   const saut2 = sens === 'ACHAT' ? { cle: cleB, zeroForOne: tblockEst0 } : { cle: cleT, zeroForOne: false };
@@ -356,7 +370,7 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
     const resume = { paye: m, payeDevise: 'ETH', recoitAuMoins: min, recoitDevise: 'block',
       quote: sortie, frais, fraisDevise: 'ETH', montantSwap: net, via: 'TBLOCK',
       fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null };
-    return { actions, valeur: m, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t) };
+    return { actions, valeur: m, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t), bps, hookPaie };
   }
   /* VENTE: fee in ETH from the final hop */
   let t, sortie;
@@ -378,7 +392,7 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
   const resume = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'ETH',
     quote: sortie, frais: fraisVente, fraisDevise: 'ETH', montantSwap: m, via: 'TBLOCK',
     fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null };
-  return { actions, valeur: 0n, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t) };
+  return { actions, valeur: 0n, resume, cle: saut1.cle, zeroForOne: saut1.zeroForOne, sortieMinTete: moinsTol(t), bps, hookPaie };
 }
 
 /** Approbations mesurees (vente), forme de struct demandee a la chaine, encodage, simulation de la transaction exacte. */
@@ -640,7 +654,12 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *     frais ne vaut PAS `montant * bps / 10000`, et recalculer donnerait deux chiffres pour le
    *     meme prelevement — celui annonce et celui preleve. */
   let frais = 0n, bps = 0n, degressif = null;
-  if (!estWalletDeFrais(compte)) {
+  /* ⛔ 2026-10-02 : le frais se prend sur la jambe d ENTREE (saut 1). Si cette pool est une pool ETH dont
+   *   le hook verse deja a6cf dans ce sens, le routeur ne prend rien : un frais par jambe. */
+  const s1 = sauts[0] || {};
+  const hookPaie = !!(s1.cle && String(s1.cle.currency0).toLowerCase() === ETH
+    && hookPaieDejaA6cf(s1.cle.hooks, s1.zeroForOne ? 'ACHAT' : 'VENTE'));
+  if (!estWalletDeFrais(compte) && !hookPaie) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
     if (degressif.etat !== 'OK') {
       return { etat: 'REFUSE', pourquoi: 'fee could not be priced: ' + (degressif.pourquoi || 'unknown') };
@@ -712,7 +731,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   verifie donc exactement ce qu on a declare — beneficiaire, devise vendable et presence d un
    *   TAKE vers a6cf restent inchanges. Le defaut du parametre reste le plus strict. */
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
-    fraisDevisesOk, bpsAttendu: bps });
+    fraisDevisesOk, bpsAttendu: bps, hookPaie });
   if (koFrais) return { etat: 'REFUSE', pourquoi: 'fee path broken: ' + koFrais, resume };
 
   /* ⛔ `sortieMinTete` BORNE LE PREMIER SAUT, et seulement lui : les suivants sont a 0 (OPEN_DELTA),
