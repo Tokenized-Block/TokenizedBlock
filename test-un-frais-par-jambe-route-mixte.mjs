@@ -16,7 +16,8 @@
  *   fois sur un seul swap. Zero 1 a mesure exactement ca sur TBLOCK/SPCXc : hook 4 975 + routeur
  *   5 000. La regle correcte n est donc ni « toujours prendre » ni « jamais prendre » :
  *      toutes les jambes hookees -> 0 PAY_PORTION et 0 TRANSFER
- *      route MIXTE              -> EXACTEMENT 1 PAY_PORTION et 0 TRANSFER
+ *      route MIXTE              -> 0 PAY_PORTION et 0 TRANSFER  (« une fois par swap », Phil 2026-10-02 :
+ *                                  le hook a deja paye a6cf ; avant : 1 PAY_PORTION sur les jambes nues)
  *      route sans aucun hook    -> EXACTEMENT 1 PAY_PORTION
  *
  * ⛔ ET J AI MAL LU CETTE REGLE AVANT DE L ECRIRE. Ma sonde affichait
@@ -146,10 +147,10 @@ ok('6. ⭐ la route est MIXTE : au moins une jambe hookee, mais pas toutes',
 /* ⛔⛔ ON JUGE `unFraisParJambe`, PAS MON AFFICHAGE. Et on lui donne des transactions FABRIQUEES :
  *    la fonction est une GARDE AVANT ENVOI, donc son travail est de refuser une tx mal formee. */
 const tx = (...commandes) => ({ commandes });
-ok('7. ⭐ route MIXTE : EXACTEMENT un PAY_PORTION est accepte',
-  unFraisParJambe(tx(CMD.V3_SWAP_EXACT_IN, CMD.PAY_PORTION, CMD.SWEEP), route, hooks) === true);
-ok('8. ⛔ route MIXTE : ZERO PAY_PORTION est REFUSE — on ne prendrait rien sur les jambes nues',
-  unFraisParJambe(tx(CMD.V3_SWAP_EXACT_IN, CMD.SWEEP), route, hooks) === false);
+ok('7. ⭐ route MIXTE (une fois par swap) : ZERO PAY_PORTION est accepte — le hook a deja paye a6cf',
+  unFraisParJambe(tx(CMD.V3_SWAP_EXACT_IN, CMD.SWEEP), route, hooks) === true);
+ok('8. ⛔ route MIXTE : UN PAY_PORTION est REFUSE — ce serait un 2e frais sur le meme swap',
+  unFraisParJambe(tx(CMD.V3_SWAP_EXACT_IN, CMD.PAY_PORTION, CMD.SWEEP), route, hooks) === false);
 ok('9. ⛔⛔ route MIXTE : DEUX PAY_PORTION est REFUSE — c est le DOUBLE FRAIS',
   unFraisParJambe(tx(CMD.PAY_PORTION, CMD.V3_SWAP_EXACT_IN, CMD.PAY_PORTION), route, hooks) === false);
 /* ⛔ ET LA PART SEPAREE EST REFUSEE SUR UNE ROUTE MIXTE : un TRANSFER en plus du PAY_PORTION serait
@@ -178,7 +179,7 @@ ok('15. ⭐ route SANS hook : exactement un PAY_PORTION, et zero est refuse',
 console.log('');
 console.log(n + ' assertions, ' + ko + ' KO');
 console.log('   La route <un B20> -> ETH -> USDC -> AAPLc existe en 3 sauts, et le frais y est pris');
-console.log('   EXACTEMENT une fois : ni zero (on ne prendrait rien), ni deux (double frais).');
+console.log('   UNE fois par swap : par le hook s il y en a un, sinon par le routeur — jamais les deux.');
 console.log('⚠️ NE PROUVE PAS que ces pools existent ni qu elles soient liquides : les aretes sont');
 console.log('   DECLAREES. Ce banc garde la REGLE du frais selon la forme de la route.');
 console.log('⛔ ET NE PROUVE RIEN SUR LA NAISSANCE : pairer un block contre une action exige un hook');

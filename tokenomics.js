@@ -176,7 +176,9 @@ export function estNotreHook(h) {
     || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase()
     || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase()) || estHook7030(x);
 }
-/** ⛔ 2026-10-02 — UN SEUL FRAIS PAR JAMBE. LA LISTE des hooks qui versent DEJA a6cf, en ETH, dans la
+/** ⛔ 2026-10-02 — UNE FOIS PAR SWAP (Phil) : si UNE jambe porte un hook de cette liste qui paie dans une devise
+ *  vendable, le routeur ne prend rien (le planificateur, echange.js, decide via hookPaieEnDeviseVendable ; la
+ *  fonction routePaieDejaA6cf ci-dessous ne regarde que les jambes ETH et n est PAS la garde en production). LA LISTE des hooks qui versent DEJA a6cf, en ETH, dans la
  *  transaction, et pour quel sens. Mesure sur fork (bloc 52072599, callTracer) :
  *    V8 achat + vente : oui (0,5 % ETH) · V1 HOOK_PREVU et V2 : vente seulement (ETH) ·
  *    V1 achat : le hook prend du BLOCK (non compte) · V2 achat : rien dans la tx · V3–V7 : aucune pool.

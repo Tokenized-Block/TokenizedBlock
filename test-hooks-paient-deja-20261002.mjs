@@ -108,8 +108,8 @@ try {
   ok(routePaieDejaA6cf(sauts, liste), 'cas 3 : la 2e jambe V8-open est vue');
   ok(!routePaieDejaA6cf([sauts[0]], liste), 'temoin negatif : l ancienne garde (saut 1 seul) ne la voyait pas -> double frais');
   ok(!routePaieDejaA6cf([sauts[0], { ...sauts[1], cle: { ...sauts[1].cle, currency0: USDC_BASE } }], liste), 'temoin negatif : jambe hors ETH -> frais routeur garde');
-  /* ⛔ 2026-10-02 (rebase sur 87a49cb, live) : la regle en production est « le routeur ne s efface que si CHAQUE
-   *   jambe paie deja a6cf » (50a3d14, Zero 1 OK). Le V8-open en 2e jambe compte donc seulement si la 1re paie aussi. */
+  /* ⛔ 2026-10-02 Phil : « UNE FOIS PAR SWAP ». Le routeur s efface des qu UNE jambe paie deja a6cf
+   *   (remplace la regle « chaque jambe » de 50a3d14). Le temoin negatif est donc une route ou AUCUNE jambe ne paie. */
   const planMS = (ss, hooksPaieurs) => planEchangeMultiSauts({ rpc: makeRpc(), chaine: 8453, compte: COMPTE, sauts: ss,
     entree: USDC_BASE, sortie: JETON, montant: 50n * 10n ** 6n, decimalesEntree: 6, prixUsdEntree: 1,
     maintenant: Date.now(), ...(hooksPaieurs ? { hooksPaieurs } : {}) });
@@ -118,17 +118,18 @@ try {
   const usdcEthV8 = cleDePool(ETH, USDC_BASE, { fee: 0, tickSpacing: 200, hooks: HOOK_V8 });
   const tousPaient = [{ cle: usdcEthV8, zeroForOne: false }, sauts[1]];
   const mOn = await planMS(tousPaient, liste);
-  ok(routeur0(mOn), 'cas 3 : VRAI planEchangeMultiSauts, jambe 1 V8 + V8-open en 2e jambe (liste injectee) -> 0 frais routeur (' + mOn.etat + ')');
-  const mOff = await planMS(tousPaient, null);
-  ok(routeurPris(mOff), 'temoin negatif : meme route, V8-open HORS liste (depot) -> frais routeur pris (' + mOff.etat + ', ' + (mOff.resume && mOff.resume.fraisBps) + ' bps)');
+  ok(routeur0(mOn), 'cas 3 : jambe 1 V8 + V8-open en 2e jambe (liste injectee) -> 0 frais routeur (' + mOn.etat + ')');
   const mTrou = await planMS(sauts, liste);
-  ok(routeurPris(mTrou), 'regle chaque jambe : jambe 1 sans hook payeur + V8-open liste -> le routeur garde son frais (' + mTrou.etat + ', ' + (mTrou.resume && mTrou.resume.fraisBps) + ' bps)');
-  // V8 (deja liste dans le depot) : couvert sans aucune copie, si chaque jambe paie
+  ok(routeur0(mTrou), 'une fois par swap : jambe 1 sans hook + V8-open LISTE en 2e jambe -> 0 frais routeur (' + mTrou.etat + ')');
+  const mOff = await planMS(sauts, null);
+  ok(!copieTk.hookPaieDejaA6cf(OPEN_NOUVEAU, 'VENTE', HOOKS_PAIENT_DEJA_A6CF), 'temoin du temoin : le V8-open n est PAS dans la liste du depot');
+  ok(routeurPris(mOff), 'temoin negatif : AUCUNE jambe payeuse (sans hook + V8-open hors liste) -> frais routeur pris (' + mOff.etat + ', ' + (mOff.resume && mOff.resume.fraisBps) + ' bps)');
+  // V8 (deja liste dans le depot) : une seule jambe V8 suffit
   const v8Jeton = { ...sauts[1], cle: cleDePool(ETH, JETON, { fee: 0, tickSpacing: 200, hooks: HOOK_V8 }) };
   const mV8 = await planMS([{ cle: usdcEthV8, zeroForOne: false }, v8Jeton]);
   ok(routeur0(mV8), 'depot : V8 + V8 -> 0 frais routeur (' + mV8.etat + ')');
-  const mV8trou = await planMS([sauts[0], v8Jeton]);
-  ok(routeurPris(mV8trou), 'temoin negatif : jambe 1 sans hook + V8 -> frais routeur pris (pont IN live : 20 bps) (' + mV8trou.etat + ')');
+  const mV8seul = await planMS([sauts[0], v8Jeton]);
+  ok(routeur0(mV8seul), 'une fois par swap : jambe 1 sans hook + V8 -> 0 frais routeur (le V8 a deja paye a6cf) (' + mV8seul.etat + ')');
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

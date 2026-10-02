@@ -1,6 +1,7 @@
 // 2026-10-02 (Zero 1 on 50a3d14) — plain English on the Create stop screen and on the route-out refusal:
 // never 'Not done (refuse par utilisateur)', never the 'state=REFUSE_PAR_UTILISATEUR' line;
-// route-out block→USDC(V8)→ETH refused with exactly 'Not tradable here yet' (internal reason kept off screen).
+// route-out with NO paying leg (block→USDC→ETH, unhooked) refused with exactly 'Not tradable here yet' (internal reason kept off screen).
+// 2026-10-02 « une fois par swap » : block→USDC(V8)→ETH n est PLUS refuse — la jambe V8 paie a6cf, le routeur s efface.
 // CRLF-safe: app.html is read with \r\n normalized. Negative controls prove each check can fail.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -74,8 +75,12 @@ await essai('(3)', async () => {
   const blocUsdc = { currency0: USDC, currency1: BLOC, fee: 0, tickSpacing: 200, hooks: T.HOOK_V8 };
   const usdcEth = { currency0: ETH, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH };
   const base = { rpc, chaine: 8453, compte: '0x' + '4'.repeat(40), entree: BLOC, sortie: ETH, montant: 10n ** 21n, prixUsdEntree: null };
-  const r = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEth, zeroForOne: false }] });
-  ok(r.etat === 'REFUSE', '(3) route-out block→USDC(V8)→ETH is still refused');
+  /* hook INCONNU (hors liste payeuse) : un pool SANS hook est refuse plus tot par un autre garde (MESSAGE_SANS_POOL). */
+  const blocUsdcNu = { ...blocUsdc, hooks: '0x' + '1'.repeat(36) + '00cc' };
+  const r = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdcNu, zeroForOne: false }, { cle: usdcEth, zeroForOne: false }] });
+  const rV8 = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEth, zeroForOne: false }] });
+  ok(rV8.etat !== 'REFUSE' && rV8.resume && BigInt(rV8.resume.frais) === 0n, '(3) once per swap: block→USDC(V8)→ETH accepted, router fee 0 (' + rV8.etat + ' ' + (rV8.pourquoi || '') + ')');
+  ok(r.etat === 'REFUSE', '(3) route-out block→USDC→ETH with NO paying leg is refused (router fee would be in the block)');
   ok(r.pourquoi === 'Not tradable here yet', '(3) its text is exactly "Not tradable here yet" (' + r.pourquoi + ')');
   ok(!/fee path broken|fee asset must be/i.test(r.pourquoi || ''), '(3) no internal jargon in the shown text');
   ok(r.refusCheminFrais === true && /fee asset must be/.test(r.causeInterne || ''), '(3) the exact internal reason is kept off screen (causeInterne)');

@@ -31,9 +31,15 @@ const usdcEthV8 = { ...usdcEthSansHook, fee: 0, tickSpacing: 200, hooks: T.HOOK_
 await essai('(b)', async () => {
   const base = { rpc, chaine: 8453, compte, entree: BLOC, sortie: ETH, montant: 10n ** 21n, prixUsdEntree: null };
   const mixte = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEthSansHook, zeroForOne: false }] });
-  const fraisSaute = mixte.etat !== 'REFUSE' && mixte.resume && BigInt(mixte.resume.frais || 0) === 0n;
-  ok(!fraisSaute, '(b) hop 1 V8 (pays) + hop 2 unhooked: the router fee is NOT skipped (taken, or the route refused)');
-  ok(mixte.etat === 'REFUSE', '(b) here the fee would be in the block (entry), so the route is refused — nothing sent');
+  /* 2026-10-02 Phil : « une fois par swap ». Hop 1 V8 paie deja a6cf (en USDC) -> le routeur s efface :
+   * plus de frais routeur dans le block a refuser, la route-out passe. */
+  ok(mixte.etat !== 'REFUSE' && mixte.resume && BigInt(mixte.resume.frais) === 0n && BigInt(mixte.resume.fraisBps) === 0n,
+    '(b) once per swap: hop 1 V8 (pays) + hop 2 unhooked -> router fee 0, route accepted (' + mixte.etat + ' ' + (mixte.pourquoi || '') + ')');
+  /* hook INCONNU (hors liste) : un pool SANS hook serait refuse plus tot, pour une autre raison (MESSAGE_SANS_POOL). */
+  const blocUsdcNu = { ...blocUsdc, hooks: '0x' + '1'.repeat(36) + '00cc' };
+  const aucun = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdcNu, zeroForOne: false }, { cle: usdcEthSansHook, zeroForOne: false }] });
+  ok(aucun.etat === 'REFUSE' && aucun.refusCheminFrais === true,
+    '(b) negative control: NO paying hop -> router fee kept, and here it would be in the block -> fee-path refusal (' + aucun.etat + ' ' + (aucun.causeInterne || '') + ')');
   const tout = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEthV8, zeroForOne: false }] });
   ok(tout.resume && BigInt(tout.resume.frais) === 0n && BigInt(tout.resume.fraisBps) === 0n,
     '(b) negative control: every hop V8-paying -> router fee 0 (' + tout.etat + ' ' + (tout.pourquoi || '') + ')');

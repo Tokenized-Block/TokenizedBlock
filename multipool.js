@@ -108,13 +108,12 @@ export function noeudsJambesRouteur(chemin, hooks = ensembleHooksFacturants()) {
   (Array.isArray(chemin) ? chemin : []).forEach((x, i) => { if (!jambeFactureeParHook(x, hooks)) { s.add(i); s.add(i + 1); } });
   return s;
 }
-/** Garde AVANT envoi : toutes les jambes hookees => 0 PAY_PORTION et 0 part ; route mixte => EXACTEMENT 1 PAY_PORTION et
- *  0 part ; route sans hook => EXACTEMENT 1 PAY_PORTION. */
+/** Garde AVANT envoi — « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : au moins UNE jambe hookee facturante => 0 PAY_PORTION
+ *  et 0 part (le hook a deja paye a6cf) ; route sans hook => EXACTEMENT 1 PAY_PORTION. (Avant : route mixte => 1.) */
 export function unFraisParJambe(tx, chemin, hooks = ensembleHooksFacturants()) {
   const n = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.PAY_PORTION).length;
   const parts = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.TRANSFER).length;
-  if (routeEntierementFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
-  if (routeFactureeParHook(chemin, hooks)) return n === 1 && parts === 0;
+  if (routeFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
   return n === 1;
 }
 
@@ -329,11 +328,11 @@ export function devisSaut(s, montant) {
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
-  /* toutes les jambes hookees : le DEVIS V4 inclut deja chaque frais de hook, le routeur ne retient rien.
-   * route mixte : le routeur retient SON frais a un noeud d une de SES jambes ; les jambes hookees sont au devis V4. */
+  /* « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : une jambe hookee facturante suffit — son frais est au DEVIS V4 et
+   * a6cf est deja paye ; le routeur ne retient rien. Route sans hook : le routeur retient son frais une fois. */
   const hooks = ensembleHooksFacturants(hooksFacturants);
-  const parHook = routeEntierementFactureeParHook(chemin, hooks);
-  const mixte = !parHook && routeFactureeParHook(chemin, hooks);
+  const parHook = routeFactureeParHook(chemin, hooks);
+  const mixte = false;
   const pl = parHook ? { etat: 'OK', indice: -1, devise: null }
     : (placement || placerFrais(chemin, admises, mixte ? { candidats: noeudsJambesRouteur(chemin, hooks) } : {}));
   if (pl.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pl.pourquoi };
@@ -460,12 +459,12 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
-  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur n y preleve RIEN (ni PAY_PORTION ni part
-   *   exacte). Une part demandee en plus sur une route hookee est REFUSEE (ce serait 0,18 %). Toutes les jambes hookees
-   *   => aucun frais routeur. Route MIXTE => le frais routeur de 9 bps, UNE fois, a un noeud d une jambe du routeur. */
+  /* ⛔⛔ « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : des qu UNE jambe est facturee par son hook, le routeur ne preleve
+   *   RIEN (ni PAY_PORTION ni part exacte) ; une part demandee en plus est REFUSEE (double frais). Route sans hook =>
+   *   le frais routeur, UNE fois. (Avant : route mixte => frais routeur sur une jambe du routeur.) */
   const hooks = ensembleHooksFacturants(hooksFacturants);
   const unHook = routeFactureeParHook(chemin, hooks);
-  const parHook = routeEntierementFactureeParHook(chemin, hooks);
+  const parHook = unHook;
   if (unHook) {
     if ((Array.isArray(partsExactes) && partsExactes.length) || BigInt(bpsA6cf) !== FRAIS_BPS
       || (Array.isArray(partsFrais) && partsFrais !== PARTS_FRAIS && partsFrais.some((p) => bas(p.qui) !== ADRESSES.FEE_WALLET || BigInt(p.bps) !== FRAIS_BPS))

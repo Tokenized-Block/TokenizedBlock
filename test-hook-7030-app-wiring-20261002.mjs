@@ -73,7 +73,12 @@ await essai('(2) legs', async () => {
   ok(eOff.resume && BigInt(eOff.resume.fraisBps) === 50n, '(2) negative control OFF: ETH pool on 7030 keeps the 0.5% router fee (stacked = 60 bps)');
   const multi = await on.E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, entree: BLOC_HAUT, sortie: ETH, montant: 10n ** 18n, prixUsdEntree: null,
     sauts: [{ cle: clePltr, zeroForOne: false }, { cle: { currency0: ETH, currency1: PLTRc, fee: 500, tickSpacing: 10, hooks: ETH }, zeroForOne: false }] });
-  ok(!(multi.etat !== 'REFUSE' && multi.resume && BigInt(multi.resume.frais || 0) === 0n), '(2) multi-hop 7030 + hookless leg: router fee NOT skipped (taken or refused)');
+  /* 2026-10-02 Phil : « une fois par swap » — la jambe 7030 paie deja a6cf en PLTRc, le routeur s efface. */
+  ok(multi.etat !== 'REFUSE' && multi.resume && BigInt(multi.resume.frais) === 0n, '(2) once per swap: multi-hop 7030 + hookless leg -> router fee 0 (' + multi.etat + ' ' + (multi.pourquoi || '') + ')');
+  const multiOff = await off.E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, entree: BLOC_HAUT, sortie: ETH, montant: 10n ** 18n, prixUsdEntree: null,
+    sauts: [{ cle: clePltr, zeroForOne: false }, { cle: { currency0: ETH, currency1: PLTRc, fee: 500, tickSpacing: 10, hooks: ETH }, zeroForOne: false }] });
+  ok((multiOff.etat === 'REFUSE' && multiOff.refusCheminFrais === true) || (multiOff.etat !== 'REFUSE' && multiOff.resume && BigInt(multiOff.resume.frais) > 0n),
+    '(2) negative control OFF: 7030 unknown -> no paying leg -> router fee kept (taken, or fee-path refusal) (' + multiOff.etat + ' ' + (multiOff.causeInterne || multiOff.pourquoi || '') + ')');
 });
 await essai('(3) recognition', async () => {
   ok(on.T.estNotreHook(H) && on.T.estHookDeNaissance(H), '(3) ON: estNotreHook + estHookDeNaissance know 7030');

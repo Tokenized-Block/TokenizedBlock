@@ -743,18 +743,26 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   -> toute jambe sur un hook inclassable est refusee avant toute lecture. */
   const refusMO = refusMarcheOuvertIncoherent(sauts, { ...(marcheOuvert || {}), liste: hooksPaieurs });
   if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
-  /* ⛔ 2026-10-02 : le frais se prend sur la jambe d ENTREE (saut 1). Si cette pool est une pool ETH dont
-   *   le hook verse deja a6cf dans ce sens, le routeur ne prend rien : un frais par jambe. */
-  const s1 = sauts[0] || {};
-  /* ⛔ 2026-10-02 (fix-2) : la devise du hook decide, plus currency0 === ETH. Debloque la sortie block -> USDC -> ETH :
-   *   le V8 y paie en USDC sur le saut 1, et le routeur ne prenait son frais qu en block (refuse). */
-  const hookS1 = s1.cle ? hookPaieEnDeviseVendable({ cle: s1.cle, sens: s1.zeroForOne ? 'ACHAT' : 'VENTE',
-    zeroForOne: !!s1.zeroForOne, fraisDevisesOk, liste: hooksPaieurs }) : { paie: false, devise: null };
-  /* ⛔ 2026-10-02 14:49 — CHAQUE JAMBE. Le saut 1 paye par son hook ne dispense PAS une jambe suivante sans hook payeur
-   *   (pool sans hook, hook qui ne verse rien) : le routeur ne s efface que si TOUS les sauts paient deja a6cf. */
-  const jambesPayees = sauts.map((x) => !!(x && x.cle) && hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
-    zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs }).paie);
-  const hookPaie = hookS1.paie && jambesPayees.every(Boolean);
+  /* ⛔⛔⛔ UNE FOIS PAR SWAP — DECISION DE RAKSHA, 2026-10-02 (et deja ecrite « definitive » le 2026-10-01
+   *      23:25 dans multipool.js : « 0,09 % NET vers a6cf, pris EXACTEMENT UNE FOIS par swap »).
+   *      La version precedente (14:49) faisait « une fois par JAMBE » : le routeur ne s effacait que si
+   *      TOUS les sauts payaient deja a6cf. Sur une route block -> ETH -> action dont UNE jambe passe par
+   *      un hook payeur, a6cf etait donc payee DEUX fois pour un seul swap — le hook sur sa jambe, le
+   *      routeur sur l entree. C etait un choix raisonne, pas un accident ; il a ete tranche dans
+   *      l autre sens par le proprietaire.
+   *   ⇒ DES QU UNE JAMBE PAIE DEJA a6cf, DANS UNE DEVISE VENDABLE, LE ROUTEUR NE PREND RIEN.
+   *   ⛔ ET L ASSIETTE DE LA GARDE ANTI-POUSSIERE SUIT LA JAMBE QUI PAIE. Avant, elle etait calculee
+   *     sur le saut 1 (`hookS1`) : correct tant que seul le saut 1 pouvait dispenser le routeur. Avec
+   *     « n importe quelle jambe », garder le saut 1 ferait verifier la poussiere sur un montant qui
+   *     n est pas celui que le hook preleve. On prend la PREMIERE jambe payeuse, et son assiette est le
+   *     montant qui ENTRE dans ce saut si le hook preleve dans la devise d entree, sinon ce qui en
+   *     SORT — exactement la regle de l ancienne ligne, generalisee du saut 1 au saut i. */
+  const parJambe = sauts.map((x) => (x && x.cle)
+    ? hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
+      zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs })
+    : { paie: false, devise: null });
+  const iPayeuse = parJambe.findIndex((r) => r.paie);
+  const hookPaie = iPayeuse >= 0;
   if (!estWalletDeFrais(compte) && !hookPaie) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
     if (degressif.etat !== 'OK') {
@@ -826,9 +834,22 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔ `bpsAttendu` EST LE TAUX EFFECTIF DE CE RAIL, pas les 50 bps du chemin historique. Le garde
    *   verifie donc exactement ce qu on a declare — beneficiaire, devise vendable et presence d un
    *   TAKE vers a6cf restent inchanges. Le defaut du parametre reste le plus strict. */
+  /* l assiette du hook sur la PREMIERE jambe payeuse : ce qui ENTRE dans ce saut si le hook preleve
+   *   dans la devise d entree du saut, sinon ce qui en SORT.
+   *   · saut 0 : comparaison a `entree`, A L IDENTIQUE de la regle precedente — aucun changement de
+   *     comportement la ou l ancienne regle s appliquait deja ; il entre `m` (routeur a 0, net = m).
+   *   · saut i > 0 : la devise d entree se lit sur la cle et le sens du saut ; il entre la sortie i-1. */
+  let assietteHook = null;
+  if (hookPaie) {
+    const s = sauts[iPayeuse];
+    const devEntree = iPayeuse === 0
+      ? String(entree).toLowerCase()
+      : String(s.zeroForOne ? s.cle.currency0 : s.cle.currency1).toLowerCase();
+    const montantEntree = iPayeuse === 0 ? m : sorties[iPayeuse - 1];
+    assietteHook = parJambe[iPayeuse].devise === devEntree ? montantEntree : sorties[iPayeuse];
+  }
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
-    fraisDevisesOk, bpsAttendu: bps, hookPaie,
-    assietteHook: hookPaie ? (hookS1.devise === String(entree).toLowerCase() ? m : sorties[0]) : null });
+    fraisDevisesOk, bpsAttendu: bps, hookPaie, assietteHook });
   /* ⛔ 2026-10-02 (Zero 1) : le texte montre est « Not tradable here yet », jamais le jargon du verrou ;
    *   la raison exacte reste dans `causeInterne` (diagnostic, tests), elle n est pas affichee. */
   if (koFrais && /^fee amount is zero\b/.test(koFrais)) return refusFraisEchange(koFrais, resume);
