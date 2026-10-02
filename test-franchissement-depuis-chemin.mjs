@@ -129,8 +129,8 @@ t('la phrase nomme le pivot et la destination', /USDC/.test(ph) && /AAPLc/.test(
 t('la phrase dit « one signature », pas « one transaction »',
   /one signature/.test(ph) && !/one transaction/i.test(ph));
 t('la phrase dit que le wallet doit SAVOIR grouper', /supports batching/i.test(ph));
-/* ⛔ DEUX SWAPS = DEUX RETENUES. Annoncer un seul frais serait annoncer la moitie de ce qu on prend. */
-t('la phrase dit que CHAQUE swap porte son frais', /Each swap carries its own fee/.test(ph));
+/* ⛔ 2026-10-02 (Phil : UN frais par swap) : le lot prend UN frais, sur une seule jambe — la phrase le dit. */
+t('la phrase dit UN frais pour le lot', /One fee for the whole crossing/.test(ph) && !/Each swap carries its own fee/.test(ph));
 t('un refus ne produit pas de prose confiante',
   /^No crossing/.test(phraseFranchissement(unSeul)));
 t('rien du tout non plus', phraseFranchissement(null) === 'Crossing: not computed.');

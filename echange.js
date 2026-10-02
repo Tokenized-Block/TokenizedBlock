@@ -22,7 +22,7 @@ import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExact
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
-  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute } from './pool-sans-hook.js';
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute, hookAdmisPourBlock } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -258,6 +258,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   /* ⛔ garde a l execution : drapeau marche ouvert ON + liste V8-open vide -> aucun hook inclassable */
   const refusMO = refusMarcheOuvertIncoherent([{ cle: marche.cle }], marcheOuvert);
   if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
+  /* ⛔⛔ 2026-10-02 (C2, F1, apres la garde marche ouvert) : un block sur une pool a hook TIERS (ni TB, ni OpenLaunch sans hook, ni o1 Standard) -> refus. */
+  if (!hookAdmisPourBlock(marche.cle)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true, refusHookTiers: true };
   /* tip 20260922-2023: ALWAYS take interface 0.5% → FEE_WALLET on in-app Buy/Sell (unless fee-wallet buyback).
    *    Prior skip when estNotreHook assumed hook TAKE ~3% already hit a6cf — live dig 2026-09-22: sink got 0
    *    from Buy/Sell volume (hooked path skipped interface AND hook was not depositing). Stacked fees
@@ -734,6 +736,9 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
  */
 export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree, sortie, montant,
   toleranceBps = 100n, maintenant = Date.now(), fraisDevisesOk = null,
+  /* ⛔ 2026-10-02 (Phil : UN frais par swap) : seul `planFranchissement` le pose — le frais unique du lot est pris
+   *   sur la jambe CL. Sans hook payeur, le routeur ne prend alors RIEN ici (et aucun TAKE vers a6cf n est admis). */
+  fraisRouteurAilleurs = false,
   /* ⛔ LES DECIMALES ET LE PRIX DE LA DEVISE D ENTREE SONT LUS PAR L APPELANT, pas supposes ici :
    *   ils servent a situer le montant dans le bareme degressif. 18 par defaut serait un pari — et
    *   OUSD en a SIX. Sans PRIX, le bareme applique le taux le plus haut et le dit. */
@@ -834,6 +839,12 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   -> toute jambe sur un hook inclassable est refusee avant toute lecture. */
   const refusMO = refusMarcheOuvertIncoherent(sauts, { ...(marcheOuvert || {}), liste: hooksPaieurs });
   if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
+  /* ⛔⛔ 2026-10-02 (C2, F1) : meme regle saut par saut (apres les regles R4 et la garde marche ouvert, qui restent seules juges de leurs cas) — un block sur une pool a hook tiers -> refus avant la cotation. */
+  /*   Un hook que l appelant passe comme PAYEUR (`hooksPaieurs`, ex. un V8-open liste) est un hook TB : admis. */
+  const listePayeurs = new Set((Array.isArray(hooksPaieurs) ? hooksPaieurs : []).map((e) => String((e && e.hook) || e || '').toLowerCase()));
+  if (sauts.some((x) => x && x.cle && !cleSansHook(x.cle) && !hookAdmisPourBlock(x.cle) && !listePayeurs.has(String(x.cle.hooks || '').toLowerCase()))) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true, refusHookTiers: true };
+  }
   /* ⛔⛔⛔ UNE FOIS PAR SWAP — DECISION DE RAKSHA, 2026-10-02 (et deja ecrite « definitive » le 2026-10-01
    *      23:25 dans multipool.js : « 0,09 % NET vers a6cf, pris EXACTEMENT UNE FOIS par swap »).
    *      La version precedente (14:49) faisait « une fois par JAMBE » : le routeur ne s effacait que si
@@ -866,7 +877,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   });
   const iPayeuse = parJambe.findIndex((r) => r.paie);
   const hookPaie = iPayeuse >= 0;
-  if (!estWalletDeFrais(compte) && !hookPaie) {
+  if (!estWalletDeFrais(compte) && !hookPaie && !fraisRouteurAilleurs) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
     if (degressif.etat !== 'OK') {
       return { etat: 'REFUSE', pourquoi: 'fee could not be priced: ' + (degressif.pourquoi || 'unknown') };
@@ -918,7 +929,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   const route = actionsMultiSauts({ sauts, entree, sortie, montant: m, minSortie: minFinal, bps,
     fraisImpose: frais,
     beneficiaireFrais: frais > 0n ? FEE_WALLET : null, actionsV4: ACTIONS_V4, paramsAction });
-  if (!routePrete(route)) {
+  /* ⛔ `routePrete` suppose un TAKE de frais ou un 2e saut (>= 3 actions). Sous `fraisRouteurAilleurs`, un saut unique sans
+   *   frais routeur fait SETTLE + TAKE_ALL (la tete est encodee a part) : forme exacte exigee, rien de plus. */
+  const formeSansTake = fraisRouteurAilleurs && !!route && route.etat === 'OK' && route.frais === 0n
+    && Array.isArray(route.actions) && route.actions.length === sauts.length + 1;
+  if (!routePrete(route) && !formeSansTake) {
     return { etat: 'REFUSE', pourquoi: route.pourquoi || 'this route could not be assembled' };
   }
   const enEth = route.fraisDevise === 'ETH';
@@ -951,8 +966,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
     const montantEntree = iPayeuse === 0 ? m : sorties[iPayeuse - 1];
     assietteHook = parJambe[iPayeuse].devise === devEntree ? montantEntree : sorties[iPayeuse];
   }
-  const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
-    fraisDevisesOk, bpsAttendu: bps, hookPaie, assietteHook });
+  const koFrais = fraisRouteurAilleurs && !hookPaie && !estWalletDeFrais(compte)
+    ? (bps !== 0n || frais !== 0n || jsonSafe(route.actions || []).toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())
+      ? 'double fee: a router fee on a leg whose batch pays its single fee elsewhere' : null)
+    : assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
+      fraisDevisesOk, bpsAttendu: bps, hookPaie, assietteHook });
   /* ⛔ 2026-10-02 (Zero 1) : le texte montre est « Not tradable here yet », jamais le jargon du verrou ;
    *   la raison exacte reste dans `causeInterne` (diagnostic, tests), elle n est pas affichee. */
   if (koFrais && /^fee amount is zero\b/.test(koFrais)) return refusFraisEchange(koFrais, resume);

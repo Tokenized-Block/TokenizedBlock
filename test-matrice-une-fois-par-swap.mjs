@@ -30,7 +30,7 @@ import fs from 'node:fs';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const T = await import(pathToFileURL(path.join(ICI, 'tokenomics.js')).href);
-const { USDC_BASE } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
+const { USDC_BASE, FEE_WALLET } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
 const { ACTIONS_COINBASE } = await import(pathToFileURL(path.join(ICI, 'paires.js')).href);
 
 const ETH = '0x' + '0'.repeat(40);
@@ -41,6 +41,16 @@ const BLOC_HAUT = '0xb2' + '0'.repeat(20) + 'ffffffffffffffff01'; /* trie APRES 
 const BLOCS = new Set([BLOC_BAS, BLOC_HAUT]);
 const INCONNU = '0x' + '1'.repeat(36) + '00cc';
 const HOOKS = { sans: ETH, V8: T.HOOK_V8, V2: T.HOOK_V2, PREVU: T.HOOK_PREVU, inconnu: INCONNU };
+const O1 = '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc';
+/* F (2026-10-02, C2 F1) : un block sur une pool V4 n est admis que sur un hook TB, sans hook au format OpenLaunch (3 %/200), ou
+ *   sur le LaunchHook Standard d o1 — ecrit ICI, pas lu dans le code juge. `inconnu` est la famille « hook tiers ». */
+function admisOracle(c) {
+  if (!BLOCS.has(bas(c.currency0)) && !BLOCS.has(bas(c.currency1))) return true;
+  const h = bas(c.hooks);
+  if ([T.HOOK_V8, T.HOOK_V2, T.HOOK_PREVU].map(bas).includes(h)) return true;
+  if (h === ETH) return Number(c.fee) === 30000 && Number(c.tickSpacing) === 200;
+  return h === O1;
+}
 
 const q = '0x' + (10n ** 18n).toString(16).padStart(64, '0') + '0'.repeat(64);
 /* StateView (getSlot0 / getLiquidity) : 0 par defaut = aucune pool de version actuelle ; `avecActuelle` = elle existe, liquide */
@@ -101,6 +111,8 @@ function juger(nom, sauts, p, ko) {
   if (hooks.some((d) => BLOCS.has(bas(d)))) ko.push(nom + ' : FRAIS DE HOOK EN BLOCK');
   /* E : au plus UNE jambe payante, sinon REFUS (juger n est appele que sur un plan construit) */
   if (hooks.length >= 2) ko.push(nom + ' : 2+ JAMBES PAYANTES non refuse (' + hooks.length + ')');
+  /* F : un hook tiers sur une pool de block n est jamais construit */
+  if (sauts.some((s) => !admisOracle(s.cle))) ko.push(nom + ' : HOOK TIERS SUR BLOCK non refuse');
 }
 
 /* ── CAS D ORACLE (D) : la jambe V1 a l ACHAT est un frais EN BLOCK, a la VENTE elle paie en ETH (liste mesuree) ── */
@@ -112,7 +124,7 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
 }
 for (const [nom, ok] of casOracle) console.log((ok ? '  ok  ' : '  KO  ') + 'oracle : ' + nom);
 
-async function matrice(E) {
+async function matrice(E, PF) {
 let n = 0, nRefus = 0, nPlans = 0;
 const ko = [];
 for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
@@ -237,10 +249,58 @@ for (const actuelle of [false, true]) {
     juger(nom, sauts.map((x) => (bas(x.cle.hooks) === bas(T.HOOK_PREVU) ? { ...x, cle: cle(x.cle.currency0, x.cle.currency1, HOOKS.V8) } : x)), p, ko);
   }
 }
-return { n, nPlans, nRefus, ko };
+/* ── G (2026-10-02, Phil : un frais par swap ; C2 F3) : FRANCHISSEMENT Uniswap V4 -> Aerodrome — UNE jambe payante par lot ──
+ * Jambe 1 = X -> USDC (1 saut) ou X -> ETH -> USDC (2 sauts), le saut qui touche un block porte chaque famille de hook ; jambe 2 =
+ *   USDC -> ACT (Aerodrome). Oracle par les OCTETS : a6cf dans la jambe 1 (TAKE routeur) + dans la jambe 2 (sweep CL) + chaque
+ *   jambe dont le hook verse a6cf (liste mesuree). Un lot construit doit en compter EXACTEMENT 1. */
+let nFr = 0;
+const SEL_FR = ['getPool(address,address,int24)', 'token0()', 'slot0()', 'allowance(address,address)', 'allowance(address,address,address)'].map((x) => '0x' + selecteur(x));
+const motA = (a) => bas(a).replace(/^0x/, '').padStart(64, '0');
+const POOL_A = '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0';
+const rpcFr = async (m, p) => {
+  if (m !== 'eth_call') return m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64);
+  const d = String((p && p[0] && p[0].data) || '').toLowerCase();
+  if (d.startsWith(SEL_FR[0])) return '0x' + motA(parseInt(d.slice(10 + 128, 10 + 192), 16) === 10 ? POOL_A : ETH);
+  if (d.startsWith(SEL_FR[1])) return '0x' + motA(USDC);
+  if (d.startsWith(SEL_FR[2])) return '0x' + (2n ** 96n).toString(16).padStart(64, '0') + '0'.repeat(64 * 6);
+  if (d.startsWith(SEL_FR[3]) || d.startsWith(SEL_FR[4])) return '0x' + 'f'.repeat(128) + '0'.repeat(64);
+  return rpc(m, p);
+};
+const A6 = bas(FEE_WALLET).slice(2);
+for (const x of [ETH, BLOC_BAS, BLOC_HAUT]) {
+  for (const deuxSauts of [false, true]) {
+    if (x === ETH && deuxSauts) continue;
+    for (const h of Object.keys(HOOKS)) {
+      if (x === ETH && h !== 'sans') continue;
+      const noeuds = deuxSauts ? [x, ETH, USDC] : [x, USDC];
+      const chemin = [...noeuds.slice(1).map((v, i) => ({ de: noeuds[i], vers: v, famille: 'uniswap-v4' })), { de: USDC, vers: ACT, famille: 'aerodrome' }];
+      const hDe = (de, vers) => (BLOCS.has(bas(de)) || BLOCS.has(bas(vers)) ? HOOKS[h] : ETH);
+      const sautsJ1 = chemin.slice(0, -1).map((s) => jambe(s.de, s.vers, hDe(s.de, s.vers)));
+      const nom = 'FR ' + noeuds.map((v) => (BLOCS.has(v) ? (v === BLOC_BAS ? 'blocBas' : 'blocHaut') : v === ETH ? 'ETH' : 'USDC')).join('>') + '>ACT [' + h + ']';
+      n += 1;
+      let p;
+      try {
+        p = await PF.planFranchissement({ rpc: rpcFr, chaine: 8453, compte, chemin, devise: x, block: ACT, montant: 10n ** 21n, decimalesEntree: 18,
+          prixUsdEntree: null, beneficiaireFrais: FEE_WALLET, fraisDevisesOk: new Set([ACT]),
+          resoudreV4: async ({ de, vers }) => { const j = jambe(de, vers, hDe(de, vers)); return { etat: 'OK', cle: j.cle, zeroForOne: j.zeroForOne, quote: 10n ** 18n }; } });
+      } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
+      if (p.etat !== 'PRET') { nRefus += 1; continue; }
+      nPlans += 1; nFr += 1;
+      const j1 = bas(p.appels[0].data).includes(A6), j2 = bas(p.appels[2].data).includes(A6);
+      const hk = sautsJ1.map(oracleFraisHook).filter(Boolean);
+      const total = (j1 ? 1 : 0) + (j2 ? 1 : 0) + hk.length;
+      if (total !== 1) ko.push(nom + ' : ' + total + ' FRAIS par lot (jambe1 ' + j1 + ', jambe2 ' + j2 + ', hooks ' + hk.length + ')');
+      if (!(p.resume && p.resume.jambesPayantes === 1)) ko.push(nom + ' : jambesPayantes ' + (p.resume && p.resume.jambesPayantes) + ' (attendu 1)');
+      if (hk.some((d) => BLOCS.has(bas(d)))) ko.push(nom + ' : FRAIS DE HOOK EN BLOCK');
+      if (sautsJ1.some((s) => !admisOracle(s.cle))) ko.push(nom + ' : HOOK TIERS SUR BLOCK non refuse');
+    }
+  }
+}
+console.log('franchissement : ' + nFr + ' lots construits, chacun 1 jambe payante attendue');
+return { n, nPlans, nRefus, ko, nFr };
 }
 
-const reel = await matrice(await import(pathToFileURL(path.join(ICI, 'echange.js')).href));
+const reel = await matrice(await import(pathToFileURL(path.join(ICI, 'echange.js')).href), await import(pathToFileURL(path.join(ICI, 'plan-franchissement.js')).href));
 console.log('DEPOT : ' + reel.n + ' combinaisons · ' + reel.nPlans + ' plans · ' + reel.nRefus + ' refus · ' + reel.ko.length + ' violations');
 for (const k of reel.ko.slice(0, 40)) console.log('  KO  ' + k);
 
@@ -266,6 +326,16 @@ const MUTANTS = [
   { nom: 'regle une jambe payante retiree', edits: [
     ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
   ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },
+  { nom: 'F1 hook tiers accepte (simple + multi)', edits: [
+    ['echange.js', 'if (!hookAdmisPourBlock(marche.cle)) return', 'if (false) return'],
+    ['echange.js', '!hookAdmisPourBlock(x.cle) && !listePayeurs', 'false && !listePayeurs'],
+  ], doitVoir: [/^SIMPLE .*\[inconnu\] : HOOK TIERS SUR BLOCK non refuse/, /\[.*inconnu.*\] : HOOK TIERS SUR BLOCK non refuse/] },
+  { nom: 'franchissement : routeur V4 garde son frais', edits: [
+    ['plan-franchissement.js', 'fraisDevisesOk, fraisRouteurAilleurs: true });', 'fraisDevisesOk });'],
+  ], doitVoir: [/^FR ETH>USDC>ACT \[sans\] : 2 FRAIS par lot/] },
+  { nom: 'franchissement : sweep CL garde malgre le hook payeur', edits: [
+    ['plan-franchissement.js', 'sansFrais: parHook,', 'sansFrais: false,'],
+  ], doitVoir: [/^FR blocBas>ETH>USDC>ACT \[V8\] : 2 FRAIS par lot/] },
 ];
 const resultatsMutants = [];
 for (const M of MUTANTS) {
@@ -278,7 +348,7 @@ for (const M of MUTANTS) {
       if (src.split(de).length - 1 !== 1) throw new Error('motif introuvable dans ' + f + ' : ' + de.slice(0, 50));
       fs.writeFileSync(p, src.replace(de, vers));
     }
-    mut = await matrice(await import(pathToFileURL(path.join(dir, 'echange.js')).href));
+    mut = await matrice(await import(pathToFileURL(path.join(dir, 'echange.js')).href), await import(pathToFileURL(path.join(dir, 'plan-franchissement.js')).href));
   } catch (e) { erreurMutant = e.message; } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const vus = M.doitVoir.map((re) => !!mut && mut.ko.some((k) => re.test(k)));
   console.log('MUTANT (' + M.nom + ') : ' + (mut ? mut.nPlans + ' plans · ' + mut.ko.length + ' violations · attendus vus ' + vus.filter(Boolean).length + '/' + vus.length : 'NON EXECUTE ' + erreurMutant));

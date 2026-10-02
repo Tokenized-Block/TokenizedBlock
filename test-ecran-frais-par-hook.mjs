@@ -85,5 +85,73 @@ ok(fraisPayeParHook({ ...bon, frais: 1n }, null, [T.HOOK_V8]) === false, 'TEMOIN
 ok(fraisPayeParHook({ ...bon, beneficiaireFrais: FEE_WALLET }, null, [T.HOOK_V8]) === false, 'TEMOIN drapeau + beneficiaire routeur -> refus');
 ok(fraisPayeParHook(bon, { data: '0x' + FEE_WALLET.slice(2) }, [T.HOOK_V8]) === false, 'TEMOIN drapeau + a6cf dans le calldata (double frais) -> refus');
 
+/* ══ 2026-10-02 (C2, F2) — LE BADGE DIT LE TAUX DU HOOK, PAS LE 3 % DU V1 ══ */
+const srcLib = extraire('libelleFrais'), srcBps = extraire('fraisHookBps'), srcDyn = extraire('fraisEstDynamique');
+const cst = (re) => { const m = html.match(re); return m ? Number(m[1]) : null; };
+const PREVU_BPS = cst(/const HOOK_PREVU_FRAIS_BPS = (\d+);/), DYN = cst(/const FRAIS_DYNAMIQUE_V4 = (0x[0-9a-f]+);/i);
+ok(!!srcLib && !!srcBps && !!srcDyn && PREVU_BPS === 300 && DYN === 0x800000, 'libelleFrais, fraisHookBps, fraisEstDynamique et leurs constantes extraites d app.html');
+const fabriquerLib = (lib) => new Function('HOOK_V8', 'HOOK_V9', 'estHook7030', 'estNotreHook', 'HOOK_PREVU_FRAIS_BPS', 'FRAIS_DYNAMIQUE_V4',
+  srcDyn + '\n' + srcBps + '\n' + lib + '\nreturn libelleFrais;')(T.HOOK_V8, T.HOOK_V9, T.estHook7030, T.estNotreHook, PREVU_BPS, DYN);
+const libelleFrais = fabriquerLib(srcLib);
+const badge = (c) => libelleFrais(c).court + ' · included'; /* la composition de l ecran, verifiee ci-dessous */
+ok(/feeEl\.textContent = parHook \? libelleFrais\(p\.cle\)\.court \+ ' · included'/.test(html), 'le badge de l ecran compose bien libelleFrais(p.cle).court + « · included »');
+ok(badge(v8Eth) === 'Fee 0.5% · included', 'BADGE V8 : « Fee 0.5% · included » (' + badge(v8Eth) + ')');
+ok(libelleFrais({ ...v8Eth, hooks: T.HOOK_PREVU }).court === 'Fee 3%', 'V1 (HOOK_PREVU) : Fee 3%');
+ok(libelleFrais({ ...v8Eth, hooks: T.HOOK_V7 }).court === 'Fee 3%' && libelleFrais({ ...v8Eth, hooks: T.HOOK_V2 }).court === 'Fee 3%', 'V2/V7 (HOOK_FEE 30 000) : Fee 3%');
+ok(libelleFrais(nuEth).court === 'Fee 0.55%' && libelleFrais({ ...nuEth, hooks: INCONNU }).court === 'Fee 0.55%+', 'sans hook / hook tiers : inchanges');
+/* MUTANT (en memoire) : le taux unique du V1 pour tout hook TB — le banc doit le voir */
+const libMut = fabriquerLib(srcLib.replace('fraisHookBps(hk)', 'HOOK_PREVU_FRAIS_BPS'));
+ok(srcLib.includes('fraisHookBps(hk)') && libMut(v8Eth).court === 'Fee 3%' && libMut(v8Eth).court !== libelleFrais(v8Eth).court,
+  'MUTANT taux V1 pour tout hook : le badge V8 redevient « Fee 3% » et le banc le distingue');
+
+/* ══ 2026-10-02 (Phil : UN frais par swap ; C2 F3) — LA GARDE DU FRANCHISSEMENT ACCEPTE UN FRAIS PAYE PAR LE HOOK ══
+ * ⛔ On execute le VRAI bloc de garde d afficherFranchissement (extrait d app.html), sur de VRAIS plans de planFranchissement. */
+const PF = await import(pathToFileURL(path.join(ICI, 'plan-franchissement.js')).href);
+const PO = await import(pathToFileURL(path.join(ICI, 'pool.js')).href);
+const { BPS_MAX } = await import(pathToFileURL(path.join(ICI, 'frais-degressif.js')).href);
+/* (les accolades du parametre destructure empechent `extraire` : on borne le bloc par ses deux ancres, apres la definition) */
+const i0 = html.indexOf('function afficherFranchissement(');
+const iG = i0 < 0 ? -1 : html.indexOf('if (!estWalletDeFrais(compte)) {', i0), jG = iG < 0 ? -1 : html.indexOf('const sym = deviseDentree', iG);
+const garde = iG > 0 && jG > iG ? html.slice(iG, jG) : '';
+ok(garde.length > 0 && /fraisPayeParHook\(/.test(garde) && /if \(!parHook && !parCl\)/.test(garde), 'garde du franchissement extraite : fraisPayeParHook + « !parHook && !parCl »');
+const fabriquerGarde = (g) => new Function('r', 'pf', 'compte', 'estWalletDeFrais', 'feeWalletDansCalldata', 'fraisPayeParHook', 'BPS_MAX_UI', 'FEE_WALLET', 'refuser',
+  g + '\nreturn "OK";');
+const feeWalletDansCalldata = new Function('FEE_WALLET', src2 + '\nreturn feeWalletDansCalldata;')(FEE_WALLET);
+const juge = (g, pf) => fabriquerGarde(g)(pf.resume, pf, compte, () => false, feeWalletDansCalldata, fraisPayeParHook, BPS_MAX, FEE_WALLET, () => 'REFUS');
+const POOL_A = '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0', NVDA = '0xb20000000000000000000078ee7ce2fe4908108c';
+const B20 = '0xb200000000000000000000000000000000000001';
+const SEL = ['getPool(address,address,int24)', 'token0()', 'slot0()'].map((x) => '0x' + PO.selecteur(x));
+const motA = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+const rpcFr = async (m, p) => {
+  if (m !== 'eth_call') return m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64);
+  const d = String(p[0].data || '').toLowerCase();
+  if (d.startsWith(SEL[0])) return '0x' + motA(parseInt(d.slice(10 + 128, 10 + 192), 16) === 10 ? POOL_A : ETH);
+  if (d.startsWith(SEL[1])) return '0x' + motA(USDC);
+  if (d.startsWith(SEL[2])) return '0x' + (2n ** 96n).toString(16).padStart(64, '0') + '0'.repeat(64 * 6);
+  if (d.startsWith('0x' + PO.selecteur('getSlot0(bytes32)')) || d.startsWith('0x' + PO.selecteur('getLiquidity(bytes32)'))) return '0x' + '0'.repeat(256);
+  return String(p[0].to || '').toLowerCase() === String(E.QUOTEUR[8453]).toLowerCase() ? q : '0x' + 'f'.repeat(128) + '0'.repeat(64);
+};
+const cleDe = (a, b, h) => { const [c0, c1] = a < b ? [a, b] : [b, a]; return h === ETH ? { currency0: c0, currency1: c1, fee: 500, tickSpacing: 10, hooks: h } : { currency0: c0, currency1: c1, fee: 0, tickSpacing: 200, hooks: h }; };
+const planFr = (chemin) => PF.planFranchissement({ rpc: rpcFr, chaine: 8453, compte, chemin, devise: chemin[0].de, block: NVDA, montant: 10n ** 21n,
+  decimalesEntree: 18, beneficiaireFrais: FEE_WALLET, fraisDevisesOk: new Set([NVDA]),
+  resoudreV4: async ({ de, vers }) => { const c = cleDe(de, vers, de === B20 || vers === B20 ? T.HOOK_V8 : ETH); return { etat: 'OK', cle: c, zeroForOne: de === c.currency0, quote: 10n ** 18n }; } });
+const frCl = await planFr([{ de: ETH, vers: USDC, famille: 'uniswap-v4' }, { de: USDC, vers: NVDA, famille: 'aerodrome' }]);
+const frHook = await planFr([{ de: B20, vers: ETH, famille: 'uniswap-v4' }, { de: ETH, vers: USDC, famille: 'uniswap-v4' }, { de: USDC, vers: NVDA, famille: 'aerodrome' }]);
+ok(frCl.etat === 'PRET' && frHook.etat === 'PRET', 'plans de franchissement PRET (CL : ' + frCl.etat + ', hook : ' + frHook.etat + ' ' + (frHook.pourquoi || '') + ')');
+if (frCl.etat === 'PRET' && frHook.etat === 'PRET') {
+  ok(juge(garde, frCl) === 'OK', 'ECRAN franchissement : frais unique sur la jambe CL -> accepte');
+  ok(juge(garde, frHook) === 'OK', 'ECRAN franchissement : frais unique paye par le hook V8 -> accepte');
+  const a6 = '0x' + FEE_WALLET.slice(2);
+  ok(juge(garde, { ...frHook, appels: [frHook.appels[0], frHook.appels[1], { ...frHook.appels[2], data: frHook.appels[2].data + a6.slice(2) }] }) === 'REFUS',
+    'TEMOIN hook payeur + a6cf dans la jambe 2 (double frais) -> refus');
+  ok(juge(garde, { ...frCl, appels: [{ ...frCl.appels[0], data: frCl.appels[0].data + a6.slice(2) }, frCl.appels[1], frCl.appels[2]],
+    resume: { ...frCl.resume, fraisJambe1: 1n, fraisBpsJambe1: 20n } }) === 'REFUS', 'TEMOIN ancienne forme (routeur V4 + sweep CL : 2 frais) -> refus');
+  ok(juge(garde, { ...frHook, resume: { ...frHook.resume, hooksJambe1: [INCONNU] } }) === 'REFUS', 'TEMOIN drapeau hook mais aucun hook payeur -> refus');
+  ok(juge(garde, { ...frCl, appels: [frCl.appels[0], frCl.appels[1], { ...frCl.appels[2], data: '0x00' }] }) === 'REFUS', 'TEMOIN jambe CL sans a6cf dans les octets (zero frais) -> refus');
+  ok(juge(garde, { ...frCl, resume: { ...frCl.resume, jambesPayantes: 2 } }) === 'REFUS', 'TEMOIN jambesPayantes 2 -> refus');
+  /* MUTANT (en memoire) : l ancienne exigence « frais CL » seule — le lot paye par le hook est refuse */
+  ok(juge(garde.replace('if (!parHook && !parCl)', 'if (!parCl)'), frHook) === 'REFUS', 'MUTANT garde sans parHook : le lot paye par le hook est refuse (le banc le voit)');
+}
+
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

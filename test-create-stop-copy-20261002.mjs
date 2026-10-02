@@ -75,8 +75,9 @@ await essai('(3)', async () => {
   const blocUsdc = { currency0: USDC, currency1: BLOC, fee: 0, tickSpacing: 200, hooks: T.HOOK_V8 };
   const usdcEth = { currency0: ETH, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH };
   const base = { rpc, chaine: 8453, compte: '0x' + '4'.repeat(40), entree: BLOC, sortie: ETH, montant: 10n ** 21n, prixUsdEntree: null };
-  /* hook INCONNU (hors liste payeuse) : un pool SANS hook est refuse plus tot par un autre garde (MESSAGE_SANS_POOL). */
-  const blocUsdcNu = { ...blocUsdc, hooks: '0x' + '1'.repeat(36) + '00cc' };
+  /* hook TB HORS liste payeuse (V5) : un pool SANS hook est refuse plus tot (MESSAGE_SANS_POOL), un hook TIERS aussi
+   *   (2026-10-02, C2 F1 : hookAdmisPourBlock) — le temoin « aucune jambe payante » passe par un hook a nous qui ne paie pas. */
+  const blocUsdcNu = { ...blocUsdc, hooks: T.HOOK_V5 };
   const r = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdcNu, zeroForOne: false }, { cle: usdcEth, zeroForOne: false }] });
   const rV8 = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEth, zeroForOne: false }] });
   ok(rV8.etat !== 'REFUSE' && rV8.resume && BigInt(rV8.resume.frais) === 0n, '(3) once per swap: block→USDC(V8)→ETH accepted, router fee 0 (' + rV8.etat + ' ' + (rV8.pourquoi || '') + ')');

@@ -117,11 +117,13 @@ try {
   const dOffOld = copie([FLAG_OFF, SANS_CORRECTIF, SANS_CORRECTIF_2]); dirs.push(dOffOld);
   const { planEchange: planOffOld } = await import(pathToFileURL(join(dOffOld, 'echange.js')).href);
   const pOff = await planOff(args), pOffOld = await planOffOld(args);
-  eq(pOff.etat, 'PRET', 'copie drapeau OFF -> PRET');
-  eq(pOff.tx.data, pOffOld.tx.data, 'drapeau OFF : calldata identique octet pour octet a l ancien code');
-  eq(hookDataLuParUr(pOff.tx.data), '', 'drapeau OFF : aucun hookData');
+  /* ⛔ 2026-10-02 (C2, F1, regle (3)) : le LaunchHook Standard d o1 n est admis sur une pool de block QUE drapeau referent ON.
+   *   Drapeau OFF, c est un hook tiers : REFUS avant cotation, sans tx — et a l identique avec ou sans le correctif formeTete. */
+  eq(pOff.etat, 'REFUSE', 'copie drapeau OFF -> REFUSE (hook tiers, regle F1 (3))');
+  ok(pOff.refusHookTiers === true && !pOff.tx, 'drapeau OFF : refus hook tiers, aucune transaction construite');
+  eq([pOffOld.etat, pOffOld.refusHookTiers === true], ['REFUSE', true], 'drapeau OFF, ancien code formeTete : meme refus');
   // temoin : le lecteur n est pas aveugle — la meme comparaison detecte la difference ON/OFF
-  ok(pOff.tx.data !== pOn.tx.data, 'temoin : le comparateur voit la difference drapeau ON / OFF');
+  ok(pOff.etat !== pOn.etat, 'temoin : le comparateur voit la difference drapeau ON / OFF');
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 }

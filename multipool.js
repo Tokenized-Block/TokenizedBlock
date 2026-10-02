@@ -27,7 +27,7 @@
  *   raison ; un « pas lu » n est jamais un « pas de route ».
  */
 import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
-import { indexBlocAJonction, estBlockAJonction, estBlockDeRoute, cleSansHook, formatOpenLaunch, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { indexBlocAJonction, estBlockAJonction, estBlockDeRoute, cleSansHook, formatOpenLaunch, hookAdmisPourBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
 export const ADRESSES = Object.freeze({
@@ -329,7 +329,7 @@ export function devisSaut(s, montant) {
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
-  { const rb = refusBlocMultipool(chemin, admises); if (rb) return rb; }
+  { const rb = refusBlocMultipool(chemin, admises, ensembleHooksFacturants(hooksFacturants)); if (rb) return rb; }
   /* « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : une jambe hookee facturante suffit — son frais est au DEVIS V4 et
    * a6cf est deja paye ; le routeur ne retient rien. Route sans hook : le routeur retient son frais une fois. */
   const hooks = ensembleHooksFacturants(hooksFacturants);
@@ -372,9 +372,12 @@ export function noeudsJonction(chemin) {
 export function blocAUneJonction(chemin) { return indexBlocAJonction(noeudsJonction(chemin)) >= 0; }
 /* ⛔⛔ 2026-10-02 (verdict C2) : un saut qui touche un block TB (debut, fin ou milieu) sur une pool SANS hook TB — Uniswap V3,
  *   Aerodrome CL, ou V4 sans hook hors format OpenLaunch (3 % / 200, seule exception, comme pool-sans-hook.js). */
-export function blocSurPoolSansHook(chemin) {
+/* ⛔ 2026-10-02 (C2, F1) : sur V4, un hook TIERS avec un block est refuse aussi (hookAdmisPourBlock) — sauf un hook TB que
+ *   l appelant NOMME facturant (`hooksAdmis`, meme liste que `hooksFacturants` : V9… le jour de son adresse). */
+export function blocSurPoolSansHook(chemin, hooksAdmis = null) {
+  const tiers = (c) => !hookAdmisPourBlock(c) && !(hooksAdmis instanceof Set && hooksAdmis.has(bas(c && c.hooks)));
   return (Array.isArray(chemin) ? chemin : []).some((s) => !!(s && s.e) && (estBlockAJonction(s.de) || estBlockAJonction(s.vers))
-    && (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))));
+    && (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle)) || tiers(s.e.cle)));
 }
 /* ⛔⛔ 2026-10-02 (C2) : un block AU MILIEU de deux sauts V4 (R4) — meme definition que planEchangeMultiSauts
  *   (estBlockDeRoute : un B20 hors devises connues reste un block meme admis ; un inconnu non admis aussi). */
@@ -387,9 +390,9 @@ export function blocMilieuV4(chemin, admises = null) {
   return false;
 }
 /** Le refus « block » d un chemin multipool, ou null. Texte exact MESSAGE_PAS_ICI. */
-export function refusBlocMultipool(chemin, admises = null) {
+export function refusBlocMultipool(chemin, admises = null, hooksAdmis = null) {
   if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
-  if (blocSurPoolSansHook(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
+  if (blocSurPoolSansHook(chemin, hooksAdmis)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
   if (blocMilieuV4(chemin, admises)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
   return null;
 }
@@ -496,7 +499,7 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
-  { const rb = refusBlocMultipool(chemin, admises); if (rb) return rb; }
+  { const rb = refusBlocMultipool(chemin, admises, ensembleHooksFacturants(hooksFacturants)); if (rb) return rb; }
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
   /* ⛔⛔ « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : des qu UNE jambe est facturee par son hook, le routeur ne preleve
    *   RIEN (ni PAY_PORTION ni part exacte) ; une part demandee en plus est REFUSEE (double frais). Route sans hook =>

@@ -119,5 +119,6 @@ export function phraseFranchissement(r, symboles = {}) {
   const a = symboles[r.action] || 'the asset';
   return 'This route crosses two venues: Uniswap to ' + p + ', then Aerodrome to ' + a
     + '. Your wallet can sign them together when it supports batching — three calls, one signature. '
-    + 'Each swap carries its own fee.';
+    /* ⛔ 2026-10-02 (Phil : UN frais par swap) : le lot prend a6cf UNE fois, sur une seule jambe (plan-franchissement.js). */
+    + 'One fee for the whole crossing.';
 }

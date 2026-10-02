@@ -35,8 +35,9 @@ await essai('(b)', async () => {
    * plus de frais routeur dans le block a refuser, la route-out passe. */
   ok(mixte.etat !== 'REFUSE' && mixte.resume && BigInt(mixte.resume.frais) === 0n && BigInt(mixte.resume.fraisBps) === 0n,
     '(b) once per swap: hop 1 V8 (pays) + hop 2 unhooked -> router fee 0, route accepted (' + mixte.etat + ' ' + (mixte.pourquoi || '') + ')');
-  /* hook INCONNU (hors liste) : un pool SANS hook serait refuse plus tot, pour une autre raison (MESSAGE_SANS_POOL). */
-  const blocUsdcNu = { ...blocUsdc, hooks: '0x' + '1'.repeat(36) + '00cc' };
+  /* hook TB HORS liste payeuse (V5) : un pool SANS hook serait refuse plus tot (MESSAGE_SANS_POOL), et un hook TIERS aussi
+   *   (2026-10-02, C2 F1 : hookAdmisPourBlock) — le temoin « aucune jambe payante » passe donc par un hook a nous qui ne paie pas. */
+  const blocUsdcNu = { ...blocUsdc, hooks: T.HOOK_V5 };
   const aucun = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdcNu, zeroForOne: false }, { cle: usdcEthSansHook, zeroForOne: false }] });
   ok(aucun.etat === 'REFUSE' && aucun.refusCheminFrais === true,
     '(b) negative control: NO paying hop -> router fee kept, and here it would be in the block -> fee-path refusal (' + aucun.etat + ' ' + (aucun.causeInterne || '') + ')');

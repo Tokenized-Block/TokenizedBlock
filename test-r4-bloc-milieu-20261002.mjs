@@ -334,6 +334,102 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   juger1('R-OUSD3 OUSD>sans(100/1)>USDC>sans>ETH (aucun hook : frais routeur une fois)', await multi(sO3, OUSD, ETH, 25n * 10n ** 18n, 18, new Set([OUSD, USDC])), sO3, 'routeur');
   await doitRefuser('R-OUSD4 OUSD>sans>USDC>V8>B1>V8>ETH (block au milieu)', [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, B1, V8), jambe(B1, ETH, V8)], OUSD, ETH, 25n * 10n ** 18n, 18, ['refusBlocIntermediaire', 'refusPlusieursHooks']);
   await doitRefuser('R-OUSD5 OUSD>V8>B1 ... B1 en tete : OUSD>sans>USDC>V8>B2 + V8 (deux jambes payantes)', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, OUSD, ETH, OUSD_USDC), jambe(OUSD, B2, V8)], B1, B2, 10n ** 18n, 18, ['refusPlusieursHooks']);
+  /* ══ 2026-10-02 (Phil : UN frais par swap ; C2 F3) — FRANCHISSEMENT Uniswap -> Aerodrome : UN frais a6cf par LOT ══
+   * ⛔ L ORACLE LIT LES OCTETS : a6cf dans la jambe 1 (TAKE routeur), a6cf dans la jambe 2 (sweep CL), plus chaque jambe dont
+   *   le hook verse a6cf (liste mesuree). Total attendu : 1. Sur f9368a0 : routeur V4 + sweep CL = 2 (ou hook + sweep = 2). */
+  const POOL_A = '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0';
+  const SEL_GP = '0x' + PO.selecteur('getPool(address,address,int24)'), SEL_T0 = '0x' + PO.selecteur('token0()'), SEL_S0 = '0x' + PO.selecteur('slot0()');
+  const mot = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+  const rpcFr = (devis = 10n ** 18n) => async (m, p) => {
+    if (m !== 'eth_call') return m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64);
+    const d = bas((p && p[0] && p[0].data) || '');
+    if (d.startsWith(SEL_GP)) return '0x' + mot(parseInt(d.slice(10 + 128, 10 + 192), 16) === 10 ? POOL_A : ETH);
+    if (d.startsWith(SEL_T0)) return '0x' + mot(USDC);
+    if (d.startsWith(SEL_S0)) return '0x' + (2n ** 96n).toString(16).padStart(64, '0') + '0'.repeat(64 * 6);
+    if (d.startsWith(SEL_SLOT0) || d.startsWith(SEL_LIQ)) return '0x' + '0'.repeat(256);
+    return bas((p && p[0] && p[0].to) || '') === Q ? '0x' + devis.toString(16).padStart(64, '0') + '0'.repeat(64) : '0x' + 'f'.repeat(128);
+  };
+  const A6 = bas(F.FEE_WALLET).slice(2);
+  const resV4 = (hBlock) => async ({ de, vers }) => { const c = cle(de, vers, BLOCS.has(bas(de)) || BLOCS.has(bas(vers)) ? hBlock : ETH);
+    return { etat: 'OK', cle: c, zeroForOne: bas(de) === c.currency0, quote: 10n ** 18n }; };
+  const frx = (chemin, { hBlock = V8, devis, montant = 10n ** 21n, fdo = null } = {}) => PF.planFranchissement({ rpc: rpcFr(devis), chaine: 8453, compte, chemin,
+    devise: chemin[0].de, block: chemin[chemin.length - 1].vers, montant, decimalesEntree: 18, prixUsdEntree: null, beneficiaireFrais: F.FEE_WALLET,
+    fraisDevisesOk: fdo || new Set([bas(chemin[0].de), NVDA]), resoudreV4: resV4(hBlock) });
+  const sautsJ1 = (chemin, hBlock = V8) => chemin.filter((x) => x.famille === 'uniswap-v4').map((x) => { const c = cle(x.de, x.vers, BLOCS.has(bas(x.de)) || BLOCS.has(bas(x.vers)) ? hBlock : ETH); return { cle: c, zeroForOne: bas(x.de) === c.currency0 }; });
+  const jugerLot = (id, p, chemin, attendu, hBlock = V8) => {
+    verifier(id + ' : PRET', p.etat === 'PRET' && Array.isArray(p.appels) && p.appels.length === 3, p.etat + ' ' + (p.etape || '') + ' ' + (p.pourquoi || ''));
+    if (p.etat !== 'PRET') return;
+    const j1 = bas(p.appels[0].data).includes(A6), j2 = bas(p.appels[2].data).includes(A6);
+    const hooks = fraisHooks(sautsJ1(chemin, hBlock));
+    const n = (j1 ? 1 : 0) + (j2 ? 1 : 0) + hooks.length;
+    verifier(id + ' : exactement 1 frais par lot (' + attendu + ')', n === 1 && (attendu === 'CL' ? j2 && !j1 : hooks.length === 1 && !j1 && !j2),
+      'jambe1=' + j1 + ' jambe2=' + j2 + ' hooks=' + JSON.stringify(hooks));
+    verifier(id + ' : le plan le dit (jambesPayantes 1, jambe ' + (attendu === 'CL' ? 2 : 1) + ')', p.resume.jambesPayantes === 1 && p.resume.jambePayante === (attendu === 'CL' ? 2 : 1)
+      && p.resume.fraisParHook === (attendu !== 'CL') && p.resume.fraisBpsJambe1 === 0n && p.resume.fraisBpsJambe2 === (attendu === 'CL' ? 10n : 0n), JSON.stringify(p.resume, (k, v) => (typeof v === 'bigint' ? String(v) : v)));
+    verifier(id + ' : aucun frais en block', !hooks.some((d) => BLOCS.has(bas(d))), JSON.stringify(hooks));
+  };
+  const cFR1 = [lieu(OUSD, USDC, 'uniswap-v4'), lieu(USDC, NVDA, 'aerodrome')];
+  jugerLot('FR1 franchissement OUSD>(V4 sans hook, 1 saut)>USDC>(Aerodrome)>NVDAc', await frx(cFR1), cFR1, 'CL');
+  const cFR2 = [lieu(ETH, USDC, 'uniswap-v4'), lieu(USDC, NVDA, 'aerodrome')];
+  jugerLot('FR2 franchissement ETH>(V4 sans hook)>USDC>(Aerodrome)>NVDAc', await frx(cFR2), cFR2, 'CL');
+  const cFR3 = [lieu(B4, ETH, 'uniswap-v4'), lieu(ETH, USDC, 'uniswap-v4'), lieu(USDC, NVDA, 'aerodrome')];
+  jugerLot('FR3 franchissement B4>(V8)>ETH>(sans)>USDC>(Aerodrome)>NVDAc (hook payeur)', await frx(cFR3), cFR3, 'hook');
+  jugerLot('FR3b franchissement B4>(V2, vente)>ETH>(sans)>USDC>(Aerodrome)>NVDAc (hook payeur)', await frx(cFR3, { hBlock: T.HOOK_V2 }), cFR3, 'hook', T.HOOK_V2);
+  const cFR4 = [lieu(B4, USDC, 'uniswap-v4'), lieu(USDC, NVDA, 'aerodrome')];
+  jugerLot('FR4 franchissement B4>(V8, 1 saut)>USDC>(Aerodrome)>NVDAc (hook payeur)', await frx(cFR4), cFR4, 'hook');
+  const pFR5 = await frx(cFR1, { devis: 500n, montant: 500n });
+  verifier('FR5 franchissement poussiere (frais CL arrondi a 0) : REFUSE refusPoussiere', pFR5.etat === 'REFUSE' && pFR5.refusPoussiere === true && pFR5.pourquoi === E.MESSAGE_TROP_PETIT,
+    pFR5.etat + ' ' + pFR5.pourquoi);
+  /* TEMOINS : une route a UNE jambe paie toujours exactement 1 frais (rail V4 seul, sans franchissement) */
+  const sTS1 = [jambe(OUSD, USDC, ETH)];
+  const pTS1 = await multi(sTS1, OUSD, USDC, 10n ** 21n, 18, new Set([OUSD, USDC]));
+  juger1('TS1 une seule jambe OUSD>(V4 sans hook)>USDC : 1 frais routeur', pTS1, sTS1, 'routeur');
+  verifier('TS1 : le TAKE a6cf est dans les octets', pTS1.tx && bas(pTS1.tx.data).includes(A6), pTS1.etat);
+  const sTS2 = [jambe(ETH, USDC, ETH)];
+  juger1('TS2 une seule jambe ETH>(V4 sans hook)>USDC : 1 frais routeur', await multi(sTS2, ETH, USDC, 10n ** 18n, 18), sTS2, 'routeur');
+
+  /* ══ 2026-10-02 (C2, F1) — UN BLOCK SUR UNE POOL V4 A HOOK TIERS EST REFUSE, avant toute cotation ══ */
+  const O1 = '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc';
+  const MEME = '0x' + 'ab'.repeat(20); /* memecoin hors B20 (type BRIAN), non prixe : PAS un block a la forme */
+  const doitRefuserTiers = (id, p) => {
+    verifier(id + ' : REFUSE (hook tiers)', p && p.etat === 'REFUSE' && p.refusBlocSansHookTb === true, (p && p.etat) + ' ' + (p && p.pourquoi));
+    if (p && p.etat === 'REFUSE') { propre(id, p); verifier(id + ' : texte exact', p.pourquoi === PS.MESSAGE_PAS_ICI, p.pourquoi); }
+  };
+  for (const sens of ['ACHAT', 'VENTE']) {
+    doitRefuserTiers('H1-S ' + sens + ' simple ETH/B1 hook tiers', await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens, montant: 10n ** 16n,
+      marcheLu: { etat: 'LUE', cle: cle(ETH, B1, INCONNU), paire: 'ETH' } }));
+  }
+  doitRefuserTiers('H1-M1 multi ETH>(hook tiers)>B1', await multi([jambe(ETH, B1, INCONNU)], ETH, B1, 10n ** 16n, 18));
+  doitRefuserTiers('H1-M2 multi USDC>sans>ETH>(hook tiers)>B1', await multi([jambe(USDC, ETH, ETH), jambe(ETH, B1, INCONNU)], USDC, B1, 10n ** 7n, 6));
+  doitRefuserTiers('H1-M3 multi B1>(hook tiers)>ETH (vente)', await multi([jambe(B1, ETH, INCONNU)], B1, ETH, 10n ** 18n, 18));
+  const chTiers = [{ de: ETH, vers: B1, e: v4(ETH, B1, INCONNU) }];
+  doitRefuserTiers('H1-MP multipool ETH>(V4 hook tiers)>B1 (cotation)', await MP.coterChemin({ rpc: rpcMuet, chemin: chTiers, montant: 10n ** 18n, admises: ADM }));
+  doitRefuserTiers('H1-MP multipool ETH>(V4 hook tiers)>B1 (construction)', MP.construireRoute({ ...baseMP, chemin: chTiers, fraisIndice: 0 }));
+  /* TEMOINS POSITIFS : V8, o1 Standard (referent a6cf), OpenLaunch (OL-S1/OL-M2 plus haut), et un memecoin hors B20 */
+  for (const sens of ['ACHAT', 'VENTE']) {
+    const c = cle(ETH, B1, V8);
+    juger1('H1-P V8 ' + sens + ' simple ETH/B1', await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens, montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle: c, paire: 'ETH' } }),
+      [{ cle: c, zeroForOne: sens === 'ACHAT' }], 'hook');
+  }
+  const cO1 = cle(ETH, B1, O1);
+  juger1('H1-P o1 Standard ACHAT simple ETH>B1 (referent a6cf)', await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens: 'ACHAT', montant: 10n ** 16n,
+    marcheLu: { etat: 'LUE', cle: cO1, paire: 'ETH' } }), [{ cle: cO1, zeroForOne: true }], 'routeur');
+  const sO1 = [jambe(ETH, B1, O1)];
+  juger1('H1-P o1 Standard multi ETH>(o1)>B1', await multi(sO1, ETH, B1, 10n ** 16n, 18), sO1, 'routeur');
+  const chO1 = [{ de: ETH, vers: B1, e: v4(ETH, B1, O1) }];
+  const mO1 = MP.construireRoute({ ...baseMP, montant: 10n ** 16n, chemin: chO1, fraisIndice: MP.placerFrais(chO1, ADM).indice });
+  verifier('H1-P o1 Standard multipool ETH>(V4 o1)>B1 : PRET', mO1.etat === 'PRET', mO1.etat + ' ' + (mO1.pourquoi || ''));
+  const admis = (c) => (typeof PS.hookAdmisPourBlock === 'function' ? PS.hookAdmisPourBlock(c) : null); /* absent (code d avant) : rouge, pas d exception */
+  verifier('H1-P memecoin hors B20 sur hook tiers : la regle F1 ne le juge pas (forme)', admis(cle(ETH, MEME, INCONNU)) === true
+    && admis(cle(ETH, B1, INCONNU)) === false && admis(cle(ETH, B1, O1)) === true && admis(cle(ETH, B1, ETH, OL)) === true
+    && admis(cle(ETH, B1, ETH)) === false);
+
+  /* ══ F6 (C2) : les 4 actions ajoutees par 56878eb sont CONNUES — aucune n est un block ══ */
+  const QUATRE = ['GMEc', 'HTZc', 'PFEc', 'PMc'].map((s) => [s, P.ACTIONS_COINBASE.find((a) => a.symbole === s)]);
+  verifier('F6 GMEc HTZc PFEc PMc au registre, ni block de route ni block a jonction', QUATRE.every(([, a]) => !!a && !PS.estBlockDeRoute(a.adr) && !PS.estBlockAJonction(a.adr) && admis(cle(ETH, a.adr, INCONNU)) !== false),
+    QUATRE.map(([s, a]) => s + '=' + (a ? a.adr : 'ABSENTE')).join(' '));
+  verifier('F6 compte : 37 actions au registre, 41 devises 7030 toutes connues', P.ACTIONS_COINBASE.length === 37 && P.DEVISES_ADMISES_7030.length === 41
+    && P.DEVISES_ADMISES_7030.every((d) => PS.estDeviseConnue(d.adr || d)), P.ACTIONS_COINBASE.length + ' / ' + P.DEVISES_ADMISES_7030.length);
   return res;
 }
 
@@ -379,7 +475,7 @@ const MUTANTS = [
     doitCasser: [/^V1-B3 /, /^V1-S3 /] },
   { nom: 'L PREVU achat hors fraisHookEnBlock', edits: [['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)']],
     doitCasser: [/^PREVU ACHAT simple/] }, /* multi : refuse desormais plus tot par la jambe V1 (refusV1Route, item e) */
-  { nom: 'O multipool : block sur pool sans hook TB accepte', edits: [['multipool.js', "&& (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))));", '&& false);']],
+  { nom: 'O multipool : block sur pool sans hook TB accepte', edits: [['multipool.js', "&& (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle)) || tiers(s.e.cle)));", '&& false);']],
     doitCasser: [/^B-M1 /, /^B-M2 /, /^B-M3 /, /^B-M4 /, /^B-M5 /] },
   { nom: 'T multipool : exception OpenLaunch retiree', edits: [['multipool.js', '(cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))', 'cleSansHook(s.e.cle)']],
     doitCasser: [/^OL-M1 /, /^OL-M2 /] },
@@ -396,7 +492,24 @@ const MUTANTS = [
   { nom: 'V B20 = simple prefixe 0xb2', edits: [['pool-sans-hook.js', 'export const RE_B20 = /^0xb20{20}/i;', 'export const RE_B20 = /^0xb2/i;']],
     doitCasser: [/^B20a /, /^B20c /] },
   { nom: 'W HTZc retire du registre (une action B20 connue n est un block que si elle sort du registre)', edits: [['paires.js', "{ symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },", '']],
-    doitCasser: [/^B20b /, /^B20c /] },
+    doitCasser: [/^B20b /, /^B20c /, /^F6 GMEc /] },
+  /* ── 2026-10-02 (Phil : un frais par swap ; C2 F1/F3) ── */
+  { nom: 'F3a franchissement : routeur V4 garde son frais (2 frais par lot)', edits: [['plan-franchissement.js', 'fraisDevisesOk, fraisRouteurAilleurs: true });', 'fraisDevisesOk });']],
+    doitCasser: [/^FR1 .*exactement 1 frais/, /^FR2 .*exactement 1 frais/] },
+  { nom: 'F3b franchissement : sweep CL garde malgre le hook payeur', edits: [['plan-franchissement.js', 'sansFrais: parHook,', 'sansFrais: false,']],
+    doitCasser: [/^FR3 .*exactement 1 frais/, /^FR3b .*exactement 1 frais/, /^FR4 .*exactement 1 frais/] },
+  { nom: 'F3c franchissement : garde poussiere retiree', edits: [['plan-franchissement.js', 'if (!parHook && (minPools * FRAIS_INTERFACE_BPS_CL) / 10000n <= 0n)', 'if (false)']],
+    doitCasser: [/^FR5 /] },
+  { nom: 'F3d jambe 1 a un saut sans TAKE refusee', edits: [['echange.js', 'const formeSansTake = fraisRouteurAilleurs &&', 'const formeSansTake = false &&']],
+    doitCasser: [/^FR1 .*: PRET/, /^FR4 .*: PRET/] },
+  { nom: 'F1a swap simple : hook tiers accepte', edits: [['echange.js', 'if (!hookAdmisPourBlock(marche.cle)) return', 'if (false) return']],
+    doitCasser: [/^H1-S ACHAT /, /^H1-S VENTE /] },
+  { nom: 'F1b multi-sauts : hook tiers accepte', edits: [['echange.js', '!hookAdmisPourBlock(x.cle) && !listePayeurs', 'false && !listePayeurs']],
+    doitCasser: [/^H1-M1 /, /^H1-M2 /, /^H1-M3 /] },
+  { nom: 'F1c multipool : hook tiers accepte', edits: [['multipool.js', '|| tiers(s.e.cle)));', '));']],
+    doitCasser: [/^H1-MP .*cotation/, /^H1-MP .*construction/] },
+  { nom: 'F1d helper : o1 Standard refuse (temoin positif)', edits: [['pool-sans-hook.js', 'return REFERENT_O1_ACTIF === true && estHookO1Standard(h);', 'return false;']],
+    doitCasser: [/^H1-P o1 Standard ACHAT/, /^H1-P o1 Standard multi /, /^H1-P o1 Standard multipool/] },
 ];
 
 let nAssert = 0, ko = 0;
@@ -419,7 +532,7 @@ try {
     ok(rouges.length > 0, 'mutant ' + M.nom + ' : le banc doit devenir ROUGE');
     for (const re of M.doitCasser) ok(rouges.some((id) => re.test(id)), 'mutant ' + M.nom + ' : doit casser ' + re);
     /* les routes legitimes ne dependent d aucune mutation */
-    ok(!rouges.some((id) => /^(R0|R1|R3|R-OUSD[123] |pay-with R1a|P-|PREVU oracle)/.test(id)), 'mutant ' + M.nom + ' : R0/R1/R3 et temoins P- restent verts');
+    ok(!rouges.some((id) => /^(R0|R1|R3|R-OUSD[123] |pay-with R1a|P-|PREVU oracle|TS[12] |H1-P V8 )/.test(id)), 'mutant ' + M.nom + ' : R0/R1/R3 et temoins P- restent verts');
   }
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });

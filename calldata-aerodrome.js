@@ -505,7 +505,7 @@ export function calldataGetPool({ tokenA, tokenB, tickSpacing } = {}) {
  */
 export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpacing, recipient,
   deadline, minSortie1, minSortie2, maintenant = null, entree2 = null, poolResolue = null,
-  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null } = {}) {
+  fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais = null, sansFrais = false } = {}) {
   if (!jambe1 || !ADR.test(String(jambe1.to || '')) || typeof jambe1.data !== 'string' || !jambe1.data) {
     return { etat: 'REFUSE', pourquoi: 'leg 1 must be an already-built call { to, data }' };
   }
@@ -560,11 +560,20 @@ export function planifierFranchissement({ jambe1 = null, pivot, action, tickSpac
    *   le minimum recu par l UTILISATEUR. Avec celui-ci, c est le minimum des POOLS, AVANT notre
    *   retenue ; l utilisateur recoit `minSortie2 * (10000 - bps) / 10000`. Les deux chiffres sont
    *   rendus (`minPools`, `minUtilisateur`) pour qu aucun ecran n ait a deviner lequel il montre. */
-  const jambe2 = calldataExactInputAvecFrais({
-    sauts: [{ de: pivot, vers: action, tickSpacing }],
-    recipient, deadline, amountIn: e2, amountOutMinimum: minSortie2, maintenant,
-    fraisBps, beneficiaireFrais,
-  });
+  /* ⛔⛔ 2026-10-02 (Phil : UN frais par swap) : `sansFrais` = la jambe 1 paie deja a6cf PAR SON HOOK. La jambe 2 est alors
+   *   un exactInput nu vers l acheteur — PAS un sweepTokenWithFee a 0 bps (feeBips doit etre > 0 sur le routeur v3). */
+  const jambe2 = sansFrais
+    ? (() => {
+      const j = calldataExactInputCL({ sauts: [{ de: pivot, vers: action, tickSpacing }],
+        recipient, deadline, amountIn: e2, amountOutMinimum: minSortie2, maintenant });
+      return j.etat !== 'PRET' ? j : { ...j, fraisBps: 0, beneficiaireFrais: null,
+        minPools: String(j.champs.amountOutMinimum), minUtilisateur: String(j.champs.amountOutMinimum) };
+    })()
+    : calldataExactInputAvecFrais({
+      sauts: [{ de: pivot, vers: action, tickSpacing }],
+      recipient, deadline, amountIn: e2, amountOutMinimum: minSortie2, maintenant,
+      fraisBps, beneficiaireFrais,
+    });
   if (jambe2.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'leg 2 refused: ' + jambe2.pourquoi };
 
   return {

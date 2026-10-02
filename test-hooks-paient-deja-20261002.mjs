@@ -93,7 +93,9 @@ try {
     }
   }
   const pDepot = await plan({ planEchange }, OPEN_ANCIEN, 'ACHAT');
-  eq(String(pDepot.resume.fraisBps), String(FRAIS_INTERFACE_BPS), 'temoin negatif : hook HORS liste -> ' + FRAIS_INTERFACE_BPS + ' bps (le double frais que la liste evite)');
+  /* ⛔ 2026-10-02 (C2, F1) : hors liste, ce hook est un hook TIERS sur une pool de block -> REFUS avant cotation (avant :
+   *   PRET a 50 bps routeur, le double frais que la liste evite). Plus strict : ni double frais, ni frais du tout. */
+  ok(pDepot.etat === 'REFUSE' && pDepot.refusHookTiers === true, 'temoin negatif : hook HORS liste -> REFUSE (hook tiers), pas ' + FRAIS_INTERFACE_BPS + ' bps empiles (' + pDepot.etat + ')');
   // ── 2. REDEPLOIEMENT : retirer l ancienne adresse referait le double frais ──
   const sansAncien = copieTk.HOOKS_PAIENT_DEJA_A6CF.filter((e) => e.hook !== OPEN_ANCIEN);
   ok(copieTk.hookPaieDejaA6cf(OPEN_ANCIEN, 'ACHAT') && copieTk.hookPaieDejaA6cf(OPEN_NOUVEAU, 'VENTE'), 'cas 2 : ancien ET nouveau V8-open dans la liste unique');
@@ -124,7 +126,8 @@ try {
   ok(routeur0(mTrou), 'une fois par swap : jambe 1 sans hook + V8-open LISTE en 2e jambe -> 0 frais routeur (' + mTrou.etat + ')');
   const mOff = await planMS(sauts, null);
   ok(!copieTk.hookPaieDejaA6cf(OPEN_NOUVEAU, 'VENTE', HOOKS_PAIENT_DEJA_A6CF), 'temoin du temoin : le V8-open n est PAS dans la liste du depot');
-  ok(routeurPris(mOff), 'temoin negatif : AUCUNE jambe payeuse (sans hook + V8-open hors liste) -> frais routeur pris (' + mOff.etat + ', ' + (mOff.resume && mOff.resume.fraisBps) + ' bps)');
+  /* ⛔ 2026-10-02 (C2, F1) : hors liste, le V8-open est un hook TIERS sur la pool du block -> REFUS (avant : frais routeur pris). */
+  ok(mOff.etat === 'REFUSE' && mOff.refusHookTiers === true, 'temoin negatif : AUCUNE jambe payeuse (sans hook + V8-open hors liste) -> REFUSE hook tiers (' + mOff.etat + ')');
   // V8 (deja liste dans le depot) : une seule jambe V8 suffit
   const v8Jeton = { ...sauts[1], cle: cleDePool(ETH, JETON, { fee: 0, tickSpacing: 200, hooks: HOOK_V8 }) };
   const mV8 = await planMS([{ cle: usdcEthV8, zeroForOne: false }, v8Jeton]);

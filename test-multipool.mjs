@@ -144,7 +144,8 @@ console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
   /* sans le nommer : le routeur preleve (au noeud NVDAc, 9 bps) ; en le nommant : RIEN */
   const sansNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1 });
   const avecNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9] });
-  ok('6c. TEMOIN : hook non nomme => 1 PAY_PORTION (la double facturation serait la)', sansNom.commandes.filter((c) => c === CMD.PAY_PORTION).length === 1, sansNom.commandes.join(','));
+  /* ⛔ 2026-10-02 (C2, F1) : un hook NON nomme sur une pool de block est un hook TIERS -> REFUS (avant : 1 PAY_PORTION). */
+  ok('6c. F1 : hook non nomme sur un block => REFUSE (hook tiers), texte Not tradable here yet', sansNom.etat === 'REFUSE' && sansNom.refusBlocSansHookTb === true && /^Not tradable here yet/.test(sansNom.pourquoi), sansNom.etat + ' ' + sansNom.pourquoi);
   ok('6d. hook facturant nomme => 0 PAY_PORTION, 0 part : seul le hook facture la jambe', avecNom.etat === 'PRET' && !avecNom.commandes.includes(CMD.PAY_PORTION) && !avecNom.commandes.includes(CMD.TRANSFER) && avecNom.fraisParHook === true, avecNom.commandes.join(','));
   ok('6e. a6cf n apparait nulle part dans le calldata du routeur (le hook paie a6cf lui-meme)', !avecNom.data.includes(FEE_WALLET.slice(2)));
   /* 0,18 % IMPOSSIBLE : toute tentative d ajouter une part routeur sur une jambe facturee est REFUSEE */
@@ -153,7 +154,7 @@ console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
   const double2 = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9], partsFrais: [{ qui: FEE_WALLET, bps: 9n }, { qui: USER, bps: 9n }] });
   ok('6g. TEMOIN : deux parts en bips sur une jambe facturee => REFUSE', double2.etat === 'REFUSE', double2.pourquoi);
   /* la garde avant envoi : 9 bps routeur + hook facturant => NON ; route facturee sans PAY_PORTION => OUI */
-  ok('6h. garde unFraisParJambe : route V9 + PAY_PORTION => false (0,18 %)', unFraisParJambe(sansNom, vente, ensembleHooksFacturants([V9])) === false);
+  ok('6h. garde unFraisParJambe : route V9 + PAY_PORTION => false (0,18 %)', unFraisParJambe({ ...avecNom, commandes: [...avecNom.commandes, CMD.PAY_PORTION] }, vente, ensembleHooksFacturants([V9])) === false);
   ok('6i. garde unFraisParJambe : route V9 sans PAY_PORTION => true ; route sans hook avec 1 PAY_PORTION => true', unFraisParJambe(avecNom, vente, ensembleHooksFacturants([V9])) && unFraisParJambe(r, chBA));
   /* le total d une jambe facturee : celui du hook SEUL. 0,10 % (700 + 300 pips) sur q = 1e8 : 100000, jamais 190000 */
   const q8 = 10n ** 8n, hookSeul = (q8 * 700n) / 1000000n + (q8 * 300n) / 1000000n;
@@ -229,7 +230,8 @@ console.log('=== 7. une fois par swap ===');
   const qm = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm, hooksFacturants: [HTB] });
   ok('7l. AAPLc -> NVDAc -> block (hook TB) : frais routeur 0, la 1re jambe recoit 1e8 brut', qm.etat === 'OK' && qm.frais === 0n && qm.fraisParHook === true && vus[0].data.includes((10n ** 8n).toString(16).padStart(64, '0')), String(qm.frais));
   const qmSans = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm });
-  ok('7m. TEMOIN : le MEME chemin, hook TB NON declare => frais routeur 90000 AAPLc-wei au noeud 0', qmSans.etat === 'OK' && qmSans.frais === 90000n && qmSans.fraisIndice === 0, String(qmSans.frais) + ' @' + qmSans.fraisIndice);
+  /* ⛔ 2026-10-02 (C2, F1) : hook NON declare sur la jambe du block = hook TIERS -> REFUS (avant : frais routeur 90000 au noeud 0). */
+  ok('7m. TEMOIN F1 : le MEME chemin, hook NON declare => REFUSE (hook tiers sur un block)', qmSans.etat === 'REFUSE' && qmSans.refusBlocSansHookTb === true, qmSans.etat + ' ' + qmSans.pourquoi);
   const rm = construireRoute({ ...base, admises: adm, montant: 10n ** 8n, chemin: mixte, fraisIndice: 0, hooksFacturants: [HTB] });
   ok('7n. route : 0 PAY_PORTION, a6cf x0, 0 part', rm.etat === 'PRET' && nbPP(rm) === 0 && nbA6cf(rm) === 0 && !rm.commandes.includes(CMD.TRANSFER), rm.commandes && rm.commandes.join(','));
   ok('7o. garde : 0 PAY_PORTION OK ; 1 et 2 REJETES', unFraisParJambe(rm, mixte, HT) && !unFraisParJambe({ commandes: ['06', '10', '04'] }, mixte, HT) && !unFraisParJambe({ commandes: ['06', '06', '10', '04'] }, mixte, HT));

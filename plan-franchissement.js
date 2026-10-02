@@ -23,8 +23,8 @@
 
 import { franchissementDepuisChemin } from './franchissement-depuis-chemin.js';
 import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
-import { planEchangeMultiSauts } from './echange.js';
-import { planifierFranchissement, calldataGetPool } from './calldata-aerodrome.js';
+import { planEchangeMultiSauts, MESSAGE_TROP_PETIT } from './echange.js';
+import { planifierFranchissement, calldataGetPool, FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { sortieSpot } from './plan-usdc-block.js';
 import { selecteur } from './keccak.js';
 import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
@@ -144,7 +144,7 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
   try {
     p1 = await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts,
       entree: devise, sortie: forme.pivot, montant, toleranceBps, maintenant,
-      decimalesEntree, prixUsdEntree, fraisDevisesOk });
+      decimalesEntree, prixUsdEntree, fraisDevisesOk, fraisRouteurAilleurs: true });
   } catch (e) {
     return { etat: 'NON_MESURE', etape: 'jambe 1',
       pourquoi: 'leg 1 could not be planned: ' + String((e && e.message) || e).slice(0, 120) };
@@ -158,6 +158,9 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
     return { etat: p1.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', etape: 'jambe 1',
       pourquoi: p1.pourquoi };
   }
+  /* ⛔⛔ 2026-10-02 (Phil : UN frais par swap, C2) : le lot prend a6cf UNE fois, sur UNE jambe — le hook V4 de la jambe 1
+   *   s il paie deja a6cf, sinon la jambe CL seule. Avant, routeur V4 (bareme) + sweep CL = deux frais par lot. */
+  const parHook = !!(p1.resume && p1.resume.fraisParHook === true);
   const minPivot = BigInt(p1.resume.recoitAuMoins);
   if (minPivot <= 0n) {
     return { etat: 'REFUSE', etape: 'jambe 1',
@@ -188,6 +191,10 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
   if (minPools <= 0n) {
     return { etat: 'REFUSE', etape: 'jambe 2', pourquoi: 'the amount is too small for this pool' };
   }
+  /* ⛔ LE FRAIS UNIQUE NE DOIT PAS S ARRONDIR A 0 (meme garde que « fee amount is zero » sur le rail V4). */
+  if (!parHook && (minPools * FRAIS_INTERFACE_BPS_CL) / 10000n <= 0n) {
+    return { etat: 'REFUSE', etape: 'jambe 2', pourquoi: MESSAGE_TROP_PETIT, refusPoussiere: true };
+  }
 
   /* ── 4. LE LOT ─────────────────────────────────────────────────────────────────────────── */
   const lot = planifierFranchissement({
@@ -196,7 +203,7 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
     recipient: compte, deadline: BigInt(Math.floor(maintenant / 1000) + 1200),
     maintenant: BigInt(Math.floor(maintenant / 1000)),
     minSortie1: minPivot, entree2: minPivot, minSortie2: minPools,
-    poolResolue: aero.pool, beneficiaireFrais,
+    poolResolue: aero.pool, beneficiaireFrais, sansFrais: parHook,
   });
   if (lot.etat !== 'PRET') {
     return { etat: 'REFUSE', etape: 'lot', pourquoi: lot.pourquoi };
@@ -213,11 +220,15 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
       recoitAuMoins: BigInt(lot.minUtilisateur),
       recoitDevise: forme.action,
       pivot: forme.pivot,
-      /* ⛔⛔ DEUX FRAIS, ET ON LES DIT TOUS LES DEUX. Annoncer celui de la jambe 1 seul serait
-       *   annoncer la moitie de ce qu on prend. Phil : « des fees sur chaque transaction ». */
+      /* ⛔⛔ UN SEUL FRAIS PAR LOT (2026-10-02) : jambe 1 = hook payeur (routeur 0, CL 0), sinon jambe 2 = CL seule
+       *   (routeur 0). `jambesPayantes` le DIT, pour que l ecran et la matrice le lisent au lieu de le deduire. */
       fraisJambe1: BigInt(p1.resume.frais),
       fraisBpsJambe1: BigInt(p1.resume.fraisBps),
       fraisBpsJambe2: BigInt(lot.fraisBps),
+      fraisParHook: parHook,
+      jambePayante: parHook ? 1 : 2,
+      jambesPayantes: (parHook ? 1 : 0) + (BigInt(p1.resume.fraisBps) > 0n ? 1 : 0) + (BigInt(lot.fraisBps) > 0n ? 1 : 0),
+      hooksJambe1: b.sauts.map((x) => String((x && x.cle && x.cle.hooks) || '').toLowerCase()),
       /* ⚠️ LE MINIMUM DE LA JAMBE 2 EST DERIVE D UN PRIX SPOT, pas d un devis : il ignore la
        *   profondeur. On le NOMME pour qu aucun ecran ne le presente comme un montant garanti par
        *   une cotation. */

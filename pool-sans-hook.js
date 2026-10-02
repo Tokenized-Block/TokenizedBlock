@@ -7,7 +7,9 @@
  *   · Exception unique : le format OpenLaunch (frais 3 %, espacement 200) — pools partenaires, hors de notre perimetre.
  *   Fait mesure (fork 52074517) : TBLOCK n a AUCUNE pool ETH avec hook ; sa seule pool ETH (frais 0, espacement 200)
  *   est sans hook — elle n est donc plus jamais choisie, et ce qui en dependait est refuse avant le wallet. */
-import { TBLOCK, TBGAS, HOOK_PREVU, deviseFraisHook } from './tokenomics.js';
+import { TBLOCK, TBGAS, HOOK_PREVU, deviseFraisHook, estNotreHook } from './tokenomics.js';
+import { REFERENT_O1_ACTIF, estHookO1Standard } from './referent-o1.js';
+import { estHookMarcheOuvert } from './marche-ouvert.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
 
 const bas = (a) => String(a || '').toLowerCase();
@@ -103,4 +105,21 @@ export function estBlockAJonction(adr) {
 }
 export function indexBlocAJonction(noeuds) {
   return (Array.isArray(noeuds) ? noeuds : []).findIndex((t) => estBlockAJonction(t));
+}
+
+/* ══ 2026-10-02 (C2, F1) — UN BLOCK SUR UNE POOL V4 A HOOK TIERS ═══════════════════════════════════════════════════════
+ * ⛔⛔ Une cle V4 dont une devise est un block (estBlockAJonction : TBLOCK/TBGAS, ou B20 hors devises connues — PAS
+ *     estBlockDeRoute, sinon un memecoin o1 non prixe hors B20, ex. BRIAN, serait refuse) n est admise que si :
+ *     (1) estNotreHook, ou un hook V8-open LISTE (marche-ouvert.js) — les regles existantes (frais en block, V1, une jambe
+ *         payante, garde marche ouvert) s appliquent ensuite ;
+ *     (2) sans hook ET format OpenLaunch (3 % / 200) ;
+ *     (3) le LaunchHook Standard d o1 avec REFERENT_O1_ACTIF (la part referrer a6cf, GO).
+ *     Tout autre hook (o1 Tax, anciens o1, Clanker, Doppler, inconnu) -> refus avant toute cotation. Sans cle : rien a juger. */
+export function hookAdmisPourBlock(cle) {
+  if (!cle) return true;
+  if (!estBlockAJonction(cle.currency0) && !estBlockAJonction(cle.currency1)) return true;
+  const h = bas(cle.hooks || ZERO);
+  if (estNotreHook(h) || estHookMarcheOuvert(h)) return true;
+  if (h === ZERO) return formatOpenLaunch(cle);
+  return REFERENT_O1_ACTIF === true && estHookO1Standard(h);
 }

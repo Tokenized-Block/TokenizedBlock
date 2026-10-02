@@ -7935,6 +7935,16 @@ function fraisEstDynamique(fee) {
   const n = Number(fee);
   return Number.isFinite(n) && (n & FRAIS_DYNAMIQUE_V4) !== 0;
 }
+/* ⛔⛔ 2026-10-02 (C2, F2) : LE TAUX DU HOOK, PAR HOOK. Avant, tout hook TB affichait le 3 % du V1 — et le badge
+ *   « · included » le mettait sur chaque echange V8, qui prend 0,5 %. V1–V7 : HOOK_FEE 30 000 (3 %, mesure V1, relu V5) ;
+ *   V8 : HOOK_FEE 5000 (0,5 %, relu) ; V9 : 0,09 % ; 7030 : 0,07 % + 0,03 % = 0,1 % (tokenomics.js). */
+function fraisHookBps(hk) {
+  const h = String(hk || '').toLowerCase();
+  if (h === String(HOOK_V8).toLowerCase()) return 50;
+  if (HOOK_V9 && h === String(HOOK_V9).toLowerCase()) return 9;
+  if (estHook7030(h)) return 10;
+  return HOOK_PREVU_FRAIS_BPS;
+}
 function libelleFrais(cle) {
   const zero = '0x0000000000000000000000000000000000000000';
   const hk = cle && cle.hooks ? String(cle.hooks).toLowerCase() : zero;
@@ -7942,7 +7952,7 @@ function libelleFrais(cle) {
   /* ⛔ PHIL (2026-09-19) : « 3,5 % c est de trop — entre 0,5 % et 3 %, mais ne l ecris pas ». Sur nos pools, l interface
    * ne s ajoute plus au hook (echange.js) : total 3 %. L ecran montre UN pourcentage, vrai, sans paragraphe. */
   if (estNotreHook(hk)) {
-    const total = (HOOK_PREVU_FRAIS_BPS + (tier || 0) / 100) / 100;
+    const total = (fraisHookBps(hk) + (tier || 0) / 100) / 100;
     return { court: 'Fee ' + total + '%', long: '' };
   }
   /* ⛔⛔ UNE POOL A FRAIS DYNAMIQUES N ANNONCE AUCUN TAUX. Sans ce cas, `8 388 608 / 10 000`
@@ -11804,17 +11814,19 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
   const r = pf.resume;
   /* ══ LES GARDES DE FRAIS, SUR LES DEUX JAMBES ══════════════════════════════════════════════ */
   if (!estWalletDeFrais(compte)) {
-    const j1 = r && typeof r.fraisJambe1 === 'bigint' && r.fraisJambe1 > 0n
-      && typeof r.fraisBpsJambe1 === 'bigint' && r.fraisBpsJambe1 > 0n && r.fraisBpsJambe1 <= BPS_MAX_UI;
-    const j2 = r && typeof r.fraisBpsJambe2 === 'bigint' && r.fraisBpsJambe2 > 0n
-      && r.fraisBpsJambe2 <= BPS_MAX_UI;
-    /* ⛔⛔ LES OCTETS, PAS LE RESUME. Un plan peut annoncer un frais que son calldata ne prend pas :
-     *   ce jumeau a deja ete attrape dans ce depot. On exige FEE_WALLET dans la jambe 1 ET dans la
-     *   jambe 2 — c est la jambe 2 qui ne payait RIEN jusqu a ce matin, et c est celle du volume. */
+    /* ⛔⛔ 2026-10-02 (Phil : UN frais par swap) : le lot paie a6cf UNE fois, sur UNE jambe — soit le hook V4 de la
+     *   jambe 1 (`fraisPayeParHook` : routeur 0, a6cf absent de la jambe 1, hook dans la liste payeuse ; jambe 2 sans
+     *   frais), soit la jambe CL seule (routeur 0, a6cf absent de la jambe 1, FEE_WALLET dans les octets de la jambe 2).
+     *   LES OCTETS, PAS LE RESUME : un plan peut annoncer un frais que son calldata ne prend pas. */
     const octets1 = pf.appels[0] && feeWalletDansCalldata(pf.appels[0]);
-    const octets2 = pf.appels[2] && String(pf.appels[2].data || '').toLowerCase()
-      .includes(String(FEE_WALLET).replace(/^0x/, '').toLowerCase());
-    if (!j1 || !j2 || !octets1 || !octets2) {
+    const octets2 = pf.appels[2] && feeWalletDansCalldata(pf.appels[2]);
+    const un = r && r.jambesPayantes === 1;
+    const parHook = un && r.fraisParHook === true && r.fraisBpsJambe2 === 0n && !octets2
+      && fraisPayeParHook({ fraisParHook: true, fraisBps: r.fraisBpsJambe1, frais: r.fraisJambe1, beneficiaireFrais: null },
+        pf.appels[0], r.hooksJambe1);
+    const parCl = un && r.fraisParHook !== true && r.fraisJambe1 === 0n && r.fraisBpsJambe1 === 0n && !octets1
+      && typeof r.fraisBpsJambe2 === 'bigint' && r.fraisBpsJambe2 > 0n && r.fraisBpsJambe2 <= BPS_MAX_UI && octets2;
+    if (!parHook && !parCl) {
       return refuser('This crossing could not be prepared safely. Nothing to sign — try again.',
         'echange_multi_refus_frais');
     }
@@ -11829,10 +11841,9 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
       + (r.minimumParPrixSpot ? ' (floor from the pool price, not a quote)' : ''),
     'Route: through ' + (r.pivot ? 'USDC' : 'a bridge asset') + ', two venues, '
       + pf.appels.length + ' calls in one signature',
-    /* ⛔⛔ DEUX FRAIS, ET ON LES DIT TOUS LES DEUX. Annoncer celui de la jambe 1 seul serait annoncer
-     *   la moitie de ce qu on prend. */
-    'Fee: ' + (Number(r.fraisBpsJambe1) / 100) + '% on what you pay, then '
-      + (Number(r.fraisBpsJambe2) / 100) + '% on what comes out',
+    /* ⛔ UN FRAIS PAR LOT (2026-10-02) : on dit lequel. */
+    r.fraisParHook === true ? 'Fee: one fee, included in the hooked pool'
+      : 'Fee: ' + (Number(r.fraisBpsJambe2) / 100) + '% on what comes out (one fee for the whole crossing)',
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
 
   const bt = document.createElement('button');
