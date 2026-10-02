@@ -12,7 +12,7 @@ import {
   nettoyerTexte, nettoyerVoix, voixPublique, lireVoixPublique, resumeSavoir, messageVoix, verifierEcriture,
   recupererSignataire, proprietaireDuBlock, reactionVoix, composerParole, BORNES_VOIX, PAROLE_MAX_OCTETS,
   etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, partageVoix,
-  EVENEMENTS_VOIX, grosEchangeEnEth, libelleGrosEchange,
+  EVENEMENTS_VOIX, grosEchangeEnEth, libelleGrosEchange, estLeBlock,
 } from './voix-block.js';
 import { TOPIC_CREATED, FACTORY } from './index-blocks.js';
 
@@ -224,15 +224,17 @@ const fMaj = fonction('majAidesVoix'), fLire = fonction('lireFormulaireVoix');
 const fListe = (bloc.match(/const listeVoix = [^\r\n]*/) || [''])[0];
 ok(fMaj.length > 300 && fLire.length > 100 && fListe.length > 30, 'majAidesVoix, lireFormulaireVoix et listeVoix extraites de la page');
 const echapper = (t) => String(t).replace(/[&<>"]/g, (c) => '&#' + c.charCodeAt(0) + ';');
-const aides = ({ amis = '', devise = null, bio = '', connus = [] } = {}) => {
+const aides = ({ amis = '', devise = null, bio = '', connus = [], savoir = '', profil = '', sym = null } = {}) => {
   const el = {};
-  const $ = (q) => (el[q] = el[q] || { hidden: false, value: /data-voix-style/.test(q) ? 'normal' : '', textContent: '', innerHTML: '' });
-  $('#pvAmis').value = amis; $('#pvBio').value = bio;
-  new Function('$', 'nettoyerVoix', 'amisIntrouvables', 'resumeSavoir', 'resumeReactions', 'reactionDepuisChoix', 'EVENEMENTS_VOIX',
-    'libelleGrosEchange', 'habitants', 'creationsLive', 'deviseProfil', 'enTexte', fListe + ';\n' + fLire + fMaj + 'majAidesVoix();')(
+  const $ = (q) => (el[q] = el[q] || { hidden: false, value: /data-voix-style/.test(q) ? 'normal' : '', textContent: '', innerHTML: '', dataset: {} });
+  $('#pvAmis').value = amis; $('#pvBio').value = bio; $('#pvSavoir').value = savoir; $('#profil').dataset.block = profil;
+  const r = new Function('$', 'nettoyerVoix', 'amisIntrouvables', 'resumeSavoir', 'resumeReactions', 'reactionDepuisChoix', 'EVENEMENTS_VOIX',
+    'libelleGrosEchange', 'habitants', 'creationsLive', 'deviseProfil', 'enTexte', 'estLeBlock', 'symProfil',
+    fListe + ';\n' + fLire + fMaj + 'majAidesVoix(); return lireFormulaireVoix();')(
     $, nettoyerVoix, amisIntrouvables, resumeSavoir, resumeReactions, reactionDepuisChoix, EVENEMENTS_VOIX,
-    libelleGrosEchange, connus, new Map(), devise, echapper);
-  return { puces: el['#pvAmisPuces'].innerHTML, gros: el['[data-voix-libelle="big_trade"]'].textContent, bio: el['#pvBioCompte'].textContent };
+    libelleGrosEchange, connus, new Map(), devise, echapper, estLeBlock, sym);
+  return { puces: el['#pvAmisPuces'].innerHTML, gros: el['[data-voix-libelle="big_trade"]'].textContent, bio: el['#pvBioCompte'].textContent,
+    partage: el['#pvPartage'].textContent, formulaire: r };
 };
 const surPage = [{ adr: B, sym: 'MUC' }, { adr: C, sym: 'TBLOCK' }];
 const pp = aides({ amis: 'MUC, GATEWAY', connus: surPage }).puces;
@@ -267,5 +269,35 @@ ok(bloc.includes('placeholder="What it says — empty uses its personality"') &&
 eq(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisChoix('own', '') } }).voix }), tour({ A: nettoyerVoix({ ton: 'happy' }).voix }),
   'et c est vrai : « own words » laisse vide = la personnalite');
 ok(JSON.stringify(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisChoix('own', 'Yay!') } }).voix })).includes('Yay!'), 'TEMOIN : des mots ecrits partent bien');
+
+console.log('— 10. revue v3 : exemples en gris « e.g. », le block de la fiche n est pas son propre ami');
+const regleGris = (app.match(/^#pvLignes::placeholder,#pvSavoir::placeholder\{([^}]*)\}\r?$/m) || [])[1] || '';
+ok(regleGris === 'color:revert;opacity:revert', 'les deux exemples reviennent au gris du navigateur — celui de « art, football, coffee »');
+ok(!/#pvSujets[^{]*::placeholder|\.champ input::placeholder|input#pvSujets::placeholder/.test(app), 'TEMOIN : « art, football, coffee » n a aucune regle a soi (c est bien le gris du navigateur qu on reprend)');
+ok(/^\.champ textarea::placeholder\{color:var\(--tiede\);opacity:1\}\r?$/m.test(app), 'TEMOIN : les autres zones de texte gardent leur regle (seuls ces deux champs changent)');
+ok(!/#pv(Lignes|Savoir)(?!::placeholder)[^{\s,]*\s*[{,][^}]*color/.test(app.replace(/^#pvLignes::placeholder,#pvSavoir::placeholder\{[^}]*\}\r?$/m, '')),
+  'TEMOIN : aucune regle ne touche la couleur du texte saisi dans ces deux champs (seul ::placeholder change)');
+ok(carte.includes('id="pvLignes" rows="3" maxlength="420" placeholder="e.g. gm, neighbours!"'), '« Its own lines » : « e.g. gm, neighbours! »');
+ok(carte.includes('placeholder="e.g. We just opened a shop in Brussels. Our block loves sunny days."'), '« What it knows » : « e.g. We just opened a shop in Brussels… »');
+ok(/placeholder="art, football, coffee"/.test(carte) && /placeholder="The bravest block on the map"/.test(carte), 'TEMOIN : les autres exemples ne prennent pas « e.g. »');
+const TB = '0x' + 'b'.repeat(40);
+eq(estLeBlock('TBLOCK', TB, 'TBLOCK'), true, 'le symbole du block de la fiche : c est lui');
+eq(estLeBlock('$tblock', TB, 'TBLOCK'), true, 'meme avec un $ et une autre casse');
+eq(estLeBlock(TB.toUpperCase().replace('0X', '0x'), TB, null), true, 'son adresse, sans symbole connu : c est lui');
+eq(estLeBlock('MUC', TB, 'TBLOCK'), false, 'TEMOIN : un autre nom n est pas lui');
+eq(estLeBlock('TBLOCK', TB, null), false, 'TEMOIN : symbole inconnu, un nom ne se compare pas a une adresse');
+const pSoi = aides({ amis: 'TBLOCK, MUC, GATEWAY', connus: surPage, profil: TB, sym: 'TBLOCK' });
+ok(pSoi.puces.includes('>TBLOCK · this block</span>') && !pSoi.puces.includes('TBLOCK · not on this page'), 'sur la fiche de TBLOCK, la puce TBLOCK dit « · this block »');
+ok(pSoi.puces.includes('<span class="puce">MUC</span>') && pSoi.puces.includes('>GATEWAY · not on this page</span>'), 'TEMOIN : les autres blocks gardent leur puce (normale / « not on this page »)');
+ok(aides({ amis: 'TBLOCK', connus: surPage, profil: B, sym: 'MUC' }).puces === '<span class="puce">TBLOCK</span>', 'TEMOIN : sur la fiche d un autre block, TBLOCK est une puce normale');
+eq(pSoi.formulaire.amis, ['MUC', 'GATEWAY'], 'a l enregistrement, le block lui-meme est retire de ses amis');
+eq(nettoyerVoix(pSoi.formulaire).voix.amis, ['MUC', 'GATEWAY'], 'et le texte signe (nettoyerVoix -> messageVoix) ne le contient pas');
+eq(aides({ amis: TB + ', MUC', profil: TB, sym: null }).formulaire.amis, ['MUC'], 'par adresse aussi');
+eq(aides({ amis: 'TBLOCK, MUC', profil: B, sym: 'MUC' }).formulaire.amis, ['TBLOCK'], 'TEMOIN : sur une autre fiche, TBLOCK est garde (et MUC, c est elle, retire)');
+const solo = aides({ amis: 'TBLOCK', savoir: 'We sell hats. Not this.', profil: TB, sym: 'TBLOCK' });
+eq(solo.formulaire.amis, [], 'seul ami = lui-meme : aucun ami enregistre');
+eq(solo.partage, 'Other blocks hear only: “We sell hats.”', '« Other blocks hear only » ne parle pas de lui-meme');
+ok(!JSON.stringify(voixPublique(nettoyerVoix(solo.formulaire).voix)).includes('TBLOCK'), 'ce que les autres blocks recoivent ne le contient pas');
+ok(JSON.stringify(voixPublique(nettoyerVoix(aides({ amis: 'MUC', profil: TB, sym: 'TBLOCK' }).formulaire).voix)).includes('MUC'), 'TEMOIN : un vrai ami, lui, part');
 
 console.log('\n' + n + ' assertions, 0 KO');
