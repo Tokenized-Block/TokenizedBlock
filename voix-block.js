@@ -303,6 +303,11 @@ export function estLeBlock(nom, adr, sym) {
   const n = String(nom || '').trim().replace(/^\$/, '').toLowerCase();
   return !!n && ((!!adr && n === String(adr).toLowerCase()) || (!!sym && n === String(sym).toLowerCase()));
 }
+/** ⛔ 2026-10-02 : le block retire de ses propres amis, DIT dans « Removed: … » — une seule fois, « SM14 (this block) ». */
+export function soiRetireDesAmis(noms, adr, sym) {
+  const soi = (noms || []).find((x) => estLeBlock(x, adr, sym));
+  return soi ? [String(sym || soi).trim().replace(/^\$/, '') + ' (this block)'] : [];
+}
 /**
  * Qui voit l editeur. 'EDITEUR' (le formulaire), 'CONNECTER' (« Your block? Connect… »), 'CACHE' (un autre wallet que
  * le createur : rien), 'HORS_BASE'. ⛔ Createur inconnu = EDITEUR : le serveur tranche a l enregistrement.

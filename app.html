@@ -3200,7 +3200,7 @@ import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } fro
 import { fragmenterMemoire, lireFragment, reconstruireCerveau } from './fragments-cerveau.js';
 import { parolesDuTour } from './parole-cerveaux.js';
 import { nettoyerVoix, messageVoix, lireVoixPublique, voixPublique, reactionVoix, partageVoix, composerParole, TONS, EVENEMENTS_VOIX,
-  resumeSavoir, etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, libelleGrosEchange, estLeBlock } from './voix-block.js';
+  resumeSavoir, etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, libelleGrosEchange, estLeBlock, soiRetireDesAmis } from './voix-block.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -8838,6 +8838,7 @@ async function lireProfil(adr, sym, perime, opts) {
     if (f.symbole) {
       $('#pSym').textContent = f.symbole;
       symProfil = f.symbole;
+      if (CHAINE === 8453) peindreApercuVoix(f.symbole); /* ⛔ l apercu « How it talks » prend le symbole des qu il est lu */
       /* ⛔ LE NOM LU MET A JOUR LA TUILE : un block pose par adresse ne reste pas « ? » sur la map. */
       const hMap = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
       if (hMap && !hMap.sym) {
@@ -10709,12 +10710,21 @@ function remplirFormulaireVoix(v) {
   }
   majAidesVoix();
 }
+/* ⛔ 2026-10-02 : l apercu se REDESSINE quand le symbole arrive. Premiere visite par lien : la voix (serveur local) arrive
+ *   avant le symbole (lu sur la chaine) — l apercu restait « Someone just bought me. » sur la fiche de SM14.
+ *   ⛔ On ne repeint QUE l apercu : remplir le formulaire effacerait ce que le createur est en train de taper. */
+let voixApercuPub = null;
 function remplirVoix(v, sym) {
   remplirFormulaireVoix(v);
   const pub = v ? voixPublique(v) : null;
+  $('#pvEtat').textContent = pub ? 'set by its creator' : 'default';
+  voixApercuPub = pub;
+  peindreApercuVoix(sym);
+}
+function peindreApercuVoix(sym) {
+  const pub = voixApercuPub;
   const nomV = String(sym || symProfil || '').slice(0, 14);
   const base = (nomV ? nomV + ': someone' : 'Someone') + ' just bought me.';
-  $('#pvEtat').textContent = pub ? 'set by its creator' : 'default';
   /* « For example » pour la parole par defaut ; « Sounds like » quand le createur a regle sa voix */
   $('#pvApercu').textContent = pub
     ? 'Sounds like: ' + composerParole(base, reactionVoix(pub, 'new_buy', {}), partageVoix(pub, 0))
@@ -10759,6 +10769,7 @@ async function enregistrerVoix() {
   if (peindreAccesVoix() !== 'EDITEUR') return;
   const cre = createursConnus.get(CHAINE + ':' + adr) || null;
   const { voix, notes } = nettoyerVoix(lireFormulaireVoix());
+  notes.unshift(...soiRetireDesAmis(listeVoix($('#pvAmis').value, ','), adr, symProfil)); /* « Removed: SM14 (this block) » */
   const horodatage = Date.now();
   const texte = messageVoix({ jeton: adr, chaine: 8453, horodatage, voix });
   const hexV = '0x' + [...new TextEncoder().encode(texte)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -20093,8 +20104,11 @@ function ouvrirLearn() {
   window.scrollTo({ top: 0 });
 }
 $('#pLearn').addEventListener('click', ouvrirLearn);
+/* ⛔ 2026-10-02 : « Connect » et « Reset to default » de la carte « How it talks » ont l ALLURE d un lienLearn, pas
+ *   son role — cliquer « Connect » quittait la fiche du block pour « What am I looking at? ». */
+const PAS_LEARN = new Set(['pvConnecterBtn', 'pvEffacer']);
 document.addEventListener('click', (e) => {
-  if (e.target && e.target.classList && e.target.classList.contains('lienLearn')) ouvrirLearn();
+  if (e.target && e.target.classList && e.target.classList.contains('lienLearn') && !PAS_LEARN.has(e.target.id)) ouvrirLearn();
 });
 
 $('#pReseau').textContent = RESEAUX[CHAINE].nom;

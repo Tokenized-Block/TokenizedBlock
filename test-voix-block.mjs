@@ -12,7 +12,7 @@ import {
   nettoyerTexte, nettoyerVoix, voixPublique, lireVoixPublique, resumeSavoir, messageVoix, verifierEcriture,
   recupererSignataire, proprietaireDuBlock, reactionVoix, composerParole, BORNES_VOIX, PAROLE_MAX_OCTETS,
   etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, partageVoix,
-  EVENEMENTS_VOIX, grosEchangeEnEth, libelleGrosEchange, estLeBlock,
+  EVENEMENTS_VOIX, grosEchangeEnEth, libelleGrosEchange, estLeBlock, soiRetireDesAmis,
 } from './voix-block.js';
 import { TOPIC_CREATED, FACTORY } from './index-blocks.js';
 
@@ -305,5 +305,48 @@ const regleBio = (app.match(/^([^{\r\n]*#pvBio::placeholder[^{\r\n]*)\{([^}]*)\}
 ok(/(^|,)#pvBio::placeholder(,|$)/.test(regleBio[1] || '') && regleBio[2] === 'color:revert;opacity:revert' && (app.match(/#pvBio::placeholder/g) || []).length === 1, 'bio : « The bravest block on the map » reprend le gris du navigateur, comme « art, football, coffee »');
 ok((regleBio[1] || '').split(',').every((x) => /::placeholder$/.test(x)), 'TEMOIN : la regle ne vise que des ::placeholder — le texte tape dans la bio garde sa couleur');
 ok(/<textarea id="pvBio"[^>]*placeholder="The bravest block on the map"/.test(carte) && !/#pvBio(?!::placeholder)[^{\s,]*\s*[{,][^}]*color/.test(app), 'TEMOIN : la bio reste une zone de texte, aucune regle de couleur sur son texte');
+
+console.log('— 12. revue v5 : « Connect » reste sur la fiche, l apercu prend le symbole, « Removed: SM14 (this block) »');
+/* 1) le gestionnaire de clic « lienLearn » de TOUTE la page — le vrai, extrait de app.html */
+const fLearnClic = (app.match(/const PAS_LEARN = [^\r\n]*\r?\ndocument\.addEventListener\('click', \(e\) => \{\r?\n[^\r\n]*\r?\n\}\);/) || [''])[0];
+ok(fLearnClic.length > 100 && /ouvrirLearn\(\)/.test(fLearnClic), 'le gestionnaire lienLearn de la page est extrait');
+const clicLearn = (id, source = fLearnClic) => { let ouvert = 0, h = null;
+  new Function('document', 'ouvrirLearn', source)({ addEventListener: (t, f) => { if (t === 'click') h = f; } }, () => { ouvert++; });
+  h({ target: { id, classList: { contains: (c) => c === 'lienLearn' } } }); return ouvert; };
+eq(clicLearn('pvConnecterBtn'), 0, '« Connect » de la carte : Learn ne s ouvre pas, la fiche du block reste ouverte');
+eq(clicLearn('pvEffacer'), 0, '« Reset to default » : Learn ne s ouvre pas non plus');
+eq(clicLearn('mapTbgasDeep'), 1, 'TEMOIN : un autre lienLearn ouvre toujours Learn');
+eq(clicLearn('pvConnecterBtn', fLearnClic.replace(' && !PAS_LEARN.has(e.target.id)', '')), 1, 'TEMOIN : sans l exclusion, « Connect » ouvrait Learn (le defaut vu le 2026-10-02)');
+ok(/class="lienLearn" id="pvConnecterBtn"/.test(carte) && /class="lienLearn" id="pvEffacer"/.test(carte), 'meme allure : les deux boutons gardent la classe lienLearn');
+/* 2) l apercu se redessine quand le symbole arrive — remplirVoix + peindreApercuVoix, les vraies */
+const fRemplir = fonction('remplirVoix'), fApercu = fonction('peindreApercuVoix');
+ok(fRemplir.length > 100 && fApercu.length > 200 && /peindreApercuVoix\(sym\)/.test(fRemplir) && !/remplirFormulaireVoix/.test(fApercu), 'remplirVoix et peindreApercuVoix extraites ; l apercu ne touche pas au formulaire');
+const VSM = nettoyerVoix({ bio: 'The calmest block in Brussels', sujets: ['coffee', 'football', 'rain'] }).voix;
+const apercu = ({ voix = VSM, symOuverture = null, symLu = 'SM14', repeindre = true } = {}) => {
+  const el = {}; const $ = (q) => (el[q] = el[q] || { textContent: '' }); let formulaires = 0;
+  const r = new Function('$', 'remplirFormulaireVoix', 'voixPublique', 'composerParole', 'reactionVoix', 'partageVoix', 'voix', 'symOuverture', 'symLu', 'repeindre',
+    'let voixApercuPub = null, symProfil = symOuverture;\n' + fRemplir + fApercu
+    + 'remplirVoix(voix, symOuverture); const avant = $("#pvApercu").textContent;\n'
+    + 'symProfil = symLu; if (repeindre) peindreApercuVoix(symLu); return { avant, apres: $("#pvApercu").textContent };')(
+    $, () => { formulaires++; }, voixPublique, composerParole, reactionVoix, partageVoix, voix, symOuverture, symLu, repeindre);
+  return { ...r, formulaires };
+};
+const premiere = apercu();
+eq(premiere.avant, 'Sounds like: Someone just bought me. Ask me about coffee, football, rain.', 'premiere visite : la voix arrive avant le symbole');
+eq(premiere.apres, 'Sounds like: SM14: someone just bought me. Ask me about coffee, football, rain.', 'le symbole lu : « SM14: someone just bought me. »');
+eq(premiere.formulaires, 1, 'le redessin ne remplit pas le formulaire une 2e fois (ce que le createur tape reste)');
+eq(apercu({ repeindre: false }).apres, premiere.avant, 'TEMOIN : sans le redessin, l apercu restait « Someone just bought me. »');
+eq(apercu({ voix: null }).apres, 'For example: SM14: someone just bought me. Its brain says what it sees on the chain.', 'rien de regle : « For example: SM14: … » aussi');
+eq(apercu({ symOuverture: 'SM14' }).avant, premiere.apres, 'TEMOIN : symbole deja connu a l ouverture, l apercu l a des le depart');
+ok(/symProfil = f\.symbole;\r?\n\s*if \(CHAINE === 8453\) peindreApercuVoix\(f\.symbole\);/.test(app), 'lireProfil redessine l apercu des que le symbole est lu');
+/* 3) « Removed: SM14 (this block) » */
+const SM = '0xb200000000000000000000e7e544d1292a095c36';
+eq(soiRetireDesAmis(['SM14', 'TBLOCK', 'MUC'], SM, 'SM14'), ['SM14 (this block)'], 'son propre nom retire : « SM14 (this block) »');
+eq(soiRetireDesAmis(['$sm14', 'SM14'], SM, 'SM14'), ['SM14 (this block)'], 'une seule fois, avec le vrai symbole');
+eq(soiRetireDesAmis([SM.toUpperCase().replace('0X', '0x'), 'MUC'], SM, null), [SM.toUpperCase().replace('0X', '0x') + ' (this block)'], 'par adresse, symbole inconnu');
+eq(soiRetireDesAmis(['TBLOCK', 'MUC'], SM, 'SM14'), [], 'TEMOIN : d autres blocks seulement, rien a dire');
+eq(soiRetireDesAmis([], SM, 'SM14'), [], 'TEMOIN : aucun ami, rien a dire');
+ok(/const \{ voix, notes \} = nettoyerVoix\(lireFormulaireVoix\(\)\);\r?\n\s*notes\.unshift\(\.\.\.soiRetireDesAmis\(listeVoix\(\$\('#pvAmis'\)\.value, ','\), adr, symProfil\)\);/.test(bloc)
+  && /' Removed: ' \+ notes\.join\(', '\)/.test(bloc), 'enregistrerVoix met « SM14 (this block) » en tete de « Removed: … »');
 
 console.log('\n' + n + ' assertions, 0 KO');
