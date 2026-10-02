@@ -20,7 +20,7 @@ import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExact
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
-  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock } from './pool-sans-hook.js';
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -202,7 +202,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     ? sens === 'VENTE' : sens === 'ACHAT'));
   /* ⛔⛔ 2026-10-02 13:59 (fondateur) : jamais de frais en block a a6cf — une pool dont le hook preleverait en block est refusee. */
   if (REFUS_FRAIS_HOOK_EN_BLOCK && fraisHookEnBlock(marche.cle, jeton, sens, zfMarche)) {
-    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusFraisEnBlock: true };
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
   }
   const hookPaie = marche.paire !== 'TBLOCK' && !!marche.cle
     && hookPaieEnDeviseVendable({ cle: marche.cle, sens, zeroForOne: zfMarche, jeton, fraisDevisesOk }).paie;
@@ -683,7 +683,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   TBLOCK, TBGAS). Les jambes entre devises (ETH/USDC…) restent permises. */
   if (REFUS_FRAIS_HOOK_EN_BLOCK && sauts.some((x) => x && x.cle && [entree, sortie].some((j) => /^0xb2/i.test(String(j || ''))
     && fraisHookEnBlock(x.cle, j, x.zeroForOne ? 'ACHAT' : 'VENTE', !!x.zeroForOne)))) {
-    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusFraisEnBlock: true };
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
   }
   if (!ROUTE_VIA_TBLOCK && sauts.some((x) => x && cleTouchTblock(x.cle))) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusTblock: true };

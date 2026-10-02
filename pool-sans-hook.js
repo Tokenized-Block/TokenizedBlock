@@ -56,6 +56,8 @@ export function cleTouchTblock(cle) {
  *     (69 549 931 494 498 013 106 unites sur un achat de 71 247 NVDAc) et le routeur ajoutait 356 NVDAc — deux frais,
  *     dont un en block. Le contrat ne se change pas : l app REFUSE ces pools (Create ne les fabrique plus : item 2). */
 export const REFUS_FRAIS_HOOK_EN_BLOCK = true;
+/** Texte EXACT montre a l ecran pour ces blocks (decision 14:07 : rien d autre). */
+export const MESSAGE_PAS_ICI = 'Not tradable here yet';
 /** Vrai = le hook de cette pool verserait son frais dans le block `jeton` pour ce sens. */
 export function fraisHookEnBlock(cle, jeton, sens, zeroForOne) {
   const d = deviseFraisHook(cle, sens, zeroForOne);

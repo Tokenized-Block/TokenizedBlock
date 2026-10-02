@@ -124,9 +124,11 @@ const cleBlkDevant = { currency0: BLK_LO.replace('0x0b', '0xb1'), currency1: NVD
 for (const sens of ['ACHAT', 'VENTE']) {
   const rB = await E.planEchange({ rpc: rpcMock(), chaine: 8453, jeton: cleBlkDevant.currency0, compte: COMPTE, sens, montant: 10n ** 8n,
     marcheLu: { etat: 'LUE', cle: cleBlkDevant, paire: null }, fraisDevisesOk: new Set([NVDAc.toLowerCase()]) });
+  ok(rB.pourquoi === 'Not tradable here yet', 'stock: exact UI text "Not tradable here yet" (' + sens + ')');
   ok(rB.etat === 'REFUSE' && rB.refusFraisEnBlock === true, 'stock: V8 pool with block=currency0 refused (' + sens + '): a6cf would be paid in block');
 }
-ok(PSH.REFUS_FRAIS_HOOK_EN_BLOCK === true, 'stock: never-block-fee switch ON');
+ok(PSH.REFUS_FRAIS_HOOK_EN_BLOCK === true, 'stock: never-block-fee switch ON (strict)');
+ok(/e\.textContent = p\.refusFraisEnBlock \? String\(p\.pourquoi\)/.test(html), 'stock: Buy/Sell screen shows that text alone, no prefix');
 ok(/if \(!ROUTE_VIA_TBLOCK && cleTouchTblock\(p\.cle\)\) continue;/.test(extraire(html, 'poolDecouvertPour')), 'tblock: Buy-here skips TBLOCK pools');
 
 /* ── item 2 : auto-salt grinds until the block sorts after its quote ── */

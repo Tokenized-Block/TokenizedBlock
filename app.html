@@ -11759,7 +11759,8 @@ async function preparerEchange(sens) {
      *     en action remontait tel quel : « Buy/Sell fee must land as ETH or USDC — this pair cannot
      *     take the interface fee in an allowed asset ». C est NOTRE contrainte de frais, pas la
      *     sienne, et elle ne lui apprend rien de ce qu il peut faire. */
-    e.textContent = /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+    /* ⛔ 2026-10-02 14:07 : pool dont le hook paierait a6cf en block — texte exact, rien d autre. */
+    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
       ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
         + 'available yet — its market is real on Uniswap. Nothing was sent.'
       : 'Not possible: ' + (p.pourquoi || p.etat)
