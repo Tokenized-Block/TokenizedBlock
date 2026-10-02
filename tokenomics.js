@@ -133,11 +133,11 @@ export const HOOK_V9 = null;
 export const V9_PAIE_DEJA_A6CF = null;
 /* ══ 2026-10-02 — HOOK 7030 (fee lot 2) : 0,07 % au wallet de frais + 0,03 % au createur, TOUJOURS dans la devise
  *    appariee (ETH, USDC, cbBTC, TOSHI, OUSD ou l action), jamais dans le block. Source contracts/launch-lock
- *    TBlockLaunchLockHook.sol, plan contracts/launch-lock/plan/ (CREATE2 0x4e59, sel 0x…24b4d1), contrat valide par
- *    Zero 1 (a7fc46c). PAS DEPLOYE : tant que HOOK_7030_ACTIF vaut false, RIEN ne change (memes octets de tx).
+ *    TBlockLaunchLockHook.sol (contrat valide par Zero 1 a a7fc46c) ; liste fixe Devises7030 = V9 19 + 18 actions
+ *    Coinbase (0ea4661), branche feat/hook-7030-37-devises-20261002 @ e7a9c17 : CREATE2 0x4e59, sel 0x…253955. PAS DEPLOYE : tant que HOOK_7030_ACTIF vaut false, RIEN ne change (memes octets de tx).
  *    Mesure Zero 1 (fork 52079022) : achat 0,001 ETH -> wallet de frais 7e11 + createur 3e11, routeur 0 = 10 bps.
  *    Le createur ne touche ses 0,03 % que tant que sa caution (inscrireAvecCaution) est en place ; sinon -> collateral. */
-export const HOOK_7030 = '0x643DbB5e24D17a1d1D1909fa9F8C6267936124cC';
+export const HOOK_7030 = '0x907e5976E614e13c4e4CCA68535c93f2281124cc';
 export const HOOK_7030_ACTIF = false;
 export const HOOK_7030_PPM = Object.freeze({ walletDeFrais: 700, createur: 300 });
 /** Ce hook est-il le 7030 ET le drapeau est-il allume ? Drapeau eteint = le 7030 n existe pas pour l app. */

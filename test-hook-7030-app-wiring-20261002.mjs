@@ -10,7 +10,7 @@ let ko = 0, n = 0;
 const ok = (c, m) => { n++; console.log((c ? 'ok  ' : 'KO  ') + m); if (!c) ko++; };
 const essai = async (m, f) => { try { await f(); } catch (e) { ok(false, m + ' (threw: ' + String(e && e.message || e).slice(0, 110) + ')'); } };
 const ICI = resolve(process.env.DIR || '.');
-const H = '0x643dbb5e24d17a1d1d1909fa9f8c6267936124cc';
+const H = '0x907e5976e614e13c4e4cca68535c93f2281124cc';
 const ETH = '0x0000000000000000000000000000000000000000';
 const PLTRc = '0xb2000000000000000000007d16372840df4dabbe';
 const BLOC_HAUT = '0xb2ffffffffffffffffffffffffffffffffffff01'; // sorts after PLTRc -> PLTRc = currency0
@@ -39,7 +39,7 @@ const achat = (X, cle, jeton, sens = 'ACHAT') => X.E.planEchange({ rpc, chaine: 
   marcheLu: { etat: 'LUE', cle, paire: cle.currency0 === ETH ? 'ETH' : 'PLTRc' } });
 
 await essai('(1) list', async () => {
-  ok(on.T.HOOK_7030.toLowerCase() === H, '(1) HOOK_7030 = 0x643DbB5e24D17a1d1D1909fa9F8C6267936124cC');
+  ok(on.T.HOOK_7030.toLowerCase() === H, '(1) HOOK_7030 = 0x907e5976E614e13c4e4CCA68535c93f2281124cc');
   const e7 = on.T.HOOKS_PAIENT_DEJA_A6CF.find((e) => String(e.hook).toLowerCase() === H);
   ok(!!e7 && JSON.stringify(e7.sens) === '["ACHAT","VENTE"]', '(1) ON: 7030 in HOOKS_PAIENT_DEJA_A6CF, both directions');
   ok(on.T.hookPaieDejaA6cf(H, 'ACHAT') && on.T.hookPaieDejaA6cf(H, 'VENTE'), '(1) ON: hookPaieDejaA6cf true buy and sell');
@@ -85,6 +85,25 @@ await essai('(3) recognition', async () => {
     '(3) negative control OFF: Create guard still refuses PLTRc (as base)');
   ok(on.M.CLES_MARCHE[0].hooks === on.T.HOOK_7030 && !off.M.CLES_MARCHE.some((c) => c.hooks === off.T.HOOK_7030), '(3) ETH market discovery: 7030 first only when ON');
   ok(on.P.hookDeLancementPour(RANDOM, 8453, { h7030: true }) === null, '(3) a quote outside the 19 + ETH is not admitted by 7030');
+});
+await essai('(3b) the 18 new Coinbase stocks', async () => {
+  const n18 = ['AMDc','ASTSc','CAKEc','DJTc','DUOLc','LLYc','MRNAc','MRVLc','NFLXc','NVAXc','ORCLc','PTONc','PYPLc','QUBTc','RBLXc','RDDTc','TTWOc','WENc'];
+  const parSym = Object.fromEntries(on.P.ACTIONS_COINBASE.map((x) => [x.symbole, x.adr.toLowerCase()]));
+  ok(on.P.DEVISES_ADMISES_7030.length === 37 && on.P.DEVISES_ADMISES_V9.every((a) => on.P.DEVISES_ADMISES_7030.includes(a)), '(3b) 7030 list = V9 19 + 18 = 37');
+  for (const s of n18) {
+    const a = parSym[s];
+    ok(!!a && on.P.DEVISES_ADMISES_7030.includes(a) && on.P.refusPrixNouveauBlock(a, 8453, { routable: true, symbole: s, ...on.T.OPTIONS_LANCEMENT }) === null,
+      '(3b) ON Create admits ' + s);
+    ok(off.P.refusPrixNouveauBlock(a, 8453, { routable: true, symbole: s, ...off.T.OPTIONS_LANCEMENT }) !== null, '(3b) negative control OFF: Create refuses ' + s + ' (V8 does not admit it)');
+  }
+  const cle = { currency0: parSym.NFLXc, currency1: BLOC_HAUT, fee: 0, tickSpacing: 200, hooks: H };
+  const p = await achat(on, cle, BLOC_HAUT);
+  ok(p.etat !== 'REFUSE' && BigInt(p.resume.fraisBps) === 0n && p.resume.fraisMarcheBps === 10, '(3b) ON NFLXc buy plan: router 0, 10 bps hook');
+  for (const [s, a] of [['GMEc', '0xb2000000000000000000007790ed6e48e06ed935'], ['HTZc', '0xb2000000000000000000002601c5c94f435da168'],
+    ['PFEc', '0xb20000000000000000000018fe7ec7d6dfeeb528'], ['PMc', '0xb2000000000000000000008fc2a8c23cf5937b66']]) {
+    ok(!on.P.DEVISES_ADMISES_7030.includes(a) && on.P.hookDeLancementPour(a, 8453, { h7030: true }) === null && !(s in parSym),
+      '(3b) ' + s + ' (no healthy pool) neither offered nor admitted, even ON');
+  }
 });
 await essai('(4) birth', async () => {
   ok(on.P.minimumCautionCreateur({ prixUsd: 2500, decimales: 18 }) === 400000000000000n, '(4) floor: $1 of ETH @2500 = 4e14 wei');

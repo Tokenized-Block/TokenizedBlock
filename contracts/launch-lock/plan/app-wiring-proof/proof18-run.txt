@@ -1,0 +1,99 @@
+{
+ "forkBlock": 52081326,
+ "hookFeeWalletIsAppFeeWallet": true,
+ "hookCourantEth": "HOOK_7030",
+ "hookCourantNflx": "HOOK_7030",
+ "ethUsdChainlink": 2721.07453485,
+ "ethBirth": {
+  "minimum": "367501877362256",
+  "etapes": [
+   "0x095ea7b3",
+   "0x87517c45",
+   "0xfde76f6a(payant 1367501877362256)"
+  ],
+  "feeWalletBirthDelta": "1000000000000000",
+  "creatorIsAdmin": true,
+  "caution": "367501877362256",
+  "minimumCaution": "367501877362256",
+  "payee": true
+ },
+ "ethMarketDiscovered": "LUE on HOOK_7030",
+ "ethBuy": {
+  "routerBps": "0",
+  "routerFeeWei": "0",
+  "buyerPaidWei": "1000000000000000",
+  "feeWalletDeltaWei": "700000000000",
+  "creatorDueDeltaWei": "300000000000",
+  "blocksReceived": "99730162929781380914549",
+  "totalBps": 10
+ },
+ "nflxUsdFixture": 100,
+ "nflxBirth": {
+  "minimum": "1000000",
+  "etapes": [
+   "0x095ea7b3",
+   "0x87517c45",
+   "0x095ea7b3",
+   "0xfde76f6a(payant 1000000000000000)"
+  ],
+  "feeWalletBirthDelta": "1000000000000000",
+  "creatorIsAdmin": true,
+  "caution": "1000000",
+  "minimumCaution": "1000000",
+  "payee": true
+ },
+ "nflxMarket": "LUE on HOOK_7030",
+ "nflxBuy": {
+  "planFirst": "APPROBATIONS",
+  "approvals": 2,
+  "routerBps": "0",
+  "routerFee": "0",
+  "stockQRaw": "10000000",
+  "feeWalletDeltaStockRaw": "7000",
+  "creatorDueDeltaStockRaw": "3000",
+  "sinkIsFloor700": true,
+  "creatorIsFloor300": true,
+  "feeWalletBlockDelta": "0",
+  "routerStockLeft": "0",
+  "blocksDelta": "365233055985551135508878",
+  "feeWalletBps": 7,
+  "creatorBps": 3
+ },
+ "nflxSell": {
+  "planFirst": "APPROBATIONS",
+  "approvals": 2,
+  "routerBps": "0",
+  "routerFee": "0",
+  "stockQRaw": "4995913",
+  "feeWalletDeltaStockRaw": "3497",
+  "creatorDueDeltaStockRaw": "1498",
+  "sinkIsFloor700": true,
+  "creatorIsFloor300": true,
+  "feeWalletBlockDelta": "0",
+  "routerStockLeft": "0",
+  "blocksDelta": "-182616527992775567754439",
+  "feeWalletBps": 6.99,
+  "creatorBps": 2.99
+ },
+ "state": {
+  "B1": "0xb200000000000000000000f564fc26e3e7470c5e",
+  "B2": "0xb200000000000000000000c59ad4e42ed75ca526",
+  "kE": {
+   "currency0": "0x0000000000000000000000000000000000000000",
+   "currency1": "0xb200000000000000000000f564fc26e3e7470c5e",
+   "fee": 0,
+   "tickSpacing": 200,
+   "hooks": "0x907e5976E614e13c4e4CCA68535c93f2281124cc"
+  },
+  "kP": {
+   "currency0": "0xb20000000000000000000058b8c947e44011dfe6",
+   "currency1": "0xb200000000000000000000c59ad4e42ed75ca526",
+   "fee": 0,
+   "tickSpacing": 200,
+   "hooks": "0x907e5976E614e13c4e4CCA68535c93f2281124cc"
+  },
+  "BUYER": "0x00000000000000000000000000000007a1031003",
+  "now": 1790952000000,
+  "STK": "0xb20000000000000000000058b8c947e44011dfe6"
+ }
+}

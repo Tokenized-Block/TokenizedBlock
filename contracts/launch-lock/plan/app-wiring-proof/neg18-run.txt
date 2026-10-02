@@ -3,12 +3,12 @@
   "hookCourantEth": "HOOK_V8",
   "ethDiscovery": "NON_TROUVEE",
   "ethBuy": "PRET routerBps=50 (+10 hook = 60 bps total)",
-  "pltrBuy": "REFUSE: this market is not a TokenizedBlock market — only those are traded here in another currency"
+  "nflxBuy": "REFUSE: this market is not a TokenizedBlock market — only those are traded here in another currency"
  },
- "base-87a49cb": {
+ "base-live-b027000": {
   "hookCourantEth": "HOOK_V8",
   "ethDiscovery": "NON_TROUVEE",
   "ethBuy": "PRET routerBps=50 (+10 hook = 60 bps total)",
-  "pltrBuy": "REFUSE: this market is not a TokenizedBlock market — only those are traded here in another currency"
+  "nflxBuy": "REFUSE: this market is not a TokenizedBlock market — only those are traded here in another currency"
  }
 }

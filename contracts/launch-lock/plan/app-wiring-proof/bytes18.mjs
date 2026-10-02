@@ -1,5 +1,5 @@
 // FORK ONLY. Flag OFF = base, to the byte: the txs the app builds (Create birth steps + mint, Buy, Sell) from the
-// shipped tree (HOOK_7030_ACTIF=false) vs base 87a49cb, same fork state, same clock.
+// shipped tree (HOOK_7030_ACTIF=false) vs live b027000 (feat/auto-salt-create), same fork state, same clock.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 const RPC = 'http://127.0.0.1:8581'; let id = 1;
@@ -21,7 +21,7 @@ const now = Number(BigInt((await rpc('eth_getBlockByNumber', ['latest', false]))
 const J = (x) => JSON.stringify(x, (_, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v);
 const txs = (p) => J({ etat: p.etat, etapes: (p.etapes || []).map((e) => [e.to, e.data, e.value || '0x0', !!e.payant]), tx: p.tx ? [p.tx.to, p.tx.data, p.tx.value] : null });
 const res = {};
-const trees = { off: '/workspace/tb-h7030/', base: '/workspace/tb-feefix2-rb/' };
+const trees = { off: '/workspace/tb-app18/', base: '/workspace/tb-live-b027/' };
 for (const [v, dir] of Object.entries(trees)) {
   const T = await import(dir + 'tokenomics.js'), { planLancement } = await import(dir + 'lancer-pool.js'), L2 = await import(dir + 'lancer-pool-v2.js');
   const r = {};
@@ -60,5 +60,5 @@ for (const [v, dir] of Object.entries(trees)) {
 }
 const cmp = {};
 for (const k of Object.keys(res.base)) cmp[k] = { identical: res.off[k] === res.base[k], bytes: res.base[k].length, etat: (res.base[k].match(/"etat":"(\w+)"/) || [])[1], hookIsV8: k === 'market' ? res.base[k].toLowerCase().includes('5926abdabf5d0006ee960a8270f3e124e5a764cc') : undefined, usdcInCreate: k === 'create-USDC' ? res.base[k].includes('833589fcd6edb6e08f4c7c32d4f71b54bda02913') : undefined };
-writeFileSync('/workspace/tb-feefix-proof/h7030/bytes-out.json', J(res));
+writeFileSync('/workspace/tb-feefix-proof/h7030/bytes18-out.json', J(res));
 console.log(JSON.stringify(cmp, null, 1));
