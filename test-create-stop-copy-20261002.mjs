@@ -42,7 +42,7 @@ await essai('(2)', async () => {
   const ctx = (expr) => new Function('TEXTE_REFUS_WALLET', 'enTexte', 'ligneDiagnostic', 'r', 'rc', 'feeKept', 'lien',
     est[0] + '; const e = {}; ' + expr + ' return e.innerHTML;');
   const diag = (nom, x) => ' <code>step=' + nom + ' · state=' + x.etat + '</code>';
-  const vie = html.match(/ {4}e\.innerHTML = estRefusWallet\(r\)[\s\S]*?ligneDiagnostic\('bring-to-life', r\);/);
+  const vie = html.match(/ {4}e\.innerHTML = estRefusWallet\(r\) \? enTexte\(TEXTE_REFUS_WALLET\)\n\s+: enTexte\('Not done \([^\n]*\n\s+\+ ligneDiagnostic\('bring-to-life', r\);/);
   ok(!!vie, '(2) bring-to-life refusal branch found');
   const cree = html.match(/ {6}e\.innerHTML = estRefusWallet\(rc\)[\s\S]*?ligneDiagnostic\('create', rc\);/);
   ok(!!cree, '(2) Create refusal branch found');

@@ -57,8 +57,9 @@ const cleV8Eth = { currency0: ETH, currency1: BLK_HI, fee: 0, tickSpacing: 200, 
 const achat = (w) => E.planEchange({ rpc: rpcMock(), chaine: 8453, jeton: BLK_HI, compte: COMPTE, sens: 'ACHAT', montant: w,
   marcheLu: { etat: 'LUE', cle: cleV8Eth, paire: null } });
 const r199 = await achat(199n), r200 = await achat(200n);
-ok(r199.etat === 'REFUSE' && /fee amount is zero/.test(r199.pourquoi || ''), 'item5: 199 wei on a V8 hook-paid buy is refused (' + r199.pourquoi + ')');
-ok(!/fee amount is zero/.test(r200.pourquoi || ''), 'item5 NEG: 200 wei passes the dust guard (' + r200.etat + ')');
+/* 2026-10-02 (Zero 1) : the shown text is 'Amount too small to trade here.'; the exact reason lives in causeInterne */
+ok(r199.etat === 'REFUSE' && /fee amount is zero/.test(r199.causeInterne || r199.pourquoi || ''), 'item5: 199 wei on a V8 hook-paid buy is refused (' + r199.pourquoi + ')');
+ok(!/fee amount is zero/.test((r200.causeInterne || '') + (r200.pourquoi || '')) && !r200.refusPoussiere, 'item5 NEG: 200 wei passes the dust guard (' + r200.etat + ')');
 
 /* ── item 6 : explicit check on the TBLOCK leg in routeViaTblock ── */
 ok(fn(E, 'hookPaieJambeTblock'), 'item6: hookPaieJambeTblock exported');

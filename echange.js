@@ -93,6 +93,15 @@ export const estWalletDeFrais = (compte) => String(compte || '').toLowerCase() =
  *   est passee par l appelant. Tous les autres controles — beneficiaire, devise vendable, presence
  *   d un TAKE vers a6cf — sont inchanges. Un appelant qui oublierait le parametre retombe sur
  *   `FRAIS_INTERFACE_BPS`, donc sur le comportement d avant : le defaut est le plus strict. */
+/* ⛔ 2026-10-02 (Zero 1) : la poussiere (frais arrondi a 0) se dit en anglais simple, jamais « fee path broken » ;
+ *   la raison exacte reste dans `causeInterne` (diagnostic, tests), elle n est pas affichee. */
+export const MESSAGE_TROP_PETIT = 'Amount too small to trade here.';
+function refusFraisEchange(ko, resume) {
+  if (/^fee amount is zero\b/.test(String(ko))) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_TROP_PETIT, refusPoussiere: true, causeInterne: 'Buy/Sell fee path broken: ' + ko, resume };
+  }
+  return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + ko, resume };
+}
 function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk = null,
   bpsAttendu = FRAIS_INTERFACE_BPS, hookPaie = false, assietteHook = null }) {
   if (estWalletDeFrais(compte)) return null; /* le tresor ne se facture pas lui-meme */
@@ -225,7 +234,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     const route = await routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps });
     if (!route.actions) return route;
     const koFrais = assertFraisInterfaceA6cf({ compte, bps: route.bps, resume: route.resume, actions: route.actions, hookPaie: route.hookPaie, assietteHook: route.assietteHook });
-    if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume: route.resume };
+    if (koFrais) return refusFraisEchange(koFrais, route.resume);
     const { bps: _b, hookPaie: _h, assietteHook: _a, ...routeF } = route;
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, ...routeF });
   }
@@ -286,7 +295,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     }
     const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk, hookPaie,
       assietteHook: sens === 'ACHAT' ? m : q });
-    if (koPair) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koPair, resume: resumeD };
+    if (koPair) return refusFraisEchange(koPair, resumeD);
     return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions: actionsD, valeur: valeurD, resume: resumeD,
       cle, zeroForOne: zf, sortieMinTete: 0n, jetonPaye: entree, valeurEth: false });
   }
@@ -377,7 +386,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
   resume.fraisMarcheBps = hookPaieDeja ? 300 : null;
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaie, assietteHook: sens === 'ACHAT' ? m : quote });
-  if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
+  if (koFrais) return refusFraisEchange(koFrais, resume);
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });
 }
 
@@ -640,7 +649,7 @@ export async function planEthVersUsdc({ rpc, chaine, compte, montantWei, toleran
     via: 'ETH/USDC · fee ' + best.fee, usdcExit: true,
   };
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions });
-  if (koFrais) return { etat: 'REFUSE', pourquoi: 'Buy/Sell fee path broken: ' + koFrais, resume };
+  if (koFrais) return refusFraisEchange(koFrais, resume);
   return finaliser({
     lire, R, compte, jeton: USDC_BASE, sens: 'ACHAT', m, maintenant, deadline,
     /* ⛔ `best.zeroForOne` ET PLUS `true` EN DUR : la valeur est DERIVEE de la paire. Elle vaut
@@ -821,6 +830,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
     assietteHook: hookPaie ? (hookS1.devise === String(entree).toLowerCase() ? m : sorties[0]) : null });
   /* ⛔ 2026-10-02 (Zero 1) : le texte montre est « Not tradable here yet », jamais le jargon du verrou ;
    *   la raison exacte reste dans `causeInterne` (diagnostic, tests), elle n est pas affichee. */
+  if (koFrais && /^fee amount is zero\b/.test(koFrais)) return refusFraisEchange(koFrais, resume);
   if (koFrais) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusCheminFrais: true, causeInterne: 'fee path broken: ' + koFrais, resume };
 
   /* ⛔ `sortieMinTete` BORNE LE PREMIER SAUT, et seulement lui : les suivants sont a 0 (OPEN_DELTA),

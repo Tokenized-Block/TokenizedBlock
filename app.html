@@ -11549,7 +11549,8 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
   }
   if (p.etat === 'REFUSE') {
     try { etape('echange_multi_refus_pool'); } catch (_) {}
-    return refuser('Not possible: ' + (p.pourquoi || p.etat) + ' Nothing was sent.');
+    /* ⛔ 2026-10-02 (Zero 1) : poussiere / verrou de frais -> le texte simple, seul (pas « Not possible: »). */
+    return refuser((p.refusPoussiere || p.refusCheminFrais) ? String(p.pourquoi) : 'Not possible: ' + (p.pourquoi || p.etat) + ' Nothing was sent.');
   }
   if (p.etat === 'APPROBATIONS' && Array.isArray(p.etapes) && p.etapes.length) {
     /* ⛔ UN JETON ERC-20 EN ENTREE DEMANDE UNE AUTORISATION. L ETH natif n en demande pas — c est
@@ -12178,7 +12179,8 @@ async function preparerEchange(sens) {
      *     sienne, et elle ne lui apprend rien de ce qu il peut faire. */
     /* ⛔ 2026-10-02 14:07 : pool dont le hook paierait a6cf en block — texte exact, rien d autre. */
     /* ⛔ 2026-10-02 (Zero 1) : route refusee par le verrou de frais (ex. block→USDC→ETH) — « Not tradable here yet », seul. */
-    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : p.refusCheminFrais ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+    /* ⛔ 2026-10-02 (Zero 1) : poussiere -> « Amount too small to trade here. », seul. */
+    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : p.refusCheminFrais ? String(p.pourquoi) : p.refusPoussiere ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
       ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
         + 'available yet — its market is real on Uniswap. Nothing was sent.'
       : 'Not possible: ' + (p.pourquoi || p.etat)
@@ -12303,7 +12305,9 @@ async function signerEchange(tx, sens, estApprobation) {
       if (r.etat === 'REFUSE_PAR_UTILISATEUR' || /user (rejected|denied)|declined|4001/i.test(String(r.pourquoi || ''))) etape('achat_sign_refus');
     } catch (_) {}
     e.className = 'note wKo';
-    e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
+    /* ⛔ 2026-10-02 (Zero 1) : un refus dans le wallet = « Not done: you declined in your wallet. », sans etat interne ni « state=… ». */
+    e.innerHTML = estRefusWallet(r) ? enTexte(TEXTE_REFUS_WALLET) + lien
+      : 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
     return;
   }
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
@@ -12542,7 +12546,7 @@ async function preparerEthUsdc() {
     return;
   }
   if (p.etat === 'REFUSE') {
-    e.className = 'note wKo'; e.textContent = 'Not possible: ' + (p.pourquoi || p.etat); return;
+    e.className = 'note wKo'; e.textContent = p.refusPoussiere ? String(p.pourquoi) : 'Not possible: ' + (p.pourquoi || p.etat); return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   if (!estWalletDeFrais(compte)) {
