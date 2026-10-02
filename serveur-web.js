@@ -1829,6 +1829,8 @@ const SERVIS = [
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
   'routage.js',
+  /* launch-lock 24 h : lore du berceau + avertissement « seize » (drapeau ETEINT par defaut). */
+  'berceau-24h.js',
   /* ⛔⛔ `actions-emetteur.js` PORTE LE LIBELLE « issued by Coinbase » DE LA PAGE, et il est importe
    *     PAR LE SERVEUR AUSSI (qui lit la liste des 40 et marque chaque ligne de trending). Le
    *     libelle est ecrit UNE fois et importe des deux cotes : deux copies d une phrase visible
