@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 interface IHook24h {
     function consommerSortie(uint256 m) external returns (uint256 pris);
     function consommerEntree(uint256 m) external returns (uint256 vente, uint256 ajout);
+    function echange(address bloc) external view returns (bool);
 }
 
 /// @title TBlockBloc24h — PROTOTYPE, FORK-PROVEN ONLY, NOT DEPLOYED (2026-10-02, branch feat/launch-lock-24h)
@@ -19,7 +20,7 @@ interface IHook24h {
 ///     with the tokens — a transfer never creates credit, unbacked tokens cannot move;
 ///   · an inflow to the PoolManager must pay a swap or a liquidity add on OUR pools in this tx, else it reverts
 ///     (hookless / foreign v4 pools are unusable for the block during the window);
-///   · exemptions: the seeder's liquidity add on our pool before the first credited payout (the birth seed),
+///   · exemptions: the seeder's liquidity add on our pool before the block's first hooked swap (the birth seed),
 ///     and a burn to the dead address.
 ///   After `restrictionsEndAt()` every check is skipped (plain ERC-20) — automatic, no keeper, no tx needed.
 contract TBlockBloc24h {
@@ -54,7 +55,7 @@ contract TBlockBloc24h {
     /// 0 until birth; then birth + 24 h
     uint256 internal _fin;
     mapping(address => uint256) internal _credit;
-    /// true once the first credited payout happened (ends the seed exemption)
+    /// true once the first credited payout happened (also ends the seed exemption; F1 adds the hook's `echange` flag)
     bool public trading;
 
     constructor(string memory n, string memory s, string memory uri, uint256 supply, address seeder_, address pm, address hook_) {
@@ -156,9 +157,14 @@ contract TBlockBloc24h {
         if (to == pm) {
             (uint256 vente, uint256 ajout) = hook.consommerEntree(v);
             if (vente + ajout != v) revert PasNotrePool(v, vente + ajout);
-            // the birth seed (seeder's liquidity add on OUR pool, before the first credited payout) is the only
-            // unbacked inflow allowed; a sell is always debited, even the seeder's
-            uint256 du = (from == seeder && !trading) ? vente : v;
+            // the birth seed (seeder's liquidity add on OUR pool, before the block's first hooked swap) is the only
+            // unbacked inflow allowed; a sell is always debited, even the seeder's.
+            // F1 (Zero 1 crosscheck 2026-10-02): `trading` alone was not enough — it flips only on a CREDITED payout,
+            // which PM netting or 6909 claims avoid, so a netted add's leftover `ajout` could cover the seeder's
+            // RETAINED unbacked tokens (S1: 994,813,326,750,542,984,734,320 wei laundered into sellCredit in one tx;
+            // S2: parked hookless then sold). Before any block-moving swap there is no PM block credit to net against,
+            // so every exempt inflow is really paid by the transferred tokens.
+            uint256 du = (from == seeder && !trading && !hook.echange(address(this))) ? vente : v;
             if (du != 0) _debiter(from, du);
             return;
         }

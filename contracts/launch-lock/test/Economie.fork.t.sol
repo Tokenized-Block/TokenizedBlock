@@ -210,8 +210,16 @@ contract EconomieTest is LLBase {
         Hook off = _deployHook(_cfg(TAUX_V9, 0, 0, 0, true, false));
         assertEq(uint160(address(off)) & Hooks.ALL_HOOK_MASK, uint160(v9) & Hooks.ALL_HOOK_MASK, "same permission bits (0x24cc)");
         assertFalse(off.SUIVI_24H());
-        L memory a = _ouvrirB20(v9, "MSE3A", 0);
-        L memory b = _ouvrirB20(address(off), "MSE3B", 0);
+        // SAME ORIENTATION for both pools (block < NVDAc or block > NVDAc), else the two pools are not the same pool
+        // up to the hook and the deltas differ by rounding (seen 2026-10-02: 1987845903917086555376978 vs ...353606 when
+        // a hook bytecode change moved the mined salt, hence nonceSel, hence the B20 block addresses).
+        address ba = _creerB20("MSE3A");
+        address bb = _creerB20("MSE3B");
+        for (uint256 i; i < 32 && ((ba < NVDAc) != (bb < NVDAc)); ++i) bb = _creerB20(string.concat("MSE3B", vm.toString(i)));
+        assertEq(ba < NVDAc, bb < NVDAc, "E3 compares two pools of the same orientation");
+        L memory a = _ouvrirB20Sur(v9, ba, 0);
+        L memory b = _ouvrirB20Sur(address(off), bb, 0);
+        console2.log("E3 orientation (quote is currency0) V9 / OFF:", a.devise0 ? 1 : 0, b.devise0 ? 1 : 0);
         _fundStock(NVDAc, alice, 10 * UN);
         _approve(alice, address(a.t));
         _approve(alice, address(b.t));
@@ -237,14 +245,21 @@ contract EconomieTest is LLBase {
 
     /// a REAL B20 block (CreateRouter on the fork, label engraved), registered on `hook`, 99.9 %-style seed vs NVDAc
     function _ouvrirB20(address hook, string memory sym, uint128 minimum) internal returns (L memory l) {
+        return _ouvrirB20Sur(hook, _creerB20(sym), minimum);
+    }
+
+    function _creerB20(string memory sym) internal returns (address bloc) {
         bytes memory params = abi.encode(Params(1, sym, sym, adm, 18));
         bytes[] memory calls = new bytes[](1);
         calls[0] = abi.encodeWithSignature("updateContractURI(string)", URI);
         vm.deal(adm, adm.balance + FRAIS_OUVERTURE + 1 ether);
         vm.prank(adm);
-        address bloc = ICreateRouterL(CREATE_ROUTER).createPaid{value: FRAIS_OUVERTURE}(
+        bloc = ICreateRouterL(CREATE_ROUTER).createPaid{value: FRAIS_OUVERTURE}(
             0, keccak256(abi.encode(sym, nonceSel++)), params, calls, adm
         );
+    }
+
+    function _ouvrirB20Sur(address hook, address bloc, uint128 minimum) internal returns (L memory l) {
         l.t = TBlockBloc24h(bloc); // (ERC-20 view only: balanceOf / transfer / approve)
         l.hook = hook;
         l.devise = NVDAc;

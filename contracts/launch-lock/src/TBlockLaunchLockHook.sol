@@ -161,6 +161,9 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
     /// mode 2: quote placed as liquidity · mode 3: stock units bought (claims)
     mapping(PoolId => uint256) public place;
     mapping(Currency => uint256) public enAttente;
+    /// F1 (Zero 1 crosscheck 2026-10-02): true once the block has had a hooked swap that moved the block (any of
+    /// OUR pools). Read by the TBlockBloc24h token: the seeder's seed exemption needs `!echange[block]`. Never reset.
+    mapping(address => bool) public echange;
 
     modifier seulementPoolManager() {
         if (msg.sender != address(poolManager)) revert PasLePoolManager();
@@ -512,6 +515,13 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
             // The fee is always in the quote, so this IS the block amount settle/take will move for our pool.
             int128 db = devise0 ? delta.amount1() : delta.amount0();
             bytes32 k = _cleT(devise0 ? key.currency1 : key.currency0, 0);
+            // F1 (Zero 1 crosscheck + Grok Bot review): the block's FIRST swap that MOVES the block ends the seeder's
+            // seed exemption for good. Only db != 0: a zero-block swap (dust quote-only liquidity + no block in range,
+            // possible by ANYONE between birth and the seed) must not make the birth seed impossible for 24 h.
+            if (db != 0) {
+                address bq = Currency.unwrap(devise0 ? key.currency1 : key.currency0);
+                if (!echange[bq]) echange[bq] = true;
+            }
             assembly ("memory-safe") {
                 tstore(k, add(tload(k), signextend(15, db)))
             }
