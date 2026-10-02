@@ -118,12 +118,17 @@ function assertFraisInterfaceA6cf({ compte, bps, resume, actions, fraisDevisesOk
   /* ⛔ 2026-10-02 : le hook verse deja a6cf sur cette jambe -> le routeur ne prend RIEN (un frais par jambe). */
   if (hookPaie) {
     if (bps !== 0n) return 'double fee: the hook already pays the fee wallet on this leg';
-    return jsonSafe(actions || []).toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())
+    const ko = jsonSafe(actions || []).toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())
       ? 'double fee: a router TAKE to the fee wallet on a leg the hook already pays'
       /* ⛔ 2026-10-02 (fix-2, poussiere) : f319fc9 refusait « fee amount is zero » ; 0d870cf rendait ici AVANT ce controle,
        *   et un achat V8/ETH de 199 wei passait avec 0 wei a a6cf (le hook arrondit a 0). Meme garde, sur l assiette du hook. */
       : (assietteHook == null || (BigInt(assietteHook) * FRAIS_INTERFACE_BPS) / 10000n <= 0n)
         ? 'fee amount is zero — amount too small for 0.5%' : null;
+    /* ⛔⛔ 2026-10-02 (KO prod, Grok Super) : les gardes de l ECRAN exigeaient 0,5 % > 0 sans exception et refusaient
+     *   tout Buy/Sell dont le hook paie deja a6cf. Le plan le DIT explicitement, et seulement apres CE controle :
+     *   l ecran ne doit pas deviner a partir de fraisBps = 0 (le cas « wallet de frais » vaut aussi 0). */
+    if (!ko && resume) resume.fraisParHook = true;
+    return ko;
   }
   if (bps !== bpsAttendu) return 'interface fee bps missing (want ' + bpsAttendu + ')';
   if (String(resume && resume.beneficiaireFrais || '').toLowerCase() !== FEE_WALLET.toLowerCase()) {

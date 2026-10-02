@@ -2325,7 +2325,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261002-sens-relatif-bloc" hidden>Build <code>20261002-sens-relatif-bloc</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261002-ecran-frais-par-hook" hidden>Build <code>20261002-ecran-frais-par-hook</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3277,7 +3277,7 @@ import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreff
  *   bancs ; c est le CABLE qui part. */
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -8166,6 +8166,18 @@ function peindreCapturePaths(adr, v, hkInfo) {
   }
 }
 
+/** ⛔⛔ 2026-10-02 (KO prod, Grok Super) — « une fois par swap » : le hook a DEJA verse a6cf, le routeur ne prend rien.
+ *  Les gardes ci-dessous exigeaient un frais routeur > 0 sans exception et bloquaient TOUT Buy/Sell V8. On n accepte
+ *  le frais routeur nul que si TOUT concorde : drapeau du plan (pose apres le controle anti-double-frais), 0 bps,
+ *  0 frais, aucun beneficiaire routeur, a6cf ABSENT du calldata, et au moins un hook de la route dans la liste
+ *  payeuse. Une seule incoherence -> refus, comme avant. */
+function fraisPayeParHook(r, tx, hooks) {
+  if (!r || r.fraisParHook !== true) return false;
+  if (r.fraisBps !== 0n || !(r.frais === undefined || r.frais === 0n) || r.beneficiaireFrais) return false;
+  if (tx && feeWalletDansCalldata(tx)) return false;
+  const liste = new Set(HOOKS_PAIENT_DEJA_A6CF.map((x) => String(x.hook).toLowerCase()));
+  return (hooks || []).some((h) => liste.has(String(h || '').toLowerCase()));
+}
 /** ⛔ P0 2026-09-15 tip 1900: fail-closed — FEE_WALLET must appear in router calldata when a fee is owed. */
 function feeWalletDansCalldata(tx) {
   const d = String(tx && tx.data || '').toLowerCase();
@@ -11581,7 +11593,8 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
     /* ⛔⛔ LE CALLDATA EST LA SEULE PREUVE. Le resume est ce qu on se raconte ; les octets sont ce
      *   qui part. Les deux ont deja diverge dans ce depot. */
     const octetsOk = p.tx && feeWalletDansCalldata(p.tx);
-    if (!tauxOk || !destOk || !fraisOk || !octetsOk) {
+    const parHook = fraisPayeParHook(r, p.tx, ((b && b.sauts) || []).map((s) => s && s.cle && s.cle.hooks));
+    if (!parHook && (!tauxOk || !destOk || !fraisOk || !octetsOk)) {
       /* ⛔ CE REFUS SE TIENT ENTRE UN TRADE ET NOTRE REVENU : il doit se COMPTER, sinon on ne
        *   saura jamais combien il nous coute ni s il se declenche a tort. */
       try { etape('echange_multi_refus_frais'); } catch (_) {}
@@ -12212,7 +12225,8 @@ async function preparerEchange(sens) {
     const destOk = r && r.beneficiaireFrais
       && String(r.beneficiaireFrais).toLowerCase() === FEE_WALLET.toLowerCase();
     const fraisOk = r && typeof r.frais === 'bigint' && r.frais > 0n;
-    if (!bpsOk || !destOk || !fraisOk) {
+    const parHook = fraisPayeParHook(r, p.tx, [p.cle && p.cle.hooks]);
+    if (!parHook && (!bpsOk || !destOk || !fraisOk)) {
       e.className = 'note wKo';
       e.textContent = 'This trade could not be prepared safely. Nothing to sign — try again.';
       const br = document.createElement('button');
@@ -12244,7 +12258,7 @@ async function preparerEchange(sens) {
       }
     } catch (err) { /* badge optional */ }
     /* ⛔ tip 1900: calldata must name FEE_WALLET when fee is owed (resume alone is not enough). */
-    if (p.tx && !feeWalletDansCalldata(p.tx)) {
+    if (!parHook && p.tx && !feeWalletDansCalldata(p.tx)) {
       e.className = 'note wKo';
       e.textContent = 'This trade could not be prepared safely. Nothing to sign — try again.';
       const br = document.createElement('button');
