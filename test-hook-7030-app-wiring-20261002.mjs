@@ -98,10 +98,11 @@ await essai('(3) recognition', async () => {
   ok(on.M.CLES_MARCHE[0].hooks === on.T.HOOK_7030 && !off.M.CLES_MARCHE.some((c) => c.hooks === off.T.HOOK_7030), '(3) ETH market discovery: 7030 first only when ON');
   ok(on.P.hookDeLancementPour(RANDOM, 8453, { h7030: true }) === null, '(3) a quote outside the 19 + ETH is not admitted by 7030');
 });
-await essai('(3b) the 18 new Coinbase stocks', async () => {
-  const n18 = ['AMDc','ASTSc','CAKEc','DJTc','DUOLc','LLYc','MRNAc','MRVLc','NFLXc','NVAXc','ORCLc','PTONc','PYPLc','QUBTc','RBLXc','RDDTc','TTWOc','WENc'];
+await essai('(3b) the 22 new Coinbase stocks', async () => {
+  /* 2026-10-02 (Phil) : + GMEc, HTZc, PFEc, PMc, ajoutees au hook 7030 (Devises7030.sol, 41). V8 ne les admet pas. */
+  const n18 = ['AMDc','ASTSc','CAKEc','DJTc','DUOLc','LLYc','MRNAc','MRVLc','NFLXc','NVAXc','ORCLc','PTONc','PYPLc','QUBTc','RBLXc','RDDTc','TTWOc','WENc','GMEc','HTZc','PFEc','PMc'];
   const parSym = Object.fromEntries(on.P.ACTIONS_COINBASE.map((x) => [x.symbole, x.adr.toLowerCase()]));
-  ok(on.P.DEVISES_ADMISES_7030.length === 37 && on.P.DEVISES_ADMISES_V9.every((a) => on.P.DEVISES_ADMISES_7030.includes(a)), '(3b) 7030 list = V9 19 + 18 = 37');
+  ok(on.P.DEVISES_ADMISES_7030.length === 41 && new Set(on.P.DEVISES_ADMISES_7030).size === 41 && on.P.DEVISES_ADMISES_V9.every((a) => on.P.DEVISES_ADMISES_7030.includes(a)), '(3b) 7030 list = V9 19 + 22 = 41, no duplicate');
   for (const s of n18) {
     const a = parSym[s];
     ok(!!a && on.P.DEVISES_ADMISES_7030.includes(a) && on.P.refusPrixNouveauBlock(a, 8453, { routable: true, symbole: s, ...on.T.OPTIONS_LANCEMENT }) === null,
@@ -113,8 +114,10 @@ await essai('(3b) the 18 new Coinbase stocks', async () => {
   ok(p.etat !== 'REFUSE' && BigInt(p.resume.fraisBps) === 0n && p.resume.fraisMarcheBps === 10, '(3b) ON NFLXc buy plan: router 0, 10 bps hook');
   for (const [s, a] of [['GMEc', '0xb2000000000000000000007790ed6e48e06ed935'], ['HTZc', '0xb2000000000000000000002601c5c94f435da168'],
     ['PFEc', '0xb20000000000000000000018fe7ec7d6dfeeb528'], ['PMc', '0xb2000000000000000000008fc2a8c23cf5937b66']]) {
-    ok(!on.P.DEVISES_ADMISES_7030.includes(a) && on.P.hookDeLancementPour(a, 8453, { h7030: true }) === null && !(s in parSym),
-      '(3b) ' + s + ' (no healthy pool) neither offered nor admitted, even ON');
+    /* le symbole ET l adresse : la liste de l app doit porter EXACTEMENT celle de Devises7030.sol */
+    ok(parSym[s] === a && on.P.DEVISES_ADMISES_7030.includes(a) && on.P.hookDeLancementPour(a, 8453, { h7030: true }) === '7030'
+      && off.P.hookDeLancementPour(a, 8453) === null,
+      '(3b) ' + s + ' at the API address: ON opens on 7030, OFF refused (V8 does not admit it)');
   }
 });
 await essai('(4) birth', async () => {

@@ -41,13 +41,14 @@ const AJOUTEES = [
   ['RDDTc', '0xb20000000000000000000066242d4067724cb7a1'],
   ['TTWOc', '0xb200000000000000000000f720c26062bc3067da'],
   ['WENc', '0xb20000000000000000000044e3cd7a0e1028e57a'],
+  /* 2026-10-02 (Phil) : + GMEc, HTZc, PFEc, PMc, ajoutees au hook 7030 (Devises7030.sol, 41). V8 ne les admet pas. */
+  ['GMEc', '0xb2000000000000000000007790ed6e48e06ed935'],
+  ['HTZc', '0xb2000000000000000000002601c5c94f435da168'],
+  ['PFEc', '0xb20000000000000000000018fe7ec7d6dfeeb528'],
+  ['PMc', '0xb2000000000000000000008fc2a8c23cf5937b66'],
 ];
 
 const DEHORS = [
-  ['HTZc', '0xb2000000000000000000002601c5c94f435da168'],
-  ['PFEc', '0xb20000000000000000000018fe7ec7d6dfeeb528'],
-  ['GMEc', '0xb2000000000000000000007790ed6e48e06ed935'],
-  ['PMc', '0xb2000000000000000000008fc2a8c23cf5937b66'],
   ['SOUNc', '0xb2000000000000000000002137743d4a01fe4e88'],
   ['AEOc', '0xb2000000000000000000006064f8ec027f042294'],
   ['AMCc', '0xb200000000000000000000cd7e6b8042cb7c2bb5'],
@@ -72,7 +73,7 @@ const DEHORS = [
 ];
 
 v('les 18 sont dans paires.js, a la bonne adresse, une seule fois', () => {
-  assert.equal(AJOUTEES.length, 18);
+  assert.equal(AJOUTEES.length, 22);
   for (const [s, a] of AJOUTEES) {
     const l = ACTIONS_COINBASE.filter((x) => x.symbole === s);
     assert.equal(l.length, 1, s + ' absente ou en double dans ACTIONS_COINBASE');
@@ -135,4 +136,4 @@ v('hors Base mainnet, une action ajoutee est refusee', () => {
 });
 
 assert.equal(n, 6, 'compte de cas inattendu : ' + n);
-console.log('ok new-stocks-26 — ' + n + ' cas · 18 ajoutees · ' + DEHORS.length + ' ecartees + 1 inventee refusees');
+console.log('ok new-stocks-26 — ' + n + ' cas · 22 ajoutees · ' + DEHORS.length + ' ecartees + 1 inventee refusees');

@@ -277,6 +277,12 @@ export const ACTIONS_COINBASE = [
   { symbole: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },
   { symbole: 'TTWOc', nom: 'Take-Two Interactive', adr: '0xb200000000000000000000f720c26062bc3067da' },
   { symbole: 'WENc', nom: 'Wendy’s', adr: '0xb20000000000000000000044e3cd7a0e1028e57a' },
+  /* 2026-10-02 (Phil) : ajoutees au hook 7030. Adresses copiees de api.coinbase.com/v1/tokenized-stocks, lues sur Base
+   *   (code 0xef, 8 decimales, supply > 0 : GMEc 3 011, HTZc 16 949, PFEc 182, PMc 27 unites). */
+  { symbole: 'GMEc', nom: 'GameStop', adr: '0xb2000000000000000000007790ed6e48e06ed935' },
+  { symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },
+  { symbole: 'PFEc', nom: 'Pfizer', adr: '0xb20000000000000000000018fe7ec7d6dfeeb528' },
+  { symbole: 'PMc', nom: 'Philip Morris', adr: '0xb2000000000000000000008fc2a8c23cf5937b66' },
 ];
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
@@ -371,8 +377,8 @@ export const DEVISES_ADMISES_V9 = Object.freeze([
   '0xb2000000000000000000007d16372840df4dabbe', // PLTRc
 ]);
 /** 2026-10-02 — liste du hook 7030 (contracts/launch-lock/src/Devises7030.sol, FIXE au constructeur, sans setter) :
- *  celle du V9 (19) + les 18 actions Coinbase dont une vraie pool est prouvee sur fork (0ea4661). GMEc, HTZc, PFEc,
- *  PMc n y sont PAS (pas de pool saine). Ne compte que si l appelant passe `{ h7030: true }` (drapeau HOOK_7030_ACTIF). */
+ *  celle du V9 (19) + les 18 actions Coinbase dont une vraie pool est prouvee sur fork (0ea4661) + GMEc, HTZc, PFEc,
+ *  PMc (Phil, 2026-10-02 ; L3 sur fork : naissance, 4 swaps, partage au wei, jamais en block) = 41. Ne compte que si l appelant passe `{ h7030: true }` (drapeau HOOK_7030_ACTIF). */
 export const DEVISES_ADMISES_7030 = Object.freeze([
   ...DEVISES_ADMISES_V9,
   '0xb2000000000000000000000d8ce462e99ee7a47b', // AMDc
@@ -393,6 +399,10 @@ export const DEVISES_ADMISES_7030 = Object.freeze([
   '0xb20000000000000000000066242d4067724cb7a1', // RDDTc
   '0xb200000000000000000000f720c26062bc3067da', // TTWOc
   '0xb20000000000000000000044e3cd7a0e1028e57a', // WENc
+  '0xb2000000000000000000007790ed6e48e06ed935', // GMEc
+  '0xb2000000000000000000002601c5c94f435da168', // HTZc
+  '0xb20000000000000000000018fe7ec7d6dfeeb528', // PFEc
+  '0xb2000000000000000000008fc2a8c23cf5937b66', // PMc
 ]);
 
 /** The hook a NEW block quoted in `adresse` opens on ('V8' | 'V9'), or null if no launch hook admits it.
@@ -403,7 +413,7 @@ export const DEVISES_ADMISES_7030 = Object.freeze([
 export function hookDeLancementPour(adresse, chaine, { v9 = false, h7030 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
   const a = String(adresse || '').trim().toLowerCase();
-  /* ⛔ 2026-10-02 — hook 7030 (drapeau HOOK_7030_ACTIF, passe par l appelant) : ETH + sa liste fixe de 37 (V9 19 + 18). */
+  /* ⛔ 2026-10-02 — hook 7030 (drapeau HOOK_7030_ACTIF, passe par l appelant) : ETH + sa liste fixe de 41 (V9 19 + 22). */
   if (h7030 === true && (a === ETH_NATIF || DEVISES_ADMISES_7030.includes(a))) return '7030';
   if (v9 === true && a.startsWith('0xb2') && DEVISES_ADMISES_V9.includes(a)) return 'V9';
   if (a === ETH_NATIF || a === TBLOCK_MAINNET || DEVISES_ADMISES_V8.includes(a)) return 'V8';

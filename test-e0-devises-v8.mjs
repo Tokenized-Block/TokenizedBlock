@@ -37,14 +37,15 @@ const REFUSEES = ['OUSD', 'TOSHI', 'AVGOc', 'BEc', 'HIMSc', 'MUc', 'PLTRc'];
 const SIX = REFUSEES.filter((s) => s !== 'TOSHI');
 /* 2026-10-02 : 18 actions de l emetteur ajoutees aux paires (test-new-stocks-26-20261002.mjs). V8 ne les admet pas
  *   (lu sur fork : deviseAdmise() == false) : elles rejoignent les refusees pour un block NEUF, rien d autre ne change. */
-const NOUVELLES_20261002 = ['AMDc', 'ASTSc', 'CAKEc', 'DJTc', 'DUOLc', 'LLYc', 'MRNAc', 'MRVLc', 'NFLXc', 'NVAXc', 'ORCLc', 'PTONc', 'PYPLc', 'QUBTc', 'RBLXc', 'RDDTc', 'TTWOc', 'WENc'];
+const NOUVELLES_20261002 = ['AMDc', 'ASTSc', 'CAKEc', 'DJTc', 'DUOLc', 'LLYc', 'MRNAc', 'MRVLc', 'NFLXc', 'NVAXc', 'ORCLc', 'PTONc', 'PYPLc', 'QUBTc', 'RBLXc', 'RDDTc', 'TTWOc', 'WENc', 'GMEc', 'HTZc', 'PFEc', 'PMc'];
+/* 2026-10-02 (Phil) : + GMEc, HTZc, PFEc, PMc, ajoutees au hook 7030 (Devises7030.sol, 41). V8 ne les admet pas. */
 
 console.log('one source, pinned to the census (devises-admises.mjs, measured 2026-10-01)');
 ok('12 admitted, by symbol', DEVISES_ADMISES_V8.length === 12 && ADMISES.every((s) => DEVISES_ADMISES_V8.includes(parSym[s])));
 ok('no second (refused) list is exported', !Object.keys(P).some((k) => /REFUSE/i.test(k)), Object.keys(P).filter((k) => /REFUSE/i.test(k)));
 const cibles = ciblesDuCensus().filter((c) => c.sym !== 'TEMOIN');
-ok('the census asks exactly the 19 listed currencies + the 18 added 2026-10-02', cibles.length === 19 + NOUVELLES_20261002.length);
-ok('refused = complement of the admitted set = exactly the 7 + the 18 added 2026-10-02',
+ok('the census asks exactly the 19 listed currencies + the 22 added 2026-10-02', cibles.length === 19 + NOUVELLES_20261002.length);
+ok('refused = complement of the admitted set = exactly the 7 + the 22 added 2026-10-02',
   JSON.stringify(cibles.filter((c) => hookDeLancementPour(c.adr, 8453) === null).map((c) => c.sym).sort()) === JSON.stringify([...REFUSEES, ...NOUVELLES_20261002].sort()),
   cibles.filter((c) => hookDeLancementPour(c.adr, 8453) === null).map((c) => c.sym));
 ok('ETH and TBLOCK open on V8', hookDeLancementPour(ETH_NATIF, 8453) === 'V8' && hookDeLancementPour(TBLOCK_MAINNET, 8453) === 'V8');
