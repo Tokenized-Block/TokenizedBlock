@@ -8547,6 +8547,9 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
 }
 
 /** Compte une etape de l entonnoir (anonyme : le nom de l etape, rien d autre). « une fois » = une fois par visite. */
+/* ⛔ 2026-10-02 (Zero 1) : un refus dans le wallet se dit en anglais simple, sans l etat interne ni ligne « state=… ». */
+const TEXTE_REFUS_WALLET = 'Not done: you declined in your wallet.';
+function estRefusWallet(r) { return !!r && r.etat === 'REFUSE_PAR_UTILISATEUR'; }
 /** ⛔ UNE LIGNE QUE LA PERSONNE PEUT COLLER. Sans elle, « ca marche pas » est tout ce qui nous revient,
  *  et on cherche a l aveugle. Elle porte l etape, l etat rendu par le wallet, la raison de la chaine,
  *  le hash s il existe, et le build — RIEN d autre.
@@ -12174,7 +12177,8 @@ async function preparerEchange(sens) {
      *     take the interface fee in an allowed asset ». C est NOTRE contrainte de frais, pas la
      *     sienne, et elle ne lui apprend rien de ce qu il peut faire. */
     /* ⛔ 2026-10-02 14:07 : pool dont le hook paierait a6cf en block — texte exact, rien d autre. */
-    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+    /* ⛔ 2026-10-02 (Zero 1) : route refusee par le verrou de frais (ex. block→USDC→ETH) — « Not tradable here yet », seul. */
+    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : p.refusCheminFrais ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
       ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
         + 'available yet — its market is real on Uniswap. Nothing was sent.'
       : 'Not possible: ' + (p.pourquoi || p.etat)
@@ -12604,6 +12608,13 @@ let miroirVieDansCreate = false;
 let blockMiroirVie = null;
 /** Texte d arret de la mise en vie. `prepaye` = le paiement createPaid deja fait pour CE block (ou null). */
 function texteArretVie(etapeN, prepaye, detail) {
+  /* ⛔ 2026-10-02 (Zero 1) : le detail est recopie de `#plEtat` ; l ecran d arret de Create ne montre ni l etat
+   *   interne (« refuse par utilisateur »), ni la ligne de diagnostic (« state=… »), qui reste dans le profil. */
+  if (detail) detail = String(detail)
+    .replace(/\s*If this keeps happening, copy this line[\s\S]*$/i, '')
+    .replace(/\s*\bstep=\S+\s*·\s*state=[\s\S]*$/i, '')
+    .replace(/Not done \(refuse par utilisateur\)\.?(\s*you declined in your wallet[^.]*\.?)?/i, 'Not done: you declined in your wallet.')
+    .trim();
   const d = detail && !/^Opening your wallet/i.test(detail) ? ' — ' + String(detail).slice(0, 180) : '.';
   if (prepaye && prepaye.wei && BigInt(prepaye.wei) > 0n) {
     /* ⛔ 2026-10-02 (Zero 1) : « fee was paid » puis « nothing was sent » se contredisaient — le detail perd ces fragments. */
@@ -13376,7 +13387,8 @@ async function signerEtapeLancement(etapePlan) {
      *    `etape()` rejouerait EXACTEMENT ce bug — une statistique qui tue le parcours qu elle
      *    observe. C est la garde qui manquait, pas seulement le nom. */
     try { etape('vie_echec'); } catch (_) {}
-    e.innerHTML = enTexte('Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || ''))
+    e.innerHTML = estRefusWallet(r) ? enTexte(TEXTE_REFUS_WALLET)
+      : enTexte('Not done (' + r.etat.toLowerCase().replace(/_/g, ' ') + '). ' + (r.pourquoi || ''))
       + ligneDiagnostic('bring-to-life', r);
     vieAutoArreter();
     return;
@@ -17746,7 +17758,8 @@ async function creerBlock() {
        *     compteur que la liste blanche rejetterait EN SILENCE — le defaut qu on vient de
        *     corriger, reproduit le jour meme. Rien d identifiant ne part : une categorie, point. */
       try { etape(etapeEchec(rc && rc.etat)); } catch (_) {}
-      e.innerHTML = enTexte(rc.pourquoi || rc.etat) + feeKept + lien + ligneDiagnostic('create', rc);
+      e.innerHTML = estRefusWallet(rc) ? enTexte(TEXTE_REFUS_WALLET) + feeKept + lien
+        : enTexte(rc.pourquoi || rc.etat) + feeKept + lien + ligneDiagnostic('create', rc);
     }
   } finally {
     forcerCreateRouterIb = false;

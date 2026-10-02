@@ -798,7 +798,9 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions: route.actions,
     fraisDevisesOk, bpsAttendu: bps, hookPaie,
     assietteHook: hookPaie ? (hookS1.devise === String(entree).toLowerCase() ? m : sorties[0]) : null });
-  if (koFrais) return { etat: 'REFUSE', pourquoi: 'fee path broken: ' + koFrais, resume };
+  /* ⛔ 2026-10-02 (Zero 1) : le texte montre est « Not tradable here yet », jamais le jargon du verrou ;
+   *   la raison exacte reste dans `causeInterne` (diagnostic, tests), elle n est pas affichee. */
+  if (koFrais) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusCheminFrais: true, causeInterne: 'fee path broken: ' + koFrais, resume };
 
   /* ⛔ `sortieMinTete` BORNE LE PREMIER SAUT, et seulement lui : les suivants sont a 0 (OPEN_DELTA),
    *   et le minimum qui protege l acheteur est celui du TAKE_ALL final, deja dans les actions. */
