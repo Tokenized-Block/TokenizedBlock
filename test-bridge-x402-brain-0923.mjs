@@ -31,9 +31,28 @@ assert.doesNotMatch(phraseBridgeLegs(), /\bPhil\b|BridgeRouter|\bbps\b/i,
   'jargon interne ou prenom de l equipe dans une phrase affichee aux utilisateurs');
 assert.doesNotMatch(phraseBridgeLegs(), /0xa6cf|Fees for Dev|≈\s*\$1|\b2x\b|leverage|FINRA/i);
 assert.match(phraseBridgeLegs(), /not a broker/i);
-/* la phrase doit dire ce qui se passe VRAIMENT : rien n est preleve tant que l echange n existe pas */
-assert.match(phraseBridgeLegs(), /nothing is charged|not built yet/i,
-  'la phrase ne dit plus que rien n est preleve tant que l echange n existe pas');
+/* ⛔⛔⛔ CETTE ASSERTION EXIGEAIT UNE PHRASE DEVENUE FAUSSE, ET C EST LE CAS LE PLUS INSTRUCTIF DU
+ *      LOT. Elle demandait « nothing is charged » ou « not built yet » : vrai tant que le seul
+ *      geste propose etait un echange actif-vers-actif inexistant. Mais l onglet a TOUJOURS porte un
+ *      geste vivant — vendre un block par sa propre pool — et sur CELUI-LA le frais EST preleve,
+ *      dans la meme transaction. Depuis que les selecteurs morts sont partis (2026-10-02), la phrase
+ *      ne parle plus que du geste vivant : y exiger « rien n est preleve » serait exiger un
+ *      MENSONGE, au benefice d une garde ecrite pour l autre moitie de l ecran.
+ *   ⛔ UNE GARDE PEUT ETRE VRAIE ET COUVRIR LA MAUVAISE MOITIE — motif deja paye ici. Celle-ci
+ *     couvrait la moitie morte et aurait fini par defendre une sous-declaration du frais, c est-a-
+ *     dire exactement l inverse de ce que ce depot protege.
+ *   ⇒ CE QU IL FAUT EXIGER : que la phrase dise le frais VRAI. Pris dans la meme transaction, jamais
+ *     comme un prelevement separe. C est verifiable, c est ce que le code fait, et ca reste vrai le
+ *     jour ou le hub token-token s allume. */
+assert.match(phraseBridgeLegs(), /inside that same transaction|inside the same transaction|with a .* fee/i,
+  'la phrase ne dit plus comment le frais est pris. Il est preleve DANS la transaction de vente, '
+  + 'jamais separement — et c est le dernier texte lu avant que quelqu un ouvre son wallet.');
+/* ⛔ ET ELLE NE PROMET PAS UN PRELEVEMENT NUL. « nothing is charged » etait vrai pour le hub mort ;
+ *   sur la vente d un block, le frais part. Annoncer la gratuite d un geste payant est la faute la
+ *   plus chere dans l autre sens — et elle serait decouverte APRES la signature. */
+assert.doesNotMatch(phraseBridgeLegs(), /nothing is charged|free of charge|no fee\b/i,
+  'la phrase annonce un prelevement nul alors que la vente d un block paie un frais dans sa propre '
+  + 'transaction : la decouverte se ferait APRES la signature');
 
 const stub = confirmerBridgeStub(quoteBridge({ amount: 1, fromSym: 'AAPLc', toSym: 'USDC' }));
 assert.equal(stub.goPhil, true);

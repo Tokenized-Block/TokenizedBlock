@@ -131,9 +131,22 @@ export function phraseBridgeLegs() {
      *   d ailleurs garde « 0.01% » trois semaines apres que le tarif soit passe a 0,5 %. */
     ? ('Legs: Fund (fiat → your wallet) · swap between tokens, with a ' + BRIDGE_FEE_LABEL
       + ' fee · tokenized equity later — not a broker.')
-    : 'Legs: Fund (fiat → your wallet) is the only one running. Swapping one token for another is '
-      + 'not built yet, so nothing is charged for it — the quote below is an estimate for later, '
-      + 'not an offer. Tokenized equity comes after that. We are not a broker.';
+    /* ⛔⛔⛔ LA BRANCHE DE REPLI NE DESAVOUE PLUS RIEN, PARCE QU IL N Y A PLUS RIEN A DESAVOUER.
+     *      Elle disait « Swapping one token for another is not built yet … the quote below is an
+     *      estimate for later, not an offer ». Cette reserve etait NECESSAIRE tant que l onglet
+     *      portait deux selecteurs « From » / « To » proposant vingt actifs : on laissait croire a un
+     *      echange actif-vers-actif, il fallait donc ecrire qu il ne se reglerait pas.
+     *    ⇒ Le 2026-10-02, les selecteurs sont partis — mesure : ils n entraient JAMAIS dans la
+     *      transaction, et le devis calcule a partir d eux n etait utilise nulle part. L onglet ne
+     *      propose plus que le geste reel : choisir un de ses blocks, dire combien, le vendre par son
+     *      propre marche. Plus d offre fantome, donc plus de reserve.
+     *    ⛔ L ORDRE COMPTE, ET C EST TOUT L ARGUMENT. Retirer la reserve EN GARDANT les selecteurs
+     *      aurait affiche un prix a cote d une capacite absente — le defaut le plus cher de ce
+     *      depot. On retire l OFFRE d abord ; la phrase suit, elle ne precede pas.
+     *    ⛔ « not a broker » RESTE, et ce n est pas une reserve de meme nature : c est une limite
+     *      JURIDIQUE permanente, pas l etat d avancement d un chantier. Elle ne partira jamais. */
+    : 'Legs: Fund (fiat → your wallet), then sell a block through its own market — the fee is taken '
+      + 'inside that same transaction. Tokenized equity comes later. We are not a broker.';
 }
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;

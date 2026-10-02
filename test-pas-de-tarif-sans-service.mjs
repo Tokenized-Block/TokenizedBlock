@@ -75,14 +75,27 @@ if (!HUB_SWAP_LIVE) {
    *     absente, et la reserve SURVIT a l endroit du devis. Les deux moities sont verifiees
    *     ci-dessous. Retirer la reserve PARTOUT ferait rougir ce fichier, et c est voulu : un prix
    *     affiche sans sa reserve est le defaut le plus cher de ce depot. */
-  t('⛔ la reserve survit a l endroit du DEVIS, la ou un chiffre apparait',
-    /You receive: nothing yet — the swap hub is not running/.test(sansCommentaires)
-    && /this quote is an estimate for later, not an offer/.test(sansCommentaires));
-  /* ⛔ ET ELLE Y EST DERIVEE DU DRAPEAU, pas figee : sinon elle mentirait dans l autre sens le jour
-   *   ou le hub s allume — et ce jour-la, personne ne relira cette ligne. */
-  t('⛔ …et elle y est derivee de HUB_SWAP_LIVE, pas ecrite en dur',
-    /netEl\.textContent = HUB_SWAP_LIVE/.test(sansCommentaires)
-    && /settleEl\.textContent = HUB_SWAP_LIVE/.test(sansCommentaires));
+  /* ⛔⛔⛔ DEUXIEME REECRITURE DU MEME JOUR, ET LA RAISON EST LA MEME QUE DANS test-bridge-tab-0922 :
+   *      la cause a ete RETIREE au lieu d etre signalee.
+   *      Ce matin, ces deux assertions exigeaient la reserve sous le devis, parce qu un net etait
+   *      affiche et qu il venait d un STUB. L apres-midi, les selecteurs « From »/« To » qui
+   *      obligeaient ce stub a exister sont partis — mesure : ils n entraient JAMAIS dans la
+   *      transaction. Le devis vient desormais de `planEchange`, la MEME fonction qui construit la
+   *      transaction envoyee.
+   *   ⇒ UNE RESERVE PROTEGE D UNE DIVERGENCE ; UNE SOURCE UNIQUE LA REND IMPOSSIBLE. On exige donc
+   *     la source unique, qui est strictement plus forte — c est le seul motif acceptable pour
+   *     retirer une reserve de ce depot, et il doit etre verifiable, pas plaide.
+   *   ⚠️ SI LE DEVIS REDEVIENT UNE ESTIMATION, ceci rougit et la reserve redevient obligatoire. */
+  t('⛔ le devis vient de la MEME source que la transaction, pas d une estimation',
+    /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/.test(sansCommentaires));
+  t('⛔ …et le stub ne peut plus revenir par l import : une seule formule pour « combien on prend »',
+    !/import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/.test(sansCommentaires));
+  /* ⛔ ET CE QUE LE DEVIS DIT DE SES PROPRES LIMITES SURVIT : un echec de lecture n est pas un zero,
+   *   et le net est un MINIMUM. Sans ces deux-la, une source unique afficherait quand meme un
+   *   chiffre faux sur une panne de noeud. */
+  t('⛔ « non lu » reste distinct de zero, et le net reste un MINIMUM',
+    /You receive: not read — /.test(sansCommentaires)
+    && /You receive at least /.test(sansCommentaires));
   /* ⛔ ET IL POINTE VERS CE QUI MARCHE : un renvoi honnete vaut mieux qu un silence. Supprimer la
    *   phrase aurait ete l autre moitie du defaut — le visiteur qui cherche cette fonction merite de
    *   savoir qu elle n existe pas, au lieu de la chercher. */

@@ -56,35 +56,58 @@ v('fail-open assume : une entree SANS drapeau reste proposable', () => {
   assert.equal(proposableEnEchange(null), true);
 });
 
-v('⛔ la liste DYNAMIQUE du Bridge applique le filtre', () => {
-  const i = src.indexOf('function peindreBridgeActifs(');
-  assert.ok(i > 0, 'peindreBridgeActifs introuvable : ce test ne garde plus rien');
-  const corps = src.slice(i, i + 1600);
-  assert.match(corps, /\.filter\(\s*proposableEnEchange\s*\)/,
-    'la liste dynamique du Bridge ne filtre pas : TBLOCK y revient');
+/* ⛔⛔⛔ TROIS CAS FUSIONNES EN UNE GARDE CONTRE LE RETOUR, LE 2026-10-02 — ET C EST UN CHANGEMENT
+ *      QU IL FAUT JUSTIFIER, PAS CONSTATER.
+ *      Ils gardaient `peindreBridgeActifs()` : que sa liste DYNAMIQUE filtre par
+ *      `proposableEnEchange`, que sa liste de REPLI ne recode pas TBLOCK en dur, et que l ecran
+ *      importe bien le filtre. Trois bonnes gardes sur un sujet qui N EXISTE PLUS : la fonction et
+ *      les deux selecteurs « From » / « To » ont ete retires.
+ *
+ *   ⭐ POURQUOI ILS ONT ETE RETIRES, et c est une MESURE, pas un gout : les deux selecteurs
+ *     n entraient JAMAIS dans la transaction. Le gestionnaire appelle
+ *     `planEchange({ jeton: hub, sens: 'VENTE', montant })` ; `fromSym` et `toSym` apparaissaient
+ *     ZERO fois dans son corps, et le devis calcule a partir d eux n etait utilise NULLE PART.
+ *     Vingt options laissaient croire a un echange actif-vers-actif, ce qui OBLIGEAIT a ecrire
+ *     quelque part qu il ne se reglerait pas — la phrase que Raksha a fait retirer le 2026-10-02.
+ *
+ *   ⛔ UN TEST DONT LE SUJET DISPARAIT NE DOIT PAS ETRE SUPPRIME : il doit devenir la garde qui
+ *     empeche le sujet de REVENIR sans ses protections. C est la seule facon honnete de retirer une
+ *     fonctionnalite — sinon la prochaine personne recable les selecteurs, sans filtre, et plus rien
+ *     ne crie.
+ *   ⚠️ CE QUI N EST PLUS GARDE, DIT FRANCHEMENT : plus rien ne verifie que la liste de repli evite
+ *     TBLOCK, parce qu il n y a plus de liste. Si les selecteurs reviennent, l assertion ci-dessous
+ *     rougit et il faudra REECRIRE ces trois cas, pas seulement les rebrancher. Les deux premiers
+ *     cas de ce fichier gardent toujours le filtre LUI-MEME dans `paires.js` : la regle survit, son
+ *     cablage non. */
+v('⛔ l offre actif-vers-actif ne revient pas sans ses protections', () => {
+  const vu = src.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  /* ⛔ TEMOIN DU DEPOUILLEMENT : sans effet il ne protege rien, trop gourmand il rend toute absence
+   *   vraie. Trois instruments se sont fait prendre la-dessus aujourd hui, dont deux a moi. */
+  assert.ok(vu.length < src.length && vu.length > 200000 && vu.includes('id="brConfirm"'),
+    'depouillement casse : ce cas ne garde plus rien (' + vu.length + '/' + src.length + ')');
+  assert.doesNotMatch(vu, /id="brFrom"/,
+    'le selecteur « From » est revenu. Il ne commande RIEN dans la transaction — `planEchange` ne '
+    + 'prend que le block et le montant — donc il recree une offre fantome, et il faudra de nouveau '
+    + 'ecrire a l ecran qu elle ne se regle pas. Si le hub token-token existe vraiment maintenant, '
+    + 'rebranche `proposableEnEchange` ET reecris les trois cas que ce bloc remplace.');
+  assert.doesNotMatch(vu, /id="brTo"/, 'le selecteur « To » est revenu — meme raison que « From »');
+  assert.doesNotMatch(vu, /function peindreBridgeActifs/,
+    'le peintre des selecteurs est revenu sans les selecteurs, ou avec : dans les deux cas ce '
+    + 'fichier doit etre reecrit avant, pas apres');
+  /* ⛔ ET LE GESTE VIVANT SURVIT. `fail-closed sur une affordance efface le produit` a coute 13
+   *   puces reduites a 2 EN PROD : retirer une offre fantome ne doit pas emporter l offre reelle. */
+  assert.match(vu, /id="brConfirm"[^>]*>Sell these blocks through their market</,
+    'le bouton de vente reelle a disparu avec les selecteurs morts : on a emporte l affordance qui '
+    + 'MARCHE en retirant celle qui mentait');
+  assert.match(vu, /id="brAmount"/, 'le champ du montant a disparu : la vente devient inatteignable');
+  assert.match(vu, /id="brBlock"/, 'le choix du block a disparu : c est LUI qui determine le marche');
 });
 
-v('⛔ la liste de REPLI ne contient plus TBLOCK', () => {
-  /* ⛔⛔ LE JUMEAU. Le repli sert quand la liste dynamique echoue ; y laisser TBLOCK code en dur
-   *     rendrait le correctif inoperant precisement dans ce cas. */
-  const i = src.indexOf('function peindreBridgeActifs(');
-  const corps = src.slice(i, i + 1600);
-  const repli = corps.slice(corps.indexOf('if (!opts.length)'));
-  assert.ok(repli.length > 20, 'la liste de repli est introuvable');
-  assert.doesNotMatch(repli, /TBLOCK/,
-    'TBLOCK est encore code en dur dans la liste de repli du Bridge');
-  assert.match(repli, /ETH/, 'le repli ne propose plus rien : un selecteur vide');
-});
-
-v('le module app.html importe bien le filtre', () => {
-  /* ⛔ `garde-sur-element-absent-toujours-fausse` : sans l import, `proposableEnEchange` serait
-   *    indefini et `.filter(undefined)` jetterait — le catch avalerait tout et on retomberait
-   *    silencieusement sur le repli. Le defaut serait invisible. */
-  assert.match(src, /import\s*\{[^}]*proposableEnEchange[^}]*\}\s*from\s*'\.\/paires\.js'/,
-    "app.html n importe pas proposableEnEchange : le filtre jetterait et le repli prendrait la main");
-});
-
-assert.equal(n, 6, 'compte de cas inattendu : ' + n);
-console.log('ok bridge-actifs-proposes — ' + n + ' cas : TBLOCK retire des DEUX listes, '
-  + DEVISES_BASE.filter(proposableEnEchange).length + ' actifs restent proposables.');
+assert.equal(n, 4, 'compte de cas inattendu : ' + n);
+/* ⛔ CETTE LIGNE DISAIT « TBLOCK retire des DEUX listes » — faux depuis le 2026-10-02 : il n y a
+ *   plus de liste du tout dans le Bridge. Un resume qui decrit un etat disparu est la premiere
+ *   chose qu on relit et la derniere qu on corrige. */
+console.log('ok bridge-actifs-proposes — ' + n + ' cas : le filtre tient dans paires.js ('
+  + DEVISES_BASE.filter(proposableEnEchange).length + ' actifs proposables), et l offre '
+  + 'actif-vers-actif ne peut pas revenir dans le Bridge sans faire rougir ce fichier.');
 console.log('⚠️ NE PROUVE PAS que les autres actifs ont un marche : le drapeau est declare, pas mesure.');

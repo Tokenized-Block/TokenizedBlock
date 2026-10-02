@@ -2312,7 +2312,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261002-reserve-derivee-relay-retire" hidden>Build <code>20261002-reserve-derivee-relay-retire</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261002-devis-une-seule-source" hidden>Build <code>20261002-devis-une-seule-source</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2871,19 +2871,33 @@ details[open] > summary::before{transform:rotate(90deg)}
         taken inside the same transaction, never as a separate charge (fail-closed if it rounds
         to 0). Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never
         replace this fee.</p>
-      <label class="champ">From
-        <select id="brFrom"></select>
-      </label>
-      <label class="champ">To
-        <select id="brTo"></select>
-      </label>
-      <label class="champ">Amount
+      <!-- ⛔⛔⛔ LES SELECTEURS « From » ET « To » SONT RETIRES LE 2026-10-02, ET CE N EST PAS UN
+                CHANGEMENT DE REDACTION : C ETAIENT DES ENTREES MORTES.
+                Le gestionnaire du bouton appelle `planEchange({ jeton: hub, sens: 'VENTE',
+                montant: unites })`. Mesure : `fromSym` et `toSym` apparaissent ZERO fois dans le
+                corps du gestionnaire apres leur lecture, et le devis calcule a partir d eux
+                (`const q = quoteBridge(...)`) n est utilise NULLE PART — une valeur lue puis jetee,
+                le motif de defaut n°1 de ce depot. Le commentaire du code le disait deja : « la
+                devise From ne commande plus rien ».
+              ⛔ ET C EST CE QUI OBLIGEAIT LA RESERVE A EXISTER. Deux selecteurs proposant vingt
+                actifs laissaient croire a un echange actif-vers-actif ; il fallait donc ecrire
+                quelque part qu il ne se reglerait pas. Raksha (2026-10-02) refusait la phrase ; la
+                retirer en gardant l offre aurait affiche un prix a cote d une capacite absente.
+                ⇒ On retire L OFFRE, pas la phrase honnete. Alors il n y a plus rien a desavouer.
+              ⛔ LE STUB FACTURAIT 0,01 % QUAND LE FRAIS REEL EST 0,5 % (`BRIDGE_FEE_BPS = 50n`) —
+                facteur CINQUANTE, exactement le defaut deja paye ici le 2026-09-25. Le devis vient
+                desormais de `planEchange`, LA MEME SOURCE que la transaction : les deux ne peuvent
+                plus diverger, parce qu il n y en a plus qu une.
+              ⚠️ CE QUI N ETAIT PAS CASSE, ET JE NE LE SURCLAME PAS : la vente restait atteignable.
+                La condition `fromSym !== toSym` gardait le chemin vivant sur des entrees qui ne
+                l influencent pas, mais le repli `find(v => v !== from.value)` evitait la collision.
+                Dependance morte, pas panne. -->
+      <label class="champ">How many blocks to sell
         <input id="brAmount" inputmode="decimal" placeholder="0.0" autocomplete="off">
       </label>
       <div class="carte" id="brQuote" style="margin-top:10px;background:transparent">
-        <p class="note" id="brQuoteFee">Fee (<span data-frais-bridge>—</span>): —</p>
         <p class="note" id="brQuoteNet">You receive: —</p>
-        <p class="note" id="brQuoteSettle">Settlement: —</p>
+        <p class="note" id="brQuoteFee">Fee (<span data-frais-bridge>—</span>): taken inside the same transaction.</p>
       </div>
       <!-- ⛔⛔ L ETIQUETTE DISAIT « Confirm Bridge fee » ET LE GESTE VEND LES BLOCKS. Quelqu un qui
            confirme « un frais » ne s attend pas a se separer de ce qu il detient : c est un
@@ -2990,7 +3004,13 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
   ORNEMENTS_CREATE as ORNEMENTS, combinaisonsCreate as combinaisons } from './face.js';
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
-import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock } from './paires.js';
+/* ⛔ `proposableEnEchange` RETIRE DE L IMPORT le 2026-10-02 : son seul appelant dans l ecran etait
+ *   `peindreBridgeActifs()`, parti avec les selecteurs « From » / « To ». La REGLE reste entiere
+ *   dans `paires.js` avec ses bancs (Phil, 2026-09-24 : « retirer le TBLOCK de la, le coin est pas
+ *   reellement lance au public ») — c est son CABLAGE qui disparait, parce qu il n y a plus de liste
+ *   a filtrer. `test-bridge-actifs-proposes.mjs` garde desormais le retour de cette liste : si les
+ *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
+import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock } from './paires.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -3182,7 +3202,26 @@ const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase(
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 /* tip 20260922-prepaye-inscrire-dust */
-import { quoteBridge, formatBridgeAmount, confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, BRIDGE_LEGS, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
+/* ⛔⛔⛔ `quoteBridge` ET `formatBridgeAmount` NE SONT PLUS IMPORTES, LE 2026-10-02 — ET CE RETRAIT
+ *      EST LA VRAIE CORRECTION, PAS UN NETTOYAGE.
+ *      `quoteBridge` est un STUB : sa propre documentation dit « fee = amount * 0.0001 », soit
+ *      0,01 %, alors que `BRIDGE_FEE_BPS` vaut 50n — 0,5 %. Tant qu il reste IMPORTABLE, il reste
+ *      une seconde formule pour la question « combien on prend », et ce depot a mesure le 2026-09-25
+ *      ce que coute une seconde formule : le facteur CINQUANTE s affichait sur l ecran ou quelqu un
+ *      decide de payer.
+ *    ⇒ DEUX FORMULES POUR UNE SEULE QUESTION, C EST UNE DE TROP. Le devis vient desormais de
+ *      `planEchange`, la MEME fonction qui construit la transaction envoyee. Elles ne peuvent plus
+ *      diverger parce qu elles ne sont plus deux.
+ *    ⛔ LE MODULE `bridge.js` GARDE `quoteBridge` ET SES BANCS : la fonction n est pas supprimee,
+ *      elle n est plus CABLEE a un ecran. Supprimer l export casserait ses propres tests sans rien
+ *      rendre de plus sur l interface. */
+/* ⛔ `BRIDGE_LEGS` RETIRE DE L IMPORT : il etait importe et utilise NULLE PART dans l ecran — trouve
+ *   le 2026-10-02 par une assertion qui visait trop large et dont le rouge a quand meme servi. Ses
+ *   notes contiennent « Swapping one token for another is not built yet », donc un import mort
+ *   portait une phrase que Raksha venait de faire retirer : si quelqu un la recablait demain, elle
+ *   reviendrait a l ecran sans qu aucune garde ne bouge. La donnee reste dans `bridge.js` avec ses
+ *   bancs ; c est le CABLE qui part. */
+import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
@@ -3409,7 +3448,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void peindreTokenizedBank();
   /* tip 20260922-prepaye-inscrire-dust */
-  if (nom === 'bridge') { peindreBridgeActifs(); void peindreBridgeBlocks(); majBridgeQuote(); }
+  if (nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -19213,35 +19252,25 @@ window.addEventListener('hashchange', () => {
 });
 
 /* ── Bridge (tip 20260922-prepaye-inscrire-dust) ───────────────────────────────────────────────────────── */
-function peindreBridgeActifs() {
-  const from = $('#brFrom'), to = $('#brTo');
-  if (!from || !to) return;
-  let opts = [];
-  try {
-    const list = (typeof pairesProposees === 'function') ? pairesProposees(CHAINE) : [];
-    /* ⛔ On ne PROPOSE que ce qui s echange vraiment (Phil, 2026-09-24 : « retirer le TBLOCK de la,
-     *   le coin est pas reellement lance au public »). Le filtre vit dans paires.js pour que les
-     *   deux listes ci-dessous — la dynamique ET le repli — ne puissent pas diverger. */
-    opts = list.filter(proposableEnEchange)
-      .map((p) => '<option value="' + enTexte(p.symbole) + '">' + enTexte(p.symbole + ' — ' + (p.nom || p.symbole)) + '</option>');
-  } catch (_) { opts = []; }
-  if (!opts.length) {
-    /* ⛔⛔ LE REPLI PORTAIT LE MEME DEFAUT, et c est le piege `single-and-batch-twins-diverge` :
-     *     filtrer la liste dynamique en laissant TBLOCK code en dur ici aurait rendu le correctif
-     *     invisible exactement quand la liste dynamique echoue — c est-a-dire au pire moment. */
-    opts = ['<option value="ETH">ETH</option>', '<option value="USDC">USDC</option>',
-      '<option value="AAPLc">AAPLc</option>'];
-  }
-  const fv = from.value || 'ETH', tv = to.value || 'USDC';
-  from.innerHTML = opts.join('');
-  to.innerHTML = opts.join('');
-  if ([...from.options].some((o) => o.value === fv)) from.value = fv; else from.value = 'ETH';
-  if ([...to.options].some((o) => o.value === tv)) to.value = tv;
-  else {
-    const alt = [...to.options].map((o) => o.value).find((v) => v !== from.value);
-    to.value = alt || 'USDC';
-  }
-}
+/* ⛔⛔⛔ `peindreBridgeActifs()` EST RETIREE LE 2026-10-02 AVEC LES SELECTEURS QU ELLE PEUPLAIT.
+ *      Elle remplissait « From » et « To » avec les vingt actifs proposables — et aucun des deux
+ *      n entrait dans la transaction : `planEchange` ne prend que le block et le montant. Vingt
+ *      options laissaient donc croire a un echange actif-vers-actif, ce qui obligeait a ecrire
+ *      quelque part qu il ne se reglerait pas.
+ *   ⛔ ON RETIRE L OFFRE, PAS LA PHRASE HONNETE. C est la seule facon de satisfaire la demande de
+ *     Raksha (« ecris pas que ca marche pas ») sans tomber dans le pire des trois choix : retirer la
+ *     reserve en gardant le devis aurait affiche un prix a cote d une capacite absente.
+ *   ⚠️ CE QUI PART AVEC, ET IL FAUT LE DIRE : le filtre `proposableEnEchange` n a plus d usage dans
+ *     cet onglet. Sa raison restait bonne (Phil, 2026-09-24 : « retirer le TBLOCK de la, le coin est
+ *     pas reellement lance au public ») et `paires.js` le garde avec ses bancs — il n est simplement
+ *     plus cable ici, parce qu il n y a plus de liste a filtrer.
+ *   ⛔ ET LE REPLI CODE EN DUR PART AUSSI. Il listait ETH/USDC/AAPLc en dur « au cas ou » : c etait
+ *     le piege `single-and-batch-twins-diverge` sous surveillance permanente. Plus de liste, plus
+ *     de jumeau a maintenir.
+ *   ⛔⛔ ET ELLE EST VRAIMENT SUPPRIMEE, PAS LAISSEE VIDE. Ma premiere version gardait un corps vide
+ *      « pour que les appelants n aient rien a changer » : c est le motif
+ *      `presence-dun-nom-nest-pas-son-usage`, qui a deja coute trois mutations ici. Un nom qui
+ *      existe encore fait croire qu un geste existe encore. Les DEUX appelants partent avec elle. */
 
 async function peindreBridgeBlocks() {
   const sel = $('#brBlock'), note = $('#brBlockNote');
@@ -19301,40 +19330,69 @@ async function peindreBridgeBlocks() {
     : 'Pick any of your TB blocks as the Bridge hub.';
 }
 
-function majBridgeQuote() {
+/* ⛔⛔⛔ LE DEVIS VIENT DE `planEchange`, LA MEME SOURCE QUE LA TRANSACTION — ET C EST TOUT LE POINT
+ *      DE LA REECRITURE DU 2026-10-02.
+ *      Avant, il venait de `quoteBridge()`, un STUB documente comme « fee = amount * 0.0001 », soit
+ *      0,01 %, alors que `BRIDGE_FEE_BPS` vaut 50n — 0,5 %. Facteur CINQUANTE entre le chiffre
+ *      affiche et le chiffre preleve, sur l ecran ou quelqu un decide de vendre. Ce depot a DEJA
+ *      paye ce defaut exact le 2026-09-25 ; il etait revenu par une autre porte.
+ *   ⛔ DEUX FORMULES POUR UNE SEULE QUESTION, C EST UNE DE TROP. Il n y en a plus qu une : celle qui
+ *     construit la transaction. Elles ne peuvent plus diverger parce qu elles ne sont plus deux.
+ *   ⛔ ET C EST LA NORME « MONTRER LE NET AVANT DE SIGNER » : le chiffre annonce est celui que la
+ *     chaine vient de rendre (`recoitAuMoins`), pas une estimation. Un minimum garanti est la seule
+ *     forme honnete — le prix bouge entre la lecture et l inclusion.
+ *
+ * ⚠️ CE QUE CETTE FONCTION NE PEUT PAS FAIRE, ET ELLE LE DIT A L ECRAN : lire la chaine prend du
+ *   temps et peut echouer. Une panne de lecture n est PAS « ce block n a pas de marche » — on
+ *   n annonce donc jamais zero sur un echec, on dit qu on n a pas su lire. Confondre les deux a
+ *   deja produit ici trois verdicts faux.
+ * ⛔ ET ELLE NE DECIDE PAS DU BOUTON SUR SON PROPRE RESULTAT : le bouton s ouvre des qu il y a un
+ *   block et un montant. Le refuser parce qu une LECTURE a rate serait punir l utilisateur d une
+ *   panne de noeud — « fail-closed sur une affordance efface le produit », paye ici en prod.
+ *   Le gestionnaire relit le plan de toute facon avant de signer : c est lui qui refuse, pas le
+ *   devis. */
+let jetonDevisBridge = 0;
+async function majBridgeQuote() {
   const amountEl = $('#brAmount'), feeEl = $('#brQuoteFee'), netEl = $('#brQuoteNet');
-  const settleEl = $('#brQuoteSettle'), btn = $('#brConfirm'), etat = $('#brEtat');
+  const btn = $('#brConfirm'), etat = $('#brEtat');
   if (!amountEl || !feeEl || !netEl) return;
-  const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
-  const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
-  const q = quoteBridge({ amount: amountEl.value, fromSym, toSym });
-  if (!q.ok) {
-    feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): —';
-    netEl.textContent = 'You receive: —';
-    if (settleEl) settleEl.textContent = 'Settlement: —';
-    if (btn) btn.disabled = true;
+  const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
+  let unites = 0n;
+  try { unites = unitsFromHuman(amountEl.value, 18); } catch (_) { unites = 0n; }
+  feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): taken inside the same transaction.';
+  /* ⛔ LE BOUTON D ABORD, ET SANS ATTENDRE LA CHAINE : il ne depend que de ce que l utilisateur a
+   *   fourni. Un `await` avant cette ligne laisserait le bouton dans son etat precedent pendant
+   *   toute la lecture — donc desactive alors que tout est rempli. */
+  if (btn) btn.disabled = !(unites > 0n && /^0x[0-9a-fA-F]{40}$/.test(String(hub || '')));
+  if (etat && !etat.dataset.locked) etat.textContent = '';
+  if (!(unites > 0n)) { netEl.textContent = 'You receive: —'; return; }
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(hub || ''))) {
+    netEl.textContent = 'You receive: — · pick one of your blocks above first.';
     return;
   }
-  /* ⛔⛔ « You receive » DISPARAIT TANT QUE RIEN N EST LIVRE. Cette ligne promettait un montant net
-   *     recu alors que le seul mouvement possible etait le frais QUITTANT le wallet. Elle etait
-   *     affichee juste au-dessus du bouton de confirmation : l endroit exact ou quelqu un decide
-   *     de payer. Montrer un chiffre qu on ne remettra jamais est la forme la plus chere de
-   *     malentendu — et c est nous qui l ecrivions.
-   *   ⇒ Tant que le hub n echange pas, on annonce ce qui se passerait VRAIMENT : rien. Le chiffre
-   *     net revient de lui-meme le jour ou l echange existe. */
-  feeEl.textContent = HUB_SWAP_LIVE
-    ? ('Fee (' + BRIDGE_FEE_LABEL + '): ' + formatBridgeAmount(q.fee, q.settleSym))
-    : ('Fee (' + BRIDGE_FEE_LABEL + '): none — nothing is charged while the swap is off');
-  netEl.textContent = HUB_SWAP_LIVE
-    ? ('You receive: ' + formatBridgeAmount(q.net, toSym))
-    : 'You receive: nothing yet — the swap hub is not running';
-  if (settleEl) settleEl.textContent = HUB_SWAP_LIVE
-    ? ('Settlement: ' + q.settleSym + ' preferred · fee amount only')
-    : 'Settlement: none — this quote is an estimate for later, not an offer';
-  const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
-  /* Live fee skim when From is ETH/USDC; other From stays clickable for honest stub copy. */
-  if (btn) btn.disabled = !(q.amount > 0 && hub && fromSym && toSym && fromSym !== toSym);
-  if (etat && !etat.dataset.locked) etat.textContent = '';
+  /* ⛔⛔ JETON DE COURSE : chaque frappe relance une lecture, et elles ne reviennent pas dans
+   *    l ordre. Sans ce jeton, une reponse LENTE pour « 10 » ecraserait la reponse RAPIDE pour
+   *    « 100 » et l ecran afficherait le net du mauvais montant, juste avant une signature.
+   *    Ce depot connait le motif : « la peinture accrochee au premier settle ». */
+  const monJeton = ++jetonDevisBridge;
+  netEl.textContent = 'You receive: reading its market on chain…';
+  let plan;
+  try {
+    plan = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites });
+  } catch (err) {
+    plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) };
+  }
+  if (monJeton !== jetonDevisBridge) return;
+  if (plan.etat !== 'PRET' || !plan.resume) {
+    /* ⛔ « NON LU » N EST PAS « ZERO ». On nomme l etat, on n invente pas un montant. */
+    netEl.textContent = 'You receive: not read — ' + (plan.pourquoi || 'its market could not be read')
+      + '. Nothing was sent.';
+    return;
+  }
+  netEl.textContent = 'You receive at least '
+    + formaterUnites(plan.resume.recoitAuMoins || 0n, 18) + ' '
+    + (plan.resume.recoitDevise === 'pair' ? 'in the paired asset' : (plan.resume.recoitDevise || 'ETH'))
+    + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.';
 }
 
 function basculerBridgeMode(mode) {
@@ -19368,20 +19426,37 @@ function basculerBridgeMode(mode) {
     etape('bridge_create');
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
   });
-  for (const id of ['#brFrom', '#brTo', '#brAmount']) {
-    const el = $(id);
-    if (!el) continue;
-    el.addEventListener('input', majBridgeQuote);
-    el.addEventListener('change', majBridgeQuote);
+  /* ⛔⛔⛔ LE DEVIS LIT LA CHAINE, DONC L ECOUTEUR EST DEBOUNCE — ET C EST MOI QUI AI CREE CE RISQUE
+   *      EN REMPLACANT LE STUB. Avant, `majBridgeQuote` etait une multiplication locale : la brancher
+   *      sur `input` ne coutait rien. Maintenant elle appelle `planEchange`, donc un `eth_call` par
+   *      FRAPPE. Taper « 1000 » aurait declenche quatre lectures, et le noeud public plafonne — ce
+   *      depot a deja mesure 12 refus d affilee sur une rafale d `eth_call`.
+   *   ⛔ UNE CORRECTION QUI DEPLACE LE COUT SANS LE NOMMER N EST PAS UNE CORRECTION. Le stub etait
+   *     faux mais gratuit ; le vrai devis est juste mais payant. On paie une fois par pause de
+   *     frappe, pas une fois par caractere.
+   *   ⛔ ET `change` RESTE IMMEDIAT : il ne tire qu au blur ou a la selection, donc une seule fois,
+   *     et c est le moment ou l utilisateur attend un chiffre. */
+  let tDevis = 0;
+  const devisDebounce = () => {
+    clearTimeout(tDevis);
+    tDevis = setTimeout(() => { void majBridgeQuote(); }, 600);
+  };
+  {
+    const el = $('#brAmount');
+    if (el) {
+      el.addEventListener('input', devisDebounce);
+      el.addEventListener('change', () => { clearTimeout(tDevis); void majBridgeQuote(); });
+    }
   }
   const conf = $('#brConfirm');
   if (conf) conf.addEventListener('click', async () => {
-    const fromSym = ($('#brFrom') && $('#brFrom').value) || 'ETH';
-    const toSym = ($('#brTo') && $('#brTo').value) || 'USDC';
     const amount = ($('#brAmount') && $('#brAmount').value) || 0;
     /* le block a sortir : c est LUI qu on vend par sa propre pool, pas une devise generique */
     const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
-    const q = quoteBridge({ amount, fromSym, toSym });
+    /* ⛔ `const q = quoteBridge({ amount, fromSym, toSym })` RETIRE : il etait calcule ici et
+     *   utilise NULLE PART dans ce gestionnaire — mesure du 2026-10-02, `fromSym` et `toSym`
+     *   apparaissaient zero fois apres leur lecture. Une valeur lue puis jetee est un defaut, et
+     *   celle-ci portait en plus un tarif de 0,01 % quand le reel est 0,5 %. */
     const etat = $('#brEtat');
     const setEtat = (t) => { if (etat) { etat.dataset.locked = '1'; etat.textContent = t; } };
     /* ⛔⛔ L ANCIEN GARDE-FOU EST RETIRE, ET IL FAUT DIRE POURQUOI PLUTOT QUE DE LE LAISSER TRAINER.
@@ -19511,7 +19586,9 @@ function basculerBridgeMode(mode) {
   if (brFund) brFund.addEventListener('click', (e) => { try { etape('bridge_fund_wallet'); } catch (_) {} ouvrirRailFiat(e, brFund, 'ETH'); });
   const cGo = $('#cGoBridge');
   if (cGo) cGo.addEventListener('click', (e) => { e.preventDefault(); etape('create_go_bridge'); allerA('bridge'); });
-  peindreBridgeActifs();
+  /* ⛔ `peindreBridgeActifs()` RETIRE ICI AUSSI : c etait le second des deux appelants. Laisser un
+   *   seul appel d une fonction supprimee aurait leve a l EVALUATION de ce bloc IIFE — donc casse
+   *   tout le module, pas seulement le Bridge. */
   basculerBridgeMode('fund');
 })();
 

@@ -166,16 +166,34 @@ assert.ok(
  *   ⚠️ CE QU ON PERD, ET IL FAUT LE DIRE : ce fichier ne garde plus rien sur le texte d accueil du
  *     panneau. `test-reserve-derivee-pas-ecrite.mjs` le fait (18 assertions, 5 mutants tues), et
  *     c est lui qui interdit desormais toute annonce d absence hors de portee d une repeinture. */
+/* ⛔⛔⛔ ET LA PREMISSE A CHANGE UNE SECONDE FOIS LE MEME JOUR — il faut le dire, parce qu une garde
+ *      reecrite deux fois en quelques heures est normalement le signe qu on la plie a son code.
+ *      Ce matin j ai redirige cette assertion vers « la reserve survit SOUS LE DEVIS », parce qu un
+ *      net etait affiche et qu il venait d un STUB (`quoteBridge`, 0,01 % quand le reel est 0,5 %).
+ *      La reserve etait alors la seule protection possible.
+ *   ⇒ L APRES-MIDI, LA CAUSE A ETE RETIREE AU LIEU D ETRE SIGNALEE. Les selecteurs « From »/« To »
+ *     n entraient jamais dans la transaction (mesure : zero occurrence dans le gestionnaire) ; ils
+ *     sont partis, et le devis vient desormais de `planEchange` — LA MEME fonction qui construit la
+ *     transaction envoyee. Il n y a plus de chiffre dont il faut se mefier.
+ *   ⛔ UNE RESERVE PROTEGE D UNE DIVERGENCE ; UNE SOURCE UNIQUE LA REND IMPOSSIBLE. Exiger la seconde
+ *     est strictement plus fort que d exiger la premiere — et c est le seul motif acceptable pour
+ *     retirer une reserve de ce depot.
+ *   ⚠️ SI LE DEVIS REDEVENAIT UNE ESTIMATION, cette assertion rougirait et la reserve redeviendrait
+ *     obligatoire. Les deux ne sont pas interchangeables : l ordre est « supprimer l offre fantome,
+ *     puis la phrase », jamais l inverse. */
 const appEntiere = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-assert.match(appEntiere, /You receive: nothing yet — the swap hub is not running/,
-  'la reserve a disparu de SOUS LE DEVIS : un montant net s afficherait sans dire qu il ne sera '
-  + 'pas regle. C est un prix a cote d une capacite absente — le defaut le plus cher de ce depot');
-assert.match(appEntiere, /this quote is an estimate for later, not an offer/,
-  'le devis ne se declare plus estimation : il se lit comme une offre');
-/* ⛔ ET LA RESERVE RESTE BRANCHEE SUR LE DRAPEAU, pas figee. Sans ca, elle survivrait au jour ou le
- *   hub s allume et mentirait dans l autre sens. */
-assert.match(appEntiere, /netEl\.textContent = HUB_SWAP_LIVE/,
-  'la reserve du devis n est plus derivee de HUB_SWAP_LIVE : elle redevient une phrase figee');
+assert.match(appEntiere, /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/,
+  'le devis du Bridge ne lit plus la chaine par `planEchange` : s il repart d une estimation, le '
+  + 'chiffre affiche peut diverger de la transaction, et il faut alors RETABLIR la reserve');
+assert.match(appEntiere, /You receive at least /,
+  'le net n est plus annonce comme un MINIMUM lu sur la chaine');
+assert.match(appEntiere, /You receive: not read — /,
+  'une panne de lecture ne se distingue plus d un montant : « non lu » annonce comme un chiffre');
+/* ⛔ ET LE STUB NE PEUT PLUS REVENIR PAR L IMPORT : c est la garde structurelle. Tant qu il est
+ *   importable, il reste une seconde formule pour « combien on prend ». */
+assert.doesNotMatch(appEntiere, /import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/,
+  'le stub `quoteBridge` est de nouveau importe dans l ecran : deux formules pour une seule '
+  + 'question, et c est exactement ce qui a produit le facteur cinquante le 2026-09-25');
 /* ⛔ ET LE CONTROLE INVERSE, QUI MANQUAIT : aucun prenom de l equipe a l ecran. Sans lui, remettre
  *    « Phil-blocked » demain ne ferait rougir personne ici. */
 assert.doesNotMatch(ecranBridge, /\b(?:Phil|Rakhsa|Raksha|Zero\s?1|Clansy|VolKov)\b/i,

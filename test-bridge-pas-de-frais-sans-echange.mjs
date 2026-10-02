@@ -91,11 +91,30 @@ v('les approbations manquantes sont dites AVANT la signature', () => {
 v('⛔ l ecran ne promet pas un net issu de l estimation', () => {
   /* La promesse etait affichee juste au-dessus du bouton : l endroit exact ou quelqu un decide de
    * payer. Elle doit venir du plan REEL, ou ne pas etre un chiffre du tout. */
+  /* ⛔⛔⛔ CE CAS VERIFIAIT UN PROXY ALORS QUE SON PROPRE COMMENTAIRE, DEUX LIGNES PLUS HAUT, NOMMAIT
+   *      LA BONNE PROPRIETE : « elle doit venir du plan REEL, ou ne pas etre un chiffre du tout ».
+   *      Il exigeait `HUB_SWAP_LIVE` a cote du net, parce que c etait la seule facon de garantir
+   *      qu un net STUB ne s affiche pas comme une promesse. Depuis le 2026-10-02 le net vient du
+   *      plan reel, donc on peut exiger la chose elle-meme au lieu de son substitut.
+   *   ⇒ CE N EST PAS UN ASSOUPLISSEMENT. Un drapeau a cote d un chiffre dit « mefie-toi de lui » ;
+   *     une source unique rend la mefiance inutile. `majBridgeQuote` appelle desormais `planEchange`,
+   *     LA MEME fonction que le gestionnaire qui construit la transaction envoyee. Deux formules
+   *     pour une question, c etait une de trop — et l ancienne valait 0,01 % quand le reel est 0,5 %.
+   *   ⛔ ET LES TROIS MOITIES SONT EXIGEES ENSEMBLE. Garder la premiere sans les deux autres
+   *     laisserait un chiffre d apparence juste s afficher sur une PANNE DE LECTURE. */
   const positions = [...src.matchAll(/netEl\.textContent\s*=/g)].map((m) => m.index);
   assert.ok(positions.length > 0, 'la ligne du net recu est introuvable');
-  const conditionnee = positions.some((k) => /HUB_SWAP_LIVE/.test(src.slice(k, k + 340)));
-  assert.ok(conditionnee,
-    "« You receive » est affiche sans condition : l ecran promet de nouveau un net qui n arrivera pas");
+  const duPlanReel = positions.some((k) => /plan\.resume\.recoitAuMoins/.test(src.slice(k, k + 340)));
+  assert.ok(duPlanReel,
+    '« You receive » ne vient plus du plan REEL (`plan.resume.recoitAuMoins`, rendu par planEchange '
+    + '— la fonction qui construit la transaction). S il revient d une estimation, l ecran promet de '
+    + 'nouveau un chiffre que la transaction ne tiendra pas, juste au-dessus du bouton.');
+  assert.match(src, /You receive: not read — /,
+    'une lecture ratee ne se distingue plus d un montant : « non lu » annonce comme zero ferait '
+    + 'croire qu un block n a pas de marche');
+  assert.match(src, /You receive at least /,
+    'le net n est plus annonce comme un MINIMUM : le prix bouge entre la lecture et l inclusion, '
+    + 'donc un montant exact serait une promesse qu on ne peut pas tenir');
 });
 
 v('le texte lu juste avant la signature decrit l echange, pas un frais seul', () => {

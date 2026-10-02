@@ -151,8 +151,24 @@ ok('4. …et son texte depend du drapeau',
   /const resv = \$\('#brSwapReserve'\);[\s\S]{0,1400}?HUB_SWAP_LIVE/.test(app));
 /* ⛔ LA RESERVE SURVIT A L ENDROIT DU DEVIS. C est la seule place ou elle informe : un chiffre
  *   apparait, et le lecteur doit savoir qu il ne sera pas regle. */
-ok('5. ⛔ et elle survit SOUS LE DEVIS, la ou un chiffre apparait',
-  /You receive: nothing yet/.test(app) && /this quote is an estimate for later, not an offer/.test(app));
+/* ⛔⛔⛔ CETTE ASSERTION EST LA MIENNE, ECRITE CE MATIN, ET JE LA REECRIS LE MEME JOUR — donc je dois
+ *      justifier plus, pas moins.
+ *      Elle exigeait « You receive: nothing yet » sous le devis : la reserve devait survivre a
+ *      l endroit ou un chiffre apparait, parce que ce chiffre venait d un STUB (`quoteBridge`,
+ *      0,01 % quand le frais reel est 0,5 %) et qu il fallait avertir de s en mefier.
+ *   ⇒ L APRES-MIDI, J AI RETIRE LA CAUSE PLUTOT QUE DE LA SIGNALER. Les selecteurs « From »/« To »
+ *     qui justifiaient ce stub n entraient JAMAIS dans la transaction — zero occurrence dans le
+ *     gestionnaire, et le devis calcule a partir d eux n etait utilise nulle part. Partis. Le devis
+ *     vient de `planEchange`, la MEME fonction qui construit la transaction.
+ *   ⛔ POURQUOI C EST PLUS FORT, ET PAS SEULEMENT PLUS PROPRE : une reserve demande au lecteur de se
+ *     mefier d un chiffre, et elle depend de lui pour fonctionner. Une source unique rend la
+ *     divergence IMPOSSIBLE et ne demande rien a personne.
+ *   ⚠️ CE BANC NE GARDE DONC PLUS DE RESERVE SOUS LE DEVIS. C est `test-devis-meme-source-que-la-tx`
+ *     qui tient l invariant (28 assertions, 7 mutants tues), et c est lui qu il faut lire avant de
+ *     rebrancher une estimation ici. */
+ok('5. ⛔ le devis vient de la MEME source que la transaction, au lieu d etre desavoue',
+  /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/.test(app)
+  && !/import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/.test(app));
 /* ⛔ LE JOUR DE LA BASCULE : plus aucune phrase a changer a la main. On compte les emplacements
  *   derives — s il en reste moins de quatre, quelqu un a recable une phrase en dur. */
 const derives = (app.match(/HUB_SWAP_LIVE\s*(\?|===|!==|&&|\|\|)/g) || []).length
