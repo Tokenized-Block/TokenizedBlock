@@ -43,6 +43,12 @@ export function fdvDepuisTick(tick, supply = 1e9) { return supply / Math.pow(1.0
  * @param {{nom:string, symbole:string, lanceur:string, startTick:number, lpFee:number, salt:string, metadataURI?:string}} o
  * @returns {{ etat:'OK', tx:{to,data,value}, resume } | { etat:'REFUSE', pourquoi:string }}
  */
+/** Marque TB : nom normalise contenant « tokenizedblock », ou symbole TB / TBGAS / TBLOCK*. */
+export function estMarqueTb(nom, symbole) {
+  const n = String(nom || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const s = String(symbole || '').toUpperCase();
+  return n.includes('tokenizedblock') || s === 'TB' || s === 'TBGAS' || s.startsWith('TBLOCK');
+}
 export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, metadataURI = '' }) {
   const refus = (pourquoi) => ({ etat: 'REFUSE', pourquoi });
   const n = String(nom || '').trim(), s = String(symbole || '').trim();
@@ -50,8 +56,9 @@ export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, me
   if (!/^[A-Za-z0-9]{1,11}$/.test(s)) return refus('symbol: 1 to 11 letters or digits');
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(lanceur || ''))) return refus('connect your wallet first');
   if (String(lanceur).toLowerCase() === FEE_WALLET.toLowerCase()) return refus('the TokenizedBlock fee wallet cannot launch here');
-  /* ⛔ 2026-10-02 13:27, REGLE DU FONDATEUR : aucun refus ni etiquette de « marque » dans l UI.
-   *   La console partenaire lance tout nom valide (garde : test-marche-etranger-20261002). */
+  /* ⛔ 2026-10-02 : 0x88c53e80 (« TokenizedBlock »/TBLOCK) est parti de CETTE carte, sans hook, donc sans frais.
+   *   Un token a la marque TB passe par « Create a block » (V8). La console OpenLaunch partenaire n est pas touchee. */
+  if (estMarqueTb(n, s)) return refus('this name belongs to TokenizedBlock — use Create a block instead');
   if (!FRAIS_OK.includes(Number(lpFee))) return refus('LP fee must be 0, 1 % or 3 %');
   const t = Number(startTick);
   if (!Number.isInteger(t) || t % TICK_SPACING !== 0 || t <= MIN_USABLE || t > MAX_USABLE) return refus('start price out of range');

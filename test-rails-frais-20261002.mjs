@@ -1,7 +1,7 @@
 // test-rails-frais-20261002.mjs — les 4 fuites du 2026-10-02, chacune avec son controle negatif.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { planLaunchOL } from './openlaunch-launch.js';
+import { planLaunchOL, estMarqueTb } from './openlaunch-launch.js';
 import { hookPaieDejaA6cf, HOOK_V8, HOOK_PREVU, HOOK_V2, HOOK_V5 } from './tokenomics.js';
 import { mintLancementRecevable, simulerSequenceLancement } from './lancer-pool.js';
 import { calldataV3ExactIn } from './calldata-v3.js';
@@ -23,15 +23,15 @@ function extraire(nom) {
   return html.slice(m.index, j + 1);
 }
 
-/* 1 — REGLE DU FONDATEUR (2026-10-02 13:27) : plus AUCUN refus de « marque » sur la carte OpenLaunch */
+/* 1 — marque TB refusee sur la carte OpenLaunch (0x88c53e80) */
 const base = { lanceur: L, startTick: 196200, lpFee: 30000, salt: SALT };
-for (const [nom, symbole] of [['TokenizedBlock', 'TBLOCK'], ['Tokenized Block', 'XYZ'], ['Gas', 'TBGAS'], ['x', 'TB']]) {
-  const r = planLaunchOL({ ...base, nom, symbole });
-  ok(r.etat === 'OK', 'plus de refus de marque : ' + nom + '/' + symbole);
-}
-/* controle negatif : la carte refuse toujours ce qui est INVALIDE (la garde n a pas ete arrachee en bloc) */
-ok(planLaunchOL({ ...base, nom: 'My token', symbole: 'MY-TKN' }).etat === 'REFUSE', 'symbole invalide toujours refuse');
+ok(planLaunchOL({ ...base, nom: 'TokenizedBlock', symbole: 'TBLOCK' }).etat === 'REFUSE', 'TokenizedBlock/TBLOCK refuse');
+ok(planLaunchOL({ ...base, nom: 'Tokenized Block', symbole: 'XYZ' }).etat === 'REFUSE', 'nom normalise refuse');
+ok(planLaunchOL({ ...base, nom: 'Gas', symbole: 'TBGAS' }).etat === 'REFUSE', 'TBGAS refuse');
+ok(estMarqueTb('x', 'TBLOCK2') && estMarqueTb('x', 'TB'), 'TBLOCK* et TB');
+/* controle negatif : un nom ordinaire passe, TBX aussi */
 ok(planLaunchOL({ ...base, nom: 'My token', symbole: 'MYTKN' }).etat === 'OK', 'nom ordinaire accepte');
+ok(planLaunchOL({ ...base, nom: 'Test Block', symbole: 'TBX' }).etat === 'OK', 'TBX accepte');
 
 /* 2 — un frais par jambe : table mesuree sur fork */
 ok(hookPaieDejaA6cf(HOOK_V8, 'ACHAT') && hookPaieDejaA6cf(HOOK_V8, 'VENTE'), 'V8 paie dans les deux sens');

@@ -90,7 +90,7 @@ ok(encodeV4Swap({ ...base, deadline: 1n, actions: [], hookData: hd }).includes(h
 
 // ── 3. REGLE DU FONDATEUR (2026-10-02 13:27) : aucune etiquette « not official » / « non officiel » /
 //       « pool sans frais TB » NULLE PART dans l UI. On lit app.html ET tous les modules servis a la racine.
-const INTERDIT = /not[\s_-]*official|non[\s_-]*officiel|pool sans frais tb|this name belongs to tokenizedblock/i;
+const INTERDIT = /not[\s_-]*official|non[\s_-]*officiel|pool sans frais tb/i;
 ok(INTERDIT.test('Not official: x') && INTERDIT.test('non officiel') && INTERDIT.test('Pool sans frais TB') && INTERDIT.test('NOT_OFFICIAL'), 'temoin positif : le detecteur voit les formes interdites');
 ok(!INTERDIT.test('official TokenizedBlock market') && !INTERDIT.test('Outside market'), 'temoin negatif : le texte normal passe');
 const ici = new URL('./', import.meta.url);
@@ -99,12 +99,23 @@ const fautifs = servis.filter((f) => INTERDIT.test(readFileSync(new URL(f, ici),
 eq(fautifs, [], 'aucun fichier .js/.html de la racine ne porte le libelle interdit');
 ok(servis.includes('app.html') && servis.length > 50, 'la lecture a bien porte sur l app (' + servis.length + ' fichiers)');
 ok(!servis.includes('marque-tb.js'), 'marque-tb.js retire (plus aucun usage, ni UI ni routage ni API)');
-for (const [nom, symbole] of [['TokenizedBlock', 'TBLOCK'], ['TB-Gas', 'TBGAS']]) {
-  const r = planLaunchOL({ lanceur: '0x' + '11'.repeat(20), startTick: 196200, lpFee: 30000, salt: '0x' + '00'.repeat(32), nom, symbole });
-  ok(r.etat === 'OK', 'console OpenLaunch : plus de bloc de marque (' + nom + ')');
+// ⛔ 14:21 : le refus de marque de la console OpenLaunch (partenaire) est RESTAURE tel qu avant la
+//    branche — seul le libelle « Not official » du profil disparait. Le module doit etre identique au
+//    parent 7135acd : on le verifie par son comportement (refus) ET par son temoin (un nom libre passe).
+const olArgs = { lanceur: '0x' + '11'.repeat(20), startTick: 196200, lpFee: 30000, salt: '0x' + '00'.repeat(32) };
+for (const [nom, symbole] of [['TokenizedBlock', 'TBLOCK'], ['x', 'TBGAS'], ['x', 'TB']]) {
+  const r = planLaunchOL({ ...olArgs, nom, symbole });
+  ok(r.etat === 'REFUSE' && /belongs to TokenizedBlock/.test(r.pourquoi), 'console OpenLaunch : refus de marque restaure (' + nom + '/' + symbole + ')');
 }
+ok(planLaunchOL({ ...olArgs, nom: 'My Token', symbole: 'MYTKN' }).etat === 'OK', 'temoin negatif : un nom libre passe la console OpenLaunch');
 
 // ── 4. choix de marche : jamais un prix pire en silence ──
+// ⛔ Crosscheck Zero 1 : choisirMarche n est PAS encore une garantie -> elle ne doit etre appelee NULLE PART.
+const appelants = servis.filter((f) => f !== 'marche-ouvert.js' && /\bchoisirMarche\s*\(/.test(readFileSync(new URL(f, ici), 'utf8')));
+eq(appelants, [], 'choisirMarche : aucun appelant dans l app (no-op)');
+const srcMo = readFileSync(new URL('marche-ouvert.js', ici), 'utf8');
+ok(/\bchoisirMarche\s*\(/.test(srcMo), 'temoin positif : le detecteur voit bien la definition');
+ok(/N EST PAS ENCORE UNE GARANTIE/.test(srcMo) && /POOLS CANDIDATES/.test(srcMo), 'commentaire de tete : pas une garantie, doit prendre les pools candidates');
 ok(HOOK_MARCHE_OUVERT === null && MARCHE_OUVERT_ACTIF === false, 'non deploye, drapeau OFF');
 eq(choisirMarche({ devisEtranger: 100n, devisA6cf: 200n }).choix, 'ETRANGER', 'drapeau OFF : rien ne change');
 eq(choisirMarche({ devisEtranger: 100n, devisA6cf: 100n, actif: true }).choix, 'A6CF', 'egalite : pool TB');
