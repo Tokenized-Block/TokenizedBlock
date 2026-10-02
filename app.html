@@ -9924,7 +9924,7 @@ function ligneEchange(e, nom, sansFrais) {
   if (e.n > 1) return tete + ' · ' + e.n + (achat ? ' buys' : ' sells');
   const bouts = [];
   if (e.quantite) bouts.push(enTexte(lisible(e.quantite)) + (achat ? ' bought' : ' sold'));
-  if (e.eth && e.devise) bouts.push('for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise));
+  if (e.eth && e.devise) bouts.push('for ' + enTexte(lisible(e.eth)) + '&nbsp;' + enTexte(e.devise));
   let ligne = tete + (bouts.length ? ' · ' + bouts.join(' ') : '');
   if (bouts.length && e.fraisMarche && !sansFrais) ligne += ' · before this market\'s fee';
   return ligne;
@@ -10273,7 +10273,7 @@ function enfantsDuFil(e, cleG, nom) {
   /* ⛔ REVUE 13:32 (mobile) : « block⏎52,072,505 · tx » cassait la ligne ; le numero ne se repete plus d une entree a l autre */
   const bloc = (c) => 'block&nbsp;' + (Number.isFinite(c.bloc) ? c.bloc.toLocaleString('en-US') : '?');
   /* ⛔ l adresse du wallet de frais ne s affiche JAMAIS, meme abregee */
-  const adr = (a) => String(a || '').toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : enTexte(court(String(a || '?')));
+  const adr = (a) => String(a || '').toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : '<span style="white-space:nowrap">' + enTexte(court(String(a || '?'))) + '</span>';
   const items = e.enfants.slice(0, montres).map((c, i, tous) => {
     let t;
     if (c.type === 'NOTE') {
@@ -10434,7 +10434,7 @@ function peindreLive() {
            * inconnue, log illisible. Ce n est plus le cas general — c est l aveu d un cas precis. */
           : '↔ <b>' + nom + '</b> traded' + (e.n > 1 ? ' · ' + e.n + '×' : '');
     const lien = e.tx && e.n === 1 ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(e.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
-    const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut)
+    const plage = e.n > 1 && Number.isFinite(e.blocBas) && Number.isFinite(e.blocHaut) && e.blocBas !== e.blocHaut
       ? 'blocks ' + e.blocBas.toLocaleString('en-US') + '–' + e.blocHaut.toLocaleString('en-US')
       : 'block ' + (Number.isFinite(e.bloc) ? e.bloc.toLocaleString('en-US') : '?');
     /* tip 2358: unhooked ACHAT/VENTE → Launch hooked beside (fee capture); hooked/TBGAS → Buy/Sell */
@@ -10466,7 +10466,7 @@ function peindreLive() {
     const openHint = foreignCreate ? ''
       : depliable
         ? ' · <span class="filOpen">' + (deplie ? '▴ tap to hide' : '▾ tap to show ' + (e.n > 1 ? 'all ' + e.n : 'it')) + '</span>'
-          + ' · <a href="#" class="filOpen" data-fil-profil="' + enTexte(e.jeton) + '">profile ›</a>'
+          + ' · <a href="#" class="filOpen" data-fil-profil="' + enTexte(e.jeton) + '">profile&nbsp;›</a>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
