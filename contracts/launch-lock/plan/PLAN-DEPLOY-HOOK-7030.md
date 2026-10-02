@@ -23,7 +23,7 @@ Changes since the previous descriptor:
 | resulting hook | 0xB8Cf7fB000C8415523A9ab8Dc80bCade061DA4CC |
 | initcode hash | 0x1ae8c6986ea36c4e189fb508e879f0239b7442e11ee427a937e42f4d87c9e3c4 |
 | runtime | 22 968 bytes |
-| gas | inner CREATE2 on fork: 6 623 552 — ⚠️ a fresh eth_estimateGas on mainnet has NOT been run for this descriptor |
+| gas | eth_estimateGas on Base mainnet (read-only, 2026-10-02 ~22:50, from 0x…dEaD): 7 123 766 (inner CREATE2 on fork 6 623 552); eth_getCode at the target = 0x (address free) |
 | signer | any team deployer EOA with ~0.0001 ETH — never the fee sink |
 
 Fork proof (2026-10-02, Base mainnet fork, base-forge): full suite 89/89 PASS (88 + test_OFF_equals_V9_toTheWei
