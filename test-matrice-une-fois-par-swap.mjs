@@ -328,7 +328,7 @@ const MUTANTS = [
   ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },
   { nom: 'F1 hook tiers accepte (simple + multi)', edits: [
     ['echange.js', 'if (!hookAdmisPourBlock(marche.cle)) return', 'if (false) return'],
-    ['echange.js', '!hookAdmisPourBlock(x.cle) && !listePayeurs', 'false && !listePayeurs'],
+    ['echange.js', '!hookAdmisPourBlock(x.cle, sauts.map((y) => y && y.cle)) && !listePayeurs', 'false && !listePayeurs'],
   ], doitVoir: [/^SIMPLE .*\[inconnu\] : HOOK TIERS SUR BLOCK non refuse/, /\[.*inconnu.*\] : HOOK TIERS SUR BLOCK non refuse/] },
   { nom: 'franchissement : routeur V4 garde son frais', edits: [
     ['plan-franchissement.js', 'fraisDevisesOk, fraisRouteurAilleurs: true });', 'fraisDevisesOk });'],

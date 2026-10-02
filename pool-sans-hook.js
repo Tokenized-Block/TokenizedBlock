@@ -11,6 +11,7 @@ import { TBLOCK, TBGAS, HOOK_PREVU, deviseFraisHook, estNotreHook } from './toke
 import { REFERENT_O1_ACTIF, estHookO1Standard } from './referent-o1.js';
 import { estHookMarcheOuvert } from './marche-ouvert.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
+import { estNeDuRouteur, indexRouteurLu } from './index-routeur.js';
 
 const bas = (a) => String(a || '').toLowerCase();
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -29,9 +30,10 @@ export function estDeviseConnue(adr) {
  *  l appelant a lu le prix (`fraisDevisesOk`). ⛔ Un B20 (0xb2…) qui n est pas une devise connue reste un block MEME
  *  prixe : app.html met dans `fraisDevisesOk` les blocks lus avec prix et liquidite. Sans `fraisDevisesOk` : tout jeton
  *  inconnu est un block (fail-closed). */
-export function estBlockDeRoute(adr, fraisDevisesOk = null) {
+export function estBlockDeRoute(adr, fraisDevisesOk = null, cles = []) {
   const a = bas(adr);
-  return !pasUnBlockConnu(a) && (RE_B20.test(a) || !(fraisDevisesOk instanceof Set && fraisDevisesOk.has(a)));
+  /* ⛔ 2026-10-03 (Phil 00:20) : un B20 n est un block que s il est TB (classeBlock) ; un B20 d un autre launchpad, non. */
+  return !pasUnBlockConnu(a) && (estBlockTbClasse(a, cles) || (!RE_B20.test(a) && !(fraisDevisesOk instanceof Set && fraisDevisesOk.has(a))));
 }
 /* ⛔⛔ 2026-10-02 (Zero 1, R4 item 2) : « B20 » = 0xb2 SUIVI DE 20 ZEROS, pas le seul prefixe 0xb2 (70 pools V3/Aerodrome et
  *   192 V4 de jetons ordinaires 0xb2… etaient refusees a tort). Une devise ou une action CONNUE du registre (OUSD, HTZc, PFEc,
@@ -41,24 +43,25 @@ function pasUnBlockConnu(a) { return estDeviseConnue(a); }
 export function cleSansHook(cle) {
   return !!cle && /^0x0{40}$/i.test(String(cle.hooks || ZERO));
 }
-export function estBlockTb(adr, blocks = []) {
+export function estBlockTb(adr, blocks = [], cles = []) {
   const a = bas(adr);
   if (!/^0x[0-9a-f]{40}$/.test(a)) return false;
   if (BLOCKS_TB.has(a)) return true;
-  /* un block = un jeton B20 (0xb2…) ; un jeton exterieur (memecoin hors B20) n est pas concerne par la regle */
-  return a.startsWith('0xb2') && blocks.map(bas).includes(a) && !DEVISES.has(a);
+  /* un block = un block TB (classeBlock, 2026-10-03) echange par l appelant ; un B20 d un autre launchpad ou un memecoin
+   * hors B20 n est pas concerne par la regle */
+  return blocks.map(bas).includes(a) && estBlockTbClasse(a, cles);
 }
 export function formatOpenLaunch(cle) {
   return Number(cle.fee) === 30000 && Number(cle.tickSpacing) === 200;
 }
 /** Vrai = cette cle est INTERDITE au routage (pool sans hook avec un block TB dedans). */
-export function poolSansHookInterdite(cle, blocks = []) {
+export function poolSansHookInterdite(cle, blocks = [], cles = [cle]) {
   if (!cleSansHook(cle) || formatOpenLaunch(cle)) return false;
-  return estBlockTb(cle.currency0, blocks) || estBlockTb(cle.currency1, blocks);
+  return estBlockTb(cle.currency0, blocks, cles) || estBlockTb(cle.currency1, blocks, cles);
 }
 /** Le premier indice de cle interdite, ou -1. */
 export function indexPoolSansHookInterdite(cles, blocks = []) {
-  return (cles || []).findIndex((c) => poolSansHookInterdite(c, blocks));
+  return (cles || []).findIndex((c) => poolSansHookInterdite(c, blocks, cles || []));
 }
 
 /* ══ 2026-10-02 13:58 — DECISION DU FONDATEUR : PLUS AUCUNE ROUTE PAR TBLOCK ═════════════════════════════════════════
@@ -99,12 +102,11 @@ export function deviseFraisHookHorsListe(cle, sens, zeroForOne) {
  *     Meme classe que R4, et la regle du fondateur casse : la pool Aerodrome du block n a pas de hook TB. Refus,
  *     texte exact MESSAGE_PAS_ICI. Un block ici = TBLOCK/TBGAS, ou un B20 (0xb2…) qui n est pas une devise connue — son prix
  *     lu ne change rien (meme choix que estBlockDeRoute). Rend l indice du premier block parmi `noeuds`, ou -1. */
-export function estBlockAJonction(adr) {
-  const a = bas(adr);
-  return BLOCKS_TB.has(a) || (RE_B20.test(a) && !pasUnBlockConnu(a));
+export function estBlockAJonction(adr, cles = []) {
+  return estBlockTbClasse(adr, cles);
 }
-export function indexBlocAJonction(noeuds) {
-  return (Array.isArray(noeuds) ? noeuds : []).findIndex((t) => estBlockAJonction(t));
+export function indexBlocAJonction(noeuds, cles = []) {
+  return (Array.isArray(noeuds) ? noeuds : []).findIndex((t) => estBlockAJonction(t, cles));
 }
 
 /* ══ 2026-10-02 (C2, F1) — UN BLOCK SUR UNE POOL V4 A HOOK TIERS ═══════════════════════════════════════════════════════
@@ -115,11 +117,48 @@ export function indexBlocAJonction(noeuds) {
  *     (2) sans hook ET format OpenLaunch (3 % / 200) ;
  *     (3) le LaunchHook Standard d o1 avec REFERENT_O1_ACTIF (la part referrer a6cf, GO).
  *     Tout autre hook (o1 Tax, anciens o1, Clanker, Doppler, inconnu) -> refus avant toute cotation. Sans cle : rien a juger. */
-export function hookAdmisPourBlock(cle) {
+export function hookAdmisPourBlock(cle, cles = [cle]) {
   if (!cle) return true;
-  if (!estBlockAJonction(cle.currency0) && !estBlockAJonction(cle.currency1)) return true;
+  if (!estBlockAJonction(cle.currency0, cles) && !estBlockAJonction(cle.currency1, cles)) return true;
   const h = bas(cle.hooks || ZERO);
   if (estNotreHook(h) || estHookMarcheOuvert(h)) return true;
   if (h === ZERO) return formatOpenLaunch(cle);
   return REFERENT_O1_ACTIF === true && estHookO1Standard(h);
+}
+
+/* ══ 2026-10-03 (Phil 00:20, spec Claude 00:27) — QU EST-CE QU UN « BLOCK TB » POUR LE ROUTAGE ? ═════════════════════════
+ * ⛔⛔ Seuls les vrais blocks TB sont restreints (R4, sans-hook, hook tiers, jonction). Un jeton est un block TB si :
+ *     (a) il est ne du CreateRouter (index-routeur.js : graine + index servi, formule neDuRouteur du hook 7030) ;
+ *     (b) TBLOCK / TBGAS (BLOCKS_TB), ou un des blocks V1 de test (RNG, TUTU, OK, O ; TBGAS en est aussi) qui gardent leurs regles ;
+ *     (c) son marche lu est sur un de NOS hooks (estNotreHook) — une des `cles` passees, ou un marche deja vu par l app
+ *         (noterMarcheSurNotreHook). Couvre les anciens blocks nes de la factory.
+ *     Un B20 qu aucune regle ne classe : TIERS si l index est LU (echangeable comme sur 1bb12d6, frais routeur en ETH/USDC),
+ *     INCONNU sinon — traite en block (fail-closed), ce qui ne refuse que ses pools SANS hook TB.
+ * ⛔ CLASSEMENT DE ROUTAGE SEULEMENT : rien ici ne decide de l affichage (carte, fil, profils, listes).
+ * ⛔ Une devise connue (ETH, USDC, OUSD, actions…) n est jamais un block ; un jeton hors B20 ne l est que par (c). */
+const BLOCKS_V1_TEST = new Set(['0xb2000000000000000000004ff41cbd5ef8e49f14', '0xb20000000000000000000071224edc6587e362d2',
+  '0xb2000000000000000000006d6f9102e9e4b221e0', '0xb200000000000000000000a3f3e63b48ef57c481']);
+const marchesSurNosHooks = new Set();
+/** L app a lu un marche (cle V4) sur un de NOS hooks : ses devises non connues sont des blocks TB (regle (c)). */
+export function noterMarcheSurNotreHook(cle) {
+  if (!cle || !estNotreHook(cle.hooks)) return false;
+  for (const a of [bas(cle.currency0), bas(cle.currency1)]) if (/^0x[0-9a-f]{40}$/.test(a) && !DEVISES.has(a)) marchesSurNosHooks.add(a);
+  return true;
+}
+function surNotreHook(a, cles) {
+  return marchesSurNosHooks.has(a) || (Array.isArray(cles) ? cles : []).some((c) => !!c && estNotreHook(c.hooks)
+    && (bas(c.currency0) === a || bas(c.currency1) === a));
+}
+/** 'TB' | 'TIERS' | 'INCONNU' | null (devise connue, adresse invalide, ou jeton hors B20 sans marche sur nos hooks). */
+export function classeBlock(adr, cles = []) {
+  const a = bas(adr);
+  if (!/^0x[0-9a-f]{40}$/.test(a) || DEVISES.has(a)) return null;
+  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || estNeDuRouteur(a) || surNotreHook(a, cles)) return 'TB';
+  if (!RE_B20.test(a)) return null;
+  return indexRouteurLu() ? 'TIERS' : 'INCONNU';
+}
+/** Vrai = traiter ce jeton en block TB au routage (TB prouve, ou INCONNU : fail-closed). */
+export function estBlockTbClasse(adr, cles = []) {
+  const c = classeBlock(adr, cles);
+  return c === 'TB' || c === 'INCONNU';
 }

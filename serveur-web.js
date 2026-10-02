@@ -100,6 +100,7 @@ import { selecteur as selecteurSrv } from './keccak.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
+import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR } from './index-routeur.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
@@ -864,6 +865,50 @@ async function resoudreFace(token) {
    * sinon une minute de noeud sature condamnerait la face d un block pour toute la vie du process. */
   if (r.etat !== 'NON_LUE') facesLues.set(t, rep);
   return rep;
+}
+
+/* ══ 2026-10-03 — L INDEX DES BLOCKS NES DU CreateRouter (/api/blocks-routeur) ═══════════════════════════════════════════
+ * ⛔ Graine = les 7 createPaid de mainnet (adresse ET sel lus on-chain), qui couvre [PLANCHER_ROUTEUR, GRAINE_JUSQUA]. Le
+ *    serveur lit ensuite VERS L AVANT (logs B20Created -> tx -> to == CreateRouter + createPaid -> sel -> neDuRouteur), par
+ *    morceaux, et la plage n avance que sur une lecture sans trou. Chaque entree porte son sel : l app re-verifie la formule.
+ * ⛔ « couvertureComplete » = contigu depuis le plancher ; « tete » voyage avec la reponse : l app juge le retard elle-meme
+ *    (index-routeur.js, RETARD_MAX_INDEX). Une fenetre ratee est COMPTEE, jamais tue. Lecture seule, aucune signature. */
+const PAS_ROUTEUR = 2000;
+const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
+  tete: null, ratees: 0, lu: null };
+let routeurEnCours = null;
+async function etendreBlocksRouteur() {
+  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  if (!Number.isSafeInteger(tete)) return;
+  routeurEtat.tete = tete;
+  if (routeurEtat.jusqua >= tete) return;
+  const aBloc = Math.min(tete, routeurEtat.jusqua + PAS_ROUTEUR);
+  const r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
+  for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+  routeurEtat.ratees = r.fenetresRatees;
+  if (!r.fenetresRatees) routeurEtat.jusqua = aBloc;
+  routeurEtat.lu = new Date().toISOString();
+}
+function rattraperBlocksRouteur() {
+  if (routeurEnCours) return;
+  routeurEnCours = (async () => {
+    try {
+      for (let k = 0; k < 40; k += 1) {
+        await etendreBlocksRouteur();
+        if (routeurEtat.ratees || routeurEtat.tete === null || routeurEtat.tete - routeurEtat.jusqua <= 0) break;
+        await new Promise((ok) => setTimeout(ok, 1500));
+      }
+    } catch (e) { /* on reessaiera au prochain tour */ }
+    routeurEnCours = null;
+  })();
+}
+setInterval(() => { if (routeurEtat.lu !== null) rattraperBlocksRouteur(); }, 60000).unref?.();
+function blocksRouteurCorps() {
+  rattraperBlocksRouteur();
+  return JSON.stringify({ ok: true, lu: routeurEtat.lu, blocks: [...routeurEtat.blocks.values()],
+    depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua, tete: routeurEtat.tete, plancher: PLANCHER_ROUTEUR,
+    couvertureComplete: routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null,
+    fenetresRatees: routeurEtat.ratees });
 }
 
 /* ⛔⛔ « NOS BLOCKS », CALCULE ICI ET PAS DANS LA PAGE (Phil, 2026-09-20 : « faut expandre depuis le
@@ -1837,7 +1882,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'pool-sans-hook.js', 'multiplicateur-action.js', 'geste-envoi.js', 'frais-du-geste.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'pool-sans-hook.js', 'index-routeur.js', 'multiplicateur-action.js', 'geste-envoi.js', 'frais-du-geste.js',
   /* ⛔ AJOUTE LE 2026-09-26 — et c est `test-imports-servis` qui l a EXIGE, pas moi : un module
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
@@ -2480,6 +2525,13 @@ createServer((req, res) => {
         /* ⛔ UNE VEILLE QUI ECHOUE LE DIT. « 0 alerte » sur une lecture ratee endort. */
         res.end(JSON.stringify({ ok: false, complet: false, alertes: [], pourquoi: String(e && e.message || e).slice(0, 120) }));
       });
+    return;
+  }
+
+  /* ⛔ 2026-10-03 (Phil 00:20, spec Claude 00:27) : l index des blocks nes du CreateRouter (classement de ROUTAGE). */
+  if (chemin === '/api/blocks-routeur') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    res.end(blocksRouteurCorps());
     return;
   }
 

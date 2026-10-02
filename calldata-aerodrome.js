@@ -35,6 +35,8 @@
 
 /* ── adresses mesurees ─────────────────────────────────────────────────────────────────────── */
 /** SwapRouter des pools Aerodrome CL. ⛔ `factory()` verifie sur la chaine. */
+import { estDeviseConnue } from './pool-sans-hook.js';
+const WETH_SORTIE_FRAIS = '0x4200000000000000000000000000000000000006';
 export const ROUTEUR_AERODROME_CL = '0x698cb2b6dd822994581fea6ea4fc755d1363a92f';
 /** ⛔ La factory que ce routeur declare. Publiee ici pour qu une sonde puisse la RE-verifier, pas
  *  pour etre recopiee ailleurs. */
@@ -375,6 +377,12 @@ export const FRAIS_BPS_MAX_PRUDENT = 100n;
  */
 export function calldataExactInputAvecFrais({ sauts, recipient, amountIn, amountOutMinimum,
   deadline, maintenant = null, fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais } = {}) {
+  /* ⛔⛔ 2026-10-03 (Zero 1 F-c6) : le balayage preleve dans le jeton de SORTIE. a6cf n est paye qu en ETH (WETH), USDC ou
+   *   action appariee — jamais dans un block ni dans un jeton tiers. Garde de profondeur pour TOUS les rails CL. */
+  const sortieFrais = Array.isArray(sauts) && sauts.length ? String((sauts[sauts.length - 1] || {}).vers || '').toLowerCase() : '';
+  if (sortieFrais && !estDeviseConnue(sortieFrais) && sortieFrais !== WETH_SORTIE_FRAIS) {
+    return { etat: 'REFUSE', pourquoi: 'the fee would be taken in the output token, which is not ETH, USDC or a listed stock', refusFraisHorsDevise: true };
+  }
   const bps = (() => { try { return BigInt(fraisBps); } catch (_) { return -1n; } })();
   if (bps < 0n) return { etat: 'REFUSE', pourquoi: 'the interface fee must be a number of basis points' };
   if (bps > FRAIS_BPS_MAX_PRUDENT) {

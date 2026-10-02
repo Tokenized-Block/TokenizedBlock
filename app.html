@@ -3060,7 +3060,21 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
-import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock } from './pool-sans-hook.js';
+import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
+/* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
+ *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
+import { chargerIndexRouteur, indexRouteurIllisible, indexRouteurLu } from './index-routeur.js';
+let essaisIndexRouteur = 0;
+async function chargerIndexBlocksRouteur() {
+  try {
+    const j = await fetch('/api/blocks-routeur', { cache: 'no-store' }).then((x) => x.json());
+    chargerIndexRouteur(j);
+  } catch (e) { indexRouteurIllisible('index could not be read'); }
+  /* le serveur rattrape la tete apres son demarrage : on relit vite tant que l index n est pas LU (10 essais) */
+  if (!indexRouteurLu() && essaisIndexRouteur++ < 10) setTimeout(() => { void chargerIndexBlocksRouteur(); }, 20000);
+}
+void chargerIndexBlocksRouteur();
+setInterval(() => { void chargerIndexBlocksRouteur(); }, 300000);
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -8115,7 +8129,7 @@ async function enrichirMarcheSiDecouvert(adr, v) {
       if (Number.isSafeInteger(head) && poolm) {
         const de = Math.max(0, head - 50000);
         const d = await decouvrirPools({ rpc, poolManager: poolm, deBloc: de, aBloc: head, jetons: [adr], pause: 120 });
-        (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
+        (d.pools || new Map()).forEach((p, id) => { poolsLive.set(id, p); noterMarcheSurNotreHook(p && p.cle); });
         ext = poolDecouvertPour(adr);
       }
     } catch (_) { /* keep trying Dex path */ }
@@ -8127,6 +8141,7 @@ async function enrichirMarcheSiDecouvert(adr, v) {
       const dex = await lirePoolParDexScreener({ rpc, poolManager: poolm, jeton: adr });
       if (dex && dex.cle) {
         poolsLive.set(dex.poolId, dex);
+        noterMarcheSurNotreHook(dex.cle);
         ext = { ...dex, confiance: dex.confiance || confianceDe(dex.cle), _score: 150 };
       }
     } catch (_) { /* keep NON_TROUVEE */ }
@@ -9737,7 +9752,7 @@ async function lireLive(sens) {
     const deDec = sens === 'ancien' ? deBloc : decouverteJusqua === null ? Math.max(0, fin - DECOUVERTE_INITIALE) : decouverteJusqua + 1;
     if (deDec <= aBloc) {
       const d = await decouvrirPools({ rpc, poolManager: V.poolm, deBloc: deDec, aBloc, jetons: null, pause: 250 });
-      d.pools.forEach((p, id) => poolsLive.set(id, p));
+      d.pools.forEach((p, id) => { poolsLive.set(id, p); noterMarcheSurNotreHook(p && p.cle); });
       liveRatees += d.fenetresRatees.length;
       if (sens !== 'ancien' && !d.fenetresRatees.length) decouverteJusqua = aBloc;
     }
@@ -16848,7 +16863,7 @@ async function decouvrirPourTrending() {
     if (!Number.isSafeInteger(head)) { decouverteTrendingLancee = false; return; }
     const d = await decouvrirPools({ rpc, poolManager: V.poolm,
       deBloc: Math.max(0, head - DECOUVERTE_INITIALE), aBloc: head, jetons: null, pause: 250 });
-    (d.pools || new Map()).forEach((p, id) => poolsLive.set(id, p));
+    (d.pools || new Map()).forEach((p, id) => { poolsLive.set(id, p); noterMarcheSurNotreHook(p && p.cle); });
     /* ⛔ on ne repeint QUE si on a trouve : un repaint a vide ferait clignoter la liste sans rien
      *   changer, et ferait croire a un rafraichissement utile. */
     if (d.pools && d.pools.size) { try { peindreTrending(); } catch (_) { /* rien */ } }

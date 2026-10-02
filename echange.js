@@ -794,7 +794,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   Fail-closed, saut par saut, cote block par cote block. */
   const blocsRoute = [...new Set(sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))
     .map((a) => String(a || '').toLowerCase()))]
-    .filter((a) => estBlockDeRoute(a, fraisDevisesOk));
+    .filter((a) => estBlockDeRoute(a, fraisDevisesOk, sauts.map((x) => x && x.cle)));
   for (const x of sauts) {
     if (!(x && x.cle)) continue;
     for (const b of [x.cle.currency0, x.cle.currency1].map((a) => String(a || '').toLowerCase())) {
@@ -842,7 +842,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔⛔ 2026-10-02 (C2, F1) : meme regle saut par saut (apres les regles R4 et la garde marche ouvert, qui restent seules juges de leurs cas) — un block sur une pool a hook tiers -> refus avant la cotation. */
   /*   Un hook que l appelant passe comme PAYEUR (`hooksPaieurs`, ex. un V8-open liste) est un hook TB : admis. */
   const listePayeurs = new Set((Array.isArray(hooksPaieurs) ? hooksPaieurs : []).map((e) => String((e && e.hook) || e || '').toLowerCase()));
-  if (sauts.some((x) => x && x.cle && !cleSansHook(x.cle) && !hookAdmisPourBlock(x.cle) && !listePayeurs.has(String(x.cle.hooks || '').toLowerCase()))) {
+  if (sauts.some((x) => x && x.cle && !cleSansHook(x.cle) && !hookAdmisPourBlock(x.cle, sauts.map((y) => y && y.cle)) && !listePayeurs.has(String(x.cle.hooks || '').toLowerCase()))) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true, refusHookTiers: true };
   }
   /* ⛔⛔⛔ UNE FOIS PAR SWAP — DECISION DE RAKSHA, 2026-10-02 (et deja ecrite « definitive » le 2026-10-01

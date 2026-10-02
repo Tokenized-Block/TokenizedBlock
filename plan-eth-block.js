@@ -35,7 +35,7 @@ import { calldataExactInputCL, calldataExactInputAvecFrais, calldataApprove,
   ROUTEUR_AERODROME_CL, FRAIS_INTERFACE_BPS_CL, phraseDeRetenue } from './calldata-aerodrome.js';
 /** ⛔ Le wallet de frais, LU dans le depot (`frais-creation.js`) et pas recite — un test compare. */
 export { FEE_WALLET } from './frais-creation.js';
-import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { indexBlocAJonction, MESSAGE_PAS_ICI, estDeviseConnue } from './pool-sans-hook.js';
 
 /** WETH sur Base. ⛔ Lue dans le depot (`echange.js` / `prix-eth.js`), pas recitee — un test compare. */
 export const WETH_BASE = '0x4200000000000000000000000000000000000006';
@@ -382,7 +382,9 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
    *   le verifie aussi — deux gardes pour la meme propriete, parce qu un chemin qui ne chaine pas
    *   est refuse par la CHAINE avec une erreur illisible, loin de sa cause. */
   if (troisSauts) sauts.push({ de: action, vers: block, tickSpacing: Number(entier(poolBlock.tickSpacing)) });
-  const avecFrais = ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n;
+  /* ⛔⛔ F-c6 (Zero 1, 2026-10-03) : sweepTokenWithFee preleve dans la SORTIE. a6cf n est paye qu en ETH / USDC / action appariee,
+   *   jamais dans un block ni un jeton tiers : si la sortie (block au 3e saut) n est pas une devise connue, swap NU, sans frais. */
+  const avecFrais = ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n && estDeviseConnue(troisSauts ? block : action);
   const swap = avecFrais
     ? calldataExactInputAvecFrais({ sauts, recipient, deadline, amountIn: m,
       amountOutMinimum: minSortie, maintenant, fraisBps, beneficiaireFrais })

@@ -31,6 +31,7 @@ import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, calldataApprove } from './c
 /* ⛔ LA MEME PORTE QUE LES PUCES, importee et non recopiee : le frais et la puce doivent se decider
  *   sur le MEME jugement, sinon les deux seuils divergent au premier reglage. */
 import { porteDAchat, porteNotreFrais, glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
+import { estBlockAJonction, estDeviseConnue, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /** La factory des pools Uniswap v3 sur Base.
  * ⛔ LUE SUR LA CHAINE le 2026-09-27 : `factory()` sur trois pools `uniswap` de Base rend cette
@@ -116,6 +117,9 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
   if (!ADR.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
   if (!ADR.test(String(block || ''))) return { etat: 'REFUSE', pourquoi: 'a whole block address is required' };
   if (!ADR.test(String(pool || ''))) return { etat: 'REFUSE', pourquoi: 'a whole pool address is required' };
+  /* ⛔⛔ 2026-10-03 (Zero 1, F-c6, KO sur bd6b6ce) : un block TB ne termine jamais une jambe V3/CL sans hook TB — sur fork, l achat
+   *   USDC -> XC (CL 0x3dfdecc3…) versait a6cf EN XC (579 545 475 176 244 939 wei). Refus AVANT toute lecture de chaine. */
+  if (estBlockAJonction(block)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
   /* ⛔ LE DEADLINE VIENT D UN INSTANT FOURNI, jamais de l horloge de ce module : un test doit pouvoir
    *   le rejouer. `maintenantSec` absent ⇒ on refuse, plutot que d inventer une heure. */
   if (!Number.isInteger(maintenantSec) || maintenantSec <= 0) {
@@ -228,7 +232,11 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
     /* ⛔⛔ LE FRAIS PART D ICI, ET SEULEMENT SI LA PORTE DIT OUI. Aucun defaut dans le module pur :
      *     c est l appelant qui nomme le beneficiaire, pour qu une retenue ne puisse jamais
      *     s appliquer sans que quelqu un l ait decidee. 0,1 % — voir FRAIS_INTERFACE_BPS_CL. */
-    beneficiaireFrais: (famille !== 'cl' || porteNotreFrais(porteFrais)) ? FEE_WALLET : null,
+    /* ⛔⛔ 2026-10-03 : a6cf n est paye qu en ETH / USDC / action appariee. Sur Aerodrome le frais part en SORTIE
+     *   (sweepTokenWithFee) : il n est donc pris que si la sortie est une devise connue (ex. TSLAc). Un jeton tiers en
+     *   sortie : aucun frais — le routeur CL n a ni Permit2 ni `pull` (bytecode lu), un frais sur l ENTREE USDC est
+     *   impossible en une transaction. Sur Uniswap v3 le frais est deja sur l ENTREE (plan-usdc-block.js). */
+    beneficiaireFrais: (famille !== 'cl' || (porteNotreFrais(porteFrais) && estDeviseConnue(block))) ? FEE_WALLET : null,
     block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc, toleranceBps,
     recipient: compte, deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), devise,
   });

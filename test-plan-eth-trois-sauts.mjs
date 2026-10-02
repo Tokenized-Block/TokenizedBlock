@@ -171,18 +171,23 @@ cas('⛔⛔ UNE POOL DE BLOCK NON LUE EST REFUSEE, JAMAIS DEVINEE', () => {
   assert.equal(p.etat, 'REFUSE', 'une pool de block sans block a ete ignoree au lieu d etre refusee');
 });
 
-cas('⛔⛔ LE FRAIS DE 0,1 % SURVIT AU TROISIEME SAUT', () => {
-  /* ⛔⛔ C est la raison d etre de ce chemin : le montage `multicall([exactInput, sweepTokenWithFee])`
-   *     doit porter jusqu au bout. Un troisieme saut qui ferait retomber sur le swap NU nous
-   *     ferait servir du volume gratuitement. */
+cas('⛔⛔ F-c6 : AU TROISIEME SAUT LA SORTIE EST UN BLOCK — a6cf N EST PAS PAYE DANS LE BLOCK', () => {
+  /* ⛔⛔ 2026-10-03 (Zero 1, F-c6) : sweepTokenWithFee preleve dans la SORTIE. a6cf n est paye qu en ETH / USDC / action
+   *     appariee, jamais dans un block ni un jeton tiers. Le 3e saut rend TE (pas une devise) : swap NU, sans frais.
+   *     (Avant R6 ce cas exigeait le frais dans le block.) */
   const avec = planEthVersAction({ ...troisSauts, beneficiaireFrais: FEE_WALLET });
   assert.equal(avec.etat, 'PRET', avec.pourquoi);
-  assert.ok(avec.appels[0].data.toLowerCase().startsWith('0xac9650d8'),
-    'le calldata a trois sauts n est pas un `multicall` : le frais ne peut pas etre preleve');
-  assert.ok(avec.appels[0].data.toLowerCase().includes('e0e189a0'),
-    '`sweepTokenWithFee` est absent du multicall a trois sauts');
-  assert.ok(avec.appels[0].data.toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase()),
-    'le wallet de frais n est pas dans le calldata');
+  const d = avec.appels[0].data.toLowerCase();
+  assert.ok(!d.includes('e0e189a0'), '`sweepTokenWithFee` preleve dans le block au 3e saut');
+  assert.ok(!d.includes(FEE_WALLET.slice(2).toLowerCase()), 'le wallet de frais est dans le calldata d un achat de block');
+  assert.equal(avec.beneficiaireFrais, null);
+  assert.equal(avec.fraisBps, 0);
+  /* ⛔ ET A DEUX SAUTS (sortie = action appariee MUc) LE FRAIS RESTE : multicall + sweepTokenWithFee vers a6cf. */
+  const deux = planEthVersAction({ ...deuxSauts, beneficiaireFrais: FEE_WALLET });
+  assert.equal(deux.etat, 'PRET', deux.pourquoi);
+  const d2 = deux.appels[0].data.toLowerCase();
+  assert.ok(d2.startsWith('0xac9650d8') && d2.includes('e0e189a0') && d2.includes(FEE_WALLET.slice(2).toLowerCase()),
+    'le frais a6cf a disparu sur l action appariee');
   /* ⛔ SANS BENEFICIAIRE, PAS DE MONTAGE — un frais qui s applique « par defaut » est un frais cache. */
   const sans = planEthVersAction(troisSauts);
   assert.ok(!sans.appels[0].data.toLowerCase().startsWith('0xac9650d8'),
@@ -197,6 +202,6 @@ cas('⛔ LA VALEUR PART SUR L APPEL, ET IL N Y EN A QU UN', () => {
 
 console.log('✓ test-plan-eth-trois-sauts : ' + n + ' cas');
 console.log('   WETH -> USDC -> action -> block en UNE transaction, minimum sur la sortie FINALE,');
-console.log('   pivot choisi sur ce que le visiteur RECOIT, et les 0,1 % survivent au 3e saut.');
+console.log('   pivot choisi sur ce que le visiteur RECOIT, 0,1 % sur l action appariee, jamais dans le block (F-c6).');
 console.log('   ⚠️ NE PROUVE PAS qu un achat aboutisse : le prix spot ignore la profondeur, et');
 console.log('   TROIS sauts donnent TROIS occasions d echouer pour un seul clic.');

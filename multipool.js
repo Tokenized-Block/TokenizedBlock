@@ -369,14 +369,17 @@ export function noeudsJonction(chemin) {
   }
   return out;
 }
-export function blocAUneJonction(chemin) { return indexBlocAJonction(noeudsJonction(chemin)) >= 0; }
+/* ⛔ 2026-10-03 : le contexte (cles V4 du chemin) sert a la regle (c) de classeBlock — un block sur un de nos hooks est TB. */
+const clesDu = (chemin) => (Array.isArray(chemin) ? chemin : []).map((s) => s && s.e && s.e.cle).filter(Boolean);
+export function blocAUneJonction(chemin) { return indexBlocAJonction(noeudsJonction(chemin), clesDu(chemin)) >= 0; }
 /* ⛔⛔ 2026-10-02 (verdict C2) : un saut qui touche un block TB (debut, fin ou milieu) sur une pool SANS hook TB — Uniswap V3,
  *   Aerodrome CL, ou V4 sans hook hors format OpenLaunch (3 % / 200, seule exception, comme pool-sans-hook.js). */
 /* ⛔ 2026-10-02 (C2, F1) : sur V4, un hook TIERS avec un block est refuse aussi (hookAdmisPourBlock) — sauf un hook TB que
  *   l appelant NOMME facturant (`hooksAdmis`, meme liste que `hooksFacturants` : V9… le jour de son adresse). */
 export function blocSurPoolSansHook(chemin, hooksAdmis = null) {
-  const tiers = (c) => !hookAdmisPourBlock(c) && !(hooksAdmis instanceof Set && hooksAdmis.has(bas(c && c.hooks)));
-  return (Array.isArray(chemin) ? chemin : []).some((s) => !!(s && s.e) && (estBlockAJonction(s.de) || estBlockAJonction(s.vers))
+  const ctx = clesDu(chemin);
+  const tiers = (c) => !hookAdmisPourBlock(c, ctx) && !(hooksAdmis instanceof Set && hooksAdmis.has(bas(c && c.hooks)));
+  return (Array.isArray(chemin) ? chemin : []).some((s) => !!(s && s.e) && (estBlockAJonction(s.de, ctx) || estBlockAJonction(s.vers, ctx))
     && (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle)) || tiers(s.e.cle)));
 }
 /* ⛔⛔ 2026-10-02 (C2) : un block AU MILIEU de deux sauts V4 (R4) — meme definition que planEchangeMultiSauts
@@ -385,7 +388,7 @@ export function blocMilieuV4(chemin, admises = null) {
   for (let i = 1; i < (Array.isArray(chemin) ? chemin.length : 0); i += 1) {
     const a = chemin[i - 1] && chemin[i - 1].e, b = chemin[i] && chemin[i].e;
     if (a && b && a.venue === 'uniswap-v4' && b.venue === 'uniswap-v4'
-      && estBlockDeRoute(noeud(chemin[i].de), admises instanceof Set ? admises : null)) return true;
+      && estBlockDeRoute(noeud(chemin[i].de), admises instanceof Set ? admises : null, clesDu(chemin))) return true;
   }
   return false;
 }
