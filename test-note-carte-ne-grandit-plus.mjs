@@ -19,14 +19,30 @@ let n = 0;
 const cas = (t, f) => { n += 1; try { f(); console.log('  ok  ' + t); } catch (e) { console.error('✗ ' + t); throw e; } };
 const nu = sansCommentaires(readFileSync(new URL('./app.html', import.meta.url), 'utf8'), { minRetire: 5000 });
 
+/* ⛔⛔⛔ CE TEST ETAIT ROUGE SUR WINDOWS — « noteCarteSansPasse introuvable » — alors que la
+ *      fonction EST dans `app.html` (deux occurrences, dans ta version comme dans la mienne).
+ *      La cause : `indexOf('\n}\n')` sur un fichier que git sort en **CRLF**. Le texte reel est
+ *      `\r\n}\r\n`, le motif ne matche jamais, `fF` vaut -1, et le test accuse le CODE.
+ *      ⇒ TROISIEME occurrence du meme defaut ce soir, chez DEUX agents differents (Zero 1 l avait
+ *        deux fois dans `test-e0-devises-v8.mjs`). Ce n est plus une etourderie, c est systemique —
+ *        d ou `test-tests-portables.mjs`, qui refuse desormais ce motif dans tout le depot.
+ *      ⛔ ET LE PIRE EST LE LIBELLE : « introuvable » se lit comme un defaut du code. Quelqu un
+ *        pouvait supprimer une fonction qui marche pour faire taire un test casse.
+ * ⛔ La fin de ligne est une propriete du CHECKOUT, jamais du depot. */
 const dF = nu.indexOf('function noteCarteSansPasse(');
-const fF = nu.indexOf('\n}\n', dF);
+const mF = dF < 0 ? null : /\r?\n\}\r?\n/.exec(nu.slice(dF));
+const fF = mF ? dF + mF.index : -1;
 assert.ok(dF > 0 && fF > dF, 'noteCarteSansPasse introuvable');
-const noteCarteSansPasse = new Function(nu.slice(dF, fF + 2) + '\nreturn noteCarteSansPasse;')();
+const noteCarteSansPasse = new Function(
+  nu.slice(dF, fF + mF[0].indexOf('}') + 1) + '\nreturn noteCarteSansPasse;')();
 
 const dL = nu.indexOf('async function lireLaVie(');
 const dM = nu.indexOf('n.textContent = ', dL);
-const fM = nu.indexOf(';\n}', dM);
+/* ⛔ SECONDE ANCRE, MEME CAUSE : `';\n}'` sur un fichier CRLF ne matche jamais. Trouvee seulement
+ *   apres avoir repare la premiere — le test est passe de « introuvable » a « phrase de fin de
+ *   passe introuvable », deux symptomes d un seul defaut. Un fichier peut en porter plusieurs. */
+const mM = /;\r?\n\}/.exec(nu.slice(dM));
+const fM = mM ? dM + mM.index : -1;
 assert.ok(dL > 0 && dM > dL && fM > dM, 'phrase de fin de passe introuvable');
 const phrase = nu.slice(dM + 'n.textContent = '.length, fM);
 const ecrire = new Function('n', 'cible', 'lot', 'lus', 'faits', 'surLaCarte', 'avecMarche', 'nonLus', 'noteCarteSansPasse',

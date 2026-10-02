@@ -15572,9 +15572,32 @@ function montrerFundWalletCourt() {
  * No oracle required. Exact shortfall + Fund wallet CTA if short.
  * Returns { ok, solde, besoin, frais, seed, gas, pourquoi } — never «Could not read the price».
  */
-async function preflightInstantBirthEthFixe({ e, seedWei = null } = {}) {
+async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null } = {}) {
   const gasBuf = 500000000000000n; /* ~0.0005 ETH Create+Launch headroom */
-  const frais = FRAIS_OUVERTURE_WEI;
+  /* ⛔⛔⛔ LE FRAIS VIENT DE L APPELANT QUAND IL LE CONNAIT — ET SANS CA, UN REPLI DELIBERE DU CODE
+   *      NE POUVAIT JAMAIS S APPLIQUER. `creerBlock` porte depuis longtemps ce geste (tip 2356) :
+   *      « If wallet cannot cover the 0.001 ETH fee but can cover floor + gas, charge the floor ».
+   *      Il abaisse donc `fraisWei` a `CREATE_FEE_WEI_FLOOR` (0,0003) et le DIT a l ecran.
+   *      Puis ce preflight tournait JUSTE APRES avec `FRAIS_OUVERTURE_WEI` (0,001) EN DUR, ignorait
+   *      l abaissement, et refusait. Le repli etait defait par la garde qui le suivait.
+   *      ⇒ Mesure du 2026-10-01, en lisant les deux formules :
+   *            le bouton s active des                     0,000550 ETH
+   *            ce preflight exigeait                      0,001500 (seed 0) / 0,001800 (seed plancher)
+   *        Soit une fenetre de **0,00055 a 0,0015 ETH** ou l app annonce « using the minimum, so fee
+   *        still get paid » puis refuse. C est le profil exact d un nouveau venu qui finance son
+   *        wallet au minimum.
+   *      ⛔ ET C EST « MODULE CORRECT MAIS INATTEIGNABLE » : le repli est juste, deliberement ecrit,
+   *        commente, et il n a JAMAIS pu s executer jusqu au bout. Rien ne levait d erreur.
+   *
+   * ⛔ JE M ETAIS TROMPE D ABORD, ET JE LE LAISSE ECRIT : j avais conclu que le seuil du bouton
+   *   (`CREATE_FEE_WEI_FLOOR + gaz`) etait une base « 3,3x trop petite ». FAUX — il est COHERENT
+   *   avec ce repli. C est le preflight qui ignorait le repli, pas le bouton qui se trompait de base.
+   *   Decision de Phil (2026-10-02) : « le repli doit marcher ».
+   *
+   * ⛔ `null` = « l appelant ne sait pas » et retombe sur le frais plein. Un appelant qui CONNAIT le
+   *   frais effectif le passe. On ne devine jamais a la baisse : exiger moins que le reel ferait
+   *   echouer la transaction APRES la signature, ce qui est pire qu un refus avant. */
+  const frais = fraisWei === null || fraisWei === undefined ? FRAIS_OUVERTURE_WEI : BigInt(fraisWei);
   let seed = seedWei != null ? BigInt(seedWei) : null;
   if (seed == null) {
     try { seed = await preparerQuoteEthDefaut(true); } catch (_) { seed = null; }
@@ -16611,6 +16634,16 @@ async function creerBlock() {
   const usd = fraisCreationUsd(CHAINE);
   let creationEnCoursPayante = false;
   let fraisWei = null;
+  /* ⛔⛔⛔ `null` TANT QUE LE REPLI DU TIP 2356 N A PAS TIRE, ET C EST LA PRECAUTION QUI COMPTE.
+   *      On ne transmet un frais abaisse au preflight QUE dans le cas exact ou le code a decide de
+   *      facturer le plancher. Partout ailleurs il garde `FRAIS_OUVERTURE_WEI`.
+   *      ⛔ POURQUOI PAS `fraisWeiCalcule` : c est le frais derive du DOLLAR, il bouge avec le prix
+   *        de l ETH, et ce preflight s appelle `...EthFixe`. Lui passer ce chiffre pourrait exiger
+   *        MOINS que ce que la transaction envoie — et un refus APRES la signature est pire qu un
+   *        refus avant. Exiger trop est reparable ; exiger trop peu se paie en gas perdu.
+   *      ⇒ On ne baisse l exigence que la ou quelqu un a ecrit, en toutes lettres, qu il facture
+   *        le plancher. */
+  let fraisReplieAuPlancher = null;
   if (usd > 0) {
     e.className = 'note';
     e.textContent = 'Reading ETH/USD from Uniswap pools and your ETH balance…';
@@ -16639,6 +16672,10 @@ async function creerBlock() {
       if (s >= besoinFloor) {
         fraisWei = CREATE_FEE_WEI_FLOOR;
         fraisWeiCalcule = fraisWei;
+        /* ⛔ ON LE MARQUE ICI, A L ENDROIT EXACT OU LA DECISION EST PRISE. Le preflight qui suit
+         *   lisait `FRAIS_OUVERTURE_WEI` en dur et defaisait ce repli en silence : il annoncait
+         *   « using the minimum ... so fee still get paid », puis refusait pour « short by ». */
+        fraisReplieAuPlancher = CREATE_FEE_WEI_FLOOR;
         e.className = 'note';
         e.textContent = 'Balance below ≈ $' + usd + ' — using the minimum '
           + ethLisible(fraisWei) + ' ETH so fee still get paid.';
@@ -16680,7 +16717,16 @@ async function creerBlock() {
      *   ⛔ On passe `0n` EXPLICITEMENT, et non `null` : la nuance est justement ce que le preflight
      *     vient d apprendre a distinguer. */
     const sansSeed = !!(paireChoisie && paireChoisie.type === 'ACTION');
-    const pf = await preflightInstantBirthEthFixe({ e, ...(sansSeed ? { seedWei: 0n } : {}) });
+    /* ⛔⛔⛔ ON PASSE LE FRAIS EFFECTIF, celui que le repli du tip 2356 vient peut-etre d abaisser
+     *      a `CREATE_FEE_WEI_FLOOR` quelques lignes plus haut. Sans ca, le preflight repartait de
+     *      `FRAIS_OUVERTURE_WEI` en dur et REFUSAIT la creation que l app venait d annoncer
+     *      possible — « using the minimum ... so fee still get paid », puis « short by ». Le repli
+     *      etait ecrit, commente, juste, et defait par la garde suivante.
+     *   ⛔ `fraisWeiCalcule` et non `fraisWei` : c est la variable que le repli met a jour ET que
+     *     l ecran affiche. Prendre l autre ferait diverger ce qu on exige de ce qu on annonce —
+     *     exactement le defaut qu on repare. */
+    const pf = await preflightInstantBirthEthFixe({ e, fraisWei: fraisReplieAuPlancher,
+      ...(sansSeed ? { seedWei: 0n } : {}) });
     if (!pf.ok) { forcerCreateRouterIb = false; return; }
   }
   creationEnCours = true;
