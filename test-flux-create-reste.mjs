@@ -99,7 +99,10 @@ v('⛔ UN ECHEC NE LAISSE PAS L ECRAN FIGE', () => {
   assert.ok(va.length > 200 && va.length < 2500, 'extraction de vieAutoArreter suspecte (' + va.length + ')');
   assert.match(va, /miroirVieDansCreate/,
     "l echec ne dit plus rien dans Create : l utilisateur attendrait devant un texte de succes");
-  assert.match(va, /not alive yet|stopped at step/i,
+  /* 2026-10-02 (fix-2) : la phrase vit dans texteArretVie (dit si le frais createPaid a deja ete paye) ; vieAutoArreter l appelle. */
+  const ta = src.indexOf('function texteArretVie(');
+  assert.ok(ta > 0 && /texteArretVie\(/.test(va), 'texteArretVie absent ou non appele par vieAutoArreter');
+  assert.match(src.slice(ta, ta + 900), /not alive yet|stopped at step/i,
     "le message d echec ne dit plus que le block n est pas vivant");
 });
 

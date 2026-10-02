@@ -12597,6 +12597,17 @@ let etapeVieCourante = 0;
 /* ⛔ Vrai UNIQUEMENT pendant un parcours lance depuis l onglet Create. Il commande le miroir de
  *   progression et la navigation de fin : hors de ce cas, on ne touche ni a Create ni a l onglet. */
 let miroirVieDansCreate = false;
+/* le block dont la mise en vie est refletee dans Create : `lancementLien` est consomme en route (null a l arret) */
+let blockMiroirVie = null;
+/** Texte d arret de la mise en vie. `prepaye` = le paiement createPaid deja fait pour CE block (ou null). */
+function texteArretVie(etapeN, prepaye, detail) {
+  const d = detail && !/^Opening your wallet/i.test(detail) ? ' — ' + String(detail).slice(0, 180) : '.';
+  if (prepaye && prepaye.wei && BigInt(prepaye.wei) > 0n) {
+    return 'It stopped at step ' + etapeN + ' and it is not alive yet. Your ' + ethLisible(BigInt(prepaye.wei))
+      + ' ETH Create fee was paid; you will not pay it again. Finish later from My blocks, or below' + d;
+  }
+  return 'It stopped at step ' + etapeN + ' and it is not alive yet. Nothing is lost' + d;
+}
 function vieAutoArreter(reussi) {
   const atteinte = etapeVieCourante;
   vieAuto = false;
@@ -12621,9 +12632,9 @@ function vieAutoArreter(reussi) {
          *     l envoyer le chercher — « ouvre son profil pour voir pourquoi » demandait une
          *     navigation pour lire une phrase qu on avait deja sous la main. */
         const detail = ($('#plEtat') && $('#plEtat').textContent || '').trim();
-        c.textContent = 'It stopped at step ' + Math.min(4, atteinte) + ' and it is not alive yet. '
-          + 'Nothing is lost'
-          + (detail && !/^Opening your wallet/i.test(detail) ? ' — ' + detail.slice(0, 180) : '.');
+        /* ⛔⛔ 2026-10-02 (Zero 1, live 52d0566) : apres createPaid, « Nothing is lost » etait FAUX — 0,0007 ETH sont
+         *     partis, la pool non. On dit ce qui a ete paye, qu on ne le redemandera pas, et ou finir. */
+        c.textContent = texteArretVie(Math.min(4, atteinte), prepayePour(blockMiroirVie || lancementLien || ''), detail);
         /* ⛔⛔ ET UN BOUTON POUR REPRENDRE, SUR PLACE. Sans lui, la seule issue etait d aller ouvrir
          *     le profil : une etape de plus au moment precis ou quelqu un vient d echouer, donc le
          *     moment ou il abandonne. Le parcours est deja mesure — `cree` = 6, `vivant` = 2 —, et
@@ -12632,16 +12643,18 @@ function vieAutoArreter(reussi) {
          *     `vieAuto` et rappelle `calculerLancement()`, exactement ce que fait le profil. */
         try {
           c.querySelectorAll('[data-reprendre-vie]').forEach((b) => b.remove());
-          const adrReprise = lancementLien || null;
+          const adrReprise = blockMiroirVie || lancementLien || null;
           if (adrReprise && typeof calculerLancement === 'function') {
             const b = document.createElement('button');
             b.type = 'button'; b.className = 'bouton sec'; b.setAttribute('data-reprendre-vie', '1');
             b.style.marginTop = '8px';
-            b.textContent = 'Try step ' + Math.min(4, atteinte) + ' again';
+            b.textContent = prepayePour(adrReprise) ? 'Finish bringing it to life (fee already paid)' : 'Try step ' + Math.min(4, atteinte) + ' again';
             b.addEventListener('click', () => {
               b.disabled = true;
               vieAuto = true;
               miroirVieDansCreate = true;
+              /* reprendre le MEME block : le lien est rearme, le prepaye de ce block evite de repayer createPaid */
+              lancementLien = String(adrReprise).toLowerCase();
               void calculerLancement();
             });
             c.appendChild(document.createElement('br'));
@@ -17641,6 +17654,7 @@ async function creerBlock() {
         const goLaunch = () => {
           try {
             lancementLien = String(adresseCreee).toLowerCase();
+            blockMiroirVie = String(adresseCreee).toLowerCase();
             /* ⛔⛔ ON RESTE DANS CREATE. Mesure de production : `cree` = 6, `vivant` = 2 — deux
              *     blocks crees sur trois ne prennent jamais vie. Phil decrit le symptome sans
              *     avoir vu les compteurs : « il t emene au profil […] et l user est perdu car il
