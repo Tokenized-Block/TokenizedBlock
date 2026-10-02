@@ -57,8 +57,13 @@ ok('3d. a6cf est nomme dans le calldata, une seule fois', r.data.split(FEE_WALLE
 ok('3e. une approbation ERC-20 du montant exact, pas de msg.value', r.approbation && r.approbation.montant === 10n ** 18n && r.value === '0x0');
 const forcee = construireRoute({ ...base, chemin: chBA, fraisIndice: 0 });
 ok('3f. TEMOIN NEGATIF : forcer le frais au noeud 0 (BLUEPILL, un block) est REFUSE', forcee.etat === 'REFUSE' && /not ETH, USDC/.test(forcee.pourquoi), forcee.pourquoi);
-const tb = construireRoute({ ...base, chemin: [{ de: TBGAS, vers: ETH, e: G[6] }], fraisIndice: 0 });
+/* 3g : la regle « jamais de frais en block » est tenue sur une pool block NON facturee par son hook ; sur la pool V8 (G[6]),
+ *   le hook facture la jambe lui-meme : le routeur ne preleve RIEN (section 6), donc rien non plus en TBGAS. */
+const gTbNonFacture = { ...G[6], cle: { ...G[6].cle, hooks: '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc' } };
+const tb = construireRoute({ ...base, chemin: [{ de: TBGAS, vers: ETH, e: gTbNonFacture }], fraisIndice: 0 });
 ok('3g. TEMOIN NEGATIF : frais en TBGAS refuse', tb.etat === 'REFUSE');
+const tbV8 = construireRoute({ ...base, chemin: [{ de: TBGAS, vers: ETH, e: G[6] }], fraisIndice: 0 });
+ok('3g-bis. pool V8 (hook facturant) : aucun frais routeur, donc aucun en TBGAS', tbV8.etat === 'PRET' && !tbV8.commandes.includes(CMD.PAY_PORTION) && tbV8.fraisDevise === null, tbV8.commandes && tbV8.commandes.join(','));
 ok('3h. a6cf comme swapper refuse', construireRoute({ ...base, destinataire: FEE_WALLET, chemin: chBA, fraisIndice: 2 }).etat === 'REFUSE');
 ok('3i. minimum nul refuse', construireRoute({ ...base, minSortie: 0n, chemin: chBA, fraisIndice: 2 }).etat === 'REFUSE');
 const eth = construireRoute({ ...base, chemin: [{ de: ETH, vers: TOSHI, e: G[5] }], fraisIndice: 0 });
@@ -121,6 +126,58 @@ ok('5e. TOSHI et cbBTC ne sont pas des devises de frais (ni action ni B20 devise
   ok('pool TB 5 % admise', areteValide(tb5) === true);
   ok('frais dynamique V4 (0x800000) admis', areteValide(dyn) === true);
   ok('aucun chemin ne passe par une pool piege', cc([piege], Z, T).length === 0);
+}
+/* ══ 6. UN SEUL FRAIS PAR JAMBE + REGLEMENT APRES LE SWAP (fondateur 2026-10-02 11:06, Zero 1) ══ */
+console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
+{
+  const mp = await import('./multipool.js');
+  const { HOOKS_FACTURANTS, routeFactureeParHook, unFraisParJambe, ensembleHooksFacturants, OPEN_DELTA } = mp;
+  /* les actions V4 a l interieur d un V4_SWAP : mot(0x40) | mot(off) | longueur | codes */
+  const actionsV4 = (h) => { const L = Number(BigInt('0x' + h.slice(128, 192))); return h.slice(192, 192 + 2 * L).match(/../g).join(','); };
+  const V9 = '0x' + '9'.repeat(36) + '24cc'; /* un hook V9 / 24 h passe par l appelant (adresse de test) */
+  const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c', BLOC = '0xb2000000000000000000000000000000000b10c0';
+  const jambeV9 = v4(NVDA < BLOC ? NVDA : BLOC, NVDA < BLOC ? BLOC : NVDA, 0, 200, V9);
+  const adm9 = new Set([...ADMISES, NVDA]);
+  const vente = [{ de: BLOC, vers: NVDA, e: jambeV9 }];
+  ok('6a. V8 est dans la liste fermee des hooks facturants', HOOKS_FACTURANTS.includes('0x5926abdabf5d0006ee960a8270f3e124e5a764cc'));
+  ok('6b. un hook inconnu n est PAS facturant tant que l appelant ne le nomme pas', !routeFactureeParHook(vente) && routeFactureeParHook(vente, ensembleHooksFacturants([V9])));
+  /* sans le nommer : le routeur preleve (au noeud NVDAc, 9 bps) ; en le nommant : RIEN */
+  const sansNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1 });
+  const avecNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9] });
+  ok('6c. TEMOIN : hook non nomme => 1 PAY_PORTION (la double facturation serait la)', sansNom.commandes.filter((c) => c === CMD.PAY_PORTION).length === 1, sansNom.commandes.join(','));
+  ok('6d. hook facturant nomme => 0 PAY_PORTION, 0 part : seul le hook facture la jambe', avecNom.etat === 'PRET' && !avecNom.commandes.includes(CMD.PAY_PORTION) && !avecNom.commandes.includes(CMD.TRANSFER) && avecNom.fraisParHook === true, avecNom.commandes.join(','));
+  ok('6e. a6cf n apparait nulle part dans le calldata du routeur (le hook paie a6cf lui-meme)', !avecNom.data.includes(FEE_WALLET.slice(2)));
+  /* 0,18 % IMPOSSIBLE : toute tentative d ajouter une part routeur sur une jambe facturee est REFUSEE */
+  const double = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9], partsExactes: [{ qui: USER, montant: 1n }], bpsA6cf: 7n });
+  ok('6f. TEMOIN : part exacte (split) sur une jambe facturee => REFUSE (0,18 % impossible)', double.etat === 'REFUSE' && /twice/.test(double.pourquoi), double.pourquoi);
+  const double2 = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9], partsFrais: [{ qui: FEE_WALLET, bps: 9n }, { qui: USER, bps: 9n }] });
+  ok('6g. TEMOIN : deux parts en bips sur une jambe facturee => REFUSE', double2.etat === 'REFUSE', double2.pourquoi);
+  /* la garde avant envoi : 9 bps routeur + hook facturant => NON ; route facturee sans PAY_PORTION => OUI */
+  ok('6h. garde unFraisParJambe : route V9 + PAY_PORTION => false (0,18 %)', unFraisParJambe(sansNom, vente, ensembleHooksFacturants([V9])) === false);
+  ok('6i. garde unFraisParJambe : route V9 sans PAY_PORTION => true ; route sans hook avec 1 PAY_PORTION => true', unFraisParJambe(avecNom, vente, ensembleHooksFacturants([V9])) && unFraisParJambe(r, chBA));
+  /* le total d une jambe facturee : celui du hook SEUL. 0,10 % (700 + 300 pips) sur q = 1e8 : 100000, jamais 190000 */
+  const q8 = 10n ** 8n, hookSeul = (q8 * 700n) / 1000000n + (q8 * 300n) / 1000000n;
+  const routeur = avecNom.commandes.includes(CMD.PAY_PORTION) ? fraisSur(q8) : 0n;
+  ok('6j. 1 NVDAc : hook 70000 + 30000 = 100000 unites, routeur 0 => total 100000 (0,10 %), pas 190000', hookSeul + routeur === 100000n, String(hookSeul + routeur));
+  /* le devis : sur une route facturee, le routeur ne retient rien avant le quoter V4 (qui inclut deja le frais du hook) */
+  vus = [];
+  const qh = await coterChemin({ rpc: espion, chemin: vente, montant: 10n ** 18n, admises: adm9, hooksFacturants: [V9] });
+  ok('6k. devis d une jambe facturee : montant brut au quoter, frais routeur 0', qh.etat === 'OK' && qh.frais === 0n && qh.fraisParHook === true && vus[0].data.includes((10n ** 18n).toString(16).padStart(64, '0')), qh.frais);
+  /* REGLEMENT APRES LE SWAP : 1er segment V4 => SWAP(montant exact) ... SETTLE(OPEN_DELTA) TAKE */
+  const iV = avecNom.commandes.indexOf(CMD.V4_SWAP);
+  ok('6l. vente block (1er segment V4) : actions SWAP puis SETTLE puis TAKE (06,0b,0e)', actionsV4(avecNom.entrees[iV]) === '06,0b,0e', actionsV4(avecNom.entrees[iV]));
+  ok('6m. le SWAP porte le montant EXACT (1e18), le SETTLE la dette (OPEN_DELTA = 0)', avecNom.entrees[iV].includes((10n ** 18n).toString(16).padStart(64, '0')) && OPEN_DELTA === 0n);
+  const iR = r.commandes.indexOf(CMD.V4_SWAP);
+  ok('6n. BLUEPILL -> HIMSc -> USDC (2 sauts V4 en tete) : SWAP(exact), SWAP(OPEN_DELTA), SETTLE, TAKE', actionsV4(r.entrees[iR]) === '06,06,0b,0e', actionsV4(r.entrees[iR]));
+  /* frais au noeud 0 PUIS 1er segment V4 : le montant du swap = m - floor(m x 9 / 1e4) */
+  const ethUsdc = construireRoute({ ...base, chemin: [{ de: ETH, vers: USDC, e: G[0] }], fraisIndice: 0 });
+  const iE = ethUsdc.commandes.indexOf(CMD.V4_SWAP);
+  const net = 10n ** 18n - fraisSur(10n ** 18n);
+  ok('6o. ETH -> USDC frais a l entree : SWAP du NET (m - floor(m*9/1e4)) puis SETTLE', actionsV4(ethUsdc.entrees[iE]) === '06,0b,0e' && ethUsdc.entrees[iE].includes(net.toString(16).padStart(64, '0')), actionsV4(ethUsdc.entrees[iE]));
+  /* TEMOIN : un segment V4 qui SUIT un segment V3 (montant inconnu) garde SETTLE(CONTRACT_BALANCE) d abord */
+  const v3puisV4 = construireRoute({ ...base, chemin: [{ de: TOSHI, vers: ETH, e: G[5] }, { de: ETH, vers: USDC, e: G[0] }], fraisIndice: 1 });
+  const iS = v3puisV4.commandes.lastIndexOf(CMD.V4_SWAP);
+  ok('6p. TEMOIN : V4 apres V3 (montant inconnu) => SETTLE(CONTRACT_BALANCE) PUIS SWAP (ancien ordre, nomme)', actionsV4(v3puisV4.entrees[iS]) === '0b,06,0e' && v3puisV4.entrees[iS].includes(CONTRACT_BALANCE.toString(16).padStart(64, '0')), actionsV4(v3puisV4.entrees[iS]));
 }
 void faux; void noeud; void CONTRACT_BALANCE;
 console.log('\n' + n + ' assertions, ' + ko + ' KO');

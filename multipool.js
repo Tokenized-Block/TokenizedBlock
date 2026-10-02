@@ -67,6 +67,31 @@ export const PARTS_FRAIS = Object.freeze([Object.freeze({ qui: ADRESSES.FEE_WALL
 /** Le seul autre taux a6cf admis : 7 bps = 700 / 1e6, SEULEMENT dans le split du block (parts-bloc.js, drapeau ON). */
 export const BPS_A6CF_SPLIT_BLOC = 7n;
 
+/* ══ UN SEUL FRAIS PAR JAMBE (fondateur 2026-10-02 11:06, recommandation Zero 1) ══════════════════════
+ * « Celui qui possede la jambe facture, UNE fois. » Une jambe V4 sur un hook TB QUI PRELEVE LUI-MEME le frais
+ *   a6cf dans la devise (V8, V9, le hook du berceau 24 h) est DEJA facturee par le hook : le routeur n y ajoute
+ *   AUCUN PAY_PORTION ni part exacte. Sans cela : 0,09 % (hook) + 0,09 % (routeur) = 0,18 % sur la meme jambe.
+ * ⛔ Liste FERMEE, en minuscules. V8 = le hook en production (feeWallet() = a6cf). Les hooks V9 / 24 h, pas encore
+ *   deployes, sont passes par l appelant (`hooksFacturants`) le jour de leur adresse — jamais devines. */
+export const HOOKS_FACTURANTS = Object.freeze(['0x5926abdabf5d0006ee960a8270f3e124e5a764cc']);
+export function ensembleHooksFacturants(extra = []) {
+  return new Set([...HOOKS_FACTURANTS, ...(extra || []).map((h) => bas(h))].filter((h) => ADR.test(h)));
+}
+/** La jambe `s` est-elle facturee par son hook ? (V4 seulement : V3 / Slipstream n ont pas nos hooks) */
+export function jambeFactureeParHook(s, hooks = ensembleHooksFacturants()) {
+  return !!(s && s.e && s.e.venue === 'uniswap-v4' && s.e.cle && hooks.has(bas(s.e.cle.hooks)));
+}
+export function routeFactureeParHook(chemin, hooks = ensembleHooksFacturants()) {
+  return Array.isArray(chemin) && chemin.some((s) => jambeFactureeParHook(s, hooks));
+}
+/** Garde AVANT envoi : PAY_PORTION / TRANSFER de parts presents si et seulement si aucune jambe n est facturee par son hook. */
+export function unFraisParJambe(tx, chemin, hooks = ensembleHooksFacturants()) {
+  const n = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.PAY_PORTION).length;
+  const parts = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.TRANSFER).length;
+  if (routeFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
+  return n === 1;
+}
+
 /** Constantes du routeur (ActionConstants / Constants du depot source). */
 export const CONTRACT_BALANCE = 1n << 255n;
 export const OPEN_DELTA = 0n;
@@ -271,8 +296,10 @@ export function devisSaut(s, montant) {
  * ⛔ Une lecture ratee rend NON_MESURE (jamais 0) ; un devis nul rend REFUSE ; un quoter qui dit
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
-export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null }) {
-  const pl = placement || placerFrais(chemin, admises);
+export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
+  /* une jambe facturee par son hook : le DEVIS V4 inclut deja le frais du hook, le routeur ne retient rien */
+  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
+  const pl = parHook ? { etat: 'OK', indice: -1, devise: null } : (placement || placerFrais(chemin, admises));
   if (pl.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pl.pourquoi };
   let courant = BigInt(montant);
   if (courant <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
@@ -291,7 +318,7 @@ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_B
     if (out <= 0n) return { etat: 'REFUSE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' returns nothing' };
     courant = out;
   }
-  return { etat: 'OK', sortie: courant, frais, fraisIndice: pl.indice, fraisDevise: pl.devise, avantFrais };
+  return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook };
 }
 
 /* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
@@ -325,19 +352,30 @@ export function cheminV3(sauts) {
   return hex;
 }
 
-function entreeV4(sauts) {
-  /* les actions : SETTLE(entree, CONTRACT_BALANCE, payeur=routeur), un SWAP par saut en OPEN_DELTA,
-   * TAKE(sortie, ADDRESS_THIS, OPEN_DELTA). ⛔ La forme de struct est SANS minHop : c est celle du
-   * fork velodrome (IV4Router.ExactInputSingleParams, 5 champs). Prouve par le banc. */
+function entreeV4(sauts, montantConnu = null) {
+  /* ⛔⛔ ORDRE (fondateur 2026-10-02 11:06, Zero 1) : quand le montant d entree du segment est CONNU EXACTEMENT a
+   *   l assemblage (premier segment de la route), on REGLE APRES LE SWAP :
+   *     SWAP(1er saut, montant exact), SWAP(sauts suivants, OPEN_DELTA), SETTLE(entree, OPEN_DELTA = la dette, payeur=routeur),
+   *     TAKE(sortie, ADDRESS_THIS, OPEN_DELTA).
+   *   C est l ordre du periphery Uniswap : le PoolManager recoit l entree APRES que le hook a vu la vente, ce qu exige
+   *   le block du berceau 24 h (mode strict : toute entree vers le PoolManager doit payer une vente de NOS pools DEJA vue).
+   *   Avant : SETTLE(CONTRACT_BALANCE) d abord => le block arrivait au PoolManager avant la vente => PasNotrePool.
+   * Segment suivant (entree = sortie d un segment V3/CL, montant inconnu a l assemblage) : l ancien ordre
+   *   SETTLE(entree, CONTRACT_BALANCE) puis SWAP en OPEN_DELTA — un block du berceau en ENTREE d un tel segment
+   *   echoue ferme pendant 24 h (aucune perte), voir le rapport.
+   * ⛔ La forme de struct est SANS minHop : c est celle du fork velodrome (IV4Router.ExactInputSingleParams, 5 champs). */
   const premier = sauts[0], dernier = sauts[sauts.length - 1];
   const devIn = (s) => (s.de === ADRESSES.ETH && ![bas(s.e.cle.currency0), bas(s.e.cle.currency1)].includes(ADRESSES.ETH) ? ADRESSES.WETH : s.de);
   const devOut = (s) => (s.vers === ADRESSES.ETH && ![bas(s.e.cle.currency0), bas(s.e.cle.currency1)].includes(ADRESSES.ETH) ? ADRESSES.WETH : s.vers);
-  const codes = [ACT.SETTLE], params = [motAdr(devIn(premier)) + mot(CONTRACT_BALANCE) + mot(0)];
-  for (const s of sauts) {
+  const apres = typeof montantConnu === 'bigint' && montantConnu > 0n;
+  const codes = [], params = [];
+  if (!apres) { codes.push(ACT.SETTLE); params.push(motAdr(devIn(premier)) + mot(CONTRACT_BALANCE) + mot(0)); }
+  sauts.forEach((s, k) => {
     const zf = noeud(s.e.cle.currency0) === noeud(devIn(s));
     codes.push(ACT.SWAP_EXACT_IN_SINGLE);
-    params.push(paramsSwapExactInSingle({ cle: s.e.cle, zeroForOne: zf, montant: OPEN_DELTA, sortieMin: 0n, forme: SANS_MINHOP }));
-  }
+    params.push(paramsSwapExactInSingle({ cle: s.e.cle, zeroForOne: zf, montant: apres && k === 0 ? montantConnu : OPEN_DELTA, sortieMin: 0n, forme: SANS_MINHOP }));
+  });
+  if (apres) { codes.push(ACT.SETTLE); params.push(motAdr(devIn(premier)) + mot(OPEN_DELTA) + mot(0)); }
   codes.push(ACT.TAKE);
   params.push(motAdr(devOut(dernier)) + motAdr(ADDRESS_THIS) + mot(OPEN_DELTA));
   const elements = params.map((p) => dyn(p));
@@ -345,7 +383,7 @@ function entreeV4(sauts) {
   const offs = elements.map((e) => { const o = mot(c); c += BigInt(e.length / 2); return o; });
   const tableau = mot(elements.length) + offs.join('') + elements.join('');
   const actions = dyn(codes.join(''));
-  return { hex: mot(0x40) + mot(0x40 + actions.length / 2) + actions + tableau,
+  return { hex: mot(0x40) + mot(0x40 + actions.length / 2) + actions + tableau, reglementApres: apres, codes,
     entreeNative: devIn(premier) === ADRESSES.ETH, sortieNative: devOut(dernier) === ADRESSES.ETH };
 }
 
@@ -376,7 +414,7 @@ export function assemblerExecute(cmds, ins, deadline) {
  *   tient par construction.
  */
 export function construireRoute({ chemin, montant, minSortie, destinataire, deadline, fraisIndice,
-  partsFrais = PARTS_FRAIS, admises, partsExactes = [], bpsA6cf = FRAIS_BPS } = {}) {
+  partsFrais = PARTS_FRAIS, admises, partsExactes = [], bpsA6cf = FRAIS_BPS, hooksFacturants = [] } = {}) {
   if (!Array.isArray(chemin) || !chemin.length || chemin.length > SAUTS_MAX) return { etat: 'REFUSE', pourquoi: 'path must have 1..' + SAUTS_MAX + ' hops' };
   if (!chemin.every((s) => areteValide(s.e))) return { etat: 'REFUSE', pourquoi: 'a hop has no buildable pool' };
   if (!estAdresse(destinataire) || [ADDRESS_THIS, MSG_SENDER, ADRESSES.ROUTEUR].includes(bas(destinataire))) return { etat: 'REFUSE', pourquoi: 'a real recipient address is required' };
@@ -386,6 +424,17 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
+  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur ne preleve RIEN (ni PAY_PORTION ni part
+   *   exacte). Une part demandee en plus sur une telle route est REFUSEE (ce serait 0,18 %). */
+  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
+  if (parHook) {
+    if ((Array.isArray(partsExactes) && partsExactes.length) || BigInt(bpsA6cf) !== FRAIS_BPS
+      || (Array.isArray(partsFrais) && partsFrais !== PARTS_FRAIS && partsFrais.some((p) => bas(p.qui) !== ADRESSES.FEE_WALLET || BigInt(p.bps) !== FRAIS_BPS))
+      || (Array.isArray(partsFrais) && partsFrais.length > 1)) {
+      return { etat: 'REFUSE', pourquoi: 'refused: a leg of this path is on a TB hook that charges the fee itself — a router fee or share on top would charge the same leg twice (0.18 %)' };
+    }
+    return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts: [], exactes: [], fraisIndice: -1, devFrais: null, parHook });
+  }
   if (!Number.isInteger(fraisIndice) || fraisIndice < 0 || fraisIndice > chemin.length) return { etat: 'REFUSE', pourquoi: 'fee node index out of the path' };
   /* ⛔⛔ LE VERROU : la devise du frais DOIT etre admise. On le reverifie ICI, meme si `placerFrais`
    *   l a deja fait : un appelant qui passerait un indice a la main ne doit pas pouvoir payer a6cf
@@ -415,7 +464,11 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
       if (typeof p.montant !== 'bigint' || p.montant <= 0n) return { etat: 'REFUSE', pourquoi: 'refused: an extra share must be a positive bigint amount' };
     }
   }
+  return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts, exactes, fraisIndice, devFrais, parHook: false });
+}
 
+/** L assemblage, APRES tous les verrous de `construireRoute` (interne : n est pas exporte). */
+function assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts, exactes, fraisIndice, devFrais, parHook }) {
   const cmds = [], ins = [];
   const ajoute = (c, h) => { cmds.push(c); ins.push(h); };
   const entreeEth = chemin[0].de === ADRESSES.ETH;
@@ -439,7 +492,18 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
     if (!segIdx.has(i)) continue;
     const sg = segs[segIdx.get(i)];
     if (sg.type === 'v4') {
-      const v = entreeV4(sg.sauts);
+      /* premier segment : le routeur tient EXACTEMENT m (TRANSFER_FROM m / msg.value m), moins les parts prises au
+       *   noeud 0 (PAY_PORTION = floor(solde x bps / 1e4), dans l ordre, puis les TRANSFER exacts) => reglement APRES le swap */
+      let connu = null;
+      if (sg.debut === 0) {
+        connu = m;
+        if (fraisIndice === 0) {
+          for (const p of parts) connu -= (connu * BigInt(p.bps)) / BASE_BPS;
+          for (const p of exactes) connu -= p.montant;
+        }
+        if (connu <= 0n) return { etat: 'REFUSE', pourquoi: 'nothing left to swap after the fee' };
+      }
+      const v = entreeV4(sg.sauts, connu);
       if (v.entreeNative && tenue === 'weth') ajoute(CMD.UNWRAP_WETH, motAdr(ADDRESS_THIS) + mot(0));
       if (!v.entreeNative && tenue === 'eth' && noeud(sg.sauts[0].de) === ADRESSES.ETH) ajoute(CMD.WRAP_ETH, motAdr(ADDRESS_THIS) + mot(CONTRACT_BALANCE));
       ajoute(CMD.V4_SWAP, v.hex);
@@ -464,7 +528,8 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
     /* ⛔ L APPROBATION : une seule, ERC-20 ordinaire, du MONTANT EXACT (TRANSFER_FROM essaie
      *   `transferFrom` avant Permit2). Aucune pour l ETH natif. */
     approbation: entreeEth ? null : { jeton: chemin[0].de, spender: ADRESSES.ROUTEUR, montant: m },
-    commandes: cmds, entrees: ins, fraisDevise: noeud(devFrais), fraisIndice, segments: segs.map((s) => s.type),
+    commandes: cmds, entrees: ins, fraisDevise: devFrais === null ? null : noeud(devFrais), fraisIndice: parHook ? null : fraisIndice,
+    segments: segs.map((s) => s.type), fraisParHook: parHook,
     signatures: entreeEth ? 1 : 2,
   };
 }
@@ -475,12 +540,12 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
  *   cotables sont DITS (NON_MESURE / REFUSE), pas jetes.
  */
 export async function planifier({ rpc, aretes, de, vers, montant, destinataire, admises, toleranceBps = 100n,
-  deadline, sautsMax = 3, max = 12, bps = FRAIS_BPS }) {
+  deadline, sautsMax = 3, max = 12, bps = FRAIS_BPS, hooksFacturants = [] }) {
   const cands = cheminsCandidats(aretes, de, vers, { sautsMax, max });
   if (!cands.length) return { etat: 'SANS_ROUTE', pourquoi: 'no measured pool path of ' + sautsMax + ' hops or fewer', essais: [] };
   const essais = [];
   for (const ch of cands) {
-    const q = await coterChemin({ rpc, chemin: ch, montant, admises, bps });
+    const q = await coterChemin({ rpc, chemin: ch, montant, admises, bps, hooksFacturants });
     essais.push({ chemin: ch, ...q });
   }
   const bons = essais.filter((x) => x.etat === 'OK').sort((a, b) => (b.sortie > a.sortie ? 1 : b.sortie < a.sortie ? -1 : 0));
@@ -491,7 +556,8 @@ export async function planifier({ rpc, aretes, de, vers, montant, destinataire, 
   const best = bons[0];
   const tol = BigInt(toleranceBps);
   const minSortie = (best.sortie * (10000n - tol)) / 10000n;
-  const tx = construireRoute({ chemin: best.chemin, montant, minSortie, destinataire, deadline, fraisIndice: best.fraisIndice, admises, partsFrais: [{ qui: ADRESSES.FEE_WALLET, bps }] });
+  const tx = construireRoute({ chemin: best.chemin, montant, minSortie, destinataire, deadline, fraisIndice: best.fraisIndice, admises, hooksFacturants,
+    partsFrais: best.fraisParHook ? PARTS_FRAIS : [{ qui: ADRESSES.FEE_WALLET, bps }] });
   return { etat: tx.etat === 'PRET' ? 'PRET' : 'REFUSE', meilleur: best, minSortie, tx, essais, pourquoi: tx.pourquoi || null };
 }
 
