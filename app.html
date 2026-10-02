@@ -3285,7 +3285,7 @@ import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscriptio
  * ⛔ `meilleureClePourMontant` est le resolveur CANONIQUE de pool V4, celui qu utilise deja
  *   `planEthVersUsdc`. On l injecte au lieu d en ecrire une copie : deux resolveurs divergeraient. */
 import { planEchange, planEchangeMultiSauts, planEthVersUsdc, meilleureClePourMontant,
-  estWalletDeFrais, FRAIS_INTERFACE_BPS } from './echange.js';
+  estWalletDeFrais, FRAIS_INTERFACE_BPS, poolActuelleDuBlock } from './echange.js';
 /* ⛔ LE DECODEUR DE CHAINE ABI EST CANONIQUE, ON N EN ECRIT PAS UN TROISIEME.
  * `decoderChaine` rend de l UTF-8 et `null` plutot que du charabia. Un `String.fromCharCode`
  * par octet donne du LATIN-1 : des blocks reels de Base s affichaient « å°çç¶­å°¼ » — leurs
@@ -8563,7 +8563,17 @@ function texteBridgePoussiere(plan) { return 'You receive: not read. ' + String(
 /* ⛔⛔ 2026-10-02 (Zero 1, R4 item 3) : UN SEUL texte de refus d echange — « <Raison>. Nothing was sent. ». Avant : « Not possible: … »,
  *   « Not prepared — … », « Not possible as set: … », et MESSAGE_SANS_POOL qui disait deux fois « nothing was sent ». Le fragment
  *   deja present dans la raison est retire, puis ajoute UNE fois. L etape interne (« (at forme) ») n est plus affichee. */
+/* ⛔⛔ 2026-10-02 (Grok Super, revue UI KO1) : un refus STRUCTUREL (block au milieu, a une jonction, sur une pool sans hook TB,
+ *   deux jambes payantes, frais en block, pool sans hook, jambe V1) dit EXACTEMENT TEXTE_PAS_ICI, sur tous les rails. On passe
+ *   le PLAN (pas sa raison) a texteRefusEchange pour que le drapeau decide, pas le libelle. */
+const TEXTE_PAS_ICI = 'Not tradable here yet. Nothing was sent.';
+const DRAPEAUX_REFUS_STRUCTURELS = Object.freeze(['refusBlocIntermediaire', 'refusBlocJonction', 'refusPlusieursHooks', 'refusFraisEnBlock',
+  'refusSansHook', 'refusBlocSansHookTb', 'refusV1Route', 'refusCheminFrais']);
+function estRefusStructurel(p) {
+  return !!p && typeof p === 'object' && (DRAPEAUX_REFUS_STRUCTURELS.some((k) => p[k] === true) || /^not tradable here yet\b/i.test(String(p.pourquoi || '')));
+}
 function texteRefusEchange(pourquoi) {
+  if (pourquoi && typeof pourquoi === 'object') { if (estRefusStructurel(pourquoi)) return TEXTE_PAS_ICI; pourquoi = pourquoi.pourquoi || pourquoi.etat; }
   const r = String(pourquoi || 'Not tradable here yet').replace(/[\s,;:—–-]*(?:so )?nothing was sent[.\s]*/gi, ' ').replace(/\s+/g, ' ').trim().replace(/[\s.,;:—–-]+$/, '');
   return (r.charAt(0).toUpperCase() + r.slice(1)) + '. Nothing was sent.';
 }
@@ -9087,6 +9097,8 @@ async function lireProfil(adr, sym, perime, opts) {
     if (perime()) return;
   }
   marcheProfil = v ? { adr: String(adr).toLowerCase(), chaine: CHAINE, v } : null;
+  if (perime()) return;
+  await marquerAchatV1(v);
   if (perime()) return;
   /* ⛔ TROIS ETATS, JAMAIS DEUX. « Pas de marche » est un fait sur le block ; « illisible » est un
    * fait sur notre lecture. Les fondre ferait dire au profil de quelqu un qu il ne vaut rien. */
@@ -11256,6 +11268,23 @@ function peindreAchats() {
 let echangeCourant = null, echangeEnCours = false;
 /* le marche que le profil vient de lire : reutilise par l achat / vente du MEME block sur la MEME chaine */
 let marcheProfil = null;
+/* ⛔⛔ 2026-10-02 (revue UI KO2) : un marche V1 (HOOK_PREVU) SANS pool de version actuelle — planEchange refuse l achat
+ *   (frais en block). On le dit AU CHARGEMENT : « Prepare buy » desactive, « Not tradable here yet » dessous. La vente reste
+ *   ouverte. Lecture StateView ratee : on ne ferme rien (le planificateur rendra NON_MESURE). */
+async function marquerAchatV1(v) {
+  const b = $('#peAcheter'); if (!b) return;
+  let n = document.getElementById('peAchatV1');
+  const fermer = (ferme) => {
+    b.disabled = ferme;
+    if (ferme && !n) { n = document.createElement('p'); n.id = 'peAchatV1'; n.className = 'note'; b.insertAdjacentElement('afterend', n); }
+    if (n) { n.textContent = 'Not tradable here yet'; n.hidden = !ferme; }
+  };
+  const estV1 = !!(v && v.etat === 'LUE' && v.cle && String(v.cle.hooks || '').toLowerCase() === String(HOOK_PREVU).toLowerCase());
+  if (!estV1) { fermer(false); return; }
+  let a;
+  try { a = await poolActuelleDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, cle: v.cle }); } catch (_) { a = { cle: null, ratees: 1 }; }
+  fermer(!a.cle && !(a.ratees > 0));
+}
 /* le block dont le lien demande le lancement (?block=…&lancer=…), ouvert une seule fois */
 let lancementLien = null;
 async function decimalesDe(jeton) {
@@ -11577,9 +11606,11 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
    *   dire. Une garde statique ne voit que ce qui est ecrit en clair : passer par une variable la
    *   rend aveugle sans la faire rougir.
    *   ⇒ Chaque site d appel ecrit donc son nom EN LITTERAL, a cote de sa condition. */
-  const refuser = (texte) => {
+  /* ⛔ 2026-10-02 (revue UI KO3) : « Retry quote » seulement apres une lecture ratee (NON_MESURE, garde) — jamais apres un refus. */
+  const refuser = (texte, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
+    if (!relancer) return;
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange('ACHAT'));
@@ -11592,8 +11623,8 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
   }
   if (p.etat === 'REFUSE') {
     try { etape('echange_multi_refus_pool'); } catch (_) {}
-    /* ⛔ 2026-10-02 (Zero 1) : poussiere -> le texte simple, seul ; tout autre refus garde « Not possible: … Nothing was sent. » */
-    return refuser(p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p.pourquoi || p.etat));
+    /* ⛔ 2026-10-02 (Zero 1) : poussiere -> le texte simple, seul ; tout autre refus : texteRefusEchange (R4 item 3, revue UI KO1) */
+    return refuser(p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p), false);
   }
   if (p.etat === 'APPROBATIONS' && Array.isArray(p.etapes) && p.etapes.length) {
     /* ⛔ UN JETON ERC-20 EN ENTREE DEMANDE UNE AUTORISATION. L ETH natif n en demande pas — c est
@@ -11666,22 +11697,22 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
  *   qui ne savent pas grouper.
  */
 function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
-  const refuser = (texte, compteur) => {
+  const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
     try { etape(compteur); } catch (_) {}
+    if (!relancer) return; /* revue UI KO3 : pas de « Retry quote » apres un refus */
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange('ACHAT'));
     $('#peActions').appendChild(br);
   };
   if (!pa || pa.etat === 'NON_MESURE') {
-    return refuser('Could not price this route right now'
-      + (pa && pa.etape ? ' (' + pa.etape + ')' : '') + ' — nothing to sign, try again.',
+    return refuser('Could not price this route right now — nothing to sign, try again.',
       'echange_multi_refus_prix');
   }
   if (pa.etat !== 'PRET') {
-    return refuser(texteRefusEchange(pa.pourquoi || pa.etat), 'echange_multi_refus_pool');
+    return refuser(texteRefusEchange(pa), 'echange_multi_refus_pool', false);
   }
   const r = pa.resume;
   /* ⛔⛔ LES MEMES GARDES QUE LES AUTRES RAILS, avec la bonne borne — et LES OCTETS, pas le resume. */
@@ -11741,10 +11772,11 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
  *   `wallet_getCapabilities` et savent pourtant grouper. On tente, et on LIT le resultat.
  */
 function afficherFranchissement({ pf, e, dec, symBlock }) {
-  const refuser = (texte, compteur) => {
+  const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
     try { etape(compteur); } catch (_) {}
+    if (!relancer) return; /* revue UI KO3 : pas de « Retry quote » apres un refus */
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange('ACHAT'));
@@ -11752,8 +11784,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
   };
   if (!pf || pf.etat === 'NON_MESURE') {
     /* ⛔ L ETAPE QUI A RATE EST DITE : « la route a echoue » envoie chercher partout. */
-    return refuser('Could not price this crossing right now'
-      + (pf && pf.etape ? ' (' + pf.etape + ')' : '') + ' — nothing to sign, try again.',
+    return refuser('Could not price this crossing right now — nothing to sign, try again.',
       'echange_multi_refus_prix');
   }
   if (pf.etat === 'APPROBATIONS' && Array.isArray(pf.etapes) && pf.etapes.length) {
@@ -11768,7 +11799,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
     return;
   }
   if (pf.etat !== 'PRET') {
-    return refuser(texteRefusEchange(pf.pourquoi || pf.etat), 'echange_multi_refus_pool');
+    return refuser(texteRefusEchange(pf), 'echange_multi_refus_pool', false);
   }
   const r = pf.resume;
   /* ══ LES GARDES DE FRAIS, SUR LES DEUX JAMBES ══════════════════════════════════════════════ */
@@ -12098,7 +12129,7 @@ async function preparerEchange(sens) {
     if (b.etat !== 'OK') {
       e.className = 'note wKo';
       /* ⛔ LE REFUS PORTE LE SAUT QUI A MANQUE. « La route a echoue » envoie chercher partout. */
-      e.textContent = texteRefusEchange(b.pourquoi);
+      e.textContent = texteRefusEchange(b);
       try { etape('echange_refus_route_multi'); } catch (_) {}
       profilEnLecture = false;
       return;
@@ -12222,7 +12253,7 @@ async function preparerEchange(sens) {
     /* ⛔ 2026-10-02 14:07 : pool dont le hook paierait a6cf en block — texte exact, rien d autre. */
     /* ⛔ 2026-10-02 (Zero 1) : route refusee par le verrou de frais (ex. block→USDC→ETH) — « Not tradable here yet », seul. */
     /* ⛔ 2026-10-02 (Zero 1) : poussiere -> « Amount too small to trade here. », seul. */
-    e.textContent = p.refusFraisEnBlock ? texteRefusEchange(p.pourquoi) : p.refusCheminFrais ? texteRefusEchange(p.pourquoi) : p.refusPoussiere ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+    e.textContent = estRefusStructurel(p) ? texteRefusEchange(p) : p.refusPoussiere ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
       ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
         + 'available yet — its market is real on Uniswap. Nothing was sent.'
       : texteRefusEchange(String(p.pourquoi || p.etat)
@@ -12232,10 +12263,7 @@ async function preparerEchange(sens) {
     /* ⛔ LA POOL A REPONDU, et sa reponse est « non » — carnet trop mince, taille trop grande. Rien
      *   a reparer dans notre code : c est de la liquidite qui manque, et ce compteur le dira. */
     try { etape('echange_refus_pool'); } catch (_) {}
-    const br = document.createElement('button');
-    br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
-    br.addEventListener('click', () => void preparerEchange(sens));
-    $('#peActions').appendChild(br);
+    /* ⛔ 2026-10-02 (revue UI KO3) : la pool a REPONDU « non » — pas de bouton de relance (il ne reste que pour NON_MESURE). */
     return;
   }
   /* ⛔ LE FOURRE-TOUT, et il est nomme comme tel : tout etat de plan qui n est ni PRET, ni les cas
@@ -12280,7 +12308,10 @@ async function preparerEchange(sens) {
       if (feeEl && r) {
         const hk = p.cle && p.cle.hooks ? String(p.cle.hooks).toLowerCase() : '';
         const hooked = hk && hk !== '0x0000000000000000000000000000000000000000';
-        feeEl.textContent = libelleFrais(p.cle).court + ' · ' + feeLabel
+        /* ⛔ 2026-10-02 (revue UI, vu en prod 23:10) : frais routeur 0 parce que le hook a deja paye — « Fee 3% · included »,
+         *   jamais « Fee 3% · fee · 0 ETH ». */
+        feeEl.textContent = parHook ? libelleFrais(p.cle).court + ' · included'
+          : libelleFrais(p.cle).court + ' · ' + feeLabel
           + ' · ' + formaterUnites(r.frais, 18) + ' ' + (r.rachatAuto ? '→TBLOCK' : (r.fraisDevise || 'ETH'));
       }
     } catch (err) { /* badge optional */ }
@@ -12591,7 +12622,7 @@ async function preparerEthUsdc() {
     return;
   }
   if (p.etat === 'REFUSE') {
-    e.className = 'note wKo'; e.textContent = p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p.pourquoi || p.etat); return;
+    e.className = 'note wKo'; e.textContent = p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p); return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   if (!estWalletDeFrais(compte)) {
@@ -13123,8 +13154,8 @@ function peindrePlan(plan, adr) {
     /* ⛔ DEUX PHRASES DIFFERENTES : un refus est un fait sur ce lancement, une lecture ratee est un
      * fait sur notre reseau — et dans les deux cas, rien n est offert a signer. */
     /* ⛔ 2026-10-02 fee lot 2 : block currency0 sur un hook qui preleve en currency0 — texte exact, rien d autre. */
-    e.textContent = plan.refusFraisEnBlock ? texteRefusEchange(plan.pourquoi)
-      : plan.etat === 'REFUSE' ? texteRefusEchange(plan.pourquoi) : 'Not measured, so nothing to sign: ' + plan.pourquoi;
+    e.textContent = plan.refusFraisEnBlock || plan.etat === 'REFUSE' ? texteRefusEchange(plan)
+      : 'Not measured, so nothing to sign: ' + plan.pourquoi;
     return;
   }
   const d = plan.dec;

@@ -90,7 +90,7 @@ await essai('(3)', async () => {
   /* 2026-10-02 (fix R4, Zero 1) : deux jambes hookees = deux frais de hook sur la chaine -> refusPlusieursHooks, jamais ce garde-ci */
   ok(!r2.refusCheminFrais && r2.etat === 'REFUSE' && r2.refusPlusieursHooks === true, '(3) NEG: every hop V8-paying -> not refused by this rule; refused as two hooked legs (' + r2.etat + ')');
   /* 2026-10-02 (R4 item 3) : un seul texte de refus, texteRefusEchange — « Not tradable here yet. Nothing was sent. » */
-  ok(/e\.textContent = p\.refusFraisEnBlock \? texteRefusEchange\(p\.pourquoi\) : p\.refusCheminFrais \? texteRefusEchange\(p\.pourquoi\)/.test(html), '(3) Buy/Sell screen shows the single refusal copy, no "Not possible:" prefix');
+  ok(/e\.textContent = estRefusStructurel\(p\) \? texteRefusEchange\(p\) : p\.refusPoussiere/.test(html), '(3) Buy/Sell screen shows the single refusal copy, no "Not possible:" prefix');
 });
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

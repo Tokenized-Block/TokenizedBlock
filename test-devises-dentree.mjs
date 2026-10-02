@@ -19,6 +19,9 @@ const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const OUSD = '0x0000000000000000000000000000000000000ou'.replace('ou', '01'); /* substitut de test */
 const AAPLC = '0x00000000000000000000000000000000000aap1';
 const BLOCK = '0xb20000000000000000000084d0953bad205d563f';
+/* 2026-10-02 (verdict C2, revue UI KO2) : un BLOCK TB sur Aerodrome n est plus offert ; les rails Aerodrome servent les
+ *   ACTIONS (AAPLc, adresse du registre paires.js). Les assertions « Aerodrome offert » visent donc une action. */
+const ACTION_AERO = '0xb200000000000000000000c2e324d24d7eecd1fb';
 
 const ousd = '0x0000000000000000000000000000000000000001';
 const aaplc = '0x0000000000000000000000000000000000000002';
@@ -203,9 +206,28 @@ t('assemblage: c est bien UNE transaction', cV4.tx === 1);
 const aeroPur = [
   { de: USDC, vers: ousd, famille: 'aerodrome' },
   { de: ETH, vers: USDC, famille: 'aerodrome' },
-  areteDuBlock({ block: BLOCK, deviseDeLaPool: ETH, famille: 'aerodrome' }),
+  areteDuBlock({ block: ACTION_AERO, deviseDeLaPool: ETH, famille: 'aerodrome' }),
 ];
-const cAero = classerDevise({ devise: ousd, block: BLOCK, aretes: aeroPur, faitsLus: true });
+const cAero = classerDevise({ devise: ousd, block: ACTION_AERO, aretes: aeroPur, faitsLus: true });
+const cPontAction = classerDevise({ devise: ousd, block: ACTION_AERO, faitsLus: true, aretes: [
+  { de: USDC, vers: ousd, famille: 'uniswap-v4' }, areteDuBlock({ block: ACTION_AERO, deviseDeLaPool: USDC, famille: 'aerodrome' })] });
+/* ⛔⛔ KO2 : LES MEMES FORMES VERS UN BLOCK TB NE SONT PLUS OFFERTES (le planificateur les refuse) */
+const cAeroBlock = classerDevise({ devise: ousd, block: BLOCK, faitsLus: true, aretes: [
+  { de: USDC, vers: ousd, famille: 'aerodrome' }, { de: ETH, vers: USDC, famille: 'aerodrome' }, areteDuBlock({ block: BLOCK, deviseDeLaPool: ETH, famille: 'aerodrome' })] });
+t('KO2: segment Aerodrome qui FINIT sur un block : pas offert, « not here yet »', cAeroBlock.etat === 'UNE_TX' && peutEtreAssemblee(cAeroBlock).ok === false && peutEtreAssemblee(cAeroBlock).court === 'not here yet');
+t('KO2: franchissement V4 -> Aerodrome -> block : pas offert', cPont.etat === 'PLUSIEURS_TX' && peutEtreAssemblee(cPont).ok === false && peutEtreAssemblee(cPont).court === 'not here yet');
+const B_MILIEU = '0xb2000000000000000000000000000000000000b1';
+const cMilieu = classerDevise({ devise: ousd, block: BLOCK, faitsLus: true, aretes: [
+  { de: ousd, vers: B_MILIEU, famille: 'uniswap-v4' }, areteDuBlock({ block: BLOCK, deviseDeLaPool: B_MILIEU, famille: 'uniswap-v4' })] });
+t('KO2: V4 pur avec un block AU MILIEU : pas offert', cMilieu.etat === 'UNE_TX' && cMilieu.chemin.length === 2 && peutEtreAssemblee(cMilieu).ok === false && peutEtreAssemblee(cMilieu).court === 'not here yet');
+const cJonction = classerDevise({ devise: ousd, block: ACTION_AERO, faitsLus: true, aretes: [
+  { de: ousd, vers: B_MILIEU, famille: 'uniswap-v4' }, areteDuBlock({ block: ACTION_AERO, deviseDeLaPool: B_MILIEU, famille: 'aerodrome' })] });
+t('KO2: block a la JONCTION V4 -> Aerodrome : pas offert', peutEtreAssemblee(cJonction).ok === false && peutEtreAssemblee(cJonction).court === 'not here yet');
+t('KO2 temoin: V4 pur OUSD -> USDC -> ETH -> block (block a la fin) reste offert', peutEtreAssemblee(cV4).ok === true);
+const ORD = '0xb2ffffffffffffffffffffffffffffffffffff03';
+const cOrd = classerDevise({ devise: ousd, block: BLOCK, faitsLus: true, aretes: [
+  { de: ousd, vers: ORD, famille: 'uniswap-v4' }, areteDuBlock({ block: BLOCK, deviseDeLaPool: ORD, famille: 'uniswap-v4' })] });
+t('KO2 temoin: un jeton ORDINAIRE 0xb2ff… (pas B20) au milieu n est pas un block', peutEtreAssemblee(cOrd).ok === true);
 /* ⭐⭐ CETTE ASSERTION DISAIT « un segment aerodrome est REFUSE ». Elle encodait une limite de notre
  *   OUTILLAGE, pas une regle — et elle a cesse d etre vraie le 2026-10-01, quand une mesure a
  *   renverse ma decision de ne pas batir ce rail :
@@ -224,7 +246,7 @@ t('assemblage: deux appels (approbation puis swap)', peutEtreAssemblee(cAero).ap
 t('assemblage: ⛔ et il N EXIGE PAS l atomicite',
   peutEtreAssemblee(cAero).exigeAtomique === false);
 t('assemblage: le franchissement, lui, l exige TOUJOURS',
-  peutEtreAssemblee(cPont).exigeAtomique === true);
+  peutEtreAssemblee(cPontAction).exigeAtomique === true);
 /* ⛔ ET UNE FAMILLE QU ON NE SAIT PAS BATIR RESTE REFUSEE, avec son nom. */
 const exotique = { etat: 'UNE_TX', devise: ousd, tx: 1,
   segments: [{ famille: 'un-lieu-inconnu', sauts: [{}] }] };
@@ -239,14 +261,14 @@ t('assemblage: une famille inconnue reste refusee',
  *     l outillage a change. Une assertion qui gele une limite temporaire finit par defendre le
  *     defaut qu elle documentait. */
 t('assemblage: uniswap-v4 PUIS un saut aerodrome est un FRANCHISSEMENT',
-  peutEtreAssemblee(cPont).ok === true && peutEtreAssemblee(cPont).par === 'franchissement');
+  peutEtreAssemblee(cPontAction).ok === true && peutEtreAssemblee(cPontAction).par === 'franchissement');
 t('assemblage: et il annonce TROIS appels, pas un',
-  peutEtreAssemblee(cPont).appels === 3);
+  peutEtreAssemblee(cPontAction).appels === 3);
 /* ⛔⛔ ET IL EXIGE L ATOMICITE. Sans elle, la jambe 1 peut passer seule et l acheteur se retrouve
  *   avec le pivot au lieu de ce qu il voulait — il a paye un frais pour un actif qu il n a pas
  *   demande. Le drapeau doit remonter pour que l ecran puisse refuser aux wallets qui ne groupent
  *   pas, au lieu de les laisser decouvrir le probleme apres avoir signe. */
-t('assemblage: le franchissement EXIGE l atomicite', peutEtreAssemblee(cPont).exigeAtomique === true);
+t('assemblage: le franchissement EXIGE l atomicite', peutEtreAssemblee(cPontAction).exigeAtomique === true);
 t('assemblage: le rail a un seul segment ne l exige PAS',
   peutEtreAssemblee(cV4).exigeAtomique === undefined && peutEtreAssemblee(cV4).appels === 1);
 /* ⛔ L ORDRE INVERSE RESTE REFUSE : aerodrome puis uniswap ferait un lot aux approbations fausses. */

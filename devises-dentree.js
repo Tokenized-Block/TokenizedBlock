@@ -32,6 +32,7 @@
  */
 
 import { cheminEntre, segmenterParFactory, transactionsNecessaires, SAUTS_MAX } from './pont-de-liquidite.js';
+import { indexBlocAJonction, estBlockDeRoute, RE_B20, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /** Les etats rendus. ⛔ Aucun autre n est produit, et un etat inconnu fait refuser l affichage. */
 export const ETATS = Object.freeze(['DIRECTE', 'UNE_TX', 'PLUSIEURS_TX', 'SANS_ROUTE', 'NON_MESUREE']);
@@ -188,6 +189,23 @@ export function devisesDentree({ block, deviseDeLaPool, familleDuBlock, candidat
  *   limite qui est la NOTRE. C est la meme distinction que SANS_ROUTE / NON_MESUREE, un cran plus
  *   loin : la chaine peut, nous pas encore.
  */
+/**
+ * ⛔⛔ 2026-10-02 (revue UI Grok Super, KO2) — UNE ROUTE QUE LE PLANIFICATEUR REFUSERA N EST JAMAIS OFFERTE. Meme predicat
+ *   STATIQUE que les gardes R4 / jonction, sur `d.chemin` ({ de, vers, famille }, sans cle de pool) :
+ *     · un noeud INTERMEDIAIRE qui est un block (B20 hors devises connues : estBlockDeRoute, comme sautsDepuisChemin) ;
+ *     · un noeud a une JONCTION de familles qui est un block (indexBlocAJonction, comme les rails Aerodrome) ;
+ *     · un saut HORS Uniswap V4 (Aerodrome, V3) dont un bout est un block (verdict C2 : pas de block sans hook TB).
+ *   ⚠️ « Deux jambes payantes » n est PAS statique ici : le chemin ne porte pas les hooks. Le planificateur le refuse. */
+export function routeRefuseeStatiquement(chemin) {
+  const c = Array.isArray(chemin) ? chemin.filter(Boolean) : [];
+  for (let i = 0; i < c.length - 1; i += 1) {
+    const t = String(c[i].vers || '');
+    if (RE_B20.test(t) && estBlockDeRoute(t)) return true;
+    if (c[i].famille !== c[i + 1].famille && indexBlocAJonction([t]) >= 0) return true;
+  }
+  return c.some((s) => s.famille !== 'uniswap-v4' && indexBlocAJonction([s.de, s.vers]) >= 0);
+}
+
 export function peutEtreAssemblee(d) {
   if (!d || !ETATS.includes(d.etat)) {
     return { ok: false, court: 'unknown', pourquoi: 'this route was not classified' };
@@ -207,6 +225,7 @@ export function peutEtreAssemblee(d) {
     return { ok: false, pourquoi: d.pourquoi || 'this currency is not offered',
       court: d.etat === 'SANS_ROUTE' ? 'no route' : 'not checked' };
   }
+  if (routeRefuseeStatiquement(d.chemin)) return { ok: false, court: 'not here yet', pourquoi: MESSAGE_PAS_ICI };
   const segs = Array.isArray(d.segments) ? d.segments : [];
   if (segs.length === 1) {
     if (segs[0].famille === 'uniswap-v4') {

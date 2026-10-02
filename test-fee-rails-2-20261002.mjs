@@ -131,7 +131,7 @@ for (const sens of ['ACHAT', 'VENTE']) {
   ok(rB.etat === 'REFUSE' && rB.refusFraisEnBlock === true, 'stock: V8 pool with block=currency0 refused (' + sens + '): a6cf would be paid in block');
 }
 ok(PSH.REFUS_FRAIS_HOOK_EN_BLOCK === true, 'stock: never-block-fee switch ON (strict)');
-ok(/e\.textContent = p\.refusFraisEnBlock \? texteRefusEchange\(p\.pourquoi\)/.test(html), 'stock: Buy/Sell screen shows the single refusal copy (R4 item 3), no prefix');
+ok(/e\.textContent = estRefusStructurel\(p\) \? texteRefusEchange\(p\)/.test(html), 'stock: Buy/Sell screen shows the single refusal copy (R4 item 3), no prefix');
 ok(/if \(!ROUTE_VIA_TBLOCK && cleTouchTblock\(p\.cle\)\) continue;/.test(extraire(html, 'poolDecouvertPour')), 'tblock: Buy-here skips TBLOCK pools');
 
 /* ── item 2 : auto-salt grinds until the block sorts after its quote ── */
