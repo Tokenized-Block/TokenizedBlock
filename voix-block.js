@@ -298,6 +298,11 @@ export function estAmi(voix, adr, sym) {
 }
 
 /* ── FICHE (app.html) : petites decisions pures, testees sans navigateur ─────────────────────── */
+/** ⛔ Un block ne se parle pas a lui-meme : ce nom d ami est-il le block de la fiche (son adresse d abord, sinon son symbole) ? */
+export function estLeBlock(nom, adr, sym) {
+  const n = String(nom || '').trim().replace(/^\$/, '').toLowerCase();
+  return !!n && ((!!adr && n === String(adr).toLowerCase()) || (!!sym && n === String(sym).toLowerCase()));
+}
 /**
  * Qui voit l editeur. 'EDITEUR' (le formulaire), 'CONNECTER' (« Your block? Connect… »), 'CACHE' (un autre wallet que
  * le createur : rien), 'HORS_BASE'. ⛔ Createur inconnu = EDITEUR : le serveur tranche a l enregistrement.
