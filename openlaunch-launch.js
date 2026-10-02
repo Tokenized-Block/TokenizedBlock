@@ -8,6 +8,7 @@
 //    dessus, ou sur notre hook ») : un launch OpenLaunch fait depuis notre app donne 100 % des frais LP AU LANCEUR, comme
 //    sur openlaunch.lol. TokenizedBlock ne se nomme pas destinataire. Les frais TokenizedBlock existent sur NOS marches.
 // ⛔ Le module ne lit pas le reseau et n envoie rien : il rend { to, data, value:'0x0', resume }.
+import { estMarqueTbEtendue } from './marque-tb.js';
 import { selecteur } from './encodeur.js';
 import { FEE_WALLET } from './frais-creation.js';
 
@@ -43,12 +44,9 @@ export function fdvDepuisTick(tick, supply = 1e9) { return supply / Math.pow(1.0
  * @param {{nom:string, symbole:string, lanceur:string, startTick:number, lpFee:number, salt:string, metadataURI?:string}} o
  * @returns {{ etat:'OK', tx:{to,data,value}, resume } | { etat:'REFUSE', pourquoi:string }}
  */
-/** Marque TB : nom normalise contenant « tokenizedblock », ou symbole TB / TBGAS / TBLOCK*. */
-export function estMarqueTb(nom, symbole) {
-  const n = String(nom || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const s = String(symbole || '').toUpperCase();
-  return n.includes('tokenizedblock') || s === 'TB' || s === 'TBGAS' || s.startsWith('TBLOCK');
-}
+/** Marque TB : nom normalise contenant « tokenizedblock », nom « TB-… », ou symbole TB / TBGAS / TBLOCK* / TB-*.
+ *  ⛔ 2026-10-02 : une seule definition, `marque-tb.js` (aussi lue par le profil pour « Not official »). */
+export function estMarqueTb(nom, symbole) { return estMarqueTbEtendue(nom, symbole); }
 export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, metadataURI = '' }) {
   const refus = (pourquoi) => ({ etat: 'REFUSE', pourquoi });
   const n = String(nom || '').trim(), s = String(symbole || '').trim();

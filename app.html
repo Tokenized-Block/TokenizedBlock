@@ -3278,6 +3278,7 @@ import { creerMoteur3D } from './map3d.js';
 import { usdCourt } from './trending.js';
 import { tirageUniforme } from './tirage.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
+import { verdictMarque, phraseMarque } from './marque-tb.js';
 import { planMessagePaye } from './messagerie-blocks.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
@@ -8844,6 +8845,12 @@ async function lireProfil(adr, sym, perime, opts) {
     } catch (e) { /* non lue : l avatar reste celui de l adresse */ }
   }
   $('#pOrigine').textContent = phrasesOrigine({ origine: origineProfil, scellement: { etat: 'NON_LU' } }).origine;
+  /* ⛔ 2026-10-02 MARQUE : un token qui porte le nom TokenizedBlock sans etre ne sur TB est DIT « Not official ».
+   *   Seulement si l origine est LUE ailleurs (face absente/autre) : une origine non lue ne condamne personne. */
+  {
+    const phraseM = phraseMarque(verdictMarque({ adresse: adr, nom: f && f.nom, symbole: symProfil, origine: origineProfil }));
+    if (phraseM) $('#pOrigine').textContent += ' ' + phraseM;
+  }
   /* ⛔⛔ LE POST GRAVE, ENFIN AFFICHE (Phil, 2026-09-23). Il etait valide, stocke et grave — et
    *     jamais relu. Une valeur ecrite sur la chaine puis jamais rendue a coute du gas sans
    *     informer personne.

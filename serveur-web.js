@@ -102,6 +102,7 @@ import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } fr
 import { partsHolders } from './parts-holders.js';
 /* ⛔ LA VEILLE DES FRAIS VIT DANS SON MODULE, TESTE (66 assertions) : la reecrire ici en ferait une
  *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
+import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -738,6 +739,25 @@ async function fraisEnAttente() {
  *    rafraichissement d onglet relancerait tout et le noeud finirait par refuser — et des fenetres
  *    refusees rendraient le total « PLANCHER » sans que personne ne comprenne pourquoi. */
 let recentsCache = new Map();
+const etrangersCache = new Map();
+async function lancementsEtrangers(heures) {
+  const cle = String(heures);
+  const c = etrangersCache.get(cle);
+  if (c && Date.now() - c.t < 300000) return c.r;
+  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  const deBloc = tete - Math.round(heures * 1800);
+  const scan = await scannerLancements({ rpc: rpcServeur, deBloc, aBloc: tete, maxAffinage: 250 });
+  const r = {
+    ok: true, lu: new Date().toISOString(), heures, deBloc, aBloc: tete,
+    complet: scan.ratees === 0, fenetres: scan.fenetres, fenetresRatees: scan.ratees, nonAffines: scan.nonAffines,
+    parLaunchpad: scan.parLaunchpad,
+    lancements: scan.lancements.slice(-200),
+    borne: 'Factory events only. LaunchBlitz is recognised by its metadata host on the o1 factory; bankr by its Doppler integrator / Clanker interface tag.',
+  };
+  etrangersCache.set(cle, { t: Date.now(), r });
+  return r;
+}
+
 async function fraisRecents(heures) {
   const cle = String(heures);
   const dansLeCache = recentsCache.get(cle);
@@ -1844,6 +1864,8 @@ const SERVIS = [
    *   Il porte le bareme : 0,2 % jusqu a 100 $ (p75 mesure), 0,1 % au-dela, et le PLANCHER qui
    *   empeche qu un cent de plus coute moitie moins. */
   'frais-degressif.js',
+  /* ⛔ 2026-10-02 : importes par `echange.js` / `openlaunch-launch.js` / l app (part referrer o1, marque TB). */
+  'referent-o1.js', 'marque-tb.js', 'lancements-etrangers.js',
   /* ⛔⛔ `devises-dentree.js` REPOND « avec quoi peut-on payer ce block ? ». Il ajoute au graphe des
    *   pools l ARETE DU BLOCK LUI-MEME — celle qui manquait, et sans laquelle `cheminEntre(OUSD,
    *   block)` rendait REFUSE non pas parce qu aucune route n existe, mais parce que personne n avait
@@ -2853,6 +2875,23 @@ createServer((req, res) => {
       }
       repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS });
     }).catch((e) => repondre({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+    return;
+  }
+
+  /* ══ QUI LANCE QUOI SUR BASE, EN CE MOMENT (2026-10-02) ═══════════════════════════════════════
+   * ⛔ LECTURE SEULE : eth_getLogs des factories (o1/LaunchBlitz, Clanker, Zora, Doppler/bankr, OpenLaunch,
+   *    B20 auto). Fenetres ratees et fronts non lus sont COMPTES dans la reponse, jamais tus.
+   * ⛔ 6 h maximum par appel, cache 5 min : un scan de 24 h (~260 getLogs + ~1 500 eth_call) n a rien a
+   *    faire derriere un bouton. Les chiffres de 24 h sont dans canal/DIG-LAUNCHBLITZ-capture-2026-10-02.md. */
+  if (chemin === '/api/lancements-etrangers') {
+    const heures = Math.min(6, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('h')) || 1));
+    lancementsEtrangers(heures).then((r) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(r));
+    }).catch((e) => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
+    });
     return;
   }
 

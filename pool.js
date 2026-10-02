@@ -471,15 +471,20 @@ export const paramsAction = Object.freeze({
  */
 /** Les parametres d un SWAP_EXACT_IN_SINGLE (0x06), utilisables comme action suivante (buyback automatique).
  *  ⛔ `montant` 0 = OPEN_DELTA : le routeur prend TOUT le credit de la devise d entree (V4Router, lu a la source). */
-export function paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme }) {
+/* ⛔ 2026-10-02 `hookData` (hex SANS 0x, longueur paire) : '' par defaut -> octets IDENTIQUES a avant (teste).
+ *    Seul usage : la part referrer publique d o1 (`referent-o1.js`), drapeau OFF. */
+export function paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme, hookData = '' }) {
   const champs = forme === AVEC_MINHOP ? 9 : 8;
+  const hd = String(hookData || '').replace(/^0x/, '').toLowerCase();
+  if (hd.length % 2 || !/^[0-9a-f]*$/.test(hd)) throw new Error('hookData: hex attendu');
+  const queue = mot(hd.length / 2) + (hd.length ? hd.padEnd(Math.ceil(hd.length / 64) * 64, '0') : '');
   return mot(0x20) + cleInline(cle) + mot(zeroForOne ? 1 : 0) + mot(montant) + mot(sortieMin)
     + (forme === AVEC_MINHOP ? mot(0) : '')
-    + mot((champs + 1) * 32) + mot(0);
+    + mot((champs + 1) * 32) + queue;
 }
 
-export function encodeV4Swap({ cle, zeroForOne, montant, sortieMin, deadline, forme, actions }) {
-  const tete = paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme });
+export function encodeV4Swap({ cle, zeroForOne, montant, sortieMin, deadline, forme, actions, hookData = '' }) {
+  const tete = paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme, hookData });
   const elements = [dyn(tete), ...actions.map((a) => dyn(a.params))];
   let curseur = BigInt(32 * elements.length);
   const offsets = elements.map((e) => { const o = mot(curseur); curseur += BigInt(e.length / 2); return o; });
