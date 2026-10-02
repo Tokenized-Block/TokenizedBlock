@@ -349,4 +349,55 @@ eq(soiRetireDesAmis([], SM, 'SM14'), [], 'TEMOIN : aucun ami, rien a dire');
 ok(/const \{ voix, notes \} = nettoyerVoix\(lireFormulaireVoix\(\)\);\r?\n\s*notes\.unshift\(\.\.\.soiRetireDesAmis\(listeVoix\(\$\('#pvAmis'\)\.value, ','\), adr, symProfil\)\);/.test(bloc)
   && /' Removed: ' \+ notes\.join\(', '\)/.test(bloc), 'enregistrerVoix met « SM14 (this block) » en tete de « Removed: … »');
 
+console.log('— 13. revue v6 : la fiche lue rafraichit la voix de la map, « Saved… » sous le bouton Save');
+/* 1) peindreVoixProfil, la vraie, sur de faux elements : une voix gardee (10 min) ne survit pas a une lecture fraiche */
+const fProfil = 'async ' + fonction('peindreVoixProfil'); /* l extraction commence a « function » */
+ok(fProfil.length > 300 && /cache: 'no-store'/.test(fProfil) && /async function peindreVoixProfil\(/.test(app), 'peindreVoixProfil extraite (lecture no-store)');
+const VIEILLE = nettoyerVoix({ sujets: ['coffee', 'football', 'rain'] }).voix, NEUVE = nettoyerVoix({ sujets: ['tea', 'chess', 'rain'], savoir: 'We sell tea. Not this.' }).voix;
+const SMV = '0xb200000000000000000000e7e544d1292a095c36';
+const lireFiche = async (reponse, source = fProfil) => {
+  const el = {}; const $ = (q) => (el[q] = el[q] || { textContent: '', className: '', open: false, hidden: false });
+  const connues = new Map([[SMV, { voix: lireVoixPublique(voixPublique(VIEILLE)), a: Date.now() }]]);
+  const f = new Function('$', 'fetch', 'voixConnues', 'nettoyerVoix', 'voixPublique', 'lireVoixPublique', 'remplirVoix', 'annoncerSousSave', 'peindreAccesVoix',
+    'let voixProfilJeton = 0, voixCreateur = null; const CHAINE = 8453, PIED_VOIX = "", symProfil = "SM14";\n' + source + '\nreturn peindreVoixProfil;')(
+    $, async () => ({ json: async () => reponse }), connues, nettoyerVoix, voixPublique, lireVoixPublique, () => {}, () => {}, () => 'CONNECTER');
+  await f(SMV, 'SM14');
+  return connues.get(SMV);
+};
+const apresLecture = await lireFiche({ ok: true, voix: NEUVE, createur: CREATEUR });
+eq(apresLecture.voix.sujets, ['tea', 'chess', 'rain'], 'la fiche lue frais : la map de ce visiteur parle avec « tea, chess, rain »');
+ok(!JSON.stringify(apresLecture.voix).includes('Not this.') && JSON.stringify(apresLecture.voix).includes('We sell tea.'), 'et seule la forme PUBLIQUE est gardee pour la map (le resume, pas le savoir entier)');
+eq((await lireFiche({ ok: true, voix: null, createur: CREATEUR })).voix, null, 'voix remise par defaut : la map revient a la parole d avant');
+eq((await lireFiche({ ok: false })).voix.sujets, ['coffee', 'football', 'rain'], 'TEMOIN : lecture ratee, on garde ce qu on avait (rien ne s invente)');
+const sansRafraichir = fProfil.replace(/\r?\n[^\r\n]*voixConnues\.set\([^\r\n]*/, '');
+ok(sansRafraichir !== fProfil, 'TEMOIN : la ligne qui rafraichit est bien celle retiree ci-dessous');
+eq((await lireFiche({ ok: true, voix: NEUVE, createur: CREATEUR }, sansRafraichir)).voix.sujets, ['coffee', 'football', 'rain'], 'TEMOIN : sans elle, la map gardait « coffee, football, rain » 10 min');
+/* 2) annoncerSousSave, la vraie : sous le bouton, a la place de la ligne Reset, puis la ligne revient */
+const fFlash = fonction('annoncerSousSave');
+ok(fFlash.length > 100, 'annoncerSousSave extraite');
+const flash = () => {
+  const el = { '#pvBasFlash': { hidden: true, textContent: '' }, '#pvBasReset': { hidden: false } }; let minuterie = null, delai = 0;
+  const go = new Function('$', 'setTimeout', 'clearTimeout', 'let voixFlash = 0; const VOIX_FLASH_MS = 6000;\n' + fFlash + '\nreturn annoncerSousSave;')(
+    (q) => el[q], (f, ms) => { minuterie = f; delai = ms; return 1; }, () => { minuterie = null; });
+  return { el, go, tic: () => minuterie && minuterie(), delai: () => delai };
+};
+const F = flash(); F.go('Saved. Everyone now hears these words from this block. Removed: SM14 (this block).');
+eq([F.el['#pvBasFlash'].hidden, F.el['#pvBasReset'].hidden, F.el['#pvBasFlash'].textContent], [false, true, 'Saved. Everyone now hears these words from this block. Removed: SM14 (this block).'],
+  '« Saved… Removed: SM14 (this block). » sous le bouton, la ligne Reset cachee');
+ok(F.delai() >= 3000 && F.delai() <= 10000, 'pour quelques secondes (' + F.delai() + ' ms)');
+F.tic();
+eq([F.el['#pvBasFlash'].hidden, F.el['#pvBasReset'].hidden, F.el['#pvBasFlash'].textContent], [true, false, ''], 'puis « Reset to default — not saved until you sign » revient');
+const G = flash(); G.go('Saved.'); G.go(null);
+eq([G.el['#pvBasFlash'].hidden, G.el['#pvBasReset'].hidden], [true, false], 'une autre fiche ouverte : la ligne revient tout de suite');
+const H = flash();
+eq([H.el['#pvBasFlash'].hidden, H.el['#pvBasReset'].hidden], [true, false], 'TEMOIN : sans sauvegarde, rien ne change sous le bouton');
+eq(F.el['#pvBasFlash'].className, 'note wOk', '« Saved… » en vert');
+const K = flash(); K.go('Not saved: our network could not check this right now.', true);
+eq([K.el['#pvBasFlash'].hidden, K.el['#pvBasFlash'].className], [false, 'note wKo'], '« Not saved: … » s affiche au meme endroit, en rouge');
+ok((bloc.match(/annoncerSousSave\(note\.textContent, true\); return;/g) || []).length === 2, 'les deux refus apres la signature (wallet, serveur) passent aussi sous le bouton');
+const bas = (carte.match(/<div class="pvBas"[\s\S]*?<\/div>/) || [''])[0];
+ok(/id="pvEnregistrer"[\s\S]*id="pvBasReset"[\s\S]*not saved until you sign\.<\/p>\r?\n\s*<p class="note wOk" id="pvBasFlash" hidden/.test(bas), 'le message vit DANS la barre collante, juste sous le bouton Save');
+ok(!/id="pvNote"/.test(bas), 'TEMOIN : le pied #pvNote, lui, est hors de la barre (sous la barre d onglets sur mobile)');
+ok(/annoncerSousSave\(note\.textContent\);\r?\n\}/.test(bloc) && /remplirVoix\(null, sym\);\r?\n\s*annoncerSousSave\(null\);/.test(bloc), 'enregistrerVoix annonce le meme texte ; ouvrir une fiche remet la ligne');
+
 console.log('\n' + n + ' assertions, 0 KO');

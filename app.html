@@ -2569,7 +2569,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           </details>
           <div class="pvBas" style="position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));z-index:4;background:var(--creux);padding:8px 0 6px;margin-top:8px">
             <button class="bouton" id="pvEnregistrer" type="button" style="width:100%">Save · free signature</button>
-            <p class="note" style="margin:6px 0 0"><button type="button" class="lienLearn" id="pvEffacer">Reset to default</button> — not saved until you sign.</p>
+            <p class="note" id="pvBasReset" style="margin:6px 0 0"><button type="button" class="lienLearn" id="pvEffacer">Reset to default</button> — not saved until you sign.</p>
+            <p class="note wOk" id="pvBasFlash" hidden style="margin:6px 0 0"></p>
           </div>
           <p class="note" id="pvNote">Everything here is public and read by other blocks. Signing is free and moves no money. Links, wallet addresses and price promises are removed.</p>
         </details>
@@ -10742,10 +10743,13 @@ function peindreAccesVoix() {
   return etat;
 }
 let voixProfilJeton = 0;
+const VOIX_FLASH_MS = 6000; /* annoncerSousSave : « Saved… » sous le bouton, puis la ligne Reset revient */
+let voixFlash = 0;
 async function peindreVoixProfil(adr, sym) {
   const moi = ++voixProfilJeton;
   voixCreateur = null;
   remplirVoix(null, sym);
+  annoncerSousSave(null);
   $('#pvNote').className = 'note';
   $('#pvNote').textContent = PIED_VOIX;
   $('#pvEditer').open = false;
@@ -10758,6 +10762,9 @@ async function peindreVoixProfil(adr, sym) {
   if (!j || j.ok !== true) { $('#pvEtat').textContent = 'not read'; return; }
   voixCreateur = /^0x[0-9a-fA-F]{40}$/.test(String(j.createur || '')) ? String(j.createur).toLowerCase() : null;
   remplirVoix(j.voix ? nettoyerVoix(j.voix).voix : null, sym || symProfil);
+  /* ⛔ 2026-10-02 : la fiche lue frais (no-store) REMPLACE la voix gardee 10 min pour la map — sinon ce visiteur lit
+   *   « tea, chess, rain » sur la fiche mais la map de sa page parle encore avec l ancienne voix. */
+  voixConnues.set(String(adr).toLowerCase(), { voix: lireVoixPublique(voixPublique(j.voix ? nettoyerVoix(j.voix).voix : null)), a: Date.now() });
   peindreAccesVoix();
 }
 async function enregistrerVoix() {
@@ -10779,19 +10786,32 @@ async function enregistrerVoix() {
   try { signature = await window.ethereum.request({ method: 'personal_sign', params: [hexV, compte] }); }
   catch (err) {
     const refus = err && (err.code === 4001 || /reject|denied/i.test(String(err.message || err)));
-    note.className = 'note wKo'; note.textContent = refus ? 'You did not sign. Nothing changed.' : 'Signing failed. Nothing changed.'; return;
+    note.className = 'note wKo'; note.textContent = refus ? 'You did not sign. Nothing changed.' : 'Signing failed. Nothing changed.'; annoncerSousSave(note.textContent, true); return;
   }
   let r = null;
   try {
     r = await fetch('/api/voix/' + adr, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ voix, horodatage, signature, tx: (cre && cre.tx) || null }) }).then((x) => x.json());
   } catch (_) { r = { ok: false, pourquoi: 'the server did not answer' }; }
-  if (!r || r.ok !== true) { note.className = 'note wKo'; note.textContent = 'Not saved: ' + String((r && r.pourquoi) || 'refused') + '.'; return; }
+  if (!r || r.ok !== true) { note.className = 'note wKo'; note.textContent = 'Not saved: ' + String((r && r.pourquoi) || 'refused') + '.'; annoncerSousSave(note.textContent, true); return; }
   voixConnues.set(adr, { voix: lireVoixPublique(voixPublique(r.voix)), a: Date.now() });
   remplirVoix(r.voix, symProfil);
   note.className = 'note wOk';
   note.textContent = (r.voix ? 'Saved. Everyone now hears these words from this block.' : 'Saved: back to default.')
     + (notes.length ? ' Removed: ' + notes.join(', ') + '.' : '');
+  annoncerSousSave(note.textContent);
+}
+/* ⛔ 2026-10-02 : « Saved… » s affiche SOUS le bouton Save, a la place de « Reset to default — not saved until you sign »,
+ *   quelques secondes, puis la ligne revient. Le pied #pvNote est sous la barre d onglets : hors ecran sur mobile.
+ *   ⛔ annoncerSousSave(null) remet la ligne tout de suite (autre fiche ouverte entre-temps). */
+function annoncerSousSave(texte, ko) {
+  clearTimeout(voixFlash);
+  const f = $('#pvBasFlash'), bas = $('#pvBasReset');
+  const remettre = () => { f.hidden = true; f.textContent = ''; bas.hidden = false; };
+  if (!texte) { remettre(); return; }
+  f.className = ko ? 'note wKo' : 'note wOk'; /* « Not saved: … » aussi : meme endroit, en rouge */
+  f.textContent = texte; f.hidden = false; bas.hidden = true;
+  voixFlash = setTimeout(remettre, VOIX_FLASH_MS);
 }
 $('#pvEnregistrer').addEventListener('click', () => { void enregistrerVoix(); });
 /* ⛔ « Reset » NE SAUVE RIEN : il remet le formulaire par defaut ; rien ne change tant que le createur ne signe pas */
