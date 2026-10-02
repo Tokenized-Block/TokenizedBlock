@@ -69,11 +69,24 @@ export const BPS_A6CF_SPLIT_BLOC = 7n;
 
 /* ══ UN SEUL FRAIS PAR JAMBE (fondateur 2026-10-02 11:06, recommandation Zero 1) ══════════════════════
  * « Celui qui possede la jambe facture, UNE fois. » Une jambe V4 sur un hook TB QUI PRELEVE LUI-MEME le frais
- *   a6cf dans la devise (V8, V9, le hook du berceau 24 h) est DEJA facturee par le hook : le routeur n y ajoute
+ *   a6cf dans la devise (V8, V9, ...) est DEJA facturee par le hook : le routeur n y ajoute
  *   AUCUN PAY_PORTION ni part exacte. Sans cela : 0,09 % (hook) + 0,09 % (routeur) = 0,18 % sur la meme jambe.
- * ⛔ Liste FERMEE, en minuscules. V8 = le hook en production (feeWallet() = a6cf). Les hooks V9 / 24 h, pas encore
- *   deployes, sont passes par l appelant (`hooksFacturants`) le jour de leur adresse — jamais devines. */
-export const HOOKS_FACTURANTS = Object.freeze(['0x5926abdabf5d0006ee960a8270f3e124e5a764cc']);
+ * ⛔⛔ ET L INVERSE (crosscheck Zero 1 2026-10-02, corrige ici) : une jambe SANS hook facturant est la jambe DU
+ *   ROUTEUR — elle paie le frais du routeur, une fois, meme si une AUTRE jambe de la route est hookee. f0b4e91 coupait
+ *   le frais routeur de TOUTE la route des qu une jambe etait hookee : AAPLc -> NVDAc (sans hook) -> block (hook TB)
+ *   ne payait rien sur AAPLc -> NVDAc (fuite a frais nul). Regle :
+ *     · toutes les jambes hookees        => 0 PAY_PORTION (chaque hook facture la sienne) ;
+ *     · au moins une jambe du routeur     => EXACTEMENT 1 PAY_PORTION de 9 bps vers a6cf, pris a un noeud d une jambe
+ *       du routeur (son entree ou sa sortie), jamais en block ; aucune part en plus (le split createur d un block
+ *       appartient au hook de la jambe block) ;
+ *     · aucune jambe hookee               => inchange (1 PAY_PORTION, parts possibles).
+ *   Plusieurs jambes du routeur sur une route paient UN frais routeur (la regle du 2026-10-01 23:25 : une fois par
+ *   swap pour ce que le routeur porte) — inchange pour les routes sans hook.
+ * ⛔ Liste FERMEE, en minuscules. V8 = le hook en production (feeWallet() = a6cf). Les autres hooks TB facturants
+ *   (V9...) sont passes par l appelant (`hooksFacturants`) le jour de leur adresse — jamais devines. (Le berceau 24 h
+ *   est ABANDONNE, fondateur 2026-10-02 13:39 : il n est PAS dans cette liste.) */
+export const HOOK_V8 = '0x5926abdabf5d0006ee960a8270f3e124e5a764cc';
+export const HOOKS_FACTURANTS = Object.freeze([HOOK_V8]);
 export function ensembleHooksFacturants(extra = []) {
   return new Set([...HOOKS_FACTURANTS, ...(extra || []).map((h) => bas(h))].filter((h) => ADR.test(h)));
 }
@@ -81,14 +94,27 @@ export function ensembleHooksFacturants(extra = []) {
 export function jambeFactureeParHook(s, hooks = ensembleHooksFacturants()) {
   return !!(s && s.e && s.e.venue === 'uniswap-v4' && s.e.cle && hooks.has(bas(s.e.cle.hooks)));
 }
+/** au moins UNE jambe facturee par son hook */
 export function routeFactureeParHook(chemin, hooks = ensembleHooksFacturants()) {
   return Array.isArray(chemin) && chemin.some((s) => jambeFactureeParHook(s, hooks));
 }
-/** Garde AVANT envoi : PAY_PORTION / TRANSFER de parts presents si et seulement si aucune jambe n est facturee par son hook. */
+/** TOUTES les jambes facturees par leur hook : le routeur n a aucune jambe a lui, donc aucun frais */
+export function routeEntierementFactureeParHook(chemin, hooks = ensembleHooksFacturants()) {
+  return Array.isArray(chemin) && chemin.length > 0 && chemin.every((s) => jambeFactureeParHook(s, hooks));
+}
+/** les indices de NOEUDS qui touchent une jambe du ROUTEUR (sans hook facturant) : la ou le routeur facture SA jambe */
+export function noeudsJambesRouteur(chemin, hooks = ensembleHooksFacturants()) {
+  const s = new Set();
+  (Array.isArray(chemin) ? chemin : []).forEach((x, i) => { if (!jambeFactureeParHook(x, hooks)) { s.add(i); s.add(i + 1); } });
+  return s;
+}
+/** Garde AVANT envoi : toutes les jambes hookees => 0 PAY_PORTION et 0 part ; route mixte => EXACTEMENT 1 PAY_PORTION et
+ *  0 part ; route sans hook => EXACTEMENT 1 PAY_PORTION. */
 export function unFraisParJambe(tx, chemin, hooks = ensembleHooksFacturants()) {
   const n = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.PAY_PORTION).length;
   const parts = (tx && tx.commandes ? tx.commandes : []).filter((c) => c === CMD.TRANSFER).length;
-  if (routeFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
+  if (routeEntierementFactureeParHook(chemin, hooks)) return n === 0 && parts === 0;
+  if (routeFactureeParHook(chemin, hooks)) return n === 1 && parts === 0;
   return n === 1;
 }
 
@@ -227,16 +253,22 @@ export function cheminsCandidats(aretes, de, vers, { sautsMax = 3, max = 12 } = 
  *   TOT (un frais pris a l entree est exact sans aucun prix). Aucun noeud admis => REFUSE : on ne
  *   prend jamais le frais dans un block, et on ne fait pas non plus un swap gratuit en silence.
  */
-export function placerFrais(chemin, admises) {
+export function placerFrais(chemin, admises, { candidats = null } = {}) {
   if (!Array.isArray(chemin) || !chemin.length) return { etat: 'REFUSE', pourquoi: 'no path' };
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
   let meilleur = null;
   noeuds.forEach((n, i) => {
+    /* route mixte : seuls les noeuds d une jambe du ROUTEUR (`candidats`) peuvent porter SON frais */
+    if (candidats instanceof Set && !candidats.has(i)) return;
     const r = rangFrais(n, admises);
     if (r === null) return;
     if (!meilleur || r < meilleur.rang) meilleur = { indice: i, rang: r, devise: noeud(n) };
   });
   if (!meilleur) {
+    if (candidats instanceof Set) {
+      return { etat: 'REFUSE', pourquoi: 'no node of the router legs of this path is ETH, USDC or an admitted stock/B20 — '
+        + 'the router leg would go unpaid or be paid in a block token, both refused' };
+    }
     return { etat: 'REFUSE', pourquoi: 'no node of this path is ETH, USDC or an admitted stock/B20 — '
       + 'the fee would have to be taken in a block token, which is refused' };
   }
@@ -297,9 +329,13 @@ export function devisSaut(s, montant) {
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
-  /* une jambe facturee par son hook : le DEVIS V4 inclut deja le frais du hook, le routeur ne retient rien */
-  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
-  const pl = parHook ? { etat: 'OK', indice: -1, devise: null } : (placement || placerFrais(chemin, admises));
+  /* toutes les jambes hookees : le DEVIS V4 inclut deja chaque frais de hook, le routeur ne retient rien.
+   * route mixte : le routeur retient SON frais a un noeud d une de SES jambes ; les jambes hookees sont au devis V4. */
+  const hooks = ensembleHooksFacturants(hooksFacturants);
+  const parHook = routeEntierementFactureeParHook(chemin, hooks);
+  const mixte = !parHook && routeFactureeParHook(chemin, hooks);
+  const pl = parHook ? { etat: 'OK', indice: -1, devise: null }
+    : (placement || placerFrais(chemin, admises, mixte ? { candidats: noeudsJambesRouteur(chemin, hooks) } : {}));
   if (pl.etat !== 'OK') return { etat: 'REFUSE', pourquoi: pl.pourquoi };
   let courant = BigInt(montant);
   if (courant <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
@@ -318,7 +354,7 @@ export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_B
     if (out <= 0n) return { etat: 'REFUSE', saut: i + 1, pourquoi: 'hop ' + (i + 1) + ' returns nothing' };
     courant = out;
   }
-  return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook };
+  return { etat: 'OK', sortie: courant, frais, fraisIndice: parHook ? null : pl.indice, fraisDevise: pl.devise, avantFrais, fraisParHook: parHook, routeMixte: mixte };
 }
 
 /* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
@@ -424,18 +460,24 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
-  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur ne preleve RIEN (ni PAY_PORTION ni part
-   *   exacte). Une part demandee en plus sur une telle route est REFUSEE (ce serait 0,18 %). */
-  const parHook = routeFactureeParHook(chemin, ensembleHooksFacturants(hooksFacturants));
-  if (parHook) {
+  /* ⛔⛔ UN SEUL FRAIS PAR JAMBE : une jambe facturee par son hook => le routeur n y preleve RIEN (ni PAY_PORTION ni part
+   *   exacte). Une part demandee en plus sur une route hookee est REFUSEE (ce serait 0,18 %). Toutes les jambes hookees
+   *   => aucun frais routeur. Route MIXTE => le frais routeur de 9 bps, UNE fois, a un noeud d une jambe du routeur. */
+  const hooks = ensembleHooksFacturants(hooksFacturants);
+  const unHook = routeFactureeParHook(chemin, hooks);
+  const parHook = routeEntierementFactureeParHook(chemin, hooks);
+  if (unHook) {
     if ((Array.isArray(partsExactes) && partsExactes.length) || BigInt(bpsA6cf) !== FRAIS_BPS
       || (Array.isArray(partsFrais) && partsFrais !== PARTS_FRAIS && partsFrais.some((p) => bas(p.qui) !== ADRESSES.FEE_WALLET || BigInt(p.bps) !== FRAIS_BPS))
       || (Array.isArray(partsFrais) && partsFrais.length > 1)) {
       return { etat: 'REFUSE', pourquoi: 'refused: a leg of this path is on a TB hook that charges the fee itself — a router fee or share on top would charge the same leg twice (0.18 %)' };
     }
-    return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts: [], exactes: [], fraisIndice: -1, devFrais: null, parHook });
+    if (parHook) return assembler({ chemin, m, mn, destinataire, deadline, noeuds, parts: [], exactes: [], fraisIndice: -1, devFrais: null, parHook });
   }
   if (!Number.isInteger(fraisIndice) || fraisIndice < 0 || fraisIndice > chemin.length) return { etat: 'REFUSE', pourquoi: 'fee node index out of the path' };
+  if (unHook && !noeudsJambesRouteur(chemin, hooks).has(fraisIndice)) {
+    return { etat: 'REFUSE', pourquoi: 'refused: on a path mixing TB-hooked legs and router legs, the router fee must be taken at a node of a router leg (each leg pays exactly once)' };
+  }
   /* ⛔⛔ LE VERROU : la devise du frais DOIT etre admise. On le reverifie ICI, meme si `placerFrais`
    *   l a deja fait : un appelant qui passerait un indice a la main ne doit pas pouvoir payer a6cf
    *   en block. C est le temoin negatif n°1 du banc. */

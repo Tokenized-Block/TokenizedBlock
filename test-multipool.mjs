@@ -179,6 +179,77 @@ console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
   const iS = v3puisV4.commandes.lastIndexOf(CMD.V4_SWAP);
   ok('6p. TEMOIN : V4 apres V3 (montant inconnu) => SETTLE(CONTRACT_BALANCE) PUIS SWAP (ancien ordre, nomme)', actionsV4(v3puisV4.entrees[iS]) === '0b,06,0e' && v3puisV4.entrees[iS].includes(CONTRACT_BALANCE.toString(16).padStart(64, '0')), actionsV4(v3puisV4.entrees[iS]));
 }
+/* ══ 7. ROUTE MIXTE : CHAQUE JAMBE PAIE EXACTEMENT UNE FOIS (crosscheck Zero 1 2026-10-02, fondateur 13:41) ══
+ * Une jambe hookee (V8 / hook TB nomme) est facturee par son hook ; une jambe SANS hook facturant est celle du routeur et paie
+ * 9 bps a a6cf, UNE fois, a un noeud de cette jambe. f0b4e91 coupait le frais de toute la route des qu une jambe etait hookee. */
+console.log('=== 7. route mixte : chaque jambe paie une fois ===');
+{
+  const mp = await import('./multipool.js');
+  const { HOOKS_FACTURANTS, HOOK_V8, routeFactureeParHook, routeEntierementFactureeParHook, noeudsJambesRouteur, unFraisParJambe, ensembleHooksFacturants } = mp;
+  const fs = await import('node:fs');
+  const nbA6cf = (t) => (t && t.data ? t.data.split(FEE_WALLET.slice(2)).length - 1 : -1);
+  const nbPP = (t) => (t && t.commandes ? t.commandes.filter((c) => c === CMD.PAY_PORTION).length : -1);
+  const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c', BLOC = '0xb2000000000000000000000000000000000b10c0';
+  const HTB = '0x' + '9'.repeat(36) + '24cc'; /* un hook TB facturant passe par l appelant (adresse de test) */
+  const trie = (a, b) => (a < b ? [a, b] : [b, a]);
+  const adm = new Set([...ADMISES, NVDA]);
+  const H8 = ensembleHooksFacturants();
+
+  /* -- la liste par defaut : V8 SEUL, aucun berceau 24 h -- */
+  ok('7a. liste par defaut = [V8] exactement (berceau 24 h abandonne : absent)', HOOKS_FACTURANTS.length === 1 && HOOKS_FACTURANTS[0] === HOOK_V8 && HOOK_V8 === '0x5926abdabf5d0006ee960a8270f3e124e5a764cc', JSON.stringify(HOOKS_FACTURANTS));
+  ok('7b. aucun export / fichier de config du berceau', !('HOOK_BERCEAU_24H' in mp) && !fs.existsSync(new URL('./config-hooks-facturants.js', import.meta.url)));
+
+  /* -- V8 MIXTE, liste par defaut (aucun hooksFacturants) : USDC -(v4 sans hook)-> ETH -(V8)-> TBGAS -- */
+  const v8m = [{ de: USDC, vers: ETH, e: G[0] }, { de: ETH, vers: TBGAS, e: G[6] }];
+  ok('7c. USDC -> ETH -> TBGAS (V8) : route MIXTE, noeuds routeur {0,1}', routeFactureeParHook(v8m, H8) && !routeEntierementFactureeParHook(v8m, H8) && [...noeudsJambesRouteur(v8m, H8)].join(',') === '0,1');
+  const pV8 = placerFrais(v8m, ADMISES, { candidats: noeudsJambesRouteur(v8m, H8) });
+  const rV8 = construireRoute({ ...base, montant: 10n ** 6n, chemin: v8m, fraisIndice: pV8.indice });
+  ok('7d. V8 mixte : EXACTEMENT 1 PAY_PORTION, a6cf UNE fois dans le calldata, 0 part, frais sur la jambe routeur', rV8.etat === 'PRET' && nbPP(rV8) === 1 && nbA6cf(rV8) === 1 && !rV8.commandes.includes(CMD.TRANSFER) && rV8.fraisParHook === false && (pV8.indice === 0 || pV8.indice === 1), rV8.commandes && rV8.commandes.join(',') + ' a6cf x' + nbA6cf(rV8));
+  ok('7e. V8 mixte : la garde unFraisParJambe accepte 1 PAY_PORTION', unFraisParJambe(rV8, v8m) === true);
+  ok('7f. TEMOIN NEGATIF V8 : la meme route a 0 PAY_PORTION (comportement f0b4e91) est REJETEE par la garde', unFraisParJambe({ commandes: ['10', '04'] }, v8m) === false);
+  ok('7g. TEMOIN V8 : 2 PAY_PORTION (jambe V8 payee aussi par le routeur) REJETE', unFraisParJambe({ commandes: ['06', '06', '10', '04'] }, v8m) === false);
+  const rV8t = construireRoute({ ...base, montant: 10n ** 6n, chemin: v8m, fraisIndice: 2 });
+  ok('7h. TEMOIN V8 : frais force au noeud TBGAS (ne touche que la jambe V8) => REFUSE', rV8t.etat === 'REFUSE', rV8t.pourquoi);
+  /* devis : le quoter rend 2e6 ETH-wei pour la jambe 1 ; le frais (ETH, prefere par placerFrais) est pris au noeud 1, SUR la
+   *  jambe routeur, et la jambe V8 recoit le net : 2e6 - floor(2e6 x 9 / 1e4) = 1998200 */
+  vus = [];
+  const deuxM = async (m, [tx]) => { vus.push(tx); return '0x' + (2000000n).toString(16).padStart(64, '0'); };
+  const q8 = await coterChemin({ rpc: deuxM, chemin: v8m, montant: 10n ** 6n, admises: ADMISES });
+  ok('7i. devis V8 mixte : frais routeur 1800 ETH-wei au noeud 1 (jambe routeur), net 1998200 au quoter V8 : 1 seul frais', q8.etat === 'OK' && q8.frais === 1800n && q8.fraisIndice === 1 && q8.fraisDevise === ETH && q8.routeMixte === true && q8.fraisParHook === false && vus.length === 2 && vus[0].data.includes((10n ** 6n).toString(16).padStart(64, '0')) && vus[1].data.includes((2000000n - 1800n).toString(16).padStart(64, '0')), String(q8.frais) + ' @' + q8.fraisIndice);
+  /* sens inverse : TBGAS -(V8)-> ETH -(sans hook)-> USDC : le noeud 0 (TBGAS) ne porte jamais le frais */
+  const v8r = [{ de: TBGAS, vers: ETH, e: G[6] }, { de: ETH, vers: USDC, e: G[0] }];
+  const rR0 = construireRoute({ ...base, chemin: v8r, fraisIndice: 0 });
+  const rR1 = construireRoute({ ...base, chemin: v8r, fraisIndice: 1 });
+  ok('7j. TBGAS -(V8)-> ETH -> USDC : frais au noeud 0 => REFUSE ; au noeud 1 (ETH) => 1 PAY_PORTION, a6cf x1', rR0.etat === 'REFUSE' && rR1.etat === 'PRET' && nbPP(rR1) === 1 && nbA6cf(rR1) === 1 && rR1.fraisDevise === ETH, rR1.commandes && rR1.commandes.join(','));
+  const rRx = construireRoute({ ...base, chemin: v8r, fraisIndice: 1, partsExactes: [{ qui: USER, montant: 1n }], bpsA6cf: 7n });
+  ok('7k. TEMOIN V8 mixte + part createur en plus => REFUSE (la jambe V8 serait payee deux fois)', rRx.etat === 'REFUSE' && /twice/.test(rRx.pourquoi), rRx.pourquoi);
+
+  /* -- le cas de Zero 1 : AAPLc -(sans hook)-> NVDAc -(hook TB nomme)-> block : 90,000 AAPLc-wei, pas 0 -- */
+  const jT = (x, y) => v4(...trie(x, y), 0, 200, HTB);
+  const libre = (x, y) => v4(...trie(x, y), 500, 10, ETH);
+  const mixte = [{ de: AAPL, vers: NVDA, e: libre(AAPL, NVDA) }, { de: NVDA, vers: BLOC, e: jT(NVDA, BLOC) }];
+  const HT = ensembleHooksFacturants([HTB]);
+  vus = [];
+  const qm = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm, hooksFacturants: [HTB] });
+  ok('7l. AAPLc -> NVDAc -> block : frais routeur = floor(1e8 x 9 / 1e4) = 90000 AAPLc-wei au noeud 0 (f0b4e91 : 0)', qm.etat === 'OK' && qm.frais === 90000n && qm.fraisIndice === 0 && qm.fraisDevise === AAPL && qm.routeMixte === true && vus[0].data.includes((10n ** 8n - 90000n).toString(16).padStart(64, '0')), String(qm.frais));
+  ok('7m. ... et la jambe hookee recoit le montant brut de sa jambe (aucune 2e retenue routeur : 2 devis, 1 seul frais)', vus.length === 2 && vus[1].data.includes((123n).toString(16).padStart(64, '0')), String(vus.length));
+  const rm = construireRoute({ ...base, admises: adm, montant: 10n ** 8n, chemin: mixte, fraisIndice: 0, hooksFacturants: [HTB] });
+  ok('7n. route : EXACTEMENT 1 PAY_PORTION en AAPLc, a6cf x1, 0 part', rm.etat === 'PRET' && nbPP(rm) === 1 && nbA6cf(rm) === 1 && rm.fraisDevise === AAPL && !rm.commandes.includes(CMD.TRANSFER), rm.commandes && rm.commandes.join(','));
+  ok('7o. garde : 1 PAY_PORTION OK ; 0 (f0b4e91) et 2 REJETES', unFraisParJambe(rm, mixte, HT) && !unFraisParJambe({ commandes: ['10', '04'] }, mixte, HT) && !unFraisParJambe({ commandes: ['06', '06', '10', '04'] }, mixte, HT));
+  ok('7p. TEMOIN : frais force au noeud block => REFUSE', construireRoute({ ...base, admises: adm, chemin: mixte, fraisIndice: 2, hooksFacturants: [HTB] }).etat === 'REFUSE');
+  /* 3 sauts : NVDAc -(TB)-> block -(TB)-> AAPLc -(sans hook)-> USDC : noeud 0 ne touche que des jambes hookees */
+  const trois = [{ de: NVDA, vers: BLOC, e: jT(NVDA, BLOC) }, { de: BLOC, vers: AAPL, e: jT(BLOC, AAPL) }, { de: AAPL, vers: USDC, e: cl(AAPL, USDC) }];
+  const r0 = construireRoute({ ...base, admises: adm, chemin: trois, fraisIndice: 0, hooksFacturants: [HTB] });
+  const pT = placerFrais(trois, adm, { candidats: noeudsJambesRouteur(trois, HT) });
+  ok('7q. 3 sauts : frais au noeud 0 (jambes hookees seules) => REFUSE ; placerFrais choisit un noeud de la jambe routeur (2 ou 3)', r0.etat === 'REFUSE' && /router leg/.test(r0.pourquoi) && pT.etat === 'OK' && (pT.indice === 2 || pT.indice === 3), JSON.stringify(pT));
+  /* toutes les jambes hookees (V8 par defaut + TB nomme) => 0 */
+  const tous = [{ de: TBGAS, vers: ETH, e: G[6] }, { de: ETH, vers: NVDA, e: jT(ETH, NVDA) }];
+  const rt = construireRoute({ ...base, admises: adm, chemin: tous, fraisIndice: 0, hooksFacturants: [HTB] });
+  ok('7r. V8 + hook TB, toutes jambes hookees => 0 PAY_PORTION, a6cf absent du calldata', rt.etat === 'PRET' && nbPP(rt) === 0 && nbA6cf(rt) === 0 && rt.fraisParHook === true && unFraisParJambe(rt, tous, HT), rt.commandes && rt.commandes.join(','));
+  vus = [];
+  const qa = await coterChemin({ rpc: espion, chemin: [{ de: NVDA, vers: BLOC, e: jT(NVDA, BLOC) }], montant: 10n ** 8n, admises: adm, hooksFacturants: [HTB] });
+  ok('7s. jambe hookee seule : frais routeur 0 (inchange)', qa.etat === 'OK' && qa.frais === 0n && qa.fraisParHook === true, String(qa.frais));
+}
 void faux; void noeud; void CONTRACT_BALANCE;
 console.log('\n' + n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);
