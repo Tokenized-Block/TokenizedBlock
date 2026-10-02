@@ -2351,6 +2351,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="sfCreateFeeHonesty" hidden></p>
       <p class="note" id="sfFeeRecu" hidden></p>
       <p class="note" id="sfFeedTrustHonesty" hidden></p>
+      <!-- ⛔ 2026-10-02 (fondateur) : l explication du routage, UNE fois au-dessus de la liste, jamais par ligne ni en infobulle -->
+      <p class="note" id="sfLiveRoute" hidden>We read every pool of these blocks and route your buy to the cheapest.</p>
       <ul class="fil" id="sfLive"></ul>
       <div class="sentinelle" id="sfLiveFin" aria-hidden="true"></div>
       <div id="sfLiveFin" style="height:1px"></div>
@@ -10328,14 +10330,16 @@ function enfantsDuFil(e, cleG, nom) {
       t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'a fragment') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
     } else if (c.type === 'ACHAT' || c.type === 'VENTE') {
       t = ligneEchange({ ...c, n: 1 }, nom, true);
-    } else t = '↔ traded';
+    } else if (c.type === 'CREATION') t = '🧱 born on another launchpad';
+    else t = '↔ traded';
     const memeBloc = i > 0 && tous[i - 1].bloc === c.bloc;
     return '<li class="filS" style="margin:2px 0">' + t + '<span style="white-space:nowrap">' + (memeBloc ? '' : ' · ' + bloc(c)) + tx(c) + '</span></li>';
   }).join('');
   const reste = e.enfants.length - montres;
   const rN = e.type === 'NOTE' ? resumeNotes(e.enfants, notesLues) : null;
   const frais = e.enfants.some((c) => c.fraisMarche && c.quantite) ? ' · amounts are before this market\'s fee' : '';
-  const tete = e.type === 'NOTE'
+  const tete = e.type === 'CREATION' ? ''
+    : e.type === 'NOTE'
     ? (libelleNotes(rN).spam ? '<p class="filS" data-fil-spam><b>' + enTexte(AVERT_SPAM) + '</b></p>' : '')
       + '<p class="filS" data-fil-notes-resume>' + enTexte(phraseNotes(rN, e.blocBas, e.blocHaut)) + '</p>'
     : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first' + frais + '</p>';
@@ -10356,6 +10360,18 @@ function lireNotesAuto() {
     notesAuto.add(cle);
     void lireNotesDuGroupe(cle);
   }
+}
+/* ⛔⛔ 2026-10-02 (fondateur) : chaque ligne « born on another launchpad » repetait « block N · tx · Buy here — we read
+ *     every pool of this block and route the cheapest · Open a market on TB · 0.001 ETH · Open profile ».
+ *   ⇒ Ligne compacte ; block et tx seulement dans le deplie ; l explication UNE fois (#sfLiveRoute).
+ *   ⛔ « Open on TB 0.001 ETH » ne se coupe jamais (espaces insecables) ; si la ligne se replie, elle
+ *     se replie AVANT « Buy » : les deux actions restent ensemble. Routage et frais : inchanges. */
+const estEtrangere = (e) => e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
+function actionsEtrangeres(jeton) {
+  const j = enTexte(jeton);
+  return ' · <span class="filActs" style="white-space:nowrap"><a href="#" class="filOpen" data-fil-profil="' + j + '">Buy</a>'
+    + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open&nbsp;on&nbsp;TB&nbsp;0.001&nbsp;ETH</button>'
+    + ' · <a href="#" class="filOpen" data-fil-profil="' + j + '">profile&nbsp;›</a></span>';
 }
 async function lireNotesDuGroupe(cleG) {
   const e = liveLignesParCle.get(cleG);
@@ -10426,7 +10442,8 @@ function peindreLive() {
   $('#sfLive').innerHTML = lignes.slice(0, liveAffiches).map((e) => {
     const nom = enTexte(String(e.sym || '?').slice(0, 14));
     /* ⛔ 2026-10-02 : une ligne groupee (ou une note) SE DEPLIE au toucher ; le profil a son propre lien. */
-    const depliable = estDepliable(e);
+    const etrangere = estEtrangere(e);
+    const depliable = estDepliable(e) || etrangere;
     const cleG = depliable ? cleGroupe(e) : '';
     if (depliable) liveLignesParCle.set(cleG, e);
     const deplie = depliable && liveDeplies.has(cleG);
@@ -10442,7 +10459,7 @@ function peindreLive() {
         : (CHAINE === 8453
           ? (poolDecouvertPour(e.jeton) && poolDecouvertPour(e.jeton).isTbFeeHook
               ? '🧱 <b>' + nom + '</b> market open · it was not created on TokenizedBlock'
-              : '🧱 <b>' + nom + '</b> was born on another launchpad')
+              : '🧱 <b>' + nom + '</b> · born on another launchpad')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       /* ⛔ REVUE 13:32 : un groupe dit son TOTAL et son nombre de wallets, pas le montant et le destinataire du dernier */
       : e.type === 'GM' ? (e.n > 1 ? '➡️ <b>' + nom + '</b> ' + enTexte(titreEnvois(resumeEnvois(e.enfants), lisible))
@@ -10467,7 +10484,7 @@ function peindreLive() {
     /* tip 20260922-fee-funnel: Created unhooked row — primary V8 CTA, Open profile secondary (same profile path) */
     /* tip 20260923-feed-catch-router: ANY unpaid MAIN Created row → primary Instant Birth on TB.
      * Still NO foreign V8 birth. Handler data-tf-act=instant-birth-tb → #creer. */
-    const foreignCreate = e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
+    const foreignCreate = etrangere;
     /* tip 20260923-reclaim-volume: stronger primary IB — birth on TB opens hooked market / Buy path */
     /* ⛔⛔ L OFFRE A CHANGE, ET C EST UNE MESURE QUI L A DICTEE (2026-09-23, Phil : « change
      *     l offre, dig toi-meme »). Cette ligne proposait « Instant Birth on TB · 0.001 ETH ·
@@ -10488,10 +10505,7 @@ function peindreLive() {
      *     ⛔ LE CHEMIN NAISSANCE RESTE, EN SECONDAIRE, et son libelle dit ce qu il FAIT : un block
      *       sans marche en a encore besoin, et le retirer casserait le seul rail qui ait jamais
      *       rapporte quoi que ce soit. */
-    const openHint = foreignCreate
-      ? ' · <span class="filOpen">Buy here — we read every pool of this block and route the cheapest</span>'
-        + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open a market on TB · 0.001 ETH</button>'
-        + ' · <span class="filOpen">Open profile</span>'
+    const openHint = foreignCreate ? ''
       : depliable
         ? ' · <span class="filOpen">' + (deplie ? '▴ tap to hide' : '▾ tap to show ' + (e.n > 1 ? 'all ' + e.n : 'it')) + '</span>'
           + ' · <a href="#" class="filOpen" data-fil-profil="' + enTexte(e.jeton) + '">profile ›</a>'
@@ -10506,13 +10520,16 @@ function peindreLive() {
       + (e.sym ? ' data-sym="' + enTexte(String(e.sym).slice(0, 14)) + '"' : '')
       + (depliable ? ' data-groupe="' + enTexte(cleG) + '" aria-expanded="' + (deplie ? 'true' : 'false') + '"' : '')
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p>'
+      + '<p class="filT">' + quoi + (foreignCreate ? actionsEtrangeres(e.jeton) : '') + '</p>'
+      + (foreignCreate ? (trustHint ? '<p class="filS">' + trustHint.replace(/^ · /, '') + '</p>' : '')
+        : '<p class="filS">' + plage + lien + openHint + trustHint + '</p>')
       + (deplie ? enfantsDuFil(e, cleG, nom) : '') + '</div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
     /* ⛔ Une liste vide qui ne nomme pas son filtre se lit comme une panne. Elle dit donc CE QU ELLE
      *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
     ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>' : '');
   setTimeout(lireNotesAuto, 0);
+  if ($('#sfLiveRoute')) $('#sfLiveRoute').hidden = !lignes.slice(0, liveAffiches).some(estEtrangere);
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
