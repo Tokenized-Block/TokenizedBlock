@@ -79,6 +79,8 @@ async function lireOpenLaunch() {
  * de la factory B20, lecture seule, ~12 h puis increments (tip 20260923-map-trending)), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations, createurDe } from './index-blocks.js';
+/* ⛔ 2026-10-02 (Raksha) : COMMENT UN BLOCK PARLE, choisi par son createur — meme module que la page (une seule source). */
+import { verifierEcriture, recupererSignataire, proprietaireDuBlock, voixPublique, nettoyerVoix } from './voix-block.js';
 import { frappesVers } from './mes-blocks.js';
 /* ⛔ LE CALCUL DE GLISSEMENT EST PARTAGE AVEC LE CLIENT, pas recopie ici : deux implementations du
  *   meme calcul divergent, et c est le client qui ouvre ou ferme la puce. Une seule source. */
@@ -1011,6 +1013,42 @@ function ecrireCles() {
   } catch (err) { console.warn('[cles] fichier illisible, on repart a vide : ' + err.message); }
 })();
 
+/* ══ LES VOIX DES BLOCKS (Raksha, 2026-10-02) — memoire + volume, meme discipline que les cles ══════ */
+const FICHIER_VOIX = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'voix-blocks.json') : null;
+const VOIX_FICHIER_MAX_OCTETS = 8 * 1024 * 1024;
+const VOIX_CORPS_MAX = 16 * 1024;
+const VOIX_POSTS_MINUTE = 60;
+const VOIX_POSTS_IP_MINUTE = 6;
+const VOIX_MAX_BLOCKS = 3000;
+const voixParBlock = new Map();
+const voixPosts = { minute: 0, n: 0, parIp: new Map() };
+function ecrireVoix() {
+  if (!FICHIER_VOIX) return;
+  try {
+    while (voixParBlock.size > VOIX_MAX_BLOCKS) voixParBlock.delete(voixParBlock.keys().next().value);
+    const payload = JSON.stringify([...voixParBlock]);
+    if (payload.length > VOIX_FICHIER_MAX_OCTETS) return;
+    writeFileSync(FICHIER_VOIX + '.tmp', payload);
+    renameSync(FICHIER_VOIX + '.tmp', FICHIER_VOIX);
+  } catch (err) { /* ⛔ une ecriture ratee ne casse pas une lecture : la memoire suffit */ }
+}
+(function relireVoix() {
+  if (!FICHIER_VOIX || !existsSync(FICHIER_VOIX)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_VOIX, 'utf8'));
+    if (!Array.isArray(brut)) return;
+    /* ⛔ RE-NETTOYE AU CHARGEMENT : un fichier abime ou ancien ne passe pas sans le filtre d aujourd hui */
+    for (const [j, v] of brut) {
+      const { voix } = nettoyerVoix(v && v.voix);
+      if (typeof j === 'string' && /^0x[0-9a-f]{40}$/.test(j) && voix && Number.isFinite(Number(v.horodatage))) {
+        voixParBlock.set(j, { voix, horodatage: Number(v.horodatage), auteur: String(v.auteur || '') });
+      }
+    }
+    console.log('[voix] ' + voixParBlock.size + ' voix relue(s) du volume');
+  } catch (err) { console.warn('[voix] fichier illisible, on repart a vide : ' + err.message); }
+})();
+
 const FICHIER_HOLDERS = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'holders-cache.json') : null;
 /* ⛔ borne dure du fichier : au-dela on n ecrit pas plutot que de remplir le volume */
@@ -1781,6 +1819,8 @@ const SERVIS = [
    *   garde ci-dessous ne relit QUE les imports DIRECTS de `app.html`, donc elle ne dirait rien
    *   d un manque transitif. C est ici qu il faut le declarer, et nulle part ailleurs. */
   'pool-cl.js',
+  /* ⛔ `voix-block.js` : la voix choisie par le createur (importe par parole-cerveaux.js, donc par la page). */
+  'voix-block.js',
   /* ⛔ `routage.js` CLASSE POURQUOI UN MARCHE N EST PAS ECHANGEABLE ICI. Il n a AUCUNE dependance,
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
@@ -2608,6 +2648,67 @@ createServer((req, res) => {
       rendre(rep);
     }).catch((e) => {
       rendre({ ok: false, etat: 'NON_MESURE', pourquoi: 'post not read: ' + String(e.message || e).slice(0, 120) });
+    });
+    return;
+  }
+
+  /* ══ LA VOIX D UN BLOCK : /api/voix (Raksha, 2026-10-02) ══════════════════════════════════════
+   * GET  /api/voix?b=0x…,0x…   → les voix PUBLIQUES (sans le savoir entier, seulement son court resume), 60 au plus
+   * GET  /api/voix/0x…         → la voix entiere d un block (pour sa fiche)
+   * POST /api/voix/0x…         → { voix, horodatage, signature, tx? } — signe par le wallet qui a CREE le block.
+   * ⛔ Ce qui coute du reseau (ecrecover, createur) ne tourne qu apres les verifications gratuites, et au plus
+   *   VOIX_POSTS_MINUTE fois par minute pour tout le serveur. Aucune cle, aucun secret, aucun montant ici. */
+  if (chemin === '/api/voix' || chemin.startsWith('/api/voix/')) {
+    const rendreV = (code, corps) => {
+      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps));
+    };
+    if (chemin === '/api/voix') {
+      const q = new URL(req.url, 'http://x').searchParams;
+      const liste = String(q.get('b') || '').toLowerCase().split(',').filter((a) => /^0x[0-9a-f]{40}$/.test(a)).slice(0, 60);
+      const voix = {};
+      for (const a of liste) { const v = voixParBlock.get(a); if (v) voix[a] = voixPublique(v.voix); }
+      rendreV(200, { ok: true, voix });
+      return;
+    }
+    const jetonV = chemin.slice('/api/voix/'.length).toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(jetonV)) { rendreV(400, { ok: false, pourquoi: 'whole address required' }); return; }
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const v = voixParBlock.get(jetonV);
+      rendreV(200, { ok: true, voix: v ? v.voix : null, horodatage: v ? v.horodatage : null });
+      return;
+    }
+    if (req.method !== 'POST') { rendreV(405, { ok: false, pourquoi: 'GET or POST only' }); return; }
+    /* ⛔ le budget ne se compte qu AU MOMENT DU RESEAU : un corps mal forme ne prive personne de son enregistrement */
+    const ipV = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const budgetV = () => {
+      const minute = Math.floor(Date.now() / 60000);
+      if (voixPosts.minute !== minute) { voixPosts.minute = minute; voixPosts.n = 0; voixPosts.parIp.clear(); }
+      const n = (voixPosts.parIp.get(ipV) || 0) + 1;
+      voixPosts.parIp.set(ipV, n);
+      return ++voixPosts.n <= VOIX_POSTS_MINUTE && n <= VOIX_POSTS_IP_MINUTE;
+    };
+    let brut = '', trop = false;
+    req.on('data', (c) => { if (trop) return; brut += c; if (brut.length > VOIX_CORPS_MAX) { trop = true; rendreV(413, { ok: false, pourquoi: 'too long' }); req.destroy(); } });
+    req.on('end', async () => {
+      if (trop) return;
+      let corps;
+      try { corps = JSON.parse(brut); } catch { rendreV(400, { ok: false, pourquoi: 'not JSON' }); return; }
+      try {
+        const avant = voixParBlock.get(jetonV);
+        const r = await verifierEcriture({ jeton: jetonV, chaine: 8453, horodatage: corps && corps.horodatage, voix: corps && corps.voix,
+          signature: corps && corps.signature, maintenant: Date.now(), precedent: avant ? avant.horodatage : null,
+          recuperer: (texte, sig) => {
+            if (!budgetV()) throw new Error('too many saves right now — try again in a minute');
+            return recupererSignataire({ rpc: rpcServeur, texte, signature: sig });
+          },
+          proprietaire: () => proprietaireDuBlock({ rpc: rpcServeur, jeton: jetonV, connu: createurParBlock.get(jetonV) || null, tx: corps && corps.tx }) });
+        if (!r.ok) { rendreV(r.pourquoi.startsWith('only the wallet') ? 403 : 400, r); return; }
+        if (r.voix) voixParBlock.set(jetonV, { voix: r.voix, horodatage: r.horodatage, auteur: r.auteur });
+        else voixParBlock.delete(jetonV);
+        ecrireVoix();
+        rendreV(200, { ok: true, voix: r.voix, horodatage: r.horodatage });
+      } catch (e) { rendreV(200, { ok: false, pourquoi: 'not saved: ' + String((e && e.message) || e).slice(0, 80) }); }
     });
     return;
   }

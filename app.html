@@ -2516,6 +2516,28 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <p class="note mono" id="pcEmpreinte"></p>
       </div>
+      <!-- ⛔ 2026-10-02 (Raksha) : COMMENT CE BLOCK PARLE, choisi par celui qui l a cree (voix-block.js). Tout le monde le
+           lit ; seul le wallet qui a cree le block enregistre (signature relue par le serveur). Rien de regle = la parole d avant. -->
+      <div class="pJeu" id="pVoix">
+        <div class="pJeuTete"><span class="pBadge">How it talks</span><span class="pPV" id="pvEtat">—</span></div>
+        <p class="pProchain" id="pvApercu">Its brain says what it sees on the chain. Whoever created this block can add their own words.</p>
+        <details class="bDetail" id="pvEditer" style="margin-top:8px"><summary class="note">Change how it talks (creator only)</summary>
+          <label class="champ">Personality<select id="pvTon"></select></label>
+          <label class="champ">Short bio or motto<input id="pvBio" maxlength="120" placeholder="The bravest block on the map" autocomplete="off"></label>
+          <label class="champ">Topics it likes (put a comma between each)<input id="pvSujets" maxlength="140" placeholder="art, football, coffee" autocomplete="off"></label>
+          <label class="champ">Its own lines (one per line, up to 5)<textarea id="pvLignes" rows="3" maxlength="420" placeholder="gm, neighbours!"></textarea></label>
+          <label class="champ">Blocks it likes to talk to (their names, comma between each)<input id="pvAmis" maxlength="120" placeholder="TBLOCK, MUC" autocomplete="off"></label>
+          <label class="champ">What it knows: news, story, opinions (up to 2000 letters)<textarea id="pvSavoir" rows="4" maxlength="2000" placeholder="We just opened a shop in Brussels. Our block loves sunny days."></textarea></label>
+          <p class="note">Other blocks only hear a short summary of it: the first sentence.</p>
+          <p class="titre" style="margin-top:10px;font-size:1em">How it reacts</p>
+          <div id="pvReactions"></div>
+          <div class="pActions" style="grid-template-columns:1fr 1fr">
+            <button class="bouton" id="pvEnregistrer" type="button">Save (your wallet signs)</button>
+            <button class="bouton sec" id="pvEffacer" type="button">Back to default</button>
+          </div>
+          <p class="note" id="pvNote">Signing is free and moves no money. Links, wallet addresses and price promises are removed.</p>
+        </details>
+      </div>
       <!-- ⛔ LE METIER DU BLOCK. Il OBSERVE et PROPOSE ; ce qui coute quelque chose se signe dans le
            wallet de l utilisateur, jamais ici. La ligne « never » est affichee avec le metier. -->
       <div class="pJeu" id="pMetier">
@@ -3084,6 +3106,7 @@ function noterMemoire(adr, etat) {
 import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } from './memoire-chaine.js';
 import { fragmenterMemoire, lireFragment, reconstruireCerveau } from './fragments-cerveau.js';
 import { parolesDuTour } from './parole-cerveaux.js';
+import { nettoyerVoix, messageVoix, lireVoixPublique, voixPublique, reactionVoix, partageVoix, composerParole, TONS, EVENEMENTS_VOIX } from './voix-block.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -8587,6 +8610,7 @@ async function lireProfil(adr, sym, perime, opts) {
   p.hidden = false;
   p.dataset.block = adr;
   $('#pAvatar').innerHTML = dessin(adr, sym);
+  void peindreVoixProfil(adr, sym);
   $('#pSym').textContent = sym || '…';
   $('#pNomLong').textContent = '';
   $('#pAdr').textContent = adr;
@@ -10371,6 +10395,10 @@ const PAROLES_GARDEES = 400;
 /** Combien on en MONTRE. Depart a 8, +25 par clic — comme « Show more » de Trending. */
 const PAROLES_PAS = 25;
 let parolesAffichees = 8;
+/* la voix choisie par chaque createur (voix-block.js) — declaree ICI, avant le premier battement qui la lit */
+const voixConnues = new Map();
+let voixChargeesA = 0;
+const voixDe = (adr) => { const v = voixConnues.get(String(adr).toLowerCase()); return (v && v.voix) || null; };
 /** ⛔ tip 1915: mood_changes / browser-local NOTE bursts — same class as GM spam. One chip per token. */
 function estParoleMood(p) {
   if (!p) return false;
@@ -10381,8 +10409,9 @@ function parlerCerveaux() {
   parolesTour++;
   const avecCerveau = habitants.filter((h) => h.cerveau && h.vu);
   if (!avecCerveau.length) return;
+  if (Date.now() - voixChargeesA > 30000) { voixChargeesA = Date.now(); void chargerVoix(avecCerveau.map((h) => h.adr)); }
   const { paroles, dernieres } = parolesDuTour({ tick: parolesTour, dernieres: parolesDernieres,
-    blocks: avecCerveau.map((h) => ({ adr: h.adr, sym: h.sym, vu: h.vu, vuAvant: h.vuAvant || null, echange: h.dernierEchange || null })) });
+    blocks: avecCerveau.map((h) => ({ adr: h.adr, sym: h.sym, vu: h.vu, vuAvant: h.vuAvant || null, echange: h.dernierEchange || null, voix: voixDe(h.adr) })) });
   parolesDernieres = dernieres;
   if (!paroles.length) return;
   const heure = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -10484,6 +10513,110 @@ $('#sfParoles').addEventListener('click', async (ev) => {
   note.innerHTML = (r.etat === 'CONFIRME' ? 'Said on chain — public and permanent, readable in ' + enTexte(p.sym) + '’s public messages.'
     : 'Not sent (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '')) + lien;
 });
+
+/* ══ COMMENT UN BLOCK PARLE (voix-block.js, Raksha 2026-10-02) ═══════════════════════════════════════════
+ * ⛔ Les voix viennent du serveur (/api/voix), par lots, gardees 10 min. Une lecture ratee = pas de voix = la parole
+ *    d avant : rien ne casse, rien ne s invente. Seule la forme PUBLIQUE arrive ici (le savoir entier reste sur la fiche). */
+async function chargerVoix(adrs) {
+  if (CHAINE !== 8453) return;
+  const t = Date.now();
+  const manquants = [...new Set((adrs || []).map((a) => String(a).toLowerCase()))].filter((a) => /^0x[0-9a-f]{40}$/.test(a))
+    .filter((a) => { const v = voixConnues.get(a); return !v || t - v.a > 600000; }).slice(0, 240);
+  for (let i = 0; i < manquants.length; i += 60) {
+    const lot = manquants.slice(i, i + 60);
+    let j = null;
+    try { j = await fetch('/api/voix?b=' + lot.join(','), { cache: 'no-store' }).then((x) => x.json()); } catch (_) { return; }
+    if (!j || j.ok !== true || !j.voix || typeof j.voix !== 'object') return;
+    for (const a of lot) voixConnues.set(a, { voix: lireVoixPublique(j.voix[a]), a: t });
+  }
+}
+const LIBELLE_TON = { normal: 'Plain (default)', happy: 'Happy', calm: 'Calm', grumpy: 'Grumpy', funny: 'Funny' };
+const LIBELLE_EVT_VOIX = { new_buy: 'Someone buys', new_sell: 'Someone sells', big_trade: 'A big trade (0.1 ETH or more)',
+  new_holder: 'A new holder', new_message: 'A message arrives', new_transfer: 'A transfer arrives', price_up: 'Price goes up', price_down: 'Price goes down' };
+$('#pvTon').innerHTML = TONS.map((t) => '<option value="' + t + '">' + LIBELLE_TON[t] + '</option>').join('');
+$('#pvReactions').innerHTML = EVENEMENTS_VOIX.map((e) => '<div class="pActions" style="grid-template-columns:1fr 1fr;margin-top:6px">'
+  + '<label class="champ" style="margin-top:0">' + LIBELLE_EVT_VOIX[e] + '<select data-voix-style="' + e + '"><option value="normal">Its personality</option>'
+  + TONS.filter((t) => t !== 'normal').map((t) => '<option value="' + t + '">' + LIBELLE_TON[t] + '</option>').join('')
+  + '<option value="quiet">Stay quiet</option></select></label>'
+  + '<label class="champ" style="margin-top:0">Or its own words<input data-voix-ligne="' + e + '" maxlength="80" placeholder="optional" autocomplete="off"></label></div>').join('');
+const listeVoix = (t, sep) => String(t || '').split(sep).map((x) => x.trim()).filter(Boolean);
+function lireFormulaireVoix() {
+  const reactions = {};
+  for (const e of EVENEMENTS_VOIX) {
+    reactions[e] = { style: $('[data-voix-style="' + e + '"]').value, ligne: $('[data-voix-ligne="' + e + '"]').value };
+  }
+  return { ton: $('#pvTon').value, bio: $('#pvBio').value, sujets: listeVoix($('#pvSujets').value, ','),
+    lignes: listeVoix($('#pvLignes').value, /\r?\n/), amis: listeVoix($('#pvAmis').value, ','), reactions, savoir: $('#pvSavoir').value };
+}
+function remplirVoix(v, sym) {
+  const x = v || {};
+  $('#pvTon').value = x.ton || 'normal';
+  $('#pvBio').value = x.bio || '';
+  $('#pvSujets').value = (x.sujets || []).join(', ');
+  $('#pvLignes').value = (x.lignes || []).join('\n');
+  $('#pvAmis').value = (x.amis || []).join(', ');
+  $('#pvSavoir').value = x.savoir || '';
+  for (const e of EVENEMENTS_VOIX) {
+    const r = (x.reactions || {})[e] || {};
+    $('[data-voix-style="' + e + '"]').value = r.style || 'normal';
+    $('[data-voix-ligne="' + e + '"]').value = r.ligne || '';
+  }
+  const pub = v ? voixPublique(v) : null;
+  const nomV = String(sym || symProfil || '').slice(0, 14);
+  $('#pvEtat').textContent = pub ? 'set by its creator' : 'default';
+  $('#pvApercu').textContent = pub
+    ? 'For example: ' + composerParole((nomV ? nomV + ': someone' : 'Someone') + ' just bought me.', reactionVoix(pub, 'new_buy', {}), partageVoix(pub, 0))
+    : 'Its brain says what it sees on the chain. Whoever created this block can add their own words.';
+}
+let voixProfilJeton = 0;
+async function peindreVoixProfil(adr, sym) {
+  const moi = ++voixProfilJeton;
+  remplirVoix(null, sym);
+  $('#pvNote').className = 'note';
+  $('#pvNote').textContent = 'Signing is free and moves no money. Links, wallet addresses and price promises are removed.';
+  if (CHAINE !== 8453) { $('#pvNote').textContent = 'Only blocks on Base can be given their own words.'; return; }
+  let j = null;
+  try { j = await fetch('/api/voix/' + String(adr).toLowerCase(), { cache: 'no-store' }).then((x) => x.json()); } catch (_) { j = null; }
+  if (moi !== voixProfilJeton) return;
+  if (!j || j.ok !== true) { $('#pvEtat').textContent = 'not read'; return; }
+  remplirVoix(j.voix ? nettoyerVoix(j.voix).voix : null, sym || symProfil);
+}
+async function enregistrerVoix(effacer) {
+  const adr = String($('#profil').dataset.block || '').toLowerCase();
+  const note = $('#pvNote');
+  if (!/^0x[0-9a-f]{40}$/.test(adr)) return;
+  if (CHAINE !== 8453) { note.className = 'note wKo'; note.textContent = 'Only blocks on Base can be given their own words.'; return; }
+  if (!(await pret({ e: note }))) { direPrealable(note, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); return; }
+  const cre = createursConnus.get(CHAINE + ':' + adr) || null;
+  if (cre && cre.createur && String(cre.createur).toLowerCase() !== String(compte).toLowerCase()) {
+    note.className = 'note wKo'; note.textContent = 'Only the wallet that created this block can change how it talks.'; return;
+  }
+  const { voix, notes } = nettoyerVoix(effacer ? {} : lireFormulaireVoix());
+  const horodatage = Date.now();
+  const texte = messageVoix({ jeton: adr, chaine: 8453, horodatage, voix });
+  const hexV = '0x' + [...new TextEncoder().encode(texte)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  note.className = 'note';
+  note.textContent = 'Your wallet opens: read the text, then sign. It moves no money.';
+  let signature = null;
+  try { signature = await window.ethereum.request({ method: 'personal_sign', params: [hexV, compte] }); }
+  catch (err) {
+    const refus = err && (err.code === 4001 || /reject|denied/i.test(String(err.message || err)));
+    note.className = 'note wKo'; note.textContent = refus ? 'You did not sign. Nothing changed.' : 'Signing failed. Nothing changed.'; return;
+  }
+  let r = null;
+  try {
+    r = await fetch('/api/voix/' + adr, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ voix, horodatage, signature, tx: (cre && cre.tx) || null }) }).then((x) => x.json());
+  } catch (_) { r = { ok: false, pourquoi: 'the server did not answer' }; }
+  if (!r || r.ok !== true) { note.className = 'note wKo'; note.textContent = 'Not saved: ' + String((r && r.pourquoi) || 'refused') + '.'; return; }
+  voixConnues.set(adr, { voix: lireVoixPublique(voixPublique(r.voix)), a: Date.now() });
+  remplirVoix(r.voix, symProfil);
+  note.className = 'note wOk';
+  note.textContent = (r.voix ? 'Saved. Everyone now hears these words from this block.' : 'Back to default.')
+    + (notes.length ? ' Removed: ' + notes.join(', ') + '.' : '');
+}
+$('#pvEnregistrer').addEventListener('click', () => { void enregistrerVoix(false); });
+$('#pvEffacer').addEventListener('click', () => { void enregistrerVoix(true); });
 
 /* ══ L AGENT RELAIS (relais-cerveaux.js) ══════════════════════════════════════════════════════════════════
  * ⛔ Il relit les paroles des cerveaux et le fil Live, classe par preuve, et ne propose que des gestes a signer. */
