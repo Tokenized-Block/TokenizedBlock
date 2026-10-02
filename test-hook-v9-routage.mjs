@@ -38,9 +38,16 @@ ok('estNotreHook(V8) unchanged', estNotreHook(HOOK_V8) === true);
 
 console.log('one source: no V9 list outside paires.js');
 ok('tokenomics exports no currency list', !Object.keys(T).some((k) => /DEVISES/.test(k)), Object.keys(T).filter((k) => /DEVISES/.test(k)));
+/* ⛔⛔ 2026-10-02 (feat/new-stocks-26-20261002) : 22 actions de l emetteur OFFERTES a Create mais ABSENTES de
+ *     V9Devises.sol (liste fixee au constructeur, hook non deploye). Exemptees NOMMEMENT, pas par motif : toute autre
+ *     devise offerte hors liste fait encore echouer ce cas. Et elles DOIVENT rester hors liste ici tant que le .sol
+ *     ne les porte pas — le jour ou il les porte, ce test force la mise a jour. */
+const AJOUTS_20261002 = ['AMDc', 'ASTSc', 'CAKEc', 'DJTc', 'DUOLc', 'GMEc', 'HTZc', 'LLYc', 'MRNAc', 'MRVLc', 'NFLXc', 'NVAXc', 'ORCLc', 'PFEc', 'PMc', 'PTONc', 'PYPLc', 'QUBTc', 'RBLXc', 'RDDTc', 'TTWOc', 'WENc'].map((s) => sym[s]);
 const offertesSansEth = offertes.map((p) => bas(p.adr)).filter((a) => a !== ETH_NATIF && a !== TBLOCK_MAINNET);
-ok('V9 list = every quote Create offers on Base (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
-  && new Set(DEVISES_ADMISES_V9).size === 19 && offertesSansEth.every((a) => DEVISES_ADMISES_V9.includes(a)));
+ok('V9 list = every quote Create offers on Base (19, = V9Devises.sol), minus the 22 added 2026-10-02', DEVISES_ADMISES_V9.length === 19
+  && new Set(DEVISES_ADMISES_V9).size === 19 && AJOUTS_20261002.length === 22 && AJOUTS_20261002.every(Boolean)
+  && offertesSansEth.filter((a) => !AJOUTS_20261002.includes(a)).every((a) => DEVISES_ADMISES_V9.includes(a))
+  && AJOUTS_20261002.every((a) => !DEVISES_ADMISES_V9.includes(a)));
 ok('V8 list is a subset of the V9 list', DEVISES_ADMISES_V8.every((a) => DEVISES_ADMISES_V9.includes(a)));
 const srcTok = readFileSync('./tokenomics.js', 'utf8');
 ok('deviseVaSurV9 reads hookDeLancementPour', /return hookDeLancementPour\(devise, 8453, \{ v9: true \}\) === 'V9';/.test(srcTok));

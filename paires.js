@@ -249,6 +249,45 @@ export const ACTIONS_COINBASE = [
   { symbole: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbole: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
   { symbole: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },
+  /* ── 22 AJOUTS DU 2026-10-02 (feat/new-stocks-26-20261002) ────────────────────────────────────
+   * ⛔⛔ SOURCE : la liste de l EMETTEUR, `https://api.coinbase.com/v1/tokenized-stocks` (HTTP 200,
+   *     58 entrees ce jour). Les « 26 » annoncees = les 26 que nous ne servions pas sur les 40 du
+   *     2026-09-30 : PLTRc deja servie, BIRDc et CRCLc a supply 0 (refusees), SOUNc sans marche
+   *     sain (seule pool USDC a 88 % de frais) — restent ces 22. Adresses EXTRAITES du JSON.
+   * ⛔ CHAQUE ADRESSE MESUREE sur un fork Base (bloc 52080500, anvil --base) : `eth_getCode` ==
+   *   `0xef` EXACTEMENT, `symbol()` concordant, `decimals()` == 8, `totalSupply()` > 0.
+   * ⛔⛔ LE MARCHE EST SUR UNISWAP V4, PAS AERODROME : chacune a une pool USDC v4 sans hook (frais
+   *     4,1 a 8 %) avec liquidite, devis lu sur le Quoter v4. Les pools Aerodrome CL existantes
+   *     sont vides ou hors prix (AMDc, RBLXc : devis absurdes) — donc pas de 0,1 % routeur ici.
+   *   ⚠️ MINCES : 1 000 $ d achat passent sur AMDc LLYc NFLXc MRVLc TTWOc DJTc GMEc HTZc ORCLc
+   *     PYPLc QUBTc RDDTc ASTSc MRNAc ; 1 000 $ REVERTENT sur CAKEc DUOLc NVAXc PFEc PMc PTONc
+   *     RBLXc WENc. « admise » ne veut pas dire « profonde ».
+   * ⛔⛔ AUCUNE NE PEUT COTER UN BLOCK NEUF AUJOURD HUI : `deviseAdmise` du hook V8 rend false pour
+   *     les 22 (temoins : NVDAc true, 0x…beef false). Elles ne sont PAS dans DEVISES_ADMISES_V8/V9 :
+   *     la garde de Create les refuse avec la phrase E0. Il faudra les inscrire dans la liste du
+   *     constructeur du nouveau hook 0,07/0,03 AVANT son deploiement. */
+  { symbole: 'AMDc', nom: 'Advanced Micro Devices', adr: '0xb2000000000000000000000d8ce462e99ee7a47b' },
+  { symbole: 'ASTSc', nom: 'AST SpaceMobile', adr: '0xb200000000000000000000b1a29cf17a1819288a' },
+  { symbole: 'CAKEc', nom: 'Cheesecake Factory', adr: '0xb200000000000000000000f215e4c890cfb7176b' },
+  { symbole: 'DJTc', nom: 'Trump Media & Technology', adr: '0xb200000000000000000000428e3a3eebbb20692b' },
+  { symbole: 'DUOLc', nom: 'Duolingo', adr: '0xb200000000000000000000a613d12deafbbb1db7' },
+  { symbole: 'GMEc', nom: 'GameStop', adr: '0xb2000000000000000000007790ed6e48e06ed935' },
+  { symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },
+  { symbole: 'LLYc', nom: 'Eli Lilly', adr: '0xb200000000000000000000f1a0f91e34892e4718' },
+  { symbole: 'MRNAc', nom: 'Moderna', adr: '0xb200000000000000000000e215e9b76ecba02468' },
+  { symbole: 'MRVLc', nom: 'Marvell Technology', adr: '0xb200000000000000000000ec3c4c7395cc609813' },
+  { symbole: 'NFLXc', nom: 'Netflix', adr: '0xb20000000000000000000058b8c947e44011dfe6' },
+  { symbole: 'NVAXc', nom: 'Novavax', adr: '0xb200000000000000000000c597c476fcf9aed3a8' },
+  { symbole: 'ORCLc', nom: 'Oracle', adr: '0xb200000000000000000000347afba223d7b6b63c' },
+  { symbole: 'PFEc', nom: 'Pfizer', adr: '0xb20000000000000000000018fe7ec7d6dfeeb528' },
+  { symbole: 'PMc', nom: 'Philip Morris', adr: '0xb2000000000000000000008fc2a8c23cf5937b66' },
+  { symbole: 'PTONc', nom: 'Peloton', adr: '0xb2000000000000000000009272a491812842aa84' },
+  { symbole: 'PYPLc', nom: 'PayPal', adr: '0xb200000000000000000000450ad3abe5d4846c6e' },
+  { symbole: 'QUBTc', nom: 'Quantum Computing', adr: '0xb200000000000000000000ca425ab42e07c35bc3' },
+  { symbole: 'RBLXc', nom: 'Roblox', adr: '0xb2000000000000000000005bd7ae89b9e6189bb5' },
+  { symbole: 'RDDTc', nom: 'Reddit', adr: '0xb20000000000000000000066242d4067724cb7a1' },
+  { symbole: 'TTWOc', nom: 'Take-Two Interactive', adr: '0xb200000000000000000000f720c26062bc3067da' },
+  { symbole: 'WENc', nom: 'Wendy’s', adr: '0xb20000000000000000000044e3cd7a0e1028e57a' },
 ];
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
