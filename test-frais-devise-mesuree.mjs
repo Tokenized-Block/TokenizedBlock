@@ -62,9 +62,11 @@ function rpcLabo() {
 }
 
 v('⛔⛔ sans mesure, une action est REFUSEE — et le refus dit pourquoi', async () => {
-  /* ⛔⛔ LE VERROU QUI PROTEGE LE REVENU. Sans ensemble, on ne doit pas encaisser en AAPLc. */
+  /* ⛔⛔ LE VERROU QUI PROTEGE LE REVENU. Sans ensemble, le ROUTEUR ne doit pas encaisser en AAPLc.
+   * ⛔ 2026-10-02 14:49 : sur le V8 le routeur ne prend plus rien (le hook paie, prix lu ou non) — le verrou se joue
+   *   donc la ou le routeur preleverait encore : un de nos hooks qui ne verse pas a a6cf (V5). */
   const p = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
-    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr) });
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr, HOOK_V5) });
   assert.equal(p.etat, 'REFUSE', 'un marche cote en action passe SANS mesure du prix de la devise');
   assert.match(String(p.pourquoi), /could not price|sellable|not a TokenizedBlock market/i,
     'le refus ne dit pas pourquoi : ' + p.pourquoi);
@@ -76,7 +78,7 @@ v('⛔⛔ sans mesure, une action est REFUSEE — et le refus dit pourquoi', asy
 v('⛔ un ensemble VIDE se comporte exactement comme avant', async () => {
   /* ⛔ Fail-closed par construction : l absence de mesure ne doit jamais elargir quoi que ce soit. */
   const p = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
-    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr), fraisDevisesOk: new Set() });
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr, HOOK_V5), fraisDevisesOk: new Set() });
   assert.equal(p.etat, 'REFUSE', 'un ensemble vide autorise un encaissement non mesure');
 });
 
@@ -121,10 +123,16 @@ v('⛔⛔ V8 + devise MESUREE : le hook paie a6cf dans la devise, le routeur ne 
   assert.notEqual(p.etat, 'REFUSE', 'une devise mesuree reste refusee : ' + p.pourquoi);
   assert.equal(BigInt(p.resume.fraisBps), 0n, 'le routeur empile encore ses 0,5 % sur le hook V8');
   assert.equal(p.resume.beneficiaireFrais, null, 'un TAKE routeur vers a6cf subsiste');
-  /* controle negatif : sans mesure, le meme marche V8 reste REFUSE (le hook paierait dans une devise non mesuree) */
+  /* 2026-10-02 14:49 (PREUVE-FRAIS-VIEILLES-POOLS, SPCXc) : sans mesure, le V8 paie quand meme a6cf dans la devise —
+   *   le routeur ne prend toujours RIEN (avant : routeur 0,5 % + hook 0,5 % = double frais). */
   const q = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
     sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr) });
-  assert.equal(q.etat, 'REFUSE', 'V8 sans mesure : accepte');
+  assert.notEqual(q.etat, 'REFUSE', 'V8 sans mesure : refuse (' + q.pourquoi + ')');
+  assert.equal(BigInt(q.resume.fraisBps), 0n, 'V8 sans mesure : le routeur empile ses 0,5 %');
+  /* controle negatif : meme marche sur un hook qui ne verse rien (V5), sans mesure -> REFUSE (le routeur ne saurait ou encaisser) */
+  const r = await planEchange({ rpc: rpcLabo(), chaine: 8453, jeton: BLOCK, compte: COMPTE,
+    sens: 'ACHAT', montant: 10n ** 8n, marcheLu: marcheEn(AAPL.adr, HOOK_V5) });
+  assert.equal(r.etat, 'REFUSE', 'V5 sans mesure : accepte');
 });
 
 for (const [nom, fn] of cas) { await fn(); n++; }

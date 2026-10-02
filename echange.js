@@ -15,7 +15,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU, estNotreHook, hookPaieDejaA6cf, deviseFraisHook } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -47,7 +47,11 @@ const ETH = '0x0000000000000000000000000000000000000000';
 export function hookPaieEnDeviseVendable({ cle, sens, zeroForOne, jeton = null, fraisDevisesOk = null }) {
   const d = deviseFraisHook(cle, sens, zeroForOne);
   if (!d || (jeton && d === String(jeton).toLowerCase())) return { paie: false, devise: d };
-  const ok = d === ETH || d === USDC_BASE.toLowerCase() || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(d));
+  /* ⛔ 2026-10-02 14:49 (Zero 1, PREUVE-FRAIS-VIEILLES-POOLS) : le V8 verse a6cf dans la devise appariee, dans les deux
+   *   sens, QUELLE QU ELLE SOIT (TBLOCK(e7e9)/SPCXc mesure : hook 4 975 + routeur 5 000 = double frais). Sur une pool V8 dont
+   *   le block n est pas currency0, le hook paie toujours : le routeur ne prend rien, prix lu ou non. */
+  const v8 = String((cle && cle.hooks) || '').toLowerCase() === String(HOOK_V8).toLowerCase();
+  const ok = v8 || d === ETH || d === USDC_BASE.toLowerCase() || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(d));
   return { paie: ok, devise: d };
 }
 /** ⛔ 2026-10-02 (fix-2, Claude C) — jambe TBLOCK/ETH de `routeViaTblock` : le frais du hook n y compte QUE s il est en ETH.
@@ -236,7 +240,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
      *     a6cf a deja ete paye en jetons invendables une fois ; ca n arrivera pas par ce chemin. */
     const deviseBas = String(devise).toLowerCase();
     const deviseMesuree = fraisDevisesOk instanceof Set && fraisDevisesOk.has(deviseBas);
-    if (deviseBas !== USDC_BASE.toLowerCase() && !deviseMesuree) {
+    if (bps > 0n && deviseBas !== USDC_BASE.toLowerCase() && !deviseMesuree) {
       return { etat: 'REFUSE', pourquoi: 'this market is priced in a currency we could not price in '
         + 'dollars, so the 0.5% fee could not be taken in something sellable — nothing was sent' };
     }
@@ -715,7 +719,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   le V8 y paie en USDC sur le saut 1, et le routeur ne prenait son frais qu en block (refuse). */
   const hookS1 = s1.cle ? hookPaieEnDeviseVendable({ cle: s1.cle, sens: s1.zeroForOne ? 'ACHAT' : 'VENTE',
     zeroForOne: !!s1.zeroForOne, fraisDevisesOk }) : { paie: false, devise: null };
-  const hookPaie = hookS1.paie;
+  /* ⛔ 2026-10-02 14:49 — CHAQUE JAMBE. Le saut 1 paye par son hook ne dispense PAS une jambe suivante sans hook payeur
+   *   (pool sans hook, hook qui ne verse rien) : le routeur ne s efface que si TOUS les sauts paient deja a6cf. */
+  const jambesPayees = sauts.map((x) => !!(x && x.cle) && hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
+    zeroForOne: !!x.zeroForOne, fraisDevisesOk }).paie);
+  const hookPaie = hookS1.paie && jambesPayees.every(Boolean);
   if (!estWalletDeFrais(compte) && !hookPaie) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
     if (degressif.etat !== 'OK') {

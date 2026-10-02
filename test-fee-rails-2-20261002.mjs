@@ -44,7 +44,9 @@ if (fn(E, 'hookPaieEnDeviseVendable')) {
   const cleTete = { currency0: BLK_LO, currency1: USDC, fee: 0, tickSpacing: 200, hooks: V8 };
   ok(E.hookPaieEnDeviseVendable({ cle: cleTete, sens: 'VENTE', zeroForOne: true, jeton: BLK_LO }).paie === false, 'item1 NEG: block-first V8 pool (fee in block) -> router keeps its fee');
   const cleNvda = { currency0: NVDAc, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: V8 };
-  ok(E.hookPaieEnDeviseVendable({ cle: cleNvda, sens: 'VENTE', zeroForOne: false, jeton: BLK_HI }).paie === false, 'item1 NEG: NVDAc not priced -> router keeps fee');
+  /* 2026-10-02 14:49 : le V8 paie a6cf dans la devise appariee QUELLE QU ELLE SOIT -> plus de frais routeur, prix lu ou non */
+  ok(E.hookPaieEnDeviseVendable({ cle: cleNvda, sens: 'VENTE', zeroForOne: false, jeton: BLK_HI }).paie === true, 'item1: V8 NVDAc pool, price not read -> hook pays, router 0');
+  ok(E.hookPaieEnDeviseVendable({ cle: { ...cleNvda, hooks: T.HOOK_V5 }, sens: 'VENTE', zeroForOne: false, jeton: BLK_HI }).paie === false, 'item1 NEG: non-paying hook (V5), NVDAc not priced -> router keeps fee');
   ok(E.hookPaieEnDeviseVendable({ cle: cleNvda, sens: 'VENTE', zeroForOne: false, jeton: BLK_HI, fraisDevisesOk: new Set([NVDAc.toLowerCase()]) }).paie === true, 'item1: NVDAc priced -> hook pays');
 }
 ok(/hookPaieEnDeviseVendable\(\{ cle: marche\.cle/.test(extraire(src, 'planEchange')), 'item1: planEchange uses the hook fee currency');
