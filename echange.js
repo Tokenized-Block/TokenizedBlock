@@ -21,7 +21,7 @@ import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExact
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
-  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -757,10 +757,18 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *     n est pas celui que le hook preleve. On prend la PREMIERE jambe payeuse, et son assiette est le
    *     montant qui ENTRE dans ce saut si le hook preleve dans la devise d entree, sinon ce qui en
    *     SORT — exactement la regle de l ancienne ligne, generalisee du saut 1 au saut i. */
-  const parJambe = sauts.map((x) => (x && x.cle)
-    ? hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
-      zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs })
-    : { paie: false, devise: null });
+  /* ⛔⛔ 2026-10-02 (matrice test-matrice-une-fois-par-swap, 12 cas) : le court-circuit V8 de
+   *   hookPaieEnDeviseVendable compte comme « payee » une jambe V8 dont le block est currency0 — son hook verse
+   *   a6cf EN BLOCK. Le garde « frais en block » plus haut ne voit que l ENTREE et la SORTIE : avec un block AU
+   *   MILIEU (X -> block -> Y), le routeur s effacait et a6cf ne recevait que du block. Ici, un frais de hook ne
+   *   compte que s il est verse dans une devise CONNUE ou prixee — sinon le routeur garde le sien. */
+  const parJambe = sauts.map((x) => {
+    if (!(x && x.cle)) return { paie: false, devise: null };
+    const r = hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
+      zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs });
+    const vendable = !!r.devise && (estDeviseConnue(r.devise) || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(r.devise)));
+    return r.paie && !vendable ? { paie: false, devise: r.devise } : r;
+  });
   const iPayeuse = parJambe.findIndex((r) => r.paie);
   const hookPaie = iPayeuse >= 0;
   if (!estWalletDeFrais(compte) && !hookPaie) {

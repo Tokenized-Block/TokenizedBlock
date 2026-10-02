@@ -18,6 +18,11 @@ const DEVISES = new Set([ZERO, ...DEVISES_BASE.map((d) => bas(d.adr)), ...ACTION
 
 export const MESSAGE_SANS_POOL = 'this block has no market the app can trade on right now — nothing was sent';
 
+/** Vrai = devise CONNUE et vendable (ETH, devises de base hors TBLOCK/TBGAS, actions Coinbase). Tout autre
+ *  jeton — un block en particulier — n en est pas une. */
+export function estDeviseConnue(adr) {
+  return DEVISES.has(bas(adr));
+}
 export function cleSansHook(cle) {
   return !!cle && /^0x0{40}$/i.test(String(cle.hooks || ZERO));
 }
