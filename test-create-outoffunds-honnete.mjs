@@ -30,7 +30,7 @@ async function lancer({ refus = null, jette = null } = {}) {
   const adresseOuRefus = async () => { if (jette) throw new Error(jette); return refus ? { adresse: null, refus } : { adresse: '0x' + '12'.repeat(20), refus: null }; };
   const fn = new Function('$', 'validerCreation', 'majFraisEtRecap', 'calldataCreation', 'utiliseCreateRouter', 'CREATE_ROUTER',
     'valeurCreation', 'fraisWeiCalcule', 'CREATE_FEE_WEI_FLOOR', 'adresseOuRefus', 'appelBrut', 'compte', 'montrerFundWalletCourt',
-    'let profilEnLecture = false; let adressePrevue = null;\n' + source + '\nreturn verifierAdresseCreation();');
+    'let profilEnLecture = false; let adressePrevue = null; let selAuto = false;\n' + source + '\nreturn verifierAdresseCreation();');
   await fn($, () => ({ ko: null }), () => {}, () => '0xdead', () => true, '0x' + '00'.repeat(20), () => '0x38d7ea4c68000', null, 1n,
     adresseOuRefus, async () => ({}), '0x' + '11'.repeat(20), () => {});
   return e;

@@ -185,6 +185,17 @@ export function hookPaieDejaA6cf(h, sens) {
   if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return sens === 'VENTE';
   return false;
 }
+/** ⛔ 2026-10-02 (fix-2) — DANS QUELLE DEVISE le hook verse-t-il a6cf sur cette jambe ? `null` s il ne verse rien.
+ *  Mesure fork (Zero 1, bloc 52073896, callTracer) : le V8 preleve TOUJOURS en currency0, dans les deux sens —
+ *    V8 USDC/block vente : USDC · V8 NVDAc/block (NVDAc = currency0) : NVDAc · V8 block/NVDAc (block = currency0) : BLOCK.
+ *  V1/V2 a la vente : la devise de SORTIE (ETH mesure). V9 : currency0 suppose, et seulement si V9_PAIE_DEJA_A6CF === true. */
+export function deviseFraisHook(cle, sens, zeroForOne) {
+  if (!cle || !hookPaieDejaA6cf(cle.hooks, sens)) return null;
+  const x = String(cle.hooks).toLowerCase();
+  const c0 = String(cle.currency0 || '').toLowerCase(), c1 = String(cle.currency1 || '').toLowerCase();
+  if (x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase())) return c0;
+  return zeroForOne ? c1 : c0;
+}
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
 export const ETATS_LABEL = ['OUI', 'NON', 'NON_LU'];

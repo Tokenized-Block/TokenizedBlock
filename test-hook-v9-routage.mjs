@@ -70,7 +70,10 @@ ok('lancer-pool Birth guard uses estHookDeNaissance', /&& !estHookDeNaissance\(h
 ok('lancer-pool V8 launch guard reads hookDeLancementPour', /hookDeLancementPour\(devise, chaine\) !== 'V8'\)/.test(lp));
 ok('lancer-pool V9 launch guard reads hookDeLancementPour', /hookDeLancementPour\(devise, chaine, \{ v9: true \}\) !== 'V9'\)/.test(lp));
 const app = readFileSync('./app.html', 'utf8');
-ok('both hookCourant call sites pass the quote', (app.match(/hookCourant\(\{[^}]*\}\)/g) || []).filter((x) => /devise(: deviseLancement \|\| null|\s*\})/.test(x)).length === 2);
+/* 2026-10-02 (fix-2) : un 3e site — la pre-verification avant createPaid — lit le meme hook ; TOUS passent la devise. */
+{ const sites = app.match(/hookCourant\(\{[^}]*\}\)/g) || [];
+  ok('every hookCourant call site passes the quote (' + sites.length + ' sites)', sites.length === 3
+    && sites.every((x) => /devise(: deviseLancement \|\| null|\s*\})/.test(x))); }
 ok('no call site still demands V8 by string compare', !/!== String\(HOOK_V8\)\.toLowerCase\(\)/.test(app));
 ok('the Create guard passes OPTIONS_LANCEMENT (V9 lets its quotes through by construction)', /symbole: q\.paire\.symbole, \.\.\.OPTIONS_LANCEMENT \}\)/.test(app));
 

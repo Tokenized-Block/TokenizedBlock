@@ -155,7 +155,7 @@ async function simuler(adr, { routable }) {
   const ctx = vm.createContext({
     $: (q) => dom[q] || el(), CHAINE: 8453, AUTRE_PAIRE: '__autre__', majPaireSeq: 0, paireChoisie: null, motifRefusPaire: null,
     compte: '0x00000000000000000000000000000000000c0de1', TextEncoder, String, Number, Boolean, Promise,
-    qualifierPaire: P.qualifierPaire, refusPrixNouveauBlock: P.refusPrixNouveauBlock,
+    qualifierPaire: P.qualifierPaire, refusPrixNouveauBlock: P.refusPrixNouveauBlock, libellePuceCreation: P.libellePuceCreation,
     transactionsDepuisEth: () => (routable ? { tx: 2, chemin: [], directe: false } : null),
     prixUsdDevise: async () => { appels.prixUsdDevise += 1; return null; },
     faitsDuBlock: async () => { appels.faitsDuBlock += 1; return { estB20: true, supply: 1n, symbole: 'X', nom: 'X' }; },
@@ -196,7 +196,7 @@ async function simulerGraphe(adr, aretesDepart, areteLue) {
   const ctx = vm.createContext({
     $: (q) => dom[q] || el(), CHAINE: 8453, AUTRE_PAIRE: '__autre__', majPaireSeq: 0, paireChoisie: null, motifRefusPaire: null,
     compte: '0x00000000000000000000000000000000000c0de1', TextEncoder, String, Number, Boolean, Promise,
-    qualifierPaire: P.qualifierPaire, refusPrixNouveauBlock: P.refusPrixNouveauBlock,
+    qualifierPaire: P.qualifierPaire, refusPrixNouveauBlock: P.refusPrixNouveauBlock, libellePuceCreation: P.libellePuceCreation,
     ETH_ADR: '0x0000000000000000000000000000000000000000', cheminEntre: PONT.cheminEntre,
     transactionsNecessaires: PONT.transactionsNecessaires, aretesMesurees: () => aretes,
     /* reading the currency's pool facts = what 5e7e044 does for the Pay-with selector */
