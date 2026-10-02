@@ -3303,7 +3303,7 @@ import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } fro
 import { evenementsLive } from './fil-live.js';
 /* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
  *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
-import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes } from './notes-du-fil.js';
+import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes, libelleNotes, AVERT_SPAM, compteProfil, resumeEnvois, titreEnvois } from './notes-du-fil.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 /* ⛔ `CLES_PRIX` est la liste des combinaisons fee/tickSpacing que le resolveur V4 essaie. Elle est
  *   IMPORTEE et pas recopiee : une seconde liste divergerait de celle qu utilise `echange.js`, et
@@ -9958,7 +9958,7 @@ function reconciliationFiltres() {
  *    un chiffre faux, et n en montrer qu un seul ferait passer un echange pour tous les autres.
  * ⚠️ `fraisMarche` : sur une pool a hook, le montant lu est celui d AVANT le frais du marche
  *    (l evenement Swap est emis avant `afterSwap` — v4-core/PoolManager.sol:240). On le dit. */
-function ligneEchange(e, nom) {
+function ligneEchange(e, nom, sansFrais) {
   const achat = e.type === 'ACHAT';
   const tete = achat ? '🟢 <b>' + nom + '</b> fed' : '🔴 <b>' + nom + '</b> killed';
   if (e.n > 1) return tete + ' · ' + e.n + (achat ? ' buys' : ' sells');
@@ -9966,7 +9966,7 @@ function ligneEchange(e, nom) {
   if (e.quantite) bouts.push(enTexte(lisible(e.quantite)) + (achat ? ' bought' : ' sold'));
   if (e.eth && e.devise) bouts.push('for ' + enTexte(lisible(e.eth)) + ' ' + enTexte(e.devise));
   let ligne = tete + (bouts.length ? ' · ' + bouts.join(' ') : '');
-  if (bouts.length && e.fraisMarche) ligne += ' · before this market\'s fee';
+  if (bouts.length && e.fraisMarche && !sansFrais) ligne += ' · before this market\'s fee';
   return ligne;
 }
 
@@ -10310,34 +10310,52 @@ const notesEnLecture = new Set();
 function enfantsDuFil(e, cleG, nom) {
   const montres = liveDeplies.get(cleG) || ENFANTS_PAS;
   const tx = (c) => c.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(c.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
-  const bloc = (c) => 'block ' + (Number.isFinite(c.bloc) ? c.bloc.toLocaleString('en-US') : '?');
+  /* ⛔ REVUE 13:32 (mobile) : « block⏎52,072,505 · tx » cassait la ligne ; le numero ne se repete plus d une entree a l autre */
+  const bloc = (c) => 'block&nbsp;' + (Number.isFinite(c.bloc) ? c.bloc.toLocaleString('en-US') : '?');
   /* ⛔ l adresse du wallet de frais ne s affiche JAMAIS, meme abregee */
   const adr = (a) => String(a || '').toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : enTexte(court(String(a || '?')));
-  const items = e.enfants.slice(0, montres).map((c) => {
+  const items = e.enfants.slice(0, montres).map((c, i, tous) => {
     let t;
     if (c.type === 'NOTE') {
       const l = c.tx ? notesLues.get(String(c.tx).toLowerCase()) : null;
       t = !l ? '📝 reading its text…'
         : l.etat === 'LU' ? '📝 “' + enTexte(String(l.texte).slice(0, 280)) + '”'
-        : l.etat === 'AUCUN' ? '📝 no text attached — a 0-amount transfer'
+        : l.etat === 'AUCUN' ? '⚪ empty transfer (0 amount)'
         : l.etat === 'ILLISIBLE' ? '📝 extra bytes that are not text'
         : '📝 ⚠️ transaction not read right now — not empty';
       t += ' · from ' + adr(c.de);
     } else if (c.type === 'GM') {
       t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'a fragment') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
     } else if (c.type === 'ACHAT' || c.type === 'VENTE') {
-      t = ligneEchange({ ...c, n: 1 }, nom);
+      t = ligneEchange({ ...c, n: 1 }, nom, true);
     } else t = '↔ traded';
-    return '<li class="filS" style="margin:2px 0">' + t + ' · ' + bloc(c) + tx(c) + '</li>';
+    const memeBloc = i > 0 && tous[i - 1].bloc === c.bloc;
+    return '<li class="filS" style="margin:2px 0">' + t + '<span style="white-space:nowrap">' + (memeBloc ? '' : ' · ' + bloc(c)) + tx(c) + '</span></li>';
   }).join('');
   const reste = e.enfants.length - montres;
+  const rN = e.type === 'NOTE' ? resumeNotes(e.enfants, notesLues) : null;
+  const frais = e.enfants.some((c) => c.fraisMarche && c.quantite) ? ' · amounts are before this market\'s fee' : '';
   const tete = e.type === 'NOTE'
-    ? '<p class="filS" data-fil-notes-resume>' + enTexte(phraseNotes(resumeNotes(e.enfants, notesLues), e.blocBas, e.blocHaut)) + '</p>'
-    : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first</p>';
+    ? (libelleNotes(rN).spam ? '<p class="filS" data-fil-spam><b>' + enTexte(AVERT_SPAM) + '</b></p>' : '')
+      + '<p class="filS" data-fil-notes-resume>' + enTexte(phraseNotes(rN, e.blocBas, e.blocHaut)) + '</p>'
+    : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first' + frais + '</p>';
   return '<div class="filEnfants" style="margin-top:4px;cursor:default">' + tete
     + '<ul style="list-style:none;padding:0;margin:0">' + items + '</ul>'
     + (reste > 0 ? '<button type="button" class="puce" data-fil-plus="' + enTexte(cleG) + '">show ' + Math.min(reste, ENFANTS_PAS) + ' more · ' + reste + ' left</button>' : '')
     + '</div>';
+}
+/* ⛔ le titre d une ligne NOTE depend du texte : les 5 premieres lignes NOTE a l ecran se lisent seules,
+ *   UNE fois chacune (ENFANTS_PAS tx au plus, via le regulateur) ; les autres attendent un toucher. */
+const notesAuto = new Set();
+function lireNotesAuto() {
+  let k = 0;
+  for (const [cle, e] of liveLignesParCle) {
+    if (e.type !== 'NOTE') continue;
+    if (++k > 5) break;
+    if (notesAuto.has(cle)) continue;
+    notesAuto.add(cle);
+    void lireNotesDuGroupe(cle);
+  }
 }
 async function lireNotesDuGroupe(cleG) {
   const e = liveLignesParCle.get(cleG);
@@ -10426,8 +10444,13 @@ function peindreLive() {
               ? '🧱 <b>' + nom + '</b> market open · it was not created on TokenizedBlock'
               : '🧱 <b>' + nom + '</b> was born on another launchpad')
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
-      : e.type === 'GM' ? '➡️ <b>' + nom + '</b> sent' + (e.n > 1 ? ' · ' + e.n + '×' : '') + ' · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment') + (e.a ? ' → ' + enTexte(court(e.a)) : '')
-      : e.type === 'NOTE' ? '📝 <b>' + nom + '</b> got ' + (e.n > 1 ? e.n + ' notes' : 'a note')
+      /* ⛔ REVUE 13:32 : un groupe dit son TOTAL et son nombre de wallets, pas le montant et le destinataire du dernier */
+      : e.type === 'GM' ? (e.n > 1 ? '➡️ <b>' + nom + '</b> ' + enTexte(titreEnvois(resumeEnvois(e.enfants), lisible))
+        : '➡️ <b>' + nom + '</b> sent · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment')
+          + (e.a ? ' → ' + (String(e.a).toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : enTexte(court(e.a))) : ''))
+      /* ⛔ REVUE 13:32 : « note » = une entree qui PORTE un texte ; sinon « N empty transfers (0 amount) » */
+      : e.type === 'NOTE' ? (() => { const l = libelleNotes(resumeNotes(e.enfants, notesLues));
+        return (l.notes ? '📝 <b>' + nom + '</b> ' : '⚪ <b>' + nom + '</b> · ') + enTexte(l.texte); })()
       : e.type === 'MESSAGE' ? (e.aaOpaque
         ? '✉️ a paid message from a smart wallet · ' + enTexte(court(e.signataire))
         : '✉️ <b>' + symDe(e.de) + '</b> → <b>' + symDe(e.a) + '</b>: “' + enTexte(String(e.texte || '').slice(0, 140)) + '” · wallet ' + enTexte(court(e.signataire)) + ' paid the TBLOCK fee')
@@ -10470,7 +10493,7 @@ function peindreLive() {
         + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open a market on TB · 0.001 ETH</button>'
         + ' · <span class="filOpen">Open profile</span>'
       : depliable
-        ? ' · <span class="filOpen">' + (deplie ? '▴ tap to hide' : '▾ tap to show ' + (e.n > 1 ? 'all ' + e.n : (e.type === 'NOTE' ? 'the note' : 'it'))) + '</span>'
+        ? ' · <span class="filOpen">' + (deplie ? '▴ tap to hide' : '▾ tap to show ' + (e.n > 1 ? 'all ' + e.n : 'it')) + '</span>'
           + ' · <a href="#" class="filOpen" data-fil-profil="' + enTexte(e.jeton) + '">profile ›</a>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
@@ -10489,6 +10512,7 @@ function peindreLive() {
     /* ⛔ Une liste vide qui ne nomme pas son filtre se lit comme une panne. Elle dit donc CE QU ELLE
      *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
     ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>' : '');
+  setTimeout(lireNotesAuto, 0);
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
@@ -14490,8 +14514,8 @@ async function lireMessagesDuBlock() {
       + ' · block ' + (Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?')
       + (l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
         + '" target="_blank" rel="noopener">tx</a>' : '') + '</p></div></li>').join('');
-    $('#pmsgCompte').textContent = avec.length || !rFil ? avec.length + ' message' + (avec.length === 1 ? '' : 's')
-      : rFil.total + ' note' + (rFil.total === 1 ? '' : 's') + ' from the Feed · ' + (rFil.nonLues ? 'not all read' : 'none with text');
+    /* ⛔ REVUE 13:32 : « No messages yet · 8 empty 0-amount transfers », jamais « 8 notes … none with text » */
+    $('#pmsgCompte').textContent = compteProfil(avec.length, rFil);
     const ratees = (r.fenetresRatees || []).length;
     note.className = 'note';
     note.textContent = (avec.length
