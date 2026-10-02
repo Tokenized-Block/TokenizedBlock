@@ -160,13 +160,13 @@ function verifierMineurs(src, page) {
   assert.match(hg, /➡️ amount not read · /); assert.doesNotMatch(hg, /a fragment/, '« a fragment » par entree');
   assert.match(page, /placeholder="e\.g\. gm, from my block"/, 'placeholder sans « e.g. »');
   /* rebase sur 65fe91a : le gris des exemples est le gris du navigateur (regle « revert » de talk-ui) — #pmsgTexte la rejoint */
-  assert.match(page, /#pvBio::placeholder,#pmsgTexte::placeholder\{color:revert;opacity:revert\}/, 'placeholder pas gris');
+  assert.match(page, /^#pmsgTexte::placeholder\{color:revert;opacity:revert\}\r?$/m, 'placeholder pas gris');
 }
 cas('« amount not read » par entree ; placeholder « e.g. gm, from my block » en gris', () => verifierMineurs(srcEnfants, html));
 cas('TEMOIN NEGATIF : « a fragment » remis par entree, ou placeholder jaune, rougit', () => {
   const mut = srcEnfants.replace("'amount not read') + ' · ' + adr(c.de)", "'a fragment') + ' · ' + adr(c.de)"); assert.notEqual(mut, srcEnfants);
   assert.throws(() => verifierMineurs(mut, html), /a fragment|amount not read/);
-  const pageJaune = html.replace(',#pmsgTexte::placeholder{color:revert', '{color:revert'); assert.notEqual(pageJaune, html);
+  const pageJaune = html.replace('#pmsgTexte::placeholder{color:revert;opacity:revert}', ''); assert.notEqual(pageJaune, html);
   assert.throws(() => verifierMineurs(srcEnfants, pageJaune), /pas gris/);
 });
 cas('une vente seule (hors groupe) ne dit plus le frais du marche (fondateur 14:12 : en tete de section seulement)', () => {
