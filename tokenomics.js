@@ -107,6 +107,29 @@ import { hookDeLancementPour } from './paires.js';
  *    Preuve sur fork et sur un vrai noeud Base : /workspace/tb-v9/V9-DESIGN-AND-FORK-PROOF-2026-10-01.md
  * ⛔ Tant qu il vaut null, RIEN ne change : `hookCourant` rend le V8 comme avant. */
 export const HOOK_V9 = null;
+/* ⛔⛔⛔ EST-CE QUE LE V9 VERSE DEJA a6cf, EN DEVISE DE COTATION, DANS LA TRANSACTION ? TROIS ETATS,
+ *      ET LE DEFAUT EST « PAS MESURE ».
+ *      `null` = pas mesure · `true` = mesure sur fork, il paie · `false` = mesure, il ne paie pas.
+ *
+ *   ⛔ POURQUOI CETTE CONSTANTE EXISTE, mesure du 2026-10-02. `hookPaieDejaA6cf` traitait le V9
+ *     comme PAYANT, dans les DEUX sens, des l instant ou `HOOK_V9` cesse d etre `null` :
+ *         if (x === HOOK_V8 || (!!HOOK_V9 && x === HOOK_V9)) return true;
+ *     Or V9 n est pas deploye : rien n a pu etre mesure. Poser l adresse aurait donc fait passer le
+ *     routeur a 0 bps sur toutes les pools V9 sur la foi d une SUPPOSITION.
+ *
+ *   ⛔⛔ ET LE SENS DE LA FAUTE EST CELUI QUI COUTE. Un faux « non » fait DOUBLE facturer, et
+ *      `echange.js` l attrape (« double fee »). Un faux « oui » fait prendre ZERO, et RIEN ne
+ *      l attrape : un prelevement nul ressemble a un succes. C est le motif
+ *      `zero-par-impossibilite` a l envers — un zero qu on prendrait pour normal.
+ *   ⇒ LE DEFAUT VA DONC VERS « LE ROUTEUR PREND SON FRAIS ». Le pire cas devient une double
+ *     facturation refusee par une garde existante, au lieu d une fuite silencieuse.
+ *
+ *   ⚠️ CE N EST PAS UN VERDICT SUR LE V9. Il n existe pas encore : il ne peut etre ni innocente ni
+ *     coupable. C est le code qui ne doit pas trancher a sa place.
+ *   ⛔ POUR LA PASSER A `true` : une mesure fork au callTracer sur une pool V9 reelle, dans les DEUX
+ *     sens, comme celle qui a produit la table V1/V2/V8 (bloc 52072599). Pas une lecture de la
+ *     source du hook — `guards-measured-transport-not-execution` a deja coute ici. */
+export const V9_PAIE_DEJA_A6CF = null;
 /** Un lancement cote dans cette devise doit-il aller sur le V9 ? ⛔ PAS DE SECONDE LISTE ICI : la
  *  reponse vient de paires.js `hookDeLancementPour` (la liste du V9 y vit, a cote de celle du V8),
  *  la meme source que la garde de Create et la garde de lancement. */
@@ -143,11 +166,22 @@ export function estNotreHook(h) {
  *  la transaction, pour ce sens ? Mesure sur fork (bloc 52072599, callTracer) :
  *    V8 achat + vente : oui (0,5 % ETH) · V1 HOOK_PREVU et V2 : vente seulement (ETH) ·
  *    V1 achat : le hook prend du BLOCK (non compte) · V2 achat : rien dans la tx · V3–V7 : aucune pool.
- *  Vrai = le routeur ne prend PAS son 0,5 % en plus. V9 compte seulement une fois pose. */
+ *  Vrai = le routeur ne prend PAS son 0,5 % en plus.
+ *
+ *  ⛔⛔⛔ LE V9 NE REPOND PLUS « OUI » PAR DEFAUT, CORRIGE LE 2026-10-02. La version precedente disait
+ *       « V9 compte seulement une fois pose » et l implementait par `!!HOOK_V9` : poser l adresse
+ *       suffisait a faire passer le routeur a 0 bps, dans les DEUX sens, sans aucune mesure — V9
+ *       n est pas deploye. Un faux « oui » fait prendre ZERO et rien ne l attrape ; un faux « non »
+ *       fait double facturer et la garde `double fee` d `echange.js` le refuse. On va donc vers
+ *       celui que quelque chose attrape.
+ *    ⇒ `V9_PAIE_DEJA_A6CF` porte la reponse : `null` tant qu aucune mesure fork n existe, et dans ce
+ *      cas le routeur PREND son frais. La table V1/V2/V8 reste telle quelle : elle est mesuree. */
 export function hookPaieDejaA6cf(h, sens) {
   const x = String(h || '').toLowerCase();
   if (!x || (sens !== 'ACHAT' && sens !== 'VENTE')) return false;
-  if (x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase())) return true;
+  if (x === HOOK_V8.toLowerCase()) return true;
+  /* ⛔ V9 : jamais deduit de la seule presence de l adresse. `null` = pas mesure = on prend. */
+  if (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase()) return V9_PAIE_DEJA_A6CF === true;
   if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return sens === 'VENTE';
   return false;
 }
