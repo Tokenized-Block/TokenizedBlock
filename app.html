@@ -8546,6 +8546,8 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
   peindreCompanion();
 }
 
+/** Bridge, poussiere : ⛔ 2026-10-02 (Zero 1) — phrase complete, sans double point. */
+function texteBridgePoussiere(plan) { return 'You receive: not read. ' + String(plan.pourquoi) + ' Nothing was sent.'; }
 /** Compte une etape de l entonnoir (anonyme : le nom de l etape, rien d autre). « une fois » = une fois par visite. */
 /* ⛔ 2026-10-02 (Zero 1) : un refus dans le wallet se dit en anglais simple, sans l etat interne ni ligne « state=… ». */
 const TEXTE_REFUS_WALLET = 'Not done: you declined in your wallet.';
@@ -12456,7 +12458,9 @@ async function signerLiquidite(tx, adr, genre) {
       return;
     }
     e.className = 'note wKo';
-    e.innerHTML = 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
+    /* ⛔ 2026-10-02 (Zero 1) : refus dans le wallet = « Not done: you declined in your wallet. », sans etat interne ni « state=… ». */
+    e.innerHTML = estRefusWallet(r) ? enTexte(TEXTE_REFUS_WALLET) + lien
+      : 'Not done (' + enTexte(r.etat.toLowerCase().replace(/_/g, ' ')) + '). ' + enTexte(r.pourquoi || '') + lien;
     return;
   }
   if (genre === 'APPROBATION') { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerAjout(); return; }
@@ -20007,7 +20011,8 @@ async function majBridgeQuote() {
   if (monJeton !== jetonDevisBridge) return;
   if (plan.etat !== 'PRET' || !plan.resume) {
     /* ⛔ « NON LU » N EST PAS « ZERO ». On nomme l etat, on n invente pas un montant. */
-    netEl.textContent = 'You receive: not read — ' + (plan.pourquoi || 'its market could not be read')
+    netEl.textContent = plan.refusPoussiere ? texteBridgePoussiere(plan)
+      : 'You receive: not read — ' + (plan.pourquoi || 'its market could not be read')
       + '. Nothing was sent.';
     return;
   }
@@ -20138,7 +20143,7 @@ function basculerBridgeMode(mode) {
     }
     if (sortie.etat !== 'PRET' || !sortie.tx) {
       etape('bridge_swap_ko');
-      setEtat((sortie.pourquoi || 'its market could not be read') + ' — nothing was sent.');
+      setEtat(sortie.refusPoussiere ? sortie.pourquoi + ' Nothing was sent.' : (sortie.pourquoi || 'its market could not be read') + ' — nothing was sent.');
       return;
     }
     /* ⛔ Les approbations manquantes ne sont pas un detail : signer sans elles echouerait SUR LA
