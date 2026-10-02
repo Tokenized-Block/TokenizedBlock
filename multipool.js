@@ -64,6 +64,8 @@ export const FRAIS_PPM = 900n;
 export const BASE_PPM = 1000000n;
 if (FRAIS_BPS * BASE_PPM !== FRAIS_PPM * BASE_BPS) throw new Error('0,09 % : 9 / 1e4 doit egaler 900 / 1e6');
 export const PARTS_FRAIS = Object.freeze([Object.freeze({ qui: ADRESSES.FEE_WALLET, bps: FRAIS_BPS })]);
+/** Le seul autre taux a6cf admis : 7 bps = 700 / 1e6, SEULEMENT dans le split du block (parts-bloc.js, drapeau ON). */
+export const BPS_A6CF_SPLIT_BLOC = 7n;
 
 /** Constantes du routeur (ActionConstants / Constants du depot source). */
 export const CONTRACT_BALANCE = 1n << 255n;
@@ -374,7 +376,7 @@ export function assemblerExecute(cmds, ins, deadline) {
  *   tient par construction.
  */
 export function construireRoute({ chemin, montant, minSortie, destinataire, deadline, fraisIndice,
-  partsFrais = PARTS_FRAIS, admises } = {}) {
+  partsFrais = PARTS_FRAIS, admises, partsExactes = [], bpsA6cf = FRAIS_BPS } = {}) {
   if (!Array.isArray(chemin) || !chemin.length || chemin.length > SAUTS_MAX) return { etat: 'REFUSE', pourquoi: 'path must have 1..' + SAUTS_MAX + ' hops' };
   if (!chemin.every((s) => areteValide(s.e))) return { etat: 'REFUSE', pourquoi: 'a hop has no buildable pool' };
   if (!estAdresse(destinataire) || [ADDRESS_THIS, MSG_SENDER, ADRESSES.ROUTEUR].includes(bas(destinataire))) return { etat: 'REFUSE', pourquoi: 'a real recipient address is required' };
@@ -393,6 +395,26 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   const parts = Array.isArray(partsFrais) ? partsFrais : [];
   if (!parts.length || parts.some((p) => !estAdresse(p.qui) || BigInt(p.bps) <= 0n || BigInt(p.bps) > 100n)) return { etat: 'REFUSE', pourquoi: 'fee parts must be 1..100 bps to whole addresses' };
   if (bas(parts[0].qui) !== ADRESSES.FEE_WALLET) return { etat: 'REFUSE', pourquoi: 'the first fee part must go to the fee wallet' };
+  /* ⛔⛔ PARTS EXACTES (parts-bloc.js, 2026-10-02, drapeau OFF) : des TRANSFER de montants FIXES, AU MEME noeud,
+   *   APRES le PAY_PORTION de a6cf. Avec des parts exactes, a6cf est la SEULE part en bips, au taux EXIGE `bpsA6cf` :
+   *   9 (le 0,09 % en vigueur, par defaut) ou 7 (le split du block de Raksha 10:21 : 0,07 % + 0,03 % createur/collateral,
+   *   drapeau ON seulement — et alors les parts exactes sont OBLIGATOIRES). Tout autre taux est refuse ; aucune part
+   *   exacte vers a6cf, vers le routeur ou en double. */
+  const exactes = Array.isArray(partsExactes) ? partsExactes : [];
+  const bA = BigInt(bpsA6cf);
+  if (![FRAIS_BPS, BPS_A6CF_SPLIT_BLOC].includes(bA)) return { etat: 'REFUSE', pourquoi: 'refused: the fee wallet rate must be ' + FRAIS_BPS + ' bps (live) or ' + BPS_A6CF_SPLIT_BLOC + ' bps (block split)' };
+  if (bA !== FRAIS_BPS && !exactes.length) return { etat: 'REFUSE', pourquoi: 'refused: the ' + bA + ' bps rate only exists with the creator/collateral share' };
+  if (exactes.length || bA !== FRAIS_BPS) {
+    if (parts.length !== 1 || BigInt(parts[0].bps) !== bA) return { etat: 'REFUSE', pourquoi: 'refused: shares may not cut into the fee wallet part (it must stay the only bips part, at exactly ' + bA + ' bps)' };
+    const vus = new Set();
+    for (const p of exactes) {
+      const q = bas(p && p.qui);
+      if (!estAdresse(q) || [ADDRESS_THIS, MSG_SENDER, ADRESSES.ROUTEUR, ADRESSES.FEE_WALLET].includes(q)) return { etat: 'REFUSE', pourquoi: 'refused: an extra share must go to a real address that is not the fee wallet or the router' };
+      if (vus.has(q)) return { etat: 'REFUSE', pourquoi: 'refused: the same extra-share recipient twice (double charge)' };
+      vus.add(q);
+      if (typeof p.montant !== 'bigint' || p.montant <= 0n) return { etat: 'REFUSE', pourquoi: 'refused: an extra share must be a positive bigint amount' };
+    }
+  }
 
   const cmds = [], ins = [];
   const ajoute = (c, h) => { cmds.push(c); ins.push(h); };
@@ -407,6 +429,7 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
     if (dev === ADRESSES.ETH && tenue === 'weth') { ajoute(CMD.UNWRAP_WETH, motAdr(ADDRESS_THIS) + mot(0)); tenue = 'eth'; }
     const jeton = dev === ADRESSES.ETH ? ADRESSES.ETH : dev;
     for (const p of parts) ajoute(CMD.PAY_PORTION, motAdr(jeton) + motAdr(p.qui) + mot(p.bps));
+    for (const p of exactes) ajoute(CMD.TRANSFER, motAdr(jeton) + motAdr(p.qui) + mot(p.montant));
   };
   const segs = segments(chemin, fraisIndice);
   const segIdx = new Map(segs.map((s, k) => [s.debut, k]));

@@ -14,13 +14,18 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { FRAIS_PPM, BASE_PPM } from './multipool.js';
 import { OPTIONS } from './recompense-actions.js';
+import { SPLIT_BLOC, RACHAT_DETENTEURS_ACTIVE } from './parts-bloc.js';
+/* SPLIT DU BLOCK (parts-bloc.js, Raksha 10:21, drapeau OFF par defaut) : SI le drapeau etait ON et SI tout le volume
+ *   touchait un block inscrit avec son action sur le chemin : 0,10 % paye par le swapper = a6cf 0,07 % + createur 0,03 %
+ *   (s il tient son minimum ; sinon ces 0,03 % vont au collateral). Colonnes siON_* HYPOTHETIQUES ; les colonnes a6cf
+ *   sans prefixe restent le 0,09 % EN VIGUEUR. */
 
 const V = process.argv[2] || '/workspace/mp-data/volume-24h.json';
 const SORTIE = process.env.SORTIE || '/workspace/canal/projection-revenu-a6cf-2026-10-01.csv';
 const taux = Number(FRAIS_PPM) / Number(BASE_PPM); /* 0.0009 */
 if (taux !== 0.0009) throw new Error('le taux doit etre 0,09 %');
 const vol = existsSync(V) ? JSON.parse(readFileSync(V, 'utf8')) : null;
-const lignes = [['nature', 'perimetre', 'volume_jour_usd', 'capture', 'volume_capte_jour_usd', 'a6cf_jour_usd', 'a6cf_30j_usd', 'a6cf_365j_usd', 'optA_cout_coffre_jour_usd', 'optB_cout_coffre_jour_usd', 'optC_coffre_jour_usd', 'optCbis_a6cf_jour_usd', 'source']];
+const lignes = [['nature', 'perimetre', 'volume_jour_usd', 'capture', 'volume_capte_jour_usd', 'a6cf_jour_usd', 'a6cf_30j_usd', 'a6cf_365j_usd', 'optA_cout_coffre_jour_usd', 'optB_cout_coffre_jour_usd', 'optC_coffre_jour_usd', 'optCbis_a6cf_jour_usd', 'siON_a6cf_jour_usd', 'siON_createur_jour_usd_si_au_minimum', 'siON_collateral_jour_usd_si_createur_sous_minimum', 'siON_total_swapper_jour_usd', 'source']];
 const r2 = (x) => (x === null ? '' : (Math.round(x * 100) / 100).toFixed(2));
 function ligne(nature, perimetre, volJour, capture, source) {
   const capte = volJour * capture;
@@ -32,7 +37,7 @@ function ligne(nature, perimetre, volJour, capture, source) {
   const optC = capte * (1 - taux) * Number(OPTIONS.C.surchargeBps) / 10000;
   /* C-bis : a6cf a 8 bps au lieu de 9 — CONTRAIRE a la regle, montre pour comparaison */
   const optCbis = capte * 8 / 10000;
-  lignes.push([nature, perimetre, r2(volJour), capture, r2(capte), r2(a6cf), r2(a6cf * 30), r2(a6cf * 365), r2(optA), r2(optB), r2(optC), r2(optCbis), source]);
+  lignes.push([nature, perimetre, r2(volJour), capture, r2(capte), r2(a6cf), r2(a6cf * 30), r2(a6cf * 365), r2(optA), r2(optB), r2(optC), r2(optCbis), r2(capte * Number(SPLIT_BLOC.a6cfPpm) / 1e6), r2(capte * Number(SPLIT_BLOC.createurPpm) / 1e6), r2(capte * Number(SPLIT_BLOC.createurPpm) / 1e6), r2(capte * Number(SPLIT_BLOC.a6cfPpm + SPLIT_BLOC.createurPpm) / 1e6), source]);
 }
 if (vol && vol.resume) {
   const r = vol.resume;
@@ -41,7 +46,8 @@ if (vol && vol.resume) {
     if (v === undefined || v === null) continue;
     for (const c of [0.01, 0.05, 0.1]) ligne('MESURE x capture HYPOTHETIQUE', nom, v, c, src + ' · capture ' + c * 100 + ' % = HYPOTHESE');
   }
-} else lignes.push(['MESURE', 'volume 24 h', 'inconnu', '', '', '', '', '', '', '', '', '', 'volume-24h.json absent : NON MESURE']);
+} else lignes.push(['MESURE', 'volume 24 h', 'inconnu', '', '', '', '', '', '', '', '', '', '', '', '', '', 'volume-24h.json absent : NON MESURE']);
+void RACHAT_DETENTEURS_ACTIVE;
 for (const v of [10000, 100000, 1000000, 10000000]) ligne('HYPOTHETIQUE', 'volume journalier rond', v, 1, 'aucune mesure : volume suppose');
 const csv = (x) => (/[",\n]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : String(x));
 writeFileSync(SORTIE, lignes.map((l) => l.map(csv).join(',')).join('\n') + '\n');
