@@ -64,6 +64,9 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
     error ConversionInvalide();
     error RetraitBloque24h();
     error ConfigIncompatible();
+    /// @dev marqueur vide au constructeur : il desactiverait entierement la verification du label,
+    ///      et sans setter l etat serait definitif. Voir `porteLeLabel`.
+    error MarqueurVide();
     error PasUnBloc24h();
 
     event Inscrite(PoolId indexed id, address indexed createur, address indexed devise, uint160 sqrtPriceX96, uint256 paye);
@@ -188,6 +191,15 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
         if (address(c.poolManager) == address(0) || c.feeWallet == address(0)) revert AdresseNulle();
         if (c.hookFee == 0 || uint256(c.hookFee) + c.partCreateur + c.partCollateral > FRAIS_MAX) revert FraisInvalide();
         if (c.modeCollateral > 3) revert FraisInvalide();
+        // ⛔⛔⛔ LE MARQUEUR NE PEUT PAS ETRE VIDE — ajoute le 2026-10-02, et c est LE correctif du
+        //      fail-open de `porteLeLabel`. Un marqueur vide y rendait `true` pour toute adresse :
+        //      la verification du label sautait entierement, et n importe quel jeton pouvait
+        //      inscrire une pool sur ce hook. `marqueur` est en storage, pose ICI et nulle part
+        //      ailleurs (aucun setter, par conception adminless) : l erreur aurait ete DEFINITIVE.
+        //   ⛔ ON VALIDE A LA FRONTIERE OU C EST ENCORE REPARABLE — le deploiement — plutot que dans
+        //     le chemin chaud, ou refuser aurait brique le hook. Les autres champs de la Config sont
+        //     deja valides ici ; `marqueur` etait le seul a ne pas l etre.
+        if (c.marqueur.length == 0) revert MarqueurVide();
         if (c.suivi24h && c.exigerB20) revert ConfigIncompatible(); // B20 precompiles cannot carry the rule
         if (c.modeCollateral == 3) {
             if (address(c.conversion.hooks) != address(0)) revert ConversionInvalide();
@@ -233,9 +245,26 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
         return permissions();
     }
 
+    /// @notice does this token's URI carry our marker (i.e. is it an engraved block)?
+    /// ⛔⛔⛔ FAIL-OPEN CORRIGE LE 2026-10-02. Cette ligne etait `if (m.length == 0) return true;` :
+    ///      un marqueur vide rendait `true` pour N IMPORTE QUELLE adresse, donc la verification du
+    ///      label etait ENTIEREMENT DESACTIVEE. N importe quel jeton pouvait alors inscrire une pool
+    ///      sur ce hook. Et `marqueur` est en storage, pose une seule fois au constructeur, SANS
+    ///      setter : l etat aurait ete permanent.
+    ///   ⛔ LE VRAI CORRECTIF EST AU CONSTRUCTEUR, PAS ICI. Inverser ce `return` seul aurait BRIQUE un
+    ///     hook deploye avec un marqueur vide — il aurait refuse tout, pour toujours. C est le motif
+    ///     « fail-closed sur une affordance efface le produit », deja paye en production.
+    ///     Le constructeur refuse desormais un marqueur vide (`MarqueurVide`), ce qui rend cette
+    ///     branche INATTEIGNABLE. Elle reste, fail-closed, comme assertion de cet invariant : si
+    ///     elle tirait un jour, c est que la garde du constructeur aurait saute, et refuser vaut
+    ///     mieux qu ouvrir.
+    ///   ⚠️ UN MARQUEUR VIDE N A JAMAIS ETE UNE CONFIGURATION VOULUE : la valeur reelle est
+    ///     `%22face%22%3A%7B` (l encodage URL de `"face":{`), qui verifie que le block est GRAVE. Et
+    ///     ce contrat exprime deja ses exigences par des DRAPEAUX explicites (`exigerB20`) — un
+    ///     « pas de verification » encode dans une chaine vide etait la seule exception, implicite.
     function porteLeLabel(address bloc) public view returns (bool) {
         bytes memory m = marqueur;
-        if (m.length == 0) return true;
+        if (m.length == 0) return false;
         (bool ok, bytes memory ret) = bloc.staticcall{gas: GAS_LABEL}(abi.encodeWithSelector(0xe8a3d485));
         if (!ok || ret.length < 64) return false;
         string memory uri;
