@@ -3,7 +3,7 @@
 // (2) Buy/Sell wallet decline: 'Not done: you declined in your wallet.', never 'Not done (refuse par utilisateur)' nor a state= line.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n?/g, '\n');
 let ko = 0, n = 0;
@@ -19,8 +19,14 @@ const rpc = async (m) => { if (m === 'eth_call') return word(10n ** 18n); if (m 
 // (1a) planEchange: 199 wei on a V8 hook-paid buy
 let r199 = {}, r200 = {};
 await essai('(1a)', async () => {
-  const E = await import(path.join(ICI, 'echange.js'));
-  const T = await import(path.join(ICI, 'tokenomics.js'));
+/* ⛔⛔⛔ IMPORT PORTABLE — CORRIGE LE 2026-10-02. `await import(path.join(...))` fonctionne sur
+ *      POSIX et LEVE sur Windows : « On Windows, absolute paths must be valid file:// URLs ». Les
+ *      cinq bancs du 2026-10-02 etaient donc VERTS dans le conteneur et MORTS sur la machine de
+ *      Raksha — ils ne gardaient rien la ou l app est reellement relue avant deploiement.
+ *    ⛔ Meme famille que le cliquet CRLF : un banc ne doit dependre NI de la fin de ligne NI du
+ *      systeme de fichiers de l hote. `pathToFileURL(...).href` est la seule forme qui vaut partout. */
+  const E = await import(pathToFileURL(path.join(ICI, 'echange.js')).href);
+  const T = await import(pathToFileURL(path.join(ICI, 'tokenomics.js')).href);
   const cle = { currency0: ETH, currency1: BLK, fee: 0, tickSpacing: 200, hooks: T.HOOK_V8 };
   const achat = (w) => E.planEchange({ rpc, chaine: 8453, jeton: BLK, compte: COMPTE, sens: 'ACHAT', montant: w, marcheLu: { etat: 'LUE', cle, paire: null } });
   r199 = await achat(199n); r200 = await achat(200n);

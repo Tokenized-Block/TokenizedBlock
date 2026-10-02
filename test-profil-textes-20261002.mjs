@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdtempSync, copyFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { FEE_WALLET } from './frais-creation.js';
 
 let n = 0;
@@ -16,7 +16,18 @@ const CAS = [];
 const cas = (nom, fn) => CAS.push([nom, fn]);
 const HTML = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const SRC_METIERS = readFileSync(new URL('./metiers.js', import.meta.url), 'utf8');
-const ICI = new URL('.', import.meta.url).pathname;
+/* ⛔⛔⛔ `new URL('.', import.meta.url).pathname` N EST PAS UN CHEMIN DE FICHIER SUR WINDOWS. Il rend
+ *      `/D:/Users/...` — avec un slash en tete — et `readdirSync` le resout alors contre le lecteur
+ *      courant, d ou l erreur mesuree ici : `ENOENT … scandir 'D:\\D:\\Users\\VolKov\\…'`, la lettre
+ *      de lecteur DOUBLEE. Ce banc ne pouvait donc pas tourner du tout sur la machine de Raksha,
+ *      alors qu il est vert dans le conteneur.
+ *    ⛔ `fileURLToPath` est la seule conversion correcte : elle existe pour ca, et elle rend un
+ *      chemin natif sur les deux systemes. L import plus bas utilisait DEJA `pathToFileURL` — donc la
+ *      bonne pratique etait connue dans ce fichier, appliquee a un endroit et pas a l autre. C est
+ *      le motif `canonical-helper-weaker-copy` : la version juste existe, et la copie faible gagne.
+ *    ⛔ Meme famille que le cliquet CRLF : un banc ne doit dependre NI de la fin de ligne NI du
+ *      systeme de fichiers de l hote. */
+const ICI = fileURLToPath(new URL('.', import.meta.url));
 const dossier = mkdtempSync(join(tmpdir(), 'profil-textes-'));
 for (const f of readdirSync(ICI)) if (f.endsWith('.js')) copyFileSync(join(ICI, f), join(dossier, f));
 let k = 0;

@@ -18,6 +18,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
 /* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
  *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
@@ -36,7 +37,14 @@ const fichier = join(dossier, 'holders-cache.json');
 /** Lance un bout de code dans un processus NEUF, avec le volume pointe sur notre dossier. */
 function dansUnProcessusNeuf(code) {
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
-    cwd: new URL('.', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'),
+    /* ⛔ `.pathname.replace(/^\/([A-Za-z]:)/, '$1')` ETAIT UNE RECOPIE A LA MAIN DE `fileURLToPath`,
+     *   remplacee le 2026-10-02. Elle FONCTIONNAIT — ce banc etait vert — mais c est le motif
+     *   `canonical-helper-weaker-copy` : l helper officiel existe, il gere aussi les caracteres
+     *   encodes (un dossier avec un espace arrive en `%20` dans `.pathname`), la copie ne couvre que
+     *   la lettre de lecteur. Elle aurait casse sur un chemin de projet contenant un espace.
+     *   ⛔ Et c est le cliquet de portabilite qui l a trouvee, le jour ou il a appris a voir les
+     *     chemins non portables — apres que CINQ bancs se soient reveles MORTS sur Windows. */
+    cwd: fileURLToPath(new URL('.', import.meta.url)),
     env: { ...process.env, RAILWAY_VOLUME_MOUNT_PATH: dossier, PORT: '8791', PORT_TEST: '8791' },
     encoding: 'utf8', timeout: 60000,
   });

@@ -80,6 +80,31 @@ function suspects(src) {
      *        sans quantificateur absorbant. Elle existe en theorie ; elle n a casse personne ici.
      *      ⛔ Une garde qui accuse soixante fichiers le premier jour est une garde qu on desactive
      *        la semaine suivante. Elle doit se tromper du cote de l INNOCENCE. */
+
+    /* ══ SECOND MOTIF, AJOUTE LE 2026-10-02 : LE CHEMIN QUI NE MARCHE QUE SUR POSIX ══════════════
+     * ⛔⛔⛔ MESURE DU JOUR : CINQ bancs etaient VERTS dans le conteneur du Grok Bot et MORTS sur la
+     *      machine de Raksha — 157 assertions qui ne s executaient pas, dont 102 pour le seul
+     *      `test-hook-7030-app-wiring`, c est-a-dire l audit COMPLET du cablage du hook. Son
+     *      « audit vert » portait donc sur une box ou ces bancs tournent ; ici ils ne gardaient RIEN.
+     *      Deux formes, toutes deux letales :
+     *        1. `await import(path.join(ICI, 'x.js'))` -> « On Windows, absolute paths must be valid
+     *           file:// URLs ». Correct : `pathToFileURL(...).href`.
+     *        2. `new URL('.', import.meta.url).pathname` utilise comme CHEMIN -> rend `/D:/Users/…`
+     *           avec un slash en tete, et `readdirSync` le resout contre le lecteur courant :
+     *           `ENOENT … scandir 'D:\\D:\\Users\\…'`, lettre de lecteur DOUBLEE.
+     *           Correct : `fileURLToPath(new URL('.', import.meta.url))`.
+     *   ⛔ MEME FAMILLE QUE LE MOTIF CRLF CI-DESSUS, ET C EST POURQUOI ILS VIVENT DANS LA MEME GARDE :
+     *     un banc ne doit dependre NI de la fin de ligne NI du systeme de fichiers de l hote. Dans
+     *     les deux cas il ne casse pas, il cesse SILENCIEUSEMENT de couvrir — ou pire, il accuse LE
+     *     CODE pour une raison qui n a rien a voir avec lui.
+     *   ⚠️ CE QUE CE MOTIF LAISSE PASSER, nomme : un `import()` dont le chemin est construit plus
+     *     haut dans une variable qu on ne relit pas ici. On vise l appel, pas le flot de donnees. */
+    if (/await\s+import\(\s*(?:path\.)?(?:join|resolve)\(/.test(ligne)) {
+      trouves.push({ l: i + 1, quoi: t.slice(0, 70), pourquoi: 'import() d un chemin, pas d une file:// URL' });
+    }
+    if (/new URL\([^)]*import\.meta\.url\s*\)\s*\.pathname/.test(ligne)) {
+      trouves.push({ l: i + 1, quoi: t.slice(0, 70), pourquoi: '.pathname utilise comme chemin de fichier' });
+    }
   });
   return trouves;
 }
@@ -96,6 +121,21 @@ ok('TEMOIN — la sonde attrape l ancre de position qui a casse trois tests', vu
 const SAIN = "const m = /\\r?\\n\\}\\r?\\n/.exec(src);\nconsole.log('a\\nb');";
 ok('TEMOIN NEGATIF — la forme corrigee et un console.log ne sont PAS accuses',
   suspects(SAIN).length === 0, JSON.stringify(suspects(SAIN)));
+
+/* ⛔⛔ ET LES MEMES DEUX TEMOINS POUR LE MOTIF DES CHEMINS, avec les formes EXACTES mesurees ce jour.
+ *    Sans eux, « 0 fautif » ne distinguerait pas « tout est portable » de « le second motif ne
+ *    cherche rien » — et c est precisement ce qui vient de se passer pendant des heures. */
+const TEMOIN_CHEMIN = "  const E = await import(path.join(ICI, 'echange.js'));\n"
+  + "  T: await import(join(d, 'tokenomics.js')),\n"
+  + "const ICI = new URL('.', import.meta.url).pathname;";
+const vusChemin = suspects(TEMOIN_CHEMIN);
+ok('TEMOIN — la sonde attrape les trois formes de chemin non portables mesurees le 2026-10-02',
+  vusChemin.length === 3, JSON.stringify(vusChemin.map((x) => x.pourquoi)));
+const SAIN_CHEMIN = "  const E = await import(pathToFileURL(path.join(ICI, 'echange.js')).href);\n"
+  + "const ICI = fileURLToPath(new URL('.', import.meta.url));\n"
+  + "const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');";
+ok('TEMOIN NEGATIF — les formes corrigees et `new URL(...)` passe a readFileSync ne sont PAS accusees',
+  suspects(SAIN_CHEMIN).length === 0, JSON.stringify(suspects(SAIN_CHEMIN)));
 
 console.log('');
 console.log('  ' + FICHIERS.length + ' fichiers de test/banc examines');
@@ -123,10 +163,21 @@ n += 1;
 if (fautifs > DETTE_CONNUE) {
   ko += 1;
   console.log('');
+  /* ⛔⛔ CE MESSAGE NE PARLAIT QUE DES FINS DE LIGNE, et la garde surveille desormais DEUX familles.
+   *    Le 2026-10-02 il a accuse un defaut de CHEMIN en expliquant un probleme de CRLF : le
+   *    signalement etait juste et le remede propose etait hors sujet. « Un chiffre juste mais
+   *    illisible n avertit pas » — et une alerte qui propose le mauvais correctif fait perdre plus
+   *    de temps qu elle n en gagne. Le remede vient maintenant de la raison MESUREE, par ligne. */
   console.log('  ⛔ ' + fautifs + ' fichiers fautifs, pour une dette connue de ' + DETTE_CONNUE + '.');
-  console.log('     Un NOUVEAU test depend de la fin de ligne du checkout : il sera VERT sur une box');
-  console.log('     LF et ROUGE sur Windows, et il accusera le CODE. Correctif : `\\r?\\n` des deux');
-  console.log('     cotes, ou normaliser a la lecture.');
+  console.log('     Un NOUVEAU banc depend de l HOTE : il sera VERT sur une box et ROUGE ailleurs, ou');
+  console.log('     pire, il cessera silencieusement de couvrir en accusant LE CODE.');
+  console.log('     Remedes, selon la raison imprimee ci-dessus :');
+  console.log('       · « ancre de position »          -> `\\r?\\n` des deux cotes, ou `indexEol()`.');
+  console.log('       · « import() d un chemin »       -> `pathToFileURL(chemin).href`.');
+  console.log('       · « .pathname comme chemin »     -> `fileURLToPath(new URL(...))`.');
+  console.log('     ⛔ Mesure du 2026-10-02 : CINQ bancs etaient verts en conteneur et MORTS sur');
+  console.log('        Windows — 157 assertions qui ne s executaient pas, dont 102 pour le seul');
+  console.log('        audit du cablage du hook. Un banc qui ne tourne pas ne garde rien.');
 } else if (fautifs < DETTE_CONNUE) {
   ko += 1;
   console.log('');

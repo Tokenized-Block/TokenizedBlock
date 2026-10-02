@@ -6,6 +6,7 @@
 import { mkdtempSync, readdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 let ko = 0, n = 0;
 const ok = (c, m) => { n++; console.log((c ? 'ok  ' : 'KO  ') + m); if (!c) ko++; };
 const essai = async (m, f) => { try { await f(); } catch (e) { ok(false, m + ' (threw: ' + String(e && e.message || e).slice(0, 110) + ')'); } };
@@ -25,8 +26,14 @@ const tk = readFileSync(join(ON, 'tokenomics.js'), 'utf8');
 ok(tk.includes('export const HOOK_7030_ACTIF = false;'), 'shipped flag is OFF (export const HOOK_7030_ACTIF = false)');
 writeFileSync(join(ON, 'tokenomics.js'), tk.replace('export const HOOK_7030_ACTIF = false;', 'export const HOOK_7030_ACTIF = true;'));
 const charger = async (d) => ({
-  T: await import(join(d, 'tokenomics.js')), P: await import(join(d, 'paires.js')), E: await import(join(d, 'echange.js')),
-  L2: await import(join(d, 'lancer-pool-v2.js')), L: await import(join(d, 'lancer-pool.js')), M: await import(join(d, 'marche.js')) });
+/* ⛔⛔⛔ IMPORT PORTABLE — CORRIGE LE 2026-10-02. `await import(path.join(...))` fonctionne sur
+ *      POSIX et LEVE sur Windows : « On Windows, absolute paths must be valid file:// URLs ». Les
+ *      cinq bancs du 2026-10-02 etaient donc VERTS dans le conteneur et MORTS sur la machine de
+ *      Raksha — ils ne gardaient rien la ou l app est reellement relue avant deploiement.
+ *    ⛔ Meme famille que le cliquet CRLF : un banc ne doit dependre NI de la fin de ligne NI du
+ *      systeme de fichiers de l hote. `pathToFileURL(...).href` est la seule forme qui vaut partout. */
+  T: await import(pathToFileURL(join(d, 'tokenomics.js')).href), P: await import(pathToFileURL(join(d, 'paires.js')).href), E: await import(pathToFileURL(join(d, 'echange.js')).href),
+  L2: await import(pathToFileURL(join(d, 'lancer-pool-v2.js')).href), L: await import(pathToFileURL(join(d, 'lancer-pool.js')).href), M: await import(pathToFileURL(join(d, 'marche.js')).href) });
 const off = await charger(ICI), on = await charger(ON);
 
 // quoter / reads mock: every eth_call returns 1e18 in word 0 (quotes), 0 elsewhere (no code -> fine for plans)
@@ -113,7 +120,7 @@ await essai('(4) birth', async () => {
   const plan = { etat: 'APPROBATIONS', etapes: [{ nom: 'x', to: RANDOM, data: '0x', value: '0x0' }], cle: cleEth, sqrtVise: 79228162514264337593543950336n, tx: {} };
   const S = on.L2.SIG_INSCRIRE_CAUTION;
   ok(S === 'inscrireAvecCaution((address,address,uint24,int24,address),uint160,uint128)', '(4) signature');
-  const { selecteur } = await import(join(ON, 'pool.js'));
+  const { selecteur } = await import(pathToFileURL(join(ON, 'pool.js')).href);
   const lecteur = ({ payee = false, qui = ETH, allow = 0n, prix = 0n } = {}) => async (m, p) => {
     const d = String(p[0].data).slice(2, 10);
     const w = (x) => '0x' + BigInt(x).toString(16).padStart(64, '0');
