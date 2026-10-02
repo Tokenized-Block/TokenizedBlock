@@ -57,6 +57,15 @@ export function hookPaieEnDeviseVendable({ cle, sens, zeroForOne, jeton = null, 
   const ok = v8 || d === ETH || d === USDC_BASE.toLowerCase() || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(d));
   return { paie: ok, devise: d };
 }
+/** Le SENS d une jambe de route, RELATIF AU BLOCK : ACHAT = le block sort de la jambe. Le block est le cote qui
+ *  n est pas une devise connue. Deux devises connues (ETH/USDC) ou deux blocks : convention historique
+ *  « zeroForOne = ACHAT » (juste quand la devise est currency0). */
+export function sensRelatifAuBlock(x) {
+  const c0 = String(x.cle.currency0).toLowerCase(), c1 = String(x.cle.currency1).toLowerCase();
+  const k0 = estDeviseConnue(c0), k1 = estDeviseConnue(c1);
+  if (k0 === k1) return x.zeroForOne ? 'ACHAT' : 'VENTE';
+  return (x.zeroForOne ? c1 : c0) === (k0 ? c1 : c0) ? 'ACHAT' : 'VENTE';
+}
 /** ⛔ 2026-10-02 (fix-2, Claude C) — jambe TBLOCK/ETH de `routeViaTblock` : le frais du hook n y compte QUE s il est en ETH.
  *  Avant, la sortie du routeur reposait sur la seule construction (cleT est TBLOCK/ETH). Garde explicite, testee. */
 export function hookPaieJambeTblock(cleT, sens) {
@@ -713,7 +722,8 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔⛔ 2026-10-02 (regle du fondateur) : aucun saut sur une pool sans hook qui contient un block TB (entree, sortie,
    *   TBLOCK, TBGAS). Les jambes entre devises (ETH/USDC…) restent permises. */
   if (REFUS_FRAIS_HOOK_EN_BLOCK && sauts.some((x) => x && x.cle && [entree, sortie].some((j) => /^0xb2/i.test(String(j || ''))
-    && fraisHookEnBlock(x.cle, j, x.zeroForOne ? 'ACHAT' : 'VENTE', !!x.zeroForOne)))) {
+    /* une action Coinbase (0xb2… aussi) n est pas un block : un frais de hook en action est vendable */
+    && !estDeviseConnue(j) && fraisHookEnBlock(x.cle, j, sensRelatifAuBlock(x), !!x.zeroForOne)))) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
   }
   if (!ROUTE_VIA_TBLOCK && sauts.some((x) => x && cleTouchTblock(x.cle))) {
@@ -764,7 +774,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   compte que s il est verse dans une devise CONNUE ou prixee — sinon le routeur garde le sien. */
   const parJambe = sauts.map((x) => {
     if (!(x && x.cle)) return { paie: false, devise: null };
-    const r = hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
+    /* ⛔ 2026-10-02 (matrice, 16 doubles frais V2/PREVU) : le SENS est relatif au BLOCK — ACHAT = le block sort
+     *   de la jambe. « zeroForOne = ACHAT » n est vrai que si la devise est currency0 ; block en currency0, il
+     *   s inverse, et un hook qui ne paie qu a la VENTE etait lu comme non payeur (routeur + hook = double frais).
+     *   Le block = le cote qui n est pas une devise connue ; deux devises connues ou deux blocks : convention. */
+    const r = hookPaieEnDeviseVendable({ cle: x.cle, sens: sensRelatifAuBlock(x),
       zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs });
     const vendable = !!r.devise && (estDeviseConnue(r.devise) || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(r.devise)));
     return r.paie && !vendable ? { paie: false, devise: r.devise } : r;

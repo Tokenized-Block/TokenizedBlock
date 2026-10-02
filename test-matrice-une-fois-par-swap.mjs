@@ -41,8 +41,17 @@ const cle = (a, b, hooks) => {
 /* le sens d une jambe, meme convention que le planificateur (zeroForOne -> ACHAT) */
 const jambe = (de, vers, hooks) => { const c = cle(de, vers, hooks); return { cle: c, zeroForOne: bas(de) === c.currency0 }; };
 
+/* ⛔ LE SENS EST RELATIF AU BLOCK : ACHAT = le block SORT de cette jambe. La convention « zeroForOne = ACHAT »
+ *   n est vraie que si ETH (ou la devise) est currency0 ; avec un block en currency0 elle s inverse. */
+function sensJambe(s) {
+  const c0 = bas(s.cle.currency0), c1 = bas(s.cle.currency1);
+  const blocEn = BLOCS.has(c0) ? c0 : BLOCS.has(c1) ? c1 : null;
+  if (!blocEn) return s.zeroForOne ? 'ACHAT' : 'VENTE';
+  const sortie = s.zeroForOne ? c1 : c0;
+  return sortie === blocEn ? 'ACHAT' : 'VENTE';
+}
 function oraclePaie(s) {
-  const sens = s.zeroForOne ? 'ACHAT' : 'VENTE';
+  const sens = sensJambe(s);
   if (!T.hookPaieDejaA6cf(s.cle.hooks, sens)) return false;
   const d = T.deviseFraisHook(s.cle, sens, s.zeroForOne);
   return !!d && !BLOCS.has(bas(d));
@@ -86,6 +95,11 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
  *   n y passe pas : c est ici que le court-circuit V8 de hookPaieEnDeviseVendable pourrait compter comme
  *   « payee » une jambe dont le hook verse a6cf EN BLOCK. */
 let nMilieu = 0;
+const construits = new Set();
+/* ⛔ UN REFUS NE FAIT ECHOUER AUCUN INVARIANT : ces routes DOIVENT donner un plan. Le hook V8 y verse a6cf en
+ *   ACTION (ACT = currency0 face a blocHaut), et l action est l entree ou la sortie. Le garde « frais en block »
+ *   les refusait en prenant toute adresse 0xb2… pour un block (actions comprises). */
+const DOIT_PASSER = ['MILIEU ACT>blocHaut>ETH [V8,V8]', 'MILIEU ACT>blocHaut>USDC [V8,V8]', 'MILIEU ETH>blocHaut>ACT [V8,V8]'];
 for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
   for (const [a, z] of [[ACT, ETH], [ACT, USDC], [ETH, ACT], [USDC, ACT], [ETH, USDC], [USDC, ETH]]) {
     for (const h1 of Object.keys(HOOKS)) {
@@ -100,7 +114,7 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
             montant: 10n ** 21n, decimalesEntree: 18, prixUsdEntree: null, fraisDevisesOk: new Set([ACT]) });
         } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
         if (p.etat === 'REFUSE') { nRefus += 1; continue; }
-        nPlans += 1; nMilieu += 1;
+        nPlans += 1; nMilieu += 1; construits.add(nom);
         const paie = sauts.some(oraclePaie);
         const frais = BigInt((p.resume && p.resume.frais) || 0);
         if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — routeur ' + frais);
@@ -114,6 +128,38 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
   }
 }
 console.log('block intermediaire : ' + nMilieu + ' plans construits');
+for (const nom of DOIT_PASSER) if (!construits.has(nom)) ko.push(nom + ' : REFUSE alors que le hook paie en action vendable');
+
+/* ── SWAP SIMPLE (planEchange) : block contre ETH / USDC / action, chaque hook, chaque sens, block bas ou haut ── */
+let nSimple = 0;
+for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
+  for (const autre of [ETH, USDC, ACT]) {
+    for (const h of Object.keys(HOOKS)) {
+      for (const sens of ['ACHAT', 'VENTE']) {
+        const c = cle(bloc, autre, HOOKS[h]);
+        const zf = sens === 'ACHAT' ? c.currency0 !== bloc : c.currency0 === bloc;
+        const nom = 'SIMPLE ' + sens + ' ' + (bloc === BLOC_BAS ? 'blocBas' : 'blocHaut') + '/' + (autre === ETH ? 'ETH' : autre === USDC ? 'USDC' : 'ACT') + ' [' + h + ']';
+        n += 1;
+        let p;
+        try {
+          p = await E.planEchange({ rpc, chaine: 8453, jeton: bloc, compte, sens, montant: 10n ** 15n, fraisDevisesOk: new Set([ACT]),
+            marcheLu: { etat: 'LUE', cle: c, paire: autre === ETH ? 'ETH' : autre === USDC ? 'USDC' : 'ACT' } });
+        } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
+        if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { nRefus += 1; continue; }
+        nPlans += 1; nSimple += 1;
+        const paie = oraclePaie({ cle: c, zeroForOne: zf });
+        const frais = BigInt((p.resume && p.resume.frais) || 0);
+        if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — routeur ' + frais);
+        if (!paie && frais === 0n) ko.push(nom + ' : ZERO FRAIS (ou seul un frais EN BLOCK) — routeur 0');
+        if (frais > 0n) {
+          const dev = bas((p.resume && (p.resume.fraisDevise === 'pair' ? p.resume.devise : p.resume.fraisDevise)) || '');
+          if (BLOCS.has(dev)) ko.push(nom + ' : FRAIS EN BLOCK');
+        }
+      }
+    }
+  }
+}
+console.log('swap simple : ' + nSimple + ' plans construits');
 console.log(n + ' combinaisons · ' + nPlans + ' plans · ' + nRefus + ' refus · ' + ko.length + ' violations');
 for (const k of ko.slice(0, 40)) console.log('  KO  ' + k);
 if (nPlans === 0) { console.log('⛔ aucun plan construit : la matrice ne juge rien'); process.exit(1); }
