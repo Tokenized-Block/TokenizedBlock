@@ -1864,8 +1864,8 @@ const SERVIS = [
    *   Il porte le bareme : 0,2 % jusqu a 100 $ (p75 mesure), 0,1 % au-dela, et le PLANCHER qui
    *   empeche qu un cent de plus coute moitie moins. */
   'frais-degressif.js',
-  /* ⛔ 2026-10-02 : importes par `echange.js` / `openlaunch-launch.js` / l app (part referrer o1, marque TB). */
-  'referent-o1.js', 'marque-tb.js', 'lancements-etrangers.js', 'marche-ouvert.js',
+  /* ⛔ 2026-10-02 : importes par `echange.js` / `openlaunch-launch.js` / l app (part referrer o1, marche ouvert). */
+  'referent-o1.js', 'lancements-etrangers.js', 'marche-ouvert.js',
   /* ⛔⛔ `devises-dentree.js` REPOND « avec quoi peut-on payer ce block ? ». Il ajoute au graphe des
    *   pools l ARETE DU BLOCK LUI-MEME — celle qui manquait, et sans laquelle `cheminEntre(OUSD,
    *   block)` rendait REFUSE non pas parce qu aucune route n existe, mais parce que personne n avait

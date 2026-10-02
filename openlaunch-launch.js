@@ -8,7 +8,6 @@
 //    dessus, ou sur notre hook ») : un launch OpenLaunch fait depuis notre app donne 100 % des frais LP AU LANCEUR, comme
 //    sur openlaunch.lol. TokenizedBlock ne se nomme pas destinataire. Les frais TokenizedBlock existent sur NOS marches.
 // ⛔ Le module ne lit pas le reseau et n envoie rien : il rend { to, data, value:'0x0', resume }.
-import { estMarqueTbEtendue } from './marque-tb.js';
 import { selecteur } from './encodeur.js';
 import { FEE_WALLET } from './frais-creation.js';
 
@@ -44,9 +43,6 @@ export function fdvDepuisTick(tick, supply = 1e9) { return supply / Math.pow(1.0
  * @param {{nom:string, symbole:string, lanceur:string, startTick:number, lpFee:number, salt:string, metadataURI?:string}} o
  * @returns {{ etat:'OK', tx:{to,data,value}, resume } | { etat:'REFUSE', pourquoi:string }}
  */
-/** Marque TB : nom normalise contenant « tokenizedblock », nom « TB-… », ou symbole TB / TBGAS / TBLOCK* / TB-*.
- *  ⛔ 2026-10-02 : une seule definition, `marque-tb.js` (aussi lue par le profil pour « Not official »). */
-export function estMarqueTb(nom, symbole) { return estMarqueTbEtendue(nom, symbole); }
 export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, metadataURI = '' }) {
   const refus = (pourquoi) => ({ etat: 'REFUSE', pourquoi });
   const n = String(nom || '').trim(), s = String(symbole || '').trim();
@@ -54,9 +50,8 @@ export function planLaunchOL({ nom, symbole, lanceur, startTick, lpFee, salt, me
   if (!/^[A-Za-z0-9]{1,11}$/.test(s)) return refus('symbol: 1 to 11 letters or digits');
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(lanceur || ''))) return refus('connect your wallet first');
   if (String(lanceur).toLowerCase() === FEE_WALLET.toLowerCase()) return refus('the TokenizedBlock fee wallet cannot launch here');
-  /* ⛔ 2026-10-02 : 0x88c53e80 (« TokenizedBlock »/TBLOCK) est parti de CETTE carte, sans hook, donc sans frais.
-   *   Un token a la marque TB passe par « Create a block » (V8). La console OpenLaunch partenaire n est pas touchee. */
-  if (estMarqueTb(n, s)) return refus('this name belongs to TokenizedBlock — use Create a block instead');
+  /* ⛔ 2026-10-02 13:27, REGLE DU FONDATEUR : aucun refus ni etiquette de « marque » dans l UI.
+   *   La console partenaire lance tout nom valide (garde : test-marche-etranger-20261002). */
   if (!FRAIS_OK.includes(Number(lpFee))) return refus('LP fee must be 0, 1 % or 3 %');
   const t = Number(startTick);
   if (!Number.isInteger(t) || t % TICK_SPACING !== 0 || t <= MIN_USABLE || t > MAX_USABLE) return refus('start price out of range');
