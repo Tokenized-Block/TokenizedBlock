@@ -110,7 +110,7 @@ export function phraseNotes(r, blocBas, blocHaut) {
   if (r.avecTexte) bouts.push(pl(r.avecTexte, 'note', 'notes') + ' with readable text');
   if (r.sansTexte) bouts.push(r.sansTexte + ' empty (no text attached)');
   if (r.illisibles) bouts.push(r.illisibles + ' with extra bytes that are not text');
-  if (r.enAttente) bouts.push(r.enAttente + ' being read…');
+  if (r.enAttente) bouts.push(r.enAttente + ' not checked yet');
   if (r.nonLues) bouts.push('⚠️ ' + r.nonLues + ' could not be read right now — not empty, tap again to retry');
   return bouts.join(' · ');
 }
