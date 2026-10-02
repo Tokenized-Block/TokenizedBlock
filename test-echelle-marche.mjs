@@ -19,6 +19,12 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { echelleDesMarches, phraseEchelle, LIQ_MIN_ECHELLE_USD } from './echelle-marche.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -161,7 +167,7 @@ cas('⛔ la carte des chiffres PRIVES reste cachee dans la page', () => {
    *     l ecran etait propre. */
   const i = app.indexOf('async function peindreStats()');
   assert.notEqual(i, -1, '`peindreStats` est introuvable');
-  const corps = app.slice(i, app.indexOf('\n}', i));
+  const corps = app.slice(i, indexEol(app, /\r?\n\}/, i));
   assert.match(corps, /if \(carte && carte\.hidden\) return;/,
     '`peindreStats` ecrit de nouveau dans une carte cachee : les chiffres d exploitation '
     + 'redeviendraient lisibles dans le DOM servi, alors que Phil les a fait retirer');

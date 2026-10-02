@@ -20,6 +20,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 let n = 0;
@@ -30,7 +36,7 @@ assert.match(html, /const FRAIS_DYNAMIQUE_V4 = 0x800000;/,
   'la constante du drapeau dynamique a disparu — cette garde ne protege plus rien');
 const dF = html.indexOf('function fraisEstDynamique(');
 assert.ok(dF > 0, 'fraisEstDynamique introuvable');
-const srcF = html.slice(dF, html.indexOf('\n}', dF) + 2);
+const srcF = html.slice(dF, indexEol(html, /\r?\n\}/, dF) + 2);
 assert.ok(srcF.length > 80, 'extraction suspecte : ' + srcF.length);
 
 const fait = new Function('FRAIS_DYNAMIQUE_V4', srcF + '\nreturn fraisEstDynamique;')(0x800000);
@@ -55,7 +61,7 @@ v('les valeurs illisibles ne sont pas « dynamiques » non plus', () => {
 v("l'ecran n'affiche plus de nombre pour un frais dynamique", () => {
   const d = html.indexOf('function libelleFrais(');
   assert.ok(d > 0, 'libelleFrais introuvable');
-  const src = html.slice(d, html.indexOf('\n}', d) + 2);
+  const src = html.slice(d, indexEol(html, /\r?\n\}/, d) + 2);
   assert.match(src, /if \(fraisEstDynamique\(tier\)\)/,
     'libelleFrais ne traite plus le cas dynamique : « Fee 839.36% » reviendrait');
   assert.match(src, /Fee set by this market at each trade/, 'la phrase de remplacement a disparu');
@@ -67,7 +73,7 @@ v("l'ecran n'affiche plus de nombre pour un frais dynamique", () => {
 v('le classement par prix ne traite plus un frais dynamique comme un taux', () => {
   const d = html.indexOf('function poolDecouvertPour(');
   assert.ok(d > 0, 'poolDecouvertPour introuvable');
-  const src = html.slice(d, html.indexOf('\n}', d) + 2);
+  const src = html.slice(d, indexEol(html, /\r?\n\}/, d) + 2);
   assert.match(src, /!fraisEstDynamique\(feeBrut\)/,
     'le classement voit encore 8 388 608 comme un prix : ces pools sont rangees a 838 %');
 });

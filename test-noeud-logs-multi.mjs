@@ -18,6 +18,12 @@
  *    dit, et c est une mesure, pas un test. Il prouve l ORDRE, pas la reponse. */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 
@@ -30,7 +36,7 @@ const debut = html.indexOf('const to = params && params[0]');
 assert.ok(debut > 0, 'bloc de selection introuvable dans app.html');
 const ancre = html.indexOf('if (servant) noeuds =', debut);
 assert.ok(ancre > debut, 'reordonnancement introuvable');
-const fin = html.indexOf('\n  }', ancre);
+const fin = indexEol(html, /\r?\n  \}/, ancre);
 assert.ok(fin > ancre, 'fin du bloc introuvable');
 const source = html.slice(debut, fin + 4);
 

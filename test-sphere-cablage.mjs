@@ -21,6 +21,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const brut = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const nu = brut.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
@@ -341,7 +347,7 @@ v('⛔ on peut la tourner au doigt, et l auto ne reprend pas la main', () => {
 v('⛔⛔ le panneau ne dit QUE des chiffres du battement', () => {
   const i = nu.indexOf('function dessinerReseauDit(');
   assert.ok(i > 0, 'le panneau lateral a disparu');
-  const corps = nu.slice(i, nu.indexOf('\n}', i));
+  const corps = nu.slice(i, indexEol(nu, /\r?\n\}/, i));
   /* Chaque valeur doit venir de `vu` (ou du cablage), jamais d un calcul local. */
   for (const champ of ['vu.spikes', 'vu.gauche_hz', 'vu.droite_hz', 'vu.virage', 'vu.memoire', 'vu.phase']) {
     assert.ok(corps.includes(champ), 'le panneau ne lit plus ' + champ + ' : une ligne serait inventee');

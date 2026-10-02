@@ -18,6 +18,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
@@ -28,7 +34,7 @@ const v = (nom, fn) => { fn(); n++; };
 
 const i = src.indexOf('function vieAutoArreter(');
 assert.ok(i > 0, 'vieAutoArreter est introuvable : ce test ne garde plus rien');
-const corps = src.slice(i, src.indexOf('\n}', i) + 2);
+const corps = src.slice(i, indexEol(src, /\r?\n\}/, i) + 2);
 
 v('l entonnoir d arret compte un echec', () => {
   assert.match(corps, /etape\(\s*'vie_ko_etape'/,
@@ -59,7 +65,7 @@ v('⛔ on ne compte QUE si le parcours avait commence', () => {
 v('l etape se lit dans le texte deja affiche, et se remet a zero a la fin', () => {
   const j = src.indexOf('function majProgressionVie(');
   assert.ok(j > 0, 'majProgressionVie introuvable');
-  const mp = src.slice(j, src.indexOf('\n}', j) + 2);
+  const mp = src.slice(j, indexEol(src, /\r?\n\}/, j) + 2);
   assert.match(mp, /Step\\s\+\(\\d\)|Step\s*\\s\+/,
     "majProgressionVie ne lit plus le numero d etape : le compteur ne saurait plus OU ca meurt");
   assert.match(mp, /etapeVieCourante = 0/,

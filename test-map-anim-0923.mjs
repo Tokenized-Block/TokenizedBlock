@@ -1,4 +1,10 @@
 import { readFileSync } from 'fs';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 const h = readFileSync('./app.html', 'utf8');
 /* ⛔ EPINGLE DE BUILD RETIREE (2026-09-23, passe globale) : elle exigeait un numero de
  *    build precis, donc elle rougissait des qu un AUTRE deploiement bumpait le build. Elle ne
@@ -32,7 +38,7 @@ const corps = bloc.slice(0, iFin);
 const iRelance = corps.indexOf('if (!anim) animer();');
 if (iRelance === -1) throw new Error('Show on map ne relance plus l animation du tout');
 const iIf = corps.indexOf('if (!h) {');
-const iAccolade = iIf === -1 ? -1 : corps.indexOf('\n  }', iIf);
+const iAccolade = iIf === -1 ? -1 : indexEol(corps, /\r?\n  \}/, iIf);
 if (iIf !== -1 && iAccolade !== -1 && iRelance > iIf && iRelance < iAccolade) {
   throw new Error('la relance d animer() est REVENUE dans le `if (!h)` : elle ne couvrira que le cas '
     + 'ou le block n est PAS deja sur la carte, et la carte restera figee pour tous les autres');

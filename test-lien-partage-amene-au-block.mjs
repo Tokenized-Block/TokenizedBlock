@@ -18,6 +18,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const src = html.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"\w])\/\/[^\n]*/g, '$1 ');
@@ -26,7 +32,7 @@ const v = (nom, fn) => { fn(); n++; };
 
 const i = src.indexOf('function amenerEnVue(');
 assert.ok(i > 0, 'amenerEnVue est introuvable : ce test ne garde plus rien');
-const j = src.indexOf('\nasync function', i);
+const j = indexEol(src, /\r?\nasync function/, i);
 const f = src.slice(i, j > i ? j : i + 1600);
 
 v('le profil est amene en vue quand on navigue vers lui', () => {

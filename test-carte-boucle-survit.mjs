@@ -26,6 +26,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 let n = 0;
@@ -33,7 +39,7 @@ const v = (nom, fn) => { fn(); n++; };
 
 const i = html.indexOf('function animer()');
 assert.ok(i > 0, 'animer() est introuvable : ce test ne garde plus rien');
-const f = html.slice(i, html.indexOf('\n}', i));
+const f = html.slice(i, indexEol(html, /\r?\n\}/, i));
 
 v('⛔⛔⛔ la replanification passe AVANT la peinture', () => {
   /* ⛔⛔⛔ LE CAS CENTRAL. Peindre puis replanifier, c est parier que la peinture ne jette jamais —

@@ -22,6 +22,12 @@ import { planEthVersAction, sortieDeuxSauts, meilleurePoolPivot, WETH_BASE, SELE
 import { sortieSpot, USDC_BASE, TOLERANCE_MAX_BPS } from './plan-usdc-block.js';
 import { ROUTEUR_AERODROME_CL, SELECTEURS } from './calldata-aerodrome.js';
 import { selecteur } from './pool.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -373,7 +379,7 @@ cas('⛔ le module reste PUR, et les montants sortent en chaines exactes', () =>
   }
   /* ⛔ ET `sortieDeuxSauts` N UTILISE PAS Number : borne a SA fonction. */
   const i = src.indexOf('export function sortieDeuxSauts');
-  assert.ok(!src.slice(i, src.indexOf('\n}', i)).includes('Number('),
+  assert.ok(!src.slice(i, indexEol(src, /\r?\n\}/, i)).includes('Number('),
     'sortieDeuxSauts utilise Number : le calcul doit rester en entiers');
 });
 

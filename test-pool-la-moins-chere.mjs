@@ -17,11 +17,17 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const d = html.indexOf('function poolDecouvertPour(');
 assert.ok(d > 0, 'poolDecouvertPour introuvable — cette garde ne protege plus rien');
-const fin = html.indexOf('\n}', d);
+const fin = indexEol(html, /\r?\n\}/, d);
 assert.ok(fin > d, 'fin de fonction introuvable');
 const source = html.slice(d, fin + 2);
 assert.ok(source.length > 600, 'extraction suspecte : ' + source.length + ' caracteres');
@@ -37,7 +43,7 @@ for (const j of ['_score', 'MAX_SAFE_INTEGER', 'confiance']) {
  *     (`canonical-helper-weaker-copy`). */
 const dDyn = html.indexOf('function fraisEstDynamique(');
 assert.ok(dDyn > 0, 'fraisEstDynamique introuvable dans app.html');
-const srcDyn = html.slice(dDyn, html.indexOf('\n}', dDyn) + 2);
+const srcDyn = html.slice(dDyn, indexEol(html, /\r?\n\}/, dDyn) + 2);
 assert.ok(srcDyn.includes('FRAIS_DYNAMIQUE_V4'), 'extraction de fraisEstDynamique incomplete');
 const fraisEstDynamique = new Function('FRAIS_DYNAMIQUE_V4', srcDyn + '\nreturn fraisEstDynamique;')(0x800000);
 

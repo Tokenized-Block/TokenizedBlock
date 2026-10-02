@@ -24,6 +24,12 @@
  */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const v = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -48,7 +54,7 @@ v('⛔⛔ un NaN passe a travers le rebond ET a travers le masquage', () => {
 v('⛔ `placer()` pose vx, vy ET vz — pas un seul des trois jumeaux', () => {
   const i = map.indexOf('function placer(h)');
   assert.notEqual(i, -1, '`placer` a disparu de map3d.js');
-  const corps = map.slice(i, map.indexOf('\n  }', i));
+  const corps = map.slice(i, indexEol(map, /\r?\n  \}/, i));
   for (const cle of ['h.vx =', 'h.vy =', 'h.vz =']) {
     assert.ok(corps.includes(cle), '`placer()` ne pose pas ' + cle + ' : la derive rendrait NaN');
   }
@@ -60,7 +66,7 @@ v('⛔ les vitesses viennent de l ADRESSE, pas du hasard', () => {
    *   `Math.random()` sur la vitesse rendrait deux ecrans incomparables des la premiere seconde —
    *   et rendrait ce comportement impossible a reproduire dans un rapport de bug. */
   const i = map.indexOf('function placer(h)');
-  const corps = map.slice(i, map.indexOf('\n  }', i));
+  const corps = map.slice(i, indexEol(map, /\r?\n  \}/, i));
   assert.ok(/parseInt\(a\.slice\(/.test(corps), 'les vitesses ne derivent plus de l adresse');
 });
 
@@ -75,7 +81,7 @@ v('⛔⛔ une POSITION saine n est JAMAIS jetee parce qu une VITESSE manque', ()
    *     differents, avec deux causes differentes : on repare champ par champ. */
   const i = map.indexOf('function saine(h)');
   assert.notEqual(i, -1, 'le rattrapage a disparu');
-  const corps = map.slice(i, map.indexOf('\n  }', i));
+  const corps = map.slice(i, indexEol(map, /\r?\n  \}/, i));
   assert.ok(/if \(!posOk\) \{ placer\(h\); return false; \}/.test(corps),
     'le replacement complet n est plus reserve au cas ou la POSITION est cassee');
   /* ⛔ ET LA BRANCHE « position bonne, vitesse absente » doit reparer SANS replacer : si `placer(`
@@ -97,7 +103,7 @@ v('⛔⛔ un block deja NaN est REPLACE, pas abandonne', () => {
    *   son angle a partir de la valeur cassee. */
   assert.ok(/function saine\(h\)/.test(map), 'le rattrapage des blocks NaN a disparu');
   const i = map.indexOf('function saine(h)');
-  const corps = map.slice(i, map.indexOf('\n  }', i));
+  const corps = map.slice(i, indexEol(map, /\r?\n  \}/, i));
   assert.ok(/Number\.isFinite\(h\.vx\)/.test(corps) && /Number\.isFinite\(h\.wx\)/.test(corps),
     'le rattrapage ne verifie pas a la fois la position ET la vitesse');
   assert.ok(/placer\(h\)/.test(corps), 'le rattrapage ne replace pas le block : il le laisse perdu');

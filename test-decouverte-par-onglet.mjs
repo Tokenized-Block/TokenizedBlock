@@ -21,6 +21,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const sansCommentaires = html.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
@@ -53,7 +59,7 @@ v('il ne tourne QU UNE FOIS, et pas a chaque rendu', () => {
   /* ⛔ Sans ce garde-fou, chaque tri de colonne relancerait un balayage de 10 000 blocs. */
   assert.match(sansCommentaires, /let decouverteTrendingLancee = false;/, 'le verrou a disparu');
   const d = sansCommentaires.indexOf('async function decouvrirPourTrending(');
-  const corps = sansCommentaires.slice(d, sansCommentaires.indexOf('\n}', d) + 2);
+  const corps = sansCommentaires.slice(d, indexEol(sansCommentaires, /\r?\n\}/, d) + 2);
   assert.match(corps, /if \(decouverteTrendingLancee/, 'le verrou n est plus teste en entree');
   assert.match(corps, /poolsLive && poolsLive\.size/,
     'la condition « rien n a encore ete decouvert » a disparu : on rebalayerait meme avec des pools');
@@ -63,7 +69,7 @@ v('un ECHEC rouvre le droit de reessayer', () => {
   /* ⛔ `neutral-return-swallows-failure` : si le verrou restait pose apres une panne de lecture,
    *    l app conclurait « pas de marche » pour toute la session sur un simple 429. */
   const d = sansCommentaires.indexOf('async function decouvrirPourTrending(');
-  const corps = sansCommentaires.slice(d, sansCommentaires.indexOf('\n}', d) + 2);
+  const corps = sansCommentaires.slice(d, indexEol(sansCommentaires, /\r?\n\}/, d) + 2);
   const apresCatch = corps.slice(corps.indexOf('catch'));
   assert.match(apresCatch, /decouverteTrendingLancee = false/,
     'apres un echec le verrou reste pose : une panne de lecture vaudrait « aucune pool » pour toute la session');

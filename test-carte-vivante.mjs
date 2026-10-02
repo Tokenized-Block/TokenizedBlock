@@ -24,6 +24,12 @@
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 import { CUBE3D_CSS } from './cube3d.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 let n = 0;
@@ -70,7 +76,7 @@ v('les satellites gardent leur tour complet', () => {
  *    compte, et une relecture de texte ne l aurait jamais montre. */
 const d = html.indexOf('function aSaPlaceSurLaCarte(');
 assert.ok(d > 0, 'le filtre de la carte est introuvable');
-const src = html.slice(d, html.indexOf('\n}', d) + 2);
+const src = html.slice(d, indexEol(html, /\r?\n\}/, d) + 2);
 const aSaPlace = new Function(src + '\nreturn aSaPlaceSurLaCarte;')();
 
 v('un block PROUVE sans marche quitte la carte', () => {

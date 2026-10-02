@@ -20,6 +20,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const src = html.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"\w])\/\/[^\n]*/g, '$1 ')
@@ -51,7 +57,7 @@ v('⛔ la progression est REFLETEE dans Create — sinon l ecran est muet', () =
    *     signatures. */
   const i = src.indexOf('function majProgressionVie(');
   assert.ok(i > 0, 'majProgressionVie introuvable');
-  const mp = src.slice(i, src.indexOf('\n}', i) + 2);
+  const mp = src.slice(i, indexEol(src, /\r?\n\}/, i) + 2);
   assert.match(mp, /miroirVieDansCreate/, 'la progression n est plus refletee dans Create');
   assert.match(mp, /cVieProgression/, 'la destination du miroir a disparu');
 });
@@ -62,7 +68,7 @@ v('le miroir ne s allume QUE pour un parcours lance depuis Create', () => {
   assert.match(src, /let miroirVieDansCreate = false/,
     'le drapeau du miroir ne demarre plus a faux : il ecrirait par defaut');
   const i = src.indexOf('function majProgressionVie(');
-  const mp = src.slice(i, src.indexOf('\n}', i) + 2);
+  const mp = src.slice(i, indexEol(src, /\r?\n\}/, i) + 2);
   assert.match(mp, /if \(miroirVieDansCreate\)/, 'le miroir n est plus conditionnel');
 });
 

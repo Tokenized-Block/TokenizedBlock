@@ -19,6 +19,12 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { capaciteDeGroupement, peutGrouper, CAPACITES_LOT, etapeDeCapacite } from './groupe-wallet.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -199,7 +205,7 @@ casA('⛔ `peutGrouper` DELEGUE : une seule logique, pas deux copies', async () 
    *   SIGNANTE qui paierait l ecart. On verifie l accord sur toute la table, pas sur un cas. */
   const src = readFileSync(new URL('./groupe-wallet.js', import.meta.url), 'utf8');
   const i = src.indexOf('export async function peutGrouper');
-  const corps = src.slice(i, src.indexOf('\n}', i));
+  const corps = src.slice(i, indexEol(src, /\r?\n\}/, i));
   assert.ok(/capaciteDeGroupement\(/.test(corps), 'peutGrouper ne delegue plus');
   assert.ok(!/wallet_getCapabilities/.test(corps), 'peutGrouper redemande les capacites lui-meme : deuxieme copie');
   for (const rep of [{ [CHAINE_HEX]: { atomic: { status: 'supported' } } },

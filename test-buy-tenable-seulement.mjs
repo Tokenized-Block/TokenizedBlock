@@ -23,6 +23,12 @@ import { readFileSync } from 'node:fs';
 /* ⛔ LE MODULE EST IMPORTE, pas decrit : depuis le 2026-09-27 la garde delegue a `routage.js`, et
  *   verifier le cablage sans verifier le COMPORTEMENT laisserait passer un module permissif. */
 import { verdictRoutage, phraseRoutage } from './routage.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -46,7 +52,7 @@ const nu = app.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ').r
 function blocDeLaGarde() {
   const i = nu.indexOf("const aBuy = $('#fAcheter')");
   assert.notEqual(i, -1, 'le bloc de visibilite de Buy est introuvable');
-  const j = nu.indexOf('\n});', i);
+  const j = indexEol(nu, /\r?\n\}\);/, i);
   assert.notEqual(j, -1, 'la fermeture du bloc de la garde est introuvable');
   const bloc = nu.slice(i, j);
   /* ⛔ LES TROIS TEMOINS DE COMPLETUDE : si l un manque, la borne a glisse et les assertions

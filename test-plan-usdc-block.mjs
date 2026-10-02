@@ -28,6 +28,12 @@ import { readFileSync } from 'node:fs';
 import { planUsdcVersBlock, sortieSpot, USDC_BASE, TOLERANCE_MAX_BPS } from './plan-usdc-block.js';
 import { calldataV3ExactIn } from './calldata-v3.js';
 import { USDC_BASE as USDC_DU_DEPOT } from './prix-eth.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const cas = (titre, f) => { n++; try { f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -403,7 +409,7 @@ cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {
   }
   /* ⛔ ET `sortieSpot` LUI-MEME N UTILISE PAS Number : borne a SA fonction, pas au fichier. */
   const i = src.indexOf('export function sortieSpot');
-  const corps = src.slice(i, src.indexOf('\n}', i));
+  const corps = src.slice(i, indexEol(src, /\r?\n\}/, i));
   assert.ok(!corps.includes('Number('), 'sortieSpot utilise Number : le calcul doit rester en entiers');
 });
 

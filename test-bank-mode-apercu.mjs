@@ -18,6 +18,12 @@
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 import { BANK_CONTRACT } from './tokenized-bank.js';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 /* ⛔ commentaires retires du cote LU : ce depot cite ses defauts corriges en toutes lettres, et ce
@@ -39,7 +45,7 @@ function handler(id) {
   assert.ok(i > 0, 'gestionnaire de ' + id + ' introuvable : ce test ne garde plus rien');
   /* ⛔ borne a la fin reelle du gestionnaire, pas a un nombre choisi a la main : une fenetre fixe
    *   se perime au premier commentaire ajoute — ca m est deja arrive aujourd hui. */
-  const j = src.indexOf("\n});", i);
+  const j = indexEol(src, /\r?\n\}\);/, i);
   return src.slice(i, j > i ? j : i + 3000);
 }
 

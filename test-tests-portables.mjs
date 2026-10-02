@@ -117,7 +117,8 @@ for (const f of FICHIERS) {
  *            se rembourse sans qu on l ecrive se reconstitue.
  *      ⛔ PAS DE PLAFOND SILENCIEUX : ce depot interdit qu une garde borne quelque chose sans le
  *        dire. Le chiffre est la, dans le code, pas dans un commentaire. */
-const DETTE_CONNUE = 19;  /* 20 -> 19 : test-note-carte-ne-grandit-plus repare le 2026-10-02 */
+const DETTE_CONNUE = 0;  /* 20 -> 19 : test-note-carte-ne-grandit-plus repare le 2026-10-02 ;
+                            19 -> 0 : les 19 restants passes a `indexEol(s, /\r?\n.../, de)`, 2026-10-02 */
 n += 1;
 if (fautifs > DETTE_CONNUE) {
   ko += 1;

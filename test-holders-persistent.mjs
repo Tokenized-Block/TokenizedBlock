@@ -19,6 +19,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { strict as assert } from 'node:assert';
+/* ⛔ PORTABLE LF/CRLF (test-tests-portables.mjs) : comme `s.indexOf('\n…', de)`, mais le saut
+ *   de ligne peut etre `\r\n` (checkout Windows). Rend la position du `\n`, comme indexOf, ou -1. */
+const indexEol = (s, re, de = 0) => {
+  const g = new RegExp(re.source, 'g'); g.lastIndex = de;
+  const m = g.exec(s); return m ? m.index + m[0].indexOf('\n') : -1;
+};
 
 let n = 0;
 const v = async (nom, fn) => { await fn(); n++; };
@@ -74,12 +80,12 @@ try {
     const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
     const i = src.indexOf('function ecrireHolders()');
     assert.ok(i > 0, 'ecrireHolders a disparu');
-    const ecriture = src.slice(i, src.indexOf('\n}', i));
+    const ecriture = src.slice(i, indexEol(src, /\r?\n\}/, i));
     assert.match(ecriture, /e\.jusqua === null \|\| e\.ratees !== 0\) continue/,
       'l ecriture ne refuse plus les passes partielles');
     const j = src.indexOf('function relireHolders()');
     assert.ok(j > 0, 'la relecture a disparu');
-    const relecture = src.slice(j, src.indexOf('\n})();', j));
+    const relecture = src.slice(j, indexEol(src, /\r?\n\}\)\(\);/, j));
     assert.match(relecture, /e\.jusqua === null \|\| e\.ratees !== 0\) continue/,
       'la relecture accepte une passe partielle : un etat incomplet reviendrait a chaque demarrage');
   });
@@ -90,7 +96,7 @@ try {
      *   toucher. */
     const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
     const j = src.indexOf('function relireHolders()');
-    const relecture = src.slice(j, src.indexOf('\n})();', j));
+    const relecture = src.slice(j, indexEol(src, /\r?\n\}\)\(\);/, j));
     assert.match(relecture, /\^0xb20\[0-9a-f\]\{37\}\$/,
       'la relecture ne revalide plus l adresse du jeton');
   });
@@ -101,7 +107,7 @@ try {
      *     lecture de reussir. Un cache est un confort, jamais une dependance. */
     const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
     const i = src.indexOf('function ecrireHolders()');
-    const ecriture = src.slice(i, src.indexOf('\n}', i));
+    const ecriture = src.slice(i, indexEol(src, /\r?\n\}/, i));
     assert.match(ecriture, /if \(!FICHIER_HOLDERS \|\| holdersEcritureEnCours\) return;/,
       'l ecriture ne sort plus proprement quand il n y a pas de volume');
     assert.match(ecriture, /catch \(err\) \{/, 'une ecriture ratee peut de nouveau remonter');
