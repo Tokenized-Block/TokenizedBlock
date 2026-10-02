@@ -43,41 +43,41 @@ function makeRpc({ amountOut = 10n ** 18n } = {}) {
   };
 }
 
-for (const hooks of [HOOK_V8, HOOK_PREVU]) {
+/* ⛔⛔ 2026-10-02 — UN FRAIS PAR JAMBE (regle de Raksha), et c est une MESURE qui le permet : sur fork
+ *     (bloc 52072599, callTracer), le hook V8 verse 0,5 % ETH a a6cf a l achat ET a la vente, V1/V2 a la
+ *     vente. L ancienne regle « stacked fees beat zero fees » (tip 20260922-2023) partait d un hook qui ne
+ *     versait rien ; ce n est plus le cas, et l empilement faisait payer deux fois la meme jambe.
+ *   Table attendue : V8 achat 0 · V8 vente 0 · V1 achat 50 (le hook prend du BLOCK) · V1 vente 0. */
+const ATTENDU = [[HOOK_V8, 'ACHAT', 0n], [HOOK_V8, 'VENTE', 0n], [HOOK_PREVU, 'ACHAT', FRAIS_INTERFACE_BPS], [HOOK_PREVU, 'VENTE', 0n]];
+for (const [hooks, sens, bpsAttendu] of ATTENDU) {
   const cle = cleDePool(ETH, JETON, { fee: 5000, tickSpacing: 200, hooks });
   const marcheLu = { etat: 'LUE', cle, paire: null };
-  const label = hooks.slice(0, 10);
-
-  {
-    const plan = await planEchange({
-      rpc: makeRpc(), chaine: 8453, jeton: JETON, compte: COMPTE, sens: 'ACHAT',
-      montant: 10n ** 16n, marcheLu, maintenant: Date.now(),
-    });
-    ok(plan.etat === 'PRET', 'ACHAT hooked ' + label + ' → PRET (' + plan.etat + ' ' + (plan.pourquoi || '') + ')');
-    eq(plan.resume && plan.resume.fraisBps, FRAIS_INTERFACE_BPS, 'ACHAT fraisBps=50 on hooked ' + label);
-    eq(String(plan.resume.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(), 'ACHAT fee → a6cf');
-    ok(plan.resume.frais > 0n, 'ACHAT frais > 0');
-    eq(plan.resume.fraisDevise, 'ETH', 'ACHAT fee asset ETH (not TBLOCK/TBGAS)');
-    ok(String(plan.tx && plan.tx.data || '').toLowerCase().includes(sink),
-      'ACHAT calldata carries TAKE to fee sink (assertFraisInterfaceA6cf already required it)');
+  const label = hooks.slice(0, 10) + ' ' + sens;
+  const plan = await planEchange({
+    rpc: makeRpc(sens === 'VENTE' ? { amountOut: 5n * 10n ** 15n } : {}), chaine: 8453, jeton: JETON, compte: COMPTE,
+    sens, montant: sens === 'VENTE' ? 10n ** 18n : 10n ** 16n, marcheLu, maintenant: Date.now(),
+  });
+  ok(plan.etat === 'PRET' || plan.etat === 'APPROBATIONS', label + ' → ' + plan.etat + ' ' + (plan.pourquoi || ''));
+  eq(plan.resume && plan.resume.fraisBps, bpsAttendu, label + ' fraisBps');
+  if (bpsAttendu > 0n) {
+    eq(String(plan.resume.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(), label + ' fee → a6cf');
+    ok(plan.resume.frais > 0n, label + ' frais > 0');
+    eq(plan.resume.fraisDevise, 'ETH', label + ' fee asset ETH (not TBLOCK/TBGAS)');
+    if (plan.etat === 'PRET') ok(String(plan.tx.data).toLowerCase().includes(sink), label + ' calldata carries the router TAKE');
+  } else {
+    /* le hook paie : AUCUN TAKE routeur vers a6cf (sinon double frais) */
+    eq(plan.resume.beneficiaireFrais, null, label + ' no router beneficiary');
+    eq(BigInt(plan.resume.frais), 0n, label + ' router fee 0');
+    if (plan.etat === 'PRET') ok(!String(plan.tx.data).toLowerCase().includes(sink), label + ' no router TAKE to a6cf');
   }
-
-  {
-    const plan = await planEchange({
-      rpc: makeRpc({ amountOut: 5n * 10n ** 15n }), chaine: 8453, jeton: JETON, compte: COMPTE,
-      sens: 'VENTE', montant: 10n ** 18n, marcheLu, maintenant: Date.now(),
-    });
-    ok(plan.etat === 'PRET' || plan.etat === 'APPROBATIONS',
-      'VENTE hooked ' + label + ' → ' + plan.etat + ' ' + (plan.pourquoi || ''));
-    eq(plan.resume && plan.resume.fraisBps, FRAIS_INTERFACE_BPS, 'VENTE fraisBps=50 on hooked ' + label);
-    eq(String(plan.resume.beneficiaireFrais).toLowerCase(), FEE_WALLET.toLowerCase(), 'VENTE fee → a6cf');
-    ok(plan.resume.frais > 0n, 'VENTE frais > 0');
-    eq(plan.resume.fraisDevise, 'ETH', 'VENTE fee asset ETH (not TBLOCK/TBGAS)');
-    if (plan.etat === 'PRET') {
-      ok(String(plan.tx && plan.tx.data || '').toLowerCase().includes(sink),
-        'VENTE calldata carries TAKE_PORTION to fee sink');
-    }
-  }
+}
+/* controle negatif : un hook ETRANGER garde le frais routeur (une seule fois) */
+{
+  const cle = cleDePool(ETH, JETON, { fee: 0, tickSpacing: 200, hooks: '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc' });
+  const plan = await planEchange({ rpc: makeRpc(), chaine: 8453, jeton: JETON, compte: COMPTE, sens: 'ACHAT',
+    montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle, paire: null }, maintenant: Date.now() });
+  eq(plan.resume && plan.resume.fraisBps, FRAIS_INTERFACE_BPS, 'foreign hook ACHAT keeps the 0.5% router fee');
+  ok(plan.etat === 'PRET' && String(plan.tx.data).toLowerCase().includes(sink), 'foreign hook ACHAT: router TAKE present');
 }
 
 {

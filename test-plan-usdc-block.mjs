@@ -376,13 +376,17 @@ cas('⛔⛔ LE FRAIS D INTERFACE EST PORTE PAR LE CHEMIN AERODROME', () => {
   assert.notEqual(sans.appel.data, avec.appel.data, 'le calldata est identique : le frais ne part pas');
   assert.ok(avec.appel.data.toLowerCase().includes(FEE.replace(/^0x/, '')),
     'le wallet de frais n est pas dans le calldata');
-  /* ⛔⛔ ET SUR UNISWAP v3, LE FRAIS N EST PAS POSSIBLE — l Universal Router n a pas
-   *     `sweepTokenWithFee` (mesure du 2026-09-28). Le plan doit le DIRE par `fraisBps: 0`, pas
-   *     laisser croire qu il preleve. */
+  /* ⛔⛔ 2026-10-02 : SUR UNISWAP v3 LE FRAIS SE PREND SUR L ENTREE — PERMIT2_TRANSFER_FROM (0x02) vers a6cf,
+   *     puis V3_SWAP_EXACT_IN sur le net. Prouve sur fork (bloc 52072599) : a6cf +5000 USDC pour 5 USDC. */
   const surUniswap = planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3', beneficiaireFrais: FEE });
   assert.equal(surUniswap.etat, 'PRET');
-  assert.equal(surUniswap.fraisBps, 0, 'un frais est annonce sur un chemin qui ne peut pas le prelever');
-  assert.equal(surUniswap.beneficiaireFrais, null);
+  assert.equal(surUniswap.fraisBps, 10, 'v3 : 10 bps sur l entree');
+  assert.equal(surUniswap.beneficiaireFrais, FEE);
+  assert.ok(surUniswap.appel.data.toLowerCase().includes(FEE.replace(/^0x/, '')), 'v3 : a6cf dans le calldata');
+  /* ⛔ CONTROLE NEGATIF : sans beneficiaire, aucune retenue et aucun a6cf dans le calldata. */
+  const surUniswapSans = planUsdcVersBlock({ ...POOLS[0], ...baseAero, famille: 'v3' });
+  assert.equal(surUniswapSans.fraisBps, 0);
+  assert.ok(!surUniswapSans.appel.data.toLowerCase().includes(FEE.replace(/^0x/, '')));
 });
 
 cas('⛔ le module reste PUR : ni reseau, ni horloge, ni signature', () => {

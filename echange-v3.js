@@ -216,8 +216,10 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
   } else {
     /* ⛔ hors Aerodrome le frais est impossible PAR CONSTRUCTION — on le nomme, au lieu de le
      *   laisser tomber dans un `NON_MESURE` qui ressemblerait a une panne de lecture. */
-    porteFrais = { verdict: 'ADMIS_SANS_FRAIS', bps: null,
-      pourquoi: 'this market is not on the Aerodrome router: no sweepTokenWithFee, so no fee' };
+    /* ⛔ 2026-10-02 : 138 achats de Phil sur ce chemin, 0 a a6cf. Le frais part desormais sur l ENTREE
+     *   (PERMIT2_TRANSFER_FROM, plan-usdc-block.js) — pas besoin de sweepTokenWithFee. */
+    porteFrais = { verdict: 'ADMIS_FRAIS_ENTREE', bps: null,
+      pourquoi: 'Uniswap v3: the fee is taken on the input currency, never on the block' };
   }
 
   /* ── 3. le plan, PUR ───────────────────────────────────────────────────────────────────── */
@@ -226,7 +228,7 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
     /* ⛔⛔ LE FRAIS PART D ICI, ET SEULEMENT SI LA PORTE DIT OUI. Aucun defaut dans le module pur :
      *     c est l appelant qui nomme le beneficiaire, pour qu une retenue ne puisse jamais
      *     s appliquer sans que quelqu un l ait decidee. 0,1 % — voir FRAIS_INTERFACE_BPS_CL. */
-    beneficiaireFrais: porteNotreFrais(porteFrais) ? FEE_WALLET : null,
+    beneficiaireFrais: (famille !== 'cl' || porteNotreFrais(porteFrais)) ? FEE_WALLET : null,
     block, pool, sqrtPriceX96, fee, blockEst0, montantUsdc, toleranceBps,
     recipient: compte, deadline: BigInt(maintenantSec) + 300n, maintenant: BigInt(maintenantSec), devise,
   });

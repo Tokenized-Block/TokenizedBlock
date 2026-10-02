@@ -123,8 +123,13 @@ export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, m
   const s = entier(sqrtPriceX96);
   if (s === null || s <= 0n) return { etat: 'REFUSE', pourquoi: 'sqrtPriceX96 must be read from the pool' };
 
+  /* ⛔ 2026-10-02 : Uniswap v3 — notre frais (FRAIS_INTERFACE_BPS_CL) se prend sur l ENTREE (la devise),
+   *   par PERMIT2_TRANSFER_FROM, jamais sur la sortie (le block). Le swap et le minimum portent sur le NET. */
+  const fraisV3 = famille === 'v3' && ADR.test(String(beneficiaireFrais || '')) && BigInt(fraisBps) > 0n
+    ? (m * BigInt(fraisBps)) / 10000n : 0n;
+  const mNet = m - fraisV3;
   /* ── les frais se prelevent sur l ENTREE ────────────────────────────────────────────────── */
-  const entreeApresFrais = (m * (1000000n - f)) / 1000000n;
+  const entreeApresFrais = (mNet * (1000000n - f)) / 1000000n;
   if (entreeApresFrais <= 0n) {
     return { etat: 'REFUSE', pourquoi: 'the amount is so small that the pool fee consumes all of it' };
   }
@@ -186,7 +191,9 @@ export function planUsdcVersBlock({ block, pool, sqrtPriceX96, fee, blockEst0, m
      *     `echange.js` les construit deja et les MESURE (`jetonPaye`) ; on ne les reecrit pas. */
       payerIsUser: true,
       maintenant,
+      fraisEntree: fraisV3, beneficiaireFrais: fraisV3 > 0n ? beneficiaireFrais : null,
     });
+  if (fraisV3 > 0n && appel.etat === 'PRET') { appel.fraisBps = Number(fraisBps); appel.frais = fraisV3.toString(); }
   if (appel.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'calldata refused: ' + appel.pourquoi };
 
   return {

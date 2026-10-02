@@ -2,7 +2,7 @@
 import { mathsNaissanceInstantanee, MARGE_POUR_MILLE, MICRO_SWAP_ETH_WEI, construireAppelMicroSwapNaissance } from './lancer-pool.js';
 import { CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI } from './frais-creation.js';
 import { montantsPosition } from './pool.js';
-import { HOOK_PREVU } from './tokenomics.js';
+import { HOOK_PREVU, HOOK_V8 } from './tokenomics.js';
 
 let fails = 0;
 function ok(cond, msg) {
@@ -53,8 +53,11 @@ ok(MICRO_SWAP_ETH_WEI > 0n && MICRO_SWAP_ETH_WEI < CREATE_FEE_WEI_FLOOR, 'micro-
   const cle = {
     currency0: '0x0000000000000000000000000000000000000000',
     currency1: '0xb200000000000000000000000000000000000001',
-    fee: 0, tickSpacing: 200, hooks: HOOK_PREVU,
+    fee: 0, tickSpacing: 200, hooks: HOOK_V8,
   };
+  /* 2026-10-02 : Birth = V8 ; une cle dont le hook ne paie pas a6cf a l achat (V1 : frais en block) est refusee. */
+  const ko = construireAppelMicroSwapNaissance({ cle: { ...cle, hooks: HOOK_PREVU }, chaine: 8453, blockEst1: true });
+  ok(ko.etat === 'REFUSE', 'micro-swap on a hook that does not pay a6cf on buy is refused (negative control)');
   const ms = construireAppelMicroSwapNaissance({ cle, chaine: 8453, blockEst1: true });
   ok(ms.etat === 'OK', 'micro-swap call builds');
   ok(ms.call && ms.call.to && ms.call.data && ms.call.value, 'micro-swap has to/data/value');

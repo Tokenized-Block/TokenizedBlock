@@ -119,7 +119,7 @@ export function encoderChemin(sauts) {
  * @param {number} [p.chaine]
  */
 export function calldataV3ExactIn({ sauts, recipient, amountIn, amountOutMinimum, deadline,
-  payerIsUser, maintenant = null, chaine = 8453 } = {}) {
+  payerIsUser, maintenant = null, chaine = 8453, fraisEntree = 0n, beneficiaireFrais = null } = {}) {
   const R = ROUTEUR_UNIVERSEL[Number(chaine)];
   if (!R) return { etat: 'REFUSE', pourquoi: 'no Universal Router measured on this network' };
 
@@ -177,20 +177,30 @@ export function calldataV3ExactIn({ sauts, recipient, amountIn, amountOutMinimum
   /* ── l input du swap, dans l ordre DECODE sur la transaction temoin ──
    * ⛔ Les cinq mots de tete, puis le `path` en zone dynamique. L offset vaut 5 x 32 = 160, et c est
    *   exactement ce que la transaction reelle portait — l egalite est la preuve. */
+  /* ⛔ 2026-10-02 : FRAIS SUR L ENTREE (USDC), jamais sur la sortie (le block). PERMIT2_TRANSFER_FROM (0x02)
+   *   tire `fraisEntree` du portefeuille vers le beneficiaire, puis le swap porte sur le NET. */
+  const fe = BigInt(fraisEntree || 0);
+  if (fe < 0n || fe >= entree) return { etat: 'REFUSE', pourquoi: 'the input fee must be below the amount' };
+  if (fe > 0n && (!ADR.test(String(beneficiaireFrais || '')) || payerIsUser !== true)) {
+    return { etat: 'REFUSE', pourquoi: 'an input fee needs a fee recipient and payerIsUser' };
+  }
   const TETE = 5;
-  const input0 = motAdr(recipient) + mot(entree) + mot(min) + mot(TETE * 32)
+  const input0 = motAdr(recipient) + mot(entree - fe) + mot(min) + mot(TETE * 32)
     + mot(payerIsUser ? 1 : 0) + dyn(chemin.hex);
 
   /* ── l enveloppe `execute(bytes,bytes[],uint256)`, la MEME que `pool.js` ──
    * ⛔ offCommands = 0x60 : trois mots de tete (offset, offset, deadline). offInputs suit la zone
    *   des commandes. Ces deux nombres sont exactement ceux de la transaction temoin. */
-  const commands = dyn(COMMANDE_V3_SWAP_EXACT_IN);
+  const inputFrais = fe > 0n ? motAdr(chemin.entree) + motAdr(beneficiaireFrais) + mot(fe) : null;
+  const commands = dyn(fe > 0n ? '02' + COMMANDE_V3_SWAP_EXACT_IN : COMMANDE_V3_SWAP_EXACT_IN);
   const offCommands = 0x60n;
   const offInputs = offCommands + BigInt(commands.length / 2);
   const data = '0x' + selecteur('execute(bytes,bytes[],uint256)')
     + mot(offCommands) + mot(offInputs) + mot(dl)
     + commands
-    + mot(1) + mot(0x20) + dyn(input0);
+    + (fe > 0n
+      ? mot(2) + mot(0x40) + mot(0x40 + dyn(inputFrais).length / 2) + dyn(inputFrais) + dyn(input0)
+      : mot(1) + mot(0x20) + dyn(input0));
 
   return {
     etat: 'PRET',
@@ -200,7 +210,8 @@ export function calldataV3ExactIn({ sauts, recipient, amountIn, amountOutMinimum
      *   une commande d enveloppement en plus, et ce module ne la construit pas — il le dit plutot
      *   que de laisser croire qu il la couvre. */
     value: '0x0',
-    champs: { recipient: bas(recipient), amountIn: String(entree), amountOutMinimum: String(min),
+    fraisEntree: String(fe), beneficiaireFrais: fe > 0n ? bas(beneficiaireFrais) : null,
+    champs: { recipient: bas(recipient), amountIn: String(entree - fe), amountOutMinimum: String(min),
       deadline: String(dl), payerIsUser, cheminOctets: chemin.octets,
       entree: chemin.entree, sortie: chemin.sortie, sauts: sauts.length },
     noteDeadline,

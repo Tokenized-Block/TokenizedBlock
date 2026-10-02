@@ -139,6 +139,18 @@ export function estNotreHook(h) {
     || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase()
     || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
 }
+/** ⛔ 2026-10-02 — UN SEUL FRAIS PAR JAMBE. Le hook de cette pool verse-t-il DEJA a6cf, en ETH, dans
+ *  la transaction, pour ce sens ? Mesure sur fork (bloc 52072599, callTracer) :
+ *    V8 achat + vente : oui (0,5 % ETH) · V1 HOOK_PREVU et V2 : vente seulement (ETH) ·
+ *    V1 achat : le hook prend du BLOCK (non compte) · V2 achat : rien dans la tx · V3–V7 : aucune pool.
+ *  Vrai = le routeur ne prend PAS son 0,5 % en plus. V9 compte seulement une fois pose. */
+export function hookPaieDejaA6cf(h, sens) {
+  const x = String(h || '').toLowerCase();
+  if (!x || (sens !== 'ACHAT' && sens !== 'VENTE')) return false;
+  if (x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase())) return true;
+  if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return sens === 'VENTE';
+  return false;
+}
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
 export const ETATS_LABEL = ['OUI', 'NON', 'NON_LU'];

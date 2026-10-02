@@ -3029,7 +3029,7 @@ import { faceDuBlock, validerFace } from './face.js';
  * a index.html par un test) ; il ne signe rien. Chaque signature passe par `envoi.js`, et la chaine
  * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
-import { planLancement, simulerLancement, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
+import { planLancement, simulerLancement, simulerSequenceLancement, mintLancementRecevable, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, etapeDeCapacite } from './groupe-wallet.js';
 import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
@@ -7950,6 +7950,10 @@ function poolDecouvertPour(adr) {
     const conf = p.confiance || confianceDe(p.cle);
     const hk = String(p.cle.hooks || '').toLowerCase();
     const isTb = estNotreHook(hk);
+    /* ⛔ 2026-10-02 : « Buy here » ne sait echanger qu une pool ETH hors de nos hooks (planEchange refuse une
+     *   paire ERC-20 etrangere). Sur TWIN et SPROUT la paire mmETH a 0 % battait la pool ETH a 0,30 % : la
+     *   route « la moins chere » etait une route qu on ne peut pas prendre, et l achat etait refuse. */
+    if (!isTb && !/^0x0{40}$/.test(c0) && !/^0x0{40}$/.test(c1)) continue;
     /* Prefer fee hook if somehow present; else any ETH pair we can trade/upgrade. */
     /* ⛔⛔ « SANS HOOK » NE PASSE PLUS DEVANT « AVEC HOOK » (Phil, 2026-09-23 : « fais au mieux »).
      *     L ancien classement mettait `SANS_HOOK` (100) devant `HOOK` (50), donc une pool sans hook
@@ -12880,6 +12884,29 @@ function peindrePlan(plan, adr) {
  *      qu un identifiant `etape` reapparaisse en portee. Deux `const etape = …` de bloc existent
  *      ailleurs dans ce fichier : inoffensifs aujourd hui parce qu aucun compteur n y est appele,
  *      mais ce sont deux pieges armes. */
+/* ⛔⛔ 2026-10-02 — 0x753d : 0,0003 ETH payes a `inscrire`, puis le mint refuse PAR NOUS (garde « no ETH
+ *     value ») — l argent part, la pool jamais. On REFUSE AVANT DE PAYER : meme predicat que la garde du
+ *     mint, puis la sequence [cette etape, les suivantes, le mint] simulee depuis ce compte. Vrai = refuse. */
+async function refuserAvantPaiementLancement(etapePlan, e) {
+  if (!etapePlan || !etapePlan.payant || !/^0xbb920fed/i.test(String(etapePlan.data || ''))) return false;
+  const pl = planCourant;
+  if (!mintLancementRecevable(pl)) {
+    e.className = 'note wKo'; vieAutoArreter();
+    e.textContent = 'This launch could not finish after the fee, so nothing was sent.';
+    return true;
+  }
+  const ets = (pl.etapes || []);
+  const k = ets.findIndex((x) => x && x.data === etapePlan.data && x.to === etapePlan.to);
+  const suite = [etapePlan, ...(k >= 0 ? ets.slice(k + 1) : []), pl.tx];
+  e.textContent = 'Checking the whole launch on chain before any payment…';
+  const sq = await simulerSequenceLancement({ rpc, compte, appels: suite });
+  if (sq.etat === 'ACCEPTE') return false;
+  try { etape('vie_echec'); } catch (_) {}
+  e.className = 'note wKo';
+  e.textContent = 'The chain would not finish this launch (' + sq.pourquoi + '), so nothing was sent.';
+  vieAutoArreter();
+  return true;
+}
 async function signerEtapeLancement(etapePlan) {
   if (lancementEnCours) return;
   lancementEnCours = true;
@@ -12888,6 +12915,8 @@ async function signerEtapeLancement(etapePlan) {
   e.textContent = 'Opening your wallet — check what it shows before you sign.';
   let r;
   try {
+    /* ⛔⛔ 2026-10-02 — 0x753d : refus AVANT de payer `inscrire` si le lancement ne peut pas aboutir. */
+    if (await refuserAvantPaiementLancement(etapePlan, e)) return;
     if (etapePlan.payant) {
       const v = BigInt(etapePlan.value || '0x0');
       e.textContent = (v > 0n && v <= CREATE_FEE_WEI_FLOOR)
@@ -13052,7 +13081,9 @@ async function lancerMarcheBlock(adr) {
   const besoinSeed = naissance
     ? BigInt(planCourant.quoteEthWei || planCourant.ethRequis || 0n) + (planCourant.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n)
     : 0n;
-  if (naissance && (!planCourant.ethRequis || planCourant.ethRequis <= 0n || planCourant.tx.value === '0x0')) {
+  /* ⛔ 2026-10-02 : la naissance SANS APPORT (ecran par defaut depuis a1fa16f) part legitimement a 0 — elle
+   *   tombait ici APRES le paiement d `inscrire` (0x753d). Meme predicat que le refus avant paiement. */
+  if (naissance && !mintLancementRecevable(planCourant)) {
     e.className = 'note wKo'; vieAutoArreter();
     e.textContent = 'Instant Birth mint has no ETH value — Launch refused (fail-closed).';
     return;
@@ -15116,7 +15147,8 @@ function peindrePaireChips() {
        *     rien » des marches qui rapportent, pendant une simple panne de lecture — et
        *     l entonnoir en tirerait un chiffre faux dans les deux sens selon la sante du RPC. */
       + '" data-frais="' + (v.verdict === 'NON_MESURE' ? 'inconnu' : (porteNotreFrais(v) ? 'oui' : 'non')) + '"'
-      + (sansFrais ? ' title="' + enTexte(sym + ' — buyable here, this app takes no fee on it') + '"' : '')
+      /* 2026-10-02 : un achat Uniswap v3 porte desormais 0,1 % sur l entree (plan-usdc-block.js) — plus de « no fee ». */
+      + (sansFrais ? ' title="' + enTexte(sym + ' — buyable here') + '"' : '')
       + ' aria-pressed="' + (on ? 'true' : 'false') + '">' + enTexte(sym) + '</button>';
   }).filter(Boolean);
   if (!htmlChips.length) { box.hidden = true; box.innerHTML = ''; return; }
@@ -15571,10 +15603,11 @@ function cibleCreation() {
 function valeurCreation(fraisWei) {
   if (!utiliseCreateRouter()) return '0x0';
   const w = fraisWei != null ? BigInt(fraisWei) : 0n;
-  /* tip 20260923-feed-catch-router: MAIN CreateRouter always pays FRAIS_OUVERTURE_WEI (0.001). */
-  const floor = FRAIS_OUVERTURE_WEI;
-  const pay = w > floor ? w : floor;
-  return '0x' + pay.toString(16);
+  /* ⛔⛔ 2026-10-02 (mesure fork) : le parcours « 0.001 ETH » encaissait 0,0013 — createPaid 0,001 PUIS
+   *     V8.inscrire 0,0003 (plancher du contrat, exige tant que payee=false, cf. 12411). Le total annonce
+   *     est tenu en retirant ce plancher ICI : createPaid + inscrire = FRAIS_OUVERTURE_WEI, exactement. */
+  const total = w > FRAIS_OUVERTURE_WEI ? w : FRAIS_OUVERTURE_WEI;
+  return '0x' + (total - CREATE_FEE_WEI_FLOOR).toString(16);
 }
 
 /* ⛔ FRAIS CREATE = ~$1 EN ETH (prix mediane pools). USDC n est plus le rail Create. */
@@ -16475,7 +16508,8 @@ async function recupererPrepayeCreateRouter(adr) {
     const from = String(tx.from || '').toLowerCase();
     const val = BigInt(tx.value || '0x0');
     if (to !== String(CREATE_ROUTER).toLowerCase()) return null;
-    if (val < FRAIS_OUVERTURE_WEI) return null;
+    /* 2026-10-02 : createPaid porte FRAIS_OUVERTURE_WEI - plancher (le reste part a inscrire). */
+    if (val < FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR) return null;
     if (from !== String(compte).toLowerCase()) return null;
     const v = { hash: info.tx, wei: String(val), compte: from, t: Date.now(), via: 'CreateRouter-onchain' };
     noterPrepayeBlock(adr, v);
@@ -16955,7 +16989,7 @@ async function creerBlock() {
         dataSend = calldataCreation(v);
         toSend = cibleCreation();
         valueSend = valeurCreation(FRAIS_OUVERTURE_WEI);
-        if (estCreateB20ValeurZero(toSend, valueSend) || BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI
+        if (estCreateB20ValeurZero(toSend, valueSend) || BigInt(valueSend || '0x0') < FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR
           || String(toSend).toLowerCase() !== String(CREATE_ROUTER).toLowerCase()) {
           e.className = 'note wKo';
           e.textContent = 'Instant Birth refused: the paid request could not be built. Nothing was sent.';
@@ -16979,7 +17013,7 @@ async function creerBlock() {
         }
         adresseCreee = adrSend;
         e.className = 'note';
-        e.textContent = 'Instant Birth — 0.001 ETH, once. Check your wallet: it should ask for 0.001 ETH, not zero.';
+        e.textContent = 'Instant Birth — 0.001 ETH in total: ' + ethLisible(BigInt(valueSend)) + ' ETH now, the rest when its market opens. Check your wallet: it should not ask for zero.';
         try { console.info('[Instant Birth] CreateRouter same-sig paid', toSend, valueSend, adrSend); } catch (_) {}
       } catch (errIb) {
         e.className = 'note wKo';
