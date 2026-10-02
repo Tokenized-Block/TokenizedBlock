@@ -98,6 +98,7 @@ import { selecteur as selecteurSrv } from './keccak.js';
  *     ecrit en dur ici    0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
  *   IDENTIQUES. On garde celui du fichier pour ne pas creer deux sources du meme fait. */
 import { decoderInitialize } from './pools-du-jeton.js';
+import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
@@ -335,6 +336,13 @@ const adrDePool = (h) => '0x' + motDePool(h, 0).slice(24);
  * ⛔ CACHE POUR TOUJOURS : une cle de pool ne change JAMAIS. Mais on ne cache que les SUCCES —
  *   graver un echec de lecture figerait une cecite pour toute la vie du process. */
 const clesV4Lues = new Map();
+/* ⛔ 2026-10-02 — PRE-REMPLI par des logs `Initialize` MESURES (cles-v4-mesurees.js), chacun repasse par
+ *   `decoderInitialize` : une cle n entre que si son poolId se recalcule. OUSD/USDC est nee hors de la fenetre
+ *   de 120 000 blocs remontee ci-dessous — sans ce pre-remplissage, sa route restait cotable et pas construisible. */
+for (const l of LOGS_INITIALIZE_MESURES) {
+  const p = decoderInitialize(l);
+  if (p && !p.erreur && p.cle && p.poolId) clesV4Lues.set(p.poolId, p.cle);
+}
 async function cleV4DuPoolId(id) {
   const k = String(id).toLowerCase();
   if (clesV4Lues.has(k)) return clesV4Lues.get(k);
