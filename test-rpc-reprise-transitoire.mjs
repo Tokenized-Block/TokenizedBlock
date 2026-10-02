@@ -57,9 +57,12 @@ function fabriquer({ noeuds, secours = [], reponses, b20Rpc = null }) {
    *   reprise sert a quelque chose, parce que le navigateur journalise le 403 meme quand elle
    *   reussit. Un correctif qu on ne peut pas mesurer est un correctif qu on croit. */
   const compte = { reseau: 0, cache: 0, fusion: 0, reprises: 0, reprisesOk: 0 };
-  const faire = new Function('RESEAUX', 'CHAINE', 'ESSAIS_429', 'fetch', 'setTimeout', 'rpcCompte',
+  /* ⛔ `rpcRegul` (2026-10-02, regulateur-rpc.js) est injecte a `null` : ce fichier garde la politique
+   *   de REPRISE seule, telle qu elle etait. Le regulateur a son propre test, qui execute la meme
+   *   fonction AVEC lui : test-regulateur-rpc.mjs. */
+  const faire = new Function('RESEAUX', 'CHAINE', 'ESSAIS_429', 'fetch', 'setTimeout', 'rpcCompte', 'rpcRegul',
     'let idRpc = 0; return (' + source + ');')(
-    RESEAUX, 8453, 5, fetchLabo, (k, ms) => { dodos.push(ms); k(); }, compte);
+    RESEAUX, 8453, 5, fetchLabo, (k, ms) => { dodos.push(ms); k(); }, compte, null);
   return { faire, appels, dodos, compte };
 }
 

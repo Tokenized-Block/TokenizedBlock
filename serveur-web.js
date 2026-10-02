@@ -1776,6 +1776,10 @@ const SERVIS = [
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
   'heures-marche.js',
+  /* ⛔ 2026-10-02 : debit et refus permanents des noeuds RPC publics, importe par `app.html`. */
+  'regulateur-rpc.js',
+  /* ⛔ 2026-10-02 : les lignes groupees du Feed se deplient, leurs notes se lisent depuis leurs tx. */
+  'notes-du-fil.js',
   /* ⛔ `pool-cl.js` LIT LES POOLS AERODROME CL (et tout fork Uniswap v3) — la ou `pool.js` ne sait
    *   que le v4. Ses deux dependances (`keccak.js`, `pool.js`) sont deja servies plus haut ; la
    *   garde ci-dessous ne relit QUE les imports DIRECTS de `app.html`, donc elle ne dirait rien
