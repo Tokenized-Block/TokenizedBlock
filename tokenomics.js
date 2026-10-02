@@ -97,7 +97,7 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
  *       rendraient 0,000509934 ETH. Il faut SIX FOIS plus de volume pour egaler. C est un PARI.
  *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
-import { HOOKS_MARCHE_OUVERT } from './marche-ouvert.js';
+import { HOOKS_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF, incoherenceMarcheOuvert } from './marche-ouvert.js';
 import { hookDeLancementPour } from './paires.js';
 /* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
  *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
@@ -209,6 +209,26 @@ export function deviseFraisHook(cle, sens, zeroForOne, liste = HOOKS_PAIENT_DEJA
    *   preleve en ETH dans les deux sens, fork 52074194) — preleve en currency0. */
   if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return zeroForOne ? c1 : c0;
   return c0;
+}
+/** ⛔ GARDE A L EXECUTION (crosscheck Zero 1 sur ee8de19, 2026-10-02) : « drapeau ON refuse si la liste
+ *  V8-open est vide » n etait verifie QUE par un test (incoherenceMarcheOuvert). A l execution, rien ne
+ *  l empechait : drapeau ON + liste vide, une pool V8-open (qui verse deja a6cf) est indiscernable d un
+ *  hook etranger quelconque, et le routeur reprendrait son frais EN PLUS (double frais).
+ *  ⇒ Tant que la configuration est incoherente, toute route dont une jambe porte un hook que l app ne sait
+ *    pas classer (ni sans hook, ni un des notres, ni dans HOOKS_PAIENT_DEJA_A6CF) est REFUSEE — le chemin
+ *    referent o1 compris (LaunchHook o1 = hook etranger). Configuration coherente : null, rien ne change.
+ *  @param {Array<{cle:{hooks:string}}>} sauts — les jambes de la route ; @returns {string|null} la raison du refus */
+export function refusMarcheOuvertIncoherent(sauts, { actif = MARCHE_OUVERT_ACTIF, hooks = HOOKS_MARCHE_OUVERT,
+  liste = HOOKS_PAIENT_DEJA_A6CF } = {}) {
+  const inc = incoherenceMarcheOuvert({ actif, hooks });
+  if (!inc) return null;
+  const inclasse = (Array.isArray(sauts) ? sauts : []).some((s) => {
+    const h = String((s && s.cle && s.cle.hooks) || '').toLowerCase();
+    if (!h || /^0x0{40}$/.test(h)) return false;
+    if (estNotreHook(h)) return false;
+    return !liste.some((e) => !!e.hook && String(e.hook).toLowerCase() === h);
+  });
+  return inclasse ? inc + ' — a pool on a hook we cannot classify could be charged twice; nothing was sent' : null;
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';

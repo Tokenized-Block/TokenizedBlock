@@ -16,7 +16,7 @@
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook, routePaieDejaA6cf,
-  HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
+  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -158,7 +158,9 @@ async function appelOuErreur(rpc, tx) {
  * @param {bigint} o.montant  achat : wei d ETH payes (frais compris) ; vente : unites brutes du block vendues
  */
 export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, toleranceBps = 100n, maintenant = Date.now(),
-  marcheLu = null, cleImposee = null, fraisDevisesOk = null }) {
+  marcheLu = null, cleImposee = null, fraisDevisesOk = null,
+  /* injectable pour les tests : actif + hooks du marche ouvert ; defaut = marche-ouvert.js */
+  marcheOuvert = undefined }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)], V = V4_ADRESSES[Number(chaine)];
   if (!R || !Q || !V) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) return { etat: 'REFUSE', pourquoi: 'connect your wallet first' };
@@ -195,6 +197,9 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   if (marche.paire !== 'TBLOCK' && poolSansHookInterdite(marche.cle, [jeton])) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusSansHook: true };
   }
+  /* ⛔ garde a l execution : drapeau marche ouvert ON + liste V8-open vide -> aucun hook inclassable */
+  const refusMO = refusMarcheOuvertIncoherent([{ cle: marche.cle }], marcheOuvert);
+  if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
   /* tip 20260922-2023: ALWAYS take interface 0.5% → FEE_WALLET on in-app Buy/Sell (unless fee-wallet buyback).
    *    Prior skip when estNotreHook assumed hook TAKE ~3% already hit a6cf — live dig 2026-09-22: sink got 0
    *    from Buy/Sell volume (hooked path skipped interface AND hook was not depositing). Stacked fees
@@ -672,7 +677,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   OUSD en a SIX. Sans PRIX, le bareme applique le taux le plus haut et le dit. */
   decimalesEntree = 18, prixUsdEntree = null,
   /* injectable pour les tests (redeploiement V8-open) ; defaut = la liste unique de tokenomics.js */
-  hooksPaieurs = HOOKS_PAIENT_DEJA_A6CF }) {
+  hooksPaieurs = HOOKS_PAIENT_DEJA_A6CF, marcheOuvert = undefined }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)];
   if (!R || !Q) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) {
@@ -724,6 +729,10 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *     frais ne vaut PAS `montant * bps / 10000`, et recalculer donnerait deux chiffres pour le
    *     meme prelevement — celui annonce et celui preleve. */
   let frais = 0n, bps = 0n, degressif = null;
+  /* ⛔ garde a l execution (Zero 1, patch runtime-guard-empty-v8open) : drapeau marche ouvert ON + liste V8-open vide
+   *   -> toute jambe sur un hook inclassable est refusee avant toute lecture. */
+  const refusMO = refusMarcheOuvertIncoherent(sauts, { ...(marcheOuvert || {}), liste: hooksPaieurs });
+  if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
   /* ⛔ 2026-10-02 : le frais se prend sur la jambe d ENTREE (saut 1). Si cette pool est une pool ETH dont
    *   le hook verse deja a6cf dans ce sens, le routeur ne prend rien : un frais par jambe. */
   const s1 = sauts[0] || {};
