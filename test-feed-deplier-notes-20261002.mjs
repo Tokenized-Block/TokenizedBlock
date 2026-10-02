@@ -159,7 +159,7 @@ cas('⛔ notes depliees : texte lisible, expediteur court, lien tx — et jamais
   const frais = await lireNotes({ rpc: rpcLabo, notes: G.note.enfants, lireMemo });
   const h = fabriquerEnfants(srcEnfants, new Map(), frais)(G.note, cleGroupe(G.note), 'NVDAc');
   assert.match(h, /“gm from NVDA”/);
-  assert.match(h, /from 0x1111…1111/);
+  assert.match(h, /from <span style="white-space:nowrap">0x1111…1111<\/span>/);
   assert.match(h, /empty transfer \(0 amount\)/);
   assert.match(h, /not read right now — not empty/);
   assert.match(h, /4 0-amount transfers counted by the Feed in chain blocks 52,071,384–52,072,345/);

@@ -125,6 +125,7 @@ function verifierEnfants(f) {
   const hn = f({ type: 'NOTE', n: 3, jeton: '0xb3', enfants: notesEnf, blocBas: 52073001, blocHaut: 52073003 }, 'NOTE:0xb3', 'NVDAc');
   assert.ok(hn.indexOf(M.AVERT_SPAM) > 0 && hn.indexOf(M.AVERT_SPAM) < hn.indexOf('data-fil-notes-resume'), 'l avertissement spam doit ouvrir le deplie');
   assert.ok(sansMotNote(hn.replace(/data-fil-notes-resume/g, '')), 'le deplie appelle « note » des transferts vides');
+  assert.match(hn, /from <span style="white-space:nowrap">0x3cfc…2b29<\/span>/, 'une adresse abregee se coupe apres « … » (mobile)');
 }
 cas('⛔ ventes depliees : block non repete et insecable, « before this market\'s fee » une fois dans l entete ; notes vides : avertissement en tete', () => verifierEnfants(fabriquer(srcEnfants, srcEchange)));
 cas('TEMOIN NEGATIF : sans le dedoublonnage du block, la verification rougit', () => {
@@ -139,11 +140,26 @@ cas('TEMOIN NEGATIF : sans l avertissement spam, la verification rougit', () => 
   const mut = srcEnfants.replace('libelleNotes(rN).spam ?', 'false ?'); assert.notEqual(mut, srcEnfants);
   assert.throws(() => verifierEnfants(fabriquer(mut, srcEchange)), /spam/);
 });
+cas('TEMOIN NEGATIF : une adresse abregee sans nowrap rougit', () => {
+  const mut = srcEnfants.replace(`'<span style="white-space:nowrap">' + enTexte(court(String(a || '?'))) + '</span>'`, `enTexte(court(String(a || '?')))`); assert.notEqual(mut, srcEnfants);
+  assert.throws(() => verifierEnfants(fabriquer(mut, srcEchange)), /se coupe/);
+});
+function verifierPlage(h) {
+  assert.match(h, /&& e\.blocBas !== e\.blocHaut\r?\n\s*\? 'blocks '/, 'un groupe dans UN block dit « blocks N–N »');
+  assert.match(h, /data-fil-profil="' \+ enTexte\(e\.jeton\) \+ '">profile&nbsp;›<\/a>/, '« profile › » peut se couper');
+  const f = new Function('enTexte', 'lisible', srcEchange + '\nreturn ligneEchange;')(enTexte, lisible);
+  assert.match(f({ ...ventes[0], n: 1 }, 'SPROUT'), /for 0\.01&nbsp;ETH/, '« 0.01 ETH » peut se couper');
+}
+cas('⛔ « blocks N–N » devient « block N » ; « profile › » et « 0.01 ETH » insecables', () => verifierPlage(html));
+cas('TEMOIN NEGATIF : sans la garde blocBas !== blocHaut, la verification rougit', () => {
+  const mut = html.replace(' && e.blocBas !== e.blocHaut\n', '\n').replace(' && e.blocBas !== e.blocHaut\r\n', '\r\n'); assert.notEqual(mut, html);
+  assert.throws(() => verifierPlage(mut), /blocks N–N/);
+});
 cas('une vente seule (hors groupe) dit toujours le frais du marche', () => {
   const f = new Function('enTexte', 'lisible', srcEchange + '\nreturn ligneEchange;')(enTexte, lisible);
   assert.match(f({ ...ventes[0], n: 1 }, 'SPROUT'), /before this market's fee/);
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
-console.log('ok feed-revue-20261002 — ' + n + ' cas, 7 temoins negatifs par mutation (module et code extrait de app.html)');
+console.log('ok feed-revue-20261002 — ' + n + ' cas, 9 temoins negatifs par mutation (module et code extrait de app.html)');
 console.log('⚠️ NE PROUVE PAS le rendu navigateur : voir les captures 390 px et bureau.');
