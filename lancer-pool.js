@@ -24,6 +24,7 @@ import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAli
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
 import { HOOK_V8, HOOK_V9, estHookDeNaissance, hookPaieDejaA6cf } from './tokenomics.js';
 import { hookDeLancementPour } from './paires.js';
+import { REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /* ══ CONSTANTES — RECOPIEES DE index.html, COMPAREES PAR UN TEST ═════════════════════════════ */
 export const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -277,6 +278,17 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
   }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };
+  /* ⛔ 2026-10-02 (Zero 1, fee lot 2) — LA MEME REGLE QUE CREATE, ICI AUSSI (lancement depuis le profil) : un block qui
+   *   passerait currency0 sur une pool dont le hook preleve en currency0 (V8) ferait verser a6cf EN BLOCK. On n ouvre pas
+   *   ce marche : texte exact « Not tradable here yet », avant toute demande au wallet. */
+  {
+    const [c0, c1] = String(devise).toLowerCase() < String(jeton).toLowerCase() ? [devise, jeton] : [jeton, devise];
+    const cle = { currency0: c0, currency1: c1, hooks };
+    if (REFUS_FRAIS_HOOK_EN_BLOCK && ['ACHAT', 'VENTE'].some((sens) => fraisHookEnBlock(cle, jeton, sens,
+      sens === 'ACHAT' ? String(c0).toLowerCase() !== String(jeton).toLowerCase() : String(c0).toLowerCase() === String(jeton).toLowerCase()))) {
+      return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
+    }
+  }
   const enEth = String(devise).toLowerCase() === ETH_NATIF;
   const classement = enEth ? classementValoLancement(valorisationEth)
     : (Number(valorisationEth) > 0 && Number.isFinite(Number(valorisationEth)) ? { etat: 'NON_APPLICABLE' } : { etat: 'ILLISIBLE' });
@@ -520,6 +532,9 @@ export function mintLancementRecevable(plan) {
 
 /** Avant de PAYER : la sequence entiere [etapes restantes…, mint] est-elle acceptee par la chaine, dans l ordre,
  *  depuis ce compte ? Une seule reponse « oui » : chaque appel en 0x1. Tout le reste (refus, noeud muet) = non. */
+/** Texte EXACT quand la naissance entiere n a pas pu etre simulee (Zero 1, 2026-10-02) : createPaid n est pas appele. */
+export const COPIE_NAISSANCE_NON_VERIFIEE = "Can't check this birth right now, nothing was charged. Try again.";
+
 export async function simulerSequenceLancement({ rpc, compte, appels }) {
   if (!Array.isArray(appels) || !appels.length) return { etat: 'REFUSE', pourquoi: 'nothing to simulate' };
   const calls = appels.map((a) => ({ from: compte, to: a.to, data: a.data, value: a.value || '0x0' }));

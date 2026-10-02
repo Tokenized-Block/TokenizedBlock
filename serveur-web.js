@@ -1595,7 +1595,7 @@ const ETAPES_ENTONNOIR = [
    *                     geste a eu lieu, le resultat non ;
    *     · `preparation` notre requete n a pas pu etre construite -> defaut CHEZ NOUS, jamais chez
    *                     le visiteur. C est la distinction qui evite de chercher au mauvais endroit. */
-  'cree_refus_solde', 'cree_refus_lecture', 'cree_refus_frais', 'cree_refus_preparation', 'cree_refus_ordre_sel', 'cree_refus_presim',
+  'cree_refus_solde', 'cree_refus_lecture', 'cree_refus_frais', 'cree_refus_preparation', 'cree_refus_ordre_sel', 'cree_refus_presim', 'cree_refus_presim_non_mesure',
   /* achat — l etape qui rapporte */
   /* ⛔ `achat_clic` = l INTENTION (clic sur Buy dans Market) · `achat_prepare` = on a passe les
    *   gardes et on prepare vraiment. Les deux partageaient le nom `achat_prepare` jusqu au

@@ -3079,7 +3079,7 @@ import { faceDuBlock, validerFace } from './face.js';
  * a index.html par un test) ; il ne signe rien. Chaque signature passe par `envoi.js`, et la chaine
  * SIMULE le lancement avant que le bouton ne s ouvre. Mesure du 2026-09-13 sur Base Sepolia : sur de
  * vrais blocks et leurs vrais createurs, la sequence autorisations + lancement a ete acceptee. */
-import { planLancement, simulerLancement, simulerSequenceLancement, mintLancementRecevable, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee } from './lancer-pool.js';
+import { planLancement, simulerLancement, simulerSequenceLancement, mintLancementRecevable, PERMIT2, MICRO_SWAP_ETH_WEI, mathsNaissanceInstantanee, COPIE_NAISSANCE_NON_VERIFIEE } from './lancer-pool.js';
 import { peutGrouper, envoyerGroupe, rpcAvecBlockPrevu, capaciteDeGroupement, etapeDeCapacite } from './groupe-wallet.js';
 import { categorieSource } from './source-visite.js';
 import { choisirPool, phraseDuChoix } from './choix-de-pool.js';
@@ -12606,6 +12606,10 @@ let blockMiroirVie = null;
 function texteArretVie(etapeN, prepaye, detail) {
   const d = detail && !/^Opening your wallet/i.test(detail) ? ' — ' + String(detail).slice(0, 180) : '.';
   if (prepaye && prepaye.wei && BigInt(prepaye.wei) > 0n) {
+    /* ⛔ 2026-10-02 (Zero 1) : « fee was paid » puis « nothing was sent » se contredisaient — le detail perd ces fragments. */
+    const brut = detail && !/^Opening your wallet/i.test(detail)
+      ? String(detail).replace(/\s*[—–-]?\s*(nothing was (sent|charged)|nothing is lost)[.;,]?/gi, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 180) : '';
+    const d = brut ? ' — ' + brut : '.';
     return 'It stopped at step ' + etapeN + ' and it is not alive yet. Your ' + ethLisible(BigInt(prepaye.wei))
       + ' ETH Create fee was paid; you will not pay it again. Finish later from My blocks, or below' + d;
   }
@@ -12911,7 +12915,7 @@ async function calculerLancement() {
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ AUDIT (bloquant) : si quelqu un a ouvert la pool PAYEE avant le createur et l a laissee vide au prix plancher, le plan
    *    est refuse avec un message technique (« range collapses »). On dit ce qui s est passe, sans promettre de reparation. */
-  if (poolVide && plan && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
+  if (poolVide && plan && !plan.refusFraisEnBlock && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
     plan.pourquoi = 'someone opened this market before you and left it empty at the lowest price. Its starting price cannot be set from here any more — pick another pair to open a fresh market.';
   }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
@@ -13055,7 +13059,9 @@ function peindrePlan(plan, adr) {
     e.className = 'note wKo'; vieAutoArreter();
     /* ⛔ DEUX PHRASES DIFFERENTES : un refus est un fait sur ce lancement, une lecture ratee est un
      * fait sur notre reseau — et dans les deux cas, rien n est offert a signer. */
-    e.textContent = (plan.etat === 'REFUSE' ? 'Not possible as set: ' : 'Not measured, so nothing to sign: ') + plan.pourquoi;
+    /* ⛔ 2026-10-02 fee lot 2 : block currency0 sur un hook qui preleve en currency0 — texte exact, rien d autre. */
+    e.textContent = plan.refusFraisEnBlock ? String(plan.pourquoi)
+      : (plan.etat === 'REFUSE' ? 'Not possible as set: ' : 'Not measured, so nothing to sign: ') + plan.pourquoi;
     return;
   }
   const d = plan.dec;
@@ -17563,6 +17569,14 @@ async function creerBlock() {
           e.className = 'note wKo';
           e.textContent = 'The chain would not finish this birth (' + String(pre.pourquoi || '').slice(0, 160) + '), so nothing was sent.';
           try { etape('cree_refus_presim'); } catch (_) {}
+          return;
+        }
+        /* ⛔ 2026-10-02 (Zero 1, fee lot 2) — PAS DE SIMULATION, PAS DE createPaid. NON_MESURE (noeud sans eth_simulateV1,
+         *   erreur de simulation, plan illisible) laissait Create encaisser 0,0007 ETH sans verification : on refuse. */
+        if (pre.etat !== 'ACCEPTE') {
+          e.className = 'note wKo';
+          e.textContent = COPIE_NAISSANCE_NON_VERIFIEE;
+          try { etape('cree_refus_presim_non_mesure'); } catch (_) {}
           return;
         }
         e.className = 'note';
