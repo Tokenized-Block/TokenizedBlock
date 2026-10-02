@@ -3,7 +3,7 @@
  *      l avertissement spam en tete du deplie, et au profil « No messages yet · N empty 0-amount transfers ».
  *   2. un groupe « sent » dit son TOTAL et son nombre de wallets distincts, pas le dernier envoi.
  *   3. mobile : le numero de block ne se repete pas d une entree a la suivante, ne se coupe pas, et
- *      « before this market's fee » n est dit qu UNE fois, dans l entete du groupe.
+ *      « before this market's fee » n est plus dit par entree (2026-10-02 14:12 : une fois, en tete de SECTION).
  * ⛔ Chaque verification a son TEMOIN NEGATIF par mutation (module ou code extrait de app.html). */
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
@@ -97,7 +97,7 @@ cas('app.html : le titre d un groupe GM passe par titreEnvois(resumeEnvois(e.enf
 });
 
 /* ── 3. enfants : block non repete, insecable ; frais du marche une seule fois ─────────────── */
-const srcEchange = bloc('function ligneEchange(e, nom, sansFrais) {');
+const srcEchange = bloc('function ligneEchange(e, nom) {');
 const srcEnfants = bloc('function enfantsDuFil(e, cleG, nom) {');
 const lisible = (x) => String(x);
 const enTexte = (t) => String(t).replace(/</g, '&lt;');
@@ -119,22 +119,21 @@ function verifierEnfants(f) {
   assert.equal((h.match(/block&nbsp;52,072,490/g) || []).length, 1);
   assert.doesNotMatch(h, /block 5/, 'espace secable entre « block » et le numero (coupure mobile)');
   assert.equal((h.match(/<span style="white-space:nowrap">/g) || []).length, 4, 'block · tx doit tenir sur une ligne');
-  assert.equal((h.match(/before this market's fee/g) || []).length, 1, 'le frais du marche doit etre dit UNE fois');
-  assert.match(h.split('<ul')[0], /amounts are before this market's fee/, 'le frais doit etre dans l entete');
+  assert.equal((h.match(/before (this|that) (market's )?fee/g) || []).length, 0, 'le frais du marche est encore dit dans le deplie');
   assert.equal((h.match(/\/tx\/0x/g) || []).length, 4, 'chaque entree garde son lien tx');
   const hn = f({ type: 'NOTE', n: 3, jeton: '0xb3', enfants: notesEnf, blocBas: 52073001, blocHaut: 52073003 }, 'NOTE:0xb3', 'NVDAc');
   assert.ok(hn.indexOf(M.AVERT_SPAM) > 0 && hn.indexOf(M.AVERT_SPAM) < hn.indexOf('data-fil-notes-resume'), 'l avertissement spam doit ouvrir le deplie');
   assert.ok(sansMotNote(hn.replace(/data-fil-notes-resume/g, '')), 'le deplie appelle « note » des transferts vides');
   assert.match(hn, /from <span style="white-space:nowrap">0x3cfc…2b29<\/span>/, 'une adresse abregee se coupe apres « … » (mobile)');
 }
-cas('⛔ ventes depliees : block non repete et insecable, « before this market\'s fee » une fois dans l entete ; notes vides : avertissement en tete', () => verifierEnfants(fabriquer(srcEnfants, srcEchange)));
+cas('⛔ ventes depliees : block non repete et insecable, aucun « before this market\'s fee » par entree ; notes vides : avertissement en tete', () => verifierEnfants(fabriquer(srcEnfants, srcEchange)));
 cas('TEMOIN NEGATIF : sans le dedoublonnage du block, la verification rougit', () => {
   const mut = srcEnfants.replace("(memeBloc ? '' : ' · ' + bloc(c))", "(' · ' + bloc(c))"); assert.notEqual(mut, srcEnfants);
   assert.throws(() => verifierEnfants(fabriquer(mut, srcEchange)), /se repete/);
 });
-cas('TEMOIN NEGATIF : le frais repete sur chaque entree rougit', () => {
-  const mut = srcEnfants.replace('ligneEchange({ ...c, n: 1 }, nom, true)', 'ligneEchange({ ...c, n: 1 }, nom)'); assert.notEqual(mut, srcEnfants);
-  assert.throws(() => verifierEnfants(fabriquer(mut, srcEchange)), /UNE fois/);
+cas('TEMOIN NEGATIF : le frais remis sur chaque entree rougit', () => {
+  const mut = srcEchange.replace("return tete + ' · ' + qte + prix;", "return tete + ' · ' + qte + prix + (e.fraisMarche ? ' · before this market\\'s fee' : '');"); assert.notEqual(mut, srcEchange);
+  assert.throws(() => verifierEnfants(fabriquer(srcEnfants, mut)), /encore dit/);
 });
 cas('TEMOIN NEGATIF : sans l avertissement spam, la verification rougit', () => {
   const mut = srcEnfants.replace('libelleNotes(rN).spam ?', 'false ?'); assert.notEqual(mut, srcEnfants);
@@ -170,9 +169,9 @@ cas('TEMOIN NEGATIF : « a fragment » remis par entree, ou placeholder jaune, r
   const pageJaune = html.replace(',#pmsgTexte::placeholder{color:revert', '{color:revert'); assert.notEqual(pageJaune, html);
   assert.throws(() => verifierMineurs(srcEnfants, pageJaune), /pas gris/);
 });
-cas('une vente seule (hors groupe) dit toujours le frais du marche', () => {
+cas('une vente seule (hors groupe) ne dit plus le frais du marche (fondateur 14:12 : en tete de section seulement)', () => {
   const f = new Function('enTexte', 'lisible', srcEchange + '\nreturn ligneEchange;')(enTexte, lisible);
-  assert.match(f({ ...ventes[0], n: 1 }, 'SPROUT'), /before this market's fee/);
+  assert.doesNotMatch(f({ ...ventes[0], n: 1 }, 'SPROUT'), /fee/);
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
