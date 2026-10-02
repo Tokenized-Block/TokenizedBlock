@@ -31,7 +31,28 @@ v('⛔⛔ `0n` ne retombe plus au plancher, `null` si', () => {
   /* ⛔⛔ LE CAS CENTRAL. Un seul `<=` separait « payable » de « refuse ». */
   const i = html.indexOf('async function preflightInstantBirthEthFixe(');
   assert.ok(i > 0, 'le preflight est introuvable : ce test ne garde plus rien');
-  const f = html.slice(i, i + 2600);
+  /* ⛔⛔⛔ LA FENETRE EST BORNEE PAR LA FIN REELLE DE LA FONCTION, PAS PAR UN COMPTE D OCTETS.
+   *      Elle valait `i + 2600`. Le 2026-10-02, un bloc de commentaire ajoute dans le preflight a
+   *      pousse `if (seed == null)` a l offset 3046 : le `assert.match` est devenu ROUGE sans qu une
+   *      seule ligne de comportement ait bouge. Mais le vrai danger etait l AUTRE sens — le
+   *      `doesNotMatch` ci-dessous n etait vrai QUE parce que la mauvaise ligne tombait dans les
+   *      2600 premiers octets. A l offset 3000, le defaut serait revenu EN VIE, test VERT.
+   *   ⛔ Motif « une garde peut etre correcte PAR ACCIDENT » : une assertion NEGATIVE sur une fenetre
+   *     tronquee ne prouve l absence que dans la partie qu elle regarde.
+   *   ⛔⛔ FIN DE LIGNE : `/\r?\n\}\r?\n/`, NI `\n}\n` NI `\r\n}\r\n`. Ma premiere version de cette
+   *      ligne ecrivait `indexOf('\r\n}\r\n')` — et `test-tests-portables.mjs` l a accusee dans la
+   *      minute. J avais sur-corrige : ce depot s etait fait prendre six fois sur des motifs en `\n`
+   *      seul, alors j ai code du CRLF en dur, ce qui rend ce test ROUGE sur tout checkout LF
+   *      (Railway, la copie gitlawb, n importe quel CI) ou il accuserait LE CODE.
+   *   ⛔ LA LECON N EST PAS « \n contre \r\n » : c est qu une assertion ne doit dependre d AUCUNE
+   *     fin de ligne. Les deux litteraux sont faux de la meme facon. */
+  const mFin = /\r?\n\}\r?\n/.exec(html.slice(i));
+  assert.ok(mFin, 'la fin de la fonction est introuvable : la fenetre redeviendrait arbitraire');
+  const f = html.slice(i, i + mFin.index);
+  /* ⛔ TEMOIN DE LA FENETRE : si elle se refermait trop tot, tout ce qui suit passerait au vert par
+   *   ABSENCE. On exige donc de voir le `return` final de la fonction DANS la fenetre. */
+  assert.match(f, /return \{ ok: true, solde, besoin, frais, seed, gas: gasBuf \};/,
+    'la fenetre ne va pas jusqu au bout du preflight : les assertions qui suivent ne prouvent rien');
   assert.doesNotMatch(f, /if \(seed == null \|\| seed <= 0n\) seed = CREATE_FEE_WEI_FLOOR;/,
     'un seed de zero explicite retombe de nouveau au plancher : les creations appairees a une '
     + 'action seront refusees pour un montant qu elles ne depenseront jamais');
@@ -44,9 +65,22 @@ v('⛔⛔ `0n` ne retombe plus au plancher, `null` si', () => {
 v('⛔ Create passe un seed de zero EXPLICITE pour une paire action', () => {
   const i = html.indexOf('const sansSeed = !!(paireChoisie && paireChoisie.type === \'ACTION\')');
   assert.ok(i > 0, 'Create ne distingue plus la paire action au preflight');
-  const f = html.slice(i, i + 260);
+  /* ⛔⛔ DEUXIEME FENETRE FIXE DU MEME FICHIER, ET ELLE A CASSE LE MEME JOUR. Elle valait `i + 260` ;
+   *    l appel est a 807 octets de l ancre depuis qu un commentaire les separe. On borne desormais
+   *    sur l APPEL LUI-MEME, pas sur un compte d octets — c est ce qu on voulait verifier. */
+  const iAppel = html.indexOf('preflightInstantBirthEthFixe({', i);
+  assert.ok(iAppel > i && iAppel - i < 4000,
+    'l appel au preflight ne suit plus `sansSeed` : la fenetre de ce test ne garde plus rien');
+  const f = html.slice(iAppel, html.indexOf(';', iAppel) + 1);
   assert.match(f, /seedWei: 0n/,
     'le seed de zero n est plus passe explicitement : on retombe sur le plancher par defaut');
+  /* ⛔ ET LE FRAIS EFFECTIF VOYAGE DANS LE MEME APPEL. Les deux corrections tiennent a cette seule
+   *   ligne ; si l une partait, ce test ne doit pas rester vert sur l autre. */
+  assert.match(f, /fraisWei: fraisReplieAuPlancher/,
+    'le frais effectif ne voyage plus : le repli au plancher redevient defait par le preflight');
+  assert.doesNotMatch(f, /fraisWei: fraisWeiCalcule/,
+    'le frais DERIVE DU DOLLAR est repasse a un preflight `EthFixe` : il pourrait exiger MOINS que '
+    + 'ce que la tx envoie, et l echec arriverait APRES la signature');
 });
 
 v('⛔⛔ le champ « ETH seed » se cache quand il ne sert pas', () => {

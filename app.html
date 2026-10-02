@@ -15572,8 +15572,17 @@ function montrerFundWalletCourt() {
  * No oracle required. Exact shortfall + Fund wallet CTA if short.
  * Returns { ok, solde, besoin, frais, seed, gas, pourquoi } — never «Could not read the price».
  */
+/* ⛔⛔⛔ UNE SEULE RESERVE DE GAZ POUR LA NAISSANCE, ET C EST CE QUI MANQUAIT. Il y en avait DEUX —
+ *      0,0005 ici, 0,00025 au repli de `creerBlock` — et le repli se declenchait donc sur un seuil
+ *      PLUS BAS que celui que le preflight allait exiger. Resultat mesure par le Grok Bot a son
+ *      wallet Rabby : avec 0,00137 ETH le repli ne tirait pas (`s < fraisWei` est faux au-dessus de
+ *      0,001) et le preflight refusait quand meme. Ma premiere correction n avait ferme que la
+ *      fenetre SOUS le frais ; celle du DESSUS restait entiere, et c est lui qui l a trouvee.
+ *   ⛔ DEUX CHIFFRES POUR UNE SEULE QUESTION, C EST LE MOTIF QUI REVIENT TOUTE LA NUIT. On en garde
+ *     UN, exporte ici, lu aux deux endroits. */
+const GAZ_NAISSANCE_WEI = 500000000000000n; /* ~0,0005 ETH — Create + Launch */
 async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null } = {}) {
-  const gasBuf = 500000000000000n; /* ~0.0005 ETH Create+Launch headroom */
+  const gasBuf = GAZ_NAISSANCE_WEI;
   /* ⛔⛔⛔ LE FRAIS VIENT DE L APPELANT QUAND IL LE CONNAIT — ET SANS CA, UN REPLI DELIBERE DU CODE
    *      NE POUVAIT JAMAIS S APPLIQUER. `creerBlock` porte depuis longtemps ce geste (tip 2356) :
    *      « If wallet cannot cover the 0.001 ETH fee but can cover floor + gas, charge the floor ».
@@ -15687,7 +15696,15 @@ function majFraisEtRecap() {
     const prixOk = usd === 0 || (fraisWeiCalcule != null && ethUsd != null);
     let soldeOk = true;
     if (utiliseCreateRouter() && fraisWeiCalcule != null && soldeEthNat != null) {
-      const gasBuf = 250000000000000n;
+      /* ⛔⛔⛔ LE BOUTON JUGE AVEC LA MEME RESERVE QUE CE QUI VA LE REFUSER. C etait la TROISIEME
+       *      valeur de gaz du fichier (0,00025 ici, 0,0005 au preflight, 0,0005 au repli), et c est
+       *      elle qui ouvrait le bouton a 0,000550 ETH pour une operation que le preflight refusait
+       *      sous 0,000800. Un bouton actif qui mene a un refus est pire qu un bouton grise : la
+       *      personne a espere, clique, et reçu « short by ».
+       *   ⇒ Aligne sur `GAZ_NAISSANCE_WEI`, le bouton se ferme exactement la ou le repli ne peut
+       *     plus passer. Il se ferme donc un peu PLUS TOT qu avant — et c est le but : il ne promet
+       *     plus ce qui sera refuse trois lignes plus loin. */
+      const gasBuf = GAZ_NAISSANCE_WEI;
       soldeOk = soldeEthNat >= CREATE_FEE_WEI_FLOOR + gasBuf;
     } else if (usd > 0 && fraisWeiCalcule != null && soldeEthNat != null) {
       soldeOk = soldeEthNat >= fraisWeiCalcule;
@@ -16666,8 +16683,23 @@ async function creerBlock() {
     }
     /* tip 2356: CreateRouter on-chain FEE_WALLET = a6cf. If wallet cannot cover the 0.001 ETH fee
      * but can cover floor + gas, charge the floor — fail-closed only below floor. */
-    const gasBuf = 250000000000000n; /* ~0.00025 ETH headroom for Base gas */
-    if (utiliseCreateRouter() && s < fraisWei) {
+    const gasBuf = GAZ_NAISSANCE_WEI;
+    /* ⛔⛔⛔ LE REPLI SE DECLENCHE SUR LE BESOIN TOTAL, PAS SUR LE FRAIS SEUL — ET C EST LE GROK BOT
+     *      QUI A TROUVE QUE MA PREMIERE CORRECTION ETAIT INCOMPLETE. Mesure a son wallet Rabby :
+     *      avec 0,00137 ETH, `s < fraisWei` est FAUX (0,00137 > 0,001), donc le repli ne tirait pas
+     *      — et le preflight, lui, exigeait `frais + seed + gaz`, soit 0,0015 au moins. Refus.
+     *      ⇒ J avais mesure et ferme la fenetre SOUS le frais (0,00055 -> 0,0008) et annonce
+     *        « reduite de 0,00095 a 0,00025 ». La fenetre du DESSUS — entre 0,001 et ~0,0015 —
+     *        restait ENTIERE, et je ne l avais pas vue. Son wallet tombait dedans.
+     *      ⛔ La cause de fond etait les DEUX reserves de gaz : le repli jugeait avec 0,00025 ce que
+     *        le preflight allait exiger avec 0,0005. Un seuil qui juge une regle qu il ne connait
+     *        pas. Il n y a plus qu une constante, `GAZ_NAISSANCE_WEI`.
+     *
+     * ⚠️ CE QUE CA COUTE, ET C EST LA DECISION DE PHIL (« le repli doit marcher ») : un compte entre
+     *   0,001 et 0,0015 ETH paie desormais le PLANCHER (0,0003) au lieu du frais plein. On encaisse
+     *   moins sur ces creations-la — et elles avaient lieu zero fois jusqu ici, puisqu elles etaient
+     *   refusees. Moins sur quelque chose vaut mieux que tout sur rien. */
+    if (utiliseCreateRouter() && s < fraisWei + gasBuf) {
       const besoinFloor = CREATE_FEE_WEI_FLOOR + gasBuf;
       if (s >= besoinFloor) {
         fraisWei = CREATE_FEE_WEI_FLOOR;
@@ -16722,9 +16754,18 @@ async function creerBlock() {
      *      `FRAIS_OUVERTURE_WEI` en dur et REFUSAIT la creation que l app venait d annoncer
      *      possible — « using the minimum ... so fee still get paid », puis « short by ». Le repli
      *      etait ecrit, commente, juste, et defait par la garde suivante.
-     *   ⛔ `fraisWeiCalcule` et non `fraisWei` : c est la variable que le repli met a jour ET que
-     *     l ecran affiche. Prendre l autre ferait diverger ce qu on exige de ce qu on annonce —
-     *     exactement le defaut qu on repare. */
+     *   ⛔⛔⛔ ON PASSE `fraisReplieAuPlancher` — ET SURTOUT PAS `fraisWeiCalcule`. Ce commentaire
+     *        disait l inverse jusqu au 2026-10-02 : il ordonnait `fraisWeiCalcule` « parce que c est
+     *        la variable que l ecran affiche ». C etait faux, et dangereux. `fraisWeiCalcule` est le
+     *        frais DERIVE DU DOLLAR : il bouge avec le prix de l ETH, alors que ce preflight
+     *        s appelle `...EthFixe`. Le passer pourrait exiger MOINS que ce que la transaction
+     *        envoie — et un echec APRES la signature coute le gas, la ou un refus avant ne coute
+     *        rien. Exiger trop est reparable ; exiger trop peu, non.
+     *     ⛔ `fraisReplieAuPlancher` vaut `null` tant que le repli n a pas tire, et le preflight lit
+     *       `null` comme « je ne sais pas » puis retombe sur `FRAIS_OUVERTURE_WEI` — jamais sur zero.
+     *     ⛔ `test-repli-plancher-atteignable.mjs` INTERDIT explicitement la forme que ce commentaire
+     *       recommandait (assertion 6). Un commentaire qui enseigne le defaut que le banc refuse est
+     *       pire qu absent : il donne au prochain lecteur une raison de defaire la correction. */
     const pf = await preflightInstantBirthEthFixe({ e, fraisWei: fraisReplieAuPlancher,
       ...(sansSeed ? { seedWei: 0n } : {}) });
     if (!pf.ok) { forcerCreateRouterIb = false; return; }
