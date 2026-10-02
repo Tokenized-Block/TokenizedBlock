@@ -17,7 +17,8 @@ const fnOu = (mod, nom) => {
   manquants.push(nom);
   return () => { throw new Error('missing export: ' + nom); };
 };
-const planLaunchOL = fnOu(OL, 'planLaunchOL'), estMarqueTb = fnOu(OL, 'estMarqueTb');
+/* e93e9e2 (regle du fondateur 13:27) : estMarqueTb n existe plus */
+const planLaunchOL = fnOu(OL, 'planLaunchOL');
 const hookPaieDejaA6cf = fnOu(TK, 'hookPaieDejaA6cf'), estNotreHook = fnOu(TK, 'estNotreHook');
 const { HOOK_V8, HOOK_PREVU, HOOK_V2, HOOK_V5 } = TK;
 const mintLancementRecevable = fnOu(LP, 'mintLancementRecevable'), simulerSequenceLancement = fnOu(LP, 'simulerSequenceLancement');
@@ -45,15 +46,14 @@ function extraire(nom) {
   return html.slice(m.index, j + 1);
 }
 
-/* 1 — marque TB refusee sur la carte OpenLaunch (0x88c53e80) */
+/* 1 — REGLE DU FONDATEUR (2026-10-02 13:27) : plus AUCUN refus de « marque » sur la carte OpenLaunch */
 const base = { lanceur: L, startTick: 196200, lpFee: 30000, salt: SALT };
-await essai('TokenizedBlock/TBLOCK refuse', async () => planLaunchOL({ ...base, nom: 'TokenizedBlock', symbole: 'TBLOCK' }).etat === 'REFUSE');
-await essai('nom normalise refuse', async () => planLaunchOL({ ...base, nom: 'Tokenized Block', symbole: 'XYZ' }).etat === 'REFUSE');
-await essai('TBGAS refuse', async () => planLaunchOL({ ...base, nom: 'Gas', symbole: 'TBGAS' }).etat === 'REFUSE');
-await essai('TBLOCK* et TB', async () => estMarqueTb('x', 'TBLOCK2') && estMarqueTb('x', 'TB'));
-/* controle negatif : un nom ordinaire passe, TBX aussi */
+for (const [nom, symbole] of [['TokenizedBlock', 'TBLOCK'], ['Tokenized Block', 'XYZ'], ['Gas', 'TBGAS'], ['x', 'TB']]) {
+  await essai('plus de refus de marque : ' + nom + '/' + symbole, async () => planLaunchOL({ ...base, nom, symbole }).etat === 'OK');
+}
+/* controle negatif : la carte refuse toujours ce qui est INVALIDE (la garde n a pas ete arrachee en bloc) */
+await essai('symbole invalide toujours refuse', async () => planLaunchOL({ ...base, nom: 'My token', symbole: 'MY-TKN' }).etat === 'REFUSE');
 await essai('nom ordinaire accepte', async () => planLaunchOL({ ...base, nom: 'My token', symbole: 'MYTKN' }).etat === 'OK');
-await essai('TBX accepte', async () => planLaunchOL({ ...base, nom: 'Test Block', symbole: 'TBX' }).etat === 'OK');
 
 /* 2 — un frais par jambe : table mesuree sur fork */
 await essai('V8 paie dans les deux sens', async () => hookPaieDejaA6cf(HOOK_V8, 'ACHAT') && hookPaieDejaA6cf(HOOK_V8, 'VENTE'));

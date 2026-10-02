@@ -5,11 +5,11 @@ import { readFileSync } from 'node:fs';
 import { classerLogs, filtresScan, interfaceClanker, frontO1, scannerLancements, decoderTexte, BANKR_INTEGRATEUR } from './lancements-etrangers.js';
 import { hookDataReferentO1, O1_LAUNCH_HOOK_STANDARD, COMMENTAIRE_O1 } from './referent-o1.js';
 import { paramsSwapExactInSingle, encodeV4Swap } from './pool.js';
-import { estMarqueTbEtendue, estMarqueTbForte, verdictMarque, phraseMarque, OFFICIELS_TB } from './marque-tb.js';
-import { estMarqueTb } from './openlaunch-launch.js';
+import { planLaunchOL } from './openlaunch-launch.js';
+import { readdirSync } from 'node:fs';
 import { choisirMarche, phraseChoix, HOOK_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF } from './marche-ouvert.js';
 import { FEE_WALLET } from './frais-creation.js';
-import { TBLOCK, TBGAS, hookPaieDejaA6cf, HOOK_V8 } from './tokenomics.js';
+import { hookPaieDejaA6cf, HOOK_V8 } from './tokenomics.js';
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -88,26 +88,21 @@ eq(avec.slice(-128), hd, 'donnees en queue');
 assert.throws(() => paramsSwapExactInSingle({ ...base, hookData: 'zz' })); n++;
 ok(encodeV4Swap({ ...base, deadline: 1n, actions: [], hookData: hd }).includes(hd), 'encodeV4Swap transmet hookData');
 
-// ── 3. marque TB ──
-for (const [nom, sym] of [['TokenizedBlock', 'X'], ['Tokenized Block', 'X'], ['tokenized-block gas', 'Y'], ['TB-Moon', 'M'], ['x', 'TBLOCK2'], ['x', 'TBGAS'], ['x', 'TB'], ['x', 'TB-1']]) {
-  ok(estMarqueTbEtendue(nom, sym), 'marque : ' + nom + '/' + sym);
-  ok(estMarqueTb(nom, sym), 'OpenLaunch lit la MEME regle : ' + nom);
+// ── 3. REGLE DU FONDATEUR (2026-10-02 13:27) : aucune etiquette « not official » / « non officiel » /
+//       « pool sans frais TB » NULLE PART dans l UI. On lit app.html ET tous les modules servis a la racine.
+const INTERDIT = /not[\s_-]*official|non[\s_-]*officiel|pool sans frais tb|this name belongs to tokenizedblock/i;
+ok(INTERDIT.test('Not official: x') && INTERDIT.test('non officiel') && INTERDIT.test('Pool sans frais TB') && INTERDIT.test('NOT_OFFICIAL'), 'temoin positif : le detecteur voit les formes interdites');
+ok(!INTERDIT.test('official TokenizedBlock market') && !INTERDIT.test('Outside market'), 'temoin negatif : le texte normal passe');
+const ici = new URL('./', import.meta.url);
+const servis = readdirSync(ici).filter((f) => /\.(js|html)$/.test(f));
+const fautifs = servis.filter((f) => INTERDIT.test(readFileSync(new URL(f, ici), 'utf8')));
+eq(fautifs, [], 'aucun fichier .js/.html de la racine ne porte le libelle interdit');
+ok(servis.includes('app.html') && servis.length > 50, 'la lecture a bien porte sur l app (' + servis.length + ' fichiers)');
+ok(!servis.includes('marque-tb.js'), 'marque-tb.js retire (plus aucun usage, ni UI ni routage ni API)');
+for (const [nom, symbole] of [['TokenizedBlock', 'TBLOCK'], ['TB-Gas', 'TBGAS']]) {
+  const r = planLaunchOL({ lanceur: '0x' + '11'.repeat(20), startTick: 196200, lpFee: 30000, salt: '0x' + '00'.repeat(32), nom, symbole });
+  ok(r.etat === 'OK', 'console OpenLaunch : plus de bloc de marque (' + nom + ')');
 }
-for (const [nom, sym] of [['Tbilisi', 'TBC'], ['Bitcoin', 'TBTC'], ['T-Bill', 'TBILL'], ['Tokenized Gold', 'TGLD'], ['', '']]) {
-  ok(!estMarqueTbEtendue(nom, sym), 'pas la marque : ' + nom + '/' + sym);
-}
-ok(OFFICIELS_TB.has(TBLOCK.toLowerCase()) && OFFICIELS_TB.has(TBGAS.toLowerCase()), 'TBLOCK et TBGAS officiels');
-eq(verdictMarque({ adresse: TBLOCK, nom: 'TokenizedBlock', symbole: 'TBLOCK', origine: 'AILLEURS' }), 'OFFICIEL', 'TBLOCK officiel quelle que soit la face');
-eq(verdictMarque({ adresse: '0x88c53e80ffffffffffffffffffffffffffffffff', nom: 'TokenizedBlock', symbole: 'TBLOCK', origine: 'AILLEURS' }), 'NON_OFFICIEL', 'imitation lue ailleurs');
-eq(verdictMarque({ adresse: '0x88c53e80ffffffffffffffffffffffffffffffff', nom: 'TokenizedBlock', symbole: 'TBLOCK', origine: 'NON_LU' }), 'SANS_OBJET', 'origine non lue : on ne condamne pas');
-eq(verdictMarque({ adresse: '0x1', nom: 'TokenizedBlock', symbole: 'TBLOCK', origine: 'TOKENIZEDBLOCK' }), 'OFFICIEL', 'ne sur TB = officiel');
-eq(verdictMarque({ adresse: '0x1', nom: 'Doge', symbole: 'DOGE', origine: 'AILLEURS' }), 'SANS_OBJET', 'autre nom : rien');
-ok(/^Not official/.test(phraseMarque('NON_OFFICIEL', 'LaunchBlitz')) && /LaunchBlitz/.test(phraseMarque('NON_OFFICIEL', 'LaunchBlitz')), 'phrase');
-eq(phraseMarque('OFFICIEL'), '', 'officiel : silence');
-// cas reel 24 h : « Tadbit » (TB), 0xb20000000000000000000053f0e368ae2a70a04e — refuse dans NOTRE console, jamais accuse
-ok(estMarqueTb('Tadbit', 'TB'), 'console OpenLaunch : TB seul reste refuse (prudence chez nous)');
-eq(verdictMarque({ adresse: '0xb20000000000000000000053f0e368ae2a70a04e', nom: 'Tadbit', symbole: 'TB', origine: 'AILLEURS' }), 'SANS_OBJET', 'Tadbit (TB) : pas d etiquette « Not official »');
-eq(verdictMarque({ adresse: '0x2', nom: 'TB-Gas', symbole: 'TB', origine: 'AILLEURS' }), 'NON_OFFICIEL', 'TB + nom TB-… : etiquete');
 
 // ── 4. choix de marche : jamais un prix pire en silence ──
 ok(HOOK_MARCHE_OUVERT === null && MARCHE_OUVERT_ACTIF === false, 'non deploye, drapeau OFF');
