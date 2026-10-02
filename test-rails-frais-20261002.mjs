@@ -109,8 +109,8 @@ await essai('prepaye relu a 0,0007', async () => /if \(val < FRAIS_OUVERTURE_WEI
 /* 4b — « Buy here » : la route la moins chere doit etre une route praticable (ETH ou notre hook) */
 const ETH0 = '0x0000000000000000000000000000000000000000', TOK = '0xb200000000000000000000784d2c42a395452405';
 const mk = (c0, fee, hooks) => { const cle = { currency0: c0, currency1: TOK, fee, tickSpacing: 60, hooks }; return { cle, jeton: TOK, confiance: confianceDe(cle) }; };
-const pdp = (pools) => new Function('poolsLive', 'estNotreHook', 'confianceDe', 'poolSansHookInterdite', 'choixBuyHere', 'v8BlockDevant', 'HOOK_V8', 'const FRAIS_DYNAMIQUE_V4 = 0x800000;\n'
-  + extraire('fraisEstDynamique') + '\n' + extraire('poolDecouvertPour') + '\nreturn poolDecouvertPour;')(new Map(pools.map((p, i) => [String(i), p])), estNotreHook, confianceDe, poolSansHookInterdite, choixBuyHere, v8BlockDevant, HOOK_V8);
+const pdp = (pools) => new Function('poolsLive', 'estNotreHook', 'confianceDe', 'poolSansHookInterdite', 'choixBuyHere', 'v8BlockDevant', 'HOOK_V8', 'ROUTE_VIA_TBLOCK', 'cleTouchTblock', 'const FRAIS_DYNAMIQUE_V4 = 0x800000;\n'
+  + extraire('fraisEstDynamique') + '\n' + extraire('poolDecouvertPour') + '\nreturn poolDecouvertPour;')(new Map(pools.map((p, i) => [String(i), p])), estNotreHook, confianceDe, poolSansHookInterdite, choixBuyHere, v8BlockDevant, HOOK_V8, PSH.ROUTE_VIA_TBLOCK === true, typeof PSH.cleTouchTblock === 'function' ? PSH.cleTouchTblock : () => false);
 const sprout = pdp([mk(ETH0, 3000, '0x01f6c61223f89ad07f0d712be4804b66efc380cc'), mk('0x4fc59c42653e052c7ab5c8381f839e2d70504131', 0, '0xc847d9d4db9d70b713e4c0ff19f7119f2ee328c0')])(TOK);
 await essai('SPROUT : la pool ETH est choisie, pas la paire mmETH', async () => sprout && sprout.cle.currency0 === ETH0);
 /* controle negatif : une pool de NOTRE hook contre une devise ERC-20 reste eligible */

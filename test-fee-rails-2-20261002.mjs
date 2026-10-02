@@ -81,14 +81,17 @@ if (fn(PSH, 'poolSansHookInterdite')) {
 }
 const rH = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: TBLOCK, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 16n,
   marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: ETH }, paire: null } });
-ok(rH.etat === 'REFUSE' && rH.refusSansHook === true, 'hookless: planEchange refuses the TBLOCK hookless pool before any read/quote');
+ok(rH.etat === 'REFUSE' && (rH.refusSansHook === true || rH.refusTblock === true), 'hookless: planEchange refuses the TBLOCK hookless pool before any read/quote');
 ok(!/hook/i.test(rH.pourquoi || '') && !/non officiel|sans frais/i.test(rH.pourquoi || ''), 'hookless: refusal text is generic (no label about that pool)');
+const rH2 = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: BLK_HI, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 16n,
+  marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: ETH }, paire: null } });
+ok(rH2.etat === 'REFUSE' && rH2.refusSansHook === true, 'hookless: a B20 block on a hookless ETH pool is refused');
 const rOk = await achat(10n ** 16n);
 ok(rOk.refusSansHook !== true, 'hookless NEG: a hooked V8 pool is not refused by the rule');
 const rM = await E.planEchangeMultiSauts({ rpc: rpcMock(), chaine: 8453, compte: COMPTE, entree: ETH, sortie: BLK_HI, montant: 10n ** 16n,
   sauts: [{ cle: { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: ETH }, zeroForOne: true },
     { cle: { currency0: TBLOCK, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: V8 }, zeroForOne: true }] });
-ok(rM.etat === 'REFUSE' && rM.refusSansHook === true, 'hookless: multi-hop through the TBLOCK hookless leg refused');
+ok(rM.etat === 'REFUSE' && (rM.refusSansHook === true || rM.refusTblock === true), 'hookless: multi-hop through the TBLOCK hookless leg refused');
 const rM2 = await E.planEchangeMultiSauts({ rpc: rpcMock(), chaine: 8453, compte: COMPTE, entree: ETH, sortie: BLK_HI, montant: 10n ** 16n,
   sauts: [{ cle: { currency0: ETH, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH }, zeroForOne: true },
     { cle: { currency0: USDC, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: V8 }, zeroForOne: true }] });
@@ -98,6 +101,33 @@ ok(/indexPoolSansHookInterdite\(\[cleT, cleB\]/.test(rvt), 'hookless: both legs 
 ok(/indexPoolSansHookInterdite\(sauts\.map/.test(extraire(src, 'planEchangeMultiSauts')), 'hookless: guard wired in multi-hop');
 ok(/if \(poolSansHookInterdite\(p\.cle, \[want\]\)\) continue;/.test(extraire(html, 'poolDecouvertPour')), 'hookless: Buy-here pool pick skips hookless pools');
 ok(!/non officiel|pool sans frais TB|unofficial pool/i.test(html), 'hookless: no user-facing label about that pool in app.html');
+
+/* ── founder 13:58 : no route through TBLOCK anymore ── */
+ok(PSH.ROUTE_VIA_TBLOCK === false && fn(PSH, 'cleTouchTblock'), 'tblock: ROUTE_VIA_TBLOCK is false');
+const cleTbBlk = { currency0: TBLOCK, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: V8 };
+const rT = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: BLK_HI, compte: COMPTE, sens: 'ACHAT',
+  montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle: cleTbBlk, paire: 'TBLOCK' } });
+ok(rT.etat === 'REFUSE' && rT.refusTblock === true, 'tblock: a block paired with TBLOCK is not routed via TBLOCK (even on a V8 pool)');
+const rT2 = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: TBLOCK, compte: COMPTE, sens: 'ACHAT',
+  montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: V8 }, paire: null } });
+ok(rT2.etat === 'REFUSE' && rT2.refusTblock === true, 'tblock: TBLOCK itself stays blocked even if a hooked TBLOCK/ETH pool appeared');
+const rT3 = await E.planEchangeMultiSauts({ rpc: rpcMock(), chaine: 8453, compte: COMPTE, entree: ETH, sortie: BLK_HI, montant: 10n ** 16n,
+  sauts: [{ cle: { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: V8 }, zeroForOne: true }, { cle: cleTbBlk, zeroForOne: true }] });
+ok(rT3.etat === 'REFUSE' && rT3.refusTblock === true, 'tblock: multi-hop through hooked TBLOCK legs refused');
+/* negative control: a block against its paired stock on V8 is routed, fee in the stock */
+const cleAapl = { currency0: NVDAc, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: V8 };
+const rS = await E.planEchange({ rpc: rpcMock(), chaine: 8453, jeton: BLK_HI, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 8n,
+  marcheLu: { etat: 'LUE', cle: cleAapl, paire: null }, fraisDevisesOk: new Set([NVDAc.toLowerCase()]) });
+ok(rS.refusTblock !== true && rS.refusSansHook !== true && rS.etat !== 'REFUSE', 'tblock NEG: block<->NVDAc on V8 still routes (' + rS.etat + ' ' + (rS.pourquoi || '') + ')');
+ok(rS.resume && BigInt(rS.resume.fraisBps) === 0n && rS.resume.beneficiaireFrais === null, 'stock: hook pays a6cf in NVDAc, router takes nothing');
+const cleBlkDevant = { currency0: BLK_LO.replace('0x0b', '0xb1'), currency1: NVDAc, fee: 0, tickSpacing: 200, hooks: V8 };
+for (const sens of ['ACHAT', 'VENTE']) {
+  const rB = await E.planEchange({ rpc: rpcMock(), chaine: 8453, jeton: cleBlkDevant.currency0, compte: COMPTE, sens, montant: 10n ** 8n,
+    marcheLu: { etat: 'LUE', cle: cleBlkDevant, paire: null }, fraisDevisesOk: new Set([NVDAc.toLowerCase()]) });
+  ok(rB.etat === 'REFUSE' && rB.refusFraisEnBlock === true, 'stock: V8 pool with block=currency0 refused (' + sens + '): a6cf would be paid in block');
+}
+ok(PSH.REFUS_FRAIS_HOOK_EN_BLOCK === true, 'stock: never-block-fee switch ON');
+ok(/if \(!ROUTE_VIA_TBLOCK && cleTouchTblock\(p\.cle\)\) continue;/.test(extraire(html, 'poolDecouvertPour')), 'tblock: Buy-here skips TBLOCK pools');
 
 /* ── item 2 : auto-salt grinds until the block sorts after its quote ── */
 ok(fn(P, 'blockApresDevise'), 'item2: blockApresDevise exported');

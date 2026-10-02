@@ -3060,7 +3060,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant } from './paires.js';
-import { poolSansHookInterdite } from './pool-sans-hook.js';
+import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock } from './pool-sans-hook.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -8020,6 +8020,8 @@ function poolDecouvertPour(adr) {
     if (!p || !p.cle) continue;
     /* ⛔⛔ 2026-10-02 (regle du fondateur) : une pool sans hook n est jamais choisie pour un block TB. */
     if (poolSansHookInterdite(p.cle, [want])) continue;
+    /* ⛔⛔ 2026-10-02 13:58 (fondateur) : aucune route par TBLOCK. */
+    if (!ROUTE_VIA_TBLOCK && cleTouchTblock(p.cle)) continue;
     const c0 = String(p.cle.currency0 || '').toLowerCase();
     const c1 = String(p.cle.currency1 || '').toLowerCase();
     const j = String(p.jeton || '').toLowerCase();

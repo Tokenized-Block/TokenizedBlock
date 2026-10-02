@@ -7,7 +7,7 @@
  *   · Exception unique : le format OpenLaunch (frais 3 %, espacement 200) — pools partenaires, hors de notre perimetre.
  *   Fait mesure (fork 52074517) : TBLOCK n a AUCUNE pool ETH avec hook ; sa seule pool ETH (frais 0, espacement 200)
  *   est sans hook — elle n est donc plus jamais choisie, et ce qui en dependait est refuse avant le wallet. */
-import { TBLOCK, TBGAS } from './tokenomics.js';
+import { TBLOCK, TBGAS, deviseFraisHook } from './tokenomics.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
 
 const bas = (a) => String(a || '').toLowerCase();
@@ -39,4 +39,25 @@ export function poolSansHookInterdite(cle, blocks = []) {
 /** Le premier indice de cle interdite, ou -1. */
 export function indexPoolSansHookInterdite(cles, blocks = []) {
   return (cles || []).findIndex((c) => poolSansHookInterdite(c, blocks));
+}
+
+/* ══ 2026-10-02 13:58 — DECISION DU FONDATEUR : PLUS AUCUNE ROUTE PAR TBLOCK ═════════════════════════════════════════
+ * ⛔⛔ TBLOCK n est plus une jambe intermediaire : un block s echange directement contre sa devise appariee (action
+ *     tokenisee, USDC, ETH) sur une pool hookee, et le frais va a a6cf dans CETTE devise — jamais en block. TBLOCK
+ *     lui-meme reste bloque dans l app (aucune pool hookee TBLOCK/ETH). `ROUTE_VIA_TBLOCK` ferme `routeViaTblock`. */
+export const ROUTE_VIA_TBLOCK = false;
+/** Vrai = cette cle passe par TBLOCK (une de ses deux devises). */
+export function cleTouchTblock(cle) {
+  return !!cle && (bas(cle.currency0) === bas(TBLOCK) || bas(cle.currency1) === bas(TBLOCK));
+}
+
+/* ══ 2026-10-02 13:59 — FONDATEUR : a6cf recoit ETH, USDC ou l action appariee, JAMAIS le block ═══════════════════════
+ * ⛔⛔ Mesure fork (stock-proof, NVDAc) : sur une pool V8 ou le block est currency0, le HOOK verse a6cf en BLOCK
+ *     (69 549 931 494 498 013 106 unites sur un achat de 71 247 NVDAc) et le routeur ajoutait 356 NVDAc — deux frais,
+ *     dont un en block. Le contrat ne se change pas : l app REFUSE ces pools (Create ne les fabrique plus : item 2). */
+export const REFUS_FRAIS_HOOK_EN_BLOCK = true;
+/** Vrai = le hook de cette pool verserait son frais dans le block `jeton` pour ce sens. */
+export function fraisHookEnBlock(cle, jeton, sens, zeroForOne) {
+  const d = deviseFraisHook(cle, sens, zeroForOne);
+  return !!d && bas(d) === bas(jeton);
 }
