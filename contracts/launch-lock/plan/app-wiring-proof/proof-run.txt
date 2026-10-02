@@ -1,0 +1,77 @@
+{
+ "forkBlock": 52079875,
+ "hookFeeWalletIsAppFeeWallet": true,
+ "hookCourantEth": "HOOK_7030",
+ "hookCourantPltr": "HOOK_7030",
+ "ethUsdChainlink": 2755.172,
+ "ethBirth": {
+  "minimum": "362953746626345",
+  "etapes": [
+   "0x095ea7b3",
+   "0x87517c45",
+   "0xfde76f6a(payant 1362953746626345)"
+  ],
+  "feeWalletBirthDelta": "1000000000000000",
+  "creatorIsAdmin": true,
+  "caution": "362953746626345",
+  "minimumCaution": "362953746626345",
+  "payee": true
+ },
+ "ethMarketDiscovered": "LUE on HOOK_7030",
+ "ethBuy": {
+  "routerBps": "0",
+  "routerFeeWei": "0",
+  "buyerPaidWei": "1000000000000000",
+  "feeWalletDeltaWei": "700000000000",
+  "creatorDueDeltaWei": "300000000000",
+  "blocksReceived": "99730162929781380914549",
+  "totalBps": 10
+ },
+ "pltrUsdFixture": 180,
+ "pltrBirth": {
+  "minimum": "555556",
+  "etapes": [
+   "0x095ea7b3",
+   "0x87517c45",
+   "0x095ea7b3",
+   "0xfde76f6a(payant 1000000000000000)"
+  ],
+  "feeWalletBirthDelta": "1000000000000000",
+  "creatorIsAdmin": true,
+  "caution": "555556",
+  "minimumCaution": "555556",
+  "payee": true
+ },
+ "pltrPlan": "APPROBATIONS",
+ "pltrPlanAfterApprovals": "PRET",
+ "pltrBuy": {
+  "approvals": 2,
+  "routerBps": "0",
+  "routerFee": "0",
+  "buyerPaidPltrRaw": "10000000",
+  "feeWalletDeltaPltrRaw": "7000",
+  "creatorDueDeltaPltrRaw": "3000",
+  "blocksReceived": "652113969778920553552727",
+  "totalBps": 10
+ },
+ "state": {
+  "B1": "0xb20000000000000000000009663e957994610fd1",
+  "B2": "0xb200000000000000000000c7238ad7afd996f256",
+  "kE": {
+   "currency0": "0x0000000000000000000000000000000000000000",
+   "currency1": "0xb20000000000000000000009663e957994610fd1",
+   "fee": 0,
+   "tickSpacing": 200,
+   "hooks": "0x643DbB5e24D17a1d1D1909fa9F8C6267936124cC"
+  },
+  "kP": {
+   "currency0": "0xb2000000000000000000007d16372840df4dabbe",
+   "currency1": "0xb200000000000000000000c7238ad7afd996f256",
+   "fee": 0,
+   "tickSpacing": 200,
+   "hooks": "0x643DbB5e24D17a1d1D1909fa9F8C6267936124cC"
+  },
+  "BUYER": "0x00000000000000000000000000000007a1031003",
+  "now": 1790949097000
+ }
+}

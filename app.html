@@ -3059,7 +3059,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   a filtrer. `test-bridge-actifs-proposes.mjs` garde desormais le retour de cette liste : si les
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
-  libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant } from './paires.js';
+  libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock } from './pool-sans-hook.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
@@ -3277,8 +3277,8 @@ import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreff
  *   bancs ; c est le CABLE qui part. */
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
-import { completerInscriptionHook, completerInscriptionPayee } from './lancer-pool-v2.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel } from './tokenomics.js';
+import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
  *   Deux rails, deux taux, explicitement — baisser l existant aurait coupe un revenu qui existe.
@@ -12863,7 +12863,7 @@ async function calculerLancement() {
        *    avant que Create ne grave sa face. Le decouvrir dans le wallet couterait du gas pour rien.
        * ⛔ TROIS ETATS : « pas lu » a sa propre branche — on laisse passer en le disant, plutot que de
        *    bloquer un vrai createur parce qu un noeud a tousse. */
-      const label = ((HOOK_V9 && hooks === HOOK_V9) || hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
+      const label = ((HOOK_V9 && hooks === HOOK_V9) || estHook7030(hooks) || hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
         ? await etatLabelNaissance(adr) : 'OUI';
       if (plan && plan.etat === 'REFUSE') {
         /* already refused: missing hook on MAIN */
@@ -12899,10 +12899,11 @@ async function calculerLancement() {
           ...(quoteEthWei != null && !deviseLancement ? { quoteEthWei } : {}) });
         }
         if (plan && plan.etat !== 'REFUSE' && plan.etat !== 'NON_MESURE') {
-        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8 || (HOOK_V9 && hooks === HOOK_V9)) {
+        if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8 || (HOOK_V9 && hooks === HOOK_V9) || estHook7030(hooks)) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
-          plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks });
+          plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks,
+            caution: await cautionCreateurPour(hooks, deviseLancement || null) });
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
         }
@@ -12955,14 +12956,16 @@ async function calculerLancement() {
     const hookPayee = !!(plan.v2 && plan.inscriptionPayee);
     plan.etapes = plan.etapes.map((et) => {
       if (!et || !et.payant) return et;
-      const isInscrire = et.data && String(et.data).toLowerCase().startsWith('0xbb920fed');
+      const isInscrire = estEtapeInscription(et.data);
+      /* 7030 : la caution ETH du createur voyage dans la meme valeur — jamais remise a zero. */
+      const cautionW = BigInt(et.cautionWei || 0n);
       if (isInscrire && !hookPayee) {
         const minV = CREATE_FEE_WEI_FLOOR;
-        return { ...et, value: '0x' + minV.toString(16), payant: true,
+        return { ...et, value: '0x' + (minV + cautionW).toString(16), payant: true,
           nom: 'Register on V8 — 0.0003 ETH min (open fee already paid via Create)' };
       }
       /* tip 20260922-no-approx-dollar-step: never keep ≈ $1 in the approval label when fee already paid */
-      return { ...et, value: '0x0', payant: false, nom: 'Bring it to life — open fee already paid on chain' };
+      return { ...et, value: '0x' + cautionW.toString(16), payant: false, nom: 'Bring it to life — open fee already paid on chain' };
     });
   }
   planCourant = plan;
@@ -13233,9 +13236,9 @@ function peindrePlan(plan, adr) {
   if (usdLaunch > 0 && soldeEthNat != null && fraisL != null) {
     /* tip 0212: v2 inscriptionPayee ⇒ open fee already paid; only seed (+ optional micro) remains.
      * tip 20260922-prepaye-inscrire-dust: CreateRouter prepay still needs fraisVie dust on inscrire. */
-    const inscrireDust = (plan.etapes || []).some((et) => et && et.payant && et.data
-      && String(et.data).toLowerCase().startsWith('0xbb920fed'));
-    const fraisEncore = inscrireDust ? CREATE_FEE_WEI_FLOOR : (feeDejaPaye ? 0n : BigInt(fraisL));
+    const inscrireDust = (plan.etapes || []).some((et) => et && et.payant && estEtapeInscription(et.data));
+    const cautionEth = (plan.etapes || []).reduce((a, et) => a + BigInt((et && et.cautionWei) || 0n), 0n);
+    const fraisEncore = (inscrireDust ? CREATE_FEE_WEI_FLOOR : (feeDejaPaye ? 0n : BigInt(fraisL))) + cautionEth;
     const seedBesoin = plan.naissance ? BigInt(plan.quoteEthWei || plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n;
     const besoin = fraisEncore + seedBesoin;
     if (BigInt(soldeEthNat) < besoin) {
@@ -13349,7 +13352,9 @@ function peindrePlan(plan, adr) {
  *     value ») — l argent part, la pool jamais. On REFUSE AVANT DE PAYER : meme predicat que la garde du
  *     mint, puis la sequence [cette etape, les suivantes, le mint] simulee depuis ce compte. Vrai = refuse. */
 async function refuserAvantPaiementLancement(etapePlan, e) {
-  if (!etapePlan || !etapePlan.payant || !/^0xbb920fed/i.test(String(etapePlan.data || ''))) return false;
+  /* inscrire (0xbb920fed, V2..V8) ou inscrireAvecCaution (0xfde76f6a, hook 7030) : meme refus avant de payer */
+  const dEt = String(etapePlan && etapePlan.data || '');
+  if (!etapePlan || !etapePlan.payant || !(/^0xbb920fed/i.test(dEt) || estEtapeInscription(dEt))) return false;
   const pl = planCourant;
   if (!mintLancementRecevable(pl)) {
     e.className = 'note wKo'; vieAutoArreter();
@@ -13566,10 +13571,10 @@ async function lancerMarcheBlock(adr) {
     /* v2: open fee already handled via inscription etape; still need seed+micro for Instant Birth.
      * Non-v2: need open fee (unless dejaPaye) + seed+micro when naissance. */
     /* tip 20260922-prepaye-inscrire-dust: if a payant inscrire etape remains, keep fraisVie floor. */
-    const inscrireDustL = (planCourant.etapes || []).some((et) => et && et.payant && et.data
-      && String(et.data).toLowerCase().startsWith('0xbb920fed'));
-    const fraisEncore = inscrireDustL ? CREATE_FEE_WEI_FLOOR
-      : ((!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n);
+    const inscrireDustL = (planCourant.etapes || []).some((et) => et && et.payant && estEtapeInscription(et.data));
+    const cautionEthL = (planCourant.etapes || []).reduce((a, et) => a + BigInt((et && et.cautionWei) || 0n), 0n);
+    const fraisEncore = (inscrireDustL ? CREATE_FEE_WEI_FLOOR
+      : ((!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n)) + cautionEthL;
     const besoinTotal = fraisEncore + besoinSeed;
     if (soldeEthNat != null && BigInt(soldeEthNat) < besoinTotal) {
       e.className = 'note wKo'; vieAutoArreter();
@@ -15902,8 +15907,8 @@ async function majPaire() {
     else if (q.paire.type === 'B20') chip.textContent = 'Quote = B20 ' + (q.paire.symbole || '·');
     else if (q.paire.type === 'ACTION') {
       /* ⛔ 2026-10-02 (fix-2) : « fee 0.001 ETH » melait frais de naissance et frais d echange. */
-      chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'stock' });
-    } else chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'custom' });
+      chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'stock', h7030: OPTIONS_LANCEMENT.h7030 === true && paireVa7030(q.paire.adr) });
+    } else chip.textContent = libellePuceCreation({ symbole: q.paire.symbole || 'custom', h7030: OPTIONS_LANCEMENT.h7030 === true && paireVa7030(q.paire.adr) });
   }
   /* le resume replie porte le choix en cours, jamais « TBLOCK by default » pose en dur */
   majResumePaire(q.paire.symbole || null, q.paire.type);
@@ -17048,6 +17053,31 @@ async function recupererPrepayeCreateRouter(adr) {
  *     cree le block a l adresse predite.
  *   Rend { etat: 'ACCEPTE' | 'REFUSE' | 'NON_MESURE', pourquoi }. REFUSE = on n envoie rien. NON_MESURE (noeud muet,
  *   plan illisible) = on garde le comportement d avant et on le journalise : bloquer sur un hoquet RPC tuerait Create. */
+/* ══ 2026-10-02 — HOOK 7030 (drapeau HOOK_7030_ACTIF, tokenomics.js) ══════════════════════════════════════════
+ * La paire choisie naitra-t-elle sur le 7030 ? Drapeau eteint : toujours non (texte et tx d avant, a l octet). */
+function paireVa7030(adr) {
+  return HOOK_7030_ACTIF === true
+    && hookDeLancementPour(adr || '0x0000000000000000000000000000000000000000', CHAINE, { h7030: true }) === '7030';
+}
+/* Plancher APP de la caution du createur, inscrite a la naissance (inscrireAvecCaution) : ≈ 1 $ dans la devise
+ * appariee, unites brutes, arrondi au-dessus (paires.js `minimumCautionCreateur`, CAUTION_CREATEUR_USD).
+ * Rend null hors 7030 (rien ne change) ; { minimum: null } si prix ou decimales illisibles -> le plan dit NON_MESURE. */
+async function cautionCreateurPour(hook, devise) {
+  if (!estHook7030(hook)) return null;
+  const d = devise && !/^0x0{40}$/i.test(String(devise)) ? String(devise).toLowerCase() : null;
+  try {
+    let prix, dec = 18;
+    if (d) {
+      prix = await prixUsdDevise(d);
+      dec = Number(BigInt(await rpc('eth_call', [{ to: d, data: '0x313ce567' }, 'latest'])));
+    } else {
+      if (ethUsd === null) await lirePrixEth();
+      prix = ethUsd;
+    }
+    const minimum = minimumCautionCreateur({ prixUsd: prix, decimales: dec });
+    return { minimum, devise: d || '0x0000000000000000000000000000000000000000' };
+  } catch (_) { return { minimum: null }; }
+}
 async function preverifierNaissancePayee({ adresse, appelCreate }) {
   try {
     const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
@@ -17070,7 +17100,8 @@ async function preverifierNaissancePayee({ adresse, appelCreate }) {
       ...(devise ? { devise } : {}), hooks: hook,
       ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
     const reste = FRAIS_OUVERTURE_WEI - BigInt(appelCreate.value || '0x0');
-    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: reste > 0n ? reste : 0n, hook });
+    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: reste > 0n ? reste : 0n, hook,
+      caution: await cautionCreateurPour(hook, devise) });
     if (!plan || !plan.tx) return { etat: 'NON_MESURE', pourquoi: 'launch plan not built' };
     if (!mintLancementRecevable(plan)) return { etat: 'REFUSE', pourquoi: 'the market could not open after the fee' };
     const appels = [appelCreate, ...(plan.etapes || []).map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),
@@ -17132,7 +17163,8 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
       ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
     /* tip 20260922-eth-fixe: fee = FRAIS_OUVERTURE_WEI even if oracle unread — never STOP on price. */
     const w = await assurerFraisLancementWei(true) || FRAIS_OUVERTURE_WEI;
-    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook });
+    plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: BigInt(w), hook,
+      caution: await cautionCreateurPour(hook, devise) });
     plan.fraisW = BigInt(w);
   } catch (_) { return 'SANS'; }
   /* un plan incomplet, deja marche, ou a confirmer a la main : le parcours classique sait l expliquer */

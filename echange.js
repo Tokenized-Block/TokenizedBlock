@@ -16,7 +16,7 @@
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook,
-  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent } from './tokenomics.js';
+  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030 } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -52,7 +52,8 @@ export function hookPaieEnDeviseVendable({ cle, sens, zeroForOne, jeton = null, 
   /* ⛔ 2026-10-02 14:49 (Zero 1, PREUVE-FRAIS-VIEILLES-POOLS) : le V8 verse a6cf dans la devise appariee, dans les deux
    *   sens, QUELLE QU ELLE SOIT (TBLOCK(e7e9)/SPCXc mesure : hook 4 975 + routeur 5 000 = double frais). Sur une pool V8 dont
    *   le block n est pas currency0, le hook paie toujours : le routeur ne prend rien, prix lu ou non. */
-  const v8 = String((cle && cle.hooks) || '').toLowerCase() === String(HOOK_V8).toLowerCase();
+  /* 2026-10-02 (hook 7030) : meme regle pour le 7030 (drapeau allume) — il preleve dans la devise admise, jamais le block. */
+  const v8 = String((cle && cle.hooks) || '').toLowerCase() === String(HOOK_V8).toLowerCase() || estHook7030(cle && cle.hooks);
   const ok = v8 || d === ETH || d === USDC_BASE.toLowerCase() || (fraisDevisesOk instanceof Set && fraisDevisesOk.has(d));
   return { paie: ok, devise: d };
 }
@@ -282,7 +283,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
           { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'pair', recoitAuMoins: min, recoitDevise: 'block',
         quote: q, frais: fraisPair, fraisDevise: 'pair', montantSwap: netPair, devise,
-        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null };
     } else {
       const fraisVente = (q * bps) / 10000n;
       const min = ((q - fraisVente) * (10000n - tol)) / 10000n;
@@ -291,7 +292,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'pair',
         quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
-        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? 300 : null };
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null };
     }
     const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk, hookPaie,
       assietteHook: sens === 'ACHAT' ? m : q });
@@ -384,7 +385,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
-  resume.fraisMarcheBps = hookPaieDeja ? 300 : null;
+  resume.fraisMarcheBps = hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null;
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaie, assietteHook: sens === 'ACHAT' ? m : quote });
   if (koFrais) return refusFraisEchange(koFrais, resume);
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });

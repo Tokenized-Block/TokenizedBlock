@@ -22,7 +22,7 @@ import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale
   encodeSwapExactInSingle, SANS_MINHOP, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
-import { HOOK_V8, HOOK_V9, estHookDeNaissance, hookPaieDejaA6cf } from './tokenomics.js';
+import { HOOK_V8, HOOK_V9, estHookDeNaissance, hookPaieDejaA6cf, estHook7030 } from './tokenomics.js';
 import { hookDeLancementPour } from './paires.js';
 import { REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
@@ -275,6 +275,10 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
   }
   if (Number(chaine) === 8453 && HOOK_V9 && String(hooks).toLowerCase() === String(HOOK_V9).toLowerCase()
     && hookDeLancementPour(devise, chaine, { v9: true }) !== 'V9') {
+    return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
+  }
+  /* 2026-10-02 — hook 7030 (drapeau) : meme source que Create — ETH + sa liste de 19, sinon son constructeur refuserait. */
+  if (Number(chaine) === 8453 && estHook7030(hooks) && hookDeLancementPour(devise, chaine, { h7030: true }) !== '7030') {
     return { etat: 'REFUSE', pourquoi: "Base Launch refused: this quote can't price a new block on this hook" };
   }
   if (String(devise).toLowerCase() === String(jeton).toLowerCase()) return { etat: 'REFUSE', pourquoi: 'a block cannot be paired with itself' };

@@ -370,15 +370,41 @@ export const DEVISES_ADMISES_V9 = Object.freeze([
   '0xb200000000000000000000fd2f87532b90095211', // MUc
   '0xb2000000000000000000007d16372840df4dabbe', // PLTRc
 ]);
+/** 2026-10-02 — liste du hook 7030 (contracts/launch-lock/src/Devises7030.sol, FIXE au constructeur, sans setter) :
+ *  celle du V9 (19) + les 18 actions Coinbase dont une vraie pool est prouvee sur fork (0ea4661). GMEc, HTZc, PFEc,
+ *  PMc n y sont PAS (pas de pool saine). Ne compte que si l appelant passe `{ h7030: true }` (drapeau HOOK_7030_ACTIF). */
+export const DEVISES_ADMISES_7030 = Object.freeze([
+  ...DEVISES_ADMISES_V9,
+  '0xb2000000000000000000000d8ce462e99ee7a47b', // AMDc
+  '0xb200000000000000000000b1a29cf17a1819288a', // ASTSc
+  '0xb200000000000000000000f215e4c890cfb7176b', // CAKEc
+  '0xb200000000000000000000428e3a3eebbb20692b', // DJTc
+  '0xb200000000000000000000a613d12deafbbb1db7', // DUOLc
+  '0xb200000000000000000000f1a0f91e34892e4718', // LLYc
+  '0xb200000000000000000000e215e9b76ecba02468', // MRNAc
+  '0xb200000000000000000000ec3c4c7395cc609813', // MRVLc
+  '0xb20000000000000000000058b8c947e44011dfe6', // NFLXc
+  '0xb200000000000000000000c597c476fcf9aed3a8', // NVAXc
+  '0xb200000000000000000000347afba223d7b6b63c', // ORCLc
+  '0xb2000000000000000000009272a491812842aa84', // PTONc
+  '0xb200000000000000000000450ad3abe5d4846c6e', // PYPLc
+  '0xb200000000000000000000ca425ab42e07c35bc3', // QUBTc
+  '0xb2000000000000000000005bd7ae89b9e6189bb5', // RBLXc
+  '0xb20000000000000000000066242d4067724cb7a1', // RDDTc
+  '0xb200000000000000000000f720c26062bc3067da', // TTWOc
+  '0xb20000000000000000000044e3cd7a0e1028e57a', // WENc
+]);
 
 /** The hook a NEW block quoted in `adresse` opens on ('V8' | 'V9'), or null if no launch hook admits it.
  *  The ONLY place that decides — the Create guard, the launch guard (lancer-pool.js) and the hook
  *  routing (tokenomics `hookCourant`) all ask here. Off Base: null.
  *  With `{ v9: true }`: stock / B20 quotes (0xb2…) of the V9 list go to V9; ETH, TBLOCK, USDC, cbBTC
  *  stay on V8; TOSHI (in the V9 list, not 0xb2) stays unrouted until its rail decides. */
-export function hookDeLancementPour(adresse, chaine, { v9 = false } = {}) {
+export function hookDeLancementPour(adresse, chaine, { v9 = false, h7030 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
   const a = String(adresse || '').trim().toLowerCase();
+  /* ⛔ 2026-10-02 — hook 7030 (drapeau HOOK_7030_ACTIF, passe par l appelant) : ETH + sa liste fixe de 37 (V9 19 + 18). */
+  if (h7030 === true && (a === ETH_NATIF || DEVISES_ADMISES_7030.includes(a))) return '7030';
   if (v9 === true && a.startsWith('0xb2') && DEVISES_ADMISES_V9.includes(a)) return 'V9';
   if (a === ETH_NATIF || a === TBLOCK_MAINNET || DEVISES_ADMISES_V8.includes(a)) return 'V8';
   return null;
@@ -393,11 +419,26 @@ export const COPIE_E0_SANS_ROUTE = "This currency can't price a new block yet, a
 /** null = this currency can price a new block (Base only); otherwise the sentence to show.
  *  `routable` MUST come from the app's own buy-routing data at display time (app.html:
  *  `transactionsDepuisEth`, the measured edge graph) — never assumed. Anything but `true` = factual phrase. */
-export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbole = null, v9 = false } = {}) {
+export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbole = null, v9 = false, h7030 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
-  if (hookDeLancementPour(adresse, chaine, { v9 }) !== null) return null;
+  if (hookDeLancementPour(adresse, chaine, { v9, h7030 }) !== null) return null;
   const sym = typeof symbole === 'string' ? symbole.trim() : '';
   return routable === true && /^[A-Za-z0-9.]{1,12}$/.test(sym) ? copieE0Achat(sym) : COPIE_E0_SANS_ROUTE;
+}
+
+/* ══ 2026-10-02 — CAUTION DU CREATEUR (hook 7030) : PLANCHER COTE APP ═════════════════════════════════════════
+ * Le hook n impose AUCUN plancher (Zero 1, D2 : 1 unite brute suffit et touche les 0,03 %). L app en pose un : la
+ * caution vaut l equivalent de CAUTION_CREATEUR_USD dollars dans la devise appariee, arrondi AU-DESSUS a l unite brute,
+ * prix lu (/api/prix-usd, ETH via le prix ETH). 1 $ : assez pour qu une caution « vide » ne touche pas la part, assez
+ * peu pour ne bloquer personne. Prix illisible -> null -> pas de naissance 7030 (on refuse, rien n est paye). */
+export const CAUTION_CREATEUR_USD = 1;
+export function minimumCautionCreateur({ prixUsd, decimales, usd = CAUTION_CREATEUR_USD } = {}) {
+  const p = Number(prixUsd), d = Number(decimales);
+  if (!(p > 0) || !Number.isFinite(p) || !Number.isInteger(d) || d < 0 || d > 36) return null;
+  const pS = BigInt(Math.round(p * 1e12)), uS = BigInt(Math.round(Number(usd) * 1e12));
+  if (pS <= 0n || uS <= 0n) return null;
+  const m = (uS * 10n ** BigInt(d) + pS - 1n) / pS;
+  return m > 0n ? m : 1n;
 }
 
 /* ══ 2026-10-02 (fix-2) — PUCE DE PAIRE A CREATE, ORDRE DES ADRESSES, CHOIX « BUY HERE » ══════════════════════════ */
@@ -408,8 +449,10 @@ export const TAUX_ECHANGE_V8_LIBELLE = '0.5%';
 /** Puce de paire a Create. ⛔ Le frais de naissance et le frais d echange sont DEUX choses : « fee 0.001 ETH » les
  *  confondait. Le partage « app 0.07% · creator 0.03% » ne s affiche QUE si le drapeau multipool est allume.
  *  Jamais d adresse de frais, jamais le libelle interne du wallet de frais. */
-export function libellePuceCreation({ symbole, multipool = MEMESTOCK_MULTIPOOL_ACTIF } = {}) {
+export function libellePuceCreation({ symbole, multipool = MEMESTOCK_MULTIPOOL_ACTIF, h7030 = false } = {}) {
   const s = String(symbole || 'stock');
+  /* ⛔ 2026-10-02 : hook 7030 allume -> 0.1 % par echange, partage affiche. Eteint -> exactement le texte d avant. */
+  if (h7030 === true) return 'Quote = ' + s + ' · birth fee 0.001 ETH, once · swap fee 0.1% per trade (app 0.07% · creator 0.03%)';
   return 'Quote = ' + s + ' · birth fee 0.001 ETH, once · swap fee ' + TAUX_ECHANGE_V8_LIBELLE + ' per trade'
     + (multipool === true ? ' (app 0.07% · creator 0.03%)' : '');
 }

@@ -98,7 +98,7 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
  *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
 import { HOOKS_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF, incoherenceMarcheOuvert } from './marche-ouvert.js';
-import { hookDeLancementPour } from './paires.js';
+import { hookDeLancementPour, DEVISES_ADMISES_7030 } from './paires.js';
 /* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
  *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
  *    CE QU IL CHANGE PAR RAPPORT AU V8 : un frais de 0,09 % (9 bps) pris TOUJOURS dans la devise de
@@ -131,6 +131,19 @@ export const HOOK_V9 = null;
  *     sens, comme celle qui a produit la table V1/V2/V8 (bloc 52072599). Pas une lecture de la
  *     source du hook — `guards-measured-transport-not-execution` a deja coute ici. */
 export const V9_PAIE_DEJA_A6CF = null;
+/* ══ 2026-10-02 — HOOK 7030 (fee lot 2) : 0,07 % au wallet de frais + 0,03 % au createur, TOUJOURS dans la devise
+ *    appariee (ETH, USDC, cbBTC, TOSHI, OUSD ou l action), jamais dans le block. Source contracts/launch-lock
+ *    TBlockLaunchLockHook.sol, plan contracts/launch-lock/plan/ (CREATE2 0x4e59, sel 0x…24b4d1), contrat valide par
+ *    Zero 1 (a7fc46c). PAS DEPLOYE : tant que HOOK_7030_ACTIF vaut false, RIEN ne change (memes octets de tx).
+ *    Mesure Zero 1 (fork 52079022) : achat 0,001 ETH -> wallet de frais 7e11 + createur 3e11, routeur 0 = 10 bps.
+ *    Le createur ne touche ses 0,03 % que tant que sa caution (inscrireAvecCaution) est en place ; sinon -> collateral. */
+export const HOOK_7030 = '0x643DbB5e24D17a1d1D1909fa9F8C6267936124cC';
+export const HOOK_7030_ACTIF = false;
+export const HOOK_7030_PPM = Object.freeze({ walletDeFrais: 700, createur: 300 });
+/** Ce hook est-il le 7030 ET le drapeau est-il allume ? Drapeau eteint = le 7030 n existe pas pour l app. */
+export function estHook7030(h) {
+  return HOOK_7030_ACTIF === true && String(h || '').toLowerCase() === HOOK_7030.toLowerCase();
+}
 /** Un lancement cote dans cette devise doit-il aller sur le V9 ? ⛔ PAS DE SECONDE LISTE ICI : la
  *  reponse vient de paires.js `hookDeLancementPour` (la liste du V9 y vit, a cote de celle du V8),
  *  la meme source que la garde de Create et la garde de lancement. */
@@ -138,7 +151,7 @@ export function deviseVaSurV9(devise) {
   return hookDeLancementPour(devise, 8453, { v9: true }) === 'V9';
 }
 /** Les options de routage tant que l app tourne : le V9 compte seulement s il est pose. */
-export const OPTIONS_LANCEMENT = Object.freeze({ v9: !!HOOK_V9 });
+export const OPTIONS_LANCEMENT = Object.freeze({ v9: !!HOOK_V9, ...(HOOK_7030_ACTIF ? { h7030: true } : {}) });
 /** Le V9 est-il deploye ? `ABSENT` tant que HOOK_V9 vaut null — jamais suppose. */
 export async function hookV9Deploye({ rpc }) {
   if (!HOOK_V9) return 'ABSENT';
@@ -151,7 +164,7 @@ export async function hookV9Deploye({ rpc }) {
 export function estHookDeNaissance(h) {
   const x = String(h || '').toLowerCase();
   if (!x) return false;
-  return x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
+  return x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase()) || estHook7030(x);
 }
 /** Un marche est-il sur NOTRE hook (V1, V2, V3, V4 ou V5) ? La seule fonction qui en decide.
  *  ⛔ LES ANCIENS RESTENT : une pool ouverte sur le V1 est toujours la notre et paie toujours a6cf.
@@ -161,7 +174,7 @@ export function estNotreHook(h) {
   return x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()
     || x === HOOK_V3.toLowerCase() || x === HOOK_V4.toLowerCase() || x === HOOK_V5.toLowerCase()
     || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase()
-    || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
+    || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase()) || estHook7030(x);
 }
 /** ⛔ 2026-10-02 — UN SEUL FRAIS PAR JAMBE. LA LISTE des hooks qui versent DEJA a6cf, en ETH, dans la
  *  transaction, et pour quel sens. Mesure sur fork (bloc 52072599, callTracer) :
@@ -179,6 +192,8 @@ export const HOOKS_PAIENT_DEJA_A6CF = Object.freeze([
   { hook: HOOK_V8, sens: DEUX_SENS, preuve: 'fork 52072599 callTracer' },
   ...(HOOK_V9 && V9_PAIE_DEJA_A6CF === true ? [{ hook: HOOK_V9, sens: DEUX_SENS, preuve: 'V9 mesure (V9_PAIE_DEJA_A6CF)' }] : []),
   ...HOOKS_MARCHE_OUVERT.map((h) => ({ hook: h, sens: DEUX_SENS, preuve: 'V8-open fork 52074194' })),
+  /* 2026-10-02 : hook 7030, SEULEMENT drapeau allume (mesure fork app : 0,001 ETH -> 7e11 + 3e11, routeur 0). */
+  ...(HOOK_7030_ACTIF ? [{ hook: HOOK_7030, sens: DEUX_SENS, preuve: 'fork 52079875 app path, 10 bps' }] : []),
   { hook: HOOK_PREVU, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
   { hook: HOOK_V2, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
 ].map((e) => Object.freeze(e)));
@@ -208,6 +223,8 @@ export function deviseFraisHook(cle, sens, zeroForOne, liste = HOOKS_PAIENT_DEJA
   /* V1/V2 (vente seulement) : la devise de SORTIE. Tout autre hook de la liste — V8, V9 mesure, V8-open (ETH/<token>,
    *   preleve en ETH dans les deux sens, fork 52074194) — preleve en currency0. */
   if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return zeroForOne ? c1 : c0;
+  /* 7030 : la devise ADMISE par le hook (ETH ou sa liste fixe) — l autre cote est le block, jamais preleve. */
+  if (estHook7030(x)) return c0 === '0x0000000000000000000000000000000000000000' || DEVISES_ADMISES_7030.includes(c0) ? c0 : c1;
   return c0;
 }
 /** ⛔ GARDE A L EXECUTION (crosscheck Zero 1 sur ee8de19, 2026-10-02) : « drapeau ON refuse si la liste
@@ -346,6 +363,13 @@ export async function hookDeploye({ rpc }) {
  * @param {string}   [o.devise]     adresse de la devise de cotation (route les actions/B20 vers le V9)
  */
 export async function hookCourant({ rpc, mainnet = false, avecDevise = false, etatV1 = 'NON_LU', devise = null }) {
+  /* ⛔ 2026-10-02 : 7030 d abord, SEULEMENT drapeau allume ET code lu sur la chaine, pour toute devise qu il admet. */
+  if (HOOK_7030_ACTIF && hookDeLancementPour(devise || '0x0000000000000000000000000000000000000000', 8453, { h7030: true }) === '7030') {
+    try {
+      const code = String(await rpc('eth_getCode', [HOOK_7030, 'latest']) || '');
+      if (code !== '' && code !== '0x') return HOOK_7030;
+    } catch (_) { /* non lu : on retombe sur la suite, exactement comme avant */ }
+  }
   /* ⛔ V9 D ABORD pour une action / un B20 de sa liste — et SEULEMENT s il est deploye (code LU).
    *    « NON_LU » ou « ABSENT » : on retombe sur le V8, exactement comme avant. */
   if (devise && deviseVaSurV9(devise) && await hookV9Deploye({ rpc }) === 'DEPLOYE') return HOOK_V9;
