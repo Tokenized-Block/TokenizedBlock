@@ -1,0 +1,28 @@
+{
+ "create-ETH": {
+  "identical": true,
+  "bytes": 3724,
+  "etat": "APPROBATIONS"
+ },
+ "create-USDC": {
+  "identical": true,
+  "bytes": 3724,
+  "etat": "APPROBATIONS",
+  "usdcInCreate": true
+ },
+ "market": {
+  "identical": true,
+  "bytes": 194,
+  "hookIsV8": true
+ },
+ "buy": {
+  "identical": true,
+  "bytes": 2350,
+  "etat": "PRET"
+ },
+ "sell": {
+  "identical": true,
+  "bytes": 572,
+  "etat": "APPROBATIONS"
+ }
+}

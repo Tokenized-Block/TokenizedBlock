@@ -20,7 +20,7 @@
 // ✅ 2026-09-15 P0: App Launch attaches HOOK_PREVU — try that key first (ETH + TBLOCK), then legacy zero-hook.
 import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
-import { TBLOCK, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8 } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { pairesProposees } from './paires.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
@@ -103,6 +103,8 @@ async function vieEnTblock({ rpc, stateView, jeton }) {
 export const CLES_MARCHE = [
   /* tip 20260923-wallet-intent-market: HOOK_V8 first (Instant Birth / Give birth · V8), then older TB hooks, then legacy. */
   /* ⛔ NOTRE Launch (lancer-pool.js FEE_POOL=0) — hooked when TbFeeHook DEPLOYE, then legacy zero-hook. */
+  /* 2026-10-02 : hook 7030 (0,1 % : app 0,07 % · createur 0,03 %) — lu en premier, SEULEMENT drapeau allume. */
+  ...(HOOK_7030_ACTIF ? [{ nom: 'ETH · 0 % · TBlockLaunchLockHook 7030 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_7030 }] : []),
   { nom: 'ETH · 0 % · TbFeeHook v8 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V8 },
   { nom: 'ETH · 0 % · TbFeeHook v7 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V7 },
   { nom: 'ETH · 0 % · TbFeeHook v6 (Launch)', fee: 0, tickSpacing: 200, hooks: HOOK_V6 },
