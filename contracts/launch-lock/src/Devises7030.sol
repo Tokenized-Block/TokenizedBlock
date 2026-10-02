@@ -5,7 +5,9 @@ import {V9Devises} from "./V9Devises.sol";
 
 /// @notice The quote list of the 0.07 % / 0.03 % hook ("7030"): the V9 list (19, ETH implicit) + the 18 Coinbase
 ///         stocks added 2026-10-02 (feat/new-stocks-26-20261002-mesure-fork @ 0ea4661: real pool proven on fork;
-///         GMEc, HTZc, PFEc, PMc left out — no healthy pool) = 37 + ETH. FIXED at construction:
+///         + GMEc, HTZc, PFEc, PMc added 2026-10-02 by the founder (healthy USDC pools at 5 %, GMEc at 8 %;
+///         addresses copied from api.coinbase.com/v1/tokenized-stocks, read on Base: code 0xef, 8 decimals,
+///         supply > 0 — HTZc 16 949, PFEc 182, PMc 27, GMEc 3 011 units) = 41 + ETH. FIXED at construction:
 ///         no owner, no setter.
 /// @dev Source of the 18: api.coinbase.com/v1/tokenized-stocks (issuer list), each address cross-checked against the
 ///      app's paires.js @ 0ea4661 and read on a Base fork (B20 precompile: code == 0xef, decimals 8, supply > 0).
@@ -32,19 +34,25 @@ library Devises7030 {
     address internal constant RBLXc = 0xB2000000000000000000005bd7AE89b9E6189Bb5;
     address internal constant RDDTc = 0xb20000000000000000000066242d4067724cB7A1;
     address internal constant TTWOc = 0xB200000000000000000000f720C26062Bc3067Da;
+    address internal constant GMEc = 0xb2000000000000000000007790ed6E48e06eD935;
+    address internal constant HTZc = 0xb2000000000000000000002601C5C94F435da168;
+    address internal constant PFEc = 0xB20000000000000000000018FE7eC7d6DfeeB528;
+    address internal constant PMc = 0xB2000000000000000000008FC2A8C23cf5937b66;
     address internal constant WENc = 0xB20000000000000000000044E3CD7a0E1028E57a;
 
-    uint256 internal constant N = 37;
+    uint256 internal constant N = 41;
+    uint256 internal constant NOUVELLES = 22;
 
-    function nouvelles() internal pure returns (address[18] memory n) {
-        n = [AMDc, ASTSc, CAKEc, DJTc, DUOLc, LLYc, MRNAc, MRVLc, NFLXc, NVAXc, ORCLc, PTONc, PYPLc, QUBTc, RBLXc, RDDTc, TTWOc, WENc];
+    function nouvelles() internal pure returns (address[22] memory n) {
+        n = [AMDc, ASTSc, CAKEc, DJTc, DUOLc, LLYc, MRNAc, MRVLc, NFLXc, NVAXc, ORCLc, PTONc, PYPLc, QUBTc, RBLXc, RDDTc, TTWOc, WENc,
+            GMEc, HTZc, PFEc, PMc];
     }
 
     function liste() internal pure returns (address[] memory l) {
         address[] memory v9 = V9Devises.liste();
-        address[18] memory n = nouvelles();
+        address[22] memory n = nouvelles();
         l = new address[](N);
         for (uint256 i; i < v9.length; ++i) l[i] = v9[i];
-        for (uint256 i; i < 18; ++i) l[v9.length + i] = n[i];
+        for (uint256 i; i < NOUVELLES; ++i) l[v9.length + i] = n[i];
     }
 }

@@ -107,7 +107,14 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
     uint256 public constant DIVISEUR = 1_000_000;
     uint24 public constant FRAIS_MAX = 10_000;
     uint256 public constant GAS_POUSSEE = 150_000;
-    uint256 public constant GAS_LABEL = 300_000;
+    /// ⛔⛔ 2026-10-02 — 300 000 FAISAIT PLANTER TOUT VRAI CREATE (Zero 1, relaye par C2 ; confirme sur fork).
+    ///   `contractURI()` d un B20 se lit a ~65,6 gas/octet a FROID (2 100 gas par slot de 32 octets) : mesure
+    ///   mainnet 620 o -> ~45 000 gas d execution, fork froid 44 788. L app grave le SVG du block en `image_data` :
+    ///   faces jusqu a 19 135 octets, factory acceptant 40 000. A 300 000, la lecture echouait des ~4 500 octets,
+    ///   `porteLeLabel` rendait faux, et l inscription revertait `SansLabel`. Les bancs passaient : URI de 88 o,
+    ///   et stockage CHAUD (block cree dans la meme transaction). 3 000 000 couvre 40 000 o a froid (~2,65 M).
+    ///   Appele une seule fois, a l inscription — jamais dans un swap.
+    uint256 public constant GAS_LABEL = 3_000_000;
     uint160 internal constant PREFIXE_B20 = uint160(0xb2) << 152;
     uint160 internal constant MASQUE_PREFIXE = type(uint160).max << 80;
     uint8 internal constant OP_VERSER = 1;

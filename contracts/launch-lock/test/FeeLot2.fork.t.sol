@@ -173,8 +173,8 @@ contract FeeLot2Test is EconomieTest {
         address[] memory v9 = V9Devises.liste();
         for (uint256 i; i < v9.length; ++i) assertTrue(h.deviseAdmise(v9[i]), "the 19 of the fixed list stay admitted");
         assertTrue(h.deviseAdmise(address(0)), "ETH admitted");
-        address[18] memory n = Devises7030.nouvelles();
-        for (uint256 i; i < 18; ++i) {
+        address[22] memory n = Devises7030.nouvelles();
+        for (uint256 i; i < n.length; ++i) {
             string memory s = IMeta(n[i]).symbol();
             assertTrue(h.deviseAdmise(n[i]), string.concat(s, " admitted by the new hook"));
             assertTrue(h.estB20(n[i]), "a B20 precompile");
@@ -198,8 +198,8 @@ contract FeeLot2Test is EconomieTest {
 
     /// (5) negative control: the LIVE V8 refuses the 18 at registration (PaireNonAdmise).
     function test_L3_controleNegatif_V8_refuseLes18() public fork {
-        address[18] memory n = Devises7030.nouvelles();
-        for (uint256 i; i < 18; ++i) {
+        address[22] memory n = Devises7030.nouvelles();
+        for (uint256 i; i < n.length; ++i) {
             address b = _creerB20(string.concat("N8x", IMeta(n[i]).symbol()));
             PoolKey memory k = _cle(n[i], b, HOOK_V8);
             (uint160 sp,) = _prix(Currency.unwrap(k.currency0) == n[i]);
