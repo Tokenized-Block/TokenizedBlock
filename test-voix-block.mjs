@@ -271,12 +271,12 @@ eq(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisCh
 ok(JSON.stringify(tour({ A: nettoyerVoix({ ton: 'happy', reactions: { new_buy: reactionDepuisChoix('own', 'Yay!') } }).voix })).includes('Yay!'), 'TEMOIN : des mots ecrits partent bien');
 
 console.log('— 10. revue v3 : exemples en gris « e.g. », le block de la fiche n est pas son propre ami');
-const regleGris = (app.match(/^#pvLignes::placeholder,#pvSavoir::placeholder\{([^}]*)\}\r?$/m) || [])[1] || '';
+const regleGris = (app.match(/^#pvLignes::placeholder,#pvSavoir::placeholder,#pvBio::placeholder\{([^}]*)\}\r?$/m) || [])[1] || '';
 ok(regleGris === 'color:revert;opacity:revert', 'les deux exemples reviennent au gris du navigateur — celui de « art, football, coffee »');
 ok(!/#pvSujets[^{]*::placeholder|\.champ input::placeholder|input#pvSujets::placeholder/.test(app), 'TEMOIN : « art, football, coffee » n a aucune regle a soi (c est bien le gris du navigateur qu on reprend)');
 ok(/^\.champ textarea::placeholder\{color:var\(--tiede\);opacity:1\}\r?$/m.test(app), 'TEMOIN : les autres zones de texte gardent leur regle (seuls ces deux champs changent)');
-ok(!/#pv(Lignes|Savoir)(?!::placeholder)[^{\s,]*\s*[{,][^}]*color/.test(app.replace(/^#pvLignes::placeholder,#pvSavoir::placeholder\{[^}]*\}\r?$/m, '')),
-  'TEMOIN : aucune regle ne touche la couleur du texte saisi dans ces deux champs (seul ::placeholder change)');
+ok(!/#pv(Lignes|Savoir|Bio)(?!::placeholder)[^{\s,]*\s*[{,][^}]*color/.test(app.replace(/^#pvLignes::placeholder,#pvSavoir::placeholder,#pvBio::placeholder\{[^}]*\}\r?$/m, '')),
+  'TEMOIN : aucune regle ne touche la couleur du texte saisi dans ces trois champs (seul ::placeholder change)');
 ok(carte.includes('id="pvLignes" rows="3" maxlength="420" placeholder="e.g. gm, neighbours!"'), '« Its own lines » : « e.g. gm, neighbours! »');
 ok(carte.includes('placeholder="e.g. We just opened a shop in Brussels. Our block loves sunny days."'), '« What it knows » : « e.g. We just opened a shop in Brussels… »');
 ok(/placeholder="art, football, coffee"/.test(carte) && /placeholder="The bravest block on the map"/.test(carte), 'TEMOIN : les autres exemples ne prennent pas « e.g. »');
@@ -299,5 +299,11 @@ eq(solo.formulaire.amis, [], 'seul ami = lui-meme : aucun ami enregistre');
 eq(solo.partage, 'Other blocks hear only: “We sell hats.”', '« Other blocks hear only » ne parle pas de lui-meme');
 ok(!JSON.stringify(voixPublique(nettoyerVoix(solo.formulaire).voix)).includes('TBLOCK'), 'ce que les autres blocks recoivent ne le contient pas');
 ok(JSON.stringify(voixPublique(nettoyerVoix(aides({ amis: 'MUC', profil: TB, sym: 'TBLOCK' }).formulaire).voix)).includes('MUC'), 'TEMOIN : un vrai ami, lui, part');
+
+console.log('— 11. revue v4 : l exemple de la bio est gris lui aussi (regression de 02f3100 : input -> textarea)');
+const regleBio = (app.match(/^([^{\r\n]*#pvBio::placeholder[^{\r\n]*)\{([^}]*)\}\r?$/m) || []);
+ok(/(^|,)#pvBio::placeholder(,|$)/.test(regleBio[1] || '') && regleBio[2] === 'color:revert;opacity:revert' && (app.match(/#pvBio::placeholder/g) || []).length === 1, 'bio : « The bravest block on the map » reprend le gris du navigateur, comme « art, football, coffee »');
+ok((regleBio[1] || '').split(',').every((x) => /::placeholder$/.test(x)), 'TEMOIN : la regle ne vise que des ::placeholder — le texte tape dans la bio garde sa couleur');
+ok(/<textarea id="pvBio"[^>]*placeholder="The bravest block on the map"/.test(carte) && !/#pvBio(?!::placeholder)[^{\s,]*\s*[{,][^}]*color/.test(app), 'TEMOIN : la bio reste une zone de texte, aucune regle de couleur sur son texte');
 
 console.log('\n' + n + ' assertions, 0 KO');
