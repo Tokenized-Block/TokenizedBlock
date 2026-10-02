@@ -838,6 +838,8 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .champ textarea{min-height:72px;resize:vertical;line-height:1.4}
 .champ input:focus,.champ select:focus,.champ textarea:focus{outline:none;border-color:var(--accent)}
 .champ textarea::placeholder{color:var(--tiede);opacity:1}
+/* « What it says — empty uses its personality » tient en entier a 375 px */
+.champ input[data-voix-ligne]::placeholder{font-size:.8em}
 /* Paid-message prepare: full width under the fields, never a clipped « Prep » chip. */
 #pmsgPreparer{width:100%;margin-top:10px;white-space:normal}
 /* Salt row: editable field + re-roll. Salt still fixes the address; auto-fill is disclosed beside it. */
@@ -2548,7 +2550,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <details class="bDetail" id="pvEditer" hidden style="margin-top:8px"><summary class="note">Change how it talks (creator only)</summary>
           <details class="bDetail pvSection" id="pvSecVoix" open><summary class="note"><b>Voice</b></summary>
             <label class="champ">Personality<select id="pvTon"></select></label>
-            <label class="champ">Short bio or motto<input id="pvBio" maxlength="120" placeholder="The bravest block on the map" autocomplete="off"></label>
+            <label class="champ">Short bio or motto<textarea id="pvBio" rows="2" maxlength="120" placeholder="The bravest block on the map" style="min-height:0"></textarea></label>
+            <p class="note" id="pvBioCompte" style="text-align:right;margin:2px 0 0">0 / 120</p>
             <label class="champ">Topics it likes, separated by commas<input id="pvSujets" maxlength="140" placeholder="art, football, coffee" autocomplete="off"></label>
             <label class="champ">Its own lines (one per line, up to 5)<textarea id="pvLignes" rows="3" maxlength="420" placeholder="gm, neighbours!"></textarea></label>
           </details>
@@ -3195,7 +3198,7 @@ import { encoderMemoireChaine, decoderMemoireChaine, restaurerDepuisChaine } fro
 import { fragmenterMemoire, lireFragment, reconstruireCerveau } from './fragments-cerveau.js';
 import { parolesDuTour } from './parole-cerveaux.js';
 import { nettoyerVoix, messageVoix, lireVoixPublique, voixPublique, reactionVoix, partageVoix, composerParole, TONS, EVENEMENTS_VOIX,
-  resumeSavoir, etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables } from './voix-block.js';
+  resumeSavoir, etatEditeurVoix, choixReaction, reactionDepuisChoix, resumeReactions, amisIntrouvables, libelleGrosEchange } from './voix-block.js';
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
@@ -10658,7 +10661,7 @@ $('#pvReactions').innerHTML = EVENEMENTS_VOIX.map((e) => '<label class="champ"><
   + '<select data-voix-style="' + e + '"><option value="normal">Its personality</option>'
   + TONS.filter((t) => t !== 'normal').map((t) => '<option value="' + t + '">' + LIBELLE_TON[t] + '</option>').join('')
   + '<option value="quiet">Stay quiet</option><option value="own">Its own words…</option></select>'
-  + '<input data-voix-ligne="' + e + '" maxlength="80" placeholder="What it says" autocomplete="off" hidden></label>').join('');
+  + '<input data-voix-ligne="' + e + '" maxlength="80" placeholder="What it says — empty uses its personality" autocomplete="off" hidden></label>').join('');
 /** le champ « own words » d un evenement suit son menu */
 function basculerLigneVoix(e) {
   const sel = $('[data-voix-style="' + e + '"]');
@@ -10675,15 +10678,16 @@ function lireFormulaireVoix() {
 function majAidesVoix() {
   const sav = $('#pvSavoir').value;
   $('#pvSavoirCompte').textContent = [...sav].length + ' / 2000';
+  $('#pvBioCompte').textContent = [...$('#pvBio').value].length + ' / 120';
   const res = resumeSavoir(sav);
   $('#pvPartage').textContent = res ? 'Other blocks hear only: “' + res + '”' : 'Other blocks hear nothing from it yet.';
   const amis = nettoyerVoix({ amis: listeVoix($('#pvAmis').value, ',') }).voix;
   const absents = new Set(amisIntrouvables(amis ? amis.amis : [], [...habitants, ...[...creationsLive.values()].map((c) => ({ adr: c.jeton, sym: c.sym }))]).map((x) => x.toLowerCase()));
   $('#pvAmisPuces').innerHTML = (amis ? amis.amis : []).map((x) => '<span class="puce"' + (absents.has(x.toLowerCase()) ? ' style="opacity:.7"' : '') + '>'
-    + enTexte(x) + (absents.has(x.toLowerCase()) ? ' · not found' : '') + '</span>').join('');
+    + enTexte(x) + (absents.has(x.toLowerCase()) ? ' · not on this page' : '') + '</span>').join('');
   $('#pvReactResume').textContent = resumeReactions(lireFormulaireVoix().reactions);
-  /* ⛔ une pool qui n est pas en ETH : le seuil se lit « environ » */
-  $('[data-voix-libelle="big_trade"]').textContent = 'A big trade (' + (deviseProfil && deviseProfil !== 'ETH' ? '≈ ' : '') + '0.1 ETH or more)';
+  /* ⛔ une pool qui n est pas en ETH : la ligne ne se declenche jamais — meme regle que reactionVoix (voix-block.js) */
+  $('[data-voix-libelle="big_trade"]').textContent = libelleGrosEchange(deviseProfil);
 }
 function remplirFormulaireVoix(v) {
   const x = v || {};
@@ -10786,7 +10790,7 @@ $('#pvReactions').addEventListener('change', (ev) => {
   if (e) basculerLigneVoix(e);
   majAidesVoix();
 });
-for (const id of ['#pvSavoir', '#pvAmis']) $(id).addEventListener('input', majAidesVoix);
+for (const id of ['#pvSavoir', '#pvAmis', '#pvBio']) $(id).addEventListener('input', majAidesVoix);
 $('#pvSecReact').addEventListener('toggle', majAidesVoix);
 $('#pvConnecterBtn').addEventListener('click', async () => { await pret({ e: $('#pvNote') }); peindreAccesVoix(); });
 if (window.ethereum && typeof window.ethereum.on === 'function') {

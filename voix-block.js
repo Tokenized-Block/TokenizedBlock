@@ -259,7 +259,7 @@ export function reactionVoix(voix, e, b) {
   /* ⛔ `echange.eth` est le montant dans la DEVISE de la pool (ETH ou TBLOCK, fil-live.js) : seul un montant en ETH se
    *    compare a 0,1 ETH. Une autre devise, ou une devise inconnue, ne fait jamais un « gros » echange. */
   const ech = (b && b.echange) || {};
-  const gros = (e === 'new_buy' || e === 'new_sell') && (ech.devise == null || ech.devise === 'ETH') && Number(ech.eth) >= GROS_ECHANGE_ETH;
+  const gros = (e === 'new_buy' || e === 'new_sell') && grosEchangeEnEth(ech.devise) && Number(ech.eth) >= GROS_ECHANGE_ETH;
   const x = (gros && r.big_trade) || r[e] || null;
   if (x && x.style === 'quiet') return 'SILENCE';
   if (x && x.ligne) return x.ligne;
@@ -307,6 +307,15 @@ export function etatEditeurVoix({ chaine, compte, createur }) {
   if (!compte) return 'CONNECTER';
   if (createur && String(createur).toLowerCase() !== String(compte).toLowerCase()) return 'CACHE';
   return 'EDITEUR';
+}
+/**
+ * ⛔ UNE SEULE REGLE pour « gros echange » : `reactionVoix` (ce qui se declenche) et le libelle de la fiche la lisent ICI,
+ *    pour que l ecran et le comportement ne puissent pas se contredire. Seule une devise ETH (ou non dite) se compare a 0,1 ETH.
+ */
+export function grosEchangeEnEth(devise) { return devise == null || devise === 'ETH'; }
+/** Le libelle de la ligne big_trade : sur un marche qui n est pas cote en ETH, elle ne se declenche jamais — on le dit. */
+export function libelleGrosEchange(devise) {
+  return 'A big trade (0.1 ETH or more' + (grosEchangeEnEth(devise) ? '' : ' · ETH markets only') + ')';
 }
 /** La valeur du menu d une reaction : un style, ou 'own' quand le createur a ecrit ses mots. */
 export function choixReaction(r) {
