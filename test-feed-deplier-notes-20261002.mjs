@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
-import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes } from './notes-du-fil.js';
+import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes, libelleNotes, AVERT_SPAM, compteProfil } from './notes-du-fil.js';
 import { lireMemo, encodeTransferAvecMemo } from './messages.js';
 import { FEE_WALLET } from './frais-creation.js';
 
@@ -111,7 +111,7 @@ cas('⛔⛔ 4 notes comptees = 4 notes listees : 1 texte, 1 sans texte, 2 non lu
   assert.deepEqual(r, { total: 4, avecTexte: 1, sansTexte: 1, illisibles: 0, nonLues: 2, enAttente: 0 });
   assert.equal(cache.get(tx(10)).texte, 'gm from NVDA');
   const phrase = phraseNotes(r, G.note.blocBas, G.note.blocHaut);
-  assert.match(phrase, /^4 notes counted by the Feed in chain blocks 52,071,384–52,072,345/);
+  assert.match(phrase, /^4 0-amount transfers counted by the Feed in chain blocks 52,071,384–52,072,345 · 1 note with readable text/);
   assert.match(phrase, /2 could not be read right now — not empty/);
   assert.doesNotMatch(phrase, /\b0 messages?\b/);
 });
@@ -131,10 +131,10 @@ cas('une note NON_LUE se relit au toucher suivant ; une note lue, jamais deux fo
 /* ── 3. enfantsDuFil REEL : plafond, « show more », pas d adresse du wallet de frais ──────── */
 const srcEnfants = bloc(0, 'function enfantsDuFil(e, cleG, nom) {');
 const fabriquerEnfants = (src, liveDeplies, notesLues) => new Function('liveDeplies', 'ENFANTS_PAS', 'notesLues', 'RESEAUX', 'CHAINE',
-  'enTexte', 'court', 'lisible', 'ligneEchange', 'phraseNotes', 'resumeNotes', 'FEE_WALLET', src + '\nreturn enfantsDuFil;')(
+  'enTexte', 'court', 'lisible', 'ligneEchange', 'phraseNotes', 'resumeNotes', 'FEE_WALLET', 'libelleNotes', 'AVERT_SPAM', src + '\nreturn enfantsDuFil;')(
   liveDeplies, ENFANTS_PAS, notesLues, { 8453: { explorateur: 'https://basescan.org' } }, 8453,
   (t) => String(t).replace(/</g, '&lt;'), (a) => a.slice(0, 6) + '…' + a.slice(-4), (x) => String(x),
-  (e) => (e.type === 'ACHAT' ? 'fed' : 'killed') + ' ' + e.quantite, phraseNotes, resumeNotes, FEE_WALLET);
+  (e) => (e.type === 'ACHAT' ? 'fed' : 'killed') + ' ' + e.quantite, phraseNotes, resumeNotes, FEE_WALLET, libelleNotes, AVERT_SPAM);
 const items = (h) => (h.match(/<li /g) || []).length;
 function verifierPlafond(f) {
   const h = f(G.gm, cleGroupe(G.gm), 'GOOGLc');
@@ -160,9 +160,9 @@ cas('⛔ notes depliees : texte lisible, expediteur court, lien tx — et jamais
   const h = fabriquerEnfants(srcEnfants, new Map(), frais)(G.note, cleGroupe(G.note), 'NVDAc');
   assert.match(h, /“gm from NVDA”/);
   assert.match(h, /from 0x1111…1111/);
-  assert.match(h, /no text attached — a 0-amount transfer/);
+  assert.match(h, /empty transfer \(0 amount\)/);
   assert.match(h, /not read right now — not empty/);
-  assert.match(h, /4 notes counted by the Feed in chain blocks 52,071,384–52,072,345/);
+  assert.match(h, /4 0-amount transfers counted by the Feed in chain blocks 52,071,384–52,072,345/);
   assert.ok(!h.toLowerCase().includes(FEE_WALLET.slice(0, 6).toLowerCase() + '…'), 'le wallet de frais s affiche abrege');
   assert.ok(!/Fees for Dev/i.test(h));
 });
@@ -241,7 +241,7 @@ cas('⛔ le profil lit les notes du Feed, et son compte ne retombe pas a « 0 me
   const src = bloc(0, 'async function lireMessagesDuBlock() {');
   assert.match(src, /liveEvts\.filter\(\(x\) => x\.type === 'NOTE'/, 'le profil ne relit pas les notes du Feed');
   assert.match(src, /lireNotes\(\{ rpc, notes: duFil, lireMemo, cache: notesLues \}\)/);
-  assert.match(src, /avec\.length \|\| !rFil \? avec\.length \+ ' message'/, 'le compte peut encore dire « 0 messages » malgre des notes du Feed');
+  assert.match(src, /\$\('#pmsgCompte'\)\.textContent = compteProfil\(avec\.length, rFil\);/, 'le compte du profil ne passe plus par compteProfil');
 });
 
 for (const [nom, fn] of CAS) { try { await fn(); n++; } catch (e) { e.message = nom + ' — ' + e.message; throw e; } }

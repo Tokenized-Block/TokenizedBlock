@@ -69,16 +69,79 @@ export function resumeNotes(notes, cache) {
   return r;
 }
 
-/** La phrase affichee au-dessus de la liste. ⛔ Jamais « 0 messages » : elle part du compte du Feed. */
+/* ⛔⛔ REVUE 2026-10-02 13:32 : le mot « note » est RESERVE aux entrees qui portent un texte. Un transfert
+ *     de 0 sans texte s appelle un « empty transfer (0 amount) » — c est la forme classique du spam par
+ *     copie d adresse, et l appeler « note » invitait a l ouvrir et a recopier l adresse. */
+const pl = (n, un, plusieurs) => n + ' ' + (n === 1 ? un : plusieurs);
+export const AVERT_SPAM = 'These look like address-copy spam — never copy an address from them.';
+
+/** Le titre d une ligne NOTE. `notes` = au moins une entree porte un texte (seul cas ou le mot « note » sert). */
+export function libelleNotes(r) {
+  const attente = r.enAttente;
+  const vides = r.sansTexte + r.illisibles;
+  if (!r.avecTexte && attente === r.total) {
+    return { notes: false, texte: pl(r.total, '0-amount transfer', '0-amount transfers') + ' · checking for text…' };
+  }
+  const bouts = [];
+  if (r.avecTexte) bouts.push('got ' + pl(r.avecTexte, 'note', 'notes'));
+  if (r.sansTexte) bouts.push(pl(r.sansTexte, 'empty transfer', 'empty transfers') + ' (0 amount)');
+  if (r.illisibles) bouts.push(pl(r.illisibles, '0-amount transfer', '0-amount transfers') + ' with bytes that are not text');
+  if (attente) bouts.push(attente + ' not checked yet');
+  if (r.nonLues) bouts.push('⚠️ ' + r.nonLues + ' could not be read');
+  return { notes: r.avecTexte > 0, texte: bouts.join(' · '), spam: !r.avecTexte && vides > 0 };
+}
+
+/** Le compte du profil. ⛔ Jamais « N notes » pour des transferts vides ; jamais « 0 messages » sec quand le Feed en a vu. */
+export function compteProfil(nMessages, r) {
+  if (!r) return pl(nMessages, 'message', 'messages');
+  const vides = r.sansTexte ? pl(r.sansTexte, 'empty 0-amount transfer', 'empty 0-amount transfers') : '';
+  const enSuspens = r.enAttente + r.nonLues;
+  return [nMessages ? pl(nMessages, 'message', 'messages') : 'No messages yet', vides,
+    r.illisibles ? r.illisibles + ' with bytes that are not text' : '',
+    enSuspens ? '⚠️ ' + enSuspens + ' not read' : ''].filter(Boolean).join(' · ');
+}
+
+/** La phrase affichee au-dessus de la liste. ⛔ Elle part du compte du Feed, et « note » = avec texte. */
 export function phraseNotes(r, blocBas, blocHaut) {
   const f = (x) => Number(x).toLocaleString('en-US');
   const plage = Number.isFinite(blocBas) && Number.isFinite(blocHaut)
     ? (blocBas === blocHaut ? ' in chain block ' + f(blocBas) : ' in chain blocks ' + f(blocBas) + '–' + f(blocHaut)) : '';
-  const bouts = [r.total + ' note' + (r.total === 1 ? '' : 's') + ' counted by the Feed' + plage];
-  if (r.avecTexte) bouts.push(r.avecTexte + ' with readable text');
-  if (r.sansTexte) bouts.push(r.sansTexte + ' with no text attached (a 0-amount transfer)');
+  const bouts = [pl(r.total, '0-amount transfer', '0-amount transfers') + ' counted by the Feed' + plage];
+  if (r.avecTexte) bouts.push(pl(r.avecTexte, 'note', 'notes') + ' with readable text');
+  if (r.sansTexte) bouts.push(r.sansTexte + ' empty (no text attached)');
   if (r.illisibles) bouts.push(r.illisibles + ' with extra bytes that are not text');
   if (r.enAttente) bouts.push(r.enAttente + ' being read…');
   if (r.nonLues) bouts.push('⚠️ ' + r.nonLues + ' could not be read right now — not empty, tap again to retry');
   return bouts.join(' · ');
+}
+
+/* ⛔⛔ REVUE 2026-10-02 13:32 : « sent 33× · 195,820.19 → 0x52a8… » montrait le montant et le destinataire
+ *     du SEUL dernier envoi, comme s il resumait les 33. Le resume dit le TOTAL et le nombre de wallets. */
+/** Somme EXACTE de montants decimaux en texte (« 22146.665951691321294165 ») — jamais en flottant. */
+export function sommeDecimale(textes) {
+  let dec = 0;
+  const ok = [];
+  for (const t of textes) {
+    const m = /^(\d+)(?:\.(\d+))?$/.exec(String(t).trim());
+    if (!m) return null;
+    ok.push(m); dec = Math.max(dec, (m[2] || '').length);
+  }
+  let total = 0n;
+  for (const m of ok) total += BigInt(m[1] + (m[2] || '').padEnd(dec, '0'));
+  const s = total.toString().padStart(dec + 1, '0');
+  return dec ? (s.slice(0, -dec) + '.' + s.slice(-dec)).replace(/\.?0+$/, '') : s;
+}
+
+/** Le bilan d un groupe d envois : combien, le total des montants LUS, combien sans montant, combien de wallets. */
+export function resumeEnvois(enfants) {
+  const lus = (enfants || []).map((c) => c && c.quantite).filter((q) => q != null && q !== '');
+  const wallets = new Set((enfants || []).map((c) => String((c && c.a) || '').toLowerCase()).filter(Boolean));
+  return { n: (enfants || []).length, total: lus.length ? sommeDecimale(lus) : null, sansMontant: (enfants || []).length - lus.length, wallets: wallets.size };
+}
+
+/** « sent 33 transfers · 195,820.19 · 3 wallets ». `lisible` = le formateur d affichage de la page. */
+export function titreEnvois(r, lisible) {
+  const montant = r.total === null ? (r.sansMontant ? 'amount not read' : null)
+    : lisible(r.total) + (r.sansMontant ? ' (+' + r.sansMontant + ' without a read amount)' : '');
+  return ['sent ' + pl(r.n, 'transfer', 'transfers'), montant, r.wallets ? pl(r.wallets, 'wallet', 'wallets') : null].filter(Boolean).join(' · ');
 }
