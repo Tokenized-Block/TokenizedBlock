@@ -87,6 +87,18 @@ function formaterBrut(v, dec) {
   return ent.toString() + (frac ? '.' + frac : '');
 }
 
+/** ⛔ 2026-10-02 — un evenement lu AVANT que les decimales de son jeton soient connues garde sa valeur BRUTE (`brut`).
+ *  Des que les decimales sont lues, on le complete, avec le MEME formateur qu au premier passage. Sans ca, ce qui
+ *  avait ete lu trop tot restait « amount not read » pour toujours. Rend vrai si l evenement a change. */
+export function completerQuantite(e, dec) {
+  if (!e || e.quantite || !e.brut || !Number.isInteger(dec)) return false;
+  let v;
+  try { v = BigInt(e.brut.v); } catch (_) { return false; }
+  e.quantite = e.brut.forme === 'unites' ? formaterUnites(v, dec) : formaterBrut(v, dec);
+  e.brut = null;
+  return true;
+}
+
 /** Le nom de la devise d une pool, SEULEMENT si elle est prouvee : ETH natif (0x0) ou TBLOCK. Sinon null. */
 function deviseConnue(cle, jeton) {
   const autre = String(cle.currency0).toLowerCase() === String(jeton).toLowerCase() ? cle.currency1 : cle.currency0;
@@ -150,7 +162,7 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
       if (s.txHash) txSwaps.add(String(s.txHash).toLowerCase());
       const p = pools.get(s.poolId);
       if (!p) continue;
-      let type = 'SWAP', quantite = null, eth = null, fraisMarche = false;
+      let type = 'SWAP', quantite = null, eth = null, fraisMarche = false, brut = null;
       const confiance = p.confiance || confianceDe(p.cle);
       const devise = deviseConnue(p.cle, p.jeton);
       /* ⛔⛔ CORRIGE LE 2026-09-20 (Phil : « Feed = buy, Kill = sell, divise le Swap en 2 »).
@@ -169,9 +181,10 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
         type = sens.etat;
         fraisMarche = confiance === 'HOOK';
         if (p.dec !== null) quantite = formaterUnites(sens.quantiteBlock, p.dec);
+        else brut = { v: String(sens.quantiteBlock), forme: 'unites' };
         if (devise) eth = formaterUnites(sens.quantiteDevise, devise.dec);
       }
-      ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, eth,
+      ajouter({ type, bloc: s.blockNumber, jeton: p.jeton, sym: p.sym, tx: s.txHash, logIndex: s.logIndex, quantite, brut, eth,
         devise: type === 'SWAP' || !devise ? null : devise.nom, confiance, fraisMarche, verifie: type !== 'SWAP' });
     }
   }
@@ -195,7 +208,8 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
           const dec = Number.isInteger(b.dec) ? b.dec : null;
           if (t.value > 0n && t.value > GM_MAX_UNITES) continue; /* dump/move ≠ GM */
           ajouter({ type: t.value === 0n ? 'NOTE' : 'GM', bloc: t.bloc, jeton: t.token, sym: b.sym ?? null, tx: t.tx, logIndex: t.logIndex,
-            de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null });
+            de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null,
+            brut: dec === null && t.value > 0n ? { v: String(t.value), forme: 'brut' } : null });
         }
       }
     }

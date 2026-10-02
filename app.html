@@ -2325,7 +2325,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261002-quatre-actions-7030" hidden>Build <code>20261002-quatre-actions-7030</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261002-fil-montants-lus" hidden>Build <code>20261002-fil-montants-lus</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3314,7 +3314,7 @@ import { creerRegulateur } from './regulateur-rpc.js';
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
-import { evenementsLive } from './fil-live.js';
+import { evenementsLive, completerQuantite } from './fil-live.js';
 /* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
  *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
 import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes, libelleNotes, AVERT_SPAM, compteProfil, resumeEnvois, titreEnvois } from './notes-du-fil.js';
@@ -9609,15 +9609,34 @@ $('#sfLiveFiltres').addEventListener('click', (ev) => {
 });
 const cleEvtLive = (e) => e.type + ':' + e.tx + ':' + e.jeton + ':' + (e.logIndex ?? '');
 
+/* ⛔⛔ 2026-10-02 (Phil : « check le feed ») — 100 % DES LIGNES DU FIL DISAIENT « amount not read » (5 359 evenements
+ *   lus, aucun montant). Cause : chaque habitant (actions AAPLc…, blocks de la carte) partait avec `dec: null` ECRIT EN
+ *   DUR, et fil-live.js ne formate une quantite que si les decimales sont CONNUES. Le fil avait l ETH, jamais le block.
+ *   ⇒ Les decimales sont LUES sur la chaine (`decimals()`), une fois par jeton, quelques jetons par tour (le noeud
+ *     public rend des 429) ; jamais supposees. Une lecture ratee reste `null` et sera retentee : « non lu » ≠ « zero ». */
+const decimalesLues = new Map();
+const DECIMALES_PAR_TOUR = 12;
+async function lireDecimalesManquantes(blocks) {
+  const manquants = blocks.filter((b) => b.dec === null && !decimalesLues.has(String(b.jeton).toLowerCase()))
+    .slice(0, DECIMALES_PAR_TOUR);
+  for (const b of manquants) {
+    try {
+      const r = await rpc('eth_call', [{ to: b.jeton, data: '0x313ce567' }, 'latest']);
+      const d = parseInt(String(r || ''), 16);
+      if (Number.isInteger(d) && d >= 0 && d <= 36) decimalesLues.set(String(b.jeton).toLowerCase(), d);
+    } catch (_) { /* non lu : retente au prochain tour */ }
+  }
+}
 function blocksSuivisLive() {
   const m = new Map();
+  const lue = (adr) => { const d = decimalesLues.get(String(adr).toLowerCase()); return Number.isInteger(d) ? d : null; };
   for (const c of creationsLues) {
-    m.set(String(c.jeton).toLowerCase(), { jeton: c.jeton, sym: c.symbole, dec: Number.isInteger(c.decimales) ? c.decimales : null });
+    m.set(String(c.jeton).toLowerCase(), { jeton: c.jeton, sym: c.symbole, dec: Number.isInteger(c.decimales) ? c.decimales : lue(c.jeton) });
   }
-  for (const [k, c] of creationsLive) if (!m.has(k)) m.set(k, c);
+  for (const [k, c] of creationsLive) if (!m.has(k)) m.set(k, Number.isInteger(c.dec) ? c : { ...c, dec: lue(c.jeton) });
   for (const h of habitants) {
     const k = String(h.adr).toLowerCase();
-    if (!m.has(k)) m.set(k, { jeton: h.adr, sym: h.sym, dec: null });
+    if (!m.has(k)) m.set(k, { jeton: h.adr, sym: h.sym, dec: lue(h.adr) });
   }
   return [...m.values()];
 }
@@ -9693,6 +9712,9 @@ async function lireLive(sens) {
       liveRatees += d.fenetresRatees.length;
       if (sens !== 'ancien' && !d.fenetresRatees.length) decouverteJusqua = aBloc;
     }
+    await lireDecimalesManquantes(blocksSuivisLive());
+    /* les evenements deja lus quand leurs decimales etaient inconnues sont completes maintenant (valeur brute gardee) */
+    for (const e of liveEvts) completerQuantite(e, decimalesLues.get(String(e.jeton || '').toLowerCase()));
     const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250, poolsDecouvertes: poolsLive });
     liveRatees += r.fenetresRatees.length;
     const deja = new Set(liveEvts.map(cleEvtLive));
