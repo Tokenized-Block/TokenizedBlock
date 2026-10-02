@@ -133,6 +133,19 @@ const iPre = cb.indexOf('preverifierNaissancePayee('), iSend = cb.indexOf("etape
 ok(iPre > 0 && iSend > iPre, 'item4: pre-check runs before the wallet is asked');
 ok(/pre\.etat === 'REFUSE'[\s\S]{0,300}nothing was sent[\s\S]{0,120}return;/.test(cb), 'item4 NEG path: REFUSE stops before createPaid');
 
+/* ── item 4 (Zero 1, live 52d0566) : after createPaid, never « Nothing is lost » ── */
+const srcArret = extraire(html, 'texteArretVie');
+ok(!!srcArret, 'item4: texteArretVie present');
+if (srcArret) {
+  const texteArretVie = new Function('ethLisible', srcArret + '\nreturn texteArretVie;')((w) => (Number(w) / 1e18).toString());
+  const paye = texteArretVie(2, { wei: '700000000000000', hash: '0x1' }, 'Not done (refused by user)');
+  ok(/Create fee was paid; you will not pay it again/.test(paye) && /0\.0007 ETH/.test(paye) && !/Nothing is lost/.test(paye), 'item4: prepaid -> says the 0.0007 ETH fee was paid (' + paye.slice(0, 90) + ')');
+  ok(/Nothing is lost/.test(texteArretVie(2, null, '')), 'item4 NEG: nothing paid -> "Nothing is lost" stays true');
+}
+const arret = extraire(html, 'vieAutoArreter');
+ok(/texteArretVie\(Math\.min\(4, atteinte\), prepayePour\(blockMiroirVie \|\| lancementLien/.test(arret) && /blockMiroirVie = String\(adresseCreee\)/.test(html) && !/'Nothing is lost'/.test(arret), 'item4: stop screen reads the prepaid record of THIS block');
+ok(/prepayePour\(adrReprise\) \? 'Finish bringing it to life \(fee already paid\)'/.test(arret), 'item4: resume button on the same block');
+
 /* ── item 8 : Create pair chip wording ── */
 ok(fn(P, 'libellePuceCreation') && P.MEMESTOCK_MULTIPOOL_ACTIF === false, 'item8: chip helper present, multipool flag defaults OFF');
 if (fn(P, 'libellePuceCreation')) {
