@@ -181,6 +181,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .titre{font-weight:700;font-size:16px;letter-spacing:-.2px;margin:0 0 5px}
 .sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
 .note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
+/* launch-lock 24 h (drapeau LAUNCH_LOCK_24H, ETEINT par defaut — berceau-24h.js). L avertissement « seize »
+ * doit tenir en 3 lignes a 375 px. MESURE (Chrome headless, iframe 375 px, Noto Sans) : a 12.5 px et 294 px de
+ * large, les deux textes font 4 lignes ; a 11.5 px sur 314 px (on reprend 10 px de chaque cote dans le padding
+ * de 18 px de la carte) les deux font 3 lignes pour tout symbole du registre (le plus long : GOOGLc). */
+.berceau24 .note{margin-top:4px}
+.avertSaisie{color:var(--dur);font-size:11.5px;line-height:1.5;margin:8px -10px 0;max-width:none}
 
 /* Mini tabs inside a card — reuse .puce; panes hide walls of text. */
 .infoPane{margin-top:8px}
@@ -1272,6 +1278,8 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
 
     <div id="cModeBlock">
+    <!-- launch-lock 24 h : la lore du berceau, peinte par berceau-24h.js SEULEMENT si LAUNCH_LOCK_24H. -->
+    <div class="carte berceau24" id="cBerceau" hidden><p class="titre" data-berceau="titre"></p><p class="note" data-berceau="corps"></p></div>
     <div class="carte">
       <p class="titre"><span class="creaEtape">1</span> Name it</p>
       <!-- ⛔ « — only its admin could raise it » RETIRE (Phil, 2026-09-23 : « retire ca de l app sur
@@ -1415,6 +1423,8 @@ details[open] > summary::before{transform:rotate(90deg)}
            Un resume qui ne suit pas le choix est un mensonge poli : `majPaire` l ecrit desormais. -->
       <!-- tip 20260922-stock-pair-ux: chips OUTSIDE collapsed details so AAPLc/GOOGLc/NVDAc/COINc stay discoverable -->
       <div id="cPaireChips" class="stadeLigne" style="margin-top:10px;flex-wrap:wrap" hidden></div>
+      <!-- launch-lock 24 h : avertissement « seize » de l action appariee (actif / inconnu ; inactif = rien). -->
+      <p class="avertSaisie" id="cSaisie" role="note" hidden></p>
       <details class="bDetail" id="cPaireDetail" style="margin-top:8px"><summary class="note" id="cPaireResume">Paired with · ETH</summary>
       <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
            creation ; la pool, elle, s ouvre au lancement. Une action n est appelee « action » que si
@@ -2453,6 +2463,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
       </div>
+      <!-- launch-lock 24 h : avertissement « seize » de la devise appariee, PLEINE largeur de carte (3 lignes a 375 px). -->
+      <p class="avertSaisie" id="pSaisie" role="note" hidden></p>
       <!-- ⛔ COMPANION MODE (P0 glue, 2026-09-15): one strip that names existing mood + HP/stage + role.
            No new vitality score. Fly brain owns mood/phase/rules; HP = ∛(USD cap); role = browser until engraved.
            Any future LLM may ONLY rephrase facts already produced by fly brain / chain — never decide
@@ -2931,6 +2943,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
 /* ⛔ LES PAIRES : registre Coinbase RECOPIE de index.html (compare par un test), jeton libre accepte
  * mais jamais blanchi. */
 import { pairesProposees, qualifierPaire, etiquettePaire, proposableEnEchange, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock } from './paires.js';
+import { peindreSaisie, peindreBerceau } from './berceau-24h.js';
 /* ⛔ UN TICKER QUI SE LIT COMME UNE DEVISE DOIT SE VOIR. Mesure du 2026-09-30 : le selecteur du
  *   Brain proposait deux « USDC » qui sont de VRAIS B20 nommes « UpSideDownCat » et
  *   « FatCatBatRatWifHat » — des jeux de mots, pas des faux, mais la liste n affichait que le
@@ -8605,6 +8618,7 @@ async function lireProfil(adr, sym, perime, opts) {
   $('#pNotePalier').textContent = '';
   $('#pPuces').innerHTML = '';
   deviseProfil = null;
+  peindreSaisie($('#pSaisie'), null, null);
   soldeProfil = null;
   $('#pmTitre').textContent = '…';
   $('#pmFait').textContent = '';
@@ -8904,6 +8918,11 @@ async function lireProfil(adr, sym, perime, opts) {
     }
   }
   peindreJeu(vieProfil, deviseProfil, etatVieProfil, prixDeviseUsd);
+  /* launch-lock 24 h : avertissement « seize » de la devise appariee, lue dans la CLE de la pool. */
+  if (v && v.cle && deviseProfil) {
+    const s0 = String(v.cle.currency0 || '').toLowerCase();
+    peindreSaisie($('#pSaisie'), s0 === String(adr || '').toLowerCase() ? v.cle.currency1 : s0, deviseProfil);
+  }
   /* ⛔ LE BOUTON N APPARAIT QUE POUR UN BLOCK SANS MARCHE AVERE. « Pas lu » n est pas « endormi » :
    * proposer de reveiller un block qu on n a pas su lire enverrait ouvrir une pool qui existe. */
   /* ⛔ LE LANCEMENT EST MAINTENANT DANS L APP : le bouton revient, mais SEULEMENT pour un block sans
@@ -15118,6 +15137,11 @@ let majPaireSeq = 0;
 async function majPaire() {
   const seq = ++majPaireSeq;
   motifRefusPaire = null;
+  /* launch-lock 24 h. ⛔ `typeof` EXPRES : test-e0-devises-v8.mjs EXECUTE majPaire dans un bac a sable qui ne
+   * fournit que les noms qu il connait ; un appel nu y leverait ReferenceError. Dans la page, l import existe
+   * (test-launch-lock-24h.mjs le verifie), donc le garde ne masque rien. */
+  const saisieC = typeof peindreSaisie === 'function' ? peindreSaisie : () => null;
+  saisieC($('#cSaisie'), null, null);
   const autre = $('#cPaire').value === AUTRE_PAIRE;
   $('#cPaireAutreRang').hidden = !autre;
   const n = $('#cPaireNote');
@@ -15131,6 +15155,7 @@ async function majPaire() {
     return;
   }
   const q = qualifierPaire(adr, CHAINE);
+  if (q.etat === 'OK') saisieC($('#cSaisie'), q.paire.adr, q.paire.symbole);
   if (q.etat !== 'OK') {
     paireChoisie = null;
     n.className = 'note wKo';
@@ -18827,6 +18852,7 @@ peindrePaires();
 peindreRolesCreate();
 peindreApercuCreation();
 $('#cPaire').addEventListener('change', () => void majPaire());
+peindreBerceau($('#cBerceau'));
 $('#cPaireAutre').addEventListener('input', () => void majPaire());
 /* tip 20260922-stock-pair-ux: chip → set select + majPaire */
 const chipsBox = $('#cPaireChips');
