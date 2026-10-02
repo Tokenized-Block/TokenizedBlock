@@ -11,6 +11,8 @@
 // ⛔ P0 2026-09-15 tip 1915: mood_changes alone flooded Social (calm↔curious ~30s). Longer gap; UI collapses per token.
 import { evenementsDuPas } from './regles-cerveau.js';
 import { nomHumeur } from './cerveau.js';
+/* ⛔ 2026-10-02 (Raksha) : la VOIX choisie par le createur ajoute des mots APRES le fait ; sans voix, rien ne change. */
+import { reactionVoix, partageVoix, composerParole, estAmi } from './voix-block.js';
 
 export const PAROLE_ECART_BATTEMENTS = 50;
 /** Mood-only speech: same class as GM spam — do not re-announce every calm↔curious flip. */
@@ -112,18 +114,28 @@ export function parolesDuTour({ blocks, tick, dernieres = {} }) {
     if (!e) continue;
     const gap = e === 'mood_changes' ? PAROLE_ECART_MOOD : PAROLE_ECART_BATTEMENTS;
     if (!libre(b.adr, gap)) continue;
+    /* voix du createur : « quiet » sur cet evenement = le block se tait (et personne ne lui repond) */
+    const reaction = reactionVoix(b.voix, e, b);
+    if (reaction === 'SILENCE') continue;
     d[b.adr] = tick;
-    paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null, texte: nom(b) + ': ' + PHRASE[e](b.vu, b),
+    const partage = b.voix && e !== 'mood_changes' ? partageVoix(b.voix, tick) : null;
+    paroles.push({ type: 'DIT', de: b.adr, sym: nom(b), a: null, symA: null,
+      texte: composerParole(nom(b) + ': ' + PHRASE[e](b.vu, b), reaction, partage),
       parce_que: 'it saw ' + RAISON[e], evenement: e });
     if (!APPELLE_REPONSE.has(e) || paroles.length >= PAROLES_MAX_PAR_TOUR) continue;
-    /* le repondant : le block suivant dans l ordre des adresses, qui n a pas parle recemment — deterministe */
+    /* le repondant : le block suivant dans l ordre des adresses, qui n a pas parle recemment — deterministe.
+     * Si le createur a nomme des blocks avec qui il aime parler, le premier d entre eux qui est libre passe devant. */
     const i = liste.indexOf(b);
-    const autre = [...liste.slice(i + 1), ...liste.slice(0, i)].find((x) => libre(x.adr));
+    const tour = [...liste.slice(i + 1), ...liste.slice(0, i)];
+    const autre = (b.voix && tour.find((x) => libre(x.adr) && estAmi(b.voix, x.adr, x.sym))) || tour.find((x) => libre(x.adr));
     if (!autre) continue;
     d[autre.adr] = tick;
+    const base = nom(autre) + ' → ' + nom(b) + ': ' + REPONSE[e] + (humeurJugee(autre.vu) ? ' I am ' + humeur(autre.vu.phase) + ' myself.' : '');
+    const reponseVoix = reactionVoix(autre.voix, e, b);
     paroles.push({ type: 'REPOND', de: autre.adr, sym: nom(autre), a: b.adr, symA: nom(b),
       /* humeur non lue (marche illisible) : on ne la dit pas — « I am unable to read my market myself » ne veut rien dire */
-      texte: nom(autre) + ' → ' + nom(b) + ': ' + REPONSE[e] + (humeurJugee(autre.vu) ? ' I am ' + humeur(autre.vu.phase) + ' myself.' : ''),
+      texte: composerParole(base, reponseVoix === 'SILENCE' ? null : reponseVoix,
+        partage && partage.startsWith('My news:') ? 'Thanks for the news.' : null),
       parce_que: 'a reply — ' + deQui(b, e), evenement: e });
   }
   return { paroles, dernieres: d };
