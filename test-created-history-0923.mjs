@@ -27,7 +27,8 @@ const need = [
    *      block est ne. La promesse d honnetete ne disparait pas, elle change de place — de l onglet
    *      vers la ligne, la ou le lecteur la voit vraiment. */
   ['Created title', 'Every block born on Base in this window'],
-  ['origine dite par ligne', 'was born on another launchpad'],
+  /* 2026-10-02 (fondateur) : ligne compacte « ARMY · born on another launchpad » */
+  ['origine dite par ligne', "· born on another launchpad'"],
   ['IB CTA 0.001', 'data-tf-act="instant-birth-tb">Instant Birth on TB · 0.001 ETH'],
   ['paid-first sort', "liveFiltre === 'CREATION' || liveFiltre === 'CREATION_TB' || liveFiltre === 'CREATION_FOREIGN'"],
 ];

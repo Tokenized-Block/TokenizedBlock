@@ -13,7 +13,8 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
  *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
 assert.match(html, /data-build="[\w-]+"/);
 assert.doesNotMatch(html, /Launch hooked V8/);
-assert.match(html, /was born on another launchpad'/);
+/* 2026-10-02 (fondateur) : la ligne dit « ARMY · born on another launchpad » — l origine reste dite par ligne. */
+assert.match(html, /· born on another launchpad'/);
 assert.doesNotMatch(html, /was born on another launchpad · unhooked/);
 /* ⛔ EPINGLE RETIREE LE 2026-09-23 — elle epinglait l INDENTATION du source (`\s*\n\s*`).
  *    Elle ne testait pas une fonctionnalite : elle testait que PERSONNE N AVAIT DEPLOYE ni
@@ -30,7 +31,8 @@ assert.doesNotMatch(html, /was born on another launchpad · unhooked/);
  *       renommage volontaire, et fait croire a une regression quand il n y en a pas.
  * ⛔ CE N EST PAS UN AFFAIBLISSEMENT : la presence du lien reste exigee. Ce qui disparait, c est
  *    l exigence qu il soit produit par une variable au nom precis. */
-assert.match(html, /class="filOpen">Open profile<\/span>/);
+/* 2026-10-02 (fondateur) : ligne etrangere compacte — le lien vers le profil est « profile › » (data-fil-profil), toujours exige. */
+assert.match(html, /class="filOpen" data-fil-profil="' \+ j \+ '">profile&nbsp;›<\/a>/);
 /* ⛔⛔ SUPERSEDED — CES TROIS ASSERTIONS CONTREDISENT UNE DECISION PRISE APRES ELLES.
  *     Elles exigeaient qu AUCUN CTA « Instant Birth » n apparaisse pres de `openHint` : c etait
  *     l intention du tip 20260922-2141 (« Created unhooked : Open profile ONLY »).
