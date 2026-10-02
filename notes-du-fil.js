@@ -94,11 +94,12 @@ export function libelleNotes(r) {
 /** Le compte du profil. ⛔ Jamais « N notes » pour des transferts vides ; jamais « 0 messages » sec quand le Feed en a vu. */
 export function compteProfil(nMessages, r) {
   if (!r) return pl(nMessages, 'message', 'messages');
-  const vides = r.sansTexte ? pl(r.sansTexte, 'empty 0-amount transfer', 'empty 0-amount transfers') : '';
-  const enSuspens = r.enAttente + r.nonLues;
-  return [nMessages ? pl(nMessages, 'message', 'messages') : 'No messages yet', vides,
+  /* ⛔ REVUE 14:00 : les MEMES morceaux que le titre du Feed (libelleNotes) — un non-verifie n est pas un vide */
+  return [nMessages ? pl(nMessages, 'message', 'messages') : 'No messages yet',
+    r.sansTexte ? r.sansTexte + ' empty' : '',
     r.illisibles ? r.illisibles + ' with bytes that are not text' : '',
-    enSuspens ? '⚠️ ' + enSuspens + ' not read' : ''].filter(Boolean).join(' · ');
+    r.enAttente ? r.enAttente + ' not checked yet' : '',
+    r.nonLues ? '⚠️ ' + r.nonLues + ' could not be read' : ''].filter(Boolean).join(' · ');
 }
 
 /** La phrase affichee au-dessus de la liste. ⛔ Elle part du compte du Feed, et « note » = avec texte. */

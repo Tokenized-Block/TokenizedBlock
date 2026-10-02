@@ -8770,6 +8770,7 @@ async function lireProfil(adr, sym, perime, opts) {
   $('#pmsgFil').innerHTML = '';
   $('#pmsgNote').textContent = '';
   $('#pmsgCompte').textContent = '';
+  pmsgLu = null;
   $('#pmsgPayeLignes').innerHTML = '';
   $('#pmsgPayeActions').innerHTML = '';
   $('#pmsgPayeNote').textContent = '';
@@ -10487,6 +10488,7 @@ function peindreLive() {
      *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
     ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>' : '');
   setTimeout(lireNotesAuto, 0);
+  peindreMessagesProfil(); /* ⛔ REVUE 14:00 : le compte du profil suit le Feed, au meme instant */
   if ($('#sfLiveRoute')) $('#sfLiveRoute').hidden = !lignes.slice(0, liveAffiches).some(estEtrangere);
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
@@ -14237,6 +14239,44 @@ $('#plConfirm').addEventListener('change', () => { if (planCourant) peindrePlan(
 const MSG_TX_MAX = 30;
 let msgEnCours = false;
 
+var pmsgLu = null; /* var : lu avant sa ligne si un profil s ouvre pendant le chargement */
+function peindreMessagesProfil() {
+  const f = pmsgLu;
+  if (!f || $('#profil').hidden || $('#profil').dataset.block !== f.adr) return;
+  const adr = f.adr;
+  const duFil = liveEvts.filter((x) => x.type === 'NOTE' && String(x.jeton).toLowerCase() === String(adr).toLowerCase());
+  const avec = f.avecScan.slice();
+  const txVues = new Set(avec.map((l) => String(l.tx || '').toLowerCase()));
+  for (const nt of duFil) {
+    const k = String(nt.tx || '').toLowerCase(), l = notesLues.get(k);
+    if (!l || l.etat !== 'LU' || txVues.has(k)) continue;
+    txVues.add(k);
+    avec.push({ tx: nt.tx, bloc: nt.bloc, from: nt.de, to: nt.a, texte: l.texte, signataire: l.signataire });
+  }
+  avec.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0));
+  const rFil = duFil.length ? resumeNotes(duFil, notesLues) : null;
+  const blocsFil = duFil.map((x) => x.bloc).filter(Number.isFinite);
+  const sym = symProfil || 'this block';
+  $('#pmsgFil').innerHTML = avec.map((l) => '<li class="filL"><div style="min-width:0;flex:1">'
+    + '<p class="filM" style="margin:0">« ' + enTexte(l.texte) + ' »</p>'
+    + '<p class="filS">' + enTexte(court(l.signataire || l.from)) + ' → ' + enTexte(court(l.to))
+    + ' · block ' + (Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?')
+    + (l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
+      + '" target="_blank" rel="noopener">tx</a>' : '') + '</p></div></li>').join('');
+  /* ⛔ REVUE 13:32 / 14:00 : « No messages yet · 10 empty · 6 not checked yet » — le decoupage du Feed */
+  $('#pmsgCompte').textContent = compteProfil(avec.length, rFil);
+  const note = $('#pmsgNote');
+  note.className = 'note';
+  note.textContent = (avec.length
+    ? avec.length + ' message(s) among the last ' + f.recents + ' transfer(s) of ' + sym
+    : 'No message among the last ' + f.recents + ' transfer(s) of ' + sym)
+    + ' · over the last 2,000 chain blocks'
+    + (f.illisibles ? ' · ' + f.illisibles + ' transfer(s) with extra bytes that are not text' : '')
+    + (f.txNonLues ? ' · ⚠️ ' + f.txNonLues + ' transaction(s) not read — incomplete, not empty' : '')
+    + (f.ratees ? ' · ⚠️ ' + f.ratees + ' window(s) refused by the node' : '')
+    + (rFil ? ' · ' + phraseNotes(rFil, Math.min(...blocsFil), Math.max(...blocsFil)) : '');
+}
+
 async function lireMessagesDuBlock() {
   const adr = $('#profil').dataset.block;
   if (msgEnCours || !/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) return;
@@ -14269,39 +14309,18 @@ async function lireMessagesDuBlock() {
     }
     /* ⛔⛔ 2026-10-02 (QA prod : Feed « NVDAc got 4 notes », profil « 0 messages ») : les 30 derniers
      *     transferts ne sont PAS la source du Feed. Les notes que le Feed a comptees pour ce block sont
-     *     relues ici depuis LEURS transactions, et le compte ne dit plus « 0 » quand le Feed dit 4. */
+     *     relues ici depuis LEURS transactions, et le compte ne dit plus « 0 » quand le Feed dit 4.
+     * ⛔⛔ REVUE 14:00 : Feed « 10 empty · 6 not checked yet », profil « 15 empty » — le profil lisait TOUT
+     *     et a un autre moment. Il lit maintenant EXACTEMENT la page que le Feed lit, et son compte se
+     *     repeint a chaque rendu du Feed (peindreMessagesProfil) : meme decoupage, meme fenetre. */
     const duFil = liveEvts.filter((x) => x.type === 'NOTE' && String(x.jeton).toLowerCase() === String(adr).toLowerCase());
-    if (duFil.length) await lireNotes({ rpc, notes: duFil, lireMemo, cache: notesLues });
-    if ($('#profil').dataset.block !== adr) return;
-    const txVues = new Set(avec.map((l) => String(l.tx || '').toLowerCase()));
-    for (const nt of duFil) {
-      const k = String(nt.tx || '').toLowerCase(), l = notesLues.get(k);
-      if (!l || l.etat !== 'LU' || txVues.has(k)) continue;
-      txVues.add(k);
-      avec.push({ tx: nt.tx, bloc: nt.bloc, from: nt.de, to: nt.a, texte: l.texte, signataire: l.signataire });
+    if (duFil.length) {
+      await lireNotes({ rpc, notes: duFil.slice(0, liveDeplies.get(cleGroupe({ type: 'NOTE', jeton: adr })) || ENFANTS_PAS), lireMemo, cache: notesLues });
+      peindreLive();
     }
-    avec.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0));
-    const rFil = duFil.length ? resumeNotes(duFil, notesLues) : null;
-    const blocsFil = duFil.map((x) => x.bloc).filter(Number.isFinite);
-    const sym = symProfil || 'this block';
-    $('#pmsgFil').innerHTML = avec.map((l) => '<li class="filL"><div style="min-width:0;flex:1">'
-      + '<p class="filM" style="margin:0">« ' + enTexte(l.texte) + ' »</p>'
-      + '<p class="filS">' + enTexte(court(l.signataire || l.from)) + ' → ' + enTexte(court(l.to))
-      + ' · block ' + (Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?')
-      + (l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
-        + '" target="_blank" rel="noopener">tx</a>' : '') + '</p></div></li>').join('');
-    /* ⛔ REVUE 13:32 : « No messages yet · 8 empty 0-amount transfers », jamais « 8 notes … none with text » */
-    $('#pmsgCompte').textContent = compteProfil(avec.length, rFil);
-    const ratees = (r.fenetresRatees || []).length;
-    note.className = 'note';
-    note.textContent = (avec.length
-      ? avec.length + ' message(s) among the last ' + recents.length + ' transfer(s) of ' + sym
-      : 'No message among the last ' + recents.length + ' transfer(s) of ' + sym)
-      + ' · over the last 2,000 chain blocks'
-      + (illisibles ? ' · ' + illisibles + ' transfer(s) with extra bytes that are not text' : '')
-      + (txNonLues ? ' · ⚠️ ' + txNonLues + ' transaction(s) not read — incomplete, not empty' : '')
-      + (ratees ? ' · ⚠️ ' + ratees + ' window(s) refused by the node' : '')
-      + (rFil ? ' · ' + phraseNotes(rFil, Math.min(...blocsFil), Math.max(...blocsFil)) : '');
+    if ($('#profil').dataset.block !== adr) return;
+    pmsgLu = { adr, avecScan: avec, recents: recents.length, illisibles, txNonLues, ratees: (r.fenetresRatees || []).length };
+    peindreMessagesProfil();
   } finally {
     msgEnCours = false;
     profilEnLecture = false;
