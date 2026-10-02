@@ -210,17 +210,38 @@ export const ACTIONS_COINBASE = [
    * ⛔ MUc EST SUR UNISWAP, PAS AERODROME : elle est achetable, mais elle NE PEUT PAS porter notre
    *   frais de 0,1 % — `sweepTokenWithFee` n existe que sur le routeur Aerodrome. C est dit ici
    *   parce qu une ligne de liste ne dit rien de l argent qu elle rapporte. */
+  /* ── DIX-HUIT AJOUTS DU 2026-10-02 (annonce Base « 26 new tokenized stocks », x.com/base/status/2106022851346383309) ──
+   * ⛔⛔ SOURCE : la liste de l EMETTEUR, `https://api.coinbase.com/v1/tokenized-stocks` (58 entrees ce jour).
+   *     Les 58 relues SUR LA CHAINE : `eth_getCode` == `0xef`, `symbol()` concordant, `decimals()` == 8 — 58/58.
+   *     43 n etaient pas chez nous ; 20 ont une supply NULLE (regle du 2026-09-27 : dehors).
+   * ⛔⛔ RESTENT 23, ET 18 ENTRENT : chacune a une pool REELLE prouvee sur fork Base (bloc 52081042) par aller-retour
+   *     au Quoter v4 (10 USDC -> action -> USDC, ~9,0 rendus : frais de pool 5 %, sans hook). DEHORS : HTZc (aucune
+   *     pool), PFEc (pool a 88 % de frais : 10 -> 0,14), GMEc, PMc, SOUNc (Aerodrome CL, liquidite dans la plage = 0).
+   * ⛔ AUCUNE N EST DANS `DEVISES_ADMISES_V8` : V8 `deviseAdmise()` rend `false` pour les 18 (temoin NVDAc : `true`).
+   *   Un block NEUF ne s y cote donc pas encore — la garde de Create le dit deja en clair ; elles servent aux paires
+   *   et a l achat. Les adresses sont EXTRAITES de la reponse JSON de l emetteur, jamais transcrites de tete. */
   { symbole: 'AAPLc', nom: 'Apple', adr: '0xb200000000000000000000c2e324d24d7eecd1fb' },
+  { symbole: 'AMDc', nom: 'Advanced Micro Devices', adr: '0xb2000000000000000000000d8ce462e99ee7a47b' },
   { symbole: 'AMZNc', nom: 'Amazon', adr: '0xb200000000000000000000d9192b6b456483c2e8' },
+  { symbole: 'ASTSc', nom: 'AST SpaceMobile', adr: '0xb200000000000000000000b1a29cf17a1819288a' },
   { symbole: 'AVGOc', nom: 'Broadcom', adr: '0xb200000000000000000000fc737aea6196ab5a4c' },
   { symbole: 'BEc', nom: 'Bloom Energy', adr: '0xb20000000000000000000016f9dfe862feba122b' },
+  { symbole: 'CAKEc', nom: 'Cheesecake Factory', adr: '0xb200000000000000000000f215e4c890cfb7176b' },
+  { symbole: 'DJTc', nom: 'Trump Media & Technology Group', adr: '0xb200000000000000000000428e3a3eebbb20692b' },
+  { symbole: 'DUOLc', nom: 'Duolingo', adr: '0xb200000000000000000000a613d12deafbbb1db7' },
   { symbole: 'GOOGLc', nom: 'Alphabet', adr: '0xb2000000000000000000002d0ba3164cc74f58b7' },
   { symbole: 'HIMSc', nom: 'Hims & Hers Health', adr: '0xb20000000000000000000043a599976181bcf336' },
+  { symbole: 'LLYc', nom: 'Eli Lilly', adr: '0xb200000000000000000000f1a0f91e34892e4718' },
   { symbole: 'METAc', nom: 'Meta Platforms', adr: '0xb2000000000000000000008bc8786b856e61707c' },
+  { symbole: 'MRNAc', nom: 'Moderna', adr: '0xb200000000000000000000e215e9b76ecba02468' },
+  { symbole: 'MRVLc', nom: 'Marvell Technology', adr: '0xb200000000000000000000ec3c4c7395cc609813' },
   { symbole: 'MSFTc', nom: 'Microsoft', adr: '0xb200000000000000000000ab99cfa739e253872b' },
   { symbole: 'MSTRc', nom: 'Strategy', adr: '0xb2000000000000000000004884b426556b92883d' },
   { symbole: 'MUc', nom: 'Micron Technology', adr: '0xb200000000000000000000fd2f87532b90095211' },
+  { symbole: 'NFLXc', nom: 'Netflix', adr: '0xb20000000000000000000058b8c947e44011dfe6' },
+  { symbole: 'NVAXc', nom: 'Novavax', adr: '0xb200000000000000000000c597c476fcf9aed3a8' },
   { symbole: 'NVDAc', nom: 'NVIDIA', adr: '0xb20000000000000000000078ee7ce2fe4908108c' },
+  { symbole: 'ORCLc', nom: 'Oracle', adr: '0xb200000000000000000000347afba223d7b6b63c' },
   /* ── PLTRc, AJOUTEE LE 2026-09-30, ET UNE MESURE SUR LES 40 L A ISOLEE ────────────────────────
    * ⛔⛔ D OU VIENT LE CANDIDAT : la liste de l EMETTEUR lui-meme,
    *     `https://api.coinbase.com/v1/tokenized-stocks` (HTTP 200, sondee avant d etre codee
@@ -246,9 +267,16 @@ export const ACTIONS_COINBASE = [
    * ⚠️ L adresse est EXTRAITE de la reponse JSON de l emetteur, jamais transcrite de tete.
    * ⚠️ Supply lue le 2026-09-30 : 2 068,33 — mince, et « admise » ne veut pas dire « profonde ». */
   { symbole: 'PLTRc', nom: 'Palantir Technologies', adr: '0xb2000000000000000000007d16372840df4dabbe' },
+  { symbole: 'PTONc', nom: 'Peloton Interactive', adr: '0xb2000000000000000000009272a491812842aa84' },
+  { symbole: 'PYPLc', nom: 'PayPal', adr: '0xb200000000000000000000450ad3abe5d4846c6e' },
+  { symbole: 'QUBTc', nom: 'Quantum Computing', adr: '0xb200000000000000000000ca425ab42e07c35bc3' },
+  { symbole: 'RBLXc', nom: 'Roblox', adr: '0xb2000000000000000000005bd7ae89b9e6189bb5' },
+  { symbole: 'RDDTc', nom: 'Reddit', adr: '0xb20000000000000000000066242d4067724cb7a1' },
   { symbole: 'SNDKc', nom: 'Sandisk', adr: '0xb200000000000000000000397293cb8cda9a10c5' },
   { symbole: 'SPCXc', nom: 'SpaceX', adr: '0xb2000000000000000000007b9fcbd005511acbd5' },
   { symbole: 'TSLAc', nom: 'Tesla', adr: '0xb2000000000000000000001e800a7f5189430cd0' },
+  { symbole: 'TTWOc', nom: 'Take-Two Interactive', adr: '0xb200000000000000000000f720c26062bc3067da' },
+  { symbole: 'WENc', nom: 'Wendy’s', adr: '0xb20000000000000000000044e3cd7a0e1028e57a' },
 ];
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
