@@ -19,7 +19,8 @@ import { TBLOCK, HOOK_PREVU, estNotreHook, hookPaieDejaA6cf, deviseFraisHook } f
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
-import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL } from './pool-sans-hook.js';
+import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -181,6 +182,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
   }
   /* ⛔⛔ 2026-10-02 (regle du fondateur) : jamais une pool sans hook pour un block TB — refus avant toute cotation. */
+  /* ⛔⛔ 2026-10-02 13:58 (fondateur) : plus aucune route par TBLOCK — ni TBLOCK lui-meme, ni un block apparie a TBLOCK. */
+  if (!ROUTE_VIA_TBLOCK && (marche.paire === 'TBLOCK' || cleTouchTblock(marche.cle))) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusTblock: true };
+  }
   if (marche.paire !== 'TBLOCK' && poolSansHookInterdite(marche.cle, [jeton])) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusSansHook: true };
   }
@@ -195,6 +200,10 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
    *   pools USDC et actions (Zero 1 : 34 075 hook + 33 904 routeur USDC sur la meme vente). La devise du hook decide. */
   const zfMarche = !!(marche.cle && (String(marche.cle.currency0).toLowerCase() === String(jeton).toLowerCase()
     ? sens === 'VENTE' : sens === 'ACHAT'));
+  /* ⛔⛔ 2026-10-02 13:59 (fondateur) : jamais de frais en block a a6cf — une pool dont le hook preleverait en block est refusee. */
+  if (REFUS_FRAIS_HOOK_EN_BLOCK && fraisHookEnBlock(marche.cle, jeton, sens, zfMarche)) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusFraisEnBlock: true };
+  }
   const hookPaie = marche.paire !== 'TBLOCK' && !!marche.cle
     && hookPaieEnDeviseVendable({ cle: marche.cle, sens, zeroForOne: zfMarche, jeton, fraisDevisesOk }).paie;
   const bps = (estWalletDeFrais(compte) || hookPaie) ? 0n : FRAIS_INTERFACE_BPS;
@@ -672,6 +681,13 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *     taux, et c est explicite — baisser le chemin existant aurait coupe un revenu qui existe. */
   /* ⛔⛔ 2026-10-02 (regle du fondateur) : aucun saut sur une pool sans hook qui contient un block TB (entree, sortie,
    *   TBLOCK, TBGAS). Les jambes entre devises (ETH/USDC…) restent permises. */
+  if (REFUS_FRAIS_HOOK_EN_BLOCK && sauts.some((x) => x && x.cle && [entree, sortie].some((j) => /^0xb2/i.test(String(j || ''))
+    && fraisHookEnBlock(x.cle, j, x.zeroForOne ? 'ACHAT' : 'VENTE', !!x.zeroForOne)))) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusFraisEnBlock: true };
+  }
+  if (!ROUTE_VIA_TBLOCK && sauts.some((x) => x && cleTouchTblock(x.cle))) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusTblock: true };
+  }
   if (indexPoolSansHookInterdite(sauts.map((x) => x && x.cle), [entree, sortie]) >= 0) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusSansHook: true };
   }

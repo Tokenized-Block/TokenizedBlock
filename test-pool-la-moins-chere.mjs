@@ -50,13 +50,13 @@ const fraisEstDynamique = new Function('FRAIS_DYNAMIQUE_V4', srcDyn + '\nreturn 
 /* ⛔ 2026-10-02 (fix-2) : poolDecouvertPour applique la regle du fondateur (jamais une pool sans hook pour un block B20)
  *   et le choix « Buy here » des V8 ou le block passe devant. Dependances REELLES, importees. Le classement ci-dessous se
  *   teste donc sur un jeton HORS B20 (JETON) ; le cas SPIKE reel (B20) a son propre cas : il ne route plus sans hook. */
-const { poolSansHookInterdite } = await import('./pool-sans-hook.js');
+const { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock } = await import('./pool-sans-hook.js');
 const { choixBuyHere, v8BlockDevant } = await import('./paires.js');
 const { HOOK_V8 } = await import('./tokenomics.js');
 const choisirBrut = new Function('poolsLive', 'estNotreHook', 'confianceDe', 'fraisEstDynamique', 'adr',
-  'poolSansHookInterdite', 'choixBuyHere', 'v8BlockDevant', 'HOOK_V8',
+  'poolSansHookInterdite', 'choixBuyHere', 'v8BlockDevant', 'HOOK_V8', 'ROUTE_VIA_TBLOCK', 'cleTouchTblock',
   source + '\nreturn poolDecouvertPour(adr);');
-const choisir = (m, e, c, f, adr) => choisirBrut(m, e, c, f, adr, poolSansHookInterdite, choixBuyHere, v8BlockDevant, HOOK_V8);
+const choisir = (m, e, c, f, adr) => choisirBrut(m, e, c, f, adr, poolSansHookInterdite, choixBuyHere, v8BlockDevant, HOOK_V8, ROUTE_VIA_TBLOCK, cleTouchTblock);
 
 const SPIKE = '0xb200000000000000000000fac1a85ab57681d601';
 /* jeton hors B20 : le classement entre pools sans hook s y applique toujours */
