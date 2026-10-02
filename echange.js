@@ -15,7 +15,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook, routePaieDejaA6cf,
+import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook,
   HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
@@ -508,7 +508,7 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
      *   (key, zeroForOne, amountIn, amountOutMin, bytes hookData). La forme AVEC_MINHOP met un 0 la ou
      *   l UR lit l offset de hookData : hookData est alors lu VIDE, en silence — le referrer o1 ne
      *   recevait rien. Des qu il y a des hookData, la tete est encodee SANS_MINHOP. Sans hookData
-     *   (drapeau OFF), l octet emis est inchange. Teste par test-referent-o1-plan-echange-20261002.mjs. */
+     *   (pool hors LaunchHook o1 Standard, ou drapeau OFF), l octet emis est inchange. Teste par test-referent-o1-plan-echange-20261002.mjs. */
     const formeTete = hookData ? SANS_MINHOP : forme;
     const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme: formeTete, actions: actionsEncodees, hookData });
     return { to: R, data, value: '0x' + valeur.toString(16) };

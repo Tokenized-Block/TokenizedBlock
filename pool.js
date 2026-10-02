@@ -472,7 +472,7 @@ export const paramsAction = Object.freeze({
 /** Les parametres d un SWAP_EXACT_IN_SINGLE (0x06), utilisables comme action suivante (buyback automatique).
  *  ⛔ `montant` 0 = OPEN_DELTA : le routeur prend TOUT le credit de la devise d entree (V4Router, lu a la source). */
 /* ⛔ 2026-10-02 `hookData` (hex SANS 0x, longueur paire) : '' par defaut -> octets IDENTIQUES a avant (teste).
- *    Seul usage : la part referrer publique d o1 (`referent-o1.js`), drapeau OFF. */
+ *    Seul usage : la part referrer publique d o1 (`referent-o1.js`, REFERENT_O1_ACTIF = true) ; hors pool o1 Standard : ''. */
 export function paramsSwapExactInSingle({ cle, zeroForOne, montant, sortieMin, forme, hookData = '' }) {
   const champs = forme === AVEC_MINHOP ? 9 : 8;
   const hd = String(hookData || '').replace(/^0x/, '').toLowerCase();

@@ -39,8 +39,15 @@ await essai('(1b)', async () => {
   ok(f(r199) === 'Amount too small to trade here.', '(1b) dust on the Buy/Sell screen: exactly the plain sentence (' + f(r199) + ')');
   const g = f({ etat: 'REFUSE', pourquoi: 'this pool returns nothing for this amount' });
   ok(/^Not possible: this pool returns nothing/.test(g), '(1b) NEG: another refusal keeps its "Not possible:" reason (' + g.slice(0, 60) + ')');
-  const mu = html.match(/ {4}return refuser\(\(p\.refusPoussiere \|\| p\.refusCheminFrais\) \? String\(p\.pourquoi\) : 'Not possible: '[^\n]*\n/);
-  ok(!!mu, '(1b) multi-hop refusal shows the plain text alone');
+  /* 2026-10-02 (cleanup) : multi-hop -> dust alone; every other refusal keeps 'Not possible: … Nothing was sent.' */
+  const mu = html.match(/ {4}return refuser\(p\.refusPoussiere \? String\(p\.pourquoi\) : 'Not possible: ' \+ \(p\.pourquoi \|\| p\.etat\) \+ ' Nothing was sent\.'\);\n/);
+  ok(!!mu, '(1b) multi-hop refusal found');
+  if (mu) {
+    const fm = new Function('p', 'const refuser = (x) => x; ' + mu[0]);
+    ok(fm(r199) === 'Amount too small to trade here.', '(1b) multi-hop dust: the plain sentence alone (' + fm(r199) + ')');
+    const fc = fm({ etat: 'REFUSE', pourquoi: 'Not tradable here yet', refusCheminFrais: true });
+    ok(fc === 'Not possible: Not tradable here yet Nothing was sent.', '(1b) NEG: multi-hop route-out keeps the wrapper (' + fc + ')');
+  }
   const eu = html.match(/e\.textContent = p\.refusPoussiere \? String\(p\.pourquoi\) : 'Not possible: ' \+ \(p\.pourquoi \|\| p\.etat\); return;/);
   ok(!!eu, '(1b) ETH->USDC refusal shows the plain text alone');
 });
