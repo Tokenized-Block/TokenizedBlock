@@ -240,8 +240,9 @@ cas('une ligne SEULE ouvre toujours le profil (inchange)', () => {
 cas('⛔ le profil lit les notes du Feed, et son compte ne retombe pas a « 0 messages »', () => {
   const src = bloc(0, 'async function lireMessagesDuBlock() {');
   assert.match(src, /liveEvts\.filter\(\(x\) => x\.type === 'NOTE'/, 'le profil ne relit pas les notes du Feed');
-  assert.match(src, /lireNotes\(\{ rpc, notes: duFil, lireMemo, cache: notesLues \}\)/);
-  assert.match(src, /\$\('#pmsgCompte'\)\.textContent = compteProfil\(avec\.length, rFil\);/, 'le compte du profil ne passe plus par compteProfil');
+  /* REVUE 14:00 : le profil lit la MEME page que le Feed (preuve executee : test-profil-meme-decoupage-20261002.mjs) */
+  assert.match(src, /lireNotes\(\{ rpc, notes: duFil\.slice\(0, liveDeplies\.get\(cleGroupe\(\{ type: 'NOTE', jeton: adr \}\)\) \|\| ENFANTS_PAS\), lireMemo, cache: notesLues \}\)/);
+  assert.match(bloc(0, 'function peindreMessagesProfil() {'), /\$\('#pmsgCompte'\)\.textContent = compteProfil\(avec\.length, rFil\);/, 'le compte du profil ne passe plus par compteProfil');
 });
 
 for (const [nom, fn] of CAS) { try { await fn(); n++; } catch (e) { e.message = nom + ' — ' + e.message; throw e; } }

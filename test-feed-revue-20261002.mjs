@@ -49,8 +49,8 @@ function verifierLibelles(m) {
   const mixte = m.libelleNotes(r({ total: 8, avecTexte: 2, sansTexte: 6 }));
   assert.equal(mixte.texte, 'got 2 notes · 6 empty transfers (0 amount)', 'cas mixte : seules les entrees a texte sont des notes');
   assert.equal(mixte.notes, true); assert.ok(!mixte.spam);
-  assert.equal(m.compteProfil(0, r({ total: 8, sansTexte: 8 })), 'No messages yet · 8 empty 0-amount transfers');
-  assert.equal(m.compteProfil(2, r({ total: 8, avecTexte: 2, sansTexte: 6 })), '2 messages · 6 empty 0-amount transfers');
+  assert.equal(m.compteProfil(0, r({ total: 8, sansTexte: 8 })), 'No messages yet · 8 empty');
+  assert.equal(m.compteProfil(2, r({ total: 8, avecTexte: 2, sansTexte: 6 })), '2 messages · 6 empty');
   for (const x of [vide.texte, m.compteProfil(0, r({ total: 8, sansTexte: 8 })), m.phraseNotes(r({ total: 8, sansTexte: 8 }), 1, 9)])
     assert.ok(sansMotNote(x), 'le mot « note » nomme des transferts vides : ' + x);
   const attente = m.libelleNotes(r({ total: 3, enAttente: 3 }));
