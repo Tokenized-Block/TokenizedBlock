@@ -8560,6 +8560,13 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
 
 /** Bridge, poussiere : ⛔ 2026-10-02 (Zero 1) — phrase complete, sans double point. */
 function texteBridgePoussiere(plan) { return 'You receive: not read. ' + String(plan.pourquoi) + ' Nothing was sent.'; }
+/* ⛔⛔ 2026-10-02 (Zero 1, R4 item 3) : UN SEUL texte de refus d echange — « <Raison>. Nothing was sent. ». Avant : « Not possible: … »,
+ *   « Not prepared — … », « Not possible as set: … », et MESSAGE_SANS_POOL qui disait deux fois « nothing was sent ». Le fragment
+ *   deja present dans la raison est retire, puis ajoute UNE fois. L etape interne (« (at forme) ») n est plus affichee. */
+function texteRefusEchange(pourquoi) {
+  const r = String(pourquoi || 'Not tradable here yet').replace(/[\s,;:—–-]*(?:so )?nothing was sent[.\s]*/gi, ' ').replace(/\s+/g, ' ').trim().replace(/[\s.,;:—–-]+$/, '');
+  return (r.charAt(0).toUpperCase() + r.slice(1)) + '. Nothing was sent.';
+}
 /** Compte une etape de l entonnoir (anonyme : le nom de l etape, rien d autre). « une fois » = une fois par visite. */
 /* ⛔ 2026-10-02 (Zero 1) : un refus dans le wallet se dit en anglais simple, sans l etat interne ni ligne « state=… ». */
 const TEXTE_REFUS_WALLET = 'Not done: you declined in your wallet.';
@@ -11586,7 +11593,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
   if (p.etat === 'REFUSE') {
     try { etape('echange_multi_refus_pool'); } catch (_) {}
     /* ⛔ 2026-10-02 (Zero 1) : poussiere -> le texte simple, seul ; tout autre refus garde « Not possible: … Nothing was sent. » */
-    return refuser(p.refusPoussiere ? String(p.pourquoi) : 'Not possible: ' + (p.pourquoi || p.etat) + ' Nothing was sent.');
+    return refuser(p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p.pourquoi || p.etat));
   }
   if (p.etat === 'APPROBATIONS' && Array.isArray(p.etapes) && p.etapes.length) {
     /* ⛔ UN JETON ERC-20 EN ENTREE DEMANDE UNE AUTORISATION. L ETH natif n en demande pas — c est
@@ -11674,8 +11681,7 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
       'echange_multi_refus_prix');
   }
   if (pa.etat !== 'PRET') {
-    return refuser('Not possible: ' + (pa.pourquoi || pa.etat)
-      + (pa.etape ? ' (at ' + pa.etape + ')' : '') + ' Nothing was sent.', 'echange_multi_refus_pool');
+    return refuser(texteRefusEchange(pa.pourquoi || pa.etat), 'echange_multi_refus_pool');
   }
   const r = pa.resume;
   /* ⛔⛔ LES MEMES GARDES QUE LES AUTRES RAILS, avec la bonne borne — et LES OCTETS, pas le resume. */
@@ -11762,8 +11768,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
     return;
   }
   if (pf.etat !== 'PRET') {
-    return refuser('Not possible: ' + (pf.pourquoi || pf.etat)
-      + (pf.etape ? ' (at ' + pf.etape + ')' : '') + ' Nothing was sent.', 'echange_multi_refus_pool');
+    return refuser(texteRefusEchange(pf.pourquoi || pf.etat), 'echange_multi_refus_pool');
   }
   const r = pf.resume;
   /* ══ LES GARDES DE FRAIS, SUR LES DEUX JAMBES ══════════════════════════════════════════════ */
@@ -12093,7 +12098,7 @@ async function preparerEchange(sens) {
     if (b.etat !== 'OK') {
       e.className = 'note wKo';
       /* ⛔ LE REFUS PORTE LE SAUT QUI A MANQUE. « La route a echoue » envoie chercher partout. */
-      e.textContent = 'Not prepared — ' + b.pourquoi + '. Nothing was sent.';
+      e.textContent = texteRefusEchange(b.pourquoi);
       try { etape('echange_refus_route_multi'); } catch (_) {}
       profilEnLecture = false;
       return;
@@ -12217,13 +12222,13 @@ async function preparerEchange(sens) {
     /* ⛔ 2026-10-02 14:07 : pool dont le hook paierait a6cf en block — texte exact, rien d autre. */
     /* ⛔ 2026-10-02 (Zero 1) : route refusee par le verrou de frais (ex. block→USDC→ETH) — « Not tradable here yet », seul. */
     /* ⛔ 2026-10-02 (Zero 1) : poussiere -> « Amount too small to trade here. », seul. */
-    e.textContent = p.refusFraisEnBlock ? String(p.pourquoi) : p.refusCheminFrais ? String(p.pourquoi) : p.refusPoussiere ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
+    e.textContent = p.refusFraisEnBlock ? texteRefusEchange(p.pourquoi) : p.refusCheminFrais ? texteRefusEchange(p.pourquoi) : p.refusPoussiere ? String(p.pourquoi) : /interface fee in an allowed asset/.test(String(p.pourquoi || ''))
       ? 'This block is priced in a Coinbase tokenized stock. Trading it from this app is not '
         + 'available yet — its market is real on Uniswap. Nothing was sent.'
-      : 'Not possible: ' + (p.pourquoi || p.etat)
+      : texteRefusEchange(String(p.pourquoi || p.etat)
         + (String(p.pourquoi || '').includes('returns nothing')
-          ? ' — the pool quoted zero for this size (thin book or empty), not a network blip.'
-          : '');
+          ? ' — the pool quoted zero for this size (thin book or empty), not a network blip'
+          : ''));
     /* ⛔ LA POOL A REPONDU, et sa reponse est « non » — carnet trop mince, taille trop grande. Rien
      *   a reparer dans notre code : c est de la liquidite qui manque, et ce compteur le dira. */
     try { etape('echange_refus_pool'); } catch (_) {}
@@ -12586,7 +12591,7 @@ async function preparerEthUsdc() {
     return;
   }
   if (p.etat === 'REFUSE') {
-    e.className = 'note wKo'; e.textContent = p.refusPoussiere ? String(p.pourquoi) : 'Not possible: ' + (p.pourquoi || p.etat); return;
+    e.className = 'note wKo'; e.textContent = p.refusPoussiere ? String(p.pourquoi) : texteRefusEchange(p.pourquoi || p.etat); return;
   }
   if (p.etat !== 'PRET') { e.className = 'note wKo'; e.textContent = 'Nothing to sign: ' + (p.pourquoi || p.etat); return; }
   if (!estWalletDeFrais(compte)) {
@@ -13118,8 +13123,8 @@ function peindrePlan(plan, adr) {
     /* ⛔ DEUX PHRASES DIFFERENTES : un refus est un fait sur ce lancement, une lecture ratee est un
      * fait sur notre reseau — et dans les deux cas, rien n est offert a signer. */
     /* ⛔ 2026-10-02 fee lot 2 : block currency0 sur un hook qui preleve en currency0 — texte exact, rien d autre. */
-    e.textContent = plan.refusFraisEnBlock ? String(plan.pourquoi)
-      : (plan.etat === 'REFUSE' ? 'Not possible as set: ' : 'Not measured, so nothing to sign: ') + plan.pourquoi;
+    e.textContent = plan.refusFraisEnBlock ? texteRefusEchange(plan.pourquoi)
+      : plan.etat === 'REFUSE' ? texteRefusEchange(plan.pourquoi) : 'Not measured, so nothing to sign: ' + plan.pourquoi;
     return;
   }
   const d = plan.dec;

@@ -29,8 +29,13 @@ export function estDeviseConnue(adr) {
  *  inconnu est un block (fail-closed). */
 export function estBlockDeRoute(adr, fraisDevisesOk = null) {
   const a = bas(adr);
-  return !estDeviseConnue(a) && (/^0xb2/.test(a) || !(fraisDevisesOk instanceof Set && fraisDevisesOk.has(a)));
+  return !pasUnBlockConnu(a) && (RE_B20.test(a) || !(fraisDevisesOk instanceof Set && fraisDevisesOk.has(a)));
 }
+/* ⛔⛔ 2026-10-02 (Zero 1, R4 item 2) : « B20 » = 0xb2 SUIVI DE 20 ZEROS, pas le seul prefixe 0xb2 (70 pools V3/Aerodrome et
+ *   192 V4 de jetons ordinaires 0xb2… etaient refusees a tort). Une devise ou une action CONNUE du registre (OUSD, HTZc, PFEc,
+ *   PMc, GMEc… — B20 elles aussi, ajoutees par 56878eb) n est jamais un block. */
+export const RE_B20 = /^0xb20{20}/i;
+function pasUnBlockConnu(a) { return estDeviseConnue(a); }
 export function cleSansHook(cle) {
   return !!cle && /^0x0{40}$/i.test(String(cle.hooks || ZERO));
 }
@@ -94,7 +99,7 @@ export function deviseFraisHookHorsListe(cle, sens, zeroForOne) {
  *     lu ne change rien (meme choix que estBlockDeRoute). Rend l indice du premier block parmi `noeuds`, ou -1. */
 export function estBlockAJonction(adr) {
   const a = bas(adr);
-  return BLOCKS_TB.has(a) || (/^0xb2/.test(a) && !estDeviseConnue(a));
+  return BLOCKS_TB.has(a) || (RE_B20.test(a) && !pasUnBlockConnu(a));
 }
 export function indexBlocAJonction(noeuds) {
   return (Array.isArray(noeuds) ? noeuds : []).findIndex((t) => estBlockAJonction(t));

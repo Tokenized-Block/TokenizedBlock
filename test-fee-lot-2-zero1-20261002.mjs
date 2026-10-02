@@ -39,7 +39,7 @@ await essai('(2)', async () => {
   ok(!apres.refusFraisEnBlock, '(2) negative control: block sorting AFTER NVDAc is not refused by this rule');
   const eth = await LP.planLancement({ ...base, devise: '0x0000000000000000000000000000000000000000', jeton: '0xb200000000000000000000000000000000000001' });
   ok(!eth.refusFraisEnBlock, '(2) negative control: ETH pair (block always currency1) is not refused');
-  ok(/e\.textContent = plan\.refusFraisEnBlock \? String\(plan\.pourquoi\)/.test(html), '(2) profile screen shows that text alone, no prefix');
+  ok(/e\.textContent = plan\.refusFraisEnBlock \? texteRefusEchange\(plan\.pourquoi\)/.test(html), '(2) profile screen shows the single refusal copy (R4 item 3), no prefix');
   ok(/poolVide && plan && !plan\.refusFraisEnBlock/.test(html), '(2) the empty-pool copy never overwrites it');
 });
 

@@ -27,7 +27,7 @@
  *   raison ; un « pas lu » n est jamais un « pas de route ».
  */
 import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
-import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { indexBlocAJonction, estBlockAJonction, estBlockDeRoute, cleSansHook, formatOpenLaunch, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 
 /* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
 export const ADRESSES = Object.freeze({
@@ -329,7 +329,7 @@ export function devisSaut(s, montant) {
  *   NotEnoughLiquidity / PoolNotInitialized rend SANS_LIQUIDITE (mesure : la pool ne tient pas ce montant).
  */
 export async function coterChemin({ rpc, chemin, montant, admises, bps = FRAIS_BPS, placement = null, hooksFacturants = [] }) {
-  if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
+  { const rb = refusBlocMultipool(chemin, admises); if (rb) return rb; }
   /* « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : une jambe hookee facturante suffit — son frais est au DEVIS V4 et
    * a6cf est deja paye ; le routeur ne retient rien. Route sans hook : le routeur retient son frais une fois. */
   const hooks = ensembleHooksFacturants(hooksFacturants);
@@ -370,6 +370,29 @@ export function noeudsJonction(chemin) {
   return out;
 }
 export function blocAUneJonction(chemin) { return indexBlocAJonction(noeudsJonction(chemin)) >= 0; }
+/* ⛔⛔ 2026-10-02 (verdict C2) : un saut qui touche un block TB (debut, fin ou milieu) sur une pool SANS hook TB — Uniswap V3,
+ *   Aerodrome CL, ou V4 sans hook hors format OpenLaunch (3 % / 200, seule exception, comme pool-sans-hook.js). */
+export function blocSurPoolSansHook(chemin) {
+  return (Array.isArray(chemin) ? chemin : []).some((s) => !!(s && s.e) && (estBlockAJonction(s.de) || estBlockAJonction(s.vers))
+    && (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))));
+}
+/* ⛔⛔ 2026-10-02 (C2) : un block AU MILIEU de deux sauts V4 (R4) — meme definition que planEchangeMultiSauts
+ *   (estBlockDeRoute : un B20 hors devises connues reste un block meme admis ; un inconnu non admis aussi). */
+export function blocMilieuV4(chemin, admises = null) {
+  for (let i = 1; i < (Array.isArray(chemin) ? chemin.length : 0); i += 1) {
+    const a = chemin[i - 1] && chemin[i - 1].e, b = chemin[i] && chemin[i].e;
+    if (a && b && a.venue === 'uniswap-v4' && b.venue === 'uniswap-v4'
+      && estBlockDeRoute(noeud(chemin[i].de), admises instanceof Set ? admises : null)) return true;
+  }
+  return false;
+}
+/** Le refus « block » d un chemin multipool, ou null. Texte exact MESSAGE_PAS_ICI. */
+export function refusBlocMultipool(chemin, admises = null) {
+  if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
+  if (blocSurPoolSansHook(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
+  if (blocMilieuV4(chemin, admises)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
+  return null;
+}
 
 /* ══ L ASSEMBLAGE : UNE TRANSACTION ════════════════════════════════════════════════════════ */
 
@@ -473,7 +496,7 @@ export function construireRoute({ chemin, montant, minSortie, destinataire, dead
   if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'amount must be above zero' };
   if (mn <= 0n) return { etat: 'REFUSE', pourquoi: 'a positive minimum on the final output is required' };
   for (let i = 1; i < chemin.length; i += 1) if (chemin[i].de !== chemin[i - 1].vers) return { etat: 'REFUSE', pourquoi: 'the path does not chain at hop ' + (i + 1) };
-  if (blocAUneJonction(chemin)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
+  { const rb = refusBlocMultipool(chemin, admises); if (rb) return rb; }
   const noeuds = [chemin[0].de, ...chemin.map((s) => s.vers)];
   /* ⛔⛔ « UNE FOIS PAR SWAP » (Phil, 2026-10-02) : des qu UNE jambe est facturee par son hook, le routeur ne preleve
    *   RIEN (ni PAY_PORTION ni part exacte) ; une part demandee en plus est REFUSEE (double frais). Route sans hook =>

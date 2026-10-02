@@ -28,7 +28,7 @@
  *   qui ne finit pas la ou il croit. Et « une route a echoue » sans dire OU envoie chercher partout.
  */
 
-import { estBlockDeRoute, cleSansHook, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { estBlockDeRoute, cleSansHook, MESSAGE_PAS_ICI, RE_B20 } from './pool-sans-hook.js';
 
 /** Les etats rendus. ⛔ Aucun autre. */
 export const ETATS = Object.freeze(['OK', 'REFUSE', 'NON_MESURE']);
@@ -91,7 +91,7 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
    *   hookees ou plus la refusent apres resolution (au plus un frais vers a6cf). Ici, un block = un B20 (0xb2…) qui
    *   n est pas une devise connue ; le planificateur, qui recoit `fraisDevisesOk`, refuse en plus tout jeton inconnu. */
   for (let i = 0; i < chemin.length - 1; i += 1) {
-    if (/^0xb2/i.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers)) {
+    if (RE_B20.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers)) {
       return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: 0, pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
     }
   }

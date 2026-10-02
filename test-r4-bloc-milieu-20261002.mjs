@@ -33,12 +33,15 @@ const charger = async (dir) => {
 const ETH = '0x' + '0'.repeat(40);
 const bas = (a) => String(a).toLowerCase();
 const B4 = '0xb200000000000000000000000000000000000001';  /* trie AVANT NVDAc : B4 = currency0 face a NVDAc */
-const B1 = '0xb2ffffffffffffffffffffffffffffffffffff01';  /* trie APRES tout : block = currency1 */
-const B2 = '0xb2ffffffffffffffffffffffffffffffffffff02';
+/* ⛔ 2026-10-02 (Zero 1, R4 item 2) : un block = 0xb2 + 20 zeros (B20) ; B1/B2 en ont la forme (avant : 0xb2ff…, plus un block) */
+const B1 = '0xb2' + '0'.repeat(20) + 'ffffffffffffffff01';  /* trie APRES tout : block = currency1 */
+const B2 = '0xb2' + '0'.repeat(20) + 'ffffffffffffffff02';
+const B2_ORDINAIRE = '0xb2ffffffffffffffffffffffffffffffffffff03'; /* jeton ORDINAIRE 0xb2… (pas B20) : pas un block */
+const HTZC = '0xb2000000000000000000002601c5c94f435da168'; /* action Coinbase B20 (symbol() lu = HTZc), au registre depuis 56878eb : pas un block */
 const BLOCS = new Set([B4, B1, B2]);
 const INCONNU = '0x' + '1'.repeat(36) + '00cc';
 const compte = '0x' + '4'.repeat(40);
-const REFUS = ['refusSansHook', 'refusFraisEnBlock', 'refusBlocIntermediaire', 'refusPlusieursHooks', 'refusTblock'];
+const REFUS = ['refusSansHook', 'refusFraisEnBlock', 'refusBlocIntermediaire', 'refusPlusieursHooks', 'refusTblock', 'refusV1Route', 'refusBlocSansHookTb'];
 
 async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const USDC = bas(F.USDC_BASE);
@@ -75,7 +78,7 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
     /* HOOK_PREVU (V1) a l ACHAT : a6cf recoit la SORTIE, le block (fork 52072599) — ecrit ici, pas lu dans le code juge */
     if (bas(s.cle.hooks) === bas(T.HOOK_PREVU) && sens === 'ACHAT') return bas(s.zeroForOne ? s.cle.currency1 : s.cle.currency0);
     return T.hookPaieDejaA6cf(s.cle.hooks, sens) ? T.deviseFraisHook(s.cle, sens, s.zeroForOne) : null; }).filter(Boolean);
-  const multi = (sauts, entree, sortie, montant, dec, fraisDevisesOk = null) => E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, sauts,
+  const multi = (sauts, entree, sortie, montant, dec, fraisDevisesOk = null, r = rpc) => E.planEchangeMultiSauts({ rpc: r, chaine: 8453, compte, sauts,
     entree, sortie, montant, decimalesEntree: dec, prixUsdEntree: null, fraisDevisesOk });
 
   const res = [];
@@ -167,7 +170,8 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   verifier('PREVU oracle : VENTE B1>ETH = un frais de hook en ETH', JSON.stringify(fraisHooks([{ cle: cPrevu, zeroForOne: false }])) === JSON.stringify([ETH]));
   const pPa = await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens: 'ACHAT', montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle: cPrevu, paire: 'ETH' } });
   verifier('PREVU ACHAT simple ETH>B1 : REFUSE (refusFraisEnBlock)', pPa.etat === 'REFUSE' && pPa.refusFraisEnBlock === true && pPa.pourquoi === PS.MESSAGE_PAS_ICI, pPa.etat + ' ' + pPa.pourquoi);
-  await doitRefuser('PREVU ACHAT multi USDC>sans>ETH>PREVU>B1', [jambe(USDC, ETH, ETH), jambe(ETH, B1, PREVU)], USDC, B1, 25n * 10n ** 6n, 6, ['refusFraisEnBlock']);
+  /* 2026-10-02 (item e) : sans pool V8, la jambe V1 d une route est refusee AVANT le verrou de frais (refusV1Route) */
+  await doitRefuser('PREVU ACHAT multi USDC>sans>ETH>PREVU>B1', [jambe(USDC, ETH, ETH), jambe(ETH, B1, PREVU)], USDC, B1, 25n * 10n ** 6n, 6, ['refusFraisEnBlock', 'refusV1Route']);
   const pPv = await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens: 'VENTE', montant: 10n ** 18n, marcheLu: { etat: 'LUE', cle: cPrevu, paire: 'ETH' } });
   juger1('R0 VENTE PREVU/ETH simple (temoin)', pPv, [{ cle: cPrevu, zeroForOne: false }], 'hook');
   verifier('V1-S2 VENTE sans pool actuelle : reste sur V1, marquee migrationEnAttente', pPv.resume && pPv.resume.migrationEnAttente === true && !pPv.resume.remplaceV1,
@@ -252,6 +256,84 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const m2 = MP.construireRoute({ ...baseMP, chemin: ch2, fraisIndice: pl2.indice });
   verifier('P-M2 multipool USDC>(V4 sans hook)>ETH>(Aerodrome)>NVDAc : PRET, 1 frais routeur, pas en block',
     m2.etat === 'PRET' && routeur(m2) === 1 && !BLOCS.has(bas(m2.fraisDevise || '')), m2.etat + ' ' + (m2.pourquoi || '') + ' routeur=' + routeur(m2) + ' devise=' + m2.fraisDevise);
+  /* ══ 2026-10-02 VERDICT C2 (item b) : AUCUN BLOCK TB SUR UNE POOL SANS HOOK TB — debut, fin ou milieu ══ */
+  const doitRefuserSansHookTb = (id, p) => {
+    verifier(id + ' : REFUSE (refusBlocSansHookTb)', p && p.etat === 'REFUSE' && p.refusBlocSansHookTb === true, (p && p.etat) + ' ' + (p && p.pourquoi));
+    if (p && p.etat === 'REFUSE') { propre(id, p); verifier(id + ' : texte exact', p.pourquoi === PS.MESSAGE_PAS_ICI, p.pourquoi); }
+  };
+  const seg = (chemin, devise, block) => PA.planAerodromeSegment({ rpc: rpcMuet, chemin, devise, block, montant: 10n ** 7n, compte, beneficiaireFrais: F.FEE_WALLET });
+  doitRefuserSansHookTb('B-A1 segment Aerodrome USDC>B1 (block a la FIN : sweep 10 bps en block)', await seg([lieu(USDC, B1, 'aerodrome')], USDC, B1));
+  doitRefuserSansHookTb('B-A2 segment Aerodrome B1>USDC (block au DEBUT)', await seg([lieu(B1, USDC, 'aerodrome')], B1, USDC));
+  doitRefuserSansHookTb('B-A3 segment Aerodrome USDC>ETH>B1 (fin, 2 sauts)', await seg([lieu(USDC, ETH, 'aerodrome'), lieu(ETH, B1, 'aerodrome')], USDC, B1));
+  const pOrd = await seg([lieu(USDC, B2_ORDINAIRE, 'aerodrome')], USDC, B2_ORDINAIRE);
+  verifier('B20a segment Aerodrome USDC>0xb2ff… (jeton ordinaire, pas B20) : pas un block (lecture atteinte)', !pOrd.refusBlocSansHookTb && !pOrd.refusBlocJonction && pOrd.etat === 'NON_MESURE', pOrd.etat + ' ' + pOrd.pourquoi);
+  const pHtz = await seg([lieu(USDC, HTZC, 'aerodrome')], USDC, HTZC);
+  verifier('B20b segment Aerodrome USDC>HTZc (action B20 connue) : pas un block (lecture atteinte)', !pHtz.refusBlocSansHookTb && !pHtz.refusBlocJonction && pHtz.etat === 'NON_MESURE', pHtz.etat + ' ' + pHtz.pourquoi);
+  const B20_CONNUS = ['HTZc', 'PFEc', 'PMc', 'GMEc'].map((sym) => P.ACTIONS_COINBASE.find((a) => a.symbole === sym)).filter(Boolean).map((a) => bas(a.adr)).concat([OUSD]);
+  verifier('B20c oracle : B1/B2 sont des blocks ; 0xb2ff…, HTZc/PFEc/PMc/GMEc et OUSD non (B20 connus)', B20_CONNUS.length === 5 && B20_CONNUS.every((a) => PS.RE_B20.test(a) && !PS.estBlockAJonction(a) && !PS.estBlockDeRoute(a))
+    && PS.estBlockAJonction(B1) && PS.estBlockAJonction(B2) && !PS.estBlockAJonction(B2_ORDINAIRE) && !PS.estBlockAJonction(HTZC)
+    && PS.estBlockDeRoute(B1, new Set([B1])) && !PS.estBlockDeRoute(HTZC) && !PS.estBlockDeRoute(B2_ORDINAIRE, new Set([B2_ORDINAIRE])));
+  doitRefuserSansHookTb('B-F1 franchissement OUSD>(V4)>USDC>(Aerodrome)>B1 (block a la FIN)', await fr([lieu(OUSD, USDC, 'uniswap-v4'), lieu(USDC, B1, 'aerodrome')], B1));
+  doitRefuserSansHookTb('B-E1 ETH>USDC>B1 (block = action, fin du segment CL)', PE.planEthVersAction({ ...eb, action: B1 }));
+  doitRefuserSansHookTb('B-E2 ETH>USDC>NVDAc>B1 (3e saut CL vers le block)', PE.planEthVersAction({ ...eb, action: NVDA, block: B1,
+    poolBlock: { pool: '0x' + '7'.repeat(40), sqrtPriceX96: '79228162514264337593543950336', fee: 500, tickSpacing: 10, blockEst0: false, famille: 'aerodrome' } }));
+  const v4f = (c0, c1, hooks, forme) => { const e = v4(c0, c1, hooks); return { ...e, cle: { ...e.cle, ...forme } }; };
+  const sM = async (id, chemin) => {
+    doitRefuserSansHookTb(id + ' (cotation)', await MP.coterChemin({ rpc: rpcMuet, chemin, montant: 10n ** 18n, admises: ADM }));
+    doitRefuserSansHookTb(id + ' (construction)', MP.construireRoute({ ...baseMP, chemin, fraisIndice: 0 }));
+  };
+  await sM('B-M1 multipool ETH>(Aerodrome CL)>B1 (fin)', [{ de: ETH, vers: B1, e: clA(ETH, B1) }]);
+  await sM('B-M2 multipool B1>(Aerodrome CL)>ETH (debut)', [{ de: B1, vers: ETH, e: clA(B1, ETH) }]);
+  await sM('B-M3 multipool USDC>(V3)>B1 (fin)', [{ de: USDC, vers: B1, e: v3A(USDC, B1) }]);
+  await sM('B-M4 multipool ETH>(V4 sans hook 500/10)>B1 (fin)', [{ de: ETH, vers: B1, e: v4(ETH, B1, ETH) }]);
+  await sM('B-M5 multipool B1>(V4 sans hook 500/10)>ETH (debut)', [{ de: B1, vers: ETH, e: v4(B1, ETH, ETH) }]);
+  /* TEMOIN POSITIF : le format OpenLaunch (V4 sans hook, 3 % / 200) reste la seule exception */
+  const chOL = [{ de: ETH, vers: B1, e: v4f(ETH, B1, ETH, OL) }];
+  const qOL = await MP.coterChemin({ rpc, chemin: chOL, montant: 10n ** 16n, admises: ADM });
+  verifier('OL-M1 multipool ETH>(V4 OpenLaunch 3 %/200)>B1 : cotation pas refusee', qOL.etat !== 'REFUSE', qOL.etat + ' ' + (qOL.pourquoi || ''));
+  const plOL = MP.placerFrais(chOL, ADM);
+  const mOL = MP.construireRoute({ ...baseMP, montant: 10n ** 16n, chemin: chOL, fraisIndice: plOL.indice });
+  verifier('OL-M2 multipool ETH>(V4 OpenLaunch)>B1 : PRET, 1 frais routeur, pas en block', mOL.etat === 'PRET' && routeur(mOL) === 1 && !BLOCS.has(bas(mOL.fraisDevise || '')),
+    mOL.etat + ' ' + (mOL.pourquoi || '') + ' routeur=' + routeur(mOL) + ' devise=' + mOL.fraisDevise);
+  const cOL = cle(ETH, B1, ETH, OL);
+  const pOL = await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens: 'ACHAT', montant: 10n ** 16n, marcheLu: { etat: 'LUE', cle: cOL, paire: 'ETH' } });
+  juger1('OL-S1 ACHAT simple ETH>(V4 OpenLaunch)>B1', pOL, [{ cle: cOL, zeroForOne: true }], 'routeur');
+
+  /* ══ 2026-10-02 (item c) : multipool — un block AU MILIEU de deux sauts V4 est refuse (estBlockDeRoute) ══ */
+  const chC = [{ de: USDC, vers: B1, e: v4(USDC, B1, V8) }, { de: B1, vers: ETH, e: v4(B1, ETH, V8) }];
+  const qC = await MP.coterChemin({ rpc: rpcMuet, chemin: chC, montant: 10n ** 7n, admises: ADM });
+  const rC = MP.construireRoute({ ...baseMP, chemin: chC, fraisIndice: 0 });
+  for (const [k, p] of [['cotation', qC], ['construction', rC]]) {
+    verifier('C-M1 multipool USDC>(V4 V8)>B1>(V4 V8)>ETH (' + k + ') : REFUSE (refusBlocIntermediaire)', p.etat === 'REFUSE' && p.refusBlocIntermediaire === true && p.pourquoi === PS.MESSAGE_PAS_ICI, p.etat + ' ' + p.pourquoi);
+  }
+  const chC2 = [{ de: USDC, vers: ETH, e: v4(USDC, ETH, ETH) }, { de: ETH, vers: B1, e: v4(ETH, B1, V8) }];
+  const mC2 = MP.construireRoute({ ...baseMP, chemin: chC2, fraisIndice: 0, hooksFacturants: [V8] });
+  verifier('P-M3 multipool USDC>(V4 sans hook)>ETH>(V4 V8)>B1 : PRET (block a la fin, pas au milieu)', mC2.etat === 'PRET' && routeur(mC2) === 0, mC2.etat + ' ' + (mC2.pourquoi || '') + ' routeur=' + routeur(mC2));
+
+  /* ══ 2026-10-02 (item e) : une jambe V1 DANS une route multi-sauts suit f9888b4 — ramenee sur V8, sinon refusee ══ */
+  const routeV1A = [jambe(USDC, ETH, ETH), jambe(ETH, B1, PREVU)];
+  const eA = await multi(routeV1A, USDC, B1, 25n * 10n ** 6n, 6, null, avecV8());
+  juger1('E-1 route ACHAT USDC>sans>ETH>V1>B1 avec pool V8', eA, [routeV1A[0], { cle: cV8, zeroForOne: routeV1A[1].zeroForOne }], 'hook');
+  const dA = bas((eA.tx && eA.tx.data) || '');
+  verifier('E-1 calldata sur V8, pas sur V1', dA.includes(hex(V8)) && !dA.includes(hex(PREVU)), 'v8=' + dA.includes(hex(V8)) + ' v1=' + dA.includes(hex(PREVU)));
+  const routeV1V = [jambe(B1, ETH, PREVU), jambe(ETH, USDC, ETH)];
+  const eV = await multi(routeV1V, B1, USDC, 10n ** 18n, 18, null, avecV8());
+  juger1('E-2 route VENTE B1>V1>ETH>sans>USDC avec pool V8', eV, [{ cle: cV8, zeroForOne: routeV1V[0].zeroForOne }, routeV1V[1]], 'hook');
+  const dV = bas((eV.tx && eV.tx.data) || '');
+  verifier('E-2 calldata sur V8, pas sur V1', dV.includes(hex(V8)) && !dV.includes(hex(PREVU)), 'v8=' + dV.includes(hex(V8)) + ' v1=' + dV.includes(hex(PREVU)));
+  await doitRefuser('E-3 route VENTE B1>V1>ETH>sans>USDC SANS pool V8', routeV1V, B1, USDC, 10n ** 18n, 18, ['refusV1Route']);
+  const eP = await multi(routeV1V, B1, USDC, 10n ** 18n, 18, null, rpcSV('panne'));
+  verifier('E-4 route V1, StateView illisible : NON_MESURE', eP.etat === 'NON_MESURE', eP.etat + ' ' + eP.pourquoi);
+
+  /* ══ 242b475 : LA ROUTE OUSD (OUSD/USDC V4 sans hook 100/1, cle mesuree) passe par les regles R4 ══ */
+  const OUSD_USDC = { fee: 100, tickSpacing: 1 };
+  await doitPasser('R-OUSD1 OUSD>sans(100/1)>USDC>sans>ETH>V8>B1 (achat, 1 jambe payante)', [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, ETH, ETH), jambe(ETH, B1, V8)], OUSD, B1, 25n * 10n ** 18n, 18, 'hook');
+  await doitPasser('R-OUSD2 B1>V8>ETH>sans>USDC>sans(100/1)>OUSD (vente)', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, OUSD, ETH, OUSD_USDC)], B1, OUSD, 10n ** 18n, 18, 'hook');
+  /* OUSD a un marche mesure (app : fraisDevisesOk) — sans lui, refusCheminFrais comme sur 242b475 */
+  const sO3 = [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, ETH, ETH)];
+  juger1('R-OUSD3 OUSD>sans(100/1)>USDC>sans>ETH (aucun hook : frais routeur une fois)', await multi(sO3, OUSD, ETH, 25n * 10n ** 18n, 18, new Set([OUSD, USDC])), sO3, 'routeur');
+  await doitRefuser('R-OUSD4 OUSD>sans>USDC>V8>B1>V8>ETH (block au milieu)', [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, B1, V8), jambe(B1, ETH, V8)], OUSD, ETH, 25n * 10n ** 18n, 18, ['refusBlocIntermediaire', 'refusPlusieursHooks']);
+  await doitRefuser('R-OUSD5 OUSD>V8>B1 ... B1 en tete : OUSD>sans>USDC>V8>B2 + V8 (deux jambes payantes)', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, OUSD, ETH, OUSD_USDC), jambe(OUSD, B2, V8)], B1, B2, 10n ** 18n, 18, ['refusPlusieursHooks']);
   return res;
 }
 
@@ -271,13 +353,13 @@ function copie(mutation) {
 const MUTANTS = [
   { nom: 'A [entree, sortie]', edits: [['echange.js', 'sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))', '[entree, sortie]']],
     doitCasser: [/^R4 ETH>sans/, /^R4 miroir NVDAc/, /^R4 miroir avec NVDAc prixe/, /^R5a /, /^R5c /] },
-  { nom: 'B block prixe = devise', edits: [['pool-sans-hook.js', "(/^0xb2/.test(a) || !(fraisDevisesOk", "(false || !(fraisDevisesOk"]],
+  { nom: 'B block prixe = devise', edits: [['pool-sans-hook.js', "(RE_B20.test(a) || !(fraisDevisesOk", "(false || !(fraisDevisesOk"]],
     doitCasser: [/^R4 avec B4 prixe/] },
   { nom: 'C regle (1) retiree', edits: [['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)']],
-    doitCasser: [/^SEULE regle \(1\)/] },
+    doitCasser: [/^SEULE regle \(1\)/] }, /* R-OUSD4 reste refuse par la regle (2) : 2 jambes V8 */
   { nom: 'D regle (2) retiree', edits: [['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)']],
-    doitCasser: [/^SEULE regle \(2\)/] },
-  { nom: 'E pay-with regle (1) retiree', edits: [['sauts-depuis-chemin.js', "if (/^0xb2/i.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers))", 'if (false)']],
+    doitCasser: [/^SEULE regle \(2\)/, /^R-OUSD5 /] },
+  { nom: 'E pay-with regle (1) retiree', edits: [['sauts-depuis-chemin.js', "if (RE_B20.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers))", 'if (false)']],
     doitCasser: [/^pay-with SEULE regle \(1\)/] },
   { nom: 'F pay-with regle (2) retiree', edits: [['sauts-depuis-chemin.js', 'if (sauts.filter((x) => !cleSansHook(x.cle)).length >= 2)', 'if (false)']],
     doitCasser: [/^pay-with SEULE regle \(2\)/] },
@@ -289,14 +371,32 @@ const MUTANTS = [
     doitCasser: [/^J-A1 /] },
   { nom: 'J jonction ETH>pivot>action retiree', edits: [['plan-eth-block.js', 'if (indexBlocAJonction(troisSauts ? [devise, action] : [devise]) >= 0)', 'if (false)']],
     doitCasser: [/^J-E1 /, /^J-E2 /] },
-  { nom: 'K garde de jonction retiree (partout)', edits: [['pool-sans-hook.js', "return BLOCKS_TB.has(a) || (/^0xb2/.test(a) && !estDeviseConnue(a));", 'return false;']],
-    doitCasser: [/^J-F1 /, /^J-A1 /, /^J-E1 /, /^J-E2 /, /^J-M1 /, /^J-M2 /, /^J-M3 /] },
+  { nom: 'K garde de jonction retiree (partout)', edits: [['pool-sans-hook.js', "return BLOCKS_TB.has(a) || (RE_B20.test(a) && !pasUnBlockConnu(a));", 'return false;']],
+    doitCasser: [/^J-F1 /, /^J-A1 /, /^J-E1 /, /^J-E2 /, /^J-M1 /, /^J-M2 /, /^J-M3 /, /^B-A1 /, /^B-F1 /, /^B-E1 /, /^B-M1 /] },
   { nom: 'M V1 non ramene sur la pool actuelle', edits: [['echange.js', "if (actuelle.cle) marche = { ...marche, etat: 'LUE', cle: actuelle.cle, remplaceV1: true };", 'if (false) marche = marche;']],
     doitCasser: [/^V1-B1 /, /^V1-S1 /] },
   { nom: 'N pool actuelle sans liquidite acceptee', edits: [['echange.js', 'if (s0 !== 0n && lq > 0n) return { cle: c, ratees };', 'if (s0 !== 0n) return { cle: c, ratees };']],
     doitCasser: [/^V1-B3 /, /^V1-S3 /] },
   { nom: 'L PREVU achat hors fraisHookEnBlock', edits: [['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)']],
-    doitCasser: [/^PREVU ACHAT simple/, /^PREVU ACHAT multi/] },
+    doitCasser: [/^PREVU ACHAT simple/] }, /* multi : refuse desormais plus tot par la jambe V1 (refusV1Route, item e) */
+  { nom: 'O multipool : block sur pool sans hook TB accepte', edits: [['multipool.js', "&& (s.e.venue !== 'uniswap-v4' || (cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))));", '&& false);']],
+    doitCasser: [/^B-M1 /, /^B-M2 /, /^B-M3 /, /^B-M4 /, /^B-M5 /] },
+  { nom: 'T multipool : exception OpenLaunch retiree', edits: [['multipool.js', '(cleSansHook(s.e.cle) && !formatOpenLaunch(s.e.cle))', 'cleSansHook(s.e.cle)']],
+    doitCasser: [/^OL-M1 /, /^OL-M2 /] },
+  { nom: 'P segment Aerodrome : debut/fin non gardes', edits: [['plan-aerodrome-segment.js', 'if (indexBlocAJonction([chemin[0].de, chemin[chemin.length - 1].vers]) >= 0)', 'if (false)']],
+    doitCasser: [/^B-A1 /, /^B-A2 /, /^B-A3 /] },
+  { nom: 'Q franchissement : block final non garde', edits: [['plan-franchissement.js', 'if (indexBlocAJonction([forme.action]) >= 0)', 'if (false)']],
+    doitCasser: [/^B-F1 /] },
+  { nom: 'R ETH>pivot>action(>block) : bout non garde', edits: [['plan-eth-block.js', 'if (indexBlocAJonction([troisSauts ? block : action]) >= 0)', 'if (false)']],
+    doitCasser: [/^B-E1 /, /^B-E2 /] },
+  { nom: 'S multipool : block au milieu de deux V4 accepte', edits: [['multipool.js', '&& estBlockDeRoute(noeud(chemin[i].de), admises instanceof Set ? admises : null)) return true;', '&& false) return true;']],
+    doitCasser: [/^C-M1 /] },
+  { nom: 'U route : jambe V1 non ramenee sur V8', edits: [['echange.js', 'if (a.cle) { neufs.push({ ...x, cle: a.cle }); continue; }', 'if (a.cle) { neufs.push(x); continue; }']],
+    doitCasser: [/^E-1 /, /^E-2 /] },
+  { nom: 'V B20 = simple prefixe 0xb2', edits: [['pool-sans-hook.js', 'export const RE_B20 = /^0xb20{20}/i;', 'export const RE_B20 = /^0xb2/i;']],
+    doitCasser: [/^B20a /, /^B20c /] },
+  { nom: 'W HTZc retire du registre (une action B20 connue n est un block que si elle sort du registre)', edits: [['paires.js', "{ symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },", '']],
+    doitCasser: [/^B20b /, /^B20c /] },
 ];
 
 let nAssert = 0, ko = 0;
@@ -319,7 +419,7 @@ try {
     ok(rouges.length > 0, 'mutant ' + M.nom + ' : le banc doit devenir ROUGE');
     for (const re of M.doitCasser) ok(rouges.some((id) => re.test(id)), 'mutant ' + M.nom + ' : doit casser ' + re);
     /* les routes legitimes ne dependent d aucune mutation */
-    ok(!rouges.some((id) => /^(R0|R1|R3|pay-with R1a|P-|PREVU oracle)/.test(id)), 'mutant ' + M.nom + ' : R0/R1/R3 et temoins P- restent verts');
+    ok(!rouges.some((id) => /^(R0|R1|R3|R-OUSD[123] |pay-with R1a|P-|PREVU oracle)/.test(id)), 'mutant ' + M.nom + ' : R0/R1/R3 et temoins P- restent verts');
   }
 } finally {
   for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });

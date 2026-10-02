@@ -121,6 +121,11 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
   if (indexBlocAJonction([forme.pivot]) >= 0) {
     return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
+  /* ⛔⛔ 2026-10-02 (verdict C2) : AUCUN BLOCK TB SUR UNE POOL SANS HOOK TB — Aerodrome n en a pas. Un block au DEBUT ou a la
+   *   FIN du segment Aerodrome est refuse comme a une jonction. */
+  if (indexBlocAJonction([forme.action]) >= 0) {
+    return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
+  }
 
   /* ── 1. LA POOL AERODROME, RESOLUE ─────────────────────────────────────────────────────── */
   const aero = await poolAerodromeDe({ rpc, a: forme.pivot, b: forme.action, espacements });

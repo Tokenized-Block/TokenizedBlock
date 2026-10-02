@@ -193,6 +193,11 @@ export function planEthVersAction({ action, montantWei, poolAction, poolsPivot,
   if (indexBlocAJonction(troisSauts ? [devise, action] : [devise]) >= 0) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
+  /* ⛔⛔ 2026-10-02 (verdict C2) : AUCUN BLOCK TB SUR UNE POOL SANS HOOK TB — Aerodrome n en a pas. Un block au DEBUT ou a la
+   *   FIN du segment Aerodrome est refuse comme a une jonction. */
+  if (indexBlocAJonction([troisSauts ? block : action]) >= 0) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
+  }
   const m = entier(montantWei);
   if (m === null || m <= 0n) return { etat: 'REFUSE', pourquoi: 'the ETH amount must be above zero' };
   if (!ADR.test(String(recipient || ''))) return { etat: 'REFUSE', pourquoi: 'a whole recipient address is required' };

@@ -235,7 +235,8 @@ console.log('=== 7. une fois par swap ===');
   ok('7o. garde : 0 PAY_PORTION OK ; 1 et 2 REJETES', unFraisParJambe(rm, mixte, HT) && !unFraisParJambe({ commandes: ['06', '10', '04'] }, mixte, HT) && !unFraisParJambe({ commandes: ['06', '06', '10', '04'] }, mixte, HT));
   const trois = [{ de: NVDA, vers: BLOC, e: jT(NVDA, BLOC) }, { de: BLOC, vers: AAPL, e: jT(BLOC, AAPL) }, { de: AAPL, vers: USDC, e: cl(AAPL, USDC) }];
   const r3 = construireRoute({ ...base, admises: adm, chemin: trois, fraisIndice: 0, hooksFacturants: [HTB] });
-  ok('7q. 3 sauts (2 jambes TB + 1 CL) : 0 PAY_PORTION', r3.etat === 'PRET' && nbPP(r3) === 0 && nbA6cf(r3) === 0, (r3.commandes && r3.commandes.join(',')) || r3.pourquoi);
+  /* ⛔ 2026-10-02 (C2, R4) : BLOC est AU MILIEU de deux sauts V4 — refuse (avant : PRET, deux jambes TB, block au milieu) */
+  ok('7q. 3 sauts NVDAc>TB>BLOC>TB>AAPLc>CL>USDC : REFUSE (block au milieu de deux sauts V4)', r3.etat === 'REFUSE' && r3.refusBlocIntermediaire === true && r3.pourquoi === 'Not tradable here yet', r3.etat + ' ' + r3.pourquoi);
   /* toutes les jambes hookees (V8 par defaut + TB nomme) => 0 */
   const tous = [{ de: TBGAS, vers: ETH, e: G[6] }, { de: ETH, vers: NVDA, e: jT(ETH, NVDA) }];
   const rt = construireRoute({ ...base, admises: adm, chemin: tous, fraisIndice: 0, hooksFacturants: [HTB] });

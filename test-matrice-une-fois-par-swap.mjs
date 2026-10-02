@@ -37,7 +37,7 @@ const ETH = '0x' + '0'.repeat(40);
 const USDC = USDC_BASE.toLowerCase();
 const ACT = ACTIONS_COINBASE[0].adr.toLowerCase(); /* une action reelle du depot */
 const BLOC_BAS = '0xb200000000000000000000000000000000000001';  /* trie AVANT l action : block = currency0 */
-const BLOC_HAUT = '0xb2ffffffffffffffffffffffffffffffffffff01'; /* trie APRES tout */
+const BLOC_HAUT = '0xb2' + '0'.repeat(20) + 'ffffffffffffffff01'; /* trie APRES tout ; forme B20 (0xb2 + 20 zeros, R4 item 2) */
 const BLOCS = new Set([BLOC_BAS, BLOC_HAUT]);
 const INCONNU = '0x' + '1'.repeat(36) + '00cc';
 const HOOKS = { sans: ETH, V8: T.HOOK_V8, V2: T.HOOK_V2, PREVU: T.HOOK_PREVU, inconnu: INCONNU };
@@ -217,6 +217,26 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
   }
 }
 console.log('swap simple : ' + nSimple + ' plans construits');
+/* ── 2026-10-02 (item e) : une jambe V1 DANS une route — ramenee sur V8 quand elle existe, sinon refusee ── */
+for (const actuelle of [false, true]) {
+  for (const sensRoute of ['ACHAT', 'VENTE']) {
+    const noeuds = sensRoute === 'ACHAT' ? [USDC, ETH, BLOC_HAUT] : [BLOC_HAUT, ETH, USDC];
+    const sauts = sensRoute === 'ACHAT' ? [jambe(USDC, ETH, HOOKS.sans), jambe(ETH, BLOC_HAUT, HOOKS.PREVU)] : [jambe(BLOC_HAUT, ETH, HOOKS.PREVU), jambe(ETH, USDC, HOOKS.sans)];
+    const nom = 'ROUTE V1 ' + sensRoute + (actuelle ? ' +V8 actuelle' : ' sans V8');
+    n += 1;
+    let p;
+    try {
+      p = await E.planEchangeMultiSauts({ rpc: rpcSV(actuelle), chaine: 8453, compte, sauts, entree: noeuds[0], sortie: noeuds[2],
+        montant: 10n ** 21n, decimalesEntree: 18, prixUsdEntree: null, fraisDevisesOk: new Set([ACT]) });
+    } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
+    if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { nRefus += 1; if (actuelle) ko.push(nom + ' : refuse alors que la pool V8 existe'); continue; }
+    nPlans += 1;
+    const data = bas(JSON.stringify(p, (k, v) => (typeof v === 'bigint' ? String(v) : v)));
+    if (data.includes(bas(T.HOOK_PREVU).slice(2))) ko.push(nom + ' : V1 ROUTE NON RAMENEE (calldata sur V1)');
+    if (!actuelle) ko.push(nom + ' : jambe V1 non refusee sans pool V8');
+    juger(nom, sauts.map((x) => (bas(x.cle.hooks) === bas(T.HOOK_PREVU) ? { ...x, cle: cle(x.cle.currency0, x.cle.currency1, HOOKS.V8) } : x)), p, ko);
+  }
+}
 return { n, nPlans, nRefus, ko };
 }
 
@@ -237,6 +257,12 @@ const MUTANTS = [
   { nom: 'V1 non ramene sur la pool actuelle', edits: [
     ['echange.js', "if (actuelle.cle) marche = { ...marche, etat: 'LUE', cle: actuelle.cle, remplaceV1: true };", 'if (false) marche = marche;'],
   ], doitVoir: [/^SIMPLE VENTE blocHaut\/ETH \[PREVU\] \+V8 actuelle : V1 NON RAMENE/] },
+  { nom: 'V1 route non ramenee sur V8', edits: [
+    ['echange.js', 'if (a.cle) { neufs.push({ ...x, cle: a.cle }); continue; }', 'if (a.cle) { neufs.push(x); continue; }'],
+  ], doitVoir: [/^ROUTE V1 ACHAT \+V8 actuelle : refuse alors que la pool V8 existe/, /^ROUTE V1 VENTE \+V8 actuelle : V1 ROUTE NON RAMENEE/] },
+  { nom: 'V1 route acceptee sans V8', edits: [
+    ['echange.js', "return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusV1Route: true };", "neufs.push(x); continue;"],
+  ], doitVoir: [/^ROUTE V1 VENTE sans V8 : jambe V1 non refusee/] },
   { nom: 'regle une jambe payante retiree', edits: [
     ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
   ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },

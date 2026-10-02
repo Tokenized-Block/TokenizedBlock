@@ -765,6 +765,21 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   if (!ROUTE_VIA_TBLOCK && sauts.some((x) => x && cleTouchTblock(x.cle))) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusTblock: true };
   }
+  /* ⛔⛔ 2026-10-02 (Phil 22:19, item e) : une jambe V1 (HOOK_PREVU) d une route est RAMENEE sur la pool de version
+   *   actuelle du meme couple (poolActuelleDuBlock : meme paire, donc meme zeroForOne). Sans elle, la jambe est REFUSEE
+   *   dans les deux sens — la vente V1 reste ouverte en echange simple (planEchange, migrationEnAttente). */
+  if (sauts.some((x) => x && x.cle && String(x.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase())) {
+    const V4a = V4_ADRESSES[Number(chaine)];
+    const neufs = [];
+    for (const x of sauts) {
+      if (!(x && x.cle && String(x.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase())) { neufs.push(x); continue; }
+      const a = V4a ? await poolActuelleDuBlock({ rpc: lire, stateView: V4a.stateView, cle: x.cle }) : { cle: null, ratees: 1 };
+      if (a.cle) { neufs.push({ ...x, cle: a.cle }); continue; }
+      if (a.ratees > 0) return { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
+      return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusV1Route: true };
+    }
+    sauts = neufs;
+  }
   /* ⛔⛔ 2026-10-02 (regle du fondateur) : aucun saut sur une pool sans hook qui contient un block TB, et aucun frais de
    *   hook verse EN BLOCK. Les jambes entre devises (ETH/USDC…) restent permises.
    *   ⛔ R4 (fix bloc au milieu) : les blocks se lisent sur TOUS les sauts — (currency0, currency1) de chaque cle —, pas

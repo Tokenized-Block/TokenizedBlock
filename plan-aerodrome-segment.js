@@ -93,6 +93,11 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
   if (indexBlocAJonction(chemin.slice(1).map((s) => s.de)) >= 0) {
     return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocJonction: true };
   }
+  /* ⛔⛔ 2026-10-02 (verdict C2) : AUCUN BLOCK TB SUR UNE POOL SANS HOOK TB — Aerodrome n en a pas. Un block au DEBUT ou a la
+   *   FIN du segment Aerodrome est refuse comme a une jonction. */
+  if (indexBlocAJonction([chemin[0].de, chemin[chemin.length - 1].vers]) >= 0) {
+    return { etat: 'REFUSE', etape: 'forme', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };
+  }
   let m;
   try { m = BigInt(montant); } catch (_) { m = 0n; }
   if (m <= 0n) return { etat: 'REFUSE', etape: 'forme', pourquoi: 'the amount must be above zero' };
