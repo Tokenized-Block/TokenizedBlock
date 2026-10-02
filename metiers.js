@@ -227,8 +227,9 @@ export function rapport({ metier, symbole = null, vie = null, devise = null, ten
   if (m.cle === 'COMPTABLE') {
     lignes.push(solde === null ? 'Your balance of this block was not read.'
       : 'You hold ' + solde + ' of it.');
-    /* ⛔ AUCUNE PROPOSITION DE COLLECTE : un marche ouvert ici est permanent, a 0 % de frais. */
-    lignes.push('A market opened in this app is permanent, with a 0 % fee: there are no pool fees to collect — for anyone.');
+    /* ⛔ AUCUNE PROPOSITION DE COLLECTE. 2026-10-02 : l ancienne phrase (« 0 % fee … no pool fees to collect ») se
+     *   lisait comme « aucun frais » alors qu un echange paie le frais affiche avant la signature. */
+    lignes.push('Pool liquidity earns no LP fee. Swaps on this block\'s pool carry the fee shown before you sign.');
   }
 
   if (m.cle === 'HERAUT') {

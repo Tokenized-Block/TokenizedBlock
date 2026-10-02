@@ -766,13 +766,13 @@ body:not(.surMap) .mapCta{display:none}
   border-radius:var(--rs);padding:7px 10px;overflow-wrap:anywhere}
 .filS{font-size:11.5px;color:var(--doux);margin:3px 0 0}
 .filS a{color:var(--accent2)}
-/* ⛔ 2026-10-02 (revue 14:00) : ligne etrangere — les liens comme les autres liens du Feed, et AUCUN « · » au point de
- *   repli : chaque morceau porte son separateur a gauche, et celui d un morceau qui commence une ligne sort du cadre
- *   (marge negative + overflow:hidden). Sur une seule ligne, il reste visible entre les deux morceaux. */
+/* ⛔ 2026-10-02 (revue 14:00 / 14:14) : ligne etrangere — les liens comme les autres liens du Feed, et AUCUN « · »
+ *   au point de repli : titre et actions sont separes par un ESPACE (column-gap), pas par un point. Sans marge
+ *   negative ni overflow : un nom long (MILEMOSA) qui se replie garde « launchpad » entier, et la ligne 2 part
+ *   du debut du texte. */
 .filActs a{color:var(--accent2)}
-.filLigne{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:1.1em;overflow:hidden}
-.filLigne>span{margin-left:-1.1em;min-width:0}
-.filLigne>span::before{content:'·';display:inline-block;width:1.1em;text-align:center}
+.filLigne{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.9em}
+.filLigne>span{min-width:0}
 .schemaVie{margin:6px 0 10px}
 /* ⛔ BORNE DE TAILLE : ce SVG n a que 320 unites de large. Sans plafond il s etire sur toute la
    carte et le mot « price » devient un titre de 60px (vu en prod le 2026-09-17). */
@@ -2356,6 +2356,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="sfFeedTrustHonesty" hidden></p>
       <!-- ⛔ 2026-10-02 (fondateur) : l explication du routage, UNE fois au-dessus de la liste, jamais par ligne ni en infobulle -->
       <p class="note" id="sfLiveRoute" hidden>We read every pool of these blocks and route your buy to the cheapest.</p>
+      <p class="note" id="sfLiveFrais" hidden>On markets with their own fee, buy and sell amounts are shown before that fee.</p>
       <ul class="fil" id="sfLive"></ul>
       <div class="sentinelle" id="sfLiveFin" aria-hidden="true"></div>
       <div id="sfLiveFin" style="height:1px"></div>
@@ -7657,8 +7658,10 @@ function peindreMetier(adr) {
   $('#pmRole').innerHTML = METIERS.map((x) => '<option value="' + x.cle + '"' + (x.cle === cle ? ' selected' : '') + '>'
     + enTexte(x.titre) + '</option>').join('');
   $('#pmRoleNote').textContent = (roleChoisi(adr) ? 'Chosen in this browser (or engraved at Create)' : 'Derived from its address — pick another to change it')
-    + ' · New Creates can engrave the role in metadata · its brain weighs ' + (SENS_ROLE[cle] || 'what it reads')
-    + ' more. It never signs or sends anything.';
+    /* ⛔ 2026-10-02 : COMPTABLE donnait « its brain weighs nothing more than the others more » */
+    + ' · New Creates can engrave the role in metadata · '
+    + (cle === 'COMPTABLE' ? 'its brain counts the same as any other' : 'its brain weighs ' + (SENS_ROLE[cle] || 'what it reads') + ' more')
+    + '. It never signs or sends anything.';
   $('#pmTitre').textContent = m.titre;
   $('#pmFait').textContent = 'Its job: ' + m.fait + '.';
   $('#pmTendance').textContent = tendance.etat === 'PAS_ASSEZ'
@@ -9677,7 +9680,10 @@ async function lireLive(sens) {
 function lisible(texte) {
   const x = Number(texte);
   if (!Number.isFinite(x)) return String(texte ?? '?');
-  if (x !== 0 && Math.abs(x) < 1) return String(Number(x.toPrecision(3)));
+  /* ⛔ 2026-10-02 (fondateur, Feed en direct) : « 4.91e-9 ETH » s affichait. Jamais de notation scientifique :
+   *   sous 0.000001 on dit « < 0.000001 », au-dessus 3 chiffres significatifs en ecriture decimale. */
+  if (x !== 0 && Math.abs(x) < 0.000001) return '< 0.000001';
+  if (x !== 0 && Math.abs(x) < 1) return x.toLocaleString('en-US', { maximumSignificantDigits: 3 });
   return x.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
@@ -9926,16 +9932,16 @@ function reconciliationFiltres() {
  *    un chiffre faux, et n en montrer qu un seul ferait passer un echange pour tous les autres.
  * ⚠️ `fraisMarche` : sur une pool a hook, le montant lu est celui d AVANT le frais du marche
  *    (l evenement Swap est emis avant `afterSwap` — v4-core/PoolManager.sol:240). On le dit. */
-function ligneEchange(e, nom, sansFrais) {
+function ligneEchange(e, nom) {
   const achat = e.type === 'ACHAT';
   const tete = achat ? '🟢 <b>' + nom + '</b> fed' : '🔴 <b>' + nom + '</b> killed';
   if (e.n > 1) return tete + ' · ' + e.n + (achat ? ' buys' : ' sells');
-  const bouts = [];
-  if (e.quantite) bouts.push(enTexte(lisible(e.quantite)) + (achat ? ' bought' : ' sold'));
-  if (e.eth && e.devise) bouts.push('for ' + enTexte(lisible(e.eth)) + '&nbsp;' + enTexte(e.devise));
-  let ligne = tete + (bouts.length ? ' · ' + bouts.join(' ') : '');
-  if (bouts.length && e.fraisMarche && !sansFrais) ligne += ' · before this market\'s fee';
-  return ligne;
+  /* ⛔ 2026-10-02 (fondateur) : « killed · for 0.0023 ETH » — le montant du block manquait sans le dire.
+   *   Le montant, ou « amount not read » ; jamais un trou. Et « before this market's fee » ne se dit plus
+   *   par ligne : une seule fois, en tete de section (#sfLiveFrais). */
+  const qte = e.quantite ? enTexte(lisible(e.quantite)) + (achat ? ' bought' : ' sold') : 'amount not read';
+  const prix = e.eth && e.devise ? (e.quantite ? ' for ' : ' · for ') + enTexte(lisible(e.eth)) + '&nbsp;' + enTexte(e.devise) : '';
+  return tete + ' · ' + qte + prix;
 }
 
 /** La phrase d une liste vide : ce qu on cherchait, et pourquoi il n y en a pas. */
@@ -10295,7 +10301,7 @@ function enfantsDuFil(e, cleG, nom) {
     } else if (c.type === 'GM') {
       t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'amount not read') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
     } else if (c.type === 'ACHAT' || c.type === 'VENTE') {
-      t = ligneEchange({ ...c, n: 1 }, nom, true);
+      t = ligneEchange({ ...c, n: 1 }, nom);
     } else if (c.type === 'CREATION') t = '🧱 born on another launchpad';
     else t = '↔ traded';
     const memeBloc = i > 0 && tous[i - 1].bloc === c.bloc;
@@ -10303,12 +10309,11 @@ function enfantsDuFil(e, cleG, nom) {
   }).join('');
   const reste = e.enfants.length - montres;
   const rN = e.type === 'NOTE' ? resumeNotes(e.enfants, notesLues) : null;
-  const frais = e.enfants.some((c) => c.fraisMarche && c.quantite) ? ' · amounts are before this market\'s fee' : '';
   const tete = e.type === 'CREATION' ? ''
     : e.type === 'NOTE'
     ? (libelleNotes(rN).spam ? '<p class="filS" data-fil-spam><b>' + enTexte(AVERT_SPAM) + '</b></p>' : '')
       + '<p class="filS" data-fil-notes-resume>' + enTexte(phraseNotes(rN, e.blocBas, e.blocHaut)) + '</p>'
-    : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first' + frais + '</p>';
+    : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first</p>';
   return '<div class="filEnfants" style="margin-top:4px;cursor:default">' + tete
     + '<ul style="list-style:none;padding:0;margin:0">' + items + '</ul>'
     + (reste > 0 ? '<button type="button" class="puce" data-fil-plus="' + enTexte(cleG) + '">show ' + Math.min(reste, ENFANTS_PAS) + ' more · ' + reste + ' left</button>' : '')
@@ -10497,6 +10502,7 @@ function peindreLive() {
   setTimeout(lireNotesAuto, 0);
   peindreMessagesProfil(); /* ⛔ REVUE 14:00 : le compte du profil suit le Feed, au meme instant */
   if ($('#sfLiveRoute')) $('#sfLiveRoute').hidden = !lignes.slice(0, liveAffiches).some(estEtrangere);
+  if ($('#sfLiveFrais')) $('#sfLiveFrais').hidden = !lignes.slice(0, liveAffiches).some((l) => (l.enfants || [l]).some((c) => c.fraisMarche && (c.quantite || c.eth)));
   const suivis = new Set(blocksSuivisLive().map((b) => String(b.jeton).toLowerCase()));
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;

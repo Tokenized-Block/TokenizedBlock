@@ -33,7 +33,7 @@ function verifierExplication(html) {
   /* les commentaires du source qui CITENT l ancienne phrase ne s affichent pas : on compte ce qui s affiche */
   const tout = html.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '').match(EXPLI) || [];
   assert.equal(tout.length, 1, 'l explication du routage apparait ' + tout.length + ' fois dans la page');
-  assert.match(html, /<p class="note" id="sfLiveRoute" hidden>We read every pool of these blocks and route your buy to the cheapest\.<\/p>\r?\n\s*<ul class="fil" id="sfLive">/);
+  assert.match(html, /<p class="note" id="sfLiveRoute" hidden>We read every pool of these blocks and route your buy to the cheapest\.<\/p>\r?\n\s*(<p class="note" id="sfLiveFrais" hidden>[^<]*<\/p>\r?\n\s*)?<ul class="fil" id="sfLive">/);
   const peindre = bloc('function peindreLive() {', html);
   assert.doesNotMatch(peindre.replace(/\/\*[\s\S]*?\*\//g, ''), EXPLI, 'l explication est encore produite PAR LIGNE');
   assert.match(peindre, /\$\('#sfLiveRoute'\)\.hidden = !lignes\.slice\(0, liveAffiches\)\.some\(estEtrangere\);/, 'l entete ne suit pas les lignes affichees');
@@ -74,9 +74,10 @@ cas('TEMOIN NEGATIF : sans white-space:nowrap, les actions peuvent se separer �
 function verifierRepli(html) {
   assert.match(html, /\.filS a\{color:var\(--accent2\)\}\r?\n/, 'la couleur des liens du Feed a change');
   assert.match(html, /\.filActs a\{color:var\(--accent2\)\}/, '« Buy » / « profile › » gardent le bleu par defaut du navigateur');
-  assert.match(html, /\.filLigne\{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:1\.1em;overflow:hidden\}/, 'le cadre ne coupe pas le separateur de debut de ligne');
-  assert.match(html, /\.filLigne>span\{margin-left:-1\.1em;min-width:0\}/);
-  assert.match(html, /\.filLigne>span::before\{content:'·';display:inline-block;width:1\.1em;text-align:center\}/);
+  /* 14:14 : nom long (MILEMOSA) → « ınchpad » rogne a gauche par la marge negative ; ESPACE au lieu de « · », ni marge ni overflow */
+  const css = (/\.filLigne\{[^}]*\}/.exec(html) || [''])[0] + ((/\.filLigne>span\{[^}]*\}/.exec(html)) || [''])[0];
+  assert.match(css, /\.filLigne\{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:\.9em\}/, 'titre et actions ne sont plus separes par un espace');
+  assert.doesNotMatch(css + ((/\.filLigne[^{]*::before\{[^}]*\}/.exec(html)) || [''])[0], /margin-left:-|overflow:hidden|content:/, 'marge negative / overflow / separateur genere : le debut de ligne est rogne');
   const peindre = bloc('function peindreLive() {', html);
   assert.match(peindre, /\(foreignCreate \? '<span class="filLigne"><span>' \+ quoi \+ '<\/span>' \+ actionsEtrangeres\(e\.jeton\) \+ '<\/span>' : quoi\)/, 'le separateur entre titre et actions est un « · » ecrit en dur');
 }
@@ -84,6 +85,10 @@ cas('⛔ liens « Buy » / « profile › » lavande comme « tx » ; le « · �
 cas('TEMOIN NEGATIF : sans la regle de couleur, la verification rougit', () => {
   const mut = HTML.replace('.filActs a{color:var(--accent2)}', ''); assert.notEqual(mut, HTML);
   assert.throws(() => verifierRepli(mut), /bleu par defaut/);
+});
+cas('TEMOIN NEGATIF : l ancienne marge negative (texte rogne a gauche) rougit', () => {
+  const mut = HTML.replace('.filLigne>span{min-width:0}', '.filLigne>span{margin-left:-1.1em;min-width:0}'); assert.notEqual(mut, HTML);
+  assert.throws(() => verifierRepli(mut), /rogne/);
 });
 cas('TEMOIN NEGATIF : un « · » ecrit en dur avant les actions (orphelin en fin de ligne) rougit', () => {
   const mut = HTML.replace("'<span class=\"filLigne\"><span>' + quoi + '</span>' + actionsEtrangeres(e.jeton) + '</span>'", "quoi + ' · ' + actionsEtrangeres(e.jeton)"); assert.notEqual(mut, HTML);
@@ -112,5 +117,5 @@ cas('TEMOIN NEGATIF : une ligne etrangere qui garde « block N · tx » rougit',
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
-console.log('ok feed-etrangeres-20261002 — ' + n + ' cas, 7 temoins negatifs par mutation');
+console.log('ok feed-etrangeres-20261002 — ' + n + ' cas, 8 temoins negatifs par mutation');
 console.log('⚠️ NE PROUVE PAS le rendu (repli a 375 px) : voir les captures revue-375-*.png.');
