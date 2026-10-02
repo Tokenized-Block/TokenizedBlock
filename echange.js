@@ -28,6 +28,7 @@ import { actionsMultiSauts, routePrete, SAUTS_MIN, SAUTS_MAX } from './route-v4-
 /* ⛔ LE BAREME VIT A PART, avec son plancher monotone et ses paliers tires de la distribution
  *   MESUREE. Le recopier ici ferait deux baremes qui divergeraient. */
 import { fraisPourMontant } from './frais-degressif.js';
+import { hookDataReferentO1 } from './referent-o1.js';
 import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
@@ -486,7 +487,9 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     const actionsEncodees = actions.map((a) => (a.params === '__SWAP__'
       ? { code: a.code, params: paramsSwapExactInSingle({ ...a.swap, forme }) }
       : a));
-    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme, actions: actionsEncodees });
+    /* ⛔ 2026-10-02 : part referrer o1 (0,20 % des 1 % deja payes) -> a6cf. '' tant que le drapeau est OFF. */
+    const hookData = hookDataReferentO1({ cle });
+    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme, actions: actionsEncodees, hookData });
     return { to: R, data, value: '0x' + valeur.toString(16) };
   };
   const formes = actions.some((a) => a.params === '__SWAP__')
