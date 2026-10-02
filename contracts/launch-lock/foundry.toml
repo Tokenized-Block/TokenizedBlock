@@ -11,7 +11,7 @@ bytecode_hash = "none"
 # so the PAIRED STOCK is the REAL NVDAc / AAPLc on the fork (no mock). Needs the Base build of Foundry
 # (~/.foundry/versions/base-nightly/forge). Stock forge ignores this key and B20 calls revert.
 base = true
-fs_permissions = [{ access = "read", path = "./out" }]
+fs_permissions = [{ access = "read", path = "./out" }, { access = "read-write", path = "./plan" }]
 # MultipoolOrdreTest needs FFI: it runs ONLY under FOUNDRY_PROFILE=multipool (below). Default profile: ffi off, skipped.
 no_match_contract = "MultipoolOrdreTest"
 # FORK ONLY. NEVER --broadcast. Nothing here signs with a real key. Run:
