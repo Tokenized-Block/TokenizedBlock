@@ -641,9 +641,14 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
                 //     face a un plafond egal a sa caution — un frein economique mesurable, PAS une
                 //     impossibilite. Un vrai plafond cumulatif couterait un slot par pool : c est une
                 //     decision de Raksha, pas la mienne.
-                uint256 enAttente = comptes[id].duCreateur;
+                // ⛔ `dejaDu` ET NON `enAttente` : ce nom MASQUAIT le mapping public
+                //   `mapping(Currency => uint256) public enAttente` (ligne ~166). Le compilateur l a
+                //   signale (warning 2519). Le comportement etait juste dans cette portee, mais
+                //   masquer une variable d etat publique est un piege pour le prochain lecteur — et
+                //   c est moi qui l avais introduit en ecrivant ce plafond.
+                uint256 dejaDu = comptes[id].duCreateur;
                 uint256 plafond = caution[id];
-                uint256 reste = plafond > enAttente ? plafond - enAttente : 0;
+                uint256 reste = plafond > dejaDu ? plafond - dejaDu : 0;
                 if (cr > reste) {
                     uint256 trop = cr - reste;
                     cr = reste;
