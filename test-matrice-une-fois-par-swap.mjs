@@ -8,14 +8,21 @@
  *   une jambe paie ⟺ son hook est dans la liste pour ce sens ET la devise prelevee n est PAS un block.
  * ⛔ Invariants, sur chaque plan non refuse :
  *   A. frais routeur = 0 ⟺ au moins une jambe paie (selon l oracle)   — ni double frais, ni zero frais ;
- *   B. frais routeur > 0 ⇒ sa devise n est pas un block.
+ *   B. frais routeur > 0 ⇒ sa devise n est pas un block ;
+ *   C. (2026-10-02, Zero 1 : R5a/R5c KO sur la chaine, matrice verte) LES FRAIS DE HOOK COMPTENT AUSSI : chaque jambe
+ *      dont le hook verse a6cf (liste mesuree), DANS N IMPORTE QUELLE DEVISE, est un frais. Total routeur + hooks = 1
+ *      exactement, et aucun frais de hook en block.
+ * ⛔ TEMOIN NEGATIF : la meme matrice tourne sur une COPIE du depot ou les gardes R4 du 2026-10-02 sont retirees
+ *   (jeu de jetons [entree, sortie], pas de refus du block intermediaire ni des deux hooks) : elle DOIT y voir R5a/R5c.
  * ⚠️ NE PROUVE PAS : que ces pools existent, ni le montant reel verse par le hook (quoter simule, 1e18
- *   partout). Il garde la DECISION du planificateur sur la forme de la route, combinaison par combinaison. */
+ *   partout). Il garde la DECISION du planificateur sur la forme de la route, combinaison par combinaison.
+ *   Non modelise : HOOK_PREVU a l ACHAT preleve du block sur la chaine (hors liste). */
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
-const E = await import(pathToFileURL(path.join(ICI, 'echange.js')).href);
 const T = await import(pathToFileURL(path.join(ICI, 'tokenomics.js')).href);
 const { USDC_BASE } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
 const { ACTIONS_COINBASE } = await import(pathToFileURL(path.join(ICI, 'paires.js')).href);
@@ -56,7 +63,28 @@ function oraclePaie(s) {
   const d = T.deviseFraisHook(s.cle, sens, s.zeroForOne);
   return !!d && !BLOCS.has(bas(d));
 }
+/* C : la devise de CHAQUE frais de hook verse a6cf (block compris) — null si la jambe ne verse rien */
+function oracleFraisHook(s) {
+  const sens = sensJambe(s);
+  if (!T.hookPaieDejaA6cf(s.cle.hooks, sens)) return null;
+  return T.deviseFraisHook(s.cle, sens, s.zeroForOne) || null;
+}
+function juger(nom, sauts, p, ko) {
+  const frais = BigInt((p.resume && p.resume.frais) || 0);
+  const paie = sauts.some(oraclePaie);
+  if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — une jambe paie deja a6cf, routeur ' + frais);
+  if (!paie && frais === 0n) ko.push(nom + ' : ZERO FRAIS (ou seul un frais EN BLOCK) — routeur 0');
+  if (frais > 0n) {
+    const dev = bas((p.resume && (p.resume.fraisDevise === 'pair' ? p.resume.devise : p.resume.fraisDevise)) || '');
+    if (BLOCS.has(dev)) ko.push(nom + ' : FRAIS EN BLOCK');
+  }
+  const hooks = sauts.map(oracleFraisHook).filter(Boolean);
+  const total = (frais > 0n ? 1 : 0) + hooks.length;
+  if (total !== 1) ko.push(nom + ' : ' + total + ' FRAIS au total (routeur ' + frais + ', hooks ' + hooks.length + ')');
+  if (hooks.some((d) => BLOCS.has(bas(d)))) ko.push(nom + ' : FRAIS DE HOOK EN BLOCK');
+}
 
+async function matrice(E) {
 let n = 0, nRefus = 0, nPlans = 0;
 const ko = [];
 for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
@@ -77,29 +105,18 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
           } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
           if (p.etat === 'REFUSE') { nRefus += 1; continue; }
           nPlans += 1;
-          const paie = sauts.some(oraclePaie);
-          const frais = BigInt((p.resume && p.resume.frais) || 0);
-          if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — une jambe paie deja a6cf, routeur ' + frais);
-          if (!paie && frais === 0n) ko.push(nom + ' : ZERO FRAIS — aucune jambe ne paie (oracle), routeur 0');
-          if (frais > 0n) {
-            const dev = bas((p.resume && (p.resume.fraisDevise === 'pair' ? p.resume.devise : p.resume.fraisDevise)) || '');
-            if (BLOCS.has(dev)) ko.push(nom + ' : FRAIS EN BLOCK');
-          }
+          juger(nom, sauts, p, ko);
         }
       }
     }
   }
 }
 /* ── BLOCK INTERMEDIAIRE (paires block/B20, voulues par Phil) : X -> block -> Y ──
- * ⛔ Le garde « frais du hook en block » (echange.js) ne regarde que l ENTREE et la SORTIE. Un block au milieu
- *   n y passe pas : c est ici que le court-circuit V8 de hookPaieEnDeviseVendable pourrait compter comme
- *   « payee » une jambe dont le hook verse a6cf EN BLOCK. */
+ * ⛔ 2026-10-02 (fix R4, Zero 1) : un block INTERMEDIAIRE est desormais REFUSE, quelle que soit la combinaison de
+ *   hooks — sur la chaine, ces routes payaient 2 a 3 frais, dont un en block (R4a-g, R5a/R5c). Les trois routes
+ *   « DOIT_PASSER » d avant (V8,V8 en action) payaient DEUX frais de hook : elles sont refusees elles aussi. */
 let nMilieu = 0;
 const construits = new Set();
-/* ⛔ UN REFUS NE FAIT ECHOUER AUCUN INVARIANT : ces routes DOIVENT donner un plan. Le hook V8 y verse a6cf en
- *   ACTION (ACT = currency0 face a blocHaut), et l action est l entree ou la sortie. Le garde « frais en block »
- *   les refusait en prenant toute adresse 0xb2… pour un block (actions comprises). */
-const DOIT_PASSER = ['MILIEU ACT>blocHaut>ETH [V8,V8]', 'MILIEU ACT>blocHaut>USDC [V8,V8]', 'MILIEU ETH>blocHaut>ACT [V8,V8]'];
 for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
   for (const [a, z] of [[ACT, ETH], [ACT, USDC], [ETH, ACT], [USDC, ACT], [ETH, USDC], [USDC, ETH]]) {
     for (const h1 of Object.keys(HOOKS)) {
@@ -115,20 +132,29 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
         } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
         if (p.etat === 'REFUSE') { nRefus += 1; continue; }
         nPlans += 1; nMilieu += 1; construits.add(nom);
-        const paie = sauts.some(oraclePaie);
-        const frais = BigInt((p.resume && p.resume.frais) || 0);
-        if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — routeur ' + frais);
-        if (!paie && frais === 0n) ko.push(nom + ' : ZERO FRAIS (ou seul un frais EN BLOCK) — routeur 0');
-        if (frais > 0n) {
-          const dev = bas((p.resume && (p.resume.fraisDevise === 'pair' ? p.resume.devise : p.resume.fraisDevise)) || '');
-          if (BLOCS.has(dev)) ko.push(nom + ' : FRAIS EN BLOCK');
-        }
+        juger(nom, sauts, p, ko);
+        ko.push(nom + ' : BLOCK INTERMEDIAIRE non refuse');
       }
     }
   }
 }
-console.log('block intermediaire : ' + nMilieu + ' plans construits');
-for (const nom of DOIT_PASSER) if (!construits.has(nom)) ko.push(nom + ' : REFUSE alors que le hook paie en action vendable');
+/* ── R5c (Zero 1) : 3 sauts, ETH -> USDC (sans hook) -> block (sans hook) -> action (V8, block = currency0) ── */
+for (const [h2, h3] of [['sans', 'V8'], ['sans', 'inconnu'], ['V8', 'V8']]) {
+  const noeuds = [ETH, USDC, BLOC_BAS, ACT];
+  const sauts = [jambe(ETH, USDC, HOOKS.sans), jambe(USDC, BLOC_BAS, HOOKS[h2]), jambe(BLOC_BAS, ACT, HOOKS[h3])];
+  const nom = 'R5c ETH>USDC>blocBas>ACT [sans,' + h2 + ',' + h3 + ']';
+  n += 1;
+  let p;
+  try {
+    p = await E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, sauts, entree: ETH, sortie: ACT,
+      montant: 10n ** 21n, decimalesEntree: 18, prixUsdEntree: null, fraisDevisesOk: new Set([ACT]) });
+  } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
+  if (p.etat === 'REFUSE') { nRefus += 1; continue; }
+  nPlans += 1; nMilieu += 1;
+  juger(nom, sauts, p, ko);
+  ko.push(nom + ' : BLOCK INTERMEDIAIRE non refuse');
+}
+console.log('block intermediaire : ' + nMilieu + ' plans construits (attendu 0)');
 
 /* ── SWAP SIMPLE (planEchange) : block contre ETH / USDC / action, chaque hook, chaque sens, block bas ou haut ── */
 let nSimple = 0;
@@ -147,20 +173,43 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
         } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
         if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { nRefus += 1; continue; }
         nPlans += 1; nSimple += 1;
-        const paie = oraclePaie({ cle: c, zeroForOne: zf });
-        const frais = BigInt((p.resume && p.resume.frais) || 0);
-        if (paie && frais !== 0n) ko.push(nom + ' : DOUBLE FRAIS — routeur ' + frais);
-        if (!paie && frais === 0n) ko.push(nom + ' : ZERO FRAIS (ou seul un frais EN BLOCK) — routeur 0');
-        if (frais > 0n) {
-          const dev = bas((p.resume && (p.resume.fraisDevise === 'pair' ? p.resume.devise : p.resume.fraisDevise)) || '');
-          if (BLOCS.has(dev)) ko.push(nom + ' : FRAIS EN BLOCK');
-        }
+        juger(nom, [{ cle: c, zeroForOne: zf }], p, ko);
       }
     }
   }
 }
 console.log('swap simple : ' + nSimple + ' plans construits');
-console.log(n + ' combinaisons · ' + nPlans + ' plans · ' + nRefus + ' refus · ' + ko.length + ' violations');
-for (const k of ko.slice(0, 40)) console.log('  KO  ' + k);
-if (nPlans === 0) { console.log('⛔ aucun plan construit : la matrice ne juge rien'); process.exit(1); }
-process.exit(ko.length ? 1 : 0);
+return { n, nPlans, nRefus, ko };
+}
+
+const reel = await matrice(await import(pathToFileURL(path.join(ICI, 'echange.js')).href));
+console.log('DEPOT : ' + reel.n + ' combinaisons · ' + reel.nPlans + ' plans · ' + reel.nRefus + ' refus · ' + reel.ko.length + ' violations');
+for (const k of reel.ko.slice(0, 40)) console.log('  KO  ' + k);
+
+/* ── TEMOIN NEGATIF : une copie du depot SANS les gardes R4 du 2026-10-02 doit etre rouge, et sur R5a/R5c ── */
+const MUTANT = [
+  ['echange.js', 'sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))', '[entree, sortie]'],
+  ['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)'],
+  ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+];
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-matrice-'));
+let mut = null, erreurMutant = null;
+try {
+  for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) || f === 'package.json') fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
+  for (const [f, de, vers] of MUTANT) {
+    const p = path.join(dir, f); const src = fs.readFileSync(p, 'utf8');
+    if (src.split(de).length - 1 !== 1) throw new Error('motif introuvable dans ' + f + ' : ' + de.slice(0, 50));
+    fs.writeFileSync(p, src.replace(de, vers));
+  }
+  mut = await matrice(await import(pathToFileURL(path.join(dir, 'echange.js')).href));
+} catch (e) { erreurMutant = e.message; } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+const vuR5a = mut && mut.ko.some((k) => /^MILIEU USDC>blocBas>ACT \[sans,V8\]/.test(k));
+const vuR5c = mut && mut.ko.some((k) => /^R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\]/.test(k));
+console.log('MUTANT (gardes R4 retirees) : ' + (mut ? mut.nPlans + ' plans · ' + mut.ko.length + ' violations · R5a vu=' + vuR5a + ' · R5c vu=' + vuR5c : 'NON EXECUTE ' + erreurMutant));
+for (const k of (mut ? mut.ko : []).filter((x) => /^(MILIEU USDC>blocBas>ACT \[sans,V8\]|R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\])/.test(x))) console.log('  (mutant) ' + k);
+
+let echec = false;
+if (reel.nPlans === 0) { console.log('⛔ aucun plan construit : la matrice ne juge rien'); echec = true; }
+if (reel.ko.length) echec = true;
+if (!mut || !mut.ko.length || !vuR5a || !vuR5c) { console.log('⛔ TEMOIN NEGATIF : la matrice ne voit pas R5a/R5c sans les gardes R4'); echec = true; }
+process.exit(echec ? 1 : 0);

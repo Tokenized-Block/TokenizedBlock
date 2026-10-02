@@ -23,6 +23,14 @@ export const MESSAGE_SANS_POOL = 'this block has no market the app can trade on 
 export function estDeviseConnue(adr) {
   return DEVISES.has(bas(adr));
 }
+/** Vrai = ce jeton est un BLOCK pour une route multi-sauts (2026-10-02, fix R4) : ni devise connue, ni devise dont
+ *  l appelant a lu le prix (`fraisDevisesOk`). ⛔ Un B20 (0xb2…) qui n est pas une devise connue reste un block MEME
+ *  prixe : app.html met dans `fraisDevisesOk` les blocks lus avec prix et liquidite. Sans `fraisDevisesOk` : tout jeton
+ *  inconnu est un block (fail-closed). */
+export function estBlockDeRoute(adr, fraisDevisesOk = null) {
+  const a = bas(adr);
+  return !estDeviseConnue(a) && (/^0xb2/.test(a) || !(fraisDevisesOk instanceof Set && fraisDevisesOk.has(a)));
+}
 export function cleSansHook(cle) {
   return !!cle && /^0x0{40}$/i.test(String(cle.hooks || ZERO));
 }
@@ -33,7 +41,7 @@ export function estBlockTb(adr, blocks = []) {
   /* un block = un jeton B20 (0xb2…) ; un jeton exterieur (memecoin hors B20) n est pas concerne par la regle */
   return a.startsWith('0xb2') && blocks.map(bas).includes(a) && !DEVISES.has(a);
 }
-function formatOpenLaunch(cle) {
+export function formatOpenLaunch(cle) {
   return Number(cle.fee) === 30000 && Number(cle.tickSpacing) === 200;
 }
 /** Vrai = cette cle est INTERDITE au routage (pool sans hook avec un block TB dedans). */

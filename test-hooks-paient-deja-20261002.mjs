@@ -118,7 +118,8 @@ try {
   const usdcEthV8 = cleDePool(ETH, USDC_BASE, { fee: 0, tickSpacing: 200, hooks: HOOK_V8 });
   const tousPaient = [{ cle: usdcEthV8, zeroForOne: false }, sauts[1]];
   const mOn = await planMS(tousPaient, liste);
-  ok(routeur0(mOn), 'cas 3 : jambe 1 V8 + V8-open en 2e jambe (liste injectee) -> 0 frais routeur (' + mOn.etat + ')');
+  /* 2026-10-02 (fix R4, Zero 1) : deux jambes hookees = deux frais de hook sur la chaine -> refus, aucun frais routeur */
+  ok(mOn.etat === 'REFUSE' && mOn.refusPlusieursHooks === true, 'cas 3 : jambe 1 V8 + V8-open en 2e jambe (liste injectee) -> refus deux hooks (' + mOn.etat + ')');
   const mTrou = await planMS(sauts, liste);
   ok(routeur0(mTrou), 'une fois par swap : jambe 1 sans hook + V8-open LISTE en 2e jambe -> 0 frais routeur (' + mTrou.etat + ')');
   const mOff = await planMS(sauts, null);
@@ -127,7 +128,7 @@ try {
   // V8 (deja liste dans le depot) : une seule jambe V8 suffit
   const v8Jeton = { ...sauts[1], cle: cleDePool(ETH, JETON, { fee: 0, tickSpacing: 200, hooks: HOOK_V8 }) };
   const mV8 = await planMS([{ cle: usdcEthV8, zeroForOne: false }, v8Jeton]);
-  ok(routeur0(mV8), 'depot : V8 + V8 -> 0 frais routeur (' + mV8.etat + ')');
+  ok(mV8.etat === 'REFUSE' && mV8.refusPlusieursHooks === true, 'depot : V8 + V8 -> refus deux hooks (' + mV8.etat + ')');
   const mV8seul = await planMS([sauts[0], v8Jeton]);
   ok(routeur0(mV8seul), 'une fois par swap : jambe 1 sans hook + V8 -> 0 frais routeur (le V8 a deja paye a6cf) (' + mV8seul.etat + ')');
 } finally {

@@ -41,8 +41,9 @@ await essai('(b)', async () => {
   ok(aucun.etat === 'REFUSE' && aucun.refusCheminFrais === true,
     '(b) negative control: NO paying hop -> router fee kept, and here it would be in the block -> fee-path refusal (' + aucun.etat + ' ' + (aucun.causeInterne || '') + ')');
   const tout = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: usdcEthV8, zeroForOne: false }] });
-  ok(tout.resume && BigInt(tout.resume.frais) === 0n && BigInt(tout.resume.fraisBps) === 0n,
-    '(b) negative control: every hop V8-paying -> router fee 0 (' + tout.etat + ' ' + (tout.pourquoi || '') + ')');
+  /* 2026-10-02 (fix R4, Zero 1) : deux jambes V8 = deux frais de hook sur la chaine -> refus (au plus un frais vers a6cf) */
+  ok(tout.etat === 'REFUSE' && tout.refusPlusieursHooks === true && !tout.refusCheminFrais,
+    '(b) negative control: every hop V8-paying -> two hook fees, refused as two hooked legs (' + tout.etat + ' ' + (tout.pourquoi || '') + ')');
 });
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

@@ -28,6 +28,8 @@
  *   qui ne finit pas la ou il croit. Et « une route a echoue » sans dire OU envoie chercher partout.
  */
 
+import { estBlockDeRoute, cleSansHook, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+
 /** Les etats rendus. ⛔ Aucun autre. */
 export const ETATS = Object.freeze(['OK', 'REFUSE', 'NON_MESURE']);
 
@@ -84,6 +86,15 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
         pourquoi: 'hop ' + (i + 1) + ' does not start where hop ' + i + ' ends' };
     }
   }
+  /* ⛔⛔ 2026-10-02 (Zero 1, R4g) — LES MEMES REGLES QUE planEchangeMultiSauts, ICI AUSSI, fail-closed : un block
+   *   INTERMEDIAIRE (ni le premier `de` ni le dernier `vers`) refuse la route avant toute lecture ; deux jambes
+   *   hookees ou plus la refusent apres resolution (au plus un frais vers a6cf). Ici, un block = un B20 (0xb2…) qui
+   *   n est pas une devise connue ; le planificateur, qui recoit `fraisDevisesOk`, refuse en plus tout jeton inconnu. */
+  for (let i = 0; i < chemin.length - 1; i += 1) {
+    if (/^0xb2/i.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers)) {
+      return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: 0, pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
+    }
+  }
 
   const sauts = [];
   let courant = m;
@@ -121,6 +132,9 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
     } else {
       try { courant = BigInt(r.quote); } catch (_) { courant = 0n; }
     }
+  }
+  if (sauts.filter((x) => !cleSansHook(x.cle)).length >= 2) {
+    return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: sauts.length, pourquoi: MESSAGE_PAS_ICI, refusPlusieursHooks: true };
   }
   return {
     etat: 'OK', sauts, resolus: sauts.length,

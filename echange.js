@@ -21,7 +21,7 @@ import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExact
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
-  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue } from './pool-sans-hook.js';
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -724,18 +724,41 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *     puisque 0,1 % de 100 vaut justement 0,1.
    *   ⛔ LE CHEMIN HISTORIQUE N EST PAS TOUCHE : `planEchange` garde ses 0,5 %. Deux rails, deux
    *     taux, et c est explicite — baisser le chemin existant aurait coupe un revenu qui existe. */
-  /* ⛔⛔ 2026-10-02 (regle du fondateur) : aucun saut sur une pool sans hook qui contient un block TB (entree, sortie,
-   *   TBLOCK, TBGAS). Les jambes entre devises (ETH/USDC…) restent permises. */
-  if (REFUS_FRAIS_HOOK_EN_BLOCK && sauts.some((x) => x && x.cle && [entree, sortie].some((j) => /^0xb2/i.test(String(j || ''))
-    /* une action Coinbase (0xb2… aussi) n est pas un block : un frais de hook en action est vendable */
-    && !estDeviseConnue(j) && fraisHookEnBlock(x.cle, j, sensRelatifAuBlock(x), !!x.zeroForOne)))) {
-    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
-  }
   if (!ROUTE_VIA_TBLOCK && sauts.some((x) => x && cleTouchTblock(x.cle))) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusTblock: true };
   }
-  if (indexPoolSansHookInterdite(sauts.map((x) => x && x.cle), [entree, sortie]) >= 0) {
+  /* ⛔⛔ 2026-10-02 (regle du fondateur) : aucun saut sur une pool sans hook qui contient un block TB, et aucun frais de
+   *   hook verse EN BLOCK. Les jambes entre devises (ETH/USDC…) restent permises.
+   *   ⛔ R4 (fix bloc au milieu) : les blocks se lisent sur TOUS les sauts — (currency0, currency1) de chaque cle —, pas
+   *   sur [entree, sortie]. ETH -> (sans hook) -> block -> (V8, block = currency0) -> NVDAc passait les deux gardes :
+   *   signable, deux frais dont un en block. Block = ni devise connue (ETH, USDC, OUSD, actions…), ni devise dont
+   *   l appelant a lu le prix (`fraisDevisesOk`) — un B20 non connu reste un block meme prixe (`estBlockDeRoute`).
+   *   Fail-closed, saut par saut, cote block par cote block. */
+  const blocsRoute = [...new Set(sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))
+    .map((a) => String(a || '').toLowerCase()))]
+    .filter((a) => estBlockDeRoute(a, fraisDevisesOk));
+  for (const x of sauts) {
+    if (!(x && x.cle)) continue;
+    for (const b of [x.cle.currency0, x.cle.currency1].map((a) => String(a || '').toLowerCase())) {
+      if (!blocsRoute.includes(b)) continue;
+      /* format OpenLaunch (frais 3 %, espacement 200) : seule exception de la regle (pool-sans-hook.js) */
+      if (cleSansHook(x.cle) && !formatOpenLaunch(x.cle)) return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusSansHook: true };
+      if (REFUS_FRAIS_HOOK_EN_BLOCK && fraisHookEnBlock(x.cle, b, sensRelatifAuBlock(x), !!x.zeroForOne)) {
+        return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusFraisEnBlock: true };
+      }
+    }
+  }
+  if (indexPoolSansHookInterdite(sauts.map((x) => x && x.cle), blocsRoute) >= 0) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_SANS_POOL, refusSansHook: true };
+  }
+  /* ⛔⛔ 2026-10-02 (Zero 1, RESULT-once-per-swap-6fc35ab : R4a-g, R5a/R5c KO sur fork) — AU PLUS UN FRAIS VERS a6cf.
+   *   L app ne pilote que le routeur ; chaque jambe hookee preleve SON frais sur la chaine. Fail-closed :
+   *   (1) un block qui n est ni l entree ni la sortie (block INTERMEDIAIRE) -> refus ;
+   *   (2) deux jambes hookees ou plus -> refus (sinon deux frais de hook, ou plus, pour un seul echange). */
+  const bouts = new Set([String(entree || '').toLowerCase(), String(sortie || '').toLowerCase()]);
+  if (blocsRoute.some((b) => !bouts.has(b))) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
+  if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusPlusieursHooks: true };
   }
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
   /* ⛔⛔ LE BAREME EST DEGRESSIF : 0,2 % jusqu a 100 $, 0,1 % au-dela — decision de Phil

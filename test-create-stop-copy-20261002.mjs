@@ -87,7 +87,8 @@ await essai('(3)', async () => {
   /* negative control: an all-V8 route is not refused by this rule */
   const v8 = { currency0: ETH, currency1: USDC, fee: 0, tickSpacing: 200, hooks: T.HOOK_V8 };
   const r2 = await E.planEchangeMultiSauts({ ...base, sauts: [{ cle: blocUsdc, zeroForOne: false }, { cle: v8, zeroForOne: false }] });
-  ok(r2.etat !== 'REFUSE' && !r2.refusCheminFrais, '(3) NEG: every hop V8-paying -> not refused (' + r2.etat + ')');
+  /* 2026-10-02 (fix R4, Zero 1) : deux jambes hookees = deux frais de hook sur la chaine -> refusPlusieursHooks, jamais ce garde-ci */
+  ok(!r2.refusCheminFrais && r2.etat === 'REFUSE' && r2.refusPlusieursHooks === true, '(3) NEG: every hop V8-paying -> not refused by this rule; refused as two hooked legs (' + r2.etat + ')');
   ok(/e\.textContent = p\.refusFraisEnBlock \? String\(p\.pourquoi\) : p\.refusCheminFrais \? String\(p\.pourquoi\)/.test(html), '(3) Buy/Sell screen shows that text alone, no "Not possible:" prefix');
 });
 console.log(n + ' assertions, ' + ko + ' KO');
