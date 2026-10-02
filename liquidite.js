@@ -35,7 +35,7 @@ export async function planAjoutLiquidite({ rpc, chaine, jeton, compte, partPourM
   const estTblockApp = feeOk && (marche.paire === 'TBLOCK' || t0 || t1)
     && (t0 || t1);
   if (!estEthApp && !estTblockApp) {
-    return { etat: 'REFUSE', pourquoi: 'its market is not a TokenizedBlock market (ETH or TBLOCK, 0 % fee, spacing 200, our hook or none) — liquidity tools only add to those' };
+    return { etat: 'REFUSE', pourquoi: 'its market is not a TokenizedBlock market (ETH or TBLOCK, 0 % LP fee, spacing 200, our hook or none) — liquidity tools only add to those' };
   }
   const devise = estTblockApp ? TBLOCK : ETH_NATIF;
   const plan = await planLancement({ rpc: lire, chaine, jeton, compte, valorisationEth: 1, maintenant, partPourMille, proprietaire: compte, devise, hooks: k.hooks });
