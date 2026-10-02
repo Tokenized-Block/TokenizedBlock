@@ -15,7 +15,8 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook } from './tokenomics.js';
+import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook, routePaieDejaA6cf,
+  HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
 import { vieDuBlock } from './marche.js';
@@ -45,8 +46,8 @@ const ETH = '0x0000000000000000000000000000000000000000';
  *  dans une devise VENDABLE (ETH, USDC, ou une devise dont l appelant a lu le prix) — jamais le block lui-meme ?
  *  Oui : le routeur ne prend rien. Non (hook qui paie en block, ou pas de hook payeur) : le routeur garde son frais.
  *  Rend { paie, devise } ; `devise` sert a calculer l assiette du frais du hook (garde anti-poussiere). */
-export function hookPaieEnDeviseVendable({ cle, sens, zeroForOne, jeton = null, fraisDevisesOk = null }) {
-  const d = deviseFraisHook(cle, sens, zeroForOne);
+export function hookPaieEnDeviseVendable({ cle, sens, zeroForOne, jeton = null, fraisDevisesOk = null, liste = HOOKS_PAIENT_DEJA_A6CF }) {
+  const d = deviseFraisHook(cle, sens, zeroForOne, liste);
   if (!d || (jeton && d === String(jeton).toLowerCase())) return { paie: false, devise: d };
   /* ⛔ 2026-10-02 14:49 (Zero 1, PREUVE-FRAIS-VIEILLES-POOLS) : le V8 verse a6cf dans la devise appariee, dans les deux
    *   sens, QUELLE QU ELLE SOIT (TBLOCK(e7e9)/SPCXc mesure : hook 4 975 + routeur 5 000 = double frais). Sur une pool V8 dont
@@ -489,7 +490,13 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
       : a));
     /* ⛔ 2026-10-02 : part referrer o1 (0,20 % des 1 % deja payes) -> a6cf. '' tant que le drapeau est OFF. */
     const hookData = hookDataReferentO1({ cle });
-    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme, actions: actionsEncodees, hookData });
+    /* ⛔⛔ CORRECTIF ZERO 1 (2026-10-02, KO sur e93e9e2) : le struct du Universal Router de Base est
+     *   (key, zeroForOne, amountIn, amountOutMin, bytes hookData). La forme AVEC_MINHOP met un 0 la ou
+     *   l UR lit l offset de hookData : hookData est alors lu VIDE, en silence — le referrer o1 ne
+     *   recevait rien. Des qu il y a des hookData, la tete est encodee SANS_MINHOP. Sans hookData
+     *   (drapeau OFF), l octet emis est inchange. Teste par test-referent-o1-plan-echange-20261002.mjs. */
+    const formeTete = hookData ? SANS_MINHOP : forme;
+    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme: formeTete, actions: actionsEncodees, hookData });
     return { to: R, data, value: '0x' + valeur.toString(16) };
   };
   const formes = actions.some((a) => a.params === '__SWAP__')
@@ -663,7 +670,9 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔ LES DECIMALES ET LE PRIX DE LA DEVISE D ENTREE SONT LUS PAR L APPELANT, pas supposes ici :
    *   ils servent a situer le montant dans le bareme degressif. 18 par defaut serait un pari — et
    *   OUSD en a SIX. Sans PRIX, le bareme applique le taux le plus haut et le dit. */
-  decimalesEntree = 18, prixUsdEntree = null }) {
+  decimalesEntree = 18, prixUsdEntree = null,
+  /* injectable pour les tests (redeploiement V8-open) ; defaut = la liste unique de tokenomics.js */
+  hooksPaieurs = HOOKS_PAIENT_DEJA_A6CF }) {
   const R = ROUTEUR[Number(chaine)], Q = QUOTEUR[Number(chaine)];
   if (!R || !Q) return { etat: 'REFUSE', pourquoi: 'no Uniswap router on this network here' };
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) {
@@ -721,11 +730,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔ 2026-10-02 (fix-2) : la devise du hook decide, plus currency0 === ETH. Debloque la sortie block -> USDC -> ETH :
    *   le V8 y paie en USDC sur le saut 1, et le routeur ne prenait son frais qu en block (refuse). */
   const hookS1 = s1.cle ? hookPaieEnDeviseVendable({ cle: s1.cle, sens: s1.zeroForOne ? 'ACHAT' : 'VENTE',
-    zeroForOne: !!s1.zeroForOne, fraisDevisesOk }) : { paie: false, devise: null };
+    zeroForOne: !!s1.zeroForOne, fraisDevisesOk, liste: hooksPaieurs }) : { paie: false, devise: null };
   /* ⛔ 2026-10-02 14:49 — CHAQUE JAMBE. Le saut 1 paye par son hook ne dispense PAS une jambe suivante sans hook payeur
    *   (pool sans hook, hook qui ne verse rien) : le routeur ne s efface que si TOUS les sauts paient deja a6cf. */
   const jambesPayees = sauts.map((x) => !!(x && x.cle) && hookPaieEnDeviseVendable({ cle: x.cle, sens: x.zeroForOne ? 'ACHAT' : 'VENTE',
-    zeroForOne: !!x.zeroForOne, fraisDevisesOk }).paie);
+    zeroForOne: !!x.zeroForOne, fraisDevisesOk, liste: hooksPaieurs }).paie);
   const hookPaie = hookS1.paie && jambesPayees.every(Boolean);
   if (!estWalletDeFrais(compte) && !hookPaie) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });

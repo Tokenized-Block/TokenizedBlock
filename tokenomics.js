@@ -97,7 +97,7 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
  *       rendraient 0,000509934 ETH. Il faut SIX FOIS plus de volume pour egaler. C est un PARI.
  *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
-import { estHookMarcheOuvert } from './marche-ouvert.js';
+import { HOOKS_MARCHE_OUVERT } from './marche-ouvert.js';
 import { hookDeLancementPour } from './paires.js';
 /* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
  *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
@@ -163,42 +163,52 @@ export function estNotreHook(h) {
     || x === HOOK_V6.toLowerCase() || x === HOOK_V7.toLowerCase() || x === HOOK_V8.toLowerCase()
     || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase());
 }
-/** ⛔ 2026-10-02 — UN SEUL FRAIS PAR JAMBE. Le hook de cette pool verse-t-il DEJA a6cf, en ETH, dans
- *  la transaction, pour ce sens ? Mesure sur fork (bloc 52072599, callTracer) :
+/** ⛔ 2026-10-02 — UN SEUL FRAIS PAR JAMBE. LA LISTE des hooks qui versent DEJA a6cf, en ETH, dans la
+ *  transaction, et pour quel sens. Mesure sur fork (bloc 52072599, callTracer) :
  *    V8 achat + vente : oui (0,5 % ETH) · V1 HOOK_PREVU et V2 : vente seulement (ETH) ·
  *    V1 achat : le hook prend du BLOCK (non compte) · V2 achat : rien dans la tx · V3–V7 : aucune pool.
- *  Vrai = le routeur ne prend PAS son 0,5 % en plus.
- *
- *  ⛔⛔⛔ LE V9 NE REPOND PLUS « OUI » PAR DEFAUT, CORRIGE LE 2026-10-02. La version precedente disait
- *       « V9 compte seulement une fois pose » et l implementait par `!!HOOK_V9` : poser l adresse
- *       suffisait a faire passer le routeur a 0 bps, dans les DEUX sens, sans aucune mesure — V9
- *       n est pas deploye. Un faux « oui » fait prendre ZERO et rien ne l attrape ; un faux « non »
- *       fait double facturer et la garde `double fee` d `echange.js` le refuse. On va donc vers
- *       celui que quelque chose attrape.
- *    ⇒ `V9_PAIE_DEJA_A6CF` porte la reponse : `null` tant qu aucune mesure fork n existe, et dans ce
- *      cas le routeur PREND son frais. La table V1/V2/V8 reste telle quelle : elle est mesuree. */
-export function hookPaieDejaA6cf(h, sens) {
+ *    V8-open (TBlockOpenMarketHook) : achat + vente en ETH (fork 52074194) — TOUTES ses adresses,
+ *    anciennes comprises (marche-ouvert.js > HOOKS_MARCHE_OUVERT ; vide tant que non deploye).
+ *  ⛔ APPLIQUEE A CHAQUE JAMBE (planEchange, route via TBLOCK, multi-sauts) : aucun frais routeur sur une
+ *    route dont une jambe ETH porte un hook de cette liste dans son sens. Une liste vide ferait payer
+ *    deux fois chaque marche V8 : test-hooks-paient-deja-20261002.mjs echoue alors.
+ *  ⛔⛔ V9 (fix-2, live 87a49cb) : JAMAIS deduit de la seule adresse — il n entre dans la liste que si
+ *    V9_PAIE_DEJA_A6CF === true (mesure fork). `null` = pas mesure = le routeur prend son frais. */
+const DEUX_SENS = Object.freeze(['ACHAT', 'VENTE']);
+export const HOOKS_PAIENT_DEJA_A6CF = Object.freeze([
+  { hook: HOOK_V8, sens: DEUX_SENS, preuve: 'fork 52072599 callTracer' },
+  ...(HOOK_V9 && V9_PAIE_DEJA_A6CF === true ? [{ hook: HOOK_V9, sens: DEUX_SENS, preuve: 'V9 mesure (V9_PAIE_DEJA_A6CF)' }] : []),
+  ...HOOKS_MARCHE_OUVERT.map((h) => ({ hook: h, sens: DEUX_SENS, preuve: 'V8-open fork 52074194' })),
+  { hook: HOOK_PREVU, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
+  { hook: HOOK_V2, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
+].map((e) => Object.freeze(e)));
+/** Vrai = ce hook verse deja a6cf en ETH pour ce sens -> le routeur ne prend PAS son frais en plus. */
+export function hookPaieDejaA6cf(h, sens, liste = HOOKS_PAIENT_DEJA_A6CF) {
   const x = String(h || '').toLowerCase();
   if (!x || (sens !== 'ACHAT' && sens !== 'VENTE')) return false;
-  if (x === HOOK_V8.toLowerCase()) return true;
-  /* ⛔ V9 : jamais deduit de la seule presence de l adresse. `null` = pas mesure = on prend. */
-  if (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase()) return V9_PAIE_DEJA_A6CF === true;
-  /* ⛔ 2026-10-02 : le marche ouvert (V8-open) preleve deja en ETH sur les deux sens -> pas de second frais
-   *   routeur. No-op tant que HOOK_MARCHE_OUVERT est null (non deploye). */
-  if (estHookMarcheOuvert(x)) return true;
-  if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return sens === 'VENTE';
-  return false;
+  return liste.some((e) => !!e.hook && String(e.hook).toLowerCase() === x && e.sens.includes(sens));
+}
+/** UNE ROUTE (liste de sauts { cle, zeroForOne }) : une de ses jambes ETH porte-t-elle un hook qui verse deja
+ *  a6cf dans le sens de CETTE jambe ? (ETH en currency0 : zeroForOne = ETH entre = ACHAT.)
+ *  ⛔ Cas Zero 1 n° 3 : ne regarder que le saut 1 faisait payer deux fois une route ou le V8-open
+ *    n est pas la premiere jambe. Les jambes sans ETH gardent le frais routeur (mesure faite en ETH). */
+export function routePaieDejaA6cf(sauts, liste = HOOKS_PAIENT_DEJA_A6CF) {
+  if (!Array.isArray(sauts)) return false;
+  return sauts.some((s) => !!(s && s.cle && String(s.cle.currency0).toLowerCase() === '0x0000000000000000000000000000000000000000'
+    && hookPaieDejaA6cf(s.cle.hooks, s.zeroForOne ? 'ACHAT' : 'VENTE', liste)));
 }
 /** ⛔ 2026-10-02 (fix-2) — DANS QUELLE DEVISE le hook verse-t-il a6cf sur cette jambe ? `null` s il ne verse rien.
  *  Mesure fork (Zero 1, bloc 52073896, callTracer) : le V8 preleve TOUJOURS en currency0, dans les deux sens —
  *    V8 USDC/block vente : USDC · V8 NVDAc/block (NVDAc = currency0) : NVDAc · V8 block/NVDAc (block = currency0) : BLOCK.
  *  V1/V2 a la vente : la devise de SORTIE (ETH mesure). V9 : currency0 suppose, et seulement si V9_PAIE_DEJA_A6CF === true. */
-export function deviseFraisHook(cle, sens, zeroForOne) {
-  if (!cle || !hookPaieDejaA6cf(cle.hooks, sens)) return null;
+export function deviseFraisHook(cle, sens, zeroForOne, liste = HOOKS_PAIENT_DEJA_A6CF) {
+  if (!cle || !hookPaieDejaA6cf(cle.hooks, sens, liste)) return null;
   const x = String(cle.hooks).toLowerCase();
   const c0 = String(cle.currency0 || '').toLowerCase(), c1 = String(cle.currency1 || '').toLowerCase();
-  if (x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase())) return c0;
-  return zeroForOne ? c1 : c0;
+  /* V1/V2 (vente seulement) : la devise de SORTIE. Tout autre hook de la liste — V8, V9 mesure, V8-open (ETH/<token>,
+   *   preleve en ETH dans les deux sens, fork 52074194) — preleve en currency0. */
+  if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return zeroForOne ? c1 : c0;
+  return c0;
 }
 /** ⛔ Selecteur de « porteLeLabel(address) » — MESURE avec « cast sig », jamais ecrit de memoire. */
 export const SEL_PORTE_LABEL = '0x330676aa';
