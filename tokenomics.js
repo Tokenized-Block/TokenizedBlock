@@ -97,6 +97,7 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
  *       rendraient 0,000509934 ETH. Il faut SIX FOIS plus de volume pour egaler. C est un PARI.
  *    ⛔ Memes bits 0x24cc que le V7 : aucune capacite ajoutee. */
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
+import { estHookMarcheOuvert } from './marche-ouvert.js';
 import { hookDeLancementPour } from './paires.js';
 /* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
  *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
@@ -148,6 +149,9 @@ export function hookPaieDejaA6cf(h, sens) {
   const x = String(h || '').toLowerCase();
   if (!x || (sens !== 'ACHAT' && sens !== 'VENTE')) return false;
   if (x === HOOK_V8.toLowerCase() || (!!HOOK_V9 && x === String(HOOK_V9).toLowerCase())) return true;
+  /* ⛔ 2026-10-02 : le marche ouvert (V8-open) preleve deja en ETH sur les deux sens -> pas de second frais
+   *   routeur. No-op tant que HOOK_MARCHE_OUVERT est null (non deploye). */
+  if (estHookMarcheOuvert(x)) return true;
   if (x === HOOK_PREVU.toLowerCase() || x === HOOK_V2.toLowerCase()) return sens === 'VENTE';
   return false;
 }
