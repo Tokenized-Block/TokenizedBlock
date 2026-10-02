@@ -256,7 +256,10 @@ const octets = (s) => new TextEncoder().encode(s).length;
 export function reactionVoix(voix, e, b) {
   if (!voix || typeof voix !== 'object') return null;
   const r = voix.reactions || {};
-  const gros = (e === 'new_buy' || e === 'new_sell') && Number(b && b.echange && b.echange.eth) >= GROS_ECHANGE_ETH;
+  /* ⛔ `echange.eth` est le montant dans la DEVISE de la pool (ETH ou TBLOCK, fil-live.js) : seul un montant en ETH se
+   *    compare a 0,1 ETH. Une autre devise, ou une devise inconnue, ne fait jamais un « gros » echange. */
+  const ech = (b && b.echange) || {};
+  const gros = (e === 'new_buy' || e === 'new_sell') && (ech.devise == null || ech.devise === 'ETH') && Number(ech.eth) >= GROS_ECHANGE_ETH;
   const x = (gros && r.big_trade) || r[e] || null;
   if (x && x.style === 'quiet') return 'SILENCE';
   if (x && x.ligne) return x.ligne;
@@ -270,7 +273,8 @@ export function reactionVoix(voix, e, b) {
 export function partageVoix(voix, tick) {
   if (!voix || typeof voix !== 'object') return null;
   const choix = [];
-  if (voix.resume) choix.push('My news: “' + voix.resume + '”');
+  /* ⛔ ATTRIBUE AU CREATEUR : ce sont ses mots, pas un fait que l app affirme */
+  if (voix.resume) choix.push('Creator says: “' + voix.resume + '”');
   for (const l of voix.lignes || []) choix.push(l);
   if ((voix.sujets || []).length) choix.push('Ask me about ' + voix.sujets.slice(0, 3).join(', ') + '.');
   if (voix.bio) choix.push('“' + voix.bio + '”');
@@ -291,4 +295,38 @@ export function estAmi(voix, adr, sym) {
   const amis = (voix && voix.amis) || [];
   const a = String(adr || '').toLowerCase(), s = String(sym || '').toLowerCase();
   return amis.some((x) => x.toLowerCase() === a || (s && x.toLowerCase() === s));
+}
+
+/* ── FICHE (app.html) : petites decisions pures, testees sans navigateur ─────────────────────── */
+/**
+ * Qui voit l editeur. 'EDITEUR' (le formulaire), 'CONNECTER' (« Your block? Connect… »), 'CACHE' (un autre wallet que
+ * le createur : rien), 'HORS_BASE'. ⛔ Createur inconnu = EDITEUR : le serveur tranche a l enregistrement.
+ */
+export function etatEditeurVoix({ chaine, compte, createur }) {
+  if (Number(chaine) !== 8453) return 'HORS_BASE';
+  if (!compte) return 'CONNECTER';
+  if (createur && String(createur).toLowerCase() !== String(compte).toLowerCase()) return 'CACHE';
+  return 'EDITEUR';
+}
+/** La valeur du menu d une reaction : un style, ou 'own' quand le createur a ecrit ses mots. */
+export function choixReaction(r) {
+  if (r && r.ligne) return 'own';
+  return (r && STYLES_REACTION.includes(r.style)) ? r.style : 'normal';
+}
+/** Le menu + le champ -> la reaction. Le champ ne compte QUE si « Its own words… » est choisi. */
+export function reactionDepuisChoix(choix, texte) {
+  if (choix === 'own') return { ligne: String(texte || '') };
+  return { style: STYLES_REACTION.includes(choix) ? choix : 'normal' };
+}
+/** « 8 events · 2 custom » : combien d evenements ont une reaction autre que la personnalite. */
+export function resumeReactions(reactions) {
+  const n = EVENEMENTS_VOIX.filter((e) => { const r = (reactions || {})[e]; return r && (r.ligne || (r.style && r.style !== 'normal')); }).length;
+  return EVENEMENTS_VOIX.length + ' events · ' + n + ' custom';
+}
+/** Les noms d amis qui ne correspondent a aucun block connu (nom ou adresse). Liste connue vide = on ne juge pas. */
+export function amisIntrouvables(amis, connus) {
+  const l = Array.isArray(connus) ? connus : [];
+  if (!l.length) return [];
+  const set = new Set(l.flatMap((b) => [String(b.adr || '').toLowerCase(), String(b.sym || '').toLowerCase()]).filter(Boolean));
+  return (Array.isArray(amis) ? amis : []).filter((x) => !set.has(String(x).toLowerCase()));
 }

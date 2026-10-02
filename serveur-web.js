@@ -2675,7 +2675,8 @@ createServer((req, res) => {
     if (!/^0x[0-9a-f]{40}$/.test(jetonV)) { rendreV(400, { ok: false, pourquoi: 'whole address required' }); return; }
     if (req.method === 'GET' || req.method === 'HEAD') {
       const v = voixParBlock.get(jetonV);
-      rendreV(200, { ok: true, voix: v ? v.voix : null, horodatage: v ? v.horodatage : null });
+      /* le createur est un fait public (expediteur de la tx de creation) : la fiche s en sert pour cacher l editeur aux autres */
+      rendreV(200, { ok: true, voix: v ? v.voix : null, horodatage: v ? v.horodatage : null, createur: createurParBlock.get(jetonV) || null });
       return;
     }
     if (req.method !== 'POST') { rendreV(405, { ok: false, pourquoi: 'GET or POST only' }); return; }
