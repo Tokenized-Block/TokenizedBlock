@@ -155,11 +155,25 @@ cas('TEMOIN NEGATIF : sans la garde blocBas !== blocHaut, la verification rougit
   const mut = html.replace(' && e.blocBas !== e.blocHaut\n', '\n').replace(' && e.blocBas !== e.blocHaut\r\n', '\r\n'); assert.notEqual(mut, html);
   assert.throws(() => verifierPlage(mut), /blocks N–N/);
 });
+/* revue 14:00 (mineurs) : « amount not read » plutot que « a fragment » ; placeholder gris avec « e.g. » */
+function verifierMineurs(src, page) {
+  const hg = fabriquer(src, srcEchange)({ type: 'GM', n: 2, jeton: '0xb4', enfants: [{ type: 'GM', bloc: 1, tx: tx(7), de: '0x1111111111', a: '0x2222222222', quantite: null }, { type: 'GM', bloc: 1, tx: tx(8), de: '0x1111111111', a: '0x2222222222', quantite: '5' }] }, 'GM:0xb4', 'NVDAc');
+  assert.match(hg, /➡️ amount not read · /); assert.doesNotMatch(hg, /a fragment/, '« a fragment » par entree');
+  assert.match(page, /placeholder="e\.g\. gm, from my block"/, 'placeholder sans « e.g. »');
+  assert.match(page, /\.champ textarea::placeholder\{color:var\(--doux\);opacity:1\}/, 'placeholder pas gris');
+}
+cas('« amount not read » par entree ; placeholder « e.g. gm, from my block » en gris', () => verifierMineurs(srcEnfants, html));
+cas('TEMOIN NEGATIF : « a fragment » remis par entree, ou placeholder jaune, rougit', () => {
+  const mut = srcEnfants.replace("'amount not read') + ' · ' + adr(c.de)", "'a fragment') + ' · ' + adr(c.de)"); assert.notEqual(mut, srcEnfants);
+  assert.throws(() => verifierMineurs(mut, html), /a fragment|amount not read/);
+  const pageJaune = html.replace('.champ textarea::placeholder{color:var(--doux);opacity:1}', '.champ textarea::placeholder{color:var(--tiede);opacity:1}'); assert.notEqual(pageJaune, html);
+  assert.throws(() => verifierMineurs(srcEnfants, pageJaune), /pas gris/);
+});
 cas('une vente seule (hors groupe) dit toujours le frais du marche', () => {
   const f = new Function('enTexte', 'lisible', srcEchange + '\nreturn ligneEchange;')(enTexte, lisible);
   assert.match(f({ ...ventes[0], n: 1 }, 'SPROUT'), /before this market's fee/);
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
-console.log('ok feed-revue-20261002 — ' + n + ' cas, 9 temoins negatifs par mutation (module et code extrait de app.html)');
+console.log('ok feed-revue-20261002 — ' + n + ' cas, 11 temoins negatifs par mutation (module et code extrait de app.html)');
 console.log('⚠️ NE PROUVE PAS le rendu navigateur : voir les captures 390 px et bureau.');

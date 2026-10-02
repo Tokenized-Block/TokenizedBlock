@@ -766,6 +766,13 @@ body:not(.surMap) .mapCta{display:none}
   border-radius:var(--rs);padding:7px 10px;overflow-wrap:anywhere}
 .filS{font-size:11.5px;color:var(--doux);margin:3px 0 0}
 .filS a{color:var(--accent2)}
+/* ⛔ 2026-10-02 (revue 14:00) : ligne etrangere — les liens comme les autres liens du Feed, et AUCUN « · » au point de
+ *   repli : chaque morceau porte son separateur a gauche, et celui d un morceau qui commence une ligne sort du cadre
+ *   (marge negative + overflow:hidden). Sur une seule ligne, il reste visible entre les deux morceaux. */
+.filActs a{color:var(--accent2)}
+.filLigne{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:1.1em;overflow:hidden}
+.filLigne>span{margin-left:-1.1em;min-width:0}
+.filLigne>span::before{content:'·';display:inline-block;width:1.1em;text-align:center}
 .schemaVie{margin:6px 0 10px}
 /* ⛔ BORNE DE TAILLE : ce SVG n a que 320 unites de large. Sans plafond il s etire sur toute la
    carte et le mot « price » devient un titre de 60px (vu en prod le 2026-09-17). */
@@ -837,7 +844,7 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
   padding:11px 12px;min-height:44px}
 .champ textarea{min-height:72px;resize:vertical;line-height:1.4}
 .champ input:focus,.champ select:focus,.champ textarea:focus{outline:none;border-color:var(--accent)}
-.champ textarea::placeholder{color:var(--tiede);opacity:1}
+.champ textarea::placeholder{color:var(--doux);opacity:1}
 /* Paid-message prepare: full width under the fields, never a clipped « Prep » chip. */
 #pmsgPreparer{width:100%;margin-top:10px;white-space:normal}
 /* Salt row: editable field + re-roll. Salt still fixes the address; auto-fill is disclosed beside it. */
@@ -2738,7 +2745,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="champ">Pay with<select id="pmsgDevise"><option value="USDC">0.50 USDC</option></select></label>
         <label class="champ">Speak as<select id="pmsgDe"></select></label>
         <label class="champ">Your message
-          <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="gm, from my block" autocomplete="off" spellcheck="true"></textarea>
+          <textarea id="pmsgTexte" rows="3" maxlength="160" placeholder="e.g. gm, from my block" autocomplete="off" spellcheck="true"></textarea>
         </label>
         <button class="bouton" id="pmsgPreparer" type="button">Connect → Prepare the paid message</button>
         <ul class="pmLignes" id="pmsgPayeLignes"></ul>
@@ -10286,7 +10293,7 @@ function enfantsDuFil(e, cleG, nom) {
         : '📝 ⚠️ transaction not read right now — not empty';
       t += ' · from ' + adr(c.de);
     } else if (c.type === 'GM') {
-      t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'a fragment') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
+      t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'amount not read') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
     } else if (c.type === 'ACHAT' || c.type === 'VENTE') {
       t = ligneEchange({ ...c, n: 1 }, nom, true);
     } else if (c.type === 'CREATION') t = '🧱 born on another launchpad';
@@ -10328,7 +10335,7 @@ function lireNotesAuto() {
 const estEtrangere = (e) => e.type === 'CREATION' && CHAINE === 8453 && e.paidCreate !== true;
 function actionsEtrangeres(jeton) {
   const j = enTexte(jeton);
-  return ' · <span class="filActs" style="white-space:nowrap"><a href="#" class="filOpen" data-fil-profil="' + j + '">Buy</a>'
+  return '<span class="filActs" style="white-space:nowrap"><a href="#" class="filOpen" data-fil-profil="' + j + '">Buy</a>'
     + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open&nbsp;on&nbsp;TB&nbsp;0.001&nbsp;ETH</button>'
     + ' · <a href="#" class="filOpen" data-fil-profil="' + j + '">profile&nbsp;›</a></span>';
 }
@@ -10422,7 +10429,7 @@ function peindreLive() {
           : '🧱 <b>' + nom + '</b> was born (Practice)'))
       /* ⛔ REVUE 13:32 : un groupe dit son TOTAL et son nombre de wallets, pas le montant et le destinataire du dernier */
       : e.type === 'GM' ? (e.n > 1 ? '➡️ <b>' + nom + '</b> ' + enTexte(titreEnvois(resumeEnvois(e.enfants), lisible))
-        : '➡️ <b>' + nom + '</b> sent · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'a fragment')
+        : '➡️ <b>' + nom + '</b> sent · ' + (e.quantite ? enTexte(lisible(e.quantite)) : 'amount not read')
           + (e.a ? ' → ' + (String(e.a).toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : enTexte(court(e.a))) : ''))
       /* ⛔ REVUE 13:32 : « note » = une entree qui PORTE un texte ; sinon « N empty transfers (0 amount) » */
       : e.type === 'NOTE' ? (() => { const l = libelleNotes(resumeNotes(e.enfants, notesLues));
@@ -10479,7 +10486,7 @@ function peindreLive() {
       + (e.sym ? ' data-sym="' + enTexte(String(e.sym).slice(0, 14)) + '"' : '')
       + (depliable ? ' data-groupe="' + enTexte(cleG) + '" aria-expanded="' + (deplie ? 'true' : 'false') + '"' : '')
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + (foreignCreate ? actionsEtrangeres(e.jeton) : '') + '</p>'
+      + '<p class="filT">' + (foreignCreate ? '<span class="filLigne"><span>' + quoi + '</span>' + actionsEtrangeres(e.jeton) + '</span>' : quoi) + '</p>'
       + (foreignCreate ? (trustHint ? '<p class="filS">' + trustHint.replace(/^ · /, '') + '</p>' : '')
         : '<p class="filS">' + plage + lien + openHint + trustHint + '</p>')
       + (deplie ? enfantsDuFil(e, cleG, nom) : '') + '</div></li>';

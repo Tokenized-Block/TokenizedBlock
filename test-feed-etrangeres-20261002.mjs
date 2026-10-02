@@ -54,7 +54,7 @@ cas('TEMOIN NEGATIF : une infobulle « title » sur Buy (pas de survol sur mobil
 /* ── 2. la ligne : compacte, insecable, repli AVANT « Buy » ───────────────────────────────── */
 function verifierActions(f) {
   const h = f('0xb200000000000000000000000000000000000abc');
-  assert.ok(h.startsWith(' · <span class="filActs" style="white-space:nowrap">'), 'le seul point de repli doit etre AVANT « Buy »');
+  assert.ok(h.startsWith('<span class="filActs" style="white-space:nowrap">'), 'les actions doivent former UN morceau insecable, sans « · » devant (point de repli)');
   assert.match(h, />Buy<\/a> · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open&nbsp;on&nbsp;TB&nbsp;0\.001&nbsp;ETH<\/button> · <a [^>]*data-fil-profil="0xb2[0-9a-f]+">profile&nbsp;›<\/a><\/span>$/);
   assert.doesNotMatch(h, /Open on|TB 0\.001|0\.001 ETH/, '« Open on TB 0.001 ETH » peut se couper');
   assert.doesNotMatch(h, /\bblock\b|\/tx\//, 'block / tx sur la ligne : ils vont dans le deplie');
@@ -67,7 +67,27 @@ cas('TEMOIN NEGATIF : des espaces ordinaires dans « Open on TB 0.001 ETH » rou
 });
 cas('TEMOIN NEGATIF : sans white-space:nowrap, les actions peuvent se separer — rougit', () => {
   const mut = HTML.replace('<span class="filActs" style="white-space:nowrap">', '<span class="filActs">');
-  assert.notEqual(mut, HTML); assert.throws(() => verifierActions(actions(mut)), /repli/);
+  assert.notEqual(mut, HTML); assert.throws(() => verifierActions(actions(mut)), /point de repli/);
+});
+
+/* ── 2b. revue 14:00 : liens lisibles (comme « tx »), et aucun « · » orphelin au point de repli ─ */
+function verifierRepli(html) {
+  assert.match(html, /\.filS a\{color:var\(--accent2\)\}\r?\n/, 'la couleur des liens du Feed a change');
+  assert.match(html, /\.filActs a\{color:var\(--accent2\)\}/, '« Buy » / « profile › » gardent le bleu par defaut du navigateur');
+  assert.match(html, /\.filLigne\{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:1\.1em;overflow:hidden\}/, 'le cadre ne coupe pas le separateur de debut de ligne');
+  assert.match(html, /\.filLigne>span\{margin-left:-1\.1em;min-width:0\}/);
+  assert.match(html, /\.filLigne>span::before\{content:'·';display:inline-block;width:1\.1em;text-align:center\}/);
+  const peindre = bloc('function peindreLive() {', html);
+  assert.match(peindre, /\(foreignCreate \? '<span class="filLigne"><span>' \+ quoi \+ '<\/span>' \+ actionsEtrangeres\(e\.jeton\) \+ '<\/span>' : quoi\)/, 'le separateur entre titre et actions est un « · » ecrit en dur');
+}
+cas('⛔ liens « Buy » / « profile › » lavande comme « tx » ; le « · » du point de repli sort du cadre', () => verifierRepli(HTML));
+cas('TEMOIN NEGATIF : sans la regle de couleur, la verification rougit', () => {
+  const mut = HTML.replace('.filActs a{color:var(--accent2)}', ''); assert.notEqual(mut, HTML);
+  assert.throws(() => verifierRepli(mut), /bleu par defaut/);
+});
+cas('TEMOIN NEGATIF : un « · » ecrit en dur avant les actions (orphelin en fin de ligne) rougit', () => {
+  const mut = HTML.replace("'<span class=\"filLigne\"><span>' + quoi + '</span>' + actionsEtrangeres(e.jeton) + '</span>'", "quoi + ' · ' + actionsEtrangeres(e.jeton)"); assert.notEqual(mut, HTML);
+  assert.throws(() => verifierRepli(mut), /ecrit en dur/);
 });
 
 /* ── 3. la ligne se deplie, et le deplie porte block + tx ─────────────────────────────────── */
@@ -92,5 +112,5 @@ cas('TEMOIN NEGATIF : une ligne etrangere qui garde « block N · tx » rougit',
 });
 
 for (const [nom, fn] of CAS) { await fn(); n++; }
-console.log('ok feed-etrangeres-20261002 — ' + n + ' cas, 5 temoins negatifs par mutation');
+console.log('ok feed-etrangeres-20261002 — ' + n + ' cas, 7 temoins negatifs par mutation');
 console.log('⚠️ NE PROUVE PAS le rendu (repli a 375 px) : voir les captures revue-375-*.png.');
