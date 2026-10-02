@@ -3294,10 +3294,16 @@ import { reconcilier, bloqueLaCreation, phraseRappel } from './blocks-a-lancer.j
 /* ⛔ Le routage des lectures d historique profond — publicnode refuse l archive des -10 000
  *   blocs (mesure du 2026-09-30, refus stables). Module teste : 38 assertions, 8/8 mutations. */
 import { etatProfondeur, ordreNoeuds } from './profondeur-logs.js';
+/* ⛔ Debit et refus permanents des noeuds publics (mesure du 2026-10-02 : 124 erreurs console en
+ *   2 min sur le Feed — 429 de debit, 400 drpc au-dela de ~100 blocs, 403 publicnode a 50 adresses). */
+import { creerRegulateur } from './regulateur-rpc.js';
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
 import { evenementsLive } from './fil-live.js';
+/* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
+ *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
+import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes } from './notes-du-fil.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 /* ⛔ `CLES_PRIX` est la liste des combinaisons fee/tickSpacing que le resolveur V4 essaie. Elle est
  *   IMPORTEE et pas recopiee : une seconde liste divergerait de celle qu utilise `echange.js`, et
@@ -3674,6 +3680,9 @@ function rpcCleLogs(p) {
  *   hoquet ; c est le seul chiffre qui dit ce que le correctif rattrape vraiment. */
 const rpcCompte = { reseau: 0, cache: 0, fusion: 0, reprises: 0, reprisesOk: 0, t0: Date.now() };
 try { window.__tbRpc = rpcCompte; } catch (_) { /* rien */ }
+/* ⛔ UN SEUL regulateur pour toute la page : l ecart et le repos sont PAR NOEUD, quel que soit l appelant. */
+const rpcRegul = creerRegulateur();
+try { window.__tbRpcRegul = rpcRegul; } catch (_) { /* rien */ }
 async function rpc(methode, params) {
   const deCache = (v) => { rpcCompte.cache++; return v; };
   if (methode === 'eth_blockNumber' && rpcTete.v && Date.now() - rpcTete.t < 4000) return deCache(rpcTete.v);
@@ -3820,6 +3829,10 @@ async function rpcReseau(methode, params) {
     const prof = etatProfondeur(filtreLogs, rpcTete.n);
     if (prof.etat === 'PROFONDE') noeuds = ordreNoeuds(noeuds, prof, RESEAUX[CHAINE].logsArchiveRpc);
   }
+  /* ⛔⛔ 2026-10-02 (regulateur-rpc.js) : un noeud qui refusera A COUP SUR (drpc > 100 blocs, publicnode
+   *     > 9 adresses ou archive) n est plus essaye — sauf s il ne reste que lui ; un noeud qui vient de
+   *     dire 429 passe DERRIERE. On reordonne et on filtre, on ne vide jamais la liste. */
+  if (rpcRegul) noeuds = rpcRegul.ordonner(noeuds, methode, params, filtreLogs ? rpcTete.n : 0);
   let derniere = null;
   for (let i = 0; i < noeuds.length; i++) {
     const url = noeuds[i];
@@ -3849,6 +3862,8 @@ async function rpcReseau(methode, params) {
     let reprises = 0;
     for (let essai = 0; essai <= ESSAIS_429; essai++) {
       let r, j = null, limite = false, statut = 0;
+      /* ⛔ un creneau par noeud (ecart + concurrence + repos apres 429), borne : jamais d attente infinie */
+      const liberer = rpcRegul ? await rpcRegul.creneau(url) : null;
       try {
         r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
@@ -3859,6 +3874,7 @@ async function rpcReseau(methode, params) {
           j = await r.json();
         }
       } catch (e) {
+        if (liberer) liberer();
         derniere = e;
         /* `statut === 0` = le fetch lui-meme a jete : coupure reseau, DNS, CORS. Transitoire aussi. */
         const transitoire = statut === 0 || STATUTS_TRANSITOIRES.has(statut);
@@ -3870,8 +3886,10 @@ async function rpcReseau(methode, params) {
         }
         break; /* try next node */
       }
+      if (liberer) liberer();
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
       if (refusDebit) {
+        if (rpcRegul) rpcRegul.noter(url, 'debit');
         derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
         if (essai < ESSAIS_429 && noeuds.length === 1) {
           await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai + Math.floor(Math.random() * 400)));
@@ -3883,6 +3901,7 @@ async function rpcReseau(methode, params) {
       /* ⛔ ICI ET NULLE PART AILLEURS : une lecture qui aboutit APRES un hoquet est exactement ce que
        *   le correctif rattrape. `reprises` seul compterait aussi les tentatives perdues. */
       if (reprises > 0) { try { rpcCompte.reprisesOk++; } catch (_) { /* rien */ } }
+      if (rpcRegul) rpcRegul.noter(url, 'ok');
       return j.result;
     }
   }
@@ -10278,6 +10297,62 @@ function peindreEchelle() {
   note.textContent = r.phrase;
 }
 
+/* ══ LIGNES GROUPEES QUI SE DEPLIENT (2026-10-02) ═══════════════════════════════════════════════
+ * ⛔ QA PROD 11:44 : « GOOGLc sent · 257× » et « SPROUT killed · 2 sells » ouvraient le profil au
+ *    toucher — les 257 transactions comptees n etaient visibles nulle part. Et « NVDAc got 4 notes »
+ *    renvoyait vers un profil qui relisait une AUTRE source et disait « 0 messages ».
+ * ⇒ Toucher deplie la ligne : ses enfants, ENFANTS_PAS a la fois, « show more » pour la suite. Les
+ *   notes se lisent depuis leurs propres transactions (cache partage, une lecture par tx). */
+const liveDeplies = new Map(); /* cleGroupe -> combien d enfants montres */
+const liveLignesParCle = new Map();
+const notesLues = new Map(); /* tx -> { etat, texte, signataire } */
+const notesEnLecture = new Set();
+function enfantsDuFil(e, cleG, nom) {
+  const montres = liveDeplies.get(cleG) || ENFANTS_PAS;
+  const tx = (c) => c.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(c.tx) + '" target="_blank" rel="noopener">tx</a>' : '';
+  const bloc = (c) => 'block ' + (Number.isFinite(c.bloc) ? c.bloc.toLocaleString('en-US') : '?');
+  /* ⛔ l adresse du wallet de frais ne s affiche JAMAIS, meme abregee */
+  const adr = (a) => String(a || '').toLowerCase() === String(FEE_WALLET).toLowerCase() ? 'a TB wallet' : enTexte(court(String(a || '?')));
+  const items = e.enfants.slice(0, montres).map((c) => {
+    let t;
+    if (c.type === 'NOTE') {
+      const l = c.tx ? notesLues.get(String(c.tx).toLowerCase()) : null;
+      t = !l ? '📝 reading its text…'
+        : l.etat === 'LU' ? '📝 “' + enTexte(String(l.texte).slice(0, 280)) + '”'
+        : l.etat === 'AUCUN' ? '📝 no text attached — a 0-amount transfer'
+        : l.etat === 'ILLISIBLE' ? '📝 extra bytes that are not text'
+        : '📝 ⚠️ transaction not read right now — not empty';
+      t += ' · from ' + adr(c.de);
+    } else if (c.type === 'GM') {
+      t = '➡️ ' + (c.quantite ? enTexte(lisible(c.quantite)) : 'a fragment') + ' · ' + adr(c.de) + ' → ' + adr(c.a);
+    } else if (c.type === 'ACHAT' || c.type === 'VENTE') {
+      t = ligneEchange({ ...c, n: 1 }, nom);
+    } else t = '↔ traded';
+    return '<li class="filS" style="margin:2px 0">' + t + ' · ' + bloc(c) + tx(c) + '</li>';
+  }).join('');
+  const reste = e.enfants.length - montres;
+  const tete = e.type === 'NOTE'
+    ? '<p class="filS" data-fil-notes-resume>' + enTexte(phraseNotes(resumeNotes(e.enfants, notesLues), e.blocBas, e.blocHaut)) + '</p>'
+    : '<p class="filS">' + e.enfants.length + ' transaction' + (e.enfants.length === 1 ? '' : 's') + ' in this row, newest first</p>';
+  return '<div class="filEnfants" style="margin-top:4px;cursor:default">' + tete
+    + '<ul style="list-style:none;padding:0;margin:0">' + items + '</ul>'
+    + (reste > 0 ? '<button type="button" class="puce" data-fil-plus="' + enTexte(cleG) + '">show ' + Math.min(reste, ENFANTS_PAS) + ' more · ' + reste + ' left</button>' : '')
+    + '</div>';
+}
+async function lireNotesDuGroupe(cleG) {
+  const e = liveLignesParCle.get(cleG);
+  if (!e || e.type !== 'NOTE' || notesEnLecture.has(cleG)) return;
+  notesEnLecture.add(cleG);
+  try {
+    const visibles = e.enfants.slice(0, liveDeplies.get(cleG) || ENFANTS_PAS);
+    let pas = 0;
+    await lireNotes({ rpc, notes: visibles, lireMemo, cache: notesLues, auPas: () => { if (++pas % 3 === 0) peindreLive(); } });
+  } finally {
+    notesEnLecture.delete(cleG);
+    peindreLive();
+  }
+}
+
 function peindreLive() {
   const montres = liveEvts.filter(filtreLive);
   /* tip 20260923-feed-catch-router: Created / TB·paid — TB CreateRouter rows first, foreign secondary */
@@ -10301,13 +10376,14 @@ function peindreLive() {
       const g = gmParJeton.get(k);
       if (g) {
         g.n += 1;
+        g.enfants.push(e);
         if (Number.isFinite(e.bloc)) {
           if (e.bloc > g.blocHaut) { g.blocHaut = e.bloc; g.tx = e.tx; g.a = e.a; g.quantite = e.quantite; g.bloc = e.bloc; }
           if (e.bloc < g.blocBas) g.blocBas = e.bloc;
         }
         continue;
       }
-      const row = { ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc };
+      const row = { ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc, enfants: [e] };
       gmParJeton.set(k, row);
       lignes.push(row);
       continue;
@@ -10318,17 +10394,24 @@ function peindreLive() {
       && der.confiance === e.confiance) {
       der.n = (der.n || 1) + 1;
       der.blocBas = e.bloc;
+      der.enfants.push(e);
       continue;
     }
-    lignes.push({ ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc });
+    lignes.push({ ...e, n: 1, blocHaut: e.bloc, blocBas: e.bloc, enfants: [e] });
   }
   /* keep chronological: re-sort by blocHaut after GM merge */
   lignes.sort((a, b) => (b.blocHaut ?? b.bloc ?? 0) - (a.blocHaut ?? a.bloc ?? 0));
   /* tip 0031 (Phil : « mets une limite, ca part a fond ») : 40 lignes a l ecran, pas 200.
    * ⛔ AUDIT 2026-09-20 : c etait un 40 EN DUR, donc « Load older » lisait 1 580 evenements de la
    *    chaine et n ajoutait jamais une seule ligne — un bouton visible, actif, et sans effet. */
+  liveLignesParCle.clear();
   $('#sfLive').innerHTML = lignes.slice(0, liveAffiches).map((e) => {
     const nom = enTexte(String(e.sym || '?').slice(0, 14));
+    /* ⛔ 2026-10-02 : une ligne groupee (ou une note) SE DEPLIE au toucher ; le profil a son propre lien. */
+    const depliable = estDepliable(e);
+    const cleG = depliable ? cleGroupe(e) : '';
+    if (depliable) liveLignesParCle.set(cleG, e);
+    const deplie = depliable && liveDeplies.has(cleG);
     const symDe = (adr) => { const h = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase()); return enTexte(String((h && h.sym) || court(adr)).slice(0, 14)); };
     /* tip 2349: free create OK — nudge Launch to market (fee moment), not “spam kill create”. */
     /* tip 20260923-feed-catch-router: celebrate ONLY CreateRouter paidCreate.
@@ -10386,6 +10469,9 @@ function peindreLive() {
       ? ' · <span class="filOpen">Buy here — we read every pool of this block and route the cheapest</span>'
         + ' · <button type="button" class="puce" data-tf-act="instant-birth-tb">Open a market on TB · 0.001 ETH</button>'
         + ' · <span class="filOpen">Open profile</span>'
+      : depliable
+        ? ' · <span class="filOpen">' + (deplie ? '▴ tap to hide' : '▾ tap to show ' + (e.n > 1 ? 'all ' + e.n : (e.type === 'NOTE' ? 'the note' : 'it'))) + '</span>'
+          + ' · <a href="#" class="filOpen" data-fil-profil="' + enTexte(e.jeton) + '">profile ›</a>'
       : ((e.type === 'CREATION' || e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP')
         ? ' · <span class="filOpen">tap to open</span>' : '');
     const trustHint = e.type === 'CREATION' && e.paidCreate === true
@@ -10395,8 +10481,10 @@ function peindreLive() {
       : (e.type === 'CREATION' && estTrusted(e.jeton) ? ' · <span class="filOpen">✦ trusted</span>' : '');
     return '<li class="filL" data-block="' + enTexte(e.jeton) + '"'
       + (e.sym ? ' data-sym="' + enTexte(String(e.sym).slice(0, 14)) + '"' : '')
+      + (depliable ? ' data-groupe="' + enTexte(cleG) + '" aria-expanded="' + (deplie ? 'true' : 'false') + '"' : '')
       + ' style="cursor:pointer"><div class="filArt">' + dessin(e.jeton, e.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p></div></li>';
+      + '<p class="filT">' + quoi + '</p><p class="filS">' + plage + lien + openHint + trustHint + '</p>'
+      + (deplie ? enfantsDuFil(e, cleG, nom) : '') + '</div></li>';
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
     /* ⛔ Une liste vide qui ne nomme pas son filtre se lit comme une panne. Elle dit donc CE QU ELLE
      *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
@@ -10494,7 +10582,34 @@ $('#sfLive').addEventListener('click', (ev) => {
     return;
   }
 
+  /* tip 20261002-feed-deplier : le profil d une ligne groupee a son PROPRE lien ; toucher la ligne la deplie */
+  const versProfil = ev.target.closest('[data-fil-profil]');
+  if (versProfil) {
+    ev.preventDefault(); ev.stopPropagation();
+    const a = versProfil.getAttribute('data-fil-profil');
+    const liP = versProfil.closest('li.filL[data-block]');
+    if (/^0x[0-9a-fA-F]{40}$/i.test(String(a || ''))) void ouvrirProfil(a, (liP && liP.getAttribute('data-sym')) || null);
+    return;
+  }
+  const plus = ev.target.closest('[data-fil-plus]');
+  if (plus) {
+    ev.preventDefault(); ev.stopPropagation();
+    const k = plus.getAttribute('data-fil-plus');
+    liveDeplies.set(k, (liveDeplies.get(k) || ENFANTS_PAS) + ENFANTS_PAS);
+    peindreLive();
+    void lireNotesDuGroupe(k);
+    return;
+  }
   if (ev.target.closest('a')) return;
+  if (ev.target.closest('.filEnfants')) return;
+  const groupe = ev.target.closest('li.filL[data-groupe]');
+  if (groupe) {
+    const k = groupe.getAttribute('data-groupe');
+    if (liveDeplies.has(k)) liveDeplies.delete(k); else liveDeplies.set(k, ENFANTS_PAS);
+    peindreLive();
+    if (liveDeplies.has(k)) void lireNotesDuGroupe(k);
+    return;
+  }
   const li = ev.target.closest('li.filL[data-block]');
   if (!li) return;
   const adr = li.getAttribute('data-block');
@@ -14352,6 +14467,22 @@ async function lireMessagesDuBlock() {
       if (m.etat === 'LU') avec.push({ ...t, texte: m.texte, signataire: tx.from });
       else if (m.etat === 'ILLISIBLE') illisibles++;
     }
+    /* ⛔⛔ 2026-10-02 (QA prod : Feed « NVDAc got 4 notes », profil « 0 messages ») : les 30 derniers
+     *     transferts ne sont PAS la source du Feed. Les notes que le Feed a comptees pour ce block sont
+     *     relues ici depuis LEURS transactions, et le compte ne dit plus « 0 » quand le Feed dit 4. */
+    const duFil = liveEvts.filter((x) => x.type === 'NOTE' && String(x.jeton).toLowerCase() === String(adr).toLowerCase());
+    if (duFil.length) await lireNotes({ rpc, notes: duFil, lireMemo, cache: notesLues });
+    if ($('#profil').dataset.block !== adr) return;
+    const txVues = new Set(avec.map((l) => String(l.tx || '').toLowerCase()));
+    for (const nt of duFil) {
+      const k = String(nt.tx || '').toLowerCase(), l = notesLues.get(k);
+      if (!l || l.etat !== 'LU' || txVues.has(k)) continue;
+      txVues.add(k);
+      avec.push({ tx: nt.tx, bloc: nt.bloc, from: nt.de, to: nt.a, texte: l.texte, signataire: l.signataire });
+    }
+    avec.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0));
+    const rFil = duFil.length ? resumeNotes(duFil, notesLues) : null;
+    const blocsFil = duFil.map((x) => x.bloc).filter(Number.isFinite);
     const sym = symProfil || 'this block';
     $('#pmsgFil').innerHTML = avec.map((l) => '<li class="filL"><div style="min-width:0;flex:1">'
       + '<p class="filM" style="margin:0">« ' + enTexte(l.texte) + ' »</p>'
@@ -14359,7 +14490,8 @@ async function lireMessagesDuBlock() {
       + ' · block ' + (Number.isFinite(l.bloc) ? l.bloc.toLocaleString('en-US') : '?')
       + (l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
         + '" target="_blank" rel="noopener">tx</a>' : '') + '</p></div></li>').join('');
-    $('#pmsgCompte').textContent = avec.length + ' message' + (avec.length === 1 ? '' : 's');
+    $('#pmsgCompte').textContent = avec.length || !rFil ? avec.length + ' message' + (avec.length === 1 ? '' : 's')
+      : rFil.total + ' note' + (rFil.total === 1 ? '' : 's') + ' from the Feed · ' + (rFil.nonLues ? 'not all read' : 'none with text');
     const ratees = (r.fenetresRatees || []).length;
     note.className = 'note';
     note.textContent = (avec.length
@@ -14368,7 +14500,8 @@ async function lireMessagesDuBlock() {
       + ' · over the last 2,000 chain blocks'
       + (illisibles ? ' · ' + illisibles + ' transfer(s) with extra bytes that are not text' : '')
       + (txNonLues ? ' · ⚠️ ' + txNonLues + ' transaction(s) not read — incomplete, not empty' : '')
-      + (ratees ? ' · ⚠️ ' + ratees + ' window(s) refused by the node' : '');
+      + (ratees ? ' · ⚠️ ' + ratees + ' window(s) refused by the node' : '')
+      + (rFil ? ' · ' + phraseNotes(rFil, Math.min(...blocsFil), Math.max(...blocsFil)) : '');
   } finally {
     msgEnCours = false;
     profilEnLecture = false;
