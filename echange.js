@@ -16,9 +16,10 @@
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook,
-  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030 } from './tokenomics.js';
+  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030,
+  HOOK_V9, V9_PAIE_DEJA_A6CF, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
-  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool } from './pool.js';
+  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
   REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute } from './pool-sans-hook.js';
@@ -181,6 +182,31 @@ async function appelOuErreur(rpc, tx) {
  * @param {'ACHAT'|'VENTE'} o.sens
  * @param {bigint} o.montant  achat : wei d ETH payes (frais compris) ; vente : unites brutes du block vendues
  */
+/* ══ 2026-10-02 22:19 (Phil) — UN BLOCK V1 (HOOK_PREVU) EST RAMENE SUR LA BONNE V ═════════════════════════════════════════
+ * ⛔⛔ Achat ET vente d un block dont le marche lu est V1 passent par sa pool de VERSION ACTUELLE (meme paire, format Launch
+ *     frais 0 / espacement 200 ; 7030 si drapeau allume, V9 si mesure payant, puis V8) quand elle est initialisee ET a de
+ *     la liquidite : un frais, verse par le hook, jamais en block. Sans pool actuelle : achat REFUSE (le V1 preleve du
+ *     block a l achat), vente laissee sur V1 (un frais, en ETH) pour ne pas pieger les detenteurs, marquee
+ *     `migrationEnAttente`. Une lecture ratee n est pas une absence : `ratees` > 0 => NON_MESURE. */
+export const HOOKS_VERSION_ACTUELLE = Object.freeze([...(HOOK_7030_ACTIF ? [HOOK_7030] : []),
+  ...(HOOK_V9 && V9_PAIE_DEJA_A6CF === true ? [HOOK_V9] : []), HOOK_V8]);
+export async function poolActuelleDuBlock({ rpc, stateView, cle, hooks = HOOKS_VERSION_ACTUELLE }) {
+  let ratees = 0;
+  const mot = (r) => (r && String(r).length >= 66 ? BigInt(String(r).slice(0, 66)) : null);
+  for (const h of hooks) {
+    const c = { currency0: cle.currency0, currency1: cle.currency1, fee: 0, tickSpacing: 200, hooks: h };
+    const id = poolId(c).slice(2);
+    let s0, lq;
+    try {
+      s0 = mot(await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + id }, 'latest']));
+      lq = mot(await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getLiquidity(bytes32)') + id }, 'latest']));
+    } catch { ratees += 1; continue; }
+    if (s0 === null || lq === null) { ratees += 1; continue; }
+    if (s0 !== 0n && lq > 0n) return { cle: c, ratees };
+  }
+  return { cle: null, ratees };
+}
+
 export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, toleranceBps = 100n, maintenant = Date.now(),
   marcheLu = null, cleImposee = null, fraisDevisesOk = null,
   /* injectable pour les tests : actif + hooks du marche ouvert ; defaut = marche-ouvert.js */
@@ -212,6 +238,14 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   if (marche.etat !== 'LUE' || !marche.cle) {
     return { etat: marche.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
+  }
+  let migrationEnAttente = false;
+  if (String(marche.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase()) {
+    const actuelle = await poolActuelleDuBlock({ rpc: lire, stateView: V.stateView, cle: marche.cle });
+    if (actuelle.cle) marche = { ...marche, etat: 'LUE', cle: actuelle.cle, remplaceV1: true };
+    else if (actuelle.ratees > 0) return { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
+    else if (sens === 'VENTE') migrationEnAttente = true;
+    /* ACHAT sans pool actuelle : refuse plus bas (fraisHookEnBlock, texte « Not tradable here yet ») */
   }
   /* ⛔⛔ 2026-10-02 (regle du fondateur) : jamais une pool sans hook pour un block TB — refus avant toute cotation. */
   /* ⛔⛔ 2026-10-02 13:58 (fondateur) : plus aucune route par TBLOCK — ni TBLOCK lui-meme, ni un block apparie a TBLOCK. */
@@ -308,6 +342,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null };
     }
+    if (marche.remplaceV1) resumeD.remplaceV1 = true;
+    if (migrationEnAttente) resumeD.migrationEnAttente = true;
     const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk, hookPaie,
       assietteHook: sens === 'ACHAT' ? m : q });
     if (koPair) return refusFraisEchange(koPair, resumeD);
@@ -400,6 +436,8 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
   resume.fraisMarcheBps = hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null;
+  if (marche.remplaceV1) resume.remplaceV1 = true;
+  if (migrationEnAttente) resume.migrationEnAttente = true;
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaie, assietteHook: sens === 'ACHAT' ? m : quote });
   if (koFrais) return refusFraisEchange(koFrais, resume);
   return finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete: 0n });

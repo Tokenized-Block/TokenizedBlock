@@ -27,7 +27,7 @@ const charger = async (dir) => {
   const imp = (f) => import(pathToFileURL(path.join(dir, f)).href);
   return { E: await imp('echange.js'), T: await imp('tokenomics.js'), P: await imp('paires.js'), F: await imp('frais-creation.js'),
     S: await imp('sauts-depuis-chemin.js'), PS: await imp('pool-sans-hook.js'), PF: await imp('plan-franchissement.js'), PA: await imp('plan-aerodrome-segment.js'),
-    PE: await imp('plan-eth-block.js'), MP: await imp('multipool.js') };
+    PE: await imp('plan-eth-block.js'), MP: await imp('multipool.js'), PO: await imp('pool.js') };
 };
 
 const ETH = '0x' + '0'.repeat(40);
@@ -40,15 +40,28 @@ const INCONNU = '0x' + '1'.repeat(36) + '00cc';
 const compte = '0x' + '4'.repeat(40);
 const REFUS = ['refusSansHook', 'refusFraisEnBlock', 'refusBlocIntermediaire', 'refusPlusieursHooks', 'refusTblock'];
 
-async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP }) {
+async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const USDC = bas(F.USDC_BASE);
   const NVDA = bas(P.ACTIONS_COINBASE.find((a) => a.symbole === 'NVDAc').adr);
   const OUSD = bas(P.DEVISES_BASE.find((d) => d.symbole === 'OUSD').adr);
   const Q = bas(E.QUOTEUR[8453]);
   const q = '0x' + (10n ** 18n).toString(16).padStart(64, '0') + '0'.repeat(64);
   /* le quoter rend 1e18 ; tout autre eth_call (autorisations, simulation) rend des mots pleins : autorisations OK */
-  const rpc = async (m, p) => (m === 'eth_call' ? (bas((p && p[0] && p[0].to) || '') === Q ? q : '0x' + 'f'.repeat(128))
-    : m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64));
+  /* StateView (getSlot0/getLiquidity) : `sv` dit quelles pools de version actuelle existent — par defaut AUCUNE.
+   *   sv = { ids: Set(poolId), liquidite: bigint } ; sv = 'panne' : la lecture echoue. */
+  const SEL_SLOT0 = '0x' + PO.selecteur('getSlot0(bytes32)'), SEL_LIQ = '0x' + PO.selecteur('getLiquidity(bytes32)');
+  const rpcSV = (sv = null) => async (m, p) => {
+    if (m !== 'eth_call') return m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64);
+    const d = bas((p && p[0] && p[0].data) || '');
+    if (d.startsWith(SEL_SLOT0) || d.startsWith(SEL_LIQ)) {
+      if (sv === 'panne') throw new Error('StateView rate limit');
+      const id = '0x' + d.slice(10, 74);
+      if (!sv || !sv.ids.has(id)) return '0x' + '0'.repeat(256);
+      return d.startsWith(SEL_SLOT0) ? '0x' + (2n ** 96n).toString(16).padStart(64, '0') + '0'.repeat(192) : '0x' + BigInt(sv.liquidite).toString(16).padStart(64, '0');
+    }
+    return bas((p && p[0] && p[0].to) || '') === Q ? q : '0x' + 'f'.repeat(128);
+  };
+  const rpc = rpcSV(null);
   const cle = (a, b, h, forme = null) => { const [c0, c1] = bas(a) < bas(b) ? [bas(a), bas(b)] : [bas(b), bas(a)];
     if (forme) return { currency0: c0, currency1: c1, ...forme, hooks: h };
     return h === ETH ? { currency0: c0, currency1: c1, fee: 500, tickSpacing: 10, hooks: h } : { currency0: c0, currency1: c1, fee: 0, tickSpacing: 200, hooks: h }; };
@@ -157,6 +170,31 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP }) {
   await doitRefuser('PREVU ACHAT multi USDC>sans>ETH>PREVU>B1', [jambe(USDC, ETH, ETH), jambe(ETH, B1, PREVU)], USDC, B1, 25n * 10n ** 6n, 6, ['refusFraisEnBlock']);
   const pPv = await E.planEchange({ rpc, chaine: 8453, jeton: B1, compte, sens: 'VENTE', montant: 10n ** 18n, marcheLu: { etat: 'LUE', cle: cPrevu, paire: 'ETH' } });
   juger1('R0 VENTE PREVU/ETH simple (temoin)', pPv, [{ cle: cPrevu, zeroForOne: false }], 'hook');
+  verifier('V1-S2 VENTE sans pool actuelle : reste sur V1, marquee migrationEnAttente', pPv.resume && pPv.resume.migrationEnAttente === true && !pPv.resume.remplaceV1,
+    JSON.stringify(pPv.resume && { m: pPv.resume.migrationEnAttente, r: pPv.resume.remplaceV1 }));
+
+  /* ══ 2026-10-02 22:19 (Phil) — UN BLOCK V1 EST RAMENE SUR SA POOL DE VERSION ACTUELLE (V8), ACHAT ET VENTE ══ */
+  const cV8 = cle(ETH, B1, V8); /* meme paire, format Launch frais 0 / espacement 200 */
+  const avecV8 = (liquidite = 10n ** 18n) => rpcSV({ ids: new Set([bas(PO.poolId(cV8))]), liquidite });
+  const hex = (a) => bas(a).slice(2);
+  const planV1 = (sens, r) => E.planEchange({ rpc: r, chaine: 8453, jeton: B1, compte, sens, montant: sens === 'ACHAT' ? 10n ** 16n : 10n ** 18n,
+    marcheLu: { etat: 'LUE', cle: cPrevu, paire: 'ETH' } });
+  for (const sens of ['ACHAT', 'VENTE']) {
+    const id = sens === 'ACHAT' ? 'V1-B1 ACHAT' : 'V1-S1 VENTE';
+    const pV = await planV1(sens, avecV8());
+    juger1(id + ' avec pool V8 : passe par V8', pV, [{ cle: cV8, zeroForOne: sens === 'ACHAT' }], 'hook');
+    const data = bas((pV.tx && pV.tx.data) || '');
+    verifier(id + ' avec pool V8 : calldata sur V8, pas sur V1', pV.resume && pV.resume.remplaceV1 === true && data.includes(hex(V8)) && !data.includes(hex(PREVU)),
+      'remplaceV1=' + (pV.resume && pV.resume.remplaceV1) + ' v8=' + data.includes(hex(V8)) + ' v1=' + data.includes(hex(PREVU)));
+  }
+  const pVide = await planV1('ACHAT', avecV8(0n));
+  verifier('V1-B3 ACHAT, pool V8 initialisee mais VIDE : REFUSE (pas une pool actuelle)', pVide.etat === 'REFUSE' && pVide.pourquoi === PS.MESSAGE_PAS_ICI, pVide.etat + ' ' + pVide.pourquoi);
+  const pVideV = await planV1('VENTE', avecV8(0n));
+  verifier('V1-S3 VENTE, pool V8 vide : reste sur V1 (migrationEnAttente)', pVideV.etat === 'PRET' && pVideV.resume.migrationEnAttente === true, pVideV.etat);
+  for (const sens of ['ACHAT', 'VENTE']) {
+    const pP = await planV1(sens, rpcSV('panne'));
+    verifier('V1-R ' + sens + ' : StateView illisible => NON_MESURE (une panne n est pas une absence)', pP.etat === 'NON_MESURE', pP.etat + ' ' + pP.pourquoi);
+  }
 
   /* ══ JONCTIONS AERODROME / V3 <-> V4 : un block a la jonction est REFUSE, avant toute lecture ══ */
   const rpcMuet = async (m) => { throw new Error('aucune lecture attendue (' + m + ')'); };
@@ -253,6 +291,10 @@ const MUTANTS = [
     doitCasser: [/^J-E1 /, /^J-E2 /] },
   { nom: 'K garde de jonction retiree (partout)', edits: [['pool-sans-hook.js', "return BLOCKS_TB.has(a) || (/^0xb2/.test(a) && !estDeviseConnue(a));", 'return false;']],
     doitCasser: [/^J-F1 /, /^J-A1 /, /^J-E1 /, /^J-E2 /, /^J-M1 /, /^J-M2 /, /^J-M3 /] },
+  { nom: 'M V1 non ramene sur la pool actuelle', edits: [['echange.js', "if (actuelle.cle) marche = { ...marche, etat: 'LUE', cle: actuelle.cle, remplaceV1: true };", 'if (false) marche = marche;']],
+    doitCasser: [/^V1-B1 /, /^V1-S1 /] },
+  { nom: 'N pool actuelle sans liquidite acceptee', edits: [['echange.js', 'if (s0 !== 0n && lq > 0n) return { cle: c, ratees };', 'if (s0 !== 0n) return { cle: c, ratees };']],
+    doitCasser: [/^V1-B3 /, /^V1-S3 /] },
   { nom: 'L PREVU achat hors fraisHookEnBlock', edits: [['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)']],
     doitCasser: [/^PREVU ACHAT simple/, /^PREVU ACHAT multi/] },
 ];

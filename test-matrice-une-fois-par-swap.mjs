@@ -20,7 +20,9 @@
  *   D. HOOK_PREVU a l ACHAT preleve du BLOCK (fork 52072599 callTracer) : l oracle le compte comme un frais de hook EN BLOCK
  *      (ecrit ici, sans appeler pool-sans-hook.js) — un plan qui le construit est une violation.
  *   E. AU PLUS UNE JAMBE PAYANTE (hook qui verse a6cf, dans n importe quelle devise) : deux ou plus => le plan DOIT etre
- *      REFUSE. Temoins negatifs : un mutant par garde (R4, PREVU, une jambe payante) doit rendre la matrice rouge. */
+ *      REFUSE. Temoins negatifs : un mutant par garde (R4, PREVU, une jambe payante) doit rendre la matrice rouge.
+ *   F. (Phil 22:19) un marche V1 est RAMENE sur la pool de version actuelle (V8) quand le StateView la montre initialisee et
+ *      liquide : le plan est juge sur la cle V8. Sans elle : achat refuse, vente sur V1 marquee `migrationEnAttente`. */
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
@@ -41,7 +43,16 @@ const INCONNU = '0x' + '1'.repeat(36) + '00cc';
 const HOOKS = { sans: ETH, V8: T.HOOK_V8, V2: T.HOOK_V2, PREVU: T.HOOK_PREVU, inconnu: INCONNU };
 
 const q = '0x' + (10n ** 18n).toString(16).padStart(64, '0') + '0'.repeat(64);
-const rpc = async (m) => (m === 'eth_call' ? q : m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64));
+/* StateView (getSlot0 / getLiquidity) : 0 par defaut = aucune pool de version actuelle ; `avecActuelle` = elle existe, liquide */
+const { selecteur } = await import(pathToFileURL(path.join(ICI, 'pool.js')).href);
+const SEL_SV = ['getSlot0(bytes32)', 'getLiquidity(bytes32)'].map((x) => '0x' + selecteur(x));
+const rpcSV = (avecActuelle) => async (m, p) => {
+  if (m !== 'eth_call') return m === 'eth_chainId' ? '0x2105' : '0x' + '0'.repeat(64);
+  const d = String((p && p[0] && p[0].data) || '').toLowerCase();
+  if (SEL_SV.some((x) => d.startsWith(x))) return avecActuelle ? q + q.slice(2) : '0x' + '0'.repeat(256);
+  return q;
+};
+const rpc = rpcSV(false);
 const compte = '0x' + '4'.repeat(40);
 const bas = (a) => String(a).toLowerCase();
 const cle = (a, b, hooks) => {
@@ -178,19 +189,29 @@ let nSimple = 0;
 for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
   for (const autre of [ETH, USDC, ACT]) {
     for (const h of Object.keys(HOOKS)) {
+      /* 2026-10-02 22:19 (Phil) : un marche V1 est ramene sur la pool de version actuelle (V8) quand elle existe */
+      for (const actuelle of (h === 'PREVU' ? [false, true] : [false])) {
       for (const sens of ['ACHAT', 'VENTE']) {
         const c = cle(bloc, autre, HOOKS[h]);
         const zf = sens === 'ACHAT' ? c.currency0 !== bloc : c.currency0 === bloc;
-        const nom = 'SIMPLE ' + sens + ' ' + (bloc === BLOC_BAS ? 'blocBas' : 'blocHaut') + '/' + (autre === ETH ? 'ETH' : autre === USDC ? 'USDC' : 'ACT') + ' [' + h + ']';
+        const nom = 'SIMPLE ' + sens + ' ' + (bloc === BLOC_BAS ? 'blocBas' : 'blocHaut') + '/' + (autre === ETH ? 'ETH' : autre === USDC ? 'USDC' : 'ACT') + ' [' + h + ']'
+          + (actuelle ? ' +V8 actuelle' : '');
         n += 1;
         let p;
         try {
-          p = await E.planEchange({ rpc, chaine: 8453, jeton: bloc, compte, sens, montant: 10n ** 15n, fraisDevisesOk: new Set([ACT]),
+          p = await E.planEchange({ rpc: rpcSV(actuelle), chaine: 8453, jeton: bloc, compte, sens, montant: 10n ** 15n, fraisDevisesOk: new Set([ACT]),
             marcheLu: { etat: 'LUE', cle: c, paire: autre === ETH ? 'ETH' : autre === USDC ? 'USDC' : 'ACT' } });
         } catch (e) { ko.push(nom + ' : EXCEPTION ' + e.message); continue; }
         if (p.etat === 'REFUSE' || p.etat === 'NON_MESURE') { nRefus += 1; continue; }
         nPlans += 1; nSimple += 1;
+        if (actuelle) {
+          if (!(p.resume && p.resume.remplaceV1 === true)) ko.push(nom + ' : V1 NON RAMENE sur la pool actuelle');
+          juger(nom, [{ cle: cle(bloc, autre, HOOKS.V8), zeroForOne: zf }], p, ko);
+          continue;
+        }
+        if (h === 'PREVU' && sens === 'VENTE' && !(p.resume && p.resume.migrationEnAttente === true)) ko.push(nom + ' : vente V1 sans migrationEnAttente');
         juger(nom, [{ cle: c, zeroForOne: zf }], p, ko);
+      }
       }
     }
   }
@@ -213,6 +234,9 @@ const MUTANTS = [
   { nom: 'PREVU achat hors fraisHookEnBlock', edits: [
     ['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)'],
   ], doitVoir: [/^SIMPLE ACHAT blocBas\/ETH \[PREVU\] : FRAIS DE HOOK EN BLOCK/, /^SIMPLE ACHAT blocHaut\/ETH \[PREVU\] : FRAIS DE HOOK EN BLOCK/] },
+  { nom: 'V1 non ramene sur la pool actuelle', edits: [
+    ['echange.js', "if (actuelle.cle) marche = { ...marche, etat: 'LUE', cle: actuelle.cle, remplaceV1: true };", 'if (false) marche = marche;'],
+  ], doitVoir: [/^SIMPLE VENTE blocHaut\/ETH \[PREVU\] \+V8 actuelle : V1 NON RAMENE/] },
   { nom: 'regle une jambe payante retiree', edits: [
     ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
   ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },
