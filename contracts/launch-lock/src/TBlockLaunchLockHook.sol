@@ -67,6 +67,9 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
     /// @dev marqueur vide au constructeur : il desactiverait entierement la verification du label,
     ///      et sans setter l etat serait definitif. Voir `porteLeLabel`.
     error MarqueurVide();
+    /// @dev delai de retrait nul au constructeur : la caution ressortirait dans le meme bloc, et
+    ///      l invariant « cannot be flash-borrowed » tomberait. Voir le constructeur.
+    error DelaiRetraitNul();
     error PasUnBloc24h();
 
     event Inscrite(PoolId indexed id, address indexed createur, address indexed devise, uint160 sqrtPriceX96, uint256 paye);
@@ -197,9 +200,31 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
         //      inscrire une pool sur ce hook. `marqueur` est en storage, pose ICI et nulle part
         //      ailleurs (aucun setter, par conception adminless) : l erreur aurait ete DEFINITIVE.
         //   ⛔ ON VALIDE A LA FRONTIERE OU C EST ENCORE REPARABLE — le deploiement — plutot que dans
-        //     le chemin chaud, ou refuser aurait brique le hook. Les autres champs de la Config sont
-        //     deja valides ici ; `marqueur` etait le seul a ne pas l etre.
+        //     le chemin chaud, ou refuser aurait brique le hook.
+        // ⛔⛔ CORRECTION D UNE AFFIRMATION A MOI. J avais ecrit ici : « les autres champs de la
+        //    Config sont deja valides ; `marqueur` etait le SEUL a ne pas l etre ». C etait FAUX, et
+        //    un verificateur adversarial l a mesure : `fraisVie`, `largeur`, `seuil` et
+        //    `delaiRetrait` ne sont pas valides non plus. Une affirmation de completude non verifiee
+        //    est pire qu aucune : elle dispense le lecteur de chercher.
+        //    Des quatre, `delaiRetrait` est le seul dont le zero est SILENCIEUX ET DE SECURITE — il
+        //    est valide juste dessous. Les trois autres restent non valides, et je le dis :
+        //      · `fraisVie` a 0 rend l inscription gratuite (choix economique, pas une faille) ;
+        //      · `largeur` doit etre un multiple du tickSpacing, exigence ecrite en commentaire
+        //        seulement (champ `largeur` de la Config) et jamais appliquee ;
+        //      · `seuil` vaut 0 dans les trois endroits du depot qui le fixent.
         if (c.marqueur.length == 0) revert MarqueurVide();
+        // ⛔⛔⛔ LE DELAI DE RETRAIT NE PEUT PAS ETRE NUL — ajoute le 2026-10-02. A 0, `demanderRetrait`
+        //      pose `retraitDes = block.timestamp`, et la garde de `retirerCaution`
+        //      (`block.timestamp < k.retraitDes`) est FAUSSE dans le meme bloc : la caution ressort
+        //      immediatement. L invariant de la NatSpec — « cannot be flash-borrowed » — tombe, et le
+        //      slot createur devient occupable a capital net nul.
+        //   ⇒ LA BORNE EST EXACTE, ELLE NE CHOISIT AUCUNE DUREE. Des `delaiRetrait >= 1`, un retrait
+        //     dans la MEME transaction voit `T < T + 1` et revert : le flash-loan est ferme. La duree
+        //     ECONOMIQUE (7 jours dans les configs du depot) reste un choix de deploiement, celui de
+        //     Raksha — je ne la fixe pas ici.
+        //   ⚠️ NON ACTIF AUJOURD HUI : toutes les configs du depot posent 7 jours. C est une garde
+        //     contre le prochain deploiement, pas la reparation d un incident.
+        if (c.delaiRetrait == 0) revert DelaiRetraitNul();
         if (c.suivi24h && c.exigerB20) revert ConfigIncompatible(); // B20 precompiles cannot carry the rule
         if (c.modeCollateral == 3) {
             if (address(c.conversion.hooks) != address(0)) revert ConversionInvalide();
@@ -631,27 +656,41 @@ contract TBlockLaunchLockHook is IHooks, IUnlockCallback {
                 //      RIEN (`enforced-key-that-bounds-nothing`).
                 //   ⇒ ON NE CHOISIT AUCUN MONTANT, et c est tout l interet : la borne est la CAUTION
                 //     ELLE-MEME, dans la MEME devise. Aucune constante nouvelle, aucun slot de
-                //     stockage en plus. Deposer presque rien fait gagner presque rien.
-                //   ⛔ LE SURPLUS N EST PAS PERDU : il part au collateral du block, par le chemin qui
-                //     existe DEJA quand la porte est fermee. Aucun nouveau flux, aucune adresse
-                //     nouvelle, rien ne disparait.
-                //   ⚠️ CE QUE CE PLAFOND NE FAIT PAS, ET JE LE DIS PLUTOT QUE DE LE COUVRIR : il borne
-                //     l EN ATTENTE, pas le CUMUL. Un createur qui reclame sans cesse rouvre son
-                //     plafond a chaque fois. Ce qui l en dissuade est le gaz de chaque reclamation
-                //     face a un plafond egal a sa caution — un frein economique mesurable, PAS une
-                //     impossibilite. Un vrai plafond cumulatif couterait un slot par pool : c est une
-                //     decision de Raksha, pas la mienne.
-                // ⛔ `dejaDu` ET NON `enAttente` : ce nom MASQUAIT le mapping public
-                //   `mapping(Currency => uint256) public enAttente` (ligne ~166). Le compilateur l a
-                //   signale (warning 2519). Le comportement etait juste dans cette portee, mais
-                //   masquer une variable d etat publique est un piege pour le prochain lecteur — et
-                //   c est moi qui l avais introduit en ecrivant ce plafond.
-                uint256 dejaDu = comptes[id].duCreateur;
+                //     stockage en plus. Deposer presque rien fait gagner presque rien PAR SWAP.
+                //
+                // ⛔⛔⛔ CORRIGE LE MEME JOUR, ET C EST MA FAUTE : LA PREMIERE VERSION ETAIT NON IDEMPOTENTE.
+                //      Elle bornait par `caution[id] - comptes[id].duCreateur`. Or `_parts` est appele
+                //      DEUX fois par swap : en `beforeSwap` (via `_repartir`, qui ECRIT
+                //      `duCreateur += cr`), puis en `afterSwap` (via `_verifierRemplissage`, qui le
+                //      REJOUE et compare `rempli != attendu`). Le second appel relisait un `duCreateur`
+                //      deja augmente par le premier : les deux totaux divergeaient, et le swap
+                //      revertait `RemplissagePartiel`. Trouve par un verificateur adversarial du
+                //      workflow, pas par moi — mes 76/76 testent le mode 1, ou le total reste
+                //      invariant parce que `co` absorbe le surplus. En mode 0, accepte par le
+                //      constructeur, le surplus est abandonne, le total varie, et la taille maximale
+                //      d un swap a montant exact s etranglait de facon geometrique.
+                //   ⇒ LA BORNE NE LIT PLUS QUE `caution[id]`, que `_repartir` n ecrit JAMAIS. Les deux
+                //     appels de `_parts` lisent donc le meme etat et rendent le meme total. Regle : une
+                //     fonction appelee en before ET en after ne doit dependre d aucun etat que
+                //     l appel before modifie.
+                //   ⚠️ CE QUE CA CHANGE : le plafond est desormais PAR SWAP, plus sur l en-attente.
+                //     Une caution d une unite plafonne chaque swap a une unite ; elle ne plafonne pas
+                //     le cumul de plusieurs swaps. Le frein reste economique (le createur doit avoir
+                //     verrouille au moins ce que chaque swap lui verse), pas une impossibilite. Un vrai
+                //     plafond cumulatif couterait un slot de stockage par pool : decision de Raksha.
+                //
+                // ⛔⛔ « LE SURPLUS N EST PAS PERDU » — CETTE PHRASE, ECRITE PAR MOI, ETAIT TROMPEUSE.
+                //    En mode 1 (la config de deploiement VISEE, FeeLot2Test._cfgProd), le surplus part
+                //    bien au collateral et n est pas brule — mais `comptes[id].collateral` ne decroit
+                //    JAMAIS : sa seule sortie est `_deployer`, dont les deux appelants exigent le mode 2,
+                //    et `MODE_COLLATERAL` est `immutable` sans setter. Le surplus y est donc IMMOBILISE
+                //    DEFINITIVEMENT. Ce bac etait deja sans issue avant ce plafond (porte fermee, plus
+                //    haut) : ce correctif ne cree pas le gel, il y ajoute. En mode 0, le surplus n est
+                //    simplement pas preleve — l acheteur paie moins, personne n est lese.
                 uint256 plafond = caution[id];
-                uint256 reste = plafond > dejaDu ? plafond - dejaDu : 0;
-                if (cr > reste) {
-                    uint256 trop = cr - reste;
-                    cr = reste;
+                if (cr > plafond) {
+                    uint256 trop = cr - plafond;
+                    cr = plafond;
                     if (MODE_COLLATERAL != 0) co = trop;
                 }
             }

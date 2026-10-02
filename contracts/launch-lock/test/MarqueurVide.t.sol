@@ -89,51 +89,100 @@ contract MarqueurVideTest is Test {
         );
         new Hook(_cfg(bytes("x")));
     }
-    /// ⛔⛔⛔ LE PLAFOND DE LA PART CREATEUR — ajoute le 2026-10-02. On ne peut pas construire un hook
-    ///      vivant ici (adresse CREATE2 a miner), donc on prouve l ARITHMETIQUE de la borne, telle
-    ///      qu elle est ecrite dans `_parts` : `reste = caution - enAttente`, et le surplus va au
-    ///      collateral. C est une preuve de FORMULE, pas de comportement — les bancs fork tiennent
-    ///      l autre moitie, et je ne pretends pas le contraire.
-    function _borne(uint256 caution_, uint256 enAttente, uint256 cr)
-        internal pure returns (uint256 crBorne, uint256 versCollateral)
-    {
-        uint256 reste = caution_ > enAttente ? caution_ - enAttente : 0;
-        if (cr > reste) return (reste, cr - reste);
+    /// ⛔⛔⛔ LE PLAFOND DE LA PART CREATEUR, CORRIGE LE MEME JOUR. Ma premiere version bornait par
+    ///      `caution - duCreateur`. Or `_parts` est appele DEUX fois par swap — en `beforeSwap`, ou
+    ///      `_repartir` ECRIT `duCreateur += cr`, puis en `afterSwap`, ou `_verifierRemplissage` le
+    ///      REJOUE et compare. Le second appel relisait l etat deja modifie : les totaux divergeaient
+    ///      et le swap revertait `RemplissagePartiel`. Trouve par un verificateur adversarial, pas par
+    ///      moi. La borne ne lit plus que `caution`, que `_repartir` n ecrit jamais.
+    ///   ⇒ LA PROPRIETE A GARDER N EST PAS « la somme est conservee » — ca, l ancienne formule le
+    ///     faisait aussi. C est L IDEMPOTENCE : before et after doivent rendre la meme chose.
+    function _borne(uint256 caution_, uint256 cr) internal pure returns (uint256 crBorne, uint256 surplus) {
+        if (cr > caution_) return (caution_, cr - caution_);
         return (cr, 0);
     }
 
-    function test_plafond_deposer_presque_rien_rapporte_presque_rien() public pure {
-        // une caution d UNE unite : la part due ne depasse jamais une unite
-        (uint256 cr, uint256 co) = _borne(1, 0, 1_000_000);
-        assertEq(cr, 1, "une caution de 1 doit plafonner la part a 1");
-        assertEq(co, 999_999, "tout le surplus doit aller au collateral");
-        assertEq(cr + co, 1_000_000, "rien ne doit disparaitre");
+    /// ⛔ L ANCIENNE FORMULE, GARDEE UNIQUEMENT POUR PROUVER QU ELLE ETAIT FAUTIVE. Sans ce temoin,
+    ///   « la nouvelle est idempotente » ne dirait pas que l ancienne ne l etait pas — et le correctif
+    ///   n aurait pas de raison mesurable.
+    function _borneAncienne(uint256 caution_, uint256 dejaDu, uint256 cr) internal pure returns (uint256) {
+        uint256 reste = caution_ > dejaDu ? caution_ - dejaDu : 0;
+        return cr > reste ? reste : cr;
+    }
+
+    function test_plafond_deposer_presque_rien_rapporte_presque_rien_par_swap() public pure {
+        (uint256 cr, uint256 surplus) = _borne(1, 1_000_000);
+        assertEq(cr, 1, "une caution de 1 plafonne chaque swap a 1");
+        assertEq(surplus, 999_999, "le reste n est pas verse au createur");
+        assertEq(cr + surplus, 1_000_000, "rien ne disparait de la comptabilite");
     }
 
     /// ⛔ TEMOIN POSITIF — une caution large ne bride RIEN. Sans lui, « ca plafonne » serait
     ///   indiscernable d un plafond qui ecrase tout, et la part createur serait morte.
     function test_TEMOIN_une_caution_large_ne_bride_rien() public pure {
-        (uint256 cr, uint256 co) = _borne(10_000_000, 0, 1_000_000);
+        (uint256 cr, uint256 surplus) = _borne(10_000_000, 1_000_000);
         assertEq(cr, 1_000_000, "une caution large ne doit rien plafonner");
-        assertEq(co, 0, "rien ne doit partir au collateral");
+        assertEq(surplus, 0, "aucun surplus");
     }
 
-    /// ⛔ ET L EN ATTENTE COMPTE : ce qui est deja du consomme le plafond. Sinon le plafond serait
-    ///   reinitialise a chaque swap et ne bornerait rien du tout.
-    function test_len_attente_consomme_le_plafond() public pure {
-        (uint256 cr, uint256 co) = _borne(100, 100, 50);
-        assertEq(cr, 0, "plafond deja atteint : plus rien n est du");
-        assertEq(co, 50, "tout part au collateral");
-        (uint256 cr2,) = _borne(100, 60, 50);
-        assertEq(cr2, 40, "il reste exactement 40 avant le plafond");
+    /// ⛔⛔⛔ LE TEST QUI COMPTE : LE SWAP REJOUE NE DIVERGE PLUS. On simule exactement le cycle du
+    ///      hook : un premier calcul (beforeSwap), l ecriture `duCreateur += cr`, puis un second
+    ///      calcul sur l etat modifie (afterSwap). Le cas choisi est celui que le verificateur a nomme :
+    ///      0 < caution - duCreateur < 2X.
+    function test_idempotent_avant_et_apres_le_swap() public pure {
+        uint256 caution_ = 100;
+        uint256 X = 60;                 // part createur calculee pour ce swap
+        uint256 dejaDu = 0;
+        // NOUVELLE FORMULE : ne lit que la caution
+        (uint256 avant,) = _borne(caution_, X);
+        dejaDu += avant;                // ce que _repartir ecrit en beforeSwap
+        (uint256 apres,) = _borne(caution_, X);
+        assertEq(avant, apres, "nouvelle formule : before et after doivent rendre la meme part");
+        assertEq(dejaDu, 60, "le cycle a bien credite la part");
     }
 
-    /// ⛔ AUCUNE PERTE, JAMAIS : la somme est conservee dans tous les cas. Un plafond qui ferait
-    ///   disparaitre la difference serait un vol silencieux.
-    function testFuzz_rien_ne_disparait(uint96 caution_, uint96 enAttente, uint96 cr) public pure {
-        (uint256 a, uint256 b) = _borne(caution_, enAttente, cr);
+    /// ⛔⛔ ET LE TEMOIN QUE L ANCIENNE ETAIT FAUTIVE, sur le MEME cas. Si ce test passait au vert avec
+    ///    egalite, mon correctif n aurait rien corrige. Il doit montrer la DIVERGENCE.
+    function test_TEMOIN_lancienne_formule_divergeait() public pure {
+        uint256 caution_ = 100;
+        uint256 X = 60;
+        uint256 dejaDu = 0;
+        uint256 avant = _borneAncienne(caution_, dejaDu, X);   // 60
+        dejaDu += avant;                                        // 60
+        uint256 apres = _borneAncienne(caution_, dejaDu, X);   // min(60, 100-60) = 40
+        assertTrue(avant != apres, "l ancienne formule DEVAIT diverger : c etait le defaut");
+        assertEq(avant, 60, "before : 60");
+        assertEq(apres, 40, "after : 40 -> RemplissagePartiel");
+    }
+
+    /// ⛔ ET POUR TOUTE ENTREE : conservation ET idempotence. La seconde est la propriete que j avais
+    ///   cassee ; la premiere, je l avais deja, et elle ne m a pas protege.
+    function testFuzz_conserve_et_idempotent(uint96 caution_, uint96 cr) public pure {
+        (uint256 a, uint256 b) = _borne(caution_, cr);
         assertEq(a + b, cr, "la somme doit etre conservee");
-        assertLe(a, cr, "la part bornee ne peut pas depasser la part calculee");
+        assertLe(a, caution_, "la part ne depasse jamais la caution");
+        (uint256 a2,) = _borne(caution_, cr);
+        assertEq(a, a2, "deux appels sur le meme etat rendent la meme part");
+    }
+
+    /// ⛔⛔ LE DELAI DE RETRAIT NUL EST REFUSE AU CONSTRUCTEUR. A 0, la caution ressortirait dans le meme
+    ///    bloc et l invariant « cannot be flash-borrowed » tomberait.
+    function test_constructeur_refuse_un_delai_de_retrait_nul() public {
+        Hook.Config memory c = _cfg(MARQUEUR);
+        c.delaiRetrait = 0;
+        vm.expectRevert(Hook.DelaiRetraitNul.selector);
+        new Hook(c);
+    }
+
+    /// ⛔ TEMOIN : un delai d UNE seconde passe la garde (et echoue plus loin, sur l adresse v4). La
+    ///   garde porte sur le ZERO, pas sur une duree choisie — la duree economique est a Raksha.
+    function test_TEMOIN_un_delai_dune_seconde_passe_la_garde() public {
+        Hook.Config memory c = _cfg(MARQUEUR);
+        c.delaiRetrait = 1;
+        vm.expectRevert(
+            abi.encodeWithSignature("HookAddressNotValid(address)", address(0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f))
+        );
+        new Hook(c);
     }
 
 }
