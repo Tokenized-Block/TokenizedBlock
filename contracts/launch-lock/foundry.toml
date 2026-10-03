@@ -1,0 +1,27 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.26"
+optimizer = true
+optimizer_runs = 200
+evm_version = "cancun"
+bytecode_hash = "none"
+# base-anvil / base-forge: execute Base's Rust precompiles (B20 tokens, B20 factory, PolicyRegistry) in tests,
+# so the PAIRED STOCK is the REAL NVDAc / AAPLc on the fork (no mock). Needs the Base build of Foundry
+# (~/.foundry/versions/base-nightly/forge). Stock forge ignores this key and B20 calls revert.
+base = true
+fs_permissions = [{ access = "read", path = "./out" }, { access = "read", path = "./test/data" }, { access = "read-write", path = "./plan" }]
+# FORK ONLY. NEVER --broadcast. Nothing here signs with a real key. Run:
+#   ~/.foundry/versions/base-nightly/forge test --fork-url <Base RPC> --fork-block-number <N> -vv
+remappings = [
+  "forge-std/=lib/v4-core/lib/forge-std/src/",
+  "v4-core/=lib/v4-core/src/",
+  "@uniswap/v4-core/=lib/v4-core/",
+  "solmate/=lib/v4-core/lib/solmate/",
+  "@openzeppelin/=lib/v4-core/lib/openzeppelin-contracts/",
+]
+
+[lint]
+lint_on_build = false
+

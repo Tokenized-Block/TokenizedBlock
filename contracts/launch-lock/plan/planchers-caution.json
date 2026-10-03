@@ -1,0 +1,1325 @@
+{
+ "bloc": 52090382,
+ "refsLues": "2026-10-02T19:41:53.933Z",
+ "regle": {
+  "MAX_GAP_BPS": 1000,
+  "REF_AGREE_BPS": 100,
+  "MIN_DEPTH_USD": 500
+ },
+ "rows": [
+  {
+   "sym": "ETH",
+   "adresse": "0x0000000000000000000000000000000000000000",
+   "decimales": 18,
+   "refs": {
+    "coinbase": 2666,
+    "kraken": 2666.58
+   },
+   "source": "v3 0xd0b53D9277642d899DF5C87A3966A349A798F224 (Uniswap v3 WETH/USDC 0.05%)",
+   "prixPool": 2665.87866589,
+   "L": "1501033790335440884",
+   "profondeurUsd": 4291011,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    0,
+    2
+   ],
+   "regle": "POOL",
+   "raw": "375110845363267",
+   "prixUsd": 2665.87866589,
+   "valeurUsd": 0.9999999999978963,
+   "valeurRefBasseUsd": 1.0000455137384698
+  },
+  {
+   "sym": "USDC",
+   "adresse": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+   "decimales": 6,
+   "refs": {},
+   "regle": "UNIT",
+   "source": "USDC is the unit",
+   "raw": "1000000",
+   "prixUsd": 1,
+   "valeurUsd": 1
+  },
+  {
+   "sym": "cbBTC",
+   "adresse": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "decimales": 8,
+   "refs": {
+    "coinbase": 84217.755,
+    "kraken": 84208.7
+   },
+   "source": "cl 0x7C7420DD105E2779316423Ba3E973f434315EFA9 (aerodrome cbBTC/WETH)",
+   "prixPool": 84193.67894402,
+   "L": "120985331689307861",
+   "profondeurUsd": 1669693,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    2,
+    1
+   ],
+   "regle": "POOL",
+   "raw": "1188",
+   "prixUsd": 84193.67894402,
+   "valeurUsd": 1.0002209058549576,
+   "valeurRefBasseUsd": 1.000399356
+  },
+  {
+   "sym": "TOSHI",
+   "adresse": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+   "decimales": 18,
+   "refs": {
+    "coinbase": 0.0001198,
+    "kraken": 0.0001199
+   },
+   "source": "v3 0x4b0Aaf3EBb163dd45F663b38b6d93f6093EBC2d3 (uniswap TOSHI/WETH)",
+   "prixPool": 0.00012023,
+   "L": "1603049876980847303536797",
+   "profondeurUsd": 483848,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    35,
+    27
+   ],
+   "regle": "POOL",
+   "raw": "8317319830414303380420",
+   "prixUsd": 0.00012023,
+   "valeurUsd": 0.9999913632107118,
+   "valeurRefBasseUsd": 0.9964149156836335
+  },
+  {
+   "sym": "OUSD",
+   "adresse": "0xB2000000000000000000002fEb517dFeC7415344",
+   "decimales": 6,
+   "refs": {
+    "peg": 1
+   },
+   "source": "v4 0xdf5bde0fc414fcd1f803c9d1b52ebbb4db5982d8dca5316ae06b467e06fc429a (uniswap OUSD/USDC)",
+   "prixPool": 1.00000107,
+   "L": "15573219381373221",
+   "profondeurUsd": 15573227728,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    0
+   ],
+   "regle": "POOL",
+   "raw": "999999",
+   "prixUsd": 1.00000107,
+   "valeurUsd": 1.00000006999893,
+   "valeurRefBasseUsd": 0.999999
+  },
+  {
+   "sym": "AAPLc",
+   "adresse": "0xb200000000000000000000C2e324d24d7eEcd1fb",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 333.83,
+    "nasdaq": 333.83
+   },
+   "source": "cl 0xA3b1E3f9747065e2073722Ff4c9027d3eA4994F0 (aerodrome AAPLc/USDC)",
+   "prixPool": 333.7763971,
+   "L": "31259159820472",
+   "profondeurUsd": 935458,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    1,
+    1
+   ],
+   "regle": "POOL",
+   "raw": "299602",
+   "prixUsd": 333.7763971,
+   "valeurUsd": 1.0000007612395418,
+   "valeurRefBasseUsd": 1.0001613566
+  },
+  {
+   "sym": "AMZNc",
+   "adresse": "0xb200000000000000000000d9192b6B456483C2E8",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 250.74,
+    "nasdaq": 250.75
+   },
+   "source": "v3 0x7F030e5fD657795C0937a3e8af2929Fd90DA91C7 (uniswap AMZNc/USDC)",
+   "prixPool": 250.80397508,
+   "L": "43200701926",
+   "profondeurUsd": 5966,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    2,
+    2
+   ],
+   "regle": "POOL",
+   "raw": "398718",
+   "prixUsd": 250.80397508,
+   "valeurUsd": 1.0000005933594744,
+   "valeurRefBasseUsd": 0.9997455132
+  },
+  {
+   "sym": "AVGOc",
+   "adresse": "0xB200000000000000000000Fc737aeA6196aB5a4c",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 355.83,
+    "nasdaq": 355.92
+   },
+   "source": "cl 0x1f4a5e3112AE53cA2864c89d5C0AEf85282b4C62 (aerodrome AVGOc/USDC)",
+   "prixPool": 355.31573736,
+   "L": "0",
+   "profondeurUsd": 1940,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    14,
+    16
+   ],
+   "pourquoi": "no active liquidity",
+   "regle": "REFERENCE",
+   "raw": "281034",
+   "prixUsd": 355.83,
+   "valeurUsd": 1.0000032822,
+   "valeurRefBasseUsd": 1.0000032822
+  },
+  {
+   "sym": "BEc",
+   "adresse": "0xb20000000000000000000016f9dfe862feBA122b",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 291.98,
+    "nasdaq": 291.98
+   },
+   "source": "v4 0xa68987c1412e623c3e2a09d0b5d1f5d34ed5c475c798b0d9bbd005ff6fd21c1f (uniswap BEc/USDC)",
+   "prixPool": 285.75011058,
+   "L": "12075179114",
+   "profondeurUsd": 20412,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    213,
+    213
+   ],
+   "regle": "POOL",
+   "raw": "349957",
+   "prixUsd": 285.75011058,
+   "valeurUsd": 1.0000025144824507,
+   "valeurRefBasseUsd": 1.0218044486
+  },
+  {
+   "sym": "GOOGLc",
+   "adresse": "0xb2000000000000000000002D0BA3164cc74f58B7",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 342.995,
+    "nasdaq": 342.995
+   },
+   "source": "cl 0xB1987CAD1682841b4b641d50E520777eC5Ab5542 (aerodrome GOOGLc/USDC)",
+   "prixPool": 343.27093451,
+   "L": "33506606338582",
+   "profondeurUsd": 767366,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    8,
+    8
+   ],
+   "regle": "POOL",
+   "raw": "291316",
+   "prixUsd": 343.27093451,
+   "valeurUsd": 1.0000031555771516,
+   "valeurRefBasseUsd": 0.9991993142
+  },
+  {
+   "sym": "HIMSc",
+   "adresse": "0xB20000000000000000000043a599976181Bcf336",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 28.99,
+    "nasdaq": 28.99
+   },
+   "source": "v4 0xa5d57d3527dbc5333b4e828400d0dc200d4eec29c8a45eda889ef238869c6d59 (uniswap HIMSc/USDC)",
+   "prixPool": 28.64340259,
+   "L": "136447838623",
+   "profondeurUsd": 73026,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    119,
+    119
+   ],
+   "regle": "POOL",
+   "raw": "3491206",
+   "prixUsd": 28.64340259,
+   "valeurUsd": 1.0000001898262354,
+   "valeurRefBasseUsd": 1.0121006194
+  },
+  {
+   "sym": "METAc",
+   "adresse": "0xb2000000000000000000008bC8786B856E61707C",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 726.91,
+    "nasdaq": 726.91
+   },
+   "source": "cl 0xEAF57753BC382E0324a1D43F72E7027705a2273E (aerodrome METAc/USDC)",
+   "prixPool": 727.18070912,
+   "L": "21768541100762",
+   "profondeurUsd": 796122,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    3,
+    3
+   ],
+   "regle": "POOL",
+   "raw": "137518",
+   "prixUsd": 727.18070912,
+   "valeurUsd": 1.0000043675676415,
+   "valeurRefBasseUsd": 0.9996320938
+  },
+  {
+   "sym": "MSFTc",
+   "adresse": "0xB200000000000000000000Ab99cFa739E253872B",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 515.36,
+    "nasdaq": 515.362
+   },
+   "source": "cl 0x7103eB3c9590d1281f7dc03b2A9EE27C39dF5D54 (aerodrome MSFTc/USDC)",
+   "prixPool": 515.40130342,
+   "L": "47927586741723",
+   "profondeurUsd": 517476,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    0,
+    0
+   ],
+   "regle": "POOL",
+   "raw": "194024",
+   "prixUsd": 515.40130342,
+   "valeurUsd": 1.0000022249476208,
+   "valeurRefBasseUsd": 0.9999220864
+  },
+  {
+   "sym": "MSTRc",
+   "adresse": "0xb2000000000000000000004884b426556b92883d",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 158.25,
+    "nasdaq": 158.28
+   },
+   "source": "v4 0x17ecfe141bada18d94b2c41a2bbaffde8726309a6b4340e1ad7a6910bc7cdf8d (uniswap MSTRc/USDC)",
+   "prixPool": 161.28687688,
+   "L": "4087196393",
+   "profondeurUsd": 5191,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    191,
+    189
+   ],
+   "regle": "POOL",
+   "raw": "620014",
+   "prixUsd": 161.28687688,
+   "valeurUsd": 1.000001216818763,
+   "valeurRefBasseUsd": 0.981172155
+  },
+  {
+   "sym": "MUc",
+   "adresse": "0xb200000000000000000000Fd2f87532B90095211",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 1073.5,
+    "nasdaq": 1073.38
+   },
+   "source": "cl 0x17e1bEB2cD65493Da73ed4BbbC7BEcAAa0F91C73 (aerodrome MUc/USDC)",
+   "prixPool": 1073.11541176,
+   "L": "4585035711003",
+   "profondeurUsd": 205846,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    3,
+    2
+   ],
+   "regle": "POOL",
+   "raw": "93187",
+   "prixUsd": 1073.11541176,
+   "valeurUsd": 1.000004058756791,
+   "valeurRefBasseUsd": 1.0002506206000001
+  },
+  {
+   "sym": "NVDAc",
+   "adresse": "0xb20000000000000000000078ee7ce2fE4908108C",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 234.485,
+    "nasdaq": 234.475
+   },
+   "source": "cl 0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9 (aerodrome NVDAc/USDC)",
+   "prixPool": 234.48777826,
+   "L": "23085709481771",
+   "profondeurUsd": 1206272,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    0,
+    0
+   ],
+   "regle": "POOL",
+   "raw": "426462",
+   "prixUsd": 234.48777826,
+   "valeurUsd": 1.0000012689231612,
+   "valeurRefBasseUsd": 0.9999467745
+  },
+  {
+   "sym": "PLTRc",
+   "adresse": "0xb2000000000000000000007d16372840dF4dAbbe",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 189.22,
+    "nasdaq": 189.22
+   },
+   "source": "cl 0x650cc267AA248191978013d5Ae421e5Dc2A6e242 (aerodrome PLTRc/USDC)",
+   "prixPool": 189.24340319,
+   "L": "16525643585725",
+   "profondeurUsd": 296863,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    1,
+    1
+   ],
+   "regle": "POOL",
+   "raw": "528421",
+   "prixUsd": 189.24340319,
+   "valeurUsd": 1.00000188357063,
+   "valeurRefBasseUsd": 0.9998782162000001
+  },
+  {
+   "sym": "SNDKc",
+   "adresse": "0xb200000000000000000000397293Cb8cda9a10c5",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 1719.06,
+    "nasdaq": 1719.2
+   },
+   "source": "v3 0x26fa54cdfc64fAacb5364c09De7Ac2F72308052D (uniswap SNDKc/USDC)",
+   "prixPool": 1733.23327865,
+   "L": "1611973546",
+   "profondeurUsd": 1415,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    82,
+    81
+   ],
+   "regle": "POOL",
+   "raw": "57696",
+   "prixUsd": 1733.23327865,
+   "valeurUsd": 1.0000062724499041,
+   "valeurRefBasseUsd": 0.9918288576
+  },
+  {
+   "sym": "SPCXc",
+   "adresse": "0xb2000000000000000000007b9fcbd005511aCBd5",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 159.29,
+    "nasdaq": 159.3
+   },
+   "source": "v3 0x127a12FC0953ab2ab89558c67Ba6D597D7140431 (uniswap SPCXc/USDC)",
+   "prixPool": 157.98891238,
+   "L": "41042169917",
+   "profondeurUsd": 24596,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    81,
+    82
+   ],
+   "regle": "POOL",
+   "raw": "632956",
+   "prixUsd": 157.98891238,
+   "valeurUsd": 1.0000003002439528,
+   "valeurRefBasseUsd": 1.0082356124
+  },
+  {
+   "sym": "TSLAc",
+   "adresse": "0xb2000000000000000000001e800a7f5189430cD0",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 374.305,
+    "nasdaq": 374.29
+   },
+   "source": "cl 0x469337fDcc5E8f38e2E4B670B04F57865D13a7BB (aerodrome TSLAc/USDC)",
+   "prixPool": 374.1759851,
+   "L": "10941602352269",
+   "profondeurUsd": 606600,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    3,
+    3
+   ],
+   "regle": "POOL",
+   "raw": "267254",
+   "prixUsd": 374.1759851,
+   "valeurUsd": 1.000000287219154,
+   "valeurRefBasseUsd": 1.0003049966000002
+  },
+  {
+   "sym": "AMDc",
+   "adresse": "0xB2000000000000000000000d8Ce462E99ee7A47B",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 634.29,
+    "nasdaq": 634.645
+   },
+   "source": "v4 0x3794f7b84c4d243c117e3cba9cd07c23ac001585e0d9464820bbf503f3c0c3be (uniswap AMDc/USDC)",
+   "prixPool": 613.33890705,
+   "L": "52326925750",
+   "profondeurUsd": 129591,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    330,
+    335
+   ],
+   "regle": "POOL",
+   "raw": "163042",
+   "prixUsd": 613.33890705,
+   "valeurUsd": 1.0000000208324609,
+   "valeurRefBasseUsd": 1.0341591017999998
+  },
+  {
+   "sym": "ASTSc",
+   "adresse": "0xB200000000000000000000B1a29cF17A1819288a",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 58.25,
+    "nasdaq": 58.25
+   },
+   "source": "v4 0x3c4219c9da7abe1ca95e3c7d2d4a9ccfdddf7c70c115b2909aa4b558a6d683b8 (uniswap ASTSc/USDC)",
+   "prixPool": 57.70908026,
+   "L": "27860777731",
+   "profondeurUsd": 21165,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    92,
+    92
+   ],
+   "regle": "POOL",
+   "raw": "1732830",
+   "prixUsd": 57.70908026,
+   "valeurUsd": 1.000000255469358,
+   "valeurRefBasseUsd": 1.009373475
+  },
+  {
+   "sym": "CAKEc",
+   "adresse": "0xb200000000000000000000f215E4C890CFb7176B",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 108.54,
+    "nasdaq": 108.54
+   },
+   "source": "v4 0x804fece8c0572619d514faf9cbf5147d6115e215d69508c4bdf0e75d286f44ab (uniswap CAKEc/USDC)",
+   "prixPool": 116.02932406,
+   "L": "4947715844",
+   "profondeurUsd": 5330,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    690,
+    690
+   ],
+   "regle": "POOL",
+   "raw": "861852",
+   "prixUsd": 116.02932406,
+   "valeurUsd": 1.000001049997591,
+   "valeurRefBasseUsd": 0.9354541608
+  },
+  {
+   "sym": "DJTc",
+   "adresse": "0xb200000000000000000000428E3a3eebBb20692B",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 8.9,
+    "nasdaq": 8.9
+   },
+   "source": "v4 0x08357c323c3b3f635c16df4a9f850e4582e0470fca4d59a8f563116e8ecd27f0 (uniswap DJTc/USDC)",
+   "prixPool": 9.17440322,
+   "L": "79591589122",
+   "profondeurUsd": 24108,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    308,
+    308
+   ],
+   "regle": "POOL",
+   "raw": "10899892",
+   "prixUsd": 9.17440322,
+   "valeurUsd": 1.0000000426245224,
+   "valeurRefBasseUsd": 0.970090388
+  },
+  {
+   "sym": "DUOLc",
+   "adresse": "0xb200000000000000000000A613D12dEAfBBb1Db7",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 144.39,
+    "nasdaq": 144.39
+   },
+   "source": "v4 0x25c85af41f267598b06dc658f55ceef6c7df2d2719c4077b7e7462149148667e (uniswap DUOLc/USDC)",
+   "prixPool": 149.87834776,
+   "L": "4317901785",
+   "profondeurUsd": 5286,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    380,
+    380
+   ],
+   "regle": "POOL",
+   "raw": "667208",
+   "prixUsd": 149.87834776,
+   "valeurUsd": 1.0000003265225408,
+   "valeurRefBasseUsd": 0.9633816311999999
+  },
+  {
+   "sym": "LLYc",
+   "adresse": "0xB200000000000000000000f1a0F91e34892E4718",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 1146.285,
+    "nasdaq": 1146.285
+   },
+   "source": "v4 0xa7cfa6bac05206b5781d2eacff67f4e8046efe60fba79ccd0b13a8e6d5a9db9d (uniswap LLYc/USDC)",
+   "prixPool": 1179.7452485,
+   "L": "262958054380",
+   "profondeurUsd": 903193,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    291,
+    291
+   ],
+   "regle": "POOL",
+   "raw": "84765",
+   "prixUsd": 1179.7452485,
+   "valeurUsd": 1.000011059891025,
+   "valeurRefBasseUsd": 0.9716484802500001
+  },
+  {
+   "sym": "MRNAc",
+   "adresse": "0xB200000000000000000000e215e9B76ecBA02468",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 190.195,
+    "nasdaq": 190.26
+   },
+   "source": "v4 0xd8c5b72395fe0cf680950c6455cfb054d5723aa789c2ef9f166449190e1b453c (uniswap MRNAc/USDC)",
+   "prixPool": 177.70467387,
+   "L": "669332202",
+   "profondeurUsd": 892,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    656,
+    659
+   ],
+   "regle": "POOL",
+   "raw": "562732",
+   "prixUsd": 177.70467387,
+   "valeurUsd": 1.0000010653621283,
+   "valeurRefBasseUsd": 1.0702881274
+  },
+  {
+   "sym": "MRVLc",
+   "adresse": "0xB200000000000000000000eC3c4c7395Cc609813",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 274.36,
+    "nasdaq": 274.36
+   },
+   "source": "v4 0x539a0eec22fa9f760acee8406db3685e3dbb844c7c8b5cecafd940c8fb597d49 (uniswap MRVLc/USDC)",
+   "prixPool": 255.60551115,
+   "L": "26374199048",
+   "profondeurUsd": 42166,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    683,
+    683
+   ],
+   "regle": "POOL",
+   "raw": "391228",
+   "prixUsd": 255.60551115,
+   "valeurUsd": 1.000000329161922,
+   "valeurRefBasseUsd": 1.0733731408
+  },
+  {
+   "sym": "NFLXc",
+   "adresse": "0xb20000000000000000000058B8c947e44011dFE6",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 67.01,
+    "nasdaq": 67.01
+   },
+   "source": "v4 0x4e7d243e0095037608bef179bc69c1fcd04a3e4d4e723bf2ec75e90bbc186bd0 (uniswap NFLXc/USDC)",
+   "prixPool": 69.1944452,
+   "L": "124038009380",
+   "profondeurUsd": 103179,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    325,
+    325
+   ],
+   "regle": "POOL",
+   "raw": "1445203",
+   "prixUsd": 69.1944452,
+   "valeurUsd": 1.000000197863756,
+   "valeurRefBasseUsd": 0.9684305303
+  },
+  {
+   "sym": "NVAXc",
+   "adresse": "0xB200000000000000000000C597c476FCf9Aed3a8",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 10.425,
+    "nasdaq": 10.425
+   },
+   "source": "v4 0xdb5ad710e437dbc22f5eb1286a878ea59ee1cb36fa034cf2e771e06a7ab5b503 (uniswap NVAXc/USDC)",
+   "prixPool": 11.29644101,
+   "L": "32760370661",
+   "profondeurUsd": 11011,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    835,
+    835
+   ],
+   "regle": "POOL",
+   "raw": "8852346",
+   "prixUsd": 11.29644101,
+   "valeurUsd": 1.0000000438910945,
+   "valeurRefBasseUsd": 0.9228570705000001
+  },
+  {
+   "sym": "ORCLc",
+   "adresse": "0xb200000000000000000000347AFbA223D7B6b63C",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 142.545,
+    "nasdaq": 142.54
+   },
+   "source": "v4 0x55092916912c12e39bc6304e2a2326f207ce82094534f40b5e7e54420e0e53aa (uniswap ORCLc/USDC)",
+   "prixPool": 137.78022953,
+   "L": "16063426256",
+   "profondeurUsd": 18855,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    334,
+    333
+   ],
+   "regle": "POOL",
+   "raw": "725794",
+   "prixUsd": 137.78022953,
+   "valeurUsd": 1.0000006391149683,
+   "valeurRefBasseUsd": 1.0345467676
+  },
+  {
+   "sym": "PTONc",
+   "adresse": "0xB2000000000000000000009272A491812842Aa84",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 4.94,
+    "nasdaq": 4.94
+   },
+   "source": "v4 0x5ea4feabed47530545c0235d7241e605fa51f6538eeeb9f12fa00174ba20e227 (uniswap PTONc/USDC)",
+   "prixPool": 5.40593715,
+   "L": "16065845108",
+   "profondeurUsd": 3735,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    943,
+    943
+   ],
+   "regle": "POOL",
+   "raw": "18498181",
+   "prixUsd": 5.40593715,
+   "valeurUsd": 1.0000000387532415,
+   "valeurRefBasseUsd": 0.9138101414
+  },
+  {
+   "sym": "PYPLc",
+   "adresse": "0xb200000000000000000000450ad3abE5d4846c6E",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 52.78,
+    "nasdaq": 52.78
+   },
+   "source": "v4 0x9fe752e5ab1cd1c5e8b1bc90f38271fbc4485d067448f50a76d6e1474b5e9d40 (uniswap PYPLc/USDC)",
+   "prixPool": 52.02824154,
+   "L": "15882838280",
+   "profondeurUsd": 11456,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    142,
+    142
+   ],
+   "regle": "POOL",
+   "raw": "1922034",
+   "prixUsd": 52.02824154,
+   "valeurUsd": 1.0000004920009236,
+   "valeurRefBasseUsd": 1.0144495452
+  },
+  {
+   "sym": "QUBTc",
+   "adresse": "0xb200000000000000000000CA425ab42e07C35bC3",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 8.135,
+    "nasdaq": 8.135
+   },
+   "source": "v4 0xf6c175a40f11dda83bcf403923bc6bb07edadaf6bb161c9188f3c81d1dc960e2 (uniswap QUBTc/USDC)",
+   "prixPool": 8.67283738,
+   "L": "92030018056",
+   "profondeurUsd": 27103,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    661,
+    661
+   ],
+   "regle": "POOL",
+   "raw": "11530252",
+   "prixUsd": 8.67283738,
+   "valeurUsd": 1.0000000054641978,
+   "valeurRefBasseUsd": 0.9379860002
+  },
+  {
+   "sym": "RBLXc",
+   "adresse": "0xB2000000000000000000005bd7AE89b9E6189Bb5",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 44.07,
+    "nasdaq": 44.07
+   },
+   "source": "cl 0x51642769e591Fe72275219750E0FB469adD35441 (aerodrome RBLXc/USDC)",
+   "prixPool": 44.0185534,
+   "L": "0",
+   "profondeurUsd": 1939,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    11,
+    11
+   ],
+   "pourquoi": "no active liquidity",
+   "regle": "REFERENCE",
+   "raw": "2269118",
+   "prixUsd": 44.07,
+   "valeurUsd": 1.0000003026,
+   "valeurRefBasseUsd": 1.0000003026
+  },
+  {
+   "sym": "RDDTc",
+   "adresse": "0xb20000000000000000000066242d4067724cB7A1",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 148.06,
+    "nasdaq": 148.0599
+   },
+   "source": "v4 0x63c669a07967107027856d8c36eed06427669d6be5674794da232c6ce27e236e (uniswap RDDTc/USDC)",
+   "prixPool": 149.55514263,
+   "L": "59617787775",
+   "profondeurUsd": 72908,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    100,
+    100
+   ],
+   "regle": "POOL",
+   "raw": "668650",
+   "prixUsd": 149.55514263,
+   "valeurUsd": 1.000000461195495,
+   "valeurRefBasseUsd": 0.9900025213500001
+  },
+  {
+   "sym": "TTWOc",
+   "adresse": "0xB200000000000000000000f720C26062Bc3067Da",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 202.925,
+    "nasdaq": 202.925
+   },
+   "source": "v4 0x5d33e25309769f6fb006cfe17644175620a31b507a27bfbfc1591856b93710bb (uniswap TTWOc/USDC)",
+   "prixPool": 200.71038348,
+   "L": "25182202935",
+   "profondeurUsd": 35676,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    109,
+    109
+   ],
+   "regle": "POOL",
+   "raw": "498231",
+   "prixUsd": 200.71038348,
+   "valeurUsd": 1.0000013507162389,
+   "valeurRefBasseUsd": 1.01103525675
+  },
+  {
+   "sym": "WENc",
+   "adresse": "0xB20000000000000000000044E3CD7a0E1028E57a",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 6.154,
+    "nasdaq": 6.1538
+   },
+   "source": "v4 0xfcb3d52e699c52dc071edda41e531d6fc3830a81b55a6d16fdba817041003091 (uniswap WENc/USDC)",
+   "prixPool": 6.80716418,
+   "L": "17184258135",
+   "profondeurUsd": 4483,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    1061,
+    1061
+   ],
+   "pourquoi": "pool vs reference gap 1061/1061 bps > 1000",
+   "regle": "REFERENCE",
+   "raw": "16250122",
+   "prixUsd": 6.1538,
+   "valeurUsd": 1.000000007636,
+   "valeurRefBasseUsd": 1.000000007636
+  },
+  {
+   "sym": "GMEc",
+   "adresse": "0xb2000000000000000000007790ed6E48e06eD935",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 24.7,
+    "nasdaq": 24.7
+   },
+   "source": "v4 0x723e3c6bf63baa05f38ac34b1801aca48bad08ee053ba87d302443ea33a11df5 (uniswap GMEc/USDC (Dexscreener 2026-10-02 23:04 CEST: the only GMEc pool listed))",
+   "prixPool": 24.02192802,
+   "L": "63615387968",
+   "profondeurUsd": 31179,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    274,
+    274
+   ],
+   "regle": "POOL",
+   "raw": "4162864",
+   "prixUsd": 24.02192802,
+   "valeurUsd": 1.000000193650493,
+   "valeurRefBasseUsd": 1.028227408
+  },
+  {
+   "sym": "HTZc",
+   "adresse": "0xb2000000000000000000002601C5C94F435da168",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 1.735,
+    "nasdaq": 1.735
+   },
+   "source": "cl 0x4DFfb33A4e4059De45C7Bc82212A6d25F62c6f30 (aerodrome HTZc/USDC)",
+   "prixPool": 1.75832403,
+   "L": "15087191476",
+   "profondeurUsd": 1,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    134,
+    134
+   ],
+   "pourquoi": "depth $1 < $500",
+   "regle": "REFERENCE",
+   "raw": "57636888",
+   "prixUsd": 1.735,
+   "valeurUsd": 1.0000000068000001,
+   "valeurRefBasseUsd": 1.0000000068000001
+  },
+  {
+   "sym": "PFEc",
+   "adresse": "0xB20000000000000000000018FE7eC7d6DfeeB528",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 27.735,
+    "nasdaq": 27.73
+   },
+   "source": "v4 0xc9c1898e8d5c2eea14419410815cfd43aab3d21d70ff6fda9a42ddf5e761b30d (uniswap PFEc/USDC)",
+   "prixPool": 49.5220122,
+   "L": "46451606",
+   "profondeurUsd": 33,
+   "profondeur": "virtual in-range quote (L, sqrtP)",
+   "ecartBps": [
+    7855,
+    7858
+   ],
+   "pourquoi": "depth $33 < $500; pool vs reference gap 7855/7858 bps > 1000",
+   "regle": "REFERENCE",
+   "raw": "3606203",
+   "prixUsd": 27.73,
+   "valeurUsd": 1.0000000919,
+   "valeurRefBasseUsd": 1.0000000919
+  },
+  {
+   "sym": "PMc",
+   "adresse": "0xB2000000000000000000008FC2A8C23cf5937b66",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 188.5,
+    "nasdaq": 188.505
+   },
+   "source": "cl 0x88274b1e6cadE876082537fC158ceba48338219f (aerodrome PMc/USDC)",
+   "prixPool": 193.1849214,
+   "L": "1482760274",
+   "profondeurUsd": 1939,
+   "profondeur": "quote balance held by the pool",
+   "ecartBps": [
+    248,
+    248
+   ],
+   "regle": "POOL",
+   "raw": "517639",
+   "prixUsd": 193.1849214,
+   "valeurUsd": 1.000000495285746,
+   "valeurRefBasseUsd": 0.975749515
+  },
+  {
+   "sym": "AMCc",
+   "adresse": "0xB200000000000000000000CD7e6b8042cb7c2BB5",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 2.77,
+    "nasdaq": 2.77
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "36101084",
+   "prixUsd": 2.77,
+   "valeurUsd": 1.0000000268,
+   "valeurRefBasseUsd": 1.0000000268
+  },
+  {
+   "sym": "AEOc",
+   "adresse": "0xB2000000000000000000006064f8EC027f042294",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 17.71,
+    "nasdaq": 17.71
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "5646528",
+   "prixUsd": 17.71,
+   "valeurUsd": 1.0000001088000001,
+   "valeurRefBasseUsd": 1.0000001088000001
+  },
+  {
+   "sym": "BMNRc",
+   "adresse": "0xB200000000000000000000eA2df44A307CaB279C",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 26.27,
+    "nasdaq": 26.27
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "3806624",
+   "prixUsd": 26.27,
+   "valeurUsd": 1.0000001248000001,
+   "valeurRefBasseUsd": 1.0000001248000001
+  },
+  {
+   "sym": "BIRDc",
+   "adresse": "0xb200000000000000000000535fE96f18204BFD96",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 3.365,
+    "nasdaq": 3.365
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "29717683",
+   "prixUsd": 3.365,
+   "valeurUsd": 1.00000003295,
+   "valeurRefBasseUsd": 1.00000003295
+  },
+  {
+   "sym": "BYNDc",
+   "adresse": "0xB200000000000000000000801830b13b8E493423",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 8.25,
+    "nasdaq": 8.25
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "12121213",
+   "prixUsd": 8.25,
+   "valeurUsd": 1.0000000725,
+   "valeurRefBasseUsd": 1.0000000725
+  },
+  {
+   "sym": "CIFRc",
+   "adresse": "0xB200000000000000000000690275843B6e246286",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 15.71,
+    "nasdaq": 15.71
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "6365373",
+   "prixUsd": 15.71,
+   "valeurUsd": 1.0000000983,
+   "valeurRefBasseUsd": 1.0000000983
+  },
+  {
+   "sym": "CLSKc",
+   "adresse": "0xB200000000000000000000fa63cFFF5c794dbB95",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 12.74,
+    "nasdaq": 12.74
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "7849294",
+   "prixUsd": 12.74,
+   "valeurUsd": 1.0000000556,
+   "valeurRefBasseUsd": 1.0000000556
+  },
+  {
+   "sym": "CRCLc",
+   "adresse": "0xB20000000000000000000019f6E7C675b73C2e4D",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 81.25,
+    "nasdaq": 81.25
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "1230770",
+   "prixUsd": 81.25,
+   "valeurUsd": 1.000000625,
+   "valeurRefBasseUsd": 1.000000625
+  },
+  {
+   "sym": "CRWVc",
+   "adresse": "0xb200000000000000000000F111184A74720787E6",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 89.62,
+    "nasdaq": 89.62
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "1115823",
+   "prixUsd": 89.62,
+   "valeurUsd": 1.0000005726,
+   "valeurRefBasseUsd": 1.0000005726
+  },
+  {
+   "sym": "HUTc",
+   "adresse": "0xb2000000000000000000006Ee1C139a723872e09",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 89.63,
+    "nasdaq": 89.63
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "1115698",
+   "prixUsd": 89.63,
+   "valeurUsd": 1.0000001174,
+   "valeurRefBasseUsd": 1.0000001174
+  },
+  {
+   "sym": "KSSc",
+   "adresse": "0xB200000000000000000000105A1f43ff3605C5De",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 18.81,
+    "nasdaq": 18.81
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "5316322",
+   "prixUsd": 18.81,
+   "valeurUsd": 1.0000001682,
+   "valeurRefBasseUsd": 1.0000001682
+  },
+  {
+   "sym": "LCIDc",
+   "adresse": "0xB20000000000000000000081050Ac3d4395Df527",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 4.13,
+    "nasdaq": 4.13
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "24213076",
+   "prixUsd": 4.13,
+   "valeurUsd": 1.0000000387999999,
+   "valeurRefBasseUsd": 1.0000000387999999
+  },
+  {
+   "sym": "MARAc",
+   "adresse": "0xb200000000000000000000a310e034E09186Fb2d",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 11.23,
+    "nasdaq": 11.23
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "8904720",
+   "prixUsd": 11.23,
+   "valeurUsd": 1.0000000560000002,
+   "valeurRefBasseUsd": 1.0000000560000002
+  },
+  {
+   "sym": "OPENc",
+   "adresse": "0xb200000000000000000000259694B27Bf052E7d7",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 2.44,
+    "nasdaq": 2.44
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "40983607",
+   "prixUsd": 2.44,
+   "valeurUsd": 1.0000000108,
+   "valeurRefBasseUsd": 1.0000000108
+  },
+  {
+   "sym": "RIOTc",
+   "adresse": "0xb200000000000000000000bd0C7627b663c581A6",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 19.73,
+    "nasdaq": 19.73
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "5068424",
+   "prixUsd": 19.73,
+   "valeurUsd": 1.0000000552,
+   "valeurRefBasseUsd": 1.0000000552
+  },
+  {
+   "sym": "SOUNc",
+   "adresse": "0xb2000000000000000000002137743d4a01fe4e88",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 5.84,
+    "nasdaq": 5.84
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "17123288",
+   "prixUsd": 5.84,
+   "valeurUsd": 1.0000000192,
+   "valeurRefBasseUsd": 1.0000000192
+  },
+  {
+   "sym": "USDEc",
+   "adresse": "0xB2000000000000000000009426B660396eBCf343",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 14.15,
+    "nasdaq": 14.15
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "7067138",
+   "prixUsd": 14.15,
+   "valeurUsd": 1.000000027,
+   "valeurRefBasseUsd": 1.000000027
+  },
+  {
+   "sym": "VVVc",
+   "adresse": "0xb200000000000000000000FEC679b39992F67627",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 30.58,
+    "nasdaq": 30.58
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "3270112",
+   "prixUsd": 30.58,
+   "valeurUsd": 1.0000002496,
+   "valeurRefBasseUsd": 1.0000002496
+  },
+  {
+   "sym": "WULFc",
+   "adresse": "0xb200000000000000000000432a1d2Bd864ACEc82",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 15.49,
+    "nasdaq": 15.49
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "6455778",
+   "prixUsd": 15.49,
+   "valeurUsd": 1.0000000122,
+   "valeurRefBasseUsd": 1.0000000122
+  },
+  {
+   "sym": "WWc",
+   "adresse": "0xB20000000000000000000089221e238277d52515",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 14.74,
+    "nasdaq": 14.74
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "6784261",
+   "prixUsd": 14.74,
+   "valeurUsd": 1.0000000714,
+   "valeurRefBasseUsd": 1.0000000714
+  },
+  {
+   "sym": "XYZc",
+   "adresse": "0xb20000000000000000000067C8C151f24E1c9924",
+   "decimales": 8,
+   "refs": {
+    "yahoo": 74.33,
+    "nasdaq": 74.33
+   },
+   "source": "-",
+   "prixPool": null,
+   "pourquoi": "no pool declared",
+   "regle": "REFERENCE",
+   "raw": "1345352",
+   "prixUsd": 74.33,
+   "valeurUsd": 1.0000001416,
+   "valeurRefBasseUsd": 1.0000001416
+  }
+ ]
+}

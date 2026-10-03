@@ -1,0 +1,996 @@
+{
+ "note": "Pinned price sources for the per-currency caution floor (hook 7030). Pools found with Dexscreener (discovery only); every price is READ ON CHAIN at the pinned block. 2026-10-03: +21 issuer stocks without a pool (pool: null) -> REFERENCE floors.",
+ "devises": [
+  {
+   "sym": "ETH",
+   "adresse": "0x0000000000000000000000000000000000000000",
+   "decimales": 18,
+   "ref": {
+    "kind": "crypto",
+    "coinbase": "ETH-USD",
+    "kraken": "XETHZUSD"
+   },
+   "pool": {
+    "type": "v3",
+    "pool": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
+    "base": "0x4200000000000000000000000000000000000006",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "Uniswap v3 WETH/USDC 0.05%"
+   }
+  },
+  {
+   "sym": "USDC",
+   "adresse": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+   "decimales": 6,
+   "unite": true
+  },
+  {
+   "sym": "cbBTC",
+   "adresse": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x7C7420DD105E2779316423Ba3E973f434315EFA9",
+    "base": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+    "quote": "0x4200000000000000000000000000000000000006",
+    "note": "aerodrome cbBTC/WETH"
+   },
+   "ref": {
+    "kind": "crypto",
+    "coinbase": "BTC-USD",
+    "kraken": "XXBTZUSD"
+   }
+  },
+  {
+   "sym": "TOSHI",
+   "adresse": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+   "decimales": 18,
+   "pool": {
+    "type": "v3",
+    "pool": "0x4b0Aaf3EBb163dd45F663b38b6d93f6093EBC2d3",
+    "base": "0xAC1Bd2486aAf3B5C0fc3Fd868558b082a531B2B4",
+    "quote": "0x4200000000000000000000000000000000000006",
+    "note": "uniswap TOSHI/WETH"
+   },
+   "ref": {
+    "kind": "crypto",
+    "coinbase": "TOSHI-USD",
+    "kraken": "TOSHIUSD"
+   }
+  },
+  {
+   "sym": "OUSD",
+   "adresse": "0xB2000000000000000000002fEb517dFeC7415344",
+   "decimales": 6,
+   "pool": {
+    "type": "v4",
+    "pool": "0xdf5bde0fc414fcd1f803c9d1b52ebbb4db5982d8dca5316ae06b467e06fc429a",
+    "base": "0xB2000000000000000000002fEb517dFeC7415344",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap OUSD/USDC"
+   },
+   "ref": {
+    "kind": "peg",
+    "usd": "1"
+   }
+  },
+  {
+   "sym": "AAPLc",
+   "adresse": "0xb200000000000000000000C2e324d24d7eEcd1fb",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0xA3b1E3f9747065e2073722Ff4c9027d3eA4994F0",
+    "base": "0xb200000000000000000000C2e324d24d7eEcd1fb",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome AAPLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "AAPL",
+    "isin": "US0378331005",
+    "name": "Apple Inc."
+   }
+  },
+  {
+   "sym": "AMZNc",
+   "adresse": "0xb200000000000000000000d9192b6B456483C2E8",
+   "decimales": 8,
+   "pool": {
+    "type": "v3",
+    "pool": "0x7F030e5fD657795C0937a3e8af2929Fd90DA91C7",
+    "base": "0xb200000000000000000000d9192b6B456483C2E8",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap AMZNc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "AMZN",
+    "isin": "US0231351067",
+    "name": "Amazon.com Inc."
+   }
+  },
+  {
+   "sym": "AVGOc",
+   "adresse": "0xB200000000000000000000Fc737aeA6196aB5a4c",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x1f4a5e3112AE53cA2864c89d5C0AEf85282b4C62",
+    "base": "0xB200000000000000000000Fc737aeA6196aB5a4c",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome AVGOc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "AVGO",
+    "isin": "US11135F1012",
+    "name": "Broadcom Inc."
+   }
+  },
+  {
+   "sym": "BEc",
+   "adresse": "0xb20000000000000000000016f9dfe862feBA122b",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xa68987c1412e623c3e2a09d0b5d1f5d34ed5c475c798b0d9bbd005ff6fd21c1f",
+    "base": "0xb20000000000000000000016f9dfe862feBA122b",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap BEc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "BE",
+    "isin": "US0937121079",
+    "name": "Bloom Energy Corporation"
+   }
+  },
+  {
+   "sym": "GOOGLc",
+   "adresse": "0xb2000000000000000000002D0BA3164cc74f58B7",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0xB1987CAD1682841b4b641d50E520777eC5Ab5542",
+    "base": "0xb2000000000000000000002D0BA3164cc74f58B7",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome GOOGLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "GOOGL",
+    "isin": "US02079K3059",
+    "name": "Alphabet Inc."
+   }
+  },
+  {
+   "sym": "HIMSc",
+   "adresse": "0xB20000000000000000000043a599976181Bcf336",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xa5d57d3527dbc5333b4e828400d0dc200d4eec29c8a45eda889ef238869c6d59",
+    "base": "0xB20000000000000000000043a599976181Bcf336",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap HIMSc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "HIMS",
+    "isin": "US4330001060",
+    "name": "Hims & Hers Health, Inc."
+   }
+  },
+  {
+   "sym": "METAc",
+   "adresse": "0xb2000000000000000000008bC8786B856E61707C",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0xEAF57753BC382E0324a1D43F72E7027705a2273E",
+    "base": "0xb2000000000000000000008bC8786B856E61707C",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome METAc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "META",
+    "isin": "US30303M1027",
+    "name": "Meta Platforms Inc."
+   }
+  },
+  {
+   "sym": "MSFTc",
+   "adresse": "0xB200000000000000000000Ab99cFa739E253872B",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x7103eB3c9590d1281f7dc03b2A9EE27C39dF5D54",
+    "base": "0xB200000000000000000000Ab99cFa739E253872B",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome MSFTc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "MSFT",
+    "isin": "US5949181045",
+    "name": "Microsoft Corporation"
+   }
+  },
+  {
+   "sym": "MSTRc",
+   "adresse": "0xb2000000000000000000004884b426556b92883d",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x17ecfe141bada18d94b2c41a2bbaffde8726309a6b4340e1ad7a6910bc7cdf8d",
+    "base": "0xb2000000000000000000004884b426556b92883d",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap MSTRc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "MSTR",
+    "isin": "US5949724083",
+    "name": "Strategy Inc."
+   }
+  },
+  {
+   "sym": "MUc",
+   "adresse": "0xb200000000000000000000Fd2f87532B90095211",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x17e1bEB2cD65493Da73ed4BbbC7BEcAAa0F91C73",
+    "base": "0xb200000000000000000000Fd2f87532B90095211",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome MUc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "MU",
+    "isin": "US5951121038",
+    "name": "Micron Technology Inc."
+   }
+  },
+  {
+   "sym": "NVDAc",
+   "adresse": "0xb20000000000000000000078ee7ce2fE4908108C",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9",
+    "base": "0xb20000000000000000000078ee7ce2fE4908108C",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome NVDAc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "NVDA",
+    "isin": "US67066G1040",
+    "name": "NVIDIA Corporation"
+   }
+  },
+  {
+   "sym": "PLTRc",
+   "adresse": "0xb2000000000000000000007d16372840dF4dAbbe",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x650cc267AA248191978013d5Ae421e5Dc2A6e242",
+    "base": "0xb2000000000000000000007d16372840dF4dAbbe",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome PLTRc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "PLTR",
+    "isin": "US69608A1088",
+    "name": "Palantir Technologies Inc."
+   }
+  },
+  {
+   "sym": "SNDKc",
+   "adresse": "0xb200000000000000000000397293Cb8cda9a10c5",
+   "decimales": 8,
+   "pool": {
+    "type": "v3",
+    "pool": "0x26fa54cdfc64fAacb5364c09De7Ac2F72308052D",
+    "base": "0xb200000000000000000000397293Cb8cda9a10c5",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap SNDKc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "SNDK",
+    "isin": "US80004C2008",
+    "name": "Sandisk Corporation"
+   }
+  },
+  {
+   "sym": "SPCXc",
+   "adresse": "0xb2000000000000000000007b9fcbd005511aCBd5",
+   "decimales": 8,
+   "pool": {
+    "type": "v3",
+    "pool": "0x127a12FC0953ab2ab89558c67Ba6D597D7140431",
+    "base": "0xb2000000000000000000007b9fcbd005511aCBd5",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap SPCXc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "SPCX",
+    "isin": "US84615Q1031",
+    "name": "Space Exploration Technologies Corp."
+   }
+  },
+  {
+   "sym": "TSLAc",
+   "adresse": "0xb2000000000000000000001e800a7f5189430cD0",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x469337fDcc5E8f38e2E4B670B04F57865D13a7BB",
+    "base": "0xb2000000000000000000001e800a7f5189430cD0",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome TSLAc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "TSLA",
+    "isin": "US88160R1014",
+    "name": "Tesla Inc."
+   }
+  },
+  {
+   "sym": "AMDc",
+   "adresse": "0xB2000000000000000000000d8Ce462E99ee7A47B",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x3794f7b84c4d243c117e3cba9cd07c23ac001585e0d9464820bbf503f3c0c3be",
+    "base": "0xB2000000000000000000000d8Ce462E99ee7A47B",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap AMDc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "AMD",
+    "isin": "US0079031078",
+    "name": "Advanced Micro Devices, Inc."
+   }
+  },
+  {
+   "sym": "ASTSc",
+   "adresse": "0xB200000000000000000000B1a29cF17A1819288a",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x3c4219c9da7abe1ca95e3c7d2d4a9ccfdddf7c70c115b2909aa4b558a6d683b8",
+    "base": "0xB200000000000000000000B1a29cF17A1819288a",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap ASTSc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "ASTS",
+    "isin": "US00217D1000",
+    "name": "AST SpaceMobile, Inc."
+   }
+  },
+  {
+   "sym": "CAKEc",
+   "adresse": "0xb200000000000000000000f215E4C890CFb7176B",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x804fece8c0572619d514faf9cbf5147d6115e215d69508c4bdf0e75d286f44ab",
+    "base": "0xb200000000000000000000f215E4C890CFb7176B",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap CAKEc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "CAKE",
+    "isin": "US1630721017",
+    "name": "Cheesecake Factory Inc"
+   }
+  },
+  {
+   "sym": "DJTc",
+   "adresse": "0xb200000000000000000000428E3a3eebBb20692B",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x08357c323c3b3f635c16df4a9f850e4582e0470fca4d59a8f563116e8ecd27f0",
+    "base": "0xb200000000000000000000428E3a3eebBb20692B",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap DJTc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "DJT",
+    "isin": "US25400Q1058",
+    "name": "Trump Media & Technology Group Corp."
+   }
+  },
+  {
+   "sym": "DUOLc",
+   "adresse": "0xb200000000000000000000A613D12dEAfBBb1Db7",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x25c85af41f267598b06dc658f55ceef6c7df2d2719c4077b7e7462149148667e",
+    "base": "0xb200000000000000000000A613D12dEAfBBb1Db7",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap DUOLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "DUOL",
+    "isin": "US26603R1068",
+    "name": "Duolingo, Inc."
+   }
+  },
+  {
+   "sym": "LLYc",
+   "adresse": "0xB200000000000000000000f1a0F91e34892E4718",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xa7cfa6bac05206b5781d2eacff67f4e8046efe60fba79ccd0b13a8e6d5a9db9d",
+    "base": "0xB200000000000000000000f1a0F91e34892E4718",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap LLYc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "LLY",
+    "isin": "US5324571083",
+    "name": "Eli Lilly & Co"
+   }
+  },
+  {
+   "sym": "MRNAc",
+   "adresse": "0xB200000000000000000000e215e9B76ecBA02468",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xd8c5b72395fe0cf680950c6455cfb054d5723aa789c2ef9f166449190e1b453c",
+    "base": "0xB200000000000000000000e215e9B76ecBA02468",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap MRNAc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "MRNA",
+    "isin": "US60770K1079",
+    "name": "Moderna, Inc."
+   }
+  },
+  {
+   "sym": "MRVLc",
+   "adresse": "0xB200000000000000000000eC3c4c7395Cc609813",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x539a0eec22fa9f760acee8406db3685e3dbb844c7c8b5cecafd940c8fb597d49",
+    "base": "0xB200000000000000000000eC3c4c7395Cc609813",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap MRVLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "MRVL",
+    "isin": "US5738741041",
+    "name": "Marvell Technology, Inc."
+   }
+  },
+  {
+   "sym": "NFLXc",
+   "adresse": "0xb20000000000000000000058B8c947e44011dFE6",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x4e7d243e0095037608bef179bc69c1fcd04a3e4d4e723bf2ec75e90bbc186bd0",
+    "base": "0xb20000000000000000000058B8c947e44011dFE6",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap NFLXc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "NFLX",
+    "isin": "US64110L1061",
+    "name": "Netflix Inc"
+   }
+  },
+  {
+   "sym": "NVAXc",
+   "adresse": "0xB200000000000000000000C597c476FCf9Aed3a8",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xdb5ad710e437dbc22f5eb1286a878ea59ee1cb36fa034cf2e771e06a7ab5b503",
+    "base": "0xB200000000000000000000C597c476FCf9Aed3a8",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap NVAXc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "NVAX",
+    "isin": "US6700024010",
+    "name": "Novavax Inc"
+   }
+  },
+  {
+   "sym": "ORCLc",
+   "adresse": "0xb200000000000000000000347AFbA223D7B6b63C",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x55092916912c12e39bc6304e2a2326f207ce82094534f40b5e7e54420e0e53aa",
+    "base": "0xb200000000000000000000347AFbA223D7B6b63C",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap ORCLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "ORCL",
+    "isin": "US68389X1054",
+    "name": "Oracle Corporation"
+   }
+  },
+  {
+   "sym": "PTONc",
+   "adresse": "0xB2000000000000000000009272A491812842Aa84",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x5ea4feabed47530545c0235d7241e605fa51f6538eeeb9f12fa00174ba20e227",
+    "base": "0xB2000000000000000000009272A491812842Aa84",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap PTONc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "PTON",
+    "isin": "US70614W1009",
+    "name": "Peloton Interactive, Inc."
+   }
+  },
+  {
+   "sym": "PYPLc",
+   "adresse": "0xb200000000000000000000450ad3abE5d4846c6E",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x9fe752e5ab1cd1c5e8b1bc90f38271fbc4485d067448f50a76d6e1474b5e9d40",
+    "base": "0xb200000000000000000000450ad3abE5d4846c6E",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap PYPLc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "PYPL",
+    "isin": "US70450Y1038",
+    "name": "PayPal Holdings, Inc."
+   }
+  },
+  {
+   "sym": "QUBTc",
+   "adresse": "0xb200000000000000000000CA425ab42e07C35bC3",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xf6c175a40f11dda83bcf403923bc6bb07edadaf6bb161c9188f3c81d1dc960e2",
+    "base": "0xb200000000000000000000CA425ab42e07C35bC3",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap QUBTc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "QUBT",
+    "isin": "US74766W1080",
+    "name": "Quantum Computing Inc."
+   }
+  },
+  {
+   "sym": "RBLXc",
+   "adresse": "0xB2000000000000000000005bd7AE89b9E6189Bb5",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x51642769e591Fe72275219750E0FB469adD35441",
+    "base": "0xB2000000000000000000005bd7AE89b9E6189Bb5",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome RBLXc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "RBLX",
+    "isin": "US7710491033",
+    "name": "Roblox Corporation"
+   }
+  },
+  {
+   "sym": "RDDTc",
+   "adresse": "0xb20000000000000000000066242d4067724cB7A1",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x63c669a07967107027856d8c36eed06427669d6be5674794da232c6ce27e236e",
+    "base": "0xb20000000000000000000066242d4067724cB7A1",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap RDDTc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "RDDT",
+    "isin": "US75734B1008",
+    "name": "Reddit, Inc."
+   }
+  },
+  {
+   "sym": "TTWOc",
+   "adresse": "0xB200000000000000000000f720C26062Bc3067Da",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x5d33e25309769f6fb006cfe17644175620a31b507a27bfbfc1591856b93710bb",
+    "base": "0xB200000000000000000000f720C26062Bc3067Da",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap TTWOc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "TTWO",
+    "isin": "US8740541094",
+    "name": "Take-Two Interactive Software, Inc."
+   }
+  },
+  {
+   "sym": "WENc",
+   "adresse": "0xB20000000000000000000044E3CD7a0E1028E57a",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xfcb3d52e699c52dc071edda41e531d6fc3830a81b55a6d16fdba817041003091",
+    "base": "0xB20000000000000000000044E3CD7a0E1028E57a",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap WENc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "WEN",
+    "isin": "US95058W1009",
+    "name": "Wendy's Co"
+   }
+  },
+  {
+   "sym": "GMEc",
+   "adresse": "0xb2000000000000000000007790ed6E48e06eD935",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0x723e3c6bf63baa05f38ac34b1801aca48bad08ee053ba87d302443ea33a11df5",
+    "base": "0xb2000000000000000000007790ed6E48e06eD935",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap GMEc/USDC (Dexscreener 2026-10-02 23:04 CEST: the only GMEc pool listed)"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "GME",
+    "isin": "US36467W1099",
+    "name": "GameStop Corp."
+   }
+  },
+  {
+   "sym": "HTZc",
+   "adresse": "0xb2000000000000000000002601C5C94F435da168",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x4DFfb33A4e4059De45C7Bc82212A6d25F62c6f30",
+    "base": "0xb2000000000000000000002601C5C94F435da168",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome HTZc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "HTZ",
+    "isin": "US42806J7000",
+    "name": "Hertz Global Holdings, Inc."
+   }
+  },
+  {
+   "sym": "PFEc",
+   "adresse": "0xB20000000000000000000018FE7eC7d6DfeeB528",
+   "decimales": 8,
+   "pool": {
+    "type": "v4",
+    "pool": "0xc9c1898e8d5c2eea14419410815cfd43aab3d21d70ff6fda9a42ddf5e761b30d",
+    "base": "0xB20000000000000000000018FE7eC7d6DfeeB528",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "uniswap PFEc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "PFE",
+    "isin": "US7170811035",
+    "name": "Pfizer Inc"
+   }
+  },
+  {
+   "sym": "PMc",
+   "adresse": "0xB2000000000000000000008FC2A8C23cf5937b66",
+   "decimales": 8,
+   "pool": {
+    "type": "cl",
+    "pool": "0x88274b1e6cadE876082537fC158ceba48338219f",
+    "base": "0xB2000000000000000000008FC2A8C23cf5937b66",
+    "quote": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "note": "aerodrome PMc/USDC"
+   },
+   "ref": {
+    "kind": "stock",
+    "ticker": "PM",
+    "isin": "US7181721090",
+    "name": "Philip Morris International Inc."
+   }
+  },
+  {
+   "sym": "AMCc",
+   "adresse": "0xB200000000000000000000CD7e6b8042cb7c2BB5",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "AMC",
+    "name": "AMC Entertainment Holdings, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "AEOc",
+   "adresse": "0xB2000000000000000000006064f8EC027f042294",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "AEO",
+    "name": "American Eagle Outfitters, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "BMNRc",
+   "adresse": "0xB200000000000000000000eA2df44A307CaB279C",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "BMNR",
+    "name": "BitMine Immersion Technologies, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "BIRDc",
+   "adresse": "0xb200000000000000000000535fE96f18204BFD96",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "BIRD",
+    "name": "Smartbird, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "BYNDc",
+   "adresse": "0xB200000000000000000000801830b13b8E493423",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "BYND",
+    "name": "Beyond Meat, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "CIFRc",
+   "adresse": "0xB200000000000000000000690275843B6e246286",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "CIFR",
+    "name": "Cipher Digital Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "CLSKc",
+   "adresse": "0xB200000000000000000000fa63cFFF5c794dbB95",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "CLSK",
+    "name": "CleanSpark, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "CRCLc",
+   "adresse": "0xB20000000000000000000019f6E7C675b73C2e4D",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "CRCL",
+    "name": "Circle Internet Group Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "CRWVc",
+   "adresse": "0xb200000000000000000000F111184A74720787E6",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "CRWV",
+    "name": "CoreWeave, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "HUTc",
+   "adresse": "0xb2000000000000000000006Ee1C139a723872e09",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "HUT",
+    "name": "Hut 8 Corp.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "KSSc",
+   "adresse": "0xB200000000000000000000105A1f43ff3605C5De",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "KSS",
+    "name": "Kohl's Corporation",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "LCIDc",
+   "adresse": "0xB20000000000000000000081050Ac3d4395Df527",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "LCID",
+    "name": "Lucid Group, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "MARAc",
+   "adresse": "0xb200000000000000000000a310e034E09186Fb2d",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "MARA",
+    "name": "MARA Holdings, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "OPENc",
+   "adresse": "0xb200000000000000000000259694B27Bf052E7d7",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "OPEN",
+    "name": "Opendoor Technologies Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "RIOTc",
+   "adresse": "0xb200000000000000000000bd0C7627b663c581A6",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "RIOT",
+    "name": "Riot Platforms, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "SOUNc",
+   "adresse": "0xb2000000000000000000002137743d4a01fe4e88",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "SOUN",
+    "name": "SoundHound AI, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 843) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "USDEc",
+   "adresse": "0xB2000000000000000000009426B660396eBCf343",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "USDE",
+    "name": "StablecoinX Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "VVVc",
+   "adresse": "0xb200000000000000000000FEC679b39992F67627",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "VVV",
+    "name": "Valvoline Inc",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "WULFc",
+   "adresse": "0xb200000000000000000000432a1d2Bd864ACEc82",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "WULF",
+    "name": "TeraWulf Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "WWc",
+   "adresse": "0xB20000000000000000000089221e238277d52515",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "WW",
+    "name": "WW International, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  },
+  {
+   "sym": "XYZc",
+   "adresse": "0xb20000000000000000000067C8C151f24E1c9924",
+   "decimales": 8,
+   "pool": null,
+   "ref": {
+    "kind": "stock",
+    "ticker": "XYZ",
+    "name": "Block, Inc.",
+    "note": "issuer list 2026-10-03; no on-chain pool (supply 0) -> REFERENCE rule"
+   }
+  }
+ ]
+}

@@ -1,0 +1,256 @@
+{
+ "lu": "2026-10-02T19:41:53.933Z",
+ "prix": {
+  "ETH": {
+   "coinbase": "2666",
+   "kraken": "2666.58"
+  },
+  "cbBTC": {
+   "coinbase": "84217.755",
+   "kraken": "84208.7"
+  },
+  "TOSHI": {
+   "coinbase": "0.000119805",
+   "kraken": "0.0001199"
+  },
+  "OUSD": {
+   "peg": "1"
+  },
+  "AAPLc": {
+   "yahoo": "333.83",
+   "nasdaq": "333.83"
+  },
+  "AMZNc": {
+   "yahoo": "250.74",
+   "nasdaq": "250.75"
+  },
+  "AVGOc": {
+   "yahoo": "355.83",
+   "nasdaq": "355.92"
+  },
+  "BEc": {
+   "yahoo": "291.98",
+   "nasdaq": "291.98"
+  },
+  "GOOGLc": {
+   "yahoo": "342.995",
+   "nasdaq": "342.995"
+  },
+  "HIMSc": {
+   "yahoo": "28.99",
+   "nasdaq": "28.99"
+  },
+  "METAc": {
+   "yahoo": "726.91",
+   "nasdaq": "726.91"
+  },
+  "MSFTc": {
+   "yahoo": "515.36",
+   "nasdaq": "515.362"
+  },
+  "MSTRc": {
+   "yahoo": "158.25",
+   "nasdaq": "158.28"
+  },
+  "MUc": {
+   "yahoo": "1073.5",
+   "nasdaq": "1073.38"
+  },
+  "NVDAc": {
+   "yahoo": "234.485",
+   "nasdaq": "234.475"
+  },
+  "PLTRc": {
+   "yahoo": "189.22",
+   "nasdaq": "189.22"
+  },
+  "SNDKc": {
+   "yahoo": "1719.06",
+   "nasdaq": "1719.20"
+  },
+  "SPCXc": {
+   "yahoo": "159.29",
+   "nasdaq": "159.30"
+  },
+  "TSLAc": {
+   "yahoo": "374.305",
+   "nasdaq": "374.29"
+  },
+  "AMDc": {
+   "yahoo": "634.29",
+   "nasdaq": "634.645"
+  },
+  "ASTSc": {
+   "yahoo": "58.25",
+   "nasdaq": "58.25"
+  },
+  "CAKEc": {
+   "yahoo": "108.54",
+   "nasdaq": "108.54"
+  },
+  "DJTc": {
+   "yahoo": "8.9",
+   "nasdaq": "8.90"
+  },
+  "DUOLc": {
+   "yahoo": "144.39",
+   "nasdaq": "144.39"
+  },
+  "LLYc": {
+   "yahoo": "1146.285",
+   "nasdaq": "1146.285"
+  },
+  "MRNAc": {
+   "yahoo": "190.195",
+   "nasdaq": "190.26"
+  },
+  "MRVLc": {
+   "yahoo": "274.36",
+   "nasdaq": "274.36"
+  },
+  "NFLXc": {
+   "yahoo": "67.01",
+   "nasdaq": "67.01"
+  },
+  "NVAXc": {
+   "yahoo": "10.425",
+   "nasdaq": "10.425"
+  },
+  "ORCLc": {
+   "yahoo": "142.545",
+   "nasdaq": "142.54"
+  },
+  "PTONc": {
+   "yahoo": "4.94",
+   "nasdaq": "4.94"
+  },
+  "PYPLc": {
+   "yahoo": "52.78",
+   "nasdaq": "52.78"
+  },
+  "QUBTc": {
+   "yahoo": "8.135",
+   "nasdaq": "8.135"
+  },
+  "RBLXc": {
+   "yahoo": "44.07",
+   "nasdaq": "44.07"
+  },
+  "RDDTc": {
+   "yahoo": "148.06",
+   "nasdaq": "148.0599"
+  },
+  "TTWOc": {
+   "yahoo": "202.925",
+   "nasdaq": "202.925"
+  },
+  "WENc": {
+   "yahoo": "6.154",
+   "nasdaq": "6.1538"
+  },
+  "HTZc": {
+   "yahoo": "1.735",
+   "nasdaq": "1.735"
+  },
+  "PFEc": {
+   "yahoo": "27.735",
+   "nasdaq": "27.73"
+  },
+  "PMc": {
+   "yahoo": "188.5",
+   "nasdaq": "188.505"
+  },
+  "GMEc": {
+   "yahoo": "24.7",
+   "nasdaq": "24.70"
+  },
+  "AMCc": {
+   "yahoo": "2.77",
+   "nasdaq": "2.77"
+  },
+  "AEOc": {
+   "yahoo": "17.71",
+   "nasdaq": "17.71"
+  },
+  "BMNRc": {
+   "yahoo": "26.27",
+   "nasdaq": "26.27"
+  },
+  "BIRDc": {
+   "yahoo": "3.365",
+   "nasdaq": "3.365"
+  },
+  "BYNDc": {
+   "yahoo": "8.25",
+   "nasdaq": "8.25"
+  },
+  "CIFRc": {
+   "yahoo": "15.71",
+   "nasdaq": "15.71"
+  },
+  "CLSKc": {
+   "yahoo": "12.74",
+   "nasdaq": "12.74"
+  },
+  "CRCLc": {
+   "yahoo": "81.25",
+   "nasdaq": "81.25"
+  },
+  "CRWVc": {
+   "yahoo": "89.62",
+   "nasdaq": "89.62"
+  },
+  "HUTc": {
+   "yahoo": "89.63",
+   "nasdaq": "89.63"
+  },
+  "KSSc": {
+   "yahoo": "18.81",
+   "nasdaq": "18.81"
+  },
+  "LCIDc": {
+   "yahoo": "4.13",
+   "nasdaq": "4.13"
+  },
+  "MARAc": {
+   "yahoo": "11.23",
+   "nasdaq": "11.23"
+  },
+  "OPENc": {
+   "yahoo": "2.44",
+   "nasdaq": "2.44"
+  },
+  "RIOTc": {
+   "yahoo": "19.73",
+   "nasdaq": "19.73"
+  },
+  "SOUNc": {
+   "yahoo": "5.84",
+   "nasdaq": "5.84"
+  },
+  "USDEc": {
+   "yahoo": "14.15",
+   "nasdaq": "14.15"
+  },
+  "VVVc": {
+   "yahoo": "30.58",
+   "nasdaq": "30.58"
+  },
+  "WULFc": {
+   "yahoo": "15.49",
+   "nasdaq": "15.49"
+  },
+  "WWc": {
+   "yahoo": "14.74",
+   "nasdaq": "14.74"
+  },
+  "XYZc": {
+   "yahoo": "74.33",
+   "nasdaq": "74.33"
+  }
+ },
+ "notes": {
+  "GMEc": "GMEc ref recorded 2026-10-02 ~23:05 CEST = regular close 16:00 ET (yahoo regularMarketPrice; nasdaq secondaryData). After-hours 24.99 not used."
+ },
+ "lu21": "2026-10-03T17:58:59.069Z"
+}
