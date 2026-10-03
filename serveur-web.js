@@ -1184,6 +1184,20 @@ function ecrireCles() {
     console.log('[cles] ' + clesCache.size + ' cle(s) de pool relue(s) du volume');
   } catch (err) { console.warn('[cles] fichier illisible, on repart a vide : ' + err.message); }
 })();
+/* ⛔⛔ 2026-10-03 (mesure prod, build actions-v4-cles-lues) : le cache du volume passe AVANT clesPool, et il tenait pour 16 des 20
+ *   actions une AUTRE pool (memestock a hook tiers, ou une seconde pool USDC moins profonde) — la pool USDC lue restait invisible
+ *   de /api/cle et des rails. On FUSIONNE : chaque cle mesuree (clesPool, `mesure: true`) rejoint la liste du jeton si son poolId
+ *   n y est pas ; rien n est retire, vieDuBlock choisit la meilleure parmi toutes. */
+(function fusionnerClesMesurees() {
+  let ajoutees = 0;
+  for (const [t, r] of clesPool) {
+    if (!r || r.mesure !== true) continue;
+    const c = clesCache.get(t);
+    if (!c) continue;
+    for (const k of r.cles) if (!c.cles.some((x) => String(x.poolId).toLowerCase() === k.poolId)) { c.cles.push(k); ajoutees += 1; }
+  }
+  if (ajoutees) console.log('[cles] ' + ajoutees + ' cle(s) mesuree(s) ajoutee(s) aux entrees du volume');
+})();
 
 /* ══ LES VOIX DES BLOCKS (Raksha, 2026-10-02) — memoire + volume, meme discipline que les cles ══════ */
 const FICHIER_VOIX = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))

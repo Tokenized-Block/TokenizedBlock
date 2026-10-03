@@ -67,8 +67,22 @@ ok(pre([altere], decoderInitialize).size === 0, 'MUTANT : le log altere ne rempl
 const be = actions[dec.findIndex((d) => parAdr.get(d.cle.currency0 === USDC ? d.cle.currency1 : d.cle.currency0) === 'BEc')];
 ok(rempli.get(be) && rempli.get(be).cles[0].fee === 50000 && rempli.get(be).cles[0].tickSpacing === 500, 'BEc : fee 50000, tickSpacing 500 (lus au bloc 51966303)');
 
-console.log('— C. temoin on-chain (lecture seule)');
 const idBe = dec.find((d) => (d.cle.currency0 === USDC ? d.cle.currency1 : d.cle.currency0) === be).poolId;
+/* ⛔ mesure prod (1er deploiement) : 16/20 cles USDC INVISIBLES — le cache du volume (une autre pool par jeton) passait avant clesPool. */
+const iR = srv.indexOf('(function fusionnerClesMesurees() {'), iL = srv.indexOf('(function relireCles() {');
+ok(iL > 0 && iR > iL && /if \(!c\.cles\.some\(\(x\) => String\(x\.poolId\)\.toLowerCase\(\) === k\.poolId\)\) \{ c\.cles\.push\(k\); ajoutees \+= 1; \}/.test(srv),
+  'serveur-web.js : apres relecture du volume, chaque cle mesuree est FUSIONNEE dans l entree du jeton (poolId absent -> ajoutee, rien retire)');
+{
+  const corps = srv.slice(iR, srv.indexOf('})();', iR) + 5);
+  const clesCache = new Map([[be, { ok: true, cles: [{ poolId: '0x' + 'cd'.repeat(32), currency0: '0x' + '4b'.repeat(20), currency1: be, fee: 8388608, tickSpacing: 200, hooks: '0x' + 'bd'.repeat(20) }] }]]);
+  new Function('clesPool', 'clesCache', 'console', corps)(rempli, clesCache, { log() {} });
+  ok(clesCache.get(be).cles.length === 2 && clesCache.get(be).cles[1].poolId === idBe && clesCache.get(be).cles[0].hooks === '0x' + 'bd'.repeat(20),
+    'bloc extrait et execute : l entree volume de BEc (pool a hook tiers) GARDE sa cle et GAGNE la pool USDC mesuree');
+  new Function('clesPool', 'clesCache', 'console', corps)(rempli, clesCache, { log() {} });
+  ok(clesCache.get(be).cles.length === 2, 'idempotent : une seconde fusion n ajoute rien');
+}
+
+console.log('— C. temoin on-chain (lecture seule)');
 const slot0 = async (id) => {
   for (let e = 0; e < 4; e += 1) {
     try {
