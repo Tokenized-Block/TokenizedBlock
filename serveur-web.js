@@ -1208,7 +1208,12 @@ async function rpcRails(methode, params) {
       const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: ++idRails, method: methode, params }) });
       const j = await r.json().catch(() => null);
-      if (j && !j.error && j.result !== undefined) return j.result;
+      /* ⛔ MESURE EN PROD (build rails-lecteur-large) : 2 sondes sur 3 « decimals or supply unread ». Un endpoint qui rend
+       *   `0x` a un decimals() de B20 rend une NON-reponse : sur une LECTURE (sans `from`) on passe a l endpoint suivant.
+       *   Une SIMULATION (avec `from`) peut legitimement rendre `0x` (execute du routeur) : c est une reponse. */
+      const lecture = !(params && params[0] && params[0].from);
+      if (j && !j.error && j.result !== undefined && !(lecture && j.result === '0x')) return j.result;
+      if (j && !j.error && j.result === '0x') { dernier = new Error('empty answer to a read'); await new Promise((ok) => setTimeout(ok, 200 * (k + 1))); continue; }
       const msg = j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status;
       dernier = new Error(msg);
       if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy/i.test(msg)) { dernier.definitif = true; throw dernier; }

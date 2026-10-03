@@ -86,7 +86,8 @@ const noeud = http.createServer((req, res) => {
   req.on('end', () => {
     let id = 1, m = ''; try { const j = JSON.parse(b); id = j.id; m = j.method; } catch (_) {}
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ jsonrpc: '2.0', id, result: m === 'eth_blockNumber' ? '0x100000' : m === 'eth_getLogs' ? [] : '0x' }));
+    /* un mot nul de 32 octets : une vraie reponse (« pas de pool »), pas `0x` — que le lecteur des plans reessaie */
+    res.end(JSON.stringify({ jsonrpc: '2.0', id, result: m === 'eth_blockNumber' ? '0x100000' : m === 'eth_getLogs' ? [] : '0x' + '0'.repeat(64) }));
   });
 });
 await new Promise((o) => noeud.listen(0, '127.0.0.1', o));
