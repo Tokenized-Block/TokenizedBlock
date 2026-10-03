@@ -2065,6 +2065,8 @@ const SERVIS = [
   'sauts-depuis-chemin.js',
   /* 2026-10-03 (Phil) : les sauts d un echange block -> block (importe par app.html : absent d ici = 404 = app morte) */
   'bloc-vers-bloc.js',
+  /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
+  'pools-actions-aerodrome.js',
   /* 2026-10-03 (Phil) : ce que les assistants IA lisent du site — faits verifiables seulement, fondateur nomme et lie */
   'llms.txt',
   /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement

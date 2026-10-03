@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-r9b-actions-memestock" hidden>Build <code>20261003-r9b-actions-memestock</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-actions-pools-aero" hidden>Build <code>20261003-actions-pools-aero</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3079,6 +3079,7 @@ import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVI
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
 import { sautsBlocVersBloc, blocsRecevables, cheminBlocVersAction, actionsRecevables } from './bloc-vers-bloc.js';
+import { avecPoolAction } from './pools-actions-aerodrome.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
 import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
@@ -17063,7 +17064,8 @@ function peindreTrending() {
          *   fiche sur la carte sait les acheter (ETH en une tx, ou USDC), avec notre frais de 0,1 % pris sur la sortie
          *   (sweepTokenWithFee, porte de glissement). MEME verdict que la fiche (verdictRoutage), MEME achat : ce bouton
          *   ouvre la fiche, il ne reecrit rien. */
-        const vR = verdictRoutage({ aMarche: true, dex: l.dex, poolAdr: l.poolAdr });
+        const lA = avecPoolAction(l); /* la vraie pool de l action (table mesuree), pas celle d un meme coté en elle */
+        const vR = verdictRoutage({ aMarche: true, dex: lA.dex, poolAdr: lA.poolAdr });
         if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc)) {
           return '<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>';
         }
@@ -21033,7 +21035,8 @@ async function soleilsSurLaMap(essai = 0) {
         if (t !== h.t) { h.t = t; poserTailleBloc(h.el, t); }
         h.el.classList.remove('sansPrix');
       }
-      marcheParAdr.set(String(l.adr).toLowerCase(), l);
+      /* 2026-10-03 : une action tokenisee garde SA pool Aerodrome mesuree (pools-actions-aerodrome.js), pas celle d un meme */
+      marcheParAdr.set(String(l.adr).toLowerCase(), avecPoolAction(l));
     }
     /* ⛔ LA PHOTO EST POSEE ICI AUSSI, APRES LA BOUCLE : `soleilsSurLaMap` lit le meme endpoint que
      *   `lireTrending`, et c est souvent LUI qui lit en premier — la Map s ouvre avant Market. Sans

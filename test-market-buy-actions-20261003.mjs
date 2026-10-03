@@ -13,7 +13,7 @@ const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; c
 const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 
 /* A. cablage */
-ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: l\.dex, poolAdr: l\.poolAdr \}\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc\)\) \{\n\s+return '<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
+ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr \}\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc\)\) \{\n\s+return '<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
   'ligne du Market : Buy si le MEME verdict que la fiche dit achetable (ETH ou USDC), liquidite au seuil');
 const iV = html.indexOf('const vR = verdictRoutage({ aMarche: true'), iF = html.indexOf('if (feeOk && liqOk) {');
 ok(iF > 0 && iV > iF, 'le Buy v4 historique reste prioritaire (teste avant)');
