@@ -79,7 +79,13 @@ async function banc(M) {
     v('TB ' + fam + ' : block ne du routeur -> REFUSE, 0 lecture', r.etat === 'REFUSE' && r.refusBlocSansHookTb === true && lectures === 0, r.etat + ' lectures=' + lectures);
   }
   { const { r, lectures } = await achat(XC, POOL_XC, 'cl', 200);
-    v('TB XC index LU (hors liste blanche = block) -> REFUSE, 0 lecture', r.etat === 'REFUSE' && r.refusBlocSansHookTb === true && lectures === 0, r.etat + ' lectures=' + lectures); }
+    /* ⛔ R10 (Phil, 2026-10-03) : XC est absent de toute source TB (ne avant le Block 0) ; sources lues, c est un jeton TIERS :
+     *   sa pool CL se lit et le plan se construit. Sous R8 il etait traite en block et refuse sans lecture.
+     *   ⚠️ CE QUE CA LAISSE OUVERT (F-c6 inchange) : sur Aerodrome CL le frais est pris en SORTIE et seulement si la sortie est
+     *   une devise connue — un jeton tiers achete en USDC sur CL passe donc SANS frais (comme PEXRA ci-dessous). Mesure du
+     *   jour : 0 des 177 blocks suivis a son marche sur Aerodrome (tous v4) ; a corriger par un frais sur l ENTREE. */
+    v('XC index LU (absent des sources TB = tiers, R10) -> plan construit, lectures > 0, a6cf absent du calldata', r.etat !== 'REFUSE' && r.refusBlocSansHookTb !== true && lectures > 0 && !data(r).includes(A6),
+      r.etat + ' lectures=' + lectures + ' ' + (r.pourquoi || '')); }
   IR.indexRouteurIllisible('test');
   { const { r, lectures } = await achat(XC, POOL_XC, 'cl', 200);
     v('TB XC index illisible -> REFUSE, 0 lecture', r.etat === 'REFUSE' && lectures === 0, r.etat + ' lectures=' + lectures);

@@ -149,8 +149,9 @@ try {
   eq(bOff.tx.data, bOffOld.tx.data, 'BRIAN drapeau OFF : calldata identique octet pour octet a l ancien code (R5-1)');
   eq(hookDataLuParUr(bOff.tx.data), '', 'BRIAN drapeau OFF : aucun hookData');
   const pOffApres = await planOff(args);
-  /* R9 (C2 R8 F1/F2) : plus de liberation par le hook du marche — JETON (synthetique, pas ne d un lancement o1) reste un block. */
-  eq(pOffApres.etat, 'REFUSE', 'JETON sur o1, sources lues : pas dans la liste (adresses), un marche o1 ne libere pas -> REFUSE');
+  /* R10 (Phil, 2026-10-03) : JETON (synthetique) est absent de TOUTE source TB ; sources lues, c est un jeton tiers — son marche o1
+   *   se planifie (sous R8/R9 il restait un block faute de liste blanche). */
+  eq(pOffApres.etat, 'PRET', 'JETON sur o1, sources lues : absent des sources TB = tiers (R10) -> PRET');
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 }

@@ -100,7 +100,7 @@ import { selecteur as selecteurSrv } from './keccak.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
-import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX } from './index-routeur.js';
+import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX, chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues } from './index-routeur.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
@@ -3034,7 +3034,13 @@ createServer((req, res) => {
     railsBudget.n += 1;
     railsEnVol += 1;
     if (sonde) railsCompteurs.sondes += 1; else railsCompteurs.plans += 1;
+    /* ⛔⛔ R10 (pool-sans-hook.js) : un B20 hors de nos sources TB n est libere que si ces sources sont LUES — dans CE processus,
+     *   l etat module d index-routeur.js n est charge par personne (c est le client qui l appelle). Le serveur juge donc ses
+     *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
+     *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
+    try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
     planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453 }).then((r) => {
+      if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;
         else if (r.etat === 'APPROBATIONS') railsCompteurs.approbations += 1;

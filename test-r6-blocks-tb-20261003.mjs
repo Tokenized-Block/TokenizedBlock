@@ -20,6 +20,11 @@
  *   lancement o1, jetons-nes-launchpads.js) ; aucun hook (Clanker, 0xe1ef, Doppler, o1) ne libere par son marche, et un jeton
  *   liste ne libere ni le cote cotation ni les autres sauts. EFIX et SMOKE14 (creations directes TB) entrent dans la liste
  *   statique. Les copies mutees tournent dans l etat de l outil (outil-etat-index.mjs les charge aussi).
+ * ⛔⛔ R10 (Phil, 2026-10-03 : « l appliquer de partout ») : mesure prod, 148 des 177 blocks suivis etaient refuses par R8
+ *   (280 340 $ / 24 h, 88 % du volume des blocks ; 92 sur un lanceur a hook unique par jeton, hors de toute liste). Un B20 absent
+ *   de TOUTES les sources TB, sources LUES, est TIERS : la liste blanche n est plus la condition. Fail-closed inchange quand une
+ *   source n est pas lue (etats non / vide / perime / nosvide / illisible). Risque accepte par le fondateur : un block TB absent
+ *   des sources serait route ailleurs (on garde le frais routeur) — la completude de l ensemble TB est la seule garde (R10b).
  * ⛔ TEMOINS NEGATIFS : le banc tourne sur une COPIE du depot (doit rester vert), puis sur des MUTANTS ; chacun DOIT le rougir.
  * ⛔ 1bb12d6 : les plans « tiers » sont compares OCTET POUR OCTET a ceux de 1bb12d6 (git show ; sans git, la comparaison est DITE non executee). */
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -181,18 +186,22 @@ async function banc(M, { base = null } = {}) {
   v('CL TBLOCK = TB, TBGAS = TB', PS.classeBlock(T.TBLOCK) === 'TB' && PS.classeBlock(T.TBGAS) === 'TB');
   v('CL TBLOCK est toujours un block (estBlockTb, meme hors des jetons de la route)', PS.estBlockTb(T.TBLOCK, []) === true);
   v('CL V1 de test (RNG) = TB', PS.classeBlock(RNG) === 'TB');
-  v('CL PEXRA = TIERS (liste explicite), SYN sans contexte = INCONNU (0xb2 inconnu : bloque)', PS.classeBlock(PEXRA) === 'TIERS' && PS.classeBlock(SYN) === 'INCONNU');
+  /* ⛔⛔ R10 (Phil, 2026-10-03 : « l appliquer de partout ») : mesure prod 148/177 blocks refuses (280 340 $ / 24 h) par R8 ;
+   *   un B20 absent de TOUTES les sources TB, sources LUES, est TIERS — la liste blanche n est plus la condition. */
+  v('CL R10 SYN sans contexte, sources lues = TIERS (absent de toute source TB) ; PEXRA = TIERS', PS.classeBlock(PEXRA) === 'TIERS' && PS.classeBlock(SYN) === 'TIERS');
   v('CL SYN avec son marche V8 = TB (regle c)', PS.classeBlock(SYN, [cSynV8]) === 'TB');
   v('CL SYN sur V8 ET sur un hook de launchpad tiers : TB (l ensemble TB gagne)', PS.classeBlock(SYN, [cSynV8, cle(ETH, SYN, HOOK_CLANKER, 10000, 200)]) === 'TB');
-  v('CL aucun hook ne libere : SYN sur Clanker / 0xe1ef / o1 / Doppler (cote lance ou cotation) = INCONNU',
-    [HOOK_CLANKER, HOOK_PEXRA, HOOK_O1, HOOK_DOPPLER].every((h) => PS.classeBlock(SYN, [cle(ETH, SYN, h, 10000, 200)]) === 'INCONNU'
-      && PS.classeBlock(SYN, [cle(BRIAN, SYN, h, 10000, 200)]) === 'INCONNU'));
+  v('CL R10 SYN sur Clanker / 0xe1ef / o1 / Doppler (cote lance ou cotation) = TIERS par absence des sources, et TB des que son marche V8 est dans le contexte',
+    [HOOK_CLANKER, HOOK_PEXRA, HOOK_O1, HOOK_DOPPLER].every((h) => PS.classeBlock(SYN, [cle(ETH, SYN, h, 10000, 200)]) === 'TIERS'
+      && PS.classeBlock(SYN, [cle(BRIAN, SYN, h, 10000, 200)]) === 'TIERS' && PS.classeBlock(SYN, [cSynV8, cle(ETH, SYN, h, 10000, 200)]) === 'TB'));
   v('CL liste blanche R9 : PEXRA + ' + NL.NES_LAUNCHPADS_O1.length + ' B20 nes o1 (BRIAN inclus), tous B20, aucun dans l ensemble TB',
     NL.NES_LAUNCHPADS_O1.length === 6822 && new Set(NL.NES_LAUNCHPADS_O1).size === 6822 && NL.NES_LAUNCHPADS_O1.every((a) => PS.RE_B20.test(a) && a.length === 42)
     && NL.NES_LAUNCHPADS_O1.includes(BRIAN) && !NL.NES_LAUNCHPADS_O1.includes(PEXRA)
     && [...Object.values(REELS), ...PS.BLOCKS_SUR_NOS_HOOKS, ...IR.GRAINE_ROUTEUR.map((g) => g.jeton), T.TBLOCK].every((x) => !NL.NES_LAUNCHPADS_O1.includes(bas(x)))
     && PS.classeBlock(BRIAN) === 'TIERS');
-  v('CL un jeton de la liste ne libere pas les autres sauts', PS.classeBlock(SYN, [cle(ETH, PEXRA, ETH, 3000, 60), cle(PEXRA, SYN, ETH, 3000, 60), cle(ETH, BRIAN, HOOK_O1, 0, 200), cle(BRIAN, SYN, HOOK_O1, 0, 200)]) === 'INCONNU');
+  v('CL un jeton de la liste ne libere pas les autres sauts : un block TB (IB022) sur ces routes reste TB ; SYN y est TIERS par lui-meme (R10)',
+    PS.classeBlock(OLD, [cle(ETH, PEXRA, ETH, 3000, 60), cle(PEXRA, OLD, ETH, 3000, 60), cle(ETH, BRIAN, HOOK_O1, 0, 200), cle(BRIAN, OLD, HOOK_O1, 0, 200)]) === 'TB'
+    && PS.classeBlock(SYN, [cle(ETH, PEXRA, ETH, 3000, 60), cle(PEXRA, SYN, ETH, 3000, 60), cle(ETH, BRIAN, HOOK_O1, 0, 200), cle(BRIAN, SYN, HOOK_O1, 0, 200)]) === 'TIERS');
   v('CL jeton liste MAIS marche sur un de NOS hooks : TB (l ensemble TB gagne)', PS.classeBlock(BRIAN, [cle(ETH, BRIAN, T.HOOK_V8, 0, 200)]) === 'TB' && PS.classeBlock(PEXRA, [cle(ETH, PEXRA, T.HOOK_V2, 0, 200)]) === 'TB');
   const HI = '0xb2ffffffffffffffffffffffffffffffffffffff';
   v('CL estBlockTb R5 : 0xb2 hors motif B20 = block, PEXRA libere = pas un block', PS.estBlockTb(HI, [HI]) === true && PS.estBlockTb(PEXRA, [PEXRA]) === false);
@@ -232,9 +241,9 @@ async function banc(M, { base = null } = {}) {
   const t5k = await achat(OLD, cOldNu);
   v('T5k IB022 pool sans hook, sans contexte, index lu : REFUSE', t5k.etat === 'REFUSE' && PS.poolSansHookInterdite(cOldNu, [OLD], [cOldNu]) === true, t5k.etat + ' ' + (t5k.pourquoi || ''));
   const t3b = await multi([j(cUsdcEth, USDC), j(cle(ETH, SYN, HOOK_CLANKER, 10000, 200), ETH)], USDC, SYN, 10n ** 7n);
-  v('T3b USDC>ETH>(hook Clanker)SYN : REFUSE, un marche Clanker ne libere pas', t3b.etat === 'REFUSE', t3b.etat + ' ' + (t3b.pourquoi || ''));
+  v('T3b R10 USDC>ETH>(hook Clanker)SYN : PRET, un frais routeur (SYN tiers par absence des sources)', pret(t3b) && t3b.resume && t3b.resume.frais > 0n, t3b.etat + ' ' + (t3b.pourquoi || ''));
   const t3c = await multi([j(cle(ETH, SYN, HOOK_CLANKER, 10000, 200), ETH), j(cle(SYN, USDC, ETH, 3000, 60), SYN)], ETH, USDC, 10n ** 16n);
-  v('T3c ETH>(hook Clanker)SYN>(sans hook)USDC : REFUSE, le contexte de route ne libere rien', t3c.etat === 'REFUSE', t3c.etat + ' ' + (t3c.pourquoi || ''));
+  v('T3c R10 ETH>(hook Clanker)SYN>(sans hook)USDC : PRET (SYN n est pas un block TB au milieu)', pret(t3c), t3c.etat + ' ' + (t3c.pourquoi || ''));
   /* jeton hors B20 PRIXE (fraisDevisesOk) : sans marche sur nos hooks il passe ; avec son marche V8 dans la route, regle (c) -> block */
   const ms5d = (sauts) => E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, sauts, entree: ETH, sortie: USDC, montant: 10n ** 16n, decimalesEntree: 18,
     prixUsdEntree: null, maintenant: MAINTENANT, fraisDevisesOk: new Set([NON_B20]) });
@@ -271,22 +280,35 @@ async function banc(M, { base = null } = {}) {
       v('REG ' + etat + ' ' + nom + ' : sans hook / hook inconnu / hook de launchpad tiers -> REFUSE', [a, b, c].every((p) => p.etat === 'REFUSE'), [a, b, c].map((p) => p.etat).join(','));
     }
     const s1 = await achat(SYN, cSynNu), s2 = await achat(SYN, cle(ETH, SYN, HOOK_INC, 3000, 60));
-    v('REG ' + etat + ' SYN (0xb2 inconnu, hors liste blanche) -> REFUSE', s1.etat === 'REFUSE' && s2.etat === 'REFUSE', s1.etat + ',' + s2.etat);
-    /* R9 : routes et pools ouvertes a tous — rien n est libere par un hook, ni par un autre saut */
+    /* R10 : SYN (absent de toute source TB) est libere SEULEMENT sources lues ; dans tout autre etat il reste un block (fail-closed) */
+    const lu = etat === 'lu';
+    if (lu) v('REG lu SYN (0xb2 absent des sources TB) -> PRET, frais routeur ETH (R10)', fraisRouteurEth(s1) && fraisRouteurEth(s2), s1.etat + ',' + s2.etat);
+    else v('REG ' + etat + ' SYN (0xb2 inconnu, sources non lues) -> REFUSE', s1.etat === 'REFUSE' && s2.etat === 'REFUSE', s1.etat + ',' + s2.etat);
+    /* R9 : routes et pools ouvertes a tous — un block TB n est libere ni par un hook, ni par un autre saut */
     const efixRoute = await multi([j(cle(ETH, REELS.EFIX, ETH, 3000, 60), ETH), j(cle(REELS.EFIX, USDC, HOOK_PEXRA, 3000, 60), REELS.EFIX)], ETH, USDC, 10n ** 16n);
     const synRoute = await multi([j(cle(ETH, SYN, ETH, 3000, 60), ETH), j(cle(SYN, USDC, HOOK_PEXRA, 3000, 60), SYN)], ETH, USDC, 10n ** 16n);
     v('REG ' + etat + ' route ETH>(sans hook)EFIX>(0xe1ef)USDC -> REFUSE', efixRoute.etat === 'REFUSE', efixRoute.etat);
-    v('REG ' + etat + ' route ETH>(sans hook)SYN>(0xe1ef)USDC -> REFUSE (block non couvert)', synRoute.etat === 'REFUSE', synRoute.etat);
-    const ouv = [];
-    for (const X of [REELS.EFIX, REELS.SMOKE14, OLD, SYN]) for (const h of [HOOK_CLANKER, HOOK_PEXRA]) ouv.push(await achat(X, cle(ETH, X, h, 10000, 200)));
-    v('REG ' + etat + ' pool Clanker / 0xe1ef (ouvertes a tous) : EFIX, SMOKE14, IB022, SYN -> REFUSE', ouv.every((p) => p.etat === 'REFUSE'), ouv.map((p) => p.etat).join(','));
+    if (lu) v('REG lu route ETH>(sans hook)SYN>(0xe1ef)USDC -> PRET (R10 : SYN tiers)', pret(synRoute), synRoute.etat + ' ' + (synRoute.pourquoi || ''));
+    else v('REG ' + etat + ' route ETH>(sans hook)SYN>(0xe1ef)USDC -> REFUSE (block non couvert)', synRoute.etat === 'REFUSE', synRoute.etat);
+    const ouv = [], ouvSyn = [];
+    for (const X of [REELS.EFIX, REELS.SMOKE14, OLD]) for (const h of [HOOK_CLANKER, HOOK_PEXRA]) ouv.push(await achat(X, cle(ETH, X, h, 10000, 200)));
+    for (const h of [HOOK_CLANKER, HOOK_PEXRA]) ouvSyn.push(await achat(SYN, cle(ETH, SYN, h, 10000, 200)));
+    v('REG ' + etat + ' pool Clanker / 0xe1ef (ouvertes a tous) : EFIX, SMOKE14, IB022 -> REFUSE', ouv.every((p) => p.etat === 'REFUSE'), ouv.map((p) => p.etat).join(','));
+    if (lu) v('REG lu pool Clanker / 0xe1ef : SYN -> PRET, frais routeur ETH (R10)', ouvSyn.every(fraisRouteurEth), ouvSyn.map((p) => p.etat).join(','));
+    else v('REG ' + etat + ' pool Clanker / 0xe1ef : SYN -> REFUSE (sources non lues)', ouvSyn.every((p) => p.etat === 'REFUSE'), ouvSyn.map((p) => p.etat).join(','));
     const dop = [await achat(OLD, cle(ETH, OLD, HOOK_DOPPLER, 10000, 200)), await achat(SYN, cle(ETH, SYN, HOOK_DOPPLER, 10000, 200)),
       await multi([j(cle(ETH, BRIAN, ETH, 3000, 60), ETH), j(cle(BRIAN, SYN, HOOK_DOPPLER, 10000, 200), BRIAN)], ETH, SYN, 10n ** 16n)];
-    v('REG ' + etat + ' Doppler : block TB / SYN en cote cotation -> REFUSE, jamais libere', dop.every((p) => p.etat === 'REFUSE')
-      && PS.classeBlock(OLD, [cle(BRIAN, OLD, HOOK_DOPPLER, 10000, 200)]) === 'TB' && PS.classeBlock(SYN, [cle(BRIAN, SYN, HOOK_DOPPLER, 10000, 200)]) === 'INCONNU', dop.map((p) => p.etat).join(','));
+    v('REG ' + etat + ' Doppler : block TB (IB022) -> REFUSE, jamais libere', dop[0].etat === 'REFUSE' && PS.classeBlock(OLD, [cle(BRIAN, OLD, HOOK_DOPPLER, 10000, 200)]) === 'TB', dop[0].etat);
+    if (lu) v('REG lu Doppler : SYN lance / en cotation -> PRET (R10), classe TIERS', pret(dop[1]) && pret(dop[2]) && PS.classeBlock(SYN, [cle(BRIAN, SYN, HOOK_DOPPLER, 10000, 200)]) === 'TIERS', dop.slice(1).map((p) => p.etat).join(','));
+    else v('REG ' + etat + ' Doppler : SYN -> REFUSE, classe INCONNU (sources non lues)', dop[1].etat === 'REFUSE' && dop[2].etat === 'REFUSE' && PS.classeBlock(SYN, [cle(BRIAN, SYN, HOOK_DOPPLER, 10000, 200)]) === 'INCONNU', dop.slice(1).map((p) => p.etat).join(','));
     const autres = [await multi([j(cle(ETH, PEXRA, ETH, 3000, 60), PEXRA), j(cle(ETH, SYN, ETH, 3000, 60), ETH)], PEXRA, SYN, 10n ** 16n),
       await multi([j(cle(ETH, BRIAN, HOOK_O1, 0, 200), ETH), j(cle(BRIAN, SYN, ETH, 3000, 60), BRIAN)], ETH, SYN, 10n ** 16n)];
-    v('REG ' + etat + ' un jeton liste (PEXRA, BRIAN) ne libere pas les autres sauts : SYN -> REFUSE', autres.every((p) => p.etat === 'REFUSE'), autres.map((p) => p.etat).join(','));
+    /* R10 : SYN est tiers par lui-meme ; la route payee EN PEXRA reste refusee par la garde de frais (le routeur ne preleve jamais
+     *   dans un jeton sans marche mesure), la route ETH>(o1)BRIAN>SYN passe. */
+    if (lu) v('REG lu un jeton liste et SYN sur la meme route : payee en PEXRA -> REFUSE (frais en jeton non mesure) ; ETH>(o1)BRIAN>(sans hook)SYN -> PRET (R10)',
+      autres[0].etat === 'REFUSE' && /fee asset|measured market/.test((autres[0].pourquoi || '') + ' ' + (autres[0].causeInterne || '')) && pret(autres[1]),
+      autres.map((p) => p.etat + ' ' + (p.pourquoi || '') + ' ' + (p.causeInterne || '')).join(' | '));
+    else v('REG ' + etat + ' un jeton liste (PEXRA, BRIAN) ne libere pas les autres sauts : SYN -> REFUSE', autres.every((p) => p.etat === 'REFUSE'), autres.map((p) => p.etat).join(','));
     const br = await achat(BRIAN, cle(ETH, BRIAN, ETH, 3000, 60));
     if (etat === 'lu') v('LIB lu BRIAN (ne d un lancement o1) sans hook : libere, PRET + frais routeur ETH', fraisRouteurEth(br), br.etat + ' ' + (br.pourquoi || ''));
     else v('LIB ' + etat + ' BRIAN : une source TB non lue ne libere rien -> REFUSE', br.etat === 'REFUSE', br.etat);
@@ -343,15 +365,16 @@ const MUTANTS = [
   { nom: 'k1b H8 absent de la graine', edits: [['index-routeur.js', "{ jeton: '0xb200000000000000000000e63ffc3f40bf92a042',", "{ jeton: '0xb200000000000000000000e63ffc3f40bf92a043',"]], casse: [/^PROV graine/] },
   { nom: 'c regle (c) marche sur nos hooks retiree', edits: [['pool-sans-hook.js', '|| estNotreBlockServi(a) || surNotreHook(a, cles)) return', '|| estNotreBlockServi(a)) return']], casse: [/^CL SYN avec/, /^CL SYN sur V8 ET/] },
   { nom: 'c2 contexte de route oublie (multi-sauts)', edits: [['echange.js', 'estBlockDeRoute(a, fraisDevisesOk, sauts.map((x) => x && x.cle))', 'estBlockDeRoute(a, fraisDevisesOk)']], casse: [/^T5d /] },
-  { nom: 'd liberation sans sources TB lues (fail-open)', edits: [['pool-sans-hook.js', "return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return listeBlanche(a) ? 'TIERS' : 'INCONNU';"]], casse: [/^U1 |^U2 /, /^LIB non PEXRA/, /^LIB illisible PEXRA/, /^LIB vide PEXRA/, /^LIB perime PEXRA/, /^LIB nosvide PEXRA/] },
+  { nom: 'd liberation sans sources TB lues (fail-open)', edits: [['pool-sans-hook.js', "return sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return 'TIERS';"]], casse: [/^U1 |^U2 /, /^LIB non PEXRA/, /^LIB illisible PEXRA/, /^LIB vide PEXRA/, /^LIB perime PEXRA/, /^LIB nosvide PEXRA/, /^REG non SYN/, /^REG illisible SYN/] },
   { nom: 'e fail-closed etendu a tout le monde', edits: [['pool-sans-hook.js', '  if (!RE_B20.test(a)) return null;', '']], casse: [/^U4 /] },
   { nom: 'f tiers traite en block', edits: [['pool-sans-hook.js', "return c === 'TB' || c === 'INCONNU';", 'return c !== null;']], casse: [/^T1 |^T2 |^T3 /] },
   { nom: 'g index en retard accepte', edits: [['index-routeur.js', '!rep.fenetresRatees && retard <= RETARD_MAX_INDEX', '!rep.fenetresRatees']], casse: [/^IDX en retard/] },
   { nom: 'h sel non verifie au chargement', edits: [['index-routeur.js', 'if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) nes.add', 'if (b) nes.add']], casse: [/^IDX entree au sel faux/] },
   { nom: 'i scanner sans verification de formule', edits: [['index-routeur.js', 'for (const r of routeurs) if (!sel && neDuRouteur(c.jeton, w, r)) {', 'for (const r of routeurs) if (!sel) {']], casse: [/^PROV scanner/] },
   { nom: 'R8a liste blanche consultee AVANT l ensemble TB', edits: [['pool-sans-hook.js', '  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||', "  if (RE_B20.test(a) && listeBlanche(a) && sourcesTbLues()) return 'TIERS';\n  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||"]], casse: [/^CL jeton liste MAIS marche sur un de NOS hooks/] },
-  { nom: 'R8b defaut R6 (tout 0xb2 inconnu libere quand l index est lu)', edits: [['pool-sans-hook.js', "return listeBlanche(a) && sourcesTbLues() ? 'TIERS'", "return sourcesTbLues() ? 'TIERS'"]], casse: [/^REG lu SYN /, /^CL PEXRA = TIERS/] },
-  { nom: 'R8c liberation coupee (PEXRA bloque a tort)', edits: [['pool-sans-hook.js', "return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return 'INCONNU';"]], casse: [/^LIB lu PEXRA/, /^LIB lu BRIAN/, /^T1 /] },
+  /* R10 : le retour a la liste blanche R8/R9 comme condition doit rougir les cas SYN liberes */
+  { nom: 'R10a retour R8 (liste blanche redevenue la condition)', edits: [['pool-sans-hook.js', "return sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';"]], casse: [/^REG lu SYN /, /^CL R10 SYN sans contexte/, /^CL R10 SYN sur Clanker/, /^T3b /, /^T3c /] },
+  { nom: 'R8c liberation coupee (PEXRA bloque a tort)', edits: [['pool-sans-hook.js', "return sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return 'INCONNU';"]], casse: [/^LIB lu PEXRA/, /^LIB lu BRIAN/, /^T1 /, /^REG lu SYN /] },
   { nom: 'R8d graine des anciens routeurs 0xd0a6 ignoree', edits: [['index-routeur.js', '...GRAINE_ANCIENS_ROUTEURS.filter((g) => neDUnDeNosRouteurs(g.jeton, g.sel, g.routeur))].map', '].map']], casse: [/^CL anciens routeurs/] },
   { nom: 'R8e /api/nos-blocks ignore par la porte de liberation', edits: [['index-routeur.js', 'export function sourcesTbLues() { return indexRouteurLu() && nosBlocksTbLus(); }', 'export function sourcesTbLues() { return indexRouteurLu(); }']], casse: [/^LIB nosvide PEXRA/, /^IDX \/api\/nos-blocks non lu/] },
   { nom: 'R8f liste d index vide acceptee', edits: [['index-routeur.js', '&& graineServie && teteFraiche && rejetes === 0;', '&& teteFraiche && rejetes === 0;']], casse: [/^LIB vide PEXRA/, /^IDX liste vide/] },
@@ -360,14 +383,13 @@ const MUTANTS = [
   { nom: 'R8i /api/nos-blocks vide marque complet accepte', edits: [['index-routeur.js', '!rep.fenetresRatees && liste.length > 0;', '!rep.fenetresRatees;']], casse: [/^LIB nosvide PEXRA/] },
   { nom: 'R8j blocks servis par /api/nos-blocks ignores', edits: [['pool-sans-hook.js', '|| estNotreBlockServi(a) ||', '||']], casse: [/^CL block seulement dans/] },
   { nom: 'R8k estBlockTb : regle R5 0xb2 retiree', edits: [['pool-sans-hook.js', "return c === 'TB' || (a.startsWith('0xb2') && !DEVISES.has(a) && c !== 'TIERS');", "return c === 'TB' || c === 'INCONNU';"]], casse: [/^CL estBlockTb R5/] },
-  { nom: 'R9a liberation par le hook du marche retablie (Clanker / 0xe1ef / Doppler / o1, toute cle de la route, les deux cotes)', edits: [['pool-sans-hook.js', "  return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "  const __h = ['0xa10a6f4b918e963ec8694d37aa22e438706fe8cc', '0xe1efe2ba62af522897dbfb44b9bf0be2136700cc', '0xbdf938149ac6a781f94faa0ed45e6a0e984c6544', '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc'];\n  const __c = (Array.isArray(cles) ? cles : []).some((c) => !!c && __h.includes(bas(c.hooks)) && (bas(c.currency0) === a || bas(c.currency1) === a));\n  return (listeBlanche(a) || __c) && sourcesTbLues() ? 'TIERS' : 'INCONNU';"]],
-    casse: [/^CL aucun hook ne libere/, /^REG lu route ETH>\(sans hook\)SYN>\(0xe1ef\)USDC/, /^REG lu pool Clanker/, /^REG lu Doppler/, /^T3b /, /^T3c /] },
   { nom: 'R9b EFIX / SMOKE14 hors de la liste statique', edits: [['pool-sans-hook.js', "  '0xb200000000000000000000eedb997f91ceb22b8a', /* EFIX", "  /* '0xb200000000000000000000eedb997f91ceb22b8a', */ /* EFIX"], ['pool-sans-hook.js', "  '0xb200000000000000000000e7e544d1292a095c36', /* SMOKE14", "  /* '0xb200000000000000000000e7e544d1292a095c36', */ /* SMOKE14"]], casse: [/^CL EFIX \/ SMOKE14/, /^CL K2 /] },
-  { nom: 'R9e etat R8 (hook 0xe1ef libere + EFIX hors liste) : la route d amplification de C2 repasse', edits: [['pool-sans-hook.js', "  '0xb200000000000000000000eedb997f91ceb22b8a', /* EFIX", "  /* '0xb200000000000000000000eedb997f91ceb22b8a', */ /* EFIX"], ['pool-sans-hook.js', "  return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "  return (listeBlanche(a) || (Array.isArray(cles) ? cles : []).some((c) => !!c && bas(c.hooks) === '0xe1efe2ba62af522897dbfb44b9bf0be2136700cc' && (bas(c.currency0) === a || bas(c.currency1) === a))) && sourcesTbLues() ? 'TIERS' : 'INCONNU';"]],
-    casse: [/^REG lu route ETH>\(sans hook\)EFIX>\(0xe1ef\)USDC/, /^REG lu pool Clanker/] },
-  { nom: 'R9c B20 nes o1 ignores (liste explicite seule)', edits: [['pool-sans-hook.js', 'const TIERS_EXPLICITES = new Set([...JETONS_TIERS_EXPLICITES, ...NES_LAUNCHPADS_O1]);', 'const TIERS_EXPLICITES = new Set([...JETONS_TIERS_EXPLICITES]);']], casse: [/^LIB lu BRIAN/, /^CL liste blanche R9/] },
-  { nom: 'R9d liberation par route (un jeton liste libere tous les sauts)', edits: [['pool-sans-hook.js', "  return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "  return (listeBlanche(a) || (Array.isArray(cles) ? cles : []).some((c) => !!c && (listeBlanche(bas(c.currency0)) || listeBlanche(bas(c.currency1))))) && sourcesTbLues() ? 'TIERS' : 'INCONNU';"]],
-    casse: [/^CL un jeton de la liste ne libere pas/, /^REG lu un jeton liste/] },
+  /* R10 : EFIX hors de la liste statique = un block TB absent des sources ; sous R10 il serait LIBERE (sources lues) : la route
+   *   d amplification de C2 repasse. C est le risque ACCEPTE par le fondateur (on garde le frais routeur) — et c est pourquoi
+   *   l ensemble TB statique doit rester complet : ce mutant le prouve en rougissant la route EFIX. */
+  { nom: 'R10b EFIX hors liste statique sous R10 : la route via 0xe1ef repasse (completude de l ensemble TB = la seule garde)', edits: [['pool-sans-hook.js', "  '0xb200000000000000000000eedb997f91ceb22b8a', /* EFIX", "  /* '0xb200000000000000000000eedb997f91ceb22b8a', */ /* EFIX"]],
+    casse: [/^REG lu route ETH>\(sans hook\)EFIX>\(0xe1ef\)USDC/, /^REG lu pool Clanker \/ 0xe1ef \(ouvertes a tous\) : EFIX/] },
+  /* R10 : la liste blanche (PEXRA + B20 nes o1) ne conditionne plus rien — le mutant R9c (liste explicite seule) ne peut plus rougir ; retire. */
   { nom: 'R5-2a hook payeur de l appelant non filtre (echange)', edits: [['echange.js', '  hooksPaieurs = filtrerHooksPayeurs(hooksPaieurs);', '']], casse: [/^P52 /] },
   { nom: 'R5-2b hook facturant de l appelant non filtre (multipool)', edits: [['multipool.js', '...filtrerHooksPayeurs(extra || []).map(', '...(extra || []).map(']], casse: [/^P52m /] },
   { nom: 'j affichage filtre par le classement', edits: [

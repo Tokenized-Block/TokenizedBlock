@@ -302,8 +302,11 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
      *   l action doit etre MESUREE vendable (`fraisDevisesOk` : prix + liquidite lus), sinon refus. Tout AUTRE marche
      *   tiers cote en ERC-20 reste refuse. */
     const deviseTiers = c0 === j ? c1 : c0;
-    const actionCoinbase = ACTIONS_COINBASE.some((a) => String(a.adr).toLowerCase() === deviseTiers);
-    if (!hookPaieDeja && !actionCoinbase) return { etat: 'REFUSE', pourquoi: 'this market is not a TokenizedBlock market — only those are traded here in another currency' };
+    /* ⛔ 2026-10-03 (Phil : « l appliquer de partout ») : meme regle pour TOUTE devise connue et vendable (USDC, OUSD, cbBTC,
+     *   TOSHI, actions) — mesure prod : OCTO/OUSD, 100X et COBALT/USDC sur des hooks tiers. La garde « prix + liquidite
+     *   LUS » (fraisDevisesOk, USDC admis d office) decide ensuite, comme pour une action. */
+    const deviseVendable = estDeviseConnue(deviseTiers) || ACTIONS_COINBASE.some((a) => String(a.adr).toLowerCase() === deviseTiers);
+    if (!hookPaieDeja && !deviseVendable) return { etat: 'REFUSE', pourquoi: 'this market is not a TokenizedBlock market — only those are traded here in another currency' };
     if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
     const devise = deviseTiers;
     const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne

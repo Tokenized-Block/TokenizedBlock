@@ -219,7 +219,14 @@ export function classeBlock(adr, cles = []) {
   if (!/^0x[0-9a-f]{40}$/.test(a) || DEVISES.has(a)) return null;
   if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) || estNeDuRouteur(a) || estNotreBlockServi(a) || surNotreHook(a, cles)) return 'TB';
   if (!RE_B20.test(a)) return null;
-  return listeBlanche(a) && sourcesTbLues() ? 'TIERS' : 'INCONNU';
+  /* ⛔⛔ R10 (2026-10-03, decision du fondateur : « l appliquer de partout ») — LIBERATION PAR ABSENCE DES SOURCES TB, LUES.
+   *   Mesure du jour (prod, 177 blocks suivis) : R8 ne liberait que 29 blocks (liste o1, figee au bloc 52 108 727) et
+   *   refusait 148 blocks = 280 340 $ / 24 h, 88 % du volume des blocks — 92 d entre eux sur un lanceur a hook unique par
+   *   jeton (bytecode identique, 16 724 o, init par PositionManager), hors de toute liste par lanceur. Un B20 absent de
+   *   TOUTES les sources TB (ensemble statique, routeur, /api/nos-blocks, nos hooks), ces sources LUES, est un jeton tiers :
+   *   tradable sur son propre hook, notre 0,5 % dans la devise (echange.js). La liste blanche R9 n est plus la condition
+   *   (elle reste exportee). ⛔ Sources NON lues = INCONNU = block : le fail-closed de R8 est inchange. */
+  return sourcesTbLues() ? 'TIERS' : 'INCONNU';
 }
 /** Vrai = traiter ce jeton en block TB au routage (TB prouve, ou INCONNU : fail-closed). */
 export function estBlockTbClasse(adr, cles = []) {

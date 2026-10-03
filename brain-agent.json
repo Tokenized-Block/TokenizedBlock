@@ -159,6 +159,7 @@
     "budget": "4 plans/min per IP, 20/min in total, 2 at a time; 429 + retry-after over that",
     "fee": "the API is free; the fee is the one inside the transaction, paid only when your wallet executes it",
     "server_side_strictness": "the server does not read input USD prices; it takes a fee only in USDC or in one of the 12 tokenized stocks with a measured deep Aerodrome pool: it may refuse a route the app accepts, never the reverse",
-    "third_party_memestocks": "a block quoted in a Coinbase tokenized stock on another launcher's hook trades here with a 0.5% fee taken in that stock, once per swap (proved on a Base fork: SI/NVDAc buy and sell)"
+    "third_party_memestocks": "a block quoted in a Coinbase tokenized stock on another launcher's hook trades here with a 0.5% fee taken in that stock, once per swap (proved on a Base fork: SI/NVDAc buy and sell)",
+    "third_party_blocks": "since 2026-10-03 (R10): any B20 absent from all our own records (router index, our blocks, our hooks), with those records read, is a third-party token: it trades on its own pool and hook with our 0.5% in the quote token (ETH, USDC, OUSD, cbBTC, TOSHI or a Coinbase stock); proved on a Base fork for SI/NVDAc, COBALT/USDC, FIRSTOUSD/OUSD, COFFR/ETH"
   }
 }
