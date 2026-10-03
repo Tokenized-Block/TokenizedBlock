@@ -53,7 +53,13 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
   if (!ADR.test(String(a || '')) || !ADR.test(String(b || ''))) {
     return { etat: 'REFUSE', pourquoi: 'both tokens must be whole addresses' };
   }
+  /* ⛔⛔ 2026-10-03 (mesure, 37 actions x 9 espacements) : cette fonction rendait la PREMIERE pool trouvee, en partant de
+   *   l espacement 1. MUc, PLTRc et AMZNc ont une pool VIDE a 1 (0 $ d USDC) et leur vraie pool a 10 (360 k$, 588 k$,
+   *   1,19 M$) : le franchissement calculait son minimum sur une pool vide. On parcourt donc TOUS les espacements et on
+   *   garde la plus PROFONDE, mesuree par le solde du jeton d entree `a` que la pool detient (balanceOf). Une seule pool
+   *   trouvee : comportement d avant. Plusieurs et AUCUNE profondeur lue : NON_MESURE — jamais un choix au hasard. */
   let essayes = 0, refus = 0;
+  const trouvees = [];
   for (const ts of espacements) {
     const c = calldataGetPool({ tokenA: a, tokenB: b, tickSpacing: ts });
     if (c.etat !== 'PRET') continue;
@@ -62,16 +68,30 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
     try { r = await appel(rpc, c.to, c.data); } catch (_) { refus += 1; continue; }
     const adresse = '0x' + String(r).slice(-40);
     if (nulle(adresse)) continue;
+    let prof = null;
+    /* (keccak.selecteur rend DEJA le prefixe 0x) */
+    try { prof = BigInt(String(await appel(rpc, a, selecteur('balanceOf(address)') + adresse.slice(2).toLowerCase().padStart(64, '0')))); }
+    catch (_) { prof = null; }
+    trouvees.push({ adresse, ts, prof });
+  }
+  if (trouvees.length) {
+    const lues = trouvees.filter((x) => x.prof !== null);
+    if (trouvees.length > 1 && !lues.length) {
+      return { etat: 'NON_MESURE', essayes, refus,
+        pourquoi: trouvees.length + ' pools were found but none of their depths could be read, so which one is real is unknown' };
+    }
+    const choisie = lues.length ? lues.reduce((m, x) => (x.prof > m.prof ? x : m)) : trouvees[0];
     /* ⛔ LE SENS, LU SUR LA POOL. */
     let t0 = null;
-    try { t0 = '0x' + String(await appel(rpc, adresse, selecteur('token0()'))).slice(-40); }
+    try { t0 = '0x' + String(await appel(rpc, choisie.adresse, selecteur('token0()'))).slice(-40); }
     catch (_) { t0 = null; }
     if (!t0 || !ADR.test(t0)) {
       return { etat: 'NON_MESURE', pourquoi: 'the pool was found but token0() could not be read, '
         + 'so the swap direction is unknown — and a direction is never guessed' };
     }
-    return { etat: 'PRET', pool: bas(adresse), tickSpacing: ts, token0: bas(t0),
-      entreeEst0: bas(t0) === bas(a), essayes, refus };
+    return { etat: 'PRET', pool: bas(choisie.adresse), tickSpacing: choisie.ts, token0: bas(t0),
+      entreeEst0: bas(t0) === bas(a), essayes, refus, trouvees: trouvees.length,
+      profondeur: choisie.prof === null ? null : String(choisie.prof) };
   }
   /* ⛔⛔ « AUCUNE POOL TROUVEE » N EST PAS « IL N Y A PAS DE POOL ». On rend le nombre d espacements
    *   essayes ET le nombre de lectures refusees : si des appels ont echoue, le resultat est une
