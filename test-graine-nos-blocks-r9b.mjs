@@ -35,13 +35,15 @@ const VERITE = [
   { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte: A6CF, bloc: 51527429, tx: '0xa1e0591229f80691cdeac437a81d8afe5c2f520b1af10661d83a6dfc790ab508' }];
 const recuDe = (tx) => { const e = VERITE.find((x) => x.tx === String(tx).toLowerCase()); return e ? { status: '0x1', blockNumber: '0x' + e.bloc.toString(16),
   logs: [{ address: e.jeton, topics: [TOPIC_TRANSFER, mot('0x' + '0'.repeat(40)), mot(e.compte)] }] } : null; };
-const FABRIQUE = '0xb200000000000000000000deadbeef00000000ab'; /* entree bien formee, compte surveille, tx inventee (F2) */
+const FABRIQUE = '0xb200000000000000000000deadbeef00000000ab';
+const VIEUX = '0xb200000000000000000000feed000000000000f3'; /* F3b : frappe vers a6cf a jusqua - 59 000, dans la plage qui rate */ /* entree bien formee, compte surveille, tx inventee (F2) */
 const libre = () => new Promise((ok) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
 
 const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
 function rpcFictif(jusqua, o = {}) {
   const etat = { tete: o.tete || jusqua + 43200, fenetresFrappes: [], sousLaGraine: 0, echecs: o.echecs ?? 3, rates: [],
-    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null, codeKo: !!o.codeKo };
+    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null, codeKo: !!o.codeKo,
+    sansRecus: !!o.sansRecus, trouVieux: o.trouVieux || null };
   const repondre = async (m, p) => {
     if (m === 'eth_blockNumber') return '0x' + etat.tete.toString(16);
     if (m === 'eth_getLogs') {
@@ -52,8 +54,11 @@ function rpcFictif(jusqua, o = {}) {
         /* une fenetre RATEE : les `echecs` prochaines requetes echouent (rpcServeur reessaie 3 fois : 3 echecs = une fenetre ratee) */
         if (etat.echecs > 0) { etat.echecs -= 1; etat.rates.push([de, a]); throw new Error('internal error'); }
         if (etat.trou && de <= etat.trou && etat.trou <= a) { etat.rates.push([de, a]); throw new Error('internal error'); } /* F3 : une fenetre du milieu */
-        const b = jusqua + 100;
-        return de <= b && b <= a ? [{ address: NOUVEAU, topics: [TOPIC_TRANSFER, t[1], t[2]], data: '0x', blockNumber: '0x' + b.toString(16), transactionHash: '0x' + 'ab'.repeat(32) }] : [];
+        /* F3b (Zero 1, fault-f3b.mjs) : une plage ANCIENNE rate pendant la remontee, et un block y est frappe */
+        if (etat.trouVieux && de <= etat.trouVieux[1] && a >= etat.trouVieux[0]) { etat.rates.push([de, a]); throw new Error('internal error'); }
+        const b = jusqua + 100, bv = jusqua - 59000;
+        return [[NOUVEAU, b], [VIEUX, bv]].filter(([, x]) => de <= x && x <= a)
+          .map(([adr, x]) => ({ address: adr, topics: [TOPIC_TRANSFER, t[1], t[2]], data: '0x', blockNumber: '0x' + x.toString(16), transactionHash: '0x' + 'ab'.repeat(32) }));
       }
       /* ⛔ seules les fenetres du routeur (pas 1000, alignees sur GRAINE_JUSQUA + 1) : le balayage trending lit aussi la factory */
       if (String(q.address).toLowerCase() === FACTORY_B20 && o.baseRouteur && de > o.baseRouteur && (de - o.baseRouteur - 1) % 1000 === 0 && a - de <= 999) {
@@ -62,9 +67,9 @@ function rpcFictif(jusqua, o = {}) {
       }
       return [];
     }
-    if (m === 'eth_getTransactionReceipt') { etat.recus += 1; return recuDe(p[0]); }
+    if (m === 'eth_getTransactionReceipt') { etat.recus += 1; return etat.sansRecus ? null : recuDe(p[0]); }
     if (m === 'eth_getCode' && etat.codeKo && String(p[0]).toLowerCase() === NOUVEAU) throw new Error('internal error'); /* F4 */
-    if (m === 'eth_getCode') return String(p[0]).toLowerCase() === NOUVEAU ? '0xef0100' + 'ab'.repeat(20) : '0x';
+    if (m === 'eth_getCode') return [NOUVEAU, VIEUX].includes(String(p[0]).toLowerCase()) ? '0xef0100' + 'ab'.repeat(20) : '0x';
     throw Object.assign(new Error('execution reverted'), { code: 3 });
   };
   etat.serveur = http.createServer((req, res) => {
@@ -109,7 +114,7 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
 }
 
 /* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXYNPC') {
+async function banc(dir, scen = 'RFGXYNPCB') {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
@@ -251,6 +256,22 @@ async function banc(dir, scen = 'RFGXYNPC') {
       && c1.some((x) => x.fenetresRatees >= 1));
     v('C2 (F4) le code se relit : le block est servi, couverture complete', c2.some((x) => x.couvertureComplete === true && x.blocks.includes(NOUVEAU)));
   })() : null;
+  /* B1-B2 (F3b, Zero 1 fault-f3b.mjs) — graine refusee (recus inconnus du noeud) : remontee depuis la tete. Une plage ANCIENNE
+   *   [J - 60000, J - 58001] rate pour de bon et un block y est frappe : depuis ne doit JAMAIS sauter le trou, puis le block est servi. */
+  const blocB = scen.includes('B') ? (async () => {
+    const lo = J - 60000, hi = lo + 1999;
+    const sv = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, sansRecus: true, trouVieux: [lo, hi] } });
+    const vu = (r) => r.findIndex((x) => x.fenetresRatees >= 1 && x.depuis !== null && x.depuis <= hi + 40001);
+    const b1 = await sv.suivre(90000, (r) => vu(r) >= 0 && r.length - vu(r) >= 6);
+    sv.rpc.trouVieux = null;
+    const b2 = await sv.suivre(40000, (r) => r.some((x) => x.blocks.includes(VIEUX)));
+    await sv.arreter();
+    v('B1 (F3b) plage ancienne ratee pendant la remontee : depuis reste AU-DESSUS du trou, jamais complete, le block du trou pas servi',
+      vu(b1) >= 0 && b1.every((x) => (x.depuis === null || x.depuis > hi) && x.couvertureComplete === false && !x.blocks.includes(VIEUX))
+      && b1.some((x) => x.graine === 'REFUSEE'));
+    v('B2 (F3b) la plage se relit : le block du trou est servi (jamais une couverture complete sans lui)',
+      b2.some((x) => x.blocks.includes(VIEUX)) && [...b1, ...b2].every((x) => !(x.couvertureComplete === true && !x.blocks.includes(VIEUX))));
+  })() : null;
   /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
   const blocN = scen.includes('N') ? (async () => {
     const sn = await redemarrer(dir, J, { attenteMax: 8000, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
@@ -277,7 +298,7 @@ async function banc(dir, scen = 'RFGXYNPC') {
     /past the chain head/.test(sc5.journal) && sc5.rpc.sousLaGraine > 0 && !!sc5.premiere && sc5.premiere.couvertureComplete === false
     && sc5.vues.every((x) => x.graine !== 'ADMISE'));
   })() : null;
-  await Promise.all([principal, blocX, blocP, blocC, blocN, blocG]);
+  await Promise.all([principal, blocX, blocP, blocC, blocN, blocG, blocB]);
   return res;
 }
 
@@ -320,6 +341,7 @@ const MUTANTS = [
   { nom: 'n20 (F3) rattrapage tout-ou-rien (jusqua n avance pas sur une fenetre ratee)', scen: 'P', edits: [['serveur-web.js', 'if (basRate - 1 > nosBlocksEtat.jusqua) nosBlocksEtat.jusqua = basRate - 1;', 'if (false) nosBlocksEtat.jusqua = basRate - 1;']], casse: [/^P1 /] },
   { nom: 'n21 (F4) serveur : fenetre a jeton non verifie comptee propre', scen: 'C', edits: [['serveur-web.js', ', ...(scan.fenetresNonVerifiees || [])].map(', '].map(']], casse: [/^C1 /] },
   { nom: 'n22 (F4) mes-blocks : fenetre du jeton non verifie non rendue', scen: 'C', edits: [['mes-blocks.js', ' fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton });', '']], casse: [/^C1 /] },
+  { nom: 'n23 (F3b, Zero 1) remontee : depuis saute la fenetre ratee', scen: 'B', edits: [['serveur-web.js', 'if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;', 'nosBlocksEtat.depuis = deBloc;']], casse: [/^B1 /, /^B2 /] },
 ];
 
 let nAssert = 0, ko = 0;
