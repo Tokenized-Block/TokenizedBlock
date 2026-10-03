@@ -42,8 +42,13 @@ ok(ini.result.protocolVersion === '2025-03-26' && ini.result.capabilities.tools 
   'initialize : rend la version demandee quand il la connait, annonce les outils, et dit « UNSIGNED »');
 ok((await rq('initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion === M.MCP_VERSIONS[0], 'version inconnue : il rend la sienne (' + M.MCP_VERSIONS[0] + ')');
 const tl = await rq('tools/list');
-ok(tl.result.tools.length === 4 && tl.result.tools.every((o) => o.name && o.description && o.inputSchema && o.inputSchema.type === 'object' && o.annotations.readOnlyHint === true),
-  'tools/list : 4 outils, chacun decrit, schema objet, annonce en lecture seule — ' + tl.result.tools.map((o) => o.name).join(' '));
+/* 7 outils depuis la telecommande (test-panel-sessions-20261004.mjs) : les 4 planificateurs + l etat du panneau sont en lecture seule ;
+ *   ouvrir un panneau et proposer une commande ECRIVENT une file en memoire (jamais la chaine) — annonces comme tels, non destructifs. */
+const lectureSeule = tl.result.tools.filter((o) => o.annotations.readOnlyHint === true).map((o) => o.name).sort().join();
+ok(tl.result.tools.length === 7 && tl.result.tools.every((o) => o.name && o.description && o.inputSchema && o.inputSchema.type === 'object' && o.annotations)
+  && lectureSeule === 'tblock_creator_minimum,tblock_pairs,tblock_panel_state,tblock_plan_birth,tblock_plan_swap'
+  && tl.result.tools.filter((o) => o.annotations.readOnlyHint === false).every((o) => o.annotations.destructiveHint === false),
+  'tools/list : 7 outils decrits, schema objet ; 5 en lecture seule, 2 qui ecrivent une file (non destructifs) — ' + tl.result.tools.map((o) => o.name).join(' '));
 ok(await M.traiterMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, deps) === null, 'une notification ne recoit rien');
 ok((await M.traiterMcp([{ jsonrpc: '2.0', id: 1, method: 'ping' }], deps)).error.code === -32600, 'un lot est refuse (-32600)');
 ok((await M.traiterMcp({ id: 1, method: 'ping' }, deps)).error.code === -32600 && JSON.stringify((await rq('ping')).result) === '{}', 'pas du JSON-RPC 2.0 : -32600 ; ping : {}');
@@ -153,7 +158,7 @@ if (demarre) {
     'POST /mcp initialize : 200 JSON, CORS ouvert, serverInfo tokenizedblock');
   const n1 = await fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
   ok(n1.status === 202 && (await n1.text()) === '', 'notification : 202, corps vide');
-  ok((await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).corps.result.tools.length === 4, 'tools/list par HTTP : 4 outils');
+  ok((await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).corps.result.tools.length === 7, 'tools/list par HTTP : 7 outils');
   const g = await fetch(base + '/mcp'); const o = await fetch(base + '/mcp', { method: 'OPTIONS' });
   ok(g.status === 405 && /POST/.test(g.headers.get('allow') || '') && o.status === 204 && /POST/.test(o.headers.get('access-control-allow-methods') || ''), 'GET /mcp : 405 (pas de flux) ; OPTIONS : 204 + methodes CORS');
   ok((await mcp('{pas du json')).code === 400, 'JSON casse : 400, erreur de parse');

@@ -138,6 +138,7 @@ import { planRail } from './rails-api.js';
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
 import { traiterMcp } from './mcp-tblock.js';
 import { etatCautionCreateur, sortieCautionPour, cleMarcheCreateur } from './caution-createur.js';
+import { creerRegistrePanel } from './panel-sessions.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -1379,6 +1380,24 @@ function pairesPourAgent() {
  *   entiere (createPaid + approbations + inscription + ouverture) contre le hook deploye, avec le code DEPLOYE, depuis un compte
  *   de sonde au solde SUPPOSE (aucun fonds reel, rien d envoye). Son verdict est dans /sante.naissance : PRET, ou la raison.
  * ⛔ BORNE : paire ETH seulement (un minimum en devise ne se suppose pas), simulation et non execution, toutes les 10 minutes. */
+/* ── LA TELECOMMANDE (2026-10-04) : les sessions de panneau, en memoire (panel-sessions.js) ── */
+const registrePanel = creerRegistrePanel({ tirerId: () => randomBytes(16).toString('hex') });
+const URL_PANEL = 'https://tokenizedblock.space/panel.html';
+function ouvrirPanel(block) {
+  const r = registrePanel.ouvrir({ block });
+  if (!r.ok) return r;
+  return { ok: true, session: r.session, url: URL_PANEL + '#s=' + r.session + (block ? '&b=' + String(block).toLowerCase() : ''),
+    note: 'the link is for the user: it opens the control panel, where their own wallet signs. The session lasts 2 hours without activity and is lost if the server restarts.' };
+}
+/* le panneau interroge toutes les 2 s : 30 requetes/min par panneau ouvert. 240/min par adresse laisse plusieurs panneaux et l agent. */
+const panelBudget = { minute: 0, parIp: new Map() };
+function budgetPanel(ip) {
+  const minute = Math.floor(Date.now() / 60000);
+  if (panelBudget.minute !== minute) { panelBudget.minute = minute; panelBudget.parIp.clear(); }
+  const n = (panelBudget.parIp.get(ip) || 0) + 1;
+  panelBudget.parIp.set(ip, n);
+  return n <= 240;
+}
 const COMPTE_SONDE = '0x00000000000000000000000000000000c0ffee77';
 let naissanceSonde = { etat: 'PAS_ENCORE', pourquoi: 'not run yet', lu: null };
 async function sonderNaissance() {
@@ -2276,6 +2295,8 @@ const SERVIS = [
   /* 2026-10-03 (Phil) : les sauts d un echange block -> block (importe par app.html : absent d ici = 404 = app morte) */
   'bloc-vers-bloc.js',
   'hook-7030-descripteur.js', 'deploy-7030.html', 'deploy-7030.json',
+  /* 2026-10-04 : le panneau de commande (telecommande MCP) — ses modules sont ceux de l app, deja servis */
+  'panel.html',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
@@ -3155,7 +3176,7 @@ createServer((req, res) => {
    *   GET  /api/caution?block=[&paire=][&compte=]                      le minimum du createur + l appel de sortie non signe
    *   POST /mcp                                                        les memes outils, en MCP (JSON-RPC 2.0, sans session)
    * ⛔ RIEN N EST SIGNE NI ENVOYE ICI. Nom et symbole d un block sont publics (ils seront graves) : ils peuvent voyager en GET. */
-  if (chemin === '/api/naissance/paires' || chemin === '/api/naissance/plan' || chemin === '/api/caution' || chemin === '/mcp') {
+  if (chemin === '/api/naissance/paires' || chemin === '/api/naissance/plan' || chemin === '/api/caution' || chemin === '/mcp' || chemin.startsWith('/api/panel/')) {
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'content-type, accept, mcp-protocol-version, mcp-session-id, x-ms-monitor' };
     const rendreN = (code, corps, extra = {}) => {
@@ -3167,6 +3188,35 @@ createServer((req, res) => {
     const sondeN = req.headers['x-ms-monitor'] === '1';
     const occupe = () => rendreN(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: each plan reads the chain on a node shared with the whole site — retry in a minute' }, { 'retry-after': '60' });
     const qN = new URL(req.url, 'http://x').searchParams;
+    /* ── LA TELECOMMANDE (panel-sessions.js) : POST JSON seulement — l identifiant de session est un secret au porteur, il ne voyage
+     *   JAMAIS dans une URL (ni journal, ni referer). Le panneau garde le sien dans le fragment (#s=…), que le navigateur n envoie pas.
+     *     /api/panel/ouvrir     { block? }                 -> { session, url }          (le panneau lui-meme, ou un agent)
+     *     /api/panel/commande   { s, commande }            -> { n }                     (l agent PROPOSE)
+     *     /api/panel/commandes  { s, depuis }              -> { commandes }             (le panneau lit)
+     *     /api/panel/evenement  { s, evenement }           -> { m }                     (le panneau rend compte)
+     *     /api/panel/etat       { s, depuis }              -> { evenements }            (l agent lit la suite) */
+    if (chemin.startsWith('/api/panel/')) {
+      if (req.method !== 'POST') { rendreN(405, { ok: false, pourquoi: 'POST only' }, { allow: 'POST, OPTIONS' }); return; }
+      if (!budgetPanel(ipN)) { rendreN(429, { ok: false, pourquoi: 'too many panel requests from this address — slow down' }, { 'retry-after': '30' }); return; }
+      let brutP = '', tropP = false;
+      req.on('data', (c) => { if (tropP) return; brutP += c; if (brutP.length > 4096) { tropP = true; rendreN(413, { ok: false, pourquoi: 'request too large' }); req.destroy(); } });
+      req.on('end', () => {
+        if (tropP) return;
+        let j;
+        try { j = JSON.parse(brutP || '{}'); } catch { rendreN(400, { ok: false, pourquoi: 'not JSON' }); return; }
+        if (!j || typeof j !== 'object' || Array.isArray(j)) { rendreN(400, { ok: false, pourquoi: 'a JSON object is expected' }); return; }
+        const depuis = Number.isInteger(j.depuis) ? j.depuis : 0;
+        let r;
+        if (chemin === '/api/panel/ouvrir') r = ouvrirPanel(j.block === undefined || j.block === null || j.block === '' ? null : j.block);
+        else if (chemin === '/api/panel/commande') r = registrePanel.pousser(j.s, j.commande);
+        else if (chemin === '/api/panel/commandes') r = registrePanel.lireCommandes(j.s, depuis);
+        else if (chemin === '/api/panel/evenement') r = registrePanel.noter(j.s, j.evenement);
+        else if (chemin === '/api/panel/etat') r = registrePanel.lireEvenements(j.s, depuis);
+        else { rendreN(404, { ok: false, pourquoi: 'unknown panel route' }); return; }
+        rendreN(r.ok ? 200 : r.inconnue ? 404 : r.tropVite ? 429 : 400, r);
+      });
+      return;
+    }
     if (chemin === '/api/naissance/paires') {
       if (req.method !== 'GET') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
       rendreN(200, pairesPourAgent());
@@ -3221,6 +3271,17 @@ createServer((req, res) => {
           tblock_plan_birth: avecBudget((a) => faireNaissance({ nom: a.name, symbole: a.symbol, compte: a.account, paire: a.pair || 'ETH', sel: a.salt || '' }, { sonde: sondeN })),
           tblock_plan_swap: avecBudget((a) => faireRail({ de: a.from, vers: a.to, montant: a.amount, compte: a.account })),
           tblock_creator_minimum: avecBudget((a) => faireCaution({ block: a.block, pair: a.pair || 'ETH', account: a.account || '' })),
+          /* la telecommande : des PROPOSITIONS pour un panneau ouvert par l humain — aucune lecture de chaine, aucun envoi */
+          tblock_panel_open: async (a) => { const r = ouvrirPanel(a.block || null); return r.ok ? { ...r, etat: 'PRET' } : { ...r, etat: 'REFUSE' }; },
+          tblock_command: async (a) => {
+            const { session, ...commande } = a;
+            const r = registrePanel.pousser(session, commande);
+            return r.ok ? { ok: true, etat: 'PRET', n: r.n, commande: r.commande, panneauOuvert: r.panneauOuvert,
+              suite: r.panneauOuvert ? 'shown in the panel; read tblock_panel_state for the brain verdict and what the user signs'
+                : 'queued, but no panel is open on this session right now — ask the user to open the link from tblock_panel_open' }
+              : { ok: false, etat: 'REFUSE', pourquoi: r.pourquoi };
+          },
+          tblock_panel_state: async (a) => { const r = registrePanel.lireEvenements(a.session, a.since ? Number(a.since) : 0); return r.ok ? { ...r, etat: 'PRET' } : { ...r, etat: 'REFUSE' }; },
         } });
         if (rep === null) { res.writeHead(202, cors); res.end(); return; }
         rendreN(200, rep);

@@ -166,8 +166,15 @@
     "since": "2026-10-04",
     "endpoint": "POST https://tokenizedblock.space/mcp",
     "transport": "JSON-RPC 2.0, streamable HTTP without sessions, one request per POST (no event stream, no batch)",
-    "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum"],
-    "read_only": "every tool returns unsigned calls; the user's wallet signs them in order. The server signs, holds and sends nothing.",
+    "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum", "tblock_panel_open", "tblock_command", "tblock_panel_state"],
+    "read_only": "the planning tools return unsigned calls; the user's wallet signs them in order. The server signs, holds and sends nothing.",
+    "control_panel": {
+      "page": "https://tokenizedblock.space/panel.html",
+      "how": "tblock_panel_open returns a link for the user (the session rides in the URL fragment); tblock_command proposes select | show | trade | task | birth | say; tblock_panel_state returns the events the panel reported",
+      "rule": "a command is a proposal shown in the panel. The block's brain gates each task (brain-tasks catalog, deterministic — not a language model); the plan comes from the server planners; only the user's wallet signs, one click at a time",
+      "session": "a 128-bit bearer secret kept in memory: 2 hours without activity, lost on a server restart, one command per second; whoever holds it can propose, never sign",
+      "limits": "the panel's brain is fed with the market only (on-chain food is not re-read there); trades and births are executed in the panel, the other tasks link to the app"
+    },
     "birth": {
       "get": "https://tokenizedblock.space/api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>[&paire=<ETH or a currency address>][&sel=<free text that fixes the address>]",
       "pairs": "https://tokenizedblock.space/api/naissance/paires",
