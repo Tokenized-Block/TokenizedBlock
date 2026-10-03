@@ -188,5 +188,70 @@ try {
   await naissance({ etiquette: 'AMDc', devise: AMD, decimales: dec, prixUsd: 614, valorisation: 44, financer: donner(AMD, '0x498581ff718922c3f8e6a244956af099b2652b2b') });
 } catch (e) { ok(false, 'AMDc : le banc a plante — ' + String(e && e.message).slice(0, 140)); }
 
+/* ── 6. LE PLAN RENDU A UN AGENT (naissance-api.js, celui du MCP), EXECUTE TEL QUEL ───────────────────────────────────────────────
+ * base-anvil n a pas eth_simulateV1 : on l EMULE fidelement — instantane, envoi reel de chaque appel, lecture des status, retour
+ * a l instantane. Le plan est donc juge par une execution, puis rejoue pour de bon. */
+const NA = await imp('naissance-api.js'), CC = await imp('caution-createur.js');
+const rpcPlan = async (method, params) => {
+  if (method !== 'eth_simulateV1') return rpc(method, params);
+  const calls = params[0].blockStateCalls[0].calls, snap = await rpc('evm_snapshot', []);
+  const res = [];
+  try { for (const c of calls) { let st = '0x0'; try { st = (await envoyer(c.from, c)).status; } catch (_) { st = '0x0'; } res.push({ status: st, error: st === '0x1' ? undefined : { message: 'reverted on the fork' } }); } }
+  finally { await rpc('evm_revert', [snap]); }
+  return [{ calls: res }];
+};
+console.log('— plan MCP (naissance-api) execute');
+try {
+  const agent = await compteNeuf();
+  const a0 = await solde(A6CF);
+  const pl = await NA.planNaissance({ nom: 'Agent Banc', symbole: 'agb', compte: agent, sel: 'agent-' + tete + '-' + serie }, { rpc: rpcPlan, prixUsd: async (a) => (a === null ? 2000 : null) });
+  ok(pl.etat === 'PRET' && pl.aSigner.length === 5 && pl.aSigner.map((c) => c.role).join() === 'create,approve,approve,birth,open', 'plan MCP : PRET, 5 appels dans l ordre (' + (pl.pourquoi || pl.aSigner.map((c) => c.role).join()) + ')');
+  ok(await solde(A6CF) === a0, 'TEMOIN : planifier n a RIEN envoye (a6cf inchange apres la simulation emulee)');
+  const st = [];
+  for (const c of pl.aSigner) st.push((await envoyer(agent, c)).status);
+  ok(st.every((s) => s === '0x1'), 'plan MCP execute tel quel : ' + st.join(',') + ' — toutes status 1');
+  ok(await solde(A6CF) - a0 === F.FRAIS_OUVERTURE_WEI && pl.cout.fraisEthWei === F.FRAIS_OUVERTURE_WEI.toString(), 'plan MCP : a6cf a recu 0,001 ETH au total = le `cout.fraisEthWei` annonce');
+  ok(await balance(pl.block.adresse, agent) > 0n && await lireU(H, '0x' + selecteur('porteLeLabel(address)') + adrMot(pl.block.adresse)) === 1n, 'plan MCP : le block existe a l adresse annoncee, face gravee reconnue par le hook');
+
+  /* ── 7. LA SORTIE DU MINIMUM DU CREATEUR (caution-createur.js) sur ce marche ── */
+  console.log('— sortie du minimum du createur');
+  const cle = CC.cleMarcheCreateur({ bloc: pl.block.adresse, devise: ETH, hook: H });
+  const heure = async () => parseInt((await rpc('eth_getBlockByNumber', ['latest', false])).timestamp, 16);
+  const etat = async () => CC.etatCautionCreateur({ rpc, hook: H, cle, maintenantSec: await heure() });
+  const e0 = await etat();
+  ok(e0.etat === 'LUE' && e0.phase === 'ACTIF' && e0.partActive === true && e0.createur === agent.toLowerCase() && e0.depose.toString() === pl.cout.minimumCreateur.montant && e0.delaiSec === 604800,
+    'etat lu : ACTIF, createur = l agent, depose = le minimum annonce (' + e0.depose + ' wei), delai 604800 s');
+  const autre = await compteNeuf();
+  ok(CC.sortieCautionPour({ etat: e0, compte: autre, hook: H, cle }).appel === null
+    && await revert(autre, CC.appelDemanderRetrait({ hook: H, cle })) === '0x' + selecteur('PasLeCreateur()'), 'TEMOIN : un autre wallet n a aucun appel, et le hook le refuserait (PasLeCreateur)');
+  const s1 = CC.sortieCautionPour({ etat: e0, compte: agent, hook: H, cle });
+  ok(s1.etape === 'DEMANDER' && (await envoyer(agent, s1.appel)).status === '0x1', 'demanderRetrait : status 1');
+  const e1b = await etat();
+  ok(e1b.phase === 'SORTIE_DEMANDEE' && e1b.partActive === false && e1b.secondesRestantes > 604000 && e1b.secondesRestantes <= 604800
+    && await lireU(H, '0x' + selecteur('createurActif(bytes32)') + poolId(cle).slice(2)) === 0n, 'apres la demande : SORTIE_DEMANDEE, la part du createur est ARRETEE (createurActif = 0), ~7 jours restants (' + e1b.secondesRestantes + ' s)');
+  ok(CC.sortieCautionPour({ etat: e1b, compte: agent, hook: H, cle }).appel === null
+    && await revert(agent, CC.appelRetirerCaution({ hook: H, cle })) === '0x' + selecteur('RetraitPasPret()'), 'TEMOIN avant l echeance : aucun appel propose, et le hook reverterait RetraitPasPret');
+  await rpc('evm_increaseTime', [604800]); await rpc('evm_mine', []);
+  const e2b = await etat();
+  const s2 = CC.sortieCautionPour({ etat: e2b, compte: agent, hook: H, cle });
+  ok(e2b.phase === 'RETIRABLE' && s2.etape === 'RETIRER', '7 jours plus tard (horloge de la chaine avancee) : RETIRABLE');
+  const b0 = await solde(agent);
+  const h2 = await rpc('eth_sendTransaction', [{ from: agent, to: s2.appel.to, data: s2.appel.data, value: '0x0', gas: '0x7a120' }]);
+  let r2 = null; for (let i = 0; i < 100 && !r2; i += 1) { r2 = await rpc('eth_getTransactionReceipt', [h2]); if (!r2) await new Promise((o) => setTimeout(o, 100)); }
+  /* le cout de la tx sur Base = gas L2 + frais L1 : on le lit sur le recu (l1Fee quand le noeud le rend) */
+  const coutTx = BigInt(r2.gasUsed) * BigInt(r2.effectiveGasPrice) + BigInt(r2.l1Fee || '0x0');
+  const recu = await solde(agent) - b0 + coutTx;
+  ok(r2.status === '0x1' && recu === e2b.depose, 'retirerCaution : status 1, le createur a recu ' + recu + ' wei = TOUT le depot (' + e2b.depose + ')');
+  const e3b = await etat();
+  ok(e3b.phase === 'RETIRE' && e3b.depose === 0n && CC.sortieCautionPour({ etat: e3b, compte: agent, hook: H, cle }).appel === null, 'apres : RETIRE, depot 0, plus aucun appel propose');
+} catch (e) { ok(false, 'plan MCP / sortie : le banc a plante — ' + String(e && e.message).slice(0, 160)); }
+/* ⛔ L HORLOGE DU FORK EST REMISE A L HEURE : le saut de 7 jours empoisonnait la relance (mesure : 2e passage = 13 KO — les
+ *   echeances Permit2 calculees sur l horloge murale etaient deja passees pour la chaine). Un banc doit pouvoir se rejouer. */
+try {
+  await rpc('evm_setTime', [Math.floor(Date.now() / 1000)]); await rpc('evm_mine', []);
+  const ts = parseInt((await rpc('eth_getBlockByNumber', ['latest', false])).timestamp, 16);
+  ok(Math.abs(ts - Math.floor(Date.now() / 1000)) < 600, 'horloge du fork remise a l heure murale (ecart ' + (ts - Math.floor(Date.now() / 1000)) + ' s) : le banc reste rejouable');
+} catch (e) { ok(false, 'horloge du fork non remise : ' + String(e && e.message).slice(0, 100)); }
+
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exitCode = ko ? 1 : 0;

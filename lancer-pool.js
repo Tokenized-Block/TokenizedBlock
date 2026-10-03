@@ -539,12 +539,14 @@ export function mintLancementRecevable(plan) {
 /** Texte EXACT quand la naissance entiere n a pas pu etre simulee (Zero 1, 2026-10-02) : createPaid n est pas appele. */
 export const COPIE_NAISSANCE_NON_VERIFIEE = "Can't check this birth right now, nothing was charged. Try again.";
 
-export async function simulerSequenceLancement({ rpc, compte, appels }) {
+/* 2026-10-04 : `surcharges` (stateOverrides d eth_simulateV1, ex. un solde ETH SUPPOSE) — pour la sonde de sante de la naissance et
+ *   pour dire a un agent « le plan est sain, il ne manque que les fonds ». Absent = l etat reel, comme avant : l ecran ne le passe pas. */
+export async function simulerSequenceLancement({ rpc, compte, appels, surcharges = null }) {
   if (!Array.isArray(appels) || !appels.length) return { etat: 'REFUSE', pourquoi: 'nothing to simulate' };
   const calls = appels.map((a) => ({ from: compte, to: a.to, data: a.data, value: a.value || '0x0' }));
   let sim;
   try {
-    sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls }], validation: false, traceTransfers: false }, 'latest']);
+    sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ ...(surcharges ? { stateOverrides: surcharges } : {}), calls }], validation: false, traceTransfers: false }, 'latest']);
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'the chain was not asked: ' + String((e && e.message) || e).slice(0, 160) };
   }

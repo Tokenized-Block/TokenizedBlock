@@ -161,5 +161,22 @@
     "server_side_strictness": "the server does not read input USD prices; it takes a fee only in USDC or in one of the 12 tokenized stocks with a measured deep Aerodrome pool: it may refuse a route the app accepts, never the reverse",
     "third_party_memestocks": "a block quoted in a Coinbase tokenized stock on another launcher's hook trades here with a 0.5% fee taken in that stock, once per swap (proved on a Base fork: SI/NVDAc buy and sell)",
     "third_party_blocks": "since 2026-10-03 (R10): any B20 absent from all our own records (router index, our blocks, our hooks), with those records read, is a third-party token: it trades on its own pool and hook with our 0.5% in the quote token (ETH, USDC, OUSD, cbBTC, TOSHI or a Coinbase stock); proved on a Base fork for SI/NVDAc, COBALT/USDC, FIRSTOUSD/OUSD, COFFR/ETH"
+  },
+  "mcp": {
+    "since": "2026-10-04",
+    "endpoint": "POST https://tokenizedblock.space/mcp",
+    "transport": "JSON-RPC 2.0, streamable HTTP without sessions, one request per POST (no event stream, no batch)",
+    "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum"],
+    "read_only": "every tool returns unsigned calls; the user's wallet signs them in order. The server signs, holds and sends nothing.",
+    "birth": {
+      "get": "https://tokenizedblock.space/api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>[&paire=<ETH or a currency address>][&sel=<free text that fixes the address>]",
+      "pairs": "https://tokenizedblock.space/api/naissance/paires",
+      "fee": "0.001 ETH (0.0007 at creation + 0.0003 at registration); the plan is refused if the calls do not add up to exactly that",
+      "creator_minimum": "about $1 of the paired currency, never under the contract floor: a deposit, not a fee; it earns 0.03% of each trade; exit = a request (the share stops at once), then the withdrawal 7 days later",
+      "proof": "executed on a Base fork against the deployed hook: the returned calls sent as-is, all status 1, fee wallet +0.001 ETH, then the creator minimum requested and withdrawn in full after 7 days",
+      "limit": "a block made straight through the Base B20 factory does not pass through TokenizedBlock"
+    },
+    "creator_minimum_get": "https://tokenizedblock.space/api/caution?block=<block address>[&paire=<ETH or the paired currency>][&compte=<the creator wallet>]",
+    "health": "https://tokenizedblock.space/sante — `naissance.sonde` is a full birth planned and simulated against the deployed hook every 10 minutes"
   }
 }

@@ -22,6 +22,15 @@
 - A plan reads the chain and simulates the exact transaction: measured from 4 seconds to over a minute depending on the route (set a long timeout). Budget: 4 plans per minute per IP, 20 per minute in total; over that the answer is 429 with `retry-after`.
 - The API itself is free. The fee is the one in the transaction (the block market's hook, or the route's fee), paid only when your wallet executes it.
 
+## For agents: the MCP server, and making a block
+
+- MCP endpoint: `POST https://tokenizedblock.space/mcp` (JSON-RPC 2.0, streamable HTTP without sessions; one request per POST). Tools: `tblock_pairs`, `tblock_plan_birth`, `tblock_plan_swap`, `tblock_creator_minimum`. Every tool is read-only: it returns unsigned calls, and your wallet signs them.
+- Making a block without MCP: `GET https://tokenizedblock.space/api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>[&paire=<ETH or a currency address>][&sel=<free text that fixes the address>]`. Currencies: `GET https://tokenizedblock.space/api/naissance/paires`.
+- The plan is the whole birth, in order: create the block (createPaid), approvals, registration on the market contract, market opening. A wallet batch (wallet_sendCalls) makes it one signature. The sequence is simulated from your wallet before it is returned; `etat` is `PRET` only when every call would succeed.
+- Cost, all listed in `cout`: a birth fee of 0.001 ETH (0.0007 at creation + 0.0003 at registration); a creator minimum of about $1 of the paired currency, which is a deposit and not a fee — it stays the creator's, held by the market contract, and earns 0.03% of each trade; and, for an ETH pair, 0.0003 ETH seeded into the pool. Gas is on top. For a pair other than ETH the wallet must already hold the creator minimum in that currency.
+- Taking the creator minimum back: `GET https://tokenizedblock.space/api/caution?block=<block address>[&paire=<ETH or the paired currency>][&compte=<the creator wallet>]` returns its state and the unsigned call for the next step. A request stops the 0.03% share at once; the withdrawal opens 7 days later.
+- A block made straight through the Base B20 factory does not pass through TokenizedBlock: these tools only plan births on this path.
+
 ## Links
 
 - App: https://tokenizedblock.space/

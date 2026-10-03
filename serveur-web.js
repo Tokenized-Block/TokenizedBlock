@@ -134,6 +134,14 @@ async function obtenirRasteriseur() {
 import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
 import { planRail } from './rails-api.js';
+/* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
+import { planNaissance, pairesDeNaissance } from './naissance-api.js';
+import { traiterMcp } from './mcp-tblock.js';
+import { etatCautionCreateur, sortieCautionPour, cleMarcheCreateur } from './caution-createur.js';
+import { prixEthUsd } from './prix-eth.js';
+import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
+import { V4_ADRESSES } from './lancer-pool.js';
+import { randomBytes } from 'node:crypto';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
 /* ⛔⛔ DEUX ENDPOINTS OFFICIELS PAR DEFAUT, ET PAS PLUS. Mesure du 2026-09-29 :
@@ -1269,6 +1277,118 @@ async function clesRails(a) {
   } catch (_) { /* cle illisible : vieDuBlock essaie ses cles standard et dit s il n a pas lu */ }
   return [];
 }
+
+/* ══ LA NAISSANCE PAR UN AGENT + LE MCP (2026-10-04) — naissance-api.js, mcp-tblock.js, caution-createur.js ════════════════════
+ * ⛔ RIEN N EST SIGNE ICI : des appels NON SIGNES, simules avant d etre rendus. Le wallet de l agent signe.
+ * ⛔ MEME BUDGET QUE LES RAILS (une naissance planifiee = ~20 lectures + une simulation, sur les noeuds de tout le site). */
+const naissanceCompteurs = { plans: 0, prets: 0, refus: 0, nonMesures: 0, trop: 0, mcp: 0 };
+/** Vrai = le budget est pris (a rendre par railsEnVol -= 1). Faux = occupe. */
+function prendreBudgetPlan(ip) {
+  const minute = Math.floor(Date.now() / 60000);
+  if (railsBudget.minute !== minute) { railsBudget.minute = minute; railsBudget.n = 0; railsBudget.parIp.clear(); }
+  const nIp = (railsBudget.parIp.get(ip) || 0) + 1;
+  if (nIp > RAILS_IP_MINUTE || railsBudget.n >= RAILS_MINUTE || railsEnVol >= RAILS_EN_VOL_MAX) return false;
+  railsBudget.parIp.set(ip, nIp);
+  railsBudget.n += 1;
+  railsEnVol += 1;
+  return true;
+}
+/* eth_simulateV1 : mesure le 2026-10-04 — mainnet.base.org, publicnode et drpc l executent (surcharge de solde comprise) ; un
+ *   endpoint qui ne le connait pas ou qui limite n est PAS une reponse : on passe au suivant. Un resultat (tableau) est la
+ *   reponse, meme quand un appel y est en 0x0. Toute autre methode : le lecteur des rails. */
+const RPC_SIMULATION = ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'];
+let tourSim = 0;
+async function rpcNaissance(methode, params) {
+  if (methode !== 'eth_simulateV1') return rpcRails(methode, params);
+  let dernier = new Error('no endpoint tried');
+  for (let k = 0; k < RPC_SIMULATION.length * 2; k += 1) {
+    const url = RPC_SIMULATION[tourSim++ % RPC_SIMULATION.length];
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(20000), headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++idRails, method: methode, params }) });
+      const j = await r.json().catch(() => null);
+      if (j && Array.isArray(j.result)) return j.result;
+      dernier = new Error(j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status);
+      /* « insufficient funds » est une REPONSE de la chaine (le compte ne peut pas payer) : inutile de la redemander ailleurs */
+      if (/insufficient funds/i.test(dernier.message)) throw dernier;
+    } catch (e) { dernier = e; if (/insufficient funds/i.test(String(e && e.message))) throw e; }
+    await new Promise((ok) => setTimeout(ok, 250 * (k + 1)));
+  }
+  throw dernier;
+}
+/* le prix en dollars que l ECRAN lirait : l ETH sur ses pools (prix-eth.js), une devise par notre propre /api/prix-usd (meme
+ *   chiffre, meme cache). null = non lu : le plan s arrete en NON_MESURE, il n invente pas un minimum. */
+let prixEthCache = { t: 0, usd: null };
+async function prixUsdPourPlan(adr) {
+  if (adr === null) {
+    if (prixEthCache.usd !== null && Date.now() - prixEthCache.t < 60000) return prixEthCache.usd;
+    try {
+      const r = await prixEthUsd({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView });
+      if (r && r.etat === 'LU' && Number.isFinite(r.usd) && r.usd > 0) { prixEthCache = { t: Date.now(), usd: r.usd }; return r.usd; }
+    } catch (_) { /* non lu */ }
+    return null;
+  }
+  try {
+    const d = await fetch('http://127.0.0.1:' + PORT + '/api/prix-usd?adr=' + encodeURIComponent(String(adr).toLowerCase()),
+      { signal: AbortSignal.timeout(15000), headers: { 'x-ms-monitor': '1' } }).then((x) => x.json());
+    return d && d.ok === true && Number(d.prixUsd) > 0 ? Number(d.prixUsd) : null;
+  } catch (_) { return null; }
+}
+const selAleatoireServeur = () => 'block-' + randomBytes(8).toString('hex');
+async function faireNaissance(demande, { sonde = false, soldeSuppose = null } = {}) {
+  if (!sonde) naissanceCompteurs.plans += 1;
+  const r = await planNaissance(demande, { rpc: rpcNaissance, prixUsd: prixUsdPourPlan, selAleatoire: selAleatoireServeur, chaine: 8453, soldeSuppose });
+  if (!sonde) {
+    if (r.etat === 'PRET') naissanceCompteurs.prets += 1;
+    else if (r.etat === 'REFUSE') naissanceCompteurs.refus += 1;
+    else naissanceCompteurs.nonMesures += 1;
+  }
+  return r;
+}
+async function faireRail(demande) {
+  try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
+  const r = await planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453 });
+  if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
+  return r;
+}
+/** Le minimum du createur d un block ne sur le hook 7030 : l etat lu, et l appel NON SIGNE de la prochaine etape de sortie. */
+async function faireCaution({ block, pair, account }) {
+  const hook = DESCRIPTEUR_7030.adresse;
+  const devise = !pair || /^eth$/i.test(pair) ? '0x0000000000000000000000000000000000000000' : String(pair).toLowerCase();
+  const cle = cleMarcheCreateur({ bloc: String(block).toLowerCase(), devise, hook });
+  let maintenantSec = Math.floor(Date.now() / 1000);
+  try { const b = await rpcRails('eth_getBlockByNumber', ['latest', false]); if (b && b.timestamp) maintenantSec = parseInt(b.timestamp, 16); } catch (_) { /* l horloge du serveur */ }
+  const etat = await etatCautionCreateur({ rpc: rpcRails, hook, cle, maintenantSec });
+  const sortie = account ? sortieCautionPour({ etat, compte: account, hook, cle }) : { appel: null, pourquoi: 'no account given: state only' };
+  const j = (v) => (typeof v === 'bigint' ? v.toString() : v);
+  return { ok: etat.etat === 'LUE', etat: etat.etat === 'NON_MESURE' ? 'NON_MESURE' : etat.etat === 'AUCUN' ? 'REFUSE' : 'PRET', pourquoi: etat.pourquoi || null,
+    marche: { block: String(block).toLowerCase(), paire: devise, hook: hook.toLowerCase() },
+    minimum: etat.etat === 'LUE' ? { createur: etat.createur, depose: j(etat.depose), minimum: j(etat.minimum), partActive: etat.partActive, phase: etat.phase,
+      retraitDes: etat.retraitDes, secondesRestantes: etat.secondesRestantes, delaiSec: etat.delaiSec } : null,
+    aSigner: sortie.appel ? [sortie.appel] : [], etape: sortie.etape || null, pourquoiPasDAppel: sortie.appel ? null : sortie.pourquoi,
+    borne: 'state read at one block; the call is unsigned and NOT simulated here. A request stops the 0.03% creator share at once; the withdrawal opens 7 days later.' };
+}
+function pairesPourAgent() {
+  return { ok: true, etat: 'PRET', frais: { naissanceEthWei: '1000000000000000', note: '0.001 ETH: 0.0007 at creation + 0.0003 at registration' },
+    paires: pairesDeNaissance(8453).map((p) => { const pl = plancher7030(p.adr); return { adresse: p.adr, symbole: p.symbole, type: p.type, plancherMinimumCreateur: pl === null ? null : pl.toString() }; }),
+    note: 'plancherMinimumCreateur = the contract floor of the creator minimum, in raw units of that currency; the amount asked at birth is the larger of that floor and about $1 at today’s price' };
+}
+/* ── LA SONDE DE SANTE DE LA NAISSANCE (2026-10-04) ──────────────────────────────────────────────────────────────────────
+ * ⛔⛔ POURQUOI : le 2026-10-03 un drapeau a route toutes les naissances vers un hook dont l inscription exigeait un sel que l app
+ *   n envoyait pas — TOUS les Create refuses pendant ~5 h, et /sante disait ok. Cette sonde planifie ET SIMULE une naissance
+ *   entiere (createPaid + approbations + inscription + ouverture) contre le hook deploye, avec le code DEPLOYE, depuis un compte
+ *   de sonde au solde SUPPOSE (aucun fonds reel, rien d envoye). Son verdict est dans /sante.naissance : PRET, ou la raison.
+ * ⛔ BORNE : paire ETH seulement (un minimum en devise ne se suppose pas), simulation et non execution, toutes les 10 minutes. */
+const COMPTE_SONDE = '0x00000000000000000000000000000000c0ffee77';
+let naissanceSonde = { etat: 'PAS_ENCORE', pourquoi: 'not run yet', lu: null };
+async function sonderNaissance() {
+  try {
+    const r = await faireNaissance({ nom: 'Probe', symbole: 'PROBE', compte: COMPTE_SONDE, paire: 'ETH', sel: 'sonde-' + Date.now() }, { sonde: true, soldeSuppose: 10n ** 17n });
+    naissanceSonde = { etat: r.etat, pourquoi: r.pourquoi || null, lu: new Date().toISOString(),
+      fraisEthWei: r.cout ? r.cout.fraisEthWei : null, totalEthWei: r.cout ? r.cout.totalEthWei : null, hook: r.block ? r.block.hook : null, appels: (r.aSigner || []).length };
+  } catch (e) { naissanceSonde = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160), lu: new Date().toISOString() }; }
+}
+setTimeout(() => { sonderNaissance(); setInterval(sonderNaissance, 10 * 60 * 1000).unref(); }, 45000).unref();
 function ecrireVoix() {
   if (!FICHIER_VOIX) return;
   try {
@@ -3029,6 +3149,88 @@ createServer((req, res) => {
     return;
   }
 
+  /* ══ LA NAISSANCE PAR UN AGENT, ET LE MCP (2026-10-04) ═════════════════════════════════════════════════════════════════
+   *   GET  /api/naissance/paires                                       les devises de naissance
+   *   GET  /api/naissance/plan?nom=&symbole=&compte=[&paire=][&sel=]   les appels NON SIGNES d une naissance entiere, simules
+   *   GET  /api/caution?block=[&paire=][&compte=]                      le minimum du createur + l appel de sortie non signe
+   *   POST /mcp                                                        les memes outils, en MCP (JSON-RPC 2.0, sans session)
+   * ⛔ RIEN N EST SIGNE NI ENVOYE ICI. Nom et symbole d un block sont publics (ils seront graves) : ils peuvent voyager en GET. */
+  if (chemin === '/api/naissance/paires' || chemin === '/api/naissance/plan' || chemin === '/api/caution' || chemin === '/mcp') {
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type, accept, mcp-protocol-version, mcp-session-id, x-ms-monitor' };
+    const rendreN = (code, corps, extra = {}) => {
+      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...cors, ...extra });
+      res.end(corps === null ? '' : JSON.stringify(corps));
+    };
+    if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
+    const ipN = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const sondeN = req.headers['x-ms-monitor'] === '1';
+    const occupe = () => rendreN(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: each plan reads the chain on a node shared with the whole site — retry in a minute' }, { 'retry-after': '60' });
+    const qN = new URL(req.url, 'http://x').searchParams;
+    if (chemin === '/api/naissance/paires') {
+      if (req.method !== 'GET') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
+      rendreN(200, pairesPourAgent());
+      return;
+    }
+    if (chemin === '/api/naissance/plan') {
+      if (req.method !== 'GET') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const d = { nom: String(qN.get('nom') || ''), symbole: String(qN.get('symbole') || ''), compte: String(qN.get('compte') || ''),
+        paire: String(qN.get('paire') || 'ETH'), sel: String(qN.get('sel') || '') };
+      if (!d.nom.trim() || !d.symbole.trim() || !/^0x[0-9a-f]{40}$/i.test(d.compte) || !/^(eth|0x[0-9a-f]{40})$/i.test(d.paire) || d.sel.length > 64) {
+        rendreN(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>'
+          + '[&paire=<ETH or a currency address from /api/naissance/paires>][&sel=<free text that fixes the address>]' });
+        return;
+      }
+      if (!prendreBudgetPlan(ipN)) { naissanceCompteurs.trop += 1; occupe(); return; }
+      faireNaissance(d, { sonde: sondeN }).then((r) => rendreN(200, r))
+        .catch((e) => rendreN(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) }))
+        .finally(() => { railsEnVol -= 1; });
+      return;
+    }
+    if (chemin === '/api/caution') {
+      if (req.method !== 'GET') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const d = { block: String(qN.get('block') || ''), pair: String(qN.get('paire') || 'ETH'), account: String(qN.get('compte') || '') };
+      if (!/^0x[0-9a-f]{40}$/i.test(d.block) || !/^(eth|0x[0-9a-f]{40})$/i.test(d.pair) || (d.account && !/^0x[0-9a-f]{40}$/i.test(d.account))) {
+        rendreN(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/caution?block=<block address>[&paire=<ETH or the paired currency address>][&compte=<the creator wallet>]' });
+        return;
+      }
+      if (!prendreBudgetPlan(ipN)) { naissanceCompteurs.trop += 1; occupe(); return; }
+      faireCaution(d).then((r) => rendreN(200, r))
+        .catch((e) => rendreN(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) }))
+        .finally(() => { railsEnVol -= 1; });
+      return;
+    }
+    /* ── /mcp ── */
+    if (req.method === 'GET') { rendreN(405, { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'this MCP server answers POST only (no event stream)' } }, { allow: 'POST, OPTIONS' }); return; }
+    if (req.method !== 'POST') { rendreN(405, { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'POST only' } }, { allow: 'POST, OPTIONS' }); return; }
+    let brutM = '', tropM = false;
+    req.on('data', (c) => { if (tropM) return; brutM += c; if (brutM.length > 16 * 1024) { tropM = true; rendreN(413, { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'request too large' } }); req.destroy(); } });
+    req.on('end', async () => {
+      if (tropM) return;
+      let msg;
+      try { msg = JSON.parse(brutM); } catch { rendreN(400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } }); return; }
+      naissanceCompteurs.mcp += 1;
+      /* chaque outil qui lit la chaine prend le budget des plans ; il le REND dans son finally */
+      const avecBudget = (f) => async (a) => {
+        if (!prendreBudgetPlan(ipN)) { naissanceCompteurs.trop += 1; const e = new Error('busy'); e.occupe = true; throw e; }
+        try { return await f(a); } finally { railsEnVol -= 1; }
+      };
+      try {
+        const rep = await traiterMcp(msg, { version: buildServi(), outils: {
+          tblock_pairs: async () => pairesPourAgent(),
+          tblock_plan_birth: avecBudget((a) => faireNaissance({ nom: a.name, symbole: a.symbol, compte: a.account, paire: a.pair || 'ETH', sel: a.salt || '' }, { sonde: sondeN })),
+          tblock_plan_swap: avecBudget((a) => faireRail({ de: a.from, vers: a.to, montant: a.amount, compte: a.account })),
+          tblock_creator_minimum: avecBudget((a) => faireCaution({ block: a.block, pair: a.pair || 'ETH', account: a.account || '' })),
+        } });
+        if (rep === null) { res.writeHead(202, cors); res.end(); return; }
+        rendreN(200, rep);
+      } catch (e) {
+        rendreN(200, { jsonrpc: '2.0', id: (msg && msg.id) === undefined ? null : msg.id, error: { code: -32603, message: 'internal error' } });
+      }
+    });
+    return;
+  }
+
   /* ══ NOS RAILS, EXPOSES : /api/rails/plan?de=&vers=&montant=&compte= (2026-10-03) ═══════════════════════════════════
    * ⛔ RIEN N EST SIGNE ICI : la reponse porte des appels NON SIGNES, construits par les planificateurs de l app. Le wallet
    *   de l agent les signe, dans l ordre de `aSigner`. Le budget ne se compte qu AU MOMENT DU RESEAU. */
@@ -3345,7 +3547,10 @@ createServer((req, res) => {
     /* ⛔ LE BUILD SERVI, POUR QU UN ONGLET DEJA OUVERT SACHE QU IL EST PERIME (2026-09-17 : Phil lisait
      * une page d avant le deploiement et en concluait que le travail n avait pas ete fait). Lu dans le
      * fichier SERVI, jamais recopie a la main. */
-    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), rails: railsCompteurs, ...(ok ? {} : { modulesManquants }) }));
+    /* `naissance` : le verdict de la sonde qui simule une naissance entiere contre le hook deploye (voir sonderNaissance). Il ne
+     *   change PAS `ok` (un 503 ferait redemarrer le conteneur pour une panne de noeud) — il se LIT : etat PRET, ou la raison. */
+    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), rails: railsCompteurs,
+      naissance: { sonde: naissanceSonde, ...naissanceCompteurs }, ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 
