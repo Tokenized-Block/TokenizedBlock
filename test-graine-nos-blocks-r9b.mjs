@@ -43,7 +43,7 @@ const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
 function rpcFictif(jusqua, o = {}) {
   const etat = { tete: o.tete || jusqua + 43200, fenetresFrappes: [], sousLaGraine: 0, echecs: o.echecs ?? 3, rates: [],
     echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null, codeKo: !!o.codeKo,
-    sansRecus: !!o.sansRecus, trouVieux: o.trouVieux || null };
+    sansRecus: !!o.sansRecus, trouVieux: o.trouVieux || null, recusKo: !!o.recusKo };
   const repondre = async (m, p) => {
     if (m === 'eth_blockNumber') return '0x' + etat.tete.toString(16);
     if (m === 'eth_getLogs') {
@@ -67,7 +67,8 @@ function rpcFictif(jusqua, o = {}) {
       }
       return [];
     }
-    if (m === 'eth_getTransactionReceipt') { etat.recus += 1; return etat.sansRecus ? null : recuDe(p[0]); }
+    if (m === 'eth_getTransactionReceipt') { etat.recus += 1; if (etat.recusKo) throw new Error('Archive requests require a personal token'); /* G2 */
+      return etat.sansRecus ? null : recuDe(p[0]); }
     if (m === 'eth_getCode' && etat.codeKo && String(p[0]).toLowerCase() === NOUVEAU) throw new Error('internal error'); /* F4 */
     if (m === 'eth_getCode') return [NOUVEAU, VIEUX].includes(String(p[0]).toLowerCase()) ? '0xef0100' + 'ab'.repeat(20) : '0x';
     throw Object.assign(new Error('execution reverted'), { code: 3 });
@@ -154,6 +155,13 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
     && (await O.verifierGraineNos({ rpc: rpcV, tete: J + 10, graine: fab })).etat === 'FAUX'
     && (await O.verifierGraineNos({ rpc: rpcV, tete: J - 1 })).etat === 'FAUX'
     && (await O.verifierGraineNos({ rpc: async () => { throw new Error('x'); }, tete: J + 10 })).etat === 'NON_LU');
+  /* U9 (G2) — recu null (tx inconnue du noeud) : refusee, mais le journal dit « inconnue », pas « ne correspond pas » */
+  const pq = async (rpc) => O.verifierGraineNos({ rpc, tete: J + 10 });
+  const nul = await pq(async () => null), mal = await pq(async () => ({ status: '0x0' }));
+  v('U9 (G2) recu null : INCONNU, graine refusee avec « tx unknown to this node » ; un recu qui ne correspond pas reste « does not match »',
+    await O.verifierEntreeGraineNos({ rpc: async () => null, entree: e }) === 'INCONNU'
+    && nul.etat === 'FAUX' && /tx unknown to this node/.test(nul.pourquoi) && !/does not match/.test(nul.pourquoi)
+    && mal.etat === 'FAUX' && /does not match its receipt/.test(mal.pourquoi));
   /* U7 (F1) — le client applique a /api/nos-blocks la borne du routeur : retard <= 1800, tete lue il y a <= 10 min */
   const IRu = await imp(dir, 'index-routeur.js'); const mU = Date.now();
   const nosU = (o = {}) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, fenetresEnAttente: 0, blocks: PROD, tete: 52200000, jusqua: 52200000, teteLueA: mU, ...o });
@@ -297,6 +305,11 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   v('S5c (F2) jusqua de la graine au-dela de la tete : graine refusee (journal), balayage depuis la tete, jamais complete d emblee',
     /past the chain head/.test(sc5.journal) && sc5.rpc.sousLaGraine > 0 && !!sc5.premiere && sc5.premiere.couvertureComplete === false
     && sc5.vues.every((x) => x.graine !== 'ADMISE'));
+  /* S5d (G2, C2) — RPC sans archive : chaque recu de la graine ERRE (NON_LU a chaque tour). Apres 5 tours : balayage complet, jamais bloque */
+  const sd = await redemarrer(dir, J, { attenteMax: 90000, rpcO: { echecs: 0, recusKo: true } }); await sd.arreter();
+  v('S5d (G2) recus de la graine illisibles (RPC sans archive) : apres 5 tours, balayage complet depuis la tete (journal), jamais admise ni complete',
+    /graine non verifiable apres 5 tours/.test(sd.journal) && sd.rpc.recus >= 5 && sd.rpc.sousLaGraine > 0
+    && sd.vues.every((x) => x.graine !== 'ADMISE' && x.couvertureComplete === false) && sd.vues.some((x) => x.graine === 'REFUSEE'));
   })() : null;
   /* I1 (G1, C2) — complete, puis AU REPOS (aucune visite) pendant 80 s alors que la tete avance : le rafraichissement de fond (60 s)
    *   relit la tete. La PREMIERE reponse apres le repos porte une tete lue il y a < 70 s et la nouvelle tete, couverte (sans lui :
@@ -351,12 +364,14 @@ const MUTANTS = [
   { nom: 'n16 (F1) client : fraicheur de la tete de nos-blocks ignoree', scen: '', edits: [['index-routeur.js', 'const aJour = retard <= RETARD_MAX_INDEX && teteFraiche && !attenteTropLoin;', 'const aJour = retard <= RETARD_MAX_INDEX && !attenteTropLoin;']], casse: [/^U7b /] },
   { nom: 'n17 (F2) re-verification sur la chaine non branchee', scen: 'G', edits: [['serveur-web.js', 'const v = await verifierGraineNos({ rpc: rpcServeur, tete: fin });', "const v = { etat: 'OK' };"]], casse: [/^S5b /, /^S5c /] },
   { nom: 'n18 (F2) jusqua <= tete non verifie', scen: 'G', edits: [['origine.js', '  if (jusqua > tete) return', '  if (false) return']], casse: [/^S5c /, /^U8 /] },
-  { nom: 'n19 (F2) tx inconnue du noeud lue comme « en attente » (jamais refusee)', scen: 'G', edits: [['origine.js', "  if (!r) return 'FAUX';", "  if (!r) return 'NON_LU';"]], casse: [/^S5b /] },
+  { nom: 'n19 (F2) tx inconnue du noeud lue comme « en attente » (jamais refusee)', scen: 'G', edits: [['origine.js', "  if (!r) return 'INCONNU';", "  if (!r) return 'NON_LU';"]], casse: [/^S5b /] },
   { nom: 'n20 (F3) rattrapage tout-ou-rien (jusqua n avance pas sur une fenetre ratee)', scen: 'P', edits: [['serveur-web.js', 'if (basRate - 1 > nosBlocksEtat.jusqua) nosBlocksEtat.jusqua = basRate - 1;', 'if (false) nosBlocksEtat.jusqua = basRate - 1;']], casse: [/^P1 /] },
   { nom: 'n21 (F4) serveur : fenetre a jeton non verifie comptee propre', scen: 'C', edits: [['serveur-web.js', ', ...(scan.fenetresNonVerifiees || [])].map(', '].map(']], casse: [/^C1 /] },
   { nom: 'n22 (F4) mes-blocks : fenetre du jeton non verifie non rendue', scen: 'C', edits: [['mes-blocks.js', ' fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton });', '']], casse: [/^C1 /] },
   { nom: 'n23 (F3b, Zero 1) remontee : depuis saute la fenetre ratee', scen: 'B', edits: [['serveur-web.js', 'if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;', 'nosBlocksEtat.depuis = deBloc;']], casse: [/^B1 /, /^B2 /] },
   { nom: 'n24 (G1, C2) pas de rafraichissement de fond une fois complete', scen: 'I', edits: [['serveur-web.js', 'setInterval(() => { if (nosBlocksEtat.lu !== null) rattraperNosBlocks(); }, 60000).unref?.();', '/* G1 retire */']], casse: [/^I1 /] },
+  { nom: 'n25 (G2, C2) recus illisibles : la verification de la graine reessaie pour toujours', scen: 'G', edits: [['serveur-web.js', "if (v.etat === 'NON_LU' && ++nosBlocksEtat.graineEssais < GRAINE_ESSAIS_MAX)", "if (v.etat === 'NON_LU')"]], casse: [/^S5d /] },
+  { nom: 'n26 (G2, C2) recu null dit « ne correspond pas » (journal trompeur)', scen: '', edits: [['origine.js', "  if (!r) return 'INCONNU';", "  if (!r) return 'FAUX';"]], casse: [/^U9 /] },
 ];
 
 let nAssert = 0, ko = 0;

@@ -58,13 +58,14 @@ export function graineNosBlocksAdmise({ comptes, plancher, graine = GRAINE_NOS_B
   return { ok: true, blocks: graine.map((g) => g.jeton), jusqua };
 }
 const TOPIC_TRANSFER_GRAINE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-/** Re-verifie UNE entree sur la chaine (lecture seule : un recu). 'OK' | 'FAUX' | 'NON_LU'. */
+/** Re-verifie UNE entree sur la chaine (lecture seule : un recu). 'OK' | 'FAUX' | 'INCONNU' (recu null) | 'NON_LU'. */
 export async function verifierEntreeGraineNos({ rpc, entree }) {
   let r;
   try { r = await rpc('eth_getTransactionReceipt', [entree.tx]); } catch { return 'NON_LU'; }
   /* F2 : la graine est figee dans le passe (bloc <= jusqua <= tete, verifie par verifierGraineNos) : un noeud qui ne connait PAS
-   *   la tx dit qu elle n existe pas. FAUX (graine refusee, balayage complet), jamais « en attente » pour toujours. */
-  if (!r) return 'FAUX';
+   *   la tx dit qu elle n existe pas. Graine refusee (balayage complet), jamais « en attente » pour toujours.
+   *   G2 (C2) : dit INCONNU, pas FAUX — un noeud a index de tx limite (geth --history.transactions) rend aussi null. */
+  if (!r) return 'INCONNU';
   const mot = (a) => '0x' + '0'.repeat(24) + String(a).toLowerCase().slice(2);
   const ok = r.status === '0x1' && parseInt(r.blockNumber, 16) === entree.bloc && (r.logs || []).some((l) => String(l.address).toLowerCase() === entree.jeton
     && l.topics && String(l.topics[0]).toLowerCase() === TOPIC_TRANSFER_GRAINE && String(l.topics[1]).toLowerCase() === mot('0x' + '0'.repeat(40))
@@ -81,6 +82,7 @@ export async function verifierGraineNos({ rpc, tete, graine = GRAINE_NOS_BLOCKS,
   for (const e of graine) {
     const v = await verifierEntreeGraineNos({ rpc, entree: e });
     if (v === 'FAUX') return { etat: 'FAUX', pourquoi: 'seed entry ' + e.jeton + ' does not match its receipt (tx ' + e.tx + ')' };
+    if (v === 'INCONNU') return { etat: 'FAUX', pourquoi: 'seed entry ' + e.jeton + ': tx unknown to this node (null receipt; tx index limited or pruned?) (tx ' + e.tx + ')' };
     if (v !== 'OK') return { etat: 'NON_LU', pourquoi: 'receipt of seed entry ' + e.jeton + ' not read' };
   }
   return { etat: 'OK' };
