@@ -62,12 +62,28 @@ const TOPIC_TRANSFER_GRAINE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11
 export async function verifierEntreeGraineNos({ rpc, entree }) {
   let r;
   try { r = await rpc('eth_getTransactionReceipt', [entree.tx]); } catch { return 'NON_LU'; }
-  if (!r) return 'NON_LU';
+  /* F2 : la graine est figee dans le passe (bloc <= jusqua <= tete, verifie par verifierGraineNos) : un noeud qui ne connait PAS
+   *   la tx dit qu elle n existe pas. FAUX (graine refusee, balayage complet), jamais « en attente » pour toujours. */
+  if (!r) return 'FAUX';
   const mot = (a) => '0x' + '0'.repeat(24) + String(a).toLowerCase().slice(2);
   const ok = r.status === '0x1' && parseInt(r.blockNumber, 16) === entree.bloc && (r.logs || []).some((l) => String(l.address).toLowerCase() === entree.jeton
     && l.topics && String(l.topics[0]).toLowerCase() === TOPIC_TRANSFER_GRAINE && String(l.topics[1]).toLowerCase() === mot('0x' + '0'.repeat(40))
     && String(l.topics[2]).toLowerCase() === mot(entree.compte));
   return ok ? 'OK' : 'FAUX';
+}
+/** F2 (C2 R9b) : la graine ENTIERE re-verifiee sur la chaine avant d etre utilisee (lecture seule : 1 recu par entree) :
+ *  jusqua <= tete, puis chaque entree par son recu. { etat: 'OK' } | { etat: 'FAUX', pourquoi } | { etat: 'NON_LU', pourquoi }.
+ *  ⚠️ Ne prouve pas qu il ne MANQUE aucune entree (completude) : une entree perdue ne fait que retirer un block TB de cette
+ *  source (fail-closed : il reste INCONNU, bloque), et les deux entrees sont aussi dans la liste statique. */
+export async function verifierGraineNos({ rpc, tete, graine = GRAINE_NOS_BLOCKS, jusqua = GRAINE_NOS_JUSQUA }) {
+  if (!Number.isSafeInteger(tete)) return { etat: 'NON_LU', pourquoi: 'chain head not read' };
+  if (jusqua > tete) return { etat: 'FAUX', pourquoi: 'seed jusqua ' + jusqua + ' is past the chain head ' + tete };
+  for (const e of graine) {
+    const v = await verifierEntreeGraineNos({ rpc, entree: e });
+    if (v === 'FAUX') return { etat: 'FAUX', pourquoi: 'seed entry ' + e.jeton + ' does not match its receipt (tx ' + e.tx + ')' };
+    if (v !== 'OK') return { etat: 'NON_LU', pourquoi: 'receipt of seed entry ' + e.jeton + ' not read' };
+  }
+  return { etat: 'OK' };
 }
 
 /** Nos blocks : la genese + les B20 frappes vers le wallet de frais entre `deBloc` et `aBloc`. */

@@ -108,7 +108,7 @@ import { partsHolders } from './parts-holders.js';
  *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
 import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
-import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise } from './origine.js';
+import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
@@ -963,11 +963,14 @@ console.log('[nos-blocks] ' + NOS_CREATEURS.length + ' compte(s) surveille(s) ·
 /* ⛔ R9b : la GRAINE (origine.js) couvre [PREMIER_BLOCK_TB, GRAINE_NOS_JUSQUA] ; seul [jusqua + 1, tete] reste a lire. Graine
  *   refusee (entree hors comptes surveilles, hors plage, compte non couvert) : balayage complet, comme avant. La couverture
  *   n est COMPLETE qu apres une lecture propre jusqu a la tete (`teteAtteinte`), jamais sur la seule graine. */
+/* ⛔ F2 (C2 R9b) : admise ici sur sa FORME seulement ; elle n est utilisee qu apres re-verification SUR LA CHAINE au premier tour
+ *   (verifierGraineNos : jusqua <= tete, un recu par entree). Une entree qui ne passe pas : graine refusee, balayage complet.
+ *   Recu illisible : rien n est complet, on reessaie au tour suivant. */
 const GRAINE_NOS = graineNosBlocksAdmise({ comptes: NOS_CREATEURS, plancher: PREMIER_BLOCK_TB });
-console.log(GRAINE_NOS.ok ? '[nos-blocks] graine admise : ' + GRAINE_NOS.blocks.length + ' block(s), couverte jusqu au bloc ' + GRAINE_NOS.jusqua
+console.log(GRAINE_NOS.ok ? '[nos-blocks] graine recue : ' + GRAINE_NOS.blocks.length + ' block(s), jusqu au bloc ' + GRAINE_NOS.jusqua + ' — re-verification sur la chaine au premier tour'
   : '[nos-blocks] ⛔ graine refusee (' + GRAINE_NOS.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
-const nosBlocksEtat = { blocks: new Set([...NOS_BLOCKS_GENESE, ...(GRAINE_NOS.ok ? GRAINE_NOS.blocks : [])]),
-  depuis: GRAINE_NOS.ok ? PREMIER_BLOCK_TB : null, jusqua: GRAINE_NOS.ok ? GRAINE_NOS.jusqua : null, ratees: 0, lu: null, teteAtteinte: false,
+const nosBlocksEtat = { blocks: new Set(NOS_BLOCKS_GENESE),
+  depuis: null, jusqua: null, graine: GRAINE_NOS.ok ? 'A_VERIFIER' : 'REFUSEE', ratees: 0, lu: null, teteAtteinte: false,
   tete: null, teteLueA: null };
 /* ⛔ F1 (C2, R9b) : « complete » RETOMBE si la couverture prend du retard sur la tete (meme borne que le routeur : RETARD_MAX_INDEX
  *   blocs). Une fenetre qui reste en attente fige `jusqua` : apres ~1 h, couvertureComplete repasse a faux. `tete` et `teteLueA`
@@ -979,6 +982,19 @@ async function etendreNosBlocks() {
   const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   if (!Number.isSafeInteger(fin)) return;
   nosBlocksEtat.tete = fin; nosBlocksEtat.teteLueA = Date.now(); /* F1 : seule une tete LUE rafraichit teteLueA */
+  if (nosBlocksEtat.graine === 'A_VERIFIER') {
+    const v = await verifierGraineNos({ rpc: rpcServeur, tete: fin });
+    if (v.etat === 'NON_LU') { nosBlocksEtat.lu = new Date().toISOString(); return; } /* rien de complet ; on reessaie au tour suivant */
+    if (v.etat === 'OK') {
+      nosBlocksEtat.graine = 'ADMISE';
+      for (const b of GRAINE_NOS.blocks) nosBlocksEtat.blocks.add(b);
+      nosBlocksEtat.depuis = PREMIER_BLOCK_TB; nosBlocksEtat.jusqua = GRAINE_NOS.jusqua;
+      console.log('[nos-blocks] graine admise apres re-verification sur la chaine : ' + GRAINE_NOS.blocks.length + ' recu(s) OK, jusqua ' + GRAINE_NOS.jusqua + ' <= tete ' + fin);
+    } else {
+      nosBlocksEtat.graine = 'REFUSEE';
+      console.log('[nos-blocks] ⛔ graine refusee sur la chaine (' + v.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
+    }
+  }
   let deBloc, aBloc;
   const f = prochaineFenetre({ fin, depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB, pas: PAS_NOS_BLOCKS });
@@ -1039,7 +1055,7 @@ function nosBlocksCorps() {
     blocks: [...nosBlocksEtat.blocks],
     depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB,
-    tete: nosBlocksEtat.tete, teteLueA: nosBlocksEtat.teteLueA,
+    tete: nosBlocksEtat.tete, teteLueA: nosBlocksEtat.teteLueA, graine: nosBlocksEtat.graine,
     couvertureComplete: nosBlocksComplet(),
     /* R9b : `fenetresRatees` = ce qui MANQUE a la couverture annoncee. Une fois complete, une lecture ratee au-dela de
      *   `jusqua` n y retire rien (la plage n avance simplement pas) : elle est dite dans `fenetresEnAttente`, pas en trou. */
