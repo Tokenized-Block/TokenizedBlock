@@ -131,6 +131,8 @@ try {
    *   code (sans formeTete), comme sur 1bb12d6. Chaque copie a son propre module d index : on le charge dans chacune. */
   const BRIAN = '0xb2000000000000000000002eefebd3dd6ef2d601';
   const argsB = { ...args, jeton: BRIAN, marcheLu: { etat: 'LUE', cle: cleDePool(ETH, BRIAN, { fee: 0, tickSpacing: 200, hooks: O1_LAUNCH_HOOK_STANDARD }), paire: null } };
+  /* R9 : l outil d etat peut charger les copies (TB_ETAT_INDEX) — on les met NON LUES ici, explicitement. */
+  for (const d of [dOff, dOffOld]) { const IRc = await import(pathToFileURL(join(d, 'index-routeur.js')).href); IRc.indexRouteurIllisible('banc'); IRc.nosBlocksTbIllisibles('banc'); }
   const bNon = await planOff(argsB), bNonOld = await planOffOld(argsB);
   eq([bNon.etat, bNonOld.etat], ['REFUSE', 'REFUSE'], 'BRIAN drapeau OFF, sources TB non lues : traite en block (R5) -> REFUSE');
   const charge = async (d) => {
@@ -147,7 +149,8 @@ try {
   eq(bOff.tx.data, bOffOld.tx.data, 'BRIAN drapeau OFF : calldata identique octet pour octet a l ancien code (R5-1)');
   eq(hookDataLuParUr(bOff.tx.data), '', 'BRIAN drapeau OFF : aucun hookData');
   const pOffApres = await planOff(args);
-  eq(pOffApres.etat, 'PRET', 'JETON sur o1, sources lues : jeton tiers libere, PRET (meme regle que BRIAN)');
+  /* R9 (C2 R8 F1/F2) : plus de liberation par le hook du marche — JETON (synthetique, pas ne d un lancement o1) reste un block. */
+  eq(pOffApres.etat, 'REFUSE', 'JETON sur o1, sources lues : pas dans la liste (adresses), un marche o1 ne libere pas -> REFUSE');
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 }

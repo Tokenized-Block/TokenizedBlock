@@ -170,14 +170,27 @@ v('l ecran dit combien de pools ont ete lues, et seulement s il y a eu un choix'
     'la ligne s afficherait meme sans choix reel — annoncer une comparaison qui n a pas eu lieu');
 });
 
-v('regle du fondateur : SPIKE (B20) et ses sept pools sans hook -> aucune route ; une pool hookee reste choisie', () => {
-  const sp = (fee, hooks) => ({ jeton: SPIKE, cle: { currency0: ZERO, currency1: SPIKE, fee, tickSpacing: 200, hooks } });
-  const m = new Map([[1, sp(770000, ZERO)], [2, sp(887323, ZERO)], [3, sp(878449, ZERO)], [4, sp(500000, ZERO)]]);
-  assert.equal(choisir(m, estNotreHook, confianceDe, fraisEstDynamique, SPIKE), null, 'une pool sans hook a ete choisie pour un block B20');
+/* ⛔ R9 (C2 R8) : SPIKE est un B20 NE D UN LANCEMENT o1 (jetons-nes-launchpads.js) : jeton tiers, libere quand les sources TB
+ *   sont lues. La regle du fondateur se teste donc sur un block B20 HORS liste (BLOC, les sept pools de SPIKE recopiees). */
+const BLOC = '0xb200000000000000000000fac1a85ab57681d6ff';
+const septPools = (adr) => {
+  const sp = (fee, hooks) => ({ jeton: adr, cle: { currency0: ZERO, currency1: adr, fee, tickSpacing: 200, hooks } });
+  return { sp, m: new Map([[1, sp(770000, ZERO)], [2, sp(887323, ZERO)], [3, sp(878449, ZERO)], [4, sp(500000, ZERO)]]) };
+};
+v('regle du fondateur : un block B20 (hors liste) et ses sept pools sans hook -> aucune route ; une pool hookee reste choisie', () => {
+  const { sp, m } = septPools(BLOC);
+  assert.equal(choisir(m, estNotreHook, confianceDe, fraisEstDynamique, BLOC), null, 'une pool sans hook a ete choisie pour un block B20');
   /* controle negatif : la meme carte + une pool hookee -> la hookee */
   m.set(5, sp(0, NOTRE));
-  const r = choisir(m, estNotreHook, confianceDe, fraisEstDynamique, SPIKE);
+  const r = choisir(m, estNotreHook, confianceDe, fraisEstDynamique, BLOC);
   assert.ok(r && String(r.cle.hooks).toLowerCase() === NOTRE, 'la pool hookee n est pas choisie');
 });
-assert.equal(n, 10, 'compte de cas inattendu apres ajout : ' + n);
+const { sourcesTbLues } = await import('./index-routeur.js');
+v('SPIKE (B20 ne o1, liste R9) : sources TB lues -> la pool sans hook la moins chere ; sinon aucune route (block par defaut)', () => {
+  const { m } = septPools(SPIKE);
+  const r = choisir(m, estNotreHook, confianceDe, fraisEstDynamique, SPIKE);
+  if (sourcesTbLues()) assert.ok(r && Number(r.cle.fee) === 500000, 'SPIKE libere : la moins chere (50 %) devait gagner');
+  else assert.equal(r, null, 'SPIKE, sources non lues : une pool sans hook a ete choisie');
+});
+assert.equal(n, 11, 'compte de cas inattendu apres ajout : ' + n);
 console.log('ok pool-la-moins-chere — ' + n + ' cas, fonction extraite d app.html et EXECUTEE');
