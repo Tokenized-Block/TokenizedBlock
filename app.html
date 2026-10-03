@@ -20136,9 +20136,10 @@ async function majBridgeQuote() {
    *    Ce depot connait le motif : « la peinture accrochee au premier settle ». */
   const monJeton = ++jetonDevisBridge;
   netEl.textContent = 'You receive: reading its market on chain…';
-  let plan;
+  let plan, marcheB = null;
   try {
-    plan = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites });
+    marcheB = await marcheDuHubBridge(hub);
+    plan = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites, marcheLu: marcheB });
   } catch (err) {
     plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) };
   }
@@ -20150,10 +20151,25 @@ async function majBridgeQuote() {
       + '. Nothing was sent.';
     return;
   }
-  netEl.textContent = 'You receive at least '
-    + formaterUnites(plan.resume.recoitAuMoins || 0n, 18) + ' '
-    + (plan.resume.recoitDevise === 'pair' ? 'in the paired asset' : (plan.resume.recoitDevise || 'ETH'))
-    + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.';
+  const recu = recuBridge(plan.resume, marcheB);
+  netEl.textContent = recu ? 'You receive at least ' + recu + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.'
+    : 'You receive: not read — the paired asset of its market could not be read. Nothing was sent.';
+}
+/* ⛔⛔ 2026-10-03 (audit rails R9) : le Bridge appelait planEchange SANS marche lu ; planEchange relisait alors par
+ *    vieDuBlock sans `clesExactes`, aveugle aux pools V8 contre une devise ERC-20. e7e9 (pool V8 SPCXc/e7e9, prix lu
+ *    sur la chaine) recevait « this block has no market to trade on yet » — faux. Meme lecture que le profil. */
+async function marcheDuHubBridge(hub) {
+  try { return await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: hub, clesExactes: await clesReellesDe(hub) }); }
+  catch (_) { return null; }
+}
+/** Le montant recu, dans SES decimales. ⛔ Le Bridge formatait tout en 18 : un minimum en SPCXc (8 dec) se serait
+ *  affiche 1e10 fois trop petit, juste avant une signature. Devise sans decimales lues -> null (on ne devine pas). */
+function recuBridge(resume, marche) {
+  if (!resume) return null;
+  if (resume.recoitDevise !== 'pair') return formaterUnites(resume.recoitAuMoins || 0n, 18) + ' ' + (resume.recoitDevise || 'ETH');
+  const dec = marche && marche.paire === 'DEVISE' ? Number(marche.decDevise) : NaN;
+  if (!Number.isInteger(dec) || dec < 0 || dec > 36) return null;
+  return formaterUnites(resume.recoitAuMoins || 0n, dec) + ' ' + (marche.devise || 'of the paired asset');
 }
 
 function basculerBridgeMode(mode) {
@@ -20268,9 +20284,10 @@ function basculerBridgeMode(mode) {
       return;
     }
     setEtat('Reading its market and asking the chain for a real price…');
-    let sortie;
+    let sortie, marcheS = null;
     try {
-      sortie = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites });
+      marcheS = await marcheDuHubBridge(hub);
+      sortie = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites, marcheLu: marcheS });
     } catch (err) {
       /* ⛔ une panne de lecture n est pas « ce block n a pas de marche » : on ne conclut pas a sa place */
       sortie = { etat: 'NON_MESURE', pourquoi: 'its market could not be read: ' + String((err && err.message) || err).slice(0, 120) };
@@ -20290,6 +20307,12 @@ function basculerBridgeMode(mode) {
       return;
     }
     const sortieResume = sortie.resume || {};
+    const recuS = recuBridge(sortieResume, marcheS);
+    if (!recuS) {
+      etape('bridge_swap_ko');
+      setEtat('The paired asset of its market could not be read, so the minimum you receive cannot be shown — nothing was sent.');
+      return;
+    }
     const call = { ok: true, to: sortie.tx.to, data: sortie.tx.data, value: sortie.tx.value };
     etape('bridge_fee_sign');
     /* ⛔ « still needs Phil » RETIRE : ce texte s affiche au moment ou l utilisateur ouvre son
@@ -20300,9 +20323,7 @@ function basculerBridgeMode(mode) {
      *     geste etait vide. Maintenant elle decrit l echange REEL, avec les chiffres que la chaine
      *     vient de rendre, pas ceux d une estimation. */
     setEtat('Open your wallet — this sells ' + formaterUnites(sortieResume.paye || 0n, 18)
-      + ' blocks through its own market. You receive at least '
-      + formaterUnites(sortieResume.recoitAuMoins || 0n, 18) + ' '
-      + (sortieResume.recoitDevise === 'pair' ? 'in the paired asset' : (sortieResume.recoitDevise || 'ETH'))
+      + ' blocks through its own market. You receive at least ' + recuS
       + '. The fee is taken inside the same transaction.');
     conf.disabled = true;
     try {
