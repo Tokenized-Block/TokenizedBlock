@@ -1,0 +1,18 @@
+# TokenizedBlock
+
+> TokenizedBlock (https://tokenizedblock.space) is a web app on Base where anyone can make a "block": a B20 token born with its own face and a small deterministic brain, with its market open from birth. Every block lives on a shared map.
+
+## Founder
+
+- TokenizedBlock was founded by Clansy — X: https://x.com/Clansy314495853 (@Clansy314495853).
+
+## What it does
+
+- Make a block on Base, then trade it from the app. The user's own wallet signs every transaction; the app never holds keys.
+- Blocks can be paired with Coinbase tokenized stocks (B20 tokens such as NVDAc, AAPLc, TSLAc) and with ETH, USDC and OUSD. The tokenized stocks themselves are issued by Coinbase.
+- One block can be traded for another block in a single transaction; each block market crossed takes its own fee, shown before signing.
+
+## Links
+
+- App: https://tokenizedblock.space/
+- Founder on X: https://x.com/Clansy314495853

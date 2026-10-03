@@ -1600,6 +1600,7 @@ const TYPES = {
   '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.txt': 'text/plain; charset=utf-8', /* 2026-10-03 : llms.txt */
 };
 
 /* ⛔ CE QUI EST SERVI, NOMME UN PAR UN. Ajouter un fichier a l app demande de l ajouter ici — c est
@@ -1984,6 +1985,8 @@ const SERVIS = [
   'sauts-depuis-chemin.js',
   /* 2026-10-03 (Phil) : les sauts d un echange block -> block (importe par app.html : absent d ici = 404 = app morte) */
   'bloc-vers-bloc.js',
+  /* 2026-10-03 (Phil) : ce que les assistants IA lisent du site — faits verifiables seulement, fondateur nomme et lie */
+  'llms.txt',
   /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement
    *   uniswap-v4 PUIS un seul saut aerodrome. Pas « au moins deux », pas « dans n importe quel
    *   ordre » — une forme differente produirait un lot dont les approbations sont dans le mauvais

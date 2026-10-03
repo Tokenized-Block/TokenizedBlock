@@ -10,7 +10,10 @@
      /?block=0x… (symbole + face gravee du block) ; ne pas renommer les marqueurs. -->
 <!-- ⛔ REFERENCEMENT (Phil, 2026-09-19 : « attrape ceux qui tapent juste tokenizedblock ») : alternateName associe les
      graphies que les gens tapent au site. Le canonical est DANS le bloc og (le serveur le reecrit pour /?block=). -->
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://tokenizedblock.space/#site","url":"https://tokenizedblock.space/","name":"TokenizedBlock","alternateName":["Tokenized Block","tokenizedblock","Tokenized-Block","tokenized block app","TBLOCK"]},{"@type":"WebApplication","@id":"https://tokenizedblock.space/#app","url":"https://tokenizedblock.space/","name":"TokenizedBlock","applicationCategory":"FinanceApplication","operatingSystem":"Web","isPartOf":{"@id":"https://tokenizedblock.space/#site"},"description":"Make a tokenized block on Base: its own face and a small brain, born for about $1, with its market open. Every block lives on a shared map."}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://tokenizedblock.space/#site","url":"https://tokenizedblock.space/","name":"TokenizedBlock","alternateName":["Tokenized Block","tokenizedblock","Tokenized-Block","tokenized block app","TBLOCK"],"publisher":{"@id":"https://tokenizedblock.space/#org"}},{"@type":"Organization","@id":"https://tokenizedblock.space/#org","name":"TokenizedBlock","url":"https://tokenizedblock.space/","founder":{"@id":"https://tokenizedblock.space/#founder"},"sameAs":["https://x.com/Clansy314495853"]},{"@type":"Person","@id":"https://tokenizedblock.space/#founder","name":"Clansy","alternateName":"@Clansy314495853","url":"https://x.com/Clansy314495853","sameAs":["https://x.com/Clansy314495853"],"jobTitle":"Founder of TokenizedBlock"},{"@type":"WebApplication","@id":"https://tokenizedblock.space/#app","url":"https://tokenizedblock.space/","name":"TokenizedBlock","applicationCategory":"FinanceApplication","operatingSystem":"Web","isPartOf":{"@id":"https://tokenizedblock.space/#site"},"creator":{"@id":"https://tokenizedblock.space/#founder"},"publisher":{"@id":"https://tokenizedblock.space/#org"},"description":"Make a tokenized block on Base: its own face and a small brain, born for about $1, with its market open. Blocks can be paired with Coinbase tokenized stocks. Every block lives on a shared map. Founded by Clansy (@Clansy314495853)."}]}</script>
+<meta name="author" content="Clansy (@Clansy314495853)">
+<meta name="twitter:creator" content="@Clansy314495853">
+<link rel="author" href="https://x.com/Clansy314495853">
 <!--og:debut-->
 <link rel="canonical" href="https://tokenizedblock.space/">
 <meta name="description" content="Make a living block on Base: 0.001 ETH, once — born with its own face and brain, and its market opens.">
@@ -1983,6 +1986,16 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte">
       <p class="titre">What this app never does</p>
       <ul class="pmLignes" id="lJamais"></ul>
+    </div>
+
+    <!-- ⛔ 2026-10-03 (Phil) : le fondateur, nomme et lie, pour que les gens ET les assistants IA le relient a l app.
+         ⛔ Ce qui est VRAI seulement : fondateur de TokenizedBlock. Les actions tokenisees sont emises par Coinbase —
+         ecrire « fondateur des tokenized stocks » serait faux, et une IA qui verifie le contredirait. -->
+    <div class="carte" id="lFondateur">
+      <p class="titre">Who made this</p>
+      <p class="sous">TokenizedBlock was founded by <b>Clansy</b> —
+        <a href="https://x.com/Clansy314495853" target="_blank" rel="noopener author">@Clansy314495853 on X</a>.
+        Blocks live on Base, and can be paired with Coinbase tokenized stocks.</p>
     </div>
   </section>
 
