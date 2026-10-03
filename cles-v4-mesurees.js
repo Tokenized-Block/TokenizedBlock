@@ -8,6 +8,8 @@
  * ⛔ CE QUI EST GARDE : le LOG BRUT (topics + data), pas une cle recopiee. Il passe par le decodeur canonique
  *   `decoderInitialize`, qui RECALCULE le poolId et refuse toute cle incoherente — un log altere ne donne rien.
  * Source : eth_getLogs sur mainnet.base.org, PoolManager, bloc 51962957, tx 0x776dd72539eaf83cbffc20154c9586921cccfd315509e5c813278cd898e5e8dd. */
+/* 2026-10-03 : + les 20 pools v4 USDC des actions tokenisees (cles-v4-actions.js), lues de la meme facon. OUSD reste en [0]. */
+import { LOGS_INITIALIZE_ACTIONS } from './cles-v4-actions.js';
 export const LOGS_INITIALIZE_MESURES = Object.freeze([
   /* OUSD/USDC — Uniswap V4, fee 100, tickSpacing 1, sans hook ; ~10 M$ de liquidite (dexscreener, 2026-10-02) */
   Object.freeze({
@@ -21,4 +23,5 @@ export const LOGS_INITIALIZE_MESURES = Object.freeze([
     ],
     "data": "0x00000000000000000000000000000000000000000000000000000000000000640000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   }),
+  ...LOGS_INITIALIZE_ACTIONS,
 ]);

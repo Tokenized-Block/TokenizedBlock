@@ -39,12 +39,17 @@ const o0 = (r0.devises || []).find((d) => d.devise === OUSD);
 ok(!o0 || !DD.peutEtreAssemblee(o0).ok, 'TEMOIN sans pool mesuree : OUSD non assemblable (le « no route » de prod)');
 /* ⛔ 2026-10-03 (prod baa5 : « AMDc — routed ») : un fait v4 SANS cle constructible ne cree aucune arete ; une cle face a ETH
  *   relie le jeton a ETH, pas a USDC. */
+/* ⛔ 2026-10-03 (soir) : AMDc a REJOINT les logs mesures (cles-v4-actions.js, pool v4 USDC/AMDc bloc 51792212) — il a donc une arete
+ *   de fait, et le temoin « sans cle » devient AVGOc (aucune pool lisible, mesure du 2026-10-03). Le vert d avant tenait a l absence. */
+const AVGO = P.ACTIONS_COINBASE.find((x) => x.symbole === 'AVGOc').adr.toLowerCase();
 const AMD = P.ACTIONS_COINBASE.find((x) => x.symbole === 'AMDc').adr.toLowerCase();
 const fauxJeton = '0x' + '7'.repeat(40);
-const faits = new Map([[AMD, { famille: 'uniswap-v4', cleV4: null }], [fauxJeton, { famille: 'uniswap-v4', cleV4: { currency0: ETH, currency1: fauxJeton, fee: 3000, tickSpacing: 60, hooks: ETH } }]]);
+const faits = new Map([[AVGO, { famille: 'uniswap-v4', cleV4: null }], [fauxJeton, { famille: 'uniswap-v4', cleV4: { currency0: ETH, currency1: fauxJeton, fee: 3000, tickSpacing: 60, hooks: ETH } }]]);
 const a2 = new Function('ETH_ADR', 'USDC_BASE', 'faitsPoolLus', 'LOGS_INITIALIZE_MESURES', 'decoderInitialize', src + '\nreturn aretesMesurees;')(
   ETH, USDC_BASE, faits, C.LOGS_INITIALIZE_MESURES, PJ.decoderInitialize)();
-ok(!a2.some((a) => String(a.vers).toLowerCase() === AMD || String(a.de).toLowerCase() === AMD), 'AMDc (cleV4 null = « priced but not built ») : aucune arete, donc plus offert');
+ok(!a2.some((a) => String(a.vers).toLowerCase() === AVGO || String(a.de).toLowerCase() === AVGO), 'AVGOc (cleV4 null = « priced but not built ») : aucune arete, donc plus offert');
+ok(a2.some((a) => a.famille === 'uniswap-v4' && [String(a.de).toLowerCase(), String(a.vers).toLowerCase()].includes(AMD) && [String(a.de).toLowerCase(), String(a.vers).toLowerCase()].includes(USDC_BASE.toLowerCase())),
+  'AMDc : son Initialize mesure (cles-v4-actions.js) cree l arete USDC/AMDc sans aucun fait serveur');
 ok(a2.some((a) => String(a.vers).toLowerCase() === fauxJeton && String(a.de).toLowerCase() === ETH) && !a2.some((a) => String(a.vers).toLowerCase() === fauxJeton && String(a.de).toLowerCase() === USDC),
   'cle v4 face a ETH : arete jeton <-> ETH (l autre cote reel), pas USDC');
 console.log(n + ' assertions, ' + ko + ' KO');

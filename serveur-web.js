@@ -801,6 +801,21 @@ async function fraisRecents(heures) {
 }
 
 const clesPool = new Map();
+/* ⛔⛔ 2026-10-03 — PRE-REMPLI (par JETON) depuis les logs Initialize MESURES. Mesure en prod : `/api/cle/<action>` rendait
+ *   POOLID_ABSENT pour les 20 actions a pool v4 USDC (cles-v4-actions.js) — leurs Initialize datent de 2 a 12 jours, hors des
+ *   40 fenetres de 999 blocs balayees ci-dessous. Sans cle, la fiche ne lisait ni n achetait ces 20 (planEchange, nourri de la
+ *   cle exacte, rend APPROBATIONS 0,5 % USDC — BEc, ORCLc, QUBTc). Meme regle : seul un log dont le poolId se recalcule entre. */
+for (const l of LOGS_INITIALIZE_MESURES) {
+  const p = decoderInitialize(l);
+  if (!p || p.erreur || !p.cle || !p.poolId) continue;
+  const c = { poolId: p.poolId, currency0: p.cle.currency0, currency1: p.cle.currency1, fee: p.cle.fee, tickSpacing: p.cle.tickSpacing, hooks: p.cle.hooks, bloc: p.bloc };
+  for (const j of p.jetons) {
+    const t = String(j).toLowerCase();
+    const r = clesPool.get(t) || { ok: true, cles: [], balaye: 0, mesure: true };
+    if (!r.cles.some((x) => x.poolId === c.poolId)) r.cles.push(c);
+    clesPool.set(t, r);
+  }
+}
 async function resoudreClePool(token, fenetres = 40) {
   const t = String(token).toLowerCase();
   if (clesPool.has(t)) return clesPool.get(t);
@@ -2131,6 +2146,8 @@ const SERVIS = [
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
+  /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */
+  'cles-v4-actions.js',
   /* 2026-10-03 (Phil) : ce que les assistants IA lisent du site — faits verifiables seulement, fondateur nomme et lie */
   'llms.txt',
   /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement
