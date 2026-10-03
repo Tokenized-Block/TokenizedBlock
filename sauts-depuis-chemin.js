@@ -28,7 +28,7 @@
  *   qui ne finit pas la ou il croit. Et « une route a echoue » sans dire OU envoie chercher partout.
  */
 
-import { estBlockDeRoute, cleSansHook, MESSAGE_PAS_ICI, RE_B20 } from './pool-sans-hook.js';
+import { estBlockDeRoute, cleSansHook, hooksDeRoute, MESSAGE_PAS_ICI, RE_B20 } from './pool-sans-hook.js';
 
 /** Les etats rendus. ⛔ Aucun autre. */
 export const ETATS = Object.freeze(['OK', 'REFUSE', 'NON_MESURE']);
@@ -133,7 +133,11 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
       try { courant = BigInt(r.quote); } catch (_) { courant = 0n; }
     }
   }
-  if (sauts.filter((x) => !cleSansHook(x.cle)).length >= 2) {
+  /* ⛔ 2026-10-03 (Phil) : block A -> ... -> block B admis, un frais de hook par marche de block (regle UNIQUE :
+   *   pool-sans-hook.js `hooksDeRoute`, la meme que planEchangeMultiSauts). Tout autre 2+ hooks : refus, comme avant. */
+  const hr = hooksDeRoute({ sauts, entree: chemin[0].de, sortie: chemin[chemin.length - 1].vers,
+    estBlock: (a) => RE_B20.test(String(a || '')) && estBlockDeRoute(a) });
+  if (!hr.ok) {
     return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: sauts.length, pourquoi: MESSAGE_PAS_ICI, refusPlusieursHooks: true };
   }
   return {

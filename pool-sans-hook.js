@@ -44,6 +44,28 @@ function pasUnBlockConnu(a) { return estDeviseConnue(a); }
 export function cleSansHook(cle) {
   return !!cle && /^0x0{40}$/i.test(String(cle.hooks || ZERO));
 }
+/** Combien de jambes a hook une route peut-elle traverser ? ⛔ UNE SEULE REGLE, lue par echange.js (planEchangeMultiSauts)
+ *  ET sauts-depuis-chemin.js — deux copies ont deja diverge ici (jumeaux).
+ *  ⛔⛔ DECISION DE PHIL, 2026-10-03 : un block s echange contre un AUTRE block en une transaction (A -> ETH -> B). Chaque
+ *   marche de block traverse preleve SON frais de hook sur la chaine ; le routeur ne prend rien ; le total est affiche
+ *   avant signature. La regle « une fois par swap » devient « jamais de frais routeur EN PLUS d un hook, et un frais par
+ *   marche de block traverse ».
+ *  · 0 ou 1 jambe a hook : inchange.
+ *  · 2 jambes a hook : admis SEULEMENT si l entree ET la sortie sont deux blocks distincts, que la PREMIERE jambe est le
+ *    marche du block d entree et la DERNIERE celui du block de sortie (chacune ne contient que son block). Tout le reste —
+ *    un hook sur une jambe de devises, deux hooks du meme block, 3 hooks — reste refuse (fail-closed).
+ *  @returns {{ ok: boolean, jambesHook: number[], blocAbloc: boolean }} */
+export function hooksDeRoute({ sauts = [], entree, sortie, estBlock = () => false }) {
+  const jambesHook = [];
+  for (const [i, x] of sauts.entries()) if (x && x.cle && !cleSansHook(x.cle)) jambesHook.push(i);
+  if (jambesHook.length <= 1) return { ok: true, jambesHook, blocAbloc: false };
+  const e = bas(entree), s = bas(sortie), dernier = sauts.length - 1;
+  const contient = (i, a) => [sauts[i].cle.currency0, sauts[i].cle.currency1].some((c) => bas(c) === a);
+  const ok = jambesHook.length === 2 && e !== s && !!estBlock(e) && !!estBlock(s)
+    && jambesHook[0] === 0 && jambesHook[1] === dernier
+    && contient(0, e) && !contient(0, s) && contient(dernier, s) && !contient(dernier, e);
+  return { ok, jambesHook, blocAbloc: ok };
+}
 export function estBlockTb(adr, blocks = [], cles = []) {
   const a = bas(adr);
   if (!/^0x[0-9a-f]{40}$/.test(a)) return false;

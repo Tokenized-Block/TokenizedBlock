@@ -2325,7 +2325,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-audit-rails-bridge" hidden>Build <code>20261003-audit-rails-bridge</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-bloc-vers-bloc" hidden>Build <code>20261003-bloc-vers-bloc</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2692,6 +2692,10 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="dexCol">
             <label class="champ">Sell — blocks to sell<input id="peVente" inputmode="decimal" placeholder="1000" autocomplete="off">
               <span class="soldeDex">Balance: <b id="peSoldeBloc">—</b> <button type="button" class="maxDex" id="peMaxBloc">MAX</button></span></label>
+            <!-- ⛔ 2026-10-03 (Phil) : BLOCK -> BLOCK en une transaction. Vide = le marche de ce block (chemin historique,
+                 inchange). Un block choisi = vendre celui-ci sur SON marche et acheter l autre sur le SIEN ; chaque marche
+                 preleve son frais, le total est dit avant la signature. N apparait que s il existe au moins un autre block TB vivant. -->
+            <label class="champ" id="peRecoitBloc" hidden>Receive<select id="peRecoit"></select></label>
             <button class="bouton sec" id="peVendre" type="button">Prepare sell</button>
           </div>
         </div>
@@ -3061,6 +3065,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
+import { sautsBlocVersBloc, blocsRecevables } from './bloc-vers-bloc.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
 import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
@@ -11346,6 +11351,22 @@ function majDeviseEchange(v) {
   }
   void majSoldeDeviseEchange();
   majDevisesDentree(v);
+  try { majRecoitBlocs(); } catch (_) { /* liste illisible : le selecteur reste cache, la vente historique reste */ }
+}
+/** Le selecteur « Receive » (block -> block). La liste vient de bloc-vers-bloc.js `blocsRecevables` (routage) ; le
+ *  planificateur re-juge tout au clic, cette liste ne promet rien qu il refuserait d avance. */
+function majRecoitBlocs() {
+  const sel = $('#peRecoit'), bloc = $('#peRecoitBloc');
+  if (!sel || !bloc) return;
+  const adr = $('#profil') && $('#profil').dataset.block;
+  const liste = blocsRecevables({ marches: marcheParAdr, ici: adr, liqMin: LIQ_MIN_BUY_USD });
+  sel.textContent = '';
+  const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Its own market (ETH or its pair)'; sel.appendChild(o0);
+  for (const b of liste) {
+    const o = document.createElement('option'); o.value = b.adr; o.textContent = b.symbole + ' — another block'; o.dataset.sym = b.symbole;
+    sel.appendChild(o);
+  }
+  bloc.hidden = liste.length === 0;
 }
 let deviseEchange = null;
 /** La devise d entree choisie dans le selecteur, ou `null` = celle de la pool (chemin historique). */
@@ -11622,7 +11643,20 @@ function majDevisesDentree(v) {
  *   ⛔ ET LE TAUX EST BORNE PAR `BPS_MAX` : un plan qui reclamerait plus que le palier le plus haut
  *     du bareme serait un prelevement qu on n a jamais annonce. On refuse plutot que de signer.
  */
-function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
+/** La ligne de frais d une route, DITE AVANT LA SIGNATURE. ⛔ 2026-10-03 : quand un hook paie, fraisBps vaut 0 (le routeur
+ *  ne prend rien) et l ecran affichait « Fee: 0% » — faux : le marche du block preleve son taux sur la chaine. Block -> block
+ *  (decision de Phil) : chaque marche traverse preleve le sien, le total est annonce (somme des taux, compose a peine plus bas). */
+function ligneFraisMultiSauts(r, taux) {
+  if (r && r.fraisParHook === true && Number.isFinite(r.fraisMarcheBps) && r.fraisMarcheBps > 0) {
+    const total = r.fraisMarcheBps / 100;
+    if (r.jambesHook >= 2) {
+      return 'Fee: about ' + total + '% in total — each of the ' + r.jambesHook + ' block markets crossed takes its own fee, inside the same transaction';
+    }
+    return 'Fee: ' + total + '%, taken by the block’s market inside the same transaction';
+  }
+  return taux !== null ? 'Fee: ' + taux + '% of what you pay, inside the same transaction' : null;
+}
+function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relance = 'ACHAT' }) {
   const r = p && p.resume;
   /* ⛔⛔⛔ `refuser` NE COMPTE PAS, ET C EST VOLONTAIRE. Ma premiere version prenait le nom du
    *   compteur en PARAMETRE et appelait `etape(compteur)`. Resultat : `test-etapes-comptees.mjs`,
@@ -11640,7 +11674,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
     if (!relancer) return;
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
-    br.addEventListener('click', () => void preparerEchange('ACHAT'));
+    br.addEventListener('click', () => void preparerEchange(relance));
     $('#peActions').appendChild(br);
   };
   if (!p || p.etat === 'NON_MESURE') {
@@ -11660,7 +11694,9 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
     const bt = document.createElement('button');
     bt.className = 'bouton'; bt.type = 'button';
     bt.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + et.nom;
-    bt.addEventListener('click', () => void signerEchange(et, 'ACHAT', true));
+    /* ⛔ `relance` : apres l approbation, signerEchange re-prepare DANS CE SENS — une vente block -> block ne doit pas
+     *   repartir en achat (2026-10-03). */
+    bt.addEventListener('click', () => void signerEchange(et, relance, true));
     $('#peActions').appendChild(bt);
     e.className = 'note';
     e.textContent = 'This token needs an approval first, then the swap. Each one is measured again once done.';
@@ -11688,7 +11724,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
       return refuser('This trade could not be prepared safely. Nothing to sign — try again.');
     }
   }
-  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  const sym = symPaye || (deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token');
   const taux = r && typeof r.fraisBps === 'bigint' ? (Number(r.fraisBps) / 100) : null;
   $('#peLignes').innerHTML = [
     'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
@@ -11699,12 +11735,12 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec }) {
     'Route: ' + b.sauts.length + ' hops, one transaction',
     /* ⚠️ ET LE CHIFFRE ANNONCE EST LE TAUX EFFECTIF, pas celui du palier : le plancher du bareme
      *   peut le rendre superieur, et annoncer le palier serait annoncer un prix qu on ne prend pas. */
-    ...(taux !== null ? ['Fee: ' + taux + '% of what you pay, inside the same transaction'] : []),
+    ...(ligneFraisMultiSauts(r, taux) ? [ligneFraisMultiSauts(r, taux)] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
   const bt = document.createElement('button');
   bt.className = 'bouton'; bt.type = 'button';
   bt.textContent = 'Sign — pay with ' + sym;
-  bt.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
+  bt.addEventListener('click', () => void signerEchange(p.tx, relance, false));
   $('#peActions').appendChild(bt);
   e.className = 'note';
   e.textContent = 'Your wallet signs — this page never does. It shows every amount before you confirm.';
@@ -12073,6 +12109,34 @@ async function preparerEchange(sens) {
     } catch (_) { /* ⛔ liste illisible : on retombe sur l ensemble d avant, jamais sur « tout ouvert » */ }
     return s;
   })();
+  /* ══ 2026-10-03 (Phil) : VENDRE CE BLOCK CONTRE UN AUTRE BLOCK, EN UNE TRANSACTION ════════════════════════════
+   * ⛔ Ne s active que sur un choix explicite dans « Receive » ; vide = vente historique, inchangee. Les deux marches sont
+   *   LUS (cle exacte), les sauts construits par bloc-vers-bloc.js, et TOUT est juge par planEchangeMultiSauts (regle
+   *   hooksDeRoute : un frais par marche de block, routeur 0) puis par les gardes d ecran d afficherPlanMultiSauts. */
+  const cible = sens === 'VENTE' && $('#peRecoit') ? String($('#peRecoit').value || '').toLowerCase() : '';
+  if (cible) {
+    const optC = $('#peRecoit').selectedOptions && $('#peRecoit').selectedOptions[0];
+    const symCible = (optC && optC.dataset.sym) || 'blocks';
+    try {
+      const sv = RESEAUX[CHAINE].stateView;
+      const marcheA = marcheLu && marcheLu.etat === 'LUE' ? marcheLu
+        : await vieDuBlock({ rpc, stateView: sv, jeton: adr, clesExactes: await clesReellesDe(adr) });
+      const marcheB = await vieDuBlock({ rpc, stateView: sv, jeton: cible, clesExactes: await clesReellesDe(cible) });
+      const b = sautsBlocVersBloc({ adrA: adr, marcheA, adrB: cible, marcheB });
+      if (b.etat !== 'OK') { p = { etat: 'REFUSE', pourquoi: b.pourquoi }; }
+      else {
+        p = await planEchangeMultiSauts({ rpc, chaine: CHAINE, compte, sauts: b.sauts, entree: adr, sortie: cible,
+          montant: m.valeur, decimalesEntree: dec, prixUsdEntree: null, fraisDevisesOk });
+        p.sautsBloc = b.sauts;
+      }
+    } catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) }; }
+    finally { profilEnLecture = false; }
+    if ($('#profil').dataset.block !== adr) return;
+    echangeCourant = p;
+    try { etape('echange_bloc_vers_bloc'); } catch (_) {}
+    afficherPlanMultiSauts({ p, e, b: { sauts: p.sautsBloc || [] }, symBlock: symCible, dec, symPaye: symProfil || 'blocks', relance: 'VENTE' });
+    return;
+  }
   /* ══ LE RAIL MULTI-SAUTS : payer un block avec une devise qui n est PAS celle de sa pool ═══════
    * ⭐⭐ C EST LE PAS QUI OUVRE LE PRODUIT A UN PORTEUR D OUSD. Jusqu ici il ne pouvait LITTERALEMENT
    *   rien acheter chez nous : sa liquidite est sur Uniswap V4, la plupart de nos blocks sur

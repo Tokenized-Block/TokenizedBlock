@@ -22,7 +22,7 @@ import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExact
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
-  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute, hookAdmisPourBlock } from './pool-sans-hook.js';
+  REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute, hookAdmisPourBlock, hooksDeRoute } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
  *   on ne fait que LIRE les prix et APPELER : melanger la lecture et la decision rendrait un refus
  *   indistinguable d une lecture ratee — le defaut numero un de ce depot. */
@@ -820,7 +820,10 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   (2) deux jambes hookees ou plus -> refus (sinon deux frais de hook, ou plus, pour un seul echange). */
   const bouts = new Set([String(entree || '').toLowerCase(), String(sortie || '').toLowerCase()]);
   if (blocsRoute.some((b) => !bouts.has(b))) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocIntermediaire: true };
-  if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2) {
+  /* ⛔⛔ 2026-10-03 (Phil) : (2) devient — 2 jambes hookees admises SEULEMENT pour block A -> ... -> block B, chaque
+   *   jambe etant le marche de SON block (pool-sans-hook.js `hooksDeRoute`, regle unique avec sauts-depuis-chemin.js). */
+  const regleHooks = hooksDeRoute({ sauts, entree, sortie, estBlock: (a) => blocsRoute.includes(String(a || '').toLowerCase()) });
+  if (!regleHooks.ok) {
     return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusPlusieursHooks: true };
   }
   const deadline = BigInt(Math.floor(maintenant / 1000) + 1200);
@@ -884,6 +887,13 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   });
   const iPayeuse = parJambe.findIndex((r) => r.paie);
   const hookPaie = iPayeuse >= 0;
+  /* ⛔ 2026-10-03 : block -> block — les DEUX jambes hookees doivent payer a6cf dans une devise vendable. Sinon une jambe
+   *   preleverait un frais que a6cf ne recoit pas (ou en block), et le routeur, efface par l autre, ne le rattraperait pas. */
+  const jambesPayantes = regleHooks.blocAbloc ? regleHooks.jambesHook : (hookPaie ? [iPayeuse] : []);
+  if (regleHooks.blocAbloc && !regleHooks.jambesHook.every((i) => parJambe[i] && parJambe[i].paie)) {
+    return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusPlusieursHooks: true,
+      causeInterne: 'block-to-block: a hooked leg does not pay the fee wallet in a sellable currency' };
+  }
   if (!estWalletDeFrais(compte) && !hookPaie && !fraisRouteurAilleurs) {
     degressif = fraisPourMontant({ montant: m, decimales: decimalesEntree, prixUsd: prixUsdEntree });
     if (degressif.etat !== 'OK') {
@@ -951,6 +961,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
     frais, fraisDevise: route.fraisDevise, devise: route.devise,
     via: 'V4_' + sauts.length + '_SAUTS', sauts: sauts.length,
     fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null,
+    /* ⛔ 2026-10-03 : ce que les HOOKS prennent sur la chaine (le routeur, lui, est dans fraisBps). Somme des taux par marche
+     *   de block traverse (tokenomics.fraisHookBps) : ~1 % pour deux V8 ; le compose reel est a peine plus bas. */
+    /* (champs poses SEULEMENT quand un hook paie : une route a frais routeur reste octet pour octet celle d avant — test-r6 T3) */
+    ...(hookPaie ? { fraisMarcheBps: jambesPayantes.reduce((t, i) => t + fraisHookBps(sauts[i].cle.hooks), 0),
+      jambesHook: jambesPayantes.length, blocAbloc: regleHooks.blocAbloc } : {}),
   };
   /* ⛔⛔ LE VERROU DE LA DEVISE DE FRAIS EST CELUI D ICI, PAS UNE SECONDE REGLE. `route-v4-multi-sauts`
    *   NOMME la devise, il ne la juge pas : `assertFraisInterfaceA6cf` decide, et il n admet ETH,
@@ -964,14 +979,19 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
    *   · saut 0 : comparaison a `entree`, A L IDENTIQUE de la regle precedente — aucun changement de
    *     comportement la ou l ancienne regle s appliquait deja ; il entre `m` (routeur a 0, net = m).
    *   · saut i > 0 : la devise d entree se lit sur la cle et le sens du saut ; il entre la sortie i-1. */
-  let assietteHook = null;
-  if (hookPaie) {
-    const s = sauts[iPayeuse];
-    const devEntree = iPayeuse === 0
+  const assietteDe = (i) => {
+    const s = sauts[i];
+    const devEntree = i === 0
       ? String(entree).toLowerCase()
       : String(s.zeroForOne ? s.cle.currency0 : s.cle.currency1).toLowerCase();
-    const montantEntree = iPayeuse === 0 ? m : sorties[iPayeuse - 1];
-    assietteHook = parJambe[iPayeuse].devise === devEntree ? montantEntree : sorties[iPayeuse];
+    const montantEntree = i === 0 ? m : sorties[i - 1];
+    return parJambe[i].devise === devEntree ? montantEntree : sorties[i];
+  };
+  /* ⛔ 2026-10-03 : block -> block, la garde anti-poussiere porte sur CHAQUE jambe payante. Le seuil est le meme pour
+   *   toutes (assiette * 50 / 10000 > 0, en unites brutes) : la PLUS PETITE assiette les verifie toutes. */
+  let assietteHook = null;
+  if (hookPaie) {
+    assietteHook = jambesPayantes.map(assietteDe).reduce((a, b) => (b < a ? b : a));
   }
   const koFrais = fraisRouteurAilleurs && !hookPaie && !estWalletDeFrais(compte)
     ? (bps !== 0n || frais !== 0n || jsonSafe(route.actions || []).toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())

@@ -103,6 +103,24 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
     return routeur;
   };
   const doitPasser = async (id, sauts, e, s, m, dec, attendu) => { const p = await multi(sauts, e, s, m, dec); juger1(id, p, sauts, attendu); return p; };
+  /* ⛔⛔ 2026-10-03 (Phil) : block A -> ... -> block B en UNE transaction. Oracle : routeur 0, EXACTEMENT 2 frais de hook
+   *   (un par marche de block), aucun en block, et le plan l annonce (fraisMarcheBps 100 = 2 x V8, blocAbloc, jambesHook 2). */
+  const juger2 = (id, p, sauts) => {
+    const routeur = BigInt((p.resume && p.resume.frais) || 0);
+    const hooks = fraisHooks(sauts);
+    verifier(id + ' : PRET', p.etat === 'PRET', p.etat + ' ' + (p.pourquoi || p.causeInterne || ''));
+    verifier(id + ' : routeur 0, 2 frais de hook (un par block)', routeur === 0n && hooks.length === 2 && BigInt((p.resume && p.resume.fraisBps) || 0) === 0n,
+      'routeur=' + routeur + ' hooks=' + JSON.stringify(hooks));
+    verifier(id + ' : aucun frais en block', !hooks.some((d) => BLOCS.has(bas(d))), JSON.stringify(hooks));
+    /* les OCTETS : aucun TAKE vers a6cf (le routeur ne prend rien), et le hook V8 present dans la transaction */
+    const octets = String((p.tx && p.tx.data) || '').toLowerCase();
+    verifier(id + ' : octets sans a6cf, hook V8 dedans', !!p.tx && !octets.includes(F.FEE_WALLET.slice(2).toLowerCase()) && octets.includes(bas(T.HOOK_V8).slice(2)),
+      'tx=' + !!p.tx + ' a6cf=' + octets.includes(F.FEE_WALLET.slice(2).toLowerCase()));
+    verifier(id + ' : annonce 100 bps de marche, 2 jambes', !!p.resume && p.resume.fraisMarcheBps === 100 && p.resume.jambesHook === 2
+      && p.resume.blocAbloc === true && p.resume.fraisParHook === true,
+      JSON.stringify(p.resume && { m: p.resume.fraisMarcheBps, j: p.resume.jambesHook, b: p.resume.blocAbloc, h: p.resume.fraisParHook }));
+    return p;
+  };
 
   /* ══ DOIVENT REFUSER ══ */
   const r4 = [jambe(ETH, B4, ETH), jambe(B4, NVDA, V8)];
@@ -127,7 +145,11 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   await doitRefuser('R5d USDC>sans>B4>V8>ETH (conflit, voir rapport)', [jambe(USDC, B4, ETH), jambe(B4, ETH, V8)], USDC, ETH, 10n * 10n ** 6n, 6, tousRefus);
   /* chaque regle nouvelle, SEULE responsable du refus : */
   await doitRefuser('SEULE regle (1) : USDC>OpenLaunch>B1>V8>ETH (block intermediaire)', [jambe(USDC, B1, ETH, OL), jambe(B1, ETH, V8)], USDC, ETH, 10n ** 7n, 6, ['refusBlocIntermediaire']);
-  await doitRefuser('SEULE regle (2) : B1>V8>ETH>sans>USDC>V8>B2 (deux hooks)', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, B2, V8)], B1, B2, 10n ** 18n, 18, ['refusPlusieursHooks']);
+  /* ⛔ 2026-10-03 (Phil) : B1>V8>ETH>sans>USDC>V8>B2 PASSE desormais (block -> block, juge plus bas : BB1). La regle (2)
+   *   garde ses refus — chacun SEUL responsable : */
+  await doitRefuser('SEULE regle (2) : B1>V8>ETH>V8>USDC (hook sur une jambe de devises)', [jambe(B1, ETH, V8), jambe(ETH, USDC, V8)], B1, USDC, 10n ** 18n, 18, ['refusPlusieursHooks']);
+  await doitRefuser('SEULE regle (2) : B1>V8>ETH>V8>B1 (le meme block aux deux bouts)', [jambe(B1, ETH, V8), jambe(ETH, B1, V8)], B1, B1, 10n ** 18n, 18, ['refusPlusieursHooks']);
+  await doitRefuser('SEULE regle (2) : B1>V8>ETH>V8>USDC>V8>B2 (trois hooks)', [jambe(B1, ETH, V8), jambe(ETH, USDC, V8), jambe(USDC, B2, V8)], B1, B2, 10n ** 18n, 18, ['refusPlusieursHooks']);
   /* ⚠️ le brief initial voulait PRET ces routes « block V8 currency1 au milieu » : la regle (1) les refuse desormais */
   await doitRefuser('MILIEU USDC>V2(achat)>B1>V8>ETH', [jambe(USDC, B1, T.HOOK_V2), jambe(B1, ETH, V8)], USDC, ETH, 5n * 10n ** 6n, 6, ['refusBlocIntermediaire', 'refusPlusieursHooks']);
   await doitRefuser('MILIEU ETH>V8>B1>inconnu>USDC', [jambe(ETH, B1, V8), jambe(B1, USDC, INCONNU)], ETH, USDC, 10n ** 15n, 18, ['refusBlocIntermediaire', 'refusPlusieursHooks']);
@@ -142,6 +164,11 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   await doitPasser('R1b ETH>sans>USDC>V8>B2', [jambe(ETH, USDC, ETH), jambe(USDC, B2, V8)], ETH, B2, 10n ** 16n, 18, 'hook');
   await doitPasser('R1c B1>V8>ETH>sans>USDC', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH)], B1, USDC, 10n ** 18n, 18, 'hook');
   await doitPasser('R1d B2>V8>USDC>sans>ETH', [jambe(B2, USDC, V8), jambe(USDC, ETH, ETH)], B2, ETH, 10n ** 18n, 18, 'hook');
+  /* ══ 2026-10-03 (Phil) : BLOCK -> BLOCK EN UNE TRANSACTION, un frais de hook par marche de block, routeur 0 ══ */
+  const sBB1 = [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, B2, V8)];
+  juger2('BB1 B1>V8>ETH>sans>USDC>V8>B2', await multi(sBB1, B1, B2, 10n ** 18n, 18), sBB1);
+  const sBB2 = [jambe(B1, ETH, V8), jambe(ETH, B2, V8)];
+  juger2('BB2 B1>V8>ETH>V8>B2 (pivot ETH direct)', await multi(sBB2, B1, B2, 10n ** 18n, 18), sBB2);
   const p3a = await doitPasser('R3a ETH>sans>USDC (1 saut)', [jambe(ETH, USDC, ETH)], ETH, USDC, 10n ** 16n, 18, 'routeur');
   verifier('R3a : 0,2 % (20 bps) exact', p3a.resume && BigInt(p3a.resume.fraisBps) === 20n && BigInt(p3a.resume.frais) === 2n * 10n ** 13n,
     p3a.resume && (p3a.resume.fraisBps + ' bps, ' + p3a.resume.frais));
@@ -157,8 +184,12 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   if (b4g.etat === 'REFUSE') propre('R4g pay-with', b4g);
   const bOL = await S.sautsDepuisChemin({ chemin: ch(USDC, B1, ETH), montant: 10n ** 7n, resoudre: resolveur(tab([USDC, B1, ETH, OL], [B1, ETH, V8])) });
   verifier('pay-with SEULE regle (1) : block intermediaire refuse', bOL.etat === 'REFUSE' && bOL.refusBlocIntermediaire === true, bOL.etat + ' ' + bOL.pourquoi);
+  /* ⛔ 2026-10-03 (Phil) : block -> block admis par le constructeur aussi (meme regle hooksDeRoute) ; deux hooks AILLEURS refuses */
   const b2h = await S.sautsDepuisChemin({ chemin: ch(B1, ETH, USDC, B2), montant: 10n ** 18n, resoudre: resolveur(tab([B1, ETH, V8], [ETH, USDC, ETH], [USDC, B2, V8])) });
-  verifier('pay-with SEULE regle (2) : deux hooks refuses', b2h.etat === 'REFUSE' && b2h.refusPlusieursHooks === true, b2h.etat + ' ' + b2h.pourquoi);
+  verifier('pay-with BB : block -> block, constructeur OK (3 sauts)', b2h.etat === 'OK' && b2h.sauts && b2h.sauts.length === 3, b2h.etat + ' ' + (b2h.pourquoi || ''));
+  if (b2h.etat === 'OK') juger2('pay-with BB -> planificateur', await multi(b2h.sauts, B1, B2, 10n ** 18n, 18), b2h.sauts);
+  const b2x = await S.sautsDepuisChemin({ chemin: ch(B1, ETH, USDC), montant: 10n ** 18n, resoudre: resolveur(tab([B1, ETH, V8], [ETH, USDC, V8])) });
+  verifier('pay-with SEULE regle (2) : deux hooks hors block -> block refuses', b2x.etat === 'REFUSE' && b2x.refusPlusieursHooks === true, b2x.etat + ' ' + b2x.pourquoi);
   const b1a = await S.sautsDepuisChemin({ chemin: ch(USDC, ETH, B1), montant: 25n * 10n ** 6n, resoudre: resolveur(tab([USDC, ETH, ETH], [ETH, B1, V8])) });
   verifier('pay-with R1a : constructeur OK (temoin)', b1a.etat === 'OK' && b1a.sauts && b1a.sauts.length === 2, b1a.etat + ' ' + (b1a.pourquoi || ''));
   if (b1a.etat === 'OK') await doitPasser('pay-with R1a -> planificateur', b1a.sauts, USDC, B1, 25n * 10n ** 6n, 6, 'hook');
@@ -333,7 +364,9 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const sO3 = [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, ETH, ETH)];
   juger1('R-OUSD3 OUSD>sans(100/1)>USDC>sans>ETH (aucun hook : frais routeur une fois)', await multi(sO3, OUSD, ETH, 25n * 10n ** 18n, 18, new Set([OUSD, USDC])), sO3, 'routeur');
   await doitRefuser('R-OUSD4 OUSD>sans>USDC>V8>B1>V8>ETH (block au milieu)', [jambe(OUSD, USDC, ETH, OUSD_USDC), jambe(USDC, B1, V8), jambe(B1, ETH, V8)], OUSD, ETH, 25n * 10n ** 18n, 18, ['refusBlocIntermediaire', 'refusPlusieursHooks']);
-  await doitRefuser('R-OUSD5 OUSD>V8>B1 ... B1 en tete : OUSD>sans>USDC>V8>B2 + V8 (deux jambes payantes)', [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, OUSD, ETH, OUSD_USDC), jambe(OUSD, B2, V8)], B1, B2, 10n ** 18n, 18, ['refusPlusieursHooks']);
+  /* ⛔ 2026-10-03 (Phil) : R-OUSD5 est un block -> block (B1 ... B2) : il PASSE, un frais de hook par marche de block */
+  const sO5 = [jambe(B1, ETH, V8), jambe(ETH, USDC, ETH), jambe(USDC, OUSD, ETH, OUSD_USDC), jambe(OUSD, B2, V8)];
+  juger2('R-OUSD5 B1>V8>ETH>sans>USDC>sans(100/1)>OUSD>V8>B2 (block -> block)', await multi(sO5, B1, B2, 10n ** 18n, 18), sO5);
   /* ══ 2026-10-02 (Phil : UN frais par swap ; C2 F3) — FRANCHISSEMENT Uniswap -> Aerodrome : UN frais a6cf par LOT ══
    * ⛔ L ORACLE LIT LES OCTETS : a6cf dans la jambe 1 (TAKE routeur), a6cf dans la jambe 2 (sweep CL), plus chaque jambe dont
    *   le hook verse a6cf (liste mesuree). Total attendu : 1. Sur f9368a0 : routeur V4 + sweep CL = 2 (ou hook + sweep = 2). */
@@ -453,11 +486,14 @@ const MUTANTS = [
     doitCasser: [/^R4 avec B4 prixe/] },
   { nom: 'C regle (1) retiree', edits: [['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)']],
     doitCasser: [/^SEULE regle \(1\)/] }, /* R-OUSD4 reste refuse par la regle (2) : 2 jambes V8 */
-  { nom: 'D regle (2) retiree', edits: [['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)']],
-    doitCasser: [/^SEULE regle \(2\)/, /^R-OUSD5 /] },
+  { nom: 'D regle (2) retiree', edits: [['echange.js', 'if (!regleHooks.ok) {', 'if (false) {']],
+    doitCasser: [/^SEULE regle \(2\) : B1>V8>ETH>V8>USDC /, /^SEULE regle \(2\) : B1>V8>ETH>V8>B1 /, /^SEULE regle \(2\) : B1>V8>ETH>V8>USDC>V8>B2 /] },
+  /* 2026-10-03 : la regle partagee elle-meme ouverte (n importe quels 2+ hooks) — echange ET pay-with */
+  { nom: 'D2 hooksDeRoute laxiste', edits: [['pool-sans-hook.js', 'const ok = jambesHook.length === 2 && e !== s', 'const ok = jambesHook.length >= 2 || e !== s']],
+    doitCasser: [/^SEULE regle \(2\) : B1>V8>ETH>V8>B1 /, /^pay-with SEULE regle \(2\)/] },
   { nom: 'E pay-with regle (1) retiree', edits: [['sauts-depuis-chemin.js', "if (RE_B20.test(String(chemin[i].vers || '')) && estBlockDeRoute(chemin[i].vers))", 'if (false)']],
     doitCasser: [/^pay-with SEULE regle \(1\)/] },
-  { nom: 'F pay-with regle (2) retiree', edits: [['sauts-depuis-chemin.js', 'if (sauts.filter((x) => !cleSansHook(x.cle)).length >= 2)', 'if (false)']],
+  { nom: 'F pay-with regle (2) retiree', edits: [['sauts-depuis-chemin.js', 'if (!hr.ok) {', 'if (false) {']],
     doitCasser: [/^pay-with SEULE regle \(2\)/] },
   { nom: 'G jonction franchissement retiree', edits: [['plan-franchissement.js', 'if (indexBlocAJonction([forme.pivot]) >= 0)', 'if (false)']],
     doitCasser: [/^J-F1 /] },

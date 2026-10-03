@@ -309,7 +309,8 @@ const MUTANTS = [
   { nom: 'gardes R4 retirees', edits: [
     ['echange.js', 'sauts.flatMap((x) => (x && x.cle ? [x.cle.currency0, x.cle.currency1] : []))', '[entree, sortie]'],
     ['echange.js', 'if (blocsRoute.some((b) => !bouts.has(b)))', 'if (false)'],
-    ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+    /* 2026-10-03 : la regle (2) vit dans pool-sans-hook.js `hooksDeRoute` ; echange.js la consulte par `regleHooks.ok` */
+    ['echange.js', 'if (!regleHooks.ok) {', 'if (false) {'],
   ], doitVoir: [/^MILIEU USDC>blocBas>ACT \[sans,V8\]/, /^R5c ETH>USDC>blocBas>ACT \[sans,sans,V8\]/] },
   { nom: 'PREVU achat hors fraisHookEnBlock', edits: [
     ['pool-sans-hook.js', 'deviseFraisHook(cle, sens, zeroForOne) || deviseFraisHookHorsListe(cle, sens, zeroForOne)', 'deviseFraisHook(cle, sens, zeroForOne)'],
@@ -324,7 +325,7 @@ const MUTANTS = [
     ['echange.js', "return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusV1Route: true };", "neufs.push(x); continue;"],
   ], doitVoir: [/^ROUTE V1 VENTE sans V8 : jambe V1 non refusee/] },
   { nom: 'regle une jambe payante retiree', edits: [
-    ['echange.js', 'if (sauts.filter((x) => x && x.cle && !cleSansHook(x.cle)).length >= 2)', 'if (false)'],
+    ['echange.js', 'if (!regleHooks.ok) {', 'if (false) {'],
   ], doitVoir: [/ : 2\+ JAMBES PAYANTES non refuse/] },
   { nom: 'F1 hook tiers accepte (simple + multi)', edits: [
     ['echange.js', 'if (!hookAdmisPourBlock(marche.cle)) return', 'if (false) return'],

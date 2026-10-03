@@ -1761,6 +1761,7 @@ const ETAPES_ENTONNOIR = [
    *     ce qui rate. Un entonnoir qui ne compte que ses echecs ne dit pas s il sert a quelqu un. */
   'echange_refus_route_multi', 'echange_multi_refus_prix', 'echange_multi_refus_pool',
   'echange_multi_refus_plan', 'echange_multi_refus_frais', 'echange_multi_pret',
+  'echange_bloc_vers_bloc', /* 2026-10-03 : vente block -> block (bloc-vers-bloc.js) */
   /* ⛔⛔ `echange_multi_sign_propos` EST LE DENOMINATEUR QUI MANQUAIT. Sans lui on saurait combien
    *   de franchissements ABOUTISSENT, jamais combien ont ete PROPOSES a la signature — donc jamais
    *   le taux d abandon devant le wallet. Un entonnoir sans son denominateur ne mesure rien : il
@@ -1981,6 +1982,8 @@ const SERVIS = [
    *   LEQUEL — une route partielle produirait un calldata qui s arrete au milieu. 45 assertions,
    *   9/9 mutations attrapees. */
   'sauts-depuis-chemin.js',
+  /* 2026-10-03 (Phil) : les sauts d un echange block -> block (importe par app.html : absent d ici = 404 = app morte) */
+  'bloc-vers-bloc.js',
   /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement
    *   uniswap-v4 PUIS un seul saut aerodrome. Pas « au moins deux », pas « dans n importe quel
    *   ordre » — une forme differente produirait un lot dont les approbations sont dans le mauvais
