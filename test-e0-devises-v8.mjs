@@ -165,6 +165,9 @@ async function simuler(adr, { routable }) {
     faitsDuBlock: async () => { appels.faitsDuBlock += 1; return { estB20: true, supply: 1n, symbole: 'X', nom: 'X' }; },
     rpc: async () => { throw new Error('no rpc'); }, majResumePaire() {}, majFraisEtRecap() {}, peindrePaireChips() {},
     majFundWalletPourPaire() {}, OPTIONS_LANCEMENT: { v9: false },
+    /* 2026-10-03 (memestocks) : majPaire consulte la regle de lancement AVANT la lecture on-chain — le vrai module */
+    hookDeLancementPour: P.hookDeLancementPour,
+    symbolesLancables: () => P.pairesProposees(8453).filter((p) => p.type === 'ACTION' && P.hookDeLancementPour(p.adr, 8453, { v9: false })).map((p) => p.symbole),
   });
   vm.runInContext(srcMaj + '\n' + srcVal, ctx);
   await vm.runInContext('majPaire()', ctx);

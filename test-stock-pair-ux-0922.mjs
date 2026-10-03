@@ -13,7 +13,8 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
  *    L intention — « c est bien une page servie, avec sa ligne de build » — est gardee. */
 assert.match(html, /data-build="[\w-]+"/);
 assert.match(html, /id="cPaireChips"/);
-assert.match(html, /optgroup label="Coinbase tokenized stocks"/);
+/* 2026-10-03 : le groupe garde son nom, suffixe « — make it a memestock » (les actions lancables en tete) */
+assert.match(html, /optgroup label="Coinbase tokenized stocks( — make it a memestock)?"/);
 /* ⛔ la liste des puces n est plus une constante gravee mais une fonction CALCULEE depuis les prix
  *   reellement lus (2026-09-27) : on verifie la fonction, pas le nom de l ancienne constante. */
 assert.match(html, /function pairesChipQuick()/);

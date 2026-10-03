@@ -320,8 +320,18 @@ ok(MODULES.length >= 40, MODULES.length + ' module(s) .js balaye(s) — pas une 
 ok(PAGES.length >= 3, PAGES.length + ' page(s) publique(s) balayee(s) : ' + PAGES.join(', '));
 let total = 0, totalModules = 0;
 const fautes = [];
+/* ⛔ EXCEPTION BORNEE (2026-10-03, demande explicite de Phil) : la carte « Who made this » (#lFondateur) NOMME le fondateur
+ *   et lie son compte X — une attribution publique voulue, pas une note interne. Elle seule est retiree du balayage, et
+ *   elle est verifiee a part : elle ne contient que l attribution et le lien X, rien d autre de l equipe. */
+const CARTE_FONDATEUR = /<div class="carte" id="lFondateur">[\s\S]*?<\/div>/;
 for (const nom of PAGES) {
-  const src = readFileSync(new URL('./' + nom, import.meta.url), 'utf8');
+  let src = readFileSync(new URL('./' + nom, import.meta.url), 'utf8');
+  const carteF = (src.match(CARTE_FONDATEUR) || [])[0];
+  if (carteF) {
+    ok(/https:\/\/x\.com\/Clansy314495853/.test(carteF) && !/\b(?:Phil|Rakhsa|Raksha|Zero\s?1|VolKov)\b/i.test(carteF),
+      nom + ' : la carte fondateur ne contient que l attribution et le lien X (aucun autre nom de l equipe)');
+    src = src.replace(CARTE_FONDATEUR, '');
+  }
   const visibles = chainesVisibles(src);
   total += visibles.length;
   for (const v of visibles) {
