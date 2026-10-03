@@ -155,7 +155,7 @@
       "REFUSE": "refused — the reason is in pourquoi",
       "NON_MESURE": "the chain could not be read — retry"
     },
-    "routes": "block against its own quote token (ETH, USDC, OUSD or a tokenized stock); USDC or OUSD to a block quoted in ETH or USDC; block to block; block to a tokenized stock; ETH or USDC to a tokenized stock with a measured Aerodrome pool",
+    "routes": "block against its own quote token (ETH, USDC, OUSD or a tokenized stock); USDC or OUSD to a block quoted in ETH or USDC; block to block; block to a tokenized stock; ETH or USDC to a tokenized stock with a measured Aerodrome pool (12) or a read v4 USDC pool (20 more); such a stock back to USDC",
     "budget": "4 plans/min per IP, 20/min in total, 2 at a time; 429 + retry-after over that",
     "fee": "the API is free; the fee is the one inside the transaction, paid only when your wallet executes it",
     "server_side_strictness": "the server does not read input USD prices; it takes a fee only in USDC or in one of the 12 tokenized stocks with a measured deep Aerodrome pool: it may refuse a route the app accepts, never the reverse",

@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-hook-7030-allume" hidden>Build <code>20261003-hook-7030-allume</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-actions-v4-cles-lues" hidden>Build <code>20261003-actions-v4-cles-lues</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -17096,7 +17096,12 @@ function peindreTrending() {
          *   ouvre la fiche, il ne reecrit rien. */
         const lA = avecPoolAction(l); /* la vraie pool de l action (table mesuree), pas celle d un meme coté en elle */
         const vR = verdictRoutage({ aMarche: true, dex: lA.dex, poolAdr: lA.poolAdr });
-        if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc)) {
+        /* ⛔ 2026-10-03 : `achetableIci` aussi, POUR LES ACTIONS DU REGISTRE SEULEMENT — les 20 a pool v4 USDC (dex uniswap, sans
+         *   adresse) rendaient IN_APP et ce bouton les envoyait quand meme a « Pair a block with it ». Leur cle est LUE
+         *   (cles-v4-actions.js) : la fiche sait acheter. Mesure avant de borner : sans la borne, 211 lignes sur 223 gagnaient un
+         *   Buy — une decision produit qui n est pas la mienne ; les blocks v4 gardent le chemin d avant (pool decouverte). */
+        const actionRegistre = typeof STOCKS_BASE_BY_ADR !== 'undefined' && STOCKS_BASE_BY_ADR.has(String(l.adr || '').toLowerCase());
+        if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc || (vR.achetableIci && actionRegistre))) {
           return '<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>';
         }
         /* ⛔⛔ LIBELLE CORRIGE LE 2026-09-23 (Phil : « ca aussi pourquoi ? »). Il disait « Trade on
