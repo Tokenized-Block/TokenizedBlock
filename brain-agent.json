@@ -144,5 +144,20 @@
     "option_b_auto_pay": false,
     "x402_module": "/x402-pay.js",
     "not": "Brain freestyle-signing markets; replacing CreateRouter; replacing Buy/Sell; double Bridge skim"
+  },
+  "rails_api": {
+    "since": "2026-10-03",
+    "get": "https://tokenizedblock.space/api/rails/plan?de=<token address or ETH>&vers=<token address or ETH>&montant=<integer, raw units of the token paid>&compte=<the wallet that will sign>",
+    "returns": "unsigned calls from the app's own planners (same fee guards); sign aSigner in order. The server signs and sends nothing.",
+    "etat": {
+      "PRET": "ready to sign",
+      "APPROBATIONS": "sign the approvals, then ask for the plan again to get the swap",
+      "REFUSE": "refused — the reason is in pourquoi",
+      "NON_MESURE": "the chain could not be read — retry"
+    },
+    "routes": "block against its own quote token (ETH, USDC, OUSD or a tokenized stock); USDC or OUSD to a block quoted in ETH or USDC; block to block; block to a tokenized stock; ETH or USDC to a tokenized stock with a measured Aerodrome pool",
+    "budget": "4 plans/min per IP, 20/min in total, 2 at a time; 429 + retry-after over that",
+    "fee": "the API is free; the fee is the one inside the transaction, paid only when your wallet executes it",
+    "server_side_strictness": "the server does not read input USD prices or extra fee currencies: it may refuse a route the app accepts, never the reverse"
   }
 }

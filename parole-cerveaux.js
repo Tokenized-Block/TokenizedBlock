@@ -28,8 +28,17 @@ const humeurJugee = (vu) => !!vu && vu.phase !== 'NON_LU';
 /* le nom ANGLAIS de l humeur, d une seule source (cerveau.js) */
 const humeur = (phase) => (phase === 'NON_LU' ? 'unable to read my market' : nomHumeur(phase));
 /* ⛔ les montants viennent TELS QUELS de l evenement Live (achats.js) ; absents = on ne cite aucun chiffre */
-const montant = (b) => (b && b.echange && b.echange.quantite && b.echange.eth ? ' ' + String(b.echange.quantite).slice(0, 16) + ' of me for '
-  + String(b.echange.eth).slice(0, 12) + ' ETH' : '');
+/* ⛔⛔ 2026-10-03 : `echange.eth` est le montant dans la DEVISE de la pool — ETH ou TBLOCK (fil-live.js, deviseConnue). La
+ *   phrase ecrivait « ETH » en dur : « bought 5000 of me for 5 ETH » pour 5 TBLOCK, une ligne qui peut etre publiee sur la
+ *   chaine. Meme convention que grosEchangeEnEth (voix-block.js) : devise absente = ETH, la forme d avant ; un autre nom =
+ *   aucun chiffre, jamais une unite inventee. */
+const UNITES_PAROLE = new Set(['ETH', 'TBLOCK']);
+const montant = (b) => {
+  const ech = b && b.echange;
+  const unite = !ech ? null : ech.devise == null ? 'ETH' : (UNITES_PAROLE.has(ech.devise) ? ech.devise : null);
+  return ech && ech.quantite && ech.eth && unite
+    ? ' ' + String(ech.quantite).slice(0, 16) + ' of me for ' + String(ech.eth).slice(0, 12) + ' ' + unite : '';
+};
 const PHRASE = {
   new_buy: (vu, b) => 'someone just bought' + (montant(b) || ' me') + '.',
   new_sell: (vu, b) => 'someone just sold' + (montant(b) || ' me') + '.',

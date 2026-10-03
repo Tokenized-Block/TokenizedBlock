@@ -133,6 +133,7 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { pairesProposees } from './paires.js';
+import { planRail } from './rails-api.js';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
 /* ⛔⛔ DEUX ENDPOINTS OFFICIELS PAR DEFAUT, ET PAS PLUS. Mesure du 2026-09-29 :
@@ -1179,6 +1180,34 @@ const VOIX_POSTS_IP_MINUTE = 6;
 const VOIX_MAX_BLOCKS = 3000;
 const voixParBlock = new Map();
 const voixPosts = { minute: 0, n: 0, parIp: new Map() };
+/* ══ NOS RAILS, EXPOSES (2026-10-03) — GET /api/rails/plan (rails-api.js) ══════════════════════════════════════════════
+ * ⛔ UN PLAN COUTE DES DIZAINES DE LECTURES (marche, cotations, simulation de la transaction exacte) sur le MEME noeud que
+ *   tout le site. Plafond global + par IP + deux en vol ; seul un plan PRET est rendu depuis le cache (15 s) — jamais une
+ *   reponse APPROBATIONS : l agent qui vient de signer ses autorisations doit relire, pas recevoir l etat d avant.
+ * ⛔ COMPTEURS REMIS A ZERO A CHAQUE DEPLOIEMENT, et nos propres sondes (`x-ms-monitor: 1`) comptees A PART. */
+const RAILS_MINUTE = 20;
+const RAILS_IP_MINUTE = 4;
+const RAILS_EN_VOL_MAX = 2;
+const RAILS_CACHE_MS = 15000;
+const railsBudget = { minute: 0, n: 0, parIp: new Map() };
+const railsCache = new Map();
+const railsCompteurs = { plans: 0, prets: 0, approbations: 0, refus: 0, nonMesures: 0, trop: 0, sondes: 0 };
+let railsEnVol = 0;
+/** La cle exacte d un block : le cache de /api/cle d abord, sinon une recherche COURTE (10 fenetres, pas 40). */
+async function clesRails(a) {
+  const k = String(a || '').toLowerCase();
+  const c = clesCache.get(k);
+  if (c && Array.isArray(c.cles) && c.cles.length) return c.cles;
+  try {
+    const r = await resoudreClePool(k, 10);
+    if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
+      clesCache.set(k, { ok: true, cles: r.cles });
+      ecrireCles();
+      return r.cles;
+    }
+  } catch (_) { /* cle illisible : vieDuBlock essaie ses cles standard et dit s il n a pas lu */ }
+  return [];
+}
 function ecrireVoix() {
   if (!FICHIER_VOIX) return;
   try {
@@ -2936,6 +2965,61 @@ createServer((req, res) => {
     return;
   }
 
+  /* ══ NOS RAILS, EXPOSES : /api/rails/plan?de=&vers=&montant=&compte= (2026-10-03) ═══════════════════════════════════
+   * ⛔ RIEN N EST SIGNE ICI : la reponse porte des appels NON SIGNES, construits par les planificateurs de l app. Le wallet
+   *   de l agent les signe, dans l ordre de `aSigner`. Le budget ne se compte qu AU MOMENT DU RESEAU. */
+  if (chemin === '/api/rails/plan') {
+    const rendreR = (code, corps, extra = {}) => {
+      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', ...extra });
+      res.end(JSON.stringify(corps));
+    };
+    if (req.method !== 'GET') { rendreR(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    const demande = { de: String(q.get('de') || ''), vers: String(q.get('vers') || ''),
+      montant: String(q.get('montant') || ''), compte: String(q.get('compte') || '') };
+    if (![demande.de, demande.vers].every((x) => /^(eth|0x[0-9a-f]{40})$/i.test(x))
+      || !/^0x[0-9a-f]{40}$/i.test(demande.compte) || !/^[1-9][0-9]{0,40}$/.test(demande.montant)) {
+      rendreR(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/rails/plan?de=<token address or ETH>&vers=<token address or ETH>'
+        + '&montant=<integer, raw units of the token paid>&compte=<the wallet that will sign>' });
+      return;
+    }
+    const sonde = req.headers['x-ms-monitor'] === '1';
+    const cleR = [demande.de, demande.vers, demande.montant, demande.compte].join('|').toLowerCase();
+    const enCache = railsCache.get(cleR);
+    if (enCache && Date.now() - enCache.t < RAILS_CACHE_MS) { rendreR(200, { ...enCache.corps, depuisCache: true }); return; }
+    const ipR = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const minuteR = Math.floor(Date.now() / 60000);
+    if (railsBudget.minute !== minuteR) { railsBudget.minute = minuteR; railsBudget.n = 0; railsBudget.parIp.clear(); }
+    const nIp = (railsBudget.parIp.get(ipR) || 0) + 1;
+    if (nIp > RAILS_IP_MINUTE || railsBudget.n >= RAILS_MINUTE || railsEnVol >= RAILS_EN_VOL_MAX) {
+      railsCompteurs.trop += 1;
+      rendreR(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: each plan reads the chain on a node shared with the whole site — retry in a minute' },
+        { 'retry-after': '60' });
+      return;
+    }
+    railsBudget.parIp.set(ipR, nIp);
+    railsBudget.n += 1;
+    railsEnVol += 1;
+    if (sonde) railsCompteurs.sondes += 1; else railsCompteurs.plans += 1;
+    planRail(demande, { rpc: rpcServeur, clesDe: clesRails, chaine: 8453 }).then((r) => {
+      if (!sonde) {
+        if (r.etat === 'PRET') railsCompteurs.prets += 1;
+        else if (r.etat === 'APPROBATIONS') railsCompteurs.approbations += 1;
+        else if (r.etat === 'REFUSE') railsCompteurs.refus += 1;
+        else railsCompteurs.nonMesures += 1;
+      }
+      if (r.etat === 'PRET') {
+        railsCache.set(cleR, { t: Date.now(), corps: r });
+        while (railsCache.size > 200) railsCache.delete(railsCache.keys().next().value);
+      }
+      rendreR(200, r);
+    }).catch((e) => {
+      rendreR(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) });
+    }).finally(() => { railsEnVol -= 1; });
+    return;
+  }
+
   /* ══ LE RAIL FIAT -> BASE (Phil, 2026-09-23 : « la raison est le bridge fiat to block ») ═══════
    * ⛔⛔ CETTE ROUTE NE RENVOIE RIEN DE FAUX. Sans cle CDP dans l environnement, elle repond
    *     `pret:false` avec le NOM de la variable manquante, et AUCUNE url. Le client retombe alors
@@ -3191,7 +3275,7 @@ createServer((req, res) => {
     /* ⛔ LE BUILD SERVI, POUR QU UN ONGLET DEJA OUVERT SACHE QU IL EST PERIME (2026-09-17 : Phil lisait
      * une page d avant le deploiement et en concluait que le travail n avait pas ete fait). Lu dans le
      * fichier SERVI, jamais recopie a la main. */
-    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), ...(ok ? {} : { modulesManquants }) }));
+    res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), rails: railsCompteurs, ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 

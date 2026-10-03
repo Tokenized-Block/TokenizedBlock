@@ -206,6 +206,13 @@ grosT[0].echange = { quantite: '5000', eth: '5', devise: 'TBLOCK' };
 ok(!parolesDuTour({ blocks: grosT, tick: 7 }).paroles[0].texte.includes('Whale'), '5 TBLOCK ne sont pas un gros echange (montant hors ETH)');
 grosT[0].echange.devise = 'ETH';
 ok(parolesDuTour({ blocks: grosT, tick: 7 }).paroles[0].texte.includes('Whale'), 'TEMOIN : 5 ETH en est un');
+/* ⛔ 2026-10-03 : la PHRASE disait « ETH » en dur — « bought 5000 of me for 5 ETH » pour 5 TBLOCK (fil-live.js : `eth` est
+ *   le montant dans la devise de la pool). Une ligne qui peut etre publiee sur la chaine. */
+const dit = (ech) => { const g = blocs({}); g[0].echange = ech; return parolesDuTour({ blocks: g, tick: 7 }).paroles[0].texte; };
+eq(dit({ quantite: '5000', eth: '5', devise: 'TBLOCK' }), 'AAA: someone just bought 5000 of me for 5 TBLOCK.', 'marche cote en TBLOCK : la phrase dit TBLOCK');
+eq(dit({ quantite: '5000', eth: '0.25', devise: 'ETH' }), 'AAA: someone just bought 5000 of me for 0.25 ETH.', 'TEMOIN : marche en ETH, la phrase dit ETH');
+eq(dit({ quantite: '5000', eth: '0.25' }), 'AAA: someone just bought 5000 of me for 0.25 ETH.', 'devise absente = ETH (meme convention que grosEchangeEnEth)');
+eq(dit({ quantite: '5000', eth: '7', devise: 'constructor' }), 'AAA: someone just bought me.', 'devise inconnue : aucun chiffre, jamais une unite inventee');
 
 console.log('— 8. textes de la fiche');
 ok(carte.includes('Save · free signature') && carte.includes('Reset to default') && carte.includes('not saved until you sign'), 'bouton « Save · free signature », lien « Reset to default »');
