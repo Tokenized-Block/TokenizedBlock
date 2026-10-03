@@ -23,6 +23,53 @@ import { FEE_WALLET } from './frais-creation.js';
 export const TTB = '0xb20000000000000000000003d296be435ae4bbe3';
 export const NOS_BLOCKS_GENESE = Object.freeze([TBLOCK.toLowerCase(), TTB]);
 
+/* ══ R9b (2026-10-03, prod 20261003-r9-blocks-tb) — GRAINE DE /api/nos-blocks, comme GRAINE_ROUTEUR ══════════════════════
+ * ⛔ Au redemarrage le serveur redescendait de la tete jusqu au bloc 50 861 088 (~19 min) : couvertureComplete restait
+ *   faux, donc sourcesTbLues() aussi, et PEXRA + les jetons o1 restaient bloques en prod. La graine FIGE ce qui a ete lu
+ *   sur la chaine : les B20 frappes (Transfer depuis 0x0) vers chaque compte de GRAINE_NOS_COMPTES entre le plancher et
+ *   GRAINE_NOS_JUSQUA (frappesVers, le code meme du serveur ; 0 fenetre ratee). Le serveur ne lit plus que
+ *   [GRAINE_NOS_JUSQUA + 1, tete].
+ * ⛔ CHAQUE ENTREE SE RE-VERIFIE : { jeton, compte, bloc, tx } — le recu de `tx` (bloc `bloc`) porte un Transfer de `jeton`
+ *   depuis 0x0 vers `compte` (verifierEntreeGraineNos). Une entree hors des comptes surveilles, hors plage ou mal formee :
+ *   la graine ENTIERE est refusee (balayage complet, comme avant). Un compte surveille que la graine ne couvre pas
+ *   (TB_NOS_CREATEURS) : graine refusee aussi — elle ne dit rien de ce compte. Une graine refusee n est qu un retour au
+ *   balayage lent, jamais une couverture affirmee a tort. */
+export const GRAINE_NOS_COMPTES = Object.freeze([FEE_WALLET.toLowerCase()]);
+/* Lu le 2026-10-03 08:3x CEST (mainnet.base.org, 629 appels, 0 fenetre ratee ; fix-r4-logs/r9b/scan-nos.json) : 2 B20 frappes
+ *   vers a6cf entre 50 861 088 et 52 109 849 ; avec la genese, les 4 blocks que /api/nos-blocks sert en prod. */
+export const GRAINE_NOS_JUSQUA = 52109849;
+export const GRAINE_NOS_BLOCKS = Object.freeze([
+  { jeton: '0xb200000000000000000000e63ffc3f40bf92a042', compte: '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4', bloc: 51692885, tx: '0x6fee4932a982df3f6444dde424a7cb7afc838db7e074b4af930b57c473f00dba' },
+  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte: '0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4', bloc: 51527429, tx: '0xa1e0591229f80691cdeac437a81d8afe5c2f520b1af10661d83a6dfc790ab508' },
+].map((g) => Object.freeze(g)));
+const RE_ADR = /^0x[0-9a-f]{40}$/;
+/** La graine est-elle admise pour ces comptes surveilles ? { ok, blocks, jusqua } ou { ok:false, pourquoi, rejetees }. */
+export function graineNosBlocksAdmise({ comptes, plancher, graine = GRAINE_NOS_BLOCKS, jusqua = GRAINE_NOS_JUSQUA,
+  couverts = GRAINE_NOS_COMPTES }) {
+  const surveilles = new Set((comptes || []).map((c) => String(c).toLowerCase()));
+  const couv = new Set((couverts || []).map((c) => String(c).toLowerCase()));
+  if (!Number.isSafeInteger(jusqua) || !Number.isSafeInteger(plancher) || jusqua < plancher) return { ok: false, pourquoi: 'seed range invalid', rejetees: [] };
+  const horsCouverture = [...surveilles].filter((c) => !couv.has(c));
+  if (!surveilles.size || horsCouverture.length) return { ok: false, pourquoi: 'a watched account is not covered by the seed', rejetees: [] };
+  const rejetees = (graine || []).filter((g) => !(g && RE_ADR.test(String(g.jeton)) && /^0xb20{20}/.test(String(g.jeton))
+    && surveilles.has(String(g.compte)) && couv.has(String(g.compte)) && Number.isSafeInteger(g.bloc) && g.bloc >= plancher && g.bloc <= jusqua
+    && /^0x[0-9a-f]{64}$/.test(String(g.tx))));
+  if (rejetees.length) return { ok: false, pourquoi: rejetees.length + ' seed entr' + (rejetees.length > 1 ? 'ies' : 'y') + ' rejected', rejetees };
+  return { ok: true, blocks: graine.map((g) => g.jeton), jusqua };
+}
+const TOPIC_TRANSFER_GRAINE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+/** Re-verifie UNE entree sur la chaine (lecture seule : un recu). 'OK' | 'FAUX' | 'NON_LU'. */
+export async function verifierEntreeGraineNos({ rpc, entree }) {
+  let r;
+  try { r = await rpc('eth_getTransactionReceipt', [entree.tx]); } catch { return 'NON_LU'; }
+  if (!r) return 'NON_LU';
+  const mot = (a) => '0x' + '0'.repeat(24) + String(a).toLowerCase().slice(2);
+  const ok = r.status === '0x1' && parseInt(r.blockNumber, 16) === entree.bloc && (r.logs || []).some((l) => String(l.address).toLowerCase() === entree.jeton
+    && l.topics && String(l.topics[0]).toLowerCase() === TOPIC_TRANSFER_GRAINE && String(l.topics[1]).toLowerCase() === mot('0x' + '0'.repeat(40))
+    && String(l.topics[2]).toLowerCase() === mot(entree.compte));
+  return ok ? 'OK' : 'FAUX';
+}
+
 /** Nos blocks : la genese + les B20 frappes vers le wallet de frais entre `deBloc` et `aBloc`. */
 export async function nosBlocks({ rpc, deBloc, aBloc }) {
   const r = await frappesVers({ rpc, compte: FEE_WALLET, deBloc, aBloc });

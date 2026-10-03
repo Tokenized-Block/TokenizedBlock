@@ -108,7 +108,7 @@ import { partsHolders } from './parts-holders.js';
  *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
 import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
-import { NOS_BLOCKS_GENESE } from './origine.js';
+import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise } from './origine.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
@@ -874,6 +874,10 @@ async function resoudreFace(token) {
  * ⛔ « couvertureComplete » = contigu depuis le plancher ; « tete » voyage avec la reponse : l app juge le retard elle-meme
  *    (index-routeur.js, RETARD_MAX_INDEX). Une fenetre ratee est COMPTEE, jamais tue. Lecture seule, aucune signature. */
 const PAS_ROUTEUR = 2000;
+/* ⛔ R9b (Claude, prod : PEXRA/o1 clignotaient, 11-12 lectures sur 15) : une lecture ratee est RELUE sur place avec une attente
+ *    croissante avant de conclure (index du routeur ET nos-blocks). Seule celle qui rate encore compte, et elle ne retire
+ *    jamais la couverture deja acquise : la plage n avance simplement pas. */
+const REPRISES_LECTURE_MS = [500, 1000, 2000];
 const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
   tete: null, teteLueA: null, ratees: 0, lu: null };
 let routeurEnCours = null;
@@ -884,8 +888,14 @@ async function etendreBlocksRouteur() {
   routeurEtat.teteLueA = Date.now(); /* R8 (C2 R6-3) : l app refuse une tete figee */
   if (routeurEtat.jusqua >= tete) return;
   const aBloc = Math.min(tete, routeurEtat.jusqua + PAS_ROUTEUR);
-  const r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
+  let r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
   for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+  for (const ms of REPRISES_LECTURE_MS) {
+    if (!r.fenetresRatees) break;
+    await new Promise((ok) => setTimeout(ok, ms));
+    r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
+    for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+  }
   routeurEtat.ratees = r.fenetresRatees;
   if (!r.fenetresRatees) routeurEtat.jusqua = aBloc;
   routeurEtat.lu = new Date().toISOString();
@@ -906,12 +916,15 @@ function rattraperBlocksRouteur() {
 setInterval(() => { if (routeurEtat.lu !== null) rattraperBlocksRouteur(); }, 60000).unref?.();
 function blocksRouteurCorps() {
   rattraperBlocksRouteur();
+  /* R8 (C2 R6-3) : couverture REELLE — contigue depuis le plancher, 0 trou, et jusqu a la tete (retard borne).
+   * R9b : `jusqua` n avance que sur une lecture sans trou, donc une lecture ratee AU-DELA de `jusqua` n ouvre aucun trou dans
+   *   [depuis, jusqua] : elle est dite dans `fenetresEnAttente`, et c est le retard borne qui finit par couper si elle persiste. */
+  const complet = routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null
+    && routeurEtat.tete - routeurEtat.jusqua <= RETARD_MAX_INDEX;
   return JSON.stringify({ ok: true, lu: routeurEtat.lu, blocks: [...routeurEtat.blocks.values()],
     depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua, tete: routeurEtat.tete, plancher: PLANCHER_ROUTEUR,
-    /* R8 (C2 R6-3) : couverture REELLE — contigue depuis le plancher, 0 trou, et jusqu a la tete (retard borne). */
-    couvertureComplete: routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null && !routeurEtat.ratees
-      && routeurEtat.tete - routeurEtat.jusqua <= RETARD_MAX_INDEX,
-    teteLueA: routeurEtat.teteLueA, fenetresRatees: routeurEtat.ratees });
+    couvertureComplete: complet,
+    teteLueA: routeurEtat.teteLueA, fenetresRatees: complet ? 0 : routeurEtat.ratees, fenetresEnAttente: routeurEtat.ratees });
 }
 
 /* ⛔⛔ « NOS BLOCKS », CALCULE ICI ET PAS DANS LA PAGE (Phil, 2026-09-20 : « faut expandre depuis le
@@ -922,8 +935,8 @@ function blocksRouteurCorps() {
  *    ne peut etre anterieur, donc il est inutile de descendre plus bas.
  * ⛔ PLAGE CONTIGUE [depuis, jusqua] QUI N AVANCE QUE SUR UN SCAN PROPRE : une fenetre refusee par le
  *    noeud ne doit JAMAIS etre recouverte par un « deja lu ». Meme discipline que mesFrappes.
- * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la couverture repart. C est DIT dans la reponse
- *    (depuis / jusqua / couvertureComplete), jamais masque. */
+ * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la couverture repart — R9b : depuis la GRAINE (origine.js), pas
+ *    depuis zero. C est DIT dans la reponse (depuis / jusqua / couvertureComplete), jamais masque. */
 const PREMIER_BLOCK_TB = 50861088;
 const PAS_NOS_BLOCKS = 40000;
 /* ⛔⛔ MESURE (2026-09-20, 706 985 blocs, balayage complet, 0 fenetre ratee) : les blocks sont frappes
@@ -947,7 +960,15 @@ const NOS_CREATEURS = (() => {
 })();
 if (CREATEURS_REFUSES.length) console.log('[nos-blocks] ⛔ ' + CREATEURS_REFUSES.length + ' adresse(s) de TB_NOS_CREATEURS mal formee(s), ignoree(s) : ' + CREATEURS_REFUSES.join(', '));
 console.log('[nos-blocks] ' + NOS_CREATEURS.length + ' compte(s) surveille(s) · plancher bloc ' + PREMIER_BLOCK_TB);
-const nosBlocksEtat = { blocks: new Set(NOS_BLOCKS_GENESE), depuis: null, jusqua: null, ratees: 0, lu: null };
+/* ⛔ R9b : la GRAINE (origine.js) couvre [PREMIER_BLOCK_TB, GRAINE_NOS_JUSQUA] ; seul [jusqua + 1, tete] reste a lire. Graine
+ *   refusee (entree hors comptes surveilles, hors plage, compte non couvert) : balayage complet, comme avant. La couverture
+ *   n est COMPLETE qu apres une lecture propre jusqu a la tete (`teteAtteinte`), jamais sur la seule graine. */
+const GRAINE_NOS = graineNosBlocksAdmise({ comptes: NOS_CREATEURS, plancher: PREMIER_BLOCK_TB });
+console.log(GRAINE_NOS.ok ? '[nos-blocks] graine admise : ' + GRAINE_NOS.blocks.length + ' block(s), couverte jusqu au bloc ' + GRAINE_NOS.jusqua
+  : '[nos-blocks] ⛔ graine refusee (' + GRAINE_NOS.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
+const nosBlocksEtat = { blocks: new Set([...NOS_BLOCKS_GENESE, ...(GRAINE_NOS.ok ? GRAINE_NOS.blocks : [])]),
+  depuis: GRAINE_NOS.ok ? PREMIER_BLOCK_TB : null, jusqua: GRAINE_NOS.ok ? GRAINE_NOS.jusqua : null, ratees: 0, lu: null, teteAtteinte: false };
+const nosBlocksComplet = () => nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && nosBlocksEtat.teteAtteinte;
 let nbEnCours = null;
 async function etendreNosBlocks() {
   const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
@@ -958,21 +979,30 @@ async function etendreNosBlocks() {
   deBloc = f.deBloc; aBloc = f.aBloc;
   /* ⛔ TOUS LES COMPTES, ET LES RATES DE CHACUN COMPTENT. Un seul compte qui echoue doit empecher la
    *    plage d avancer — sinon un trou serait recouvert par un « deja lu ». */
+  /* ⛔ R9b : une fenetre ratee est RELUE sur place (REPRISES_LECTURE_MS) ; seules celles qui ratent encore comptent. */
   let ratees = 0;
   for (const compte of NOS_CREATEURS) {
     const scan = await frappesVers({ rpc: rpcServeur, compte, deBloc, aBloc });
     for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
-    ratees += (scan.fenetresRatees || []).length;
+    for (const w of scan.fenetresRatees || []) {
+      let relue = false;
+      for (const ms of REPRISES_LECTURE_MS) {
+        await new Promise((ok) => setTimeout(ok, ms));
+        const r = await frappesVers({ rpc: rpcServeur, compte, deBloc: w.de, aBloc: w.a });
+        for (const b of r.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
+        if (!(r.fenetresRatees || []).length) { relue = true; break; }
+      }
+      if (!relue) ratees += 1;
+    }
   }
-  const scan = { blocks: [], fenetresRatees: ratees ? [{ n: ratees }] : [] };
   /* ⛔ LES BLOCKS TROUVES SONT GARDES MEME SI UNE FENETRE A RATE : ils sont vrais. C est la PLAGE qui
-   *    n avance pas, pas l ensemble. */
-  for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
-  nosBlocksEtat.ratees = (scan.fenetresRatees || []).length;
+   *    n avance pas, pas l ensemble — et la couverture DEJA acquise [depuis, jusqua] n est jamais remise a zero. */
+  nosBlocksEtat.ratees = ratees;
   if (!nosBlocksEtat.ratees) {
     if (nosBlocksEtat.jusqua === null) { nosBlocksEtat.depuis = deBloc; nosBlocksEtat.jusqua = aBloc; }
     else if (aBloc === fin) nosBlocksEtat.jusqua = aBloc;
     else nosBlocksEtat.depuis = deBloc;
+    if (aBloc === fin) nosBlocksEtat.teteAtteinte = true;
   }
   nosBlocksEtat.lu = new Date().toISOString();
 }
@@ -985,8 +1015,7 @@ function rattraperNosBlocks() {
   rattrapageArme = true;
   const pas = async () => {
     try { await etendreNosBlocks(); } catch (e) { /* on reessaiera au prochain tour */ }
-    const complet = nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB;
-    if (complet) {
+    if (nosBlocksComplet()) {
       rattrapageArme = false;
       console.log('[nos-blocks] couverture complete jusqu au bloc ' + PREMIER_BLOCK_TB
         + ' · ' + nosBlocksEtat.blocks.size + ' block(s) a nous');
@@ -1003,8 +1032,11 @@ function nosBlocksCorps() {
     blocks: [...nosBlocksEtat.blocks],
     depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB,
-    couvertureComplete: nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB,
-    fenetresRatees: nosBlocksEtat.ratees,
+    couvertureComplete: nosBlocksComplet(),
+    /* R9b : `fenetresRatees` = ce qui MANQUE a la couverture annoncee. Une fois complete, une lecture ratee au-dela de
+     *   `jusqua` n y retire rien (la plage n avance simplement pas) : elle est dite dans `fenetresEnAttente`, pas en trou. */
+    fenetresRatees: nosBlocksComplet() ? 0 : nosBlocksEtat.ratees,
+    fenetresEnAttente: nosBlocksEtat.ratees,
     /* ⛔ LA BORNE VOYAGE AVEC LA REPONSE : un appelant qui lirait « blocks » sans « couvertureComplete »
      *    croirait tenir la liste entiere alors que la remontee est encore en cours. */
     comptesSurveilles: NOS_CREATEURS.length,
