@@ -46,7 +46,7 @@ cas('⛔⛔ LE REFUS « NE ICI » EST EN CLAIR, NON VIDE, ET SANS MOT INTERNE', 
   const m = /const POURQUOI_PAS_LABEL = ('(?:[^'\\]|\\.)*');/.exec(nu);
   assert.ok(m, 'POURQUOI_PAS_LABEL introuvable');
   const phrase = new Function('return ' + m[1])();
-  assert.equal(phrase, "This block was created somewhere else, so its market can't be opened here. You can create a new one — 0.001 ETH, once.");
+  assert.equal(phrase, "This block was created somewhere else, so its market can't be opened here. You can create a new one — 0.001 ETH.");
   assert.doesNotMatch(phrase, /\bV\d\b|hook|on-chain|createB20|label/i);
 });
 
@@ -60,7 +60,7 @@ cas('⛔⛔ QUAND LE REFUS S AFFICHE, « Give birth » EST CACHE AVANT (on ne pr
 
 cas('⛔ LES BOUTONS ET REFUS ONT LEUR NOUVEAU TEXTE (et gardent le prix)', () => {
   for (const p of [
-    'Give birth · 0.001 ETH once',
+    'Give birth · 0.001 ETH',
     '<span class="pBadge" id="plBadge">Give birth</span>',
     "<b>Next</b>: open its market.",
     'this plan would open a market that pays no fee — rebuild the plan.',

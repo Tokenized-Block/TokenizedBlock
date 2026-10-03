@@ -470,8 +470,8 @@ export const TAUX_ECHANGE_V8_LIBELLE = '0.5%';
 export function libellePuceCreation({ symbole, multipool = MEMESTOCK_MULTIPOOL_ACTIF, h7030 = false } = {}) {
   const s = String(symbole || 'stock');
   /* ⛔ 2026-10-02 : hook 7030 allume -> 0.1 % par echange, partage affiche. Eteint -> exactement le texte d avant. */
-  if (h7030 === true) return 'Quote = ' + s + ' · birth fee 0.001 ETH, once · swap fee 0.1% per trade (app 0.07% · creator 0.03%)';
-  return 'Quote = ' + s + ' · birth fee 0.001 ETH, once · swap fee ' + TAUX_ECHANGE_V8_LIBELLE + ' per trade'
+  if (h7030 === true) return 'Quote = ' + s + ' · birth fee 0.001 ETH · swap fee 0.1% per trade (app 0.07% · creator 0.03%)';
+  return 'Quote = ' + s + ' · birth fee 0.001 ETH · swap fee ' + TAUX_ECHANGE_V8_LIBELLE + ' per trade'
     + (multipool === true ? ' (app 0.07% · creator 0.03%)' : '');
 }
 /** Le block est-il APRES la devise dans la PoolKey (currency0 = devise) ? Le V8 preleve en currency0 : un block qui

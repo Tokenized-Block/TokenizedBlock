@@ -67,6 +67,10 @@ const MOTIFS = [
     quoi: 'mot francais en majuscules (nos etats internes portent ces noms)' },
   { re: /\btier\(s\)|\btiers\b(?! party)/i,
     quoi: '« tier(s) » — calque de « tiers » ; en anglais « tier » veut dire palier' },
+  /* 2026-10-04 (Phil : « retire le once, on sera dans le vrai ») : sur le hook de naissance actuel, 0,001 ETH n est pas TOUT ce que
+   *   le createur sort (il depose aussi son minimum). « once » / « one-time » accole au frais le faisait lire comme le prix total. */
+  { re: /0\.001 ETH,? once\b|one-time 0\.001 ETH|0\.001 ETH [a-z ]{0,20}fee, (paid )?once\b/i,
+    quoi: '« 0.001 ETH once » — le frais n est pas le cout total d une naissance (minimum du createur en plus)' },
   { re: /≠|⛔|≥(?!\s*\d)/,
     quoi: 'notation de specification (≠, ⛔) — elle appartient au code, pas a l ecran' },
   { re: /\b(unread|unreadable)\s*[≠!=]/i, quoi: 'note de conception sur nos etats de lecture' },

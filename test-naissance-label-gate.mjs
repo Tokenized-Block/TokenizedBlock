@@ -12,7 +12,7 @@ ok(!page.includes("this block was not engraved by this app's Create, so its mark
   'old engraved-session refuse string removed');
 /* 2026-10-01 (Raksha : « V8 », « on-chain label » a l ecran = jargon interne) : la phrase de refus est
  * reecrite en clair. On epingle la NOUVELLE, et on verifie que l ANCIENNE ne revient pas. */
-ok(page.includes("const POURQUOI_PAS_LABEL = 'This block was created somewhere else, so its market can\\'t be opened here. You can create a new one — 0.001 ETH, once.';"),
+ok(page.includes("const POURQUOI_PAS_LABEL = 'This block was created somewhere else, so its market can\\'t be opened here. You can create a new one — 0.001 ETH.';"),
   'refuse copy says it plainly: created elsewhere, create a new one');
 ok(!page.includes('V8 birth needs a face engraved at Create (on-chain label)'),
   'old jargon refuse (V8 / on-chain label) removed');

@@ -48,7 +48,7 @@ assert.match(html, /creerBlock IB final guard/);
  *    formulation, et exige toujours que le montant y figure. Rien n est retire.
  *    ⛔ Les controles sur les IDENTIFIANTS DE CODE (`forcerCreateRouterIb`, le commentaire de tip)
  *      restent intacts plus haut : eux ne sont pas a l ecran, et ils gardent vraiment quelque chose. */
-assert.match(html, /Instant Birth — 0\.001 ETH, once/);
+assert.match(html, /Instant Birth — 0\.001 ETH/);
 assert.match(html, /FRAIS_OUVERTURE_WEI/);
 assert.doesNotMatch(html, /Fees for Dev/);
 assert.doesNotMatch(html, /0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4/i);

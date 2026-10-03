@@ -86,6 +86,6 @@ export function phraseRappel(liste) {
   if (!l.length) return '';
   return l.length + ' block' + (l.length === 1 ? '' : 's')
     + ' you made here ' + (l.length === 1 ? 'has' : 'have') + ' no market yet. '
-    + 'Bringing ' + (l.length === 1 ? 'it' : 'them') + ' to life costs 0.001 ETH, once — '
+    + 'Bringing ' + (l.length === 1 ? 'it' : 'them') + ' to life costs 0.001 ETH — '
     + 'and you can create another one meanwhile.';
 }

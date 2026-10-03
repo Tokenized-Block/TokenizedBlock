@@ -491,7 +491,8 @@ ok('le succes dit LE MONTANT du frais de naissance', (() => {
 })(), phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
 ok('et il dit QUAND on le paie', (() => {
   const s = phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST);
-  return /once/i.test(s) && /Create/.test(s);
+  /* 2026-10-04 (Phil) : « once » retire de tous les textes de frais — la phrase dit toujours QUAND (a la signature dans Create) */
+  return /when you sign in Create/.test(s) && !/once/i.test(s);
 })(), phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST));
 ok('et il garde le cout REEL du marche a cote', (() => {
   const s = phraseFraisChemin(P, FRAIS_OUVERTURE_WEI_TEST);

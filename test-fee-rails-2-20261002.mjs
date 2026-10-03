@@ -185,7 +185,7 @@ ok(/prepayePour\(adrReprise\) \? 'Finish bringing it to life \(fee already paid\
 ok(fn(P, 'libellePuceCreation') && P.MEMESTOCK_MULTIPOOL_ACTIF === false, 'item8: chip helper present, multipool flag defaults OFF');
 if (fn(P, 'libellePuceCreation')) {
   const off = P.libellePuceCreation({ symbole: 'GOOGLc' }), on = P.libellePuceCreation({ symbole: 'GOOGLc', multipool: true });
-  ok(/birth fee 0\.001 ETH, once/.test(off) && /swap fee 0\.5%/.test(off), 'item8: birth fee and swap fee shown separately (' + off + ')');
+  ok(/birth fee 0\.001 ETH/.test(off) && /swap fee 0\.5%/.test(off), 'item8: birth fee and swap fee shown separately (' + off + ')');
   ok(!/0\.07%|0\.03%|creator/.test(off), 'item8 NEG: flag OFF -> no split text');
   ok(/app 0\.07% · creator 0\.03%/.test(on), 'item8: flag ON -> split shown');
   for (const t of [off, on]) ok(!/fees for dev/i.test(t) && !t.toLowerCase().includes(F.FEE_WALLET.slice(2).toLowerCase()), 'item8: no fee-wallet label/address');

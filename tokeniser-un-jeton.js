@@ -386,7 +386,7 @@ export function phraseFraisChemin(p, fraisOuvertureWei) {
   if (typeof fraisOuvertureWei !== 'bigint' || fraisOuvertureWei <= 0n) {
     return 'Birth fee: amount not read on this screen — check it in Create before you sign.' + suite;
   }
-  return 'Birth fee ' + formaterEthExact(fraisOuvertureWei) + ' ETH, once, when you sign in Create.' + suite;
+  return 'Birth fee ' + formaterEthExact(fraisOuvertureWei) + ' ETH, when you sign in Create.' + suite;
 }
 
 /**

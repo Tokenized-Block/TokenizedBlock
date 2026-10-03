@@ -114,7 +114,7 @@ export const ONCHAIN_TASKS = Object.freeze([
     label: 'Launch / Wake',
     does: 'Life fee then open hooked market',
     signs: true,
-    fee: '0.001 ETH once (Instant Birth / Launch)',
+    fee: '0.001 ETH (Instant Birth / Launch)',
     fee_sink: FEE_WALLET_TASKS,
     gate: 'sleep_or_unpaid',
   },

@@ -184,7 +184,7 @@ await essai('(4) birth', async () => {
   const lr = await on.L.planLancement({ rpc, chaine: 8453, jeton: BLOC_HAUT, compte, valorisationEth: 10, partPourMille: 999, devise: RANDOM, hooks: on.T.HOOK_7030 });
   ok(lr.etat === 'REFUSE' && /can't price a new block on this hook/.test(lr.pourquoi), '(4) launch guard: 7030 refuses a quote it does not admit');
   // copy
-  ok(on.P.libellePuceCreation({ symbole: 'PLTRc', h7030: true }) === 'Quote = PLTRc · birth fee 0.001 ETH, once · swap fee 0.1% per trade (app 0.07% · creator 0.03%)',
+  ok(on.P.libellePuceCreation({ symbole: 'PLTRc', h7030: true }) === 'Quote = PLTRc · birth fee 0.001 ETH · swap fee 0.1% per trade (app 0.07% · creator 0.03%)',
     '(4) ON copy: "app 0.07% · creator 0.03%"');
   ok(off.P.libellePuceCreation({ symbole: 'PLTRc', h7030: false }) === off.P.libellePuceCreation({ symbole: 'PLTRc' })
     && !off.P.libellePuceCreation({ symbole: 'PLTRc' }).includes('creator 0.03%'), '(4) OFF copy unchanged, no split shown');

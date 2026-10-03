@@ -111,7 +111,7 @@ export function phraseFrais(chaine, nomReseau, ethUsd = null, fraisWei = null, s
   const main = Number(chaine) === 8453;
   /* tip 20260922-fee-funnel: Create funnel phrase — fiat + amount, never fee addr */
   return main
-    ? 'Birth fee: 0.001 ETH, once — create and open its market in one signature.'
+    ? 'Birth fee: 0.001 ETH — create and open its market in one signature.'
     : 'Free on Practice — nothing is paid here.';
 }
 
@@ -131,7 +131,7 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   }
   if (ethUsd === null || ethUsd === undefined || fraisWei === null || fraisWei === undefined) {
     /* tip 0035 (Phil : pas de jargon, pas ou vont les frais — juste le montant) */
-    return 'Reading the ETH price… bringing it to life costs 0.001 ETH, once.';
+    return 'Reading the ETH price… bringing it to life costs 0.001 ETH.';
   }
   /* ⛔⛔ « Create itself is free » A ETE RETIRE ICI LE 2026-09-21, et pas par gout du changement :
    *     depuis que le frais d ouverture vaut 0,001 ETH, cette phrase restait vraie a la lettre —
@@ -150,7 +150,7 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   const usdLisible = usdReel >= 1 ? usdReel.toFixed(2) : usdReel.toFixed(3);
   let base = 'Opening its market: ' + formaterEthCourt(fraisWei) + ' ETH'
     + ' (≈ $' + usdLisible + ' at ~$' + Math.round(Number(ethUsd)).toLocaleString('en-US') + '/ETH),'
-    + ' paid once, in the same signature that creates it.';
+    + ' paid in the same signature that creates it.';
   if (soldeEth === null || soldeEth === undefined) return base;
   if (BigInt(soldeEth) < BigInt(fraisWei)) {
     return base + ' ⚠️ Not enough ETH in your wallet yet.';
