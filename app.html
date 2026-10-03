@@ -3078,7 +3078,7 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
-import { sautsBlocVersBloc, blocsRecevables } from './bloc-vers-bloc.js';
+import { sautsBlocVersBloc, blocsRecevables, cheminBlocVersAction, actionsRecevables } from './bloc-vers-bloc.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
 import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
@@ -11373,13 +11373,24 @@ function majRecoitBlocs() {
   if (!sel || !bloc) return;
   const adr = $('#profil') && $('#profil').dataset.block;
   const liste = blocsRecevables({ marches: marcheParAdr, ici: adr, liqMin: LIQ_MIN_BUY_USD });
+  /* 2026-10-03 (Phil : « Blocks/stock et stocks/blocks ») : les actions tokenisees dont le marche est sur Aerodrome */
+  let actionsR = [];
+  try { actionsR = actionsRecevables({ marches: marcheParAdr, actions: ACTIONS_COINBASE }).filter((x) => x.adr !== String(adr || '').toLowerCase()); } catch (_) { actionsR = []; }
   sel.textContent = '';
   const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Its own market (ETH or its pair)'; sel.appendChild(o0);
+  if (actionsR.length) {
+    const g = document.createElement('optgroup'); g.label = 'A tokenized stock';
+    for (const x of actionsR) {
+      const o = document.createElement('option'); o.value = x.adr; o.textContent = x.symbole + ' — tokenized stock';
+      o.dataset.sym = x.symbole; o.dataset.kind = 'action'; g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
   for (const b of liste) {
     const o = document.createElement('option'); o.value = b.adr; o.textContent = b.symbole + ' — another block'; o.dataset.sym = b.symbole;
     sel.appendChild(o);
   }
-  bloc.hidden = liste.length === 0;
+  bloc.hidden = liste.length === 0 && actionsR.length === 0;
 }
 let deviseEchange = null;
 /** La devise d entree choisie dans le selecteur, ou `null` = celle de la pool (chemin historique). */
@@ -11847,7 +11858,9 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
  *   ecrite dans ce fichier — ne JAMAIS sortir tot sur `!peutGrouper`. Des wallets repondent mal a
  *   `wallet_getCapabilities` et savent pourtant grouper. On tente, et on LIT le resultat.
  */
-function afficherFranchissement({ pf, e, dec, symBlock }) {
+/* ⛔ 2026-10-03 : `symPaye` / `relance` — le meme ecran sert a VENDRE un block contre une action (block -> action) ;
+ *   la relance et l approbation re-preparent dans CE sens, et ce qu on paie se nomme (pas deviseDentree). */
+function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance = 'ACHAT' }) {
   const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
@@ -11855,7 +11868,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
     if (!relancer) return; /* revue UI KO3 : pas de « Retry quote » apres un refus */
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
-    br.addEventListener('click', () => void preparerEchange('ACHAT'));
+    br.addEventListener('click', () => void preparerEchange(relance));
     $('#peActions').appendChild(br);
   };
   if (!pf || pf.etat === 'NON_MESURE') {
@@ -11868,7 +11881,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
     const bt = document.createElement('button');
     bt.className = 'bouton'; bt.type = 'button';
     bt.textContent = 'Approval 1 of ' + pf.etapes.length + ' — ' + et.nom;
-    bt.addEventListener('click', () => void signerEchange(et, 'ACHAT', true));
+    bt.addEventListener('click', () => void signerEchange(et, relance, true));
     $('#peActions').appendChild(bt);
     e.className = 'note';
     e.textContent = 'This token needs an approval first. The crossing is measured again once it is done.';
@@ -11897,7 +11910,7 @@ function afficherFranchissement({ pf, e, dec, symBlock }) {
         'echange_multi_refus_frais');
     }
   }
-  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  const sym = symPaye || (deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token');
   $('#peLignes').innerHTML = [
     'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
     /* ⚠️ « AT LEAST » EST DERIVE D UN PRIX SPOT, PAS D UN DEVIS : il ignore la profondeur du
@@ -12130,6 +12143,34 @@ async function preparerEchange(sens) {
   if (cible) {
     const optC = $('#peRecoit').selectedOptions && $('#peRecoit').selectedOptions[0];
     const symCible = (optC && optC.dataset.sym) || 'blocks';
+    /* ══ BLOCK -> ACTION TOKENISEE : le franchissement existant (forme test-r4 FR3), dans le sens VENTE ══ */
+    if (optC && optC.dataset.kind === 'action') {
+      let pf;
+      try {
+        const sv = RESEAUX[CHAINE].stateView;
+        const marcheA = marcheLu && marcheLu.etat === 'LUE' ? marcheLu
+          : await vieDuBlock({ rpc, stateView: sv, jeton: adr, clesExactes: await clesReellesDe(adr) });
+        const c = cheminBlocVersAction({ adrA: adr, marcheA, action: cible });
+        if (c.etat !== 'OK') pf = { etat: 'REFUSE', pourquoi: c.pourquoi };
+        else {
+          /* le resolveur v4 : la cle LUE du marche du block d abord, puis les cles de prix connues (comme l achat multi) */
+          const resoudreA = async ({ de, vers, montant: mt }) => {
+            const paire = new Set([String(de).toLowerCase(), String(vers).toLowerCase()]);
+            const k = marcheA.cle && paire.has(String(marcheA.cle.currency0).toLowerCase()) && paire.has(String(marcheA.cle.currency1).toLowerCase()) ? marcheA.cle : null;
+            const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
+            return meilleureClePourMontant({ rpc, chaine: CHAINE, de, vers, montant: mt, candidates: sup.concat(CLES_PRIX_UI) });
+          };
+          pf = await planFranchissement({ rpc, chaine: CHAINE, compte, chemin: c.chemin, devise: adr, block: cible,
+            montant: m.valeur, decimalesEntree: dec, prixUsdEntree: null, resoudreV4: resoudreA, beneficiaireFrais: FEE_WALLET, fraisDevisesOk });
+        }
+      } catch (err) { pf = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) }; }
+      finally { profilEnLecture = false; }
+      if ($('#profil').dataset.block !== adr) return;
+      echangeCourant = pf;
+      try { etape('echange_bloc_vers_bloc'); } catch (_) {}
+      afficherFranchissement({ pf, e, dec, symBlock: symCible, symPaye: symProfil || 'blocks', relance: 'VENTE' });
+      return;
+    }
     try {
       const sv = RESEAUX[CHAINE].stateView;
       const marcheA = marcheLu && marcheLu.etat === 'LUE' ? marcheLu

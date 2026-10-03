@@ -119,7 +119,7 @@ const PO = await import(pathToFileURL(path.join(ICI, 'pool.js')).href);
 const { BPS_MAX } = await import(pathToFileURL(path.join(ICI, 'frais-degressif.js')).href);
 /* (les accolades du parametre destructure empechent `extraire` : on borne le bloc par ses deux ancres, apres la definition) */
 const i0 = html.indexOf('function afficherFranchissement(');
-const iG = i0 < 0 ? -1 : html.indexOf('if (!estWalletDeFrais(compte)) {', i0), jG = iG < 0 ? -1 : html.indexOf('const sym = deviseDentree', iG);
+const iG = i0 < 0 ? -1 : html.indexOf('if (!estWalletDeFrais(compte)) {', i0), jG = iG < 0 ? -1 : html.indexOf('const sym = symPaye || (deviseDentree', iG); /* 2026-10-03 : ancre suivie (symPaye, vente block -> action) */
 const garde = iG > 0 && jG > iG ? html.slice(iG, jG) : '';
 ok(garde.length > 0 && /fraisPayeParHook\(/.test(garde) && /if \(!parHook && !parCl\)/.test(garde), 'garde du franchissement extraite : fraisPayeParHook + « !parHook && !parCl »');
 const fabriquerGarde = (g) => new Function('r', 'pf', 'compte', 'estWalletDeFrais', 'feeWalletDansCalldata', 'fraisPayeParHook', 'BPS_MAX_UI', 'FEE_WALLET', 'refuser',

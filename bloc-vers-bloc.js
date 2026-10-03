@@ -68,3 +68,36 @@ export function sautsBlocVersBloc({ adrA, marcheA, adrB, marcheB }) {
   }
   return { etat: 'REFUSE', pourquoi: 'these two blocks trade against different assets — no single route between them yet' };
 }
+
+/* ══ 2026-10-03 (Phil : « Blocks/stock et stocks/blocks ») : VENDRE UN BLOCK CONTRE UNE ACTION TOKENISEE ══════════════
+ * ⛔ AUCUN MOTEUR NOUVEAU : c est la forme du franchissement deja prouvee (test-r4 FR3 : block -> V8 -> ETH -> USDC ->
+ *   Aerodrome -> NVDAc, UN frais par lot, celui du hook). Ce module ne construit que le CHEMIN ; planFranchissement cote,
+ *   assemble et juge les frais ; afficherFranchissement applique les gardes d ecran sur les octets. */
+/** Le chemin block -> action pour planFranchissement : la jambe v4 vend le block sur SON marche (vers USDC, ou ETH puis
+ *  ETH -> USDC), la jambe Aerodrome achete l action contre USDC. Toute autre cotation : refus nomme. */
+export function cheminBlocVersAction({ adrA, marcheA, action }) {
+  const a = bas(adrA), x = bas(action), usdc = bas(USDC_BASE);
+  if (!/^0x[0-9a-f]{40}$/.test(a) || !/^0x[0-9a-f]{40}$/.test(x)) return { etat: 'REFUSE', pourquoi: 'not a token address' };
+  if (!marcheA || marcheA.etat !== 'LUE' || !marcheA.cle) return { etat: 'REFUSE', pourquoi: 'the market of this block could not be read' };
+  const pA = autreCote(marcheA.cle, a);
+  if (!pA) return { etat: 'REFUSE', pourquoi: 'the market read for this block does not contain it' };
+  if (pA === usdc) return { etat: 'OK', chemin: [{ de: a, vers: usdc, famille: 'uniswap-v4' }, { de: usdc, vers: x, famille: 'aerodrome' }] };
+  if (pA === ZERO) {
+    return { etat: 'OK', chemin: [{ de: a, vers: ZERO, famille: 'uniswap-v4' }, { de: ZERO, vers: usdc, famille: 'uniswap-v4' },
+      { de: usdc, vers: x, famille: 'aerodrome' }] };
+  }
+  return { etat: 'REFUSE', pourquoi: 'this block trades against an asset we cannot route to a stock yet' };
+}
+/** Les actions qu on peut RECEVOIR en vendant un block : celles dont le marche le plus liquide est une pool Aerodrome
+ *  (adresse de contrat lue par le serveur), la seule famille que la jambe 2 du franchissement sait adresser. */
+export function actionsRecevables({ marches, actions }) {
+  const parAdr = new Map();
+  for (const [adr, m] of marches || []) parAdr.set(bas(adr), m);
+  const out = [];
+  for (const act of actions || []) {
+    const m = parAdr.get(bas(act.adr));
+    if (!m || !/^aerodrome$/i.test(String(m.dex || '')) || !/^0x[0-9a-f]{40}$/i.test(String(m.poolAdr || ''))) continue;
+    out.push({ adr: bas(act.adr), symbole: act.symbole, liq: Number(m.liquiditeUsd) || 0 });
+  }
+  return out.sort((p, q) => q.liq - p.liq);
+}
