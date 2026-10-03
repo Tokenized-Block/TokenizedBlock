@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-cles-mesurees-fusionnees" hidden>Build <code>20261003-cles-mesurees-fusionnees</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-registre-actions-defini" hidden>Build <code>20261003-registre-actions-defini</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3077,6 +3077,11 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
+/* ⛔⛔ 2026-10-03 (mesure prod) : deux gardes de cette page testaient « typeof STOCKS_BASE_BY_ADR » (indefini ?) — un nom qui n existe
+ *   que dans index.html. Ici il est TOUJOURS indefini : la garde etait toujours fausse (le Buy a trois sauts des blocks cotes en action,
+ *   mesure 123 blocks le 30/09, et le Buy Market des actions v4 : LLYc, AMDc, PYPLc rendaient « Pair a block with it » apres le
+ *   deploiement). Le registre des actions, c est ACTIONS_COINBASE, deja importe. */
+const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowerCase()));
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
 import { sautsBlocVersBloc, blocsRecevables, cheminBlocVersAction, actionsRecevables } from './bloc-vers-bloc.js';
 import { avecPoolAction } from './pools-actions-aerodrome.js';
@@ -5264,7 +5269,7 @@ $('#fAcheterEth').addEventListener('click', async () => {
    *      Un block cote en un jeton inconnu reste sans bouton — c est la bonne reponse, pas une
    *      promesse qu on ne tiendrait pas. */
   const quote = mk && mk.quoteAdr ? String(mk.quoteAdr).toLowerCase() : null;
-  const estAction = Boolean(quote && typeof STOCKS_BASE_BY_ADR !== 'undefined' && STOCKS_BASE_BY_ADR.has(quote));
+  const estAction = Boolean(quote && ACTIONS_PAR_ADR.has(quote)); /* 2026-10-03 : etait `typeof STOCKS_BASE_BY_ADR` — indefini ici, donc jamais vrai */
   const mkAction = estAction ? marcheParAdr.get(quote) : null;
   const troisSauts = Boolean(estAction && mkAction && mkAction.poolAdr);
   if (estAction && !troisSauts) {
@@ -17100,7 +17105,7 @@ function peindreTrending() {
          *   adresse) rendaient IN_APP et ce bouton les envoyait quand meme a « Pair a block with it ». Leur cle est LUE
          *   (cles-v4-actions.js) : la fiche sait acheter. Mesure avant de borner : sans la borne, 211 lignes sur 223 gagnaient un
          *   Buy — une decision produit qui n est pas la mienne ; les blocks v4 gardent le chemin d avant (pool decouverte). */
-        const actionRegistre = typeof STOCKS_BASE_BY_ADR !== 'undefined' && STOCKS_BASE_BY_ADR.has(String(l.adr || '').toLowerCase());
+        const actionRegistre = ACTIONS_PAR_ADR.has(String(l.adr || '').toLowerCase());
         if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc || (vR.achetableIci && actionRegistre))) {
           return '<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>';
         }

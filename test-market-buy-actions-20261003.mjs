@@ -15,8 +15,21 @@ const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 
 /* A. cablage */
 /* 2026-10-03 (soir) : + `achetableIci` — les 20 actions a pool v4 USDC (cles-v4-actions.js) rendent IN_APP ; la fiche sait les acheter. */
-ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr \}\);\n(\s+\/\*[^]*?\*\/\n)?\s+const actionRegistre = typeof STOCKS_BASE_BY_ADR !== 'undefined' && STOCKS_BASE_BY_ADR\.has\(String\(l\.adr \|\| ''\)\.toLowerCase\(\)\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc \|\| \(vR\.achetableIci && actionRegistre\)\)\) \{\n\s+return '<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
+ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr \}\);\n(\s+\/\*[^]*?\*\/\n)?\s+const actionRegistre = ACTIONS_PAR_ADR\.has\(String\(l\.adr \|\| ''\)\.toLowerCase\(\)\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc \|\| \(vR\.achetableIci && actionRegistre\)\)\) \{\n\s+return '<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
   'ligne du Market : Buy si le MEME verdict que la fiche dit achetable (ETH, USDC, ou v4 lisible ici — actions du registre seulement), liquidite au seuil');
+/* ⛔⛔ mesure prod 2026-10-03 (build cles-mesurees-fusionnees) : LLYc, AMDc, PYPLc rendaient encore « Pair a block with it » — la garde
+ *   testait `typeof STOCKS_BASE_BY_ADR`, un nom d index.html, TOUJOURS indefini dans app.html. Idem pour le Buy a trois sauts (ligne
+ *   ~5267, 123 blocks cotes en action le 30/09) : la garde etait toujours fausse. Le nom ne doit plus apparaitre dans app.html. */
+ok(!/STOCKS_BASE_BY_ADR\.has\(|typeof STOCKS_BASE_BY_ADR !==/.test(html), 'app.html n EXECUTE plus un nom qui n y existe pas (STOCKS_BASE_BY_ADR est a index.html ; les commentaires peuvent le citer)');
+ok(/^const ACTIONS_PAR_ADR = new Set\(ACTIONS_COINBASE\.map\(\(a\) => String\(a\.adr\)\.toLowerCase\(\)\)\);$/m.test(html)
+  && /const estAction = Boolean\(quote && ACTIONS_PAR_ADR\.has\(quote\)\);/.test(html), 'le registre des actions est ACTIONS_COINBASE (importe), pour le Market ET le Buy a trois sauts');
+{ /* la garde du Market, extraite et executee : une action du registre passe, un block non */
+  const { ACTIONS_COINBASE } = P;
+  const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowerCase()));
+  const garde = (l) => ACTIONS_PAR_ADR.has(String(l.adr || '').toLowerCase());
+  ok(garde({ adr: ACTIONS_COINBASE.find((a) => a.symbole === 'LLYc').adr.toUpperCase() }) && !garde({ adr: '0xb20000000000000000000084d0953bad205d563f' }) && !garde({}),
+    'la garde : LLYc (casse quelconque) passe, Block 0 non, ligne sans adresse non');
+}
 const iV = html.indexOf('const vR = verdictRoutage({ aMarche: true'), iF = html.indexOf('if (feeOk && liqOk) {');
 ok(iF > 0 && iV > iF, 'le Buy v4 historique reste prioritaire (teste avant)');
 ok(/const ficheBtn = e\.target\.closest\('\[data-acheter-fiche\]'\);/.test(html) && /etape\('achat_clic'\)[\s\S]{0,200}allerA\('map'\)/.test(html)
