@@ -289,24 +289,25 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   const blocG = scen.includes('G') ? (async () => {
   const dF = copie({ nom: 'graine forgee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
     "  { jeton: '0xb200000000000000000000deadbeef00000000aa', compte: '0x1111111111111111111111111111111111111111', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
-  const sf = await redemarrer(dF, J, { attenteMax: 15000 }); await sf.arreter();
+  const dB = copie({ nom: 'graine inventee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
+    "  { jeton: '" + FABRIQUE + "', compte: '" + A6CF + "', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
+  /* ⛔ S5-S5d en PARALLELE (independants). attenteMax 60 s : sous charge, 15 s ne suffisait pas (sousLaGraine = 0, Claude) ;
+   *   redemarrer sort des que sousLaGraine > 0, un passage vert n est pas ralenti. */
+  const [sf, sb, sc5, sd] = await Promise.all([redemarrer(dF, J, { attenteMax: 60000 }), redemarrer(dB, J, { attenteMax: 60000 }),
+    redemarrer(dir, J, { attenteMax: 60000, rpcO: { tete: J - 500, echecs: 0 } }), redemarrer(dir, J, { attenteMax: 90000, rpcO: { echecs: 0, recusKo: true } })]);
+  await Promise.all([sf, sb, sc5, sd].map((x) => x.arreter()));
   v('S5 graine forgee : refusee au demarrage (journal), balayage depuis la tete sous la graine, jamais complete d emblee',
     /graine refusee/.test(sf.journal) && sf.rpc.sousLaGraine > 0 && !!sf.premiere && sf.premiere.couvertureComplete === false
     && !(sf.derniere && sf.derniere.blocks.includes('0xb200000000000000000000deadbeef00000000aa')));
   /* S5b (F2) — entree INVENTEE mais bien formee (compte surveille, plage, tx au bon format) : admise sur la forme, REFUSEE sur la chaine */
-  const dB = copie({ nom: 'graine inventee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
-    "  { jeton: '" + FABRIQUE + "', compte: '" + A6CF + "', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
-  const sb = await redemarrer(dB, J, { attenteMax: 15000 }); await sb.arreter();
   v('S5b (F2) entree inventee bien formee : graine refusee SUR LA CHAINE (journal), balayage complet sous la graine, l entree jamais servie',
     /graine recue/.test(sb.journal) && /graine refusee sur la chaine/.test(sb.journal) && sb.rpc.recus > 0 && sb.rpc.sousLaGraine > 0
     && sb.vues.every((x) => x.couvertureComplete === false && !x.blocks.includes(FABRIQUE)));
   /* S5c (F2) — tete AVANT jusqua (graine du futur, ou noeud en retard) : refusee */
-  const sc5 = await redemarrer(dir, J, { attenteMax: 15000, rpcO: { tete: J - 500, echecs: 0 } }); await sc5.arreter();
   v('S5c (F2) jusqua de la graine au-dela de la tete : graine refusee (journal), balayage depuis la tete, jamais complete d emblee',
     /past the chain head/.test(sc5.journal) && sc5.rpc.sousLaGraine > 0 && !!sc5.premiere && sc5.premiere.couvertureComplete === false
     && sc5.vues.every((x) => x.graine !== 'ADMISE'));
   /* S5d (G2, C2) — RPC sans archive : chaque recu de la graine ERRE (NON_LU a chaque tour). Apres 5 tours : balayage complet, jamais bloque */
-  const sd = await redemarrer(dir, J, { attenteMax: 90000, rpcO: { echecs: 0, recusKo: true } }); await sd.arreter();
   v('S5d (G2) recus de la graine illisibles (RPC sans archive) : apres 5 tours, balayage complet depuis la tete (journal), jamais admise ni complete',
     /graine non verifiable apres 5 tours/.test(sd.journal) && sd.rpc.recus >= 5 && sd.rpc.sousLaGraine > 0
     && sd.vues.every((x) => x.graine !== 'ADMISE' && x.couvertureComplete === false) && sd.vues.some((x) => x.graine === 'REFUSEE'));
@@ -378,12 +379,14 @@ let nAssert = 0, ko = 0;
 const ok = (c, m) => { nAssert += 1; if (!c) { ko += 1; console.log('  KO ' + m); } };
 try {
   /* depot, copie non mutee et mutants en parallele (5 voies : le banc tient sous le delai de la suite) ; sortie dans l ordre */
-  const resultats = new Array(MUTANTS.length); let suivant = 0;
+  /*   les mutants les plus longs (remontee B, repos I, graine G, redemarrage R) partent d abord : le banc tient sous 180 s */
+  const resultats = new Array(MUTANTS.length); const poids = (m) => ['I', 'B', 'G', 'F', 'C', 'P', 'X', 'R', 'N'].findIndex((c) => m.scen.includes(c));
+  const ordre = MUTANTS.map((m, i) => i).sort((a, b) => ((poids(MUTANTS[a]) + 99) % 99) - ((poids(MUTANTS[b]) + 99) % 99)); let suivant = 0;
   const [reel, temoin] = await Promise.all([banc(ICI), banc(copie(null)),
-    ...[0, 1, 2, 3].map(async () => { while (suivant < MUTANTS.length) { const i = suivant++; resultats[i] = await banc(copie(MUTANTS[i]), MUTANTS[i].scen); } })]);
+    ...[0, 1, 2, 3, 4].map(async () => { while (suivant < ordre.length) { const i = ordre[suivant++]; resultats[i] = await banc(copie(MUTANTS[i]), MUTANTS[i].scen); } })]);
   for (const x of reel) ok(x.ok, 'depot : ' + x.id);
   console.log('depot : ' + reel.length + ' verifications, ' + reel.filter((x) => !x.ok).length + ' KO');
-  ok(temoin.length === reel.length && temoin.every((x) => x.ok), 'copie non mutee : verte');
+  ok(temoin.length === reel.length && temoin.every((x) => x.ok), 'copie non mutee : verte' + temoin.filter((x) => !x.ok).map((x) => ' | KO ' + x.id).join(''));
   for (const [i, M] of MUTANTS.entries()) {
     const r = resultats[i];
     const rouges = r.filter((x) => !x.ok).map((x) => x.id);
