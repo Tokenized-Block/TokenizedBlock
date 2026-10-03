@@ -77,7 +77,7 @@ function rpcPour({ E }) {
 }
 const plein = (IR, extra = {}) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(),
   blocks: IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })), ...extra });
-const nosRep = (blocks) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks });
+const nosRep = (blocks) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(), blocks });
 /* LU : index plein + /api/nos-blocks reduit a NOS_SEUL (les blocks reels et TBLOCK ne doivent rien a nos-blocks dans PROV/CL) */
 const LU = (IR, extra = {}, nos = [NOS_SEUL]) => { const e = IR.chargerIndexRouteur(plein(IR, extra)); IR.chargerNosBlocksTb(nosRep(nos)); return e; };
 /* /api/nos-blocks tel que servi (C2, 2026-10-02 22:37 UTC) + NOS_SEUL */

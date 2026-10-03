@@ -140,7 +140,7 @@ try {
     const Tc = await import(pathToFileURL(join(d, 'tokenomics.js')).href);
     IRc.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(),
       blocks: IRc.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) });
-    IRc.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks: [Tc.TBLOCK] });
+    IRc.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(), blocks: [Tc.TBLOCK] });
     return IRc.sourcesTbLues();
   };
   ok((await charge(dOff)) && (await charge(dOffOld)), 'copies : sources TB chargees (index + nos-blocks)');

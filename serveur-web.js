@@ -967,11 +967,18 @@ const GRAINE_NOS = graineNosBlocksAdmise({ comptes: NOS_CREATEURS, plancher: PRE
 console.log(GRAINE_NOS.ok ? '[nos-blocks] graine admise : ' + GRAINE_NOS.blocks.length + ' block(s), couverte jusqu au bloc ' + GRAINE_NOS.jusqua
   : '[nos-blocks] ⛔ graine refusee (' + GRAINE_NOS.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
 const nosBlocksEtat = { blocks: new Set([...NOS_BLOCKS_GENESE, ...(GRAINE_NOS.ok ? GRAINE_NOS.blocks : [])]),
-  depuis: GRAINE_NOS.ok ? PREMIER_BLOCK_TB : null, jusqua: GRAINE_NOS.ok ? GRAINE_NOS.jusqua : null, ratees: 0, lu: null, teteAtteinte: false };
-const nosBlocksComplet = () => nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && nosBlocksEtat.teteAtteinte;
+  depuis: GRAINE_NOS.ok ? PREMIER_BLOCK_TB : null, jusqua: GRAINE_NOS.ok ? GRAINE_NOS.jusqua : null, ratees: 0, lu: null, teteAtteinte: false,
+  tete: null, teteLueA: null };
+/* ⛔ F1 (C2, R9b) : « complete » RETOMBE si la couverture prend du retard sur la tete (meme borne que le routeur : RETARD_MAX_INDEX
+ *   blocs). Une fenetre qui reste en attente fige `jusqua` : apres ~1 h, couvertureComplete repasse a faux. `tete` et `teteLueA`
+ *   voyagent avec la reponse : le client juge aussi le retard et la fraicheur (index-routeur.js, chargerNosBlocksTb). */
+const nosBlocksComplet = () => nosBlocksEtat.depuis !== null && nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && nosBlocksEtat.teteAtteinte
+  && nosBlocksEtat.tete !== null && nosBlocksEtat.tete - nosBlocksEtat.jusqua <= RETARD_MAX_INDEX;
 let nbEnCours = null;
 async function etendreNosBlocks() {
   const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  if (!Number.isSafeInteger(fin)) return;
+  nosBlocksEtat.tete = fin; nosBlocksEtat.teteLueA = Date.now(); /* F1 : seule une tete LUE rafraichit teteLueA */
   let deBloc, aBloc;
   const f = prochaineFenetre({ fin, depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB, pas: PAS_NOS_BLOCKS });
@@ -1032,6 +1039,7 @@ function nosBlocksCorps() {
     blocks: [...nosBlocksEtat.blocks],
     depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB,
+    tete: nosBlocksEtat.tete, teteLueA: nosBlocksEtat.teteLueA,
     couvertureComplete: nosBlocksComplet(),
     /* R9b : `fenetresRatees` = ce qui MANQUE a la couverture annoncee. Une fois complete, une lecture ratee au-dela de
      *   `jusqua` n y retire rien (la plage n avance simplement pas) : elle est dite dans `fenetresEnAttente`, pas en trou. */

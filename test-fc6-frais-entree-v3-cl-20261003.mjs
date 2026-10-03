@@ -70,7 +70,7 @@ async function banc(M) {
   const pret = (r) => r.etat === 'PRET' || r.etat === 'APPROBATIONS';
   const data = (r) => bas((r.plan && r.plan.appel && r.plan.appel.data) || '');
   const LU = () => { IR.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 1, jusqua: 1, teteLueA: Date.now(),
-    blocks: IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) }); IR.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks: ['0xb20000000000000000000024c30d3fcb7931272e'] }); };
+    blocks: IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) }); IR.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 1, jusqua: 1, teteLueA: Date.now(), blocks: ['0xb20000000000000000000024c30d3fcb7931272e'] }); };
 
   LU();
   /* ══ 1. un block TB : REFUSE avant toute lecture de chaine ══ */

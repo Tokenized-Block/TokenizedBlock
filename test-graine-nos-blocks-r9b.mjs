@@ -98,8 +98,8 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
   return { premiere, derniere, complet, rpc, vues, suivre, arreter, get journal() { return journal; } };
 }
 
-/* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXY') {
+/* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
+async function banc(dir, scen = 'RFGXYN') {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
@@ -130,6 +130,14 @@ async function banc(dir, scen = 'RFGXY') {
     && await O.verifierEntreeGraineNos({ rpc: recu({ r: { blockNumber: '0x1' } }), entree: e }) === 'FAUX'
     && await O.verifierEntreeGraineNos({ rpc: recu({ r: { status: '0x0' } }), entree: e }) === 'FAUX'
     && await O.verifierEntreeGraineNos({ rpc: async () => { throw new Error('x'); }, entree: e }) === 'NON_LU');
+  /* U7 (F1) — le client applique a /api/nos-blocks la borne du routeur : retard <= 1800, tete lue il y a <= 10 min */
+  const IRu = await imp(dir, 'index-routeur.js'); const mU = Date.now();
+  const nosU = (o = {}) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, fenetresEnAttente: 0, blocks: PROD, tete: 52200000, jusqua: 52200000, teteLueA: mU, ...o });
+  const luU = (o) => IRu.chargerNosBlocksTb(nosU(o), mU).lu;
+  v('U7 client nos-blocks : a jour = lu ; en attente 1 fenetre a 1000 blocs = lu ; en attente a 1801 blocs = REFUSE ; sans tete = REFUSE',
+    luU() === true && luU({ fenetresEnAttente: 1, jusqua: 52199000 }) === true && luU({ fenetresEnAttente: 1, jusqua: 52198199 }) === false
+    && luU({ tete: undefined }) === false);
+  v('U7b client nos-blocks : tete lue il y a 11 min = REFUSE (meme fraicheur que le routeur)', luU({ teteLueA: mU - 11 * 60000 }) === false && luU({ teteLueA: mU - 9 * 60000 }) === true);
   /* S — le vrai serveur, redemarre (la PREMIERE fenetre lue rate 3 fois de suite = une fenetre ratee pour rpcServeur : S6) */
   if (!scen) return res;
   const s = await redemarrer(dir, J);
@@ -146,13 +154,16 @@ async function banc(dir, scen = 'RFGXY') {
     !!rate1 && s.rpc.rates.length === 3 && s.rpc.rates.every((w) => w[0] === rate1[0] && w[1] === rate1[1])
     && s.rpc.fenetresFrappes.filter((w) => w[0] === rate1[0] && w[1] === rate1[1]).length === 4
     && s.vues.every((x) => x.fenetresRatees === 0 && x.fenetresEnAttente === 0) && s.complet !== null);
-  let s7 = [], s8 = [], tete7 = null, jusqua8 = null;
+  let s7 = [], s8 = [], s10 = [], tete7 = null, jusqua8 = null, tete10 = null;
   if (s.complet !== null && scen.includes('F')) {
     s.rpc.tete += 100; tete7 = s.rpc.tete; s.rpc.echecs = 3;
     s7 = await s.suivre(7000);
     jusqua8 = s7.length ? s7[s7.length - 1].jusqua : null;
     s.rpc.tete += 100; s.rpc.echecs = 100000;
     s8 = await s.suivre(24000, (r) => r.findIndex((x) => x.fenetresEnAttente > 0) >= 0 && r.length - r.findIndex((x) => x.fenetresEnAttente > 0) >= 4);
+    /* S10 (F1) : la fenetre reste en attente et la tete s eloigne au-dela de RETARD_MAX_INDEX : « complete » doit retomber */
+    s.rpc.tete += 2000; tete10 = s.rpc.tete;
+    s10 = await s.suivre(30000, (r) => r.some((x) => x.tete === tete10 && x.couvertureComplete === false));
   }
   await s.arreter();
   if (scen.includes('F')) v('S7 apres la couverture, une fenetre ratee puis relue : couvertureComplete RESTE vrai, aucun trou servi, la tete est rattrapee',
@@ -186,6 +197,18 @@ async function banc(dir, scen = 'RFGXY') {
       x2.length > 3 && x2.every((y) => y.couvertureComplete === true && y.fenetresRatees === 0 && y.jusqua === jX && y.depuis === IRm.PLANCHER_ROUTEUR)
       && x2.some((y) => y.fenetresEnAttente > 0));
   }
+  if (scen.includes('F')) {
+    const chute = s10.find((x) => x.tete === tete10 && x.couvertureComplete === false);
+    const IRs = await imp(dir, 'index-routeur.js');
+    v('S10 (F1) fenetre en attente et tete a > 1800 blocs : couvertureComplete RETOMBE a faux (fenetresRatees > 0), le client refuse ; tete / teteLueA servis',
+      !!chute && chute.fenetresRatees > 0 && chute.tete - chute.jusqua > 1800 && Number.isFinite(chute.teteLueA)
+      && s8.every((x) => Number.isFinite(x.tete) && Number.isFinite(x.teteLueA)) && IRs.chargerNosBlocksTb(chute).lu === false);
+  }
+  /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
+  if (scen.includes('N')) {
+    const sn = await redemarrer(dir, J, { attenteMax: 8000, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
+    v('S1b graine sous la borne de retard mais [jusqua + 1, tete] pas encore lu : jamais complete', sn.vues.length > 3 && sn.vues.every((x) => x.couvertureComplete === false));
+  }
   if (!scen.includes('G')) return res;
   /* S5 — graine forgee dans une copie : le serveur la refuse et redescend depuis la tete */
   const dF = copie({ nom: 'graine forgee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
@@ -215,7 +238,7 @@ function copie(mutation, source = ICI) {
 }
 const MUTANTS = [
   { nom: 'n1 pas de graine (le serveur repart de zero)', scen: 'R', edits: [['serveur-web.js', 'depuis: GRAINE_NOS.ok ? PREMIER_BLOCK_TB : null, jusqua: GRAINE_NOS.ok ? GRAINE_NOS.jusqua : null,', 'depuis: null, jusqua: null,']], casse: [/^S2 /, /^S3 /] },
-  { nom: 'n2 complet sur la seule graine (tete jamais exigee)', scen: 'R', edits: [['serveur-web.js', '&& nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && nosBlocksEtat.teteAtteinte;', '&& nosBlocksEtat.depuis <= PREMIER_BLOCK_TB;']], casse: [/^S1 /] },
+  { nom: 'n2 complet sur la seule graine (tete jamais exigee)', scen: 'N', edits: [['serveur-web.js', '&& nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && nosBlocksEtat.teteAtteinte', '&& nosBlocksEtat.depuis <= PREMIER_BLOCK_TB && true']], casse: [/^S1b /] },
   { nom: 'n3 comptes surveilles non verifies par entree', scen: 'G', edits: [['origine.js', '&& surveilles.has(String(g.compte)) && couv.has(String(g.compte))', '']], casse: [/^U2 /, /^S5 /] },
   { nom: 'n4 plage non verifiee', scen: '', edits: [['origine.js', '&& g.bloc >= plancher && g.bloc <= jusqua', '']], casse: [/^U3 /] },
   { nom: 'n5 couverture des comptes non verifiee', scen: '', edits: [['origine.js', 'if (!surveilles.size || horsCouverture.length) return', 'if (false) return']], casse: [/^U4 /] },
@@ -227,6 +250,9 @@ const MUTANTS = [
   { nom: 'n11 index routeur : ratees ecrasees (pas de relecture)', scen: 'X', edits: [['serveur-web.js', '    if (!r.fenetresRatees) break;', '    break;']], casse: [/^X1 /] },
   { nom: 'n12 index routeur : trou servi pour une lecture au-dela de jusqua', scen: 'XY', edits: [['serveur-web.js', 'fenetresRatees: complet ? 0 : routeurEtat.ratees,', 'fenetresRatees: routeurEtat.ratees,']], casse: [/^X2 /] },
   { nom: 'n13 index routeur : couverture coupee par une lecture ratee (etat R8)', scen: 'XY', edits: [['serveur-web.js', '  const complet = routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null', '  const complet = routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null && !routeurEtat.ratees']], casse: [/^X2 /] },
+  { nom: 'n14 (F1) serveur : complete sans borne de retard (ne retombe jamais)', scen: 'RF', edits: [['serveur-web.js', '  && nosBlocksEtat.tete !== null && nosBlocksEtat.tete - nosBlocksEtat.jusqua <= RETARD_MAX_INDEX;', '  && true;']], casse: [/^S10 /] },
+  { nom: 'n15 (F1) client : retard / attente de nos-blocks non bornes', scen: '', edits: [['index-routeur.js', 'const aJour = retard <= RETARD_MAX_INDEX && teteFraiche && !attenteTropLoin;', 'const aJour = teteFraiche;']], casse: [/^U7 /] },
+  { nom: 'n16 (F1) client : fraicheur de la tete de nos-blocks ignoree', scen: '', edits: [['index-routeur.js', 'const aJour = retard <= RETARD_MAX_INDEX && teteFraiche && !attenteTropLoin;', 'const aJour = retard <= RETARD_MAX_INDEX && !attenteTropLoin;']], casse: [/^U7b /] },
 ];
 
 let nAssert = 0, ko = 0;
@@ -235,7 +261,7 @@ try {
   /* depot, copie non mutee et mutants en parallele (5 voies : le banc tient sous le delai de la suite) ; sortie dans l ordre */
   const resultats = new Array(MUTANTS.length); let suivant = 0;
   const [reel, temoin] = await Promise.all([banc(ICI), banc(copie(null)),
-    ...[0, 1, 2].map(async () => { while (suivant < MUTANTS.length) { const i = suivant++; resultats[i] = await banc(copie(MUTANTS[i]), MUTANTS[i].scen); } })]);
+    ...[0, 1, 2, 3].map(async () => { while (suivant < MUTANTS.length) { const i = suivant++; resultats[i] = await banc(copie(MUTANTS[i]), MUTANTS[i].scen); } })]);
   for (const x of reel) ok(x.ok, 'depot : ' + x.id);
   console.log('depot : ' + reel.length + ' verifications, ' + reel.filter((x) => !x.ok).length + ' KO');
   ok(temoin.length === reel.length && temoin.every((x) => x.ok), 'copie non mutee : verte');

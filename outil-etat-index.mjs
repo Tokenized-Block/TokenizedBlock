@@ -14,7 +14,7 @@ const AJOUT = `
   const __plein = () => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: __m,
     blocks: GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel, bloc: g.bloc, tx: g.tx })) });
   /* /api/nos-blocks tel que lu le 2026-10-02 22:37 UTC (C2) */
-  const __nos = () => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, jusqua: 52095643,
+  const __nos = () => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, jusqua: 52095643, tete: 52095643, teteLueA: __m,
     blocks: ['0xb20000000000000000000024c30d3fcb7931272e', '0xb20000000000000000000003d296be435ae4bbe3', '0xb200000000000000000000e63ffc3f40bf92a042', '0xb200000000000000000000ab549fa65ad4edae3f'] });
   if (__e === 'lu') { chargerIndexRouteur(__plein()); chargerNosBlocksTb(__nos()); }
   else if (__e === 'vide') { chargerIndexRouteur({ ...__plein(), blocks: [] }); chargerNosBlocksTb({ ...__nos(), blocks: [] }); }

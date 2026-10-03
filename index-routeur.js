@@ -121,12 +121,20 @@ let etatNos = { lu: false, pourquoi: 'our blocks not loaded yet' };
 /** Vrai = ce jeton est dans /api/nos-blocks (deja lu). */
 export function estNotreBlockServi(adr) { return nosServis.has(bas(adr)); }
 export function nosBlocksTbLus() { return etatNos.lu === true; }
-/** Charge /api/nos-blocks pour le ROUTAGE (union, jamais d ecrasement). Lu = ok, couverture complete, 0 fenetre ratee, liste non vide. */
-export function chargerNosBlocksTb(rep) {
+/** Charge /api/nos-blocks pour le ROUTAGE (union, jamais d ecrasement). Lu = ok, couverture complete, 0 fenetre ratee, liste non vide,
+ *  ET (F1, C2 R9b) meme borne que l index du routeur : retard tete - jusqua <= RETARD_MAX_INDEX, tete lue il y a <= 10 min, et
+ *  jamais une fenetre en attente au-dela de cette borne. */
+export function chargerNosBlocksTb(rep, maintenantMs = Date.now()) {
   const liste = rep && Array.isArray(rep.blocks) ? rep.blocks : [];
   for (const b of liste) if (/^0x[0-9a-f]{40}$/.test(bas(b))) nosServis.add(bas(b));
   const lu = !!rep && rep.ok === true && rep.couvertureComplete === true && !rep.fenetresRatees && liste.length > 0;
-  etatNos = { lu, pourquoi: lu ? null : 'our blocks list not complete' };
+  const retard = rep && Number.isFinite(rep.tete) && Number.isFinite(rep.jusqua) ? rep.tete - rep.jusqua : Infinity;
+  const teteFraiche = !!rep && Number.isFinite(rep.teteLueA) && Math.abs(maintenantMs - rep.teteLueA) <= FRAICHEUR_MAX_TETE_MS;
+  const attenteTropLoin = !!rep && Number(rep.fenetresEnAttente) > 0 && retard > RETARD_MAX_INDEX;
+  const aJour = retard <= RETARD_MAX_INDEX && teteFraiche && !attenteTropLoin;
+  etatNos = { lu: lu && aJour, pourquoi: lu && aJour ? null : !lu ? 'our blocks list not complete'
+    : attenteTropLoin ? 'our blocks: a window is pending beyond the lag bound' : retard > RETARD_MAX_INDEX ? 'our blocks behind the chain head'
+      : 'our blocks head stale' };
   return { ...etatNos, taille: nosServis.size };
 }
 export function nosBlocksTbIllisibles(pourquoi = 'our blocks could not be read') { etatNos = { lu: false, pourquoi }; }
