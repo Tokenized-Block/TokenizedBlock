@@ -41,7 +41,7 @@ const libre = () => new Promise((ok) => { const s = net.createServer(); s.listen
 const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
 function rpcFictif(jusqua, o = {}) {
   const etat = { tete: o.tete || jusqua + 43200, fenetresFrappes: [], sousLaGraine: 0, echecs: o.echecs ?? 3, rates: [],
-    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0 };
+    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null };
   const repondre = async (m, p) => {
     if (m === 'eth_blockNumber') return '0x' + etat.tete.toString(16);
     if (m === 'eth_getLogs') {
@@ -51,6 +51,7 @@ function rpcFictif(jusqua, o = {}) {
         await new Promise((ok) => setTimeout(ok, 100)); /* latence d un RPC public */
         /* une fenetre RATEE : les `echecs` prochaines requetes echouent (rpcServeur reessaie 3 fois : 3 echecs = une fenetre ratee) */
         if (etat.echecs > 0) { etat.echecs -= 1; etat.rates.push([de, a]); throw new Error('internal error'); }
+        if (etat.trou && de <= etat.trou && etat.trou <= a) { etat.rates.push([de, a]); throw new Error('internal error'); } /* F3 : une fenetre du milieu */
         const b = jusqua + 100;
         return de <= b && b <= a ? [{ address: NOUVEAU, topics: [TOPIC_TRANSFER, t[1], t[2]], data: '0x', blockNumber: '0x' + b.toString(16), transactionHash: '0x' + 'ab'.repeat(32) }] : [];
       }
@@ -107,7 +108,7 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
 }
 
 /* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXYN') {
+async function banc(dir, scen = 'RFGXYNP') {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
@@ -221,6 +222,18 @@ async function banc(dir, scen = 'RFGXYN') {
       !!chute && chute.fenetresRatees > 0 && chute.tete - chute.jusqua > 1800 && Number.isFinite(chute.teteLueA)
       && s8.every((x) => Number.isFinite(x.tete) && Number.isFinite(x.teteLueA)) && IRs.chargerNosBlocksTb(chute).lu === false);
   }
+  /* P1-P2 (F3) — graine a 1 jour, une fenetre AU MILIEU de [jusqua + 1, tete] rate pour de bon : la plage avance jusqu a elle */
+  if (scen.includes('P')) {
+    const sp = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, trou: J + 20000 } });
+    const avance = (x) => x.jusqua > J && x.jusqua < J + 20000 && x.couvertureComplete === false;
+    const p1 = await sp.suivre(30000, (r) => r.filter(avance).length >= 2);
+    sp.rpc.trou = null;
+    const p2 = await sp.suivre(20000, (r) => r.some((x) => x.couvertureComplete === true));
+    await sp.arreter();
+    v('P1 (F3) fenetre du milieu ratee pour de bon : jusqua avance jusqu a elle (contigu, jamais au-dela), pas complete, la fenetre comptee',
+      p1.some(avance) && p1.every((x) => x.jusqua === null || x.jusqua <= J + 20000) && p1.filter(avance).every((x) => x.fenetresRatees >= 1));
+    v('P2 (F3) la fenetre se relit : couverture complete jusqu a la tete', p2.some((x) => x.couvertureComplete === true && x.jusqua === sp.rpc.tete));
+  }
   /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
   if (scen.includes('N')) {
     const sn = await redemarrer(dir, J, { attenteMax: 8000, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
@@ -285,6 +298,7 @@ const MUTANTS = [
   { nom: 'n17 (F2) re-verification sur la chaine non branchee', scen: 'G', edits: [['serveur-web.js', 'const v = await verifierGraineNos({ rpc: rpcServeur, tete: fin });', "const v = { etat: 'OK' };"]], casse: [/^S5b /, /^S5c /] },
   { nom: 'n18 (F2) jusqua <= tete non verifie', scen: 'G', edits: [['origine.js', '  if (jusqua > tete) return', '  if (false) return']], casse: [/^S5c /, /^U8 /] },
   { nom: 'n19 (F2) tx inconnue du noeud lue comme « en attente » (jamais refusee)', scen: 'G', edits: [['origine.js', "  if (!r) return 'FAUX';", "  if (!r) return 'NON_LU';"]], casse: [/^S5b /] },
+  { nom: 'n20 (F3) rattrapage tout-ou-rien (jusqua n avance pas sur une fenetre ratee)', scen: 'P', edits: [['serveur-web.js', 'if (basRate - 1 > nosBlocksEtat.jusqua) nosBlocksEtat.jusqua = basRate - 1;', 'if (false) nosBlocksEtat.jusqua = basRate - 1;']], casse: [/^P1 /] },
 ];
 
 let nAssert = 0, ko = 0;

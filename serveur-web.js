@@ -1003,7 +1003,7 @@ async function etendreNosBlocks() {
   /* ⛔ TOUS LES COMPTES, ET LES RATES DE CHACUN COMPTENT. Un seul compte qui echoue doit empecher la
    *    plage d avancer — sinon un trou serait recouvert par un « deja lu ». */
   /* ⛔ R9b : une fenetre ratee est RELUE sur place (REPRISES_LECTURE_MS) ; seules celles qui ratent encore comptent. */
-  let ratees = 0;
+  let ratees = 0; const restent = [];
   for (const compte of NOS_CREATEURS) {
     const scan = await frappesVers({ rpc: rpcServeur, compte, deBloc, aBloc });
     for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
@@ -1015,7 +1015,7 @@ async function etendreNosBlocks() {
         for (const b of r.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
         if (!(r.fenetresRatees || []).length) { relue = true; break; }
       }
-      if (!relue) ratees += 1;
+      if (!relue) { ratees += 1; restent.push(w); }
     }
   }
   /* ⛔ LES BLOCKS TROUVES SONT GARDES MEME SI UNE FENETRE A RATE : ils sont vrais. C est la PLAGE qui
@@ -1026,6 +1026,16 @@ async function etendreNosBlocks() {
     else if (aBloc === fin) nosBlocksEtat.jusqua = aBloc;
     else nosBlocksEtat.depuis = deBloc;
     if (aBloc === fin) nosBlocksEtat.teteAtteinte = true;
+  } else if (f.sens === 'AVANT') {
+    /* ⛔ F3 (C2 R9b) : RATTRAPAGE INCREMENTAL. Les fenetres de frappesVers partitionnent [deBloc, aBloc] de la meme facon pour
+     *   chaque compte : tout ce qui est SOUS la plus basse fenetre encore ratee est lu proprement. jusqua avance jusque-la (et
+     *   pas plus loin : fail-closed) ; une graine vieille sur un RPC instable progresse fenetre par fenetre au lieu de tout
+     *   relire a chaque tour. */
+    const basRate = Math.min(...restent.map((w) => w.de));
+    if (basRate - 1 > nosBlocksEtat.jusqua) nosBlocksEtat.jusqua = basRate - 1;
+  } else if (f.sens === 'ARRIERE') {
+    const hautRate = Math.max(...restent.map((w) => w.a)); /* remontee : seule la partie propre AU-DESSUS de la ratee est acquise */
+    if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;
   }
   nosBlocksEtat.lu = new Date().toISOString();
 }
