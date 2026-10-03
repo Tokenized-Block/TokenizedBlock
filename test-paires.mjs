@@ -116,8 +116,14 @@ v('⛔ toutes les adresses sont bien formees', () => {
  *   ⇒ Ce cas FIGE le retrait. Si une de ces trois gagne une supply un jour, elle peut revenir —
  *     mais quelqu un devra retoucher ce test ET ecrire pourquoi. Un retour SILENCIEUX est
  *     impossible : c est toute la difference entre une decision et une rechute. */
-v('⛔⛔ COINc, CRCLc et INTCc restent HORS de la liste (supply nulle mesuree)', () => {
-  const dehors = ['COINc', 'CRCLc', 'INTCc'];
+/* ⛔ 2026-10-03 : CRCLc REVIENT, et c est DIT ici comme exige ci-dessus. Remesure du jour sur Base : supply toujours
+ *   EXACTEMENT NULLE (totalSupply() == 0), code 0xef, 8 decimales. Ce n est pas une rechute : decision du fondateur
+ *   (« Oui, les 21 en Soon ») — les 21 actions de l emetteur sans supply entrent pour l AFFICHAGE seulement (le hook 7030 a
+ *   62 devises les admet ; le V8 vivant admet deja CRCLc, mesure deviseAdmise == true). Sans unite ni prix, aucun achat et
+ *   aucun pairage ne passe les gardes. COINc et INTCc ne sont PAS dans la liste de l emetteur du 2026-10-03 : hors. */
+v('⛔⛔ COINc et INTCc restent HORS de la liste ; CRCLc revient en « Soon » (supply nulle remesuree, decision du 2026-10-03)', () => {
+  const dehors = ['COINc', 'INTCc'];
+  assert.ok(new Set(ACTIONS_COINBASE.map((a) => a.symbole)).has('CRCLc'), 'CRCLc doit etre dans la liste (Soon, 2026-10-03)');
   const dedans = new Set(ACTIONS_COINBASE.map((a) => a.symbole));
   for (const s of dehors) {
     assert.ok(!dedans.has(s), s + ' est revenu dans la liste : sa supply etait NULLE le 2026-09-26. '
@@ -141,4 +147,5 @@ console.log('ok paires — ' + n + ' cas · ' + ACTIONS_COINBASE.length
 console.log('⚠️ NE PROUVE PAS que ces adresses soient les vraies actions Coinbase : il prouve que');
 console.log('   les deux copies du depot disent la meme chose. La chaine a tranche le 2026-09-26 sur');
 console.log('   les TREIZE d alors — 13 existent, 13 sont des B20 natifs, 13 symboles concordent.');
-console.log('   TROIS ont ete retirees depuis (COINc, CRCLc, INTCc) : supply EXACTEMENT NULLE.');
+console.log('   TROIS retirees le 2026-09-27 (COINc, CRCLc, INTCc) : supply NULLE ; CRCLc revenue le 2026-10-03 en « Soon »');
+console.log('   avec 20 autres de l emetteur (affichage seul, supply nulle remesuree).');

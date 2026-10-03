@@ -44,9 +44,11 @@ const offertesSansEth = offertes.map((p) => bas(p.adr)).filter((a) => a !== ETH_
 const NOUVELLES_20261002 = ['AMDc', 'ASTSc', 'CAKEc', 'DJTc', 'DUOLc', 'LLYc', 'MRNAc', 'MRVLc', 'NFLXc', 'NVAXc', 'ORCLc', 'PTONc', 'PYPLc', 'QUBTc', 'RBLXc', 'RDDTc', 'TTWOc', 'WENc', 'GMEc', 'HTZc', 'PFEc', 'PMc'];
 /* 2026-10-02 (Phil) : + GMEc, HTZc, PFEc, PMc, ajoutees au hook 7030 (Devises7030.sol, 41). V8 ne les admet pas. */
 const symDe = new Map(offertes.map((p) => [bas(p.adr), p.symbole]));
-ok('V9 list = every quote Create offers on Base except the 22 added 2026-10-02 (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
+/* 2026-10-03 (fondateur, « les 21 en Soon ») : les 21 autres actions de l emetteur sont offertes a l affichage ; hors V9 aussi. */
+const NOUVELLES_20261003 = ['AMCc', 'AEOc', 'BMNRc', 'BIRDc', 'BYNDc', 'CIFRc', 'CLSKc', 'CRCLc', 'CRWVc', 'HUTc', 'KSSc', 'LCIDc', 'MARAc', 'OPENc', 'RIOTc', 'SOUNc', 'USDEc', 'VVVc', 'WULFc', 'WWc', 'XYZc'];
+ok('V9 list = every quote Create offers on Base except the 22 added 2026-10-02 and the 21 added 2026-10-03 (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
   && new Set(DEVISES_ADMISES_V9).size === 19
-  && JSON.stringify(offertesSansEth.filter((a) => !DEVISES_ADMISES_V9.includes(a)).map((a) => symDe.get(a)).sort()) === JSON.stringify([...NOUVELLES_20261002].sort()));
+  && JSON.stringify(offertesSansEth.filter((a) => !DEVISES_ADMISES_V9.includes(a)).map((a) => symDe.get(a)).sort()) === JSON.stringify([...NOUVELLES_20261002, ...NOUVELLES_20261003].sort()));
 ok('V8 list is a subset of the V9 list', DEVISES_ADMISES_V8.every((a) => DEVISES_ADMISES_V9.includes(a)));
 const srcTok = readFileSync('./tokenomics.js', 'utf8');
 ok('deviseVaSurV9 reads hookDeLancementPour', /return hookDeLancementPour\(devise, 8453, \{ v9: true \}\) === 'V9';/.test(srcTok));

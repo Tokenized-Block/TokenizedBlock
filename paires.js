@@ -283,6 +283,33 @@ export const ACTIONS_COINBASE = [
   { symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },
   { symbole: 'PFEc', nom: 'Pfizer', adr: '0xb20000000000000000000018fe7ec7d6dfeeb528' },
   { symbole: 'PMc', nom: 'Philip Morris', adr: '0xb2000000000000000000008fc2a8c23cf5937b66' },
+  /* ⛔⛔ 2026-10-03 (fondateur, « Oui, les 21 en Soon ») : LES 21 AUTRES ACTIONS DE L EMETTEUR entrent au registre pour
+   *   l AFFICHAGE — la regle du 2026-09-27 (« supply nulle = dehors ») est levee pour l affichage SEULEMENT, jamais pour un
+   *   achat : sans marche lu, pas de Buy ; sans contrat qui les admet, Create les montre « opens with our next contract ».
+   *   Le hook 7030 a 62 devises (hook-7030-descripteur.js, 0x32F3…64cc, PAS DEPLOYE) les admet toutes.
+   *   Les 21 relues SUR Base le 2026-10-03 (`eth_getCode` == `0xef`, `symbol()` concordant, `decimals()` == 8) ; SOUNc a
+   *   843 unites, les 20 autres une supply NULLE ce jour. Adresses extraites de la reponse JSON de l emetteur. */
+  { symbole: 'AMCc', nom: 'AMC Entertainment', adr: '0xb200000000000000000000cd7e6b8042cb7c2bb5' },
+  { symbole: 'AEOc', nom: 'American Eagle Outfitters', adr: '0xb2000000000000000000006064f8ec027f042294' },
+  { symbole: 'BMNRc', nom: 'BitMine Immersion', adr: '0xb200000000000000000000ea2df44a307cab279c' },
+  { symbole: 'BIRDc', nom: 'Smartbird', adr: '0xb200000000000000000000535fe96f18204bfd96' },
+  { symbole: 'BYNDc', nom: 'Beyond Meat', adr: '0xb200000000000000000000801830b13b8e493423' },
+  { symbole: 'CIFRc', nom: 'Cipher Digital', adr: '0xb200000000000000000000690275843b6e246286' },
+  { symbole: 'CLSKc', nom: 'CleanSpark', adr: '0xb200000000000000000000fa63cfff5c794dbb95' },
+  { symbole: 'CRCLc', nom: 'Circle Internet Group', adr: '0xb20000000000000000000019f6e7c675b73c2e4d' },
+  { symbole: 'CRWVc', nom: 'CoreWeave', adr: '0xb200000000000000000000f111184a74720787e6' },
+  { symbole: 'HUTc', nom: 'Hut 8', adr: '0xb2000000000000000000006ee1c139a723872e09' },
+  { symbole: 'KSSc', nom: 'Kohl’s', adr: '0xb200000000000000000000105a1f43ff3605c5de' },
+  { symbole: 'LCIDc', nom: 'Lucid Group', adr: '0xb20000000000000000000081050ac3d4395df527' },
+  { symbole: 'MARAc', nom: 'MARA Holdings', adr: '0xb200000000000000000000a310e034e09186fb2d' },
+  { symbole: 'OPENc', nom: 'Opendoor Technologies', adr: '0xb200000000000000000000259694b27bf052e7d7' },
+  { symbole: 'RIOTc', nom: 'Riot Platforms', adr: '0xb200000000000000000000bd0c7627b663c581a6' },
+  { symbole: 'SOUNc', nom: 'SoundHound AI', adr: '0xb2000000000000000000002137743d4a01fe4e88' },
+  { symbole: 'USDEc', nom: 'StablecoinX', adr: '0xb2000000000000000000009426b660396ebcf343' },
+  { symbole: 'VVVc', nom: 'Valvoline', adr: '0xb200000000000000000000fec679b39992f67627' },
+  { symbole: 'WULFc', nom: 'TeraWulf', adr: '0xb200000000000000000000432a1d2bd864acec82' },
+  { symbole: 'WWc', nom: 'WW International', adr: '0xb20000000000000000000089221e238277d52515' },
+  { symbole: 'XYZc', nom: 'Block', adr: '0xb20000000000000000000067c8c151f24e1c9924' },
 ];
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
@@ -366,6 +393,7 @@ export const DEVISES_ADMISES_V8 = Object.freeze([
 
 /** HOOK V9 constructor list (src/V9Devises.sol: 19 addresses, ETH implicit). NOT deployed: it only
  *  counts when the caller passes `{ v9: true }` (tokenomics `OPTIONS_LANCEMENT`, true once HOOK_V9 is set). */
+import { DEVISES_7030 } from './hook-7030-descripteur.js';
 export const DEVISES_ADMISES_V9 = Object.freeze([
   ...DEVISES_ADMISES_V8,
   '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4', // TOSHI
@@ -376,34 +404,11 @@ export const DEVISES_ADMISES_V9 = Object.freeze([
   '0xb200000000000000000000fd2f87532b90095211', // MUc
   '0xb2000000000000000000007d16372840df4dabbe', // PLTRc
 ]);
-/** 2026-10-02 — liste du hook 7030 (contracts/launch-lock/src/Devises7030.sol, FIXE au constructeur, sans setter) :
- *  celle du V9 (19) + les 18 actions Coinbase dont une vraie pool est prouvee sur fork (0ea4661) + GMEc, HTZc, PFEc,
- *  PMc (Phil, 2026-10-02 ; L3 sur fork : naissance, 4 swaps, partage au wei, jamais en block) = 41. Ne compte que si l appelant passe `{ h7030: true }` (drapeau HOOK_7030_ACTIF). */
-export const DEVISES_ADMISES_7030 = Object.freeze([
-  ...DEVISES_ADMISES_V9,
-  '0xb2000000000000000000000d8ce462e99ee7a47b', // AMDc
-  '0xb200000000000000000000b1a29cf17a1819288a', // ASTSc
-  '0xb200000000000000000000f215e4c890cfb7176b', // CAKEc
-  '0xb200000000000000000000428e3a3eebbb20692b', // DJTc
-  '0xb200000000000000000000a613d12deafbbb1db7', // DUOLc
-  '0xb200000000000000000000f1a0f91e34892e4718', // LLYc
-  '0xb200000000000000000000e215e9b76ecba02468', // MRNAc
-  '0xb200000000000000000000ec3c4c7395cc609813', // MRVLc
-  '0xb20000000000000000000058b8c947e44011dfe6', // NFLXc
-  '0xb200000000000000000000c597c476fcf9aed3a8', // NVAXc
-  '0xb200000000000000000000347afba223d7b6b63c', // ORCLc
-  '0xb2000000000000000000009272a491812842aa84', // PTONc
-  '0xb200000000000000000000450ad3abe5d4846c6e', // PYPLc
-  '0xb200000000000000000000ca425ab42e07c35bc3', // QUBTc
-  '0xb2000000000000000000005bd7ae89b9e6189bb5', // RBLXc
-  '0xb20000000000000000000066242d4067724cb7a1', // RDDTc
-  '0xb200000000000000000000f720c26062bc3067da', // TTWOc
-  '0xb20000000000000000000044e3cd7a0e1028e57a', // WENc
-  '0xb2000000000000000000007790ed6e48e06ed935', // GMEc
-  '0xb2000000000000000000002601c5c94f435da168', // HTZc
-  '0xb20000000000000000000018fe7ec7d6dfeeb528', // PFEc
-  '0xb2000000000000000000008fc2a8c23cf5937b66', // PMc
-]);
+/** 2026-10-03 — liste du hook 7030 = 62 (contracts/launch-lock/src/Devises7030.sol de feat/hook-7030-62-sur-a040db5-20261003,
+ *  FIXE au constructeur, sans setter) : V9 19 + 18 actions (0ea4661) + GMEc HTZc PFEc PMc + les 21 autres actions de l emetteur
+ *  (fondateur : « la plus large »). Lue dans hook-7030-descripteur.js, la SEULE source (adresse, liste, planchers) ; ce fichier
+ *  n en recopie plus rien. Ne compte que si l appelant passe `{ h7030: true }` (drapeau HOOK_7030_ACTIF, eteint). */
+export const DEVISES_ADMISES_7030 = DEVISES_7030;
 
 /** The hook a NEW block quoted in `adresse` opens on ('V8' | 'V9'), or null if no launch hook admits it.
  *  The ONLY place that decides — the Create guard, the launch guard (lancer-pool.js) and the hook

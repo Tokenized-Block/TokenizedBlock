@@ -2126,6 +2126,7 @@ const SERVIS = [
   'sauts-depuis-chemin.js',
   /* 2026-10-03 (Phil) : les sauts d un echange block -> block (importe par app.html : absent d ici = 404 = app morte) */
   'bloc-vers-bloc.js',
+  'hook-7030-descripteur.js', 'deploy-7030.html', 'deploy-7030.json',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */

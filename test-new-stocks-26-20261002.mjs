@@ -114,17 +114,26 @@ v('aucune ne cote un block NEUF aujourd hui : V8 ne les admet pas, Create le dit
   assert.equal(hookDeLancementPour('0xb20000000000000000000078ee7ce2fe4908108c', 8453), 'V8');
 });
 
-v('TEMOIN NEGATIF : une adresse hors liste reste refusee comme action', () => {
+/* ⛔ 2026-10-03 (fondateur, « les 21 en Soon ») : les 21 ex-DEHORS ENTRENT au registre pour l affichage (supply nulle
+ *   remesuree le jour meme, SOUNc 843 unites) ; elles restent SANS lancement (aucun hook deploye ne les admet dans l app).
+ *   Le temoin negatif ne porte plus que sur l adresse inventee. */
+v('les 21 « Soon » sont au registre et dans le jumeau, proposees comme actions, mais n ouvrent AUCUN lancement', () => {
   const connues = new Set(ACTIONS_COINBASE.map((x) => x.adr));
   const bas = html.toLowerCase();
-  for (const [s, a] of [...DEHORS, ['INVENTEE', '0xb2000000000000000000000000000000deadbeef']]) {
-    assert.ok(!connues.has(a), s + ' ne doit PAS etre dans la liste');
-    assert.ok(!bas.includes("adr: '" + a + "'"), s + ' ne doit PAS etre dans index.html');
+  assert.equal(DEHORS.length, 21);
+  for (const [s, a] of DEHORS) {
+    assert.ok(connues.has(a), s + ' doit etre dans la liste (Soon, 2026-10-03)');
+    assert.ok(bas.includes("adr: '" + a + "'"), s + ' doit etre dans index.html (jumeau)');
     const q = qualifierPaire(a, 8453);
-    assert.notEqual(q.paire && q.paire.verifiee, true, s + ' promue verifiee alors qu elle est hors liste');
-    assert.notEqual(q.paire && q.paire.type, 'ACTION', s + ' promue action');
+    assert.equal(q.paire && q.paire.type, 'ACTION', s + ' doit etre proposee comme action');
     assert.equal(hookDeLancementPour(a, 8453), null, s + ' ne doit ouvrir aucun lancement');
   }
+  const [s, a] = ['INVENTEE', '0xb2000000000000000000000000000000deadbeef'];
+  assert.ok(!connues.has(a) && !bas.includes("adr: '" + a + "'"), s + ' ne doit etre nulle part');
+  const q = qualifierPaire(a, 8453);
+  assert.notEqual(q.paire && q.paire.verifiee, true, s + ' promue verifiee alors qu elle est hors liste');
+  assert.notEqual(q.paire && q.paire.type, 'ACTION', s + ' promue action');
+  assert.equal(hookDeLancementPour(a, 8453), null, s + ' ne doit ouvrir aucun lancement');
 });
 
 v('hors Base mainnet, une action ajoutee est refusee', () => {
@@ -136,4 +145,4 @@ v('hors Base mainnet, une action ajoutee est refusee', () => {
 });
 
 assert.equal(n, 6, 'compte de cas inattendu : ' + n);
-console.log('ok new-stocks-26 — ' + n + ' cas · 22 ajoutees · ' + DEHORS.length + ' ecartees + 1 inventee refusees');
+console.log('ok new-stocks-26 — ' + n + ' cas · 22 ajoutees · ' + DEHORS.length + ' en « Soon » depuis le 2026-10-03 (sans lancement) + 1 inventee refusee');

@@ -11,7 +11,8 @@ let ko = 0, n = 0;
 const ok = (c, m) => { n++; console.log((c ? 'ok  ' : 'KO  ') + m); if (!c) ko++; };
 const essai = async (m, f) => { try { await f(); } catch (e) { ok(false, m + ' (threw: ' + String(e && e.message || e).slice(0, 110) + ')'); } };
 const ICI = resolve(process.env.DIR || '.');
-const H = '0x907e5976e614e13c4e4cca68535c93f2281124cc';
+/* 2026-10-03 : l adresse vient du descripteur (62 devises, arbre a040db5 de Zero 1) — 0x907e…24cc (37) est perime */
+const H = (await import(pathToFileURL(join(resolve(process.env.DIR || '.'), 'hook-7030-descripteur.js')).href)).DESCRIPTEUR_7030.adresse.toLowerCase();
 const ETH = '0x0000000000000000000000000000000000000000';
 const PLTRc = '0xb2000000000000000000007d16372840df4dabbe';
 const BLOC_HAUT = '0xb2ffffffffffffffffffffffffffffffffffff01'; // sorts after PLTRc -> PLTRc = currency0
@@ -46,7 +47,7 @@ const achat = (X, cle, jeton, sens = 'ACHAT') => X.E.planEchange({ rpc, chaine: 
   marcheLu: { etat: 'LUE', cle, paire: cle.currency0 === ETH ? 'ETH' : 'PLTRc' } });
 
 await essai('(1) list', async () => {
-  ok(on.T.HOOK_7030.toLowerCase() === H, '(1) HOOK_7030 = 0x907e5976E614e13c4e4CCA68535c93f2281124cc');
+  ok(on.T.HOOK_7030.toLowerCase() === H && /^0x[0-9a-f]{40}$/.test(H), '(1) HOOK_7030 = the descriptor address (' + H + ')');
   const e7 = on.T.HOOKS_PAIENT_DEJA_A6CF.find((e) => String(e.hook).toLowerCase() === H);
   ok(!!e7 && JSON.stringify(e7.sens) === '["ACHAT","VENTE"]', '(1) ON: 7030 in HOOKS_PAIENT_DEJA_A6CF, both directions');
   ok(on.T.hookPaieDejaA6cf(H, 'ACHAT') && on.T.hookPaieDejaA6cf(H, 'VENTE'), '(1) ON: hookPaieDejaA6cf true buy and sell');
@@ -107,7 +108,7 @@ await essai('(3b) the 22 new Coinbase stocks', async () => {
   /* 2026-10-02 (Phil) : + GMEc, HTZc, PFEc, PMc, ajoutees au hook 7030 (Devises7030.sol, 41). V8 ne les admet pas. */
   const n18 = ['AMDc','ASTSc','CAKEc','DJTc','DUOLc','LLYc','MRNAc','MRVLc','NFLXc','NVAXc','ORCLc','PTONc','PYPLc','QUBTc','RBLXc','RDDTc','TTWOc','WENc','GMEc','HTZc','PFEc','PMc'];
   const parSym = Object.fromEntries(on.P.ACTIONS_COINBASE.map((x) => [x.symbole, x.adr.toLowerCase()]));
-  ok(on.P.DEVISES_ADMISES_7030.length === 41 && new Set(on.P.DEVISES_ADMISES_7030).size === 41 && on.P.DEVISES_ADMISES_V9.every((a) => on.P.DEVISES_ADMISES_7030.includes(a)), '(3b) 7030 list = V9 19 + 22 = 41, no duplicate');
+  ok(on.P.DEVISES_ADMISES_7030.length === 62 && new Set(on.P.DEVISES_ADMISES_7030).size === 62 && on.P.DEVISES_ADMISES_V9.every((a) => on.P.DEVISES_ADMISES_7030.includes(a)), '(3b) 7030 list = V9 19 + 22 + 21 = 62, no duplicate (2026-10-03)');
   for (const s of n18) {
     const a = parSym[s];
     ok(!!a && on.P.DEVISES_ADMISES_7030.includes(a) && on.P.refusPrixNouveauBlock(a, 8453, { routable: true, symbole: s, ...on.T.OPTIONS_LANCEMENT }) === null,

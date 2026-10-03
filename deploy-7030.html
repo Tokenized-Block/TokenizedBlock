@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Deploy the 7030 market contract</title>
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:640px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px}
+  h2{font-size:15px;margin:0 0 6px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  .ligne{display:flex;gap:10px;align-items:baseline;margin:6px 0}
+  .ligne b{min-width:18px}
+  code{font-size:12.5px;word-break:break-all;color:var(--doux)}
+  button{font:inherit;font-weight:700;padding:12px 18px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012}
+  button[disabled]{opacity:.45;cursor:not-allowed}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:4px 0}
+  label.case{display:flex;gap:8px;align-items:flex-start;margin:10px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Deploy the 7030 market contract (62 currencies)</h1>
+  <p class="doux">One transaction, signed by <b>your</b> wallet. This page never sees a key. The contract has no owner and
+    lands at the same address whoever sends it: the address depends only on its code.</p>
+
+  <div class="carte">
+    <h2>What this contract is</h2>
+    <ul class="doux">
+      <li><b>0.07 % to the fee wallet + 0.03 % to the block's creator</b>, on every swap, always in the paired currency
+        (ETH, USDC, cbBTC, TOSHI, OUSD or a tokenized stock), never in the block.</li>
+      <li><b>62 currencies a new block can be paired with</b>, fixed forever at deployment: the 12 the current contract knows,
+        plus 50 more including every tokenized stock the issuer lists today. <span id="nbDevises"></span></li>
+      <li><b>A creator keeps the 0.03 % only while a small escrow (~$1 of the paired currency) is in place</b>; the floor of
+        each currency is baked in.</li>
+      <li class="ko"><b>Nothing changes for the app until its flag is switched on</b>, after this address is live and re-read
+        on chain. Markets already open keep the contract they were born with.</li>
+    </ul>
+  </div>
+
+  <div class="carte">
+    <div class="ligne"><b id="c1">…</b><span>Base mainnet reachable, target address still empty</span></div>
+    <div class="ligne"><b id="c2">…</b><span>Dry run on Base returns the expected address</span></div>
+    <div class="ligne"><b id="c3">…</b><span>Wallet connected on Base, and it is not the fee wallet</span></div>
+    <div class="ligne"><b id="c4">…</b><span>You confirmed the signing wallet is not the dev wallet</span></div>
+    <p class="doux" style="margin:10px 0 0">Expected address: <code id="attendu"></code></p>
+    <p class="doux">Fee wallet baked in: <code id="fee"></code> · fee split <code id="split"></code> · transaction size <code id="taille"></code> bytes
+      · gas (estimated on Base today) <code id="gaz"></code></p>
+    <p class="doux">Connected wallet: <code id="wallet">—</code></p>
+    <label class="case"><input id="pasDev" type="checkbox"><span>This wallet is <b>not</b> the dev wallet and not the fee wallet. I sign with it on purpose.</span></label>
+  </div>
+
+  <div class="carte">
+    <button id="connecter" type="button">Connect wallet</button>
+    <button id="deployer" type="button" disabled>Deploy — sign in your wallet</button>
+    <p id="etat" class="doux" style="margin:12px 0 0"></p>
+    <p id="relecture" class="doux" style="margin:8px 0 0"></p>
+  </div>
+</main>
+<script type="module">
+/* ⛔ PAGE DE DEPLOIEMENT DU HOOK 7030 A 62 DEVISES (2026-10-03), derivee de deploy-v8.html qui a servi.
+ *    Phil signe avec un wallet AUTRE que celui du dev : la page REFUSE le wallet de frais (a6cf) et exige une case cochee
+ *    « pas le wallet du dev » — elle ne connait pas l adresse du dev et ne la devine pas.
+ *    Le contrat part par le deployeur standard : l adresse ne depend QUE du code. La page VERIFIE avant la signature :
+ *      1. aucun code a l adresse attendue ; 2. un eth_call de la transaction rend exactement cette adresse ;
+ *      3. wallet sur Base et != a6cf ; 4. la case cochee.
+ *    APRES : elle relit sur la chaine feeWallet(), HOOK_FEE() / PART_CREATEUR() (700 / 300), deviseAdmise() et
+ *    plancherCaution() pour TOUTES les 62 devises + ETH, contre deploy-7030.json (selecteurs calcules par keccak.js, pas devines). */
+import { envoyerDepuisWallet } from './envoi.js';
+
+const $ = (s) => document.querySelector(s);
+/* ⛔ MESURE (2026-10-03, cette page en local) : « over rate limit » des le premier dry run sur mainnet.base.org seul.
+ *   Deux endpoints publics (ceux du serveur), tour a tour, et un refus de debit est reessaye 4 fois ; une erreur de
+ *   la chaine (revert) n est PAS reessayee : c est une reponse. */
+const RPCS = ['https://mainnet.base.org', 'https://developer-access-mainnet.base.org'];
+let tour = 0;
+const rpc = async (method, params) => {
+  let dernier = null;
+  for (let k = 0; k < 8; k += 1) {
+    const url = RPCS[tour++ % RPCS.length];
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }).then((x) => x.json());
+      if (!r.error) return r.result;
+      dernier = new Error(r.error.message || 'rpc error');
+      if (!/rate|limit|timeout|busy|capacity/i.test(dernier.message)) throw dernier;
+    } catch (e) { dernier = e; if (!/rate|limit|timeout|busy|capacity|fetch|network|429/i.test(String(e.message || e))) throw e; }
+    await new Promise((o) => setTimeout(o, 700 * (k + 1)));
+  }
+  throw dernier || new Error('rpc error');
+};
+const marque = (id, ok) => { const e = $(id); e.textContent = ok ? '✓' : '✗'; e.className = ok ? 'ok' : 'ko'; };
+const pad = (a) => String(a).toLowerCase().replace(/^0x/, '').padStart(64, '0');
+
+let tx = null, compte = null, pret = { vide: false, simu: false };
+
+async function verifier() {
+  tx = await fetch('./deploy-7030.json', { cache: 'no-store' }).then((r) => r.json());
+  $('#attendu').textContent = tx.hook;
+  $('#fee').textContent = tx.feeWallet;
+  $('#split').textContent = (tx.hookFeePips / 10000) + '% + ' + (tx.partCreateurPips / 10000) + '%';
+  $('#taille').textContent = String(tx.octets);
+  $('#gaz').textContent = String(tx.gazEstimeMainnet);
+  $('#nbDevises').textContent = 'The list carries ' + (tx.devises.length - 1) + ' currencies plus ETH.';
+  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  pret.vide = code === '0x';
+  marque('#c1', pret.vide);
+  if (!pret.vide) {
+    $('#etat').innerHTML = '<span class="ok">Already deployed at this address. Nothing to do.</span>';
+    void relire();
+    return;
+  }
+  const r = await rpc('eth_call', [{ to: tx.deployeur, data: tx.data, gas: '0x7a1200' }, 'latest']);
+  pret.simu = ('0x' + String(r).slice(-40)).toLowerCase() === tx.hook.toLowerCase();
+  marque('#c2', pret.simu);
+  majBouton();
+}
+function majBouton() {
+  const pasDev = $('#pasDev').checked;
+  marque('#c4', pasDev);
+  $('#deployer').disabled = !(pret.vide && pret.simu && compte && pasDev);
+}
+
+/** ⛔ Les lectures qui comptent, faites SUR LA CHAINE une fois le contrat vivant — toutes les devises, pas un echantillon. */
+async function relire() {
+  const appel = async (data) => rpc('eth_call', [{ to: tx.hook, data }, 'latest']);
+  const lignes = [];
+  try {
+    const fee = '0x' + String(await appel(tx.selecteurs.feeWallet)).slice(-40);
+    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + fee);
+    const hf = BigInt(await appel(tx.selecteurs.hookFee)), pc = BigInt(await appel(tx.selecteurs.partCreateur));
+    lignes.push((hf === BigInt(tx.hookFeePips) && pc === BigInt(tx.partCreateurPips) ? '✓' : '✗') + ' fee split on chain: ' + hf + ' / ' + pc + ' per million (expected ' + tx.hookFeePips + ' / ' + tx.partCreateurPips + ')');
+    let admises = 0, planchersOk = 0;
+    for (const d of tx.devises) {
+      const a = BigInt(await appel(tx.selecteurs.deviseAdmise + pad(d.adresse))) === 1n;
+      const p = BigInt(await appel(tx.selecteurs.plancherCaution + pad(d.adresse)));
+      if (a) admises += 1;
+      if (p === BigInt(d.plancher)) planchersOk += 1;
+    }
+    lignes.push((admises === tx.devises.length ? '✓' : '✗') + ' currencies admitted on chain: ' + admises + ' of ' + tx.devises.length + ' (ETH included)');
+    lignes.push((planchersOk === tx.devises.length ? '✓' : '✗') + ' escrow floors on chain equal to the plan: ' + planchersOk + ' of ' + tx.devises.length);
+    const inconnu = '0x' + '7'.repeat(40);
+    const faux = BigInt(await appel(tx.selecteurs.deviseAdmise + pad(inconnu))) === 1n;
+    lignes.push((!faux ? '✓' : '✗') + ' a currency outside the list is refused (negative control)');
+  } catch (e) {
+    lignes.push('✗ could not read the deployed contract: ' + (e.message || e));
+  }
+  $('#relecture').innerHTML = lignes.map((l) => '<div>' + l.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>').join('');
+}
+
+$('#pasDev').addEventListener('change', majBouton);
+$('#connecter').addEventListener('click', async () => {
+  if (!window.ethereum) { $('#etat').textContent = 'No wallet found in this browser.'; return; }
+  try {
+    const comptes = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    compte = comptes && comptes[0];
+    try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
+    const chaine = await window.ethereum.request({ method: 'eth_chainId' });
+    $('#wallet').textContent = compte || '—';
+    const estFee = !!compte && tx && compte.toLowerCase() === tx.feeWallet.toLowerCase();
+    if (estFee) { $('#etat').innerHTML = '<span class="ko">This is the fee wallet. Sign with another wallet.</span>'; compte = null; }
+    marque('#c3', !!compte && Number(chaine) === 8453);
+    if (Number(chaine) !== 8453) compte = null;
+  } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
+  majBouton();
+});
+
+$('#deployer').addEventListener('click', async () => {
+  $('#deployer').disabled = true;
+  $('#etat').textContent = 'Opening your wallet — check it shows Base and a contract call of ' + tx.octets + ' bytes, then sign.';
+  const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: tx.deployeur, data: tx.data, value: '0x0' });
+  if (r.etat !== 'CONFIRME') { $('#etat').innerHTML = '<span class="ko">Not done: ' + (r.pourquoi || r.etat) + '</span>'; majBouton(); return; }
+  const code = await rpc('eth_getCode', [tx.hook, 'latest']);
+  $('#etat').innerHTML = code !== '0x'
+    ? '<span class="ok">Deployed. The contract is live at ' + tx.hook + '.</span> Transaction: <code>' + r.hash + '</code>'
+    : '<span class="ko">Transaction confirmed but no code at the address yet — send the hash: </span><code>' + r.hash + '</code>';
+  void relire();
+});
+
+verifier().catch((e) => { $('#etat').textContent = 'Could not read Base right now: ' + (e.message || e); });
+</script>
+</body>
+</html>

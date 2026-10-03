@@ -99,6 +99,7 @@ export const HOOK_V7 = '0xb5680Fc44ea440fC223D1ca62F2b4F261fdA24Cc';
 export const HOOK_V8 = '0x5926abdAbf5D0006Ee960A8270f3e124e5a764cc';
 import { HOOKS_MARCHE_OUVERT, MARCHE_OUVERT_ACTIF, incoherenceMarcheOuvert } from './marche-ouvert.js';
 import { hookDeLancementPour, DEVISES_ADMISES_7030 } from './paires.js';
+import { DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 /* ⛔ HOOK V9 (« quote fee hook ») — PAS DEPLOYE (2026-10-01). `null` tant qu un deploiement GATE
  *    (sel mine pour 0x4e59, exigerB20 = true, chaque getter relu sur la chaine) n a pas eu lieu.
  *    CE QU IL CHANGE PAR RAPPORT AU V8 : un frais de 0,09 % (9 bps) pris TOUJOURS dans la devise de
@@ -137,7 +138,10 @@ export const V9_PAIE_DEJA_A6CF = null;
  *    Coinbase (0ea4661), branche feat/hook-7030-37-devises-20261002 @ e7a9c17 : CREATE2 0x4e59, sel 0x…253955. PAS DEPLOYE : tant que HOOK_7030_ACTIF vaut false, RIEN ne change (memes octets de tx).
  *    Mesure Zero 1 (fork 52079022) : achat 0,001 ETH -> wallet de frais 7e11 + createur 3e11, routeur 0 = 10 bps.
  *    Le createur ne touche ses 0,03 % que tant que sa caution (inscrireAvecCaution) est en place ; sinon -> collateral. */
-export const HOOK_7030 = '0x907e5976E614e13c4e4CCA68535c93f2281124cc';
+/* ⛔ 2026-10-03 (fondateur : « la plus large ») : 62 devises sur l arbre a040db5 de Zero 1 — adresse, liste et planchers
+ *   viennent de hook-7030-descripteur.js (UNE source), plan contracts/launch-lock/plan de feat/hook-7030-62-sur-a040db5-20261003.
+ *   0x907e…24cc (37), 0xDe294c…64Cc (41) et 0xd68B…24cC (62 sur e7a9c17) sont PERIMES. Drapeau toujours ETEINT : pas deploye. */
+export const HOOK_7030 = DESCRIPTEUR_7030.adresse;
 export const HOOK_7030_ACTIF = false;
 export const HOOK_7030_PPM = Object.freeze({ walletDeFrais: 700, createur: 300 });
 /** Ce hook est-il le 7030 ET le drapeau est-il allume ? Drapeau eteint = le 7030 n existe pas pour l app. */

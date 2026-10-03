@@ -5978,6 +5978,30 @@ const STOCKS_BASE_REGISTRY = [
   { symbol: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },
   { symbol: 'PFEc', nom: 'Pfizer', adr: '0xb20000000000000000000018fe7ec7d6dfeeb528' },
   { symbol: 'PMc', nom: 'Philip Morris', adr: '0xb2000000000000000000008fc2a8c23cf5937b66' },
+  /* 2026-10-03 (fondateur) : les 21 autres actions de l emetteur, en « Soon » (affichage ; sans marche, pas d achat).
+   *   Relues sur Base ce jour (0xef, symbole, 8 decimales) ; SOUNc 843 unites, les 20 autres supply nulle.
+   *   TOUT AJOUT ICI DOIT L ETRE DANS `ACTIONS_COINBASE` (paires.js) : un test compare les deux. */
+  { symbol: 'AMCc', nom: 'AMC Entertainment', adr: '0xb200000000000000000000cd7e6b8042cb7c2bb5' },
+  { symbol: 'AEOc', nom: 'American Eagle Outfitters', adr: '0xb2000000000000000000006064f8ec027f042294' },
+  { symbol: 'BMNRc', nom: 'BitMine Immersion', adr: '0xb200000000000000000000ea2df44a307cab279c' },
+  { symbol: 'BIRDc', nom: 'Smartbird', adr: '0xb200000000000000000000535fe96f18204bfd96' },
+  { symbol: 'BYNDc', nom: 'Beyond Meat', adr: '0xb200000000000000000000801830b13b8e493423' },
+  { symbol: 'CIFRc', nom: 'Cipher Digital', adr: '0xb200000000000000000000690275843b6e246286' },
+  { symbol: 'CLSKc', nom: 'CleanSpark', adr: '0xb200000000000000000000fa63cfff5c794dbb95' },
+  { symbol: 'CRCLc', nom: 'Circle Internet Group', adr: '0xb20000000000000000000019f6e7c675b73c2e4d' },
+  { symbol: 'CRWVc', nom: 'CoreWeave', adr: '0xb200000000000000000000f111184a74720787e6' },
+  { symbol: 'HUTc', nom: 'Hut 8', adr: '0xb2000000000000000000006ee1c139a723872e09' },
+  { symbol: 'KSSc', nom: 'Kohl’s', adr: '0xb200000000000000000000105a1f43ff3605c5de' },
+  { symbol: 'LCIDc', nom: 'Lucid Group', adr: '0xb20000000000000000000081050ac3d4395df527' },
+  { symbol: 'MARAc', nom: 'MARA Holdings', adr: '0xb200000000000000000000a310e034e09186fb2d' },
+  { symbol: 'OPENc', nom: 'Opendoor Technologies', adr: '0xb200000000000000000000259694b27bf052e7d7' },
+  { symbol: 'RIOTc', nom: 'Riot Platforms', adr: '0xb200000000000000000000bd0c7627b663c581a6' },
+  { symbol: 'SOUNc', nom: 'SoundHound AI', adr: '0xb2000000000000000000002137743d4a01fe4e88' },
+  { symbol: 'USDEc', nom: 'StablecoinX', adr: '0xb2000000000000000000009426b660396ebcf343' },
+  { symbol: 'VVVc', nom: 'Valvoline', adr: '0xb200000000000000000000fec679b39992f67627' },
+  { symbol: 'WULFc', nom: 'TeraWulf', adr: '0xb200000000000000000000432a1d2bd864acec82' },
+  { symbol: 'WWc', nom: 'WW International', adr: '0xb20000000000000000000089221e238277d52515' },
+  { symbol: 'XYZc', nom: 'Block', adr: '0xb20000000000000000000067c8c151f24e1c9924' },
 ];
 const STOCKS_BASE_BY_ADR = new Map(STOCKS_BASE_REGISTRY.map((s) => [s.adr.toLowerCase(), s]));
 /** True when quote address is a Coinbase B20 stock from the issuer registry — refuse on this page. */

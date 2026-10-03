@@ -461,7 +461,8 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const QUATRE = ['GMEc', 'HTZc', 'PFEc', 'PMc'].map((s) => [s, P.ACTIONS_COINBASE.find((a) => a.symbole === s)]);
   verifier('F6 GMEc HTZc PFEc PMc au registre, ni block de route ni block a jonction', QUATRE.every(([, a]) => !!a && !PS.estBlockDeRoute(a.adr) && !PS.estBlockAJonction(a.adr) && admis(cle(ETH, a.adr, INCONNU)) !== false),
     QUATRE.map(([s, a]) => s + '=' + (a ? a.adr : 'ABSENTE')).join(' '));
-  verifier('F6 compte : 37 actions au registre, 41 devises 7030 toutes connues', P.ACTIONS_COINBASE.length === 37 && P.DEVISES_ADMISES_7030.length === 41
+  /* 2026-10-03 (fondateur) : registre 58 = 37 + les 21 de l emetteur en « Soon » (affichage) ; liste 7030 = 62, toutes connues */
+  verifier('F6 compte : 58 actions au registre, 62 devises 7030 toutes connues', P.ACTIONS_COINBASE.length === 58 && P.DEVISES_ADMISES_7030.length === 62
     && P.DEVISES_ADMISES_7030.every((d) => PS.estDeviseConnue(d.adr || d)), P.ACTIONS_COINBASE.length + ' / ' + P.DEVISES_ADMISES_7030.length);
   return res;
 }
