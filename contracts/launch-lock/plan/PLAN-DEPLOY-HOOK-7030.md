@@ -4,22 +4,30 @@ Source: `src/TBlockLaunchLockHook.sol` (no owner, no setter: every value fixed a
 Config (`FeeLot2Test._cfgProd`): hookFee 700 pips · partCreateur 300 · partCollateral 0 · modeCollateral 1 ·
 fraisVie 3e14 wei (inscrire, unchanged) · exigerB20 true · suivi24h false (no cradle) · devises = Devises7030 (V9 19 + 18 new
 Coinbase stocks = 37, + ETH). **Rev. 2026-10-02 16:37** — the 18 with a real pool proven on fork (0ea4661): AMDc ASTSc
-CAKEc DJTc DUOLc LLYc MRNAc MRVLc NFLXc NVAXc ORCLc PTONc PYPLc QUBTc RBLXc RDDTc TTWOc WENc. Left out: GMEc HTZc PFEc PMc.
+CAKEc DJTc DUOLc LLYc MRNAc MRVLc NFLXc NVAXc ORCLc PTONc PYPLc QUBTc RBLXc RDDTc TTWOc WENc.
 
-| field | value |
+**Rev. 2026-10-03 (founder: « la plus large »)** — devises = 62 + ETH: the 37 above + the 25 other stocks the issuer
+(api.coinbase.com/v1/tokenized-stocks, 58 tokens) declares, each read on Base mainnet the same day (code 0xef, issuer
+symbol, 8 decimals): AMCc AEOc BMNRc BIRDc BYNDc CIFRc CLSKc CRCLc CRWVc GMEc HTZc HUTc KSSc LCIDc MARAc OPENc PFEc PMc
+RIOTc SOUNc USDEc VVVc WULFc WWc XYZc. 5 minted (GMEc HTZc PFEc PMc SOUNc), 20 with supply 0 (admitted now: the list can
+never change). Measured the same day: the live V8 admits 13 quotes besides ETH — the 12 of the app registry AND CRCLc.
+
+| field | value (rev. 2026-10-03) |
 |---|---|
 | to | 0x4e59b44847b379578588920cA78FbF26c0B4956C (CREATE2 deployer, permissionless) |
 | value | 0 |
-| data | `plan/deploy-calldata.hex` (salt ++ initcode, 28 589 bytes, sha256 of the hex file 29122c1d…f8c9) |
-| salt | 0x…253955 (mined: address low 14 bits == FLAGS_V9 = 0x24cc: beforeInitialize, afterAddLiquidity, before/afterSwap, both return-deltas) |
-| resulting hook | 0x907e5976E614e13c4e4CCA68535c93f2281124cc (no code on Base today; supersedes 0x643D…24cC) |
-| initcode hash | 0x8515237938afdf8f10147faa65feac2f2a4436283cd5e8757a309ace7bd583b6 |
-| gas | eth_estimateGas on Base mainnet (read-only, 2026-10-02 ~16:50): 6 917 997 (inner CREATE2 6 839 064) |
-| cost | ~0.0000415 ETH L2 (at 0.006 gwei) + L1 data fee (~28.6 kB) |
-| signer | any team deployer EOA with ~0.0001 ETH — never the fee sink |
+| data | `plan/deploy-calldata.hex` (salt ++ initcode, 29 389 bytes, sha256 of the hex file c0d80af9…2819861e) |
+| salt | 0x…252567 (mined: address low 14 bits == FLAGS_V9 = 0x24cc) |
+| resulting hook | 0xd68BA83a2B8Bd633607a6637e1D3aed9f47524cC (no code on Base on 2026-10-03; supersedes 0x907e…24cc) |
+| initcode hash | 0x0d5a613a897a1533ab657deab97761c349f85a26956a6986ed3f91deb3189afc |
+| independent check | CREATE2 address and initcode hash recomputed in JS from the calldata file: identical; 62/62 list addresses and the fee sink a6cf present in the initcode |
+| gas | eth_estimateGas on Base mainnet (read-only, 2026-10-03): 8 071 712 (inner CREATE2 on fork 7 915 173) |
+| signer | any team deployer EOA with a little ETH — never the fee sink |
 
-Fork proof: `forge test --fork-url <anvil --base forked at 52081326> --match-contract FeeLot2Test -vv` → 14/14 PASS
-(L2 7 pairs, L3 the 18: split to the wei in the stock, sink never holds the block; V8 refuses the 18; forged NFLXc refused).
+Fork proof (rev. 2026-10-03, base-anvil local fork ~52.15M): `base-forge test --match-contract FeeLot2Test -vv` → 15/16 PASS:
+L4 the 25 admitted, the 5 minted with the full split to the wei in the stock (sink never holds the block); L4 negative
+control (V8 refuses 24, admits CRCLc); L2/L3 unchanged. The 1 FAIL, test_L2_porteCreateur ("PoolManager holds too little
+to fund the test"), fails IDENTICALLY on the unmodified 37 code at the same fork block: fork state, not the list.
 
 ## Why a fixed list (no "any genuine Coinbase stock" check)
 Every on-chain attribute of a B20 is chosen by whoever calls the permissionless B20Factory: name, symbol, decimals,

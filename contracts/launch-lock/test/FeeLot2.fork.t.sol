@@ -11,6 +11,10 @@ import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {LiquidityAmounts} from "../src/lib/LiquidityAmounts.sol";
 import {V9Devises} from "../src/V9Devises.sol";
 import {Devises7030} from "../src/Devises7030.sol";
+
+interface ISupplyL4 {
+    function totalSupply() external view returns (uint256);
+}
 import {TBlockLaunchLockHook as Hook} from "../src/TBlockLaunchLockHook.sol";
 import {TBlockBloc24h} from "../src/TBlockBloc24h.sol";
 import {IERC20L, IInscrireL} from "./LLBase.sol";
@@ -235,6 +239,60 @@ contract FeeLot2Test is EconomieTest {
         (bool ok, bytes memory r) = address(h).call{value: FRAIS_VIE}(abi.encodeWithSelector(Hook.inscrireAvecCaution.selector, k, sp, uint128(1)));
         assertFalse(ok, "registration refused");
         assertEq(bytes4(r), bytes4(0x9e16f763), "PaireNonAdmise");
+    }
+
+    // ── 2026-10-03 (founder: « la plus large ») : the 25 other stocks the issuer declares ─────────────────────────────
+    /// (6) all 25 admitted, B20, 8 decimals; for the 5 MINTED ones the full split proof (birth, 4 swap shapes, sink ==
+    /// floor(q*700/1e6) and creator == floor(q*300/1e6) IN THE STOCK, sink never holds the block). The 20 with supply 0
+    /// cannot be swapped today: admission is what is proven for them.
+    function test_L4_vingtCinq_admises_emisesSplitAuWei() public fork {
+        Hook h = _deployHook(_cfgProd());
+        address[] memory tout = Devises7030.liste();
+        assertEq(tout.length, 62, "62 quotes + ETH");
+        for (uint256 i; i < tout.length; ++i) assertTrue(h.deviseAdmise(tout[i]), "every quote of the list admitted");
+        address[25] memory e = Devises7030.emetteur25();
+        uint256 emises;
+        for (uint256 i; i < 25; ++i) {
+            string memory s = IMeta(e[i]).symbol();
+            assertTrue(h.deviseAdmise(e[i]), string.concat(s, " admitted by the new hook"));
+            assertTrue(h.estB20(e[i]), string.concat(s, " is a B20 precompile"));
+            assertEq(IDec(e[i]).decimals(), 8, "8 decimals");
+            if (ISupplyL4(e[i]).totalSupply() == 0) continue;
+            ++emises;
+            uint256 u = UN / 100;
+            L memory l = _ouvrirSur(address(h), e[i], _creerB20(string.concat("L4", s)), uint128(u));
+            assertTrue(h.createurActif(l.key.toId()), "creator active (minimum escrowed)");
+            _fund(e[i], alice, 10 * u);
+            uint256[4] memory m = [2 * u, 100 ether, 100 ether, u / 10];
+            for (uint256 cas; cas < 4; ++cas) {
+                Avant memory a = _avant(l);
+                BalanceDelta dd = _swapBrut(l, alice, cas < 2, cas == 0 || cas == 2, m[cas], false);
+                uint256 q = _verifierSplit(l, a, cas, m[cas], dd, P_CREA, 0);
+                assertEq(_sinkBloc(l), 0, string.concat(s, ": the sink NEVER holds the block token"));
+                assertGt(q * P_SINK / 1e6, 0, "non-dust leg");
+                _invariant(l);
+            }
+            console2.log(string.concat("L4 ", s, " minted: sink quote after 4 swaps"), _sinkQ(l));
+        }
+        assertEq(emises, 5, "5 of the 25 minted on the fork block (GMEc HTZc PFEc PMc SOUNc on 2026-10-03)");
+    }
+
+    /// (6) negative control: the LIVE V8 refuses the 25 at registration (PaireNonAdmise) — today's limit, measured.
+    function test_L4_controleNegatif_V8_refuseLes25() public fork {
+        address[25] memory e = Devises7030.emetteur25();
+        for (uint256 i; i < 25; ++i) {
+            address b = _creerB20(string.concat("N8y", IMeta(e[i]).symbol()));
+            PoolKey memory k = _cle(e[i], b, HOOK_V8);
+            (uint160 sp,) = _prix(Currency.unwrap(k.currency0) == e[i]);
+            vm.deal(adm, adm.balance + 1 ether);
+            vm.prank(adm);
+            (bool ok, bytes memory r) = HOOK_V8.call{value: FRAIS_VIE}(abi.encodeWithSelector(IInscrireL.inscrire.selector, k, sp));
+            /* ⛔ MESURE 2026-10-03 (Base mainnet, V8.deviseAdmise sur les 62) : le V8 admet 13 devises hors ETH — les 12 du
+             *   registre de l app PLUS CRCLc (supply 0 ce jour). CRCLc est donc deja appariable sur le V8 : admise ici. */
+            if (e[i] == Devises7030.CRCLc) { assertTrue(ok, "V8 already admits CRCLc (measured)"); continue; }
+            assertFalse(ok, string.concat("V8 refuses the stock ", IMeta(e[i]).symbol()));
+            assertEq(bytes4(r), bytes4(0x9e16f763), "PaireNonAdmise");
+        }
     }
 
     /// (4) THE DEPLOY PLAN: exact CREATE2 calldata through 0x4e59 (salt ++ initcode), mined address, gas used.
