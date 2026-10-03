@@ -2067,6 +2067,8 @@ const SERVIS = [
   'bloc-vers-bloc.js',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
+  /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
+  'cles-v4-mesurees.js',
   /* 2026-10-03 (Phil) : ce que les assistants IA lisent du site — faits verifiables seulement, fondateur nomme et lie */
   'llms.txt',
   /* ⛔⛔ `franchissement-depuis-chemin.js` decide la FORME d un passage a deux mondes : exactement

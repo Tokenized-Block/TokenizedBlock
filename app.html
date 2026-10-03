@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-paywith-ousd-v8" hidden>Build <code>20261003-paywith-ousd-v8</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-ousd-pool-profonde" hidden>Build <code>20261003-ousd-pool-profonde</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3367,7 +3367,8 @@ import { V4_ADRESSES } from './lancer-pool.js';
 import { prixEthUsd, weiPourDollars, CLES_PRIX as CLES_PRIX_UI } from './prix-eth.js';
 import { progressionPalier } from './pointsdevie.js';
 import { stadesDesBlocks, EMOJI_STADE } from './stades.js';
-import { decouvrirPools, confianceDe, lirePoolParDexScreener } from './pools-du-jeton.js';
+import { decouvrirPools, confianceDe, lirePoolParDexScreener, decoderInitialize } from './pools-du-jeton.js';
+import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 /* ⛔ `import { resumeRelais } from './relais-cerveaux.js'` RETIRE avec le panneau Relay le
  *   2026-10-02. Le module et ses bancs restent dans le depot : la logique de classement par preuve
  *   est conservee et rejouable, elle n est simplement plus cablee a un ecran. Laisser l import
@@ -14592,6 +14593,18 @@ function aretesMesurees() {
     if (f.famille !== 'aerodrome' && f.famille !== 'uniswap-v4') continue;
     if (String(adr) === String(USDC_BASE).toLowerCase()) continue;
     aretes.push({ de: USDC_BASE, vers: adr, famille: f.famille });
+  }
+  /* ⛔ 2026-10-03 (prod : OUSD absent de « Pay with », note « no route ») : /api/prix-usd rend OUSD avec
+   *   `famille: NON_MESURE` (lecture on-chain > 6 s), donc aucune arete. Or l Initialize de la pool OUSD/USDC v4 est MESURE
+   *   et versionne (cles-v4-mesurees.js, bloc 51962957, sans hook, 100/1) : une pool LUE est une arete de fait. Rien n est
+   *   invente — seules les cles decodees, recalculees (decoderInitialize verifie poolId), entrent. */
+  for (const l of LOGS_INITIALIZE_MESURES) {
+    const d = decoderInitialize(l);
+    if (!d || !d.cle) continue;
+    const c0 = String(d.cle.currency0).toLowerCase(), c1 = String(d.cle.currency1).toLowerCase();
+    if (!aretes.some((x) => x.famille === 'uniswap-v4' && [String(x.de).toLowerCase(), String(x.vers).toLowerCase()].sort().join() === [c0, c1].sort().join())) {
+      aretes.push({ de: c0, vers: c1, famille: 'uniswap-v4' });
+    }
   }
   return aretes;
 }
