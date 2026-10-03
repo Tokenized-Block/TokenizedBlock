@@ -17058,6 +17058,15 @@ function peindreTrending() {
         if (feeOk && liqOk) {
           return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>';
         }
+        /* ⛔⛔ 2026-10-03 (Phil : « nos cibles, les actions tokenisees Coinbase ») — MESURE en prod : les 9 actions sur
+         *   Aerodrome (GOOGLc, METAc, MSFTc, NVDAc, TSLAc, AAPLc…, des M$ de volume) n avaient AUCUN Buy ici, alors que leur
+         *   fiche sur la carte sait les acheter (ETH en une tx, ou USDC), avec notre frais de 0,1 % pris sur la sortie
+         *   (sweepTokenWithFee, porte de glissement). MEME verdict que la fiche (verdictRoutage), MEME achat : ce bouton
+         *   ouvre la fiche, il ne reecrit rien. */
+        const vR = verdictRoutage({ aMarche: true, dex: l.dex, poolAdr: l.poolAdr });
+        if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc)) {
+          return '<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>';
+        }
         /* ⛔⛔ LIBELLE CORRIGE LE 2026-09-23 (Phil : « ca aussi pourquoi ? »). Il disait « Trade on
          *     TB · 0.001 ETH », a cote de lignes qui disent « Buy · 0.5% ». Le lecteur croyait
          *     comparer DEUX PRIX POUR LA MEME ACTION — alors que ce bouton-ci n echange RIEN : son
@@ -17189,6 +17198,20 @@ $('#trListe').addEventListener('click', (e) => {
     try { etape('create_clic'); } catch (_) {}
     poserIntent({ kind: 'ib' });
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
+    return;
+  }
+  /* ⛔ 2026-10-03 : Buy d une action sur Aerodrome -> la fiche de la carte, qui porte deja l achat (ETH ou USDC) et
+   *   notre frais de 0,1 %. Meme compteur d intention que l autre Buy. Pas sur la carte : le profil, comme avant. */
+  const ficheBtn = e.target.closest('[data-acheter-fiche]');
+  if (ficheBtn) {
+    try { etape('achat_clic'); } catch (_) {}
+    const cibleF = String(ficheBtn.getAttribute('data-acheter-fiche') || '');
+    allerA('map');
+    setTimeout(() => {
+      const el = document.querySelector('.bloc[data-block="' + cibleF.toLowerCase() + '"]') || document.querySelector('.bloc[data-block="' + cibleF + '"]');
+      if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      else void ouvrirProfil(adr, sym);
+    }, 400);
     return;
   }
   const acheter = Boolean(e.target.closest('[data-acheter]'));
