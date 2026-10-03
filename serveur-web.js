@@ -1193,6 +1193,33 @@ const railsBudget = { minute: 0, n: 0, parIp: new Map() };
 const railsCache = new Map();
 const railsCompteurs = { plans: 0, prets: 0, approbations: 0, refus: 0, nonMesures: 0, trop: 0, sondes: 0 };
 let railsEnVol = 0;
+/* ⛔⛔ MESURE EN PROD (2026-10-03, build rails-api-parole-devise) : 3 sondes sur 3 en NON_MESURE — « over rate limit » —
+ *   sur le lecteur du serveur (deux endpoints, partages avec tous les scans du site), alors que les memes plans sortaient
+ *   PRET depuis une autre machine. Les eth_call d un plan passent donc par la liste LARGE (quatre endpoints), PARAMETRES
+ *   ENTIERS : `from`, `value` et les surcharges d etat comptent dans une simulation — `callLarge` les jette, et prend `0x`
+ *   pour un echec. Un refus de la chaine (revert) n est PAS reessaye : c est une reponse, pas une panne. */
+let idRails = 0;
+async function rpcRails(methode, params) {
+  if (methode !== 'eth_call') return rpcServeur(methode, params);
+  let dernier = new Error('no endpoint tried');
+  for (let k = 0; k < RPC_FAITS_POOL.length * 2; k += 1) {
+    const url = RPC_FAITS_POOL[tourFaits++ % RPC_FAITS_POOL.length];
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++idRails, method: methode, params }) });
+      const j = await r.json().catch(() => null);
+      if (j && !j.error && j.result !== undefined) return j.result;
+      const msg = j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status;
+      dernier = new Error(msg);
+      if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy/i.test(msg)) { dernier.definitif = true; throw dernier; }
+    } catch (e) {
+      if (e && e.definitif) throw e;
+      dernier = e;
+    }
+    await new Promise((ok) => setTimeout(ok, 200 * (k + 1)));
+  }
+  throw dernier;
+}
 /** La cle exacte d un block : le cache de /api/cle d abord, sinon une recherche COURTE (10 fenetres, pas 40). */
 async function clesRails(a) {
   const k = String(a || '').toLowerCase();
@@ -3002,7 +3029,7 @@ createServer((req, res) => {
     railsBudget.n += 1;
     railsEnVol += 1;
     if (sonde) railsCompteurs.sondes += 1; else railsCompteurs.plans += 1;
-    planRail(demande, { rpc: rpcServeur, clesDe: clesRails, chaine: 8453 }).then((r) => {
+    planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453 }).then((r) => {
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;
         else if (r.etat === 'APPROBATIONS') railsCompteurs.approbations += 1;
