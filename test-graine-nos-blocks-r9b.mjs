@@ -47,7 +47,8 @@ function rpcFictif(jusqua, o = {}) {
         const b = jusqua + 100;
         return de <= b && b <= a ? [{ address: NOUVEAU, topics: [TOPIC_TRANSFER, t[1], t[2]], data: '0x', blockNumber: '0x' + b.toString(16), transactionHash: '0x' + 'ab'.repeat(32) }] : [];
       }
-      if (String(q.address).toLowerCase() === FACTORY_B20) {
+      /* ⛔ seules les fenetres du routeur (pas 1000, alignees sur GRAINE_JUSQUA + 1) : le balayage trending lit aussi la factory */
+      if (String(q.address).toLowerCase() === FACTORY_B20 && o.baseRouteur && de > o.baseRouteur && (de - o.baseRouteur - 1) % 1000 === 0 && a - de <= 999) {
         etat.fenetresRouteur.push([de, a]); await new Promise((ok) => setTimeout(ok, 100));
         if (etat.echecsRouteur > 0) { etat.echecsRouteur -= 1; etat.ratesRouteur.push([de, a]); throw new Error('internal error'); }
       }
@@ -162,7 +163,7 @@ async function banc(dir, scen = 'RFGXY') {
   /* X1-X2 — /api/blocks-routeur : meme clignotement (Claude). Tete a 3000 blocs de GRAINE_ROUTEUR (retard max 1800). */
   if (scen.includes('X')) {
     const IRm = await imp(dir, 'index-routeur.js');
-    const x = await redemarrer(dir, J, { routeurSeul: true, rpcO: { tete: IRm.GRAINE_JUSQUA + 3000, echecs: 0, echecsRouteur: 3 } });
+    const x = await redemarrer(dir, J, { routeurSeul: true, rpcO: { tete: IRm.GRAINE_JUSQUA + 3000, echecs: 0, echecsRouteur: 3, baseRouteur: IRm.GRAINE_JUSQUA } });
     const R = '/api/blocks-routeur'; const tX = x.rpc.tete;
     const fini = (r) => r.length >= 3 && r.slice(-3).every((y) => y.couvertureComplete === true && y.jusqua === tX);
     const x1 = await x.suivre(20000, fini, R);
@@ -175,6 +176,8 @@ async function banc(dir, scen = 'RFGXY') {
     }
     await x.arreter();
     const r1 = x.rpc.ratesRouteur[0];
+    if (dir === ICI) console.log('routeur : ' + x.rpc.fenetresRouteur.length + ' fenetre(s) lues, ' + x.rpc.ratesRouteur.length + ' ratee(s) ' + JSON.stringify(x.rpc.ratesRouteur)
+      + ' ; ' + x1.length + ' lecture(s), fenetresRatees vues ' + JSON.stringify([...new Set(x1.map((y) => y.fenetresRatees))]) + ', derniere jusqua ' + jX + ' / tete ' + tX);
     v('X1 index routeur : fenetre ratee RELUE sur place, jamais servie en trou, puis complet jusqu a la tete',
       !!r1 && x.rpc.ratesRouteur.slice(0, 3).every((w) => w[0] === r1[0] && w[1] === r1[1])
       && x.rpc.fenetresRouteur.filter((w) => w[0] === r1[0] && w[1] === r1[1]).length === 4
