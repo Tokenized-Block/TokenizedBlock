@@ -188,7 +188,7 @@ async function banc(M, { base = null } = {}) {
     [HOOK_CLANKER, HOOK_PEXRA, HOOK_O1, HOOK_DOPPLER].every((h) => PS.classeBlock(SYN, [cle(ETH, SYN, h, 10000, 200)]) === 'INCONNU'
       && PS.classeBlock(SYN, [cle(BRIAN, SYN, h, 10000, 200)]) === 'INCONNU'));
   v('CL liste blanche R9 : PEXRA + ' + NL.NES_LAUNCHPADS_O1.length + ' B20 nes o1 (BRIAN inclus), tous B20, aucun dans l ensemble TB',
-    NL.NES_LAUNCHPADS_O1.length === 5202 && new Set(NL.NES_LAUNCHPADS_O1).size === 5202 && NL.NES_LAUNCHPADS_O1.every((a) => PS.RE_B20.test(a) && a.length === 42)
+    NL.NES_LAUNCHPADS_O1.length === 6822 && new Set(NL.NES_LAUNCHPADS_O1).size === 6822 && NL.NES_LAUNCHPADS_O1.every((a) => PS.RE_B20.test(a) && a.length === 42)
     && NL.NES_LAUNCHPADS_O1.includes(BRIAN) && !NL.NES_LAUNCHPADS_O1.includes(PEXRA)
     && [...Object.values(REELS), ...PS.BLOCKS_SUR_NOS_HOOKS, ...IR.GRAINE_ROUTEUR.map((g) => g.jeton), T.TBLOCK].every((x) => !NL.NES_LAUNCHPADS_O1.includes(bas(x)))
     && PS.classeBlock(BRIAN) === 'TIERS');
