@@ -84,7 +84,12 @@ await essai('(3) recognition', async () => {
   ok(on.T.estNotreHook(H) && on.T.estHookDeNaissance(H), '(3) ON: estNotreHook + estHookDeNaissance know 7030');
   ok(!off.T.estNotreHook(H) && !off.T.estHookDeNaissance(H), '(3) negative control OFF: unknown');
   const r = await achat(off, clePltr, BLOC_HAUT);
-  ok(r.etat === 'REFUSE' && /not a TokenizedBlock market/.test(r.pourquoi), '(3) negative control OFF: PLTRc pool refused "not a TokenizedBlock market"');
+  /* ⛔ 2026-10-03 (Phil : memestocks tiers ouverts, 0,5 % pris dans l action) : un hook INCONNU cote en action Coinbase n est
+   *   plus refuse d office — il est traite en TIERS. L intention du controle reste : jamais le routeur a 0 sur un hook inconnu.
+   *   Refuse (prix de l action non mesure ici) OU frais routeur 50 bps ; jamais 0. */
+  ok((r.etat === 'REFUSE') || (r.resume && BigInt(r.resume.fraisBps) === 50n),
+    '(3) negative control OFF: unknown hook on PLTRc never gets router 0 — refused or 0.5% (' + r.etat + ' ' + (r.pourquoi || '') + ')');
+  ok(!(r.resume && BigInt(r.resume.fraisBps) === 0n), '(3) negative control OFF: router fee is never 0 on an unknown hook');
   for (const [s, a] of [['TOSHI', '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4'], ['OUSD', '0xb2000000000000000000002feb517dfec7415344'],
     ['AVGOc', '0xb200000000000000000000fc737aea6196ab5a4c'], ['BEc', '0xb20000000000000000000016f9dfe862feba122b'],
     ['HIMSc', '0xb20000000000000000000043a599976181bcf336'], ['MUc', '0xb200000000000000000000fd2f87532b90095211'], ['PLTRc', PLTRc]]) {

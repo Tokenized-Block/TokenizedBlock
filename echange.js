@@ -34,6 +34,7 @@ import { hookDataReferentO1 } from './referent-o1.js';
 import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
+import { ACTIONS_COINBASE } from './paires.js';
 
 /** ⛔ RECOPIEES de index.html (const ROUTEUR, const QUOTER) — un test compare. */
 export const ROUTEUR = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
@@ -293,10 +294,18 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   if (String(cle.currency0).toLowerCase() !== ETH) {
     /* ⛔⛔ MARCHE CONTRE UNE DEVISE ERC-20 (V3, 2026-09-19) : on paie la devise pour acheter, on la recoit en vendant — un saut.
      *    Seulement sur NOTRE hook : c est lui qui preleve (3 %) ; l interface n ajoute rien. Permit2 sur le jeton PAYE. */
-    if (!hookPaieDeja) return { etat: 'REFUSE', pourquoi: 'this market is not a TokenizedBlock market — only those are traded here in another currency' };
     const c0 = String(cle.currency0).toLowerCase(), c1 = String(cle.currency1).toLowerCase(), j = String(jeton).toLowerCase();
+    /* ⛔⛔ 2026-10-03 (Phil : « l app attrape le marche », taux 0,5 %, « un seul frais ») : un MEMESTOCK TIERS — block cote
+     *   en action Coinbase sur un hook qui n est pas le notre (BLUEPILL/HIMSc 26 952 $ / 24 h, SI/NVDAc, mesures le meme
+     *   jour) — se trade ici avec NOTRE frais de 0,5 %, pris DANS L ACTION (TAKE a l achat, TAKE_PORTION a la vente, plus
+     *   bas) : un seul frais vers a6cf, le hook tiers ne nous verse rien. Toutes les gardes d apres jugent comme avant :
+     *   l action doit etre MESUREE vendable (`fraisDevisesOk` : prix + liquidite lus), sinon refus. Tout AUTRE marche
+     *   tiers cote en ERC-20 reste refuse. */
+    const deviseTiers = c0 === j ? c1 : c0;
+    const actionCoinbase = ACTIONS_COINBASE.some((a) => String(a.adr).toLowerCase() === deviseTiers);
+    if (!hookPaieDeja && !actionCoinbase) return { etat: 'REFUSE', pourquoi: 'this market is not a TokenizedBlock market — only those are traded here in another currency' };
     if (c0 !== j && c1 !== j) return { etat: 'REFUSE', pourquoi: 'this market is not this block' };
-    const devise = c0 === j ? c1 : c0;
+    const devise = deviseTiers;
     const zf = sens === 'ACHAT' ? devise === c0 : j === c0; // on paie currency0 -> zeroForOne
     /* ⛔⛔ CE REFUS FERMAIT TOUT MARCHE COTE AUTREMENT QU EN USDC, actions Coinbase comprises —
      *     alors que l ecran de Create promettait « buyers will need INTCc to trade your block ».

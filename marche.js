@@ -252,9 +252,16 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
 
   let lues = 0, ratees = 0, sqrt = 0n, via = null, cleTrouvee = null;
   const nulle = (h) => !h || /^0x0{40}$/i.test(String(h));
+  /* ⛔⛔ 2026-10-03 (mesure BLUEPILL, 26 952 $ / 24 h sur sa pool HIMSc) : ses cles exactes comptent des pools pieges —
+   *   ETH sans hook a 88,0238 % de frais LP (liquidite 0), USDC a 75 %. La pool ETH etait lue la premiere et devenait « le
+   *   marche » : le block paraissait cote en ETH, et sa vraie pool HIMSc n etait jamais atteinte. Un frais LP STATIQUE
+   *   au-dessus de 10 % n est pas un marche ; le frais dynamique v4 (drapeau 0x800000) n est pas concerne. */
+  const FRAIS_LP_MAX_MARCHE = 100000, FRAIS_DYNAMIQUE = 0x800000;
+  const clesSaines = (Array.isArray(clesExactes) ? clesExactes : [])
+    .filter((c) => c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing))
+      && (Number(c.fee) <= FRAIS_LP_MAX_MARCHE || Number(c.fee) === FRAIS_DYNAMIQUE));
   const candidates = [
-    ...(Array.isArray(clesExactes) ? clesExactes : [])
-      .filter((c) => c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing)))
+    ...clesSaines
       .map((c) => ({ nom: 'on-chain key ' + (Number(c.fee) / 10000) + ' %', fee: Number(c.fee),
         tickSpacing: Number(c.tickSpacing), hooks: nulle(c.hooks) ? null : c.hooks })),
     ...CLES_MARCHE,
@@ -293,7 +300,7 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
    *    Before: ratees>0 short-circuited to NON_LUE and never opened Buy/Sell for TBLOCK-launched blocks.
    *    Create+Launch default TBLOCK — skipping this path = false « unavailable ». */
   if (sqrt === 0n) {
-    const vd = await vieEnDevise({ rpc, stateView, jeton, clesExactes });
+    const vd = await vieEnDevise({ rpc, stateView, jeton, clesExactes: clesSaines });
     if (vd) return vd;
   }
   if (sqrt === 0n && String(jeton).toLowerCase() !== TBLOCK.toLowerCase()) {

@@ -7,7 +7,8 @@
  * ⛔ LE REVENU EST ON-CHAIN : l appel rendu paie le hook (ou le routeur) vers le wallet de frais QUAND le wallet de l agent
  *   le signe. L API elle-meme ne facture rien ; un peage x402 de l appel n existera qu une fois la cle CDP posee.
  * ⛔ CE QUE LE SERVEUR NE LIT PAS, IL NE L ADMET PAS (fail-closed par rapport a l app) :
- *   - `fraisDevisesOk` = { USDC } seul : l app y ajoute les devises dont ELLE a lu le prix ; ici aucune.
+ *   - `fraisDevisesOk` = USDC + les 12 actions a pool Aerodrome profonde MESUREE (table) ; l app, elle, lit prix + liquidite
+ *     de toute devise proposee — le serveur n ajoute rien qu il n a pas mesure.
  *   - `prixUsdEntree` = null : le bareme degressif du multi-sauts applique son taux le plus haut, et le resume le dit.
  *   Le serveur peut donc REFUSER une route que l app accepte ; il ne peut pas en accepter une qu elle refuse.
  * Routes (le reste : refus nomme) :
@@ -113,7 +114,9 @@ export async function planRail(q, deps) {
   if (m <= 0n) return normaliser('?', { etat: 'REFUSE', pourquoi: 'montant must be a positive integer in raw units of the token paid' });
   if (de === vers) return normaliser('?', { etat: 'REFUSE', pourquoi: 'de and vers are the same token' });
   const nd = natureJeton(de), nv = natureJeton(vers), route = nd + '>' + nv;
-  const fraisDevisesOk = new Set([USDC]);
+  /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
+   * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */
+  const fraisDevisesOk = new Set([USDC, ...POOLS_ACTIONS_AERODROME.keys()]);
   const marcheDe = async (a) => vieDuBlock({ rpc, stateView, jeton: a, clesExactes: await clesDe(a) });
   const illisible = (mk) => ({ etat: mk && mk.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
     pourquoi: 'the block market could not be read: ' + ((mk && mk.pourquoi) || 'no answer') });
