@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-ousd-pool-profonde" hidden>Build <code>20261003-ousd-pool-profonde</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-graphe-cles-reelles" hidden>Build <code>20261003-graphe-cles-reelles</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -14592,6 +14592,17 @@ function aretesMesurees() {
     if (!f || typeof f.famille !== 'string') continue;
     if (f.famille !== 'aerodrome' && f.famille !== 'uniswap-v4') continue;
     if (String(adr) === String(USDC_BASE).toLowerCase()) continue;
+    /* ⛔⛔ 2026-10-03 (prod, baa5 : « AMDc — routed » offert) : une arete v4 n entre que si sa CLE CONSTRUCTIBLE est connue
+     *   (le serveur dit lui-meme `cleV4: null` = « priced but not built »), et elle relie le jeton a l AUTRE COTE REEL de
+     *   cette cle, pas a USDC par defaut. Aerodrome : inchange (paires USDC mesurees). */
+    if (f.famille === 'uniswap-v4') {
+      const k = f.cleV4;
+      if (!k || !k.currency0 || !k.currency1) continue;
+      const a0 = String(k.currency0).toLowerCase(), a1 = String(k.currency1).toLowerCase(), moi = String(adr).toLowerCase();
+      if (a0 !== moi && a1 !== moi) continue;
+      aretes.push({ de: a0 === moi ? a1 : a0, vers: adr, famille: 'uniswap-v4' });
+      continue;
+    }
     aretes.push({ de: USDC_BASE, vers: adr, famille: f.famille });
   }
   /* ⛔ 2026-10-03 (prod : OUSD absent de « Pay with », note « no route ») : /api/prix-usd rend OUSD avec
