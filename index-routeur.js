@@ -50,6 +50,9 @@ export const GRAINE_ROUTEUR = Object.freeze([
   { jeton: '0xb200000000000000000000df3ffcd9be89b3843c', sel: '0xbdb93b5d73a9877426bb2d5ad0c6e57bba2241b09c57360b33185a7784640485', bloc: 51359874, tx: '0x5f7e6a6bd653488336d266efe602901e6bcd4f74129f033fe064385943f79dbc' },
   { jeton: '0xb20000000000000000000072eb43b8db1029b7d9', sel: '0x59effef68caf2a5587b3796c33e1f762675227549c79ecde5f76542f800890a0', bloc: 51358276, tx: '0xb1b9bbc432f698300e1f085d2049247606fec8ccc9b40641bc2a415b0aaa77ac' },
   { jeton: '0xb200000000000000000000913c2d82ea435eb2aa', sel: '0xbbd23100cdd16acf3c890b5cea9cf7f374e468e7606215955134275293a848c4', bloc: 51356384, tx: '0x77b03fb923528b5d6b85fe45e3472dd7add1307a79c0f7904c86436d0e83caba' },
+  /* R7 (Zero 1, K1) : createPaid passe par l EntryPoint ERC-4337 0x5ff137d4…2789 (smart wallet) — tx.to n est pas le routeur.
+   *   Relu sur la chaine : statut 1, sel present dans l input, formule = log B20Created (fix-r4-logs/r7/scan-hooks.json). */
+  { jeton: '0xb200000000000000000000e63ffc3f40bf92a042', sel: '0xaf653605fa93e0a42485f4839122b166d81c448c87e094847fc9de2f3020c27a', bloc: 51692885, tx: '0x6fee4932a982df3f6444dde424a7cb7afc838db7e074b4af930b57c473f00dba' },
 ].map((g) => Object.freeze(g)));
 /** Plancher du balayage serveur (premier bloc ou le CreateRouter a du code) et borne haute couverte par la graine. */
 export const PLANCHER_ROUTEUR = 51354834;
@@ -96,8 +99,8 @@ export function selDeCreatePaid(input) {
   return '0x' + s.slice(10 + 64, 10 + 128);
 }
 /**
- * Lit [deBloc, aBloc] par fenetres de `pas` : logs B20Created de la factory, puis chaque transaction ; garde celles dont
- * to == CreateRouter, selecteur createPaid, et dont le sel redonne l adresse du log (neDuRouteur). Les fenetres et les
+ * Lit [deBloc, aBloc] par fenetres de `pas` : logs B20Created de la factory, puis chaque transaction ; garde le jeton si un
+ * mot de l input (createPaid direct, ou appel via un contrat : 4337, smart wallet) redonne son adresse (neDuRouteur). Les fenetres et les
  * transactions ratees sont COMPTEES (`fenetresRatees`) : la plage ne doit pas avancer sur un trou.
  */
 export async function scannerNesDuRouteur({ rpc, deBloc, aBloc, pas = 1000, routeur = CREATE_ROUTER }) {
@@ -119,10 +122,16 @@ export async function scannerNesDuRouteur({ rpc, deBloc, aBloc, pas = 1000, rout
       let tx;
       try { tx = await rpc('eth_getTransactionByHash', [h]); } catch { fenetresRatees += 1; continue; }
       if (!tx) { fenetresRatees += 1; continue; }
-      if (bas(tx.to) !== bas(routeur)) continue;
-      const sel = selDeCreatePaid(tx.input);
-      if (!sel) continue;
-      for (const c of crees) if (neDuRouteur(c.jeton, sel, routeur)) blocks.push({ jeton: c.jeton, sel, bloc: c.bloc, tx: h });
+      /* ⛔ R7 (Zero 1, K1) : createPaid peut arriver par un contrat (EntryPoint ERC-4337, smart wallet, multicall) : tx.to
+       *   n est alors PAS le routeur. On cherche le sel partout dans l input (mots de 32 octets, a tout decalage de 4 octets) ;
+       *   la formule CREATE2 le prouve (pas de faux positif). */
+      const direct = bas(tx.to) === bas(routeur) ? selDeCreatePaid(tx.input) : null;
+      const inp = bas(tx.input).replace(/^0x/, '');
+      for (const c of crees) {
+        let sel = direct && neDuRouteur(c.jeton, direct, routeur) ? direct : null;
+        for (let off = 0; !sel && off < 64; off += 8) for (let k = off; !sel && k + 64 <= inp.length; k += 64) { const w = '0x' + inp.slice(k, k + 64); if (neDuRouteur(c.jeton, w, routeur)) sel = w; }
+        if (sel) blocks.push({ jeton: c.jeton, sel, bloc: c.bloc, tx: h });
+      }
     }
   }
   return { blocks, fenetresRatees };

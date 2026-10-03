@@ -138,6 +138,27 @@ export function hookAdmisPourBlock(cle, cles = [cle]) {
  * ⛔ Une devise connue (ETH, USDC, OUSD, actions…) n est jamais un block ; un jeton hors B20 ne l est que par (c). */
 const BLOCKS_V1_TEST = new Set(['0xb2000000000000000000004ff41cbd5ef8e49f14', '0xb20000000000000000000071224edc6587e362d2',
   '0xb2000000000000000000006d6f9102e9e4b221e0', '0xb200000000000000000000a3f3e63b48ef57c481']);
+/* ⛔⛔ R7 (Zero 1, K2) : la regle (c) ne doit pas dependre de ce que l app a deja vu. Liste STATIQUE et COMPLETE des jetons qui
+ *   ont une pool sur un de NOS hooks (estNotreHook : V1 HOOK_PREVU, V2…V8 ; 7030 sans code), lue sur la chaine : Initialize du
+ *   PoolManager 0x4985…2b2b de 51 355 025 (1er bloc avec code de HOOK_PREVU) a 52 098 430, 744 fenetres, 0 ratee, 72 361
+ *   Initialize, 10 pools sur nos hooks (fix-r4-logs/r7/scan-hooks.json). Les 11 devises non connues de ces pools : */
+export const BLOCKS_SUR_NOS_HOOKS = Object.freeze([
+  '0xb200000000000000000000df3ffcd9be89b3843c', /* TBGAS     V1 51360108 */
+  '0xb2000000000000000000004ff41cbd5ef8e49f14', /* RNG       V1 51478831 */
+  '0xb20000000000000000000071224edc6587e362d2', /* TUTU      V1 51479454 */
+  '0xb2000000000000000000006d6f9102e9e4b221e0', /* OK        V1 51484540 */
+  '0xb200000000000000000000a3f3e63b48ef57c481', /* O         V1 51486012 */
+  '0xb200000000000000000000ab549fa65ad4edae3f', /*           V2 51527429 */
+  '0xb200000000000000000000809778b2d38d114351', /*           V2 51531218 */
+  '0xb200000000000000000000e4b0c5fbe9c8df579e', /* IB022     V8 51653364 */
+  '0xb200000000000000000000baa5356bfc210cc30a', /* routeur   V8 51662444 */
+  '0xb2000000000000000000007b9fcbd005511acbd5', /* (c0)      V8 51955308, pool block/block */
+  '0xb200000000000000000000e7e9db76e8234f8f56', /* routeur   V8 51955308 */
+]);
+/* BACKLOG (non construit) : version durable = le serveur indexe aussi les Initialize du PoolManager sur nos hooks (comme
+ *   /api/blocks-routeur) et l app les ajoute a cet ensemble ; d ici la, une pool ouverte plus tard sur nos hooks par un jeton
+ *   qui n est pas ne du routeur n est TB que par le contexte / poolsLive (noterMarcheSurNotreHook). */
+const SUR_NOS_HOOKS = new Set(BLOCKS_SUR_NOS_HOOKS);
 const marchesSurNosHooks = new Set();
 /** L app a lu un marche (cle V4) sur un de NOS hooks : ses devises non connues sont des blocks TB (regle (c)). */
 export function noterMarcheSurNotreHook(cle) {
@@ -153,7 +174,7 @@ function surNotreHook(a, cles) {
 export function classeBlock(adr, cles = []) {
   const a = bas(adr);
   if (!/^0x[0-9a-f]{40}$/.test(a) || DEVISES.has(a)) return null;
-  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || estNeDuRouteur(a) || surNotreHook(a, cles)) return 'TB';
+  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) || estNeDuRouteur(a) || surNotreHook(a, cles)) return 'TB';
   if (!RE_B20.test(a)) return null;
   return indexRouteurLu() ? 'TIERS' : 'INCONNU';
 }
