@@ -20,12 +20,14 @@ const BLOC_BAS = '0xb200000000000000000000000000000000000001';  // sorts before 
 const RANDOM = '0x1111111111111111111111111111111111111111';
 const compte = '0x' + '4'.repeat(40);
 
-/* ON copy: the same modules, only `HOOK_7030_ACTIF = false` -> true in tokenomics.js */
-const ON = mkdtempSync(join(tmpdir(), 'h7030-on-'));
-for (const f of readdirSync(ICI)) if (f.endsWith('.js')) copyFileSync(join(ICI, f), join(ON, f));
-const tk = readFileSync(join(ON, 'tokenomics.js'), 'utf8');
-ok(tk.includes('export const HOOK_7030_ACTIF = false;'), 'shipped flag is OFF (export const HOOK_7030_ACTIF = false)');
-writeFileSync(join(ON, 'tokenomics.js'), tk.replace('export const HOOK_7030_ACTIF = false;', 'export const HOOK_7030_ACTIF = true;'));
+/* 2026-10-03 : le contrat est DEPLOYE et le drapeau ALLUME dans le depot (= le cas ON) ; la copie OFF est fabriquee en eteignant
+ *   le drapeau — les temoins negatifs « OFF » du banc tournent sur cette copie, les cas « ON » sur le depot tel qu il est servi. */
+const OFF = mkdtempSync(join(tmpdir(), 'h7030-off-'));
+for (const f of readdirSync(ICI)) if (f.endsWith('.js')) copyFileSync(join(ICI, f), join(OFF, f));
+const tk = readFileSync(join(OFF, 'tokenomics.js'), 'utf8');
+ok(tk.includes('export const HOOK_7030_ACTIF = true;'), 'shipped flag is ON (export const HOOK_7030_ACTIF = true) — contract live since 2026-10-03');
+writeFileSync(join(OFF, 'tokenomics.js'), tk.replace('export const HOOK_7030_ACTIF = true;', 'export const HOOK_7030_ACTIF = false;'));
+const ON = ICI;
 const charger = async (d) => ({
 /* ⛔⛔⛔ IMPORT PORTABLE — CORRIGE LE 2026-10-02. `await import(path.join(...))` fonctionne sur
  *      POSIX et LEVE sur Windows : « On Windows, absolute paths must be valid file:// URLs ». Les
@@ -35,7 +37,7 @@ const charger = async (d) => ({
  *      systeme de fichiers de l hote. `pathToFileURL(...).href` est la seule forme qui vaut partout. */
   T: await import(pathToFileURL(join(d, 'tokenomics.js')).href), P: await import(pathToFileURL(join(d, 'paires.js')).href), E: await import(pathToFileURL(join(d, 'echange.js')).href),
   L2: await import(pathToFileURL(join(d, 'lancer-pool-v2.js')).href), L: await import(pathToFileURL(join(d, 'lancer-pool.js')).href), M: await import(pathToFileURL(join(d, 'marche.js')).href) });
-const off = await charger(ICI), on = await charger(ON);
+const off = await charger(OFF), on = await charger(ON);
 
 // quoter / reads mock: every eth_call returns 1e18 in word 0 (quotes), 0 elsewhere (no code -> fine for plans)
 const q = '0x' + (10n ** 18n).toString(16).padStart(64, '0') + '0'.repeat(64);
@@ -190,6 +192,6 @@ ok(!/startsWith\('0xbb920fed'\)/.test(app) && (app.match(/estEtapeInscription\(/
   'app: inscription steps (prepaid value, balance checks, refuse-before-pay) recognised for both selectors');
 ok(/function paireVa7030[\s\S]{0,200}HOOK_7030_ACTIF === true/.test(app) && (app.match(/OPTIONS_LANCEMENT\.h7030 === true && paireVa7030\(/g) || []).length === 2,
   'app: split copy only when the flag is ON (OPTIONS_LANCEMENT.h7030)');
-rmSync(ON, { recursive: true, force: true });
+rmSync(OFF, { recursive: true, force: true });
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

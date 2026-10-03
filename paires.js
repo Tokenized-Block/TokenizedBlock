@@ -418,7 +418,7 @@ export const DEVISES_ADMISES_7030 = DEVISES_7030;
 export function hookDeLancementPour(adresse, chaine, { v9 = false, h7030 = false } = {}) {
   if (Number(chaine) !== 8453) return null;
   const a = String(adresse || '').trim().toLowerCase();
-  /* ⛔ 2026-10-02 — hook 7030 (drapeau HOOK_7030_ACTIF, passe par l appelant) : ETH + sa liste fixe de 41 (V9 19 + 22). */
+  /* ⛔ hook 7030 (drapeau HOOK_7030_ACTIF, passe par l appelant) : ETH + sa liste fixe — 62 depuis le 2026-10-03 (descripteur). */
   if (h7030 === true && (a === ETH_NATIF || DEVISES_ADMISES_7030.includes(a))) return '7030';
   if (v9 === true && a.startsWith('0xb2') && DEVISES_ADMISES_V9.includes(a)) return 'V9';
   if (a === ETH_NATIF || a === TBLOCK_MAINNET || DEVISES_ADMISES_V8.includes(a)) return 'V8';
@@ -442,8 +442,11 @@ export function refusPrixNouveauBlock(adresse, chaine, { routable = false, symbo
 }
 
 /* ══ 2026-10-02 — CAUTION DU CREATEUR (hook 7030) : PLANCHER COTE APP ═════════════════════════════════════════
- * Le hook n impose AUCUN plancher (Zero 1, D2 : 1 unite brute suffit et touche les 0,03 %). L app en pose un : la
- * caution vaut l equivalent de CAUTION_CREATEUR_USD dollars dans la devise appariee, arrondi AU-DESSUS a l unite brute,
+ * ⛔ PERIME LE 2026-10-03 : le hook DEPLOYE (0x32F3…64cc, arbre a040db5 de Zero 1) IMPOSE un plancher par devise, fige au
+ *   constructeur (hook-7030-descripteur.js, ~1 $ au bloc 52 090 382 ; CautionSousLePlancher en dessous). L app garde SON 1 $
+ *   du jour et prend le PLUS GRAND des deux (app.html cautionCreateurPour) — sinon une hausse de l ETH ferait reverter la
+ *   naissance apres paiement (Grok, croisement de 4d8e437).
+ * La caution vaut l equivalent de CAUTION_CREATEUR_USD dollars dans la devise appariee, arrondi AU-DESSUS a l unite brute,
  * prix lu (/api/prix-usd, ETH via le prix ETH). 1 $ : assez pour qu une caution « vide » ne touche pas la part, assez
  * peu pour ne bloquer personne. Prix illisible -> null -> pas de naissance 7030 (on refuse, rien n est paye). */
 export const CAUTION_CREATEUR_USD = 1;

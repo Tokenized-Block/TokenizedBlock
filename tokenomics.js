@@ -142,7 +142,10 @@ export const V9_PAIE_DEJA_A6CF = null;
  *   viennent de hook-7030-descripteur.js (UNE source), plan contracts/launch-lock/plan de feat/hook-7030-62-sur-a040db5-20261003.
  *   0x907e…24cc (37), 0xDe294c…64Cc (41) et 0xd68B…24cC (62 sur e7a9c17) sont PERIMES. Drapeau toujours ETEINT : pas deploye. */
 export const HOOK_7030 = DESCRIPTEUR_7030.adresse;
-export const HOOK_7030_ACTIF = false;
+/* ⛔⛔ ALLUME le 2026-10-03 : contrat DEPLOYE par Phil — tx 0xdb6f2f416be45ae1a730e2357e1bf7c09cb57aac35380c54d67d232b28f66b6f, bloc
+ *   52 132 476, 22 117 octets a 0x32F3…64cc, relu sur la chaine : feeWallet a6cf, 700/300, 63/63 admises, 63/63 planchers =
+ *   plan, adresse hors liste refusee. `hookCourant` ne le rend que code LU sur la chaine. */
+export const HOOK_7030_ACTIF = true;
 export const HOOK_7030_PPM = Object.freeze({ walletDeFrais: 700, createur: 300 });
 /** Ce hook est-il le 7030 ET le drapeau est-il allume ? Drapeau eteint = le 7030 n existe pas pour l app. */
 export function estHook7030(h) {

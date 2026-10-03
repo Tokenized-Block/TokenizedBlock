@@ -47,7 +47,8 @@ const O1 = '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc';
 function admisOracle(c) {
   if (!BLOCS.has(bas(c.currency0)) && !BLOCS.has(bas(c.currency1))) return true;
   const h = bas(c.hooks);
-  if ([T.HOOK_V8, T.HOOK_V2, T.HOOK_PREVU].map(bas).includes(h)) return true;
+  /* 2026-10-03 : le 7030 (0x32F3…64cc) est NOTRE hook depuis que son drapeau est allume — l oracle le sait par estHook7030 */
+  if ([T.HOOK_V8, T.HOOK_V2, T.HOOK_PREVU].map(bas).includes(h) || T.estHook7030(h)) return true;
   if (h === ETH) return Number(c.fee) === 30000 && Number(c.tickSpacing) === 200;
   return h === O1;
 }
@@ -218,7 +219,9 @@ for (const bloc of [BLOC_BAS, BLOC_HAUT]) {
         nPlans += 1; nSimple += 1;
         if (actuelle) {
           if (!(p.resume && p.resume.remplaceV1 === true)) ko.push(nom + ' : V1 NON RAMENE sur la pool actuelle');
-          juger(nom, [{ cle: cle(bloc, autre, HOOKS.V8), zeroForOne: zf }], p, ko);
+          /* 2026-10-03 : la pool de version actuelle est la PREMIERE de HOOKS_VERSION_ACTUELLE (7030 depuis que son drapeau est
+           *   allume, sinon V8) — le libelle « +V8 actuelle » est garde pour les motifs des mutants. */
+          juger(nom, [{ cle: cle(bloc, autre, E.HOOKS_VERSION_ACTUELLE[0]), zeroForOne: zf }], p, ko);
           continue;
         }
         if (h === 'PREVU' && sens === 'VENTE' && !(p.resume && p.resume.migrationEnAttente === true)) ko.push(nom + ' : vente V1 sans migrationEnAttente');
@@ -246,7 +249,7 @@ for (const actuelle of [false, true]) {
     const data = bas(JSON.stringify(p, (k, v) => (typeof v === 'bigint' ? String(v) : v)));
     if (data.includes(bas(T.HOOK_PREVU).slice(2))) ko.push(nom + ' : V1 ROUTE NON RAMENEE (calldata sur V1)');
     if (!actuelle) ko.push(nom + ' : jambe V1 non refusee sans pool V8');
-    juger(nom, sauts.map((x) => (bas(x.cle.hooks) === bas(T.HOOK_PREVU) ? { ...x, cle: cle(x.cle.currency0, x.cle.currency1, HOOKS.V8) } : x)), p, ko);
+    juger(nom, sauts.map((x) => (bas(x.cle.hooks) === bas(T.HOOK_PREVU) ? { ...x, cle: cle(x.cle.currency0, x.cle.currency1, E.HOOKS_VERSION_ACTUELLE[0]) } : x)), p, ko);
   }
 }
 /* ── G (2026-10-02, Phil : un frais par swap ; C2 F3) : FRANCHISSEMENT Uniswap V4 -> Aerodrome — UNE jambe payante par lot ──

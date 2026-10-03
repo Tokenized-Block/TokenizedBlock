@@ -35,7 +35,7 @@ ok(JSON.stringify(D.DESCRIPTEUR_7030.devises) === JSON.stringify(j.devises.map((
   'descripteur app = JSON de la page, ligne pour ligne');
 ok(D.DESCRIPTEUR_7030.adresse === j.hook && D.DESCRIPTEUR_7030.initcodeHash === j.initcodeHash && D.DESCRIPTEUR_7030.sel === j.sel, 'descripteur : adresse, initcode, sel = JSON');
 ok(D.DEVISES_7030.length === 62 && new Set(D.DEVISES_7030).size === 62 && P.DEVISES_ADMISES_7030 === D.DEVISES_7030, 'paires.DEVISES_ADMISES_7030 = les 62 du descripteur (meme objet)');
-ok(T.HOOK_7030 === j.hook && T.HOOK_7030_ACTIF === false, 'tokenomics.HOOK_7030 = ' + j.hook + ', drapeau ETEINT');
+ok(T.HOOK_7030 === j.hook && T.HOOK_7030_ACTIF === true, 'tokenomics.HOOK_7030 = ' + j.hook + ', drapeau ALLUME (contrat deploye le 2026-10-03, tx 0xdb6f2f41…)');
 /* l ordre des 19 est celui du CONTRAT (V9Devises.sol), pas celui de paires.js : on verifie l ensemble, pas l ordre */
 ok(P.DEVISES_ADMISES_V9.length === 19 && P.DEVISES_ADMISES_V9.every((a) => D.DEVISES_7030.slice(0, 19).includes(a)), 'les 19 du V9 sont les 19 premieres de la liste (ensemble)');
 const attendus = { feeWallet: 'feeWallet()', hookFee: 'HOOK_FEE()', partCreateur: 'PART_CREATEUR()', deviseAdmise: 'deviseAdmise(address)', plancherCaution: 'plancherCaution(address)' };

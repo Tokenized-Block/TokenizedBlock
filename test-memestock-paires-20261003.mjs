@@ -19,11 +19,16 @@ const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; c
 const adr = (s) => P.ACTIONS_COINBASE.find((a) => a.symbole === s).adr;
 
 /* ── A. la regle ── */
-const lancables = P.ACTIONS_COINBASE.filter((a) => P.hookDeLancementPour(a.adr, 8453, T.OPTIONS_LANCEMENT)).map((a) => a.symbole).sort();
-ok(JSON.stringify(lancables) === JSON.stringify(['AAPLc', 'AMZNc', 'GOOGLc', 'METAc', 'MSFTc', 'MSTRc', 'NVDAc', 'SNDKc', 'SPCXc', 'TSLAc']),
-  '10 actions lancables aujourd hui (V8) : ' + lancables.join(' '));
-ok(!P.hookDeLancementPour(adr('AMDc'), 8453, T.OPTIONS_LANCEMENT), 'AMDc : pas lancable sur le hook actuel');
-ok(!!P.hookDeLancementPour(adr('AMDc'), 8453, { ...T.OPTIONS_LANCEMENT, h7030: true }), 'AMDc : lancable des que le 7030 est actif (la liste s elargit seule)');
+/* 2026-10-03 : le 7030 (62 devises) est DEPLOYE et le drapeau ALLUME — les 58 actions du registre sont lancables (sur 7030).
+ *   Le temoin « V8 seul » (10) se joue avec les options SANS h7030. */
+const SANS_7030 = { v9: T.OPTIONS_LANCEMENT.v9 === true };
+const lancablesV8 = P.ACTIONS_COINBASE.filter((a) => P.hookDeLancementPour(a.adr, 8453, SANS_7030)).map((a) => a.symbole).sort();
+ok(JSON.stringify(lancablesV8) === JSON.stringify(['AAPLc', 'AMZNc', 'GOOGLc', 'METAc', 'MSFTc', 'MSTRc', 'NVDAc', 'SNDKc', 'SPCXc', 'TSLAc']),
+  'TEMOIN sans 7030 : 10 actions lancables (V8) : ' + lancablesV8.join(' '));
+const lancables = P.ACTIONS_COINBASE.filter((a) => P.hookDeLancementPour(a.adr, 8453, T.OPTIONS_LANCEMENT) === '7030').map((a) => a.symbole);
+ok(T.OPTIONS_LANCEMENT.h7030 === true && lancables.length === 58, 'drapeau allume : les 58 actions du registre sont lancables sur le 7030 (' + lancables.length + ')');
+ok(!P.hookDeLancementPour(adr('AMDc'), 8453, SANS_7030), 'AMDc : pas lancable sur le V8 seul');
+ok(P.hookDeLancementPour(adr('AMDc'), 8453, T.OPTIONS_LANCEMENT) === '7030', 'AMDc : lancable sur le 7030 (la liste s elargit seule)');
 
 /* ── B. temoin on-chain ── */
 const sel = PO.selecteur('deviseAdmise(address)');
@@ -55,7 +60,10 @@ const i0 = html.indexOf('function symbolesLancables()');
 let src = null; if (i0 >= 0) { let p = 0; for (let k = html.indexOf('{', i0); k < html.length; k += 1) { if (html[k] === '{') p += 1; else if (html[k] === '}') { p -= 1; if (p === 0) { src = html.slice(i0, k + 1); break; } } } }
 const sl = new Function('pairesProposees', 'estPaireLancable', 'CHAINE', src + '\nreturn symbolesLancables;')(
   P.pairesProposees, (a) => !!P.hookDeLancementPour(a, 8453, T.OPTIONS_LANCEMENT), 8453);
-ok(sl().length === 10 && sl().includes('NVDAc') && !sl().includes('AMDc'), 'le message de refus liste les 10 : ' + sl().join(', '));
+ok(sl().length === 58 && sl().includes('NVDAc') && sl().includes('AMDc'), 'le message de refus (hors Base) liste les 58 lancables : ' + sl().length);
+const slV8 = new Function('pairesProposees', 'estPaireLancable', 'CHAINE', src + '\nreturn symbolesLancables;')(
+  P.pairesProposees, (a) => !!P.hookDeLancementPour(a, 8453, SANS_7030), 8453);
+ok(slV8().length === 10 && !slV8().includes('AMDc'), 'TEMOIN sans 7030 : la meme fonction en liste 10');
 
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

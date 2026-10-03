@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-page-signature-7030-62" hidden>Build <code>20261003-page-signature-7030-62</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-hook-7030-allume" hidden>Build <code>20261003-hook-7030-allume</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3318,6 +3318,7 @@ import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreff
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
+import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -17375,8 +17376,15 @@ async function cautionCreateurPour(hook, devise) {
       if (ethUsd === null) await lirePrixEth();
       prix = ethUsd;
     }
-    const minimum = minimumCautionCreateur({ prixUsd: prix, decimales: dec });
-    return { minimum, devise: d || '0x0000000000000000000000000000000000000000' };
+    const minimumApp = minimumCautionCreateur({ prixUsd: prix, decimales: dec });
+    /* ⛔⛔ 2026-10-03 (Grok, croisement de 4d8e437) : le hook REFUSE une caution sous SON plancher (CautionSousLePlancher), fige a la
+     *   naissance du contrat au bloc 52 090 382 (ETH 2 665,88 $). L app demandait 1 $ au prix du MOMENT : des que l ETH passe
+     *   au-dessus de ~2 666 $, 1 $ fait moins de wei que le plancher et la creation REVERTE apres paiement. Le minimum est donc le
+     *   PLUS GRAND des deux : 1 $ du jour et le plancher du hook (hook-7030-descripteur.js, la meme source que le contrat). */
+    const plancher = plancher7030(d || '0x0000000000000000000000000000000000000000');
+    const minimum = minimumApp === null || minimumApp === undefined ? null
+      : (plancher !== null && plancher > BigInt(minimumApp) ? plancher : BigInt(minimumApp));
+    return { minimum, devise: d || '0x0000000000000000000000000000000000000000', minimumApp, plancherHook: plancher };
   } catch (_) { return { minimum: null }; }
 }
 async function preverifierNaissancePayee({ adresse, appelCreate }) {

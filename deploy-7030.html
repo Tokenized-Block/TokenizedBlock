@@ -114,15 +114,21 @@ async function verifier() {
     void relire();
     return;
   }
-  const r = await rpc('eth_call', [{ to: tx.deployeur, data: tx.data, gas: '0x7a1200' }, 'latest']);
+  /* 12 M de gaz pour l essai a blanc : l estimation mainnet est 7,92 M, la tx reelle a pris 7 797 771 — 8 M ne laissait que 2,5 % */
+  const r = await rpc('eth_call', [{ to: tx.deployeur, data: tx.data, gas: '0xb71b00' }, 'latest']);
   pret.simu = ('0x' + String(r).slice(-40)).toLowerCase() === tx.hook.toLowerCase();
   marque('#c2', pret.simu);
   majBouton();
 }
+/* ⛔ 2026-10-03 (Grok, croisement de 4d8e437) : le controle a6cf ne tournait QU A LA CONNEXION, et il etait saute si le JSON
+ *   n etait pas encore charge (clic sur Connect trop tot) : a6cf pouvait alors activer le bouton. Le controle vit ici, dans
+ *   la condition du bouton, ET au clic sur Deploy — et sans JSON charge, rien ne s active. */
+const estWalletDeFrais = () => !!(compte && tx && compte.toLowerCase() === tx.feeWallet.toLowerCase());
 function majBouton() {
   const pasDev = $('#pasDev').checked;
   marque('#c4', pasDev);
-  $('#deployer').disabled = !(pret.vide && pret.simu && compte && pasDev);
+  if (estWalletDeFrais()) { marque('#c3', false); $('#etat').innerHTML = '<span class="ko">This is the fee wallet. Sign with another wallet.</span>'; }
+  $('#deployer').disabled = !(tx && pret.vide && pret.simu && compte && !estWalletDeFrais() && pasDev);
 }
 
 /** ⛔ Les lectures qui comptent, faites SUR LA CHAINE une fois le contrat vivant — toutes les devises, pas un echantillon. */
@@ -170,6 +176,7 @@ $('#connecter').addEventListener('click', async () => {
 });
 
 $('#deployer').addEventListener('click', async () => {
+  if (!tx || !compte || estWalletDeFrais() || !$('#pasDev').checked) { majBouton(); return; }
   $('#deployer').disabled = true;
   $('#etat').textContent = 'Opening your wallet — check it shows Base and a contract call of ' + tx.octets + ' bytes, then sign.';
   const r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: 8453, compte, to: tx.deployeur, data: tx.data, value: '0x0' });
