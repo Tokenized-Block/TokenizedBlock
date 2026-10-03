@@ -1007,13 +1007,15 @@ async function etendreNosBlocks() {
   for (const compte of NOS_CREATEURS) {
     const scan = await frappesVers({ rpc: rpcServeur, compte, deBloc, aBloc });
     for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
-    for (const w of scan.fenetresRatees || []) {
+    /* ⛔ F4 (C2 R9b) : une fenetre dont un jeton n a pas pu etre verifie (eth_getCode en echec) n est pas propre : relue, puis en attente */
+    const aRelire = [...new Map([...(scan.fenetresRatees || []), ...(scan.fenetresNonVerifiees || [])].map((w) => [w.de + '-' + w.a, w])).values()];
+    for (const w of aRelire) {
       let relue = false;
       for (const ms of REPRISES_LECTURE_MS) {
         await new Promise((ok) => setTimeout(ok, ms));
         const r = await frappesVers({ rpc: rpcServeur, compte, deBloc: w.de, aBloc: w.a });
         for (const b of r.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
-        if (!(r.fenetresRatees || []).length) { relue = true; break; }
+        if (!(r.fenetresRatees || []).length && !(r.fenetresNonVerifiees || []).length) { relue = true; break; }
       }
       if (!relue) { ratees += 1; restent.push(w); }
     }

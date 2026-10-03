@@ -41,7 +41,7 @@ const libre = () => new Promise((ok) => { const s = net.createServer(); s.listen
 const FACTORY_B20 = '0xb20f000000000000000000000000000000000000';
 function rpcFictif(jusqua, o = {}) {
   const etat = { tete: o.tete || jusqua + 43200, fenetresFrappes: [], sousLaGraine: 0, echecs: o.echecs ?? 3, rates: [],
-    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null };
+    echecsRouteur: o.echecsRouteur || 0, fenetresRouteur: [], ratesRouteur: [], recus: 0, trou: o.trou || null, codeKo: !!o.codeKo };
   const repondre = async (m, p) => {
     if (m === 'eth_blockNumber') return '0x' + etat.tete.toString(16);
     if (m === 'eth_getLogs') {
@@ -63,6 +63,7 @@ function rpcFictif(jusqua, o = {}) {
       return [];
     }
     if (m === 'eth_getTransactionReceipt') { etat.recus += 1; return recuDe(p[0]); }
+    if (m === 'eth_getCode' && etat.codeKo && String(p[0]).toLowerCase() === NOUVEAU) throw new Error('internal error'); /* F4 */
     if (m === 'eth_getCode') return String(p[0]).toLowerCase() === NOUVEAU ? '0xef0100' + 'ab'.repeat(20) : '0x';
     throw Object.assign(new Error('execution reverted'), { code: 3 });
   };
@@ -108,7 +109,7 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
 }
 
 /* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXYNP') {
+async function banc(dir, scen = 'RFGXYNPC') {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
@@ -158,39 +159,49 @@ async function banc(dir, scen = 'RFGXYNP') {
   v('U7b client nos-blocks : tete lue il y a 11 min = REFUSE (meme fraicheur que le routeur)', luU({ teteLueA: mU - 11 * 60000 }) === false && luU({ teteLueA: mU - 9 * 60000 }) === true);
   /* S — le vrai serveur, redemarre (la PREMIERE fenetre lue rate 3 fois de suite = une fenetre ratee pour rpcServeur : S6) */
   if (!scen) return res;
-  const s = await redemarrer(dir, J);
-  if (dir === ICI) console.log('redemarrage : couvertureComplete vrai apres ' + s.complet + ' ms ; ' + s.rpc.fenetresFrappes.length + ' fenetre(s) de frappes lues, de ' + (J + 1) + ' a ' + s.rpc.tete);
-  v('S1 apres redemarrage, la premiere reponse ne se dit PAS complete (la tete n est pas encore lue)', !!s.premiere && s.premiere.couvertureComplete === false);
-  v('S2 apres redemarrage, couvertureComplete vrai en moins de 2 min (graine a 1 jour de la tete)', s.complet !== null && s.complet < 120000
-    && s.derniere.fenetresRatees === 0 && s.derniere.depuis === PLANCHER && s.derniere.jusqua === s.rpc.tete);
-  v('S3 aucun bloc sous la graine n est relu ; [jusqua + 1, tete] lu en entier', s.rpc.sousLaGraine === 0 && s.rpc.fenetresFrappes.length > 0
-    && Math.min(...s.rpc.fenetresFrappes.map((w) => w[0])) === J + 1 && Math.max(...s.rpc.fenetresFrappes.map((w) => w[1])) === s.rpc.tete);
-  v('S4 servi : la genese, la graine et le block frappe apres la graine', !!s.derniere && [...PROD, NOUVEAU].every((b) => s.derniere.blocks.includes(b)));
-  /* S6..S8 — le clignotement PEXRA/o1 (Claude, prod : une fenetre ratee rendait sourcesTbLues() faux jusqu au tour suivant) */
-  const rate1 = s.rpc.rates[0];
-  v('S6 fenetre ratee au redemarrage : RELUE sur place (meme fenetre redemandee), aucune reponse ne montre de trou',
-    !!rate1 && s.rpc.rates.length === 3 && s.rpc.rates.every((w) => w[0] === rate1[0] && w[1] === rate1[1])
-    && s.rpc.fenetresFrappes.filter((w) => w[0] === rate1[0] && w[1] === rate1[1]).length === 4
-    && s.vues.every((x) => x.fenetresRatees === 0 && x.fenetresEnAttente === 0) && s.complet !== null);
-  let s7 = [], s8 = [], s10 = [], tete7 = null, jusqua8 = null, tete10 = null;
-  if (s.complet !== null && scen.includes('F')) {
-    s.rpc.tete += 100; tete7 = s.rpc.tete; s.rpc.echecs = 3;
-    s7 = await s.suivre(7000);
-    jusqua8 = s7.length ? s7[s7.length - 1].jusqua : null;
-    s.rpc.tete += 100; s.rpc.echecs = 100000;
-    s8 = await s.suivre(24000, (r) => r.findIndex((x) => x.fenetresEnAttente > 0) >= 0 && r.length - r.findIndex((x) => x.fenetresEnAttente > 0) >= 4);
-    /* S10 (F1) : la fenetre reste en attente et la tete s eloigne au-dela de RETARD_MAX_INDEX : « complete » doit retomber */
-    s.rpc.tete += 2000; tete10 = s.rpc.tete;
-    s10 = await s.suivre(30000, (r) => r.some((x) => x.tete === tete10 && x.couvertureComplete === false));
-  }
-  await s.arreter();
-  if (scen.includes('F')) v('S7 apres la couverture, une fenetre ratee puis relue : couvertureComplete RESTE vrai, aucun trou servi, la tete est rattrapee',
-    s7.length > 3 && s7.every((x) => x.couvertureComplete === true && x.fenetresRatees === 0 && x.fenetresEnAttente === 0) && s7[s7.length - 1].jusqua === tete7);
-  if (scen.includes('F')) v('S8 fenetre qui rate encore apres les reprises : couverture GARDEE (vrai, depuis = plancher, jusqua inchange), dite « en attente », jamais en trou',
-    s8.length > 3 && s8.every((x) => x.couvertureComplete === true && x.fenetresRatees === 0 && x.depuis === PLANCHER && x.jusqua === jusqua8)
-    && s8.some((x) => x.fenetresEnAttente > 0));
+  /* ⛔ les scenarios independants tournent EN PARALLELE (chacun son serveur, son RPC fictif, ses ports) : le banc tient sous le delai de la suite */
+  const principal = (async () => {
+    const s = await redemarrer(dir, J);
+    if (dir === ICI) console.log('redemarrage : couvertureComplete vrai apres ' + s.complet + ' ms ; ' + s.rpc.fenetresFrappes.length + ' fenetre(s) de frappes lues, de ' + (J + 1) + ' a ' + s.rpc.tete);
+    v('S1 apres redemarrage, la premiere reponse ne se dit PAS complete (la tete n est pas encore lue)', !!s.premiere && s.premiere.couvertureComplete === false);
+    v('S2 apres redemarrage, couvertureComplete vrai en moins de 2 min (graine a 1 jour de la tete)', s.complet !== null && s.complet < 120000
+      && s.derniere.fenetresRatees === 0 && s.derniere.depuis === PLANCHER && s.derniere.jusqua === s.rpc.tete);
+    v('S3 aucun bloc sous la graine n est relu ; [jusqua + 1, tete] lu en entier', s.rpc.sousLaGraine === 0 && s.rpc.fenetresFrappes.length > 0
+      && Math.min(...s.rpc.fenetresFrappes.map((w) => w[0])) === J + 1 && Math.max(...s.rpc.fenetresFrappes.map((w) => w[1])) === s.rpc.tete);
+    v('S4 servi : la genese, la graine et le block frappe apres la graine', !!s.derniere && [...PROD, NOUVEAU].every((b) => s.derniere.blocks.includes(b)));
+    /* S6..S8 — le clignotement PEXRA/o1 (Claude, prod : une fenetre ratee rendait sourcesTbLues() faux jusqu au tour suivant) */
+    const rate1 = s.rpc.rates[0];
+    v('S6 fenetre ratee au redemarrage : RELUE sur place (meme fenetre redemandee), aucune reponse ne montre de trou',
+      !!rate1 && s.rpc.rates.length === 3 && s.rpc.rates.every((w) => w[0] === rate1[0] && w[1] === rate1[1])
+      && s.rpc.fenetresFrappes.filter((w) => w[0] === rate1[0] && w[1] === rate1[1]).length === 4
+      && s.vues.every((x) => x.fenetresRatees === 0 && x.fenetresEnAttente === 0) && s.complet !== null);
+    let s7 = [], s8 = [], s10 = [], tete7 = null, jusqua8 = null, tete10 = null;
+    if (s.complet !== null && scen.includes('F')) {
+      s.rpc.tete += 100; tete7 = s.rpc.tete; s.rpc.echecs = 3;
+      s7 = await s.suivre(7000);
+      jusqua8 = s7.length ? s7[s7.length - 1].jusqua : null;
+      s.rpc.tete += 100; s.rpc.echecs = 100000;
+      s8 = await s.suivre(24000, (r) => r.findIndex((x) => x.fenetresEnAttente > 0) >= 0 && r.length - r.findIndex((x) => x.fenetresEnAttente > 0) >= 4);
+      /* S10 (F1) : la fenetre reste en attente et la tete s eloigne au-dela de RETARD_MAX_INDEX : « complete » doit retomber */
+      s.rpc.tete += 2000; tete10 = s.rpc.tete;
+      s10 = await s.suivre(30000, (r) => r.some((x) => x.tete === tete10 && x.couvertureComplete === false));
+    }
+    await s.arreter();
+    if (scen.includes('F')) v('S7 apres la couverture, une fenetre ratee puis relue : couvertureComplete RESTE vrai, aucun trou servi, la tete est rattrapee',
+      s7.length > 3 && s7.every((x) => x.couvertureComplete === true && x.fenetresRatees === 0 && x.fenetresEnAttente === 0) && s7[s7.length - 1].jusqua === tete7);
+    if (scen.includes('F')) v('S8 fenetre qui rate encore apres les reprises : couverture GARDEE (vrai, depuis = plancher, jusqua inchange), dite « en attente », jamais en trou',
+      s8.length > 3 && s8.every((x) => x.couvertureComplete === true && x.fenetresRatees === 0 && x.depuis === PLANCHER && x.jusqua === jusqua8)
+      && s8.some((x) => x.fenetresEnAttente > 0));
+    if (scen.includes('F')) {
+      const chute = s10.find((x) => x.tete === tete10 && x.couvertureComplete === false);
+      const IRs = await imp(dir, 'index-routeur.js');
+      v('S10 (F1) fenetre en attente et tete a > 1800 blocs : couvertureComplete RETOMBE a faux (fenetresRatees > 0), le client refuse ; tete / teteLueA servis',
+        !!chute && chute.fenetresRatees > 0 && chute.tete - chute.jusqua > 1800 && Number.isFinite(chute.teteLueA)
+        && s8.every((x) => Number.isFinite(x.tete) && Number.isFinite(x.teteLueA)) && IRs.chargerNosBlocksTb(chute).lu === false);
+    }
+  })();
   /* X1-X2 — /api/blocks-routeur : meme clignotement (Claude). Tete a 3000 blocs de GRAINE_ROUTEUR (retard max 1800). */
-  if (scen.includes('X')) {
+  const blocX = scen.includes('X') ? (async () => {
     const IRm = await imp(dir, 'index-routeur.js');
     const x = await redemarrer(dir, J, { routeurSeul: true, rpcO: { tete: IRm.GRAINE_JUSQUA + 3000, echecs: 0, echecsRouteur: 3, baseRouteur: IRm.GRAINE_JUSQUA } });
     const R = '/api/blocks-routeur'; const tX = x.rpc.tete;
@@ -214,16 +225,9 @@ async function banc(dir, scen = 'RFGXYNP') {
     if (scen.includes('Y')) v('X2 index routeur : apres la couverture, une lecture qui rate encore garde couvertureComplete vrai (retard borne), dite « en attente »',
       x2.length > 3 && x2.every((y) => y.couvertureComplete === true && y.fenetresRatees === 0 && y.jusqua === jX && y.depuis === IRm.PLANCHER_ROUTEUR)
       && x2.some((y) => y.fenetresEnAttente > 0));
-  }
-  if (scen.includes('F')) {
-    const chute = s10.find((x) => x.tete === tete10 && x.couvertureComplete === false);
-    const IRs = await imp(dir, 'index-routeur.js');
-    v('S10 (F1) fenetre en attente et tete a > 1800 blocs : couvertureComplete RETOMBE a faux (fenetresRatees > 0), le client refuse ; tete / teteLueA servis',
-      !!chute && chute.fenetresRatees > 0 && chute.tete - chute.jusqua > 1800 && Number.isFinite(chute.teteLueA)
-      && s8.every((x) => Number.isFinite(x.tete) && Number.isFinite(x.teteLueA)) && IRs.chargerNosBlocksTb(chute).lu === false);
-  }
+  })() : null;
   /* P1-P2 (F3) — graine a 1 jour, une fenetre AU MILIEU de [jusqua + 1, tete] rate pour de bon : la plage avance jusqu a elle */
-  if (scen.includes('P')) {
+  const blocP = scen.includes('P') ? (async () => {
     const sp = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, trou: J + 20000 } });
     const avance = (x) => x.jusqua > J && x.jusqua < J + 20000 && x.couvertureComplete === false;
     const p1 = await sp.suivre(30000, (r) => r.filter(avance).length >= 2);
@@ -233,14 +237,27 @@ async function banc(dir, scen = 'RFGXYNP') {
     v('P1 (F3) fenetre du milieu ratee pour de bon : jusqua avance jusqu a elle (contigu, jamais au-dela), pas complete, la fenetre comptee',
       p1.some(avance) && p1.every((x) => x.jusqua === null || x.jusqua <= J + 20000) && p1.filter(avance).every((x) => x.fenetresRatees >= 1));
     v('P2 (F3) la fenetre se relit : couverture complete jusqu a la tete', p2.some((x) => x.couvertureComplete === true && x.jusqua === sp.rpc.tete));
-  }
+  })() : null;
+  /* C1-C2 (F4) — eth_getCode du block frappe apres la graine en echec : sa fenetre est EN ATTENTE, jamais propre */
+  const blocC = scen.includes('C') ? (async () => {
+    const sk = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, codeKo: true } });
+    const vu = (r) => r.findIndex((x) => x.fenetresRatees >= 1);
+    const c1 = await sk.suivre(30000, (r) => vu(r) >= 0 && r.length - vu(r) >= 3);
+    sk.rpc.codeKo = false;
+    const c2 = await sk.suivre(20000, (r) => r.some((x) => x.couvertureComplete === true));
+    await sk.arreter();
+    v('C1 (F4) code d un jeton illisible : la fenetre reste en attente (comptee), jamais complete, le jeton ni servi ni oublie',
+      c1.length > 3 && c1.every((x) => x.couvertureComplete === false && !x.blocks.includes(NOUVEAU) && (x.jusqua === null || x.jusqua < J + 100))
+      && c1.some((x) => x.fenetresRatees >= 1));
+    v('C2 (F4) le code se relit : le block est servi, couverture complete', c2.some((x) => x.couvertureComplete === true && x.blocks.includes(NOUVEAU)));
+  })() : null;
   /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
-  if (scen.includes('N')) {
+  const blocN = scen.includes('N') ? (async () => {
     const sn = await redemarrer(dir, J, { attenteMax: 8000, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
     v('S1b graine sous la borne de retard mais [jusqua + 1, tete] pas encore lu : jamais complete', sn.vues.length > 3 && sn.vues.every((x) => x.couvertureComplete === false));
-  }
-  if (!scen.includes('G')) return res;
+  })() : null;
   /* S5 — graine forgee dans une copie : le serveur la refuse et redescend depuis la tete */
+  const blocG = scen.includes('G') ? (async () => {
   const dF = copie({ nom: 'graine forgee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
     "  { jeton: '0xb200000000000000000000deadbeef00000000aa', compte: '0x1111111111111111111111111111111111111111', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
   const sf = await redemarrer(dF, J, { attenteMax: 15000 }); await sf.arreter();
@@ -259,6 +276,8 @@ async function banc(dir, scen = 'RFGXYNP') {
   v('S5c (F2) jusqua de la graine au-dela de la tete : graine refusee (journal), balayage depuis la tete, jamais complete d emblee',
     /past the chain head/.test(sc5.journal) && sc5.rpc.sousLaGraine > 0 && !!sc5.premiere && sc5.premiere.couvertureComplete === false
     && sc5.vues.every((x) => x.graine !== 'ADMISE'));
+  })() : null;
+  await Promise.all([principal, blocX, blocP, blocC, blocN, blocG]);
   return res;
 }
 
@@ -299,6 +318,8 @@ const MUTANTS = [
   { nom: 'n18 (F2) jusqua <= tete non verifie', scen: 'G', edits: [['origine.js', '  if (jusqua > tete) return', '  if (false) return']], casse: [/^S5c /, /^U8 /] },
   { nom: 'n19 (F2) tx inconnue du noeud lue comme « en attente » (jamais refusee)', scen: 'G', edits: [['origine.js', "  if (!r) return 'FAUX';", "  if (!r) return 'NON_LU';"]], casse: [/^S5b /] },
   { nom: 'n20 (F3) rattrapage tout-ou-rien (jusqua n avance pas sur une fenetre ratee)', scen: 'P', edits: [['serveur-web.js', 'if (basRate - 1 > nosBlocksEtat.jusqua) nosBlocksEtat.jusqua = basRate - 1;', 'if (false) nosBlocksEtat.jusqua = basRate - 1;']], casse: [/^P1 /] },
+  { nom: 'n21 (F4) serveur : fenetre a jeton non verifie comptee propre', scen: 'C', edits: [['serveur-web.js', ', ...(scan.fenetresNonVerifiees || [])].map(', '].map(']], casse: [/^C1 /] },
+  { nom: 'n22 (F4) mes-blocks : fenetre du jeton non verifie non rendue', scen: 'C', edits: [['mes-blocks.js', ' fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton });', '']], casse: [/^C1 /] },
 ];
 
 let nAssert = 0, ko = 0;

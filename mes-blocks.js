@@ -26,16 +26,19 @@ export async function estB20({ rpc, jeton }) {
 
 /**
  * Les B20 frappes vers `compte` entre `deBloc` et `aBloc` (inclus), par fenetres de 2 000 blocs.
- * @returns {Promise<{blocks:{jeton:string,bloc:number,tx:string}[], fenetresRatees:{de:number,a:number,cause:string}[], nonVerifies:string[]}>}
+ * @returns {Promise<{blocks:{jeton:string,bloc:number,tx:string}[], fenetresRatees:{de:number,a:number,cause:string}[], nonVerifies:string[],
+ *   fenetresNonVerifiees:{de:number,a:number,jeton:string}[]}>}
  * ⛔ Une fenetre ratee est NOMMEE, jamais comptee comme vide. Un jeton dont le code n a pas pu etre lu est
  *    rendu dans `nonVerifies`, ni montre ni cache.
+ * ⛔ F4 (C2 R9b) : ET sa fenetre est rendue dans `fenetresNonVerifiees` — elle n est PAS propre : un appelant qui fait avancer
+ *    une couverture (serveur, /api/nos-blocks) la traite en fenetre en attente, sinon le block manquerait pour toujours.
  */
 export async function frappesVers({ rpc, compte, deBloc, aBloc, surProgres = null, deTous = false }) {
   /* ⛔ `deTous` (2026-09-13) : TOUT Transfer vers le compte, pas seulement les frappes — c est ce qui fait apparaitre
    *    dans le Wallet les blocks ACHETES ou recus, que la page disait « not listed yet ». Meme verification 0xef. */
   const cible = topicAdresse(compte);
   if (!cible) return { blocks: [], fenetresRatees: [{ de: deBloc, a: aBloc, cause: 'invalid account' }], nonVerifies: [] };
-  const vus = new Map();
+  const vus = new Map(), fenetreDe = new Map();
   const fenetresRatees = [];
   for (let haut = aBloc; haut >= deBloc; haut -= FENETRE_FRAPPES) {
     const bas = Math.max(deBloc, haut - FENETRE_FRAPPES + 1);
@@ -46,20 +49,21 @@ export async function frappesVers({ rpc, compte, deBloc, aBloc, surProgres = nul
         const a = String(l.address || '').toLowerCase();
         if (!/^0x[0-9a-f]{40}$/.test(a) || vus.has(a)) continue;
         vus.set(a, { jeton: a, bloc: l.blockNumber ? parseInt(l.blockNumber, 16) : null, tx: l.transactionHash || null });
+        fenetreDe.set(a, { de: bas, a: haut });
       }
     } catch (e) {
       fenetresRatees.push({ de: bas, a: haut, cause: String((e && e.message) || e) });
     }
     if (surProgres) surProgres({ parcouru: aBloc - bas + 1, total: aBloc - deBloc + 1, trouves: vus.size });
   }
-  const blocks = [], nonVerifies = [];
+  const blocks = [], nonVerifies = [], fenetresNonVerifiees = [];
   for (const c of vus.values()) {
     const e = await estB20({ rpc, jeton: c.jeton });
     if (e === 'B20') blocks.push(c);
-    else if (e === 'NON_LU') nonVerifies.push(c.jeton);
+    else if (e === 'NON_LU') { nonVerifies.push(c.jeton); fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton }); }
   }
   blocks.sort((x, y) => (y.bloc ?? 0) - (x.bloc ?? 0));
-  return { blocks, fenetresRatees, nonVerifies };
+  return { blocks, fenetresRatees, nonVerifies, fenetresNonVerifiees };
 }
 
 /**
