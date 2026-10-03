@@ -16,7 +16,7 @@
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
 import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook, filtrerHooksPayeurs,
-  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030,
+  HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030, fraisHookBps,
   HOOK_V9, V9_PAIE_DEJA_A6CF, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
@@ -333,7 +333,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
           { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'pair', recoitAuMoins: min, recoitDevise: 'block',
         quote: q, frais: fraisPair, fraisDevise: 'pair', montantSwap: netPair, devise,
-        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null };
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? fraisHookBps(cle.hooks) : null };
     } else {
       const fraisVente = (q * bps) / 10000n;
       const min = ((q - fraisVente) * (10000n - tol)) / 10000n;
@@ -342,7 +342,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         { code: ACTIONS_V4.TAKE_ALL, params: paramsAction.takeAll(sortie, min) }];
       resumeD = { paye: m, payeDevise: 'block', recoitAuMoins: min, recoitDevise: 'pair',
         quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
-        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null };
+        fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? fraisHookBps(cle.hooks) : null };
     }
     if (marche.remplaceV1) resumeD.remplaceV1 = true;
     if (migrationEnAttente) resumeD.migrationEnAttente = true;
@@ -437,7 +437,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
   }
   resume.fraisBps = bps;
   resume.beneficiaireFrais = bps > 0n ? FEE_WALLET : null;
-  resume.fraisMarcheBps = hookPaieDeja ? (estHook7030(cle.hooks) ? 10 : 300) : null;
+  resume.fraisMarcheBps = hookPaieDeja ? fraisHookBps(cle.hooks) : null;
   if (marche.remplaceV1) resume.remplaceV1 = true;
   if (migrationEnAttente) resume.migrationEnAttente = true;
   const koFrais = assertFraisInterfaceA6cf({ compte, bps, resume, actions, hookPaie, assietteHook: sens === 'ACHAT' ? m : quote });
@@ -518,6 +518,9 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
   /* ── les deux autorisations Permit2 sur le jeton PAYE (le block a la vente ; la devise ERC-20 a l achat), MESUREES ── */
   const etapes = [];
   const paye = jetonPaye || (sens === 'VENTE' ? jeton : null);
+  /* ⛔ audit rails R9 (2026-10-03) : le libelle disait « this block » sur un multi-sauts paye en OUSD. Le jeton
+   *    autorise n est le block qu a la VENTE du block lui-meme ; sinon c est la devise payee. */
+  const payeEstLeBlock = sens === 'VENTE' && String(paye || '').toLowerCase() === String(jeton || '').toLowerCase();
   if (paye) {
     const jeton = paye; // la suite du bloc lit et autorise CE jeton
     let okP2, okR;
@@ -530,7 +533,7 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     } catch (e) {
       return { etat: 'NON_MESURE', pourquoi: 'an approval could not be read', resume };
     }
-    if (!okP2) etapes.push({ nom: 'Allow Permit2 to move this block', to: jeton, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
+    if (!okP2) etapes.push({ nom: payeEstLeBlock ? 'Allow Permit2 to move this block' : 'Allow Permit2 to move this token', to: jeton, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
     if (!okR) etapes.push({ nom: 'Allow the Uniswap router (through Permit2)', to: PERMIT2, data: encodePermit2Approve(jeton, R, MAX_UINT160, MAX_UINT48), value: '0x0' });
     if (etapes.length) return { etat: 'APPROBATIONS', etapes, resume, cle, pourquoi: null };
   }
@@ -544,7 +547,9 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     /* ⛔ capture de Phil (Rabby mobile) : « the router refuses this swap: {"avecMinHop":"EVM error: OutOfFunds",…} » — il
      *    voulait acheter 0.001 ETH avec 0.00085 ETH. La cause se dit en clair ; le reste garde le detail technique. */
     const brut = jsonSafe(f.causes);
-    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance/i.test(brut);
+    /* ⛔ TRANSFER_FROM_FAILED|STF : alignes sur les jumeaux echange-eth.js et echange-v3.js (audit rails R9 :
+     *    une vente IB022 sans solde rendait le JSON brut ici, la phrase claire chez eux). */
+    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|\bSTF\b/i.test(brut);
     return { etat: f.transport ? 'NON_MESURE' : 'REFUSE', resume, cle,
       pourquoi: f.transport ? 'the node refused the check — try again'
         : sansFonds ? 'not enough ' + (enEth ? 'ETH' : 'funds') + ' in your wallet for this amount plus gas — try a smaller amount'

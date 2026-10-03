@@ -57,6 +57,8 @@ for (const sens of ['ACHAT', 'VENTE']) {
   ok(['PRET', 'APPROBATIONS'].includes(p.etat) && p.resume && p.resume.fraisParHook === true && p.resume.fraisBps === 0n,
     'plan V8/ETH ' + sens + ' : PRET, fraisParHook, 0 bps (' + p.etat + ' ' + (p.pourquoi || '') + ')');
   ok(fraisPayeParHook(p.resume, p.tx, [p.cle && p.cle.hooks]) === true, 'ECRAN : V8/ETH ' + sens + ' accepte (le KO de prod)');
+  /* audit rails R9 (2026-10-03) : echange.js rendait 300 ici ; HOOK_FEE() du V8 relu = 5000 / 1e6 */
+  ok(p.resume && p.resume.fraisMarcheBps === 50, 'plan V8/ETH ' + sens + ' : fraisMarcheBps 50 (' + (p.resume && p.resume.fraisMarcheBps) + ')');
 }
 /* temoin : pool SANS hook -> le routeur prend 0,5 %, pas de drapeau, l ecran garde l ancienne regle */
 /* temoin : hook HORS liste -> le routeur prend son frais, pas de drapeau (une pool SANS hook est refusee plus tot) */
@@ -86,12 +88,18 @@ ok(fraisPayeParHook({ ...bon, beneficiaireFrais: FEE_WALLET }, null, [T.HOOK_V8]
 ok(fraisPayeParHook(bon, { data: '0x' + FEE_WALLET.slice(2) }, [T.HOOK_V8]) === false, 'TEMOIN drapeau + a6cf dans le calldata (double frais) -> refus');
 
 /* ══ 2026-10-02 (C2, F2) — LE BADGE DIT LE TAUX DU HOOK, PAS LE 3 % DU V1 ══ */
-const srcLib = extraire('libelleFrais'), srcBps = extraire('fraisHookBps'), srcDyn = extraire('fraisEstDynamique');
+const srcLib = extraire('libelleFrais'), srcDyn = extraire('fraisEstDynamique');
 const cst = (re) => { const m = html.match(re); return m ? Number(m[1]) : null; };
 const PREVU_BPS = cst(/const HOOK_PREVU_FRAIS_BPS = (\d+);/), DYN = cst(/const FRAIS_DYNAMIQUE_V4 = (0x[0-9a-f]+);/i);
-ok(!!srcLib && !!srcBps && !!srcDyn && PREVU_BPS === 300 && DYN === 0x800000, 'libelleFrais, fraisHookBps, fraisEstDynamique et leurs constantes extraites d app.html');
-const fabriquerLib = (lib) => new Function('HOOK_V8', 'HOOK_V9', 'estHook7030', 'estNotreHook', 'HOOK_PREVU_FRAIS_BPS', 'FRAIS_DYNAMIQUE_V4',
-  srcDyn + '\n' + srcBps + '\n' + lib + '\nreturn libelleFrais;')(T.HOOK_V8, T.HOOK_V9, T.estHook7030, T.estNotreHook, PREVU_BPS, DYN);
+ok(!!srcLib && !!srcDyn && PREVU_BPS === 300 && DYN === 0x800000, 'libelleFrais, fraisEstDynamique et leurs constantes extraites d app.html');
+/* ⛔ 2026-10-03 (audit rails R9) : UNE table, dans tokenomics.js. app.html l importe et ne la redefinit plus ;
+ *   echange.js la lit pour `resume.fraisMarcheBps` (il rendait 300 sur V8). */
+ok(!/function fraisHookBps\(/.test(html) && /import \{[^}]*\bfraisHookBps\b[^}]*\} from '\.\/tokenomics\.js'/.test(html),
+  'app.html importe fraisHookBps de tokenomics.js et ne garde aucun jumeau local');
+ok(T.fraisHookBps(T.HOOK_V8) === 50 && T.fraisHookBps(T.HOOK_PREVU) === 300 && T.fraisHookBps(T.HOOK_V7) === 300,
+  'tokenomics.fraisHookBps : V8 50, V1/V7 300');
+const fabriquerLib = (lib) => new Function('fraisHookBps', 'estNotreHook', 'HOOK_PREVU_FRAIS_BPS', 'FRAIS_DYNAMIQUE_V4',
+  srcDyn + '\n' + lib + '\nreturn libelleFrais;')(T.fraisHookBps, T.estNotreHook, PREVU_BPS, DYN);
 const libelleFrais = fabriquerLib(srcLib);
 const badge = (c) => libelleFrais(c).court + ' · included'; /* la composition de l ecran, verifiee ci-dessous */
 ok(/feeEl\.textContent = parHook \? libelleFrais\(p\.cle\)\.court \+ ' · included'/.test(html), 'le badge de l ecran compose bien libelleFrais(p.cle).court + « · included »');

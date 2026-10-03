@@ -329,7 +329,7 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   } catch (e) { sim = { ok: false, message: String((e && e.message) || e) }; }
   if (!sim.ok) {
     /* ⛔ UN MANQUE DE FONDS ET UN REFUS DE MARCHE APPELLENT DES REPONSES OPPOSEES. */
-    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|STF/i.test(sim.message);
+    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|\bSTF\b/i.test(sim.message);
     return { etat: 'REFUSE', plan, sansFonds,
       pourquoi: sansFonds ? 'not enough ETH in this wallet for that amount'
         : 'the chain refuses this exact swap: ' + sim.message.slice(0, 160) };

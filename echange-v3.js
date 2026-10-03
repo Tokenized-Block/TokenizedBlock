@@ -301,7 +301,7 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
     /* ⛔⛔ LA CAUSE SE DIT EN CLAIR QUAND ON LA RECONNAIT. Un manque de fonds et un refus de marche
      *     appellent deux reponses opposees : l un envoie vers le Bridge, l autre vers le montant.
      *     Confondre les deux a deja ete mesure sur le chemin v4 (capture de Phil, Rabby mobile). */
-    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|STF/i.test(sim.message);
+    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|\bSTF\b/i.test(sim.message);
     return {
       etat: 'REFUSE', plan,
       pourquoi: sansFonds

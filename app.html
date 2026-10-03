@@ -3298,7 +3298,7 @@ import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreff
  *   bancs ; c est le CABLE qui part. */
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
-import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
+import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -7958,14 +7958,9 @@ function fraisEstDynamique(fee) {
 }
 /* ⛔⛔ 2026-10-02 (C2, F2) : LE TAUX DU HOOK, PAR HOOK. Avant, tout hook TB affichait le 3 % du V1 — et le badge
  *   « · included » le mettait sur chaque echange V8, qui prend 0,5 %. V1–V7 : HOOK_FEE 30 000 (3 %, mesure V1, relu V5) ;
- *   V8 : HOOK_FEE 5000 (0,5 %, relu) ; V9 : 0,09 % ; 7030 : 0,07 % + 0,03 % = 0,1 % (tokenomics.js). */
-function fraisHookBps(hk) {
-  const h = String(hk || '').toLowerCase();
-  if (h === String(HOOK_V8).toLowerCase()) return 50;
-  if (HOOK_V9 && h === String(HOOK_V9).toLowerCase()) return 9;
-  if (estHook7030(h)) return 10;
-  return HOOK_PREVU_FRAIS_BPS;
-}
+ *   V8 : HOOK_FEE 5000 (0,5 %, relu) ; V9 : 0,09 % ; 7030 : 0,07 % + 0,03 % = 0,1 % (tokenomics.js).
+ * ⛔ 2026-10-03 (audit rails R9) : la table vit dans tokenomics.js `fraisHookBps`, importee ici ET par echange.js —
+ *   le jumeau d echange.js rendait 300 sur V8 pendant que celui-ci rendait 50. */
 function libelleFrais(cle) {
   const zero = '0x0000000000000000000000000000000000000000';
   const hk = cle && cle.hooks ? String(cle.hooks).toLowerCase() : zero;

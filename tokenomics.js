@@ -144,6 +144,17 @@ export const HOOK_7030_PPM = Object.freeze({ walletDeFrais: 700, createur: 300 }
 export function estHook7030(h) {
   return HOOK_7030_ACTIF === true && String(h || '').toLowerCase() === HOOK_7030.toLowerCase();
 }
+/** Taux de marche (bps) que prend le hook de cette pool. ⛔ UNE SEULE TABLE : app.html (libelle) et echange.js
+ *  (`resume.fraisMarcheBps`) la lisent toutes deux. Avant le 2026-10-03, echange.js ne connaissait que « 7030 -> 10,
+ *  sinon 300 » : sur V8 il rendait 300 alors que HOOK_FEE() relu = 5000 / 1e6 (audit rails R9).
+ *  Les hooks plus anciens : 300 = 2 % + 1 %, mesures (app.html `HOOK_PREVU_FRAIS_BPS`). */
+export function fraisHookBps(h) {
+  const x = String(h || '').toLowerCase();
+  if (x === HOOK_V8.toLowerCase()) return 50;
+  if (HOOK_V9 && x === String(HOOK_V9).toLowerCase()) return 9;
+  if (estHook7030(x)) return 10;
+  return 300;
+}
 /** Un lancement cote dans cette devise doit-il aller sur le V9 ? ⛔ PAS DE SECONDE LISTE ICI : la
  *  reponse vient de paires.js `hookDeLancementPour` (la liste du V9 y vit, a cote de celle du V8),
  *  la meme source que la garde de Create et la garde de lancement. */
