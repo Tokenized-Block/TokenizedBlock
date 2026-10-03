@@ -87,7 +87,10 @@ function rpcFictif(jusqua, o = {}) {
 }
 
 /* Le vrai serveur de `dir`, redemarre a froid contre le RPC fictif. */
-async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeurSeul = false } = {}) {
+/* `vuesMin` (Claude, revue 2026-10-03) : sortir des qu on a assez de lectures, au lieu d un chronometre fixe. Mesure : sous les
+ *   5 voies paralleles de ce banc, le serveur mettait PLUS de 8 s a ecouter sur Windows (journal sans « sert … sur le port »),
+ *   seul il repond en 0,56 s meme RPC mort — S1b rendait 0 lecture : le banc chronometrait la machine, pas le code. */
+async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeurSeul = false, vuesMin = Infinity } = {}) {
   const rpc = rpcFictif(jusqua, rpcO); const portRpc = await libre(); await new Promise((ok) => rpc.serveur.listen(portRpc, '127.0.0.1', ok));
   const port = await libre(); const vol = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-r9b-vol-')); tmp.push(vol);
   const u = 'http://127.0.0.1:' + portRpc;
@@ -104,6 +107,7 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
     while (!routeurSeul && Date.now() - t0 < attenteMax) {
       try { derniere = await lire(); vues.push(derniere); if (!premiere) premiere = derniere; } catch { await new Promise((ok) => setTimeout(ok, 200)); continue; }
       if (derniere.couvertureComplete === true) { complet = Date.now() - t0; break; }
+      if (vues.length >= vuesMin) break;
       if (rpc.sousLaGraine > 0 && Date.now() - t0 > 4000) break; /* il redescend sous la graine : inutile d attendre 19 min */
       await new Promise((ok) => setTimeout(ok, 500));
     }
@@ -219,13 +223,13 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
     const x = await redemarrer(dir, J, { routeurSeul: true, rpcO: { tete: IRm.GRAINE_JUSQUA + 3000, echecs: 0, echecsRouteur: 3, baseRouteur: IRm.GRAINE_JUSQUA } });
     const R = '/api/blocks-routeur'; const tX = x.rpc.tete;
     const fini = (r) => r.length >= 3 && r.slice(-3).every((y) => y.couvertureComplete === true && y.jusqua === tX);
-    const x1 = await x.suivre(20000, fini, R);
+    const x1 = await x.suivre(60000, fini, R); /* 20 s -> 60 s (Claude) : sort des que `fini` ; demarrage lent sous 5 voies */
     const jX = x1.length ? x1[x1.length - 1].jusqua : null;
     let x2 = [];
     if (fini(x1) && scen.includes('Y')) {
       x.rpc.tete += 500; x.rpc.echecsRouteur = 100000;
       const vu = (r) => r.findIndex((y) => y.fenetresEnAttente > 0);
-      x2 = await x.suivre(24000, (r) => vu(r) >= 0 && r.length - vu(r) >= 4, R);
+      x2 = await x.suivre(60000, (r) => vu(r) >= 0 && r.length - vu(r) >= 4, R);
     }
     await x.arreter();
     const r1 = x.rpc.ratesRouteur[0];
@@ -282,7 +286,7 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   })() : null;
   /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
   const blocN = scen.includes('N') ? (async () => {
-    const sn = await redemarrer(dir, J, { attenteMax: 8000, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
+    const sn = await redemarrer(dir, J, { attenteMax: 45000, vuesMin: 6, rpcO: { tete: J + 1000, echecs: 1e9 } }); await sn.arreter();
     v('S1b graine sous la borne de retard mais [jusqua + 1, tete] pas encore lu : jamais complete', sn.vues.length > 3 && sn.vues.every((x) => x.couvertureComplete === false));
   })() : null;
   /* S5 — graine forgee dans une copie : le serveur la refuse et redescend depuis la tete */
