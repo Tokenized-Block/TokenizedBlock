@@ -11,6 +11,11 @@
  *   H8    0xb200000000000000000000e63ffc3f40bf92a042 — R7 (Zero 1, K1) : createPaid via l EntryPoint ERC-4337 (bloc 51 692 885).
  *   R7 (Zero 1, K2) : OLD (= IB022) et les blocks V2 sont TB SANS contexte (liste statique BLOCKS_SUR_NOS_HOOKS, scan Initialize) ;
  *   la regle (c) par contexte est testee sur SYN, un B20 synthetique absent de toute liste.
+ * ⛔⛔ R8 (C2 KO R6, decision Raksha) : LOGIQUE INVERSEE. Par defaut tout B20 non devise est un block (R5) ; seule une liste
+ *   blanche LIBERE les vrais jetons tiers (liste explicite PEXRA, ou marche lu sur un hook de launchpad tiers connu), et
+ *   seulement s ils sont absents de l ensemble TB ET que toutes les sources TB sont lues. Section REG : les blocks TB reels
+ *   (IB022, ab549f, 809778, e63ffc, 03d296, les 2 de 0xd0a6) sont refuses hors hook TB dans CHAQUE etat de l index
+ *   (non, lu, vide, perime, nosvide, illisible) ; PEXRA n est libere que sources lues ; un 0xb2 inconnu reste refuse.
  * ⛔ TEMOINS NEGATIFS : le banc tourne sur une COPIE du depot (doit rester vert), puis sur des MUTANTS ; chacun DOIT le rougir.
  * ⛔ 1bb12d6 : les plans « tiers » sont compares OCTET POUR OCTET a ceux de 1bb12d6 (git show ; sans git, la comparaison est DITE non executee). */
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -23,7 +28,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const imp = (dir, f) => import(pathToFileURL(path.join(dir, f)).href);
 const charger = async (dir) => ({ E: await imp(dir, 'echange.js'), T: await imp(dir, 'tokenomics.js'), F: await imp(dir, 'frais-creation.js'),
   PS: await imp(dir, 'pool-sans-hook.js'), IR: await imp(dir, 'index-routeur.js'), LE: await imp(dir, 'lancements-etrangers.js'),
-  IB: await imp(dir, 'index-blocks.js'), PO: await imp(dir, 'pool.js') });
+  IB: await imp(dir, 'index-blocks.js'), PO: await imp(dir, 'pool.js'), MP: await imp(dir, 'multipool.js') });
 
 const ETH = '0x' + '0'.repeat(40);
 const bas = (a) => String(a).toLowerCase();
@@ -36,6 +41,14 @@ const H8 = '0xb200000000000000000000e63ffc3f40bf92a042';
 const V2A = '0xb200000000000000000000ab549fa65ad4edae3f', V2B = '0xb200000000000000000000809778b2d38d114351';
 const SYN = '0xb200000000000000000000c0ffee0000000000c1'; /* B20 synthetique, hors routeur et hors liste */
 const ENTRYPOINT = '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789';
+const REELS = { IB022: '0xb200000000000000000000e4b0c5fbe9c8df579e', ab549f: '0xb200000000000000000000ab549fa65ad4edae3f',
+  '809778': '0xb200000000000000000000809778b2d38d114351', e63ffc: '0xb200000000000000000000e63ffc3f40bf92a042',
+  '03d296': '0xb20000000000000000000003d296be435ae4bbe3', d0a6a: '0xb200000000000000000000407ee1732664dc8028',
+  d0a6b: '0xb200000000000000000000dae0212b61be4c49bb' };
+const NOS_SEUL = '0xb2' + '0'.repeat(20) + '5eed00000000000001'; /* un block servi SEULEMENT par /api/nos-blocks */
+const HOOK_INC = '0x1234000000000000000000000000000000000acc'; /* hook inconnu */
+const HOOK_CLANKER = '0xa10a6f4b918e963ec8694d37aa22e438706fe8cc';
+const ETATS = ['non', 'lu', 'vide', 'perime', 'nosvide', 'illisible'];
 const MEME = '0x1234567890abcdef1234567890abcdef12345678'; /* jeton hors B20 (forme Clanker / Zora) */
 const compte = '0x' + '4'.repeat(40);
 const MAINTENANT = Date.UTC(2026, 9, 3, 0, 0, 0);
@@ -53,11 +66,24 @@ function rpcPour({ E }) {
     return '0x' + 'f'.repeat(192);
   };
 }
-const LU = (IR, extra = {}) => IR.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000,
+const plein = (IR, extra = {}) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(),
   blocks: IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })), ...extra });
+const nosRep = (blocks) => ({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks });
+/* LU : index plein + /api/nos-blocks reduit a NOS_SEUL (les blocks reels et TBLOCK ne doivent rien a nos-blocks dans PROV/CL) */
+const LU = (IR, extra = {}, nos = [NOS_SEUL]) => { const e = IR.chargerIndexRouteur(plein(IR, extra)); IR.chargerNosBlocksTb(nosRep(nos)); return e; };
+/* /api/nos-blocks tel que servi (C2, 2026-10-02 22:37 UTC) + NOS_SEUL */
+const NOS_SERVIS = ['0xb20000000000000000000024c30d3fcb7931272e', '0xb20000000000000000000003d296be435ae4bbe3', '0xb200000000000000000000e63ffc3f40bf92a042',
+  '0xb200000000000000000000ab549fa65ad4edae3f', NOS_SEUL];
+function etatIndex(IR, nom) {
+  if (nom === 'lu') { IR.chargerIndexRouteur(plein(IR)); IR.chargerNosBlocksTb(nosRep(NOS_SERVIS)); }
+  else if (nom === 'vide') { IR.chargerIndexRouteur(plein(IR, { blocks: [] })); IR.chargerNosBlocksTb(nosRep(NOS_SERVIS)); }
+  else if (nom === 'perime') { IR.chargerIndexRouteur(plein(IR, { teteLueA: Date.now() - 3600 * 1000 })); IR.chargerNosBlocksTb(nosRep(NOS_SERVIS)); }
+  else if (nom === 'nosvide') { IR.chargerIndexRouteur(plein(IR)); IR.chargerNosBlocksTb(nosRep([])); }
+  else { IR.indexRouteurIllisible(nom); IR.nosBlocksTbIllisibles(nom); }
+}
 
 async function banc(M, { base = null } = {}) {
-  const { E, T, F, PS, IR, LE, IB, PO } = M;
+  const { E, T, F, PS, IR, LE, IB, PO, MP } = M;
   const res = [];
   const v = (id, ok, detail = '') => res.push({ id, ok: !!ok, detail });
   const rpc = rpcPour(M);
@@ -118,12 +144,19 @@ async function banc(M, { base = null } = {}) {
   /* ══ ETAT DE L INDEX : non charge = illisible ; sel faux rejete ; index en retard = illisible ══ */
   IR.indexRouteurIllisible('test');
   v('IDX non lu par defaut ou apres echec', IR.indexRouteurLu() === false);
-  const e1 = LU(IR, { blocks: [{ jeton: faux, sel: mot(7n) }] });
-  v('IDX entree au sel faux : rejetee, jamais TB', e1.lu === true && e1.rejetes === 1 && !IR.estNeDuRouteur(faux) && PS.classeBlock(faux) === 'TIERS', jsonB(e1));
+  const e1 = LU(IR, { blocks: [...IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })), { jeton: faux, sel: mot(7n) }] });
+  v('IDX entree au sel faux : rejetee, jamais TB, et l index n est pas lu', e1.lu === false && e1.rejetes === 1 && !IR.estNeDuRouteur(faux) && PS.classeBlock(faux) === 'INCONNU', jsonB(e1));
   const e2 = LU(IR, { jusqua: 52100000 - IR.RETARD_MAX_INDEX - 1 });
   v('IDX en retard sur la tete : non lu (fail-closed)', e2.lu === false && PS.classeBlock(PEXRA) === 'INCONNU', jsonB(e2));
   const e3 = LU(IR, { couvertureComplete: false });
   v('IDX couverture incomplete : non lu', e3.lu === false);
+  const e4 = LU(IR, { blocks: [] });
+  v('IDX liste vide marquee complete : non lu, PEXRA reste bloque', e4.lu === false && PS.classeBlock(PEXRA) === 'INCONNU', jsonB(e4));
+  const e5 = LU(IR, { teteLueA: Date.now() - 3600 * 1000 });
+  v('IDX tete figee (lue il y a 1 h) : non lu, PEXRA reste bloque', e5.lu === false && PS.classeBlock(PEXRA) === 'INCONNU', jsonB(e5));
+  LU(IR);
+  IR.nosBlocksTbIllisibles('test');
+  v('IDX /api/nos-blocks non lu : aucune liberation (PEXRA INCONNU)', IR.indexRouteurLu() === true && IR.sourcesTbLues() === false && PS.classeBlock(PEXRA) === 'INCONNU');
   LU(IR);
   v('IDX lu', IR.indexRouteurLu() === true);
 
@@ -131,11 +164,18 @@ async function banc(M, { base = null } = {}) {
   v('CL ne du routeur = TB', PS.classeBlock(NE_ROUTEUR) === 'TB');
   v('CL H8 ne via 4337 = TB', PS.classeBlock(H8) === 'TB' && PS.classeBlock(H8, []) === 'TB');
   v('CL K2 IB022 et les 2 blocks V2 = TB SANS contexte (liste statique)', PS.classeBlock(OLD) === 'TB' && PS.classeBlock(V2A) === 'TB' && PS.classeBlock(V2B) === 'TB'
-    && PS.BLOCKS_SUR_NOS_HOOKS.length === 11);
+    && PS.BLOCKS_SUR_NOS_HOOKS.length === 11 && !PS.BLOCKS_SUR_NOS_HOOKS.includes('0xb2000000000000000000007b9fcbd005511acbd5'));
+  v('CL anciens routeurs 0xd0a6 : 2 blocks TB (formule, graine statique)', PS.classeBlock(REELS.d0a6a) === 'TB' && PS.classeBlock(REELS.d0a6b) === 'TB'
+    && IR.GRAINE_ANCIENS_ROUTEURS.every((g) => IR.neDuRouteur(g.jeton, g.sel, g.routeur)));
   v('CL TBLOCK = TB, TBGAS = TB', PS.classeBlock(T.TBLOCK) === 'TB' && PS.classeBlock(T.TBGAS) === 'TB');
   v('CL V1 de test (RNG) = TB', PS.classeBlock(RNG) === 'TB');
-  v('CL PEXRA = TIERS, SYN sans contexte = TIERS', PS.classeBlock(PEXRA) === 'TIERS' && PS.classeBlock(SYN) === 'TIERS');
+  v('CL PEXRA = TIERS (liste explicite), SYN sans contexte = INCONNU (0xb2 inconnu : bloque)', PS.classeBlock(PEXRA) === 'TIERS' && PS.classeBlock(SYN) === 'INCONNU');
   v('CL SYN avec son marche V8 = TB (regle c)', PS.classeBlock(SYN, [cSynV8]) === 'TB');
+  v('CL SYN sur V8 ET sur un hook de launchpad tiers : TB (l ensemble TB gagne)', PS.classeBlock(SYN, [cSynV8, cle(ETH, SYN, HOOK_CLANKER, 10000, 200)]) === 'TB');
+  v('CL SYN sur le hook Clanker seul : TIERS (libere par son marche)', PS.classeBlock(SYN, [cle(ETH, SYN, HOOK_CLANKER, 10000, 200)]) === 'TIERS');
+  const HI = '0xb2ffffffffffffffffffffffffffffffffffffff';
+  v('CL estBlockTb R5 : 0xb2 hors motif B20 = block, PEXRA libere = pas un block', PS.estBlockTb(HI, [HI]) === true && PS.estBlockTb(PEXRA, [PEXRA]) === false);
+  v('CL block seulement dans /api/nos-blocks = TB', (IR.chargerNosBlocksTb(nosRep([NOS_SEUL])), PS.classeBlock(NOS_SEUL) === 'TB'));
   v('CL ETH / USDC / hors B20 : jamais un block', PS.classeBlock(ETH) === null && PS.classeBlock(USDC) === null && PS.classeBlock(MEME) === null);
 
   /* ══ 1. TIERS sur sa pool (hook tiers) ou sans hook -> PRET, frais routeur en ETH ══ */
@@ -153,14 +193,27 @@ async function banc(M, { base = null } = {}) {
   /* ══ 2. block ne du routeur sur pool sans hook -> REFUSE ══ */
   const t4 = await achat(NE_ROUTEUR, cRouteurNu);
   v('T4 block ne du routeur, pool sans hook : REFUSE', t4.etat === 'REFUSE', t4.etat);
-  const t4b = await achat(NE_ROUTEUR, cle(ETH, NE_ROUTEUR, HOOK_PEXRA, 3000, 60));
+  const t4b = await achat(NE_ROUTEUR, cle(ETH, NE_ROUTEUR, HOOK_INC, 3000, 60));
   v('T4b block ne du routeur, hook tiers : REFUSE', t4b.etat === 'REFUSE' && t4b.refusHookTiers === true, t4b.etat);
+  const t4c = await achat(NE_ROUTEUR, cle(ETH, NE_ROUTEUR, HOOK_PEXRA, 3000, 60));
+  v('T4c block ne du routeur sur un hook de launchpad tiers (liste blanche) : REFUSE', t4c.etat === 'REFUSE', t4c.etat);
+  /* R5-2 : un hook inconnu passe comme PAYEUR par l appelant n admet pas un block sur sa pool */
+  const p52 = await E.planEchange({ rpc, chaine: 8453, jeton: OLD, compte, sens: 'ACHAT', montant: 10n ** 16n, maintenant: MAINTENANT,
+    marcheLu: { etat: 'LUE', cle: cle(ETH, OLD, HOOK_INC, 0, 200), paire: null }, hooksPaieurs: [{ hook: HOOK_INC, sens: ['ACHAT', 'VENTE'], preuve: 'appelant' }] });
+  const p52m = await E.planEchangeMultiSauts({ rpc, chaine: 8453, compte, sauts: [j(cUsdcEth, USDC), j(cle(ETH, OLD, HOOK_INC, 0, 200), ETH)], entree: USDC, sortie: OLD,
+    montant: 10n ** 7n, decimalesEntree: 6, prixUsdEntree: null, maintenant: MAINTENANT, hooksPaieurs: [{ hook: HOOK_INC, sens: ['ACHAT', 'VENTE'], preuve: 'appelant' }] });
+  v('P52 hook inconnu passe comme payeur : REFUSE (seuls nos hooks / HOOKS_PAIENT_DEJA_A6CF)', p52.etat === 'REFUSE' && p52m.etat === 'REFUSE', p52.etat + ' ' + (p52.pourquoi || '') + ' / multi ' + p52m.etat + ' ' + (p52m.pourquoi || ''));
+  v('P52m multipool : hook inconnu nomme facturant : ignore', !MP.ensembleHooksFacturants([HOOK_INC]).has(HOOK_INC) && MP.ensembleHooksFacturants([T.HOOK_V2]).has(bas(T.HOOK_V2)));
   /* ══ 3. ancien block sur V8 -> PRET, le hook paie (pas de frais routeur) ══ */
   const t5 = await achat(OLD, cOldV8);
   v('T5 ancien block sur V8 : PRET, le hook paie (routeur 0)', pret(t5) && t5.resume && t5.resume.fraisBps === 0n && t5.resume.beneficiaireFrais === null, t5.etat + ' ' + (t5.pourquoi || ''));
   /* R7 (K2) : IB022 sur une pool sans hook, SANS contexte, index lu -> REFUSE (preuve fork de Zero 1 : PRET sur a653486) */
   const t5k = await achat(OLD, cOldNu);
   v('T5k IB022 pool sans hook, sans contexte, index lu : REFUSE', t5k.etat === 'REFUSE' && PS.poolSansHookInterdite(cOldNu, [OLD], [cOldNu]) === true, t5k.etat + ' ' + (t5k.pourquoi || ''));
+  const t3b = await multi([j(cUsdcEth, USDC), j(cle(ETH, SYN, HOOK_CLANKER, 10000, 200), ETH)], USDC, SYN, 10n ** 7n);
+  v('T3b USDC>ETH>(hook Clanker)SYN : PRET, libere par son marche sur un hook de launchpad tiers', pret(t3b), t3b.etat + ' ' + (t3b.pourquoi || ''));
+  const t3c = await multi([j(cle(ETH, SYN, HOOK_CLANKER, 10000, 200), ETH), j(cle(SYN, USDC, ETH, 3000, 60), SYN)], ETH, USDC, 10n ** 16n);
+  v('T3c ETH>(hook Clanker)SYN>(sans hook)USDC : PRET, le contexte de route libere SYN', pret(t3c), t3c.etat + ' ' + (t3c.pourquoi || ''));
   v('T5b B20 hors liste : sa pool sans hook est interdite quand son marche V8 est dans le contexte', PS.indexPoolSansHookInterdite([cSynV8, cSynNu], [SYN]) === 1);
   const t5c = await multi([j(cSynV8, ETH), j(cle(SYN, USDC, ETH, 3000, 60), SYN)], ETH, USDC, 10n ** 16n);
   v('T5c ETH>(V8) SYN>(sans hook) USDC : REFUSE (block TB au milieu / sans hook)', t5c.etat === 'REFUSE', t5c.etat + ' ' + (t5c.pourquoi || ''));
@@ -179,6 +232,22 @@ async function banc(M, { base = null } = {}) {
   v('U4 illisible : jeton hors B20 sur hook tiers -> PRET (pas tout le monde bloque)', fraisRouteurEth(u4), u4.etat + ' ' + (u4.pourquoi || ''));
   const u5 = await achat(NE_ROUTEUR, cRouteurNu);
   v('U5 illisible : block ne du routeur sans hook -> REFUSE', u5.etat === 'REFUSE');
+  LU(IR);
+
+  /* ══ REG : chaque etat de l index — blocks TB reels refuses hors hook TB, PEXRA libere seulement sources lues, 0xb2 inconnu refuse ══ */
+  for (const etat of ETATS) {
+    etatIndex(IR, etat);
+    for (const [nom, X] of Object.entries({ ...REELS, NOS_SEUL })) {
+      if (nom === 'NOS_SEUL' && etat !== 'lu') continue;
+      const a = await achat(X, cle(ETH, X, ETH, 3000, 60)), b = await achat(X, cle(ETH, X, HOOK_INC, 3000, 60)), c = await achat(X, cle(ETH, X, HOOK_PEXRA, 3000, 60));
+      v('REG ' + etat + ' ' + nom + ' : sans hook / hook inconnu / hook de launchpad tiers -> REFUSE', [a, b, c].every((p) => p.etat === 'REFUSE'), [a, b, c].map((p) => p.etat).join(','));
+    }
+    const s1 = await achat(SYN, cSynNu), s2 = await achat(SYN, cle(ETH, SYN, HOOK_INC, 3000, 60));
+    v('REG ' + etat + ' SYN (0xb2 inconnu, hors liste blanche) -> REFUSE', s1.etat === 'REFUSE' && s2.etat === 'REFUSE', s1.etat + ',' + s2.etat);
+    const px = await achat(PEXRA, cPexNu);
+    if (etat === 'lu') v('LIB lu PEXRA sans hook : libere, PRET + frais routeur ETH', fraisRouteurEth(px), px.etat + ' ' + (px.pourquoi || ''));
+    else v('LIB ' + etat + ' PEXRA : une source TB non lue ne libere rien -> REFUSE', px.etat === 'REFUSE', px.etat);
+  }
   LU(IR);
 
   /* ══ 6. AFFICHAGE INCHANGE : un B20 tiers reste dans le fil / les listes, index lu ou non ══ */
@@ -220,20 +289,33 @@ function copieBase() {
 let nAssert = 0, ko = 0;
 const ok = (c, m) => { nAssert += 1; if (!c) { ko += 1; console.log('  KO ' + m); } };
 const MUTANTS = [
-  { nom: 'a provenance routeur ignoree', edits: [['pool-sans-hook.js', '|| estNeDuRouteur(a) ||', '||']], casse: [/^T4 |^CL ne du routeur|^U5 /] },
+  { nom: 'a provenance routeur ignoree', edits: [['pool-sans-hook.js', '|| estNeDuRouteur(a) ||', '||']], casse: [/^CL ne du routeur/, /^T4c /] },
   { nom: 'b BLOCKS_TB ignore au classement', edits: [['pool-sans-hook.js', 'if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) ||', 'if (BLOCKS_V1_TEST.has(a) ||']], casse: [/^CL TBLOCK/] },
   { nom: 'b2 blocks V1 de test oublies (les deux listes : V1 de test et sur nos hooks)', edits: [['pool-sans-hook.js', 'if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||', 'if (BLOCKS_TB.has(a) ||']], casse: [/^CL V1/] },
-  { nom: 'k2 liste statique des blocks sur nos hooks ignoree', edits: [['pool-sans-hook.js', '|| SUR_NOS_HOOKS.has(a) ||', '||']], casse: [/^CL K2 /, /^T5k /] },
+  { nom: 'k2 liste statique des blocks sur nos hooks ignoree', edits: [['pool-sans-hook.js', '|| SUR_NOS_HOOKS.has(a) ||', '||']], casse: [/^CL K2 /, /^REG lu IB022 /, /^REG lu 809778 /] },
   { nom: 'k1 scanner : sel cherche seulement si tx.to == routeur', edits: [['index-routeur.js', 'for (let off = 0; !sel && off < 64; off += 8)', 'for (let off = 0; false; off += 8)']], casse: [/^PROV scanner 4337/] },
   { nom: 'k1b H8 absent de la graine', edits: [['index-routeur.js', "{ jeton: '0xb200000000000000000000e63ffc3f40bf92a042',", "{ jeton: '0xb200000000000000000000e63ffc3f40bf92a043',"]], casse: [/^PROV graine/, /^CL H8 /] },
-  { nom: 'c regle (c) marche sur nos hooks retiree', edits: [['pool-sans-hook.js', '|| estNeDuRouteur(a) || surNotreHook(a, cles)) return', '|| estNeDuRouteur(a)) return']], casse: [/^T5b |^T5c |^CL SYN avec/] },
-  { nom: 'c2 contexte de route oublie (multi-sauts)', edits: [['echange.js', 'estBlockDeRoute(a, fraisDevisesOk, sauts.map((x) => x && x.cle))', 'estBlockDeRoute(a, fraisDevisesOk)']], casse: [/^T5c /] },
-  { nom: 'd index illisible = tiers (fail-open)', edits: [['pool-sans-hook.js', "return indexRouteurLu() ? 'TIERS' : 'INCONNU';", "return 'TIERS';"]], casse: [/^U1 |^U2 /] },
+  { nom: 'c regle (c) marche sur nos hooks retiree', edits: [['pool-sans-hook.js', '|| estNotreBlockServi(a) || surNotreHook(a, cles)) return', '|| estNotreBlockServi(a)) return']], casse: [/^CL SYN avec/, /^CL SYN sur V8 ET/] },
+  { nom: 'c2 contexte de route oublie (multi-sauts)', edits: [['echange.js', 'estBlockDeRoute(a, fraisDevisesOk, sauts.map((x) => x && x.cle))', 'estBlockDeRoute(a, fraisDevisesOk)']], casse: [/^T3c /] },
+  { nom: 'd liberation sans sources TB lues (fail-open)', edits: [['pool-sans-hook.js', "return listeBlanche(a, cles) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return listeBlanche(a, cles) ? 'TIERS' : 'INCONNU';"]], casse: [/^U1 |^U2 /, /^LIB non PEXRA/, /^LIB illisible PEXRA/, /^LIB vide PEXRA/, /^LIB perime PEXRA/, /^LIB nosvide PEXRA/] },
   { nom: 'e fail-closed etendu a tout le monde', edits: [['pool-sans-hook.js', '  if (!RE_B20.test(a)) return null;', '']], casse: [/^U4 /] },
   { nom: 'f tiers traite en block', edits: [['pool-sans-hook.js', "return c === 'TB' || c === 'INCONNU';", 'return c !== null;']], casse: [/^T1 |^T2 |^T3 /] },
-  { nom: 'g index en retard accepte', edits: [['index-routeur.js', '&& retard <= RETARD_MAX_INDEX;', ';']], casse: [/^IDX en retard/] },
-  { nom: 'h sel non verifie au chargement', edits: [['index-routeur.js', 'if (b && neDuRouteur(b.jeton, b.sel)) nes.add', 'if (b) nes.add']], casse: [/^IDX entree au sel faux/] },
-  { nom: 'i scanner sans verification de formule', edits: [['index-routeur.js', 'if (neDuRouteur(c.jeton, w, routeur)) sel = w;', 'sel = w;']], casse: [/^PROV scanner/] },
+  { nom: 'g index en retard accepte', edits: [['index-routeur.js', '!rep.fenetresRatees && retard <= RETARD_MAX_INDEX', '!rep.fenetresRatees']], casse: [/^IDX en retard/] },
+  { nom: 'h sel non verifie au chargement', edits: [['index-routeur.js', 'if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) nes.add', 'if (b) nes.add']], casse: [/^IDX entree au sel faux/] },
+  { nom: 'i scanner sans verification de formule', edits: [['index-routeur.js', 'for (const r of routeurs) if (!sel && neDuRouteur(c.jeton, w, r)) {', 'for (const r of routeurs) if (!sel) {']], casse: [/^PROV scanner/] },
+  { nom: 'R8a liste blanche consultee AVANT l ensemble TB', edits: [['pool-sans-hook.js', '  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||', "  if (RE_B20.test(a) && listeBlanche(a, cles) && sourcesTbLues()) return 'TIERS';\n  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||"]], casse: [/^REG lu IB022 /, /^REG lu ab549f /, /^REG lu 809778 /, /^REG lu e63ffc /, /^REG lu 03d296 /, /^REG lu d0a6a /, /^REG lu d0a6b /, /^REG lu NOS_SEUL /, /^T4c /] },
+  { nom: 'R8b defaut R6 (tout 0xb2 inconnu libere quand l index est lu)', edits: [['pool-sans-hook.js', "return listeBlanche(a, cles) && sourcesTbLues() ? 'TIERS'", "return sourcesTbLues() ? 'TIERS'"]], casse: [/^REG lu SYN /, /^CL PEXRA = TIERS/] },
+  { nom: 'R8c liberation coupee (PEXRA bloque a tort)', edits: [['pool-sans-hook.js', "return listeBlanche(a, cles) && sourcesTbLues() ? 'TIERS' : 'INCONNU';", "return 'INCONNU';"]], casse: [/^LIB lu PEXRA/, /^T1 /, /^T3b /] },
+  { nom: 'R8d graine des anciens routeurs 0xd0a6 ignoree', edits: [['index-routeur.js', '...GRAINE_ANCIENS_ROUTEURS.filter((g) => neDUnDeNosRouteurs(g.jeton, g.sel, g.routeur))].map', '].map']], casse: [/^CL anciens routeurs/, /^REG lu d0a6a /, /^REG lu d0a6b /] },
+  { nom: 'R8e /api/nos-blocks ignore par la porte de liberation', edits: [['index-routeur.js', 'export function sourcesTbLues() { return indexRouteurLu() && nosBlocksTbLus(); }', 'export function sourcesTbLues() { return indexRouteurLu(); }']], casse: [/^LIB nosvide PEXRA/, /^IDX \/api\/nos-blocks non lu/] },
+  { nom: 'R8f liste d index vide acceptee', edits: [['index-routeur.js', '&& graineServie && teteFraiche && rejetes === 0;', '&& teteFraiche && rejetes === 0;']], casse: [/^LIB vide PEXRA/, /^IDX liste vide/] },
+  { nom: 'R8g tete figee acceptee', edits: [['index-routeur.js', '&& graineServie && teteFraiche && rejetes === 0;', '&& graineServie && rejetes === 0;']], casse: [/^LIB perime PEXRA/, /^IDX tete figee/] },
+  { nom: 'R8h entrees rejetees tolerees', edits: [['index-routeur.js', '&& graineServie && teteFraiche && rejetes === 0;', '&& graineServie && teteFraiche;']], casse: [/^IDX entree au sel faux/] },
+  { nom: 'R8i /api/nos-blocks vide marque complet accepte', edits: [['index-routeur.js', '!rep.fenetresRatees && liste.length > 0;', '!rep.fenetresRatees;']], casse: [/^LIB nosvide PEXRA/] },
+  { nom: 'R8j blocks servis par /api/nos-blocks ignores', edits: [['pool-sans-hook.js', '|| estNotreBlockServi(a) ||', '||']], casse: [/^REG lu NOS_SEUL /, /^CL block seulement dans/] },
+  { nom: 'R8k estBlockTb : regle R5 0xb2 retiree', edits: [['pool-sans-hook.js', "return c === 'TB' || (a.startsWith('0xb2') && !DEVISES.has(a) && c !== 'TIERS');", "return c === 'TB' || c === 'INCONNU';"]], casse: [/^CL estBlockTb R5/] },
+  { nom: 'R5-2a hook payeur de l appelant non filtre (echange)', edits: [['echange.js', '  hooksPaieurs = filtrerHooksPayeurs(hooksPaieurs);', '']], casse: [/^P52 /] },
+  { nom: 'R5-2b hook facturant de l appelant non filtre (multipool)', edits: [['multipool.js', '...filtrerHooksPayeurs(extra || []).map(', '...(extra || []).map(']], casse: [/^P52m /] },
   { nom: 'j affichage filtre par le classement', edits: [
     ['lancements-etrangers.js', "import { decoderChaineAbi } from './texte-onchain.js';", "import { decoderChaineAbi } from './texte-onchain.js';\nimport { classeBlock as __cb } from './pool-sans-hook.js';"],
     ['lancements-etrangers.js', "    out.push({ jeton, launchpad: 'B20_AUTO'", "    if (__cb(jeton) !== 'TB') continue;\n    out.push({ jeton, launchpad: 'B20_AUTO'"]], casse: [/^AFF /] },
@@ -271,7 +353,8 @@ try {
   }
   const app = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8');
   ok(!/classeBlock|estBlockTbClasse/.test(app), 'app.html : aucun filtre d affichage sur le classement');
-  ok((app.match(/indexRouteurLu\(/g) || []).length === 1, 'app.html : indexRouteurLu sert seulement a relire l index');
+  ok((app.match(/indexRouteurLu\(/g) || []).length === 0 && (app.match(/!sourcesTbLues\(\)/g) || []).length === 1, 'app.html : la relecture suit sourcesTbLues (index + /api/nos-blocks)');
+  ok(/chargerNosBlocksTb\(/.test(app) && /ajouterNeDuRouteur\(adresseCreee, sNe\)/.test(app), 'app.html : /api/nos-blocks charge, et le block cree est ajoute a l index (ajouterNeDuRouteur)');
   ok((app.match(/noterMarcheSurNotreHook\(/g) || []).length === 4, 'app.html : noterMarcheSurNotreHook seulement a la decouverte des pools');
   const srv = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
   ok(/'index-routeur\.js'/.test(srv) && /chemin === '\/api\/blocks-routeur'/.test(srv), 'serveur : module servi et /api/blocks-routeur expose');

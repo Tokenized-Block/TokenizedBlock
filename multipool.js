@@ -28,6 +28,7 @@
  */
 import { mot, motSigne, motAdr, dyn, selecteur, paramsSwapExactInSingle, SANS_MINHOP, encodeQuote } from './pool.js';
 import { indexBlocAJonction, estBlockAJonction, estBlockDeRoute, cleSansHook, formatOpenLaunch, hookAdmisPourBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { filtrerHooksPayeurs } from './tokenomics.js';
 
 /* ══ ADRESSES (Base 8453) — chacune VERIFIEE sur le fork (factory()/code), voir le rapport ══ */
 export const ADRESSES = Object.freeze({
@@ -89,7 +90,8 @@ export const BPS_A6CF_SPLIT_BLOC = 7n;
 export const HOOK_V8 = '0x5926abdabf5d0006ee960a8270f3e124e5a764cc';
 export const HOOKS_FACTURANTS = Object.freeze([HOOK_V8]);
 export function ensembleHooksFacturants(extra = []) {
-  return new Set([...HOOKS_FACTURANTS, ...(extra || []).map((h) => bas(h))].filter((h) => ADR.test(h)));
+  /* ⛔ R8 (C2, R5-2) : un hook passe par l appelant n est facturant que s il est a NOUS ou dans HOOKS_PAIENT_DEJA_A6CF. */
+  return new Set([...HOOKS_FACTURANTS, ...filtrerHooksPayeurs(extra || []).map((h) => bas((h && h.hook) || h))].filter((h) => ADR.test(h)));
 }
 /** La jambe `s` est-elle facturee par son hook ? (V4 seulement : V3 / Slipstream n ont pas nos hooks) */
 export function jambeFactureeParHook(s, hooks = ensembleHooksFacturants()) {

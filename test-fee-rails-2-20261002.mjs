@@ -27,9 +27,6 @@ const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const TBLOCK = '0xb20000000000000000000024c30d3fcb7931272e';
 const NVDAc = '0xb20000000000000000000078ee7ce2fe4908108c';
 const BLK_HI = '0xb2000000000000000000ffff00000000000000aa'; // sorts AFTER USDC and NVDAc
-// R6 (2026-10-03): a TB block is now classified (CreateRouter / BLOCKS_TB / our hook), not read off the 0xb2 prefix. BLK_HI is not a B20,
-// so the two "forbidden" cases use a block born from the CreateRouter (rule a).
-const BLK_TB = '0xb200000000000000000000e7e9db76e8234f8f56';
 const BLK_LO = '0x0b00000000000000000000000000000000000001'; // sorts BEFORE USDC
 const V8 = T.HOOK_V8;
 const COMPTE = '0x1234567890123456789012345678901234567890';
@@ -79,7 +76,7 @@ ok(fn(PSH, 'poolSansHookInterdite'), 'hookless: guard module present');
 if (fn(PSH, 'poolSansHookInterdite')) {
   const tbHookless = { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: ETH };
   ok(PSH.poolSansHookInterdite(tbHookless, []) === true, 'hookless: TBLOCK/ETH fee 0 ts 200 hooks 0 is forbidden');
-  ok(PSH.poolSansHookInterdite({ currency0: ETH, currency1: BLK_TB, fee: 5000, tickSpacing: 200, hooks: ETH }, [BLK_TB]) === true, 'hookless: any block traded with a hookless key is forbidden');
+  ok(PSH.poolSansHookInterdite({ currency0: ETH, currency1: BLK_HI, fee: 5000, tickSpacing: 200, hooks: ETH }, [BLK_HI]) === true, 'hookless: any block traded with a hookless key is forbidden');
   /* negative controls */
   ok(PSH.poolSansHookInterdite({ ...tbHookless, hooks: V8 }, []) === false, 'hookless NEG: the hooked key is allowed');
   ok(PSH.poolSansHookInterdite({ currency0: ETH, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH }, [BLK_HI]) === false, 'hookless NEG: ETH/USDC leg (no block in it) is allowed');
@@ -89,8 +86,8 @@ const rH = await E.planEchange({ rpc: async () => { throw new Error('no read exp
   marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: TBLOCK, fee: 0, tickSpacing: 200, hooks: ETH }, paire: null } });
 ok(rH.etat === 'REFUSE' && (rH.refusSansHook === true || rH.refusTblock === true), 'hookless: planEchange refuses the TBLOCK hookless pool before any read/quote');
 ok(!/hook/i.test(rH.pourquoi || '') && !/non officiel|sans frais/i.test(rH.pourquoi || ''), 'hookless: refusal text is generic (no label about that pool)');
-const rH2 = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: BLK_TB, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 16n,
-  marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: BLK_TB, fee: 0, tickSpacing: 200, hooks: ETH }, paire: null } });
+const rH2 = await E.planEchange({ rpc: async () => { throw new Error('no read expected'); }, chaine: 8453, jeton: BLK_HI, compte: COMPTE, sens: 'ACHAT', montant: 10n ** 16n,
+  marcheLu: { etat: 'LUE', cle: { currency0: ETH, currency1: BLK_HI, fee: 0, tickSpacing: 200, hooks: ETH }, paire: null } });
 ok(rH2.etat === 'REFUSE' && rH2.refusSansHook === true, 'hookless: a B20 block on a hookless ETH pool is refused');
 const rOk = await achat(10n ** 16n);
 ok(rOk.refusSansHook !== true, 'hookless NEG: a hooked V8 pool is not refused by the rule');

@@ -3063,15 +3063,22 @@ import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVI
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
-import { chargerIndexRouteur, indexRouteurIllisible, indexRouteurLu } from './index-routeur.js';
+import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
+  ajouterNeDuRouteur, selDeCreatePaid } from './index-routeur.js';
 let essaisIndexRouteur = 0;
+/* ⛔ R8 (logique inversee) : par defaut tout B20 non devise est un block (R5). Ces deux sources ne font que RESSERRER, et
+ *   ouvrir la liberation des seuls jetons tiers de la liste blanche quand elles sont TOUTES lues (pool-sans-hook.js). */
 async function chargerIndexBlocksRouteur() {
   try {
     const j = await fetch('/api/blocks-routeur', { cache: 'no-store' }).then((x) => x.json());
     chargerIndexRouteur(j);
   } catch (e) { indexRouteurIllisible('index could not be read'); }
-  /* le serveur rattrape la tete apres son demarrage : on relit vite tant que l index n est pas LU (10 essais) */
-  if (!indexRouteurLu() && essaisIndexRouteur++ < 10) setTimeout(() => { void chargerIndexBlocksRouteur(); }, 20000);
+  try {
+    const n = await fetch('/api/nos-blocks', { cache: 'no-store' }).then((x) => x.json());
+    chargerNosBlocksTb(n);
+  } catch (e) { nosBlocksTbIllisibles('our blocks could not be read'); }
+  /* le serveur rattrape la tete apres son demarrage : on relit vite tant que les sources ne sont pas LUES (10 essais) */
+  if (!sourcesTbLues() && essaisIndexRouteur++ < 10) setTimeout(() => { void chargerIndexBlocksRouteur(); }, 20000);
 }
 void chargerIndexBlocksRouteur();
 setInterval(() => { void chargerIndexBlocksRouteur(); }, 300000);
@@ -17769,6 +17776,8 @@ async function creerBlock() {
     }
     if (rc.etat === 'CONFIRME' && adresseCreee) {
       etape('cree');
+      /* ⛔ R8 (C2 R6-4) : le createur connait le sel de SON block — prouve TB tout de suite, sans attendre l index servi. */
+      if (ibDirect) { try { const sNe = selDeCreatePaid(dataSend); if (sNe) ajouterNeDuRouteur(adresseCreee, sNe); } catch (_) {} }
       /* tip 20260922-same-sig: CreateRouter Instant Birth fee already to sink — remember as prepaye for this block. */
       if (ibDirect && BigInt(valueSend || '0x0') >= FRAIS_OUVERTURE_WEI - CREATE_FEE_WEI_FLOOR && rc.hash) {
         prepayeCourant = { hash: rc.hash, wei: String(BigInt(valueSend || '0x0')), compte: String(compte).toLowerCase(), t: Date.now(), via: 'CreateRouter' };

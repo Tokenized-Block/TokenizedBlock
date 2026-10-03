@@ -124,6 +124,30 @@ try {
   eq([pOffOld.etat, pOffOld.refusHookTiers === true], ['REFUSE', true], 'drapeau OFF, ancien code formeTete : meme refus');
   // temoin : le lecteur n est pas aveugle — la meme comparaison detecte la difference ON/OFF
   ok(pOff.etat !== pOn.etat, 'temoin : le comparateur voit la difference drapeau ON / OFF');
+
+  // ── 3b. R8 (C2, R5-1 restaure) : un jeton o1 ORDINAIRE (BRIAN, B20 lance par o1 sur son LaunchHook Standard), drapeau OFF ──
+  /* ⛔ Logique inversee : BRIAN n est libere (jeton tiers) que si TOUTES les sources TB sont lues ; sinon il reste traite en
+   *   block (R5) : REFUS hook tiers, drapeau OFF. Sources lues : PRET, et les octets drapeau OFF sont IDENTIQUES a l ancien
+   *   code (sans formeTete), comme sur 1bb12d6. Chaque copie a son propre module d index : on le charge dans chacune. */
+  const BRIAN = '0xb2000000000000000000002eefebd3dd6ef2d601';
+  const argsB = { ...args, jeton: BRIAN, marcheLu: { etat: 'LUE', cle: cleDePool(ETH, BRIAN, { fee: 0, tickSpacing: 200, hooks: O1_LAUNCH_HOOK_STANDARD }), paire: null } };
+  const bNon = await planOff(argsB), bNonOld = await planOffOld(argsB);
+  eq([bNon.etat, bNonOld.etat], ['REFUSE', 'REFUSE'], 'BRIAN drapeau OFF, sources TB non lues : traite en block (R5) -> REFUSE');
+  const charge = async (d) => {
+    const IRc = await import(pathToFileURL(join(d, 'index-routeur.js')).href);
+    const Tc = await import(pathToFileURL(join(d, 'tokenomics.js')).href);
+    IRc.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(),
+      blocks: IRc.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) });
+    IRc.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks: [Tc.TBLOCK] });
+    return IRc.sourcesTbLues();
+  };
+  ok((await charge(dOff)) && (await charge(dOffOld)), 'copies : sources TB chargees (index + nos-blocks)');
+  const bOff = await planOff(argsB), bOffOld = await planOffOld(argsB);
+  eq(bOff.etat, 'PRET', 'BRIAN drapeau OFF, sources lues : PRET (jeton o1 tiers, pas un block TB)');
+  eq(bOff.tx.data, bOffOld.tx.data, 'BRIAN drapeau OFF : calldata identique octet pour octet a l ancien code (R5-1)');
+  eq(hookDataLuParUr(bOff.tx.data), '', 'BRIAN drapeau OFF : aucun hookData');
+  const pOffApres = await planOff(args);
+  eq(pOffApres.etat, 'PRET', 'JETON sur o1, sources lues : jeton tiers libere, PRET (meme regle que BRIAN)');
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 }

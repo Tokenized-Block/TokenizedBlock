@@ -11,7 +11,7 @@ import { TBLOCK, TBGAS, HOOK_PREVU, deviseFraisHook, estNotreHook } from './toke
 import { REFERENT_O1_ACTIF, estHookO1Standard } from './referent-o1.js';
 import { estHookMarcheOuvert } from './marche-ouvert.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
-import { estNeDuRouteur, indexRouteurLu } from './index-routeur.js';
+import { estNeDuRouteur, estNotreBlockServi, sourcesTbLues } from './index-routeur.js';
 
 const bas = (a) => String(a || '').toLowerCase();
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -47,9 +47,11 @@ export function estBlockTb(adr, blocks = [], cles = []) {
   const a = bas(adr);
   if (!/^0x[0-9a-f]{40}$/.test(a)) return false;
   if (BLOCKS_TB.has(a)) return true;
-  /* un block = un block TB (classeBlock, 2026-10-03) echange par l appelant ; un B20 d un autre launchpad ou un memecoin
-   * hors B20 n est pas concerne par la regle */
-  return blocks.map(bas).includes(a) && estBlockTbClasse(a, cles);
+  /* R8 (logique inversee) : regle R5 — un jeton 0xb2… echange par l appelant, hors devise connue, est un block — SAUF un
+   * jeton tiers LIBERE (classeBlock 'TIERS'). Un jeton hors 0xb2 n est un block que s il est TB prouve (regle (c)). */
+  if (!blocks.map(bas).includes(a)) return false;
+  const c = classeBlock(a, cles);
+  return c === 'TB' || (a.startsWith('0xb2') && !DEVISES.has(a) && c !== 'TIERS');
 }
 export function formatOpenLaunch(cle) {
   return Number(cle.fee) === 30000 && Number(cle.tickSpacing) === 200;
@@ -126,39 +128,56 @@ export function hookAdmisPourBlock(cle, cles = [cle]) {
   return REFERENT_O1_ACTIF === true && estHookO1Standard(h);
 }
 
-/* ══ 2026-10-03 (Phil 00:20, spec Claude 00:27) — QU EST-CE QU UN « BLOCK TB » POUR LE ROUTAGE ? ═════════════════════════
- * ⛔⛔ Seuls les vrais blocks TB sont restreints (R4, sans-hook, hook tiers, jonction). Un jeton est un block TB si :
- *     (a) il est ne du CreateRouter (index-routeur.js : graine + index servi, formule neDuRouteur du hook 7030) ;
- *     (b) TBLOCK / TBGAS (BLOCKS_TB), ou un des blocks V1 de test (RNG, TUTU, OK, O ; TBGAS en est aussi) qui gardent leurs regles ;
- *     (c) son marche lu est sur un de NOS hooks (estNotreHook) — une des `cles` passees, ou un marche deja vu par l app
- *         (noterMarcheSurNotreHook). Couvre les anciens blocks nes de la factory.
- *     Un B20 qu aucune regle ne classe : TIERS si l index est LU (echangeable comme sur 1bb12d6, frais routeur en ETH/USDC),
- *     INCONNU sinon — traite en block (fail-closed), ce qui ne refuse que ses pools SANS hook TB.
+/* ══ 2026-10-03 R8 (C2 KO R6 ; decision Raksha) — LOGIQUE INVERSEE : PAR DEFAUT, R5 ═══════════════════════════════════════
+ * ⛔⛔ Par defaut tout B20 (0xb2 + 20 zeros) qui n est pas une devise connue est un BLOCK : refuse hors hooks TB, OpenLaunch
+ *     3 % / 200 et o1 avec REFERENT_O1_ACTIF — exactement R5. classeBlock rend :
+ *       'TB'      prouve TB : BLOCKS_TB, blocks V1 de test, liste statique sur nos hooks / fondateur, ne d un de nos
+ *                 routeurs (graine + index), /api/nos-blocks, ou marche sur un de NOS hooks (contexte / poolsLive) ;
+ *       'TIERS'   LIBERE : B20 absent de l ensemble TB, ET dans la liste blanche (liste explicite, ou marche lu sur un hook
+ *                 de launchpad tiers connu), ET toutes les sources TB servies LUES (index routeur + /api/nos-blocks) ;
+ *       'INCONNU' tout autre B20 : traite en block (defaut R5) ;
+ *       null      devise connue, adresse invalide, ou jeton hors B20 sans marche sur nos hooks.
+ * ⛔ Une erreur de l index ou de la liste blanche ne peut que GARDER un jeton tiers bloque ; elle ne libere jamais un block TB
+ *   (la liberation exige l absence de l ensemble TB et des sources lues). L index ne fait que RESSERRER.
  * ⛔ CLASSEMENT DE ROUTAGE SEULEMENT : rien ici ne decide de l affichage (carte, fil, profils, listes).
- * ⛔ Une devise connue (ETH, USDC, OUSD, actions…) n est jamais un block ; un jeton hors B20 ne l est que par (c). */
+ * ⛔ Point d entree futur « migrer vers un hook TB » : un jeton TIERS qui ouvre une pool sur nos hooks devient TB (regle (c)). */
 const BLOCKS_V1_TEST = new Set(['0xb2000000000000000000004ff41cbd5ef8e49f14', '0xb20000000000000000000071224edc6587e362d2',
   '0xb2000000000000000000006d6f9102e9e4b221e0', '0xb200000000000000000000a3f3e63b48ef57c481']);
-/* ⛔⛔ R7 (Zero 1, K2) : la regle (c) ne doit pas dependre de ce que l app a deja vu. Liste STATIQUE et COMPLETE des jetons qui
- *   ont une pool sur un de NOS hooks (estNotreHook : V1 HOOK_PREVU, V2…V8 ; 7030 sans code), lue sur la chaine : Initialize du
- *   PoolManager 0x4985…2b2b de 51 355 025 (1er bloc avec code de HOOK_PREVU) a 52 098 430, 744 fenetres, 0 ratee, 72 361
- *   Initialize, 10 pools sur nos hooks (fix-r4-logs/r7/scan-hooks.json). Les 11 devises non connues de ces pools : */
+/* ⛔⛔ R7 (Zero 1, K2) : liste STATIQUE et COMPLETE des jetons qui ont une pool sur un de NOS hooks (estNotreHook : V1
+ *   HOOK_PREVU, V2…V8 ; 7030 sans code), lue sur la chaine : Initialize du PoolManager 0x4985…2b2b de 51 355 025 a
+ *   52 098 430, 744 fenetres, 0 ratee, 10 pools (fix-r4-logs/r7/scan-hooks.json). R8 : SPCXc (0xb2…7b9fcbd005511acbd5, une
+ *   action, devise connue) retire. Plus les blocks du fondateur servis par /api/nos-blocks (lu 2026-10-02 22:37 UTC). */
 export const BLOCKS_SUR_NOS_HOOKS = Object.freeze([
   '0xb200000000000000000000df3ffcd9be89b3843c', /* TBGAS     V1 51360108 */
   '0xb2000000000000000000004ff41cbd5ef8e49f14', /* RNG       V1 51478831 */
   '0xb20000000000000000000071224edc6587e362d2', /* TUTU      V1 51479454 */
   '0xb2000000000000000000006d6f9102e9e4b221e0', /* OK        V1 51484540 */
   '0xb200000000000000000000a3f3e63b48ef57c481', /* O         V1 51486012 */
-  '0xb200000000000000000000ab549fa65ad4edae3f', /*           V2 51527429 */
+  '0xb200000000000000000000ab549fa65ad4edae3f', /*           V2 51527429 (aussi /api/nos-blocks) */
   '0xb200000000000000000000809778b2d38d114351', /*           V2 51531218 */
   '0xb200000000000000000000e4b0c5fbe9c8df579e', /* IB022     V8 51653364 */
   '0xb200000000000000000000baa5356bfc210cc30a', /* routeur   V8 51662444 */
-  '0xb2000000000000000000007b9fcbd005511acbd5', /* (c0)      V8 51955308, pool block/block */
   '0xb200000000000000000000e7e9db76e8234f8f56', /* routeur   V8 51955308 */
+  '0xb20000000000000000000003d296be435ae4bbe3', /* fondateur /api/nos-blocks, sans marche v4 */
 ]);
-/* BACKLOG (non construit) : version durable = le serveur indexe aussi les Initialize du PoolManager sur nos hooks (comme
- *   /api/blocks-routeur) et l app les ajoute a cet ensemble ; d ici la, une pool ouverte plus tard sur nos hooks par un jeton
- *   qui n est pas ne du routeur n est TB que par le contexte / poolsLive (noterMarcheSurNotreHook). */
+/* BACKLOG (non construit) : version durable = le serveur indexe aussi les Initialize du PoolManager sur nos hooks. */
 const SUR_NOS_HOOKS = new Set(BLOCKS_SUR_NOS_HOOKS);
+/* ── LISTE BLANCHE (liberation des seuls vrais jetons tiers) ──
+ * Hooks de launchpads TIERS connus (lus sur la chaine / dans le depot) : un B20 dont le marche lu est sur l un d eux est un
+ * jeton de ce launchpad. o1 Standard / Tax : lancements-etrangers.js (LAUNCHPADS) ; Clanker ClankerHookStaticFeeV2 et Doppler
+ * DopplerHookInitializer : noms verifies Blockscout (2026-10-03) ; 0xe1ef… : le hook de lancement de PEXRA (sa pool V4 lue). */
+export const HOOKS_LAUNCHPADS_TIERS = Object.freeze([
+  '0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc', /* o1 Launchpad Standard */
+  '0x9c7155d7216454d9d894f792c8b5c564f2c66acc', /* o1 Launchpad Tax */
+  '0xa10a6f4b918e963ec8694d37aa22e438706fe8cc', /* Clanker ClankerHookStaticFeeV2 */
+  '0xbdf938149ac6a781f94faa0ed45e6a0e984c6544', /* Doppler DopplerHookInitializer */
+  '0xe1efe2ba62af522897dbfb44b9bf0be2136700cc', /* launchpad de PEXRA */
+]);
+/** Liste explicite de B20 tiers (verifies : hors routeur, hors nos hooks, hors /api/nos-blocks). */
+export const JETONS_TIERS_EXPLICITES = Object.freeze([
+  '0xb200000000000000000000c21042dc554628d2ac', /* PEXRA : B20Created 52 091 810 par l EOA 0xe417…c3b8, pool sur 0xe1ef… */
+]);
+const HOOKS_TIERS = new Set(HOOKS_LAUNCHPADS_TIERS), TIERS_EXPLICITES = new Set(JETONS_TIERS_EXPLICITES);
 const marchesSurNosHooks = new Set();
 /** L app a lu un marche (cle V4) sur un de NOS hooks : ses devises non connues sont des blocks TB (regle (c)). */
 export function noterMarcheSurNotreHook(cle) {
@@ -170,13 +189,17 @@ function surNotreHook(a, cles) {
   return marchesSurNosHooks.has(a) || (Array.isArray(cles) ? cles : []).some((c) => !!c && estNotreHook(c.hooks)
     && (bas(c.currency0) === a || bas(c.currency1) === a));
 }
-/** 'TB' | 'TIERS' | 'INCONNU' | null (devise connue, adresse invalide, ou jeton hors B20 sans marche sur nos hooks). */
+function listeBlanche(a, cles) {
+  return TIERS_EXPLICITES.has(a) || (Array.isArray(cles) ? cles : []).some((c) => !!c && HOOKS_TIERS.has(bas(c.hooks))
+    && (bas(c.currency0) === a || bas(c.currency1) === a));
+}
+/** 'TB' | 'TIERS' | 'INCONNU' | null — voir l en-tete R8 ci-dessus. */
 export function classeBlock(adr, cles = []) {
   const a = bas(adr);
   if (!/^0x[0-9a-f]{40}$/.test(a) || DEVISES.has(a)) return null;
-  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) || estNeDuRouteur(a) || surNotreHook(a, cles)) return 'TB';
+  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) || estNeDuRouteur(a) || estNotreBlockServi(a) || surNotreHook(a, cles)) return 'TB';
   if (!RE_B20.test(a)) return null;
-  return indexRouteurLu() ? 'TIERS' : 'INCONNU';
+  return listeBlanche(a, cles) && sourcesTbLues() ? 'TIERS' : 'INCONNU';
 }
 /** Vrai = traiter ce jeton en block TB au routage (TB prouve, ou INCONNU : fail-closed). */
 export function estBlockTbClasse(adr, cles = []) {

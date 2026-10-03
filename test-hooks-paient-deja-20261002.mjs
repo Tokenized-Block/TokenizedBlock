@@ -112,7 +112,7 @@ try {
   ok(!routePaieDejaA6cf([sauts[0], { ...sauts[1], cle: { ...sauts[1].cle, currency0: USDC_BASE } }], liste), 'temoin negatif : jambe hors ETH -> frais routeur garde');
   /* ⛔ 2026-10-02 Phil : « UNE FOIS PAR SWAP ». Le routeur s efface des qu UNE jambe paie deja a6cf
    *   (remplace la regle « chaque jambe » de 50a3d14). Le temoin negatif est donc une route ou AUCUNE jambe ne paie. */
-  const planMS = (ss, hooksPaieurs) => planEchangeMultiSauts({ rpc: makeRpc(), chaine: 8453, compte: COMPTE, sauts: ss,
+  const planMS = (ss, hooksPaieurs, mod = { planEchangeMultiSauts }) => mod.planEchangeMultiSauts({ rpc: makeRpc(), chaine: 8453, compte: COMPTE, sauts: ss,
     entree: USDC_BASE, sortie: JETON, montant: 50n * 10n ** 6n, decimalesEntree: 6, prixUsdEntree: 1,
     maintenant: Date.now(), ...(hooksPaieurs ? { hooksPaieurs } : {}) });
   const routeur0 = (p) => ['PRET', 'APPROBATIONS'].includes(p.etat) && p.resume && p.resume.frais === 0n && p.resume.fraisBps === 0n;
@@ -122,8 +122,13 @@ try {
   const mOn = await planMS(tousPaient, liste);
   /* 2026-10-02 (fix R4, Zero 1) : deux jambes hookees = deux frais de hook sur la chaine -> refus, aucun frais routeur */
   ok(mOn.etat === 'REFUSE' && mOn.refusPlusieursHooks === true, 'cas 3 : jambe 1 V8 + V8-open en 2e jambe (liste injectee) -> refus deux hooks (' + mOn.etat + ')');
-  const mTrou = await planMS(sauts, liste);
+  /* ⛔ R8 (C2, R5-2) : une liste passee par l APPELANT ne garde que nos hooks et HOOKS_PAIENT_DEJA_A6CF du depot. Le V8-open
+   *   « deploye » se teste donc dans la COPIE (ou il est dans HOOKS_MARCHE_OUVERT, donc dans sa liste) ; dans le depot, la
+   *   meme liste injectee est ignoree -> hook tiers sur la pool du block -> REFUSE. */
+  const mTrou = await planMS(sauts, liste, copie);
   ok(routeur0(mTrou), 'une fois par swap : jambe 1 sans hook + V8-open LISTE en 2e jambe -> 0 frais routeur (' + mTrou.etat + ')');
+  const mInj = await planMS(sauts, liste);
+  ok(mInj.etat === 'REFUSE' && mInj.refusHookTiers === true, 'R5-2 : depot, V8-open injecte par l appelant (hors nos hooks / liste) -> ignore, REFUSE hook tiers (' + mInj.etat + ')');
   const mOff = await planMS(sauts, null);
   ok(!copieTk.hookPaieDejaA6cf(OPEN_NOUVEAU, 'VENTE', HOOKS_PAIENT_DEJA_A6CF), 'temoin du temoin : le V8-open n est PAS dans la liste du depot');
   /* ⛔ 2026-10-02 (C2, F1) : hors liste, le V8-open est un hook TIERS sur la pool du block -> REFUS (avant : frais routeur pris). */

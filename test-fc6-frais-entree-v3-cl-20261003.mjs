@@ -4,6 +4,8 @@
  *   par sweepTokenWithFee. Correctifs : (1) planAchatUsdcV3 refuse un block TB AVANT toute lecture (garde de Zero 1) ;
  *   (2) sur Aerodrome (frais en SORTIE) le frais n est pris que si la sortie est une devise connue ; (3) garde de profondeur
  *   dans calldataExactInputAvecFrais ; (4) Uniswap v3 : frais sur l ENTREE USDC (PERMIT2_TRANSFER_FROM), inchange.
+ * R8 (logique inversee, C2) : XC n est pas dans la liste blanche -> traite en block dans TOUS les etats de l index (REFUSE avant
+ *   toute lecture). Le jeton NON TB libere est PEXRA (liste explicite), et seulement sources TB lues.
  * XC = 0xb200000000000000000000cfbdf64a8706a94a01 : sa pool CL USDC/XC est nee au bloc 50 490 577 (avant le Block 0 de TB,
  *   50 861 088, et avant le CreateRouter, 51 354 834) — PAS un block TB au sens R6 ; il n est refuse que si l index est illisible.
  * ⛔ TEMOINS NEGATIFS : copie du depot (verte), puis mutants (chacun doit rougir). Le rpc est scripte et COMPTE ses appels. */
@@ -20,6 +22,7 @@ const charger = async (dir) => ({ V3: await imp(dir, 'echange-v3.js'), PO: await
 const bas = (a) => String(a).toLowerCase();
 const XC = '0xb200000000000000000000cfbdf64a8706a94a01';
 const POOL_XC = '0x3dfdecc334a8f2618321c78a9de0e9428438f871';
+const PEXRA = '0xb200000000000000000000c21042dc554628d2ac';
 const NE_ROUTEUR = '0xb20000000000000000000005090fb1d9da0e5949';
 const POOL_X = '0x' + '7'.repeat(40);
 const COMPTE = '0x041e9e88288c0c62b8549c50a759a74a1a65b6b7';
@@ -66,7 +69,8 @@ async function banc(M) {
   };
   const pret = (r) => r.etat === 'PRET' || r.etat === 'APPROBATIONS';
   const data = (r) => bas((r.plan && r.plan.appel && r.plan.appel.data) || '');
-  const LU = () => IR.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 1, jusqua: 1, blocks: [] });
+  const LU = () => { IR.chargerIndexRouteur({ ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 1, jusqua: 1, teteLueA: Date.now(),
+    blocks: IR.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) }); IR.chargerNosBlocksTb({ ok: true, couvertureComplete: true, fenetresRatees: 0, blocks: ['0xb20000000000000000000024c30d3fcb7931272e'] }); };
 
   LU();
   /* ══ 1. un block TB : REFUSE avant toute lecture de chaine ══ */
@@ -74,16 +78,20 @@ async function banc(M) {
     const { r, lectures } = await achat(NE_ROUTEUR, POOL_X, fam, 200);
     v('TB ' + fam + ' : block ne du routeur -> REFUSE, 0 lecture', r.etat === 'REFUSE' && r.refusBlocSansHookTb === true && lectures === 0, r.etat + ' lectures=' + lectures);
   }
+  { const { r, lectures } = await achat(XC, POOL_XC, 'cl', 200);
+    v('TB XC index LU (hors liste blanche = block) -> REFUSE, 0 lecture', r.etat === 'REFUSE' && r.refusBlocSansHookTb === true && lectures === 0, r.etat + ' lectures=' + lectures); }
   IR.indexRouteurIllisible('test');
   { const { r, lectures } = await achat(XC, POOL_XC, 'cl', 200);
-    v('TB XC index illisible (non classe) -> REFUSE, 0 lecture', r.etat === 'REFUSE' && lectures === 0, r.etat + ' lectures=' + lectures); }
+    v('TB XC index illisible -> REFUSE, 0 lecture', r.etat === 'REFUSE' && lectures === 0, r.etat + ' lectures=' + lectures);
+    const p = await achat(PEXRA, POOL_X, 'cl', 200);
+    v('TB PEXRA index illisible : rien n est libere -> REFUSE, 0 lecture', p.r.etat === 'REFUSE' && p.lectures === 0, p.r.etat); }
   LU();
   /* ══ 2. jeton NON TB : a6cf jamais paye dans ce jeton ; Uniswap v3 : frais pris sur l ENTREE USDC ══ */
-  { const { r } = await achat(XC, POOL_XC, 'cl', 200);
-    v('NT XC sur Aerodrome (index lu, tiers) : planifie, AUCUN frais dans XC (a6cf absent du calldata)', pret(r) && r.plan && r.plan.beneficiaireFrais === null
+  { const { r } = await achat(PEXRA, POOL_X, 'cl', 200);
+    v('NT PEXRA sur Aerodrome (sources lues, tiers libere) : planifie, AUCUN frais dans PEXRA (a6cf absent du calldata)', pret(r) && r.plan && r.plan.beneficiaireFrais === null
       && Number(r.plan.fraisBps) === 0 && !data(r).includes(A6), r.etat + ' ' + (r.pourquoi || '') + ' benef=' + (r.plan && r.plan.beneficiaireFrais)); }
-  { const { r } = await achat(XC, POOL_X, 'v3', 0);
-    v('NT XC sur Uniswap v3 : frais sur l ENTREE USDC vers a6cf', pret(r) && r.plan && bas(r.plan.beneficiaireFrais || '') === bas(F.FEE_WALLET)
+  { const { r } = await achat(PEXRA, POOL_X, 'v3', 0);
+    v('NT PEXRA sur Uniswap v3 : frais sur l ENTREE USDC vers a6cf', pret(r) && r.plan && bas(r.plan.beneficiaireFrais || '') === bas(F.FEE_WALLET)
       && Number(r.plan.fraisBps) > 0 && r.plan.jetonPaye === USDC && data(r).includes(A6), r.etat + ' ' + (r.pourquoi || '')); }
   /* ══ 3. TSLAc (action appariee) : toujours PRET, frais pris ══ */
   { const { r } = await achat(TSLA, POOL_X, 'cl', 10);
@@ -128,12 +136,12 @@ let nAssert = 0, ko = 0;
 const ok = (c, m) => { nAssert += 1; if (!c) { ko += 1; console.log('  KO ' + m); } };
 const MUTANTS = [
   { nom: 'm1 garde F-c6 de Zero 1 retiree', edits: [['echange-v3.js', "if (estBlockAJonction(block)) return { etat: 'REFUSE', pourquoi: MESSAGE_PAS_ICI, refusBlocSansHookTb: true };", '']], casse: [/^TB /] },
-  { nom: 'm2 frais CL meme si la sortie n est pas une devise', edits: [['echange-v3.js', '(porteNotreFrais(porteFrais) && estDeviseConnue(block))', 'porteNotreFrais(porteFrais)']], casse: [/^NT XC sur Aerodrome/] },
+  { nom: 'm2 frais CL meme si la sortie n est pas une devise', edits: [['echange-v3.js', '(porteNotreFrais(porteFrais) && estDeviseConnue(block))', 'porteNotreFrais(porteFrais)']], casse: [/^NT PEXRA sur Aerodrome/] },
   { nom: 'm2b frais CL coupe pour tout le monde', edits: [['echange-v3.js', '(porteNotreFrais(porteFrais) && estDeviseConnue(block))', 'false']], casse: [/^TSLAc sur Aerodrome/] },
   { nom: 'm3 garde de profondeur retiree', edits: [['calldata-aerodrome.js', "if (sortieFrais && !estDeviseConnue(sortieFrais) && sortieFrais !== WETH_SORTIE_FRAIS) {", 'if (false) {']], casse: [/^GARDE sweep dans XC/] },
   { nom: 'm5 plan-eth-block : frais meme dans un block (garde F-c6 retiree, garde de profondeur aussi)', edits: [['plan-eth-block.js', '&& estDeviseConnue(troisSauts ? block : action);', ';'], ['calldata-aerodrome.js', "if (sortieFrais && !estDeviseConnue(sortieFrais) && sortieFrais !== WETH_SORTIE_FRAIS) {", 'if (false) {']], casse: [/^ETH3 /] },
   { nom: 'm5b plan-eth-block : garde F-c6 retiree seule (la profondeur refuse alors l achat)', edits: [['plan-eth-block.js', '&& estDeviseConnue(troisSauts ? block : action);', ';']], casse: [/^ETH3 /] },
-  { nom: 'm4 frais v3 sur l entree retire', edits: [['plan-usdc-block.js', "const fraisV3 = famille === 'v3' &&", 'const fraisV3 = false &&']], casse: [/^NT XC sur Uniswap v3/, /^TSLAc sur Uniswap v3/] },
+  { nom: 'm4 frais v3 sur l entree retire', edits: [['plan-usdc-block.js', "const fraisV3 = famille === 'v3' &&", 'const fraisV3 = false &&']], casse: [/^NT PEXRA sur Uniswap v3/, /^TSLAc sur Uniswap v3/] },
 ];
 try {
   const reel = await banc(await charger(ICI));

@@ -15,7 +15,7 @@
 // ⛔ BUYBACK : le wallet de frais qui achete TBLOCK ne se paie pas de frais a lui-meme (frais = 0).
 // ⛔ AVANT DE PROPOSER LA SIGNATURE, LA CHAINE EST INTERROGEE : quote (prix reel), forme de struct acceptee,
 //    puis eth_call de la transaction exacte. Une lecture ratee = rien a signer.
-import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook,
+import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFraisHook, filtrerHooksPayeurs,
   HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030,
   HOOK_V9, V9_PAIE_DEJA_A6CF, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
@@ -837,6 +837,8 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   let frais = 0n, bps = 0n, degressif = null;
   /* ⛔ garde a l execution (Zero 1, patch runtime-guard-empty-v8open) : drapeau marche ouvert ON + liste V8-open vide
    *   -> toute jambe sur un hook inclassable est refusee avant toute lecture. */
+  /* ⛔ R8 (C2, R5-2) : seuls NOS hooks et HOOKS_PAIENT_DEJA_A6CF restent dans la liste de l appelant. */
+  hooksPaieurs = filtrerHooksPayeurs(hooksPaieurs);
   const refusMO = refusMarcheOuvertIncoherent(sauts, { ...(marcheOuvert || {}), liste: hooksPaieurs });
   if (refusMO) return { etat: 'REFUSE', pourquoi: refusMO };
   /* ⛔⛔ 2026-10-02 (C2, F1) : meme regle saut par saut (apres les regles R4 et la garde marche ouvert, qui restent seules juges de leurs cas) — un block sur une pool a hook tiers -> refus avant la cotation. */

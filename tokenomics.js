@@ -199,6 +199,16 @@ export const HOOKS_PAIENT_DEJA_A6CF = Object.freeze([
   { hook: HOOK_PREVU, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
   { hook: HOOK_V2, sens: Object.freeze(['VENTE']), preuve: 'fork 52072599 callTracer' },
 ].map((e) => Object.freeze(e)));
+/** R8 (C2, R5-2) : une liste de hooks « payeurs / facturants » passee par un APPELANT ne garde que NOS hooks (estNotreHook)
+ *  et ceux de HOOKS_PAIENT_DEJA_A6CF — jamais un hook quelconque (qui serait alors admis sur une pool de block ou
+ *  dispenserait le routeur de son frais). Entrees { hook, … } ou adresses ; l ordre est garde. */
+export function filtrerHooksPayeurs(liste) {
+  const connus = new Set(HOOKS_PAIENT_DEJA_A6CF.map((e) => String(e.hook).toLowerCase()));
+  return (Array.isArray(liste) ? liste : []).filter((e) => {
+    const h = String((e && e.hook) || e || '').toLowerCase();
+    return /^0x[0-9a-f]{40}$/.test(h) && (estNotreHook(h) || connus.has(h));
+  });
+}
 /** Vrai = ce hook verse deja a6cf en ETH pour ce sens -> le routeur ne prend PAS son frais en plus. */
 export function hookPaieDejaA6cf(h, sens, liste = HOOKS_PAIENT_DEJA_A6CF) {
   const x = String(h || '').toLowerCase();

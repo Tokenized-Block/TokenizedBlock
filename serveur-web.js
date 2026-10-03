@@ -100,7 +100,7 @@ import { selecteur as selecteurSrv } from './keccak.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
-import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR } from './index-routeur.js';
+import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX } from './index-routeur.js';
 import { veiller } from './veille-pot.js';
 import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
@@ -875,12 +875,13 @@ async function resoudreFace(token) {
  *    (index-routeur.js, RETARD_MAX_INDEX). Une fenetre ratee est COMPTEE, jamais tue. Lecture seule, aucune signature. */
 const PAS_ROUTEUR = 2000;
 const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
-  tete: null, ratees: 0, lu: null };
+  tete: null, teteLueA: null, ratees: 0, lu: null };
 let routeurEnCours = null;
 async function etendreBlocksRouteur() {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   if (!Number.isSafeInteger(tete)) return;
   routeurEtat.tete = tete;
+  routeurEtat.teteLueA = Date.now(); /* R8 (C2 R6-3) : l app refuse une tete figee */
   if (routeurEtat.jusqua >= tete) return;
   const aBloc = Math.min(tete, routeurEtat.jusqua + PAS_ROUTEUR);
   const r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
@@ -907,8 +908,10 @@ function blocksRouteurCorps() {
   rattraperBlocksRouteur();
   return JSON.stringify({ ok: true, lu: routeurEtat.lu, blocks: [...routeurEtat.blocks.values()],
     depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua, tete: routeurEtat.tete, plancher: PLANCHER_ROUTEUR,
-    couvertureComplete: routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null,
-    fenetresRatees: routeurEtat.ratees });
+    /* R8 (C2 R6-3) : couverture REELLE — contigue depuis le plancher, 0 trou, et jusqu a la tete (retard borne). */
+    couvertureComplete: routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null && !routeurEtat.ratees
+      && routeurEtat.tete - routeurEtat.jusqua <= RETARD_MAX_INDEX,
+    teteLueA: routeurEtat.teteLueA, fenetresRatees: routeurEtat.ratees });
 }
 
 /* ⛔⛔ « NOS BLOCKS », CALCULE ICI ET PAS DANS LA PAGE (Phil, 2026-09-20 : « faut expandre depuis le

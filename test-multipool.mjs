@@ -134,18 +134,25 @@ console.log('=== 6. un seul frais par jambe, reglement apres le swap ===');
   const { HOOKS_FACTURANTS, routeFactureeParHook, unFraisParJambe, ensembleHooksFacturants, OPEN_DELTA } = mp;
   /* les actions V4 a l interieur d un V4_SWAP : mot(0x40) | mot(off) | longueur | codes */
   const actionsV4 = (h) => { const L = Number(BigInt('0x' + h.slice(128, 192))); return h.slice(192, 192 + 2 * L).match(/../g).join(','); };
-  const V9 = '0x' + '9'.repeat(36) + '24cc'; /* un hook V9 / 24 h passe par l appelant (adresse de test) */
+  /* ⛔ R8 (C2, R5-2) : un hook nomme par l appelant n est facturant que s il est a NOUS ou dans HOOKS_PAIENT_DEJA_A6CF.
+   *   V9 = un de nos hooks (HOOK_V2) nomme facturant par l appelant ; INC = un hook inconnu, jamais facturant meme nomme. */
+  const V9 = (await import('./tokenomics.js')).HOOK_V2.toLowerCase();
+  const INC = '0x' + '9'.repeat(36) + '24cc';
   const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c', BLOC = '0xb2000000000000000000000000000000000b10c0';
   const jambeV9 = v4(NVDA < BLOC ? NVDA : BLOC, NVDA < BLOC ? BLOC : NVDA, 0, 200, V9);
   const adm9 = new Set([...ADMISES, NVDA]);
   const vente = [{ de: BLOC, vers: NVDA, e: jambeV9 }];
+  const venteInc = [{ de: BLOC, vers: NVDA, e: v4(NVDA < BLOC ? NVDA : BLOC, NVDA < BLOC ? BLOC : NVDA, 0, 200, INC) }];
   ok('6a. V8 est dans la liste fermee des hooks facturants', HOOKS_FACTURANTS.includes('0x5926abdabf5d0006ee960a8270f3e124e5a764cc'));
-  ok('6b. un hook inconnu n est PAS facturant tant que l appelant ne le nomme pas', !routeFactureeParHook(vente) && routeFactureeParHook(vente, ensembleHooksFacturants([V9])));
+  ok('6b. un hook inconnu n est PAS facturant, MEME nomme (R5-2) ; un de nos hooks l est quand l appelant le nomme', !routeFactureeParHook(venteInc)
+    && !routeFactureeParHook(venteInc, ensembleHooksFacturants([INC])) && !routeFactureeParHook(vente) && routeFactureeParHook(vente, ensembleHooksFacturants([V9])));
   /* sans le nommer : le routeur preleve (au noeud NVDAc, 9 bps) ; en le nommant : RIEN */
-  const sansNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1 });
+  const sansNom = construireRoute({ ...base, admises: adm9, chemin: venteInc, fraisIndice: 1 });
+  const incNomme = construireRoute({ ...base, admises: adm9, chemin: venteInc, fraisIndice: 1, hooksFacturants: [INC] });
   const avecNom = construireRoute({ ...base, admises: adm9, chemin: vente, fraisIndice: 1, hooksFacturants: [V9] });
   /* ⛔ 2026-10-02 (C2, F1) : un hook NON nomme sur une pool de block est un hook TIERS -> REFUS (avant : 1 PAY_PORTION). */
-  ok('6c. F1 : hook non nomme sur un block => REFUSE (hook tiers), texte Not tradable here yet', sansNom.etat === 'REFUSE' && sansNom.refusBlocSansHookTb === true && /^Not tradable here yet/.test(sansNom.pourquoi), sansNom.etat + ' ' + sansNom.pourquoi);
+  ok('6c. F1 : hook inconnu sur un block => REFUSE (hook tiers), texte Not tradable here yet — nomme ou non (R5-2)', sansNom.etat === 'REFUSE' && sansNom.refusBlocSansHookTb === true && /^Not tradable here yet/.test(sansNom.pourquoi)
+    && incNomme.etat === 'REFUSE' && incNomme.refusBlocSansHookTb === true, sansNom.etat + ' ' + sansNom.pourquoi + ' / ' + incNomme.etat);
   ok('6d. hook facturant nomme => 0 PAY_PORTION, 0 part : seul le hook facture la jambe', avecNom.etat === 'PRET' && !avecNom.commandes.includes(CMD.PAY_PORTION) && !avecNom.commandes.includes(CMD.TRANSFER) && avecNom.fraisParHook === true, avecNom.commandes.join(','));
   ok('6e. a6cf n apparait nulle part dans le calldata du routeur (le hook paie a6cf lui-meme)', !avecNom.data.includes(FEE_WALLET.slice(2)));
   /* 0,18 % IMPOSSIBLE : toute tentative d ajouter une part routeur sur une jambe facturee est REFUSEE */
@@ -191,7 +198,10 @@ console.log('=== 7. une fois par swap ===');
   const nbA6cf = (t) => (t && t.data ? t.data.split(FEE_WALLET.slice(2)).length - 1 : -1);
   const nbPP = (t) => (t && t.commandes ? t.commandes.filter((c) => c === CMD.PAY_PORTION).length : -1);
   const NVDA = '0xb20000000000000000000078ee7ce2fe4908108c', BLOC = '0xb2000000000000000000000000000000000b10c0';
-  const HTB = '0x' + '9'.repeat(36) + '24cc'; /* un hook TB facturant passe par l appelant (adresse de test) */
+  /* ⛔ R8 (C2, R5-2) : un hook facturant passe par l appelant doit etre a NOUS (ou dans HOOKS_PAIENT_DEJA_A6CF) : HOOK_V2 ici.
+   *   INC (inconnu) reste un hook tiers, nomme ou non. */
+  const HTB = (await import('./tokenomics.js')).HOOK_V2.toLowerCase();
+  const INC7 = '0x' + '9'.repeat(36) + '24cc';
   const trie = (a, b) => (a < b ? [a, b] : [b, a]);
   const adm = new Set([...ADMISES, NVDA]);
   const H8 = ensembleHooksFacturants();
@@ -229,9 +239,12 @@ console.log('=== 7. une fois par swap ===');
   vus = [];
   const qm = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm, hooksFacturants: [HTB] });
   ok('7l. AAPLc -> NVDAc -> block (hook TB) : frais routeur 0, la 1re jambe recoit 1e8 brut', qm.etat === 'OK' && qm.frais === 0n && qm.fraisParHook === true && vus[0].data.includes((10n ** 8n).toString(16).padStart(64, '0')), String(qm.frais));
-  const qmSans = await coterChemin({ rpc: espion, chemin: mixte, montant: 10n ** 8n, admises: adm });
+  const mixteInc = [{ de: AAPL, vers: NVDA, e: libre(AAPL, NVDA) }, { de: NVDA, vers: BLOC, e: v4(...trie(NVDA, BLOC), 0, 200, INC7) }];
+  const qmSans = await coterChemin({ rpc: espion, chemin: mixteInc, montant: 10n ** 8n, admises: adm });
+  const qmInc = await coterChemin({ rpc: espion, chemin: mixteInc, montant: 10n ** 8n, admises: adm, hooksFacturants: [INC7] });
   /* ⛔ 2026-10-02 (C2, F1) : hook NON declare sur la jambe du block = hook TIERS -> REFUS (avant : frais routeur 90000 au noeud 0). */
-  ok('7m. TEMOIN F1 : le MEME chemin, hook NON declare => REFUSE (hook tiers sur un block)', qmSans.etat === 'REFUSE' && qmSans.refusBlocSansHookTb === true, qmSans.etat + ' ' + qmSans.pourquoi);
+  ok('7m. TEMOIN F1 : le meme chemin sur un hook INCONNU => REFUSE (hook tiers sur un block), nomme ou non (R5-2)', qmSans.etat === 'REFUSE' && qmSans.refusBlocSansHookTb === true
+    && qmInc.etat === 'REFUSE' && qmInc.refusBlocSansHookTb === true, qmSans.etat + ' ' + qmSans.pourquoi + ' / ' + qmInc.etat);
   const rm = construireRoute({ ...base, admises: adm, montant: 10n ** 8n, chemin: mixte, fraisIndice: 0, hooksFacturants: [HTB] });
   ok('7n. route : 0 PAY_PORTION, a6cf x0, 0 part', rm.etat === 'PRET' && nbPP(rm) === 0 && nbA6cf(rm) === 0 && !rm.commandes.includes(CMD.TRANSFER), rm.commandes && rm.commandes.join(','));
   ok('7o. garde : 0 PAY_PORTION OK ; 1 et 2 REJETES', unFraisParJambe(rm, mixte, HT) && !unFraisParJambe({ commandes: ['06', '10', '04'] }, mixte, HT) && !unFraisParJambe({ commandes: ['06', '06', '10', '04'] }, mixte, HT));
