@@ -87,8 +87,13 @@ async function banc(dir) {
   const G_ = { gen, T, HOOK_V8: TK.HOOK_V8 };
   const logs = chaine(G_);
   const vite = () => Promise.resolve();
+  /* F5 : sources TB servies (telles qu un serveur a jour les sert) ; `nos` = les 4 blocks de prod, + `plusNos` */
+  const PROD4 = ['0xb20000000000000000000024c30d3fcb7931272e', '0xb20000000000000000000003d296be435ae4bbe3', '0xb200000000000000000000e63ffc3f40bf92a042', '0xb200000000000000000000ab549fa65ad4edae3f'];
+  const SRC = ({ plusNos = [], nos = {} } = {}) => ({ routeur: { ok: true, couvertureComplete: true, fenetresRatees: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(),
+    blocks: T.GRAINE_ROUTEUR.map((g) => ({ jeton: g.jeton, sel: g.sel })) },
+    nos: { ok: true, couvertureComplete: true, fenetresRatees: 0, fenetresEnAttente: 0, tete: 52100000, jusqua: 52100000, teteLueA: Date.now(), blocks: [...PROD4, ...plusNos], ...nos } });
   const run = async (opts = {}, args = {}) => { const f = rpcFictif(logs, opts);
-    try { return { f, r: await gen.generer({ rpc: f.rpc, de: 100, attendre: vite, pauseMs: 0, ...args }) }; } catch (e) { return { f, err: String(e.message || e) }; } };
+    try { return { f, r: await gen.generer({ rpc: f.rpc, de: 100, attendre: vite, pauseMs: 0, sourcesTb: SRC(), ...args }) }; } catch (e) { return { f, err: String(e.message || e) }; } };
 
   /* G1 fenetres */
   const { f, r } = await run();
@@ -143,9 +148,20 @@ async function banc(dir) {
     PS.BLOCKS_SUR_NOS_HOOKS.every((x) => !S.has(x)) && !!NL.COMPTES_NES_LAUNCHPADS && NL.COMPTES_NES_LAUNCHPADS.surNosHooks === 0);
   /* G13 la ligne de commande : RPC injoignable -> code 1, fichier intact */
   const cible = path.join(dir, 'jetons-nes-launchpads.js'); const avant = fs.readFileSync(cible);
-  let code = 0; try { execFileSync(process.execPath, [path.join(dir, 'outil-gen-nes-launchpads.mjs'), '--rpc', 'http://127.0.0.1:9', '--pause', '1', '--ecrire'],
+  let code = 0; try { execFileSync(process.execPath, [path.join(dir, 'outil-gen-nes-launchpads.mjs'), '--rpc', 'http://127.0.0.1:9', '--sources-tb', 'http://127.0.0.1:9', '--pause', '1', '--ecrire'],
     { stdio: 'pipe', env: { ...process.env, NODE_OPTIONS: '' } }); } catch (e) { code = e.status; }
-  v('G13 ligne de commande, RPC injoignable : code 1, jetons-nes-launchpads.js intact', code === 1 && Buffer.compare(avant, fs.readFileSync(cible)) === 0);
+  v('G13 ligne de commande, RPC et sources TB injoignables : code 1, jetons-nes-launchpads.js intact', code === 1 && Buffer.compare(avant, fs.readFileSync(cible)) === 0);
+  /* G14 (F5) — l exclusion TB charge les sources servies (EN DERNIER : charger nos-blocks est une union, elle reste) */
+  const sansSrc = await run({}, { sourcesTb: null });
+  v('G14c sans sources TB : ARRET, aucun module', !sansSrc.r && /sources TB requises/.test(sansSrc.err || ''));
+  const nonLues = await run({}, { sourcesTb: SRC({ nos: { couvertureComplete: false } }) });
+  const vieilles = await run({}, { sourcesTb: SRC({ nos: { teteLueA: Date.now() - 11 * 60000 } }) });
+  v('G14b sources TB non lues (nos-blocks incomplet, ou tete perimee) : ARRET, aucun module', !nonLues.r && /sources TB non lues/.test(nonLues.err || '')
+    && !vieilles.r && /sources TB non lues/.test(vieilles.err || ''));
+  const avecNos = await run({}, { sourcesTb: SRC({ plusNos: [G] }) });
+  v('G14 un lance (G) servi par /api/nos-blocks : exclu comme TB ; le rapport compte les sources', !!avecNos.r && !avecNos.r.jetons.includes(G)
+    && avecNos.r.rapport.exclus.tb.includes(G) && JSON.stringify(avecNos.r.jetons) === JSON.stringify([A, BB].sort())
+    && avecNos.r.rapport.sourcesTb.nos === 5 && avecNos.r.rapport.sourcesTb.routeur === T.GRAINE_ROUTEUR.length && avecNos.r.rapport.sourcesTb.graines >= 4);
   return res;
 }
 
@@ -178,6 +194,9 @@ const MUTANTS = [
   { nom: 'm12 ancienne liste non exigee', edits: [[O, 'if (manque.length) throw', 'if (false) throw']], casse: [/^G10 /] },
   { nom: 'm13 fichier livre edite a la main (un jeton retire)', edits: [['jetons-nes-launchpads.js', '000648ac7599ab8601 ', '']], casse: [/^G11 /] },
   { nom: 'm14 un jeton TB (EFIX) ajoute a la main a la liste', edits: [['jetons-nes-launchpads.js', '000648ac7599ab8601 ', '000648ac7599ab8601 eedb997f91ceb22b8a ']], casse: [/^G11 /, /^G12 /] },
+  { nom: 'm16 (F5) sources servies non chargees', edits: [[O, 'const r = chargerIndexRouteur(routeur, maintenantMs); const n = chargerNosBlocksTb(nos, maintenantMs);', 'const r = { lu: true }, n = { lu: true };']], casse: [/^G14 /, /^G14b /] },
+  { nom: 'm17 (F5) sources non lues acceptees', edits: [[O, 'if (!r.lu || !n.lu) throw', 'if (false) throw']], casse: [/^G14b /] },
+  { nom: 'm18 (F5) listes statiques hors exclusion', edits: [[O, 'graines.has(bas(a)) || classeBlock(a) === \'TB\' || estDeviseConnue(a);', 'graines.has(bas(a)) || estDeviseConnue(a);']], casse: [/^G6 /] },
   { nom: 'm15 ecriture meme apres echec', edits: [[O, "principal(process.argv.slice(2)).catch((e) => {", "writeFileSync(fileURLToPath(new URL('./jetons-nes-launchpads.js', import.meta.url)), '/* vide */');\n  principal(process.argv.slice(2)).catch((e) => {"]], casse: [/^G13 /] },
 ];
 

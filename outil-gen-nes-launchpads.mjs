@@ -8,13 +8,17 @@
  *   ce jeton pour devise. Le cote cotation (quoteToken) n est jamais retenu. Exclus ensuite : l ensemble TB (classeBlock
  *   'TB' sans contexte : routeur, nos blocks, liste statique, TBLOCK/TBGAS, V1 de test), les devises connues, et tout jeton
  *   qui a une pool sur un de NOS hooks (estNotreHook) dans la plage lue.
- * Usage : node outil-gen-nes-launchpads.mjs [--rpc URL] [--tete N] [--pause MS] [--rapport fichier.json] [--ecrire]
+ * ⛔ F5 (C2 R9b) : l exclusion TB charge les SOURCES TB : listes statiques (classeBlock), graines (GRAINE_ROUTEUR, GRAINE_NOS_BLOCKS,
+ *   genese) ET les listes servies /api/blocks-routeur + /api/nos-blocks d un serveur (--sources-tb, 2 GET), chargees par le code
+ *   meme du client (chargerIndexRouteur / chargerNosBlocksTb : sel re-verifie, retard et fraicheur bornes). Sources non lues : ARRET.
+ * Usage : node outil-gen-nes-launchpads.mjs [--rpc URL] [--sources-tb URL] [--tete N] [--pause MS] [--rapport fichier.json] [--ecrire]
  *   Sans --ecrire : lit, compte, n ecrit que le rapport. La nouvelle liste doit contenir toute l ancienne (sinon arret). */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { topic } from './keccak.js';
 import { estNotreHook } from './tokenomics.js';
-import { FACTORY_B20, TOPIC_B20_CREATED } from './index-routeur.js';
+import { FACTORY_B20, TOPIC_B20_CREATED, GRAINE_ROUTEUR, chargerIndexRouteur, chargerNosBlocksTb } from './index-routeur.js';
+import { GRAINE_NOS_BLOCKS, NOS_BLOCKS_GENESE } from './origine.js';
 import { RE_B20, classeBlock, estDeviseConnue } from './pool-sans-hook.js';
 
 export const O1_STANDARD_FACTORY = '0x1176122eb77ad6a2339322cda7c4d7ea9bfa63dc';
@@ -26,6 +30,7 @@ export const TOPIC_INITIALIZE = topic('Initialize(bytes32,address,address,uint24
 /** Bloc de deploiement d o1 (la fabrique Standard a du code des 50 579 789). */
 export const BLOC_DEPLOIEMENT_O1 = 50579785;
 export const RPC_DEFAUT = 'https://mainnet.base.org';
+export const SOURCES_TB_DEFAUT = 'https://tokenizedblock.space';
 
 const bas = (a) => String(a || '').toLowerCase();
 const hex = (n) => '0x' + Number(n).toString(16);
@@ -82,6 +87,17 @@ export function decoderInitialize(l) {
   const mots = String(l.data || '').replace(/^0x/, '').match(/.{64}/g) || [];
   return { id: bas(l.topics[1]), c0: adr(l.topics[2]), c1: adr(l.topics[3]), hook: mots[2] ? adr(mots[2]) : null,
     tx: bas(l.transactionHash), bloc: parseInt(l.blockNumber, 16) };
+}
+
+/** F5 : l ensemble TB COMPLET pour l exclusion. `routeur` / `nos` = les reponses servies de /api/blocks-routeur et /api/nos-blocks.
+ *  Exception si l une n est pas LUE (rien n est ecrit). */
+export function ensembleTb({ routeur, nos, maintenantMs = Date.now() }) {
+  const r = chargerIndexRouteur(routeur, maintenantMs); const n = chargerNosBlocksTb(nos, maintenantMs);
+  if (!r.lu || !n.lu) throw new Error('sources TB non lues (routeur : ' + (r.pourquoi || 'lu') + ' ; nos-blocks : ' + (n.pourquoi || 'lu') + ') : rien n est ecrit');
+  const graines = new Set([...GRAINE_ROUTEUR.map((g) => g.jeton), ...GRAINE_NOS_BLOCKS.map((g) => g.jeton), ...NOS_BLOCKS_GENESE].map(bas));
+  /* classeBlock voit maintenant les listes statiques ET les deux listes servies (estNeDuRouteur / estNotreBlockServi) */
+  const estTb = (a) => graines.has(bas(a)) || classeBlock(a) === 'TB' || estDeviseConnue(a);
+  return { estTb, taille: { routeur: (routeur.blocks || []).length, nos: (nos.blocks || []).length, graines: graines.size } };
 }
 
 /** Le tri : quels lancements donnent un jeton de la liste. Entrees decodees ; sortie triee, sans doublon. */
@@ -143,7 +159,9 @@ export function ecrireModule({ jetons, de, tete, comptes }) {
 
 /** Tout le generateur, RPC injecte. Ne fait qu exceptions ou retourne { module, rapport }. */
 export async function generer({ rpc, de = BLOC_DEPLOIEMENT_O1, tete = null, pauseMs = 150, attendre = dormir, ancienne = null, journal = null,
-  fenetres = { launched: 2000, nes: 2000, init: 2000 } }) {
+  fenetres = { launched: 2000, nes: 2000, init: 2000 }, sourcesTb = null }) {
+  if (!sourcesTb) throw new Error('sources TB requises (/api/blocks-routeur + /api/nos-blocks) : rien n est ecrit');
+  const tb = ensembleTb(sourcesTb);
   const t = tete == null ? parseInt(await rpc('eth_blockNumber', []), 16) : Number(tete);
   if (!(Number.isInteger(t) && t >= de)) throw new Error('tete invalide : ' + t);
   const o = { de, a: t, pauseMs, attendre, journal };
@@ -155,7 +173,7 @@ export async function generer({ rpc, de = BLOC_DEPLOIEMENT_O1, tete = null, paus
     garder: (l) => voulus.has(adr(l.topics[1])) });
   const sI = await balayer({ ...o, rpc, adresse: POOL_MANAGER, topic0: TOPIC_INITIALIZE, fenetre: fenetres.init,
     garder: (l) => { const i = decoderInitialize(l); return ids.has(i.id) || estNotreHook(i.hook); } });
-  const r = deriver({ lances, nes: sN.logs, inits: sI.logs.map(decoderInitialize) });
+  const r = deriver({ lances, nes: sN.logs, inits: sI.logs.map(decoderInitialize), estTb: tb.estTb });
   const comptes = { lancements: lances.length, jetons: r.jetons.length,
     ...Object.fromEntries(Object.entries(r.exclus).map(([k, v]) => [k, v.length])) };
   if (r.jetons.length === 0) throw new Error('liste vide : rien n est ecrit');
@@ -166,7 +184,7 @@ export async function generer({ rpc, de = BLOC_DEPLOIEMENT_O1, tete = null, paus
     poolsNosHooks: r.poolsNosHooks, appels: { launched: sL.appels, nes: sN.appels, init: sI.appels },
     divisions: { launched: sL.divisions, nes: sN.divisions, init: sI.divisions },
     reprises: { launched: sL.erreurs, nes: sN.erreurs, init: sI.erreurs },
-    journauxLus: { launched: sL.lus, nes: sN.lus, init: sI.lus }, ancienne: ancienne ? ancienne.length : null };
+    journauxLus: { launched: sL.lus, nes: sN.lus, init: sI.lus }, ancienne: ancienne ? ancienne.length : null, sourcesTb: tb.taille };
   return { module, rapport, jetons: r.jetons };
 }
 
@@ -186,11 +204,16 @@ async function principal(argv) {
   const opt = (n, d = null) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
   const cible = fileURLToPath(new URL('./jetons-nes-launchpads.js', import.meta.url));
   const ancienne = (await import(pathToFileURL(cible).href)).NES_LAUNCHPADS_O1;
+  /* F5 : les sources TB servies d abord (2 GET, lecture seule) ; sans elles rien n est lu ni ecrit */
+  const base = String(opt('--sources-tb', SOURCES_TB_DEFAUT)).replace(/\/+$/, '');
+  const lire = async (c) => { const r = await fetch(base + c, { signal: AbortSignal.timeout(30000), cache: 'no-store' });
+    if (!r.ok) throw new Error(c + ' : HTTP ' + r.status); return r.json(); };
+  const sourcesTb = { routeur: await lire('/api/blocks-routeur'), nos: await lire('/api/nos-blocks') };
   const { module, rapport } = await generer({ rpc: rpcHttp(opt('--rpc', RPC_DEFAUT)), tete: opt('--tete'),
-    pauseMs: Number(opt('--pause', 150)), ancienne, journal: (j) => console.error(JSON.stringify(j)) });
+    pauseMs: Number(opt('--pause', 150)), ancienne, journal: (j) => console.error(JSON.stringify(j)), sourcesTb });
   const rap = opt('--rapport'); if (rap) writeFileSync(rap, JSON.stringify(rapport, null, 1));
   console.log(JSON.stringify({ de: rapport.de, tete: rapport.tete, comptes: rapport.comptes, appels: rapport.appels,
-    divisions: rapport.divisions, poolsNosHooks: rapport.poolsNosHooks.length, ancienne: rapport.ancienne }));
+    divisions: rapport.divisions, poolsNosHooks: rapport.poolsNosHooks.length, ancienne: rapport.ancienne, sourcesTb: rapport.sourcesTb }));
   if (argv.includes('--ecrire')) {
     const avant = readFileSync(cible, 'utf8');
     if (avant.replace(/\r\n/g, '\n') !== module) writeFileSync(cible, module);
