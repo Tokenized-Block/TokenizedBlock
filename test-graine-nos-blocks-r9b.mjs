@@ -114,7 +114,7 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
 }
 
 /* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXYNPCB') {
+async function banc(dir, scen = 'RFGXYNPCBI') {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
@@ -298,7 +298,21 @@ async function banc(dir, scen = 'RFGXYNPCB') {
     /past the chain head/.test(sc5.journal) && sc5.rpc.sousLaGraine > 0 && !!sc5.premiere && sc5.premiere.couvertureComplete === false
     && sc5.vues.every((x) => x.graine !== 'ADMISE'));
   })() : null;
-  await Promise.all([principal, blocX, blocP, blocC, blocN, blocG, blocB]);
+  /* I1 (G1, C2) — complete, puis AU REPOS (aucune visite) pendant 80 s alors que la tete avance : le rafraichissement de fond (60 s)
+   *   relit la tete. La PREMIERE reponse apres le repos porte une tete lue il y a < 70 s et la nouvelle tete, couverte (sans lui :
+   *   l etat d avant le repos, age >= 80 s). Periode 60 s << FRAICHEUR_MAX_TETE_MS (10 min) : fraiche quel que soit le repos. */
+  const blocI = scen.includes('I') ? (async () => {
+    const IRi = await imp(dir, 'index-routeur.js');
+    const si = await redemarrer(dir, J, { rpcO: { echecs: 0 } });
+    const avant = si.derniere; si.rpc.tete += 300;
+    await new Promise((ok) => setTimeout(ok, 80000));
+    const i1 = await si.suivre(10000, (r) => r.length >= 1); const x = i1[0]; const m = Date.now();
+    await si.arreter();
+    v('I1 (G1) serveur au repos 80 s, la tete avance : la premiere reponse porte une tete relue (< 70 s) et couverte, acceptee par le client',
+      si.complet !== null && !!avant && avant.couvertureComplete === true && !!x && x.teteLueA > avant.teteLueA && m - x.teteLueA < 70000
+      && x.tete === si.rpc.tete && x.jusqua === si.rpc.tete && x.couvertureComplete === true && IRi.chargerNosBlocksTb(x, m).lu === true);
+  })() : null;
+  await Promise.all([principal, blocX, blocP, blocC, blocN, blocG, blocB, blocI]);
   return res;
 }
 
@@ -342,6 +356,7 @@ const MUTANTS = [
   { nom: 'n21 (F4) serveur : fenetre a jeton non verifie comptee propre', scen: 'C', edits: [['serveur-web.js', ', ...(scan.fenetresNonVerifiees || [])].map(', '].map(']], casse: [/^C1 /] },
   { nom: 'n22 (F4) mes-blocks : fenetre du jeton non verifie non rendue', scen: 'C', edits: [['mes-blocks.js', ' fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton });', '']], casse: [/^C1 /] },
   { nom: 'n23 (F3b, Zero 1) remontee : depuis saute la fenetre ratee', scen: 'B', edits: [['serveur-web.js', 'if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;', 'nosBlocksEtat.depuis = deBloc;']], casse: [/^B1 /, /^B2 /] },
+  { nom: 'n24 (G1, C2) pas de rafraichissement de fond une fois complete', scen: 'I', edits: [['serveur-web.js', 'setInterval(() => { if (nosBlocksEtat.lu !== null) rattraperNosBlocks(); }, 60000).unref?.();', '/* G1 retire */']], casse: [/^I1 /] },
 ];
 
 let nAssert = 0, ko = 0;

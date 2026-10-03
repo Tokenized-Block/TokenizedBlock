@@ -1060,6 +1060,11 @@ function rattraperNosBlocks() {
   };
   setTimeout(pas, 1500).unref?.();
 }
+/* ⛔ G1 (C2, revue F1-F5) : une fois complete, plus rien n etait planifie, et depuis F1 une tete lue il y a plus de 10 min
+ *   (FRAICHEUR_MAX_TETE_MS) est refusee par le client. Serveur au repos, le premier visiteur recevait l etat d AVANT le tour
+ *   qu il declenche : PEXRA/o1 INCONNUS ~20 s. Meme rafraichissement de fond que le routeur (60 s) : tete et jusqua restent
+ *   fraiches sans visite (lecture legere : 1 eth_blockNumber + la fenetre [jusqua + 1, tete] par minute). */
+setInterval(() => { if (nosBlocksEtat.lu !== null) rattraperNosBlocks(); }, 60000).unref?.();
 function nosBlocksCorps() {
   rattraperNosBlocks();
   return JSON.stringify({
