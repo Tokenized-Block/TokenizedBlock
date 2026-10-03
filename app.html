@@ -1442,6 +1442,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
       <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: 0.001 ETH, once. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cCautionNote" hidden></p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
@@ -2338,7 +2339,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-registre-actions-defini" hidden>Build <code>20261003-registre-actions-defini</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-naissance-7030-sel" hidden>Build <code>20261003-naissance-7030-sel</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3088,7 +3089,7 @@ import { avecPoolAction } from './pools-actions-aerodrome.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
 import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
-  ajouterNeDuRouteur, selDeCreatePaid } from './index-routeur.js';
+  ajouterNeDuRouteur, selDeCreatePaid, selDuRouteur, selDansInput, indexRouteurLu } from './index-routeur.js';
 let essaisIndexRouteur = 0;
 /* ⛔ R8 (logique inversee) : par defaut tout B20 non devise est un block (R5). Ces deux sources ne font que RESSERRER, et
  *   ouvrir la liberation des seuls jetons tiers de la liste blanche quand elles sont TOUTES lues (pool-sans-hook.js). */
@@ -13133,8 +13134,16 @@ async function calculerLancement() {
         if (hooks === HOOK_V2 || hooks === HOOK_V3 || hooks === HOOK_V4 || hooks === HOOK_V5 || hooks === HOOK_V6 || hooks === HOOK_V7 || hooks === HOOK_V8 || (HOOK_V9 && hooks === HOOK_V9) || estHook7030(hooks)) {
           /* ⛔ V2/V3 : les ≈ 1 $ sont l inscription elle-meme — payes au contrat, qui les verse au wallet de frais */
           const w = await assurerFraisLancementWei(true);
+          /* ⛔⛔ 2026-10-03 — hook 7030 : l inscription porte le SEL de createPaid (index du routeur, sinon la tx de creation). Sans
+           *   lui le hook facture aussi fraisCreation : un block deja paye a Create aurait coute 0,0017 ETH. Sel inconnu ET index
+           *   non lu = on ne sait pas encore comment ce block est ne : on attend, on ne fait pas payer deux fois. */
+          const selNe = estHook7030(hooks) ? await selRouteurPour(adr) : null;
+          if (estHook7030(hooks) && selNe === null && !indexRouteurLu()) {
+            plan = { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'how this block was created could not be read yet, so nothing was asked — try again in a moment' };
+          } else {
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks,
-            caution: await cautionCreateurPour(hooks, deviseLancement || null) });
+            caution: await cautionCreateurPour(hooks, deviseLancement || null), sel: selNe });
+          }
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
         }
@@ -13190,6 +13199,9 @@ async function calculerLancement() {
       const isInscrire = estEtapeInscription(et.data);
       /* 7030 : la caution ETH du createur voyage dans la meme valeur — jamais remise a zero. */
       const cautionW = BigInt(et.cautionWei || 0n);
+      /* ⛔ 2026-10-03 — hook 7030 : l etape porte deja le frais EXACT que le hook exige (`du`, lu on-chain, sel prouve ou non).
+       *   La reecrire a 0,0003 sans le sel reverterait MontantInsuffisant ; on n y touche pas. */
+      if (isInscrire && et.du != null) return et;
       if (isInscrire && !hookPayee) {
         const minV = CREATE_FEE_WEI_FLOOR;
         return { ...et, value: '0x' + (minV + cautionW).toString(16), payant: true,
@@ -13469,7 +13481,9 @@ function peindrePlan(plan, adr) {
      * tip 20260922-prepaye-inscrire-dust: CreateRouter prepay still needs fraisVie dust on inscrire. */
     const inscrireDust = (plan.etapes || []).some((et) => et && et.payant && estEtapeInscription(et.data));
     const cautionEth = (plan.etapes || []).reduce((a, et) => a + BigInt((et && et.cautionWei) || 0n), 0n);
-    const fraisEncore = (inscrireDust ? CREATE_FEE_WEI_FLOOR : (feeDejaPaye ? 0n : BigInt(fraisL))) + cautionEth;
+    /* hook 7030 : l etape porte le frais exact lu sur le hook (`du`) — 0,0003 avec le sel, 0,001 sans ; on ne le suppose pas */
+    const duEtape = (plan.etapes || []).reduce((a, et) => (et && et.payant && et.du != null ? BigInt(et.du) : a), null);
+    const fraisEncore = (duEtape != null ? duEtape : inscrireDust ? CREATE_FEE_WEI_FLOOR : (feeDejaPaye ? 0n : BigInt(fraisL))) + cautionEth;
     const seedBesoin = plan.naissance ? BigInt(plan.quoteEthWei || plan.ethRequis || 0n) + (plan.microSwap ? BigInt(MICRO_SWAP_ETH_WEI) : 0n) : 0n;
     const besoin = fraisEncore + seedBesoin;
     if (BigInt(soldeEthNat) < besoin) {
@@ -13804,7 +13818,8 @@ async function lancerMarcheBlock(adr) {
     /* tip 20260922-prepaye-inscrire-dust: if a payant inscrire etape remains, keep fraisVie floor. */
     const inscrireDustL = (planCourant.etapes || []).some((et) => et && et.payant && estEtapeInscription(et.data));
     const cautionEthL = (planCourant.etapes || []).reduce((a, et) => a + BigInt((et && et.cautionWei) || 0n), 0n);
-    const fraisEncore = (inscrireDustL ? CREATE_FEE_WEI_FLOOR
+    const duEtapeL = (planCourant.etapes || []).reduce((a, et) => (et && et.payant && et.du != null ? BigInt(et.du) : a), null);
+    const fraisEncore = (duEtapeL != null ? duEtapeL : inscrireDustL ? CREATE_FEE_WEI_FLOOR
       : ((!planCourant.v2 && !dejaPaye) ? BigInt(fraisL) : 0n)) + cautionEthL;
     const besoinTotal = fraisEncore + besoinSeed;
     if (soldeEthNat != null && BigInt(soldeEthNat) < besoinTotal) {
@@ -16200,10 +16215,49 @@ async function majPaire() {
   majFraisEtRecap();
 }
 
+/* ⛔⛔ 2026-10-03 — « 0.001 ETH, once » NE DIT PAS TOUT sur le hook 7030 (Grok, verifie) : la naissance y depose aussi le MINIMUM DU
+ *   CREATEUR — au moins ~1 $ de la devise appariee, jamais sous le plancher du contrat — pris dans SON wallet, en plus du frais.
+ *   Aucune phrase de l app ne le disait : quelqu un qui apparie a AMDc sans AMDc etait refuse sans savoir pourquoi. Ce n est pas
+ *   un frais (il reste au createur, tenu par le contrat du marche) mais c est de l argent a AVOIR. Faits lus sur le contrat :
+ *   part du createur 0,03 % par echange tant que le minimum est en place ; sortie = une demande puis 7 jours (DELAI_RETRAIT =
+ *   604800 s), que cette app ne propose PAS encore — on le dit, on ne promet pas un bouton qui n existe pas. */
+let majNoteCautionSeq = 0;
+async function majNoteCaution() {
+  const el = $('#cCautionNote');
+  if (!el) return;
+  const seq = ++majNoteCautionSeq;
+  const p = paireChoisie;
+  const devise = p && p.adr && !/^0x0{40}$/i.test(p.adr) ? String(p.adr) : null;
+  try {
+    if (Number(CHAINE) !== 8453) { el.hidden = true; return; }
+    const hook = await hookCourant({ rpc, mainnet: true, avecDevise: !!devise, devise });
+    if (seq !== majNoteCautionSeq) return;
+    if (!estHook7030(hook)) { el.hidden = true; return; }
+    const c = await cautionCreateurPour(hook, devise);
+    if (seq !== majNoteCautionSeq) return;
+    const sym = devise ? String((p && p.symbole) || 'the paired token') : 'ETH';
+    const fin = ' It is not a fee: it stays yours, held by the market contract, and it is what lets you earn 0.03% of each trade. '
+      + 'Taking it back means a request and then 7 days, made on the contract — this app does not offer that step yet.';
+    if (!c || typeof c.minimum !== 'bigint') {
+      el.textContent = 'On top of the Birth fee, this market asks you to deposit a creator’s minimum — about $1 of ' + sym
+        + ', from your wallet. Its exact amount could not be read just now.' + fin;
+    } else {
+      let dec = 18;
+      if (devise) dec = Number(BigInt(await rpc('eth_call', [{ to: devise, data: '0x313ce567' }, 'latest'])));
+      if (seq !== majNoteCautionSeq) return;
+      const s = c.minimum.toString().padStart(dec + 1, '0');
+      const entier = s.slice(0, s.length - dec), frac = dec ? s.slice(s.length - dec).replace(/0+$/, '').slice(0, 8) : '';
+      el.textContent = 'On top of the Birth fee, this market asks you to deposit a creator’s minimum: ' + entier + (frac ? '.' + frac : '') + ' ' + sym
+        + ' (about $1), from your wallet' + (devise ? ' — you need that ' + sym + ' before you create.' : '.') + fin;
+    }
+    el.hidden = false;
+  } catch (_) { if (seq === majNoteCautionSeq) el.hidden = true; }
+}
 /** tip 20260922-stock-pair-ux: Fund wallet CTA matches selected pair — never invent custody / stock onramp */
 function majFundWalletPourPaire() {
   const a = $('#cFundWallet');
   const h = $('#cFundHint');
+  void majNoteCaution();
   if (!a) return;
   const p = paireChoisie;
   if (p && p.type === 'ACTION') {
@@ -17327,6 +17381,22 @@ function openFeeDejaPayePour(adr, plan) {
   const p = prepayePour(adr);
   return !!(p && p.hash && String(p.compte || '').toLowerCase() === String(compte || '').toLowerCase());
 }
+/* ⛔⛔ 2026-10-03 — le sel de createPaid d un block (hook 7030). D ABORD l index du routeur (graine + /api/blocks-routeur + les blocks
+ *   crees dans cette session) : il couvre TOUS les blocks nes du routeur, sans fenetre de blocs. SINON la transaction de creation
+ *   gardee a la naissance (prepaye) : createPaid direct, ou tout mot de 32 octets d un appel enveloppe (smart wallet, 4337).
+ *   Un sel n est rendu que s il REDONNE l adresse du block (formule du routeur) ; le hook le re-prouve avant tout paiement. */
+async function selRouteurPour(adr) {
+  const connu = selDuRouteur(adr);
+  if (connu) return connu;
+  try {
+    const p = prepayePour(adr);
+    if (!p || !p.hash) return null;
+    const tx = await rpc('eth_getTransactionByHash', [p.hash]);
+    const s = tx && tx.input ? selDansInput(adr, tx.input) : null;
+    if (s && ajouterNeDuRouteur(adr, s)) return s;
+  } catch (_) { /* illisible : pas de sel, l appelant decide */ }
+  return null;
+}
 async function recupererPrepayeCreateRouter(adr) {
   if (prepayePour(adr)) return prepayePour(adr);
   if (!compte || Number(CHAINE) !== 8453 || !adr) return null;
@@ -17419,8 +17489,11 @@ async function preverifierNaissancePayee({ adresse, appelCreate }) {
       ...(devise ? { devise } : {}), hooks: hook,
       ...(quoteW != null ? { quoteEthWei: quoteW, soldePresume: SUPPLY_FIXE } : {}) });
     const reste = FRAIS_OUVERTURE_WEI - BigInt(appelCreate.value || '0x0');
+    /* ⛔⛔ 2026-10-03 — hook 7030 : le sel du createPaid QU ON VA ENVOYER part avec l inscription (surcharge a 4 arguments). Sans
+     *   lui le hook exige 0,001 ETH ici, on en envoie 0,0003, et ce pre-controle refusait chaque Create (MontantInsuffisant). */
     plan = await completerInscriptionPayee({ rpc: rpcPrevu, plan, compte, fraisWei: reste > 0n ? reste : 0n, hook,
-      caution: await cautionCreateurPour(hook, devise) });
+      caution: await cautionCreateurPour(hook, devise), sel: selDansInput(adresse, appelCreate.data) });
+    if (plan && plan.etat === 'REFUSE' && plan.pourquoi) return { etat: 'REFUSE', pourquoi: plan.pourquoi };
     if (!plan || !plan.tx) return { etat: 'NON_MESURE', pourquoi: 'launch plan not built' };
     if (!mintLancementRecevable(plan)) return { etat: 'REFUSE', pourquoi: 'the market could not open after the fee' };
     const appels = [appelCreate, ...(plan.etapes || []).map((x) => ({ to: x.to, data: x.data, value: x.value || '0x0' })),

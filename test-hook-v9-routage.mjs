@@ -79,8 +79,9 @@ ok('lancer-pool V8 launch guard reads hookDeLancementPour', /hookDeLancementPour
 ok('lancer-pool V9 launch guard reads hookDeLancementPour', /hookDeLancementPour\(devise, chaine, \{ v9: true \}\) !== 'V9'\)/.test(lp));
 const app = readFileSync('./app.html', 'utf8');
 /* 2026-10-02 (fix-2) : un 3e site — la pre-verification avant createPaid — lit le meme hook ; TOUS passent la devise. */
+/* 2026-10-03 : un 4e site — la ligne « minimum du createur » de l ecran Create (majNoteCaution) — lit le meme hook, avec la devise. */
 { const sites = app.match(/hookCourant\(\{[^}]*\}\)/g) || [];
-  ok('every hookCourant call site passes the quote (' + sites.length + ' sites)', sites.length === 3
+  ok('every hookCourant call site passes the quote (' + sites.length + ' sites)', sites.length === 4
     && sites.every((x) => /devise(: deviseLancement \|\| null|\s*\})/.test(x))); }
 ok('no call site still demands V8 by string compare', !/!== String\(HOOK_V8\)\.toLowerCase\(\)/.test(app));
 ok('the Create guard passes OPTIONS_LANCEMENT (V9 lets its quotes through by construction)', /symbole: q\.paire\.symbole, \.\.\.OPTIONS_LANCEMENT \}\)/.test(app));

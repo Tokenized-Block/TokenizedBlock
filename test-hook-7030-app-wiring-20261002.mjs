@@ -145,6 +145,10 @@ await essai('(4) birth', async () => {
     if (d === selecteur('prixInscrit(bytes32)')) return w(prix);
     if (d === selecteur('createurs(bytes32)')) return w(BigInt(qui)) + '0'.repeat(128);
     if (d === selecteur('allowance(address,address)')) return w(allow);
+    /* 2026-10-03 : le hook DICTE le frais — valeurs lues sur 0x32F3…64cc. Ce lecteur rendait 0 partout : c est ce qui a cache
+     *   que la naissance exigeait fraisVie + fraisCreation sans le sel (test-7030-sel-createpaid-20261003.mjs le couvre). */
+    if (d === selecteur('fraisVie()')) return w(300000000000000n);
+    if (d === selecteur('fraisCreation()')) return w(700000000000000n);
     return w(0);
   };
   const fw = 10n ** 15n, min = 4n * 10n ** 14n;

@@ -370,7 +370,7 @@ const MUTANTS = [
   { nom: 'e fail-closed etendu a tout le monde', edits: [['pool-sans-hook.js', '  if (!RE_B20.test(a)) return null;', '']], casse: [/^U4 /] },
   { nom: 'f tiers traite en block', edits: [['pool-sans-hook.js', "return c === 'TB' || c === 'INCONNU';", 'return c !== null;']], casse: [/^T1 |^T2 |^T3 /] },
   { nom: 'g index en retard accepte', edits: [['index-routeur.js', '!rep.fenetresRatees && retard <= RETARD_MAX_INDEX', '!rep.fenetresRatees']], casse: [/^IDX en retard/] },
-  { nom: 'h sel non verifie au chargement', edits: [['index-routeur.js', 'if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) nes.add', 'if (b) nes.add']], casse: [/^IDX entree au sel faux/] },
+  { nom: 'h sel non verifie au chargement', edits: [['index-routeur.js', 'if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) {', 'if (b) {']], casse: [/^IDX entree au sel faux/] },
   { nom: 'i scanner sans verification de formule', edits: [['index-routeur.js', 'for (const r of routeurs) if (!sel && neDuRouteur(c.jeton, w, r)) {', 'for (const r of routeurs) if (!sel) {']], casse: [/^PROV scanner/] },
   { nom: 'R8a liste blanche consultee AVANT l ensemble TB', edits: [['pool-sans-hook.js', '  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||', "  if (RE_B20.test(a) && listeBlanche(a) && sourcesTbLues()) return 'TIERS';\n  if (BLOCKS_TB.has(a) || BLOCKS_V1_TEST.has(a) || SUR_NOS_HOOKS.has(a) ||"]], casse: [/^CL jeton liste MAIS marche sur un de NOS hooks/] },
   /* R10 : le retour a la liste blanche R8/R9 comme condition doit rougir les cas SYN liberes */
@@ -430,7 +430,10 @@ try {
   }
   const app = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8');
   ok(!/classeBlock|estBlockTbClasse/.test(app), 'app.html : aucun filtre d affichage sur le classement');
-  ok((app.match(/indexRouteurLu\(/g) || []).length === 0 && (app.match(/!sourcesTbLues\(\)/g) || []).length === 1, 'app.html : la relecture suit sourcesTbLues (index + /api/nos-blocks)');
+  /* 2026-10-03 : UN usage d indexRouteurLu est admis, et un seul — la garde du sel de createPaid (hook 7030 : sel inconnu ET index
+   *   non lu = on attend, on ne fait pas payer deux fois). La RELECTURE, elle, suit toujours sourcesTbLues. */
+  ok((app.match(/indexRouteurLu\(/g) || []).length === 1 && /selNe === null && !indexRouteurLu\(\)/.test(app) && (app.match(/!sourcesTbLues\(\)/g) || []).length === 1,
+    'app.html : la relecture suit sourcesTbLues (index + /api/nos-blocks)');
   ok(/chargerNosBlocksTb\(/.test(app) && /ajouterNeDuRouteur\(adresseCreee, sNe\)/.test(app), 'app.html : /api/nos-blocks charge, et le block cree est ajoute a l index (ajouterNeDuRouteur)');
   ok((app.match(/noterMarcheSurNotreHook\(/g) || []).length === 4, 'app.html : noterMarcheSurNotreHook seulement a la decouverte des pools');
   const srv = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');

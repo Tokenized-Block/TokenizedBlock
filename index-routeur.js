@@ -76,7 +76,24 @@ export const GRAINE_JUSQUA = 52095000;
 /* Une entree de graine dont la formule ne tombe pas juste n entre pas : une faute de recopie ne cree pas un block TB. */
 const nes = new Set([...GRAINE_ROUTEUR.filter((g) => neDuRouteur(g.jeton, g.sel)),
   ...GRAINE_ANCIENS_ROUTEURS.filter((g) => neDUnDeNosRouteurs(g.jeton, g.sel, g.routeur))].map((g) => g.jeton));
+/* ⛔⛔ 2026-10-03 — LE SEL ETAIT LU PUIS JETE. Chaque entree (graine, index servi, block qu on vient de creer) arrive avec son sel,
+ *   prouve par la formule, et on n en gardait que l adresse. Or le hook 7030 exige ce sel a l inscription : sans lui il facture
+ *   fraisVie + fraisCreation (0,001 ETH) au lieu de fraisVie (0,0003) — l Instant Birth revertait MontantInsuffisant et la mise
+ *   en vie d un block deja cree aurait coute 0,0017. Seuls les sels du routeur ACTUEL entrent : c est celui que le hook connait
+ *   (createRouter() lu on-chain = CREATE_ROUTER). */
+const sels = new Map(GRAINE_ROUTEUR.filter((g) => neDuRouteur(g.jeton, g.sel)).map((g) => [bas(g.jeton), bas(g.sel)]));
 let etat = { lu: false, pourquoi: 'index not loaded yet', jusqua: null };
+/** Le sel de createPaid d un block ne du routeur ACTUEL (graine, index servi, ou block cree dans cette session), sinon null. */
+export function selDuRouteur(adr) { return sels.get(bas(adr)) || null; }
+/** Cherche dans l input d une transaction le sel qui redonne `jeton` par le routeur actuel : createPaid direct, sinon tout mot
+ *  de 32 octets a tout decalage de 4 octets (smart wallet, 4337 — meme balayage que scannerNesDuRouteur). null si aucun. */
+export function selDansInput(jeton, input) {
+  const direct = selDeCreatePaid(input);
+  if (direct && neDuRouteur(jeton, direct)) return direct;
+  const inp = bas(input).replace(/^0x/, '');
+  for (let off = 0; off < 64; off += 8) for (let k = off; k + 64 <= inp.length; k += 64) { const w = '0x' + inp.slice(k, k + 64); if (neDuRouteur(jeton, w)) return w; }
+  return null;
+}
 /** Fraicheur maximale de la tete lue par le serveur (ms) : au-dela, l index n est plus « LU » (tete figee = R6-3). */
 export const FRAICHEUR_MAX_TETE_MS = 10 * 60 * 1000;
 
@@ -94,7 +111,10 @@ export function chargerIndexRouteur(rep, maintenantMs = Date.now()) {
   let rejetes = 0;
   const liste = rep && Array.isArray(rep.blocks) ? rep.blocks : [];
   for (const b of liste) {
-    if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) nes.add(bas(b.jeton)); else rejetes += 1;
+    if (b && neDUnDeNosRouteurs(b.jeton, b.sel, b.routeur || null)) {
+      nes.add(bas(b.jeton));
+      if (neDuRouteur(b.jeton, b.sel)) sels.set(bas(b.jeton), bas(b.sel));
+    } else rejetes += 1;
   }
   const retard = rep && Number.isFinite(rep.tete) && Number.isFinite(rep.jusqua) ? rep.tete - rep.jusqua : Infinity;
   /* R8 (C2 R6-3) : une liste vide ou amputee « complete » n est pas lue (le serveur sert toujours la graine) ; une tete
@@ -113,7 +133,7 @@ export function chargerIndexRouteur(rep, maintenantMs = Date.now()) {
 /** Le serveur n a pas pu etre lu : l etat repasse NON LU (les blocks deja prouves restent). */
 export function indexRouteurIllisible(pourquoi = 'index could not be read') { etat = { ...etat, lu: false, pourquoi }; }
 /** L app qui vient de creer un block connait son sel : elle peut l ajouter (prouve) sans attendre le serveur. */
-export function ajouterNeDuRouteur(jeton, sel) { if (!neDuRouteur(jeton, sel)) return false; nes.add(bas(jeton)); return true; }
+export function ajouterNeDuRouteur(jeton, sel) { if (!neDuRouteur(jeton, sel)) return false; nes.add(bas(jeton)); sels.set(bas(jeton), bas(sel)); return true; }
 
 /* ── R8 : /api/nos-blocks (blocks frappes par nos comptes surveilles) — une SOURCE TB de plus, lue pour resserrer ─────────── */
 const nosServis = new Set();

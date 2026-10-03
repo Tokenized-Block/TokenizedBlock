@@ -23,16 +23,31 @@ export function encodeInscrire(cle, sqrtPriceX96) {
 /** 2026-10-02 — hook 7030 : `inscrireAvecCaution(key, sqrtPriceX96, uint128 minimum)` (cast sig = 0xfde76f6a).
  *  Meme disposition qu inscrire + le minimum de caution du createur, en unites brutes de la devise appariee. */
 export const SIG_INSCRIRE_CAUTION = 'inscrireAvecCaution((address,address,uint24,int24,address),uint160,uint128)';
-export function encodeInscrireAvecCaution(cle, sqrtPriceX96, minimum) {
+/* ⛔⛔ 2026-10-03 — LA SURCHARGE A 4 ARGUMENTS, CELLE QUI PORTE LE SEL DE createPaid. Lu dans la source du hook deploye
+ *   (TBlockLaunchLockHook._du) et sur la chaine (0x32F3…64cc : fraisVie = 3e14, fraisCreation = 7e14, createRouter = notre
+ *   CreateRouter, les deux selecteurs presents dans le bytecode) : SANS preuve, la premiere inscription doit
+ *   fraisVie + fraisCreation = 0,001 ETH ; AVEC un sel qui redonne l adresse du block (neDuRouteur), fraisVie seul = 0,0003.
+ *   L app n encodait que la surcharge a 3 arguments : apres createPaid (0,0007) l Instant Birth envoyait 0,0003 et le hook
+ *   repondait MontantInsuffisant — AUCUN Create ne pouvait naitre sur le 7030 (drapeau allume en 3c89dba sans naissance reelle :
+ *   les bancs d alors simulaient le hook). Un sel FAUX reverte PasNeDuRouteur : il n est passe que PROUVE par le hook. */
+export const SIG_INSCRIRE_CAUTION_SEL = 'inscrireAvecCaution((address,address,uint24,int24,address),uint160,uint128,bytes32)';
+const SEL_32 = /^0x[0-9a-fA-F]{64}$/;
+export function encodeInscrireAvecCaution(cle, sqrtPriceX96, minimum, sel = null) {
   const m = BigInt(minimum);
   if (m <= 0n || m >= (1n << 128n)) throw new Error('caution minimum out of uint128 range');
-  return '0x' + selecteur(SIG_INSCRIRE_CAUTION) + encodeInitializePool(cle, sqrtPriceX96).slice(10)
-    + m.toString(16).padStart(64, '0');
+  if (sel !== null && !SEL_32.test(String(sel))) throw new Error('createPaid salt is not a bytes32');
+  return '0x' + selecteur(sel === null ? SIG_INSCRIRE_CAUTION : SIG_INSCRIRE_CAUTION_SEL) + encodeInitializePool(cle, sqrtPriceX96).slice(10)
+    + m.toString(16).padStart(64, '0') + (sel === null ? '' : String(sel).slice(2).toLowerCase());
 }
-/** L etape qui inscrit (et paie la naissance) : `inscrire` (0xbb920fed, V2..V8) ou `inscrireAvecCaution` (7030). */
+/** L etape qui inscrit (et paie la naissance) : `inscrire` (0xbb920fed, V2..V8) ou `inscrireAvecCaution` (7030, 3 ou 4 arguments). */
 export function estEtapeInscription(data) {
   const d = String(data || '').toLowerCase();
-  return d.startsWith('0xbb920fed') || d.startsWith('0x' + selecteur(SIG_INSCRIRE_CAUTION));
+  return d.startsWith('0xbb920fed') || d.startsWith('0x' + selecteur(SIG_INSCRIRE_CAUTION)) || d.startsWith('0x' + selecteur(SIG_INSCRIRE_CAUTION_SEL));
+}
+/** Des wei en ETH lisibles, sans zeros de queue (300000000000000n -> « 0.0003 »). */
+function ethTexte(w) {
+  const s = BigInt(w).toString().padStart(19, '0');
+  return (s.slice(0, -18) + '.' + s.slice(-18)).replace(/\.?0+$/, '');
 }
 const ETH_CAUTION = '0x0000000000000000000000000000000000000000';
 
@@ -66,7 +81,7 @@ export async function completerInscriptionHook({ rpc, plan, compte }) {
  * ⛔ Pour TOUT compte, EOA comme smart wallet : sans elle, la chaine refuse d ouvrir le marche.
  * ⛔ L etat vient de la chaine (`payee`, `inscrit`) : deja payee -> pas de second paiement.
  */
-export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2, caution = null }) {
+export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2, caution = null, sel = null }) {
   if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) return plan;
   const out = { ...plan, hook, frais: FRAIS_V2, v2: true };
   if (plan.poolExiste) return out;
@@ -109,11 +124,40 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
           value: '0x0' });
       }
       const cautionWei = dev === ETH_CAUTION ? min : 0n;
+      /* ⛔⛔ LE HOOK DICTE LE FRAIS, l app ne le suppose plus. On LIT fraisVie et fraisCreation, et on demande au hook lui-meme
+       *   si le sel prouve la naissance par le routeur (neDuRouteur — pas notre copie de la formule) :
+       *     prouve     -> surcharge a 4 arguments, du = fraisVie (createPaid a deja paye le reste : jamais 0,0017) ;
+       *     non prouve -> surcharge a 3 arguments, du = fraisVie + fraisCreation.
+       *   Si ce que l appelant comptait payer (`fraisWei`) ne couvre pas `du`, on REFUSE ICI, avant toute signature : envoyer
+       *   reverterait MontantInsuffisant. Lecture ratee -> NON_MESURE : rien n est demande au wallet. */
+      let du = null, selProuve = null;
+      if (!payee) {
+        let vie, creation, prouve = false;
+        try {
+          vie = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('fraisVie()') }, 'latest']));
+          creation = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('fraisCreation()') }, 'latest']));
+          if (sel !== null && SEL_32.test(String(sel))) {
+            const bloc = dev === c0 ? c1 : c0;
+            prouve = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('neDuRouteur(address,bytes32)')
+              + bloc.slice(2).padStart(64, '0') + String(sel).slice(2).toLowerCase() }, 'latest'])) === 1n;
+          }
+        } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the birth fee could not be read on chain, so nothing was asked' }; }
+        if (vie <= 0n || creation <= 0n) return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the birth fee could not be read on chain, so nothing was asked' };
+        du = prouve ? vie : vie + creation;
+        if (fraisWei < du) {
+          return { ...out, etat: 'REFUSE', etapes: [], fraisDu: du,
+            pourquoi: 'this block could not be matched to its Create payment, so opening its market would cost more than announced — nothing was asked' };
+        }
+        if (prouve) selProuve = String(sel).toLowerCase();
+      }
+      const frais = payee ? 0n : (selProuve ? du : fraisWei);
       etapes.push({
-        nom: payee ? "Confirm the starting price and lock the creator's minimum" : 'Bring it to life — 0.001 ETH, paid on chain',
-        to: hook, data: encodeInscrireAvecCaution(plan.cle, plan.sqrtVise, min),
-        value: '0x' + ((payee ? 0n : fraisWei) + cautionWei).toString(16),
-        payant: !payee, caution: min, cautionWei,
+        nom: payee ? "Confirm the starting price and lock the creator's minimum"
+          : selProuve ? 'Bring it to life — ' + ethTexte(du) + ' ETH here, the rest was paid at Create'
+            : 'Bring it to life — ' + ethTexte(frais) + ' ETH, paid on chain',
+        to: hook, data: encodeInscrireAvecCaution(plan.cle, plan.sqrtVise, min, selProuve),
+        value: '0x' + (frais + cautionWei).toString(16),
+        payant: !payee, caution: min, cautionWei, du, selRouteur: selProuve,
       });
       return { ...out, etapes, etat: 'APPROBATIONS', inscriptionPayee: false, caution: min };
     }
