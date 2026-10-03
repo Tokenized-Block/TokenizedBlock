@@ -147,8 +147,22 @@ ok(/<p class="note" id="cCautionNote" hidden><\/p>/.test(html), 'C ecran Create 
 const iN = html.indexOf('async function majNoteCaution() {'), noteSrc = html.slice(iN, html.indexOf('\n}\n', iN));
 ok(iN > 0 && /if \(!estHook7030\(hook\)\) \{ el\.hidden = true; return; \}/.test(noteSrc) && /const c = await cautionCreateurPour\(hook, devise\);/.test(noteSrc),
   'C la ligne n apparait que sur le hook 7030, avec le montant de cautionCreateurPour (la meme source que la transaction)');
-ok(/It is not a fee: it stays yours/.test(noteSrc) && /0\.03% of each trade/.test(noteSrc) && /a request and then 7 days/.test(noteSrc) && /this app does not offer that step yet/.test(noteSrc),
-  'C la ligne dit : pas un frais, 0,03 % par echange, sortie = demande + 7 jours, PAS encore proposee par l app');
+/* 2026-10-04 : la sortie EST proposee, sur la page du block (peindreCautionProfil) — la ligne ne dit plus « not offered yet » */
+ok(/It is not a fee: it stays yours/.test(noteSrc) && /0\.03% of each trade/.test(noteSrc) && /a request and then 7 days/.test(noteSrc)
+  && /done from the block’s own page here, and your share stops as soon as you ask/.test(noteSrc) && !/does not offer/.test(noteSrc),
+  'C la ligne dit : pas un frais, 0,03 % par echange, sortie = demande + 7 jours depuis la page du block, la part s arrete a la demande');
+/* la carte « Creator minimum » de la page du block */
+const iP = html.indexOf('async function peindreCautionProfil(adr, v) {'), profSrc = html.slice(iP, html.indexOf('\n}\n', iP));
+ok(iP > 0 && /<div class="pJeu" id="pCaution" hidden>/.test(html) && (html.match(/peindreVerrouMarche\(v, origineProfil\);\n\s+void peindreCautionProfil\(adr, v\);/g) || []).length === 2,
+  'C page du block : la carte #pCaution existe et se peint a chaque lecture du marche (2 sites)');
+ok(/!estHook7030\(v\.cle\.hooks\)\) return;/.test(profSrc) && /etatCautionCreateur\(\{ rpc, hook, cle, maintenantSec \}\)/.test(profSrc) && /if \(!etat \|\| etat\.etat !== 'LUE'\) return;/.test(profSrc),
+  'C la carte ne lit que le contrat du marche (7030), et reste CACHEE sur une lecture ratee (jamais « rien a reprendre »)');
+ok(/const moi = !!compte && String\(compte\)\.toLowerCase\(\) === etat\.createur;/.test(profSrc) && /if \(!moi\) return;\n\s+const sortie = sortieCautionPour\(/.test(profSrc),
+  'C le bouton n existe que pour le createur QUE LE CONTRAT NOMME');
+ok(/your 0\.03% share stops at once, and the deposit can only be taken back 7 days later/.test(profSrc) && /b\.textContent = 'Yes, ask now'; b\.onclick = envoyer;/.test(profSrc),
+  'C demander = deux clics : le premier dit le cout (part arretee, 7 jours), le second envoie');
+const srvC = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
+ok(/'caution-createur\.js',/.test(srvC) && /import \{ etatCautionCreateur, sortieCautionPour \} from '\.\/caution-createur\.js';/.test(html), 'C caution-createur.js est importe par l app ET servi (sinon 404 = app morte)');
 ok(/function majFundWalletPourPaire\(\) \{\n[^\n]*\n[^\n]*\n\s+void majNoteCaution\(\);/.test(html), 'C la ligne est recalculee a chaque changement de paire');
 
 console.log('— D. mutants');

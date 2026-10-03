@@ -174,6 +174,9 @@ async function simuler(adr, { routable }) {
     /* 2026-10-03 : le drapeau 7030 est ALLUME dans le depot ; CE banc reste le temoin du cas « 7030 eteint » (textes et tx
      *   d avant, a l octet) : la paire ne va jamais au 7030 ici. Le cas allume vit dans test-hook-7030-app-wiring. */
     paireVa7030: () => false,
+    /* 2026-10-04 : la devise de secours ne concerne que les adresses TAPEES (type SAISIE) ; ici on ne joue que des devises du
+     *   registre — si elle etait consultee pour elles, ce faux leverait (test-secours-paire-20261004.mjs couvre le cas SAISIE). */
+    deviseDeSecoursPour: () => { throw new Error('the fallback currency must not be consulted for a registry currency'); },
     /* 2026-10-03 (memestocks) : majPaire consulte la regle de lancement AVANT la lecture on-chain — le vrai module */
     hookDeLancementPour: P.hookDeLancementPour,
     symbolesLancables: () => P.pairesProposees(8453).filter((p) => p.type === 'ACTION' && P.hookDeLancementPour(p.adr, 8453, { v9: false })).map((p) => p.symbole),
@@ -224,6 +227,7 @@ async function simulerGraphe(adr, aretesDepart, areteLue) {
      *   et tx d avant, a l octet) ; le cas 7030 allume vit dans test-hook-7030-app-wiring. */
     OPTIONS_LANCEMENT: { v9: TOK.OPTIONS_LANCEMENT.v9 === true },
     paireVa7030: () => false, hookDeLancementPour: P.hookDeLancementPour,
+    deviseDeSecoursPour: () => { throw new Error('the fallback currency must not be consulted for a registry currency'); },
     symbolesLancables: () => P.pairesProposees(8453).filter((p) => p.type === 'ACTION' && P.hookDeLancementPour(p.adr, 8453, { v9: false })).map((p) => p.symbole),
     majFraisEtRecap() { notes.push(dom['#cPaireNote'].textContent); },
   });

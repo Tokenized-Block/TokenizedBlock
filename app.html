@@ -2339,7 +2339,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-panneau-telecommande" hidden>Build <code>20261004-panneau-telecommande</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-secours-paire-et-retrait" hidden>Build <code>20261004-secours-paire-et-retrait</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -2778,6 +2778,15 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
         <p class="note wOk" id="plProgression" hidden style="font-weight:700"></p>
       <p class="note" id="plEtat"></p>
+      </div>
+
+      <!-- 2026-10-04 : le minimum du createur (contrat de marche 0,07 % / 0,03 %) — son etat, et sa sortie pour le createur.
+           Rempli par peindreCautionProfil() ; cache tant que le marche n est pas sur ce contrat ou qu aucun minimum n y est. -->
+      <div class="pJeu" id="pCaution" hidden>
+        <div class="pJeuTete"><span class="pBadge">Creator minimum</span><span class="pPV" id="pCautionEtat"></span></div>
+        <p class="note" id="pCautionTexte"></p>
+        <button type="button" class="bouton sec" id="pCautionBouton" hidden></button>
+        <p class="note" id="pCautionNote"></p>
       </div>
 
       <p class="note" id="pNote"></p>
@@ -3326,6 +3335,7 @@ import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phra
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
+import { etatCautionCreateur, sortieCautionPour } from './caution-createur.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
  *   Deux rails, deux taux, explicitement — baisser l existant aurait coupe un revenu qui existe.
@@ -9169,6 +9179,7 @@ async function lireProfil(adr, sym, perime, opts) {
   $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
   majDeviseEchange(v);
   peindreVerrouMarche(v, origineProfil);
+  void peindreCautionProfil(adr, v);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (ethUsd === null && typeof vieProfil === 'number') await lirePrixEth();
   /* ⛔ Le prix de la devise du marche, quand ce n est pas de l ETH : l adresse se lit dans la CLE de la
@@ -9274,6 +9285,7 @@ async function lireProfil(adr, sym, perime, opts) {
   $('#pEchange').hidden = !echangeAutorise(v, etatVieProfil, origineProfil);
   majDeviseEchange(v);
   peindreVerrouMarche(v, origineProfil);
+  void peindreCautionProfil(adr, v);
   $('#pLiquidite').hidden = etatVieProfil !== 'LUE';
   if (etatVieProfil === 'LUE') void peindrePositions(adr);
   /* ⛔ P0 2026-09-15: profile shows whether the READ pool key is hooked (fee hook) or legacy unhooked. */
@@ -15786,9 +15798,13 @@ function peindrePaires() {
             const queue = (combien.get(String(b.symbole)) || 0) > 1 ? ' ·' + String(b.adr).slice(-4) : '';
             /* 2026-10-03 : meme regle que les actions — le hook V8 ne les admet pas (deviseAdmise lu : false) */
             const okB = deviseOk && lancable(b.adr);
-            return '<option value="' + enTexte(b.adr) + '"' + (okB ? '' : ' disabled') + '>'
+            /* ⛔ 2026-10-04 (Phil : « le paired b20 to b20 est casse ») : ces lignes etaient `disabled` et libellees « — soon ».
+             *   Or la liste des devises du contrat de marche est FIGEE : « soon » etait une promesse sans rien derriere. Elles
+             *   sont maintenant CHOISISSABLES, et le choix mene a la devise de secours (deviseDeSecoursPour) : le block nait
+             *   contre la devise du block choisi, celle qui a le marche profond. */
+            return '<option value="' + enTexte(b.adr) + '">'
               + enTexte(b.symbole) + enTexte(queue) + ' — ' + enTexte(usdCourt(b.liq)) + ' liquidity'
-              + (okB ? '' : ' — soon') + '</option>';
+              + (okB ? '' : ' — through its currency') + '</option>';
           }).join('')
           + '</optgroup>';
       })()
@@ -16009,6 +16025,83 @@ async function clesReellesDe(adr) {
   return p;
 }
 
+/* ══ LE MINIMUM DU CREATEUR SUR LA PAGE DU BLOCK (2026-10-04) — caution-createur.js ════════════════════════════════════════════
+ * ⛔⛔ POURQUOI : l ecran Create annoncait le depot et disait « this app does not offer that step yet » ; le createur ne pouvait le
+ *   reprendre qu en appelant le contrat a la main. Cette carte LIT l etat (qui a depose, combien, la part coule-t-elle) pour tout
+ *   le monde, et donne au CREATEUR — celui que le contrat nomme, pas un indice de l app — le bouton de l etape suivante.
+ * ⛔ CE QUE SORTIR COUTE EST DIT AVANT LE CLIC QUI ENGAGE : la demande arrete la part de 0,03 % AUSSITOT ; le retrait n ouvre que
+ *   7 jours plus tard. Deux clics pour demander (le premier explique, le second envoie) ; le wallet signe, rien d autre.
+ * Prouve sur fork contre le contrat deploye (banc-naissance-7030-fork : demande -> part arretee -> RetraitPasPret avant 7 j ->
+ *   depot rendu en entier apres). ⛔ NON MESURE : ce bouton avec un vrai wallet. */
+let cautionProfilSeq = 0;
+async function peindreCautionProfil(adr, v) {
+  const carte = $('#pCaution');
+  if (!carte) return;
+  const seq = ++cautionProfilSeq;
+  carte.hidden = true;
+  const b = $('#pCautionBouton'), note = $('#pCautionNote');
+  b.hidden = true; b.onclick = null; note.textContent = '';
+  if (Number(CHAINE) !== 8453 || !v || v.etat !== 'LUE' || !v.cle || !estHook7030(v.cle.hooks)) return;
+  const cle = v.cle, hook = v.cle.hooks, a = String(adr).toLowerCase();
+  const devise = String(cle.currency0).toLowerCase() === a ? String(cle.currency1).toLowerCase() : String(cle.currency0).toLowerCase();
+  let etat, dec = 18, maintenantSec = Math.floor(Date.now() / 1000);
+  try {
+    etat = await etatCautionCreateur({ rpc, hook, cle, maintenantSec });
+    if (!/^0x0{40}$/.test(devise)) dec = Number(BigInt(await rpc('eth_call', [{ to: devise, data: '0x313ce567' }, 'latest'])));
+  } catch (_) { etat = { etat: 'NON_MESURE' }; }
+  if (seq !== cautionProfilSeq || String($('#profil').dataset.block || '').toLowerCase() !== a) return;
+  if (!etat || etat.etat !== 'LUE') return; /* aucun minimum, ou non lu : la carte reste cachee — jamais « rien a reprendre » sur une lecture ratee */
+  const sym = /^0x0{40}$/.test(devise) ? 'ETH' : String(v.devise || 'the paired currency');
+  const lisible = (x) => { const s = x.toString().padStart(dec + 1, '0'); const f = dec ? s.slice(s.length - dec).replace(/0+$/, '').slice(0, 8) : ''; return s.slice(0, s.length - dec) + (f ? '.' + f : ''); };
+  const moi = !!compte && String(compte).toLowerCase() === etat.createur;
+  const phases = { ACTIF: 'earning', SOUS_LE_MINIMUM: 'not earning', SORTIE_DEMANDEE: 'leaving', RETIRABLE: 'ready to take back', RETIRE: 'taken back' };
+  $('#pCautionEtat').textContent = phases[etat.phase] || '';
+  const jours = (s) => { const j = Math.floor(s / 86400), h = Math.ceil((s % 86400) / 3600); return j > 0 ? j + ' day(s) ' + h + ' h' : h + ' h'; };
+  $('#pCautionTexte').textContent = (etat.phase === 'RETIRE'
+    ? 'The creator took the minimum back. The creator share no longer flows on this market.'
+    : lisible(etat.depose) + ' ' + sym + ' deposited by ' + (moi ? 'you' : court(etat.createur)) + '. '
+      + (etat.phase === 'ACTIF' ? 'While it stays, the creator earns 0.03% of each trade.'
+        : etat.phase === 'SOUS_LE_MINIMUM' ? 'It is under the minimum fixed at birth (' + lisible(etat.minimum) + ' ' + sym + '), so the creator share is not flowing.'
+          : etat.phase === 'SORTIE_DEMANDEE' ? 'The creator asked to take it back: the share has stopped, and the deposit can be taken back in ' + jours(etat.secondesRestantes) + '.'
+            : 'The 7 days have passed: the creator can take it back.'));
+  carte.hidden = false;
+  if (!moi) return;
+  const sortie = sortieCautionPour({ etat, compte, hook, cle });
+  if (!sortie.appel) return;
+  const envoyer = async () => {
+    b.disabled = true; note.className = 'note'; note.textContent = 'Check it in your wallet…';
+    let r;
+    try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: sortie.appel.to, data: sortie.appel.data, value: '0x0' }); }
+    catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    b.disabled = false;
+    if (r.etat === 'CONFIRME') { note.textContent = sortie.etape === 'DEMANDER' ? 'Requested. Come back in 7 days to take it back.' : 'Taken back — it is in your wallet.'; void peindreCautionProfil(adr, v); return; }
+    note.className = 'note wKo';
+    note.textContent = estRefusWallet(r) ? 'You declined in your wallet — nothing was sent.'
+      : aEteDiffusee(r.etat) ? 'Sent, not confirmed yet — do not sign it again; reload this page in a moment.'
+        : 'It did not go through: ' + String(r.pourquoi || r.etat).slice(0, 160);
+  };
+  b.hidden = false; b.disabled = false;
+  if (sortie.etape === 'RETIRER') { b.textContent = 'Take my minimum back'; b.onclick = envoyer; return; }
+  b.textContent = 'Ask to take my minimum back';
+  b.onclick = () => {
+    /* premier clic : ce que ca coute, dit en clair ; second clic : l envoi */
+    note.className = 'note';
+    note.textContent = 'If you ask, your 0.03% share stops at once, and the deposit can only be taken back 7 days later. It does not come back by itself afterwards.';
+    b.textContent = 'Yes, ask now'; b.onclick = envoyer;
+  };
+}
+/** La devise contre laquelle faire naitre un block quand la personne a choisi UN AUTRE BLOCK comme paire : la devise du marche de
+ *  ce block (lue dans l index du Market) si le contrat l admet, sinon ETH. null = rien a proposer (alors le refus reste seul). */
+function deviseDeSecoursPour(adr) {
+  const a = String(adr || '').toLowerCase();
+  const mk = marcheParAdr.get(a) || null;
+  const cote = mk && mk.quoteAdr ? String(mk.quoteAdr).toLowerCase() : null;
+  const liste = pairesProposees(CHAINE);
+  const trouver = (x) => liste.find((p) => String(p.adr).toLowerCase() === x && estPaireLancable(p.adr)) || null;
+  const p = (cote && trouver(cote)) || trouver(ETH_ADR.toLowerCase());
+  if (!p || String(p.adr).toLowerCase() === a) return null;
+  return { adr: p.adr, symbole: p.symbole, saCote: !!cote && String(p.adr).toLowerCase() === cote, symboleBlock: mk && mk.sym ? String(mk.sym) : null };
+}
 let majPaireSeq = 0;
 async function majPaire() {
   const seq = ++majPaireSeq;
@@ -16046,6 +16139,24 @@ async function majPaire() {
       motifRefusPaire = e0();
       n.className = 'note wKo';
       n.textContent = motifRefusPaire;
+      /* ⛔⛔ 2026-10-04 — LA DEVISE DE SECOURS. Un block ne peut pas naitre directement contre un autre block : la liste du
+       *   contrat de marche est figee. Au lieu de laisser la personne devant un refus, on lui propose LA DEVISE DE CE BLOCK
+       *   (celle de son marche, lue dans l index) si elle est dans la liste, sinon ETH — un clic, et la naissance repart. */
+      /* seulement pour une adresse TAPEE ou choisie parmi les blocks vivants (type SAISIE) : une devise du registre refusee
+       *   (ex. une action sans prix) garde son refus seul — lui proposer « pas un autre block » serait faux. */
+      const secours = q.paire.type === 'SAISIE' ? deviseDeSecoursPour(q.paire.adr) : null;
+      if (secours) {
+        n.className = 'note';
+        n.textContent = 'A new block is born against a currency, not directly against another block. '
+          + (secours.saCote ? (secours.symboleBlock || 'That block') + ' trades against ' + secours.symbole + ': pair yours with ' + secours.symbole
+            + ' too — both then share the same currency, which is how the app routes one block into another. '
+            : 'Pair yours with ' + secours.symbole + ', the default here: blocks that share a currency are routed into one another through it. ');
+        const bS = document.createElement('button');
+        bS.type = 'button'; bS.className = 'bouton sec'; bS.id = 'cPaireSecours';
+        bS.textContent = 'Pair with ' + secours.symbole + ' instead';
+        bS.addEventListener('click', () => { const sP = $('#cPaire'); sP.value = secours.adr; sP.dispatchEvent(new Event('change')); });
+        n.append(bS);
+      }
       const chipE0 = $('#cPaireChip'); if (chipE0) chipE0.hidden = true;
       majFraisEtRecap();
     };
@@ -16074,8 +16185,10 @@ async function majPaire() {
     if (Number(CHAINE) === 8453 && !hookDeLancementPour(q.paire.adr, CHAINE, OPTIONS_LANCEMENT)) {
       paireChoisie = null;
       n.className = 'note wKo';
-      n.textContent = 'Our current market contract can pair a new block with ETH, USDC, cbBTC and 10 tokenized stocks ('
-        + symbolesLancables().join(', ') + '). This one opens with our next contract — pick one of these for now. Nothing was sent.';
+      /* 2026-10-04 : la phrase annoncait « 10 tokenized stocks » (il y en a 58) et « opens with our next contract » — une promesse
+       *   que rien ne porte. Elle dit maintenant ce qui est, sans compte recopie ni date. */
+      n.textContent = 'A new block can be paired with ETH, a currency from the list, or one of these tokenized stocks: '
+        + symbolesLancables().join(', ') + '. This token is not on the market contract’s list — pick one of those. Nothing was sent.';
       const chipNo = $('#cPaireChip'); if (chipNo) chipNo.hidden = true;
       majFraisEtRecap();
       return;
@@ -16237,7 +16350,7 @@ async function majNoteCaution() {
     if (seq !== majNoteCautionSeq) return;
     const sym = devise ? String((p && p.symbole) || 'the paired token') : 'ETH';
     const fin = ' It is not a fee: it stays yours, held by the market contract, and it is what lets you earn 0.03% of each trade. '
-      + 'Taking it back means a request and then 7 days, made on the contract — this app does not offer that step yet.';
+      + 'Taking it back means a request and then 7 days: both are done from the block’s own page here, and your share stops as soon as you ask.';
     if (!c || typeof c.minimum !== 'bigint') {
       el.textContent = 'On top of the Birth fee, this market asks you to deposit a creator’s minimum — about $1 of ' + sym
         + ', from your wallet. Its exact amount could not be read just now.' + fin;
