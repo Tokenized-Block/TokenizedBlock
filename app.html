@@ -15612,6 +15612,16 @@ setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
  *   ⛔ ET ON BORNE. 148 lignes dans un menu deroulant, ce n est pas un choix, c est un mur. Les plus
  *     profondes d abord : ce sont celles ou un acheteur pourra reellement entrer. */
 const PAIRES_DECOUVERTES_MAX = 40;
+/** Une devise peut-elle etre la paire d un block NEUF sur le hook de lancement actuel ? ⛔ UNE regle (hookDeLancementPour,
+ *  la meme que la garde de lancement) pour le selecteur ET la garde de majPaire. Hors mainnet : comportement d avant. */
+function estPaireLancable(adr) {
+  return Number(CHAINE) !== 8453 || !!hookDeLancementPour(adr, CHAINE, OPTIONS_LANCEMENT);
+}
+/** Les actions du registre qu un block neuf peut prendre comme paire AUJOURD HUI (s elargit seul avec le prochain hook). */
+function symbolesLancables() {
+  try { return pairesProposees(CHAINE).filter((p) => p.type === 'ACTION' && estPaireLancable(p.adr)).map((p) => p.symbole); }
+  catch (_) { return []; }
+}
 function blocksDecouverts() {
   const dejaAuRegistre = new Set();
   try { for (const p of pairesProposees(CHAINE)) dejaAuRegistre.add(String(p.adr || '').toLowerCase()); }
@@ -15642,15 +15652,20 @@ function peindrePaires() {
   /* Phil (2026-09-19) : « ne propose plus TBLOCK — aucune liquidite injectee, on fera plus tard ». */
   /* tip 20260922-stock-pair-ux: MAIN Birth=V8 admits stocks — do not leave AAPLc/… as « soon » for 3s */
   const deviseOk = v3Pret || Number(CHAINE) === 8453;
-  const ouverte = (p) => p.type === 'NATIF' || (deviseOk && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION'));
+  /* ⛔⛔ 2026-10-03 (mesure) : le selecteur ouvrait 37 actions, le hook de lancement n en admet que 10 — et aucun block
+   *   vivant. Sur mainnet, une option n est ouverte que si hookDeLancementPour l admet (la meme regle que la garde de
+   *   lancement) ; les autres disent « soon » au lieu de reverter apres le clic. Les lancables passent en tete :
+   *   un block appaire a une action, c est un MEMESTOCK. */
+  const lancable = estPaireLancable;
+  const ouverte = (p) => p.type === 'NATIF' || (deviseOk && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION') && lancable(p.adr));
   const base = liste.filter((p) => p.type === 'NATIF' || p.type === 'STABLE' || p.type === 'MAJEUR');
-  const actions = liste.filter((p) => p.type === 'ACTION');
+  const actions = liste.filter((p) => p.type === 'ACTION').sort((a, b) => Number(lancable(b.adr)) - Number(lancable(a.adr)));
   const opt = (p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
       + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>';
   /* tip 20260922-stock-pair-ux: optgroups — Base currencies vs Coinbase tokenized stocks */
   s.innerHTML = '<optgroup label="Base currencies">' + base.map(opt).join('') + '</optgroup>'
     + (actions.length
-      ? '<optgroup label="Coinbase tokenized stocks">' + actions.map(opt).join('') + '</optgroup>'
+      ? '<optgroup label="Coinbase tokenized stocks — make it a memestock">' + actions.map(opt).join('') + '</optgroup>'
       : '')
     /* ⛔⛔ LES BLOCKS VIVANTS, DECOUVERTS. Le groupe n apparait QUE s il y a quelque chose dedans :
      *     un `optgroup` vide est un rayon vide dans un magasin, il fait croire a une panne.
@@ -15677,9 +15692,11 @@ function peindrePaires() {
         return '<optgroup label="Live blocks — discovered on chain">'
           + vivants.map((b) => {
             const queue = (combien.get(String(b.symbole)) || 0) > 1 ? ' ·' + String(b.adr).slice(-4) : '';
-            return '<option value="' + enTexte(b.adr) + '"' + (deviseOk ? '' : ' disabled') + '>'
+            /* 2026-10-03 : meme regle que les actions — le hook V8 ne les admet pas (deviseAdmise lu : false) */
+            const okB = deviseOk && lancable(b.adr);
+            return '<option value="' + enTexte(b.adr) + '"' + (okB ? '' : ' disabled') + '>'
               + enTexte(b.symbole) + enTexte(queue) + ' — ' + enTexte(usdCourt(b.liq)) + ' liquidity'
-              + (deviseOk ? '' : ' — soon') + '</option>';
+              + (okB ? '' : ' — soon') + '</option>';
           }).join('')
           + '</optgroup>';
       })()
@@ -15959,6 +15976,18 @@ async function majPaire() {
    *     divisant par 1e18 sans lire `decimals()`. Un chiffre juste mais illisible n avertit pas. */
   if (q.paire.type === 'SAISIE' || q.paire.besoinB20 || q.paire.type === 'ACTION') {
     const estAction = q.paire.type === 'ACTION';
+    /* ⛔⛔ 2026-10-03 (mesure : deviseAdmise() lu sur le hook V8) : sa liste est FIGEE — ETH, USDC, cbBTC et 10 actions.
+     *   AMDc et 6 blocks vivants du Market rendent `false` : un Create pair avec eux revertait APRES le clic. Meme
+     *   fonction que la garde de lancement (hookDeLancementPour) : s ouvre d elle-meme quand le prochain hook est actif. */
+    if (Number(CHAINE) === 8453 && !hookDeLancementPour(q.paire.adr, CHAINE, OPTIONS_LANCEMENT)) {
+      paireChoisie = null;
+      n.className = 'note wKo';
+      n.textContent = 'Our current market contract can pair a new block with ETH, USDC, cbBTC and 10 tokenized stocks ('
+        + symbolesLancables().join(', ') + '). This one opens with our next contract — pick one of these for now. Nothing was sent.';
+      const chipNo = $('#cPaireChip'); if (chipNo) chipNo.hidden = true;
+      majFraisEtRecap();
+      return;
+    }
     n.className = 'note';
     n.textContent = estAction
       ? 'Checking that stock on chain — it must exist and have units in circulation…'
