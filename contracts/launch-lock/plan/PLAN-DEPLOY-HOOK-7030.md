@@ -1,3 +1,10 @@
+# ⛔⛔ DO NOT SIGN THIS PLAN (2026-10-03) ⛔⛔
+**This 62-quote build sits on e7a9c17, which PREDATES the fixes judged necessary on 2026-10-02 evening** — GAS_LABEL
+300k made every real Create revert (163b627), creator share above what was locked (6caeb0f), empty label marker
+disabling the check (a035bc8), non-idempotent caution cap (9dcf154), per-currency ~$1 caution floor (Zero 1, d9dd200).
+The hook address below (0xd68B…24cC) is the 62-list ON THE OLD CODE. The 62 list and the L4 tests must be ported onto the
+reconciled fixed contract, re-mined and re-proved before any signature.
+
 # New hook 0.07 % fee sink + 0.03 % creator, in the paired currency — DEPLOY PLAN (fork only, nothing sent)
 
 Source: `src/TBlockLaunchLockHook.sol` (no owner, no setter: every value fixed at construction).
