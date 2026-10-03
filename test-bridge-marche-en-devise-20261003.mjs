@@ -45,16 +45,22 @@ ok(/if \(!recuS\) \{/.test(html), 'Bridge : devise illisible -> arret avant la s
 
 /* ── A. recuBridge, hors reseau ── */
 const spcx = { paire: 'DEVISE', devise: 'SPCXc', decDevise: 8 };
-ok(recuBridge({ recoitDevise: 'pair', recoitAuMoins: 150000000n }, spcx) === formaterUnites(150000000n, 8) + ' SPCXc',
-  'paire SPCXc 8 dec : 1,5e8 unites -> ' + recuBridge({ recoitDevise: 'pair', recoitAuMoins: 150000000n }, spcx));
-ok(recuBridge({ recoitDevise: 'ETH', recoitAuMoins: 10n ** 15n }, null) === formaterUnites(10n ** 15n, 18) + ' ETH', 'TEMOIN vente en ETH : 18 decimales, inchange');
-ok(recuBridge({ recoitDevise: 'pair', recoitAuMoins: 1n }, null) === null, 'paire sans marche lu -> null (on ne devine pas)');
-ok(recuBridge({ recoitDevise: 'pair', recoitAuMoins: 1n }, { paire: 'DEVISE', devise: 'X' }) === null, 'paire sans decimales lues -> null');
-ok(recuBridge(null, spcx) === null, 'pas de resume -> null');
+ok(recuBridge(150000000n, 'pair', spcx) === formaterUnites(150000000n, 8) + ' SPCXc',
+  'paire SPCXc 8 dec : 1,5e8 unites -> ' + recuBridge(150000000n, 'pair', spcx));
+ok(recuBridge(10n ** 15n, 'ETH', null) === formaterUnites(10n ** 15n, 18) + ' ETH', 'TEMOIN vente en ETH : 18 decimales, inchange');
+ok(recuBridge(1n, 'pair', null) === null, 'paire sans marche lu -> null (on ne devine pas)');
+ok(recuBridge(1n, 'pair', { paire: 'DEVISE', devise: 'X' }) === null, 'paire sans decimales lues -> null');
+ok(recuBridge(undefined, 'ETH', null) === null, 'pas de minimum dans le plan -> null (jamais « 0 »)');
 /* MUTANT : l ancien formatage (18 en dur) — le banc doit voir la difference */
-const mutant = fabriquerRecu(srcRecu.replace('formaterUnites(resume.recoitAuMoins || 0n, dec)', 'formaterUnites(resume.recoitAuMoins || 0n, 18)'));
-ok(mutant({ recoitDevise: 'pair', recoitAuMoins: 150000000n }, spcx) !== recuBridge({ recoitDevise: 'pair', recoitAuMoins: 150000000n }, spcx),
+const CIBLE = 'formaterUnites(recoitAuMoins, dec)';
+ok(srcRecu.includes(CIBLE), 'cible du mutant presente dans recuBridge');
+const mutant = fabriquerRecu(srcRecu.replace(CIBLE, 'formaterUnites(recoitAuMoins, 18)'));
+ok(mutant(150000000n, 'pair', spcx) !== recuBridge(150000000n, 'pair', spcx),
   'MUTANT 18 decimales en dur : le montant affiche change, le banc le voit');
+/* le texte du net vient du plan REEL (meme exigence que test-bridge-pas-de-frais-sans-echange) */
+ok(/recuBridge\(plan\.resume\.recoitAuMoins, plan\.resume\.recoitDevise, marcheB\)/.test(html)
+  && /recuBridge\(sortieResume\.recoitAuMoins, sortieResume\.recoitDevise, marcheS\)/.test(html),
+  'les deux sites passent recoitAuMoins du plan reel a recuBridge');
 
 /* ── B. sur la chaine : e7e9 (marche V8 contre SPCXc), IB022 (marche V8 contre ETH) ── */
 const URLS = ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'];

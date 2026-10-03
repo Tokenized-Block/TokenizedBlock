@@ -2325,7 +2325,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261003-r9-blocks-tb" hidden>Build <code>20261003-r9-blocks-tb</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261003-audit-rails-bridge" hidden>Build <code>20261003-audit-rails-bridge</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -20151,8 +20151,9 @@ async function majBridgeQuote() {
       + '. Nothing was sent.';
     return;
   }
-  const recu = recuBridge(plan.resume, marcheB);
-  netEl.textContent = recu ? 'You receive at least ' + recu + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.'
+  netEl.textContent = recuBridge(plan.resume.recoitAuMoins, plan.resume.recoitDevise, marcheB)
+    ? 'You receive at least ' + recuBridge(plan.resume.recoitAuMoins, plan.resume.recoitDevise, marcheB)
+      + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.'
     : 'You receive: not read — the paired asset of its market could not be read. Nothing was sent.';
 }
 /* ⛔⛔ 2026-10-03 (audit rails R9) : le Bridge appelait planEchange SANS marche lu ; planEchange relisait alors par
@@ -20164,12 +20165,12 @@ async function marcheDuHubBridge(hub) {
 }
 /** Le montant recu, dans SES decimales. ⛔ Le Bridge formatait tout en 18 : un minimum en SPCXc (8 dec) se serait
  *  affiche 1e10 fois trop petit, juste avant une signature. Devise sans decimales lues -> null (on ne devine pas). */
-function recuBridge(resume, marche) {
-  if (!resume) return null;
-  if (resume.recoitDevise !== 'pair') return formaterUnites(resume.recoitAuMoins || 0n, 18) + ' ' + (resume.recoitDevise || 'ETH');
+function recuBridge(recoitAuMoins, recoitDevise, marche) {
+  if (recoitAuMoins === undefined || recoitAuMoins === null) return null;
+  if (recoitDevise !== 'pair') return formaterUnites(recoitAuMoins, 18) + ' ' + (recoitDevise || 'ETH');
   const dec = marche && marche.paire === 'DEVISE' ? Number(marche.decDevise) : NaN;
   if (!Number.isInteger(dec) || dec < 0 || dec > 36) return null;
-  return formaterUnites(resume.recoitAuMoins || 0n, dec) + ' ' + (marche.devise || 'of the paired asset');
+  return formaterUnites(recoitAuMoins, dec) + ' ' + (marche.devise || 'of the paired asset');
 }
 
 function basculerBridgeMode(mode) {
@@ -20307,7 +20308,7 @@ function basculerBridgeMode(mode) {
       return;
     }
     const sortieResume = sortie.resume || {};
-    const recuS = recuBridge(sortieResume, marcheS);
+    const recuS = recuBridge(sortieResume.recoitAuMoins, sortieResume.recoitDevise, marcheS);
     if (!recuS) {
       etape('bridge_swap_ko');
       setEtat('The paired asset of its market could not be read, so the minimum you receive cannot be shown — nothing was sent.');
