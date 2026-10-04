@@ -180,6 +180,13 @@ ok(/if \(!moi \|\| CHAINE !== 8453\) \{ mesSkins\.compte = null; mesSkins\.parBl
   'C2 Map : sans wallet les anneaux sont RETIRES ; une teinte hors 0..359 n est jamais posee en CSS');
 ok(/\.bloc\.maSkin,\.mapEnv\.a3d \.bloc\.maSkin\{border:2px solid var\(--skinC/.test(html) && /if \(chemin\.startsWith\('\/api\/skins\/de\/'\)\) \{/.test(lire('serveur-web.js'))
   && /if \(l\.payeur === qui\) parBlock\.set\(l\.block, l\);/.test(lire('serveur-web.js')), 'C2 Map : /api/skins/de/<compte> rend la derniere skin payee par CE compte pour chaque block');
+/* l onglet Blocks ouvre le panneau ; la carte « Bot loop » y est deplacee ; les sorties d un block vers les actions Aerodrome */
+ok(/nb\.addEventListener\('click', \(\) => \{ try \{ bcOuvrirPop\(\{ sansBasculer: true, vue: 'trade' \}\); \} catch \(_\) \{\} \}\);/.test(html) && /if \(!opts\.sansBasculer && !\$\('#v-brain'\)\.classList\.contains\('on'\)\) allerA\('brain'\);/.test(html)
+  && /if \(d && !d\.open && opts\.vue\) \{ try \{ bcVue\(opts\.vue\); \}/.test(html), 'C2 l onglet Blocks ouvre le panneau sur Trade SANS quitter Blocks ; deja ouvert, sa vue n est pas changee');
+ok(/const carte = \$\('#bBotLoopCarte'\), niche = \$\('#bcBotLoop'\); if \(carte && niche\) niche\.append\(carte\);/.test(html) && (html.match(/id="bBotLoopCarte"/g) || []).length === 1 && /<div id="bcBotLoop"><\/div>/.test(html),
+  'C2 la carte « Bot loop · Option A » est DEPLACEE dans le panneau (le meme element, une seule fois dans la page) — pas de doublon');
+ok(/if \(!achat && !ACTIONS_PAR_ADR\.has\(a\)\) \{/.test(bcSrc) && /if \(ml && Number\(ml\.prixUsd\) > 0 && \/\^aerodrome\$\/i\.test\(String\(ml\.dex \|\| ''\)\)\) choix\.push\(\[sa, 'for ' \+ st\.symbole\]\);/.test(bcSrc),
+  'C2 vente d un block : le menu ajoute les actions que l index prixe sur Aerodrome (route BLOCK>ACTION mesuree) ; jamais pour une action');
 /* la recherche d un block */
 ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /const j = bcResoudre\(v\);\n\s+if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
   'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');

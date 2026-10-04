@@ -76,7 +76,7 @@ ok(/dessinerRasterSur\(\$\('#bcRaster'\), brainHisto\)/.test(html) && /const svg
 ok(!/etatInitial\(|cerveauPas\(/.test(html.slice(html.indexOf('const bc = { session: null'), html.indexOf('(function bcDemarrage()'))), 'TEMOIN : le code du panneau ne fait battre AUCUN cerveau a lui');
 const iW = html.indexOf('Its wiring — and what it writes'), iL = html.indexOf('<div class="carte" id="bcLanceur">'), iJ = html.indexOf('<p class="titre">Its job</p>');
 ok(iW > 0 && iL > iW && iJ > iL && !/<div class="carte"/.test(html.slice(iL + 40, iJ - 60).replace(/<div class="carte">\s*$/, '')), 'le widget « Control panel » est place entre « Its wiring » et « Its job »');
-ok(/<dialog class="bcPop" id="bcPop"/.test(html) && /function bcOuvrirPop\(\) \{/.test(html) && /\$\('#bcOuvrir'\)\.addEventListener\('click', \(\) => bcOuvrirPop\(\)\);/.test(html)
+ok(/<dialog class="bcPop" id="bcPop"/.test(html) && /function bcOuvrirPop\(opts = \{\}\) \{/.test(html) && /\$\('#bcOuvrir'\)\.addEventListener\('click', \(\) => bcOuvrirPop\(\)\);/.test(html)
   && /async function bcRecevoir\(c\) \{\n\s+bcOuvrirPop\(\);/.test(html), 'le panneau est un pop-up : ouvert par le widget, et de lui-meme quand un agent propose');
 const bcSrc = html.slice(html.indexOf('const bc = { session: null'), html.indexOf('(function bcDemarrage()'));
 const innerHtmls = bcSrc.match(/[A-Za-z]+\.innerHTML = [^;]+;/g) || [];

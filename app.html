@@ -618,6 +618,9 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcPlus[aria-expanded="true"]{transform:rotate(45deg)}
 .bcBoutique{margin-top:8px;padding:10px 12px;border:1px solid var(--ligne);border-radius:16px;background:var(--creux)}
 .bcBoutique .bcPre{margin:0 0 8px}
+.bcBot{margin-top:10px;border:1px solid var(--ligne);border-radius:16px;padding:8px 12px;background:var(--creux)}
+.bcBot summary{cursor:pointer;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--doux)}
+.bcBot .carte{margin:8px 0 0;padding:0;border:0;background:transparent;box-shadow:none}
 .bcBoutique .puce[aria-pressed="true"]{border-color:var(--accent);color:var(--texte)}
 /* les curseurs de la skin : la piste MONTRE la roue des teintes, la valeur s affiche a cote du libelle */
 .bcReglages{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
@@ -1879,6 +1882,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique" aria-label="Skins" title="Skins">+</button>
         </div>
         <div class="bcBoutique" id="bcBoutique" hidden></div>
+        <!-- la carte « Bot loop · Option A » de l onglet Brain est DEPLACEE ici au demarrage (meme element, pas une copie) -->
+        <details class="bcBot"><summary>Bot loop — pay for a brain action</summary><div id="bcBotLoop"></div></details>
       </div>
 
       <div class="bcOnglets" role="tablist" aria-label="Control panel views">
@@ -2680,7 +2685,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-ma-skin-sur-la-map" hidden>Build <code>20261004-ma-skin-sur-la-map</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-blocks-ouvre-le-panneau" hidden>Build <code>20261004-blocks-ouvre-le-panneau</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21796,9 +21801,12 @@ function bcRepeindre() {
   } catch (_) { /* le battement suivant repeindra */ }
 }
 /** Ouvre le pop-up (sur l onglet Brain : c est lui qui fait battre le cerveau). Sans effet s il est deja ouvert. */
-function bcOuvrirPop() {
-  try { if (!$('#v-brain').classList.contains('on')) allerA('brain'); } catch (_) {}
+function bcOuvrirPop(opts = {}) {
+  /* `sansBasculer` : ouvert depuis un autre onglet (Blocks) — on y RESTE ; le cerveau bat quand meme tant que le panneau est ouvert.
+   * `vue` : la vue montree SI le panneau etait ferme (deja ouvert = on le laisse tel qu il est). */
+  try { if (!opts.sansBasculer && !$('#v-brain').classList.contains('on')) allerA('brain'); } catch (_) {}
   const d = $('#bcPop');
+  if (d && !d.open && opts.vue) { try { bcVue(opts.vue); } catch (_) {} }
   /* ⛔ NON MODAL (`show`, pas `showModal`) : l app reste visible et utilisable derriere. Le panneau est sorti de la vue Brain et pose
    *   sous <body> : enfant d une vue, il disparaissait des qu on changeait d onglet (une vue masquee masque ses enfants, fixes ou non). */
   if (d && d.parentElement !== document.body) document.body.append(d);
@@ -21939,7 +21947,8 @@ async function bcLireSoldes(a) {
 function bcPeindreTicket(a, sym, mk, snap) {
   const achat = bc.cote === 'buy', nomB = sym || 'this block', q = bcCotation(a);
   const s = $('#bcDevise');
-  const cle = a + '|' + (sym || '') + '|' + bc.cote + '|' + (q && q.ok ? q.adr : '');
+  /* la cle inclut l arrivee de l index : les sorties vers les actions Aerodrome n apparaissent qu une fois l index lu */
+  const cle = a + '|' + (sym || '') + '|' + bc.cote + '|' + (q && q.ok ? q.adr : '') + '|' + (marcheParAdr.size ? 1 : 0);
   if (bc.ticketDe !== cle) {
     bc.ticketDe = cle; bc.rapidesDe = null;
     /* un autre block ou un autre sens : la note du ticket precedent ne vaut plus */
@@ -21953,6 +21962,16 @@ function bcPeindreTicket(a, sym, mk, snap) {
     let choix;
     if (achat) choix = ACTIONS_PAR_ADR.has(a) ? [['USDC', 'USDC'], ['ETH', 'ETH']] : standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
     else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
+    /* ⛔ « propose toutes les routes possibles dans le menu » (Phil) — seulement celles qui ABOUTISSENT. Mesure prod du 2026-10-04 :
+     *   vendre un block contre une action cotee sur Aerodrome (IB022 > NVDAc) rend APPROBATIONS (route BLOCK>ACTION). Un block peut
+     *   donc sortir vers ces actions-la : on les ajoute a la VENTE d un block. OUSD > block n a pas pu etre cote ce jour-la (noeud en
+     *   quota) : pas ajoute. Une action, elle, ne se vend que contre USDC. */
+    if (!achat && !ACTIONS_PAR_ADR.has(a)) {
+      for (const st of ACTIONS_COINBASE) {
+        const sa = String(st.adr).toLowerCase(), ml = marcheParAdr.get(sa);
+        if (ml && Number(ml.prixUsd) > 0 && /^aerodrome$/i.test(String(ml.dex || ''))) choix.push([sa, 'for ' + st.symbole]);
+      }
+    }
     const avant = s.value; s.textContent = '';
     for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
     if (choix.some(([v]) => v === avant)) s.value = avant;
@@ -22243,7 +22262,7 @@ function bcAifiPeindre() {
   for (const id of ['#bcAiAchat', '#bcAiVente', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
   b.textContent = s ? 'Stop AiFi' : 'Start AiFi';
   const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'AiFi · on' : 'AiFi';
-  if (!s) { if (!e.classList.contains('wKo')) e.textContent = 'Its brain proposes; you confirm each trade in your wallet.'; return; }
+  if (!s) { if (!e.classList.contains('wKo')) e.textContent = 'Its brain proposes; you confirm each trade in your wallet. Each trade pays the usual trade fee.'; return; }
   const h = Math.max(0, (Number(s.jusqua) - Date.now()) / 3600000);
   e.className = 'note';
   /* le budget ne concerne que les ACHATS : sans la regle d achat, on ne l affiche pas (« 0 of 0 ETH » ne voulait rien dire) */
@@ -22541,6 +22560,13 @@ for (const b of document.querySelectorAll('#bcPanneau [data-mode]')) b.addEventL
   $('#bcLimites').hidden = !full;
 });
 $('#bcArmer').addEventListener('click', () => { if (bc.aifi) bcAifiArreter('AiFi stopped.'); else bcAifiDemarrer(); });
+/* 2026-10-04 (Phil) : « des que l utilisateur appuie sur l onglet Blocks, ca ouvre le panneau de controle… si deja ouvert laisse-le,
+ *   et sur Trade ». Le panneau s ouvre sur sa vue Trade sans quitter l onglet Blocks ; deja ouvert, il n est pas touche. */
+{ const nb = document.querySelector('.navB[data-volet="mien"]'); if (nb) nb.addEventListener('click', () => { try { bcOuvrirPop({ sansBasculer: true, vue: 'trade' }); } catch (_) {} }); }
+/* 2026-10-04 (Phil, capture de la carte « Bot loop · Option A ») : « integre-la dans le panel et retire-la du frontend — pas de
+ *   doublon ». La carte N EST PAS reecrite : c est le MEME element (memes champs, memes gestionnaires) deplace dans la vue Brain du
+ *   panneau, replie par defaut. L onglet Brain ne la montre plus. */
+{ const carte = $('#bBotLoopCarte'), niche = $('#bcBotLoop'); if (carte && niche) niche.append(carte); }
 bcAifiCharger();
 bcAifiPeindre();
 $('#bcLier').addEventListener('click', async () => { await bcOuvrirSession(null); $('#bcDialogue').showModal(); });
