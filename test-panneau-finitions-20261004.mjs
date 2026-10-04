@@ -53,8 +53,12 @@ const symV4 = ACTIONS_COINBASE.find((a) => !aero.includes(String(a.adr).toLowerC
   ok(r.etat !== 'PRET', 'A … sur un faux noeud qui ne rend que des zeros, AUCUN plan n est rendu (etat ' + r.etat + ') : pas de pool lue, pas de plan');
   const t = await refusVente(ICI, symV4, usdc);
   ok(t.r.etat !== 'PRET' && t.r.via !== 'planAerodromeSegment', 'A temoin : ' + symV4 + ' (hors table Aerodrome) garde le chemin v4 — le batisseur Aerodrome ne deborde pas');
+  /* 2026-10-04 (2e passe) : une action Aerodrome se vend AUSSI contre ETH (action -> USDC -> WETH, puis ETH natif). Ce qui reste
+   *   refuse en un seul trade : payer un block ou une autre action avec elle — et le refus dit quoi faire. */
   const e = await refusVente(ICI, symAero, 'ETH');
-  ok(e.r.etat === 'REFUSE' && /a tokenized stock sells here for USDC only/.test(e.r.pourquoi) && e.appels === 0, 'A ACTION>ETH : « sells here for USDC only », sans une seule lecture de chaine');
+  ok(e.r.route === 'ACTION>ETH' && e.r.via === 'planAerodromeSegment' && e.r.etat !== 'PRET' && e.appels > 0, 'A ACTION>ETH (table Aerodrome) : aiguille vers le batisseur Aerodrome, qui LIT ses pools ; sur un faux noeud, aucun plan');
+  const b = await refusVente(ICI, symAero, '0xb200000000000000000000000000000000000001');
+  ok(b.r.etat === 'REFUSE' && /sells here for USDC or ETH — sell it first, then buy/.test(b.r.pourquoi) && b.appels === 0, 'A ACTION (Aerodrome) > BLOCK : refus qui dit quoi faire, sans une seule lecture de chaine');
 }
 
 console.log('— B. la pre-commande « Sell a stock » mene a un plan');
@@ -154,7 +158,7 @@ ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) &
 /* capture de Phil (telephone) : replie, le volet COUVRAIT la barre d onglets. Il se pose au-dessus, a sa hauteur MESUREE. */
 ok(/@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*bottom:calc\(var\(--bcNav,66px\) \+ 8px\)/.test(html) && /dialog\.bcPop\.bcReduit\{top:auto;bottom:calc\(var\(--bcNav,66px\) \+ 8px\);height:auto\}/.test(html)
   && /dialog\.bcPop\{[^}]*height:calc\(100dvh - 24px - var\(--bcNav,66px\)\)/.test(html) && /setProperty\('--bcNav', \(n \? Math\.ceil\(n\.getBoundingClientRect\(\)\.height\) : 0\) \+ 'px'\)/.test(html)
-  && /document\.body\.classList\.add\('bcOuvert'\); \} catch \(_\) \{\}\n  bcPoserNav\(\);/.test(html) && /window\.addEventListener\('resize', bcPoserNav\);/.test(html),
+  && /document\.body\.classList\.add\('bcOuvert'\); \} catch \(_\) \{\}\s+bcPoserNav\(\);/.test(html) && /window\.addEventListener\('resize', bcPoserNav\);/.test(html),
   'C2 le volet (ouvert ou replie, telephone ou grand ecran) s arrete AU-DESSUS de la barre d onglets, dont la hauteur est mesuree');
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
   && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
@@ -307,7 +311,8 @@ ok((bcSrc.match(/bcOpMaj\(op, 'notOffered'\);/g) || []).length === 2 && /notOffe
 ok(/const actionAffichee = !!moi && ACTIONS_PAR_ADR\.has\(moi\);/.test(bcSrc) && /if \(actionAffichee && \(de\.adr === moi \|\| vers\.adr === moi\)\) bcEtape\(m, 'A Coinbase stock — it trades on its own market; no brain gate\.'\);\n\s+else if \(moi && /.test(bcSrc),
   'C3 une action Coinbase n a PAS de porte du cerveau (SNDKc, NVDAc, MSTRc, MSFTc etaient refusees) ; un block garde la sienne');
 ok(/const t = estAction \? 'A Coinbase stock — it trades on its own market; no brain gate\.'/.test(bcSrc), 'C3 le ticket n annonce plus a une action un refus qui ne s appliquera pas');
-ok(/if \(achat\) choix = ACTIONS_PAR_ADR\.has\(a\) \|\| standard \? \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\] : \[\[q\.adr, q\.sym\]\];/.test(bcSrc), 'C3 « Pay with » : ETH en premier partout (regle de Phil), USDC en second');
+ok(/if \(achat\) choix = ACTIONS_PAR_ADR\.has\(a\) \? \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\] : standard \? \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\] : \[\[q\.adr, q\.sym\]\];/.test(bcSrc),
+  'C3 « Pay with » : ETH en premier pour un block (regle de Phil) ; USDC en premier pour une action (sa cotation — retour de Phil du meme jour)');
 ok(/if \(ul\.dataset\.de !== a\) \{ ul\.textContent = ''; ul\.append\(bcEl\('li', \{ cls: 'note', text: 'Reading…' \}\)\); ul\.dataset\.de = '';/.test(bcSrc), 'C3 Market : la liste d activite d un block ne reste pas affichee sous le nom d un autre');
 ok(/if \(pourquoi\) \{ const e = \$\('#bcAiEtat'\); e\.className = 'note'; e\.textContent = pourquoi; \}/.test(bcSrc), 'C3 « AiFi stopped. » s ecrit a cote du bouton (il partait dans le Chat, masque depuis la vue Trade)');
 ok(/if \(c\.hidden\) \{ try \{ bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', deplier: true \}\); if \(\$\('#bcPop'\)\.open\) return; \}/.test(html), 'C3 le bouton « Info » de la Map ouvre le panneau (son block, sa skin) au lieu de la colonne ; panneau impossible = la colonne, comme avant');
@@ -364,12 +369,12 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-fin-'));
   let rouge = false;
   try { const { r } = await refusVente(dir, symAero, usdc); rouge = r.via !== 'planAerodromeSegment' && /no initialized pool among/.test(String(r.pourquoi)); } catch (_) { rouge = true; }
   ok(rouge, 'E mutant « vente Aerodrome retiree » : ROUGE (la vente retombe sur une pool v4 qui n existe pas — le refus mesure en prod)');
-  const de2 = "if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only";
+  const de2 = "if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: (ACTIONS.get(de) || 'this tokenized stock') + ' trades on Aerodrome: it sells here for USDC or ETH";
   ok(src.split(de2).length === 2, 'E motif du mutant 2 present une seule fois');
-  fs.writeFileSync(path.join(dir, 'rails-api.js'), src.replace(de2, "if (false) return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only"));
+  fs.writeFileSync(path.join(dir, 'rails-api.js'), src.replace(de2, "if (false) return normaliser(route, { etat: 'REFUSE', pourquoi: (ACTIONS.get(de) || 'this tokenized stock') + ' trades on Aerodrome: it sells here for USDC or ETH"));
   let rouge2 = false;
-  try { const { r } = await refusVente(dir, symAero, 'ETH'); rouge2 = !/for USDC only/.test(String(r.pourquoi)); } catch (_) { rouge2 = true; }
-  ok(rouge2, 'E mutant « ACTION>ETH sans sa phrase » : ROUGE');
+  try { const { r } = await refusVente(dir, symAero, '0xb200000000000000000000000000000000000001'); rouge2 = !/for USDC or ETH/.test(String(r.pourquoi)); } catch (_) { rouge2 = true; }
+  ok(rouge2, 'E mutant « ACTION (Aerodrome) > BLOCK sans sa phrase » : ROUGE');
 }
 /* E2 : la pre-commande remise sur une action a pool Aerodrome → B doit rougir */
 {

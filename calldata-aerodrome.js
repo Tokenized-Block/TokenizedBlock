@@ -376,7 +376,15 @@ export const FRAIS_BPS_MAX_PRUDENT = 100n;
  *   PAS de transaction temoin. L appelant DOIT le simuler par `eth_call` avant de le proposer.
  */
 export function calldataExactInputAvecFrais({ sauts, recipient, amountIn, amountOutMinimum,
-  deadline, maintenant = null, fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais } = {}) {
+  deadline, maintenant = null, fraisBps = FRAIS_INTERFACE_BPS_CL, beneficiaireFrais, sortieEthNatif = false } = {}) {
+  /* ⛔ 2026-10-04 — SORTIE EN ETH NATIF (vendre une action contre de l ETH, pas du WETH) : le dernier saut doit rendre le WETH
+   *   du routeur, et le balayage devient `unwrapWETH9WithFee` — meme montage, meme retenue, mais l utilisateur et le wallet
+   *   des frais recoivent de l ETH. Selecteur present dans le bytecode LU du routeur (PUSH4, sonde du jour), et `WETH9()` rend
+   *   bien ce WETH. Tout autre jeton de sortie avec ce drapeau est un REFUS : `unwrap` ne balaie que le WETH. */
+  if (sortieEthNatif) {
+    const der = Array.isArray(sauts) && sauts.length ? String((sauts[sauts.length - 1] || {}).vers || '').toLowerCase() : '';
+    if (der !== WETH_SORTIE_FRAIS) return { etat: 'REFUSE', pourquoi: 'a native-ETH exit needs a path that ends on WETH' };
+  }
   /* ⛔⛔ 2026-10-03 (Zero 1 F-c6) : le balayage preleve dans le jeton de SORTIE. a6cf n est paye qu en ETH (WETH), USDC ou
    *   action appariee — jamais dans un block ni dans un jeton tiers. Garde de profondeur pour TOUS les rails CL. */
   const sortieFrais = Array.isArray(sauts) && sauts.length ? String((sauts[sauts.length - 1] || {}).vers || '').toLowerCase() : '';
@@ -422,12 +430,19 @@ export function calldataExactInputAvecFrais({ sauts, recipient, amountIn, amount
     return { etat: 'REFUSE', pourquoi: 'after our cut the guaranteed minimum would be zero — the '
       + 'amount is too small for this fee' };
   }
-  const balayage = SELECTEURS.sweepTokenWithFee.replace(/^0x/, '')
-    + motAdresse(sortie, 'token')
-    + motNombre(minUtilisateur, 'amountMinimum')
-    + motAdresse(recipient, 'recipient')
-    + motNombre(bps, 'feeBips')
-    + motAdresse(beneficiaireFrais, 'feeRecipient');
+  /* unwrapWETH9WithFee(amountMinimum, recipient, feeBips, feeRecipient) — pas d argument `token` : c est toujours le WETH */
+  const balayage = sortieEthNatif
+    ? SELECTEURS.unwrapWETH9WithFee.replace(/^0x/, '')
+      + motNombre(minUtilisateur, 'amountMinimum')
+      + motAdresse(recipient, 'recipient')
+      + motNombre(bps, 'feeBips')
+      + motAdresse(beneficiaireFrais, 'feeRecipient')
+    : SELECTEURS.sweepTokenWithFee.replace(/^0x/, '')
+      + motAdresse(sortie, 'token')
+      + motNombre(minUtilisateur, 'amountMinimum')
+      + motAdresse(recipient, 'recipient')
+      + motNombre(bps, 'feeBips')
+      + motAdresse(beneficiaireFrais, 'feeRecipient');
 
   /* ── l enveloppe `multicall(bytes[])` ──────────────────────────────────────────────────────
    * ⛔ UN TABLEAU DYNAMIQUE DE BYTES : offset du tableau, longueur, puis un offset par element,

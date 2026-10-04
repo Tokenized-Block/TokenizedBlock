@@ -22,6 +22,7 @@ import { planEchange, planEchangeMultiSauts, meilleureClePourMontant } from './e
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { planAchatEthAction } from './echange-eth.js';
+import { WETH_BASE } from './plan-eth-block.js';
 import { sautsBlocVersBloc, cheminBlocVersAction } from './bloc-vers-bloc.js';
 import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
 import { vieDuBlock } from './marche.js';
@@ -130,15 +131,15 @@ export async function planRail(q, deps) {
     return d;
   };
   /* le resolveur v4 de l app : la cle LUE du marche d abord, puis les cles de prix connues (jamais l une sans l autre) */
-  const resolveurAvec = (cleConnue) => async ({ de: d1, vers: v1, montant: mt }) => {
+  const resolveurAvec = (...clesConnues) => async ({ de: d1, vers: v1, montant: mt }) => {
     const paire = new Set([bas(d1), bas(v1)]);
-    const k = cleConnue && paire.has(bas(cleConnue.currency0)) && paire.has(bas(cleConnue.currency1)) ? cleConnue : null;
+    const k = clesConnues.find((c) => c && paire.has(bas(c.currency0)) && paire.has(bas(c.currency1))) || null;
     const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
     return meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt, candidates: sup.concat(CLES_PRIX) });
   };
   try {
     /* ── 1. ACHETER UN BLOCK ─────────────────────────────────────────────────────────────────────────────── */
-    if (nv === 'BLOCK' && nd !== 'BLOCK') {
+    if (nv === 'BLOCK' && nd !== 'BLOCK' && nd !== 'ACTION') { /* une action qui paie un block : route 5 */
       const marcheB = await marcheDe(vers);
       if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
       const quote = quoteDe(marcheB.cle, vers);
@@ -193,7 +194,7 @@ export async function planRail(q, deps) {
      *   sur la chaine, cles-v4-actions.js). Mesure, wallet vide, 1 USDC : vieDuBlock LUE 19/20 (CAKEc NON_TROUVEE), planEchange ACHAT
      *   APPROBATIONS 19/19 (0,5 % en USDC, le frais d interface : aucun hook ne paie), VENTE 18/19 (ASTSc : devis reverte). Le chemin
      *   v4 est celui des blocks cotes en USDC : ETH passe par USDC (deux sauts, une tx). */
-    if (nv === 'ACTION') {
+    if (nv === 'ACTION' && nd !== 'ACTION') { /* une action contre une autre action : route 5 */
       const t = POOLS_ACTIONS_AERODROME.get(vers);
       if (!t && (nd === 'ETH' || nd === 'USDC')) {
         const marcheV = await marcheDe(vers);
@@ -242,9 +243,53 @@ export async function planRail(q, deps) {
       return normaliser(route, await planEchange({ rpc, chaine, jeton: de, compte, sens: 'VENTE', montant: m,
         marcheLu: marcheA, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: USDC, pool: 'uniswap-v4' });
     }
+    /* ── 4 bis. UNE ACTION DE LA TABLE AERODROME SE VEND CONTRE DE L ETH (regle de Phil : « tout se regle en ETH ») ──────
+     *   action -> USDC -> WETH, deux sauts sur Aerodrome dans UN exactInput ; le routeur rend ensuite de l ETH NATIF
+     *   (unwrapWETH9WithFee) en retenant notre part : le vendeur et le wallet des frais recoivent de l ETH, pas du WETH.
+     *   ⛔ BORNE : non simule cote serveur (comme la vente contre USDC) ; minimum derive du prix spot des deux pools. */
+    if (nd === 'ACTION' && nv === 'ETH' && POOLS_ACTIONS_AERODROME.has(de)) {
+      return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }, { de: USDC, vers: bas(WETH_BASE), famille: 'aerodrome' }],
+        devise: de, block: bas(WETH_BASE), montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant, sortieEthNatif: true }),
+      { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome' });
+    }
+    /* ── 5. UNE ACTION A POOL v4 PAIE AUTRE CHOSE QUE DE L USDC : de l ETH, un block, une autre action a pool v4 ─────────
+     * Phil, 2026-10-04 : « payer un block avec n importe quelle TStock : pas route — fais-le ». Tout le chemin est en
+     *   uniswap-v4 : l action sort en USDC sur SA pool LUE, puis l USDC suit les jambes deja en prod (USDC>ETH, USDC>block,
+     *   USDC>action). UN seul appel au routeur : soit tout passe, soit rien — personne ne reste avec l USDC du milieu.
+     * ⛔ Le frais est retenu en tete, DANS L ACTION payee : elle n est admise comme devise de frais que parce que sa pool v4
+     *   vient d etre LUE ici (un frais pris dans une devise sans marche ne se revend pas — c est la regle de `fraisDevisesOk`).
+     * ⛔ BORNE : les 12 actions de la table Aerodrome n ont PAS ce chemin (leur marche est sur Aerodrome, et un exactInput ne
+     *   traverse qu une factory) : refus NOMME plus bas, elles se vendent contre USDC. */
+    if (nd === 'ACTION' && !POOLS_ACTIONS_AERODROME.has(de) && (nv === 'ETH' || nv === 'BLOCK' || nv === 'ACTION')) {
+      /* refus AVANT toute lecture : la cible est sur Aerodrome, l entree sur v4 — deux factories, deux trades */
+      if (nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers)) {
+        return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(vers) + ' trades on Aerodrome and ' + ACTIONS.get(de) + ' on Uniswap v4: sell for USDC, then buy with USDC (two trades)' });
+      }
+      const marcheA = await marcheDe(de);
+      if (!marcheA || marcheA.etat !== 'LUE' || !marcheA.cle) return normaliser(route, illisible(marcheA));
+      if (quoteDe(marcheA.cle, de) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(de) + ' trades on v4 against ' + quoteDe(marcheA.cle, de) + ', not USDC' });
+      const chemin = [{ de, vers: USDC, famille: 'uniswap-v4' }];
+      const connues = [marcheA.cle];
+      if (nv === 'ETH') chemin.push({ de: USDC, vers: ETH, famille: 'uniswap-v4' });
+      else {
+        const marcheB = await marcheDe(vers);
+        if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
+        const quoteB = quoteDe(marcheB.cle, vers);
+        if (quoteB !== USDC && quoteB !== ETH) return normaliser(route, { etat: 'REFUSE', pourquoi: 'this one trades against ' + quoteB + ': no measured path from USDC to it' }, { cotation: quoteB });
+        if (quoteB === ETH) chemin.push({ de: USDC, vers: ETH, famille: 'uniswap-v4' });
+        chemin.push({ de: quoteB, vers, famille: 'uniswap-v4' });
+        connues.push(marcheB.cle);
+      }
+      const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec(...connues) });
+      if (b.etat !== 'OK') return normaliser(route, { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi }, { via: 'sautsDepuisChemin', chemin });
+      const decA = Number.isInteger(marcheA.decimales) ? marcheA.decimales : await decimalesDe(de);
+      return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
+        decimalesEntree: decA, prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, de]), maintenant }),
+      { via: 'planEchangeMultiSauts', chemin, cotation: USDC, pool: 'uniswap-v4' });
+    }
   } catch (e) {
     return normaliser(route, { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) });
   }
-  if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only (route ' + route + ' is not offered by this API yet)' });
+  if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: (ACTIONS.get(de) || 'this tokenized stock') + ' trades on Aerodrome: it sells here for USDC or ETH — sell it first, then buy (two trades; route ' + route + ' is not offered in one yet)' });
   return normaliser(route, { etat: 'REFUSE', pourquoi: 'route ' + route + ' is not offered by this API yet' });
 }

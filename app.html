@@ -2693,7 +2693,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-volet-au-dessus-des-onglets" hidden>Build <code>20261004-volet-au-dessus-des-onglets</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-actions-contre-eth-et-block" hidden>Build <code>20261004-actions-contre-eth-et-block</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3448,7 +3448,7 @@ import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVI
 const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowerCase()));
 import { poolSansHookInterdite, ROUTE_VIA_TBLOCK, cleTouchTblock, noterMarcheSurNotreHook } from './pool-sans-hook.js';
 import { sautsBlocVersBloc, blocsRecevables, cheminBlocVersAction, actionsRecevables } from './bloc-vers-bloc.js';
-import { avecPoolAction } from './pools-actions-aerodrome.js';
+import { avecPoolAction, POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 /* ⛔ 2026-10-03 (Phil 00:20) : l index des blocks nes du CreateRouter sert au ROUTAGE seulement — rien n est cache ni retire
  *   de la carte, du fil, des profils ou des listes. Non lu (pas encore charge, serveur muet) : fail-closed (pool-sans-hook.js). */
 import { chargerIndexRouteur, indexRouteurIllisible, chargerNosBlocksTb, nosBlocksTbIllisibles, sourcesTbLues,
@@ -21993,6 +21993,20 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
  *   ⛔ CORRIGE : j avais ecrit ici « AMDc (pool Aerodrome) » — FAUX, AMDc a une pool v4. Son refus au 1er passage (« no initialized
  *   pool among the 17 keys read ») ne s est PAS reproduit aux 2 passages suivants : cause NON ELUCIDEE, lecture transitoire probable. */
 const BC_RAPIDES = { ETH: ['0.0005', '0.002', '0.01'], USDC: ['1', '5', '20'] };
+/** Les actions a pool v4 USDC MESUREE (cles-v4-mesurees.js : logs Initialize redecodes, poolId recalcule) et HORS table Aerodrome :
+ *  celles qui paient un block en UN appel (action -> USDC -> block). Prouve sur fork le 2026-10-04 (banc-marche-actions-fork). */
+let bcActionsV4Memo = null;
+function bcActionsV4() {
+  if (bcActionsV4Memo) return bcActionsV4Memo;
+  const s = new Set();
+  for (const l of LOGS_INITIALIZE_MESURES) {
+    const d = decoderInitialize(l);
+    if (!d || !d.cle) continue;
+    for (const c of [d.cle.currency0, d.cle.currency1]) { const k = String(c).toLowerCase(); if (ACTIONS_PAR_ADR.has(k) && !POOLS_ACTIONS_AERODROME.has(k)) s.add(k); }
+  }
+  bcActionsV4Memo = s;
+  return s;
+}
 /** Un montant brut en decimal EXACT (toutes ses decimales) : « 100 % de mon solde » s ecrit sans arrondi. */
 const bcDecimal = (brut, dec) => { const s = BigInt(brut).toString().padStart(dec + 1, '0'); const f = dec ? s.slice(s.length - dec).replace(/0+$/, '') : ''; return s.slice(0, s.length - dec) + (f ? '.' + f : ''); };
 /** La devise contre laquelle ce jeton s echange ICI : USDC pour une action ; sinon la cotation LUE (index, ou cle de pool lue). null = pas lue. */
@@ -22037,12 +22051,23 @@ function bcPeindreTicket(a, sym, mk, snap) {
     /* [valeur ecrite dans la commande, libelle] — une cotation hors ETH/USDC ne s achete et ne se vend que contre elle-meme */
     let choix;
     /* ETH EN PREMIER partout (regle de Phil : « tout se regle en ETH ») — USDC reste propose en second */
-    if (achat) choix = ACTIONS_PAR_ADR.has(a) || standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
+    /* ⛔ SAUF POUR UNE ACTION (Phil, 2026-10-04 : « swap action to USDC et inversement, pas que ETH — USDC natif sera plus simple ») :
+     *   une action est cotee en USDC, c est son chemin le plus court (un saut). USDC d abord, ETH en second. */
+    if (achat) choix = ACTIONS_PAR_ADR.has(a) ? [['USDC', 'USDC'], ['ETH', 'ETH']] : standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
+    /* 2026-10-04 : une action se vend contre ETH aussi (v4 : action -> USDC -> ETH ; Aerodrome : action -> USDC -> WETH puis ETH
+     *   natif) — 30/30 actions echangeables executees sur fork, frais recu par le wallet des frais a chaque fois. */
+    else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat([['ETH', 'for ETH']]);
     else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
+    /* « payer un block avec n importe quelle TStock » (Phil) : les actions a pool v4 mesuree paient un block cote en ETH ou en
+     *   USDC en UN appel. Les 12 de la table Aerodrome ne le peuvent pas en un trade (deux factories) : elles ne sont pas proposees. */
+    if (achat && !ACTIONS_PAR_ADR.has(a) && standard) {
+      const v4 = bcActionsV4();
+      for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
+    }
     /* ⛔ « propose toutes les routes possibles dans le menu » (Phil) — seulement celles qui ABOUTISSENT. Mesure prod du 2026-10-04 :
      *   vendre un block contre une action cotee sur Aerodrome (IB022 > NVDAc) rend APPROBATIONS (route BLOCK>ACTION). Un block peut
      *   donc sortir vers ces actions-la : on les ajoute a la VENTE d un block. OUSD > block n a pas pu etre cote ce jour-la (noeud en
-     *   quota) : pas ajoute. Une action, elle, ne se vend que contre USDC. */
+     *   quota) : pas ajoute. (Une action se vend contre ETH ou USDC — voir plus haut.) */
     if (!achat && !ACTIONS_PAR_ADR.has(a)) {
       for (const st of ACTIONS_COINBASE) {
         const sa = String(st.adr).toLowerCase(), ml = marcheParAdr.get(sa);

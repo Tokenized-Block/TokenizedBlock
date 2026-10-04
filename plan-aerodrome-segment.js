@@ -57,7 +57,7 @@ const ADR = /^0x[0-9a-fA-F]{40}$/;
  */
 export async function planAerodromeSegment({ rpc, chemin, devise, block, montant, compte,
   beneficiaireFrais, toleranceBps = 100n, maintenant = Date.now(),
-  fraisBps = FRAIS_INTERFACE_BPS_CL } = {}) {
+  fraisBps = FRAIS_INTERFACE_BPS_CL, sortieEthNatif = false } = {}) {
   if (!Array.isArray(chemin) || !chemin.length) {
     return { etat: 'REFUSE', etape: 'forme', pourquoi: 'no path to build' };
   }
@@ -147,7 +147,7 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
     sauts, recipient: compte, amountIn: m, amountOutMinimum: minPools,
     deadline: BigInt(Math.floor(maintenant / 1000) + 1200),
     maintenant: BigInt(Math.floor(maintenant / 1000)),
-    fraisBps, beneficiaireFrais,
+    fraisBps, beneficiaireFrais, sortieEthNatif,
   });
   if (swap.etat !== 'PRET') {
     return { etat: 'REFUSE', etape: 'swap', pourquoi: swap.pourquoi };
@@ -174,7 +174,8 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
       paye: m,
       payeDevise: bas(devise),
       recoitAuMoins: BigInt(swap.minUtilisateur),
-      recoitDevise: bas(block),
+      /* sortie en ETH natif : le chemin finit sur le WETH, mais ce que le compte recoit est de l ETH — on le DIT */
+      recoitDevise: sortieEthNatif ? '0x0000000000000000000000000000000000000000' : bas(block),
       fraisBps: BigInt(swap.fraisBps),
       beneficiaireFrais: swap.beneficiaireFrais,
       minPools: BigInt(swap.minPools),

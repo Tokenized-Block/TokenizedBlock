@@ -19,6 +19,7 @@
  *   Montants d essai petits (50 USDC, 0,01 ETH) : une pool fine peut refuser plus gros — le banc ne mesure pas la profondeur.
  * Usage : base-anvil --fork-url <rpc Base> --port 8549, puis
  *   node banc-marche-actions-fork-20261004.mjs [http://127.0.0.1:8549] [SYMc …]      (sans symbole : les 58) */
+import fs from 'node:fs';
 import * as R from './rails-api.js';
 import * as F from './frais-creation.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
@@ -54,7 +55,7 @@ const plan = (de, vers, montant, compte) => R.planRail({ de, vers, montant: Stri
 
 /** Une route, de bout en bout. Rend ce qui s est passe, mesure sur les soldes. */
 async function trader(sym, de, vers, montant, compte, actionAdr) {
-  const jetons = [ETH, USDC, actionAdr];
+  const jetons = [...new Set([ETH, USDC, actionAdr, de, vers])];
   const avant = { c: {}, f: {} };
   for (const j of jetons) { avant.c[j] = await solde(j, compte); avant.f[j] = await solde(j, FRAIS); }
   let p = await plan(de, vers, montant, compte), gaz = 0n, tours = 0;
@@ -74,7 +75,7 @@ async function trader(sym, de, vers, montant, compte, actionAdr) {
   for (const j of jetons) { d.c[j] = await solde(j, compte) - avant.c[j]; d.f[j] = await solde(j, FRAIS) - avant.f[j]; }
   d.c[ETH] += gaz; /* le gaz n est pas le prix du trade */
   const recu = d.c[vers], paye = -d.c[de];
-  const frais = jetons.filter((j) => d.f[j] > 0n).map((j) => ({ jeton: j === ETH ? 'ETH' : j === USDC ? 'USDC' : sym, montant: d.f[j], brut: j }));
+  const frais = jetons.filter((j) => d.f[j] > 0n).map((j) => ({ jeton: j === ETH ? 'ETH' : j === USDC ? 'USDC' : j === actionAdr ? sym : j.slice(0, 8) + '…', montant: d.f[j], brut: j }));
   ok(recu > 0n, sym + ' ' + route + ' : execute, mais le compte ne recoit rien');
   ok(frais.length > 0, sym + ' ' + route + ' : execute (via ' + p.via + ') SANS RIEN payer au wallet des frais');
   /* le frais, rapporte a ce qui a ete paye ou recu dans la MEME unite — sinon on ne compare pas des pommes et des poires */
@@ -89,7 +90,8 @@ async function trader(sym, de, vers, montant, compte, actionAdr) {
 const chaine = parseInt(await rpc('eth_chainId', []), 16), tete = parseInt(await rpc('eth_blockNumber', []), 16);
 console.log('fork ' + URL_FORK + ' · chaine ' + chaine + ' · bloc ' + tete + ' · wallet des frais ' + FRAIS);
 if (!ok(chaine === 8453, 'le fork est Base (sinon ce banc ne prouve rien)')) process.exit(1);
-const registre = ACTIONS_COINBASE.map((a) => ({ symbole: a.symbole, adr: String(a.adr).toLowerCase() })).filter((a) => !demandes.length || demandes.includes(a.symbole));
+const registre0 = ACTIONS_COINBASE.map((a) => ({ symbole: a.symbole, adr: String(a.adr).toLowerCase() }));
+const registre = registre0.filter((a) => !demandes.length || demandes.includes(a.symbole));
 const aero = [...POOLS_ACTIONS_AERODROME.entries()].map(([adr, t]) => ({ adr: adr.toLowerCase(), ...t }));
 console.log(registre.length + ' actions essayees · ' + aero.length + ' pools Aerodrome en table · ' + cles.size + ' pools v4 lues');
 
@@ -98,7 +100,12 @@ const fmt = (r) => {
   if (r.etat !== 'EXECUTE') return r.etat + (r.pourquoi ? ' (' + String(r.pourquoi).slice(0, 70) + ')' : '');
   return 'OK ' + (r.pool || (r.via === 'planAchatEthAction' ? 'aerodrome' : r.via)) + ' · frais ' + r.frais.map((f) => f.montant + ' ' + f.jeton).join(' + ') + (r.bps !== null ? ' = ' + r.bps + ' bps' : '');
 };
-const bilan = { 'USDC>ACTION': [0, 0], 'ETH>ACTION': [0, 0], 'ACTION>USDC': [0, 0], 'ACTION>ETH': [0, 0] };
+const bilan = { 'USDC>ACTION': [0, 0], 'ETH>ACTION': [0, 0], 'ACTION>USDC': [0, 0], 'ACTION>ETH': [0, 0], 'ACTION>BLOCK': [0, 0], 'ACTION>ACTION': [0, 0] };
+/* le block paye en action : celui que la sonde du serveur lit a chaque demarrage (adresse LUE dans serveur-web.js, jamais recopiee) */
+const BLOCK_CIBLE = (fs.readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').match(/const BLOCK_SONDE = '(0x[0-9a-f]{40})';/) || [])[1];
+if (!ok(/^0x[0-9a-f]{40}$/.test(String(BLOCK_CIBLE)), 'le block cible (BLOCK_SONDE du serveur) se lit dans serveur-web.js')) process.exit(1);
+/* l autre action d un echange action>action : la premiere action a pool v4 qui n est pas celle traitee */
+const autreV4 = (a) => registre0.find((x) => x.adr !== a && cles.has(x.adr) && !POOLS_ACTIONS_AERODROME.has(x.adr) && x.symbole !== 'CAKEc');
 const compter = (route, r) => { bilan[route][1] += 1; if (r && r.etat === 'EXECUTE') bilan[route][0] += 1; };
 const sansRoute = [];
 const instantane = await rpc('evm_snapshot', []);
@@ -120,15 +127,22 @@ try {
       lignes.ae = await trader(a.symbole, ETH, a.adr, 10n ** 16n, compte, a.adr);
       const detenu = await solde(a.adr, compte);
       if (detenu > 0n) {
-        /* la moitie contre USDC, le reste contre ETH : les deux sorties sont essayees sur le meme compte */
-        lignes.vu = await trader(a.symbole, a.adr, USDC, detenu / 2n, compte, a.adr);
+        /* un quart par sortie : USDC, ETH, un block, une autre action — les quatre sont essayees sur le meme compte */
+        const part = detenu / 4n;
+        lignes.vu = await trader(a.symbole, a.adr, USDC, part, compte, a.adr);
+        lignes.ve = await trader(a.symbole, a.adr, ETH, part, compte, a.adr);
+        lignes.vb = await trader(a.symbole, a.adr, BLOCK_CIBLE, part, compte, a.adr);
+        const autre = autreV4(a.adr);
         const reste = await solde(a.adr, compte);
-        lignes.ve = reste > 0n ? await trader(a.symbole, a.adr, ETH, reste, compte, a.adr) : null;
+        lignes.va = autre && reste > 0n ? await trader(a.symbole, a.adr, autre.adr, reste, compte, a.adr) : null;
+        if (lignes.va) lignes.va.vers = autre.symbole;
       }
     } catch (e) { ok(false, a.symbole + ' : le banc a leve ' + String((e && e.message) || e).slice(0, 140)); }
     compter('USDC>ACTION', lignes.au); compter('ETH>ACTION', lignes.ae); compter('ACTION>USDC', lignes.vu); compter('ACTION>ETH', lignes.ve);
+    compter('ACTION>BLOCK', lignes.vb); compter('ACTION>ACTION', lignes.va);
     if (!lignes.au || lignes.au.etat !== 'EXECUTE') sansRoute.push(a.symbole);
-    console.log(a.symbole.padEnd(8) + ' achat USDC : ' + fmt(lignes.au) + '\n         achat ETH  : ' + fmt(lignes.ae) + '\n         vente USDC : ' + fmt(lignes.vu) + '\n         vente ETH  : ' + fmt(lignes.ve));
+    console.log(a.symbole.padEnd(8) + ' achat USDC : ' + fmt(lignes.au) + '\n         achat ETH  : ' + fmt(lignes.ae) + '\n         vente USDC : ' + fmt(lignes.vu) + '\n         vente ETH  : ' + fmt(lignes.ve)
+      + '\n         paie un block : ' + fmt(lignes.vb) + '\n         contre ' + ((lignes.va && lignes.va.vers) || 'une action').padEnd(6) + ' : ' + fmt(lignes.va));
   }
 } finally {
   await rpc('evm_revert', [instantane]);
