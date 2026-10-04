@@ -158,6 +158,46 @@ export function phraseFraisLancement(chaine, nomReseau, ethUsd = null, fraisWei 
   return base;
 }
 
+/* ══ CE QUE LE WALLET DOIT TENIR POUR QU UNE NAISSANCE DEMARRE — l ecran DIT la somme que la garde EXIGE ══════════════════════
+ * ⛔⛔ 2026-10-04 (QA wallet reel de Grok, constat P1 « e » : « Create affiche 0.001 ETH alors qu il faut ~0.0015 ETH »).
+ *   CE QUI A ETE LU DANS LE CODE : l ecart ne vient pas du wallet, il vient de NOTRE garde. Avant d ouvrir le wallet,
+ *   `preflightInstantBirthEthFixe` (app.html) exige  frais + seed + RESERVE DE GAZ :
+ *       paire action (seed 0)     0,001 + 0      + 0,0005 = 0,0015 ETH
+ *       toute autre paire         0,001 + 0,0003 + 0,0005 = 0,0018 ETH AU MOINS (seed = max(1 $ d ETH, 0,0003), lu au clic)
+ *   La reserve (`GAZ_NAISSANCE_WEI`, 0,0005 ETH) n etait dite par AUCUNE phrase de Create avant le clic : les libelles disent
+ *   « 0.001 ETH », le frais. Apres le clic, le refus ecrivait « (0.001 fee + seed … + gas) » : le frais EN DUR a cote d un
+ *   total calcule, et « gas » sans son montant — un tiers de la somme demandee a une paire action.
+ * ⛔ UNE SOMME, DEUX PHRASES : la garde calcule son besoin ICI et les deux phrases lisent le MEME objet. Une phrase qui
+ *   referait l addition de son cote deriverait au premier changement de la reserve — et cette reserve a deja eu deux valeurs
+ *   a trois endroits d app.html (0,00025 au bouton, 0,0005 au preflight et au repli : voir le commentaire de la constante).
+ * ⛔ CE QUE CES PHRASES NE DISENT PAS, parce que ce n est PAS mesure : le frais de reseau REEL d une naissance. La reserve
+ *   est un seuil de l app (elle ne part nulle part, elle est comparee au solde), pas une estimation du gaz. Aucune phrase ne
+ *   promet donc « le reseau prendra X » : elles disent ce que l app verifie, et rien de plus.
+ * ⛔ PAS DE `number` : tout est en wei (bigint), un NaN ne peut pas traverser une borne. */
+export function besoinNaissance({ fraisWei, seedWei = 0n, gazWei }) {
+  const frais = BigInt(fraisWei), seed = BigInt(seedWei), gaz = BigInt(gazWei);
+  return { frais, seed, gaz, total: frais + seed + gaz };
+}
+
+/** AVANT le clic : ce que l app verifiera. `auMoins` = le seed ne sera lu qu au clic, la somme dite est un minimum.
+ *  ⛔ Montants EXACTS (`formaterEthCourt`), pas arrondis : c est un seuil, et un seuil arrondi vers le bas serait un refus. */
+export function phraseAvoirPourNaitre(b, { auMoins = false } = {}) {
+  return 'Network fees come on top: before your wallet opens, this app checks that it holds '
+    + (auMoins ? 'at least ' : '') + formaterEthCourt(b.total) + ' ETH, of which ' + formaterEthCourt(b.gaz)
+    + ' ETH is a reserve for network fees.';
+}
+
+/** APRES le clic, solde trop court : la meme somme, detaillee, et ce qui manque. Le seed n est nomme que s il existe
+ *  (une paire action n en a pas : « seed 0 » nommait une depense qui n arrive jamais). */
+export function phraseManquePourNaitre(b, soldeWei) {
+  const solde = BigInt(soldeWei);
+  const manque = b.total > solde ? b.total - solde : 0n;
+  return 'Need ≈ ' + arrondiAffichage(b.total) + ' ETH (' + arrondiAffichage(b.frais) + ' Birth fee'
+    + (b.seed > 0n ? ' + seed ' + arrondiAffichage(b.seed) : '')
+    + ' + ' + arrondiAffichage(b.gaz) + ' reserve for network fees). This account holds ' + arrondiAffichage(solde)
+    + ' ETH — short by ' + arrondiAffichage(manque) + '. Nothing was started.';
+}
+
 export function arrondiAffichage(wei, n = 6) {
   const t = formaterEthCourt(wei);
   const [ent, frac = ''] = t.split('.');
