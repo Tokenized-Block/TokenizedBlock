@@ -1,0 +1,8 @@
+# Ce que `railway up` n envoie PAS. Le serveur (serveur-web.js) ne lit rien dans ces dossiers.
+#
+# 2026-10-04 : chaque envoi pesait 68 Mo, dont 39 Mo de contracts/ (bibliotheques Foundry, out/, cache/). Trois envois de suite
+# ont expire (« operation timed out ») et Railway a marque les trois deploiements FAILED, sans build. La transaction de
+# deploiement de BlockSkins que le site sert est a la RACINE (blockskins-deploiement.js), pas dans contracts/.
+# ⛔ `--no-gitignore` reste necessaire (le fichier XMTP vendore est ignore par git et doit partir) : ce fichier-ci ne fait
+#    qu AJOUTER des exclusions.
+contracts/
