@@ -1,6 +1,6 @@
 # Test wallet connecté — panneau de commande (pour Grok Bot)
 
-**Build attendu** : `20261004-ma-skin-sur-la-map` (lire `https://tokenizedblock.space/sante` → `build`, et `sondes` : les 4 à `PRET`).
+**Build attendu** : `20261004-panneau-remplace-la-fiche` ou plus récent (lire `https://tokenizedblock.space/sante` → `build`, et `sondes` : les 4 à `PRET`).
 **Ouvrir** : `https://tokenizedblock.space/app.html?panel=1#b=0xb200000000000000000000e4b0c5fbe9c8df579e` (IB022).
 **Wallet** : un wallet de TEST avec un peu d'ETH et ≥ 2 USDC sur Base. ⛔ Jamais le wallet des frais `0xa6cf…f5d4`.
 **Ce qui n'a JAMAIS été mesuré** (c'est l'objet de ce test) : toute signature depuis le panneau avec un vrai wallet.
@@ -46,6 +46,14 @@ Pour chaque étape : noter **vu / pas vu**, le texte exact si différent, et le 
 ## G. Smart wallet (Base Account / passkey), si disponible
 25. Refaire l'étape 17-19 avec un smart wallet. Attendu identique. Si `The registry refused it` : copier la raison et le hash — c'est le cas non testé sur la chaîne.
 
+## H. Map → panneau, et les saluts (1 signature)
+26. Onglet Map → cliquer un block. Attendu : la fiche d'info NE s'affiche PAS ; le panneau s'ouvre déplié sur ce block, vue Market, avec `Buy | Open profile | GM | BM | GN | Gmeow`. Les boutons + − recentrer rotation sont en bas à GAUCHE.
+27. Dans le panneau, **GM 👋** (wallet connecté, en détenant un peu du block) → la colonne s'ouvre avec le formulaire d'envoi : `GM ready: paste who receives it…`, montant `1`. Coller une adresse de test, signer. Attendu : le transfert part, avec la ligne de frais séparée (0,1 %).
+28. Onglet **Blocks** → le panneau s'ouvre (vue Trade) sans quitter Blocks ; déjà ouvert, il ne change pas de vue.
+
+## I. Un agent pilote le panneau (MCP)
+29. Dans le panneau : **Agent link** → copier la session. Depuis un client MCP branché sur `https://tokenizedblock.space/mcp` : `tblock_command` `{session, type:"trade", block:"0xb200…579e", side:"buy", amount:"100000000000000", with:"ETH"}`. Attendu : `Agent: connected`, une carte `Your agent · swap` s'ouvre seule ; **Prepare the plan** puis signer. `tblock_panel_state` doit ensuite rendre un événement `signed` avec le hash.
+
 ## À me renvoyer
-- Pour chaque lettre A–G : OK / KO + texte exact + hash.
+- Pour chaque lettre A–I : OK / KO + texte exact + hash.
 - Toute différence entre ce que la carte annonce (« You receive at least », frais) et ce que le wallet montre.
