@@ -154,18 +154,29 @@ ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) &
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
   && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
   'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; les skins du catalogue ne retouchent pas l interieur');
-ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /bcPorterSkin\(bcSkinAleatoire\(\)\); \}\);/.test(bcSrc) && /return bcSkinDepuisRecette\(\{ id: 'random', angle: t\(\), h: \[h1, h2, h3\], cube: t\(\), noyau: t\(\) \}\);/.test(bcSrc),
+ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /bcPorterSkin\(bcSkinAleatoire\(\)\); bcPeindreBoutique\(\); \}\);/.test(bcSrc) && /return bcSkinDepuisRecette\(\{ id: 'random', angle: t\(\), h: \[h1, h2, h3\], cube: t\(\), noyau: t\(\) \}\);/.test(bcSrc),
   'C2 « Random » tire a chaque appui une RECETTE d entiers (angle, 3 teintes d anneau, aretes, noyau) — la skin en est derivee');
 /* quatre variables par skin : anneau, lueur, ARETES du cube, NOYAU aux 128 neurones */
 const catalogue = (bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0];
-ok((catalogue.match(/cube: \d+, noyau: \d+, payant: true/g) || []).length === 7 && /cube: null, noyau: null, payant: false/.test(catalogue),
-  'C2 chaque skin payante du catalogue porte une teinte d ARETES et une teinte de NOYAU ; « Original » n en porte pas');
+/* 2026-10-04 (Phil, 3e retour) : « laisse que le bouton random et les parametres en manuel » — le catalogue est parti du panneau */
+ok((catalogue.match(/\{ id: '/g) || []).length === 1 && /cube: null, noyau: null, payant: false/.test(catalogue),
+  'C2 le panneau ne propose plus de skins toutes faites : il reste « Original » (sans teinte) et UNE skin reglable');
+const reglages = (bcSrc.match(/const BC_REGLAGES = Object\.freeze\(\[(.*)\]\);/) || ['', ''])[1];
+ok((reglages.match(/\['[^']+', '(h|angle|cube|noyau)', (\d|null)\]/g) || []).length === 6 && /'Edges', 'cube', null/.test(reglages) && /'Core', 'noyau', null/.test(reglages),
+  'C2 six curseurs : trois teintes d anneau, l angle, les ARETES du cube, le NOYAU aux 128 neurones');
+ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
+  && /bc\.skinChoisie = true; bcPorterSkin\(bcSkinDepuisRecette\(r\)\);/.test(bcSrc), 'C2 chaque curseur (0 a 359, borne et arrondi) repeint la skin portee depuis sa recette');
+/* une recette reglee a la main est une recette que skins.js ACCEPTE a l achat (sinon on reglerait une skin invendable) */
 ok(/const thCube = cible && Number\.isFinite\(cible\.teinteCube\) \? cible\.teinteCube : thApp;/.test(html) && /const th = cible && Number\.isFinite\(cible\.teinteNoyau\) \? cible\.teinteNoyau : thApp;/.test(html)
   && (html.match(/traitCube\(ctx, f, thCube, (true|false)\)/g) || []).length === 2, 'C2 le dessin du cube prend la teinte des aretes et celle du noyau SEPAREMENT ; sans cible, c est la teinte de l app (rendu d origine inchange)');
-/* les skins du panneau et celles de skins.js sont LES MEMES (un id vendu que le panneau ne sait pas peindre, ou l inverse, casserait l achat) */
 const SK = await imp('skins.js');
-const idsPanneau = [...catalogue.matchAll(/\{ id: '([a-z]+)', nom: '[^']+', anneau: '[^']*', lueur: '[^']*', cube: \d+, noyau: \d+, payant: true \}/g)].map((m) => m[1]);
-ok(idsPanneau.length === 7 && JSON.stringify([...idsPanneau].sort()) === JSON.stringify([...SK.SKINS_CATALOGUE].sort()), 'C2 les 7 skins payantes du panneau sont exactement le catalogue de skins.js (' + idsPanneau.join(', ') + ')');
+ok(SK.validerRecette({ id: 'random', angle: 210, h: [0, 359, 180], cube: 0, noyau: 359 }).ok === true && /const r = \{ id: 'random', angle: cur\.angle, h: \[cur\.h\[0\], cur\.h\[1\], cur\.h\[2\]\], cube: cur\.cube, noyau: cur\.noyau \}/.test(bcSrc),
+  'C2 la recette reglee a la main a la forme que skins.js accepte a l achat (id random, six entiers de 0 a 359)');
+/* la recherche d un block */
+ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /const j = bcResoudre\(v\);\n\s+if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
+  'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');
+ok(/if \(compte2\.get\(k\) > 1\) opts\.push\(\[String\(l\.adr\)\.toLowerCase\(\),/.test(html) && /dl\.append\(bcEl\('option', \{ value: v, label: lib \}\)\);/.test(html),
+  'C2 recherche : un symbole porte par plusieurs blocks est propose par son ADRESSE ; les propositions sont posees en attributs, jamais en HTML');
 /* l achat */
 const achat = bcSrc.slice(bcSrc.indexOf("const BC_CLE_SKIN = 'tblock.panel.skinEnAttente';"));
 ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /\$\('#bcSkinAcheter'\)\.addEventListener\('click', \(\) => void bcAcheterSkin\(\)\);/.test(html), 'C2 « Buy » lance bcAcheterSkin');

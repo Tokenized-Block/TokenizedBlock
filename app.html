@@ -614,7 +614,24 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
   background:rgb(var(--accentRgb) / .12);color:var(--accent);font-size:26px;font-weight:700;line-height:1;transition:transform .15s ease,background .15s ease}
 .bcPlus:hover{background:rgb(var(--accentRgb) / .22)}
 .bcPlus[aria-expanded="true"]{transform:rotate(45deg)}
-.bcBoutique{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:8px}
+.bcBoutique{margin-top:8px;padding:10px 12px;border:1px solid var(--ligne);border-radius:16px;background:var(--creux)}
+.bcBoutique .bcPre{margin:0 0 8px}
+.bcBoutique .puce[aria-pressed="true"]{border-color:var(--accent);color:var(--texte)}
+/* les curseurs de la skin : la piste MONTRE la roue des teintes, la valeur s affiche a cote du libelle */
+.bcReglages{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.bcReglages label{display:block;min-width:0}
+.bcReglages label span{display:flex;justify-content:space-between;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+.bcReglages label b{color:var(--texte);font-size:11px}
+.bcReglages input[type=range]{appearance:none;-webkit-appearance:none;width:100%;height:10px;margin:6px 0 0;border-radius:6px;cursor:pointer;
+  background:linear-gradient(90deg,hsl(0 90% 55%),hsl(60 90% 55%),hsl(120 90% 50%),hsl(180 90% 50%),hsl(240 90% 60%),hsl(300 90% 58%),hsl(359 90% 55%))}
+.bcReglages input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgb(var(--fondRgb));box-shadow:0 0 0 1px var(--ligne)}
+.bcReglages input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2px solid rgb(var(--fondRgb))}
+/* la recherche d un block, dans l en-tete du panneau */
+.bcCherche{flex:1 1 150px;min-width:0;display:flex;align-items:center;gap:6px;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:12px;padding:0 10px}
+.bcCherche:focus-within{border-color:var(--accent)}
+.bcCherche input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--texte);font:inherit;font-size:13px;padding:8px 0}
+.bcCherche input::placeholder{color:var(--doux);opacity:.7}
+#bcChercheNote:empty{display:none}
 .bcBoutique[hidden]{display:none}
 .bcTuile{appearance:none;display:block;min-width:0;padding:8px;border:1px solid var(--ligne);border-radius:14px;background:var(--creux);color:var(--texte);font:inherit;text-align:center;cursor:pointer}
 .bcTuile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .25)}
@@ -1756,7 +1773,15 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="bcLier">Agent link</button>
         <button type="button" class="bouton sec" id="bcReduire" aria-label="Fold or unfold the control panel" aria-expanded="true">–</button>
         <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">✕</button>
+        <!-- 2026-10-04 (Phil, capture : la place vide a cote de ✕) : « ajoute un mode rechercher pour voir les autres blocks ».
+             Un symbole, un nom ou une adresse ; les propositions viennent de l index du Market et du registre des actions. -->
+        <form class="bcCherche" id="bcChercheForm" autocomplete="off" role="search">
+          <span aria-hidden="true">⌕</span>
+          <input id="bcCherche" list="bcChercheListe" placeholder="Find a block — symbol or address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Find another block">
+          <datalist id="bcChercheListe"></datalist>
+        </form>
       </div>
+      <p class="note wKo" id="bcChercheNote" style="margin:6px 0 0"></p>
       <div class="bcScene">
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
@@ -2653,7 +2678,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-skins-1usdc-aretes-noyau" hidden>Build <code>20261004-skins-1usdc-aretes-noyau</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-recherche-skin-curseurs" hidden>Build <code>20261004-recherche-skin-curseurs</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22074,20 +22099,19 @@ function bcPeindreCerveau(a, snap) {
  * « Original » = le visage grave du block (son modele 2D), toujours a lui. Les autres sont des habillages du PERIMETRE (« le skin
  * par-dessus le block sur le perimetre, comme sur un jeu video ») : un anneau et une lueur autour du visage, du cube et de la vignette
  * — on les ESSAIE ici, le temps de la visite. Le visage lui-meme n est jamais retouche.
- * ⛔ RIEN NE S ACHETE ENCORE : aucun prix n est affiche (aucun n est fixe), aucun paiement n est demande, rien n est ecrit sur la
- *   chaine ni garde. L essai ne touche ni l onglet Brain, ni la map, ni ce que voient les autres. */
+ * ⛔ ESSAYER ne paie rien et n ecrit rien ; l essai ne touche ni l onglet Brain, ni la map, ni ce que voient les autres. L ACHAT
+ *   (1 USDC, prix fixe par Phil) est un geste a part : bcAcheterSkin, plus bas. */
 /* Une skin = QUATRE variables : l ANNEAU (le perimetre du block, de son cube et de sa vignette), sa LUEUR, la teinte des ARETES du
- *   cube (`cube`, en degres) et celle du NOYAU aux 128 neurones (`noyau`). `anneau: ''` et teintes `null` = l original. */
+ *   cube (`cube`, en degres) et celle du NOYAU aux 128 neurones (`noyau`). `anneau: ''` et teintes `null` = l original.
+ * 2026-10-04 (Phil, 3e retour) : « laisse que le bouton random et les parametres en manuel pour changer, comme sur l onglet Create ».
+ *   Le catalogue de skins toutes faites est parti du panneau : il reste l ORIGINAL, et UNE skin reglable — sa recette de six entiers
+ *   (trois teintes d anneau, l angle, les aretes, le noyau), tiree au hasard ou reglee curseur par curseur. C est cette recette qui
+ *   s ecrit dans la transaction a l achat. */
 const BC_SKINS = Object.freeze([
   { id: 'original', nom: 'Original', anneau: '', lueur: '', cube: null, noyau: null, payant: false },
-  { id: 'gold', nom: 'Gold', anneau: 'conic-gradient(from 210deg,#f6d365,#b8860b,#fff3b0,#8a6508,#f6d365)', lueur: 'rgb(246 211 101 / .55)', cube: 45, noyau: 52, payant: true },
-  { id: 'ice', nom: 'Ice', anneau: 'conic-gradient(from 210deg,#e0fbfc,#5bc0eb,#a8edea,#2b6f8f,#e0fbfc)', lueur: 'rgb(91 192 235 / .55)', cube: 198, noyau: 185, payant: true },
-  { id: 'ember', nom: 'Ember', anneau: 'conic-gradient(from 210deg,#ff512f,#f09819,#7a1c00,#ffb347,#ff512f)', lueur: 'rgb(255 81 47 / .55)', cube: 12, noyau: 30, payant: true },
-  { id: 'toxic', nom: 'Toxic', anneau: 'conic-gradient(from 210deg,#b4ec51,#429321,#eaffb0,#1f5d0f,#b4ec51)', lueur: 'rgb(180 236 81 / .5)', cube: 95, noyau: 78, payant: true },
-  { id: 'violet', nom: 'Ultraviolet', anneau: 'conic-gradient(from 210deg,#a18cd1,#5f2c82,#fbc2eb,#3a1c71,#a18cd1)', lueur: 'rgb(161 140 209 / .6)', cube: 268, noyau: 305, payant: true },
-  { id: 'chrome', nom: 'Chrome', anneau: 'conic-gradient(from 210deg,#f5f7fa,#8e9eab,#ffffff,#5b6770,#f5f7fa)', lueur: 'rgb(245 247 250 / .4)', cube: 210, noyau: 200, payant: true },
-  { id: 'circuit', nom: 'Circuit', anneau: 'repeating-conic-gradient(from 0deg,#00e5ff 0 6deg,#00323a 6deg 12deg)', lueur: 'rgb(0 229 255 / .5)', cube: 187, noyau: 160, payant: true },
 ]);
+/* les six reglages : [libelle, champ de la recette, index dans `h` ou null] */
+const BC_REGLAGES = Object.freeze([['Ring 1', 'h', 0], ['Ring 2', 'h', 1], ['Ring 3', 'h', 2], ['Ring turn', 'angle', null], ['Edges', 'cube', null], ['Core', 'noyau', null]]);
 /* ── LES SKINS ACHETEES POUR CE BLOCK (index du serveur, /api/skins/<block> ; chaque ligne porte sa transaction) ── */
 async function bcLireSkins(a) {
   if (bc.skinsEnVol) return;
@@ -22137,7 +22161,7 @@ function bcSkinAleatoire() {
 }
 function bcSkinDepuisRecette(r) {
   const c = (h, l) => 'hsl(' + h + ' 90% ' + l + '%)', [h1, h2, h3] = r.h;
-  return { id: 'random', nom: 'Random ' + h1 + '·' + h2 + '·' + h3, payant: true, recette: r, cube: r.cube, noyau: r.noyau,
+  return { id: 'random', nom: 'Skin ' + h1 + '·' + h2 + '·' + h3, payant: true, recette: r, cube: r.cube, noyau: r.noyau,
     anneau: 'conic-gradient(from ' + r.angle + 'deg,' + c(h1, 62) + ',' + c(h2, 38) + ',' + c(h3, 70) + ',' + c(h2, 30) + ',' + c(h1, 62) + ')',
     lueur: 'hsl(' + h1 + ' 90% 60% / .55)', filtre: 'sepia(1) saturate(4) hue-rotate(' + r.noyau + 'deg)' };
 }
@@ -22159,24 +22183,34 @@ function bcPorterSkin(id) {
   for (const b of document.querySelectorAll('#bcBoutique [data-skin]')) b.setAttribute('aria-pressed', String(b.getAttribute('data-skin') === s.id));
 }
 function bcPeindreBoutique() {
-  const z = $('#bcBoutique'), svg = bc.svgVisage || '';
+  const z = $('#bcBoutique');
   z.textContent = '';
-  for (const s of BC_SKINS) {
-    const v = bcEl('div', { cls: 'bcVignette' });
-    /* la vignette = le visage de CE block (notre propre SVG, celui que `dessin()` vient de rendre) sous le filtre de la skin */
-    if (svg) v.innerHTML = svg; else v.textContent = '◈';
-    if (s.anneau) v.style.setProperty('--bcAnneau', s.anneau); else v.style.setProperty('--bcAnneau', 'var(--ligne)');
-    const b = bcEl('button', { type: 'button', cls: 'bcTuile', 'data-skin': s.id, 'aria-pressed': String((bc.skin || 'original') === s.id) }, [v, bcEl('b', { text: s.nom }), bcEl('span', { text: s.payant ? 'paid · try on' : 'yours' })]);
-    b.addEventListener('click', () => { bc.skinChoisie = true; bcPorterSkin(s.id); });
-    z.append(b);
+  /* deux boutons : revenir a l ORIGINAL, ou tirer une skin au HASARD (chaque appui en tire une autre et regle les curseurs dessus) */
+  const haut = bcEl('div', { cls: 'bcPre' });
+  const bo = bcEl('button', { type: 'button', cls: 'puce', 'data-skin': 'original', 'aria-pressed': String((bc.skin || 'original') === 'original'), text: 'Original' });
+  bo.addEventListener('click', () => { bc.skinChoisie = true; bcPorterSkin('original'); bcPeindreBoutique(); });
+  const ra = bcEl('button', { type: 'button', cls: 'puce', 'data-skin': 'random', 'aria-pressed': String(bc.skin === 'random'), text: '🎲 Random' });
+  ra.addEventListener('click', () => { bc.skinChoisie = true; bcPorterSkin(bcSkinAleatoire()); bcPeindreBoutique(); });
+  haut.append(bo, ra); z.append(haut);
+  /* les six curseurs (0 a 359) : chaque mouvement repeint la skin portee. Partir de l original = partir de la teinte de l app. */
+  const portee = bc.skinPortee && bc.skinPortee.recette ? bc.skinPortee.recette : null;
+  const depart = () => { const t = Math.round(teinteH()) % 360; return { id: 'random', angle: 210, h: [t, (t + 40) % 360, (t + 320) % 360], cube: t, noyau: t }; };
+  const grille = bcEl('div', { cls: 'bcReglages' });
+  for (const [lib, champ, i] of BC_REGLAGES) {
+    const r0 = portee || depart(), v0 = i === null ? r0[champ] : r0[champ][i];
+    const val = bcEl('b', { text: String(v0) });
+    const c = bcEl('input', { type: 'range', min: '0', max: '359', step: '1', value: String(v0), 'aria-label': lib + ', 0 to 359' });
+    c.addEventListener('input', () => {
+      const cur = bc.skinPortee && bc.skinPortee.recette ? bc.skinPortee.recette : depart();
+      const r = { id: 'random', angle: cur.angle, h: [cur.h[0], cur.h[1], cur.h[2]], cube: cur.cube, noyau: cur.noyau }, n = Math.max(0, Math.min(359, Math.round(Number(c.value)) || 0));
+      if (i === null) r[champ] = n; else r.h[i] = n;
+      val.textContent = String(n);
+      bc.skinChoisie = true; bcPorterSkin(bcSkinDepuisRecette(r));
+      for (const b of z.querySelectorAll('[data-skin]')) b.setAttribute('aria-pressed', String(b.getAttribute('data-skin') === 'random'));
+    });
+    grille.append(bcEl('label', {}, [bcEl('span', {}, [document.createTextNode(lib + ' '), val]), c]));
   }
-  /* la tuile « Random » : chaque appui tire une nouvelle combinaison contour + interieur et la fait porter */
-  const va = bcEl('div', { cls: 'bcVignette', text: '🎲' }); va.style.setProperty('--bcAnneau', 'conic-gradient(#ff512f,#f6d365,#b4ec51,#5bc0eb,#a18cd1,#ff512f)');
-  const ra = bcEl('button', { type: 'button', cls: 'bcTuile', 'data-skin': 'random', 'aria-pressed': String(bc.skin === 'random') }, [va, bcEl('b', { text: 'Random' }), bcEl('span', { text: 'a new one each tap' })]);
-  ra.addEventListener('click', () => { bc.skinChoisie = true; bcPorterSkin(bcSkinAleatoire()); });
-  z.append(ra);
-  const p = bcEl('button', { type: 'button', cls: 'bcTuile', disabled: '', 'aria-disabled': 'true' }, [bcEl('div', { cls: 'bcVignette', text: '+' }), bcEl('b', { text: 'Yours' }), bcEl('span', { text: 'propose a skin · soon' })]);
-  z.append(p);
+  z.append(grille);
 }
 /* ── AiFi : LE CERVEAU PROPOSE SEUL, DANS DES LIMITES ; LE WALLET CONFIRME CHAQUE TRADE (2026-10-04) ────────────────────────────
  * Ce que c est : quand l humeur du block CHANGE vers un etat que la personne a coche (excited -> achat ; worried -> vente d un quart
@@ -22487,6 +22521,36 @@ bcPeindreOps();
 $('#bcOuvrir').addEventListener('click', () => bcOuvrirPop());
 $('#bcFermer').addEventListener('click', () => $('#bcPop').close());
 /* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
+/* ── LA RECHERCHE D UN BLOCK (en-tete du panneau) : un symbole, un nom exact ou une adresse entiere -> ce block s affiche ──
+ * Les propositions (datalist) viennent de l index du Market (les plus echanges d abord) et du registre des actions. La resolution est
+ * celle des commandes (`bcResoudre`) : un symbole porte par plusieurs blocks est REFUSE et le dit — on ne choisit pas a la place. */
+function bcRemplirRecherche() {
+  const dl = $('#bcChercheListe'); if (!dl) return;
+  const vus = new Set(), opts = [];
+  for (const a of ACTIONS_COINBASE) { const s = String(a.symbole); if (!vus.has(s.toUpperCase())) { vus.add(s.toUpperCase()); opts.push([s, String(a.nom || '')]); } }
+  const lignes = [...marcheParAdr.values()].filter((l) => l && l.sym).sort((x, y) => Number(y.volume24hUsd || 0) - Number(x.volume24hUsd || 0)).slice(0, 150);
+  const compte2 = new Map(); for (const l of lignes) { const k = String(l.sym).toUpperCase(); compte2.set(k, (compte2.get(k) || 0) + 1); }
+  for (const l of lignes) {
+    const k = String(l.sym).toUpperCase();
+    if (vus.has(k) && compte2.get(k) === 1) continue;
+    /* symbole porte par plusieurs blocks : c est l ADRESSE qui est proposee (le symbole seul serait refuse) */
+    if (compte2.get(k) > 1) opts.push([String(l.adr).toLowerCase(), String(l.sym) + (l.nom ? ' — ' + String(l.nom) : '')]);
+    else { vus.add(k); opts.push([String(l.sym), String(l.nom || '')]); }
+  }
+  dl.textContent = '';
+  for (const [v, lib] of opts.slice(0, 200)) dl.append(bcEl('option', { value: v, label: lib }));
+}
+$('#bcCherche').addEventListener('focus', bcRemplirRecherche);
+$('#bcChercheForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const champ = $('#bcCherche'), note = $('#bcChercheNote'), v = champ.value.trim();
+  if (!v) return;
+  const j = bcResoudre(v);
+  if (!j.ok) { note.textContent = j.pourquoi; return; }
+  if (j.adr === ETH_ADR.toLowerCase() || !/^0x[0-9a-f]{40}$/.test(j.adr)) { note.textContent = 'That is a currency, not a block — name a block or a tokenized stock.'; return; }
+  note.textContent = ''; champ.value = '';
+  choisirBrain(j.adr); bcRepeindre();
+});
 $('#bcReduire').addEventListener('click', () => {
   const r = $('#bcPop').classList.toggle('bcReduit');
   $('#bcReduire').textContent = r ? '+' : '–'; $('#bcReduire').setAttribute('aria-expanded', String(!r));

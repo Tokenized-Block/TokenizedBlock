@@ -80,9 +80,9 @@ ok(/<dialog class="bcPop" id="bcPop"/.test(html) && /function bcOuvrirPop\(\) \{
   && /async function bcRecevoir\(c\) \{\n\s+bcOuvrirPop\(\);/.test(html), 'le panneau est un pop-up : ouvert par le widget, et de lui-meme quand un agent propose');
 const bcSrc = html.slice(html.indexOf('const bc = { session: null'), html.indexOf('(function bcDemarrage()'));
 const innerHtmls = bcSrc.match(/[A-Za-z]+\.innerHTML = [^;]+;/g) || [];
-/* 4 depuis les skins (2026-10-04) : la vignette de la boutique recoit le MEME svg (`bc.svgVisage`, rendu par dessin()) */
-ok(innerHtmls.length === 4 && innerHtmls.every((x) => /innerHTML = svg;/.test(x)) && /const z = \$\('#bcBoutique'\), svg = bc\.svgVisage \|\| '';/.test(bcSrc) && /bc\.svgVisage = svg \|\| '';/.test(bcSrc),
-  'les seuls innerHTML du panneau sont NOTRE svg (dessin : avatar, widget, peau, vignettes de skin) : ' + innerHtmls.length + ' — tout texte d agent ou de chaine passe par textContent');
+/* 3 : avatar, widget, peau. (Il y en a eu un 4e, les vignettes du catalogue de skins — parti avec le catalogue le 2026-10-04.) */
+ok(innerHtmls.length === 3 && innerHtmls.every((x) => /innerHTML = svg;/.test(x)),
+  'les seuls innerHTML du panneau sont NOTRE svg (dessin : avatar, widget, peau) : ' + innerHtmls.length + ' — tout texte d agent ou de chaine passe par textContent');
 /* ── les vues (Phil, 2026-10-04) : Trade = en cours + historique + notes du cerveau ; Market = les echanges des AUTRES ; Brain = le cube ── */
 ok(/const BC_EN_COURS = \['proposed', 'planned', 'signing', 'sent'\];/.test(bcSrc) && /id="bcEnCours"/.test(html) && /id="bcHistorique"/.test(html) && /id="bcNotesBot"/.test(html),
   'Trade : les operations en cours, l historique, et ce que le cerveau a note');
