@@ -2,3 +2,6 @@
 # convertir les fins de ligne (core.autocrlf = true sur ce poste le ferait au prochain checkout, et le widget MCP
 # s eteindrait sans bruit). `-text` = octets tels quels, dans les deux sens.
 mcp-ext-apps-2.0.3.bundle.js -text
+# Un script bash sorti en CRLF ne s execute pas (« \r : commande introuvable ») : avec core.autocrlf = true, un checkout sur un
+# autre poste convertirait outils/deployer.sh. On le garde en LF dans les deux sens.
+*.sh text eol=lf
