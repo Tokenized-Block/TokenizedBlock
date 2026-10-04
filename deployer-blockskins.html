@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Deploy BlockSkins — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#07141a;color:#e8f4f6;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;margin:26px 0 8px;color:#9fd6dd}
+p{margin:8px 0}
+.note{color:#9db4ba;font-size:14px}
+.carte{border:1px solid #1d3a44;border-radius:14px;padding:14px 16px;margin:12px 0;background:#0b1d25}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:0;font-size:14px}
+dt{color:#9db4ba}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+button{appearance:none;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;background:#2fd0c8;color:#04262a}
+button.sec{background:transparent;color:#e8f4f6;border:1px solid #2a4a55}
+button:disabled{opacity:.45;cursor:not-allowed}
+.ok{color:#6fe3a5}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+</style>
+</head>
+<body>
+<main>
+  <h1>Deploy BlockSkins</h1>
+  <p class="note">One transaction, signed by your wallet, creates the contract on Base. This page sends nothing by itself.</p>
+
+  <h2>What the contract does</h2>
+  <div class="carte">
+    <ul>
+      <li>Minting a skin costs 1 USDC, sent straight to the fee wallet.</li>
+      <li>A skin can be sold at a fixed price or by auction (7 days at most). Each sale pays 10% to the fee wallet.</li>
+      <li>Sales run in ETH, USDC, or a token the owner has allowed.</li>
+      <li>A bid must raise the highest one by 5%. A bid in the last 5 minutes adds 5 minutes, never past the 7 days.</li>
+      <li>The wallet that signs here becomes the owner. The owner can only allow or disallow a payment token.</li>
+      <li>It cannot be changed or paused after it is deployed.</li>
+    </ul>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <dl>
+      <dt>Network</dt><dd>Base (8453)</dd>
+      <dt>USDC</dt><dd id="dUsdc">—</dd>
+      <dt>Fee wallet</dt><dd id="dFrais">—</dd>
+      <dt>Compiler</dt><dd id="dComp">—</dd>
+      <dt>Size</dt><dd id="dTaille">—</dd>
+      <dt>Fingerprint</dt><dd id="dEmpreinte">—</dd>
+    </dl>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Deploy</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Deploy BlockSkins</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>Contract</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+  </div>
+</main>
+<script type="module">
+/* deployer-blockskins.html — propose AU WALLET CONNECTE la transaction de deploiement de BlockSkins, FIGEE dans
+ * blockskins-deploiement.js (generee par contracts/preparer-deploiement-blockskins.mjs ; le banc fork deploie cette meme donnee).
+ * ⛔ Rien n est envoye sans un appui sur « Deploy » ET la signature du wallet. Aucune cle, aucun argument saisi a la main :
+ *   les deux arguments du constructeur sont DANS la donnee figee, et la page les RELIT dans cette donnee avant de les afficher.
+ * ⛔ L empreinte est RECALCULEE dans le navigateur ; si elle differe de celle annoncee, le bouton reste eteint. */
+import { BLOCKSKINS_DEPLOIEMENT as D } from './blockskins-deploiement.js';
+import { selecteur } from './keccak.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+let compte = null, intacte = false, envoi = false;
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+/* les deux arguments, LUS dans la fin de la donnee figee (2 mots de 32 octets) — pas dans le champ `constructeur` */
+const fin = D.creation.slice(-128), usdc = '0x' + fin.slice(24, 64), frais = '0x' + fin.slice(88, 128);
+$('#dUsdc').textContent = usdc; $('#dFrais').textContent = frais;
+$('#dComp').textContent = 'solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm;
+$('#dTaille').textContent = D.octetsCreation + ' bytes of creation code';
+$('#dEmpreinte').textContent = 'sha256 ' + D.sha256Creation;
+(async () => {
+  try {
+    const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    intacte = h === D.sha256Creation && octets.length === D.octetsCreation && usdc === D.constructeur.usdc && frais === D.constructeur.walletDesFrais;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser: it matches.' : 'The fingerprint does not match. Nothing can be deployed from this page.';
+  } catch (_) { $('#dVerif').className = 'note ko'; $('#dVerif').textContent = 'The fingerprint could not be computed here. Nothing can be deployed from this page.'; }
+  peindre();
+})();
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  $('#bDeployer').disabled = !compte || !intacte || envoi;
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  peindre();
+});
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi) return;
+  envoi = true; peindre();
+  try {
+    const chaine = await eth().request({ method: 'eth_chainId' });
+    if (String(chaine).toLowerCase() !== CHAINE_HEX) {
+      try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); }
+      catch (_) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
+    }
+    dire('Confirm in your wallet…');
+    /* ⛔ AUCUN `to` (creation de contrat), AUCUNE valeur : la donnee figee, telle quelle */
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
+    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
+    dire('Sent. Waiting for Base to confirm…');
+    let recu = null;
+    for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } }
+    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
+    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+    const adr = String(recu.contractAddress);
+    $('#rAdr').textContent = adr;
+    /* relecture SUR LA CHAINE de ce que le contrat dit de lui-meme */
+    const lire = async (sig) => '0x' + String(await eth().request({ method: 'eth_call', params: [{ to: adr, data: selecteur(sig) }, 'latest'] })).slice(-40);
+    const [u, f, o] = [await lire('USDC()'), await lire('FEE_WALLET()'), await lire('owner()')];
+    const bon = u === usdc && f === frais && o.toLowerCase() === compte.toLowerCase();
+    $('#rLu').textContent = 'USDC ' + u + ' · fee wallet ' + f + ' · owner ' + o;
+    dire(bon ? 'Deployed. The contract reads back what was signed. Send its address to the team: the app does not use it yet.' : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  } catch (e) {
+    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>

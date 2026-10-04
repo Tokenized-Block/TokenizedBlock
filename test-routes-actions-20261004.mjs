@@ -98,6 +98,20 @@ ok(/if \(achat && !ACTIONS_PAR_ADR\.has\(a\) && standard\) \{\s+const v4 = bcAct
 ok(/if \(ACTIONS_PAR_ADR\.has\(k\) && !POOLS_ACTIONS_AERODROME\.has\(k\)\) s\.add\(k\);/.test(html) && /for \(const l of LOGS_INITIALIZE_MESURES\) \{\s+const d = decoderInitialize\(l\);\s+if \(!d \|\| !d\.cle\) continue;\s+for \(const c of \[d\.cle\.currency0, d\.cle\.currency1\]\)/.test(html),
   'C … cette liste vient des pools v4 LUES (logs redecodes), et exclut la table Aerodrome (qui ne paie pas un block en un trade)');
 
+/* AiFi (Phil, 2026-10-04 : deux cartes identiques puis sept fois le meme avis — « ca casse tout, corrige ») */
+ok(/const bcAifiOuverte = \(x\) => !!x && \(x\.op \? BC_EN_COURS\.includes\(x\.op\.etat\) : Date\.now\(\) - x\.depuis < 20000\);/.test(html)
+  && /if \(bcAifiOuverte\(bcAifiSuivi\.achat\)\) return;/.test(html) && /if \(bcAifiOuverte\(bcAifiSuivi\.vente\)\) return;/.test(html)
+  && /if \(suivi\) suivi\.op = op;/.test(html), 'C AiFi : UNE proposition ouverte par sens — tant que sa carte attend, il n en ouvre pas une autre');
+ok(html.indexOf('if (bcAifiOuverte(bcAifiSuivi.achat)) return;') < html.indexOf("s.propose = (BigInt(s.propose) + m).toString(); bcAifiSauver(); bcAifiPeindre();")
+  && html.indexOf('if (bcAifiOuverte(bcAifiSuivi.achat)) return;') > html.indexOf("if (s.achat && phase === 'EXCITE') {"), 'C … et le doublon ecarte ne compte RIEN au budget (le controle precede le decompte)');
+ok(/function bcAifiDire\(texte\) \{ if \(bcAifiSuivi\.avis === texte\) return; bcAifiSuivi\.avis = texte; bcAifiNote\(texte\); \}/.test(html)
+  && !/bcMessage\('AiFi', '', 'It got worried/.test(html), 'C AiFi : un avis identique au precedent n est pas reecrit (plus aucun « It got worried » ecrit sans passer par ce filtre)');
+/* le fil condense (Phil : « fais pas de doublon, mets le chat en condense ») : UN bloc AiFi, des lignes dedans */
+ok(/if \(der && der\.dataset && der\.dataset\.aifi === '1'\) \{\s+if \(der\.dataset\.derniere !== texte\) \{ bcEtape\(der, texte\);/.test(html)
+  && (html.match(/bcMessage\('AiFi'/g) || []).length === 1 && /if \(pourquoi\) bcAifiNote\(pourquoi\);/.test(html) && /bcAifiNote\('Started on '/.test(html),
+  'C AiFi : started / stopped / avis s ajoutent en LIGNES dans un seul bloc « AiFi » (un seul `bcMessage(\'AiFi\'` dans tout le source : celui qui ouvre ce bloc)');
+ok(/\.bcLimites \.bcCoche\{[^}]*user-select:none/.test(html), 'C les libelles des cases AiFi ne se selectionnent plus au double-clic (capture de Phil : texte grise illisible)');
+
 console.log('— D. mutants');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-routes-'));
 const copie = () => { const dir = fs.mkdtempSync(path.join(tmp, 'm-')); for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) && !/^(serveur-web|vendor|mcp-ext-apps)/.test(f)) fs.copyFileSync(path.join(ICI, f), path.join(dir, f)); return dir; };
@@ -146,6 +160,41 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
   ok(vrai.etat === 'PRET' && String(vrai.appels[1].data).toLowerCase().includes(sel) && /^0x0{40}$/.test(String(vrai.resume.recoitDevise)),
     'D temoin : le plan complet (2 sauts) rend PRET, se termine par unwrapWETH9WithFee, et annonce de l ETH natif (etat ' + vrai.etat + (vrai.pourquoi ? ' — ' + vrai.pourquoi : '') + ')');
   ok(m.une && mut.etat === 'PRET' && !String(mut.appels[1].data).toLowerCase().includes(sel), 'D mutant « drapeau perdu entre le plan et le calldata » : ROUGE (le plan annoncerait de l ETH et rendrait du WETH)');
+}
+console.log('— E. le marche d une action se lit en UNE lecture de pool (mesure prod : 27 a 175 s par plan)');
+/* faux noeud qui REPOND : slot0 non nul, decimales 8, offre 1e16. `vieDuBlock` doit rendre le marche de la cle exacte sans
+ * passer par les 17 pools ETH. On COMPTE les getSlot0. */
+async function lecturesMarche(dir, extra) {
+  const M = await imp('marche.js', dir), { LOGS_INITIALIZE_ACTIONS } = await imp('cles-v4-actions.js'), { decoderInitialize } = await imp('pools-du-jeton.js');
+  const { V4_ADRESSES } = await imp('lancer-pool.js'), { selecteur } = await imp('keccak.js');
+  const cle = LOGS_INITIALIZE_ACTIONS.map(decoderInitialize).map((d) => d && d.cle).find((c) => c && [String(c.currency0).toLowerCase(), String(c.currency1).toLowerCase()].includes(adrDe(symV4)));
+  const s0 = '0x' + selecteur('getSlot0(bytes32)').replace(/^0x/, '');
+  let slot0 = 0;
+  const rpc = async (m, p) => {
+    const d = String(p[0].data);
+    if (d.startsWith(s0)) { slot0 += 1; return '0x' + (1n << 96n).toString(16).padStart(64, '0') + '0'.repeat(64 * 3); }
+    if (d.startsWith('0x313ce567')) return '0x' + (8).toString(16).padStart(64, '0');
+    if (d.startsWith('0x18160ddd')) return '0x' + (10n ** 16n).toString(16).padStart(64, '0');
+    return '0x' + '0'.repeat(64);
+  };
+  const v = await M.vieDuBlock({ rpc, stateView: V4_ADRESSES[8453].stateView, jeton: adrDe(symV4), clesExactes: [cle], ...extra });
+  return { v, slot0, cle };
+}
+{
+  const a = await lecturesMarche(ICI, { deviseDAbord: true });
+  ok(a.v.etat === 'LUE' && a.slot0 === 1 && String(a.v.deviseAdr).toLowerCase() === USDC, 'E ' + symV4 + ' avec deviseDAbord : marche LU en USDC, en 1 lecture de pool (' + a.slot0 + ')');
+  const t = await lecturesMarche(ICI, {});
+  /* le faux noeud repond « pool initialisee » a TOUT : sans le drapeau, la 1re cle ETH essayee l emporte — c est le chemin d avant */
+  ok(t.v.etat === 'LUE' && String(t.v.deviseAdr || '').toLowerCase() !== USDC, 'E temoin : sans le drapeau, l ordre d avant est INCHANGE (les pools ETH sont essayees d abord)');
+  const src = lire('rails-api.js');
+  ok(/const marcheDe = async \(a\) => vieDuBlock\(\{ rpc, stateView, jeton: a, clesExactes: await clesDe\(a\), deviseDAbord: natureJeton\(a\) === 'ACTION' \}\);/.test(src),
+    'E rails-api.js ne pose le drapeau que pour une ACTION du registre (un block garde l ordre ETH d abord)');
+  ok(/const sautAction = !!k && \(natureJeton\(d1\) === 'ACTION' \|\| natureJeton\(v1\) === 'ACTION'\);/.test(src) && /candidates: sautAction \? sup : sup\.concat\(CLES_PRIX\)/.test(src),
+    'E un saut d action dont la cle est lue ne devise que cette cle (plus les 5 gabarits ETH/USDC qui revertaient)');
+  const m = muter('marche.js', 'if (deviseDAbord && clesSaines.length) {', 'if (false) {');
+  let rouge = false;
+  try { const x = await lecturesMarche(m.dir, { deviseDAbord: true }); rouge = String(x.v.deviseAdr || '').toLowerCase() !== USDC || x.slot0 !== 1; } catch (_) { rouge = true; }
+  ok(m.une && rouge, 'E mutant « raccourci retire » : ROUGE');
 }
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log('\n' + (n - ko) + ' ok / ' + ko + ' KO (' + n + ' assertions)');

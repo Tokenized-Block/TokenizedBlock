@@ -119,7 +119,9 @@ export async function planRail(q, deps) {
   /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
    * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */
   const fraisDevisesOk = new Set([USDC, ...POOLS_ACTIONS_AERODROME.keys()]);
-  const marcheDe = async (a) => vieDuBlock({ rpc, stateView, jeton: a, clesExactes: await clesDe(a) });
+  /* une action du registre est cotee en devise (USDC) : sa cle exacte est lue D ABORD — 17 lectures de pools ETH inexistantes
+   * en moins par plan (mesure du 2026-10-04, voir marche.js). Un block garde l ordre d avant. */
+  const marcheDe = async (a) => vieDuBlock({ rpc, stateView, jeton: a, clesExactes: await clesDe(a), deviseDAbord: natureJeton(a) === 'ACTION' });
   const illisible = (mk) => ({ etat: mk && mk.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
     pourquoi: 'the block market could not be read: ' + ((mk && mk.pourquoi) || 'no answer') });
   /* ⛔ LES DECIMALES SE LISENT (OUSD en a 6, pas 18) ; ETH natif seul est connu. */
@@ -135,7 +137,11 @@ export async function planRail(q, deps) {
     const paire = new Set([bas(d1), bas(v1)]);
     const k = clesConnues.find((c) => c && paire.has(bas(c.currency0)) && paire.has(bas(c.currency1))) || null;
     const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
-    return meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt, candidates: sup.concat(CLES_PRIX) });
+    /* ⛔ 2026-10-04 (compte des lectures) : sur un saut ACTION <-> USDC dont la cle est LUE, les gabarits de CLES_PRIX (les pools
+     *   de prix ETH/USDC) ne designent aucune pool de cette paire : 5 devis qui REVERTENT a chaque plan. Pour ce saut-la, la
+     *   cle lue seule. Tout autre saut garde la regle d avant (la cle lue ET les cles de prix). */
+    const sautAction = !!k && (natureJeton(d1) === 'ACTION' || natureJeton(v1) === 'ACTION');
+    return meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt, candidates: sautAction ? sup : sup.concat(CLES_PRIX) });
   };
   try {
     /* ── 1. ACHETER UN BLOCK ─────────────────────────────────────────────────────────────────────────────── */

@@ -241,7 +241,7 @@ async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
   return null;
 }
 
-export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
+export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], deviseDAbord = false }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
     return { etat: 'REFUSEE', vie: null, devise: null, via: null, pourquoi: 'not an address' };
   }
@@ -260,6 +260,17 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [] }) {
   const clesSaines = (Array.isArray(clesExactes) ? clesExactes : [])
     .filter((c) => c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing))
       && (Number(c.fee) <= FRAIS_LP_MAX_MARCHE || Number(c.fee) === FRAIS_DYNAMIQUE));
+  /* ⛔⛔ 2026-10-04 (MESURE sur le planificateur de prod) : un plan d action tokenisee mettait 27 a 175 s. Compte des lectures sur
+   *   fork : 23 par plan, dont 17 `getSlot0` SEQUENTIELS sur des pools ETH qui n existent pas pour une action (elle est cotee
+   *   en USDC) — sa vraie pool n etait lue qu APRES, par `vieEnDevise`. `deviseDAbord` lit d abord les cles exactes appariees a
+   *   une devise ; une reponse LUE est rendue telle quelle (c est celle que l ancien chemin aurait rendue 17 lectures plus tard,
+   *   puisqu aucune pool ETH ne la precedait). Rien de lu, ou lecture ratee : on retombe sur le chemin d avant, INCHANGE.
+   *   ⛔ Reserve a l appelant qui SAIT que le marche du jeton est une devise (rails-api : les actions du registre). Pour un
+   *   block, l ordre ETH d abord reste la regle (un block a pool ETH ET pool devise garde sa pool ETH comme marche). */
+  if (deviseDAbord && clesSaines.length) {
+    const vd0 = await vieEnDevise({ rpc, stateView, jeton, clesExactes: clesSaines });
+    if (vd0) return vd0;
+  }
   const candidates = [
     ...clesSaines
       .map((c) => ({ nom: 'on-chain key ' + (Number(c.fee) / 10000) + ' %', fee: Number(c.fee),

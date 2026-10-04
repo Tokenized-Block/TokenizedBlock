@@ -243,14 +243,18 @@ ok(/data-mode="semi" aria-selected="true">Manual</.test(html) && /data-mode="ful
   'C2 Trade : le switch Manual / AiFi (Manual par defaut) ; « Max per day » est parti (un budget total et une heure d arret)');
 ok(/<input type="checkbox" id="bcAiAchat"><span>/.test(html) && /<input type="checkbox" id="bcAiVente"><span>/.test(html), 'C2 AiFi : les deux declencheurs sont DECOCHES par defaut — c est la personne qui choisit quand son cerveau propose');
 /* AiFi, EXECUTE : la fonction est extraite du source et rejouee avec de faux voisins */
-const srcAifi = (bcSrc.match(/function bcAifiBattre\(a, snap\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
+/* 2026-10-04 : l extrait part de `bcAifiSuivi` — les deux gardes anti-doublon (une proposition ouverte par sens, un avis non repete)
+ *   vivent juste au-dessus de la fonction et sont executees avec elle */
+const srcAifi = (bcSrc.match(/const bcAifiSuivi = \{ achat: null, vente: null, avis: null \};\n[\s\S]*?function bcAifiBattre\(a, snap\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
 const BLK = '0xb2000000000000000000000000000000000000aa', ETH0 = '0x' + '0'.repeat(40);
 function monterAifi(src, etat, { compte = null, solde = 400n, cot = { ok: true, adr: ETH0, sym: 'ETH' } } = {}) {
   const vus = { swaps: [], messages: [], arrets: [], ouverts: 0 };
   const bc = { aifi: etat };
-  const f = new Function('bc', 'bcAifiArreter', 'bcAifiSauver', 'bcAifiPeindre', 'bcResoudre', 'court', 'ETH_ADR', 'bcOuvrirPop', 'bcProposerSwap', 'compte', 'bcCotation', 'bcSolde', 'bcMessage',
+  /* la fausse carte : une operation « proposed » que le test REFERME lui-meme (declined / done), comme le ferait la personne */
+  const f = new Function('bc', 'bcAifiArreter', 'bcAifiSauver', 'bcAifiPeindre', 'bcResoudre', 'court', 'ETH_ADR', 'bcOuvrirPop', 'bcProposerSwap', 'compte', 'bcCotation', 'bcSolde', 'bcMessage', 'BC_EN_COURS', 'bcAifiNote',
     src + '; return bcAifiBattre;')(bc, (p) => { vus.arrets.push(p); bc.aifi = null; }, () => {}, () => {}, () => ({ sym: 'BLK' }), (x) => x, ETH0, () => { vus.ouverts += 1; },
-    async (qui, cls, e) => { vus.swaps.push({ qui, cls, de: e.de.adr, vers: e.vers.adr, montant: e.montant }); }, compte, () => cot, async () => solde, (q, c, t) => { vus.messages.push(t); });
+    async (qui, cls, e, ref, suivi) => { const op = { etat: 'proposed' }; if (suivi) suivi.op = op; vus.swaps.push({ qui, cls, de: e.de.adr, vers: e.vers.adr, montant: e.montant, op }); },
+    compte, () => cot, async () => solde, (q, c, t) => { vus.messages.push(t); }, ['proposed', 'planned', 'signing', 'sent'], (t) => { vus.messages.push(t); });
   return { f, vus, bc };
 }
 const etatAifi = (plus = {}) => ({ block: BLK, achat: true, vente: false, parTrade: '2000', budget: '5000', propose: '0', jusqua: Date.now() + 3600000, phase: null, ...plus });
@@ -261,7 +265,13 @@ async function jeuAifi(src, dire) {
   battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === ETH0 && m.vus.swaps[0].vers === BLK && m.vus.swaps[0].montant === '2000' && m.bc.aifi.propose === '2000' && m.vus.swaps[0].cls === 'agent',
     'AiFi : calm -> excited = UNE proposition d achat, du montant « per trade », en ETH, par la meme carte qu un agent');
   battre(m, 'EXCITE'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1, 'AiFi : l humeur ne change pas = rien (declenche sur un FRONT, jamais en boucle)');
-  battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 2 && m.bc.aifi.propose === '4000', 'AiFi : un 2e changement = une 2e proposition (4000 proposes sur 5000)');
+  /* Phil, 2026-10-04 : deux cartes identiques. Une humeur qui OSCILLE pendant que la carte attend n en ouvre pas une autre. */
+  battre(m, 'CALME'); battre(m, 'EXCITE'); battre(m, 'CALME'); battre(m, 'EXCITE');
+  dire(m.vus.swaps.length === 1 && m.bc.aifi.propose === '2000', 'AiFi : sa carte d achat attend encore — l humeur peut osciller, AUCUNE 2e carte, et rien de plus au budget');
+  m.vus.swaps[0].op.etat = 'declined';
+  battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1, 'AiFi : carte refermee, humeur inchangee = toujours rien (c est un changement qui declenche, pas la place libre)');
+  battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 2 && m.bc.aifi.propose === '4000', 'AiFi : carte refermee PUIS nouveau changement = une 2e proposition (4000 proposes sur 5000)');
+  m.vus.swaps[1].op.etat = 'done';
   battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 2 && m.bc.aifi === null && /Budget reached/.test(m.vus.arrets[0] || ''), 'AiFi : le 3e depasserait le budget (6000 > 5000) = AUCUNE proposition, et AiFi s arrete en le disant');
   m = monterAifi(src, etatAifi({ phase: 'CALME' }));
   battre(m, 'EXCITE', null); dire(m.vus.swaps.length === 0, 'AiFi : sans battement (tick null) rien ne se declenche');
@@ -274,6 +284,11 @@ async function jeuAifi(src, dire) {
   battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === BLK && m.vus.swaps[0].vers === ETH0 && m.vus.swaps[0].montant === '100', 'AiFi : calm -> worried = vente d un QUART du solde LU (400 -> 100), contre la cotation lue');
   m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: null });
   battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0 && /no wallet is connected/.test(m.vus.messages[0] || ''), 'AiFi : vente sans wallet = rien, et il le dit');
+  for (let k = 0; k < 6; k += 1) { battre(m, 'CALME'); battre(m, 'INQUIET'); }
+  await new Promise((o) => setTimeout(o, 20)); dire(m.vus.messages.length === 1, 'AiFi : six allers-retours de plus sans wallet = le MEME avis n est pas reecrit (Phil en a vu sept d affilee)');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: '0x' + 'c'.repeat(40), solde: 400n });
+  battre(m, 'INQUIET'); battre(m, 'CALME'); battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20));
+  dire(m.vus.swaps.length === 1, 'AiFi : la carte de vente attend encore — une humeur qui oscille n en ouvre pas une 2e');
   m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: '0x' + 'c'.repeat(40), solde: 3n });
   battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0, 'AiFi : un quart de 3 unites = 0 : rien a vendre, rien propose');
 }
@@ -400,6 +415,9 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-fin-'));
     ['premiere humeur prise pour un changement', '  if (avant === null) return;', ''],
     ['autre block accepte', '  if (s.block !== a || !snap || snap.tick === null || snap.tick === undefined) return;', '  if (!snap || snap.tick === null || snap.tick === undefined) return;'],
     ['heure d arret ignoree', "  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — AiFi stopped.'); return; }", ''],
+    ['doublon d achat admis (carte encore ouverte)', '    if (bcAifiOuverte(bcAifiSuivi.achat)) return; /* sa carte d achat attend deja : pas de doublon, rien au budget */', ''],
+    ['doublon de vente admis', '    if (bcAifiOuverte(bcAifiSuivi.vente)) return;', ''],
+    ['avis repete', 'if (bcAifiSuivi.avis === texte) return; ', ''],
   ];
   for (const [nom, de, a] of mutantsAifi) {
     if (srcAifi.split(de).length !== 2) { ok(false, 'E mutant AiFi « ' + nom + ' » : motif introuvable ou multiple'); continue; }

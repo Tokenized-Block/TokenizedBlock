@@ -609,7 +609,7 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcLimites input{width:100%;box-sizing:border-box;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-weight:700;padding:8px 30px 8px 10px}
 .bcLimites label i{position:absolute;right:9px;bottom:9px;font-style:normal;font-size:11px;color:var(--doux)}
 .bcLimites .bouton,.bcLimites .note,.bcLimites .bcCoche{grid-column:1/-1}
-.bcLimites .bcCoche{display:flex;align-items:center;gap:8px;cursor:pointer}
+.bcLimites .bcCoche{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;-webkit-user-select:none}
 .bcLimites .bcCoche input{width:18px;height:18px;padding:0;flex:0 0 auto;accent-color:var(--accent)}
 .bcLimites .bcCoche span{margin:0;font-size:13px;text-transform:none;letter-spacing:0;color:var(--texte)}
 .bcLimites input:disabled{opacity:.6}
@@ -2693,7 +2693,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-actions-contre-eth-et-block" hidden>Build <code>20261004-actions-contre-eth-et-block</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-plan-rapide-aifi-unique" hidden>Build <code>20261004-plan-rapide-aifi-unique</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21680,7 +21680,7 @@ async function bcAvecWallet(m, suite) {
   return false;
 }
 /** Un echange entre deux jetons (adresses), montant en unites brutes du jeton paye. `ref` = le numero de la commande d un agent. */
-async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
+async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
   /* les deux lectures en parallele, chacune bornee a 6 s : illisibles = unites brutes, la carte s affiche quand meme */
@@ -21688,6 +21688,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
   const libelle = (decDe === null ? montant + ' raw units of ' : bcUnites(montant, decDe) + ' ') + de.sym + ' → ' + vers.sym;
   const m = bcMessage(qui + ' · swap', classe, libelle);
   const op = bcOp('Swap ' + libelle, qui, m);
+  if (suivi) suivi.op = op; /* AiFi suit SA proposition : tant qu elle est ouverte, il n en ouvre pas une autre du meme sens */
   bcVue('chat');
   const refs = ref ? { ref } : {};
   /* ⛔⛔ 2026-10-04 (QA de Grok, capture de Phil sur MSFTc : « Brain: curious — refuses ») : UNE ACTION COINBASE N A PAS DE PORTE.
@@ -22381,10 +22382,23 @@ function bcAifiCharger() {
     if (j && /^0x[0-9a-f]{40}$/.test(String(j.block)) && Number(j.jusqua) > Date.now() && /^\d+$/.test(String(j.parTrade)) && /^\d+$/.test(String(j.budget)) && /^\d+$/.test(String(j.propose))) bc.aifi = { ...j, phase: null };
   } catch (_) { bc.aifi = null; }
 }
+/* ⛔ LE FIL RESTE CONDENSE (Phil, 2026-10-04 : « fais pas de doublon, mets le chat en condense, plus lisible ») : les avis d AiFi
+ *   (started, stopped, « it got worried… ») s ajoutent en LIGNES dans UN seul bloc « AiFi » tant qu aucun autre message ne s est
+ *   intercale ; une ligne identique a la derniere n est pas reecrite. Une carte d echange, elle, reste un bloc a part. */
+function bcAifiNote(texte) {
+  const der = $('#bcFil').lastElementChild;
+  if (der && der.dataset && der.dataset.aifi === '1') {
+    if (der.dataset.derniere !== texte) { bcEtape(der, texte); der.dataset.derniere = texte; der.scrollIntoView({ block: 'nearest' }); }
+    return der;
+  }
+  const m = bcMessage('AiFi', '', texte);
+  m.dataset.aifi = '1'; m.dataset.derniere = texte;
+  return m;
+}
 function bcAifiArreter(pourquoi) {
   if (!bc.aifi) return;
   bc.aifi = null; bcAifiSauver();
-  if (pourquoi) bcMessage('AiFi', '', pourquoi);
+  if (pourquoi) bcAifiNote(pourquoi);
   bcAifiPeindre();
   /* le message part dans le Chat, qui est MASQUE quand on arrete depuis la vue Trade (QA de Grok : « AiFi stopped. » jamais vu) :
    *   il s ecrit aussi a cote du bouton */
@@ -22418,8 +22432,18 @@ function bcAifiDemarrer() {
     phase: snap && String(snap.address || '').toLowerCase() === a && snap.tick !== null && snap.tick !== undefined ? String(snap.phase || '') : null };
   e.className = 'note';
   bcAifiSauver(); bcAifiPeindre();
-  bcMessage('AiFi', '', 'Started on ' + (bcResoudre(a).sym || court(a)) + '. Its brain will open a trade card here when its mood changes; you confirm each one.');
+  bcAifiSuivi.avis = null; /* un nouveau demarrage : les avis de la session d avant ne comptent plus */
+  bcAifiNote('Started on ' + (bcResoudre(a).sym || court(a)) + '. Its brain will open a trade card here when its mood changes; you confirm each one.');
 }
+/* ⛔⛔ 2026-10-04 (Phil, sur le fil du panneau : deux cartes « 0.002 ETH → NVDAc » identiques, puis sept fois « It got worried, but
+ *   no wallet is connected » — « ca casse tout, corrige »). Une humeur qui OSCILLE (excited, autre, excited…) rouvrait une carte et
+ *   reecrivait le meme avis a chaque aller-retour. Deux regles :
+ *   - UNE proposition ouverte par sens : tant que la carte d achat (ou de vente) d AiFi attend la personne, est en cours de
+ *     signature ou d envoi, AiFi n en ouvre pas une autre du meme sens — et ne compte rien au budget ;
+ *   - un AVIS identique au precedent n est pas reecrit tant qu AiFi n a pas ete redemarre. */
+const bcAifiSuivi = { achat: null, vente: null, avis: null };
+const bcAifiOuverte = (x) => !!x && (x.op ? BC_EN_COURS.includes(x.op.etat) : Date.now() - x.depuis < 20000);
+function bcAifiDire(texte) { if (bcAifiSuivi.avis === texte) return; bcAifiSuivi.avis = texte; bcAifiNote(texte); }
 /** Appele a chaque peinture du panneau : un changement d humeur du block d AiFi ouvre (au plus) une proposition. */
 function bcAifiBattre(a, snap) {
   const s = bc.aifi;
@@ -22432,24 +22456,29 @@ function bcAifiBattre(a, snap) {
   if (avant === null) return; /* premiere humeur vue : un point de depart, pas un changement */
   const jeton = { ok: true, adr: a, sym: bcResoudre(a).sym || court(a) };
   if (s.achat && phase === 'EXCITE') {
+    if (bcAifiOuverte(bcAifiSuivi.achat)) return; /* sa carte d achat attend deja : pas de doublon, rien au budget */
     const reste = BigInt(s.budget) - BigInt(s.propose), m = BigInt(s.parTrade);
     if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — AiFi stopped.'); return; }
     s.propose = (BigInt(s.propose) + m).toString(); bcAifiSauver(); bcAifiPeindre();
     bcOuvrirPop();
-    void bcProposerSwap('Its brain · AiFi', 'agent', { de: { ok: true, adr: ETH_ADR.toLowerCase(), sym: 'ETH' }, vers: jeton, montant: m.toString() }, null);
+    const suivi = { op: null, depuis: Date.now() }; bcAifiSuivi.achat = suivi;
+    void bcProposerSwap('Its brain · AiFi', 'agent', { de: { ok: true, adr: ETH_ADR.toLowerCase(), sym: 'ETH' }, vers: jeton, montant: m.toString() }, null, suivi);
     return;
   }
   if (s.vente && phase === 'INQUIET') {
-    if (!compte) { bcMessage('AiFi', '', 'It got worried, but no wallet is connected: nothing was proposed.'); return; }
+    if (bcAifiOuverte(bcAifiSuivi.vente)) return;
+    if (!compte) { bcAifiDire('It got worried, but no wallet is connected: nothing was proposed.'); return; }
     const cot = bcCotation(a);
+    const suivi = { op: null, depuis: Date.now() }; bcAifiSuivi.vente = suivi; /* pose AVANT la lecture du solde : deux battements rapproches ne lisent pas deux fois */
     void (async () => {
+      const rien = (t) => { bcAifiSuivi.vente = null; bcAifiDire(t); };
       let solde = null;
       try { solde = await bcSolde(a, compte); } catch (_) { solde = null; }
-      if (solde === null) { bcMessage('AiFi', '', 'It got worried, but your balance could not be read: nothing was proposed.'); return; }
-      if (!(solde / 4n > 0n)) { bcMessage('AiFi', '', 'It got worried, but this wallet holds none of it: nothing to sell.'); return; }
-      if (!cot || !cot.ok) { bcMessage('AiFi', '', 'It got worried, but its market has not been read: nothing was proposed.'); return; }
+      if (solde === null) return rien('It got worried, but your balance could not be read: nothing was proposed.');
+      if (!(solde / 4n > 0n)) return rien('It got worried, but this wallet holds none of it: nothing to sell.');
+      if (!cot || !cot.ok) return rien('It got worried, but its market has not been read: nothing was proposed.');
       bcOuvrirPop();
-      void bcProposerSwap('Its brain · AiFi', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null);
+      void bcProposerSwap('Its brain · AiFi', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null, suivi);
     })();
   }
 }

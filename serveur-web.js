@@ -2539,6 +2539,10 @@ const SERVIS = [
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
   'skins.js',
+  /* 2026-10-04 : la page qui propose AU WALLET CONNECTE le deploiement de BlockSkins, et la donnee figee qu elle envoie. Elle ne
+   * signe rien : un bouton, puis le wallet. Aucun lien depuis l app ; `noindex`. */
+  'deployer-blockskins.html',
+  'blockskins-deploiement.js',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */

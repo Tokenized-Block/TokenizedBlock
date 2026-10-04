@@ -14,6 +14,7 @@
  * Usage : (cd contracts && forge build) ; base-anvil --fork-url <rpc Base> --port 8549 ; node banc-blockskins-fork-20261004.mjs */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as F from './frais-creation.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
@@ -55,7 +56,14 @@ const chaine = parseInt(await rpc('eth_chainId', []), 16), tete = parseInt(await
 console.log('fork ' + URL_FORK + ' · chaine ' + chaine + ' · bloc ' + tete);
 if (!ok(chaine === 8453, 'le fork est Base (sinon ce banc ne prouve rien)')) process.exit(1);
 const artefact = JSON.parse(fs.readFileSync(path.join(ICI, 'contracts/out/BlockSkins.sol/BlockSkins.json'), 'utf8'));
-const creation = String(artefact.bytecode.object) + adrMot(USDC) + adrMot(FRAIS);
+/* ⛔ CE QUI EST DEPLOYE ICI EST CE QUE PHIL SIGNERA : la donnee figee dans blockskins-deploiement.js (generee par
+ *   contracts/preparer-deploiement-blockskins.mjs), pas un bytecode recompose a cote. On verifie qu elle est bien le bytecode compile
+ *   + les deux arguments du depot, et que son empreinte est celle qu elle annonce. */
+const { BLOCKSKINS_DEPLOIEMENT: DEP } = await import('./blockskins-deploiement.js');
+const creation = DEP.creation;
+ok(creation === String(artefact.bytecode.object) + adrMot(USDC) + adrMot(FRAIS), 'la donnee de deploiement figee = le bytecode compile + (USDC, wallet des frais) du depot');
+ok(crypto.createHash('sha256').update(Buffer.from(creation.slice(2), 'hex')).digest('hex') === DEP.sha256Creation && DEP.adresse === null,
+  'son empreinte sha256 est celle qu elle annonce (' + DEP.sha256Creation.slice(0, 12) + '…) ; aucune adresse deployee n est declaree');
 const table = [...POOLS_ACTIONS_AERODROME.entries()].map(([adr, t]) => ({ adr: adr.toLowerCase(), ...t }));
 const NV = table.find((t) => t.symbole === 'NVDAc'), AUTRE = table.find((t) => t.symbole !== 'NVDAc');
 const codeFrais = await rpc('eth_getCode', [FRAIS, 'latest']), codeAction = await rpc('eth_getCode', [NV.adr, 'latest']);
