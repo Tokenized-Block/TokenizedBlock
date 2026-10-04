@@ -2693,7 +2693,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-plan-rapide-aifi-unique" hidden>Build <code>20261004-plan-rapide-aifi-unique</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-precommandes-sans-doublon" hidden>Build <code>20261004-precommandes-sans-doublon</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22519,6 +22519,7 @@ function bcPeindre(snap) {
     if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
   }
   bcPeindreTicket(a, sym, mk, snap);
+  bcPeindrePre(a, sym);
   if (bc.aifi) { bcAifiBattre(a, snap); bcAifiPeindre(); }
   /* les skins achetees pour ce block : relues toutes les 60 s tant que le panneau est ouvert (et tout de suite apres un achat) */
   if ($('#bcPop').open && CHAINE === 8453 && Date.now() - (bc.skinsLues || 0) > 60000) void bcLireSkins(a);
@@ -22582,8 +22583,21 @@ function bcPeindre(snap) {
 }
 /* ── cablage ── */
 $('#bcForm').addEventListener('submit', async (e) => { e.preventDefault(); const s = $('#bcSaisie'); if (await bcExecuterTexte(s.value)) s.value = ''; });
+/* ⛔ « Buy a stock » et « Buy this block » font DOUBLON quand le block affiche EST une action (Phil, 2026-10-04 : « buy stock et
+ *   block c est la meme, donc choisis »). Sur une action il ne reste que « Buy <SYM> » / « Sell <SYM> » ; sur un block, les quatre
+ *   gardent leur sens (acheter une action, ou CE block) et les deux dernieres portent son nom au lieu de « this block ». */
+function bcPeindrePre(a, sym) {
+  const estAction = ACTIONS_PAR_ADR.has(a);
+  for (const b of document.querySelectorAll('#bcPre [data-pre]')) {
+    const c = b.getAttribute('data-pre');
+    if (c === 'buy_stock' || c === 'sell_stock') b.hidden = estAction;
+    if (c === 'buy_block') b.textContent = sym ? 'Buy ' + sym : 'Buy this block';
+    if (c === 'sell_block') b.textContent = sym ? 'Sell ' + sym : 'Sell this block';
+  }
+}
 for (const p of PRECOMMANDES) {
   const b = bcEl('button', { type: 'button', cls: 'puce', text: p.libelle });
+  b.setAttribute('data-pre', p.cle);
   /* une pre-commande ECRIT son modele dans le champ : la personne ajuste le montant ou le jeton, puis envoie — rien ne part au clic */
   b.addEventListener('click', () => {
     /* « What can it do? » n a rien a ajuster : elle s execute, et ne laisse pas « tasks » dans le champ */

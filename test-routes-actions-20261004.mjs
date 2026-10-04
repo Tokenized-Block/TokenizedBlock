@@ -112,6 +112,11 @@ ok(/if \(der && der\.dataset && der\.dataset\.aifi === '1'\) \{\s+if \(der\.data
   'C AiFi : started / stopped / avis s ajoutent en LIGNES dans un seul bloc « AiFi » (un seul `bcMessage(\'AiFi\'` dans tout le source : celui qui ouvre ce bloc)');
 ok(/\.bcLimites \.bcCoche\{[^}]*user-select:none/.test(html), 'C les libelles des cases AiFi ne se selectionnent plus au double-clic (capture de Phil : texte grise illisible)');
 
+/* pre-commandes : pas de doublon sur une action (Phil : « buy stock et block c est la meme, donc choisis ») */
+ok(/if \(c === 'buy_stock' \|\| c === 'sell_stock'\) b\.hidden = estAction;/.test(html) && /if \(c === 'buy_block'\) b\.textContent = sym \? 'Buy ' \+ sym : 'Buy this block';/.test(html)
+  && /b\.setAttribute\('data-pre', p\.cle\);/.test(html) && /bcPeindreTicket\(a, sym, mk, snap\);\s+bcPeindrePre\(a, sym\);/.test(html),
+  'C pre-commandes : sur une action, « Buy a stock » / « Sell a stock » sont masquees (doublon) ; « Buy <SYM> » / « Sell <SYM> » portent le nom');
+
 console.log('— D. mutants');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-routes-'));
 const copie = () => { const dir = fs.mkdtempSync(path.join(tmp, 'm-')); for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) && !/^(serveur-web|vendor|mcp-ext-apps)/.test(f)) fs.copyFileSync(path.join(ICI, f), path.join(dir, f)); return dir; };
