@@ -2685,7 +2685,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-blocks-ouvre-le-panneau" hidden>Build <code>20261004-blocks-ouvre-le-panneau</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-panneau-reprend-le-block" hidden>Build <code>20261004-panneau-reprend-le-block</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21813,6 +21813,11 @@ function bcOuvrirPop(opts = {}) {
   const dl = $('#bcDialogue'); if (dl && dl.parentElement !== document.body) document.body.append(dl);
   if (d && !d.open) { try { d.show(); } catch (_) { d.setAttribute('open', ''); } }
   if (!brainAdr) { try { const s = $('#bChoix'); if (s && s.value) choisirBrain(s.value); } catch (_) {} }
+  /* ⛔ MESURE (prod, panneau ouvert depuis l onglet Blocks sur un chargement a froid) : le selecteur de l onglet Brain est encore
+   *   vide, donc aucun block — le panneau disait « Pick a block in the Brain tab ». On reprend le DERNIER block choisi dans ce
+   *   navigateur (la meme cle que l onglet Brain) ; sans lui, le panneau renvoie a sa propre recherche. */
+  if (!brainAdr) { try { const m = localStorage.getItem(CLE_BRAIN_CHOIX + CHAINE); if (m && /^0x[0-9a-fA-F]{40}$/.test(m)) choisirBrain(m); } catch (_) {} }
+  if (!brainAdr) $('#bcNom').textContent = 'Find a block above';
   bcRepeindre();
   /* tant que le pop-up est ouvert : un repeint toutes les 3 s (soldes, activite, index) meme si le cerveau ne bat pas */
   if (!bc.peintre) bc.peintre = setInterval(() => { if ($('#bcPop').open) bcRepeindre(); }, 3000);
