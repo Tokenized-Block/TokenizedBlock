@@ -227,7 +227,8 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
         const logs = await logsAdaptatifs(rpc, { address: String(dev.token).toLowerCase(), topics: [TOPIC_TRANSFER, null, topicAdresse(FEE_WALLET)] }, de, a, fenetresRatees, 'messages ' + nomDevise);
         for (const l of logs || []) {
           const t = decoderTransfer(l);
-          if (!t || typeof t.value !== 'bigint' || t.value < dev.frais) continue;
+          /* le plancher de LECTURE (`fraisLu`), pas le prix d envoi : un message paye a l ancien prix reste dans le fil */
+          if (!t || typeof t.value !== 'bigint' || t.value < dev.fraisLu) continue;
           let tx = null;
           try { tx = await rpc('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
           const m = messageDepuisTransfert(t, tx, nomDevise);

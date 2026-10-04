@@ -28,14 +28,24 @@ import { USDC_BASE } from './prix-eth.js';
 
 /** ⛔ Montant FIXE choisi pour la mise en service (1 000 TBLOCK) : parametre nomme, a ajuster par decision de Phil. */
 export const FRAIS_MESSAGE_TBLOCK = 1000n * 10n ** 18n;
-/** ⛔ 0,01 $ en USDC (6 decimales). Phil (2026-09-23, capture a l appui) : « fais des actions
+/** LE FRAIS D UN MESSAGE EN USDC (6 decimales) — son histoire, la plus ancienne d abord :
+ *  ⛔ 0,01 $ : Phil (2026-09-23, capture a l appui) : « fais des actions
  *  courtes de contrat a 0.01 usdc comme ca envoie » — le message doit partir, pas faire reflechir.
  *  ⛔ IL ETAIT A 0,50 $ (decision du 2026-09-17, « de l argent qui rentre »). Mesure qui a tranche :
  *    0 message paye en 14 jours, et 0 USDC arrive au wallet. Un prix qui n encaisse rien n est pas
  *    un revenu, c est un panneau d arret — cinquante fois trop cher pour dire « gm ».
  *  ⚠️ CE QUE CE CHANGEMENT NE PROUVE PAS : qu a 0,01 $ les gens enverront. Ca reste a MESURER ;
- *     d ici la, le seul fait etabli est que 0,50 $ n a rien produit. */
-export const FRAIS_MESSAGE_USDC = 10_000n;
+ *     d ici la, le seul fait etabli est que 0,50 $ n a rien produit.
+ *  ⛔⛔ 2026-10-04 — 0,10 $ (Phil : « si c est pour envoyer un msg vers un block, fais payer 0.1 frais pour le dev »). L unite
+ *    n etait pas dite ; il m a laisse le choix : la carte paie en USDC et un pourcentage n aurait aucune base, donc 0,10 USDC.
+ *    Troisieme prix en trois semaines (0,50 -> 0,01 -> 0,10) : AUCUN n a ete mesure sur des envois reels. A mesurer.
+ *  ⛔ L ECRAN AFFICHAIT ENCORE « 0.50 USDC » pendant que le wallet debitait 0,01 (du 2026-09-23 au 2026-10-04) : un prix ecrit
+ *    en dur a cote de la constante. L ecran lit desormais `prixMessageLisible()` — il ne peut plus s en ecarter. */
+export const FRAIS_MESSAGE_USDC = 100_000n;
+/** Le PLANCHER DE LECTURE : le plus petit frais que l app ait jamais demande (0,01 $, du 2026-09-23 au 2026-10-04). Un message
+ *  paye a ce prix-la A EU LIEU et reste lu ; relever le plancher avec le prix l aurait efface du fil. L ENVOI, lui, demande
+ *  `FRAIS_MESSAGE_USDC`. ⛔ Un script peut donc encore faire lire un message a 0,01 $ : il paie quand meme le wallet de frais. */
+export const FRAIS_MESSAGE_USDC_PLANCHER_LU = 10_000n;
 /**
  * ⛔⛔ DEUX DEVISES, UNE SEULE FORME DE TRANSACTION. Un message paye reste un `transfer` vers le wallet
  * de frais, memo colle derriere le calldata : une implementation ERC-20 ne decode que ses deux premiers
@@ -45,9 +55,20 @@ export const FRAIS_MESSAGE_USDC = 10_000n;
  *    chose. L ecran affiche toujours la devise A COTE du montant, et ne totalise jamais les deux.
  */
 export const DEVISES_MESSAGE = Object.freeze({
-  TBLOCK: Object.freeze({ token: TBLOCK, frais: FRAIS_MESSAGE_TBLOCK, decimales: 18, nom: 'TBLOCK' }),
-  USDC: Object.freeze({ token: USDC_BASE, frais: FRAIS_MESSAGE_USDC, decimales: 6, nom: 'USDC' }),
+  /* `frais` = ce que l ENVOI demande ; `fraisLu` = le plancher au-dessus duquel un transfert est LU comme un message */
+  TBLOCK: Object.freeze({ token: TBLOCK, frais: FRAIS_MESSAGE_TBLOCK, fraisLu: FRAIS_MESSAGE_TBLOCK, decimales: 18, nom: 'TBLOCK' }),
+  USDC: Object.freeze({ token: USDC_BASE, frais: FRAIS_MESSAGE_USDC, fraisLu: FRAIS_MESSAGE_USDC_PLANCHER_LU, decimales: 6, nom: 'USDC' }),
 });
+/** Le prix d un message, tel que l ecran doit le DIRE : derive du frais reellement demande, jamais ecrit a cote.
+ *  « 0.10 USDC », « 1,000 TBLOCK ». Devise inconnue : null (l appelant n affiche alors aucun prix). */
+export function prixMessageLisible(devise) {
+  const d = DEVISES_MESSAGE[String(devise ?? '').toUpperCase()];
+  if (!d) return null;
+  const base = 10n ** BigInt(d.decimales), entier = d.frais / base, reste = d.frais % base;
+  let dec = reste.toString().padStart(d.decimales, '0').replace(/0+$/, '');
+  if (reste > 0n && dec.length < 2) dec = dec.padEnd(2, '0');
+  return entier.toLocaleString('en-US') + (dec ? '.' + dec : '') + ' ' + d.nom;
+}
 /** La devise demandee, ou `null` — jamais un repli silencieux sur une autre devise que celle demandee. */
 export function deviseMessage(devise) {
   return DEVISES_MESSAGE[String(devise ?? 'TBLOCK').toUpperCase()] || null;
@@ -134,7 +155,7 @@ export function messageDepuisTransfert(t, tx, devise = 'TBLOCK') {
    *    l ecran quand un transfert est ecarte du fil, et le lecteur n a aucun moyen de savoir ce
    *    qu est un « Fees for Dev path ». Les REGLES sont inchangees — seul le mot part. */
   if (String(t.to).toLowerCase() !== FEE_WALLET.toLowerCase()) return { etat: 'REJETE', pourquoi: 'the message fee did not go to the fee wallet' };
-  if (typeof t.value !== 'bigint' || t.value < dev.frais) return { etat: 'REJETE', pourquoi: 'below the message fee' };
+  if (typeof t.value !== 'bigint' || t.value < dev.fraisLu) return { etat: 'REJETE', pourquoi: 'below the message fee' };
   /* ⛔⛔ UN MESSAGE ENVOYE PAR LE WALLET DE FRAIS N EST PLUS REJETE — IL EST MARQUE.
    *     Il etait ecarte du fil, ce qui rendait l app muette pour son proprietaire (Phil,
    *     2026-09-23). Le rejeter cachait un transfert qui a REELLEMENT eu lieu ; le marquer dit la
@@ -170,7 +191,7 @@ export async function lireConversations({ rpc, blocs = 20000, fin = null, pause 
     const lu = await listerTransfers({ rpc: lire, token: dev.token, blocs, fin, toAddr: FEE_WALLET });
     lectures.push(lu);
     for (const t of lu.transfers || []) {
-      if (typeof t.value !== 'bigint' || t.value < dev.frais) { compteurs.sousFrais++; continue; }
+      if (typeof t.value !== 'bigint' || t.value < dev.fraisLu) { compteurs.sousFrais++; continue; }
       let tx = null;
       try { tx = await lire('eth_getTransactionByHash', [t.tx]); } catch (e) { tx = null; }
       if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));

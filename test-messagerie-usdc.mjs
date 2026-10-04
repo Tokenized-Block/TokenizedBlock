@@ -2,7 +2,7 @@
 // ⛔ TEMOINS NEGATIFS : un transfert USDC n est PAS un message TBLOCK, et l inverse ; un USDC sous le prix est rejete.
 import assert from 'node:assert/strict';
 import { planMessagePaye, messageDepuisTransfert, deviseMessage, FRAIS_MESSAGE_USDC, FRAIS_MESSAGE_TBLOCK,
-  DEVISES_MESSAGE } from './messagerie-blocks.js';
+  DEVISES_MESSAGE, FRAIS_MESSAGE_USDC_PLANCHER_LU, prixMessageLisible } from './messagerie-blocks.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { encodeTransferAvecMemo } from './messages.js';
 
@@ -32,7 +32,16 @@ await ok('devises connues, devise inconnue -> null (pas de repli silencieux)', (
    *    ⛔ CE QUI A TRANCHE : a 0,50 $, 0 message paye et 0 USDC arrive au wallet en 14 jours
    *      (mesure du 2026-09-23, 303/303 fenetres lues, 0 ratee). Un prix qui n encaisse rien n est
    *      pas un revenu. ⚠️ Ce qui reste NON PROUVE : qu a 0,01 $ les gens enverront. */
-  assert.equal(FRAIS_MESSAGE_USDC, 10000n); /* 0,01 USDC a 6 decimales */
+  /* ⛔ 2026-10-04 : 0,10 USDC (Phil : « fais payer 0.1 frais pour le dev » ; il m a laisse fixer l unite). Le plancher de LECTURE
+   *    reste a l ancien prix, 0,01 : un message paye entre le 23/09 et le 04/10 ne disparait pas du fil. */
+  assert.equal(FRAIS_MESSAGE_USDC, 100000n); /* 0,10 USDC a 6 decimales */
+  assert.equal(FRAIS_MESSAGE_USDC_PLANCHER_LU, 10000n);
+  assert.equal(deviseMessage('usdc').fraisLu, FRAIS_MESSAGE_USDC_PLANCHER_LU);
+  assert.equal(deviseMessage('TBLOCK').fraisLu, FRAIS_MESSAGE_TBLOCK);
+  /* ce que l ecran DIT vient de la constante : pas de prix ecrit a cote */
+  assert.equal(prixMessageLisible('USDC'), '0.10 USDC');
+  assert.equal(prixMessageLisible('tblock'), '1,000 TBLOCK');
+  assert.equal(prixMessageLisible('EUR'), null);
 });
 
 await ok('plan USDC : la transaction va au contrat USDC, pour le frais en USDC vers le wallet de frais', async () => {
@@ -54,7 +63,9 @@ await ok('solde USDC insuffisant : refus, avec ce qui manque, en USDC', async ()
   const p = await planMessagePaye({ rpc: noeud({ [USDC.toLowerCase()]: 4_000n }), compte: COMPTE, de: DE, a: A,
     texte: 'gm', detientDe: true, devise: 'USDC' });
   assert.equal(p.etat, 'REFUSE');
-  assert.equal(p.manque, 6_000n);
+  /* 2026-10-04 : le manque SUIT le prix (0,10 USDC) au lieu d epingler un nombre — 4 000 detenus, il manque le reste */
+  assert.equal(p.manque, FRAIS_MESSAGE_USDC - 4_000n);
+  assert.equal(p.manque, 96_000n);
   assert.equal(p.devise, 'USDC');
 });
 
@@ -74,7 +85,11 @@ await ok('lecture : un transfert USDC n est pas un message TBLOCK, et l inverse 
   /* ⛔ UN USDC SOUS LE PRIX -> REJETE. La valeur suit le prix (0,01 USDC depuis le 2026-09-23) :
    *    499 999 etait « un wei sous 0,50 $ » et vaut maintenant cinquante fois le frais. Le cas
    *    doit rester UN WEI SOUS LE PRIX — c est la borne qui compte, pas le nombre. */
-  assert.equal(messageDepuisTransfert({ ...t, value: FRAIS_MESSAGE_USDC - 1n }, txUsdc, 'USDC').etat, 'REJETE');
+  /* ⛔ 2026-10-04 : la borne de LECTURE est le plancher (0,01), plus le prix d envoi (0,10). Un wei sous le plancher = rejete ;
+   *    AU plancher = lu (c est un message paye a l ancien prix, il a eu lieu). */
+  assert.equal(messageDepuisTransfert({ ...t, value: FRAIS_MESSAGE_USDC_PLANCHER_LU - 1n }, txUsdc, 'USDC').etat, 'REJETE');
+  assert.equal(messageDepuisTransfert({ ...t, value: FRAIS_MESSAGE_USDC_PLANCHER_LU }, txUsdc, 'USDC').etat, 'MESSAGE');
+  assert.equal(messageDepuisTransfert({ ...t, value: FRAIS_MESSAGE_USDC - 1n }, txUsdc, 'USDC').etat, 'MESSAGE');
 });
 
 /* ⛔⛔ TEMOIN NEUF (2026-09-23) : LE WALLET DE FRAIS PEUT PARLER, ET SON MESSAGE EST MARQUE.
