@@ -115,6 +115,7 @@ const M = await imp('mcp-tblock.js');
 const hashAttendu = (srv.match(/const WIDGET_BUNDLE_SHA256 = '([0-9a-f]{64})';/) || [])[1];
 const hashReel = crypto.createHash('sha256').update(fs.readFileSync(path.join(ICI, 'mcp-ext-apps-2.0.3.bundle.js'))).digest('hex');
 ok(!!hashAttendu && hashAttendu === hashReel, 'le paquet ext-apps embarque a l empreinte que le serveur exige (' + hashReel.slice(0, 16) + '…)');
+ok(/^mcp-ext-apps-2\.0\.3\.bundle\.js -text$/m.test(fs.readFileSync(path.join(ICI, '.gitattributes'), 'utf8')), '.gitattributes interdit a git de convertir les fins de ligne du paquet (sinon l empreinte casse au prochain checkout)');
 const rq = (method, params, widget = () => '<html>w</html>') => M.traiterMcp({ jsonrpc: '2.0', id: 1, method, params }, { version: 't', widget, outils: {} });
 const tl = (await rq('tools/list')).result.tools;
 ok(tl.filter((t) => t._meta && t._meta.ui && t._meta.ui.resourceUri === M.WIDGET_URI && t._meta['ui/resourceUri'] === M.WIDGET_URI).map((t) => t.name).join() === 'tblock_panel_open,tblock_panel_state',

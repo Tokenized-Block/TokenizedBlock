@@ -1,0 +1,4 @@
+# Le paquet ext-apps embarque est verifie par son empreinte (sha256) au demarrage du serveur : git ne doit JAMAIS en
+# convertir les fins de ligne (core.autocrlf = true sur ce poste le ferait au prochain checkout, et le widget MCP
+# s eteindrait sans bruit). `-text` = octets tels quels, dans les deux sens.
+mcp-ext-apps-2.0.3.bundle.js -text
