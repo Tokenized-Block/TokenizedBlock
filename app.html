@@ -291,7 +291,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-04 (Phil, capture) : « les boutons + − recentrer et rotation, mets-les A GAUCHE : le panel les masque ». Ils etaient en bas
    a droite, sous le volet. A gauche, plus besoin de les decaler quand une colonne s ouvre a droite ; sur telephone ils remontent
    au-dessus de la feuille du panneau quand il est ouvert. */
-.mapZoom{position:absolute;left:10px;right:auto;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
+/* ⛔ bottom:44px (capture de Phil, le soir meme) : a 10px la colonne recouvrait la ligne d aide de la Map (« Drag to look around… »),
+   qui est AUSSI en bas a gauche, et son dernier bouton — le partage sur X — se lisait a travers le texte. */
+.mapZoom{position:absolute;left:10px;right:auto;bottom:44px;z-index:7;display:flex;flex-direction:column;gap:6px}
 /* ⛔⛔ CE DECALAGE PASSE PAR `transform`, ET PAS PAR `right` — ET C EST MESURE, PAS PREFERE.
    Comptee « faite » TROIS fois avant d etre mesuree : 0135 (:has sur .mapEnv, ne matchait rien),
    0138 (:has sur #scene, MATCHAIT et ne bougeait pas), 0144 (classe posee en JS, idem).
@@ -2691,7 +2693,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-panneau-remplace-la-fiche" hidden>Build <code>20261004-panneau-remplace-la-fiche</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-achat-direct-qa-wallet" hidden>Build <code>20261004-achat-direct-qa-wallet</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4301,8 +4303,13 @@ async function rpcReseau(methode, params) {
       /* ⛔ un creneau par noeud (ecart + concurrence + repos apres 429), borne : jamais d attente infinie */
       const liberer = rpcRegul ? await rpcRegul.creneau(url) : null;
       try {
+        /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok) : ce fetch n avait AUCUN delai maximal. Sous les 429 / 403 des noeuds publics une
+         *   lecture restait pendue, et tout ce qui l attendait avec elle : dans le panneau, « Prepare the plan » ne faisait RIEN (ni
+         *   carte, ni message, ni wallet) pendant que le serveur, lui, rendait un plan PRET. Borne : 8 s (20 s pour un balayage de
+         *   logs). Un abandon jette avec `statut === 0` : traite comme une erreur transitoire, on passe au noeud suivant. */
         r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }) });
+          body: JSON.stringify({ jsonrpc: '2.0', id: ++idRpc, method: methode, params }),
+          signal: AbortSignal.timeout(methode === 'eth_getLogs' ? 20000 : 8000) });
         statut = r.status;
         limite = r.status === 429;
         if (!limite) {
@@ -7274,6 +7281,10 @@ $('#pReseau').addEventListener('click', () => {
  * n est donc necessaire a l ouverture — la map garde exactement sa taille. */
 $('#bMasquer').addEventListener('click', () => {
   const c = $('#cote'), b = $('#bMasquer');
+  /* 2026-10-04 (Phil) : « change le bouton "info" qui redirige aussi sur le pop-up panel ». « Info » (colonne fermee) ouvre le
+   *   PANNEAU de la personne — son block, sa skin — au lieu de la colonne. Refermer une colonne ouverte marche comme avant, et un
+   *   salut (GM…) rouvre la colonne lui-meme, par `ouvrirCote()`. Si le panneau ne peut pas s ouvrir, la colonne s ouvre. */
+  if (c.hidden) { try { bcOuvrirPop({ sansBasculer: true, vue: 'market', deplier: true }); if ($('#bcPop').open) return; } catch (_) { /* la colonne, comme avant */ } }
   const ouvert = c.hidden;
   c.hidden = !ouvert;
   /* « Info » montre l explication ; fermer oublie le block choisi */
@@ -21484,7 +21495,12 @@ function bcIdentite(a) {
 const BC_CLE_OPS = 'tblock.panel.ops';
 const BC_EN_COURS = ['proposed', 'planned', 'signing', 'sent'];
 const BC_ETATS = { proposed: ['waiting for you', 'cours'], planned: ['plan ready', 'cours'], signing: ['in your wallet', 'cours'], sent: ['sent, not confirmed', 'cours'],
-  done: ['done', 'oui'], declined: ['declined', ''], failed: ['failed', 'non'], refused: ['refused by the brain', 'non'], interrupted: ['left unfinished', ''] };
+  done: ['done', 'oui'], declined: ['declined', ''], failed: ['failed', 'non'], refused: ['refused by the brain', 'non'], interrupted: ['left unfinished', ''],
+  /* 2026-10-04 (QA wallet reel de Grok, TOSHI) : un plan REFUSE laissait l operation a « waiting for you » pour toujours — rien
+   *   n attendait la personne, et aucun wallet ne s ouvrait. Un refus du planificateur REFERME l operation et le dit. */
+  notOffered: ['refused — nothing was sent', 'non'] };
+/** Une lecture du panneau (decimales, solde) BORNEE dans le temps : passe ce delai elle echoue, et le panneau continue sans elle. */
+const bcAvecDelai = (p, ms = 8000) => Promise.race([p, new Promise((_, non) => setTimeout(() => non(new Error('read timed out')), ms))]);
 function bcChargerOps() {
   try {
     const j = JSON.parse(localStorage.getItem(BC_CLE_OPS) || '[]');
@@ -21667,14 +21683,20 @@ async function bcAvecWallet(m, suite) {
 async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
-  try { decDe = await bcDecimales(de.adr); decVers = await bcDecimales(vers.adr); } catch (_) { /* l affichage tombe sur les unites brutes */ }
+  /* les deux lectures en parallele, chacune bornee a 6 s : illisibles = unites brutes, la carte s affiche quand meme */
+  [decDe, decVers] = await Promise.all([de.adr, vers.adr].map((x) => bcAvecDelai(bcDecimales(x), 6000).catch(() => null)));
   const libelle = (decDe === null ? montant + ' raw units of ' : bcUnites(montant, decDe) + ' ') + de.sym + ' → ' + vers.sym;
   const m = bcMessage(qui + ' · swap', classe, libelle);
   const op = bcOp('Swap ' + libelle, qui, m);
   bcVue('chat');
   const refs = ref ? { ref } : {};
+  /* ⛔⛔ 2026-10-04 (QA de Grok, capture de Phil sur MSFTc : « Brain: curious — refuses ») : UNE ACTION COINBASE N A PAS DE PORTE.
+   *   Son marche est celui de l emetteur, pas un marche ne chez nous ; la porte `trade_tblock` la jugeait « awake, sans marche lu »
+   *   et refusait SNDKc, NVDAc, MSTRc, MSFTc. Elle ne s applique qu a un block. */
+  const actionAffichee = !!moi && ACTIONS_PAR_ADR.has(moi);
   /* (1) la porte du cerveau — seulement si l echange touche le block affiche ; sinon il n a rien a juger, et on le DIT */
-  if (moi && (de.adr === moi || vers.adr === moi)) {
+  if (actionAffichee && (de.adr === moi || vers.adr === moi)) bcEtape(m, 'A Coinbase stock — it trades on its own market; no brain gate.');
+  else if (moi && (de.adr === moi || vers.adr === moi)) {
     const g = tacheAutorisee('trade_tblock', window.__TB_BRAIN_SNAPSHOT__ || {});
     const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
     bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
@@ -21687,11 +21709,13 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
     /* ⛔ LE SOLDE EST RELU AVANT LE PLAN. Mesure sur fork (banc-vente-aerodrome) : un plan Aerodrome n est PAS simule cote serveur —
      *   sans solde il revient PRET, l approbation passe, et le swap reverte dans le wallet. On refuse ici, avant toute signature.
      *   Solde illisible = on laisse le planificateur juger (jamais un refus sur une lecture ratee). */
+    bcOpMaj(op, 'proposed'); /* un nouvel essai rouvre l operation */
     let soldeDe = null;
-    try { soldeDe = await bcSolde(de.adr, compte); } catch (_) { soldeDe = null; }
+    try { soldeDe = await bcAvecDelai(bcSolde(de.adr, compte), 8000); } catch (_) { soldeDe = null; }
     if (soldeDe !== null && soldeDe < BigInt(montant)) {
       bcEtape(m, 'This wallet holds ' + (decDe === null ? soldeDe + ' raw units of' : bcUnites(soldeDe, decDe)) + ' ' + de.sym + ' — not enough. Nothing was asked.', 'non');
       bcNoter({ type: 'plan', ...refs, etat: 'REFUSE', text: 'balance too low' });
+      bcOpMaj(op, 'notOffered');
       bcBoutons(m, [['Try again', planifier, true], ['Dismiss', refuser, true]]);
       return;
     }
@@ -21705,6 +21729,8 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
     bcNoter({ type: 'plan', ...refs, etat: String(p.etat || '').slice(0, 20), ...(p.pourquoi ? { text: String(p.pourquoi) } : {}) });
     if (p.etat !== 'PRET' && p.etat !== 'APPROBATIONS') {
       bcEtape(m, (p.etat === 'REFUSE' ? 'Refused: ' : 'Not read: ') + String(p.pourquoi || 'no reason given').slice(0, 220), 'non');
+      /* le refus REFERME l operation (elle restait a « waiting for you » alors que rien n attendait la personne) */
+      bcOpMaj(op, 'notOffered');
       bcBoutons(m, [['Try again', planifier, true]]);
       return;
     }
@@ -21720,7 +21746,10 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
     if (rs.recoitAuMoins !== undefined && rs.recoitAuMoins !== null) bcEtape(m, 'You receive at least ' + (decVers === null ? rs.recoitAuMoins + ' raw units of ' : bcUnites(rs.recoitAuMoins, decVers) + ' ') + vers.sym + '.');
     const approbations = p.etat === 'APPROBATIONS';
     bcOpMaj(op, 'planned');
-    bcBoutons(m, [[approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', async () => {
+    /* un wallet n a souvent AUCUN prix pour un block frais : il compare alors l entree a une sortie « sans valeur » et alerte
+     *   (mesure de Phil avec Rabby : « price difference exceeds 20 % » sur un aller-retour qui a perdu ~1 %). On le dit AVANT. */
+    if (moi && (de.adr === moi || vers.adr === moi) && !actionAffichee) bcEtape(m, 'Your wallet may warn about a price difference: it often has no price for a block. The minimum you receive is the line above.');
+    const signer = async () => {
       bcOpMaj(op, 'signing');
       const s = await bcSigner(m, p.aSigner);
       if (!s.ok) {
@@ -21734,8 +21763,18 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
       m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
       bcNoter({ type: 'signed', ...refs, tx: s.hash, account: String(compte).toLowerCase() });
       bcJournal('swap ' + de.sym + ' to ' + vers.sym, s.hash);
-    }], ['Dismiss', refuser, true]]);
+    };
+    /* DIRECT pour la personne (voir plus bas) : le plan pret, le wallet s ouvre — c est LUI la confirmation. Une proposition d agent
+     *   ou d AiFi garde son clic. */
+    if (direct) return signer();
+    bcBoutons(m, [[approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
   };
+  /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, Buy et Sell IB022 passes avec Rabby) : « Buy / Sell DIRECTS ». Une commande que la
+   *   personne a ecrite ou validee elle-meme (ticket, barre du Chat) ne demande plus « Prepare the plan » puis « Sign » : son Review
+   *   construit le plan et ouvre le wallet, approbations comprises. Ce qu un AGENT ou AiFi propose garde ses deux clics : la
+   *   personne n a rien demande, elle doit pouvoir lire avant que son wallet ne s ouvre. */
+  const direct = qui === 'You';
+  if (direct) { void planifier(); return; }
   bcBoutons(m, [['Prepare the plan', planifier], ['Dismiss', refuser, true]]);
 }
 /** Un envoi. ⛔ Le destinataire s affiche EN ENTIER ; le solde est relu ; un envoi propose par un agent demande un clic de plus. */
@@ -21989,7 +22028,8 @@ function bcPeindreTicket(a, sym, mk, snap) {
     const standard = !q || !q.ok || q.adr === eth || (usdc.ok && q.adr === usdc.adr);
     /* [valeur ecrite dans la commande, libelle] — une cotation hors ETH/USDC ne s achete et ne se vend que contre elle-meme */
     let choix;
-    if (achat) choix = ACTIONS_PAR_ADR.has(a) ? [['USDC', 'USDC'], ['ETH', 'ETH']] : standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
+    /* ETH EN PREMIER partout (regle de Phil : « tout se regle en ETH ») — USDC reste propose en second */
+    if (achat) choix = ACTIONS_PAR_ADR.has(a) || standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
     else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
     /* ⛔ « propose toutes les routes possibles dans le menu » (Phil) — seulement celles qui ABOUTISSENT. Mesure prod du 2026-10-04 :
      *   vendre un block contre une action cotee sur Aerodrome (IB022 > NVDAc) rend APPROBATIONS (route BLOCK>ACTION). Un block peut
@@ -22021,8 +22061,10 @@ function bcPeindreTicket(a, sym, mk, snap) {
    *   « refuses: its market must be read… » — un refus prononce par un cerveau qui n a pas encore battu. Sans battement, on dit
    *   qu il se reveille ; le refus n est annonce que par un cerveau qui a juge. (La porte, elle, reste fermee tant qu il n a pas battu.) */
   const aBattu = !!snap && snap.tick !== null && snap.tick !== undefined;
-  const t = !aBattu ? 'Brain: waking up…' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
-  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu ? '' : ' wKo'); }
+  /* une action Coinbase n a pas de porte (voir bcProposerSwap) : le ticket ne lui annonce donc pas un refus qui ne s appliquera pas */
+  const estAction = ACTIONS_PAR_ADR.has(a);
+  const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
+  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu || estAction ? '' : ' wKo'); }
   /* ── ce que la personne DETIENT : relu toutes les 20 s tant que la vue Trade est ouverte, et apres chaque transaction confirmee ── */
   const z = $('#bcPosition');
   if (compte && $('#bcPop').open && $('#bc-trade').classList.contains('on') && (!so || Date.now() - bc.soldesLus > 20000)) void bcLireSoldes(a);
@@ -22057,6 +22099,9 @@ async function bcLireActivite(a, sym, mk) {
   if (bc.activiteEnVol) return;
   bc.activiteEnVol = true; bc.activiteDe = a; bc.activiteLue = Date.now();
   const ul = $('#bcActivite'), note = $('#bcActiviteNote');
+  /* ⛔ QA de Grok : revenu sur IB022, la liste montrait encore les transactions de NVDAc. Des qu on lit pour un AUTRE block, la liste
+   *   du precedent s efface — elle ne reste jamais affichee sous le nom d un autre. */
+  if (ul.dataset.de !== a) { ul.textContent = ''; ul.append(bcEl('li', { cls: 'note', text: 'Reading…' })); ul.dataset.de = ''; note.textContent = ''; }
   try {
     const r = await fetch('/api/activite/' + a, { cache: 'no-store', signal: AbortSignal.timeout(40000) });
     const d = await r.json();
@@ -22308,6 +22353,9 @@ function bcAifiArreter(pourquoi) {
   bc.aifi = null; bcAifiSauver();
   if (pourquoi) bcMessage('AiFi', '', pourquoi);
   bcAifiPeindre();
+  /* le message part dans le Chat, qui est MASQUE quand on arrete depuis la vue Trade (QA de Grok : « AiFi stopped. » jamais vu) :
+   *   il s ecrit aussi a cote du bouton */
+  if (pourquoi) { const e = $('#bcAiEtat'); e.className = 'note'; e.textContent = pourquoi; }
 }
 function bcAifiPeindre() {
   const s = bc.aifi, b = $('#bcArmer'), e = $('#bcAiEtat');
@@ -22404,6 +22452,8 @@ function bcPeindre(snap) {
     const sn = $('#bcSousNom'); sn.hidden = !(sym && nom); sn.textContent = sym && nom ? nom : '';
     const ad = $('#bcAdr'); ad.hidden = false; ad.textContent = a; ad.dataset.adr = a;
     bcPeindreActions(a, sym);
+    /* un autre block : la liste d activite du precedent ne reste pas affichee sous son nom (meme hors de la vue Market) */
+    { const ua = $('#bcActivite'); if (ua && ua.dataset.de !== a) { ua.textContent = ''; ua.append(bcEl('li', { cls: 'note', text: 'Reading…' })); ua.dataset.de = ''; $('#bcActiviteNote').textContent = ''; bc.activiteLue = 0; } }
     if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
   }
   bcPeindreTicket(a, sym, mk, snap);

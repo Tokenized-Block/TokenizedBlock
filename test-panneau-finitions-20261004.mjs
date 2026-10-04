@@ -171,7 +171,7 @@ ok(/choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', depl
 ok(/bouton\('Open profile', \(\) => \{ try \{ void ouvrirProfil\(a, null\); \}/.test(bcSrc) && /try \{ ouvrirCote\(\); ouvrirSalut\(mot\); \} catch/.test(bcSrc) && /\[\['GM', 'GM 👋'\], \['BM', 'BM 🌙'\], \['GN', 'GN 😴'\], \['Gmeow', 'Gmeow 🐱'\]\]/.test(bcSrc),
   'C2 le panneau reprend les gestes de la fiche : Buy, la page du block, et les quatre saluts — par les MEMES fonctions (ouvrirProfil, ouvrirSalut), rien de reecrit');
 ok(/if \(!el\) \{ bcMessage\('Panel', '', mot \+ ' is sent from the block’s own page: '/.test(bcSrc), 'C2 un salut sur un block absent de la Map renvoie a sa page et le dit');
-ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-60dvh - 14px\)\)\}/.test(html),
+ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:44px/.test(html) && /\.mapAide\{position:absolute;left:10px;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-60dvh - 14px\)\)\}/.test(html),
   'C2 les boutons de la Map (+ − recentrer rotation) sont A GAUCHE : le volet ne les masque plus ; sur telephone ils remontent au-dessus de la feuille');
 ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
   && /bc\.skinChoisie = true; bcPorterSkin\(bcSkinDepuisRecette\(r\)\);/.test(bcSrc), 'C2 chaque curseur (0 a 359, borne et arrondi) repeint la skin portee depuis sa recette');
@@ -279,7 +279,34 @@ ok(!/eth_sign|personal_sign|privateKey|signTypedData/.test(bcSrc), 'C2 temoin : 
 /* le solde avant le plan */
 ok(/if \(soldeDe !== null && soldeDe < BigInt\(montant\)\) \{/.test(bcSrc) && bcSrc.indexOf('soldeDe < BigInt(montant)') < bcSrc.indexOf("fetch('/api/rails/plan?de='"),
   'C2 echange : le solde du jeton paye est relu AVANT le plan (un plan Aerodrome n est pas simule : sans cela, approbation signee puis swap reverte)');
-ok(/try \{ soldeDe = await bcSolde\(de\.adr, compte\); \} catch \(_\) \{ soldeDe = null; \}/.test(bcSrc), 'C2 … un solde illisible ne refuse rien (le planificateur juge)');
+ok(/try \{ soldeDe = await bcAvecDelai\(bcSolde\(de\.adr, compte\), 8000\); \} catch \(_\) \{ soldeDe = null; \}/.test(bcSrc), 'C2 … un solde illisible OU trop lent (8 s) ne refuse rien (le planificateur juge)');
+
+console.log('— C3. ce que le test WALLET REEL de Grok a trouve (2026-10-04) : « Prepare the plan » ne faisait rien, actions refusees, op jamais refermee');
+/* bcAvecDelai : extraite et executee */
+const srcDelai = (bcSrc.match(/const bcAvecDelai = (\(p, ms = 8000\) => [^\n]+);\n/) || [])[1];
+const avecDelai = srcDelai ? new Function('return ' + srcDelai)() : null;
+{
+  const t0 = Date.now();
+  let pendue = 'pas jete';
+  try { await avecDelai(new Promise(() => {}), 120); } catch (e) { pendue = String(e.message); }
+  ok(!!avecDelai && pendue === 'read timed out' && Date.now() - t0 < 2000 && await avecDelai(Promise.resolve(7), 120) === 7,
+    'C3 bcAvecDelai : une lecture PENDUE echoue apres le delai (au lieu de bloquer le clic pour toujours) ; une lecture rapide passe telle quelle');
+}
+ok(/signal: AbortSignal\.timeout\(methode === 'eth_getLogs' \? 20000 : 8000\) \}\);/.test(html), 'C3 le fetch RPC du navigateur a un delai maximal (8 s, 20 s pour des logs) — il n en avait AUCUN');
+ok(/\[decDe, decVers\] = await Promise\.all\(\[de\.adr, vers\.adr\]\.map\(\(x\) => bcAvecDelai\(bcDecimales\(x\), 6000\)\.catch\(\(\) => null\)\)\);/.test(bcSrc),
+  'C3 echange : les decimales sont lues en parallele, bornees a 6 s ; illisibles = unites brutes, la carte s affiche quand meme');
+ok(/const direct = qui === 'You';\n\s+if \(direct\) \{ void planifier\(\); return; \}/.test(bcSrc) && /if \(direct\) return signer\(\);/.test(bcSrc) && /bcBoutons\(m, \[\['Prepare the plan', planifier\], \['Dismiss', refuser, true\]\]\);/.test(bcSrc),
+  'C3 Buy / Sell DIRECTS pour la personne (son Review construit le plan et ouvre le wallet) ; une proposition d agent ou d AiFi garde ses deux clics');
+ok((bcSrc.match(/bcOpMaj\(op, 'notOffered'\);/g) || []).length === 2 && /notOffered: \['refused — nothing was sent', 'non'\]/.test(bcSrc) && /bcOpMaj\(op, 'proposed'\); \/\* un nouvel essai rouvre l operation \*\//.test(bcSrc),
+  'C3 un plan REFUSE (ou un solde insuffisant) REFERME l operation — elle restait a « waiting for you » ; un nouvel essai la rouvre');
+ok(/const actionAffichee = !!moi && ACTIONS_PAR_ADR\.has\(moi\);/.test(bcSrc) && /if \(actionAffichee && \(de\.adr === moi \|\| vers\.adr === moi\)\) bcEtape\(m, 'A Coinbase stock — it trades on its own market; no brain gate\.'\);\n\s+else if \(moi && /.test(bcSrc),
+  'C3 une action Coinbase n a PAS de porte du cerveau (SNDKc, NVDAc, MSTRc, MSFTc etaient refusees) ; un block garde la sienne');
+ok(/const t = estAction \? 'A Coinbase stock — it trades on its own market; no brain gate\.'/.test(bcSrc), 'C3 le ticket n annonce plus a une action un refus qui ne s appliquera pas');
+ok(/if \(achat\) choix = ACTIONS_PAR_ADR\.has\(a\) \|\| standard \? \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\] : \[\[q\.adr, q\.sym\]\];/.test(bcSrc), 'C3 « Pay with » : ETH en premier partout (regle de Phil), USDC en second');
+ok(/if \(ul\.dataset\.de !== a\) \{ ul\.textContent = ''; ul\.append\(bcEl\('li', \{ cls: 'note', text: 'Reading…' \}\)\); ul\.dataset\.de = '';/.test(bcSrc), 'C3 Market : la liste d activite d un block ne reste pas affichee sous le nom d un autre');
+ok(/if \(pourquoi\) \{ const e = \$\('#bcAiEtat'\); e\.className = 'note'; e\.textContent = pourquoi; \}/.test(bcSrc), 'C3 « AiFi stopped. » s ecrit a cote du bouton (il partait dans le Chat, masque depuis la vue Trade)');
+ok(/if \(c\.hidden\) \{ try \{ bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', deplier: true \}\); if \(\$\('#bcPop'\)\.open\) return; \}/.test(html), 'C3 le bouton « Info » de la Map ouvre le panneau (son block, sa skin) au lieu de la colonne ; panneau impossible = la colonne, comme avant');
+ok(/if \(moi && \(de\.adr === moi \|\| vers\.adr === moi\) && !actionAffichee\) bcEtape\(m, 'Your wallet may warn about a price difference/.test(bcSrc), 'C3 la carte previent que le wallet peut alerter sur un ecart de prix (il n a pas de prix pour un block frais)');
 /* les donnees du cerveau, les listes vides */
 ok(/function bcPeindreCerveau\(a, snap\) \{/.test(bcSrc) && /id="bcCerveau"/.test(html) && !/id="bcReseauNote"/.test(html) && !/The idea: a skin you buy/.test(html),
   'C2 Brain : les chiffres de CE cerveau (tires de l instantane) remplacent les deux paragraphes d explication');

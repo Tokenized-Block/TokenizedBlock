@@ -610,18 +610,27 @@ export function prixDepuisSqrt({ sqrtPriceX96, decDevise, decBlock, deviseEst0 }
   if (s <= 0n) return null;
   if (!Number.isInteger(decDevise) || !Number.isInteger(decBlock)) return null;
   if (decDevise < 0 || decBlock < 0 || decDevise > 36 || decBlock > 36) return null;
-  /* ratio d UNITES DE BASE currency1/currency0 = (s / 2^96)^2.
-   * ⚠️ On divise AVANT de convertir : (s^2 << 64) / 2^192 garde 64 bits de fraction, la ou
-   *    `Number(s*s)` deborderait le double sur des prix ordinaires. */
-  const Q192 = 1n << 192n;
-  const ratioFix = (s * s * (1n << 64n)) / Q192;      /* ratio en virgule fixe 64 bits */
-  const ratio = Number(ratioFix) / Number(1n << 64n); /* unites de base : c1 par c0 */
-  if (!Number.isFinite(ratio) || ratio <= 0) return null;
-  const eB = 10 ** decBlock, eD = 10 ** decDevise;
-  /* devise = currency0 : 1 unite de base de devise -> `ratio` unites de base de block.
-   *   1 block entier = eB unites de base -> eB / ratio unites de base de devise -> / eD entiers. */
-  const prix = deviseEst0 ? (eB / ratio) / eD : (ratio * eB) / eD;
+  /* ratio d UNITES DE BASE currency1/currency0 = s^2 / 2^192.
+   * ⛔⛔ 2026-10-04 (correctif de Grok Bot, sim fork d un block appaire a cbBTC ; patch b274c78, reecrit ici a la main) : l ancienne
+   *   virgule fixe a 64 bits ((s^2 << 64) / 2^192) tombait a 0 des que le ratio passait sous 2^-64 (cbBTC, 8 decimales, contre un
+   *   block a 18 : ratio 3e-20) -> null -> « no market », Buy et Sell fermes sur un block dont la pool existe. On garde la fraction
+   *   EXACTE (numerateur / denominateur en BigInt) et on ne passe en Number qu a la fin, 64 bits significatifs a toute echelle. */
+  const Q192 = 1n << 192n, eB = 10n ** BigInt(decBlock), eD = 10n ** BigInt(decDevise);
+  /* devise = currency0 : prix = 2^192 * 10^decB / (s^2 * 10^decD) ; devise = currency1 : prix = s^2 * 10^decB / (2^192 * 10^decD) */
+  const num = deviseEst0 ? Q192 * eB : s * s * eB;
+  const den = deviseEst0 ? s * s * eD : Q192 * eD;
+  const prix = fractionEnNombre(num, den);
   return Number.isFinite(prix) && prix > 0 ? prix : null;
+}
+/** num / den (BigInt > 0) en Number, 64 bits significatifs a toute echelle (pas de 0 par sous-precision). */
+function fractionEnNombre(num, den) {
+  if (num <= 0n || den <= 0n) return 0;
+  const decalage = 64 - (num.toString(2).length - den.toString(2).length);
+  const q = decalage >= 0 ? (num << BigInt(decalage)) / den : num / (den << BigInt(-decalage));
+  let x = Number(q), e = -decalage;
+  while (e > 1000) { x *= 2 ** 1000; e -= 1000; }
+  while (e < -1000) { x *= 2 ** -1000; e += 1000; }
+  return x * 2 ** e;
 }
 
 /** sqrtPriceX96 aux bornes de la pleine etendue. ⛔ Valeurs du protocole, pas calculees ici :
