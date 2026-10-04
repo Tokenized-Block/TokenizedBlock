@@ -310,7 +310,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
       exactement ce qu on veut ici (elle doit rester visible AU-DESSUS du panneau). */
 .mapZoom.decale{transform:none}
 @media (max-width:699px){.mapZoom.decale{transform:translateY(calc(-52dvh - 14px))}}
-@media (max-width:760px){body.bcOuvert .mapZoom{transform:translateY(calc(-60dvh - 14px))}}
+@media (max-width:760px){body.bcOuvert .mapZoom{transform:translateY(calc(-54dvh - 14px))}}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -664,13 +664,13 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
    ca a la base ». Il n est donc PLUS modal : pas de voile, l app reste visible et utilisable. Grand ecran = un volet a droite ;
    telephone = une feuille en bas (60 % de la hauteur). Un bouton le replie sur son en-tete. */
 dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;margin:0;position:fixed;z-index:70;inset:auto;
-  right:12px;top:12px;height:calc(100dvh - 24px);width:min(430px,calc(100% - 24px));max-width:none;max-height:none;overflow:visible}
+  right:12px;top:12px;height:calc(100dvh - 24px - var(--bcNav,66px));width:min(430px,calc(100% - 24px));max-width:none;max-height:none;overflow:visible}
 /* ⛔ FOND OPAQUE (capture de Phil : le texte de l app se lisait A TRAVERS le volet). `.carte` est translucide — sans le voile du
    mode modal, ce qui est derriere transparaissait. Une couleur pleine sous le degrade de la carte. */
 dialog.bcPop>.carte{background-color:rgb(var(--fondRgb));backdrop-filter:none;margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
   box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
-@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:60dvh}}
-dialog.bcPop.bcReduit{top:auto;bottom:12px;height:auto}
+@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:54dvh}}
+dialog.bcPop.bcReduit{top:auto;bottom:calc(var(--bcNav,66px) + 8px);height:auto}
 dialog.bcPop.bcReduit>.carte{height:auto;overflow:hidden}
 dialog.bcPop.bcReduit .bcScene,dialog.bcPop.bcReduit #bcRaster,dialog.bcPop.bcReduit .bcVue,dialog.bcPop.bcReduit .bcOnglets{display:none}
 .bcFil{scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
@@ -2693,7 +2693,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-achat-direct-qa-wallet" hidden>Build <code>20261004-achat-direct-qa-wallet</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-volet-au-dessus-des-onglets" hidden>Build <code>20261004-volet-au-dessus-des-onglets</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21860,6 +21860,13 @@ function bcRepeindre() {
       : { address: a, symbole: null, phase: 'NON_LU', humeur: null, phrase: '', tick: null, marche: null, nourriture: null, journal: [], spikes: null, memoire: null });
   } catch (_) { /* le battement suivant repeindra */ }
 }
+/* Le volet se pose AU-DESSUS de la barre d onglets (capture de Phil, telephone, 2026-10-04 : replie sur son en-tete, il la
+   COUVRAIT — plus aucun onglet atteignable). La hauteur de la barre est MESUREE (elle depend de la zone sure du telephone),
+   jamais supposee ; le CSS garde 66px en repli tant que rien n a ete mesure. */
+function bcPoserNav() {
+  try { const n = document.querySelector('.nav'); document.documentElement.style.setProperty('--bcNav', (n ? Math.ceil(n.getBoundingClientRect().height) : 0) + 'px'); } catch (_) {}
+}
+window.addEventListener('resize', bcPoserNav);
 /** Ouvre le pop-up (sur l onglet Brain : c est lui qui fait battre le cerveau). Sans effet s il est deja ouvert. */
 function bcOuvrirPop(opts = {}) {
   /* `sansBasculer` : ouvert depuis un autre onglet (Blocks) — on y RESTE ; le cerveau bat quand meme tant que le panneau est ouvert.
@@ -21870,6 +21877,7 @@ function bcOuvrirPop(opts = {}) {
   /* `deplier` : un block vient d etre choisi sur la Map — un panneau replie sur son en-tete ne montrerait rien */
   if (d && opts.deplier && d.classList.contains('bcReduit')) { d.classList.remove('bcReduit'); const br = $('#bcReduire'); if (br) { br.textContent = '–'; br.setAttribute('aria-expanded', 'true'); } }
   try { document.body.classList.add('bcOuvert'); } catch (_) {}
+  bcPoserNav();
   /* ⛔ NON MODAL (`show`, pas `showModal`) : l app reste visible et utilisable derriere. Le panneau est sorti de la vue Brain et pose
    *   sous <body> : enfant d une vue, il disparaissait des qu on changeait d onglet (une vue masquee masque ses enfants, fixes ou non). */
   if (d && d.parentElement !== document.body) document.body.append(d);

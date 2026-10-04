@@ -150,7 +150,12 @@ ok(/try \{ d\.show\(\); \}/.test(html) && !/\$\('#bcPop'\)\.showModal\(\)|d\.sho
   'C2 le panneau n est PLUS modal (show, pas showModal ; aucun voile) et vit sous <body> : l app reste visible et utilisable, d un onglet a l autre');
 ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPop'\); return !!\(p && p\.open\); \}\)\(\);/.test(html) && /if \(\(\$\('#v-brain'\)\.classList\.contains\('on'\) === false && !panneauOuvert\) \|\| !brainEtat\) return;/.test(html),
   'C2 tant que le panneau est ouvert, le cerveau qu il montre continue de battre hors de l onglet Brain');
-ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:60dvh\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (60 % de la hauteur)');
+ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:54dvh\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (54 % de la hauteur)');
+/* capture de Phil (telephone) : replie, le volet COUVRAIT la barre d onglets. Il se pose au-dessus, a sa hauteur MESUREE. */
+ok(/@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*bottom:calc\(var\(--bcNav,66px\) \+ 8px\)/.test(html) && /dialog\.bcPop\.bcReduit\{top:auto;bottom:calc\(var\(--bcNav,66px\) \+ 8px\);height:auto\}/.test(html)
+  && /dialog\.bcPop\{[^}]*height:calc\(100dvh - 24px - var\(--bcNav,66px\)\)/.test(html) && /setProperty\('--bcNav', \(n \? Math\.ceil\(n\.getBoundingClientRect\(\)\.height\) : 0\) \+ 'px'\)/.test(html)
+  && /document\.body\.classList\.add\('bcOuvert'\); \} catch \(_\) \{\}\n  bcPoserNav\(\);/.test(html) && /window\.addEventListener\('resize', bcPoserNav\);/.test(html),
+  'C2 le volet (ouvert ou replie, telephone ou grand ecran) s arrete AU-DESSUS de la barre d onglets, dont la hauteur est mesuree');
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
   && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
   'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; les skins du catalogue ne retouchent pas l interieur');
@@ -171,7 +176,7 @@ ok(/choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', depl
 ok(/bouton\('Open profile', \(\) => \{ try \{ void ouvrirProfil\(a, null\); \}/.test(bcSrc) && /try \{ ouvrirCote\(\); ouvrirSalut\(mot\); \} catch/.test(bcSrc) && /\[\['GM', 'GM 👋'\], \['BM', 'BM 🌙'\], \['GN', 'GN 😴'\], \['Gmeow', 'Gmeow 🐱'\]\]/.test(bcSrc),
   'C2 le panneau reprend les gestes de la fiche : Buy, la page du block, et les quatre saluts — par les MEMES fonctions (ouvrirProfil, ouvrirSalut), rien de reecrit');
 ok(/if \(!el\) \{ bcMessage\('Panel', '', mot \+ ' is sent from the block’s own page: '/.test(bcSrc), 'C2 un salut sur un block absent de la Map renvoie a sa page et le dit');
-ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:44px/.test(html) && /\.mapAide\{position:absolute;left:10px;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-60dvh - 14px\)\)\}/.test(html),
+ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:44px/.test(html) && /\.mapAide\{position:absolute;left:10px;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-54dvh - 14px\)\)\}/.test(html),
   'C2 les boutons de la Map (+ − recentrer rotation) sont A GAUCHE : le volet ne les masque plus ; sur telephone ils remontent au-dessus de la feuille');
 ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
   && /bc\.skinChoisie = true; bcPorterSkin\(bcSkinDepuisRecette\(r\)\);/.test(bcSrc), 'C2 chaque curseur (0 a 359, borne et arrondi) repeint la skin portee depuis sa recette');
