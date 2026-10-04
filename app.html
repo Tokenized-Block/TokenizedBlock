@@ -288,7 +288,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
      contient `translateX(-388px)`, relu a 1,5 s) et le style CALCULE reste `matrix(1,0,0,1,0,0)` —
      l identite. La transition ne se termine jamais sur cet element.
    Une animation qu on ne sait pas faire aboutir vaut moins qu un deplacement qui a lieu. */
-.mapZoom{position:absolute;right:10px;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
+/* 2026-10-04 (Phil, capture) : « les boutons + − recentrer et rotation, mets-les A GAUCHE : le panel les masque ». Ils etaient en bas
+   a droite, sous le volet. A gauche, plus besoin de les decaler quand une colonne s ouvre a droite ; sur telephone ils remontent
+   au-dessus de la feuille du panneau quand il est ouvert. */
+.mapZoom{position:absolute;left:10px;right:auto;bottom:10px;z-index:7;display:flex;flex-direction:column;gap:6px}
 /* ⛔⛔ CE DECALAGE PASSE PAR `transform`, ET PAS PAR `right` — ET C EST MESURE, PAS PREFERE.
    Comptee « faite » TROIS fois avant d etre mesuree : 0135 (:has sur .mapEnv, ne matchait rien),
    0138 (:has sur #scene, MATCHAIT et ne bougeait pas), 0144 (classe posee en JS, idem).
@@ -303,8 +306,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
    et `transform` est le levier qui repond. On prend celui qui marche, et on ecrit pourquoi.
    ⚠️ `transform` ne pousse pas les voisins : la colonne glisse par-dessus la carte, ce qui est
       exactement ce qu on veut ici (elle doit rester visible AU-DESSUS du panneau). */
-.mapZoom.decale{transform:translateX(-388px)}
+.mapZoom.decale{transform:none}
 @media (max-width:699px){.mapZoom.decale{transform:translateY(calc(-52dvh - 14px))}}
+@media (max-width:760px){body.bcOuvert .mapZoom{transform:translateY(calc(-60dvh - 14px))}}
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -1816,6 +1820,8 @@ details[open] > summary::before{transform:rotate(90deg)}
            mouvements lus sur la chaine (/api/activite : signataire lu sur la transaction). -->
       <div class="bcVue" id="bc-market">
         <div class="bcPos" id="bcMarche"></div>
+        <!-- ce que la fiche d info de la Map offrait (Buy, profil, saluts) : repris ici, la fiche n est plus montree -->
+        <div class="bcPre" id="bcActions"></div>
         <p class="bcSousTitre">Live on this block</p>
         <ul class="bcListe" id="bcActivite"><li class="note">Reading…</li></ul>
         <p class="note" id="bcActiviteNote" style="margin:6px 0 0"></p>
@@ -2685,7 +2691,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-skin-fond-et-map-panneau" hidden>Build <code>20261004-skin-fond-et-map-panneau</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-panneau-remplace-la-fiche" hidden>Build <code>20261004-panneau-remplace-la-fiche</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5197,7 +5203,16 @@ $('#map').addEventListener('click', (e) => {
   $('#fiche').hidden = false;
   /* 2026-10-04 (Phil) : « quand tu ouvres un block sur la Map, ca ouvre le panel avec le block selectionne ». Le panneau s ouvre
    *   sur CE block (vue Market) sans quitter la Map ; deja ouvert, il change seulement de block. La fiche garde ses boutons. */
-  if (/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) { try { choisirBrain(adr); bcOuvrirPop({ sansBasculer: true, vue: 'market' }); } catch (_) { /* la fiche reste utilisable */ } }
+  /* 2026-10-04 (Phil, 2e retour, captures) : « la barre info existe encore… en fait le panel vient REMPLACER le bouton info, en mieux ».
+   *   La fiche est toujours REMPLIE ci-dessous (ses boutons GM et profil servent encore, appeles depuis le panneau), mais elle n est
+   *   plus MONTREE : la colonne se referme juste apres, et le panneau — deplie — prend sa place. Si le panneau ne peut pas s ouvrir,
+   *   la fiche reste, comme avant. */
+  if (/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) {
+    try {
+      choisirBrain(adr); bcOuvrirPop({ sansBasculer: true, vue: 'market', deplier: true });
+      setTimeout(() => { try { if (Date.now() > (bc.ficheJusqua || 0) && $('#bcPop').open && !$('#cote').hidden) $('#bMasquer').click(); } catch (_) {} }, 0);
+    } catch (_) { /* la fiche reste utilisable */ }
+  }
   /* ⛔ MEME DESSIN QUE SUR LA MAP, PAR LA MEME FONCTION : deux rendus du meme block seraient deux
    * identites pour une seule chose. */
   $('#fAvatar').innerHTML = dessin(adr, h && h.sym);
@@ -21813,6 +21828,9 @@ function bcOuvrirPop(opts = {}) {
   try { if (!opts.sansBasculer && !$('#v-brain').classList.contains('on')) allerA('brain'); } catch (_) {}
   const d = $('#bcPop');
   if (d && !d.open && opts.vue) { try { bcVue(opts.vue); } catch (_) {} }
+  /* `deplier` : un block vient d etre choisi sur la Map — un panneau replie sur son en-tete ne montrerait rien */
+  if (d && opts.deplier && d.classList.contains('bcReduit')) { d.classList.remove('bcReduit'); const br = $('#bcReduire'); if (br) { br.textContent = '–'; br.setAttribute('aria-expanded', 'true'); } }
+  try { document.body.classList.add('bcOuvert'); } catch (_) {}
   /* ⛔ NON MODAL (`show`, pas `showModal`) : l app reste visible et utilisable derriere. Le panneau est sorti de la vue Brain et pose
    *   sous <body> : enfant d une vue, il disparaissait des qu on changeait d onglet (une vue masquee masque ses enfants, fixes ou non). */
   if (d && d.parentElement !== document.body) document.body.append(d);
@@ -22064,6 +22082,28 @@ async function bcLireActivite(a, sym, mk) {
     }
     note.textContent = d.transactions.length ? 'Last ' + d.transactions.length + ' transactions · ' + minutes + ' min window' : '';
   } catch (_) { /* reseau : on reessaie au prochain tour */ } finally { bc.activiteEnVol = false; }
+}
+/* ── LES GESTES DE LA FICHE, DANS LE PANNEAU (vue Market) : Buy, la page du block, et les quatre saluts ──────────────────────────
+ * Rien n est reecrit : « Open profile » appelle `ouvrirProfil` ; un salut (GM, BM, GN, Gmeow) appelle `ouvrirSalut` — le MEME geste
+ * que la fiche (un vrai transfert d un fragment du block a un ami, avec sa ligne de frais a part). Le salut a besoin de la fiche de
+ * CE block : on la remplit par le clic de la Map, et la colonne se rouvre le temps du formulaire d envoi.
+ * ⛔ Un block absent de la Map n a pas de fiche : le salut renvoie alors a sa page, il ne fait pas semblant. */
+function bcPeindreActions(a, sym) {
+  const z = $('#bcActions'); if (!z) return;
+  z.textContent = '';
+  const bouton = (texte, f) => { const b = bcEl('button', { type: 'button', cls: 'puce', text: texte }); b.addEventListener('click', f); z.append(b); };
+  bouton('Buy', () => { bc.cote = 'buy'; bcVue('trade'); bcRepeindre(); });
+  bouton('Open profile', () => { try { void ouvrirProfil(a, null); } catch (_) {} });
+  for (const [mot, lib] of [['GM', 'GM 👋'], ['BM', 'BM 🌙'], ['GN', 'GN 😴'], ['Gmeow', 'Gmeow 🐱']]) {
+    bouton(lib, () => {
+      const el = [...document.querySelectorAll('.bloc[data-block]')].find((e) => String(e.getAttribute('data-block')).toLowerCase() === a);
+      if (!el) { bcMessage('Panel', '', mot + ' is sent from the block’s own page: ' + (sym || court(a)) + ' is not on the Map right now.'); bcVue('chat'); try { void ouvrirProfil(a, null); } catch (_) {} return; }
+      bc.ficheJusqua = Date.now() + 1500; /* la colonne doit RESTER ouverte : c est elle qui porte le formulaire d envoi */
+      try { allerA('map'); } catch (_) {}
+      el.click();
+      try { ouvrirCote(); ouvrirSalut(mot); } catch (_) {}
+    });
+  }
 }
 /* ── L INDEX DU MARKET, POUR LE PANNEAU ───────────────────────────────────────────────────────────────────────────────────────
  * ⛔ MESURE (2026-10-04, panneau ouvert DIRECTEMENT sur NVDAc par son lien) : `marcheParAdr` etait VIDE — seule la boucle de la Map
@@ -22363,6 +22403,7 @@ function bcPeindre(snap) {
     $('#bcNom').textContent = sym || nom || court(a);
     const sn = $('#bcSousNom'); sn.hidden = !(sym && nom); sn.textContent = sym && nom ? nom : '';
     const ad = $('#bcAdr'); ad.hidden = false; ad.textContent = a; ad.dataset.adr = a;
+    bcPeindreActions(a, sym);
     if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
   }
   bcPeindreTicket(a, sym, mk, snap);
@@ -22592,7 +22633,7 @@ $('#bcLierCopier').addEventListener('click', async () => {
 bcChargerOps();
 bcPeindreOps();
 $('#bcOuvrir').addEventListener('click', () => bcOuvrirPop());
-$('#bcFermer').addEventListener('click', () => $('#bcPop').close());
+$('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert'); } catch (_) {} });
 /* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
 /* ── LA RECHERCHE D UN BLOCK (en-tete du panneau) : un symbole, un nom exact ou une adresse entiere -> ce block s affiche ──
  * Les propositions (datalist) viennent de l index du Market (les plus echanges d abord) et du registre des actions. La resolution est

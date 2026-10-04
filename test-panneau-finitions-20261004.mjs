@@ -166,7 +166,13 @@ ok((reglages.match(/\['[^']+', '(h|angle|cube|noyau|fond)', (\d|null)\]/g) || []
   'C2 sept curseurs : trois teintes d anneau, l angle, les ARETES du cube, le NOYAU aux 128 neurones, le FOND de la case');
 ok(/if \(cible && Number\.isFinite\(cible\.fond\)\) \{ ctx\.fillStyle = 'hsl\(' \+ cible\.fond \+ ' 45% 9%\)'; ctx\.fillRect\(0, 0, c\.width, c\.height\); \}/.test(html) && /fond: sk && Number\.isFinite\(sk\.fond\) \? sk\.fond : undefined/.test(bcSrc),
   'C2 le FOND de la case du cerveau est une variable de la skin (panneau seulement) ; sans skin, la toile reste transparente comme avant');
-ok(/try \{ choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market' \}\); \}/.test(html), 'C2 ouvrir un block sur la Map ouvre le panneau sur CE block (vue Market), sans quitter la Map');
+ok(/choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', deplier: true \}\);/.test(html) && /if \(Date\.now\(\) > \(bc\.ficheJusqua \|\| 0\) && \$\('#bcPop'\)\.open && !\$\('#cote'\)\.hidden\) \$\('#bMasquer'\)\.click\(\);/.test(html),
+  'C2 ouvrir un block sur la Map ouvre le panneau DEPLIE sur ce block et REFERME la fiche d info (le panneau la remplace) — seulement si le panneau est bien ouvert');
+ok(/bouton\('Open profile', \(\) => \{ try \{ void ouvrirProfil\(a, null\); \}/.test(bcSrc) && /try \{ ouvrirCote\(\); ouvrirSalut\(mot\); \} catch/.test(bcSrc) && /\[\['GM', 'GM 👋'\], \['BM', 'BM 🌙'\], \['GN', 'GN 😴'\], \['Gmeow', 'Gmeow 🐱'\]\]/.test(bcSrc),
+  'C2 le panneau reprend les gestes de la fiche : Buy, la page du block, et les quatre saluts — par les MEMES fonctions (ouvrirProfil, ouvrirSalut), rien de reecrit');
+ok(/if \(!el\) \{ bcMessage\('Panel', '', mot \+ ' is sent from the block’s own page: '/.test(bcSrc), 'C2 un salut sur un block absent de la Map renvoie a sa page et le dit');
+ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-60dvh - 14px\)\)\}/.test(html),
+  'C2 les boutons de la Map (+ − recentrer rotation) sont A GAUCHE : le volet ne les masque plus ; sur telephone ils remontent au-dessus de la feuille');
 ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
   && /bc\.skinChoisie = true; bcPorterSkin\(bcSkinDepuisRecette\(r\)\);/.test(bcSrc), 'C2 chaque curseur (0 a 359, borne et arrondi) repeint la skin portee depuis sa recette');
 /* une recette reglee a la main est une recette que skins.js ACCEPTE a l achat (sinon on reglerait une skin invendable) */
