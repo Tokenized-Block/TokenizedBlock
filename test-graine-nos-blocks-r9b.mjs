@@ -95,7 +95,9 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
   const port = await libre(); const vol = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-r9b-vol-')); tmp.push(vol);
   const u = 'http://127.0.0.1:' + portRpc;
   const enfant = spawn(process.execPath, [path.join(dir, 'serveur-web.js')], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '' } });
+    /* TB_SONDES=0 (2026-10-04) : les sondes de /sante (naissance, marche, echange, cerveau) lisent la chaine 45 s apres le demarrage ;
+     * contre ce noeud fictif elles ajoutaient des lectures que le banc compte. Elles ne sont pas l objet de ce banc. */
+    env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '', TB_SONDES: '0' } });
   let journal = '', mort = false; enfant.stdout.on('data', (d) => { journal += d; }); enfant.stderr.on('data', (d) => { journal += d; });
   enfant.on('exit', () => { mort = true; });
   /* ⛔ un serveur mort (port pris) ne doit jamais laisser lire celui d un autre mutant */

@@ -95,7 +95,7 @@ ok(/fetch\('\/api\/activite\/' \+ a,/.test(bcSrc) && /id="bcActivite"/.test(html
   'Market : les mouvements de CE block, lus par le serveur ; plus aucune liste d autres blocks');
 ok(/const src = \$\('#bReseau'\), dst = \$\('#bcReseau'\);/.test(bcSrc) && /cx\.drawImage\(src, 0, 0\);/.test(bcSrc), 'Brain : le cube et ses connexions = le canvas de « Its wiring » RECOPIE (meme dessin), pas un second dessin');
 /* 2026-10-04 (Phil) : le bouton desactive devient un « + » qui ouvre des skins A L ESSAI. Ce qui reste interdit : un prix, un achat. */
-const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), bcSrc.indexOf('/** Peint le panneau depuis LE snapshot'));
+const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), bcSrc.indexOf('/* ── AiFi : LE CERVEAU PROPOSE SEUL'));
 ok(/<button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique"/.test(html) && /\$\('#bcSkins'\)\.addEventListener\('click'/.test(html) && !/id="bcTaches"/.test(html),
   'Brain : la peau du block et un « + » qui ouvre les skins ; la liste des taches n y est plus');
 ok(skinsSrc.length > 500 && !/\$\d|€|\bETH\b|USDC|price|envoyerDepuisWallet|bcSigner|fetch\(|localStorage/i.test(skinsSrc.replace(/\/\*[\s\S]*?\*\//g, '')),

@@ -1571,7 +1571,12 @@ async function sonderLeReste() {
     autresSondes.cerveau = { etat: g.ok ? 'PRET' : 'REFUSE', pourquoi: g.ok ? null : (g.pourquoi || null), phase: vu ? vu.phase : null, battements: e.tick, lu };
   } catch (e) { autresSondes.cerveau = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
 }
-setTimeout(() => { sonderNaissance().then(sonderLeReste); setInterval(() => { sonderNaissance().then(sonderLeReste); }, 10 * 60 * 1000).unref(); }, 45000).unref();
+/* 2026-10-04 — LES SONDES SE COUPENT PAR `TB_SONDES=0`. Elles partent 45 s apres le demarrage et lisent la chaine par les noeuds du
+ *   serveur ; un banc qui demarre une copie du serveur contre un noeud FICTIF dont il compte les lectures (test-graine-nos-blocks-r9b)
+ *   les recevait aussi : elles n ont rien a y faire, il les coupe. En production la variable n existe pas : sondes actives.
+ *   ⛔ CE QUE JE N AI PAS PROUVE : que ce banc etait rouge A CAUSE d elles. Il est reste rouge une fois les sondes coupees, sur un KO
+ *   different a chaque passage (C1, P1, mutant n24) — cause NON trouvee ; dit dans le compte rendu, pas masque. */
+if (process.env.TB_SONDES !== '0') setTimeout(() => { sonderNaissance().then(sonderLeReste); setInterval(() => { sonderNaissance().then(sonderLeReste); }, 10 * 60 * 1000).unref(); }, 45000).unref();
 /* ── LE WIDGET MCP (mcp-widget-panneau.html) : le paquet officiel ext-apps 2.0.3 est EMBARQUE et inline (un bac a sable de chat
  *   bloque tout script distant). Son `export{…}` final devient `globalThis.ExtApps={…}` — la reecriture du guide officiel.
  *   ⛔ Empreinte VERIFIEE au demarrage : un paquet altere ou absent = pas de widget (les outils marchent sans lui). */

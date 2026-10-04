@@ -152,7 +152,10 @@ ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPo
   'C2 tant que le panneau est ouvert, le cerveau qu il montre continue de battre hors de l onglet Brain');
 ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:60dvh\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (60 % de la hauteur)');
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
-  && !/style\.filter = s\./.test(bcSrc), 'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; le visage du block n est pas retouche');
+  && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
+  'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; les skins du catalogue ne retouchent pas l interieur');
+ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /ra\.addEventListener\('click', \(\) => bcPorterSkin\(bcSkinAleatoire\(\)\)\);/.test(bcSrc) && /filtre: 'sepia\(1\) saturate\(4\) hue-rotate\(' \+ h3 \+ 'deg\)'/.test(bcSrc),
+  'C2 « Random » tire a chaque appui une skin qui combine un contour et une teinte d interieur');
 const achat = html.slice(html.indexOf("$('#bcSkinAcheter').addEventListener('click'"), html.indexOf("$('#bcSkinAcheter').addEventListener('click'") + 700);
 ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /no price is set, so nothing is asked from your wallet/.test(achat) && !/bcSigner|envoyerDepuisWallet|fetch\(|\$\d|USDC/.test(achat),
   'C2 « Buy » sur une skin payante REPOND, et tant qu aucun prix n est fixe il ne construit aucune transaction et ne cite aucun montant');
@@ -163,9 +166,51 @@ ok(/const fMarche = rs\.fraisParHook === true && rs\.fraisMarcheBps !== undefine
 ok(/if \(fApp !== null && Number\.isFinite\(fApp\) && fApp > 0\) bcEtape\(m, 'App fee: '/.test(bcSrc) && /else if \(fApp === 0 && fMarche === null\) bcEtape\(m, 'No app fee on this route\.'\);/.test(bcSrc),
   'C2 … le frais de l app n est dit que s il existe ; un champ absent n est jamais affiche comme zero');
 /* le switch */
-ok(/data-mode="semi" aria-selected="true">Semi-auto</.test(html) && /data-mode="full" aria-selected="false">Full AiFi</.test(html), 'C2 Trade : le switch Semi-auto / Full AiFi, Semi-auto par defaut');
-ok(/<button type="button" class="bouton sec" id="bcArmer" disabled aria-disabled="true">Arm Full AiFi — not available yet<\/button>/.test(html) && !/bcArmer'\)/.test(html),
-  'C2 Full AiFi N EST PAS ARMABLE : bouton desactive qui le dit, et aucun gestionnaire n y est branche');
+ok(/data-mode="semi" aria-selected="true">Manual</.test(html) && /data-mode="full" aria-selected="false">AiFi</.test(html) && !/Max per day|Semi-auto|Full AiFi</.test(html.slice(html.indexOf('id="bc-trade"'), html.indexOf('id="bc-brain"'))),
+  'C2 Trade : le switch Manual / AiFi (Manual par defaut) ; « Max per day » est parti (un budget total et une heure d arret)');
+ok(/<input type="checkbox" id="bcAiAchat"><span>/.test(html) && /<input type="checkbox" id="bcAiVente"><span>/.test(html), 'C2 AiFi : les deux declencheurs sont DECOCHES par defaut — c est la personne qui choisit quand son cerveau propose');
+/* AiFi, EXECUTE : la fonction est extraite du source et rejouee avec de faux voisins */
+const srcAifi = (bcSrc.match(/function bcAifiBattre\(a, snap\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
+const BLK = '0xb2000000000000000000000000000000000000aa', ETH0 = '0x' + '0'.repeat(40);
+function monterAifi(src, etat, { compte = null, solde = 400n, cot = { ok: true, adr: ETH0, sym: 'ETH' } } = {}) {
+  const vus = { swaps: [], messages: [], arrets: [], ouverts: 0 };
+  const bc = { aifi: etat };
+  const f = new Function('bc', 'bcAifiArreter', 'bcAifiSauver', 'bcAifiPeindre', 'bcResoudre', 'court', 'ETH_ADR', 'bcOuvrirPop', 'bcProposerSwap', 'compte', 'bcCotation', 'bcSolde', 'bcMessage',
+    src + '; return bcAifiBattre;')(bc, (p) => { vus.arrets.push(p); bc.aifi = null; }, () => {}, () => {}, () => ({ sym: 'BLK' }), (x) => x, ETH0, () => { vus.ouverts += 1; },
+    async (qui, cls, e) => { vus.swaps.push({ qui, cls, de: e.de.adr, vers: e.vers.adr, montant: e.montant }); }, compte, () => cot, async () => solde, (q, c, t) => { vus.messages.push(t); });
+  return { f, vus, bc };
+}
+const etatAifi = (plus = {}) => ({ block: BLK, achat: true, vente: false, parTrade: '2000', budget: '5000', propose: '0', jusqua: Date.now() + 3600000, phase: null, ...plus });
+const battre = (m, phase, tick = 1, adr = BLK) => m.f(adr, { address: adr, phase, tick });
+async function jeuAifi(src, dire) {
+  let m = monterAifi(src, etatAifi());
+  battre(m, 'EXCITE'); dire(m.vus.swaps.length === 0, 'AiFi : la PREMIERE humeur vue est un point de depart — aucune proposition (meme si elle est « excited »)');
+  battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === ETH0 && m.vus.swaps[0].vers === BLK && m.vus.swaps[0].montant === '2000' && m.bc.aifi.propose === '2000' && m.vus.swaps[0].cls === 'agent',
+    'AiFi : calm -> excited = UNE proposition d achat, du montant « per trade », en ETH, par la meme carte qu un agent');
+  battre(m, 'EXCITE'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1, 'AiFi : l humeur ne change pas = rien (declenche sur un FRONT, jamais en boucle)');
+  battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 2 && m.bc.aifi.propose === '4000', 'AiFi : un 2e changement = une 2e proposition (4000 proposes sur 5000)');
+  battre(m, 'CALME'); battre(m, 'EXCITE'); dire(m.vus.swaps.length === 2 && m.bc.aifi === null && /Budget reached/.test(m.vus.arrets[0] || ''), 'AiFi : le 3e depasserait le budget (6000 > 5000) = AUCUNE proposition, et AiFi s arrete en le disant');
+  m = monterAifi(src, etatAifi({ phase: 'CALME' }));
+  battre(m, 'EXCITE', null); dire(m.vus.swaps.length === 0, 'AiFi : sans battement (tick null) rien ne se declenche');
+  battre(m, 'EXCITE', 1, '0xb2000000000000000000000000000000000000bb'); dire(m.vus.swaps.length === 0, 'AiFi : un AUTRE block affiche ne declenche rien');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', jusqua: Date.now() - 1 }));
+  battre(m, 'EXCITE'); dire(m.vus.swaps.length === 0 && m.bc.aifi === null && /Time is up/.test(m.vus.arrets[0] || ''), 'AiFi : heure d arret passee = rien, et AiFi s arrete');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: false }));
+  battre(m, 'EXCITE'); battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0, 'AiFi : une regle non cochee ne propose rien');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: '0x' + 'c'.repeat(40), solde: 400n });
+  battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === BLK && m.vus.swaps[0].vers === ETH0 && m.vus.swaps[0].montant === '100', 'AiFi : calm -> worried = vente d un QUART du solde LU (400 -> 100), contre la cotation lue');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: null });
+  battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0 && /no wallet is connected/.test(m.vus.messages[0] || ''), 'AiFi : vente sans wallet = rien, et il le dit');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: '0x' + 'c'.repeat(40), solde: 3n });
+  battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0, 'AiFi : un quart de 3 unites = 0 : rien a vendre, rien propose');
+}
+ok(srcAifi.length > 400, 'C2 AiFi : bcAifiBattre est extraite du source');
+await jeuAifi(srcAifi, (c, t) => ok(c, 'C2 ' + t));
+const aifiSrc = bcSrc.slice(bcSrc.indexOf("const BC_CLE_AIFI = 'tblock.panel.aifi';"), bcSrc.indexOf('/** Peint le panneau depuis LE snapshot'));
+ok(aifiSrc.length > 1500 && !/bcSigner|envoyerDepuisWallet|window\.ethereum|eth_send/.test(aifiSrc) && /void bcProposerSwap\('Its brain · AiFi', 'agent',/.test(aifiSrc),
+  'C2 AiFi ne signe RIEN et n appelle jamais le wallet : il ouvre la carte d echange (porte du cerveau, plan, puis la personne)');
+ok(/\$\('#bcArmer'\)\.addEventListener\('click', \(\) => \{ if \(bc\.aifi\) bcAifiArreter\('AiFi stopped\.'\); else bcAifiDemarrer\(\); \}\);/.test(html) && /if \(!achat && !vente\) return dire\(/.test(aifiSrc) && /heures < 1 \|\| heures > 168/.test(aifiSrc),
+  'C2 AiFi : demarre et s arrete d un bouton ; refuse de demarrer sans regle cochee ou avec une duree hors de 1 a 168 h');
 ok(!/eth_sign|personal_sign|privateKey|signTypedData/.test(bcSrc), 'C2 temoin : le code du panneau ne contient aucune signature hors du wallet de la personne (envoyerDepuisWallet)');
 /* le solde avant le plan */
 ok(/if \(soldeDe !== null && soldeDe < BigInt\(montant\)\) \{/.test(bcSrc) && bcSrc.indexOf('soldeDe < BigInt(montant)') < bcSrc.indexOf("fetch('/api/rails/plan?de='"),
@@ -237,6 +282,22 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-fin-'));
 {
   const arrondi = new Function('return ' + srcDec.replace(".replace(/0+$/, '')", ".replace(/0+$/, '').slice(0, 8)"))();
   ok(C.enUnitesBrutes(arrondi(987654321987654321n, 18), 18) !== 987654321987654321n, 'E mutant « bcDecimal tronque comme l affichage » : ROUGE (100 % du solde ne serait plus 100 %)');
+}
+/* E4 : mutants d AiFi — la fonction extraite, abimee, doit faire rougir le jeu AiFi */
+{
+  const mutantsAifi = [
+    ['front retire (propose a chaque peinture)', '  if (avant === phase) return;', ''],
+    ['budget non verifie', "    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — AiFi stopped.'); return; }", ''],
+    ['premiere humeur prise pour un changement', '  if (avant === null) return;', ''],
+    ['autre block accepte', '  if (s.block !== a || !snap || snap.tick === null || snap.tick === undefined) return;', '  if (!snap || snap.tick === null || snap.tick === undefined) return;'],
+    ['heure d arret ignoree', "  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — AiFi stopped.'); return; }", ''],
+  ];
+  for (const [nom, de, a] of mutantsAifi) {
+    if (srcAifi.split(de).length !== 2) { ok(false, 'E mutant AiFi « ' + nom + ' » : motif introuvable ou multiple'); continue; }
+    let rouges = 0;
+    try { await jeuAifi(srcAifi.replace(de, a), (c) => { if (!c) rouges += 1; }); } catch (_) { rouges += 1; }
+    ok(rouges > 0, 'E mutant AiFi « ' + nom + ' » : ROUGE (' + rouges + ' assertion(s))');
+  }
 }
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
 

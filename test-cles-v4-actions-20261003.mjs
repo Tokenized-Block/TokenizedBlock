@@ -59,8 +59,8 @@ ok(/quoteDe\(marcheV\.cle, vers\) !== USDC\) return normaliser\(route, \{ etat: 
 ok(/chemin = \[\{ de: ETH, vers: USDC, famille: 'uniswap-v4' \}, \{ de: USDC, vers, famille: 'uniswap-v4' \}\];/.test(rails), 'rails-api : ETH > ACTION = ETH -> USDC -> action, deux sauts v4, une tx');
 /* 2026-10-04 : la vente d une action de la table Aerodrome passe AVANT, par son propre batisseur (banc-vente-aerodrome-fork) ; les
  * autres lisent toujours leur pool v4. Les deux branches sont exigees, dans cet ordre. */
-const iVente = rails.indexOf("if (nd === 'ACTION' && nv === 'USDC') {"), iAero = rails.indexOf('if (POOLS_ACTIONS_AERODROME.has(de)) {', iVente), iV4 = rails.indexOf('const marcheA = await marcheDe(de);', iVente);
-ok(iVente > 0 && iAero > iVente && iV4 > iAero && iV4 - iVente < 2400 && /sens: 'VENTE', montant: m,\s+marcheLu: marcheA/.test(rails.slice(iV4, iV4 + 700)),
+const iVente = rails.indexOf("if (nd === 'ACTION' && nv === 'USDC') {"), iAero = rails.indexOf('if (POOLS_ACTIONS_AERODROME.has(de)) {', iVente), iVenteV4 = rails.indexOf('const marcheA = await marcheDe(de);', iVente);
+ok(iVente > 0 && iAero > iVente && iVenteV4 > iAero && iVenteV4 - iVente < 2400 && /sens: 'VENTE', montant: m,\s+marcheLu: marcheA/.test(rails.slice(iVenteV4, iVenteV4 + 700)),
   'rails-api : ACTION > USDC vend sur la pool Aerodrome de la table, sinon sur la pool v4 lue');
 const iT = rails.indexOf('const t = POOLS_ACTIONS_AERODROME.get(vers);'), iV4 = rails.indexOf("if (!t && (nd === 'ETH' || nd === 'USDC')) {");
 ok(iT > 0 && iV4 > iT && /if \(!t\) return normaliser\(route, \{ etat: 'REFUSE', pourquoi: 'no measured deep Aerodrome pool/.test(rails), 'la table Aerodrome est lue d abord ; le repli v4 ne joue que sans elle ; sinon le refus nomme d avant');

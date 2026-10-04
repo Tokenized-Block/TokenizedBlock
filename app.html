@@ -600,7 +600,11 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcLimites label span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux);margin-bottom:3px}
 .bcLimites input{width:100%;box-sizing:border-box;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-weight:700;padding:8px 30px 8px 10px}
 .bcLimites label i{position:absolute;right:9px;bottom:9px;font-style:normal;font-size:11px;color:var(--doux)}
-.bcLimites .bouton,.bcLimites .note{grid-column:1/-1}
+.bcLimites .bouton,.bcLimites .note,.bcLimites .bcCoche{grid-column:1/-1}
+.bcLimites .bcCoche{display:flex;align-items:center;gap:8px;cursor:pointer}
+.bcLimites .bcCoche input{width:18px;height:18px;padding:0;flex:0 0 auto;accent-color:var(--accent)}
+.bcLimites .bcCoche span{margin:0;font-size:13px;text-transform:none;letter-spacing:0;color:var(--texte)}
+.bcLimites input:disabled{opacity:.6}
 .bcLimites .bouton:disabled{opacity:.55;cursor:not-allowed}
 .bcSkin{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px 12px;border:1px solid var(--ligne);border-radius:16px;
   background:linear-gradient(120deg,color-mix(in srgb,var(--bcFond,var(--creux)) 30%,transparent),transparent 70%),var(--creux)}
@@ -633,7 +637,9 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
    telephone = une feuille en bas (60 % de la hauteur). Un bouton le replie sur son en-tete. */
 dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;margin:0;position:fixed;z-index:70;inset:auto;
   right:12px;top:12px;height:calc(100dvh - 24px);width:min(430px,calc(100% - 24px));max-width:none;max-height:none;overflow:visible}
-dialog.bcPop>.carte{margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
+/* ⛔ FOND OPAQUE (capture de Phil : le texte de l app se lisait A TRAVERS le volet). `.carte` est translucide — sans le voile du
+   mode modal, ce qui est derriere transparaissait. Une couleur pleine sous le degrade de la carte. */
+dialog.bcPop>.carte{background-color:rgb(var(--fondRgb));backdrop-filter:none;margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
   box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
 @media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:60dvh}}
 dialog.bcPop.bcReduit{top:auto;bottom:12px;height:auto}
@@ -1788,20 +1794,23 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- 2026-10-04 (Phil : « ici y a prob, refais mieux… propose quelque chose qui manque ») : la vue n etait que des listes vides.
              A leur place : UN TICKET (sens, montant, devise) qui mene a la carte du plan, et CE QUE LA PERSONNE DETIENT — ce qui manquait.
              ⛔ Le ticket n envoie rien : il ecrit la meme commande que la barre du Chat, qui passe la porte du cerveau puis le plan. -->
-        <!-- QUI SIGNE (Phil, 2026-10-04 : « semi auto avec l approbation de chaque swap, et ajoute un switch Full AiFi ou le brain a full
-             controle avec ses limitations »). Semi-auto = ce qui marche : chaque swap est approuve dans le wallet.
-             ⛔ Full AiFi N EST PAS ARME ET NE PEUT PAS L ETRE ICI : rien dans cette app ne signe a la place de la personne (aucune cle,
-             aucune permission de depense). Le switch montre les LIMITES qu il respectera ; son bouton d armement est desactive et le dit. -->
-        <div class="bcCote bcMode" role="tablist" aria-label="Who signs">
-          <button type="button" role="tab" data-mode="semi" aria-selected="true">Semi-auto</button>
-          <button type="button" role="tab" data-mode="full" aria-selected="false">Full AiFi</button>
+        <!-- QUI LANCE UN TRADE. 2026-10-04 (Phil, 2e retour) : « change le nom : Manual et AiFi » ; la limite « par jour » n avait pas de sens.
+             AiFi EXISTE maintenant, dans ce qu une app sans cle peut faire honnetement : LE CERVEAU PROPOSE SEUL (sur un changement
+             d humeur que la personne a coche), dans un montant par trade et un budget total, jusqu a une heure d arret ; CHAQUE trade
+             reste confirme dans le wallet. ⛔ Rien ne signe a la place de la personne : « full control » sans confirmation demande une
+             permission de depense cote wallet (un contrat) — pas construit. Les deux declencheurs sont DECOCHES par defaut. -->
+        <div class="bcCote bcMode" role="tablist" aria-label="Who starts a trade">
+          <button type="button" role="tab" data-mode="semi" aria-selected="true">Manual</button>
+          <button type="button" role="tab" data-mode="full" aria-selected="false">AiFi</button>
         </div>
         <div class="bcLimites" id="bcLimites" hidden>
-          <label><span>Max per trade</span><input id="bcLimTrade" inputmode="decimal" value="0.002" aria-label="Max per trade, in ETH"><i>ETH</i></label>
-          <label><span>Max per day</span><input id="bcLimJour" inputmode="decimal" value="0.01" aria-label="Max per day, in ETH"><i>ETH</i></label>
+          <label class="bcCoche"><input type="checkbox" id="bcAiAchat"><span>Buy when it gets excited</span></label>
+          <label class="bcCoche"><input type="checkbox" id="bcAiVente"><span>Sell a quarter when it gets worried</span></label>
+          <label><span>Per trade</span><input id="bcLimTrade" inputmode="decimal" value="0.002" aria-label="Amount per trade, in ETH"><i>ETH</i></label>
+          <label><span>Budget</span><input id="bcLimBudget" inputmode="decimal" value="0.01" aria-label="Total budget, in ETH"><i>ETH</i></label>
           <label><span>Stops after</span><input id="bcLimDuree" inputmode="numeric" value="24" aria-label="Stops after, in hours"><i>h</i></label>
-          <button type="button" class="bouton sec" id="bcArmer" disabled aria-disabled="true">Arm Full AiFi — not available yet</button>
-          <p class="note" style="margin:6px 0 0">Needs a spending permission from your wallet. Until then, every swap is yours to approve.</p>
+          <button type="button" class="bouton" id="bcArmer">Start AiFi</button>
+          <p class="note" id="bcAiEtat" style="margin:6px 0 0">Its brain proposes; you confirm each trade in your wallet.</p>
         </div>
         <form class="bcTicket" id="bcTicket" autocomplete="off">
           <div class="bcCote" role="tablist" aria-label="Buy or sell the block shown">
@@ -2644,7 +2653,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-panneau-market-skins-aifi" hidden>Build <code>20261004-panneau-market-skins-aifi</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-aifi-propose-skin-random" hidden>Build <code>20261004-aifi-propose-skin-random</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21534,7 +21543,8 @@ function bcResoudre(ref) {
   if (/^0x[0-9a-fA-F]{40}$/.test(r)) {
     /* une adresse garde son adresse ; on lui donne seulement son NOM : le registre d abord, sinon l index du Market, sinon l adresse abregee */
     const parAdr = registre.find((d) => String(d.adr).toLowerCase() === r.toLowerCase()), mk = marcheParAdr.get(r.toLowerCase());
-    return { ok: true, adr: r.toLowerCase(), sym: (parAdr && parAdr.symbole) || (mk && mk.sym) || court(r) };
+    const luA = bcNoms.get(r.toLowerCase());
+    return { ok: true, adr: r.toLowerCase(), sym: (parAdr && parAdr.symbole) || (mk && mk.sym) || (luA && luA.sym) || court(r) };
   }
   const haut = r.toUpperCase();
   const reg = registre.find((d) => String(d.symbole).toUpperCase() === haut);
@@ -21923,8 +21933,12 @@ function bcPeindreTicket(a, sym, mk, snap) {
     else r.append(bcEl('span', { cls: 'note', text: !compte ? 'Connect your wallet to sell a share of what you hold.' : so && so.block === 0n ? 'This wallet holds none of it.' : 'Reading what you hold…' }));
   }
   const g = tacheAutorisee('trade_tblock', snap || {}), humeur = (snap && snap.humeur) || 'unread';
-  const t = g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
-  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok ? '' : ' wKo'); }
+  /* ⛔ MESURE (prod, onglet en arriere-plan) : avant le PREMIER battement il n y a aucun instantane, et le ticket affichait en rouge
+   *   « refuses: its market must be read… » — un refus prononce par un cerveau qui n a pas encore battu. Sans battement, on dit
+   *   qu il se reveille ; le refus n est annonce que par un cerveau qui a juge. (La porte, elle, reste fermee tant qu il n a pas battu.) */
+  const aBattu = !!snap && snap.tick !== null && snap.tick !== undefined;
+  const t = !aBattu ? 'Brain: waking up…' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
+  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu ? '' : ' wKo'); }
   /* ── ce que la personne DETIENT : relu toutes les 20 s tant que la vue Trade est ouverte, et apres chaque transaction confirmee ── */
   const z = $('#bcPosition');
   if (compte && $('#bcPop').open && $('#bc-trade').classList.contains('on') && (!so || Date.now() - bc.soldesLus > 20000)) void bcLireSoldes(a);
@@ -22003,6 +22017,8 @@ async function bcChargerIndex() {
       /* ⛔ REGLE DU DEPOT (test-puces-paire-calculees, qui a attrape cet oubli) : ce qui se CALCULE depuis l index doit etre REPEINT
        *   a son arrivee — les paires de Create comprises, sinon « Live blocks » reste calcule sur une Map vide. */
       try { peindrePaires(); } catch (_) { /* l ecran Create se repeindra a son ouverture */ }
+      /* … et l echelle du Market, qui somme la meme Map (test-echelle-marche : 2e oubli du meme motif attrape par la serie) */
+      try { peindreEchelle(); } catch (_) { /* l onglet Market se repeindra a son ouverture */ }
     } else bc.indexLu = Date.now() - 45000; /* rien de lu : nouvel essai dans 15 s, pas dans une minute */
   } catch (_) { bc.indexLu = Date.now() - 45000; } finally { bc.indexEnVol = false; }
 }
@@ -22042,9 +22058,21 @@ const BC_SKINS = Object.freeze([
   { id: 'chrome', nom: 'Chrome', anneau: 'conic-gradient(from 210deg,#f5f7fa,#8e9eab,#ffffff,#5b6770,#f5f7fa)', lueur: 'rgb(245 247 250 / .4)', payant: true },
   { id: 'circuit', nom: 'Circuit', anneau: 'repeating-conic-gradient(from 0deg,#00e5ff 0 6deg,#00323a 6deg 12deg)', lueur: 'rgb(0 229 255 / .5)', payant: true },
 ]);
+/* UNE SKIN AU HASARD (Phil : « un bouton aleatoire qui combine le perimetre et l interieur… random a new skin ») : un anneau a trois
+ * teintes tirees au sort + une teinte pour l INTERIEUR (le visage et le cube, par un filtre de couleur). Chaque appui en tire une
+ * autre. ⛔ `Math.random` : c est un habillage a l essai, rien de garde ni de vendu — aucune rarete n est promise. */
+function bcSkinAleatoire() {
+  const t = () => Math.floor(Math.random() * 360), [h1, h2, h3] = [t(), t(), t()];
+  const c = (h, l) => 'hsl(' + h + ' 90% ' + l + '%)';
+  return { id: 'random', nom: 'Random ' + h1 + '·' + h2 + '·' + h3, payant: true,
+    anneau: 'conic-gradient(from ' + t() + 'deg,' + c(h1, 62) + ',' + c(h2, 38) + ',' + c(h3, 70) + ',' + c(h2, 30) + ',' + c(h1, 62) + ')',
+    lueur: 'hsl(' + h1 + ' 90% 60% / .55)', filtre: 'sepia(1) saturate(4) hue-rotate(' + h3 + 'deg)' };
+}
 function bcPorterSkin(id) {
-  const s = BC_SKINS.find((x) => x.id === id) || BC_SKINS[0];
+  const s = (id && typeof id === 'object') ? id : (BC_SKINS.find((x) => x.id === id) || BC_SKINS[0]);
   bc.skin = s.id;
+  /* l INTERIEUR : un filtre de couleur sur le visage et le cube du panneau (jamais sur ceux de l onglet Brain) ; '' = tel quel */
+  for (const e of [$('#bcReseau'), $('#bcAvatarIn'), document.querySelector('#bcSkinFace svg')]) if (e) e.style.filter = s.filtre || '';
   /* la skin habille le PERIMETRE : l anneau et la lueur sont poses sur le panneau, et tout ce qui cercle le block les suit */
   for (const cadre of [$('#bcPanneau'), $('#bcLanceur')]) {
     if (!cadre) continue;
@@ -22069,8 +22097,100 @@ function bcPeindreBoutique() {
     b.addEventListener('click', () => bcPorterSkin(s.id));
     z.append(b);
   }
+  /* la tuile « Random » : chaque appui tire une nouvelle combinaison contour + interieur et la fait porter */
+  const va = bcEl('div', { cls: 'bcVignette', text: '🎲' }); va.style.setProperty('--bcAnneau', 'conic-gradient(#ff512f,#f6d365,#b4ec51,#5bc0eb,#a18cd1,#ff512f)');
+  const ra = bcEl('button', { type: 'button', cls: 'bcTuile', 'data-skin': 'random', 'aria-pressed': String(bc.skin === 'random') }, [va, bcEl('b', { text: 'Random' }), bcEl('span', { text: 'a new one each tap' })]);
+  ra.addEventListener('click', () => bcPorterSkin(bcSkinAleatoire()));
+  z.append(ra);
   const p = bcEl('button', { type: 'button', cls: 'bcTuile', disabled: '', 'aria-disabled': 'true' }, [bcEl('div', { cls: 'bcVignette', text: '+' }), bcEl('b', { text: 'Yours' }), bcEl('span', { text: 'propose a skin · soon' })]);
   z.append(p);
+}
+/* ── AiFi : LE CERVEAU PROPOSE SEUL, DANS DES LIMITES ; LE WALLET CONFIRME CHAQUE TRADE (2026-10-04) ────────────────────────────
+ * Ce que c est : quand l humeur du block CHANGE vers un etat que la personne a coche (excited -> achat ; worried -> vente d un quart
+ *   de ce qu elle detient), le panneau ouvre de lui-meme la carte de l echange — la MEME carte qu une commande ecrite ou qu un agent :
+ *   porte du cerveau, plan du serveur, puis le wallet. La personne prepare et signe, ou ecarte.
+ * Les limites : un montant par achat (ETH), un BUDGET total d achats proposes (pas « par jour » : la duree est deja bornee par
+ *   l heure d arret), et une heure d arret. Budget atteint ou heure passee = AiFi s arrete et le dit.
+ * ⛔ Declenche sur un FRONT (l humeur vient de changer, vue sur un vrai battement), une fois par changement — jamais en boucle.
+ * ⛔ Ne vaut que pour le block sur lequel il a ete demarre, et tant que le panneau est ouvert (le cerveau ne bat que dans cette page).
+ * ⛔ Le cerveau est 128 neurones a regles fixes, pas un conseiller : son humeur n est PAS un signal de marche eprouve. Rien ici ne
+ *   promet un gain ; rien n est signe sans la personne. NON MESURE : un cycle complet avec un vrai wallet. */
+const BC_CLE_AIFI = 'tblock.panel.aifi';
+function bcAifiSauver() { try { if (bc.aifi) localStorage.setItem(BC_CLE_AIFI, JSON.stringify(bc.aifi)); else localStorage.removeItem(BC_CLE_AIFI); } catch (_) { /* stockage prive : AiFi vit le temps de la page */ } }
+function bcAifiCharger() {
+  try {
+    const j = JSON.parse(localStorage.getItem(BC_CLE_AIFI) || 'null');
+    if (j && /^0x[0-9a-f]{40}$/.test(String(j.block)) && Number(j.jusqua) > Date.now() && /^\d+$/.test(String(j.parTrade)) && /^\d+$/.test(String(j.budget)) && /^\d+$/.test(String(j.propose))) bc.aifi = { ...j, phase: null };
+  } catch (_) { bc.aifi = null; }
+}
+function bcAifiArreter(pourquoi) {
+  if (!bc.aifi) return;
+  bc.aifi = null; bcAifiSauver();
+  if (pourquoi) bcMessage('AiFi', '', pourquoi);
+  bcAifiPeindre();
+}
+function bcAifiPeindre() {
+  const s = bc.aifi, b = $('#bcArmer'), e = $('#bcAiEtat');
+  for (const id of ['#bcAiAchat', '#bcAiVente', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
+  b.textContent = s ? 'Stop AiFi' : 'Start AiFi';
+  const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'AiFi · on' : 'AiFi';
+  if (!s) { if (!e.classList.contains('wKo')) e.textContent = 'Its brain proposes; you confirm each trade in your wallet.'; return; }
+  const h = Math.max(0, (Number(s.jusqua) - Date.now()) / 3600000);
+  e.className = 'note';
+  /* le budget ne concerne que les ACHATS : sans la regle d achat, on ne l affiche pas (« 0 of 0 ETH » ne voulait rien dire) */
+  e.textContent = 'On for ' + (bcResoudre(s.block).sym || court(s.block)) + (s.achat ? ' · proposed ' + bcUnites(s.propose, 18) + ' of ' + bcUnites(s.budget, 18) + ' ETH' : '')
+    + ' · ' + (h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(h * 60)) + ' min') + ' left.';
+}
+function bcAifiDemarrer() {
+  const e = $('#bcAiEtat'), dire = (t) => { e.className = 'note wKo'; e.textContent = t; };
+  if (!brainAdr) return dire('Pick a block first.');
+  const achat = $('#bcAiAchat').checked, vente = $('#bcAiVente').checked;
+  if (!achat && !vente) return dire('Tick at least one rule: when to buy, or when to sell.');
+  const lire = (sel) => { const v = $(sel).value.trim(); return /^\d+([.,]\d+)?$/.test(v) ? enUnitesBrutes(v.replace(',', '.'), 18) : null; };
+  const parTrade = lire('#bcLimTrade'), budget = lire('#bcLimBudget'), heures = Number($('#bcLimDuree').value.trim());
+  if (achat && (parTrade === null || !(parTrade > 0n))) return dire('“Per trade” must be an amount in ETH above zero.');
+  if (achat && (budget === null || budget < parTrade)) return dire('The budget must be at least one trade.');
+  if (!Number.isInteger(heures) || heures < 1 || heures > 168) return dire('“Stops after” must be a whole number of hours, from 1 to 168.');
+  const snap = window.__TB_BRAIN_SNAPSHOT__, a = String(brainAdr).toLowerCase();
+  bc.aifi = { block: a, achat, vente, parTrade: String(parTrade || 0n), budget: String(budget || 0n), propose: '0', jusqua: Date.now() + heures * 3600000,
+    /* l humeur DE DEPART est notee : AiFi ne reagit qu a un changement survenu APRES son demarrage */
+    phase: snap && String(snap.address || '').toLowerCase() === a && snap.tick !== null && snap.tick !== undefined ? String(snap.phase || '') : null };
+  e.className = 'note';
+  bcAifiSauver(); bcAifiPeindre();
+  bcMessage('AiFi', '', 'Started on ' + (bcResoudre(a).sym || court(a)) + '. Its brain will open a trade card here when its mood changes; you confirm each one.');
+}
+/** Appele a chaque peinture du panneau : un changement d humeur du block d AiFi ouvre (au plus) une proposition. */
+function bcAifiBattre(a, snap) {
+  const s = bc.aifi;
+  if (!s) return;
+  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — AiFi stopped.'); return; }
+  if (s.block !== a || !snap || snap.tick === null || snap.tick === undefined) return;
+  const phase = String(snap.phase || ''), avant = s.phase;
+  if (avant === phase) return;
+  s.phase = phase;
+  if (avant === null) return; /* premiere humeur vue : un point de depart, pas un changement */
+  const jeton = { ok: true, adr: a, sym: bcResoudre(a).sym || court(a) };
+  if (s.achat && phase === 'EXCITE') {
+    const reste = BigInt(s.budget) - BigInt(s.propose), m = BigInt(s.parTrade);
+    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — AiFi stopped.'); return; }
+    s.propose = (BigInt(s.propose) + m).toString(); bcAifiSauver(); bcAifiPeindre();
+    bcOuvrirPop();
+    void bcProposerSwap('Its brain · AiFi', 'agent', { de: { ok: true, adr: ETH_ADR.toLowerCase(), sym: 'ETH' }, vers: jeton, montant: m.toString() }, null);
+    return;
+  }
+  if (s.vente && phase === 'INQUIET') {
+    if (!compte) { bcMessage('AiFi', '', 'It got worried, but no wallet is connected: nothing was proposed.'); return; }
+    const cot = bcCotation(a);
+    void (async () => {
+      let solde = null;
+      try { solde = await bcSolde(a, compte); } catch (_) { solde = null; }
+      if (solde === null) { bcMessage('AiFi', '', 'It got worried, but your balance could not be read: nothing was proposed.'); return; }
+      if (!(solde / 4n > 0n)) { bcMessage('AiFi', '', 'It got worried, but this wallet holds none of it: nothing to sell.'); return; }
+      if (!cot || !cot.ok) { bcMessage('AiFi', '', 'It got worried, but its market has not been read: nothing was proposed.'); return; }
+      bcOuvrirPop();
+      void bcProposerSwap('Its brain · AiFi', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null);
+    })();
+  }
 }
 /** Peint le panneau depuis LE snapshot du cerveau de l app (appele a chaque battement par publierSnapshotBrain). */
 function bcPeindre(snap) {
@@ -22105,6 +22225,7 @@ function bcPeindre(snap) {
     if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
   }
   bcPeindreTicket(a, sym, mk, snap);
+  if (bc.aifi) { bcAifiBattre(a, snap); bcAifiPeindre(); }
   $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
   $('#bcHumeur').textContent = snap.phrase || '';
   $('#bcPhase').textContent = snap.humeur || '—';
@@ -22218,12 +22339,15 @@ $('#bcSkinAcheter').addEventListener('click', () => {
   bcEtape(m, 'You can keep trying it on here.');
   bcVue('chat');
 });
-/* qui signe : Semi-auto (chaque swap approuve — ce qui marche) ou Full AiFi (limites montrees, armement indisponible) */
+/* qui LANCE un trade : Manual (la personne ecrit ou touche) ou AiFi (le cerveau propose dans ses limites). Le wallet confirme toujours. */
 for (const b of document.querySelectorAll('#bcPanneau [data-mode]')) b.addEventListener('click', () => {
   const full = b.getAttribute('data-mode') === 'full';
   for (const x of document.querySelectorAll('#bcPanneau [data-mode]')) x.setAttribute('aria-selected', String(x === b));
   $('#bcLimites').hidden = !full;
 });
+$('#bcArmer').addEventListener('click', () => { if (bc.aifi) bcAifiArreter('AiFi stopped.'); else bcAifiDemarrer(); });
+bcAifiCharger();
+bcAifiPeindre();
 $('#bcLier').addEventListener('click', async () => { await bcOuvrirSession(null); $('#bcDialogue').showModal(); });
 $('#bcLierFermer').addEventListener('click', () => $('#bcDialogue').close());
 $('#bcLierCopier').addEventListener('click', async () => {
