@@ -154,11 +154,39 @@ ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) &
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
   && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
   'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; les skins du catalogue ne retouchent pas l interieur');
-ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /ra\.addEventListener\('click', \(\) => bcPorterSkin\(bcSkinAleatoire\(\)\)\);/.test(bcSrc) && /filtre: 'sepia\(1\) saturate\(4\) hue-rotate\(' \+ h3 \+ 'deg\)'/.test(bcSrc),
-  'C2 « Random » tire a chaque appui une skin qui combine un contour et une teinte d interieur');
-const achat = html.slice(html.indexOf("$('#bcSkinAcheter').addEventListener('click'"), html.indexOf("$('#bcSkinAcheter').addEventListener('click'") + 700);
-ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /no price is set, so nothing is asked from your wallet/.test(achat) && !/bcSigner|envoyerDepuisWallet|fetch\(|\$\d|USDC/.test(achat),
-  'C2 « Buy » sur une skin payante REPOND, et tant qu aucun prix n est fixe il ne construit aucune transaction et ne cite aucun montant');
+ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /bcPorterSkin\(bcSkinAleatoire\(\)\); \}\);/.test(bcSrc) && /return bcSkinDepuisRecette\(\{ id: 'random', angle: t\(\), h: \[h1, h2, h3\], cube: t\(\), noyau: t\(\) \}\);/.test(bcSrc),
+  'C2 « Random » tire a chaque appui une RECETTE d entiers (angle, 3 teintes d anneau, aretes, noyau) — la skin en est derivee');
+/* quatre variables par skin : anneau, lueur, ARETES du cube, NOYAU aux 128 neurones */
+const catalogue = (bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0];
+ok((catalogue.match(/cube: \d+, noyau: \d+, payant: true/g) || []).length === 7 && /cube: null, noyau: null, payant: false/.test(catalogue),
+  'C2 chaque skin payante du catalogue porte une teinte d ARETES et une teinte de NOYAU ; « Original » n en porte pas');
+ok(/const thCube = cible && Number\.isFinite\(cible\.teinteCube\) \? cible\.teinteCube : thApp;/.test(html) && /const th = cible && Number\.isFinite\(cible\.teinteNoyau\) \? cible\.teinteNoyau : thApp;/.test(html)
+  && (html.match(/traitCube\(ctx, f, thCube, (true|false)\)/g) || []).length === 2, 'C2 le dessin du cube prend la teinte des aretes et celle du noyau SEPAREMENT ; sans cible, c est la teinte de l app (rendu d origine inchange)');
+/* les skins du panneau et celles de skins.js sont LES MEMES (un id vendu que le panneau ne sait pas peindre, ou l inverse, casserait l achat) */
+const SK = await imp('skins.js');
+const idsPanneau = [...catalogue.matchAll(/\{ id: '([a-z]+)', nom: '[^']+', anneau: '[^']*', lueur: '[^']*', cube: \d+, noyau: \d+, payant: true \}/g)].map((m) => m[1]);
+ok(idsPanneau.length === 7 && JSON.stringify([...idsPanneau].sort()) === JSON.stringify([...SK.SKINS_CATALOGUE].sort()), 'C2 les 7 skins payantes du panneau sont exactement le catalogue de skins.js (' + idsPanneau.join(', ') + ')');
+/* l achat */
+const achat = bcSrc.slice(bcSrc.indexOf("const BC_CLE_SKIN = 'tblock.panel.skinEnAttente';"));
+ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /\$\('#bcSkinAcheter'\)\.addEventListener\('click', \(\) => void bcAcheterSkin\(\)\);/.test(html), 'C2 « Buy » lance bcAcheterSkin');
+ok(/prix\.prixUsdc !== SKIN_PRIX_USDC\.toString\(\) \|\| String\(prix\.usdc\)\.toLowerCase\(\) !== usdc \|\| String\(prix\.beneficiaire\)\.toLowerCase\(\) !== beneficiaire/.test(achat),
+  'C2 achat : le prix, le contrat USDC et le beneficiaire du SERVEUR doivent etre ceux de l APP — deux sources d accord, sinon rien n est demande');
+ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to ' \+ beneficiaire \+ ' \(TokenizedBlock\)\./.test(achat),
+  'C2 achat : l argent va au wallet des frais du depot, affiche EN ENTIER avant la signature');
+ok(/if \(solde < SKIN_PRIX_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_PRIX_USDC)') < achat.indexOf('await bcSigner(m, [appel])'), 'C2 achat : le solde USDC est relu AVANT de signer');
+ok(/const r = await bcSigner\(m, \[appel\]\);/.test(achat) && !/approve|0x095ea7b3/.test(achat), 'C2 achat : UN seul appel signe (le transfert + memo), aucune approbation');
+ok(/localStorage\.setItem\(BC_CLE_SKIN, JSON\.stringify\(\{ tx: r\.hash, block: a, skin: recette \}\)\);/.test(achat) && /if \(r && r\.etat === 'REFUSE'\)/.test(achat) && /bcBoutons\(m, \[\['Record it now', \(\) => bcEnregistrerSkin\(m\), true\]\]\);/.test(achat),
+  'C2 achat : un paiement fait mais pas encore enregistre est GARDE et se reenregistre (NON_LU se retente ; seul un REFUSE arrete)');
+ok(/if \(CHAINE !== 8453\) \{ bcEtape\(m, 'Skins are bought on Base mainnet only\.', 'non'\); return; \}/.test(achat), 'C2 achat : Base mainnet seulement');
+/* ce qu il ressent, en mots : la fonction est extraite et executee */
+const srcRes = (bcSrc.match(/function bcRessenti\(snap\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
+const ressenti = srcRes ? new Function(srcRes + '; return bcRessenti;')() : null;
+const snapR = (actifs, memoire, g, d, v) => ({ spikes: { actifs, neurones: 128 }, memoire, hz: { gauche: g, droite: d, vitesse: v } });
+ok(!!ressenti && ressenti(snapR(0, 0, 50, 50, 0)).join('|') === 'silent|blank|steady|resting' && ressenti(snapR(25, 0.17, 62, 62, 0.625)).join('|') === 'lively|recalling|steady|cruising'
+  && ressenti(snapR(80, 0.6, 20, 60, 0.9)).join('|') === 'racing|saturated|pulled right|rushing' && ressenti(snapR(10, 0.3, 60, 50, 0.3)).join('|') === 'stirring|absorbed|leaning left|strolling',
+  'C2 « Feels » : quatre grandeurs de l instantane (neurones actifs, memoire, ecart des ailes, vitesse) transcrites en mots — memes chiffres, memes mots');
+ok(!!ressenti && ressenti({}).length === 0 && ressenti({ spikes: { actifs: 3, neurones: 0 }, hz: { gauche: 0, droite: 0 } }).length === 0, 'C2 … une grandeur non lue ne donne AUCUN mot (jamais un mot par defaut)');
+ok(!/Math\.random|Date\.now|fetch\(/.test(srcRes) && /const ressenti = snap\.tick === null \|\| snap\.tick === undefined \? \[\] : bcRessenti\(snap\);/.test(bcSrc), 'C2 … deterministe (ni hasard, ni horloge, ni reseau), et rien n est dit avant le premier battement');
 /* le frais affiche : celui du plan, le bon */
 ok(/const fMarche = rs\.fraisParHook === true && rs\.fraisMarcheBps !== undefined && rs\.fraisMarcheBps !== null \? Number\(rs\.fraisMarcheBps\) : null;/.test(bcSrc)
   && /'Market fee: ' \+ \(fMarche \/ 100\) \+ ' %, taken by this block’s own market inside the swap\.'/.test(bcSrc) && !/'Fee: ' \+ \(Number\(rs\.fraisBps\) \/ 100\)/.test(bcSrc),
@@ -234,6 +262,14 @@ ok(/if \(r\.etat === 'LUE' \|\| r\.etat === 'NON_TROUVEE'\) \{/.test(lm) && /if 
   'D … seuls les faits mesures sont gardes (30 s, 400 blocks) ; un NON_LUE n est jamais cache');
 ok(/vieDuBlock\(\{ rpc: rpcRails, stateView: V4_ADRESSES\[8453\]\.stateView, jeton: token, clesExactes: await clesRails\(token\) \}\)/.test(lm), 'D … le MEME lecteur que l app (vieDuBlock), sur les noeuds des rails');
 ok(/if \(chemin\.startsWith\('\/api\/marche\/'\)\) \{/.test(srv) && /if \(!\/\^0x\[0-9a-f\]\{40\}\$\/\.test\(token\)\) \{ rendreM\(400/.test(srv), 'D la route refuse tout ce qui n est pas une adresse entiere');
+/* /api/skins : l index des achats (la verification elle-meme est testee dans test-skins-20261004 et prouvee sur fork) */
+const sk = srv.slice(srv.indexOf('async function enregistrerAchatSkin({ tx, block, skin }) {'), srv.indexOf('const skinsDuBlock = '));
+ok(/verifierAchatSkin\(\{ tx: t, recu, usdc: USDC_BASE, beneficiaire: FEE_WALLET, block: b, recette: vr\.recette \}\)/.test(sk), 'D /api/skins/achat : verifie sur la transaction et son recu, contre l USDC et le wallet des frais DU DEPOT (jamais ceux du client)');
+ok(/if \(!v\.ok\) return \{ ok: false, etat: v\.etat, pourquoi: v\.pourquoi \};/.test(sk) && sk.indexOf('if (!v.ok) return') < sk.indexOf('skinsAchats.set(h, achat)'), 'D … rien n est enregistre sans verification reussie ; NON_LU est rendu tel quel (a reessayer)');
+ok(/this transaction already paid for another skin or another block/.test(sk) && /etat: 'ENREGISTRE', achat: deja, deja: true/.test(sk), 'D … idempotent par transaction : la meme rend la meme ligne, et ne s enregistre pas pour autre chose');
+ok(/if \(skinsEnVol >= 3\)/.test(sk) && /if \(skinsAchats\.size >= 2000\)/.test(sk) && /\.slice\(-2000\)/.test(srv), 'D … bornes : 3 verifications en vol, 2 000 lignes');
+ok(/validerRecette\(l\.recette\)\.ok\) skinsAchats\.set\(l\.tx, l\);/.test(srv), 'D … au redemarrage, seules des lignes bien formees sont rechargees');
+ok(/prixUsdc: SKIN_PRIX_USDC\.toString\(\), decimales: 6, usdc: USDC_BASE\.toLowerCase\(\), beneficiaire: FEE_WALLET\.toLowerCase\(\)/.test(srv) && /^  'skins\.js',$/m.test(srv), 'D /api/skins/prix rend le prix, l USDC et le beneficiaire du depot ; skins.js est servi a l app');
 /* /api/activite : qui bouge ce block */
 const la = srv.slice(srv.indexOf('async function lireActiviteServeur(token) {'), srv.indexOf('async function lireActiviteServeur(token) {') + 4200);
 ok(/const TOPIC_TRANSFER_SRV = topicSrv\('Transfer\(address,address,uint256\)'\);/.test(srv), 'D /api/activite : le topic Transfer est CALCULE (keccak de la signature), jamais recopie de memoire');

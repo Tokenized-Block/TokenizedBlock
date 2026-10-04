@@ -110,7 +110,8 @@ import { partsHolders } from './parts-holders.js';
 import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
-import { FEE_WALLET } from './frais-creation.js';
+import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
+import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
 /* ══ RASTERISEUR PNG, CHARGE A LA DEMANDE ══════════════════════════════════════════════════════════
@@ -1409,6 +1410,59 @@ async function lireActiviteServeur(token) {
   return p;
 }
 
+/* ── LES SKINS ACHETEES : UN INDEX DE TRANSACTIONS (2026-10-04, skins.js) ─────────────────────────────────────────────────────
+ * L achat est UNE transaction sur la chaine : transfer(wallet des frais, 1 USDC) + memo `tb-skin:1:<block>:<recette>`. Le serveur ne
+ *   detient rien et ne decide rien : il VERIFIE la transaction et son recu (verifierAchatSkin) puis garde une ligne
+ *   { tx, bloc, payeur, block, recette } — un index, que n importe qui peut refaire en relisant la chaine.
+ *   GET  /api/skins/prix            le prix, le contrat USDC, le beneficiaire (ce que le wallet va signer)
+ *   GET  /api/skins/<block>         les skins achetees pour ce block (les plus recentes d abord)
+ *   POST /api/skins/achat           { tx, block, skin } -> verifie sur la chaine, puis enregistre (idempotent par transaction)
+ * ⛔ Une transaction pas encore lisible (noeud en retard) rend NON_LU : le client reessaie ; ce n est jamais un refus.
+ * ⛔ BORNES : 2 000 lignes en memoire et sur le volume, 3 verifications en vol ; sans volume, l index vit le temps du processus
+ *   (la chaine, elle, garde tout : une ligne perdue se reenregistre avec le meme hash). */
+const FICHIER_SKINS = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'skins-achetees.json') : null;
+const skinsAchats = new Map();
+let skinsEnVol = 0;
+(function relireSkins() {
+  if (!FICHIER_SKINS || !existsSync(FICHIER_SKINS)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_SKINS, 'utf8'));
+    for (const l of (Array.isArray(brut) ? brut : [])) {
+      /* ⛔ on ne recharge que des lignes BIEN FORMEES : un fichier abime ne doit pas inventer un achat */
+      if (l && /^0x[0-9a-f]{64}$/.test(String(l.tx)) && /^0x[0-9a-f]{40}$/.test(String(l.payeur)) && /^0x[0-9a-f]{40}$/.test(String(l.block)) && validerRecette(l.recette).ok) skinsAchats.set(l.tx, l);
+    }
+  } catch (_) { /* fichier illisible : l index repart vide, la chaine garde les achats */ }
+})();
+function ecrireSkins() {
+  if (!FICHIER_SKINS) return;
+  try { writeFileSync(FICHIER_SKINS + '.tmp', JSON.stringify([...skinsAchats.values()].slice(-2000))); renameSync(FICHIER_SKINS + '.tmp', FICHIER_SKINS); }
+  catch (_) { /* une ecriture ratee ne casse pas la reponse : la ligne est en memoire, et sur la chaine */ }
+}
+async function enregistrerAchatSkin({ tx, block, skin }) {
+  const h = String(tx || '').toLowerCase(), b = String(block || '').toLowerCase(), vr = validerRecette(skin);
+  if (!/^0x[0-9a-f]{64}$/.test(h)) return { ok: false, etat: 'REFUSE', pourquoi: 'tx must be a whole transaction hash' };
+  if (!/^0x[0-9a-f]{40}$/.test(b)) return { ok: false, etat: 'REFUSE', pourquoi: 'block must be a whole address' };
+  if (!vr.ok) return { ok: false, etat: 'REFUSE', pourquoi: vr.pourquoi };
+  const deja = skinsAchats.get(h);
+  /* idempotent : la meme transaction rend la meme ligne — et ne peut PAS etre reenregistree pour un autre block ou une autre skin */
+  if (deja) return deja.block === b && JSON.stringify(deja.recette) === JSON.stringify(vr.recette) ? { ok: true, etat: 'ENREGISTRE', achat: deja, deja: true }
+    : { ok: false, etat: 'REFUSE', pourquoi: 'this transaction already paid for another skin or another block' };
+  if (skinsEnVol >= 3) return { ok: false, etat: 'NON_LU', occupe: true, pourquoi: 'the skin registry is busy — try again in a moment' };
+  skinsEnVol += 1;
+  try {
+    let t = null, recu = null;
+    try { [t, recu] = await Promise.all([rpcActivite('eth_getTransactionByHash', [h]), rpcActivite('eth_getTransactionReceipt', [h])]); } catch (_) { t = null; recu = null; }
+    const v = verifierAchatSkin({ tx: t, recu, usdc: USDC_BASE, beneficiaire: FEE_WALLET, block: b, recette: vr.recette });
+    if (!v.ok) return { ok: false, etat: v.etat, pourquoi: v.pourquoi };
+    const achat = { tx: h, bloc: v.bloc, payeur: v.payeur, block: b, recette: vr.recette, t: new Date().toISOString() };
+    if (skinsAchats.size >= 2000) skinsAchats.delete(skinsAchats.keys().next().value);
+    skinsAchats.set(h, achat); ecrireSkins();
+    return { ok: true, etat: 'ENREGISTRE', achat };
+  } finally { skinsEnVol -= 1; }
+}
+const skinsDuBlock = (b) => [...skinsAchats.values()].filter((l) => l.block === b).reverse().slice(0, 20);
+
 /* ══ LA NAISSANCE PAR UN AGENT + LE MCP (2026-10-04) — naissance-api.js, mcp-tblock.js, caution-createur.js ════════════════════
  * ⛔ RIEN N EST SIGNE ICI : des appels NON SIGNES, simules avant d etre rendus. Le wallet de l agent signe.
  * ⛔ MEME BUDGET QUE LES RAILS (une naissance planifiee = ~20 lectures + une simulation, sur les noeuds de tout le site). */
@@ -2484,6 +2538,7 @@ const SERVIS = [
   'caution-createur.js',
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
+  'skins.js',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
@@ -3364,6 +3419,30 @@ createServer((req, res) => {
     return;
   }
 
+  /* les skins : le prix, celles d un block, et l enregistrement d un achat verifie sur la chaine (skins.js) */
+  if (chemin === '/api/skins/prix' || chemin === '/api/skins/achat' || chemin.startsWith('/api/skins/')) {
+    const rendreS = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (chemin === '/api/skins/achat') {
+      if (req.method !== 'POST') { rendreS(405, { ok: false, pourquoi: 'POST only' }); return; }
+      let brutS = '', tropS = false;
+      req.on('data', (c) => { if (tropS) return; brutS += c; if (brutS.length > 2048) { tropS = true; rendreS(413, { ok: false, pourquoi: 'request too large' }); req.destroy(); } });
+      req.on('end', () => {
+        if (tropS) return;
+        let j;
+        try { j = JSON.parse(brutS || '{}'); } catch { rendreS(400, { ok: false, pourquoi: 'not JSON' }); return; }
+        if (!j || typeof j !== 'object' || Array.isArray(j)) { rendreS(400, { ok: false, pourquoi: 'a JSON object is expected' }); return; }
+        enregistrerAchatSkin({ tx: j.tx, block: j.block, skin: j.skin }).then((r) => rendreS(r.occupe ? 429 : 200, r))
+          .catch((e) => rendreS(200, { ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) }));
+      });
+      return;
+    }
+    if (req.method !== 'GET') { rendreS(405, { ok: false, pourquoi: 'GET only' }); return; }
+    if (chemin === '/api/skins/prix') { rendreS(200, { ok: true, prixUsdc: SKIN_PRIX_USDC.toString(), decimales: 6, usdc: USDC_BASE.toLowerCase(), beneficiaire: FEE_WALLET.toLowerCase(), memo: 'tb-skin:1:<block>:<skin>' }); return; }
+    const blockS = chemin.slice('/api/skins/'.length).toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(blockS)) { rendreS(400, { ok: false, pourquoi: 'whole block address required' }); return; }
+    rendreS(200, { ok: true, block: blockS, achats: skinsDuBlock(blockS) });
+    return;
+  }
   /* qui bouge ce block, en direct (onglet Market du panneau) : /api/activite/0x… */
   if (chemin.startsWith('/api/activite/')) {
     const token = chemin.slice('/api/activite/'.length).toLowerCase();

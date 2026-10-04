@@ -93,13 +93,17 @@ ok(/bcOpMaj\(op, 'done', s\.hash\);/.test(bcSrc) && /bcOpMaj\(op, s\.refuse \? '
  * des echanges d AUTRES blocks et les « plus echanges du jour » sont partis (le detail est dans test-panneau-finitions-20261004). */
 ok(/fetch\('\/api\/activite\/' \+ a,/.test(bcSrc) && /id="bcActivite"/.test(html) && !/id="bcAutres"/.test(html) && !/id="bcMouvants"/.test(html) && !/liveEvts/.test(bcSrc),
   'Market : les mouvements de CE block, lus par le serveur ; plus aucune liste d autres blocks');
-ok(/const src = \$\('#bReseau'\), dst = \$\('#bcReseau'\);/.test(bcSrc) && /cx\.drawImage\(src, 0, 0\);/.test(bcSrc), 'Brain : le cube et ses connexions = le canvas de « Its wiring » RECOPIE (meme dessin), pas un second dessin');
-/* 2026-10-04 (Phil) : le bouton desactive devient un « + » qui ouvre des skins A L ESSAI. Ce qui reste interdit : un prix, un achat. */
+/* 2026-10-04 : le cube du panneau n est plus une copie d image — il est dessine par LA MEME fonction que la carte « Its wiring »
+ * (une seule implementation), sur sa toile, avec les teintes de la skin ; et cette fonction ne touche pas les positions du clic. */
+ok(/dessinerReseau\(brainDernierVu, \{ canvas: dst, teinteCube: /.test(bcSrc) && /function dessinerReseau\(vu = null, cible = null\) \{/.test(html)
+  && /if \(!cible\) bwPos = pos;/.test(html) && /if \(!cible\) bwAretes = aretes;/.test(html) && (html.match(/function dessinerReseau\(/g) || []).length === 1,
+  'Brain : le cube et ses connexions = la MEME fonction de dessin que « Its wiring » (pas une seconde), sans toucher aux positions du clic de la carte');
+/* 2026-10-04 (Phil) : le bouton desactive devient un « + » qui ouvre des skins A L ESSAI ; puis « prix 1 $ par skin » : elles s achetent. */
 const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), bcSrc.indexOf('/* ── AiFi : LE CERVEAU PROPOSE SEUL'));
 ok(/<button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique"/.test(html) && /\$\('#bcSkins'\)\.addEventListener\('click'/.test(html) && !/id="bcTaches"/.test(html),
   'Brain : la peau du block et un « + » qui ouvre les skins ; la liste des taches n y est plus');
-ok(skinsSrc.length > 500 && !/\$\d|€|\bETH\b|USDC|price|envoyerDepuisWallet|bcSigner|fetch\(|localStorage/i.test(skinsSrc.replace(/\/\*[\s\S]*?\*\//g, '')),
-  'skins : AUCUN prix, AUCUN paiement, AUCUNE signature, rien d ecrit ni de garde — on les essaie, c est tout');
+ok(skinsSrc.length > 500 && !/envoyerDepuisWallet|bcSigner|localStorage|appelAchatSkin/.test(skinsSrc.replace(/\/\*[\s\S]*?\*\//g, '')),
+  'skins : ESSAYER une skin ne signe rien, ne paie rien et ne garde rien (l achat vit ailleurs : bcAcheterSkin, teste dans test-panneau-finitions)');
 ok(/bcApi\('\/api\/panel\/cerveau', \{ s: bc\.session, cerveau: \{ block: a,/.test(bcSrc), 'cablage direct : le panneau publie l etat du cerveau (humeur, battement, taches acceptees) pour l agent');
 ok(/const mB = !h && brainMarche && brainMarche\.adr === String\(brainAdr\)\.toLowerCase\(\) \? brainMarche\.v : null;/.test(html) && /\? marcheProfil\.v : mB;/.test(html),
   'l instantane rapporte le marche dont le cerveau s est NOURRI (block hors carte) — sinon la porte refusait tout echange sur un marche lu');
