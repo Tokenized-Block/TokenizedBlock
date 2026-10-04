@@ -607,8 +607,10 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcLimites label{display:block;min-width:0;position:relative}
 .bcLimites label span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux);margin-bottom:3px}
 .bcLimites input{width:100%;box-sizing:border-box;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-weight:700;padding:8px 30px 8px 10px}
-.bcLimites label i{position:absolute;right:9px;bottom:9px;font-style:normal;font-size:11px;color:var(--doux)}
-.bcLimites .bouton,.bcLimites .note,.bcLimites .bcCoche{grid-column:1/-1}
+.bcLimites label i{position:absolute;right:9px;bottom:9px;font-style:normal;font-size:11px;color:var(--doux);max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bcLimites select{width:100%;box-sizing:border-box;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-weight:700;padding:8px 10px}
+.bcLimites select:disabled{opacity:.6}
+.bcLimites .bouton,.bcLimites .note,.bcLimites .bcCoche,.bcLimites .bcDevise{grid-column:1/-1}
 .bcLimites .bcCoche{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;-webkit-user-select:none}
 .bcLimites .bcCoche input{width:18px;height:18px;padding:0;flex:0 0 auto;accent-color:var(--accent)}
 .bcLimites .bcCoche span{margin:0;font-size:13px;text-transform:none;letter-spacing:0;color:var(--texte)}
@@ -1839,15 +1841,20 @@ details[open] > summary::before{transform:rotate(90deg)}
              permission de depense cote wallet (un contrat) — pas construit. Les deux declencheurs sont DECOCHES par defaut. -->
         <div class="bcCote bcMode" role="tablist" aria-label="Who starts a trade">
           <button type="button" role="tab" data-mode="semi" aria-selected="true">Manual</button>
-          <button type="button" role="tab" data-mode="full" aria-selected="false">AiFi</button>
+          <!-- 2026-10-04 (Phil) : « change le nom AiFi par SI — S.I pour super intelligence ». Le LIBELLE change ; ce que le mode fait
+               ne change pas, et la phrase sous le bouton continue de le dire tel qu il est (le cerveau propose, la personne confirme). -->
+          <button type="button" role="tab" data-mode="full" aria-selected="false">S.I</button>
         </div>
         <div class="bcLimites" id="bcLimites" hidden>
           <label class="bcCoche"><input type="checkbox" id="bcAiAchat"><span>Buy when it gets excited</span></label>
           <label class="bcCoche"><input type="checkbox" id="bcAiVente"><span>Sell a quarter when it gets worried</span></label>
-          <label><span>Per trade</span><input id="bcLimTrade" inputmode="decimal" value="0.002" aria-label="Amount per trade, in ETH"><i>ETH</i></label>
-          <label><span>Budget</span><input id="bcLimBudget" inputmode="decimal" value="0.01" aria-label="Total budget, in ETH"><i>ETH</i></label>
+          <!-- 2026-10-04 (Phil) : « tu peux choisir tokenized action pour le paiement comme tu as fait pour la section manual ». Les
+               MEMES choix que le ticket (bcChoixPaiement) ; le montant par trade et le budget sont dans la devise choisie. -->
+          <label class="bcDevise"><span>Pay with</span><select id="bcAiDevise" aria-label="What each buy is paid with"></select></label>
+          <label><span>Per trade</span><input id="bcLimTrade" inputmode="decimal" value="0.002" aria-label="Amount per trade"><i id="bcLimTradeU">ETH</i></label>
+          <label><span>Budget</span><input id="bcLimBudget" inputmode="decimal" value="0.01" aria-label="Total budget"><i id="bcLimBudgetU">ETH</i></label>
           <label><span>Stops after</span><input id="bcLimDuree" inputmode="numeric" value="24" aria-label="Stops after, in hours"><i>h</i></label>
-          <button type="button" class="bouton" id="bcArmer">Start AiFi</button>
+          <button type="button" class="bouton" id="bcArmer">Start S.I</button>
           <p class="note" id="bcAiEtat" style="margin:6px 0 0">Its brain proposes; you confirm each trade in your wallet.</p>
         </div>
         <form class="bcTicket" id="bcTicket" autocomplete="off">
@@ -2693,7 +2700,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-message-prix-vrai" hidden>Build <code>20261004-message-prix-vrai</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-si-devise-eth-usdc" hidden>Build <code>20261004-si-devise-eth-usdc</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22048,6 +22055,22 @@ async function bcLireSoldes(a) {
     bc.soldes = { adr: a, compte: moi, eth, usdc: u, block: b, dec: d, usdcDec: du };
   } finally { bc.soldesEnVol = false; bc.soldesLus = Date.now(); }
 }
+/** AVEC QUOI ON PEUT PAYER CE JETON ICI — une seule liste pour le ticket Buy et pour le mode S.I : [valeur, libelle].
+ *  - une ACTION : USDC d abord (sa cotation, un saut — Phil : « USDC natif sera plus simple »), puis ETH ;
+ *  - un block cote en ETH ou en USDC : ETH d abord (regle de Phil : « tout se regle en ETH »), USDC, puis les actions a pool v4
+ *    MESUREE, qui le paient en UN appel (Phil : « payer un block avec n importe quelle TStock »). Les 12 actions de la table
+ *    Aerodrome ne le peuvent pas en un trade (deux factories) : elles ne sont pas proposees ;
+ *  - un block cote dans une autre devise : cette devise seule. */
+function bcChoixPaiement(a, q) {
+  const usdc = bcResoudre('USDC'), eth = ETH_ADR.toLowerCase();
+  const standard = !q || !q.ok || q.adr === eth || (usdc.ok && q.adr === usdc.adr);
+  if (ACTIONS_PAR_ADR.has(a)) return [['USDC', 'USDC'], ['ETH', 'ETH']];
+  if (!standard) return [[q.adr, q.sym]];
+  const choix = [['ETH', 'ETH'], ['USDC', 'USDC']];
+  const v4 = bcActionsV4();
+  for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
+  return choix;
+}
 function bcPeindreTicket(a, sym, mk, snap) {
   const achat = bc.cote === 'buy', nomB = sym || 'this block', q = bcCotation(a);
   const s = $('#bcDevise');
@@ -22060,24 +22083,15 @@ function bcPeindreTicket(a, sym, mk, snap) {
     for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.setAttribute('aria-selected', String(b.getAttribute('data-cote') === bc.cote));
     $('#bcTicketLib').textContent = achat ? 'You pay' : 'You sell — in ' + nomB;
     $('#bcTicketGo').textContent = achat ? 'Review the buy of ' + nomB : 'Review the sale of ' + nomB;
-    const usdc = bcResoudre('USDC'), eth = ETH_ADR.toLowerCase();
-    const standard = !q || !q.ok || q.adr === eth || (usdc.ok && q.adr === usdc.adr);
+    const eth = ETH_ADR.toLowerCase();
     /* [valeur ecrite dans la commande, libelle] — une cotation hors ETH/USDC ne s achete et ne se vend que contre elle-meme */
     let choix;
-    /* ETH EN PREMIER partout (regle de Phil : « tout se regle en ETH ») — USDC reste propose en second */
-    /* ⛔ SAUF POUR UNE ACTION (Phil, 2026-10-04 : « swap action to USDC et inversement, pas que ETH — USDC natif sera plus simple ») :
-     *   une action est cotee en USDC, c est son chemin le plus court (un saut). USDC d abord, ETH en second. */
-    if (achat) choix = ACTIONS_PAR_ADR.has(a) ? [['USDC', 'USDC'], ['ETH', 'ETH']] : standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
+    /* l ACHAT : les choix de paiement viennent de `bcChoixPaiement` — la MEME liste que le mode S.I (une seule source) */
+    if (achat) choix = bcChoixPaiement(a, q);
     /* 2026-10-04 : une action se vend contre ETH aussi (v4 : action -> USDC -> ETH ; Aerodrome : action -> USDC -> WETH puis ETH
      *   natif) — 30/30 actions echangeables executees sur fork, frais recu par le wallet des frais a chaque fois. */
     else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat([['ETH', 'for ETH']]);
     else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
-    /* « payer un block avec n importe quelle TStock » (Phil) : les actions a pool v4 mesuree paient un block cote en ETH ou en
-     *   USDC en UN appel. Les 12 de la table Aerodrome ne le peuvent pas en un trade (deux factories) : elles ne sont pas proposees. */
-    if (achat && !ACTIONS_PAR_ADR.has(a) && standard) {
-      const v4 = bcActionsV4();
-      for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
-    }
     /* ⛔ « propose toutes les routes possibles dans le menu » (Phil) — seulement celles qui ABOUTISSENT. Mesure prod du 2026-10-04 :
      *   vendre un block contre une action cotee sur Aerodrome (IB022 > NVDAc) rend APPROBATIONS (route BLOCK>ACTION). Un block peut
      *   donc sortir vers ces actions-la : on les ajoute a la VENTE d un block. OUSD > block n a pas pu etre cote ce jour-la (noeud en
@@ -22392,8 +22406,37 @@ function bcAifiSauver() { try { if (bc.aifi) localStorage.setItem(BC_CLE_AIFI, J
 function bcAifiCharger() {
   try {
     const j = JSON.parse(localStorage.getItem(BC_CLE_AIFI) || 'null');
-    if (j && /^0x[0-9a-f]{40}$/.test(String(j.block)) && Number(j.jusqua) > Date.now() && /^\d+$/.test(String(j.parTrade)) && /^\d+$/.test(String(j.budget)) && /^\d+$/.test(String(j.propose))) bc.aifi = { ...j, phase: null };
+    if (j && /^0x[0-9a-f]{40}$/.test(String(j.block)) && Number(j.jusqua) > Date.now() && /^\d+$/.test(String(j.parTrade)) && /^\d+$/.test(String(j.budget)) && /^\d+$/.test(String(j.propose))) {
+      /* la devise de paiement : absente (etat enregistre avant le 2026-10-04) ou mal formee = ETH, comme avant */
+      const d = j.devise;
+      const devise = d && /^0x[0-9a-f]{40}$/.test(String(d.adr)) && typeof d.sym === 'string' && d.sym.length <= 12 && Number.isInteger(d.dec) && d.dec >= 0 && d.dec <= 36 ? { adr: d.adr, sym: d.sym, dec: d.dec } : BC_AIFI_ETH();
+      bc.aifi = { ...j, devise, phase: null };
+    }
   } catch (_) { bc.aifi = null; }
+}
+/** La devise de paiement par defaut du mode S.I : l ETH natif. */
+const BC_AIFI_ETH = () => ({ adr: ETH_ADR.toLowerCase(), sym: 'ETH', dec: 18 });
+/** Les choix « Pay with » du mode S.I : la MEME liste que le ticket Buy (bcChoixPaiement). Les unites et les montants proposes
+ *  suivent la devise choisie ; une action n a pas de montant propose (la personne ecrit le sien). */
+const BC_AIFI_SUGGERES = { ETH: ['0.002', '0.01'], USDC: ['5', '20'] };
+function bcAifiUnites() {
+  const s = $('#bcAiDevise'), o = s.options[s.selectedIndex];
+  const sym = o ? String(o.textContent).replace(/ \(stock\)$/, '') : 'ETH';
+  $('#bcLimTradeU').textContent = sym; $('#bcLimBudgetU').textContent = sym;
+  return sym;
+}
+function bcAifiPeindreDevises(a) {
+  const s = $('#bcAiDevise'), q = bcCotation(a);
+  const cle = a + '|' + (q && q.ok ? q.adr : '') + '|' + (marcheParAdr.size ? 1 : 0);
+  if (bc.aifiDevisesDe === cle) return;
+  bc.aifiDevisesDe = cle;
+  /* S.I en marche : le menu montre SA devise, et rien d autre ne change */
+  const voulue = bc.aifi && bc.aifi.block === a && bc.aifi.devise ? (bc.aifi.devise.sym === 'ETH' || bc.aifi.devise.sym === 'USDC' ? bc.aifi.devise.sym : bc.aifi.devise.adr) : s.value;
+  s.textContent = '';
+  const choix = bcChoixPaiement(a, q);
+  for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
+  if (choix.some(([v]) => v === voulue)) s.value = voulue;
+  bcAifiUnites();
 }
 /* ⛔ LE FIL RESTE CONDENSE (Phil, 2026-10-04 : « fais pas de doublon, mets le chat en condense, plus lisible ») : les avis d AiFi
  *   (started, stopped, « it got worried… ») s ajoutent en LIGNES dans UN seul bloc « AiFi » tant qu aucun autre message ne s est
@@ -22404,7 +22447,7 @@ function bcAifiNote(texte) {
     if (der.dataset.derniere !== texte) { bcEtape(der, texte); der.dataset.derniere = texte; der.scrollIntoView({ block: 'nearest' }); }
     return der;
   }
-  const m = bcMessage('AiFi', '', texte);
+  const m = bcMessage('S.I', '', texte);
   m.dataset.aifi = '1'; m.dataset.derniere = texte;
   return m;
 }
@@ -22419,28 +22462,41 @@ function bcAifiArreter(pourquoi) {
 }
 function bcAifiPeindre() {
   const s = bc.aifi, b = $('#bcArmer'), e = $('#bcAiEtat');
-  for (const id of ['#bcAiAchat', '#bcAiVente', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
-  b.textContent = s ? 'Stop AiFi' : 'Start AiFi';
-  const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'AiFi · on' : 'AiFi';
+  for (const id of ['#bcAiAchat', '#bcAiVente', '#bcAiDevise', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
+  b.textContent = s ? 'Stop S.I' : 'Start S.I';
+  const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'S.I · on' : 'S.I';
   if (!s) { if (!e.classList.contains('wKo')) e.textContent = 'Its brain proposes; you confirm each trade in your wallet. Each trade pays the usual trade fee.'; return; }
   const h = Math.max(0, (Number(s.jusqua) - Date.now()) / 3600000);
   e.className = 'note';
   /* le budget ne concerne que les ACHATS : sans la regle d achat, on ne l affiche pas (« 0 of 0 ETH » ne voulait rien dire) */
-  e.textContent = 'On for ' + (bcResoudre(s.block).sym || court(s.block)) + (s.achat ? ' · proposed ' + bcUnites(s.propose, 18) + ' of ' + bcUnites(s.budget, 18) + ' ETH' : '')
+  const dv = s.devise || BC_AIFI_ETH();
+  e.textContent = 'On for ' + (bcResoudre(s.block).sym || court(s.block)) + (s.achat ? ' · proposed ' + bcUnites(s.propose, dv.dec) + ' of ' + bcUnites(s.budget, dv.dec) + ' ' + dv.sym : '')
     + ' · ' + (h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(h * 60)) + ' min') + ' left.';
 }
-function bcAifiDemarrer() {
+async function bcAifiDemarrer() {
   const e = $('#bcAiEtat'), dire = (t) => { e.className = 'note wKo'; e.textContent = t; };
   if (!brainAdr) return dire('Pick a block first.');
   const achat = $('#bcAiAchat').checked, vente = $('#bcAiVente').checked;
   if (!achat && !vente) return dire('Tick at least one rule: when to buy, or when to sell.');
-  const lire = (sel) => { const v = $(sel).value.trim(); return /^\d+([.,]\d+)?$/.test(v) ? enUnitesBrutes(v.replace(',', '.'), 18) : null; };
+  /* la devise de paiement, et SES decimales LUES (une action en a 8, l USDC 6) : jamais 18 par defaut pour un jeton */
+  const choisie = $('#bcAiDevise').value || 'ETH';
+  let devise = BC_AIFI_ETH();
+  if (choisie !== 'ETH') {
+    const r = bcResoudre(choisie);
+    if (!r.ok) return dire(r.pourquoi || 'Pick what each buy is paid with.');
+    let dec = null;
+    try { dec = await bcAvecDelai(bcDecimales(r.adr), 6000); } catch (_) { dec = null; }
+    if (!Number.isInteger(dec)) return dire('The decimals of ' + r.sym + ' could not be read — try again.');
+    devise = { adr: r.adr, sym: r.sym, dec };
+  }
+  if (bc.aifi) return; /* demarre entre-temps (double clic pendant la lecture des decimales) */
+  const lire = (sel) => { const v = $(sel).value.trim(); return /^\d+([.,]\d+)?$/.test(v) ? enUnitesBrutes(v.replace(',', '.'), devise.dec) : null; };
   const parTrade = lire('#bcLimTrade'), budget = lire('#bcLimBudget'), heures = Number($('#bcLimDuree').value.trim());
-  if (achat && (parTrade === null || !(parTrade > 0n))) return dire('“Per trade” must be an amount in ETH above zero.');
+  if (achat && (parTrade === null || !(parTrade > 0n))) return dire('“Per trade” must be an amount in ' + devise.sym + ' above zero.');
   if (achat && (budget === null || budget < parTrade)) return dire('The budget must be at least one trade.');
   if (!Number.isInteger(heures) || heures < 1 || heures > 168) return dire('“Stops after” must be a whole number of hours, from 1 to 168.');
   const snap = window.__TB_BRAIN_SNAPSHOT__, a = String(brainAdr).toLowerCase();
-  bc.aifi = { block: a, achat, vente, parTrade: String(parTrade || 0n), budget: String(budget || 0n), propose: '0', jusqua: Date.now() + heures * 3600000,
+  bc.aifi = { block: a, achat, vente, devise, parTrade: String(parTrade || 0n), budget: String(budget || 0n), propose: '0', jusqua: Date.now() + heures * 3600000,
     /* l humeur DE DEPART est notee : AiFi ne reagit qu a un changement survenu APRES son demarrage */
     phase: snap && String(snap.address || '').toLowerCase() === a && snap.tick !== null && snap.tick !== undefined ? String(snap.phase || '') : null };
   e.className = 'note';
@@ -22461,7 +22517,7 @@ function bcAifiDire(texte) { if (bcAifiSuivi.avis === texte) return; bcAifiSuivi
 function bcAifiBattre(a, snap) {
   const s = bc.aifi;
   if (!s) return;
-  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — AiFi stopped.'); return; }
+  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — S.I stopped.'); return; }
   if (s.block !== a || !snap || snap.tick === null || snap.tick === undefined) return;
   const phase = String(snap.phase || ''), avant = s.phase;
   if (avant === phase) return;
@@ -22471,11 +22527,13 @@ function bcAifiBattre(a, snap) {
   if (s.achat && phase === 'EXCITE') {
     if (bcAifiOuverte(bcAifiSuivi.achat)) return; /* sa carte d achat attend deja : pas de doublon, rien au budget */
     const reste = BigInt(s.budget) - BigInt(s.propose), m = BigInt(s.parTrade);
-    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — AiFi stopped.'); return; }
+    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — S.I stopped.'); return; }
     s.propose = (BigInt(s.propose) + m).toString(); bcAifiSauver(); bcAifiPeindre();
     bcOuvrirPop();
     const suivi = { op: null, depuis: Date.now() }; bcAifiSuivi.achat = suivi;
-    void bcProposerSwap('Its brain · AiFi', 'agent', { de: { ok: true, adr: ETH_ADR.toLowerCase(), sym: 'ETH' }, vers: jeton, montant: m.toString() }, null, suivi);
+    /* paye dans la devise CHOISIE au demarrage (ETH par defaut ; USDC ou une action a pool v4) — `parTrade` est dans ses unites */
+    const dv = s.devise && /^0x[0-9a-f]{40}$/.test(String(s.devise.adr)) ? s.devise : { adr: ETH_ADR.toLowerCase(), sym: 'ETH' };
+    void bcProposerSwap('Its brain · S.I', 'agent', { de: { ok: true, adr: dv.adr, sym: dv.sym }, vers: jeton, montant: m.toString() }, null, suivi);
     return;
   }
   if (s.vente && phase === 'INQUIET') {
@@ -22491,7 +22549,7 @@ function bcAifiBattre(a, snap) {
       if (!(solde / 4n > 0n)) return rien('It got worried, but this wallet holds none of it: nothing to sell.');
       if (!cot || !cot.ok) return rien('It got worried, but its market has not been read: nothing was proposed.');
       bcOuvrirPop();
-      void bcProposerSwap('Its brain · AiFi', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null, suivi);
+      void bcProposerSwap('Its brain · S.I', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null, suivi);
     })();
   }
 }
@@ -22533,6 +22591,7 @@ function bcPeindre(snap) {
   }
   bcPeindreTicket(a, sym, mk, snap);
   bcPeindrePre(a, sym);
+  bcAifiPeindreDevises(a);
   if (bc.aifi) { bcAifiBattre(a, snap); bcAifiPeindre(); }
   /* les skins achetees pour ce block : relues toutes les 60 s tant que le panneau est ouvert (et tout de suite apres un achat) */
   if ($('#bcPop').open && CHAINE === 8453 && Date.now() - (bc.skinsLues || 0) > 60000) void bcLireSkins(a);
@@ -22751,7 +22810,12 @@ for (const b of document.querySelectorAll('#bcPanneau [data-mode]')) b.addEventL
   for (const x of document.querySelectorAll('#bcPanneau [data-mode]')) x.setAttribute('aria-selected', String(x === b));
   $('#bcLimites').hidden = !full;
 });
-$('#bcArmer').addEventListener('click', () => { if (bc.aifi) bcAifiArreter('AiFi stopped.'); else bcAifiDemarrer(); });
+$('#bcArmer').addEventListener('click', () => { if (bc.aifi) bcAifiArreter('S.I stopped.'); else void bcAifiDemarrer(); });
+/* changer la devise de paiement du mode S.I : les unites affichees suivent, et les montants proposes aussi (aucun pour une action) */
+$('#bcAiDevise').addEventListener('change', () => {
+  const sym = bcAifiUnites(), sug = BC_AIFI_SUGGERES[sym] || ['', ''];
+  $('#bcLimTrade').value = sug[0]; $('#bcLimBudget').value = sug[1];
+});
 /* 2026-10-04 (Phil) : « des que l utilisateur appuie sur l onglet Blocks, ca ouvre le panneau de controle… si deja ouvert laisse-le,
  *   et sur Trade ». Le panneau s ouvre sur sa vue Trade sans quitter l onglet Blocks ; deja ouvert, il n est pas touche. */
 { const nb = document.querySelector('.navB[data-volet="mien"]'); if (nb) nb.addEventListener('click', () => { try { bcOuvrirPop({ sansBasculer: true, vue: 'trade' }); } catch (_) {} }); }

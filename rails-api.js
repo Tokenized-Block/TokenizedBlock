@@ -27,7 +27,7 @@ import { sautsBlocVersBloc, cheminBlocVersAction } from './bloc-vers-bloc.js';
 import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
 import { vieDuBlock } from './marche.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
+import { DEVISES_BASE, ACTIONS_COINBASE, proposableEnEchange } from './paires.js';
 import { USDC_BASE, FEE_WALLET } from './frais-creation.js';
 import { CLES_PRIX } from './prix-eth.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -41,6 +41,14 @@ const USDC = bas(USDC_BASE);
 const OUSD = bas((DEVISES_BASE.find((d) => d.symbole === 'OUSD') || {}).adr);
 const ACTIONS = new Map(ACTIONS_COINBASE.map((a) => [bas(a.adr), a.symbole]));
 const DEVISES = new Map(DEVISES_BASE.map((d) => [bas(d.adr), d.symbole]));
+/* ⛔⛔ Les devises qui s echangent entre elles ICI (route 6) : ETH et USDC, et SEULEMENT elles.
+ *   MESURE (banc-devises-fork-20261004.mjs, fork de Base, 5 devises proposables du registre, 20 paires ordonnees) :
+ *     depuis ETH ou USDC vers ETH, USDC, cbBTC, TOSHI, OUSD : 8/8 executees, 20 bps au wallet des frais ;
+ *     depuis cbBTC, TOSHI ou OUSD : 12/12 REFUSEES par le planificateur (« Not tradable here yet » : le frais se prend dans la
+ *     devise payee, et `fraisDevisesOk` n admet pas celles-la).
+ *   Offrir USDC > TOSHI sans TOSHI > USDC serait vendre un ALLER SANS RETOUR : la personne acheterait ici ce qu elle ne peut
+ *   pas revendre ici. On n ouvre donc que la paire qui marche dans les DEUX sens. Les autres attendent une regle de frais. */
+const ECHANGEABLES = new Set(DEVISES_BASE.filter((d) => proposableEnEchange(d) && d.chaines.includes(8453) && (d.symbole === 'ETH' || d.symbole === 'USDC')).map((d) => bas(d.adr)));
 const BORNE = 'unsigned calls built from the chain read now: your wallet signs them, in order; the minimums hold only at the '
   + 'price read now, and the chain can still refuse them later';
 
@@ -292,6 +300,26 @@ export async function planRail(q, deps) {
       return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
         decimalesEntree: decA, prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, de]), maintenant }),
       { via: 'planEchangeMultiSauts', chemin, cotation: USDC, pool: 'uniswap-v4' });
+    }
+    /* ── 6. ETH CONTRE USDC, ET L INVERSE ───────────────────────────────────────────────────────────────────────────────
+     * QA wallet reel de Grok (2026-10-04, P0) : « swap 5 USDC to ETH » rendait « route USDC>ETH is not offered by this API yet » —
+     *   la pre-commande « Swap » du panneau menait a un refus pour l echange le plus banal qui soit.
+     * Le chemin : DIRECT si une pool v4 sans hook cote la paire a cette taille (les deux replis par pivot ne servent qu a une
+     *   devise future). Un seul appel au routeur. Le frais et ses gardes sont ceux de `planEchangeMultiSauts`, inchanges.
+     * ⛔ `ECHANGEABLES` dit POURQUOI les autres devises du registre n y sont pas (aller sans retour, mesure sur fork). */
+    if (ECHANGEABLES.has(de) && ECHANGEABLES.has(vers)) {
+      const essais = [[{ de, vers }]];
+      if (de !== USDC && vers !== USDC) essais.push([{ de, vers: USDC }, { de: USDC, vers }]);
+      if (de !== ETH && vers !== ETH) essais.push([{ de, vers: ETH }, { de: ETH, vers }]);
+      let dernier = null;
+      for (const e of essais) {
+        const chemin = e.map((s) => ({ ...s, famille: 'uniswap-v4' }));
+        const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec() });
+        if (b.etat !== 'OK') { dernier = { b, chemin }; continue; }
+        return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
+          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk, maintenant }), { via: 'planEchangeMultiSauts', chemin });
+      }
+      return normaliser(route, { etat: dernier.b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: dernier.b.pourquoi }, { via: 'sautsDepuisChemin', chemin: dernier.chemin });
     }
   } catch (e) {
     return normaliser(route, { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) });

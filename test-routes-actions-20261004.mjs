@@ -85,16 +85,42 @@ async function router(dir, de, vers) {
   ok(y.r.etat === 'REFUSE' && /sells here for USDC or ETH — sell it first, then buy/.test(String(y.r.pourquoi)) && y.appels === 0, 'B ' + symAero + ' (Aerodrome) > BLOCK : refus qui dit quoi faire, sans lecture');
   const t = await router(ICI, USDC, BLOCK);
   ok(t.r.route === 'USDC>BLOCK' && t.lus[0] === BLOCK, 'B temoin : USDC > BLOCK garde la route 1 (le marche du block est lu en premier)');
+  /* route 6 (QA wallet reel de Grok, P0) : ETH <-> USDC est ROUTE ; les autres devises restent refusees (aller sans retour, mesure
+   *   sur fork : banc-devises-fork-20261004.mjs — depuis cbBTC / TOSHI / OUSD le planificateur refuse 12/12) */
+  const { DEVISES_BASE } = await imp('paires.js');
+  const TOSHI = String(DEVISES_BASE.find((d) => d.symbole === 'TOSHI').adr).toLowerCase();
+  for (const [de, vers, nom] of [['ETH', USDC, 'ETH > USDC'], [USDC, 'ETH', 'USDC > ETH']]) {
+    const x = await router(ICI, de, vers);
+    ok(!/is not offered by this API yet/.test(String(x.r.pourquoi)) && x.appels > 0 && /sautsDepuisChemin|planEchangeMultiSauts/.test(String(x.r.via)),
+      'B ' + nom + ' : ROUTE (le planificateur cherche la pool v4 de la paire ; faux noeud = aucun plan, etat ' + x.r.etat + ')');
+  }
+  for (const [de, vers, nom] of [[USDC, TOSHI, 'USDC > TOSHI'], [TOSHI, USDC, 'TOSHI > USDC'], [TOSHI, 'ETH', 'TOSHI > ETH']]) {
+    const x = await router(ICI, de, vers);
+    ok(x.r.etat === 'REFUSE' && /is not offered by this API yet/.test(String(x.r.pourquoi)) && x.appels === 0, 'B ' + nom + ' : refuse sans lecture — une devise qu on ne peut pas revendre ici ne s y achete pas');
+  }
 }
 
 console.log('— C. app.html : le ticket');
 const html = lire('app.html');
 /* Phil, 2026-10-04 : « swap action to USDC et inversement, pas que ETH — USDC natif sera plus simple » : USDC d abord pour une action */
 ok(/else if \(ACTIONS_PAR_ADR\.has\(a\)\) choix = \(q && q\.ok \? \[\[q\.adr, 'for ' \+ q\.sym\]\] : \[\]\)\.concat\(\[\['ETH', 'for ETH'\]\]\);/.test(html), 'C vendre une action : sa cotation (USDC) en premier, « for ETH » en second');
-ok(/if \(achat\) choix = ACTIONS_PAR_ADR\.has\(a\) \? \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\] : standard \? \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\] : \[\[q\.adr, q\.sym\]\];/.test(html),
-  'C acheter une action : USDC en premier, ETH en second ; un block garde ETH en premier');
-ok(/if \(achat && !ACTIONS_PAR_ADR\.has\(a\) && standard\) \{\s+const v4 = bcActionsV4\(\);/.test(html) && /if \(v4\.has\(sa\)\) choix\.push\(\[sa, st\.symbole \+ ' \(stock\)'\]\);/.test(html),
+/* 2026-10-04 (soir) : les choix de PAIEMENT vivent dans `bcChoixPaiement`, une seule liste pour le ticket Buy ET pour le mode S.I */
+ok(/function bcChoixPaiement\(a, q\) \{/.test(html) && /if \(ACTIONS_PAR_ADR\.has\(a\)\) return \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\];/.test(html)
+  && /if \(!standard\) return \[\[q\.adr, q\.sym\]\];\s+const choix = \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\];/.test(html),
+  'C acheter une action : USDC en premier, ETH en second ; un block garde ETH en premier ; une autre cotation : elle seule');
+ok(/const v4 = bcActionsV4\(\);\s+for \(const st of ACTIONS_COINBASE\) \{ const sa = String\(st\.adr\)\.toLowerCase\(\); if \(v4\.has\(sa\)\) choix\.push\(\[sa, st\.symbole \+ ' \(stock\)'\]\); \}\s+return choix;/.test(html),
   'C acheter un block (cote en ETH ou USDC) : les actions a pool v4 mesuree sont proposees comme moyen de paiement');
+ok(/if \(achat\) choix = bcChoixPaiement\(a, q\);/.test(html) && /const choix = bcChoixPaiement\(a, q\);\s+for \(const \[v, l\] of choix\) s\.append\(bcEl\('option', \{ value: v, text: l \}\)\);/.test(html)
+  && (html.match(/bcChoixPaiement\(a, q\)/g) || []).length === 3, 'C le ticket Buy et le menu « Pay with » du mode S.I lisent la MEME liste (bcChoixPaiement) — pas deux copies');
+/* le mode S.I (ex-AiFi) : son nom, et sa devise de paiement */
+ok(/data-mode="full" aria-selected="false">S\.I</.test(html) && /b\.textContent = s \? 'Stop S\.I' : 'Start S\.I';/.test(html) && !/>AiFi<|'Start AiFi'|'Stop AiFi'|AiFi stopped\.'\)|'Its brain · AiFi'/.test(html),
+  'C le mode s appelle « S.I » partout a l ecran (bouton, switch, cartes, avis) — plus aucun libelle « AiFi » affiche');
+ok(/<select id="bcAiDevise"/.test(html) && /try \{ dec = await bcAvecDelai\(bcDecimales\(r\.adr\), 6000\); \} catch \(_\) \{ dec = null; \}/.test(html)
+  && /if \(!Number\.isInteger\(dec\)\) return dire\('The decimals of ' \+ r\.sym \+ ' could not be read — try again\.'\);/.test(html)
+  && /enUnitesBrutes\(v\.replace\(',', '\.'\), devise\.dec\)/.test(html),
+  'C S.I : la devise de paiement se choisit ; ses decimales sont LUES (jamais 18 par defaut pour un jeton) et un echec de lecture refuse de demarrer');
+ok(/bcUnites\(s\.propose, dv\.dec\) \+ ' of ' \+ bcUnites\(s\.budget, dv\.dec\) \+ ' ' \+ dv\.sym/.test(html) && /for \(const id of \['#bcAiAchat', '#bcAiVente', '#bcAiDevise',/.test(html),
+  'C S.I : le budget s affiche dans la devise choisie ; le menu est fige tant que S.I tourne');
 ok(/if \(ACTIONS_PAR_ADR\.has\(k\) && !POOLS_ACTIONS_AERODROME\.has\(k\)\) s\.add\(k\);/.test(html) && /for \(const l of LOGS_INITIALIZE_MESURES\) \{\s+const d = decoderInitialize\(l\);\s+if \(!d \|\| !d\.cle\) continue;\s+for \(const c of \[d\.cle\.currency0, d\.cle\.currency1\]\)/.test(html),
   'C … cette liste vient des pools v4 LUES (logs redecodes), et exclut la table Aerodrome (qui ne paie pas un block en un trade)');
 
@@ -108,8 +134,8 @@ ok(/function bcAifiDire\(texte\) \{ if \(bcAifiSuivi\.avis === texte\) return; b
   && !/bcMessage\('AiFi', '', 'It got worried/.test(html), 'C AiFi : un avis identique au precedent n est pas reecrit (plus aucun « It got worried » ecrit sans passer par ce filtre)');
 /* le fil condense (Phil : « fais pas de doublon, mets le chat en condense ») : UN bloc AiFi, des lignes dedans */
 ok(/if \(der && der\.dataset && der\.dataset\.aifi === '1'\) \{\s+if \(der\.dataset\.derniere !== texte\) \{ bcEtape\(der, texte\);/.test(html)
-  && (html.match(/bcMessage\('AiFi'/g) || []).length === 1 && /if \(pourquoi\) bcAifiNote\(pourquoi\);/.test(html) && /bcAifiNote\('Started on '/.test(html),
-  'C AiFi : started / stopped / avis s ajoutent en LIGNES dans un seul bloc « AiFi » (un seul `bcMessage(\'AiFi\'` dans tout le source : celui qui ouvre ce bloc)');
+  && (html.match(/bcMessage\('S\.I'/g) || []).length === 1 && !/bcMessage\('AiFi'/.test(html) && /if \(pourquoi\) bcAifiNote\(pourquoi\);/.test(html) && /bcAifiNote\('Started on '/.test(html),
+  'C S.I : started / stopped / avis s ajoutent en LIGNES dans un seul bloc « S.I » (un seul `bcMessage(\'S.I\'` dans tout le source : celui qui ouvre ce bloc)');
 ok(/\.bcLimites \.bcCoche\{[^}]*user-select:none/.test(html), 'C les libelles des cases AiFi ne se selectionnent plus au double-clic (capture de Phil : texte grise illisible)');
 
 /* pre-commandes : pas de doublon sur une action (Phil : « buy stock et block c est la meme, donc choisis ») */
@@ -138,6 +164,16 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
   let rouge = false;
   try { const e = await router(m.dir, adrDe(symAero), 'ETH'); rouge = e.r.via !== 'planAerodromeSegment'; } catch (_) { rouge = true; }
   ok(m.une && rouge, 'D mutant « vente Aerodrome contre ETH retiree » : ROUGE');
+}
+{
+  const m = muter('rails-api.js', "&& (d.symbole === 'ETH' || d.symbole === 'USDC')).map(", ').map(');
+  let rouge = false;
+  try {
+    const { DEVISES_BASE } = await imp('paires.js');
+    const TOSHI = String(DEVISES_BASE.find((d) => d.symbole === 'TOSHI').adr).toLowerCase();
+    const x = await router(m.dir, USDC, TOSHI); rouge = !/is not offered by this API yet/.test(String(x.r.pourquoi));
+  } catch (_) { rouge = true; }
+  ok(m.une && rouge, 'D mutant « toutes les devises du registre ouvertes » : ROUGE (USDC > TOSHI serait route, sans retour possible)');
 }
 {
   const m = muter('calldata-aerodrome.js', 'const balayage = sortieEthNatif', 'const balayage = false');

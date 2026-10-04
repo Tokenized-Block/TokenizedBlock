@@ -239,7 +239,7 @@ ok(/const fMarche = rs\.fraisParHook === true && rs\.fraisMarcheBps !== undefine
 ok(/if \(fApp !== null && Number\.isFinite\(fApp\) && fApp > 0\) bcEtape\(m, 'App fee: '/.test(bcSrc) && /else if \(fApp === 0 && fMarche === null\) bcEtape\(m, 'No app fee on this route\.'\);/.test(bcSrc),
   'C2 … le frais de l app n est dit que s il existe ; un champ absent n est jamais affiche comme zero');
 /* le switch */
-ok(/data-mode="semi" aria-selected="true">Manual</.test(html) && /data-mode="full" aria-selected="false">AiFi</.test(html) && !/Max per day|Semi-auto|Full AiFi</.test(html.slice(html.indexOf('id="bc-trade"'), html.indexOf('id="bc-brain"'))),
+ok(/data-mode="semi" aria-selected="true">Manual</.test(html) && /data-mode="full" aria-selected="false">S\.I</.test(html) && !/Max per day|Semi-auto|Full AiFi</.test(html.slice(html.indexOf('id="bc-trade"'), html.indexOf('id="bc-brain"'))),
   'C2 Trade : le switch Manual / AiFi (Manual par defaut) ; « Max per day » est parti (un budget total et une heure d arret)');
 ok(/<input type="checkbox" id="bcAiAchat"><span>/.test(html) && /<input type="checkbox" id="bcAiVente"><span>/.test(html), 'C2 AiFi : les deux declencheurs sont DECOCHES par defaut — c est la personne qui choisit quand son cerveau propose');
 /* AiFi, EXECUTE : la fonction est extraite du source et rejouee avec de faux voisins */
@@ -291,13 +291,20 @@ async function jeuAifi(src, dire) {
   dire(m.vus.swaps.length === 1, 'AiFi : la carte de vente attend encore — une humeur qui oscille n en ouvre pas une 2e');
   m = monterAifi(src, etatAifi({ phase: 'CALME', achat: false, vente: true }), { compte: '0x' + 'c'.repeat(40), solde: 3n });
   battre(m, 'INQUIET'); await new Promise((o) => setTimeout(o, 20)); dire(m.vus.swaps.length === 0, 'AiFi : un quart de 3 unites = 0 : rien a vendre, rien propose');
+  /* 2026-10-04 (Phil) : la devise de paiement se CHOISIT (ETH, USDC, une action) — l achat part dans celle-la, au montant « per trade » */
+  const ACTION = '0xb2000000000000000000000000000000000000cc';
+  m = monterAifi(src, etatAifi({ phase: 'CALME', devise: { adr: ACTION, sym: 'LLYc', dec: 8 } }));
+  battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === ACTION && m.vus.swaps[0].vers === BLK && m.vus.swaps[0].montant === '2000',
+    'S.I : avec une action choisie pour payer, l achat propose part de CETTE action (pas de l ETH), au montant « per trade »');
+  m = monterAifi(src, etatAifi({ phase: 'CALME', devise: { adr: 'pas une adresse', sym: 'X', dec: 8 } }));
+  battre(m, 'EXCITE'); dire(m.vus.swaps.length === 1 && m.vus.swaps[0].de === ETH0, 'S.I : une devise mal formee dans l etat enregistre retombe sur l ETH (jamais une adresse inventee)');
 }
 ok(srcAifi.length > 400, 'C2 AiFi : bcAifiBattre est extraite du source');
 await jeuAifi(srcAifi, (c, t) => ok(c, 'C2 ' + t));
 const aifiSrc = bcSrc.slice(bcSrc.indexOf("const BC_CLE_AIFI = 'tblock.panel.aifi';"), bcSrc.indexOf('/** Peint le panneau depuis LE snapshot'));
-ok(aifiSrc.length > 1500 && !/bcSigner|envoyerDepuisWallet|window\.ethereum|eth_send/.test(aifiSrc) && /void bcProposerSwap\('Its brain · AiFi', 'agent',/.test(aifiSrc),
+ok(aifiSrc.length > 1500 && !/bcSigner|envoyerDepuisWallet|window\.ethereum|eth_send/.test(aifiSrc) && /void bcProposerSwap\('Its brain · S\.I', 'agent',/.test(aifiSrc),
   'C2 AiFi ne signe RIEN et n appelle jamais le wallet : il ouvre la carte d echange (porte du cerveau, plan, puis la personne)');
-ok(/\$\('#bcArmer'\)\.addEventListener\('click', \(\) => \{ if \(bc\.aifi\) bcAifiArreter\('AiFi stopped\.'\); else bcAifiDemarrer\(\); \}\);/.test(html) && /if \(!achat && !vente\) return dire\(/.test(aifiSrc) && /heures < 1 \|\| heures > 168/.test(aifiSrc),
+ok(/\$\('#bcArmer'\)\.addEventListener\('click', \(\) => \{ if \(bc\.aifi\) bcAifiArreter\('S\.I stopped\.'\); else void bcAifiDemarrer\(\); \}\);/.test(html) && /if \(!achat && !vente\) return dire\(/.test(aifiSrc) && /heures < 1 \|\| heures > 168/.test(aifiSrc),
   'C2 AiFi : demarre et s arrete d un bouton ; refuse de demarrer sans regle cochee ou avec une duree hors de 1 a 168 h');
 ok(!/eth_sign|personal_sign|privateKey|signTypedData/.test(bcSrc), 'C2 temoin : le code du panneau ne contient aucune signature hors du wallet de la personne (envoyerDepuisWallet)');
 /* le solde avant le plan */
@@ -326,7 +333,7 @@ ok((bcSrc.match(/bcOpMaj\(op, 'notOffered'\);/g) || []).length === 2 && /notOffe
 ok(/const actionAffichee = !!moi && ACTIONS_PAR_ADR\.has\(moi\);/.test(bcSrc) && /if \(actionAffichee && \(de\.adr === moi \|\| vers\.adr === moi\)\) bcEtape\(m, 'A Coinbase stock — it trades on its own market; no brain gate\.'\);\n\s+else if \(moi && /.test(bcSrc),
   'C3 une action Coinbase n a PAS de porte du cerveau (SNDKc, NVDAc, MSTRc, MSFTc etaient refusees) ; un block garde la sienne');
 ok(/const t = estAction \? 'A Coinbase stock — it trades on its own market; no brain gate\.'/.test(bcSrc), 'C3 le ticket n annonce plus a une action un refus qui ne s appliquera pas');
-ok(/if \(achat\) choix = ACTIONS_PAR_ADR\.has\(a\) \? \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\] : standard \? \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\] : \[\[q\.adr, q\.sym\]\];/.test(bcSrc),
+ok(/if \(ACTIONS_PAR_ADR\.has\(a\)\) return \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\];/.test(bcSrc) && /const choix = \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\];/.test(bcSrc) && /if \(achat\) choix = bcChoixPaiement\(a, q\);/.test(bcSrc),
   'C3 « Pay with » : ETH en premier pour un block (regle de Phil) ; USDC en premier pour une action (sa cotation — retour de Phil du meme jour)');
 ok(/if \(ul\.dataset\.de !== a\) \{ ul\.textContent = ''; ul\.append\(bcEl\('li', \{ cls: 'note', text: 'Reading…' \}\)\); ul\.dataset\.de = '';/.test(bcSrc), 'C3 Market : la liste d activite d un block ne reste pas affichee sous le nom d un autre');
 ok(/if \(pourquoi\) \{ const e = \$\('#bcAiEtat'\); e\.className = 'note'; e\.textContent = pourquoi; \}/.test(bcSrc), 'C3 « AiFi stopped. » s ecrit a cote du bouton (il partait dans le Chat, masque depuis la vue Trade)');
@@ -411,10 +418,11 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-fin-'));
 {
   const mutantsAifi = [
     ['front retire (propose a chaque peinture)', '  if (avant === phase) return;', ''],
-    ['budget non verifie', "    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — AiFi stopped.'); return; }", ''],
+    ['budget non verifie', "    if (m <= 0n || m > reste) { bcAifiArreter('Budget reached — S.I stopped.'); return; }", ''],
+    ['devise de paiement ignoree (toujours ETH)', "const dv = s.devise && /^0x[0-9a-f]{40}$/.test(String(s.devise.adr)) ? s.devise : { adr: ETH_ADR.toLowerCase(), sym: 'ETH' };", "const dv = { adr: ETH_ADR.toLowerCase(), sym: 'ETH' };"],
     ['premiere humeur prise pour un changement', '  if (avant === null) return;', ''],
     ['autre block accepte', '  if (s.block !== a || !snap || snap.tick === null || snap.tick === undefined) return;', '  if (!snap || snap.tick === null || snap.tick === undefined) return;'],
-    ['heure d arret ignoree', "  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — AiFi stopped.'); return; }", ''],
+    ['heure d arret ignoree', "  if (Date.now() >= Number(s.jusqua)) { bcAifiArreter('Time is up — S.I stopped.'); return; }", ''],
     ['doublon d achat admis (carte encore ouverte)', '    if (bcAifiOuverte(bcAifiSuivi.achat)) return; /* sa carte d achat attend deja : pas de doublon, rien au budget */', ''],
     ['doublon de vente admis', '    if (bcAifiOuverte(bcAifiSuivi.vente)) return;', ''],
     ['avis repete', 'if (bcAifiSuivi.avis === texte) return; ', ''],
