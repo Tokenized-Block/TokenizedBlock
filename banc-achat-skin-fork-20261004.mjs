@@ -61,7 +61,7 @@ try {
   ok(verifier(l1, { recette: { id: 'ice' } }).ok === false, 'la meme transaction reclamee pour une AUTRE skin : refusee');
 
   /* 2. une skin « random » : la recette entiere dans le memo */
-  const rnd = { id: 'random', angle: 278, h: [17, 237, 163], cube: 45, noyau: 310 };
+  const rnd = { id: 'random', angle: 278, h: [17, 237, 163], cube: 45, noyau: 310, fond: 200 };
   const l2 = await lire(await envoyer(acheteur, S.appelAchatSkin({ usdc: USDC, beneficiaire: FRAIS, block: BLOCK, recette: rnd })));
   const m2 = lireMemo(l2.tx.input), d2 = m2.etat === 'LU' ? S.lireMemoSkin(m2.texte) : { ok: false };
   ok(verifier(l2, { recette: rnd }).ok === true && d2.ok && JSON.stringify(d2.recette) === JSON.stringify(rnd), 'skin random : acceptee, et sa recette (angle, 3 teintes, aretes, noyau) se relit dans la transaction');

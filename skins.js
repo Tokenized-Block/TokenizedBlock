@@ -38,30 +38,32 @@ export function validerRecette(r) {
   if (!r || typeof r !== 'object' || Array.isArray(r)) return { ok: false, pourquoi: 'the skin must be an object' };
   if (r.id === 'random') {
     const h = Array.isArray(r.h) ? r.h : [];
-    if (h.length !== 3 || !h.every(entier359) || !entier359(r.angle) || !entier359(r.cube) || !entier359(r.noyau)) {
-      return { ok: false, pourquoi: 'a random skin is angle, three ring hues, a cube hue and a core hue — whole numbers from 0 to 359' };
+    if (h.length !== 3 || !h.every(entier359) || !entier359(r.angle) || !entier359(r.cube) || !entier359(r.noyau) || !entier359(r.fond)) {
+      return { ok: false, pourquoi: 'a skin is a ring angle, three ring hues, an edge hue, a core hue and a background hue — whole numbers from 0 to 359' };
     }
-    return { ok: true, recette: { id: 'random', angle: r.angle, h: [h[0], h[1], h[2]], cube: r.cube, noyau: r.noyau } };
+    return { ok: true, recette: { id: 'random', angle: r.angle, h: [h[0], h[1], h[2]], cube: r.cube, noyau: r.noyau, fond: r.fond } };
   }
   if (typeof r.id !== 'string' || !SKINS_CATALOGUE.includes(r.id)) return { ok: false, pourquoi: 'unknown skin' };
   return { ok: true, recette: { id: r.id } };
 }
 
-/** Le memo ecrit dans la transaction. ASCII, court (< 256 octets), sans espace : `tb-skin:1:<block>:<gold | r.a.h1.h2.h3.cube.noyau>`. */
+/** Le memo ecrit dans la transaction. ASCII, court (< 256 octets), sans espace : `tb-skin:1:<block>:<gold | r.a.h1.h2.h3.cube.noyau.fond>`.
+ *  2026-10-04 : SEPT nombres (le FOND de la case s est ajoute le jour meme, avant toute vente : aucun memo a six nombres n existe sur
+ *  la chaine — verifie : l index de prod etait vide). Un memo a six nombres est REFUSE, il n est pas complete par un defaut. */
 export function memoSkin(block, recette) {
   const b = bas(block), v = validerRecette(recette);
   if (!ADR.test(b)) throw new Error('block must be a whole address');
   if (!v.ok) throw new Error(v.pourquoi);
   const r = v.recette;
-  return 'tb-skin:1:' + b + ':' + (r.id === 'random' ? 'r.' + [r.angle, r.h[0], r.h[1], r.h[2], r.cube, r.noyau].join('.') : r.id);
+  return 'tb-skin:1:' + b + ':' + (r.id === 'random' ? 'r.' + [r.angle, r.h[0], r.h[1], r.h[2], r.cube, r.noyau, r.fond].join('.') : r.id);
 }
 
 /** L inverse de memoSkin, STRICT : tout ce qui n est pas exactement un memo de skin rend `{ ok:false }`. */
 export function lireMemoSkin(texte) {
-  const m = /^tb-skin:1:(0x[0-9a-f]{40}):(?:(gold|ice|ember|toxic|violet|chrome|circuit)|r\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}))$/.exec(String(texte || ''));
+  const m = /^tb-skin:1:(0x[0-9a-f]{40}):(?:(gold|ice|ember|toxic|violet|chrome|circuit)|r\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}))$/.exec(String(texte || ''));
   if (!m) return { ok: false };
   if (m[2]) return { ok: true, block: m[1], recette: { id: m[2] } };
-  const v = validerRecette({ id: 'random', angle: Number(m[3]), h: [Number(m[4]), Number(m[5]), Number(m[6])], cube: Number(m[7]), noyau: Number(m[8]) });
+  const v = validerRecette({ id: 'random', angle: Number(m[3]), h: [Number(m[4]), Number(m[5]), Number(m[6])], cube: Number(m[7]), noyau: Number(m[8]), fond: Number(m[9]) });
   return v.ok ? { ok: true, block: m[1], recette: v.recette } : { ok: false };
 }
 

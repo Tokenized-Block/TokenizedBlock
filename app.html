@@ -2685,7 +2685,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-panneau-reprend-le-block" hidden>Build <code>20261004-panneau-reprend-le-block</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-skin-fond-et-map-panneau" hidden>Build <code>20261004-skin-fond-et-map-panneau</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5195,6 +5195,9 @@ $('#map').addEventListener('click', (e) => {
   $('#cote').classList.add('aFiche');
   $('#cote').scrollTop = 0;
   $('#fiche').hidden = false;
+  /* 2026-10-04 (Phil) : « quand tu ouvres un block sur la Map, ca ouvre le panel avec le block selectionne ». Le panneau s ouvre
+   *   sur CE block (vue Market) sans quitter la Map ; deja ouvert, il change seulement de block. La fiche garde ses boutons. */
+  if (/^0x[0-9a-fA-F]{40}$/.test(String(adr || ''))) { try { choisirBrain(adr); bcOuvrirPop({ sansBasculer: true, vue: 'market' }); } catch (_) { /* la fiche reste utilisable */ } }
   /* ⛔ MEME DESSIN QUE SUR LA MAP, PAR LA MEME FONCTION : deux rendus du meme block seraient deux
    * identites pour une seule chose. */
   $('#fAvatar').innerHTML = dessin(adr, h && h.sym);
@@ -19873,6 +19876,9 @@ function haloDeLHumeur(ctx, cx, cy, r, phase, part, biais, th) {
 function dessinerReseau(vu = null, cible = null) {
   const c = cible && cible.canvas ? cible.canvas : $('#bReseau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
+  /* le FOND de la case (skin du panneau seulement) : une teinte, sombre, pour que le cube reste lisible. Sans `cible.fond`, la toile
+   *   reste transparente et suit le fond du site, comme avant. */
+  if (cible && Number.isFinite(cible.fond)) { ctx.fillStyle = 'hsl(' + cible.fond + ' 45% 9%)'; ctx.fillRect(0, 0, c.width, c.height); }
   if (!brainEtat) return;
   const liens = brainEtat.c.liens;
   const thApp = teinteH();
@@ -22137,7 +22143,7 @@ const BC_SKINS = Object.freeze([
   { id: 'original', nom: 'Original', anneau: '', lueur: '', cube: null, noyau: null, payant: false },
 ]);
 /* les six reglages : [libelle, champ de la recette, index dans `h` ou null] */
-const BC_REGLAGES = Object.freeze([['Ring 1', 'h', 0], ['Ring 2', 'h', 1], ['Ring 3', 'h', 2], ['Ring turn', 'angle', null], ['Edges', 'cube', null], ['Core', 'noyau', null]]);
+const BC_REGLAGES = Object.freeze([['Ring 1', 'h', 0], ['Ring 2', 'h', 1], ['Ring 3', 'h', 2], ['Ring turn', 'angle', null], ['Edges', 'cube', null], ['Core', 'noyau', null], ['Background', 'fond', null]]);
 /* ── LES SKINS ACHETEES POUR CE BLOCK (index du serveur, /api/skins/<block> ; chaque ligne porte sa transaction) ── */
 async function bcLireSkins(a) {
   if (bc.skinsEnVol) return;
@@ -22172,7 +22178,8 @@ function bcDessinerCube() {
     if (!src || !dst || !$('#bc-brain').classList.contains('on')) return;
     if (dst.width !== src.width || dst.height !== src.height) { dst.width = src.width; dst.height = src.height; }
     const sk = bc.skinPortee || null;
-    dessinerReseau(brainDernierVu, { canvas: dst, teinteCube: sk && Number.isFinite(sk.cube) ? sk.cube : undefined, teinteNoyau: sk && Number.isFinite(sk.noyau) ? sk.noyau : undefined });
+    dessinerReseau(brainDernierVu, { canvas: dst, teinteCube: sk && Number.isFinite(sk.cube) ? sk.cube : undefined, teinteNoyau: sk && Number.isFinite(sk.noyau) ? sk.noyau : undefined,
+      fond: sk && Number.isFinite(sk.fond) ? sk.fond : undefined });
   } catch (_) { /* la carte du dessous reste la reference */ }
 }
 /* UNE SKIN AU HASARD (Phil : « un bouton aleatoire qui combine le perimetre et l interieur… random a new skin ») : un anneau a trois
@@ -22183,11 +22190,11 @@ function bcSkinAleatoire() {
   const c = (h, l) => 'hsl(' + h + ' 90% ' + l + '%)';
   /* ⛔ LA RECETTE EST FAITE D ENTIERS (0 a 359) : c est elle qui s enregistre a l achat (angle, trois teintes d anneau, aretes, noyau).
    *   L anneau, la lueur et le filtre du visage en sont DERIVES — deux navigateurs qui lisent la meme recette peignent la meme skin. */
-  return bcSkinDepuisRecette({ id: 'random', angle: t(), h: [h1, h2, h3], cube: t(), noyau: t() });
+  return bcSkinDepuisRecette({ id: 'random', angle: t(), h: [h1, h2, h3], cube: t(), noyau: t(), fond: t() });
 }
 function bcSkinDepuisRecette(r) {
   const c = (h, l) => 'hsl(' + h + ' 90% ' + l + '%)', [h1, h2, h3] = r.h;
-  return { id: 'random', nom: 'Skin ' + h1 + '·' + h2 + '·' + h3, payant: true, recette: r, cube: r.cube, noyau: r.noyau,
+  return { id: 'random', nom: 'Skin ' + h1 + '·' + h2 + '·' + h3, payant: true, recette: r, cube: r.cube, noyau: r.noyau, fond: r.fond,
     anneau: 'conic-gradient(from ' + r.angle + 'deg,' + c(h1, 62) + ',' + c(h2, 38) + ',' + c(h3, 70) + ',' + c(h2, 30) + ',' + c(h1, 62) + ')',
     lueur: 'hsl(' + h1 + ' 90% 60% / .55)', filtre: 'sepia(1) saturate(4) hue-rotate(' + r.noyau + 'deg)' };
 }
@@ -22220,7 +22227,7 @@ function bcPeindreBoutique() {
   haut.append(bo, ra); z.append(haut);
   /* les six curseurs (0 a 359) : chaque mouvement repeint la skin portee. Partir de l original = partir de la teinte de l app. */
   const portee = bc.skinPortee && bc.skinPortee.recette ? bc.skinPortee.recette : null;
-  const depart = () => { const t = Math.round(teinteH()) % 360; return { id: 'random', angle: 210, h: [t, (t + 40) % 360, (t + 320) % 360], cube: t, noyau: t }; };
+  const depart = () => { const t = Math.round(teinteH()) % 360; return { id: 'random', angle: 210, h: [t, (t + 40) % 360, (t + 320) % 360], cube: t, noyau: t, fond: t }; };
   const grille = bcEl('div', { cls: 'bcReglages' });
   for (const [lib, champ, i] of BC_REGLAGES) {
     const r0 = portee || depart(), v0 = i === null ? r0[champ] : r0[champ][i];
@@ -22228,7 +22235,7 @@ function bcPeindreBoutique() {
     const c = bcEl('input', { type: 'range', min: '0', max: '359', step: '1', value: String(v0), 'aria-label': lib + ', 0 to 359' });
     c.addEventListener('input', () => {
       const cur = bc.skinPortee && bc.skinPortee.recette ? bc.skinPortee.recette : depart();
-      const r = { id: 'random', angle: cur.angle, h: [cur.h[0], cur.h[1], cur.h[2]], cube: cur.cube, noyau: cur.noyau }, n = Math.max(0, Math.min(359, Math.round(Number(c.value)) || 0));
+      const r = { id: 'random', angle: cur.angle, h: [cur.h[0], cur.h[1], cur.h[2]], cube: cur.cube, noyau: cur.noyau, fond: cur.fond }, n = Math.max(0, Math.min(359, Math.round(Number(c.value)) || 0));
       if (i === null) r[champ] = n; else r.h[i] = n;
       val.textContent = String(n);
       bc.skinChoisie = true; bcPorterSkin(bcSkinDepuisRecette(r));

@@ -26,7 +26,7 @@ const ACHETEUR = '0x' + 'c0ffee'.padEnd(40, '1'), RELAIS = '0x' + 'be1a15'.padEn
 const T = K.topic('Transfer(address,address,uint256)');
 const mot = (a) => '0x' + String(a).slice(2).toLowerCase().padStart(64, '0');
 const HASH = '0x' + 'ab'.repeat(32);
-const GOLD = { id: 'gold' }, RND = { id: 'random', angle: 278, h: [17, 237, 163], cube: 45, noyau: 310 };
+const GOLD = { id: 'gold' }, RND = { id: 'random', angle: 278, h: [17, 237, 163], cube: 45, noyau: 310, fond: 200 };
 
 async function jeu(dir, dire) {
   const S = await imp('skins.js', dir);
@@ -65,7 +65,11 @@ ok(S.validerRecette(GOLD).ok && S.validerRecette(RND).ok, 'A recette du catalogu
 for (const [nom, r] of [['id inconnu', { id: 'platine' }], ['teinte 360', { ...RND, cube: 360 }], ['teinte negative', { ...RND, noyau: -1 }], ['teinte decimale', { ...RND, angle: 1.5 }],
   ['deux teintes d anneau', { ...RND, h: [1, 2] }], ['teinte en texte', { ...RND, h: ['1', 2, 3] }], ['null', null], ['tableau', []]]) ok(S.validerRecette(r).ok === false, 'A refusee : ' + nom);
 const memoG = S.memoSkin(BLOCK, GOLD), memoR = S.memoSkin(BLOCK, RND);
-ok(memoG === 'tb-skin:1:' + BLOCK + ':gold' && memoR === 'tb-skin:1:' + BLOCK + ':r.278.17.237.163.45.310', 'A memo : ' + memoG + ' | …' + memoR.slice(-24));
+ok(memoG === 'tb-skin:1:' + BLOCK + ':gold' && memoR === 'tb-skin:1:' + BLOCK + ':r.278.17.237.163.45.310.200', 'A memo : ' + memoG + ' | …' + memoR.slice(-28));
+/* le FOND est la 7e variable (ajoutee le jour meme, avant toute vente) : sans lui la recette est refusee, jamais completee */
+const { fond: _sansFond, ...RND6 } = RND;
+ok(S.validerRecette(RND6).ok === false && S.validerRecette({ ...RND, fond: 360 }).ok === false && S.lireMemoSkin('tb-skin:1:' + BLOCK + ':r.278.17.237.163.45.310').ok === false,
+  'A une recette SANS fond (l ancien format a six nombres) est refusee, a la validation comme a la lecture du memo ; fond 360 aussi');
 ok(M.validerMemo(memoR).etat === 'OK' && new TextEncoder().encode(memoR).length < 100, 'A le memo le plus long tient dans la limite des messages de l app (' + new TextEncoder().encode(memoR).length + ' octets)');
 const lG = S.lireMemoSkin(memoG), lR = S.lireMemoSkin(memoR);
 ok(lG.ok && lG.block === BLOCK && lG.recette.id === 'gold' && lR.ok && JSON.stringify(lR.recette) === JSON.stringify(RND), 'A aller-retour : lireMemoSkin(memoSkin(x)) rend x');

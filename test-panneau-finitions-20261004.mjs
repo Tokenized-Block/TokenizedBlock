@@ -154,24 +154,28 @@ ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) &
 ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
   && /e\.style\.filter = s\.filtre \|\| '';/.test(bcSrc) && !/filtre:/.test((bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0]),
   'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; les skins du catalogue ne retouchent pas l interieur');
-ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /bcPorterSkin\(bcSkinAleatoire\(\)\); bcPeindreBoutique\(\); \}\);/.test(bcSrc) && /return bcSkinDepuisRecette\(\{ id: 'random', angle: t\(\), h: \[h1, h2, h3\], cube: t\(\), noyau: t\(\) \}\);/.test(bcSrc),
-  'C2 « Random » tire a chaque appui une RECETTE d entiers (angle, 3 teintes d anneau, aretes, noyau) — la skin en est derivee');
+ok(/function bcSkinAleatoire\(\) \{/.test(bcSrc) && /bcPorterSkin\(bcSkinAleatoire\(\)\); bcPeindreBoutique\(\); \}\);/.test(bcSrc) && /return bcSkinDepuisRecette\(\{ id: 'random', angle: t\(\), h: \[h1, h2, h3\], cube: t\(\), noyau: t\(\), fond: t\(\) \}\);/.test(bcSrc),
+  'C2 « Random » tire a chaque appui une RECETTE d entiers (angle, 3 teintes d anneau, aretes, noyau, fond) — la skin en est derivee');
 /* quatre variables par skin : anneau, lueur, ARETES du cube, NOYAU aux 128 neurones */
 const catalogue = (bcSrc.match(/const BC_SKINS = Object\.freeze\(\[\n[\s\S]*?\n\]\);/) || [''])[0];
 /* 2026-10-04 (Phil, 3e retour) : « laisse que le bouton random et les parametres en manuel » — le catalogue est parti du panneau */
 ok((catalogue.match(/\{ id: '/g) || []).length === 1 && /cube: null, noyau: null, payant: false/.test(catalogue),
   'C2 le panneau ne propose plus de skins toutes faites : il reste « Original » (sans teinte) et UNE skin reglable');
 const reglages = (bcSrc.match(/const BC_REGLAGES = Object\.freeze\(\[(.*)\]\);/) || ['', ''])[1];
-ok((reglages.match(/\['[^']+', '(h|angle|cube|noyau)', (\d|null)\]/g) || []).length === 6 && /'Edges', 'cube', null/.test(reglages) && /'Core', 'noyau', null/.test(reglages),
-  'C2 six curseurs : trois teintes d anneau, l angle, les ARETES du cube, le NOYAU aux 128 neurones');
+ok((reglages.match(/\['[^']+', '(h|angle|cube|noyau|fond)', (\d|null)\]/g) || []).length === 7 && /'Edges', 'cube', null/.test(reglages) && /'Core', 'noyau', null/.test(reglages) && /'Background', 'fond', null/.test(reglages),
+  'C2 sept curseurs : trois teintes d anneau, l angle, les ARETES du cube, le NOYAU aux 128 neurones, le FOND de la case');
+ok(/if \(cible && Number\.isFinite\(cible\.fond\)\) \{ ctx\.fillStyle = 'hsl\(' \+ cible\.fond \+ ' 45% 9%\)'; ctx\.fillRect\(0, 0, c\.width, c\.height\); \}/.test(html) && /fond: sk && Number\.isFinite\(sk\.fond\) \? sk\.fond : undefined/.test(bcSrc),
+  'C2 le FOND de la case du cerveau est une variable de la skin (panneau seulement) ; sans skin, la toile reste transparente comme avant');
+ok(/try \{ choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market' \}\); \}/.test(html), 'C2 ouvrir un block sur la Map ouvre le panneau sur CE block (vue Market), sans quitter la Map');
 ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
   && /bc\.skinChoisie = true; bcPorterSkin\(bcSkinDepuisRecette\(r\)\);/.test(bcSrc), 'C2 chaque curseur (0 a 359, borne et arrondi) repeint la skin portee depuis sa recette');
 /* une recette reglee a la main est une recette que skins.js ACCEPTE a l achat (sinon on reglerait une skin invendable) */
 ok(/const thCube = cible && Number\.isFinite\(cible\.teinteCube\) \? cible\.teinteCube : thApp;/.test(html) && /const th = cible && Number\.isFinite\(cible\.teinteNoyau\) \? cible\.teinteNoyau : thApp;/.test(html)
   && (html.match(/traitCube\(ctx, f, thCube, (true|false)\)/g) || []).length === 2, 'C2 le dessin du cube prend la teinte des aretes et celle du noyau SEPAREMENT ; sans cible, c est la teinte de l app (rendu d origine inchange)');
 const SK = await imp('skins.js');
-ok(SK.validerRecette({ id: 'random', angle: 210, h: [0, 359, 180], cube: 0, noyau: 359 }).ok === true && /const r = \{ id: 'random', angle: cur\.angle, h: \[cur\.h\[0\], cur\.h\[1\], cur\.h\[2\]\], cube: cur\.cube, noyau: cur\.noyau \}/.test(bcSrc),
-  'C2 la recette reglee a la main a la forme que skins.js accepte a l achat (id random, six entiers de 0 a 359)');
+ok(SK.validerRecette({ id: 'random', angle: 210, h: [0, 359, 180], cube: 0, noyau: 359, fond: 12 }).ok === true && /const r = \{ id: 'random', angle: cur\.angle, h: \[cur\.h\[0\], cur\.h\[1\], cur\.h\[2\]\], cube: cur\.cube, noyau: cur\.noyau, fond: cur\.fond \}/.test(bcSrc)
+  && /return \{ id: 'random', angle: 210, h: \[t, \(t \+ 40\) % 360, \(t \+ 320\) % 360\], cube: t, noyau: t, fond: t \};/.test(bcSrc),
+  'C2 la recette reglee a la main a la forme que skins.js accepte a l achat (id random, SEPT entiers de 0 a 359, dans le meme ordre)');
 /* MES skins sur la Map : propres a chaque wallet */
 const ms = html.slice(html.indexOf('const mesSkins = { compte: null'), html.indexOf('setInterval(() => { void lireMesSkins().then(poserMesSkins); }, 15000);'));
 ok(ms.length > 800 && /fetch\('\/api\/skins\/de\/' \+ moi,/.test(ms) && /valides = moi && mesSkins\.compte === moi \? mesSkins\.parBlock : new Map\(\)/.test(ms),
