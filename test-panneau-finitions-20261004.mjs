@@ -172,6 +172,14 @@ ok(/const thCube = cible && Number\.isFinite\(cible\.teinteCube\) \? cible\.tein
 const SK = await imp('skins.js');
 ok(SK.validerRecette({ id: 'random', angle: 210, h: [0, 359, 180], cube: 0, noyau: 359 }).ok === true && /const r = \{ id: 'random', angle: cur\.angle, h: \[cur\.h\[0\], cur\.h\[1\], cur\.h\[2\]\], cube: cur\.cube, noyau: cur\.noyau \}/.test(bcSrc),
   'C2 la recette reglee a la main a la forme que skins.js accepte a l achat (id random, six entiers de 0 a 359)');
+/* MES skins sur la Map : propres a chaque wallet */
+const ms = html.slice(html.indexOf('const mesSkins = { compte: null'), html.indexOf('setInterval(() => { void lireMesSkins().then(poserMesSkins); }, 15000);'));
+ok(ms.length > 800 && /fetch\('\/api\/skins\/de\/' \+ moi,/.test(ms) && /valides = moi && mesSkins\.compte === moi \? mesSkins\.parBlock : new Map\(\)/.test(ms),
+  'C2 Map : le wallet connecte lit SES skins ; un wallet deconnecte ou CHANGE ne garde pas les anneaux de l autre compte');
+ok(/if \(!moi \|\| CHAINE !== 8453\) \{ mesSkins\.compte = null; mesSkins\.parBlock = new Map\(\); return; \}/.test(ms) && /el\.classList\.remove\('maSkin'\)/.test(ms) && /Number\.isInteger\(n\) && n >= 0 && n <= 359/.test(ms),
+  'C2 Map : sans wallet les anneaux sont RETIRES ; une teinte hors 0..359 n est jamais posee en CSS');
+ok(/\.bloc\.maSkin,\.mapEnv\.a3d \.bloc\.maSkin\{border:2px solid var\(--skinC/.test(html) && /if \(chemin\.startsWith\('\/api\/skins\/de\/'\)\) \{/.test(lire('serveur-web.js'))
+  && /if \(l\.payeur === qui\) parBlock\.set\(l\.block, l\);/.test(lire('serveur-web.js')), 'C2 Map : /api/skins/de/<compte> rend la derniere skin payee par CE compte pour chaque block');
 /* la recherche d un block */
 ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /const j = bcResoudre\(v\);\n\s+if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
   'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');

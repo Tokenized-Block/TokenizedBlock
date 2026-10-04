@@ -3437,6 +3437,16 @@ createServer((req, res) => {
       return;
     }
     if (req.method !== 'GET') { rendreS(405, { ok: false, pourquoi: 'GET only' }); return; }
+    /* les skins d UN ACHETEUR (Phil, 2026-10-04 : « les skins sont propres a l utilisateur… chacun voit son propre block ») :
+     *   GET /api/skins/de/<compte> — sa derniere skin payee pour chaque block. C est un index public de transactions publiques. */
+    if (chemin.startsWith('/api/skins/de/')) {
+      const qui = chemin.slice('/api/skins/de/'.length).toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(qui)) { rendreS(400, { ok: false, pourquoi: 'whole account address required' }); return; }
+      const parBlock = new Map();
+      for (const l of skinsAchats.values()) if (l.payeur === qui) parBlock.set(l.block, l); /* la plus recente ecrase les precedentes */
+      rendreS(200, { ok: true, compte: qui, skins: [...parBlock.values()].slice(-200) });
+      return;
+    }
     if (chemin === '/api/skins/prix') { rendreS(200, { ok: true, prixUsdc: SKIN_PRIX_USDC.toString(), decimales: 6, usdc: USDC_BASE.toLowerCase(), beneficiaire: FEE_WALLET.toLowerCase(), memo: 'tb-skin:1:<block>:<skin>' }); return; }
     const blockS = chemin.slice('/api/skins/'.length).toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(blockS)) { rendreS(400, { ok: false, pourquoi: 'whole block address required' }); return; }

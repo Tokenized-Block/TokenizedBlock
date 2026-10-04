@@ -261,6 +261,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   padding:0;overflow:hidden;transition:border-color .12s,box-shadow .12s;will-change:transform}
 .bloc:hover,.bloc.actif{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .32)}
 .bloc.nous{border:2px solid var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .28);z-index:2}
+/* MA skin sur la Map : le block porte l anneau de la skin que CE wallet a payee pour lui (les autres visiteurs voient le leur, ou rien) */
+.bloc.maSkin,.mapEnv.a3d .bloc.maSkin{border:2px solid var(--skinC,var(--accent));box-shadow:0 0 0 2px var(--skinC2,transparent),0 0 16px var(--skinL,transparent);z-index:2}
 .bloc.pulse{animation:pulseBloc 1.4s ease-out 1}
 @keyframes pulseBloc{0%{box-shadow:0 0 0 0 rgb(var(--accentRgb) / .7)}100%{box-shadow:0 0 0 22px rgb(var(--accentRgb) / 0)}}
 @media (prefers-reduced-motion:reduce){.bloc.pulse{animation:none}}
@@ -2678,7 +2680,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-recherche-skin-curseurs" hidden>Build <code>20261004-recherche-skin-curseurs</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-ma-skin-sur-la-map" hidden>Build <code>20261004-ma-skin-sur-la-map</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22454,6 +22456,7 @@ async function bcEnregistrerSkin(m) {
     if (r && r.ok === true) {
       try { localStorage.removeItem(BC_CLE_SKIN); } catch (_) {}
       bc.skinsLues = 0; /* la liste des skins de ce block est a relire */
+      mesSkins.lu = 0; void lireMesSkins().then(poserMesSkins); /* … et la Map montre tout de suite la skin qu on vient de payer */
       bcEtape(m, 'Recorded. This skin is yours on this block — the transaction says so on chain.', 'oui');
       return;
     }
@@ -22499,6 +22502,38 @@ async function bcAcheterSkin() {
   bcBoutons(m, [['Pay 1 USDC', payer], ['Dismiss', refuser, true]]);
 }
 $('#bcSkinAcheter').addEventListener('click', () => void bcAcheterSkin());
+/* ── MES SKINS SUR LA MAP (Phil, 2026-10-04 : « les skins sont propres a l utilisateur : chacun achete la sienne et voit son propre
+ *    block ») ── le wallet connecte retrouve, sur la Map, l anneau de la skin qu IL a payee pour chaque block. Les autres visiteurs
+ *    ne voient pas la sienne : ils voient la leur, ou le block d origine. Lu dans l index du serveur (/api/skins/de/<compte>) toutes
+ *    les 2 minutes, et tout de suite apres un achat ; pose sur les blocks toutes les 15 s (la Map en cree au fil de l eau).
+ * ⛔ Un wallet deconnecte, ou une lecture ratee, RETIRE les anneaux : on ne montre jamais la skin d un autre compte. */
+const mesSkins = { compte: null, lu: 0, parBlock: new Map(), enVol: false };
+async function lireMesSkins() {
+  const moi = compte ? String(compte).toLowerCase() : null;
+  if (!moi || CHAINE !== 8453) { mesSkins.compte = null; mesSkins.parBlock = new Map(); return; }
+  if (mesSkins.enVol || (mesSkins.compte === moi && Date.now() - mesSkins.lu < 120000)) return;
+  mesSkins.enVol = true;
+  try {
+    const d = await (await fetch('/api/skins/de/' + moi, { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json();
+    if (d && d.ok === true && Array.isArray(d.skins)) {
+      const m = new Map();
+      for (const l of d.skins) if (l && /^0x[0-9a-f]{40}$/.test(String(l.block)) && l.recette && l.recette.id === 'random' && Array.isArray(l.recette.h)) m.set(l.block, l.recette);
+      mesSkins.compte = moi; mesSkins.parBlock = m; mesSkins.lu = Date.now();
+    }
+  } catch (_) { /* reseau : relu au tour suivant */ } finally { mesSkins.enVol = false; }
+}
+function poserMesSkins() {
+  const moi = compte ? String(compte).toLowerCase() : null, valides = moi && mesSkins.compte === moi ? mesSkins.parBlock : new Map();
+  for (const el of document.querySelectorAll('.bloc[data-block]')) {
+    const r = valides.get(String(el.getAttribute('data-block')).toLowerCase());
+    const teinte = (n) => (Number.isInteger(n) && n >= 0 && n <= 359 ? n : null);
+    const h1 = r ? teinte(r.h[0]) : null, h2 = r ? teinte(r.h[1]) : null;
+    if (h1 === null || h2 === null) { if (el.classList.contains('maSkin')) { el.classList.remove('maSkin'); for (const v of ['--skinC', '--skinC2', '--skinL']) el.style.removeProperty(v); } continue; }
+    el.classList.add('maSkin');
+    el.style.setProperty('--skinC', 'hsl(' + h1 + ' 90% 62%)'); el.style.setProperty('--skinC2', 'hsl(' + h2 + ' 90% 45%)'); el.style.setProperty('--skinL', 'hsl(' + h1 + ' 90% 60% / .55)');
+  }
+}
+setInterval(() => { void lireMesSkins().then(poserMesSkins); }, 15000);
 /* qui LANCE un trade : Manual (la personne ecrit ou touche) ou AiFi (le cerveau propose dans ses limites). Le wallet confirme toujours. */
 for (const b of document.querySelectorAll('#bcPanneau [data-mode]')) b.addEventListener('click', () => {
   const full = b.getAttribute('data-mode') === 'full';
