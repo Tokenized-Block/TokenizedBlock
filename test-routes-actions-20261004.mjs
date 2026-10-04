@@ -143,6 +143,9 @@ ok(/if \(c === 'buy_stock' \|\| c === 'sell_stock'\) b\.hidden = estAction;/.tes
   && /b\.setAttribute\('data-pre', p\.cle\);/.test(html) && /bcPeindreTicket\(a, sym, mk, snap\);\s+bcPeindrePre\(a, sym\);/.test(html),
   'C pre-commandes : sur une action, « Buy a stock » / « Sell a stock » sont masquees (doublon) ; « Buy <SYM> » / « Sell <SYM> » portent le nom');
 
+ok(/for \(const p of PRECOMMANDES\) \{[\s\S]{0,520}if \(p\.cle === 'tasks'\) continue;\s+const b = bcEl\('button', \{ type: 'button', cls: 'puce', text: p\.libelle \}\);/.test(html),
+  'C la puce « What can it do? » n est plus affichee (Phil : « retire ca ») — la commande ecrite `tasks` reste dans la grammaire');
+
 console.log('— D. mutants');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-routes-'));
 const copie = () => { const dir = fs.mkdtempSync(path.join(tmp, 'm-')); for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) && !/^(serveur-web|vendor|mcp-ext-apps)/.test(f)) fs.copyFileSync(path.join(ICI, f), path.join(dir, f)); return dir; };
