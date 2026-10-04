@@ -488,6 +488,91 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .pLarge{grid-column:1/-1}
 .pJeu{margin:14px 0 0;background:var(--creux);border:1px solid var(--ligne);border-radius:var(--rs);padding:12px}
 .pJeuTete{display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* ── le panneau de commande (extension de l onglet Brain, 2026-10-04) : le block au centre, les vues en bas ── */
+.bcHaut{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bcHaut .bcPousse{flex:1}
+/* le block et ses chiffres cote a cote : la barre de commande doit rester a portee sans defiler (1er jet : tout empile, le champ
+   tombait sous l ecran d un telephone) */
+.bcScene{display:flex;align-items:center;gap:14px;margin:12px 0 4px}
+.bcInfos{flex:1;min-width:0}
+.bcAvatar{flex:0 0 auto;width:92px;height:92px;border-radius:22px;padding:3px;background:conic-gradient(from 210deg,var(--accent),var(--ligne),var(--accent));transition:filter .4s}
+.bcAvatar>div{width:100%;height:100%;border-radius:19px;overflow:hidden;background:var(--creux);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--accent)}
+@media (min-width:620px){.bcAvatar{width:128px;height:128px;border-radius:26px}.bcAvatar>div{border-radius:23px}}
+#bcRaster{height:64px;margin-top:8px}
+.bcAvatar svg{width:100%;height:100%;display:block}
+.bcAvatar[data-phase="EXCITE"]{filter:drop-shadow(0 0 16px rgb(var(--accentRgb) / .75))}
+.bcAvatar[data-phase="DORMANT"],.bcAvatar[data-phase="NON_LU"]{filter:grayscale(.7)}
+.bcNom{font-size:18px;font-weight:700;overflow-wrap:anywhere}
+.bcChips{display:flex;gap:6px;flex-wrap:wrap}
+.bcChips span{border:1px solid var(--ligne);border-radius:10px;padding:4px 8px;font-size:10px;color:var(--doux);text-transform:uppercase;letter-spacing:.4px}
+.bcChips b{display:block;font-size:13px;color:var(--texte);text-transform:none;letter-spacing:0}
+.bcVue{display:none;margin-top:10px}
+.bcVue.on{display:block}
+.bcLigne{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--ligne)}
+.bcLigne:last-child{border-bottom:0}
+.bcLigne span:first-child{color:var(--doux)}
+.bcFil{display:flex;flex-direction:column;gap:8px;max-height:44vh;overflow-y:auto}
+.bcMsg{border:1px solid var(--ligne);border-radius:14px;padding:9px 12px;background:var(--creux)}
+.bcMsg .bcQui{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);margin-bottom:3px}
+.bcMsg.agent{border-color:var(--accent)}
+.bcMsg ul{list-style:none;margin:6px 0 0;padding:0}
+.bcMsg li{font-size:13px;padding:2px 0}
+.bcMsg li.oui{color:#6ee7b7}
+.bcMsg li.non{color:#fca5a5}
+.bcMsg .bcBoutons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.bcPre{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+.bcPre button{appearance:none;font-family:inherit;cursor:pointer;color:var(--texte)}
+.bcPre button:hover{border-color:var(--accent)}
+/* la barre de commande : UN champ et son bouton dans le meme cadre (le premier jet laissait un champ blanc nu sous des boutons pleine largeur) */
+.bcComposer{display:flex;align-items:center;gap:8px;background:rgb(var(--fondRgb) / .75);border:1px solid rgb(var(--accentRgb) / .28);
+  border-radius:16px;padding:5px 5px 5px 14px;transition:border-color .2s ease,box-shadow .2s ease}
+.bcComposer:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .18),0 0 18px rgb(var(--accentRgb) / .15)}
+.bcInvite{color:var(--accent);font-weight:700;font-size:18px;line-height:1;user-select:none}
+.bcComposer input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--texte);font:inherit;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:15px;padding:10px 0}
+.bcComposer input::placeholder{color:var(--doux);opacity:.65}
+.bcEnvoyer{appearance:none;border:0;flex:0 0 auto;width:42px;height:42px;border-radius:12px;cursor:pointer;font-size:17px;line-height:1;
+  background:linear-gradient(180deg,var(--accent2),var(--accent));color:hsl(var(--h) 60% 10%);transition:transform .12s ease}
+.bcEnvoyer:active{transform:scale(.94)}
+/* les vues, en bas : une barre segmentee, pas quatre boutons empiles */
+.bcOnglets{display:flex;gap:4px;margin-top:14px;padding:4px;background:rgb(var(--fondRgb) / .6);border:1px solid var(--ligne);border-radius:14px}
+.bcOnglets button{appearance:none;flex:1 1 0;min-width:0;border:0;background:transparent;color:var(--doux);font:inherit;font-weight:600;
+  font-size:13px;padding:9px 4px;border-radius:10px;cursor:pointer;transition:background .15s ease,color .15s ease}
+.bcOnglets button[aria-selected="true"]{background:rgb(var(--boutonRgb));color:var(--texte)}
+.bcHaut .bouton,.bcMsg .bcBoutons .bouton{width:auto;min-height:0;padding:8px 14px;font-size:13px}
+.bcSousTitre{margin:14px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--doux)}
+.bcListe{list-style:none;margin:0;padding:0}
+.bcListe li{display:flex;gap:8px;align-items:baseline;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--ligne);font-size:13px}
+.bcListe li:last-child{border-bottom:0}
+.bcListe li.note{display:block;border-bottom:0}
+.bcListe .bcEtat{flex:0 0 auto;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+.bcListe .bcEtat.oui{color:#6ee7b7}
+.bcListe .bcEtat.non{color:#fca5a5}
+.bcListe .bcEtat.cours{color:#fcd34d}
+.bcListe button{appearance:none;border:0;background:transparent;color:var(--accent);font:inherit;cursor:pointer;padding:0;text-align:left}
+canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
+.bcSkin{display:flex;gap:14px;align-items:center;margin-top:12px;padding:12px;border:1px solid var(--ligne);border-radius:16px;background:var(--creux)}
+.bcSkinFace{flex:0 0 auto;width:96px;height:96px;border-radius:20px;overflow:hidden;border:1px solid var(--ligne);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--accent)}
+.bcSkinFace svg{width:100%;height:100%;display:block}
+.bcSkinTexte{flex:1;min-width:0}
+.bcSkin .bouton{width:auto;min-height:0;padding:8px 14px;font-size:13px}
+.bcSkin .bouton:disabled{opacity:.55;cursor:not-allowed}
+.bcMsg a{display:inline-block;margin-top:6px;color:var(--accent)}
+/* le panneau est un POP-UP (Phil, 2026-10-04 : « idealement ca pop comme un pop-up ») ouvert par le widget de l onglet Brain */
+dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;max-width:720px;width:calc(100% - 20px);max-height:94dvh;overflow:visible}
+dialog.bcPop::backdrop{background:rgb(var(--fondRgb) / .8);backdrop-filter:blur(4px)}
+dialog.bcPop>.carte{margin:0;max-height:94dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
+.bcFil{scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
+dialog.bcPop[open]{animation:bcPop .18s ease-out}
+@keyframes bcPop{from{transform:translateY(14px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){dialog.bcPop[open]{animation:none}}
+.bcLanceurIn{display:flex;align-items:center;gap:12px}
+.bcMini{flex:0 0 auto;width:56px;height:56px;border-radius:14px;overflow:hidden;background:var(--creux);border:1px solid var(--ligne);
+  display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--accent)}
+.bcMini svg{width:100%;height:100%;display:block}
+dialog.bcDialogue{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:16px;max-width:560px;width:calc(100% - 32px);padding:16px}
+dialog.bcDialogue::backdrop{background:rgb(var(--fondRgb) / .75)}
+dialog.bcDialogue pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--creux);border:1px solid var(--ligne);border-radius:10px;padding:10px;font-size:12px}
 .pBadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
   border:1px solid var(--accent);border-radius:99px;padding:4px 10px}
 .pPV{color:var(--doux);font-size:12px;font-weight:700}
@@ -1576,6 +1661,98 @@ details[open] > summary::before{transform:rotate(90deg)}
        ⛔ UN MODELE, ET IL LE DIT. Ce n est pas un connectome biologique : 128 neurones a fuite,
           semes par l adresse du block. Ce qu il fait est visible ici plutot que raconte. -->
   <section class="volet" id="v-brain" aria-label="Brain AI">
+    <!-- ══ LE PANNEAU DE COMMANDE (2026-10-04) — une EXTENSION de cet onglet : il montre le MEME cerveau (memoire, nourriture, journal,
+         raster) que les cartes du dessous, pas une copie. On ecrit une commande ou on en touche une ; le cerveau la juge ; le plan
+         est construit et simule ; le wallet signe. Un agent (Claude, Grok…) peut PROPOSER par le MCP — jamais signer. -->
+    <dialog class="bcPop" id="bcPop" aria-label="Control panel">
+    <div class="carte" id="bcPanneau">
+      <div class="bcHaut">
+        <p class="titre" style="margin:0">Control panel</p>
+        <span class="bcPousse"></span>
+        <span class="puce" id="bcAgent">Agent: not connected</span>
+        <button type="button" class="bouton sec" id="bcLier">Agent link</button>
+        <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">Close</button>
+      </div>
+      <div class="bcScene">
+        <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
+        <div class="bcInfos">
+          <div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
+          <p class="note" id="bcHumeur" style="margin:2px 0 8px"></p>
+          <div class="bcChips">
+            <span>Price<b id="bcPrix">—</b></span><span>Liquidity<b id="bcLiq">—</b></span><span>Mood<b id="bcPhase">—</b></span><span>Beat<b id="bcTick">—</b></span>
+          </div>
+        </div>
+      </div>
+      <canvas id="bcRaster" width="640" height="110" class="toile" aria-label="Neurons firing, beat by beat"></canvas>
+
+      <div class="bcVue on" id="bc-chat">
+        <div class="bcFil" id="bcFil" aria-live="polite"></div>
+        <div class="bcPre" id="bcPre"></div>
+        <form id="bcForm" class="bcComposer" autocomplete="off">
+          <span class="bcInvite" aria-hidden="true">›</span>
+          <input id="bcSaisie" placeholder="buy NVDAc with 5 USDC" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="send" aria-label="Command for the brain">
+          <button type="submit" class="bcEnvoyer" aria-label="Send to the brain" title="Send to the brain">➤</button>
+        </form>
+        <p class="note" id="bcNote">Write a command or tap one above, then adjust it. Type “help” for the list. Nothing moves until you sign in your wallet.</p>
+      </div>
+      <div class="bcVue" id="bc-market">
+        <div id="bcMarche"><p class="note">No block chosen yet.</p></div>
+        <p class="bcSousTitre">Other blocks — trades read on chain</p>
+        <ul class="bcListe" id="bcAutres"><li class="note">No trade read yet in this session.</li></ul>
+        <p class="bcSousTitre">Most traded today</p>
+        <div class="bcPre" id="bcMouvants"></div>
+      </div>
+      <div class="bcVue" id="bc-trade">
+        <p class="bcSousTitre" style="margin-top:0">In progress</p>
+        <ul class="bcListe" id="bcEnCours"><li class="note">Nothing in progress.</li></ul>
+        <p class="bcSousTitre">Quick trades for the block shown</p>
+        <div class="bcPre" id="bcRapides"></div>
+        <p class="bcSousTitre">History in this browser</p>
+        <ul class="bcListe" id="bcHistorique"><li class="note">Nothing yet.</li></ul>
+        <p class="bcSousTitre">What its brain noted</p>
+        <ul class="bcListe" id="bcNotesBot"><li class="note">No note yet — the brain writes one after each transaction you sign here.</li></ul>
+      </div>
+      <div class="bcVue" id="bc-brain">
+        <!-- le MEME dessin que la carte « Its wiring » de l onglet Brain : son canvas est recopie ici a chaque battement -->
+        <canvas id="bcReseau" width="560" height="420" class="toile bcCube" aria-label="The block’s brain: 128 neurons and their links, firing"></canvas>
+        <p class="note" id="bcReseauNote" style="text-align:center">The block is the cube; its brain lives inside — each dot a neuron, each line a link. Turn and zoom it from “Its wiring” in the Brain tab.</p>
+        <!-- 2026-10-04 (Phil) : la liste des taches n a rien a faire ici (« ca on s en fout ») — a sa place, la PEAU du block, et le
+             bouton des skins. ⛔ Ce bouton NE MARCHE PAS ENCORE, et il le dit : desactive, sans prix, sans date. -->
+        <div class="bcSkin">
+          <div class="bcSkinFace" id="bcSkinFace">◈</div>
+          <div class="bcSkinTexte">
+            <p class="bcSousTitre" style="margin:0 0 4px">Its skin</p>
+            <p class="note" style="margin:0 0 8px">The face engraved with this block — what covers its brain today.</p>
+            <button type="button" class="bouton sec" id="bcSkins" disabled aria-disabled="true">Skins — not available yet</button>
+            <p class="note" style="margin:6px 0 0">The idea: a skin you buy to cover the brain, or one you propose yourself — like a skin in a video game.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bcOnglets" role="tablist" aria-label="Control panel views">
+        <button type="button" role="tab" data-bc="chat" aria-selected="true">Chat</button>
+        <button type="button" role="tab" data-bc="market" aria-selected="false">Market</button>
+        <button type="button" role="tab" data-bc="trade" aria-selected="false">Trade</button>
+        <button type="button" role="tab" data-bc="brain" aria-selected="false">Brain</button>
+      </div>
+    </div>
+    </dialog>
+    <dialog class="bcDialogue" id="bcDialogue">
+      <p class="titre" style="margin:0 0 6px">Connect Claude, or any model, to this panel</p>
+      <p class="note" style="margin-top:0">The panel is wired to this block’s brain. Your agent reads its mood and what it accepts, and proposes commands here — swaps, sends, births. Only your wallet signs.</p>
+      <p class="bcSousTitre">1 · Add the MCP server</p>
+      <pre id="bcLierMcp">https://tokenizedblock.space/mcp</pre>
+      <p class="note" style="margin:0">Claude, web or desktop: add it as a custom connector. Claude Code:</p>
+      <pre id="bcLierCode">claude mcp add --transport http tokenizedblock https://tokenizedblock.space/mcp</pre>
+      <p class="note" style="margin:0">Any other MCP client (Grok and others): a remote server over HTTP at that address. No key, no sign-in.</p>
+      <p class="bcSousTitre">2 · Give it this session</p>
+      <pre id="bcLierSession">…</pre>
+      <p class="bcSousTitre">Without MCP</p>
+      <pre id="bcLierHttp">POST https://tokenizedblock.space/api/panel/commande
+{"s":"&lt;session&gt;","commande":{"type":"say","text":"hello"}}</pre>
+      <p class="note">Whoever has this session can propose commands to this panel. They can never sign: your wallet does, one click at a time.</p>
+      <div class="rang" style="gap:8px"><button type="button" class="bouton" id="bcLierCopier">Copy for my agent</button><button type="button" class="bouton sec" id="bcLierFermer">Close</button></div>
+    </dialog>
     <div class="carte">
       <p class="titre">Brain AI</p>
       <p class="sous">128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> — feeds on market + chain, moves the block, <b>signs nothing</b>.
@@ -1795,6 +1972,18 @@ details[open] > summary::before{transform:rotate(90deg)}
         </div>
       </div>
       <p class="note mono" id="bEmpreinte"></p>
+    </div>
+
+    <!-- 2026-10-04 (Phil, capture annotee : ICI, entre « Its wiring » et « Its job ») : le widget qui OUVRE le panneau de commande. -->
+    <div class="carte" id="bcLanceur">
+      <div class="bcLanceurIn">
+        <div class="bcMini" id="bcMini">◈</div>
+        <div style="flex:1;min-width:0">
+          <p class="titre" style="margin:0">Control panel</p>
+          <p class="sous" style="margin:4px 0 0">Direct this block like a personal trading bot: write a command or tap one — swap, send, buy a tokenized stock. Its brain judges, your wallet signs. An AI agent can propose commands too.</p>
+        </div>
+      </div>
+      <button type="button" class="bouton" id="bcOuvrir" style="margin-top:12px">Open the control panel</button>
     </div>
 
     <div class="carte">
@@ -2339,7 +2528,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-secours-paire-et-retrait" hidden>Build <code>20261004-secours-paire-et-retrait</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-panneau-pop-up-cerveau" hidden>Build <code>20261004-panneau-pop-up-cerveau</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3303,7 +3492,8 @@ import { resumerTransaction } from './resume-tx.js';
 import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from './origine.js';
 import { pensees, ajouterAuJournal, entreeBotAction } from './journal-cerveau.js';
 import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
-import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1 } from './brain-tasks.js';
+import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1, tacheAutorisee } from './brain-tasks.js';
+import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -18925,8 +19115,13 @@ function publierSnapshotBrain(vu, h) {
   const reg = reglesLues(brainAdr);
   const marcheExtra = (() => {
     try {
+      /* ⛔⛔ 2026-10-04 — LUE PUIS JETEE, encore (mesure dans le panneau de commande) : pour un block HORS CARTE dont le profil n est
+       *   pas ouvert, le cerveau BAT avec `brainMarche` (battreBrain le lui donne) — humeur « calm » — mais l instantane disait
+       *   `etatVie: null`. La porte des taches lisait donc « market unread » et REFUSAIT tout echange sur un marche que le cerveau
+       *   venait de lire. Le marche dont le cerveau s est nourri est celui que l instantane rapporte. */
+      const mB = !h && brainMarche && brainMarche.adr === String(brainAdr).toLowerCase() ? brainMarche.v : null;
       const mp = marcheProfil && String(marcheProfil.adr).toLowerCase() === String(brainAdr).toLowerCase()
-        ? marcheProfil.v : null;
+        ? marcheProfil.v : mB;
       if (!mp || mp.etat !== 'LUE') {
         if (h && h.cle) {
           const infoH = infoHookMarche({ etat: 'LUE', vie: h.vie, via: h.via, cle: h.cle });
@@ -19005,6 +19200,7 @@ function publierSnapshotBrain(vu, h) {
       + ' · localStorage[tb-brain-last]';
   }
   try { peindreTasks(snap); } catch (e) { /* tasks */ }
+  try { bcPeindre(snap); } catch (e) { /* le panneau de commande lit CE snapshot — le meme, pas une copie */ }
   return snap;
 }
 
@@ -21022,6 +21218,497 @@ async function ouvrirRailFiat(evt, lien, actif) {
 
 /* ── Brain AI ───────────────────────────────────────────────────────────────────────────────── */
 $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
+
+/* ══ LE PANNEAU DE COMMANDE (2026-10-04) — extension de l onglet Brain ════════════════════════════════════════════════════════════
+ * ⛔⛔ POURQUOI ICI ET PAS DANS UNE PAGE A PART : une premiere version (panel.html) faisait tourner SA copie du reseau, nourrie du
+ *   marche seul — donc un cerveau different de celui de l app (ni memoire, ni nourriture on-chain, ni journal), et des visages
+ *   absents. Phil : « fais l extension de l onglet Brain en panel, mais les donnees sont les memes ». Ce panneau LIT donc
+ *   `window.__TB_BRAIN_SNAPSHOT__` et `brainHisto` — les objets memes que les cartes du dessous — et dessine le visage par `dessin()`.
+ * ⛔ RIEN NE SE SIGNE SANS LA PERSONNE. Une commande (ecrite ici, touchee dans les pre-commandes, ou PROPOSEE par un agent via le
+ *   MCP) passe : (1) la porte du cerveau quand elle touche ce block (brain-tasks.js, deterministe — pas un modele de langage) ;
+ *   (2) un plan construit et SIMULE par le serveur (/api/rails/plan : appels non signes) ; (3) le wallet, etape par etape.
+ * ⛔ UN ENVOI (send) montre le destinataire EN ENTIER, relit le solde, et quand il vient d un AGENT exige un clic de plus.
+ * ⛔ Tout texte venu d un agent ou de la chaine est pose en textContent. `dessin()` rend notre propre SVG.
+ * ⛔ NON MESURE : une signature depuis ce panneau avec un vrai wallet. */
+const bc = { session: null, dernier: 0, agentVu: 0, avatarDe: null, minuterie: null, ops: [], marchePeint: 0, cerveauEnvoye: 0, phaseEnvoyee: null };
+/* ── les operations : ce qui est EN COURS (propose, plan pret, dans le wallet, envoye) et l HISTORIQUE, garde dans ce navigateur ──
+ * ⛔ Une operation « en cours » retrouvee au rechargement n a plus sa carte : elle devient « left unfinished » — jamais « done ». */
+const BC_CLE_OPS = 'tblock.panel.ops';
+const BC_EN_COURS = ['proposed', 'planned', 'signing', 'sent'];
+const BC_ETATS = { proposed: ['waiting for you', 'cours'], planned: ['plan ready', 'cours'], signing: ['in your wallet', 'cours'], sent: ['sent, not confirmed', 'cours'],
+  done: ['done', 'oui'], declined: ['declined', ''], failed: ['failed', 'non'], refused: ['refused by the brain', 'non'], interrupted: ['left unfinished', ''] };
+function bcChargerOps() {
+  try {
+    const j = JSON.parse(localStorage.getItem(BC_CLE_OPS) || '[]');
+    bc.ops = (Array.isArray(j) ? j : []).filter((o) => o && typeof o.texte === 'string' && BC_ETATS[o.etat]).slice(0, 40)
+      .map((o) => (BC_EN_COURS.includes(o.etat) ? { ...o, etat: o.etat === 'sent' ? 'sent' : 'interrupted' } : o));
+  } catch (_) { bc.ops = []; }
+}
+function bcSauverOps() { try { localStorage.setItem(BC_CLE_OPS, JSON.stringify(bc.ops.slice(0, 40))); } catch (_) { /* stockage prive */ } bcPeindreOps(); }
+function bcOp(texte, qui) {
+  const op = { id: Date.now() + '-' + bc.ops.length, t: Date.now(), texte: String(texte).slice(0, 160), qui: String(qui).slice(0, 20), etat: 'proposed', tx: null };
+  bc.ops.unshift(op); bc.ops = bc.ops.slice(0, 40);
+  bcSauverOps();
+  return op;
+}
+function bcOpMaj(op, etat, tx) { if (!op || !BC_ETATS[etat]) return; op.etat = etat; if (tx) op.tx = tx; bcSauverOps(); }
+function bcPeindreOps() {
+  const ligne = (o) => {
+    const [lib, cls] = BC_ETATS[o.etat];
+    const gauche = bcEl('span', {}, [bcEl('span', { text: o.texte + ' ' }), bcEl('span', { cls: 'note', text: '· ' + o.qui + ' · ' + new Date(o.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })]);
+    if (o.tx && /^0x[0-9a-f]{64}$/i.test(o.tx)) gauche.append(document.createTextNode(' '), bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + o.tx, target: '_blank', rel: 'noopener', text: court(o.tx) }));
+    return bcEl('li', {}, [gauche, bcEl('span', { cls: 'bcEtat ' + cls, text: lib })]);
+  };
+  const remplir = (sel, liste, vide) => { const ul = $(sel); if (!ul) return; ul.textContent = ''; if (!liste.length) ul.append(bcEl('li', { cls: 'note', text: vide })); else for (const o of liste) ul.append(ligne(o)); };
+  remplir('#bcEnCours', bc.ops.filter((o) => BC_EN_COURS.includes(o.etat)), 'Nothing in progress.');
+  remplir('#bcHistorique', bc.ops.filter((o) => !BC_EN_COURS.includes(o.etat)).slice(0, 15), 'Nothing yet.');
+}
+const bcEl = (tag, props = {}, enfants = []) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === 'cls') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v); }
+  for (const c of enfants) e.append(c);
+  return e;
+};
+function bcMessage(qui, classe, texte) {
+  const m = bcEl('div', { cls: 'bcMsg ' + classe }, [bcEl('div', { cls: 'bcQui', text: qui }), bcEl('div', { text: texte })]);
+  $('#bcFil').append(m);
+  m.scrollIntoView({ block: 'nearest' });
+  return m;
+}
+function bcEtape(m, texte, classe = '') {
+  let ul = m.querySelector('ul');
+  if (!ul) { ul = document.createElement('ul'); m.append(ul); }
+  ul.append(bcEl('li', { cls: classe, text: texte }));
+  m.scrollIntoView({ block: 'nearest' });
+}
+function bcBoutons(m, liste) {
+  const vieux = m.querySelector('.bcBoutons'); if (vieux) vieux.remove();
+  if (!liste.length) return;
+  const d = bcEl('div', { cls: 'bcBoutons' });
+  for (const [texte, action, sec] of liste) {
+    const b = bcEl('button', { type: 'button', cls: 'bouton' + (sec ? ' sec' : ''), text: texte });
+    b.addEventListener('click', () => { for (const x of d.querySelectorAll('button')) x.disabled = true; void action(); });
+    d.append(b);
+  }
+  m.append(d);
+}
+function bcVue(nom) {
+  for (const b of document.querySelectorAll('#bcPanneau [data-bc]')) b.setAttribute('aria-selected', String(b.getAttribute('data-bc') === nom));
+  for (const v of document.querySelectorAll('#bcPanneau .bcVue')) v.classList.toggle('on', v.id === 'bc-' + nom);
+}
+/* ── la session de telecommande (panel-sessions.js cote serveur) : ouverte a la demande, jamais dans une URL ── */
+async function bcApi(chemin, corps) {
+  const r = await fetch(chemin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps), signal: AbortSignal.timeout(15000) });
+  return { code: r.status, j: await r.json().catch(() => null) };
+}
+const bcNoter = (evenement) => { if (bc.session) bcApi('/api/panel/evenement', { s: bc.session, evenement }).catch(() => {}); };
+async function bcOuvrirSession(connue) {
+  if (connue && /^[0-9a-f]{32}$/.test(connue)) bc.session = connue;
+  /* trois essais : au tout premier chargement (mesure locale) l ouverture a echoue une fois, et le panneau restait sans session */
+  for (let essai = 0; essai < 3 && !bc.session; essai += 1) {
+    const r = await bcApi('/api/panel/ouvrir', {}).catch(() => null);
+    if (r && r.j && r.j.ok) bc.session = r.j.session;
+    else await new Promise((o) => setTimeout(o, 1200));
+  }
+  $('#bcLierSession').textContent = bc.session ? 'session: ' + bc.session : 'No session could be opened — try again.';
+  if (bc.session && !bc.minuterie) bc.minuterie = setInterval(() => void bcInterroger(), 2000);
+  if (bc.session && brainAdr) bcNoter({ type: 'ready', block: String(brainAdr).toLowerCase(), ...(compte ? { account: String(compte).toLowerCase() } : {}) });
+  return bc.session;
+}
+async function bcInterroger() {
+  if (!bc.session) return;
+  try {
+    const r = await bcApi('/api/panel/commandes', { s: bc.session, depuis: bc.dernier });
+    if (r.code === 404) {
+      bc.session = null; bc.dernier = 0;
+      await bcOuvrirSession(null);
+      bcMessage('Panel', '', 'This session ended (2 hours without activity, or the server restarted). A new one is open: give the new session to your agent from “Agent link”.');
+      return;
+    }
+    if (!r.j || !r.j.ok) return;
+    for (const c of r.j.commandes) { bc.dernier = Math.max(bc.dernier, c.n); bc.agentVu = Date.now(); await bcRecevoir(c); }
+    const actif = Date.now() - bc.agentVu < 120000;
+    $('#bcAgent').textContent = actif ? 'Agent: connected' : 'Agent: not connected';
+  } catch (_) { /* reseau : on reessaie au tour suivant */ }
+}
+/* ── les jetons : le registre d abord (un block nomme « USDC » ne prend pas la place de l USDC), puis les blocks du Market ── */
+function bcResoudre(ref) {
+  const r = String(ref || '').trim();
+  if (/^(this|it|block)$/i.test(r)) {
+    if (!brainAdr) return { ok: false, pourquoi: 'pick a block first (“this” is the block shown)' };
+    const mk = marcheParAdr.get(String(brainAdr).toLowerCase());
+    return { ok: true, adr: String(brainAdr).toLowerCase(), sym: (mk && mk.sym) || (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.symbole) || court(brainAdr) };
+  }
+  const registre = [...DEVISES_BASE.filter((d) => d.chaines.includes(8453)), ...ACTIONS_COINBASE];
+  if (/^0x[0-9a-fA-F]{40}$/.test(r)) {
+    /* une adresse garde son adresse ; on lui donne seulement son NOM : le registre d abord, sinon l index du Market, sinon l adresse abregee */
+    const parAdr = registre.find((d) => String(d.adr).toLowerCase() === r.toLowerCase()), mk = marcheParAdr.get(r.toLowerCase());
+    return { ok: true, adr: r.toLowerCase(), sym: (parAdr && parAdr.symbole) || (mk && mk.sym) || court(r) };
+  }
+  const haut = r.toUpperCase();
+  const reg = registre.find((d) => String(d.symbole).toUpperCase() === haut);
+  if (reg) return { ok: true, adr: String(reg.adr).toLowerCase(), sym: reg.symbole };
+  const trouves = [...marcheParAdr.values()].filter((l) => String(l.sym || '').toUpperCase() === haut);
+  if (trouves.length === 1) return { ok: true, adr: String(trouves[0].adr).toLowerCase(), sym: trouves[0].sym };
+  if (trouves.length > 1) return { ok: false, pourquoi: trouves.length + ' blocks are named ' + r + ' — paste the address of the one you mean' };
+  return { ok: false, pourquoi: 'nothing named ' + r + ' is known here — paste its whole address' };
+}
+const bcDecCache = new Map([[ETH_ADR.toLowerCase(), 18]]);
+async function bcDecimales(adr) {
+  const a = String(adr).toLowerCase();
+  if (bcDecCache.has(a)) return bcDecCache.get(a);
+  const d = Number(BigInt(await rpc('eth_call', [{ to: a, data: '0x313ce567' }, 'latest'])));
+  if (!Number.isInteger(d) || d < 0 || d > 36) throw new Error('decimals unread');
+  bcDecCache.set(a, d);
+  return d;
+}
+const bcUnites = (brut, dec) => { const s = BigInt(brut).toString().padStart(dec + 1, '0'); const f = dec ? s.slice(s.length - dec).replace(/0+$/, '').slice(0, 8) : ''; return s.slice(0, s.length - dec) + (f ? '.' + f : ''); };
+const bcSolde = async (jeton, qui) => (String(jeton).toLowerCase() === ETH_ADR.toLowerCase() ? BigInt(await rpc('eth_getBalance', [qui, 'latest']))
+  : BigInt(await rpc('eth_call', [{ to: jeton, data: '0x70a08231' + String(qui).slice(2).toLowerCase().padStart(64, '0') }, 'latest'])));
+/** Signe une suite d appels, un par un, dans l ordre ; s arrete au premier qui n est pas confirme. */
+async function bcSigner(m, appels) {
+  let hash = null;
+  for (let i = 0; i < appels.length; i += 1) {
+    const c = appels[i];
+    bcEtape(m, 'Step ' + (i + 1) + ' of ' + appels.length + ': ' + (c.nom || 'transaction') + ' — check it in your wallet…');
+    let r;
+    try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, to: c.to, data: c.data || '0x', value: c.value || '0x0' }); }
+    catch (e) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
+    if (r.etat !== 'CONFIRME') {
+      const refuse = estRefusWallet(r);
+      bcEtape(m, refuse ? 'You declined in your wallet — nothing more was sent.' : aEteDiffusee(r.etat) ? 'Sent, not confirmed yet — do not sign it again; check your wallet.'
+        : 'It did not go through: ' + String(r.pourquoi || r.etat).slice(0, 160), 'non');
+      return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash };
+    }
+    hash = r.hash; bcEtape(m, 'Confirmed.', 'oui');
+  }
+  return { ok: true, hash };
+}
+/** Le cerveau ecrit sa note (meme journal que la carte « Bot loop ») : seulement apres une transaction CONFIRMEE. */
+function bcJournal(action, hash) {
+  if (!brainAdr) return;
+  try {
+    const line = entreeBotAction({ action, paid: true, resultat: 'tx ' + court(hash), parce_que: 'Control panel · you signed · Brain journal write only' });
+    const j = ajouterAuJournal(journalLu(brainAdr), (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.tick) || 0, [line]);
+    localStorage.setItem(CLE_JOURNAL + String(brainAdr).toLowerCase(), JSON.stringify(j));
+    peindreJournal(brainAdr, j);
+  } catch (_) { /* stockage prive : la transaction, elle, est sur la chaine */ }
+}
+async function bcAvecWallet(m, suite) {
+  if (compte) return true;
+  bcEtape(m, 'Connect your wallet first — the plan is built for the wallet that signs.', 'non');
+  bcBoutons(m, [['Connect wallet', async () => { try { await connecter(); } catch (_) {} if (compte) void suite(); else bcBoutons(m, [['Connect wallet', () => bcAvecWallet(m, suite)]]); }]]);
+  return false;
+}
+/** Un echange entre deux jetons (adresses), montant en unites brutes du jeton paye. `ref` = le numero de la commande d un agent. */
+async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
+  const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
+  let decDe = null, decVers = null;
+  try { decDe = await bcDecimales(de.adr); decVers = await bcDecimales(vers.adr); } catch (_) { /* l affichage tombe sur les unites brutes */ }
+  const libelle = (decDe === null ? montant + ' raw units of ' : bcUnites(montant, decDe) + ' ') + de.sym + ' → ' + vers.sym;
+  const m = bcMessage(qui + ' · swap', classe, libelle);
+  const op = bcOp('Swap ' + libelle, qui);
+  bcVue('chat');
+  const refs = ref ? { ref } : {};
+  /* (1) la porte du cerveau — seulement si l echange touche le block affiche ; sinon il n a rien a juger, et on le DIT */
+  if (moi && (de.adr === moi || vers.adr === moi)) {
+    const g = tacheAutorisee('trade_tblock', window.__TB_BRAIN_SNAPSHOT__ || {});
+    const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
+    bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + (g.pourquoi || 'not now') + '.', g.ok ? 'oui' : 'non');
+    bcNoter({ type: 'verdict', ...refs, etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts trade_tblock' : String(g.pourquoi || 'refused') });
+    if (!g.ok) { bcOpMaj(op, 'refused'); return; }
+  } else bcEtape(m, 'This trade does not touch the block shown: its brain does not judge it, it only notes it once you have signed.');
+  const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
+  const planifier = async () => {
+    if (!(await bcAvecWallet(m, planifier))) return;
+    bcEtape(m, 'Building the plan and simulating it on chain…');
+    let p;
+    try {
+      const r = await fetch('/api/rails/plan?de=' + (de.adr === ETH_ADR.toLowerCase() ? 'ETH' : de.adr) + '&vers=' + (vers.adr === ETH_ADR.toLowerCase() ? 'ETH' : vers.adr)
+        + '&montant=' + montant + '&compte=' + String(compte).toLowerCase(), { signal: AbortSignal.timeout(120000) });
+      p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute', aSigner: [] } : await r.json();
+    } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched', aSigner: [] }; }
+    bcNoter({ type: 'plan', ...refs, etat: String(p.etat || '').slice(0, 20), ...(p.pourquoi ? { text: String(p.pourquoi) } : {}) });
+    if (p.etat !== 'PRET' && p.etat !== 'APPROBATIONS') {
+      bcEtape(m, (p.etat === 'REFUSE' ? 'Refused: ' : 'Not read: ') + String(p.pourquoi || 'no reason given').slice(0, 220), 'non');
+      bcBoutons(m, [['Try again', planifier, true]]);
+      return;
+    }
+    const rs = p.resume || {};
+    if (rs.fraisBps !== undefined && rs.fraisBps !== null) bcEtape(m, 'Fee: ' + (Number(rs.fraisBps) / 100) + ' % of the trade, taken inside the transaction.');
+    if (rs.recoitAuMoins !== undefined && rs.recoitAuMoins !== null) bcEtape(m, 'You receive at least ' + (decVers === null ? rs.recoitAuMoins + ' raw units of ' : bcUnites(rs.recoitAuMoins, decVers) + ' ') + vers.sym + '.');
+    const approbations = p.etat === 'APPROBATIONS';
+    bcOpMaj(op, 'planned');
+    bcBoutons(m, [[approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', async () => {
+      bcOpMaj(op, 'signing');
+      const s = await bcSigner(m, p.aSigner);
+      if (!s.ok) {
+        bcNoter({ type: s.refuse ? 'declined' : 'failed', ...refs, ...(s.hash ? { tx: s.hash } : {}) });
+        bcOpMaj(op, s.refuse ? 'declined' : s.diffusee ? 'sent' : 'failed', s.hash);
+        bcBoutons(m, [['Start again', planifier, true]]); return;
+      }
+      if (approbations) { bcEtape(m, 'Approvals done. Building the swap…'); return planifier(); }
+      bcOpMaj(op, 'done', s.hash);
+      bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      bcNoter({ type: 'signed', ...refs, tx: s.hash, account: String(compte).toLowerCase() });
+      bcJournal('swap ' + de.sym + ' to ' + vers.sym, s.hash);
+    }], ['Dismiss', refuser, true]]);
+  };
+  bcBoutons(m, [['Prepare the plan', planifier], ['Dismiss', refuser, true]]);
+}
+/** Un envoi. ⛔ Le destinataire s affiche EN ENTIER ; le solde est relu ; un envoi propose par un agent demande un clic de plus. */
+async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, ref, deLAgent) {
+  let dec = null;
+  try { dec = await bcDecimales(jeton.adr); } catch (_) {}
+  const libelle = (dec === null ? montant + ' raw units of ' : bcUnites(montant, dec) + ' ') + jeton.sym + ' to ' + destinataire;
+  const m = bcMessage(qui + ' · send', classe, libelle);
+  const op = bcOp('Send ' + libelle, qui);
+  bcVue('chat');
+  const refs = ref ? { ref } : {};
+  const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
+  if (destinataire === jeton.adr) { bcEtape(m, 'The recipient is the token’s own address — a transfer there is lost. Refused.', 'non'); bcNoter({ type: 'verdict', ...refs, etat: 'refused', text: 'recipient is the token contract' }); bcOpMaj(op, 'failed'); return; }
+  bcEtape(m, 'A transfer cannot be undone. Read the address above, every character.');
+  const preparer = async () => {
+    if (!(await bcAvecWallet(m, preparer))) return;
+    let solde;
+    try { solde = await bcSolde(jeton.adr, compte); } catch (_) { bcEtape(m, 'Your balance could not be read — nothing was asked.', 'non'); bcBoutons(m, [['Try again', preparer, true]]); return; }
+    if (solde < BigInt(montant)) { bcEtape(m, 'This wallet holds ' + (dec === null ? solde : bcUnites(solde, dec)) + ' ' + jeton.sym + ' — not enough. Nothing was asked.', 'non'); bcNoter({ type: 'plan', ...refs, etat: 'REFUSE', text: 'balance too low' }); return; }
+    const natif = jeton.adr === ETH_ADR.toLowerCase();
+    const appel = natif ? { to: destinataire, data: '0x', value: '0x' + BigInt(montant).toString(16), nom: 'send ' + jeton.sym }
+      : { to: jeton.adr, data: encodeTransfer(destinataire, BigInt(montant)), value: '0x0', nom: 'send ' + jeton.sym };
+    bcNoter({ type: 'plan', ...refs, etat: 'PRET' });
+    bcOpMaj(op, 'planned');
+    bcBoutons(m, [['Sign in my wallet', async () => {
+      bcOpMaj(op, 'signing');
+      const s = await bcSigner(m, [appel]);
+      if (!s.ok) { bcNoter({ type: s.refuse ? 'declined' : 'failed', ...refs, ...(s.hash ? { tx: s.hash } : {}) }); bcOpMaj(op, s.refuse ? 'declined' : s.diffusee ? 'sent' : 'failed', s.hash); return; }
+      bcOpMaj(op, 'done', s.hash);
+      bcEtape(m, 'Sent — ' + court(s.hash) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      bcNoter({ type: 'signed', ...refs, tx: s.hash, account: String(compte).toLowerCase() });
+      bcJournal('send ' + jeton.sym, s.hash);
+    }], ['Dismiss', refuser, true]]);
+  };
+  /* ⛔ venu d un agent : un clic de plus, qui dit d ou vient la demande — un agent peut avoir lu une page piegee */
+  if (deLAgent) bcBoutons(m, [['I checked the address — prepare it', preparer], ['Dismiss', refuser, true]]);
+  else bcBoutons(m, [['Prepare it', preparer], ['Dismiss', refuser, true]]);
+}
+function bcProposerTache(qui, classe, c, ref) {
+  const t = ONCHAIN_TASKS.find((x) => x.id === c.task);
+  const m = bcMessage(qui + ' · brain task', classe, t ? t.label : c.task);
+  bcVue('chat');
+  const g = tacheAutorisee(c.task, window.__TB_BRAIN_SNAPSHOT__ || {});
+  const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
+  bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + (g.pourquoi || 'not now') + '.', g.ok ? 'oui' : 'non');
+  bcNoter({ type: 'verdict', ...(ref ? { ref } : {}), etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts ' + c.task : String(g.pourquoi || 'refused') });
+  if (!g.ok) return;
+  /* on est DANS l app : chaque tache mene au vrai controle, pas a un lien */
+  const aller = (sel) => () => { try { $('#bcPop').close(); } catch (_) {} const e = $(sel); if (e) { const d = e.closest('details'); if (d) d.open = true; e.scrollIntoView({ block: 'center' }); } };
+  const actions = { trade_tblock: ['Open the quick trades', () => bcVue('trade')], export_snapshot: ['Download its brain facts', () => $('#bExporter').click()],
+    launch_wake: ['Open its page to bring it to life', () => void ouvrirProfil(brainAdr, null)], offer_food: ['Go to the food offer', aller('#tbOfferPrep')],
+    feed_trusted: ['Open its page to send it a GM', () => void ouvrirProfil(brainAdr, null)], record_memory: ['Go to memory on chain', aller('#bGraver')],
+    decision_receipts: ['Go to its journal', aller('#bJournal')], read_agent_catalog: ['Open the agent catalog', () => window.open('/brain-agent.json', '_blank', 'noopener')] };
+  if (actions[c.task]) bcBoutons(m, [actions[c.task]]);
+}
+function bcProposerNaissance(qui, classe, c) {
+  const m = bcMessage(qui + ' · birth', classe, c.name + ' · ' + c.symbol + ' — paired with ' + (c.pair === 'ETH' ? 'ETH' : court(c.pair)));
+  bcVue('chat');
+  bcEtape(m, 'A birth is made on the Create screen: one signature creates the block and opens its market.');
+  bcBoutons(m, [['Fill Create with this block', () => {
+    try {
+      $('#cNom').value = c.name; $('#cSym').value = c.symbol;
+      for (const x of ['#cNom', '#cSym']) $(x).dispatchEvent(new Event('input', { bubbles: true }));
+      const s = $('#cPaire'), cible = c.pair === 'ETH' ? ETH_ADR.toLowerCase() : c.pair;
+      const o = [...s.options].find((x) => String(x.value).toLowerCase() === cible);
+      if (o) { s.value = o.value; s.dispatchEvent(new Event('change')); }
+    } catch (_) { /* champ absent : l ecran Create s ouvre quand meme */ }
+    try { $('#bcPop').close(); } catch (_) {}
+    allerA('creer');
+  }]]);
+}
+/** Ouvre le pop-up (sur l onglet Brain : c est lui qui fait battre le cerveau). Sans effet s il est deja ouvert. */
+function bcOuvrirPop() {
+  try { if (!$('#v-brain').classList.contains('on')) allerA('brain'); } catch (_) {}
+  const d = $('#bcPop');
+  if (d && !d.open) { try { d.showModal(); } catch (_) { d.setAttribute('open', ''); } }
+  if (!brainAdr) { try { const s = $('#bChoix'); if (s && s.value) choisirBrain(s.value); } catch (_) {} }
+}
+/** Une commande venue d un AGENT (deja validee par le serveur : panel-sessions.js). */
+async function bcRecevoir(c) {
+  bcOuvrirPop(); /* une proposition d agent se MONTRE : le panneau s ouvre de lui-meme */
+  if (c.type === 'say') { bcMessage('Your agent', 'agent', c.text); return; }
+  if (c.type === 'show') { bcVue(c.tab); return; }
+  if (c.type === 'select') { allerA('brain'); choisirBrain(c.block); bcMessage('Your agent', 'agent', 'Showing ' + (bcResoudre(c.block).sym || court(c.block)) + '.'); return; }
+  if (c.block && (!brainAdr || String(brainAdr).toLowerCase() !== c.block)) choisirBrain(c.block);
+  const jet = (x) => (x === 'ETH' ? { adr: ETH_ADR.toLowerCase(), sym: 'ETH' } : bcResoudre(x));
+  if (c.type === 'trade') {
+    const avec = c.with ? jet(c.with) : (() => { const mk = marcheParAdr.get(c.block); return mk && mk.quoteAdr ? bcResoudre(mk.quoteAdr) : { adr: ETH_ADR.toLowerCase(), sym: 'ETH' }; })();
+    const blocJ = bcResoudre(c.block);
+    return c.side === 'buy' ? bcProposerSwap('Your agent', 'agent', { de: avec, vers: blocJ, montant: c.amount }, c.n)
+      : bcProposerSwap('Your agent', 'agent', { de: blocJ, vers: avec, montant: c.amount }, c.n);
+  }
+  if (c.type === 'swap') return bcProposerSwap('Your agent', 'agent', { de: jet(c.from), vers: jet(c.to), montant: c.amount }, c.n);
+  if (c.type === 'send') return bcProposerEnvoi('Your agent', 'agent', { jeton: jet(c.token), montant: c.amount, destinataire: c.recipient }, c.n, true);
+  if (c.type === 'task') return bcProposerTache('Your agent', 'agent', c, c.n);
+  if (c.type === 'birth') return bcProposerNaissance('Your agent', 'agent', c);
+}
+/** Une commande ECRITE ici (ou une pre-commande touchee) : la grammaire de commandes-panel.js, puis le meme chemin. */
+async function bcExecuterTexte(texte) {
+  const note = $('#bcNote');
+  const a = analyserCommande(texte);
+  if (!a.ok) { note.className = 'note wKo'; note.textContent = a.pourquoi; return false; }
+  note.className = 'note'; note.textContent = '';
+  const c = a.commande;
+  if (c.type === 'help') { const m = bcMessage('Panel', '', 'Commands'); for (const l of AIDE_COMMANDES) bcEtape(m, l); return true; }
+  if (c.type === 'show') { bcVue(c.tab); return true; }
+  if (c.type === 'tasks') {
+    /* ce que le cerveau accepte MAINTENANT (la liste n est plus affichee en permanence : on la demande) */
+    const ts = (window.__TB_BRAIN_TASKS__ && window.__TB_BRAIN_TASKS__.tasks) || [];
+    const m = bcMessage('Its brain', '', ts.length ? 'What it accepts right now' : 'Pick a block first: its brain has not beaten yet.');
+    for (const t of ts) bcEtape(m, (t.allowed ? 'accepts · ' : 'refuses · ') + t.label + (t.allowed ? '' : ' — ' + (t.pourquoi || '')), t.allowed ? 'oui' : 'non');
+    bcVue('chat');
+    return true;
+  }
+  if (c.type === 'select') { const j = bcResoudre(c.jeton); if (!j.ok) { note.className = 'note wKo'; note.textContent = j.pourquoi; return false; } choisirBrain(j.adr); return true; }
+  const erreur = (t) => { note.className = 'note wKo'; note.textContent = t; return false; };
+  if (c.type === 'swap') {
+    const de = bcResoudre(c.de);
+    if (!de.ok) return erreur(de.pourquoi);
+    let vers;
+    if (c.vers === null) { const mk = marcheParAdr.get(de.adr); vers = mk && mk.quoteAdr ? bcResoudre(mk.quoteAdr) : bcResoudre('USDC'); } else vers = bcResoudre(c.vers);
+    if (!vers.ok) return erreur(vers.pourquoi);
+    if (de.adr === vers.adr) return erreur('that is the same token on both sides');
+    let dec;
+    try { dec = await bcDecimales(de.adr); } catch (_) { return erreur('the decimals of ' + de.sym + ' could not be read — try again'); }
+    const brut = enUnitesBrutes(c.montant, dec);
+    if (brut === null) return erreur(de.sym + ' has ' + dec + ' decimals: ' + c.montant + ' is not an amount it can carry');
+    void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null);
+    return true;
+  }
+  if (c.type === 'send') {
+    const jeton = bcResoudre(c.jeton);
+    if (!jeton.ok) return erreur(jeton.pourquoi);
+    let dec;
+    try { dec = await bcDecimales(jeton.adr); } catch (_) { return erreur('the decimals of ' + jeton.sym + ' could not be read — try again'); }
+    const brut = enUnitesBrutes(c.montant, dec);
+    if (brut === null) return erreur(jeton.sym + ' has ' + dec + ' decimals: ' + c.montant + ' is not an amount it can carry');
+    void bcProposerEnvoi('You', '', { jeton, montant: brut.toString(), destinataire: c.destinataire }, null, false);
+    return true;
+  }
+  return erreur('not understood — type “help”');
+}
+/** Peint le panneau depuis LE snapshot du cerveau de l app (appele a chaque battement par publierSnapshotBrain). */
+function bcPeindre(snap) {
+  if (!snap || !snap.address) return;
+  const a = String(snap.address).toLowerCase(), mk = marcheParAdr.get(a) || null;
+  const sym = (mk && mk.sym) || snap.symbole || null;
+  if (bc.avatarDe !== a + '|' + (sym || '')) {
+    bc.avatarDe = a + '|' + (sym || '');
+    const svg = dessin(a, sym || '?');
+    const dedans = $('#bcAvatarIn');
+    if (svg) dedans.innerHTML = svg; else dedans.textContent = (sym || '?').slice(0, 1);
+    const mini = $('#bcMini'); if (mini) { if (svg) mini.innerHTML = svg; else mini.textContent = (sym || '?').slice(0, 1); }
+    const peau = $('#bcSkinFace'); if (peau) { if (svg) peau.innerHTML = svg; else peau.textContent = (sym || '?').slice(0, 1); }
+    $('#bcNom').textContent = (mk && mk.nom ? mk.nom + ' · ' : '') + (sym || court(a));
+    if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
+    const r = $('#bcRapides'); r.textContent = '';
+    for (const [lib, cmd] of [['Buy with 0.0005 ETH', 'buy this with 0.0005 ETH'], ['Buy with 0.002 ETH', 'buy this with 0.002 ETH'], ['Buy with 5 USDC', 'buy this with 5 USDC']]) {
+      const b = bcEl('button', { type: 'button', cls: 'puce', text: lib }); b.addEventListener('click', () => void bcExecuterTexte(cmd)); r.append(b);
+    }
+    const bS = bcEl('button', { type: 'button', cls: 'puce', text: 'Sell some…' }); bS.addEventListener('click', () => { bcVue('chat'); $('#bcSaisie').value = 'sell 1000 this'; $('#bcSaisie').focus(); }); r.append(bS);
+  }
+  $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
+  $('#bcHumeur').textContent = snap.phrase || '';
+  $('#bcPhase').textContent = snap.humeur || '—';
+  $('#bcTick').textContent = snap.tick === null || snap.tick === undefined ? '—' : String(snap.tick);
+  $('#bcPrix').textContent = mk && Number(mk.prixUsd) > 0 ? (Number(mk.prixUsd) >= 1 ? '$' + Number(mk.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '$' + Number(mk.prixUsd).toPrecision(3)) : '—';
+  $('#bcLiq').textContent = mk && Number(mk.liquiditeUsd) > 0 ? usdCourt(mk.liquiditeUsd) : '—';
+  try { dessinerRasterSur($('#bcRaster'), brainHisto); } catch (_) { /* le raster du dessous reste la reference */ }
+  const mc = $('#bcMarche'); mc.textContent = '';
+  const ligne = (x, y) => mc.append(bcEl('div', { cls: 'bcLigne' }, [bcEl('span', { text: x }), bcEl('span', { text: y })]));
+  const ev = snap.marche && snap.marche.etatVie;
+  ligne('Market on chain', ev === 'LUE' ? 'read' : ev === 'NON_TROUVEE' ? 'none found' : 'not read yet');
+  if (snap.marche && snap.marche.hooked !== null && snap.marche.hooked !== undefined) ligne('Where', snap.marche.hooked ? 'a TokenizedBlock market' : 'an outside market');
+  if (mk) {
+    if (mk.quoteSym) ligne('Quoted in', String(mk.quoteSym));
+    ligne('24 h change', mk.change24h === null || mk.change24h === undefined ? '—' : Number(mk.change24h).toFixed(2) + ' %');
+    ligne('24 h volume', Number(mk.volume24hUsd) > 0 ? usdCourt(mk.volume24hUsd) : '—');
+    ligne('Trades in 24 h', mk.trades24h === null || mk.trades24h === undefined ? '—' : String(mk.trades24h));
+  }
+  if (snap.nourriture && snap.nourriture.etat === 'LUE') ligne('Food read on chain', snap.nourriture.gm + ' transfers · ' + snap.nourriture.detenteurs + ' holders · ' + snap.nourriture.messages + ' messages');
+  const taches = (window.__TB_BRAIN_TASKS__ && window.__TB_BRAIN_TASKS__.tasks) || [];
+  /* le cube et ses connexions : le canvas de « Its wiring » est RECOPIE (meme dessin, meme battement) — rien n est redessine ici */
+  try {
+    const src = $('#bReseau'), dst = $('#bcReseau');
+    if (src && dst && $('#bc-brain').classList.contains('on')) { if (dst.width !== src.width || dst.height !== src.height) { dst.width = src.width; dst.height = src.height; } const cx = dst.getContext('2d'); cx.clearRect(0, 0, dst.width, dst.height); cx.drawImage(src, 0, 0); }
+  } catch (_) { /* la carte du dessous reste la reference */ }
+  /* ce que le cerveau a NOTE apres une transaction signee ici (son journal, lignes « bot ») */
+  try {
+    const nb = $('#bcNotesBot'), lignes = (journalLu(a) || []).filter((l) => l && l.bot === true).slice(-6).reverse();
+    nb.textContent = '';
+    if (!lignes.length) nb.append(bcEl('li', { cls: 'note', text: 'No note yet — the brain writes one after each transaction you sign here.' }));
+    else for (const l of lignes) nb.append(bcEl('li', {}, [bcEl('span', { text: String(l.texte || '') })]));
+  } catch (_) { /* journal illisible : la liste reste telle quelle */ }
+  /* les AUTRES blocks : les echanges lus sur la chaine par le fil Live de l app, et les plus echanges du jour (index du Market) —
+   *   repeint toutes les 5 s au plus : c est une liste, pas une animation */
+  if (Date.now() - bc.marchePeint > 5000) {
+    bc.marchePeint = Date.now();
+    const ul = $('#bcAutres'); ul.textContent = '';
+    const echanges = liveEvts.filter((e) => e && (e.type === 'ACHAT' || e.type === 'VENTE')).slice(0, 10);
+    if (!echanges.length) ul.append(bcEl('li', { cls: 'note', text: 'No trade read yet in this session — the Feed tab reads them as they happen.' }));
+    for (const e of echanges) {
+      const j = String(e.jeton || '').toLowerCase(), l = marcheParAdr.get(j), nom = (l && l.sym) || court(j);
+      const b = bcEl('button', { type: 'button', text: nom }); b.addEventListener('click', () => choisirBrain(j));
+      const quoi = (e.type === 'ACHAT' ? ' bought' : ' sold') + (e.eth && e.devise ? ' for ' + lisible(e.eth) + ' ' + String(e.devise) : '');
+      ul.append(bcEl('li', {}, [bcEl('span', {}, [b, bcEl('span', { text: quoi })]), bcEl('span', { cls: 'bcEtat ' + (e.type === 'ACHAT' ? 'oui' : 'non'), text: e.type === 'ACHAT' ? 'buy' : 'sell' })]));
+    }
+    const mv = $('#bcMouvants'); mv.textContent = '';
+    const tops = [...marcheParAdr.values()].filter((x) => Number(x.volume24hUsd) > 0 && String(x.adr).toLowerCase() !== a).sort((x, y) => Number(y.volume24hUsd) - Number(x.volume24hUsd)).slice(0, 8);
+    for (const x of tops) { const b = bcEl('button', { type: 'button', cls: 'puce', text: String(x.sym || court(x.adr)) + ' · ' + usdCourt(x.volume24hUsd) }); b.addEventListener('click', () => choisirBrain(String(x.adr).toLowerCase())); mv.append(b); }
+  }
+  /* ── LE CABLAGE DIRECT : l agent LIT le cerveau tel que ce panneau le voit (humeur, battement, ce qu il accepte) ── */
+  if (bc.session && (bc.phaseEnvoyee !== a + '|' + snap.phase || Date.now() - bc.cerveauEnvoye > 20000)) {
+    bc.phaseEnvoyee = a + '|' + snap.phase; bc.cerveauEnvoye = Date.now();
+    bcApi('/api/panel/cerveau', { s: bc.session, cerveau: { block: a, symbol: sym || '', phase: String(snap.phase || ''), mood: String(snap.humeur || ''), tick: Number(snap.tick) || 0,
+      market: String((snap.marche && snap.marche.etatVie) || ''), accepts: taches.filter((t) => t.allowed).map((t) => t.id), refuses: taches.filter((t) => !t.allowed).map((t) => t.id) } }).catch(() => {});
+  }
+}
+/* ── cablage ── */
+$('#bcForm').addEventListener('submit', async (e) => { e.preventDefault(); const s = $('#bcSaisie'); if (await bcExecuterTexte(s.value)) s.value = ''; });
+for (const p of PRECOMMANDES) {
+  const b = bcEl('button', { type: 'button', cls: 'puce', text: p.libelle });
+  /* une pre-commande ECRIT son modele dans le champ : la personne ajuste le montant ou le jeton, puis envoie — rien ne part au clic */
+  b.addEventListener('click', () => { const s = $('#bcSaisie'); s.value = p.modele; s.focus(); try { s.setSelectionRange(p.modele.length, p.modele.length); } catch (_) {} if (p.cle === 'tasks') void bcExecuterTexte('tasks'); });
+  $('#bcPre').append(b);
+}
+document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) bcVue(b.getAttribute('data-bc')); });
+$('#bcLier').addEventListener('click', async () => { await bcOuvrirSession(null); $('#bcDialogue').showModal(); });
+$('#bcLierFermer').addEventListener('click', () => $('#bcDialogue').close());
+$('#bcLierCopier').addEventListener('click', async () => {
+  const t = 'TokenizedBlock MCP server: https://tokenizedblock.space/mcp\nControl panel session: ' + bc.session
+    + '\nMy control panel is open and wired to my block’s brain. Call tblock_panel_state with this session to read the brain (mood, beat, what it accepts) and what I signed. '
+    + 'Call tblock_command with this session to propose commands: select, show, swap, send, trade, task, birth, say. Amounts are raw integer units. I sign in my wallet; you never do.';
+  try { await navigator.clipboard.writeText(t); $('#bcLierCopier').textContent = 'Copied'; } catch (_) { $('#bcLierCopier').textContent = 'Copy failed — select the text above'; }
+});
+bcChargerOps();
+bcPeindreOps();
+$('#bcOuvrir').addEventListener('click', () => bcOuvrirPop());
+$('#bcFermer').addEventListener('click', () => $('#bcPop').close());
+/* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
+$('#bcPop').addEventListener('click', (e) => { if (e.target === $('#bcPop')) $('#bcPop').close(); });
+/* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
+(function bcDemarrage() {
+  const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const s = h.get('s'), b = h.get('b');
+  if (paramsLien.get('panel') !== '1' && !(s && /^[0-9a-f]{32}$/.test(s))) return;
+  setTimeout(() => {
+    try { allerA('brain'); } catch (_) {}
+    if (b && /^0x[0-9a-fA-F]{40}$/.test(b)) { try { choisirBrain(b); } catch (_) {} }
+    bcOuvrirPop();
+    void bcOuvrirSession(s || null);
+  }, 600);
+})();
 
 /* ── Learn ──────────────────────────────────────────────────────────────────────────────────── */
 peindreLearn();

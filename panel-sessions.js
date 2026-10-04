@@ -56,6 +56,25 @@ export function validerCommande(c) {
       if (c.with !== undefined && !JETON.test(String(c.with))) return non('with must be ETH or a whole token address');
       return { ok: true, commande: { type: 'trade', side: c.side, block: bas(c.block), amount: String(c.amount), ...(c.with !== undefined ? { with: /^eth$/i.test(c.with) ? 'ETH' : bas(c.with) } : {}) } };
     }
+    /* 2026-10-04 (Phil : « swap, send — un bot de trading personnel en actions tokenisees ») : un echange entre deux jetons
+     *   quelconques que nos rails savent router (devise -> action, block -> block…), et un ENVOI. ⛔ Un envoi propose par un agent
+     *   reste une proposition : le panneau montre le destinataire EN ENTIER et exige une confirmation de plus avant le wallet. */
+    case 'swap': {
+      const f = champs(['type', 'from', 'to', 'amount']); if (f) return non(f);
+      if (!JETON.test(String(c.from || '')) || !JETON.test(String(c.to || ''))) return non('from and to must be ETH or a whole token address');
+      if (!MONTANT.test(String(c.amount || ''))) return non('amount must be a positive integer in raw units of the token paid (from)');
+      const norme = (x) => (/^eth$/i.test(x) ? 'ETH' : bas(x));
+      if (norme(c.from) === norme(c.to)) return non('from and to are the same token');
+      return { ok: true, commande: { type: 'swap', from: norme(c.from), to: norme(c.to), amount: String(c.amount) } };
+    }
+    case 'send': {
+      const f = champs(['type', 'token', 'amount', 'recipient']); if (f) return non(f);
+      if (!JETON.test(String(c.token || ''))) return non('token must be ETH or a whole token address');
+      if (!MONTANT.test(String(c.amount || ''))) return non('amount must be a positive integer in raw units of the token sent');
+      if (!ADR.test(String(c.recipient || ''))) return non('recipient must be a whole address — it is never completed');
+      if (/^0x0{40}$/.test(String(c.recipient))) return non('the zero address cannot receive');
+      return { ok: true, commande: { type: 'send', token: /^eth$/i.test(c.token) ? 'ETH' : bas(c.token), amount: String(c.amount), recipient: bas(c.recipient) } };
+    }
     case 'task': {
       const f = champs(['type', 'task', 'block']); if (f) return non(f);
       if (!TACHES_PANEL.includes(c.task)) return non('task must be one of: ' + TACHES_PANEL.join(', '));
@@ -77,7 +96,7 @@ export function validerCommande(c) {
       return { ok: true, commande: { type: 'say', text: t } };
     }
     default:
-      return non('type must be one of: select, show, trade, task, birth, say');
+      return non('type must be one of: select, show, trade, swap, send, task, birth, say');
   }
 }
 
@@ -169,7 +188,29 @@ export function creerRegistrePanel(deps) {
       const t = horloge(); s.vu = t;
       const d = Number.isInteger(depuis) && depuis >= 0 ? depuis : 0;
       return { ok: true, block: s.block, panneauOuvert: s.panneauVu !== null && t - s.panneauVu < 15000, commandesEnvoyees: s.n, dernier: s.m,
+        /* le cablage direct : le cerveau TEL QUE LE PANNEAU LE VOIT (null tant qu il n a rien dit) et l age de cette lecture */
+        cerveau: s.cerveau ? { ...s.cerveau, ageSec: Math.round((t - s.cerveauVu) / 1000) } : null,
         evenements: s.evenements.filter((e) => e.m > d) };
     },
+    /** Le PANNEAU dit ou en est le cerveau du block affiche (humeur, battement, ce qu il accepte). Remplace la lecture d avant. */
+    noterCerveau(id, cerveau) {
+      const s = prendre(id);
+      if (!s) return { ok: false, pourquoi: 'unknown or expired session', inconnue: true };
+      const v = validerCerveau(cerveau);
+      if (!v.ok) return v;
+      const t = horloge(); s.vu = t; s.panneauVu = t; s.cerveau = v.cerveau; s.cerveauVu = t;
+      if (v.cerveau.block) s.block = v.cerveau.block;
+      return { ok: true };
+    },
   };
+}
+
+/** L etat du cerveau que le panneau publie : champs courts, taches du catalogue seulement, rien d autre. */
+export function validerCerveau(c) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return { ok: false, pourquoi: 'a brain state is an object' };
+  if (!ADR.test(String(c.block || ''))) return { ok: false, pourquoi: 'block must be a whole address' };
+  const liste = (x) => (Array.isArray(x) ? x.filter((t) => TACHES_PANEL.includes(t)).slice(0, TACHES_PANEL.length) : []);
+  const tick = Number(c.tick);
+  return { ok: true, cerveau: { block: bas(c.block), symbol: texteSur(c.symbol || '', 24), phase: texteSur(c.phase || '', 16), mood: texteSur(c.mood || '', 60),
+    tick: Number.isFinite(tick) && tick >= 0 ? Math.floor(tick) : 0, market: texteSur(c.market || '', 16), accepts: liste(c.accepts), refuses: liste(c.refuses) } };
 }

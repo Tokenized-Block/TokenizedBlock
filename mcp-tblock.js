@@ -19,6 +19,13 @@ export const MCP_INSTRUCTIONS = 'TokenizedBlock on Base mainnet. The planning to
   + '(about $1 of the paired currency) that stays theirs and earns 0.03% of each trade. Amounts are raw integer units. '
   + 'A plan is simulated when it is built, not executed: read `etat` (PRET, APPROBATIONS, REFUSE, NON_MESURE) and `pourquoi` before signing.';
 
+/* ── LE WIDGET (MCP Apps, 2026-10-04) : une carte affichee DANS le chat par les clients qui savent le faire. Lu dans le paquet
+ *   officiel @modelcontextprotocol/ext-apps 2.0.3 (server/index.js) : l outil porte `_meta.ui.resourceUri` ET l ancienne cle
+ *   `_meta["ui/resourceUri"]` ; la ressource est servie en `text/html;profile=mcp-app`. Un client sans cette surface ignore
+ *   `_meta` et lit le texte de l outil comme avant — rien ne depend du widget. */
+export const WIDGET_URI = 'ui://tokenizedblock/panel.html';
+export const WIDGET_MIME = 'text/html;profile=mcp-app';
+const META_WIDGET = Object.freeze({ ui: Object.freeze({ resourceUri: WIDGET_URI }), 'ui/resourceUri': WIDGET_URI });
 const ADRESSE = { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$' };
 const JETON = { type: 'string', pattern: '^(?:[eE][tT][hH]|0x[0-9a-fA-F]{40})$' };
 export const OUTILS = Object.freeze([
@@ -62,19 +69,24 @@ export const OUTILS = Object.freeze([
       + 'for the user to open in their browser with their wallet. Give the link to the user. Then send commands with tblock_command and read what happened with tblock_panel_state. '
       + 'Commands are proposals: the block’s brain accepts or refuses each task, and only the user’s wallet signs.',
     inputSchema: { type: 'object', properties: { block: { ...ADRESSE, description: 'Optional: the block to show first.' } }, additionalProperties: false },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }, _meta: META_WIDGET },
   { name: 'tblock_command', title: 'Send a command to the control panel',
     description: 'Proposes one command to an open control panel. type = select (show a block), show (switch tab: market, trade, brain, chat), '
-      + 'trade (side buy|sell, block, amount in raw units, optional `with` token), task (a brain task: trade_tblock, launch_wake, feed_trusted, record_memory, offer_food, '
+      + 'trade (side buy|sell, block, amount in raw units, optional `with` token), swap (from, to, amount in raw units of `from` — e.g. USDC to a Coinbase tokenized stock), '
+      + 'send (token, amount in raw units, recipient: a transfer the user must confirm twice), task (a brain task: trade_tblock, launch_wake, feed_trusted, record_memory, offer_food, '
       + 'export_snapshot, read_agent_catalog, decision_receipts), birth (name, symbol, optional pair) or say (a short text shown in the chat). '
       + 'Nothing is signed by this call: the panel shows the proposal with buttons, and the user decides. One command per second.',
     inputSchema: { type: 'object', required: ['session', 'type'], additionalProperties: false, properties: {
       session: { type: 'string', pattern: '^[0-9a-f]{32}$', description: 'The session returned by tblock_panel_open.' },
-      type: { type: 'string', pattern: '^(select|show|trade|task|birth|say)$', description: 'select | show | trade | task | birth | say' },
+      type: { type: 'string', pattern: '^(select|show|trade|swap|send|task|birth|say)$', description: 'select | show | trade | swap | send | task | birth | say' },
+      from: { ...JETON, description: 'For swap: the token paid (ETH or an address).' },
+      to: { ...JETON, description: 'For swap: the token received (ETH or an address).' },
+      token: { ...JETON, description: 'For send: the token sent (ETH or an address).' },
+      recipient: { ...ADRESSE, description: 'For send: the whole address that receives. Never abbreviated.' },
       block: { ...ADRESSE, description: 'For select, trade, task: the block address.' },
       tab: { type: 'string', pattern: '^(market|trade|brain|chat)$', description: 'For show.' },
       side: { type: 'string', pattern: '^(buy|sell)$', description: 'For trade.' },
-      amount: { type: 'string', pattern: '^[1-9][0-9]{0,40}$', description: 'For trade: raw units of the token paid (buy) or of the block (sell).' },
+      amount: { type: 'string', pattern: '^[1-9][0-9]{0,40}$', description: 'For trade, swap, send: raw integer units (trade: of the token paid for a buy, of the block for a sell; swap: of `from`; send: of `token`).' },
       with: { ...JETON, description: 'For trade: the token paid (buy) or received (sell); default: the block’s own quote token.' },
       task: { type: 'string', maxLength: 40, description: 'For task: the brain task id.' },
       name: { type: 'string', maxLength: 32, description: 'For birth.' },
@@ -82,13 +94,13 @@ export const OUTILS = Object.freeze([
       pair: { ...JETON, description: 'For birth: ETH (default) or a currency from tblock_pairs.' },
       text: { type: 'string', maxLength: 500, description: 'For say.' } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
-  { name: 'tblock_panel_state', title: 'Read what happened in the control panel',
-    description: 'Returns the events reported by the control panel since `since`: whether the panel is open, the brain’s verdict on each command, plans built, '
-      + 'and what the user signed (transaction hash) or declined.',
+  { name: 'tblock_panel_state', title: 'Read the brain and what happened in the control panel',
+    description: 'Reads the control panel, which is wired to the block’s brain: `cerveau` is the brain as the panel sees it (block, mood, beat, market read, and the tasks it accepts '
+      + 'or refuses right now), and `evenements` are the events since `since` — the brain’s verdict on each command, plans built, and what the user signed (transaction hash) or declined.',
     inputSchema: { type: 'object', required: ['session'], additionalProperties: false, properties: {
       session: { type: 'string', pattern: '^[0-9a-f]{32}$', description: 'The session returned by tblock_panel_open.' },
       since: { type: 'string', pattern: '^[0-9]{1,9}$', description: 'Optional: only events after this event number.' } } },
-    annotations: { readOnlyHint: true, openWorldHint: false } },
+    annotations: { readOnlyHint: true, openWorldHint: false }, _meta: META_WIDGET },
 ]);
 
 const erreur = (id, code, message) => ({ jsonrpc: '2.0', id: id === undefined ? null : id, error: { code, message } });
@@ -131,10 +143,23 @@ export async function traiterMcp(msg, deps) {
   if (method === 'initialize') {
     const demandee = params && typeof params.protocolVersion === 'string' ? params.protocolVersion : null;
     return resultat(id, { protocolVersion: MCP_VERSIONS.includes(demandee) ? demandee : MCP_VERSIONS[0],
-      capabilities: { tools: { listChanged: false } },
+      capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
       serverInfo: { ...MCP_SERVEUR, version: String((deps && deps.version) || '0') }, instructions: MCP_INSTRUCTIONS });
   }
   if (method === 'tools/list') return resultat(id, { tools: OUTILS });
+  /* les ressources : UNE seule, le widget du panneau (deps.widget() rend son HTML, ou null si le serveur ne l a pas) */
+  if (method === 'resources/list') {
+    const html = deps && typeof deps.widget === 'function' ? deps.widget() : null;
+    return resultat(id, { resources: html ? [{ uri: WIDGET_URI, name: 'tblock-panel', title: 'TokenizedBlock control panel', mimeType: WIDGET_MIME,
+      description: 'A card shown in the chat: the link of the control panel, whether it is open, and what the user signed or declined.' }] : [] });
+  }
+  if (method === 'resources/templates/list') return resultat(id, { resourceTemplates: [] });
+  if (method === 'resources/read') {
+    const uri = params && params.uri;
+    const html = deps && typeof deps.widget === 'function' ? deps.widget() : null;
+    if (uri !== WIDGET_URI || !html) return erreur(id, -32002, 'resource not found: ' + String(uri).slice(0, 80));
+    return resultat(id, { contents: [{ uri: WIDGET_URI, mimeType: WIDGET_MIME, text: html, _meta: { ui: { prefersBorder: true } } }] });
+  }
   if (method === 'tools/call') {
     const nom = params && params.name;
     const outil = OUTILS.find((o) => o.name === nom);

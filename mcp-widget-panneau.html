@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TokenizedBlock control panel</title>
+<!-- mcp-widget-panneau.html — LE WIDGET DU PANNEAU, affiche DANS le chat par les clients MCP qui rendent les « MCP Apps ».
+     ⛔ PETIT ET A UN SEUL USAGE : il donne le lien du panneau (ou la personne signe avec SON wallet — impossible dans le bac a
+       sable d un chat), dit si le panneau est ouvert, et montre ce que la personne a signe ou refuse. Il ne signe rien, n envoie
+       rien : ses boutons « vue » appellent tblock_command (show), une proposition d affichage.
+     ⛔ Le serveur remplace le marqueur ci-dessous par le paquet officiel @modelcontextprotocol/ext-apps 2.0.3 (embarque, verifie
+       par son empreinte) : un bac a sable de chat bloque tout script distant. Tout texte recu est pose en textContent. -->
+<style>
+:root{color-scheme:light dark;--fond:#ffffff;--carte:#f6f4fb;--ligne:#ddd6ee;--texte:#1a1228;--doux:#5e5477;--accent:#7c5cf0;--ok:#0f8a5f;--non:#b4232a}
+:root.dark{--fond:#0f0a17;--carte:#1b1429;--ligne:#2f2545;--texte:#f3effb;--doux:#b9a9dd;--accent:#a78bfa;--ok:#6ee7b7;--non:#fca5a5}
+*{box-sizing:border-box}
+body{margin:0;background:transparent;color:var(--texte);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#w{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:14px}
+.tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tete b{font-size:15px}
+.tete .pousse{flex:1}
+.p{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--ligne);color:var(--doux);white-space:nowrap}
+.p.ok{color:var(--ok)}
+p{margin:8px 0 0;color:var(--doux)}
+.rang{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:9px 14px;cursor:pointer;background:var(--accent);color:#fff}
+button.s{background:transparent;color:var(--texte);border:1px solid var(--ligne)}
+button:disabled{opacity:.45;cursor:not-allowed}
+ul{list-style:none;margin:10px 0 0;padding:0}
+li{padding:6px 0;border-top:1px dashed var(--ligne);font-size:13px}
+li b{font-weight:600}
+li.ok b{color:var(--ok)}
+li.non b{color:var(--non)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div id="w">
+  <div class="tete"><b>TokenizedBlock</b><span class="mono">control panel</span><span class="pousse"></span><span class="p" id="etat">waiting</span></div>
+  <p id="texte">The panel opens in the browser, where the wallet signs. This card follows it.</p>
+  <div class="rang">
+    <button type="button" id="ouvrir" disabled>Open the panel</button>
+    <button type="button" class="s" data-tab="chat" disabled>Chat</button>
+    <button type="button" class="s" data-tab="market" disabled>Market</button>
+    <button type="button" class="s" data-tab="trade" disabled>Trade</button>
+    <button type="button" class="s" data-tab="brain" disabled>Brain</button>
+  </div>
+  <ul id="evs"></ul>
+</div>
+<script type="module">
+/*__EXT_APPS_BUNDLE__*/
+const { App } = globalThis.ExtApps;
+const $ = (s) => document.querySelector(s);
+const app = new App({ name: 'TokenizedBlock panel', version: '1.0.0' }, {}, { autoResize: true });
+let session = null, url = null, depuis = 0, minuterie = null;
+const lire = (res) => { try { return (res && res.structuredContent) || JSON.parse(res.content[0].text); } catch (_) { return null; } };
+const NOMS = { ready: 'Panel ready', verdict: 'Brain', plan: 'Plan', signed: 'Signed', declined: 'Declined', failed: 'Failed', note: 'Note' };
+function peindre(d) {
+  if (!d) return;
+  if (d.session && d.url) { session = d.session; url = d.url; for (const b of document.querySelectorAll('button')) b.disabled = false; }
+  if (typeof d.panneauOuvert === 'boolean') {
+    const e = $('#etat');
+    e.textContent = d.panneauOuvert ? 'panel open' : 'panel not open';
+    e.className = 'p' + (d.panneauOuvert ? ' ok' : '');
+    $('#texte').textContent = d.panneauOuvert ? 'The panel is open. Proposals appear there; the brain judges, the wallet signs.'
+      : 'Open the panel in the browser that has the wallet. Nothing can be signed from this card.';
+  }
+  for (const ev of (Array.isArray(d.evenements) ? d.evenements : [])) {
+    depuis = Math.max(depuis, Number(ev.m) || 0);
+    const li = document.createElement('li');
+    li.className = ev.type === 'signed' || ev.etat === 'accepted' ? 'ok' : (ev.type === 'declined' || ev.type === 'failed' || ev.etat === 'refused' ? 'non' : '');
+    const b = document.createElement('b'); b.textContent = (NOMS[ev.type] || ev.type) + (ev.etat ? ' · ' + ev.etat : '');
+    li.append(b);
+    if (ev.text) { const s = document.createElement('span'); s.textContent = ' — ' + ev.text; li.append(s); }
+    if (ev.tx) { const s = document.createElement('div'); s.className = 'mono'; s.textContent = ev.tx; li.append(s); }
+    $('#evs').append(li);
+  }
+  if (session && !minuterie) minuterie = setInterval(suivre, 4000);
+}
+async function suivre() {
+  if (!session) return;
+  try { peindre(lire(await app.callServerTool({ name: 'tblock_panel_state', arguments: { session, since: String(depuis) } }))); } catch (_) { /* on reessaie au tour suivant */ }
+}
+app.ontoolresult = (res) => peindre(lire(res));
+const theme = () => { try { document.documentElement.classList.toggle('dark', (app.getHostContext() || {}).theme === 'dark'); } catch (_) {} };
+app.onhostcontextchanged = theme;
+$('#ouvrir').addEventListener('click', () => { if (url) app.openLink({ url }); });
+for (const b of document.querySelectorAll('button[data-tab]')) {
+  b.addEventListener('click', async () => {
+    if (!session) return;
+    try { await app.callServerTool({ name: 'tblock_command', arguments: { session, type: 'show', tab: b.dataset.tab } }); } catch (_) {}
+  });
+}
+await app.connect();
+theme();
+</script>
+</body>
+</html>

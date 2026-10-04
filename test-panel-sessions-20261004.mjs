@@ -32,6 +32,17 @@ async function jeu(dir, dire) {
     'A trade : cote inconnu, montant decimal, montant 0, devise par symbole — refuses');
   dire(!v({ type: 'trade', side: 'buy', block: B, amount: '1', to: A }).ok && !v({ type: 'say', text: 'x', html: '<b>' }).ok, 'A champ inconnu (ex. un destinataire) : refuse');
   dire(v({ type: 'task', task: 'trade_tblock', block: B }).ok && !v({ type: 'task', task: 'send_funds', block: B }).ok, 'A task : une tache du catalogue du cerveau, rien d autre');
+  /* 2026-10-04 : swap (deux jetons quelconques) et send (un envoi — une PROPOSITION, que le panneau fait confirmer deux fois) */
+  const sw = v({ type: 'swap', from: 'eth', to: B, amount: '5000000' });
+  dire(sw.ok && sw.commande.from === 'ETH' && sw.commande.to === B.toLowerCase() && sw.commande.amount === '5000000', 'A swap : deux jetons (ETH ou adresse entiere), montant brut du jeton paye');
+  dire(!v({ type: 'swap', from: B, to: B.toUpperCase().replace('0X', '0x'), amount: '1' }).ok && !v({ type: 'swap', from: 'usdc', to: B, amount: '1' }).ok
+    && !v({ type: 'swap', from: B, to: A, amount: '1.5' }).ok && !v({ type: 'swap', from: B, to: A, amount: '1', recipient: A }).ok,
+    'A swap : meme jeton des deux cotes, symbole au lieu d une adresse, montant decimal, champ en trop — refuses');
+  const se = v({ type: 'send', token: 'ETH', amount: '1000', recipient: A.toUpperCase().replace('0X', '0x') });
+  dire(se.ok && se.commande.recipient === A && se.commande.token === 'ETH', 'A send : jeton, montant brut, destinataire ENTIER (normalise en minuscules)');
+  dire(!v({ type: 'send', token: 'ETH', amount: '1', recipient: A.slice(0, 30) }).ok && !v({ type: 'send', token: 'ETH', amount: '1', recipient: '0x' + '0'.repeat(40) }).ok
+    && !v({ type: 'send', token: 'ETH', amount: '1' }).ok && !v({ type: 'send', token: 'ETH', amount: '0', recipient: A }).ok,
+    'A send : destinataire tronque, adresse nulle, destinataire absent, montant 0 — refuses (une adresse ne se complete jamais)');
   const b = v({ type: 'birth', name: '  Mon  Block ', symbol: 'mbk' });
   dire(b.ok && b.commande.name === 'Mon Block' && b.commande.symbol === 'MBK' && b.commande.pair === 'ETH', 'A birth : nom nettoye, symbole en majuscules, paire ETH par defaut');
   dire(!v({ type: 'birth', name: 'é'.repeat(17), symbol: 'x' }).ok && !v({ type: 'birth', name: 'x' }).ok, 'A birth : plus de 32 octets, ou sans symbole — refuse');
@@ -63,6 +74,14 @@ async function jeu(dir, dire) {
   dire(R.pousser(o.session, { type: 'show', tab: 'trade' }).panneauOuvert === true, 'B apres une lecture du panneau (< 15 s) : panneauOuvert vrai');
   dire(R.noter(o.session, { type: 'verdict', ref: 3, etat: 'ok', text: 'brain accepts' }).m === 1 && R.noter(o.session, { type: 'signed', ref: 3, tx: TX, account: A }).m === 2
     && !R.noter(o.session, { type: 'signed', tx: 'nope' }).ok, 'B le panneau rend compte : evenements numerotes ; un evenement mal forme est refuse');
+  /* le cablage direct : le panneau publie le cerveau, l agent le lit avec son age */
+  dire(R.lireEvenements(o.session).cerveau === null, 'B tant que le panneau n a rien dit du cerveau : cerveau = null (jamais une humeur inventee)');
+  const nc = R.noterCerveau(o.session, { block: B, symbol: 'IB', phase: 'CALME', mood: 'calm', tick: 12.7, market: 'LUE', accepts: ['trade_tblock', 'send_funds'], refuses: ['launch_wake'], secret: 'x' });
+  maintenant += 3000;
+  const lc = R.lireEvenements(o.session).cerveau;
+  dire(nc.ok && lc && lc.block === B.toLowerCase() && lc.phase === 'CALME' && lc.tick === 12 && lc.ageSec === 3 && lc.accepts.join() === 'trade_tblock' && lc.refuses.join() === 'launch_wake' && lc.secret === undefined,
+    'B cerveau publie : champs courts, taches du catalogue seulement (« send_funds » ecarte), champ inconnu ecarte, age en secondes');
+  dire(!R.noterCerveau(o.session, { block: '0x12', phase: 'CALME' }).ok && !R.noterCerveau('f'.repeat(32), { block: B }).ok, 'B cerveau : block tronque ou session inconnue — refuse');
   const ev = R.lireEvenements(o.session, 1);
   dire(ev.ok && ev.evenements.length === 1 && ev.evenements[0].tx === TX && ev.commandesEnvoyees === 3 && ev.panneauOuvert === true, 'B l agent lit « apres 1 » : la signature (hash), 3 commandes envoyees');
   maintenant += 16000;
@@ -127,7 +146,7 @@ if (demarre) {
   ok((await fetch(base + '/api/panel/etat')).status === 405, 'GET sur une route de panneau : 405 (la session ne voyage jamais dans une URL)');
   const ouv = await mcp('tblock_panel_open', { block: B });
   const S = ouv.structuredContent.session;
-  ok(ouv.isError === false && /^[0-9a-f]{32}$/.test(S) && ouv.structuredContent.url === 'https://tokenizedblock.space/panel.html#s=' + S + '&b=' + B.toLowerCase(),
+  ok(ouv.isError === false && /^[0-9a-f]{32}$/.test(S) && ouv.structuredContent.url === 'https://tokenizedblock.space/app.html?panel=1#s=' + S + '&b=' + B.toLowerCase(),
     'MCP tblock_panel_open : une session, et le lien du panneau avec la session DANS LE FRAGMENT (' + ouv.structuredContent.url.slice(0, 48) + '…)');
   const c1 = await mcp('tblock_command', { session: S, type: 'trade', side: 'buy', block: B, amount: '1000000000000000', with: 'ETH' });
   ok(c1.isError === false && c1.structuredContent.n === 1 && c1.structuredContent.panneauOuvert === false && /no panel is open/.test(c1.structuredContent.suite),
@@ -143,6 +162,9 @@ if (demarre) {
   const st = await mcp('tblock_panel_state', { session: S });
   ok(st.isError === false && st.structuredContent.evenements.map((e) => e.type).join() === 'verdict,declined' && st.structuredContent.commandesEnvoyees === 2 && st.structuredContent.panneauOuvert === true,
     'MCP tblock_panel_state : l agent lit le verdict et le refus, dans l ordre');
+  ok(st.structuredContent.cerveau === null && (await post('/api/panel/cerveau', { s: S, cerveau: { block: B, phase: 'CALME', mood: 'calm', tick: 7, market: 'LUE', accepts: ['trade_tblock'], refuses: [] } })).corps.ok === true
+    && (await mcp('tblock_panel_state', { session: S })).structuredContent.cerveau.accepts.join() === 'trade_tblock',
+    'cablage direct par HTTP + MCP : le panneau publie le cerveau, l agent le lit (humeur, battement, taches acceptees)');
   ok((await mcp('tblock_panel_state', { session: S, since: '1' })).structuredContent.evenements.length === 1, 'since = 1 : seulement la suite');
   ok((await post('/api/panel/commande', { s: 'f'.repeat(32), commande: { type: 'say', text: 'x' } })).code === 404 && (await mcp('tblock_command', { session: 'f'.repeat(32), type: 'say', text: 'x' })).structuredContent.etat === 'REFUSE',
     'session inconnue : 404 en HTTP, REFUSE en MCP');

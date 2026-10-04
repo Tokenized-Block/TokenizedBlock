@@ -169,11 +169,14 @@
     "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum", "tblock_panel_open", "tblock_command", "tblock_panel_state"],
     "read_only": "the planning tools return unsigned calls; the user's wallet signs them in order. The server signs, holds and sends nothing.",
     "control_panel": {
-      "page": "https://tokenizedblock.space/panel.html",
-      "how": "tblock_panel_open returns a link for the user (the session rides in the URL fragment); tblock_command proposes select | show | trade | task | birth | say; tblock_panel_state returns the events the panel reported",
+      "page": "https://tokenizedblock.space/app.html?panel=1",
+      "how": "tblock_panel_open returns a link for the user (the session rides in the URL fragment); tblock_command proposes select | show | trade | swap | send | task | birth | say; tblock_panel_state returns the brain as the panel sees it (cerveau: mood, beat, tasks accepted) and the events the panel reported",
+      "wired_to": "the app's own brain for that block (same memory, same food read on chain, same journal) — the panel is a pop-up over the Brain tab, not a second brain",
+      "written_commands": "buy <token> with <amount> <token> | sell <amount> <token> [for <token>] | swap <amount> <token> to <token> | send <amount> <token> to <whole address> | show <token>; anything else is refused, never guessed",
+      "widget": "clients that render MCP Apps show a card (ui://tokenizedblock/panel.html) with the panel link and its events; other clients just get the link",
       "rule": "a command is a proposal shown in the panel. The block's brain gates each task (brain-tasks catalog, deterministic — not a language model); the plan comes from the server planners; only the user's wallet signs, one click at a time",
       "session": "a 128-bit bearer secret kept in memory: 2 hours without activity, lost on a server restart, one command per second; whoever holds it can propose, never sign",
-      "limits": "the panel's brain is fed with the market only (on-chain food is not re-read there); trades and births are executed in the panel, the other tasks link to the app"
+      "limits": "swaps and sends are executed from the panel; a birth is filled into the Create screen; other brain tasks lead to their own control in the app. A send proposed by an agent needs one more confirmation. Skins are not available"
     },
     "birth": {
       "get": "https://tokenizedblock.space/api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>[&paire=<ETH or a currency address>][&sel=<free text that fixes the address>]",
@@ -184,6 +187,6 @@
       "limit": "a block made straight through the Base B20 factory does not pass through TokenizedBlock"
     },
     "creator_minimum_get": "https://tokenizedblock.space/api/caution?block=<block address>[&paire=<ETH or the paired currency>][&compte=<the creator wallet>]",
-    "health": "https://tokenizedblock.space/sante — `naissance.sonde` is a full birth planned and simulated against the deployed hook every 10 minutes"
+    "health": "https://tokenizedblock.space/sante — `sondes` holds four probes replayed every 10 minutes with the deployed code: a full birth planned and simulated against the deployed hook, a market read, a swap plan, and the brain's task gate on one reference block"
   }
 }

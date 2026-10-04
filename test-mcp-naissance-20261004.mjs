@@ -52,7 +52,8 @@ ok(tl.result.tools.length === 7 && tl.result.tools.every((o) => o.name && o.desc
 ok(await M.traiterMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, deps) === null, 'une notification ne recoit rien');
 ok((await M.traiterMcp([{ jsonrpc: '2.0', id: 1, method: 'ping' }], deps)).error.code === -32600, 'un lot est refuse (-32600)');
 ok((await M.traiterMcp({ id: 1, method: 'ping' }, deps)).error.code === -32600 && JSON.stringify((await rq('ping')).result) === '{}', 'pas du JSON-RPC 2.0 : -32600 ; ping : {}');
-ok((await rq('resources/list')).error.code === -32601, 'methode inconnue : -32601');
+/* « resources/list » servait ici de methode inconnue : elle existe depuis le widget (test-commandes-panel-20261004.mjs) */
+ok((await rq('prompts/list')).error.code === -32601 && (await rq('sampling/createMessage')).error.code === -32601, 'methode inconnue : -32601');
 ok((await rq('tools/call', { name: 'tblock_send', arguments: {} })).error.code === -32602, 'outil inconnu : -32602 (il n existe AUCUN outil qui envoie)');
 const bon = await rq('tools/call', { name: 'tblock_plan_birth', arguments: { name: 'A', symbol: 'a', account: VIDE } });
 ok(bon.result.isError === false && bon.result.structuredContent.etat === 'PRET' && JSON.parse(bon.result.content[0].text).etat === 'PRET' && appelsOutil === 1,

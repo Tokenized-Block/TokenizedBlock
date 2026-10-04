@@ -139,6 +139,11 @@ import { planNaissance, pairesDeNaissance } from './naissance-api.js';
 import { traiterMcp } from './mcp-tblock.js';
 import { etatCautionCreateur, sortieCautionPour, cleMarcheCreateur } from './caution-createur.js';
 import { creerRegistrePanel } from './panel-sessions.js';
+/* les sondes du marche, de l echange et du cerveau : les MEMES modules que l app (rien de reecrit pour la sonde) */
+import { vieDuBlock } from './marche.js';
+import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
+import { snapshotCerveau } from './export-cerveau.js';
+import { tacheAutorisee } from './brain-tasks.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -1382,7 +1387,8 @@ function pairesPourAgent() {
  * ⛔ BORNE : paire ETH seulement (un minimum en devise ne se suppose pas), simulation et non execution, toutes les 10 minutes. */
 /* ── LA TELECOMMANDE (2026-10-04) : les sessions de panneau, en memoire (panel-sessions.js) ── */
 const registrePanel = creerRegistrePanel({ tirerId: () => randomBytes(16).toString('hex') });
-const URL_PANEL = 'https://tokenizedblock.space/panel.html';
+/* le panneau vit DANS l app (extension de l onglet Brain : memes donnees que le cerveau de l app) ; panel.html y conduit les anciens liens */
+const URL_PANEL = 'https://tokenizedblock.space/app.html?panel=1';
 function ouvrirPanel(block) {
   const r = registrePanel.ouvrir({ block });
   if (!r.ok) return r;
@@ -1407,7 +1413,51 @@ async function sonderNaissance() {
       fraisEthWei: r.cout ? r.cout.fraisEthWei : null, totalEthWei: r.cout ? r.cout.totalEthWei : null, hook: r.block ? r.block.hook : null, appels: (r.aSigner || []).length };
   } catch (e) { naissanceSonde = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160), lu: new Date().toISOString() }; }
 }
-setTimeout(() => { sonderNaissance(); setInterval(sonderNaissance, 10 * 60 * 1000).unref(); }, 45000).unref();
+/* ── LES TROIS AUTRES SONDES (Phil, 2026-10-04 : « fais pareil pour le brain, le market et le trade, avec ce que l app fait deja ») ──
+ * Meme principe que la naissance : le code DEPLOYE, contre la chaine, toutes les 10 minutes, rien d envoye.
+ *   marche  : vieDuBlock (le lecteur de l app) sur un block de reference dont le marche existe — doit rendre LUE ;
+ *   echange : planRail ETH -> ce block depuis le compte de sonde — doit rendre PRET (le planificateur simule la transaction) ;
+ *   cerveau : le reseau de l app (cerveau.js) nourri de CE marche, 24 battements — doit etre dans une phase vivante et sa porte
+ *             (brain-tasks.js) doit accepter « trade ». Un cerveau qui refuserait tout echange sur un marche lu est une panne.
+ * ⛔ BORNES : UN block de reference (IB022, cote en ETH sur notre hook) — une sonde verte ne dit rien des autres blocks ; des
+ *   plans simules, pas des executions ; le cerveau de la sonde n a ni memoire ni nourriture (celui d un visiteur en a). */
+const BLOCK_SONDE = '0xb200000000000000000000e4b0c5fbe9c8df579e';
+let autresSondes = { marche: { etat: 'PAS_ENCORE' }, echange: { etat: 'PAS_ENCORE' }, cerveau: { etat: 'PAS_ENCORE' } };
+async function sonderLeReste() {
+  const lu = new Date().toISOString();
+  let v = null;
+  try {
+    v = await vieDuBlock({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView, jeton: BLOCK_SONDE, clesExactes: await clesRails(BLOCK_SONDE) });
+    autresSondes.marche = { etat: v && v.etat === 'LUE' ? 'PRET' : (v && v.etat) || 'NON_MESURE', pourquoi: v && v.etat !== 'LUE' ? (v.pourquoi || null) : null, vie: v && typeof v.vie === 'number' ? v.vie : null, devise: (v && v.devise) || null, lu };
+  } catch (e) { autresSondes.marche = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
+  try {
+    const r = await faireRail({ de: 'ETH', vers: BLOCK_SONDE, montant: '100000000000000', compte: COMPTE_SONDE });
+    autresSondes.echange = { etat: r.etat, pourquoi: r.pourquoi || null, route: r.route || null, appels: (r.aSigner || []).length, lu };
+  } catch (e) { autresSondes.echange = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
+  try {
+    const faits = { vie: v && v.etat === 'LUE' && typeof v.vie === 'number' ? v.vie : null, vieAvant: null, etatVie: v ? (v.etat === 'REFUSEE' ? 'NON_LUE' : v.etat) : 'NON_LUE' };
+    let e = etatInitialCerveau(BLOCK_SONDE), vu = null;
+    for (let i = 0; i < 24; i += 1) { const r = pasCerveau(e, faits); e = r.etat; vu = r.vu; }
+    const snap = snapshotCerveau({ address: BLOCK_SONDE, symbole: 'IB022', vu, etat: e, journal: [], nourriture: null, vie: faits.vie, etatVie: faits.etatVie, marche: { etatVie: faits.etatVie, vie: faits.vie } });
+    const g = tacheAutorisee('trade_tblock', snap);
+    autresSondes.cerveau = { etat: g.ok ? 'PRET' : 'REFUSE', pourquoi: g.ok ? null : (g.pourquoi || null), phase: vu ? vu.phase : null, battements: e.tick, lu };
+  } catch (e) { autresSondes.cerveau = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
+}
+setTimeout(() => { sonderNaissance().then(sonderLeReste); setInterval(() => { sonderNaissance().then(sonderLeReste); }, 10 * 60 * 1000).unref(); }, 45000).unref();
+/* ── LE WIDGET MCP (mcp-widget-panneau.html) : le paquet officiel ext-apps 2.0.3 est EMBARQUE et inline (un bac a sable de chat
+ *   bloque tout script distant). Son `export{…}` final devient `globalThis.ExtApps={…}` — la reecriture du guide officiel.
+ *   ⛔ Empreinte VERIFIEE au demarrage : un paquet altere ou absent = pas de widget (les outils marchent sans lui). */
+const WIDGET_BUNDLE_SHA256 = 'fb56376b7583ecafb4820bdebc150abee18feb6258ff84b83c2c944ebd9c3602';
+let widgetHtml = null;
+try {
+  const brut = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'mcp-ext-apps-2.0.3.bundle.js'));
+  if (createHash('sha256').update(brut).digest('hex') === WIDGET_BUNDLE_SHA256) {
+    const bundle = brut.toString('utf8').replace(/export\{([^}]+)\};?\s*$/, (_, corps) => 'globalThis.ExtApps={'
+      + corps.split(',').map((p) => { const [local, exporte] = p.split(' as ').map((s) => s.trim()); return (exporte || local) + ':' + local; }).join(',') + '};');
+    const modele = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'mcp-widget-panneau.html'), 'utf8');
+    if (modele.includes('/*__EXT_APPS_BUNDLE__*/') && bundle.includes('globalThis.ExtApps={')) widgetHtml = modele.replace('/*__EXT_APPS_BUNDLE__*/', () => bundle);
+  } else console.warn('[mcp] ext-apps bundle hash mismatch — widget disabled');
+} catch (e) { console.warn('[mcp] widget not built: ' + e.message); }
 function ecrireVoix() {
   if (!FICHIER_VOIX) return;
   try {
@@ -2299,6 +2349,8 @@ const SERVIS = [
   'panel.html',
   /* 2026-10-04 : le minimum du createur, lu et rendu depuis la page du block (importe par app.html : absent d ici = 404 = app morte) */
   'caution-createur.js',
+  /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
+  'commandes-panel.js',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
@@ -3178,6 +3230,12 @@ createServer((req, res) => {
    *   GET  /api/caution?block=[&paire=][&compte=]                      le minimum du createur + l appel de sortie non signe
    *   POST /mcp                                                        les memes outils, en MCP (JSON-RPC 2.0, sans session)
    * ⛔ RIEN N EST SIGNE NI ENVOYE ICI. Nom et symbole d un block sont publics (ils seront graves) : ils peuvent voyager en GET. */
+  /* l apercu du widget MCP tel que le serveur le rend a un client (resources/read) — pour le relire dans un navigateur */
+  if (chemin === '/mcp/widget') {
+    res.writeHead(widgetHtml ? 200 : 404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    res.end(widgetHtml || 'the widget is not built on this server');
+    return;
+  }
   if (chemin === '/api/naissance/paires' || chemin === '/api/naissance/plan' || chemin === '/api/caution' || chemin === '/mcp' || chemin.startsWith('/api/panel/')) {
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS',
       'access-control-allow-headers': 'content-type, accept, mcp-protocol-version, mcp-session-id, x-ms-monitor' };
@@ -3214,6 +3272,8 @@ createServer((req, res) => {
         else if (chemin === '/api/panel/commandes') r = registrePanel.lireCommandes(j.s, depuis);
         else if (chemin === '/api/panel/evenement') r = registrePanel.noter(j.s, j.evenement);
         else if (chemin === '/api/panel/etat') r = registrePanel.lireEvenements(j.s, depuis);
+        /* le cablage direct : le panneau publie l etat du cerveau du block affiche ; l agent le lit dans tblock_panel_state */
+        else if (chemin === '/api/panel/cerveau') r = registrePanel.noterCerveau(j.s, j.cerveau);
         else { rendreN(404, { ok: false, pourquoi: 'unknown panel route' }); return; }
         rendreN(r.ok ? 200 : r.inconnue ? 404 : r.tropVite ? 429 : 400, r);
       });
@@ -3268,7 +3328,7 @@ createServer((req, res) => {
         try { return await f(a); } finally { railsEnVol -= 1; }
       };
       try {
-        const rep = await traiterMcp(msg, { version: buildServi(), outils: {
+        const rep = await traiterMcp(msg, { version: buildServi(), widget: () => widgetHtml, outils: {
           tblock_pairs: async () => pairesPourAgent(),
           tblock_plan_birth: avecBudget((a) => faireNaissance({ nom: a.name, symbole: a.symbol, compte: a.account, paire: a.pair || 'ETH', sel: a.salt || '' }, { sonde: sondeN })),
           tblock_plan_swap: avecBudget((a) => faireRail({ de: a.from, vers: a.to, montant: a.amount, compte: a.account })),
@@ -3613,7 +3673,10 @@ createServer((req, res) => {
     /* `naissance` : le verdict de la sonde qui simule une naissance entiere contre le hook deploye (voir sonderNaissance). Il ne
      *   change PAS `ok` (un 503 ferait redemarrer le conteneur pour une panne de noeud) — il se LIT : etat PRET, ou la raison. */
     res.end(JSON.stringify({ ok, servis: cache.size, racine: RACINE, build: buildServi(), rails: railsCompteurs,
-      naissance: { sonde: naissanceSonde, ...naissanceCompteurs }, ...(ok ? {} : { modulesManquants }) }));
+      naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
+      /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
+      sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
+      mcpWidget: widgetHtml !== null, ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 
