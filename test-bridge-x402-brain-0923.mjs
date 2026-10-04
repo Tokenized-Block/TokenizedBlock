@@ -209,7 +209,11 @@ assert.match(phraseBridgeLegs(), /later|comes after/i,
 
 const brainStart = html.indexOf('id="v-brain"');
 const brainEnd = html.indexOf('id="v-bridge"'); // bridge follows? actually wallet etc — use bot card
-assert.match(html.slice(brainStart, brainStart + 8000), /signs nothing/i);
+/* 2026-10-04 : le panneau de commande (deux <dialog>) vit EN TETE de la vue Brain ; la fenetre de 8 000 caracteres comptee depuis
+ * `id="v-brain"` ne voyait plus la premiere carte de la vue. Elle part maintenant de la fin du panneau — meme phrase, meme carte. */
+const apresPanneau = html.indexOf('</dialog>', html.indexOf('id="bcDialogue"', brainStart));
+assert.ok(apresPanneau > brainStart, 'la fin du panneau de commande est introuvable dans la vue Brain');
+assert.match(html.slice(apresPanneau, apresPanneau + 8000), /signs nothing/i);
 
 const servi = readFileSync('./serveur-web.js', 'utf8');
 assert.match(servi, /x402-pay\.js/);

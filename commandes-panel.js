@@ -18,7 +18,10 @@ const nombre = (s) => String(s).replace(',', '.');
  *  modele parle du block affiche (« this »). Chaque modele est une phrase que analyserCommande() accepte — le test le verifie. */
 export const PRECOMMANDES = Object.freeze([
   { cle: 'buy_stock', libelle: 'Buy a stock', modele: 'buy NVDAc with 5 USDC' },
-  { cle: 'sell_stock', libelle: 'Sell a stock', modele: 'sell 0.01 AMDc for USDC' },
+  /* 2026-10-04 : le modele etait « sell 0.01 AMDc for USDC ». Au 1er passage sur le planificateur il a rendu REFUSE (« no initialized
+   *   pool among the 17 keys read »), aux 2 suivants APPROBATIONS — refus NON reproduit, cause non elucidee. LLYc (pool v4 USDC) a
+   *   rendu APPROBATIONS aux 3 passages : une pre-commande doit mener a un plan a chaque fois. */
+  { cle: 'sell_stock', libelle: 'Sell a stock', modele: 'sell 0.01 LLYc for USDC' },
   { cle: 'buy_block', libelle: 'Buy this block', modele: 'buy this with 0.0005 ETH', ceBlock: true },
   { cle: 'sell_block', libelle: 'Sell this block', modele: 'sell 1000 this', ceBlock: true },
   { cle: 'swap', libelle: 'Swap', modele: 'swap 5 USDC to NVDAc' },
@@ -30,7 +33,7 @@ export const PRECOMMANDES = Object.freeze([
 
 export const AIDE_COMMANDES = Object.freeze([
   'buy <token> with <amount> <token>      e.g. buy NVDAc with 5 USDC',
-  'sell <amount> <token> [for <token>]    e.g. sell 0.01 AMDc for USDC',
+  'sell <amount> <token> [for <token>]    e.g. sell 0.01 LLYc for USDC',
   'swap <amount> <token> to <token>       e.g. swap 5 USDC to NVDAc',
   'send <amount> <token> to <address>     e.g. send 1 USDC to 0x… (the whole address)',
   'show <token>                           e.g. show NVDAc',

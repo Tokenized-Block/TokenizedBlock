@@ -493,24 +493,66 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcHaut .bcPousse{flex:1}
 /* le block et ses chiffres cote a cote : la barre de commande doit rester a portee sans defiler (1er jet : tout empile, le champ
    tombait sous l ecran d un telephone) */
-.bcScene{display:flex;align-items:center;gap:14px;margin:12px 0 4px}
+/* 2026-10-04 (Phil, capture : deux bandes claires de part et d autre du visage) : le visage est un dessin 200×220 qui porte SON
+   fond ; pose dans un carre, il laissait voir le fond du cadre a gauche et a droite. Le cadre prend le RATIO du dessin, et la scene
+   se teinte de la couleur de fond LUE dans le SVG rendu (--bcFond) : le decor est celui du block, pas un gris commun a tous. */
+.bcScene{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px 14px;margin:12px 0 4px;padding:12px;border-radius:20px;border:1px solid var(--ligne);
+  background:linear-gradient(120deg,color-mix(in srgb,var(--bcFond,var(--creux)) 42%,transparent),transparent 72%),var(--creux)}
 .bcInfos{flex:1;min-width:0}
-.bcAvatar{flex:0 0 auto;width:92px;height:92px;border-radius:22px;padding:3px;background:conic-gradient(from 210deg,var(--accent),var(--ligne),var(--accent));transition:filter .4s}
-.bcAvatar>div{width:100%;height:100%;border-radius:19px;overflow:hidden;background:var(--creux);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--accent)}
-@media (min-width:620px){.bcAvatar{width:128px;height:128px;border-radius:26px}.bcAvatar>div{border-radius:23px}}
+/* LA SKIN = LE CONTOUR DU BLOCK (Phil, 2026-10-04 : « le skin par-dessus le block sur le perimetre, que tu peux changer comme sur un jeu
+   video »). Le visage reste celui du block ; l anneau qui l entoure (--bcAnneau) et sa lueur (--bcLueur) sont la skin portee. Le meme
+   anneau cercle le cube de la vue Brain et la vignette de la boutique. */
+.bcAvatar{flex:0 0 auto;width:92px;aspect-ratio:200/220;border-radius:22px;padding:4px;transition:filter .4s,box-shadow .3s ease;
+  background:var(--bcAnneau,conic-gradient(from 210deg,var(--accent),var(--bcFond,var(--ligne)),var(--accent)));box-shadow:0 0 22px var(--bcLueur,transparent)}
+.bcCadre{max-width:366px;margin:0 auto 8px;padding:4px;border-radius:20px;transition:box-shadow .3s ease;
+  background:var(--bcAnneau,linear-gradient(135deg,var(--ligne),var(--ligne)));box-shadow:0 0 26px var(--bcLueur,transparent)}
+.bcCadre canvas.bcCube{display:block;margin:0;max-width:none;width:100%;border-radius:16px}
+.bcSkinFace,.bcTuile .bcVignette{padding:3px;box-sizing:border-box;background:var(--bcAnneau,var(--ligne)) !important}
+.bcSkinFace>svg,.bcTuile .bcVignette>svg{border-radius:10px}
+.bcAvatar>div{width:100%;height:100%;border-radius:19px;overflow:hidden;background:var(--bcFond,var(--creux));display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--accent)}
+@media (min-width:620px){.bcAvatar{width:124px;border-radius:26px}.bcAvatar>div{border-radius:23px}}
+/* l adresse B20 du block, EN ENTIER (jamais abregee la ou on la copie) : un bouton qui la copie */
+.bcAdr{appearance:none;display:block;max-width:100%;margin:3px 0 0;padding:0;border:0;background:transparent;color:var(--doux);cursor:pointer;text-align:left;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;line-height:1.35;overflow-wrap:anywhere}
+.bcAdr:hover{color:var(--accent)}
+/* le ticket de l onglet Trade : un sens, un montant, une devise, un bouton — puis ce que la personne detient */
+.bcTicket{border:1px solid var(--ligne);border-radius:18px;padding:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--bcFond,var(--creux)) 22%,transparent),transparent 60%),var(--creux)}
+.bcCote{display:flex;gap:4px;padding:4px;background:rgb(var(--fondRgb) / .6);border:1px solid var(--ligne);border-radius:12px}
+.bcCote button{appearance:none;flex:1 1 0;border:0;background:transparent;color:var(--doux);font:inherit;font-weight:700;font-size:14px;padding:9px 4px;border-radius:9px;cursor:pointer}
+.bcCote button[aria-selected="true"][data-cote="buy"]{background:rgb(110 231 183 / .16);color:#6ee7b7}
+.bcCote button[aria-selected="true"][data-cote="sell"]{background:rgb(252 165 165 / .16);color:#fca5a5}
+.bcChamp{display:block;margin-top:10px}
+.bcChamp>span:first-child{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);margin-bottom:4px}
+.bcChampIn{display:flex;align-items:center;gap:8px;background:rgb(var(--fondRgb) / .75);border:1px solid rgb(var(--accentRgb) / .28);border-radius:14px;padding:4px 6px 4px 14px}
+.bcChampIn:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .18)}
+.bcChampIn input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--texte);font:inherit;font-size:20px;font-weight:700;padding:8px 0}
+.bcChampIn select{flex:0 0 auto;max-width:46%;background:rgb(var(--boutonRgb));color:var(--texte);border:1px solid var(--ligne);border-radius:10px;font:inherit;font-weight:700;font-size:13px;padding:8px 8px}
+.bcTicket .bouton{margin-top:10px}
+.bcTicket .bcPre{margin:8px 0 0}
+.bcPos{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.bcPos>div{border:1px solid var(--ligne);border-radius:12px;padding:8px 10px;background:var(--creux);min-width:0}
+.bcPos span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+.bcPos b{display:block;font-size:15px;overflow-wrap:anywhere}
+.bcPos i{display:block;font-style:normal;font-size:11px;color:var(--doux)}
 #bcRaster{height:64px;margin-top:8px}
 .bcAvatar svg{width:100%;height:100%;display:block}
 .bcAvatar[data-phase="EXCITE"]{filter:drop-shadow(0 0 16px rgb(var(--accentRgb) / .75))}
 .bcAvatar[data-phase="DORMANT"],.bcAvatar[data-phase="NON_LU"]{filter:grayscale(.7)}
-.bcNom{font-size:18px;font-weight:700;overflow-wrap:anywhere}
-.bcChips{display:flex;gap:6px;flex-wrap:wrap}
-.bcChips span{border:1px solid var(--ligne);border-radius:10px;padding:4px 8px;font-size:10px;color:var(--doux);text-transform:uppercase;letter-spacing:.4px}
-.bcChips b{display:block;font-size:13px;color:var(--texte);text-transform:none;letter-spacing:0}
+.bcNom{font-size:22px;font-weight:800;line-height:1.15;overflow-wrap:anywhere}
+/* le symbole en grand, le nom en petit dessous, puis l humeur et QUATRE chiffres sur une seule rangee (1er jet : le titre tenait sur
+   trois lignes et les chiffres sur deux — la scene mangeait la moitie d un ecran de telephone) */
+.bcScene .bcHumeur{grid-column:1/-1;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bcScene .bcHumeur:empty{display:none}
+.bcChips{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.bcChips span{border:1px solid var(--ligne);border-radius:10px;padding:5px 8px;font-size:10px;color:var(--doux);text-transform:uppercase;letter-spacing:.4px;min-width:0;background:rgb(var(--fondRgb) / .35)}
+.bcChips b{display:block;font-size:13px;color:var(--texte);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bcRaster[hidden]{display:none}
 .bcVue{display:none;margin-top:10px}
 .bcVue.on{display:block}
 .bcLigne{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--ligne)}
 .bcLigne:last-child{border-bottom:0}
-.bcLigne span:first-child{color:var(--doux)}
+.bcLigne span:first-child{color:var(--doux);flex:0 0 auto}
+.bcLigne span:last-child{min-width:0;text-align:right;overflow-wrap:anywhere}
 .bcFil{display:flex;flex-direction:column;gap:8px;max-height:44vh;overflow-y:auto}
 .bcMsg{border:1px solid var(--ligne);border-radius:14px;padding:9px 12px;background:var(--creux)}
 .bcMsg .bcQui{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);margin-bottom:3px}
@@ -551,23 +593,58 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcListe .bcEtat.cours{color:#fcd34d}
 .bcListe button{appearance:none;border:0;background:transparent;color:var(--accent);font:inherit;cursor:pointer;padding:0;text-align:left}
 canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
-.bcSkin{display:flex;gap:14px;align-items:center;margin-top:12px;padding:12px;border:1px solid var(--ligne);border-radius:16px;background:var(--creux)}
-.bcSkinFace{flex:0 0 auto;width:96px;height:96px;border-radius:20px;overflow:hidden;border:1px solid var(--ligne);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--accent)}
+.bcMode{margin-bottom:10px}
+.bcCote.bcMode button[aria-selected="true"]{background:rgb(var(--boutonRgb));color:var(--texte)}
+.bcLimites{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;padding:12px;border:1px dashed var(--ligne);border-radius:16px}
+.bcLimites label{display:block;min-width:0;position:relative}
+.bcLimites label span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux);margin-bottom:3px}
+.bcLimites input{width:100%;box-sizing:border-box;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-weight:700;padding:8px 30px 8px 10px}
+.bcLimites label i{position:absolute;right:9px;bottom:9px;font-style:normal;font-size:11px;color:var(--doux)}
+.bcLimites .bouton,.bcLimites .note{grid-column:1/-1}
+.bcLimites .bouton:disabled{opacity:.55;cursor:not-allowed}
+.bcSkin{display:flex;gap:12px;align-items:center;margin-top:12px;padding:10px 12px;border:1px solid var(--ligne);border-radius:16px;
+  background:linear-gradient(120deg,color-mix(in srgb,var(--bcFond,var(--creux)) 30%,transparent),transparent 70%),var(--creux)}
+.bcSkinTexte b{display:block;font-size:15px}
+.bcSkinTexte span{display:block}
+.bcPlus{appearance:none;flex:0 0 auto;width:44px;height:44px;border-radius:14px;border:1px solid rgb(var(--accentRgb) / .45);cursor:pointer;
+  background:rgb(var(--accentRgb) / .12);color:var(--accent);font-size:26px;font-weight:700;line-height:1;transition:transform .15s ease,background .15s ease}
+.bcPlus:hover{background:rgb(var(--accentRgb) / .22)}
+.bcPlus[aria-expanded="true"]{transform:rotate(45deg)}
+.bcBoutique{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:8px}
+.bcBoutique[hidden]{display:none}
+.bcTuile{appearance:none;display:block;min-width:0;padding:8px;border:1px solid var(--ligne);border-radius:14px;background:var(--creux);color:var(--texte);font:inherit;text-align:center;cursor:pointer}
+.bcTuile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .25)}
+.bcTuile:disabled{opacity:.6;cursor:not-allowed}
+.bcTuile .bcVignette{width:64px;aspect-ratio:200/220;margin:0 auto 6px;border-radius:12px;overflow:hidden;background:var(--bcFond,var(--creux));display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--accent)}
+.bcTuile .bcVignette svg{width:100%;height:100%;display:block}
+.bcTuile b{display:block;font-size:13px}
+.bcTuile span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+#bcReseau,#bcAvatarIn,#bcSkinFace{transition:filter .3s ease}
+.bcListe .bcQui{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12px}
+.bcSkinFace{flex:0 0 auto;width:60px;aspect-ratio:200/220;background:var(--bcFond,transparent);border-radius:14px;overflow:hidden;border:1px solid var(--ligne);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--accent)}
 .bcSkinFace svg{width:100%;height:100%;display:block}
 .bcSkinTexte{flex:1;min-width:0}
 .bcSkin .bouton{width:auto;min-height:0;padding:8px 14px;font-size:13px}
 .bcSkin .bouton:disabled{opacity:.55;cursor:not-allowed}
 .bcMsg a{display:inline-block;margin-top:6px;color:var(--accent)}
 /* le panneau est un POP-UP (Phil, 2026-10-04 : « idealement ca pop comme un pop-up ») ouvert par le widget de l onglet Brain */
-dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;max-width:720px;width:calc(100% - 20px);max-height:94dvh;overflow:visible}
-dialog.bcPop::backdrop{background:rgb(var(--fondRgb) / .8);backdrop-filter:blur(4px)}
-dialog.bcPop>.carte{margin:0;max-height:94dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
+/* 2026-10-04 (Phil) : « le pop-up ne doit pas couvrir toute l app derriere : on doit voir plusieurs infos en simultane — c etait pour
+   ca a la base ». Il n est donc PLUS modal : pas de voile, l app reste visible et utilisable. Grand ecran = un volet a droite ;
+   telephone = une feuille en bas (60 % de la hauteur). Un bouton le replie sur son en-tete. */
+dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;margin:0;position:fixed;z-index:70;inset:auto;
+  right:12px;top:12px;height:calc(100dvh - 24px);width:min(430px,calc(100% - 24px));max-width:none;max-height:none;overflow:visible}
+dialog.bcPop>.carte{margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
+  box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
+@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:8px;width:auto;height:60dvh}}
+dialog.bcPop.bcReduit{top:auto;bottom:12px;height:auto}
+dialog.bcPop.bcReduit>.carte{height:auto;overflow:hidden}
+dialog.bcPop.bcReduit .bcScene,dialog.bcPop.bcReduit #bcRaster,dialog.bcPop.bcReduit .bcVue,dialog.bcPop.bcReduit .bcOnglets{display:none}
 .bcFil{scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
 dialog.bcPop[open]{animation:bcPop .18s ease-out}
 @keyframes bcPop{from{transform:translateY(14px) scale(.98);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){dialog.bcPop[open]{animation:none}}
 .bcLanceurIn{display:flex;align-items:center;gap:12px}
-.bcMini{flex:0 0 auto;width:56px;height:56px;border-radius:14px;overflow:hidden;background:var(--creux);border:1px solid var(--ligne);
+.bcMini{flex:0 0 auto;width:56px;aspect-ratio:200/220;border-radius:14px;overflow:hidden;background:var(--bcFond,var(--creux));border:1px solid var(--ligne);
   display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--accent)}
 .bcMini svg{width:100%;height:100%;display:block}
 dialog.bcDialogue{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:16px;max-width:560px;width:calc(100% - 32px);padding:16px}
@@ -1671,16 +1748,19 @@ details[open] > summary::before{transform:rotate(90deg)}
         <span class="bcPousse"></span>
         <span class="puce" id="bcAgent">Agent: not connected</span>
         <button type="button" class="bouton sec" id="bcLier">Agent link</button>
-        <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">Close</button>
+        <button type="button" class="bouton sec" id="bcReduire" aria-label="Fold or unfold the control panel" aria-expanded="true">–</button>
+        <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">✕</button>
       </div>
       <div class="bcScene">
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
           <div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
-          <p class="note" id="bcHumeur" style="margin:2px 0 8px"></p>
-          <div class="bcChips">
-            <span>Price<b id="bcPrix">—</b></span><span>Liquidity<b id="bcLiq">—</b></span><span>Mood<b id="bcPhase">—</b></span><span>Beat<b id="bcTick">—</b></span>
-          </div>
+          <div class="note" id="bcSousNom" hidden></div>
+          <button type="button" class="bcAdr" id="bcAdr" hidden title="Copy this block’s B20 address"></button>
+        </div>
+        <p class="note bcHumeur" id="bcHumeur"></p>
+        <div class="bcChips">
+          <span>Price<b id="bcPrix">—</b></span><span>Liquidity<b id="bcLiq">—</b></span><span>Mood<b id="bcPhase">—</b></span><span>Beat<b id="bcTick">—</b></span>
         </div>
       </div>
       <canvas id="bcRaster" width="640" height="110" class="toile" aria-label="Neurons firing, beat by beat"></canvas>
@@ -1693,40 +1773,76 @@ details[open] > summary::before{transform:rotate(90deg)}
           <input id="bcSaisie" placeholder="buy NVDAc with 5 USDC" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="send" aria-label="Command for the brain">
           <button type="submit" class="bcEnvoyer" aria-label="Send to the brain" title="Send to the brain">➤</button>
         </form>
-        <p class="note" id="bcNote">Write a command or tap one above, then adjust it. Type “help” for the list. Nothing moves until you sign in your wallet.</p>
+        <p class="note" id="bcNote"></p>
       </div>
+      <!-- 2026-10-04 (Phil) : « l onglet Market est propre au block actuel — on doit voir qui interagit avec CE block en direct ».
+           La liste des echanges d AUTRES blocks et les « plus echanges du jour » sont partis : ici, le marche de ce block et ses
+           mouvements lus sur la chaine (/api/activite : signataire lu sur la transaction). -->
       <div class="bcVue" id="bc-market">
-        <div id="bcMarche"><p class="note">No block chosen yet.</p></div>
-        <p class="bcSousTitre">Other blocks — trades read on chain</p>
-        <ul class="bcListe" id="bcAutres"><li class="note">No trade read yet in this session.</li></ul>
-        <p class="bcSousTitre">Most traded today</p>
-        <div class="bcPre" id="bcMouvants"></div>
+        <div class="bcPos" id="bcMarche"></div>
+        <p class="bcSousTitre">Live on this block</p>
+        <ul class="bcListe" id="bcActivite"><li class="note">Reading…</li></ul>
+        <p class="note" id="bcActiviteNote" style="margin:6px 0 0"></p>
       </div>
       <div class="bcVue" id="bc-trade">
-        <p class="bcSousTitre" style="margin-top:0">In progress</p>
-        <ul class="bcListe" id="bcEnCours"><li class="note">Nothing in progress.</li></ul>
-        <p class="bcSousTitre">Quick trades for the block shown</p>
-        <div class="bcPre" id="bcRapides"></div>
-        <p class="bcSousTitre">History in this browser</p>
-        <ul class="bcListe" id="bcHistorique"><li class="note">Nothing yet.</li></ul>
-        <p class="bcSousTitre">What its brain noted</p>
-        <ul class="bcListe" id="bcNotesBot"><li class="note">No note yet — the brain writes one after each transaction you sign here.</li></ul>
+        <!-- 2026-10-04 (Phil : « ici y a prob, refais mieux… propose quelque chose qui manque ») : la vue n etait que des listes vides.
+             A leur place : UN TICKET (sens, montant, devise) qui mene a la carte du plan, et CE QUE LA PERSONNE DETIENT — ce qui manquait.
+             ⛔ Le ticket n envoie rien : il ecrit la meme commande que la barre du Chat, qui passe la porte du cerveau puis le plan. -->
+        <!-- QUI SIGNE (Phil, 2026-10-04 : « semi auto avec l approbation de chaque swap, et ajoute un switch Full AiFi ou le brain a full
+             controle avec ses limitations »). Semi-auto = ce qui marche : chaque swap est approuve dans le wallet.
+             ⛔ Full AiFi N EST PAS ARME ET NE PEUT PAS L ETRE ICI : rien dans cette app ne signe a la place de la personne (aucune cle,
+             aucune permission de depense). Le switch montre les LIMITES qu il respectera ; son bouton d armement est desactive et le dit. -->
+        <div class="bcCote bcMode" role="tablist" aria-label="Who signs">
+          <button type="button" role="tab" data-mode="semi" aria-selected="true">Semi-auto</button>
+          <button type="button" role="tab" data-mode="full" aria-selected="false">Full AiFi</button>
+        </div>
+        <div class="bcLimites" id="bcLimites" hidden>
+          <label><span>Max per trade</span><input id="bcLimTrade" inputmode="decimal" value="0.002" aria-label="Max per trade, in ETH"><i>ETH</i></label>
+          <label><span>Max per day</span><input id="bcLimJour" inputmode="decimal" value="0.01" aria-label="Max per day, in ETH"><i>ETH</i></label>
+          <label><span>Stops after</span><input id="bcLimDuree" inputmode="numeric" value="24" aria-label="Stops after, in hours"><i>h</i></label>
+          <button type="button" class="bouton sec" id="bcArmer" disabled aria-disabled="true">Arm Full AiFi — not available yet</button>
+          <p class="note" style="margin:6px 0 0">Needs a spending permission from your wallet. Until then, every swap is yours to approve.</p>
+        </div>
+        <form class="bcTicket" id="bcTicket" autocomplete="off">
+          <div class="bcCote" role="tablist" aria-label="Buy or sell the block shown">
+            <button type="button" role="tab" data-cote="buy" aria-selected="true">Buy</button>
+            <button type="button" role="tab" data-cote="sell" aria-selected="false">Sell</button>
+          </div>
+          <label class="bcChamp"><span id="bcTicketLib">You pay</span>
+            <span class="bcChampIn">
+              <input id="bcMontant" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Amount">
+              <select id="bcDevise" aria-label="Currency"></select>
+            </span>
+          </label>
+          <div class="bcPre" id="bcRapides"></div>
+          <p class="note" id="bcTicketBrain" style="margin:8px 0 0"></p>
+          <button type="submit" class="bouton" id="bcTicketGo">Review the buy</button>
+          <p class="note" id="bcTicketNote" style="margin:6px 0 0"></p>
+        </form>
+        <p class="bcSousTitre">You hold</p>
+        <div id="bcPosition"></div>
+        <!-- les trois listes ne s affichent que quand elles ont quelque chose a dire (un titre au-dessus de « Nothing yet » = du bruit) -->
+        <div id="bcBlocEnCours" hidden><p class="bcSousTitre">Waiting for you</p><ul class="bcListe" id="bcEnCours"></ul></div>
+        <div id="bcBlocHistorique" hidden><p class="bcSousTitre">History</p><ul class="bcListe" id="bcHistorique"></ul></div>
+        <div id="bcBlocNotes" hidden><p class="bcSousTitre">Brain notes</p><ul class="bcListe" id="bcNotesBot"></ul></div>
       </div>
       <div class="bcVue" id="bc-brain">
         <!-- le MEME dessin que la carte « Its wiring » de l onglet Brain : son canvas est recopie ici a chaque battement -->
-        <canvas id="bcReseau" width="560" height="420" class="toile bcCube" aria-label="The block’s brain: 128 neurons and their links, firing"></canvas>
-        <p class="note" id="bcReseauNote" style="text-align:center">The block is the cube; its brain lives inside — each dot a neuron, each line a link. Turn and zoom it from “Its wiring” in the Brain tab.</p>
-        <!-- 2026-10-04 (Phil) : la liste des taches n a rien a faire ici (« ca on s en fout ») — a sa place, la PEAU du block, et le
-             bouton des skins. ⛔ Ce bouton NE MARCHE PAS ENCORE, et il le dit : desactive, sans prix, sans date. -->
+        <div class="bcCadre"><canvas id="bcReseau" width="560" height="420" class="toile bcCube" aria-label="The block’s brain: 128 neurons and their links, firing"></canvas></div>
+        <!-- 2026-10-04 (Phil, capture) : « retire ce qu il y a sur la photo, mets des donnees du brain respectif, ajoute un bouton +
+             pour le skin et propose deja des skins payants qui revetent le cube ». Les deux paragraphes d explication sont partis.
+             A leur place : les chiffres de CE cerveau (meme instantane que l onglet Brain), puis la peau et le « + » des skins.
+             ⛔ Une skin se PORTE A L ESSAI (dans ce panneau, pour cette visite) ; elle ne s achete pas encore : aucun prix n est
+             affiche tant qu aucun n est fixe, et aucun paiement n est demande. -->
+        <div class="bcPos" id="bcCerveau"></div>
+        <p class="note" id="bcPensee" style="margin:8px 0 0"></p>
         <div class="bcSkin">
           <div class="bcSkinFace" id="bcSkinFace">◈</div>
-          <div class="bcSkinTexte">
-            <p class="bcSousTitre" style="margin:0 0 4px">Its skin</p>
-            <p class="note" style="margin:0 0 8px">The face engraved with this block — what covers its brain today.</p>
-            <button type="button" class="bouton sec" id="bcSkins" disabled aria-disabled="true">Skins — not available yet</button>
-            <p class="note" style="margin:6px 0 0">The idea: a skin you buy to cover the brain, or one you propose yourself — like a skin in a video game.</p>
-          </div>
+          <div class="bcSkinTexte"><b id="bcSkinNom">Original</b><span class="note" id="bcSkinEtat">its own face</span></div>
+          <button type="button" class="bouton sec" id="bcSkinAcheter" hidden>Buy</button>
+          <button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique" aria-label="Skins" title="Skins">+</button>
         </div>
+        <div class="bcBoutique" id="bcBoutique" hidden></div>
       </div>
 
       <div class="bcOnglets" role="tablist" aria-label="Control panel views">
@@ -1980,7 +2096,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="bcMini" id="bcMini">◈</div>
         <div style="flex:1;min-width:0">
           <p class="titre" style="margin:0">Control panel</p>
-          <p class="sous" style="margin:4px 0 0">Direct this block like a personal trading bot: write a command or tap one — swap, send, buy a tokenized stock. Its brain judges, your wallet signs. An AI agent can propose commands too.</p>
+          <p class="sous" style="margin:4px 0 0">Trade, swap and send with this block’s brain. Your wallet signs.</p>
         </div>
       </div>
       <button type="button" class="bouton" id="bcOuvrir" style="margin-top:12px">Open the control panel</button>
@@ -2528,7 +2644,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261004-panneau-pop-up-cerveau" hidden>Build <code>20261004-panneau-pop-up-cerveau</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261004-panneau-market-skins-aifi" hidden>Build <code>20261004-panneau-market-skins-aifi</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3659,9 +3775,19 @@ function vieServeurPourCerveau(adr) {
   if (Number(mk.liquiditeUsd) > 0) return Number(mk.liquiditeUsd);
   return null;
 }
+/* ⛔⛔ 2026-10-04 — « NON_TROUVEE » VEUT DIRE « AUCUNE POOL V4 TROUVEE », PAS « AUCUN MARCHE ». Mesure dans le panneau, sur NVDAc :
+ *   son marche est une pool AERODROME (1,8 M$ de volume par jour a l index), notre lecteur de chaine ne lit que le V4 — il rendait
+ *   donc `NON_TROUVEE`, le repli ci-dessus s y interdisait (« fait de chaine »), le cerveau restait sans marche et sa porte refusait
+ *   tout echange. Pour ces blocks-la, le « fait de chaine » etait la limite de NOTRE lecteur.
+ *   ⇒ Le repli sur l index s applique aussi quand l index montre un marche Aerodrome PRIXE pour ce block. Un `NON_TROUVEE` sans
+ *     marche a l index reste ce qu il est : on n invente de marche a personne. */
+function marcheAerodromeIndexe(adr) {
+  const mk = adr ? marcheParAdr.get(String(adr).toLowerCase()) : null;
+  return !!(mk && Number(mk.prixUsd) > 0 && /^aerodrome$/i.test(String(mk.dex || '')));
+}
 function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
   const vieLue = typeof vie === 'number' && Number.isFinite(vie) && vie > 0;
-  const seraitNonLu = !etatVie || etatVie === 'NON_LUE' || etatVie === 'LUE';
+  const seraitNonLu = !etatVie || etatVie === 'NON_LUE' || etatVie === 'LUE' || (etatVie === 'NON_TROUVEE' && !!(h && h.adr) && marcheAerodromeIndexe(h.adr));
   if (!vieLue && seraitNonLu && h && h.adr) {
     const vs = vieServeurPourCerveau(h.adr);
     if (vs !== null) { vie = vs; vieAvant = null; etatVie = 'LUE'; }
@@ -18894,7 +19020,7 @@ function choisirBrain(adr) {
       }
     } catch { /* non lue : le journal le dira */ }
     try {
-      const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, clesExactes: await clesReellesDe(adr) });
+      const marche = await marchePourBrain(adr);
       if (hB) {
         if (marche && marche.etat === 'LUE') {
           hB.vieAvant = hB.vie;
@@ -18942,23 +19068,55 @@ function choisirBrain(adr) {
 }
 
 let brainRelireMarcheTick = 0;
+/** Le marche d un block POUR SON CERVEAU : notre lecture (navigateur) d abord ; si elle n aboutit pas, celle du serveur.
+ *  ⛔⛔ 2026-10-04 (mesure, panneau ouvert sur IB022) : les noeuds publics repondaient 429 au navigateur (10 refus), le cerveau restait
+ *    « market unread » et la porte des taches refusait tout — alors que le serveur lisait ce marche (sonde : PRET). `/api/marche/` est
+ *    le MEME lecteur (`vieDuBlock`) sur d autres noeuds. Seuls ses FAITS MESURES sont pris (`LUE`, `NON_TROUVEE`) ; un echec du
+ *    serveur laisse notre propre resultat tel quel — on ne remplace jamais « pas lu » par autre chose. */
+async function marchePourBrain(adr) {
+  const a = String(adr).toLowerCase();
+  let m = null;
+  try { m = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: a, clesExactes: await clesReellesDe(a) }); } catch (_) { m = null; }
+  if ((m && (m.etat === 'LUE' || m.etat === 'NON_TROUVEE')) || CHAINE !== 8453) return m;
+  try {
+    const r = await fetch('/api/marche/' + a, { cache: 'no-store', signal: AbortSignal.timeout(45000) });
+    const d = await r.json();
+    if (d && d.ok === true && (d.etat === 'LUE' || d.etat === 'NON_TROUVEE')) {
+      let liq = null;
+      try { liq = d.liquidite !== null && d.liquidite !== undefined ? BigInt(d.liquidite) : null; } catch (_) { liq = null; }
+      return { etat: d.etat, vie: typeof d.vie === 'number' ? d.vie : null, devise: d.devise || null, via: d.via || null, pourquoi: d.pourquoi || null,
+        cle: d.cle || null, liquidite: liq, decimales: Number.isInteger(d.decimales) ? d.decimales : null, source: 'server' };
+    }
+  } catch (_) { /* serveur muet : notre resultat reste ce qu il est */ }
+  return m;
+}
 async function relireMarcheBrainSiNonLu() {
   if (!brainAdr) return;
   const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr || '').toLowerCase());
   const et = h ? h.etatVie : null;
   const cached = viePourCerveau(brainAdr, h ? h.vie : null, et);
   if (cached.etatVie === 'LUE' && cached.vie > 0) return;
+  /* l adresse est figee AVANT les lectures : si la personne change de block pendant qu elles volent, le resultat ne va pas au suivant */
+  const adrLue = String(brainAdr).toLowerCase();
   try {
-    const marche = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: brainAdr, clesExactes: await clesReellesDe(brainAdr) });
+    const marche = await marchePourBrain(adrLue);
     if (marche && marche.etat === 'LUE') {
       if (h) { h.vieAvant = h.vie; h.vie = marche.vie; h.devise = marche.devise; h.via = marche.via || null; h.cle = marche.cle || null; h.liquidite = marche.liquidite != null ? marche.liquidite : null; h.etatVie = 'LUE'; }
-      viePourCerveau(brainAdr, marche.vie, 'LUE');
+      /* ⛔⛔ 2026-10-04 — LE JUMEAU QUI N ECRIVAIT PAS (mesure prod, IB022 hors carte) : cette relance LISAIT le marche, nourrissait le
+       *   cerveau (humeur « calm ») … et laissait `brainMarche` sur la premiere lecture ratee. L instantane, lui, lit `brainMarche` :
+       *   le panneau affichait « Market on chain: not read yet » et la porte des taches refusait « needs market LUE » sur un marche
+       *   que le cerveau etait en train de manger. La lecture reussie va maintenant la ou la lecture de la selection va. */
+      else if (String(brainAdr).toLowerCase() === adrLue) brainMarche = { adr: adrLue, v: marche };
+      viePourCerveau(adrLue, marche.vie, 'LUE');
     }
   } catch (e) { /* keep unread honest */ }
 }
 
 function battreBrain() {
-  if ($('#v-brain').classList.contains('on') === false || !brainEtat) return;
+  /* 2026-10-04 : le panneau de commande n est plus modal — on peut changer d onglet en le gardant ouvert. Tant qu il est ouvert,
+   * le cerveau qu il montre continue de battre (sinon ses chiffres se figeaient des qu on quittait l onglet Brain). */
+  const panneauOuvert = (() => { const p = document.getElementById('bcPop'); return !!(p && p.open); })();
+  if (($('#v-brain').classList.contains('on') === false && !panneauOuvert) || !brainEtat) return;
   const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr || '').toLowerCase());
   void relireNourriture(h);
   /* ⛔ 2026-09-14: while mood is market-unread, re-read the pool every ~12s — cache alone can't wake a cold start. */
@@ -19138,7 +19296,8 @@ function publierSnapshotBrain(vu, h) {
         }
         return {
           vie: h && typeof h.vie === 'number' ? h.vie : null,
-          etatVie: h ? h.etatVie : null,
+          /* hors carte : l etat MESURE (`NON_TROUVEE`, `NON_LUE`) est rendu tel quel — « cherche, pas de pool » n est pas « pas encore lu » */
+          etatVie: h ? h.etatVie : (mp && typeof mp.etat === 'string' ? mp.etat : null),
           via: h && h.via ? String(h.via) : null,
           hooks: null,
           hooked: null,
@@ -21230,7 +21389,25 @@ $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
  * ⛔ UN ENVOI (send) montre le destinataire EN ENTIER, relit le solde, et quand il vient d un AGENT exige un clic de plus.
  * ⛔ Tout texte venu d un agent ou de la chaine est pose en textContent. `dessin()` rend notre propre SVG.
  * ⛔ NON MESURE : une signature depuis ce panneau avec un vrai wallet. */
-const bc = { session: null, dernier: 0, agentVu: 0, avatarDe: null, minuterie: null, ops: [], marchePeint: 0, cerveauEnvoye: 0, phaseEnvoyee: null };
+const bc = { session: null, dernier: 0, agentVu: 0, avatarDe: null, minuterie: null, ops: [], marchePeint: 0, cerveauEnvoye: 0, phaseEnvoyee: null,
+  cote: 'buy', ticketDe: null, soldes: null, soldesLus: 0, soldesEnVol: false, nomEssai: new Map() };
+/* ── le NOM et le SYMBOLE d un block absent de l index du Market : lus sur la chaine (`name()`, `symbol()`), une fois ──
+ * 2026-10-04 (Phil, capture : le panneau titrait « 0xb200…579e ») : IB022 n est sur aucune carte ni dans l index — l app ne lui
+ * connaissait aucun nom, alors que son contrat en porte un. ⛔ On ne retient QUE ce qui a ete lu (un echec se retente, au plus toutes
+ * les 15 s) ; le texte passe par `texteAbi` (UTF-8, invisibles et inversions retires) et se pose en textContent.
+ * ⛔ Un nom lu sur la chaine est celui que le CREATEUR a ecrit : il ne prouve rien. L adresse B20 entiere reste affichee a cote. */
+const bcNoms = new Map();
+function bcIdentite(a) {
+  if (bcNoms.has(a) || Date.now() - (bc.nomEssai.get(a) || 0) < 15000) return;
+  bc.nomEssai.set(a, Date.now());
+  void (async () => {
+    /* ⛔ mesure (NVDAc) : avec la limite par defaut du decodeur (12, faite pour un SYMBOLE) le nom s affichait « NVIDIA Corpo ».
+     *   Un nom coupe se lit comme un autre nom : 48 caracteres pour `name()`, la limite d ecran pour `symbol()`. */
+    const lire = async (sel, max) => { try { return symboleDepuisReponse(await rpc('eth_call', [{ to: a, data: sel }, 'latest']), max) || ''; } catch (_) { return ''; } };
+    const [nom, sym] = await Promise.all([lire(SEL_NOM_ERC20, 48), lire(SEL_SYM_ERC20, undefined)]);
+    if (nom || sym) { bcNoms.set(a, { nom, sym }); bc.avatarDe = null; }
+  })();
+}
 /* ── les operations : ce qui est EN COURS (propose, plan pret, dans le wallet, envoye) et l HISTORIQUE, garde dans ce navigateur ──
  * ⛔ Une operation « en cours » retrouvee au rechargement n a plus sa carte : elle devient « left unfinished » — jamais « done ». */
 const BC_CLE_OPS = 'tblock.panel.ops';
@@ -21245,23 +21422,37 @@ function bcChargerOps() {
   } catch (_) { bc.ops = []; }
 }
 function bcSauverOps() { try { localStorage.setItem(BC_CLE_OPS, JSON.stringify(bc.ops.slice(0, 40))); } catch (_) { /* stockage prive */ } bcPeindreOps(); }
-function bcOp(texte, qui) {
+/* la carte du Chat de chaque operation ouverte dans CETTE page : une ligne « en cours » y ramene (elle ne survit pas au rechargement) */
+const bcCartes = new Map();
+function bcOp(texte, qui, carte = null) {
   const op = { id: Date.now() + '-' + bc.ops.length, t: Date.now(), texte: String(texte).slice(0, 160), qui: String(qui).slice(0, 20), etat: 'proposed', tx: null };
+  if (carte) bcCartes.set(op.id, carte);
   bc.ops.unshift(op); bc.ops = bc.ops.slice(0, 40);
   bcSauverOps();
   return op;
 }
-function bcOpMaj(op, etat, tx) { if (!op || !BC_ETATS[etat]) return; op.etat = etat; if (tx) op.tx = tx; bcSauverOps(); }
+function bcOpMaj(op, etat, tx) { if (!op || !BC_ETATS[etat]) return; op.etat = etat; if (tx) op.tx = tx; if (etat === 'done') bc.soldesLus = 0; /* une transaction confirmee = soldes a relire */ bcSauverOps(); }
 function bcPeindreOps() {
   const ligne = (o) => {
     const [lib, cls] = BC_ETATS[o.etat];
     const gauche = bcEl('span', {}, [bcEl('span', { text: o.texte + ' ' }), bcEl('span', { cls: 'note', text: '· ' + o.qui + ' · ' + new Date(o.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })]);
     if (o.tx && /^0x[0-9a-f]{64}$/i.test(o.tx)) gauche.append(document.createTextNode(' '), bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + o.tx, target: '_blank', rel: 'noopener', text: court(o.tx) }));
+    /* une operation EN COURS mene a sa carte (la ou sont ses boutons) : sans ce lien, la ligne disait « plan ready » et ne menait a rien */
+    const carte = BC_EN_COURS.includes(o.etat) ? bcCartes.get(o.id) : null;
+    if (carte && carte.isConnected) {
+      const b = bcEl('button', { type: 'button', text: 'open' });
+      b.addEventListener('click', () => { bcVue('chat'); carte.scrollIntoView({ block: 'center' }); });
+      gauche.append(document.createTextNode(' · '), b);
+    }
     return bcEl('li', {}, [gauche, bcEl('span', { cls: 'bcEtat ' + cls, text: lib })]);
   };
-  const remplir = (sel, liste, vide) => { const ul = $(sel); if (!ul) return; ul.textContent = ''; if (!liste.length) ul.append(bcEl('li', { cls: 'note', text: vide })); else for (const o of liste) ul.append(ligne(o)); };
-  remplir('#bcEnCours', bc.ops.filter((o) => BC_EN_COURS.includes(o.etat)), 'Nothing in progress.');
-  remplir('#bcHistorique', bc.ops.filter((o) => !BC_EN_COURS.includes(o.etat)).slice(0, 15), 'Nothing yet.');
+  const remplir = (sel, liste, vide) => { const ul = $(sel); if (!ul) return; ul.textContent = ''; if (!liste.length) { if (vide) ul.append(bcEl('li', { cls: 'note', text: vide })); } else for (const o of liste) ul.append(ligne(o)); };
+  /* une liste vide ne s affiche pas du tout (ni son titre) : « Nothing yet » sous un titre, c est du bruit */
+  const enCours = bc.ops.filter((o) => BC_EN_COURS.includes(o.etat)), passe = bc.ops.filter((o) => !BC_EN_COURS.includes(o.etat)).slice(0, 15);
+  remplir('#bcEnCours', enCours, ''); remplir('#bcHistorique', passe, '');
+  const be = $('#bcBlocEnCours'), bh = $('#bcBlocHistorique');
+  if (be) be.hidden = !enCours.length;
+  if (bh) bh.hidden = !passe.length;
 }
 const bcEl = (tag, props = {}, enfants = []) => {
   const e = document.createElement(tag);
@@ -21336,8 +21527,8 @@ function bcResoudre(ref) {
   const r = String(ref || '').trim();
   if (/^(this|it|block)$/i.test(r)) {
     if (!brainAdr) return { ok: false, pourquoi: 'pick a block first (“this” is the block shown)' };
-    const mk = marcheParAdr.get(String(brainAdr).toLowerCase());
-    return { ok: true, adr: String(brainAdr).toLowerCase(), sym: (mk && mk.sym) || (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.symbole) || court(brainAdr) };
+    const mk = marcheParAdr.get(String(brainAdr).toLowerCase()), lu = bcNoms.get(String(brainAdr).toLowerCase());
+    return { ok: true, adr: String(brainAdr).toLowerCase(), sym: (mk && mk.sym) || (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.symbole) || (lu && lu.sym) || court(brainAdr) };
   }
   const registre = [...DEVISES_BASE.filter((d) => d.chaines.includes(8453)), ...ACTIONS_COINBASE];
   if (/^0x[0-9a-fA-F]{40}$/.test(r)) {
@@ -21396,7 +21587,7 @@ function bcJournal(action, hash) {
 }
 async function bcAvecWallet(m, suite) {
   if (compte) return true;
-  bcEtape(m, 'Connect your wallet first — the plan is built for the wallet that signs.', 'non');
+  bcEtape(m, 'Connect your wallet first.', 'non');
   bcBoutons(m, [['Connect wallet', async () => { try { await connecter(); } catch (_) {} if (compte) void suite(); else bcBoutons(m, [['Connect wallet', () => bcAvecWallet(m, suite)]]); }]]);
   return false;
 }
@@ -21407,21 +21598,32 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
   try { decDe = await bcDecimales(de.adr); decVers = await bcDecimales(vers.adr); } catch (_) { /* l affichage tombe sur les unites brutes */ }
   const libelle = (decDe === null ? montant + ' raw units of ' : bcUnites(montant, decDe) + ' ') + de.sym + ' → ' + vers.sym;
   const m = bcMessage(qui + ' · swap', classe, libelle);
-  const op = bcOp('Swap ' + libelle, qui);
+  const op = bcOp('Swap ' + libelle, qui, m);
   bcVue('chat');
   const refs = ref ? { ref } : {};
   /* (1) la porte du cerveau — seulement si l echange touche le block affiche ; sinon il n a rien a juger, et on le DIT */
   if (moi && (de.adr === moi || vers.adr === moi)) {
     const g = tacheAutorisee('trade_tblock', window.__TB_BRAIN_SNAPSHOT__ || {});
     const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
-    bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + (g.pourquoi || 'not now') + '.', g.ok ? 'oui' : 'non');
+    bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
     bcNoter({ type: 'verdict', ...refs, etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts trade_tblock' : String(g.pourquoi || 'refused') });
     if (!g.ok) { bcOpMaj(op, 'refused'); return; }
-  } else bcEtape(m, 'This trade does not touch the block shown: its brain does not judge it, it only notes it once you have signed.');
+  } else bcEtape(m, 'Not the block shown — its brain does not judge this one.');
   const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
   const planifier = async () => {
     if (!(await bcAvecWallet(m, planifier))) return;
-    bcEtape(m, 'Building the plan and simulating it on chain…');
+    /* ⛔ LE SOLDE EST RELU AVANT LE PLAN. Mesure sur fork (banc-vente-aerodrome) : un plan Aerodrome n est PAS simule cote serveur —
+     *   sans solde il revient PRET, l approbation passe, et le swap reverte dans le wallet. On refuse ici, avant toute signature.
+     *   Solde illisible = on laisse le planificateur juger (jamais un refus sur une lecture ratee). */
+    let soldeDe = null;
+    try { soldeDe = await bcSolde(de.adr, compte); } catch (_) { soldeDe = null; }
+    if (soldeDe !== null && soldeDe < BigInt(montant)) {
+      bcEtape(m, 'This wallet holds ' + (decDe === null ? soldeDe + ' raw units of' : bcUnites(soldeDe, decDe)) + ' ' + de.sym + ' — not enough. Nothing was asked.', 'non');
+      bcNoter({ type: 'plan', ...refs, etat: 'REFUSE', text: 'balance too low' });
+      bcBoutons(m, [['Try again', planifier, true], ['Dismiss', refuser, true]]);
+      return;
+    }
+    bcEtape(m, 'Building the plan…');
     let p;
     try {
       const r = await fetch('/api/rails/plan?de=' + (de.adr === ETH_ADR.toLowerCase() ? 'ETH' : de.adr) + '&vers=' + (vers.adr === ETH_ADR.toLowerCase() ? 'ETH' : vers.adr)
@@ -21435,7 +21637,14 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref) {
       return;
     }
     const rs = p.resume || {};
-    if (rs.fraisBps !== undefined && rs.fraisBps !== null) bcEtape(m, 'Fee: ' + (Number(rs.fraisBps) / 100) + ' % of the trade, taken inside the transaction.');
+    /* ⛔ LE FRAIS DIT EST CELUI DU PLAN, ET LE BON. Mesure prod (ETH > IB022) : `fraisBps: "0"`, `fraisMarcheBps: 50`, `fraisParHook: true`
+     *   — le panneau affichait « Fee: 0 % » sur un echange ou le marche du block preleve 0,5 % par son hook. Un chiffre vrai (le frais
+     *   d interface) presente comme LE frais. Les deux sont nommes ; un champ absent n est pas affiche comme zero. */
+    const fMarche = rs.fraisParHook === true && rs.fraisMarcheBps !== undefined && rs.fraisMarcheBps !== null ? Number(rs.fraisMarcheBps) : null;
+    const fApp = rs.fraisBps !== undefined && rs.fraisBps !== null ? Number(rs.fraisBps) : null;
+    if (fMarche !== null && Number.isFinite(fMarche)) bcEtape(m, 'Market fee: ' + (fMarche / 100) + ' %, taken by this block’s own market inside the swap.');
+    if (fApp !== null && Number.isFinite(fApp) && fApp > 0) bcEtape(m, 'App fee: ' + (fApp / 100) + ' %, inside the transaction.');
+    else if (fApp === 0 && fMarche === null) bcEtape(m, 'No app fee on this route.');
     if (rs.recoitAuMoins !== undefined && rs.recoitAuMoins !== null) bcEtape(m, 'You receive at least ' + (decVers === null ? rs.recoitAuMoins + ' raw units of ' : bcUnites(rs.recoitAuMoins, decVers) + ' ') + vers.sym + '.');
     const approbations = p.etat === 'APPROBATIONS';
     bcOpMaj(op, 'planned');
@@ -21463,7 +21672,7 @@ async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, re
   try { dec = await bcDecimales(jeton.adr); } catch (_) {}
   const libelle = (dec === null ? montant + ' raw units of ' : bcUnites(montant, dec) + ' ') + jeton.sym + ' to ' + destinataire;
   const m = bcMessage(qui + ' · send', classe, libelle);
-  const op = bcOp('Send ' + libelle, qui);
+  const op = bcOp('Send ' + libelle, qui, m);
   bcVue('chat');
   const refs = ref ? { ref } : {};
   const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
@@ -21500,7 +21709,7 @@ function bcProposerTache(qui, classe, c, ref) {
   bcVue('chat');
   const g = tacheAutorisee(c.task, window.__TB_BRAIN_SNAPSHOT__ || {});
   const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
-  bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + (g.pourquoi || 'not now') + '.', g.ok ? 'oui' : 'non');
+  bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
   bcNoter({ type: 'verdict', ...(ref ? { ref } : {}), etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts ' + c.task : String(g.pourquoi || 'refused') });
   if (!g.ok) return;
   /* on est DANS l app : chaque tache mene au vrai controle, pas a un lien */
@@ -21527,19 +21736,39 @@ function bcProposerNaissance(qui, classe, c) {
     allerA('creer');
   }]]);
 }
+/** Repeint le panneau MAINTENANT, sans attendre un battement.
+ *  ⛔ MESURE (2026-10-04, onglet du navigateur en arriere-plan) : le cerveau ne battait pas, donc aucun instantane, et le panneau
+ *    affichait « Pick a block in the Brain tab » pendant 40 s sur un block pourtant choisi — ticket, marche et activite compris.
+ *    Sans instantane de CE block, on peint ce qu on sait de lui (nom, adresse, visage, marche, ticket) avec une humeur NON LUE :
+ *    rien n est invente, et le premier battement remplace le tout. */
+function bcRepeindre() {
+  if (!brainAdr) return;
+  const a = String(brainAdr).toLowerCase(), s = window.__TB_BRAIN_SNAPSHOT__;
+  try {
+    bcPeindre(s && String(s.address || '').toLowerCase() === a ? s
+      : { address: a, symbole: null, phase: 'NON_LU', humeur: null, phrase: '', tick: null, marche: null, nourriture: null, journal: [], spikes: null, memoire: null });
+  } catch (_) { /* le battement suivant repeindra */ }
+}
 /** Ouvre le pop-up (sur l onglet Brain : c est lui qui fait battre le cerveau). Sans effet s il est deja ouvert. */
 function bcOuvrirPop() {
   try { if (!$('#v-brain').classList.contains('on')) allerA('brain'); } catch (_) {}
   const d = $('#bcPop');
-  if (d && !d.open) { try { d.showModal(); } catch (_) { d.setAttribute('open', ''); } }
+  /* ⛔ NON MODAL (`show`, pas `showModal`) : l app reste visible et utilisable derriere. Le panneau est sorti de la vue Brain et pose
+   *   sous <body> : enfant d une vue, il disparaissait des qu on changeait d onglet (une vue masquee masque ses enfants, fixes ou non). */
+  if (d && d.parentElement !== document.body) document.body.append(d);
+  const dl = $('#bcDialogue'); if (dl && dl.parentElement !== document.body) document.body.append(dl);
+  if (d && !d.open) { try { d.show(); } catch (_) { d.setAttribute('open', ''); } }
   if (!brainAdr) { try { const s = $('#bChoix'); if (s && s.value) choisirBrain(s.value); } catch (_) {} }
+  bcRepeindre();
+  /* tant que le pop-up est ouvert : un repeint toutes les 3 s (soldes, activite, index) meme si le cerveau ne bat pas */
+  if (!bc.peintre) bc.peintre = setInterval(() => { if ($('#bcPop').open) bcRepeindre(); }, 3000);
 }
 /** Une commande venue d un AGENT (deja validee par le serveur : panel-sessions.js). */
 async function bcRecevoir(c) {
   bcOuvrirPop(); /* une proposition d agent se MONTRE : le panneau s ouvre de lui-meme */
   if (c.type === 'say') { bcMessage('Your agent', 'agent', c.text); return; }
   if (c.type === 'show') { bcVue(c.tab); return; }
-  if (c.type === 'select') { allerA('brain'); choisirBrain(c.block); bcMessage('Your agent', 'agent', 'Showing ' + (bcResoudre(c.block).sym || court(c.block)) + '.'); return; }
+  if (c.type === 'select') { allerA('brain'); choisirBrain(c.block); bcRepeindre(); bcMessage('Your agent', 'agent', 'Showing ' + (bcResoudre(c.block).sym || court(c.block)) + '.'); return; }
   if (c.block && (!brainAdr || String(brainAdr).toLowerCase() !== c.block)) choisirBrain(c.block);
   const jet = (x) => (x === 'ETH' ? { adr: ETH_ADR.toLowerCase(), sym: 'ETH' } : bcResoudre(x));
   if (c.type === 'trade') {
@@ -21553,30 +21782,55 @@ async function bcRecevoir(c) {
   if (c.type === 'task') return bcProposerTache('Your agent', 'agent', c, c.n);
   if (c.type === 'birth') return bcProposerNaissance('Your agent', 'agent', c);
 }
+/* Les raisons de la porte du cerveau (brain-tasks.js) sont ecrites pour un agent — « needs market LUE + living phase » (capture de
+ * Phil, 2026-10-04). Le panneau les dit en clair ; une raison inconnue ici est rendue TELLE QUELLE, jamais remplacee par une autre. */
+const BC_RAISONS = new Map([
+  ['needs market LUE + living phase', 'its market must be read and the block awake first'],
+  ['Wake/Launch for sleep / unread / no-market', 'only for a block that sleeps or has no market yet'],
+  ['market unread — feed after food/market read', 'its market has not been read yet'],
+  ['needs ≥1 beat / journal line', 'its brain must beat at least once first'],
+  ['needs ≥1 beat so signals are recorded', 'its brain must beat at least once first'],
+  ['one offering at a time — slot busy', 'one food offer at a time: one is already open'],
+  ['dead — creator balance read 0', 'this block is dead: its creator holds none of it'],
+  ['dead', 'this block is dead'],
+]);
+const bcRaison = (p) => BC_RAISONS.get(String(p || '')) || String(p || 'not now');
 /** Une commande ECRITE ici (ou une pre-commande touchee) : la grammaire de commandes-panel.js, puis le meme chemin. */
-async function bcExecuterTexte(texte) {
-  const note = $('#bcNote');
+/* ⛔ `note` = l endroit ou le refus s ecrit. Le ticket de l onglet Trade passe LE SIEN : ecrit dans la note du Chat, un refus du
+ *   ticket serait juste et invisible (la vue Chat est masquee a ce moment-la). */
+async function bcExecuterTexte(texte, note = $('#bcNote')) {
   const a = analyserCommande(texte);
   if (!a.ok) { note.className = 'note wKo'; note.textContent = a.pourquoi; return false; }
   note.className = 'note'; note.textContent = '';
   const c = a.commande;
-  if (c.type === 'help') { const m = bcMessage('Panel', '', 'Commands'); for (const l of AIDE_COMMANDES) bcEtape(m, l); return true; }
+  if (c.type === 'help') { const m = bcMessage('Panel', '', 'Commands'); for (const l of AIDE_COMMANDES) bcEtape(m, l); bcVue('chat'); return true; }
   if (c.type === 'show') { bcVue(c.tab); return true; }
   if (c.type === 'tasks') {
     /* ce que le cerveau accepte MAINTENANT (la liste n est plus affichee en permanence : on la demande) */
     const ts = (window.__TB_BRAIN_TASKS__ && window.__TB_BRAIN_TASKS__.tasks) || [];
     const m = bcMessage('Its brain', '', ts.length ? 'What it accepts right now' : 'Pick a block first: its brain has not beaten yet.');
-    for (const t of ts) bcEtape(m, (t.allowed ? 'accepts · ' : 'refuses · ') + t.label + (t.allowed ? '' : ' — ' + (t.pourquoi || '')), t.allowed ? 'oui' : 'non');
+    for (const t of ts) bcEtape(m, (t.allowed ? 'accepts · ' : 'refuses · ') + t.label + (t.allowed ? '' : ' — ' + bcRaison(t.pourquoi)), t.allowed ? 'oui' : 'non');
     bcVue('chat');
     return true;
   }
-  if (c.type === 'select') { const j = bcResoudre(c.jeton); if (!j.ok) { note.className = 'note wKo'; note.textContent = j.pourquoi; return false; } choisirBrain(j.adr); return true; }
+  if (c.type === 'select') {
+    const j = bcResoudre(c.jeton); if (!j.ok) { note.className = 'note wKo'; note.textContent = j.pourquoi; return false; }
+    if (j.adr === ETH_ADR.toLowerCase()) { note.className = 'note wKo'; note.textContent = 'ETH is not a block — name a block or a tokenized stock'; return false; }
+    /* une commande qui change le block le DIT dans le fil : sans cette ligne, « show NVDAc » semblait n avoir rien fait */
+    choisirBrain(j.adr); bcMessage('Panel', '', 'Showing ' + j.sym + '.'); bcVue('chat'); bcRepeindre();
+    return true;
+  }
   const erreur = (t) => { note.className = 'note wKo'; note.textContent = t; return false; };
   if (c.type === 'swap') {
     const de = bcResoudre(c.de);
     if (!de.ok) return erreur(de.pourquoi);
     let vers;
-    if (c.vers === null) { const mk = marcheParAdr.get(de.adr); vers = mk && mk.quoteAdr ? bcResoudre(mk.quoteAdr) : bcResoudre('USDC'); } else vers = bcResoudre(c.vers);
+    if (c.vers === null) {
+      /* ⛔ « sell 1000 this » sans devise : la cotation LUE du jeton, jamais USDC par defaut — mesure : un block cote en ETH vendu
+       *   « contre USDC » est REFUSE par le planificateur ; le defaut menait donc droit a un refus pour tout block hors index. */
+      vers = bcCotation(de.adr);
+      if (!vers) return erreur('the market of ' + de.sym + ' has not been read yet — say what you want for it, e.g. “sell ' + c.montant + ' ' + c.de + ' for ETH”');
+    } else vers = bcResoudre(c.vers);
     if (!vers.ok) return erreur(vers.pourquoi);
     if (de.adr === vers.adr) return erreur('that is the same token on both sides');
     let dec;
@@ -21598,45 +21852,298 @@ async function bcExecuterTexte(texte) {
   }
   return erreur('not understood — type “help”');
 }
+/* ── LE TICKET DE L ONGLET TRADE (2026-10-04) ───────────────────────────────────────────────────────────────────────────────
+ * Il n envoie rien : il ECRIT la commande que la barre du Chat aurait recue (`buy this with 0.002 ETH`), qui passe la porte du
+ * cerveau puis le plan simule. ⛔ Il ne propose que des devises qui ABOUTISSENT — mesure du 2026-10-04 sur le planificateur de prod :
+ *   block (IB022) : achat en ETH = PRET, en USDC = APPROBATIONS ; vente contre sa cotation (ETH) = APPROBATIONS, contre USDC = REFUSE
+ *   (« a block sells here for its own quote token ») ; action : achat en USDC et en ETH = PRET, vente contre USDC seulement
+ *   (ACTION>ETH : « not offered »). Vente d action contre USDC : par sa pool v4 LUE (AMDc, BEc, LLYc, QUBTc : APPROBATIONS au 2e
+ *   passage) ou, depuis ce jour, par sa pool Aerodrome pour les 12 de la table (NVDAc etait REFUSEE : la vente ne cherchait qu une
+ *   pool v4 ; prouvee sur fork, banc-vente-aerodrome-fork-20261004.mjs).
+ *   ⛔ CORRIGE : j avais ecrit ici « AMDc (pool Aerodrome) » — FAUX, AMDc a une pool v4. Son refus au 1er passage (« no initialized
+ *   pool among the 17 keys read ») ne s est PAS reproduit aux 2 passages suivants : cause NON ELUCIDEE, lecture transitoire probable. */
+const BC_RAPIDES = { ETH: ['0.0005', '0.002', '0.01'], USDC: ['1', '5', '20'] };
+/** Un montant brut en decimal EXACT (toutes ses decimales) : « 100 % de mon solde » s ecrit sans arrondi. */
+const bcDecimal = (brut, dec) => { const s = BigInt(brut).toString().padStart(dec + 1, '0'); const f = dec ? s.slice(s.length - dec).replace(/0+$/, '') : ''; return s.slice(0, s.length - dec) + (f ? '.' + f : ''); };
+/** La devise contre laquelle ce jeton s echange ICI : USDC pour une action ; sinon la cotation LUE (index, ou cle de pool lue). null = pas lue. */
+function bcCotation(a) {
+  const nommer = (q) => (q === ETH_ADR.toLowerCase() ? { ok: true, adr: q, sym: 'ETH' } : bcResoudre(q));
+  if (ACTIONS_PAR_ADR.has(a)) return bcResoudre('USDC');
+  const mk = marcheParAdr.get(a);
+  if (mk && /^0x[0-9a-fA-F]{40}$/.test(String(mk.quoteAdr || ''))) return nommer(String(mk.quoteAdr).toLowerCase());
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === a);
+  const cle = (h && h.cle) || (brainMarche && brainMarche.adr === a && brainMarche.v && brainMarche.v.etat === 'LUE' ? brainMarche.v.cle : null)
+    || (marcheProfil && String(marcheProfil.adr).toLowerCase() === a && marcheProfil.v && marcheProfil.v.etat === 'LUE' ? marcheProfil.v.cle : null);
+  if (!cle || !cle.currency0 || !cle.currency1) return null;
+  const c0 = String(cle.currency0).toLowerCase(), c1 = String(cle.currency1).toLowerCase();
+  return nommer(c0 === a ? c1 : c0);
+}
+async function bcLireSoldes(a) {
+  if (bc.soldesEnVol || !compte) return;
+  bc.soldesEnVol = true;
+  try {
+    const moi = String(compte).toLowerCase(), usdc = bcResoudre('USDC');
+    /* ⛔ null = PAS LU (jamais 0) : un solde non lu s affiche « not read » et ne sert a aucun pourcentage */
+    const lire = async (adr) => { try { return await bcSolde(adr, moi); } catch (_) { return null; } };
+    const dec = async (adr) => { try { return await bcDecimales(adr); } catch (_) { return null; } };
+    const [eth, u, b, d, du] = await Promise.all([lire(ETH_ADR), usdc.ok ? lire(usdc.adr) : null, lire(a), dec(a), usdc.ok ? dec(usdc.adr) : null]);
+    bc.soldes = { adr: a, compte: moi, eth, usdc: u, block: b, dec: d, usdcDec: du };
+  } finally { bc.soldesEnVol = false; bc.soldesLus = Date.now(); }
+}
+function bcPeindreTicket(a, sym, mk, snap) {
+  const achat = bc.cote === 'buy', nomB = sym || 'this block', q = bcCotation(a);
+  const s = $('#bcDevise');
+  const cle = a + '|' + (sym || '') + '|' + bc.cote + '|' + (q && q.ok ? q.adr : '');
+  if (bc.ticketDe !== cle) {
+    bc.ticketDe = cle; bc.rapidesDe = null;
+    /* un autre block ou un autre sens : la note du ticket precedent ne vaut plus */
+    const tn = $('#bcTicketNote'); tn.className = 'note'; tn.textContent = '';
+    for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.setAttribute('aria-selected', String(b.getAttribute('data-cote') === bc.cote));
+    $('#bcTicketLib').textContent = achat ? 'You pay' : 'You sell — in ' + nomB;
+    $('#bcTicketGo').textContent = achat ? 'Review the buy of ' + nomB : 'Review the sale of ' + nomB;
+    const usdc = bcResoudre('USDC'), eth = ETH_ADR.toLowerCase();
+    const standard = !q || !q.ok || q.adr === eth || (usdc.ok && q.adr === usdc.adr);
+    /* [valeur ecrite dans la commande, libelle] — une cotation hors ETH/USDC ne s achete et ne se vend que contre elle-meme */
+    let choix;
+    if (achat) choix = ACTIONS_PAR_ADR.has(a) ? [['USDC', 'USDC'], ['ETH', 'ETH']] : standard ? [['ETH', 'ETH'], ['USDC', 'USDC']] : [[q.adr, q.sym]];
+    else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
+    const avant = s.value; s.textContent = '';
+    for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
+    if (choix.some(([v]) => v === avant)) s.value = avant;
+  }
+  /* les montants rapides : par devise a l achat ; une PART du solde lu a la vente (aucune part sans solde lu) */
+  const so = bc.soldes && bc.soldes.adr === a && compte && bc.soldes.compte === String(compte).toLowerCase() ? bc.soldes : null;
+  const cleR = cle + '|' + s.value + '|' + (so && so.block !== null ? so.block : 'x');
+  if (bc.rapidesDe !== cleR) {
+    bc.rapidesDe = cleR;
+    const r = $('#bcRapides'); r.textContent = '';
+    const puce = (lib, valeur) => { const b = bcEl('button', { type: 'button', cls: 'puce', text: lib }); b.addEventListener('click', () => { $('#bcMontant').value = valeur; $('#bcMontant').focus(); }); r.append(b); };
+    if (achat) for (const v of (BC_RAPIDES[s.value] || [])) puce(v + ' ' + s.value, v);
+    else if (so && so.block !== null && so.dec !== null && so.block > 0n) for (const p of [25n, 50n, 100n]) puce(p + ' %', bcDecimal(so.block * p / 100n, so.dec));
+    else r.append(bcEl('span', { cls: 'note', text: !compte ? 'Connect your wallet to sell a share of what you hold.' : so && so.block === 0n ? 'This wallet holds none of it.' : 'Reading what you hold…' }));
+  }
+  const g = tacheAutorisee('trade_tblock', snap || {}), humeur = (snap && snap.humeur) || 'unread';
+  const t = g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
+  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok ? '' : ' wKo'); }
+  /* ── ce que la personne DETIENT : relu toutes les 20 s tant que la vue Trade est ouverte, et apres chaque transaction confirmee ── */
+  const z = $('#bcPosition');
+  if (compte && $('#bcPop').open && $('#bc-trade').classList.contains('on') && (!so || Date.now() - bc.soldesLus > 20000)) void bcLireSoldes(a);
+  const cleP = (compte || '') + '|' + a + '|' + (sym || '') + '|' + (so ? bc.soldesLus : 0) + '|' + (mk && mk.prixUsd ? mk.prixUsd : '');
+  if (bc.positionDe === cleP) return;
+  bc.positionDe = cleP; z.textContent = '';
+  if (!compte) {
+    const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Connect wallet' });
+    b.addEventListener('click', async () => { try { await connecter(); } catch (_) {} bc.positionDe = null; bcRepeindre(); });
+    z.append(b);
+    return;
+  }
+  if (!so) { z.append(bcEl('p', { cls: 'note', text: 'Reading your balances…' })); return; }
+  const grille = bcEl('div', { cls: 'bcPos' });
+  const cas = (titre, valeur, sous) => grille.append(bcEl('div', {}, [bcEl('span', { text: titre }), bcEl('b', { text: valeur }), ...(sous ? [bcEl('i', { text: sous })] : [])]));
+  const texte = (brut, dec) => (brut === null || dec === null ? 'not read' : bcUnites(brut, dec));
+  let valeur = null;
+  if (so.block !== null && so.dec !== null && so.block > 0n && mk && Number(mk.prixUsd) > 0) {
+    const v = Number(bcDecimal(so.block, so.dec)) * Number(mk.prixUsd);
+    if (Number.isFinite(v)) valeur = '≈ ' + (v >= 0.01 ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : 'under $0.01') + ' at the index price';
+  }
+  cas(nomB, texte(so.block, so.dec), valeur);
+  cas('ETH', texte(so.eth, 18), null);
+  cas('USDC', texte(so.usdc, so.usdcDec), null);
+  z.append(grille);
+}
+/* ── QUI BOUGE CE BLOCK (vue Market) : /api/activite/<block>, lu par le serveur ───────────────────────────────────────────────
+ * Chaque ligne = UNE transaction : son SIGNATAIRE (lu sur la transaction, pas sur l evenement), ce qu elle a fait a ce block, combien.
+ * ⛔ « bought » / « sold » se disent par rapport a la POOL du block (celle de l index, ou le PoolManager v4) : le jeton sort de la
+ *   pool = achat, y entre = vente. Aucune pool dans la transaction = « moved ». Signataire non lu = « unknown signer », jamais devine. */
+async function bcLireActivite(a, sym, mk) {
+  if (bc.activiteEnVol) return;
+  bc.activiteEnVol = true; bc.activiteDe = a; bc.activiteLue = Date.now();
+  const ul = $('#bcActivite'), note = $('#bcActiviteNote');
+  try {
+    const r = await fetch('/api/activite/' + a, { cache: 'no-store', signal: AbortSignal.timeout(40000) });
+    const d = await r.json();
+    if (String(brainAdr || '').toLowerCase() !== a) return; /* la personne a change de block pendant la lecture */
+    if (!d || d.ok !== true) { if (!ul.dataset.de || ul.dataset.de !== a) { ul.textContent = ''; ul.append(bcEl('li', { cls: 'note', text: 'Not read — retrying.' })); } return; }
+    let dec = null;
+    try { dec = await bcDecimales(a); } catch (_) { dec = null; }
+    const V4 = V4_ADRESSES[CHAINE], zero = ETH_ADR.toLowerCase();
+    const pools = new Set([mk && /^0x[0-9a-fA-F]{40}$/.test(String(mk.poolAdr || '')) ? String(mk.poolAdr).toLowerCase() : null, V4 && V4.poolm ? String(V4.poolm).toLowerCase() : null,
+      ...(Array.isArray(d.pools) ? d.pools.filter((p) => /^0x[0-9a-f]{40}$/.test(String(p))) : [])].filter(Boolean));
+    ul.textContent = ''; ul.dataset.de = a;
+    const minutes = Math.max(1, Math.round(Number(d.fenetreBlocs) * 2 / 60));
+    if (!d.transactions.length) ul.append(bcEl('li', { cls: 'note', text: 'Nothing moved in the last ' + minutes + ' min.' }));
+    for (const t of d.transactions) {
+      const sortie = t.mouvements.find((m) => pools.has(m.de)), entree = t.mouvements.find((m) => pools.has(m.vers));
+      const frappe = t.mouvements.find((m) => m.de === zero), brule = t.mouvements.find((m) => m.vers === zero);
+      const [verbe, leg, cls] = sortie ? ['bought', sortie, 'oui'] : entree ? ['sold', entree, 'non'] : frappe ? ['minted', frappe, ''] : brule ? ['burned', brule, ''] : ['moved', t.mouvements[0], ''];
+      const combien = leg && leg.montant !== null && dec !== null ? bcUnites(leg.montant, dec) + ' ' + (sym || '') : '';
+      const age = Math.max(0, Math.round((Number(d.tete) - Number(t.bloc)) * 2 / 60));
+      const qui = bcEl('a', { cls: 'bcQui', href: RESEAUX[CHAINE].explorateur + '/tx/' + t.tx, target: '_blank', rel: 'noopener', text: t.signataire ? court(t.signataire) : 'unknown signer' });
+      ul.append(bcEl('li', {}, [bcEl('span', {}, [qui, bcEl('span', { text: ' ' + verbe + (combien ? ' ' + combien : '') }), bcEl('span', { cls: 'note', text: ' · ' + (age < 1 ? 'now' : age + ' min') })]),
+        bcEl('span', { cls: 'bcEtat ' + cls, text: verbe === 'bought' ? 'buy' : verbe === 'sold' ? 'sell' : verbe })]));
+    }
+    note.textContent = d.transactions.length ? 'Last ' + d.transactions.length + ' transactions · ' + minutes + ' min window' : '';
+  } catch (_) { /* reseau : on reessaie au prochain tour */ } finally { bc.activiteEnVol = false; }
+}
+/* ── L INDEX DU MARKET, POUR LE PANNEAU ───────────────────────────────────────────────────────────────────────────────────────
+ * ⛔ MESURE (2026-10-04, panneau ouvert DIRECTEMENT sur NVDAc par son lien) : `marcheParAdr` etait VIDE — seule la boucle de la Map
+ *   la remplit, et la Map n avait jamais ete ouverte. Prix et liquidite a « — », et surtout : le cerveau d une action cotee sur
+ *   Aerodrome (aucune pool v4) restait « market unread », donc la porte refusait tout echange lance depuis le ticket.
+ *   Le panneau lit donc /api/trending lui-meme (meme source, meme transformation `avecPoolAction` que la Map), au plus une fois par
+ *   minute, tant qu il est ouvert. */
+async function bcChargerIndex() {
+  if (bc.indexEnVol || Date.now() - (bc.indexLu || 0) < 60000) return;
+  bc.indexEnVol = true; bc.indexLu = Date.now();
+  try {
+    const d = await (await fetch('/api/trending', { cache: 'no-store', signal: AbortSignal.timeout(30000) })).json();
+    /* ⛔ `ok: true` avec ZERO ligne existe (mesure : serveur a froid, « Trending refresh in progress ») : ce n est pas une lecture */
+    if (d && d.ok === true && Array.isArray(d.lignes) && d.lignes.length) {
+      for (const l of d.lignes) if (l && /^0x[0-9a-fA-F]{40}$/.test(String(l.adr))) marcheParAdr.set(String(l.adr).toLowerCase(), avecPoolAction(l));
+      bc.avatarDe = null; /* le nom et le symbole de l index remplacent ceux lus sur le contrat */
+      /* ⛔ REGLE DU DEPOT (test-puces-paire-calculees, qui a attrape cet oubli) : ce qui se CALCULE depuis l index doit etre REPEINT
+       *   a son arrivee — les paires de Create comprises, sinon « Live blocks » reste calcule sur une Map vide. */
+      try { peindrePaires(); } catch (_) { /* l ecran Create se repeindra a son ouverture */ }
+    } else bc.indexLu = Date.now() - 45000; /* rien de lu : nouvel essai dans 15 s, pas dans une minute */
+  } catch (_) { bc.indexLu = Date.now() - 45000; } finally { bc.indexEnVol = false; }
+}
+/* ── LES DONNEES DE CE CERVEAU (vue Brain) : tirees du MEME instantane que l onglet Brain, rien de recalcule ── */
+function bcPeindreCerveau(a, snap) {
+  const sp = snap.spikes || {}, t = [];
+  let metier = null;
+  try { metier = metierDe(a); } catch (_) { metier = null; }
+  if (metier && metier.titre) t.push(['Job', String(metier.titre)]);
+  t.push(['Mood', String(snap.humeur || '—')]);
+  t.push(['Beat', snap.tick === null || snap.tick === undefined ? '—' : Number(snap.tick).toLocaleString('en-US')]);
+  if (Number.isFinite(Number(sp.actifs)) && Number.isFinite(Number(sp.neurones))) t.push(['Firing now', sp.actifs + ' / ' + sp.neurones]);
+  if (Number.isFinite(Number(snap.memoire))) t.push(['Memory', Math.round(Number(snap.memoire) * 100) + ' %']);
+  if (Number.isFinite(Number(sp.depuis_ouverture))) t.push(['Spikes this visit', Number(sp.depuis_ouverture).toLocaleString('en-US')]);
+  const cle = JSON.stringify(t), z = $('#bcCerveau');
+  if (bc.cerveauDe !== cle) { bc.cerveauDe = cle; z.textContent = ''; for (const [x, y] of t) z.append(bcEl('div', {}, [bcEl('span', { text: x }), bcEl('b', { text: y })])); }
+  /* sa derniere pensee : la derniere ligne de SON journal (celui de l onglet Brain) */
+  const j = Array.isArray(snap.journal) ? snap.journal : [], d = j.length ? j[j.length - 1] : null;
+  const p = d && d.texte ? '“' + String(d.texte) + '”' : '';
+  if ($('#bcPensee').textContent !== p) $('#bcPensee').textContent = p;
+}
+/* ── LES SKINS (2026-10-04, Phil : « un bouton + pour le skin, et propose deja des skins payants qui revetent le cube ; t as deja le
+ *    modele 2D de son propre block ») ────────────────────────────────────────────────────────────────────────────────────────
+ * « Original » = le visage grave du block (son modele 2D), toujours a lui. Les autres sont des habillages du PERIMETRE (« le skin
+ * par-dessus le block sur le perimetre, comme sur un jeu video ») : un anneau et une lueur autour du visage, du cube et de la vignette
+ * — on les ESSAIE ici, le temps de la visite. Le visage lui-meme n est jamais retouche.
+ * ⛔ RIEN NE S ACHETE ENCORE : aucun prix n est affiche (aucun n est fixe), aucun paiement n est demande, rien n est ecrit sur la
+ *   chaine ni garde. L essai ne touche ni l onglet Brain, ni la map, ni ce que voient les autres. */
+/* Une skin = un ANNEAU (le perimetre du block, de son cube et de sa vignette) et une LUEUR. `anneau: ''` = l anneau d origine. */
+const BC_SKINS = Object.freeze([
+  { id: 'original', nom: 'Original', anneau: '', lueur: '', payant: false },
+  { id: 'gold', nom: 'Gold', anneau: 'conic-gradient(from 210deg,#f6d365,#b8860b,#fff3b0,#8a6508,#f6d365)', lueur: 'rgb(246 211 101 / .55)', payant: true },
+  { id: 'ice', nom: 'Ice', anneau: 'conic-gradient(from 210deg,#e0fbfc,#5bc0eb,#a8edea,#2b6f8f,#e0fbfc)', lueur: 'rgb(91 192 235 / .55)', payant: true },
+  { id: 'ember', nom: 'Ember', anneau: 'conic-gradient(from 210deg,#ff512f,#f09819,#7a1c00,#ffb347,#ff512f)', lueur: 'rgb(255 81 47 / .55)', payant: true },
+  { id: 'toxic', nom: 'Toxic', anneau: 'conic-gradient(from 210deg,#b4ec51,#429321,#eaffb0,#1f5d0f,#b4ec51)', lueur: 'rgb(180 236 81 / .5)', payant: true },
+  { id: 'violet', nom: 'Ultraviolet', anneau: 'conic-gradient(from 210deg,#a18cd1,#5f2c82,#fbc2eb,#3a1c71,#a18cd1)', lueur: 'rgb(161 140 209 / .6)', payant: true },
+  { id: 'chrome', nom: 'Chrome', anneau: 'conic-gradient(from 210deg,#f5f7fa,#8e9eab,#ffffff,#5b6770,#f5f7fa)', lueur: 'rgb(245 247 250 / .4)', payant: true },
+  { id: 'circuit', nom: 'Circuit', anneau: 'repeating-conic-gradient(from 0deg,#00e5ff 0 6deg,#00323a 6deg 12deg)', lueur: 'rgb(0 229 255 / .5)', payant: true },
+]);
+function bcPorterSkin(id) {
+  const s = BC_SKINS.find((x) => x.id === id) || BC_SKINS[0];
+  bc.skin = s.id;
+  /* la skin habille le PERIMETRE : l anneau et la lueur sont poses sur le panneau, et tout ce qui cercle le block les suit */
+  for (const cadre of [$('#bcPanneau'), $('#bcLanceur')]) {
+    if (!cadre) continue;
+    if (s.anneau) { cadre.style.setProperty('--bcAnneau', s.anneau); cadre.style.setProperty('--bcLueur', s.lueur); }
+    else { cadre.style.removeProperty('--bcAnneau'); cadre.style.removeProperty('--bcLueur'); }
+  }
+  $('#bcSkinNom').textContent = s.nom;
+  $('#bcSkinEtat').textContent = s.payant ? 'trying it on' : 'its own face';
+  /* le bouton d achat : present sur une skin payante, et il DIT ou on en est (aucun prix n est fixe : rien ne peut etre demande) */
+  const ba = $('#bcSkinAcheter'); if (ba) ba.hidden = !s.payant;
+  for (const b of document.querySelectorAll('#bcBoutique [data-skin]')) b.setAttribute('aria-pressed', String(b.getAttribute('data-skin') === s.id));
+}
+function bcPeindreBoutique() {
+  const z = $('#bcBoutique'), svg = bc.svgVisage || '';
+  z.textContent = '';
+  for (const s of BC_SKINS) {
+    const v = bcEl('div', { cls: 'bcVignette' });
+    /* la vignette = le visage de CE block (notre propre SVG, celui que `dessin()` vient de rendre) sous le filtre de la skin */
+    if (svg) v.innerHTML = svg; else v.textContent = '◈';
+    if (s.anneau) v.style.setProperty('--bcAnneau', s.anneau); else v.style.setProperty('--bcAnneau', 'var(--ligne)');
+    const b = bcEl('button', { type: 'button', cls: 'bcTuile', 'data-skin': s.id, 'aria-pressed': String((bc.skin || 'original') === s.id) }, [v, bcEl('b', { text: s.nom }), bcEl('span', { text: s.payant ? 'paid · try on' : 'yours' })]);
+    b.addEventListener('click', () => bcPorterSkin(s.id));
+    z.append(b);
+  }
+  const p = bcEl('button', { type: 'button', cls: 'bcTuile', disabled: '', 'aria-disabled': 'true' }, [bcEl('div', { cls: 'bcVignette', text: '+' }), bcEl('b', { text: 'Yours' }), bcEl('span', { text: 'propose a skin · soon' })]);
+  z.append(p);
+}
 /** Peint le panneau depuis LE snapshot du cerveau de l app (appele a chaque battement par publierSnapshotBrain). */
 function bcPeindre(snap) {
   if (!snap || !snap.address) return;
   const a = String(snap.address).toLowerCase(), mk = marcheParAdr.get(a) || null;
-  const sym = (mk && mk.sym) || snap.symbole || null;
-  if (bc.avatarDe !== a + '|' + (sym || '')) {
-    bc.avatarDe = a + '|' + (sym || '');
+  /* le nom : l index du Market d abord ; sinon ce que le contrat dit de lui-meme (lu une fois) ; l adresse abregee en dernier recours */
+  const lu = bcNoms.get(a) || null;
+  if ($('#bcPop').open) void bcChargerIndex();
+  if (!(mk && mk.sym && mk.nom)) bcIdentite(a);
+  const sym = (mk && mk.sym) || snap.symbole || (lu && lu.sym) || null;
+  const nom = (mk && mk.nom) || (lu && lu.nom) || null;
+  if (bc.avatarDe !== a + '|' + (sym || '') + '|' + (nom || '')) {
+    bc.avatarDe = a + '|' + (sym || '') + '|' + (nom || '');
     const svg = dessin(a, sym || '?');
+    bc.svgVisage = svg || '';
     const dedans = $('#bcAvatarIn');
     if (svg) dedans.innerHTML = svg; else dedans.textContent = (sym || '?').slice(0, 1);
     const mini = $('#bcMini'); if (mini) { if (svg) mini.innerHTML = svg; else mini.textContent = (sym || '?').slice(0, 1); }
     const peau = $('#bcSkinFace'); if (peau) { if (svg) peau.innerHTML = svg; else peau.textContent = (sym || '?').slice(0, 1); }
-    $('#bcNom').textContent = (mk && mk.nom ? mk.nom + ' · ' : '') + (sym || court(a));
-    if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
-    const r = $('#bcRapides'); r.textContent = '';
-    for (const [lib, cmd] of [['Buy with 0.0005 ETH', 'buy this with 0.0005 ETH'], ['Buy with 0.002 ETH', 'buy this with 0.002 ETH'], ['Buy with 5 USDC', 'buy this with 5 USDC']]) {
-      const b = bcEl('button', { type: 'button', cls: 'puce', text: lib }); b.addEventListener('click', () => void bcExecuterTexte(cmd)); r.append(b);
+    /* le decor du panneau = la couleur de fond du visage, LUE dans le SVG rendu (jamais recalculee a cote) ; rien de lisible = decor neutre */
+    const fondSvg = dedans.querySelector('svg rect[width="200"][height="220"]'), fond = fondSvg ? String(fondSvg.getAttribute('fill') || '') : '';
+    for (const cadre of [$('#bcPanneau'), $('#bcLanceur')]) {
+      if (!cadre) continue;
+      if (/^(hsl|rgb)a?\([0-9 .,%/]+\)$|^#[0-9a-fA-F]{3,8}$/.test(fond)) cadre.style.setProperty('--bcFond', fond); else cadre.style.removeProperty('--bcFond');
     }
-    const bS = bcEl('button', { type: 'button', cls: 'puce', text: 'Sell some…' }); bS.addEventListener('click', () => { bcVue('chat'); $('#bcSaisie').value = 'sell 1000 this'; $('#bcSaisie').focus(); }); r.append(bS);
+    /* un autre block : la skin a l essai retombe (elle etait essayee sur le precedent), et les vignettes prennent le nouveau visage */
+    bcPorterSkin('original');
+    if (!$('#bcBoutique').hidden) bcPeindreBoutique();
+    $('#bcNom').textContent = sym || nom || court(a);
+    const sn = $('#bcSousNom'); sn.hidden = !(sym && nom); sn.textContent = sym && nom ? nom : '';
+    const ad = $('#bcAdr'); ad.hidden = false; ad.textContent = a; ad.dataset.adr = a;
+    if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });
   }
+  bcPeindreTicket(a, sym, mk, snap);
   $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
   $('#bcHumeur').textContent = snap.phrase || '';
   $('#bcPhase').textContent = snap.humeur || '—';
   $('#bcTick').textContent = snap.tick === null || snap.tick === undefined ? '—' : String(snap.tick);
   $('#bcPrix').textContent = mk && Number(mk.prixUsd) > 0 ? (Number(mk.prixUsd) >= 1 ? '$' + Number(mk.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '$' + Number(mk.prixUsd).toPrecision(3)) : '—';
   $('#bcLiq').textContent = mk && Number(mk.liquiditeUsd) > 0 ? usdCourt(mk.liquiditeUsd) : '—';
+  /* tant que le cerveau n a pas battu, le raster n a rien a montrer : pas de cadre vide */
+  $('#bcRaster').hidden = !(Array.isArray(brainHisto) && brainHisto.length);
   try { dessinerRasterSur($('#bcRaster'), brainHisto); } catch (_) { /* le raster du dessous reste la reference */ }
-  const mc = $('#bcMarche'); mc.textContent = '';
-  const ligne = (x, y) => mc.append(bcEl('div', { cls: 'bcLigne' }, [bcEl('span', { text: x }), bcEl('span', { text: y })]));
+  const mc = $('#bcMarche');
+  /* des tuiles (titre, valeur) : la vue Market se lit d un coup d oeil, sans phrases. Repeintes seulement quand une valeur change. */
+  const tuiles = [];
+  const ligne = (x, y) => tuiles.push([x, y]);
   const ev = snap.marche && snap.marche.etatVie;
-  ligne('Market on chain', ev === 'LUE' ? 'read' : ev === 'NON_TROUVEE' ? 'none found' : 'not read yet');
-  if (snap.marche && snap.marche.hooked !== null && snap.marche.hooked !== undefined) ligne('Where', snap.marche.hooked ? 'a TokenizedBlock market' : 'an outside market');
+  /* quatre etats, quatre phrases : « cherche, rien trouve » et « le noeud n a pas repondu » ne sont pas « pas encore lu » */
+  /* ⛔ une action cotee sur Aerodrome n a pas de pool v4 : le lecteur du cerveau ne la trouve pas, alors que l index du Market la
+   *   prixe (NVDAc, mesure). On dit d ou vient ce qu on sait, plutot que « no market found » sur un marche a 1,8 M$ par jour. */
+  const indexe = mk && Number(mk.prixUsd) > 0;
+  ligne('Market', ev === 'LUE' ? 'read on chain' : indexe ? 'index' + (mk.dex ? ' · ' + String(mk.dex).slice(0, 16) : '')
+    : ev === 'NON_TROUVEE' ? 'none found' : ev ? 'node silent — retrying' : 'reading…');
+  if (snap.marche && snap.marche.hooked !== null && snap.marche.hooked !== undefined) ligne('Venue', snap.marche.hooked ? 'TokenizedBlock' : 'outside');
   if (mk) {
-    if (mk.quoteSym) ligne('Quoted in', String(mk.quoteSym));
-    ligne('24 h change', mk.change24h === null || mk.change24h === undefined ? '—' : Number(mk.change24h).toFixed(2) + ' %');
-    ligne('24 h volume', Number(mk.volume24hUsd) > 0 ? usdCourt(mk.volume24hUsd) : '—');
-    ligne('Trades in 24 h', mk.trades24h === null || mk.trades24h === undefined ? '—' : String(mk.trades24h));
+    if (Number(mk.prixUsd) > 0) ligne('Price', $('#bcPrix').textContent);
+    if (mk.change24h !== null && mk.change24h !== undefined) ligne('24 h', (Number(mk.change24h) > 0 ? '+' : '') + Number(mk.change24h).toFixed(2) + ' %');
+    if (Number(mk.volume24hUsd) > 0) ligne('Volume 24 h', usdCourt(mk.volume24hUsd));
+    if (mk.trades24h !== null && mk.trades24h !== undefined) ligne('Trades 24 h', String(mk.trades24h));
+    if (Number(mk.liquiditeUsd) > 0) ligne('Liquidity', usdCourt(mk.liquiditeUsd));
   }
-  if (snap.nourriture && snap.nourriture.etat === 'LUE') ligne('Food read on chain', snap.nourriture.gm + ' transfers · ' + snap.nourriture.detenteurs + ' holders · ' + snap.nourriture.messages + ' messages');
+  const cot = bcCotation(a);
+  if (cot && cot.ok) ligne('Quoted in', cot.sym);
+  const cleM = JSON.stringify(tuiles);
+  if (bc.marcheDe !== cleM) {
+    bc.marcheDe = cleM; mc.textContent = '';
+    for (const [x, y] of tuiles) mc.append(bcEl('div', {}, [bcEl('span', { text: x }), bcEl('b', { text: y })]));
+  }
+  /* ── QUI BOUGE CE BLOCK : relu toutes les 20 s tant que la vue Market est ouverte ── */
+  if ($('#bcPop').open && $('#bc-market').classList.contains('on') && (bc.activiteDe !== a || Date.now() - bc.activiteLue > 20000)) void bcLireActivite(a, sym, mk);
+  /* ── LES DONNEES DE CE CERVEAU (meme instantane que l onglet Brain) ── */
+  bcPeindreCerveau(a, snap);
   const taches = (window.__TB_BRAIN_TASKS__ && window.__TB_BRAIN_TASKS__.tasks) || [];
   /* le cube et ses connexions : le canvas de « Its wiring » est RECOPIE (meme dessin, meme battement) — rien n est redessine ici */
   try {
@@ -21647,26 +22154,9 @@ function bcPeindre(snap) {
   try {
     const nb = $('#bcNotesBot'), lignes = (journalLu(a) || []).filter((l) => l && l.bot === true).slice(-6).reverse();
     nb.textContent = '';
-    if (!lignes.length) nb.append(bcEl('li', { cls: 'note', text: 'No note yet — the brain writes one after each transaction you sign here.' }));
-    else for (const l of lignes) nb.append(bcEl('li', {}, [bcEl('span', { text: String(l.texte || '') })]));
+    $('#bcBlocNotes').hidden = !lignes.length;
+    for (const l of lignes) nb.append(bcEl('li', {}, [bcEl('span', { text: String(l.texte || '') })]));
   } catch (_) { /* journal illisible : la liste reste telle quelle */ }
-  /* les AUTRES blocks : les echanges lus sur la chaine par le fil Live de l app, et les plus echanges du jour (index du Market) —
-   *   repeint toutes les 5 s au plus : c est une liste, pas une animation */
-  if (Date.now() - bc.marchePeint > 5000) {
-    bc.marchePeint = Date.now();
-    const ul = $('#bcAutres'); ul.textContent = '';
-    const echanges = liveEvts.filter((e) => e && (e.type === 'ACHAT' || e.type === 'VENTE')).slice(0, 10);
-    if (!echanges.length) ul.append(bcEl('li', { cls: 'note', text: 'No trade read yet in this session — the Feed tab reads them as they happen.' }));
-    for (const e of echanges) {
-      const j = String(e.jeton || '').toLowerCase(), l = marcheParAdr.get(j), nom = (l && l.sym) || court(j);
-      const b = bcEl('button', { type: 'button', text: nom }); b.addEventListener('click', () => choisirBrain(j));
-      const quoi = (e.type === 'ACHAT' ? ' bought' : ' sold') + (e.eth && e.devise ? ' for ' + lisible(e.eth) + ' ' + String(e.devise) : '');
-      ul.append(bcEl('li', {}, [bcEl('span', {}, [b, bcEl('span', { text: quoi })]), bcEl('span', { cls: 'bcEtat ' + (e.type === 'ACHAT' ? 'oui' : 'non'), text: e.type === 'ACHAT' ? 'buy' : 'sell' })]));
-    }
-    const mv = $('#bcMouvants'); mv.textContent = '';
-    const tops = [...marcheParAdr.values()].filter((x) => Number(x.volume24hUsd) > 0 && String(x.adr).toLowerCase() !== a).sort((x, y) => Number(y.volume24hUsd) - Number(x.volume24hUsd)).slice(0, 8);
-    for (const x of tops) { const b = bcEl('button', { type: 'button', cls: 'puce', text: String(x.sym || court(x.adr)) + ' · ' + usdCourt(x.volume24hUsd) }); b.addEventListener('click', () => choisirBrain(String(x.adr).toLowerCase())); mv.append(b); }
-  }
   /* ── LE CABLAGE DIRECT : l agent LIT le cerveau tel que ce panneau le voit (humeur, battement, ce qu il accepte) ── */
   if (bc.session && (bc.phaseEnvoyee !== a + '|' + snap.phase || Date.now() - bc.cerveauEnvoye > 20000)) {
     bc.phaseEnvoyee = a + '|' + snap.phase; bc.cerveauEnvoye = Date.now();
@@ -21679,10 +22169,61 @@ $('#bcForm').addEventListener('submit', async (e) => { e.preventDefault(); const
 for (const p of PRECOMMANDES) {
   const b = bcEl('button', { type: 'button', cls: 'puce', text: p.libelle });
   /* une pre-commande ECRIT son modele dans le champ : la personne ajuste le montant ou le jeton, puis envoie — rien ne part au clic */
-  b.addEventListener('click', () => { const s = $('#bcSaisie'); s.value = p.modele; s.focus(); try { s.setSelectionRange(p.modele.length, p.modele.length); } catch (_) {} if (p.cle === 'tasks') void bcExecuterTexte('tasks'); });
+  b.addEventListener('click', () => {
+    /* « What can it do? » n a rien a ajuster : elle s execute, et ne laisse pas « tasks » dans le champ */
+    if (p.cle === 'tasks') { void bcExecuterTexte('tasks'); return; }
+    const s = $('#bcSaisie'); s.value = p.modele; s.focus(); try { s.setSelectionRange(p.modele.length, p.modele.length); } catch (_) {}
+    const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? 'Paste the recipient’s whole address, then send.' : '';
+  });
   $('#bcPre').append(b);
 }
-document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) bcVue(b.getAttribute('data-bc')); });
+/* ── le ticket de l onglet Trade ── */
+for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.addEventListener('click', () => { bc.cote = b.getAttribute('data-cote'); $('#bcMontant').value = ''; bcRepeindre(); });
+$('#bcDevise').addEventListener('change', () => { bc.rapidesDe = null; bcRepeindre(); });
+$('#bcTicket').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const note = $('#bcTicketNote'), n = $('#bcMontant').value.trim(), d = $('#bcDevise').value;
+  const dire = (t) => { note.className = 'note wKo'; note.textContent = t; };
+  if (!brainAdr) return dire('Pick a block first, in the Brain tab.');
+  if (!n) return dire('Enter an amount first.');
+  /* le ticket dit ce qui cloche DANS SES MOTS : « abc » rendait « not understood — type help », une reponse de ligne de commande */
+  if (!/^\d+([.,]\d+)?$/.test(n) || !(Number(n.replace(',', '.')) > 0)) return dire('That is not an amount — write a number above zero, like 0.002.');
+  if (!d) return dire('The currency list is not ready yet — try again in a moment.');
+  /* meme grammaire, meme chemin que la barre du Chat ; le refus s ecrit ICI (la vue Chat est masquee a ce moment) */
+  if (await bcExecuterTexte(bc.cote === 'buy' ? 'buy this with ' + n + ' ' + d : 'sell ' + n + ' this for ' + d, note)) {
+    $('#bcMontant').value = ''; note.className = 'note'; note.textContent = '';
+  }
+});
+$('#bcAdr').addEventListener('click', async () => {
+  const ad = $('#bcAdr'), a = ad.dataset.adr; if (!a) return;
+  try { await navigator.clipboard.writeText(a); ad.textContent = a + ' — copied'; } catch (_) { ad.textContent = a + ' — select it to copy'; }
+  setTimeout(() => { if (ad.dataset.adr === a) ad.textContent = a; }, 1600);
+});
+/* changer de vue REPEINT tout de suite (soldes, activite du block, cube) : sans cela la vue attendait le battement suivant */
+document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) { bcVue(b.getAttribute('data-bc')); try { bcRepeindre(); } catch (_) {} } });
+/* les skins : le « + » ouvre la boutique (essai seulement — voir BC_SKINS) */
+$('#bcSkins').addEventListener('click', () => {
+  const z = $('#bcBoutique'), ouvrir = z.hidden;
+  if (ouvrir) bcPeindreBoutique();
+  z.hidden = !ouvrir; $('#bcSkins').setAttribute('aria-expanded', String(ouvrir));
+});
+/* ACHETER UNE SKIN (Phil : « ajoute des boutons… creer une tx x402 pour acheter le skin, ou autre tx »). Le bouton existe et REPOND :
+ * ⛔ tant qu aucun PRIX n est fixe (decision de Phil : le montant, et qui recoit quoi), il ne construit AUCUNE transaction — il le dit
+ *   dans le fil. Aucun montant n est invente, rien n est demande au wallet. */
+$('#bcSkinAcheter').addEventListener('click', () => {
+  const s = BC_SKINS.find((x) => x.id === bc.skin);
+  if (!s || !s.payant) return;
+  const m = bcMessage('Skins', '', s.nom + ' — for ' + ((brainAdr && bcResoudre('this').sym) || 'this block'));
+  bcEtape(m, 'The skin shop is not open yet: no price is set, so nothing is asked from your wallet.', 'non');
+  bcEtape(m, 'You can keep trying it on here.');
+  bcVue('chat');
+});
+/* qui signe : Semi-auto (chaque swap approuve — ce qui marche) ou Full AiFi (limites montrees, armement indisponible) */
+for (const b of document.querySelectorAll('#bcPanneau [data-mode]')) b.addEventListener('click', () => {
+  const full = b.getAttribute('data-mode') === 'full';
+  for (const x of document.querySelectorAll('#bcPanneau [data-mode]')) x.setAttribute('aria-selected', String(x === b));
+  $('#bcLimites').hidden = !full;
+});
 $('#bcLier').addEventListener('click', async () => { await bcOuvrirSession(null); $('#bcDialogue').showModal(); });
 $('#bcLierFermer').addEventListener('click', () => $('#bcDialogue').close());
 $('#bcLierCopier').addEventListener('click', async () => {
@@ -21696,7 +22237,10 @@ bcPeindreOps();
 $('#bcOuvrir').addEventListener('click', () => bcOuvrirPop());
 $('#bcFermer').addEventListener('click', () => $('#bcPop').close());
 /* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
-$('#bcPop').addEventListener('click', (e) => { if (e.target === $('#bcPop')) $('#bcPop').close(); });
+$('#bcReduire').addEventListener('click', () => {
+  const r = $('#bcPop').classList.toggle('bcReduit');
+  $('#bcReduire').textContent = r ? '+' : '–'; $('#bcReduire').setAttribute('aria-expanded', String(!r));
+});
 /* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
 (function bcDemarrage() {
   const h = new URLSearchParams(location.hash.replace(/^#/, ''));

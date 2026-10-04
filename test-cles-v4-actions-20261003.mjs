@@ -47,7 +47,9 @@ const altere = { ...LOGS_INITIALIZE_ACTIONS[0], data: '0x' + '0'.repeat(60) + 'c
 ok(decoderInitialize(altere).erreur === 'poolId ne se recalcule pas', 'TEMOIN : un log au fee change est REFUSE par le decodeur');
 
 const srv = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8').replace(/\r\n/g, '\n');
-const i0 = srv.indexOf('for (const l of LOGS_INITIALIZE_MESURES) {\n  const p = decoderInitialize(l);\n  if (!p || p.erreur || !p.cle || !p.poolId) continue;');
+/* par regexp (`\s*` matche aussi `\r`) : une chaine a sauts de ligne colles raterait sur une copie CRLF (test-tests-portables) */
+const mI0 = /for \(const l of LOGS_INITIALIZE_MESURES\) \{\s*const p = decoderInitialize\(l\);\s*if \(!p \|\| p\.erreur \|\| !p\.cle \|\| !p\.poolId\) continue;/.exec(srv);
+const i0 = mI0 ? mI0.index : -1;
 ok(i0 > 0 && srv.indexOf('async function resoudreClePool(', i0) > i0 && /for \(const j of p\.jetons\) \{[\s\S]{0,400}clesPool\.set\(t, r\);/.test(srv.slice(i0, i0 + 1200)),
   'serveur-web.js : le cache PAR JETON de /api/cle est pre-rempli depuis les logs, avant resoudreClePool');
 ok(/'cles-v4-actions\.js',/.test(srv) && /'cles-v4-mesurees\.js',/.test(srv), 'les deux modules sont servis (import de cles-v4-mesurees.js dans l app)');
@@ -55,7 +57,11 @@ const rails = fs.readFileSync(path.join(ICI, 'rails-api.js'), 'utf8').replace(/\
 ok(/if \(!t && \(nd === 'ETH' \|\| nd === 'USDC'\)\) \{\n\s+const marcheV = await marcheDe\(vers\);/.test(rails), 'rails-api : sans table Aerodrome, la pool v4 de l action est LUE (marcheDe)');
 ok(/quoteDe\(marcheV\.cle, vers\) !== USDC\) return normaliser\(route, \{ etat: 'REFUSE'/.test(rails), 'rails-api : une pool v4 qui ne cote pas en USDC est refusee, nommee');
 ok(/chemin = \[\{ de: ETH, vers: USDC, famille: 'uniswap-v4' \}, \{ de: USDC, vers, famille: 'uniswap-v4' \}\];/.test(rails), 'rails-api : ETH > ACTION = ETH -> USDC -> action, deux sauts v4, une tx');
-ok(/if \(nd === 'ACTION' && nv === 'USDC'\) \{\n\s+const marcheA = await marcheDe\(de\);/.test(rails) && /sens: 'VENTE', montant: m,\n\s+marcheLu: marcheA/.test(rails), 'rails-api : ACTION > USDC vend sur la pool v4 lue');
+/* 2026-10-04 : la vente d une action de la table Aerodrome passe AVANT, par son propre batisseur (banc-vente-aerodrome-fork) ; les
+ * autres lisent toujours leur pool v4. Les deux branches sont exigees, dans cet ordre. */
+const iVente = rails.indexOf("if (nd === 'ACTION' && nv === 'USDC') {"), iAero = rails.indexOf('if (POOLS_ACTIONS_AERODROME.has(de)) {', iVente), iV4 = rails.indexOf('const marcheA = await marcheDe(de);', iVente);
+ok(iVente > 0 && iAero > iVente && iV4 > iAero && iV4 - iVente < 2400 && /sens: 'VENTE', montant: m,\s+marcheLu: marcheA/.test(rails.slice(iV4, iV4 + 700)),
+  'rails-api : ACTION > USDC vend sur la pool Aerodrome de la table, sinon sur la pool v4 lue');
 const iT = rails.indexOf('const t = POOLS_ACTIONS_AERODROME.get(vers);'), iV4 = rails.indexOf("if (!t && (nd === 'ETH' || nd === 'USDC')) {");
 ok(iT > 0 && iV4 > iT && /if \(!t\) return normaliser\(route, \{ etat: 'REFUSE', pourquoi: 'no measured deep Aerodrome pool/.test(rails), 'la table Aerodrome est lue d abord ; le repli v4 ne joue que sans elle ; sinon le refus nomme d avant');
 

@@ -25,7 +25,9 @@ const ETH = '0x0000000000000000000000000000000000000000', USDC = '0x833589fcd6ed
 const NVDA = P.ACTIONS_COINBASE.find((a) => a.symbole === 'NVDAc').adr.toLowerCase();
 const BLOC = '0xb2000000000000000000000000000000000000aa', AUTRE = '0xb2000000000000000000000000000000000000bb';
 
-const i0 = html.indexOf('function deviseDeSecoursPour(adr) {'), i1 = html.indexOf('\n}\n', i0) + 2;
+/* fin de la fonction : accolade seule sur sa ligne, cherchee par regexp (`\r?\n`) — regle de test-tests-portables */
+const finFn = (s, i) => { const m = /\r?\n\}\r?\n/.exec(s.slice(i)); return m ? i + m.index + m[0].indexOf('}') : -1; };
+const i0 = html.indexOf('function deviseDeSecoursPour(adr) {'), i1 = finFn(html, i0) + 1;
 ok(i0 > 0, 'deviseDeSecoursPour est definie dans app.html');
 const fabriquer = (src, { marche = new Map(), lancable = (a) => !!P.hookDeLancementPour(a, 8453, T.OPTIONS_LANCEMENT) } = {}) =>
   new Function('marcheParAdr', 'pairesProposees', 'estPaireLancable', 'CHAINE', 'ETH_ADR', src + '\nreturn deviseDeSecoursPour;')(marche, P.pairesProposees, lancable, 8453, ETH);

@@ -23,8 +23,11 @@ function ok(nom, cond, vu) {
 }
 
 /* Les fichiers du produit — pas les tests, pas les bancs, pas les mesures. */
+/* 2026-10-04 : le paquet TIERS embarque (`mcp-ext-apps-2.0.3.bundle.js`, verifie par son sha256 au demarrage du serveur) n est pas
+ *   du code du produit : il ne decode aucun texte lu sur la chaine, et on ne le modifie pas. La sonde le signalait (1 site, « fichier
+ *   non gele ») depuis son arrivee — ROUGE que je n avais pas vu, faute d avoir relance la serie complete apres l avoir embarque. */
 const tous = readdirSync('.').filter((f) => /\.(js|html)$/.test(f)
-  && !/^test-/.test(f) && !/^banc-/.test(f) && !/^mesure-/.test(f) && !/^verifie-/.test(f));
+  && !/^test-/.test(f) && !/^banc-/.test(f) && !/^mesure-/.test(f) && !/^verifie-/.test(f) && !/^mcp-ext-apps-.*\.bundle\.js$/.test(f));
 
 /* ⛔⛔ MON PREMIER JET DE CE TEST FAISAIT LA FAUTE QU IL DENONCE : il comptait les MENTIONS
  *   de `String.fromCharCode`, donc aussi les COMMENTAIRES qui expliquent le bug, et il

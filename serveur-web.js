@@ -88,7 +88,8 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 /* ⛔ LE SELECTEUR SE CALCULE, IL NE SE TAPE PAS. `keccak.js` est pur (zero dependance) et c est la
  *   seule source du depot : un selecteur ecrit a la main ne plante pas, il interroge une AUTRE
  *   fonction et rend un silence qu on lirait comme un fait. */
-import { selecteur as selecteurSrv } from './keccak.js';
+import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
+import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -1284,6 +1285,130 @@ async function clesRails(a) {
   return [];
 }
 
+/* ── LE MARCHE D UN BLOCK LU PAR LE SERVEUR : GET /api/marche/0x… (2026-10-04) ───────────────────────────────────────────────
+ * POURQUOI. Le cerveau d un block ne recevait que la lecture faite DEPUIS LE NAVIGATEUR, sur des noeuds publics. Mesure du jour, dans
+ *   le panneau de commande ouvert sur IB022 : 10 reponses 429 (mainnet.base.org ×8, base.drpc.org ×2), `etatVie: null`, « Market on
+ *   chain: not read yet », et la porte des taches qui refuse tout echange — pendant que la sonde du SERVEUR lisait ce meme marche
+ *   (/sante.sondes.marche : PRET, 0.00163 ETH). Un echec de NOTRE lecture cote navigateur, affiche comme un etat du block.
+ * CE QUE C EST. Le MEME lecteur (`vieDuBlock`, marche.js) sur les noeuds des rails. Le navigateur ne l appelle QUE si sa propre lecture
+ *   n a pas abouti. ⛔ On ne garde en memoire que les FAITS MESURES (`LUE`, `NON_TROUVEE`), 30 s ; un `NON_LUE` n est jamais cache.
+ * ⛔ BORNES : 3 lectures en vol au plus (au-dela : 429), une seule par block a la fois, 400 blocks en memoire. */
+const marchesServeur = new Map(), marchesEnCours = new Map();
+let marchesEnVol = 0;
+async function lireMarcheServeur(token) {
+  const c = marchesServeur.get(token);
+  if (c && Date.now() - c.t < 30000) return { ...c.r, depuisCache: true };
+  if (marchesEnCours.has(token)) return marchesEnCours.get(token);
+  if (marchesEnVol >= 3) return { ok: false, occupe: true, etat: 'NON_LUE', pourquoi: 'the market reader is busy — try again in a moment' };
+  marchesEnVol += 1;
+  const p = (async () => {
+    try {
+      const v = await vieDuBlock({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView, jeton: token, clesExactes: await clesRails(token) });
+      const k = v && v.cle ? { currency0: String(v.cle.currency0), currency1: String(v.cle.currency1), fee: Number(v.cle.fee), tickSpacing: Number(v.cle.tickSpacing), hooks: String(v.cle.hooks) } : null;
+      const r = { ok: true, etat: String((v && v.etat) || 'NON_LUE'), vie: v && typeof v.vie === 'number' && Number.isFinite(v.vie) ? v.vie : null,
+        devise: v && v.devise ? String(v.devise) : null, via: v && v.via ? String(v.via) : null, pourquoi: v && v.pourquoi ? String(v.pourquoi).slice(0, 200) : null,
+        cle: k, liquidite: v && v.liquidite !== null && v.liquidite !== undefined ? String(v.liquidite) : null,
+        decimales: v && Number.isInteger(v.decimales) ? v.decimales : null, lu: new Date().toISOString(), source: 'server' };
+      if (r.etat === 'LUE' || r.etat === 'NON_TROUVEE') {
+        if (marchesServeur.size >= 400) marchesServeur.delete(marchesServeur.keys().next().value);
+        marchesServeur.set(token, { t: Date.now(), r });
+      }
+      return r;
+    } catch (e) {
+      return { ok: false, etat: 'NON_LUE', pourquoi: String((e && e.message) || e).slice(0, 120) };
+    } finally { marchesEnVol -= 1; marchesEnCours.delete(token); }
+  })();
+  marchesEnCours.set(token, p);
+  return p;
+}
+
+/* ── QUI BOUGE CE BLOCK, EN DIRECT : GET /api/activite/0x… (2026-10-04) ──────────────────────────────────────────────────────
+ * Phil, devant l onglet Market du panneau (il listait les echanges d AUTRES blocks) : « l onglet Market est propre au block actuel —
+ *   on doit voir qui interagit avec CE block en direct ».
+ * CE QUE C EST. Les `Transfer` emis PAR LE JETON LUI-MEME (filtre `address` = le jeton : un contrat tiers ne peut pas les forger),
+ *   groupes par transaction, les plus recentes d abord. ⛔ Un evenement n est pas une transaction : le SIGNATAIRE de chaque ligne
+ *   est lu sur la transaction (`eth_getTransactionByHash`.from), jamais deduit du `from` d un Transfer. Non lu = null, et dit.
+ * ⛔ BORNES, RENDUES AVEC LA REPONSE : la fenetre balayee (300 blocs, elargie a 999 puis 2 997 si moins de 12 transactions),
+ *   12 transactions au plus, 6 mouvements par transaction. Cache 20 s ; 3 lectures en vol au plus ; une seule par block a la fois. */
+const TOPIC_TRANSFER_SRV = topicSrv('Transfer(address,address,uint256)');
+const activitesServeur = new Map(), activitesEnCours = new Map();
+let activitesEnVol = 0;
+/* ⛔ MESURE (local, 2026-10-04) : sur `rpcServeur` (2 noeuds, partages avec tout le site) cette lecture rendait « over rate limit ».
+ *   Elle tourne donc sur une liste PLUS LARGE et ne retente pas le meme noeud : un noeud qui refuse, on passe au suivant.
+ *   La tete est reculee de 2 blocs pour qu un noeud legerement en retard sache servir la fenetre. */
+const RPC_ACTIVITE = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org'])];
+let tourActivite = 0;
+async function rpcActivite(methode, params) {
+  let dernier = new Error('no endpoint tried');
+  for (let k = 0; k < RPC_ACTIVITE.length; k += 1) {
+    const url = RPC_ACTIVITE[tourActivite++ % RPC_ACTIVITE.length];
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000), headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) });
+      const j = await r.json();
+      if (j && !j.error && j.result !== undefined) return j.result;
+      dernier = new Error(String((j && j.error && j.error.message) || 'rpc error').slice(0, 100));
+    } catch (e) { dernier = e; }
+  }
+  throw dernier;
+}
+async function lireActiviteServeur(token) {
+  const c = activitesServeur.get(token);
+  if (c && Date.now() - c.t < 20000) return { ...c.r, depuisCache: true };
+  if (activitesEnCours.has(token)) return activitesEnCours.get(token);
+  if (activitesEnVol >= 3) return { ok: false, occupe: true, pourquoi: 'the activity reader is busy — try again in a moment' };
+  activitesEnVol += 1;
+  const p = (async () => {
+    try {
+      const tete = parseInt(await rpcActivite('eth_blockNumber', []), 16) - 2;
+      const enHex = (x) => '0x' + x.toString(16);
+      const parTx = new Map();
+      let balaye = 0, fin = tete;
+      for (const taille of [300, 699, 999, 999]) {
+        const deb = fin - taille + 1;
+        const logs = await rpcActivite('eth_getLogs', [{ fromBlock: enHex(deb), toBlock: enHex(fin), address: token, topics: [TOPIC_TRANSFER_SRV] }]);
+        balaye += taille; fin = deb - 1;
+        for (const l of (Array.isArray(logs) ? logs : [])) {
+          if (!l || !Array.isArray(l.topics) || l.topics.length < 3 || String(l.address).toLowerCase() !== token) continue;
+          const h = String(l.transactionHash);
+          if (!parTx.has(h)) parTx.set(h, { tx: h, bloc: parseInt(l.blockNumber, 16), mouvements: [] });
+          let montant = null;
+          try { montant = BigInt(String(l.data).slice(0, 66)).toString(); } catch (_) { montant = null; }
+          parTx.get(h).mouvements.push({ de: '0x' + String(l.topics[1]).slice(26).toLowerCase(), vers: '0x' + String(l.topics[2]).slice(26).toLowerCase(), montant, i: parseInt(l.logIndex, 16) });
+        }
+        if (parTx.size >= 12) break;
+      }
+      const txs = [...parTx.values()].sort((a, b) => b.bloc - a.bloc || b.mouvements[0].i - a.mouvements[0].i).slice(0, 12);
+      /* ⛔ MESURE (1er jet, 12 lectures en parallele sur les noeuds publics) : 9 signataires sur 12 revenaient null — le noeud etranglait
+       *   la rafale. Les transactions se lisent donc TROIS par trois, avec une seconde tentative ; un signataire non lu reste null. */
+      const lireTx = async (t) => {
+        t.mouvements = t.mouvements.sort((a, b) => a.i - b.i).slice(0, 6).map(({ de, vers, montant }) => ({ de, vers, montant }));
+        t.signataire = null; t.cible = null;
+        for (let essai = 0; essai < 2 && t.signataire === null; essai += 1) {
+          try {
+            const x = await rpcActivite('eth_getTransactionByHash', [t.tx]);
+            t.signataire = x && /^0x[0-9a-fA-F]{40}$/.test(String(x.from)) ? String(x.from).toLowerCase() : null;
+            t.cible = x && /^0x[0-9a-fA-F]{40}$/.test(String(x.to)) ? String(x.to).toLowerCase() : null;
+          } catch (_) { /* seconde tentative, puis null */ }
+        }
+      };
+      for (let i = 0; i < txs.length; i += 3) await Promise.all(txs.slice(i, i + 3).map(lireTx));
+      /* les pools de ce jeton que NOUS connaissons : le PoolManager v4, et sa pool Aerodrome mesuree s il en a une. Le client dit
+       *   « bought » / « sold » par rapport a elles ; un mouvement qui ne touche aucune d elles reste « moved ». */
+      const aero = POOLS_ACTIONS_AERODROME.get(token);
+      const r = { ok: true, block: token, tete, fenetreBlocs: balaye, pools: [PM_V4.toLowerCase(), ...(aero ? [String(aero.pool).toLowerCase()] : [])],
+        transactions: txs, lu: new Date().toISOString() };
+      if (activitesServeur.size >= 200) activitesServeur.delete(activitesServeur.keys().next().value);
+      activitesServeur.set(token, { t: Date.now(), r });
+      return r;
+    } catch (e) {
+      return { ok: false, pourquoi: 'activity not read: ' + String((e && e.message) || e).slice(0, 120) };
+    } finally { activitesEnVol -= 1; activitesEnCours.delete(token); }
+  })();
+  activitesEnCours.set(token, p);
+  return p;
+}
+
 /* ══ LA NAISSANCE PAR UN AGENT + LE MCP (2026-10-04) — naissance-api.js, mcp-tblock.js, caution-createur.js ════════════════════
  * ⛔ RIEN N EST SIGNE ICI : des appels NON SIGNES, simules avant d etre rendus. Le wallet de l agent signe.
  * ⛔ MEME BUDGET QUE LES RAILS (une naissance planifiee = ~20 lectures + une simulation, sur les noeuds de tout le site). */
@@ -1431,7 +1556,10 @@ async function sonderLeReste() {
     autresSondes.marche = { etat: v && v.etat === 'LUE' ? 'PRET' : (v && v.etat) || 'NON_MESURE', pourquoi: v && v.etat !== 'LUE' ? (v.pourquoi || null) : null, vie: v && typeof v.vie === 'number' ? v.vie : null, devise: (v && v.devise) || null, lu };
   } catch (e) { autresSondes.marche = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
   try {
-    const r = await faireRail({ de: 'ETH', vers: BLOCK_SONDE, montant: '100000000000000', compte: COMPTE_SONDE });
+    /* ⛔ MESURE (prod, 1er passage) : depuis le compte de sonde VIDE le planificateur repond « not enough ETH in your wallet » — une
+     *   reponse juste, mais qui ne dit rien du chemin. La sonde simule donc depuis une adresse qui DETIENT de l ETH (le contrat WETH
+     *   de Base, 0x4200…0006) : rien n est signe ni envoye, c est le `from` d une simulation. Resultat mesure : PRET. */
+    const r = await faireRail({ de: 'ETH', vers: BLOCK_SONDE, montant: '100000000000000', compte: '0x4200000000000000000000000000000000000006' });
     autresSondes.echange = { etat: r.etat, pourquoi: r.pourquoi || null, route: r.route || null, appels: (r.aSigner || []).length, lu };
   } catch (e) { autresSondes.echange = { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120), lu }; }
   try {
@@ -2449,8 +2577,15 @@ function buildServi() {
   const e = cache.get('/' + RACINE);
   if (!e) return null;
   /* tip 20260922-eth-fixe: allow named tips e.g. 20260922-eth-fixe (not only digits). */
-  const m = /data-build="([0-9A-Za-z_-]{6,40})"/.exec(e.corps.toString('utf8').slice(0, 200000));
-  return m ? m[1] : null;
+  /* ⛔⛔ 2026-10-04 (mesure prod, build panneau-pop-up-cerveau) : /sante rendait `build: null`. La lecture s arretait aux 200 000
+   *   premiers caracteres, et le tampon etait passe au-dela (le panneau a ajoute des styles et du HTML AVANT lui). Un deploiement
+   *   reussi devenait invisible : la boucle d attente ne voyait jamais son build et relancait l envoi. On lit TOUT le fichier, une
+   *   fois par version servie (memo sur l entree du cache). */
+  if (e.buildLu === undefined || e.buildLuSur !== e.corps) {
+    const m = /data-build="([0-9A-Za-z_-]{6,40})"/.exec(e.corps.toString('utf8'));
+    e.buildLu = m ? m[1] : null; e.buildLuSur = e.corps;
+  }
+  return e.buildLu;
 }
 
 /* ⛔⛔ INCIDENT 2026-09-17 : un deploiement fait hors git servait app.html SANS map3d.js / openlaunch.js /
@@ -3221,6 +3356,27 @@ createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
     });
+    return;
+  }
+
+  /* qui bouge ce block, en direct (onglet Market du panneau) : /api/activite/0x… */
+  if (chemin.startsWith('/api/activite/')) {
+    const token = chemin.slice('/api/activite/'.length).toLowerCase();
+    const rendreA = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'GET') { rendreA(405, { ok: false, pourquoi: 'GET only' }); return; }
+    if (!/^0x[0-9a-f]{40}$/.test(token)) { rendreA(400, { ok: false, pourquoi: 'whole address required' }); return; }
+    lireActiviteServeur(token).then((r) => rendreA(r && r.occupe ? 429 : 200, r))
+      .catch((e) => rendreA(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+    return;
+  }
+  /* le marche d un block lu par le serveur (repli du navigateur quand ses noeuds publics le refusent) : /api/marche/0x… */
+  if (chemin.startsWith('/api/marche/')) {
+    const token = chemin.slice('/api/marche/'.length).toLowerCase();
+    const rendreM = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'GET') { rendreM(405, { ok: false, pourquoi: 'GET only' }); return; }
+    if (!/^0x[0-9a-f]{40}$/.test(token)) { rendreM(400, { ok: false, pourquoi: 'whole address required' }); return; }
+    lireMarcheServeur(token).then((r) => rendreM(r && r.occupe ? 429 : 200, r))
+      .catch((e) => rendreM(200, { ok: false, etat: 'NON_LUE', pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
 

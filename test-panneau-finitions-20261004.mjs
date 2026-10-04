@@ -1,0 +1,244 @@
+/* test-panneau-finitions-20261004.mjs — LE PANNEAU DE COMMANDE, FINITIONS (retour de Phil du 2026-10-04).
+ *
+ * Ce que Phil a vu : « Market on chain: not read yet » sur IB022 pendant que son cerveau battait ; le titre « 0xb200…579e » au lieu du
+ * nom ; un onglet Trade fait de listes vides ; deux bandes claires autour du visage ; des pre-commandes a verifier une par une.
+ *
+ * A. rails-api.js (hors reseau, faux noeud) : la vente d une action dont le seul marche est une pool Aerodrome est refusee EN CLAIR ;
+ *    une action sans pool Aerodrome garde le refus de lecture (temoin negatif) ; ACTION>ETH dit « for USDC only ».
+ * B. commandes-panel.js : la pre-commande « Sell a stock » nomme une action qui a une pool v4 USDC LUE et PAS de pool Aerodrome
+ *    (l ancienne, AMDc, menait a un refus — mesure sur le planificateur de prod).
+ * C. app.html : le jumeau qui relit le marche ECRIT `brainMarche` ; l instantane rend l etat mesure hors carte ; le repli serveur ;
+ *    nom et symbole lus sur la chaine ; l adresse B20 entiere ; le ticket ; la vente par defaut contre la cotation LUE ; le visage
+ *    au ratio de son dessin ; les raisons de la porte du cerveau traduites — et chaque raison traduite EXISTE dans brain-tasks.js.
+ * D. serveur-web.js : /api/marche/ (bornes, cache des seuls faits mesures) ; /sante.build lit TOUT le fichier ; la sonde d echange
+ *    simule depuis une adresse qui detient de l ETH.
+ * E. MUTANTS (sur des copies) : chaque garde rougit quand on la retire.
+ * ⛔ BORNE : rien ici ne prouve une signature, ni ce que le panneau affiche dans un vrai navigateur (verifie a la main, hors test). */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const ICI = path.dirname(fileURLToPath(import.meta.url));
+const imp = (f, dir = ICI) => import(pathToFileURL(path.join(dir, f)).href + '?v=' + Math.random());
+let n = 0, ko = 0;
+const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
+const lire = (f) => fs.readFileSync(path.join(ICI, f), 'utf8').replace(/\r\n/g, '\n');
+
+const { ACTIONS_COINBASE, DEVISES_BASE } = await imp('paires.js');
+const { POOLS_ACTIONS_AERODROME } = await imp('pools-actions-aerodrome.js');
+const { LOGS_INITIALIZE_ACTIONS } = await imp('cles-v4-actions.js');
+const usdc = DEVISES_BASE.find((d) => d.symbole === 'USDC' && d.chaines.includes(8453)).adr.toLowerCase();
+const adrDe = (sym) => String(ACTIONS_COINBASE.find((a) => a.symbole === sym).adr).toLowerCase();
+const COMPTE = '0x00000000000000000000000000000000c0ffee77';
+
+console.log('— A. rails-api.js : les refus de vente d action se lisent');
+/* faux noeud : toute lecture rend des zeros (aucune pool initialisee nulle part) ; il COMPTE ses appels */
+async function refusVente(dir, sym, vers) {
+  const R = await imp('rails-api.js', dir);
+  let appels = 0;
+  const rpc = async (m) => { appels += 1; if (m === 'eth_blockNumber') return '0x1'; return '0x' + '0'.repeat(64 * 8); };
+  const r = await R.planRail({ de: adrDe(sym), vers, montant: '1000000', compte: COMPTE }, { rpc, clesDe: async () => [] });
+  return { r, appels };
+}
+const aero = [...POOLS_ACTIONS_AERODROME.keys()].map((k) => String(k).toLowerCase());
+const symAero = ACTIONS_COINBASE.find((a) => aero.includes(String(a.adr).toLowerCase())).symbole;
+const symV4 = ACTIONS_COINBASE.find((a) => !aero.includes(String(a.adr).toLowerCase())).symbole;
+{
+  /* ⛔ Hors reseau on ne prouve que l AIGUILLAGE (quel batisseur est appele). La vente elle-meme — transactions confirmees, frais,
+   *   allowance — est prouvee par banc-vente-aerodrome-fork-20261004.mjs (43/0 sur fork : NVDAc, MSTRc, AAPLc). */
+  const { r, appels } = await refusVente(ICI, symAero, usdc);
+  ok(r.route === 'ACTION>USDC' && r.via === 'planAerodromeSegment' && r.pool === 'aerodrome' && appels > 0,
+    'A vendre ' + symAero + ' (table Aerodrome) contre USDC : aiguille vers le batisseur Aerodrome, qui LIT sa pool (' + appels + ' lecture(s))');
+  ok(!/no initialized pool among/.test(String(r.pourquoi)), 'A … et ne cherche plus une pool v4 qui n existe pas (l ancien refus recitait 16 cles)');
+  ok(r.etat !== 'PRET', 'A … sur un faux noeud qui ne rend que des zeros, AUCUN plan n est rendu (etat ' + r.etat + ') : pas de pool lue, pas de plan');
+  const t = await refusVente(ICI, symV4, usdc);
+  ok(t.r.etat !== 'PRET' && t.r.via !== 'planAerodromeSegment', 'A temoin : ' + symV4 + ' (hors table Aerodrome) garde le chemin v4 — le batisseur Aerodrome ne deborde pas');
+  const e = await refusVente(ICI, symAero, 'ETH');
+  ok(e.r.etat === 'REFUSE' && /a tokenized stock sells here for USDC only/.test(e.r.pourquoi) && e.appels === 0, 'A ACTION>ETH : « sells here for USDC only », sans une seule lecture de chaine');
+}
+
+console.log('— B. la pre-commande « Sell a stock » mene a un plan');
+const C = await imp('commandes-panel.js');
+const pre = C.PRECOMMANDES.find((p) => p.cle === 'sell_stock');
+const an = C.analyserCommande(pre.modele);
+const v4 = new Set(LOGS_INITIALIZE_ACTIONS.flatMap((l) => [String(l.topics[2]).slice(26).toLowerCase(), String(l.topics[3]).slice(26).toLowerCase()]));
+const adrPre = an.ok ? adrDe(an.commande.de).slice(2) : '';
+ok(an.ok && an.commande.type === 'swap' && an.commande.vers === 'USDC', 'B le modele « ' + pre.modele + ' » est une vente contre USDC que la grammaire accepte');
+ok(an.ok && !aero.includes('0x' + adrPre), 'B son action n est PAS une action a pool Aerodrome seule (vente refusee par le planificateur)');
+ok(an.ok && v4.has(adrPre), 'B son action a une pool v4 USDC dont la cle a ete LUE sur la chaine (cles-v4-actions.js)');
+ok(C.AIDE_COMMANDES.some((l) => l.includes(pre.modele)), 'B l aide donne le meme exemple que la pre-commande');
+
+console.log('— C. app.html');
+const html = lire('app.html');
+const iBc = html.indexOf('const bc = { session: null');
+const bcSrc = html.slice(iBc, html.indexOf('(function bcDemarrage()', iBc));
+const relire = html.slice(html.indexOf('async function relireMarcheBrainSiNonLu() {'), html.indexOf('function battreBrain() {'));
+ok(/else if \(String\(brainAdr\)\.toLowerCase\(\) === adrLue\) brainMarche = \{ adr: adrLue, v: marche \};/.test(relire),
+  'C la relance du marche ECRIT brainMarche pour un block hors carte (elle nourrissait le cerveau sans que l instantane le sache)');
+ok(/const adrLue = String\(brainAdr\)\.toLowerCase\(\);/.test(relire) && /await marchePourBrain\(adrLue\)/.test(relire), 'C … sur l adresse figee avant la lecture (un changement de block en vol ne nourrit pas le suivant)');
+ok(/etatVie: h \? h\.etatVie : \(mp && typeof mp\.etat === 'string' \? mp\.etat : null\),/.test(html), 'C l instantane rend l etat MESURE hors carte (NON_TROUVEE / NON_LUE), plus « null »');
+const mpb = html.slice(html.indexOf('async function marchePourBrain(adr) {'), html.indexOf('async function relireMarcheBrainSiNonLu() {'));
+ok(/m = await vieDuBlock\(\{ rpc, stateView: RESEAUX\[CHAINE\]\.stateView, jeton: a, clesExactes: await clesReellesDe\(a\) \}\);/.test(mpb)
+  && mpb.indexOf('vieDuBlock(') < mpb.indexOf("fetch('/api/marche/'"), 'C marchePourBrain : NOTRE lecture d abord, le serveur ensuite');
+ok(/if \(d && d\.ok === true && \(d\.etat === 'LUE' \|\| d\.etat === 'NON_TROUVEE'\)\)/.test(mpb) && /return m;\n\}/.test(mpb), 'C … seuls les FAITS MESURES du serveur sont pris ; sinon notre resultat reste tel quel');
+ok((html.match(/await marchePourBrain\(/g) || []).length === 2, 'C les DEUX lecteurs du cerveau (selection et relance) passent par marchePourBrain');
+ok(/symboleDepuisReponse\(await rpc\('eth_call', \[\{ to: a, data: sel \}, 'latest'\]\), max\)/.test(bcSrc) && /lire\(SEL_NOM_ERC20, 48\)/.test(bcSrc)
+  && /if \(nom \|\| sym\) \{ bcNoms\.set\(a, \{ nom, sym \}\); bc\.avatarDe = null; \}/.test(bcSrc), 'C nom et symbole lus sur la chaine, par le decodeur sur ; rien n est retenu si rien n est lu');
+ok(/Date\.now\(\) - \(bc\.nomEssai\.get\(a\) \|\| 0\) < 15000/.test(bcSrc), 'C … une lecture ratee se retente au plus toutes les 15 s');
+ok(/<button type="button" class="bcAdr" id="bcAdr" hidden/.test(html) && /ad\.textContent = a; ad\.dataset\.adr = a;/.test(bcSrc),
+  'C l adresse B20 du block est affichee EN ENTIER sous son nom, jamais abregee');
+ok(/navigator\.clipboard\.writeText\(a\)/.test(html.slice(html.indexOf("$('#bcAdr').addEventListener"))), 'C … et se copie d un clic');
+ok(/<form class="bcTicket" id="bcTicket"/.test(html) && /id="bcMontant"/.test(html) && /id="bcDevise"/.test(html) && /id="bcPosition"/.test(html) && /id="bcTicketNote"/.test(html),
+  'C onglet Trade : le ticket (sens, montant, devise), sa note, et ce que la personne detient');
+ok(/await bcExecuterTexte\(bc\.cote === 'buy' \? 'buy this with ' \+ n \+ ' ' \+ d : 'sell ' \+ n \+ ' this for ' \+ d, note\)/.test(html),
+  'C le ticket ECRIT la commande de la barre du Chat (meme grammaire, meme porte, meme plan) et recoit le refus dans SA note');
+ok(/async function bcExecuterTexte\(texte, note = \$\('#bcNote'\)\) \{/.test(bcSrc), 'C bcExecuterTexte ecrit son refus la ou on le lui dit (un refus du ticket dans la note du Chat serait invisible)');
+ok(/vers = bcCotation\(de\.adr\);\n\s+if \(!vers\) return erreur\(/.test(bcSrc) && !/: bcResoudre\('USDC'\); \} else vers = bcResoudre\(c\.vers\);/.test(bcSrc),
+  'C « sell <n> <token> » sans devise : la cotation LUE, jamais USDC par defaut ; pas lue = on le dit');
+ok(/if \(ACTIONS_PAR_ADR\.has\(a\)\) return bcResoudre\('USDC'\);/.test(bcSrc) && /else choix = q && q\.ok \? \[\[q\.adr === eth \? 'ETH' : q\.adr, 'for ' \+ q\.sym\]\] : \[\['ETH', 'for ETH'\]\];/.test(bcSrc),
+  'C le ticket ne propose a la vente que la devise qui aboutit (la cotation du block ; USDC pour une action)');
+ok(/else if \(so && so\.block !== null && so\.dec !== null && so\.block > 0n\) for \(const p of \[25n, 50n, 100n\]\) puce\(p \+ ' %', bcDecimal\(so\.block \* p \/ 100n, so\.dec\)\);/.test(bcSrc),
+  'C vente : les parts (25/50/100 %) ne s offrent que sur un solde LU et non nul');
+ok(/const lire = async \(adr\) => \{ try \{ return await bcSolde\(adr, moi\); \} catch \(_\) \{ return null; \} \};/.test(bcSrc) && /brut === null \|\| dec === null \? 'not read'/.test(bcSrc),
+  'C un solde non lu vaut null et s affiche « not read », jamais 0');
+ok(/\.bcAvatar\{[^}]*aspect-ratio:200\/220/.test(html) && /\.bcMini\{[^}]*aspect-ratio:200\/220/.test(html) && /\.bcSkinFace\{[^}]*aspect-ratio:200\/220/.test(html),
+  'C les trois cadres du visage ont le ratio du dessin (200×220) : plus de bandes sur les cotes');
+ok(/dedans\.querySelector\('svg rect\[width="200"\]\[height="220"\]'\)/.test(bcSrc) && /cadre\.style\.setProperty\('--bcFond', fond\); else cadre\.style\.removeProperty\('--bcFond'\);/.test(bcSrc),
+  'C le decor du panneau prend la couleur de fond LUE dans le visage rendu ; illisible = decor neutre');
+/* bcDecimal : extrait du source et execute — c est lui qui ecrit « 100 % de mon solde » */
+const srcDec = (bcSrc.match(/const bcDecimal = (\(brut, dec\) => \{[^\n]+\});\n/) || [])[1];
+const bcDecimal = srcDec ? new Function('return ' + srcDec)() : null;
+ok(!!bcDecimal && bcDecimal(123456789n, 8) === '1.23456789' && bcDecimal(10n ** 18n, 18) === '1' && bcDecimal(1n, 18) === '0.000000000000000001' && bcDecimal(0n, 6) === '0' && bcDecimal(1500000n, 6) === '1.5' && bcDecimal(7n, 0) === '7',
+  'C bcDecimal rend le montant EXACT (aucune decimale perdue, aucun zero de trop)');
+ok(!!bcDecimal && C.enUnitesBrutes(bcDecimal(987654321987654321n, 18), 18) === 987654321987654321n, 'C … et ce montant relu par la grammaire redonne le solde brut au wei pres');
+/* les raisons traduites : chacune doit EXISTER dans brain-tasks.js, sinon la traduction ne sert plus et personne ne le voit */
+const taches = lire('brain-tasks.js');
+const raisons = [...(bcSrc.match(/const BC_RAISONS = new Map\(\[\n([\s\S]*?)\n\]\);/) || ['', ''])[1].matchAll(/^\s+\['([^']+)', '([^']+)'\],$/gm)].map((m) => m[1]);
+ok(raisons.length >= 6 && raisons.every((r) => taches.includes("pourquoi: '" + r + "'")), 'C chaque raison traduite par le panneau (' + raisons.length + ') est une raison que brain-tasks.js rend vraiment');
+ok(/const bcRaison = \(p\) => BC_RAISONS\.get\(String\(p \|\| ''\)\) \|\| String\(p \|\| 'not now'\);/.test(bcSrc), 'C une raison inconnue est rendue TELLE QUELLE, jamais remplacee');
+ok(/if \(p\.cle === 'tasks'\) \{ void bcExecuterTexte\('tasks'\); return; \}/.test(html), 'C « What can it do? » s execute sans laisser « tasks » dans le champ');
+ok(/choisirBrain\(j\.adr\); bcMessage\('Panel', '', 'Showing ' \+ j\.sym/.test(bcSrc), 'C « show <token> » le dit dans le fil (la commande semblait n avoir rien fait)');
+ok(/if \(carte && carte\.isConnected\) \{/.test(bcSrc) && /const op = bcOp\('Swap ' \+ libelle, qui, m\);/.test(bcSrc) && /const op = bcOp\('Send ' \+ libelle, qui, m\);/.test(bcSrc),
+  'C une operation en cours mene a sa carte (« open ») tant que la carte existe');
+ok(!/Food read on chain/.test(bcSrc) && !/snap\.nourriture\.detenteurs/.test(bcSrc), 'C la vue Market n affiche plus « 0 transfers · 0 holders » (une fenetre recente lue comme « personne ne le detient »)');
+
+console.log('— C2. le panneau refait (2e retour de Phil, 2026-10-04)');
+/* Market = CE block */
+const act = bcSrc.slice(bcSrc.indexOf('async function bcLireActivite(a, sym, mk) {'), bcSrc.indexOf('async function bcChargerIndex() {'));
+ok(/if \(String\(brainAdr \|\| ''\)\.toLowerCase\(\) !== a\) return;/.test(act), 'C2 activite : une reponse arrivee apres un changement de block n est pas peinte sur le suivant');
+ok(/text: t\.signataire \? court\(t\.signataire\) : 'unknown signer'/.test(act), 'C2 activite : le signataire affiche est celui LU sur la transaction ; non lu = « unknown signer », jamais devine');
+ok(/const sortie = t\.mouvements\.find\(\(m\) => pools\.has\(m\.de\)\), entree = t\.mouvements\.find\(\(m\) => pools\.has\(m\.vers\)\);/.test(act) && /: \['moved', t\.mouvements\[0\], ''\]/.test(act),
+  'C2 activite : « bought » / « sold » se disent par rapport a une pool CONNUE ; sinon « moved »');
+ok(/'Nothing moved in the last ' \+ minutes \+ ' min\.'/.test(act) && /minutes \+ ' min window'/.test(act), 'C2 activite : la fenetre balayee est dite (une liste vide n est pas « jamais »)');
+ok(/if \(\$\('#bcPop'\)\.open && \$\('#bc-market'\)\.classList\.contains\('on'\) && \(bc\.activiteDe !== a \|\| Date\.now\(\) - bc\.activiteLue > 20000\)\) void bcLireActivite\(a, sym, mk\);/.test(bcSrc),
+  'C2 activite : relue toutes les 20 s, seulement quand la vue Market du pop-up est ouverte');
+/* l index, le repeint sans battement */
+ok(/if \(d && d\.ok === true && Array\.isArray\(d\.lignes\) && d\.lignes\.length\) \{/.test(bcSrc) && /marcheParAdr\.set\(String\(l\.adr\)\.toLowerCase\(\), avecPoolAction\(l\)\);/.test(bcSrc),
+  'C2 le panneau charge l index du Market lui-meme (meme source et meme transformation que la Map) ; « ok » sans ligne n est pas une lecture');
+ok(/function bcRepeindre\(\) \{/.test(html) && /phase: 'NON_LU', humeur: null/.test(html) && /if \(!bc\.peintre\) bc\.peintre = setInterval\(\(\) => \{ if \(\$\('#bcPop'\)\.open\) bcRepeindre\(\); \}, 3000\);/.test(html),
+  'C2 le panneau se peint a l ouverture SANS attendre un battement (humeur non lue, rien d invente), puis toutes les 3 s tant qu il est ouvert');
+/* le cerveau d une action cotee sur Aerodrome : « aucune pool V4 » n est pas « aucun marche » */
+const srcAero = (html.match(/function marcheAerodromeIndexe\(adr\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
+const aeroIdx = srcAero ? new Function('marcheParAdr', srcAero + '; return marcheAerodromeIndexe;')(new Map([
+  ['0xaa', { prixUsd: 2, dex: 'aerodrome' }], ['0xbb', { prixUsd: 2, dex: 'uniswap' }], ['0xcc', { prixUsd: 0, dex: 'aerodrome' }], ['0xee', { prixUsd: 3, dex: 'Aerodrome' }]])) : null;
+ok(!!aeroIdx && aeroIdx('0xAA') === true && aeroIdx('0xee') === true && aeroIdx('0xbb') === false && aeroIdx('0xcc') === false && aeroIdx('0xdd') === false && aeroIdx(null) === false,
+  'C2 marcheAerodromeIndexe : vrai SEULEMENT pour un block que l index prixe sur Aerodrome (autre DEX, prix nul, block inconnu, rien = faux)');
+ok(/const seraitNonLu = !etatVie \|\| etatVie === 'NON_LUE' \|\| etatVie === 'LUE' \|\| \(etatVie === 'NON_TROUVEE' && !!\(h && h\.adr\) && marcheAerodromeIndexe\(h\.adr\)\);/.test(html),
+  'C2 le cerveau d une action cotee sur Aerodrome se nourrit de l index (le lecteur V4 rendait NON_TROUVEE, la porte refusait tout echange) ; sans marche a l index, NON_TROUVEE reste NON_TROUVEE');
+/* le panneau ne couvre plus l app ; la skin est un contour ; le bouton d achat ne demande rien */
+ok(/try \{ d\.show\(\); \}/.test(html) && !/\$\('#bcPop'\)\.showModal\(\)|d\.showModal\(\)/.test(html) && !/dialog\.bcPop::backdrop/.test(html) && /if \(d && d\.parentElement !== document\.body\) document\.body\.append\(d\);/.test(html),
+  'C2 le panneau n est PLUS modal (show, pas showModal ; aucun voile) et vit sous <body> : l app reste visible et utilisable, d un onglet a l autre');
+ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPop'\); return !!\(p && p\.open\); \}\)\(\);/.test(html) && /if \(\(\$\('#v-brain'\)\.classList\.contains\('on'\) === false && !panneauOuvert\) \|\| !brainEtat\) return;/.test(html),
+  'C2 tant que le panneau est ouvert, le cerveau qu il montre continue de battre hors de l onglet Brain');
+ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:60dvh\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (60 % de la hauteur)');
+ok(/cadre\.style\.setProperty\('--bcAnneau', s\.anneau\); cadre\.style\.setProperty\('--bcLueur', s\.lueur\);/.test(bcSrc) && /\.bcAvatar\{[^}]*background:var\(--bcAnneau,/.test(html) && /\.bcCadre\{[^}]*background:var\(--bcAnneau,/.test(html)
+  && !/style\.filter = s\./.test(bcSrc), 'C2 une skin habille le PERIMETRE (anneau + lueur autour du visage et du cube) ; le visage du block n est pas retouche');
+const achat = html.slice(html.indexOf("$('#bcSkinAcheter').addEventListener('click'"), html.indexOf("$('#bcSkinAcheter').addEventListener('click'") + 700);
+ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /no price is set, so nothing is asked from your wallet/.test(achat) && !/bcSigner|envoyerDepuisWallet|fetch\(|\$\d|USDC/.test(achat),
+  'C2 « Buy » sur une skin payante REPOND, et tant qu aucun prix n est fixe il ne construit aucune transaction et ne cite aucun montant');
+/* le frais affiche : celui du plan, le bon */
+ok(/const fMarche = rs\.fraisParHook === true && rs\.fraisMarcheBps !== undefined && rs\.fraisMarcheBps !== null \? Number\(rs\.fraisMarcheBps\) : null;/.test(bcSrc)
+  && /'Market fee: ' \+ \(fMarche \/ 100\) \+ ' %, taken by this block’s own market inside the swap\.'/.test(bcSrc) && !/'Fee: ' \+ \(Number\(rs\.fraisBps\) \/ 100\)/.test(bcSrc),
+  'C2 la carte nomme le frais du MARCHE (hook) quand le plan le porte — elle affichait « Fee: 0 % » sur un echange ou le hook preleve 0,5 % (mesure prod, ETH > IB022)');
+ok(/if \(fApp !== null && Number\.isFinite\(fApp\) && fApp > 0\) bcEtape\(m, 'App fee: '/.test(bcSrc) && /else if \(fApp === 0 && fMarche === null\) bcEtape\(m, 'No app fee on this route\.'\);/.test(bcSrc),
+  'C2 … le frais de l app n est dit que s il existe ; un champ absent n est jamais affiche comme zero');
+/* le switch */
+ok(/data-mode="semi" aria-selected="true">Semi-auto</.test(html) && /data-mode="full" aria-selected="false">Full AiFi</.test(html), 'C2 Trade : le switch Semi-auto / Full AiFi, Semi-auto par defaut');
+ok(/<button type="button" class="bouton sec" id="bcArmer" disabled aria-disabled="true">Arm Full AiFi — not available yet<\/button>/.test(html) && !/bcArmer'\)/.test(html),
+  'C2 Full AiFi N EST PAS ARMABLE : bouton desactive qui le dit, et aucun gestionnaire n y est branche');
+ok(!/eth_sign|personal_sign|privateKey|signTypedData/.test(bcSrc), 'C2 temoin : le code du panneau ne contient aucune signature hors du wallet de la personne (envoyerDepuisWallet)');
+/* le solde avant le plan */
+ok(/if \(soldeDe !== null && soldeDe < BigInt\(montant\)\) \{/.test(bcSrc) && bcSrc.indexOf('soldeDe < BigInt(montant)') < bcSrc.indexOf("fetch('/api/rails/plan?de='"),
+  'C2 echange : le solde du jeton paye est relu AVANT le plan (un plan Aerodrome n est pas simule : sans cela, approbation signee puis swap reverte)');
+ok(/try \{ soldeDe = await bcSolde\(de\.adr, compte\); \} catch \(_\) \{ soldeDe = null; \}/.test(bcSrc), 'C2 … un solde illisible ne refuse rien (le planificateur juge)');
+/* les donnees du cerveau, les listes vides */
+ok(/function bcPeindreCerveau\(a, snap\) \{/.test(bcSrc) && /id="bcCerveau"/.test(html) && !/id="bcReseauNote"/.test(html) && !/The idea: a skin you buy/.test(html),
+  'C2 Brain : les chiffres de CE cerveau (tires de l instantane) remplacent les deux paragraphes d explication');
+ok(/<div id="bcBlocEnCours" hidden>/.test(html) && /<div id="bcBlocHistorique" hidden>/.test(html) && /<div id="bcBlocNotes" hidden>/.test(html) && /if \(be\) be\.hidden = !enCours\.length;/.test(bcSrc),
+  'C2 Trade : une liste vide ne s affiche pas (ni son titre)');
+
+console.log('— D. serveur-web.js');
+const srv = lire('serveur-web.js');
+const fb = srv.slice(srv.indexOf('function buildServi() {'), srv.indexOf('function buildServi() {') + 1200);
+ok(!/slice\(0, 200000\)/.test(fb) && /exec\(e\.corps\.toString\('utf8'\)\);/.test(fb), 'D /sante.build lit TOUT app.html (le tampon etait passe au-dela des 200 000 premiers caracteres : build null en prod)');
+const stamp = (html.match(/data-build="([0-9A-Za-z_-]{6,40})"/) || [])[1];
+ok(!!stamp && html.indexOf('data-build="' + stamp + '"') > 200000, 'D temoin : le tampon de build (' + stamp + ') est bien au-dela de 200 000 caracteres — l ancienne lecture ne pouvait pas le voir');
+const lm = srv.slice(srv.indexOf('async function lireMarcheServeur(token) {'), srv.indexOf('async function lireMarcheServeur(token) {') + 2600);
+ok(/if \(marchesEnVol >= 3\) return \{ ok: false, occupe: true/.test(lm) && /if \(marchesEnCours\.has\(token\)\) return marchesEnCours\.get\(token\);/.test(lm), 'D /api/marche : 3 lectures en vol au plus, une seule par block a la fois');
+ok(/if \(r\.etat === 'LUE' \|\| r\.etat === 'NON_TROUVEE'\) \{/.test(lm) && /if \(marchesServeur\.size >= 400\)/.test(lm) && /Date\.now\(\) - c\.t < 30000/.test(lm),
+  'D … seuls les faits mesures sont gardes (30 s, 400 blocks) ; un NON_LUE n est jamais cache');
+ok(/vieDuBlock\(\{ rpc: rpcRails, stateView: V4_ADRESSES\[8453\]\.stateView, jeton: token, clesExactes: await clesRails\(token\) \}\)/.test(lm), 'D … le MEME lecteur que l app (vieDuBlock), sur les noeuds des rails');
+ok(/if \(chemin\.startsWith\('\/api\/marche\/'\)\) \{/.test(srv) && /if \(!\/\^0x\[0-9a-f\]\{40\}\$\/\.test\(token\)\) \{ rendreM\(400/.test(srv), 'D la route refuse tout ce qui n est pas une adresse entiere');
+/* /api/activite : qui bouge ce block */
+const la = srv.slice(srv.indexOf('async function lireActiviteServeur(token) {'), srv.indexOf('async function lireActiviteServeur(token) {') + 4200);
+ok(/const TOPIC_TRANSFER_SRV = topicSrv\('Transfer\(address,address,uint256\)'\);/.test(srv), 'D /api/activite : le topic Transfer est CALCULE (keccak de la signature), jamais recopie de memoire');
+ok(/address: token, topics: \[TOPIC_TRANSFER_SRV\]/.test(la) && /String\(l\.address\)\.toLowerCase\(\) !== token\) continue;/.test(la),
+  'D … seuls les Transfer emis PAR le jeton sont lus (filtre a la requete, reverifie sur chaque log) — un contrat tiers ne peut pas en forger');
+ok(/const x = await rpcActivite\('eth_getTransactionByHash', \[t\.tx\]\);/.test(la) && /t\.signataire = x && \/\^0x\[0-9a-fA-F\]\{40\}\$\/\.test\(String\(x\.from\)\) \? String\(x\.from\)\.toLowerCase\(\) : null;/.test(la),
+  'D … le signataire est lu sur la TRANSACTION (tx.from), pas sur l evenement ; non lu = null');
+ok(/for \(let i = 0; i < txs\.length; i \+= 3\) await Promise\.all\(txs\.slice\(i, i \+ 3\)\.map\(lireTx\)\);/.test(la) && /\.slice\(0, 12\);/.test(la) && /\.slice\(0, 6\)/.test(la),
+  'D … bornes : 12 transactions, 6 mouvements chacune, signataires lus trois par trois');
+ok(/if \(activitesEnVol >= 3\)/.test(la) && /Date\.now\(\) - c\.t < 20000/.test(la) && /fenetreBlocs: balaye/.test(la), 'D … 3 lectures en vol au plus, cache 20 s, et la fenetre balayee est RENDUE avec la reponse');
+ok(/if \(chemin\.startsWith\('\/api\/activite\/'\)\) \{/.test(srv), 'D la route /api/activite existe');
+ok(/faireRail\(\{ de: 'ETH', vers: BLOCK_SONDE, montant: '100000000000000', compte: '0x4200000000000000000000000000000000000006' \}\)/.test(srv), 'D la sonde d echange simule depuis une adresse qui detient de l ETH (le compte vide rendait « not enough ETH »)');
+
+console.log('— E. mutants');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-fin-'));
+/* E1 : rails-api.js sans le refus Aerodrome → l assertion A doit rougir. Les modules voisins sont recopies tels quels. */
+{
+  const dir = fs.mkdtempSync(path.join(tmp, 'r-'));
+  for (const f of fs.readdirSync(ICI)) if (/\.js$/.test(f) && !/^(serveur-web|vendor|mcp-ext-apps)/.test(f)) fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
+  const src = lire('rails-api.js');
+  const de = '      if (POOLS_ACTIONS_AERODROME.has(de)) {';
+  ok(src.split(de).length === 2, 'E motif du mutant 1 present une seule fois');
+  fs.writeFileSync(path.join(dir, 'rails-api.js'), src.replace(de, '      if (false) {'));
+  let rouge = false;
+  try { const { r } = await refusVente(dir, symAero, usdc); rouge = r.via !== 'planAerodromeSegment' && /no initialized pool among/.test(String(r.pourquoi)); } catch (_) { rouge = true; }
+  ok(rouge, 'E mutant « vente Aerodrome retiree » : ROUGE (la vente retombe sur une pool v4 qui n existe pas — le refus mesure en prod)');
+  const de2 = "if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only";
+  ok(src.split(de2).length === 2, 'E motif du mutant 2 present une seule fois');
+  fs.writeFileSync(path.join(dir, 'rails-api.js'), src.replace(de2, "if (false) return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only"));
+  let rouge2 = false;
+  try { const { r } = await refusVente(dir, symAero, 'ETH'); rouge2 = !/for USDC only/.test(String(r.pourquoi)); } catch (_) { rouge2 = true; }
+  ok(rouge2, 'E mutant « ACTION>ETH sans sa phrase » : ROUGE');
+}
+/* E2 : la pre-commande remise sur une action a pool Aerodrome → B doit rougir */
+{
+  const src = lire('commandes-panel.js');
+  const de = "modele: '" + pre.modele + "'";
+  const mut = src.replace(de, "modele: 'sell 0.01 " + symAero + " for USDC'");
+  const dir = fs.mkdtempSync(path.join(tmp, 'c-'));
+  fs.writeFileSync(path.join(dir, 'commandes-panel.js'), mut);
+  const Cm = await imp('commandes-panel.js', dir);
+  const am = Cm.analyserCommande(Cm.PRECOMMANDES.find((p) => p.cle === 'sell_stock').modele);
+  ok(src.split(de).length === 2 && am.ok && aero.includes(adrDe(am.commande.de)), 'E mutant « pre-commande sur ' + symAero + ' » : ROUGE (action a pool Aerodrome seule)');
+}
+/* E3 : bcDecimal qui arrondit a 8 decimales (comme l affichage) → l aller-retour au wei pres doit rougir */
+{
+  const arrondi = new Function('return ' + srcDec.replace(".replace(/0+$/, '')", ".replace(/0+$/, '').slice(0, 8)"))();
+  ok(C.enUnitesBrutes(arrondi(987654321987654321n, 18), 18) !== 987654321987654321n, 'E mutant « bcDecimal tronque comme l affichage » : ROUGE (100 % du solde ne serait plus 100 %)');
+}
+try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+
+console.log('\n' + (n - ko) + ' ok / ' + ko + ' KO (' + n + ' assertions)');
+process.exit(ko ? 1 : 0);

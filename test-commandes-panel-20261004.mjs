@@ -80,18 +80,26 @@ ok(/<dialog class="bcPop" id="bcPop"/.test(html) && /function bcOuvrirPop\(\) \{
   && /async function bcRecevoir\(c\) \{\n\s+bcOuvrirPop\(\);/.test(html), 'le panneau est un pop-up : ouvert par le widget, et de lui-meme quand un agent propose');
 const bcSrc = html.slice(html.indexOf('const bc = { session: null'), html.indexOf('(function bcDemarrage()'));
 const innerHtmls = bcSrc.match(/[A-Za-z]+\.innerHTML = [^;]+;/g) || [];
-ok(innerHtmls.length === 3 && innerHtmls.every((x) => /innerHTML = svg;/.test(x)), 'les seuls innerHTML du panneau sont NOTRE svg (dessin : avatar, widget, peau) : ' + innerHtmls.length + ' — tout texte d agent ou de chaine passe par textContent');
+/* 4 depuis les skins (2026-10-04) : la vignette de la boutique recoit le MEME svg (`bc.svgVisage`, rendu par dessin()) */
+ok(innerHtmls.length === 4 && innerHtmls.every((x) => /innerHTML = svg;/.test(x)) && /const z = \$\('#bcBoutique'\), svg = bc\.svgVisage \|\| '';/.test(bcSrc) && /bc\.svgVisage = svg \|\| '';/.test(bcSrc),
+  'les seuls innerHTML du panneau sont NOTRE svg (dessin : avatar, widget, peau, vignettes de skin) : ' + innerHtmls.length + ' — tout texte d agent ou de chaine passe par textContent');
 /* ── les vues (Phil, 2026-10-04) : Trade = en cours + historique + notes du cerveau ; Market = les echanges des AUTRES ; Brain = le cube ── */
 ok(/const BC_EN_COURS = \['proposed', 'planned', 'signing', 'sent'\];/.test(bcSrc) && /id="bcEnCours"/.test(html) && /id="bcHistorique"/.test(html) && /id="bcNotesBot"/.test(html),
   'Trade : les operations en cours, l historique, et ce que le cerveau a note');
 ok(/\? \{ \.\.\.o, etat: o\.etat === 'sent' \? 'sent' : 'interrupted' \} : o\)/.test(bcSrc), 'une operation « en cours » retrouvee au rechargement devient « left unfinished » (une tx envoyee reste « sent ») — jamais « done »');
 ok(/bcOpMaj\(op, 'done', s\.hash\);/.test(bcSrc) && /bcOpMaj\(op, s\.refuse \? 'declined' : s\.diffusee \? 'sent' : 'failed', s\.hash\);/.test(bcSrc) && /if \(!g\.ok\) \{ bcOpMaj\(op, 'refused'\); return; \}/.test(bcSrc),
   'chaque issue est notee : faite (avec son hash), refusee au wallet, envoyee non confirmee, echouee, refusee par le cerveau');
-ok(/liveEvts\.filter\(\(e\) => e && \(e\.type === 'ACHAT' \|\| e\.type === 'VENTE'\)\)/.test(bcSrc) && /id="bcAutres"/.test(html) && /id="bcMouvants"/.test(html),
-  'Market : les echanges des autres blocks viennent du fil Live de l app (lus sur la chaine), et les plus echanges de l index');
+/* 2026-10-04 (Phil) : « l onglet Market est propre au block actuel — on doit voir qui interagit avec CE block en direct ». La liste
+ * des echanges d AUTRES blocks et les « plus echanges du jour » sont partis (le detail est dans test-panneau-finitions-20261004). */
+ok(/fetch\('\/api\/activite\/' \+ a,/.test(bcSrc) && /id="bcActivite"/.test(html) && !/id="bcAutres"/.test(html) && !/id="bcMouvants"/.test(html) && !/liveEvts/.test(bcSrc),
+  'Market : les mouvements de CE block, lus par le serveur ; plus aucune liste d autres blocks');
 ok(/const src = \$\('#bReseau'\), dst = \$\('#bcReseau'\);/.test(bcSrc) && /cx\.drawImage\(src, 0, 0\);/.test(bcSrc), 'Brain : le cube et ses connexions = le canvas de « Its wiring » RECOPIE (meme dessin), pas un second dessin');
-ok(/<button type="button" class="bouton sec" id="bcSkins" disabled aria-disabled="true">Skins — not available yet<\/button>/.test(html) && !/bcSkins'\)\.addEventListener/.test(html) && !/id="bcTaches"/.test(html),
-  'Brain : la peau du block et un bouton « Skins » DESACTIVE qui dit qu il ne marche pas encore (aucun prix, aucune date) ; la liste des taches n y est plus');
+/* 2026-10-04 (Phil) : le bouton desactive devient un « + » qui ouvre des skins A L ESSAI. Ce qui reste interdit : un prix, un achat. */
+const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), bcSrc.indexOf('/** Peint le panneau depuis LE snapshot'));
+ok(/<button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique"/.test(html) && /\$\('#bcSkins'\)\.addEventListener\('click'/.test(html) && !/id="bcTaches"/.test(html),
+  'Brain : la peau du block et un « + » qui ouvre les skins ; la liste des taches n y est plus');
+ok(skinsSrc.length > 500 && !/\$\d|€|\bETH\b|USDC|price|envoyerDepuisWallet|bcSigner|fetch\(|localStorage/i.test(skinsSrc.replace(/\/\*[\s\S]*?\*\//g, '')),
+  'skins : AUCUN prix, AUCUN paiement, AUCUNE signature, rien d ecrit ni de garde — on les essaie, c est tout');
 ok(/bcApi\('\/api\/panel\/cerveau', \{ s: bc\.session, cerveau: \{ block: a,/.test(bcSrc), 'cablage direct : le panneau publie l etat du cerveau (humeur, battement, taches acceptees) pour l agent');
 ok(/const mB = !h && brainMarche && brainMarche\.adr === String\(brainAdr\)\.toLowerCase\(\) \? brainMarche\.v : null;/.test(html) && /\? marcheProfil\.v : mB;/.test(html),
   'l instantane rapporte le marche dont le cerveau s est NOURRI (block hors carte) — sinon la porte refusait tout echange sur un marche lu');

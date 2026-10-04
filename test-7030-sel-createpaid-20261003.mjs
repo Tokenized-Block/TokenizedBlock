@@ -130,7 +130,10 @@ ok(/if \(plan && plan\.etat === 'REFUSE' && plan\.pourquoi\) return \{ etat: 'RE
 ok(/if \(isInscrire && et\.du != null\) return et;\n\s+if \(isInscrire && !hookPayee\) \{/.test(html), 'C reecriture « prepaye » : une etape dont le frais vient du hook (du) n est pas touchee');
 ok((html.match(/et && et\.payant && et\.du != null \? BigInt\(et\.du\) : a\), null\)/g) || []).length === 2, 'C les deux controles de solde lisent le frais de l etape (du), pas 0,0003 suppose');
 ok(/import \{[^}]*selDuRouteur, selDansInput, indexRouteurLu \} from '\.\/index-routeur\.js';/.test(html), 'C imports');
-const i0 = html.indexOf('async function selRouteurPour(adr) {'), i1 = html.indexOf('\n}\n', i0) + 2;
+/* la fin d une fonction de premier niveau : une accolade seule sur sa ligne — cherchee par regexp (`\r?\n`), jamais par une chaine
+ * a saut de ligne colle (regle de test-tests-portables : une telle ancre rate sur une copie CRLF). Rend l index de l accolade. */
+const finFn = (s, i) => { const m = /\r?\n\}\r?\n/.exec(s.slice(i)); return m ? i + m.index + m[0].indexOf('}') : -1; };
+const i0 = html.indexOf('async function selRouteurPour(adr) {'), i1 = finFn(html, i0) + 1;
 ok(i0 > 0, 'C selRouteurPour est defini');
 const mk = ({ prepaye = null, input = '0x', connu = null, compteur = { tx: 0 } } = {}) => new Function('ctx', 'const { rpc, prepayePour, selDuRouteur, selDansInput, ajouterNeDuRouteur } = ctx;\n' + html.slice(i0, i1) + '\nreturn selRouteurPour;')({
   rpc: async (m) => { if (m === 'eth_getTransactionByHash') { compteur.tx += 1; return { input }; } return null; }, prepayePour: () => prepaye,
@@ -144,7 +147,7 @@ ok(await mk({ prepaye: { hash: '0xa' }, input: directC })('0xb2' + '0'.repeat(37
 
 /* le cout dit a l ecran : « 0.001 ETH, once » ne suffit pas sur le 7030 — le minimum du createur est annonce AVANT le wallet */
 ok(/<p class="note" id="cCautionNote" hidden><\/p>/.test(html), 'C ecran Create : une ligne pour le minimum du createur (#cCautionNote)');
-const iN = html.indexOf('async function majNoteCaution() {'), noteSrc = html.slice(iN, html.indexOf('\n}\n', iN));
+const iN = html.indexOf('async function majNoteCaution() {'), noteSrc = html.slice(iN, finFn(html, iN));
 ok(iN > 0 && /if \(!estHook7030\(hook\)\) \{ el\.hidden = true; return; \}/.test(noteSrc) && /const c = await cautionCreateurPour\(hook, devise\);/.test(noteSrc),
   'C la ligne n apparait que sur le hook 7030, avec le montant de cautionCreateurPour (la meme source que la transaction)');
 /* 2026-10-04 : la sortie EST proposee, sur la page du block (peindreCautionProfil) — la ligne ne dit plus « not offered yet » */
@@ -152,7 +155,7 @@ ok(/It is not a fee: it stays yours/.test(noteSrc) && /0\.03% of each trade/.tes
   && /done from the block’s own page here, and your share stops as soon as you ask/.test(noteSrc) && !/does not offer/.test(noteSrc),
   'C la ligne dit : pas un frais, 0,03 % par echange, sortie = demande + 7 jours depuis la page du block, la part s arrete a la demande');
 /* la carte « Creator minimum » de la page du block */
-const iP = html.indexOf('async function peindreCautionProfil(adr, v) {'), profSrc = html.slice(iP, html.indexOf('\n}\n', iP));
+const iP = html.indexOf('async function peindreCautionProfil(adr, v) {'), profSrc = html.slice(iP, finFn(html, iP));
 ok(iP > 0 && /<div class="pJeu" id="pCaution" hidden>/.test(html) && (html.match(/peindreVerrouMarche\(v, origineProfil\);\n\s+void peindreCautionProfil\(adr, v\);/g) || []).length === 2,
   'C page du block : la carte #pCaution existe et se peint a chaque lecture du marche (2 sites)');
 ok(/!estHook7030\(v\.cle\.hooks\)\) return;/.test(profSrc) && /etatCautionCreateur\(\{ rpc, hook, cle, maintenantSec \}\)/.test(profSrc) && /if \(!etat \|\| etat\.etat !== 'LUE'\) return;/.test(profSrc),

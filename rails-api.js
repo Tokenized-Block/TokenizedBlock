@@ -224,6 +224,18 @@ export async function planRail(q, deps) {
     }
     /* ── 4. VENDRE UNE ACTION TOKENISEE CONTRE USDC sur sa pool v4 LUE (les 20 ; les 12 Aerodrome n ont pas ce chemin ici) ── */
     if (nd === 'ACTION' && nv === 'USDC') {
+      /* ⛔⛔ 2026-10-04 — LES DEUX MARCHES SONT ACCEPTES A LA VENTE (Phil : « pool Aerodrome et Uniswap acceptees, oublie pas »).
+       *   Mesure du jour sur ce planificateur : vendre NVDAc rendait REFUSE « no initialized pool among the 16 keys read » — l achat
+       *   de la meme action passait par sa pool Aerodrome, la vente ne cherchait qu une pool v4 qui n existe pas. 12 actions (la
+       *   table MESUREE) n avaient donc aucune sortie ici.
+       *   MEME REGLE QUE L ACHAT (route 3) : une action de la table se traite sur SA pool Aerodrome ; les autres sur leur pool v4 LUE.
+       *   Le batisseur est celui de l achat, dans l autre sens : un segment Aerodrome action -> USDC, approbation du montant EXACT,
+       *   frais d interface retenu sur l USDC qui sort (sweepTokenWithFee).
+       *   ⛔ BORNE : ce plan n est PAS simule cote serveur (comme l achat Aerodrome) ; son minimum derive du prix spot de la pool. */
+      if (POOLS_ACTIONS_AERODROME.has(de)) {
+        return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }], devise: de,
+          block: USDC, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }), { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome' });
+      }
       const marcheA = await marcheDe(de);
       if (!marcheA || marcheA.etat !== 'LUE' || !marcheA.cle) return normaliser(route, illisible(marcheA));
       if (quoteDe(marcheA.cle, de) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(de) + ' trades on v4 against ' + quoteDe(marcheA.cle, de) + ', not USDC' });
@@ -233,5 +245,6 @@ export async function planRail(q, deps) {
   } catch (e) {
     return normaliser(route, { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) });
   }
+  if (nd === 'ACTION') return normaliser(route, { etat: 'REFUSE', pourquoi: 'a tokenized stock sells here for USDC only (route ' + route + ' is not offered by this API yet)' });
   return normaliser(route, { etat: 'REFUSE', pourquoi: 'route ' + route + ' is not offered by this API yet' });
 }
