@@ -22,8 +22,32 @@ import { cleDePool, poolId, selecteur, prixDepuisSqrt } from './pool.js';
 import { capitalisation } from './pointsdevie.js';
 import { TBLOCK, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { pairesProposees } from './paires.js';
+import { enVolBorne, lireEnsemble } from './lectures-en-vol.js';
 
 const ETH_NATIF = '0x0000000000000000000000000000000000000000';
+
+/* ══ LES DECIMALES D UN JETON : LUES UNE FOIS, GARDEES (2026-10-04) ══════════════════════════════════════════════════════════
+ * MESURE (fork, compter-lectures-plan-20261004.mjs) : chaque plan relisait `decimals()` 1 a 3 fois — le jeton, sa devise de
+ *   cotation, le jeton paye — alors que la reponse ne change jamais. Le navigateur les garde deja (`RPC_SEL_IMMUABLES`, app.html) ;
+ *   le serveur, non.
+ * ⛔⛔ ON NE GARDE QUE CE FAIT-LA. Prix, supply, liquidite, solde, autorisation : relus a CHAQUE plan, jamais gardes.
+ * ⛔ ON NE GARDE QU UNE REPONSE PLAUSIBLE : un entier de 1 a 36. Une lecture ratee LEVE et n est pas gardee (une panne gardee
+ *   condamnerait le jeton jusqu au redemarrage). Un 0 n est pas garde non plus : c est la forme d une NON-reponse de noeud
+ *   (meme regle que `rpcGardable` dans app.html) — il est rendu tel quel, comme avant, et relu la fois suivante.
+ * ⛔ LA CLE PORTE LE StateView : il differe d une chaine a l autre, donc une meme adresse sur deux chaines ne se melange pas.
+ * ⛔ BORNE : la memoire vit le temps du processus (le serveur) ou de la page ; `oublierDecimales()` la vide (tests). */
+const decimalesConnues = new Map();
+export function oublierDecimales() { decimalesConnues.clear(); }
+export async function decimalesLues({ rpc, stateView, jeton }) {
+  const k = String(stateView || '').toLowerCase() + ':' + String(jeton || '').toLowerCase();
+  if (decimalesConnues.has(k)) return decimalesConnues.get(k);
+  const d = Number(BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
+  if (Number.isInteger(d) && d >= 1 && d <= 36) {
+    if (decimalesConnues.size >= 5000) decimalesConnues.delete(decimalesConnues.keys().next().value);
+    decimalesConnues.set(k, d);
+  }
+  return d;
+}
 
 /** La cle TBLOCK/block lue en second (format du lancement de l app). */
 export const CLE_TBLOCK = { fee: 0, tickSpacing: 200 };
@@ -228,9 +252,14 @@ async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
       if (!s0 || String(s0).length < 66) continue;
       const sqrt = BigInt(String(s0).slice(0, 66));
       if (sqrt === 0n) continue;
-      const decB = Number(BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
-      const decD = Number(BigInt(String(await rpc('eth_call', [{ to: devise, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
-      const supply = BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66));
+      /* 2026-10-04 : les decimales des deux cotes et la supply ne dependent pas l une de l autre — lues ENSEMBLE, une fois la pool
+       *   trouvee (pas avant : sur une cle sans pool ce seraient des lectures en plus). Une seule illisible : cle suivante, comme
+       *   avant. Les decimales sortent de la memoire quand elles y sont ; la supply est relue a chaque fois. */
+      const [decB, decD, supply] = await lireEnsemble([
+        () => decimalesLues({ rpc, stateView, jeton }),
+        () => decimalesLues({ rpc, stateView, jeton: devise }),
+        async () => BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66)),
+      ]);
       const prix = prixDepuisSqrt({ sqrtPriceX96: sqrt, decDevise: decD, decBlock: decB, deviseEst0: c0 === devise });
       const cap = capitalisation({ supply, decimales: decB, prix, devise: sym });
       if (cap.valeur === null) continue;
@@ -330,11 +359,15 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], devi
 
   /* ⛔ LES DECIMALES SE LISENT, ELLES NE SE SUPPOSENT PAS. Supposer 18 a deja produit des
    * capitalisations fausses d un facteur mille sur un jeton a 6 decimales. */
-  let dec = null, supply = null;
-  try {
-    dec = Number(BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('decimals()') }, 'latest'])).slice(0, 66)));
-    supply = BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66));
-  } catch { /* signale juste dessous */ }
+  /* 2026-10-04 : decimales, supply et liquidite de la pool trouvee sont trois lectures INDEPENDANTES — lues ensemble (3 allers-
+   *   retours en file avant). Le verdict est celui d avant, dans le meme ordre : decimales ou supply illisible = NON_LUE.
+   *   ⛔ Seul ecart : sur CET echec-la, la liquidite a ete demandee pour rien (une lecture de plus, aucun effet sur la reponse). */
+  const [luDec, luSupply, luLiquidite] = await enVolBorne([
+    () => decimalesLues({ rpc, stateView, jeton }),
+    async () => BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66)),
+    () => lireLiquiditePool(rpc, stateView, cleTrouvee),
+  ], (f) => f());
+  const dec = luDec.ok ? luDec.valeur : null, supply = luSupply.ok ? luSupply.valeur : null;
   if (!Number.isFinite(dec) || supply === null) {
     return { etat: 'NON_LUE', vie: null, devise: null, via,
       pourquoi: 'decimals or supply unread — we never assume 18 decimals' };
@@ -348,6 +381,6 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], devi
   }
   /* ⛔ LA CLE TROUVEE EST RENDUE (2026-09-13) : l achat / vente dans l app doit trader SUR LA POOL LUE ICI, pas
    * sur une cle recalculee ailleurs — une deuxieme recherche de marche finirait par diverger de celle-ci. */
-  const liquidite = await lireLiquiditePool(rpc, stateView, cleTrouvee);
+  const liquidite = luLiquidite.ok ? luLiquidite.valeur : null;
   return { etat: 'LUE', vie: c.valeur, devise: c.devise, via, pourquoi: null, cle: cleTrouvee, sqrtPriceX96: sqrt, decimales: dec, liquidite };
 }

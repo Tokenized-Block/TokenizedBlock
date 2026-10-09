@@ -28,6 +28,7 @@ import { planifierFranchissement, calldataGetPool, FRAIS_INTERFACE_BPS_CL } from
 import { sortieSpot } from './plan-usdc-block.js';
 import { selecteur } from './keccak.js';
 import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
+import { enVolBorne, LECTURES_EN_VOL_MAX } from './lectures-en-vol.js';
 
 /** Les etats rendus. ⛔ Aucun autre n est produit. */
 export const ETATS = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']);
@@ -58,21 +59,35 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
    *   1,19 M$) : le franchissement calculait son minimum sur une pool vide. On parcourt donc TOUS les espacements et on
    *   garde la plus PROFONDE, mesuree par le solde du jeton d entree `a` que la pool detient (balanceOf). Une seule pool
    *   trouvee : comportement d avant. Plusieurs et AUCUNE profondeur lue : NON_MESURE — jamais un choix au hasard. */
-  let essayes = 0, refus = 0;
-  const trouvees = [];
+  /* ⛔ 2026-10-04 — LES NEUF ESPACEMENTS SE LISENT ENSEMBLE (au plus `LECTURES_EN_VOL_MAX` a la fois), PLUS EN FILE.
+   *   MESURE (fork, compter-lectures-plan-20261004.mjs) : USDC > NVDAc faisait 13 lectures et NVDAc > ETH 27, une seule en vol —
+   *   dont 9 `getPool` par saut, tous lus de toute facon (on garde la plus profonde, pas la premiere) et dont aucun ne depend
+   *   d un autre. Chaque espacement fait sa file a lui : `getPool`, puis la profondeur SI une pool est rendue.
+   *   Le resultat est celui d avant : `trouvees` est rangee dans l ORDRE DES ESPACEMENTS (a profondeur egale la premiere gagne,
+   *   comme avant), `essayes` et `refus` comptent pareil, et seul un `getPool` qui leve est un refus.
+   *   ⛔ Rien n est garde en memoire : une pool plus profonde peut naitre demain a un autre espacement. */
+  const demandes = [];
   for (const ts of espacements) {
     const c = calldataGetPool({ tokenA: a, tokenB: b, tickSpacing: ts });
     if (c.etat !== 'PRET') continue;
-    essayes += 1;
-    let r;
-    try { r = await appel(rpc, c.to, c.data); } catch (_) { refus += 1; continue; }
+    demandes.push({ ts, c });
+  }
+  const essayes = demandes.length;
+  let refus = 0;
+  const issues = await enVolBorne(demandes, async ({ ts, c }) => {
+    const r = await appel(rpc, c.to, c.data);
     const adresse = '0x' + String(r).slice(-40);
-    if (nulle(adresse)) continue;
+    if (nulle(adresse)) return null;
     let prof = null;
     /* (keccak.selecteur rend DEJA le prefixe 0x) */
     try { prof = BigInt(String(await appel(rpc, a, selecteur('balanceOf(address)') + adresse.slice(2).toLowerCase().padStart(64, '0')))); }
     catch (_) { prof = null; }
-    trouvees.push({ adresse, ts, prof });
+    return { adresse, ts, prof };
+  }, LECTURES_EN_VOL_MAX);
+  const trouvees = [];
+  for (const x of issues) {
+    if (!x.ok) { refus += 1; continue; }
+    if (x.valeur) trouvees.push(x.valeur);
   }
   if (trouvees.length) {
     const lues = trouvees.filter((x) => x.prof !== null);
