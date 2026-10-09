@@ -144,6 +144,7 @@ import { etatCautionCreateur, sortieCautionPour, cleMarcheCreateur } from './cau
 import { creerRegistrePanel } from './panel-sessions.js';
 /* les sondes du marche, de l echange et du cerveau : les MEMES modules que l app (rien de reecrit pour la sonde) */
 import { vieDuBlock } from './marche.js';
+import { lireReferenceAction, estActionCoinbase } from './reference-action.js';
 import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
 import { snapshotCerveau } from './export-cerveau.js';
 import { tacheAutorisee } from './brain-tasks.js';
@@ -1378,6 +1379,40 @@ async function lireMarcheServeur(token) {
   return p;
 }
 
+/* ── LE MULTIPLICATEUR B20 ET LA REFERENCE CHAINLINK D UNE ACTION : GET /api/actions/reference/0x… (2026-10-09) ─────────────
+ * CE QUE C EST. `lireReferenceAction` (reference-action.js) sur les noeuds des rails : le registre d oracles de l emetteur
+ *   (multiplicateur + pause), la mise a jour programmee du jeton (ERC-8056) et le feed Chainlink publie par docs.base.org.
+ *   LECTURE SEULE : rien n est signe, rien n est envoye.
+ * ⛔ TROIS ETATS par partie (LU / NON_LU / NON_DISPONIBLE). On ne garde en memoire QUE ce qui a ete LU en entier (multiplicateur
+ *   ET reference lus, ou reference NON_DISPONIBLE), 60 s ; un NON_LU n est jamais cache — il se relit a la demande suivante.
+ * ⛔ BORNES : 3 lectures en vol au plus (au-dela : 429), une seule par jeton a la fois, 120 jetons en memoire, 5 eth_call par
+ *   lecture. Une adresse hors du registre des actions ne coute AUCUN appel (NON_DISPONIBLE). */
+const referencesServeur = new Map(), referencesEnCours = new Map();
+let referencesEnVol = 0;
+async function lireReferenceServeur(token) {
+  const c = referencesServeur.get(token);
+  if (c && Date.now() - c.t < 60000) return { ...c.r, depuisCache: true };
+  if (referencesEnCours.has(token)) return referencesEnCours.get(token);
+  if (!estActionCoinbase(token)) return { ok: true, ...(await lireReferenceAction({ rpc: rpcRails, jeton: token })) };
+  if (referencesEnVol >= 3) return { ok: false, occupe: true, pourquoi: 'the reference reader is busy — try again in a moment' };
+  referencesEnVol += 1;
+  const p = (async () => {
+    try {
+      const r = { ok: true, ...(await lireReferenceAction({ rpc: rpcRails, jeton: token })) };
+      const complet = r.multiplicateur.etat === 'LU' && (r.reference.etat === 'LU' || r.reference.etat === 'NON_DISPONIBLE');
+      if (complet) {
+        if (referencesServeur.size >= 120) referencesServeur.delete(referencesServeur.keys().next().value);
+        referencesServeur.set(token, { t: Date.now(), r });
+      }
+      return r;
+    } catch (e) {
+      return { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) };
+    } finally { referencesEnVol -= 1; referencesEnCours.delete(token); }
+  })();
+  referencesEnCours.set(token, p);
+  return p;
+}
+
 /* ── QUI BOUGE CE BLOCK, EN DIRECT : GET /api/activite/0x… (2026-10-04) ──────────────────────────────────────────────────────
  * Phil, devant l onglet Market du panneau (il listait les echanges d AUTRES blocks) : « l onglet Market est propre au block actuel —
  *   on doit voir qui interagit avec CE block en direct ».
@@ -1587,7 +1622,7 @@ async function faireNaissance(demande, { sonde = false, soldeSuppose = null } = 
 }
 async function faireRail(demande) {
   try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-  const r = await planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453 });
+  const r = await planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur });
   if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
   return r;
 }
@@ -2561,6 +2596,9 @@ const SERVIS = [
    *   rien, alors qu un module importe et pas servi rend un 404 qui arrete le module ENTIER —
    *   c est-a-dire toute la page. L ordre « servir d abord, cabler ensuite » est le seul sur. */
   'cobalt.js',
+  /* ⛔ 2026-10-09 : `reference-action.js` porte la phrase de la reference Chainlink et le SEUIL d ecart du ticket ; importe par
+   *   `app.html`. L oublier ici tuerait TOUTE la page — un import 404 arrete le module entier. */
+  'reference-action.js',
   /* ⛔ `route-multi-factory.js` refuse une route a cheval sur deux factories — le cas ou CHAQUE
    *   jambe existe et ou l appel reverte quand meme (OUSD : 10 M$ au pair sur Uniswap V4, 0 pool
    *   Aerodrome CL). Servi AVANT d etre importe, comme `cobalt.js` : un module servi et pas encore
@@ -3536,6 +3574,16 @@ createServer((req, res) => {
       .catch((e) => rendreA(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
+  /* le multiplicateur B20 et la reference Chainlink d une action Coinbase, en lecture seule : /api/actions/reference/0x… */
+  if (chemin.startsWith('/api/actions/reference/')) {
+    const token = chemin.slice('/api/actions/reference/'.length).toLowerCase();
+    const rendreR = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'GET') { rendreR(405, { ok: false, pourquoi: 'GET only' }); return; }
+    if (!/^0x[0-9a-f]{40}$/.test(token)) { rendreR(400, { ok: false, pourquoi: 'whole address required' }); return; }
+    lireReferenceServeur(token).then((r) => rendreR(r && r.occupe ? 429 : 200, r))
+      .catch((e) => rendreR(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+    return;
+  }
   /* le marche d un block lu par le serveur (repli du navigateur quand ses noeuds publics le refusent) : /api/marche/0x… */
   if (chemin.startsWith('/api/marche/')) {
     const token = chemin.slice('/api/marche/'.length).toLowerCase();
@@ -3719,7 +3767,7 @@ createServer((req, res) => {
      *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
      *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
     try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-    planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453 }).then((r) => {
+    planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur }).then((r) => {
       if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;

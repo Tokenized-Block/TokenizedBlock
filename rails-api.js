@@ -107,6 +107,43 @@ const quoteDe = (cle, jeton) => {
   return c0 === j ? c1 : (c1 === j ? c0 : null);
 };
 
+/* ── LA REFERENCE CHAINLINK DANS LE RESUME D UNE ROUTE D ACTION (2026-10-09) ─────────────────────────────────────────────────
+ * ⛔⛔ AJOUT D INFORMATION, JAMAIS DE DECISION : la reference est lue A COTE du plan (en parallele), puis posee dans
+ *   `resume.reference`. Elle ne change NI la route, NI un montant, NI un minimum, NI l etat du plan. Lue ou non, le plan sort tel
+ *   que le planificateur l a construit. Sans `deps.reference`, rien n est ajoute (les appelants d avant sont inchanges).
+ * ⛔ BORNE DE TEMPS : on n attend la reference que `ATTENTE_REFERENCE_MS` APRES la fin du plan ; au-dela, `NON_LU` — un plan ne
+ *   ralentit pas pour une information.
+ * ⛔ L ECART n est donne que quand le resume porte un DEVIS (`quote`) entre USDC et l action : prix implicite = USDC payes /
+ *   actions recues (achat), ou USDC recus / actions payees (vente). Il INCLUT notre frais et l impact de prix a cette taille —
+ *   c est ecrit dans le champ `ecartInclut`. Les routes Aerodrome n ont pas de devis (minimum derive du prix spot) : `ecartBps`
+ *   null, et on dit pourquoi. */
+const ATTENTE_REFERENCE_MS = 3000;
+const DEC_USDC = 6;
+export function ajouterReference(plan, { de, vers, nd, nv, decimalesAction, ref }) {
+  if (!plan || !plan.resume || typeof plan.resume !== 'object') return plan;
+  const action = nd === 'ACTION' ? de : vers;
+  const r = ref && ref.reference ? ref.reference : { etat: 'NON_LU', pourquoi: 'the reference was not read in time' };
+  const sortie = { jeton: action, etat: r.etat, prixUsd: r.etat === 'LU' ? r.prixUsd : null, majA: r.etat === 'LU' ? r.majA : null,
+    fraicheur: r.etat === 'LU' ? r.fraicheur : null, feed: r.feed || null, pourquoi: r.pourquoi || null,
+    multiplicateur: ref && ref.multiplicateur ? ref.multiplicateur : { etat: 'NON_LU' },
+    prixImpliqueUsd: null, ecartBps: null, ecartInclut: null };
+  const rs = plan.resume;
+  const paye = rs.paye !== undefined && rs.paye !== null ? String(rs.paye) : null, quote = rs.quote !== undefined && rs.quote !== null ? String(rs.quote) : null;
+  if (r.etat === 'LU' && paye && quote && /^[0-9]+$/.test(paye) && /^[0-9]+$/.test(quote) && Number.isInteger(decimalesAction)
+    && ((nd === 'USDC' && nv === 'ACTION') || (nd === 'ACTION' && nv === 'USDC'))) {
+    const usdc = Number(nd === 'USDC' ? paye : quote) / 10 ** DEC_USDC, act = Number(nd === 'USDC' ? quote : paye) / 10 ** decimalesAction;
+    if (usdc > 0 && act > 0) {
+      sortie.prixImpliqueUsd = usdc / act;
+      sortie.ecartBps = Math.round(((sortie.prixImpliqueUsd - r.prixUsd) / r.prixUsd) * 10000);
+      sortie.ecartInclut = 'our interface fee and the pool’s price impact at this size';
+    }
+  } else if (r.etat === 'LU') {
+    sortie.ecartInclut = 'no deviation: this plan carries no USDC quote for the stock (Aerodrome minimums come from the spot price)';
+  }
+  plan.resume = { ...rs, reference: sortie };
+  return plan;
+}
+
 /**
  * LA POOL AERODROME D UNE ACTION A POOL v4, COTEE A LA MEME TAILLE, et le choix qui en decoule (pour l ACHAT en USDC).
  * - pool : la plus profonde des espacements declares (poolAerodromeDe) ; sortie : le quoter Aerodrome CL (multipool.js) ;
@@ -135,9 +172,31 @@ export async function meilleureAlternativeAerodrome({ rpc, action, montant, sort
 
 /**
  * @param {{ de:string, vers:string, montant:string|bigint, compte:string }} q  montant en unites brutes du jeton paye
- * @param {{ rpc:Function, clesDe?:(a:string)=>Promise<object[]>, chaine?:number, stateView?:string, maintenant?:number }} deps
+ * @param {{ rpc:Function, clesDe?:(a:string)=>Promise<object[]>, chaine?:number, stateView?:string, maintenant?:number,
+ *           reference?:(jeton:string)=>Promise<object> }} deps
  */
 export async function planRail(q, deps) {
+  const lireRef = deps && typeof deps.reference === 'function' ? deps.reference : null;
+  const lireAdr = (x) => (String(x || '').toUpperCase() === 'ETH' ? ETH : bas(x));
+  const de = lireAdr(q && q.de), vers = lireAdr(q && q.vers), nd = natureJeton(de), nv = natureJeton(vers);
+  /* une route qui touche UNE action (pas action>action : deux references, aucune ne serait « la » sienne) */
+  if (!lireRef || (nd === 'ACTION') === (nv === 'ACTION')) return planRailBrut(q, deps);
+  const action = nd === 'ACTION' ? de : vers;
+  const pRef = Promise.resolve().then(() => lireRef(action)).catch(() => null);
+  const plan = await planRailBrut(q, deps);
+  const ref = await Promise.race([pRef, new Promise((ok) => setTimeout(() => ok(null), ATTENTE_REFERENCE_MS))]);
+  let decimalesAction = null;
+  const avecDevis = ((nd === 'USDC' && nv === 'ACTION') || (nd === 'ACTION' && nv === 'USDC')) && ref && ref.reference && ref.reference.etat === 'LU'
+    && plan && plan.resume && plan.resume.quote !== undefined && plan.resume.quote !== null;
+  if (avecDevis) try {
+    const r = await deps.rpc('eth_call', [{ to: action, data: selecteur('decimals()') }, 'latest']);
+    const d = Number(BigInt(String(r).slice(0, 66)));
+    if (Number.isInteger(d) && d >= 0 && d <= 36) decimalesAction = d;
+  } catch (_) { /* decimales non lues : pas d ecart, la reference reste */ }
+  return ajouterReference(plan, { de, vers, nd, nv, decimalesAction, ref });
+}
+
+async function planRailBrut(q, deps) {
   const rpc = deps && deps.rpc;
   const clesDe = (deps && typeof deps.clesDe === 'function') ? deps.clesDe : (async () => []);
   const chaine = Number((deps && deps.chaine) || 8453);
