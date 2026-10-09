@@ -95,9 +95,12 @@ ok(!/'[^'\n]*0\.001 fee \+ seed/.test(HTML) && !/frais \+ BigInt\(seed\) \+ gasB
 ok(/gazWei: GAZ_NAISSANCE_WEI \}\), \{ auMoins: !sansSeed \}\)/.test(srcIndice) && /besoinNaissance\(\{ fraisWei: FRAIS_OUVERTURE_WEI,/.test(srcIndice),
   'B la ligne d avant-clic lit les MEMES constantes que la garde (frais, reserve)');
 ok(!/0\.001/.test(srcIndice.replace(/\/\*[\s\S]*?\*\//g, '')), 'B aucun « 0.001 » ecrit en dur dans la ligne d avant-clic (commentaires ecartes)');
-ok(/const sansSeed = !!\(p && p\.type === 'ACTION'\);/.test(srcIndice) && /const p = paireChoisie;/.test(srcIndice)
-  && /const sansSeed = !!\(paireChoisie && paireChoisie\.type === 'ACTION'\);/.test(HTML)
-  && /\.\.\.\(sansSeed \? \{ seedWei: 0n \} : \{\}\) \}\);/.test(HTML), 'B meme regle de seed aux deux endroits : seule une paire action se lance sans seed');
+/* 2026-10-09 : UNE fonction `paireSansGraineEth` (ACTION + STABLE, mesures sur fork) lue aux TROIS endroits (indice, garde de
+ *   creerBlock, garde du lot Instant Birth) — une regle recopiee divergerait. */
+ok(/const sansSeed = paireSansGraineEth\(p\);/.test(srcIndice) && /const p = paireChoisie;/.test(srcIndice)
+  && /const sansSeed = paireSansGraineEth\(paireChoisie\);/.test(HTML)
+  && /const seedPourGate = paireSansGraineEth\(paireChoisie\) \? 0n :/.test(HTML)
+  && /\.\.\.\(sansSeed \? \{ seedWei: 0n \} : \{\}\) \}\);/.test(HTML), 'B meme regle de seed aux trois endroits : action et USDC (mesures) se lancent sans graine ETH');
 ok(/if \(seed == null\) seed = CREATE_FEE_WEI_FLOOR;/.test(srcPorte) && /const SEED_FIXE_SANS_ORACLE = CREATE_FEE_WEI_FLOOR;/.test(HTML)
   && /if \(w == null \|\| w < SEED_FIXE_SANS_ORACLE\) w = SEED_FIXE_SANS_ORACLE;/.test(HTML) && /seedWei: sansSeed \? 0n : CREATE_FEE_WEI_FLOOR,/.test(srcIndice),
 'B le « at least » dit le VRAI plancher : le seed lu au clic ne descend jamais sous `CREATE_FEE_WEI_FLOOR`');
@@ -142,6 +145,7 @@ function jouerIndice(html, mod, { paire, chaine = 8453 }) {
     $: (q) => (q === '#cFundWallet' ? a : q === '#cFundHint' ? h : null), majNoteCaution: async () => {},
     paireChoisie: paire, CHAINE: chaine,
   });
+  vm.runInContext(extraire(html, 'function paireSansGraineEth(p) {'), ctx);
   vm.runInContext(src, ctx);
   vm.runInContext('majFundWalletPourPaire()', ctx);
   return h.innerHTML;
@@ -195,8 +199,12 @@ const juges = {
     const auDessus = await jouerPorte(html, mod, { solde: 0n, seedLu: 375000000000000n });
     const ditEth = jouerIndice(html, mod, { paire: PAIRE_ETH }), ditUsdc = jouerIndice(html, mod, { paire: PAIRE_USDC });
     const attendu = 'holds at least ' + mod.formaterEthCourt(auPlancher.r.besoin) + ' ETH, of which ';
-    return ditEth.includes(attendu) && ditUsdc.includes(attendu) && ditUsdc.startsWith('This pair needs USDC, plus ' + mod.arrondiAffichage(auPlancher.r.frais) + ' ETH for the Birth fee. ')
-      && auDessus.r.besoin > auPlancher.r.besoin;
+    /* 2026-10-09 (banc-naissance-7030-fork : une naissance USDC coute 0,001 ETH tout compris, caution en USDC) : l USDC n a PAS de
+     *   graine ETH — sa somme est EXACTE (frais + reserve), egale a ce que la garde exige avec seedWei 0n, jamais « at least ». */
+    const sansGraine = await jouerPorte(html, mod, { solde: 0n, seedWei: 0n });
+    return ditEth.includes(attendu) && !ditUsdc.includes('at least') && ditUsdc.includes(mod.formaterEthCourt(sansGraine.r.besoin) + ' ETH')
+      && ditUsdc.startsWith('This pair needs USDC, plus ' + mod.arrondiAffichage(auPlancher.r.frais) + ' ETH for the Birth fee. ')
+      && sansGraine.r.besoin < auPlancher.r.besoin && auDessus.r.besoin > auPlancher.r.besoin;
   },
   /* hors Base la garde ne tourne pas, et sans paire on ne sait pas quelle regle jouera : la ligne ne dit alors aucune somme */
   async muetQuandLaGardeNeJouePas(html, mod) {
@@ -212,7 +220,7 @@ const LIBELLES = {
   nonLuEstUnTroisiemeEtat: 'C un solde NON LU est un troisieme etat : « Could not read… », jamais « short by »',
   seedLuCompte: 'C autre paire : le seed lu au clic (0,000375) entre dans la somme et le refus le nomme',
   ditEgaleExige: 'C ⭐ paire action : la somme dite AVANT le clic == le besoin que la garde REND (et le frais dit == son frais)',
-  minimumDitEstUnMinimum: 'C autre paire (ETH, USDC) : « at least » == le besoin de la garde au plancher du seed ; un seed plus haut exige plus',
+  minimumDitEstUnMinimum: 'C paire ETH : « at least » == le besoin de la garde au plancher du seed ; paire USDC (mesure fork) : somme EXACTE sans graine, plus basse',
   muetQuandLaGardeNeJouePas: 'C en Practice ou sans paire choisie, la ligne ne dit aucune somme (la garde ne joue pas / regle inconnue)',
 };
 for (const k of Object.keys(juges)) {

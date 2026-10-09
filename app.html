@@ -2717,7 +2717,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-paire-relancee" hidden>Build <code>20261009-paire-relancee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-usdc-sans-graine" hidden>Build <code>20261009-usdc-sans-graine</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16969,7 +16969,7 @@ function majFundWalletPourPaire() {
    * ⛔ SEULEMENT SUR BASE ET AVEC UNE PAIRE CHOISIE : en Practice la garde ne tourne pas, et sans paire on ne sait pas
    *   laquelle des deux regles s appliquera — on ne dit alors rien plutot qu une somme devinee.
    * ⚠️ CE QUE LA PHRASE NE DIT PAS : le frais de reseau REEL (non mesure ici). Elle dit ce que l app verifie. */
-  const sansSeed = !!(p && p.type === 'ACTION');
+  const sansSeed = paireSansGraineEth(p);
   const avoir = (p && Number(CHAINE) === 8453)
     ? enTexte(phraseAvoirPourNaitre(besoinNaissance({ fraisWei: FRAIS_OUVERTURE_WEI,
       seedWei: sansSeed ? 0n : CREATE_FEE_WEI_FLOOR, gazWei: GAZ_NAISSANCE_WEI }), { auMoins: !sansSeed })) + ' '
@@ -17251,6 +17251,15 @@ function montrerFundWalletCourt() {
  *   ⛔ DEUX CHIFFRES POUR UNE SEULE QUESTION, C EST LE MOTIF QUI REVIENT TOUTE LA NUIT. On en garde
  *     UN, exporte ici, lu aux deux endroits. */
 const GAZ_NAISSANCE_WEI = 500000000000000n; /* ~0,0005 ETH — Create + Launch */
+/** ⛔⛔ 2026-10-09 — QUELLE PAIRE NE DEMANDE AUCUNE GRAINE EN ETH. MESURE (banc-naissance-7030-fork, fork Base, toutes les etapes
+ *   status 1) : une naissance appariee a l USDC coute en ETH EXACTEMENT 0,001 (createPaid 0,0007 + inscription 0,0003) ; la caution
+ *   du createur part en USDC (1 000 000 unites). Les actions : mesure du 2026-09-25 (`ethRequis = 0`). La garde exigeait pourtant
+ *   frais + ~1 $ d ETH + gaz (>= 0,0018) pour l USDC.
+ *   ⛔ SEULEMENT LES TYPES MESURES : ACTION et STABLE. cbBTC (MAJEUR) et une adresse saisie ne le sont pas — ils gardent la graine :
+ *   exiger trop se repare, exiger trop peu ferait echouer la transaction APRES la signature. */
+function paireSansGraineEth(p) {
+  return !!(p && (p.type === 'ACTION' || p.type === 'STABLE'));
+}
 async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null } = {}) {
   const gasBuf = GAZ_NAISSANCE_WEI;
   /* ⛔⛔⛔ LE FRAIS VIENT DE L APPELANT QUAND IL LE CONNAIT — ET SANS CA, UN REPLI DELIBERE DU CODE
@@ -18312,7 +18321,8 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   if (firstVal && BigInt(firstVal.value) < feeWeiBat) {
     try { console.warn('[Instant Birth] first value leg < open fee', String(firstVal.value), String(feeWeiBat)); } catch (_) {}
   }
-  const seedPourGate = plan.quoteEthWei || plan.ethRequis || CREATE_FEE_WEI_FLOOR;
+  /* ⛔ 2026-10-09 : `||` changeait un `ethRequis` de 0 (aucune graine) en plancher. Une paire sans graine ETH passe 0n. */
+  const seedPourGate = paireSansGraineEth(paireChoisie) ? 0n : (plan.quoteEthWei || plan.ethRequis || CREATE_FEE_WEI_FLOOR);
   const pf = await preflightInstantBirthEthFixe({ e, seedWei: seedPourGate });
   if (!pf.ok) return 'STOP';
   /* Prefer eth_call on our RPC before Rabby — show refuse early when sim fails. */
@@ -18570,7 +18580,7 @@ async function creerBlock() {
      *     pairs against native ETH » — le seed n existe que pour l ETH.
      *   ⛔ On passe `0n` EXPLICITEMENT, et non `null` : la nuance est justement ce que le preflight
      *     vient d apprendre a distinguer. */
-    const sansSeed = !!(paireChoisie && paireChoisie.type === 'ACTION');
+    const sansSeed = paireSansGraineEth(paireChoisie);
     /* ⛔⛔⛔ ON PASSE LE FRAIS EFFECTIF, celui que le repli du tip 2356 vient peut-etre d abaisser
      *      a `CREATE_FEE_WEI_FLOOR` quelques lignes plus haut. Sans ca, le preflight repartait de
      *      `FRAIS_OUVERTURE_WEI` en dur et REFUSAIT la creation que l app venait d annoncer
