@@ -715,7 +715,15 @@ const RPC_ARCHIVE = (() => {
 })();
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
-const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0 };
+const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {} };
+/* ⛔ 2026-10-09 (prod, 20 h UTC) : budget du jour EPUISE (10 000 / 10 000) et 549 erreurs — mais rien ne disait QUI avait depense
+ *   (l histoire profonde ? le dernier repli de rpcServeur, qui prend TOUTE methode quand base.org et publicnode refusent ?) ni de
+ *   QUEL type etaient les erreurs : `derniereErreur` et `relances` vivaient en memoire et chaque redeploiement les jetait.
+ *   `par` = appels par « origine methode » (relances comprises) ; `erreursPar` = erreurs finales par classe. Tout est sauve. */
+const classeErreurArchive = (m) => /rate|limit|429/i.test(m) ? 'debit' : /timeout|aborted/i.test(m) ? 'delai' : /\b5\d\d\b/.test(m) ? '5xx'
+  : /fetch failed|ECONNRESET|ENOTFOUND|EAI_AGAIN/i.test(m) ? 'reseau' : 'autre';
+const compteurEntier = (o) => (o && typeof o === 'object' && !Array.isArray(o))
+  ? Object.fromEntries(Object.entries(o).filter(([k, v]) => k.length <= 60 && Number.isSafeInteger(v) && v >= 0)) : {};
 /* ⛔ 2026-10-09 : le compteur du jour vivait en memoire — chaque redeploiement (5 ce jour-la) le remettait a 0, et le plafond ne
  *   bornait plus rien. Il est garde sur le volume (relu s il est du MEME jour UTC), sauve tous les 25 appels. */
 const FICHIER_ARCHIVE_COMPTE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
@@ -723,21 +731,29 @@ const FICHIER_ARCHIVE_COMPTE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (exists
 try {
   if (FICHIER_ARCHIVE_COMPTE && existsSync(FICHIER_ARCHIVE_COMPTE)) {
     const x = JSON.parse(readFileSync(FICHIER_ARCHIVE_COMPTE, 'utf8'));
-    if (x && x.jour === new Date().toISOString().slice(0, 10)) for (const k of ['appels', 'refusBudget', 'erreurs', 'servis']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
-    if (x && x.jour === new Date().toISOString().slice(0, 10)) archiveCompte.jour = x.jour;
+    if (x && x.jour === new Date().toISOString().slice(0, 10)) {
+      for (const k of ['appels', 'refusBudget', 'erreurs', 'servis', 'relances']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
+      if (typeof x.derniereErreur === 'string') archiveCompte.derniereErreur = x.derniereErreur.slice(0, 80);
+      archiveCompte.par = compteurEntier(x.par); archiveCompte.erreursPar = compteurEntier(x.erreursPar);
+      archiveCompte.jour = x.jour;
+    }
   }
 } catch { /* fichier illisible : on compte depuis zero, et c est le seul cas */ }
 function sauverArchiveCompte() {
   if (!FICHIER_ARCHIVE_COMPTE) return;
   try { writeFileSync(FICHIER_ARCHIVE_COMPTE + '.tmp', JSON.stringify(archiveCompte)); renameSync(FICHIER_ARCHIVE_COMPTE + '.tmp', FICHIER_ARCHIVE_COMPTE); } catch { /* le volume refuse : on reessaiera */ }
 }
-function lecteurArchive() {
+function lecteurArchive(origine = 'repli') {
   const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
   return async (methode, params) => {
     const j = new Date().toISOString().slice(0, 10);
-    if (archiveCompte.jour !== j) { archiveCompte.jour = j; archiveCompte.appels = 0; archiveCompte.refusBudget = 0; archiveCompte.erreurs = 0; archiveCompte.servis = 0; }
-    if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
+    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {} });
+    /* les refus au-dela du plafond sont la DEMANDE NON SERVIE — la seule mesure de « le plafond suffit-il ». Une fois le plafond
+     *   atteint, `appels` ne bouge plus : sans ce sauvetage, ces refus etaient perdus au redeploiement (prod : 53 -> 51). */
+    if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; if (archiveCompte.refusBudget % 25 === 0) sauverArchiveCompte(); throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
+    const cle = origine + ' ' + String(methode).slice(0, 40);
     archiveCompte.appels++;
+    archiveCompte.par[cle] = (archiveCompte.par[cle] || 0) + 1;
     if (archiveCompte.appels % 25 === 0) sauverArchiveCompte();
     /* ⛔ 2026-10-09 (prod : 19 erreurs sur 1 733 appels = exactement les 14 + 5 pages refusees du rattrapage, nombre qui varie d une
      *   passe a l autre -> transitoire) : un refus de DEBIT, un delai ou un 5xx est relance deux fois (pause 1 s puis 2 s), chaque
@@ -746,10 +762,15 @@ function lecteurArchive() {
       try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) {
         const m = String((e && e.message) || e);
         if (essai >= 2 || !/rate|limit|429|5\d\d|timeout|aborted|temporar|unavailable|ECONNRESET|fetch failed/i.test(m)
-          || archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.erreurs++; archiveCompte.derniereErreur = masquerCle(m).slice(0, 80); throw e; }
+          || archiveCompte.appels >= ARCHIVE_MAX_JOUR) {
+          archiveCompte.erreurs++; archiveCompte.derniereErreur = masquerCle(m).slice(0, 80);
+          const c = classeErreurArchive(m); archiveCompte.erreursPar[c] = (archiveCompte.erreursPar[c] || 0) + 1;
+          throw e;
+        }
         archiveCompte.relances = (archiveCompte.relances || 0) + 1;
         await new Promise((ok) => setTimeout(ok, 1000 * (essai + 1)));
         archiveCompte.appels++;
+        archiveCompte.par[cle] = (archiveCompte.par[cle] || 0) + 1;
       }
     }
   };
@@ -762,7 +783,7 @@ function lecteurArchive() {
 const PROFONDEUR_PUBLICNODE = 9000;
 let archiveDirect = null;
 async function rpcHistoire(methode, params) {
-  if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive(); return archiveDirect(methode, params); }
+  if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive('histoire'); return archiveDirect(methode, params); }
   return rpcServeur(methode, params);
 }
 /** Un message de noeud peut recopier l URL qu il a recue : chaque segment du chemin du noeud d archive est masque avant publication. */
@@ -777,7 +798,7 @@ function libelleNoeud(url) {
 }
 let repliServeur = null;
 async function rpcServeur(methode, params) {
-  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, [...REPLIS_LOGS_SERVEUR.map((u) => lecteurUrl(u)), ...(RPC_ARCHIVE ? [lecteurArchive()] : [])]);
+  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, [...REPLIS_LOGS_SERVEUR.map((u) => lecteurUrl(u)), ...(RPC_ARCHIVE ? [lecteurArchive('repli')] : [])]);
   return repliServeur(methode, params);
 }
 async function rpcServeurBrut(methode, params) {

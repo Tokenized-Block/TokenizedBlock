@@ -59,6 +59,14 @@ await cas('A2b le compteur du jour SURVIT a un redemarrage (meme jour) et repart
   assert.ok(disque.has('/data/archive-compte.json'), 'le compteur n a pas ete sauve au 25e appel');
   const m2 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], disque);
   assert.equal(m2.archiveCompte.appels, 25, 'un redemarrage a remis le compteur a zero');
+  /* au-dela du plafond, `appels` ne bouge plus : les REFUS doivent etre sauves eux aussi (prod : 53 refus -> 51 apres redeploiement) */
+  const plein = new Map();
+  const p1 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '1' }, false, async () => [], plein);
+  const lp = p1.lecteurArchive();
+  await lp('eth_getLogs', [{}]);
+  for (let k = 0; k < 25; k++) await assert.rejects(lp('eth_getLogs', [{}]), /daily budget/);
+  assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '1' }, false, async () => [], plein).archiveCompte.refusBudget, 25,
+    'les refus au-dela du plafond ont ete perdus au redemarrage');
   const vieux = new Map([['/data/archive-compte.json', JSON.stringify({ jour: '2000-01-01', appels: 9999, servis: 9999, erreurs: 0, refusBudget: 0 })]]);
   assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], vieux).archiveCompte.appels, 0, 'le compteur d un autre jour a ete repris');
 });
@@ -78,6 +86,38 @@ await cas('A3b un refus TRANSITOIRE (debit) est relance et finit servi ; un refu
   await assert.rejects(d.lecteurArchive()('eth_getLogs', [{}]), /invalid params/);
   assert.equal(k, 1, 'un refus definitif a ete relance');
 });
+await cas('A3c QUI depense et QUELLES erreurs : par origine+methode (relances comprises), erreurs par classe — et ca survit au redemarrage', async () => {
+  /* prod 2026-10-09 : 10 000 / 10 000 et 549 erreurs, sans savoir qui avait depense ni de quel type */
+  const disque = new Map();
+  let appelsCall = 0;
+  const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async (methode) => {
+    if (methode === 'eth_call' && ++appelsCall === 1) throw new Error('HTTP 429 over rate limit');
+    if (methode === 'eth_getBlockByNumber') throw new Error('upstream 503 unavailable');
+    if (methode === 'eth_getCode') throw new Error('invalid params');
+    return [];
+  }, disque);
+  const h = m.lecteurArchive('histoire'), r = m.lecteurArchive('repli');
+  for (let x = 0; x < 3; x++) await h('eth_getLogs', [{}]);
+  await r('eth_call', [{}]); /* 1er essai 429 -> relance -> servi */
+  await assert.rejects(r('eth_getBlockByNumber', []), /503/); /* 3 essais, puis erreur finale « 5xx » */
+  await assert.rejects(r('eth_getCode', []), /invalid params/); /* definitif : 1 essai, « autre » */
+  assert.deepEqual(m.archiveCompte.par, { 'histoire eth_getLogs': 3, 'repli eth_call': 2, 'repli eth_getBlockByNumber': 3, 'repli eth_getCode': 1 });
+  assert.equal(Object.values(m.archiveCompte.par).reduce((a, b) => a + b, 0), m.archiveCompte.appels, 'par ne couvre pas tous les appels');
+  assert.deepEqual(m.archiveCompte.erreursPar, { '5xx': 1, autre: 1 });
+  assert.equal(m.archiveCompte.derniereErreur, 'invalid params');
+  /* redemarrage le meme jour : tout est relu (le sauvetage a lieu tous les 25 appels — on le force ici) */
+  for (let x = 0; x < 16; x++) await h('eth_getLogs', [{}]);
+  assert.equal(m.archiveCompte.appels, 25);
+  const m2 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], disque);
+  assert.equal(m2.archiveCompte.par['histoire eth_getLogs'], 19);
+  assert.deepEqual(m2.archiveCompte.erreursPar, { '5xx': 1, autre: 1 });
+  assert.equal(m2.archiveCompte.derniereErreur, 'invalid params');
+  assert.equal(m2.archiveCompte.relances, 3);
+  /* un fichier corrompu ne fait pas entrer de cle non entiere */
+  const sale = new Map([['/data/archive-compte.json', JSON.stringify({ jour: new Date().toISOString().slice(0, 10), appels: 1, par: { ok: 2, mal: 'x', neg: -1 }, erreursPar: [1] })]]);
+  const m3 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], sale);
+  assert.deepEqual(m3.archiveCompte.par, { ok: 2 }); assert.deepEqual(m3.archiveCompte.erreursPar, {});
+});
 await cas('A4 libelleNoeud publie l hote, jamais le chemin ; masquerCle retire la cle', async () => {
   const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP });
   assert.equal(m.libelleNoeud(URL_CDP), 'api.developer.coinbase.com (path hidden)');
@@ -87,7 +127,8 @@ await cas('A4 libelleNoeud publie l hote, jamais le chemin ; masquerCle retire l
 });
 
 await cas('B1 cablage : archive APRES publicnode ; la sonde et /sante ne publient que des libelles', async () => {
-  assert.match(nu, /avecRepliLogs\(rpcServeurBrut, \[\.\.\.REPLIS_LOGS_SERVEUR\.map\(\(u\) => lecteurUrl\(u\)\), \.\.\.\(RPC_ARCHIVE \? \[lecteurArchive\(\)\] : \[\]\)\]\)/);
+  assert.match(nu, /avecRepliLogs\(rpcServeurBrut, \[\.\.\.REPLIS_LOGS_SERVEUR\.map\(\(u\) => lecteurUrl\(u\)\), \.\.\.\(RPC_ARCHIVE \? \[lecteurArchive\('repli'\)\] : \[\]\)\]\)/);
+  assert.match(nu, /archiveDirect = lecteurArchive\('histoire'\);/, 'l histoire directe doit porter son origine');
   assert.match(nu, /res\[libelleNoeud\(url\)\] = n;/);
   assert.ok(!/res\[url\.replace\(/.test(nu), 'la sonde publie encore l URL brute');
   assert.match(nu, /archive: \{ pose: Boolean\(RPC_ARCHIVE\), noeud: RPC_ARCHIVE \? libelleNoeud\(RPC_ARCHIVE\) : null, maxJour: ARCHIVE_MAX_JOUR, \.\.\.archiveCompte \}/);

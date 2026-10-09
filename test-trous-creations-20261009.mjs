@@ -69,7 +69,7 @@ await cas('B1 persistance, graine unique, /sante', async () => {
   assert.match(nu, /trousRelus: trousRelus\.slice\(-10\)/);
 });
 await cas('B2 l histoire profonde va DIRECTEMENT au noeud d archive (mesure : la chaine base.org 429 -> publicnode 403 figeait tout)', async () => {
-  assert.match(nu, /async function rpcHistoire\(methode, params\) \{\s+if \(RPC_ARCHIVE && methode === 'eth_getLogs'\) \{ if \(!archiveDirect\) archiveDirect = lecteurArchive\(\); return archiveDirect\(methode, params\); \}\s+return rpcServeur\(methode, params\);/);
+  assert.match(nu, /async function rpcHistoire\(methode, params\) \{\s+if \(RPC_ARCHIVE && methode === 'eth_getLogs'\) \{ if \(!archiveDirect\) archiveDirect = lecteurArchive\('histoire'\); return archiveDirect\(methode, params\); \}\s+return rpcServeur\(methode, params\);/);
   assert.match(nu, /const r = await listerCreations\(\{ rpc: rpcHistoire, blocs: haut - t\.de, fin: haut \}\);/);
   assert.match(nu, /const lecteur = tete - haut > PROFONDEUR_PUBLICNODE \? rpcHistoire : rpcServeur;/);
   assert.match(nu, /if \(!Array\.isArray\(logs\)\) throw new Error\('not a list'\);/);
