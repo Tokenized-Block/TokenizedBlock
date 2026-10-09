@@ -679,6 +679,11 @@ dialog.bcPop>.carte{background-color:rgb(var(--fondRgb));backdrop-filter:none;ma
 /* 2026-10-09 (Phil : « optimise l UX du panneau sur PC et sur tel ») : un peu plus large sur grand ecran (tuiles a 3 colonnes sans
  *   coupure) ; sur telephone, les 4 puces de l en-tete en 2x2 (a 4 colonnes le prix d un petit block finissait en « $0.0000… »). */
 @media (min-width:1100px){dialog.bcPop{width:min(480px,calc(100% - 24px))}}
+/* ⛔ 2026-10-09 (Phil, capture : « le panel mange l info » — les valeurs des Biggest blocks coupees DERRIERE le panneau) : sur grand
+ *   ecran la page se POUSSE de la largeur du panneau au lieu d etre recouverte ; replie sur son en-tete, il ne pousse rien. Sous
+ *   1100 px la page deviendrait trop etroite : le panneau reste par-dessus, comme avant. */
+@media (min-width:1100px){body.bcOuvert{padding-right:calc(min(480px,100% - 24px) + 24px);box-sizing:border-box}
+  body.bcOuvert:has(dialog.bcPop.bcReduit){padding-right:0}}
 @media (max-width:440px){.bcChips{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* sur telephone, la carte du block mangeait la feuille (mesure 375 px : avatar + nom + adresse + puces = ~330 px sur 493) et les
  *   gestes et le chat restaient sous la ligne de flottaison : avatar 64 px, nom 18 px, adresse sur une ligne, raster plus bas. */
@@ -2717,7 +2722,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-7030-sans-graine" hidden>Build <code>20261009-7030-sans-graine</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-gm-panneau-page-poussee" hidden>Build <code>20261009-gm-panneau-page-poussee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -7783,6 +7788,38 @@ async function envoyer() {
   /* ⛔ LES ISSUES SONT PARTAGEES PAR LES TROIS GESTES : c est le meme code qui envoie. Les decliner
    *   par geste multiplierait les noms sans rien apprendre de plus que `*_clic` ne dit deja. */
   try { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_propos'); if (s) etape(s); } catch (_) {}
+  const r = await envoyerCadeauEtFrais(p);
+  envoiEnCours = false;
+  /* ⛔ L ISSUE EST COMPTEE, ET SEULEMENT SUR UN ETAT CONNU. `CONFIRME` est le seul qui prouve que
+   *   la chaine a accepte ; `REFUSE_PAR_UTILISATEUR` est le seul qui prouve un refus deliberé. Tout
+   *   le reste (EN_ATTENTE, ANNULE_SUR_CHAINE, ECHEC_ENVOI) reste NON COMPTE plutot que range de
+   *   force d un cote : c est la meme discipline des trois issues que `messageEnvoi`. */
+  try {
+    if (r.etat === 'CONFIRME') { const s = etapeDuGeste(gesteEnvoiCourant, 'ok'); if (s) etape(s); }
+    else if (r.etat === 'REFUSE_PAR_UTILISATEUR') { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_refus'); if (s) etape(s); }
+  } catch (_) {}
+  e.className = 'note' + (r.etat === 'CONFIRME' ? ' wOk' : r.etat === 'EN_ATTENTE' || r.etat === 'ENVOYE' ? '' : ' wKo');
+  e.innerHTML = enTexte(MOTS_ISSUE_ENVOI(r)) + (r.hash
+    ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>'
+    : '');
+  if (r.hash) { $('#sMontant').value = ''; void majWallet(); } else majRecap();
+}
+/** La phrase d issue d un envoi — PARTAGEE par l onglet Wallet et le geste du panneau (une seule formulation). */
+function MOTS_ISSUE_ENVOI(r) {
+  const mots = {
+    CONFIRME: 'Sent and confirmed on chain.',
+    ENVOYE: 'Sent.',
+    EN_ATTENTE: 'Sent, not confirmed yet — do not send it again.',
+    ANNULE_SUR_CHAINE: 'Reverted on chain' + (r.horsGaz ? ' (it ran out of gas)' : '') + ': the fee was paid, nothing moved.',
+  };
+  return mots[r.etat] || r.pourquoi || r.etat;
+}
+/**
+ * ⛔⛔ 2026-10-09 — LE COEUR DE L ENVOI, EXTRAIT TEL QUEL de `envoyer()` pour etre PARTAGE avec le geste GM du panneau : un second
+ *   chemin d envoi recopie divergerait au premier correctif (motif deja paye dans ce depot). Le cadeau, puis la ligne de frais.
+ * @param {{ tx: object, txFrais: object|null }} p
+ */
+async function envoyerCadeauEtFrais(p) {
   let r;
   /* ⛔⛔ AVEC UNE LIGNE DE FRAIS, ON TENTE LE LOT : une seule signature pour le cadeau ET les
    *     0,1 %. L ordre dans le lot place l ami EN PREMIER.
@@ -7819,26 +7856,7 @@ async function envoyer() {
       catch (_) { /* notre part seulement : silencieux pour l expediteur */ }
     }
   }
-  envoiEnCours = false;
-  /* ⛔ L ISSUE EST COMPTEE, ET SEULEMENT SUR UN ETAT CONNU. `CONFIRME` est le seul qui prouve que
-   *   la chaine a accepte ; `REFUSE_PAR_UTILISATEUR` est le seul qui prouve un refus deliberé. Tout
-   *   le reste (EN_ATTENTE, ANNULE_SUR_CHAINE, ECHEC_ENVOI) reste NON COMPTE plutot que range de
-   *   force d un cote : c est la meme discipline des trois issues que `messageEnvoi`. */
-  try {
-    if (r.etat === 'CONFIRME') { const s = etapeDuGeste(gesteEnvoiCourant, 'ok'); if (s) etape(s); }
-    else if (r.etat === 'REFUSE_PAR_UTILISATEUR') { const s = etapeDuGeste(gesteEnvoiCourant, 'sign_refus'); if (s) etape(s); }
-  } catch (_) {}
-  const mots = {
-    CONFIRME: 'Sent and confirmed on chain.',
-    ENVOYE: 'Sent.',
-    EN_ATTENTE: 'Sent, not confirmed yet — do not send it again.',
-    ANNULE_SUR_CHAINE: 'Reverted on chain' + (r.horsGaz ? ' (it ran out of gas)' : '') + ': the fee was paid, nothing moved.',
-  };
-  e.className = 'note' + (r.etat === 'CONFIRME' ? ' wOk' : r.etat === 'EN_ATTENTE' || r.etat === 'ENVOYE' ? '' : ' wKo');
-  e.innerHTML = enTexte(mots[r.etat] || r.pourquoi || r.etat) + (r.hash
-    ? ' <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(r.hash) + '" target="_blank" rel="noopener">See it on the explorer</a>'
-    : '');
-  if (r.hash) { $('#sMontant').value = ''; void majWallet(); } else majRecap();
+  return r;
 }
 
 function basculer(sel) {
@@ -22545,13 +22563,89 @@ async function bcLireActivite(a, sym, mk) {
  * que la fiche (un vrai transfert d un fragment du block a un ami, avec sa ligne de frais a part). Le salut a besoin de la fiche de
  * CE block : on la remplit par le clic de la Map, et la colonne se rouvre le temps du formulaire d envoi.
  * ⛔ Un block absent de la Map n a pas de fiche : le salut renvoie alors a sa page, il ne fait pas semblant. */
-function bcSaluer(a, sym, mot) {
-  const el = [...document.querySelectorAll('.bloc[data-block]')].find((e) => String(e.getAttribute('data-block')).toLowerCase() === a);
-  if (!el) { bcMessage('Panel', '', mot + ' is sent from the block’s own page: ' + (sym || court(a)) + ' is not on the Map right now.'); bcVue('chat'); try { void ouvrirProfil(a, null); } catch (_) {} return; }
-  bc.ficheJusqua = Date.now() + 1500; /* la colonne doit RESTER ouverte : c est elle qui porte le formulaire d envoi */
-  try { allerA('map'); } catch (_) {}
-  el.click();
-  try { ouvrirCote(); ouvrirSalut(mot); } catch (_) {}
+/* ⛔⛔ 2026-10-09 (Phil, capture : « les boutons GM GN Gmeow ne fonctionnent pas sur le panel, n envoient pas de tx du mot ») —
+ *   MESURE en navigateur : le clic ouvrait la fiche (#cote) SOUS le panneau (recouverte), le formulaire d envoi de l onglet Wallet
+ *   restait a 0x0 px, et le refus « Connect your wallet first » s ecrivait dans une note invisible. Et le MOT n etait jamais ecrit :
+ *   il ne servait que de placeholder. Le geste se fait maintenant DANS le panneau, dans le fil :
+ *     · le transfert d un fragment du block a un ami, avec le MOT dans le memo (encodeTransferAvecMemo — public, pour toujours) ;
+ *     · la ligne des 0,1 % a part, ECRITE avant la signature (fraisDuGeste / phraseFraisDuGeste, le montage choisi par Phil) ;
+ *     · la case de consentement sur mainnet (jamais pre-cochee), puis LE WALLET signe — envoyerCadeauEtFrais, le MEME coeur que
+ *       l onglet Wallet (lot atomique si le wallet sait, sinon cadeau puis frais). */
+async function bcSaluer(a, sym, mot) {
+  mot = SALUTS.includes(mot) ? mot : 'GM';
+  const nom = sym || court(a);
+  bcVue('chat');
+  try { const e = etapeDuGeste('gm', 'clic'); if (e) etape(e); } catch (_) {}
+  const m = bcMessage('You · ' + mot, 'moi', mot + ' to a friend with ' + nom + ' — a real transfer of this block, with the word « ' + mot + ' » written on chain.');
+  if (!compte) {
+    bcEtape(m, 'Connect your wallet first — it signs, this page never does.');
+    bcBoutons(m, [['Connect wallet', async () => { try { await connecter(); } catch (_) {} if (compte) void bcSaluer(a, sym, mot); else bcEtape(m, texteRefusConnexion('The wallet did not connect — nothing was shared.'), 'non'); }]]);
+    try { const e = etapeDuGeste('gm', 'refus_wallet'); if (e) etape(e); } catch (_) {}
+    return;
+  }
+  let solde = null, dec = null;
+  try { [solde, dec] = await Promise.all([bcSolde(a, compte), bcDecimales(a)]); } catch (_) { solde = null; }
+  if (solde === null || !Number.isInteger(dec)) { bcEtape(m, 'Your balance of ' + nom + ' could not be read — nothing was prepared. Try again in a moment.', 'non'); return; }
+  if (!(solde > 0n)) {
+    bcEtape(m, 'You hold none of ' + nom + ' — a ' + mot + ' sends a fragment of it. Buy a little first.', 'non');
+    bcBoutons(m, [['Buy ' + nom, () => { bc.cote = 'buy'; bcVue('trade'); bcRepeindre(); }]]);
+    try { const e = etapeDuGeste('gm', 'refus_solde'); if (e) etape(e); } catch (_) {}
+    return;
+  }
+  /* le formulaire, dans la carte : destinataire + montant (1 unite par defaut) + consentement */
+  const champ = (attrs) => { const i = bcEl('input', attrs); i.style.cssText = 'width:100%;box-sizing:border-box;margin-top:6px'; return i; };
+  const dest = champ({ placeholder: 'Friend wallet 0x… (whole address)', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Who receives the ' + mot });
+  const montant = champ({ value: '1', inputmode: 'decimal', 'aria-label': 'How much ' + nom });
+  const consent = bcEl('input', { type: 'checkbox' });
+  const lblConsent = bcEl('label', { cls: 'note' }, [consent, document.createTextNode(' I checked the address — this is a real transfer on ' + RESEAUX[CHAINE].nom + '.')]);
+  const recap = bcEl('p', { cls: 'note' });
+  m.append(dest, montant, ...(CHAINE === 8453 ? [lblConsent] : []), recap);
+  const preparer = () => {
+    const d = dest.value.trim();
+    if (!d) return { ko: '' };
+    if (!ADRESSE.test(d)) return { ko: 'Not an address. Paste it whole — this page never completes or corrects one.' };
+    if (d.toLowerCase() === a) return { ko: 'That is the ' + nom + ' contract itself. Tokens sent there are usually lost.' };
+    const q = montantHumain(montant.value, dec);
+    if (q.etat !== 'OK') return { ko: q.etat === 'VIDE' ? '' : q.pourquoi };
+    if (q.valeur === 0n) return { ko: 'Zero is not a send.' };
+    const fg = fraisDuGeste({ montant: q.valeur });
+    if (q.valeur + (fg.etat === 'AVEC_FRAIS' ? fg.frais : 0n) > solde) return { ko: 'More than you hold (' + formaterUnites(solde, dec) + ' ' + nom + ', fee line included).' };
+    const memo = validerMemo(mot);
+    if (memo.etat !== 'OK') return { ko: memo.pourquoi || 'the word could not be encoded' };
+    return { tx: { to: a, data: encodeTransferAvecMemo(d, q.valeur, memo.texte), value: '0x0' },
+      txFrais: fg.etat === 'AVEC_FRAIS' ? { to: a, data: encodeTransfer(FEE_WALLET, fg.frais), value: '0x0' } : null, fg, valeur: q.valeur, d };
+  };
+  const b = bcEl('button', { type: 'button', cls: 'bouton', text: 'Sign the ' + mot });
+  b.disabled = true;
+  const maj = () => {
+    const p = preparer();
+    if (p.ko !== undefined) { recap.className = 'note' + (p.ko ? ' wKo' : ''); recap.textContent = p.ko || 'Paste who receives it.'; b.disabled = true; return p; }
+    recap.className = 'note';
+    recap.textContent = 'You send ' + formaterUnites(p.valeur, dec) + ' ' + nom + ' to ' + court(p.d) + ' with the word « ' + mot + ' » — public, for good. '
+      + (p.fg ? phraseFraisDuGeste(p.fg, (v) => formaterUnites(v, dec) + ' ' + nom) : '') + ' Your wallet shows the same before you sign.';
+    b.disabled = CHAINE === 8453 && !consent.checked;
+    return p;
+  };
+  for (const x of [dest, montant, consent]) x.addEventListener('input', maj);
+  consent.addEventListener('change', maj);
+  maj();
+  b.addEventListener('click', async () => {
+    const p = maj();
+    if (p.ko !== undefined || b.disabled) return;
+    b.disabled = true;
+    try { const s = etapeDuGeste('gm', 'sign_propos'); if (s) etape(s); } catch (_) {}
+    bcEtape(m, 'Opening your wallet — check what it shows before you sign.');
+    let r;
+    try { r = await envoyerCadeauEtFrais(p); } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    try {
+      if (r.etat === 'CONFIRME') { const s = etapeDuGeste('gm', 'ok'); if (s) etape(s); }
+      else if (r.etat === 'REFUSE_PAR_UTILISATEUR') { const s = etapeDuGeste('gm', 'sign_refus'); if (s) etape(s); }
+    } catch (_) {}
+    bcEtape(m, MOTS_ISSUE_ENVOI(r) + (r.hash ? ' ' + RESEAUX[CHAINE].explorateur + '/tx/' + r.hash : ''), r.etat === 'CONFIRME' ? 'oui' : r.hash ? '' : 'non');
+    if (!r.hash) b.disabled = false;
+  });
+  m.append(b);
+  dest.focus();
 }
 function bcPeindreActions(a, sym) {
   const z = $('#bcActions'); if (!z) return;
@@ -23378,6 +23472,9 @@ bcChargerOps();
 bcPeindreOps();
 $('#bcOuvrir').addEventListener('click', () => bcOuvrirPop());
 $('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert'); } catch (_) {} });
+/* ⛔ 2026-10-09 : la page est POUSSEE quand le panneau est ouvert (grand ecran) — quelle que soit la facon dont il se ferme (Echap,
+ *   un autre code), elle doit reprendre sa largeur. */
+$('#bcPop').addEventListener('close', () => { try { document.body.classList.remove('bcOuvert'); } catch (_) {} });
 /* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
 /* ── LA RECHERCHE D UN BLOCK (en-tete du panneau) : un symbole, un nom exact ou une adresse entiere -> ce block s affiche ──
  * Les propositions (datalist) viennent de l index du Market (les plus echanges d abord) et du registre des actions. La resolution est

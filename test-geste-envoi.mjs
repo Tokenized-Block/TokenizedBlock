@@ -93,8 +93,10 @@ cas('⛔⛔ L ISSUE N EST COMPTEE QUE SUR UN ETAT CONNU', () => {
    *     comme LIBELLES. Elle confondait « le mot apparait a cote » et « cet etat est compte » —
    *     le meme travers qu une fenetre trop large a deja produit trois fois aujourd hui.
    *   ⇒ ON DECOUPE LE BLOC DE COMPTAGE, exactement, entre son debut et la table qui le suit. */
+  /* 2026-10-09 : la table des libelles est partie dans MOTS_ISSUE_ENVOI (partagee avec le geste du panneau) ; le bloc de comptage
+   *   finit maintenant au `catch` qui le ferme, juste avant la ligne d affichage. */
   const zone = trancheNue(brut, "if (r.etat === 'CONFIRME') { const s = etapeDuGeste",
-    'const mots = {', 'le bloc de comptage de l issue');
+    "e.className = 'note' + (r.etat === 'CONFIRME'", 'le bloc de comptage de l issue');
   assert.match(zone, /r\.etat === 'CONFIRME'/, 'le succes n est pas conditionne a CONFIRME');
   assert.match(zone, /REFUSE_PAR_UTILISATEUR/, 'le refus delibere n est pas distingue');
   assert.doesNotMatch(zone, /EN_ATTENTE|ANNULE_SUR_CHAINE/,

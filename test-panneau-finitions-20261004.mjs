@@ -177,9 +177,19 @@ ok(/if \(cible && Number\.isFinite\(cible\.fond\)\) \{ ctx\.fillStyle = 'hsl\(' 
   'C2 le FOND de la case du cerveau est une variable de la skin (panneau seulement) ; sans skin, la toile reste transparente comme avant');
 ok(/choisirBrain\(adr\); bcOuvrirPop\(\{ sansBasculer: true, vue: 'market', deplier: true \}\);/.test(html) && /if \(Date\.now\(\) > \(bc\.ficheJusqua \|\| 0\) && \$\('#bcPop'\)\.open && !\$\('#cote'\)\.hidden\) \$\('#bMasquer'\)\.click\(\);/.test(html),
   'C2 ouvrir un block sur la Map ouvre le panneau DEPLIE sur ce block et REFERME la fiche d info (le panneau la remplace) — seulement si le panneau est bien ouvert');
-ok(/bouton\('Open profile', \(\) => \{ try \{ void ouvrirProfil\(a, null\); \}/.test(bcSrc) && /try \{ ouvrirCote\(\); ouvrirSalut\(mot\); \} catch/.test(bcSrc) && /\[\['GM', 'GM 👋'\], \['BM', 'BM 🌙'\], \['GN', 'GN 😴'\], \['Gmeow', 'Gmeow 🐱'\]\]/.test(bcSrc),
-  'C2 le panneau reprend les gestes de la fiche : Buy, la page du block, et les quatre saluts — par les MEMES fonctions (ouvrirProfil, ouvrirSalut), rien de reecrit');
-ok(/if \(!el\) \{ bcMessage\('Panel', '', mot \+ ' is sent from the block’s own page: '/.test(bcSrc), 'C2 un salut sur un block absent de la Map renvoie a sa page et le dit');
+/* ⛔ 2026-10-09 (Phil, capture : « GM GN Gmeow ne fonctionnent pas sur le panel ») — MESURE : le salut renvoyait a la fiche, ouverte
+ *   SOUS le panneau, et le mot n etait jamais ecrit. Les deux assertions d avant epinglaient ce renvoi. Le salut se fait maintenant
+ *   DANS le fil : le MOT dans le memo, la ligne de frais a part, la case de consentement, et le MEME coeur d envoi que l onglet Wallet. */
+ok(/bouton\('Open profile', \(\) => \{ try \{ void ouvrirProfil\(a, null\); \}/.test(bcSrc) && /\[\['GM', 'GM 👋'\], \['BM', 'BM 🌙'\], \['GN', 'GN 😴'\], \['Gmeow', 'Gmeow 🐱'\]\]/.test(bcSrc)
+  && /bouton\(lib, \(\) => bcSaluer\(a, sym, mot\)\)/.test(bcSrc),
+  'C2 le panneau porte Buy, la page du block, et les quatre saluts (bcSaluer, dans le fil)');
+{
+  const s = bcSrc.slice(bcSrc.indexOf('async function bcSaluer(a, sym, mot) {'), bcSrc.indexOf('function bcPeindreActions(a, sym) {'));
+  ok(s.length > 200 && /encodeTransferAvecMemo\(d, q\.valeur, memo\.texte\)/.test(s) && /const memo = validerMemo\(mot\);/.test(s)
+    && /encodeTransfer\(FEE_WALLET, fg\.frais\)/.test(s) && /r = await envoyerCadeauEtFrais\(p\)/.test(s)
+    && /b\.disabled = CHAINE === 8453 && !consent\.checked;/.test(s) && !/ouvrirSalut\(|ouvrirCote\(/.test(s),
+  'C2 le salut du panneau ecrit le MOT on-chain (memo), separe la ligne de frais, exige le consentement sur mainnet, et part par le coeur partage — jamais par la fiche cachee');
+}
 ok(/\.mapZoom\{position:absolute;left:10px;right:auto;bottom:44px/.test(html) && /\.mapAide\{position:absolute;left:10px;bottom:10px/.test(html) && /\.mapZoom\.decale\{transform:none\}/.test(html) && /body\.bcOuvert \.mapZoom\{transform:translateY\(calc\(-62dvh - 14px\)\)\}/.test(html),
   'C2 les boutons de la Map (+ − recentrer rotation) sont A GAUCHE : le volet ne les masque plus ; sur telephone ils remontent au-dessus de la feuille');
 ok(/bcEl\('input', \{ type: 'range', min: '0', max: '359', step: '1'/.test(bcSrc) && /n = Math\.max\(0, Math\.min\(359, Math\.round\(Number\(c\.value\)\) \|\| 0\)\);/.test(bcSrc)
