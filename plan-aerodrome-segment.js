@@ -57,7 +57,10 @@ const ADR = /^0x[0-9a-fA-F]{40}$/;
  */
 export async function planAerodromeSegment({ rpc, chemin, devise, block, montant, compte,
   beneficiaireFrais, toleranceBps = 100n, maintenant = Date.now(),
-  fraisBps = FRAIS_INTERFACE_BPS_CL, sortieEthNatif = false } = {}) {
+  fraisBps = FRAIS_INTERFACE_BPS_CL, sortieEthNatif = false,
+  /* 2026-10-09 : une sortie COTEE par le quoter Aerodrome (un seul saut). Fournie, elle remplace l estimation au prix spot pour
+   *   le minimum — sur une pool fine, le spot surestime la sortie et le swap reverterait apres la signature. */
+  sortieCotee = null } = {}) {
   if (!Array.isArray(chemin) || !chemin.length) {
     return { etat: 'REFUSE', etape: 'forme', pourquoi: 'no path to build' };
   }
@@ -135,6 +138,16 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
     }
     courant = suivant;
   }
+  /* la sortie cotee (un saut) remplace l estimation au spot ; l ecart entre les deux EST l impact, dit dans le resume */
+  let impactBps = null;
+  const spot = courant;
+  if (sortieCotee !== null && sortieCotee !== undefined) {
+    let sc;
+    try { sc = BigInt(sortieCotee); } catch (_) { sc = 0n; }
+    if (chemin.length !== 1 || sc <= 0n) return { etat: 'REFUSE', etape: 'minimum', pourquoi: 'a quoted output is only used on a single hop, and must be above zero' };
+    impactBps = sc >= spot ? 0n : ((spot - sc) * 10000n) / spot;
+    courant = sc;
+  }
 
   const tol = BigInt(toleranceBps);
   const minPools = (courant * (10000n - tol)) / 10000n;
@@ -183,7 +196,8 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
       /* ⚠️ NOMME, parce qu un minimum derive d un prix spot n est pas un devis : il ignore la
        *   profondeur du carnet, et l annoncer comme une cotation serait une promesse qu on ne tient
        *   pas sur un gros montant. */
-      minimumParPrixSpot: true,
+      minimumParPrixSpot: impactBps === null,
+      ...(impactBps !== null ? { impactBps, sortieAuPrixPool: spot } : {}),
       retenue: swap.borne,
     },
     pourquoi: null,

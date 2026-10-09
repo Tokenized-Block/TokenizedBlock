@@ -2700,7 +2700,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-lot-atomique-skins" hidden>Build <code>20261009-lot-atomique-skins</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-impact-pool-meilleure" hidden>Build <code>20261009-impact-pool-meilleure</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -21707,6 +21707,21 @@ async function bcAvecWallet(m, suite) {
  *  - `lot` : le plan PRET exige l atomicite : ses appels partent ensemble ou pas du tout ;
  *  - `ethParDeballage` : la sortie est de l ETH natif obtenu en deballant du WETH sur le routeur Aerodrome (le wallet peut afficher
  *    « 0 WETH recu » : mesure avec Rabby le 2026-10-04, la transaction simulee sur la vraie chaine ne revertait pas). */
+/** L offre totale d une action, lue sur la chaine (une lecture a la fois par jeton ; echec = rien d affiche, on reessaie plus tard). */
+async function bcLireOffre(a) {
+  if (!bc.offres) bc.offres = new Map();
+  if (!bc.offresEnVol) bc.offresEnVol = new Set();
+  if (bc.offresEnVol.has(a)) return;
+  bc.offresEnVol.add(a);
+  try {
+    const [brut, dec] = await Promise.all([
+      bcAvecDelai(rpc('eth_call', [{ to: a, data: '0x' + selecteur('totalSupply()') }, 'latest']), 8000).then((r) => BigInt(String(r).slice(0, 66))).catch(() => null),
+      bcAvecDelai(bcDecimales(a), 8000).catch(() => null)]);
+    if (brut !== null && Number.isInteger(dec)) bc.offres.set(a, { brut, dec, t: Date.now() });
+  } finally { bc.offresEnVol.delete(a); }
+}
+/** Le seuil d avertissement d impact du panneau : le MEME que echange.js IMPACT_AVERTIR_BPS (proposition, a confirmer). */
+const BC_IMPACT_AVERTIR_BPS = 1000;
 function bcModeEnvoi(p) {
   const approbations = !!p && p.etat === 'APPROBATIONS';
   return { approbations, franchissement: !!p && p.via === 'planFranchissement', lot: !!p && !approbations && p.atomique === true,
@@ -21777,6 +21792,16 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     if (fApp !== null && Number.isFinite(fApp) && fApp > 0) bcEtape(m, 'App fee: ' + (fApp / 100) + ' %, inside the transaction.');
     else if (fApp === 0 && fMarche === null) bcEtape(m, 'No app fee on this route.');
     if (rs.recoitAuMoins !== undefined && rs.recoitAuMoins !== null) bcEtape(m, 'You receive at least ' + (decVers === null ? rs.recoitAuMoins + ' raw units of ' : bcUnites(rs.recoitAuMoins, decVers) + ' ') + vers.sym + '.');
+    /* ⛔ 2026-10-09 (MRVLc : 100 USDC payes 16 % au-dessus du prix de la pool, sans un mot a l ecran) : l impact lu dans le devis
+     *   est DIT avant la signature ; au-dela du seuil, en rouge. Absent (route sans mesure) ou non lu : rien n est affiche comme 0. */
+    /* le choix de pool est DIT (regle du proprietaire : jamais un choix de pool silencieux) */
+    if (typeof p.choix === 'string' && p.choix) bcEtape(m, p.choix + '.');
+    const impact = rs.impactBps !== undefined && rs.impactBps !== null && /^\d+$/.test(String(rs.impactBps)) ? Number(rs.impactBps) : null;
+    if (impact !== null) {
+      const fort = impact >= BC_IMPACT_AVERTIR_BPS;
+      bcEtape(m, 'Price impact: ' + (impact / 100).toFixed(1) + ' % below this pool’s current price (its own pool fee included).'
+        + (fort ? ' This pool is thin for this amount — a smaller amount loses less.' : ''), fort ? 'non' : '');
+    }
     const { approbations, franchissement, lot, ethParDeballage } = bcModeEnvoi(p);
     bcOpMaj(op, 'planned');
     /* un wallet n a souvent AUCUN prix pour un block frais : il compare alors l entree a une sortie « sans valeur » et alerte
@@ -22674,6 +22699,18 @@ function bcPeindre(snap) {
     if (Number(mk.volume24hUsd) > 0) ligne('Volume 24 h', usdCourt(mk.volume24hUsd));
     if (mk.trades24h !== null && mk.trades24h !== undefined) ligne('Trades 24 h', String(mk.trades24h));
     if (Number(mk.liquiditeUsd) > 0) ligne('Liquidity', usdCourt(mk.liquiditeUsd));
+  }
+  /* ⛔ 2026-10-09 (post public sur MRVLc ; mesure : il n existe que 6,04 MRVLc, ~1 800 $ au prix de la pool) : pour une action, l offre
+   *   TOTALE est dite — quand toute l action vaut moins qu un achat, aucune pool ne peut etre profonde. Lue sur la chaine
+   *   (totalSupply + decimals), relue au plus toutes les 10 min ; non lue = la tuile n apparait pas (jamais « 0 »). */
+  if (ACTIONS_PAR_ADR.has(a)) {
+    const su = bc.offres && bc.offres.get(a);
+    if (!su || Date.now() - su.t > 600000) void bcLireOffre(a);
+    if (su && su.brut !== null && su.dec !== null) {
+      const unites = Number(bcDecimal(su.brut, su.dec));
+      const v = mk && Number(mk.prixUsd) > 0 ? unites * Number(mk.prixUsd) : null;
+      ligne('All that exists', unites.toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' ' + (sym || '') + (v !== null && Number.isFinite(v) ? ' ≈ ' + usdCourt(v) : ''));
+    }
   }
   const cot = bcCotation(a);
   if (cot && cot.ok) ligne('Quoted in', cot.sym);

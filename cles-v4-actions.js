@@ -11,6 +11,12 @@
  *   le poolId et refuse tout log altere. Meme regle que cles-v4-mesurees.js (OUSD).
  * ⛔ BORNES : un instantane de l EXISTENCE de la pool (immuable) ; la profondeur citee est celle du jour et la fiche re-lit la pool
  *   avant tout frais. Aucune promesse d execution : le quoter simule, la porte de glissement refuse une pool videe.
+ * ⛔⛔ 2026-10-09 — LES MONTANTS « ~X $ d USDC » DES COMMENTAIRES CI-DESSOUS NE SONT PAS UNE PROFONDEUR, ne pas les citer.
+ *   Le PoolManager v4 detient l USDC de TOUTES les pools : un solde lu ne dit rien d UNE pool. Mesure du 2026-10-09 (quoter, bloc
+ *   ~52 380 279) : MRVLc, annoncee ici « ~42 166 $ », ne remplit qu environ 448 USDC (500 reverte ; DexScreener : 1 124 $ de
+ *   liquidite) ; et l en-tete (« 692 $ » pour NVAXc) contredit le commentaire de NVAXc lui-meme. DUOLc, PTONc et NVAXc avaient une
+ *   liquidite active nulle, CAKEc un prix degenere : leurs devis revertent. La seule mesure qui vaut est le devis a la taille
+ *   demandee — c est ce que le planificateur fait (impactBps, refus « too thin », echange.js).
  * Genere depuis les logs lus (scratch gen-cles-v4-actions.mjs) ; test : test-cles-v4-actions-20261003.mjs. */
 export const LOGS_INITIALIZE_ACTIONS = Object.freeze([
   /* MSTRc/USDC — bloc 50877363, fee 30000, tickSpacing 300, sans hook ; ~5,191 $ d USDC lus le 2026-10-03 */

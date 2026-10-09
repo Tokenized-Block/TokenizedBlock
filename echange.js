@@ -208,6 +208,29 @@ export async function poolActuelleDuBlock({ rpc, stateView, cle, hooks = HOOKS_V
   return { cle: null, ratees };
 }
 
+/** Au-dela de cet impact (bps, frais LP de la pool inclus), l ecran AVERTIT avant la signature. ⛔ PROPOSITION a confirmer par le
+ *  proprietaire : rien n est refuse sur ce seuil. Repere mesure le 2026-10-09 : la plupart des pools v4 d actions coutent 5 a 8 %
+ *  des 10 USDC (leur frais LP) ; MRVLc 16 % a 100 USDC. */
+export const IMPACT_AVERTIR_BPS = 1000n;
+/**
+ * L impact d un devis contre le prix INSTANTANE de la meme pool. Tout en BigInt sur les unites brutes.
+ *   prix (currency1 par currency0, brut) = sqrtPriceX96^2 / 2^192
+ *   zeroForOne : sortieSpot = entree * sqrt^2 / 2^192   ;   sinon : sortieSpot = entree * 2^192 / sqrt^2
+ * @returns {{ impactBps: bigint|null, sortieSpot: bigint|null }}  null = non lu (jamais 0 par defaut)
+ */
+export async function impactDuDevis({ lire, stateView, cle, zeroForOne, entree, sortie }) {
+  try {
+    const r = await lire('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + poolId(cle).slice(2) }, 'latest']);
+    if (!r || String(r).length < 66) return { impactBps: null, sortieSpot: null };
+    const s = BigInt(String(r).slice(0, 66));
+    if (s <= 0n) return { impactBps: null, sortieSpot: null };
+    const Q192 = 1n << 192n;
+    const spot = zeroForOne ? (BigInt(entree) * s * s) / Q192 : (BigInt(entree) * Q192) / (s * s);
+    if (spot <= 0n) return { impactBps: null, sortieSpot: null };
+    const q = BigInt(sortie);
+    return { impactBps: q >= spot ? 0n : ((spot - q) * 10000n) / spot, sortieSpot: spot };
+  } catch (_) { return { impactBps: null, sortieSpot: null }; }
+}
 export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, toleranceBps = 100n, maintenant = Date.now(),
   marcheLu = null, cleImposee = null, fraisDevisesOk = null,
   /* injectable pour les tests : actif + hooks du marche ouvert ; defaut = marche-ouvert.js */
@@ -330,9 +353,27 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
       const rq = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: zf, montant: montantQuote }) }, 'latest']);
       q = BigInt('0x' + String(rq).slice(2, 66));
     } catch (e) {
+      /* ⛔⛔ 2026-10-09 (post public sur MRVLc : « un achat de 1 000 $ fait +100 % » ; mesure le meme jour : la pool v4 MRVLc/USDC
+       *   ne remplit qu environ 448 USDC, 500 et 1 000 revertent ; toute l offre MRVLc vaut ~1 800 $). Ce revert rendait
+       *   NON_MESURE « could not be quoted » — le contraire de la verite : la pool a REPONDU, elle ne peut pas remplir CETTE taille.
+       *   On recote au dixieme : s il passe, la pool est trop fine pour ce montant et on le DIT (REFUSE). S il revert aussi,
+       *   c est bien une lecture ratee ou une pool morte : NON_MESURE comme avant. */
+      let dixiemeCote = false;
+      if (montantQuote / 10n > 0n) {
+        try {
+          const r10 = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne: zf, montant: montantQuote / 10n }) }, 'latest']);
+          dixiemeCote = BigInt('0x' + String(r10).slice(2, 66)) > 0n;
+        } catch (_) { dixiemeCote = false; }
+      }
+      if (dixiemeCote) return { etat: 'REFUSE', poolTropFine: true, pourquoi: 'this pool is too thin for this amount: it quotes a tenth of it, not all of it — try a much smaller amount' };
       return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
     }
     if (q <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
+    /* ⛔ L IMPACT DE PRIX, LU DANS LE DEVIS (2026-10-09, meme mesure) : 100 USDC de MRVLc coutaient +16 % sur le prix de la pool,
+     *   400 USDC ~ +45 %, et le ticket ne disait que « au moins … (1 % de glissement) » — le minimum protege contre un mouvement
+     *   APRES le devis, pas contre l impact DEJA dans le devis. `impactBps` = sortie au prix instantane (slot0 de CETTE pool) moins
+     *   la sortie cotee, en bps de la premiere ; il inclut le frais LP de la pool. Lecture ratee = null (non lu), jamais 0. */
+    const impact = await impactDuDevis({ lire, stateView: V.stateView, cle, zeroForOne: zf, entree: montantQuote, sortie: q });
     const entree = sens === 'ACHAT' ? devise : j, sortie = sens === 'ACHAT' ? j : devise;
     let actionsD, resumeD, valeurD = 0n;
     if (sens === 'ACHAT') {
@@ -356,6 +397,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
         quote: q, frais: fraisVente, fraisDevise: 'pair', montantSwap: m, devise,
         fraisBps: bps, beneficiaireFrais: bps > 0n ? FEE_WALLET : null, fraisMarcheBps: hookPaieDeja ? fraisHookBps(cle.hooks) : null };
     }
+    resumeD.impactBps = impact.impactBps; resumeD.sortieAuPrixPool = impact.sortieSpot;
     if (marche.remplaceV1) resumeD.remplaceV1 = true;
     if (migrationEnAttente) resumeD.migrationEnAttente = true;
     const koPair = assertFraisInterfaceA6cf({ compte, bps, resume: resumeD, actions: actionsD, fraisDevisesOk, hookPaie,

@@ -21,6 +21,9 @@
 import { planEchange, planEchangeMultiSauts, meilleureClePourMontant } from './echange.js';
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
+import { poolAerodromeDe } from './plan-franchissement.js';
+import { devisSaut } from './multipool.js';
+import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planAchatEthAction } from './echange-eth.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { sautsBlocVersBloc, cheminBlocVersAction } from './bloc-vers-bloc.js';
@@ -103,6 +106,32 @@ const quoteDe = (cle, jeton) => {
   const c0 = bas(cle.currency0), c1 = bas(cle.currency1), j = bas(jeton);
   return c0 === j ? c1 : (c1 === j ? c0 : null);
 };
+
+/**
+ * LA POOL AERODROME D UNE ACTION A POOL v4, COTEE A LA MEME TAILLE, et le choix qui en decoule (pour l ACHAT en USDC).
+ * - pool : la plus profonde des espacements declares (poolAerodromeDe) ; sortie : le quoter Aerodrome CL (multipool.js) ;
+ * - compare ce que la personne recoit : v4 = `sortieV4` (le devis de planEchange, frais 0,5 % deja retire de l entree) ;
+ *   Aerodrome = sortie cotee moins 0,1 % (le frais du balayage). Choisie seulement si STRICTEMENT meilleure.
+ * ⛔ Pas de pool, pool non lue, devis qui reverte, devis v4 absent : jamais choisie (le chemin v4 reste, inchange).
+ * @returns {{ choisie: boolean, sortie: bigint|null, phrase: string|null }}
+ */
+export async function meilleureAlternativeAerodrome({ rpc, action, montant, sortieV4 }) {
+  const rien = (phrase = null) => ({ choisie: false, sortie: null, phrase });
+  let v4;
+  try { v4 = sortieV4 === null || sortieV4 === undefined ? null : BigInt(sortieV4); } catch (_) { v4 = null; }
+  let p;
+  try { p = await poolAerodromeDe({ rpc, a: USDC, b: action }); } catch (_) { return rien(); }
+  if (!p || p.etat !== 'PRET') return rien();
+  let sortie;
+  try {
+    const d = devisSaut({ de: USDC, vers: action, e: { venue: 'aerodrome-cl', factory: 3, tickSpacing: p.tickSpacing } }, BigInt(montant));
+    sortie = BigInt(String(await rpc('eth_call', [{ to: d.to, data: d.data }, 'latest'])).slice(0, 66));
+  } catch (_) { return rien(); }
+  if (!(sortie > 0n)) return rien();
+  const net = (sortie * (10000n - FRAIS_INTERFACE_BPS_CL)) / 10000n;
+  if (v4 === null || net <= v4) return rien(v4 === null ? null : 'Uniswap v4 pool kept: it gives you more than this stock’s Aerodrome pool at this size');
+  return { choisie: true, sortie, phrase: 'Routed through this stock’s Aerodrome pool: at this size it gives you more than its Uniswap v4 pool' };
+}
 
 /**
  * @param {{ de:string, vers:string, montant:string|bigint, compte:string }} q  montant en unites brutes du jeton paye
@@ -218,8 +247,19 @@ export async function planRail(q, deps) {
         }
         if (quoteDe(marcheV.cle, vers) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(vers) + ' trades on v4 against ' + quoteDe(marcheV.cle, vers) + ', not USDC: pay with that token' });
         if (nd === 'USDC') {
-          return normaliser(route, await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
-            marcheLu: marcheV, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: USDC, pool: 'uniswap-v4' });
+          const pv4 = await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
+            marcheLu: marcheV, fraisDevisesOk, maintenant });
+          /* ⛔ 2026-10-09 (MRVLc et les pools v4 fines) : la pool Aerodrome de l action, si elle existe, est COTEE a la meme taille ;
+           *   elle n est prise que si ce que la personne RECOIT est strictement plus grand (frais d interface de chaque route
+           *   compris : 0,5 % en v4, 0,1 % sur Aerodrome). Regle du proprietaire (2026-09-30) : jamais un surcout pour la personne
+           *   au profit de notre frais — ici on ne devie que si elle y GAGNE. Une lecture ratee ne fait jamais devier. */
+          const alt = await meilleureAlternativeAerodrome({ rpc, action: vers, montant: m, sortieV4: pv4 && pv4.resume ? pv4.resume.quote : null });
+          if (alt.choisie) {
+            const pa = await planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers, famille: 'aerodrome' }], devise: USDC,
+              block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant, sortieCotee: alt.sortie });
+            if (pa && pa.etat === 'PRET') return normaliser(route, pa, { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome', choix: alt.phrase });
+          }
+          return normaliser(route, pv4, { via: 'planEchange', cotation: USDC, pool: 'uniswap-v4', ...(alt.phrase ? { choix: alt.phrase } : {}) });
         }
         const chemin = [{ de: ETH, vers: USDC, famille: 'uniswap-v4' }, { de: USDC, vers, famille: 'uniswap-v4' }];
         const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec(marcheV.cle) });
