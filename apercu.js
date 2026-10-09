@@ -43,7 +43,12 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
   const a = String(adr || '').toLowerCase();
   const V = V4_ADRESSES[Number(chaine)] || {};
   const connus = [
-    [compte, 'you'], [jeton, symbole ? 'the block ' + symbole : 'this block'],
+    /* ⛔ 2026-10-09 (session wallet connecte, message paye) : l aperçu ecrivait « Contract: the block USDC » — le jeton passe ici
+     *   n est pas toujours un block (la devise d un message paye, d un achat). L USDC garde son nom ; un jeton hors B20 (0xb2…)
+     *   est « the token », jamais « the block ». */
+    [compte, 'you'], [jeton, String(jeton || '').toLowerCase() === String(USDC_BASE).toLowerCase() ? 'USDC'
+      : !/^0xb2/i.test(String(jeton || '')) ? (symbole ? 'the token ' + symbole : 'this token')
+        : (symbole ? 'the block ' + symbole : 'this block')],
     /* ⛔ « TB CreateRouter » -> ce que le contrat FAIT. Ces libelles s affichent sur la ligne
      *    « Contract: … » sous chaque signature, a cote de « Permit2 (Uniswap) » — un nom que le
      *    lecteur peut aller verifier. « CreateRouter » n en est pas un : c est notre vocabulaire

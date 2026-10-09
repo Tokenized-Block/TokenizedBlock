@@ -2722,7 +2722,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-gm-panneau-page-poussee" hidden>Build <code>20261009-gm-panneau-page-poussee</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-session-wallet" hidden>Build <code>20261009-session-wallet</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -15447,9 +15447,14 @@ $('#pmsgLire').addEventListener('click', () => void lireMessagesDuBlock());
  * ⛔ « Speak as » ne liste QUE des blocks que le wallet connecte detient (soldes lus par le Wallet) ; le plan relit le
  *    compte et le solde TBLOCK, refuse le wallet de frais et les smart wallets, puis la page propose UNE signature. */
 /* tip 2140: Speak-as lists blocks the wallet holds; Prepare stays clickable and states why it cannot plan. */
+/* ⛔ 2026-10-09 (session avec wallet connecte, mode essai) : la liste offrait « USDC » — une DEVISE n est pas un block qui parle.
+ *   Un block est un actif B20 (adresse 0xb2…) qui n est ni une devise de paire (USDC, OUSD…) ni une action Coinbase. Le prefixe ne
+ *   PROUVE pas le natif (b20-prefix-impersonation) ; il ECARTE ce qui n en est surement pas un — le plan relit le reste. */
 function blocsPourParler() {
   const adrProfil = String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase();
-  return actifs.filter((x) => x && x.etat === 'LU' && /^0x[0-9a-fA-F]{40}$/.test(String(x.id || ''))
+  const devises = new Set(pairesProposees(CHAINE).map((p) => String(p.adr).toLowerCase()));
+  return actifs.filter((x) => x && x.etat === 'LU' && /^0xb2[0-9a-fA-F]{38}$/.test(String(x.id || ''))
+    && !devises.has(String(x.id).toLowerCase()) && !ACTIONS_PAR_ADR.has(String(x.id).toLowerCase())
     && ((typeof x.solde === 'bigint' && x.solde > 0n) || (typeof x.solde === 'number' && x.solde > 0))
     && String(x.id).toLowerCase() !== adrProfil);
 }
@@ -22811,6 +22816,18 @@ async function bcPreparerMessageRencontre(a, b, symB, texte) {
   try { void ouvrirProfil(b, symB || null); } catch (_) { return; }
   await new Promise((ok) => setTimeout(ok, 0));
   const t = $('#pmsgTexte'); if (t) { t.value = texte; t.dispatchEvent(new Event('input')); }
+  /* ⛔ 2026-10-09 (session wallet connecte, mode essai) : « Speak as » lit `actifs` (soldes de l onglet Wallet), qui ne contient que
+   *   les blocks crees ou « recus » (scan cache) — l IB022 achete dans le panneau n y etait pas. ⛔ ESSAYE PUIS RETIRE : `await
+   *   majWallet()` BLOQUAIT plus de 70 s (il relance les scans de creations / receptions) — et lance en fond il vide `actifs` en
+   *   commencant. Le block qui PARLE est connu : son solde est LU ici (2 lectures), et s il est positif il entre dans la liste. */
+  if (compte && !actifs.some((x) => String(x.id || '').toLowerCase() === a)) {
+    try {
+      const [s, d] = await Promise.all([bcSolde(a, compte), bcDecimales(a)]);
+      if (typeof s === 'bigint' && s > 0n && Number.isInteger(d)) {
+        actifs.push({ id: a, nom: String(bcResoudre(a).sym || court(a)).slice(0, 12), sous: 'block you hold · ' + court(a), adr: a, bloc: true, solde: s, decimales: d, etat: 'LU' });
+      }
+    } catch (_) { /* non lu : la liste dit ce qu elle sait */ }
+  }
   try { peindreChoixParler(); } catch (_) {}
   const sel = $('#pmsgDe');
   const tient = sel && [...sel.options].some((o) => String(o.value).toLowerCase() === a);
