@@ -918,7 +918,7 @@ async function fraisEnAttente() {
   }
   sauverFraisScan();
   const pad = (a) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0');
-  const lignes = [];
+  const lignes = [], creancesNonLues = [];
   /* ⛔ LES CREANCES SE LISENT SANS ARCHIVE : `du(wallet, devise)` est un eth_call, servi partout. USDC et TBLOCK, les deux devises
    *   d appariement connues, sont lues pour CHAQUE hook meme si le balayage ne les a pas encore trouvees — sinon un balayage arrete
    *   rendait « aucune creance » sur des devises qu on n a simplement pas eu le droit de lister. Elles ne sont PAS ajoutees au
@@ -934,12 +934,21 @@ async function fraisEnAttente() {
         try { const x = await rpcServeur('eth_call', [{ to: d, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }
         try { dec = Number(BigInt(await rpcServeur('eth_call', [{ to: d, data: '0x313ce567' }, 'latest']))); } catch { dec = null; }
         lignes.push({ hook: h.nom, hookAdr: h.adr, devise: d, symbole: sym, decimales: dec, du: du.toString() });
-      } catch { fenetresRatees++; }
+      } catch (e) {
+        /* ⛔ 2026-10-09 (mesure en prod) : ces echecs etaient comptes dans `fenetresRatees` — 13 « fenetres ratees » alors que le
+         *   balayage avait lu TOUTES ses fenetres jusqu a la tete. Une creance non lue n est pas une fenetre ratee : elle est NOMMEE
+         *   (hook, devise, raison) et rend `creancesCompletes` faux, sans brouiller le compte des fenetres. */
+        creancesNonLues.push({ hook: h.nom, devise: d, pourquoi: String((e && e.message) || e).slice(0, 60) });
+      }
     }
   }
-  /* `complet` false = les lignes sont un PLANCHER (des fenetres n ont pas ete lues) ; `arret` dit pourquoi le balayage s est arrete */
-  const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, complet: fenetresRatees === 0 && !arret, balayeJusqua: fraisScan.jusqua,
-    ...(arret ? { arret } : {}), devisesAmorcees: amorce, lignes };
+  /* `balayageComplet` : toutes les fenetres depuis le Block 0 lues (jusqua = tete, aucun arret) ; `creancesCompletes` : chaque du()
+   *   lu. Les lignes ne sont un COMPTE que si les deux sont vrais ; sinon un PLANCHER, et ce qui manque est nomme. */
+  const balayageComplet = fenetresRatees === 0 && !arret && fraisScan.jusqua === tete;
+  const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, balayageComplet, creancesCompletes: creancesNonLues.length === 0,
+    complet: balayageComplet && creancesNonLues.length === 0, balayeJusqua: fraisScan.jusqua,
+    ...(arret ? { arret } : {}), devisesAmorcees: amorce, devisesVues: [...devises.values()].reduce((s, x) => s + x.size, 0), pools: fraisScan.pools.length,
+    creancesNonLues: creancesNonLues.slice(0, 40), lignes };
   fraisCache = { t: Date.now(), r };
   return r;
 }

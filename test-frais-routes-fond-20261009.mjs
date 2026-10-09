@@ -97,7 +97,11 @@ await cas('C2 sans noeud d archive : arret apres 20 refus de suite, DIT ; creanc
   assert.match(corps, /refusDeSuite = 0;/);
   assert.match(corps, /const amorce = \[USDC_BASE\.toLowerCase\(\), String\(TBLOCK_JETON\)\.toLowerCase\(\)\];/);
   assert.match(corps, /for \(const d of new Set\(\[\.\.\.devises\.get\(h\.adr\), \.\.\.amorce\]\)\)/);
-  assert.match(corps, /complet: fenetresRatees === 0 && !arret/);
+  assert.match(corps, /const balayageComplet = fenetresRatees === 0 && !arret && fraisScan\.jusqua === tete;/);
+  assert.match(corps, /complet: balayageComplet && creancesNonLues\.length === 0/);
+  /* une creance non lue est NOMMEE, pas comptee comme une fenetre (mesure prod : 13 « fenetres ratees » sur un balayage complet) */
+  assert.match(corps, /creancesNonLues\.push\(\{ hook: h\.nom, devise: d, pourquoi:/);
+  assert.ok(!/\} catch \{ fenetresRatees\+\+; \}\s+\}\s+\}\s+\/\*/.test(corps), 'un du() rate est encore compte comme fenetre');
   assert.ok(!/devises\.get\([^)]*\)\.add\(amorce|devises\.get\(h\.adr\)\.add\(d\)/.test(corps), 'l amorce est ecrite dans le resultat du balayage');
 });
 
