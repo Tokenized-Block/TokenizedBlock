@@ -571,6 +571,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcMsg li.non{color:#fca5a5}
 .bcMsg .bcBoutons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .bcPre{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+.bcParler{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.bcParler .bcSousTitre{flex-basis:100%;margin:4px 0 0}
 .bcPre button{appearance:none;font-family:inherit;cursor:pointer;color:var(--texte)}
 .bcPre button:hover{border-color:var(--accent)}
 /* la barre de commande : UN champ et son bouton dans le meme cadre (le premier jet laissait un champ blanc nu sous des boutons pleine largeur) */
@@ -2701,7 +2703,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-ref-chainlink" hidden>Build <code>20261009-ref-chainlink</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-cerveaux-parlent" hidden>Build <code>20261009-cerveaux-parlent</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3768,6 +3770,7 @@ import { usdCourt } from './trending.js';
 import { tirageUniforme } from './tirage.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
 import { planMessagePaye, prixMessageLisible } from './messagerie-blocks.js';
+import { rencontre as rencontreCerveaux, cercle as cercleCerveaux, rejouer as rejouerCerveau, faitsLus, repliqueDe, humeurCourte, conseilDe, texteRencontre, pourcentSynchro, BATTEMENTS_RENCONTRE } from './interactions-cerveaux.js';
 /* ⛔ LES ENTREES DU CERVEAU VIENNENT D UN SEUL ENDROIT : map, onglet Brain et profil liraient sinon trois
  * nourritures differentes pour le meme block. Non lue ⇒ zero nourriture et JAMAIS mort. */
 /* ⛔ 2026-09-14 Brain wake: RPC blips must not wipe a known market into permanent « market unread ». */
@@ -22381,22 +22384,112 @@ async function bcLireActivite(a, sym, mk) {
  * que la fiche (un vrai transfert d un fragment du block a un ami, avec sa ligne de frais a part). Le salut a besoin de la fiche de
  * CE block : on la remplit par le clic de la Map, et la colonne se rouvre le temps du formulaire d envoi.
  * ⛔ Un block absent de la Map n a pas de fiche : le salut renvoie alors a sa page, il ne fait pas semblant. */
+function bcSaluer(a, sym, mot) {
+  const el = [...document.querySelectorAll('.bloc[data-block]')].find((e) => String(e.getAttribute('data-block')).toLowerCase() === a);
+  if (!el) { bcMessage('Panel', '', mot + ' is sent from the block’s own page: ' + (sym || court(a)) + ' is not on the Map right now.'); bcVue('chat'); try { void ouvrirProfil(a, null); } catch (_) {} return; }
+  bc.ficheJusqua = Date.now() + 1500; /* la colonne doit RESTER ouverte : c est elle qui porte le formulaire d envoi */
+  try { allerA('map'); } catch (_) {}
+  el.click();
+  try { ouvrirCote(); ouvrirSalut(mot); } catch (_) {}
+}
 function bcPeindreActions(a, sym) {
   const z = $('#bcActions'); if (!z) return;
   z.textContent = '';
-  const bouton = (texte, f) => { const b = bcEl('button', { type: 'button', cls: 'puce', text: texte }); b.addEventListener('click', f); z.append(b); };
+  const bouton = (texte, f, ou = z) => { const b = bcEl('button', { type: 'button', cls: 'puce', text: texte }); b.addEventListener('click', f); ou.append(b); return b; };
   bouton('Buy', () => { bc.cote = 'buy'; bcVue('trade'); bcRepeindre(); });
   bouton('Open profile', () => { try { void ouvrirProfil(a, null); } catch (_) {} });
-  for (const [mot, lib] of [['GM', 'GM 👋'], ['BM', 'BM 🌙'], ['GN', 'GN 😴'], ['Gmeow', 'Gmeow 🐱']]) {
-    bouton(lib, () => {
-      const el = [...document.querySelectorAll('.bloc[data-block]')].find((e) => String(e.getAttribute('data-block')).toLowerCase() === a);
-      if (!el) { bcMessage('Panel', '', mot + ' is sent from the block’s own page: ' + (sym || court(a)) + ' is not on the Map right now.'); bcVue('chat'); try { void ouvrirProfil(a, null); } catch (_) {} return; }
-      bc.ficheJusqua = Date.now() + 1500; /* la colonne doit RESTER ouverte : c est elle qui porte le formulaire d envoi */
-      try { allerA('map'); } catch (_) {}
-      el.click();
-      try { ouvrirCote(); ouvrirSalut(mot); } catch (_) {}
-    });
-  }
+  for (const [mot, lib] of [['GM', 'GM 👋'], ['BM', 'BM 🌙'], ['GN', 'GN 😴'], ['Gmeow', 'Gmeow 🐱']]) bouton(lib, () => bcSaluer(a, sym, mot));
+  /* ── PARLER A SON CERVEAU, ET LE FAIRE RENCONTRER LES AUTRES (Phil, 2026-10-09 : « des boutons d interaction en direct entre humain
+   *    et Brain AI, et les Brain AI peuvent s envoyer entre eux… creer une communaute ») ──────────────────────────────────────────
+   * ⛔ Tout vient de `interactions-cerveaux.js` : phrases d une table fermee indexee par la PHASE, rencontres REJOUEES depuis les
+   *   adresses et les faits lus. Aucun LLM, aucun faux stimulus (parler ne l excite pas), et rien ne se signe sans le wallet : le
+   *   seul geste qui part sur la chaine est un GM ou un message paye, par leurs chemins existants. */
+  const zp = bcEl('div', { cls: 'bcParler' });
+  zp.append(bcEl('p', { cls: 'bcSousTitre', text: 'Talk with its brain' }));
+  z.append(zp);
+  const nom = sym || court(a);
+  bouton('How are you? 💬', () => {
+    const ph = bcPhaseDe(a);
+    bcVue('chat');
+    bcMessage('You', 'moi', 'How are you, ' + nom + '?');
+    const snap = window.__TB_BRAIN_SNAPSHOT__;
+    const mots = snap && String(snap.address || '').toLowerCase() === a ? bcRessenti(snap) : [];
+    bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', repliqueDe(ph) +(mots.length ? ' (' + mots.join(', ') + ')' : ''));
+  }, zp);
+  bouton('What would you do? 🧠', () => {
+    const ph = bcPhaseDe(a), c = conseilDe(ph);
+    bcVue('chat');
+    bcMessage('You', 'moi', 'What would you do now, ' + nom + '?');
+    const m = bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', c.texte + ' It is a suggestion: nothing leaves without your wallet.');
+    if (c.geste === 'buy') bcBoutons(m, [['Write the buy', () => { const s = $('#bcSaisie'); s.value = 'buy this with '; s.focus(); const n = $('#bcNote'); n.className = 'note'; n.textContent = 'Add the amount and the currency (e.g. 0.002 ETH), then send.'; }]]);
+    else if (c.geste === 'sell_quarter') bcBoutons(m, [['Open the sell ticket (25 %)', () => { bc.cote = 'sell'; bcVue('trade'); bcRepeindre(); }]]);
+    else if (c.geste === 'gm') bcBoutons(m, [['Say GM 👋', () => bcSaluer(a, sym, 'GM')]]);
+  }, zp);
+  bouton('Its circle 🫂', () => bcCercle(a, sym), zp);
+}
+/* La phase de CE block : celle de l instantane vivant s il s agit du cerveau affiche, sinon rejouee depuis son adresse et ses faits lus. */
+function bcPhaseDe(a) {
+  const snap = window.__TB_BRAIN_SNAPSHOT__;
+  if (snap && String(snap.address || '').toLowerCase() === a && snap.phase) return snap.phase;
+  const r = rejouerCerveau(a, faitsLus(bcFaitsVoisin(a)));
+  return r ? r.phase : 'NON_LU';
+}
+/* les faits d un block, tels que l app les a LUS : la Map d abord (vie + etat), puis l index du Market. Rien de lu = rien. */
+function bcFaitsVoisin(adr) {
+  const k = String(adr || '').toLowerCase();
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === k);
+  if (h) return { adr: k, sym: h.sym, vie: h.vie, etatVie: h.etatVie };
+  const mk = marcheParAdr.get(k);
+  return { adr: k, sym: mk && mk.sym ? mk.sym : null, vie: mk && typeof mk.vie === 'number' ? mk.vie : null, etatVie: null };
+}
+/* ⛔ LE CERCLE : les voisins les plus SYNCHRONES de ce block parmi les blocks de la Map (ou de l index du Market si la Map est vide).
+ *   Une mesure rejouable (neurones qui tirent ensemble), pas un classement choisi. */
+function bcCercle(a, sym) {
+  const nom = sym || court(a);
+  const voisins = habitants.length ? habitants.map((h) => ({ adr: h.adr, sym: h.sym, vie: h.vie, etatVie: h.etatVie }))
+    : [...marcheParAdr.keys()].slice(0, 80).map((k) => bcFaitsVoisin(k));
+  bcVue('chat');
+  if (!voisins.length) { bcMessage('Panel', '', 'No other block is loaded yet — open the Map once, then ask again.'); return; }
+  const liste = cercleCerveaux({ a, faitsA: faitsLus(bcFaitsVoisin(a)), voisins: voisins.slice(0, 120) });
+  if (!liste.length) { bcMessage(nom, 'agent', 'None of the ' + voisins.length + ' blocks I can see fired a neuron with me over ' + BATTEMENTS_RENCONTRE + ' beats.'); return; }
+  const m = bcMessage(nom + ' · its circle', 'agent', 'The brains that fire most with mine, out of ' + Math.min(voisins.length, 120) + ' blocks I can see (same neurons firing on the same beat, replayed over ' + BATTEMENTS_RENCONTRE + ' beats):');
+  for (const v of liste) bcEtape(m, (v.sym || court(v.adr)) + ' · ' + pourcentSynchro(v.synchronie) + '% in sync · ' + v.humeur);
+  bcBoutons(m, liste.map((v) => [(v.sym || court(v.adr)).slice(0, 12) + ' ↔ meet', () => bcRencontre(a, sym, v.adr, v.sym), true]));
+}
+/* ⛔ UNE RENCONTRE : les deux cerveaux rejoues, ce que chacun dit, leur synchronie — et deux gestes REELS proposes, jamais faits :
+ *   un message paye de l un a l autre (le chemin existant du profil : la personne doit DETENIR le block qui parle), ou un GM. */
+function bcRencontre(a, symA, b, symB) {
+  const r = rencontreCerveaux({ a, faitsA: faitsLus(bcFaitsVoisin(a)), b, faitsB: faitsLus(bcFaitsVoisin(b)) });
+  bcVue('chat');
+  if (r.etat !== 'LU') { bcMessage('Panel', '', r.pourquoi + '.'); return; }
+  const nA = symA || court(a), nB = symB || court(b), pc = pourcentSynchro(r.synchronie);
+  bcMessage(nA + ' · ' + r.humeurA, 'agent', r.repliqueA);
+  bcMessage(nB + ' · ' + r.humeurB, 'agent', r.repliqueB);
+  const texte = texteRencontre({ symA: nA, symB: nB, r });
+  const m = bcMessage('Panel', '', (pc === null ? 'No neuron fired in common' : pc + '% of their firing neurons fired together') + ' over ' + r.battements
+    + ' beats. Same wiring and same facts replay the same meeting for anyone. To make it public, ' + nA + ' can send it to ' + nB + ' on chain:');
+  bcEtape(m, '“' + texte + '”');
+  bcBoutons(m, [
+    ['Send it as a paid message · ' + prixMessageTexte(), () => bcPreparerMessageRencontre(a, b, symB, texte)],
+    ['GM ' + nB.slice(0, 12) + ' 👋', () => bcSaluer(b, symB, 'GM'), true],
+  ]);
+}
+/* Le message paye passe par le formulaire EXISTANT du profil du destinataire (Prepare -> Sign) : texte pre-rempli, « Speak as »
+ *   pointe sur le block qui parle SI la personne le detient. Rien ne part sans les deux clics et la signature. */
+async function bcPreparerMessageRencontre(a, b, symB, texte) {
+  /* ⛔ MESURE (navigateur local, 2026-10-09) : `await ouvrirProfil` attend TOUTE la lecture de la chaine (~20 s, ou une erreur 429) —
+   *   le champ restait vide. La remise a zero du profil est SYNCHRONE (debut de `lireProfil`) : on lance la lecture, on laisse passer
+   *   ce tour, et on remplit apres elle. */
+  try { void ouvrirProfil(b, symB || null); } catch (_) { return; }
+  await new Promise((ok) => setTimeout(ok, 0));
+  const t = $('#pmsgTexte'); if (t) { t.value = texte; t.dispatchEvent(new Event('input')); }
+  try { peindreChoixParler(); } catch (_) {}
+  const sel = $('#pmsgDe');
+  const tient = sel && [...sel.options].some((o) => String(o.value).toLowerCase() === a);
+  if (tient) { sel.value = [...sel.options].find((o) => String(o.value).toLowerCase() === a).value; sel.dispatchEvent(new Event('change')); }
+  const note = $('#pmsgPayeNote');
+  if (note) { note.className = 'note'; note.textContent = tient ? 'Message written by the meeting — check it, then Prepare and sign.' : 'To speak as this block you must hold some of it. Pick a block you hold in “Speak as”, or buy a little first.'; }
+  if (t) t.scrollIntoView({ block: 'center' });
 }
 /* ── L INDEX DU MARKET, POUR LE PANNEAU ───────────────────────────────────────────────────────────────────────────────────────
  * ⛔ MESURE (2026-10-04, panneau ouvert DIRECTEMENT sur NVDAc par son lien) : `marcheParAdr` etait VIDE — seule la boucle de la Map

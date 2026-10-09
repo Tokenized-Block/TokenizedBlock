@@ -111,6 +111,7 @@ import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
+import { TBLOCK as TBLOCK_JETON } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
@@ -667,9 +668,15 @@ let rpcId = 0, rpcTour = 0;
  *   depuis ~2026-10-07) et chaque lecteur epingle sur lui tombe en silence (index nos-blocks a 270 000 blocs de retard, Map,
  *   Live). Le repli ne s applique qu aux eth_getLogs, n accepte qu un tableau, et rend l erreur du principal si tout echoue
  *   (repli-logs.js). Ce qui le rend visible : la sonde des noeuds de /sante (sonderNoeuds). */
+/* ⛔⛔ 2026-10-09 — drpc N EST PAS UN REPLI, ET JE L AVAIS CRU. La sonde l avait mesure « archive ok » — sur UN SEUL bloc. Mesure
+ *   directe ensuite (fenetres de 1/10/100/500/999 blocs, a trois profondeurs) : l offre gratuite sert au plus 10 BLOCS par getLogs
+ *   (« You can make eth_getLogs requests with up to a 10 block range »), refuse 500 et 999 (« ranges over 10000 blocks are not
+ *   supported on free plan »), et limite le debit. Nos balayages vont par 999 : drpc n en sert aucun. Seul publicnode sert les
+ *   fenetres recentes (~9 000 blocs). L historique profond demande un noeud d archive — decision du proprietaire. */
+const REPLIS_LOGS_SERVEUR = ['https://base-rpc.publicnode.com'];
 let repliServeur = null;
 async function rpcServeur(methode, params) {
-  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, [lecteurUrl('https://base-rpc.publicnode.com')]);
+  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, REPLIS_LOGS_SERVEUR.map((u) => lecteurUrl(u)));
   return repliServeur(methode, params);
 }
 async function rpcServeurBrut(methode, params) {
@@ -703,7 +710,7 @@ const rpcScanCreations = avecRepliLogs(rpcServeur, [lecteurUrl('https://base-rpc
  * Le role de chaque noeud public a ete ecrit en dur d apres UNE mesure (« base.org sert les getLogs a plus de 9 adresses »,
  * « publicnode refuse l archive »). Quand un noeud change, rien ne le disait : on l apprenait par une capture d ecran, des
  * jours apres. Toutes les 10 min, chaque noeud est essaye sur les QUATRE capacites dont l app depend, et /sante.noeuds le rend :
- *   appel (eth_blockNumber) · logs (getLogs 1 bloc, USDC) · multi (getLogs 10 adresses) · archive (getLogs a -20 000 blocs).
+ *   appel (eth_blockNumber) · logs (getLogs 1 bloc, USDC) · multi (getLogs 10 adresses) · archive (getLogs de 999 blocs a -20 000).
  * Trois etats par capacite : 'ok' (tableau / nombre rendu), 'refus' (une erreur nommee : 429, 403, plafond), 'muet' (rien).
  * `logsServis` = combien de noeuds servent un getLogs ; 0 = l historique est AVEUGLE, a lire comme une panne. */
 const NOEUDS_SONDES = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org', 'https://1rpc.io/base'])];
@@ -725,10 +732,14 @@ async function sonderNoeuds() {
   for (const url of NOEUDS_SONDES) {
     const n = { appel: await essai(url, 'eth_blockNumber', []) };
     if (Number.isSafeInteger(tete)) {
-      const b = '0x' + (tete - 2).toString(16), p = '0x' + (tete - 20000).toString(16);
+      const b = '0x' + (tete - 2).toString(16), p = '0x' + (tete - 20000).toString(16), p999 = '0x' + (tete - 20000 + 998).toString(16);
       n.logs = await essai(url, 'eth_getLogs', [{ address: usdc, fromBlock: b, toBlock: b }]);
       n.multi = await essai(url, 'eth_getLogs', [{ address: multi, fromBlock: b, toBlock: b }]);
-      n.archive = await essai(url, 'eth_getLogs', [{ address: usdc, fromBlock: p, toBlock: p }]);
+      /* ⛔⛔ L ARCHIVE SE MESURE COMME ON LA DEMANDE : une fenetre de 999 blocs (la taille de nos balayages), pas un bloc. La premiere
+       *   version sondait UN bloc et a ecrit « drpc : archive ok » — alors que drpc gratuit refuse tout getLogs de plus de 10 blocs
+       *   (mesure directe le meme jour). Une sonde qui ne pose pas la vraie question rend un vert qui ment. Adresse et topic : ceux
+       *   du balayage des frais (Initialize du PoolManager v4), peu de logs par fenetre. */
+      n.archive = await essai(url, 'eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: p, toBlock: p999 }]);
     }
     res[url.replace('https://', '')] = n;
     await new Promise((ok) => setTimeout(ok, 400));
@@ -778,17 +789,45 @@ let fraisCache = null;
 /* balayage INCREMENTAL : les devises deja vues restent ; on ne relit que les blocs nouveaux. Une fenetre ratee arrete
  * l avancee (on la relira), jamais un trou recouvert par un « deja lu ». */
 const fraisScan = { jusqua: null, devises: new Map(), pools: [] };
+/* ⛔ 2026-10-09 — LE BALAYAGE REPARTAIT DE ZERO A CHAQUE DEPLOIEMENT : ~1 520 fenetres depuis le bloc 50861088, en memoire seulement.
+ *   Il est garde sur le volume (comme le trending et les skins) : un redemarrage reprend ou il s etait arrete. Ce qui est sauve est
+ *   ce qui a ete LU (jusqua n avance que sur des fenetres lues sans trou) ; un fichier illisible = on repart de zero, jamais d un
+ *   « deja lu » invente. */
+const FICHIER_FRAIS_SCAN = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'frais-scan.json') : null;
+try {
+  if (FICHIER_FRAIS_SCAN && existsSync(FICHIER_FRAIS_SCAN)) {
+    const s = JSON.parse(readFileSync(FICHIER_FRAIS_SCAN, 'utf8'));
+    if (Number.isSafeInteger(s.jusqua) && Array.isArray(s.devises) && Array.isArray(s.pools)) {
+      fraisScan.jusqua = s.jusqua;
+      for (const [h, ds] of s.devises) if (/^0x[0-9a-f]{40}$/.test(h) && Array.isArray(ds)) fraisScan.devises.set(h, new Set(ds.filter((d) => /^0x[0-9a-f]{40}$/.test(d))));
+      fraisScan.pools = s.pools.filter((p) => p && typeof p.id === 'string');
+    }
+  }
+} catch { fraisScan.jusqua = null; fraisScan.devises = new Map(); fraisScan.pools = []; }
+function sauverFraisScan() {
+  if (!FICHIER_FRAIS_SCAN || fraisScan.jusqua === null) return;
+  try {
+    writeFileSync(FICHIER_FRAIS_SCAN + '.tmp', JSON.stringify({ jusqua: fraisScan.jusqua, devises: [...fraisScan.devises].map(([h, s]) => [h, [...s]]), pools: fraisScan.pools }));
+    renameSync(FICHIER_FRAIS_SCAN + '.tmp', FICHIER_FRAIS_SCAN);
+  } catch { /* le volume refuse : on relira, rien n est perdu que du temps */ }
+}
 async function fraisEnAttente() {
   if (fraisCache && Date.now() - fraisCache.t < 120000) return fraisCache.r;
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   for (const h of HOOKS_FRAIS) if (!fraisScan.devises.has(h.adr)) fraisScan.devises.set(h.adr, new Set());
   const devises = fraisScan.devises;
   const depuis = fraisScan.jusqua === null ? Math.min(...HOOKS_FRAIS.map((h) => h.depuis)) : fraisScan.jusqua + 1;
-  let fenetresRatees = 0, avance = true;
+  let fenetresRatees = 0, avance = true, refusDeSuite = 0, arret = null;
   for (let bas = depuis; bas <= tete; bas += 999) {
+    /* ⛔ 2026-10-09 — 20 REFUS DE SUITE, ON S ARRETE ET ON LE DIT. Mesure : aucun noeud public gratuit ne sert ces fenetres
+     *   anciennes (base.org 429, publicnode 403 archive, drpc 10 blocs max). Sans cet arret, chaque passage tentait ~1 520 fenetres
+     *   refusees, avec leurs relances. La suite reprend a la premiere fenetre non lue au prochain passage. */
+    if (refusDeSuite >= 20) { arret = 'stopped after 20 refused windows in a row from block ' + (fraisScan.jusqua === null ? depuis : fraisScan.jusqua + 1) + ': no free node serves this depth (an archive node is needed)'; break; }
     const haut = Math.min(tete, bas + 998);
     try {
       const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
+      refusDeSuite = 0;
       for (const l of logs || []) {
         const hook = '0x' + String(l.data).slice(2 + 128 + 24, 2 + 192);
         if (!devises.has(hook)) continue;
@@ -798,12 +837,20 @@ async function fraisEnAttente() {
         if (!fraisScan.pools.some((x) => x.id === l.topics[1])) fraisScan.pools.push({ hook, id: l.topics[1], c0: '0x' + l.topics[2].slice(26), c1: '0x' + l.topics[3].slice(26) });
       }
       if (avance) fraisScan.jusqua = haut;
-    } catch { fenetresRatees++; avance = false; }
+    } catch { fenetresRatees++; avance = false; refusDeSuite++; }
+    /* toutes les 100 fenetres : la progression survit a un redemarrage en plein balayage */
+    if (((bas - depuis) / 999) % 100 === 99) sauverFraisScan();
   }
+  sauverFraisScan();
   const pad = (a) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0');
   const lignes = [];
+  /* ⛔ LES CREANCES SE LISENT SANS ARCHIVE : `du(wallet, devise)` est un eth_call, servi partout. USDC et TBLOCK, les deux devises
+   *   d appariement connues, sont lues pour CHAQUE hook meme si le balayage ne les a pas encore trouvees — sinon un balayage arrete
+   *   rendait « aucune creance » sur des devises qu on n a simplement pas eu le droit de lister. Elles ne sont PAS ajoutees au
+   *   resultat du balayage (ce qu il a vu reste ce qu il a vu). */
+  const amorce = [USDC_BASE.toLowerCase(), String(TBLOCK_JETON).toLowerCase()];
   for (const h of HOOKS_FRAIS) {
-    for (const d of devises.get(h.adr)) {
+    for (const d of new Set([...devises.get(h.adr), ...amorce])) {
       if (/^0x0{40}$/.test(d)) continue; /* ETH : deja verse pendant le swap */
       try {
         const du = BigInt(await rpcServeur('eth_call', [{ to: h.adr, data: '0xe69df140' /* du(address,address) */ + pad(WALLET_FRAIS) + pad(d) }, 'latest']));
@@ -815,7 +862,9 @@ async function fraisEnAttente() {
       } catch { fenetresRatees++; }
     }
   }
-  const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, lignes };
+  /* `complet` false = les lignes sont un PLANCHER (des fenetres n ont pas ete lues) ; `arret` dit pourquoi le balayage s est arrete */
+  const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, complet: fenetresRatees === 0 && !arret, balayeJusqua: fraisScan.jusqua,
+    ...(arret ? { arret } : {}), devisesAmorcees: amorce, lignes };
   fraisCache = { t: Date.now(), r };
   return r;
 }
@@ -840,6 +889,33 @@ async function lancementsEtrangers(heures) {
   };
   etrangersCache.set(cle, { t: Date.now(), r });
   return r;
+}
+
+/* ── CALCULS LONGS EN FOND : une route repond vite, le calcul continue (voir /api/frais-hook) ──────────────────────────────────
+ * Un seul calcul en vol par cle ; relance seulement si le dernier resultat a plus de `ttl`. Une erreur est GARDEE et dite, elle ne
+ * remplace jamais un resultat (on ne sert pas « 0 frais » parce qu un noeud a refuse). */
+const calculsFond = new Map();
+function enFond(cle, fn, ttl) {
+  let c = calculsFond.get(cle);
+  if (!c) { c = { enVol: null, r: null, t: 0, debut: null, erreur: null }; calculsFond.set(cle, c); }
+  if (!c.enVol && (!c.r || Date.now() - c.t > ttl)) {
+    c.debut = Date.now();
+    c.enVol = Promise.resolve().then(fn)
+      .then((r) => { c.r = r; c.t = Date.now(); c.erreur = null; })
+      .catch((e) => { c.erreur = String((e && e.message) || e).slice(0, 160); })
+      .finally(() => { c.enVol = null; });
+  }
+  return c;
+}
+async function repondreFond(res, c, extra = () => ({})) {
+  /* un calcul court (cache chaud) repond dans la meme requete ; un long ne la tient pas plus de 2,5 s */
+  if (c.enVol) await Promise.race([c.enVol, new Promise((ok) => setTimeout(ok, 2500))]);
+  let corps;
+  if (c.r) corps = { ...c.r, ageS: Math.round((Date.now() - c.t) / 1000), recalculEnCours: Boolean(c.enVol), ...(c.erreur ? { derniereErreur: c.erreur } : {}) };
+  else if (c.enVol) corps = { ok: false, etat: 'EN_COURS', pourquoi: 'reading the chain in the background — ask again in a minute', depuisS: Math.round((Date.now() - c.debut) / 1000), ...extra() };
+  else corps = { ok: false, etat: 'ECHEC', pourquoi: c.erreur || 'not read', ...extra() };
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(corps));
 }
 
 async function fraisRecents(heures) {
@@ -2599,6 +2675,8 @@ const SERVIS = [
   /* ⛔ 2026-10-09 : `reference-action.js` porte la phrase de la reference Chainlink et le SEUIL d ecart du ticket ; importe par
    *   `app.html`. L oublier ici tuerait TOUTE la page — un import 404 arrete le module entier. */
   'reference-action.js',
+  /* ⛔ 2026-10-09 : les interactions des cerveaux (parler, rencontre, cercle) — importe par `app.html`, servi AVANT d etre cable. */
+  'interactions-cerveaux.js',
   /* ⛔ `route-multi-factory.js` refuse une route a cheval sur deux factories — le cas ou CHAQUE
    *   jambe existe et ou l appel reverte quand meme (OUSD : 10 M$ au pair sur Uniswap V4, 0 pool
    *   Aerodrome CL). Servi AVANT d etre importe, comme `cobalt.js` : un module servi et pas encore
@@ -3971,7 +4049,13 @@ createServer((req, res) => {
     const compte = String(new URL(req.url, 'http://x').searchParams.get('compte') || '').toLowerCase();
     const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
     if (!/^0x[0-9a-f]{40}$/.test(compte)) { repondre({ ok: false, pourquoi: 'not an address' }); return; }
-    fraisEnAttente().then(async () => {
+    /* ⛔ 2026-10-09 : cette route attendait elle aussi le balayage ENTIER des frais (le banc test-frais-routes-fond l a trouvee,
+     *   troisieme appelant du meme motif). Elle partage le calcul en fond de /api/frais-hook ; tant qu aucun balayage n a abouti,
+     *   elle dit EN_COURS au lieu de rendre « aucune part » sur une liste de pools vide. */
+    const fond = enFond('frais-hook', () => fraisEnAttente(), 120000);
+    (async () => {
+      if (fond.enVol) await Promise.race([fond.enVol, new Promise((ok) => setTimeout(ok, 2500))]);
+      if (!fond.r) { repondre({ ok: false, etat: fond.enVol ? 'EN_COURS' : 'ECHEC', pourquoi: fond.enVol ? 'reading the chain in the background — ask again in a minute' : (fond.erreur || 'not read'), balayeJusqua: fraisScan.jusqua }); return; }
       const pools = [];
       for (const p of fraisScan.pools) {
         let createur = null;
@@ -3982,8 +4066,9 @@ createServer((req, res) => {
         try { const x = await rpcServeur('eth_call', [{ to: bloc, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }
         pools.push({ hook: p.hook, hookNom: (HOOKS_FRAIS.find((h) => h.adr === p.hook) || {}).nom || '?', id: p.id, bloc, symbole: sym });
       }
-      repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS });
-    }).catch((e) => repondre({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+      /* `complet` : un balayage avec des fenetres ratees rend une liste PLANCHER, et c est dit */
+      repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS, complet: fond.r.fenetresRatees === 0, balayeJusqua: fraisScan.jusqua });
+    })().catch((e) => repondre({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
 
@@ -4004,14 +4089,13 @@ createServer((req, res) => {
     return;
   }
 
+  /* ⛔⛔ 2026-10-09 — CES DEUX ROUTES NE REPONDAIENT JAMAIS EN PROD (mesure : coupees a 60 s, les deux). Elles attendaient un balayage
+   *   entier (frais-hook : ~1 520 fenetres a froid) pendant que base.org refusait tout getLogs. Elles repondent maintenant TOUT DE SUITE
+   *   (au plus ~2,5 s) : le dernier resultat avec son age, ou « EN_COURS » avec la progression — et le calcul continue en fond. Un
+   *   resultat perime est DIT perime (`ageS`), jamais servi comme frais. */
   if (chemin === '/api/frais-hook') {
-    fraisEnAttente().then((r) => {
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify(r));
-    }).catch((e) => {
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
-    });
+    const c = enFond('frais-hook', () => fraisEnAttente(), 120000);
+    void repondreFond(res, c, () => ({ balayeJusqua: fraisScan.jusqua, depuisBloc: Math.min(...HOOKS_FRAIS.map((h) => h.depuis)) }));
     return;
   }
 
@@ -4023,13 +4107,8 @@ createServer((req, res) => {
    *    fait un aller-retour et le gas rend le delta negatif), NON_LU. */
   if (chemin === '/api/frais-recents') {
     const heures = Math.min(168, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('h')) || 24));
-    fraisRecents(heures).then((r2) => {
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify(r2));
-    }).catch((e) => {
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 160) }));
-    });
+    const c = enFond('frais-recents:' + heures, () => fraisRecents(heures), 300000);
+    void repondreFond(res, c, () => ({ heures }));
     return;
   }
 
