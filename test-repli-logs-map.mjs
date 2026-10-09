@@ -81,7 +81,7 @@ await cas('A8 lecteurUrl : une erreur JSON-RPC (403 archive) ou un HTTP en echec
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const nu = srv.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
 await cas('A7 le scan des creations de lireTrending passe par le repli', async () => {
-  assert.match(nu, /const rpcScanCreations = avecRepliLogs\(rpcServeur, \[lecteurUrl\('https:\/\/base-rpc\.publicnode\.com'\)\]\)/);
+  assert.match(nu, /const rpcScanCreations = avecRepliLogs\(rpcServeur, ESSAI_SRV\.actif \? \[\] : \[lecteurUrl\('https:\/\/base-rpc\.publicnode\.com'\)\]\)/);
   assert.match(nu, /const cr = await listerCreations\(\{ rpc: rpcScanCreations, blocs, fin \}\)/,
     'lireTrending scanne encore sur rpcServeur seul : base.org refuse, l index se fige');
 });
