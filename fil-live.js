@@ -80,6 +80,43 @@ export function poolsSuivies(blocks) {
   return out;
 }
 
+/* ⛔⛔ 2026-10-09 (capture du fondateur : « All 0 · Created 0 · Feed 0 · Kill 0 · Sent 0 · Big 0 ») — CHAQUE
+ *    `eth_getLogs` vers mainnet.base.org rendait 429 « request limit reached » (-32011), meme sur 1 bloc ;
+ *    or ce noeud est le SEUL a qui partent la factory (creations) et les transferts a > 9 adresses.
+ *    Mesure sur la meme fenetre de 110 blocs (52 379 831–52 379 940) : 1 B20Created emis par la factory
+ *    (tx 0x3af0dd1b…, status 0x1). La chaine n etait PAS calme : la lecture etait refusee, et les puces
+ *    disaient « 0 ». Un compte dont la lecture a ete refusee n est pas un zero : il est « non lu ».
+ * Quelles lectures nourrissent chaque puce (prefixe du `quoi` des fenetres ratees). Absente = toutes. */
+export const LECTURES_PAR_FILTRE = {
+  CREATION: ['creations'], CREATION_TB: ['creations'], CREATION_FOREIGN: ['creations'],
+  ACHAT: ['swaps', 'decouverte'], VENTE: ['swaps', 'decouverte'], SWAP: ['swaps', 'decouverte'],
+  ECHANGES: ['swaps', 'decouverte'], GROS: ['swaps', 'decouverte'], HOOKED: ['swaps', 'decouverte'],
+  GM: ['transfers'], NOTE: ['transfers'], MESSAGE: ['messages'],
+};
+const LECTURES_CONNUES = [...new Set(Object.values(LECTURES_PAR_FILTRE).flat())];
+
+/** Le compte d une puce, en TROIS etats : lu (« 3 »), non lu (« ? »), lu en partie (« ≥3 »).
+ *  `rateesParQuoi` : Map ou objet { quoi -> lectures refusees }. Un `quoi` qui ne commence par aucune
+ *  lecture connue (« tout », une exception de la boucle) touche TOUTES les puces. */
+export function compteDePuce(n, filtre, rateesParQuoi) {
+  const entrees = rateesParQuoi instanceof Map ? [...rateesParQuoi.entries()] : Object.entries(rateesParQuoi || {});
+  const cles = LECTURES_PAR_FILTRE[filtre] || null;
+  const touche = entrees.some(([quoi, k]) => {
+    if (!(k > 0)) return false;
+    const q = String(quoi);
+    if (cles === null || !LECTURES_CONNUES.some((c) => q.startsWith(c))) return true;
+    return cles.some((c) => q.startsWith(c));
+  });
+  if (!touche) return { texte: String(n), etat: 'LU' };
+  return n > 0 ? { texte: '≥' + n, etat: 'PARTIEL' } : { texte: '?', etat: 'NON_LU' };
+}
+
+/** La tete de la note du fil : « Nothing happened » SEULEMENT si rien n a ete refuse. */
+export function teteNoteLive(nEvenements, ratees) {
+  if (nEvenements > 0) return nEvenements + ' event(s)';
+  return ratees > 0 ? 'Nothing could be read' : 'Nothing happened';
+}
+
 /** Unites brutes -> texte decimal exact (sans flottant). */
 function formaterBrut(v, dec) {
   const base = 10n ** BigInt(dec);
