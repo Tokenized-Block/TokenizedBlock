@@ -100,7 +100,8 @@ await cas('C2 le script n imprime jamais l URL ni un segment du chemin ; railway
   }
   /* temoin : la sonde attrape une ligne fautive */
   assert.ok(/\burl\b/.test("'noeud : ' + url"), 'temoin');
-  assert.match(script, /spawnSync\(BIN, \['variables', '--service', SERVICE, '--set', 'BASE_RPC_ARCHIVE=' \+ url\], \{ shell: false/);
+  assert.match(script, /spawnSync\(BIN, \['variables', '--service', SERVICE, '--set', 'BASE_RPC_ARCHIVE=' \+ url\], \{ shell: false, encoding: 'utf8', cwd: path\.join\(ICI, '\.\.'\) \}\)/,
+    'railway doit tourner depuis la racine du depot lie, pas depuis le dossier de l appelant');
   assert.ok(!/process\.exit\(/.test(script), 'process.exit apres fetch fait planter libuv sous Windows');
 });
 

@@ -150,7 +150,9 @@ async function principal(argv) {
 
   const BIN = process.env.RAILWAY_BIN || 'C:\\Users\\VolKov\\AppData\\Roaming\\npm\\node_modules\\@railway\\cli\\bin\\railway.exe';
   console.log('→ railway variables --service ' + SERVICE + ' --set BASE_RPC_ARCHIVE=…');
-  const r = spawnSync(BIN, ['variables', '--service', SERVICE, '--set', 'BASE_RPC_ARCHIVE=' + url], { shell: false, encoding: 'utf8' });
+  /* ⛔ 2026-10-09 (essai de Phil) : « No linked project found » — la CLI cherche le projet lie dans le DOSSIER COURANT, et la
+   *   commande avait ete lancee depuis `mainstreet`. On lance railway depuis la racine de CE depot (lie au projet). */
+  const r = spawnSync(BIN, ['variables', '--service', SERVICE, '--set', 'BASE_RPC_ARCHIVE=' + url], { shell: false, encoding: 'utf8', cwd: path.join(ICI, '..') });
   if (r.error) { console.log('⛔ railway n a pas pu etre lance : ' + String(r.error.code || r.error.message)); return 1; }
   if (r.status !== 0) { console.log('⛔ railway a refuse (code ' + r.status + ')\n' + masquer(r.stderr || r.stdout)); return 1; }
   console.log('✅ BASE_RPC_ARCHIVE pose sur « ' + SERVICE + ' ». Railway redeploie le service.');
