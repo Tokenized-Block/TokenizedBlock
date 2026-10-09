@@ -96,6 +96,13 @@ await cas('B2 navigateur : les getLogs de la factory ont publicnode en repli APR
   assert.match(app, /const REPLI_LOGS_FACTORY = 'https:\/\/base-rpc\.publicnode\.com';/);
   assert.match(app, /\? \[RESEAUX\[CHAINE\]\.b20Rpc \|\| RESEAUX\[CHAINE\]\.rpc, \.\.\.\(methode === 'eth_getLogs' && CHAINE === 8453/);
 });
+await cas('B3 navigateur : un getLogs a plus de 9 adresses refuse partout est relu en lots de 9 ; un lot en echec fait echouer le tout', async () => {
+  assert.match(app, /if \(methode === 'eth_getLogs' && multiAdresses\) \{\s+const adrs = filtreLogs\.address, lots = \[\];\s+for \(let i = 0; i < adrs\.length; i \+= ADRESSES_MAX_PUBLICNODE\) lots\.push/);
+  assert.match(app, /const r = await rpc\('eth_getLogs', \[\{ \.\.\.filtreLogs, address: lot \}\]\);\s+if \(!Array\.isArray\(r\)\) throw/);
+  /* la branche est APRES la boucle des noeuds (repli), jamais avant : le chemin normal reste inchange */
+  const iBoucle = app.indexOf('for (let i = 0; i < noeuds.length; i++) {'), iLots = app.indexOf("if (methode === 'eth_getLogs' && multiAdresses) {");
+  assert.ok(iBoucle > 0 && iLots > iBoucle);
+});
 await cas('B1 charger() pose nos blocks AVANT le balayage de la factory', async () => {
   const i = app.indexOf('async function charger() {');
   assert.ok(i > 0);

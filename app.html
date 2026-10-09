@@ -2700,7 +2700,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-carte-live-repli-logs" hidden>Build <code>20261009-carte-live-repli-logs</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-live-lots-de-9" hidden>Build <code>20261009-live-lots-de-9</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4364,6 +4364,23 @@ async function rpcReseau(methode, params) {
       if (rpcRegul) rpcRegul.noter(url, 'ok');
       return j.result;
     }
+  }
+  /* ⛔⛔ 2026-10-09 — UN getLogs A PLUS DE 9 ADRESSES, REFUSE PARTOUT, EST RELU EN LOTS DE 9. Mesure du jour : base.org (le seul
+   *   noeud qui servait plus de 9 adresses) repond 429 a tout getLogs ; publicnode plafonne a 9 adresses. Le Live affichait donc
+   *   « amount not read » sur chaque ligne et « Sent ? ». On redemande la meme fenetre par lots de 9 — chaque lot passe par la
+   *   rotation normale (publicnode compris) ; le resultat est l UNION des lots. ⛔ Un seul lot en echec = la lecture entiere
+   *   echoue (jamais une union partielle presentee comme complete). */
+  if (methode === 'eth_getLogs' && multiAdresses) {
+    const adrs = filtreLogs.address, lots = [];
+    for (let i = 0; i < adrs.length; i += ADRESSES_MAX_PUBLICNODE) lots.push(adrs.slice(i, i + ADRESSES_MAX_PUBLICNODE));
+    const res = [];
+    for (const lot of lots) {
+      /* un lot a <= 9 adresses n est plus « multi » : il ne repasse jamais par cette branche (pas de recursion sans fin) */
+      const r = await rpc('eth_getLogs', [{ ...filtreLogs, address: lot }]);
+      if (!Array.isArray(r)) throw derniere || new Error('a batch of addresses returned no list');
+      res.push(...r);
+    }
+    return res;
   }
   throw derniere || new Error('RPC unreachable on all nodes');
 }
