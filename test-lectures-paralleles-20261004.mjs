@@ -605,7 +605,7 @@ async function mutant(nom, fichier, de, vers, rougeSi) {
   ok(m.une && rouge, 'G mutant « ' + nom + ' » : ROUGE' + (m.une ? '' : ' (⛔ la chaine a muter n est pas dans ' + fichier + ' exactement une fois)'));
 }
 {
-  await mutant('egalite : le dernier gagne (>= au lieu de >)', 'echange.js', 'if (!best || quote > best.quote) {\n      best = { cle: e.cle,'.replace('\n', os.EOL === '\r\n' && lire('echange.js').includes('\r\n') ? '\r\n' : '\n'), 'if (!best || quote >= best.quote) {\n      best = { cle: e.cle,',
+  await mutant('egalite : le dernier gagne (>= au lieu de >)', 'echange.js', 'if (!best || quote > best.quote) {\n      best = { cle: e.cle,'.replace('\n', os.EOL === '\r\n' && /\r\n/.test(lire('echange.js')) ? '\r\n' : '\n'), 'if (!best || quote >= best.quote) {\n      best = { cle: e.cle,',
     async (dir) => !(await comparer('egalite', await imp('echange.js', dir))).memeReponse);
   await mutant('les devis sont juges dans l ordre inverse de la liste', 'echange.js', 'for (const [i, e] of essais.entries()) {', 'for (const [i, e] of [...essais.entries()].reverse()) {',
     async (dir) => !(await comparer('hookEgalite', await imp('echange.js', dir))).memeReponse);
@@ -648,7 +648,7 @@ async function mutant(nom, fichier, de, vers, rougeSi) {
     async (dir) => { const Mm = await imp('marche.js', dir); const f = noeud(() => ({ v: mot(8), ms: 1 })); const T = '0xb2000000000000000000000000000000000000c1'; await Mm.decimalesLues({ rpc: f.rpc, stateView: SV, jeton: T }); await Mm.decimalesLues({ rpc: f.rpc, stateView: V4_ADRESSES[84532].stateView, jeton: T }); return f.s.appels !== 2; });
   await mutant('la memoire des decimales n est jamais remplie', 'marche.js', 'decimalesConnues.set(k, d);', '',
     async (dir) => { const Mm = await imp('marche.js', dir); Mm.oublierDecimales(); const e = { sqrt: 1n << 96n, supply: 10n ** 16n }; await lireAction(Mm, e); return (await lireAction(Mm, e)).s.appels !== 2; });
-  await mutant('decimales + supply de nouveau en file (marche d une action)', 'marche.js', "async () => BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66)),\n      ]);".replace('\n', lire('marche.js').includes('\r\n') ? '\r\n' : '\n'),
+  await mutant('decimales + supply de nouveau en file (marche d une action)', 'marche.js', "async () => BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66)),\n      ]);".replace('\n', /\r\n/.test(lire('marche.js')) ? '\r\n' : '\n'),
     "async () => BigInt(String(await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur('totalSupply()') }, 'latest'])).slice(0, 66)),\n      ], 1);",
     async (dir) => { const Mm = await imp('marche.js', dir); Mm.oublierDecimales(); const x = await lireAction(Mm, { sqrt: 1n << 96n, supply: 10n ** 16n }); return x.v.etat === 'LUE' && x.s.max === 1; });
   await mutant('decimales + supply + liquidite de nouveau en file (marche d un block)', 'marche.js', '], (f) => f());', '], (f) => f(), 1);',
