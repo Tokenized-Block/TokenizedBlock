@@ -204,8 +204,10 @@ ok(/nb\.addEventListener\('click', \(\) => \{ try \{ bcOuvrirPop\(\{ sansBascule
   && /if \(d && !d\.open && opts\.vue\) \{ try \{ bcVue\(opts\.vue\); \}/.test(html), 'C2 l onglet Blocks ouvre le panneau sur Trade SANS quitter Blocks ; deja ouvert, sa vue n est pas changee');
 ok(/const carte = \$\('#bBotLoopCarte'\), niche = \$\('#bcBotLoop'\); if \(carte && niche\) niche\.append\(carte\);/.test(html) && (html.match(/id="bBotLoopCarte"/g) || []).length === 1 && /<div id="bcBotLoop"><\/div>/.test(html),
   'C2 la carte « Bot loop · Option A » est DEPLACEE dans le panneau (le meme element, une seule fois dans la page) — pas de doublon');
-ok(/if \(!achat && !ACTIONS_PAR_ADR\.has\(a\)\) \{/.test(bcSrc) && /if \(ml && Number\(ml\.prixUsd\) > 0 && \/\^aerodrome\$\/i\.test\(String\(ml\.dex \|\| ''\)\)\) choix\.push\(\[sa, 'for ' \+ st\.symbole\]\);/.test(bcSrc),
-  'C2 vente d un block : le menu ajoute les actions que l index prixe sur Aerodrome (route BLOCK>ACTION mesuree) ; jamais pour une action');
+/* 2026-10-04 soir (retest wallet reel, Rabby) : vendre un block contre une action Aerodrome est un FRANCHISSEMENT (3 appels a grouper) ;
+ *   le ticket le proposait et le panneau signait la jambe 1 seule. Il ne le propose plus (la commande ecrite passe par le lot). */
+ok(!bcSrc.includes("choix.push([sa, 'for ' + st.symbole])") && !bcSrc.includes('if (!achat && !ACTIONS_PAR_ADR.has(a)) {'),
+  'C2 vente d un block : le ticket ne propose PLUS les actions Aerodrome (un franchissement signe appel par appel s arretait en USDC)');
 /* la recherche d un block */
 ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /const j = bcResoudre\(v\);\n\s+if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
   'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');
@@ -326,7 +328,7 @@ const avecDelai = srcDelai ? new Function('return ' + srcDelai)() : null;
 ok(/signal: AbortSignal\.timeout\(methode === 'eth_getLogs' \? 20000 : 8000\) \}\);/.test(html), 'C3 le fetch RPC du navigateur a un delai maximal (8 s, 20 s pour des logs) — il n en avait AUCUN');
 ok(/\[decDe, decVers\] = await Promise\.all\(\[de\.adr, vers\.adr\]\.map\(\(x\) => bcAvecDelai\(bcDecimales\(x\), 6000\)\.catch\(\(\) => null\)\)\);/.test(bcSrc),
   'C3 echange : les decimales sont lues en parallele, bornees a 6 s ; illisibles = unites brutes, la carte s affiche quand meme');
-ok(/const direct = qui === 'You';\n\s+if \(direct\) \{ void planifier\(\); return; \}/.test(bcSrc) && /if \(direct\) return signer\(\);/.test(bcSrc) && /bcBoutons\(m, \[\['Prepare the plan', planifier\], \['Dismiss', refuser, true\]\]\);/.test(bcSrc),
+ok(/const direct = qui === 'You';\n\s+if \(direct\) \{ void planifier\(\); return; \}/.test(bcSrc) && /if \(direct && !franchissement\) return signer\(\);/.test(bcSrc) && /bcBoutons\(m, \[\['Prepare the plan', planifier\], \['Dismiss', refuser, true\]\]\);/.test(bcSrc),
   'C3 Buy / Sell DIRECTS pour la personne (son Review construit le plan et ouvre le wallet) ; une proposition d agent ou d AiFi garde ses deux clics');
 ok((bcSrc.match(/bcOpMaj\(op, 'notOffered'\);/g) || []).length === 2 && /notOffered: \['refused — nothing was sent', 'non'\]/.test(bcSrc) && /bcOpMaj\(op, 'proposed'\); \/\* un nouvel essai rouvre l operation \*\//.test(bcSrc),
   'C3 un plan REFUSE (ou un solde insuffisant) REFERME l operation — elle restait a « waiting for you » ; un nouvel essai la rouvre');

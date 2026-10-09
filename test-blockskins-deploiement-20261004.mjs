@@ -30,7 +30,11 @@ ok('0x' + fin.slice(24, 64) === USDC_BASE.toLowerCase() && '0x' + fin.slice(88, 
   'A elle finit par les deux arguments du constructeur : le USDC et le wallet des frais DU DEPOT (frais-creation.js)');
 ok(D.constructeur.usdc === USDC_BASE.toLowerCase() && D.constructeur.walletDesFrais === FEE_WALLET.toLowerCase() && D.chaine === 8453, 'A ce qu elle annonce (chaine 8453, USDC, wallet des frais) est ce qu elle encode');
 ok(crypto.createHash('sha256').update(lire('contracts/src/BlockSkins.sol')).digest('hex') === D.sha256Source, 'A elle a ete generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
-ok(D.adresse === null && Object.isFrozen(D), 'A aucune adresse deployee n est declaree, et l objet est fige');
+/* DEPLOYE le 2026-10-04 par le proprietaire ; adresse, tx et owner donnes par SA page et RELUS sur la chaine le meme soir (input de la tx
+ *   identique a la donnee figee, contrat cree a cette adresse, USDC()/FEE_WALLET()/owner() conformes). Le test epingle ce qui a ete relu. */
+ok(D.adresse === '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' && D.txDeploiement === '0xc6e22bfa0b6a2dd931c59709b284d58be762a2b87317941168694f93126a2c9b'
+  && D.blocDeploiement === 52175537 && D.owner === '0x37eb9b7ce0b51fe12fbf092026e001918128580a' && Object.isFrozen(D),
+  'A l adresse deployee, sa transaction, son bloc et son owner sont ceux relus sur la chaine ; l objet est fige');
 ok(octets.length - 64 <= 49152 && octets.length > 1000, 'A le code de creation tient sous la limite EIP-3860 (49 152 octets)');
 
 console.log('— B. la page');

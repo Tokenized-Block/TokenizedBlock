@@ -103,7 +103,10 @@ async function router(dir, de, vers) {
 console.log('— C. app.html : le ticket');
 const html = lire('app.html');
 /* Phil, 2026-10-04 : « swap action to USDC et inversement, pas que ETH — USDC natif sera plus simple » : USDC d abord pour une action */
-ok(/else if \(ACTIONS_PAR_ADR\.has\(a\)\) choix = \(q && q\.ok \? \[\[q\.adr, 'for ' \+ q\.sym\]\] : \[\]\)\.concat\(\[\['ETH', 'for ETH'\]\]\);/.test(html), 'C vendre une action : sa cotation (USDC) en premier, « for ETH » en second');
+/* 2026-10-04 soir (retest Rabby : « 0 WETH recu, -100 % » sur NVDAc -> ETH, alors que la simulation sur la vraie chaine ne revertait pas) :
+ *   une action AERODROME ne se vend plus « for ETH » depuis le ticket ; une action v4 si (le routeur Uniswap rend l ETH natif). */
+ok(html.includes("else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat(POOLS_ACTIONS_AERODROME.has(a) ? [] : [['ETH', 'for ETH']]);"),
+  'C vendre une action : sa cotation (USDC) en premier ; « for ETH » seulement pour une action a pool v4');
 /* 2026-10-04 (soir) : les choix de PAIEMENT vivent dans `bcChoixPaiement`, une seule liste pour le ticket Buy ET pour le mode S.I */
 ok(/function bcChoixPaiement\(a, q\) \{/.test(html) && /if \(ACTIONS_PAR_ADR\.has\(a\)\) return \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\];/.test(html)
   && /if \(!standard\) return \[\[q\.adr, q\.sym\]\];\s+const choix = \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\];/.test(html),

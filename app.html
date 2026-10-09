@@ -21700,6 +21700,18 @@ async function bcAvecWallet(m, suite) {
   return false;
 }
 /** Un echange entre deux jetons (adresses), montant en unites brutes du jeton paye. `ref` = le numero de la commande d un agent. */
+/** COMMENT un plan du planificateur part vers le wallet — lu dans le plan, jamais devine :
+ *  - `approbations` : le plan ne porte que des autorisations ; on les signe, puis on redemande le plan ;
+ *  - `franchissement` : la route traverse deux marches (planFranchissement) — vrai DES l etape des approbations, ou `atomique`
+ *    n est pas encore pose ;
+ *  - `lot` : le plan PRET exige l atomicite : ses appels partent ensemble ou pas du tout ;
+ *  - `ethParDeballage` : la sortie est de l ETH natif obtenu en deballant du WETH sur le routeur Aerodrome (le wallet peut afficher
+ *    « 0 WETH recu » : mesure avec Rabby le 2026-10-04, la transaction simulee sur la vraie chaine ne revertait pas). */
+function bcModeEnvoi(p) {
+  const approbations = !!p && p.etat === 'APPROBATIONS';
+  return { approbations, franchissement: !!p && p.via === 'planFranchissement', lot: !!p && !approbations && p.atomique === true,
+    ethParDeballage: !!p && p.route === 'ACTION>ETH' && p.pool === 'aerodrome' };
+}
 async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
@@ -21765,13 +21777,50 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     if (fApp !== null && Number.isFinite(fApp) && fApp > 0) bcEtape(m, 'App fee: ' + (fApp / 100) + ' %, inside the transaction.');
     else if (fApp === 0 && fMarche === null) bcEtape(m, 'No app fee on this route.');
     if (rs.recoitAuMoins !== undefined && rs.recoitAuMoins !== null) bcEtape(m, 'You receive at least ' + (decVers === null ? rs.recoitAuMoins + ' raw units of ' : bcUnites(rs.recoitAuMoins, decVers) + ' ') + vers.sym + '.');
-    const approbations = p.etat === 'APPROBATIONS';
+    const { approbations, franchissement, lot, ethParDeballage } = bcModeEnvoi(p);
     bcOpMaj(op, 'planned');
     /* un wallet n a souvent AUCUN prix pour un block frais : il compare alors l entree a une sortie « sans valeur » et alerte
      *   (mesure de Phil avec Rabby : « price difference exceeds 20 % » sur un aller-retour qui a perdu ~1 %). On le dit AVANT. */
     if (moi && (de.adr === moi || vers.adr === moi) && !actionAffichee) bcEtape(m, 'Your wallet may warn about a price difference: it often has no price for a block. The minimum you receive is the line above.');
+    /* ⛔ un FRANCHISSEMENT se dit AVANT la premiere signature, approbations comprises : sans cela la personne signe deux
+     *   approbations pour une route que son wallet ne pourra pas prendre. La marche sure est nommee : deux echanges. */
+    if (franchissement) {
+      const pivot = bcCotation(de.adr);
+      bcEtape(m, 'This route crosses two markets: its calls must be sent TOGETHER, as one batch. A wallet that cannot batch will refuse, and nothing is sent. '
+        + 'The sure way is two trades: sell ' + de.sym + ' for ' + ((pivot && pivot.ok && pivot.sym) || 'ETH') + ', then buy ' + vers.sym + '.');
+    }
+    if (ethParDeballage) bcEtape(m, 'This route pays native ETH after unwrapping: your wallet may show “0 WETH received”. The minimum you receive, in ETH, is the line above. For a figure your wallet shows as is, sell for USDC.');
     const signer = async () => {
       bcOpMaj(op, 'signing');
+      /* ⛔⛔ UN PLAN ATOMIQUE PART EN UN LOT, OU NE PART PAS. `bcSigner` envoie les appels un par un : pour un franchissement cela
+       *   signait la jambe 1 seule (retest Rabby du 2026-10-04 : la transaction s arretait en USDC). L envoi groupe est celui de la
+       *   fiche (`envoyerLotAtomique`, envoi.js) : il ne retombe JAMAIS sur des envois separes. */
+      if (lot) {
+        bcEtape(m, 'Your wallet signs the ' + p.aSigner.length + ' calls together…');
+        let r;
+        try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, calls: p.aSigner.map((c) => ({ to: c.to, data: c.data, value: c.value || '0x0' })) }); }
+        catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+        if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
+          bcOpMaj(op, 'done', r.hash);
+          bcEtape(m, 'Done — ' + court(r.hash) + '.', 'oui');
+          m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + r.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+          bcNoter({ type: 'signed', ...refs, tx: r.hash, account: String(compte).toLowerCase() });
+          bcJournal('swap ' + de.sym + ' to ' + vers.sym, r.hash);
+          return;
+        }
+        if (r.etat === 'CONFIRME') {
+          bcEtape(m, 'Part of this trade went through and part did not. Do NOT sign again — open your wallet and look at what you hold first.', 'non');
+          bcNoter({ type: 'failed', ...refs, ...(r.hash ? { tx: r.hash } : {}) });
+          bcOpMaj(op, 'failed', r.hash);
+          return;
+        }
+        bcEtape(m, messageEnvoi(r), 'non');
+        if (!r.hash) bcEtape(m, 'Nothing was sent. Two trades do the same: sell ' + de.sym + ' first, then buy ' + vers.sym + '.');
+        bcNoter({ type: 'failed', ...refs, ...(r.hash ? { tx: r.hash } : {}) });
+        bcOpMaj(op, r.hash ? 'sent' : 'notOffered', r.hash);
+        bcBoutons(m, [['Start again', planifier, true]]);
+        return;
+      }
       const s = await bcSigner(m, p.aSigner);
       if (!s.ok) {
         bcNoter({ type: s.refuse ? 'declined' : 'failed', ...refs, ...(s.hash ? { tx: s.hash } : {}) });
@@ -21787,8 +21836,10 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     };
     /* DIRECT pour la personne (voir plus bas) : le plan pret, le wallet s ouvre — c est LUI la confirmation. Une proposition d agent
      *   ou d AiFi garde son clic. */
-    if (direct) return signer();
-    bcBoutons(m, [[approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
+    /* un franchissement n ouvre JAMAIS le wallet tout seul : la personne lit d abord la ligne ci-dessus, puis dit que son wallet groupe */
+    if (direct && !franchissement) return signer();
+    bcBoutons(m, [[franchissement ? 'My wallet can batch — ' + (approbations ? 'sign the ' + p.aSigner.length + ' approval(s)' : 'sign the ' + p.aSigner.length + ' calls together')
+      : approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
   };
   /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, Buy et Sell IB022 passes avec Rabby) : « Buy / Sell DIRECTS ». Une commande que la
    *   personne a ecrite ou validee elle-meme (ticket, barre du Chat) ne demande plus « Prepare the plan » puis « Sign » : son Review
@@ -22090,18 +22141,19 @@ function bcPeindreTicket(a, sym, mk, snap) {
     if (achat) choix = bcChoixPaiement(a, q);
     /* 2026-10-04 : une action se vend contre ETH aussi (v4 : action -> USDC -> ETH ; Aerodrome : action -> USDC -> WETH puis ETH
      *   natif) — 30/30 actions echangeables executees sur fork, frais recu par le wallet des frais a chaque fois. */
-    else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat([['ETH', 'for ETH']]);
+    /* ⛔⛔ 2026-10-04 soir — RETEST WALLET REEL (Rabby), deux sorties RETIREES du ticket parce qu elles n aboutissent pas pour un
+     *   wallet ordinaire, alors que le ticket promet « seulement celles qui aboutissent » :
+     *   (1) une action de la table AERODROME ne se vend plus « for ETH » ici. La route est JUSTE (simulee depuis le compte de test sur
+     *       la vraie chaine : pas de revert, 0,0000997 WETH sortis des pools pour 0,00114654 NVDAc, deballes en ETH natif) — mais le
+     *       wallet, qui lit « swap vers WETH », affiche « 0 WETH recu, -100 % » : la personne annule, ou apprend a ignorer son wallet.
+     *       Elle se vend « for USDC » (meme montage que l achat ETH -> NVDAc, que Rabby a affiche avec les bons montants). Une action
+     *       a pool v4 garde « for ETH » : c est le routeur Uniswap, qui rend l ETH natif directement.
+     *   (2) un block ne se vend plus contre une action Aerodrome depuis le ticket. Ce plan est un FRANCHISSEMENT : trois appels qui
+     *       doivent partir ENSEMBLE ; un wallet qui ne groupe pas signait le premier seul (block -> USDC) et s arretait la — mesure :
+     *       « at least 0.00030462 NVDAc » annonce, 0,0731 USDC montre par le wallet. La commande ecrite reste possible, mais elle
+     *       passe par l envoi groupe et le DIT avant toute signature (voir bcProposerSwap). */
+    else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat(POOLS_ACTIONS_AERODROME.has(a) ? [] : [['ETH', 'for ETH']]);
     else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
-    /* ⛔ « propose toutes les routes possibles dans le menu » (Phil) — seulement celles qui ABOUTISSENT. Mesure prod du 2026-10-04 :
-     *   vendre un block contre une action cotee sur Aerodrome (IB022 > NVDAc) rend APPROBATIONS (route BLOCK>ACTION). Un block peut
-     *   donc sortir vers ces actions-la : on les ajoute a la VENTE d un block. OUSD > block n a pas pu etre cote ce jour-la (noeud en
-     *   quota) : pas ajoute. (Une action se vend contre ETH ou USDC — voir plus haut.) */
-    if (!achat && !ACTIONS_PAR_ADR.has(a)) {
-      for (const st of ACTIONS_COINBASE) {
-        const sa = String(st.adr).toLowerCase(), ml = marcheParAdr.get(sa);
-        if (ml && Number(ml.prixUsd) > 0 && /^aerodrome$/i.test(String(ml.dex || ''))) choix.push([sa, 'for ' + st.symbole]);
-      }
-    }
     const avant = s.value; s.textContent = '';
     for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
     if (choix.some(([v]) => v === avant)) s.value = avant;
