@@ -13,7 +13,7 @@
  * ⛔ BORNE : que CDP serve l archive n est PAS prouve ici (cle non posee au moment du banc) — le script le mesure. */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { lireUrl, masqueur, formeCdp, urlDepuisCleNue } from './outils/poser-rpc-archive.mjs';
+import { lireUrl, masqueur, formeCdp, urlDepuisCleNue, formeDeCle } from './outils/poser-rpc-archive.mjs';
 
 let n = 0;
 const cas = async (titre, f) => { n++; try { await f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -82,7 +82,9 @@ await cas('C1 le script : forme Base MAINNET exigee, lecture du fichier, masquag
   assert.equal(urlDepuisCleNue('deux mots ' + CLE), null);
   assert.equal(urlDepuisCleNue('court'), null);
   assert.equal(urlDepuisCleNue('https://x/' + CLE), null);
-  assert.deepEqual(formeCdp(URL_CDP), { ok: true, longueurCle: CLE.length });
+  assert.deepEqual(formeCdp(URL_CDP), { ok: true, longueurCle: CLE.length, forme: 'alphanumerique' });
+  assert.equal(formeDeCle('123e4567-e89b-12d3-a456-426614174000'), 'UUID', 'un UUID est la forme d un Project ID / Secret key ID');
+  assert.equal(formeDeCle('abc_def'), 'autre');
   assert.equal(formeCdp('https://api.developer.coinbase.com/rpc/v1/base-sepolia/' + CLE).ok, false);
   assert.equal(formeCdp('https://evil.example/rpc/v1/base/' + CLE).ok, false);
   const m = masqueur(URL_CDP);

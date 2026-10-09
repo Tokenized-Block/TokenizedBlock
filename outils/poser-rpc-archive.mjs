@@ -59,7 +59,15 @@ export function formeCdp(url) {
   if (x.protocol !== 'https:' || x.host !== 'api.developer.coinbase.com' || segs.slice(0, 3).join('/') !== 'rpc/v1/base' || !segs[3] || segs.length !== 4) {
     return { ok: false, pourquoi: 'forme inattendue (hote ' + x.host + ', chemin ' + segs.slice(0, 3).join('/') + '/…) : on attend https://api.developer.coinbase.com/rpc/v1/base/<cle>, Base MAINNET' };
   }
-  return { ok: true, longueurCle: segs[3].length };
+  return { ok: true, longueurCle: segs[3].length, forme: formeDeCle(segs[3]) };
+}
+/** ⛔ 2026-10-09 (essai de Phil : 36 caracteres, 401 « invalid key ») — la FORME de la valeur, jamais la valeur. 36 caracteres en
+ *   8-4-4-4-12 = un UUID : c est la forme d un Project ID ou d un ID de Secret API Key CDP, pas celle d une Client API Key. */
+export function formeDeCle(cle) {
+  const c = String(cle ?? '');
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c)) return 'UUID';
+  if (/^[A-Za-z0-9]+$/.test(c)) return 'alphanumerique';
+  return 'autre';
 }
 
 /* ⛔ 2026-10-09 (premier essai de Phil : lance depuis le mauvais dossier, avec le chemin d EXEMPLE) — le fichier etait une marche de
@@ -92,7 +100,9 @@ async function principal(argv) {
   const forme = formeCdp(url);
   if (!forme.ok) { console.log('⛔ ' + forme.pourquoi); return 1; }
   const masquer = masqueur(url);
-  console.log('✅ URL de forme CDP Node Base mainnet (cle de ' + forme.longueurCle + ' caracteres, NON affichee)');
+  console.log('✅ URL de forme CDP Node Base mainnet (cle de ' + forme.longueurCle + ' caracteres, forme ' + forme.forme + ', NON affichee)');
+  if (forme.forme === 'UUID') console.log('⚠️ forme UUID (8-4-4-4-12) : c est celle d un PROJECT ID ou d un ID de SECRET API KEY, pas d une Client API Key. '
+    + 'Portail CDP > API Keys > onglet « Client API Key » (pas « Secret API Keys », pas l ID du projet).');
 
   const appel = async (methode, params) => {
     const t0 = Date.now();
@@ -108,7 +118,12 @@ async function principal(argv) {
   };
 
   const chaine = await appel('eth_chainId', []);
-  if (!chaine.ok || chaine.result !== '0x2105') { console.log('⛔ eth_chainId : ' + (chaine.ok ? chaine.result + ' (pas Base mainnet 0x2105)' : chaine.quoi)); return 1; }
+  if (!chaine.ok || chaine.result !== '0x2105') {
+    console.log('⛔ eth_chainId : ' + (chaine.ok ? chaine.result + ' (pas Base mainnet 0x2105)' : chaine.quoi));
+    if (!chaine.ok && /401/.test(chaine.quoi)) console.log('   401 = Coinbase ne reconnait pas cette valeur comme Client API Key. '
+      + (forme.forme === 'UUID' ? 'Forme UUID : tu as tres probablement copie le Project ID ou l ID d une Secret API Key.' : 'Recopie la Client API Key, ou attends quelques minutes si elle vient d etre creee.'));
+    return 1;
+  }
   const teteR = await appel('eth_blockNumber', []);
   if (!teteR.ok) { console.log('⛔ eth_blockNumber : ' + teteR.quoi); return 1; }
   const tete = parseInt(teteR.result, 16);
