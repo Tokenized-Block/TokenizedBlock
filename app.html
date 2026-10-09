@@ -1813,6 +1813,9 @@ details[open] > summary::before{transform:rotate(90deg)}
 
       <div class="bcVue on" id="bc-chat">
         <div class="bcFil" id="bcFil" aria-live="polite"></div>
+        <!-- 2026-10-09 (Phil : « le chat reste bloque apres une interaction, les boutons d interaction ne sont plus la ») : les gestes
+             Brain vivaient seulement dans la vue Market ; un clic basculait sur le Chat et on ne pouvait plus continuer. Ils sont ICI aussi. -->
+        <div class="bcPre bcParler" id="bcParlerChat"></div>
         <div class="bcPre" id="bcPre"></div>
         <form id="bcForm" class="bcComposer" autocomplete="off">
           <span class="bcInvite" aria-hidden="true">›</span>
@@ -2703,7 +2706,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-creances-nommees" hidden>Build <code>20261009-creances-nommees</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-chat-par-block" hidden>Build <code>20261009-chat-par-block</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22459,16 +22462,21 @@ function bcPeindreActions(a, sym) {
   const zp = bcEl('div', { cls: 'bcParler' });
   zp.append(bcEl('p', { cls: 'bcSousTitre', text: 'Talk with its brain' }));
   z.append(zp);
+  /* ⛔ 2026-10-09 (Phil) : les MEMES gestes dans la vue Chat (#bcParlerChat), ou chaque reponse arrive — sinon la conversation
+   *   s arretait au premier clic. Les deux rangees sont repeintes ensemble, pour le block affiche. */
+  const zc = $('#bcParlerChat');
+  if (zc) zc.textContent = '';
+  const parler = (texte, f) => { bouton(texte, f, zp); if (zc) bouton(texte, f, zc); };
   const nom = sym || court(a);
-  bouton('How are you? 💬', () => {
+  parler('How are you? 💬', () => {
     const ph = bcPhaseDe(a);
     bcVue('chat');
     bcMessage('You', 'moi', 'How are you, ' + nom + '?');
     const snap = window.__TB_BRAIN_SNAPSHOT__;
     const mots = snap && String(snap.address || '').toLowerCase() === a ? bcRessenti(snap) : [];
     bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', repliqueDe(ph) +(mots.length ? ' (' + mots.join(', ') + ')' : ''));
-  }, zp);
-  bouton('What would you do? 🧠', () => {
+  });
+  parler('What would you do? 🧠', () => {
     const ph = bcPhaseDe(a), c = conseilDe(ph);
     bcVue('chat');
     bcMessage('You', 'moi', 'What would you do now, ' + nom + '?');
@@ -22476,8 +22484,22 @@ function bcPeindreActions(a, sym) {
     if (c.geste === 'buy') bcBoutons(m, [['Write the buy', () => { const s = $('#bcSaisie'); s.value = 'buy this with '; s.focus(); const n = $('#bcNote'); n.className = 'note'; n.textContent = 'Add the amount and the currency (e.g. 0.002 ETH), then send.'; }]]);
     else if (c.geste === 'sell_quarter') bcBoutons(m, [['Open the sell ticket (25 %)', () => { bc.cote = 'sell'; bcVue('trade'); bcRepeindre(); }]]);
     else if (c.geste === 'gm') bcBoutons(m, [['Say GM 👋', () => bcSaluer(a, sym, 'GM')]]);
-  }, zp);
-  bouton('Its circle 🫂', () => bcCercle(a, sym), zp);
+  });
+  parler('Its circle 🫂', () => bcCercle(a, sym));
+}
+/* ⛔⛔ UN FIL DE CONVERSATION PAR BLOCK (Phil, 2026-10-09 : « si je change de block, la conv de l ancien block reste sur le panel »).
+ *   Le fil (#bcFil) etait UN seul pour tous les blocks. Au changement d ADRESSE (pas de nom : un nom qui arrive ne change pas de
+ *   block), les messages du block quitte sont RANGES (les noeuds DOM eux-memes : leurs boutons et cartes d operation gardent leurs
+ *   ecouteurs) et ceux du block affiche reviennent. Rien n est efface : revenir sur un block rend sa conversation. */
+function bcChangerFil(a) {
+  const fil = $('#bcFil'); if (!fil) return;
+  if (!bc.fils) bc.fils = new Map();
+  /* le tout premier block garde ce que le fil contient deja (accueil, reponses arrivees avant sa lecture) */
+  if (!bc.filDe) { bc.filDe = a; return; }
+  bc.fils.set(bc.filDe, [...fil.childNodes]);
+  fil.textContent = '';
+  for (const n of bc.fils.get(a) || []) fil.append(n);
+  bc.filDe = a;
 }
 /* La phase de CE block : celle de l instantane vivant s il s agit du cerveau affiche, sinon rejouee depuis son adresse et ses faits lus. */
 function bcPhaseDe(a) {
@@ -22889,6 +22911,7 @@ function bcAifiBattre(a, snap) {
 function bcPeindre(snap) {
   if (!snap || !snap.address) return;
   const a = String(snap.address).toLowerCase(), mk = marcheParAdr.get(a) || null;
+  if (bc.filDe !== a) bcChangerFil(a);
   /* le nom : l index du Market d abord ; sinon ce que le contrat dit de lui-meme (lu une fois) ; l adresse abregee en dernier recours */
   const lu = bcNoms.get(a) || null;
   if ($('#bcPop').open) void bcChargerIndex();

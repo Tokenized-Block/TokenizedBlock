@@ -88,6 +88,16 @@ cas('E2 le panneau porte les trois boutons de conversation, dans les actions du 
   const c = corps('function bcPeindreActions(a, sym) {');
   for (const b of ['How are you?', 'What would you do?', 'Its circle']) assert.ok(c.includes("'" + b), b);
 });
+cas('E2b (Phil 2026-10-09 : « le chat reste bloque ») les gestes Brain sont AUSSI dans la vue Chat ; un fil par block', () => {
+  assert.match(app, /<div class="bcPre bcParler" id="bcParlerChat"><\/div>/);
+  const c = corps('function bcPeindreActions(a, sym) {');
+  assert.match(c, /const parler = \(texte, f\) => \{ bouton\(texte, f, zp\); if \(zc\) bouton\(texte, f, zc\); \};/);
+  for (const b of ['How are you?', 'What would you do?', 'Its circle']) assert.ok(c.includes("parler('" + b), b + ' absent de la vue Chat');
+  const f = corps('function bcChangerFil(a) {');
+  assert.match(f, /bc\.fils\.set\(bc\.filDe, \[\.\.\.fil\.childNodes\]\);/);
+  assert.match(f, /for \(const n of bc\.fils\.get\(a\) \|\| \[\]\) fil\.append\(n\);/);
+  assert.match(app, /if \(bc\.filDe !== a\) bcChangerFil\(a\);/);
+});
 cas('E3 la rencontre ne signe rien : elle mene au formulaire du profil, jamais au wallet', () => {
   const r = corps('function bcRencontre(a, symA, b, symB) {') + corps('async function bcPreparerMessageRencontre(');
   assert.ok(!/envoyerDepuisWallet|eth_sendTransaction|wallet_sendCalls|envoyerLotAtomique/.test(r), 'la rencontre envoie elle-meme');
