@@ -692,9 +692,47 @@ let rpcId = 0, rpcTour = 0;
  *   fenetres recentes (~9 000 blocs). L historique profond demande un noeud d archive — decision du proprietaire. */
 /* ⛔ en MODE ESSAI (fork local), aucun repli : ce processus ne doit joindre aucun noeud public (garde du banc wallet-simule) */
 const REPLIS_LOGS_SERVEUR = ESSAI_SRV.actif ? [] : ['https://base-rpc.publicnode.com'];
+/* ⛔⛔ 2026-10-09 — LE NOEUD D ARCHIVE (CDP Node, decision du proprietaire). Son URL porte la CLE dans son chemin
+ *   (https://api.developer.coinbase.com/rpc/v1/base/<cle>, doc CDP) : elle vit SEULEMENT dans la variable BASE_RPC_ARCHIVE,
+ *   posee par outils/poser-rpc-archive.mjs (la valeur ne passe ni par la conversation ni par un shell). Elle n est JAMAIS
+ *   imprimee, jamais rendue par /sante (voir `libelleNoeud`), jamais servie au navigateur.
+ *   ⛔ ORDRE : APRES publicnode. publicnode (gratuit) sert les fenetres recentes ; l archive ne paie que ce qu il refuse.
+ *   ⛔ BUDGET : 10 M BU gratuits par mois chez CDP (doc) ; le cout en BU d un getLogs n est PAS documente. D ou un plafond
+ *     d appels PAR JOUR (BASE_RPC_ARCHIVE_MAX_JOUR, 3 000 par defaut), compte et publie ; au-dela, refus nomme — la fenetre
+ *     reste ratee et le dit, elle n est jamais lue comme vide.
+ *   ⚠️ NON MESURE tant que la cle n est pas posee : que CDP serve l archive. La sonde de /sante (capacite « archive », fenetre de
+ *     999 blocs a -20 000) le mesurera ; outils/poser-rpc-archive.mjs le mesure AVANT de poser. */
+const RPC_ARCHIVE = (() => {
+  if (ESSAI_SRV.actif) return null;
+  const u = String(process.env.BASE_RPC_ARCHIVE || '').trim();
+  try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.href : null; } catch { return null; }
+})();
+const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
+  ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
+const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0 };
+function lecteurArchive() {
+  const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
+  return async (methode, params) => {
+    const j = new Date().toISOString().slice(0, 10);
+    if (archiveCompte.jour !== j) { archiveCompte.jour = j; archiveCompte.appels = 0; archiveCompte.refusBudget = 0; archiveCompte.erreurs = 0; archiveCompte.servis = 0; }
+    if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
+    archiveCompte.appels++;
+    try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) { archiveCompte.erreurs++; throw e; }
+  };
+}
+/** Un message de noeud peut recopier l URL qu il a recue : chaque segment du chemin du noeud d archive est masque avant publication. */
+function masquerCle(s) {
+  let out = String(s);
+  if (RPC_ARCHIVE) { try { for (const seg of new URL(RPC_ARCHIVE).pathname.split('/')) if (seg.length >= 12) out = out.split(seg).join('«hidden»'); } catch { /* rien */ } }
+  return out;
+}
+/** Le nom d un noeud tel qu il peut etre PUBLIE : l hote, jamais le chemin (une cle d API peut y vivre). */
+function libelleNoeud(url) {
+  try { const x = new URL(url); return x.host + (x.pathname && x.pathname !== '/' ? ' (path hidden)' : ''); } catch { return 'unparsable node'; }
+}
 let repliServeur = null;
 async function rpcServeur(methode, params) {
-  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, REPLIS_LOGS_SERVEUR.map((u) => lecteurUrl(u)));
+  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, [...REPLIS_LOGS_SERVEUR.map((u) => lecteurUrl(u)), ...(RPC_ARCHIVE ? [lecteurArchive()] : [])]);
   return repliServeur(methode, params);
 }
 async function rpcServeurBrut(methode, params) {
@@ -733,7 +771,11 @@ const rpcScanCreations = avecRepliLogs(rpcServeur, ESSAI_SRV.actif ? [] : [lecte
  * `logsServis` = combien de noeuds servent un getLogs ; 0 = l historique est AVEUGLE, a lire comme une panne. */
 const NOEUDS_SONDES = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org', 'https://1rpc.io/base'])];
 const etatNoeuds = { lu: null, noeuds: {}, logsServis: null, multiServis: null, archiveServis: null };
+/* le noeud d archive (s il est pose) est sonde lui aussi, mais UNE fois par heure (1 tour sur 6) : ses appels sont factures */
+let sondeTour = 0;
 async function sonderNoeuds() {
+  sondeTour += 1;
+  const sondes = [...NOEUDS_SONDES, ...(RPC_ARCHIVE && sondeTour % 6 === 1 ? [RPC_ARCHIVE] : [])];
   const tete = await rpcServeur('eth_blockNumber', []).then((h) => parseInt(h, 16)).catch(() => null);
   const usdc = USDC_BASE.toLowerCase();
   const multi = [usdc, ...ACTIONS_COINBASE.slice(0, 9).map((a) => String(a.adr).toLowerCase())];
@@ -743,11 +785,12 @@ async function sonderNoeuds() {
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) });
       const j = await r.json().catch(() => null);
       if (j && j.result !== undefined && j.result !== null && !j.error) return 'ok';
-      return j && j.error ? 'refus: ' + String(j.error.message || '').slice(0, 60) : 'refus: HTTP ' + r.status;
-    } catch (e) { return 'muet: ' + String((e && e.message) || e).slice(0, 40); }
+      return j && j.error ? 'refus: ' + masquerCle(String(j.error.message || '')).slice(0, 60) : 'refus: HTTP ' + r.status;
+    } catch (e) { return 'muet: ' + masquerCle(String((e && e.message) || e)).slice(0, 40); }
   };
-  const res = {};
-  for (const url of NOEUDS_SONDES) {
+  /* les verdicts du noeud d archive survivent aux tours ou il n est pas sonde */
+  const res = Object.fromEntries(Object.entries(etatNoeuds.noeuds || {}).filter(([k]) => RPC_ARCHIVE && k === libelleNoeud(RPC_ARCHIVE)));
+  for (const url of sondes) {
     const n = { appel: await essai(url, 'eth_blockNumber', []) };
     if (Number.isSafeInteger(tete)) {
       const b = '0x' + (tete - 2).toString(16), p = '0x' + (tete - 20000).toString(16), p999 = '0x' + (tete - 20000 + 998).toString(16);
@@ -759,14 +802,15 @@ async function sonderNoeuds() {
        *   du balayage des frais (Initialize du PoolManager v4), peu de logs par fenetre. */
       n.archive = await essai(url, 'eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: p, toBlock: p999 }]);
     }
-    res[url.replace('https://', '')] = n;
+    /* ⛔ LE LIBELLE PUBLIE EST L HOTE, JAMAIS L URL : celle du noeud d archive porte une cle d API dans son chemin */
+    res[libelleNoeud(url)] = n;
     await new Promise((ok) => setTimeout(ok, 400));
   }
   const compte = (k) => Object.values(res).filter((n) => n[k] === 'ok').length;
   Object.assign(etatNoeuds, { lu: new Date().toISOString(), noeuds: res, tete,
     logsServis: Number.isSafeInteger(tete) ? compte('logs') : null, multiServis: Number.isSafeInteger(tete) ? compte('multi') : null,
     archiveServis: Number.isSafeInteger(tete) ? compte('archive') : null });
-  console.log('[noeuds] logs servis par ' + etatNoeuds.logsServis + ' · multi ' + etatNoeuds.multiServis + ' · archive ' + etatNoeuds.archiveServis + ' / ' + NOEUDS_SONDES.length);
+  console.log('[noeuds] logs servis par ' + etatNoeuds.logsServis + ' · multi ' + etatNoeuds.multiServis + ' · archive ' + etatNoeuds.archiveServis + ' / ' + Object.keys(res).length);
 }
 if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) setTimeout(() => { void sonderNoeuds().catch(() => {}); setInterval(() => { void sonderNoeuds().catch(() => {}); }, 10 * 60 * 1000).unref(); }, 60000).unref();
 /* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
@@ -841,7 +885,7 @@ async function fraisEnAttente() {
     /* ⛔ 2026-10-09 — 20 REFUS DE SUITE, ON S ARRETE ET ON LE DIT. Mesure : aucun noeud public gratuit ne sert ces fenetres
      *   anciennes (base.org 429, publicnode 403 archive, drpc 10 blocs max). Sans cet arret, chaque passage tentait ~1 520 fenetres
      *   refusees, avec leurs relances. La suite reprend a la premiere fenetre non lue au prochain passage. */
-    if (refusDeSuite >= 20) { arret = 'stopped after 20 refused windows in a row from block ' + (fraisScan.jusqua === null ? depuis : fraisScan.jusqua + 1) + ': no free node serves this depth (an archive node is needed)'; break; }
+    if (refusDeSuite >= 20) { arret = 'stopped after 20 refused windows in a row from block ' + (fraisScan.jusqua === null ? depuis : fraisScan.jusqua + 1) + (RPC_ARCHIVE ? ': no node served them, archive node included (its budget and errors are in /sante.archive)' : ': no free node serves this depth (an archive node is needed)'); break; }
     const haut = Math.min(tete, bas + 998);
     try {
       const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
@@ -4168,6 +4212,8 @@ createServer((req, res) => {
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
+      /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
+      archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
       /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */
       ...(ESSAI_SRV.actif ? { essai: { rpc: ESSAI_SRV.rpc } } : {}) }));
     return;
