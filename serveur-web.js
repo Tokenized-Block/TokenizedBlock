@@ -775,6 +775,17 @@ function lecteurArchive(origine = 'repli') {
     }
   };
 }
+/* ⛔⛔ 2026-10-09 (prod, 20 h 30 UTC) — UN REFUS DE BUDGET N EST PAS UNE PANNE DE NOEUD. Budget du jour epuise, chaque getLogs
+ *   d archive est refuse A COUP SUR jusqu a 00 h UTC. Le rattrapage des createurs traitait ces refus comme des pannes : 3 passes
+ *   refusees -> il SAUTAIT la fenetre (trou 50 889 029 -> 50 989 029, 51 pages, en une demi-heure). Un refus de budget se
+ *   reconnait a sa cause ; devant lui, on ATTEND : ni compte de refus, ni curseur qui descend, ni trou. */
+const RE_BUDGET_ARCHIVE = /archive node daily budget reached/;
+/** Le budget du jour est-il epuise ? Lu sur le compteur, sans appel. */
+const archiveEpuisee = () => Boolean(RPC_ARCHIVE) && archiveCompte.jour === new Date().toISOString().slice(0, 10)
+  && archiveCompte.appels >= ARCHIVE_MAX_JOUR;
+/** Toutes les fenetres ratees l ont-elles ete par le budget (et pas par le noeud) ? Une liste vide n est PAS un refus de budget. */
+const refusDeBudget = (ratees) => Array.isArray(ratees) && ratees.length > 0
+  && ratees.every((w) => RE_BUDGET_ARCHIVE.test(String((w && w.cause) || '')));
 /* ⛔⛔ 2026-10-09 (mesure en prod, noeud d archive pose) — L HISTOIRE PROFONDE VA DIRECTEMENT AU NOEUD D ARCHIVE. Par la chaine de
  *   repli, chaque fenetre ancienne essayait d abord base.org (429, avec ses relances et leurs pauses) puis publicnode (403 au-dela de
  *   ~9 000 blocs) avant d arriver a CDP : le balayage des frais a avance de ~20 000 blocs en 15 min, et la relecture du trou s est
@@ -2206,7 +2217,15 @@ let createursRelecture20261009 = false;
 /* ⛔ COMBIEN DE REFUS DE SUITE SUR LA MEME FENETRE, et les plages qu on a fini par SAUTER. Un trou
  *   nomme vaut mieux qu un index qui ne finit jamais — et infiniment mieux qu un trou invisible. */
 let refusDeSuite = 0;
+/* ⛔⛔ 2026-10-09 : ces trous n etaient NI persistes NI relus — le curseur, lui, l etait. Apres un redeploiement, le trou
+ *   disparaissait et `couvertureComplete` pouvait passer a VRAI sur des blocs jamais lus. Ils sont maintenant sauves avec
+ *   l index, relus par `relireUnTrouRattrapage` (noeud d archive), et `trousRattrapageRelus` garde ce qui a ete relu. */
 const trousRattrapage = [];
+const trousRattrapageRelus = [];
+/* ⛔ UNE RELECTURE COMPLETE, UNE SEULE (drapeau persiste) : avant ce correctif, chaque redeploiement du 2026-10-09 (au moins 7)
+ *   a pu jeter un trou nomme. Absence de trou connu n est pas preuve d absence de trou : on relit tout depuis la tete, une fois. */
+let createursRelecture20261010 = false;
+let attenteBudgetDite = null;
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending.
  *  ⛔ 2026-10-09 (noeud d archive pose) : PERSISTEES avec le trending et RELUES par `relireUnTrou` ; elles ne vivaient qu en memoire et
@@ -2242,6 +2261,30 @@ async function relireUnTrou() {
     if (trousRelus.length > 50) trousRelus.shift();
   }
   return { trou: t, haut, creations: (r.creations || []).length, nouvelles: nouvelles.length };
+}
+/** Relit AU PLUS 100 000 blocs du plus ancien trou du RATTRAPAGE DES CREATEURS (noeud d archive). Meme regle que relireUnTrou :
+ *  le trou ne recule QUE sur une relecture complete ; un refus (de noeud OU de budget) le laisse tel quel. */
+async function relireUnTrouRattrapage() {
+  if (!RPC_ARCHIVE || !trousRattrapage.length || archiveEpuisee()) return null;
+  const t = trousRattrapage[0];
+  const haut = Math.min(t.a, t.de + 100000);
+  const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
+  if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length, budget: refusDeBudget(r.fenetresRatees) };
+  const aFaire = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !createurParBlock.has(c.jeton.toLowerCase()));
+  for (let i = 0; i < aFaire.length; i += 8) {
+    const lot = aFaire.slice(i, i + 8);
+    const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
+    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); }
+  }
+  t.relues = (t.relues || 0) + (r.creations || []).length;
+  t.nouvelles = (t.nouvelles || 0) + aFaire.length;
+  t.de = haut;
+  if (t.de >= t.a) {
+    trousRattrapage.shift();
+    trousRattrapageRelus.push({ ...t, fini: new Date().toISOString() });
+    if (trousRattrapageRelus.length > 50) trousRattrapageRelus.shift();
+  }
+  return { trou: t, haut, creations: (r.creations || []).length, nouvelles: aFaire.length };
 }
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
@@ -2315,6 +2358,14 @@ function chargerTrendingDisque() {
     else if ((x.createurs || []).length >= 5000) { rattrapageDepuis = null; createursRelecture20261009 = true; console.log('[createurs] index saved under the old 5,000 cap — full re-read from the head, once'); }
     /* les trous de creations et leur relecture survivent au redeploiement ; une entree mal formee est ignoree, jamais inventee */
     const trouSain = (t) => t && Number.isSafeInteger(t.de) && Number.isSafeInteger(t.a) && t.a > t.de;
+    for (const t of (Array.isArray(x.trousRattrapage) ? x.trousRattrapage : [])) if (trouSain(t)) trousRattrapage.push({ de: t.de, a: t.a, pages: Number.isSafeInteger(t.pages) ? t.pages : null });
+    for (const t of (Array.isArray(x.trousRattrapageRelus) ? x.trousRattrapageRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRattrapageRelus.push(t);
+    if (x.createursRelecture20261010 === true) createursRelecture20261010 = true;
+    else {
+      /* fichier ecrit AVANT ce correctif : les trous nommes ont pu etre jetes a chaque redeploiement — on relit tout, une fois */
+      rattrapageDepuis = null; createursRelecture20261010 = true;
+      console.log('[createurs] gaps were not persisted before this build — full re-read from the head, once');
+    }
     for (const t of (Array.isArray(x.trousCreations) ? x.trousCreations : [])) if (trouSain(t)) trousCreations.push(t);
     for (const t of (Array.isArray(x.trousRelus) ? x.trousRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRelus.push(t);
     if (x.trouSeme20261009 === true) trouSeme20261009 = true;
@@ -2360,6 +2411,10 @@ function sauverTrendingDisque() {
        *   recommencerait a remonter depuis le present et ne finirait JAMAIS le passe. */
       rattrapageDepuis,
       trousCreations: trousCreations.slice(-50), trousRelus: trousRelus.slice(-50), trouSeme20261009,
+      /* ⛔ les trous du rattrapage des createurs : persistes, sinon un redeploiement les efface et « complet » ment. Champ ajoute
+       *   SANS changer TRENDING_CACHE_VER : la changer jetterait tout le cache, index des createurs compris ; un ancien fichier
+       *   sans ce champ se relit comme « aucun trou », et c est la relecture unique ci-dessus qui couvre ce cas. */
+      trousRattrapage: trousRattrapage.slice(-200), trousRattrapageRelus: trousRattrapageRelus.slice(-50), createursRelecture20261010,
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
     renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
@@ -2431,7 +2486,11 @@ async function lireTrending() {
      *     plus bas serait scanner le vide indefiniment. */
     try {
       if (rattrapageDepuis === null) rattrapageDepuis = fin;
-      if (rattrapageDepuis > PREMIER_BLOCK_TB) {
+      /* ⛔ budget d archive epuise : on n essaie meme pas (le refus est certain), on ne compte rien, on ne descend pas. Dit une fois
+       *   par jour dans le journal. */
+      if (rattrapageDepuis > PREMIER_BLOCK_TB && RPC_ARCHIVE && archiveEpuisee()) {
+        if (attenteBudgetDite !== archiveCompte.jour) { attenteBudgetDite = archiveCompte.jour; console.log('[createurs] archive budget spent for ' + archiveCompte.jour + ' — the walk back waits at ' + rattrapageDepuis + ' (no window skipped)'); }
+      } else if (rattrapageDepuis > PREMIER_BLOCK_TB) {
         const haut = rattrapageDepuis;
         /* ⛔⛔ 10 000 ET NON 43 200, ET C EST UNE MESURE QUI L A IMPOSE. `listerCreations` pagine en
          *     interne par 2000 blocs : une fenetre de 43 200 fait donc 22 pages, et le log de
@@ -2465,6 +2524,8 @@ async function lireTrending() {
          *     qu un trou invisible. */
         if (!(vieux.fenetresRatees || []).length) {
           rattrapageDepuis = bas; refusDeSuite = 0;
+        } else if (refusDeBudget(vieux.fenetresRatees)) {
+          /* le budget s est epuise PENDANT la fenetre : ce n est pas un refus du noeud — on ne compte pas, on reprendra la meme */
         } else if (++refusDeSuite >= 3) {
           trousRattrapage.push({ de: bas, a: haut, pages: (vieux.fenetresRatees || []).length });
           if (trousRattrapage.length > 200) trousRattrapage.shift();
@@ -2485,6 +2546,11 @@ async function lireTrending() {
       if (rt) console.log('[trous] ' + (rt.ratees ? '⛔ relecture ' + rt.trou.de + '..' + rt.haut + ' incomplete (' + rt.ratees + ' page(s) refusee(s)) — le trou reste'
         : 'relu ' + rt.haut + ' · ' + rt.creations + ' creation(s), ' + rt.nouvelles + ' nouvelle(s) · restent ' + trousCreations.length + ' trou(s)'));
     } catch (e) { console.log('[trous] relecture interrompue : ' + e.message); }
+    try {
+      const rr = await relireUnTrouRattrapage();
+      if (rr) console.log('[createurs] ' + (rr.ratees ? '⛔ gap ' + rr.trou.de + '..' + rr.haut + ' not re-read (' + rr.ratees + ' page(s) refused' + (rr.budget ? ', archive budget' : '') + ') — the gap stays'
+        : 'gap re-read up to ' + rr.haut + ' · ' + rr.creations + ' creation(s), ' + rr.nouvelles + ' creator(s) resolved · ' + trousRattrapage.length + ' gap(s) left'));
+    } catch (e) { console.log('[createurs] gap re-read interrupted : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) {
@@ -3337,6 +3403,9 @@ createServer((req, res) => {
        *   trou nomme se rattrape ; un trou tu ne se rattrape jamais. */
       trous: trousRattrapage.length,
       plagesManquees: trousRattrapage.slice(-5),
+      /* ce qui a ete RELU depuis (noeud d archive) ; et si le rattrapage attend le budget du jour, c est dit — pas un silence */
+      plagesRelues: trousRattrapageRelus.slice(-5),
+      attendBudgetArchive: rattrapageDepuis !== null && rattrapageDepuis > PREMIER_BLOCK_TB && archiveEpuisee(),
       borne: 'Blocks whose creation transaction was read since this server started indexing. '
         + 'An empty list means "not indexed yet", never "you created nothing".',
     });
