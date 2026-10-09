@@ -3737,7 +3737,7 @@ import { creerRegulateur } from './regulateur-rpc.js';
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
-import { evenementsLive, completerQuantite } from './fil-live.js';
+import { evenementsLive, completerQuantite, compteDePuce, teteNoteLive } from './fil-live.js';
 /* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
  *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
 import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes, libelleNotes, AVERT_SPAM, compteProfil, resumeEnvois, titreEnvois } from './notes-du-fil.js';
@@ -7279,7 +7279,7 @@ $('#pReseau').addEventListener('click', () => {
   peindrePaires();
   majFraisEtRecap();
   /* ⛔ LE FIL LIVE PARLAIT DE L AUTRE CHAINE */
-  liveEvts = []; liveDernier = null; livePlusAncien = null; liveRatees = 0; liveTrou = 0;
+  liveEvts = []; liveDernier = null; livePlusAncien = null; liveRatees = 0; liveRateesParQuoi.clear(); liveTrou = 0;
   $('#sfLive').innerHTML = '';
   try { peindreHookedRoute(); filHookedTbgasHandlers(); } catch (_) {}
 });
@@ -10019,6 +10019,16 @@ $('#pEnvoyer').addEventListener('click', () => {
 const LIVE_MS = 20000, LIVE_FENETRE = 999; /* tip 20260923-map-anim: Base getLogs ≤1000 — NEVER raise above 999 */
 const LIVE_HISTOIRE_BLOCS = 12000; /* tip 20260923-created-history: auto lireLive('ancien') until ~12k covered */
 let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = null, liveEnCours = false, liveRatees = 0;
+/** ⛔ 2026-10-09 : les lectures refusees PAR NATURE (creations, swaps, transfers, messages…, decouverte, tout) —
+ *  une puce dont la lecture a ete refusee dit « ? », jamais « 0 » (compteDePuce, fil-live.js). */
+const liveRateesParQuoi = new Map();
+function noterRateesLive(liste, quoiDefaut) {
+  for (const f of liste || []) {
+    const q = String((f && f.quoi) || quoiDefaut || 'tout');
+    liveRateesParQuoi.set(q, (liveRateesParQuoi.get(q) || 0) + 1);
+    liveRatees++;
+  }
+}
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
 /** l heure de la derniere lecture du fil : un clic sur Social ne relance pas une lecture de moins de 10 s */
@@ -10185,20 +10195,23 @@ async function lireLive(sens) {
       deBloc = liveDernier === null ? Math.max(0, fin - LIVE_FENETRE) : liveDernier + 1;
       if (deBloc > aBloc) return;
     }
-    $('#sfLiveNote').textContent = 'reading chain blocks ' + deBloc.toLocaleString('en-US') + '–' + aBloc.toLocaleString('en-US') + '…';
+    /* ⛔ 2026-10-09 : cette phrase REMPLACAIT l alerte des lectures refusees pendant toute la lecture (des dizaines de
+     *    secondes sous 429) — le fondateur n a vu que « reading… » a cote de puces a 0. L alerte reste. */
+    $('#sfLiveNote').textContent = 'reading chain blocks ' + deBloc.toLocaleString('en-US') + '–' + aBloc.toLocaleString('en-US') + '…'
+      + (liveRatees ? ' · ⚠️ ' + liveRatees + ' read(s) refused by the node so far — incomplete, not quiet' : '');
     /* decouverte des pools : au premier tour, DECOUVERTE_INITIALE blocs en arriere ; ensuite la fenetre lue */
     const deDec = sens === 'ancien' ? deBloc : decouverteJusqua === null ? Math.max(0, fin - DECOUVERTE_INITIALE) : decouverteJusqua + 1;
     if (deDec <= aBloc) {
       const d = await decouvrirPools({ rpc, poolManager: V.poolm, deBloc: deDec, aBloc, jetons: null, pause: 250 });
       d.pools.forEach((p, id) => { poolsLive.set(id, p); noterMarcheSurNotreHook(p && p.cle); });
-      liveRatees += d.fenetresRatees.length;
+      noterRateesLive(d.fenetresRatees, 'decouverte');
       if (sens !== 'ancien' && !d.fenetresRatees.length) decouverteJusqua = aBloc;
     }
     await lireDecimalesManquantes(blocksSuivisLive());
     /* les evenements deja lus quand leurs decimales etaient inconnues sont completes maintenant (valeur brute gardee) */
     for (const e of liveEvts) completerQuantite(e, decimalesLues.get(String(e.jeton || '').toLowerCase()));
     const r = await evenementsLive({ rpc, poolManager: V.poolm, blocks: blocksSuivisLive(), deBloc, aBloc, pause: 250, poolsDecouvertes: poolsLive });
-    liveRatees += r.fenetresRatees.length;
+    noterRateesLive(r.fenetresRatees, 'tout');
     const deja = new Set(liveEvts.map(cleEvtLive));
     const nouveaux = r.evenements.filter((e) => !deja.has(cleEvtLive(e)));
     for (const e of nouveaux) liveEvts.push(e);
@@ -10241,7 +10254,7 @@ async function lireLive(sens) {
     if (sens !== 'ancien') liveDernier = aBloc;
     if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;
   } catch (e) {
-    liveRatees++;
+    noterRateesLive([{ quoi: 'tout' }]);
   } finally {
     liveEnCours = false;
     peindreLive();
@@ -10462,7 +10475,12 @@ function majComptesFiltres() {
     /* ⛔ UN ZERO QUI EST UNE REUSSITE N A PAS LA MEME FORME QU UN ZERO QUI EST UNE ABSENCE.
      *    « Not read » compte les echanges qu on n a PAS SU lire : a zero, tout a ete lu — c est le
      *    meilleur resultat possible, et affiche « Not read 0 » il se lisait comme une panne. */
-    b.textContent = b.dataset.nom + ' ' + n;
+    /* ⛔ 2026-10-09 : TROIS etats — « 0 » lu, « ? » non lu (lecture refusee), « ≥n » lu en partie. */
+    const c = compteDePuce(n, f, liveRateesParQuoi);
+    b.textContent = b.dataset.nom + ' ' + c.texte;
+    if (b.dataset.titre === undefined) b.dataset.titre = b.title || '';
+    b.title = c.etat === 'LU' ? b.dataset.titre
+      : 'Some chain reads for this filter were refused by the node — not read, not zero. ' + b.dataset.titre;
     b.hidden = false;
     b.classList.toggle('vide', n === 0);
     comptes[f] = n;
@@ -11080,7 +11098,7 @@ function peindreLive() {
   const pools = [...poolsLive.values()].filter((p) => suivis.has(String(p.jeton).toLowerCase()));
   const parConf = (c) => pools.filter((p) => p.confiance === c).length;
   $('#sfLiveNote').textContent = (liveFiltre !== 'TOUT' ? montres.length + ' shown · ' : '')
-    + (liveEvts.length ? liveEvts.length + ' event(s)' : 'Nothing happened')
+    + teteNoteLive(liveEvts.length, liveRatees)
     + (livePlusAncien !== null && liveDernier !== null
       ? ' between chain blocks ' + livePlusAncien.toLocaleString('en-US') + ' and ' + liveDernier.toLocaleString('en-US') : '')
     + ' · ' + suivis.size + ' blocks followed · ' + pools.length + ' pools found on chain (' + parConf('NOTRE') + ' app format, '
