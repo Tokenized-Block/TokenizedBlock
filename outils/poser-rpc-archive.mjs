@@ -37,6 +37,14 @@ export function lireUrl(brutFichier) {
   }
   return null;
 }
+/** ⛔ 2026-10-09 (essai de Phil) : le lien « products/node » de la doc CDP rend « Page not found » ; le portail donne la CLE SEULE
+ *   (projects/api-keys > onglet Client API Key), pas l URL. Une cle nue (un seul mot, 20 a 200 caracteres sans espace ni « / »)
+ *   devient l URL Base mainnet documentee. */
+export function urlDepuisCleNue(texte) {
+  const t = String(texte ?? '').trim();
+  if (!/^[A-Za-z0-9_\-.~]{20,200}$/.test(t)) return null;
+  return 'https://api.developer.coinbase.com/rpc/v1/base/' + t;
+}
 /** Masque chaque segment long du chemin (la cle) et l URL entiere dans un texte, avant tout affichage. */
 export function masqueur(url) {
   let segs = [];
@@ -72,14 +80,14 @@ async function principal(argv) {
   if (!PM_V4 || !TOPIC_INITIALIZE) { console.log('⛔ PM_V4 / TOPIC_INITIALIZE introuvables dans serveur-web.js : rien n est mesure'); return 1; }
   let url;
   if (CHEMIN) {
-    try { url = lireUrl(readFileSync(CHEMIN, 'utf8')); } catch (e) { console.log('⛔ fichier illisible : ' + String(e.code || e.message)); return 1; }
-    if (!url) { console.log('⛔ aucune URL https dans ce fichier (rien n a ete affiche)'); return 1; }
+    try { const brut = readFileSync(CHEMIN, 'utf8'); url = lireUrl(brut) || urlDepuisCleNue(brut); } catch (e) { console.log('⛔ fichier illisible : ' + String(e.code || e.message)); return 1; }
+    if (!url) { console.log('⛔ ni URL https ni cle dans ce fichier (rien n a ete affiche)'); return 1; }
   } else {
     const pp = lirePressePapiers();
     if (!pp.ok) { console.log('⛔ ' + pp.pourquoi); return 1; }
-    url = lireUrl(pp.texte);
-    if (!url) { console.log('⛔ le presse-papiers ne contient pas d URL https (rien n a ete affiche). Copie l URL du noeud dans le portail CDP, puis relance.'); return 1; }
-    console.log('✅ URL lue dans le presse-papiers');
+    url = lireUrl(pp.texte) || urlDepuisCleNue(pp.texte);
+    if (!url) { console.log('⛔ le presse-papiers ne contient ni URL https ni Client API Key (rien n a ete affiche). Portail CDP > projects/api-keys > onglet « Client API Key » > copier, puis relance.'); return 1; }
+    console.log('✅ ' + (lireUrl(pp.texte) ? 'URL' : 'Client API Key') + ' lue dans le presse-papiers');
   }
   const forme = formeCdp(url);
   if (!forme.ok) { console.log('⛔ ' + forme.pourquoi); return 1; }
