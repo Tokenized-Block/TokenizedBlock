@@ -26,6 +26,31 @@
 //
 // ⚠️ CE QUE CE MODULE NE COUVRE PAS : les prix. Ils viennent du PRIX DE POOL, pas du solde, et
 //    restent donc justes quoi qu il arrive au multiplicateur.
+//
+// ⛔⛔ CORRECTION DU 2026-10-09 — LA FORMULE EST MAINTENANT LUE, A LA SOURCE. La ligne « je n ai PAS lu comment il entre dans
+//     le calcul » etait vraie le 2026-09-30 ; elle ne l est plus. docs.base.org/specifications/b20/concepts/multipliers.md :
+//       « The UI balance is what wallets and indexers show as share count. It is `raw * multiplier / WAD_PRECISION`. »
+//       « The same division is integer and rounds down. » ; `WAD_PRECISION()` rend 1e18.
+//     ⇒ `equivalentActions` ci-dessous applique EXACTEMENT cette formule, en BigInt, arrondi vers le bas — et RIEN d autre.
+//     `etatMultiplicateur` reste ce qu il etait (il classe, il ne rescale pas) : le test qui le garde tient toujours.
+//   ⛔ C EST UN AFFICHAGE, JAMAIS UN MONTANT ENVOYE. « balanceOf, transfer amounts, totalSupply, and allowances stay raw »
+//     (meme page). Un montant multiplie qui partirait sur la chaine enverrait `multiplier` fois trop (ou trop peu).
+//   ⛔ ET LE PRIX D UN JETON EST DEJA « cours × multiplicateur » (« Token Price = Underlying Equity Market Price × Multiplier »,
+//     docs.base.org) : la VALEUR d un solde = solde BRUT × prix du jeton. La multiplier encore une fois compterait le
+//     multiplicateur deux fois.
+
+/**
+ * Le nombre d actions que represente un solde brut : `brut * multiplicateur / 1e18`, arrondi vers le bas (docs.base.org).
+ * ⛔ AFFICHAGE SEULEMENT. ⛔ null si l une des deux entrees n est pas un BigInt positif — un multiplicateur non lu ne devient
+ *   JAMAIS 1 ici : sans multiplicateur lu, il n y a pas d equivalent a montrer.
+ * @param {bigint} brut            le solde brut (unites du jeton)
+ * @param {bigint} multiplicateur  la valeur LUE, en WAD (1e18 = 1,0)
+ * @returns {bigint|null}          des unites du jeton (memes decimales que `brut`)
+ */
+export function equivalentActions(brut, multiplicateur) {
+  if (typeof brut !== 'bigint' || typeof multiplicateur !== 'bigint' || brut < 0n || multiplicateur <= 0n) return null;
+  return (brut * multiplicateur) / MULTIPLICATEUR_NEUTRE;
+}
 
 /** ⛔ SELECTEUR CALCULE PAR KECCAK sur `multiplier()`, pas recite — et verifie en vivant : un nom
  *  invente REVERTE sur ces memes jetons, donc la sonde discrimine. */

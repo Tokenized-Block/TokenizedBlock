@@ -1870,6 +1870,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           </label>
           <div class="bcPre" id="bcRapides"></div>
           <p class="note" id="bcTicketBrain" style="margin:8px 0 0"></p>
+          <p class="note" id="bcTicketRef" style="margin:6px 0 0" hidden></p>
           <button type="submit" class="bouton" id="bcTicketGo">Review the buy</button>
           <p class="note" id="bcTicketNote" style="margin:6px 0 0"></p>
         </form>
@@ -3509,6 +3510,10 @@ import { SELECTEUR_MULTIPLIER, etatMultiplicateur, phraseMultiplicateur } from '
  *   premier en silence : un ecran continuerait a s afficher, avec la mauvaise phrase. */
 import { SELECTEUR_UI_MULTIPLIER, multiplicateurAccorde, afficherEquivalent, doitDireQuelqueChose,
   phraseMultiplicateur as phraseAccordMultiplicateur } from './cobalt.js';
+/* ⛔ 2026-10-09 : l equivalent en actions (`brut * multiplicateur / 1e18`, formule lue sur docs.base.org) — AFFICHAGE SEULEMENT —
+ *   et la phrase de la reference Chainlink du ticket. Aucun des deux n entre dans un montant envoye a la chaine. */
+import { equivalentActions } from './multiplicateur-action.js';
+import { phraseReference } from './reference-action.js';
 /* ⛔ LE PONT DECIDE, IL NE LIT RIEN : on lui FOURNIT les aretes qu on a mesurees. Un chemin bati
  *   sur une arete supposee promettrait un echange impossible — et une cle devinee ne trouve meme
  *   pas une pool hookee. */
@@ -21493,6 +21498,10 @@ $('#bChoix').addEventListener('change', (e) => choisirBrain(e.target.value));
  * ⛔ NON MESURE : une signature depuis ce panneau avec un vrai wallet. */
 const bc = { session: null, dernier: 0, agentVu: 0, avatarDe: null, minuterie: null, ops: [], marchePeint: 0, cerveauEnvoye: 0, phaseEnvoyee: null,
   cote: 'buy', ticketDe: null, soldes: null, soldesLus: 0, soldesEnVol: false, nomEssai: new Map() };
+/* la reference Chainlink + le multiplicateur de chaque action, lus par le serveur (voir bcLireReference) — declares ICI, avec `bc`,
+ * pour qu aucun repeint ne les touche avant leur declaration */
+const bcRefs = new Map();
+let bcRefEnVol = false;
 /* ── le NOM et le SYMBOLE d un block absent de l index du Market : lus sur la chaine (`name()`, `symbol()`), une fois ──
  * 2026-10-04 (Phil, capture : le panneau titrait « 0xb200…579e ») : IB022 n est sur aucune carte ni dans l index — l app ne lui
  * connaissait aucun nom, alors que son contrat en porte un. ⛔ On ne retient QUE ce qui a ete lu (un echec se retente, au plus toutes
@@ -22122,6 +22131,24 @@ function bcChoixPaiement(a, q) {
   for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
   return choix;
 }
+/* ── LA REFERENCE D UNE ACTION, LUE PAR LE SERVEUR : /api/actions/reference/<action> (2026-10-09) ──────────────────────────────
+ *   { t, d } par action ; une lecture a la fois. ⛔ Une reponse illisible ou en echec n ecrase pas une lecture precedente : elle
+ *   est gardee avec ses trois etats tels que le serveur les a dits (NON_LU reste NON_LU — jamais « × 1 »). */
+async function bcLireReference(a) {
+  if (bcRefEnVol) return;
+  bcRefEnVol = true;
+  try {
+    const r = await fetch('/api/actions/reference/' + a, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    const d = await r.json();
+    if (d && d.ok === true && d.multiplicateur && d.reference) bcRefs.set(a, { t: Date.now(), d });
+    else throw new Error('not read');
+  } catch (_) {
+    /* echec : la lecture precedente (avec son `luA`) reste ; sinon NON_LU. Le prochain essai attend 60 s (pas un appel par repeint). */
+    const prec = bcRefs.get(a);
+    bcRefs.set(a, { t: Date.now(), d: prec ? prec.d : { multiplicateur: { etat: 'NON_LU' }, reference: { etat: 'NON_LU' } } });
+  } finally { bcRefEnVol = false; }
+  try { bcRepeindre(); } catch (_) { /* le panneau n est pas encore construit */ }
+}
 function bcPeindreTicket(a, sym, mk, snap) {
   const achat = bc.cote === 'buy', nomB = sym || 'this block', q = bcCotation(a);
   const s = $('#bcDevise');
@@ -22178,10 +22205,23 @@ function bcPeindreTicket(a, sym, mk, snap) {
   const estAction = ACTIONS_PAR_ADR.has(a);
   const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
   const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu || estAction ? '' : ' wKo'); }
+  /* ── LA REFERENCE CHAINLINK D UNE ACTION, AVANT LA REVUE (2026-10-09) ── lue par le serveur (/api/actions/reference/), relue
+   *   toutes les 60 s tant que le panneau est ouvert. ⛔ ELLE N EMPECHE RIEN : au-dela de SEUIL_ECART_REFERENCE_BPS (une PROPOSITION
+   *   a confirmer avec le proprietaire, reference-action.js) la ligne passe en avertissement ; le bouton reste ouvert. */
+  const tr = $('#bcTicketRef');
+  if (estAction) {
+    const rr = bcRefs.get(a) || null;
+    if ($('#bcPop').open && (!rr || Date.now() - rr.t > 60000)) void bcLireReference(a);
+    const ph = phraseReference(rr ? rr.d : null, mk && Number(mk.prixUsd) > 0 ? Number(mk.prixUsd) : null, sym || 'this stock');
+    if (tr.textContent !== ph.texte) tr.textContent = ph.texte;
+    tr.className = 'note' + (ph.alerte ? ' wKo' : '');
+    tr.hidden = false;
+  } else if (!tr.hidden) { tr.hidden = true; tr.textContent = ''; }
   /* ── ce que la personne DETIENT : relu toutes les 20 s tant que la vue Trade est ouverte, et apres chaque transaction confirmee ── */
   const z = $('#bcPosition');
   if (compte && $('#bcPop').open && $('#bc-trade').classList.contains('on') && (!so || Date.now() - bc.soldesLus > 20000)) void bcLireSoldes(a);
-  const cleP = (compte || '') + '|' + a + '|' + (sym || '') + '|' + (so ? bc.soldesLus : 0) + '|' + (mk && mk.prixUsd ? mk.prixUsd : '');
+  const refP = estAction && bcRefs.get(a) ? bcRefs.get(a) : null;
+  const cleP = (compte || '') + '|' + a + '|' + (sym || '') + '|' + (so ? bc.soldesLus : 0) + '|' + (mk && mk.prixUsd ? mk.prixUsd : '') + '|' + (refP ? refP.t : 0);
   if (bc.positionDe === cleP) return;
   bc.positionDe = cleP; z.textContent = '';
   if (!compte) {
@@ -22199,7 +22239,23 @@ function bcPeindreTicket(a, sym, mk, snap) {
     const v = Number(bcDecimal(so.block, so.dec)) * Number(mk.prixUsd);
     if (Number.isFinite(v)) valeur = '≈ ' + (v >= 0.01 ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : 'under $0.01') + ' at the index price';
   }
-  cas(nomB, texte(so.block, so.dec), valeur);
+  /* ⛔⛔ L EQUIVALENT EN ACTIONS D UNE ACTION COINBASE (2026-10-09) : `brut * multiplicateur / 1e18` (docs.base.org, ERC-8056),
+   *   sur le multiplicateur LU par le serveur dans le registre de l emetteur. AFFICHAGE SEULEMENT : le nombre principal reste le
+   *   solde BRUT — c est lui qu on envoie, et les puces 25/50/100 % de la vente le prennent tel quel (`so.block`).
+   *   ⛔ La VALEUR en $ reste brut × prix du jeton : ce prix est deja « cours × multiplicateur » ; re-multiplier compterait deux fois.
+   *   ⛔ Multiplicateur non lu = « share equivalent not read », JAMAIS « × 1 ». Pause du registre = dite. */
+  let parts = null;
+  if (estAction && so.block !== null && so.dec !== null) {
+    const mu = refP && refP.d && refP.d.multiplicateur ? refP.d.multiplicateur : null;
+    if (!mu) parts = 'share equivalent: reading the multiplier…';
+    else if (mu.etat !== 'LU' || !/^[0-9]+$/.test(String(mu.valeur || ''))) parts = 'share equivalent not read (multiplier unread) — the count above is the raw token amount';
+    else {
+      const eq = equivalentActions(so.block, BigInt(mu.valeur));
+      const x = (Number(BigInt(mu.valeur) / 1000000000000n) / 1e6).toFixed(6);
+      parts = eq === null ? 'share equivalent not read' : '= ' + bcUnites(eq, so.dec) + ' shares (multiplier ' + x + '×' + (mu.pause ? ', paused by the issuer' : '') + ')';
+    }
+  }
+  cas(nomB, texte(so.block, so.dec), [parts, valeur].filter(Boolean).join(' · ') || null);
   cas('ETH', texte(so.eth, 18), null);
   cas('USDC', texte(so.usdc, so.usdcDec), null);
   z.append(grille);
@@ -22670,6 +22726,15 @@ function bcPeindre(snap) {
   if (snap.marche && snap.marche.hooked !== null && snap.marche.hooked !== undefined) ligne('Venue', snap.marche.hooked ? 'TokenizedBlock' : 'outside');
   if (mk) {
     if (Number(mk.prixUsd) > 0) ligne('Price', $('#bcPrix').textContent);
+  }
+  /* la reference Chainlink a cote du prix de marche (actions seulement) — la meme lecture que le ticket, jamais une autre ;
+   *   affichee meme si l index du Market n est pas encore lu (elle n en depend pas) */
+  {
+    const rf = ACTIONS_PAR_ADR.has(a) && bcRefs.get(a) ? bcRefs.get(a).d.reference : null;
+    if (rf && rf.etat === 'LU') ligne('Chainlink ref.', '$' + Number(rf.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (rf.fraicheur === 'A_JOUR' ? '' : rf.fraicheur === 'FIGE_PAUSE' ? ' (frozen)' : rf.fraicheur === 'DERNIERE_VALEUR' ? ' (last close)' : ' (stale)'));
+    else if (rf && rf.etat === 'NON_DISPONIBLE') ligne('Chainlink ref.', 'none published');
+  }
+  if (mk) {
     if (mk.change24h !== null && mk.change24h !== undefined) ligne('24 h', (Number(mk.change24h) > 0 ? '+' : '') + Number(mk.change24h).toFixed(2) + ' %');
     if (Number(mk.volume24hUsd) > 0) ligne('Volume 24 h', usdCourt(mk.volume24hUsd));
     if (mk.trades24h !== null && mk.trades24h !== undefined) ligne('Trades 24 h', String(mk.trades24h));
