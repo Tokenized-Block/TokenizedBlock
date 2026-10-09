@@ -24,6 +24,7 @@ const imp = (f, dir = ICI) => import(pathToFileURL(path.join(dir, f)).href + '?v
 const M = await imp('mcp-tblock.js'), N = await imp('naissance-api.js'), C = await imp('caution-createur.js');
 const { selecteur, poolId } = await imp('pool.js');
 const F = await imp('frais-creation.js'), T = await imp('tokenomics.js');
+const P = await imp('paires.js');
 let n = 0, ko = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const w = (x) => BigInt(x).toString(16).padStart(64, '0');
@@ -91,6 +92,14 @@ ok(sourd.etat === 'NON_MESURE' && sourd.aSigner.length === 0, 'reseau muet : NON
 const paires = N.pairesDeNaissance();
 ok(paires[0].adr === ETH && paires[0].symbole === 'ETH' && paires.length === 63 && paires.filter((p) => p.type === 'ACTION').length === 58 && new Set(paires.map((p) => p.adr)).size === 63,
   'paires de naissance : ETH en tete, 63 sans doublon, dont 58 actions');
+/* 2026-10-09 : ARMc, SKHYc, WRDc entrent au registre (achat/vente) HORS de la liste figee du hook 7030. pairesDeNaissance filtrait
+ *   par TYPE seulement : le MCP les aurait offertes comme paires de naissance, refusees ensuite par le hook. Temoin : elles SONT
+ *   proposees par pairesProposees — c est bien le filtre du hook qui les retire. */
+const proposees = P.pairesProposees(8453).map((p) => String(p.adr).toLowerCase());
+const horsHook = P.ACTIONS_COINBASE.filter((a) => ['ARMc', 'SKHYc', 'WRDc'].includes(a.symbole)).map((a) => a.adr.toLowerCase());
+ok(horsHook.length === 3 && horsHook.every((a) => proposees.includes(a)) && horsHook.every((a) => !paires.some((p) => p.adr === a)),
+  'paires de naissance : les 3 actions hors hook (proposees au registre) n y sont PAS');
+ok(paires.every((p) => p.adr === ETH || !!P.hookDeLancementPour(p.adr, 8453, T.OPTIONS_LANCEMENT)), 'chaque paire de naissance est admise par un hook de lancement');
 const uri = N.uriNaissance({ nom: 'Bloc', symbole: 'BLC', adresse: '0xb2' + '0'.repeat(30) + 'abcdef12', paire: paires[1] });
 ok(uri.startsWith('data:application/json,') && uri.includes('%22face%22%3A%7B') && new TextEncoder().encode(uri).length <= N.URI_MAX_OCTETS && /face%2F0xb2/.test(uri),
   'URI gravee : JSON encode, porte le marqueur du hook (%22face%22%3A%7B), image = notre /face/<adresse>.png, ' + new TextEncoder().encode(uri).length + ' octets');

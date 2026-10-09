@@ -283,6 +283,19 @@ export const ACTIONS_COINBASE = [
   { symbole: 'HTZc', nom: 'Hertz', adr: '0xb2000000000000000000002601c5c94f435da168' },
   { symbole: 'PFEc', nom: 'Pfizer', adr: '0xb20000000000000000000018fe7ec7d6dfeeb528' },
   { symbole: 'PMc', nom: 'Philip Morris', adr: '0xb2000000000000000000008fc2a8c23cf5937b66' },
+  /* ── TROIS AJOUTS DU 2026-10-09, ET LA MESURE QUI EN A ECARTE ONZE ──────────────────────────────────────────────────────
+   * ⛔⛔ SOURCE : la liste de l EMETTEUR (api.coinbase.com/v1/tokenized-stocks) — 127 entrees ce jour (58 le 2026-10-02). Les 127
+   *     relues SUR Base (mesure-registre-emetteur.mjs, 0 non mesuree) : 58 passent les 4 preuves, 69 ont une supply NULLE.
+   *     19 mintees n etaient pas chez nous. DexScreener donne a 14 d entre elles « ~50 k$ de liquidite » sur Aerodrome — ET C EST
+   *     FAUX POUR ONZE : balanceOf(USDC, pool) = 0,01 USDC (pools initialisees, pas approvisionnees). Trois seulement ont une
+   *     profondeur reelle, lue sur la chaine : ARMc 24 981 USDC · SKHYc 24 971 · WRDc 24 701 (bloc 52 394 888).
+   * ⛔ CHAQUE ADRESSE EXTRAITE DE LA REPONSE JSON DE L EMETTEUR, chaque pool RENDUE par getPool(USDC, action, 1) sur la factory
+   *   Aerodrome CL et identique a celle de DexScreener. tickSpacing 1, fee 100 — Aerodrome : le routeur qui porte notre 0,1 %.
+   * ⛔ AUCUNE N EST DANS LA LISTE FIGEE DU HOOK 7030 (62 devises) : achat et vente, PAS de naissance contre elles — la garde de
+   *   Create (hookDeLancementPour) et pairesDeNaissance (MCP) les refusent. Volume 24 h : 0 $ le jour de l ajout. */
+  { symbole: 'ARMc', nom: 'Arm Holdings', adr: '0xb20000000000000000000026215d755356e5043f' },
+  { symbole: 'SKHYc', nom: 'SK hynix', adr: '0xb200000000000000000000187f7071d6e321a7d2' },
+  { symbole: 'WRDc', nom: 'WeRide', adr: '0xb200000000000000000000e88efe88d8ade3f0da' },
   /* ⛔⛔ 2026-10-03 (fondateur, « Oui, les 21 en Soon ») : LES 21 AUTRES ACTIONS DE L EMETTEUR entrent au registre pour
    *   l AFFICHAGE — la regle du 2026-09-27 (« supply nulle = dehors ») est levee pour l affichage SEULEMENT, jamais pour un
    *   achat : sans marche lu, pas de Buy ; sans contrat qui les admet, Create les montre « opens with our next contract ».

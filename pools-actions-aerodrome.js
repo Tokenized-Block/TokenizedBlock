@@ -24,6 +24,12 @@ export const POOLS_ACTIONS_AERODROME = new Map([
   ['0xb200000000000000000000397293cb8cda9a10c5', { symbole: 'SNDKc', pool: '0x5a8236f575471e7bfca2c8462a200c28f737246e', tickSpacing: 10, usdcMesure: 580616 }],
   ['0xb2000000000000000000007b9fcbd005511acbd5', { symbole: 'SPCXc', pool: '0x0bf58fe0fac935ac69595c19b12ba0d75e3f8c0e', tickSpacing: 10, usdcMesure: 742878 }],
   ['0xb2000000000000000000001e800a7f5189430cd0', { symbole: 'TSLAc', pool: '0x469337fdcc5e8f38e2e4b670b04f57865d13a7bb', tickSpacing: 10, usdcMesure: 653067 }],
+  /* 2026-10-09 (bloc 52 394 888, base-rpc.publicnode.com, lecture seule) : 3 nouvelles actions de l emetteur, pool rendue par
+   *   getPool(USDC, action, 1) sur la factory Aerodrome CL. ⛔ tickSpacing 1 (pas 10 comme les douze du dessus). Onze autres
+   *   pools de nouvelles actions ont ete ECARTEES : 0,01 USDC lu, malgre « ~50 k$ » chez DexScreener. */
+  ['0xb20000000000000000000026215d755356e5043f', { symbole: 'ARMc', pool: '0x9a0f4fd0766ccdb792ba58fe631aa7720097623c', tickSpacing: 1, usdcMesure: 24981 }],
+  ['0xb200000000000000000000187f7071d6e321a7d2', { symbole: 'SKHYc', pool: '0x6678992e0a166f4e78bf6cad5dd7e61ca041711c', tickSpacing: 1, usdcMesure: 24971 }],
+  ['0xb200000000000000000000e88efe88d8ade3f0da', { symbole: 'WRDc', pool: '0xbc440aff9a79cced69d5b21c7b71e60bd0278efb', tickSpacing: 1, usdcMesure: 24701 }],
 ]);
 
 /** Une ligne de marche (DexScreener) avec la pool d achat de l action si la table la connait et que la ligne pointe

@@ -461,9 +461,15 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   const QUATRE = ['GMEc', 'HTZc', 'PFEc', 'PMc'].map((s) => [s, P.ACTIONS_COINBASE.find((a) => a.symbole === s)]);
   verifier('F6 GMEc HTZc PFEc PMc au registre, ni block de route ni block a jonction', QUATRE.every(([, a]) => !!a && !PS.estBlockDeRoute(a.adr) && !PS.estBlockAJonction(a.adr) && admis(cle(ETH, a.adr, INCONNU)) !== false),
     QUATRE.map(([s, a]) => s + '=' + (a ? a.adr : 'ABSENTE')).join(' '));
-  /* 2026-10-03 (fondateur) : registre 58 = 37 + les 21 de l emetteur en « Soon » (affichage) ; liste 7030 = 62, toutes connues */
-  verifier('F6 compte : 58 actions au registre, 62 devises 7030 toutes connues', P.ACTIONS_COINBASE.length === 58 && P.DEVISES_ADMISES_7030.length === 62
-    && P.DEVISES_ADMISES_7030.every((d) => PS.estDeviseConnue(d.adr || d)), P.ACTIONS_COINBASE.length + ' / ' + P.DEVISES_ADMISES_7030.length);
+  /* 2026-10-03 (fondateur) : registre 58 = 37 + les 21 de l emetteur en « Soon » (affichage) ; liste 7030 = 62, toutes connues.
+   * 2026-10-09 : registre 61 = + ARMc, SKHYc, WRDc (pool Aerodrome profonde mesuree) — HORS de la liste figee du 7030 : achat/vente
+   *   seulement, aucun hook de lancement ne doit les admettre. */
+  const HORS_7030 = ['ARMc', 'SKHYc', 'WRDc'].map((s) => P.ACTIONS_COINBASE.find((a) => a.symbole === s));
+  verifier('F6 compte : 61 actions au registre, 62 devises 7030 toutes connues ; les 3 du 2026-10-09 hors 7030 et non lancables', P.ACTIONS_COINBASE.length === 61 && P.DEVISES_ADMISES_7030.length === 62
+    && P.DEVISES_ADMISES_7030.every((d) => PS.estDeviseConnue(d.adr || d))
+    && HORS_7030.every((a) => !!a && !P.DEVISES_ADMISES_7030.some((d) => String(d.adr || d).toLowerCase() === a.adr.toLowerCase())
+      && P.hookDeLancementPour(a.adr, 8453, { v9: true, h7030: true }) === null),
+    P.ACTIONS_COINBASE.length + ' / ' + P.DEVISES_ADMISES_7030.length + ' · ' + HORS_7030.map((a) => a ? a.symbole : 'ABSENTE').join(' '));
   return res;
 }
 

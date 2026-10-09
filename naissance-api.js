@@ -21,8 +21,8 @@ import { encodeCreatePaid, paramsAsset, encodeUpdateContractURI } from './encode
 import { selDeCreatePaid, adresseNeeDuRouteur } from './index-routeur.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
-import { hookCourant, estHook7030, estHookDeNaissance, SUPPLY_FIXE, DECIMALES_FIXES } from './tokenomics.js';
-import { pairesProposees, minimumCautionCreateur } from './paires.js';
+import { hookCourant, estHook7030, estHookDeNaissance, SUPPLY_FIXE, DECIMALES_FIXES, OPTIONS_LANCEMENT } from './tokenomics.js';
+import { pairesProposees, minimumCautionCreateur, hookDeLancementPour } from './paires.js';
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { planLancement, mintLancementRecevable, simulerSequenceLancement, PERMIT2 } from './lancer-pool.js';
 import { completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
@@ -49,9 +49,13 @@ const versJson = (v) => {
 const refus = (pourquoi, extra = {}) => versJson({ ok: false, etat: 'REFUSE', pourquoi, aSigner: [], ...extra, borne: BORNE_NAISSANCE });
 const nonMesure = (pourquoi, extra = {}) => versJson({ ok: false, etat: 'NON_MESURE', pourquoi, aSigner: [], ...extra, borne: BORNE_NAISSANCE });
 
-/** Les devises contre lesquelles un block peut naitre ici, telles que l ecran les propose (ETH + STABLE / MAJEUR / ACTION). */
+/** Les devises contre lesquelles un block peut naitre ici, telles que l ecran les propose (ETH + STABLE / MAJEUR / ACTION).
+ *  ⛔⛔ 2026-10-09 : ET SEULEMENT CELLES QU UN HOOK DE LANCEMENT ADMET — la regle de l ecran (estPaireLancable). Avant, ce filtre
+ *   ne regardait que le TYPE : le jour ou une action entre au registre sans etre dans la liste figee du hook (ARMc, SKHYc, WRDc,
+ *   ajoutees ce jour), le MCP l aurait offerte comme paire de naissance, et la naissance aurait ete refusee par le hook. */
 export function pairesDeNaissance(chaine = 8453) {
-  const liste = pairesProposees(chaine).filter((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) || bas(p.adr) === ETH);
+  const liste = pairesProposees(chaine).filter((p) => (['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) || bas(p.adr) === ETH)
+    && !!hookDeLancementPour(p.adr, chaine, OPTIONS_LANCEMENT));
   const sans = liste.filter((p) => bas(p.adr) !== ETH);
   return [{ adr: ETH, symbole: 'ETH', type: 'NATIF' }, ...sans.map((p) => ({ adr: bas(p.adr), symbole: p.symbole, type: p.type }))];
 }
