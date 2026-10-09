@@ -17,6 +17,7 @@ import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const imp = (dir, f) => import(pathToFileURL(path.join(dir, f)).href);
@@ -69,7 +70,7 @@ function rpcFictif(jusqua, o = {}) {
     }
     if (m === 'eth_getTransactionReceipt') { etat.recus += 1; if (etat.recusKo) throw new Error('Archive requests require a personal token'); /* G2 */
       return etat.sansRecus ? null : recuDe(p[0]); }
-    if (m === 'eth_getCode' && etat.codeKo && String(p[0]).toLowerCase() === NOUVEAU) throw new Error('internal error'); /* F4 */
+    if (m === 'eth_getCode' && etat.codeKo && String(p[0]).toLowerCase() === NOUVEAU) { etat.codeRefuses = (etat.codeRefuses || 0) + 1; throw new Error('internal error'); } /* F4 */
     if (m === 'eth_getCode') return [NOUVEAU, VIEUX].includes(String(p[0]).toLowerCase()) ? '0xef0100' + 'ab'.repeat(20) : '0x';
     throw Object.assign(new Error('execution reverted'), { code: 3 });
   };
@@ -101,15 +102,30 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
       /* TB_REPLIS=0 (2026-10-09) : sans lui, une fenetre que CE banc rend « ratee » etait relue par le VRAI publicnode (repli du
        * serveur) — resultat dependant du reseau, et le banc rougissait au hasard (« r9b instable »). Aucun noeud reel ici. */
       TB_REPLIS: '0' } });
-  let journal = '', mort = false; enfant.stdout.on('data', (d) => { journal += d; }); enfant.stderr.on('data', (d) => { journal += d; });
+  /* `ecoute` (2026-10-09) : ms entre le lancement et « sert … sur le port » — dit, dans un diagnostic, si le banc a chronometre la machine */
+  let journal = '', mort = false, ecoute = null; const t0 = Date.now();
+  const noter = (d) => { journal += d; if (ecoute === null && /sur le port/.test(journal)) ecoute = Date.now() - t0; };
+  enfant.stdout.on('data', noter); enfant.stderr.on('data', noter);
   enfant.on('exit', () => { mort = true; });
   /* ⛔ un serveur mort (port pris) ne doit jamais laisser lire celui d un autre mutant */
-  const t0 = Date.now(); const lire = (chemin = '/api/nos-blocks') => { if (mort) return Promise.reject(new Error('serveur mort'));
-    return fetch('http://127.0.0.1:' + port + chemin, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()); };
+  const quand = new WeakMap(); /* lecture -> ms depuis le lancement (diagnostic seulement) */
+  const lire = (chemin = '/api/nos-blocks') => { if (mort) return Promise.reject(new Error('serveur mort'));
+    return fetch('http://127.0.0.1:' + port + chemin, { signal: AbortSignal.timeout(5000) }).then((r) => r.json())
+      .then((x) => { if (x && typeof x === 'object') quand.set(x, Date.now() - t0); return x; }); };
   let premiere = null, derniere = null, complet = null; const vues = [];
   const arreter = async () => { enfant.kill('SIGKILL'); await new Promise((ok) => rpc.serveur.close(ok)); };
+  /* ⛔⛔ 2026-10-09 (r9b rouge 3 fois sur 3 : C1, une fois P1, sur la COPIE non mutee) — LE CHRONOMETRE PART QUAND LE SERVEUR ECOUTE.
+   *   Les scenarios C, P, B (attenteMax 1) et X (routeurSeul) sortaient d ici AU LANCEMENT : leur delai (suivre 30 / 90 / 60 s)
+   *   comptait le demarrage du processus. Mesure, machine au repos : « sur le port » apres 0,67-0,71 s depuis le depot, 3,5-3,75 s
+   *   depuis une copie FRAICHE (fichiers qui viennent d etre ecrits), 0,72 s la meme copie relancee. Sous les voies paralleles du
+   *   banc : copie 11,1 s (P) et 13,5 s (C), depot 2,4 s et 6,4 s ; C1 copie voyait sa premiere fenetre en attente a 29,3 s d un
+   *   delai de 30 s. Le banc chronometrait la machine, pas le code (meme faute que S1b, `vuesMin`). Les assertions ne changent pas ;
+   *   `complet` (S2) se mesure toujours depuis le lancement. Serveur qui n ecoute jamais : on n attend pas plus de 60 s.
+   *   `attenteMax` court lui aussi depuis l ecoute (t1). */
+  while (ecoute === null && !mort && Date.now() - t0 < 60000) await new Promise((ok) => setTimeout(ok, 100));
+  const t1 = Date.now();
   try {
-    while (!routeurSeul && Date.now() - t0 < attenteMax) {
+    while (!routeurSeul && Date.now() - t1 < attenteMax) {
       try { derniere = await lire(); vues.push(derniere); if (!premiere) premiere = derniere; } catch { await new Promise((ok) => setTimeout(ok, 200)); continue; }
       if (derniere.couvertureComplete === true) { complet = Date.now() - t0; break; }
       if (vues.length >= vuesMin) break;
@@ -120,12 +136,23 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
   /* lit pendant `ms` (chaque lecture relance le rattrapage, comme les visites en prod) */
   const suivre = async (ms, assez = () => false, chemin) => { const r = []; const t = Date.now();
     while (Date.now() - t < ms && !assez(r)) { try { r.push(await lire(chemin)); } catch {} await new Promise((ok) => setTimeout(ok, 400)); } return r; };
-  return { premiere, derniere, complet, rpc, vues, suivre, arreter, get journal() { return journal; } };
+  return { premiere, derniere, complet, rpc, vues, suivre, arreter, quand: (x) => quand.get(x) ?? null,
+    get ecoute() { return ecoute; }, get mort() { return mort; }, get journal() { return journal; } };
 }
 
 /* scenarios du serveur : R redemarrage (S1-S4, S6), F clignotement (S7, S8, S10), G graine forgee (S5), X/Y index routeur (X1/X2) */
-async function banc(dir, scen = 'RFGXYNPCBI') {
+async function banc(dir, scen = 'RFGXYNPCBI', voie = null, mutant = false) {
   const res = []; const v = (id, c) => res.push({ id, ok: !!c });
+  /* 2026-10-09 : un rouge des voies NON mutees (depot, copie) dit ce que le serveur a rendu, lecture par lecture, avec l heure
+   *   (ms depuis le lancement) et l heure d ecoute. ⛔ Les mutants n21/n22 DOIVENT rougir C1 : leur ligne, non etiquetee, avait
+   *   ete lue comme celle de la copie (« [43200, true, 0, false] ») — d ou l etiquette, et le silence des mutants hors R9B_DIAG=1. */
+  const dire = (id, s, lectures, J, vert = false) => { if (process.env.R9B_DIAG !== '1' && (mutant || vert)) return;
+    console.log('   [' + id + ' ' + voie + '] ecoute ' + s.ecoute + ' ms' + (s.mort ? ' (MORT)' : '') + ' ; getCode refuses ' + (s.rpc.codeRefuses || 0)
+      + ' ; fenetres de frappes ' + s.rpc.fenetresFrappes.length + ' ; ' + lectures.length + ' lecture(s), les identiques de suite regroupees '
+      + '[ms de la 1re, depuis-J, jusqua-J, complete, ratees, NOUVEAU, VIEUX, nombre] '
+      + JSON.stringify(lectures.reduce((acc, x) => { const t = [x.depuis === null ? null : x.depuis - J, x.jusqua === null ? null : x.jusqua - J, x.couvertureComplete,
+        x.fenetresRatees, x.blocks.includes(NOUVEAU), x.blocks.includes(VIEUX)]; const d = acc[acc.length - 1];
+        if (d && JSON.stringify(d.slice(1, 7)) === JSON.stringify(t)) d[7] += 1; else acc.push([s.quand(x), ...t, 1]); return acc; }, [])).slice(0, 1500)); };
   const O = await imp(dir, 'origine.js');
   const J = O.GRAINE_NOS_JUSQUA;
   /* U — admission */
@@ -252,28 +279,36 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   const blocP = scen.includes('P') ? (async () => {
     const sp = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, trou: J + 20000 } });
     const avance = (x) => x.jusqua > J && x.jusqua < J + 20000 && x.couvertureComplete === false;
-    const p1 = await sp.suivre(30000, (r) => r.filter(avance).length >= 2);
+    /* 30 s -> 60 s (2026-10-09) : sort des que 2 lectures « avance » ; mesure sous charge, depuis l ecoute : 16,3-21,5 s pour la 1re */
+    const p1 = await sp.suivre(60000, (r) => r.filter(avance).length >= 2);
     sp.rpc.trou = null;
     const p2 = await sp.suivre(20000, (r) => r.some((x) => x.couvertureComplete === true));
     await sp.arreter();
-    v('P1 (F3) fenetre du milieu ratee pour de bon : jusqua avance jusqu a elle (contigu, jamais au-dela), pas complete, la fenetre comptee',
-      p1.some(avance) && p1.every((x) => x.jusqua === null || x.jusqua <= J + 20000) && p1.filter(avance).every((x) => x.fenetresRatees >= 1));
-    v('P2 (F3) la fenetre se relit : couverture complete jusqu a la tete', p2.some((x) => x.couvertureComplete === true && x.jusqua === sp.rpc.tete));
+    const okP1 = p1.some(avance) && p1.every((x) => x.jusqua === null || x.jusqua <= J + 20000) && p1.filter(avance).every((x) => x.fenetresRatees >= 1);
+    dire('P1', sp, p1, J, okP1);
+    v('P1 (F3) fenetre du milieu ratee pour de bon : jusqua avance jusqu a elle (contigu, jamais au-dela), pas complete, la fenetre comptee', okP1);
+    const okP2 = p2.some((x) => x.couvertureComplete === true && x.jusqua === sp.rpc.tete);
+    dire('P2', sp, p2, J, okP2);
+    v('P2 (F3) la fenetre se relit : couverture complete jusqu a la tete', okP2);
   })() : null;
   /* C1-C2 (F4) — eth_getCode du block frappe apres la graine en echec : sa fenetre est EN ATTENTE, jamais propre */
   const blocC = scen.includes('C') ? (async () => {
     const sk = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, codeKo: true } });
     const vu = (r) => r.findIndex((x) => x.fenetresRatees >= 1);
-    const c1 = await sk.suivre(30000, (r) => vu(r) >= 0 && r.length - vu(r) >= 3);
+    /* 30 s -> 60 s (2026-10-09) : sort des la 3e lecture apres la 1re fenetre en attente ; mesure sous charge, depuis l ecoute :
+     *   15,6-21,3 s jusqu a elle (22 fenetres de 100 ms, puis 3 reprises de 0,5 + 1 + 2 s). Chaque lecture de plus doit AUSSI etre propre. */
+    const c1 = await sk.suivre(60000, (r) => vu(r) >= 0 && r.length - vu(r) >= 3);
     sk.rpc.codeKo = false;
     const c2 = await sk.suivre(20000, (r) => r.some((x) => x.couvertureComplete === true));
     await sk.arreter();
     const okC1 = c1.length > 3 && c1.every((x) => x.couvertureComplete === false && !x.blocks.includes(NOUVEAU) && (x.jusqua === null || x.jusqua < J + 100))
       && c1.some((x) => x.fenetresRatees >= 1);
     /* 2026-10-09 : un rouge de C1 ne disait QUE « faux ». Il dit maintenant ce que le serveur a rendu, lecture par lecture. */
-    if (!okC1) console.log('   [C1 ' + dir.slice(-12) + '] ' + JSON.stringify(c1.map((x) => [x.jusqua === null ? null : x.jusqua - J, x.couvertureComplete, x.fenetresRatees, x.blocks.includes(NOUVEAU)])).slice(0, 600));
+    dire('C1', sk, c1, J, okC1);
     v('C1 (F4) code d un jeton illisible : la fenetre reste en attente (comptee), jamais complete, le jeton ni servi ni oublie', okC1);
-    v('C2 (F4) le code se relit : le block est servi, couverture complete', c2.some((x) => x.couvertureComplete === true && x.blocks.includes(NOUVEAU)));
+    const okC2 = c2.some((x) => x.couvertureComplete === true && x.blocks.includes(NOUVEAU));
+    dire('C2', sk, c2, J, okC2);
+    v('C2 (F4) le code se relit : le block est servi, couverture complete', okC2);
   })() : null;
   /* B1-B2 (F3b, Zero 1 fault-f3b.mjs) — graine refusee (recus inconnus du noeud) : remontee depuis la tete. Une plage ANCIENNE
    *   [J - 60000, J - 58001] rate pour de bon et un block y est frappe : depuis ne doit JAMAIS sauter le trou, puis le block est servi. */
@@ -281,15 +316,20 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
     const lo = J - 60000, hi = lo + 1999;
     const sv = await redemarrer(dir, J, { attenteMax: 1, rpcO: { echecs: 0, sansRecus: true, trouVieux: [lo, hi] } });
     const vu = (r) => r.findIndex((x) => x.fenetresRatees >= 1 && x.depuis !== null && x.depuis <= hi + 40001);
-    const b1 = await sv.suivre(90000, (r) => vu(r) >= 0 && r.length - vu(r) >= 6);
+    /* 90 s -> 120 s (2026-10-09) : sort des la 6e lecture apres la fenetre ratee ; mesure sous charge, depuis l ecoute : 40,3-45,8 s
+     *   jusqu a elle (3 tours de 40 000 blocs). Une serie du 2026-10-09 (ancien chronometre) a laisse n23 VIVANT (B2 vert) : coherent
+     *   avec un b1 termine avant la fenetre ratee — avec elle, n23 ne sert jamais VIEUX (mesure, R9B_DIAG=1), B2 rougit. */
+    const b1 = await sv.suivre(120000, (r) => vu(r) >= 0 && r.length - vu(r) >= 6);
     sv.rpc.trouVieux = null;
     const b2 = await sv.suivre(40000, (r) => r.some((x) => x.blocks.includes(VIEUX)));
     await sv.arreter();
-    v('B1 (F3b) plage ancienne ratee pendant la remontee : depuis reste AU-DESSUS du trou, jamais complete, le block du trou pas servi',
-      vu(b1) >= 0 && b1.every((x) => (x.depuis === null || x.depuis > hi) && x.couvertureComplete === false && !x.blocks.includes(VIEUX))
-      && b1.some((x) => x.graine === 'REFUSEE'));
-    v('B2 (F3b) la plage se relit : le block du trou est servi (jamais une couverture complete sans lui)',
-      b2.some((x) => x.blocks.includes(VIEUX)) && [...b1, ...b2].every((x) => !(x.couvertureComplete === true && !x.blocks.includes(VIEUX))));
+    const okB1 = vu(b1) >= 0 && b1.every((x) => (x.depuis === null || x.depuis > hi) && x.couvertureComplete === false && !x.blocks.includes(VIEUX))
+      && b1.some((x) => x.graine === 'REFUSEE');
+    dire('B1', sv, b1, J, okB1);
+    v('B1 (F3b) plage ancienne ratee pendant la remontee : depuis reste AU-DESSUS du trou, jamais complete, le block du trou pas servi', okB1);
+    const okB2 = b2.some((x) => x.blocks.includes(VIEUX)) && [...b1, ...b2].every((x) => !(x.couvertureComplete === true && !x.blocks.includes(VIEUX)));
+    dire('B2', sv, b2, J, okB2);
+    v('B2 (F3b) la plage se relit : le block du trou est servi (jamais une couverture complete sans lui)', okB2);
   })() : null;
   /* S1b — graine a 1000 blocs de la tete (sous la borne de retard) et [jusqua + 1, tete] illisible : JAMAIS complete sur la graine */
   const blocN = scen.includes('N') ? (async () => {
@@ -298,10 +338,10 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   })() : null;
   /* S5 — graine forgee dans une copie : le serveur la refuse et redescend depuis la tete */
   const blocG = scen.includes('G') ? (async () => {
-  const dF = copie({ nom: 'graine forgee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
-    "  { jeton: '0xb200000000000000000000deadbeef00000000aa', compte: '0x1111111111111111111111111111111111111111', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
-  const dB = copie({ nom: 'graine inventee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
-    "  { jeton: '" + FABRIQUE + "', compte: '" + A6CF + "', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir);
+  const [dF, dB] = await Promise.all([copie({ nom: 'graine forgee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
+    "  { jeton: '0xb200000000000000000000deadbeef00000000aa', compte: '0x1111111111111111111111111111111111111111', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir),
+    copie({ nom: 'graine inventee', edits: [['origine.js', "  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:",
+    "  { jeton: '" + FABRIQUE + "', compte: '" + A6CF + "', bloc: 52000000, tx: '0x" + 'cd'.repeat(32) + "' },\n  { jeton: '0xb200000000000000000000ab549fa65ad4edae3f', compte:"]] }, dir)]);
   /* ⛔ S5-S5d en PARALLELE (independants). attenteMax 60 s : sous charge, 15 s ne suffisait pas (sousLaGraine = 0, Claude) ;
    *   redemarrer sort des que sousLaGraine > 0, un passage vert n est pas ralenti. */
   const [sf, sb, sc5, sd] = await Promise.all([redemarrer(dF, J, { attenteMax: 60000 }), redemarrer(dB, J, { attenteMax: 60000 }),
@@ -341,20 +381,26 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
   return res;
 }
 
-const tmp = [];
-function copie(mutation, source = ICI) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-r9b-')); tmp.push(dir);
-  for (const f of fs.readdirSync(source, { withFileTypes: true })) {
-    if (f.name === '.git') continue;
+/* ⛔ 2026-10-09 : la copie est ASYNCHRONE. Synchrone (copyFileSync x ~650 fichiers), chacune des 39 copies d une serie bloquait la
+ *   boucle de CE processus 0,6 a 2,2 s (39,6 s au total sur 231 s, mesure R9B_DIAG=1) — et cette boucle sert les RPC fictifs et les
+ *   lectures de TOUTES les voies : chaque copie figeait tous les serveurs en cours. Asynchrone (serie suivante) : boucle figee au plus
+ *   1,7 s, p99 40 ms ; les serveurs de la copie ecoutaient a 7,9 s au lieu de 13-14 s. `dureesCopie` = duree murale de chaque copie. */
+const tmp = []; const dureesCopie = [];
+async function copie(mutation, source = ICI) {
+  const tc = Date.now();
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'tb-r9b-')); tmp.push(dir);
+  const entrees = (await fs.promises.readdir(source, { withFileTypes: true })).filter((f) => f.name !== '.git');
+  await Promise.all(entrees.map(async (f) => {
     const de = path.join(source, f.name);
-    if (f.isDirectory() || f.isSymbolicLink()) fs.symlinkSync(fs.realpathSync(de), path.join(dir, f.name));
-    else fs.copyFileSync(de, path.join(dir, f.name));
-  }
+    if (f.isDirectory() || f.isSymbolicLink()) await fs.promises.symlink(await fs.promises.realpath(de), path.join(dir, f.name));
+    else await fs.promises.copyFile(de, path.join(dir, f.name));
+  }));
   for (const [fichier, de, vers] of (mutation ? mutation.edits : [])) {
-    const p = path.join(dir, fichier); const src = fs.readFileSync(p, 'utf8'); const n = src.split(de).length - 1;
+    const p = path.join(dir, fichier); const src = await fs.promises.readFile(p, 'utf8'); const n = src.split(de).length - 1;
     if (n !== 1) throw new Error('mutant ' + mutation.nom + ' : motif trouve ' + n + ' fois dans ' + fichier + ' (attendu 1)');
-    fs.writeFileSync(p, src.replace(de, vers));
+    await fs.promises.writeFile(p, src.replace(de, vers));
   }
+  dureesCopie.push(Date.now() - tc);
   return dir;
 }
 const MUTANTS = [
@@ -388,13 +434,14 @@ const MUTANTS = [
 
 let nAssert = 0, ko = 0;
 const ok = (c, m) => { nAssert += 1; if (!c) { ko += 1; console.log('  KO ' + m); } };
+const retard = monitorEventLoopDelay({ resolution: 20 }); retard.enable(); /* R9B_DIAG=1 : combien de temps les RPC fictifs ont ete figes */
 try {
   /* depot, copie non mutee et mutants en parallele (5 voies : le banc tient sous le delai de la suite) ; sortie dans l ordre */
   /*   les mutants les plus longs (remontee B, repos I, graine G, redemarrage R) partent d abord : le banc tient sous 180 s */
   const resultats = new Array(MUTANTS.length); const poids = (m) => ['I', 'B', 'G', 'F', 'C', 'P', 'X', 'R', 'N'].findIndex((c) => m.scen.includes(c));
   const ordre = MUTANTS.map((m, i) => i).sort((a, b) => ((poids(MUTANTS[a]) + 99) % 99) - ((poids(MUTANTS[b]) + 99) % 99)); let suivant = 0;
-  const [reel, temoin] = await Promise.all([banc(ICI), banc(copie(null)),
-    ...[0, 1, 2, 3, 4].map(async () => { while (suivant < ordre.length) { const i = ordre[suivant++]; resultats[i] = await banc(copie(MUTANTS[i]), MUTANTS[i].scen); } })]);
+  const [reel, temoin] = await Promise.all([banc(ICI, undefined, 'depot'), (async () => banc(await copie(null), undefined, 'copie'))(),
+    ...[0, 1, 2, 3, 4].map(async () => { while (suivant < ordre.length) { const i = ordre[suivant++]; resultats[i] = await banc(await copie(MUTANTS[i]), MUTANTS[i].scen, MUTANTS[i].nom.split(' ')[0], true); } })]);
   for (const x of reel) ok(x.ok, 'depot : ' + x.id);
   console.log('depot : ' + reel.length + ' verifications, ' + reel.filter((x) => !x.ok).length + ' KO');
   ok(temoin.length === reel.length && temoin.every((x) => x.ok), 'copie non mutee : verte' + temoin.filter((x) => !x.ok).map((x) => ' | KO ' + x.id).join(''));
@@ -408,6 +455,8 @@ try {
 } finally {
   for (const d of tmp) fs.rmSync(d, { recursive: true, force: true });
 }
+if (process.env.R9B_DIAG === '1') console.log('copies : ' + dureesCopie.length + ', ms (murales) ' + JSON.stringify(dureesCopie)
+  + ' ; boucle de ce processus figee : max ' + Math.round(retard.max / 1e6) + ' ms, p99 ' + Math.round(retard.percentile(99) / 1e6) + ' ms, moyenne ' + Math.round(retard.mean / 1e6) + ' ms');
 console.log(nAssert + ' assertions, ' + ko + ' KO');
 if (nAssert === 0) { console.log('⛔ aucune assertion executee'); process.exit(1); }
 process.exit(ko ? 1 : 0);
