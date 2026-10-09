@@ -65,7 +65,7 @@ v('⛔⛔ `0n` ne retombe plus au plancher, `null` si', () => {
 v('⛔ Create passe un seed de zero EXPLICITE pour une paire action', () => {
   /* 2026-10-09 : la regle vit dans `paireSansGraineEth` (ACTION et STABLE, mesures) — l action en fait toujours partie */
   const i = html.indexOf('const sansSeed = paireSansGraineEth(paireChoisie);');
-  assert.ok(/function paireSansGraineEth\(p\) \{\s+return !!\(p && \(p\.type === 'ACTION' \|\| p\.type === 'STABLE'\)\);/.test(html), 'la paire action n est plus sans graine');
+  assert.ok(/function paireSansGraineEth\(p\) \{\s+if \(!p \|\| p\.type === 'NATIF' \|\| p\.type === 'SAISIE'[^\n]*return false;\s+return paireVa7030\(p\.adr\);/.test(html), 'la regle de graine n est plus celle du 7030 (devise non-ETH, caution en devise)');
   assert.ok(i > 0, 'Create ne distingue plus la paire action au preflight');
   /* ⛔⛔ DEUXIEME FENETRE FIXE DU MEME FICHIER, ET ELLE A CASSE LE MEME JOUR. Elle valait `i + 260` ;
    *    l appel est a 807 octets de l ancre depuis qu un commentaire les separe. On borne desormais

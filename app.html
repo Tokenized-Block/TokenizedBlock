@@ -2717,7 +2717,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-usdc-sans-graine" hidden>Build <code>20261009-usdc-sans-graine</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-7030-sans-graine" hidden>Build <code>20261009-7030-sans-graine</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16997,6 +16997,14 @@ function majFundWalletPourPaire() {
     if (h) h.innerHTML = 'This pair needs USDC, plus ' + fraisDit + ' ETH for the Birth fee. ' + avoir
       + 'Buy through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
       + 'and Coinbase shows you its total before you confirm.';
+  } else if (paireSansGraineEth(p) && p.symbole) {
+    /* ⛔ 2026-10-09 (mesure fork, cbBTC : caution 1 667 unites EN cbBTC) : une paire non-ETH du 7030 porte la caution du createur
+     *   DANS SA DEVISE — la phrase le dit, comme pour l USDC, au lieu de ne parler que d ETH. */
+    a.textContent = 'Fund wallet — Get ETH on Base';
+    if (h) h.innerHTML = 'This pair needs a little <b>' + enTexte(p.symbole) + '</b> (your creator deposit, about $1, stays yours), plus '
+      + fraisDit + ' ETH for the Birth fee. ' + avoir
+      + 'Buy through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
+      + 'and Coinbase shows you its total before you confirm.';
   } else {
     a.textContent = 'Fund wallet — Get ETH on Base';
     if (h) h.innerHTML = 'Birth fee is ' + fraisDit + ' ETH. ' + avoir
@@ -17255,10 +17263,13 @@ const GAZ_NAISSANCE_WEI = 500000000000000n; /* ~0,0005 ETH — Create + Launch *
  *   status 1) : une naissance appariee a l USDC coute en ETH EXACTEMENT 0,001 (createPaid 0,0007 + inscription 0,0003) ; la caution
  *   du createur part en USDC (1 000 000 unites). Les actions : mesure du 2026-09-25 (`ethRequis = 0`). La garde exigeait pourtant
  *   frais + ~1 $ d ETH + gaz (>= 0,0018) pour l USDC.
- *   ⛔ SEULEMENT LES TYPES MESURES : ACTION et STABLE. cbBTC (MAJEUR) et une adresse saisie ne le sont pas — ils gardent la graine :
- *   exiger trop se repare, exiger trop peu ferait echouer la transaction APRES la signature. */
+ *   ⛔ LA REGLE EST CELLE DU CONTRAT, MESUREE SUR 4 DEVISES : sur le hook 7030 (drapeau actif en prod), une devise autre qu ETH
+ *   porte la caution DANS LA DEVISE — USDC, cbBTC (1 667 unites), NVDAc, AMDc : 0,001 ETH tout compris, toutes etapes status 1.
+ *   Une paire qui ne nait PAS sur le 7030 (un block saisi : TBLOCK n y est pas admis, mesure) garde la graine : non mesuree,
+ *   et exiger trop se repare, exiger trop peu ferait echouer la transaction APRES la signature. */
 function paireSansGraineEth(p) {
-  return !!(p && (p.type === 'ACTION' || p.type === 'STABLE'));
+  if (!p || p.type === 'NATIF' || p.type === 'SAISIE' || /^0x0{40}$/i.test(String(p.adr || ''))) return false;
+  return paireVa7030(p.adr);
 }
 async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null } = {}) {
   const gasBuf = GAZ_NAISSANCE_WEI;

@@ -144,6 +144,8 @@ function jouerIndice(html, mod, { paire, chaine = 8453 }) {
     ethLisible: (w) => mod.arrondiAffichage(w, 6), enTexte: echap, Number,
     $: (q) => (q === '#cFundWallet' ? a : q === '#cFundHint' ? h : null), majNoteCaution: async () => {},
     paireChoisie: paire, CHAINE: chaine,
+    /* drapeau 7030 actif en prod (tokenomics.js) : toute paire non-ETH proposee y nait (hookDeLancementPour, lu le 2026-10-09) */
+    paireVa7030: () => true,
   });
   vm.runInContext(extraire(html, 'function paireSansGraineEth(p) {'), ctx);
   vm.runInContext(src, ctx);

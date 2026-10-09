@@ -188,6 +188,22 @@ try {
   await naissance({ etiquette: 'AMDc', devise: AMD, decimales: dec, prixUsd: 614, valorisation: 44, financer: donner(AMD, '0x498581ff718922c3f8e6a244956af099b2652b2b') });
 } catch (e) { ok(false, 'AMDc : le banc a plante — ' + String(e && e.message).slice(0, 140)); }
 
+/* ── 5b. (2026-10-09) LES DEUX PAIRES ENCORE NON MESUREES : cbBTC (type MAJEUR) et un block B20 SAISI (TBLOCK, natif 0xef). Question :
+ *   leur naissance depense-t-elle de l ETH au-dela de 0,001 (une graine) ? `naissance()` mesure la valeur de l etape et ce que recoit
+ *   a6cf. D abord : le hook 7030 ADMET-il la devise ? Sinon elle n est pas lancable ici, et c est la reponse. Le detenteur impersonne est
+ *   le PoolManager v4 ; son solde est LU avant (un detenteur vide ferait echouer le banc, pas le hook). */
+const PM_V4_BANC = '0x498581ff718922c3f8e6a244956af099b2652b2b';
+for (const [etiquette, adrDevise, prixUsd] of [['cbBTC', P.pairesProposees(8453).find((p) => p.symbole === 'cbBTC').adr.toLowerCase(), 60000], ['TBLOCK (saisi)', String(T.TBLOCK).toLowerCase(), 0.0001]]) {
+  try {
+    const admise = await lireU(H, '0x' + selecteur('deviseAdmise(address)') + adrMot(adrDevise));
+    if (admise !== 1n) { console.log('— ' + etiquette + ' : NON admise par le hook 7030 (deviseAdmise = ' + admise + ') — pas lancable ici, rien a mesurer'); continue; }
+    const tient = await balance(adrDevise, PM_V4_BANC);
+    if (!(tient > 0n)) { console.log('— ' + etiquette + ' : le detenteur du banc n en tient pas — NON MESURE'); continue; }
+    const dec = Number(await lireU(adrDevise, '0x313ce567'));
+    await naissance({ etiquette, devise: adrDevise, decimales: dec, prixUsd, valorisation: 10, financer: donner(adrDevise, PM_V4_BANC) });
+  } catch (e) { ok(false, etiquette + ' : le banc a plante — ' + String(e && e.message).slice(0, 140)); }
+}
+
 /* ── 6. LE PLAN RENDU A UN AGENT (naissance-api.js, celui du MCP), EXECUTE TEL QUEL ───────────────────────────────────────────────
  * base-anvil n a pas eth_simulateV1 : on l EMULE fidelement — instantane, envoi reel de chaque appel, lecture des status, retour
  * a l instantane. Le plan est donc juge par une execution, puis rejoue pour de bon. */
