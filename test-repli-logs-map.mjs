@@ -106,7 +106,9 @@ await cas('B3 navigateur : un getLogs a plus de 9 adresses refuse partout est re
 await cas('B1 charger() pose nos blocks AVANT le balayage de la factory', async () => {
   const i = app.indexOf('async function charger() {');
   assert.ok(i > 0);
-  const corps = app.slice(i, app.indexOf('\n}\n', i));
+  const fin = /\r?\n\}\r?\n/.exec(app.slice(i));
+  assert.ok(fin, 'fin de charger() introuvable');
+  const corps = app.slice(i, i + fin.index);
   const sansCom = corps.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const iPose = sansCom.indexOf('await poserNosBlocks(');
   const iScan = sansCom.indexOf('await listerCreations(');

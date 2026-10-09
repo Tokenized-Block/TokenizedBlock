@@ -127,15 +127,19 @@ const FACTORY = '0xb20f000000000000000000000000000000000000';
 v('eth_call sur la factory : pinne', () => {
   assert.deepEqual(choisir(RESEAUX, 8453, 'eth_call', [{ to: FACTORY, data: '0x' }, 'latest']), [ORG]);
 });
-v('eth_getLogs sur la factory : pinne AUSSI (le jumeau qui manquait)', () => {
-  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY)), [ORG],
-    'le balayage de la factory doit etre pinne comme son jumeau eth_call');
+/* ⛔⛔ 2026-10-09 — LE PIN SEUL EST DEVENU UNE PANNE : base.org repond 429 a TOUT eth_getLogs (mesure ; ~2026-10-07), et la Map
+ *     s est videe. Le getLogs de la factory garde base.org EN TETE, puis publicnode en REPLI (qui sert ces logs, mesure croisee
+ *     avec drpc). L eth_call de la factory reste pinne seul (ci-dessus). Ce que le pin protegeait — ne pas commencer par
+ *     publicnode — tient toujours : il est SECOND, jamais premier. */
+v('eth_getLogs sur la factory : base.org EN TETE, publicnode en repli seulement', () => {
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY)), [ORG, PUB],
+    'le balayage de la factory commence par base.org et n a que publicnode en repli');
 });
 v('la factory en MAJUSCULES est reconnue', () => {
-  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY.toUpperCase().replace('0X', '0x'))), [ORG]);
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs(FACTORY.toUpperCase().replace('0X', '0x'))), [ORG, PUB]);
 });
 v('la factory dans un tableau d UNE entree est reconnue', () => {
-  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs([FACTORY])), [ORG]);
+  assert.deepEqual(choisir(RESEAUX, 8453, 'eth_getLogs', logs([FACTORY])), [ORG, PUB]);
 });
 
 /* 8. ⛔⛔ ET LE PIEGE DU PREFIXE RESTE FERME. Le 2026-09-14, `to.startsWith('0xb20')` avait attrape

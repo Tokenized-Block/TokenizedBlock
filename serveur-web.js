@@ -135,7 +135,7 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { avecRepliLogs, lecteurUrl } from './repli-logs.js';
-import { pairesProposees } from './paires.js';
+import { pairesProposees, ACTIONS_COINBASE } from './paires.js';
 import { planRail } from './rails-api.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -661,7 +661,17 @@ async function alternativeAerodrome(jeton, famille) {
 }
 
 let rpcId = 0, rpcTour = 0;
+/* ⛔⛔ 2026-10-09 — TOUTES les lectures d historique du serveur ont le repli publicnode, pas seulement le scan des creations.
+ *   Le motif qui revient dans ce depot : un noeud public CHANGE de comportement sans prevenir (base.org : 429 a tout getLogs
+ *   depuis ~2026-10-07) et chaque lecteur epingle sur lui tombe en silence (index nos-blocks a 270 000 blocs de retard, Map,
+ *   Live). Le repli ne s applique qu aux eth_getLogs, n accepte qu un tableau, et rend l erreur du principal si tout echoue
+ *   (repli-logs.js). Ce qui le rend visible : la sonde des noeuds de /sante (sonderNoeuds). */
+let repliServeur = null;
 async function rpcServeur(methode, params) {
+  if (!repliServeur) repliServeur = avecRepliLogs(rpcServeurBrut, [lecteurUrl('https://base-rpc.publicnode.com')]);
+  return repliServeur(methode, params);
+}
+async function rpcServeurBrut(methode, params) {
   let dernier = null;
   const maxEssais = Math.max(3, RPC_LIST.length);
   for (let k = 0; k < maxEssais; k++) {
@@ -688,6 +698,47 @@ async function rpcServeur(methode, params) {
 /* ⛔ 2026-10-09 : le scan des creations (factory B20) a un REPLI getLogs — publicnode, seul noeud public mesure qui servait
  *   ce getLogs ce jour-la (200, 13 logs sur 1 999 blocs ; identique a drpc sur la fenetre recoupee). Tableau exige, sinon erreur. */
 const rpcScanCreations = avecRepliLogs(rpcServeur, [lecteurUrl('https://base-rpc.publicnode.com')]);
+/* ══ LA SONDE DES NOEUDS (2026-10-09) ═══════════════════════════════════════════════════════════════════════════════════
+ * Le role de chaque noeud public a ete ecrit en dur d apres UNE mesure (« base.org sert les getLogs a plus de 9 adresses »,
+ * « publicnode refuse l archive »). Quand un noeud change, rien ne le disait : on l apprenait par une capture d ecran, des
+ * jours apres. Toutes les 10 min, chaque noeud est essaye sur les QUATRE capacites dont l app depend, et /sante.noeuds le rend :
+ *   appel (eth_blockNumber) · logs (getLogs 1 bloc, USDC) · multi (getLogs 10 adresses) · archive (getLogs a -20 000 blocs).
+ * Trois etats par capacite : 'ok' (tableau / nombre rendu), 'refus' (une erreur nommee : 429, 403, plafond), 'muet' (rien).
+ * `logsServis` = combien de noeuds servent un getLogs ; 0 = l historique est AVEUGLE, a lire comme une panne. */
+const NOEUDS_SONDES = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org', 'https://1rpc.io/base'])];
+const etatNoeuds = { lu: null, noeuds: {}, logsServis: null, multiServis: null, archiveServis: null };
+async function sonderNoeuds() {
+  const tete = await rpcServeur('eth_blockNumber', []).then((h) => parseInt(h, 16)).catch(() => null);
+  const usdc = USDC_BASE.toLowerCase();
+  const multi = [usdc, ...ACTIONS_COINBASE.slice(0, 9).map((a) => String(a.adr).toLowerCase())];
+  const essai = async (url, methode, params) => {
+    try {
+      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) });
+      const j = await r.json().catch(() => null);
+      if (j && j.result !== undefined && j.result !== null && !j.error) return 'ok';
+      return j && j.error ? 'refus: ' + String(j.error.message || '').slice(0, 60) : 'refus: HTTP ' + r.status;
+    } catch (e) { return 'muet: ' + String((e && e.message) || e).slice(0, 40); }
+  };
+  const res = {};
+  for (const url of NOEUDS_SONDES) {
+    const n = { appel: await essai(url, 'eth_blockNumber', []) };
+    if (Number.isSafeInteger(tete)) {
+      const b = '0x' + (tete - 2).toString(16), p = '0x' + (tete - 20000).toString(16);
+      n.logs = await essai(url, 'eth_getLogs', [{ address: usdc, fromBlock: b, toBlock: b }]);
+      n.multi = await essai(url, 'eth_getLogs', [{ address: multi, fromBlock: b, toBlock: b }]);
+      n.archive = await essai(url, 'eth_getLogs', [{ address: usdc, fromBlock: p, toBlock: p }]);
+    }
+    res[url.replace('https://', '')] = n;
+    await new Promise((ok) => setTimeout(ok, 400));
+  }
+  const compte = (k) => Object.values(res).filter((n) => n[k] === 'ok').length;
+  Object.assign(etatNoeuds, { lu: new Date().toISOString(), noeuds: res, tete,
+    logsServis: Number.isSafeInteger(tete) ? compte('logs') : null, multiServis: Number.isSafeInteger(tete) ? compte('multi') : null,
+    archiveServis: Number.isSafeInteger(tete) ? compte('archive') : null });
+  console.log('[noeuds] logs servis par ' + etatNoeuds.logsServis + ' · multi ' + etatNoeuds.multiServis + ' · archive ' + etatNoeuds.archiveServis + ' / ' + NOEUDS_SONDES.length);
+}
+if (process.env.TB_SONDES !== '0') setTimeout(() => { void sonderNoeuds().catch(() => {}); setInterval(() => { void sonderNoeuds().catch(() => {}); }, 10 * 60 * 1000).unref(); }, 60000).unref();
 /* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
  * ⛔⛔ MESURE DU 2026-09-17, ET ELLE RENVERSE UNE CONCLUSION QUE J AVAIS PUBLIEE. On croyait que les
  *    pools des autres lanceurs REFUSAIENT notre routeur. Faux : on lisait la mauvaise cle. Pour
@@ -3948,7 +3999,7 @@ createServer((req, res) => {
       naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
-      mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), ...(ok ? {} : { modulesManquants }) }));
+      mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 
