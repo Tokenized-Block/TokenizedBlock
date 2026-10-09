@@ -35,6 +35,8 @@ import { FEE_WALLET, WALLET_TRESOR_SMART } from './frais-creation.js';
 import { PERMIT2, V4_ADRESSES } from './lancer-pool.js';
 import { USDC_BASE, CLES_PRIX } from './prix-eth.js';
 import { ACTIONS_COINBASE } from './paires.js';
+/* 2026-10-04 : les lectures INDEPENDANTES d un plan partent ensemble, bornees (voir lectures-en-vol.js pour la mesure). */
+import { enVolBorne, lireEnsemble, LECTURES_EN_VOL_MAX } from './lectures-en-vol.js';
 
 /** ⛔ RECOPIEES de index.html (const ROUTEUR, const QUOTER) — un test compare. */
 export const ROUTEUR = { 84532: '0x492E6456D9528771018DeB9E87ef7750EF184104', 8453: '0x6ff5693b99212DA76aD316178A184AB56D299b43' };
@@ -199,8 +201,14 @@ export async function poolActuelleDuBlock({ rpc, stateView, cle, hooks = HOOKS_V
     const id = poolId(c).slice(2);
     let s0, lq;
     try {
-      s0 = mot(await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + id }, 'latest']));
-      lq = mot(await rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getLiquidity(bytes32)') + id }, 'latest']));
+      /* 2026-10-04 : le prix et la liquidite d une MEME pool ne dependent pas l un de l autre — lus ensemble. Les hooks, eux,
+       *   restent lus l un apres l autre : le premier qui a une pool gagne, et lire les suivants serait des lectures en plus. */
+      const [brutS0, brutLq] = await lireEnsemble([
+        () => rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getSlot0(bytes32)') + id }, 'latest']),
+        () => rpc('eth_call', [{ to: stateView, data: '0x' + selecteur('getLiquidity(bytes32)') + id }, 'latest']),
+      ]);
+      s0 = mot(brutS0);
+      lq = mot(brutLq);
     } catch { ratees += 1; continue; }
     if (s0 === null || lq === null) { ratees += 1; continue; }
     if (s0 !== 0n && lq > 0n) return { cle: c, ratees };
@@ -537,8 +545,15 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     const jeton = paye; // la suite du bloc lit et autorise CE jeton
     let okP2, okR;
     try {
-      okP2 = BigInt(await lire('eth_call', [{ to: jeton, data: '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2) }, 'latest'])) >= m;
-      const raw = String(await lire('eth_call', [{ to: PERMIT2, data: '0x' + selecteur('allowance(address,address,address)') + pad(compte) + pad(jeton) + pad(R) }, 'latest']));
+      /* 2026-10-04 : les deux autorisations (jeton -> Permit2, Permit2 -> routeur) sont deux lectures INDEPENDANTES, lues
+       *   ensemble. ⛔ Jamais gardees en memoire : une autorisation change a chaque signature. Une seule illisible = NON_MESURE,
+       *   comme avant. */
+      const [brutP2, brutR] = await lireEnsemble([
+        () => lire('eth_call', [{ to: jeton, data: '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2) }, 'latest']),
+        () => lire('eth_call', [{ to: PERMIT2, data: '0x' + selecteur('allowance(address,address,address)') + pad(compte) + pad(jeton) + pad(R) }, 'latest']),
+      ]);
+      okP2 = BigInt(brutP2) >= m;
+      const raw = String(brutR);
       const montantP2 = BigInt('0x' + raw.slice(2, 66));
       const expiration = BigInt('0x' + raw.slice(66, 130));
       okR = montantP2 >= m && expiration > BigInt(Math.floor(maintenant / 1000) + 60);
@@ -645,21 +660,34 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
   if (m <= 0n) return { etat: 'REFUSE', cle: null, pourquoi: 'the amount must be above zero' };
 
   const liste = Array.isArray(candidates) ? candidates : [];
-  let best = null, cotees = 0;
-  for (const k of liste) {
+  /* ⛔⛔ 2026-10-04 — LES DEVIS PARTENT ENSEMBLE, LE CHOIX RESTE DANS L ORDRE DE LA LISTE.
+   *   MESURE (fork, compter-lectures-plan-20261004.mjs) : les devis de CETTE fonction etaient 4 a 10 des 7 a 24 lectures d un
+   *   plan v4 a plusieurs sauts, lus l un APRES l autre alors qu aucun ne depend d un autre (meme paire, meme montant, une cle
+   *   chacun). En prod, ou une lecture coute 2 a 4 s, une route a deux sauts mettait 27 a 56 s.
+   *   Ils partent donc au plus `LECTURES_EN_VOL_MAX` a la fois, et le resultat est EXACTEMENT celui d avant :
+   *     - on juge dans l ORDRE DE LA LISTE, jamais dans l ordre d arrivee : a devis egal le PREMIER candidat gagne (`>` strict) —
+   *       sinon le noeud le plus rapide choisirait la pool, et deux plans identiques pourraient en rendre deux ;
+   *     - un candidat dont la lecture leve est saute, sans arreter les autres ;
+   *     - les cles sont baties AVANT toute lecture, dans l ordre : un candidat mal forme leve comme avant, et sans rien lire.
+   *   ⛔ RIEN N EST GARDE EN MEMOIRE : un devis depend du prix et de la liquidite du bloc lu.
+   *   ⛔ NON MESURE : le gain en production (noeuds publics a debit limite). Hors reseau, 4 candidats a 40 ms chacun passent de
+   *     ~160 ms a ~40 ms (test-lectures-paralleles-20261004.mjs). */
+  const essais = liste.map((k) => {
     const cle = cleDePool(adr(de), adr(vers), k);
-    const zeroForOne = adr(cle.currency0) === adr(de);
-    let quote;
-    try {
-      const r = await rpc('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: m }) }, 'latest']);
-      quote = BigInt('0x' + String(r).slice(2, 66));
-    } catch (_) {
-      continue; /* ⛔ une combinaison absente ne dit rien des autres */
-    }
+    return { k, cle, zeroForOne: adr(cle.currency0) === adr(de) };
+  });
+  const issues = await enVolBorne(essais, async (e) => {
+    const r = await rpc('eth_call', [{ to: Q, data: encodeQuote({ cle: e.cle, zeroForOne: e.zeroForOne, montant: m }) }, 'latest']);
+    return BigInt('0x' + String(r).slice(2, 66));
+  }, LECTURES_EN_VOL_MAX);
+  let best = null, cotees = 0;
+  for (const [i, e] of essais.entries()) {
+    if (!issues[i].ok) continue; /* ⛔ une combinaison absente ne dit rien des autres */
+    const quote = issues[i].valeur;
     if (quote <= 0n) continue;
     cotees += 1;
     if (!best || quote > best.quote) {
-      best = { cle, zeroForOne, quote, fee: k.fee, tickSpacing: k.tickSpacing };
+      best = { cle: e.cle, zeroForOne: e.zeroForOne, quote, fee: e.k.fee, tickSpacing: e.k.tickSpacing };
     }
   }
   if (!best) {

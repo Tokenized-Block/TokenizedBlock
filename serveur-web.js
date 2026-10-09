@@ -2440,6 +2440,10 @@ const SERVIS = [
   'heures-marche.js',
   /* ⛔ 2026-10-02 : debit et refus permanents des noeuds RPC publics, importe par `app.html`. */
   'regulateur-rpc.js',
+  /* ⛔ 2026-10-04 : les lectures independantes d un plan, lancees ensemble et bornees. Importe par `echange.js`, `marche.js` et
+   *   `plan-franchissement.js`, donc par la page : absent d ici = import 404 = app MORTE. C est `test-imports-servis` qui l a
+   *   exige (rouge « 3 module(s) importe(s) mais non servi(s) » avant cette ligne), pas ma relecture. */
+  'lectures-en-vol.js',
   /* ⛔ 2026-10-02 : les lignes groupees du Feed se deplient, leurs notes se lisent depuis leurs tx. */
   'notes-du-fil.js',
   /* ⛔ `pool-cl.js` LIT LES POOLS AERODROME CL (et tout fork Uniswap v3) — la ou `pool.js` ne sait

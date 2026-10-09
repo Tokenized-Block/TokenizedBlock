@@ -25,14 +25,14 @@ import { planAchatEthAction } from './echange-eth.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { sautsBlocVersBloc, cheminBlocVersAction } from './bloc-vers-bloc.js';
 import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
-import { vieDuBlock } from './marche.js';
+import { vieDuBlock, decimalesLues } from './marche.js';
+import { lecteurBorne, enVolBorne, LECTURES_EN_VOL_MAX } from './lectures-en-vol.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { DEVISES_BASE, ACTIONS_COINBASE, proposableEnEchange } from './paires.js';
 import { USDC_BASE, FEE_WALLET } from './frais-creation.js';
 import { CLES_PRIX } from './prix-eth.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { RE_B20 } from './pool-sans-hook.js';
-import { selecteur } from './keccak.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -109,7 +109,12 @@ const quoteDe = (cle, jeton) => {
  * @param {{ rpc:Function, clesDe?:(a:string)=>Promise<object[]>, chaine?:number, stateView?:string, maintenant?:number }} deps
  */
 export async function planRail(q, deps) {
-  const rpc = deps && deps.rpc;
+  const rpcRecu = deps && deps.rpc;
+  /* ⛔ 2026-10-04 — UN PLAN N A JAMAIS PLUS DE `LECTURES_EN_VOL_MAX` LECTURES EN VOL, QUEL QUE SOIT LE BATISSEUR. Les lectures
+   *   independantes partent maintenant ensemble (devis d une meme paire, decimales + supply, les deux marches de la route 5) ;
+   *   ce lecteur est la seule borne commune : tout ce que le plan lit passe par lui, les appels en trop attendent leur tour.
+   *   Il ne reessaie rien et ne garde rien (lectures-en-vol.js). Le lecteur recu n est plus appele directement ci-dessous. */
+  const rpc = typeof rpcRecu === 'function' ? lecteurBorne(rpcRecu, LECTURES_EN_VOL_MAX) : rpcRecu;
   const clesDe = (deps && typeof deps.clesDe === 'function') ? deps.clesDe : (async () => []);
   const chaine = Number((deps && deps.chaine) || 8453);
   const stateView = (deps && deps.stateView) || (V4_ADRESSES[chaine] || {}).stateView;
@@ -132,14 +137,23 @@ export async function planRail(q, deps) {
   const marcheDe = async (a) => vieDuBlock({ rpc, stateView, jeton: a, clesExactes: await clesDe(a), deviseDAbord: natureJeton(a) === 'ACTION' });
   const illisible = (mk) => ({ etat: mk && mk.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
     pourquoi: 'the block market could not be read: ' + ((mk && mk.pourquoi) || 'no answer') });
-  /* ⛔ LES DECIMALES SE LISENT (OUSD en a 6, pas 18) ; ETH natif seul est connu. */
+  /* ⛔ LES DECIMALES SE LISENT (OUSD en a 6, pas 18) ; ETH natif seul est connu.
+   *   2026-10-04 : lues UNE fois par jeton puis gardees (marche.js `decimalesLues` : seul fait immuable garde ; une lecture
+   *   ratee leve et n est pas gardee). La meme demande part sur la chaine qu avant ; le refus hors bornes est inchange. */
   const decimalesDe = async (a) => {
     if (a === ETH) return 18;
-    const r = await rpc('eth_call', [{ to: a, data: selecteur('decimals()') }, 'latest']);
-    const d = Number(BigInt(String(r).slice(0, 66)));
+    const d = await decimalesLues({ rpc, stateView, jeton: a });
     if (!Number.isInteger(d) || d < 0 || d > 36) throw new Error('decimals unread');
     return d;
   };
+  /* ⛔ 2026-10-04 — DEUX MARCHES INDEPENDANTS SE LISENT ENSEMBLE (route 5 : l action payee ET ce qu elle achete).
+   *   MESURE (fork) : LLYc > block lisait le marche de LLYc (4 lectures) PUIS celui du block (5), en file. Aucun ne depend de
+   *   l autre. Les deux partent ensemble ; chaque issue est rendue a SA place, et l appelant les juge DANS L ORDRE D AVANT
+   *   (A d abord) : une erreur de lecture de B ne remplace jamais un refus dit sur A.
+   *   ⛔ Seul ecart : quand A est refuse, le marche de B a ete lu pour rien (des lectures en plus, la meme reponse). Reserve
+   *   aux routes ou B est TOUJOURS lu quand A est bon — pas a la route 2, ou « vendre contre sa cotation » ne lit pas B. */
+  const marchesDe = (...jetons) => enVolBorne(jetons, (a) => marcheDe(a), jetons.length);
+  const valeurOuErreur = (issue) => { if (!issue.ok) throw issue.erreur; return issue.valeur; };
   /* le resolveur v4 de l app : la cle LUE du marche d abord, puis les cles de prix connues (jamais l une sans l autre) */
   const resolveurAvec = (...clesConnues) => async ({ de: d1, vers: v1, montant: mt }) => {
     const paire = new Set([bas(d1), bas(v1)]);
@@ -279,14 +293,16 @@ export async function planRail(q, deps) {
       if (nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers)) {
         return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(vers) + ' trades on Aerodrome and ' + ACTIONS.get(de) + ' on Uniswap v4: sell for USDC, then buy with USDC (two trades)' });
       }
-      const marcheA = await marcheDe(de);
+      /* les deux marches partent ensemble (vers ETH : un seul marche a lire) ; ils sont juges ci-dessous dans l ordre d avant */
+      const [luA, luB] = await marchesDe(...(nv === 'ETH' ? [de] : [de, vers]));
+      const marcheA = valeurOuErreur(luA);
       if (!marcheA || marcheA.etat !== 'LUE' || !marcheA.cle) return normaliser(route, illisible(marcheA));
       if (quoteDe(marcheA.cle, de) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(de) + ' trades on v4 against ' + quoteDe(marcheA.cle, de) + ', not USDC' });
       const chemin = [{ de, vers: USDC, famille: 'uniswap-v4' }];
       const connues = [marcheA.cle];
       if (nv === 'ETH') chemin.push({ de: USDC, vers: ETH, famille: 'uniswap-v4' });
       else {
-        const marcheB = await marcheDe(vers);
+        const marcheB = valeurOuErreur(luB);
         if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
         const quoteB = quoteDe(marcheB.cle, vers);
         if (quoteB !== USDC && quoteB !== ETH) return normaliser(route, { etat: 'REFUSE', pourquoi: 'this one trades against ' + quoteB + ': no measured path from USDC to it' }, { cotation: quoteB });
