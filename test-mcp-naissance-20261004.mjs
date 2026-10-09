@@ -96,9 +96,10 @@ ok(paires[0].adr === ETH && paires[0].symbole === 'ETH' && paires.length === 63 
  *   par TYPE seulement : le MCP les aurait offertes comme paires de naissance, refusees ensuite par le hook. Temoin : elles SONT
  *   proposees par pairesProposees — c est bien le filtre du hook qui les retire. */
 const proposees = P.pairesProposees(8453).map((p) => String(p.adr).toLowerCase());
-const horsHook = P.ACTIONS_COINBASE.filter((a) => ['ARMc', 'SKHYc', 'WRDc'].includes(a.symbole)).map((a) => a.adr.toLowerCase());
-ok(horsHook.length === 3 && horsHook.every((a) => proposees.includes(a)) && horsHook.every((a) => !paires.some((p) => p.adr === a)),
-  'paires de naissance : les 3 actions hors hook (proposees au registre) n y sont PAS');
+const LOT_20261009 = ['ARMc', 'SKHYc', 'WRDc', 'BIDUc', 'BILIc', 'HSAIc', 'INFYc', 'NIOc', 'NVOc', 'PDDc', 'SAPc', 'VALEc'];
+const horsHook = P.ACTIONS_COINBASE.filter((a) => LOT_20261009.includes(a.symbole)).map((a) => a.adr.toLowerCase());
+ok(horsHook.length === 12 && horsHook.every((a) => proposees.includes(a)) && horsHook.every((a) => !paires.some((p) => p.adr === a)),
+  'paires de naissance : les 12 actions hors hook du 2026-10-09 (proposees au registre) n y sont PAS');
 ok(paires.every((p) => p.adr === ETH || !!P.hookDeLancementPour(p.adr, 8453, T.OPTIONS_LANCEMENT)), 'chaque paire de naissance est admise par un hook de lancement');
 const uri = N.uriNaissance({ nom: 'Bloc', symbole: 'BLC', adresse: '0xb2' + '0'.repeat(30) + 'abcdef12', paire: paires[1] });
 ok(uri.startsWith('data:application/json,') && uri.includes('%22face%22%3A%7B') && new TextEncoder().encode(uri).length <= N.URI_MAX_OCTETS && /face%2F0xb2/.test(uri),

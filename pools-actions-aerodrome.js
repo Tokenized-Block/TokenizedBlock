@@ -30,6 +30,19 @@ export const POOLS_ACTIONS_AERODROME = new Map([
   ['0xb20000000000000000000026215d755356e5043f', { symbole: 'ARMc', pool: '0x9a0f4fd0766ccdb792ba58fe631aa7720097623c', tickSpacing: 1, usdcMesure: 24981 }],
   ['0xb200000000000000000000187f7071d6e321a7d2', { symbole: 'SKHYc', pool: '0x6678992e0a166f4e78bf6cad5dd7e61ca041711c', tickSpacing: 1, usdcMesure: 24971 }],
   ['0xb200000000000000000000e88efe88d8ade3f0da', { symbole: 'WRDc', pool: '0xbc440aff9a79cced69d5b21c7b71e60bd0278efb', tickSpacing: 1, usdcMesure: 24701 }],
+  /* 2026-10-09 21:08 UTC (bloc ~52 395 400) : les onze « ecartees » ci-dessus avaient ete mesurees 1 h 40 apres leur creation, a
+   *   0,01 USDC. 25 min plus tard : 24 987 USDC chacune. Un instantane n est pas un etat — elles entrent avec la meme regle. */
+  ['0xb200000000000000000000d2b7d9aee52f6c6bef', { symbole: 'BIDUc', pool: '0xd47b8f13ffc3198148b138d3f07cc89c92042950', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000ca7c6d1438e7245eb6', { symbole: 'BILIc', pool: '0x32a3ce6c3a8d6c24c4a51a5cf2869410cbf4d637', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000f3049f4aa834b23b64', { symbole: 'HSAIc', pool: '0xdc8d2c31de17bf4df00c05e4e132bcea22f24c3b', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000f6b0417af5f52341fc', { symbole: 'INFYc', pool: '0x356cc16fe38a6ad0eb25e655759dd963f8d674bf', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb2000000000000000000002d2b5dc53c61f1ba06', { symbole: 'NIOc', pool: '0x484cc2ca594ced3fe38362fe950c60ce66f53f6d', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb2000000000000000000008d5328e9208773dc58', { symbole: 'NVOc', pool: '0xc1ba39d668f14eee2462ca5877402e4a7c4d1f34', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000c8a7223510467d8563', { symbole: 'PDDc', pool: '0x84608be6d655ee05032303fe7f0d6f3a51c2cf51', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000da6f64c306234127e0', { symbole: 'SAPc', pool: '0x21313a06b7f8ed38d8bc1fb8be2fbd847634a6ec', tickSpacing: 1, usdcMesure: 24987 }],
+  /* ⛔ SEc (0x0274…4547) et SONYc (0x26dd…6fdc) NE SONT PAS dans cette table : 24 987 USDC chacune, mais l achat reverte sur fork
+   *   (« Too little received » des 10 USDC) — profondeur affichee n est pas profondeur pres du prix. Voir paires.js. */
+  ['0xb20000000000000000000063376b142c0764b489', { symbole: 'VALEc', pool: '0x0f48336b76ee52fa6bb19edf5af358529df57574', tickSpacing: 1, usdcMesure: 24987 }],
 ]);
 
 /** Une ligne de marche (DexScreener) avec la pool d achat de l action si la table la connait et que la ligne pointe

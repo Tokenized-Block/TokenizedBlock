@@ -296,6 +296,24 @@ export const ACTIONS_COINBASE = [
   { symbole: 'ARMc', nom: 'Arm Holdings', adr: '0xb20000000000000000000026215d755356e5043f' },
   { symbole: 'SKHYc', nom: 'SK hynix', adr: '0xb200000000000000000000187f7071d6e321a7d2' },
   { symbole: 'WRDc', nom: 'WeRide', adr: '0xb200000000000000000000e88efe88d8ade3f0da' },
+  /* ⛔⛔ ET LES ONZE « VIDES » SE SONT REMPLIES 25 MIN PLUS TARD — UN INSTANTANE N EST PAS UN ETAT. Lot annonce par @base le
+   *     2026-10-09 19:59 UTC (« More tokenized stocks, just in time for the weekend ») ; mint 18:18-19:02, pools creees 19:07.
+   *     Mesure 20:45 UTC : 0,01 USDC chacune. Re-mesure 21:08 UTC (bloc ~52 395 400) : 24 987,81 USDC chacune, getPool(USDC,
+   *     action, 1) == la pool de DexScreener, 14/14 au-dessus du seuil de la table. Memes regles que les trois du dessus :
+   *     achat/vente, HORS de la liste figee du 7030, pas de naissance contre elles. Preuve fork : voir le message du commit.
+   * ⛔⛔ SEc ET SONYc RESTENT DEHORS, MALGRE 24 987 USDC CHACUNE : sur fork (bloc 52 395 433), le plan d achat est PRET et le swap
+   *     REVERTE « Too little received » — a 500, 100 ET 10 USDC. Le plan Aerodrome n est pas simule ; son minimum vient du prix
+   *     spot, et la liquidite pres du spot de ces deux pools ne le tient pas. Les ajouter = un Buy « PRET » qui coute du gaz pour
+   *     un echec. Elles entreront quand le plan sera simule (ou leur pool remesuree). */
+  { symbole: 'BIDUc', nom: 'Baidu', adr: '0xb200000000000000000000d2b7d9aee52f6c6bef' },
+  { symbole: 'BILIc', nom: 'Bilibili', adr: '0xb200000000000000000000ca7c6d1438e7245eb6' },
+  { symbole: 'HSAIc', nom: 'Hesai Group', adr: '0xb200000000000000000000f3049f4aa834b23b64' },
+  { symbole: 'INFYc', nom: 'Infosys', adr: '0xb200000000000000000000f6b0417af5f52341fc' },
+  { symbole: 'NIOc', nom: 'NIO', adr: '0xb2000000000000000000002d2b5dc53c61f1ba06' },
+  { symbole: 'NVOc', nom: 'Novo Nordisk', adr: '0xb2000000000000000000008d5328e9208773dc58' },
+  { symbole: 'PDDc', nom: 'PDD Holdings', adr: '0xb200000000000000000000c8a7223510467d8563' },
+  { symbole: 'SAPc', nom: 'SAP', adr: '0xb200000000000000000000da6f64c306234127e0' },
+  { symbole: 'VALEc', nom: 'Vale', adr: '0xb20000000000000000000063376b142c0764b489' },
   /* ⛔⛔ 2026-10-03 (fondateur, « Oui, les 21 en Soon ») : LES 21 AUTRES ACTIONS DE L EMETTEUR entrent au registre pour
    *   l AFFICHAGE — la regle du 2026-09-27 (« supply nulle = dehors ») est levee pour l affichage SEULEMENT, jamais pour un
    *   achat : sans marche lu, pas de Buy ; sans contrat qui les admet, Create les montre « opens with our next contract ».

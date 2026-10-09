@@ -26,11 +26,14 @@ ok(T.avecPoolAction({ adr: '0x' + '1'.repeat(40), dex: 'uniswap' }).dex === 'uni
 const nv = T.POOLS_ACTIONS_AERODROME.get('0xb20000000000000000000078ee7ce2fe4908108c');
 const lnv = { adr: '0xb20000000000000000000078ee7ce2fe4908108c', dex: 'aerodrome', poolAdr: nv.pool };
 ok(T.avecPoolAction(lnv) === lnv, 'deja sur la bonne pool : meme objet, rien de recopie');
-/* 2026-10-09 : 12 -> 15 (ARMc, SKHYc, WRDc, pools tickSpacing 1 mesurees a ~25 000 USDC ; onze autres ecartees a 0,01 USDC) */
-ok(T.POOLS_ACTIONS_AERODROME.size === 15 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
-  '15 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
+/* 2026-10-09 : 12 -> 24 — le lot @base du jour (pools tickSpacing 1 a ~25 000 USDC ; onze mesurees vides a 20:45 UTC,
+ *   approvisionnees a 21:08 UTC). SEc et SONYc DEHORS : achat PRET qui reverte sur fork (« Too little received »). */
+ok(T.POOLS_ACTIONS_AERODROME.size === 24 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
+  '24 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
 const TS1 = [...T.POOLS_ACTIONS_AERODROME.values()].filter((x) => x.tickSpacing === 1).map((x) => x.symbole).sort().join(' ');
-ok(TS1 === 'ARMc SKHYc WRDc', 'les trois du 2026-10-09 portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
+ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc NIOc NVOc PDDc SAPc SKHYc VALEc WRDc', 'les douze du 2026-10-09 portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
+ok(![...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SEc' || x.symbole === 'SONYc')
+  && !ACTIONS_COINBASE.some((a) => a.symbole === 'SEc' || a.symbole === 'SONYc'), 'SEc et SONYc absents (table ET registre) : leur achat reverte sur fork');
 ok([...T.POOLS_ACTIONS_AERODROME.keys()].every((a) => ACTIONS_COINBASE.some((x) => bas(x.adr) === a)), 'chaque cle est une action du registre');
 
 /* B */
