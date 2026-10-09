@@ -134,6 +134,7 @@ async function obtenirRasteriseur() {
   return rasteriseur;
 }
 import { resumerTrending } from './trending.js';
+import { avecRepliLogs, lecteurUrl } from './repli-logs.js';
 import { pairesProposees } from './paires.js';
 import { planRail } from './rails-api.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
@@ -684,6 +685,9 @@ async function rpcServeur(methode, params) {
   }
   throw dernier || new Error('node rate limit');
 }
+/* ⛔ 2026-10-09 : le scan des creations (factory B20) a un REPLI getLogs — publicnode, seul noeud public mesure qui servait
+ *   ce getLogs ce jour-la (200, 13 logs sur 1 999 blocs ; identique a drpc sur la fenetre recoupee). Tableau exige, sinon erreur. */
+const rpcScanCreations = avecRepliLogs(rpcServeur, [lecteurUrl('https://base-rpc.publicnode.com')]);
 /* ══ LA VRAIE CLE DE POOL D UN BLOCK ══════════════════════════════════════════════════════════════
  * ⛔⛔ MESURE DU 2026-09-17, ET ELLE RENVERSE UNE CONCLUSION QUE J AVAIS PUBLIEE. On croyait que les
  *    pools des autres lanceurs REFUSAIENT notre routeur. Faux : on lisait la mauvaise cle. Pour
@@ -1987,7 +1991,9 @@ async function lireTrending() {
     /* cold: 12h first (not 3d) so public RPC can finish; then incremental */
     const blocs = blocsLusJusqua === null ? 3 * 43200 : Math.max(1, fin - blocsLusJusqua); /* tip map-alive: 3d cold OK now fenetre≤999 */
     console.log('[trending] scan start · blocs=' + blocs + ' · connus=' + blocksConnus.size);
-    const cr = await listerCreations({ rpc: rpcServeur, blocs, fin });
+    /* ⛔⛔ 2026-10-09 : `rpcScanCreations` et non `rpcServeur` — base.org refusait tout getLogs (429), le scan
+     *     restait a `fenetresRatees: 40` et aucun block ne depuis le 2026-10-07 n entrait dans l index. Voir repli-logs.js. */
+    const cr = await listerCreations({ rpc: rpcScanCreations, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
     /* ⛔⛔ ON RETIENT LE CREATEUR DE CHAQUE NOUVELLE CREATION. C est ce qui permet a n importe qui de
      *     retrouver SES blocks, d une machine ou d une autre, sans fenetre de 24 h.
