@@ -67,6 +67,17 @@ await cas('A6 bout a bout : listerCreations sur un principal qui refuse TOUT get
   assert.ok(avec.creations.length >= 1, 'le repli a repondu mais aucune creation n est sortie : ' + JSON.stringify(avec.creations));
 });
 
+await cas('A8 lecteurUrl : une erreur JSON-RPC (403 archive) ou un HTTP en echec JETTE, jamais un tableau vide', async () => {
+  const { lecteurUrl } = await import('./repli-logs.js');
+  const repond = (corps, status = 200) => async () => ({ status, json: async () => corps });
+  await assert.rejects(lecteurUrl('http://x', { fetchImpl: repond({ jsonrpc: '2.0', id: 1, error: { code: -32000, message: 'Archive requests require a personal token' } }, 403) })('eth_getLogs', [{}]), /Archive/);
+  await assert.rejects(lecteurUrl('http://x', { fetchImpl: repond({ jsonrpc: '2.0', id: 1 }) })('eth_getLogs', [{}]));
+  assert.deepEqual(await lecteurUrl('http://x', { fetchImpl: repond({ jsonrpc: '2.0', id: 1, result: [] }) })('eth_getLogs', [{}]), []);
+  /* bout a bout : un repli qui refuse l archive laisse la fenetre RATEE */
+  const rpc = avecRepliLogs(async () => refus(), [lecteurUrl('http://x', { fetchImpl: repond({ jsonrpc: '2.0', id: 1, error: { message: '403 archive' } }, 403) })]);
+  await assert.rejects(rpc('eth_getLogs', [{}]), /request limit reached/);
+});
+
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const nu = srv.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
 await cas('A7 le scan des creations de lireTrending passe par le repli', async () => {
@@ -75,7 +86,16 @@ await cas('A7 le scan des creations de lireTrending passe par le repli', async (
     'lireTrending scanne encore sur rpcServeur seul : base.org refuse, l index se fige');
 });
 
+await cas('A9 un scan qui avance par-dessus des fenetres refusees NOTE le saut (rendu par /sante)', async () => {
+  assert.match(nu, /trousCreations\.push\(\{ de: blocsLusJusqua === null \? fin - blocs : blocsLusJusqua, a: fin, fenetres: cr\.fenetresRatees\.length/);
+  assert.match(nu, /trousCreations: trousCreations\.slice\(-10\)/);
+});
+
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+await cas('B2 navigateur : les getLogs de la factory ont publicnode en repli APRES base.org ; les eth_call de la factory restent epingles', async () => {
+  assert.match(app, /const REPLI_LOGS_FACTORY = 'https:\/\/base-rpc\.publicnode\.com';/);
+  assert.match(app, /\? \[RESEAUX\[CHAINE\]\.b20Rpc \|\| RESEAUX\[CHAINE\]\.rpc, \.\.\.\(methode === 'eth_getLogs' && CHAINE === 8453/);
+});
 await cas('B1 charger() pose nos blocks AVANT le balayage de la factory', async () => {
   const i = app.indexOf('async function charger() {');
   assert.ok(i > 0);

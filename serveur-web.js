@@ -1871,6 +1871,8 @@ let rattrapageDepuis = null;
 let refusDeSuite = 0;
 const trousRattrapage = [];
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
+/** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending. En memoire seulement. */
+const trousCreations = [];
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
@@ -2079,7 +2081,17 @@ async function lireTrending() {
     } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
-    if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) blocsLusJusqua = fin;
+    if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) {
+      /* ⛔ 2026-10-09 (relecture adverse du repli publicnode) : avancer avec des fenetres refusees SAUTE ces fenetres pour de bon —
+       *   publicnode ne sert pas l archive (403 des ~-9 000 blocs). Le saut est donc NOTE (borne, fenetres), garde en memoire et
+       *   rendu par /sante, pour qu un noeud d archive puisse un jour les relire au lieu de les oublier en silence. */
+      if ((cr.fenetresRatees || []).length) {
+        trousCreations.push({ de: blocsLusJusqua === null ? fin - blocs : blocsLusJusqua, a: fin, fenetres: cr.fenetresRatees.length, t: new Date().toISOString() });
+        if (trousCreations.length > 50) trousCreations.splice(0, trousCreations.length - 50);
+        console.log('[trending] ⛔ ' + cr.fenetresRatees.length + ' fenetre(s) refusee(s) sautee(s) — notees dans /sante.trousCreations');
+      }
+      blocsLusJusqua = fin;
+    }
     /* ── ⛔⛔ LES ACTIFS QU ON PROPOSE SOI-MEME EN PAIRE DOIVENT ETRE VUS ─────────────────────
      *     MESURE DU 2026-09-27, DexScreener interroge adresse par adresse sur les dix actions du
      *     registre `ACTIONS_COINBASE` : 10/10 ont une paire liquide, et 0/10 apparaissaient ici.
@@ -3936,7 +3948,7 @@ createServer((req, res) => {
       naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
-      mcpWidget: widgetHtml !== null, ...(ok ? {} : { modulesManquants }) }));
+      mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), ...(ok ? {} : { modulesManquants }) }));
     return;
   }
 

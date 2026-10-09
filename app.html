@@ -2700,7 +2700,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-impact-pool-meilleure" hidden>Build <code>20261009-impact-pool-meilleure</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-carte-live-repli-logs" hidden>Build <code>20261009-carte-live-repli-logs</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -4186,8 +4186,15 @@ async function rpcReseau(methode, params) {
   const filtreLogs = methode === 'eth_getLogs' && params && typeof params[0] === 'object' && params[0] ? params[0] : null;
   const multiAdresses = !!filtreLogs && Array.isArray(filtreLogs.address)
     && filtreLogs.address.length > ADRESSES_MAX_PUBLICNODE;
+  /* ⛔⛔ 2026-10-09 — LE PIN DE LA FACTORY RECOIT UN REPLI, POUR LES getLogs SEULEMENT. Mesure du jour : mainnet.base.org
+   *   repond 429 « request limit reached » a TOUT eth_getLogs (meme 1 bloc) ; la Map passait 14 min en refus et le Live restait a
+   *   « reading chain blocks ». La crainte ecrite ci-dessus (un secours qui rendrait une liste VIDE fausse) a ete MESUREE le meme
+   *   jour sur publicnode : sur la fenetre recoupee il rendait les memes logs que drpc (8 et 8), au-dela de sa profondeur il
+   *   repond 403 « personal token », au-dela de sa tete -32602 — une ERREUR explicite, jamais un tableau vide invente. Il passe
+   *   donc APRES base.org, pour les getLogs de la factory ; les eth_call de la factory restent epingles. */
+  const REPLI_LOGS_FACTORY = 'https://base-rpc.publicnode.com';
   let noeuds = viseFactory
-    ? [RESEAUX[CHAINE].b20Rpc || RESEAUX[CHAINE].rpc]
+    ? [RESEAUX[CHAINE].b20Rpc || RESEAUX[CHAINE].rpc, ...(methode === 'eth_getLogs' && CHAINE === 8453 && (RESEAUX[CHAINE].b20Rpc || '') !== REPLI_LOGS_FACTORY ? [REPLI_LOGS_FACTORY] : [])]
     : [RESEAUX[CHAINE].rpc, ...(RESEAUX[CHAINE].secours || [])];
   /* ⛔⛔⛔ LES `eth_call` TOURNENT ENTRE LES NOEUDS — ET SEULEMENT EUX. MESURE DU 2026-10-01, EN
    *      PRODUCTION, AVEC UN TEMOIN POSE SUR `fetch` (l instrument precedent,
