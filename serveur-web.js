@@ -928,7 +928,18 @@ async function fraisEnAttente() {
     for (const d of new Set([...devises.get(h.adr), ...amorce])) {
       if (/^0x0{40}$/.test(d)) continue; /* ETH : deja verse pendant le swap */
       try {
-        const du = BigInt(await rpcServeur('eth_call', [{ to: h.adr, data: '0xe69df140' /* du(address,address) */ + pad(WALLET_FRAIS) + pad(d) }, 'latest']));
+        /* ⛔ 2026-10-09 (mesure prod) : 6 des 9 creances non lues l etaient sur « over rate limit » / « service temporarily
+         *   unavailable » — un refus de DEBIT, pas une reponse. Deux relances espacees ; un « execution reverted » n est PAS relance
+         *   (c est la reponse du contrat, la relire ne la changera pas). */
+        const lireDu = () => rpcServeur('eth_call', [{ to: h.adr, data: '0xe69df140' /* du(address,address) */ + pad(WALLET_FRAIS) + pad(d) }, 'latest']);
+        let brutDu;
+        for (let essai = 0; ; essai++) {
+          try { brutDu = await lireDu(); break; } catch (e) {
+            if (essai >= 2 || !/rate limit|temporarily unavailable|429|503/i.test(String((e && e.message) || e))) throw e;
+            await new Promise((ok) => setTimeout(ok, 1500 * (essai + 1)));
+          }
+        }
+        const du = BigInt(brutDu);
         if (du === 0n) continue;
         let sym = null, dec = null;
         try { const x = await rpcServeur('eth_call', [{ to: d, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }

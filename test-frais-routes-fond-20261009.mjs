@@ -101,6 +101,8 @@ await cas('C2 sans noeud d archive : arret apres 20 refus de suite, DIT ; creanc
   assert.match(corps, /complet: balayageComplet && creancesNonLues\.length === 0/);
   /* une creance non lue est NOMMEE, pas comptee comme une fenetre (mesure prod : 13 « fenetres ratees » sur un balayage complet) */
   assert.match(corps, /creancesNonLues\.push\(\{ hook: h\.nom, devise: d, pourquoi:/);
+  /* un refus de debit est relance (2 fois) ; un revert ne l est pas */
+  assert.match(corps, /if \(essai >= 2 \|\| !\/rate limit\|temporarily unavailable\|429\|503\/i\.test\(/);
   assert.ok(!/\} catch \{ fenetresRatees\+\+; \}\s+\}\s+\}\s+\/\*/.test(corps), 'un du() rate est encore compte comme fenetre');
   assert.ok(!/devises\.get\([^)]*\)\.add\(amorce|devises\.get\(h\.adr\)\.add\(d\)/.test(corps), 'l amorce est ecrite dans le resultat du balayage');
 });
