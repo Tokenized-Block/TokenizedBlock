@@ -2095,8 +2095,40 @@ let rattrapageDepuis = null;
 let refusDeSuite = 0;
 const trousRattrapage = [];
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
-/** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending. En memoire seulement. */
+/** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending.
+ *  ⛔ 2026-10-09 (noeud d archive pose) : PERSISTEES avec le trending et RELUES par `relireUnTrou` ; elles ne vivaient qu en memoire et
+ *  le trou mesure ce matin avait disparu au premier redeploiement. `trousRelus` garde ce qui a ete relu, et combien de creations. */
 const trousCreations = [];
+const trousRelus = [];
+/* ⛔ LE TROU MESURE LE 2026-10-09 (lu dans /sante.trousCreations ce jour-la : 52302101 -> 52381409, 35 fenetres, base.org 429 a tout
+ *   getLogs). Seme UNE fois (drapeau persiste `trouSeme20261009`), puis il vit comme les autres. */
+const TROU_MESURE_20261009 = Object.freeze({ de: 52302101, a: 52381409, fenetres: 35, t: '2026-10-09T00:00:00.000Z', seme: true });
+let trouSeme20261009 = false;
+/** Relit AU PLUS 10 000 blocs du plus ancien trou (5 pages de 2 000). Le trou ne recule QUE sur une relecture complete : une page
+ *  refusee laisse le trou tel quel (il sera relu au prochain passage) — jamais « relu » sur une lecture partielle. */
+async function relireUnTrou() {
+  if (!RPC_ARCHIVE || !trousCreations.length) return null;
+  const t = trousCreations[0];
+  const haut = Math.min(t.a, t.de + 10000);
+  const r = await listerCreations({ rpc: rpcScanCreations, blocs: haut - t.de, fin: haut });
+  if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length };
+  const nouvelles = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !blocksConnus.has(c.jeton.toLowerCase()));
+  for (const c of r.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
+  for (let i = 0; i < nouvelles.length; i += 8) {
+    const lot = nouvelles.slice(i, i + 8);
+    const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
+    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); }
+  }
+  t.relues = (t.relues || 0) + (r.creations || []).length;
+  t.nouvelles = (t.nouvelles || 0) + nouvelles.length;
+  t.de = haut;
+  if (t.de >= t.a) {
+    trousCreations.shift();
+    trousRelus.push({ ...t, fini: new Date().toISOString() });
+    if (trousRelus.length > 50) trousRelus.shift();
+  }
+  return { trou: t, haut, creations: (r.creations || []).length, nouvelles: nouvelles.length };
+}
 /* tip 20260923-map-trending: persist trending on volume so redeploy does not wipe Map soleils */
 const FICHIER_TRENDING = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'trending-cache.json') : null;
@@ -2163,6 +2195,11 @@ function chargerTrendingDisque() {
     }
     if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
     if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
+    /* les trous de creations et leur relecture survivent au redeploiement ; une entree mal formee est ignoree, jamais inventee */
+    const trouSain = (t) => t && Number.isSafeInteger(t.de) && Number.isSafeInteger(t.a) && t.a > t.de;
+    for (const t of (Array.isArray(x.trousCreations) ? x.trousCreations : [])) if (trouSain(t)) trousCreations.push(t);
+    for (const t of (Array.isArray(x.trousRelus) ? x.trousRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRelus.push(t);
+    if (x.trouSeme20261009 === true) trouSeme20261009 = true;
     console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
   } catch (e) { console.log('[trending] disk cache unread:', e.message); }
 }
@@ -2199,6 +2236,7 @@ function sauverTrendingDisque() {
       /* ⛔ L AVANCEMENT DU RATTRAPAGE EST PERSISTE AVEC L INDEX : sans lui, chaque deploiement
        *   recommencerait a remonter depuis le present et ne finirait JAMAIS le passe. */
       rattrapageDepuis,
+      trousCreations: trousCreations.slice(-50), trousRelus: trousRelus.slice(-50), trouSeme20261009,
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
     renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
@@ -2314,6 +2352,13 @@ async function lireTrending() {
           + ((vieux.fenetresRatees || []).length ? ' · ⛔ ' + vieux.fenetresRatees.length + ' fenetre(s) refusee(s), on ne descend pas' : ''));
       }
     } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }
+    /* ⛔⛔ 2026-10-09 — LES TROUS SE RELISENT maintenant qu un noeud d archive est pose (sans lui, relireUnTrou ne fait rien). */
+    try {
+      if (RPC_ARCHIVE && !trouSeme20261009) { trousCreations.unshift({ ...TROU_MESURE_20261009 }); trouSeme20261009 = true; }
+      const rt = await relireUnTrou();
+      if (rt) console.log('[trous] ' + (rt.ratees ? '⛔ relecture ' + rt.trou.de + '..' + rt.haut + ' incomplete (' + rt.ratees + ' page(s) refusee(s)) — le trou reste'
+        : 'relu ' + rt.haut + ' · ' + rt.creations + ' creation(s), ' + rt.nouvelles + ' nouvelle(s) · restent ' + trousCreations.length + ' trou(s)'));
+    } catch (e) { console.log('[trous] relecture interrompue : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) {
@@ -4211,7 +4256,7 @@ createServer((req, res) => {
       naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
-      mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
+      mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
       /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
       archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
       /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */
