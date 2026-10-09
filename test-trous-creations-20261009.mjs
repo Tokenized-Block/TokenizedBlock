@@ -20,7 +20,7 @@ const cas = async (titre, f) => { n++; try { await f(); } catch (e) { console.er
 
 function monter({ archive = 'https://archive.example/x', trous = [], lister }) {
   const etat = { blocksConnus: new Set(), createurParBlock: new Map(), trousCreations: trous, trousRelus: [], appels: [] };
-  const f = new Function('RPC_ARCHIVE', 'trousCreations', 'trousRelus', 'blocksConnus', 'createurParBlock', 'listerCreations', 'rpcScanCreations', 'createurDe', 'rpcServeur',
+  const f = new Function('RPC_ARCHIVE', 'trousCreations', 'trousRelus', 'blocksConnus', 'createurParBlock', 'listerCreations', 'rpcHistoire', 'createurDe', 'rpcServeur',
     corps + '\n; return relireUnTrou;')(archive, etat.trousCreations, etat.trousRelus, etat.blocksConnus, etat.createurParBlock,
     async (o) => { etat.appels.push(o); return lister(o); }, () => {}, async ({ tx }) => ({ createur: '0x' + tx.slice(2, 42) }), () => {});
   return { f, etat };
@@ -67,6 +67,12 @@ await cas('B1 persistance, graine unique, /sante', async () => {
   assert.match(nu, /if \(RPC_ARCHIVE && !trouSeme20261009\) \{ trousCreations\.unshift\(\{ \.\.\.TROU_MESURE_20261009 \}\); trouSeme20261009 = true; \}/);
   assert.match(nu, /const TROU_MESURE_20261009 = Object\.freeze\(\{ de: 52302101, a: 52381409,/);
   assert.match(nu, /trousRelus: trousRelus\.slice\(-10\)/);
+});
+await cas('B2 l histoire profonde va DIRECTEMENT au noeud d archive (mesure : la chaine base.org 429 -> publicnode 403 figeait tout)', async () => {
+  assert.match(nu, /async function rpcHistoire\(methode, params\) \{\s+if \(RPC_ARCHIVE && methode === 'eth_getLogs'\) \{ if \(!archiveDirect\) archiveDirect = lecteurArchive\(\); return archiveDirect\(methode, params\); \}\s+return rpcServeur\(methode, params\);/);
+  assert.match(nu, /const r = await listerCreations\(\{ rpc: rpcHistoire, blocs: haut - t\.de, fin: haut \}\);/);
+  assert.match(nu, /const lecteur = tete - haut > PROFONDEUR_PUBLICNODE \? rpcHistoire : rpcServeur;/);
+  assert.match(nu, /if \(!Array\.isArray\(logs\)\) throw new Error\('not a list'\);/);
 });
 
 console.log('✓ ' + n + ' cas — les trous de creations se relisent, et ne reculent que sur une relecture complete');

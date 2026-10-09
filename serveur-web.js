@@ -720,6 +720,17 @@ function lecteurArchive() {
     try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) { archiveCompte.erreurs++; throw e; }
   };
 }
+/* ⛔⛔ 2026-10-09 (mesure en prod, noeud d archive pose) — L HISTOIRE PROFONDE VA DIRECTEMENT AU NOEUD D ARCHIVE. Par la chaine de
+ *   repli, chaque fenetre ancienne essayait d abord base.org (429, avec ses relances et leurs pauses) puis publicnode (403 au-dela de
+ *   ~9 000 blocs) avant d arriver a CDP : le balayage des frais a avance de ~20 000 blocs en 15 min, et la relecture du trou s est
+ *   figee derriere. Au-dela de PROFONDEUR_PUBLICNODE, aucun noeud gratuit ne sert ces fenetres (mesure du jour) : demander aux
+ *   autres d abord ne coutait que du temps. Les autres methodes passent toujours par rpcServeur. */
+const PROFONDEUR_PUBLICNODE = 9000;
+let archiveDirect = null;
+async function rpcHistoire(methode, params) {
+  if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive(); return archiveDirect(methode, params); }
+  return rpcServeur(methode, params);
+}
 /** Un message de noeud peut recopier l URL qu il a recue : chaque segment du chemin du noeud d archive est masque avant publication. */
 function masquerCle(s) {
   let out = String(s);
@@ -888,7 +899,9 @@ async function fraisEnAttente() {
     if (refusDeSuite >= 20) { arret = 'stopped after 20 refused windows in a row from block ' + (fraisScan.jusqua === null ? depuis : fraisScan.jusqua + 1) + (RPC_ARCHIVE ? ': no node served them, archive node included (its budget and errors are in /sante.archive)' : ': no free node serves this depth (an archive node is needed)'); break; }
     const haut = Math.min(tete, bas + 998);
     try {
-      const logs = await rpcServeur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
+      const lecteur = tete - haut > PROFONDEUR_PUBLICNODE ? rpcHistoire : rpcServeur;
+      const logs = await lecteur('eth_getLogs', [{ address: PM_V4, topics: [TOPIC_INITIALIZE], fromBlock: '0x' + bas.toString(16), toBlock: '0x' + haut.toString(16) }]);
+      if (!Array.isArray(logs)) throw new Error('not a list'); /* une reponse qui n est pas une liste n est pas une fenetre vide */
       refusDeSuite = 0;
       for (const l of logs || []) {
         const hook = '0x' + String(l.data).slice(2 + 128 + 24, 2 + 192);
@@ -974,7 +987,9 @@ async function repondreFond(res, c, extra = () => ({})) {
   if (c.enVol) await Promise.race([c.enVol, new Promise((ok) => setTimeout(ok, 2500))]);
   let corps;
   if (c.r) corps = { ...c.r, ageS: Math.round((Date.now() - c.t) / 1000), recalculEnCours: Boolean(c.enVol), ...(c.erreur ? { derniereErreur: c.erreur } : {}) };
-  else if (c.enVol) corps = { ok: false, etat: 'EN_COURS', pourquoi: 'reading the chain in the background — ask again in a minute', depuisS: Math.round((Date.now() - c.debut) / 1000), ...extra() };
+  /* ⛔ 2026-10-09 : un calcul precedent qui a ECHOUE se taisait derriere « EN_COURS » (mesure : depuisS repartait a 47 s sans dire
+   *   pourquoi). Son erreur est rendue a cote. */
+  else if (c.enVol) corps = { ok: false, etat: 'EN_COURS', pourquoi: 'reading the chain in the background — ask again in a minute', depuisS: Math.round((Date.now() - c.debut) / 1000), ...(c.erreur ? { erreurPrecedente: c.erreur } : {}), ...extra() };
   else corps = { ok: false, etat: 'ECHEC', pourquoi: c.erreur || 'not read', ...extra() };
   res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(corps));
@@ -2110,7 +2125,8 @@ async function relireUnTrou() {
   if (!RPC_ARCHIVE || !trousCreations.length) return null;
   const t = trousCreations[0];
   const haut = Math.min(t.a, t.de + 10000);
-  const r = await listerCreations({ rpc: rpcScanCreations, blocs: haut - t.de, fin: haut });
+  /* un trou est de l histoire : directement au noeud d archive (rpcHistoire), pas derriere base.org et publicnode */
+  const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
   if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length };
   const nouvelles = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !blocksConnus.has(c.jeton.toLowerCase()));
   for (const c of r.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
