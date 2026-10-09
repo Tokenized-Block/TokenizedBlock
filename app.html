@@ -16607,7 +16607,12 @@ async function majPaire() {
     paireChoisie = null;
     majFraisEtRecap();
     let f = null;
-    try { f = await faitsDuBlock({ rpc, jeton: q.paire.adr, pause: 200 }); } catch (e) { f = null; }
+    /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok : « CAKEc reste sur Checking that stock on chain… ») — CETTE LECTURE EST BORNEE
+     *   A 15 s EN TOUT (`delaiMax`, faits.js). Six lectures a la suite, chacune pouvant couter plusieurs tentatives de 8 s :
+     *   la phrase d attente restait a l ecran sans limite utile. Passe l echeance, ce qui n a pas ete lu est « non lu » et
+     *   tombe dans les phrases qui existent deja ci-dessous (« We could not check… » / « We could not read how many units… »)
+     *   — jamais dans « ce n est pas un block ». 15 s est le chiffre du constat ; il n a pas ete mesure contre un noeud lent. */
+    try { f = await faitsDuBlock({ rpc, jeton: q.paire.adr, pause: 200, delaiMax: 15000 }); } catch (e) { f = null; }
     if (seq !== majPaireSeq) return;
     if (!f || f.estB20 !== true) {
       paireChoisie = null;

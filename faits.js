@@ -24,29 +24,53 @@ const MOT = (hex, i = 0) => BigInt('0x' + String(hex).slice(2 + i * 64, 66 + i *
  * ⛔ `manques` EST LA MOITIE DU RESULTAT. Chaque champ qu on n a pas su lire y est NOMME, pour que
  *    l ecran puisse dire « non lu » au lieu de laisser un blanc qui se lira comme un zero.
  */
-export async function faitsDuBlock({ rpc, jeton, pause = 0 }) {
+export async function faitsDuBlock({ rpc, jeton, pause = 0, delaiMax = 0 }) {
   const manques = [];
+  /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, P1 : « CAKEc reste sur Checking that stock on chain… ») — UNE ECHEANCE POUR
+   *   L ENSEMBLE DES LECTURES, quand l appelant en demande une (`delaiMax`, en ms). Ce module enchaine six lectures ; le
+   *   `fetch` de l app est borne a 8 s PAR TENTATIVE depuis le meme jour, mais une lecture peut encore couter plusieurs
+   *   tentatives (un noeud apres l autre, puis les reprises) et il y en a six : l ecran qui attend ce resultat restait sur
+   *   sa phrase d attente bien au-dela de ce qu une personne attend.
+   * ⛔ PASSE L ECHEANCE, UNE LECTURE N EST PAS « FAUSSE », ELLE EST « NON LUE » : elle tombe dans le MEME chemin qu un noeud
+   *   qui refuse (`null` + son nom dans `manques`). Rien n est invente, et `estB20` reste `null` si le code n a pas ete lu.
+   * ⛔ `0` (le defaut) = AUCUNE echeance : les appelants qui ne demandent rien lisent exactement comme avant.
+   * ⚠️ La lecture abandonnee n est pas annulee (ce module ne tient pas le `fetch`) : elle finit ou expire de son cote,
+   *   et son resultat est ignore. Passe l echeance, les lectures suivantes ne sont meme plus envoyees. */
+  const echeance = delaiMax > 0 ? Date.now() + delaiMax : null;
+  const lire = (methode, params) => {
+    if (echeance === null) return rpc(methode, params);
+    const reste = echeance - Date.now();
+    if (reste <= 0) return Promise.reject(new Error('read timed out'));
+    let minuteur;
+    return Promise.race([
+      rpc(methode, params),
+      new Promise((_, non) => { minuteur = setTimeout(() => non(new Error('read timed out')), reste); }),
+    ]).finally(() => clearTimeout(minuteur));
+  };
   /* ⛔⛔ ON RESPIRE ENTRE LES LECTURES, ET C EST MESURE. Six appels d affilee sur le noeud public
    * font refuser les cinq derniers : mesure du 2026-09-10, `code` passait et symbol, name,
    * decimals, totalSupply et supplyCap etaient TOUS « non lus ». Le module disait vrai — il les
    * nommait au lieu d inventer des zeros — mais l ecran ne montrait presque rien.
    * ⚠️ `pause` vaut 0 par defaut pour que les TESTS restent instantanes : ils ne parlent a aucun
    *    reseau et n ont rien a menager. C est l appelant en ligne qui demande a ralentir. */
-  const souffler = pause ? () => new Promise((r) => setTimeout(r, pause)) : async () => {};
+  /* passe l echeance, on ne respire plus : il n y a plus de lecture a menager, et attendre retarderait la reponse */
+  const souffler = pause
+    ? () => (echeance !== null && Date.now() >= echeance ? Promise.resolve() : new Promise((r) => setTimeout(r, pause)))
+    : async () => {};
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
     return { adr: jeton, estB20: false, code: null, symbole: null, nom: null, decimales: null,
       supply: null, cap: null, mintFerme: null, manques: ['not an address'] };
   }
 
   let code = null;
-  try { code = await rpc('eth_getCode', [jeton, 'latest']); } catch { manques.push('code'); }
+  try { code = await lire('eth_getCode', [jeton, 'latest']); } catch { manques.push('code'); }
 
   /* ⛔ `estB20` reste `null` si le code n a pas ete lu : ne pas savoir n est pas « non ». */
   const estB20 = code === null ? null : String(code).toLowerCase() === '0xef';
 
   const lireTexte = async (sig) => {
     try {
-      const r = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur(sig) }, 'latest']);
+      const r = await lire('eth_call', [{ to: jeton, data: '0x' + selecteur(sig) }, 'latest']);
       if (!r || r === '0x') return null;
       /* les chaines ABI sont pointees par un offset dans le premier mot */
       return chaineA(String(r).slice(2), Number(MOT(r, 0)));
@@ -54,7 +78,7 @@ export async function faitsDuBlock({ rpc, jeton, pause = 0 }) {
   };
   const lireNombre = async (sig) => {
     try {
-      const r = await rpc('eth_call', [{ to: jeton, data: '0x' + selecteur(sig) }, 'latest']);
+      const r = await lire('eth_call', [{ to: jeton, data: '0x' + selecteur(sig) }, 'latest']);
       if (!r || r === '0x' || String(r).length < 66) return null;
       return MOT(r, 0);
     } catch { return null; }
