@@ -2717,7 +2717,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-archive-relance" hidden>Build <code>20261009-archive-relance</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-paires-trois-etats" hidden>Build <code>20261009-paires-trois-etats</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3468,6 +3468,9 @@ import { ORBITES_CREATE as ORBITES, FACETTES_CREATE as FACETTES, MATIERES_CREATE
  *   selecteurs reviennent, il rougit AVANT qu on ait oublie de rebrancher le filtre. */
 import { pairesProposees, qualifierPaire, etiquettePaire, ACTIONS_COINBASE, DEVISES_BASE, refusPrixNouveauBlock,
   libellePuceCreation, blockApresDevise, choixBuyHere, v8BlockDevant, hookDeLancementPour, minimumCautionCreateur } from './paires.js';
+/* 2026-10-04 : l etat des devises de paire, lu UNE fois par le serveur (GET /api/paires/etat), et LA regle qui grise une option de
+ *   Create — seulement sur un « not_born » MESURE (voir `paireGrisee`, plus bas). */
+import { etatsDepuisReponse, estPasNeeMesuree, LIBELLE_PAS_NEE } from './etat-paires.js';
 /* ⛔⛔ 2026-10-03 (mesure prod) : deux gardes de cette page testaient « typeof STOCKS_BASE_BY_ADR » (indefini ?) — un nom qui n existe
  *   que dans index.html. Ici il est TOUJOURS indefini : la garde etait toujours fausse (le Buy a trois sauts des blocks cotes en action,
  *   mesure 123 blocks le 30/09, et le Buy Market des actions v4 : LLYc, AMDc, PYPLc rendaient « Pair a block with it » apres le
@@ -16216,6 +16219,52 @@ async function lireV3() {
 void lireV3(); /* tip 20260922-stock-pair-ux: unlock stocks ASAP, not after 3s */
 setTimeout(() => { void lireV3(); }, 3000);
 setInterval(() => { if (!document.hidden) void lireV3(); }, 300000);
+/* ⛔⛔ 2026-10-04 — UNE DEVISE « PAS NEE » SE GRISE A CREATE, ET SEULEMENT SUR UNE MESURE (etat-paires.js, GET /api/paires/etat).
+ *   D OU CA VIENT : la sim fork des 62 devises du hook 7030 — des devises sans une seule unite en circulation restaient
+ *   choisissables, et le refus n arrivait qu apres le choix (majPaire relit la supply). Le patch qui les grisait depuis le
+ *   navigateur n a PAS ete repris : une lecture ratee y valait « pas nee » (un noeud en 429 grisait tout sauf ETH — le motif des
+ *   puces 13 -> 2 du 2026-09-29), et il ajoutait 62 lectures de prix + 62 `totalSupply` a chaque chargement.
+ *   ICI : le SERVEUR lit une fois pour tout le monde ; cette page fait UNE requete (puis une toutes les 5 min, onglet visible).
+ *   ⛔ TROIS ETATS, UN SEUL GRISE. `not_born` (zero lu deux fois sur la chaine, avec un temoin) : l option est grisee et dit
+ *     LIBELLE_PAS_NEE. `not_read`, `born`, requete ratee, reponse illisible, verdict de plus de 30 min, hors mainnet : RIEN ne
+ *     change — l option reste choisissable exactement comme avant, et majPaire garde sa propre lecture au moment du choix.
+ *   ⛔ ETH (natif) n est jamais grise. La regle elle-meme (`estPasNeeMesuree`) vit dans le module, importee ici, pas recopiee.
+ *   ⛔ PAS MESURE : cet ecran dans un navigateur sur la production (le module et ces deux fonctions sont joues hors reseau par
+ *     test-etat-paires-20261004.mjs, mutants compris). */
+let etatsPaires = new Map(); /* adresse minuscule -> { etat, t } ; vide = rien de lu = rien de grise */
+let etatsPairesEnVol = null;
+let etatsPairesRelances = 0;
+function paireGrisee(p) {
+  if (Number(CHAINE) !== 8453 || !p || p.type === 'NATIF') return false;
+  return estPasNeeMesuree(etatsPaires.get(String(p.adr || '').toLowerCase()), Date.now());
+}
+function lireEtatsPaires() {
+  if (Number(CHAINE) !== 8453) return Promise.resolve();
+  if (etatsPairesEnVol) return etatsPairesEnVol;
+  etatsPairesEnVol = (async () => {
+    try {
+      const d = await fetch('/api/paires/etat', { cache: 'no-store' }).then((r) => r.json());
+      const lus = etatsDepuisReponse(d);
+      /* reponse illisible ou `ok: false` : on GARDE ce qu on avait (qui vieillit et s efface seul), on ne grise rien de plus */
+      if (!lus) return;
+      const grises = (m) => [...m].filter(([, e]) => estPasNeeMesuree(e, Date.now())).map(([a]) => a).sort().join();
+      const avant = grises(etatsPaires);
+      etatsPaires = lus;
+      /* ⚠️ ecrit sur plusieurs lignes EXPRES : test-echelle-marche.mjs repere l arrivee du trending par la PREMIERE occurrence du
+       *   `try` d une ligne autour de peindrePaires ; la meme forme ici, plus haut dans le fichier, lui volait son ancre (rouge mesure). */
+      if (grises(etatsPaires) !== avant) {
+        try {
+          peindrePaires();
+        } catch (_) { /* Create se repeindra a son ouverture */ }
+      }
+      /* le serveur vient de demarrer et sa passe tourne encore : on relit dans 20 s, trois fois au plus */
+      if (d.enCours === true && etatsPairesRelances < 3) { etatsPairesRelances += 1; setTimeout(() => { void lireEtatsPaires(); }, 20000); }
+    } catch (_) { /* requete ratee : rien ne change a l ecran */ }
+  })().finally(() => { etatsPairesEnVol = null; });
+  return etatsPairesEnVol;
+}
+void lireEtatsPaires();
+setInterval(() => { if (!document.hidden) void lireEtatsPaires(); }, 300000);
 /* ⛔⛔ LES BLOCKS VIVANTS, DECOUVERTS AU LIEU D ETRE GRAVES (Phil, 2026-09-27).
  *     LE CONCEPT : on rend n importe quel actif en block, donc n importe quel block doit pouvoir
  *     servir de paire. Un registre de 14 entrees ne peut pas porter ca — notre index en suit ~2 000.
@@ -16276,8 +16325,13 @@ function peindrePaires() {
   const ouverte = (p) => p.type === 'NATIF' || (deviseOk && (p.type === 'STABLE' || p.type === 'MAJEUR' || p.type === 'ACTION') && lancable(p.adr));
   const base = liste.filter((p) => p.type === 'NATIF' || p.type === 'STABLE' || p.type === 'MAJEUR');
   const actions = liste.filter((p) => p.type === 'ACTION').sort((a, b) => Number(lancable(b.adr)) - Number(lancable(a.adr)));
-  const opt = (p) => '<option value="' + enTexte(p.adr) + '"' + (ouverte(p) ? '' : ' disabled') + '>'
-      + enTexte(etiquettePaire(p)) + (ouverte(p) ? '' : ' — soon') + '</option>';
+  /* 2026-10-04 : une devise MESUREE sans unite en circulation (paireGrisee : `not_born`, jamais `not_read`) reste listee, grisee,
+   *   avec LIBELLE_PAS_NEE. Toute autre devise sort a l octet pres comme avant (ouverte, ou « — soon »). */
+  const opt = (p) => {
+    const pasNee = paireGrisee(p), ok = ouverte(p) && !pasNee;
+    return '<option value="' + enTexte(p.adr) + '"' + (ok ? '' : ' disabled') + '>'
+      + enTexte(etiquettePaire(p)) + (pasNee ? ' — ' + enTexte(LIBELLE_PAS_NEE) : (ok ? '' : ' — soon')) + '</option>';
+  };
   /* tip 20260922-stock-pair-ux: optgroups — Base currencies vs Coinbase tokenized stocks */
   s.innerHTML = '<optgroup label="Base currencies">' + base.map(opt).join('') + '</optgroup>'
     + (actions.length

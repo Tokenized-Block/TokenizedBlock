@@ -152,6 +152,8 @@ import { tacheAutorisee } from './brain-tasks.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
+/* 2026-10-04 : l etat des devises de paire de Create (born / not_born / not_read), lu une fois ici pour tous les visiteurs */
+import { creerEtatPaires } from './etat-paires.js';
 import { randomBytes } from 'node:crypto';
 /* 2026-10-04 : le mode essai (fork local + wallet simule) — la regle qui decide, pure, la meme que celle de la page */
 import { essaiServeur } from './mode-essai.js';
@@ -1617,6 +1619,23 @@ async function lireReferenceServeur(token) {
   referencesEnCours.set(token, p);
   return p;
 }
+/* ── L ETAT DES DEVISES DE PAIRE DE CREATE, LU UNE FOIS POUR TOUS : GET /api/paires/etat (2026-10-04) — etat-paires.js ──────────
+ * POURQUOI. Des devises sans une seule unite en circulation restaient choisissables a Create (sim fork des 62 devises du hook 7030).
+ *   Les griser depuis le NAVIGATEUR coutait 62 `totalSupply` par chargement sur des noeuds deja en 429, et une lecture ratee y valait
+ *   « pas nee » : un noeud muet grisait tout sauf ETH (le motif des puces 13 -> 2 du 2026-09-29). Le serveur lit donc UNE fois, garde
+ *   le resultat 5 minutes, et rend TROIS etats par devise : born (supply lue > 0), not_born (zero lu deux fois, avec un temoin dans la
+ *   meme passe), not_read (tout le reste — jamais un verdict). L ecran ne grise que sur not_born.
+ * ⛔ LA LISTE EST CELLE DE L ECRAN (`pairesProposees(8453)`, sans le natif) — 62 devises ce jour, les memes que DEVISES_ADMISES_7030 ;
+ *   elle n est pas recopiee ici. Le lecteur est celui des rails (liste LARGE, `0x` = non-reponse pour une lecture).
+ * MESURE (2026-10-04, le module contre le fork local base-anvil, bloc 52 137 185, lecture seule) : 42 born, 20 not_born, 0 not_read,
+ *   82 `eth_call` (62 + les 20 zeros relus), 7,6 s. Les 20 sont exactement les « 20 a supply NULLE » notees dans paires.js le
+ *   2026-10-03 (SOUNc, la 21e, a bien 843 unites).
+ * ⛔ BORNES (dans le module, comptees par test-etat-paires-20261004.mjs) : 4 lectures a la fois, une passe a la fois, coupee apres
+ *   3 echecs d affilee, pas de nouvelle passe avant 2 min apres une passe incomplete. /sante.paires lit la memoire, sans rien lire
+ *   sur la chaine. ⛔ PAS MESURE : cette route en production (noeuds publics, depuis l IP de Railway) — ni sa duree, ni son taux
+ *   de « not_read » sous 429. La premiere reponse apres un redemarrage attend la passe 8 s au plus ; au-dela elle part en
+ *   `enCours: true` et l ecran relit 20 s plus tard. */
+const etatPaires = creerEtatPaires({ rpc: rpcRails, paires: () => pairesProposees(8453) });
 
 /* ── QUI BOUGE CE BLOCK, EN DIRECT : GET /api/activite/0x… (2026-10-04) ──────────────────────────────────────────────────────
  * Phil, devant l onglet Market du panneau (il listait les echanges d AUTRES blocks) : « l onglet Market est propre au block actuel —
@@ -2928,6 +2947,9 @@ const SERVIS = [
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
   'skins.js',
+  /* 2026-10-04 : l etat des devises de paire (born / not_born / not_read) et LA regle de l ecran qui grise (importe par app.html :
+   *   absent d ici = 404 = app morte). Sa seule dependance, keccak.js, est deja servie plus haut. */
+  'etat-paires.js',
   /* 2026-10-04 : la page qui propose AU WALLET CONNECTE le deploiement de BlockSkins, et la donnee figee qu elle envoie. Elle ne
    * signe rien : un bouton, puis le wallet. Aucun lien depuis l app ; `noindex`. */
   'deployer-blockskins.html',
@@ -3884,6 +3906,15 @@ createServer((req, res) => {
       .catch((e) => rendreM(200, { ok: false, etat: 'NON_LUE', pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
+  /* l etat des devises de paire de Create (born / not_born / not_read), lu une fois par le serveur : /api/paires/etat
+   *   ⛔ une panne ici rend `ok: false` : l ecran garde ce qu il avait et ne grise rien de plus (etatsDepuisReponse rend null). */
+  if (chemin === '/api/paires/etat') {
+    const rendreE = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'GET') { rendreE(405, { ok: false, pourquoi: 'GET only' }); return; }
+    etatPaires.lire().then((r) => rendreE(200, r))
+      .catch((e) => rendreE(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+    return;
+  }
 
   /* ══ LA NAISSANCE PAR UN AGENT, ET LE MCP (2026-10-04) ═════════════════════════════════════════════════════════════════
    *   GET  /api/naissance/paires                                       les devises de naissance
@@ -4338,6 +4369,8 @@ createServer((req, res) => {
       naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
+      /* l etat des devises de paire, en compteurs (born / not_born / not_read, passes, lectures) : lu en MEMOIRE, aucune lecture de chaine */
+      paires: etatPaires.resume(),
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
       /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
       archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
