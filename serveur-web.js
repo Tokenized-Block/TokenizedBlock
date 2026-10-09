@@ -693,7 +693,11 @@ let rpcId = 0, rpcTour = 0;
  *   supported on free plan »), et limite le debit. Nos balayages vont par 999 : drpc n en sert aucun. Seul publicnode sert les
  *   fenetres recentes (~9 000 blocs). L historique profond demande un noeud d archive — decision du proprietaire. */
 /* ⛔ en MODE ESSAI (fork local), aucun repli : ce processus ne doit joindre aucun noeud public (garde du banc wallet-simule) */
-const REPLIS_LOGS_SERVEUR = ESSAI_SRV.actif ? [] : ['https://base-rpc.publicnode.com'];
+/* ⛔ 2026-10-09 : TB_REPLIS=0 coupe tout repli PUBLIC. Un banc qui fait tourner ce serveur contre un RPC FICTIF (test-graine-nos-
+ *   blocks-r9b) rend expres des fenetres « ratees » pour juger qu elles sont relues ; le repli publicnode les faisait lire sur le
+ *   VRAI reseau, et le banc devenait aleatoire (ses KO variaient d une serie a l autre). En prod la variable n est pas posee. */
+const REPLIS_PUBLICS_COUPES = process.env.TB_REPLIS === '0';
+const REPLIS_LOGS_SERVEUR = ESSAI_SRV.actif || REPLIS_PUBLICS_COUPES ? [] : ['https://base-rpc.publicnode.com'];
 /* ⛔⛔ 2026-10-09 — LE NOEUD D ARCHIVE (CDP Node, decision du proprietaire). Son URL porte la CLE dans son chemin
  *   (https://api.developer.coinbase.com/rpc/v1/base/<cle>, doc CDP) : elle vit SEULEMENT dans la variable BASE_RPC_ARCHIVE,
  *   posee par outils/poser-rpc-archive.mjs (la valeur ne passe ni par la conversation ni par un shell). Elle n est JAMAIS
@@ -705,7 +709,7 @@ const REPLIS_LOGS_SERVEUR = ESSAI_SRV.actif ? [] : ['https://base-rpc.publicnode
  *   ⚠️ NON MESURE tant que la cle n est pas posee : que CDP serve l archive. La sonde de /sante (capacite « archive », fenetre de
  *     999 blocs a -20 000) le mesurera ; outils/poser-rpc-archive.mjs le mesure AVANT de poser. */
 const RPC_ARCHIVE = (() => {
-  if (ESSAI_SRV.actif) return null;
+  if (ESSAI_SRV.actif || process.env.TB_REPLIS === '0') return null; /* banc a faux noeud : aucun noeud reel, archive comprise */
   const u = String(process.env.BASE_RPC_ARCHIVE || '').trim();
   try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.href : null; } catch { return null; }
 })();
@@ -802,7 +806,7 @@ async function rpcServeurBrut(methode, params) {
 }
 /* ⛔ 2026-10-09 : le scan des creations (factory B20) a un REPLI getLogs — publicnode, seul noeud public mesure qui servait
  *   ce getLogs ce jour-la (200, 13 logs sur 1 999 blocs ; identique a drpc sur la fenetre recoupee). Tableau exige, sinon erreur. */
-const rpcScanCreations = avecRepliLogs(rpcServeur, ESSAI_SRV.actif ? [] : [lecteurUrl('https://base-rpc.publicnode.com')]);
+const rpcScanCreations = avecRepliLogs(rpcServeur, ESSAI_SRV.actif || REPLIS_PUBLICS_COUPES ? [] : [lecteurUrl('https://base-rpc.publicnode.com')]);
 /* ══ LA SONDE DES NOEUDS (2026-10-09) ═══════════════════════════════════════════════════════════════════════════════════
  * Le role de chaque noeud public a ete ecrit en dur d apres UNE mesure (« base.org sert les getLogs a plus de 9 adresses »,
  * « publicnode refuse l archive »). Quand un noeud change, rien ne le disait : on l apprenait par une capture d ecran, des

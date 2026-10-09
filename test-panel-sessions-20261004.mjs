@@ -134,7 +134,7 @@ const u = 'http://127.0.0.1:' + noeud.address().port;
 const vol = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-panel-vol-'));
 const port = 20000 + Math.floor(Math.random() * 20000);
 const enfant = spawn(process.execPath, [path.join(ICI, 'serveur-web.js')], { cwd: ICI, stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '' } });
+  env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '', TB_REPLIS: '0' } });
 let stderr = ''; enfant.stdout.on('data', () => {}); enfant.stderr.on('data', (c) => { stderr += c; });
 const base = 'http://127.0.0.1:' + port;
 const post = async (chemin, corps) => { const r = await fetch(base + chemin, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps), signal: AbortSignal.timeout(30000) }); return { code: r.status, corps: await r.json().catch(() => null) }; };

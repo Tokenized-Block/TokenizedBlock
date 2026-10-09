@@ -97,7 +97,10 @@ async function redemarrer(dir, jusqua, { attenteMax = 120000, rpcO = {}, routeur
   const enfant = spawn(process.execPath, [path.join(dir, 'serveur-web.js')], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
     /* TB_SONDES=0 (2026-10-04) : les sondes de /sante (naissance, marche, echange, cerveau) lisent la chaine 45 s apres le demarrage ;
      * contre ce noeud fictif elles ajoutaient des lectures que le banc compte. Elles ne sont pas l objet de ce banc. */
-    env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '', TB_SONDES: '0' } });
+    env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '', TB_SONDES: '0',
+      /* TB_REPLIS=0 (2026-10-09) : sans lui, une fenetre que CE banc rend « ratee » etait relue par le VRAI publicnode (repli du
+       * serveur) — resultat dependant du reseau, et le banc rougissait au hasard (« r9b instable »). Aucun noeud reel ici. */
+      TB_REPLIS: '0' } });
   let journal = '', mort = false; enfant.stdout.on('data', (d) => { journal += d; }); enfant.stderr.on('data', (d) => { journal += d; });
   enfant.on('exit', () => { mort = true; });
   /* ⛔ un serveur mort (port pris) ne doit jamais laisser lire celui d un autre mutant */
@@ -265,9 +268,11 @@ async function banc(dir, scen = 'RFGXYNPCBI') {
     sk.rpc.codeKo = false;
     const c2 = await sk.suivre(20000, (r) => r.some((x) => x.couvertureComplete === true));
     await sk.arreter();
-    v('C1 (F4) code d un jeton illisible : la fenetre reste en attente (comptee), jamais complete, le jeton ni servi ni oublie',
-      c1.length > 3 && c1.every((x) => x.couvertureComplete === false && !x.blocks.includes(NOUVEAU) && (x.jusqua === null || x.jusqua < J + 100))
-      && c1.some((x) => x.fenetresRatees >= 1));
+    const okC1 = c1.length > 3 && c1.every((x) => x.couvertureComplete === false && !x.blocks.includes(NOUVEAU) && (x.jusqua === null || x.jusqua < J + 100))
+      && c1.some((x) => x.fenetresRatees >= 1);
+    /* 2026-10-09 : un rouge de C1 ne disait QUE « faux ». Il dit maintenant ce que le serveur a rendu, lecture par lecture. */
+    if (!okC1) console.log('   [C1 ' + dir.slice(-12) + '] ' + JSON.stringify(c1.map((x) => [x.jusqua === null ? null : x.jusqua - J, x.couvertureComplete, x.fenetresRatees, x.blocks.includes(NOUVEAU)])).slice(0, 600));
+    v('C1 (F4) code d un jeton illisible : la fenetre reste en attente (comptee), jamais complete, le jeton ni servi ni oublie', okC1);
     v('C2 (F4) le code se relit : le block est servi, couverture complete', c2.some((x) => x.couvertureComplete === true && x.blocks.includes(NOUVEAU)));
   })() : null;
   /* B1-B2 (F3b, Zero 1 fault-f3b.mjs) — graine refusee (recus inconnus du noeud) : remontee depuis la tete. Une plage ANCIENNE

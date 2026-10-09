@@ -80,7 +80,7 @@ await cas('B1 les deux routes passent par le calcul en fond', async () => {
   assert.match(nu, /if \(!fond\.r\) \{ repondre\(\{ ok: false, etat: fond\.enVol \? 'EN_COURS' : 'ECHEC'/);
 });
 await cas('B2 aucun repli qui ne sert pas nos fenetres : drpc gratuit (10 blocs max, mesure) n y est pas', async () => {
-  assert.match(nu, /const REPLIS_LOGS_SERVEUR = ESSAI_SRV\.actif \? \[\] : \['https:\/\/base-rpc\.publicnode\.com'\];/);
+  assert.match(nu, /const REPLIS_LOGS_SERVEUR = ESSAI_SRV\.actif \|\| REPLIS_PUBLICS_COUPES \? \[\] : \['https:\/\/base-rpc\.publicnode\.com'\];/);
 });
 await cas('C1 le balayage des frais est relu au demarrage et sauve pendant et apres', async () => {
   assert.match(nu, /join\(process\.env\.RAILWAY_VOLUME_MOUNT_PATH \|\| '\/data', 'frais-scan\.json'\)/);

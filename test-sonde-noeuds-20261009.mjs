@@ -20,7 +20,7 @@ const nu = src.replace(/\/\*[\s\S]*?\*\//g, ' ');
 console.log('— A. le repli pour tout le serveur');
 ok(/async function rpcServeur\(methode, params\) \{\s+if \(!repliServeur\) repliServeur = avecRepliLogs\(rpcServeurBrut, \[\.\.\.REPLIS_LOGS_SERVEUR\.map\(\(u\) => lecteurUrl\(u\)\), \.\.\.\(RPC_ARCHIVE \? \[lecteurArchive\(\)\] : \[\]\)\]\);\s+return repliServeur\(methode, params\);\s+\}/.test(nu),
   'A rpcServeur = le lecteur brut + les replis getLogs (toutes les lectures d historique du serveur)');
-ok(/const REPLIS_LOGS_SERVEUR = ESSAI_SRV\.actif \? \[\] : \['https:\/\/base-rpc\.publicnode\.com'\];/.test(nu),
+ok(/const REPLIS_LOGS_SERVEUR = ESSAI_SRV\.actif \|\| REPLIS_PUBLICS_COUPES \? \[\] : \['https:\/\/base-rpc\.publicnode\.com'\];/.test(nu),
   'A publicnode seul en repli : drpc gratuit ne sert que 10 blocs par getLogs (mesure), nos fenetres en font 999');
 ok(/async function rpcServeurBrut\(methode, params\) \{/.test(nu) && (nu.match(/\brpcServeurBrut\b/g) || []).length === 2, 'A le lecteur brut n est appele que par le repli (aucun contournement)');
 
