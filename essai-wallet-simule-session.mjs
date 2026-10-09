@@ -35,25 +35,31 @@ const SUIVIS = [[ETH, 'ETH'], [USDC, 'USDC'], [action('NVDAc'), 'NVDAc'], [actio
 const lireSoldes = async (qui) => { const s = {}; for (const [a, nom] of SUIVIS) { try { s[nom] = await solde(rpc, a, qui); } catch (_) { s[nom] = null; } } return s; };
 const dire = (titre, s, avant = null) => console.log('  ' + titre.padEnd(18) + SUIVIS.map(([, nom]) => nom + ' ' + (s[nom] === null ? 'not read' : avant ? ((s[nom] - avant[nom]) >= 0n ? '+' : '') + (s[nom] - avant[nom]) : s[nom])).join(' · '));
 
+/* ⛔ 2026-10-09 : plus de `process.exit` apres un fetch — sous Windows (Node 24) il fait planter libuv (assertion UV_HANDLE_CLOSING,
+ *   vue sur `--rendre`). Les trois modes sont des branches ; le code de sortie passe par `process.exitCode`.
+ * ⛔ ET POUR FINIR UNE SESSION, LE FICHIER D ARRET, PAS UN KILL : tuer ce processus saute le `finally` qui rend le fork
+ *   (evm_revert). Le 2026-10-09, un `--rendre` lance apres coup a trouve un instantane (0x5) jamais rendu. */
 if (option('--soldes') !== null) {
   const qui = String(option('--soldes')).toLowerCase();
-  if (!/^0x[0-9a-f]{40}$/.test(qui)) { console.log('usage: --soldes 0x<whole address>'); process.exit(1); }
-  console.log('fork ' + rpc.url + ' · block ' + parseInt(await rpc('eth_blockNumber', []), 16) + ' · raw units');
-  dire('account', await lireSoldes(qui));
-  dire('fee wallet', await lireSoldes(FRAIS));
-  process.exit(0);
-}
-if (args.includes('--rendre')) {
+  if (!/^0x[0-9a-f]{40}$/.test(qui)) { console.log('usage: --soldes 0x<whole address>'); process.exitCode = 1; }
+  else {
+    console.log('fork ' + rpc.url + ' · block ' + parseInt(await rpc('eth_blockNumber', []), 16) + ' · raw units');
+    dire('account', await lireSoldes(qui));
+    dire('fee wallet', await lireSoldes(FRAIS));
+    process.exitCode = 0;
+  }
+} else if (args.includes('--rendre')) {
   let etat = null;
-  try { etat = JSON.parse(fs.readFileSync(FICHIER_ETAT, 'utf8')); } catch (_) { console.log('no saved session state at ' + FICHIER_ETAT + ' — nothing to give back'); process.exit(1); }
-  try { process.kill(Number(etat.pidServeur)); console.log('server pid ' + etat.pidServeur + ' stopped'); } catch (_) { console.log('server pid ' + etat.pidServeur + ' was not running'); }
-  try { await rpc('anvil_stopImpersonatingAccount', [etat.compte]); } catch (_) { /* plus impersonne */ }
-  const r = await lecteurFork(etat.fork)('evm_revert', [etat.instantane]);
-  console.log('evm_revert ' + etat.instantane + ' -> ' + r + ' · block ' + parseInt(await rpc('eth_blockNumber', []), 16) + ' (was ' + etat.tete + ')');
-  try { fs.unlinkSync(FICHIER_ETAT); } catch (_) { /* deja retire */ }
-  process.exit(r === true ? 0 : 1);
-}
-
+  try { etat = JSON.parse(fs.readFileSync(FICHIER_ETAT, 'utf8')); } catch (_) { console.log('no saved session state at ' + FICHIER_ETAT + ' — nothing to give back'); process.exitCode = 1; }
+  if (etat) {
+    try { process.kill(Number(etat.pidServeur)); console.log('server pid ' + etat.pidServeur + ' stopped'); } catch (_) { console.log('server pid ' + etat.pidServeur + ' was not running'); }
+    try { await rpc('anvil_stopImpersonatingAccount', [etat.compte]); } catch (_) { /* plus impersonne */ }
+    const r = await lecteurFork(etat.fork)('evm_revert', [etat.instantane]);
+    console.log('evm_revert ' + etat.instantane + ' -> ' + r + ' · block ' + parseInt(await rpc('eth_blockNumber', []), 16) + ' (was ' + etat.tete + ')');
+    try { fs.unlinkSync(FICHIER_ETAT); } catch (_) { /* deja retire */ }
+    process.exitCode = r === true ? 0 : 1;
+  }
+} else {
 const minutes = Math.min(180, Math.max(1, Number(option('--minutes')) || 30));
 const port = Number(option('--port')) || null;
 let session = null, serveur = null, compte = null, fin = null;
@@ -104,4 +110,5 @@ try {
   try { fs.unlinkSync(FICHIER_ETAT); } catch (_) { /* jamais ecrit */ }
   try { fs.unlinkSync(FICHIER_ARRET); } catch (_) { /* pas de fichier d arret */ }
 }
-process.exit(code);
+process.exitCode = code;
+}

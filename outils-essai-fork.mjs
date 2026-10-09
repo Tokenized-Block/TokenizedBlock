@@ -153,5 +153,7 @@ export async function demarrerServeur({ rpcEssai = RPC_ESSAI_DEFAUT, port = null
     for (const m of journal.matchAll(/\[garde-reseau\] (JOINT|BLOQUE) (\S+)/g)) (m[1] === 'JOINT' ? joints : bloques).add(m[2]);
     return { joints: [...joints], bloques: [...bloques] };
   };
-  return { port: p0, url, sante, arreter, journal: () => journal, origines, enVie: () => sorti === null };
+  /* `pid` : sans lui, le fichier d etat d essai-wallet-simule-session ecrivait `pidServeur: undefined` et `--rendre` ne pouvait
+   *   PAS arreter un serveur orphelin (vu le 2026-10-09 : « server pid undefined was not running »). */
+  return { port: p0, url, pid: proc.pid, sante, arreter, journal: () => journal, origines, enVie: () => sorti === null };
 }
