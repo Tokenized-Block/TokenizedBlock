@@ -26,9 +26,12 @@ const URL_CDP = 'https://api.developer.coinbase.com/rpc/v1/base/' + CLE;
 const i = src.indexOf('const RPC_ARCHIVE = (() => {');
 const j = src.indexOf('let repliServeur = null;', i);
 assert.ok(i > 0 && j > i, 'bloc archive introuvable');
-const fabrique = (env, essai = false, lire = async () => []) => new Function('process', 'ESSAI_SRV', 'lecteurUrl',
+/* un faux disque : `fichiers` tient ce que le bloc ecrit, pour juger la persistance du compteur */
+const fabrique = (env, essai = false, lire = async () => [], fichiers = new Map()) => new Function('process', 'ESSAI_SRV', 'lecteurUrl',
+  'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync',
   src.slice(i, j) + '\n; return { RPC_ARCHIVE, ARCHIVE_MAX_JOUR, archiveCompte, lecteurArchive, libelleNoeud, masquerCle };')(
-  { env }, { actif: essai }, () => lire);
+  { env }, { actif: essai }, () => lire,
+  (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'), (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); });
 
 await cas('A1 URL validee : https sans identifiants ; absente, http ou mode essai = pas d archive', async () => {
   assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP }).RPC_ARCHIVE, URL_CDP);
@@ -47,6 +50,17 @@ await cas('A2 budget par jour : 3 000 par defaut, refus NOMME au-dela, compte', 
   await assert.rejects(lire('eth_getLogs', [{}]), /daily budget reached \(2 calls\)/);
   assert.equal(appels, 2, 'le noeud a ete appele au-dela du budget');
   assert.equal(m.archiveCompte.appels, 2); assert.equal(m.archiveCompte.servis, 2); assert.equal(m.archiveCompte.refusBudget, 1);
+});
+await cas('A2b le compteur du jour SURVIT a un redemarrage (meme jour) et repart a 0 un autre jour', async () => {
+  const disque = new Map();
+  const m1 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], disque);
+  const lire = m1.lecteurArchive();
+  for (let k = 0; k < 25; k++) await lire('eth_getLogs', [{}]);
+  assert.ok(disque.has('/data/archive-compte.json'), 'le compteur n a pas ete sauve au 25e appel');
+  const m2 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], disque);
+  assert.equal(m2.archiveCompte.appels, 25, 'un redemarrage a remis le compteur a zero');
+  const vieux = new Map([['/data/archive-compte.json', JSON.stringify({ jour: '2000-01-01', appels: 9999, servis: 9999, erreurs: 0, refusBudget: 0 })]]);
+  assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], vieux).archiveCompte.appels, 0, 'le compteur d un autre jour a ete repris');
 });
 await cas('A3 une erreur du noeud est comptee et RE-LEVEE (jamais une liste vide)', async () => {
   const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => { throw new Error('401 invalid key'); });

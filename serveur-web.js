@@ -710,6 +710,21 @@ const RPC_ARCHIVE = (() => {
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
 const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0 };
+/* ⛔ 2026-10-09 : le compteur du jour vivait en memoire — chaque redeploiement (5 ce jour-la) le remettait a 0, et le plafond ne
+ *   bornait plus rien. Il est garde sur le volume (relu s il est du MEME jour UTC), sauve tous les 25 appels. */
+const FICHIER_ARCHIVE_COMPTE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'archive-compte.json') : null;
+try {
+  if (FICHIER_ARCHIVE_COMPTE && existsSync(FICHIER_ARCHIVE_COMPTE)) {
+    const x = JSON.parse(readFileSync(FICHIER_ARCHIVE_COMPTE, 'utf8'));
+    if (x && x.jour === new Date().toISOString().slice(0, 10)) for (const k of ['appels', 'refusBudget', 'erreurs', 'servis']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
+    if (x && x.jour === new Date().toISOString().slice(0, 10)) archiveCompte.jour = x.jour;
+  }
+} catch { /* fichier illisible : on compte depuis zero, et c est le seul cas */ }
+function sauverArchiveCompte() {
+  if (!FICHIER_ARCHIVE_COMPTE) return;
+  try { writeFileSync(FICHIER_ARCHIVE_COMPTE + '.tmp', JSON.stringify(archiveCompte)); renameSync(FICHIER_ARCHIVE_COMPTE + '.tmp', FICHIER_ARCHIVE_COMPTE); } catch { /* le volume refuse : on reessaiera */ }
+}
 function lecteurArchive() {
   const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
   return async (methode, params) => {
@@ -717,6 +732,7 @@ function lecteurArchive() {
     if (archiveCompte.jour !== j) { archiveCompte.jour = j; archiveCompte.appels = 0; archiveCompte.refusBudget = 0; archiveCompte.erreurs = 0; archiveCompte.servis = 0; }
     if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
     archiveCompte.appels++;
+    if (archiveCompte.appels % 25 === 0) sauverArchiveCompte();
     try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) { archiveCompte.erreurs++; throw e; }
   };
 }
@@ -848,7 +864,10 @@ const TOPIC_INITIALIZE = '0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e
  *    naissance du block 0, donc anterieur a tous nos hooks. Mieux vaut balayer un peu trop que de
  *    rater des pools ouvertes avant une date qu on aurait devinee. */
 const HOOKS_FRAIS = [
-  { nom: 'V1', adr: '0xaa6d7bd9fc7d394bc717137936f2939834382044', depuis: 50861088 },
+  /* ⛔ 2026-10-09 (bytecode lu sur la chaine) : V1 n a PAS de fonction du(address,address) — le selecteur 0xe69df140 est absent de
+   *   ses 45 selecteurs PUSH4, present chez V2..V8. Ses 7 lectures du() rendaient « execution reverted » : rien n etait cache, il n y
+   *   a aucune creance a lire. `sansDu` le dit au lieu de le compter comme « non lu ». */
+  { nom: 'V1', adr: '0xaa6d7bd9fc7d394bc717137936f2939834382044', depuis: 50861088, sansDu: true },
   { nom: 'V2', adr: '0x8e1eb57ad2a87a4f7bc89ce94efd5cd77aec2044', depuis: 51518785 },
   { nom: 'V3', adr: '0x7a7cebb2ccb84c9fbfa2730e6cb23bb192166044', depuis: 51518785 },
   { nom: 'V4', adr: '0x11fcd588c96b1781cc88b8b9f349b6067d9be4c4', depuis: 51518785 },
@@ -925,6 +944,7 @@ async function fraisEnAttente() {
    *   resultat du balayage (ce qu il a vu reste ce qu il a vu). */
   const amorce = [USDC_BASE.toLowerCase(), String(TBLOCK_JETON).toLowerCase()];
   for (const h of HOOKS_FRAIS) {
+    if (h.sansDu) continue; /* pas de fonction du() dans son code (mesure) : rien a lire, et ce n est pas un echec */
     for (const d of new Set([...devises.get(h.adr), ...amorce])) {
       if (/^0x0{40}$/.test(d)) continue; /* ETH : deja verse pendant le swap */
       try {
@@ -959,7 +979,7 @@ async function fraisEnAttente() {
   const r = { ok: true, lu: new Date().toISOString(), tete, fenetresRatees, balayageComplet, creancesCompletes: creancesNonLues.length === 0,
     complet: balayageComplet && creancesNonLues.length === 0, balayeJusqua: fraisScan.jusqua,
     ...(arret ? { arret } : {}), devisesAmorcees: amorce, devisesVues: [...devises.values()].reduce((s, x) => s + x.size, 0), pools: fraisScan.pools.length,
-    creancesNonLues: creancesNonLues.slice(0, 40), lignes };
+    creancesNonLues: creancesNonLues.slice(0, 40), hooksSansCreance: HOOKS_FRAIS.filter((h) => h.sansDu).map((h) => h.nom), lignes };
   fraisCache = { t: Date.now(), r };
   return r;
 }
@@ -2125,6 +2145,8 @@ const createurParBlock = new Map();
  *   remonte. Persiste, sinon chaque deploiement recommencerait le rattrapage depuis le present et
  *   ne finirait jamais. */
 let rattrapageDepuis = null;
+const CREATEURS_DISQUE_MAX = 100000;
+let createursRelecture20261009 = false;
 /* ⛔ COMBIEN DE REFUS DE SUITE SUR LA MEME FENETRE, et les plages qu on a fini par SAUTER. Un trou
  *   nomme vaut mieux qu un index qui ne finit jamais — et infiniment mieux qu un trou invisible. */
 let refusDeSuite = 0;
@@ -2231,6 +2253,10 @@ function chargerTrendingDisque() {
     }
     if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
     if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
+    /* ⛔ UNE RELECTURE, UNE SEULE : un fichier ecrit sous l ancien plafond (5 000 createurs, sans le drapeau) a perdu des entrees que
+     *   le rattrapage « complet » ne relirait jamais. On repart de la tete une fois ; le drapeau persiste empeche toute autre fois. */
+    if (x.createursRelecture20261009 === true) createursRelecture20261009 = true;
+    else if ((x.createurs || []).length >= 5000) { rattrapageDepuis = null; createursRelecture20261009 = true; console.log('[createurs] index saved under the old 5,000 cap — full re-read from the head, once'); }
     /* les trous de creations et leur relecture survivent au redeploiement ; une entree mal formee est ignoree, jamais inventee */
     const trouSain = (t) => t && Number.isSafeInteger(t.de) && Number.isSafeInteger(t.a) && t.a > t.de;
     for (const t of (Array.isArray(x.trousCreations) ? x.trousCreations : [])) if (trouSain(t)) trousCreations.push(t);
@@ -2254,6 +2280,7 @@ function sauverTrendingDisque() {
      *   qui ont une paire, donc ceux de la Map) passent D ABORD, jamais coupes ; le reste, du plus recent au plus ancien, jusqu a
      *   ADRS_DISQUE_MAX. Ce qui est coupe est COMPTE dans le journal. ⚠️ Plafond garde : chaque bloc connu coute une place dans les
      *   lots DexScreener (30 par appel) a chaque rafraichissement. */
+    if (createurParBlock.size > CREATEURS_DISQUE_MAX) console.log('[createurs] disk save keeps ' + CREATEURS_DISQUE_MAX + '/' + createurParBlock.size + ' — ' + (createurParBlock.size - CREATEURS_DISQUE_MAX) + ' oldest dropped');
     const ADRS_DISQUE_MAX = 5000;
     const avecPaire = new Set(((parsed && parsed.lignes) || []).map((l) => String((l && l.adr) || '').toLowerCase()).filter((a) => blocksConnus.has(a)));
     const autres = [...blocksConnus].filter((a) => !avecPaire.has(a));
@@ -2268,7 +2295,11 @@ function sauverTrendingDisque() {
        *     mise en ligne : exactement le defaut qu on repare.
        *   ⛔ 5000 ENTREES AU PLUS, et c est dit : le fichier reste borne. Un plafond tacite qui
        *     ferait disparaitre des entrees sans le signaler serait le meme defaut sous un autre nom. */
-      createurs: [...createurParBlock.entries()].slice(-5000),
+      /* ⛔⛔ 2026-10-09 (mesure prod : `blocksIndexes: 5001`, `couvertureComplete: true`) — le plafond de 5 000 COUPAIT l index a
+       *   chaque sauvegarde, et le rattrapage, « complet », ne relisait jamais ce qui etait coupe. Plafond 100 000 ; ce qui depasse
+       *   est COMPTE dans le journal. */
+      createurs: [...createurParBlock.entries()].slice(-CREATEURS_DISQUE_MAX),
+      createursRelecture20261009,
       /* ⛔ L AVANCEMENT DU RATTRAPAGE EST PERSISTE AVEC L INDEX : sans lui, chaque deploiement
        *   recommencerait a remonter depuis le present et ne finirait JAMAIS le passe. */
       rattrapageDepuis,
@@ -2352,8 +2383,10 @@ async function lireTrending() {
          *     fenetre est large, plus la probabilite qu AU MOINS UNE page soit refusee monte — et
          *     ma garde conservatrice bloquait alors la descente ENTIERE. Le rattrapage etait fige.
          *   ⇒ Cinq pages au lieu de vingt-deux : bien moins d occasions de tomber sur un refus. */
-        const bas = Math.max(PREMIER_BLOCK_TB, haut - 10000);
-        const vieux = await listerCreations({ rpc: rpcServeur, blocs: haut - bas, fin: haut });
+        /* ⛔ 2026-10-09 : avec le noeud d archive, 100 000 blocs par passe et directement chez lui (rpcHistoire) — une relecture
+         *   complete en ~16 passes au lieu de ~150. Sans lui, la regle d avant (10 000, chaine de repli) reste. */
+        const bas = Math.max(PREMIER_BLOCK_TB, haut - (RPC_ARCHIVE ? 100000 : 10000));
+        const vieux = await listerCreations({ rpc: RPC_ARCHIVE ? rpcHistoire : rpcServeur, blocs: haut - bas, fin: haut });
         const aFaire = (vieux.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')
           && !createurParBlock.has(c.jeton.toLowerCase()));
         for (let i = 0; i < aFaire.length; i += 8) {

@@ -310,7 +310,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
       exactement ce qu on veut ici (elle doit rester visible AU-DESSUS du panneau). */
 .mapZoom.decale{transform:none}
 @media (max-width:699px){.mapZoom.decale{transform:translateY(calc(-52dvh - 14px))}}
-@media (max-width:760px){body.bcOuvert .mapZoom{transform:translateY(calc(-54dvh - 14px))}}
+@media (max-width:760px){body.bcOuvert .mapZoom{transform:translateY(calc(-62dvh - 14px))}} /* suit la hauteur de la feuille (62dvh, 2026-10-09) */
 .mapZoom button{appearance:none;width:38px;height:38px;border-radius:12px;border:1px solid var(--ligne);
   background:rgb(var(--fondRgb) / .82);backdrop-filter:blur(6px);color:var(--texte);font:inherit;font-size:17px;font-weight:700;
   cursor:pointer;transition:transform .12s,border-color .12s}
@@ -537,10 +537,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcChampIn select{flex:0 0 auto;max-width:46%;background:rgb(var(--boutonRgb));color:var(--texte);border:1px solid var(--ligne);border-radius:10px;font:inherit;font-weight:700;font-size:13px;padding:8px 8px}
 .bcTicket .bouton{margin-top:10px}
 .bcTicket .bcPre{margin:8px 0 0}
-.bcPos{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+/* ⛔ 2026-10-09 (capture de Phil) : « TokenizedBlo / ck » — `overflow-wrap:anywhere` coupait un mot au milieu dans une tuile de 120 px.
+ *   Tuiles de 130 px au moins, valeur sur UNE ligne, ellipse si elle deborde ; la valeur entiere est dans le `title` de la tuile. */
+.bcPos{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .bcPos>div{border:1px solid var(--ligne);border-radius:12px;padding:8px 10px;background:var(--creux);min-width:0}
 .bcPos span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
-.bcPos b{display:block;font-size:15px;overflow-wrap:anywhere}
+.bcPos b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bcPos i{display:block;font-style:normal;font-size:11px;color:var(--doux)}
 #bcRaster{height:64px;margin-top:8px}
 .bcAvatar svg{width:100%;height:100%;display:block}
@@ -673,7 +675,16 @@ dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;margin:0;po
    mode modal, ce qui est derriere transparaissait. Une couleur pleine sous le degrade de la carte. */
 dialog.bcPop>.carte{background-color:rgb(var(--fondRgb));backdrop-filter:none;margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
   box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
-@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:54dvh}}
+@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:62dvh}}
+/* 2026-10-09 (Phil : « optimise l UX du panneau sur PC et sur tel ») : un peu plus large sur grand ecran (tuiles a 3 colonnes sans
+ *   coupure) ; sur telephone, les 4 puces de l en-tete en 2x2 (a 4 colonnes le prix d un petit block finissait en « $0.0000… »). */
+@media (min-width:1100px){dialog.bcPop{width:min(480px,calc(100% - 24px))}}
+@media (max-width:440px){.bcChips{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* sur telephone, la carte du block mangeait la feuille (mesure 375 px : avatar + nom + adresse + puces = ~330 px sur 493) et les
+ *   gestes et le chat restaient sous la ligne de flottaison : avatar 64 px, nom 18 px, adresse sur une ligne, raster plus bas. */
+@media (max-width:760px){.bcScene{padding:9px;gap:8px 10px;margin:8px 0 2px}.bcAvatar{width:64px;border-radius:16px;padding:3px}
+  .bcAvatar>div{border-radius:13px;font-size:26px}.bcNom{font-size:18px}
+  .bcAdr{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#bcRaster{height:40px}}
 dialog.bcPop.bcReduit{top:auto;bottom:calc(var(--bcNav,66px) + 8px);height:auto}
 dialog.bcPop.bcReduit>.carte{height:auto;overflow:hidden}
 dialog.bcPop.bcReduit .bcScene,dialog.bcPop.bcReduit #bcRaster,dialog.bcPop.bcReduit .bcVue,dialog.bcPop.bcReduit .bcOnglets{display:none}
@@ -2706,7 +2717,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-creances-relancees" hidden>Build <code>20261009-creances-relancees</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-trade-sur-demande" hidden>Build <code>20261009-trade-sur-demande</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -22481,11 +22492,31 @@ function bcPeindreActions(a, sym) {
     bcVue('chat');
     bcMessage('You', 'moi', 'What would you do now, ' + nom + '?');
     const m = bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', c.texte + ' It is a suggestion: nothing leaves without your wallet.');
-    if (c.geste === 'buy') bcBoutons(m, [['Write the buy', () => { const s = $('#bcSaisie'); s.value = 'buy this with '; s.focus(); const n = $('#bcNote'); n.className = 'note'; n.textContent = 'Add the amount and the currency (e.g. 0.002 ETH), then send.'; }]]);
-    else if (c.geste === 'sell_quarter') bcBoutons(m, [['Open the sell ticket (25 %)', () => { bc.cote = 'sell'; bcVue('trade'); bcRepeindre(); }]]);
+    if (c.geste === 'buy') bcBoutons(m, [['Prepare it — buy', () => bcTraderSurDemande(a, sym, 'buy')], ['Write my own amount', () => { const s = $('#bcSaisie'); s.value = 'buy this with '; s.focus(); const n = $('#bcNote'); n.className = 'note'; n.textContent = 'Add the amount and the currency (e.g. 0.002 ETH), then send.'; }, true]]);
+    else if (c.geste === 'sell_quarter') bcBoutons(m, [['Prepare it — sell 25 %', () => bcTraderSurDemande(a, sym, 'sell_quarter')], ['Open the sell ticket', () => { bc.cote = 'sell'; bcVue('trade'); bcRepeindre(); }, true]]);
     else if (c.geste === 'gm') bcBoutons(m, [['Say GM 👋', () => bcSaluer(a, sym, 'GM')]]);
   });
-  parler('Its circle 🫂', () => bcCercle(a, sym));
+  /* ⛔⛔ TRADER A LA DEMANDE (Phil, 2026-10-09 : « qu il sache trader le marche a la demande du user »). La personne DEMANDE ; le
+   *   cerveau choisit le SENS d apres son humeur (le vocabulaire de S.I : excite -> acheter, inquiet -> vendre un quart) et prepare la
+   *   carte du trade (bcProposerSwap, la meme que S.I et que le ticket) ; le WALLET de la personne signe, toujours. Dans une humeur
+   *   neutre il ne fait pas semblant d avoir un avis : il le dit, et offre les deux sens au choix de la personne. */
+  parler('Trade for me 📈', () => {
+    const ph = bcPhaseDe(a), c = conseilDe(ph);
+    bcVue('chat');
+    bcMessage('You', 'moi', 'Trade ' + nom + ' for me.');
+    if (c.geste === 'buy' || c.geste === 'sell_quarter') {
+      bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', (c.geste === 'buy' ? 'I am excited: I prepare a buy' : 'I am worried: I prepare a sale of a quarter of what you hold') + '. Check the card, then your wallet signs — I never sign.');
+      void bcTraderSurDemande(a, sym, c.geste);
+      return;
+    }
+    /* ⛔ mesure (navigateur local) : marche NON LU -> la porte du cerveau refuse toute carte. Proposer Buy/Sell la ne menait qu a un
+     *   refus : on le dit, sans bouton. Mort : rien a trader. */
+    if (ph === 'NON_LU' || ph === 'MORT') { bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', c.texte + (ph === 'NON_LU' ? ' Ask me again in a moment.' : '')); return; }
+    const m = bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', 'My mood does not call for a trade right now (' + humeurCourte(ph) + '). If you still want one, pick the side — I prepare it, your wallet signs.');
+    bcBoutons(m, [['Buy (S.I amount)', () => bcTraderSurDemande(a, sym, 'buy')], ['Sell 25 %', () => bcTraderSurDemande(a, sym, 'sell_quarter'), true]]);
+  });
+  /* 👥 et non 🫂 : 🫂 (Unicode 13) n existe pas dans la police emoji de Windows 10 — capture de Phil, un carre vide */
+  parler('Its circle 👥', () => bcCercle(a, sym));
 }
 /* ⛔⛔ UN FIL DE CONVERSATION PAR BLOCK (Phil, 2026-10-09 : « si je change de block, la conv de l ancien block reste sur le panel »).
  *   Le fil (#bcFil) etait UN seul pour tous les blocks. Au changement d ADRESSE (pas de nom : un nom qui arrive ne change pas de
@@ -22500,6 +22531,40 @@ function bcChangerFil(a) {
   fil.textContent = '';
   for (const n of bc.fils.get(a) || []) fil.append(n);
   bc.filDe = a;
+}
+/** Le trade DEMANDE par la personne, prepare par le cerveau : MEMES regles que S.I (bcAifiBattre) — achat au montant « Per trade » dans
+ *  la devise « Pay with » de S.I (decimales LUES, jamais 18 par defaut), vente d un quart du solde LU. Rien ne signe ici : la carte
+ *  (bcProposerSwap) mene au wallet. Chaque refus dit pourquoi, dans le fil. */
+async function bcTraderSurDemande(a, sym, sens) {
+  const nom = sym || court(a), jeton = { ok: true, adr: a, sym: bcResoudre(a).sym || nom };
+  const dire = (t) => bcMessage(nom, 'agent', t);
+  bcVue('chat'); bcOuvrirPop();
+  if (sens === 'buy') {
+    const choisie = $('#bcAiDevise') ? ($('#bcAiDevise').value || 'ETH') : 'ETH';
+    let devise = BC_AIFI_ETH();
+    if (choisie !== 'ETH') {
+      const r = bcResoudre(choisie);
+      if (!r.ok) return dire(r.pourquoi || 'Pick what to pay with, in the S.I settings of the Trade view.');
+      let dec = null;
+      try { dec = await bcAvecDelai(bcDecimales(r.adr), 6000); } catch (_) { dec = null; }
+      if (!Number.isInteger(dec)) return dire('The decimals of ' + r.sym + ' could not be read — nothing was prepared. Try again.');
+      devise = { adr: r.adr, sym: r.sym, dec };
+    }
+    const v = String(($('#bcLimTrade') && $('#bcLimTrade').value) || '').trim();
+    const m = /^\d+([.,]\d+)?$/.test(v) ? enUnitesBrutes(v.replace(',', '.'), devise.dec) : null;
+    if (m === null || !(m > 0n)) return dire('Set an amount “Per trade” in the S.I settings (Trade view) — nothing was prepared.');
+    return void bcProposerSwap('Its brain · on your request', 'agent', { de: { ok: true, adr: devise.adr, sym: devise.sym }, vers: jeton, montant: m.toString() }, null);
+  }
+  if (sens === 'sell_quarter') {
+    if (!compte) return dire('Connect your wallet first: I need to read what you hold to sell a quarter of it.');
+    const cot = bcCotation(a);
+    if (!cot || !cot.ok) return dire('My market has not been read yet — nothing was prepared. Ask again in a moment.');
+    let solde = null;
+    try { solde = await bcSolde(a, compte); } catch (_) { solde = null; }
+    if (solde === null) return dire('Your balance could not be read — nothing was prepared.');
+    if (!(solde / 4n > 0n)) return dire('This wallet holds none of ' + nom + ': nothing to sell.');
+    return void bcProposerSwap('Its brain · on your request', 'agent', { de: jeton, vers: cot, montant: (solde / 4n).toString() }, null);
+  }
 }
 /* La phase de CE block : celle de l instantane vivant s il s agit du cerveau affiche, sinon rejouee depuis son adresse et ses faits lus. */
 function bcPhaseDe(a) {
@@ -23004,7 +23069,8 @@ function bcPeindre(snap) {
   const cleM = JSON.stringify(tuiles);
   if (bc.marcheDe !== cleM) {
     bc.marcheDe = cleM; mc.textContent = '';
-    for (const [x, y] of tuiles) mc.append(bcEl('div', {}, [bcEl('span', { text: x }), bcEl('b', { text: y })]));
+    /* le title porte la valeur ENTIERE : la tuile peut l ellipser, le survol ne la perd jamais */
+    for (const [x, y] of tuiles) mc.append(bcEl('div', { title: x + ': ' + y }, [bcEl('span', { text: x }), bcEl('b', { text: y })]));
   }
   /* ── QUI BOUGE CE BLOCK : relu toutes les 20 s tant que la vue Market est ouverte ── */
   if ($('#bcPop').open && $('#bc-market').classList.contains('on') && (bc.activiteDe !== a || Date.now() - bc.activiteLue > 20000)) void bcLireActivite(a, sym, mk);

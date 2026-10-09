@@ -75,4 +75,13 @@ await cas('B2 l histoire profonde va DIRECTEMENT au noeud d archive (mesure : la
   assert.match(nu, /if \(!Array\.isArray\(logs\)\) throw new Error\('not a list'\);/);
 });
 
+await cas('B3 index des createurs : plafond 100 000 COMPTE, relecture unique si l ancien plafond (5 000) a coupe, 100 000 blocs/passe avec archive', async () => {
+  assert.match(nu, /const CREATEURS_DISQUE_MAX = 100000;/);
+  assert.ok(!/createurParBlock\.entries\(\)\]\.slice\(-5000\)/.test(nu), 'l ancien plafond de 5 000 est encore la');
+  assert.match(nu, /else if \(\(x\.createurs \|\| \[\]\)\.length >= 5000\) \{ rattrapageDepuis = null; createursRelecture20261009 = true;/);
+  assert.match(nu, /createursRelecture20261009,/);
+  assert.match(nu, /const bas = Math\.max\(PREMIER_BLOCK_TB, haut - \(RPC_ARCHIVE \? 100000 : 10000\)\);/);
+  assert.match(nu, /listerCreations\(\{ rpc: RPC_ARCHIVE \? rpcHistoire : rpcServeur, blocs: haut - bas, fin: haut \}\)/);
+});
+
 console.log('✓ ' + n + ' cas — les trous de creations se relisent, et ne reculent que sur une relecture complete');

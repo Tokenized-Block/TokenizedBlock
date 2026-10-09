@@ -98,6 +98,17 @@ cas('E2b (Phil 2026-10-09 : « le chat reste bloque ») les gestes Brain sont AU
   assert.match(f, /for \(const n of bc\.fils\.get\(a\) \|\| \[\]\) fil\.append\(n\);/);
   assert.match(app, /if \(bc\.filDe !== a\) bcChangerFil\(a\);/);
 });
+cas('E2c (Phil : « qu il sache trader le marche a la demande ») — le cerveau PREPARE, la carte du plan mene au wallet, rien ne signe ici', () => {
+  const c = corps('function bcPeindreActions(a, sym) {');
+  assert.ok(c.includes("parler('Trade for me"), 'bouton Trade for me absent');
+  const t = corps('async function bcTraderSurDemande(a, sym, sens) {');
+  assert.match(t, /bcProposerSwap\('Its brain · on your request', 'agent', \{ de: \{ ok: true, adr: devise\.adr, sym: devise\.sym \}, vers: jeton, montant: m\.toString\(\) \}, null\)/);
+  assert.match(t, /bcProposerSwap\('Its brain · on your request', 'agent', \{ de: jeton, vers: cot, montant: \(solde \/ 4n\)\.toString\(\) \}, null\)/);
+  assert.ok(!/envoyerDepuisWallet|eth_sendTransaction|wallet_sendCalls|envoyerLotAtomique/.test(t), 'le trade a la demande envoie lui-meme');
+  /* decimales LUES pour une devise jeton, jamais 18 par defaut ; solde lu, jamais suppose */
+  assert.match(t, /bcAvecDelai\(bcDecimales\(r\.adr\), 6000\)/);
+  assert.match(t, /if \(solde === null\) return dire\(/);
+});
 cas('E3 la rencontre ne signe rien : elle mene au formulaire du profil, jamais au wallet', () => {
   const r = corps('function bcRencontre(a, symA, b, symB) {') + corps('async function bcPreparerMessageRencontre(');
   assert.ok(!/envoyerDepuisWallet|eth_sendTransaction|wallet_sendCalls|envoyerLotAtomique/.test(r), 'la rencontre envoie elle-meme');
