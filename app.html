@@ -3416,7 +3416,7 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, USDC_BASE, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage } from './frais-creation.js';
+import { FEE_WALLET, USDC_BASE, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage, besoinNaissance, phraseAvoirPourNaitre, phraseManquePourNaitre } from './frais-creation.js';
 /* ⛔ Phil (test « Paired with ») : un bouton disait « Bring it to life — 0.000379689641686885 ETH ». A L ECRAN : 6 decimales
  *    au plus ; formaterEthCourt reste EXACT pour remplir un champ qui sera signe (bouton MAX). */
 const ethLisible = (w) => arrondiAffichage(w, 6);
@@ -16842,6 +16842,22 @@ function majFundWalletPourPaire() {
   void majNoteCaution();
   if (!a) return;
   const p = paireChoisie;
+  /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, P1 « e » : « Create affiche 0.001 ETH alors qu il faut ~0.0015 ») — CE QUE LE
+   *   WALLET DOIT TENIR EST DIT ICI, AVANT LE CLIC. La garde d avant-wallet (`preflightInstantBirthEthFixe`) exige
+   *   frais + seed + `GAZ_NAISSANCE_WEI` ; cette ligne n annoncait que le frais, et la reserve n apparaissait qu au refus.
+   * ⛔ MEME SOMME QUE LA GARDE, PAS UN CHIFFRE ECRIT A COTE : `besoinNaissance` avec les MEMES constantes, et la MEME regle
+   *   de seed que `creerBlock` (`sansSeed` : une paire action se lance sans seed, `seedWei: 0n`). Pour les autres paires le
+   *   seed est lu au clic (`preparerQuoteEthDefaut` : 1 $ d ETH, jamais sous `CREATE_FEE_WEI_FLOOR`) : on dit donc
+   *   « at least », avec le plancher — la somme exacte est celle du refus, calculee par la garde elle-meme.
+   * ⛔ SEULEMENT SUR BASE ET AVEC UNE PAIRE CHOISIE : en Practice la garde ne tourne pas, et sans paire on ne sait pas
+   *   laquelle des deux regles s appliquera — on ne dit alors rien plutot qu une somme devinee.
+   * ⚠️ CE QUE LA PHRASE NE DIT PAS : le frais de reseau REEL (non mesure ici). Elle dit ce que l app verifie. */
+  const sansSeed = !!(p && p.type === 'ACTION');
+  const avoir = (p && Number(CHAINE) === 8453)
+    ? enTexte(phraseAvoirPourNaitre(besoinNaissance({ fraisWei: FRAIS_OUVERTURE_WEI,
+      seedWei: sansSeed ? 0n : CREATE_FEE_WEI_FLOOR, gazWei: GAZ_NAISSANCE_WEI }), { auMoins: !sansSeed })) + ' '
+    : '';
+  const fraisDit = ethLisible(FRAIS_OUVERTURE_WEI);
   if (p && p.type === 'ACTION') {
     const sym = p.symbole || 'that stock';
     a.textContent = 'Fund wallet — Get ETH on Base (Birth fee)';
@@ -16855,18 +16871,18 @@ function majFundWalletPourPaire() {
      *     · « ton wallet », « nous ne tenons jamais ton argent » — la propriete du produit ;
      *     · « Coinbase facture et montre son total » — la divulgation, sans le bareme.
      * ⚠️ Aucun test n epinglait ces chaines : verifie l avoir mesure avant de couper, pas apres. */
-    if (h) h.innerHTML = 'Birth fee is 0.001 ETH. '
+    if (h) h.innerHTML = 'Birth fee is ' + fraisDit + ' ETH. ' + avoir
       + 'Your market will be quoted in <b>' + enTexte(sym) + '</b> — buyers need that stock to trade it. '
       + 'Buy ETH through Coinbase into <b>your</b> wallet: Tokenized Block never holds your money, '
       + 'and Coinbase shows you its total before you confirm.';
   } else if (p && p.symbole === 'USDC') {
     a.textContent = 'Fund wallet — Get USDC on Base';
-    if (h) h.innerHTML = 'This pair needs USDC, plus 0.001 ETH for the Birth fee. '
+    if (h) h.innerHTML = 'This pair needs USDC, plus ' + fraisDit + ' ETH for the Birth fee. ' + avoir
       + 'Buy through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
       + 'and Coinbase shows you its total before you confirm.';
   } else {
     a.textContent = 'Fund wallet — Get ETH on Base';
-    if (h) h.innerHTML = 'Birth fee is 0.001 ETH. '
+    if (h) h.innerHTML = 'Birth fee is ' + fraisDit + ' ETH. ' + avoir
       + 'Buy ETH through Coinbase — it lands in <b>your</b> wallet, Tokenized Block never holds your money, '
       + 'and Coinbase shows you its total before you confirm.';
   }
@@ -17158,7 +17174,12 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null
    *     en a pas ». Un negatif reste une lecture aberrante et retombe aussi. */
   if (seed == null) seed = CREATE_FEE_WEI_FLOOR;
   else if (seed < 0n) seed = CREATE_FEE_WEI_FLOOR;
-  const besoin = frais + BigInt(seed) + gasBuf;
+  /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, P1 « e ») — LA SOMME EXIGEE EST CALCULEE UNE FOIS, DANS `besoinNaissance`
+   *   (frais-creation.js), et c est ce MEME objet que lisent la phrase du refus (ci-dessous) et la phrase d avant-clic
+   *   (`majFundWalletPourPaire`). Avant : l ecran disait « 0.001 ETH » partout et cette garde exigeait 0,0015 (paire action)
+   *   ou 0,0018 au moins — la reserve de gaz n etait dite qu ICI, apres le clic, par le mot « gas » sans montant. */
+  const besoinDit = besoinNaissance({ fraisWei: frais, seedWei: seed, gazWei: gasBuf });
+  const besoin = besoinDit.total;
   const solde = await lireSoldeEthAppRobuste();
   if (solde === null) {
     try { etape('ib_preflight_fail'); } catch (_) {}
@@ -17176,9 +17197,9 @@ async function preflightInstantBirthEthFixe({ e, seedWei = null, fraisWei = null
     try { etape('ib_balance_short'); } catch (_) {}
     if (e) {
       e.className = 'note wKo';
-      e.innerHTML = 'Need ≈ ' + ethLisible(besoin) + ' ETH (0.001 fee + seed '
-        + ethLisible(seed) + ' + gas). This account holds ' + ethLisible(solde)
-        + ' ETH — short by ' + ethLisible(manque) + '. Nothing was started.'
+      /* ⛔ le frais, le seed et la reserve sont LUS dans la somme exigee — plus de « 0.001 fee » ecrit a cote d un total
+       *   calcule (faux des que le frais effectif n est pas 0,001), plus de « gas » sans son montant. */
+      e.innerHTML = enTexte(phraseManquePourNaitre(besoinDit, solde))
         + ' <a href="#cFundWallet" id="cFundShort">Fund wallet</a>.';
       const link = $('#cFundShort'); if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); montrerFundWalletCourt(); });
       montrerFundWalletCourt();
@@ -18422,7 +18443,9 @@ async function creerBlock() {
   if (ibDirectPre) forcerCreateRouterIb = true;
   if (ibDirectPre) {
     e.className = 'note';
-    e.textContent = 'Instant Birth preflight — checking ETH balance (0.001 fee + seed + gas)…';
+    /* 2026-10-04 : la parenthese « (0.001 fee + seed + gas) » est retiree — un frais ecrit en dur et un « seed » annonce
+     *   meme pour une paire action qui n en a pas. La somme exacte est dite par la ligne sous le bouton et par le refus. */
+    e.textContent = 'Instant Birth preflight — checking ETH balance…';
     /* ⛔⛔ PAIRE ACTION = LANCEMENT UNILATERAL, DONC AUCUN SEED. Mesure du 2026-09-25 sur le plan
      *     reel (INTCc, valo 5) : `etat = APPROBATIONS`, `ethRequis = 0`, `tx.value = 0x0`. Le
      *     preflight exigeait pourtant le seed par defaut, refusait des comptes solvables et
