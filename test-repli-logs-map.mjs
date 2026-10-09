@@ -117,6 +117,31 @@ await cas('B1 charger() pose nos blocks AVANT le balayage de la factory', async 
   /* et pas dans le meme `try` que le balayage : il doit etre dans sa propre tache, non attendue */
   assert.match(sansCom, /\n[ \t]*void \(async \(\) => \{[\s\S]{0,300}await poserNosBlocks\(/,
     'la tache qui pose nos blocks n est plus une instruction inconditionnelle de charger()');
+  /* la tete lue est TRANSMISE (le mutant `poserNosBlocks(0)` survivait) ; non lue -> null, jamais 0 */
+  assert.match(sansCom, /await poserNosBlocks\(Number\.isSafeInteger\(tete\) \? tete : null\)/);
+  assert.match(app, /if \(!servi && Number\.isSafeInteger\(fin\) && fin > 0\) \{/, 'le repli on-chain part sur une tete non lue');
+});
+await cas('C1 la sauvegarde disque du trending garde TOUS les blocks a paire, et compte ce qu elle coupe', async () => {
+  const i = srv.indexOf('const ADRS_DISQUE_MAX = 5000;');
+  const j = srv.indexOf('const payload = JSON.stringify({', i);
+  assert.ok(i > 0 && j > i, 'bloc de sauvegarde introuvable');
+  const corps = srv.slice(i, j);
+  const garder = new Function('parsed', 'blocksConnus', 'console', corps + '\n; return gardes;');
+  const adr = (k) => '0x' + k.toString(16).padStart(40, '0');
+  const connus = new Set(Array.from({ length: 6000 }, (_, k) => adr(k + 1)));
+  /* deux blocks ANCIENS (inseres en premier) avec une paire : la vieille regle `slice(-N)` les coupait */
+  const lignes = [{ adr: adr(1).toUpperCase().replace('0X', '0x') }, { adr: adr(2) }, { adr: '0x' + 'f'.repeat(40) }];
+  const journal = [];
+  const g = garder({ lignes }, connus, { log: (m) => journal.push(m) });
+  assert.equal(g.length, 5000);
+  assert.ok(g.includes(adr(1)) && g.includes(adr(2)), 'un block ancien AVEC paire a ete coupe');
+  assert.ok(!g.includes('0x' + 'f'.repeat(40)), 'une ligne inconnue de blocksConnus est entree dans la sauvegarde');
+  assert.ok(g.includes(adr(6000)), 'le plus recent sans paire doit rester');
+  assert.equal(new Set(g).size, g.length, 'doublon');
+  assert.match(journal.join(' '), /keeps 5000\/6000 known blocks \(2 with a pair, all kept\) — 1000 oldest without a pair dropped/);
+  const petit = garder({ lignes: [] }, new Set([adr(1), adr(2)]), { log: (m) => journal.push('X ' + m) });
+  assert.deepEqual(petit, [adr(1), adr(2)]);
+  assert.ok(!journal.some((m) => m.startsWith('X ')), 'rien n est coupe : le journal ne doit rien dire');
 });
 
 console.log('✓ ' + n + ' cas — repli getLogs du scan + nos blocks poses sans dependre de la factory');

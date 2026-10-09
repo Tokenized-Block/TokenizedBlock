@@ -22,7 +22,11 @@ ok(compteDePuce(0, 'CREATION', new Map()).texte === '0', 'tout lu, rien trouve :
 ok(compteDePuce(3, 'CREATION', new Map()).texte === '3', 'tout lu : le compte');
 ok(compteDePuce(0, 'CREATION', new Map([['creations', 1]])).texte === '?', 'creations refusees : Created dit « ? », pas « 0 »');
 ok(compteDePuce(2, 'CREATION', new Map([['creations', 1]])).texte === '≥2', 'lu en partie : « ≥2 » (un plancher)');
-ok(compteDePuce(0, 'ACHAT', new Map([['creations', 1]])).texte === '0', 'un refus de creations ne touche pas Feed');
+/* ⛔ 2026-10-09 (revue adverse) : CORRIGE. Feed lit les echanges des blocks SUIVIS, qui viennent des creations lues : un refus de
+ *   creations laisse des blocks non suivis, donc Feed n est pas un zero mesure. L assertion d avant disait l inverse. */
+ok(compteDePuce(0, 'ACHAT', new Map([['creations', 1]])).texte === '?', 'un refus de creations TOUCHE Feed (blocks non suivis)');
+ok(compteDePuce(0, 'GM', new Map([['creations', 1]])).texte === '?', 'un refus de creations touche Sent');
+ok(compteDePuce(0, 'MESSAGE', new Map([['creations', 1]])).texte === '0', 'MESSAGE (lu au wallet des frais) ne depend pas des creations');
 ok(compteDePuce(0, 'ACHAT', new Map([['decouverte', 1]])).texte === '?', 'decouverte des pools refusee : Feed « ? »');
 ok(compteDePuce(0, 'MESSAGE', { 'messages USDC': 1 }).texte === '?', '« messages USDC » compte pour MESSAGE (prefixe)');
 ok(compteDePuce(0, 'TOUT', new Map([['transfers', 1]])).texte === '?', 'All est touche par n importe quel refus');
@@ -53,7 +57,7 @@ ok(!parQuoi.has('swaps'), 'les swaps (lus) ne sont pas comptes comme refuses');
 ok(compteDePuce(0, 'CREATION', parQuoi).texte === '?', 'Created : « ? » (le cas de la capture)');
 ok(compteDePuce(0, 'GM', parQuoi).texte === '?', 'Sent : « ? »');
 ok(compteDePuce(0, 'TOUT', parQuoi).texte === '?', 'All : « ? »');
-ok(compteDePuce(0, 'ACHAT', parQuoi).texte === '0', 'Feed : « 0 » — ses lectures ont abouti, ce zero est mesure');
+ok(compteDePuce(0, 'ACHAT', parQuoi).texte === '?', 'Feed : « ? » — ses swaps sont lus, mais sur des blocks suivis sans les creations refusees');
 
 /* ── 3. le cablage d app.html ── */
 const fonction = (nom) => { const i = html.indexOf('function ' + nom + '('); if (i < 0) return ''; let p = 0;
@@ -67,6 +71,25 @@ ok(/noterRateesLive\(r\.fenetresRatees/.test(lire) && /noterRateesLive\(d\.fenet
   && !/liveRatees \+=/.test(lire), 'chaque refus du fil passe par noterRateesLive (par nature)');
 ok(/teteNoteLive\(liveEvts\.length, liveRatees\)/.test(fonction('peindreLive')) && !/'Nothing happened'/.test(html),
   'la note dit « Nothing happened » seulement via teteNoteLive');
+
+/* ── 4. le cablage qui RAMENE l alerte (revue : retirer `liveRatees++` survivait, 24/24 verts) — EXECUTE, pas lu ── */
+{
+  const src = fonction('noterRateesLive');
+  ok(src.length > 0, 'noterRateesLive trouvee');
+  const fab = new Function('etat', 'const liveRateesParQuoi = etat.m; let liveRatees = 0;\n' + src
+    + '\n; return (l, d) => { noterRateesLive(l, d); return { total: liveRatees, parQuoi: Object.fromEntries(liveRateesParQuoi) }; };');
+  const noter = fab({ m: new Map() });
+  noter([{ quoi: 'creations' }, { quoi: 'transfers' }]);
+  const x = noter([{}], 'decouverte');
+  ok(x.total === 3, 'chaque fenetre refusee augmente liveRatees (3 attendues, lu ' + x.total + ')');
+  ok(x.parQuoi.creations === 1 && x.parQuoi.transfers === 1 && x.parQuoi.decouverte === 1, 'et son compteur PAR NATURE (le defaut nomme la nature)');
+  const y = noter(null);
+  ok(y.total === 3, 'une liste absente ne compte rien');
+}
+const lireL = fonction('lireLive');
+ok(/catch[\s\S]{0,200}noterRateesLive\(\[\{ quoi: 'tout' \}\]\)/.test(html), 'une exception de la boucle Live est comptee comme refus « tout » (jamais un calme)');
+ok(/b\.classList\.toggle\('vide', n === 0 && c\.etat === 'LU'\)/.test(maj), 'une puce « ? » ne prend pas le style d une puce vide');
+ok(lireL.length > 0, 'lireLive trouvee');
 
 console.log(`\n${n - ko}/${n} verts`);
 if (ko) process.exit(1);

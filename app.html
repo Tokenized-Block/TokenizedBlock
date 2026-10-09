@@ -2703,7 +2703,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-planner-essai" hidden>Build <code>20261009-planner-essai</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-map-live-revue" hidden>Build <code>20261009-map-live-revue</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -6178,8 +6178,10 @@ async function poserNosBlocks(fin) {
       servi = true;
     }
   } catch (e) { /* le repli on-chain ci-dessous */ }
-  /* ⛔ REPLI, PAS DOUBLON : la lecture on-chain ne part QUE si le serveur n a rien rendu. */
-  if (!servi) {
+  /* ⛔ REPLI, PAS DOUBLON : la lecture on-chain ne part QUE si le serveur n a rien rendu.
+   * ⛔ 2026-10-09 (revue de la Map, mutant `poserNosBlocks(0)` qui survivait) : une tete NON LUE arrive en `null`, et le repli ne
+   *   part pas — il lisait les blocs 0 a 0 (fenetre inventee), puis se taisait comme s il avait cherche. */
+  if (!servi && Number.isSafeInteger(fin) && fin > 0) {
     try {
       const r = await nosBlocks({ rpc, deBloc: Math.max(0, fin - 20000), aBloc: fin });
       for (const b of r.blocks) vus.add(String(b).toLowerCase());
@@ -6237,7 +6239,7 @@ async function charger() {
   void (async () => {
     let tete = null;
     try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { /* tete non lue : repli on-chain borne a 0 */ }
-    try { await poserNosBlocks(Number.isSafeInteger(tete) ? tete : 0); } catch (_) { /* la Map continue sans eux */ }
+    try { await poserNosBlocks(Number.isSafeInteger(tete) ? tete : null); } catch (_) { /* la Map continue sans eux */ }
   })();
   try {
     const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
@@ -10552,7 +10554,8 @@ function majComptesFiltres() {
     b.title = c.etat === 'LU' ? b.dataset.titre
       : 'Some chain reads for this filter were refused by the node — not read, not zero. ' + b.dataset.titre;
     b.hidden = false;
-    b.classList.toggle('vide', n === 0);
+    /* ⛔ 2026-10-09 (revue) : un « ? » n est pas un zero mesure — il ne prend pas le style d une puce vide */
+    b.classList.toggle('vide', n === 0 && c.etat === 'LU');
     comptes[f] = n;
   }
   liveFiltre = garde;

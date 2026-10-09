@@ -87,11 +87,15 @@ export function poolsSuivies(blocks) {
  *    (tx 0x3af0dd1b…, status 0x1). La chaine n etait PAS calme : la lecture etait refusee, et les puces
  *    disaient « 0 ». Un compte dont la lecture a ete refusee n est pas un zero : il est « non lu ».
  * Quelles lectures nourrissent chaque puce (prefixe du `quoi` des fenetres ratees). Absente = toutes. */
+/* ⛔⛔ 2026-10-09 (revue adverse du correctif) : les echanges et les transferts sont lus pour les blocks SUIVIS, et l ensemble suivi
+ *   (`blocksSuivisLive`) vient des CREATIONS lues. Une lecture de creations refusee = un block ne dans la fenetre n est jamais suivi,
+ *   ses achats et ses envois ne sont jamais lus : Feed, Kill, Big et Sent disaient « 0 » MESURE sur ce trou. Ces puces dependent
+ *   donc AUSSI de 'creations'. Seul MESSAGE (lu au wallet des frais, pas par block) n en depend pas. */
 export const LECTURES_PAR_FILTRE = {
   CREATION: ['creations'], CREATION_TB: ['creations'], CREATION_FOREIGN: ['creations'],
-  ACHAT: ['swaps', 'decouverte'], VENTE: ['swaps', 'decouverte'], SWAP: ['swaps', 'decouverte'],
-  ECHANGES: ['swaps', 'decouverte'], GROS: ['swaps', 'decouverte'], HOOKED: ['swaps', 'decouverte'],
-  GM: ['transfers'], NOTE: ['transfers'], MESSAGE: ['messages'],
+  ACHAT: ['swaps', 'decouverte', 'creations'], VENTE: ['swaps', 'decouverte', 'creations'], SWAP: ['swaps', 'decouverte', 'creations'],
+  ECHANGES: ['swaps', 'decouverte', 'creations'], GROS: ['swaps', 'decouverte', 'creations'], HOOKED: ['swaps', 'decouverte', 'creations'],
+  GM: ['transfers', 'creations'], NOTE: ['transfers', 'creations'], MESSAGE: ['messages'],
 };
 const LECTURES_CONNUES = [...new Set(Object.values(LECTURES_PAR_FILTRE).flat())];
 

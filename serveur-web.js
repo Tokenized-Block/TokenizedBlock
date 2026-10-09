@@ -2131,9 +2131,20 @@ function sauverTrendingDisque() {
       console.log('[trending] skip disk save (empty+ratees)');
       return;
     }
+    /* ⛔⛔ 2026-10-09 (revue de la Map) : `slice(-2000)` jetait ~600 blocks connus A CHAQUE DEPLOIEMENT (mesure en prod :
+     *   blocksSuivis 2 622 -> 2 024 entre deux lectures, blocksAvecPaire 65 -> 56). Le tri etait l ordre d insertion : un block
+     *   ancien AVEC un marche vivant partait avant un block recent sans marche. Maintenant : les blocks des lignes servies (ceux
+     *   qui ont une paire, donc ceux de la Map) passent D ABORD, jamais coupes ; le reste, du plus recent au plus ancien, jusqu a
+     *   ADRS_DISQUE_MAX. Ce qui est coupe est COMPTE dans le journal. ⚠️ Plafond garde : chaque bloc connu coute une place dans les
+     *   lots DexScreener (30 par appel) a chaque rafraichissement. */
+    const ADRS_DISQUE_MAX = 5000;
+    const avecPaire = new Set(((parsed && parsed.lignes) || []).map((l) => String((l && l.adr) || '').toLowerCase()).filter((a) => blocksConnus.has(a)));
+    const autres = [...blocksConnus].filter((a) => !avecPaire.has(a));
+    const gardes = [...avecPaire, ...autres.slice(-Math.max(0, ADRS_DISQUE_MAX - avecPaire.size))];
+    if (gardes.length < blocksConnus.size) console.log('[trending] disk save keeps ' + gardes.length + '/' + blocksConnus.size + ' known blocks (' + avecPaire.size + ' with a pair, all kept) — ' + (blocksConnus.size - gardes.length) + ' oldest without a pair dropped');
     const payload = JSON.stringify({
       ver: TRENDING_CACHE_VER, a: trCache.a, corps: trCache.corps, blocsLusJusqua,
-      adrs: [...blocksConnus].slice(-2000),
+      adrs: gardes,
       /* ⛔⛔ L INDEX DES CREATEURS EST PERSISTE, SINON IL REPART DE ZERO A CHAQUE DEPLOIEMENT — et
        *     comme il ne se remplit qu avec les creations VUES depuis le dernier scan, un index
        *     volatil ne rattraperait JAMAIS le passe. Les gens reperdraient leurs blocks a chaque
