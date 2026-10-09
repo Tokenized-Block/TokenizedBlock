@@ -35,6 +35,13 @@ import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL } from './calldata-aerodrome
 import { ESPACEMENTS_RETOMBEE } from './espacements-cl.js';
 /* ⛔ LA MEME PORTE QUE LES PUCES ET QUE LE CHEMIN USDC, importee et jamais recopiee. */
 import { porteDAchat, porteNotreFrais, glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
+/* ⛔ 2026-10-09 (compte sur fork, outils compter-lectures-plan) : ETH > NVDAc = 36 lectures, UNE en vol, 18 s — le seul chemin que
+ *   planner-speed n avait pas parallelise. Les lectures INDEPENDANTES partent ensemble (au plus LECTURES_EN_VOL_MAX), les resultats
+ *   sont pris DANS L ORDRE DE LA LISTE : l ordre de decision (premier espacement qui convient, pivots dans l ordre sonde) est
+ *   inchange. `lire` ne leve jamais ; une tache qui leverait quand meme devient NON_MESURE, jamais une valeur. */
+import { enVolBorne } from './lectures-en-vol.js';
+const lireTous = (rpc, demandes) => enVolBorne(demandes, ([to, data]) => lire(rpc, to, data))
+  .then((issues) => issues.map((x) => (x.ok ? x.valeur : { etat: 'NON_MESURE', pourquoi: String((x.erreur && x.erreur.message) || x.erreur) })));
 
 /** ⛔ Les espacements ou une pool WETH/USDC a ete MESUREE le 2026-09-28 (fee 80 / 500 / 550).
  *  Publies pour qu une sonde puisse les re-verifier, et pour que « les trois » soit un fait. */
@@ -71,11 +78,8 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   }
 
   /* ── 1. la pool de l action, LUE puis PROUVEE ─────────────────────────────────────────────── */
-  const s0 = await lire(rpc, pool, selecteur('slot0()'));
-  const fe = await lire(rpc, pool, selecteur('fee()'));
-  const ts = await lire(rpc, pool, selecteur('tickSpacing()'));
-  const t0 = await lire(rpc, pool, selecteur('token0()'));
-  const t1 = await lire(rpc, pool, selecteur('token1()'));
+  const [s0, fe, ts, t0, t1] = await lireTous(rpc, [[pool, selecteur('slot0()')], [pool, selecteur('fee()')],
+    [pool, selecteur('tickSpacing()')], [pool, selecteur('token0()')], [pool, selecteur('token1()')]]);
   for (const [nom, r] of [['slot0', s0], ['fee', fe], ['tickSpacing', ts], ['token0', t0], ['token1', t1]]) {
     if (r.etat === 'NON_MESURE') {
       return { etat: 'NON_MESURE', pourquoi: 'could not read ' + nom + ' on the action pool: ' + r.pourquoi };
@@ -130,17 +134,15 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   if (block !== null && block !== undefined) {
     if (!ADR.test(String(block))) return { etat: 'REFUSE', pourquoi: 'a whole block address is required' };
     if (bas(block) === bas(action)) return { etat: 'REFUSE', pourquoi: 'the block cannot be its own quote action' };
-    for (const esp of ESPACEMENTS_RETOMBEE) {
-      const gb = await lire(rpc, FACTORY_AERODROME_CL,
-        selecteur('getPool(address,address,int24)') + pad(block) + pad(action) + motNb(esp));
+    const gbs = await lireTous(rpc, ESPACEMENTS_RETOMBEE.map((esp) => [FACTORY_AERODROME_CL,
+      selecteur('getPool(address,address,int24)') + pad(block) + pad(action) + motNb(esp)]));
+    for (let k = 0; k < ESPACEMENTS_RETOMBEE.length; k++) {
+      const esp = ESPACEMENTS_RETOMBEE[k], gb = gbs[k];
       if (gb.etat === 'NON_MESURE') { blockNonMesure += 1; continue; }
       const pb = gb.etat === 'OK' ? adrDuMot(gb.res) : null;
       /* ⛔ ADRESSE NULLE = pas de pool a cet espacement. Un FAIT, pas une panne. */
       if (!pb || /^0x0{40}$/i.test(pb)) continue;
-      const bs = await lire(rpc, pb, selecteur('slot0()'));
-      const bf = await lire(rpc, pb, selecteur('fee()'));
-      const bt0 = await lire(rpc, pb, selecteur('token0()'));
-      const bl = await lire(rpc, pb, selecteur('liquidity()'));
+      const [bs, bf, bt0, bl] = await lireTous(rpc, [[pb, selecteur('slot0()')], [pb, selecteur('fee()')], [pb, selecteur('token0()')], [pb, selecteur('liquidity()')]]);
       if (bs.etat !== 'OK' || bf.etat !== 'OK' || bt0.etat !== 'OK' || bl.etat !== 'OK') { blockNonMesure += 1; continue; }
       let liq = 0n;
       try { liq = BigInt(bl.res); } catch (_) { blockNonMesure += 1; continue; }
@@ -170,17 +172,16 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
   /* ── 2. les pools pivot WETH/USDC, RESOLUES par la factory ────────────────────────────────── */
   const poolsPivot = [];
   let pivotsNonMesures = 0;
-  for (const esp of ESPACEMENTS_PIVOT_SONDES) {
-    const gp = await lire(rpc, FACTORY_AERODROME_CL,
-      selecteur('getPool(address,address,int24)') + pad(devise) + pad(WETH_BASE) + motNb(esp));
+  const gps = await lireTous(rpc, ESPACEMENTS_PIVOT_SONDES.map((esp) => [FACTORY_AERODROME_CL,
+    selecteur('getPool(address,address,int24)') + pad(devise) + pad(WETH_BASE) + motNb(esp)]));
+  for (let k = 0; k < ESPACEMENTS_PIVOT_SONDES.length; k++) {
+    const esp = ESPACEMENTS_PIVOT_SONDES[k], gp = gps[k];
     if (gp.etat === 'NON_MESURE') { pivotsNonMesures += 1; continue; }
     const p = gp.etat === 'OK' ? adrDuMot(gp.res) : null;
     /* ⛔ ADRESSE NULLE = cette factory ne connait AUCUNE pool a cet espacement. C est un FAIT, pas
      *   une panne : on passe sans compter d echec de lecture. */
     if (!p || /^0x0{40}$/i.test(p)) continue;
-    const ps = await lire(rpc, p, selecteur('slot0()'));
-    const pf = await lire(rpc, p, selecteur('fee()'));
-    const pt0 = await lire(rpc, p, selecteur('token0()'));
+    const [ps, pf, pt0] = await lireTous(rpc, [[p, selecteur('slot0()')], [p, selecteur('fee()')], [p, selecteur('token0()')]]);
     if (ps.etat !== 'OK' || pf.etat !== 'OK' || pt0.etat !== 'OK') { pivotsNonMesures += 1; continue; }
     const pa0 = adrDuMot(pt0.res);
     if (!pa0) { pivotsNonMesures += 1; continue; }
@@ -214,16 +215,14 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
    *     On n en refuse aucun plan — on cote ce qui existe. */
   const poolsDirectes = [];
   let directesNonMesurees = 0;
-  for (const esp of ESPACEMENTS_RETOMBEE) {
-    const gd = await lire(rpc, FACTORY_AERODROME_CL,
-      selecteur('getPool(address,address,int24)') + pad(action) + pad(WETH_BASE) + motNb(esp));
+  const gds = await lireTous(rpc, ESPACEMENTS_RETOMBEE.map((esp) => [FACTORY_AERODROME_CL,
+    selecteur('getPool(address,address,int24)') + pad(action) + pad(WETH_BASE) + motNb(esp)]));
+  for (let k = 0; k < ESPACEMENTS_RETOMBEE.length; k++) {
+    const esp = ESPACEMENTS_RETOMBEE[k], gd = gds[k];
     if (gd.etat === 'NON_MESURE') { directesNonMesurees += 1; continue; }
     const pd = gd.etat === 'OK' ? adrDuMot(gd.res) : null;
     if (!pd || /^0x0{40}$/i.test(pd)) continue;
-    const ds = await lire(rpc, pd, selecteur('slot0()'));
-    const df = await lire(rpc, pd, selecteur('fee()'));
-    const dt0 = await lire(rpc, pd, selecteur('token0()'));
-    const dl = await lire(rpc, pd, selecteur('liquidity()'));
+    const [ds, df, dt0, dl] = await lireTous(rpc, [[pd, selecteur('slot0()')], [pd, selecteur('fee()')], [pd, selecteur('token0()')], [pd, selecteur('liquidity()')]]);
     if (ds.etat !== 'OK' || df.etat !== 'OK' || dt0.etat !== 'OK' || dl.etat !== 'OK') { directesNonMesurees += 1; continue; }
     let liqD = 0n;
     try { liqD = BigInt(dl.res); } catch (_) { directesNonMesurees += 1; continue; }
@@ -350,13 +349,14 @@ export async function planAchatEthAction({ rpc, compte, action, pool, montantWei
    *   ⛔ ET ON NE BLOQUE PAS SUR NOTRE AVEUGLEMENT : si une de ces lectures echoue, on laisse
    *     passer et on le DIT dans la borne. Fermer sur l inconnu a deja efface le produit une fois
    *     aujourd hui ; ici la mesure sert a AVERTIR, pas a interdire. */
-  let soldeWei = null, gazUnites = null, prixGaz = null;
-  try { soldeWei = BigInt(await rpc('eth_getBalance', [compte, 'latest'])); } catch (_) { soldeWei = null; }
-  try {
-    gazUnites = BigInt(await rpc('eth_estimateGas', [{ from: compte, to: tx.to, data: tx.data,
-      value: '0x' + m.toString(16) }]));
-  } catch (_) { gazUnites = null; }
-  try { prixGaz = BigInt(await rpc('eth_gasPrice', [])); } catch (_) { prixGaz = null; }
+  /* les trois lectures sont independantes : ensemble ; chacune qui echoue reste `null` (non verifie), jamais une valeur */
+  const [rSolde, rGaz, rPrix] = await enVolBorne([
+    () => rpc('eth_getBalance', [compte, 'latest']),
+    () => rpc('eth_estimateGas', [{ from: compte, to: tx.to, data: tx.data, value: '0x' + m.toString(16) }]),
+    () => rpc('eth_gasPrice', []),
+  ], (f) => f());
+  const enBig = (x) => { try { return x.ok ? BigInt(x.valeur) : null; } catch (_) { return null; } };
+  const soldeWei = enBig(rSolde), gazUnites = enBig(rGaz), prixGaz = enBig(rPrix);
   /* ⛔ MARGE DE 25 % SUR LE GAZ : le prix bouge entre le devis et la signature, et une marge est la
    *   seule facon honnete de ne pas promettre au wei pres. Elle est ECRITE, pas cachee. */
   const coutGaz = (gazUnites !== null && prixGaz !== null) ? (gazUnites * prixGaz * 125n) / 100n : null;

@@ -15,11 +15,16 @@ async function un(f) {
   return new Promise((ok) => {
     const p = spawn(process.execPath, [f], { cwd: DIR });
     let sortie = '';
-    const garde = setTimeout(() => { try { p.kill(); } catch (_) {} }, 300000);
+    /* ⛔ 2026-10-09 : test-bloc-vers-bloc lit le RESEAU REEL (base.org en 429, publicnode, /api/cle de prod) et prend 318 s SEUL ;
+     *   tue a 300 s, il sortait « ROUGE (code null) » a chaque serie — un faux rouge qui apprend a ignorer la liste. Un test qui
+     *   appelle une URL https a 900 s ; un test TUE par le delai est nomme DELAI (toujours compte rouge : un blocage n est pas cache). */
+    let tue = false;
+    const reseau = /fetch\(\s*['"`]https:|['"`]https:\/\/[a-z0-9.-]+\.(org|com|space|io)/.test(fs.readFileSync(path.join(DIR, f), 'utf8'));
+    const garde = setTimeout(() => { tue = true; try { p.kill(); } catch (_) {} }, reseau ? 900000 : 300000);
     p.stdout.on('data', (d) => { sortie += d; }); p.stderr.on('data', (d) => { sortie += d; });
     p.on('close', (code) => {
       clearTimeout(garde); faits += 1;
-      if (code !== 0) rouges.push({ f, code, ko: sortie.split('\n').filter((l) => /^\s*KO|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
+      if (code !== 0) rouges.push({ f, code: tue ? 'DELAI ' + (reseau ? 900 : 300) + ' s' + (reseau ? ', reseau' : '') : code, ko: sortie.split('\n').filter((l) => /^\s*KO|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
       ok();
     });
   });
