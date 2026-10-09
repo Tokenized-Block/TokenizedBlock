@@ -67,6 +67,17 @@ await cas('A3 une erreur du noeud est comptee et RE-LEVEE (jamais une liste vide
   await assert.rejects(m.lecteurArchive()('eth_getLogs', [{}]), /401/);
   assert.equal(m.archiveCompte.erreurs, 1);
 });
+await cas('A3b un refus TRANSITOIRE (debit) est relance et finit servi ; un refus definitif ne l est pas', async () => {
+  let n = 0;
+  const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => { n++; if (n === 1) throw new Error('over rate limit'); return ['ok']; });
+  assert.deepEqual(await m.lecteurArchive()('eth_getLogs', [{}]), ['ok']);
+  assert.equal(m.archiveCompte.erreurs, 0); assert.equal(m.archiveCompte.relances, 1); assert.equal(m.archiveCompte.servis, 1);
+  assert.equal(m.archiveCompte.appels, 2, 'la relance doit compter au budget');
+  let k = 0;
+  const d = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => { k++; throw new Error('invalid params'); });
+  await assert.rejects(d.lecteurArchive()('eth_getLogs', [{}]), /invalid params/);
+  assert.equal(k, 1, 'un refus definitif a ete relance');
+});
 await cas('A4 libelleNoeud publie l hote, jamais le chemin ; masquerCle retire la cle', async () => {
   const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP });
   assert.equal(m.libelleNoeud(URL_CDP), 'api.developer.coinbase.com (path hidden)');

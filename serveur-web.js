@@ -733,7 +733,19 @@ function lecteurArchive() {
     if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
     archiveCompte.appels++;
     if (archiveCompte.appels % 25 === 0) sauverArchiveCompte();
-    try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) { archiveCompte.erreurs++; throw e; }
+    /* ⛔ 2026-10-09 (prod : 19 erreurs sur 1 733 appels = exactement les 14 + 5 pages refusees du rattrapage, nombre qui varie d une
+     *   passe a l autre -> transitoire) : un refus de DEBIT, un delai ou un 5xx est relance deux fois (pause 1 s puis 2 s), chaque
+     *   relance comptee au budget. Une autre erreur (requete refusee pour de bon) n est pas relancee. */
+    for (let essai = 0; ; essai++) {
+      try { const r = await lire(methode, params); archiveCompte.servis++; return r; } catch (e) {
+        const m = String((e && e.message) || e);
+        if (essai >= 2 || !/rate|limit|429|5\d\d|timeout|aborted|temporar|unavailable|ECONNRESET|fetch failed/i.test(m)
+          || archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.erreurs++; archiveCompte.derniereErreur = masquerCle(m).slice(0, 80); throw e; }
+        archiveCompte.relances = (archiveCompte.relances || 0) + 1;
+        await new Promise((ok) => setTimeout(ok, 1000 * (essai + 1)));
+        archiveCompte.appels++;
+      }
+    }
   };
 }
 /* ⛔⛔ 2026-10-09 (mesure en prod, noeud d archive pose) — L HISTOIRE PROFONDE VA DIRECTEMENT AU NOEUD D ARCHIVE. Par la chaine de
@@ -2418,7 +2430,8 @@ async function lireTrending() {
         console.log('[createurs] rattrapage ' + bas + '..' + haut + ' · +' + aFaire.length
           + ' · index=' + createurParBlock.size + '/' + blocksConnus.size
           + (rattrapageDepuis <= PREMIER_BLOCK_TB ? ' · COMPLET' : '')
-          + ((vieux.fenetresRatees || []).length ? ' · ⛔ ' + vieux.fenetresRatees.length + ' fenetre(s) refusee(s), on ne descend pas' : ''));
+          + ((vieux.fenetresRatees || []).length ? ' · ⛔ ' + vieux.fenetresRatees.length + ' fenetre(s) refusee(s), on ne descend pas (1re cause : '
+            + masquerCle(String(vieux.fenetresRatees[0].cause || '?')).slice(0, 80) + ')' : ''));
       }
     } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }
     /* ⛔⛔ 2026-10-09 — LES TROUS SE RELISENT maintenant qu un noeud d archive est pose (sans lui, relireUnTrou ne fait rien). */
