@@ -150,6 +150,8 @@ import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { randomBytes } from 'node:crypto';
+/* 2026-10-04 : le mode essai (fork local + wallet simule) — la regle qui decide, pure, la meme que celle de la page */
+import { essaiServeur } from './mode-essai.js';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
 /* ⛔⛔ DEUX ENDPOINTS OFFICIELS PAR DEFAUT, ET PAS PLUS. Mesure du 2026-09-29 :
@@ -170,12 +172,27 @@ import { randomBytes } from 'node:crypto';
  *     d ANVIL (un EVM generique), pas des RPC tiers, qui font tourner le client Base. Mes deux
  *     temoins negatifs ont ECHOUE A ECHOUER, et c est ce qui a corrige la regle.
  *   ⛔ AUCUNE CLE : ces URL sont publiques, sans inscription. `BASE_RPC` reste prioritaire. */
-const RPC_LIST = (process.env.BASE_RPC
+/* ══ MODE ESSAI (2026-10-04) — `TB_RPC_TEST=http://127.0.0.1:8549` : TOUS les noeuds du serveur deviennent ce fork local ══
+ * POURQUOI. Rejouer le test « wallet connecte » du panneau sans wallet : la page (mode-essai.js, wallet-simule.js) envoie ses
+ *   transactions sur un fork ; le planificateur doit lire CE fork, sinon ses plans decrivent une autre chaine.
+ * CE QUI EXISTAIT DEJA : `BASE_RPC` et `BASE_RPC_LECTURE` (mesure du jour, fork au bloc 52137185 : un plan USDC > NVDAc PRET en
+ *   74 ms, ETH > IB022 juge en 4,7 s). Mais ces deux variables laissent DEUX listes sur les vrais noeuds : `RPC_ACTIVITE` (qui
+ *   AJOUTE publicnode et drpc — une lecture sur deux partirait sur la vraie chaine) et `RPC_SIMULATION` (ecrite en dur).
+ *   `TB_RPC_TEST` remplace les QUATRE, ou n en remplace aucune.
+ * ⛔ ETEINT PAR DEFAUT ET REFUSE EN PRODUCTION (regle pure, `essaiServeur`) : la variable doit designer un noeud de CETTE
+ *   machine, et elle est IGNOREE des qu une variable `RAILWAY_*` existe ou que NODE_ENV vaut production. Ignoree = journalisee,
+ *   et le serveur garde ses noeuds habituels. Sans la variable, les quatre listes ci-dessous sont celles d avant, a l octet
+ *   (test-mode-essai-20261004.mjs les compare a celles du commit 9ab857e, et tue le mutant qui inverse la condition).
+ * ⚠️ CE QUE LE MODE ESSAI NE CHANGE PAS : les lectures hors chaine (DexScreener, OpenLaunch, CDP) restent celles d avant. */
+const ESSAI_SRV = essaiServeur(process.env);
+if (ESSAI_SRV.demande && !ESSAI_SRV.actif) console.error('[essai] TB_RPC_TEST IGNORE : ' + ESSAI_SRV.pourquoi);
+if (ESSAI_SRV.actif) console.warn('[essai] MODE ESSAI : tous les noeuds de ce serveur = ' + ESSAI_SRV.rpc + ' — ce processus ne lit PAS Base mainnet');
+const RPC_LIST = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (process.env.BASE_RPC
   || 'https://mainnet.base.org,https://developer-access-mainnet.base.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
 /* ⛔ LA LISTE LARGE, RESERVEE AUX LECTURES QUI NE FONT QUE `eth_call` : quatre fois le quota pour
  *   les faits de pool, sans toucher aux chemins qui ont besoin de `eth_getLogs`. */
-const RPC_FAITS_POOL = (process.env.BASE_RPC_LECTURE
+const RPC_FAITS_POOL = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (process.env.BASE_RPC_LECTURE
   || 'https://mainnet.base.org,https://developer-access-mainnet.base.org,https://base.drpc.org,https://1rpc.io/base')
   .split(',').map((s) => s.trim()).filter(Boolean);
 let tourFaits = 0, idFaits = 0;
@@ -1337,7 +1354,7 @@ let activitesEnVol = 0;
 /* ⛔ MESURE (local, 2026-10-04) : sur `rpcServeur` (2 noeuds, partages avec tout le site) cette lecture rendait « over rate limit ».
  *   Elle tourne donc sur une liste PLUS LARGE et ne retente pas le meme noeud : un noeud qui refuse, on passe au suivant.
  *   La tete est reculee de 2 blocs pour qu un noeud legerement en retard sache servir la fenetre. */
-const RPC_ACTIVITE = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org'])];
+const RPC_ACTIVITE = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org'])];
 let tourActivite = 0;
 async function rpcActivite(methode, params) {
   let dernier = new Error('no endpoint tried');
@@ -1481,7 +1498,7 @@ function prendreBudgetPlan(ip) {
 /* eth_simulateV1 : mesure le 2026-10-04 — mainnet.base.org, publicnode et drpc l executent (surcharge de solde comprise) ; un
  *   endpoint qui ne le connait pas ou qui limite n est PAS une reponse : on passe au suivant. Un resultat (tableau) est la
  *   reponse, meme quand un appel y est en 0x0. Toute autre methode : le lecteur des rails. */
-const RPC_SIMULATION = ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'];
+const RPC_SIMULATION = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'];
 let tourSim = 0;
 async function rpcNaissance(methode, params) {
   if (methode !== 'eth_simulateV1') return rpcRails(methode, params);
@@ -2597,6 +2614,11 @@ const SERVIS = [
    *   exactement son travail : un import 404 ne degrade pas la page, il tue le module ENTIER. */
   'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js', 'calldata-aerodrome.js',
   'echange-eth.js', 'plan-eth-block.js',
+  /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
+   *   DECIDER, et il decide non hors de localhost. `wallet-simule.js` n est charge par la page (`import()`) qu en mode essai :
+   *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
+   *   serveur est lui-meme en mode essai (`SERVIS_EN_ESSAI_SEULEMENT`, juste dessous). En production : 404. */
+  'mode-essai.js', 'wallet-simule.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
@@ -2608,7 +2630,10 @@ const RACINE = 'app.html';
 /* ETag calcule au demarrage : les fichiers ne changent pas pendant la vie du processus, et un
  * recalcul par requete ferait lire le disque pour rien. */
 const cache = new Map();
+/* ⛔ Le wallet simule n existe pas pour un serveur hors mode essai : ni servi, ni compte dans `servis`. */
+const SERVIS_EN_ESSAI_SEULEMENT = ['wallet-simule.js'];
 for (const nom of SERVIS) {
+  if (SERVIS_EN_ESSAI_SEULEMENT.includes(nom) && !ESSAI_SRV.actif) continue;
   const chemin = join(ici, nom);
   if (!existsSync(chemin)) {
     /* ⛔ ON LE DIT AU DEMARRAGE, PAS EN 404 SILENCIEUX A MINUIT. Un fichier declare et absent est un
@@ -3930,7 +3955,9 @@ createServer((req, res) => {
       naissance: { sonde: naissanceSonde, ...naissanceCompteurs },
       /* les quatre sondes cote a cote : naissance, marche, echange, cerveau — chacune PRET, ou sa raison */
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
-      mcpWidget: widgetHtml !== null, ...(ok ? {} : { modulesManquants }) }));
+      mcpWidget: widgetHtml !== null, ...(ok ? {} : { modulesManquants }),
+      /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */
+      ...(ESSAI_SRV.actif ? { essai: { rpc: ESSAI_SRV.rpc } } : {}) }));
     return;
   }
 

@@ -3734,6 +3734,8 @@ import { etatProfondeur, ordreNoeuds } from './profondeur-logs.js';
 /* ⛔ Debit et refus permanents des noeuds publics (mesure du 2026-10-02 : 124 erreurs console en
  *   2 min sur le Feed — 429 de debit, 400 drpc au-dela de ~100 blocs, 403 publicnode a 50 adresses). */
 import { creerRegulateur } from './regulateur-rpc.js';
+/* 2026-10-04 : le mode essai (wallet simule + fork local). Ce module ne fait que DECIDER, et hors de localhost il decide non. */
+import { modeEssai, fournisseurDiffere, poserFournisseur } from './mode-essai.js';
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
@@ -4000,6 +4002,28 @@ const RESEAUX = {
           explorateur: 'https://basescan.org' },
 };
 let CHAINE = 8453;
+/* ══ MODE ESSAI (2026-10-04) : la vraie interface, un wallet SIMULE, un fork LOCAL — eteint par defaut ══════════════════════
+ * POURQUOI. Le test « wallet connecte » du panneau (TEST-WALLET-PANNEAU-20261004.md) demande un vrai wallet ; aucun n est
+ *   disponible cote agent. Ici la page lit un fork local (base-anvil) et recoit un `window.ethereum` sans cle, dont chaque
+ *   envoi part sur ce fork (wallet-simule.js). Tout le reste de la page est le code de production, inchange.
+ * ⛔ DEUX CONDITIONS, DANS `modeEssai` (mode-essai.js, pur, teste) : la page est servie depuis CETTE machine (localhost,
+ *   127.0.0.1, [::1]) ET l URL porte `?essai=wallet&compte=0x…`. Sur tokenizedblock.space la premiere est fausse : aucun lien ne
+ *   peut y changer les noeuds lus ni le wallet. Le noeud d essai doit lui aussi etre sur cette machine.
+ * ⛔ HORS ESSAI, CE BLOC NE FAIT RIEN : `RESEAUX` et `window.ethereum` ne sont pas touches, `wallet-simule.js` n est pas demande
+ *   (test-mode-essai-20261004.mjs execute CE bloc avec l hote de production, et tue le mutant qui retire la condition).
+ * ⛔ EN ESSAI, UN SEUL NOEUD : pas de secours. Une lecture qui retomberait sur un vrai noeud melangerait deux chaines a l ecran.
+ * ⛔⛔ EN ESSAI, JAMAIS UN VRAI WALLET. Si une extension garde `window.ethereum` (elle se pose avant la page et peut interdire
+ *   qu on la remplace), la page S ARRETE : un plan bati sur l etat d un fork ne doit jamais etre propose a un wallet qui signe
+ *   sur la vraie chaine. Ici un arret net est le bon comportement — ce n est pas une affordance, c est la garde des fonds.
+ * ⚠️ NON MESURE : un vrai wallet. Le wallet simule n a ni ecran, ni cle, ni estimation de gaz a lui (ESSAI-WALLET-SIMULE-20261004.md). */
+const ESSAI = modeEssai({ hote: location.hostname, recherche: location.search });
+if (ESSAI.actif) {
+  Object.assign(RESEAUX[8453], { rpc: ESSAI.rpc, secours: [], logsMultiRpc: ESSAI.rpc, logsArchiveRpc: ESSAI.rpc, b20Rpc: ESSAI.rpc });
+  if (!poserFournisseur(window, fournisseurDiffere(import('./wallet-simule.js').then((m) => m.installerWalletSimule({ rpcUrl: ESSAI.rpc, compte: ESSAI.compte, document }))))) {
+    document.body.textContent = 'Test mode stopped: a real wallet extension holds window.ethereum in this browser. Open this page in a browser profile without a wallet — a real wallet must never be asked to sign a plan built on a fork.';
+    throw new Error('test mode stopped: window.ethereum is held by a real wallet');
+  }
+} else if (ESSAI.pourquoi) console.warn('[test mode] not enabled: ' + ESSAI.pourquoi);
 
 /* ⛔ DECLAREE ICI PARCE QUE JE VENAIS DE L UTILISER SANS QU ELLE EXISTE : le bouton GM lisait
  * `compte`, et le clic aurait leve `ReferenceError` — une commande qui plante en silence, exactement
@@ -4079,7 +4103,9 @@ const ESSAIS_429 = 5;
  * ⚠️ Stockage navigateur = confort par visiteur : il peut etre vide ou refuse, tout est en try/catch, et l app lit la
  *    chaine normalement sans lui. Plafonne (~1,5 Mo). Aucune ecriture ne passe ici (les envois passent par envoi.js). */
 const RPC_SEL_IMMUABLES = new Set(['0x313ce567', '0x95d89b41', '0x06fdde03', '0xe8a3d485']);
-const RPC_STOCKAGE = 'tb-rpc-immuable-v1';
+/* en mode essai le cache a SA cle, par compte d essai : un recu ou des logs lus sur un fork ne doivent jamais etre relus comme
+ *   ceux de la vraie chaine (ni comme ceux d un fork precedent : chaque session d essai prend un compte neuf) */
+const RPC_STOCKAGE = ESSAI.actif ? 'tb-rpc-essai-' + ESSAI.compte : 'tb-rpc-immuable-v1';
 const rpcImmuable = new Map();
 const rpcLogs = new Map();
 const rpcEnVol = new Map();
