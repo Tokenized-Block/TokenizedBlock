@@ -54,17 +54,33 @@ export function formeCdp(url) {
   return { ok: true, longueurCle: segs[3].length };
 }
 
+/* ⛔ 2026-10-09 (premier essai de Phil : lance depuis le mauvais dossier, avec le chemin d EXEMPLE) — le fichier etait une marche de
+ *   trop. Sans argument de fichier, l URL est lue dans le PRESSE-PAPIERS (Get-Clipboard, par un processus sans shell) : copier l URL
+ *   dans le portail CDP, lancer UNE commande. La valeur ne passe toujours par aucun historique et n est jamais imprimee. */
+function lirePressePapiers() {
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'], { shell: false, encoding: 'utf8' });
+  if (r.error || r.status !== 0) return { ok: false, pourquoi: 'presse-papiers illisible (' + String((r.error && r.error.code) || r.status) + ')' };
+  return { ok: true, texte: String(r.stdout || '') };
+}
+
 async function principal(argv) {
-  const CHEMIN = argv[2];
+  const CHEMIN = argv.slice(2).find((a) => !a.startsWith('--')) || null;
   const POSER = argv.includes('--poser');
-  if (!CHEMIN) { console.log('usage : node outils/poser-rpc-archive.mjs "<fichier contenant l URL CDP Node>" [--poser]'); return 2; }
   const src = readFileSync(path.join(ICI, '..', 'serveur-web.js'), 'utf8');
   const PM_V4 = (src.match(/const PM_V4 = '(0x[0-9a-fA-F]{40})'/) || [])[1];
   const TOPIC_INITIALIZE = (src.match(/const TOPIC_INITIALIZE = '(0x[0-9a-f]{64})'/) || [])[1];
   if (!PM_V4 || !TOPIC_INITIALIZE) { console.log('⛔ PM_V4 / TOPIC_INITIALIZE introuvables dans serveur-web.js : rien n est mesure'); return 1; }
   let url;
-  try { url = lireUrl(readFileSync(CHEMIN, 'utf8')); } catch (e) { console.log('⛔ fichier illisible : ' + String(e.code || e.message)); return 1; }
-  if (!url) { console.log('⛔ aucune URL https dans ce fichier (rien n a ete affiche)'); return 1; }
+  if (CHEMIN) {
+    try { url = lireUrl(readFileSync(CHEMIN, 'utf8')); } catch (e) { console.log('⛔ fichier illisible : ' + String(e.code || e.message)); return 1; }
+    if (!url) { console.log('⛔ aucune URL https dans ce fichier (rien n a ete affiche)'); return 1; }
+  } else {
+    const pp = lirePressePapiers();
+    if (!pp.ok) { console.log('⛔ ' + pp.pourquoi); return 1; }
+    url = lireUrl(pp.texte);
+    if (!url) { console.log('⛔ le presse-papiers ne contient pas d URL https (rien n a ete affiche). Copie l URL du noeud dans le portail CDP, puis relance.'); return 1; }
+    console.log('✅ URL lue dans le presse-papiers');
+  }
   const forme = formeCdp(url);
   if (!forme.ok) { console.log('⛔ ' + forme.pourquoi); return 1; }
   const masquer = masqueur(url);
