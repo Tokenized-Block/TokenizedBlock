@@ -2717,7 +2717,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261009-paires-trois-etats" hidden>Build <code>20261009-paires-trois-etats</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261009-paire-relancee" hidden>Build <code>20261009-paire-relancee</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -16669,6 +16669,8 @@ function deviseDeSecoursPour(adr) {
   return { adr: p.adr, symbole: p.symbole, saCote: !!cote && String(p.adr).toLowerCase() === cote, symboleBlock: mk && mk.sym ? String(mk.sym) : null };
 }
 let majPaireSeq = 0;
+/* relances automatiques d une verification de paire NON LUE (au plus 3, par paire) — voir plus bas */
+let majPaireRelances = null;
 async function majPaire() {
   const seq = ++majPaireSeq;
   motifRefusPaire = null;
@@ -16792,6 +16794,19 @@ async function majPaire() {
         : (estAction
           ? 'We could not check that stock yet — the node did not answer. Pairing stays closed until it does.'
           : 'We could not check that address yet — the node did not answer. Pairing stays closed until it does.');
+      /* ⛔⛔ 2026-10-09 — DECISION (deleguee par Phil) : une lecture LENTE n est pas un refus. Passe l echeance de 15 s, la paire
+       *   reste FERMEE (rien ne se cree sur une devise non verifiee) MAIS la verification est RELANCEE seule, 3 fois au plus
+       *   (10 s, 20 s, 30 s), tant que la MEME paire est choisie. Avant : fermee pour de bon, et il fallait la re-choisir. */
+      if (!(f && f.estB20 === false)) {
+        const cle = String(q.paire.adr || '').toLowerCase();
+        if (!majPaireRelances || majPaireRelances.cle !== cle) majPaireRelances = { cle, n: 0 };
+        if (majPaireRelances.n < 3) {
+          majPaireRelances.n += 1;
+          const dans = 10 * majPaireRelances.n, seqRelance = seq;
+          n.textContent += ' Checking again in ' + dans + ' s.';
+          setTimeout(() => { if (seqRelance === majPaireSeq) void majPaire(); }, dans * 1000);
+        }
+      }
       const chipKo = $('#cPaireChip'); if (chipKo) chipKo.hidden = true;
       majFraisEtRecap();
       return;

@@ -125,8 +125,11 @@ async function jouerPaire(html, F, { rpc, delai = 150, garde = 3000 }) {
   const court = src.split('delaiMax: 15000').join('delaiMax: ' + delai);
   const el = (v = '') => ({ value: v, hidden: false, className: '', textContent: '', disabled: false, title: '' });
   const dom = { '#cPaire': el(NVDA.adr), '#cPaireAutre': el(''), '#cPaireAutreRang': el(), '#cPaireNote': el(), '#cPaireChip': el() };
+  const relances = [];
   const ctx = vm.createContext({
     $: (q) => dom[q] || el(), CHAINE: 8453, AUTRE_PAIRE: '__autre__', majPaireSeq: 0, paireChoisie: null, motifRefusPaire: null,
+    /* 2026-10-09 : les relances programmees sont NOTEES, jamais executees (le banc juge la decision, pas un minuteur) */
+    majPaireRelances: null, setTimeout: (f, ms) => { relances.push(ms); return 0; },
     String, Number, Boolean, Promise,
     qualifierPaire: P.qualifierPaire, refusPrixNouveauBlock: P.refusPrixNouveauBlock, libellePuceCreation: P.libellePuceCreation,
     hookDeLancementPour: P.hookDeLancementPour, OPTIONS_LANCEMENT: { v9: false }, paireVa7030: () => false,
@@ -141,13 +144,18 @@ async function jouerPaire(html, F, { rpc, delai = 150, garde = 3000 }) {
   const pendant = dom['#cPaireNote'].textContent;      /* ce que l ecran dit PENDANT la lecture (avant tout `await` resolu) */
   const fin = await avecGarde(p, garde);
   return { pendu: fin === 'PENDU', ms: Date.now() - t0, pendant, note: dom['#cPaireNote'].textContent, classe: dom['#cPaireNote'].className,
-    paire: vm.runInContext('paireChoisie', ctx), remplace: court !== src };
+    paire: vm.runInContext('paireChoisie', ctx), remplace: court !== src, relances };
 }
 const jugesApp = {
   async muetDitNonLu(html, F) {
     const r = await jouerPaire(html, F, { rpc: noeud({ muetApres: 0 }).rpc });
     return r.remplace && !r.pendu && r.ms < 1500 && /^Checking that stock on chain/.test(r.pendant) && r.paire === null && r.classe === 'note wKo'
-      && r.note === 'We could not check that stock yet — the node did not answer. Pairing stays closed until it does.';
+      && r.note === 'We could not check that stock yet — the node did not answer. Pairing stays closed until it does. Checking again in 10 s.';
+  },
+  /* 2026-10-09 (decision deleguee) : une lecture NON LUE programme UNE relance a 10 s ; un refus definitif n en programme aucune */
+  async muetRelance(html, F) {
+    const r = await jouerPaire(html, F, { rpc: noeud({ muetApres: 0 }).rpc });
+    return r.relances.length === 1 && r.relances[0] === 10000 && r.paire === null;
   },
   async codeLuPuisMuet(html, F) {
     const r = await jouerPaire(html, F, { rpc: noeud({ muetApres: 1 }).rpc });
@@ -163,6 +171,7 @@ const LIB_APP = {
   muetDitNonLu: 'C noeud muet : « Checking that stock… » pendant la lecture, puis « We could not check that stock yet… » a l echeance — aucune paire acceptee',
   codeLuPuisMuet: 'C code lu puis noeud muet : « We could not read how many units exist yet… » (non lu), jamais « no units in circulation » (zero)',
   sainEstAccepte: 'C TEMOIN noeud sain : la paire est acceptee avec sa supply — l echeance ne refuse pas une lecture qui aboutit',
+  muetRelance: 'C (2026-10-09) une verification NON LUE programme une relance a 10 s, la paire restant fermee',
 };
 for (const k of Object.keys(jugesApp)) {
   let v; try { v = await jugesApp[k](HTML, Faits); } catch (err) { v = 'a jete : ' + (err && err.message); }
@@ -204,6 +213,6 @@ const faitsMute = async (de, vers) => {
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log('\n' + (n - ko) + ' ok / ' + ko + ' KO (' + n + ' assertions)');
-console.log('⚠️ NE PROUVE PAS la duree d une lecture sur un vrai noeud limite, ni que 15 s est le bon chiffre ; l ecran ne relance pas seul.');
-if (n !== 16) { console.log('KO  compte d assertions inattendu : ' + n + ' (attendu 16) — un cas a ete retire ou ajoute sans le dire'); process.exit(1); }
+console.log('⚠️ NE PROUVE PAS la duree d une lecture sur un vrai noeud limite, ni que 15 s est le bon chiffre ; la relance (10/20/30 s) est jugee sur sa PROGRAMMATION, pas executee.');
+if (n !== 17) { console.log('KO  compte d assertions inattendu : ' + n + ' (attendu 17) — un cas a ete retire ou ajoute sans le dire'); process.exit(1); }
 process.exit(ko ? 1 : 0);
