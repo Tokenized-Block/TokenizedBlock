@@ -10,8 +10,9 @@ import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
 const html = readFileSync(process.env.TB_APP || new URL('./app.html', import.meta.url), 'utf8');
 const debut = html.indexOf('async function bcProposerEnvoi(');
-const fin = html.indexOf('\nfunction bcProposerTache(', debut);
-assert.ok(debut > 0 && fin > debut, 'bcProposerEnvoi introuvable');
+const apres = html.slice(debut).search(/\r?\nfunction bcProposerTache\(/);
+const fin = debut + apres;
+assert.ok(debut > 0 && apres > 0, 'bcProposerEnvoi introuvable');
 const corps = html.slice(debut, fin);
 
 const JETON = { adr: '0x' + '11'.repeat(20), sym: 'USDC' };
