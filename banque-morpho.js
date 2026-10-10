@@ -58,6 +58,7 @@ export const appelRepayShares = (p, shares, onBehalf) => '0x' + SEL.repay + mpMo
 export const appelSupplyCollateral = (p, assets, onBehalf) => '0x' + SEL.supplyCollateral + mpMots(p) + motNb(assets) + motAdr(onBehalf) + motNb(8 * 32) + BYTES_VIDES;
 export const appelWithdrawCollateral = (p, assets, onBehalf, receiver) => '0x' + SEL.withdrawCollateral + mpMots(p) + motNb(assets) + motAdr(onBehalf) + motAdr(receiver);
 export const appelWithdraw = (p, assets, onBehalf, receiver) => '0x' + SEL.withdraw + mpMots(p) + motNb(assets) + motNb(0) + motAdr(onBehalf) + motAdr(receiver);
+export const appelWithdrawShares = (p, shares, onBehalf, receiver) => '0x' + SEL.withdraw + mpMots(p) + motNb(0) + motNb(shares) + motAdr(onBehalf) + motAdr(receiver);
 const appelApprove = (spender, montant) => '0x' + SEL.approve + motAdr(spender) + motNb(montant);
 
 const nonMesure = (pourquoi) => ({ etat: 'NON_MESURE', pourquoi, aSigner: [] });
@@ -72,7 +73,7 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
   const adrs = [...ACTIONS.keys()];
   const q = 'query($c:[String!]){ markets(first: 200, where: { chainId_in: [8453], collateralAssetAddress_in: $c }) { items { marketId lltv listed '
     + 'oracle { address } loanAsset { address symbol decimals } collateralAsset { address symbol decimals } '
-    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd utilization borrowApy supplyApy } } } }';
+    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd utilization borrowApy supplyApy price } } } }';
   let j;
   try {
     const r = await fetchImpl(URL_API_MORPHO, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(delaiMs),
@@ -87,14 +88,51 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
     const g = String((m.collateralAsset && m.collateralAsset.address) || '').toLowerCase();
     if (!ACTIONS.has(g) || !/^0x[0-9a-fA-F]{64}$/.test(String(m.marketId || ''))) continue; /* l API filtre deja ; on ne la croit pas sur parole */
     const s = m.state || {};
-    marches.push({ id: String(m.marketId).toLowerCase(), garantie: { adr: g, symbole: ACTIONS.get(g) },
+    marches.push({ id: String(m.marketId).toLowerCase(), garantie: { adr: g, symbole: ACTIONS.get(g), decimales: m.collateralAsset.decimals },
       pret: { adr: String(m.loanAsset.address).toLowerCase(), symbole: m.loanAsset.symbol, decimales: m.loanAsset.decimals },
       lltv: String(m.lltv), listeParMorpho: m.listed === true, oracle: String((m.oracle && m.oracle.address) || '').toLowerCase(),
+      /* prix de l oracle selon l API (echelle Morpho 1e36), en TEXTE : un nombre JSON de 37 chiffres perd sa precision. Sert a l ESTIMATION
+       *   sans wallet (copie de StoxCredit, 2026-10-10) ; un plan relit price() sur la chaine. */
+      prixOracle: s.price === null || s.price === undefined ? null : String(s.price),
+      margeBps: Number(MARGE_EMPRUNT_BPS),
       offreUsd: s.supplyAssetsUsd ?? null, empruntUsd: s.borrowAssetsUsd ?? null, disponibleUsd: s.liquidityAssetsUsd ?? null,
       utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null });
   }
   marches.sort((a, b) => (b.offreUsd || 0) - (a.offreUsd || 0));
   return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches };
+}
+
+/** Les POSITIONS d un compte sur ces marches (API Morpho, marketPositions ; forme lue le 2026-10-10 sur de vrais emprunteurs :
+ *  healthFactor, priceVariationToLiquidationPrice, state{collateral, collateralUsd, supplyAssets(Usd), borrowAssets(Usd)}).
+ *  ⛔ Chiffres de l API, pour AFFICHER : un remboursement ou un retrait relit la position sur la chaine (planRembourser...).
+ *  Echec = NON_LU, jamais « aucune position ». */
+export async function lirePositionsMorpho({ compte, fetchImpl = globalThis.fetch, delaiMs = 15000 } = {}) {
+  const c = String(compte || '').toLowerCase();
+  if (!ADR.test(c)) return { ok: false, etat: 'REFUSE', pourquoi: 'a whole account address is required' };
+  const q = 'query($u:[String!]){ marketPositions(first: 100, where: { chainId_in: [8453], userAddress_in: $u }) { items { healthFactor '
+    + 'priceVariationToLiquidationPrice market { marketId collateralAsset { address decimals } loanAsset { symbol decimals } } '
+    + 'state { collateral collateralUsd supplyAssets supplyAssetsUsd borrowAssets borrowAssetsUsd } } } }';
+  let j;
+  try {
+    const r = await fetchImpl(URL_API_MORPHO, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(delaiMs),
+      body: JSON.stringify({ query: q, variables: { u: [c] } }) });
+    if (!r.ok) return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API answered HTTP ' + r.status };
+    j = await r.json();
+  } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API not read: ' + String((e && e.message) || e).slice(0, 80) }; }
+  const items = j && j.data && j.data.marketPositions && j.data.marketPositions.items;
+  if (!Array.isArray(items) || (j.errors && j.errors.length)) return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API answer not understood' };
+  const positions = [];
+  for (const p of items) {
+    const g = String((p.market && p.market.collateralAsset && p.market.collateralAsset.address) || '').toLowerCase();
+    const s = p.state || {};
+    if (!ACTIONS.has(g)) continue;
+    if (!(Number(s.collateral) > 0 || Number(s.supplyAssets) > 0 || Number(s.borrowAssets) > 0)) continue;
+    positions.push({ id: String(p.market.marketId).toLowerCase(), garantie: { adr: g, symbole: ACTIONS.get(g), decimales: p.market.collateralAsset.decimals },
+      pret: { symbole: p.market.loanAsset.symbol, decimales: p.market.loanAsset.decimals },
+      garantieBrute: String(s.collateral ?? 0), garantieUsd: s.collateralUsd ?? null, preteBrut: String(s.supplyAssets ?? 0), preteUsd: s.supplyAssetsUsd ?? null,
+      detteBrute: String(s.borrowAssets ?? 0), detteUsd: s.borrowAssetsUsd ?? null, sante: p.healthFactor ?? null, versLiquidation: p.priceVariationToLiquidationPrice ?? null });
+  }
+  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', positions };
 }
 
 /** Un marche Morpho, LU sur la chaine : parametres, totaux, prix de l oracle. NON_LU si une seule lecture manque. */
@@ -222,6 +260,25 @@ export async function planRembourser({ rpc, compte, id, montant = null, tout = f
   if (autorise < besoin) appels.push({ to: p.loanToken, data: appelApprove(MORPHO_BLUE, besoin), value: '0x0', nom: 'allow Morpho to take at most this amount' });
   appels.push({ to: MORPHO_BLUE, data: tout ? appelRepayShares(p, pos.borrowShares, c) : appelRepayAssets(p, besoin, c), value: '0x0', nom: tout ? 'repay the whole debt on Morpho' : 'repay on Morpho' });
   return finaliser({ rpc, compte: c, appels, resume });
+}
+
+/** Retirer ce qui a ete PRETE : `montant` unites brutes, ou `tout: true` (par parts : le pret entier, interets compris).
+ *  ⛔ Borne par la liquidite du marche : ce qui est emprunte ne sort pas avant d etre rembourse — le refus donne le chiffre. */
+export async function planRetirerPret({ rpc, compte, id, montant = null, tout = false }) {
+  const marche = await lireMarche({ rpc, id });
+  const g = garde({ marche, compte }); if (g) return g;
+  const c = String(compte).toLowerCase(), p = marche.params;
+  const pos = await lirePosition({ rpc, marche, compte: c });
+  if (pos.etat !== 'LU') return nonMesure('your position could not be read');
+  if (pos.supplyShares === 0n) return refuse('nothing lent on this market');
+  const { supplyAssets, supplyShares } = marche.totaux;
+  const prete = supplyShares === 0n ? 0n : (pos.supplyShares * supplyAssets) / supplyShares; /* arrondi BAS : jamais promettre plus */
+  let M; try { M = tout ? prete : BigInt(montant); } catch (_) { return refuse('amounts are raw integer units'); }
+  const resume = { marche: marche.id, preteLu: prete.toString(), retire: M.toString(), tout: !!tout, liquiditeMarche: marche.liquidite.toString() };
+  if (M <= 0n || M > prete) return refuse('you can withdraw between 1 and ' + prete + ' raw units', resume);
+  if (M > marche.liquidite) return refuse('only ' + marche.liquidite + ' raw units can leave this market right now: the rest is borrowed until it is repaid', resume);
+  const appel = tout ? appelWithdrawShares(p, pos.supplyShares, c, c) : appelWithdraw(p, M, c, c);
+  return finaliser({ rpc, compte: c, appels: [{ to: MORPHO_BLUE, data: appel, value: '0x0', nom: 'withdraw what you lent on Morpho, to your own wallet' }], resume });
 }
 
 /** Retirer `montant` unites brutes de garantie — seulement si la dette restante tient sous le plafond (marge comprise). */

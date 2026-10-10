@@ -99,6 +99,10 @@ const item = (g, id, usd) => ({ marketId: id, lltv: '770000000000000000', listed
   collateralAsset: { address: g, symbol: 'X', decimals: 8 }, state: { supplyAssetsUsd: usd, borrowAssetsUsd: 1, liquidityAssetsUsd: 2, utilization: 0.5, borrowApy: 0.05, supplyApy: 0.04 } });
 const L = await B.lireMarchesMorpho({ fetchImpl: repApi([item(GOOGLC, ID, 10), item(INCONNU, '0x' + 'd1'.repeat(32), 999), item(GOOGLC, '0x' + 'e2'.repeat(32), 50)]) });
 ok(L.ok && L.marches.length === 2 && L.marches[0].offreUsd === 50 && L.marches.every((m) => m.garantie.symbole === 'GOOGLc'), 'G liste : garantie hors registre ecartee (l API n est pas crue sur parole), tri par offre');
+const prixTexte = '3526329343300000000000000000000000000';
+const Lp = await B.lireMarchesMorpho({ fetchImpl: repApi([{ ...item(GOOGLC, ID, 10), state: { ...item(GOOGLC, ID, 10).state, price: prixTexte } }]) });
+ok(Lp.ok && Lp.marches[0].prixOracle === prixTexte && Lp.marches[0].garantie.decimales === 8 && Lp.marches[0].margeBps === 7000,
+  'G prix de l oracle garde en TEXTE exact (37 chiffres), decimales de la garantie et marge transmises a l estimateur');
 const L500 = await B.lireMarchesMorpho({ fetchImpl: async () => ({ ok: false, status: 500 }) });
 ok(!L500.ok && L500.etat === 'NON_LU' && !('marches' in L500), 'G API en HTTP 500 -> NON_LU, pas de liste (jamais « aucun marche »)');
 const Lerr = await B.lireMarchesMorpho({ fetchImpl: repApi([], { errors: [{ message: 'x' }] }) });

@@ -81,6 +81,14 @@ try {
   const sl = l.etat === 'PRET' ? await executer(compte, l) : [];
   const m4 = await B.lireMarche({ rpc, id: ID }); const pos4 = await B.lirePosition({ rpc, marche: m4, compte });
   ok(l.etat === 'PRET' && sl.every((s) => s === '0x1') && pos4.supplyShares > 0n, '(5) preter 5 USDC : ' + l.etat + (l.pourquoi ? ' — ' + l.pourquoi : '') + ', parts de pret ' + pos4.supplyShares);
+  /* (5b) retirer TOUT ce qui a ete prete : les USDC reviennent (au moins 5 USDC - 1 unite d arrondi), parts a 0 */
+  const uAv = await solde(USDC, compte);
+  const rp = await B.planRetirerPret({ rpc, compte, id: ID, tout: true });
+  const srp = rp.etat === 'PRET' ? await executer(compte, rp) : [];
+  const m5 = await B.lireMarche({ rpc, id: ID }); const pos5 = await B.lirePosition({ rpc, marche: m5, compte });
+  const rendu = (await solde(USDC, compte)) - uAv;
+  ok(rp.etat === 'PRET' && srp.every((s) => s === '0x1') && pos5.supplyShares === 0n && rendu >= 5n * 10n ** 6n - 1n,
+    '(5b) retirer tout le pret : ' + rp.etat + (rp.pourquoi ? ' — ' + rp.pourquoi : '') + ', +' + rendu + ' USDC brut, parts restantes ' + pos5.supplyShares);
 
   const faux = await B.planPreter({ rpc, compte, id: '0x' + '12'.repeat(32), montant: 1n });
   ok(faux.etat === 'REFUSE', '(6) TEMOIN : id inexistant -> ' + faux.etat + ' (' + faux.pourquoi + ')');

@@ -529,12 +529,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcCote button{appearance:none;flex:1 1 0;border:0;background:transparent;color:var(--doux);font:inherit;font-weight:700;font-size:14px;padding:9px 4px;border-radius:9px;cursor:pointer}
 .bcCote button[aria-selected="true"][data-cote="buy"]{background:rgb(110 231 183 / .16);color:#6ee7b7}
 .bcCote button[aria-selected="true"][data-cote="sell"]{background:rgb(252 165 165 / .16);color:#fca5a5}
+.bcCote button[aria-selected="true"][data-banque]{background:rgb(var(--boutonRgb));color:var(--texte)} /* Bank : sans cette regle, rien ne montrait Borrow ou Lend choisi */
 .bcChamp{display:block;margin-top:10px}
 .bcChamp>span:first-child{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--doux);margin-bottom:4px}
 .bcChampIn{display:flex;align-items:center;gap:8px;background:rgb(var(--fondRgb) / .75);border:1px solid rgb(var(--accentRgb) / .28);border-radius:14px;padding:4px 6px 4px 14px}
 .bcChampIn:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgb(var(--accentRgb) / .18)}
 .bcChampIn input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--texte);font:inherit;font-size:20px;font-weight:700;padding:8px 0}
 .bcChampIn select{flex:0 0 auto;max-width:46%;background:rgb(var(--boutonRgb));color:var(--texte);border:1px solid var(--ligne);border-radius:10px;font:inherit;font-weight:700;font-size:13px;padding:8px 8px}
+.bcChampIn .bcUnite{flex:0 0 auto;color:var(--doux);font-weight:700;font-size:13px;padding:8px 8px 8px 0}
+.bcBanqueLigne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.bcBanqueLigne span{flex:1 1 160px;min-width:0}
+.bcBanqueLigne .bouton{width:auto;flex:0 0 auto;min-height:0;margin:0;padding:6px 12px;font-size:13px} /* .bouton = 100 % de large ailleurs : mesure 2026-10-10, 561 px par bouton, 3 rangees par marche */
 .bcTicket .bouton{margin-top:10px}
 .bcTicket .bcPre{margin:8px 0 0}
 /* ⛔ 2026-10-09 (capture de Phil) : « TokenizedBlo / ck » — `overflow-wrap:anywhere` coupait un mot au milieu dans une tuile de 120 px.
@@ -1972,12 +1976,41 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- la carte « Bot loop · Option A » de l onglet Brain est DEPLACEE ici au demarrage (meme element, pas une copie) -->
         <details class="bcBot"><summary>Bot loop — pay for a brain action</summary><div id="bcBotLoop"></div></details>
       </div>
+      <div class="bcVue" id="bc-bank">
+        <!-- 2026-10-10 (Phil : « commence le build TokenizedBank, lending / borrowing avec les units des tokenized assets ») : phase 1 sur les
+             marches Morpho Blue QUI EXISTENT sur Base (banque-morpho.js, routes /api/banque/marches, positions et plan). ⛔ Rien ne signe ici : la carte du plan
+             va dans le Chat, le plan est SIMULE avant d etre propose, et le wallet signe chaque etape. Un block en garantie : pas ouvert. -->
+        <p class="note" style="margin:0">Borrow USDC against a tokenized stock you hold, or lend USDC. It runs on Morpho, a lending protocol already live on Base. Only your wallet signs.</p>
+        <p class="bcSousTitre">Markets</p>
+        <ul class="bcListe" id="bcBanqueMarches"><li class="note">Reading…</li></ul>
+        <form onsubmit="return false" class="bcTicket" id="bcBanqueForm" autocomplete="off" hidden>
+          <div class="bcCote" role="tablist" aria-label="Borrow or lend">
+            <button type="button" role="tab" data-banque="emprunter" aria-selected="true">Borrow</button>
+            <button type="button" role="tab" data-banque="preter" aria-selected="false">Lend</button>
+          </div>
+          <p class="note" id="bcBanqueChoix" style="margin:8px 0 0"></p>
+          <label class="bcChamp" id="bcBanqueGarantieL"><span>Collateral</span>
+            <span class="bcChampIn"><input id="bcBanqueGarantie" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Collateral to deposit"><b class="bcUnite" id="bcBanqueGarantieU"></b></span>
+          </label>
+          <label class="bcChamp"><span id="bcBanqueMontantLib">You borrow</span>
+            <span class="bcChampIn"><input id="bcBanqueMontant" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Amount"><b class="bcUnite">USDC</b></span>
+          </label>
+          <!-- 2026-10-10 (Phil : « check stoxcredit.xyz et copie ce qui marche deja ») : l ESTIMATION sans wallet, au prix de l oracle du marche -->
+          <p class="note" id="bcBanqueEstim" style="margin:8px 0 0"></p>
+          <button type="submit" class="bouton" id="bcBanqueGo">Review</button>
+          <p class="note" id="bcBanqueNote" style="margin:6px 0 0"></p>
+          <p class="note" style="margin:8px 0 0">Risks: interest grows while a loan is open; if the stock falls to the liquidation price, your collateral is sold to repay the debt. When stock markets are closed, the oracle price can stay still. Lending markets are Morpho’s, not ours.</p>
+        </form>
+        <p class="bcSousTitre">Your positions</p>
+        <div id="bcBanquePositions"><p class="note">Connect your wallet to see them.</p></div>
+      </div>
 
       <div class="bcOnglets" role="tablist" aria-label="Control panel views">
         <button type="button" role="tab" data-bc="chat" aria-selected="true">Chat</button>
         <button type="button" role="tab" data-bc="market" aria-selected="false">Market</button>
         <button type="button" role="tab" data-bc="trade" aria-selected="false">Trade</button>
         <button type="button" role="tab" data-bc="brain" aria-selected="false">Brain</button>
+        <button type="button" role="tab" data-bc="bank" aria-selected="false">Bank</button>
       </div>
     </div>
     </dialog>
@@ -23671,7 +23704,180 @@ $('#bcAdr').addEventListener('click', async () => {
   setTimeout(() => { if (ad.dataset.adr === a) ad.textContent = a; }, 1600);
 });
 /* changer de vue REPEINT tout de suite (soldes, activite du block, cube) : sans cela la vue attendait le battement suivant */
-document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) { bcVue(b.getAttribute('data-bc')); try { bcRepeindre(); } catch (_) {} } });
+document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) => { const b = e.target.closest('[data-bc]'); if (b) { const v = b.getAttribute('data-bc'); bcVue(v); if (v === 'bank') void bcBanqueCharger(); try { bcRepeindre(); } catch (_) {} } });
+/* ══ 2026-10-10 — TOKENIZEDBANK, ONGLET « Bank » (phase 1 : marches Morpho Blue EXISTANTS, banque-morpho.js) ═══════════════════════
+ * Marches : /api/banque/marches (API Morpho) ; positions : /api/banque/positions (API Morpho, AFFICHAGE) ; chaque action passe par
+ *   /api/banque/plan, qui relit le marche et la position SUR LA CHAINE et SIMULE la sequence exacte avant PRET ; puis une carte du Chat
+ *   (comme le ticket Trade) et le wallet, etape par etape. ⛔ Rien n est signe ici. Une lecture ratee se DIT : jamais « aucun marche »
+ *   ni « aucune position » sur un echec. ⛔ Les montants des positions viennent de l API (nombres JSON) : AFFICHES ; le plan relit. */
+const bcBanque = { marches: null, lu: 0, choisi: null, sens: 'emprunter', positionsDe: null };
+const bcPct = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : (Number(x) * 100).toFixed(2) + ' %'); /* insecable : a 375 px « 5.54 » et « % » se separaient */
+const bcUsd = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : '$' + Math.round(Number(x)).toLocaleString('en-US'));
+async function bcBanqueCharger(force = false) {
+  const ul = $('#bcBanqueMarches');
+  if (force || !bcBanque.marches || Date.now() - bcBanque.lu > 300000) {
+    let r = null;
+    try { r = await (await fetch('/api/banque/marches', { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+    if (!r || r.ok !== true || !Array.isArray(r.marches)) {
+      ul.textContent = '';
+      ul.append(bcEl('li', { cls: 'note', text: 'Lending markets not read — ' + ((r && r.pourquoi) || 'the data could not be fetched') + '. Try again later.' }));
+      return;
+    }
+    bcBanque.marches = r.marches; bcBanque.lu = Date.now();
+  }
+  ul.textContent = '';
+  /* 2026-10-10 (copie de StoxCredit) : seulement les marches LISTES par Morpho — les autres sont des marches poussiere (0 a 97 $, taux
+   *   0,1 %) qu une personne prendrait pour une offre. Le nombre ecarte est DIT. */
+  const listes = bcBanque.marches.filter((mk) => mk.listeParMorpho === true), ecartes = bcBanque.marches.length - listes.length;
+  if (!listes.length) ul.append(bcEl('li', { cls: 'note', text: 'No listed lending market accepts a stock of our list right now.' }));
+  const pctLtv = (bps) => String(Number(bps.toFixed(1))) + ' %';
+  for (const mk of listes) {
+    const li = bcEl('li', { cls: 'bcBanqueLigne' });
+    const dispo = Number(mk.disponibleUsd), liq = Number(mk.lltv) / 1e16;
+    const etiquette = !Number.isFinite(dispo) ? 'liquidity not read' : dispo < 1 ? 'no liquidity' : dispo < 10 ? bcUsd(dispo) + ' available (low liquidity)' : bcUsd(dispo) + ' available';
+    li.append(bcEl('span', { text: mk.garantie.symbole + ' → ' + mk.pret.symbole + ' · borrow ' + bcPct(mk.apyEmprunt) + ' · lend ' + bcPct(mk.apyPret)
+      + ' · ' + etiquette + ' · you borrow up to ' + pctLtv(liq * (mk.margeBps || 7000) / 10000) + ' of the value, liquidated at ' + pctLtv(liq) }));
+    for (const [txt, sens] of [['Borrow', 'emprunter'], ['Lend', 'preter']]) {
+      const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: txt });
+      b.addEventListener('click', () => bcBanqueChoisir(mk, sens));
+      li.append(b);
+    }
+    ul.append(li);
+  }
+  if (ecartes > 0) ul.append(bcEl('li', { cls: 'note', text: ecartes + ' unlisted market' + (ecartes > 1 ? 's' : '') + ' not shown.' }));
+  void bcBanquePositions();
+}
+/** L ESTIMATION sans wallet (copie de StoxCredit) : valeur de la garantie au prix de l oracle (API), plafond (notre marge), LTV de la
+ *  position, prix de liquidation. Arithmetique EXACTE (BigInt) jusqu a l affichage. Indicatif : le plan relit le marche et simule. */
+function bcBanqueEstimer() {
+  const z = $('#bcBanqueEstim'), mk = bcBanque.choisi;
+  if (!z || !mk) return;
+  if (bcBanque.sens !== 'emprunter') { z.textContent = 'Lenders earn ' + bcPct(mk.apyPret) + ' (variable). What is borrowed cannot be withdrawn until it is repaid.'; return; }
+  const decG = Number(mk.garantie.decimales), decP = Number(mk.pret.decimales);
+  if (!mk.prixOracle || !/^\d+$/.test(mk.prixOracle) || !Number.isInteger(decG)) { z.textContent = 'The oracle price of this market was not read: no estimate. The plan reads it on chain.'; return; }
+  const g = enUnitesBrutes($('#bcBanqueGarantie').value.trim() || '0', decG), d = enUnitesBrutes($('#bcBanqueMontant').value.trim() || '0', decP);
+  if (g === null || d === null) { z.textContent = ''; return; }
+  const prix = BigInt(mk.prixOracle), lltv = BigInt(mk.lltv), marge = BigInt(mk.margeBps || 7000);
+  const unite = 10n ** BigInt(decG);
+  const prixUnite = (unite * prix) / 10n ** 36n; /* unites brutes de pret pour 1 action */
+  const morceaux = ['Oracle price: 1 ' + mk.garantie.symbole + ' = ' + bcUnites(prixUnite, decP) + ' ' + mk.pret.symbole + '.'];
+  if (g > 0n) {
+    const valeur = (g * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
+    morceaux.push('Collateral ≈ ' + bcUnites(valeur, decP) + ' ' + mk.pret.symbole + '; you can borrow up to ≈ ' + bcUnites(plafond, decP) + '.');
+    if (d > 0n && valeur > 0n) {
+      morceaux.push('Position LTV ' + (Number((d * 10000n) / valeur) / 100).toFixed(1) + ' %' + (d > plafond ? ' — above our limit: the plan will refuse it.' : '.'));
+      const liqUnite = (d * 10n ** 18n * unite) / (g * lltv); /* unites brutes de pret par action, au seuil de liquidation */
+      morceaux.push('Liquidated if 1 ' + mk.garantie.symbole + ' falls below ≈ ' + bcUnites(liqUnite, decP) + ' ' + mk.pret.symbole + '.');
+    }
+  }
+  z.textContent = morceaux.join(' ') + ' Estimate only.';
+}
+$('#bcBanqueGarantie').addEventListener('input', bcBanqueEstimer);
+$('#bcBanqueMontant').addEventListener('input', bcBanqueEstimer);
+function bcBanqueChoisir(mk, sens) {
+  bcBanque.choisi = mk; bcBanque.sens = sens;
+  const f = $('#bcBanqueForm'); f.hidden = false;
+  for (const b of f.querySelectorAll('[data-banque]')) b.setAttribute('aria-selected', String(b.getAttribute('data-banque') === sens));
+  $('#bcBanqueGarantieL').hidden = sens !== 'emprunter';
+  $('#bcBanqueGarantieU').textContent = mk.garantie.symbole;
+  $('#bcBanqueMontantLib').textContent = sens === 'emprunter' ? 'You borrow' : 'You lend';
+  $('#bcBanqueChoix').textContent = (sens === 'emprunter' ? 'Borrow ' + mk.pret.symbole + ' against ' + mk.garantie.symbole + ' (leave Collateral empty to borrow on what you already posted)'
+    : 'Lend ' + mk.pret.symbole + ' to people who post ' + mk.garantie.symbole + ' as collateral') + ' — Morpho market ' + mk.id.slice(0, 10) + '…';
+  $('#bcBanqueNote').textContent = '';
+  bcBanqueEstimer();
+  f.scrollIntoView({ block: 'nearest' });
+}
+$('#bcBanqueForm').addEventListener('click', (e) => { const b = e.target.closest('[data-banque]'); if (b && bcBanque.choisi) bcBanqueChoisir(bcBanque.choisi, b.getAttribute('data-banque')); });
+$('#bcBanqueForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const mk = bcBanque.choisi, note = $('#bcBanqueNote');
+  if (!mk) return;
+  const sens = bcBanque.sens, texteM = $('#bcBanqueMontant').value.trim(), texteG = $('#bcBanqueGarantie').value.trim();
+  const brutM = enUnitesBrutes(texteM, Number(mk.pret.decimales));
+  if (brutM === null || brutM <= 0n) { note.className = 'note wKo'; note.textContent = 'Type an amount of ' + mk.pret.symbole + '.'; return; }
+  let brutG = 0n, decG = null;
+  if (sens === 'emprunter' && texteG) {
+    note.className = 'note'; note.textContent = 'Reading ' + mk.garantie.symbole + '…';
+    try { decG = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { decG = null; }
+    if (decG === null) { note.className = 'note wKo'; note.textContent = 'The decimals of ' + mk.garantie.symbole + ' could not be read — try again.'; return; }
+    const v = enUnitesBrutes(texteG, decG);
+    if (v === null) { note.className = 'note wKo'; note.textContent = mk.garantie.symbole + ' has ' + decG + ' decimals: ' + texteG + ' is not an amount it can carry'; return; }
+    brutG = v;
+  }
+  note.className = 'note'; note.textContent = '';
+  void bcBanqueProposer({ mk, sens, brutM, brutG, decG,
+    libelle: sens === 'emprunter' ? 'Borrow ' + texteM + ' ' + mk.pret.symbole + (texteG ? ' against ' + texteG + ' ' + mk.garantie.symbole : ' on your posted ' + mk.garantie.symbole) : 'Lend ' + texteM + ' ' + mk.pret.symbole + ' (' + mk.garantie.symbole + ' market)' });
+});
+/** Une action de banque : plan (relu + simule par le serveur), carte du Chat, puis le wallet. `tout` : rembourser / retirer le pret entier. */
+async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = null, tout = false, libelle }) {
+  const m = bcMessage('You · bank', '', libelle);
+  bcVue('chat');
+  const planifier = async () => {
+    if (!(await bcAvecWallet(m, planifier))) return;
+    bcEtape(m, 'Building the plan — your position is read on chain and the exact calls are simulated from your wallet…');
+    const q = new URLSearchParams({ action: sens, id: mk.id, compte: String(compte).toLowerCase() });
+    if (sens === 'emprunter') { q.set('garantie', String(brutG)); q.set('emprunt', String(brutM)); }
+    else if (tout) q.set('tout', '1');
+    else q.set('montant', String(brutM));
+    let p;
+    try {
+      const r = await fetch('/api/banque/plan?' + q, { signal: AbortSignal.timeout(90000) });
+      p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute' } : await r.json();
+    } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched' }; }
+    if (!p || p.etat !== 'PRET') {
+      bcEtape(m, (p && p.etat === 'REFUSE' ? 'Refused: ' : 'Not measured: ') + String((p && p.pourquoi) || 'no answer').slice(0, 240) + ' Nothing was sent.', 'non');
+      bcBoutons(m, [['Try again', planifier, true]]);
+      return;
+    }
+    const rs = p.resume || {}, decP = Number(mk.pret.decimales);
+    if (sens === 'emprunter') {
+      let dg = decG;
+      if (dg === null) { try { dg = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dg = null; } }
+      if (rs.detteApres) bcEtape(m, 'Your debt after: ' + bcUnites(rs.detteApres, decP) + ' ' + mk.pret.symbole + ' (we cap it at ' + rs.marge + ').');
+      if (rs.prixLiquidation && rs.prixActuel && dg !== null) {
+        const enPret = (x) => Number(BigInt(x)) / 1e36 * 10 ** dg / 10 ** decP;
+        bcEtape(m, 'Liquidated if 1 ' + mk.garantie.symbole + ' falls below ' + enPret(rs.prixLiquidation).toFixed(2) + ' ' + mk.pret.symbole + ' (oracle now: ' + enPret(rs.prixActuel).toFixed(2) + ').');
+      }
+    }
+    bcEtape(m, 'Simulated on chain from your wallet: every step goes through.', 'oui');
+    bcBoutons(m, [['Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {
+      const s = await bcSigner(m, p.aSigner);
+      if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
+      bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      bcBanque.positionsDe = null; void bcBanquePositions(true);
+    }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
+  };
+  void planifier();
+}
+/** Les positions du wallet connecte (API Morpho, AFFICHAGE). Un echec se dit ; « aucune position » seulement sur une lecture reussie. */
+async function bcBanquePositions(force = false) {
+  const div = $('#bcBanquePositions');
+  if (!compte) { div.textContent = ''; div.append(bcEl('p', { cls: 'note', text: 'Connect your wallet to see them.' })); return; }
+  const c = String(compte).toLowerCase();
+  if (!force && bcBanque.positionsDe === c) return;
+  let r = null;
+  try { r = await (await fetch('/api/banque/positions?compte=' + c, { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+  div.textContent = '';
+  if (!r || r.ok !== true || !Array.isArray(r.positions)) { div.append(bcEl('p', { cls: 'note', text: 'Your positions were not read — ' + ((r && r.pourquoi) || 'try again later') + '.' })); return; }
+  bcBanque.positionsDe = c;
+  if (!r.positions.length) { div.append(bcEl('p', { cls: 'note', text: 'No lending or borrowing position on these markets.' })); return; }
+  for (const ps of r.positions) {
+    const mk = (bcBanque.marches || []).find((x) => x.id === ps.id) || { id: ps.id, garantie: ps.garantie, pret: ps.pret };
+    const d = bcEl('div', { cls: 'bcBanqueLigne' }), parts = [];
+    const g = BigInt(ps.garantieBrute || 0), dt = BigInt(ps.detteBrute || 0), pr = BigInt(ps.preteBrut || 0);
+    if (g > 0n) parts.push('collateral ' + bcUnites(g, ps.garantie.decimales) + ' ' + ps.garantie.symbole + ' (' + bcUsd(ps.garantieUsd) + ')');
+    if (dt > 0n) parts.push('debt ' + bcUnites(dt, ps.pret.decimales) + ' ' + ps.pret.symbole + (ps.sante ? ' · health ' + Number(ps.sante).toFixed(2) : '')
+      + (ps.versLiquidation !== null && ps.versLiquidation !== undefined ? ' · liquidated if ' + ps.garantie.symbole + ' falls ' + Math.abs(Number(ps.versLiquidation) * 100).toFixed(0) + ' %' : ''));
+    if (pr > 0n) parts.push('lent ' + bcUnites(pr, ps.pret.decimales) + ' ' + ps.pret.symbole);
+    d.append(bcEl('span', { text: ps.garantie.symbole + ' market · ' + parts.join(' · ') }));
+    const bouton = (txt, fn) => { const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: txt }); b.addEventListener('click', fn); d.append(b); };
+    if (dt > 0n) bouton('Repay all', () => bcBanqueProposer({ mk, sens: 'rembourser', tout: true, libelle: 'Repay all your ' + ps.pret.symbole + ' debt (' + ps.garantie.symbole + ' market)' }));
+    else if (g > 0n) bouton('Withdraw collateral', () => bcBanqueProposer({ mk, sens: 'retirer', brutM: g, libelle: 'Withdraw your ' + ps.garantie.symbole + ' collateral' }));
+    if (pr > 0n) bouton('Withdraw what I lent', () => bcBanqueProposer({ mk, sens: 'retirerpret', tout: true, libelle: 'Withdraw what you lent (' + ps.garantie.symbole + ' market)' }));
+    div.append(d);
+  }
+}
 /* les skins : le « + » ouvre la boutique (essai seulement — voir BC_SKINS) */
 $('#bcSkins').addEventListener('click', () => {
   const z = $('#bcBoutique'), ouvrir = z.hidden;
