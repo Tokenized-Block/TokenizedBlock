@@ -427,7 +427,7 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
      *   UnexpectedRevertBytes) — une pool lancee d un seul cote n a, cote ETH, que ce que les achats y ont mis (~988 E.T.FFB
      *   vendables, bloc ~52 437 600). Rendre NON_MESURE disait « non lu » ; on recote a 1/10, 1/100, 1/1000 : si l un passe,
      *   la pool est trop fine pour CE montant et on le DIT (REFUSE). Si aucun ne passe, NON_MESURE comme avant. */
-    const fraction = await coteAPlusPetit((mt) => lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: mt }) }, 'latest']), netAchat);
+    const fraction = estRevertDeChaine(e) ? await coteAPlusPetit((mt) => lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: mt }) }, 'latest']), netAchat) : 0;
     if (fraction) return { etat: 'REFUSE', poolTropFine: true, fractionCotee: fraction, pourquoi: 'this pool is too thin for this amount: it quotes 1/' + fraction + ' of it, not all of it — try a much smaller amount' };
     return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
   }
@@ -701,6 +701,14 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
  *   sera pas trouvee — et ca ne veut pas dire qu elle n existe pas, ca veut dire qu on n a pas
  *   regarde. Le resultat ne doit jamais se lire « il n y a pas de pool ».
  */
+/** L echec d une lecture est-il un REFUS DE LA CHAINE (revert) ? Une panne de noeud (429, debit, delai, reseau) n en est PAS un.
+ *  ⛔ 2026-10-10 (revue Claude de 63006c0) : la sonde partait sur N IMPORTE QUEL echec ; un 429 sur le montant entier puis un noeud
+ *    retabli pour 1/10 faisait dire « this pool is too thin » - accuser le marche pour NOTRE lecture ratee (prouve : REFUSE
+ *    poolTropFine sur un 429). Seul un revert ouvre la sonde ; un message qui parle de debit n est jamais un revert. */
+export function estRevertDeChaine(e) {
+  const msg = String((e && e.message) || e || '');
+  return /revert/i.test(msg) && !/rate|limit|429|too many|timeout|timed out|capacity|unavailable|busy/i.test(msg);
+}
 /** Une pool qui revert sur m cote-t-elle m/10, m/100 ou m/1000 ? Rend le diviseur qui cote (> 0), sinon 0.
  *  ⛔ Seulement apres un ECHEC (zero lecture de plus sur le chemin heureux) ; au plus 3 lectures, en file, arret au premier. */
 export async function coteAPlusPetit(lireQuote, m) {
@@ -767,7 +775,7 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
     for (let i = 0; i < essais.length; i += 1) {
       const e = essais[i];
       /* les gabarits de prix (CLES_PRIX, sans hook) ne sont pas sondes : leur absence dit l absence, et le plan « rien » garde ses 4 lectures */
-      if (issues[i].ok || CLES_PRIX.includes(e.k)) continue;
+      if (issues[i].ok || CLES_PRIX.includes(e.k) || !estRevertDeChaine(issues[i].erreur)) continue;
       const fraction = await coteAPlusPetit((mt) => rpc('eth_call', [{ to: Q, data: encodeQuote({ cle: e.cle, zeroForOne: e.zeroForOne, montant: mt }) }, 'latest']), m);
       if (fraction) {
         return { etat: 'REFUSE', poolTropFine: true, fractionCotee: fraction, cle: e.cle, zeroForOne: e.zeroForOne, quote: null,

@@ -82,6 +82,8 @@ try {
   console.log('    plan :', pf.etat, String(pf.pourquoi || pf.etape || '').slice(0, 120));
   ok(['PRET', 'APPROBATIONS'].includes(pf.etat) || (pf.etat === 'REFUSE' && /not enough|approval|balance|insufficient/i.test(String(pf.pourquoi))),
     'IB022 -> NVDAc : forme acceptee, jambe 1 (vente sur V8) cotee et simulee jusqu au solde — ' + pf.etat
+      /* 2026-10-10 : la RAISON part dans le libelle - un KO en serie la jetait (le runner n imprime que les lignes KO) */
+      + (pf.etat === 'REFUSE' ? ' (' + String(pf.pourquoi || '').slice(0, 140) + ')' : '')
     + (pf.etat === 'REFUSE' ? ' ; jambe Aerodrome NON atteinte avec un compte vide (FR3 de test-r4 la juge)' : ''));
   if (pf.resume) ok(r.jambesPayantes === 1 && r.fraisParHook === true && BigInt(r.fraisBpsJambe1 || 0) === 0n && BigInt(r.fraisBpsJambe2 || 0) === 0n,
     'UN frais par lot, celui du hook V8 (jambe 1), routeur 0 sur les deux jambes');
