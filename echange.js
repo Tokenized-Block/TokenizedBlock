@@ -423,6 +423,12 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     const r = await lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: netAchat }) }, 'latest']);
     quote = BigInt('0x' + String(r).slice(2, 66));
   } catch (e) {
+    /* ⛔⛔ 2026-10-10 (Grok, vente E.T.FFB du hook 7030) : la pool a REPONDU NotEnoughLiquidity (0x7a5ed734, enveloppe dans
+     *   UnexpectedRevertBytes) — une pool lancee d un seul cote n a, cote ETH, que ce que les achats y ont mis (~988 E.T.FFB
+     *   vendables, bloc ~52 437 600). Rendre NON_MESURE disait « non lu » ; on recote a 1/10, 1/100, 1/1000 : si l un passe,
+     *   la pool est trop fine pour CE montant et on le DIT (REFUSE). Si aucun ne passe, NON_MESURE comme avant. */
+    const fraction = await coteAPlusPetit((mt) => lire('eth_call', [{ to: Q, data: encodeQuote({ cle, zeroForOne, montant: mt }) }, 'latest']), netAchat);
+    if (fraction) return { etat: 'REFUSE', poolTropFine: true, fractionCotee: fraction, pourquoi: 'this pool is too thin for this amount: it quotes 1/' + fraction + ' of it, not all of it — try a much smaller amount' };
     return { etat: 'NON_MESURE', pourquoi: 'the price could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
   }
   if (quote <= 0n) return { etat: 'REFUSE', pourquoi: 'the pool returns nothing for this amount' };
@@ -695,6 +701,20 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
  *   sera pas trouvee — et ca ne veut pas dire qu elle n existe pas, ca veut dire qu on n a pas
  *   regarde. Le resultat ne doit jamais se lire « il n y a pas de pool ».
  */
+/** Une pool qui revert sur m cote-t-elle m/10, m/100 ou m/1000 ? Rend le diviseur qui cote (> 0), sinon 0.
+ *  ⛔ Seulement apres un ECHEC (zero lecture de plus sur le chemin heureux) ; au plus 3 lectures, en file, arret au premier. */
+export async function coteAPlusPetit(lireQuote, m) {
+  for (const d of [10n, 100n, 1000n]) {
+    const mt = BigInt(m) / d;
+    if (mt <= 0n) break;
+    try {
+      const r = await lireQuote(mt);
+      if (BigInt('0x' + String(r).slice(2, 66)) > 0n) return Number(d);
+    } catch (_) { /* plus petit encore */ }
+  }
+  return 0;
+}
+
 export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates = CLES_PRIX } = {}) {
   const Q = QUOTEUR[Number(chaine)];
   const adr = (x) => String(x || '').toLowerCase();
@@ -742,6 +762,19 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
     }
   }
   if (!best) {
+    /* ⛔⛔ 2026-10-10 (Grok, vente E.T.FFB) : une pool qui revert a CETTE taille mais cote une fraction n est pas « introuvable »,
+     *   elle est trop fine : REFUSE nomme. Sondes en ordre de liste, seulement sur les candidats qui ont LEVE, arret au premier. */
+    for (let i = 0; i < essais.length; i += 1) {
+      const e = essais[i];
+      /* les gabarits de prix (CLES_PRIX, sans hook) ne sont pas sondes : leur absence dit l absence, et le plan « rien » garde ses 4 lectures */
+      if (issues[i].ok || CLES_PRIX.includes(e.k)) continue;
+      const fraction = await coteAPlusPetit((mt) => rpc('eth_call', [{ to: Q, data: encodeQuote({ cle: e.cle, zeroForOne: e.zeroForOne, montant: mt }) }, 'latest']), m);
+      if (fraction) {
+        return { etat: 'REFUSE', poolTropFine: true, fractionCotee: fraction, cle: e.cle, zeroForOne: e.zeroForOne, quote: null,
+          essayees: liste.length, cotees,
+          pourquoi: 'this pool is too thin for this amount: it quotes 1/' + fraction + ' of it, not all of it — try a much smaller amount' };
+      }
+    }
     return { etat: 'NON_MESURE', cle: null, zeroForOne: null, quote: null,
       essayees: liste.length, cotees,
       pourquoi: 'no v4 pool among the ' + liste.length + ' tried combinations quoted this pair at this '
