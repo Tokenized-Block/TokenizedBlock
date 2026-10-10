@@ -9,7 +9,8 @@
  *   PEXRA/o1) une fenetre ratee est RELUE sur place ; une fois complete, la couverture n est jamais remise a zero. (X1-X2) idem
  *   pour /api/blocks-routeur (l autre moitie de sourcesTbLues()).
  * ⛔ PORTABLE LF/CRLF : chemins par pathToFileURL / fileURLToPath ; motifs de mutants sur une ligne.
- * ⛔ TEMOINS NEGATIFS : copie non mutee verte, puis chaque mutant DOIT rougir. */
+ * ⛔ TEMOINS NEGATIFS : copie non mutee verte, puis chaque mutant DOIT rougir.
+ * serie-delai-s: 900 — 243 s SEUL (2026-10-10), plus de 300 s sous la charge d une serie a 3 : outils/serie.mjs lit cette ligne. */
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import http from 'node:http';

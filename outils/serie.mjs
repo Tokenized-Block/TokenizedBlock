@@ -19,12 +19,18 @@ async function un(f) {
      *   tue a 300 s, il sortait « ROUGE (code null) » a chaque serie — un faux rouge qui apprend a ignorer la liste. Un test qui
      *   appelle une URL https a 900 s ; un test TUE par le delai est nomme DELAI (toujours compte rouge : un blocage n est pas cache). */
     let tue = false;
-    const reseau = /fetch\(\s*['"`]https:|['"`]https:\/\/[a-z0-9.-]+\.(org|com|space|io)/.test(fs.readFileSync(path.join(DIR, f), 'utf8'));
-    const garde = setTimeout(() => { tue = true; try { p.kill(); } catch (_) {} }, reseau ? 900000 : 300000);
+    const texte = fs.readFileSync(path.join(DIR, f), 'utf8');
+    const reseau = /fetch\(\s*['"`]https:|['"`]https:\/\/[a-z0-9.-]+\.(org|com|space|io)/.test(texte);
+    /* ⛔ 2026-10-10 : test-graine-nos-blocks-r9b (90 assertions, 30 mutants) prend 243 s SEUL et depassait 300 s sous charge — meme
+     *   faux rouge. Un banc long DECLARE son delai dans son propre fichier (« serie-delai-s: N », 60 a 1800) : le runner ne garde
+     *   aucune liste de noms qui deriverait. Sans declaration : 300 s, ou 900 s s il appelle une URL https. */
+    const declare = /serie-delai-s:\s*(\d+)/.exec(texte);
+    const delaiS = declare && Number(declare[1]) >= 60 && Number(declare[1]) <= 1800 ? Number(declare[1]) : (reseau ? 900 : 300);
+    const garde = setTimeout(() => { tue = true; try { p.kill(); } catch (_) {} }, delaiS * 1000);
     p.stdout.on('data', (d) => { sortie += d; }); p.stderr.on('data', (d) => { sortie += d; });
     p.on('close', (code) => {
       clearTimeout(garde); faits += 1;
-      if (code !== 0) rouges.push({ f, code: tue ? 'DELAI ' + (reseau ? 900 : 300) + ' s' + (reseau ? ', reseau' : '') : code, ko: sortie.split('\n').filter((l) => /^\s*KO|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
+      if (code !== 0) rouges.push({ f, code: tue ? 'DELAI ' + delaiS + ' s' + (declare ? ', declare' : reseau ? ', reseau' : '') : code, ko: sortie.split('\n').filter((l) => /^\s*KO|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
       ok();
     });
   });
