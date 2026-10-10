@@ -27,6 +27,7 @@
 //      la cle ne traverse QUE `cdp-jwt.js`, elle n est jamais rendue, jamais journalisee, et aucune
 //      reponse HTTP ne la contient — meme en cas d erreur. Sans elle, la route REFUSE en nommant ce
 //      qui manque ; elle ne fabrique jamais d URL de secours.
+import { pauseNosBlocks, routeurEnchaine } from './rythme-fond.js';
 import { createServer } from 'node:http';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'node:fs';
@@ -1516,6 +1517,7 @@ function rattraperBlocksRouteur() {
       for (let k = 0; k < 40; k += 1) {
         await consommateurArchive.run('fond routeur', () => etendreBlocksRouteur());
         if (routeurEtat.ratees || routeurEtat.tete === null || routeurEtat.tete - routeurEtat.jusqua <= 0) break;
+        if (!routeurEnchaine(archiveEpuisee())) break; /* 2026-10-10 : budget epuise, un tour par declenchement (rythme-fond.js) */
         await new Promise((ok) => setTimeout(ok, 1500));
       }
     } catch (e) { /* on reessaiera au prochain tour */ }
@@ -1690,7 +1692,7 @@ function rattraperNosBlocks() {
         + ' · ' + nosBlocksEtat.blocks.size + ' block(s) a nous');
       return;
     }
-    setTimeout(pas, 4000).unref?.();
+    setTimeout(pas, pauseNosBlocks(archiveEpuisee())).unref?.(); /* 2026-10-10 : 5 min si le budget d archive est epuise */
   };
   setTimeout(pas, 1500).unref?.();
 }
@@ -3804,6 +3806,9 @@ console.log('[xmtp] ' + xmtpServis + ' fichier(s) servis, ' + xmtpRefuses + ' re
  * <!--og:debut-->…<!--og:fin--> dit le SYMBOLE du block et montre SA face gravee (/face/0x….png) — sinon l image
  * generique : jamais une face inventee. Lecture seule, bornee a 2,5 s (un robot d apercu n attend pas), cachee. */
 const apercusBlocs = new Map();
+/* 2026-10-10 : /api/prix-usd fusionne les requetes identiques en vol (une promesse par adresse, retiree a la reponse) */
+const prixUsdEnVol = new Map();
+let prixUsdFusions = 0;
 const prixUsdCache = new Map();
 const htmlAttr = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 async function apercuBlock(adr) {
@@ -4096,10 +4101,12 @@ function traiterRequete(req, res) {
      *     0,32 s et 0,53 s, donc je n ai PAS de mutisme a leur reprocher et je ne les touche pas
      *     sur une symetrie. Nomme ici pour que le prochain qui pose une borne ailleurs sache
      *     qu il lui faut d abord ce verrou. */
-    let repondu = false, borneFaits = null;
+    let repondu = false, borneFaits = null, libererVol = null, monVol = null;
     const repondre = (o) => {
       if (repondu) return;
       repondu = true;
+      /* 2026-10-10 : la reponse du meneur est aussi celle des requetes identiques arrivees pendant son vol */
+      if (libererVol) { if (prixUsdEnVol.get(adr) === monVol) prixUsdEnVol.delete(adr); const l = libererVol; libererVol = null; l(o); }
       /* ⛔ LE MINUTEUR SE DESARME ICI, PARCE QUE C EST LA SEULE SORTIE. Le desarmer dans chaque
        *   branche serait cinq endroits a ne pas oublier ; ici c est un seul, et il est sur le
        *   chemin de TOUTES. Un `setTimeout` laisse pendant retient le handler pour rien. */
@@ -4109,6 +4116,13 @@ function traiterRequete(req, res) {
     if (!admise) { repondre({ ok: false, pourquoi: 'not a pair currency of this app' }); return; }
     const c = prixUsdCache.get(adr);
     if (c && Date.now() - c.t < 300000) { repondre(c.r); return; }
+    /* ⛔ 2026-10-10 (budget d archive epuise, /api/prix-usd 4 567 refus dans refusParQui) : les requetes IDENTIQUES (meme adresse)
+     *   arrivees pendant qu une lecture est en vol ne relancent plus DexScreener + faitsDeLaPool (lectures d archive) : elles
+     *   attendent la reponse du meneur et rendent la MEME. Rien n est garde apres la reponse (le cache reste celui d avant). */
+    const enVol = prixUsdEnVol.get(adr);
+    if (enVol) { prixUsdFusions += 1; enVol.then((o) => repondre(o)); return; }
+    monVol = new Promise((ok) => { libererVol = ok; });
+    prixUsdEnVol.set(adr, monVol);
     fetch('https://api.dexscreener.com/tokens/v1/base/' + adr, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } })
       .then((x) => (x.ok ? x.json() : Promise.reject(new Error('HTTP ' + x.status))))
       .then((j) => {
@@ -5133,6 +5147,8 @@ function traiterRequete(req, res) {
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
       /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
       archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
+      /* 2026-10-10 : requetes /api/prix-usd identiques fusionnees depuis le demarrage (en memoire) */
+      prixUsdFusions,
       /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */
       ...(ESSAI_SRV.actif ? { essai: { rpc: ESSAI_SRV.rpc } } : {}) }));
     return;
