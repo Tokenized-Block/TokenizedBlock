@@ -304,7 +304,13 @@ export const ACTIONS_COINBASE = [
    * ⛔⛔ SEc ET SONYc RESTENT DEHORS, MALGRE 24 987 USDC CHACUNE : sur fork (bloc 52 395 433), le plan d achat est PRET et le swap
    *     REVERTE « Too little received » — a 500, 100 ET 10 USDC. Le plan Aerodrome n est pas simule ; son minimum vient du prix
    *     spot, et la liquidite pres du spot de ces deux pools ne le tient pas. Les ajouter = un Buy « PRET » qui coute du gaz pour
-   *     un echec. Elles entreront quand le plan sera simule (ou leur pool remesuree). */
+   *     un echec. Elles entreront quand le plan sera simule (ou leur pool remesuree).
+   * ⛔⛔ 2026-10-10 18:05 UTC — REMESURE (fork base-anvil, bloc 52 432 772, banc-marche-actions-fork-20261004) : SONYc ENTRE. Sa pool
+   *     a change (liquidity() 280 047 788 329 814, contre ~5 000 pour les autres) : achat USDC 9,9 bps, achat ETH, revente USDC et
+   *     ETH, et paiement d un block (route 4 ter) EXECUTES sans revert. SEc reste dehors (achat USDC REVERTE encore).
+   *   ⚠️ ET LA MEME MESURE ACCUSE CE LOT : sur les 12 actions a pool ts=1 de la table, 11 donnent un achat USDC PRET dont le swap
+   *     REVERTE (ARMc SKHYc WRDc BIDUc HSAIc INFYc NIOc NVOc PDDc SAPc VALEc ; seule BILIc passe). Le remede est la simulation du
+   *     plan Aerodrome (en cours, Grok) — pas de les retirer ici : sans la table, le planificateur trouverait la meme pool. */
   { symbole: 'BIDUc', nom: 'Baidu', adr: '0xb200000000000000000000d2b7d9aee52f6c6bef' },
   { symbole: 'BILIc', nom: 'Bilibili', adr: '0xb200000000000000000000ca7c6d1438e7245eb6' },
   { symbole: 'HSAIc', nom: 'Hesai Group', adr: '0xb200000000000000000000f3049f4aa834b23b64' },
@@ -314,6 +320,8 @@ export const ACTIONS_COINBASE = [
   { symbole: 'PDDc', nom: 'PDD Holdings', adr: '0xb200000000000000000000c8a7223510467d8563' },
   { symbole: 'SAPc', nom: 'SAP', adr: '0xb200000000000000000000da6f64c306234127e0' },
   { symbole: 'VALEc', nom: 'Vale', adr: '0xb20000000000000000000063376b142c0764b489' },
+  /* 2026-10-10 : adresse copiee de la reponse de l emetteur (api.coinbase.com/v1/tokenized-stocks, total_supply 1240) */
+  { symbole: 'SONYc', nom: 'Sony Group', adr: '0xb200000000000000000000a26326a922ffa87f6c' },
   /* ⛔⛔ 2026-10-03 (fondateur, « Oui, les 21 en Soon ») : LES 21 AUTRES ACTIONS DE L EMETTEUR entrent au registre pour
    *   l AFFICHAGE — la regle du 2026-09-27 (« supply nulle = dehors ») est levee pour l affichage SEULEMENT, jamais pour un
    *   achat : sans marche lu, pas de Buy ; sans contrat qui les admet, Create les montre « opens with our next contract ».

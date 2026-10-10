@@ -40,9 +40,12 @@ export const POOLS_ACTIONS_AERODROME = new Map([
   ['0xb2000000000000000000008d5328e9208773dc58', { symbole: 'NVOc', pool: '0xc1ba39d668f14eee2462ca5877402e4a7c4d1f34', tickSpacing: 1, usdcMesure: 24987 }],
   ['0xb200000000000000000000c8a7223510467d8563', { symbole: 'PDDc', pool: '0x84608be6d655ee05032303fe7f0d6f3a51c2cf51', tickSpacing: 1, usdcMesure: 24987 }],
   ['0xb200000000000000000000da6f64c306234127e0', { symbole: 'SAPc', pool: '0x21313a06b7f8ed38d8bc1fb8be2fbd847634a6ec', tickSpacing: 1, usdcMesure: 24987 }],
-  /* ⛔ SEc (0x0274…4547) et SONYc (0x26dd…6fdc) NE SONT PAS dans cette table : 24 987 USDC chacune, mais l achat reverte sur fork
-   *   (« Too little received » des 10 USDC) — profondeur affichee n est pas profondeur pres du prix. Voir paires.js. */
+  /* ⛔ SEc (0x0274…4547) N EST PAS dans cette table : 25 397 USDC, mais l achat reverte sur fork (« Too little received » des
+   *   10 USDC le 09, et encore le 10 au bloc 52 432 772) — profondeur affichee n est pas profondeur pres du prix. Voir paires.js. */
   ['0xb20000000000000000000063376b142c0764b489', { symbole: 'VALEc', pool: '0x0f48336b76ee52fa6bb19edf5af358529df57574', tickSpacing: 1, usdcMesure: 24987 }],
+  /* 2026-10-10 (bloc 52 432 862, base-rpc.publicnode.com, getPool(USDC, SONYc, 1) ; puis fork bloc 52 432 772) : SONYc ENTRE —
+   *   liquidity() 280 047 788 329 814 ; achat, revente et paiement d un block EXECUTES sur fork. Voir paires.js. */
+  ['0xb200000000000000000000a26326a922ffa87f6c', { symbole: 'SONYc', pool: '0x26dd2ac81ea9a212afc84848893edc21c5a76fdc', tickSpacing: 1, usdcMesure: 25423 }],
 ]);
 
 /** Une ligne de marche (DexScreener) avec la pool d achat de l action si la table la connait et que la ligne pointe

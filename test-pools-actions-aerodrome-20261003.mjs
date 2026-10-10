@@ -28,12 +28,15 @@ const lnv = { adr: '0xb20000000000000000000078ee7ce2fe4908108c', dex: 'aerodrome
 ok(T.avecPoolAction(lnv) === lnv, 'deja sur la bonne pool : meme objet, rien de recopie');
 /* 2026-10-09 : 12 -> 24 — le lot @base du jour (pools tickSpacing 1 a ~25 000 USDC ; onze mesurees vides a 20:45 UTC,
  *   approvisionnees a 21:08 UTC). SEc et SONYc DEHORS : achat PRET qui reverte sur fork (« Too little received »). */
-ok(T.POOLS_ACTIONS_AERODROME.size === 24 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
-  '24 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
+/* 2026-10-10 : 24 -> 25 — SONYc entre (pool remesuree : achat, revente et paiement d un block executes sur fork, bloc 52 432 772) ; SEc reste dehors. */
+ok(T.POOLS_ACTIONS_AERODROME.size === 25 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
+  '25 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
 const TS1 = [...T.POOLS_ACTIONS_AERODROME.values()].filter((x) => x.tickSpacing === 1).map((x) => x.symbole).sort().join(' ');
-ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc NIOc NVOc PDDc SAPc SKHYc VALEc WRDc', 'les douze du 2026-10-09 portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
-ok(![...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SEc' || x.symbole === 'SONYc')
-  && !ACTIONS_COINBASE.some((a) => a.symbole === 'SEc' || a.symbole === 'SONYc'), 'SEc et SONYc absents (table ET registre) : leur achat reverte sur fork');
+ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc NIOc NVOc PDDc SAPc SKHYc SONYc VALEc WRDc', 'les douze du 2026-10-09 et SONYc (2026-10-10) portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
+ok(![...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SEc')
+  && !ACTIONS_COINBASE.some((a) => a.symbole === 'SEc'), 'SEc absente (table ET registre) : son achat reverte sur fork (le 09 et encore le 10, bloc 52 432 772)');
+ok([...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SONYc') && ACTIONS_COINBASE.some((a) => a.symbole === 'SONYc'),
+  'SONYc presente (table ET registre) : achat, revente et paiement d un block executes sur fork le 2026-10-10');
 ok([...T.POOLS_ACTIONS_AERODROME.keys()].every((a) => ACTIONS_COINBASE.some((x) => bas(x.adr) === a)), 'chaque cle est une action du registre');
 
 /* B */
