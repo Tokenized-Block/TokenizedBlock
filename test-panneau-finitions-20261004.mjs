@@ -219,7 +219,7 @@ ok(/const carte = \$\('#bBotLoopCarte'\), niche = \$\('#bcBotLoop'\); if \(carte
 ok(!bcSrc.includes("choix.push([sa, 'for ' + st.symbole])") && !bcSrc.includes('if (!achat && !ACTIONS_PAR_ADR.has(a)) {'),
   'C2 vente d un block : le ticket ne propose PLUS les actions Aerodrome (un franchissement signe appel par appel s arretait en USDC)');
 /* la recherche d un block */
-ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /const j = bcResoudre\(v\);\n\s+if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
+ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /let j = bcResoudre\(v\);/.test(html) && /if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html) /* 2026-10-10 : repli sur /api/chercher entre les deux */,
   'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');
 ok(/if \(compte2\.get\(k\) > 1\) opts\.push\(\[String\(l\.adr\)\.toLowerCase\(\),/.test(html) && /dl\.append\(bcEl\('option', \{ value: v, label: lib \}\)\);/.test(html),
   'C2 recherche : un symbole porte par plusieurs blocks est propose par son ADRESSE ; les propositions sont posees en attributs, jamais en HTML');

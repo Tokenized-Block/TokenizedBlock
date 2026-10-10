@@ -114,7 +114,7 @@ ok(/if \(deLAgent\) bcBoutons\(m, \[\['I checked the address — prepare it', pr
 ok(/if \(solde < BigInt\(montant\)\)/.test(html) && /if \(destinataire === jeton\.adr\)/.test(html), 'envoi : le solde est relu avant tout, et le jeton lui-meme comme destinataire est refuse');
 const iReg = bcSrc.indexOf('const reg = registre.find('), iMk = bcSrc.indexOf('const trouves = [...marcheParAdr.values()]');
 ok(iReg > 0 && iMk > iReg && /if \(trouves\.length > 1\) return \{ ok: false/.test(bcSrc), 'symboles : le registre (devises, actions) passe AVANT les blocks du Market ; un symbole porte par plusieurs blocks est refuse');
-ok(/tacheAutorisee\('trade_tblock', window\.__TB_BRAIN_SNAPSHOT__ \|\| \{\}\)/.test(bcSrc) && /if \(!g\.ok\) return;/.test(bcSrc), 'un echange qui touche le block passe la porte du cerveau ; refuse = aucun plan');
+ok(/tacheAutorisee\('trade_tblock', snapMoi \|\| \{\}\)/.test(bcSrc) && /const snapMoi = bcSnapDe\(moi\);/.test(bcSrc) /* 2026-10-10 : l instantane DU block, jamais celui d un autre */ && /if \(!g\.ok\) return;/.test(bcSrc), 'un echange qui touche le block passe la porte du cerveau ; refuse = aucun plan');
 ok(/fetch\('\/api\/rails\/plan\?de='/.test(bcSrc) && /envoyerDepuisWallet\(\{ eth: window\.ethereum, rpc, chaineAttendue: CHAINE, compte,/.test(bcSrc), 'le plan vient du planificateur du serveur ; la signature passe par le wallet de la personne');
 ok(!/[?&]s=' \+|'\?s='/.test(bcSrc) && /bcApi\('\/api\/panel\/commandes', \{ s: bc\.session/.test(bcSrc), 'la session de telecommande voyage dans le CORPS des requetes, jamais dans une URL');
 ok(/class="bcComposer"/.test(html) && /class="bcEnvoyer"/.test(html) && /\.bcComposer:focus-within\{/.test(html), 'la barre de commande : un champ et son bouton dans un meme cadre');

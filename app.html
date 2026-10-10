@@ -8984,6 +8984,13 @@ async function montrerEmbedDex({ base, src, perime = null }, { frais = false } =
   };
   const charger = () => {
     panne.hidden = true; frame.hidden = false; if (cadre) cadre.style.aspectRatio = '16/10';
+    /* 2026-10-10 re-QA : 'load' SE DECLENCHE alors que DexScreener reste sur son propre 'Loading pair...' (page d un autre domaine : son
+     *   contenu ne se lit pas) - le delai ne partait donc jamais. Secours qui ne depend PAS de l iframe : le lien, toujours a cote du cadre. */
+    try {
+      let lien = document.getElementById('pPnlDexLien');
+      if (!lien && cadre && cadre.after) { lien = document.createElement('a'); lien.id = 'pPnlDexLien'; lien.className = 'note'; lien.target = '_blank'; lien.rel = 'noopener'; lien.style.display = 'inline-block'; lien.style.marginTop = '4px'; cadre.after(lien); }
+      if (lien) { lien.href = base; lien.textContent = 'Chart stuck on \u201cLoading pair\u201d? Open DexScreener \u2197'; lien.hidden = false; }
+    } catch (_) { /* le cadre reste */ }
     if (frame.getAttribute('src') !== src) {
       let charge = false; frame.addEventListener('load', () => { charge = true; }, { once: true });
       frame.src = src;
@@ -9483,6 +9490,9 @@ function amenerEnVue(el) {
 
 async function ouvrirProfil(adr, sym, opts) {
   if (!ADRESSE.test(String(adr || ''))) return;
+  /* 2026-10-10 re-QA (Grok Super) : le panneau restait sur DJTc pendant que le profil montrait IB022 (Find, liste Blocks). Panneau OUVERT :
+   *   il suit le block ouvert. Ferme : rien ne change (le choix du cerveau n est pas touche dans le dos de la personne). */
+  try { const pop = $('#bcPop'); if (pop && pop.open && !(brainAdr && adrBrainEq(brainAdr, adr))) { choisirBrain(adr); bcRepeindre(); } } catch (_) { /* le profil s ouvre quand meme */ }
   if ($('#pePremier')) $('#pePremier').hidden = true;
   const moi = ++jetonProfil;
   const perime = () => moi !== jetonProfil;
@@ -22036,6 +22046,10 @@ async function bcInterroger() {
  *   l onglet Market disait MARKET UNREAD (bandeNeurone range une phase vivante sans marche lu en 'market'). Ces deux fonctions DISENT :
  *   un marche non lu = on attend sa lecture (jamais 'accepts') ; un plan = Ready / Not measured / Refused, avant sa raison. */
 function bcMarcheLue(snap) { const mk = snap && snap.marche; return !!mk && (mk.etatVie === 'LUE' || (typeof mk.vie === 'number' && Number.isFinite(mk.vie))); }
+/* 2026-10-10 re-QA (IB022 : 'Its brain (calm) accepts.' avec Price et Liquidity a '-') : l instantane global du cerveau pouvait etre
+ *   celui d un AUTRE block (le panneau ne suivait pas le block ouvert) - on jugeait l humeur d hier sur le marche d un autre. Un
+ *   instantane ne juge QUE le block dont il porte l adresse ; sinon : pas d instantane, donc 'waiting for the market read'. */
+function bcSnapDe(adr, s = window.__TB_BRAIN_SNAPSHOT__) { return s && adr && String(s.address || '').toLowerCase() === String(adr).toLowerCase() ? s : null; }
 function bcLigneEtatPlan(p) {
   const raison = String((p && p.pourquoi) || '').slice(0, 220);
   if (p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS')) return 'Ready \u2014 the plan is built. Check it, then sign in your wallet.';
@@ -22168,10 +22182,11 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
   /* (1) la porte du cerveau — seulement si l echange touche le block affiche ; sinon il n a rien a juger, et on le DIT */
   if (actionAffichee && (de.adr === moi || vers.adr === moi)) bcEtape(m, 'A Coinbase stock — it trades on its own market; no brain gate.');
   else if (moi && (de.adr === moi || vers.adr === moi)) {
-    const g = tacheAutorisee('trade_tblock', window.__TB_BRAIN_SNAPSHOT__ || {});
+    const snapMoi = bcSnapDe(moi);
+    const g = tacheAutorisee('trade_tblock', snapMoi || {});
     /* marche non lu : le cerveau n a rien juge - on le dit, on ne dit ni 'accepts' ni 'refuses' ; le planificateur juge le marche */
-    if (g.ok && !bcMarcheLue(window.__TB_BRAIN_SNAPSHOT__)) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
-    const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
+    if (!snapMoi || (g.ok && !bcMarcheLue(snapMoi))) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
+    const humeur = (snapMoi && snapMoi.humeur) || 'unread';
     bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
     bcNoter({ type: 'verdict', ...refs, etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts trade_tblock' : String(g.pourquoi || 'refused') });
     if (!g.ok) { bcOpMaj(op, 'refused'); return; }
@@ -22179,7 +22194,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
   } else bcEtape(m, 'Not the block shown — its brain does not judge this one.');
   const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
   const planifier = async () => {
-    if (!(await bcAvecWallet(m, planifier))) { bcOpMaj(op, 'noWallet'); return; }
+    if (!(await bcAvecWallet(m, planifier))) { bcEtape(m, 'Not measured \u2014 no wallet connected, so no plan was built. Nothing was sent.', 'non'); bcOpMaj(op, 'noWallet'); return; }
     /* ⛔ LE SOLDE EST RELU AVANT LE PLAN. Mesure sur fork (banc-vente-aerodrome) : un plan Aerodrome n est PAS simule cote serveur —
      *   sans solde il revient PRET, l approbation passe, et le swap reverte dans le wallet. On refuse ici, avant toute signature.
      *   Solde illisible = on laisse le planificateur juger (jamais un refus sur une lecture ratee). */
@@ -22654,6 +22669,7 @@ function bcPeindreTicket(a, sym, mk, snap) {
     else if (so && so.block !== null && so.dec !== null && so.block > 0n) for (const p of [25n, 50n, 100n]) puce(p + ' %', bcDecimal(so.block * p / 100n, so.dec));
     else r.append(bcEl('span', { cls: 'note', text: !compte ? 'Connect your wallet to sell a share of what you hold.' : so && so.block === 0n ? 'This wallet holds none of it.' : 'Reading what you hold…' }));
   }
+  snap = bcSnapDe(a, snap); /* 2026-10-10 : jamais l humeur d un autre block */
   const g = tacheAutorisee('trade_tblock', snap || {}), humeur = (snap && snap.humeur) || 'unread';
   /* ⛔ MESURE (prod, onglet en arriere-plan) : avant le PREMIER battement il n y a aucun instantane, et le ticket affichait en rouge
    *   « refuses: its market must be read… » — un refus prononce par un cerveau qui n a pas encore battu. Sans battement, on dit
@@ -23709,7 +23725,19 @@ $('#bcChercheForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const champ = $('#bcCherche'), note = $('#bcChercheNote'), v = champ.value.trim();
   if (!v) return;
-  const j = bcResoudre(v);
+  let j = bcResoudre(v);
+  /* 2026-10-10 re-QA : rien de connu ICI -> l index du SERVEUR (toutes les creations, noms lus sur la chaine), lecture seule. Homonymes = refus. */
+  if (!j.ok && !/^0x/i.test(v) && !/blocks are named/.test(j.pourquoi)) {
+    note.textContent = 'Looking for \u201c' + v + '\u201d in the full index.';
+    void (async () => {
+      let s = null; try { s = await (await fetch('/api/chercher?q=' + encodeURIComponent(v), { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json(); } catch (_) { s = null; }
+      if (s && s.etat === 'TROUVE' && /^0x[0-9a-f]{40}$/.test(String(s.adr))) { note.textContent = ''; champ.value = ''; choisirBrain(s.adr); bcRepeindre(); return; }
+      note.textContent = s && s.etat === 'AMBIGU' ? s.n + ' blocks are named ' + v + ' - paste the address of the one you mean'
+        : s && s.etat === 'ABSENT' ? j.pourquoi + ' (' + s.couverture.nomsLus + ' names read of ' + s.couverture.blocksConnus + ' blocks indexed)'
+        : j.pourquoi + ' (the full index could not be read)';
+    })();
+    return;
+  }
   if (!j.ok) { note.textContent = j.pourquoi; return; }
   if (j.adr === ETH_ADR.toLowerCase() || !/^0x[0-9a-f]{40}$/.test(j.adr)) { note.textContent = 'That is a currency, not a block — name a block or a tokenized stock.'; return; }
   note.textContent = ''; champ.value = '';

@@ -31,5 +31,5 @@ const k = html.indexOf('async function bcProposerSwap(');
 const corps = html.slice(k, html.indexOf('const refuser = ()', k));
 const iw = corps.indexOf("'Brain: waiting for the market read.'"), ia = corps.indexOf("') accepts.'");
 assert.ok(iw > 0 && iw < ia, 'bcProposerSwap peut dire accepts sur un marche non lu');
-assert.ok(corps.includes('if (g.ok && !bcMarcheLue(window.__TB_BRAIN_SNAPSHOT__))'), 'la porte du swap ne regarde pas le marche lu');
+assert.ok(corps.includes('if (!snapMoi || (g.ok && !bcMarcheLue(snapMoi)))'), 'la porte du swap ne regarde pas le marche lu');
 console.log('ok plan-etat-marche-non-lu - etats Ready/Not measured/Refused, attente du marche ; NE PROUVE PAS le rendu navigateur');

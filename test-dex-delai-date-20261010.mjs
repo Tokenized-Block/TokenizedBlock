@@ -36,17 +36,19 @@ async function scenario(charge) {
   dom['#pPnlDexPanne'].hidden = true;
   minuteurs.length = 0;
   const env = { dexEmbedCourant: null };
+  const crees = {}; const doc = { createElement: () => el(), getElementById: (id) => crees[id] || null };
+  dom['#pPnlDexEmbed'].after = (x) => { crees[x.id] = x; };
   const src = extraire('async function montrerEmbedDex(');
   const pre = (html.match(/const DEX_DELAI_CHARGE_MS = \d+;/) || ['const DEX_DELAI_CHARGE_MS = 15000;'])[0];
   const f = new Function('$', 'fetch', 'setTimeout', 'document', 'env',
     pre + '\nlet dexEmbedCourant = null;\n' + src.replace(/dexEmbedCourant/g, 'env.dexEmbedCourant') + '; return montrerEmbedDex;')(
     (q) => dom[q], async () => ({ json: async () => ({ ok: true, etat: 'OK', status: 200 }) }), (fn, ms) => minuteurs.push([fn, ms]),
-    { createElement: () => el() }, env);
+    doc, env);
   const base = 'https://dexscreener.com/base/0x' + 'ab'.repeat(20);
   await f({ base, src: base + '?embed=1' });
   if (charge && dom['#pPnlDexFrame'].ecouteurs.load) dom['#pPnlDexFrame'].ecouteurs.load();
   for (const [fn] of minuteurs) fn();
-  return { dom, base };
+  return { dom, base, lienCadre: crees.pPnlDexLien || null };
 }
 const bloque = await scenario(false);
 assert.equal(bloque.dom['#pPnlDexPanne'].hidden, false, 'iframe jamais chargee : la carte n apparait pas');
@@ -57,4 +59,6 @@ assert.ok(lien && lien.textContent === 'Open DexScreener \u2197' && lien.href ==
 const ok = await scenario(true);
 assert.equal(ok.dom['#pPnlDexPanne'].hidden, true, 'une iframe chargee a ete remplacee');
 assert.equal(ok.dom['#pPnlDexFrame'].hidden, false);
+/* re-QA : 'load' part meme quand DexScreener reste bloque dedans - le lien a cote du cadre ne depend pas de l iframe */
+assert.ok(ok.lienCadre && ok.lienCadre.href === ok.base && /Open DexScreener \u2197/.test(ok.lienCadre.textContent) && ok.lienCadre.hidden === false, 'pas de lien DexScreener a cote d un cadre charge');
 console.log('ok dex-delai-date - date lisible, carte apres delai sans chargement ; NE PROUVE PAS le blocage interne cross-origin');

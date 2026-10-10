@@ -150,6 +150,7 @@ import { lireReferenceAction, estActionCoinbase } from './reference-action.js';
 import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
 import { snapshotCerveau } from './export-cerveau.js';
 import { tacheAutorisee } from './brain-tasks.js';
+import { chercherNom, creerIndexNoms } from './recherche-noms.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -2669,6 +2670,12 @@ async function holdersCorps(jeton) {
 }
 
 const blocksConnus = new Set();
+/* 2026-10-10 re-QA : la recherche par NOM (voir recherche-noms.js). name()/symbol() lus une fois par block, en fond, 40 blocks/min au plus,
+ *   par eth_call 'latest' (jamais l archive). Un nom lu reste ; un echec se relit 10 min plus tard. */
+const indexNoms = creerIndexNoms({ lire: (a, sel) => rpcServeur('eth_call', [{ to: a, data: sel }, 'latest']) });
+const reponsesNoms = new Map(); /* q -> { t, corps } : 30 s */
+let lignesNomsTrending = { t: 0, lignes: [] };
+if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) setInterval(() => { void indexNoms.remplir([...blocksConnus], 40).catch(() => {}); }, 60000).unref?.();
 /* ⛔⛔ QUI A CREE QUOI — L INDEX QUI MANQUAIT, ET SON ABSENCE RENDAIT LES BLOCKS DES GENS INVISIBLES.
  *     Phil, 2026-09-27 : « je vais sur My blocks et je vois pas le block que j ai cree sur l autre
  *     machine, et le bug doit etre partout ». Il l est.
@@ -4268,6 +4275,25 @@ function traiterRequete(req, res) {
     const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (!ID_PAIRE_DEX.test(id)) { repondre({ ok: false, pourquoi: 'not a Base pair id' }); return; }
     void etatEmbedDex(id, new URL(req.url, 'http://x').searchParams.get('frais') === '1').then(repondre);
+    return;
+  }
+
+  /* GET /api/chercher?q=<nom ou symbole> - lecture seule, en cache 30 s. TROUVE | AMBIGU (refus) | ABSENT (couverture dite). */
+  if (chemin === '/api/chercher') {
+    const q = String(new URL(req.url, 'http://x').searchParams.get('q') || '').slice(0, 64);
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    const cle = q.trim().toUpperCase(), deja = reponsesNoms.get(cle);
+    if (deja && Date.now() - deja.t < 30000) { repondre(deja.corps); return; }
+    (async () => {
+      if (Date.now() - lignesNomsTrending.t > 60000) {
+        try { const j = JSON.parse(await trending()); lignesNomsTrending = { t: Date.now(), lignes: Array.isArray(j.lignes) ? j.lignes.map((l) => ({ adr: l.adr, sym: l.sym, nom: l.nom })) : [] }; } catch (_) { /* on garde l ancienne liste */ }
+      }
+      const r = chercherNom(q, [...lignesNomsTrending.lignes, ...indexNoms.entrees()]);
+      const corps = { ok: r.etat !== 'REFUSE', ...r, couverture: { nomsLus: indexNoms.taille(), blocksConnus: blocksConnus.size, trending: lignesNomsTrending.lignes.length } };
+      if (reponsesNoms.size > 500) reponsesNoms.clear();
+      reponsesNoms.set(cle, { t: Date.now(), corps });
+      repondre(corps);
+    })().catch(() => repondre({ ok: false, etat: 'NON_MESURE', pourquoi: 'the name index could not be read' }));
     return;
   }
 

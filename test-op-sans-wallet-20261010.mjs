@@ -19,8 +19,8 @@ for (const [nom, motif] of [['planifier', 'const planifier = async () => {'], ['
   for (const connecte of [false, true]) {
     const op = { etat: 'proposed' };
     const bcOpMaj = (o, e) => { if (etats[e]) o.etat = e; };
-    const f = new Function('op', 'bcOpMaj', 'bcAvecWallet', 'm', nom, 'return (async () => {' + corps + '\n return "suite"; })();');
-    const r = await f(op, bcOpMaj, async () => connecte, {}, () => {});
+    const f = new Function('op', 'bcOpMaj', 'bcAvecWallet', 'm', 'bcEtape', nom, 'return (async () => {' + corps + '\n return "suite"; })();');
+    const r = await f(op, bcOpMaj, async () => connecte, {}, () => {}, () => {});
     if (!connecte) {
       assert.ok(!enCours.includes(op.etat), nom + ' sans wallet : operation laissee en cours (' + op.etat + ')');
       assert.equal(op.etat, 'noWallet', nom + ' sans wallet : ' + op.etat);
