@@ -21,6 +21,12 @@ const TOPIC = '0x' + 'dd'.repeat(32), PM = '0x' + '44'.repeat(20);
 const JETON = '0xb2' + '0'.repeat(36) + 'aa', AUTRE = '0x' + '0'.repeat(40);
 let n = 0;
 const cas = async (t, f) => { n++; try { await f(); } catch (e) { console.error('✗ ' + t); throw e; } };
+/* 2026-10-10 (refus certain) : resoudreClePoolBrut lit ses fenetres par lecteurLogs(tete) — doublure = le helper SANS archive (budget
+ *   jamais epuise) : tout va au faux noeud du banc, comme avant. Le routage reel : test-refus-certain-20261010.mjs. */
+const lecteurLogsSansArchive = (rpc) => () => ({
+  /* comme le vrai : seule une liste est une reponse d eth_getLogs ; sans archive, rien n est jamais « non envoye » */
+  rpc: async (m, p) => { const r = await rpc(m, p); if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); return r; },
+  nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
 
 function monter({ tete = 1_000_000, pools = [], refuse = () => false } = {}) {
   const e = { tete, pools, appels: [], clesPool: new Map(), teteBrute: undefined, pendantLogs: null };
@@ -37,8 +43,8 @@ function monter({ tete = 1_000_000, pools = [], refuse = () => false } = {}) {
       data: '0x' + (500).toString(16).padStart(64, '0') + (10).toString(16).padStart(64, '0') + '0'.repeat(64),
       blockNumber: '0x' + x.bloc.toString(16) }));
   };
-  const M = new Function('clesPool', 'rpcServeur', 'TOPIC_INITIALIZE', 'PM_V4',
-    bloc + '\n; return { resoudreClePool, clesPoolAbsentes, clesPoolEnVol, CLES_POOL_ABSENTES_MAX };')(e.clesPool, rpc, TOPIC, PM);
+  const M = new Function('clesPool', 'rpcServeur', 'TOPIC_INITIALIZE', 'PM_V4', 'lecteurLogs',
+    bloc + '\n; return { resoudreClePool, clesPoolAbsentes, clesPoolEnVol, CLES_POOL_ABSENTES_MAX };')(e.clesPool, rpc, TOPIC, PM, lecteurLogsSansArchive(rpc));
   return { ...M, e };
 }
 
@@ -187,10 +193,10 @@ const blocP = src.slice(iP, fP + '})();'.length);
 function monterAvecDisque(disque, { tete = 1_000_000 } = {}) {
   const e = { tete, appels: [] };
   const rpc = async (m, p) => { if (m === 'eth_blockNumber') return '0x' + e.tete.toString(16); const { fromBlock, toBlock } = p[0]; e.appels.push([parseInt(fromBlock, 16), parseInt(toBlock, 16)]); return []; };
-  const M = new Function('clesPool', 'rpcServeur', 'TOPIC_INITIALIZE', 'PM_V4', 'process', 'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console',
+  const M = new Function('clesPool', 'rpcServeur', 'TOPIC_INITIALIZE', 'PM_V4', 'process', 'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console', 'lecteurLogs',
     bloc + '\n' + blocP + '\n; return { resoudreClePool, clesPoolAbsentes };')(new Map(), rpc, TOPIC, PM, { env: {} },
     (p) => p === '/data' || disque.has(p), (...x) => x.join('/'), (p) => disque.get(p), (p, v) => disque.set(p, v),
-    (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} });
+    (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} }, lecteurLogsSansArchive(rpc));
   return { ...M, e };
 }
 await cas('P l absence LUE est ecrite sur le volume et relue au redemarrage : la requete suivante ne repaie PAS le balayage complet', async () => {

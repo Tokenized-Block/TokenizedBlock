@@ -56,14 +56,38 @@ export function avecRepliLogs(principal, replis) {
   };
 }
 
-/** Un lecteur JSON-RPC minimal sur UNE url (pas de rotation : la liste des replis l ordonne). */
-export function lecteurUrl(url, { delai = 15000, fetchImpl = globalThis.fetch } = {}) {
+/**
+ * L ISSUE D UNE REQUETE JSON-RPC ENVOYEE, en quatre classes publiables (2026-10-10, compteurs par hote de serveur-web.js) :
+ *   'ok'     un `result` rendu (meme `null` ou `0x` : le noeud a REPONDU — ce qu en fait l appelant est son affaire) ;
+ *   'limite' HTTP 429, ou une erreur de debit / de plafond (rate, limit, too many, capacity) ;
+ *   'erreur' toute autre reponse (403 archive, 413, 5xx, corps illisible, erreur JSON-RPC) ;
+ *   'reseau' rien de recu : coupure, delai depasse (`reseau` vrai — c est l appelant qui sait que fetch a leve).
+ * ⛔ Pure, ne leve jamais : un compteur ne doit pas casser une lecture.
+ */
+export function classeEnvoi(statut, corps, reseau = false) {
+  if (reseau) return 'reseau';
+  const err = corps && typeof corps === 'object' && corps.error ? String(corps.error.message || '') : '';
+  if (statut === 429 || /rate|limit|429|too many|capacity/i.test(err)) return 'limite';
+  if (corps && typeof corps === 'object' && !corps.error && corps.result !== undefined && statut >= 200 && statut < 300) return 'ok';
+  return 'erreur';
+}
+
+/** Un lecteur JSON-RPC minimal sur UNE url (pas de rotation : la liste des replis l ordonne).
+ *  `surEnvoi(classe)` (2026-10-10, facultatif) : appele UNE fois par requete reellement envoyee, avec son issue (classeEnvoi).
+ *  Sans lui, rien ne change. */
+export function lecteurUrl(url, { delai = 15000, fetchImpl = globalThis.fetch, surEnvoi = null } = {}) {
   let id = 0;
+  const noter = (c) => { if (typeof surEnvoi === 'function') { try { surEnvoi(c); } catch { /* un compteur ne casse jamais une lecture */ } } };
   return async function lire(methode, params) {
-    const r = await fetchImpl(url, { method: 'POST', signal: AbortSignal.timeout(delai),
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: methode, params }) });
-    const j = await r.json();
+    let r;
+    try {
+      r = await fetchImpl(url, { method: 'POST', signal: AbortSignal.timeout(delai),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method: methode, params }) });
+    } catch (e) { noter('reseau'); throw e; }
+    let j;
+    try { j = await r.json(); } catch (e) { noter(classeEnvoi(r.status, null, /abort|timeout/i.test(String(e && e.name)))); throw e; }
+    noter(classeEnvoi(r.status, j));
     if (!j || j.error || j.result === undefined) {
       throw new Error(String((j && j.error && j.error.message) || ('HTTP ' + r.status)).slice(0, 120));
     }

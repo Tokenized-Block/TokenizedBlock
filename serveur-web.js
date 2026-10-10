@@ -137,7 +137,7 @@ async function obtenirRasteriseur() {
   return rasteriseur;
 }
 import { resumerTrending } from './trending.js';
-import { avecRepliLogs, lecteurUrl } from './repli-logs.js';
+import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-logs.js';
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE } from './paires.js';
 import { planRail } from './rails-api.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
@@ -204,6 +204,38 @@ const RPC_FAITS_POOL = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (process.env.BASE_RPC
   || 'https://mainnet.base.org,https://developer-access-mainnet.base.org,https://base.drpc.org,https://1rpc.io/base')
   .split(',').map((s) => s.trim()).filter(Boolean);
 let tourFaits = 0, idFaits = 0;
+/* ══ 2026-10-10 — CE QUI PART VRAIMENT SUR LE RESEAU, PAR HOTE (/sante.envois) ═══════════════════════════════════════════════
+ * Seul le noeud d archive etait compte (archiveCompte). Les requetes aux noeuds PUBLICS ne l etaient nulle part : on ne pouvait pas
+ *   dire ce que coutait un refus certain (jusqu a 3 essais en rotation sur RPC_LIST, puis publicnode, puis l archive qui refuse sans
+ *   appel). Chaque requete HTTP ENVOYEE est comptee UNE fois, par hote et par issue (classeEnvoi, repli-logs.js : ok / limite / erreur
+ *   / reseau).
+ * ✅ COMPTE — cinq des six boucles fetch JSON-RPC de ce fichier, et le seul lecteur JSON-RPC des modules :
+ *   rpcServeurBrut (rotation sur RPC_LIST) · lecteurUrl de repli-logs.js (publicnode en repli de rpcServeur et de rpcScanCreations,
+ *   l archive via lecteurArchive) · callLarge et rpcRails (rotation sur RPC_FAITS_POOL) · rpcActivite (RPC_ACTIVITE) · rpcNaissance
+ *   (sa boucle eth_simulateV1 sur RPC_SIMULATION ; ses autres methodes passent par rpcRails, comptees la).
+ * ⛔ PAS COMPTE : la sixieme boucle, la sonde de /sante (sonderNoeuds, son propre fetch) ; une fenetre profonde NON ENVOYEE budget
+ *   epuise (aucune requete ne part : archiveCompte.nonEnvoyees la compte, voir lecteurLogs) ; un refus de budget de lecteurArchive
+ *   (aucune requete ne part : refusBudget) ; les lectures qui ne sont pas du JSON-RPC (DexScreener, OpenLaunch, la liste de
+ *   l emetteur, les API CDP autres que le noeud, et les appels HTTP de ce serveur a sa propre route /api/prix-usd). Aucun autre
+ *   module serveur n envoie de JSON-RPC par son propre fetch (recherche du 2026-10-10 sur les .js du depot : seul lecteurUrl de
+ *   repli-logs.js ; wallet-simule.js tourne dans la PAGE).
+ * ⛔ LE LIBELLE EST L HOTE, JAMAIS LE CHEMIN (libelleNoeud) : l URL de l archive porte une cle d API dans son chemin.
+ * ⛔ BORNE : ENVOIS_HOTES_MAX hotes, le reste sous « autres hotes » ; en memoire, depuis le demarrage (`depuis`) — pas sauve. */
+const ENVOIS_HOTES_MAX = 40;
+const ENVOIS_CLASSES = ['ok', 'limite', 'erreur', 'reseau'];
+const envoisNoeuds = { depuis: new Date().toISOString(), parHote: {} };
+function compterEnvoi(url, classe) {
+  try {
+    let h = libelleNoeud(url);
+    if (!envoisNoeuds.parHote[h] && Object.keys(envoisNoeuds.parHote).length >= ENVOIS_HOTES_MAX) h = 'autres hotes';
+    const c = envoisNoeuds.parHote[h] || (envoisNoeuds.parHote[h] = { ok: 0, limite: 0, erreur: 0, reseau: 0 });
+    c[ENVOIS_CLASSES.includes(classe) ? classe : 'erreur'] += 1;
+  } catch { /* un compteur ne casse jamais une lecture */ }
+}
+/** lecteurUrl (repli-logs.js) dont chaque requete envoyee est comptee par hote. Meme nom : le cablage existant ne change pas. */
+function lecteurUrl(url, options = {}) {
+  return lecteurUrlNu(url, { ...options, surEnvoi: (c) => compterEnvoi(url, c) });
+}
 /** `eth_call` sur la liste LARGE — pour les faits de pool, et rien d autre.
  * ⛔⛔ ELLE TOURNE A CHAQUE ESSAI, et c est le point. `rpcServeur` tourne aussi, mais sa liste ne
  *     contient que les endpoints capables de `eth_getLogs` : deux. Ici on en a quatre, donc un
@@ -216,16 +248,18 @@ async function callLarge(to, data) {
   let dernier = 'aucun essai';
   for (let k = 0; k < RPC_FAITS_POOL.length * 2; k += 1) {
     const url = RPC_FAITS_POOL[tourFaits++ % RPC_FAITS_POOL.length];
+    let compte = false; /* 2026-10-10 : chaque requete envoyee, comptee une fois par hote et par issue (compterEnvoi) */
     try {
       const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000),
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: ++idFaits, method: 'eth_call', params: [{ to, data }, 'latest'] }) });
       if (r.ok) {
         const j = await r.json().catch(() => null);
+        compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
         if (j && j.result !== undefined && j.result !== '0x') return j.result;
         dernier = j && j.error ? String(j.error.message || '').slice(0, 40) : 'reponse vide';
-      } else dernier = 'HTTP ' + r.status;
-    } catch (e) { dernier = String((e && e.name) || e).slice(0, 24); }
+      } else { compte = true; compterEnvoi(url, classeEnvoi(r.status, null)); dernier = 'HTTP ' + r.status; }
+    } catch (e) { if (!compte) compterEnvoi(url, 'reseau'); dernier = String((e && e.name) || e).slice(0, 24); }
     await new Promise((ok) => setTimeout(ok, 200 * (k + 1)));
   }
   throw new Error('refused by all ' + RPC_FAITS_POOL.length + ' endpoints (' + dernier + ')');
@@ -395,8 +429,11 @@ for (const l of LOGS_INITIALIZE_MESURES) {
  *   ~9 000 blocs, aucun noeud gratuit ne sert ces fenetres (base.org 429, publicnode 403 : mesures du 2026-10-09, repli-logs.js),
  *   seule l archive le peut : budget du jour epuise, ces fenetres sont refusees (55 des 59, compte sur PAS et la borne de 120 000
  *   blocs, pas mesure).
- *   ⛔ Le refus est COMPTE, pas reconnu a son message : avecRepliLogs relance l erreur du PRINCIPAL (repli-logs.js), jamais celle
- *     du budget. ⛔ Un NON_LUE n entre JAMAIS dans clesV4Lues : il se relit au prochain appel. */
+ *   ⛔ Le refus est COMPTE (`ratees`), pas reconnu a son message. ⚠️ CORRIGE le 2026-10-10 : j ecrivais ici qu avecRepliLogs relance
+ *     l erreur du principal « jamais celle du budget » — FAUX depuis le 2026-10-09 : quand le dernier repli (l archive) refuse par
+ *     budget, repli-logs.js met ce refus EN TETE du message, meme apres un refus passager du principal. Seule la fenetre NON
+ *     ENVOYEE de lecteurLogs (NON_ENVOYEE_BUDGET) est un refus certain ; elle seule fait dire « wait for the daily budget » ici.
+ *     ⛔ Un NON_LUE n entre JAMAIS dans clesV4Lues : il se relit au prochain appel. */
 /* ⛔⛔ 2026-10-10 (prod, compteur d archive par consommateur) — `route /api/prix-usd` = 2e consommateur (~10 appels/min la nuit).
  *   Une absence LUE (59 fenetres toutes lues, aucun Initialize) n etait JAMAIS retenue, et la reponse de /api/prix-usd ne vit que
  *   300 s : chaque jeton sans pool v4 recente repayait ~55 appels d archive toutes les 5 minutes. Meme remede que resoudreClePool
@@ -418,6 +455,9 @@ async function cleV4DuPoolId(id) {
    *   qui nous interessent. Au-dela ce n est plus une lecture, c est un balayage.
    *   La grille est celle d avant, a l identique : 59 fenetres [tete - j*PAS, tete - (j-1)*PAS - 1], j = 1..59. */
   const BAS = tete - 59 * PAS, HAUT = tete - 1;
+  /* 2026-10-10 : budget d archive epuise, une fenetre PROFONDE n est PAS envoyee (lecteurLogs) — non lue, jamais une absence ; le
+   *   reste part a rpcServeur comme avant */
+  const lire = lecteurLogs(tete);
   const lu = clesV4Absentes.get(k) || null;
   /* ⛔ revue adversariale (2026-10-10) : la memoire doit TOUCHER la plage demandee DES DEUX COTES. Une tete qui recule sous le bas de
    *   la memoire faisait fusionner [HAUT+1, depuis-1] — des blocs jamais lus — puis rendre null pour une pool qui y vivait. */
@@ -429,7 +469,7 @@ async function cleV4DuPoolId(id) {
       fenetres += 1;
       let logs;
       try {
-        logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,
+        logs = await lire.rpc('eth_getLogs', [{ address: PM_V4,
           topics: [TOPIC_INITIALIZE, k],
           fromBlock: '0x' + Math.max(0, d).toString(16),
           toBlock: '0x' + f.toString(16) }]);
@@ -443,7 +483,12 @@ async function cleV4DuPoolId(id) {
       return null;
     }
   }
-  if (ratees) return nonLue(ratees, fenetres, ratees + '/' + fenetres + ' windows of ' + PAS + ' blocks not read');
+  if (ratees) {
+    /* seules les fenetres NON ENVOYEES (budget epuise) attendent le budget ; une fenetre envoyee et ratee n est pas comptee ici */
+    const attente = lire.suivi.nonEnvoyees;
+    return nonLue(ratees, fenetres, ratees + '/' + fenetres + ' windows of ' + PAS + ' blocks not read'
+      + (attente ? ' (' + attente + ' of them wait for the archive node daily budget, exhausted until 00:00 UTC — deep windows are not sent meanwhile)' : ''));
+  }
   /* tout LU, rien trouve : l absence est retenue avec sa plage LUE ; une ecriture concurrente qui la touche est unie, jamais plus */
   let couvert = { depuis: deja ? Math.min(deja.depuis, BAS) : BAS, jusqua: deja ? Math.max(deja.jusqua, HAUT) : HAUT };
   const cur = clesV4Absentes.get(k);
@@ -801,7 +846,16 @@ const RPC_ARCHIVE = (() => {
 })();
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
-const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {} };
+const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {},
+  nonEnvoyees: 0, nonEnvoyeesParQui: {} };
+/* 2026-10-10 — nonEnvoyees / nonEnvoyeesParQui (lecteurLogs) : des fenetres eth_getLogs profondes NON ENVOYEES budget epuise (aucune
+ *   requete n est partie). « Une fenetre » = une requete eth_getLogs (sa plage ET son filtre). Chacune est comptee UNE fois par
+ *   lecteurLogs, c est-a-dire par TOUR : un tour de nos-blocks, un tour du routeur (ses relectures de la plage comprises : une fenetre
+ *   deja non envoyee dans ce tour n est pas recomptee — la revue adverse du 2026-10-10 l avait vue recomptee jusqu a 4 fois),
+ *   un appel de cleV4DuPoolId, une resolution de /api/cle. La meme fenetre redemandee a un tour SUIVANT (nos-blocks : toutes les
+ *   5 min budget epuise ; routeur : chaque minute et chaque visite ; une route : chaque requete) est recomptee : ce n est PAS un
+ *   nombre de fenetres distinctes. /sante le dit a cote (archiveNonEnvoyeesUnite). */
+const ARCHIVE_NON_ENVOYEES_UNITE = 'deep windows not sent, each counted once per round (one tour of nos-blocks or of the routeur, re-reads included; one pool-key read; one /api/cle resolution); a window asked again in a later round is counted again, so this is not a number of distinct windows';
 /* ⛔⛔ 2026-10-10 (prod, 00:00-00:31 UTC) — 2 321 appels d archive, dont 2 065 « repli eth_getLogs » (89 %) : l ORIGINE ne dit pas
  *   QUI. Chaque requete HTTP s execute sous l etiquette de sa route, chaque boucle de fond sous la sienne (AsyncLocalStorage suit les
  *   await, les minuteries et les promesses lancees depuis l appel) ; `parQui` (appels, relances comprises) et `refusParQui` (refus
@@ -831,11 +885,12 @@ try {
   if (FICHIER_ARCHIVE_COMPTE && existsSync(FICHIER_ARCHIVE_COMPTE)) {
     const x = JSON.parse(readFileSync(FICHIER_ARCHIVE_COMPTE, 'utf8'));
     if (x && x.jour === new Date().toISOString().slice(0, 10)) {
-      for (const k of ['appels', 'refusBudget', 'erreurs', 'servis', 'relances']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
+      for (const k of ['appels', 'refusBudget', 'erreurs', 'servis', 'relances', 'nonEnvoyees']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
       if (typeof x.derniereErreur === 'string') archiveCompte.derniereErreur = x.derniereErreur.slice(0, 80);
       archiveCompte.par = compteurEntier(x.par); archiveCompte.erreursPar = compteurEntier(x.erreursPar);
       archiveCompte.refusPar = compteurEntier(x.refusPar);
       archiveCompte.parQui = compteurEntier(x.parQui); archiveCompte.refusParQui = compteurEntier(x.refusParQui);
+      archiveCompte.nonEnvoyeesParQui = compteurEntier(x.nonEnvoyeesParQui);
       archiveCompte.jour = x.jour;
     }
   }
@@ -848,7 +903,7 @@ function lecteurArchive(origine = 'repli') {
   const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
   return async (methode, params) => {
     const j = new Date().toISOString().slice(0, 10);
-    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {} });
+    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {}, nonEnvoyees: 0, nonEnvoyeesParQui: {} });
     const cle = origine + ' ' + String(methode).slice(0, 40);
     const qui = etiquetteArchive();
     /* les refus au-dela du plafond sont la DEMANDE NON SERVIE — la seule mesure de « le plafond suffit-il ». Une fois le plafond
@@ -909,6 +964,81 @@ async function rpcHistoire(methode, params) {
   if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive('histoire'); return archiveDirect(methode, params); }
   return rpcServeur(methode, params);
 }
+/* ══ 2026-10-10 — UN REFUS CERTAIN NE COUTE RIEN (lecteurLogs), VERSION REDUITE ══════════════════════════════════════════════════
+ * ⛔⛔ MESURE PROD (2026-10-10, 16:27-16:31 UTC rapporte a l heure ; budget d archive epuise depuis ~03:00 UTC) : 4 044 refus de
+ *   budget par heure, dont 'route /api/prix-usd' 1 468, 'fond routeur' 1 318, 'fond nos-blocks' 1 198. Chaque refus coutait D ABORD
+ *   4 requetes publiques et 1,8 s de pauses : 3 a mainnet.base.org / developer-access (rpcServeurBrut, 0,3 + 0,6 + 0,9 s), 1 a
+ *   publicnode, puis le refus LOCAL de lecteurArchive (aucune requete a l archive).
+ * ⇒ UNE FENETRE eth_getLogs EST PROFONDE quand tete - fromBlock >= PROFONDEUR_PUBLICNODE : fromBlock est son bloc le plus profond,
+ *   `tete` celle LUE par l appelant. >= et pas > : publicnode refuse « des -9 000 » (mesure du 2026-10-09, repli-logs.js).
+ *   PROFONDE ET budget epuise (archiveEpuisee : lu sur le compteur, sans appel) : elle N EST PAS ENVOYEE (0 requete). Elle leve
+ *   NON_ENVOYEE_BUDGET (RE_BUDGET_ARCHIVE le reconnait) et elle est comptee (archiveCompte.nonEnvoyees / nonEnvoyeesParQui : une fois
+ *   par fenetre et par lecteurLogs, voir archiveCompte). C est le SEUL refus CERTAIN (`nonEnvoyee`) : l appelant la garde NON LUE
+ *   (jamais vide, jamais couverte, jamais retenue comme absence) et ne la relit pas sur place.
+ *   TOUT LE RESTE part a rpcServeur EXACTEMENT comme avant : fenetre recente, fenetre profonde AVEC du budget, autres methodes, tete
+ *   ou fromBlock illisible.
+ * ⛔ POURQUOI PAS L ARCHIVE EN DIRECT QUAND IL RESTE DU BUDGET (version precedente de ce correctif, par rpcHistoire, jamais livree) :
+ *   la revue adverse du 2026-10-10 (simulation d une heure, latence SUPPOSEE 150 ms) a montre qu UNE fenetre profonde que l archive
+ *   refuse sans cesse (503 relance, 400, ou une non-liste) fige `jusqua` de nos-blocks sous elle, et que chaque tour relit alors les
+ *   ~147 fenetres au-dessus. Sans le detour public (1,8 s par fenetre) et a 4 s de cadence, nos-blocks passait de 9-10 a 68-91 tours
+ *   par heure : 6 a 10 fois ses appels d archive a HEAD. Par rpcServeur, une fenetre profonde garde le frein d avant : memes
+ *   requetes et memes pauses que HEAD (banc test-refus-certain-20261010.mjs, cas S1 a S3, contre le serveur-web.js de e84e936).
+ *   SIMULE (harnais de la revue, une heure, latence SUPPOSEE 150 ms, fenetre coincee en 503) : 3 718 appels d archive a e84e936
+ *   comme avec ce correctif, dont nos-blocks 1 375 et 1 375 ; budget epuise, 15 104 requetes publiques -> 4 734.
+ *   Le prix de ce choix : budget LIBRE, une fenetre profonde coute toujours ses 4 requetes publiques et 1,8 s avant l archive.
+ * ⛔ UNE FENETRE ENVOYEE dont l erreur COMMENCE par le texte du budget N EST PAS un refus certain : avecRepliLogs (repli-logs.js) met
+ *   en tete le refus de budget du DERNIER repli, par exemple apres un 503 passager de publicnode sur une fenetre RECENTE. Elle garde
+ *   le traitement d avant (nos-blocks et routeur : relue sur place, REPRISES) ; elle ne fait ni ralentir une boucle ni dire « wait
+ *   for 00:00 UTC ».
+ * ⇒ SEULE UNE LISTE EST UNE REPONSE d eth_getLogs (la doctrine de fraisEnAttente et de repli-logs.js) : null, '0x', un objet, un
+ *   nombre levent 'not a list'. avecRepliLogs ecarte deja la non-liste d un REPLI, mais rend celle du PRINCIPAL telle quelle, et
+ *   nos-blocks comme le routeur la lisaient en fenetre vide (`logs || []`) : la couverture avancait sur des blocs jamais lus. La
+ *   fenetre est desormais ratee : nos-blocks et le routeur la relisent sur place (REPRISES) puis la gardent en attente ;
+ *   cleV4DuPoolId la compte ratee (NON_LUE, comme avant) ; une resolution de /api/cle leve (comme avant : `for of` sur null levait).
+ * ⚠️ LIMITE, non couverte : ne pas envoyer suppose qu AUCUN noeud gratuit ne sert l histoire profonde (base.org : 429 a tout
+ *   eth_getLogs depuis ~2026-10-07, repli-logs.js ; publicnode : 403 des -9 000). lecteurLogs ne lit pas la sonde (/sante.noeuds).
+ *   Si base.org la servait de nouveau, budget epuise, nos-blocks et le routeur resteraient figes jusqu a 00:00 UTC la ou HEAD
+ *   rattrapait par base.org (SIMULE, harnais de la revue, une heure : nos-blocks +0 bloc ici contre +301 785 a e84e936).
+ * ⚠️ LIMITE, non couverte : la profondeur est jugee sur la tete lue par l appelant, pas sur celle du noeud a l envoi. Une fenetre
+ *   recente a la lecture de la tete (la 9e de /api/cle : fromBlock a -8 990) peut passer -9 000 pendant le balayage : elle part a
+ *   rpcServeur et, budget epuise, coute ce qu elle coutait a HEAD (vu par la simulation de la revue, avant le passage a >=).
+ * `suivi.nonEnvoyees` : les fenetres DISTINCTES non envoyees par ce lecteur ; `suivi.essais` : chaque refus sans envoi, une fenetre
+ *   redemandee par le MEME lecteur comprise (le routeur relit sa plage) — c est lui qui dit « toutes les ratees de cette lecture sont
+ *   non envoyees ». */
+const NON_ENVOYEE_BUDGET = 'archive node daily budget reached — deep window not sent, it waits for 00:00 UTC';
+/** Cette erreur (ou cette cause de fenetre ratee) est-elle celle d une fenetre NON ENVOYEE budget epuise ? Le seul refus certain. */
+const nonEnvoyee = (x) => String((x && x.message) || x || '').startsWith(NON_ENVOYEE_BUDGET);
+function lecteurLogs(tete) {
+  const suivi = { nonEnvoyees: 0, essais: 0 };
+  const vues = new Set(); /* les fenetres deja non envoyees par CE lecteur : comptees une fois (archiveCompte) */
+  async function rpc(methode, params) {
+    const q = methode === 'eth_getLogs' && Array.isArray(params) && params[0] && typeof params[0] === 'object' ? params[0] : null;
+    const bas = q ? parseInt(q.fromBlock, 16) : NaN;
+    const profonde = Number.isSafeInteger(tete) && Number.isSafeInteger(bas) && tete - bas >= PROFONDEUR_PUBLICNODE;
+    if (profonde && archiveEpuisee()) {
+      suivi.essais += 1;
+      const cle = JSON.stringify(q);
+      if (!vues.has(cle)) { vues.add(cle); suivi.nonEnvoyees += 1; noterNonEnvoyee(); }
+      throw new Error(NON_ENVOYEE_BUDGET);
+    }
+    const r = await rpcServeur(methode, params);
+    if (methode === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); /* une reponse qui n est pas une liste n est pas une fenetre vide */
+    return r;
+  }
+  return { rpc, nonEnvoyee, suivi };
+}
+/** Une fenetre profonde non envoyee (budget epuise), comptee pour le consommateur qui l a demandee (etiquette AsyncLocalStorage).
+ *  ⛔ Sauve toutes les 100, pas toutes les 25 comme appels / refusBudget : a 25, la revue adverse avait compte en simulation 3 fois
+ *    les ecritures d archive-compte.json de HEAD (111 -> 338 par heure). A 100, meme simulation budget epuise : 108 a e84e936,
+ *    28 ici (SIMULE, pas mesure en prod). Entre deux, le compteur part avec le prochain sauvetage de n importe quel autre
+ *    compteur ; un redeploiement perd au plus les 99 derniers. */
+function noterNonEnvoyee() {
+  const qui = etiquetteArchive();
+  archiveCompte.nonEnvoyees = (archiveCompte.nonEnvoyees || 0) + 1;
+  if (!archiveCompte.nonEnvoyeesParQui || typeof archiveCompte.nonEnvoyeesParQui !== 'object') archiveCompte.nonEnvoyeesParQui = {};
+  archiveCompte.nonEnvoyeesParQui[qui] = (archiveCompte.nonEnvoyeesParQui[qui] || 0) + 1;
+  if (archiveCompte.nonEnvoyees % 100 === 0) sauverArchiveCompte();
+}
 /** Un message de noeud peut recopier l URL qu il a recue : chaque segment du chemin du noeud d archive est masque avant publication. */
 function masquerCle(s) {
   let out = String(s);
@@ -930,10 +1060,13 @@ async function rpcServeurBrut(methode, params) {
   for (let k = 0; k < maxEssais; k++) {
     const url = RPC_LIST[rpcTour % RPC_LIST.length];
     rpcTour++;
+    /* 2026-10-10 : chaque requete envoyee, comptee UNE fois par hote et par issue (compterEnvoi) — les relances ci-dessous, inchangees */
+    let r = null, compte = false;
     try {
-      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000),
+      r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000),
         headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: methode, params }) });
       const j = await r.json();
+      compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
       if (!j.error) return j.result;
       const msg = String(j.error.message || 'rpc error');
       dernier = new Error(msg);
@@ -941,6 +1074,7 @@ async function rpcServeurBrut(methode, params) {
       if (/413|too large|range/i.test(msg)) throw dernier;
       if (!/rate|limit|timeout/i.test(msg)) throw dernier;
     } catch (e) {
+      if (!compte) compterEnvoi(url, classeEnvoi(r ? r.status : 0, null, r === null || /abort|timeout/i.test(String(e && e.name))));
       dernier = e;
       if (/413|too large|range/i.test(String(e && e.message || e))) throw e;
     }
@@ -1336,8 +1470,13 @@ async function resoudreClePoolBrut(t, fenetres) {
   /* du plus recent au plus ancien, comme avant : la partie neuve d abord, puis la partie plus profonde jamais lue (plafonnee a la tete) */
   const plages = deja ? [[deja.jusqua + 1, tete], [bas, Math.min(deja.depuis - 1, tete)]].filter(([d, f]) => f >= d) : [[bas, tete]];
   const trouvees = [];
+  /* 2026-10-10 : budget d archive epuise, la premiere fenetre PROFONDE (fromBlock a PROFONDEUR_PUBLICNODE blocs ou plus, lecteurLogs)
+   *   n est PAS envoyee et fait lever la resolution : rien n est retenu. La route /api/cle le dit (NON_LU, « daily budget ») ;
+   *   clesRails (recherche courte, 10 fenetres : la 10e, fromBlock a -9 989, est profonde) avale l erreur comme tout echec et rend [].
+   *   Le reste de ses fenetres part a rpcServeur comme avant. */
+  const lire = lecteurLogs(tete);
   for (const [d, f] of plages) {
-    trouvees.push(...await scannerInitialize(t32, d, f));
+    trouvees.push(...await scannerInitialize(t32, d, f, lire.rpc));
     if (trouvees.length) break;
   }
   if (!trouvees.length) {
@@ -1357,13 +1496,13 @@ async function resoudreClePoolBrut(t, fenetres) {
 }
 /** Les logs Initialize du jeton entre `deb` et `fin`, par fenetres de 999 blocs du plus recent au plus ancien ; s arrete apres la
  *  premiere fenetre qui en contient (la regle d avant). Un getLogs qui leve fait lever : jamais une absence inventee. */
-async function scannerInitialize(t32, deb, fin) {
+async function scannerInitialize(t32, deb, fin, rpc) {
   const enHex = (n) => '0x' + n.toString(16);
   const trouvees = [];
   for (let f = fin; f >= deb && !trouvees.length; f -= 999) {
     const d = Math.max(deb, f - 998);
     for (const topics of [[TOPIC_INITIALIZE, null, null, t32], [TOPIC_INITIALIZE, null, t32]]) {
-      const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);
+      const logs = await rpc('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);
       for (const l of logs) trouvees.push(l);
     }
   }
@@ -1475,8 +1614,31 @@ const PAS_ROUTEUR = 2000;
  *    croissante avant de conclure (index du routeur ET nos-blocks). Seule celle qui rate encore compte, et elle ne retire
  *    jamais la couverture deja acquise : la plage n avance simplement pas. */
 const REPRISES_LECTURE_MS = [500, 1000, 2000];
+/* ══ 2026-10-10 — LES DEUX INDEX ET LE REFUS CERTAIN : UN SEUL RYTHME, CELUI DE rythme-fond.js (1365dcc) ═══════════════════════════
+ * Les fenetres des deux index passent par lecteurLogs : budget d archive epuise, une fenetre PROFONDE n est pas envoyee (0 requete).
+ * ⇒ PAS DE RELECTURE SUR PLACE d une fenetre NON ENVOYEE (elle ne partira pas davantage avant 00:00 UTC) : nos-blocks la saute dans
+ *   ses REPRISES ; le routeur, qui relit TOUTE sa plage, ne la relit que si au moins une ratee de la lecture a ete ENVOYEE. Une
+ *   fenetre ENVOYEE et ratee, meme sur un texte de budget (repli-logs.js), est relue comme avant.
+ * ⇒ `attenteBudget` (les deux boucles) = le NOMBRE de fenetres du dernier tour NON ENVOYEES ; 0 sans elles, ou budget revenu.
+ *   Recalcule en FIN de tour seulement : jamais remis a zero au debut, un retour anticipe (tete illisible, reprise a confronter,
+ *   graine illisible) garde la derniere valeur. La reponse le dit (libelleAttenteBudget : ce nombre-la, et seulement tant que le
+ *   budget est epuise — jamais apres 00:00 UTC).
+ * ⛔ UN SEUL MECANISME DE RYTHME : rythme-fond.js. La version precedente de ce correctif en ajoutait un second (pause de 60 s pour
+ *   nos-blocks, porte des visites du routeur) : RETIRE. Ce qui change, c est ce qui declenche la pause de nos-blocks :
+ *   · nos-blocks : pauseNosBlocks(attenteBudget > 0 && archiveEpuisee()) — PAUSE_EPUISE_MS (5 min) SEULEMENT si le dernier tour a
+ *     laisse une fenetre NON ENVOYEE. Budget epuise, une fenetre ENVOYEE et ratee (503 passager de publicnode sur une fenetre
+ *     recente) ou un tour propre gardent les 4 s : seule une fenetre non envoyee fait ralentir. Dans le cas vise par 1365dcc
+ *     (nos-blocks a ~300 000 blocs de la tete : fenetres profondes), c est toujours 5 min, et un tour ne coute plus que son
+ *     eth_blockNumber et ses fenetres recentes.
+ *   · routeur : routeurEnchaine(archiveEpuisee()) INCHANGE. Il n est atteint qu apres un tour SANS fenetre ratee : un tour qui en a
+ *     une (non envoyee ou non) arrete deja le declenchement (`ratees`, deja avant 1365dcc). Il ne reagit donc a aucune fenetre ; il
+ *     borne a un par declenchement les tours PROPRES budget epuise. Chaque declenchement (minuterie de 60 s, visite) coute alors,
+ *     fenetres profondes non envoyees : 1 eth_blockNumber, 0 requete pour elles, aucune relecture.
+ *   Budget revenu (00:00 UTC, archiveEpuisee faux sans appel) : nos-blocks repart a la fin de sa pause en cours (au plus 5 min), le
+ *   routeur au declenchement suivant (au plus 60 s). */
+const libelleAttenteBudget = (n) => 'archive node daily budget reached: ' + n + ' window(s) wait for 00:00 UTC (deep windows are not sent while it is exhausted)';
 const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
-  tete: null, teteLueA: null, ratees: 0, lu: null, reprise: null, repriseAVerifier: false };
+  tete: null, teteLueA: null, ratees: 0, lu: null, reprise: null, repriseAVerifier: false, attenteBudget: 0 };
 let routeurEnCours = null;
 async function etendreBlocksRouteur() {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
@@ -1497,15 +1659,22 @@ async function etendreBlocksRouteur() {
   }
   if (routeurEtat.jusqua >= tete) return;
   const aBloc = Math.min(tete, routeurEtat.jusqua + PAS_ROUTEUR);
-  let r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
+  const lire = lecteurLogs(tete); /* 2026-10-10 : budget epuise, fenetres profondes NON ENVOYEES (en attente) ; le reste a rpcServeur */
+  let avant = 0; /* refus sans envoi AVANT la lecture courante : la difference = ceux de la lecture courante */
+  let r = await scannerNesDuRouteur({ rpc: lire.rpc, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
   for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
   for (const ms of REPRISES_LECTURE_MS) {
     if (!r.fenetresRatees) break;
+    /* toutes les ratees de cette lecture sont NON ENVOYEES : la relire ne changerait rien avant 00:00 UTC. Une seule ratee ENVOYEE
+     *   (meme sur un texte de budget, repli-logs.js) et la plage est relue, comme avant. */
+    if (r.fenetresRatees <= lire.suivi.essais - avant) break;
     await new Promise((ok) => setTimeout(ok, ms));
-    r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
+    avant = lire.suivi.essais;
+    r = await scannerNesDuRouteur({ rpc: lire.rpc, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
     for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
   }
   routeurEtat.ratees = r.fenetresRatees;
+  routeurEtat.attenteBudget = r.fenetresRatees > 0 && archiveEpuisee() ? lire.suivi.essais - avant : 0; /* fin de tour seulement */
   if (!r.fenetresRatees) routeurEtat.jusqua = aBloc;
   routeurEtat.lu = new Date().toISOString();
   noterProgresIndex(); /* 2026-10-10 : la plage du routeur prouvee ici survit au redeploiement */
@@ -1517,7 +1686,7 @@ function rattraperBlocksRouteur() {
       for (let k = 0; k < 40; k += 1) {
         await consommateurArchive.run('fond routeur', () => etendreBlocksRouteur());
         if (routeurEtat.ratees || routeurEtat.tete === null || routeurEtat.tete - routeurEtat.jusqua <= 0) break;
-        if (!routeurEnchaine(archiveEpuisee())) break; /* 2026-10-10 : budget epuise, un tour par declenchement (rythme-fond.js) */
+        if (!routeurEnchaine(archiveEpuisee())) break; /* 2026-10-10 : budget epuise, un tour par declenchement (rythme-fond.js ; voir REPRISES_LECTURE_MS) */
         await new Promise((ok) => setTimeout(ok, 1500));
       }
     } catch (e) { /* on reessaiera au prochain tour */ }
@@ -1537,7 +1706,8 @@ function blocksRouteurCorps() {
   return JSON.stringify({ ok: true, lu: routeurEtat.lu, blocks: [...routeurEtat.blocks.values()],
     depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua, tete: routeurEtat.tete, plancher: PLANCHER_ROUTEUR,
     couvertureComplete: complet, reprise: routeurEtat.reprise,
-    teteLueA: routeurEtat.teteLueA, fenetresRatees: complet ? 0 : routeurEtat.ratees, fenetresEnAttente: routeurEtat.ratees });
+    teteLueA: routeurEtat.teteLueA, fenetresRatees: complet ? 0 : routeurEtat.ratees, fenetresEnAttente: routeurEtat.ratees,
+    attenteBudget: routeurEtat.attenteBudget && archiveEpuisee() ? libelleAttenteBudget(routeurEtat.attenteBudget) : null });
 }
 
 /* ⛔⛔ « NOS BLOCKS », CALCULE ICI ET PAS DANS LA PAGE (Phil, 2026-09-20 : « faut expandre depuis le
@@ -1586,7 +1756,7 @@ console.log(GRAINE_NOS.ok ? '[nos-blocks] graine recue : ' + GRAINE_NOS.blocks.l
   : '[nos-blocks] ⛔ graine refusee (' + GRAINE_NOS.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
 const nosBlocksEtat = { blocks: new Set(NOS_BLOCKS_GENESE),
   depuis: null, jusqua: null, graine: GRAINE_NOS.ok ? 'A_VERIFIER' : 'REFUSEE', ratees: 0, lu: null, teteAtteinte: false,
-  tete: null, teteLueA: null, graineEssais: 0, reprise: null, repriseAVerifier: false };
+  tete: null, teteLueA: null, graineEssais: 0, reprise: null, repriseAVerifier: false, attenteBudget: 0 };
 /* ⛔ G2 (C2) : un RPC sans archive qui ERRE sur les vieux recus (publicnode : « Archive requests require a personal token »)
  *   rendait NON_LU a chaque tour : jamais de balayage, jamais complet. Apres GRAINE_ESSAIS_MAX tours illisibles, la graine est
  *   abandonnee (jamais admise sans verification : fail-closed) et on balaie tout depuis la tete, comme une graine refusee. */
@@ -1638,25 +1808,33 @@ async function etendreNosBlocks() {
   /* ⛔ TOUS LES COMPTES, ET LES RATES DE CHACUN COMPTENT. Un seul compte qui echoue doit empecher la
    *    plage d avancer — sinon un trou serait recouvert par un « deja lu ». */
   /* ⛔ R9b : une fenetre ratee est RELUE sur place (REPRISES_LECTURE_MS) ; seules celles qui ratent encore comptent. */
-  let ratees = 0; const restent = [];
+  let ratees = 0, enAttente = 0; const restent = []; /* enAttente : celles des ratees qui sont NON ENVOYEES (budget epuise) */
+  const lire = lecteurLogs(fin); /* 2026-10-10 : budget epuise, fenetres profondes NON ENVOYEES (en attente, jamais couvertes) ; le reste a rpcServeur */
   for (const compte of NOS_CREATEURS) {
-    const scan = await frappesVers({ rpc: rpcServeur, compte, deBloc, aBloc });
+    const scan = await frappesVers({ rpc: lire.rpc, compte, deBloc, aBloc });
     for (const b of scan.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
     /* ⛔ F4 (C2 R9b) : une fenetre dont un jeton n a pas pu etre verifie (eth_getCode en echec) n est pas propre : relue, puis en attente */
     const aRelire = [...new Map([...(scan.fenetresRatees || []), ...(scan.fenetresNonVerifiees || [])].map((w) => [w.de + '-' + w.a, w])).values()];
     for (const w of aRelire) {
-      let relue = false;
+      /* 2026-10-10 : NON ENVOYEE (budget epuise) : jusqu a 00:00 UTC elle ne partira pas davantage — pas de relecture sur place, elle
+       *   reste en attente et la plage n avance pas sur elle. Une fenetre ENVOYEE et ratee, meme sur un texte de budget (repli-logs.js
+       *   le met en tete apres un 503 passager de publicnode), est relue comme avant (voir REPRISES_LECTURE_MS). */
+      if (lire.nonEnvoyee(w.cause)) { ratees += 1; enAttente += 1; restent.push(w); continue; }
+      let relue = false, nonEnvoyeeEnRelecture = false;
       for (const ms of REPRISES_LECTURE_MS) {
         await new Promise((ok) => setTimeout(ok, ms));
-        const r = await frappesVers({ rpc: rpcServeur, compte, deBloc: w.de, aBloc: w.a });
+        const r = await frappesVers({ rpc: lire.rpc, compte, deBloc: w.de, aBloc: w.a });
         for (const b of r.blocks) nosBlocksEtat.blocks.add(String(b.jeton).toLowerCase());
         if (!(r.fenetresRatees || []).length && !(r.fenetresNonVerifiees || []).length) { relue = true; break; }
+        /* le budget s est epuise pendant la relecture : elle n est plus envoyee, elle attend 00:00 UTC */
+        if ((r.fenetresRatees || []).some((x) => lire.nonEnvoyee(x.cause))) { nonEnvoyeeEnRelecture = true; break; }
       }
-      if (!relue) { ratees += 1; restent.push(w); }
+      if (!relue) { ratees += 1; restent.push(w); if (nonEnvoyeeEnRelecture) enAttente += 1; }
     }
   }
   /* ⛔ LES BLOCKS TROUVES SONT GARDES MEME SI UNE FENETRE A RATE : ils sont vrais. C est la PLAGE qui
    *    n avance pas, pas l ensemble — et la couverture DEJA acquise [depuis, jusqua] n est jamais remise a zero. */
+  nosBlocksEtat.attenteBudget = archiveEpuisee() ? enAttente : 0; /* fin de tour seulement (voir REPRISES_LECTURE_MS) */
   nosBlocksEtat.ratees = ratees;
   if (!nosBlocksEtat.ratees) {
     if (nosBlocksEtat.jusqua === null) { nosBlocksEtat.depuis = deBloc; nosBlocksEtat.jusqua = aBloc; }
@@ -1692,7 +1870,9 @@ function rattraperNosBlocks() {
         + ' · ' + nosBlocksEtat.blocks.size + ' block(s) a nous');
       return;
     }
-    setTimeout(pas, pauseNosBlocks(archiveEpuisee())).unref?.(); /* 2026-10-10 : 5 min si le budget d archive est epuise */
+    /* 2026-10-10 : 5 min (rythme-fond.js) seulement si le dernier tour a laisse une fenetre NON ENVOYEE, budget toujours epuise ;
+     *   sinon 4 s comme avant (voir REPRISES_LECTURE_MS : un seul mecanisme, et ce qui le declenche) */
+    setTimeout(pas, pauseNosBlocks(nosBlocksEtat.attenteBudget > 0 && archiveEpuisee())).unref?.();
   };
   setTimeout(pas, 1500).unref?.();
 }
@@ -1714,6 +1894,7 @@ function nosBlocksCorps() {
      *   `jusqua` n y retire rien (la plage n avance simplement pas) : elle est dite dans `fenetresEnAttente`, pas en trou. */
     fenetresRatees: nosBlocksComplet() ? 0 : nosBlocksEtat.ratees,
     fenetresEnAttente: nosBlocksEtat.ratees,
+    attenteBudget: nosBlocksEtat.attenteBudget && archiveEpuisee() ? libelleAttenteBudget(nosBlocksEtat.attenteBudget) : null,
     /* ⛔ LA BORNE VOYAGE AVEC LA REPONSE : un appelant qui lirait « blocks » sans « couvertureComplete »
      *    croirait tenir la liste entiere alors que la remontee est encore en cours. */
     comptesSurveilles: NOS_CREATEURS.length,
@@ -2002,10 +2183,12 @@ async function rpcRails(methode, params) {
   let dernier = new Error('no endpoint tried');
   for (let k = 0; k < RPC_FAITS_POOL.length * 2; k += 1) {
     const url = RPC_FAITS_POOL[tourFaits++ % RPC_FAITS_POOL.length];
+    let compte = false; /* 2026-10-10 : chaque requete envoyee, comptee une fois par hote et par issue (compterEnvoi) */
     try {
       const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: ++idRails, method: methode, params }) });
       const j = await r.json().catch(() => null);
+      compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
       /* ⛔ MESURE EN PROD (build rails-lecteur-large) : 2 sondes sur 3 « decimals or supply unread ». Un endpoint qui rend
        *   `0x` a un decimals() de B20 rend une NON-reponse : sur une LECTURE (sans `from`) on passe a l endpoint suivant.
        *   Une SIMULATION (avec `from`) peut legitimement rendre `0x` (execute du routeur) : c est une reponse. */
@@ -2016,6 +2199,7 @@ async function rpcRails(methode, params) {
       dernier = new Error(msg);
       if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy/i.test(msg)) { dernier.definitif = true; throw dernier; }
     } catch (e) {
+      if (!compte) compterEnvoi(url, 'reseau');
       if (e && e.definitif) throw e;
       dernier = e;
     }
@@ -2148,13 +2332,18 @@ async function rpcActivite(methode, params) {
   let dernier = new Error('no endpoint tried');
   for (let k = 0; k < RPC_ACTIVITE.length; k += 1) {
     const url = RPC_ACTIVITE[tourActivite++ % RPC_ACTIVITE.length];
+    let r = null, compte = false; /* 2026-10-10 : chaque requete envoyee, comptee une fois par hote et par issue (compterEnvoi) */
     try {
-      const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000), headers: { 'content-type': 'application/json' },
+      r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10000), headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) });
       const j = await r.json();
+      compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
       if (j && !j.error && j.result !== undefined) return j.result;
       dernier = new Error(String((j && j.error && j.error.message) || 'rpc error').slice(0, 100));
-    } catch (e) { dernier = e; }
+    } catch (e) {
+      if (!compte) compterEnvoi(url, classeEnvoi(r ? r.status : 0, null, r === null || /abort|timeout/i.test(String(e && e.name))));
+      dernier = e;
+    }
   }
   throw dernier;
 }
@@ -2293,15 +2482,17 @@ async function rpcNaissance(methode, params) {
   let dernier = new Error('no endpoint tried');
   for (let k = 0; k < RPC_SIMULATION.length * 2; k += 1) {
     const url = RPC_SIMULATION[tourSim++ % RPC_SIMULATION.length];
+    let compte = false; /* 2026-10-10 : chaque requete envoyee, comptee une fois par hote et par issue (compterEnvoi) */
     try {
       const r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(20000), headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: ++idRails, method: methode, params }) });
       const j = await r.json().catch(() => null);
+      compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
       if (j && Array.isArray(j.result)) return j.result;
       dernier = new Error(j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status);
       /* « insufficient funds » est une REPONSE de la chaine (le compte ne peut pas payer) : inutile de la redemander ailleurs */
       if (/insufficient funds/i.test(dernier.message)) throw dernier;
-    } catch (e) { dernier = e; if (/insufficient funds/i.test(String(e && e.message))) throw e; }
+    } catch (e) { if (!compte) compterEnvoi(url, 'reseau'); dernier = e; if (/insufficient funds/i.test(String(e && e.message))) throw e; }
     await new Promise((ok) => setTimeout(ok, 250 * (k + 1)));
   }
   throw dernier;
@@ -4628,7 +4819,7 @@ function traiterRequete(req, res) {
       res.end(JSON.stringify(r));
     }).catch((e) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify({ ok: false, pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
+      res.end(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
     });
     return;
   }
@@ -5167,6 +5358,11 @@ function traiterRequete(req, res) {
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
       /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
       archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
+      /* 2026-10-10 : l unite de archive.nonEnvoyees, dite a cote (une fois par fenetre et par tour, pas des fenetres distinctes) */
+      archiveNonEnvoyeesUnite: ARCHIVE_NON_ENVOYEES_UNITE,
+      /* 2026-10-10 : chaque requete JSON-RPC envoyee, par hote (jamais le chemin) et par issue, depuis le demarrage (compterEnvoi ;
+       *   ce qui est compte et ce qui ne l est pas : voir envoisNoeuds) */
+      envois: envoisNoeuds,
       /* 2026-10-10 : requetes /api/prix-usd identiques fusionnees depuis le demarrage (en memoire) */
       prixUsdFusions,
       /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */

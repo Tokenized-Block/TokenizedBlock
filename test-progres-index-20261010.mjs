@@ -87,10 +87,17 @@ function monter(source, { disque = new Map(), c = chaine(), volume = true, essai
   const i = source.indexOf('const PAS_ROUTEUR = 2000;'); const f = source.indexOf('/* ══ QUI DETIENT UN BLOCK', i);
   if (!(i > 0 && f > i)) throw new Error('bloc des deux index introuvable');
   const journal = [], ops = [], fonds = [], intervalles = [];
+  /* 2026-10-10 (refus certain) : les deux boucles lisent leurs fenetres par lecteurLogs(tete) et lisent archiveEpuisee() — doublures =
+   *   le helper SANS archive (budget jamais epuise) : tout va a la fausse chaine, comme avant. Le routage reel, le refus sans envoi et
+   *   le rythme : test-refus-certain-20261010.mjs. */
+  const lecteurLogs = () => ({
+    /* comme le vrai : seule une liste est une reponse d eth_getLogs ; sans archive, rien n est jamais « non envoye » */
+    rpc: async (m, p) => { const r = await c.rpc(m, p); if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); return r; },
+    nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
   const M = new Function('rpcServeur', 'scannerNesDuRouteur', 'GRAINE_ROUTEUR', 'GRAINE_JUSQUA', 'PLANCHER_ROUTEUR', 'RETARD_MAX_INDEX', 'neDuRouteur',
     'ROUTEURS_ANCIENS', 'consommateurArchive', 'FEE_WALLET', 'CREATE_ROUTER', 'process', 'console', 'graineNosBlocksAdmise', 'verifierGraineNos',
     'NOS_BLOCKS_GENESE', 'GRAINE_NOS_BLOCKS', 'prochaineFenetre', 'frappesVers', 'setTimeout', 'setInterval', 'ESSAI_SRV',
-    'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync',
+    'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'lecteurLogs', 'archiveEpuisee',
     source.slice(i, f) + '\n; return { routeurEtat, nosBlocksEtat, etendreNosBlocks, etendreBlocksRouteur, nosBlocksCorps, blocksRouteurCorps, nosBlocksComplet };')(
     c.rpc, IR.scannerNesDuRouteur, IR.GRAINE_ROUTEUR, IR.GRAINE_JUSQUA, IR.PLANCHER_ROUTEUR, IR.RETARD_MAX_INDEX, IR.neDuRouteur, IR.ROUTEURS_ANCIENS,
     { run: (l, fn) => { fonds.push(String(l)); return String(l).startsWith('fond') ? new Promise(() => {}) : fn(); } }, FEE_WALLET, CREATE_ROUTER, { env: { TB_NOS_CREATEURS: '', ...env } },
@@ -100,7 +107,8 @@ function monter(source, { disque = new Map(), c = chaine(), volume = true, essai
     (p) => (p === '/data' ? volume : disque.has(p)), (...x) => x.join('/'),
     (p) => { if (!disque.has(p)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return disque.get(p); },
     (p, v) => { ops.push(['ecrit', p]); disque.set(p, String(v)); },
-    (a, b) => { if (!disque.has(a)) throw Object.assign(new Error('ENOENT ' + a), { code: 'ENOENT' }); ops.push(['renomme', a, b]); disque.set(b, disque.get(a)); disque.delete(a); });
+    (a, b) => { if (!disque.has(a)) throw Object.assign(new Error('ENOENT ' + a), { code: 'ENOENT' }); ops.push(['renomme', a, b]); disque.set(b, disque.get(a)); disque.delete(a); },
+    lecteurLogs, () => false);
   return { ...M, c, disque, journal, ops, fonds, intervalles };
 }
 const lu = (disque) => (disque.has(FICHIER) ? JSON.parse(disque.get(FICHIER)) : null);

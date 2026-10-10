@@ -43,6 +43,11 @@ const REFUS = 'request limit reached';
 
 /* ── A. cleV4DuPoolId, extraite telle que livree ───────────────────────────────────────────────────────── */
 const corpsCle = extraire('async function cleV4DuPoolId(id) {');
+/* lecteurLogs (serveur-web.js) quand RPC_ARCHIVE est absent : tout passe par rpcServeur, archiveEpuisee() est faux, rien n attend */
+const lecteurLogsSansArchive = (rpc) => () => ({
+  /* comme le vrai : seule une liste est une reponse d eth_getLogs ; sans archive, rien n est jamais « non envoye » */
+  rpc: async (m, p) => { const r = await rpc(m, p); if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); return r; },
+  nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
 function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetre, clesV4Absentes = new Map(), apresAbsencesV4 = () => {} }) {
   const clesV4Lues = new Map(prefill);
   const journal = { blockNumber: 0, getLogs: 0 };
@@ -56,8 +61,10 @@ function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetr
     return fenetre({ de, a, profondeur: TETE - de, id: q.topics[1] });
   };
   /* 2026-10-10 : la fonction retient aussi les absences LUES (clesV4Absentes, bornee) et declenche leur persistance (doublure) */
-  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4',
-    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize, clesV4Absentes, 5000, apresAbsencesV4);
+  /* 2026-10-10 (refus certain) : elle lit ses fenetres par lecteurLogs(tete) — doublure = le helper SANS archive (budget jamais
+   *   epuise) : toute fenetre va au faux noeud du banc, comme avant. Le routage reel est juge par test-refus-certain-20261010.mjs. */
+  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4', 'lecteurLogs',
+    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize, clesV4Absentes, 5000, apresAbsencesV4, lecteurLogsSansArchive(rpcServeur));
   return { f, clesV4Lues, journal, clesV4Absentes };
 }
 const estNonLue = (r) => Boolean(r && typeof r === 'object' && r.etat === 'NON_LUE');

@@ -41,7 +41,9 @@ ok(/bcAvecDelai\(bcDecimales\(de\.adr\), 8000\)/.test(html) && /let bcSaisieEnCo
 /* 4 */
 ok(/const enVol = prixUsdEnVol\.get\(adr\);\n\s*if \(enVol\) \{ prixUsdFusions \+= 1; enVol\.then\(\(o\) => repondre\(o\)\); return; \}/.test(srv), '4a /api/prix-usd : une requete identique en vol attend le meneur');
 ok(/if \(libererVol\) \{ if \(prixUsdEnVol\.get\(adr\) === monVol\) prixUsdEnVol\.delete\(adr\);/.test(srv), '4a le vol est retire a la reponse (rien de garde)');
-ok(/setTimeout\(pas, pauseNosBlocks\(archiveEpuisee\(\)\)\)/.test(srv) && /if \(!routeurEnchaine\(archiveEpuisee\(\)\)\) break;/.test(srv), '4b les deux boucles de fond lisent le budget');
+/* 2026-10-10 (refus certain) : nos-blocks ne ralentit plus sur l epuisement seul mais sur une fenetre NON ENVOYEE du dernier tour,
+ *   budget toujours epuise (meme pause) ; le routeur, inchange. Le rythme reel est execute par test-refus-certain-20261010.mjs (D1, R2b). */
+ok(/setTimeout\(pas, pauseNosBlocks\(nosBlocksEtat\.attenteBudget > 0 && archiveEpuisee\(\)\)\)/.test(srv) && /if \(!routeurEnchaine\(archiveEpuisee\(\)\)\) break;/.test(srv), '4b les deux boucles de fond lisent le budget (nos-blocks : avec une fenetre non envoyee)');
 /* 4c — mesure CALCULEE sur une heure, budget epuise (sans la duree du tour) */
 const toursH = (pause) => Math.floor(3600000 / pause);
 ok(toursH(pauseNosBlocks(false)) === 900 && toursH(pauseNosBlocks(true)) === 12 && PAUSE_EPUISE_MS === 300000, '4c nos-blocks : 900 -> 12 tours/h budget epuise (calcule)');
