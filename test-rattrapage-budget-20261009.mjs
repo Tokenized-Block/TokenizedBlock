@@ -11,6 +11,9 @@
  *   C. relireUnTrouRattrapage : rien sans archive ou budget epuise ; une page refusee laisse le trou ; une relecture complete le
  *      fait reculer (100 000 blocs au plus) et resout les createurs inconnus ; fini -> trousRattrapageRelus.
  *   D. persistance (sauvegarde + chargement + relecture unique), publication, et `couvertureComplete` exige zero trou.
+ *   E (2026-10-09, audit du budget d archive) : un createur que `createurDe` ne resout pas (rend null) dans le rattrapage ou dans
+ *      relireUnTrouRattrapage est GARDE ({ jeton, tx }) dans `createursNonResolus` — le curseur / le trou avancent quand meme ; et
+ *      `couvertureComplete` exige aussi zero trou du scan vers l avant et zero createur non resolu.
  * ⛔ BORNE : le passage reel au noeud CDP (et le budget reel) n est pas exerce ici — la prod le montre dans /sante.archive. */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -47,16 +50,24 @@ await cas('A2 archiveEpuisee : lu sur le compteur du JOUR, et seulement avec un 
 /* ── B. le bloc de rattrapage, extrait et EXECUTE passe apres passe ──────────────────────────── */
 const blocRattrapage = entre('    try {\n      if (rattrapageDepuis === null) rattrapageDepuis = fin;'.replace(/\n/g, src.includes('\r\n') ? '\r\n' : '\n'),
   "    } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }");
+/* garderNonResolu extraite telle que livree ; absente du code d avant -> doublure muette, pour que les cas d avant tournent encore */
+const iG = src.indexOf('function garderNonResolu(c) {');
+const fG = iG < 0 ? null : /\r?\n\}\r?\n/.exec(src.slice(iG));
+const srcGarde = iG < 0 ? null : src.slice(iG, iG + fG.index + fG[0].length);
+const monterGarde = (createurParBlock, liste) => (srcGarde
+  ? new Function('createurParBlock', 'createursNonResolus', 'CREATEURS_NON_RESOLUS_MAX', 'console', 'let createursNonResolusJetes = 0;\n' + srcGarde + '\n; return garderNonResolu;')(createurParBlock, liste, 5000, { log: () => {} })
+  : () => {});
 const PARAMS = ['fin', 'PREMIER_BLOCK_TB', 'RPC_ARCHIVE', 'archiveEpuisee', 'refusDeBudget', 'archiveCompte', 'listerCreations', 'rpcHistoire', 'rpcServeur',
-  'createurParBlock', 'createurDe', 'trousRattrapage', 'blocksConnus', 'masquerCle', 'console', 'rattrapageDepuis', 'refusDeSuite', 'attenteBudgetDite'];
+  'createurParBlock', 'createurDe', 'trousRattrapage', 'blocksConnus', 'masquerCle', 'console', 'rattrapageDepuis', 'refusDeSuite', 'attenteBudgetDite', 'garderNonResolu'];
 const passe = new AsyncFunction(...PARAMS, blocRattrapage + '\n    } catch (e) { throw e; }\n    return { rattrapageDepuis, refusDeSuite, attenteBudgetDite };');
-function rattrapeur({ epuise = () => false, lister }) {
-  const e = { curseur: 2_000_000, refus: 0, dite: null, trous: [], createurs: new Map(), lectures: 0, journal: [] };
+function rattrapeur({ epuise = () => false, lister, createur = (tx) => '0x' + tx.slice(2, 42) }) {
+  const e = { curseur: 2_000_000, refus: 0, dite: null, trous: [], createurs: new Map(), lectures: 0, journal: [], nonResolus: [] };
   const { refusDeBudget } = monterJuges('https://a.example/x', {}, 10);
+  const garder = monterGarde(e.createurs, e.nonResolus);
   e.une = async () => {
     const r = await passe(2_000_000, 1_000_000, 'https://a.example/x', epuise, refusDeBudget, { jour: AUJ },
-      async (o) => { e.lectures++; return lister(o); }, () => {}, () => {}, e.createurs, async ({ tx }) => ({ createur: '0x' + tx.slice(2, 42) }),
-      e.trous, new Set(), (s) => s, { log: (m) => e.journal.push(m) }, e.curseur, e.refus, e.dite);
+      async (o) => { e.lectures++; return lister(o); }, () => {}, () => {}, e.createurs, async ({ tx }) => ({ createur: createur(tx) }),
+      e.trous, new Set(), (s) => s, { log: (m) => e.journal.push(m) }, e.curseur, e.refus, e.dite, garder);
     e.curseur = r.rattrapageDepuis; e.refus = r.refusDeSuite; e.dite = r.attenteBudgetDite;
   };
   return e;
@@ -85,18 +96,29 @@ await cas('B4 lecture propre : descente de 100 000 et createurs resolus', async 
   await e.une();
   assert.equal(e.curseur, 1_900_000); assert.equal(e.createurs.size, 1); assert.equal(e.trous.length, 0);
 });
+await cas('B5 createur NON resolu dans le rattrapage : le curseur descend (regle d avant), mais { jeton, tx } est GARDE pour une autre passe', async () => {
+  const t1 = '0x' + 'c'.repeat(40) + 'd'.repeat(24), t2 = '0x' + 'c'.repeat(39) + '2' + 'd'.repeat(24);
+  const j1 = '0xb2' + '1'.padStart(38, '0'), j2 = '0xb2' + '2'.padStart(38, '0');
+  const e = rattrapeur({ createur: (tx) => (tx === t2 ? null : '0x' + tx.slice(2, 42)),
+    lister: () => ({ creations: [{ jeton: j1, tx: t1 }, { jeton: j2, tx: t2 }], fenetresRatees: [] }) });
+  await e.une();
+  assert.equal(e.curseur, 1_900_000); assert.ok(e.createurs.has(j1) && !e.createurs.has(j2));
+  assert.deepEqual(e.nonResolus, [{ jeton: j2, tx: t2 }], 'le curseur est passe sous ce block et plus aucune passe ne le reverra');
+});
 
 /* ── C. relireUnTrouRattrapage, extraite et executee ──────────────────────────────────────────── */
 const iR = src.indexOf('async function relireUnTrouRattrapage() {');
 const fR = /\r?\n\}\r?\n/.exec(src.slice(iR));
 assert.ok(iR > 0 && fR, 'relireUnTrouRattrapage introuvable');
 const corpsR = src.slice(iR, iR + fR.index + fR[0].length);
-function relecteur({ archive = 'https://a.example/x', epuise = false, trous, lister, connus = [] }) {
-  const e = { trous, relus: [], createurs: new Map(connus.map((j) => [j, '0x' + 'e'.repeat(40)])), appels: [] };
+function relecteur({ archive = 'https://a.example/x', epuise = false, trous, lister, connus = [], createur = (tx) => '0x' + tx.slice(2, 42) }) {
+  const e = { trous, relus: [], createurs: new Map(connus.map((j) => [j, '0x' + 'e'.repeat(40)])), appels: [], nonResolus: [] };
   const { refusDeBudget } = monterJuges(archive, {}, 10);
   e.f = new Function('RPC_ARCHIVE', 'trousRattrapage', 'trousRattrapageRelus', 'archiveEpuisee', 'refusDeBudget', 'listerCreations', 'rpcHistoire', 'createurParBlock', 'createurDe', 'rpcServeur',
+    'garderNonResolu',
     corpsR + '\n; return relireUnTrouRattrapage;')(archive, e.trous, e.relus, () => epuise, refusDeBudget,
-    async (o) => { e.appels.push(o); return lister(o); }, () => {}, e.createurs, async ({ tx }) => ({ createur: '0x' + tx.slice(2, 42) }), () => {});
+    async (o) => { e.appels.push(o); return lister(o); }, () => {}, e.createurs, async ({ tx }) => ({ createur: createur(tx) }), () => {},
+    monterGarde(e.createurs, e.nonResolus));
   return e;
 }
 const J = (k) => '0xb2' + String(k).padStart(38, '0');
@@ -126,6 +148,13 @@ await cas('C4 fin du trou : il passe dans trousRattrapageRelus avec ses compteur
   assert.equal(e.appels[0].fin, 1_050_000, 'la derniere tranche ne depasse pas le trou');
   assert.equal(e.trous.length, 0); assert.equal(e.relus.length, 1); assert.equal(e.relus[0].nouvelles, 1); assert.ok(e.relus[0].fini);
 });
+await cas('C5 createur NON resolu dans relireUnTrouRattrapage : le trou recule, { jeton, tx } est GARDE ; un block deja resolu ne l est pas', async () => {
+  const e = relecteur({ trous: [{ de: 1_000_000, a: 1_300_000 }], connus: [J(5)], createur: (tx) => (tx === T(4) ? null : '0x' + tx.slice(2, 42)),
+    lister: () => ({ creations: [{ jeton: J(4), tx: T(4) }, { jeton: J(5), tx: T(5) }, { jeton: J(6), tx: T(6) }], fenetresRatees: [] }) });
+  await e.f();
+  assert.equal(e.trous[0].de, 1_100_000); assert.ok(e.createurs.has(J(6)) && !e.createurs.has(J(4)));
+  assert.deepEqual(e.nonResolus, [{ jeton: J(4), tx: T(4) }], 'le trou a recule sans ce block : il ne serait plus jamais relu');
+});
 
 /* ── D. persistance, relecture unique, publication ───────────────────────────────────────────── */
 await cas('D1 sauvegarde ET chargement des trous du rattrapage ; relecture unique si le fichier precede ce correctif', async () => {
@@ -138,7 +167,23 @@ await cas('D2 la passe relit les trous ; /api/blocks-de publie relus + attente ;
   assert.match(nu, /const rr = await relireUnTrouRattrapage\(\);/);
   assert.match(nu, /plagesRelues: trousRattrapageRelus\.slice\(-5\),/);
   assert.match(nu, /attendBudgetArchive: rattrapageDepuis !== null && rattrapageDepuis > PREMIER_BLOCK_TB && archiveEpuisee\(\),/);
-  assert.match(nu, /couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB\s+&& trousRattrapage\.length === 0,/);
+  /* 2026-10-09 (audit du budget d archive) : l expression garde ses deux conditions d avant, et en exige trois de plus — l assertion
+   *   d avant (`... && trousRattrapage.length === 0,`) est etendue, pas retiree ; l expression est EXECUTEE dans E1. */
+  assert.match(nu, /couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB\s+&& trousRattrapage\.length === 0\s+&& trousCreations\.length === 0 && createursNonResolus\.length === 0 && createursNonResolusJetes === 0,/);
+});
+
+/* ── E. couvertureComplete, l expression extraite de /api/blocks-de et EXECUTEE ─────────────────── */
+await cas('E1 couvertureComplete : vraie seulement plancher atteint ET zero trou (rattrapage, vers l avant) ET zero createur non resolu', async () => {
+  const m = /couvertureComplete: ([\s\S]*?),\r?\n/.exec(src.slice(src.indexOf("chemin === '/api/blocks-de'")));
+  assert.ok(m, 'couvertureComplete introuvable dans /api/blocks-de');
+  const couv = new Function('rattrapageDepuis', 'PREMIER_BLOCK_TB', 'trousRattrapage', 'trousCreations', 'createursNonResolus', 'createursNonResolusJetes', 'return (' + m[1] + ');');
+  const P = 50861088, propre = [P, P, [], [], [], 0];
+  assert.equal(couv(...propre), true);
+  assert.equal(couv(null, P, [], [], [], 0), false); assert.equal(couv(P + 1, P, [], [], [], 0), false);
+  assert.equal(couv(P, P, [{ de: 1, a: 2 }], [], [], 0), false);
+  assert.equal(couv(P, P, [], [{ de: 52302101, a: 52381409 }], [], 0), false, 'une creation dans un trou du scan vers l avant n est pas indexee');
+  assert.equal(couv(P, P, [], [], [{ jeton: J(1), tx: T(1) }], 0), false, 'un block au createur non resolu n est pas indexe');
+  assert.equal(couv(P, P, [], [], [], 1), false, 'un createur non resolu JETE par la borne est perdu : la couverture ne peut plus etre complete');
 });
 
 console.log('✓ ' + n + ' cas — un refus de budget fait attendre le rattrapage ; un trou se garde, se relit, et « complet » ne ment plus');

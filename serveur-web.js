@@ -2240,12 +2240,71 @@ const trousRattrapageRelus = [];
  *   a pu jeter un trou nomme. Absence de trou connu n est pas preuve d absence de trou : on relit tout depuis la tete, une fois. */
 let createursRelecture20261010 = false;
 let attenteBudgetDite = null;
+/* ⛔⛔ 2026-10-09 (audit du budget d archive) — UN CREATEUR NON RESOLU ETAIT PERDU POUR TOUJOURS. `createurDe` rend `null` quand la tx
+ *   n a pas pu etre lue ; on ne gravait rien (juste), mais le scan vers l avant, le curseur du rattrapage et `t.de` d un trou relu
+ *   AVANCAIENT quand meme : plus aucune passe ne revoyait ce block, et `couvertureComplete` pouvait passer a VRAI sans lui.
+ *   Il est maintenant GARDE ({ jeton, tx }), persiste, reessaye a chaque passe (`relireNonResolus`), et la couverture exige cette
+ *   liste vide. Borne : au-dela, le plus ancien part, COMPTE dans `createursNonResolusJetes` (persiste, publie) — et la couverture
+ *   ne se dit plus complete, puisqu un block est perdu. Non resolu n est pas « sans createur ». */
+const CREATEURS_NON_RESOLUS_MAX = 5000;
+const createursNonResolus = [];
+let createursNonResolusJetes = 0;
+function garderNonResolu(c) {
+  const jeton = String((c && c.jeton) || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(jeton) || createurParBlock.has(jeton) || createursNonResolus.some((x) => x.jeton === jeton)) return;
+  /* un hash mal forme (fichier ancien ou abime) devient `null` : `createurDe` le refuse sans appel, au lieu d un appel rate par passe */
+  createursNonResolus.push({ jeton, tx: /^0x[0-9a-fA-F]{64}$/.test(String(c.tx || '')) ? c.tx : null });
+  if (createursNonResolus.length > CREATEURS_NON_RESOLUS_MAX) {
+    const jetes = createursNonResolus.splice(0, createursNonResolus.length - CREATEURS_NON_RESOLUS_MAX);
+    createursNonResolusJetes += jetes.length;
+    console.log('[createurs] ⛔ ' + jetes.length + ' unresolved creator(s) dropped at the cap of ' + CREATEURS_NON_RESOLUS_MAX
+      + ' (' + createursNonResolusJetes + ' in all) — couvertureComplete stays false');
+  }
+}
+/** Reessaie AU PLUS 32 createurs non resolus par passe (lots de 8, comme les autres resolutions). Un resolu sort de la liste ; un echec
+ *  repart en FIN de file (un block illisible ne bloque pas les autres). Rien n est retire AVANT la reponse : une passe interrompue
+ *  laisse la liste entiere. */
+async function relireNonResolus() {
+  for (let k = createursNonResolus.length - 1; k >= 0; k--) if (createurParBlock.has(createursNonResolus[k].jeton)) createursNonResolus.splice(k, 1);
+  const essai = createursNonResolus.slice(0, 32);
+  if (!essai.length) return null;
+  let resolus = 0;
+  for (let i = 0; i < essai.length; i += 8) {
+    const lot = essai.slice(i, i + 8);
+    const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
+    for (let j = 0; j < lot.length; j++) {
+      const cre = res[j] && res[j].createur;
+      const k = createursNonResolus.indexOf(lot[j]);
+      if (k >= 0) createursNonResolus.splice(k, 1);
+      if (cre) { createurParBlock.set(lot[j].jeton, String(cre).toLowerCase()); resolus++; } else if (k >= 0) createursNonResolus.push(lot[j]);
+    }
+  }
+  return { essayes: essai.length, resolus, restent: createursNonResolus.length };
+}
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending.
  *  ⛔ 2026-10-09 (noeud d archive pose) : PERSISTEES avec le trending et RELUES par `relireUnTrou` ; elles ne vivaient qu en memoire et
  *  le trou mesure ce matin avait disparu au premier redeploiement. `trousRelus` garde ce qui a ete relu, et combien de creations. */
 const trousCreations = [];
 const trousRelus = [];
+/* ⛔⛔ 2026-10-09 (audit du budget d archive) — LE PLAFOND JETAIT LE TROU EN COURS DE RELECTURE, SANS UN MOT. Il etait de 50 et
+ *   `splice(0, …)` jetait les PLUS ANCIENS, donc [0] — celui que `relireUnTrou` relit, et ou le trou mesure du 10-09 est seme par
+ *   `unshift`. Un trou jete, ce sont des fenetres refusees qui deviennent « jamais a relire » : une fenetre refusee n est pas une
+ *   fenetre vide. Plafond 200 comme `trousRattrapage` ; au-dela, rien n est JETE : les plus anciens APRES [0] sont FONDUS en une
+ *   seule plage qui les couvre tous (relue entiere, blocs deja lus compris — un cout d archive, pas une perte), et c est dit dans
+ *   le journal. Appele partout ou la file grandit (scan vers l avant, graine, chargement). */
+const TROUS_CREATIONS_MAX = 200;
+function bornerTrousCreations(ou) {
+  if (trousCreations.length <= TROUS_CREATIONS_MAX) return 0;
+  const fondus = trousCreations.splice(1, trousCreations.length - TROUS_CREATIONS_MAX + 1);
+  const de = Math.min(...fondus.map((t) => t.de)), a = Math.max(...fondus.map((t) => t.a));
+  /* `fondus` est CUMULE : une plage deja fondue compte pour les trous qu elle porte, pas pour un */
+  trousCreations.splice(1, 0, { de, a, fenetres: fondus.reduce((s, t) => s + (Number(t.fenetres) || 0), 0), t: fondus[fondus.length - 1].t,
+    fondus: fondus.reduce((s, t) => s + (Number.isSafeInteger(t.fondus) && t.fondus > 0 ? t.fondus : 1), 0) });
+  console.log('[trous] ⛔ ' + ou + ' : cap of ' + TROUS_CREATIONS_MAX + ' gaps reached — ' + fondus.length + ' gap(s) merged into ' + de + '..' + a
+    + ' (none dropped ; the gap being re-read stays first)');
+  return fondus.length;
+}
 /* ⛔ LE TROU MESURE LE 2026-10-09 (lu dans /sante.trousCreations ce jour-la : 52302101 -> 52381409, 35 fenetres, base.org 429 a tout
  *   getLogs). Seme UNE fois (drapeau persiste `trouSeme20261009`), puis il vit comme les autres. */
 const TROU_MESURE_20261009 = Object.freeze({ de: 52302101, a: 52381409, fenetres: 35, t: '2026-10-09T00:00:00.000Z', seme: true });
@@ -2253,18 +2312,20 @@ let trouSeme20261009 = false;
 /** Relit AU PLUS 10 000 blocs du plus ancien trou (5 pages de 2 000). Le trou ne recule QUE sur une relecture complete : une page
  *  refusee laisse le trou tel quel (il sera relu au prochain passage) — jamais « relu » sur une lecture partielle. */
 async function relireUnTrou() {
-  if (!RPC_ARCHIVE || !trousCreations.length) return null;
+  /* ⛔ 2026-10-09 (audit du budget d archive) : budget du jour epuise, chaque page est refusee A COUP SUR — on n essaie meme pas
+   *   (meme garde que relireUnTrouRattrapage). Le trou reste tel quel, en tete de file : il attend, il ne recule pas. */
+  if (!RPC_ARCHIVE || !trousCreations.length || archiveEpuisee()) return null;
   const t = trousCreations[0];
   const haut = Math.min(t.a, t.de + 10000);
   /* un trou est de l histoire : directement au noeud d archive (rpcHistoire), pas derriere base.org et publicnode */
   const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
-  if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length };
+  if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length, budget: refusDeBudget(r.fenetresRatees) };
   const nouvelles = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !blocksConnus.has(c.jeton.toLowerCase()));
   for (const c of r.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
   for (let i = 0; i < nouvelles.length; i += 8) {
     const lot = nouvelles.slice(i, i + 8);
     const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
-    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); }
+    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); else garderNonResolu(lot[j]); }
   }
   t.relues = (t.relues || 0) + (r.creations || []).length;
   t.nouvelles = (t.nouvelles || 0) + nouvelles.length;
@@ -2288,7 +2349,7 @@ async function relireUnTrouRattrapage() {
   for (let i = 0; i < aFaire.length; i += 8) {
     const lot = aFaire.slice(i, i + 8);
     const res = await Promise.all(lot.map((c) => createurDe({ rpc: rpcServeur, tx: c.tx })));
-    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); }
+    for (let j = 0; j < lot.length; j++) { const cre = res[j] && res[j].createur; if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase()); else garderNonResolu(lot[j]); }
   }
   t.relues = (t.relues || 0) + (r.creations || []).length;
   t.nouvelles = (t.nouvelles || 0) + aFaire.length;
@@ -2317,16 +2378,56 @@ function chargerTrendingDisque() {
   try {
     if (!FICHIER_TRENDING || !existsSync(FICHIER_TRENDING)) return;
     const x = JSON.parse(readFileSync(FICHIER_TRENDING, 'utf8'));
-    if (!x || x.ver !== TRENDING_CACHE_VER || typeof x.corps !== 'string' || x.corps.length < 20) {
-      console.log('[trending] disk cache ignored (ver/empty)');
+    if (!x || typeof x !== 'object' || Array.isArray(x)) { console.log('[trending] disk cache ignored (not an object)'); return; }
+    /* ⛔⛔ 2026-10-09 (audit du budget d archive) — L AVANCEMENT EST RELU AVANT LE CORPS, QUOI QU IL ARRIVE AU CORPS. Les gardes plus
+     *     bas (version, ok:false, vide+ratees, forme) protegent le CORPS servi ; elles faisaient `return` AVANT cette relecture, et la
+     *     sauvegarde suivante ecrivait par-dessus des listes VIDES : index des createurs, blocks connus, curseurs, drapeaux de
+     *     relecture, files de trous. Un corps rejete ne jette plus que le corps (`trCache`). Chaque champ reste valide un par un. */
+    for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
+    /* ⛔ ON RELIT L INDEX DES CREATEURS, ET ON VALIDE LES DEUX COTES : une entree mal formee gravee
+     *   par une ancienne version ferait repondre l endpoint avec des adresses qui n en sont pas. */
+    for (const [j, c] of (x.createurs || [])) {
+      if (/^0x[0-9a-fA-F]{40}$/.test(j || '') && /^0x[0-9a-fA-F]{40}$/.test(c || '')) {
+        createurParBlock.set(String(j).toLowerCase(), String(c).toLowerCase());
+      }
+    }
+    /* les createurs NON resolus : apres l index (un block deja resolu ne revient pas), valides par `garderNonResolu` */
+    if (Number.isSafeInteger(x.createursNonResolusJetes) && x.createursNonResolusJetes > 0) createursNonResolusJetes = x.createursNonResolusJetes;
+    for (const c of (Array.isArray(x.createursNonResolus) ? x.createursNonResolus : [])) garderNonResolu(c);
+    if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
+    if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
+    /* ⛔ UNE RELECTURE, UNE SEULE : un fichier ecrit sous l ancien plafond (5 000 createurs, sans le drapeau) a perdu des entrees que
+     *   le rattrapage « complet » ne relirait jamais. On repart de la tete une fois ; le drapeau persiste empeche toute autre fois. */
+    if (x.createursRelecture20261009 === true) createursRelecture20261009 = true;
+    else if ((x.createurs || []).length >= 5000) { rattrapageDepuis = null; createursRelecture20261009 = true; console.log('[createurs] index saved under the old 5,000 cap — full re-read from the head, once'); }
+    /* les trous de creations et leur relecture survivent au redeploiement ; une entree mal formee est ignoree, jamais inventee */
+    const trouSain = (t) => t && Number.isSafeInteger(t.de) && Number.isSafeInteger(t.a) && t.a > t.de;
+    for (const t of (Array.isArray(x.trousRattrapage) ? x.trousRattrapage : [])) if (trouSain(t)) trousRattrapage.push({ de: t.de, a: t.a, pages: Number.isSafeInteger(t.pages) ? t.pages : null });
+    for (const t of (Array.isArray(x.trousRattrapageRelus) ? x.trousRattrapageRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRattrapageRelus.push(t);
+    if (x.createursRelecture20261010 === true) createursRelecture20261010 = true;
+    else {
+      /* fichier ecrit AVANT ce correctif : les trous nommes ont pu etre jetes a chaque redeploiement — on relit tout, une fois */
+      rattrapageDepuis = null; createursRelecture20261010 = true;
+      console.log('[createurs] gaps were not persisted before this build — full re-read from the head, once');
+    }
+    for (const t of (Array.isArray(x.trousCreations) ? x.trousCreations : [])) if (trouSain(t)) trousCreations.push(t);
+    bornerTrousCreations('disk load');
+    for (const t of (Array.isArray(x.trousRelus) ? x.trousRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRelus.push(t);
+    if (x.trouSeme20261009 === true) trouSeme20261009 = true;
+    console.log('[trending] progress loaded · blocksConnus=' + blocksConnus.size + ' · createurs=' + createurParBlock.size
+      + ' · blocsLusJusqua=' + blocsLusJusqua + ' · rattrapageDepuis=' + rattrapageDepuis + ' · trousCreations=' + trousCreations.length
+      + ' · createursNonResolus=' + createursNonResolus.length);
+    /* ── a partir d ici, le CORPS seulement : un `return` ne jette que `trCache`, jamais l avancement relu ci-dessus ── */
+    if (x.ver !== TRENDING_CACHE_VER || typeof x.corps !== 'string' || x.corps.length < 20) {
+      console.log('[trending] disk cache ignored (ver/empty) — body only, progress kept');
       return;
     }
     let parsed = null;
     try { parsed = JSON.parse(x.corps); } catch { parsed = null; }
     /* never revive a failed empty scan — that is what hid Map soleils after tip map-trending */
-    if (parsed && parsed.ok === false) return;
+    if (parsed && parsed.ok === false) { console.log('[trending] disk cache ignored (ok:false) — body only, progress kept'); return; }
     if (parsed && !(parsed.lignes || []).length && (parsed.fenetresRatees || 0) > 0 && !(parsed.blocksSuivis > 0)) {
-      console.log('[trending] disk cache ignored (empty+ratees)');
+      console.log('[trending] disk cache ignored (empty+ratees) — body only, progress kept');
       return;
     }
     /* ⛔⛔⛔ LA FORME EST VERIFIEE, PAS SEULEMENT LA VERSION — ET C EST UNE MESURE, PAS UNE PRECAUTION.
@@ -2351,38 +2452,11 @@ function chargerTrendingDisque() {
       const manque = champsAttendus.find((c) => !Object.prototype.hasOwnProperty.call(parsed, c))
         || champsLigne.find((c) => !Object.prototype.hasOwnProperty.call(parsed.lignes[0] || {}, c));
       if (manque) {
-        console.log('[trending] disk cache ignored (shape: no ' + manque + ' — written by older code)');
+        console.log('[trending] disk cache ignored (shape: no ' + manque + ' — written by older code) — body only, progress kept');
         return;
       }
     }
     trCache = { a: Number(x.a) || 0, corps: x.corps }; /* a=0 → force refresh path still kicks background */
-    for (const a of (x.adrs || [])) if (/^0x[0-9a-fA-F]{40}$/.test(a)) blocksConnus.add(a.toLowerCase());
-    /* ⛔ ON RELIT L INDEX DES CREATEURS, ET ON VALIDE LES DEUX COTES : une entree mal formee gravee
-     *   par une ancienne version ferait repondre l endpoint avec des adresses qui n en sont pas. */
-    for (const [j, c] of (x.createurs || [])) {
-      if (/^0x[0-9a-fA-F]{40}$/.test(j || '') && /^0x[0-9a-fA-F]{40}$/.test(c || '')) {
-        createurParBlock.set(String(j).toLowerCase(), String(c).toLowerCase());
-      }
-    }
-    if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
-    if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
-    /* ⛔ UNE RELECTURE, UNE SEULE : un fichier ecrit sous l ancien plafond (5 000 createurs, sans le drapeau) a perdu des entrees que
-     *   le rattrapage « complet » ne relirait jamais. On repart de la tete une fois ; le drapeau persiste empeche toute autre fois. */
-    if (x.createursRelecture20261009 === true) createursRelecture20261009 = true;
-    else if ((x.createurs || []).length >= 5000) { rattrapageDepuis = null; createursRelecture20261009 = true; console.log('[createurs] index saved under the old 5,000 cap — full re-read from the head, once'); }
-    /* les trous de creations et leur relecture survivent au redeploiement ; une entree mal formee est ignoree, jamais inventee */
-    const trouSain = (t) => t && Number.isSafeInteger(t.de) && Number.isSafeInteger(t.a) && t.a > t.de;
-    for (const t of (Array.isArray(x.trousRattrapage) ? x.trousRattrapage : [])) if (trouSain(t)) trousRattrapage.push({ de: t.de, a: t.a, pages: Number.isSafeInteger(t.pages) ? t.pages : null });
-    for (const t of (Array.isArray(x.trousRattrapageRelus) ? x.trousRattrapageRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRattrapageRelus.push(t);
-    if (x.createursRelecture20261010 === true) createursRelecture20261010 = true;
-    else {
-      /* fichier ecrit AVANT ce correctif : les trous nommes ont pu etre jetes a chaque redeploiement — on relit tout, une fois */
-      rattrapageDepuis = null; createursRelecture20261010 = true;
-      console.log('[createurs] gaps were not persisted before this build — full re-read from the head, once');
-    }
-    for (const t of (Array.isArray(x.trousCreations) ? x.trousCreations : [])) if (trouSain(t)) trousCreations.push(t);
-    for (const t of (Array.isArray(x.trousRelus) ? x.trousRelus : [])) if (t && Number.isSafeInteger(t.a)) trousRelus.push(t);
-    if (x.trouSeme20261009 === true) trouSeme20261009 = true;
     console.log('[trending] disk cache loaded · blocksConnus=' + blocksConnus.size + ' · lignes=' + ((parsed && parsed.lignes) || []).length);
   } catch (e) { console.log('[trending] disk cache unread:', e.message); }
 }
@@ -2424,7 +2498,11 @@ function sauverTrendingDisque() {
       /* ⛔ L AVANCEMENT DU RATTRAPAGE EST PERSISTE AVEC L INDEX : sans lui, chaque deploiement
        *   recommencerait a remonter depuis le present et ne finirait JAMAIS le passe. */
       rattrapageDepuis,
-      trousCreations: trousCreations.slice(-50), trousRelus: trousRelus.slice(-50), trouSeme20261009,
+      /* ⛔ la file est bornee la ou elle grandit (`bornerTrousCreations`, qui fond sans jeter) : cette coupe n agit pas, et si elle
+       *   agissait elle garderait [0], le trou en cours de relecture — l ancien `slice(-50)` le jetait en premier. */
+      trousCreations: trousCreations.slice(0, TROUS_CREATIONS_MAX), trousRelus: trousRelus.slice(-50), trouSeme20261009,
+      /* les createurs non resolus (bornes par `garderNonResolu`) et le compte de ceux que la borne a jetes */
+      createursNonResolus, createursNonResolusJetes,
       /* ⛔ les trous du rattrapage des createurs : persistes, sinon un redeploiement les efface et « complet » ment. Champ ajoute
        *   SANS changer TRENDING_CACHE_VER : la changer jetterait tout le cache, index des createurs compris ; un ancien fichier
        *   sans ce champ se relit comme « aucun trou », et c est la relecture unique ci-dessus qui couvre ce cas. */
@@ -2479,6 +2557,7 @@ async function lireTrending() {
         for (let j = 0; j < lot.length; j++) {
           const cre = res[j] && res[j].createur;
           if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase());
+          else garderNonResolu(lot[j]); /* le scan vers l avant ne repassera plus ici : sans la liste, ce block etait perdu */
         }
       }
       if (aResoudre.length) {
@@ -2524,6 +2603,7 @@ async function lireTrending() {
           for (let j = 0; j < lot.length; j++) {
             const cre = res[j] && res[j].createur;
             if (cre) createurParBlock.set(lot[j].jeton.toLowerCase(), String(cre).toLowerCase());
+            else garderNonResolu(lot[j]); /* le curseur descend quand meme : sans la liste, ce block etait perdu */
           }
         }
         /* ⛔⛔ AVANT : « on n avance QUE si la fenetre a ete lue ». L INTENTION ETAIT JUSTE — ne
@@ -2556,8 +2636,9 @@ async function lireTrending() {
     /* ⛔⛔ 2026-10-09 — LES TROUS SE RELISENT maintenant qu un noeud d archive est pose (sans lui, relireUnTrou ne fait rien). */
     try {
       if (RPC_ARCHIVE && !trouSeme20261009) { trousCreations.unshift({ ...TROU_MESURE_20261009 }); trouSeme20261009 = true; }
+      bornerTrousCreations('seed'); /* la graine entre en [0] : une file deja pleine ne depasse pas la borne (sans effet sinon) */
       const rt = await relireUnTrou();
-      if (rt) console.log('[trous] ' + (rt.ratees ? '⛔ relecture ' + rt.trou.de + '..' + rt.haut + ' incomplete (' + rt.ratees + ' page(s) refusee(s)) — le trou reste'
+      if (rt) console.log('[trous] ' + (rt.ratees ? '⛔ relecture ' + rt.trou.de + '..' + rt.haut + ' incomplete (' + rt.ratees + ' page(s) refusee(s)' + (rt.budget ? ', archive budget' : '') + ') — le trou reste'
         : 'relu ' + rt.haut + ' · ' + rt.creations + ' creation(s), ' + rt.nouvelles + ' nouvelle(s) · restent ' + trousCreations.length + ' trou(s)'));
     } catch (e) { console.log('[trous] relecture interrompue : ' + e.message); }
     try {
@@ -2565,6 +2646,10 @@ async function lireTrending() {
       if (rr) console.log('[createurs] ' + (rr.ratees ? '⛔ gap ' + rr.trou.de + '..' + rr.haut + ' not re-read (' + rr.ratees + ' page(s) refused' + (rr.budget ? ', archive budget' : '') + ') — the gap stays'
         : 'gap re-read up to ' + rr.haut + ' · ' + rr.creations + ' creation(s), ' + rr.nouvelles + ' creator(s) resolved · ' + trousRattrapage.length + ' gap(s) left'));
     } catch (e) { console.log('[createurs] gap re-read interrupted : ' + e.message); }
+    try {
+      const rn = await relireNonResolus();
+      if (rn) console.log('[createurs] unresolved creators retried · ' + rn.resolus + '/' + rn.essayes + ' resolved · ' + rn.restent + ' left');
+    } catch (e) { console.log('[createurs] unresolved retry interrupted : ' + e.message); }
     console.log('[trending] scan done · creations=' + (cr.creations || []).length + ' · ratees=' + (cr.fenetresRatees || []).length + ' · connus=' + blocksConnus.size);
     /* advance if any creations read OR zero ratees; partial progress beats permanent hang */
     if (!(cr.fenetresRatees || []).length || (cr.creations || []).length) {
@@ -2573,7 +2658,7 @@ async function lireTrending() {
        *   rendu par /sante, pour qu un noeud d archive puisse un jour les relire au lieu de les oublier en silence. */
       if ((cr.fenetresRatees || []).length) {
         trousCreations.push({ de: blocsLusJusqua === null ? fin - blocs : blocsLusJusqua, a: fin, fenetres: cr.fenetresRatees.length, t: new Date().toISOString() });
-        if (trousCreations.length > 50) trousCreations.splice(0, trousCreations.length - 50);
+        bornerTrousCreations('forward scan'); /* ⛔ avant : plafond 50, `splice(0, …)` jetait [0] (le trou en relecture) sans un mot */
         console.log('[trending] ⛔ ' + cr.fenetresRatees.length + ' fenetre(s) refusee(s) sautee(s) — notees dans /sante.trousCreations');
       }
       blocsLusJusqua = fin;
@@ -3410,9 +3495,17 @@ createServer((req, res) => {
        *     a saute des plages en chemin : on se declarerait complet avec des creations
        *     manquantes, et une liste vide redeviendrait un mensonge — le defaut meme qu on repare.
        *     Les DEUX conditions, jamais une seule. */
+      /* ⛔⛔ 2026-10-09 (audit du budget d archive) — ET ZERO TROU DU SCAN VERS L AVANT, ET ZERO CREATEUR NON RESOLU. Une creation
+       *     dans une fenetre sautee par le scan vers l avant (`trousCreations`) n est pas indexee ; un block dont la tx n a pas pu
+       *     etre lue (`createursNonResolus`), ou jete par la borne de cette liste, non plus. Le rattrapage ne repasse sur aucun des
+       *     deux : sans ces conditions, « complet » mentait sur eux. */
       couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB
-        && trousRattrapage.length === 0,
+        && trousRattrapage.length === 0
+        && trousCreations.length === 0 && createursNonResolus.length === 0 && createursNonResolusJetes === 0,
       rattrapageDepuis,
+      trousCreations: trousCreations.length,
+      createursNonResolus: createursNonResolus.length,
+      createursNonResolusJetes,
       /* ⛔ LES PLAGES SAUTEES SONT PUBLIEES, PAS TUES : c est ce qui rend le saut acceptable. Un
        *   trou nomme se rattrape ; un trou tu ne se rattrape jamais. */
       trous: trousRattrapage.length,
