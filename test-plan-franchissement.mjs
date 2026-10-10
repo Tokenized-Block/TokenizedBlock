@@ -76,14 +76,21 @@ t('pool: entreeEst0 faux quand token0 == sortie', r1b.entreeEst0 === false);
 t('pool: LES DEUX SENS DIFFERENT', r1.entreeEst0 !== r1b.entreeEst0);
 
 /* ⛔⛔ « AUCUNE POOL » N EST PAS « IL N Y A PAS DE POOL » SI DES LECTURES ONT ECHOUE. */
-const vide = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {} }), a: USDC, b: AAPLC });
+/* 2026-10-10 (234ff51) : AAPLc est EPINGLE (1 espacement, le mesure) - le balayage des 9 se prouve sur une paire non epinglee (cbBTC) */
+const NONEP = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const vide = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {} }), a: USDC, b: NONEP });
 t('pool: aucune pool, toutes lectures OK => REFUSE (un verdict)', vide.etat === 'REFUSE');
 t('pool: et le refus dit combien d espacements ont ete essayes',
   new RegExp(String(vide.essayes)).test(vide.pourquoi) && vide.essayes === ESPACEMENTS_CL.length);
-const aveugle = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {}, refuseGetPool: 3 }), a: USDC, b: AAPLC });
+const aveugle = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {}, refuseGetPool: 3 }), a: USDC, b: NONEP });
 t('pool: des lectures refusees => NON_MESURE (une cecite)', aveugle.etat === 'NON_MESURE');
 t('pool: et il DIT que ce serait notre aveuglement', /blindness/i.test(aveugle.pourquoi));
 t('pool: REFUSE et NON_MESURE DIFFERENT', vide.etat !== aveugle.etat);
+/* et la paire EPINGLEE garde les deux informations : 1 espacement essaye, et l aveuglement si la lecture manque */
+const videE = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {} }), a: USDC, b: AAPLC });
+t('pool epinglee: aucune pool rendue => REFUSE, et le refus dit 1 espacement essaye', videE.etat === 'REFUSE' && videE.essayes === 1 && /1 tried/.test(videE.pourquoi));
+const aveugleE = await poolAerodromeDe({ rpc: rpcQui({ refuseGetPool: 9 }), a: USDC, b: AAPLC });
+t('pool epinglee: getPool refuse => NON_MESURE qui DIT l aveuglement', aveugleE.etat === 'NON_MESURE' && /blindness/i.test(aveugleE.pourquoi));
 /* ⛔ UNE POOL TROUVEE DONT ON NE SAIT PAS LIRE LE SENS NE SE DEVINE PAS. */
 const sansSens = await poolAerodromeDe({ rpc: rpcQui({ refuseToken0: true }), a: USDC, b: AAPLC });
 t('pool: token0 illisible => NON_MESURE', sansSens.etat === 'NON_MESURE');

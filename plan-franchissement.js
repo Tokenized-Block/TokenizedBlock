@@ -75,8 +75,9 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL,
     const c = calldataGetPool({ tokenA: a, tokenB: b, tickSpacing: epingle.tickSpacing });
     let rendue = null;
     try { rendue = c.etat === 'PRET' ? bas('0x' + String(await appel(rpc, c.to, c.data)).slice(-40)) : null; } catch (_) { rendue = null; }
-    if (!rendue || !ADR.test(rendue)) return { etat: 'NON_MESURE', pourquoi: 'the measured pool of this stock could not be confirmed by the factory, so no pool is used' };
-    if (rendue !== bas(epingle.pool)) return { etat: 'REFUSE', pourquoi: 'the factory no longer returns the measured pool of this stock: nothing is built on another pool' };
+    /* le refus garde ce qu il disait : combien d espacements ont ete essayes (ici 1, le mesure) et, si la lecture a manque, que ce serait notre aveuglement */
+    if (!rendue || !ADR.test(rendue)) return { etat: 'NON_MESURE', essayes: 1, refus: 1, pourquoi: '1 of the 1 tick spacings tried (the measured one) could not be read, so "no pool" would be our blindness and not a fact about the chain' };
+    if (rendue !== bas(epingle.pool)) return { etat: 'REFUSE', essayes: 1, refus: 0, pourquoi: 'the factory no longer returns the measured pool of this stock at its tick spacing (1 tried): nothing is built on another pool' };
     let t0 = null;
     try { t0 = '0x' + String(await appel(rpc, rendue, selecteur('token0()'))).slice(-40); } catch (_) { t0 = null; }
     if (!t0 || !ADR.test(t0)) return { etat: 'NON_MESURE', pourquoi: 'the pool was found but token0() could not be read, so the swap direction is unknown' };

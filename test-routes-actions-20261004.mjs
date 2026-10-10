@@ -201,6 +201,7 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
    *   Il rend maintenant la pool MESUREE quand l appel nomme l action, la pool fictive pour le saut USDC/WETH (non epingle). */
   const mesuree = POOLS_ACTIONS_AERODROME.get(adrDe(symAero)).pool;
   const rpc = async (methode, params) => {
+    if (methode === 'eth_simulateV1') return [{ calls: params[0].blockStateCalls[0].calls.map(() => ({ status: '0x1' })) }]; /* 2026-10-10 (e0b346d) : le segment simule son plan ; ce faux noeud dit que la simulation passe */
     const data = String(params[0].data || '');
     if (data.startsWith(C.SELECTEURS.getPool)) return '0x' + (data.toLowerCase().includes(adrDe(symAero).slice(2)) ? mesuree : pool).slice(2).padStart(64, '0');
     if (data.startsWith('0x70a08231')) return '0x' + (10n ** 12n).toString(16).padStart(64, '0');

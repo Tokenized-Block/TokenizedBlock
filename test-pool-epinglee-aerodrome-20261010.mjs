@@ -31,6 +31,7 @@ function lecteur({ vraieProf = 'jamais', getPoolVraie = VRAIE, getPoolLeve = fal
   }
   const vus = [];
   const rpc = async (m, params) => {
+    if (m === 'eth_simulateV1') return [{ calls: params[0].blockStateCalls[0].calls.map(() => ({ status: '0x1' })) }]; /* 2026-10-10 (e0b346d) : le segment simule son plan ; ce faux noeud dit que la simulation passe */
     if (m !== 'eth_call') return '0x1';
     const { to, data } = params[0];
     if (gp.has(data)) { if (getPoolLeve && gp.get(data) === getPoolVraie) throw new Error('429'); return '0x' + mot(gp.get(data)); }

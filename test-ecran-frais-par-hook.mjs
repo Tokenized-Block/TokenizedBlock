@@ -126,7 +126,8 @@ const fabriquerGarde = (g) => new Function('r', 'pf', 'compte', 'estWalletDeFrai
   g + '\nreturn "OK";');
 const feeWalletDansCalldata = new Function('FEE_WALLET', src2 + '\nreturn feeWalletDansCalldata;')(FEE_WALLET);
 const juge = (g, pf) => fabriquerGarde(g)(pf.resume, pf, compte, () => false, feeWalletDansCalldata, fraisPayeParHook, BPS_MAX, FEE_WALLET, () => 'REFUS');
-const POOL_A = '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0', NVDA = '0xb20000000000000000000078ee7ce2fe4908108c';
+/* 2026-10-10 (234ff51) : la pool MESUREE de NVDAc (le franchissement epingle la table) ; c etait celle d AAPLc */
+const POOL_A = '0x853f5f1b92b16714fe6cda67caad0856b83c7ab9', NVDA = '0xb20000000000000000000078ee7ce2fe4908108c';
 const B20 = '0xb200000000000000000000000000000000000001';
 const SEL = ['getPool(address,address,int24)', 'token0()', 'slot0()'].map((x) => '0x' + PO.selecteur(x));
 const motA = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');

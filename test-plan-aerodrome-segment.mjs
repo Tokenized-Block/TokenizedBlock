@@ -38,6 +38,7 @@ function rpcQui({ ts = 10, token0 = USDC, sqrt = UN_POUR_UN, refuseSlot0 = false
   const T0 = selecteur('token0()');
   const S0 = selecteur('slot0()');
   return async (_m, p) => {
+    if (_m === 'eth_simulateV1') return [{ calls: p[0].blockStateCalls[0].calls.map(() => ({ status: '0x1' })) }]; /* 2026-10-10 (e0b346d) : le segment simule son plan ; ce faux noeud dit que la simulation passe */
     const d = String(p[0].data || '');
     if (d.startsWith(GP)) {
       if (poolNulle) return '0x' + mot(NUL);
@@ -98,9 +99,15 @@ t('⛔ sans beneficiaire => REFUSE', sansBenef.etat === 'REFUSE');
  *     d actions et 1 sur CINQ autres. Un « 10 » en dur construirait un calldata vers une pool
  *     INEXISTANTE pour cinq actions sur douze, et ca reverterait APRES la signature.
  *   ⇒ ON VERIFIE DONC L ESPACEMENT DANS LES OCTETS DU SWAP, pas l etat du plan. */
-const ts1 = await planAerodromeSegment({ ...commun, rpc: rpcQui({ ts: 1 }), chemin: cheminUn });
+/* 2026-10-10 (234ff51) : AAPLc est desormais EPINGLE sur sa pool mesuree (ts 10) - la decouverte d espacement se prouve sur une
+ *   paire NON epinglee (USDC/cbBTC), avec les MEMES trois espacements. */
+const NONEP = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const cheminX = [{ de: USDC, vers: NONEP, famille: AERO }], communX = { ...commun, block: NONEP };
+const ts10 = await planAerodromeSegment({ ...communX, rpc: rpcQui({ ts: 10 }), chemin: cheminX });
+t('une pool a tickSpacing 10 est trouvee (paire non epinglee)', ts10.etat === 'PRET');
+const ts1 = await planAerodromeSegment({ ...communX, rpc: rpcQui({ ts: 1 }), chemin: cheminX });
 t('une pool a tickSpacing 1 est trouvee', ts1.etat === 'PRET');
-const ts2000 = await planAerodromeSegment({ ...commun, rpc: rpcQui({ ts: 2000 }), chemin: cheminUn });
+const ts2000 = await planAerodromeSegment({ ...communX, rpc: rpcQui({ ts: 2000 }), chemin: cheminX });
 t('une pool a tickSpacing 2000 est trouvee', ts2000.etat === 'PRET');
 /* L espacement est encode en int24 dans le chemin du swap : on le cherche dans les octets. */
 /* ⛔ CHERCHER UNE SOUS-CHAINE HEXA EST TROP CRU : « 00000a » apparait par hasard dans un calldata
@@ -108,9 +115,9 @@ t('une pool a tickSpacing 2000 est trouvee', ts2000.etat === 'PRET');
  *   calldata, c est que TROIS espacements differents donnent TROIS calldata differents — et que les
  *   plans portent bien l espacement resolu, pas une valeur fixe. */
 t('⛔ trois espacements donnent trois calldata DIFFERENTS',
-  new Set([r.appels[1].data, ts1.appels[1].data, ts2000.appels[1].data]).size === 3);
+  new Set([ts10.appels[1].data, ts1.appels[1].data, ts2000.appels[1].data]).size === 3);
 t('⛔ et un espacement en dur rendrait ces trois calldata identiques',
-  r.appels[1].data !== ts1.appels[1].data);
+  ts10.appels[1].data !== ts1.appels[1].data);
 /* ⛔ ET SI LA FACTORY NE CONNAIT AUCUNE POOL : REFUSE, pas un calldata vers le vide. */
 const aucune = await planAerodromeSegment({ ...commun, rpc: rpcQui({ poolNulle: true }), chemin: cheminUn });
 t('aucune pool => REFUSE', aucune.etat === 'REFUSE');
