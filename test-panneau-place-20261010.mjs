@@ -55,6 +55,13 @@ function verifier(html) {
   ok(html.includes("$('#bcPop').addEventListener('close', () => { try { document.body.classList.remove('bcOuvert', 'bcReplie'); } catch (_) {} });"), 'P7b une fermeture par un autre chemin laisse une classe');
   /* 8. replie, tout l en-tete deplie d un clic ; un bouton garde son geste */
   ok(html.includes("if (!$('#bcPop').classList.contains('bcReduit') || (e.target && e.target.closest && e.target.closest('button, a, input, form, select'))) return;"), 'P8 le rail ne deplie plus au clic (ou un bouton deplie au lieu de fermer)');
+  /* 9. (Phil, 2026-10-10 : « lire a la verticale quand la barre est de cote ») : lettres DROITES empilees, aucune rotation ;
+   *   l agent en un mot et un point, sa phrase entiere gardee (DOM + bulle) */
+  ok(html.includes('dialog.bcPop.bcReduit .titre,dialog.bcPop.bcReduit #bcAgent{order:3;writing-mode:vertical-rl;text-orientation:upright;white-space:nowrap;'), 'P9a le rail ne lit plus a la verticale (lettres droites)');
+  ok(!/dialog\.bcPop\.bcReduit[^{]*\{[^}]*rotate\(180deg\)/.test(html), 'P9b le texte du rail est de nouveau tourne (lu de bas en haut)');
+  ok(html.includes("dialog.bcPop.bcReduit #bcAgent.actif::after{content:'Agent \\25CF';color:var(--accent)}") && html.includes("dialog.bcPop.bcReduit #bcAgent::after{content:'Agent \\25CB';"), 'P9c l etat de l agent n a plus son point (connecte / non)');
+  ok(html.includes("$('#bcAgent').classList.toggle('actif', actif); $('#bcAgent').title = $('#bcAgent').textContent;"), 'P9d la classe de l agent ne suit plus son etat');
+  ok(html.includes('<span class="puce" id="bcAgent" title="Agent: not connected">Agent: not connected</span>'), 'P9e la phrase de l agent n est plus en bulle au depart');
   return ko;
 }
 
@@ -76,6 +83,8 @@ const MUTANTS = [
   ['m7 pas de mesure apres l ouverture', 'bcPoserTaille(); /* 2026-10-10 : la place laissee a la page, mesuree juste apres l ouverture */', '/* plus de mesure */', /^P6c /],
   ['m8 ✕ laisse bcReplie', "$('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert', 'bcReplie');", "$('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert');", /^P7a /],
   ['m10 une autre fermeture laisse bcReplie', "$('#bcPop').addEventListener('close', () => { try { document.body.classList.remove('bcOuvert', 'bcReplie');", "$('#bcPop').addEventListener('close', () => { try { document.body.classList.remove('bcOuvert');", /^P7b /],
+  ['m11 le rail tourne de nouveau son texte', 'writing-mode:vertical-rl;text-orientation:upright;white-space:nowrap;', 'writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;', /^P9a /],
+  ['m12 la classe de l agent ne suit plus', "$('#bcAgent').classList.toggle('actif', actif); ", '', /^P9d /],
   ['m9 un bouton deplie au lieu de garder son geste', "e.target.closest('button, a, input, form, select')", "e.target.closest('a, input, form, select')", /^P8 /],
 ];
 for (const [nom, de, vers, casse] of MUTANTS) {

@@ -720,8 +720,19 @@ dialog.bcPop.bcReduit #bcAgent{min-width:0;overflow:hidden;text-overflow:ellipsi
   dialog.bcPop.bcReduit .bcHaut{flex-direction:column;align-items:center;gap:10px}
   dialog.bcPop.bcReduit #bcReduire{order:1}
   dialog.bcPop.bcReduit #bcFermer{order:2}
-  dialog.bcPop.bcReduit .titre,dialog.bcPop.bcReduit #bcAgent{order:3;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}
+  /* 2026-10-10 (Phil : « ajoute la lecture pour lire a la verticale quand la barre est de cote ») : les lettres restent DROITES,
+   *   empilees de haut en bas — on lit sans pencher la tete (avant : texte tourne, lu de bas en haut). L agent tient en un mot et
+   *   un point (● connecte, ○ non) ; la phrase entiere reste dans le DOM (lecteurs d ecran) et en bulle au survol (title). */
+  dialog.bcPop.bcReduit .titre,dialog.bcPop.bcReduit #bcAgent{order:3;writing-mode:vertical-rl;text-orientation:upright;white-space:nowrap;
+    text-transform:uppercase;letter-spacing:1px;line-height:1}
+  dialog.bcPop.bcReduit .titre{font-size:12px;font-weight:800;margin-top:6px!important}
+  dialog.bcPop.bcReduit #bcAgent{font-size:0;padding:8px 4px;border-radius:99px}
+  dialog.bcPop.bcReduit #bcAgent::after{content:'Agent \25CB';font-size:10px;font-weight:700;color:var(--doux);letter-spacing:1px}
+  dialog.bcPop.bcReduit #bcAgent.actif::after{content:'Agent \25CF';color:var(--accent)}
+  dialog.bcPop.bcReduit .bcHaut .bouton{width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1}
 }
+/* mesure (900x600) : le rail tient au pixel pres (507 / 507) ; plus bas, le mot de l agent serait coupe — il cede la place au titre */
+@media (min-width:761px) and (max-height:599px){dialog.bcPop.bcReduit #bcAgent{display:none}}
 @media (max-width:760px){
   body.bcOuvert{padding-bottom:calc(var(--bcPopH,62dvh) + var(--bcNav,66px) + 24px)}
   body.bcOuvert.bcReplie .mapZoom{transform:translateY(calc(-1 * var(--bcPopH,60px) - 14px))}
@@ -1829,7 +1840,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="bcHaut">
         <p class="titre" style="margin:0">Control panel</p>
         <span class="bcPousse"></span>
-        <span class="puce" id="bcAgent">Agent: not connected</span>
+        <span class="puce" id="bcAgent" title="Agent: not connected">Agent: not connected</span>
         <button type="button" class="bouton sec" id="bcLier">Agent link</button>
         <button type="button" class="bouton sec" id="bcReduire" aria-label="Fold or unfold the control panel" aria-expanded="true">–</button>
         <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">✕</button>
@@ -21911,6 +21922,7 @@ async function bcInterroger() {
     for (const c of r.j.commandes) { bc.dernier = Math.max(bc.dernier, c.n); bc.agentVu = Date.now(); await bcRecevoir(c); }
     const actif = Date.now() - bc.agentVu < 120000;
     $('#bcAgent').textContent = actif ? 'Agent: connected' : 'Agent: not connected';
+    $('#bcAgent').classList.toggle('actif', actif); $('#bcAgent').title = $('#bcAgent').textContent; /* le rail n affiche qu un mot et un point */
   } catch (_) { /* reseau : on reessaie au tour suivant */ }
 }
 /* ── les jetons : le registre d abord (un block nomme « USDC » ne prend pas la place de l USDC), puis les blocks du Market ── */
