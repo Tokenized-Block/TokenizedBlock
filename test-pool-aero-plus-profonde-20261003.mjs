@@ -21,9 +21,9 @@ const bas = (a) => String(a || '').toLowerCase();
 /* A. RPC fictif : getPool(ts) -> adresse ; balanceOf(pool) -> profondeur ; token0 -> USDC */
 const A = '0x' + 'a'.repeat(40), X = '0x' + 'b'.repeat(40);
 const P1 = '0x' + '1'.repeat(40), P10 = '0x' + '2'.repeat(40);
-const fictif = ({ pools, profondeurs, profondeurIllisible = false }) => async (methode, [{ to, data }]) => {
+const fictif = ({ pools, profondeurs, profondeurIllisible = false, illisibles = [] }) => async (methode, [{ to, data }]) => {
   const d = bas(data);
-  if (d.startsWith(bas(selecteur('balanceOf(address)')))) { if (profondeurIllisible) throw new Error('rate limit'); const p = '0x' + d.slice(-40); return '0x' + (profondeurs[p] || 0n).toString(16).padStart(64, '0'); }
+  if (d.startsWith(bas(selecteur('balanceOf(address)')))) { const p = '0x' + d.slice(-40); if (profondeurIllisible || illisibles.includes(p)) throw new Error('rate limit'); return '0x' + (profondeurs[p] || 0n).toString(16).padStart(64, '0'); }
   if (d.startsWith(bas(selecteur('token0()')))) return '0x' + A.slice(2).padStart(64, '0');
   for (const [ts, adr] of Object.entries(pools)) {
     const c = (await imp('calldata-aerodrome.js')).calldataGetPool({ tokenA: A, tokenB: X, tickSpacing: Number(ts) });
@@ -37,6 +37,10 @@ const une = await PF.poolAerodromeDe({ rpc: fictif({ pools: { 1: P1 }, profondeu
 ok(une.etat === 'PRET' && une.pool === P1, 'une seule pool trouvee : comportement d avant');
 const aveugle = await PF.poolAerodromeDe({ rpc: fictif({ pools: { 1: P1, 10: P10 }, profondeurs: {}, profondeurIllisible: true }), a: A, b: X });
 ok(aveugle.etat === 'NON_MESURE', 'deux pools, aucune profondeur lisible : NON_MESURE, jamais un choix au hasard');
+/* 2026-10-10 (serie complete sous charge) : AMZNc a choisi sa pool VIDE — la profondeur de la vraie n avait pas ete lue */
+const partielle = await PF.poolAerodromeDe({ rpc: fictif({ pools: { 1: P1, 10: P10 }, profondeurs: { [P1]: 0n, [P10]: 845308n * 10n ** 6n }, illisibles: [P10] }), a: A, b: X });
+ok(partielle.etat === 'NON_MESURE' && /depth of 1 could not be read/.test(String(partielle.pourquoi)),
+  'deux pools, la VIDE lue et la profonde NON lue : NON_MESURE (' + partielle.etat + ', ' + (partielle.pool || partielle.pourquoi) + ') — jamais la vide par defaut');
 
 /* C. mutant : l ancienne regle (premiere trouvee) */
 const src = fs.readFileSync(path.join(ICI, 'plan-franchissement.js'), 'utf8');
@@ -48,6 +52,13 @@ fs.writeFileSync(path.join(dir, 'plan-franchissement.js'), src.replace(motif, 'c
 const PFm = await imp('plan-franchissement.js', dir);
 const m = await PFm.poolAerodromeDe({ rpc: fictif({ pools: { 1: P1, 10: P10 }, profondeurs: { [P1]: 0n, [P10]: 845308n * 10n ** 6n } }), a: A, b: X });
 ok(m.pool === P1, 'MUTANT « premiere trouvee » : prend la pool vide — le cas A la distingue');
+/* mutant 2 : la garde du 2026-10-10 retiree -> la comparaison partielle reprend la vide */
+const garde = 'if (trouvees.length > 1 && lues.length < trouvees.length) {';
+ok(src.includes(garde), 'motif du mutant 2 present');
+fs.writeFileSync(path.join(dir, 'plan-franchissement.js'), src.replace(garde, 'if (false) {'));
+const PFm2 = await imp('plan-franchissement.js', dir); /* imp contourne deja le cache des modules (?v=…) */
+const m2 = await PFm2.poolAerodromeDe({ rpc: fictif({ pools: { 1: P1, 10: P10 }, profondeurs: { [P1]: 0n, [P10]: 845308n * 10n ** 6n }, illisibles: [P10] }), a: A, b: X });
+ok(m2.etat === 'PRET' && m2.pool === P1, 'MUTANT 2 « garde partielle retiree » : choisit la pool vide (' + (m2.pool || m2.etat) + ') — le cas partiel le distingue');
 fs.rmSync(dir, { recursive: true, force: true });
 
 /* B. temoin on-chain */

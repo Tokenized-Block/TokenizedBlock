@@ -95,6 +95,14 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
       return { etat: 'NON_MESURE', essayes, refus,
         pourquoi: trouvees.length + ' pools were found but none of their depths could be read, so which one is real is unknown' };
     }
+    /* ⛔⛔ 2026-10-10 (serie complete, sous charge) : AMZNc a choisi 0x22cf… — sa pool VIDE a l espacement 1 — parce que la
+     *   profondeur de sa vraie pool (0xd03b…, ~1,19 M$) n avait pas ete lue : « la plus profonde des LUES » est un choix au hasard
+     *   des qu une profondeur manque. Plusieurs pools et pas toutes lues : NON_MESURE, nomme. Une seule pool : inchange. */
+    if (trouvees.length > 1 && lues.length < trouvees.length) {
+      return { etat: 'NON_MESURE', essayes, refus,
+        pourquoi: trouvees.length + ' pools were found but the depth of ' + (trouvees.length - lues.length)
+          + ' could not be read, so the deepest one is unknown — a pool is never picked on a partial comparison' };
+    }
     const choisie = lues.length ? lues.reduce((m, x) => (x.prof > m.prof ? x : m)) : trouvees[0];
     /* ⛔ LE SENS, LU SUR LA POOL. */
     let t0 = null;
