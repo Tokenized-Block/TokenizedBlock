@@ -8919,7 +8919,7 @@ async function peindrePnlSwaps(adr, perime) {
     ? '<li><details class="bDetail"><summary class="note" style="cursor:pointer">More (private)</summary><ul class="note noteBullets" style="margin:6px 0 0 12px">'
       + priv.map((x) => '<li>' + x + '</li>').join('') + '</ul></details></li>'
     : '');
-  note.textContent = r.note || '';
+  note.textContent = dateMesureLisible(r.note || '');
   const dexUrl = r.dexUrl || (r.pair && r.pair.url) || (r.market && r.market.dexUrl) || null;
   if (dexRow && dexA && dexUrl) {
     dexA.href = dexUrl;
@@ -8932,7 +8932,7 @@ async function peindrePnlSwaps(adr, perime) {
       /* 2026-10-10 : la page est regardee par le serveur AVANT d etre chargee (/api/dex-embed-etat, montrerEmbedDex) */
       void montrerEmbedDex({ base, src: base + '?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartDefaultOnMobile=1&chartTheme=dark&theme=dark&chartStyle=0&chartType=usd&interval=15', perime });
     }
-    note.textContent = (r.note || '') + ' · DexScreener = this block\'s measured pair (external).';
+    note.textContent = dateMesureLisible(r.note || '') + ' · DexScreener = this block\'s measured pair (external).';
   }
   if (badge) {
     badge.textContent = r.etat === 'LUE' ? (dexUrl ? ' · Dex pair' : ' · DexScreener')
@@ -8961,11 +8961,35 @@ async function peindrePnlSwaps(adr, perime) {
 var dexEmbedCourant = null; /* var : la remise a zero du profil (plus haut) l ecrit, sans zone morte temporelle */
 /* revue adverse (2026-10-10, executee a 375 px) : le cadre garde son ratio 16/10 (178 px de haut) et la carte y etait COUPEE —
  *   « Load the chart anyway » invisible. La carte affichee rend au cadre sa hauteur libre ; le graphique la lui reprend. */
+/* 2026-10-10 (QA Grok Super) : la note du profil affichait l ISO brut ('2026-10-10T20:43:00.000Z'). Lisible, heure du visiteur :
+ *   '10 Oct, 22:43'. Un texte sans date ISO reste tel quel. */
+function dateMesureLisible(s) {
+  const MOIS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], d2 = (n) => String(n).padStart(2, '0');
+  return String(s == null ? '' : s).replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/g, (iso) => {
+    const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.getDate() + ' ' + MOIS[d.getMonth()] + ', ' + d2(d.getHours()) + ':' + d2(d.getMinutes()) : iso; });
+}
+/* 2026-10-10 (QA Grok Super) : le cadre restait sur 'Loading pair...'. Si l iframe n a pas fini de CHARGER en DEX_DELAI_CHARGE_MS, la carte
+ *   le remplace : 'Chart unavailable right now - Open DexScreener'. LIMITE : une page d un autre domaine qui a charge puis reste sur son
+ *   propre 'Loading pair...' n est PAS detectable (cross-origin) - ce cas-la n est pas couvert. */
+const DEX_DELAI_CHARGE_MS = 15000;
 async function montrerEmbedDex({ base, src, perime = null }, { frais = false } = {}) {
   const frame = $('#pPnlDexFrame'), panne = $('#pPnlDexPanne'), txt = $('#pPnlDexPanneTxt'), cadre = $('#pPnlDexEmbed');
   if (!frame || !panne) return;
   const jeton = dexEmbedCourant = { base, src, perime };
-  const charger = () => { panne.hidden = true; frame.hidden = false; if (cadre) cadre.style.aspectRatio = '16/10'; if (frame.getAttribute('src') !== src) frame.src = src; };
+  const indisponible = () => {
+    if (jeton !== dexEmbedCourant || (perime && perime())) return; /* un autre block, ou un 'Load anyway', a pris la main */
+    frame.hidden = true; frame.removeAttribute('src'); if (cadre) { cadre.style.aspectRatio = 'auto'; }
+    if (txt) { txt.textContent = 'Chart unavailable right now \u2014 '; const a = document.createElement('a'); a.href = base; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open DexScreener \u2197'; txt.append(a); }
+    panne.hidden = false;
+  };
+  const charger = () => {
+    panne.hidden = true; frame.hidden = false; if (cadre) cadre.style.aspectRatio = '16/10';
+    if (frame.getAttribute('src') !== src) {
+      let charge = false; frame.addEventListener('load', () => { charge = true; }, { once: true });
+      frame.src = src;
+      setTimeout(() => { if (!charge) indisponible(); }, DEX_DELAI_CHARGE_MS);
+    }
+  };
   const id = (String(base).match(/\/base\/(0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?)$/) || [])[1];
   let e = null;
   try { if (id) e = await fetch('/api/dex-embed-etat?pair=' + id.toLowerCase() + (frais ? '&frais=1' : ''), { signal: AbortSignal.timeout(9000) }).then((x) => x.json()); } catch (_) { e = null; }
