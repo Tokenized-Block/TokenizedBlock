@@ -103,7 +103,7 @@ import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX, chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues } from './index-routeur.js';
 import { veiller } from './veille-pot.js';
-import { naissanceDuJeton, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
+import { lireNaissance, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
 /* ⛔ LA VEILLE DES FRAIS VIT DANS SON MODULE, TESTE (66 assertions) : la reecrire ici en ferait une
  *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
@@ -1496,7 +1496,7 @@ function nosBlocksCorps() {
  *    chose. A 1e18, l ecart mesure est de zero oubli.
  * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la reconstruction repart. C est dit par `lu`. */
 const POT_FICTIF = 10n ** 18n;
-const holdersCache = new Map(); /* jeton -> { soldes, naissance, jusqua, ratees, lu, enCours } */
+const holdersCache = new Map(); /* jeton -> { soldes, naissance, jusqua, ratees, lu, enCours, rechercheNaissance } */
 const HOLDERS_MAX = 200;
 
 /* ⛔⛔ CE CACHE NE SURVIVAIT A AUCUN REDEPLOIEMENT, et c est ce que Phil a vu : « Reading every
@@ -2131,7 +2131,7 @@ async function reconstruireHolders(jeton) {
      *    de l adresse elle-meme, pas d une liste qu on tiendrait a jour. */
     if (!/^0xb20[0-9a-f]{37}$/.test(jeton)) return null;
     if (holdersCache.size >= HOLDERS_MAX) holdersCache.delete(holdersCache.keys().next().value);
-    e = { soldes: new Map(), naissance: null, jusqua: null, ratees: 0, lu: null, enCours: false };
+    e = { soldes: new Map(), naissance: null, jusqua: null, ratees: 0, lu: null, enCours: false, rechercheNaissance: null };
     holdersCache.set(jeton, e);
   }
   if (e.enCours) return e;
@@ -2139,9 +2139,18 @@ async function reconstruireHolders(jeton) {
   try {
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (e.naissance === null) {
-      e.naissance = await naissanceDuJeton({ rpc: rpcServeur, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });
-      /* ⛔ Naissance introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
-      if (e.naissance === null) { e.enCours = false; return e; }
+      /* ⛔⛔ AUDIT DU 2026-10-09 : une fenetre refusee ARRETE la recherche (lireNaissance). Avant, elle etait
+       *    sautee : un mint posterieur devenait la naissance, le rejeu partait de la, l entree etait ecrite sur le
+       *    volume, et cette ligne ne cherchait plus jamais (elle ne cherche que tant que naissance vaut null).
+       *  ⛔ On garde l etat (NON_LUE ou ABSENTE) pour que holdersCorps le NOMME. Pas de point de reprise : la
+       *    passe suivante relit depuis PREMIER_BLOCK_TB, comme avant -- un prefixe « lu vide » pres de la tete,
+       *    servi par un noeud en retard, sauterait la naissance d un block tout juste cree (raisonne, pas mesure).
+       *  ⛔ Rien n est ecrit ici : jusqua reste null, et ecrireHolders saute toute entree sans curseur. */
+      const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });
+      /* ⛔ Naissance non lue ou introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
+      if (r.etat !== 'LUE') { e.rechercheNaissance = r; e.enCours = false; return e; }
+      e.naissance = r.bloc;
+      e.rechercheNaissance = null;
     }
     /* ⛔ LA PASSE VIT DANS soldes-jeton.js POUR ETRE TESTABLE. Une copie ici serait testee par un
      *    test qui la recopie, ce qui ne prouverait rien. Voir passeIncrementale et son audit. */
@@ -2168,6 +2177,23 @@ async function holdersCorps(jeton) {
   }
   void reconstruireHolders(jeton).catch(() => {}); /* rafraichit en tache de fond */
   const e = dejaLa;
+  /* ⛔⛔ 2026-10-09 : LA RECHERCHE DE NAISSANCE A SES PROPRES ETATS, ET ILS PASSENT AVANT « un rejeu tourne ».
+   *    La branche enCours ci-dessous attrape TOUTE entree sans curseur (l appel `void reconstruireHolders`
+   *    ci-dessus vient de poser enCours), et la branche « no mint found » plus bas n etait donc jamais atteinte :
+   *    une recherche arretee par une fenetre refusee sortait en « a replay is running », ratees 0 -- le refus
+   *    etait INVISIBLE. Non lue n est pas absente, et ni l une ni l autre n est « un rejeu tourne ».
+   *  ⛔ C est l etat de la DERNIERE recherche terminee : une nouvelle peut tourner, elle repart de PREMIER_BLOCK_TB. */
+  const rn = e.naissance === null ? e.rechercheNaissance : null;
+  if (rn && rn.etat === 'NON_LUE') {
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees: Number(e.ratees || 0), naissance: null,
+      naissanceNonLue: { de: rn.refusee.de, a: rn.refusee.a },
+      pourquoi: 'the birth of this block is not read yet: blocks ' + rn.refusee.de + '-' + rn.refusee.a
+        + ' were refused by the node, so the search stops there and starts over — no later mint is taken as the birth' });
+  }
+  if (rn && rn.etat === 'ABSENTE') {
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees: Number(e.ratees || 0), naissance: null,
+      pourquoi: 'no mint found for this token up to block ' + rn.luJusqua + ' — reading, or it was never minted' });
+  }
   /* ⛔⛔ AUDIT DU 2026-09-20, SECONDE TROUVAILLE : cette fonction ne lisait jamais `enCours`. Pendant
    *    un rejeu, la Map est deja mutee fenetre par fenetre alors que `ratees` et `jusqua` datent de
    *    la passe PRECEDENTE. Un visiteur pouvait donc lire un etat ou un detenteur a 30 % de la supply

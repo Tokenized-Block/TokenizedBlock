@@ -23,21 +23,50 @@ const mot = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
 const adrDeTopic = (t) => '0x' + String(t).slice(26).toLowerCase();
 
 /**
- * Trouve le bloc de naissance d un jeton : son premier Transfer depuis l adresse zero.
- * ⛔ Rend `null` si rien n est trouve, JAMAIS une valeur par defaut : deviner une naissance ferait
- *    manquer tous les mouvements anterieurs et donnerait des soldes faux sans aucun signe.
+ * Cherche le bloc de naissance d un jeton : son premier Transfer depuis l adresse zero. TROIS etats :
+ *   LUE      { bloc }                          le premier mint, et chaque fenetre AVANT lui a ete lue ;
+ *   ABSENTE  { luJusqua }                      chaque fenetre de [depuis, jusqua] lue, aucun mint ;
+ *   NON_LUE  { luJusqua, refusee, pourquoi }   une fenetre refusee : le balayage S ARRETE sur elle.
+ * ⛔⛔ AUDIT DU 2026-10-09 (budget du noeud d archive) : la version precedente faisait `continue` sur une
+ *    fenetre refusee et rendait le premier mint trouve APRES elle. Si la fenetre sautee portait la vraie
+ *    naissance, un mint POSTERIEUR devenait la naissance : serveur-web.js rejouait depuis la, l ecrivait
+ *    dans holders-cache.json, et ne la cherchait plus jamais (elle ne se cherche que tant qu elle vaut null).
+ *    Une fenetre refusee n est pas une fenetre vide : on ne sait pas qu elle ne portait pas la naissance.
+ * ⛔ `luJusqua` : fin du prefixe CONTIGU lu sans mint (depuis - 1 si rien n a ete lu).
+ * ⛔ Un resultat qui n est pas une liste est NON_LUE, comme dans rejouerTransferts -- pas une fenetre vide.
  */
-export async function naissanceDuJeton({ rpc, jeton, depuis, jusqua, pas = PAS_LOGS }) {
+export async function lireNaissance({ rpc, jeton, depuis, jusqua, pas = PAS_LOGS }) {
+  let lu = depuis - 1;
   for (let d = depuis; d <= jusqua; d += pas) {
     const a = Math.min(d + pas - 1, jusqua);
     let logs = null;
     try {
       logs = await rpc('eth_getLogs', [{ address: jeton, topics: [TOPIC_TRANSFER, mot(ADRESSE_ZERO)],
         fromBlock: hex(d), toBlock: hex(a) }]);
-    } catch (e) { continue; /* fenetre refusee : on continue, la naissance sera dite introuvable si besoin */ }
-    if (Array.isArray(logs) && logs.length) return parseInt(logs[0].blockNumber, 16);
+    } catch (e) {
+      return { etat: 'NON_LUE', bloc: null, luJusqua: lu, refusee: { de: d, a },
+        pourquoi: String((e && e.message) || e).slice(0, 120) };
+    }
+    if (!Array.isArray(logs)) {
+      return { etat: 'NON_LUE', bloc: null, luJusqua: lu, refusee: { de: d, a }, pourquoi: 'not a list' };
+    }
+    if (logs.length) return { etat: 'LUE', bloc: parseInt(logs[0].blockNumber, 16) };
+    lu = a;
   }
-  return null;
+  return { etat: 'ABSENTE', bloc: null, luJusqua: lu };
+}
+
+/**
+ * Le bloc de naissance, ou `null`.
+ * ⛔ Rend `null` si rien n est trouve OU si une fenetre a ete refusee avant le premier mint, JAMAIS une
+ *    valeur par defaut ni un mint posterieur a une fenetre non lue : deviner une naissance ferait manquer
+ *    tous les mouvements anterieurs et donnerait des soldes faux sans aucun signe.
+ * ⛔ Ce `null` CONFOND « absente » et « pas lue ». Qui doit les distinguer appelle `lireNaissance`
+ *    (serveur-web.js le fait). boucle-pot.js garde ce `null` : il y vaut un refus d ancrer.
+ */
+export async function naissanceDuJeton(args) {
+  const r = await lireNaissance(args);
+  return r.etat === 'LUE' ? r.bloc : null;
 }
 
 /**
