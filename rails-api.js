@@ -386,8 +386,14 @@ async function planRailBrut(q, deps) {
       }
       if (!t) return normaliser(route, { etat: 'REFUSE', pourquoi: 'no measured deep Aerodrome pool for ' + ACTIONS.get(vers) + ' in our table yet' });
       if (nd === 'ETH') {
-        return normaliser(route, await planAchatEthAction({ rpc, compte, action: vers, pool: t.pool, montantWei: m,
-          maintenantSec: Math.floor(maintenant / 1000) }), { via: 'planAchatEthAction', pool: t.pool });
+        const pe = await planAchatEthAction({ rpc, compte, action: vers, pool: t.pool, montantWei: m,
+          maintenantSec: Math.floor(maintenant / 1000) });
+        /* ⛔ 2026-10-10 (test prod Grok, ETH -> NVDAc : « ni minimum ni ligne de frais » ; mesure prod : PRET, `resume` NUL) : le plan
+         *   porte ce que la personne RECOIT apres notre retenue (`minUtilisateur`) et le frais (`fraisBps`) ; la carte lit `resume`.
+         *   Seulement sur PRET : un refus ne recoit pas de chiffres inventes. */
+        const resumeEth = pe && pe.etat === 'PRET' && pe.plan
+          ? { paye: m, payeDevise: ETH, recoitAuMoins: pe.plan.minUtilisateur, recoitDevise: vers, fraisBps: pe.plan.fraisBps } : null;
+        return normaliser(route, resumeEth ? { ...pe, resume: resumeEth } : pe, { via: 'planAchatEthAction', pool: t.pool });
       }
       if (nd === 'USDC') {
         return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers, famille: 'aerodrome' }], devise: USDC,
