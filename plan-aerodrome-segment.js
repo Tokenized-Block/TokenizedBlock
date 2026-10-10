@@ -171,6 +171,30 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
   if (appro.etat !== 'PRET') {
     return { etat: 'REFUSE', etape: 'approbation', pourquoi: appro.pourquoi };
   }
+  /* ⛔⛔ 2026-10-10 (Claude, fork base-anvil bloc 52 432 772, prod a690a4b) : 11 actions Aerodrome ts=1 sur 12 rendaient un achat
+   *   USDC PRET dont le swap REVERTAIT (« Too little received ») - minimum au prix spot, aucune simulation. LA SEQUENCE EXACTE DU
+   *   PLAN (approbation + swap) passe par eth_simulateV1 depuis le compte (meme forme que lancer-pool.js simulerSequenceLancement,
+   *   utilisee par naissance-api.js). Un revert = REFUSE, jamais PRET ; une simulation illisible = NON_MESURE.
+   *   ⛔ BORNE : la simulation n est pas l execution (prix, solde peuvent bouger avant l envoi). */
+  const appelsSim = [{ to: appro.to, data: appro.data }, { to: swap.to, data: swap.data }];
+  let sim;
+  try {
+    sim = await rpc('eth_simulateV1', [{ blockStateCalls: [{ calls: appelsSim.map((a) => ({ from: compte, to: a.to, data: a.data, value: '0x0' })) }],
+      validation: false, traceTransfers: false }, 'latest']);
+  } catch (e) {
+    return { etat: 'NON_MESURE', etape: 'simulation', pourquoi: 'the exact swap could not be simulated just now: ' + String((e && e.message) || e).slice(0, 160) };
+  }
+  const resSim = (Array.isArray(sim) && sim[0] && Array.isArray(sim[0].calls)) ? sim[0].calls : null;
+  if (!resSim || resSim.length !== appelsSim.length) {
+    return { etat: 'NON_MESURE', etape: 'simulation', pourquoi: 'the node did not answer the simulation for every step' };
+  }
+  const iKo = resSim.findIndex((x) => !x || x.status !== '0x1');
+  if (iKo >= 0) {
+    const msg = String((resSim[iKo] && resSim[iKo].error && resSim[iKo].error.message) || 'reverted');
+    const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|\bSTF\b/i.test(msg);
+    return { etat: 'REFUSE', etape: 'simulation', sansFonds,
+      pourquoi: sansFonds ? 'not enough of the token paid in this wallet for that amount' : 'the chain refuses this exact swap: ' + msg.slice(0, 160) };
+  }
 
   return {
     etat: 'PRET',
@@ -196,6 +220,7 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
       /* ⚠️ NOMME, parce qu un minimum derive d un prix spot n est pas un devis : il ignore la
        *   profondeur du carnet, et l annoncer comme une cotation serait une promesse qu on ne tient
        *   pas sur un gros montant. */
+      simule: true, /* 2026-10-10 : la sequence exacte a passe eth_simulateV1 depuis le compte */
       minimumParPrixSpot: impactBps === null,
       ...(impactBps !== null ? { impactBps, sortieAuPrixPool: spot } : {}),
       retenue: swap.borne,
