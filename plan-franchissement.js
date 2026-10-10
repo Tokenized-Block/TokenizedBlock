@@ -52,6 +52,22 @@ function pairePinglee(a, b) {
   for (const [k, v] of POOLS_ACTIONS_AERODROME) if (bas(k) === x && v && ADR.test(String(v.pool || '')) && Number.isInteger(v.tickSpacing)) return v;
   return null;
 }
+/* ⛔ 2026-10-10 (revue adverse, 4 bis) - LE PIVOT USDC / WETH SE TRAITE SUR SA POOL MESUREE, comme les actions de la table.
+ *   MESURE (2026-10-10 18:02 UTC, bloc 52 432 969, base-rpc.publicnode.com, lecture seule ; getPool sur la factory Aerodrome CL
+ *   0xf8f2eb4940cfe7d13603dddd87f123820fc061ef rendue par calldataGetPool) :
+ *   ts 1 = 0x4e392fbf... 120 095 USDC / 30,4 WETH ; ts 10 = 0x493e74ed... 5 087 USDC / 0,78 WETH ;
+ *   ts 50 = 0x3fe04a59... 6 457 971 USDC / 2 108 WETH (liquidite active 3,1e19) ; ts 80..2000 : aucune pool.
+ *   Une pool tierce creee demain a un autre espacement ne peut plus etre choisie sur sa profondeur. */
+export const POOLS_PIVOTS_AERODROME = new Map([
+  [[bas(USDC_BASE), '0x4200000000000000000000000000000000000006'].sort().join('|'), { symbole: 'USDC/WETH', pool: '0x3fe04a59ebd38cf06080a6f60a98d124eb59392a', tickSpacing: 50, usdcMesure: 6457971 }],
+]);
+function pairePingleeOuPivot(a, b) {
+  const p = pairePinglee(a, b);
+  if (p) return p;
+  const k = [bas(a), bas(b)].sort().join('|');
+  for (const [k2, v] of POOLS_PIVOTS_AERODROME) if (k2 === k) return v;
+  return null;
+}
 async function appel(rpc, to, data) {
   return rpc('eth_call', [{ to, data }, 'latest']);
 }
@@ -70,7 +86,7 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL,
    *   hors-plage dans une pool tierce (creation permissionless) : mock 1 000 USDC -> AMZNc, pool tierce 100x l entree a un prix
    *   10^6 pire = PRET avec un minimum 1/1 001 001 du juste. La pool epinglee est re-verifiee : getPool(paire, son espacement)
    *   doit la rendre ; sinon NON_MESURE ou REFUSE, jamais un repli sur une autre pool. */
-  const epingle = pairePinglee(a, b);
+  const epingle = pairePingleeOuPivot(a, b);
   if (epingle) {
     const c = calldataGetPool({ tokenA: a, tokenB: b, tickSpacing: epingle.tickSpacing });
     let rendue = null;
@@ -140,23 +156,8 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL,
     /* ⛔⛔ 2026-10-10 (serie complete, sous charge) : AMZNc a choisi 0x22cf… — sa pool VIDE a l espacement 1 — parce que la
      *   profondeur de sa vraie pool (0xd03b…, ~1,19 M$) n avait pas ete lue : « la plus profonde des LUES » est un choix au hasard
      *   des qu une profondeur manque. Plusieurs pools et pas toutes lues : NON_MESURE, nomme. Une seule pool : inchange. */
-    const nonLues = trouvees.length - lues.length;
-    let mEntree = null;
-    try { mEntree = montantEntree === null || montantEntree === undefined ? null : BigInt(montantEntree); } catch (_) { mEntree = null; }
-    if (trouvees.length > 1 && nonLues > 0 && lues.length && mEntree !== null && mEntree > 0n) {
-      const meilleure = lues.reduce((m, x) => (x.prof > m.prof ? x : m));
-      if (meilleure.prof >= mEntree * PROFONDEUR_MIN_FOIS) {
-        let t0p = null;
-        try { t0p = '0x' + String(await appel(rpc, meilleure.adresse, selecteur('token0()'))).slice(-40); } catch (_) { t0p = null; }
-        if (!t0p || !ADR.test(t0p)) {
-          return { etat: 'NON_MESURE', pourquoi: 'the pool was found but token0() could not be read, '
-            + 'so the swap direction is unknown — and a direction is never guessed' };
-        }
-        return { etat: 'PRET', pool: bas(meilleure.adresse), tickSpacing: meilleure.ts, token0: bas(t0p),
-          entreeEst0: bas(t0p) === bas(a), essayes, refus, trouvees: trouvees.length,
-          profondeur: String(meilleure.prof), profondeursNonLues: nonLues };
-      }
-    }
+    /* ⛔ 2026-10-10 (revue adverse, 4 bis) : la branche « profondeur partielle » (3f8a9c9) est RETIREE - la plus profonde des LUES
+     *   peut etre une pool tierce gonflee ; les paires routees (USDC/action, USDC/WETH) passent par leur pool MESUREE ci-dessus. */
     if (trouvees.length > 1 && lues.length < trouvees.length) {
       return { etat: 'NON_MESURE', essayes, refus,
         pourquoi: trouvees.length + ' pools were found but the depth of ' + (trouvees.length - lues.length)

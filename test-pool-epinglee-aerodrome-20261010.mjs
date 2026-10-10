@@ -31,7 +31,8 @@ function lecteur({ vraieProf = 'jamais', getPoolVraie = VRAIE, getPoolLeve = fal
   }
   const vus = [];
   const rpc = async (m, params) => {
-    if (m === 'eth_simulateV1') return [{ calls: params[0].blockStateCalls[0].calls.map(() => ({ status: '0x1' })) }]; /* 2026-10-10 (e0b346d) : le segment simule son plan ; ce faux noeud dit que la simulation passe */
+    /* 2026-10-10 (e0b346d) : le segment simule son plan - la simulation passe ici, seul le CHOIX DE POOL est juge */
+    if (m === 'eth_simulateV1') return [{ calls: params[0].blockStateCalls[0].calls.map(() => ({ status: '0x1' })) }];
     if (m !== 'eth_call') return '0x1';
     const { to, data } = params[0];
     if (gp.has(data)) { if (getPoolLeve && gp.get(data) === getPoolVraie) throw new Error('429'); return '0x' + mot(gp.get(data)); }
@@ -75,7 +76,7 @@ const p5 = await F.poolAerodromeDe({ rpc: lecteur({}), a: AMZ, b: USDC, montantE
 ok(p5.etat === 'PRET' && p5.pool === VRAIE && p5.entreeEst0 === false, '5 vente AMZNc -> USDC : pool mesuree, sens lu (entreeEst0 false)');
 /* 6. MUTANT : sans l epingle, le cas adverse redevient le bug (PRET sur la tierce, minimum ecrase) */
 const src = fs.readFileSync(path.join(ICI, 'plan-franchissement.js'), 'utf8').replace(/\r\n/g, '\n');
-const ancre = 'const epingle = pairePinglee(a, b);';
+const ancre = 'const epingle = pairePingleeOuPivot(a, b);'; /* 4 bis : l epingle couvre aussi le pivot USDC/WETH */
 ok(src.includes(ancre), '6 le mutant trouve son ancre');
 const fm = path.join(ICI, '.mutant-epingle-' + process.pid + '.mjs');
 const fs2 = path.join(ICI, '.mutant-epingle-seg-' + process.pid + '.mjs');
