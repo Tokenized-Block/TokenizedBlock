@@ -58,11 +58,13 @@ export function noeudPeutServir(url, methode, params, tete = 0) {
  */
 export function creerRegulateur({ maintenant = () => Date.now(),
   dormir = (ms) => new Promise((ok) => setTimeout(ok, ms)),
-  ecartMs = 150, ecartMaxMs = 1200, enVolMax = 2, attenteMaxMs = 3000 } = {}) {
+  ecartMs = 150, ecartMaxMs = 1200, enVolMax = 2, attenteMaxMs = 3000,
+  pauseLogsApres = 3, pauseLogsMs = 5 * 60 * 1000 } = {}) {
   const etats = new Map();
   const etat = (h) => {
     let e = etats.get(h);
-    if (!e) { e = { prochain: 0, enVol: 0, ecart: ecartMs, reposJusqua: 0, refus: 0 }; etats.set(h, e); }
+    if (!e) { e = { prochain: 0, enVol: 0, ecart: ecartMs, reposJusqua: 0, refus: 0,
+      quotaLogs: 0, pauseLogsJusqua: 0, sautesLogs: 0, sondesLogs: 0 }; etats.set(h, e); }
     return e;
   };
   const auRepos = (url) => etat(hoteDe(url)).reposJusqua > maintenant();
@@ -89,9 +91,40 @@ export function creerRegulateur({ maintenant = () => Date.now(),
       let libere = false;
       return () => { if (!libere) { libere = true; e.enVol = Math.max(0, e.enVol - 1); } };
     },
-    /** `issue` : 'ok' | 'debit' | 'autre'. Seul un refus de DEBIT ralentit ; un refus de forme, non. */
-    noter(url, issue) {
+    /* ?? 2026-10-10 (Grok Bot, plan wf_214da17d-39f juge) - PAUSE DES getLogs PAR NOEUD ET PAR METHODE.
+     *   MESURE : 60 s d onglet Feed, 28 eth_getLogs sur 28 vers mainnet.base.org -> HTTP 429
+     *   {code:-32011, 'request limit reached'} ; seul dans la liste, chaque lecture y perdait 6 essais (~22 s).
+     *   ? Apres K (pauseLogsApres) refus de QUOTA d affilee, ce noeud n est plus ESSAYE pour eth_getLogs pendant T
+     *     (pauseLogsMs) ; la premiere lecture apres T est la sonde (une seule, la pause se re-arme aussitot).
+     *   ? Il n est JAMAIS retire d une liste : rpcReseau le saute sans requete, garde l erreur, et finit par le
+     *     decoupage en lots de 9 ou par un throw - jamais une liste vide.
+     *   ? K = 3 et T = 5 min sont des CHOIX (ESTIMATION), pas des constantes du fournisseur : ils se lisent dans
+     *     instantane() (quotaLogs, pauseLogsJusqua, sautesLogs, sondesLogs) pour etre MESURES en navigateur. */
+    enPauseLogs(url, methode) {
+      if (methode !== 'eth_getLogs') return false;
+      return etat(hoteDe(url)).pauseLogsJusqua > maintenant();
+    },
+    /** null = envoyer ; sinon la raison du saut (jamais un resultat). */
+    passer(url, methode) {
+      if (methode !== 'eth_getLogs') return null;
+      const h = hoteDe(url), e = etat(h);
+      if (!e.pauseLogsJusqua) return null;
+      const t = maintenant();
+      if (t >= e.pauseLogsJusqua) { e.sondesLogs++; e.pauseLogsJusqua = t + pauseLogsMs; return null; }
+      e.sautesLogs++;
+      return 'eth_getLogs paused on ' + h + ' after ' + e.quotaLogs + ' quota refusals in a row (next probe in '
+        + Math.ceil((e.pauseLogsJusqua - t) / 1000) + ' s)';
+    },
+    /** `issue` : 'ok' | 'debit' | 'autre'. Seul un refus de DEBIT ralentit ; un refus de forme, non.
+     *  `opts` : { methode, quota } - seul un refus de QUOTA sur eth_getLogs compte vers la pause. */
+    noter(url, issue, opts = {}) {
       const e = etat(hoteDe(url));
+      const logsQ = opts && opts.methode === 'eth_getLogs';
+      if (issue === 'ok' && logsQ) { e.quotaLogs = 0; e.pauseLogsJusqua = 0; }
+      if (issue === 'debit' && logsQ && opts.quota) {
+        e.quotaLogs++;
+        if (e.quotaLogs >= pauseLogsApres) e.pauseLogsJusqua = maintenant() + pauseLogsMs;
+      }
       if (issue === 'ok') { e.refus = 0; e.ecart = Math.max(ecartMs, Math.round(e.ecart * 0.8)); return; }
       if (issue !== 'debit') return;
       e.refus++;

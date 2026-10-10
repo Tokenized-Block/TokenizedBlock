@@ -4414,7 +4414,9 @@ async function rpcReseau(methode, params) {
      *     ferait attendre ~22 s par lecture quand les trois noeuds etranglent en meme temps — sous
      *     la charge d une map vivante, ca transformerait un ralentissement en gel. Ce reglage a ete
      *     mesure le 2026-09-13, je ne le rejoue pas a l aveugle. */
-    const dernierNoeud = i === noeuds.length - 1;
+    /* 2026-10-10 : un noeud qui ne suit que des noeuds EN PAUSE de getLogs est le dernier qui sera vraiment essaye. */
+    const dernierNoeud = i === noeuds.length - 1
+      || (!!rpcRegul && !!rpcRegul.enPauseLogs && noeuds.slice(i + 1).every((u) => rpcRegul.enPauseLogs(u, methode)));
     const REPRISES_TRANSITOIRE = 2, ATTENTE_TRANSITOIRE = [250, 700];
     /* 403/408/425 : etranglement ou attente. 5xx : panne cote noeud. Tous peuvent disparaitre en
      * 250 ms. ⛔ Ni 400 ni 404 ni 401 : une requete mal formee le restera, et la rejouer ne serait
@@ -4423,6 +4425,9 @@ async function rpcReseau(methode, params) {
     let reprises = 0;
     for (let essai = 0; essai <= ESSAIS_429; essai++) {
       let r, j = null, limite = false, statut = 0;
+      /* 2026-10-10 : getLogs en pause sur ce noeud = SAUT sans requete ; l erreur reste, la liste ne devient jamais vide. */
+      const pause = rpcRegul && rpcRegul.passer ? rpcRegul.passer(url, methode) : null;
+      if (pause) { if (!derniere) derniere = new Error(pause); break; }
       /* ⛔ un creneau par noeud (ecart + concurrence + repos apres 429), borne : jamais d attente infinie */
       const liberer = rpcRegul ? await rpcRegul.creneau(url) : null;
       try {
@@ -4438,6 +4443,9 @@ async function rpcReseau(methode, params) {
         if (!limite) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
           j = await r.json();
+        } else {
+          /* le corps d un 429 dit s il s agit du QUOTA ('request limit reached') ; illisible = comme avant */
+          try { j = await r.json(); } catch (_) { j = null; }
         }
       } catch (e) {
         if (liberer) liberer();
@@ -4455,8 +4463,9 @@ async function rpcReseau(methode, params) {
       if (liberer) liberer();
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
       if (refusDebit) {
-        if (rpcRegul) rpcRegul.noter(url, 'debit');
+        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && /request limit reached/i.test(String(j.error.message))) });
         derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
+        if (rpcRegul && rpcRegul.enPauseLogs && rpcRegul.enPauseLogs(url, methode)) break; /* pause armee : plus d essai ici */
         if (essai < ESSAIS_429 && noeuds.length === 1) {
           await new Promise((ok) => setTimeout(ok, 700 * 2 ** essai + Math.floor(Math.random() * 400)));
           continue;
@@ -4467,7 +4476,7 @@ async function rpcReseau(methode, params) {
       /* ⛔ ICI ET NULLE PART AILLEURS : une lecture qui aboutit APRES un hoquet est exactement ce que
        *   le correctif rattrape. `reprises` seul compterait aussi les tentatives perdues. */
       if (reprises > 0) { try { rpcCompte.reprisesOk++; } catch (_) { /* rien */ } }
-      if (rpcRegul) rpcRegul.noter(url, 'ok');
+      if (rpcRegul) rpcRegul.noter(url, 'ok', { methode });
       return j.result;
     }
   }
@@ -10240,7 +10249,11 @@ let liveFiltre = 'TOUT';
  *    logs Initialize, gardees pour la page ; et les blocks trouves en remontant le fil (« Load older ») sont suivis aussi. */
 let poolsLive = new Map(), decouverteJusqua = null;
 const creationsLive = new Map();
-const DECOUVERTE_INITIALE = 10000;
+/* ?? 2026-10-10 (Grok Bot) : 10 000 = PILE le bord d archive de publicnode. MESURE : -9 500 et -9 900 servis, -10 040 et
+ *    -10 100 refuses (403 personal token), -10 000 refuse le 09-30 ; base.org en 429, drpc filtre (fenetre 2 000). La decouverte
+ *    ratait donc a CHAQUE tour (decouverteJusqua n avance que sans echec) : une ligne refusee de plus toutes les 20 s.
+ *    9 000 laisse ~1 000 blocs (~33 min) de marge sous le bord MESURE ; plus ancien = le role de Load older, qui le dit. */
+const DECOUVERTE_INITIALE = 9000;
 function filtreLive(e) {
   /* tip 2310: All = fee-relevant feed for FEE_WALLET (address never shown).
    * Show: Launch/hook fee path (Feed/Kill · Messages · hooked swaps → FEE_WALLET). Free creates under Created chip.
