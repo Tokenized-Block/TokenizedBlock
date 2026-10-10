@@ -6242,11 +6242,18 @@ function indexDeRecherche() {
   for (const l of lignesMarcheDuMoment()) { const k = String((l && l.adr) || '').toLowerCase(); if (k) vus.add(k); }
   return vus.size;
 }
+/* 2026-10-10 (QA Grok : « la recherche mange le 0x », non reproduit) : on cherchait « b2000…f58b7 » - une adresse ABREGEE telle que
+ *   l app l affiche (court()), copiee puis collee ; la reponse etait « No block named … ». On le dit, et ON NE DEVINE PAS : tous les
+ *   blocks B20 commencent par 0xb200, il ne reste que la fin (4 caracteres) contre ~15 000 adresses connues - une collision ferait
+ *   ouvrir, puis acheter, le mauvais block. */
+function adresseAbregee(q) { return /^\s*(?:0x)?[0-9a-f]{2,}\s*(?:…|\.{2,3})\s*[0-9a-f]{2,}\s*$/i.test(String(q || '')); }
+const phraseAdresseAbregee = 'This address is shortened (…). Paste the whole address: 42 characters starting with 0x.';
 function chercherBlock() {
   const brut = String($('#trouver').value || '').trim();
   const q = brut.toLowerCase();
   const note = $('#mapNote');
   if (!q) return;
+  if (adresseAbregee(brut)) { direMap(phraseAdresseAbregee); return; }
   let h = habitants.find((x) => String(x.adr).toLowerCase() === q)
     || habitants.find((x) => String(x.sym || '').toLowerCase() === q)
     || habitants.find((x) => String(x.sym || '').toLowerCase().includes(q));
@@ -24124,6 +24131,7 @@ $('#bcChercheForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const champ = $('#bcCherche'), note = $('#bcChercheNote'), v = champ.value.trim();
   if (!v) return;
+  if (adresseAbregee(v)) { note.textContent = phraseAdresseAbregee; return; }
   let j = bcResoudre(v);
   /* 2026-10-10 re-QA : rien de connu ICI -> l index du SERVEUR (toutes les creations, noms lus sur la chaine), lecture seule. Homonymes = refus. */
   if (!j.ok && !/^0x/i.test(v) && !/blocks are named/.test(j.pourquoi)) {
