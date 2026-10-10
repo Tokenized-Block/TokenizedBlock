@@ -435,8 +435,14 @@ async function planRailBrut(q, deps) {
       };
       let j = await jambes(false);
       if (j.fin) return normaliser(route, j.fin, { via: 'actionAerodromeVersBloc' });
+      /* ⛔ 2026-10-10 (revue adverse, point 1) : une 1re jambe v4 non PRET (429...) ne dit PAS « le hook ne paie pas » - rendue telle quelle. */
+      if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via: 'actionAerodromeVersBloc' });
       const hookPaie = !!(j.pb.resume && j.pb.resume.fraisParHook === true);
-      if (!hookPaie) { j = await jambes(true); if (j.fin) return normaliser(route, j.fin, { via: 'actionAerodromeVersBloc' }); }
+      if (!hookPaie) {
+        j = await jambes(true); if (j.fin) return normaliser(route, j.fin, { via: 'actionAerodromeVersBloc' });
+        /* ⛔ deux frais (Aerodrome 10 bps + hook) : jamais */
+        if (j.pb.resume && j.pb.resume.fraisParHook === true) return normaliser(route, { etat: 'NON_MESURE', pourquoi: 'the block hook fee changed between two reads: refusing two fees in one batch' }, { via: 'actionAerodromeVersBloc' });
+      }
       if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via: 'actionAerodromeVersBloc' });
       const rb = j.pb.resume || {};
       return normaliser(route, { etat: 'PRET', exigeAtomique: true, pourquoi: null,
