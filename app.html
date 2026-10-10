@@ -2602,6 +2602,12 @@ details[open] > summary::before{transform:rotate(90deg)}
              touche la chaine est la lecture de `balanceOf` — celui-la est vrai. Tout le reste
              (panier, early holders, ouverture) vit dans le localStorage de CE navigateur.
            ⛔ Phil, 2026-09-24 : « mets en mode faux le temps de build ». C est ce bandeau. -->
+      <!-- 2026-10-10 (test prod Grok : « TokenizedBank y est encore marque not built yet ») : l emprunt d USDC contre une action EST en
+           ligne (onglet Bank du panneau, marches Morpho existants). Le bandeau ci-dessous reste vrai pour le PANIER de blocks. -->
+      <p class="note" id="tbBanqueVivante" style="margin:0 0 8px"><b>Live now:</b> borrow USDC against a tokenized stock you hold, or lend
+        USDC, on existing Morpho markets — your wallet signs each step.
+        <button type="button" class="bouton sec" id="tbOuvrirBank" style="width:auto;padding:4px 10px;margin-left:4px">Open the Bank</button>
+        The basket of blocks below is a separate idea.</p>
       <p class="note" id="tbApercu" style="border:1px solid var(--accent2);border-radius:10px;padding:8px 10px;margin:0 0 10px">
         <b>Preview — not built yet.</b> Reading how many blocks you hold is real and happens on
         chain. Everything else here is a sketch kept in this browser: there is no bank contract,
@@ -7695,6 +7701,31 @@ async function majWallet() {
   }
 
   let note = '';
+  /* ══ 2026-10-10 (test prod Grok, wallet 0x31e0 : NVDAc achete ABSENT du Wallet, USDC intermittent, « 17 chain window(s) refused ») :
+   *   seuls ETH et USDC etaient lus en direct ; une action n arrivait que par le balayage des journaux, refuse par les noeuds. Le
+   *   serveur lit EN LOT le solde de chaque devise et action du registre (/api/avoirs, eth_call 'latest') ; on n affiche que les
+   *   detenus, relus ici (decimales, multiplicateurs). Un actif NON lu est dit, jamais pris pour zero. */
+  if (CHAINE === 8453) {
+    let av = null;
+    try { av = await (await fetch('/api/avoirs?compte=' + String(compte).toLowerCase(), { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { av = null; }
+    if (perime()) return;
+    for (const v of (av && Array.isArray(av.avoirs) ? av.avoirs : []).slice(0, 40)) {
+      const adrV = String((v && v.adr) || '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(adrV) || actifs.some((x) => String(x.adr || '').toLowerCase() === adrV)) continue;
+      await dormir(260);
+      const a = { id: adrV, nom: String(v.symbole || '?').slice(0, 12), sous: (v.action ? 'tokenized stock · ' : '') + court(adrV), adr: adrV };
+      try { Object.assign(a, await lireJeton(adrV, compte)); a.etat = 'LU'; } catch {
+        /* la relecture de CE navigateur a echoue : le solde lu par le serveur reste vrai s il porte ses decimales (sinon : illisible) */
+        if (Number.isInteger(v.decimales) && /^\d+$/.test(String(v.solde))) Object.assign(a, { decimales: v.decimales, solde: BigInt(v.solde), multiplicateur: null, multiplicateurUi: null, etat: 'LU' });
+        else a.etat = 'NON_LU';
+      }
+      if (perime()) return;
+      actifs.push(a);
+      peindreActifs();
+    }
+    if (!av || av.etat === 'NON_LU') note += '⚠️ The stocks and currencies of our list could not be read right now — not read, not empty. ';
+    else if (av.etat === 'PARTIEL' && Number(av.nonLus) > 0) note += '⚠️ ' + Number(av.nonLus) + ' of the stocks and currencies of our list not read right now — not read, not empty. ';
+  }
   try {
     const { r, gardees, nonResolues } = await mesCreations();
     if (perime()) return;
@@ -7717,7 +7748,9 @@ async function majWallet() {
     let frappes = { blocks: [] };
     try { frappes = await mesFrappes(false, true); } catch { note += '⚠️ blocks you received could not be read further back. '; }
     if (perime()) return;
-    for (const b of frappes.blocks.filter((x) => !gardees.some((c) => String(c.jeton).toLowerCase() === x.jeton)).slice(0, 12)) {
+    /* 2026-10-10 : une action deja lue par /api/avoirs (meme prefixe 0xb2) ne revient pas en double comme « block received » */
+    for (const b of frappes.blocks.filter((x) => !gardees.some((c) => String(c.jeton).toLowerCase() === x.jeton)
+      && !actifs.some((y) => String(y.adr || '').toLowerCase() === x.jeton)).slice(0, 12)) {
       await dormir(260);
       const a = { id: b.jeton, nom: '?', sous: 'block you received or bought · ' + court(b.jeton), adr: b.jeton, bloc: true };
       try { Object.assign(a, await lireJeton(b.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
@@ -7740,11 +7773,11 @@ async function majWallet() {
     if (nonResolues.length) note += '⚠️ ' + nonResolues.length + ' creation(s) unattributed — unknown, not « not yours ». ';
   } catch (e) {
     console.warn('[wallet] blocks non lus :', e && e.message ? e.message : e);
-    note = 'Could not read your blocks right now — that is about the network, not your wallet. ';
+    note += 'Could not read your blocks right now — that is about the network, not your wallet. ';
   }
   if (perime()) return;
   /* ⛔ LA PROMESSE D AVANT (« not listed yet ») EST TENUE : les blocks recus ou achetes sont lus. On dit la borne. */
-  $('#wActifsNote').textContent = note + 'Blocks you created, received or bought over the last 120,000 chain blocks are listed '
+  $('#wActifsNote').textContent = note + (CHAINE === 8453 ? 'The stocks and currencies of our list are read directly. ' : '') + 'Blocks you created, received or bought over the last 120,000 chain blocks are listed '
     + '(My blocks can look further back).';
 }
 
@@ -23739,7 +23772,11 @@ async function bcBanqueCharger(force = false) {
   ul.textContent = '';
   /* 2026-10-10 (copie de StoxCredit) : seulement les marches LISTES par Morpho — les autres sont des marches poussiere (0 a 97 $, taux
    *   0,1 %) qu une personne prendrait pour une offre. Le nombre ecarte est DIT. */
-  const listes = bcBanque.marches.filter((mk) => mk.listeParMorpho === true), ecartes = bcBanque.marches.length - listes.length;
+  /* 2026-10-10 (test prod Grok : « GOOGLc apparait deux fois ») : deux marches GOOGLc -> USDC listes, meme oracle, LLTV 62,5 % (~0 $
+   *   disponible) et 77 % (573 $). Distincts et dits (liquidation, liquidite) ; c est l ORDRE qui trompait. Trie par liquidite
+   *   disponible : ceux ou l on peut emprunter d abord ; une liquidite non lue passe en dernier. */
+  const dispoDe = (mk) => { const d = Number(mk.disponibleUsd); return Number.isFinite(d) ? d : -1; };
+  const listes = bcBanque.marches.filter((mk) => mk.listeParMorpho === true).sort((a, b) => dispoDe(b) - dispoDe(a)), ecartes = bcBanque.marches.length - listes.length;
   if (!listes.length) ul.append(bcEl('li', { cls: 'note', text: 'No listed lending market accepts a stock of our list right now.' }));
   const pctLtv = (bps) => String(Number(bps.toFixed(1))) + ' %';
   for (const mk of listes) {
@@ -23766,7 +23803,10 @@ function bcBanqueEstimer() {
   if (bcBanque.sens !== 'emprunter') { z.textContent = 'Lenders earn ' + bcPct(mk.apyPret) + ' (variable). What is borrowed cannot be withdrawn until it is repaid.'; return; }
   const decG = Number(mk.garantie.decimales), decP = Number(mk.pret.decimales);
   if (!mk.prixOracle || !/^\d+$/.test(mk.prixOracle) || !Number.isInteger(decG)) { z.textContent = 'The oracle price of this market was not read: no estimate. The plan reads it on chain.'; return; }
-  const g = enUnitesBrutes($('#bcBanqueGarantie').value.trim() || '0', decG), d = enUnitesBrutes($('#bcBanqueMontant').value.trim() || '0', decP);
+  /* 2026-10-10 (mesure locale) : enUnitesBrutes rend null pour 0 - un champ VIDE effacait toute l estimation, prix de l oracle compris
+   *   (emprunter sur une garantie deja posee laisse « Collateral » vide). Vide ou zero = 0 ; un texte illisible reste null. */
+  const brut = (txt, dec) => (/^\s*0*(?:[.,]0*)?\s*$/.test(txt) ? 0n : enUnitesBrutes(txt.trim(), dec));
+  const g = brut($('#bcBanqueGarantie').value, decG), d = brut($('#bcBanqueMontant').value, decP);
   if (g === null || d === null) { z.textContent = ''; return; }
   const prix = BigInt(mk.prixOracle), lltv = BigInt(mk.lltv), marge = BigInt(mk.margeBps || 7000);
   const unite = 10n ** BigInt(decG);
@@ -23783,8 +23823,11 @@ function bcBanqueEstimer() {
   }
   z.textContent = morceaux.join(' ') + ' Estimate only.';
 }
-$('#bcBanqueGarantie').addEventListener('input', bcBanqueEstimer);
-$('#bcBanqueMontant').addEventListener('input', bcBanqueEstimer);
+/* 2026-10-10 (test prod Grok) : le refus rouge « Type an amount of USDC. » restait affiche APRES la saisie d un montant - il n etait
+ *   pose qu au submit, rien ne l effacait. Une saisie efface un refus (rouge) ; jamais une note neutre (« Reading … »). */
+function bcBanqueSaisie() { const n = $('#bcBanqueNote'); if (n && n.classList.contains('wKo')) { n.className = 'note'; n.textContent = ''; } bcBanqueEstimer(); }
+$('#bcBanqueGarantie').addEventListener('input', bcBanqueSaisie);
+$('#bcBanqueMontant').addEventListener('input', bcBanqueSaisie);
 function bcBanqueChoisir(mk, sens) {
   bcBanque.choisi = mk; bcBanque.sens = sens;
   const f = $('#bcBanqueForm'); f.hidden = false;
@@ -23801,6 +23844,8 @@ function bcBanqueChoisir(mk, sens) {
 }
 /* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
 $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));
+/* la carte TokenizedBank de l onglet Wallet mene a la banque qui existe : le panneau, sur son onglet Bank */
+$('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
 $('#bcBanqueForm').addEventListener('click', (e) => { const b = e.target.closest('[data-banque]'); if (b && bcBanque.choisi) bcBanqueChoisir(bcBanque.choisi, b.getAttribute('data-banque')); });
 $('#bcBanqueForm').addEventListener('submit', async (e) => {
   e.preventDefault();

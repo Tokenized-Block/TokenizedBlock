@@ -138,7 +138,8 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-logs.js';
-import { pairesProposees, pairesLancables, ACTIONS_COINBASE } from './paires.js';
+import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
+import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail } from './rails-api.js';
 import { lireMarchesMorpho, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
@@ -2176,6 +2177,26 @@ const railsBudget = { minute: 0, n: 0, parIp: new Map() };
 const banqueMarches = { r: null, t: 0, enVol: null };
 /* les positions par compte (API Morpho) : 30 s, une lecture en vol par compte, 500 comptes au plus en memoire */
 const banquePositions = new Map();
+/* 2026-10-10 : les avoirs d un compte (/api/avoirs, avoirs.js). Les jetons lus : les devises Base du registre (hors ETH natif) et
+ *   TOUTES les actions du registre ; publicnode d abord (lot de 71 servi entier, mesure du 2026-10-10), coupe en essai/TB_REPLIS=0. */
+const avoirsParCompte = new Map();
+let avoirsEnVol = 0;
+const decimalesAvoirs = new Map();
+const JETONS_AVOIRS = new Map([
+  ...DEVISES_BASE.filter((d) => d.type !== 'NATIF' && d.chaines.includes(8453) && /^0x[0-9a-fA-F]{40}$/.test(d.adr))
+    .map((d) => [d.adr.toLowerCase(), { symbole: d.symbole, action: false }]),
+  ...ACTIONS_COINBASE.filter((a) => /^0x[0-9a-fA-F]{40}$/.test(a.adr)).map((a) => [a.adr.toLowerCase(), { symbole: a.symbole, action: true }]),
+]);
+const NOEUDS_AVOIRS = [...new Set([...(ESSAI_SRV.actif || REPLIS_PUBLICS_COUPES ? [] : ['https://base-rpc.publicnode.com']), ...RPC_LIST])];
+async function envoyerLotAvoirs(url, corps) {
+  let r = null;
+  try {
+    r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(12000), headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) });
+    const j = await r.json().catch(() => null);
+    compterEnvoi(url, classeLot(r.status, j));
+    return j;
+  } catch (e) { if (!r) compterEnvoi(url, 'reseau'); throw e; }
+}
 const railsCache = new Map();
 const railsCompteurs = { plans: 0, prets: 0, approbations: 0, refus: 0, nonMesures: 0, trop: 0, sondes: 0 };
 let railsEnVol = 0;
@@ -4546,6 +4567,32 @@ function traiterRequete(req, res) {
     banqueMarches.enVol.then((r) => rendreB({ ...r, lu: new Date(banqueMarches.t).toISOString(),
       borne: 'Figures from the Morpho API, not re-read on chain. A plan re-reads the market on chain and simulates it before it is offered.' }))
       .catch(() => rendreB({ ok: false, etat: 'NON_LU', pourquoi: 'Morpho markets not read' }));
+    return;
+  }
+  /* ══ 2026-10-10 — LES AVOIRS D UN COMPTE PARMI LES ACTIFS DU REGISTRE (avoirs.js) ═══════════════════════════════════════════
+   *   Test prod de Grok : l onglet Wallet cachait NVDAc (achete) - il ne lisait en direct qu ETH et USDC. Ici : balanceOf de chaque
+   *   devise Base et de chaque action du registre, EN LOT (eth_call 'latest', jamais l archive), publicnode d abord (71/71 en un lot,
+   *   mesure), puis RPC_LIST par lots de 20 pour ce qui manque. Chaque envoi compte dans /sante.envois (classeLot).
+   *   30 s par compte, une lecture en vol par compte, 4 en vol au plus, 500 comptes en memoire. Un actif NON lu est rendu a part. */
+  if (chemin === '/api/avoirs') {
+    const rendreA = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    const compteA = String(new URL(req.url, 'http://x').searchParams.get('compte') || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(compteA)) { rendreA(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/avoirs?compte=<whole address>' }); return; }
+    const deja = avoirsParCompte.get(compteA);
+    if (deja && deja.corps && Date.now() - deja.t < 30000) { rendreA(200, deja.corps); return; }
+    if (deja && deja.enVol) { deja.enVol.then((c) => rendreA(200, c)); return; }
+    if (avoirsEnVol >= 4) { rendreA(429, { ok: false, etat: 'NON_LU', pourquoi: 'busy - retry in a few seconds' }); return; }
+    if (avoirsParCompte.size > 500) avoirsParCompte.clear();
+    avoirsEnVol += 1;
+    const enVol = lireAvoirs({ compte: compteA, jetons: [...JETONS_AVOIRS.keys()], noeuds: NOEUDS_AVOIRS, envoyer: envoyerLotAvoirs, decimalesConnues: decimalesAvoirs })
+      .then((r) => ({ ok: r.etat !== 'NON_LU', etat: r.etat, ...(r.pourquoi ? { pourquoi: r.pourquoi } : {}),
+        avoirs: r.avoirs.map((v) => ({ ...v, ...JETONS_AVOIRS.get(v.adr) })), zeros: r.zeros, nonLus: r.nonLus.length, lu: new Date().toISOString(),
+        borne: 'Balances of the currencies and stocks of our list only, read at the latest block. A token outside the list is not read here.' }))
+      .catch(() => ({ ok: false, etat: 'NON_LU', pourquoi: 'holdings not read', avoirs: [], zeros: 0, nonLus: JETONS_AVOIRS.size }))
+      .finally(() => { avoirsEnVol -= 1; });
+    avoirsParCompte.set(compteA, { t: 0, corps: null, enVol });
+    /* un echec n est garde que 5 s (relu vite), une lecture 30 s */
+    enVol.then((corps) => { avoirsParCompte.set(compteA, { t: corps.ok ? Date.now() : Date.now() - 25000, corps, enVol: null }); rendreA(200, corps); });
     return;
   }
   if (chemin === '/api/banque/positions') {
