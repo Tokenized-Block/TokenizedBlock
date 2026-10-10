@@ -27,7 +27,7 @@ assert.equal(borne.taille(), 40, 'le fond lit plus de 40 blocks par tour');
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 assert.match(srv, /if \(chemin === '\/api\/chercher'\) \{/);
 assert.match(srv, /rpcServeur\('eth_call', \[\{ to: a, data: sel \}, 'latest'\]\)/, 'lecture des noms hors eth_call latest');
-assert.match(srv, /indexNoms\.remplir\(\[\.\.\.blocksConnus\], 40\)/);
+assert.match(srv, /indexNoms\.remplir\(\[\.\.\.blocksConnus\], indexNoms\.taille\(\) < blocksConnus\.size \? 120 : 40\)/); /* 2026-10-10 : 120 par tour tant que l index n a pas tout lu */
 assert.match(srv, /Date\.now\(\) - deja\.t < 30000/, 'route sans cache');
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const iS = app.indexOf('let j = bcResoudre(v);'), iF = app.indexOf("fetch('/api/chercher?q='", iS);

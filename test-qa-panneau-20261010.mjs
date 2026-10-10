@@ -26,7 +26,7 @@ ok(/bc\.actionsDetenues = \{ compte: moi, t: Date\.now\(\), liste/.test(html) &&
 /* 3a */
 const pb = C.PRECOMMANDES.find((p) => p.cle === 'buy_block');
 ok(pb && !/\d/.test(pb.modele) && pb.aCompleter === true, '3a la puce Buy ne pre-remplit aucun montant (« ' + (pb && pb.modele) + ' »)');
-ok(C.analyserCommande(pb.modele).ok === false && C.analyserCommande(pb.modele.slice(0, pb.curseur) + '0.002' + pb.modele.slice(pb.curseur)).ok === true, '3a refusee telle quelle, acceptee une fois le montant tape au curseur');
+ok(C.analyserCommande(pb.modele).ok === false && C.analyserCommande(pb.modele.slice(0, pb.curseur) + '0.002' + pb.modele.slice(pb.curseur + (pb.selection || 0))).ok === true && pb.modele.slice(pb.curseur, pb.curseur + pb.selection) === '\u2026', '3a refusee telle quelle, acceptee une fois le montant tape au curseur');
 /* 3b — on rejoue bcLigneEtatPlan extraite d app.html */
 const m = /function bcLigneEtatPlan\(p\) \{[\s\S]*?\n\}/.exec(html);
 const f = new Function('return (' + m[0] + ')')();

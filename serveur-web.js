@@ -2677,7 +2677,10 @@ const blocksConnus = new Set();
 const indexNoms = creerIndexNoms({ lire: (a, sel) => rpcServeur('eth_call', [{ to: a, data: sel }, 'latest']) });
 const reponsesNoms = new Map(); /* q -> { t, corps } : 30 s */
 let lignesNomsTrending = { t: 0, lignes: [] };
-if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) setInterval(() => { void indexNoms.remplir([...blocksConnus], 40).catch(() => {}); }, 60000).unref?.();
+if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) /* 2026-10-10 (QA Grok : IB022 introuvable 1 h apres le deploiement — 527 noms lus sur 2 924) : l index repart de zero a chaque
+ *   deploiement ; a 40 noms par minute il lui fallait ~73 min. Tant qu il n a pas tout lu : 120 par tour (eth_call `latest`,
+ *   jamais l archive), puis 40 comme avant. */
+setInterval(() => { void indexNoms.remplir([...blocksConnus], indexNoms.taille() < blocksConnus.size ? 120 : 40).catch(() => {}); }, 60000).unref?.();
 /* ⛔⛔ QUI A CREE QUOI — L INDEX QUI MANQUAIT, ET SON ABSENCE RENDAIT LES BLOCKS DES GENS INVISIBLES.
  *     Phil, 2026-09-27 : « je vais sur My blocks et je vois pas le block que j ai cree sur l autre
  *     machine, et le bug doit etre partout ». Il l est.

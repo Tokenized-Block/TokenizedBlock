@@ -91,6 +91,14 @@ try {
     ok(r2.recu > 0n, s + ' > IB022 : le compte recoit ' + r2.recu + ' unites d IB022');
     ok(r2.frais.length === 1 && !r2.frais.some(([j]) => j === IB022), s + ' > IB022 : frais dans UNE devise, pas en block : ' + r2.frais.map(([j, v]) => v + ' ' + nom(j)).join(' + '));
   }
+  /* 2026-10-10 (QA Grok) : IB022 > USDC, block cote en ETH vendu contre USDC en UN appel (block -> ETH -> USDC) */
+  const ru = await trader('IB022 > USDC', IB022, USDC, part, compte, [ETH, USDC, IB022]);
+  if (ok(ru.etat === 'EXECUTE', 'IB022 > USDC : ' + ru.etat + (ru.pourquoi ? ' (' + String(ru.pourquoi).slice(0, 120) + ')' : ''))) {
+    ok(ru.via === 'planEchangeMultiSauts', 'IB022 > USDC : UN appel au routeur (via ' + ru.via + ')');
+    ok(ru.recu > 0n, 'IB022 > USDC : le compte recoit ' + ru.recu + ' unites USDC');
+    ok(ru.frais.length === 1 && !ru.frais.some(([j]) => j === IB022), 'IB022 > USDC : frais dans UNE devise, pas en block : ' + ru.frais.map(([j, v]) => v + ' ' + nom(j)).join(' + '));
+    console.log('     resume : fraisBps ' + (ru.resume && ru.resume.fraisBps) + ' · fraisParHook ' + (ru.resume && ru.resume.fraisParHook) + ' · fraisMarcheBps ' + (ru.resume && ru.resume.fraisMarcheBps));
+  }
   /* TEMOIN NEGATIF : une action de la table Aerodrome ne prend PAS la nouvelle branche */
   const nv = sym('NVDAc');
   ok(POOLS_ACTIONS_AERODROME.has(nv), 'NVDAc est dans la table Aerodrome (temoin)');

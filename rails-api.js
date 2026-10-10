@@ -287,6 +287,17 @@ async function planRailBrut(q, deps) {
         return normaliser(route, await planEchange({ rpc, chaine, jeton: de, compte, sens: 'VENTE', montant: m,
           marcheLu: marcheA, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote });
       }
+      /* ⛔ 2026-10-10 (QA Grok : Sell n offrait pas USDC) : un block cote en ETH se vend contre USDC en UN appel au routeur Uniswap,
+       *   block -> ETH -> USDC (meme assembleur, meme juge que la route vers une action ; frais une fois, dans le block vendu ou par
+       *   son hook). La jambe ETH -> USDC est une pool de prix lue a l instant (CLES_PRIX), jamais supposee. */
+      if (vers === USDC && quote === ETH) {
+        const chemin = [{ de, vers: ETH, famille: 'uniswap-v4' }, { de: ETH, vers: USDC, famille: 'uniswap-v4' }];
+        const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec(marcheA.cle) });
+        if (b.etat !== 'OK') return normaliser(route, { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi }, { via: 'sautsDepuisChemin', chemin });
+        return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: USDC, montant: m,
+          decimalesEntree: decA, prixUsdEntree: null, fraisDevisesOk, maintenant }),
+        { via: 'planEchangeMultiSauts', chemin, cotation: quote, pool: 'uniswap-v4' });
+      }
       if (nv === 'BLOCK') {
         const marcheB = await marcheDe(vers);
         if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));

@@ -883,9 +883,12 @@ body:not(.surMap) .mapCta{display:none}
 .bulle .bulleN{font-weight:800;opacity:.85;font-size:12px}
 @media (max-width:620px){
   /* ⛔ sur telephone on ne replie pas les bulles sur cinq lignes : une seule rangee qui defile */
-  .bulles{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
-    margin-left:-2px;padding-left:2px;padding-right:12px}
-  .bulles::-webkit-scrollbar{display:none}
+  /* 2026-10-10 (QA Grok a 375 px : la rangee ne defilait pas) : mesure — elle DEBORDAIT (471 px dans 349) mais sans barre ni
+   *   geste souris, rien ne le montrait. Barre fine visible ; la molette verticale la fait defiler (script plus bas). */
+  .bulles{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;
+    margin-left:-2px;padding-left:2px;padding-right:12px;padding-bottom:6px}
+  .bulles::-webkit-scrollbar{height:4px}
+  .bulles::-webkit-scrollbar-thumb{background:rgb(var(--accentRgb) / .45);border-radius:4px}
   .bulle{font-size:13px;padding:9px 14px}
 }
 /* la carte fermee disparait completement : c est la bulle qui la represente */
@@ -6228,8 +6231,24 @@ function chercherBlock() {
     return;
   }
   if (!h) {
-    direMap('No block named « ' + brut + ' » among the ' + indexDeRecherche()
-      + ' read here. Older blocks are not indexed yet — paste its address to open it.');
+    /* 2026-10-10 (QA Grok : « among the 0 read here ») : l index de ce navigateur vient de SA lecture de chaine, a 0 quand le
+     *   noeud refuse. On demande l index du SERVEUR (/api/chercher, eth_call `latest`, hors budget d archive) avant de dire « absent ». */
+    void (async () => {
+      direMap('Looking for « ' + brut + ' » in the server index…');
+      let s = null;
+      try { s = await (await fetch('/api/chercher?q=' + encodeURIComponent(brut), { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json(); } catch (_) { s = null; }
+      if (s && s.etat === 'TROUVE' && ADRESSE.test(String(s.adr))) {
+        const pose = creerHabitant({ jeton: s.adr, symbole: s.sym || null, vie: null });
+        if (!anim) animer();
+        $('#mapNote').textContent = '';
+        pose.el.click();
+        return;
+      }
+      const lus = Math.max(indexDeRecherche(), (s && s.couverture && s.couverture.nomsLus) || 0);
+      direMap(s ? 'No block named « ' + brut + ' » among the ' + lus.toLocaleString('en-US')
+        + ' names read so far. Older blocks are not indexed yet — paste its address to open it.'
+        : 'Search not read — the network is busy. Retry, or paste its address to open it.');
+    })();
     return;
   }
   note.textContent = '';
@@ -6237,6 +6256,7 @@ function chercherBlock() {
   h.el.scrollIntoView({ block: 'center' });
 }
 $('#bTrouver').addEventListener('click', chercherBlock);
+document.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('[data-live-relire]'); if (t) { t.disabled = true; void lireLive(); } });
 /* ⛔ ENTREE CHERCHE — c est le geste que tout le monde fait dans une barre de recherche. */
 $('#trouver').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); chercherBlock(); }
@@ -9500,7 +9520,9 @@ async function ouvrirProfil(adr, sym, opts) {
   if (!ADRESSE.test(String(adr || ''))) return;
   /* 2026-10-10 re-QA (Grok Super) : le panneau restait sur DJTc pendant que le profil montrait IB022 (Find, liste Blocks). Panneau OUVERT :
    *   il suit le block ouvert. Ferme : rien ne change (le choix du cerveau n est pas touche dans le dos de la personne). */
-  try { const pop = $('#bcPop'); if (pop && pop.open && !(brainAdr && adrBrainEq(brainAdr, adr))) { choisirBrain(adr); bcRepeindre(); } } catch (_) { /* le profil s ouvre quand meme */ }
+  /* 2026-10-10 (QA Grok, 2e passe : apres Find d IB022, le panneau restait sur DJTc) : le panneau etait FERME a l ouverture du profil,
+   *   puis rouvert sur l ancien block. Il suit desormais le profil ouvert, ferme ou non ; il se repeint s il est ouvert. */
+  try { const pop = $('#bcPop'); if (!(brainAdr && adrBrainEq(brainAdr, adr))) { choisirBrain(adr); if (pop && pop.open) bcRepeindre(); } } catch (_) { /* le profil s ouvre quand meme */ }
   if ($('#pePremier')) $('#pePremier').hidden = true;
   const moi = ++jetonProfil;
   const perime = () => moi !== jetonProfil;
@@ -9529,6 +9551,8 @@ async function lireProfil(adr, sym, perime, opts) {
    * ancien site »). Ce lien sortait l utilisateur de l app vers `index.html`, un autre ecran, une autre
    * logique, sans prevenir. Le bouton ouvre maintenant le lancement DANS l app. */
   for (const id of ['#pVie', '#pSupply', '#pScelle', '#pB20', '#pSolde']) $(id).textContent = '…';
+  /* 2026-10-10 (QA Grok) : sans wallet, « You hold » ne lit rien — il le dit tout de suite, pas « … » pendant la lecture du reste. */
+  if (!compte) $('#pSolde').textContent = 'Connect to see';
   $('#pNote').textContent = 'reading the chain…';
   symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null;
   traceProfilVider(); /* la bande appartient au block qu on regarde, jamais au precedent */
@@ -10011,7 +10035,7 @@ async function lireProfil(adr, sym, perime, opts) {
   peindreMetier(adr);
 
   if (!compte) {
-    $('#pSolde').textContent = 'connect your wallet to see';
+    $('#pSolde').textContent = 'Connect to see';
   } else {
     await dormir(260);
     if (perime()) return;
@@ -10848,6 +10872,7 @@ function plierLesCartes() {
   /* la rangee de bulles, posee AVANT la premiere carte */
   const barre = document.createElement('div');
   barre.className = 'bulles';
+  barre.addEventListener('wheel', (e) => { if (barre.scrollWidth > barre.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { barre.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
   barre.setAttribute('role', 'tablist');
   barre.setAttribute('aria-label', 'Feeds');
   volet.insertBefore(barre, volet.firstElementChild);
@@ -10916,8 +10941,10 @@ function plierLesCartes() {
     bulle.textContent = nomCourt(nom);
     barre.appendChild(bulle);
     bulle.addEventListener('click', () => {
+      /* 2026-10-10 (QA Grok, Feed > Live VIDE, sans compteurs) : toucher la bulle DEJA ouverte la refermait — l ecran restait noir,
+       *   bulle encore soulignee par le focus, comme une panne. La bulle ouvre toujours ; l entete de la carte reste le geste qui ferme. */
       const dejaOuverte = carte.classList.contains('ouverte');
-      ouvrirSeule(dejaOuverte ? null : nom, true);
+      ouvrirSeule(nom, true);
       /* ⛔ « le feed descend en bas » : apres l ouverture, on amene la carte sous la rangee de bulles,
        *    sinon sur telephone elle s ouvre hors de l ecran et le clic a l air sans effet. */
       if (!dejaOuverte) {
@@ -11344,7 +11371,10 @@ function peindreLive() {
   }).join('') || (liveEvts.length && liveFiltre !== 'TOUT'
     /* ⛔ Une liste vide qui ne nomme pas son filtre se lit comme une panne. Elle dit donc CE QU ELLE
      *    cherchait, et — pour les messages payes — ce qui a ete mesure sur la chaine. */
-    ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>' : '');
+    ? '<li class="filL"><p class="note">' + enTexte(riennDeTrouve()) + '</p></li>'
+    /* 2026-10-10 (QA Grok) : une lecture refusee qui n a rien rendu le DIT, avec de quoi relire — jamais un ecran vide. */
+    : !liveEvts.length && liveRatees && !liveEnCours
+      ? '<li class="filL"><p class="note">Live feed not read \u2014 the network is busy. <button type="button" class="puce" data-live-relire>Retry</button></p></li>' : '');
   setTimeout(lireNotesAuto, 0);
   peindreMessagesProfil(); /* ⛔ REVUE 14:00 : le compte du profil suit le Feed, au meme instant */
   if ($('#sfLiveRoute')) $('#sfLiveRoute').hidden = !lignes.slice(0, liveAffiches).some(estEtrangere);
@@ -22191,6 +22221,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
    *   Son marche est celui de l emetteur, pas un marche ne chez nous ; la porte `trade_tblock` la jugeait « awake, sans marche lu »
    *   et refusait SNDKc, NVDAc, MSTRc, MSFTc. Elle ne s applique qu a un block. */
   const actionAffichee = !!moi && ACTIONS_PAR_ADR.has(moi);
+  let accordCerveau = null;
   /* (1) la porte du cerveau — seulement si l echange touche le block affiche ; sinon il n a rien a juger, et on le DIT */
   if (actionAffichee && (de.adr === moi || vers.adr === moi)) bcEtape(m, 'A Coinbase stock — it trades on its own market; no brain gate.');
   else if (moi && (de.adr === moi || vers.adr === moi)) {
@@ -22199,7 +22230,10 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     /* marche non lu : le cerveau n a rien juge - on le dit, on ne dit ni 'accepts' ni 'refuses' ; le planificateur juge le marche */
     if (!snapMoi || (g.ok && !bcMarcheLue(snapMoi))) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
     const humeur = (snapMoi && snapMoi.humeur) || 'unread';
-    bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
+    /* 2026-10-10 (QA Grok : « Its brain (calm) accepts » AU-DESSUS de « Not measured ») : un accord n est DIT qu apres un plan
+     *   MESURE (PRET / APPROBATIONS, plus bas) ; un refus arrete ici, avant tout plan, et se dit tout de suite. */
+    if (g.ok) accordCerveau = 'Its brain (' + humeur + ') accepts.';
+    else bcEtape(m, 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', 'non');
     bcNoter({ type: 'verdict', ...refs, etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts trade_tblock' : String(g.pourquoi || 'refused') });
     if (!g.ok) { bcOpMaj(op, 'refused'); return; }
     }
@@ -22235,6 +22269,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       bcBoutons(m, [['Try again', planifier, true]]);
       return;
     }
+    if (accordCerveau) bcEtape(m, accordCerveau, 'oui');
     const rs = p.resume || {};
     /* ⛔ LE FRAIS DIT EST CELUI DU PLAN, ET LE BON. Mesure prod (ETH > IB022) : `fraisBps: "0"`, `fraisMarcheBps: 50`, `fraisParHook: true`
      *   — le panneau affichait « Fee: 0 % » sur un echange ou le marche du block preleve 0,5 % par son hook. Un chiffre vrai (le frais
@@ -22689,6 +22724,8 @@ function bcPeindreTicket(a, sym, mk, snap) {
        *   contre une action a pool v4 MESUREE, en UN appel (block -> ETH -> USDC -> action, rails-api.js route 2 ; prouve sur fork,
        *   banc-bloc-vers-action-fork-20261010.mjs). Les actions de la table Aerodrome restent hors du ticket (franchissement). */
       const usdcV = bcResoudre('USDC');
+      /* 2026-10-10 (QA Grok) : cote en ETH, il se vend aussi contre USDC (block -> ETH -> USDC, rails-api.js ; prouve sur fork) */
+      if (q && q.ok && q.adr === eth && usdcV.ok) choix.push([usdcV.adr, 'for USDC']);
       if (q && q.ok && (q.adr === eth || (usdcV.ok && q.adr === usdcV.adr))) {
         const v4 = bcActionsV4();
         for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, 'for ' + st.symbole + ' (stock)']); }
@@ -23310,7 +23347,10 @@ function bcAifiPeindreDevises(a) {
   s.textContent = '';
   const choix = bcChoixPaiement(a, q);
   for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
-  if (choix.some(([v]) => v === voulue)) s.value = voulue;
+  /* 2026-10-10 (QA Grok : « Pay with » USDC, carte « 1 ETH ») : S.I en marche paie dans SA devise ; si elle n est plus dans la liste,
+   *   elle y est remise et montree — le menu ne montre jamais une autre devise que celle des cartes. */
+  if (bc.aifi && bc.aifi.block === a && bc.aifi.devise && !choix.some(([v]) => v === voulue)) s.append(bcEl('option', { value: voulue, text: bc.aifi.devise.sym }));
+  if ([...s.options].some((o) => o.value === voulue)) s.value = voulue;
   bcAifiUnites();
 }
 /* ⛔ LE FIL RESTE CONDENSE (Phil, 2026-10-04 : « fais pas de doublon, mets le chat en condense, plus lisible ») : les avis d AiFi
@@ -23563,7 +23603,14 @@ $('#bcForm').addEventListener('submit', async (e) => {
   e.preventDefault(); const s = $('#bcSaisie');
   if (bcSaisieEnCours) return;
   bcSaisieEnCours = true;
-  try { if (await bcExecuterTexte(s.value)) s.value = ''; } finally { bcSaisieEnCours = false; s.focus(); }
+  /* 2026-10-10 (QA Grok, « KAShello test ») : Entree VIDE la saisie, acceptee ou non ; un refus rappelle ce qui avait ete tape. */
+  const tape = s.value;
+  try {
+    if (tape.includes('\u2026')) { const n = $('#bcNote'); n.className = 'note wKo'; n.textContent = 'Type the amount in place of \u2026, then send.'; return; }
+    const ok = await bcExecuterTexte(tape);
+    s.value = '';
+    if (!ok && tape.trim()) { const n = $('#bcNote'); n.textContent = '\u00ab ' + tape.trim().slice(0, 60) + ' \u00bb \u2014 ' + n.textContent; }
+  } finally { bcSaisieEnCours = false; s.focus(); }
 });
 /* ⛔ « Buy a stock » et « Buy this block » font DOUBLON quand le block affiche EST une action (Phil, 2026-10-04 : « buy stock et
  *   block c est la meme, donc choisis »). Sur une action il ne reste que « Buy <SYM> » / « Sell <SYM> » ; sur un block, les quatre
@@ -23589,7 +23636,7 @@ for (const p of PRECOMMANDES) {
     /* « What can it do? » n a rien a ajuster : elle s execute, et ne laisse pas « tasks » dans le champ */
     if (p.cle === 'tasks') { void bcExecuterTexte('tasks'); return; }
     const s = $('#bcSaisie'); s.value = p.modele; s.focus();
-    const ou = Number.isInteger(p.curseur) ? p.curseur : p.modele.length; try { s.setSelectionRange(ou, ou); } catch (_) {}
+    const ou = Number.isInteger(p.curseur) ? p.curseur : p.modele.length; try { s.setSelectionRange(ou, ou + (Number.isInteger(p.selection) ? p.selection : 0)); } catch (_) {}
     const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? (p.aide || 'Paste the recipient’s whole address, then send.') : '';
   });
   $('#bcPre').append(b);
