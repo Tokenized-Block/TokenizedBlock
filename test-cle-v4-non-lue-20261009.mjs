@@ -43,7 +43,7 @@ const REFUS = 'request limit reached';
 
 /* ── A. cleV4DuPoolId, extraite telle que livree ───────────────────────────────────────────────────────── */
 const corpsCle = extraire('async function cleV4DuPoolId(id) {');
-function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetre }) {
+function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetre, clesV4Absentes = new Map(), apresAbsencesV4 = () => {} }) {
   const clesV4Lues = new Map(prefill);
   const journal = { blockNumber: 0, getLogs: 0 };
   const rpcServeur = async (methode, params) => {
@@ -55,9 +55,10 @@ function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetr
     const de = parseInt(q.fromBlock, 16), a = parseInt(q.toBlock, 16);
     return fenetre({ de, a, profondeur: TETE - de, id: q.topics[1] });
   };
-  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize',
-    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize);
-  return { f, clesV4Lues, journal };
+  /* 2026-10-10 : la fonction retient aussi les absences LUES (clesV4Absentes, bornee) et declenche leur persistance (doublure) */
+  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4',
+    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize, clesV4Absentes, 5000, apresAbsencesV4);
+  return { f, clesV4Lues, journal, clesV4Absentes };
 }
 const estNonLue = (r) => Boolean(r && typeof r === 'object' && r.etat === 'NON_LUE');
 

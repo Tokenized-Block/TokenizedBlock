@@ -395,36 +395,96 @@ for (const l of LOGS_INITIALIZE_MESURES) {
  *   blocs, pas mesure).
  *   ⛔ Le refus est COMPTE, pas reconnu a son message : avecRepliLogs relance l erreur du PRINCIPAL (repli-logs.js), jamais celle
  *     du budget. ⛔ Un NON_LUE n entre JAMAIS dans clesV4Lues : il se relit au prochain appel. */
+/* ⛔⛔ 2026-10-10 (prod, compteur d archive par consommateur) — `route /api/prix-usd` = 2e consommateur (~10 appels/min la nuit).
+ *   Une absence LUE (59 fenetres toutes lues, aucun Initialize) n etait JAMAIS retenue, et la reponse de /api/prix-usd ne vit que
+ *   300 s : chaque jeton sans pool v4 recente repayait ~55 appels d archive toutes les 5 minutes. Meme remede que resoudreClePool
+ *   (/api/cle, 93dad10 + b7cd95d, revue adversariale) : la plage LUE est retenue, la suite ne lit que les blocs nouveaux ; une memoire
+ *   qui ne touche plus la fenetre est oubliee ; tout est plafonne a la tete ; un NON_LUE n est JAMAIS retenu ; persistee. */
+const CLES_V4_ABSENTES_MAX = 5000;
+const clesV4Absentes = new Map(); /* poolId -> { depuis, jusqua } : plage LUE sans Initialize */
+let apresAbsencesV4 = () => {}; /* branche sur la persistance plus bas (le banc garde la doublure muette) */
 async function cleV4DuPoolId(id) {
   const k = String(id).toLowerCase();
   if (clesV4Lues.has(k)) return clesV4Lues.get(k);
   const nonLue = (ratees, fenetres, pourquoi) => ({ etat: 'NON_LUE', ratees, fenetres, pourquoi });
   let tete;
   try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { return nonLue(0, 0, 'chain head not read'); }
-  if (!Number.isSafeInteger(tete)) return nonLue(0, 0, 'chain head not read');
+  if (!Number.isSafeInteger(tete) || tete <= 0) return nonLue(0, 0, 'chain head not read');
   const PAS = 2000;
   let ratees = 0, fenetres = 0;
   /* ⛔ ON REMONTE DANS LE TEMPS, et on BORNE : 120 000 blocs couvrent largement la vie des pools
-   *   qui nous interessent. Au-dela ce n est plus une lecture, c est un balayage. */
-  for (let de = tete - PAS; de > tete - 120000; de -= PAS) {
-    fenetres += 1;
-    let logs;
-    try {
-      logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,
-        topics: [TOPIC_INITIALIZE, k],
-        fromBlock: '0x' + Math.max(0, de).toString(16),
-        toBlock: '0x' + Math.min(tete, de + PAS - 1).toString(16) }]);
-    } catch (_) { ratees += 1; continue; /* ⛔ une fenetre refusee n est pas une fenetre vide : COMPTEE, et on continue */ }
-    /* ⛔ SEUL UN TABLEAU EST UNE REPONSE (repli-logs.js) : autre chose est un refus, pas une fenetre vide. */
-    if (!Array.isArray(logs)) { ratees += 1; continue; }
-    if (!logs.length) continue;
-    const p = decoderInitialize(logs[0]);
-    /* ⛔ `p.erreur` veut dire « je ne sais pas reconstruire cette cle » : on ne la garde PAS. */
-    if (p && !p.erreur && p.cle) { clesV4Lues.set(k, p.cle); return p.cle; }
-    return null;
+   *   qui nous interessent. Au-dela ce n est plus une lecture, c est un balayage.
+   *   La grille est celle d avant, a l identique : 59 fenetres [tete - j*PAS, tete - (j-1)*PAS - 1], j = 1..59. */
+  const BAS = tete - 59 * PAS, HAUT = tete - 1;
+  const lu = clesV4Absentes.get(k) || null;
+  /* ⛔ revue adversariale (2026-10-10) : la memoire doit TOUCHER la plage demandee DES DEUX COTES. Une tete qui recule sous le bas de
+   *   la memoire faisait fusionner [HAUT+1, depuis-1] — des blocs jamais lus — puis rendre null pour une pool qui y vivait. */
+  const deja = lu && Number.isSafeInteger(lu.depuis) && Number.isSafeInteger(lu.jusqua) && lu.jusqua + 1 >= BAS && lu.depuis <= HAUT + 1 ? lu : null;
+  const plages = deja ? [[deja.jusqua + 1, HAUT], [BAS, Math.min(deja.depuis - 1, HAUT)]].filter(([d, f]) => f >= d) : [[BAS, HAUT]];
+  for (const [deb, fin] of plages) {
+    for (let f = fin; f >= deb; f -= PAS) {
+      const d = Math.max(deb, f - PAS + 1);
+      fenetres += 1;
+      let logs;
+      try {
+        logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,
+          topics: [TOPIC_INITIALIZE, k],
+          fromBlock: '0x' + Math.max(0, d).toString(16),
+          toBlock: '0x' + f.toString(16) }]);
+      } catch (_) { ratees += 1; continue; /* ⛔ une fenetre refusee n est pas une fenetre vide : COMPTEE, et on continue */ }
+      /* ⛔ SEUL UN TABLEAU EST UNE REPONSE (repli-logs.js) : autre chose est un refus, pas une fenetre vide. */
+      if (!Array.isArray(logs)) { ratees += 1; continue; }
+      if (!logs.length) continue;
+      const p = decoderInitialize(logs[0]);
+      /* ⛔ `p.erreur` veut dire « je ne sais pas reconstruire cette cle » : on ne la garde PAS. */
+      if (p && !p.erreur && p.cle) { clesV4Lues.set(k, p.cle); if (clesV4Absentes.delete(k)) apresAbsencesV4(); return p.cle; }
+      return null;
+    }
   }
-  return ratees ? nonLue(ratees, fenetres, ratees + '/' + fenetres + ' windows of ' + PAS + ' blocks not read') : null;
+  if (ratees) return nonLue(ratees, fenetres, ratees + '/' + fenetres + ' windows of ' + PAS + ' blocks not read');
+  /* tout LU, rien trouve : l absence est retenue avec sa plage LUE ; une ecriture concurrente qui la touche est unie, jamais plus */
+  let couvert = { depuis: deja ? Math.min(deja.depuis, BAS) : BAS, jusqua: deja ? Math.max(deja.jusqua, HAUT) : HAUT };
+  const cur = clesV4Absentes.get(k);
+  if (cur && cur !== lu && cur.depuis <= couvert.jusqua + 1 && couvert.depuis <= cur.jusqua + 1) {
+    couvert = { depuis: Math.min(cur.depuis, couvert.depuis), jusqua: Math.max(cur.jusqua, couvert.jusqua) };
+  }
+  clesV4Absentes.delete(k);
+  clesV4Absentes.set(k, couvert);
+  if (clesV4Absentes.size > CLES_V4_ABSENTES_MAX) clesV4Absentes.delete(clesV4Absentes.keys().next().value);
+  apresAbsencesV4();
+  return null;
 }
+/* persistance des absences v4 : meme mecanisme que cles-absentes.json (voir resoudreClePool) */
+const FICHIER_CLES_V4_ABSENTES = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'cles-v4-absentes.json') : null;
+let ecritureAbsentesV4Prevue = null;
+apresAbsencesV4 = () => {
+  if (!FICHIER_CLES_V4_ABSENTES || ecritureAbsentesV4Prevue) return;
+  ecritureAbsentesV4Prevue = setTimeout(() => {
+    ecritureAbsentesV4Prevue = null;
+    try {
+      const payload = JSON.stringify([...clesV4Absentes]);
+      if (payload.length > 2 * 1024 * 1024) return; /* plutot rien qu un volume plein */
+      writeFileSync(FICHIER_CLES_V4_ABSENTES + '.tmp', payload);
+      renameSync(FICHIER_CLES_V4_ABSENTES + '.tmp', FICHIER_CLES_V4_ABSENTES);
+    } catch { /* une ecriture ratee ne casse pas une lecture : la memoire suffit */ }
+  }, 5000);
+  ecritureAbsentesV4Prevue.unref?.();
+};
+(function relireClesV4Absentes() {
+  if (!FICHIER_CLES_V4_ABSENTES || !existsSync(FICHIER_CLES_V4_ABSENTES)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_CLES_V4_ABSENTES, 'utf8'));
+    if (!Array.isArray(brut)) return;
+    for (const e of brut.slice(-CLES_V4_ABSENTES_MAX)) {
+      const [j, v] = Array.isArray(e) ? e : [];
+      if (/^0x[0-9a-f]{64}$/.test(String(j)) && v && Number.isSafeInteger(v.depuis) && Number.isSafeInteger(v.jusqua) && v.jusqua >= v.depuis && v.depuis > 0) {
+        clesV4Absentes.set(String(j), { depuis: v.depuis, jusqua: v.jusqua });
+      }
+    }
+    console.log('[cles-v4] ' + clesV4Absentes.size + ' absence(s) d Initialize relue(s) du volume');
+  } catch (err) { console.warn('[cles-v4] absences illisibles, on repart a vide : ' + err.message); }
+})();
 
 async function faitsPoolV4(poolId, infos) {
   const id = String(poolId).toLowerCase();
@@ -1268,7 +1328,9 @@ async function resoudreClePoolBrut(t, fenetres) {
   /* ⛔⛔ revue adversariale (2026-10-10, constat HAUT, contre-exemple execute) : une memoire qui ne TOUCHE plus la fenetre demandee
    *   (son haut sous `bas`) faisait relire TOUT l ecart depuis elle — 606 getLogs une semaine plus tard au lieu de 80, et une pool
    *   plus ancienne que la fenetre rendue ok:true. On l oublie : balayage plein de [bas, tete], la couverture d avant exactement. */
-  const deja = lu && Number.isSafeInteger(lu.depuis) && Number.isSafeInteger(lu.jusqua) && lu.jusqua + 1 >= bas ? lu : null;
+  /* ⛔ et DES DEUX COTES (revue de cleV4DuPoolId, 2026-10-10, meme trou ici) : une tete qui recule sous le bas de la memoire faisait
+   *   fusionner des blocs jamais lus [tete+1, depuis-1]. */
+  const deja = lu && Number.isSafeInteger(lu.depuis) && Number.isSafeInteger(lu.jusqua) && lu.jusqua + 1 >= bas && lu.depuis <= tete + 1 ? lu : null;
   /* du plus recent au plus ancien, comme avant : la partie neuve d abord, puis la partie plus profonde jamais lue (plafonnee a la tete) */
   const plages = deja ? [[deja.jusqua + 1, tete], [bas, Math.min(deja.depuis - 1, tete)]].filter(([d, f]) => f >= d) : [[bas, tete]];
   const trouvees = [];

@@ -157,6 +157,15 @@ await cas('J2 BAS : une tete qui RECULE (noeud en retard, > 0) : la partie profo
   assert.ok(e.appels.length > 0 && e.appels.every(([, a]) => a <= 980_000), 'un bloc au-dessus de la tete lue a ete demande : ' + JSON.stringify(e.appels.slice(0, 2)));
   assert.ok(e.appels.length <= 80, 'plus de fenetres que demande : ' + e.appels.length);
 });
+await cas('J3 la tete RECULE sous le bas de la memoire puis remonte : la pool au milieu est TROUVEE (adjacence des DEUX cotes)', async () => {
+  const { resoudreClePool, clesPoolAbsentes, e } = monter();
+  await resoudreClePool(JETON); /* memoire { 960 041, 1 000 000 } */
+  e.tete = 900_000; await resoudreClePool(JETON);
+  assert.deepEqual(clesPoolAbsentes.get(JETON), { depuis: 900_000 - 39960 + 1, jusqua: 900_000 }, 'des blocs jamais lus ont ete fusionnes');
+  e.tete = 910_000; e.pools.push({ bloc: 905_000, cote: 'c0' });
+  const r = await resoudreClePool(JETON);
+  assert.equal(r.ok, true); assert.equal(r.cles[0].bloc, 905_000);
+});
 await cas('K BAS : une autre resolution ecrit PENDANT le balayage — l union des deux plages lues est gardee (la couverture profonde ne se perd pas)', async () => {
   const { resoudreClePool, e, clesPoolAbsentes } = monter();
   /* pendant le balayage a 10 fenetres, une resolution a 40 (meme tete) termine et ecrit sa plage */
