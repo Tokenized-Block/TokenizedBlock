@@ -23556,7 +23556,7 @@ $('#bcSkins').addEventListener('click', () => {
 /* ── ACHETER UNE SKIN : 1 USDC (prix fixe par Phil le 2026-10-04), UNE transaction, le choix ecrit dedans (skins.js) ──────────────
  * La carte : (1) le wallet ; (2) le prix relu au serveur ET compare a celui de l app — deux sources qui doivent etre d accord, sinon
  *   rien n est demande ; (3) le solde USDC relu ; (4) le wallet signe `transfer(wallet des frais, 1 USDC)` + memo du block et de la
- *   skin ; (5) le serveur VERIFIE la transaction sur la chaine et l enregistre. Le beneficiaire est affiche EN ENTIER avant de signer.
+ *   skin ; (5) le serveur VERIFIE la transaction sur la chaine et l enregistre. Le beneficiaire est NOMME (TokenizedBlock) - regle de Phil du 2026-10-10 : son adresse ne s affiche jamais ; le wallet la montre.
  * ⛔ Un achat PAYE mais pas encore enregistre (noeud en retard, reseau coupe) est garde dans ce navigateur et se reenregistre : la
  *   transaction est sur la chaine, elle ne se perd pas. ⛔ NON MESURE : cet achat avec un vrai wallet (prouve sur fork : 14/0). */
 const BC_CLE_SKIN = 'tblock.panel.skinEnAttente';
@@ -23602,7 +23602,7 @@ async function bcAcheterSkin() {
     if (solde < SKIN_PRIX_USDC) { bcEtape(m, 'This wallet holds ' + bcUnites(solde, 6) + ' USDC — a skin is 1 USDC. Nothing was asked.', 'non'); return; }
     let appel;
     try { appel = appelAchatSkin({ usdc, beneficiaire, block: a, recette }); } catch (e) { bcEtape(m, 'This skin could not be prepared: ' + String((e && e.message) || e).slice(0, 120), 'non'); return; }
-    bcEtape(m, '1 USDC goes to ' + beneficiaire + ' (TokenizedBlock). The block and the skin are written in the transaction.');
+    bcEtape(m, '1 USDC goes to TokenizedBlock. The block and the skin are written in the transaction.'); /* 2026-10-10 regle de Phil : jamais l adresse de frais a l ecran ; le WALLET montre le vrai destinataire */
     bcBoutons(m, [['Sign in my wallet', async () => {
       const r = await bcSigner(m, [appel]);
       if (!r.ok) { bcBoutons(m, [['Start again', payer, true], ['Dismiss', refuser, true]]); return; }

@@ -228,8 +228,8 @@ const achat = bcSrc.slice(bcSrc.indexOf("const BC_CLE_SKIN = 'tblock.panel.skinE
 ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /\$\('#bcSkinAcheter'\)\.addEventListener\('click', \(\) => void bcAcheterSkin\(\)\);/.test(html), 'C2 « Buy » lance bcAcheterSkin');
 ok(/prix\.prixUsdc !== SKIN_PRIX_USDC\.toString\(\) \|\| String\(prix\.usdc\)\.toLowerCase\(\) !== usdc \|\| String\(prix\.beneficiaire\)\.toLowerCase\(\) !== beneficiaire/.test(achat),
   'C2 achat : le prix, le contrat USDC et le beneficiaire du SERVEUR doivent etre ceux de l APP — deux sources d accord, sinon rien n est demande');
-ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to ' \+ beneficiaire \+ ' \(TokenizedBlock\)\./.test(achat),
-  'C2 achat : l argent va au wallet des frais du depot, affiche EN ENTIER avant la signature');
+ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to TokenizedBlock\./.test(achat) && /appelAchatSkin\(\{ usdc, beneficiaire,/.test(achat), /* 2026-10-10 : regle de Phil - nomme, plus affiche ; le calldata garde l adresse */
+  'C2 achat : l argent va au wallet des frais du depot (calldata), NOMME TokenizedBlock a l ecran - le wallet montre l adresse');
 ok(/if \(solde < SKIN_PRIX_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_PRIX_USDC)') < achat.indexOf('await bcSigner(m, [appel])'), 'C2 achat : le solde USDC est relu AVANT de signer');
 ok(/const r = await bcSigner\(m, \[appel\]\);/.test(achat) && !/approve|0x095ea7b3/.test(achat), 'C2 achat : UN seul appel signe (le transfert + memo), aucune approbation');
 ok(/localStorage\.setItem\(BC_CLE_SKIN, JSON\.stringify\(\{ tx: r\.hash, block: a, skin: recette \}\)\);/.test(achat) && /if \(r && r\.etat === 'REFUSE'\)/.test(achat) && /bcBoutons\(m, \[\['Record it now', \(\) => bcEnregistrerSkin\(m\), true\]\]\);/.test(achat),
