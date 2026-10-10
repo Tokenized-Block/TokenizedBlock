@@ -23335,12 +23335,15 @@ function bcAifiArreter(pourquoi) {
    *   il s ecrit aussi a cote du bouton */
   if (pourquoi) { const e = $('#bcAiEtat'); e.className = 'note'; e.textContent = pourquoi; }
 }
+/* 2026-10-10 (Phil 17:00) : S.I par UNE autorisation plafonnee (Permit2, si-autorisation.js, DESIGN-SI-AUTORISATION-20261010.md). DRAPEAU OFF :
+ *   tant qu il l est, la phrase et le flux sont ceux d avant (chaque trade confirme dans le wallet). */
+const SI_AUTORISATION_ACTIVE = false;
 function bcAifiPeindre() {
   const s = bc.aifi, b = $('#bcArmer'), e = $('#bcAiEtat');
   for (const id of ['#bcAiAchat', '#bcAiVente', '#bcAiDevise', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
   b.textContent = s ? 'Stop S.I' : 'Start S.I';
   const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'S.I · on' : 'S.I';
-  if (!s) { if (!e.classList.contains('wKo')) e.textContent = 'Its brain proposes; you confirm each trade in your wallet. Each trade pays the usual trade fee.'; return; }
+  if (!s) { if (!e.classList.contains('wKo')) e.textContent = SI_AUTORISATION_ACTIVE ? 'One signature sets a capped, expiring allowance (enforced on chain); its brain then trades spot within it. Revoke any time.' : 'Its brain proposes; you confirm each trade in your wallet. Each trade pays the usual trade fee.'; return; }
   const h = Math.max(0, (Number(s.jusqua) - Date.now()) / 3600000);
   e.className = 'note';
   /* le budget ne concerne que les ACHATS : sans la regle d achat, on ne l affiche pas (« 0 of 0 ETH » ne voulait rien dire) */
