@@ -4404,6 +4404,10 @@ async function rpcReseau(methode, params) {
    *     > 9 adresses ou archive) n est plus essaye — sauf s il ne reste que lui ; un noeud qui vient de
    *     dire 429 passe DERRIERE. On reordonne et on filtre, on ne vide jamais la liste. */
   if (rpcRegul) noeuds = rpcRegul.ordonner(noeuds, methode, params, filtreLogs ? rpcTete.n : 0);
+  /* 2026-10-10 (revue adverse, point 3) : « libre » = pas en pause ET pas deja echoue dans CETTE lecture. Un noeud saute pour pause
+   *   est remis en fin de liste (une fois) : si les libres echouent, il est essaye. eth_getLogs garde son repli mesure (lots de 9). */
+  noeuds = noeuds.slice();
+  const echoues = new Set(), rejoues = new Set();
   let derniere = null;
   for (let i = 0; i < noeuds.length; i++) {
     const url = noeuds[i];
@@ -4427,18 +4431,18 @@ async function rpcReseau(methode, params) {
     /* 2026-10-10 : un noeud qui ne suit que des noeuds EN PAUSE de getLogs est le dernier qui sera vraiment essaye. */
     const dernierNoeud = i === noeuds.length - 1
       || (!!rpcRegul && !!rpcRegul.enPauseLogs && noeuds.slice(i + 1).every((u) => rpcRegul.enPauseLogs(u, methode)));
-    const autresNoeuds = noeuds.filter((_, k) => k !== i); /* 2026-10-10 : la pause ne saute un noeud que si un AUTRE est libre */
+    const autresNoeuds = noeuds.filter((u, k) => k !== i && u !== url && !echoues.has(u)); /* 2026-10-10 : la pause ne saute un noeud que si un AUTRE est libre */
     const REPRISES_TRANSITOIRE = 2, ATTENTE_TRANSITOIRE = [250, 700];
     /* 403/408/425 : etranglement ou attente. 5xx : panne cote noeud. Tous peuvent disparaitre en
      * 250 ms. ⛔ Ni 400 ni 404 ni 401 : une requete mal formee le restera, et la rejouer ne serait
      * que de la latence offerte. */
     const STATUTS_TRANSITOIRES = new Set([403, 408, 425, 500, 502, 503, 504]);
-    let reprises = 0;
+    let reprises = 0, saute = false;
     for (let essai = 0; essai <= ESSAIS_429; essai++) {
       let r, j = null, limite = false, statut = 0;
       /* 2026-10-10 : getLogs en pause sur ce noeud = SAUT sans requete ; l erreur reste, la liste ne devient jamais vide. */
       const pause = rpcRegul && rpcRegul.passer ? rpcRegul.passer(url, methode, autresNoeuds) : null;
-      if (pause) { if (!derniere) derniere = new Error(pause); break; }
+      if (pause) { if (!derniere) derniere = new Error(pause); saute = true; if (methode !== 'eth_getLogs' && !rejoues.has(url)) { rejoues.add(url); noeuds.push(url); } break; }
       /* ⛔ un creneau par noeud (ecart + concurrence + repos apres 429), borne : jamais d attente infinie */
       const liberer = rpcRegul ? await rpcRegul.creneau(url) : null;
       try {
@@ -4490,6 +4494,7 @@ async function rpcReseau(methode, params) {
       if (rpcRegul) rpcRegul.noter(url, 'ok', { methode });
       return j.result;
     }
+    if (!saute) echoues.add(url);
   }
   /* ⛔⛔ 2026-10-09 — UN getLogs A PLUS DE 9 ADRESSES, REFUSE PARTOUT, EST RELU EN LOTS DE 9. Mesure du jour : base.org (le seul
    *   noeud qui servait plus de 9 adresses) repond 429 a tout getLogs ; publicnode plafonne a 9 adresses. Le Live affichait donc
