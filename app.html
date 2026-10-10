@@ -23836,7 +23836,7 @@ $('#bcChercheForm').addEventListener('submit', (e) => {
       let s = null; try { s = await (await fetch('/api/chercher?q=' + encodeURIComponent(v), { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json(); } catch (_) { s = null; }
       if (s && s.etat === 'TROUVE' && /^0x[0-9a-f]{40}$/.test(String(s.adr))) { note.textContent = ''; champ.value = ''; choisirBrain(s.adr); bcRepeindre(); return; }
       note.textContent = s && s.etat === 'AMBIGU' ? s.n + ' blocks are named ' + v + ' - paste the address of the one you mean'
-        : s && s.etat === 'ABSENT' ? j.pourquoi + ' (' + s.couverture.nomsLus + ' names read of ' + s.couverture.blocksConnus + ' blocks indexed)'
+        : s && s.etat === 'ABSENT' ? j.pourquoi + ' (' + s.couverture.nomsLus + ' names read of ' + (s.couverture.aNommer || s.couverture.blocksConnus) + ' blocks known)'
         : j.pourquoi + ' (the full index could not be read)';
     })();
     return;

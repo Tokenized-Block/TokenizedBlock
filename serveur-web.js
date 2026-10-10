@@ -151,7 +151,7 @@ import { lireReferenceAction, estActionCoinbase } from './reference-action.js';
 import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
 import { snapshotCerveau } from './export-cerveau.js';
 import { tacheAutorisee } from './brain-tasks.js';
-import { chercherNom, creerIndexNoms } from './recherche-noms.js';
+import { adressesANommer, chercherNom, creerIndexNoms } from './recherche-noms.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -2677,10 +2677,27 @@ const blocksConnus = new Set();
 const indexNoms = creerIndexNoms({ lire: (a, sel) => rpcServeur('eth_call', [{ to: a, data: sel }, 'latest']) });
 const reponsesNoms = new Map(); /* q -> { t, corps } : 30 s */
 let lignesNomsTrending = { t: 0, lignes: [] };
-if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) /* 2026-10-10 (QA Grok : IB022 introuvable 1 h apres le deploiement — 527 noms lus sur 2 924) : l index repart de zero a chaque
+/* 2026-10-10 (QA Grok : IB022 introuvable 1 h apres le deploiement — 527 noms lus sur 2 924) : l index repart de zero a chaque
  *   deploiement ; a 40 noms par minute il lui fallait ~73 min. Tant qu il n a pas tout lu : 120 par tour (eth_call `latest`,
  *   jamais l archive), puis 40 comme avant. */
-setInterval(() => { void indexNoms.remplir([...blocksConnus], indexNoms.taille() < blocksConnus.size ? 120 : 40).catch(() => {}); }, 60000).unref?.();
+/* ⛔⛔ 2026-10-10 (mesure prod, x-ms-monitor) : /api/chercher?q=IB022 -> ABSENT avec « nomsLus 2 951 / blocksConnus 2 951 » — l index
+ *   etait PLEIN et IB022 n y etait pas. CAUSE : `blocksConnus` ne tient que le scan VERS L AVANT (3 jours a froid) et le disque ; le
+ *   rattrapage arriere (`relireUnTrouRattrapage`) remplit `createurParBlock` (14 928 en prod) SANS toucher `blocksConnus`. IB022
+ *   (bloc 51653364) y est, createur compris (/api/voix, /api/blocks-de) : connu du serveur, introuvable par son nom. TBGAS idem.
+ *   ⇒ on nomme l UNION, nos blocks D ABORD (ceux qu on cherche), puis le trending, puis l index des createurs.
+ *   ⛔ COUT : le meme debit (120 adresses = 240 eth_call 'latest' par minute pendant le remplissage), plus LONGTEMPS : ~2 h apres un
+ *   deploiement au lieu de ~25 min (l index des noms n est pas persiste). Jamais l archive.
+ *   ⛔ un tour a la fois : 120 lectures sequentielles peuvent depasser 60 s, et deux tours lisaient alors les memes adresses. */
+let nomsEnCours = false, aNommerTaille = 0;
+if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) {
+  setInterval(() => {
+    if (nomsEnCours) return;
+    const liste = adressesANommer(nosBlocksEtat.blocks, blocksConnus, createurParBlock.keys()); /* lus a l appel : declares plus bas, c est sur */
+    aNommerTaille = liste.length;
+    nomsEnCours = true;
+    void indexNoms.remplir(liste, indexNoms.taille() < liste.length ? 120 : 40).catch(() => {}).finally(() => { nomsEnCours = false; });
+  }, 60000).unref?.();
+}
 /* ⛔⛔ QUI A CREE QUOI — L INDEX QUI MANQUAIT, ET SON ABSENCE RENDAIT LES BLOCKS DES GENS INVISIBLES.
  *     Phil, 2026-09-27 : « je vais sur My blocks et je vois pas le block que j ai cree sur l autre
  *     machine, et le bug doit etre partout ». Il l est.
@@ -4306,7 +4323,7 @@ function traiterRequete(req, res) {
         try { const j = JSON.parse(await trending()); lignesNomsTrending = { t: Date.now(), lignes: Array.isArray(j.lignes) ? j.lignes.map((l) => ({ adr: l.adr, sym: l.sym, nom: l.nom })) : [] }; } catch (_) { /* on garde l ancienne liste */ }
       }
       const r = chercherNom(q, [...lignesNomsTrending.lignes, ...indexNoms.entrees()]);
-      const corps = { ok: r.etat !== 'REFUSE', ...r, couverture: { nomsLus: indexNoms.taille(), blocksConnus: blocksConnus.size, trending: lignesNomsTrending.lignes.length } };
+      const corps = { ok: r.etat !== 'REFUSE', ...r, couverture: { nomsLus: indexNoms.taille(), aNommer: aNommerTaille, blocksConnus: blocksConnus.size, trending: lignesNomsTrending.lignes.length } };
       if (reponsesNoms.size > 500) reponsesNoms.clear();
       reponsesNoms.set(cle, { t: Date.now(), corps });
       repondre(corps);

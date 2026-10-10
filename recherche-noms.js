@@ -25,6 +25,19 @@ export function chercherNom(q, entrees) {
   return { etat: 'ABSENT' };
 }
 
+/** Les adresses a nommer, DANS L ORDRE des sources (la premiere passe d abord), sans doublon, en minuscules, adresses entieres seulement.
+ *  ⛔ 2026-10-10 (prod : IB022 ABSENT avec « nomsLus 2 951 / blocksConnus 2 951 », index dit plein) : `blocksConnus` ne tient que le scan
+ *  vers l avant et le disque ; le rattrapage arriere remplit l index des CREATEURS (14 928 en prod), ou IB022 etait. Une source = un
+ *  iterable d adresses (Set, Map.keys(), tableau). */
+export function adressesANommer(...sources) {
+  const vues = new Set();
+  for (const s of sources) for (const brut of s || []) {
+    const a = String(brut || '').toLowerCase();
+    if (ADR.test(a)) vues.add(a);
+  }
+  return [...vues];
+}
+
 /** Index des noms LUS. `lire(adr, selecteur)` -> hex. Un echec n est pas retenu (relu plus tard) ; un nom lu l est pour toujours. */
 export function creerIndexNoms({ lire }) {
   const noms = new Map();
