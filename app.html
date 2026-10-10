@@ -1846,7 +1846,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">✕</button>
         <!-- 2026-10-04 (Phil, capture : la place vide a cote de ✕) : « ajoute un mode rechercher pour voir les autres blocks ».
              Un symbole, un nom ou une adresse ; les propositions viennent de l index du Market et du registre des actions. -->
-        <form class="bcCherche" id="bcChercheForm" autocomplete="off" role="search">
+        <form onsubmit="return false" class="bcCherche" id="bcChercheForm" autocomplete="off" role="search">
           <span aria-hidden="true">⌕</span>
           <input id="bcCherche" list="bcChercheListe" placeholder="Find a block — symbol or address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Find another block">
           <datalist id="bcChercheListe"></datalist>
@@ -1873,7 +1873,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              Brain vivaient seulement dans la vue Market ; un clic basculait sur le Chat et on ne pouvait plus continuer. Ils sont ICI aussi. -->
         <div class="bcPre bcParler" id="bcParlerChat"></div>
         <div class="bcPre" id="bcPre"></div>
-        <form id="bcForm" class="bcComposer" autocomplete="off">
+        <form onsubmit="return false" id="bcForm" class="bcComposer" autocomplete="off">
           <span class="bcInvite" aria-hidden="true">›</span>
           <input id="bcSaisie" placeholder="buy NVDAc with 5 USDC" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="send" aria-label="Command for the brain">
           <button type="submit" class="bcEnvoyer" aria-label="Send to the brain" title="Send to the brain">➤</button>
@@ -1918,7 +1918,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button type="button" class="bouton" id="bcArmer">Start S.I</button>
           <p class="note" id="bcAiEtat" style="margin:6px 0 0">Its brain proposes; you confirm each trade in your wallet.</p>
         </div>
-        <form class="bcTicket" id="bcTicket" autocomplete="off">
+        <form onsubmit="return false" class="bcTicket" id="bcTicket" autocomplete="off">
           <div class="bcCote" role="tablist" aria-label="Buy or sell the block shown">
             <button type="button" role="tab" data-cote="buy" aria-selected="true">Buy</button>
             <button type="button" role="tab" data-cote="sell" aria-selected="false">Sell</button>
