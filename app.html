@@ -736,6 +736,10 @@ dialog.bcPop.bcReduit #bcAgent{min-width:0;overflow:hidden;text-overflow:ellipsi
 @media (max-width:760px){
   body.bcOuvert{padding-bottom:calc(var(--bcPopH,62dvh) + var(--bcNav,66px) + 24px)}
   body.bcOuvert.bcReplie .mapZoom{transform:translateY(calc(-1 * var(--bcPopH,60px) - 14px))}
+  /* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 'Agent: not connected' coupe en ellipse dans la rangee repliee) : un mot court, la phrase reste dans le DOM et le title */
+  dialog.bcPop.bcReduit #bcAgent{font-size:0;flex:0 0 auto}
+  dialog.bcPop.bcReduit #bcAgent::after{content:'Agent off';font-size:11.5px;font-weight:700;color:var(--doux)}
+  dialog.bcPop.bcReduit #bcAgent.actif::after{content:'Agent on';color:var(--accent)}
 }
 .bcLanceurIn{display:flex;align-items:center;gap:12px}
 .bcMini{flex:0 0 auto;width:56px;aspect-ratio:200/220;border-radius:14px;overflow:hidden;background:var(--bcFond,var(--creux));border:1px solid var(--ligne);
@@ -1308,6 +1312,9 @@ details[open] > summary::before{transform:rotate(90deg)}
 .trDown{color:var(--dur);font-weight:700;font-size:12.5px}
 .trAcheter{width:auto;min-height:38px;padding:8px 18px;flex:0 0 auto}
 .navB{font-size:10.5px}
+/* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 9 onglets = 373 px pour 355 ; 'Tokenized' 324-383, coupe de 8 px) : sans gouttiere ni marge laterale
+   ils tiennent (~337 px) ; plus etroit encore, la barre DEFILE au lieu de couper un onglet. */
+@media (max-width:420px){.navIn{gap:0;overflow-x:auto;scrollbar-width:none}.navB{padding-left:1px;padding-right:1px}}
 </style>
 </head>
 <body class="surMap">
