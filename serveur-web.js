@@ -102,7 +102,7 @@ import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
-import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX, chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues } from './index-routeur.js';
+import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX, chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues, neDuRouteur, ROUTEURS_ANCIENS } from './index-routeur.js';
 import { veiller } from './veille-pot.js';
 import { lireNaissance, passeIncrementale, verifierSomme, soldesNegatifs } from './soldes-jeton.js';
 import { partsHolders } from './parts-holders.js';
@@ -110,8 +110,8 @@ import { partsHolders } from './parts-holders.js';
  *    copie plus faible, sans ses quatre etats ni sa borne de fenetres ratees. */
 import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
-import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
-import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
+import { NOS_BLOCKS_GENESE, GRAINE_NOS_BLOCKS, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
+import { FEE_WALLET, USDC_BASE, CREATE_ROUTER } from './frais-creation.js';
 import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
@@ -1466,20 +1466,33 @@ async function resoudreFace(token) {
  *    serveur lit ensuite VERS L AVANT (logs B20Created -> tx -> to == CreateRouter + createPaid -> sel -> neDuRouteur), par
  *    morceaux, et la plage n avance que sur une lecture sans trou. Chaque entree porte son sel : l app re-verifie la formule.
  * ⛔ « couvertureComplete » = contigu depuis le plancher ; « tete » voyage avec la reponse : l app juge le retard elle-meme
- *    (index-routeur.js, RETARD_MAX_INDEX). Une fenetre ratee est COMPTEE, jamais tue. Lecture seule, aucune signature. */
+ *    (index-routeur.js, RETARD_MAX_INDEX). Une fenetre ratee est COMPTEE, jamais tue. Lecture seule, aucune signature.
+ * ⛔ 2026-10-10 : l avancement (plage + entrees) survit au redeploiement — volume, progres-index.json (apres nosBlocksCorps). */
 const PAS_ROUTEUR = 2000;
 /* ⛔ R9b (Claude, prod : PEXRA/o1 clignotaient, 11-12 lectures sur 15) : une lecture ratee est RELUE sur place avec une attente
  *    croissante avant de conclure (index du routeur ET nos-blocks). Seule celle qui rate encore compte, et elle ne retire
  *    jamais la couverture deja acquise : la plage n avance simplement pas. */
 const REPRISES_LECTURE_MS = [500, 1000, 2000];
 const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
-  tete: null, teteLueA: null, ratees: 0, lu: null };
+  tete: null, teteLueA: null, ratees: 0, lu: null, reprise: null, repriseAVerifier: false };
 let routeurEnCours = null;
 async function etendreBlocksRouteur() {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   if (!Number.isSafeInteger(tete)) return;
   routeurEtat.tete = tete;
   routeurEtat.teteLueA = Date.now(); /* R8 (C2 R6-3) : l app refuse une tete figee */
+  noterTeteLue(tete);
+  if (routeurEtat.repriseAVerifier) { /* 2026-10-10 : une reprise du volume n est acquise qu une fois confrontee a une tete lue ICI */
+    const v = confronterReprise(routeurEtat.jusqua, tete);
+    if (v === 'ATTENDRE') return; /* routeur : ni lu ni complet, toujours a verifier */
+    if (v === 'ABANDONNER') {
+      console.log('[routeur] ⛔ avancement du volume ABANDONNE : jusqua ' + routeurEtat.jusqua + ' > tete lue ' + tete + ' + ' + RETARD_MAX_INDEX + ' — la graine comme avant');
+      routeurEtat.blocks.clear();
+      for (const g of GRAINE_ROUTEUR) routeurEtat.blocks.set(g.jeton, { ...g });
+      routeurEtat.jusqua = GRAINE_JUSQUA; routeurEtat.reprise = null;
+    }
+    routeurEtat.repriseAVerifier = false;
+  }
   if (routeurEtat.jusqua >= tete) return;
   const aBloc = Math.min(tete, routeurEtat.jusqua + PAS_ROUTEUR);
   let r = await scannerNesDuRouteur({ rpc: rpcServeur, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
@@ -1493,6 +1506,7 @@ async function etendreBlocksRouteur() {
   routeurEtat.ratees = r.fenetresRatees;
   if (!r.fenetresRatees) routeurEtat.jusqua = aBloc;
   routeurEtat.lu = new Date().toISOString();
+  noterProgresIndex(); /* 2026-10-10 : la plage du routeur prouvee ici survit au redeploiement */
 }
 function rattraperBlocksRouteur() {
   if (routeurEnCours) return;
@@ -1507,17 +1521,19 @@ function rattraperBlocksRouteur() {
     routeurEnCours = null;
   })();
 }
-setInterval(() => { if (routeurEtat.lu !== null) rattraperBlocksRouteur(); }, 60000).unref?.();
+/* 2026-10-10 (revue adverse F4) : une reprise a confronter lance aussi le tour de fond — sinon, en ATTENTE (lu reste null), le
+ *   routeur ne repartait qu a la visite suivante, et sa confrontation pouvait se faire tard, face a une tete deja montee. */
+setInterval(() => { if (routeurEtat.lu !== null || routeurEtat.repriseAVerifier) rattraperBlocksRouteur(); }, 60000).unref?.();
 function blocksRouteurCorps() {
   rattraperBlocksRouteur();
   /* R8 (C2 R6-3) : couverture REELLE — contigue depuis le plancher, 0 trou, et jusqu a la tete (retard borne).
    * R9b : `jusqua` n avance que sur une lecture sans trou, donc une lecture ratee AU-DELA de `jusqua` n ouvre aucun trou dans
    *   [depuis, jusqua] : elle est dite dans `fenetresEnAttente`, et c est le retard borne qui finit par couper si elle persiste. */
-  const complet = routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null
+  const complet = routeurEtat.depuis <= PLANCHER_ROUTEUR && routeurEtat.tete !== null && !routeurEtat.repriseAVerifier
     && routeurEtat.tete - routeurEtat.jusqua <= RETARD_MAX_INDEX;
   return JSON.stringify({ ok: true, lu: routeurEtat.lu, blocks: [...routeurEtat.blocks.values()],
     depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua, tete: routeurEtat.tete, plancher: PLANCHER_ROUTEUR,
-    couvertureComplete: complet,
+    couvertureComplete: complet, reprise: routeurEtat.reprise,
     teteLueA: routeurEtat.teteLueA, fenetresRatees: complet ? 0 : routeurEtat.ratees, fenetresEnAttente: routeurEtat.ratees });
 }
 
@@ -1530,7 +1546,9 @@ function blocksRouteurCorps() {
  * ⛔ PLAGE CONTIGUE [depuis, jusqua] QUI N AVANCE QUE SUR UN SCAN PROPRE : une fenetre refusee par le
  *    noeud ne doit JAMAIS etre recouverte par un « deja lu ». Meme discipline que mesFrappes.
  * ⚠️ CACHE EN MEMOIRE : un redeploiement le vide et la couverture repart — R9b : depuis la GRAINE (origine.js), pas
- *    depuis zero. C est DIT dans la reponse (depuis / jusqua / couvertureComplete), jamais masque. */
+ *    depuis zero. C est DIT dans la reponse (depuis / jusqua / couvertureComplete), jamais masque.
+ *    ⛔ 2026-10-10 : PLUS SEULEMENT EN MEMOIRE — la plage prouvee et ses blocks sont persistes sur le volume (progres-index.json,
+ *    apres nosBlocksCorps) et relus au demarrage s ils valent mieux que la graine ; sans volume, la graine comme avant. */
 const PREMIER_BLOCK_TB = 50861088;
 const PAS_NOS_BLOCKS = 40000;
 /* ⛔⛔ MESURE (2026-09-20, 706 985 blocs, balayage complet, 0 fenetre ratee) : les blocks sont frappes
@@ -1565,7 +1583,7 @@ console.log(GRAINE_NOS.ok ? '[nos-blocks] graine recue : ' + GRAINE_NOS.blocks.l
   : '[nos-blocks] ⛔ graine refusee (' + GRAINE_NOS.pourquoi + ') : balayage complet depuis la tete jusqu au bloc ' + PREMIER_BLOCK_TB);
 const nosBlocksEtat = { blocks: new Set(NOS_BLOCKS_GENESE),
   depuis: null, jusqua: null, graine: GRAINE_NOS.ok ? 'A_VERIFIER' : 'REFUSEE', ratees: 0, lu: null, teteAtteinte: false,
-  tete: null, teteLueA: null, graineEssais: 0 };
+  tete: null, teteLueA: null, graineEssais: 0, reprise: null, repriseAVerifier: false };
 /* ⛔ G2 (C2) : un RPC sans archive qui ERRE sur les vieux recus (publicnode : « Archive requests require a personal token »)
  *   rendait NON_LU a chaque tour : jamais de balayage, jamais complet. Apres GRAINE_ESSAIS_MAX tours illisibles, la graine est
  *   abandonnee (jamais admise sans verification : fail-closed) et on balaie tout depuis la tete, comme une graine refusee. */
@@ -1580,6 +1598,19 @@ async function etendreNosBlocks() {
   const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   if (!Number.isSafeInteger(fin)) return;
   nosBlocksEtat.tete = fin; nosBlocksEtat.teteLueA = Date.now(); /* F1 : seule une tete LUE rafraichit teteLueA */
+  noterTeteLue(fin);
+  if (nosBlocksEtat.repriseAVerifier) { /* 2026-10-10 : une reprise du volume n est acquise qu une fois confrontee a une tete lue ICI */
+    const v = confronterReprise(nosBlocksEtat.jusqua, fin);
+    if (v === 'ATTENDRE') return; /* nos-blocks : ni lu ni complet, toujours a verifier */
+    if (v === 'ABANDONNER') {
+      console.log('[nos-blocks] ⛔ avancement du volume ABANDONNE : jusqua ' + nosBlocksEtat.jusqua + ' > tete lue ' + fin + ' + ' + RETARD_MAX_INDEX + ' — la graine comme avant');
+      nosBlocksEtat.blocks.clear();
+      for (const b of NOS_BLOCKS_GENESE) nosBlocksEtat.blocks.add(b);
+      nosBlocksEtat.depuis = null; nosBlocksEtat.jusqua = null; nosBlocksEtat.reprise = null;
+      nosBlocksEtat.graine = GRAINE_NOS.ok ? 'A_VERIFIER' : 'REFUSEE'; /* l etat de depart, exactement */
+    }
+    nosBlocksEtat.repriseAVerifier = false;
+  }
   if (nosBlocksEtat.graine === 'A_VERIFIER') {
     const v = await verifierGraineNos({ rpc: rpcServeur, tete: fin });
     if (v.etat === 'NON_LU' && ++nosBlocksEtat.graineEssais < GRAINE_ESSAIS_MAX) { nosBlocksEtat.lu = new Date().toISOString(); return; } /* rien de complet ; on reessaie au tour suivant */
@@ -1641,6 +1672,7 @@ async function etendreNosBlocks() {
     if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;
   }
   nosBlocksEtat.lu = new Date().toISOString();
+  noterProgresIndex(); /* 2026-10-10 : la plage de nos-blocks prouvee ici survit au redeploiement */
 }
 /* ⛔ LE RATTRAPAGE SE CONDUIT SEUL, ET IL SAIT S ARRETER. Tant que la couverture n atteint pas le
  *    plancher, on enchaine un morceau de plus apres une pause -- sinon la remontee n avancerait qu au
@@ -1665,7 +1697,7 @@ function rattraperNosBlocks() {
  *   (FRAICHEUR_MAX_TETE_MS) est refusee par le client. Serveur au repos, le premier visiteur recevait l etat d AVANT le tour
  *   qu il declenche : PEXRA/o1 INCONNUS ~20 s. Meme rafraichissement de fond que le routeur (60 s) : tete et jusqua restent
  *   fraiches sans visite (lecture legere : 1 eth_blockNumber + la fenetre [jusqua + 1, tete] par minute). */
-setInterval(() => { if (nosBlocksEtat.lu !== null) rattraperNosBlocks(); }, 60000).unref?.();
+setInterval(() => { if (nosBlocksEtat.lu !== null || nosBlocksEtat.repriseAVerifier) rattraperNosBlocks(); }, 60000).unref?.(); /* reprise : meme raison que le routeur */
 function nosBlocksCorps() {
   rattraperNosBlocks();
   return JSON.stringify({
@@ -1673,7 +1705,7 @@ function nosBlocksCorps() {
     blocks: [...nosBlocksEtat.blocks],
     depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua,
     plancher: PREMIER_BLOCK_TB,
-    tete: nosBlocksEtat.tete, teteLueA: nosBlocksEtat.teteLueA, graine: nosBlocksEtat.graine,
+    tete: nosBlocksEtat.tete, teteLueA: nosBlocksEtat.teteLueA, graine: nosBlocksEtat.graine, reprise: nosBlocksEtat.reprise,
     couvertureComplete: nosBlocksComplet(),
     /* R9b : `fenetresRatees` = ce qui MANQUE a la couverture annoncee. Une fois complete, une lecture ratee au-dela de
      *   `jusqua` n y retire rien (la plage n avance simplement pas) : elle est dite dans `fenetresEnAttente`, pas en trou. */
@@ -1686,6 +1718,162 @@ function nosBlocksCorps() {
       + 'While couvertureComplete is false the walk back to block ' + PREMIER_BLOCK_TB + ' is still running.',
   });
 }
+
+/* ══ 2026-10-10 — L AVANCEMENT DES DEUX INDEX SURVIT AU REDEPLOIEMENT (volume, progres-index.json) ══════════════════════════════
+ * ⛔⛔ MESURE PROD (2026-10-10 03:55 UTC, build 20261010-cle-v4-absente, /api/nos-blocks, /api/blocks-routeur, /sante.archive) :
+ *     nos-blocks jusqua = 52109849 (= la graine) pour une tete a 52407542 ; routeur jusqua = 52095000 (= GRAINE_JUSQUA) pour
+ *     52407532 — ~300 000 blocs sous la tete, couvertureComplete faux, 149 fenetres en attente. Journal Railway au demarrage :
+ *     « graine recue : 2 block(s), jusqu au bloc 52109849 » puis « graine admise ». L avancement des deux boucles vivait en
+ *     MEMOIRE : chaque redeploiement (~8 dans la nuit du 9 au 10) repartait de la graine figee (origine.js, index-routeur.js), et
+ *     le rattrapage vers l avant (pages de getLogs presque toutes plus profondes que publicnode, donc a l archive, budget
+ *     10 000/jour) recommencait sans jamais finir. Compteur par consommateur ce jour-la : 'fond nos-blocks' 550 + 'fond routeur'
+ *     345 = 895 appels servis sur 4 850 etiquetes (18 %) ; et 1 303 + 568 = 1 871 des 2 506 refus de budget (75 %).
+ * ⛔ MEME MECANISME que les autres etats du volume (cles-absentes.json, cles-pool.json, trending-cache.json) : chemin du volume,
+ *     ecriture atomique (.tmp + rename) retardee de 5 s, taille bornee, relecture qui n admet qu un etat bien forme. Sans volume :
+ *     rien n est ecrit ni relu, la graine comme avant.
+ * ⛔⛔ CE QUI EST ECRIT = CE QUE LA MEMOIRE A PROUVE, RIEN DE PLUS (une section relue pas encore confrontee est re-ecrite telle
+ *     quelle, voir plus bas). [depuis, jusqua] n avance que sur une lecture sans trou (fenetre
+ *     refusee = curseur fige ; F3 incremental ; ARRIERE/AVANT de prochaineFenetre) : on ecrit ces deux bornes telles quelles, jamais
+ *     la tete. L ensemble des blocks n est JAMAIS coupe : un ensemble tronque avec sa plage dirait « lu » sur un block manquant.
+ *     Trop gros : RIEN n est ecrit (le fichier precedent, plus court et prouve lui aussi, reste), et c est dit une fois au journal.
+ * ⛔ CE QUI EST RELU n est adopte que s il est MIEUX que la graine et COHERENT avec elle :
+ *     - meme version, meme plancher, memes comptes surveilles (nos-blocks), meme CreateRouter (routeur) ;
+ *     - chaque entree bien formee (adresse ; routeur : le sel redonne le jeton par neDuRouteur, comme le client le re-verifie) ;
+ *       UNE entree mauvaise et la section ENTIERE est refusee : jamais une plage gardee sans un de ses blocks ;
+ *     - chaque entree de la graine (et la genese) dont le bloc tombe dans la plage relue y est presente ;
+ *     - nos-blocks, graine admissible : contigu depuis le plancher ET jusqua > celui de la graine, sinon la graine comme avant ;
+ *       graine refusee sur sa forme : toute plage contigue bien formee vaut mieux que le balayage depuis la tete ;
+ *     - routeur : contigu depuis le plancher ET jusqua > GRAINE_JUSQUA.
+ * ⛔ teteAtteinte N EST NI ECRIT NI RELU (S1b) : nos-blocks n est complet qu apres une lecture propre jusqu a la tete DANS CE
+ *     PROCESSUS, jamais sur la seule reprise. tete / teteLueA ne sont jamais relus (F1/G1 : seule une tete LUE compte).
+ * ⛔ Reprise adoptee : la graine de nos-blocks n est plus re-verifiee (graine: 'VOLUME' — 2 recus d archive en moins) : la plage
+ *     relue la contient, verifiee au tour ou elle a ete admise. Les deux reponses disent `reprise` (la plage relue), jamais masquee.
+ * ⛔ MODE ESSAI (fork local) : ni ecrit ni relu — une plage lue sur un fork n est pas une plage lue sur Base mainnet.
+ * ⛔⛔ UNE REPRISE N EST ACQUISE QU APRES CONFRONTATION A UNE TETE LUE DANS CE PROCESSUS (revue adverse du 2026-10-10, contre-
+ *     exemple execute : routeur.jusqua = tete + 10 000 000 ADOPTE, couvertureComplete VRAI avec un retard de -9 999 100, aucune
+ *     fenetre lue). Au demarrage la tete est inconnue : la reprise est adoptee « a verifier » (repriseAVerifier), ce qui lance
+ *     aussi le tour de fond de sa boucle (60 s, sans attendre une visite), et chaque tour, tete lue (confronterReprise) — avec
+ *     teteMin = la plus BASSE tete lue par l une OU l autre boucle depuis le demarrage :
+ *       jusqua > teteMin + RETARD_MAX_INDEX      -> le fichier dit avoir lu des blocs qui n existaient pas : reprise ABANDONNEE,
+ *                                                  etat de depart de cette boucle (graine, blocks de la graine), dit au journal ;
+ *       jusqua <= tete                          -> acquise, le tour continue ;
+ *       sinon (noeud un peu en retard)           -> on ATTEND : rien n est lu, le routeur ne se dit pas complet (nos-blocks ne
+ *                                                  l est jamais sans lecture propre jusqu a la tete, teteAtteinte).
+ *     Revue adverse du correctif (fuzz de l historique honnete : 0 violation sur 120 000 controles) : face a la tete du premier
+ *     tour de CHAQUE boucle, un fichier refuse au demarrage etait admis par un premier tour du routeur venu tard (sa tete ayant
+ *     monte) — d ou teteMin partagee et le tour de fond.
+ *     ⚠️ CE QUE CETTE CONFRONTATION NE PROUVE PAS : jusqua <= tete est NECESSAIRE, pas suffisant. Un fichier abime dont jusqua
+ *     reste sous la tete d un demarrage tardif (serveur arrete longtemps) n est pas detecte ; seul ce serveur ecrit ce fichier.
+ *     ⚠️ Un noeud tres en retard (> RETARD_MAX_INDEX) fait abandonner une reprise juste : on repaie le rattrapage depuis la graine
+ *     — le cout d avant ce correctif, jamais une couverture fausse.
+ *     ⚠️ « Etat de depart » = celui de CETTE boucle. Avant la confrontation, ses reponses servent deja les entrees relues, et le
+ *     module index-routeur.js (faireRail) les UNIT sans jamais les retirer : apres un abandon, une entree que seul le fichier
+ *     disait y reste pour la vie du processus. Routeur : sans effet (chaque entree passe neDuRouteur, vraie par construction).
+ *     nos-blocks : un jeton tiers y serait tenu pour « a nous » — donc refuse, jamais libere (fail-closed).
+ *     ⚠️ Tant qu une section n est pas confrontee, l autre boucle la RE-ECRIT telle quelle (le fichier porte les deux) : jamais
+ *     avancee, aucune lecture ne la touche avant ; le demarrage suivant la confronte de nouveau.
+ * ⚠️ CE QUI N EST PAS COUVERT : une reprise de nos-blocks PARTIELLE (remontee ARRIERE pas finie) n est pas adoptee quand la graine
+ *     est admissible (la graine est re-verifiee et le rattrapage repart d elle). Le dernier tour avant un arret peut etre perdu
+ *     (ecriture retardee de 5 s, aucun crochet d arret dans ce serveur). */
+const FICHIER_PROGRES_INDEX = !ESSAI_SRV.actif && (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'progres-index.json') : null;
+const PROGRES_INDEX_VER = 1;
+const PROGRES_INDEX_MAX_OCTETS = 2 * 1024 * 1024;
+const comptesNosTries = () => NOS_CREATEURS.map((a) => a.toLowerCase()).sort();
+function progresIndexCorps() {
+  /* nos-blocks : rien tant que la plage est vide (graine pas encore re-verifiee, ou rien lu proprement) */
+  const nos = nosBlocksEtat.depuis === null || nosBlocksEtat.jusqua === null ? null
+    : { comptes: comptesNosTries(), plancher: PREMIER_BLOCK_TB, depuis: nosBlocksEtat.depuis, jusqua: nosBlocksEtat.jusqua, blocks: [...nosBlocksEtat.blocks] };
+  const routeur = { routeur: CREATE_ROUTER.toLowerCase(), plancher: PLANCHER_ROUTEUR, depuis: routeurEtat.depuis, jusqua: routeurEtat.jusqua,
+    blocks: [...routeurEtat.blocks.values()] };
+  return JSON.stringify({ ver: PROGRES_INDEX_VER, nos, routeur });
+}
+let progresEcritureArmee = false, progresDernierEcrit = null, progresTropGrosDit = false;
+function noterProgresIndex() {
+  if (!FICHIER_PROGRES_INDEX || progresEcritureArmee) return;
+  progresEcritureArmee = true; /* arme AVANT le minuteur : un minuteur qui partirait aussitot ne bloquerait pas les ecritures suivantes */
+  const t = setTimeout(() => {
+    progresEcritureArmee = false;
+    try {
+      const payload = progresIndexCorps(); /* l etat AU MOMENT d ecrire (il grandit, sauf l abandon d une reprise : retour a la graine) ; aucun await ne le coupe en deux */
+      if (payload === progresDernierEcrit) return;
+      if (payload.length > PROGRES_INDEX_MAX_OCTETS) {
+        if (!progresTropGrosDit) { progresTropGrosDit = true; console.log('[progres-index] ⛔ ' + payload.length + ' octets > ' + PROGRES_INDEX_MAX_OCTETS + ' : rien n est ecrit (jamais un ensemble coupe) — le fichier precedent, plus court et prouve lui aussi, reste'); }
+        return;
+      }
+      writeFileSync(FICHIER_PROGRES_INDEX + '.tmp', payload);
+      renameSync(FICHIER_PROGRES_INDEX + '.tmp', FICHIER_PROGRES_INDEX);
+      progresDernierEcrit = payload;
+    } catch (err) { /* ⛔ une ecriture ratee ne casse pas une lecture : la memoire suffit */ }
+  }, 5000);
+  t.unref?.();
+}
+/* La plus BASSE tete lue par l une OU l autre boucle depuis le demarrage (revue adverse F1 : face a la tete du premier tour de
+ *   CHAQUE boucle, un fichier refuse au demarrage etait admis par un premier tour du routeur venu tard, la tete ayant monte). */
+let teteMinLue = null;
+function noterTeteLue(t) { teteMinLue = teteMinLue === null ? t : Math.min(teteMinLue, t); }
+/** Une plage relue du volume face aux tetes lues dans ce processus : 'VERIFIEE' | 'ATTENDRE' | 'ABANDONNER' (voir l en-tete). */
+function confronterReprise(jusqua, tete) {
+  if (jusqua - teteMinLue > RETARD_MAX_INDEX) return 'ABANDONNER';
+  return jusqua <= tete ? 'VERIFIEE' : 'ATTENDRE';
+}
+const adrProgresSaine = (a) => /^0x[0-9a-f]{40}$/.test(String(a));
+/** La section nos-blocks relue, si elle est admise : { depuis, jusqua, blocks } ; sinon null (la graine, comme avant). */
+function repriseNosAdmise(x) {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  if (x.plancher !== PREMIER_BLOCK_TB || !Array.isArray(x.comptes) || JSON.stringify(x.comptes) !== JSON.stringify(comptesNosTries())) return null;
+  const { depuis, jusqua, blocks } = x;
+  if (!Number.isSafeInteger(depuis) || !Number.isSafeInteger(jusqua) || depuis < PREMIER_BLOCK_TB || jusqua < depuis) return null;
+  if (!Array.isArray(blocks) || !blocks.every(adrProgresSaine)) return null;
+  const ens = new Set(blocks);
+  if (!NOS_BLOCKS_GENESE.every((b) => ens.has(b))) return null;
+  /* ⛔ une plage qui couvre le bloc d une entree de la graine SANS cette entree dirait plus qu elle n a lu */
+  if (!GRAINE_NOS_BLOCKS.every((g) => g.bloc < depuis || g.bloc > jusqua || ens.has(g.jeton))) return null;
+  if (GRAINE_NOS.ok && !(depuis === PREMIER_BLOCK_TB && jusqua > GRAINE_NOS.jusqua)) return null; /* pas mieux que la graine */
+  return { depuis, jusqua, blocks };
+}
+/** La section routeur relue, si elle est admise : { jusqua, blocks } ; sinon null (la graine, comme avant). */
+function repriseRouteurAdmise(x) {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  if (x.routeur !== CREATE_ROUTER.toLowerCase() || x.plancher !== PLANCHER_ROUTEUR) return null;
+  if (x.depuis !== PLANCHER_ROUTEUR || !Number.isSafeInteger(x.jusqua) || x.jusqua <= GRAINE_JUSQUA) return null;
+  if (!Array.isArray(x.blocks)) return null;
+  const saine = (b) => !!b && typeof b === 'object' && adrProgresSaine(b.jeton) && /^0x[0-9a-f]{64}$/.test(String(b.sel))
+    && Number.isSafeInteger(b.bloc) && b.bloc >= PLANCHER_ROUTEUR && /^0x[0-9a-fA-F]{64}$/.test(String(b.tx))
+    && (b.routeur === undefined ? neDuRouteur(b.jeton, b.sel) : ROUTEURS_ANCIENS.includes(b.routeur) && neDuRouteur(b.jeton, b.sel, b.routeur));
+  if (!x.blocks.every(saine)) return null;
+  const ens = new Set(x.blocks.map((b) => b.jeton));
+  if (!GRAINE_ROUTEUR.every((g) => g.bloc < x.depuis || g.bloc > x.jusqua || ens.has(g.jeton))) return null;
+  return { jusqua: x.jusqua, blocks: x.blocks.map((b) => (b.routeur === undefined ? { jeton: b.jeton, sel: b.sel, bloc: b.bloc, tx: b.tx }
+    : { jeton: b.jeton, sel: b.sel, routeur: b.routeur, bloc: b.bloc, tx: b.tx })) };
+}
+(function relireProgresIndex() {
+  if (!FICHIER_PROGRES_INDEX || !existsSync(FICHIER_PROGRES_INDEX)) return;
+  try {
+    const brut = readFileSync(FICHIER_PROGRES_INDEX, 'utf8');
+    if (brut.length > PROGRES_INDEX_MAX_OCTETS) { console.log('[progres-index] fichier trop gros (' + brut.length + ' octets) : ignore, la graine comme avant'); return; }
+    const x = JSON.parse(brut);
+    if (!x || typeof x !== 'object' || Array.isArray(x) || x.ver !== PROGRES_INDEX_VER) { console.log('[progres-index] fichier ignore (forme ou version) : la graine comme avant'); return; }
+    const n = repriseNosAdmise(x.nos);
+    if (n) {
+      for (const b of n.blocks) nosBlocksEtat.blocks.add(b);
+      nosBlocksEtat.depuis = n.depuis; nosBlocksEtat.jusqua = n.jusqua;
+      if (nosBlocksEtat.graine === 'A_VERIFIER') nosBlocksEtat.graine = 'VOLUME';
+      nosBlocksEtat.reprise = { depuis: n.depuis, jusqua: n.jusqua };
+      nosBlocksEtat.repriseAVerifier = true; /* acquise seulement face a une tete lue (confronterReprise) */
+      console.log('[nos-blocks] avancement relu du volume : [' + n.depuis + ', ' + n.jusqua + '], ' + nosBlocksEtat.blocks.size + ' block(s)'
+        + (GRAINE_NOS.ok ? ' — remplace la graine (jusqua ' + GRAINE_NOS.jusqua + ')' : '') + ' ; a confronter a la tete au premier tour ; complet seulement apres une lecture propre jusqu a elle');
+    } else if (x.nos) console.log('[nos-blocks] avancement du volume NON adopte (forme, comptes, plancher, entree de la graine absente, ou pas mieux que la graine) : la graine comme avant');
+    const r = repriseRouteurAdmise(x.routeur);
+    if (r) {
+      for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+      routeurEtat.jusqua = r.jusqua;
+      routeurEtat.reprise = { depuis: routeurEtat.depuis, jusqua: r.jusqua };
+      routeurEtat.repriseAVerifier = true; /* acquise seulement face a une tete lue (confronterReprise) */
+      console.log('[routeur] avancement relu du volume : [' + routeurEtat.depuis + ', ' + r.jusqua + '], ' + routeurEtat.blocks.size + ' block(s) — graine jusqua ' + GRAINE_JUSQUA + ' ; a confronter a la tete au premier tour');
+    } else if (x.routeur) console.log('[routeur] avancement du volume NON adopte (forme, routeur, plancher, sel, entree de la graine absente, ou pas mieux que la graine) : la graine comme avant');
+  } catch (err) { console.warn('[progres-index] fichier illisible, on repart de la graine : ' + err.message); }
+})();
 
 /* ══ QUI DETIENT UN BLOCK, ET QUELLE PART DE RECOMPENSE LUI REVIENDRAIT ═══════════════════════════
  * ⛔ MESURE QUI JUSTIFIE TOUT CECI (2026-09-20, 5 marches, reconstruction verifiee au wei pres) :

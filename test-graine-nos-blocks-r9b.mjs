@@ -460,7 +460,7 @@ const MUTANTS = [
   { nom: 'n21 (F4) serveur : fenetre a jeton non verifie comptee propre', scen: 'C', edits: [['serveur-web.js', ', ...(scan.fenetresNonVerifiees || [])].map(', '].map(']], casse: [/^C1 /] },
   { nom: 'n22 (F4) mes-blocks : fenetre du jeton non verifie non rendue', scen: 'C', edits: [['mes-blocks.js', ' fenetresNonVerifiees.push({ ...fenetreDe.get(c.jeton), jeton: c.jeton });', '']], casse: [/^C1 /] },
   { nom: 'n23 (F3b, Zero 1) remontee : depuis saute la fenetre ratee', scen: 'B', edits: [['serveur-web.js', 'if (hautRate + 1 < nosBlocksEtat.depuis) nosBlocksEtat.depuis = hautRate + 1;', 'nosBlocksEtat.depuis = deBloc;']], casse: [/^B1 /, /^B2 /] },
-  { nom: 'n24 (G1, C2) pas de rafraichissement de fond une fois complete', scen: 'I', edits: [['serveur-web.js', 'setInterval(() => { if (nosBlocksEtat.lu !== null) rattraperNosBlocks(); }, 60000).unref?.();', '/* G1 retire */']], casse: [/^I1 /] },
+  { nom: 'n24 (G1, C2) pas de rafraichissement de fond une fois complete', scen: 'I', edits: [['serveur-web.js', 'setInterval(() => { if (nosBlocksEtat.lu !== null || nosBlocksEtat.repriseAVerifier) rattraperNosBlocks(); }, 60000).unref?.();', '/* G1 retire */']], casse: [/^I1 /] },
   { nom: 'n25 (G2, C2) recus illisibles : la verification de la graine reessaie pour toujours', scen: 'G', edits: [['serveur-web.js', "if (v.etat === 'NON_LU' && ++nosBlocksEtat.graineEssais < GRAINE_ESSAIS_MAX)", "if (v.etat === 'NON_LU')"]], casse: [/^S5d /] },
   { nom: 'n26 (G2, C2) recu null dit « ne correspond pas » (journal trompeur)', scen: '', edits: [['origine.js', "  if (!r) return 'INCONNU';", "  if (!r) return 'FAUX';"]], casse: [/^U9 /] },
 ];
