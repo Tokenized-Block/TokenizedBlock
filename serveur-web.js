@@ -1243,17 +1243,68 @@ for (const l of LOGS_INITIALIZE_MESURES) {
 async function resoudreClePool(token, fenetres = 40) {
   const t = String(token).toLowerCase();
   if (clesPool.has(t)) return clesPool.get(t);
+  /* ⛔ une seule resolution EN VOL par jeton et par profondeur : douze requetes identiques = un balayage */
+  const k = t + ':' + fenetres;
+  if (clesPoolEnVol.has(k)) return clesPoolEnVol.get(k);
+  const p = resoudreClePoolBrut(t, fenetres).finally(() => { clesPoolEnVol.delete(k); });
+  clesPoolEnVol.set(k, p);
+  return p;
+}
+/* ⛔⛔ 2026-10-10 (prod, compteur d archive par consommateur, 01:08-01:13 UTC) — `route /api/cle/:adr` : 136 appels d archive sur 347
+ *   (39 %), premier consommateur. Un « aucun Initialize trouve » n etait JAMAIS retenu (on ne cache que les succes — juste pour un
+ *   echec RESEAU, faux pour une absence LUE) : chaque visite d un block sans pool v4 recente rebalayait 40 fenetres x 2 getLogs, dont
+ *   ~31 au-dela de la profondeur de publicnode, donc ~62 appels d archive PAR REQUETE.
+ *   ⇒ L absence LUE retient la plage balayee { depuis, jusqua } ; la requete suivante ne lit que les blocs NOUVEAUX (recents : publicnode,
+ *     gratuit) et, si on demande plus profond qu avant, la seule partie manquante. MEME COUVERTURE qu un balayage complet : une pool
+ *     nee depuis est trouvee. Un getLogs qui leve fait toujours lever la resolution — un echec reseau n est jamais retenu. */
+async function resoudreClePoolBrut(t, fenetres) {
   const t32 = '0x' + t.slice(2).padStart(64, '0');
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+  /* ⛔ revue adversariale (2026-10-10) : un `eth_blockNumber` illisible (null, "0x" -> NaN) ou a 0 (noeud en synchro) inventait une
+   *   absence SANS AUCUNE lecture, retenue pour toujours — ou faisait balayer tout l historique. Une tete non lue fait lever. */
+  if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('chain head not read (eth_blockNumber gave ' + String(tete) + ')');
+  const bas = tete - fenetres * 999 + 1; /* le bloc le plus bas de la couverture demandee (identique a l ancienne boucle) */
+  const lu = clesPoolAbsentes.get(t) || null;
+  /* ⛔⛔ revue adversariale (2026-10-10, constat HAUT, contre-exemple execute) : une memoire qui ne TOUCHE plus la fenetre demandee
+   *   (son haut sous `bas`) faisait relire TOUT l ecart depuis elle — 606 getLogs une semaine plus tard au lieu de 80, et une pool
+   *   plus ancienne que la fenetre rendue ok:true. On l oublie : balayage plein de [bas, tete], la couverture d avant exactement. */
+  const deja = lu && Number.isSafeInteger(lu.depuis) && Number.isSafeInteger(lu.jusqua) && lu.jusqua + 1 >= bas ? lu : null;
+  /* du plus recent au plus ancien, comme avant : la partie neuve d abord, puis la partie plus profonde jamais lue (plafonnee a la tete) */
+  const plages = deja ? [[deja.jusqua + 1, tete], [bas, Math.min(deja.depuis - 1, tete)]].filter(([d, f]) => f >= d) : [[bas, tete]];
   const trouvees = [];
-  for (let i = 0; i < fenetres && !trouvees.length; i++) {
-    const fin = tete - i * 999, deb = fin - 998;
-    const enHex = (n) => '0x' + n.toString(16);
+  for (const [d, f] of plages) {
+    trouvees.push(...await scannerInitialize(t32, d, f));
+    if (trouvees.length) break;
+  }
+  if (!trouvees.length) {
+    let couvert = { depuis: deja ? Math.min(deja.depuis, bas) : bas, jusqua: deja ? Math.max(deja.jusqua, tete) : tete };
+    /* ⛔ une autre resolution (autre profondeur) a pu ecrire pendant ce balayage : si les deux plages LUES se touchent, on garde leur
+     *   union (les deux sont vraies) ; sinon la plus recente lecture l emporte. Jamais une plage plus large que ce qui a ete lu. */
+    const cur = clesPoolAbsentes.get(t);
+    if (cur && cur !== lu && cur.depuis <= couvert.jusqua + 1 && couvert.depuis <= cur.jusqua + 1) {
+      couvert = { depuis: Math.min(cur.depuis, couvert.depuis), jusqua: Math.max(cur.jusqua, couvert.jusqua) };
+    }
+    clesPoolAbsentes.delete(t); /* reinsere en fin : la borne retire le plus ancien */
+    clesPoolAbsentes.set(t, couvert);
+    if (clesPoolAbsentes.size > CLES_POOL_ABSENTES_MAX) clesPoolAbsentes.delete(clesPoolAbsentes.keys().next().value);
+  } else clesPoolAbsentes.delete(t);
+  return clePoolDepuisLogs(t, trouvees, fenetres);
+}
+/** Les logs Initialize du jeton entre `deb` et `fin`, par fenetres de 999 blocs du plus recent au plus ancien ; s arrete apres la
+ *  premiere fenetre qui en contient (la regle d avant). Un getLogs qui leve fait lever : jamais une absence inventee. */
+async function scannerInitialize(t32, deb, fin) {
+  const enHex = (n) => '0x' + n.toString(16);
+  const trouvees = [];
+  for (let f = fin; f >= deb && !trouvees.length; f -= 999) {
+    const d = Math.max(deb, f - 998);
     for (const topics of [[TOPIC_INITIALIZE, null, null, t32], [TOPIC_INITIALIZE, null, t32]]) {
-      const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(deb), toBlock: enHex(fin), address: PM_V4, topics }]);
+      const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);
       for (const l of logs) trouvees.push(l);
     }
   }
+  return trouvees;
+}
+function clePoolDepuisLogs(t, trouvees, fenetres) {
   if (!trouvees.length) {
     /* pas de cache : la pool peut etre plus ancienne que la fenetre, et demain la fenetre bougera */
     /* ⛔ LE CHIFFRE ANNONCAIT LE DOUBLE DE CE QUI EST BALAYE : la boucle avance de 999 blocs par
@@ -1281,6 +1332,10 @@ async function resoudreClePool(token, fenetres = 40) {
   clesPool.set(t, r);
   return r;
 }
+/* l absence LUE d un Initialize, par jeton : { depuis, jusqua } (bornee ; le plus ancien part) — et les resolutions en vol */
+const CLES_POOL_ABSENTES_MAX = 5000;
+const clesPoolAbsentes = new Map();
+const clesPoolEnVol = new Map();
 
 /* ══ LA FACE GRAVEE D UN BLOCK ════════════════════════════════════════════════════════════════════
  * ⛔⛔ CE QUE PHIL DEMANDE DE VERIFIER (2026-09-17) : « que les blocks correspondent a ce qu ils
