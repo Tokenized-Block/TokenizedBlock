@@ -2531,7 +2531,11 @@ async function faireNaissance(demande, { sonde = false, soldeSuppose = null } = 
 }
 async function faireRail(demande) {
   try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-  const r = await planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur });
+  /* ⛔ 2026-10-10 (e0b346d simule chaque plan Aerodrome par eth_simulateV1) : rpcNaissance, pas rpcRails — rpcRails n envoie que
+   *   eth_call a sa liste large et passe le reste a rpcServeur (RPC_LIST : base.org, +1 231 refus de debit en 23 min mesures, et
+   *   developer-access, DNS mort) ; rpcNaissance envoie eth_simulateV1 a RPC_SIMULATION (base.org, publicnode, drpc : les trois
+   *   l executent, mesure depuis une page le 2026-10-10) et TOUT LE RESTE a rpcRails, comme avant. */
+  const r = await planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur });
   if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
   return r;
 }
@@ -5116,7 +5120,7 @@ function traiterRequete(req, res) {
      *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
      *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
     try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-    planRail(demande, { rpc: rpcRails, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur }).then((r) => {
+    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur }).then((r) => { /* rpcNaissance : voir faireRail */
       if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;
