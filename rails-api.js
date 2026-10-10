@@ -302,6 +302,24 @@ async function planRailBrut(q, deps) {
           decimalesEntree: decA, prixUsdEntree: null, resoudreV4: resolveurAvec(marcheA.cle), beneficiaireFrais: FEE_WALLET,
           fraisDevisesOk, maintenant }), { via: 'planFranchissement', chemin: c.chemin });
       }
+      /* ⛔ 2026-10-10 (QA de Phil, IB022 > LLYc / GMEc / DJTc refuse dans le panneau) : une action a pool v4 USDC LUE (hors table
+       *   Aerodrome) se recoit en vendant un block, en UN appel au routeur Uniswap : block -> sa cotation (ETH ou USDC) -> USDC -> action.
+       *   C est la route 5 lue a l envers (meme assembleur `sautsDepuisChemin`, meme juge `planEchangeMultiSauts`). Le frais suit la
+       *   regle « une fois par swap » : la jambe du block (son hook) paie, le routeur s efface ; sinon le routeur le prend en tete,
+       *   dans le block vendu. L action recue n est admise en devise de frais que parce que sa pool v4 vient d etre LUE ici. */
+      if (nv === 'ACTION' && !POOLS_ACTIONS_AERODROME.has(vers) && (quote === ETH || quote === USDC)) {
+        const marcheB = await marcheDe(vers);
+        if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
+        if (quoteDe(marcheB.cle, vers) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(vers) + ' trades on v4 against ' + quoteDe(marcheB.cle, vers) + ', not USDC' });
+        const chemin = [{ de, vers: quote, famille: 'uniswap-v4' }];
+        if (quote === ETH) chemin.push({ de: ETH, vers: USDC, famille: 'uniswap-v4' });
+        chemin.push({ de: USDC, vers, famille: 'uniswap-v4' });
+        const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec(marcheA.cle, marcheB.cle) });
+        if (b.etat !== 'OK') return normaliser(route, { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi }, { via: 'sautsDepuisChemin', chemin });
+        return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
+          decimalesEntree: decA, prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, vers]), maintenant }),
+        { via: 'planEchangeMultiSauts', chemin, cotation: quote, pool: 'uniswap-v4' });
+      }
       return normaliser(route, { etat: 'REFUSE', pourquoi: 'a block sells here for its own quote token (' + quote
         + '), for another block, or for a tokenized stock with a measured Aerodrome pool' }, { cotation: quote });
     }
