@@ -92,7 +92,7 @@ ok(/Date\.now\(\) - \(bc\.nomEssai\.get\(a\) \|\| 0\) < 15000/.test(bcSrc), 'C â
 ok(/<button type="button" class="bcAdr" id="bcAdr" hidden/.test(html) && /ad\.textContent = a; ad\.dataset\.adr = a;/.test(bcSrc),
   'C l adresse B20 du block est affichee EN ENTIER sous son nom, jamais abregee');
 ok(/navigator\.clipboard\.writeText\(a\)/.test(html.slice(html.indexOf("$('#bcAdr').addEventListener"))), 'C â€¦ et se copie d un clic');
-ok(/<form class="bcTicket" id="bcTicket"/.test(html) && /id="bcMontant"/.test(html) && /id="bcDevise"/.test(html) && /id="bcPosition"/.test(html) && /id="bcTicketNote"/.test(html),
+ok(/<form (onsubmit="return false" )?class="bcTicket" id="bcTicket"/ /* 2026-10-10 : garde HTML anti-rechargement */.test(html) && /id="bcMontant"/.test(html) && /id="bcDevise"/.test(html) && /id="bcPosition"/.test(html) && /id="bcTicketNote"/.test(html),
   'C onglet Trade : le ticket (sens, montant, devise), sa note, et ce que la personne detient');
 ok(/await bcExecuterTexte\(bc\.cote === 'buy' \? 'buy this with ' \+ n \+ ' ' \+ d : 'sell ' \+ n \+ ' this for ' \+ d, note\)/.test(html),
   'C le ticket ECRIT la commande de la barre du Chat (meme grammaire, meme porte, meme plan) et recoit le refus dans SA note');
@@ -219,7 +219,7 @@ ok(/const carte = \$\('#bBotLoopCarte'\), niche = \$\('#bcBotLoop'\); if \(carte
 ok(!bcSrc.includes("choix.push([sa, 'for ' + st.symbole])") && !bcSrc.includes('if (!achat && !ACTIONS_PAR_ADR.has(a)) {'),
   'C2 vente d un block : le ticket ne propose PLUS les actions Aerodrome (un franchissement signe appel par appel s arretait en USDC)');
 /* la recherche d un block */
-ok(/<form class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /let j = bcResoudre\(v\);/.test(html) && /if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html) /* 2026-10-10 : repli sur /api/chercher entre les deux */,
+ok(/<form (onsubmit="return false" )?class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /let j = bcResoudre\(v\);/.test(html) && /if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html) /* 2026-10-10 : repli sur /api/chercher entre les deux */,
   'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');
 ok(/if \(compte2\.get\(k\) > 1\) opts\.push\(\[String\(l\.adr\)\.toLowerCase\(\),/.test(html) && /dl\.append\(bcEl\('option', \{ value: v, label: lib \}\)\);/.test(html),
   'C2 recherche : un symbole porte par plusieurs blocks est propose par son ADRESSE ; les propositions sont posees en attributs, jamais en HTML');
