@@ -19156,7 +19156,7 @@ function preparerOffreApercu() {
     const resume = window.__TB_BRAIN_TASKS__;
     if (pre && resume && resume.offer_preview) {
       pre.hidden = false;
-      pre.textContent = JSON.stringify(resume.offer_preview, null, 2);
+      pre.textContent = JSON.stringify(resume.offer_preview, (k, v) => (k === 'fee_sink' || k === 'fee_wallet' ? undefined : v) /* QA a6cf : jamais l adresse de frais a l ecran */, 2);
     }
     if (planEl) {
       planEl.hidden = false;
@@ -19170,7 +19170,7 @@ function preparerOffreApercu() {
         score: plan.score,
         honesty: plan.honesty,
         steps: plan.steps,
-      }, null, 2);
+      }, (k, v) => (k === 'fee_sink' || k === 'fee_wallet' ? undefined : v) /* QA a6cf : jamais l adresse de frais a l ecran */, 2);
       planEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
     if (note) {
@@ -19240,7 +19240,7 @@ function peindreTasks(snap) {
   }
   if (pre && resume.offer_preview) {
     pre.hidden = false;
-    pre.textContent = JSON.stringify(resume.offer_preview, null, 2);
+    pre.textContent = JSON.stringify(resume.offer_preview, (k, v) => (k === 'fee_sink' || k === 'fee_wallet' ? undefined : v) /* QA a6cf : jamais l adresse de frais a l ecran */, 2);
   }
   if (sum) {
     /* « band ? » ne veut rien dire pour un visiteur ; le nombre de signaux et la decision, si. */
