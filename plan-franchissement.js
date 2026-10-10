@@ -36,6 +36,8 @@ export const ETATS = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESUR
 /** ⛔ Les NEUF espacements declares par la factory Aerodrome CL, pas les cinq que j avais sondes
  *   une fois — cette sous-mesure avait rendu 49,8 % du volume invisible. */
 export const ESPACEMENTS_CL = Object.freeze([1, 10, 50, 80, 100, 150, 200, 500, 2000]);
+/** Une pool choisie alors qu une autre profondeur n a pas ete lue doit detenir au moins ce multiple du montant qui entre dans le saut. */
+export const PROFONDEUR_MIN_FOIS = 100n;
 
 const bas = (x) => String(x || '').toLowerCase();
 const ADR = /^0x[0-9a-fA-F]{40}$/;
@@ -50,7 +52,7 @@ async function appel(rpc, to, data) {
  * ⛔ Le sens vient de `token0()` LU sur la pool, jamais de l ordre des arguments : une pool classe
  *   ses jetons par adresse, et se tromper de sens cote le prix a l envers.
  */
-export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL } = {}) {
+export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL, montantEntree = null } = {}) {
   if (!ADR.test(String(a || '')) || !ADR.test(String(b || ''))) {
     return { etat: 'REFUSE', pourquoi: 'both tokens must be whole addresses' };
   }
@@ -90,6 +92,19 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
     if (x.valeur) trouvees.push(x.valeur);
   }
   if (trouvees.length) {
+    /* ⛔ 2026-10-10 (QA de Phil, NVDAc > ETH : « hop 2 (0x833589 to 0x420000): 3 pools found but the depth of 1 could not be
+     *   read ») : UNE profondeur illisible bloquait toute la route alors que les autres etaient LUES. Deux regles, sans rouvrir le
+     *   defaut AMZNc ci-dessus :
+     *   (1) chaque profondeur ratee est RELUE une fois (une lecture ratee sous charge est le plus souvent passagere) ;
+     *   (2) si elle reste illisible, la plus profonde des LUES n est prise que si l appelant donne le montant qui ENTRE dans ce saut
+     *       et que cette pool detient au moins PROFONDEUR_MIN_FOIS fois ce montant du jeton d entree. Une pool vide ou fine (le cas
+     *       AMZNc : 0 $) ne passe jamais. Le resultat DIT combien de profondeurs n ont pas ete lues (`profondeursNonLues`).
+     *   Sans montant : comportement d avant (NON_MESURE nomme). */
+    if (trouvees.length > 1) for (const x of trouvees) {
+      if (x.prof !== null) continue;
+      try { x.prof = BigInt(String(await appel(rpc, a, selecteur('balanceOf(address)') + x.adresse.slice(2).toLowerCase().padStart(64, '0')))); }
+      catch (_) { x.prof = null; }
+    }
     const lues = trouvees.filter((x) => x.prof !== null);
     if (trouvees.length > 1 && !lues.length) {
       return { etat: 'NON_MESURE', essayes, refus,
@@ -98,6 +113,23 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL 
     /* ⛔⛔ 2026-10-10 (serie complete, sous charge) : AMZNc a choisi 0x22cf… — sa pool VIDE a l espacement 1 — parce que la
      *   profondeur de sa vraie pool (0xd03b…, ~1,19 M$) n avait pas ete lue : « la plus profonde des LUES » est un choix au hasard
      *   des qu une profondeur manque. Plusieurs pools et pas toutes lues : NON_MESURE, nomme. Une seule pool : inchange. */
+    const nonLues = trouvees.length - lues.length;
+    let mEntree = null;
+    try { mEntree = montantEntree === null || montantEntree === undefined ? null : BigInt(montantEntree); } catch (_) { mEntree = null; }
+    if (trouvees.length > 1 && nonLues > 0 && lues.length && mEntree !== null && mEntree > 0n) {
+      const meilleure = lues.reduce((m, x) => (x.prof > m.prof ? x : m));
+      if (meilleure.prof >= mEntree * PROFONDEUR_MIN_FOIS) {
+        let t0p = null;
+        try { t0p = '0x' + String(await appel(rpc, meilleure.adresse, selecteur('token0()'))).slice(-40); } catch (_) { t0p = null; }
+        if (!t0p || !ADR.test(t0p)) {
+          return { etat: 'NON_MESURE', pourquoi: 'the pool was found but token0() could not be read, '
+            + 'so the swap direction is unknown — and a direction is never guessed' };
+        }
+        return { etat: 'PRET', pool: bas(meilleure.adresse), tickSpacing: meilleure.ts, token0: bas(t0p),
+          entreeEst0: bas(t0p) === bas(a), essayes, refus, trouvees: trouvees.length,
+          profondeur: String(meilleure.prof), profondeursNonLues: nonLues };
+      }
+    }
     if (trouvees.length > 1 && lues.length < trouvees.length) {
       return { etat: 'NON_MESURE', essayes, refus,
         pourquoi: trouvees.length + ' pools were found but the depth of ' + (trouvees.length - lues.length)

@@ -534,6 +534,10 @@ async function comparerAero(nom, Mod = PF) {
   const r = {};
   for (const nom of Object.keys(AERO_SC)) {
     r[nom] = await comparerAero(nom);
+    /* 2026-10-10 (QA NVDAc > ETH) : plusieurs pools et une profondeur ratee -> chaque ratee est RELUE une fois (plan-franchissement.js) :
+     *   meme reponse, et exactement une lecture de plus par profondeur ratee. Seul ce scenario a des profondeurs ratees ET plusieurs pools. */
+    const relues = nom === 'profondeursIllisibles' ? Object.keys(AERO_SC[nom].pools).length : 0;
+    if (relues) r[nom].memesAppels = r[nom].b.appels === r[nom].a.appels + relues;
     ok(r[nom].meme && r[nom].memesAppels && r[nom].b.enVol === 0 && r[nom].b.max <= N && r[nom].a.max === 1,
       'E « ' + nom + ' » : reponse identique a la version en file (' + r[nom].neuf.r.etat + '), memes appels (' + r[nom].b.appels + '), jamais plus de ' + N + ' en vol (max : ' + r[nom].b.max + ')');
   }

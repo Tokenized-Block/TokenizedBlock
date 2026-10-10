@@ -112,7 +112,7 @@ export async function planAerodromeSegment({ rpc, chemin, devise, block, montant
   const sauts = [];
   let courant = m;
   for (const [i, s] of chemin.entries()) {
-    const p = await poolAerodromeDe({ rpc, a: s.de, b: s.vers });
+    const p = await poolAerodromeDe({ rpc, a: s.de, b: s.vers, montantEntree: courant });
     if (p.etat !== 'PRET') {
       return { etat: p.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', etape: 'hop ' + (i + 1),
         pourquoi: 'hop ' + (i + 1) + ' (' + bas(s.de).slice(0, 8) + ' to ' + bas(s.vers).slice(0, 8)
