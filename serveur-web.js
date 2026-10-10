@@ -1288,6 +1288,7 @@ async function resoudreClePoolBrut(t, fenetres) {
     clesPoolAbsentes.set(t, couvert);
     if (clesPoolAbsentes.size > CLES_POOL_ABSENTES_MAX) clesPoolAbsentes.delete(clesPoolAbsentes.keys().next().value);
   } else clesPoolAbsentes.delete(t);
+  apresAbsences();
   return clePoolDepuisLogs(t, trouvees, fenetres);
 }
 /** Les logs Initialize du jeton entre `deb` et `fin`, par fenetres de 999 blocs du plus recent au plus ancien ; s arrete apres la
@@ -1335,7 +1336,43 @@ function clePoolDepuisLogs(t, trouvees, fenetres) {
 /* l absence LUE d un Initialize, par jeton : { depuis, jusqua } (bornee ; le plus ancien part) — et les resolutions en vol */
 const CLES_POOL_ABSENTES_MAX = 5000;
 const clesPoolAbsentes = new Map();
+let apresAbsences = () => {}; /* branche sur la persistance juste en dessous (le banc garde la doublure muette) */
 const clesPoolEnVol = new Map();
+/* ⛔⛔ 2026-10-10 (prod, 16 min apres le deploiement du cache negatif) : `/api/cle` avait baisse d environ 40 %, pas plus — la memoire
+ *   des absences vivait en MEMOIRE, et chaque redeploiement (4 cette nuit) la vidait : chaque jeton repayait son balayage complet
+ *   (~62 appels d archive). Meme mecanisme que les cles trouvees (cles-pool.json) : volume, ecriture atomique, taille bornee,
+ *   relecture qui n admet que des plages bien formees. Une plage relue trop vieille pour toucher la fenetre est de toute facon ignoree
+ *   par resoudreClePoolBrut (regle d adjacence) : relire un fichier ancien ne peut jamais elargir ce qu on croit avoir lu. */
+const FICHIER_CLES_ABSENTES = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'cles-absentes.json') : null;
+let ecritureAbsentesPrevue = null;
+apresAbsences = () => {
+  if (!FICHIER_CLES_ABSENTES || ecritureAbsentesPrevue) return;
+  ecritureAbsentesPrevue = setTimeout(() => {
+    ecritureAbsentesPrevue = null;
+    try {
+      const payload = JSON.stringify([...clesPoolAbsentes]);
+      if (payload.length > 2 * 1024 * 1024) return; /* plutot rien qu un volume plein */
+      writeFileSync(FICHIER_CLES_ABSENTES + '.tmp', payload);
+      renameSync(FICHIER_CLES_ABSENTES + '.tmp', FICHIER_CLES_ABSENTES);
+    } catch { /* une ecriture ratee ne casse pas une lecture : la memoire suffit */ }
+  }, 5000);
+  ecritureAbsentesPrevue.unref?.();
+};
+(function relireClesAbsentes() {
+  if (!FICHIER_CLES_ABSENTES || !existsSync(FICHIER_CLES_ABSENTES)) return;
+  try {
+    const brut = JSON.parse(readFileSync(FICHIER_CLES_ABSENTES, 'utf8'));
+    if (!Array.isArray(brut)) return;
+    for (const e of brut.slice(-CLES_POOL_ABSENTES_MAX)) {
+      const [j, v] = Array.isArray(e) ? e : [];
+      if (/^0x[0-9a-f]{40}$/.test(String(j)) && v && Number.isSafeInteger(v.depuis) && Number.isSafeInteger(v.jusqua) && v.jusqua >= v.depuis && v.depuis > 0) {
+        clesPoolAbsentes.set(String(j), { depuis: v.depuis, jusqua: v.jusqua });
+      }
+    }
+    console.log('[cles] ' + clesPoolAbsentes.size + ' absence(s) d Initialize relue(s) du volume');
+  } catch (err) { console.warn('[cles] absences illisibles, on repart a vide : ' + err.message); }
+})();
 
 /* ══ LA FACE GRAVEE D UN BLOCK ════════════════════════════════════════════════════════════════════
  * ⛔⛔ CE QUE PHIL DEMANDE DE VERIFIER (2026-09-17) : « que les blocks correspondent a ce qu ils

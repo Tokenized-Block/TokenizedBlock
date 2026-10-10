@@ -170,4 +170,38 @@ await cas('K BAS : une autre resolution ecrit PENDANT le balayage — l union de
   assert.deepEqual(b.clesPoolAbsentes.get(JETON), { depuis: 1_000_000 - 9990 + 1, jusqua: 1_000_000 });
 });
 
+/* ── P. persistance (2026-10-10 : -40 % seulement apres le 1er deploiement, la memoire se vidait a chaque redeploiement) ──────── */
+const iP = src.indexOf('const FICHIER_CLES_ABSENTES = ');
+const fP = src.indexOf('})();', src.indexOf('(function relireClesAbsentes() {', iP));
+assert.ok(iP > 0 && fP > iP, 'bloc de persistance des absences introuvable');
+const blocP = src.slice(iP, fP + '})();'.length);
+function monterAvecDisque(disque, { tete = 1_000_000 } = {}) {
+  const e = { tete, appels: [] };
+  const rpc = async (m, p) => { if (m === 'eth_blockNumber') return '0x' + e.tete.toString(16); const { fromBlock, toBlock } = p[0]; e.appels.push([parseInt(fromBlock, 16), parseInt(toBlock, 16)]); return []; };
+  const M = new Function('clesPool', 'rpcServeur', 'TOPIC_INITIALIZE', 'PM_V4', 'process', 'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console',
+    bloc + '\n' + blocP + '\n; return { resoudreClePool, clesPoolAbsentes };')(new Map(), rpc, TOPIC, PM, { env: {} },
+    (p) => p === '/data' || disque.has(p), (...x) => x.join('/'), (p) => disque.get(p), (p, v) => disque.set(p, v),
+    (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} });
+  return { ...M, e };
+}
+await cas('P l absence LUE est ecrite sur le volume et relue au redemarrage : la requete suivante ne repaie PAS le balayage complet', async () => {
+  const disque = new Map();
+  const a = monterAvecDisque(disque);
+  await a.resoudreClePool(JETON);
+  assert.equal(a.e.appels.length, 80);
+  assert.ok(disque.has('/data/cles-absentes.json'), 'rien n a ete ecrit sur le volume');
+  /* redemarrage : nouveau processus, meme volume ; la tete a avance de 1 500 blocs */
+  const b = monterAvecDisque(disque, { tete: 1_001_500 });
+  assert.deepEqual(b.clesPoolAbsentes.get(JETON), { depuis: 1_000_000 - 39960 + 1, jusqua: 1_000_000 });
+  await b.resoudreClePool(JETON);
+  assert.equal(b.e.appels.length, 4, 'apres redemarrage, le balayage complet a ete repaye');
+});
+await cas('P2 la relecture n admet que des plages bien formees (fichier abime : rien d invente)', async () => {
+  const disque = new Map([['/data/cles-absentes.json', JSON.stringify([
+    [JETON, { depuis: 10, jusqua: 20 }], ['0xPASUNEADRESSE', { depuis: 1, jusqua: 2 }], ['0x' + 'c'.repeat(40), { depuis: 30, jusqua: 20 }],
+    ['0x' + 'd'.repeat(40), { depuis: 'x', jusqua: 5 }], ['0x' + 'e'.repeat(40), { depuis: 0, jusqua: 5 }], 'nimporte', null])]]);
+  const b = monterAvecDisque(disque);
+  assert.deepEqual([...b.clesPoolAbsentes.keys()], [JETON]);
+});
+
 console.log('✓ ' + n + ' cas — une absence lue d Initialize se retient ; la suivante ne lit que les blocs nouveaux, et une pool nee depuis est trouvee');
