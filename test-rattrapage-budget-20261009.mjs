@@ -48,15 +48,23 @@ await cas('A2 archiveEpuisee : lu sur le compteur du JOUR, et seulement avec un 
 });
 
 /* ── B. le bloc de rattrapage, extrait et EXECUTE passe apres passe ──────────────────────────── */
-const blocRattrapage = entre('    try {\n      if (rattrapageDepuis === null) rattrapageDepuis = fin;'.replace(/\n/g, src.includes('\r\n') ? '\r\n' : '\n'),
-  "    } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }");
+/* ⛔ l ancre est une regex \r?\n (test-tests-portables : aucun test ne depend de la fin de ligne du checkout) */
+const mDebutBloc = /    try \{\r?\n      if \(rattrapageDepuis === null\) rattrapageDepuis = fin;/.exec(src);
+assert.ok(mDebutBloc, 'debut du bloc de rattrapage introuvable');
+const finBloc = src.indexOf("    } catch (e) { console.log('[createurs] rattrapage interrompu : ' + e.message); }", mDebutBloc.index);
+assert.ok(finBloc > mDebutBloc.index, 'fin du bloc de rattrapage introuvable');
+const blocRattrapage = src.slice(mDebutBloc.index, finBloc);
 /* garderNonResolu extraite telle que livree ; absente du code d avant -> doublure muette, pour que les cas d avant tournent encore */
 const iG = src.indexOf('function garderNonResolu(c) {');
 const fG = iG < 0 ? null : /\r?\n\}\r?\n/.exec(src.slice(iG));
 const srcGarde = iG < 0 ? null : src.slice(iG, iG + fG.index + fG[0].length);
 const monterGarde = (createurParBlock, liste) => (srcGarde
-  ? new Function('createurParBlock', 'createursNonResolus', 'CREATEURS_NON_RESOLUS_MAX', 'console', 'let createursNonResolusJetes = 0;\n' + srcGarde + '\n; return garderNonResolu;')(createurParBlock, liste, 5000, { log: () => {} })
+  ? new Function('createurParBlock', 'createursNonResolus', 'CREATEURS_NON_RESOLUS_MAX', 'console', 'let createursNonResolusJetes = 0; let rattrapageDepuis = null;\n' + srcGarde + '\n; return garderNonResolu;')(createurParBlock, liste, 5000, { log: () => {} })
   : () => {});
+/* la meme, avec son etat visible : borne choisie, curseur de depart, compteur — pour juger ce que fait un debordement */
+const monterGardeEtat = (max, curseur) => new Function('createurParBlock', 'createursNonResolus', 'CREATEURS_NON_RESOLUS_MAX', 'console',
+  'let createursNonResolusJetes = 0; let rattrapageDepuis = ' + curseur + ';\n' + srcGarde
+  + '\n; return { garder: garderNonResolu, etat: () => ({ rattrapageDepuis, jetes: createursNonResolusJetes }) };')(new Map(), [], max, { log: () => {} });
 const PARAMS = ['fin', 'PREMIER_BLOCK_TB', 'RPC_ARCHIVE', 'archiveEpuisee', 'refusDeBudget', 'archiveCompte', 'listerCreations', 'rpcHistoire', 'rpcServeur',
   'createurParBlock', 'createurDe', 'trousRattrapage', 'blocksConnus', 'masquerCle', 'console', 'rattrapageDepuis', 'refusDeSuite', 'attenteBudgetDite', 'garderNonResolu'];
 const passe = new AsyncFunction(...PARAMS, blocRattrapage + '\n    } catch (e) { throw e; }\n    return { rattrapageDepuis, refusDeSuite, attenteBudgetDite };');
@@ -169,7 +177,9 @@ await cas('D2 la passe relit les trous ; /api/blocks-de publie relus + attente ;
   assert.match(nu, /attendBudgetArchive: rattrapageDepuis !== null && rattrapageDepuis > PREMIER_BLOCK_TB && archiveEpuisee\(\),/);
   /* 2026-10-09 (audit du budget d archive) : l expression garde ses deux conditions d avant, et en exige trois de plus — l assertion
    *   d avant (`... && trousRattrapage.length === 0,`) est etendue, pas retiree ; l expression est EXECUTEE dans E1. */
-  assert.match(nu, /couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB\s+&& trousRattrapage\.length === 0\s+&& trousCreations\.length === 0 && createursNonResolus\.length === 0 && createursNonResolusJetes === 0,/);
+  /* 2026-10-09 (revue adversariale) : `createursNonResolusJetes === 0` RETIRE de l expression — un compteur qui ne redescend jamais
+   *   la gardait a faux pour toujours ; un debordement programme maintenant une relecture depuis la tete (voir E2). */
+  assert.match(nu, /couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB\s+&& trousRattrapage\.length === 0\s+&& trousCreations\.length === 0 && createursNonResolus\.length === 0,/);
 });
 
 /* ── E. couvertureComplete, l expression extraite de /api/blocks-de et EXECUTEE ─────────────────── */
@@ -183,7 +193,19 @@ await cas('E1 couvertureComplete : vraie seulement plancher atteint ET zero trou
   assert.equal(couv(P, P, [{ de: 1, a: 2 }], [], [], 0), false);
   assert.equal(couv(P, P, [], [{ de: 52302101, a: 52381409 }], [], 0), false, 'une creation dans un trou du scan vers l avant n est pas indexee');
   assert.equal(couv(P, P, [], [], [{ jeton: J(1), tx: T(1) }], 0), false, 'un block au createur non resolu n est pas indexe');
-  assert.equal(couv(P, P, [], [], [], 1), false, 'un createur non resolu JETE par la borne est perdu : la couverture ne peut plus etre complete');
+});
+await cas('E2 un createur JETE par la borne programme une relecture depuis la tete (execute) : faux pendant, vrai au plancher — jamais faux pour toujours', async () => {
+  assert.ok(srcGarde, 'garderNonResolu introuvable');
+  const P = 50861088;
+  const g = monterGardeEtat(2, P); /* borne 2, curseur deja au plancher */
+  g.garder({ jeton: J(1), tx: T(1) }); g.garder({ jeton: J(2), tx: T(2) });
+  assert.equal(g.etat().rattrapageDepuis, P, 'sous la borne : le curseur ne bouge pas');
+  g.garder({ jeton: J(3), tx: T(3) });
+  assert.equal(g.etat().jetes, 1); assert.equal(g.etat().rattrapageDepuis, null, 'debordement : la relecture depuis la tete doit etre programmee');
+  const m = /couvertureComplete: ([\s\S]*?),\r?\n/.exec(src.slice(src.indexOf("chemin === '/api/blocks-de'")));
+  const couv = new Function('rattrapageDepuis', 'PREMIER_BLOCK_TB', 'trousRattrapage', 'trousCreations', 'createursNonResolus', 'return (' + m[1] + ');');
+  assert.equal(couv(g.etat().rattrapageDepuis, P, [], [], []), false, 'pendant la relecture : pas complete');
+  assert.equal(couv(P, P, [], [], []), true, 'relecture revenue au plancher, rien en attente : complete de nouveau (le compteur cumule ne bloque plus)');
 });
 
 console.log('✓ ' + n + ' cas — un refus de budget fait attendre le rattrapage ; un trou se garde, se relit, et « complet » ne ment plus');

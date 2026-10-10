@@ -179,5 +179,25 @@ await cas('C2 cleV4DuPoolId n a qu UN appelant (faitsPoolV4) : un nouvel appelan
   assert.match(nu, /cleV4 = await cleV4DuPoolId\(id\);/);
 });
 
+/* ── D. l ecran (app.html) : le drapeau arrive jusqu au classement (revue adversariale du 2026-10-09) ─────────────────────
+ * Le serveur publiait `cleNonLue`, l ecran le jetait : ses faits de pool etant lus, `faitsLus` valait VRAI, aucune arete v4
+ * sans cle, et classerDevise concluait SANS_ROUTE — « no route » sur une cle jamais lue. */
+const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+const { classerDevise } = await import(new URL('./devises-dentree.js', import.meta.url).href);
+await cas('D1 app.html garde cleNonLue dans faitsPoolLus, et faitsLus le compte', async () => {
+  assert.match(html, /cleNonLue: d && d\.cleNonLue === true,/);
+  assert.match(html, /faitsLus: faitsPoolLus\.has\(String\(p\.adr\)\.toLowerCase\(\)\) && faitsPoolLus\.get\(String\(p\.adr\)\.toLowerCase\(\)\)\.cleNonLue !== true,/);
+});
+await cas('D2 EXECUTE : faits lus SANS la cle -> NON_MESUREE (« not checked »), jamais SANS_ROUTE (« no route »)', async () => {
+  const DEV = '0x' + '1'.repeat(40), BLOCK = '0xb2' + '0'.repeat(38);
+  /* la meme expression que app.html, sur une entree de faitsPoolLus telle que le serveur la rend pour une cle non lue */
+  const faitsPoolLus = new Map([[DEV, { glissementBps: 12, famille: 'uniswap-v4', cleV4: null, cleNonLue: true }]]);
+  const faitsLus = faitsPoolLus.has(DEV) && faitsPoolLus.get(DEV).cleNonLue !== true;
+  assert.equal(classerDevise({ devise: DEV, block: BLOCK, aretes: [], faitsLus }).etat, 'NON_MESUREE');
+  /* temoin : la cle LUE et absente (pas de drapeau) reste une route absente mesuree */
+  const lue = new Map([[DEV, { glissementBps: 12, famille: 'uniswap-v4', cleV4: null, cleNonLue: false }]]);
+  assert.equal(classerDevise({ devise: DEV, block: BLOCK, aretes: [], faitsLus: lue.has(DEV) && lue.get(DEV).cleNonLue !== true }).etat, 'SANS_ROUTE');
+});
+
 if (rouges.length) { console.error('✗ ' + rouges.length + '/' + n + ' cas rouges'); process.exit(1); }
 console.log('✓ ' + n + ' cas — une cle v4 non lue n est plus publiee comme absente ; le glissement lu reste publie');

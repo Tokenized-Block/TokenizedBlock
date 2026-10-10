@@ -45,14 +45,17 @@ const NOUVELLES_20261002 = ['AMDc', 'ASTSc', 'CAKEc', 'DJTc', 'DUOLc', 'LLYc', '
  *   l app ne l offre pas au pairage — CRCLc n a aucune unite (totalSupply 0) ni prix, la garde de prix refuserait de toute
  *   facon. A reprendre le jour ou CRCLc circule : remesurer le census, puis mettre la liste V8 a 13. */
 const NOUVELLES_20261003 = ['AMCc', 'AEOc', 'BMNRc', 'BIRDc', 'BYNDc', 'CIFRc', 'CLSKc', 'CRCLc', 'CRWVc', 'HUTc', 'KSSc', 'LCIDc', 'MARAc', 'OPENc', 'RIOTc', 'SOUNc', 'USDEc', 'VVVc', 'WULFc', 'WWc', 'XYZc'];
+/* 2026-10-09 : 12 actions du lot @base du jour entrent au registre (achat/vente ; pools Aerodrome mesurees, achat+vente prouves sur
+ *   fork). HORS du hook 7030 comme du V8 : elles rejoignent les refusees pour un block NEUF, rien d autre ne change. */
+const NOUVELLES_20261009 = ['ARMc', 'SKHYc', 'WRDc', 'BIDUc', 'BILIc', 'HSAIc', 'INFYc', 'NIOc', 'NVOc', 'PDDc', 'SAPc', 'VALEc'];
 
 console.log('one source, pinned to the census (devises-admises.mjs, measured 2026-10-01)');
 ok('12 admitted, by symbol', DEVISES_ADMISES_V8.length === 12 && ADMISES.every((s) => DEVISES_ADMISES_V8.includes(parSym[s])));
 ok('no second (refused) list is exported', !Object.keys(P).some((k) => /REFUSE/i.test(k)), Object.keys(P).filter((k) => /REFUSE/i.test(k)));
 const cibles = ciblesDuCensus().filter((c) => c.sym !== 'TEMOIN');
-ok('the census asks exactly the 19 listed currencies + the 22 added 2026-10-02 + the 21 added 2026-10-03', cibles.length === 19 + NOUVELLES_20261002.length + NOUVELLES_20261003.length, cibles.length);
-ok('refused by the app = complement of the admitted set = exactly the 7 + the 22 + the 21',
-  JSON.stringify(cibles.filter((c) => hookDeLancementPour(c.adr, 8453) === null).map((c) => c.sym).sort()) === JSON.stringify([...REFUSEES, ...NOUVELLES_20261002, ...NOUVELLES_20261003].sort()),
+ok('the census asks exactly the 19 listed currencies + the 22 added 2026-10-02 + the 21 added 2026-10-03 + the 12 added 2026-10-09', cibles.length === 19 + NOUVELLES_20261002.length + NOUVELLES_20261003.length + NOUVELLES_20261009.length, cibles.length);
+ok('refused by the app = complement of the admitted set = exactly the 7 + the 22 + the 21 + the 12',
+  JSON.stringify(cibles.filter((c) => hookDeLancementPour(c.adr, 8453) === null).map((c) => c.sym).sort()) === JSON.stringify([...REFUSEES, ...NOUVELLES_20261002, ...NOUVELLES_20261003, ...NOUVELLES_20261009].sort()),
   cibles.filter((c) => hookDeLancementPour(c.adr, 8453) === null).map((c) => c.sym));
 ok('ETH and TBLOCK open on V8', hookDeLancementPour(ETH_NATIF, 8453) === 'V8' && hookDeLancementPour(TBLOCK_MAINNET, 8453) === 'V8');
 

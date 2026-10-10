@@ -12046,7 +12046,9 @@ function majDevisesDentree(v) {
        *   effectivement lus pour cette devise. C est lui qui separe SANS_ROUTE (on a regarde) de
        *   NON_MESUREE (on n a pas regarde) — et confondre les deux transformerait notre
        *   incompletude en accusation contre le jeton de quelqu un. */
-      faitsLus: faitsPoolLus.has(String(p.adr).toLowerCase()),
+      /* ⛔ 2026-10-09 (revue adversariale) : des faits lus dont la CLE V4 n a pas ete lue (`cleNonLue`) ne sont pas une mesure de
+       *   route — sans cle, aucune arete v4, et classerDevise concluait « no route » sur un jeton qu on n avait pas regarde. */
+      faitsLus: faitsPoolLus.has(String(p.adr).toLowerCase()) && faitsPoolLus.get(String(p.adr).toLowerCase()).cleNonLue !== true,
     }));
   } catch (_) { candidates = []; }
   /* ⛔⛔⛔ UNE DEVISE DU REGISTRE QUI N EST JAMAIS LUE NE PEUT JAMAIS ETRE OFFERTE — ET C ETAIT LE
@@ -15245,6 +15247,9 @@ async function prixUsdDeviseBrut(adr) {
            *     l ecran distingue « pas de cle » de « pas regarde ». */
           cleV4: d && d.cleV4 ? d.cleV4 : null,
           pourquoiCle: d && typeof d.pourquoiCle === 'string' ? d.pourquoiCle : null,
+          /* ⛔ 2026-10-09 : le serveur dit maintenant quand la cle n a PAS ETE LUE (fenetre refusee) — `cleNonLue: true`. Le jeter
+           *   faisait classer la devise SANS_ROUTE (« no route ») au lieu de NON_MESUREE (« not checked »). Voir `faitsLus`. */
+          cleNonLue: d && d.cleNonLue === true,
           alternativeAerodrome: d.alternativeAerodrome || null });
     }
     return d && d.ok && d.prixUsd > 0 ? d.prixUsd : null;

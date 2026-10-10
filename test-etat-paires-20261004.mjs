@@ -30,6 +30,7 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const M0 = await imp('etat-paires.js');
 const P = await imp('paires.js');
+const T = await imp('tokenomics.js');
 const K = await imp('keccak.js');
 const SEL = K.selecteur('totalSupply()');
 
@@ -373,8 +374,13 @@ console.log('— A. le module, hors reseau');
 ok(SEL === '0x18160ddd' && lire('serveur-web.js').includes("data: '0x18160ddd'"),
   'A le selecteur de totalSupply() est CALCULE (keccak.js : ' + SEL + ') et c est celui que le serveur emploie deja pour cette lecture');
 await jeuModule(M0, ok);
-const cibles = M0.ciblesEtatPaires(P.pairesProposees(8453));
-ok(cibles.length === P.pairesProposees(8453).length - 1 && cibles.length === P.DEVISES_ADMISES_7030.length
+/* 2026-10-09 : douze actions sont entrees au registre HORS du hook 7030 (achat/vente). Ce que Create PROPOSE n est plus
+ *   pairesProposees mais pairesLancables (la regle du hook) — c est ce que le serveur passe a la passe des paires mortes. */
+const LANCABLES = P.pairesLancables(8453, T.OPTIONS_LANCEMENT);
+const cibles = M0.ciblesEtatPaires(LANCABLES);
+ok(P.pairesProposees(8453).length - 1 > cibles.length,
+  'A TEMOIN : le registre propose ' + (P.pairesProposees(8453).length - 1) + ' devises, la passe n en lit que ' + cibles.length + ' — c est la regle du hook qui retire les autres');
+ok(cibles.length === LANCABLES.length - 1 && cibles.length === P.DEVISES_ADMISES_7030.length
   && cibles.every((c) => P.DEVISES_ADMISES_7030.includes(c.adr)) && P.DEVISES_ADMISES_7030.every((a) => cibles.some((c) => c.adr === a)),
   'A la liste reelle : ' + cibles.length + ' devises = tout ce que Create propose sauf ETH = exactement DEVISES_ADMISES_7030 (' + P.DEVISES_ADMISES_7030.length + ')');
 
@@ -400,8 +406,8 @@ console.log('— C. le serveur');
 const srv = lire('serveur-web.js');
 const servis = (srv.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];\n/) || [])[1] || '';
 ok(/'etat-paires\.js'/.test(servis) && /'keccak\.js'/.test(servis), 'C etat-paires.js est dans SERVIS (app.html l importe : absent = page morte), sa dependance keccak.js aussi');
-ok(/^import \{ creerEtatPaires \} from '\.\/etat-paires\.js';$/m.test(srv) && /^const etatPaires = creerEtatPaires\(\{ rpc: rpcRails, paires: \(\) => pairesProposees\(8453\) \}\);$/m.test(srv),
-  'C le serveur lit la liste de l ECRAN (pairesProposees) avec le lecteur des rails — rien n est recopie');
+ok(/^import \{ creerEtatPaires \} from '\.\/etat-paires\.js';$/m.test(srv) && /^const etatPaires = creerEtatPaires\(\{ rpc: rpcRails, paires: \(\) => pairesLancables\(8453, OPTIONS_LANCEMENT\) \}\);$/m.test(srv),
+  'C le serveur lit la liste de l ECRAN (pairesLancables : ce que Create propose, regle du hook) avec le lecteur des rails — rien n est recopie');
 ok(/if \(chemin === '\/api\/paires\/etat'\) \{/.test(srv) && /if \(req\.method !== 'GET'\) \{ rendreE\(405/.test(srv) && /etatPaires\.lire\(\)\.then\(\(r\) => rendreE\(200, r\)\)/.test(srv),
   'C la route /api/paires/etat existe, GET seulement');
 ok(/paires: etatPaires\.resume\(\),/.test(srv), 'C /sante.paires rend les compteurs (lus en memoire)');

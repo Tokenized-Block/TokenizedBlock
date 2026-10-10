@@ -79,6 +79,14 @@ await cas('B1 les deux routes passent par le calcul en fond', async () => {
   assert.match(nu, /if \(chemin === '\/api\/parts-createur'\) \{[\s\S]{0,400}const fond = enFond\('frais-hook', \(\) => fraisEnAttente\(\), 120000\);/);
   assert.match(nu, /if \(!fond\.r\) \{ repondre\(\{ ok: false, etat: fond\.enVol \? 'EN_COURS' : 'ECHEC'/);
 });
+await cas('B1b /api/frais-recents ARRONDIT h (execute) : une valeur fractionnaire ne cree plus une cle de cache de plus', async () => {
+  const m = /const heures = (Math\.min\(168, [^;]+\));/.exec(nu.slice(nu.indexOf("if (chemin === '/api/frais-recents') {")));
+  assert.ok(m, 'calcul de heures introuvable dans la route');
+  const heures = (h) => new Function('req', 'return ' + m[1] + ';')({ url: '/api/frais-recents' + (h === null ? '' : '?h=' + h) });
+  const cles = new Set(['24.001', '24.002', '24.4', '23.6', '1.0001', '167.9', '500', '-3', 'abc', '0', null].map(heures));
+  assert.deepEqual([...cles].sort((a, b) => a - b), [1, 24, 168], 'cles obtenues : ' + [...cles].join(','));
+  assert.ok([...cles].every((h) => Number.isInteger(h)), 'une cle non entiere');
+});
 await cas('B2 aucun repli qui ne sert pas nos fenetres : drpc gratuit (10 blocs max, mesure) n y est pas', async () => {
   assert.match(nu, /const REPLIS_LOGS_SERVEUR = ESSAI_SRV\.actif \|\| REPLIS_PUBLICS_COUPES \? \[\] : \['https:\/\/base-rpc\.publicnode\.com'\];/);
 });

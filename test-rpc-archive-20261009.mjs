@@ -16,6 +16,7 @@
  * ⛔ BORNE : que CDP serve l archive n est PAS prouve ici (cle non posee au moment du banc) — le script le mesure. */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { lireUrl, masqueur, formeCdp, urlDepuisCleNue, formeDeCle } from './outils/poser-rpc-archive.mjs';
 import { avecRepliLogs } from './repli-logs.js';
 import { listerCreations } from './index-blocks.js';
@@ -33,10 +34,55 @@ const j = src.indexOf('let repliServeur = null;', i);
 assert.ok(i > 0 && j > i, 'bloc archive introuvable');
 /* un faux disque : `fichiers` tient ce que le bloc ecrit, pour juger la persistance du compteur */
 const fabrique = (env, essai = false, lire = async () => [], fichiers = new Map()) => new Function('process', 'ESSAI_SRV', 'lecteurUrl',
-  'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync',
-  src.slice(i, j) + '\n; return { RPC_ARCHIVE, ARCHIVE_MAX_JOUR, archiveCompte, lecteurArchive, libelleNoeud, masquerCle, RE_BUDGET_ARCHIVE, refusDeBudget };')(
+  'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'AsyncLocalStorage',
+  src.slice(i, j) + '\n; return { RPC_ARCHIVE, ARCHIVE_MAX_JOUR, archiveCompte, lecteurArchive, libelleNoeud, masquerCle, RE_BUDGET_ARCHIVE, refusDeBudget, consommateurArchive };')(
   { env }, { actif: essai }, () => lire,
-  (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'), (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); });
+  (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'), (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); },
+  AsyncLocalStorage);
+
+await cas('A0 QUI depense (2026-10-10 : 89 % « repli » sans nom) : appels et refus comptes PAR ETIQUETTE de consommateur, executes', async () => {
+  const disque = new Map();
+  const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '5' }, false, async () => [], disque);
+  const h = m.lecteurArchive('histoire'), r = m.lecteurArchive('repli');
+  const C = m.consommateurArchive;
+  await C.run('route /api/prix-usd', () => r('eth_getLogs', [{}]));
+  await C.run('route /api/prix-usd', async () => { await new Promise((o) => setTimeout(o, 5)); return r('eth_getLogs', [{}]); }); /* l etiquette traverse l await */
+  await C.run('fond nos-blocks', () => r('eth_getLogs', [{}]));
+  await h('eth_getLogs', [{}]); /* sans etiquette : dit tel quel */
+  await C.run('fond routeur', () => C.run('fond nos-blocks', () => h('eth_getLogs', [{}]))); /* un run imbrique REMPLACE l etiquette */
+  assert.deepEqual(m.archiveCompte.parQui, { 'route /api/prix-usd': 2, 'fond nos-blocks': 2, 'sans etiquette': 1 });
+  assert.equal(Object.values(m.archiveCompte.parQui).reduce((a, b) => a + b, 0), m.archiveCompte.appels, 'parQui ne couvre pas tous les appels');
+  /* plafond 5 atteint : les refus sont ranges par etiquette */
+  await assert.rejects(C.run('route /api/veille', () => r('eth_getLogs', [{}])), /daily budget/);
+  await assert.rejects(C.run('route /api/veille', () => r('eth_getLogs', [{}])), /daily budget/);
+  assert.deepEqual(m.archiveCompte.refusParQui, { 'route /api/veille': 2 });
+  /* survit au redemarrage le meme jour, repart a zero un autre jour */
+  for (let k = 0; k < 23; k++) await assert.rejects(r('eth_getLogs', [{}]), /daily budget/); /* 25 refus : sauvetage */
+  const m2 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '5' }, false, async () => [], disque);
+  assert.deepEqual(m2.archiveCompte.parQui, { 'route /api/prix-usd': 2, 'fond nos-blocks': 2, 'sans etiquette': 1 });
+  assert.equal(m2.archiveCompte.refusParQui['route /api/veille'], 2);
+  assert.equal(m2.archiveCompte.refusParQui['sans etiquette'], 23);
+  const vieux = new Map([['/data/archive-compte.json', JSON.stringify({ jour: '2000-01-01', appels: 1, parQui: { x: 9 }, refusParQui: { y: 9 } })]]);
+  const m3 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], vieux);
+  assert.deepEqual(m3.archiveCompte.parQui, {}); assert.deepEqual(m3.archiveCompte.refusParQui, {});
+  /* et EN COURS D EXECUTION : le premier appel d un nouveau jour UTC repart de zero (le compteur d hier ne se melange pas) */
+  const m4 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => []);
+  Object.assign(m4.archiveCompte, { jour: '2000-01-01', parQui: { 'route /hier': 7 }, refusParQui: { 'route /hier': 3 } });
+  await m4.consommateurArchive.run('route /aujourd-hui', () => m4.lecteurArchive('repli')('eth_getLogs', [{}]));
+  assert.deepEqual(m4.archiveCompte.parQui, { 'route /aujourd-hui': 1 }); assert.deepEqual(m4.archiveCompte.refusParQui, {});
+});
+await cas('A0b le serveur execute chaque requete sous l etiquette de sa route, et ses boucles de fond sous la leur', async () => {
+  assert.match(nu, /createServer\(\(req, res\) => consommateurArchive\.run\(etiquetteRequete\(req\), \(\) => traiterRequete\(req, res\)\)\)\.listen\(PORT/);
+  assert.match(nu, /await consommateurArchive\.run\('fond nos-blocks', \(\) => etendreNosBlocks\(\)\)/);
+  assert.match(nu, /await consommateurArchive\.run\('fond routeur', \(\) => etendreBlocksRouteur\(\)\)/);
+  /* etiquetteRequete, extraite et executee : une cle par ROUTE, pas par jeton */
+  const k = src.indexOf('function etiquetteRequete(req) {');
+  const finE = /\r?\n\}/.exec(src.slice(k)); /* \r?\n : portable (test-tests-portables) */
+  const f = new Function(src.slice(k, k + finE.index + finE[0].length) + '\n; return etiquetteRequete;')();
+  assert.equal(f({ url: '/api/prix-usd?adr=0xb200000000000000000000c2e324d24d7eecd1fb' }), 'route /api/prix-usd');
+  assert.equal(f({ url: '/api/face/0xb200000000000000000000c2e324d24d7eecd1fb.png' }), 'route /api/face/:adr.png');
+  assert.equal(f({ url: '/api/holders/0xb2000000000000000000002d0ba3164cc74f58b7/12' }), 'route /api/holders/:adr/:n');
+});
 
 await cas('A1 URL validee : https sans identifiants ; absente, http ou mode essai = pas d archive', async () => {
   assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP }).RPC_ARCHIVE, URL_CDP);

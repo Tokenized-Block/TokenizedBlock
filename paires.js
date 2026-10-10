@@ -456,6 +456,17 @@ export function hookDeLancementPour(adresse, chaine, { v9 = false, h7030 = false
   return null;
 }
 
+/** Les devises contre lesquelles un block NEUF peut naitre sur `chaine` : ce que l ecran propose, filtre par la regle des hooks
+ *  (hookDeLancementPour) — la MEME regle que la garde de Create (estPaireLancable, app.html) et que le MCP (pairesDeNaissance).
+ *  ⛔⛔ 2026-10-09 : douze actions sont entrees au registre (achat/vente) HORS de la liste figee du hook 7030 ; la passe des paires
+ *   mortes lisait `pairesProposees` tel quel et serait passee de 62 a 74 lectures pour un ecran qui n en montre que 62.
+ *  `options` = OPTIONS_LANCEMENT de tokenomics.js, passe par l appelant. Hors Base, l ecran ne filtre pas : on rend tout. */
+export function pairesLancables(chaine, options) {
+  const liste = pairesProposees(chaine);
+  if (Number(chaine) !== 8453) return liste;
+  return liste.filter((p) => String((p && p.adr) || '').toLowerCase() === ETH_NATIF || !!hookDeLancementPour(p.adr, chaine, options));
+}
+
 /** E0 copy. ⛔ No hook / version names, no dates, no "coming soon": statements of fact only. */
 export const copieE0Achat = (symbole) => symbole + " can't price a new block yet. You can already use it to buy.";
 /* ⛔ A STATEMENT OF FACT, NOT A PROMISE: used whenever the app cannot route a buy from that currency

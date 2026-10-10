@@ -28,6 +28,7 @@
 //      reponse HTTP ne la contient — meme en cas d erreur. Sans elle, la route REFUSE en nommant ce
 //      qui manque ; elle ne fabrique jamais d URL de secours.
 import { createServer } from 'node:http';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,7 +112,7 @@ import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
-import { TBLOCK as TBLOCK_JETON } from './tokenomics.js';
+import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
@@ -136,7 +137,7 @@ async function obtenirRasteriseur() {
 }
 import { resumerTrending } from './trending.js';
 import { avecRepliLogs, lecteurUrl } from './repli-logs.js';
-import { pairesProposees, ACTIONS_COINBASE } from './paires.js';
+import { pairesProposees, pairesLancables, ACTIONS_COINBASE } from './paires.js';
 import { planRail } from './rails-api.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -738,7 +739,14 @@ const RPC_ARCHIVE = (() => {
 })();
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
-const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {} };
+const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {} };
+/* ⛔⛔ 2026-10-10 (prod, 00:00-00:31 UTC) — 2 321 appels d archive, dont 2 065 « repli eth_getLogs » (89 %) : l ORIGINE ne dit pas
+ *   QUI. Chaque requete HTTP s execute sous l etiquette de sa route, chaque boucle de fond sous la sienne (AsyncLocalStorage suit les
+ *   await, les minuteries et les promesses lancees depuis l appel) ; `parQui` (appels, relances comprises) et `refusParQui` (refus
+ *   de budget) les comptent par etiquette. Un appel sans etiquette est compte « sans etiquette » — dit, jamais range ailleurs.
+ *   ⚠️ BORNE : une minuterie programmee pendant une requete herite de l etiquette de CETTE route (c est elle qui l a lancee). */
+const consommateurArchive = new AsyncLocalStorage();
+const etiquetteArchive = () => String(consommateurArchive.getStore() || 'sans etiquette').slice(0, 60);
 /* ⛔ 2026-10-09 (prod, 20 h UTC) : budget du jour EPUISE (10 000 / 10 000) et 549 erreurs — mais rien ne disait QUI avait depense
  *   (l histoire profonde ? le dernier repli de rpcServeur, quand base.org et publicnode refusent un eth_getLogs ?) ni de
  *   QUEL type etaient les erreurs : `derniereErreur` et `relances` vivaient en memoire et chaque redeploiement les jetait.
@@ -765,6 +773,7 @@ try {
       if (typeof x.derniereErreur === 'string') archiveCompte.derniereErreur = x.derniereErreur.slice(0, 80);
       archiveCompte.par = compteurEntier(x.par); archiveCompte.erreursPar = compteurEntier(x.erreursPar);
       archiveCompte.refusPar = compteurEntier(x.refusPar);
+      archiveCompte.parQui = compteurEntier(x.parQui); archiveCompte.refusParQui = compteurEntier(x.refusParQui);
       archiveCompte.jour = x.jour;
     }
   }
@@ -777,18 +786,21 @@ function lecteurArchive(origine = 'repli') {
   const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
   return async (methode, params) => {
     const j = new Date().toISOString().slice(0, 10);
-    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {} });
+    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {} });
     const cle = origine + ' ' + String(methode).slice(0, 40);
+    const qui = etiquetteArchive();
     /* les refus au-dela du plafond sont la DEMANDE NON SERVIE — la seule mesure de « le plafond suffit-il ». Une fois le plafond
      *   atteint, `appels` ne bouge plus : sans ce sauvetage, ces refus etaient perdus au redeploiement (prod : 53 -> 51).
      *   `refusPar` les range par « origine methode », comme `par` les appels : `cle` est donc construite AVANT le refus. */
     if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) {
       archiveCompte.refusBudget++; archiveCompte.refusPar[cle] = (archiveCompte.refusPar[cle] || 0) + 1;
+      archiveCompte.refusParQui[qui] = (archiveCompte.refusParQui[qui] || 0) + 1;
       if (archiveCompte.refusBudget % 25 === 0) sauverArchiveCompte();
       throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)');
     }
     archiveCompte.appels++;
     archiveCompte.par[cle] = (archiveCompte.par[cle] || 0) + 1;
+    archiveCompte.parQui[qui] = (archiveCompte.parQui[qui] || 0) + 1;
     if (archiveCompte.appels % 25 === 0) sauverArchiveCompte();
     /* ⛔ 2026-10-09 (prod : 19 erreurs sur 1 733 appels = exactement les 14 + 5 pages refusees du rattrapage, nombre qui varie d une
      *   passe a l autre -> transitoire) : un refus de DEBIT, un delai ou un 5xx est relance deux fois (pause 1 s puis 2 s), chaque
@@ -806,6 +818,7 @@ function lecteurArchive(origine = 'repli') {
         await new Promise((ok) => setTimeout(ok, 1000 * (essai + 1)));
         archiveCompte.appels++;
         archiveCompte.par[cle] = (archiveCompte.par[cle] || 0) + 1;
+        archiveCompte.parQui[qui] = (archiveCompte.parQui[qui] || 0) + 1;
       }
     }
   };
@@ -1332,7 +1345,7 @@ function rattraperBlocksRouteur() {
   routeurEnCours = (async () => {
     try {
       for (let k = 0; k < 40; k += 1) {
-        await etendreBlocksRouteur();
+        await consommateurArchive.run('fond routeur', () => etendreBlocksRouteur());
         if (routeurEtat.ratees || routeurEtat.tete === null || routeurEtat.tete - routeurEtat.jusqua <= 0) break;
         await new Promise((ok) => setTimeout(ok, 1500));
       }
@@ -1483,7 +1496,7 @@ function rattraperNosBlocks() {
   if (rattrapageArme) return;
   rattrapageArme = true;
   const pas = async () => {
-    try { await etendreNosBlocks(); } catch (e) { /* on reessaiera au prochain tour */ }
+    try { await consommateurArchive.run('fond nos-blocks', () => etendreNosBlocks()); } catch (e) { /* on reessaiera au prochain tour */ }
     if (nosBlocksComplet()) {
       rattrapageArme = false;
       console.log('[nos-blocks] couverture complete jusqu au bloc ' + PREMIER_BLOCK_TB
@@ -1767,7 +1780,8 @@ async function lireReferenceServeur(token) {
  *   sur la chaine. ⛔ PAS MESURE : cette route en production (noeuds publics, depuis l IP de Railway) — ni sa duree, ni son taux
  *   de « not_read » sous 429. La premiere reponse apres un redemarrage attend la passe 8 s au plus ; au-dela elle part en
  *   `enCours: true` et l ecran relit 20 s plus tard. */
-const etatPaires = creerEtatPaires({ rpc: rpcRails, paires: () => pairesProposees(8453) });
+/* ⛔ 2026-10-09 : les paires que Create PROPOSE (regle du hook), pas tout le registre — douze actions y sont hors du hook 7030 */
+const etatPaires = creerEtatPaires({ rpc: rpcRails, paires: () => pairesLancables(8453, OPTIONS_LANCEMENT) });
 
 /* ── QUI BOUGE CE BLOCK, EN DIRECT : GET /api/activite/0x… (2026-10-04) ──────────────────────────────────────────────────────
  * Phil, devant l onglet Market du panneau (il listait les echanges d AUTRES blocks) : « l onglet Market est propre au block actuel —
@@ -2076,7 +2090,7 @@ async function sonderLeReste() {
  *   les recevait aussi : elles n ont rien a y faire, il les coupe. En production la variable n existe pas : sondes actives.
  *   ⛔ CE QUE JE N AI PAS PROUVE : que ce banc etait rouge A CAUSE d elles. Il est reste rouge une fois les sondes coupees, sur un KO
  *   different a chaque passage (C1, P1, mutant n24) — cause NON trouvee ; dit dans le compte rendu, pas masque. */
-if (process.env.TB_SONDES !== '0') setTimeout(() => { sonderNaissance().then(sonderLeReste); setInterval(() => { sonderNaissance().then(sonderLeReste); }, 10 * 60 * 1000).unref(); }, 45000).unref();
+if (process.env.TB_SONDES !== '0') setTimeout(() => { consommateurArchive.run('fond sondes', () => sonderNaissance().then(sonderLeReste)); setInterval(() => { consommateurArchive.run('fond sondes', () => sonderNaissance().then(sonderLeReste)); }, 10 * 60 * 1000).unref(); }, 45000).unref();
 /* ── LE WIDGET MCP (mcp-widget-panneau.html) : le paquet officiel ext-apps 2.0.3 est EMBARQUE et inline (un bac a sable de chat
  *   bloque tout script distant). Son `export{…}` final devient `globalThis.ExtApps={…}` — la reecriture du guide officiel.
  *   ⛔ Empreinte VERIFIEE au demarrage : un paquet altere ou absent = pas de widget (les outils marchent sans lui). */
@@ -2365,8 +2379,13 @@ function garderNonResolu(c) {
   if (createursNonResolus.length > CREATEURS_NON_RESOLUS_MAX) {
     const jetes = createursNonResolus.splice(0, createursNonResolus.length - CREATEURS_NON_RESOLUS_MAX);
     createursNonResolusJetes += jetes.length;
+    /* ⛔ 2026-10-09 (revue adversariale) : un jete ne se reessaie plus — et un compteur qui ne redescend JAMAIS gardait
+     *   `couvertureComplete` a faux pour toujours (sortie constante). Le seul chemin qui le retrouve est une relecture depuis la
+     *   tete : elle repasse sur sa creation, dont le createur manque a l index. On la programme ; `couvertureComplete` reste faux
+     *   jusqu a ce qu elle touche le plancher, puis redevient vrai. Le compteur reste publie (cumul). */
+    rattrapageDepuis = null;
     console.log('[createurs] ⛔ ' + jetes.length + ' unresolved creator(s) dropped at the cap of ' + CREATEURS_NON_RESOLUS_MAX
-      + ' (' + createursNonResolusJetes + ' in all) — couvertureComplete stays false');
+      + ' (' + createursNonResolusJetes + ' in all) — full re-read from the head scheduled to find them again');
   }
 }
 /** Reessaie AU PLUS 32 createurs non resolus par passe (lots de 8, comme les autres resolutions). Un resolu sort de la liste ; un echec
@@ -2832,7 +2851,7 @@ async function lireTrending() {
   return corps;
 }
 /* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
-setTimeout(() => { void lireTrending(); }, 1500); /* always rescans on boot; HTTP stays fail-open via trending() */
+setTimeout(() => { void consommateurArchive.run('fond trending (demarrage)', () => lireTrending()); }, 1500); /* always rescans on boot; HTTP stays fail-open via trending() */
 
 const ici = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 8080;
@@ -3507,7 +3526,13 @@ const entete = (e, gz = false) => ({
   'referrer-policy': 'no-referrer',
 });
 
-createServer((req, res) => {
+/** L etiquette d une requete pour le compteur d archive : la route, adresses et nombres generalises (une cle par ROUTE, pas par
+ *  jeton : sinon chaque adresse ferait une ligne et le compteur n en dirait rien). */
+function etiquetteRequete(req) {
+  const p = String((req && req.url) || '/').split('?')[0].replace(/0x[0-9a-fA-F]{6,}/g, ':adr').replace(/\/\d+(?=\/|$)/g, '/:n');
+  return ('route ' + p).slice(0, 60);
+}
+function traiterRequete(req, res) {
   /* ⛔ Old Railway host name must never serve content — always send people to MAIN. */
   const host = String(req.headers.host || '').split(':')[0].toLowerCase();
   if (host === 'tokenized-block-production.up.railway.app') {
@@ -3609,7 +3634,7 @@ createServer((req, res) => {
        *     deux : sans ces conditions, « complet » mentait sur eux. */
       couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB
         && trousRattrapage.length === 0
-        && trousCreations.length === 0 && createursNonResolus.length === 0 && createursNonResolusJetes === 0,
+        && trousCreations.length === 0 && createursNonResolus.length === 0,
       rattrapageDepuis,
       trousCreations: trousCreations.length,
       createursNonResolus: createursNonResolus.length,
@@ -4657,7 +4682,9 @@ createServer((req, res) => {
    * ⚠️ QUATRE ETATS : ARRIVE, PAS_ARRIVE, NON_CONCLUANT (le beneficiaire a paye lui-meme, l argent
    *    fait un aller-retour et le gas rend le delta negatif), NON_LU. */
   if (chemin === '/api/frais-recents') {
-    const heures = Math.min(168, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('h')) || 24));
+    /* ⛔ 2026-10-09 (revue adversariale, meme defaut que /api/lancements-etrangers) : `h` borne mais PAS arrondi — h=24.001,
+     *   24.002… ouvraient chacun une entree de calculsFond jamais evincee et un balayage de 168 h au plus. Arrondi : 168 cles au plus. */
+    const heures = Math.min(168, Math.max(1, Math.round(Number(new URL(req.url, 'http://x').searchParams.get('h'))) || 24));
     const c = enFond('frais-recents:' + heures, () => fraisRecents(heures), 300000);
     void repondreFond(res, c, () => ({ heures }));
     return;
@@ -4733,10 +4760,12 @@ createServer((req, res) => {
   }
   res.writeHead(200, entete(e));
   res.end(req.method === 'HEAD' ? undefined : e.corps);
-}).listen(PORT, '0.0.0.0', () => {
+}
+/* chaque requete s execute sous l etiquette de sa route : le compteur d archive dit QUI depense (parQui / refusParQui) */
+createServer((req, res) => consommateurArchive.run(etiquetteRequete(req), () => traiterRequete(req, res))).listen(PORT, '0.0.0.0', () => {
   console.log('tokenized-block sert ' + cache.size + ' fichier(s) sur le port ' + PORT);
   console.log('racine -> ' + RACINE + '  ·  HTML et JS en no-cache, images 24 h');
-  prechaufferFaitsDePool();
+  consommateurArchive.run('fond prechauffage prix', () => prechaufferFaitsDePool());
 });
 
 /* ── ⛔⛔ POURQUOI UN PRECHAUFFAGE, ET PAS UNE LECTURE A L OUVERTURE DE LA PAGE ──────────────────
