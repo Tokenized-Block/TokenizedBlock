@@ -22366,8 +22366,9 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
 /** Un envoi. ⛔ Le destinataire s affiche EN ENTIER ; le solde est relu ; un envoi propose par un agent demande un clic de plus. */
 async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, ref, deLAgent) {
   let dec = null;
-  note.className = 'note'; note.textContent = 'Reading ' + jeton.sym + '…';
-    try { dec = await bcAvecDelai(bcDecimales(jeton.adr), 8000); } catch (_) {}
+  /* ⛔ 2026-10-10 : PAS de `note` ici — aucune n existe dans cette portee (4558a13 en avait copie une : ReferenceError, Send casse en prod
+   *   sur ses DEUX entrees, commande tapee et envoi propose par un agent). La commande tapee dit deja « Reading … » dans SA note. */
+  try { dec = await bcAvecDelai(bcDecimales(jeton.adr), 8000); } catch (_) {}
   const libelle = (dec === null ? montant + ' raw units of ' : bcUnites(montant, dec) + ' ') + jeton.sym + ' to ' + destinataire;
   const m = bcMessage(qui + ' · send', classe, libelle);
   const op = bcOp('Send ' + libelle, qui, m);
