@@ -188,7 +188,7 @@ const PARAMS = ['fetch', 'process', 'ESSAI_SRV', 'existsSync', 'join', 'readFile
 const FICHIER_COMPTE_TMP = '/data/archive-compte.json.tmp';
 
 /** Un « processus » neuf : le code livre, son faux reseau, son faux disque, son horloge et ses minuteurs. */
-function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-10T12:00:00Z', faitsPool = [BASE_ORG, BASE_DEV, DRPC, UNRPC], immediat = false } = {}) {
+function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-10T12:00:00Z', faitsPool = [BASE_ORG, DRPC] /* 2026-10-10 : les listes par defaut de prod, sans les deux noeuds morts (developer-access 0/3 832, 1rpc 0/558) */, immediat = false } = {}) {
   const horloge = { t: Date.parse(quand) };
   const minuteur = { attente: [], pauses: 0 };
   const intervalles = [];
@@ -207,7 +207,7 @@ function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-
   const M = f(c.fetch, { env }, { actif: false }, (p) => p === '/data' || disque.has(p), (...x) => x.join('/'),
     (p) => { if (!disque.has(p)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return disque.get(p); },
     (p, v) => { if (p === FICHIER_COMPTE_TMP) ecritures.compte += 1; disque.set(p, String(v)); }, (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, AsyncLocalStorage,
-    avecFetch, avecFetch, RL.classeEnvoi, RL.avecRepliLogs, [BASE_ORG, BASE_DEV], faitsPool, st, (fn) => { intervalles.push(fn); return { unref() {} }; },
+    avecFetch, avecFetch, RL.classeEnvoi, RL.avecRepliLogs, [BASE_ORG] /* RPC_LIST de prod depuis le 2026-10-10 */, faitsPool, st, (fn) => { intervalles.push(fn); return { unref() {} }; },
     FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(),
     IR.scannerNesDuRouteur, IR.GRAINE_ROUTEUR, IR.GRAINE_JUSQUA, IR.PLANCHER_ROUTEUR, IR.RETARD_MAX_INDEX, IR.neDuRouteur, IR.ROUTEURS_ANCIENS,
     FEE_WALLET, CREATE_ROUTER, O.graineNosBlocksAdmise, O.verifierGraineNos, O.NOS_BLOCKS_GENESE, O.GRAINE_NOS_BLOCKS, prochaineFenetre, frappesVers,
@@ -338,7 +338,7 @@ async function suite(source) {
     assert.equal(l.suivi.nonEnvoyees, 2);
     const c2 = chaine({ tete: T }); const m2 = monter(corps, { c: c2 });
     assert.deepEqual(await m2.lecteurLogs(T).rpc('eth_getLogs', q(T - 9000)), []);
-    assert.deepEqual(deFenetre(c2, T - 9000, T - 8500).map((x) => x.hote), [...H_BASE, H_BASE[0], H_PUBLICNODE, H_ARCHIVE], 'budget libre, -9 000 : ' + JSON.stringify(deFenetre(c2, T - 9000, T - 8500).map((x) => x.hote)));
+    assert.deepEqual(deFenetre(c2, T - 9000, T - 8500).map((x) => x.hote), [H_BASE[0], H_BASE[0], H_BASE[0], H_PUBLICNODE, H_ARCHIVE] /* 2026-10-10 : RPC_LIST = base.org seul -> ses 3 essais, puis les replis */, 'budget libre, -9 000 : ' + JSON.stringify(deFenetre(c2, T - 9000, T - 8500).map((x) => x.hote)));
   });
   await cas('Z2 routeur, budget epuise : fenetre a fromBlock -9 000 PILE (tete = graine + 9 001) — 0 requete ; a -8 999 (tete = graine + 9 000) — lue, la plage avance', async () => {
     const c = chaine({ tete: GJR + 9001 }); const m = monter(corps, { c, max: 5 }); m.epuiser();
@@ -489,7 +489,8 @@ async function suite(source) {
   const attendu = (c) => { const a = {}; for (const x of c.envois) { const l = libelle(x); a[l] = a[l] || {}; a[l][x.classe] = (a[l][x.classe] || 0) + 1; } return a; };
   const sansZero = (p) => Object.fromEntries(Object.entries(p || {}).map(([h, v]) => [h, Object.fromEntries(Object.entries(v).filter(([, n]) => n > 0))]));
   await cas('F1 compte = parti : rpcServeur (rotation), lecteurUrl (publicnode, archive), callLarge, rpcRails, rpcActivite, rpcNaissance (R6), coupure reseau — par hote et par issue', async () => {
-    const c = chaine({ tete: T, coupures: 1 }); const m = monter(corps, { c });
+    /* 2026-10-10 : faitsPool garde 1rpc ICI seulement - le seul faux noeud qui sert un eth_call de lecture, pour que la classe ok soit exercee par rpcRails */
+    const c = chaine({ tete: T, coupures: 1 }); const m = monter(corps, { c, faitsPool: [BASE_ORG, DRPC, UNRPC] });
     await m.cleV4DuPoolId(ID_V4);
     await m.callLarge('0x' + '11'.repeat(20), '0x12345678');
     await m.rpcRails('eth_call', [{ to: '0x' + '22'.repeat(20), data: '0x12345678' }, 'latest']);
@@ -498,7 +499,8 @@ async function suite(source) {
     const nActivite = c.envois.length - nAvant;
     const r = await m.rpcNaissance('eth_simulateV1', [{ blockStateCalls: [] }, 'latest']);
     const nNaissance = c.envois.length - nAvant - nActivite;
-    assert.ok(nActivite === 3 && nNaissance === 2 && Array.isArray(r), 'temoin : rpcActivite ' + nActivite + ' envois (3 attendus), rpcNaissance ' + nNaissance + ' (2 attendus)');
+    /* 2026-10-10 : RPC_ACTIVITE = RPC_LIST (base.org seul, developer-access retire) + publicnode + drpc -> 2 noeuds essayes avant la reponse ici, plus 3 */
+    assert.ok(nActivite === 2 && nNaissance === 2 && Array.isArray(r), 'temoin : rpcActivite ' + nActivite + ' envois (2 attendus), rpcNaissance ' + nNaissance + ' (2 attendus)');
     assert.ok(m.envoisNoeuds, 'aucun compteur d envois');
     assert.deepEqual(sansZero(m.envoisNoeuds.parHote), attendu(c));
     const vus = Object.values(attendu(c)).flatMap((v) => Object.keys(v));
@@ -506,7 +508,7 @@ async function suite(source) {
     assert.ok(Number.isFinite(Date.parse(m.envoisNoeuds.depuis)), 'depuis manque');
   });
   await cas('F2 jamais un chemin d URL : la cle de l archive et le chemin /base n apparaissent pas, les libelles sont des hotes', async () => {
-    const c = chaine({ tete: T }); const m = monter(corps, { c });
+    const c = chaine({ tete: T }); const m = monter(corps, { c, faitsPool: [BASE_ORG, DRPC, UNRPC] }); /* un noeud A CHEMIN (BASE_RPC_LECTURE d un operateur) : son chemin ne doit jamais sortir */
     await m.cleV4DuPoolId(ID_V4); await m.callLarge('0x' + '11'.repeat(20), '0x12345678');
     assert.ok(m.envoisNoeuds, 'aucun compteur d envois');
     const j = JSON.stringify(m.envoisNoeuds);

@@ -197,12 +197,14 @@ const ESSAI_SRV = essaiServeur(process.env);
 if (ESSAI_SRV.demande && !ESSAI_SRV.actif) console.error('[essai] TB_RPC_TEST IGNORE : ' + ESSAI_SRV.pourquoi);
 if (ESSAI_SRV.actif) console.warn('[essai] MODE ESSAI : tous les noeuds de ce serveur = ' + ESSAI_SRV.rpc + ' — ce processus ne lit PAS Base mainnet');
 const RPC_LIST = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (process.env.BASE_RPC
-  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org')
+  /* 2026-10-10 (mesure prod, Claude) : developer-access-mainnet.base.org 0 ok / 3 832 envois -> retire des listes par defaut */
+  || 'https://mainnet.base.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
 /* ⛔ LA LISTE LARGE, RESERVEE AUX LECTURES QUI NE FONT QUE `eth_call` : quatre fois le quota pour
  *   les faits de pool, sans toucher aux chemins qui ont besoin de `eth_getLogs`. */
 const RPC_FAITS_POOL = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (process.env.BASE_RPC_LECTURE
-  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org,https://base.drpc.org,https://1rpc.io/base')
+  /* 2026-10-10 (mesure prod, Claude) : developer-access-mainnet.base.org 0 ok / 3 832 et 1rpc.io 0 ok / 558 -> retires */
+  || 'https://mainnet.base.org,https://base.drpc.org')
   .split(',').map((s) => s.trim()).filter(Boolean);
 let tourFaits = 0, idFaits = 0;
 /* ══ 2026-10-10 — CE QUI PART VRAIMENT SUR LE RESEAU, PAR HOTE (/sante.envois) ═══════════════════════════════════════════════

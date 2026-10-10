@@ -89,8 +89,9 @@ function jeuRegles(M, j) {
 /* ── C : les quatre listes du serveur, evaluees depuis SON texte ───────────────────────────────────────────────────── */
 /* la reference : les quatre declarations du commit 9ab857e (la production), recopiees telles quelles */
 const REFERENCE_9AB857E = [
-  "const RPC_LIST = (process.env.BASE_RPC\n  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org')\n  .split(',').map((s) => s.trim()).filter(Boolean);",
-  "const RPC_FAITS_POOL = (process.env.BASE_RPC_LECTURE\n  || 'https://mainnet.base.org,https://developer-access-mainnet.base.org,https://base.drpc.org,https://1rpc.io/base')\n  .split(',').map((s) => s.trim()).filter(Boolean);",
+  /* 2026-10-10 : 9ab857e MOINS les deux noeuds morts mesures en prod (developer-access-mainnet.base.org 0/3 832, 1rpc.io 0/558) */
+  "const RPC_LIST = (process.env.BASE_RPC\n  || 'https://mainnet.base.org')\n  .split(',').map((s) => s.trim()).filter(Boolean);",
+  "const RPC_FAITS_POOL = (process.env.BASE_RPC_LECTURE\n  || 'https://mainnet.base.org,https://base.drpc.org')\n  .split(',').map((s) => s.trim()).filter(Boolean);",
   "const RPC_ACTIVITE = [...new Set([...RPC_LIST, 'https://base-rpc.publicnode.com', 'https://base.drpc.org'])];",
   "const RPC_SIMULATION = ['https://mainnet.base.org', 'https://base-rpc.publicnode.com', 'https://base.drpc.org'];",
 ];
@@ -318,7 +319,9 @@ console.log('vrai code : ' + (n - avantReel) + ' assertions, ' + ko + ' KO');
 /* la reference recopiee est-elle bien le texte de 9ab857e ? (trois etats : oui / non / git non lu) */
 try {
   const vieux = execFileSync('git', ['show', '9ab857e:serveur-web.js'], { cwd: ICI, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).replace(/\r\n/g, '\n');
-  ok(REFERENCE_9AB857E.every((d) => vieux.includes(d)), 'temoin : les quatre declarations de reference sont, au caractere pres, celles du commit 9ab857e');
+  /* 2026-10-10 : la reference = 9ab857e MOINS les deux noeuds morts ; le temoin retire ces deux noeuds du texte de 9ab857e, et rien d autre */
+  const vieuxMoins = vieux.split(",https://developer-access-mainnet.base.org'").join("'").split(",https://developer-access-mainnet.base.org,").join(",").split(",https://1rpc.io/base'").join("'");
+  ok(REFERENCE_9AB857E.every((d) => vieuxMoins.includes(d)) && vieux.includes('developer-access-mainnet.base.org') && vieux.includes('1rpc.io/base'), 'temoin : les quatre declarations de reference sont, au caractere pres, celles du commit 9ab857e moins developer-access-mainnet.base.org et 1rpc.io');
 } catch (_) { console.log('NON LU : git ne rend pas 9ab857e ici — la reference recopiee n a pas ete comparee au commit (elle l a ete le 2026-10-04)'); }
 
 /* ═════════════════════════════════════════ LES MUTANTS ══════════════════════════════════════════ */
@@ -392,7 +395,7 @@ for (const mu of [
   { nom: 'serveur : RPC_FAITS_POOL reste public en essai', de: 'const RPC_FAITS_POOL = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : (', a: 'const RPC_FAITS_POOL = (' },
   { nom: 'serveur : RPC_ACTIVITE garde publicnode et drpc en essai', de: 'const RPC_ACTIVITE = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : [', a: 'const RPC_ACTIVITE = [' },
   { nom: 'serveur : RPC_SIMULATION reste publique en essai', de: 'const RPC_SIMULATION = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : [', a: 'const RPC_SIMULATION = [' },
-  { nom: 'serveur : un noeud par defaut change', de: "|| 'https://mainnet.base.org,https://developer-access-mainnet.base.org')", a: "|| 'https://mainnet.base.org')" },
+  { nom: 'serveur : un noeud par defaut change', de: "|| 'https://mainnet.base.org')", a: "|| 'https://base.drpc.org')" },
 ]) {
   const m = muter(SRC_SERVEUR, mu);
   if (!m) { ok(false, 'mutant « ' + mu.nom + ' » : motif introuvable ou multiple dans serveur-web.js'); continue; }
