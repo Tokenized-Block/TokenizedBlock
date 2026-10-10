@@ -13,6 +13,9 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
+/* 2026-10-11 : cleV4DuPoolId consulte clesPool (cache de /api/cle) par cleV4Connue avant de balayer ; ici clesPool est VIDE : rien
+ *   n est trouve, chaque cas de ce banc lit ses fenetres comme avant (test-cle-v4-connue juge la recherche elle-meme). */
+import { cleV4Connue } from './cle-v4-connue.js';
 
 const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const i = src.indexOf('const CLES_V4_ABSENTES_MAX = 5000;');
@@ -50,11 +53,11 @@ function monter({ tete = T0, disque = null, refuse = () => false, pool = null, l
     rpc: async (m, p) => { const r = await rpc(m, p); if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); return r; },
     nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
   const M = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'process', 'existsSync', 'join',
-    'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console', 'lecteurLogs',
+    'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console', 'lecteurLogs', 'cleV4Connue', 'clesPool',
     blocCle + '\n' + (disque ? blocP : '') + '\n; return { cleV4DuPoolId, clesV4Absentes, CLES_V4_ABSENTES_MAX };')(
     new Map(), rpc, PM, TOPIC, decoderInitialize, { env: {} }, (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'),
     (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); },
-    (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} }, lecteurLogs);
+    (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} }, lecteurLogs, cleV4Connue, new Map());
   return { ...M, e };
 }
 

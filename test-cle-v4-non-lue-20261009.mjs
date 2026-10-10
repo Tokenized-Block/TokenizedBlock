@@ -20,6 +20,8 @@ import { readFileSync } from 'node:fs';
 import { decoderInitialize } from './pools-du-jeton.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
+/* 2026-10-11 : cleV4DuPoolId consulte clesPool par cleV4Connue avant de balayer ; clesPool VIDE ici : les cas restent ceux d avant */
+import { cleV4Connue } from './cle-v4-connue.js';
 
 const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const nu = src.replace(/\/\*[\s\S]*?\*\//g, ' ');
@@ -63,8 +65,8 @@ function monterCle({ prefill = [], tete = () => '0x' + TETE.toString(16), fenetr
   /* 2026-10-10 : la fonction retient aussi les absences LUES (clesV4Absentes, bornee) et declenche leur persistance (doublure) */
   /* 2026-10-10 (refus certain) : elle lit ses fenetres par lecteurLogs(tete) — doublure = le helper SANS archive (budget jamais
    *   epuise) : toute fenetre va au faux noeud du banc, comme avant. Le routage reel est juge par test-refus-certain-20261010.mjs. */
-  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4', 'lecteurLogs',
-    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize, clesV4Absentes, 5000, apresAbsencesV4, lecteurLogsSansArchive(rpcServeur));
+  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4', 'lecteurLogs', 'cleV4Connue', 'clesPool',
+    corpsCle + '\n; return cleV4DuPoolId;')(clesV4Lues, rpcServeur, PM_V4, TOPIC_INITIALIZE, decoderInitialize, clesV4Absentes, 5000, apresAbsencesV4, lecteurLogsSansArchive(rpcServeur), cleV4Connue, new Map());
   return { f, clesV4Lues, journal, clesV4Absentes };
 }
 const estNonLue = (r) => Boolean(r && typeof r === 'object' && r.etat === 'NON_LUE');

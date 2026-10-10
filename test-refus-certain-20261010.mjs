@@ -58,6 +58,9 @@ const { prochaineFenetre } = await imp('fenetre-scan.js');
 const { frappesVers } = await imp('mes-blocks.js');
 const { decoderInitialize } = await imp('pools-du-jeton.js');
 const { LOGS_INITIALIZE_MESURES } = await imp('cles-v4-mesurees.js');
+/* 2026-10-11 : cleV4DuPoolId consulte clesPool par cleV4Connue avant de balayer ; un arbre ANCIEN (argv[2]) n a pas ce module et ne
+ *   l appelle pas : la doublure neutre (null) y est equivalente. Ici clesPool est vide : rien n est trouve, le routage juge reste le meme. */
+const { cleV4Connue } = await imp('cle-v4-connue.js').catch(() => ({ cleV4Connue: () => null }));
 const SRC = readFileSync(CIBLE, 'utf8');
 
 /* le temoin HEAD : la base de ce correctif, lue dans git (jamais recopiee) */
@@ -181,7 +184,7 @@ const RETOUR = '\n; return { archiveCompte, consommateurArchive, archiveEpuisee,
   + ' routeurEnCours: () => routeurEnCours, reconstruireHolders };';
 const PARAMS = ['fetch', 'process', 'ESSAI_SRV', 'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'AsyncLocalStorage',
   'lecteurUrl', 'lecteurUrlNu', 'classeEnvoi', 'avecRepliLogs', 'RPC_LIST', 'RPC_FAITS_POOL', 'setTimeout', 'setInterval', 'Date', 'console',
-  'LOGS_INITIALIZE_MESURES', 'decoderInitialize', 'PM_V4', 'TOPIC_INITIALIZE', 'clesPool',
+  'LOGS_INITIALIZE_MESURES', 'decoderInitialize', 'PM_V4', 'TOPIC_INITIALIZE', 'clesPool', 'cleV4Connue',
   'scannerNesDuRouteur', 'GRAINE_ROUTEUR', 'GRAINE_JUSQUA', 'PLANCHER_ROUTEUR', 'RETARD_MAX_INDEX', 'neDuRouteur', 'ROUTEURS_ANCIENS',
   'FEE_WALLET', 'CREATE_ROUTER', 'graineNosBlocksAdmise', 'verifierGraineNos', 'NOS_BLOCKS_GENESE', 'GRAINE_NOS_BLOCKS', 'prochaineFenetre', 'frappesVers',
   'holdersCache', 'HOLDERS_MAX', 'lireNaissance', 'naissanceDuJeton', 'passeIncrementale', 'ecrireHolders', 'pauseNosBlocks', 'routeurEnchaine'];
@@ -208,7 +211,7 @@ function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-
     (p) => { if (!disque.has(p)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return disque.get(p); },
     (p, v) => { if (p === FICHIER_COMPTE_TMP) ecritures.compte += 1; disque.set(p, String(v)); }, (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, AsyncLocalStorage,
     avecFetch, avecFetch, RL.classeEnvoi, RL.avecRepliLogs, [BASE_ORG] /* RPC_LIST de prod depuis le 2026-10-10 */, faitsPool, st, (fn) => { intervalles.push(fn); return { unref() {} }; },
-    FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(),
+    FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(), cleV4Connue,
     IR.scannerNesDuRouteur, IR.GRAINE_ROUTEUR, IR.GRAINE_JUSQUA, IR.PLANCHER_ROUTEUR, IR.RETARD_MAX_INDEX, IR.neDuRouteur, IR.ROUTEURS_ANCIENS,
     FEE_WALLET, CREATE_ROUTER, O.graineNosBlocksAdmise, O.verifierGraineNos, O.NOS_BLOCKS_GENESE, O.GRAINE_NOS_BLOCKS, prochaineFenetre, frappesVers,
     new Map(), 200, SJ.lireNaissance, SJ.naissanceDuJeton, SJ.passeIncrementale, () => {}, RF.pauseNosBlocks, RF.routeurEnchaine);

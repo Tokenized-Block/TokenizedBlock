@@ -101,6 +101,7 @@ import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
  *     ecrit en dur ici    0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
  *   IDENTIQUES. On garde celui du fichier pour ne pas creer deux sources du meme fait. */
 import { decoderInitialize } from './pools-du-jeton.js';
+import { cleV4Connue } from './cle-v4-connue.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
 import { scannerNesDuRouteur, GRAINE_ROUTEUR, GRAINE_JUSQUA, PLANCHER_ROUTEUR, RETARD_MAX_INDEX, chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues, neDuRouteur, ROUTEURS_ANCIENS } from './index-routeur.js';
@@ -449,6 +450,11 @@ let apresAbsencesV4 = () => {}; /* branche sur la persistance plus bas (le banc 
 async function cleV4DuPoolId(id) {
   const k = String(id).toLowerCase();
   if (clesV4Lues.has(k)) return clesV4Lues.get(k);
+  /* ⛔ 2026-10-11 (diagnostic Grok : /api/prix-usd = 880 appels d archive le 10/10, tous ici) : une cle deja RESOLUE par /api/cle
+   *   (clesPool, par jeton) n etait pas consultee - on rebalayait 59 fenetres pour la retrouver. Prise SEULEMENT si son poolId se
+   *   recalcule (cle-v4-connue.js) ; gain NON mesure (budget du jour epuise), a mesurer apres 00:00 UTC. */
+  const connue = cleV4Connue(k, [...clesPool.values()].flatMap((r) => (r && Array.isArray(r.cles) ? r.cles : [])));
+  if (connue) { clesV4Lues.set(k, connue); if (clesV4Absentes.delete(k)) apresAbsencesV4(); return connue; }
   const nonLue = (ratees, fenetres, pourquoi) => ({ etat: 'NON_LUE', ratees, fenetres, pourquoi });
   let tete;
   try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { return nonLue(0, 0, 'chain head not read'); }
