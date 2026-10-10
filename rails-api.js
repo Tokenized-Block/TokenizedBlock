@@ -460,10 +460,13 @@ async function planRailBrut(q, deps) {
       }
       if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via: 'actionAerodromeVersBloc' });
       const rb = j.pb.resume || {};
+      /* ⛔ 2026-10-10 (diagnostic Grok 21:58) : `fraisBps` = le frais d APP du lot, celui que la carte du panneau dit. Sans lui, un hook
+       *   qui ne paie pas = 0,1 % pris en USDC sur la jambe Aerodrome SANS une ligne a l ecran. Le routeur v4 ne prend rien
+       *   (`fraisRouteurAilleurs`) : le frais d app du lot EST celui de la jambe 1 (0 quand le hook paie). */
       return normaliser(route, { etat: 'PRET', exigeAtomique: true, pourquoi: null,
         appels: [...j.pa.appels, ...j.pb.etapes, { ...j.pb.tx, role: 'swap on Uniswap v4: USDC to this block' }],
         resume: { paye: m, payeDevise: de, recoitAuMoins: rb.recoitAuMoins, recoitDevise: vers, pivot: USDC, pivotAuMoins: j.minU,
-          fraisBpsJambe1: j.pa.resume.fraisBps, fraisBpsJambe2: rb.fraisBps, fraisParHook: hookPaie, fraisMarcheBps: rb.fraisMarcheBps,
+          fraisBps: j.pa.resume.fraisBps, fraisBpsJambe1: j.pa.resume.fraisBps, fraisBpsJambe2: rb.fraisBps, fraisParHook: hookPaie, fraisMarcheBps: rb.fraisMarcheBps,
           jambePayante: hookPaie ? 2 : 1, jambe2NonSimulee: true, minimumParPrixSpot: true,
           resteAuCompteAuPlus: 'the USDC above the Aerodrome minimum (at most the tolerance) stays in the wallet' } },
       { via: 'actionAerodromeVersBloc', chemin: [{ de, vers: USDC, famille: 'aerodrome' }, ...chemin2], cotation: quoteB });

@@ -12,8 +12,8 @@ const lignes = html.split(/\r?\n/);
 const ligne = (motif) => { const l = lignes.find((x) => x.includes(motif)); assert.ok(l, 'introuvable : ' + motif); return l; };
 const i = lignes.findIndex((x) => x.startsWith('function bcLigneEtatPlan('));
 assert.ok(i > 0, 'bcLigneEtatPlan absente : le plan ne dit pas son etat');
-const src = ligne('function bcMarcheLue(') + '\n' + lignes.slice(i, i + 6).join('\n');
-const { bcMarcheLue, bcLigneEtatPlan } = new Function(src + '; return { bcMarcheLue, bcLigneEtatPlan };')();
+const src = ligne('function bcMarcheLue(') + '\n' + ligne('function bcCerveauAttend(') + '\n' + lignes.slice(i, i + 6).join('\n');
+const { bcMarcheLue, bcCerveauAttend, bcLigneEtatPlan } = new Function(src + '; return { bcMarcheLue, bcCerveauAttend, bcLigneEtatPlan };')();
 assert.match(bcLigneEtatPlan({ etat: 'PRET' }), /^Ready \u2014 /);
 assert.match(bcLigneEtatPlan({ etat: 'APPROBATIONS' }), /^Ready \u2014 /);
 assert.equal(bcLigneEtatPlan({ etat: 'REFUSE', pourquoi: 'balance too low' }), 'Refused \u2014 balance too low. Nothing was sent.');
@@ -21,7 +21,7 @@ assert.match(bcLigneEtatPlan({ etat: 'NON_MESURE', pourquoi: 'the plan could not
 assert.match(bcLigneEtatPlan({}), /^Not measured/);
 /* la ligne du ticket, executee */
 const lt = ligne("!aBattu ? 'Brain: waking up").trim();
-const ticket = (g, snap) => new Function('estAction', 'aBattu', 'g', 'humeur', 'snap', 'bcRaison', 'bcMarcheLue', lt + '; return t;')(false, true, g, 'calm', snap, (x) => x, bcMarcheLue);
+const ticket = (g, snap) => new Function('estAction', 'aBattu', 'g', 'humeur', 'snap', 'bcRaison', 'bcMarcheLue', 'bcCerveauAttend', lt + '; return t;')(false, true, g, 'calm', snap, (x) => x, bcMarcheLue, bcCerveauAttend);
 assert.equal(ticket({ ok: true }, { tick: 1, phase: 'CALME', marche: { etatVie: 'NON_LUE' } }), 'Brain: waiting for the market read.');
 assert.equal(ticket({ ok: true }, { tick: 1, phase: 'CALME' }), 'Brain: waiting for the market read.');
 assert.match(ticket({ ok: true }, { tick: 1, marche: { etatVie: 'LUE', vie: 3 } }), /accepts/);
@@ -31,5 +31,7 @@ const k = html.indexOf('async function bcProposerSwap(');
 const corps = html.slice(k, html.indexOf('const refuser = ()', k));
 const iw = corps.indexOf("'Brain: waiting for the market read.'"), ia = corps.indexOf("') accepts.'");
 assert.ok(iw > 0 && iw < ia, 'bcProposerSwap peut dire accepts sur un marche non lu');
-assert.ok(corps.includes('if (!snapMoi || (g.ok && !bcMarcheLue(snapMoi)))'), 'la porte du swap ne regarde pas le marche lu');
+/* 2026-10-10 : la porte passe par bcCerveauAttend (NON_LU attend aussi, test-porte-cerveau-non-lu) ; on EXECUTE le marche non lu */
+assert.ok(corps.includes('if (bcCerveauAttend(snapMoi, g))'), 'la porte du swap ne passe pas par bcCerveauAttend');
+assert.equal(bcCerveauAttend({ tick: 1, phase: 'CALME', marche: { etatVie: 'NON_LUE' } }, { ok: true }), true, 'la porte du swap ne regarde pas le marche lu');
 console.log('ok plan-etat-marche-non-lu - etats Ready/Not measured/Refused, attente du marche ; NE PROUVE PAS le rendu navigateur');

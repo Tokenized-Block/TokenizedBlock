@@ -21748,7 +21748,11 @@ async function ouvrirRailFiat(evt, lien, actif) {
    *     attente n est plus rattache au clic : tous les navigateurs le bloquent comme une popup. On
    *     ouvre donc un onglet vide dans le geste de l utilisateur, puis on le redirige. Si meme
    *     celui-la est bloque (`null`), on retombe sur la navigation normale du lien. */
-  const onglet = window.open('', '_blank', 'noopener');
+  /* ⛔⛔ 2026-10-10 (test prod Grok : l onglet de l APP remplace par Coinbase + un onglet VIDE en plus ; entonnoir : session OK) :
+   *     `window.open(…, 'noopener')` rend TOUJOURS null (spec HTML) — pris pour un onglet bloque, on redirigeait l app. On ouvre
+   *     SANS noopener pour garder la poignee, et on coupe l opener a la main avant toute navigation. */
+  const onglet = window.open('', '_blank');
+  if (onglet) { try { onglet.opener = null; } catch (_) { /* deja coupe */ } }
   const repli = lien && lien.href ? lien.href : 'https://www.coinbase.com/onramp';
   try {
     /* ⛔ DELAI BORNE. Sans lui, un serveur muet laisserait un onglet blanc indefiniment — et
@@ -22127,6 +22131,10 @@ async function bcInterroger() {
  *   l onglet Market disait MARKET UNREAD (bandeNeurone range une phase vivante sans marche lu en 'market'). Ces deux fonctions DISENT :
  *   un marche non lu = on attend sa lecture (jamais 'accepts') ; un plan = Ready / Not measured / Refused, avant sa raison. */
 function bcMarcheLue(snap) { const mk = snap && snap.marche; return !!mk && (mk.etatVie === 'LUE' || (typeof mk.vie === 'number' && Number.isFinite(mk.vie))); }
+/* 2026-10-10 (test prod Grok, NVDAc paie IB022 : « Mood not judged - our read failed) refuses », puis « calm accepts » au 2e essai) :
+ *   la porte trade_tblock REFUSE la phase NON_LU (band 'cold'), et seul un ACCORD sur marche non lu disait 'waiting'. Un cerveau qui
+ *   n a pas lu son marche n a rien juge : il attend. ⛔ DORMANT / EVEILLE (lus : pas de marche) et MORT restent des refus. */
+function bcCerveauAttend(snap, g) { return !snap || snap.phase === 'NON_LU' || (!!g && g.ok && !bcMarcheLue(snap)); }
 /* 2026-10-10 re-QA (IB022 : 'Its brain (calm) accepts.' avec Price et Liquidity a '-') : l instantane global du cerveau pouvait etre
  *   celui d un AUTRE block (le panneau ne suivait pas le block ouvert) - on jugeait l humeur d hier sur le marche d un autre. Un
  *   instantane ne juge QUE le block dont il porte l adresse ; sinon : pas d instantane, donc 'waiting for the market read'. */
@@ -22269,7 +22277,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     const snapMoi = bcSnapDe(moi);
     const g = tacheAutorisee('trade_tblock', snapMoi || {});
     /* marche non lu : le cerveau n a rien juge - on le dit, on ne dit ni 'accepts' ni 'refuses' ; le planificateur juge le marche */
-    if (!snapMoi || (g.ok && !bcMarcheLue(snapMoi))) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
+    if (bcCerveauAttend(snapMoi, g)) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
     const humeur = (snapMoi && snapMoi.humeur) || 'unread';
     /* 2026-10-10 (QA Grok : « Its brain (calm) accepts » AU-DESSUS de « Not measured ») : un accord n est DIT qu apres un plan
      *   MESURE (PRET / APPROBATIONS, plus bas) ; un refus arrete ici, avant tout plan, et se dit tout de suite. */
@@ -22797,8 +22805,8 @@ function bcPeindreTicket(a, sym, mk, snap) {
   const aBattu = !!snap && snap.tick !== null && snap.tick !== undefined;
   /* une action Coinbase n a pas de porte (voir bcProposerSwap) : le ticket ne lui annonce donc pas un refus qui ne s appliquera pas */
   const estAction = ACTIONS_PAR_ADR.has(a);
-  const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : g.ok && !bcMarcheLue(snap) ? 'Brain: waiting for the market read.' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
-  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu || estAction ? '' : ' wKo'); }
+  const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : bcCerveauAttend(snap, g) ? 'Brain: waiting for the market read.' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
+  const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu || estAction || bcCerveauAttend(snap, g) ? '' : ' wKo'); }
   /* ── LA REFERENCE CHAINLINK D UNE ACTION, AVANT LA REVUE (2026-10-09) ── lue par le serveur (/api/actions/reference/), relue
    *   toutes les 60 s tant que le panneau est ouvert. ⛔ ELLE N EMPECHE RIEN : au-dela de SEUIL_ECART_REFERENCE_BPS (une PROPOSITION
    *   a confirmer avec le proprietaire, reference-action.js) la ligne passe en avertissement ; le bouton reste ouvert. */
