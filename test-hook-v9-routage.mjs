@@ -51,9 +51,11 @@ const symDe = new Map(offertes.map((p) => [bas(p.adr), p.symbole]));
 const NOUVELLES_20261003 = ['AMCc', 'AEOc', 'BMNRc', 'BIRDc', 'BYNDc', 'CIFRc', 'CLSKc', 'CRCLc', 'CRWVc', 'HUTc', 'KSSc', 'LCIDc', 'MARAc', 'OPENc', 'RIOTc', 'SOUNc', 'USDEc', 'VVVc', 'WULFc', 'WWc', 'XYZc'];
 /* 2026-10-09 : 12 actions du lot @base du jour entrent au registre (achat/vente), hors de toute liste de hook — hors V9 aussi. */
 const NOUVELLES_20261009 = ['ARMc', 'SKHYc', 'WRDc', 'BIDUc', 'BILIc', 'HSAIc', 'INFYc', 'NIOc', 'NVOc', 'PDDc', 'SAPc', 'VALEc'];
-ok('V9 list = every quote Create offers on Base except the 22 added 2026-10-02, the 21 added 2026-10-03 and the 12 added 2026-10-09 (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
+/* 2026-10-10 (3b3f39e) : SONYc entre au registre (achat/vente), hors de toute liste de hook — hors V9 aussi. */
+const NOUVELLES_20261010 = ['SONYc'];
+ok('V9 list = every quote Create offers on Base except the 22 added 2026-10-02, the 21 added 2026-10-03, the 12 added 2026-10-09 and SONYc (2026-10-10) (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
   && new Set(DEVISES_ADMISES_V9).size === 19
-  && JSON.stringify(offertesSansEth.filter((a) => !DEVISES_ADMISES_V9.includes(a)).map((a) => symDe.get(a)).sort()) === JSON.stringify([...NOUVELLES_20261002, ...NOUVELLES_20261003, ...NOUVELLES_20261009].sort()));
+  && JSON.stringify(offertesSansEth.filter((a) => !DEVISES_ADMISES_V9.includes(a)).map((a) => symDe.get(a)).sort()) === JSON.stringify([...NOUVELLES_20261002, ...NOUVELLES_20261003, ...NOUVELLES_20261009, ...NOUVELLES_20261010].sort()));
 ok('V8 list is a subset of the V9 list', DEVISES_ADMISES_V8.every((a) => DEVISES_ADMISES_V9.includes(a)));
 const srcTok = readFileSync('./tokenomics.js', 'utf8');
 ok('deviseVaSurV9 reads hookDeLancementPour', /return hookDeLancementPour\(devise, 8453, \{ v9: true \}\) === 'V9';/.test(srcTok));
