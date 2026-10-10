@@ -21892,7 +21892,10 @@ const BC_ETATS = { proposed: ['waiting for you', 'cours'], planned: ['plan ready
   done: ['done', 'oui'], declined: ['declined', ''], failed: ['failed', 'non'], refused: ['refused by the brain', 'non'], interrupted: ['left unfinished', ''],
   /* 2026-10-04 (QA wallet reel de Grok, TOSHI) : un plan REFUSE laissait l operation a « waiting for you » pour toujours — rien
    *   n attendait la personne, et aucun wallet ne s ouvrait. Un refus du planificateur REFERME l operation et le dit. */
-  notOffered: ['refused — nothing was sent', 'non'] };
+  notOffered: ['refused — nothing was sent', 'non'] ,
+  /* 2026-10-10 (QA Grok Super) : apres 'Connect your wallet first.' l historique gardait 'WAITING FOR YOU - Swap ... - open' : rien
+   *   n attendait. L operation se REFERME en disant pourquoi ; un essai apres connexion la rouvre. */
+  noWallet: ['no wallet connected \u2014 nothing was sent', ''] };
 /** Une lecture du panneau (decimales, solde) BORNEE dans le temps : passe ce delai elle echoue, et le panneau continue sans elle. */
 const bcAvecDelai = (p, ms = 8000) => Promise.race([p, new Promise((_, non) => setTimeout(() => non(new Error('read timed out')), ms))]);
 function bcChargerOps() {
@@ -22005,6 +22008,16 @@ async function bcInterroger() {
   } catch (_) { /* reseau : on reessaie au tour suivant */ }
 }
 /* ── les jetons : le registre d abord (un block nomme « USDC » ne prend pas la place de l USDC), puis les blocks du Market ── */
+/* 2026-10-10 (QA Grok Super, prod 20261010-rail-hook-dex) : le plan Trade ne disait pas son ETAT, et le cerveau 'acceptait' pendant que
+ *   l onglet Market disait MARKET UNREAD (bandeNeurone range une phase vivante sans marche lu en 'market'). Ces deux fonctions DISENT :
+ *   un marche non lu = on attend sa lecture (jamais 'accepts') ; un plan = Ready / Not measured / Refused, avant sa raison. */
+function bcMarcheLue(snap) { const mk = snap && snap.marche; return !!mk && (mk.etatVie === 'LUE' || (typeof mk.vie === 'number' && Number.isFinite(mk.vie))); }
+function bcLigneEtatPlan(p) {
+  const raison = String((p && p.pourquoi) || '').slice(0, 220);
+  if (p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS')) return 'Ready \u2014 the plan is built. Check it, then sign in your wallet.';
+  if (p && p.etat === 'REFUSE') return 'Refused \u2014 ' + (raison || 'no reason given') + '. Nothing was sent.';
+  return 'Not measured \u2014 we couldn\u2019t read this market yet. Retry.' + (raison ? ' (' + raison + ')' : '');
+}
 function bcResoudre(ref) {
   const r = String(ref || '').trim();
   if (/^(this|it|block)$/i.test(r)) {
@@ -22132,14 +22145,17 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
   if (actionAffichee && (de.adr === moi || vers.adr === moi)) bcEtape(m, 'A Coinbase stock — it trades on its own market; no brain gate.');
   else if (moi && (de.adr === moi || vers.adr === moi)) {
     const g = tacheAutorisee('trade_tblock', window.__TB_BRAIN_SNAPSHOT__ || {});
+    /* marche non lu : le cerveau n a rien juge - on le dit, on ne dit ni 'accepts' ni 'refuses' ; le planificateur juge le marche */
+    if (g.ok && !bcMarcheLue(window.__TB_BRAIN_SNAPSHOT__)) { bcEtape(m, 'Brain: waiting for the market read.'); bcNoter({ type: 'verdict', ...refs, etat: 'waiting', text: 'market unread' }); } else {
     const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
     bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
     bcNoter({ type: 'verdict', ...refs, etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts trade_tblock' : String(g.pourquoi || 'refused') });
     if (!g.ok) { bcOpMaj(op, 'refused'); return; }
+    }
   } else bcEtape(m, 'Not the block shown — its brain does not judge this one.');
   const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
   const planifier = async () => {
-    if (!(await bcAvecWallet(m, planifier))) return;
+    if (!(await bcAvecWallet(m, planifier))) { bcOpMaj(op, 'noWallet'); return; }
     /* ⛔ LE SOLDE EST RELU AVANT LE PLAN. Mesure sur fork (banc-vente-aerodrome) : un plan Aerodrome n est PAS simule cote serveur —
      *   sans solde il revient PRET, l approbation passe, et le swap reverte dans le wallet. On refuse ici, avant toute signature.
      *   Solde illisible = on laisse le planificateur juger (jamais un refus sur une lecture ratee). */
@@ -22162,7 +22178,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched', aSigner: [] }; }
     bcNoter({ type: 'plan', ...refs, etat: String(p.etat || '').slice(0, 20), ...(p.pourquoi ? { text: String(p.pourquoi) } : {}) });
     if (p.etat !== 'PRET' && p.etat !== 'APPROBATIONS') {
-      bcEtape(m, (p.etat === 'REFUSE' ? 'Refused: ' : 'Not read: ') + String(p.pourquoi || 'no reason given').slice(0, 220), 'non');
+      bcEtape(m, bcLigneEtatPlan(p), 'non');
       /* le refus REFERME l operation (elle restait a « waiting for you » alors que rien n attendait la personne) */
       bcOpMaj(op, 'notOffered');
       bcBoutons(m, [['Try again', planifier, true]]);
@@ -22190,6 +22206,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     }
     const { approbations, franchissement, lot, ethParDeballage } = bcModeEnvoi(p);
     bcOpMaj(op, 'planned');
+    bcEtape(m, bcLigneEtatPlan(p));
     /* un wallet n a souvent AUCUN prix pour un block frais : il compare alors l entree a une sortie « sans valeur » et alerte
      *   (mesure de Phil avec Rabby : « price difference exceeds 20 % » sur un aller-retour qui a perdu ~1 %). On le dit AVANT. */
     if (moi && (de.adr === moi || vers.adr === moi) && !actionAffichee) bcEtape(m, 'Your wallet may warn about a price difference: it often has no price for a block. The minimum you receive is the line above.');
@@ -22273,7 +22290,8 @@ async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, re
   if (destinataire === jeton.adr) { bcEtape(m, 'The recipient is the token’s own address — a transfer there is lost. Refused.', 'non'); bcNoter({ type: 'verdict', ...refs, etat: 'refused', text: 'recipient is the token contract' }); bcOpMaj(op, 'failed'); return; }
   bcEtape(m, 'A transfer cannot be undone. Read the address above, every character.');
   const preparer = async () => {
-    if (!(await bcAvecWallet(m, preparer))) return;
+    if (!(await bcAvecWallet(m, preparer))) { bcOpMaj(op, 'noWallet'); return; }
+    bcOpMaj(op, 'proposed'); /* connecte : l operation rouverte attend de nouveau */
     let solde;
     try { solde = await bcSolde(jeton.adr, compte); } catch (_) { bcEtape(m, 'Your balance could not be read — nothing was asked.', 'non'); bcBoutons(m, [['Try again', preparer, true]]); return; }
     if (solde < BigInt(montant)) { bcEtape(m, 'This wallet holds ' + (dec === null ? solde : bcUnites(solde, dec)) + ' ' + jeton.sym + ' — not enough. Nothing was asked.', 'non'); bcNoter({ type: 'plan', ...refs, etat: 'REFUSE', text: 'balance too low' }); return; }
@@ -22619,7 +22637,7 @@ function bcPeindreTicket(a, sym, mk, snap) {
   const aBattu = !!snap && snap.tick !== null && snap.tick !== undefined;
   /* une action Coinbase n a pas de porte (voir bcProposerSwap) : le ticket ne lui annonce donc pas un refus qui ne s appliquera pas */
   const estAction = ACTIONS_PAR_ADR.has(a);
-  const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
+  const t = estAction ? 'A Coinbase stock — it trades on its own market; no brain gate.' : !aBattu ? 'Brain: waking up…' : g.ok && !bcMarcheLue(snap) ? 'Brain: waiting for the market read.' : g.ok ? 'Brain: ' + humeur + ' — accepts.' : 'Brain: ' + humeur + ' — refuses: ' + bcRaison(g.pourquoi) + '.';
   const tb = $('#bcTicketBrain'); if (tb.textContent !== t) { tb.textContent = t; tb.className = 'note' + (g.ok || !aBattu || estAction ? '' : ' wKo'); }
   /* ── LA REFERENCE CHAINLINK D UNE ACTION, AVANT LA REVUE (2026-10-09) ── lue par le serveur (/api/actions/reference/), relue
    *   toutes les 60 s tant que le panneau est ouvert. ⛔ ELLE N EMPECHE RIEN : au-dela de SEUIL_ECART_REFERENCE_BPS (une PROPOSITION
