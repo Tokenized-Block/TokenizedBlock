@@ -21943,7 +21943,9 @@ const bcAvecDelai = (p, ms = 8000) => Promise.race([p, new Promise((_, non) => s
 function bcChargerOps() {
   try {
     const j = JSON.parse(localStorage.getItem(BC_CLE_OPS) || '[]');
-    bc.ops = (Array.isArray(j) ? j : []).filter((o) => o && typeof o.texte === 'string' && BC_ETATS[o.etat]).slice(0, 40)
+    /* 2026-10-10 (QA de Phil : l historique gardait un vieux « LEFT UNFINISHED ») : une operation interrompue est dite UNE fois, au
+     *   rechargement qui la trouve en cours ; deja « left unfinished » au chargement suivant, elle part de l historique. */
+    bc.ops = (Array.isArray(j) ? j : []).filter((o) => o && typeof o.texte === 'string' && BC_ETATS[o.etat] && o.etat !== 'interrupted').slice(0, 40)
       .map((o) => (BC_EN_COURS.includes(o.etat) ? { ...o, etat: o.etat === 'sent' ? 'sent' : 'interrupted' } : o));
   } catch (_) { bc.ops = []; }
 }
@@ -22058,10 +22060,12 @@ function bcMarcheLue(snap) { const mk = snap && snap.marche; return !!mk && (mk.
  *   celui d un AUTRE block (le panneau ne suivait pas le block ouvert) - on jugeait l humeur d hier sur le marche d un autre. Un
  *   instantane ne juge QUE le block dont il porte l adresse ; sinon : pas d instantane, donc 'waiting for the market read'. */
 function bcSnapDe(adr, s = window.__TB_BRAIN_SNAPSHOT__) { return s && adr && String(s.address || '').toLowerCase() === String(adr).toLowerCase() ? s : null; }
+/* 2026-10-10 (QA de Phil, AROS : « Nothing was sent » deux fois) : une raison qui le dit deja (MESSAGE_SANS_POOL « … — nothing was
+ *   sent ») ne le repete plus ; la phrase finale est dite une seule fois. */
 function bcLigneEtatPlan(p) {
   const raison = String((p && p.pourquoi) || '').slice(0, 220);
   if (p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS')) return 'Ready \u2014 the plan is built. Check it, then sign in your wallet.';
-  if (p && p.etat === 'REFUSE') return 'Refused \u2014 ' + (raison || 'no reason given') + '. Nothing was sent.';
+  if (p && p.etat === 'REFUSE') return 'Refused \u2014 ' + (raison.replace(/\s*(?:[\u2014,;.-]\s*)?nothing was sent\.?\s*$/i, '').replace(/[.\s]+$/, '') || 'no reason given') + '. Nothing was sent.';
   return 'Not measured \u2014 we couldn\u2019t read this market yet. Retry.' + (raison ? ' (' + raison + ')' : '');
 }
 function bcResoudre(ref) {
@@ -22327,7 +22331,8 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
 /** Un envoi. ⛔ Le destinataire s affiche EN ENTIER ; le solde est relu ; un envoi propose par un agent demande un clic de plus. */
 async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, ref, deLAgent) {
   let dec = null;
-  try { dec = await bcDecimales(jeton.adr); } catch (_) {}
+  note.className = 'note'; note.textContent = 'Reading ' + jeton.sym + '…';
+    try { dec = await bcAvecDelai(bcDecimales(jeton.adr), 8000); } catch (_) {}
   const libelle = (dec === null ? montant + ' raw units of ' : bcUnites(montant, dec) + ' ') + jeton.sym + ' to ' + destinataire;
   const m = bcMessage(qui + ' · send', classe, libelle);
   const op = bcOp('Send ' + libelle, qui, m);
@@ -22526,9 +22531,11 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
     if (!vers.ok) return erreur(vers.pourquoi);
     if (de.adr === vers.adr) return erreur('that is the same token on both sides');
     let dec;
-    try { dec = await bcDecimales(de.adr); } catch (_) { return erreur('the decimals of ' + de.sym + ' could not be read — try again'); }
+    note.className = 'note'; note.textContent = 'Reading ' + de.sym + '…';
+    try { dec = await bcAvecDelai(bcDecimales(de.adr), 8000); } catch (_) { return erreur('the decimals of ' + de.sym + ' could not be read — try again'); }
     const brut = enUnitesBrutes(c.montant, dec);
     if (brut === null) return erreur(de.sym + ' has ' + dec + ' decimals: ' + c.montant + ' is not an amount it can carry');
+    note.textContent = '';
     void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null);
     return true;
   }
@@ -22536,9 +22543,11 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
     const jeton = bcResoudre(c.jeton);
     if (!jeton.ok) return erreur(jeton.pourquoi);
     let dec;
-    try { dec = await bcDecimales(jeton.adr); } catch (_) { return erreur('the decimals of ' + jeton.sym + ' could not be read — try again'); }
+    note.className = 'note'; note.textContent = 'Reading ' + jeton.sym + '…';
+    try { dec = await bcAvecDelai(bcDecimales(jeton.adr), 8000); } catch (_) { return erreur('the decimals of ' + jeton.sym + ' could not be read — try again'); }
     const brut = enUnitesBrutes(c.montant, dec);
     if (brut === null) return erreur(jeton.sym + ' has ' + dec + ' decimals: ' + c.montant + ' is not an amount it can carry');
+    note.textContent = '';
     void bcProposerEnvoi('You', '', { jeton, montant: brut.toString(), destinataire: c.destinataire }, null, false);
     return true;
   }
@@ -22594,6 +22603,19 @@ async function bcLireSoldes(a) {
     const dec = async (adr) => { try { return await bcDecimales(adr); } catch (_) { return null; } };
     const [eth, u, b, d, du] = await Promise.all([lire(ETH_ADR), usdc.ok ? lire(usdc.adr) : null, lire(a), dec(a), usdc.ok ? dec(usdc.adr) : null]);
     bc.soldes = { adr: a, compte: moi, eth, usdc: u, block: b, dec: d, usdcDec: du };
+    /* 2026-10-10 (QA de Phil : 0,00114654 NVDAc detenus, absents de « You hold ») : les actions du registre detenues par ce wallet,
+     *   relues au plus toutes les 5 min (70 eth_call `latest`, 6 en vol — jamais l archive). Un solde non lu n est pas affiche. */
+    const st = bc.actionsDetenues;
+    if (!st || st.compte !== moi || Date.now() - st.t > 300000) {
+      const liste = [], file = ACTIONS_COINBASE.map((x) => ({ adr: String(x.adr).toLowerCase(), sym: x.symbole }));
+      await Promise.all(Array.from({ length: 6 }, async () => {
+        for (let x = file.shift(); x; x = file.shift()) {
+          const v = await lire(x.adr);
+          if (v !== null && v > 0n) liste.push({ ...x, brut: v, dec: await dec(x.adr) });
+        }
+      }));
+      bc.actionsDetenues = { compte: moi, t: Date.now(), liste: liste.sort((p, q) => p.sym.localeCompare(q.sym)) };
+    }
   } finally { bc.soldesEnVol = false; bc.soldesLus = Date.now(); }
 }
 /** AVEC QUOI ON PEUT PAYER CE JETON ICI — une seule liste pour le ticket Buy et pour le mode S.I : [valeur, libelle].
@@ -22661,7 +22683,17 @@ function bcPeindreTicket(a, sym, mk, snap) {
      *       « at least 0.00030462 NVDAc » annonce, 0,0731 USDC montre par le wallet. La commande ecrite reste possible, mais elle
      *       passe par l envoi groupe et le DIT avant toute signature (voir bcProposerSwap). */
     else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr, 'for ' + q.sym]] : []).concat(POOLS_ACTIONS_AERODROME.has(a) ? [] : [['ETH', 'for ETH']]);
-    else choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
+    else {
+      choix = q && q.ok ? [[q.adr === eth ? 'ETH' : q.adr, 'for ' + q.sym]] : [['ETH', 'for ETH']];
+      /* 2026-10-10 (QA de Phil, IB022 > LLYc refuse, Sell n offrait que « for ETH ») : un block cote en ETH ou en USDC se vend aussi
+       *   contre une action a pool v4 MESUREE, en UN appel (block -> ETH -> USDC -> action, rails-api.js route 2 ; prouve sur fork,
+       *   banc-bloc-vers-action-fork-20261010.mjs). Les actions de la table Aerodrome restent hors du ticket (franchissement). */
+      const usdcV = bcResoudre('USDC');
+      if (q && q.ok && (q.adr === eth || (usdcV.ok && q.adr === usdcV.adr))) {
+        const v4 = bcActionsV4();
+        for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, 'for ' + st.symbole + ' (stock)']); }
+      }
+    }
     const avant = s.value; s.textContent = '';
     for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
     if (choix.some(([v]) => v === avant)) s.value = avant;
@@ -22740,6 +22772,8 @@ function bcPeindreTicket(a, sym, mk, snap) {
   cas(nomB, texte(so.block, so.dec), [parts, valeur].filter(Boolean).join(' · ') || null);
   cas('ETH', texte(so.eth, 18), null);
   cas('USDC', texte(so.usdc, so.usdcDec), null);
+  const ad = bc.actionsDetenues && bc.actionsDetenues.compte === so.compte ? bc.actionsDetenues.liste : [];
+  for (const x of ad) if (x.adr !== a) cas(x.sym, texte(x.brut, x.dec), 'tokenized stock');
   z.append(grille);
 }
 /* ── QUI BOUGE CE BLOCK (vue Market) : /api/activite/<block>, lu par le serveur ───────────────────────────────────────────────
@@ -23518,7 +23552,16 @@ function bcPeindre(snap) {
   }
 }
 /* ── cablage ── */
-$('#bcForm').addEventListener('submit', async (e) => { e.preventDefault(); const s = $('#bcSaisie'); if (await bcExecuterTexte(s.value)) s.value = ''; });
+/* 2026-10-10 (QA de Phil, KAS : la saisie ne repondait plus apres Entree) : la lecture des decimales n avait aucune borne — un noeud
+ *   lent gardait la commande en attente sans un mot. Elle est bornee (8 s, bcAvecDelai), « Reading … » s affiche pendant, et une
+ *   commande en cours n en empile pas une seconde ; le champ reste toujours editable. */
+let bcSaisieEnCours = false;
+$('#bcForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const s = $('#bcSaisie');
+  if (bcSaisieEnCours) return;
+  bcSaisieEnCours = true;
+  try { if (await bcExecuterTexte(s.value)) s.value = ''; } finally { bcSaisieEnCours = false; s.focus(); }
+});
 /* ⛔ « Buy a stock » et « Buy this block » font DOUBLON quand le block affiche EST une action (Phil, 2026-10-04 : « buy stock et
  *   block c est la meme, donc choisis »). Sur une action il ne reste que « Buy <SYM> » / « Sell <SYM> » ; sur un block, les quatre
  *   gardent leur sens (acheter une action, ou CE block) et les deux dernieres portent son nom au lieu de « this block ». */
@@ -23542,8 +23585,9 @@ for (const p of PRECOMMANDES) {
   b.addEventListener('click', () => {
     /* « What can it do? » n a rien a ajuster : elle s execute, et ne laisse pas « tasks » dans le champ */
     if (p.cle === 'tasks') { void bcExecuterTexte('tasks'); return; }
-    const s = $('#bcSaisie'); s.value = p.modele; s.focus(); try { s.setSelectionRange(p.modele.length, p.modele.length); } catch (_) {}
-    const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? 'Paste the recipient’s whole address, then send.' : '';
+    const s = $('#bcSaisie'); s.value = p.modele; s.focus();
+    const ou = Number.isInteger(p.curseur) ? p.curseur : p.modele.length; try { s.setSelectionRange(ou, ou); } catch (_) {}
+    const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? (p.aide || 'Paste the recipient’s whole address, then send.') : '';
   });
   $('#bcPre').append(b);
 }

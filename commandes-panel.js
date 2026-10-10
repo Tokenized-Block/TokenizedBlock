@@ -22,7 +22,9 @@ export const PRECOMMANDES = Object.freeze([
    *   pool among the 17 keys read »), aux 2 suivants APPROBATIONS — refus NON reproduit, cause non elucidee. LLYc (pool v4 USDC) a
    *   rendu APPROBATIONS aux 3 passages : une pre-commande doit mener a un plan a chaque fois. */
   { cle: 'sell_stock', libelle: 'Sell a stock', modele: 'sell 0.01 LLYc for USDC' },
-  { cle: 'buy_block', libelle: 'Buy this block', modele: 'buy this with 0.0005 ETH', ceBlock: true },
+  /* 2026-10-10 (QA de Phil) : la puce pre-remplissait « 0.0005 ETH » — un montant choisi par nous. Le montant est laisse VIDE,
+   *   le curseur pose a sa place : la phrase est refusee telle quelle, acceptee une fois le montant tape. */
+  { cle: 'buy_block', libelle: 'Buy this block', modele: 'buy this with  ETH', ceBlock: true, aCompleter: true, curseur: 14, aide: 'Type how much ETH, then send.' },
   { cle: 'sell_block', libelle: 'Sell this block', modele: 'sell 1000 this', ceBlock: true },
   { cle: 'swap', libelle: 'Swap', modele: 'swap 5 USDC to NVDAc' },
   /* ⛔ `aCompleter` : ce modele est volontairement INCOMPLET — le destinataire se colle, il ne se propose jamais par defaut */

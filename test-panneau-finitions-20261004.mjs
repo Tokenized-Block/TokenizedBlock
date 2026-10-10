@@ -99,8 +99,10 @@ ok(/await bcExecuterTexte\(bc\.cote === 'buy' \? 'buy this with ' \+ n \+ ' ' \+
 ok(/async function bcExecuterTexte\(texte, note = \$\('#bcNote'\)\) \{/.test(bcSrc), 'C bcExecuterTexte ecrit son refus la ou on le lui dit (un refus du ticket dans la note du Chat serait invisible)');
 ok(/vers = bcCotation\(de\.adr\);\n\s+if \(!vers\) return erreur\(/.test(bcSrc) && !/: bcResoudre\('USDC'\); \} else vers = bcResoudre\(c\.vers\);/.test(bcSrc),
   'C « sell <n> <token> » sans devise : la cotation LUE, jamais USDC par defaut ; pas lue = on le dit');
-ok(/if \(ACTIONS_PAR_ADR\.has\(a\)\) return bcResoudre\('USDC'\);/.test(bcSrc) && /else choix = q && q\.ok \? \[\[q\.adr === eth \? 'ETH' : q\.adr, 'for ' \+ q\.sym\]\] : \[\['ETH', 'for ETH'\]\];/.test(bcSrc),
-  'C le ticket ne propose a la vente que la devise qui aboutit (la cotation du block ; USDC pour une action)');
+ok(/if \(ACTIONS_PAR_ADR\.has\(a\)\) return bcResoudre\('USDC'\);/.test(bcSrc) && /\n\s*choix = q && q\.ok \? \[\[q\.adr === eth \? 'ETH' : q\.adr, 'for ' \+ q\.sym\]\] : \[\['ETH', 'for ETH'\]\];/.test(bcSrc),
+  /* 2026-10-10 (QA de Phil) : la cotation reste la PREMIERE sortie d un block ; les actions a pool v4 s y ajoutent (route prouvee sur fork,
+   *   banc-bloc-vers-action-fork-20261010.mjs) — test-qa-panneau-20261010.mjs les garde. */
+  'C le ticket propose d abord a la vente la devise qui aboutit (la cotation du block ; USDC pour une action)');
 ok(/else if \(so && so\.block !== null && so\.dec !== null && so\.block > 0n\) for \(const p of \[25n, 50n, 100n\]\) puce\(p \+ ' %', bcDecimal\(so\.block \* p \/ 100n, so\.dec\)\);/.test(bcSrc),
   'C vente : les parts (25/50/100 %) ne s offrent que sur un solde LU et non nul');
 ok(/const lire = async \(adr\) => \{ try \{ return await bcSolde\(adr, moi\); \} catch \(_\) \{ return null; \} \};/.test(bcSrc) && /brut === null \|\| dec === null \? 'not read'/.test(bcSrc),
