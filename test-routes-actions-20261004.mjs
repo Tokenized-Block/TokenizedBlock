@@ -82,7 +82,9 @@ async function router(dir, de, vers) {
   ok(x.r.etat === 'REFUSE' && /trades on Aerodrome and .* on Uniswap v4: sell for USDC, then buy with USDC \(two trades\)/.test(String(x.r.pourquoi)) && x.appels === 0 && x.lus.length === 0,
     'B ' + symV4 + ' (v4) > ' + symAero + ' (Aerodrome) : refus qui dit quoi faire, AVANT toute lecture');
   const y = await router(ICI, adrDe(symAero), BLOCK);
-  ok(y.r.etat === 'REFUSE' && /sells here for USDC or ETH — sell it first, then buy/.test(String(y.r.pourquoi)) && y.appels === 0, 'B ' + symAero + ' (Aerodrome) > BLOCK : refus qui dit quoi faire, sans lecture');
+  /* 2026-10-10 (P4) : une action Aerodrome PAIE desormais un block v4 en un lot atomique (rails-api.js 4 ter, prouve sur fork par
+   *   banc-action-aero-vers-bloc-fork-20261010.mjs). Sur ce faux noeud, le marche du block ne se lit pas : AUCUN plan, et il a LU. */
+  ok(y.r.etat !== 'PRET' && y.appels > 0, 'B ' + symAero + ' (Aerodrome) > BLOCK : lit le marche du block (P4), aucun plan sur un faux noeud (' + y.r.etat + ')');
   const t = await router(ICI, USDC, BLOCK);
   ok(t.r.route === 'USDC>BLOCK' && t.lus[0] === BLOCK, 'B temoin : USDC > BLOCK garde la route 1 (le marche du block est lu en premier)');
   /* route 6 (QA wallet reel de Grok, P0) : ETH <-> USDC est ROUTE ; les autres devises restent refusees (aller sans retour, mesure

@@ -416,6 +416,16 @@ export function calldataExactInputAvecFrais({ sauts, recipient, amountIn, amount
     return { etat: 'REFUSE', pourquoi: 'the recipient cannot be the router itself' };
   }
 
+  /* ⛔ 2026-10-10 (P4, mesure sur fork : NVDAc -> USDC a 0 bps REVERTAIT — feeBips doit etre > 0 sur le routeur v3) : a 0 bps
+   *   (le frais du lot est paye ailleurs, par le hook du block), c est un exactInput NU vers le destinataire, comme `sansFrais`
+   *   du franchissement. Rien n est retenu, aucun beneficiaire n est appele ; le minimum est celui des pools. */
+  if (bps === 0n && sortieEthNatif) return { etat: 'REFUSE', pourquoi: 'native ETH out needs the unwrap step, which takes a fee above 0 bps' };
+  if (bps === 0n) {
+    const nu = calldataExactInputCL({ sauts, recipient, amountIn, amountOutMinimum: min, deadline, maintenant });
+    if (nu.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'inner swap refused: ' + nu.pourquoi };
+    return { ...nu, fraisBps: 0, beneficiaireFrais: null, minPools: String(min), minUtilisateur: String(min),
+      borne: 'no interface fee on this swap: the batch pays its single fee elsewhere' };
+  }
   /* ⛔ LE SWAP DEPOSE CHEZ LE ROUTEUR : c est ce qui permet au balayage de retenir. Et son minimum
    *   reste celui des POOLS, pas celui de l utilisateur. */
   const swap = calldataExactInputCL({ sauts, recipient: ROUTEUR_AERODROME_CL, amountIn,

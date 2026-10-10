@@ -576,10 +576,19 @@ async function routeViaTblock({ lire, Q, V, marche, jeton, sens, m, tol, bps }) 
 
 /** Approbations mesurees (vente), forme de struct demandee a la chaine, encodage, simulation de la transaction exacte. */
 async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline, actions, valeur, resume, cle, zeroForOne, sortieMinTete,
-  jetonPaye = null, valeurEth = null }) {
+  jetonPaye = null, valeurEth = null, simulationDifferee = false }) {
   /* ── les deux autorisations Permit2 sur le jeton PAYE (le block a la vente ; la devise ERC-20 a l achat), MESUREES ── */
   const etapes = [];
   const paye = jetonPaye || (sens === 'VENTE' ? jeton : null);
+  if (simulationDifferee) {
+    if (!paye) return { etat: 'REFUSE', pourquoi: 'a deferred leg must pay with a token', resume };
+    const actionsEncodees = actions.map((x) => (x.params === '__SWAP__' ? { code: x.code, params: paramsSwapExactInSingle({ ...x.swap, forme: SANS_MINHOP }) } : x));
+    const hookData = hookDataReferentO1({ cle });
+    const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme: SANS_MINHOP, actions: actionsEncodees, hookData });
+    return { etat: 'PRET', nonSimule: true, resume, cle, forme: SANS_MINHOP, pourquoi: null, tx: { to: R, data, value: '0x' + valeur.toString(16) },
+      etapes: [{ nom: 'Allow Permit2 to move this token', to: paye, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' },
+        { nom: 'Allow the Uniswap router (through Permit2)', to: PERMIT2, data: encodePermit2Approve(paye, R, MAX_UINT160, MAX_UINT48), value: '0x0' }] };
+  }
   /* ⛔ audit rails R9 (2026-10-03) : le libelle disait « this block » sur un multi-sauts paye en OUSD. Le jeton
    *    autorise n est le block qu a la VENTE du block lui-meme ; sinon c est la devise payee. */
   const payeEstLeBlock = sens === 'VENTE' && String(paye || '').toLowerCase() === String(jeton || '').toLowerCase();
@@ -826,6 +835,11 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
   /* ⛔ 2026-10-02 (Phil : UN frais par swap) : seul `planFranchissement` le pose — le frais unique du lot est pris
    *   sur la jambe CL. Sans hook payeur, le routeur ne prend alors RIEN ici (et aucun TAKE vers a6cf n est admis). */
   fraisRouteurAilleurs = false,
+  /* 2026-10-10 (P4, NVDAc paie un block v4) : la jambe v4 d un LOT ATOMIQUE dont la jambe precedente (Aerodrome) livre l USDC
+   *   payee ici. Le compte ne l a pas encore : ni les autorisations ni la transaction ne se lisent/simulent maintenant. Les deux
+   *   autorisations Permit2 sont mises au lot, la forme est SANS_MINHOP (celle de l UR de Base), et le plan le DIT
+   *   (`nonSimule`). Defaut false : tout appelant d avant est inchange. */
+  simulationDifferee = false,
   /* ⛔ LES DECIMALES ET LE PRIX DE LA DEVISE D ENTREE SONT LUS PAR L APPELANT, pas supposes ici :
    *   ils servent a situer le montant dans le bareme degressif. 18 par defaut serait un pari — et
    *   OUSD en a SIX. Sans PRIX, le bareme applique le taux le plus haut et le dit. */
@@ -1095,6 +1109,7 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
      *   a rien a autoriser, et en demander une bloquerait l achat sur une etape inutile. */
     jetonPaye: enEth ? null : entree,
     valeurEth: enEth,
+    simulationDifferee,
   });
 }
 

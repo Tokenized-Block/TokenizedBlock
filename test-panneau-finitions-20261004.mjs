@@ -58,7 +58,8 @@ const symV4 = ACTIONS_COINBASE.find((a) => !aero.includes(String(a.adr).toLowerC
   const e = await refusVente(ICI, symAero, 'ETH');
   ok(e.r.route === 'ACTION>ETH' && e.r.via === 'planAerodromeSegment' && e.r.etat !== 'PRET' && e.appels > 0, 'A ACTION>ETH (table Aerodrome) : aiguille vers le batisseur Aerodrome, qui LIT ses pools ; sur un faux noeud, aucun plan');
   const b = await refusVente(ICI, symAero, '0xb200000000000000000000000000000000000001');
-  ok(b.r.etat === 'REFUSE' && /sells here for USDC or ETH — sell it first, then buy/.test(b.r.pourquoi) && b.appels === 0, 'A ACTION (Aerodrome) > BLOCK : refus qui dit quoi faire, sans une seule lecture de chaine');
+  /* 2026-10-10 (P4) : ACTION (Aerodrome) > BLOCK est une route (lot atomique, banc-action-aero-vers-bloc-fork-20261010.mjs) */
+  ok(b.r.etat !== 'PRET' && b.appels > 0, 'A ACTION (Aerodrome) > BLOCK : lit le marche du block (P4) ; sur un faux noeud, aucun plan (' + b.r.etat + ')');
 }
 
 console.log('— B. la pre-commande « Sell a stock » mene a un plan');
