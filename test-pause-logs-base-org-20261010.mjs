@@ -116,7 +116,8 @@ await cas('(5) 429 a corps ILLISIBLE : comportement d avant (pas de pause)', asy
 await cas('MUTANTS : chaque garde, retiree, fait rougir le scenario (2)', async () => {
   const mutants = [
     ['saut retire', source.replace("if (pause) { if (!derniere) derniere = new Error(pause); break; }", ''), brutReg],
-    ['regex quota cassee', source.replace('/request limit reached/i', '/jamais/i'), brutReg],
+    /* 2026-10-10 (drpc) : un 429 a corps lisible compte aussi -> le mutant casse TOUT le critere de quota */
+    ['critere quota casse', source.replace('(/request limit reached/i.test(String(j.error.message)) || limite)', 'false'), brutReg],
     ['K jamais atteint', source, brutReg.replace('pauseLogsApres = 3', 'pauseLogsApres = 99')],
     ['T nul', source, brutReg.replace('pauseLogsMs = 5 * 60 * 1000', 'pauseLogsMs = 0')],
   ];

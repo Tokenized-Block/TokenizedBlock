@@ -4417,6 +4417,7 @@ async function rpcReseau(methode, params) {
     /* 2026-10-10 : un noeud qui ne suit que des noeuds EN PAUSE de getLogs est le dernier qui sera vraiment essaye. */
     const dernierNoeud = i === noeuds.length - 1
       || (!!rpcRegul && !!rpcRegul.enPauseLogs && noeuds.slice(i + 1).every((u) => rpcRegul.enPauseLogs(u, methode)));
+    const autresNoeuds = noeuds.filter((_, k) => k !== i); /* 2026-10-10 : la pause ne saute un noeud que si un AUTRE est libre */
     const REPRISES_TRANSITOIRE = 2, ATTENTE_TRANSITOIRE = [250, 700];
     /* 403/408/425 : etranglement ou attente. 5xx : panne cote noeud. Tous peuvent disparaitre en
      * 250 ms. ⛔ Ni 400 ni 404 ni 401 : une requete mal formee le restera, et la rejouer ne serait
@@ -4426,7 +4427,7 @@ async function rpcReseau(methode, params) {
     for (let essai = 0; essai <= ESSAIS_429; essai++) {
       let r, j = null, limite = false, statut = 0;
       /* 2026-10-10 : getLogs en pause sur ce noeud = SAUT sans requete ; l erreur reste, la liste ne devient jamais vide. */
-      const pause = rpcRegul && rpcRegul.passer ? rpcRegul.passer(url, methode) : null;
+      const pause = rpcRegul && rpcRegul.passer ? rpcRegul.passer(url, methode, autresNoeuds) : null;
       if (pause) { if (!derniere) derniere = new Error(pause); break; }
       /* ⛔ un creneau par noeud (ecart + concurrence + repos apres 429), borne : jamais d attente infinie */
       const liberer = rpcRegul ? await rpcRegul.creneau(url) : null;
@@ -4463,7 +4464,7 @@ async function rpcReseau(methode, params) {
       if (liberer) liberer();
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
       if (refusDebit) {
-        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && /request limit reached/i.test(String(j.error.message))) });
+        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && (/request limit reached/i.test(String(j.error.message)) || limite)) }); /* 2026-10-10 : un HTTP 429 a corps JSON lisible (drpc) compte aussi ; illisible = comme avant */
         derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
         if (rpcRegul && rpcRegul.enPauseLogs && rpcRegul.enPauseLogs(url, methode)) break; /* pause armee : plus d essai ici */
         if (essai < ESSAIS_429 && noeuds.length === 1) {

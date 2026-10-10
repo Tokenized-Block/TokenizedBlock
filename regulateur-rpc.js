@@ -67,6 +67,13 @@ export function creerRegulateur({ maintenant = () => Date.now(),
       quotaLogs: 0, pauseLogsJusqua: 0, sautesLogs: 0, sondesLogs: 0 }; etats.set(h, e); }
     return e;
   };
+  /* 2026-10-10 (re-QA : base.drpc.org ~10-15 HTTP 429/min en navigateur) : la meme pause, generalisee a TOUTE methode, par noeud ET
+   *   par methode (cle 'hote|methode'). getLogs garde ses champs historiques (quotaLogs...) dans l etat de l hote, pour les tests et la mesure. */
+  const pauses = new Map();
+  const pauseDe = (h, m) => { const k = h + '|' + m; let p = pauses.get(k); if (!p) { p = { quota: 0, jusqua: 0, sautes: 0, sondes: 0 }; pauses.set(k, p); } return p; };
+  const miroir = (h, m) => { if (m !== 'eth_getLogs') return; const p = pauseDe(h, m), e = etat(h);
+    e.quotaLogs = p.quota; e.pauseLogsJusqua = p.jusqua; e.sautesLogs = p.sautes; e.sondesLogs = p.sondes; };
+  const enPause = (url, m) => { const p = pauses.get(hoteDe(url) + '|' + m); return !!p && p.jusqua > maintenant(); };
   const auRepos = (url) => etat(hoteDe(url)).reposJusqua > maintenant();
   return {
     /** Filtre les refus permanents (jamais jusqu a vide), puis met les noeuds ralentis DERRIERE. */
@@ -100,30 +107,33 @@ export function creerRegulateur({ maintenant = () => Date.now(),
      *     decoupage en lots de 9 ou par un throw - jamais une liste vide.
      *   ? K = 3 et T = 5 min sont des CHOIX (ESTIMATION), pas des constantes du fournisseur : ils se lisent dans
      *     instantane() (quotaLogs, pauseLogsJusqua, sautesLogs, sondesLogs) pour etre MESURES en navigateur. */
-    enPauseLogs(url, methode) {
-      if (methode !== 'eth_getLogs') return false;
-      return etat(hoteDe(url)).pauseLogsJusqua > maintenant();
-    },
+    enPauseLogs(url, methode) { return !!methode && enPause(url, methode); },
+    enPause(url, methode) { return !!methode && enPause(url, methode); },
     /** null = envoyer ; sinon la raison du saut (jamais un resultat). */
-    passer(url, methode) {
-      if (methode !== 'eth_getLogs') return null;
-      const h = hoteDe(url), e = etat(h);
-      if (!e.pauseLogsJusqua) return null;
+    /*  `autres` (facultatif) : les autres noeuds de la liste. S il est donne et qu AUCUN n est libre pour cette methode, on ENVOIE (sauf eth_getLogs : son repli
+     *  mesure est le decoupage en lots de 9, pas le meme noeud)
+     *  quand meme : la pause ne fait jamais d une liste entiere un refus sans requete (le repli reste). */
+    passer(url, methode, autres) {
+      if (!methode) return null;
+      const h = hoteDe(url), p = pauses.get(h + '|' + methode);
+      if (!p || !p.jusqua) return null;
       const t = maintenant();
-      if (t >= e.pauseLogsJusqua) { e.sondesLogs++; e.pauseLogsJusqua = t + pauseLogsMs; return null; }
-      e.sautesLogs++;
-      return 'eth_getLogs paused on ' + h + ' after ' + e.quotaLogs + ' quota refusals in a row (next probe in '
-        + Math.ceil((e.pauseLogsJusqua - t) / 1000) + ' s)';
+      if (t >= p.jusqua) { p.sondes++; p.jusqua = t + pauseLogsMs; miroir(h, methode); return null; }
+      if (methode !== 'eth_getLogs' && Array.isArray(autres) && !autres.some((u) => hoteDe(u) !== h && !enPause(u, methode))) return null;
+      p.sautes++; miroir(h, methode);
+      return methode + ' paused on ' + h + ' after ' + p.quota + ' quota refusals in a row (next probe in '
+        + Math.ceil((p.jusqua - t) / 1000) + ' s)';
     },
     /** `issue` : 'ok' | 'debit' | 'autre'. Seul un refus de DEBIT ralentit ; un refus de forme, non.
      *  `opts` : { methode, quota } - seul un refus de QUOTA sur eth_getLogs compte vers la pause. */
     noter(url, issue, opts = {}) {
       const e = etat(hoteDe(url));
-      const logsQ = opts && opts.methode === 'eth_getLogs';
-      if (issue === 'ok' && logsQ) { e.quotaLogs = 0; e.pauseLogsJusqua = 0; }
-      if (issue === 'debit' && logsQ && opts.quota) {
-        e.quotaLogs++;
-        if (e.quotaLogs >= pauseLogsApres) e.pauseLogsJusqua = maintenant() + pauseLogsMs;
+      const m = opts && opts.methode, h = hoteDe(url);
+      if (m && issue === 'ok' && pauses.has(h + '|' + m)) { const p = pauseDe(h, m); p.quota = 0; p.jusqua = 0; miroir(h, m); }
+      if (m && issue === 'debit' && opts.quota) {
+        const p = pauseDe(h, m); p.quota++;
+        if (p.quota >= pauseLogsApres) p.jusqua = maintenant() + pauseLogsMs;
+        miroir(h, m);
       }
       if (issue === 'ok') { e.refus = 0; e.ecart = Math.max(ecartMs, Math.round(e.ecart * 0.8)); return; }
       if (issue !== 'debit') return;
@@ -134,5 +144,6 @@ export function creerRegulateur({ maintenant = () => Date.now(),
     },
     auRepos,
     instantane() { return Object.fromEntries([...etats].map(([h, e]) => [h, { ...e }])); },
+    pausesInstantane() { return Object.fromEntries([...pauses].map(([k, p]) => [k, { ...p }])); },
   };
 }
