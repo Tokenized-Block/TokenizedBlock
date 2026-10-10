@@ -4,7 +4,12 @@
  * MESURE AVANT (sonde dans le navigateur, prod 20261010-progres-index, chaque vue, tout le defilement ; un element compte des que
  *   le panneau le recouvre) : replie 1600x900 Blocks 2 jamais visibles + 17 selon le defilement, Market 1 + 15 (des boutons Buy) ;
  *   replie 1280x800 « Connect wallet » jamais visible ; ouvert 1024x768 (rien ne poussait sous 1100 px) Blocks 76 / Market 86
- *   jamais visibles ; telephone 375x812 ouvert 41 / 62 jamais visibles, replie une barre de 160 px.
+ *   jamais visibles ; telephone 375x812 ouvert : 96 px reserves pour ~560 px de feuille + onglets, la fin de chaque page ne
+ *   remontait jamais au-dessus (calcul) ; replie une barre de 160 px. ⚠️ « 41 / 62 » publie d abord : sonde a pas de 406 px pour
+ *   une bande visible de 253 px, chiffres gonfles — retires.
+ * MESURE EN PROD APRES DEPLOIEMENT (20261010-panneau-place, vrai contenu : Blocks 137 elements, Market 288) : 1600, 1280, 1024 px,
+ *   8 vues, ouvert ET replie : 0 element cache (ni jamais, ni selon le defilement), 0 debordement ; 375x812 : 0 jamais visible
+ *   (sonde a pas de 80 px), replie = 84 px.
  * MESURE APRES (serveur local, meme sonde + une preuve GEOMETRIQUE independante du contenu, car la page locale a moins de donnees :
  *   bord droit des cartes de la vue <= bord gauche du panneau) : 1600, 1280, 1024, 900, 800, 761 px, Blocks/Market/Create/Feed/
  *   Wallet, ouvert ET replie : chevauchement 0 px, aucun debordement horizontal ; 375x812 : defile au maximum, la fin du contenu
