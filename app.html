@@ -1997,6 +1997,9 @@ details[open] > summary::before{transform:rotate(90deg)}
           </label>
           <!-- 2026-10-10 (Phil : « check stoxcredit.xyz et copie ce qui marche deja ») : l ESTIMATION sans wallet, au prix de l oracle du marche -->
           <p class="note" id="bcBanqueEstim" style="margin:8px 0 0"></p>
+          <!-- 2026-10-10 (Phil : « la liquidite entre fiat et tokenized stocks accessible au mondial ») : le fiat entre par le rail CDP
+               EXISTANT (ouvrirRailFiat : onramp Coinbase vers le wallet connecte ; sans wallet, le lien public). -->
+          <p class="note" id="bcBanqueFiat" style="margin:6px 0 0" hidden>No USDC yet? <a href="https://www.coinbase.com/onramp" id="bcBanqueCarte" target="_blank" rel="noopener">Add USDC with a card or bank (Coinbase)</a> — it lands in your wallet, then lend it here.</p>
           <button type="submit" class="bouton" id="bcBanqueGo">Review</button>
           <p class="note" id="bcBanqueNote" style="margin:6px 0 0"></p>
           <p class="note" style="margin:8px 0 0">Risks: interest grows while a loan is open; if the stock falls to the liquidation price, your collateral is sold to repay the debt. When stock markets are closed, the oracle price can stay still. Lending markets are Morpho’s, not ours.</p>
@@ -2805,7 +2808,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261010-banque-hors-usdc" hidden>Build <code>20261010-banque-hors-usdc</code> · Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261010-bank-all-paths" hidden>Build <code>20261010-bank-all-paths</code> · Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -23784,9 +23787,12 @@ function bcBanqueChoisir(mk, sens) {
   $('#bcBanqueChoix').textContent = (sens === 'emprunter' ? 'Borrow ' + mk.pret.symbole + ' against ' + mk.garantie.symbole + ' (leave Collateral empty to borrow on what you already posted)'
     : 'Lend ' + mk.pret.symbole + ' to people who post ' + mk.garantie.symbole + ' as collateral') + ' — Morpho market ' + mk.id.slice(0, 10) + '…';
   $('#bcBanqueNote').textContent = '';
+  $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
 }
+/* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
+$('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));
 $('#bcBanqueForm').addEventListener('click', (e) => { const b = e.target.closest('[data-banque]'); if (b && bcBanque.choisi) bcBanqueChoisir(bcBanque.choisi, b.getAttribute('data-banque')); });
 $('#bcBanqueForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -23846,6 +23852,31 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
       m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
       bcBanque.positionsDe = null; void bcBanquePositions(true);
+      /* 2026-10-10 (Phil : « surtout pas forcer sur ETH, proposer tous les chemins d echange, full open for all assets ») : deux
+       *   raccourcis (racheter l action en garantie, le block affiche) PUIS un selecteur de TOUS les actifs connus (actions du registre,
+       *   devises de Base, block affiche). Ce sont les rails qui planifient ou refusent, avec la raison — rien n est filtre ici. */
+      if (sens === 'emprunter' && brutM) {
+        const usdc = bcResoudre('USDC'), suite = [], vus = new Set();
+        const offrir = (j) => {
+          if (!usdc.ok || !j || !j.ok || j.adr === usdc.adr || vus.has(j.adr)) return;
+          vus.add(j.adr);
+          suite.push(['Buy ' + j.sym + ' with it', () => bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null), true]);
+        };
+        offrir(bcResoudre(mk.garantie.adr));
+        if (brainAdr) offrir(bcResoudre(String(brainAdr)));
+        bcEtape(m, 'The ' + mk.pret.symbole + ' is in your wallet. Keep it, or swap it into any asset:');
+        if (suite.length) bcBoutons(m, suite);
+        if (usdc.ok) {
+          const choix = bcEl('select', { 'aria-label': 'Swap the borrowed USDC into' });
+          const tous = [...DEVISES_BASE.filter((d) => d.chaines.includes(8453) && d.lancePubliquement !== false), ...ACTIONS_COINBASE]
+            .map((d) => ({ adr: String(d.adr).toLowerCase(), sym: d.symbole })).filter((d) => d.adr !== usdc.adr);
+          if (brainAdr && !tous.some((d) => d.adr === String(brainAdr).toLowerCase())) { const b = bcResoudre(String(brainAdr)); if (b.ok) tous.unshift({ adr: b.adr, sym: b.sym }); }
+          for (const d of tous) choix.append(bcEl('option', { value: d.adr, text: d.sym }));
+          const go = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Swap' });
+          go.addEventListener('click', () => { const j = bcResoudre(choix.value); if (j.ok) void bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null); });
+          m.append(bcEl('div', { cls: 'bcBanqueLigne' }, [bcEl('span', { text: 'Any asset:' }), choix, go]));
+        }
+      }
     }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
   };
   void planifier();

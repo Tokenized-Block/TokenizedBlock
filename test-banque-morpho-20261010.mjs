@@ -117,6 +117,20 @@ ok(/if \(chemin === '\/api\/banque\/marches'\)/.test(srv) && /if \(chemin === '\
   && /planEmprunter\(\{ rpc: rpcNaissance,/.test(srv) && /nIpB > RAILS_IP_MINUTE \|\| railsBudget\.n >= RAILS_MINUTE \|\| railsEnVol >= RAILS_EN_VOL_MAX/.test(srv),
   'H routes /api/banque/marches et /api/banque/plan, budget des rails, rpc qui simule (rpcNaissance)');
 
+/* ── I. le panneau (texte d app.html : les boutons d apres-emprunt ne s affichent qu apres une vraie signature) ──
+ *   2026-10-10 (Phil) : l USDC emprunte sert aux ACTIONS et aux BLOCKS (l action en garantie, le block affiche) ; pas de bouton ETH ;
+ *   le fiat entre par le rail CDP existant (ouvrirRailFiat, USDC) en mode Lend. */
+const app = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8');
+const iBq = app.indexOf('/** Une action de banque : plan'), fBq = app.indexOf('/** Les positions du wallet connecte');
+const bloc = iBq > 0 && fBq > iBq ? app.slice(iBq, fBq) : '';
+ok(bloc.includes('offrir(bcResoudre(mk.garantie.adr));') && bloc.includes('if (brainAdr) offrir(bcResoudre(String(brainAdr)));') && !/Swap it to ETH/.test(bloc),
+  'I apres un emprunt : acheter l action en garantie ou le block affiche avec l USDC ; aucun bouton ETH');
+ok(bloc.includes("[...DEVISES_BASE.filter((d) => d.chaines.includes(8453) && d.lancePubliquement !== false), ...ACTIONS_COINBASE]") && bloc.includes("text: 'Any asset:'")
+  && bloc.includes("bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null)"),
+  'I « full open » : un selecteur de TOUS les actifs connus (devises de Base + actions du registre + block affiche), ce sont les rails qui jugent');
+ok(/ouvrirRailFiat\(e, \$\('#bcBanqueCarte'\), 'USDC'\)/.test(app) && /\$\('#bcBanqueFiat'\)\.hidden = !\(sens === 'preter' && mk\.pret\.symbole === 'USDC'\);/.test(app),
+  'I mode Lend : « Add USDC with a card or bank » par le rail fiat existant, en USDC ; masque en mode Borrow');
+
 /* ── F. mutants ── */
 const muter = async (de, vers, nom, juge) => {
   if (!SRC.includes(de)) return ok(false, 'F mutant introuvable : ' + nom);
