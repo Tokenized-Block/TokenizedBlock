@@ -5427,7 +5427,7 @@ $('#map').addEventListener('click', (e) => {
   /* tip 0042 : donnees condensees du marche (lues par le serveur : DexScreener), si le block en a */
   const mk = marcheParAdr.get(String(adr).toLowerCase());
   const chip = (t, v, cls) => '<div class="fChip"><span>' + t + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</b></div>';
-  const pctTxt = (v) => (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%';
+  const pctTxt = (v) => (!Number.isFinite(Number(v)) || Math.abs(Number(v)) > 1e5) /* QA 2026-10-10 : '+1.28e+29 %' - non fini ou absurde (> 100 000 %) = non lu */ ? '—' : (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%';
   $('#fChips').innerHTML = mk
     ? chip('Price', usdCourt(mk.prixUsd))
       + (mk.change24h !== null && mk.change24h !== undefined ? chip('24h', pctTxt(mk.change24h), mk.change24h >= 0 ? 'trUp' : 'trDown') : '')
@@ -18008,7 +18008,7 @@ function peindreTrending() {
   });
   const lignes = toutes.slice(0, trAffiches);
   const actifs = toutes.filter(bouge).length;
-  const pct = (v) => v === null || v === undefined ? '' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
+  const pct = (v) => v === null || v === undefined ? '' : (!Number.isFinite(Number(v)) || Math.abs(Number(v)) > 1e5) /* QA 2026-10-10 : '+1.28e+29 %' - non fini ou absurde (> 100 000 %) = non lu */ ? '<span>—</span>' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
   ul.innerHTML = lignes.map((l, i) => (trTri === 'h1' && i === actifs && i > 0
       ? '<li class="filL"><p class="note" style="margin:6px 0">Quiet in the last hour — sorted by 24h volume</p></li>' : '')
     + '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
@@ -19254,7 +19254,9 @@ function peindreTasks(snap) {
       + 'one bit: yes or no. “Prepare” builds the transaction and shows it to you — nothing is sent '
       + 'until your wallet signs.';
   }
-  try { window.__TB_BRAIN_TASKS__ = resume; } catch (e) { /* agent surface */ }
+  /* 2026-10-10 (QA a6cf) : la surface agent ne porte jamais l adresse du wallet de frais (fee_sink / fee_wallet) - regle de Phil. */
+  const sansCleFrais = (o) => (Array.isArray(o) ? o.map(sansCleFrais) : o && typeof o === 'object' && Object.getPrototypeOf(o) === Object.prototype ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'fee_sink' && k !== 'fee_wallet').map(([k, v]) => [k, sansCleFrais(v)])) : o);
+  try { window.__TB_BRAIN_TASKS__ = sansCleFrais(resume); } catch (e) { /* agent surface */ }
 }
 
 function peindreJournal(adr, j = journalLu(adr)) {
@@ -22023,7 +22025,18 @@ function bcResoudre(ref) {
   const trouves = [...marcheParAdr.values()].filter((l) => String(l.sym || '').toUpperCase() === haut);
   if (trouves.length === 1) return { ok: true, adr: String(trouves[0].adr).toLowerCase(), sym: trouves[0].sym };
   if (trouves.length > 1) return { ok: false, pourquoi: trouves.length + ' blocks are named ' + r + ' — paste the address of the one you mean' };
-  return { ok: false, pourquoi: 'nothing named ' + r + ' is known here — paste its whole address' };
+  /* 2026-10-10 (QA Grok Super) : 'IB022' et 'Smoke IB022' etaient refuses alors que le block existe - seul le SYMBOLE de l index du
+   *   Market etait cherche. On cherche aussi les NOMS et symboles CONNUS (index du Market, noms lus sur la chaine, carte, creations lues),
+   *   egalite exacte sans casse ; plusieurs blocks = REFUSE comme avant (on ne choisit pas a la place). */
+  const connus = new Map();
+  const noter = (adr, ...noms) => { const k = String(adr || '').toLowerCase(); if (!/^0x[0-9a-f]{40}$/.test(k)) return; if (noms.some((n) => n && String(n).trim().toUpperCase() === haut)) connus.set(k, String(noms.find((n) => n && String(n).trim().toUpperCase() === haut)).trim()); };
+  for (const l of marcheParAdr.values()) if (l) noter(l.adr, l.sym, l.nom);
+  for (const [k, v] of bcNoms) if (v) noter(k, v.sym, v.nom);
+  try { for (const h of habitants || []) if (h) noter(h.adr, h.sym, h.nom); } catch (_) { /* carte absente */ }
+  try { for (const c of creationsLues || []) if (c) noter(c.jeton, c.symbole, c.nom); } catch (_) { /* rien lu */ }
+  if (connus.size === 1) { const [adr] = connus.keys(); const mk = marcheParAdr.get(adr), lu = bcNoms.get(adr); return { ok: true, adr, sym: (mk && mk.sym) || (lu && lu.sym) || connus.get(adr) }; }
+  if (connus.size > 1) return { ok: false, pourquoi: connus.size + ' blocks are named ' + r + ' - paste the address of the one you mean' };
+  return { ok: false, pourquoi: 'No block named \u201c' + r + '\u201d found \u2014 try its address.' };
 }
 const bcDecCache = new Map([[ETH_ADR.toLowerCase(), 18]]);
 async function bcDecimales(adr) {
@@ -23390,7 +23403,7 @@ function bcPeindre(snap) {
     else if (rf && rf.etat === 'NON_DISPONIBLE') ligne('Chainlink ref.', 'none published');
   }
   if (mk) {
-    if (mk.change24h !== null && mk.change24h !== undefined) ligne('24 h', (Number(mk.change24h) > 0 ? '+' : '') + Number(mk.change24h).toFixed(2) + ' %');
+    if (mk.change24h !== null && mk.change24h !== undefined) ligne('24 h', ((v) => (!Number.isFinite(Number(v)) || Math.abs(Number(v)) > 1e5) /* QA 2026-10-10 : '+1.28e+29 %' - non fini ou absurde (> 100 000 %) = non lu */ ? '—' : (Number(v) > 0 ? '+' : '') + Number(v).toFixed(2) + ' %')(mk.change24h));
     if (Number(mk.volume24hUsd) > 0) ligne('Volume 24 h', usdCourt(mk.volume24hUsd));
     if (mk.trades24h !== null && mk.trades24h !== undefined) ligne('Trades 24 h', String(mk.trades24h));
     if (Number(mk.liquiditeUsd) > 0) ligne('Liquidity', usdCourt(mk.liquiditeUsd));
