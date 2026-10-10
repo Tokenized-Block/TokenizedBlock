@@ -22295,6 +22295,18 @@ function bcModeEnvoi(p) {
   return { approbations, franchissement: !!p && p.via === 'planFranchissement', lot: !!p && !approbations && p.atomique === true,
     ethParDeballage: !!p && p.route === 'ACTION>ETH' && p.pool === 'aerodrome' };
 }
+/* 2026-10-10 (test prod Grok, Rabby : NVDAc paie IB022 = lot de 5 appels refuse, rien d envoye) : le repli en DEUX trades etait dit
+ *   SANS bouton. Un plan qui porte son pivot ET le minimum garanti du pivot (4 ter) se coupe en deux echanges ordinaires : (1) l action
+ *   vers le pivot, (2) le pivot vers le block pour AU PLUS ce minimum (ce qui depasse reste au compte, comme dans le lot). Sans ces deux
+ *   chiffres : null, le texte seul comme avant - on ne devine pas un montant. */
+function bcDeuxTrades(p, de, vers, montant) {
+  const rs = (p && p.resume) || {}, piv = String(rs.pivot || '').toLowerCase(), min = String(rs.pivotAuMoins ?? '');
+  if (!/^0x[0-9a-f]{40}$/.test(piv) || !/^\d+$/.test(min) || BigInt(min) <= 0n) return null;
+  const reg = [...DEVISES_BASE, ...ACTIONS_COINBASE].find((d) => String(d.adr).toLowerCase() === piv);
+  const pivot = { adr: piv, sym: (reg && reg.symbole) || court(piv) };
+  return [{ libelle: '1 · Sell ' + de.sym + ' for ' + pivot.sym, de, vers: pivot, montant: String(montant) },
+    { libelle: '2 · Then buy ' + vers.sym + ' with ' + pivot.sym, de: pivot, vers, montant: min }];
+}
 async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
@@ -22418,10 +22430,13 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
           return;
         }
         bcEtape(m, messageEnvoi(r), 'non');
-        if (!r.hash) bcEtape(m, 'Nothing was sent. Two trades do the same: sell ' + de.sym + ' first, then buy ' + vers.sym + '.');
+        const deux = r.hash ? null : bcDeuxTrades(p, de, vers, montant);
+        if (!r.hash) bcEtape(m, 'Nothing was sent. Two trades do the same: sell ' + de.sym + ' first, then buy ' + vers.sym + '.'
+          + (deux ? ' Use the two buttons below, in order — each one is planned and checked before you sign.' : ''));
         bcNoter({ type: 'failed', ...refs, ...(r.hash ? { tx: r.hash } : {}) });
         bcOpMaj(op, r.hash ? 'sent' : 'notOffered', r.hash);
-        bcBoutons(m, [['Start again', planifier, true]]);
+        bcBoutons(m, [...(deux || []).map((x) => [x.libelle, () => void bcProposerSwap('You', '', { de: x.de, vers: x.vers, montant: x.montant }, null)]),
+          ['Start again', planifier, true]]);
         return;
       }
       const s = await bcSigner(m, p.aSigner);
