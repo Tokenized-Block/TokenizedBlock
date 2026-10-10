@@ -87,7 +87,7 @@ ok(p4.etat === 'REFUSE', '4 la fabrique rend une AUTRE pool a l espacement mesur
 const p5 = await F.poolAerodromeDe({ rpc: lecteur({ ts50Leve: true }), a: WETH, b: USDC, montantEntree: 10n ** 18n });
 ok(p5.etat === 'NON_MESURE', '5 getPool illisible -> NON_MESURE, jamais la tierce (' + p5.etat + ')');
 /* 6. paire NON epinglee, profondeur partielle : plus jamais « la plus profonde lue » */
-const X = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const X = '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4'; /* 2026-10-10 (actions hors USDC) : cbBTC/USDC est desormais EPINGLE - temoin non epingle = TOSHI */
 const gpX = new Map([[1, '0x' + '1'.repeat(40)], [10, '0x' + '2'.repeat(40)]].map(([ts, p]) => [calldataGetPool({ tokenA: USDC, tokenB: X, tickSpacing: ts }).data, p]));
 const rpcX = async (m, [{ data }]) => { if (gpX.has(data)) return '0x' + mot(gpX.get(data)); if (String(data).startsWith(SEL_BAL)) { const p = '0x' + String(data).slice(-40); if (p === '0x' + '2'.repeat(40)) throw new Error('429'); return '0x' + mot(10n ** 15n); } if (data === SEL_T0) return '0x' + mot(USDC); return '0x' + mot(0); };
 const p6 = await F.poolAerodromeDe({ rpc: rpcX, a: USDC, b: X, montantEntree: 10n ** 6n });

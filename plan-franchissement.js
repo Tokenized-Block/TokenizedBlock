@@ -60,7 +60,16 @@ function pairePinglee(a, b) {
  *   Une pool tierce creee demain a un autre espacement ne peut plus etre choisie sur sa profondeur. */
 export const POOLS_PIVOTS_AERODROME = new Map([
   [[bas(USDC_BASE), '0x4200000000000000000000000000000000000006'].sort().join('|'), { symbole: 'USDC/WETH', pool: '0x3fe04a59ebd38cf06080a6f60a98d124eb59392a', tickSpacing: 50, usdcMesure: 6457971 }],
+  /* 2026-10-10 (actions hors USDC, DIG-actions-hors-USDC) - RE-MESURE 19:22 UTC, bloc 52 435 371, base-rpc.publicnode.com, lecture seule,
+   *   getPool(X, USDC, ts) sur la factory du depot (calldataGetPool) pour ts 1/10/50/100/200/2000 + symbol/decimals des jetons :
+   *   WETH ts 50 = 4 318 496 USDC (ts 1 : 133 530, ts 10 : 5 087) ;
+   *   cbBTC (0xcbb7c000..., symbol cbBTC, 8 dec) ts 50 0x160d7e9d... = 3 217 382 USDC / 35,3 cbBTC (ts 1 : 159 114, ts 10 : 747) ;
+   *   EURC (0x60a3e35c..., symbol EURC, 6 dec - adresse NON recoupee avec Circle) ts 1 0xf39b7c34... = 97 473 USDC / 291 328 EURC, seule pool. */
+  [[bas(USDC_BASE), '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'].sort().join('|'), { symbole: 'USDC/cbBTC', pool: '0x160d7e9d948b16c163332a277b393c288408eb12', tickSpacing: 50, usdcMesure: 3217382 }],
+  [[bas(USDC_BASE), '0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42'].sort().join('|'), { symbole: 'USDC/EURC', pool: '0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113', tickSpacing: 1, usdcMesure: 97473 }],
 ]);
+/** Les devises X qui rejoignent une action de la table par X -> USDC -> action (et l inverse) : celles dont la pool X/USDC est epinglee. */
+export const DEVISES_VIA_USDC_AERODROME = new Set([...POOLS_PIVOTS_AERODROME.keys()].map((k) => k.split('|').find((t) => t !== bas(USDC_BASE))));
 function pairePingleeOuPivot(a, b) {
   const p = pairePinglee(a, b);
   if (p) return p;

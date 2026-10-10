@@ -101,7 +101,7 @@ t('⛔ sans beneficiaire => REFUSE', sansBenef.etat === 'REFUSE');
  *   ⇒ ON VERIFIE DONC L ESPACEMENT DANS LES OCTETS DU SWAP, pas l etat du plan. */
 /* 2026-10-10 (234ff51) : AAPLc est desormais EPINGLE sur sa pool mesuree (ts 10) - la decouverte d espacement se prouve sur une
  *   paire NON epinglee (USDC/cbBTC), avec les MEMES trois espacements. */
-const NONEP = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const NONEP = '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4'; /* 2026-10-10 (actions hors USDC) : cbBTC/USDC est desormais EPINGLE - temoin non epingle = TOSHI */
 const cheminX = [{ de: USDC, vers: NONEP, famille: AERO }], communX = { ...commun, block: NONEP };
 const ts10 = await planAerodromeSegment({ ...communX, rpc: rpcQui({ ts: 10 }), chemin: cheminX });
 t('une pool a tickSpacing 10 est trouvee (paire non epinglee)', ts10.etat === 'PRET');

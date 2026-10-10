@@ -21,7 +21,7 @@
 import { planEchange, planEchangeMultiSauts, meilleureClePourMontant } from './echange.js';
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
-import { poolAerodromeDe } from './plan-franchissement.js';
+import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME } from './plan-franchissement.js';
 import { devisSaut } from './multipool.js';
 import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planAchatEthAction } from './echange-eth.js';
@@ -254,6 +254,21 @@ async function planRailBrut(q, deps) {
     return meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt, candidates: sautAction ? sup : sup.concat(CLES_PRIX) });
   };
   try {
+    /* ── 4 quater. UNE ACTION DE LA TABLE AERODROME CONTRE WETH / cbBTC / EURC (Phil, 2026-10-10, DIG-actions-hors-USDC) ──
+     *   X -> USDC -> action et action -> USDC -> X, deux sauts Aerodrome dans UN exactInput (meme batisseur que la 4 bis) ;
+     *   la pool X/USDC est EPINGLEE (POOLS_PIVOTS_AERODROME, mesuree), celle de l action aussi ; le plan est SIMULE
+     *   (eth_simulateV1, e0b346d) avant PRET. WETH est ici le JETON (pas d unwrap ; ETH natif reste la 4 bis / planAchatEthAction).
+     *   ⛔ BORNE : notre frais (10 bps) est retenu dans le jeton qui SORT (sweepTokenWithFee) - cbBTC, EURC, WETH ou l action. */
+    if (nd === 'ACTION' && POOLS_ACTIONS_AERODROME.has(de) && DEVISES_VIA_USDC_AERODROME.has(vers)) {
+      const chemin = [{ de, vers: USDC, famille: 'aerodrome' }, { de: USDC, vers, famille: 'aerodrome' }];
+      return normaliser(route, await planAerodromeSegment({ rpc, chemin, devise: de, block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }),
+        { via: 'planAerodromeSegment', chemin, cotation: USDC, pool: 'aerodrome' });
+    }
+    if (nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers) && DEVISES_VIA_USDC_AERODROME.has(de)) {
+      const chemin = [{ de, vers: USDC, famille: 'aerodrome' }, { de: USDC, vers, famille: 'aerodrome' }];
+      return normaliser(route, await planAerodromeSegment({ rpc, chemin, devise: de, block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }),
+        { via: 'planAerodromeSegment', chemin, cotation: USDC, pool: 'aerodrome' });
+    }
     /* ── 1. ACHETER UN BLOCK ─────────────────────────────────────────────────────────────────────────────── */
     if (nv === 'BLOCK' && nd !== 'BLOCK' && nd !== 'ACTION') { /* une action qui paie un block : route 5 */
       const marcheB = await marcheDe(vers);

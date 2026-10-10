@@ -14,7 +14,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 let n = 0, ko = 0;
 const ok = (c, m) => { n += 1; if (!c) { ko += 1; console.log('KO  ' + m); } else console.log('ok  ' + m); };
 /* 2026-10-10 (4 bis) : USDC/WETH est desormais EPINGLE sur sa pool mesuree (test-pivot-weth-usdc-epingle) ; ce banc garde une paire NON epinglee (USDC/cbBTC). */
-const A = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', B = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const A = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', B = '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4'; /* 2026-10-10 (actions hors USDC) : cbBTC/USDC est desormais EPINGLE - temoin non epingle = TOSHI */
 const POOLS = { 1: '0x' + '1'.repeat(40), 10: '0x' + '2'.repeat(40), 100: '0x' + '3'.repeat(40) };
 const SEL_BAL = selecteur('balanceOf(address)'), SEL_T0 = selecteur('token0()');
 const getPoolDe = new Map(Object.entries(POOLS).map(([ts]) => [calldataGetPool({ tokenA: A, tokenB: B, tickSpacing: Number(ts) }).data, POOLS[ts]]));

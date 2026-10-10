@@ -77,7 +77,7 @@ t('pool: LES DEUX SENS DIFFERENT', r1.entreeEst0 !== r1b.entreeEst0);
 
 /* ⛔⛔ « AUCUNE POOL » N EST PAS « IL N Y A PAS DE POOL » SI DES LECTURES ONT ECHOUE. */
 /* 2026-10-10 (234ff51) : AAPLc est EPINGLE (1 espacement, le mesure) - le balayage des 9 se prouve sur une paire non epinglee (cbBTC) */
-const NONEP = '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf';
+const NONEP = '0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4'; /* 2026-10-10 (actions hors USDC) : cbBTC/USDC est desormais EPINGLE - temoin non epingle = TOSHI */
 const vide = await poolAerodromeDe({ rpc: rpcQui({ poolsConnues: {} }), a: USDC, b: NONEP });
 t('pool: aucune pool, toutes lectures OK => REFUSE (un verdict)', vide.etat === 'REFUSE');
 t('pool: et le refus dit combien d espacements ont ete essayes',
