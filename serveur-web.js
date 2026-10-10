@@ -1074,23 +1074,36 @@ async function fraisEnAttente() {
  *    rafraichissement d onglet relancerait tout et le noeud finirait par refuser — et des fenetres
  *    refusees rendraient le total « PLANCHER » sans que personne ne comprenne pourquoi. */
 let recentsCache = new Map();
+/* ⛔ 2026-10-09 (audit budget archive) : h n etait que BORNE, pas arrondi — h=1.0001, 1.0002... ouvraient chacun une cle de cache
+ *   NEUVE, donc un scan entier chacun (h=6 : 11 fenetres x 7 filtres = 77 getLogs, compte sur filtresScan ; les plus profondes peuvent
+ *   finir au noeud d archive, dernier repli des getLogs de rpcServeur), et la Map grossissait sans fin. Et le cache n etant ecrit
+ *   qu a la FIN du scan, deux requetes identiques en meme temps lancaient chacune le leur.
+ *   Maintenant : h arrondi a un entier 1..6 ICI, ou vit le cache (6 cles au plus, quel que soit l appelant), et un seul scan en vol
+ *   par cle, partage — la regle de enFond. Un echec n est pas mis en cache : la requete suivante relance. */
 const etrangersCache = new Map();
-async function lancementsEtrangers(heures) {
+const etrangersEnVol = new Map();
+async function lancementsEtrangers(h) {
+  const heures = Math.min(6, Math.max(1, Math.round(Number(h)) || 1));
   const cle = String(heures);
   const c = etrangersCache.get(cle);
   if (c && Date.now() - c.t < 300000) return c.r;
-  const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
-  const deBloc = tete - Math.round(heures * 1800);
-  const scan = await scannerLancements({ rpc: rpcServeur, deBloc, aBloc: tete, maxAffinage: 250 });
-  const r = {
-    ok: true, lu: new Date().toISOString(), heures, deBloc, aBloc: tete,
-    complet: scan.ratees === 0, fenetres: scan.fenetres, fenetresRatees: scan.ratees, nonAffines: scan.nonAffines,
-    parLaunchpad: scan.parLaunchpad,
-    lancements: scan.lancements.slice(-200),
-    borne: 'Factory events only. LaunchBlitz is recognised by its metadata host on the o1 factory; bankr by its Doppler integrator / Clanker interface tag.',
-  };
-  etrangersCache.set(cle, { t: Date.now(), r });
-  return r;
+  if (etrangersEnVol.has(cle)) return etrangersEnVol.get(cle);
+  const enVol = (async () => {
+    const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    const deBloc = tete - Math.round(heures * 1800);
+    const scan = await scannerLancements({ rpc: rpcServeur, deBloc, aBloc: tete, maxAffinage: 250 });
+    const r = {
+      ok: true, lu: new Date().toISOString(), heures, deBloc, aBloc: tete,
+      complet: scan.ratees === 0, fenetres: scan.fenetres, fenetresRatees: scan.ratees, nonAffines: scan.nonAffines,
+      parLaunchpad: scan.parLaunchpad,
+      lancements: scan.lancements.slice(-200),
+      borne: 'Factory events only. LaunchBlitz is recognised by its metadata host on the o1 factory; bankr by its Doppler integrator / Clanker interface tag.',
+    };
+    etrangersCache.set(cle, { t: Date.now(), r });
+    return r;
+  })().finally(() => { etrangersEnVol.delete(cle); });
+  etrangersEnVol.set(cle, enVol);
+  return enVol;
 }
 
 /* ── CALCULS LONGS EN FOND : une route repond vite, le calcul continue (voir /api/frais-hook) ──────────────────────────────────
@@ -4616,8 +4629,8 @@ createServer((req, res) => {
    * ⛔ 6 h maximum par appel, cache 5 min : un scan de 24 h (~260 getLogs + ~1 500 eth_call) n a rien a
    *    faire derriere un bouton. Les chiffres de 24 h sont dans canal/DIG-LAUNCHBLITZ-capture-2026-10-02.md. */
   if (chemin === '/api/lancements-etrangers') {
-    const heures = Math.min(6, Math.max(1, Number(new URL(req.url, 'http://x').searchParams.get('h')) || 1));
-    lancementsEtrangers(heures).then((r) => {
+    /* h brut : lancementsEtrangers l arrondit a un entier 1..6 a cote de son cache (une seule regle, pas deux copies) */
+    lancementsEtrangers(new URL(req.url, 'http://x').searchParams.get('h')).then((r) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify(r));
     }).catch((e) => {
