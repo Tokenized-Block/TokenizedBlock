@@ -715,11 +715,17 @@ const RPC_ARCHIVE = (() => {
 })();
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
-const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {} };
+const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {} };
 /* ⛔ 2026-10-09 (prod, 20 h UTC) : budget du jour EPUISE (10 000 / 10 000) et 549 erreurs — mais rien ne disait QUI avait depense
- *   (l histoire profonde ? le dernier repli de rpcServeur, qui prend TOUTE methode quand base.org et publicnode refusent ?) ni de
+ *   (l histoire profonde ? le dernier repli de rpcServeur, quand base.org et publicnode refusent un eth_getLogs ?) ni de
  *   QUEL type etaient les erreurs : `derniereErreur` et `relances` vivaient en memoire et chaque redeploiement les jetait.
- *   `par` = appels par « origine methode » (relances comprises) ; `erreursPar` = erreurs finales par classe. Tout est sauve. */
+ *   ⛔ CORRIGE le meme jour (UTC) : j avais ecrit que ce dernier repli « prend TOUTE methode » — FAUX. avecRepliLogs (repli-logs.js)
+ *     ne passe au repli QUE les eth_getLogs ; toute autre methode rend l erreur du principal sans jamais joindre l archive. L autre
+ *     lecteur, rpcHistoire, ne lui envoie lui aussi que des eth_getLogs : les deux origines comptees (« histoire », « repli ») n y
+ *     depensent que des getLogs (test-rpc-archive-20261009.mjs D2). HORS compteur : la sonde de /sante (sonderNoeuds) joint
+ *     l archive par un fetch direct, 1 tour sur 6 (eth_blockNumber + 3 getLogs) — ni dans `appels`, ni sous le plafond.
+ *   `par` = appels par « origine methode » (relances comprises) ; `erreursPar` = erreurs finales par classe ; `refusPar` = refus
+ *   de BUDGET par « origine methode » (la demande non servie, et QUI la fait). Tout est sauve. */
 const classeErreurArchive = (m) => /rate|limit|429/i.test(m) ? 'debit' : /timeout|aborted/i.test(m) ? 'delai' : /\b5\d\d\b/.test(m) ? '5xx'
   : /fetch failed|ECONNRESET|ENOTFOUND|EAI_AGAIN/i.test(m) ? 'reseau' : 'autre';
 const compteurEntier = (o) => (o && typeof o === 'object' && !Array.isArray(o))
@@ -735,6 +741,7 @@ try {
       for (const k of ['appels', 'refusBudget', 'erreurs', 'servis', 'relances']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
       if (typeof x.derniereErreur === 'string') archiveCompte.derniereErreur = x.derniereErreur.slice(0, 80);
       archiveCompte.par = compteurEntier(x.par); archiveCompte.erreursPar = compteurEntier(x.erreursPar);
+      archiveCompte.refusPar = compteurEntier(x.refusPar);
       archiveCompte.jour = x.jour;
     }
   }
@@ -747,11 +754,16 @@ function lecteurArchive(origine = 'repli') {
   const lire = lecteurUrl(RPC_ARCHIVE, { delai: 20000 });
   return async (methode, params) => {
     const j = new Date().toISOString().slice(0, 10);
-    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {} });
-    /* les refus au-dela du plafond sont la DEMANDE NON SERVIE — la seule mesure de « le plafond suffit-il ». Une fois le plafond
-     *   atteint, `appels` ne bouge plus : sans ce sauvetage, ces refus etaient perdus au redeploiement (prod : 53 -> 51). */
-    if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) { archiveCompte.refusBudget++; if (archiveCompte.refusBudget % 25 === 0) sauverArchiveCompte(); throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)'); }
+    if (archiveCompte.jour !== j) Object.assign(archiveCompte, { jour: j, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {} });
     const cle = origine + ' ' + String(methode).slice(0, 40);
+    /* les refus au-dela du plafond sont la DEMANDE NON SERVIE — la seule mesure de « le plafond suffit-il ». Une fois le plafond
+     *   atteint, `appels` ne bouge plus : sans ce sauvetage, ces refus etaient perdus au redeploiement (prod : 53 -> 51).
+     *   `refusPar` les range par « origine methode », comme `par` les appels : `cle` est donc construite AVANT le refus. */
+    if (archiveCompte.appels >= ARCHIVE_MAX_JOUR) {
+      archiveCompte.refusBudget++; archiveCompte.refusPar[cle] = (archiveCompte.refusPar[cle] || 0) + 1;
+      if (archiveCompte.refusBudget % 25 === 0) sauverArchiveCompte();
+      throw new Error('archive node daily budget reached (' + ARCHIVE_MAX_JOUR + ' calls)');
+    }
     archiveCompte.appels++;
     archiveCompte.par[cle] = (archiveCompte.par[cle] || 0) + 1;
     if (archiveCompte.appels % 25 === 0) sauverArchiveCompte();
@@ -778,7 +790,9 @@ function lecteurArchive(origine = 'repli') {
 /* ⛔⛔ 2026-10-09 (prod, 20 h 30 UTC) — UN REFUS DE BUDGET N EST PAS UNE PANNE DE NOEUD. Budget du jour epuise, chaque getLogs
  *   d archive est refuse A COUP SUR jusqu a 00 h UTC. Le rattrapage des createurs traitait ces refus comme des pannes : 3 passes
  *   refusees -> il SAUTAIT la fenetre (trou 50 889 029 -> 50 989 029, 51 pages, en une demi-heure). Un refus de budget se
- *   reconnait a sa cause ; devant lui, on ATTEND : ni compte de refus, ni curseur qui descend, ni trou. */
+ *   reconnait a sa cause ; devant lui, on ATTEND : ni compte de refus, ni curseur qui descend, ni trou.
+ *   ⛔ JUMEAU dans repli-logs.js : quand l archive refuse par budget en DERNIER repli de rpcServeur, c est ce texte qui ouvre
+ *     l erreur rendue (il etait avale, et c est le message de base.org qui sortait). test-rpc-archive-20261009.mjs D1 les lie. */
 const RE_BUDGET_ARCHIVE = /archive node daily budget reached/;
 /** Le budget du jour est-il epuise ? Lu sur le compteur, sans appel. */
 const archiveEpuisee = () => Boolean(RPC_ARCHIVE) && archiveCompte.jour === new Date().toISOString().slice(0, 10)

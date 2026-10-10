@@ -20,11 +20,19 @@
  *     fenetre calme, et c est exactement la faute que le pin de la factory (app.html) redoutait.
  *   ⛔ L ERREUR DU PRINCIPAL N EST PAS AVALEE : si tous les replis echouent aussi, c est elle qui part,
  *     et la fenetre reste « ratee » chez `listerCreations` — nommee, jamais vide.
+ *   ⛔⛔ SAUF QUAND UN REPLI REFUSE PAR BUDGET (2026-10-09) : le noeud d archive est le DERNIER repli de
+ *     `rpcServeur` (serveur-web.js) et, budget du jour epuise, il refuse sans appel (« archive node daily
+ *     budget reached »). Ce refus etait avale ici et c est l erreur de base.org qui sortait : un refus
+ *     certain jusqu a 00 h UTC se lisait comme un debit passager, et `refusDeBudget` ne pouvait le voir.
+ *     Le budget ouvre donc le message (un journal tronque le garde), celui du principal suit ; l erreur
+ *     du principal reste en `cause`. Sans refus de budget, rien ne change : c est elle qui part.
  *   ⚠️ CE QUE LE REPLI NE FAIT PAS : l archive. publicnode sert un getLogs a -6 000 blocs et repond
  *     `403 « Archive requests require a personal token »` des -9 000 (mesure du 2026-10-09). Une
  *     fenetre plus profonde reste donc ratee — et le dit. Le scan incremental (toutes les 5 min, ~150
  *     blocs) est, lui, toujours dans la profondeur servie.
  */
+/* ⛔ JUMEAU de RE_BUDGET_ARCHIVE (serveur-web.js) — test-rpc-archive-20261009.mjs D1 les lie bout a bout */
+const RE_BUDGET_ARCHIVE = /archive node daily budget reached/;
 export function avecRepliLogs(principal, replis) {
   const liste = Array.isArray(replis) ? replis.filter((f) => typeof f === 'function') : [];
   return async function rpcAvecRepli(methode, params) {
@@ -32,12 +40,17 @@ export function avecRepliLogs(principal, replis) {
       return await principal(methode, params);
     } catch (e) {
       if (methode !== 'eth_getLogs' || !liste.length) throw e;
+      let budget = null;
       for (const repli of liste) {
         try {
           const r = await repli(methode, params);
           if (Array.isArray(r)) return r;
-        } catch (_) { /* repli suivant */ }
+        } catch (x) { /* repli suivant — mais un refus de BUDGET est retenu */
+          const m = String((x && x.message) || x);
+          if (budget === null && RE_BUDGET_ARCHIVE.test(m)) budget = m;
+        }
       }
+      if (budget !== null) throw new Error(budget + ' (primary node: ' + String((e && e.message) || e) + ')', { cause: e });
       throw e;
     }
   };

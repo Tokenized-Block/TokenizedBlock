@@ -9,6 +9,8 @@
  *   A. `avecRepliLogs` (serveur) : un getLogs refuse par le principal est redemande au repli ; seul un
  *      TABLEAU est une reponse ; l erreur du principal ressort si tout echoue ; les autres methodes ne
  *      partent jamais au repli. Et le scan des creations de `lireTrending` l utilise.
+ *      ⛔ SAUF un refus de BUDGET du noeud d archive (dernier repli de rpcServeur) : il est NOMME en tete de
+ *      l erreur, le message du principal suit (A10/A11).
  *   B. `charger()` (app.html) pose nos blocks AVANT et INDEPENDAMMENT du balayage de la factory.
  */
 import { strict as assert } from 'node:assert';
@@ -76,6 +78,35 @@ await cas('A8 lecteurUrl : une erreur JSON-RPC (403 archive) ou un HTTP en echec
   /* bout a bout : un repli qui refuse l archive laisse la fenetre RATEE */
   const rpc = avecRepliLogs(async () => refus(), [lecteurUrl('http://x', { fetchImpl: repond({ jsonrpc: '2.0', id: 1, error: { message: '403 archive' } }, 403) })]);
   await assert.rejects(rpc('eth_getLogs', [{}]), /request limit reached/);
+});
+
+/* ⛔⛔ 2026-10-09 — LE REFUS DE BUDGET D UN REPLI ETAIT AVALE. Le noeud d archive est le DERNIER repli de rpcServeur ; budget du
+ *   jour epuise, il refuse sans appel (« archive node daily budget reached »). Ce refus tombait dans le `catch` du repli et c est
+ *   l erreur du PRINCIPAL (base.org) qui sortait : un refus certain jusqu a 00 h UTC se lisait comme un debit passager. */
+const BUDGET = 'archive node daily budget reached (10000 calls)';
+await cas('A10 un repli refuse par le BUDGET d archive : l erreur NOMME le budget en tete, et garde le message du principal', async () => {
+  const p = new Error('request limit reached');
+  const rpc = avecRepliLogs(async () => { throw p; }, [async () => { throw new Error('403 archive'); }, async () => { throw new Error(BUDGET); }]);
+  const e = await rpc('eth_getLogs', [{}]).then(() => null, (x) => x);
+  assert.ok(e instanceof Error, 'un refus partout doit JETER une erreur');
+  assert.ok(e.message.startsWith(BUDGET), 'le budget doit ouvrir le message (un journal tronque le garde) : ' + e.message);
+  assert.match(e.message, /request limit reached/, 'le message du principal a disparu');
+  assert.equal(e.cause, p, 'l erreur du principal doit rester accrochee (cause)');
+  /* le budget d un repli place AVANT un autre repli qui echoue aussi est nomme de meme */
+  const avant = avecRepliLogs(async () => refus(), [async () => { throw new Error(BUDGET); }, async () => { throw new Error('403 archive'); }]);
+  await assert.rejects(avant('eth_getLogs', [{}]), (x) => x instanceof Error && x.message.startsWith(BUDGET));
+});
+
+await cas('A11 le reste NE BOUGE PAS : sans refus de budget, l erreur du principal ELLE-MEME ; un repli qui sert gagne ; les autres methodes ne partent pas', async () => {
+  const p = new Error('request limit reached');
+  const ko = avecRepliLogs(async () => { throw p; }, [async () => { throw new Error('403 archive'); }, async () => null]);
+  await assert.rejects(ko('eth_getLogs', [{}]), (e) => e === p);
+  const ok = avecRepliLogs(async () => refus(), [async () => { throw new Error(BUDGET); }, async () => ['b']]);
+  assert.deepEqual(await ok('eth_getLogs', [{}]), ['b'], 'un refus de budget ne doit pas empecher le repli suivant de servir');
+  let appels = 0;
+  const autre = avecRepliLogs(async () => { throw p; }, [async () => { appels++; throw new Error(BUDGET); }]);
+  await assert.rejects(autre('eth_call', [{}]), (e) => e === p);
+  assert.equal(appels, 0);
 });
 
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');

@@ -10,10 +10,15 @@
  *      que le libelle ; le mode essai n a pas d archive.
  *   C. LE SCRIPT outils/poser-rpc-archive.mjs : lecture du fichier, forme Base MAINNET exigee, masquage ; il n imprime jamais
  *      `url` ni un segment du chemin.
+ *   D. BOUT A BOUT (lecteurArchive LIVRE derriere avecRepliLogs LIVRE, listerCreations) : un refus de BUDGET du dernier repli de
+ *      rpcServeur arrive jusqu a la fenetre ratee et `refusDeBudget` le reconnait ; les refus sont comptes PAR origine (refusPar, A2c).
+ *      Ce dernier repli ne recoit QUE des eth_getLogs : une autre methode ne touche ni publicnode ni le compteur d archive (D2).
  * ⛔ BORNE : que CDP serve l archive n est PAS prouve ici (cle non posee au moment du banc) — le script le mesure. */
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { lireUrl, masqueur, formeCdp, urlDepuisCleNue, formeDeCle } from './outils/poser-rpc-archive.mjs';
+import { avecRepliLogs } from './repli-logs.js';
+import { listerCreations } from './index-blocks.js';
 
 let n = 0;
 const cas = async (titre, f) => { n++; try { await f(); } catch (e) { console.error('✗ ' + titre); throw e; } };
@@ -29,7 +34,7 @@ assert.ok(i > 0 && j > i, 'bloc archive introuvable');
 /* un faux disque : `fichiers` tient ce que le bloc ecrit, pour juger la persistance du compteur */
 const fabrique = (env, essai = false, lire = async () => [], fichiers = new Map()) => new Function('process', 'ESSAI_SRV', 'lecteurUrl',
   'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync',
-  src.slice(i, j) + '\n; return { RPC_ARCHIVE, ARCHIVE_MAX_JOUR, archiveCompte, lecteurArchive, libelleNoeud, masquerCle };')(
+  src.slice(i, j) + '\n; return { RPC_ARCHIVE, ARCHIVE_MAX_JOUR, archiveCompte, lecteurArchive, libelleNoeud, masquerCle, RE_BUDGET_ARCHIVE, refusDeBudget };')(
   { env }, { actif: essai }, () => lire,
   (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'), (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); });
 
@@ -69,6 +74,36 @@ await cas('A2b le compteur du jour SURVIT a un redemarrage (meme jour) et repart
     'les refus au-dela du plafond ont ete perdus au redemarrage');
   const vieux = new Map([['/data/archive-compte.json', JSON.stringify({ jour: '2000-01-01', appels: 9999, servis: 9999, erreurs: 0, refusBudget: 0 })]]);
   assert.equal(fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => [], vieux).archiveCompte.appels, 0, 'le compteur d un autre jour a ete repris');
+});
+await cas('A2c QUI demande au-dela du plafond : refusPar par origine+methode, sauve et relu le meme jour, remis a zero un autre jour', async () => {
+  /* prod 2026-10-09 : apres 10 000 / 10 000, `refusBudget` montait sans dire QUI demandait (l histoire profonde ? le repli de rpcServeur ?) */
+  const AUJ = new Date().toISOString().slice(0, 10);
+  const env = { BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '1' };
+  const disque = new Map();
+  const m = fabrique(env, false, async () => [], disque);
+  const h = m.lecteurArchive('histoire'), r = m.lecteurArchive('repli');
+  await h('eth_getLogs', [{}]); /* le seul appel du jour */
+  for (let x = 0; x < 20; x++) await assert.rejects(h('eth_getLogs', [{}]), /daily budget reached \(1 calls\)/);
+  for (let x = 0; x < 5; x++) await assert.rejects(r('eth_getLogs', [{}]), /daily budget reached \(1 calls\)/);
+  assert.deepEqual(m.archiveCompte.refusPar, { 'histoire eth_getLogs': 20, 'repli eth_getLogs': 5 });
+  assert.equal(Object.values(m.archiveCompte.refusPar).reduce((a, b) => a + b, 0), m.archiveCompte.refusBudget, 'refusPar ne couvre pas tous les refus');
+  assert.deepEqual(m.archiveCompte.par, { 'histoire eth_getLogs': 1 }, 'un refus est entre dans `par` (qui compte les APPELS)');
+  /* sauve au 25e refus, comme refusBudget : un redemarrage le meme jour le relit */
+  const m2 = fabrique(env, false, async () => [], disque);
+  assert.deepEqual(m2.archiveCompte.refusPar, { 'histoire eth_getLogs': 20, 'repli eth_getLogs': 5 }, 'refusPar perdu au redemarrage');
+  /* un fichier corrompu ne fait entrer aucune cle non entiere */
+  const sale = new Map([['/data/archive-compte.json', JSON.stringify({ jour: AUJ, appels: 1, refusBudget: 2, refusPar: { ok: 2, mal: 'x', neg: -1 } })]]);
+  assert.deepEqual(fabrique(env, false, async () => [], sale).archiveCompte.refusPar, { ok: 2 });
+  const tableau = new Map([['/data/archive-compte.json', JSON.stringify({ jour: AUJ, appels: 1, refusPar: [3] })]]);
+  assert.deepEqual(fabrique(env, false, async () => [], tableau).archiveCompte.refusPar, {});
+  /* un autre jour : le fichier d hier n est pas relu, et le compteur en memoire ne survit pas au changement de jour */
+  const vieux = new Map([['/data/archive-compte.json', JSON.stringify({ jour: '2000-01-01', appels: 1, refusBudget: 7, refusPar: { 'histoire eth_getLogs': 7 } })]]);
+  assert.deepEqual(fabrique(env, false, async () => [], vieux).archiveCompte.refusPar, {}, 'les refus d un autre jour ont ete repris');
+  m2.archiveCompte.jour = '2000-01-01';
+  await m2.lecteurArchive('repli')('eth_getLogs', [{}]); /* nouveau jour : compteurs a zero, cet appel est servi */
+  assert.deepEqual(m2.archiveCompte.refusPar, {}, 'refusPar a survecu au changement de jour');
+  await assert.rejects(m2.lecteurArchive('repli')('eth_getLogs', [{}]), /daily budget/);
+  assert.deepEqual(m2.archiveCompte.refusPar, { 'repli eth_getLogs': 1 });
 });
 await cas('A3 une erreur du noeud est comptee et RE-LEVEE (jamais une liste vide)', async () => {
   const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => { throw new Error('401 invalid key'); });
@@ -169,6 +204,47 @@ await cas('C2 le script n imprime jamais l URL ni un segment du chemin ; railway
   assert.match(script, /spawnSync\(BIN, \['variables', '--service', SERVICE, '--set', 'BASE_RPC_ARCHIVE=' \+ url\], \{ shell: false, encoding: 'utf8', cwd: path\.join\(ICI, '\.\.'\) \}\)/,
     'railway doit tourner depuis la racine du depot lie, pas depuis le dossier de l appelant');
   assert.ok(!/process\.exit\(/.test(script), 'process.exit apres fetch fait planter libuv sous Windows');
+});
+
+/* ── D. BOUT A BOUT : le refus de budget du DERNIER repli de rpcServeur arrive jusqu a la fenetre ratee ─────────────────────── */
+await cas('D1 base.org puis publicnode refusent, l archive refuse par BUDGET : chaque fenetre ratee NOMME le budget (refusDeBudget le voit)', async () => {
+  /* le cablage de rpcServeur (B1) : avecRepliLogs(rpcServeurBrut, [publicnode, lecteurArchive('repli')]) — rejoue avec le lecteurArchive
+   *   LIVRE et le avecRepliLogs LIVRE ; seuls les deux noeuds publics sont simules, avec leurs refus mesures le 2026-10-09 */
+  const baseOrg = async () => { throw new Error('request limit reached'); };
+  const publicnode = async () => { throw new Error('Archive requests require a personal token'); };
+  const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP, BASE_RPC_ARCHIVE_MAX_JOUR: '1' }, false, async () => []);
+  await m.lecteurArchive('histoire')('eth_getLogs', [{}]); /* le budget du jour part ici */
+  const r = await listerCreations({ rpc: avecRepliLogs(baseOrg, [publicnode, m.lecteurArchive('repli')]), blocs: 5000, fin: 6000 });
+  assert.ok(r.fenetresRatees.length >= 3, 'fenetres ratees attendues : ' + r.fenetresRatees.length);
+  for (const w of r.fenetresRatees) {
+    assert.match(w.cause, m.RE_BUDGET_ARCHIVE, 'la fenetre ratee accuse base.org au lieu du budget : ' + w.cause);
+    assert.match(w.cause, /request limit reached/, 'le message du principal a disparu');
+  }
+  assert.equal(m.refusDeBudget(r.fenetresRatees), true, 'refusDeBudget ne reconnait pas un refus de budget derriere rpcServeur');
+  assert.deepEqual(m.archiveCompte.refusPar, { 'repli eth_getLogs': r.fenetresRatees.length });
+  /* TEMOIN : l archive refuse pour une AUTRE raison -> la cause reste celle du principal, et ce n est PAS un refus de budget */
+  const m2 = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => { throw new Error('invalid params'); });
+  const r2 = await listerCreations({ rpc: avecRepliLogs(baseOrg, [publicnode, m2.lecteurArchive('repli')]), blocs: 5000, fin: 6000 });
+  assert.ok(r2.fenetresRatees.length >= 3);
+  for (const w of r2.fenetresRatees) assert.equal(w.cause, 'request limit reached');
+  assert.equal(m2.refusDeBudget(r2.fenetresRatees), false);
+});
+await cas('D2 le DERNIER repli de rpcServeur ne prend QUE les eth_getLogs (le commentaire « prend TOUTE methode » etait faux)', async () => {
+  /* meme cablage que D1, budget INTACT : une autre methode refusee par base.org ressort telle quelle et ne touche ni publicnode
+   *   ni le compteur d archive ; un getLogs, lui, y arrive (TEMOIN : sans lui, un compteur reste a 0 par impossibilite) */
+  const p = new Error('request limit reached');
+  let publics = 0;
+  const m = fabrique({ BASE_RPC_ARCHIVE: URL_CDP }, false, async () => []);
+  const rpc = avecRepliLogs(async () => { throw p; }, [async () => { publics++; throw new Error('Archive requests require a personal token'); }, m.lecteurArchive('repli')]);
+  for (const methode of ['eth_call', 'eth_getTransactionByHash', 'eth_blockNumber', 'eth_getCode']) {
+    await assert.rejects(rpc(methode, []), (e) => e === p, methode + ' : l erreur du principal doit ressortir telle quelle');
+  }
+  assert.equal(publics, 0, 'une autre methode est partie au repli publicnode');
+  assert.equal(m.archiveCompte.appels, 0, 'une autre methode a depense le budget d archive');
+  assert.deepEqual(m.archiveCompte.par, {});
+  assert.deepEqual(await rpc('eth_getLogs', [{}]), []);
+  assert.equal(publics, 1);
+  assert.deepEqual(m.archiveCompte.par, { 'repli eth_getLogs': 1 }, 'le getLogs refuse partout doit finir a l archive');
 });
 
 console.log('✓ ' + n + ' cas — noeud d archive : branche apres publicnode, borne par jour, cle jamais publiee');
