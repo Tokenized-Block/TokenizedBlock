@@ -1,0 +1,108 @@
+/* test-banque-morpho-20261010.mjs — TokenizedBank phase 1 (banque-morpho.js), HORS LIGNE, faux noeud.
+ * AFFIRME : (A) l encodage des appels Morpho (tete statique, `bytes` vide a l offset juste) ; (B) le plafond d emprunt (LLTV puis
+ *   marge 70 %) sur les chiffres lus le 2026-10-10 (prix GOOGLc 352,63 USDC) ; (C) trois etats : une lecture ratee n est jamais PRET,
+ *   une simulation qui reverte -> REFUSE, une simulation muette -> NON_MESURE ; (D) refus : garantie hors registre, plafond, liquidite,
+ *   solde ; (E) approbation au MONTANT EXACT, absente si deja suffisante ; (F) mutants (simulation retiree, approbation infinie,
+ *   marge retiree) : chacun ROUGE.
+ * L execution reelle est prouvee a part : banc-banque-morpho-fork-20261010.mjs. NE PROUVE PAS une liquidation.
+ */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const ICI = path.dirname(fileURLToPath(import.meta.url));
+let n = 0, ko = 0;
+const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } return c; };
+const charger = async (src) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'banque-'));
+  fs.writeFileSync(path.join(dir, 'banque-morpho.js'), src);
+  for (const f of ['encodeur.js', 'lancer-pool.js', 'paires.js']) fs.writeFileSync(path.join(dir, f), "export * from '" + pathToFileURL(path.join(ICI, f)).href + "';\n");
+  return { M: await import(pathToFileURL(path.join(dir, 'banque-morpho.js')).href), dir };
+};
+const SRC = fs.readFileSync(path.join(ICI, 'banque-morpho.js'), 'utf8');
+const { M: B } = await charger(SRC);
+const { ACTIONS_COINBASE } = await import(pathToFileURL(path.join(ICI, 'paires.js')).href);
+const GOOGLC = String(ACTIONS_COINBASE.find((a) => a.symbole === 'GOOGLc').adr).toLowerCase();
+const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', ORACLE = '0x' + 'aa'.repeat(20), IRM = '0x' + 'bb'.repeat(20), INCONNU = '0x' + 'cc'.repeat(20);
+const ID = '0x' + 'a3'.repeat(32), COMPTE = '0x' + 'c0'.repeat(20);
+const PRIX = 3526329343300000000000000000000000000n, LLTV = 770000000000000000n;
+const w = (x) => BigInt(x).toString(16).padStart(64, '0'), wa = (a) => a.slice(2).padStart(64, '0');
+
+/* ── A. encodage ── */
+const p = { loanToken: USDC, collateralToken: GOOGLC, oracle: ORACLE, irm: IRM, lltv: LLTV };
+const sc = B.appelSupplyCollateral(p, 10n ** 7n, COMPTE).slice(10).match(/.{64}/g);
+ok(sc.length === 9 && BigInt('0x' + sc[5]) === 10n ** 7n && sc[6] === wa(COMPTE) && BigInt('0x' + sc[7]) === 256n && BigInt('0x' + sc[8]) === 0n,
+  'A supplyCollateral : marketParams 5 mots, montant, onBehalf, offset bytes = 0x100, longueur 0');
+const su = B.appelSupply(p, 5n, COMPTE).slice(10).match(/.{64}/g);
+/* tete de 9 mots (marketParams 5, assets, shares, onBehalf, offset) puis la longueur des bytes : 10 mots, offset 9 x 32 = 0x120 */
+ok(su.length === 10 && BigInt('0x' + su[5]) === 5n && BigInt('0x' + su[6]) === 0n && su[7] === wa(COMPTE) && BigInt('0x' + su[8]) === 288n && BigInt('0x' + su[9]) === 0n, 'A supply : assets, shares 0, onBehalf, offset bytes = 0x120, longueur 0');
+const bo = B.appelBorrow(p, 7n, COMPTE, COMPTE).slice(10).match(/.{64}/g);
+ok(bo.length === 9 && bo[0] === wa(USDC) && bo[1] === wa(GOOGLC) && BigInt('0x' + bo[4]) === LLTV && bo[8] === wa(COMPTE), 'A borrow : 9 mots statiques, receveur = le compte');
+
+/* ── B. plafond ── */
+const cap = B.capacite({ garantie: 10n ** 7n, prix: PRIX, lltv: LLTV });
+ok(cap.valeur === 35263293n && cap.max === 27152735n && cap.plafond === 19006914n, 'B 0,1 GOOGLc a 352,63 : valeur 35,26 USDC, max LLTV 27,15, plafond (70 %) 19,00 — ' + cap.valeur + '/' + cap.max + '/' + cap.plafond);
+
+/* ── faux noeud ── */
+function noeud(o = {}) {
+  const e = { collat: GOOGLC, prix: PRIX, supply: 600n * 10n ** 6n, borrow: 500n * 10n ** 6n, solde: 10n ** 8n, allow: 0n, sim: 'ok', prixLeve: false, ...o };
+  const appels = [];
+  const rpc = async (methode, params) => {
+    appels.push(methode);
+    if (methode === 'eth_simulateV1') { if (e.sim === 'leve') throw new Error('node down'); return [{ calls: params[0].blockStateCalls[0].calls.map((_, i, t) => ({ status: e.sim === 'revert' && i === t.length - 1 ? '0x0' : '0x1', error: { message: 'Too little' } })) }]; }
+    const { to, data } = params[0]; const sel = data.slice(2, 10);
+    if (to === B.MORPHO_BLUE && sel === B.SEL.idToMarketParams) return '0x' + wa(USDC) + wa(e.collat) + wa(ORACLE) + wa(IRM) + w(LLTV);
+    if (to === B.MORPHO_BLUE && sel === B.SEL.market) return '0x' + w(e.supply) + w(e.supply) + w(e.borrow) + w(e.borrow) + w(1) + w(0);
+    if (to === B.MORPHO_BLUE && sel === B.SEL.position) return '0x' + w(0) + w(0) + w(0);
+    if (to === ORACLE && sel === B.SEL.price) { if (e.prixLeve) throw new Error('oracle silent'); return '0x' + w(e.prix); }
+    if (sel === B.SEL.balanceOf) return '0x' + w(e.solde);
+    if (sel === B.SEL.allowance) return '0x' + w(e.allow);
+    throw new Error('unexpected ' + to + ' ' + sel);
+  };
+  return { rpc, appels };
+}
+const emprunter = (Bm, o, args = {}) => Bm.planEmprunter({ rpc: noeud(o).rpc, compte: COMPTE, id: ID, garantie: 10n ** 7n, emprunt: 10n ** 7n, ...args });
+
+/* ── C. trois etats ── */
+const pret = await emprunter(B, {});
+ok(pret.etat === 'PRET' && pret.resume.simule === true && pret.aSigner.length === 3, 'C simulation acceptee -> PRET (approve, supplyCollateral, borrow)');
+const rev = await emprunter(B, { sim: 'revert' });
+ok(rev.etat === 'REFUSE' && rev.aSigner.length === 0 && /refuses this exact sequence/.test(rev.pourquoi), 'C simulation qui reverte -> REFUSE, rien a signer');
+const muet = await emprunter(B, { sim: 'leve' });
+ok(muet.etat === 'NON_MESURE' && muet.aSigner.length === 0, 'C simulation muette -> NON_MESURE, jamais PRET');
+const oracleMuet = await emprunter(B, { prixLeve: true });
+ok(oracleMuet.etat === 'NON_MESURE' && oracleMuet.aSigner.length === 0, 'C oracle illisible -> NON_MESURE (jamais un prix 0, jamais PRET)');
+
+/* ── D. refus ── */
+const hors = await emprunter(B, { collat: INCONNU });
+ok(hors.etat === 'REFUSE' && /not a tokenized stock of our registry/.test(hors.pourquoi), 'D garantie hors registre -> REFUSE');
+const trop = await emprunter(B, {}, { emprunt: 19006915n });
+ok(trop.etat === 'REFUSE' && trop.aSigner.length === 0, 'D plafond + 1 -> REFUSE (19 006 915 > 19 006 914)');
+const pile = await emprunter(B, {}, { emprunt: 19006914n });
+ok(pile.etat === 'PRET', 'D plafond pile -> PRET');
+const sec = await emprunter(B, { supply: 100n, borrow: 95n }, { emprunt: 10n });
+ok(sec.etat === 'REFUSE' && /only 5 raw units/.test(sec.pourquoi), 'D liquidite du marche (5) < emprunt (10) -> REFUSE avec le chiffre');
+const pauvre = await emprunter(B, { solde: 10n ** 6n });
+ok(pauvre.etat === 'REFUSE' && /holds 1000000/.test(pauvre.pourquoi), 'D solde de garantie insuffisant -> REFUSE');
+
+/* ── E. approbation ── */
+const ap = pret.aSigner[0];
+ok(ap.data.startsWith('0x' + B.SEL.approve) && BigInt('0x' + ap.data.slice(-64)) === 10n ** 7n && ap.to === GOOGLC, 'E approbation de la garantie au MONTANT EXACT (10 000 000)');
+const dejaAutorise = await emprunter(B, { allow: 10n ** 7n });
+ok(dejaAutorise.etat === 'PRET' && !dejaAutorise.aSigner.some((c) => c.data.startsWith('0x' + B.SEL.approve)), 'E allocation deja suffisante -> pas d approbation');
+const pr = await B.planPreter({ rpc: noeud({}).rpc, compte: COMPTE, id: ID, montant: 5n * 10n ** 6n });
+ok(pr.etat === 'PRET' && pr.aSigner[0].to === USDC && BigInt('0x' + pr.aSigner[0].data.slice(-64)) === 5n * 10n ** 6n, 'E preter : approbation USDC exacte puis supply');
+
+/* ── F. mutants ── */
+const muter = async (de, vers, nom, juge) => {
+  if (!SRC.includes(de)) return ok(false, 'F mutant introuvable : ' + nom);
+  const { M } = await charger(SRC.replace(de, vers));
+  let rouge; try { rouge = await juge(M); } catch (_) { rouge = true; }
+  ok(rouge, 'F mutant « ' + nom + ' » : ROUGE');
+};
+await muter("const s = await simulerSequenceLancement({ rpc, compte, appels });", "const s = { etat: 'ACCEPTE' };", 'simulation retiree', async (M) => (await emprunter(M, { sim: 'revert' })).etat === 'PRET');
+await muter("data: appelApprove(MORPHO_BLUE, G)", "data: appelApprove(MORPHO_BLUE, (1n << 256n) - 1n)", 'approbation infinie', async (M) => BigInt('0x' + (await emprunter(M, {})).aSigner[0].data.slice(-64)) !== 10n ** 7n);
+await muter("plafond: (max * MARGE_EMPRUNT_BPS) / 10000n", "plafond: max", 'marge retiree', async (M) => (await emprunter(M, {}, { emprunt: 19006915n })).etat === 'PRET');
+
+console.log(n - ko + ' ok / ' + ko + ' KO (' + n + ' assertions)');
+process.exit(ko ? 1 : 0);
