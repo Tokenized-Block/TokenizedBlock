@@ -64,6 +64,39 @@ const nonMesure = (pourquoi) => ({ etat: 'NON_MESURE', pourquoi, aSigner: [] });
 const refuse = (pourquoi, resume) => ({ etat: 'REFUSE', pourquoi, aSigner: [], ...(resume ? { resume } : {}) });
 const divHaut = (a, b) => (a + b - 1n) / b;
 
+/** La LISTE des marches Morpho Base dont la garantie est une action de notre registre, lue chez blue-api.morpho.org (forme lue
+ *  par introspection le 2026-10-10 : marketId, oracle{address}, state{...Usd}). ⛔ Ce sont les chiffres de L API, pas relus sur la
+ *  chaine : un plan relit le marche sur la chaine et simule. Echec = { ok:false, etat:'NON_LU' }, jamais une liste vide. */
+export const URL_API_MORPHO = 'https://blue-api.morpho.org/graphql';
+export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs = 15000 } = {}) {
+  const adrs = [...ACTIONS.keys()];
+  const q = 'query($c:[String!]){ markets(first: 200, where: { chainId_in: [8453], collateralAssetAddress_in: $c }) { items { marketId lltv listed '
+    + 'oracle { address } loanAsset { address symbol decimals } collateralAsset { address symbol decimals } '
+    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd utilization borrowApy supplyApy } } } }';
+  let j;
+  try {
+    const r = await fetchImpl(URL_API_MORPHO, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(delaiMs),
+      body: JSON.stringify({ query: q, variables: { c: adrs } }) });
+    if (!r.ok) return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API answered HTTP ' + r.status };
+    j = await r.json();
+  } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API not read: ' + String((e && e.message) || e).slice(0, 80) }; }
+  const items = j && j.data && j.data.markets && j.data.markets.items;
+  if (!Array.isArray(items) || (j.errors && j.errors.length)) return { ok: false, etat: 'NON_LU', pourquoi: 'Morpho API answer not understood' };
+  const marches = [];
+  for (const m of items) {
+    const g = String((m.collateralAsset && m.collateralAsset.address) || '').toLowerCase();
+    if (!ACTIONS.has(g) || !/^0x[0-9a-fA-F]{64}$/.test(String(m.marketId || ''))) continue; /* l API filtre deja ; on ne la croit pas sur parole */
+    const s = m.state || {};
+    marches.push({ id: String(m.marketId).toLowerCase(), garantie: { adr: g, symbole: ACTIONS.get(g) },
+      pret: { adr: String(m.loanAsset.address).toLowerCase(), symbole: m.loanAsset.symbol, decimales: m.loanAsset.decimals },
+      lltv: String(m.lltv), listeParMorpho: m.listed === true, oracle: String((m.oracle && m.oracle.address) || '').toLowerCase(),
+      offreUsd: s.supplyAssetsUsd ?? null, empruntUsd: s.borrowAssetsUsd ?? null, disponibleUsd: s.liquidityAssetsUsd ?? null,
+      utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null });
+  }
+  marches.sort((a, b) => (b.offreUsd || 0) - (a.offreUsd || 0));
+  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches };
+}
+
 /** Un marche Morpho, LU sur la chaine : parametres, totaux, prix de l oracle. NON_LU si une seule lecture manque. */
 export async function lireMarche({ rpc, id }) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(id || ''))) return { etat: 'REFUSE', pourquoi: 'a whole market id (bytes32) is required' };

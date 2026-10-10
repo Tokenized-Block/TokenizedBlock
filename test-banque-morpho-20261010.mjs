@@ -93,6 +93,26 @@ ok(dejaAutorise.etat === 'PRET' && !dejaAutorise.aSigner.some((c) => c.data.star
 const pr = await B.planPreter({ rpc: noeud({}).rpc, compte: COMPTE, id: ID, montant: 5n * 10n ** 6n });
 ok(pr.etat === 'PRET' && pr.aSigner[0].to === USDC && BigInt('0x' + pr.aSigner[0].data.slice(-64)) === 5n * 10n ** 6n, 'E preter : approbation USDC exacte puis supply');
 
+/* ── G. la liste de l API Morpho (faux fetch) : trois etats, jamais une liste vide sur un echec ── */
+const repApi = (items, extra = {}) => async () => ({ ok: true, status: 200, json: async () => ({ data: { markets: { items } }, ...extra }) });
+const item = (g, id, usd) => ({ marketId: id, lltv: '770000000000000000', listed: true, oracle: { address: ORACLE }, loanAsset: { address: USDC, symbol: 'USDC', decimals: 6 },
+  collateralAsset: { address: g, symbol: 'X', decimals: 8 }, state: { supplyAssetsUsd: usd, borrowAssetsUsd: 1, liquidityAssetsUsd: 2, utilization: 0.5, borrowApy: 0.05, supplyApy: 0.04 } });
+const L = await B.lireMarchesMorpho({ fetchImpl: repApi([item(GOOGLC, ID, 10), item(INCONNU, '0x' + 'd1'.repeat(32), 999), item(GOOGLC, '0x' + 'e2'.repeat(32), 50)]) });
+ok(L.ok && L.marches.length === 2 && L.marches[0].offreUsd === 50 && L.marches.every((m) => m.garantie.symbole === 'GOOGLc'), 'G liste : garantie hors registre ecartee (l API n est pas crue sur parole), tri par offre');
+const L500 = await B.lireMarchesMorpho({ fetchImpl: async () => ({ ok: false, status: 500 }) });
+ok(!L500.ok && L500.etat === 'NON_LU' && !('marches' in L500), 'G API en HTTP 500 -> NON_LU, pas de liste (jamais « aucun marche »)');
+const Lerr = await B.lireMarchesMorpho({ fetchImpl: repApi([], { errors: [{ message: 'x' }] }) });
+ok(!Lerr.ok && Lerr.etat === 'NON_LU', 'G API qui rend des erreurs GraphQL -> NON_LU');
+const Lleve = await B.lireMarchesMorpho({ fetchImpl: async () => { throw new Error('reseau'); } });
+ok(!Lleve.ok && Lleve.etat === 'NON_LU', 'G API injoignable -> NON_LU');
+
+/* ── H. le serveur cable les deux routes, sur le budget des rails et la simulation de rpcNaissance (texte : le cablage ne
+ *   s execute pas sans demarrer le serveur) ── */
+const srv = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
+ok(/if \(chemin === '\/api\/banque\/marches'\)/.test(srv) && /if \(chemin === '\/api\/banque\/plan'\)/.test(srv)
+  && /planEmprunter\(\{ rpc: rpcNaissance,/.test(srv) && /nIpB > RAILS_IP_MINUTE \|\| railsBudget\.n >= RAILS_MINUTE \|\| railsEnVol >= RAILS_EN_VOL_MAX/.test(srv),
+  'H routes /api/banque/marches et /api/banque/plan, budget des rails, rpc qui simule (rpcNaissance)');
+
 /* ── F. mutants ── */
 const muter = async (de, vers, nom, juge) => {
   if (!SRC.includes(de)) return ok(false, 'F mutant introuvable : ' + nom);

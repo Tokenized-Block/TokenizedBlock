@@ -140,6 +140,7 @@ import { resumerTrending } from './trending.js';
 import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-logs.js';
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE } from './paires.js';
 import { planRail } from './rails-api.js';
+import { lireMarchesMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
 import { traiterMcp } from './mcp-tblock.js';
@@ -2169,6 +2170,8 @@ const RAILS_IP_MINUTE = 4;
 const RAILS_EN_VOL_MAX = 2;
 const RAILS_CACHE_MS = 15000;
 const railsBudget = { minute: 0, n: 0, parIp: new Map() };
+/* 2026-10-10 : la liste des marches TokenizedBank (API Morpho), en memoire ; une seule lecture en vol */
+const banqueMarches = { r: null, t: 0, enVol: null };
 const railsCache = new Map();
 const railsCompteurs = { plans: 0, prets: 0, approbations: 0, refus: 0, nonMesures: 0, trop: 0, sondes: 0 };
 let railsEnVol = 0;
@@ -4519,6 +4522,49 @@ function traiterRequete(req, res) {
       reponsesNoms.set(cle, { t: Date.now(), corps });
       repondre(corps);
     })().catch(() => repondre({ ok: false, etat: 'NON_MESURE', pourquoi: 'the name index could not be read' }));
+    return;
+  }
+
+  /* ══ 2026-10-10 — TOKENIZEDBANK PHASE 1 (banque-morpho.js) : preter / emprunter sur les marches Morpho Blue EXISTANTS dont la
+   *   garantie est une action de notre registre. LECTURE SEULE : des plans NON SIGNES, simules (eth_simulateV1, rpcNaissance) avant
+   *   PRET. Le budget est CELUI des rails (memes noeuds partages) : un plan banque compte comme un plan de trade.
+   *   GET /api/banque/marches : la liste de l API Morpho (10 min ; un echec 1 min, dit NON_LU, jamais une liste vide).
+   *   GET /api/banque/plan?action=emprunter|preter|rembourser|retirer&id=<bytes32>&compte=<adr>&garantie=&emprunt=&montant=&tout=1 */
+  if (chemin === '/api/banque/marches') {
+    const rendreB = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' }); res.end(JSON.stringify(o)); };
+    const frais = banqueMarches.r && Date.now() - banqueMarches.t < (banqueMarches.r.ok ? 600000 : 60000);
+    if (frais) { rendreB({ ...banqueMarches.r, lu: new Date(banqueMarches.t).toISOString() }); return; }
+    if (!banqueMarches.enVol) banqueMarches.enVol = lireMarchesMorpho().then((r) => { banqueMarches.r = r; banqueMarches.t = Date.now(); return r; }).finally(() => { banqueMarches.enVol = null; });
+    banqueMarches.enVol.then((r) => rendreB({ ...r, lu: new Date(banqueMarches.t).toISOString(),
+      borne: 'Figures from the Morpho API, not re-read on chain. A plan re-reads the market on chain and simulates it before it is offered.' }))
+      .catch(() => rendreB({ ok: false, etat: 'NON_LU', pourquoi: 'Morpho markets not read' }));
+    return;
+  }
+  if (chemin === '/api/banque/plan') {
+    const rendreB = (code, o, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', ...extra }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET') { rendreB(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    const action = String(q.get('action') || ''), id = String(q.get('id') || ''), compte = String(q.get('compte') || '');
+    const entier = (k) => { const v = String(q.get(k) || ''); return /^(0|[1-9][0-9]{0,40})$/.test(v) ? BigInt(v) : null; };
+    const usage = 'usage: /api/banque/plan?action=emprunter|preter|rembourser|retirer&id=<Morpho market id, bytes32>&compte=<the wallet that will sign>'
+      + ' and: emprunter -> garantie=<raw units of the stock, 0 for none>&emprunt=<raw units>; preter|retirer -> montant=<raw units>; rembourser -> montant=<raw units> or tout=1';
+    if (!['emprunter', 'preter', 'rembourser', 'retirer'].includes(action) || !/^0x[0-9a-fA-F]{64}$/.test(id) || !/^0x[0-9a-fA-F]{40}$/.test(compte)) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; }
+    const ipB = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const minuteB = Math.floor(Date.now() / 60000);
+    if (railsBudget.minute !== minuteB) { railsBudget.minute = minuteB; railsBudget.n = 0; railsBudget.parIp.clear(); }
+    const nIpB = (railsBudget.parIp.get(ipB) || 0) + 1;
+    if (nIpB > RAILS_IP_MINUTE || railsBudget.n >= RAILS_MINUTE || railsEnVol >= RAILS_EN_VOL_MAX) {
+      rendreB(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: each plan reads the chain on a node shared with the whole site — retry in a minute' }, { 'retry-after': '60' });
+      return;
+    }
+    let plan;
+    if (action === 'emprunter') { const g = entier('garantie') ?? 0n, e = entier('emprunt'); if (e === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => planEmprunter({ rpc: rpcNaissance, compte, id, garantie: g, emprunt: e }); }
+    else if (action === 'rembourser') { const tout = q.get('tout') === '1', m = entier('montant'); if (!tout && m === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => planRembourser({ rpc: rpcNaissance, compte, id, montant: m, tout }); }
+    else { const m = entier('montant'); if (m === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => (action === 'preter' ? planPreter : planRetirerGarantie)({ rpc: rpcNaissance, compte, id, montant: m }); }
+    railsBudget.parIp.set(ipB, nIpB); railsBudget.n += 1; railsEnVol += 1;
+    plan().then((r) => rendreB(200, { ok: r.etat === 'PRET', action, ...r }, {}),
+      (e) => rendreB(200, { ok: false, etat: 'NON_MESURE', action, pourquoi: 'plan not built: ' + String((e && e.message) || e).slice(0, 120), aSigner: [] }))
+      .finally(() => { railsEnVol -= 1; });
     return;
   }
 
