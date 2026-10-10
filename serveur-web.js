@@ -3874,6 +3874,53 @@ function etiquetteRequete(req) {
   const p = String((req && req.url) || '/').split('?')[0].replace(/0x[0-9a-fA-F]{6,}/g, ':adr').replace(/\/\d+(?=\/|$)/g, '/:n');
   return ('route ' + p).slice(0, 60);
 }
+/* ══ 2026-10-10 — LA FENETRE DEXSCREENER D UN PROFIL EST REGARDEE AVANT D ETRE CHARGEE ══════════════════════════════════════════════
+ * Capture de Phil : le cadre « Live pair window on DexScreener » montrait « 503 Service Unavailable — No server is available to handle
+ *   this request », la page d erreur BRUTE de leur repartiteur de charge, dans un grand cadre noir. MESURE (10:27 UTC, embed de DJTc) :
+ *   1er essai delai depasse (30 s), puis 200 deux fois — une panne PASSAGERE chez DexScreener ; leur API repondait (c est elle qui
+ *   donne l URL). Une iframe d un autre domaine ne dit pas son statut : le serveur regarde la page avant que le navigateur la charge.
+ *   EN_PANNE = 5xx ou delai depasse -> le navigateur montre une carte claire (« reessayer », « charger quand meme » ; le lien
+ *   « Open DexScreener » au-dessus du cadre reste) ;
+ *   OK = 2xx ; INCONNU = tout le reste (un 403 de garde anti-robots, un 3xx, un 4xx, le budget de verifications use) -> l iframe
+ *   comme avant : on ne cache jamais un graphique qui marche peut-etre (et la carte garde « charger quand meme »).
+ * ⛔ ANTI-SSRF : seule https://dexscreener.com/base/<0x + 40 ou 64 hexa>?embed=1 est demandee, SANS suivre de redirection
+ *   (redirect: manual) ; le corps n est jamais lu (annule des l en-tete). Cache 60 s par paire, une lecture en vol par paire, et
+ *   au plus 30 verifications par minute en tout : la route ne peut pas servir de relais pour marteler DexScreener. */
+const ID_PAIRE_DEX = /^0x(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+/* revue adverse (2026-10-10, executee) : un seul delai depasse cachait 60 s, pour TOUT le monde, un graphique revenu 1 s plus tard,
+ *   et « Try again » relisait le meme cache. Une PANNE ne se garde donc que 15 s, et `frais` (le bouton « Try again ») la relit
+ *   tout de suite — toujours dans le budget par minute et une seule lecture en vol par paire. */
+const EMBED_DEX_TTL_MS = 60000, EMBED_DEX_TTL_PANNE_MS = 15000, EMBED_DEX_DELAI_MS = 6000, EMBED_DEX_PAR_MINUTE = 30;
+const embedDexCache = new Map(), embedDexEnVol = new Map();
+const embedDexFenetre = { debut: 0, n: 0 };
+function etatEmbedDex(id, frais = false) {
+  const c = embedDexCache.get(id);
+  const ttl = c && c.r.etat === 'EN_PANNE' ? (frais ? 0 : EMBED_DEX_TTL_PANNE_MS) : EMBED_DEX_TTL_MS;
+  if (c && Date.now() - c.t < ttl) return Promise.resolve(c.r);
+  if (embedDexEnVol.has(id)) return embedDexEnVol.get(id);
+  if (Date.now() - embedDexFenetre.debut > 60000) { embedDexFenetre.debut = Date.now(); embedDexFenetre.n = 0; }
+  if (embedDexFenetre.n >= EMBED_DEX_PAR_MINUTE) return Promise.resolve({ ok: true, etat: 'INCONNU', status: null, pourquoi: 'check budget used for this minute' });
+  embedDexFenetre.n += 1;
+  const p = (async () => {
+    let r;
+    try {
+      const x = await fetch('https://dexscreener.com/base/' + id + '?embed=1', { redirect: 'manual', signal: AbortSignal.timeout(EMBED_DEX_DELAI_MS),
+        headers: { accept: 'text/html', 'user-agent': 'Mozilla/5.0 (compatible; TokenizedBlock embed check)' } });
+      try { await x.body?.cancel(); } catch (_) { /* rien a lire */ }
+      const s = x.status;
+      r = { ok: true, etat: s >= 200 && s < 300 ? 'OK' : s >= 500 ? 'EN_PANNE' : 'INCONNU', status: s, lu: new Date().toISOString() };
+    } catch (e) {
+      const delai = /timeout|abort/i.test(String((e && (e.name + ' ' + e.message)) || e));
+      r = { ok: true, etat: delai ? 'EN_PANNE' : 'INCONNU', status: null,
+        pourquoi: delai ? 'no answer within ' + (EMBED_DEX_DELAI_MS / 1000) + ' s' : 'not reachable from the server', lu: new Date().toISOString() };
+    }
+    if (embedDexCache.size >= 500) embedDexCache.delete(embedDexCache.keys().next().value);
+    embedDexCache.set(id, { t: Date.now(), r });
+    return r;
+  })().finally(() => embedDexEnVol.delete(id));
+  embedDexEnVol.set(id, p);
+  return p;
+}
 function traiterRequete(req, res) {
   /* ⛔ Old Railway host name must never serve content — always send people to MAIN. */
   const host = String(req.headers.host || '').split(':')[0].toLowerCase();
@@ -4212,6 +4259,15 @@ function traiterRequete(req, res) {
   if (chemin === '/api/nos-blocks') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     res.end(nosBlocksCorps());
+    return;
+  }
+
+  /* ⛔ 2026-10-10 : la fenetre DexScreener d un profil regardee AVANT d etre chargee (voir etatEmbedDex). */
+  if (chemin === '/api/dex-embed-etat') {
+    const id = String(new URL(req.url, 'http://x').searchParams.get('pair') || '').toLowerCase();
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (!ID_PAIRE_DEX.test(id)) { repondre({ ok: false, pourquoi: 'not a Base pair id' }); return; }
+    void etatEmbedDex(id, new URL(req.url, 'http://x').searchParams.get('frais') === '1').then(repondre);
     return;
   }
 

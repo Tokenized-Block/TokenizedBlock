@@ -3066,6 +3066,16 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div id="pPnlDexEmbed" hidden style="margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid var(--ligne);aspect-ratio:16/10;background:var(--fond)">
           <iframe id="pPnlDexFrame" title="DexScreener pair" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
             style="width:100%;height:100%;border:0;min-height:280px" allow="clipboard-write"></iframe>
+          <!-- 2026-10-10 (Phil, capture : « 503 Service Unavailable » BRUT dans ce cadre) : DexScreener en panne -> une carte claire,
+               jamais leur page d erreur ; « charger quand meme » laisse le choix au visiteur ([hidden] est !important, ligne 160). -->
+          <div id="pPnlDexPanne" hidden role="status" aria-live="polite" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:18px;text-align:center;box-sizing:border-box">
+            <p class="titre" style="margin:0">DexScreener is not answering right now</p>
+            <p class="note" id="pPnlDexPanneTxt" style="margin:0;max-width:46ch"></p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+              <button type="button" class="bouton sec" id="pPnlDexReessayer" style="width:auto">Try again</button>
+              <button type="button" class="bouton sec" id="pPnlDexQuandMeme" style="width:auto">Load the chart anyway</button>
+            </div>
+          </div>
         </div>
         <p class="note" id="pPnlNote"></p>
       </div>
@@ -8879,7 +8889,9 @@ async function peindrePnlSwaps(adr, perime) {
   note.textContent = '';
   if (dexRow) dexRow.hidden = true;
   if (dexEmbed) dexEmbed.hidden = true;
-  if (dexFrame) dexFrame.removeAttribute('src');
+  if (dexFrame) { dexFrame.removeAttribute('src'); dexFrame.hidden = false; }
+  { const pa = $('#pPnlDexPanne'); if (pa) pa.hidden = true; if (dexEmbed) dexEmbed.style.aspectRatio = '16/10'; } /* 2026-10-10 : la carte « en panne » d un block ne reste pas sur le suivant */
+  dexEmbedCourant = null;
   if (dexA) { dexA.removeAttribute('href'); dexA.textContent = 'Open DexScreener ↗'; }
   if (badge) badge.textContent = ' · reading…';
   let r = null;
@@ -8907,8 +8919,9 @@ async function peindrePnlSwaps(adr, perime) {
     dexRow.hidden = false;
     if (dexFrame && dexEmbed && /^https:\/\/dexscreener\.com\/base\//i.test(String(dexUrl))) {
       const base = String(dexUrl).split('?')[0];
-      dexFrame.src = base + '?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartDefaultOnMobile=1&chartTheme=dark&theme=dark&chartStyle=0&chartType=usd&interval=15';
       dexEmbed.hidden = false;
+      /* 2026-10-10 : la page est regardee par le serveur AVANT d etre chargee (/api/dex-embed-etat, montrerEmbedDex) */
+      void montrerEmbedDex({ base, src: base + '?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartDefaultOnMobile=1&chartTheme=dark&theme=dark&chartStyle=0&chartType=usd&interval=15', perime });
     }
     note.textContent = (r.note || '') + ' · DexScreener = this block\'s measured pair (external).';
   }
@@ -8931,6 +8944,45 @@ async function peindrePnlSwaps(adr, perime) {
   } catch (_) { /* honesty optional */ }
 }
 
+
+/* ⛔ 2026-10-10 (Phil, capture : « 503 Service Unavailable — No server is available to handle this request », la page d erreur BRUTE
+ *   de DexScreener dans le cadre du profil). Une iframe d un autre domaine ne dit pas son statut : le serveur regarde la page d abord
+ *   (/api/dex-embed-etat). EN_PANNE (5xx, delai depasse) -> une carte claire, « Try again » et « Load the chart anyway » ; OK, INCONNU
+ *   ou une verification illisible -> l iframe comme avant (on ne cache jamais un graphique qui marche peut-etre). */
+var dexEmbedCourant = null; /* var : la remise a zero du profil (plus haut) l ecrit, sans zone morte temporelle */
+/* revue adverse (2026-10-10, executee a 375 px) : le cadre garde son ratio 16/10 (178 px de haut) et la carte y etait COUPEE —
+ *   « Load the chart anyway » invisible. La carte affichee rend au cadre sa hauteur libre ; le graphique la lui reprend. */
+async function montrerEmbedDex({ base, src, perime = null }, { frais = false } = {}) {
+  const frame = $('#pPnlDexFrame'), panne = $('#pPnlDexPanne'), txt = $('#pPnlDexPanneTxt'), cadre = $('#pPnlDexEmbed');
+  if (!frame || !panne) return;
+  const jeton = dexEmbedCourant = { base, src, perime };
+  const charger = () => { panne.hidden = true; frame.hidden = false; if (cadre) cadre.style.aspectRatio = '16/10'; if (frame.getAttribute('src') !== src) frame.src = src; };
+  const id = (String(base).match(/\/base\/(0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?)$/) || [])[1];
+  let e = null;
+  try { if (id) e = await fetch('/api/dex-embed-etat?pair=' + id.toLowerCase() + (frais ? '&frais=1' : ''), { signal: AbortSignal.timeout(9000) }).then((x) => x.json()); } catch (_) { e = null; }
+  if (dexEmbedCourant !== jeton || (perime && perime())) return; /* un autre block a ete ouvert entre-temps */
+  if (!e || e.ok !== true || e.etat !== 'EN_PANNE') { charger(); return; }
+  frame.removeAttribute('src'); frame.hidden = true; if (cadre) cadre.style.aspectRatio = 'auto';
+  if (txt) {
+    const quand = e.lu ? String(e.lu).slice(11, 16) + ' UTC' : 'just now';
+    txt.textContent = 'Checked at ' + quand + ': ' + (e.status ? 'DexScreener answered HTTP ' + e.status : (e.pourquoi || 'no answer'))
+      + '. The swaps above are read separately and are not affected. Their page may come back in a minute.';
+  }
+  panne.hidden = false;
+}
+/* « Try again » relit VRAIMENT (frais : le serveur ne ressert pas une panne en cache) et le dit pendant qu il relit */
+$('#pPnlDexReessayer')?.addEventListener('click', () => {
+  if (!dexEmbedCourant) return;
+  const t = $('#pPnlDexPanneTxt'); if (t) t.textContent = 'Checking DexScreener again…';
+  void montrerEmbedDex(dexEmbedCourant, { frais: true });
+});
+/* « Load the chart anyway » : un nouveau jeton annule toute verification encore en vol (sinon sa reponse tardive remettrait la carte) */
+$('#pPnlDexQuandMeme')?.addEventListener('click', () => {
+  const c = dexEmbedCourant, frame = $('#pPnlDexFrame'), panne = $('#pPnlDexPanne'), cadre = $('#pPnlDexEmbed');
+  if (!c || !frame || !panne) return;
+  dexEmbedCourant = { ...c };
+  panne.hidden = true; frame.hidden = false; if (cadre) cadre.style.aspectRatio = '16/10'; frame.src = c.src;
+});
 
 /* tip 2280: public live Swaps·PnL — anyone on the profile; re-read Dex/Gecko on a timer while open */
 let pnlLiveTimer = null;
