@@ -101,6 +101,12 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
   for (const [i, s] of chemin.entries()) {
     const r = await resoudre({ de: s.de, vers: s.vers, montant: courant });
     if (!r || r.etat !== 'OK' || !r.cle) {
+      /* ⛔ 2026-10-10 (prod, E.T.FFB -> USDC : « hop 1 (…) has no pool we can build: this pool is too thin… ») : une pool TROP FINE
+       *   existe - elle cote une fraction du montant. Dire « no pool » serait faux : on dit le saut et la cause, et le drapeau suit. */
+      if (r && r.poolTropFine === true) {
+        return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: i, poolTropFine: true, fractionCotee: r.fractionCotee ?? null,
+          pourquoi: 'hop ' + (i + 1) + ': ' + (r.pourquoi || 'this pool is too thin for this amount') };
+      }
       /* ⛔ L ETAT DU RESOLVEUR EST PROPAGE, PAS TRADUIT — et le NUMERO du saut est dit. */
       return {
         etat: r && r.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE',
