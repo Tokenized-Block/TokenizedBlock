@@ -114,9 +114,16 @@ cas('⛔⛔ LE CADEAU PART EN PREMIER, DANS LE LOT COMME EN SEQUENTIEL', () => {
 cas('⛔⛔⛔ PAS DE RETOMBEE APRES UN LOT PEUT-ETRE EN VOL', () => {
   /* ⛔⛔ Renvoyer apres un `ECHEC_ENVOI` enverrait le CADEAU deux fois. Meme garde que sur le
    *     chemin d achat, meme raison : `ECHEC_ENVOI` ne garantit pas que rien n est parti. */
-  const t = trancheNue(brut, 'let lotTente = false;', 'envoiEnCours = false;', 'le bloc d envoi');
+  /* ⛔ 2026-10-09 (97fc01c) : l envoi du lot a ete extrait dans `envoyerCadeauEtFrais`, partage par `envoyer()` et le GM du
+   *   panneau (`bcSaluer`). L ancienne fin (« envoiEnCours = false; ») est desormais AVANT le debut : le cas levait une exception
+   *   au lieu de juger — un trou de garde ouvert par mon commit, ferme ici en rebornant la tranche sur la fonction elle-meme. */
+  const t = trancheNue(brut, 'let lotTente = false;', '  return r;', 'le bloc d envoi (envoyerCadeauEtFrais)');
   assert.match(t, /lot\.sendCallsUnsupported !== true/,
     'la retombee en sequentiel n est pas bornee au seul cas sur : double envoi du cadeau possible');
+  /* et la garde couvre les DEUX chemins : chacun envoie par cette fonction, aucun ne garde sa propre copie du lot */
+  assert.equal((html.match(/await envoyerCadeauEtFrais\(p\)/g) || []).length, 2, 'envoyer() et bcSaluer doivent tous deux passer par envoyerCadeauEtFrais');
+  assert.equal((html.match(/envoyerLotAtomique\(\{ eth: window\.ethereum, rpc, chaineAttendue: CHAINE, compte,\s+calls: \[p\.tx, p\.txFrais\] \}\)/g) || []).length, 1,
+    'le lot cadeau + frais est construit a UN seul endroit');
 });
 
 cas('⛔⛔ LA PHRASE DE FRAIS EST AFFICHEE AVANT LA SIGNATURE', () => {
