@@ -29,6 +29,8 @@ import { sortieSpot } from './plan-usdc-block.js';
 import { selecteur } from './keccak.js';
 import { indexBlocAJonction, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 import { enVolBorne, LECTURES_EN_VOL_MAX } from './lectures-en-vol.js';
+import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
+import { USDC_BASE } from './frais-creation.js';
 
 /** Les etats rendus. ⛔ Aucun autre n est produit. */
 export const ETATS = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']);
@@ -43,6 +45,13 @@ const bas = (x) => String(x || '').toLowerCase();
 const ADR = /^0x[0-9a-fA-F]{40}$/;
 const nulle = (a) => /^0x0{40}$/i.test(String(a || ''));
 
+/* la pool MESUREE d une paire USDC / action de la table, sinon null */
+function pairePinglee(a, b) {
+  const u = bas(USDC_BASE), x = bas(a) === u ? bas(b) : (bas(b) === u ? bas(a) : null);
+  if (!x) return null;
+  for (const [k, v] of POOLS_ACTIONS_AERODROME) if (bas(k) === x && v && ADR.test(String(v.pool || '')) && Number.isInteger(v.tickSpacing)) return v;
+  return null;
+}
 async function appel(rpc, to, data) {
   return rpc('eth_call', [{ to, data }, 'latest']);
 }
@@ -56,7 +65,24 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL,
   if (!ADR.test(String(a || '')) || !ADR.test(String(b || ''))) {
     return { etat: 'REFUSE', pourquoi: 'both tokens must be whole addresses' };
   }
-  /* ⛔⛔ 2026-10-03 (mesure, 37 actions x 9 espacements) : cette fonction rendait la PREMIERE pool trouvee, en partant de
+  /* ⛔ 2026-10-10 (revue adverse de Claude, point 2) : UNE ACTION DE LA TABLE MESUREE SE TRAITE SUR SA POOL MESUREE, JAMAIS SUR
+   *   « la plus profonde lue ». La profondeur (balanceOf de l entree) ne dit rien du cote sortie et se gonfle par une position
+   *   hors-plage dans une pool tierce (creation permissionless) : mock 1 000 USDC -> AMZNc, pool tierce 100x l entree a un prix
+   *   10^6 pire = PRET avec un minimum 1/1 001 001 du juste. La pool epinglee est re-verifiee : getPool(paire, son espacement)
+   *   doit la rendre ; sinon NON_MESURE ou REFUSE, jamais un repli sur une autre pool. */
+  const epingle = pairePinglee(a, b);
+  if (epingle) {
+    const c = calldataGetPool({ tokenA: a, tokenB: b, tickSpacing: epingle.tickSpacing });
+    let rendue = null;
+    try { rendue = c.etat === 'PRET' ? bas('0x' + String(await appel(rpc, c.to, c.data)).slice(-40)) : null; } catch (_) { rendue = null; }
+    if (!rendue || !ADR.test(rendue)) return { etat: 'NON_MESURE', pourquoi: 'the measured pool of this stock could not be confirmed by the factory, so no pool is used' };
+    if (rendue !== bas(epingle.pool)) return { etat: 'REFUSE', pourquoi: 'the factory no longer returns the measured pool of this stock: nothing is built on another pool' };
+    let t0 = null;
+    try { t0 = '0x' + String(await appel(rpc, rendue, selecteur('token0()'))).slice(-40); } catch (_) { t0 = null; }
+    if (!t0 || !ADR.test(t0)) return { etat: 'NON_MESURE', pourquoi: 'the pool was found but token0() could not be read, so the swap direction is unknown' };
+    return { etat: 'PRET', pool: rendue, tickSpacing: epingle.tickSpacing, token0: bas(t0), entreeEst0: bas(t0) === bas(a),
+      essayes: 1, refus: 0, trouvees: 1, profondeur: null, poolMesuree: true };
+  }  /* ⛔⛔ 2026-10-03 (mesure, 37 actions x 9 espacements) : cette fonction rendait la PREMIERE pool trouvee, en partant de
    *   l espacement 1. MUc, PLTRc et AMZNc ont une pool VIDE a 1 (0 $ d USDC) et leur vraie pool a 10 (360 k$, 588 k$,
    *   1,19 M$) : le franchissement calculait son minimum sur une pool vide. On parcourt donc TOUS les espacements et on
    *   garde la plus PROFONDE, mesuree par le solde du jeton d entree `a` que la pool detient (balanceOf). Une seule pool

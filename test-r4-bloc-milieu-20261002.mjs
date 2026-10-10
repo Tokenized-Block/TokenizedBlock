@@ -370,7 +370,7 @@ async function banc({ E, T, P, F, S, PS, PF, PA, PE, MP, PO }) {
   /* ══ 2026-10-02 (Phil : UN frais par swap ; C2 F3) — FRANCHISSEMENT Uniswap -> Aerodrome : UN frais a6cf par LOT ══
    * ⛔ L ORACLE LIT LES OCTETS : a6cf dans la jambe 1 (TAKE routeur), a6cf dans la jambe 2 (sweep CL), plus chaque jambe dont
    *   le hook verse a6cf (liste mesuree). Total attendu : 1. Sur f9368a0 : routeur V4 + sweep CL = 2 (ou hook + sweep = 2). */
-  const POOL_A = '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0';
+  const POOL_A = '0x853f5f1b92b16714fe6cda67caad0856b83c7ab9'; /* 2026-10-10 : la pool MESUREE de NVDAc (plan-franchissement epingle la table ; c etait celle d AAPLc) */
   const SEL_GP = '0x' + PO.selecteur('getPool(address,address,int24)'), SEL_T0 = '0x' + PO.selecteur('token0()'), SEL_S0 = '0x' + PO.selecteur('slot0()');
   const mot = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
   const rpcFr = (devis = 10n ** 18n) => async (m, p) => {
