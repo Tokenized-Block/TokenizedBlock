@@ -13662,8 +13662,13 @@ async function calculerLancement() {
        *     cause MESUREE des « 0 marche sur V6/V7/V8 », et elle n avait rien a voir avec la demande. */
       const hooks = await hookCourant({ rpc, mainnet, avecDevise: !!deviseLancement, etatV1: etatHook, devise: deviseLancement || null });
       /* tip 20260922-1934 + 20260922-2026: MAIN never falls through to hooks=0x0; Birth=V8 only. */
+      /* ⛔⛔ 2026-10-10 : sur mainnet, `undefined` ne veut plus dire qu UNE chose — le 7030 s applique a cette devise et son code
+       *   n a pas pu etre LU (hookCourant ne retombe plus sur le V8 ; sinon le raccourci mainnet rend au pire le V5). Ce n est pas
+       *   un refus, c est une lecture ratee : NON_MESURE, rien a signer, on redemande. Hors mainnet (Practice, Base Sepolia) rien
+       *   ne change : aucun de nos hooks n y a de code (lu le 2026-10-10 : eth_getCode = 0x pour 7030, V8, V7, V6, V5, V4 et V1),
+       *   l echelle y rendait deja `undefined` et la pratique reste sans hook. */
       if (mainnet && !hooks) {
-        plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available right now — we could not read how its fee is paid, and will not open a market that pays no fee' };
+        plan = { etat: 'NON_MESURE', hookNonLu: true, pourquoi: 'the hook its market opens on could not be read on chain — try “Work it out” again in a moment' };
       } else if (mainnet && !estHookDeNaissance(hooks)) {
         plan = { etat: 'REFUSE', pourquoi: 'Bringing life is not available — this market setup cannot take the birth fee' };
       }
@@ -13674,8 +13679,8 @@ async function calculerLancement() {
        *    bloquer un vrai createur parce qu un noeud a tousse. */
       const label = ((HOOK_V9 && hooks === HOOK_V9) || estHook7030(hooks) || hooks === HOOK_V8 || hooks === HOOK_V7 || hooks === HOOK_V6 || hooks === HOOK_V5 || hooks === HOOK_V4)
         ? await etatLabelNaissance(adr) : 'OUI';
-      if (plan && plan.etat === 'REFUSE') {
-        /* already refused: missing hook on MAIN */
+      if (plan && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
+        /* already refused (not a birth hook on MAIN), or the hook was not read: nothing else is planned — « pick ETH » ne l ecrase pas */
       } else if (label === 'NON') {
         /* tip 20260922-2112: engraved = porteLeLabel/on-chain face marker — V8 still gates; do not fake ALLOW for OpenLaunch B20 */
         plan = { etat: 'REFUSE', pourquoi: POURQUOI_PAS_LABEL };
@@ -13752,7 +13757,7 @@ async function calculerLancement() {
   finally { profilEnLecture = false; $('#plCalculer').disabled = false; }
   /* ⛔ AUDIT (bloquant) : si quelqu un a ouvert la pool PAYEE avant le createur et l a laissee vide au prix plancher, le plan
    *    est refuse avec un message technique (« range collapses »). On dit ce qui s est passe, sans promettre de reparation. */
-  if (poolVide && plan && !plan.refusFraisEnBlock && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
+  if (poolVide && plan && !plan.refusFraisEnBlock && !plan.hookNonLu && (plan.etat === 'REFUSE' || plan.etat === 'NON_MESURE')) {
     plan.pourquoi = 'someone opened this market before you and left it empty at the lowest price. Its starting price cannot be set from here any more — pick another pair to open a fresh market.';
   }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
@@ -18319,7 +18324,9 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   /* ⛔⛔ CETTE GARDE N A JAMAIS RIEN GARDE : `#cVieDirecte` n existe dans AUCUNE page servie, donc
    *     `$('#cVieDirecte')` rend null et la condition est toujours fausse. Elle est laissee telle
    *     quelle — elle ne nuit pas — mais elle est ECRITE ICI pour qu on cesse de croire que ce
-   *     chemin serait optionnel : sur mainnet, il tourne a chaque Create. */
+   *     chemin serait optionnel.
+   * ⚠️ 2026-10-10 (revue adverse) : « sur mainnet, il tourne a chaque Create » etait FAUX — la ligne du dessus rend 'SANS' des que
+   *     utiliseCreateRouter() est vrai, donc TOUJOURS sur 8453 : ce chemin n est atteint sur aucune chaine aujourd hui. */
   if ($('#cVieDirecte') && !$('#cVieDirecte').checked) return 'SANS';
   const devise = paireChoisie && paireChoisie.adr && !/^0x0{40}$/i.test(paireChoisie.adr) ? String(paireChoisie.adr) : null;
   if (devise && !pairesProposees(CHAINE).some((p) => ['STABLE', 'MAJEUR', 'ACTION'].includes(p.type) && p.adr.toLowerCase() === devise.toLowerCase())) return 'SANS';
@@ -18334,6 +18341,11 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
    *     ligne, pas l absence de demande. Une meme decision prise a deux endroits finit toujours par
    *     diverger — il n y en a plus qu un. */
   const hook = await hookCourant({ rpc, mainnet: Number(CHAINE) === 8453, avecDevise: !!devise, devise });
+  /* ⛔⛔ 2026-10-10 : sur Base, `undefined` = le 7030 n a pas pu etre LU (hookCourant ne retombe plus sur un autre hook). On
+   *   s arrete ici, rien n est envoye — jamais le parcours classique, qui ferait signer une creation sans sa naissance.
+   *   GARDE DEFENSIVE, inatteignable aujourd hui (revue adverse : le « return 'SANS' » plus haut sort toujours sur 8453) ; elle
+   *   reste pour le jour ou ce chemin redeviendrait vivant. Son test statique n en prouve que le texte, pas un comportement. */
+  if (!hook && Number(CHAINE) === 8453) { e.className = 'note wKo'; e.textContent = COPIE_NAISSANCE_NON_VERIFIEE; return 'STOP'; }
   /* tip 20260922-1934 + 20260922-2026: never one-shot Create+Launch into hooks=0x0; MAIN Birth=V8 only. */
   if (!hook || /^0x0{40}$/i.test(String(hook))) return 'SANS';
   if (Number(CHAINE) === 8453 && !estHookDeNaissance(hook)) return 'SANS';

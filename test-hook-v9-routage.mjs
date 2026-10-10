@@ -29,8 +29,11 @@ console.log('HOOK_V9 is not deployed — nothing changes');
 ok('HOOK_V9 === null and OPTIONS_LANCEMENT.v9 === false', HOOK_V9 === null && OPTIONS_LANCEMENT.v9 === false);
 ok('hookV9Deploye -> ABSENT without any read', await hookV9Deploye({ rpc: async () => { throw new Error('no read expected'); } }) === 'ABSENT');
 const rpcV8 = async (m, p) => (m === 'eth_getCode' && bas(p[0]) === bas(HOOK_V8) ? '0x6080' : '0x');
+/* ⛔ 2026-10-10 : HORS mainnet. Ce rpc rend « 0x » pour le 7030 ; sur mainnet ce n est plus une absence (le 7030 y existe depuis le
+ *   bloc 52 132 476 : hookCourant rend undefined — test-hook-7030-non-lu-20261010.mjs, cas c2). Ce que ce cas prouve ne change pas :
+ *   V9 non pose, l echelle ne le choisit jamais et reste sur le V8. */
 for (const s of ['PLTRc', 'NVDAc', 'OUSD', 'USDC']) {
-  ok('hookCourant(' + s + ') is still V8', await hookCourant({ rpc: rpcV8, mainnet: true, avecDevise: true, devise: sym[s] }) === HOOK_V8);
+  ok('hookCourant(' + s + ') is still V8', await hookCourant({ rpc: rpcV8, mainnet: false, avecDevise: true, devise: sym[s] }) === HOOK_V8);
 }
 ok('estHookDeNaissance(V8) true, V7/null/0x0 false', estHookDeNaissance(HOOK_V8) && !estHookDeNaissance(HOOK_V7)
   && !estHookDeNaissance(null) && !estHookDeNaissance(ETH_NATIF));

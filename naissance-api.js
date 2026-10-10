@@ -117,9 +117,10 @@ export async function planNaissance(q, deps) {
 
     /* ── le hook de naissance, LU ── */
     const hook = await hookCourant({ rpc, mainnet: true, avecDevise: !!devise, devise });
-    /* ⛔ MEME GARDE QUE L ECRAN (estHookDeNaissance) : quand le noeud se tait, hookCourant retombe sur un ANCIEN hook sans le lire
-     *   (raccourci mainnet) — ce n est pas un hook de naissance, c est une lecture ratee. On le dit tel quel. */
-    if (!hook || /^0x0{40}$/i.test(String(hook)) || !estHookDeNaissance(hook)) return nonMesure('the birth hook could not be read on chain — nothing to sign');
+    /* ⛔ MEME GARDE QUE L ECRAN (estHookDeNaissance) : quand le noeud se tait, hookCourant rend `undefined` si le 7030 s applique
+     *   (2026-10-10 : il ne retombe plus sur le V8), sinon un ANCIEN hook sans le lire (raccourci mainnet) — ce n est pas un hook
+     *   de naissance, c est une lecture ratee. On le dit tel quel, et on dit de redemander : rien n est planifie apres. */
+    if (!hook || /^0x0{40}$/i.test(String(hook)) || !estHookDeNaissance(hook)) return nonMesure('the birth hook could not be read on chain — try again in a moment; nothing to sign');
 
     /* ── le minimum du createur (hook 7030) : max(1 $ du jour, plancher du contrat), la regle de l ecran ── */
     let caution = null, prixEth = null;

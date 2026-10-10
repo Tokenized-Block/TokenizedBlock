@@ -178,6 +178,16 @@ export async function hookV9Deploye({ rpc }) {
     return code === '0x' || code === '' ? 'ABSENT' : 'DEPLOYE';
   } catch { return 'NON_LU'; }
 }
+/** Le 7030 est-il deploye ? Lu sur son code. ⛔⛔ 2026-10-10 — TROIS ETATS STRICTS, parce que de cette lecture depend le hook
+ *  sur lequel nait un vrai block (hookCourant) : DEPLOYE = un code hexa non vide LU ; ABSENT = un code VIDE lu ('0x' ou '') ;
+ *  NON_LU = tout le reste — le noeud jette, ou rend null / undefined / autre chose que du texte / un texte qui n est pas de
+ *  l hexa en octets entiers. Avant, `String(x || '')` faisait d une reponse null un code vide, donc un « absent ». */
+export async function hook7030Deploye({ rpc }) {
+  let code;
+  try { code = await rpc('eth_getCode', [HOOK_7030, 'latest']); } catch (_) { return 'NON_LU'; }
+  if (code === '0x' || code === '') return 'ABSENT';
+  return typeof code === 'string' && /^0x(?:[0-9a-fA-F]{2})+$/.test(code) ? 'DEPLOYE' : 'NON_LU';
+}
 /** Le hook d une Naissance permanente sur Base : le V8, ou le V9 une fois pose. */
 export function estHookDeNaissance(h) {
   const x = String(h || '').toLowerCase();
@@ -382,9 +392,11 @@ export async function hookDeploye({ rpc }) {
  *
  * ⛔ « NON_LU » N EST PAS « DEPLOYE » : un noeud qui tousse fait retomber sur le hook precedent,
  *    jamais l inverse. Un hook absent ne doit jamais etre choisi par accident.
+ * ⛔⛔ SAUF LE 7030 (2026-10-10) : quand il s applique a la devise, « NON_LU » ne retombe sur RIEN — `undefined`.
  * ══════════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** Le hook sur lequel un NOUVEAU marche doit s ouvrir. Rend `undefined` si aucun ne convient.
+/** Le hook sur lequel un NOUVEAU marche doit s ouvrir. Rend `undefined` si aucun ne convient — ou si le 7030 s applique a la
+ *  devise et que son code n a pas pu etre LU (alors : « non lu, reessayez », jamais un autre hook).
  * @param {object} o
  * @param {Function} o.rpc          appel JSON-RPC
  * @param {boolean}  o.mainnet      sur Base mainnet, V4 et V5 sont deployes pour toujours (code LU)
@@ -393,12 +405,21 @@ export async function hookDeploye({ rpc }) {
  * @param {string}   [o.devise]     adresse de la devise de cotation (route les actions/B20 vers le V9)
  */
 export async function hookCourant({ rpc, mainnet = false, avecDevise = false, etatV1 = 'NON_LU', devise = null }) {
-  /* ⛔ 2026-10-02 : 7030 d abord, SEULEMENT drapeau allume ET code lu sur la chaine, pour toute devise qu il admet. */
+  /* ⛔ 2026-10-02 : 7030 d abord, SEULEMENT drapeau allume ET code lu sur la chaine, pour toute devise qu il admet.
+   * ⛔⛔ 2026-10-10 — UNE LECTURE RATEE DU 7030 NE CHOISIT JAMAIS UN AUTRE HOOK. Le catch d avant « retombait sur la suite » :
+   *   un seul hoquet de noeud sur eth_getCode faisait planifier une vraie naissance sur le V8 (liste figee : ETH, TBLOCK + les
+   *   12 de paires.js DEVISES_ADMISES_V8) au lieu du 7030 (live depuis le bloc 52 132 476 ; son code ne peut plus disparaitre,
+   *   EIP-6780). NON_LU rend donc `undefined`, sans lire aucun autre hook : chaque appelant dit « non lu, reessayez » et ne
+   *   propose RIEN a signer. Test : test-hook-7030-non-lu-20261010.mjs.
+   * ⛔⛔ ET SUR MAINNET, UN CODE VIDE N EST PAS UNE ABSENCE (decision du lead, 2026-10-10, revue adverse : une seule reponse « 0x »
+   *   menait encore a un plan PRET sur le V8). Le code du 7030 existe sur mainnet depuis le bloc 52 132 476 et ne peut plus
+   *   disparaitre : un « 0x » y vient d un noeud en retard ou de secours (ce depot l a deja paye : app.html, « un RPC de secours
+   *   rendait 0x » faisait choisir le V1). Sur mainnet, ABSENT vaut donc NON_LU -> `undefined`, comme V4/V5 y sont tenus pour
+   *   deployes. Hors mainnet (Sepolia, fork d avant le deploiement), un code vide garde l ancienne echelle, a l identique. */
   if (HOOK_7030_ACTIF && hookDeLancementPour(devise || '0x0000000000000000000000000000000000000000', 8453, { h7030: true }) === '7030') {
-    try {
-      const code = String(await rpc('eth_getCode', [HOOK_7030, 'latest']) || '');
-      if (code !== '' && code !== '0x') return HOOK_7030;
-    } catch (_) { /* non lu : on retombe sur la suite, exactement comme avant */ }
+    const etat7030 = await hook7030Deploye({ rpc });
+    if (etat7030 === 'DEPLOYE') return HOOK_7030;
+    if (etat7030 !== 'ABSENT' || mainnet) return undefined;
   }
   /* ⛔ V9 D ABORD pour une action / un B20 de sa liste — et SEULEMENT s il est deploye (code LU).
    *    « NON_LU » ou « ABSENT » : on retombe sur le V8, exactement comme avant. */

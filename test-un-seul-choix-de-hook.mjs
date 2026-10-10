@@ -19,7 +19,8 @@
 //    du defaut constate, et le temoin en bas le prouve.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { hookCourant, HOOK_V8, HOOK_V7, HOOK_V6, HOOK_V5, HOOK_V4, HOOK_PREVU } from './tokenomics.js';
+import { hookCourant, HOOK_V8, HOOK_V7, HOOK_V6, HOOK_V5, HOOK_V4, HOOK_PREVU, HOOK_7030 } from './tokenomics.js';
+import { TBLOCK_MAINNET, hookDeLancementPour } from './paires.js';
 
 let n = 0;
 const eq = (a, b, m) => { assert.equal(a, b, m); n++; };
@@ -59,8 +60,18 @@ eq(await hookCourant({ rpc: rpcAvec([HOOK_V4]) }), HOOK_V4, 'sans V5 → V4');
 
 /* ⛔ LE PIEGE QUI COMPTE : un noeud qui tousse ne doit jamais faire CHOISIR un hook. */
 const rpcMuet = async () => { throw new Error('noeud injoignable'); };
-eq(await hookCourant({ rpc: rpcMuet, etatV1: 'DEPLOYE' }), HOOK_PREVU,
-  'chaine illisible → on retombe sur le V1 connu deploye, jamais sur un hook non lu');
+/* ⛔⛔ 2026-10-10 — ATTENTE CHANGEE, ET POURQUOI : ici, sans devise = ETH, que le hook 7030 admet. L ancienne attente (HOOK_PREVU)
+ *   encodait le defaut que la decision du lead interdit : le code du 7030 NON LU faisait retomber l echelle jusqu au V1 (et, avec
+ *   un V8 lisible, sur le V8 — test-hook-7030-non-lu-20261010.mjs). Un 7030 non lu ne rend plus AUCUN hook. */
+eq(await hookCourant({ rpc: rpcMuet, etatV1: 'DEPLOYE' }), undefined,
+  'chaine illisible, ETH (le 7030 s applique) → AUCUN hook, meme avec le V1 connu deploye : on ne choisit pas a la place d un 7030 non lu');
+/* L ancien repli reste vrai quand le code du 7030 est LU VIDE (un fork d avant son deploiement) et que le reste se tait. */
+const rpc7030AbsentResteMuet = async (m, p) => {
+  if (m === 'eth_getCode' && String(p[0]).toLowerCase() === String(HOOK_7030).toLowerCase()) return '0x';
+  throw new Error('noeud injoignable');
+};
+eq(await hookCourant({ rpc: rpc7030AbsentResteMuet, etatV1: 'DEPLOYE' }), HOOK_PREVU,
+  '7030 lu absent, le reste illisible → on retombe sur le V1 connu deploye, jamais sur un hook non lu');
 eq(await hookCourant({ rpc: rpcMuet, etatV1: 'NON_LU' }), undefined,
   'chaine illisible et V1 non lu → AUCUN hook, plutot qu un hook suppose');
 
@@ -72,10 +83,16 @@ eq(await hookCourant({ rpc: rpcAvec([]), avecDevise: false, etatV1: 'DEPLOYE' })
 
 /* ⛔ `mainnet` ne doit pas SURCLASSER un hook plus recent : V4/V5 y sont reputes deployes, mais le
  *    V8 doit rester prioritaire. Une garde peut etre vraie et couvrir la mauvaise moitie. */
-eq(await hookCourant({ rpc: rpcAvec([HOOK_V8]), mainnet: true }), HOOK_V8,
+/* ⛔ 2026-10-10 — CONTEXTE CHANGE, PAS L INTENTION : sans devise (ETH), le 7030 s applique, et rpcAvec rend « 0x » pour lui. Sur
+ *   mainnet ce n est plus une absence (son code y existe depuis le bloc 52 132 476) : hookCourant rend undefined (cas c2 de
+ *   test-hook-7030-non-lu-20261010.mjs). L echelle « mainnet » se teste donc avec TBLOCK, que la liste du 7030 n admet pas. */
+ok(hookDeLancementPour(TBLOCK_MAINNET, 8453, { h7030: true }) !== '7030', 'temoin : le 7030 ne s applique pas a TBLOCK (sinon ce cas ne testerait pas l echelle)');
+eq(await hookCourant({ rpc: rpcAvec([HOOK_V8]), mainnet: true, avecDevise: true, devise: TBLOCK_MAINNET }), HOOK_V8,
   'sur mainnet, le V8 passe toujours avant les V4/V5 reputes deployes');
-eq(await hookCourant({ rpc: rpcAvec([]), mainnet: true }), HOOK_V5,
+eq(await hookCourant({ rpc: rpcAvec([]), mainnet: true, avecDevise: true, devise: TBLOCK_MAINNET }), HOOK_V5,
   'sur mainnet sans V6/V7/V8, on descend au V5 — pas plus bas');
+eq(await hookCourant({ rpc: rpcAvec([HOOK_V8]), mainnet: true }), undefined,
+  'sur mainnet, ETH (le 7030 s applique) avec un 7030 lu « 0x » → AUCUN hook : un code vide n y est pas une absence');
 
 /* ══ 4. LE TEMOIN — sans lui, un detecteur qui ne detecte rien passerait aussi ══════════════════ */
 {
