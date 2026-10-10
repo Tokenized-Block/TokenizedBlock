@@ -383,30 +383,46 @@ for (const l of LOGS_INITIALIZE_MESURES) {
   const p = decoderInitialize(l);
   if (p && !p.erreur && p.cle && p.poolId) clesV4Lues.set(p.poolId, p.cle);
 }
+/* ⛔⛔ 2026-10-09 — TROIS ETATS, PAS DEUX. La cle (LUE) ; `null` = rien a construire sur une lecture qui a ABOUTI (evenement
+ *   absent des 59 fenetres TOUTES lues, ou evenement trouve et refuse par decoderInitialize — ce cas-la inchange) ;
+ *   `{ etat: 'NON_LUE', ratees, fenetres, pourquoi }` = au moins une fenetre NON LUE (erreur, ou autre chose qu un tableau) ou la
+ *   tete illisible, et pas de cle.
+ *   Avant : une fenetre refusee faisait `continue` comme une fenetre vide, les deux finissaient en `return null`, et faitsPoolV4
+ *   publiait « the Initialize event for this poolId was not found in the window read » sur des fenetres jamais lues. Au-dela de
+ *   ~9 000 blocs, aucun noeud gratuit ne sert ces fenetres (base.org 429, publicnode 403 : mesures du 2026-10-09, repli-logs.js),
+ *   seule l archive le peut : budget du jour epuise, ces fenetres sont refusees (55 des 59, compte sur PAS et la borne de 120 000
+ *   blocs, pas mesure).
+ *   ⛔ Le refus est COMPTE, pas reconnu a son message : avecRepliLogs relance l erreur du PRINCIPAL (repli-logs.js), jamais celle
+ *     du budget. ⛔ Un NON_LUE n entre JAMAIS dans clesV4Lues : il se relit au prochain appel. */
 async function cleV4DuPoolId(id) {
   const k = String(id).toLowerCase();
   if (clesV4Lues.has(k)) return clesV4Lues.get(k);
+  const nonLue = (ratees, fenetres, pourquoi) => ({ etat: 'NON_LUE', ratees, fenetres, pourquoi });
   let tete;
-  try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { return null; }
-  if (!Number.isSafeInteger(tete)) return null;
+  try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { return nonLue(0, 0, 'chain head not read'); }
+  if (!Number.isSafeInteger(tete)) return nonLue(0, 0, 'chain head not read');
   const PAS = 2000;
+  let ratees = 0, fenetres = 0;
   /* ⛔ ON REMONTE DANS LE TEMPS, et on BORNE : 120 000 blocs couvrent largement la vie des pools
    *   qui nous interessent. Au-dela ce n est plus une lecture, c est un balayage. */
   for (let de = tete - PAS; de > tete - 120000; de -= PAS) {
+    fenetres += 1;
     let logs;
     try {
       logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,
         topics: [TOPIC_INITIALIZE, k],
         fromBlock: '0x' + Math.max(0, de).toString(16),
         toBlock: '0x' + Math.min(tete, de + PAS - 1).toString(16) }]);
-    } catch (_) { continue; /* ⛔ une fenetre refusee n est pas une fenetre vide : on continue */ }
-    if (!Array.isArray(logs) || !logs.length) continue;
+    } catch (_) { ratees += 1; continue; /* ⛔ une fenetre refusee n est pas une fenetre vide : COMPTEE, et on continue */ }
+    /* ⛔ SEUL UN TABLEAU EST UNE REPONSE (repli-logs.js) : autre chose est un refus, pas une fenetre vide. */
+    if (!Array.isArray(logs)) { ratees += 1; continue; }
+    if (!logs.length) continue;
     const p = decoderInitialize(logs[0]);
     /* ⛔ `p.erreur` veut dire « je ne sais pas reconstruire cette cle » : on ne la garde PAS. */
     if (p && !p.erreur && p.cle) { clesV4Lues.set(k, p.cle); return p.cle; }
     return null;
   }
-  return null;
+  return ratees ? nonLue(ratees, fenetres, ratees + '/' + fenetres + ' windows of ' + PAS + ' blocks not read') : null;
 }
 
 async function faitsPoolV4(poolId, infos) {
@@ -463,12 +479,19 @@ async function faitsPoolV4(poolId, infos) {
     /* ⛔⛔ LA CLE EST RENDUE QUAND ON A SU LA LIRE, parce que c est elle — et pas le `poolId` — qui
      *   permet de CONSTRUIRE un swap. Sans elle, l ecran saurait qu une route existe et ne saurait
      *   pas la fabriquer : un bouton qui promet ce qu il ne peut pas tenir.
-     * ⛔ ET SON ABSENCE EST UN FAIT NOMME, pas un silence : `cleV4: null` + `pourquoiCle`. */
+     * ⛔ ET SON ABSENCE EST UN FAIT NOMME, pas un silence : `cleV4: null` + `pourquoiCle`.
+     * ⛔⛔ 2026-10-09 : ET « NON LUE » N EST PAS « ABSENTE » (voir cleV4DuPoolId). Une cle non lue rend `cleV4: null` (rien a
+     *   construire) + `cleNonLue: true` + une raison qui le DIT, jamais « not found ». Une exception non plus n est pas une absence.
+     *   Le glissement, lui, a ete LU : il reste publie — fermer la porte sur la cle ratee effacerait un fait mesure. */
     let cleV4 = null;
-    try { cleV4 = await cleV4DuPoolId(id); } catch (_) { cleV4 = null; }
+    try { cleV4 = await cleV4DuPoolId(id); } catch (_) { cleV4 = { etat: 'NON_LUE', pourquoi: 'the key lookup failed' }; }
+    const cleNonLue = Boolean(cleV4 && cleV4.etat === 'NON_LUE');
     return { glissementBps: Number(gl.bps), famille: 'uniswap-v4', poolId: id,
       liquiditeV4: String(liquidite),
-      ...(cleV4 ? { cleV4 } : { cleV4: null,
+      ...(cleNonLue ? { cleV4: null, cleNonLue: true,
+        pourquoiCle: 'the pool key was NOT READ (' + String(cleV4.pourquoi || 'unknown') + ') — this is not "no key": '
+          + 'the route can be priced, not built yet; the key is read again on a later request' }
+        : cleV4 ? { cleV4 } : { cleV4: null,
         pourquoiCle: 'the Initialize event for this poolId was not found in the window read — '
           + 'the route can be priced but not built' }) };
   });
@@ -3728,6 +3751,11 @@ createServer((req, res) => {
            *     `glissementBps: null` pendant cinq minutes — et le prechauffage ne pourrait plus
            *     rien reparer. Mettre son propre aveuglement en cache est la facon la plus sure de
            *     le rendre permanent. */
+          /* ⛔ 2026-10-09 : une cle v4 NON LUE (`cleNonLue: true`, `pourquoiCle` « NOT READ ») voyage dans `complet` : elle est
+           *   cachee 300 s COMME non lue, jamais comme absente, et la cle n entre pas dans clesV4Lues (relue a la premiere requete
+           *   apres ce cache). La retirer du cache (lu dans le code, non mesure) relancerait le balayage a CHAQUE requete : ≥ 1,8 s de
+           *   pauses par fenetre que base.org refuse (rpcServeurBrut, 300 + 600 + 900 ms), donc la borne de 6 s tombe avant la fin
+           *   -> NON_MESURE, et la file `enFile` reste tenue pour les autres devises : le glissement LU disparaitrait de l ecran. */
           if (typeof f.glissementBps === 'number') {
             prixUsdCache.set(adr, { t: Date.now(), r: complet });
             /* ⛔ ON GARDE LA LECTURE REUSSIE SUR LE DISQUE : c est elle qui portera la porte pendant
