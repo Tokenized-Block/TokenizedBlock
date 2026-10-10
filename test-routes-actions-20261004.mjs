@@ -196,9 +196,13 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
   const P = await imp('plan-aerodrome-segment.js', m.dir), Pv = await imp('plan-aerodrome-segment.js');
   const C = await imp('calldata-aerodrome.js');
   const pool = '0x' + '1'.repeat(40);
+  /* ⛔ 2026-10-10 (234ff51, revue adverse point 2) : une action de la table se trade sur SA pool mesuree, que la factory doit rendre.
+   *   Ce faux noeud rendait 0x11..1 a tout getPool -> le temoin devenait REFUSE (« the factory no longer returns the measured pool »).
+   *   Il rend maintenant la pool MESUREE quand l appel nomme l action, la pool fictive pour le saut USDC/WETH (non epingle). */
+  const mesuree = POOLS_ACTIONS_AERODROME.get(adrDe(symAero)).pool;
   const rpc = async (methode, params) => {
     const data = String(params[0].data || '');
-    if (data.startsWith(C.SELECTEURS.getPool)) return '0x' + pool.slice(2).padStart(64, '0');
+    if (data.startsWith(C.SELECTEURS.getPool)) return '0x' + (data.toLowerCase().includes(adrDe(symAero).slice(2)) ? mesuree : pool).slice(2).padStart(64, '0');
     if (data.startsWith('0x70a08231')) return '0x' + (10n ** 12n).toString(16).padStart(64, '0');
     if (data.startsWith('0x0dfe1681')) return '0x' + String(params[0].to === pool ? USDC : USDC).slice(2).padStart(64, '0'); /* token0() */
     return '0x' + (1n << 96n).toString(16).padStart(64, '0') + '0'.repeat(64 * 6); /* slot0 : prix 1:1 */
