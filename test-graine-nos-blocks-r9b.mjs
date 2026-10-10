@@ -415,11 +415,17 @@ const tmp = []; const dureesCopie = [];
 async function copie(mutation, source = ICI) {
   const tc = Date.now();
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'tb-r9b-')); tmp.push(dir);
-  const entrees = (await fs.promises.readdir(source, { withFileTypes: true })).filter((f) => f.name !== '.git');
+  /* ⛔ 2026-10-10 (serie complete, concurrence 3) : r9b rouge sur « ENOENT copyfile serveur-web.mutant-18640.mjs » — un fichier
+   *   TRANSITOIRE que test-mode-essai ecrit dans le depot le temps d un cas. Liste par readdir, supprime avant la copie. Ce n est
+   *   pas l etat du depot : on l ignore, et un fichier disparu entre la liste et la copie (ENOENT, et seulement lui) est saute. */
+  const entrees = (await fs.promises.readdir(source, { withFileTypes: true }))
+    .filter((f) => f.name !== '.git' && !/\.mutant-\d+\.mjs$/.test(f.name));
   await Promise.all(entrees.map(async (f) => {
     const de = path.join(source, f.name);
-    if (f.isDirectory() || f.isSymbolicLink()) await fs.promises.symlink(await fs.promises.realpath(de), path.join(dir, f.name));
-    else await fs.promises.copyFile(de, path.join(dir, f.name));
+    try {
+      if (f.isDirectory() || f.isSymbolicLink()) await fs.promises.symlink(await fs.promises.realpath(de), path.join(dir, f.name));
+      else await fs.promises.copyFile(de, path.join(dir, f.name));
+    } catch (e) { if (e && e.code === 'ENOENT') return; throw e; }
   }));
   for (const [fichier, de, vers] of (mutation ? mutation.edits : [])) {
     const p = path.join(dir, fichier); const src = await fs.promises.readFile(p, 'utf8'); const n = src.split(de).length - 1;
