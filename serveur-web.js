@@ -1129,6 +1129,52 @@ async function fraisRecents(heures) {
   return r2;
 }
 
+/* ⛔⛔ 2026-10-09 — LE VEILLEUR RELISAIT TOUT, A CHAQUE REQUETE (audit du budget d archive, relu sur le code a b64634e).
+ *   /api/veille remarchait toutes les fenetres de 2 000 blocs depuis 51 571 225 sans cache, sans partage du calcul en vol, sans
+ *   curseur. Tete lue sur publicnode le 2026-10-09 a 23 h 33 UTC : 52 399 706, soit 415 fenetres, dont 409 a plus de
+ *   PROFONDEUR_PUBLICNODE blocs de la tete — celles-la finissent au noeud d archive : ~409 appels d archive PAR REQUETE (calcul
+ *   sur le code et cette tete, pas une mesure de prod), et deux requetes simultanees marchaient chacune. Budget du jour epuise,
+ *   chacun de ces appels etait un refus connu d avance.
+ *   APPELANTS (cherches le 2026-10-09 vers 23 h 30 UTC) : AUCUN. Dans ce depot (html/js/mjs/json/md..., fichiers ignores par git
+ *   compris, node_modules exclu) comme dans les autres depots de veilleIA (git grep, suivis et non suivis), « api/veille »
+ *   n apparait que dans cette route et ses copies. Aucun sondage, aucun intervalle : la route n est atteinte que par une requete
+ *   EXTERNE, dont l origine et la frequence ne sont PAS mesurees (/sante de prod, 2026-10-09 23 h 34 UTC : 10 000 / 10 000
+ *   appels, 9 778 refus de budget, `par` vide — rien n y attribue une part au veilleur).
+ *   Maintenant : UNE marche en fond, partagee (enFond), le dernier resultat servi AVEC son age (repondreFond), une nouvelle
+ *   marche au plus toutes les VEILLE_TTL_MS. Budget epuise : AUCUNE marche — le dernier resultat reste servi avec son age et la
+ *   raison a cote (`derniereErreur`), sinon un etat NOMME. Budget epuise EN COURS de marche : la marche est COUPEE a la premiere
+ *   fenetre profonde, et ne remplace pas le dernier resultat. Jamais « complet » sur des fenetres non lues.
+ *   ⚠️ PLAFOND CALCULE, NON MESURE : au plus 8 marches par jour et par processus (+1 par redeploiement : le cache vit en
+ *     memoire), soit ~8 x 409 = ~3 300 appels d archive hors relances, contre ~409 par requete avant. Un curseur (fenetres deja
+ *     lues gardees) le ferait tomber a ~1 fenetre par marche ; il n est PAS fait ici.
+ *   ⚠️ 3 h < 6 h (DELAI_CONTESTATION) : un second ancrage reste visible avant la fin de sa fenetre s il en restait plus de
+ *     3 h + la duree d une marche. Le delai est un choix, pas une mesure. */
+const VEILLE_DEPUIS = 51571225;
+const VEILLE_TTL_MS = 3 * 3600 * 1000;
+const VEILLE_BUDGET = 'archive node daily budget reached — deep windows unread until 00:00 UTC';
+async function veilleUneFois() {
+  /* budget epuise : chaque fenetre profonde serait refusee A COUP SUR. On ne marche pas ; enFond GARDE cette erreur et ne
+   *   remplace jamais un resultat par elle. */
+  if (archiveEpuisee()) throw new Error(VEILLE_BUDGET);
+  /* ⛔ le budget peut s epuiser PENDANT la marche (~409 fenetres profondes ; les autres lecteurs d histoire le consomment aussi).
+   *   La premiere fenetre profonde demandee budget epuise COUPE la marche : plus aucun appel, et la marche coupee est rendue comme
+   *   une ERREUR — elle ne remplace pas le dernier resultat (une alerte lue en profondeur n est pas effacee par une relecture
+   *   trouee) et ne se dit jamais complete. Les fenetres recentes (publicnode, gratuit) ne coupent rien. */
+  let tete = null, coupeA = null;
+  const rpc = async (methode, params) => {
+    if (coupeA === null && methode === 'eth_getLogs' && tete !== null && archiveEpuisee()
+      && tete - parseInt(params[0].toBlock, 16) > PROFONDEUR_PUBLICNODE) coupeA = parseInt(params[0].fromBlock, 16);
+    if (coupeA !== null) throw new Error(VEILLE_BUDGET);
+    const r = await rpcServeur(methode, params);
+    if (methode === 'eth_blockNumber') tete = Number(BigInt(r));
+    return r;
+  };
+  const v = await veiller({ rpc, pot: '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272', depuis: VEILLE_DEPUIS });
+  if (coupeA !== null) throw new Error(VEILLE_BUDGET + ' (walk stopped at block ' + coupeA + ')');
+  /* repondreFond serialise sans remplacant : un BigInt eventuel devient du texte ICI, comme le faisait la route */
+  return JSON.parse(JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? x.toString() : x)));
+}
+
 const clesPool = new Map();
 /* ⛔⛔ 2026-10-03 — PRE-REMPLI (par JETON) depuis les logs Initialize MESURES. Mesure en prod : `/api/cle/<action>` rendait
  *   POOLID_ABSENT pour les 20 actions a pool v4 USDC (cles-v4-actions.js) — leurs Initialize datent de 2 a 12 jours, hors des
@@ -3715,16 +3761,10 @@ createServer((req, res) => {
    *    d audit du 2026-09-20, confirmee sous forge), tout jeton ancre plus de 6 h apres le premier
    *    n a AUCUNE fenetre. Le contrat n est pas modifiable : rendre visible est tout ce qui reste. */
   if (chemin === '/api/veille') {
-    veiller({ rpc: rpcServeur, pot: '0xc743f6aAff2c4caD67C30B9e5d1aF0e913FCE272', depuis: 51571225 })
-      .then((v) => {
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-        res.end(JSON.stringify(v, (k, x) => (typeof x === 'bigint' ? x.toString() : x)));
-      })
-      .catch((e) => {
-        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-        /* ⛔ UNE VEILLE QUI ECHOUE LE DIT. « 0 alerte » sur une lecture ratee endort. */
-        res.end(JSON.stringify({ ok: false, complet: false, alertes: [], pourquoi: String(e && e.message || e).slice(0, 120) }));
-      });
+    /* ⛔ 2026-10-09 : une marche en fond partagee, servie avec son age ; aucune marche budget d archive epuise (veilleUneFois). */
+    const c = enFond('veille', veilleUneFois, VEILLE_TTL_MS);
+    /* ⛔ UNE VEILLE QUI ECHOUE LE DIT. « 0 alerte » sur une lecture ratee endort : EN_COURS et ECHEC portent `complet: false`. */
+    void repondreFond(res, c, () => ({ complet: false, alertes: [], attendBudgetArchive: archiveEpuisee(), depuisBloc: VEILLE_DEPUIS }));
     return;
   }
 
