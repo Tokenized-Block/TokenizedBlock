@@ -22657,8 +22657,9 @@ async function bcLireSoldes(a) {
 /** AVEC QUOI ON PEUT PAYER CE JETON ICI — une seule liste pour le ticket Buy et pour le mode S.I : [valeur, libelle].
  *  - une ACTION : USDC d abord (sa cotation, un saut — Phil : « USDC natif sera plus simple »), puis ETH ;
  *  - un block cote en ETH ou en USDC : ETH d abord (regle de Phil : « tout se regle en ETH »), USDC, puis les actions a pool v4
- *    MESUREE, qui le paient en UN appel (Phil : « payer un block avec n importe quelle TStock »). Les 12 actions de la table
- *    Aerodrome ne le peuvent pas en un trade (deux factories) : elles ne sont pas proposees ;
+ *    MESUREE, qui le paient en UN appel (Phil : « payer un block avec n importe quelle TStock »), et (2026-10-10, P4) les actions
+ *    de la table Aerodrome, qui le paient en UN LOT atomique de deux segments (route « 4 ter », rails-api.js : le plan dit
+ *    `atomique`, le panneau l envoie par `envoyerLotAtomique` et un wallet qui ne groupe pas refuse — rien ne part) ;
  *  - un block cote dans une autre devise : cette devise seule. */
 function bcChoixPaiement(a, q) {
   const usdc = bcResoudre('USDC'), eth = ETH_ADR.toLowerCase();
@@ -22667,7 +22668,7 @@ function bcChoixPaiement(a, q) {
   if (!standard) return [[q.adr, q.sym]];
   const choix = [['ETH', 'ETH'], ['USDC', 'USDC']];
   const v4 = bcActionsV4();
-  for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
+  for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa) || POOLS_ACTIONS_AERODROME.has(sa)) choix.push([sa, st.symbole + ' (stock)']); }
   return choix;
 }
 /* ── LA REFERENCE D UNE ACTION, LUE PAR LE SERVEUR : /api/actions/reference/<action> (2026-10-09) ──────────────────────────────

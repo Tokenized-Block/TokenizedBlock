@@ -113,8 +113,9 @@ ok(html.includes("else if (ACTIONS_PAR_ADR.has(a)) choix = (q && q.ok ? [[q.adr,
 ok(/function bcChoixPaiement\(a, q\) \{/.test(html) && /if \(ACTIONS_PAR_ADR\.has\(a\)\) return \[\['USDC', 'USDC'\], \['ETH', 'ETH'\]\];/.test(html)
   && /if \(!standard\) return \[\[q\.adr, q\.sym\]\];\s+const choix = \[\['ETH', 'ETH'\], \['USDC', 'USDC'\]\];/.test(html),
   'C acheter une action : USDC en premier, ETH en second ; un block garde ETH en premier ; une autre cotation : elle seule');
-ok(/const v4 = bcActionsV4\(\);\s+for \(const st of ACTIONS_COINBASE\) \{ const sa = String\(st\.adr\)\.toLowerCase\(\); if \(v4\.has\(sa\)\) choix\.push\(\[sa, st\.symbole \+ ' \(stock\)'\]\); \}\s+return choix;/.test(html),
-  'C acheter un block (cote en ETH ou USDC) : les actions a pool v4 mesuree sont proposees comme moyen de paiement');
+/* 2026-10-10 (P4, route 4 ter) : les actions de la table Aerodrome aussi — en LOT atomique ; execute dans test-paiement-actions-aerodrome-20261010.mjs */
+ok(/const v4 = bcActionsV4\(\);\s+for \(const st of ACTIONS_COINBASE\) \{ const sa = String\(st\.adr\)\.toLowerCase\(\); if \(v4\.has\(sa\) \|\| POOLS_ACTIONS_AERODROME\.has\(sa\)\) choix\.push\(\[sa, st\.symbole \+ ' \(stock\)'\]\); \}\s+return choix;/.test(html),
+  'C acheter un block (cote en ETH ou USDC) : les actions a pool v4 mesuree ET celles de la table Aerodrome sont proposees comme moyen de paiement');
 ok(/if \(achat\) choix = bcChoixPaiement\(a, q\);/.test(html) && /const choix = bcChoixPaiement\(a, q\);\s+for \(const \[v, l\] of choix\) s\.append\(bcEl\('option', \{ value: v, text: l \}\)\);/.test(html)
   && (html.match(/bcChoixPaiement\(a, q\)/g) || []).length === 3, 'C le ticket Buy et le menu « Pay with » du mode S.I lisent la MEME liste (bcChoixPaiement) — pas deux copies');
 /* le mode S.I (ex-AiFi) : son nom, et sa devise de paiement */
