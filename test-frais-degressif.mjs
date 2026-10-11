@@ -92,6 +92,21 @@ cas('⛔ et le taux EFFECTIF est bien celui qu on paie, plancher compris', () =>
   assert.ok(r.bpsEffectif > Number(r.bps),
     'le plancher devrait rendre l effectif SUPERIEUR au taux du palier');
 });
+cas('⛔ 2026-10-11 (revue adverse) : le taux AFFICHE n est jamais SOUS le taux pris (montants non ronds, prix lu ou non)', () => {
+  /* 12,345678 OUSD sans prix : frais 24 691 = 19,9999 bps ; l arrondi vers le bas declarait 19 (« 0.19 % ») */
+  let pire = null;
+  for (const brut of [12345678n, 4999n, 5000n, 1234567891n, 999999n, 10000000n, 7n * 10n ** 6n + 3n]) {
+    for (const prix of [null, 1]) {
+      const r = fraisPourMontant({ montant: brut, decimales: 6, prixUsd: prix });
+      if (r.etat !== 'OK' || r.frais === 0n) continue;
+      if (BigInt(r.bpsEffectif) * brut < r.frais * 10000n) pire = brut + ' (prix ' + prix + ') : affiche ' + r.bpsEffectif + ' bps, pris ' + r.frais + '/' + brut;
+      if ((BigInt(r.bpsEffectif) - 1n) * brut >= r.frais * 10000n) pire = brut + ' : ' + r.bpsEffectif + ' bps depasse le taux pris de plus d un bps';
+    }
+  }
+  assert.equal(pire, null, pire || '');
+  const o = fraisPourMontant({ montant: 12345678n, decimales: 6, prixUsd: null });
+  assert.equal(o.bpsEffectif, 20, '12,345678 sans prix : 20 bps affiches (pris 19,9999), pas 19 (' + o.bpsEffectif + ')');
+});
 
 console.log('');
 console.log('⛔⛔ SANS PRIX LU, ON APPLIQUE LE TAUX LE PLUS HAUT');

@@ -129,7 +129,10 @@ export function fraisPourMontant({ montant, decimales, prixUsd = null } = {}) {
     bps,
     /* ⛔ LE TAUX EFFECTIF EST RENDU, parce que le plancher peut le rendre superieur au taux du
      *   palier : c est CE chiffre que l ecran doit montrer, pas le taux nominal. */
-    bpsEffectif: m > 0n ? Number((frais * 10000n) / m) : null,
+    /* ⛔ 2026-10-11 (revue adverse) : ARRONDI VERS LE HAUT. L arrondi vers le bas affichait « 0.19 % » pour 0,1999 % pris (12,345678
+     *   OUSD : frais 24 691, declare 19 bps) - un taux affiche SOUS le taux pris. Le montant preleve ne change pas (il est IMPOSE au
+     *   batisseur, route-v4-multi-sauts.js fraisImpose) ; seul le chiffre declare et affiche monte au bps entier superieur. */
+    bpsEffectif: m > 0n ? Number((frais * 10000n + m - 1n) / m) : null,
     usd,
     parPlancher: frais > brut,
     pourquoi: usd === null
