@@ -86,4 +86,14 @@ vu(/bouton\(s\.maValidation \? 'Revoke my validation' : 'Validate at this price'
 vu(/for \(const b of s\.acheteursPrets \|\| \[\]\) bouton\('Complete the sale to ' \+ court\(b\) \+ ' \(validated\)', 'COMPLETER', \{ acheteur: b \}\);/.test(html), 'ligne : Complete pour chaque acheteur CONFIRME');
 vu(/genre === 'VALIDER' \? appelValiderAchat\(s\.tokenId, s\.devise, montant\)/.test(html) && /appels = \[appelRevoquerAchat\(s\.tokenId\)\];/.test(html) && /appels = \[appelExecuterValide\(s\.tokenId, x\.acheteur\)\];/.test(html),
   'gestes VALIDER / REVOQUER / COMPLETER -> les bons appels');
+/* le brain (S.I, regle « Suggest skins ») propose de COMPLETER une vente validee - avant ses propositions d achat */
+{
+  const k = html.indexOf('async function bcAifiProposerSkin() {');
+  const corps = html.slice(k, k + 3500);
+  vu(k > 0 && /const aCompleter = r\.skins\.filter\(\(x\) => x\.enVente && !x\.enchere && x\.detenteur === moiS && x\.block === blocS && !bcAifiSkins\.proposes\.has\('c' \+ x\.tokenId\)\);/.test(corps),
+    'S.I : seulement MES annonces a prix fixe des skins de CE block, une fois par skin');
+  vu(/Date\.now\(\) - \(bcAifiSkins\.validationsLues \|\| 0\) > 120000/.test(corps), 'S.I : les journaux relus au plus toutes les 2 minutes');
+  vu(/void bcActionMarche\('COMPLETER', pret, \{ acheteur: pret\.acheteursPrets\[0\] \}, 'Its brain · S\.I'\);/.test(corps), 'S.I : la carte « Complete » - la personne signe');
+  vu(corps.indexOf("bcActionMarche('COMPLETER'") < corps.indexOf('const p = propositionSkin('), 'S.I : completer une vente passe AVANT de proposer un achat');
+}
 console.log('ok skins-validation - ' + n + ' assertions ; NE PROUVE PAS le rendu navigateur');

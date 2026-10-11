@@ -23820,6 +23820,23 @@ async function bcAifiProposerSkin() {
   try {
     const r = await lireSkins({ rpc });
     if (r.etat !== 'LU' || bc.aifi !== s) return;
+    /* « les deux cochent » (spec de Phil : « execute automatiquement par les agents ») : un acheteur a une validation CONFIRMEE sur une de
+     *   MES annonces a prix fixe d une skin de CE block -> le brain propose de COMPLETER la vente (la personne signe ; elle recoit 90 %).
+     *   Les journaux ne sont relus qu une fois toutes les 2 minutes, et seulement s il y a de telles annonces. Une seule fois par skin. */
+    const moiS = String(compte).toLowerCase(), blocS = String(s.block || '').toLowerCase();
+    const aCompleter = r.skins.filter((x) => x.enVente && !x.enchere && x.detenteur === moiS && x.block === blocS && !bcAifiSkins.proposes.has('c' + x.tokenId));
+    if (aCompleter.length && Date.now() - (bcAifiSkins.validationsLues || 0) > 120000) {
+      bcAifiSkins.validationsLues = Date.now();
+      await bcEnrichirValidations(aCompleter, moiS);
+      if (bc.aifi !== s) return;
+      const pret = aCompleter.find((x) => Array.isArray(x.acheteursPrets) && x.acheteursPrets.length);
+      if (pret) {
+        bcAifiSkins.proposes.add('c' + pret.tokenId); bcAifiSkins.derniere = Date.now();
+        bcOuvrirPop();
+        void bcActionMarche('COMPLETER', pret, { acheteur: pret.acheteursPrets[0] }, 'Its brain · S.I');
+        return;
+      }
+    }
     const dv = s.devise || BC_AIFI_ETH();
     const p = propositionSkin({ skins: r.skins, moi: compte, block: s.block, maintenant: Math.floor(Date.now() / 1000), achat: true,
       devise: dv.adr, parTrade: s.parTrade, reste: (BigInt(s.budget) - BigInt(s.propose)).toString(), dejaProposes: bcAifiSkins.proposes });
