@@ -566,6 +566,24 @@ async function planRailBrut(q, deps) {
      *   devise future). Un seul appel au routeur. Le frais et ses gardes sont ceux de `planEchangeMultiSauts`, inchanges.
      * ⛔ `ECHANGEABLES` dit POURQUOI les autres devises du registre n y sont pas (aller sans retour, mesure sur fork). */
     if (ECHANGEABLES.has(de) && ECHANGEABLES.has(vers)) {
+      /* ⛔⛔ 2026-10-11 (revue adverse, REPRODUIT sur fork) : les essais ci-dessous prennent le PREMIER chemin qui cote, pas le
+       *   meilleur. Avec OUSD dedans, une pool OUSD/ETH v4 sans hook ouverte par n importe qui (5 $ de liquidite, gabarit 3000/60)
+       *   captait ETH <-> OUSD : 0,1 ETH -> 2,447 OUSD au lieu de ~249. ⇒ OUSD s echange ICI contre USDC SEULEMENT (le choix exact
+       *   de Phil, « OUSD -> USDC »), sur la cle MESUREE (cles-v4-mesurees.js, fee 100 / tickSpacing 1, sans hook) et AUCUNE autre :
+       *   une lecture ratee de cette cle rend NON_MESURE, jamais une autre pool. ETH <-> OUSD reste ferme (deux echanges via USDC). */
+      if (de === OUSD || vers === OUSD) {
+        if (de !== USDC && vers !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: 'OUSD trades here against USDC only: swap it to USDC first (two trades)' });
+        const k = cleV4MesureeDe(OUSD);
+        if (!k) return normaliser(route, { etat: 'REFUSE', pourquoi: 'the measured OUSD/USDC pool is not in this build' });
+        const chemin = [{ de, vers, famille: 'uniswap-v4' }];
+        const epingle = async ({ de: d1, vers: v1, montant: mt }) => meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt,
+          candidates: [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] });
+        const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: epingle });
+        if (b.etat !== 'OK') return normaliser(route, { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi }, { via: 'sautsDepuisChemin', chemin });
+        return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
+          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, ...DEVISES_FRAIS_ROUTE6]), maintenant }),
+        { via: 'planEchangeMultiSauts', chemin, pool: 'uniswap-v4' });
+      }
       const essais = [[{ de, vers }]];
       if (de !== USDC && vers !== USDC) essais.push([{ de, vers: USDC }, { de: USDC, vers }]);
       if (de !== ETH && vers !== ETH) essais.push([{ de, vers: ETH }, { de: ETH, vers }]);
@@ -575,7 +593,7 @@ async function planRailBrut(q, deps) {
         const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec() });
         if (b.etat !== 'OK') { dernier = { b, chemin }; continue; }
         return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
-          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, ...DEVISES_FRAIS_ROUTE6]), maintenant }), { via: 'planEchangeMultiSauts', chemin });
+          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk, maintenant }), { via: 'planEchangeMultiSauts', chemin });
       }
       return normaliser(route, { etat: dernier.b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: dernier.b.pourquoi }, { via: 'sautsDepuisChemin', chemin: dernier.chemin });
     }
