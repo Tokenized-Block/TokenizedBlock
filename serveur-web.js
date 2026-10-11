@@ -1083,6 +1083,7 @@ async function rpcServeurBrut(methode, params) {
       if (!j.error) return j.result;
       const msg = String(j.error.message || 'rpc error');
       dernier = new Error(msg);
+      if (j && j.error) dernier.data = j.error.data; /* 2026-10-11 : les octets du revert (NotEnoughLiquidity.) ne sont QUE la */
       /* tip 20260923-map-prebridge: NEVER retry range/413 — same window will always fail and hung Map 3d scan */
       if (/413|too large|range/i.test(msg)) throw dernier;
       if (!/rate|limit|timeout/i.test(msg)) throw dernier;
@@ -2234,6 +2235,7 @@ async function rpcRails(methode, params) {
       if (j && !j.error && j.result === '0x') { dernier = new Error('empty answer to a read'); await new Promise((ok) => setTimeout(ok, 200 * (k + 1))); continue; }
       const msg = j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status;
       dernier = new Error(msg);
+      if (j && j.error) dernier.data = j.error.data; /* 2026-10-11 : les octets du revert (NotEnoughLiquidity.) ne sont QUE la */
       if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy/i.test(msg)) { dernier.definitif = true; throw dernier; }
     } catch (e) {
       if (!compte) compterEnvoi(url, 'reseau');

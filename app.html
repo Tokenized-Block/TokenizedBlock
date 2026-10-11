@@ -4652,7 +4652,7 @@ async function rpcReseau(methode, params) {
         }
         break; /* next node */
       }
-      if (j.error) throw new Error(j.error.message);
+      if (j.error) { const e = new Error(j.error.message); e.data = j.error.data; throw e; } /* 2026-10-11 : les octets du revert sont dans data */
       /* ⛔ ICI ET NULLE PART AILLEURS : une lecture qui aboutit APRES un hoquet est exactement ce que
        *   le correctif rattrape. `reprises` seul compterait aussi les tentatives perdues. */
       if (reprises > 0) { try { rpcCompte.reprisesOk++; } catch (_) { /* rien */ } }

@@ -24,15 +24,20 @@ const appels = [];
 const rpc = async (m, p) => {
   const d = String(p[0].data).toLowerCase();
   appels.push(d);
-  if (d.includes(HOOK.slice(2))) throw new Error('execution reverted: ' + JSON.stringify({ code: 3, message: 'execution reverted', data: DATA }));
+  /* LE CONTRAT REEL (Claude 13:10, mesure sur 3 noeuds) : error.message = 'execution reverted', les octets SEULEMENT dans error.data */
+  if (d.includes(HOOK.slice(2))) { const e = new Error('execution reverted'); e.data = DATA; throw e; }
   throw new Error('execution reverted'); /* les gabarits sans hook : pool absente */
 };
 const r = await meilleureClePourMontant({ rpc, chaine: 8453, de: ETH, vers: B, montant: 15n * 10n ** 12n, candidates: [REELLE].concat(CLES_PRIX) });
 vu(appels[0].includes(HOOK.slice(2)), 'la cle reelle (avec son hook) n est pas essayee en premier');
 vu(r.etat === 'REFUSE', 'ROUGE->VERT : etat ' + r.etat + ' / ' + r.pourquoi);
 vu(r.hookSansDevis === true && !r.poolTropFine, 'drapeau hookSansDevis absent');
-vu(/0xd34c23/.test(r.pourquoi) && /NotEnoughLiquidity/.test(r.pourquoi) && !/tried combinations/.test(r.pourquoi), 'message : ' + r.pourquoi);
+vu(/0xd34c23/.test(r.pourquoi) && /can't fill this amount/.test(r.pourquoi) && !/tried combinations/.test(r.pourquoi), 'message : ' + r.pourquoi);
 vu(r.cle === null && r.quote === null, 'un refus ne rend ni cle ni devis');
+/* 2026-10-11 13:40 (fork 8571 bloc 52 463 136 + blockscout) : la liquidite a ete RETIREE par son LP (PositionManager.modifyLiquidities,
+ *   Polytopia 12:09, PUMPFUN 11:37, SI 11:57 Bruxelles) ; le plan exact du routeur via le hook revert V4TooLittleReceived a min 1.
+ *   Le message ne doit plus dire « derriere son hook » (faux) : il dit que la pool n a plus de liquidite. */
+vu(/no usable liquidity right now/.test(r.pourquoi) && !/behind its own hook|liquidity provider removed/.test(r.pourquoi), 'message (seulement ce que le code mesure) : ' + r.pourquoi);
 const s = await sautsDepuisChemin({ chemin: [{ de: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', vers: ETH, famille: 'uniswap-v4' }, { de: ETH, vers: B, famille: 'uniswap-v4' }],
   montant: 50000n, resoudre: async ({ vers }) => (vers === ETH
     ? { etat: 'OK', cle: { currency0: ETH, currency1: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', fee: 500, tickSpacing: 10, hooks: ETH }, zeroForOne: false, quote: 15n * 10n ** 12n }
@@ -42,4 +47,9 @@ vu(s.etat === 'REFUSE' && /^hop 2: /.test(s.pourquoi) && !/has no pool we can bu
 const ok = await meilleureClePourMontant({ rpc: async (m, p) => (String(p[0].data).toLowerCase().includes(HOOK.slice(2)) ? '0x' + (123n).toString(16).padStart(64, '0') : (() => { throw new Error('execution reverted'); })()),
   chaine: 8453, de: ETH, vers: B, montant: 10n ** 13n, candidates: [REELLE].concat(CLES_PRIX) });
 vu(ok.etat === 'OK' && ok.quote === 123n && ok.cle.hooks.toLowerCase() === HOOK, 'une pool hookee qui cote n est plus choisie');
+/* GARDE DE SOURCE : les 2 wrappers reels portent .data (sinon la detection ne se declenche jamais en prod) */
+import { readFileSync } from 'node:fs';
+const src = (n) => readFileSync(new URL('./' + n, import.meta.url), 'utf8');
+vu(/const e = new Error\(j\.error\.message\); e\.data = j\.error\.data; throw e;/.test(src('app.html')), 'app.html : le throw du lecteur rpc perd error.data');
+vu(/dernier = new Error\(msg\);\s*if \(j && j\.error\) dernier\.data = j\.error\.data;/.test(src('serveur-web.js')), 'serveur-web.js rpcRails : le throw perd error.data');
 console.log('OK test-v4-hook-tiers-sans-devis-20261011 : ' + n + ' assertions');
