@@ -23078,6 +23078,10 @@ function bcChangerFil(a) {
   fil.textContent = '';
   for (const n of bc.fils.get(a) || []) fil.append(n);
   bc.filDe = a;
+  /* 2026-10-11 (QA de Grok, prod : apres un changement de block, la Bank restait sur « NVDAc → USDC · This block ») : la puce « This
+   *   block » et l ordre sont calcules A LA PEINTURE - une liste peinte pour un AUTRE block est repeinte (marches en cache 5 min : rien
+   *   n est relu sur le reseau pour ca) */
+  if (bcBanque.peintPour !== undefined && bcBanque.peintPour !== String(a).toLowerCase()) void bcBanqueCharger(false);
 }
 /** Le trade DEMANDE par la personne, prepare par le cerveau : MEMES regles que S.I (bcAifiBattre) — achat au montant « Per trade » dans
  *  la devise « Pay with » de S.I (decimales LUES, jamais 18 par defaut), vente d un quart du solde LU. Rien ne signe ici : la carte
@@ -24171,6 +24175,7 @@ async function bcBanqueCharger(force = false) {
   /* 2026-10-11 (Phil : « le block sur le panel control doit suivre ») : les marches du block AFFICHE passent en tete (tri stable :
    *   l ordre par liquidite reste celui de la ligne au-dessus a l interieur des deux groupes) */
   const ici = brainAdr ? String(brainAdr).toLowerCase() : null;
+  bcBanque.peintPour = ici; /* le block pour lequel la liste est peinte (bcChangerFil la repeint quand le block change) */
   if (ici) listes.sort((a, b) => (String(b.garantie.adr).toLowerCase() === ici) - (String(a.garantie.adr).toLowerCase() === ici));
   bcBanquePeindreResume(listes, ecartes);
   if (!listes.length) ul.append(bcEl('li', { cls: 'note', text: 'No listed lending market accepts a stock of our list right now.' }));
