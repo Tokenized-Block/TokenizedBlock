@@ -3992,7 +3992,7 @@ import { creerRegulateur } from './regulateur-rpc.js';
 import { modeEssai, fournisseurDiffere, poserFournisseur } from './mode-essai.js';
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
-import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition } from './liquidite.js';
+import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition, idsMintesDansRecu } from './liquidite.js';
 import { evenementsLive, completerQuantite, compteDePuce, teteNoteLive } from './fil-live.js';
 /* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
  *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
@@ -13627,13 +13627,24 @@ async function signerLiquidite(tx, adr, genre) {
     return;
   }
   if (genre === 'APPROBATION') { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerAjout(); return; }
-  if (genre === 'AJOUT' && idAvant !== null) {
-    try {
-      const pos = await lirePosition({ rpc, chaine: CHAINE, tokenId: idAvant });
-      if (pos.etat === 'LUE' && pos.proprietaire.toLowerCase() === compte.toLowerCase()) garderPosition(idAvant, adr);
-    } catch { /* non verifiee : pas gardee */ }
+  /* 2026-10-11 (contre-test de Grok : « None added from this browser yet » juste apres un ajout confirme) : l id vient du RECU
+   *   (Transfer 0x0 -> compte emis par le PositionManager), pas du compteur global lu avant l envoi - d autres avaient minte entre les
+   *   deux (mesure : 2 positions de tiers en 16 blocs). Le compteur ne reste qu en secours, toujours verifie par ownerOf. */
+  let gardees = 0;
+  if (genre === 'AJOUT') {
+    let ids = [];
+    try { ids = idsMintesDansRecu({ recu: await rpc('eth_getTransactionReceipt', [r.hash]), chaine: CHAINE, compte }); } catch (_) { ids = []; }
+    if (!ids.length && idAvant !== null) ids = [idAvant];
+    for (const id of ids) {
+      try {
+        const pos = await lirePosition({ rpc, chaine: CHAINE, tokenId: id });
+        if (pos.etat === 'LUE' && pos.proprietaire.toLowerCase() === compte.toLowerCase()) { garderPosition(id, adr); gardees += 1; }
+      } catch { /* non verifiee : pas gardee */ }
+    }
   }
-  e.className = 'note wOk'; e.innerHTML = (genre === 'AJOUT' ? 'Liquidity added — your position is listed below.' : 'Position withdrawn.') + lien;
+  e.className = 'note wOk';
+  e.innerHTML = (genre !== 'AJOUT' ? 'Position withdrawn.' : gardees ? 'Liquidity added — your position is listed below.'
+    : 'Liquidity added. Its position number could not be read back yet, so it is not listed below — it is yours on chain (see the explorer).') + lien;
   void peindrePositions(adr);
 }
 async function retirerPosition(id) {

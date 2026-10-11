@@ -82,8 +82,25 @@ export async function planRetrait({ rpc, chaine, compte, tokenId, toleranceBps =
   return { etat: 'PRET', tx, position: pos, attendu: { eth: m.montant0, blocks: m.montant1 }, minimum: { eth: min0, blocks: min1 } };
 }
 
-/** Lit l id que recevra le PROCHAIN mint (a lire juste avant d envoyer l ajout, pour retrouver la position apres). */
+/** Lit l id que recevra le PROCHAIN mint (a lire juste avant d envoyer l ajout, pour retrouver la position apres).
+ * ⛔ 2026-10-11 (contre-test de Grok, Add liquidity IB022) : ce compteur est GLOBAL. Entre la lecture et l inclusion, d autres comptes
+ *   mintent (mesure : #3129292 et #3129293 a d autres, puis #3129294 a Grok, 16 blocs) - l id lu etait celui d un tiers, la position
+ *   reelle n etait jamais gardee (« None added from this browser yet »). Ne sert plus que de SECOURS : voir idsMintesDansRecu. */
 export async function prochainIdPosition({ rpc, chaine }) {
   const V = V4_ADRESSES[Number(chaine)];
   return BigInt(await rpc('eth_call', [{ to: V.posm, data: '0x' + selecteur('nextTokenId()') }, 'latest']));
+}
+
+const TOPIC_TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+/** Les ids de position MINTES vers `compte` par CETTE transaction : Transfer(0x0 -> compte, id) emis par le PositionManager LUI-MEME
+ *  (un log porte l adresse du contrat qui l emet : un autre contrat ne peut pas en ecrire un au nom du PositionManager).
+ *  Rend [] si le recu n en porte aucun (l appelant dit alors ce qu il ne sait pas). */
+export function idsMintesDansRecu({ recu, chaine, compte }) {
+  const V = V4_ADRESSES[Number(chaine)];
+  if (!V || !recu || !Array.isArray(recu.logs) || !/^0x[0-9a-fA-F]{40}$/.test(String(compte || ''))) return [];
+  const posm = V.posm.toLowerCase(), moi = String(compte).toLowerCase().slice(2).padStart(64, '0');
+  return recu.logs.filter((l) => l && String(l.address || '').toLowerCase() === posm && Array.isArray(l.topics) && l.topics.length === 4
+    && String(l.topics[0]).toLowerCase() === TOPIC_TRANSFER && /^0x0{64}$/i.test(String(l.topics[1]))
+    && String(l.topics[2]).toLowerCase().slice(2) === moi)
+    .map((l) => BigInt(l.topics[3]));
 }
