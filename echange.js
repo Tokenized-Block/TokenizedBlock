@@ -789,6 +789,18 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
           pourquoi: 'this pool is too thin for this amount: it quotes 1/' + fraction + ' of it, not all of it — try a much smaller amount' };
       }
     }
+    /* ⛔ 2026-10-11 (Grok, achat USDC -> Polytopia, launchpad tiers) : la cle REELLE (lue, hookee) a ete essayee EN PREMIER ; la pool
+     *   repond NotEnoughLiquidity (0x7a5ed734 dans UnexpectedRevertBytes) au montant entier ET a 1/10, 1/100, 1/1000 (mesure : liquidite
+     *   active 0, sa liquidite est derriere son hook). Dire « aucune pool parmi les 5 combinaisons » etait faux : la pool existe, c est
+     *   son hook qui ne se laisse pas coter. REFUSE nomme (hook non verifie : le refus reste), jamais un OK. */
+    for (let i = 0; i < essais.length; i += 1) {
+      const e = essais[i], h = adr(e.cle.hooks);
+      if (issues[i].ok || CLES_PRIX.includes(e.k) || !/^0x[0-9a-f]{40}$/.test(h) || /^0x0{40}$/.test(h)) continue;
+      if (!/6190b2b0[0-9a-f]{128}7a5ed734/i.test(String((issues[i].erreur && issues[i].erreur.message) || issues[i].erreur || ''))) continue;
+      return { etat: 'REFUSE', hookSansDevis: true, cle: null, zeroForOne: null, quote: null, essayees: liste.length, cotees,
+        pourquoi: 'this block v4 pool (hook ' + h.slice(0, 8) + '...) answers NotEnoughLiquidity to the Uniswap quoter at this size and at '
+          + '1/10, 1/100 and 1/1000 of it: its liquidity sits behind its own hook, which we cannot quote - not tradable here' };
+    }
     return { etat: 'NON_MESURE', cle: null, zeroForOne: null, quote: null,
       essayees: liste.length, cotees,
       pourquoi: 'no v4 pool among the ' + liste.length + ' tried combinations quoted this pair at this '

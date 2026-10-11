@@ -103,6 +103,10 @@ export async function sautsDepuisChemin({ chemin, montant, resoudre } = {}) {
     if (!r || r.etat !== 'OK' || !r.cle) {
       /* ⛔ 2026-10-10 (prod, E.T.FFB -> USDC : « hop 1 (…) has no pool we can build: this pool is too thin… ») : une pool TROP FINE
        *   existe - elle cote une fraction du montant. Dire « no pool » serait faux : on dit le saut et la cause, et le drapeau suit. */
+      /* 2026-10-11 : une pool hookee qui ne se laisse coter a aucune taille existe aussi - meme regle, son drapeau suit. */
+      if (r && r.hookSansDevis === true) {
+        return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: i, hookSansDevis: true, pourquoi: 'hop ' + (i + 1) + ': ' + r.pourquoi };
+      }
       if (r && r.poolTropFine === true) {
         return { etat: 'REFUSE', sauts: null, sortieEstimee: null, resolus: i, poolTropFine: true, fractionCotee: r.fractionCotee ?? null,
           pourquoi: 'hop ' + (i + 1) + ': ' + (r.pourquoi || 'this pool is too thin for this amount') };
