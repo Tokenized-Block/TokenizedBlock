@@ -62,8 +62,10 @@ const artefact = JSON.parse(fs.readFileSync(path.join(ICI, 'contracts/out/BlockS
 const { BLOCKSKINS_DEPLOIEMENT: DEP } = await import('./blockskins-deploiement.js');
 const creation = DEP.creation;
 ok(creation === String(artefact.bytecode.object) + adrMot(USDC) + adrMot(FRAIS), 'la donnee de deploiement figee = le bytecode compile + (USDC, wallet des frais) du depot');
-ok(crypto.createHash('sha256').update(Buffer.from(creation.slice(2), 'hex')).digest('hex') === DEP.sha256Creation && DEP.adresse === null,
-  'son empreinte sha256 est celle qu elle annonce (' + DEP.sha256Creation.slice(0, 12) + '…) ; aucune adresse deployee n est declaree');
+/* 2026-10-11 : v2 DEPLOYE par Phil (0xc0d1…8e2f, relu par verif-blockskins-deploye.mjs) - ce banc redeploie sa propre copie de la
+ *   donnee figee ; l adresse enregistree est jugee par test-blockskins-deploiement (les quatre champs ensemble). */
+ok(crypto.createHash('sha256').update(Buffer.from(creation.slice(2), 'hex')).digest('hex') === DEP.sha256Creation,
+  'son empreinte sha256 est celle qu elle annonce (' + DEP.sha256Creation.slice(0, 12) + '…)');
 const table = [...POOLS_ACTIONS_AERODROME.entries()].map(([adr, t]) => ({ adr: adr.toLowerCase(), ...t }));
 const NV = table.find((t) => t.symbole === 'NVDAc'), AUTRE = table.find((t) => t.symbole !== 'NVDAc');
 const codeFrais = await rpc('eth_getCode', [FRAIS, 'latest']), codeAction = await rpc('eth_getCode', [NV.adr, 'latest']);

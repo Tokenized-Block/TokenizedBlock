@@ -35,9 +35,17 @@ const PRECEDENT = Object.freeze({
   bloc: 52175537,
   owner: '0x37eb9b7ce0b51fe12fbf092026e001918128580a',
 });
-/* ⛔ v2 — PAS ENCORE DEPLOYE. Se remplit SEULEMENT apres la page de Phil ET une relecture sur la chaine (input de la tx = `creation`
- *   octet pour octet, contrat cree a l adresse du recu, USDC()/FEE_WALLET()/owner() conformes, tokenURI d un mint sur fork). Jamais avant. */
-const DEPLOYE = null;
+/* ⛔ v2 — DEPLOYE LE 2026-10-11 par le proprietaire (sa signature, depuis deployer-blockskins.html ; Phil a colle le hash complet dans le
+ *   chat). RELU sur la chaine par verif-blockskins-deploye.mjs (8/8) : input de la tx = `creation` octet pour octet, recu status 1,
+ *   17 911 octets de code, USDC()/FEE_WALLET() du depot, owner() = l expediteur, MINT_PRICE() = 1 USDC. Puis, sur un fork a la tete
+ *   (bloc 52 470 342), un mint A CETTE ADRESSE : wallet de frais +1 USDC, fetch(tokenURI) -> JSON valide -> fetch(image) -> le SVG.
+ *   Les quatre valeurs sont recopiees de la sortie du verificateur. Ne jamais les modifier a la main. */
+const DEPLOYE = Object.freeze({
+  adresse: '0xc0d12c7c84a574fbc65fd5182aecef51924d8e2f',
+  tx: '0xc60a136835ff7864e2cb5999caee48b72578ae53c297659480deed3e6bf4ac56',
+  bloc: 52470279,
+  owner: '0x37eb9b7ce0b51fe12fbf092026e001918128580a',
+});
 const meta = typeof art.metadata === 'string' ? JSON.parse(art.metadata) : (art.metadata || {});
 const source = fs.readFileSync(path.join(ICI, 'src/BlockSkins.sol'), 'utf8').replace(/\r\n/g, '\n');
 /* l image dans le wallet est une propriete de la SOURCE : son tokenURI porte un champ "image" (prouve par la suite forge et par fetch()
