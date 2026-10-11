@@ -39,14 +39,25 @@ const finE = iE > 0 ? /\r?\n\}/.exec(html.slice(iE)) : null;
 vu(iE > 0 && !!finE, 'bcBanqueEstimer introuvable');
 const champs = { '#bcBanqueEstim': { textContent: '' }, '#bcBanqueGarantie': { value: '' }, '#bcBanqueMontant': { value: '' } };
 const mkG = { garantie: { decimales: 8, symbole: 'GOOGLc' }, pret: { decimales: 6, symbole: 'USDC' }, prixOracle: '3526329343300000000000000000000000000', lltv: '770000000000000000', margeBps: 7000, apyPret: 0.05 };
-const estimer = new Function('$', 'bcBanque', 'enUnitesBrutes', 'bcUnites', 'bcPct', html.slice(iE, iE + finE.index + finE[0].length) + '\nreturn bcBanqueEstimer;')(
-  (s) => champs[s], { choisi: mkG, sens: 'emprunter' }, enUnitesBrutes, (v, d) => (Number(v) / 10 ** d).toFixed(2), (x) => String(x));
+/* 2026-10-11 (glow up + « le risque de liquidation en % ») : l estimateur peint aussi une jauge (bcPeindreJauge) - doublure qui note ses appels */
+const jauges = [];
+const estimer = new Function('$', 'bcBanque', 'enUnitesBrutes', 'bcUnites', 'bcPct', 'bcPeindreJauge', html.slice(iE, iE + finE.index + finE[0].length) + '\nreturn bcBanqueEstimer;')(
+  (s) => champs[s], { choisi: mkG, sens: 'emprunter' }, enUnitesBrutes, (v, d) => (Number(v) / 10 ** d).toFixed(2), (x) => String(x), (...a) => jauges.push(a));
 const dit = (g, m) => { champs['#bcBanqueGarantie'].value = g; champs['#bcBanqueMontant'].value = m; estimer(); return champs['#bcBanqueEstim'].textContent; };
 /* 352,63 x 77 % x 70 % = 190,07 : les « ~190 USDC » mesures par Grok en prod sur 1 GOOGLc */
 vu(/Oracle price: 1 GOOGLc = 352\.63 USDC/.test(dit('', '10')), 'garantie vide + 10 USDC : estimation vide (' + JSON.stringify(dit('', '10')) + ')');
 vu(/you can borrow up to/.test(dit('1', '')) && /Oracle price/.test(dit('1', '')), 'garantie 1 + montant vide : pas de plafond (' + JSON.stringify(dit('1', '')) + ')');
 vu(/Position LTV/.test(dit('1', '10')), 'garantie + montant : pas de LTV');
 vu(dit('abc', '10') === '', 'un texte illisible est estime');
+/* la distance a la liquidation, en % (decision de Phil) : 10 USDC sur 1 GOOGLc (352,63) -> LTV 2,8 %, liquidation sous ~12,99 USDC,
+ *   soit une baisse de 96,3 % ; plafond 53,9 %, seuil 77 % */
+jauges.length = 0;
+const t1 = dit('1', '10'), j1 = jauges.at(-1);
+vu(/That is a 96\.3 % fall from the oracle price — the distance to liquidation, not a probability\./.test(t1), 'la distance a la liquidation en % n est pas dite : ' + JSON.stringify(t1));
+vu(j1 && Math.abs(j1[0] - 2.83) < 0.01 && Math.abs(j1[1] - 53.9) < 0.01 && Math.abs(j1[2] - 77) < 0.01 && Math.abs(j1[3] - 96.32) < 0.01 && j1[4] === 'GOOGLc',
+  'la jauge ne recoit pas LTV / plafond / seuil / baisse : ' + JSON.stringify(j1));
+dit('', '10'); vu(jauges.at(-1)[0] === null, 'sans garantie, la jauge invente une LTV');
+dit('1', ''); vu(jauges.at(-1)[0] === 0 && jauges.at(-1)[3] === null, 'garantie sans emprunt : LTV 0, pas de baisse inventee');
 /* 3) la carte TokenizedBank du Wallet disait « not built yet, no credit » alors que l emprunt est en ligne : elle mene a la banque */
 const iCarte = html.indexOf('id="wBankCarte"'), iVive = html.indexOf('id="tbBanqueVivante"'), iApercu = html.indexOf('id="tbApercu"');
 vu(iCarte > 0 && iVive > iCarte && iVive < iApercu, 'la ligne « Live now » n est pas en tete de la carte, avant le bandeau Preview');
