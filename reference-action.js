@@ -218,7 +218,9 @@ const usd = (x) => '$' + Number(x).toLocaleString('en-US', { minimumFractionDigi
 export function phraseReference(r, prixPoolUsd, symbole = 'this stock') {
   const ref = r && r.reference;
   if (!ref || !ref.etat) return { texte: 'Chainlink reference: not read yet.', alerte: false, ecartBps: null };
-  if (ref.etat === 'NON_DISPONIBLE') return { texte: 'No Chainlink reference price is published for ' + symbole + '.', alerte: false, ecartBps: null };
+  /* 2026-10-11 (etude wse49fh8o) : des pools d actions SANS reference se traitent avec une prime ronde de +3 a +9 % sur le cours (prix tiers
+   *   Yahoo, non primaire - AUCUN chiffre n est affiche ici). Sans reference, rien n est compare : on le DIT, sans rien bloquer. */
+  if (ref.etat === 'NON_DISPONIBLE') return { texte: 'No Chainlink reference price is published for ' + symbole + ': this market\'s price is not compared with the share price — check it yourself before you review.', alerte: false, ecartBps: null };
   if (ref.etat !== 'LU') return { texte: 'Chainlink reference: not read — retrying.', alerte: false, ecartBps: null };
   const qual = ref.fraicheur === 'A_JOUR' ? 'updated ' + age(ref.ageS)
     : ref.fraicheur === 'DERNIERE_VALEUR' ? 'last value, held while markets are closed (' + age(ref.ageS) + ')'

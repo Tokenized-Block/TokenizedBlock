@@ -101,7 +101,8 @@ function peindre() {
     : 'Connected: ' + compte + ' — this wallet is not the owner of the skins contract: nothing can be allowed from it.';
   $('#bConnecter').hidden = !!compte;
   const n = restantes().length;
-  $('#bAdmettre').textContent = n ? 'Allow the ' + n + ' remaining stock' + (n > 1 ? 's' : '') : 'Nothing left to allow';
+  /* rien de LU = on ne sait pas ce qui reste : jamais « Nothing left to allow » sur une lecture absente (vu en prod avant connexion) */
+  $('#bAdmettre').textContent = !lus ? 'Allow the stocks' : n ? 'Allow the ' + n + ' remaining stock' + (n > 1 ? 's' : '') : 'Nothing left to allow';
   $('#bAdmettre').disabled = !estProprio || !chaineOk || envoi || n === 0;
 }
 async function attendreRecu(tx) {

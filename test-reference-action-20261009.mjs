@@ -171,6 +171,11 @@ ok(p301.alerte === true && /above the reference/.test(p301.texte) && /check the 
 ok(pBas.alerte === true && /below the reference/.test(pBas.texte), 'sous la reference : alerte « below »');
 ok(RA.phraseReference({ reference: { etat: 'NON_LU' } }, 50).alerte === false, 'reference non lue : jamais d alerte');
 ok(/No Chainlink reference price is published for MRVLc/.test(RA.phraseReference({ reference: { etat: 'NON_DISPONIBLE' } }, 50, 'MRVLc').texte), 'reference absente : dite, pas d alerte');
+/* 2026-10-11 : sans reference, la phrase dit la CONSEQUENCE (rien n est compare au cours) - des pools sans reference ont ete mesurees avec
+ *   une prime (etude wse49fh8o, prix tiers) ; aucun chiffre n est affiche, rien n est bloque */
+const sansRef = RA.phraseReference({ reference: { etat: 'NON_DISPONIBLE' } }, 50, 'ARMc');
+ok(/not compared with the share price — check it yourself before you review\./.test(sansRef.texte) && sansRef.alerte === false && !/%|\d/.test(sansRef.texte.replace('ARMc', '')),
+  'reference absente : la consequence est dite (rien de compare), sans chiffre et sans alerte bloquante');
 ok(/last value, held while markets are closed/.test(RA.phraseReference(lu(100, 'DERNIERE_VALEUR'), 100).texte), 'week-end : « last value, held while markets are closed »');
 ok(/FROZEN/.test(RA.phraseReference(lu(100, 'FIGE_PAUSE'), 100).texte) && /STALE/.test(RA.phraseReference(lu(100, 'PERIME'), 100).texte), 'pause : FROZEN ; perime : STALE');
 ok(/not current/.test(RA.phraseReference(lu(100, 'PERIME'), 120).texte), 'une alerte contre une reference perimee le dit');

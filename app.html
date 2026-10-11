@@ -20805,21 +20805,30 @@ document.addEventListener('click', (ev) => {
 /* ⛔ PUBLIC SEULEMENT : aucun pourcentage de frais, aucune destination, aucun detail interne. Des mots simples. */
 /* ⛔ PUBLIC SEULEMENT : aucun pourcentage de frais, aucune destination, aucun detail interne.
  * Phil : « ecris par rapport a nos onglets » — une etape par onglet, dans l ordre de la barre du bas. */
+/* 2026-10-11 (Phil : « une mise a jour et une meilleure explication de l app ») : la barre avait change (Market, Bridge, Tokenized) et
+ *   l explication parlait encore de « My block » ; le panneau (Bank, Skins, S.I) n y etait pas. UNE etape par onglet, DANS L ORDRE de
+ *   la barre (test-learn-suit-la-barre le verifie), puis le panneau. Que ce qui existe ; aucun pourcentage, aucune adresse. */
 const ETAPES = [
   { t: 'Map — every cube is a block', ic: 1,
     d: 'Each cube is a real token on Base. The more its market is worth, the bigger the cube. Light beams are real buys, sales and transfers happening now. Every few minutes one block is drawn at random to sit at the centre — tap the text at the top to draw again.' },
-  { t: 'Blocks — the list', ic: 6,
-    d: 'All blocks sorted by how big their market is. Tap one to open it, see its brain, and buy or sell.' },
+  { t: 'Market — what is moving', ic: 6,
+    d: 'Every block with a live market, and the stocks Coinbase tokenized on Base, ranked by what is moving right now. Tap one to open it and buy or sell — your own wallet shows each step and you sign it.' },
   { t: 'Create — make your own', ic: 0,
-    d: 'Pick a name and a symbol; the face is ready. 0.001 ETH: it is born, and its market opens.' },
-  { t: 'Brain AI — what a block feels', ic: 9,
-    d: 'Every block has a small brain that reacts to what happens to it: a buy, a sale, a new holder. You watch it light up. It never trades for you.' },
+    d: 'Pick a name and a symbol; its face and its brain are ready. For 0.001 ETH it is born on Base, its tokens are minted to you, and its market opens.' },
+  { t: 'Bridge — move value', ic: 3,
+    d: 'Move value from one block to another through a hub block, or buy ETH or USDC with a card through Coinbase: it lands in your own wallet.' },
+  { t: 'Brain — what a block feels', ic: 9,
+    d: 'Every block has a brain of 128 small neurons, seeded by its address — not a chatbot. It reacts to buys, sales and new holders; you watch it light up. Open its control panel to talk to it and trade. Switch S.I on and it proposes trades inside the limits you set — it never signs: you do.' },
   { t: 'Wallet — your money stays yours', ic: 2,
-    d: 'See what you hold, send and receive. Every action opens your own wallet: you check it, you sign. A small fee is included in each trade and shown before you sign.' },
-  { t: 'Feed — what just happened', ic: 3,
-    d: 'Everything happening to blocks on Base, live: births, buys, sales, messages.' },
-  { t: 'My block — your page', ic: 5,
-    d: 'The blocks you created and the ones you hold, with their brain and their market.' },
+    d: 'See what you hold, send and receive, pair one of your blocks with another currency. Every action opens your own wallet: you check it, you sign. A small fee is included in each trade and shown before you sign.' },
+  { t: 'Feed — what just happened', ic: 4,
+    d: 'Everything happening to blocks on Base, live and read from the chain: births, buys, sales, sends and messages — and what each brain notices.' },
+  { t: 'Blocks — the biggest, by stage', ic: 8,
+    d: 'The biggest blocks first, then every block by stage, from Monument down to Seed. Tap one to open its page, its brain and its market.' },
+  { t: 'Tokenized — stocks, lending, your own tokens', ic: 5,
+    d: 'Borrow USDC against a Coinbase tokenized stock you hold, or lend USDC: it runs on Morpho, a lending protocol already live on Base, and your wallet signs each step. Or mint a new block named after a token that already exists — the original is never touched. Tokenized stocks are issued by Coinbase and are not offered to US persons.' },
+  { t: 'Skins — dress your block', ic: 7,
+    d: 'In the control panel, tap + to try skins on. Buy one for 1 USDC and it is yours on chain, bound to that block: its brain wears it, your wallet can show it, and you can sell it or auction it on the skins market.' },
 ];
 
 function peindreLearn() {

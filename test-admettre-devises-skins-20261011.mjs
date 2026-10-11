@@ -24,6 +24,7 @@ vu(/if \(envoi \|\| !compte \|\| !proprietaire \|\| compte\.toLowerCase\(\) !== 
 vu(/const restantes = \(\) => SKIN_ACTIONS_CANDIDATES\.filter\(\(c\) => admises\.get\(c\.adr\) === false\);/.test(script) && /await lireAdmise\(c\); peindre\(\);\s*if \(admises\.get\(c\.adr\) !== true\)/.test(script),
   'currencyAllowed relu avant (seules les NON admises lues sont proposees) et apres chaque recu');
 vu(/e && e\.code === 4001 \? 'You declined ' \+ c\.sym \+ ' in your wallet — nothing more was sent\.'/.test(script) && /return; \}/.test(script), 'un refus dans le wallet arrete tout');
+vu(/\$\('#bAdmettre'\)\.textContent = !lus \? 'Allow the stocks' : n \?/.test(script), 'rien de lu : jamais « Nothing left to allow » (vu en prod avant connexion, 2026-10-11)');
 vu(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page) && /<meta name="robots" content="noindex">/.test(page), 'aucune cle, aucun champ, noindex');
 const srv = lire('serveur-web.js'), app = lire('app.html');
 vu(/'admettre-devises-skins\.html',/.test(srv) && !/admettre-devises-skins/.test(app), 'servie par le serveur ; l app n y renvoie pas');
