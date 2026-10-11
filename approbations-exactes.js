@@ -16,7 +16,8 @@ const ADR = /^0x[0-9a-fA-F]{40}$/;
  * okP2 / okR : les autorisations EXISTANTES suffisent deja (lues par l appelant) ; libelleJeton : ce que la personne lit.
  * Rend { etat: 'OK', etapes: [...] } (0, 1 ou 2 etapes) ou { etat: 'REFUSE', pourquoi }.
  */
-export function etapesPermit2Exactes({ jeton, permit2, routeur, montant, maintenantSec, okP2 = false, okR = false, libelleJeton = 'this token' }) {
+export function etapesPermit2Exactes({ jeton, permit2, routeur, montant, maintenantSec, okP2 = false, okR = false, libelleJeton = 'this token',
+  libelleRouteur = 'the Uniswap router' }) { /* libelleRouteur : 2026-10-11, la naissance autorise le position manager, pas le routeur */
   if (![jeton, permit2, routeur].every((a) => ADR.test(String(a || '')))) return { etat: 'REFUSE', pourquoi: 'whole addresses are required for an approval' };
   let m;
   try { m = BigInt(montant); } catch (_) { return { etat: 'REFUSE', pourquoi: 'the approved amount must be raw integer units' }; }
@@ -27,7 +28,7 @@ export function etapesPermit2Exactes({ jeton, permit2, routeur, montant, mainten
   if (t <= 0n) return { etat: 'REFUSE', pourquoi: 'a reference instant is required to set the approval expiry' };
   const etapes = [];
   if (!okP2) etapes.push({ nom: 'Allow Permit2 to move exactly this amount of ' + libelleJeton, to: jeton, data: encodeApprove(permit2, m), value: '0x0' });
-  if (!okR) etapes.push({ nom: 'Allow the Uniswap router to take exactly this amount (through Permit2, for 1 hour)', to: permit2,
+  if (!okR) etapes.push({ nom: 'Allow ' + libelleRouteur + ' to take exactly this amount (through Permit2, for 1 hour)', to: permit2,
     data: encodePermit2Approve(jeton, routeur, m, t + DUREE_PERMIT2_S), value: '0x0' });
   return { etat: 'OK', etapes };
 }

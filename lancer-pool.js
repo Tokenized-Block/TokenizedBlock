@@ -19,7 +19,8 @@
 //    construit sur une lecture ratee serait un pari.
 import { selecteur, cleDePool, poolId, liquiditeUnilaterale, liquiditeBilaterale, montantsPosition, sqrtPriceDepuisPrix,
   encodeMintPosition, encodeInitializePool, encodeMulticall, encodeApprove, encodePermit2Approve,
-  encodeSwapExactInSingle, SANS_MINHOP, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
+  encodeSwapExactInSingle, SANS_MINHOP } from './pool.js';
+import { etapesPermit2Exactes } from './approbations-exactes.js';
 import { parametresLancement, classementValoLancement, tickMinAligne, tickMaxAligne } from './lancement.js';
 import { CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
 import { HOOK_V8, HOOK_V9, estHookDeNaissance, hookPaieDejaA6cf, estHook7030 } from './tokenomics.js';
@@ -412,35 +413,6 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     p, sqrtVise, L, blocksRequis, ethRequis, resteAuCreateur: solde - blocksRequis, classement, V,
     naissance: modeNaissance, quoteEthWei: modeNaissance ? quoteEthWei : 0n };
 
-  /* ── autorisations Permit2, MESUREES (or forced for pre-create Instant Birth) ── */
-  let okP2 = null, okPosm = null;
-  if (avantCreate) {
-    okP2 = false;
-    okPosm = false;
-  } else {
-    try {
-      const all = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2)));
-      okP2 = all > 0n;
-    } catch (e) { okP2 = null; }
-    try {
-      const raw = await lireAppel(rpc, PERMIT2, '0x' + selecteur('allowance(address,address,address)')
-        + pad(compte) + pad(jeton) + pad(V.posm));
-      let montant = BigInt('0x' + String(raw).slice(2, 66));
-      const expiration = BigInt('0x' + String(raw).slice(66, 130));
-      if (montant > 0n && expiration > 0n && expiration < BigInt(Math.floor(maintenant / 1000))) montant = 0n;
-      okPosm = montant > 0n;
-    } catch (e) { okPosm = null; }
-  }
-
-  if (okP2 === null || okPosm === null) {
-    return { ...base, etat: 'NON_MESURE', etapes: [],
-      pourquoi: 'an approval could not be read — nothing is offered to sign until it is measured' };
-  }
-  const etapes = [];
-  if (!okP2) etapes.push({ nom: 'Allow Permit2 to move this block', to: jeton, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
-  if (!okPosm) etapes.push({ nom: 'Allow the Uniswap position manager (through Permit2)', to: PERMIT2,
-    data: encodePermit2Approve(jeton, V.posm, MAX_UINT160, MAX_UINT48), value: '0x0' });
-
   /* ── la transaction de lancement : UNE seule, atomique ── */
   /* Instant Birth: BOTH max0 and max1 allow the ETH side. Unilateral keeps 0n on ETH. */
   let max0, max1;
@@ -486,6 +458,42 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
     max0 = blockEst1 ? 0n : (blocksRequis * 102n) / 100n;
     max1 = blockEst1 ? (blocksRequis * 102n) / 100n : 0n;
   }
+
+  /* ── autorisations Permit2 AU MONTANT EXACT (Phil, 2026-10-11 : « montant exact partout ») ──
+   * ⛔ Avant : block -> Permit2 = MAX_UINT256 et Permit2 -> position manager = MAX_UINT160 SANS expiration (MAX_UINT48), et une
+   *   autorisation lue comme « suffisante » des qu elle valait plus que 0 - 1 unite suffisait, puis le mint reverterait APRES signature.
+   * ⇒ Le montant est le plafond du mint COTE BLOCK (le seul jeton que le mint tire ici ; l ETH part en valeur), borne au solde : le
+   *   mint ne peut pas tirer plus que ce que le compte detient (sans apport, 99,9 % du supply x 1,02 depasse le supply - mesure).
+   *   Une autorisation existante n est suffisante que si elle COUVRE ce montant ; celle de Permit2, que si elle vit encore 5 minutes
+   *   (le temps de signer les etapes une a une). Meme helper que les echanges (approbations-exactes.js), expiration 1 h. */
+  const capMint = blockEst1 ? max1 : max0;
+  const aApprouver = capMint < solde ? capMint : solde;
+  let okP2 = null, okPosm = null;
+  if (avantCreate) {
+    okP2 = false;
+    okPosm = false;
+  } else {
+    try {
+      const all = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2)));
+      okP2 = all >= aApprouver;
+    } catch (e) { okP2 = null; }
+    try {
+      const raw = await lireAppel(rpc, PERMIT2, '0x' + selecteur('allowance(address,address,address)')
+        + pad(compte) + pad(jeton) + pad(V.posm));
+      const montant = BigInt('0x' + String(raw).slice(2, 66));
+      const expiration = BigInt('0x' + String(raw).slice(66, 130));
+      okPosm = montant >= aApprouver && expiration >= BigInt(Math.floor(maintenant / 1000) + 300);
+    } catch (e) { okPosm = null; }
+  }
+  if (okP2 === null || okPosm === null) {
+    return { ...base, etat: 'NON_MESURE', etapes: [],
+      pourquoi: 'an approval could not be read — nothing is offered to sign until it is measured' };
+  }
+  const ap = etapesPermit2Exactes({ jeton, permit2: PERMIT2, routeur: V.posm, montant: aApprouver, maintenantSec: Math.floor(maintenant / 1000),
+    okP2, okR: okPosm, libelleJeton: 'this block', libelleRouteur: 'the Uniswap position manager' });
+  if (ap.etat !== 'OK') return { ...base, etat: 'REFUSE', etapes: [], pourquoi: ap.pourquoi };
+  const etapes = ap.etapes;
+
   const mint = encodeMintPosition({ cle, tickBas: p.tickBas, tickHaut: p.tickHaut, liquidite: L,
     max0, max1,
     /* ⛔⛔ LE PROPRIETAIRE DE LA POSITION EST L ADRESSE MORTE, PAS LE COMPTE : c est ce qui rend la pool
@@ -516,8 +524,9 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
 
   return { ...base, etat: etapes.length ? 'APPROBATIONS' : 'PRET', etapes, tx, microSwap,
     permanente: String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase(), proprietairePosition: proprietaire,
-    approbationsIllimitees: 'Permit2 gets an unlimited allowance for this block (MAX_UINT256), and the position '
-      + 'manager an unlimited Permit2 allowance (MAX_UINT160) — both until you revoke them.' };
+    montantApprouve: aApprouver,
+    approbations: 'exactly the most this launch can place (the blocks it places + 2 %, never more than you hold): Permit2 may move '
+      + 'that amount of this block, and the position manager may take it through Permit2 for 1 hour — nothing more, nothing longer.' };
 }
 
 /**

@@ -14374,7 +14374,7 @@ function peindrePlan(plan, adr) {
       + 'come back to you today.'] : []),
     ...(plan.legacyUpgrade ? ['Opens next to its outside market; only trades here pay its creator.'] : []),
     ...feeLignes,
-    ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbationsIllimitees] : []),
+    ...(plan.etat === 'APPROBATIONS' ? ['Approvals: ' + plan.approbations] : []), /* 2026-10-11 : montant exact (lancer-pool.js) */
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('')
     /* ⛔ CE QUE LE WALLET SIGNERA, RELU DEPUIS LES CALLDATAS DU PLAN — pas depuis les phrases ci-dessus. */
     + txsApercu.filter(Boolean).map((tx, k) => {
