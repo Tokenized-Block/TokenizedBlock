@@ -13605,16 +13605,19 @@ function texteAjoutPosition({ stockees, memoire, ids }) {
   if (memoire > 0) return 'Liquidity added — position #' + ids.join(', #') + ' is yours on chain (see the explorer). This browser\'s storage is full, so it is listed below for this visit only.';
   return 'Liquidity added. Its position number could not be read back yet, so it is not listed below — it is yours on chain (see the explorer).';
 }
-const positionsMemoire = [];
+/* 2026-10-11 (G, Grok) : la memoire est rangee PAR cle de compte/chaine (clePositions) - changer de wallet ne montre plus les positions d un autre compte. */
+const positionsMemoire = new Map();
+const memoirePositions = (cle) => { if (!positionsMemoire.has(cle)) positionsMemoire.set(cle, []); return positionsMemoire.get(cle); };
 const clePositions = () => 'tblock.positions.' + CHAINE + '.' + String(compte || '').toLowerCase();
 function positionsGardees() {
   let l = [];
   try { l = JSON.parse(localStorage.getItem(clePositions()) || '[]'); } catch (e) { l = []; }
-  for (const x of positionsMemoire) if (!l.some((y) => y.id === x.id)) l.push(x);
+  for (const x of (positionsMemoire.get(clePositions()) || [])) if (!l.some((y) => y.id === x.id)) l.push(x);
   return l;
 }
 function garderPosition(id, jeton) {
-  return garderPositionDans(localStorage, clePositions(), positionsMemoire, id, jeton, RPC_STOCKAGE);
+  const cle = clePositions();
+  return garderPositionDans(localStorage, cle, memoirePositions(cle), id, jeton, RPC_STOCKAGE);
 }
 async function peindrePositions(adr) {
   const boite = $('#plqPositions');
