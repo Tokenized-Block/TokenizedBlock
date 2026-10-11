@@ -2138,7 +2138,7 @@ details[open] > summary::before{transform:rotate(90deg)}
             <span class="bcChampIn"><input id="bcBanqueGarantie" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Collateral to deposit"><b class="bcUnite" id="bcBanqueGarantieU"></b></span>
           </label>
           <label class="bcChamp"><span id="bcBanqueMontantLib">You borrow</span>
-            <span class="bcChampIn"><input id="bcBanqueMontant" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Amount"><b class="bcUnite">USDC</b></span>
+            <span class="bcChampIn"><input id="bcBanqueMontant" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Amount"><b class="bcUnite" id="bcBanqueMontantU">USDC</b><!-- 2026-10-11 (Phil, capture : « toujours pas de menu deroulant ») : en Lend, la devise se CHOISIT ; OUSD = un echange OUSD -> USDC d abord (bcBanqueDeviseLend) --><select id="bcBanqueDevise" aria-label="Currency you lend with" hidden><option value="USDC">USDC</option><option value="OUSD">OUSD → USDC</option></select></span>
           </label>
           <!-- 2026-10-11 (Phil : « optimise l ux pour les choix ») : des montants TOUT FAITS, calcules pour CE wallet ; chacun dit a quelle
                baisse de l action la garantie serait vendue (le meme calcul que l estimation). Rien n est envoye : ils remplissent les champs. -->
@@ -24192,6 +24192,8 @@ function bcBanqueIndices() {
   $('#bcBanqueGarantie').placeholder = typeof solde === 'bigint' ? (solde > 0n ? 'You hold ' + bcUnites(solde, mk.garantie.decimales) : 'You hold none') : '0.0';
   $('#bcBanqueMontant').placeholder = !r ? '0.0' : bcBanque.sens === 'emprunter' ? (r.emprunt !== null && r.emprunt > 0n ? 'Up to ≈ ' + bcBas2(r.emprunt, mk.pret.decimales) : '0.0')
     : bcBanque.sens === 'preter' ? (r.pret !== null && r.pret > 0n ? 'You have ' + bcBas2(r.pret, mk.pret.decimales) : '0.0') : '0.0';
+  /* mode « Lend avec OUSD » : les indices et montants tout faits sont en USDC - ils ne s affichent pas sur un montant en OUSD */
+  if (bcBanque.sens === 'preter' && bcBanque.lendEnOusd) { $('#bcBanqueMontant').placeholder = '0.0'; const z = $('#bcBanquePuces'); if (z) { z.textContent = ''; z.hidden = true; } return; }
   bcBanquePuces(mk, r, solde); /* 2026-10-11 : les montants tout faits, sous le champ */
 }
 async function bcBanqueCharger(force = false) {
@@ -24543,6 +24545,13 @@ function bcBanqueChoisir(mk, sens) {
       + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '') : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
+  /* 2026-10-11 (Phil, capture : « toujours pas de menu deroulant ») : en Lend sur un marche USDC, la devise se CHOISIT - USDC, ou OUSD
+   *   change d abord en USDC. Ailleurs (Borrow, autre marche) : l unite du marche, sans menu, et le choix revient a USDC. */
+  const choixDevise = sens === 'preter' && mk.pret.symbole === 'USDC';
+  $('#bcBanqueDevise').hidden = !choixDevise; $('#bcBanqueMontantU').hidden = choixDevise;
+  $('#bcBanqueMontantU').textContent = mk.pret.symbole;
+  if (!choixDevise) $('#bcBanqueDevise').value = 'USDC';
+  bcBanqueDeviseLend();
   bcBanqueIndices(); /* repeint aussi la ligne OUSD (bcBanqueOusd) */
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
@@ -24558,6 +24567,18 @@ function bcBanqueChoisir(mk, sens) {
  *   marche : la ligne gardait le solde de l ANCIEN compte, ou celui d avant le swap ; (2) une lecture ratee EFFACE la ligne (un solde
  *   d avant n est pas un solde lu) ; meme compte + meme marche : l ancienne ligne reste pendant la relecture (pas de clignotement) ;
  *   (3) moins d un cent d OUSD : rien - le frais d une poussiere arrondit a 0 et le planificateur refuse (« could not be assembled »). */
+/* Le mode « Lend avec OUSD » (menu #bcBanqueDevise) : Morpho ne prete pas d OUSD (mesure) ; Review ouvre donc l ECHANGE OUSD -> USDC
+ *   (bcProposerSwap : la carte du Chat dit notre frais et le minimum avant la signature), puis la personne prete l USDC recu. */
+function bcBanqueDeviseLend() {
+  const s = $('#bcBanqueDevise'), ousd = !!s && !s.hidden && s.value === 'OUSD';
+  bcBanque.lendEnOusd = ousd;
+  $('#bcBanqueGo').textContent = ousd ? 'Swap OUSD to USDC first' : 'Review';
+  $('#bcBanqueMontantLib').textContent = bcBanque.sens === 'emprunter' ? 'You borrow' : ousd ? 'You swap (OUSD to USDC)' : 'You lend';
+  if (ousd) { $('#bcBanquePuces').hidden = true; $('#bcBanqueMontant').placeholder = '0.0'; }
+  const n = $('#bcBanqueNote');
+  if (n && !n.classList.contains('wKo')) n.textContent = ousd ? 'OUSD is not lent here: this swaps it to USDC in one trade (our fee and the least you receive are shown before you sign). Then choose USDC and lend it.' : '';
+}
+$('#bcBanqueDevise').addEventListener('change', () => { const n = $('#bcBanqueNote'); if (n) { n.className = 'note'; n.textContent = ''; } bcBanqueDeviseLend(); bcBanqueIndices(); });
 let bcBanqueOusdGen = 0;
 async function bcBanqueOusd(mk, sens) {
   const z = $('#bcBanqueOusd'); if (!z) return;
@@ -24574,8 +24595,12 @@ async function bcBanqueOusd(mk, sens) {
   if (gen !== bcBanqueOusdGen) return;
   if (bcBanque.sens !== 'preter' || !compte || String(compte).toLowerCase() !== qui) { effacer(); return; }
   if (typeof solde !== 'bigint' || !Number.isInteger(dec) || solde < 10n ** BigInt(Math.max(0, dec - 2))) { effacer(); return; }
-  const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Swap my ' + bcUnites(solde, dec) + ' OUSD to USDC' });
-  b.addEventListener('click', () => { void bcProposerSwap('You', '', { de, vers, montant: solde.toString() }, null); });
+  /* un seul bouton d echange dans le formulaire (#bcBanqueGo) : celui-ci REMPLIT le formulaire (menu sur OUSD, tout le solde lu) - rien n est envoye */
+  const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Use all my ' + bcUnites(solde, dec) + ' OUSD' });
+  b.addEventListener('click', () => {
+    const s = $('#bcBanqueDevise'); if (s) { s.value = 'OUSD'; bcBanqueDeviseLend(); bcBanqueIndices(); }
+    $('#bcBanqueMontant').value = bcUnites(solde, dec);
+  });
   z.textContent = '';
   z.append(bcEl('span', { text: 'You hold ' + bcUnites(solde, dec) + ' OUSD. This market lends USDC, not OUSD: swap it first, then lend the USDC. The swap card shows our fee and the least you receive before you sign. ' }), b);
   z.dataset.pour = pour;
@@ -24755,6 +24780,20 @@ $('#bcBanqueForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const mk = bcBanque.choisi, note = $('#bcBanqueNote');
   if (!mk) return;
+  /* 2026-10-11 : Lend « OUSD -> USDC » (menu #bcBanqueDevise) = l echange d abord, rien d autre */
+  if (bcBanque.sens === 'preter' && bcBanque.lendEnOusd) {
+    const o = DEVISES_BASE.find((d) => d.symbole === 'OUSD'), u = DEVISES_BASE.find((d) => d.symbole === 'USDC');
+    if (!o || !u) { note.className = 'note wKo'; note.textContent = 'OUSD is not in this build.'; return; }
+    let dec = null;
+    try { dec = await bcAvecDelai(bcDecimales(o.adr), 6000); } catch (_) { dec = null; }
+    if (!Number.isInteger(dec)) { note.className = 'note wKo'; note.textContent = 'The decimals of OUSD could not be read — try again.'; return; }
+    const brut = enUnitesBrutes($('#bcBanqueMontant').value.trim(), dec);
+    if (brut === null || brut <= 0n) { note.className = 'note wKo'; note.textContent = 'Type an amount of OUSD.'; return; }
+    if (brut < 10n ** BigInt(Math.max(0, dec - 2))) { note.className = 'note wKo'; note.textContent = 'Swap at least 0.01 OUSD: below that our fee rounds to zero and the route cannot be built.'; return; }
+    note.className = 'note'; note.textContent = 'After the swap, choose USDC here and lend what you received.';
+    void bcProposerSwap('You', '', { de: { adr: String(o.adr).toLowerCase(), sym: 'OUSD' }, vers: { adr: String(u.adr).toLowerCase(), sym: 'USDC' }, montant: brut.toString() }, null);
+    return;
+  }
   const sens = bcBanque.sens, texteM = $('#bcBanqueMontant').value.trim(), texteG = $('#bcBanqueGarantie').value.trim();
   const brutM = enUnitesBrutes(texteM, Number(mk.pret.decimales));
   if (brutM === null || brutM <= 0n) { note.className = 'note wKo'; note.textContent = 'Type an amount of ' + mk.pret.symbole + '.'; return; }
