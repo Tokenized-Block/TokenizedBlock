@@ -53,7 +53,8 @@ async function logsAdaptatifs(rpc, filtre, de, a, ratees, quoi) {
       const y = await logsAdaptatifs(rpc, filtre, m + 1, a, ratees, quoi);
       return [...(x || []), ...(y || [])];
     }
-    ratees.push({ de, a, cause: msg, quoi });
+    /* 2026-10-11 : la fenetre refusee porte ses ADRESSES - une relecture plus tard redemande EXACTEMENT ce lot (relireTransferts) */
+    ratees.push({ de, a, cause: msg, quoi, adresses: Array.isArray(filtre.address) ? filtre.address.slice() : filtre.address });
     return null;
   }
 }
@@ -230,30 +231,10 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
     }
   }
   if (lireTransferts && Number.isSafeInteger(deBloc) && Number.isSafeInteger(aBloc) && aBloc >= deBloc) {
-    const pm = String(poolManager || '').toLowerCase();
-    const parJeton = new Map((blocks || []).filter((b) => /^0x[0-9a-fA-F]{40}$/.test(String(b.jeton)))
-      .map((b) => [String(b.jeton).toLowerCase(), b]));
-    const jetons = [...parJeton.keys()];
-    /* ── GM et notes : les transferts des blocks suivis, hors creation (from 0x0) et hors jambes de swap (PoolManager) ── */
-    for (let i = 0; i < jetons.length; i += JETONS_PAR_REQUETE) {
-      for (let de = deBloc; de <= aBloc; de += 2000) {
-        const a = Math.min(aBloc, de + 1999);
-        if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
-        const logs = await logsAdaptatifs(rpc, { address: jetons.slice(i, i + JETONS_PAR_REQUETE), topics: [TOPIC_TRANSFER] }, de, a, fenetresRatees, 'transfers');
-        for (const l of logs || []) {
-          const t = decoderTransfer(l);
-          if (!t || t.value === null) continue;
-          const b = parJeton.get(String(t.token));
-          if (!b || t.from === ZERO || t.from === pm || t.to === pm) continue;
-          if (t.tx && txSwaps.has(String(t.tx).toLowerCase())) continue;
-          const dec = Number.isInteger(b.dec) ? b.dec : null;
-          if (t.value > 0n && t.value > GM_MAX_UNITES) continue; /* dump/move ≠ GM */
-          ajouter({ type: t.value === 0n ? 'NOTE' : 'GM', bloc: t.bloc, jeton: t.token, sym: b.sym ?? null, tx: t.tx, logIndex: t.logIndex,
-            de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null,
-            brut: dec === null && t.value > 0n ? { v: String(t.value), forme: 'brut' } : null });
-        }
-      }
-    }
+    /* ── GM et notes : les transferts des blocks suivis (transfertsLive, la MEME fonction que la relecture des fenetres refusees) ── */
+    const tr = await transfertsLive({ rpc, poolManager, blocks, deBloc, aBloc, txSwaps, pause });
+    for (const f of tr.fenetresRatees) fenetresRatees.push(f);
+    for (const e of tr.evenements) ajouter(e);
     /* ── messages PAYES entre blocks : la devise -> wallet de frais, au moins son frais, relus un par un ──
      * ⛔⛔ CORRIGE LE 2026-09-20. Cette boucle ne lisait QUE le TBLOCK, et appelait
      *    `messageDepuisTransfert(t, tx)` sans devise — donc avec son defaut, TBLOCK. Or l ecran d envoi
@@ -282,5 +263,39 @@ export async function evenementsLive({ rpc, poolManager, blocks, deBloc, aBloc, 
     }
   }
   evenements.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
+  return { evenements, fenetresRatees };
+}
+
+/** Les envois (GM) et notes (transfert de 0) des blocks suivis entre deBloc et aBloc : hors creation (from 0x0), hors jambes de swap
+ *  (PoolManager, ou une transaction qui porte un Swap : `txSwaps`), hors gros mouvements (> GM_MAX_UNITES).
+ *  `jetons` (optionnel) : ne relire QUE ce lot d adresses - celui d une fenetre refusee.
+ *  ⛔ 2026-10-11 (Phil, capture : « Sent ? » et « None of the 2206 events read matches this filter ») : mesure en prod, base.drpc.org
+ *    rendait 2 lectures d envois puis 429 (« Public endpoint rate limit ») ; une fenetre refusee n etait JAMAIS relue - ses envois etaient
+ *    perdus et la puce restait « ? ». Cette fonction est celle du cycle normal ET de la relecture : un seul classement, pas de jumeau. */
+export async function transfertsLive({ rpc, poolManager, blocks, deBloc, aBloc, txSwaps = new Set(), pause = 0, jetons = null }) {
+  const evenements = [], fenetresRatees = [];
+  const pm = String(poolManager || '').toLowerCase();
+  const parJeton = new Map((blocks || []).filter((b) => /^0x[0-9a-fA-F]{40}$/.test(String(b.jeton)))
+    .map((b) => [String(b.jeton).toLowerCase(), b]));
+  const liste = Array.isArray(jetons) ? jetons.map((j) => String(j).toLowerCase()).filter((j) => parJeton.has(j)) : [...parJeton.keys()];
+  for (let i = 0; i < liste.length; i += JETONS_PAR_REQUETE) {
+    for (let de = deBloc; de <= aBloc; de += 2000) {
+      const a = Math.min(aBloc, de + 1999);
+      if (pause > 0) await new Promise((ok) => setTimeout(ok, pause));
+      const logs = await logsAdaptatifs(rpc, { address: liste.slice(i, i + JETONS_PAR_REQUETE), topics: [TOPIC_TRANSFER] }, de, a, fenetresRatees, 'transfers');
+      for (const l of logs || []) {
+        const t = decoderTransfer(l);
+        if (!t || t.value === null) continue;
+        const b = parJeton.get(String(t.token));
+        if (!b || t.from === ZERO || t.from === pm || t.to === pm) continue;
+        if (t.tx && txSwaps.has(String(t.tx).toLowerCase())) continue;
+        const dec = Number.isInteger(b.dec) ? b.dec : null;
+        if (t.value > 0n && t.value > GM_MAX_UNITES) continue; /* dump/move ≠ GM */
+        evenements.push({ type: t.value === 0n ? 'NOTE' : 'GM', bloc: t.bloc, jeton: t.token, sym: b.sym ?? null, tx: t.tx, logIndex: t.logIndex,
+          de: t.from, a: t.to, quantite: dec !== null && t.value > 0n ? formaterBrut(t.value, dec) : null,
+          brut: dec === null && t.value > 0n ? { v: String(t.value), forme: 'brut' } : null });
+      }
+    }
+  }
   return { evenements, fenetresRatees };
 }

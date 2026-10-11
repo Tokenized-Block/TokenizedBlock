@@ -4003,7 +4003,7 @@ import { modeEssai, fournisseurDiffere, poserFournisseur } from './mode-essai.js
 import { planDeFrais, phraseFraisChemin, planDepuisJetonAvecSupplyScellee, phrasePlanScelle,
   avertissementNonAdosse, collisionAvecEmetteur, phraseCollision } from './tokeniser-un-jeton.js';
 import { planAjoutLiquidite, planRetrait, lirePosition, prochainIdPosition, idsMintesDansRecu } from './liquidite.js';
-import { evenementsLive, completerQuantite, compteDePuce, teteNoteLive } from './fil-live.js';
+import { evenementsLive, transfertsLive, completerQuantite, compteDePuce, teteNoteLive } from './fil-live.js';
 /* ⛔ 2026-10-02 : une ligne groupee du Feed garde ses evenements et se deplie ; ses notes se lisent
  *   depuis CES transactions — le compte affiche et la liste ne peuvent plus diverger. */
 import { ENFANTS_PAS, estDepliable, cleGroupe, lireNotes, resumeNotes, phraseNotes, libelleNotes, AVERT_SPAM, compteProfil, resumeEnvois, titreEnvois } from './notes-du-fil.js';
@@ -10530,12 +10530,49 @@ let liveEvts = [], liveDernier = null, livePlusAncien = null, liveMinuterie = nu
 /** ⛔ 2026-10-09 : les lectures refusees PAR NATURE (creations, swaps, transfers, messages…, decouverte, tout) —
  *  une puce dont la lecture a ete refusee dit « ? », jamais « 0 » (compteDePuce, fil-live.js). */
 const liveRateesParQuoi = new Map();
+/* ⛔ 2026-10-11 (Phil, capture : « Sent ? » · « None of the 2206 events read matches this filter » — « faut pas casser le Sent »).
+ *   MESURE en prod : base.drpc.org rendait 2 lectures d envois (42 et 15 transferts) puis 429 « Public endpoint rate limit » ; une
+ *   fenetre d envois refusee n etait JAMAIS relue - ses envois etaient perdus et la puce restait « ? » (quand la page a pu lire, la meme
+ *   puce a dit « Sent ≥10 »). Les fenetres d envois refusees sont gardees AVEC leur lot d adresses et relues aux tours suivants
+ *   (relireTransfertsRefuses) ; celles des echanges sont gardees pour savoir quand une relecture ne peut pas trier les jambes de swap. */
+const liveTransfertsARelire = [], liveSwapsRefuses = [];
 function noterRateesLive(liste, quoiDefaut) {
   for (const f of liste || []) {
     const q = String((f && f.quoi) || quoiDefaut || 'tout');
     liveRateesParQuoi.set(q, (liveRateesParQuoi.get(q) || 0) + 1);
     liveRatees++;
+    if (q === 'transfers' && Number.isSafeInteger(f.de) && Number.isSafeInteger(f.a) && Array.isArray(f.adresses) && f.adresses.length) liveTransfertsARelire.push({ de: f.de, a: f.a, adresses: f.adresses });
+    if (q === 'swaps' && Number.isSafeInteger(f.de) && Number.isSafeInteger(f.a)) liveSwapsRefuses.push({ de: f.de, a: f.a });
   }
+}
+/** Relit au plus 2 fenetres d envois refusees par tour (le noeud qui refuse est en limite de debit : on ne l inonde pas).
+ *  Reussie : ses envois entrent dans le fil et SON refus est retire du compte - la puce passe de « ? » a son vrai nombre.
+ *  Encore refusee : elle reste a relire, comptee une seule fois.
+ *  ⛔ Jamais une fenetre dont les ECHANGES ont aussi ete refuses : sans eux, une jambe de swap via un routeur tiers passerait pour un
+ *     envoi. Elle reste comptee « non lue ». Ni une fenetre dont aucun block n est plus suivi : elle n est pas lue, son refus reste. */
+async function relireTransfertsRefuses() {
+  const V = V4_ADRESSES[CHAINE];
+  if (!V || !liveTransfertsARelire.length) return 0;
+  const blocks = blocksSuivisLive(), suivis = new Set(blocks.map((b) => String(b.jeton).toLowerCase()));
+  const txSwaps = new Set(liveEvts.filter((e) => e.type === 'ACHAT' || e.type === 'VENTE' || e.type === 'SWAP').map((e) => String(e.tx || '').toLowerCase()).filter(Boolean));
+  let essais = 0, relues = 0;
+  for (const w of [...liveTransfertsARelire]) {
+    if (essais >= 2) break;
+    if (liveSwapsRefuses.some((s) => !(s.a < w.de || s.de > w.a))) continue;
+    if (!w.adresses.some((x) => suivis.has(String(x).toLowerCase()))) { liveTransfertsARelire.splice(liveTransfertsARelire.indexOf(w), 1); continue; }
+    essais += 1;
+    let r;
+    try { r = await transfertsLive({ rpc, poolManager: V.poolm, blocks, deBloc: w.de, aBloc: w.a, txSwaps, pause: 250, jetons: w.adresses }); } catch (_) { continue; }
+    if (r.fenetresRatees.length) continue;
+    liveTransfertsARelire.splice(liveTransfertsARelire.indexOf(w), 1);
+    const k = liveRateesParQuoi.get('transfers') || 0;
+    if (k > 1) liveRateesParQuoi.set('transfers', k - 1); else liveRateesParQuoi.delete('transfers');
+    liveRatees = Math.max(0, liveRatees - 1);
+    const deja = new Set(liveEvts.map(cleEvtLive));
+    for (const e of r.evenements) if (!deja.has(cleEvtLive(e))) liveEvts.push(e);
+    relues += 1;
+  }
+  return relues;
 }
 /** blocs de chaine NON lus pendant une absence : dits a l ecran, jamais comptes comme « rien ne s est passe » */
 let liveTrou = 0;
@@ -10762,6 +10799,8 @@ async function lireLive(sens) {
       /* la phrase « Replaying… » cede sa place au tirage du centre ; elle reste en infobulle pour qui la cherche */
       if (etat) { etat.textContent = ''; etat.title = 'Replayed the last ' + (aBloc - deBloc).toLocaleString('en-US') + ' chain blocks (' + rejeu.length.toLocaleString('en-US') + ' real events), then live.'; }
     }
+    /* les envois des fenetres refusees aux tours precedents (2 au plus par tour) - jamais perdus en silence */
+    if (sens !== 'ancien') { try { await relireTransfertsRefuses(); } catch (_) { /* relu au tour suivant */ } }
     liveEvts.sort((a, b) => (b.bloc ?? 0) - (a.bloc ?? 0) || (b.logIndex ?? 0) - (a.logIndex ?? 0));
     if (sens !== 'ancien') liveDernier = aBloc;
     if (livePlusAncien === null || deBloc < livePlusAncien) livePlusAncien = deBloc;
