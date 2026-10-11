@@ -34,4 +34,24 @@ const iE = html.indexOf("if (!r.hash) bcEtape(m, 'Nothing was sent. Two trades d
 const branche = html.slice(iE - 200, iE + 900);
 vu(iE > 0 && /bcDeuxTrades\(p, de, vers, montant\)/.test(branche), 'la branche d echec du lot n appelle pas bcDeuxTrades');
 vu(/bcProposerSwap\('You', '', \{ de: x\.de, vers: x\.vers, montant: x\.montant \}, null\)/.test(branche) && /\['Start again', planifier, true\]/.test(branche), 'les boutons ne proposent pas les deux echanges, ou « Start again » a disparu');
+/* 2026-10-11 (test REEL de Grok, Rabby) : apres « 1 · Sell », « 2 · Then buy » et « Start again » restaient GRISES - bcBoutons desactivait
+ *   tout le groupe au premier clic. EXECUTE bcBoutons sur un DOM simule. */
+const iB = html.indexOf('function bcBoutons(m, liste) {');
+const finB = /\r?\n\}/.exec(html.slice(iB));
+const fauxEl = (tag) => { const e = { tag, className: '', textContent: '', disabled: false, enfants: [], ecoute: {},
+  addEventListener(t, f) { e.ecoute[t] = f; }, append(...c) { e.enfants.push(...c); }, remove() {}, setAttribute(k, v) { if (k === 'type') e.type = v; },
+  querySelector() { return null; }, querySelectorAll(s) { return s === 'button' ? e.enfants.filter((x) => x.tag === 'button') : []; } }; return e; };
+const bcElFaux = (tag, props = {}, enfants = []) => { const e = fauxEl(tag); for (const [k, v] of Object.entries(props)) { if (k === 'cls') e.className = v; else if (k === 'text') e.textContent = v; } e.append(...enfants); return e; };
+const bcBoutons = new Function('bcEl', html.slice(iB, iB + finB.index + finB[0].length) + '\nreturn bcBoutons;')(bcElFaux);
+const msg = fauxEl('div'); const faits = [];
+bcBoutons(msg, [['1 · Sell', () => faits.push(1), false, true], ['2 · Then buy', () => faits.push(2), false, true], ['Start again', () => faits.push(3), true]]);
+const [b1, b2, b3] = msg.enfants[0].enfants;
+b1.ecoute.click();
+vu(b1.disabled === true && b2.disabled === false && b3.disabled === false, 'ROUGE->VERT : apres le bouton 1, le bouton 2 ou Start again est grise (' + [b1, b2, b3].map((x) => x.disabled).join(',') + ')');
+b2.ecoute.click();
+vu(b2.disabled === true && b3.disabled === false && faits.join() === '1,2', 'le bouton 2 ne part pas, ou Start again est grise');
+const msg2 = fauxEl('div'); bcBoutons(msg2, [['Sign', () => {}], ['Dismiss', () => {}, true]]);
+msg2.enfants[0].enfants[0].ecoute.click();
+vu(msg2.enfants[0].enfants.every((x) => x.disabled), 'temoin : un choix EXCLUSIF (Sign / Dismiss) ne grise plus tout le groupe');
+vu(/x\.montant \}, null\), false, true\]\)/.test(branche), 'les boutons du repli ne sont pas « seul »');
 console.log('ok deux-trades-repli - ' + n + ' assertions ; NE PROUVE PAS un vrai Rabby');

@@ -542,12 +542,26 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-11 (Phil : « j aime l idee, glow up ») : la Bank en cartes. Chaque chiffre affiche vient de la ligne LUE (API Morpho) ; une
  *   liquidite non lue reste « not read », jamais un zero. */
 .bcBanqueResume{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 2px}
-.bcTuile{border:1px solid var(--ligne);border-radius:14px;padding:8px 10px;background:linear-gradient(160deg,rgb(var(--accentRgb) / .10),transparent 70%),var(--creux)}
-.bcTuile small{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
-.bcTuile b{display:block;font-size:17px;line-height:1.2;margin-top:2px;color:var(--texte)}
+/* ⛔ 2026-10-11 : ces tuiles s appelaient « .bcTuile » - le nom des tuiles de la BOUTIQUE de skins, declarees plus bas. Mesure au navigateur :
+ *   13 px au lieu de 17, centrees, curseur « pointer » sur une tuile qui ne fait rien, sans le degrade. Un nom a elles. */
+.bcChiffre{border:1px solid var(--ligne);border-radius:14px;padding:8px 10px;background:linear-gradient(160deg,rgb(var(--accentRgb) / .10),transparent 70%),var(--creux);min-width:0}
+.bcChiffre small{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--doux)}
+.bcChiffre b{display:block;font-size:17px;line-height:1.2;margin-top:2px;color:var(--texte);overflow-wrap:anywhere}
+/* 2026-10-11 (Phil : « refais bien la carte TokenizedBank du Wallet, pour rediriger direct ») : la carte MENE a la Bank ; l idee du panier
+ *   de blocks, jamais construite, reste lisible mais REPLIEE sous le bouton. */
+#wBankCarte .tbBanquePos{margin:8px 0 0}
+#wBankCarte .tbBanquePos p{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 0;font-size:13px}
+#wBankCarte .tbBanquePos .bcPuce{margin-left:0}
+#wBankCarte #tbOuvrirBank{margin-top:12px}
+.tbIdee{margin-top:14px;border-top:1px solid var(--ligne);padding-top:8px}
+.tbIdee>summary{cursor:pointer;font-size:13px;color:var(--doux)}
+/* 2026-10-11 (Phil : « le montant doit s adapter au user ») : sur chaque carte de marche, ce que CE wallet peut emprunter / preter */
+.bcPourToi{border-top:1px dashed var(--ligne);margin-top:8px;padding-top:6px}
+.bcPourToi .bcPourToiChiffres{grid-template-columns:repeat(2,minmax(0,1fr));margin:2px 0 0}
+.bcPourToi .bcPourToiChiffres b{color:var(--texte)}
 .bcListe li.bcMarche{display:block;border:1px solid var(--ligne);border-radius:16px;padding:10px 12px;margin:0 0 8px;background:var(--creux)}
 .bcListe li.bcMarche:last-child{border-bottom:1px solid var(--ligne)}
-.bcListe li.bcMarche.vide{opacity:.62}
+/* 2026-10-11 : un marche « Lend only » n est plus grise (opacite .62) - 4 cartes sur 9 avaient l air eteintes alors qu on peut y preter */
 .bcMarcheTete{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .bcMarcheTete b{font-size:15px}
 .bcMarcheTete .bcFleche{color:var(--doux)}
@@ -574,6 +588,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcListe li.bcMarche.ici{border-color:rgb(var(--accentRgb) / .55);box-shadow:0 0 0 1px rgb(var(--accentRgb) / .25)}
 .bcPuce.ici{color:var(--accent);border-color:rgb(var(--accentRgb) / .45);background:rgb(var(--accentRgb) / .10)}
 .bcJauge{margin:8px 0 0}
+.bcPanier{border:1px solid var(--ligne);border-radius:16px;padding:10px 12px;margin:0 0 10px;background:var(--creux)}
+.bcPanier>summary{cursor:pointer;font-weight:700;color:var(--accent)}
+.bcListe li.bcPanierLigne{display:block;padding:8px 0}
+.bcPanierLigne label.bcPanierCase{display:flex;align-items:center;gap:8px;font-weight:700}
+.bcPanierLigne .bcPanierChamps{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.bcPanierLigne .bcPanierChamps input{width:100%;min-width:0;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;padding:7px 9px}
+.bcPanierLigne .bcPanierChamps input:disabled{opacity:.45}
+.bcPanier .bouton{margin-top:8px}
 .bcJauge .bcMarcheBas{display:flex;justify-content:space-between;gap:8px}
 .bcTicket .bouton{margin-top:10px}
 .bcTicket .bcPre{margin:8px 0 0}
@@ -2020,6 +2042,16 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="bcBanqueResume" id="bcBanqueResume" hidden></div>
         <p class="bcSousTitre">Markets</p>
         <ul class="bcListe" id="bcBanqueMarches"><li class="note">Reading…</li></ul>
+        <!-- 2026-10-11 (Phil : « que tu puisses mettre plusieurs actions tokenisees en garantie en meme temps ») : N emprunts, un par action,
+             construits et simules ENSEMBLE (banque-morpho.js, planEmprunterPanier). Morpho isole chaque marche : c est dit avant tout. -->
+        <details class="bcPanier" id="bcBanquePanier" hidden>
+          <summary>Borrow against several stocks at once</summary>
+          <p class="note" style="margin:6px 0 0">Each stock is its own Morpho position: if one stock falls to its liquidation price, only that position is liquidated — the other stocks do not protect it.</p>
+          <ul class="bcListe" id="bcPanierLignes"></ul>
+          <p class="note" id="bcPanierTotal" style="margin:6px 0 0"></p>
+          <button type="button" class="bouton" id="bcPanierGo">Review basket</button>
+          <p class="note" id="bcPanierNote" style="margin:6px 0 0"></p>
+        </details>
         <form onsubmit="return false" class="bcTicket" id="bcBanqueForm" autocomplete="off" hidden>
           <div class="bcCote" role="tablist" aria-label="Borrow or lend">
             <button type="button" role="tab" data-banque="emprunter" aria-selected="true">Borrow</button>
@@ -2327,6 +2359,12 @@ details[open] > summary::before{transform:rotate(90deg)}
        cette phrase-la. Corriger la copie visible en laissant l aria-label aurait reserve la
        version fausse a ceux qui ne voient pas l ecran. -->
   <section class="volet" id="v-tokenx" aria-label="Mint a new block named after a post or a token">
+    <!-- 2026-10-11 (test reel de Grok : « la Bank ne se trouve que par Wallet, puis Open the Bank ») : une entree ici aussi -->
+    <div class="carte" id="tkBankCarte" style="margin-bottom:14px">
+      <p class="titre">TokenizedBank</p>
+      <p class="note" style="margin:0 0 8px">Borrow USDC against the tokenized stocks you hold — one or several at once — or lend USDC, on existing Morpho markets. Your wallet signs each step.</p>
+      <button type="button" class="bouton" id="tkOuvrirBank">Open the Bank</button>
+    </div>
     <!-- ⛔⛔ TOKENISER UN JETON — ET LE BUT EST LA PAIRE, PAS LE NOM.
          Phil, 2026-09-30 : « pour le paired et etre echangable par multi pools ». Un block
          appairé a un ERC-20 deja echange AJOUTE un saut que notre routeur multi-sauts peut
@@ -2630,7 +2668,21 @@ details[open] > summary::before{transform:rotate(90deg)}
          may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
          hold; losing one still leaves the rest; never show a6cf. -->
     <div class="carte" id="wBankCarte" style="margin-top:14px">
-      <p class="titre">TokenizedBank <span aria-hidden="true">🟦</span></p>
+      <p class="titre">TokenizedBank</p>
+      <!-- 2026-10-11 (Phil : « refais bien le frontend de l onglet Wallet pour TokenizedBank, pour rediriger direct ») : la carte MENE a la
+           Bank. En tete, ce qui est EN LIGNE ; les chiffres lus (les memes tuiles que l onglet Bank, meme lecture) ; les positions de CE
+           wallet ; et UN bouton, pleine largeur. Avant : le bouton etait au milieu d une phrase, puis venaient un bandeau « Preview »,
+           un paragraphe et cinq boutons d une idee jamais construite.
+           ⛔ L idee du panier de blocks n est PAS supprimee (decision de Raksha du 2026-09-24 : « mode faux le temps de build ») : elle
+             est REPLIEE sous le bouton, son bandeau « not built yet » en premier. Sa liste « My block » nourrit aussi le choix du hub
+             du Bridge (peindreBridgeBlocks lit #tbBlock) - la retirer aurait vide ce choix en silence. -->
+      <p class="note" id="tbBanqueVivante" style="margin:0">Borrow USDC against the tokenized stocks you hold — one or several at once — or
+        lend USDC, on existing Morpho markets. Your wallet signs each step.</p>
+      <div class="bcBanqueResume" id="tbBanqueResume" hidden></div>
+      <div class="tbBanquePos" id="tbBanquePos"></div>
+      <button type="button" class="bouton" id="tbOuvrirBank">Open the Bank</button>
+      <details class="tbIdee" id="tbIdee">
+      <summary>A separate idea, not built: borrowing against a basket of blocks</summary>
       <!-- ⛔⛔ CET AVERTISSEMENT EST EN HAUT, ET C EST TOUT LE POINT. Il existait deja — mais EN BAS,
            apres quatre paragraphes promettant du credit USDC, un partage de rendement et un agent
            qui « fait tourner les operations ». Une reserve qui arrive apres l argument n est pas
@@ -2641,11 +2693,8 @@ details[open] > summary::before{transform:rotate(90deg)}
              (panier, early holders, ouverture) vit dans le localStorage de CE navigateur.
            ⛔ Phil, 2026-09-24 : « mets en mode faux le temps de build ». C est ce bandeau. -->
       <!-- 2026-10-10 (test prod Grok : « TokenizedBank y est encore marque not built yet ») : l emprunt d USDC contre une action EST en
-           ligne (onglet Bank du panneau, marches Morpho existants). Le bandeau ci-dessous reste vrai pour le PANIER de blocks. -->
-      <p class="note" id="tbBanqueVivante" style="margin:0 0 8px"><b>Live now:</b> borrow USDC against a tokenized stock you hold, or lend
-        USDC, on existing Morpho markets — your wallet signs each step.
-        <button type="button" class="bouton sec" id="tbOuvrirBank" style="width:auto;padding:4px 10px;margin-left:4px">Open the Bank</button>
-        The basket of blocks below is a separate idea.</p>
+           ligne (onglet Bank du panneau, marches Morpho existants) - c est la tete de la carte. Le bandeau ci-dessous reste vrai pour le
+           PANIER de blocks. -->
       <p class="note" id="tbApercu" style="border:1px solid var(--accent2);border-radius:10px;padding:8px 10px;margin:0 0 10px">
         <b>Preview — not built yet.</b> Reading how many blocks you hold is real and happens on
         chain. Everything else here is a sketch kept in this browser: there is no bank contract,
@@ -2694,7 +2743,10 @@ details[open] > summary::before{transform:rotate(90deg)}
            lecteur ne sait pas qui c est et ne peut pas l apprendre — nommer l operateur ne
            l informe pas, ca lui fait croire qu il lui manque un savoir. Ce qui l interesse, c est
            QUE ca tourne automatiquement, pas QUI le fait tourner. -->
-      <p class="note" id="tbAgent">After confirm, the <b>Brain</b> runs ops automatically. Credit mint path is not deployed yet — this screen stays honest.</p>
+      <!-- ⛔ 2026-10-11 : « After confirm, the <b>Brain</b> runs ops automatically » - le present que la garde interdit, passe A COTE d elle
+           parce que la balise <b> coupait le motif « Brain runs ops ». Au conditionnel ; la garde lit maintenant le texte sans balises. -->
+      <p class="note" id="tbAgent">If this is ever built, the <b>Brain</b> would run the operations after you confirm. Nothing is deployed for it.</p>
+      </details>
     </div>
 
     <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
@@ -4113,7 +4165,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
-  if (nom === 'wallet') void peindreTokenizedBank();
+  if (nom === 'wallet') { void peindreTokenizedBank(); void tbBanquePeindre(); }
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
@@ -7311,6 +7363,8 @@ async function connecter() {
   /* tip 20260923-wallet-intent-market: resume IB/Buy intent once after connect */
   try { void reprendreIntentApresConnect(); } catch (_) {}
   void peindreTokenizedBank();
+  void tbBanquePeindre();
+  void bcBanquePourToi(); /* la Bank deja ouverte dit tout de suite ce que CE wallet peut */
 }
 
 /* ⛔ UNE SEULE LECTURE POUR DEUX ONGLETS. My block et Wallet ont besoin des memes creations ; les
@@ -8106,6 +8160,8 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
     void majWallet();
     void peindreTokenizedBank();
+    void tbBanquePeindre();
+    void bcBanquePourToi();
   });
 }
 
@@ -22167,9 +22223,12 @@ function bcBoutons(m, liste) {
   const vieux = m.querySelector('.bcBoutons'); if (vieux) vieux.remove();
   if (!liste.length) return;
   const d = bcEl('div', { cls: 'bcBoutons' });
-  for (const [texte, action, sec] of liste) {
+  /* 2026-10-11 (test reel de Grok, repli en deux trades) : un clic desactivait TOUT le groupe - juste pour un choix exclusif (signer /
+   *   ecarter), faux pour deux ETAPES : apres « 1 · Sell », « 2 · Then buy » et « Start again » restaient grises. `seul` (4e element) :
+   *   le bouton clique se desactive seul. */
+  for (const [texte, action, sec, seul] of liste) {
     const b = bcEl('button', { type: 'button', cls: 'bouton' + (sec ? ' sec' : ''), text: texte });
-    b.addEventListener('click', () => { for (const x of d.querySelectorAll('button')) x.disabled = true; void action(); });
+    b.addEventListener('click', () => { if (seul) b.disabled = true; else for (const x of d.querySelectorAll('button')) x.disabled = true; void action(); });
     d.append(b);
   }
   m.append(d);
@@ -22485,7 +22544,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
           + (deux ? ' Use the two buttons below, in order — each one is planned and checked before you sign.' : ''));
         bcNoter({ type: 'failed', ...refs, ...(r.hash ? { tx: r.hash } : {}) });
         bcOpMaj(op, r.hash ? 'sent' : 'notOffered', r.hash);
-        bcBoutons(m, [...(deux || []).map((x) => [x.libelle, () => void bcProposerSwap('You', '', { de: x.de, vers: x.vers, montant: x.montant }, null)]),
+        bcBoutons(m, [...(deux || []).map((x) => [x.libelle, () => void bcProposerSwap('You', '', { de: x.de, vers: x.vers, montant: x.montant }, null), false, true]),
           ['Start again', planifier, true]]);
         return;
       }
@@ -23826,9 +23885,15 @@ document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) =>
  *   /api/banque/plan, qui relit le marche et la position SUR LA CHAINE et SIMULE la sequence exacte avant PRET ; puis une carte du Chat
  *   (comme le ticket Trade) et le wallet, etape par etape. ⛔ Rien n est signe ici. Une lecture ratee se DIT : jamais « aucun marche »
  *   ni « aucune position » sur un echec. ⛔ Les montants des positions viennent de l API (nombres JSON) : AFFICHES ; le plan relit. */
-const bcBanque = { marches: null, lu: 0, choisi: null, sens: 'emprunter', positionsDe: null };
+const bcBanque = { marches: null, lu: 0, choisi: null, sens: 'emprunter', positionsDe: null, pourToi: null, genPourToi: 0 };
 const bcPct = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : (Number(x) * 100).toFixed(2) + ' %'); /* insecable : a 375 px « 5.54 » et « % » se separaient */
-const bcUsd = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : '$' + Math.round(Number(x)).toLocaleString('en-US'));
+/* 2026-10-11 (test reel de Grok : une garantie de ~0,046 $ s affichait « ($0) ») : sous 10 $, deux decimales ; sous un cent, « < $0.01 » */
+const bcUsd = (x) => {
+  if (x === null || x === undefined || !Number.isFinite(Number(x))) return '—';
+  const v = Number(x);
+  if (v > 0 && v < 0.01) return '< $0.01';
+  return '$' + (v < 10 ? v.toFixed(2) : Math.round(v).toLocaleString('en-US'));
+};
 /* 2026-10-11 (Phil : « glow up » de la Bank) : les chiffres d UNE carte de marche, tires de la ligne LUE. Liquidite non lue = « not read »,
  *   jamais 0 ; < 1 $ = vide ; < 10 $ = faible. maxPct = notre plafond (marge x LLTV), liqPct = LLTV. */
 function bcBanqueChiffres(mk) {
@@ -23837,49 +23902,159 @@ function bcBanqueChiffres(mk) {
   const dispo = brutD === null || brutD === undefined || brutD === '' ? NaN : Number(brutD);
   const liqPct = Number(mk && mk.lltv) / 1e16, maxPct = liqPct * Number((mk && mk.margeBps) || 7000) / 10000;
   const etat = !Number.isFinite(dispo) ? 'nonlu' : dispo < 1 ? 'vide' : dispo < 10 ? 'bas' : 'ok';
-  const puce = etat === 'nonlu' ? 'liquidity not read' : etat === 'vide' ? 'no liquidity' : bcUsd(dispo) + ' available' + (etat === 'bas' ? ' (low)' : '');
-  return { etat, puce, classe: etat === 'ok' ? 'ok' : etat === 'bas' ? 'bas' : etat === 'vide' ? 'non' : '', liqPct, maxPct };
+  /* ⛔ 2026-10-11 (Phil, sur la liste en prod : « les $ available c est pas bon, car peur de liquidite ») : « $3 available », « no liquidity »
+   *   sur 4 marches sur 9 faisaient lire une banque VIDE. Plus aucun montant en dollars : un ETAT (on peut emprunter / peu / on ne peut
+   *   que preter). La limite reste reelle - le plan la relit sur la chaine et refuse au-dela, et le formulaire le dit avant (bcBanqueEstimer).
+   *   Un marche ou l on ne peut que preter n est pas une panne : c est la ou un preteur est attendu - puce neutre, pas rouge. */
+  const puce = etat === 'nonlu' ? 'availability not read' : etat === 'vide' ? 'Lend only' : etat === 'bas' ? 'Borrow limited' : 'Borrow open';
+  return { etat, puce, classe: etat === 'ok' ? 'ok' : etat === 'bas' ? 'bas' : '', liqPct, maxPct };
 }
-/** Les trois tuiles : USDC disponible a emprunter (somme des seules liquidites LUES, et le nombre non lu est dit), meilleur taux de pret,
- *  nombre de marches. Rien lu = « — », jamais 0. */
+/** Les trois tuiles : le taux d emprunt le plus BAS parmi les marches ou l on peut VRAIMENT emprunter (etat ok - un taux sur un marche
+ *  vide serait une offre qu on ne peut pas prendre), le meilleur taux de pret, le nombre de marches. Rien lu = « — », jamais 0.
+ *  ⛔ 2026-10-11 (Phil : « les $ available c est pas bon, car peur de liquidite ») : la tuile « To borrow $1,074 » est retiree. */
 function bcBanqueResumer(listes) {
-  let total = 0, lus = 0, meilleur = null;
+  let meilleurPret = null, moinsCher = null, ouverts = 0;
+  const lu = (x) => x !== null && x !== undefined && x !== '' && Number.isFinite(Number(x));
   for (const mk of listes || []) {
-    const d = mk.disponibleUsd === null || mk.disponibleUsd === undefined || mk.disponibleUsd === '' ? NaN : Number(mk.disponibleUsd);
-    if (Number.isFinite(d)) { total += d; lus += 1; }
-    const a = Number(mk.apyPret); if (mk.apyPret !== null && mk.apyPret !== undefined && Number.isFinite(a) && (meilleur === null || a > meilleur)) meilleur = a;
+    const d = lu(mk.disponibleUsd) ? Number(mk.disponibleUsd) : NaN;
+    if (lu(mk.apyPret) && (meilleurPret === null || Number(mk.apyPret) > meilleurPret)) meilleurPret = Number(mk.apyPret);
+    if (d >= 10) { ouverts += 1; if (lu(mk.apyEmprunt) && (moinsCher === null || Number(mk.apyEmprunt) < moinsCher)) moinsCher = Number(mk.apyEmprunt); }
   }
-  return { total: lus ? total : null, nonLus: (listes || []).length - lus, meilleurPret: meilleur, n: (listes || []).length };
+  return { meilleurPret, moinsCher, ouverts, n: (listes || []).length };
 }
-function bcBanquePeindreResume(listes, ecartes) {
-  const z = $('#bcBanqueResume'); if (!z) return;
+function bcBanquePeindreResume(listes, ecartes, cible = '#bcBanqueResume') {
+  const z = $(cible); if (!z) return;
   const r = bcBanqueResumer(listes);
   z.textContent = ''; z.hidden = !r.n;
-  const tuile = (titre, valeur) => bcEl('div', { cls: 'bcTuile' }, [bcEl('small', { text: titre }), bcEl('b', { text: valeur })]);
-  z.append(tuile('To borrow', bcUsd(r.total) + (r.nonLus ? ' +?' : '')), tuile('Best lend', bcPct(r.meilleurPret)),
+  const tuile = (titre, valeur) => bcEl('div', { cls: 'bcChiffre' }, [bcEl('small', { text: titre }), bcEl('b', { text: valeur })]);
+  z.append(tuile('Borrow from', bcPct(r.moinsCher)), tuile('Best lend', bcPct(r.meilleurPret)),
     tuile('Markets', String(r.n) + (ecartes ? ' (+' + ecartes + ')' : '')));
-  if (r.nonLus) z.title = r.nonLus + ' market(s): liquidity not read — not counted';
+  z.title = r.ouverts + ' of ' + r.n + ' market(s) open to borrowing right now; every market accepts lenders';
 }
-async function bcBanqueCharger(force = false) {
-  const ul = $('#bcBanqueMarches');
-  if (force || !bcBanque.marches || Date.now() - bcBanque.lu > 300000) {
-    let r = null;
-    try { r = await (await fetch('/api/banque/marches', { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
-    if (!r || r.ok !== true || !Array.isArray(r.marches)) {
-      ul.textContent = '';
-      ul.append(bcEl('li', { cls: 'note', text: 'Lending markets not read — ' + ((r && r.pourquoi) || 'the data could not be fetched') + '. Try again later.' }));
-      return;
-    }
-    bcBanque.marches = r.marches; bcBanque.lu = Date.now();
-  }
-  ul.textContent = '';
-  /* 2026-10-10 (copie de StoxCredit) : seulement les marches LISTES par Morpho — les autres sont des marches poussiere (0 a 97 $, taux
+/** La lecture des marches, PARTAGEE par l onglet Bank et la carte TokenizedBank du Wallet (2026-10-11) : un seul cache (5 min), un seul
+ *  chemin d echec. Rend { ok: true } ou { ok: false, pourquoi } - jamais une liste vide sur un echec. */
+async function bcBanqueLireMarches(force = false) {
+  if (!force && bcBanque.marches && Date.now() - bcBanque.lu <= 300000) return { ok: true };
+  let r = null;
+  try { r = await (await fetch('/api/banque/marches', { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+  if (!r || r.ok !== true || !Array.isArray(r.marches)) return { ok: false, pourquoi: (r && r.pourquoi) || 'the data could not be fetched' };
+  bcBanque.marches = r.marches; bcBanque.lu = Date.now();
+  return { ok: true };
+}
+/** Les marches LISTES par Morpho, tries par liquidite, et le nombre ecarte - le MEME filtre pour l onglet Bank et la carte du Wallet. */
+function bcBanqueListes() {
+  /* 2026-10-10 (copie de StoxCredit) : seulement les marches LISTES par Morpho - les autres sont des marches poussiere (0 a 97 $, taux
    *   0,1 %) qu une personne prendrait pour une offre. Le nombre ecarte est DIT. */
   /* 2026-10-10 (test prod Grok : « GOOGLc apparait deux fois ») : deux marches GOOGLc -> USDC listes, meme oracle, LLTV 62,5 % (~0 $
    *   disponible) et 77 % (573 $). Distincts et dits (liquidation, liquidite) ; c est l ORDRE qui trompait. Trie par liquidite
    *   disponible : ceux ou l on peut emprunter d abord ; une liquidite non lue passe en dernier. */
   const dispoDe = (mk) => { const d = Number(mk.disponibleUsd); return Number.isFinite(d) ? d : -1; };
   const listes = bcBanque.marches.filter((mk) => mk.listeParMorpho === true).sort((a, b) => dispoDe(b) - dispoDe(a)), ecartes = bcBanque.marches.length - listes.length;
+  return { listes, ecartes };
+}
+/* ── 2026-10-11 (Phil : « le montant doit s adapter au user et montrer deja combien il peut borrow et lend en fonction du wallet
+ *   connecte ») : CE QUE TU PEUX, marche par marche, a la place du « $ available » du marche. ─────────────────────────────────────────
+ * bcPourToi : MEME formule que capacite() de banque-morpho.js (valeur = garantie x prix / 1e36 ; x LLTV / 1e18 ; x marge / 10000),
+ *   appliquee a TOUTE la garantie possible (wallet + deja posee), moins la dette, bornee par la liquidite BRUTE du marche. Unites brutes
+ *   du jeton prete. Une entree NON LUE (null) rend null : jamais un zero invente. Indicatif : le plan relit le marche et simule. */
+function bcPourToi(mk, soldeGarantie, position, soldePret) {
+  let emprunt = null, borneParMarche = false, garantie = null;
+  const lltv = String((mk && mk.lltv) || ''), prix = String((mk && mk.prixOracle) || '');
+  if (typeof soldeGarantie === 'bigint' && position && /^\d+$/.test(prix) && /^\d+$/.test(lltv)) {
+    garantie = soldeGarantie + BigInt(position.garantieBrute || 0);
+    const dette = BigInt(position.detteBrute || 0);
+    const valeur = (garantie * BigInt(prix)) / 10n ** 36n;
+    const plafond = (((valeur * BigInt(lltv)) / 10n ** 18n) * BigInt(mk.margeBps || 7000)) / 10000n;
+    emprunt = plafond > dette ? plafond - dette : 0n;
+    const dispo = String(mk.disponibleBrut ?? '');
+    if (/^\d+$/.test(dispo) && emprunt > BigInt(dispo)) { emprunt = BigInt(dispo); borneParMarche = true; }
+  }
+  return { emprunt, borneParMarche, garantie, dette: position ? BigInt(position.detteBrute || 0) : null,
+    liquiditeLue: /^\d+$/.test(String((mk && mk.disponibleBrut) ?? '')), pret: typeof soldePret === 'bigint' ? soldePret : null };
+}
+/** Un montant brut a DEUX decimales, arrondi BAS - « jusqu a » ne surestime jamais : 152301234 (6 dec) -> « 152.30 ». */
+const bcBas2 = (brut, dec) => { const d = Number(dec); const c = d >= 2 ? brut / 10n ** BigInt(d - 2) : brut * 10n ** BigInt(2 - d); return (c / 100n).toLocaleString('en-US') + '.' + String(c % 100n).padStart(2, '0'); };
+/** Les soldes du wallet (/api/avoirs, lot serveur, 30 s) : solde(adr) rend le brut, 0n, ou null (NON LU). Une adresse absente des avoirs
+ *  n est un zero que si le serveur a tout lu, ou dit lesquelles il n a pas lues (nonLusAdr) et qu elle n y est pas. BORNE : les jetons de
+ *  /api/avoirs sont les actions du registre et les devises Base - les garanties des marches (filtrees sur le registre) et l USDC. */
+async function bcBanqueLireAvoirs(c) {
+  let r = null;
+  try { r = await (await fetch('/api/avoirs?compte=' + c, { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+  if (!r || r.ok !== true || !Array.isArray(r.avoirs)) return null;
+  const parAdr = new Map();
+  for (const v of r.avoirs) if (v && /^0x[0-9a-fA-F]{40}$/.test(String(v.adr)) && /^\d+$/.test(String(v.solde))) parAdr.set(String(v.adr).toLowerCase(), BigInt(v.solde));
+  const nonLus = r.etat === 'LU' ? new Set() : Array.isArray(r.nonLusAdr) ? new Set(r.nonLusAdr.map((a) => String(a).toLowerCase())) : null;
+  return { solde: (adr) => { const k = String(adr || '').toLowerCase(); return parAdr.has(k) ? parAdr.get(k) : nonLus && !nonLus.has(k) ? 0n : null; } };
+}
+/** Les donnees « pour toi » du compte connecte : soldes + positions, gardees 20 s (un echec, 5 s). null sans wallet. */
+async function bcBanqueDonneesPourToi(force = false) {
+  if (!compte) return null;
+  const c = String(compte).toLowerCase(), p = bcBanque.pourToi;
+  if (!force && p && p.de === c && Date.now() - p.t < 20000) return p;
+  const [av, pos] = await Promise.all([bcBanqueLireAvoirs(c), bcBanqueLirePositions(c)]);
+  if (!compte || String(compte).toLowerCase() !== c) return null;
+  bcBanque.pourToi = { de: c, t: av && pos.ok ? Date.now() : Date.now() - 15000, av, pos };
+  return bcBanque.pourToi;
+}
+/** Le calcul pour UN marche a partir des donnees lues (null partout ou c est non lu). */
+function bcPourToiDe(mk, p) {
+  if (!p || !mk) return null;
+  const position = p.pos && p.pos.ok ? (p.pos.positions.find((x) => x.id === mk.id) || { garantieBrute: '0', detteBrute: '0' }) : null;
+  return bcPourToi(mk, p.av ? p.av.solde(mk.garantie.adr) : null, position, p.av ? p.av.solde(mk.pret.adr) : null);
+}
+function bcPeindrePourToi(el, mk, r) {
+  el.textContent = '';
+  if (r === 'deconnecte' || r === 'lecture') { el.append(bcEl('p', { cls: 'bcMarcheBas', text: r === 'lecture' ? 'Reading your wallet…' : 'Connect your wallet to see how much you can borrow and lend here.' })); return; }
+  const g = mk.garantie, pr = mk.pret;
+  /* sous un cent (mesure du 2026-10-11 : 110 unites brutes sur le second marche GOOGLc), « ≈ 0.00 USDC » n est pas un montant : on dit rien */
+  const rien = !!r && r.emprunt !== null && r.emprunt < 10n ** BigInt(Math.max(0, Number(pr.decimales) - 2));
+  const emprunt = !r || r.emprunt === null ? 'not read' : r.garantie === 0n ? 'Hold ' + g.symbole + ' first' : rien ? 'Nothing now' : '≈ ' + bcBas2(r.emprunt, pr.decimales) + ' ' + pr.symbole;
+  const pret = !r || r.pret === null ? 'not read' : r.pret === 0n ? 'No ' + pr.symbole + ' yet' : bcBas2(r.pret, pr.decimales) + ' ' + pr.symbole;
+  el.append(bcEl('div', { cls: 'bcMarcheChiffres bcPourToiChiffres' }, [
+    bcEl('div', {}, [bcEl('small', { text: 'You can borrow' }), bcEl('b', { text: emprunt })]),
+    bcEl('div', {}, [bcEl('small', { text: 'You can lend' }), bcEl('b', { text: pret })])]));
+  let note = '';
+  if (r && r.emprunt !== null && r.garantie > 0n) {
+    if (r.borneParMarche) note = rien ? 'Nothing to borrow in this market right now — you can lend here.' : 'Limited by what this market can lend right now, not by your ' + g.symbole + '.';
+    else if (rien) note = 'Your debt is already at our limit for this collateral.';
+    else note = 'With all your ' + g.symbole + ' as collateral, at our limit — borrowing less keeps you further from liquidation.' + (r.liquiditeLue ? '' : ' What the market can lend was not read.');
+  }
+  if (note) el.append(bcEl('p', { cls: 'bcMarcheBas', text: note }));
+}
+/** Remplit la ligne « pour toi » de chaque carte de marche affichee. Un jeton par peinture : un compte change en route n ecrit plus. */
+async function bcBanquePourToi(force = false) {
+  const els = [...document.querySelectorAll('#bcBanqueMarches [data-pourtoi]')];
+  if (!els.length) return;
+  const gen = (bcBanque.genPourToi = (bcBanque.genPourToi || 0) + 1);
+  const mkDe = (el) => (bcBanque.marches || []).find((x) => x.id === el.getAttribute('data-pourtoi'));
+  if (!compte) { for (const el of els) if (mkDe(el)) bcPeindrePourToi(el, mkDe(el), 'deconnecte'); return; }
+  if (force || !bcBanque.pourToi || bcBanque.pourToi.de !== String(compte).toLowerCase() || Date.now() - bcBanque.pourToi.t >= 20000) {
+    for (const el of els) if (mkDe(el)) bcPeindrePourToi(el, mkDe(el), 'lecture');
+  }
+  const p = await bcBanqueDonneesPourToi(force);
+  if (gen !== bcBanque.genPourToi) return;
+  for (const el of els) { const mk = mkDe(el); if (mk) bcPeindrePourToi(el, mk, p ? bcPourToiDe(mk, p) : 'deconnecte'); }
+  if (bcBanque.choisi) bcBanqueIndices();
+}
+/** Les champs du formulaire disent ce que CE wallet peut mettre (indices, rien n est rempli a sa place). */
+function bcBanqueIndices() {
+  const mk = bcBanque.choisi; if (!mk) return;
+  const r = bcPourToiDe(mk, bcBanque.pourToi && compte && bcBanque.pourToi.de === String(compte).toLowerCase() ? bcBanque.pourToi : null);
+  const solde = r && bcBanque.pourToi.av ? bcBanque.pourToi.av.solde(mk.garantie.adr) : null;
+  $('#bcBanqueGarantie').placeholder = typeof solde === 'bigint' ? (solde > 0n ? 'You hold ' + bcUnites(solde, mk.garantie.decimales) : 'You hold none') : '0.0';
+  $('#bcBanqueMontant').placeholder = !r ? '0.0' : bcBanque.sens === 'emprunter' ? (r.emprunt !== null && r.emprunt > 0n ? 'Up to ≈ ' + bcBas2(r.emprunt, mk.pret.decimales) : '0.0')
+    : bcBanque.sens === 'preter' ? (r.pret !== null && r.pret > 0n ? 'You have ' + bcBas2(r.pret, mk.pret.decimales) : '0.0') : '0.0';
+}
+async function bcBanqueCharger(force = false) {
+  const ul = $('#bcBanqueMarches');
+  const lu = await bcBanqueLireMarches(force);
+  if (!lu.ok) {
+    ul.textContent = '';
+    ul.append(bcEl('li', { cls: 'note', text: 'Lending markets not read — ' + lu.pourquoi + '. Try again later.' }));
+    return;
+  }
+  ul.textContent = '';
+  const { listes, ecartes } = bcBanqueListes();
   /* 2026-10-11 (Phil : « le block sur le panel control doit suivre ») : les marches du block AFFICHE passent en tete (tri stable :
    *   l ordre par liquidite reste celui de la ligne au-dessus a l interieur des deux groupes) */
   const ici = brainAdr ? String(brainAdr).toLowerCase() : null;
@@ -23899,6 +24074,7 @@ async function bcBanqueCharger(force = false) {
     li.append(bcEl('div', { cls: 'bcLtv', 'aria-hidden': 'true' }, [bcEl('i', { style: 'width:' + Math.min(100, c.maxPct).toFixed(1) + '%' }),
       bcEl('em', { style: 'left:' + Math.min(100, c.liqPct).toFixed(1) + '%' })]));
     li.append(bcEl('p', { cls: 'bcMarcheBas', text: 'You borrow up to ' + pctLtv(c.maxPct) + ' of the value; liquidated at ' + pctLtv(c.liqPct) + '.' }));
+    li.append(bcEl('div', { cls: 'bcPourToi', 'data-pourtoi': mk.id })); /* rempli par bcBanquePourToi : ce que CE wallet peut emprunter / preter */
     const boutons = bcEl('div', { cls: 'bcMarcheBoutons' });
     for (const [txt, sens, cls] of [['Borrow', 'emprunter', 'bouton'], ['Lend', 'preter', 'bouton sec']]) {
       const b = bcEl('button', { type: 'button', cls, text: txt });
@@ -23909,7 +24085,9 @@ async function bcBanqueCharger(force = false) {
     ul.append(li);
   }
   if (ecartes > 0) ul.append(bcEl('li', { cls: 'note', text: ecartes + ' unlisted market' + (ecartes > 1 ? 's' : '') + ' not shown.' }));
+  bcPanierPeindre(listes);
   void bcBanquePositions();
+  void bcBanquePourToi();
 }
 /** La jauge du formulaire Borrow : la LTV de la position (remplie), notre plafond (trait clair) et le seuil de liquidation (trait rouge),
  *  et la DISTANCE a la liquidation en %. ltv null = rien a montrer (jauge cachee). Couleur : sous le plafond / au-dessus / au seuil. */
@@ -23946,6 +24124,8 @@ function bcBanqueEstimer() {
   const unite = 10n ** BigInt(decG);
   const prixUnite = (unite * prix) / 10n ** 36n; /* unites brutes de pret pour 1 action */
   const morceaux = ['Oracle price: 1 ' + mk.garantie.symbole + ' = ' + bcUnites(prixUnite, decP) + ' ' + mk.pret.symbole + '.'];
+  /* 2026-10-11 : le montant n est plus affiche par marche (« peur de liquidite ») - la limite reste, et elle se DIT ici, au moment ou elle compte */
+  if (d > 0n && /^\d+$/.test(String(mk.disponibleBrut ?? '')) && d > BigInt(mk.disponibleBrut)) morceaux.push('This market cannot lend that much right now — try a smaller amount.');
   if (g > 0n) {
     const valeur = (g * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
     morceaux.push('Collateral ≈ ' + bcUnites(valeur, decP) + ' ' + mk.pret.symbole + '; you can borrow up to ≈ ' + bcUnites(plafond, decP) + '.');
@@ -23962,6 +24142,119 @@ function bcBanqueEstimer() {
   }
   bcPeindreJauge(ltvPct, maxPct, liqPct, chutePct, mk.garantie.symbole);
   z.textContent = morceaux.join(' ') + ' Estimate only.';
+}
+/* ── 2026-10-11 — LE PANIER (Phil : « plusieurs actions tokenisees en garantie en meme temps ») ──────────────────────────────────────
+ * bcEstimationEmprunt : le MEME calcul que bcBanqueEstimer pour UNE ligne, sans DOM (parite epinglee par test-banque-panier-ui).
+ *   null = pas d estimation (oracle non lu, montants illisibles, pas de garantie). */
+function bcEstimationEmprunt(mk, g, d) {
+  const decG = Number(mk && mk.garantie && mk.garantie.decimales);
+  if (!mk || !mk.prixOracle || !/^\d+$/.test(mk.prixOracle) || !Number.isInteger(decG) || typeof g !== 'bigint' || typeof d !== 'bigint' || g <= 0n) return null;
+  const prix = BigInt(mk.prixOracle), lltv = BigInt(mk.lltv), marge = BigInt(mk.margeBps || 7000), unite = 10n ** BigInt(decG);
+  const prixUnite = (unite * prix) / 10n ** 36n, valeur = (g * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
+  const liqPct = Number(lltv) / 1e16, maxPct = liqPct * Number(marge) / 10000;
+  if (d <= 0n || valeur <= 0n) return { valeur, plafond, ltvPct: 0, chutePct: null, maxPct, liqPct, auDela: false };
+  const ltvPct = Number((d * 10000n) / valeur) / 100, liqUnite = (d * 10n ** 18n * unite) / (g * lltv);
+  const chutePct = prixUnite > 0n ? Math.max(0, Number(10000n - (liqUnite * 10000n) / prixUnite) / 100) : null;
+  return { valeur, plafond, ltvPct, chutePct, maxPct, liqPct, auDela: d > plafond };
+}
+const BC_PANIER_MAX = 5;
+/** Les lignes du panier : un marche LISTE ou l on peut emprunter (liquidite lue >= 1 $), une case, deux montants, son estimation. */
+function bcPanierPeindre(listes) {
+  const zone = $('#bcBanquePanier'), ul = $('#bcPanierLignes');
+  if (!zone || !ul) return;
+  const empruntables = (listes || []).filter((mk) => ['ok', 'bas'].includes(bcBanqueChiffres(mk).etat));
+  zone.hidden = empruntables.length < 2;
+  ul.textContent = '';
+  for (const mk of empruntables) {
+    const li = bcEl('li', { cls: 'bcPanierLigne' });
+    li.dataset.id = mk.id;
+    const caseX = bcEl('input', { type: 'checkbox', 'aria-label': 'Use ' + mk.garantie.symbole });
+    const g = bcEl('input', { inputmode: 'decimal', placeholder: mk.garantie.symbole + ' to post', 'aria-label': mk.garantie.symbole + ' collateral' });
+    const d = bcEl('input', { inputmode: 'decimal', placeholder: mk.pret.symbole + ' to borrow', 'aria-label': mk.pret.symbole + ' to borrow' });
+    g.disabled = true; d.disabled = true;
+    const est = bcEl('p', { cls: 'bcMarcheBas', text: bcBanqueChiffres(mk).puce + ' · borrow ' + bcPct(mk.apyEmprunt) });
+    li.append(bcEl('label', { cls: 'bcPanierCase' }, [caseX, bcEl('span', { text: mk.garantie.symbole + ' → ' + mk.pret.symbole })]), bcEl('div', { cls: 'bcPanierChamps' }, [g, d]), est);
+    li._panier = { mk, caseX, g, d, est };
+    caseX.addEventListener('change', () => { g.disabled = d.disabled = !caseX.checked; bcPanierMaj(); });
+    g.addEventListener('input', bcPanierMaj); d.addEventListener('input', bcPanierMaj);
+    ul.append(li);
+  }
+  bcPanierMaj();
+}
+/** Lit les lignes cochees, peint l estimation de chacune et le total ; au plus BC_PANIER_MAX cases. Rend les lignes valides. */
+function bcPanierMaj() {
+  const lignes = [...document.querySelectorAll('#bcPanierLignes li.bcPanierLigne')].map((li) => li._panier).filter(Boolean);
+  const cochees = lignes.filter((x) => x.caseX.checked);
+  for (const x of lignes) x.caseX.disabled = !x.caseX.checked && cochees.length >= BC_PANIER_MAX;
+  const valides = []; let total = 0n, decP = null, symP = 'USDC';
+  for (const x of lignes) {
+    if (!x.caseX.checked) { x.est.textContent = bcBanqueChiffres(x.mk).puce + ' · borrow ' + bcPct(x.mk.apyEmprunt); continue; }
+    const dg = Number(x.mk.garantie.decimales), dp = Number(x.mk.pret.decimales);
+    const lire = (txt, dec) => (/^\s*0*(?:[.,]0*)?\s*$/.test(txt) ? 0n : enUnitesBrutes(txt.trim(), dec));
+    const g = lire(x.g.value, dg), d = lire(x.d.value, dp);
+    const e = g !== null && d !== null ? bcEstimationEmprunt(x.mk, g, d) : null;
+    x.est.textContent = !e ? 'Type the ' + x.mk.garantie.symbole + ' you post and the ' + x.mk.pret.symbole + ' you borrow.'
+      : 'LTV ' + e.ltvPct.toFixed(1) + ' %' + (e.chutePct !== null ? ' · liquidated if ' + x.mk.garantie.symbole + ' falls ' + e.chutePct.toFixed(1) + ' %' : '')
+        + (e.auDela ? ' — above our limit (' + e.maxPct.toFixed(1) + ' %): the plan will refuse it.' : '');
+    x.est.className = 'bcMarcheBas' + (e && e.auDela ? ' wKo' : '');
+    if (e && d > 0n) { valides.push({ mk: x.mk, brutG: g, brutM: d }); total += d; decP = dp; symP = x.mk.pret.symbole; }
+  }
+  const t = $('#bcPanierTotal');
+  if (t) t.textContent = valides.length ? 'You borrow ' + bcUnites(total, decP) + ' ' + symP + ' in total, against ' + valides.length + ' stock' + (valides.length > 1 ? 's' : '') + '. Estimate only.' : '';
+  return valides;
+}
+$('#bcPanierGo').addEventListener('click', () => {
+  const n = $('#bcPanierNote'), v = bcPanierMaj();
+  if (v.length < 1) { n.className = 'note wKo'; n.textContent = 'Tick at least one stock and type both amounts.'; return; }
+  n.className = 'note'; n.textContent = '';
+  void bcBanqueProposerPanier(v);
+});
+/** Le plan du panier : relu et SIMULE en entier par le serveur, puis signe etape par etape. */
+async function bcBanqueProposerPanier(lignes) {
+  const m = bcMessage('You · bank', '', 'Borrow against ' + lignes.length + ' stock' + (lignes.length > 1 ? 's' : '') + ': ' + lignes.map((x) => x.mk.garantie.symbole).join(', '));
+  bcVue('chat');
+  const planifier = async () => {
+    if (!(await bcAvecWallet(m, planifier))) return;
+    bcEtape(m, 'Building the plan — each position is read on chain and the whole sequence is simulated from your wallet…');
+    const q = new URLSearchParams({ action: 'panier', compte: String(compte).toLowerCase(), lignes: lignes.map((x) => x.mk.id + ':' + x.brutG + ':' + x.brutM).join(',') });
+    let p;
+    try {
+      const r = await fetch('/api/banque/plan?' + q, { signal: AbortSignal.timeout(120000) });
+      p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute' } : await r.json();
+    } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched' }; }
+    if (!p || p.etat !== 'PRET') {
+      bcEtape(m, (p && p.etat === 'REFUSE' ? 'Refused: ' : 'Not measured: ') + String((p && p.pourquoi) || 'no answer').slice(0, 240) + ' Nothing was sent.', 'non');
+      bcBoutons(m, [['Try again', planifier, true]]);
+      return;
+    }
+    const rs = p.resume || {};
+    for (const l of (Array.isArray(rs.lignes) ? rs.lignes : [])) {
+      const x = lignes.find((y) => String(y.mk.id).toLowerCase() === String(l.marche || '').toLowerCase());
+      if (!x) continue;
+      const dg = Number(x.mk.garantie.decimales), dp = Number(x.mk.pret.decimales);
+      let ligne = x.mk.garantie.symbole + ': debt after ' + bcUnites(l.detteApres, dp) + ' ' + x.mk.pret.symbole;
+      if (l.prixLiquidation && l.prixActuel && Number.isInteger(dg)) {
+        const enPret = (v) => Number(BigInt(v)) / 1e36 * 10 ** dg / 10 ** dp;
+        const chute = (1 - enPret(l.prixLiquidation) / enPret(l.prixActuel)) * 100;
+        ligne += '; liquidated if it falls below ' + enPret(l.prixLiquidation).toFixed(2) + ' (oracle ' + enPret(l.prixActuel).toFixed(2) + ', a ' + Math.max(0, chute).toFixed(1) + ' % fall)';
+      }
+      bcEtape(m, ligne + '.');
+    }
+    bcEtape(m, String(rs.positionsSeparees || 'Each stock is its own Morpho position.'));
+    bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.', 'oui');
+    bcBoutons(m, [['Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
+      const s = await bcSigner(m, p.aSigner);
+      bcBanque.positionsDe = null; void bcBanquePositions(true);
+      /* « ce que tu peux » se relit : tout de suite, puis apres 35 s (le serveur garde soldes et positions 30 s) */
+      void bcBanquePourToi(true); setTimeout(() => { void bcBanquePourToi(true); }, 35000);
+      if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
+      bcBoutons(m, []); /* une carte faite n a plus de bouton de signature */
+      try { void majWallet(); } catch (_) { /* relu a l ouverture */ }
+      bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+    }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
+  };
+  await planifier();
 }
 /* 2026-10-10 (test prod Grok) : le refus rouge « Type an amount of USDC. » restait affiche APRES la saisie d un montant - il n etait
  *   pose qu au submit, rien ne l effacait. Une saisie efface un refus (rouge) ; jamais une note neutre (« Reading … »). */
@@ -23986,6 +24279,7 @@ function bcBanqueChoisir(mk, sens) {
     + (sens === 'emprunter' ? '. At our maximum (' + bcBanqueChiffres(mk).maxPct.toFixed(1) + ' % of the value), a ' + (100 - Number(mk.margeBps || 7000) / 100).toFixed(0) + ' % fall of ' + mk.garantie.symbole + ' liquidates you.' : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
+  bcBanqueIndices();
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
 }
@@ -23993,6 +24287,62 @@ function bcBanqueChoisir(mk, sens) {
 $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));
 /* la carte TokenizedBank de l onglet Wallet mene a la banque qui existe : le panneau, sur son onglet Bank */
 $('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
+$('#tkOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
+/* 2026-10-11 (Phil : « refais bien le frontend de la carte TokenizedBank du Wallet, pour rediriger direct ») : la carte MENE a la Bank -
+ *   les MEMES trois tuiles que l onglet Bank (meme lecture, meme cache, meme filtre : bcBanqueLireMarches / bcBanqueListes), une ligne par
+ *   position de CE wallet (meme puce de sante : bcPuceSante), et un seul bouton. ⛔ Un echec se DIT dans la carte, il ne la vide pas et ne
+ *   cache pas le bouton : la Bank relit tout a l ouverture. ⛔ Un jeton par peinture : une lecture plus ancienne (autre compte) n ecrit plus. */
+let tbBanqueGeneration = 0;
+async function tbBanquePeindre() {
+  const pos = $('#tbBanquePos');
+  if (!pos || !$('#tbBanqueResume')) return;
+  const gen = ++tbBanqueGeneration;
+  const lu = await bcBanqueLireMarches();
+  if (gen !== tbBanqueGeneration) return;
+  pos.textContent = '';
+  const { listes, ecartes } = lu.ok ? bcBanqueListes() : { listes: [], ecartes: 0 };
+  if (lu.ok) bcBanquePeindreResume(listes, ecartes, '#tbBanqueResume');
+  else { $('#tbBanqueResume').hidden = true; pos.append(bcEl('p', { cls: 'note', text: 'Lending markets not read right now — ' + lu.pourquoi + '. The Bank reads them again when you open it.' })); }
+  if (!compte) { pos.append(bcEl('p', { cls: 'note', text: 'Connect your wallet to see how much you can borrow and lend with it.' })); return; }
+  const c = String(compte).toLowerCase();
+  const p = await bcBanqueDonneesPourToi();
+  if (gen !== tbBanqueGeneration || !p || p.de !== c) return;
+  /* 2026-10-11 (Phil : « montre deja combien il peut borrow et lend en fonction du wallet connecte ») : CE QUE TU PEUX, en une ligne.
+   *   Par action detenue, son MEILLEUR marche (une meme action ne garantit qu un marche a la fois - on ne la compte pas deux fois) ; preter
+   *   = l USDC du wallet. Un marche non lu n est pas compte et c est DIT. */
+  if (lu.ok) {
+    const parAction = new Map(); let nonLu = false;
+    for (const mk of listes) {
+      if (mk.pret.symbole !== 'USDC') continue;
+      const r = bcPourToiDe(mk, p);
+      if (!r || r.emprunt === null) { nonLu = true; continue; }
+      const k = String(mk.garantie.adr).toLowerCase();
+      if (r.garantie > 0n && (!parAction.has(k) || r.emprunt > parAction.get(k).e)) parAction.set(k, { e: r.emprunt, sym: mk.garantie.symbole });
+    }
+    const mkU = listes.find((mk) => mk.pret.symbole === 'USDC'), dec = mkU ? mkU.pret.decimales : 6;
+    const soldeU = mkU && p.av ? p.av.solde(mkU.pret.adr) : null;
+    let total = 0n; for (const v of parAction.values()) total += v.e;
+    const emprunt = parAction.size ? '≈ ' + bcBas2(total, dec) + ' USDC' : nonLu ? 'not read' : '0 USDC';
+    const pret = soldeU === null ? 'not read' : bcBas2(soldeU, dec) + ' USDC';
+    pos.append(bcEl('div', { cls: 'bcPourToi' }, [bcEl('div', { cls: 'bcMarcheChiffres bcPourToiChiffres' }, [
+      bcEl('div', {}, [bcEl('small', { text: 'You can borrow' }), bcEl('b', { text: emprunt })]),
+      bcEl('div', {}, [bcEl('small', { text: 'You can lend' }), bcEl('b', { text: pret })])])]));
+    const note = parAction.size ? 'Counts your ' + [...parAction.values()].map((v) => v.sym).join(', ') + ' — in your wallet and already posted — each on its best market, at our limit. Borrowing less keeps you further from liquidation.' + (nonLu ? ' Some markets were not read.' : '')
+      : nonLu ? '' : 'You hold none of the stocks these markets accept: buy one in Trade, or lend USDC.';
+    if (note) pos.append(bcEl('p', { cls: 'note', text: note }));
+  }
+  const r = p.pos;
+  if (!r || !r.ok) { pos.append(bcEl('p', { cls: 'note', text: 'Your Bank positions were not read — ' + ((r && r.pourquoi) || 'try again later') + '.' })); return; }
+  if (!r.positions.length) { pos.append(bcEl('p', { cls: 'note', text: 'You have no open position on these markets yet.' })); return; }
+  for (const ps of r.positions) {
+    const g = BigInt(ps.garantieBrute || 0), dt = BigInt(ps.detteBrute || 0), pr = BigInt(ps.preteBrut || 0), parts = [];
+    if (dt > 0n) parts.push('you owe ' + bcUnites(dt, ps.pret.decimales) + ' ' + ps.pret.symbole);
+    else if (g > 0n) parts.push(bcUnites(g, ps.garantie.decimales) + ' ' + ps.garantie.symbole + ' as collateral');
+    if (pr > 0n) parts.push('you lent ' + bcUnites(pr, ps.pret.decimales) + ' ' + ps.pret.symbole);
+    const puce = bcPuceSante(ps);
+    pos.append(bcEl('p', {}, [bcEl('b', { text: ps.garantie.symbole + ' → ' + ps.pret.symbole }), bcEl('span', { text: parts.join(' · ') }), ...(puce ? [puce] : [])]));
+  }
+}
 $('#bcBanqueForm').addEventListener('click', (e) => { const b = e.target.closest('[data-banque]'); if (b && bcBanque.choisi) bcBanqueChoisir(bcBanque.choisi, b.getAttribute('data-banque')); });
 $('#bcBanqueForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -24045,13 +24395,34 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
         bcEtape(m, 'Liquidated if 1 ' + mk.garantie.symbole + ' falls below ' + enPret(rs.prixLiquidation).toFixed(2) + ' ' + mk.pret.symbole + ' (oracle now: ' + enPret(rs.prixActuel).toFixed(2) + ').');
       }
     }
+    /* 2026-10-11 (test reel de Grok) : les cartes rembourser / retirer ne disaient AUCUN montant, et le pret n avait pas de ligne de risque.
+     *   Les montants viennent du resume du plan (lu sur la chaine). */
+    const sym = mk.pret.symbole;
+    if (sens === 'preter' && rs.prete) {
+      bcEtape(m, 'You lend ' + bcUnites(rs.prete, decP) + ' ' + sym + ' to this market.');
+      bcEtape(m, 'Risk: if a stock falls faster than its loans are liquidated, the market can lose part of what was lent (bad debt). What is borrowed cannot be withdrawn until it is repaid.');
+    }
+    if (sens === 'rembourser' && rs.detteLue) bcEtape(m, rs.tout ? 'You repay your whole debt: about ' + bcUnites(rs.detteLue, decP) + ' ' + sym + ' (your wallet allows up to ' + bcUnites(rs.autorise, decP) + ' — interest accrues until the transaction lands).'
+      : 'You repay ' + bcUnites(rs.autorise, decP) + ' ' + sym + '.');
+    if (sens === 'retirerpret' && rs.retire) bcEtape(m, 'You withdraw ' + bcUnites(rs.retire, decP) + ' ' + sym + ' of what you lent.');
+    if (sens === 'retirer' && brutM) {
+      let dgR = decG; if (dgR === null) { try { dgR = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dgR = null; } }
+      bcEtape(m, 'You withdraw ' + (dgR === null ? brutM + ' raw units of' : bcUnites(brutM, dgR)) + ' ' + mk.garantie.symbole + ' of collateral to your wallet.');
+    }
     bcEtape(m, 'Simulated on chain from your wallet: every step goes through.', 'oui');
     bcBoutons(m, [['Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {
       const s = await bcSigner(m, p.aSigner);
       if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
+      /* 2026-10-11 (test reel de Grok : « Sign N steps reste cliquable sur une carte deja faite » = double signature possible) : une carte
+       *   faite n a PLUS de bouton de signature ; le formulaire se vide ; le Wallet se relit. */
+      bcBoutons(m, []);
+      for (const id of ['#bcBanqueGarantie', '#bcBanqueMontant']) { const e = $(id); if (e) e.value = ''; }
+      try { bcBanqueEstimer(); } catch (_) { /* rien a estimer */ }
+      try { void majWallet(); } catch (_) { /* le Wallet se relira a son ouverture */ }
       bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
       m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
       bcBanque.positionsDe = null; void bcBanquePositions(true);
+      void bcBanquePourToi(true); setTimeout(() => { void bcBanquePourToi(true); }, 35000); /* serveur : 30 s de cache */
       /* 2026-10-10 (Phil : « surtout pas forcer sur ETH, proposer tous les chemins d echange, full open for all assets ») : deux
        *   raccourcis (racheter l action en garantie, le block affiche) PUIS un selecteur de TOUS les actifs connus (actions du registre,
        *   devises de Base, block affiche). Ce sont les rails qui planifient ou refusent, avec la raison — rien n est filtre ici. */
@@ -24082,24 +24453,37 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
   void planifier();
 }
 /** Les positions du wallet connecte (API Morpho, AFFICHAGE). Un echec se dit ; « aucune position » seulement sur une lecture reussie. */
+/** La lecture des positions d un compte, PARTAGEE par l onglet Bank et la carte du Wallet (2026-10-11 ; le serveur garde 30 s). Rend
+ *  { ok: true, positions } ou { ok: false, pourquoi } - un echec n est jamais « aucune position ». */
+async function bcBanqueLirePositions(c) {
+  let r = null;
+  try { r = await (await fetch('/api/banque/positions?compte=' + c, { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+  if (!r || r.ok !== true || !Array.isArray(r.positions)) return { ok: false, pourquoi: (r && r.pourquoi) || 'try again later' };
+  return { ok: true, positions: r.positions };
+}
+/** La puce de sante d une position (facteur Morpho, 1 = liquidation) : rouge < 1,1, ambre < 1,5. Sante non lue = pas de puce, jamais un
+ *  chiffre invente. PARTAGEE par l onglet Bank et la carte du Wallet - un seul seuil. */
+function bcPuceSante(ps) {
+  const s = ps && ps.sante !== null && ps.sante !== undefined && ps.sante !== '' && Number.isFinite(Number(ps.sante)) ? Number(ps.sante) : null;
+  return s === null ? null : bcEl('span', { cls: 'bcPuce ' + (s < 1.1 ? 'non' : s < 1.5 ? 'bas' : 'ok'), text: 'health ' + s.toFixed(2) });
+}
 async function bcBanquePositions(force = false) {
   const div = $('#bcBanquePositions');
   if (!compte) { div.textContent = ''; div.append(bcEl('p', { cls: 'note', text: 'Connect your wallet to see them.' })); return; }
   const c = String(compte).toLowerCase();
   if (!force && bcBanque.positionsDe === c) return;
-  let r = null;
-  try { r = await (await fetch('/api/banque/positions?compte=' + c, { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
+  const r = await bcBanqueLirePositions(c);
   div.textContent = '';
-  if (!r || r.ok !== true || !Array.isArray(r.positions)) { div.append(bcEl('p', { cls: 'note', text: 'Your positions were not read — ' + ((r && r.pourquoi) || 'try again later') + '.' })); return; }
+  if (!r.ok) { div.append(bcEl('p', { cls: 'note', text: 'Your positions were not read — ' + r.pourquoi + '.' })); return; }
   bcBanque.positionsDe = c;
   if (!r.positions.length) { div.append(bcEl('p', { cls: 'note', text: 'No lending or borrowing position on these markets.' })); return; }
   for (const ps of r.positions) {
     const mk = (bcBanque.marches || []).find((x) => x.id === ps.id) || { id: ps.id, garantie: ps.garantie, pret: ps.pret };
     /* 2026-10-11 (glow up) : une carte par position ; la sante (facteur Morpho, 1 = liquidation) en puce : rouge < 1,1, ambre < 1,5 */
     const carte = bcEl('ul', { cls: 'bcListe' }), li = bcEl('li', { cls: 'bcMarche' }), parts = [];
-    const sante = ps.sante !== null && ps.sante !== undefined && Number.isFinite(Number(ps.sante)) ? Number(ps.sante) : null;
+    const puceSante = bcPuceSante(ps);
     li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcEl('b', { text: ps.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: ps.pret.symbole }),
-      ...(sante !== null ? [bcEl('span', { cls: 'bcPuce ' + (sante < 1.1 ? 'non' : sante < 1.5 ? 'bas' : 'ok'), text: 'health ' + sante.toFixed(2) })] : [])]));
+      ...(puceSante ? [puceSante] : [])]));
     const d = bcEl('div', { cls: 'bcMarcheBoutons' });
     const g = BigInt(ps.garantieBrute || 0), dt = BigInt(ps.detteBrute || 0), pr = BigInt(ps.preteBrut || 0);
     if (g > 0n) parts.push('collateral ' + bcUnites(g, ps.garantie.decimales) + ' ' + ps.garantie.symbole + ' (' + bcUsd(ps.garantieUsd) + ')');

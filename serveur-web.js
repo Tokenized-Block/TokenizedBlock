@@ -142,7 +142,7 @@ import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail } from './rails-api.js';
-import { lireMarchesMorpho, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret } from './banque-morpho.js';
+import { lireMarchesMorpho, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
 import { traiterMcp } from './mcp-tblock.js';
@@ -3928,6 +3928,9 @@ const SERVIS = [
    *   exactement son travail : un import 404 ne degrade pas la page, il tue le module ENTIER. */
   'echange-v3.js', 'plan-usdc-block.js', 'calldata-v3.js', 'calldata-aerodrome.js',
   'echange-eth.js', 'plan-eth-block.js',
+  /* ⛔ 2026-10-11 : les approbations au MONTANT EXACT (decision de Phil), importees par echange.js et echange-v3.js. Oubliees ici, la
+   *   page locale etait MORTE (import 404 : aucun bouton, carte vide) - vu au navigateur, et la garde test-imports-servis l a crie. */
+  'approbations-exactes.js',
   /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
    *   DECIDER, et il decide non hors de localhost. `wallet-simule.js` n est charge par la page (`import()`) qu en mode essai :
    *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
@@ -4595,7 +4598,10 @@ function traiterRequete(req, res) {
     avoirsEnVol += 1;
     const enVol = lireAvoirs({ compte: compteA, jetons: [...JETONS_AVOIRS.keys()], noeuds: NOEUDS_AVOIRS, envoyer: envoyerLotAvoirs, decimalesConnues: decimalesAvoirs })
       .then((r) => ({ ok: r.etat !== 'NON_LU', etat: r.etat, ...(r.pourquoi ? { pourquoi: r.pourquoi } : {}),
-        avoirs: r.avoirs.map((v) => ({ ...v, ...JETONS_AVOIRS.get(v.adr) })), zeros: r.zeros, nonLus: r.nonLus.length, lu: new Date().toISOString(),
+        avoirs: r.avoirs.map((v) => ({ ...v, ...JETONS_AVOIRS.get(v.adr) })), zeros: r.zeros, nonLus: r.nonLus.length,
+        /* 2026-10-11 : LESQUELS (la Bank dit « ce que tu peux emprunter » action par action : une action absente des avoirs n est un
+         *   zero que si elle n est PAS dans cette liste) */
+        nonLusAdr: r.nonLus.map((a) => String(a).toLowerCase()), lu: new Date().toISOString(),
         borne: 'Balances of the currencies and stocks of our list only, read at the latest block. A token outside the list is not read here.' }))
       .catch(() => ({ ok: false, etat: 'NON_LU', pourquoi: 'holdings not read', avoirs: [], zeros: 0, nonLus: JETONS_AVOIRS.size }))
       .finally(() => { avoirsEnVol -= 1; });
@@ -4624,9 +4630,21 @@ function traiterRequete(req, res) {
     const q = new URL(req.url, 'http://x').searchParams;
     const action = String(q.get('action') || ''), id = String(q.get('id') || ''), compte = String(q.get('compte') || '');
     const entier = (k) => { const v = String(q.get(k) || ''); return /^(0|[1-9][0-9]{0,40})$/.test(v) ? BigInt(v) : null; };
+    /* 2026-10-11 (Phil : « plusieurs actions tokenisees en garantie en meme temps ») : action=panier&lignes=<id>:<garantie>:<emprunt>,...
+     *   1 a PANIER_MAX lignes ; chaque action reste sa propre position Morpho (banque-morpho.js, planEmprunterPanier). */
+    let lignesPanier = null;
+    if (action === 'panier') {
+      const brutes = String(q.get('lignes') || '').split(',').filter(Boolean);
+      if (!/^0x[0-9a-fA-F]{40}$/.test(compte) || brutes.length < 1 || brutes.length > PANIER_MAX
+        || !brutes.every((l) => /^0x[0-9a-fA-F]{64}:(0|[1-9][0-9]{0,40}):[1-9][0-9]{0,40}$/.test(l))) {
+        rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/banque/plan?action=panier&lignes=<market id>:<raw collateral>:<raw borrow>,... (1 to ' + PANIER_MAX + ' lines)&compte=<the wallet that will sign>' });
+        return;
+      }
+      lignesPanier = brutes.map((l) => { const [i, g, e] = l.split(':'); return { id: i, garantie: BigInt(g), emprunt: BigInt(e) }; });
+    }
     const usage = 'usage: /api/banque/plan?action=emprunter|preter|rembourser|retirer|retirerpret&id=<Morpho market id, bytes32>&compte=<the wallet that will sign>'
       + ' and: emprunter -> garantie=<raw units of the stock, 0 for none>&emprunt=<raw units>; preter|retirer -> montant=<raw units>; rembourser|retirerpret -> montant=<raw units> or tout=1';
-    if (!['emprunter', 'preter', 'rembourser', 'retirer', 'retirerpret'].includes(action) || !/^0x[0-9a-fA-F]{64}$/.test(id) || !/^0x[0-9a-fA-F]{40}$/.test(compte)) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; }
+    if (action !== 'panier' && (!['emprunter', 'preter', 'rembourser', 'retirer', 'retirerpret'].includes(action) || !/^0x[0-9a-fA-F]{64}$/.test(id) || !/^0x[0-9a-fA-F]{40}$/.test(compte))) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; }
     const ipB = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
     const minuteB = Math.floor(Date.now() / 60000);
     if (railsBudget.minute !== minuteB) { railsBudget.minute = minuteB; railsBudget.n = 0; railsBudget.parIp.clear(); }
@@ -4636,7 +4654,8 @@ function traiterRequete(req, res) {
       return;
     }
     let plan;
-    if (action === 'emprunter') { const g = entier('garantie') ?? 0n, e = entier('emprunt'); if (e === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => planEmprunter({ rpc: rpcNaissance, compte, id, garantie: g, emprunt: e }); }
+    if (action === 'panier') plan = () => planEmprunterPanier({ rpc: rpcNaissance, compte, lignes: lignesPanier });
+    else if (action === 'emprunter') { const g = entier('garantie') ?? 0n, e = entier('emprunt'); if (e === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => planEmprunter({ rpc: rpcNaissance, compte, id, garantie: g, emprunt: e }); }
     else if (action === 'rembourser' || action === 'retirerpret') { const tout = q.get('tout') === '1', m = entier('montant'); if (!tout && m === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => (action === 'rembourser' ? planRembourser : planRetirerPret)({ rpc: rpcNaissance, compte, id, montant: m, tout }); }
     else { const m = entier('montant'); if (m === null) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; } plan = () => (action === 'preter' ? planPreter : planRetirerGarantie)({ rpc: rpcNaissance, compte, id, montant: m }); }
     railsBudget.parIp.set(ipB, nIpB); railsBudget.n += 1; railsEnVol += 1;

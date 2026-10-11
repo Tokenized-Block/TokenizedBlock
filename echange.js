@@ -19,7 +19,8 @@ import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFrai
   HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030, fraisHookBps,
   HOOK_V9, V9_PAIE_DEJA_A6CF, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
-  encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48, AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
+  AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
+import { etapesPermit2Exactes } from './approbations-exactes.js';
 import { vieDuBlock } from './marche.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
   REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute, hookAdmisPourBlock, hooksDeRoute } from './pool-sans-hook.js';
@@ -591,9 +592,11 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     const actionsEncodees = actions.map((x) => (x.params === '__SWAP__' ? { code: x.code, params: paramsSwapExactInSingle({ ...x.swap, forme: SANS_MINHOP }) } : x));
     const hookData = hookDataReferentO1({ cle });
     const data = encodeV4Swap({ cle, zeroForOne, montant: resume.montantSwap, sortieMin: sortieMinTete, deadline, forme: SANS_MINHOP, actions: actionsEncodees, hookData });
+    /* 2026-10-11 (decision de Phil : « montant exact partout ») : les deux autorisations au montant de CET echange, 1 h (approbations-exactes.js) */
+    const ap = etapesPermit2Exactes({ jeton: paye, permit2: PERMIT2, routeur: R, montant: m, maintenantSec: Math.floor(maintenant / 1000), libelleJeton: 'this token' });
+    if (ap.etat !== 'OK') return { etat: 'REFUSE', pourquoi: ap.pourquoi, resume };
     return { etat: 'PRET', nonSimule: true, resume, cle, forme: SANS_MINHOP, pourquoi: null, tx: { to: R, data, value: '0x' + valeur.toString(16) },
-      etapes: [{ nom: 'Allow Permit2 to move this token', to: paye, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' },
-        { nom: 'Allow the Uniswap router (through Permit2)', to: PERMIT2, data: encodePermit2Approve(paye, R, MAX_UINT160, MAX_UINT48), value: '0x0' }] };
+      etapes: ap.etapes };
   }
   /* ⛔ audit rails R9 (2026-10-03) : le libelle disait « this block » sur un multi-sauts paye en OUSD. Le jeton
    *    autorise n est le block qu a la VENTE du block lui-meme ; sinon c est la devise payee. */
@@ -617,8 +620,11 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     } catch (e) {
       return { etat: 'NON_MESURE', pourquoi: 'an approval could not be read', resume };
     }
-    if (!okP2) etapes.push({ nom: payeEstLeBlock ? 'Allow Permit2 to move this block' : 'Allow Permit2 to move this token', to: jeton, data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
-    if (!okR) etapes.push({ nom: 'Allow the Uniswap router (through Permit2)', to: PERMIT2, data: encodePermit2Approve(jeton, R, MAX_UINT160, MAX_UINT48), value: '0x0' });
+    /* 2026-10-11 (decision de Phil : « montant exact partout ») : au montant de CET echange, valables 1 h ; plus jamais MAX (approbations-exactes.js) */
+    const ap = etapesPermit2Exactes({ jeton, permit2: PERMIT2, routeur: R, montant: m, maintenantSec: Math.floor(maintenant / 1000), okP2, okR,
+      libelleJeton: payeEstLeBlock ? 'this block' : 'this token' });
+    if (ap.etat !== 'OK') return { etat: 'REFUSE', pourquoi: ap.pourquoi, resume };
+    etapes.push(...ap.etapes);
     if (etapes.length) return { etat: 'APPROBATIONS', etapes, resume, cle, pourquoi: null };
   }
 

@@ -123,8 +123,11 @@ v('⛔ le PANNEAU ENTIER ne decrit plus la banque au present', () => {
   const i = html.indexOf('id="wBankCarte"');
   assert.ok(i > 0, 'la carte de la banque est introuvable');
   const j = html.indexOf('</section>', i);
+  /* ⛔ 2026-10-11 : ET SANS BALISES. « After confirm, the <b>Brain</b> runs ops automatically » est reste a l ecran sous cette garde :
+   *   la balise <b> coupait le motif « Brain runs ops ». Le lecteur lit le texte, pas les balises - la garde aussi. */
   const carte = html.slice(i, j > i ? j : i + 9000)
-    .replace(/<!--[\s\S]*?-->/g, ' '); /* les commentaires citent les defauts corriges */
+    .replace(/<!--[\s\S]*?-->/g, ' ') /* les commentaires citent les defauts corriges */
+    .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
   assert.ok(carte.length > 1500, 'extraction de la carte suspecte (' + carte.length + ' car.)');
   assert.doesNotMatch(carte, /The agent runs the ops|Brain runs ops/i,
     'le panneau affirme de nouveau que des operations tournent : aucune ne tourne');

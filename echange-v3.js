@@ -22,7 +22,8 @@
  * ⚠️ CE QU IL NE PROUVE PAS : qu un echange aboutisse au bloc suivant. Une simulation reussie decrit
  *   l etat A CET INSTANT ; le prix peut bouger avant la signature. C est a ca que sert le minimum.
  */
-import { selecteur, encodeApprove, encodePermit2Approve, MAX_UINT256, MAX_UINT160, MAX_UINT48 } from './pool.js';
+import { selecteur } from './pool.js';
+import { etapesPermit2Exactes } from './approbations-exactes.js';
 import { PERMIT2 } from './lancer-pool.js';
 import { ROUTEUR } from './echange.js';
 import { planUsdcVersBlock, USDC_BASE } from './plan-usdc-block.js';
@@ -286,10 +287,10 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
     okR = montantP2 >= m && expiration > BigInt(maintenantSec + 60);
   } catch (_) { okR = false; }
   if (!okP2 || !okR) {
-    const etapes = [];
-    if (!okP2) etapes.push({ nom: 'Allow Permit2 to move your USDC', to: bas(devise), data: encodeApprove(PERMIT2, MAX_UINT256), value: '0x0' });
-    if (!okR) etapes.push({ nom: 'Allow the Uniswap router (through Permit2)', to: bas(PERMIT2), data: encodePermit2Approve(devise, R, MAX_UINT160, MAX_UINT48), value: '0x0' });
-    return { etat: 'APPROBATIONS', etapes, plan, pourquoi: null };
+    /* 2026-10-11 (decision de Phil : « montant exact partout ») : au montant de CET echange, valables 1 h ; plus jamais MAX (approbations-exactes.js) */
+    const ap = etapesPermit2Exactes({ jeton: bas(devise), permit2: bas(PERMIT2), routeur: R, montant: m, maintenantSec, okP2, okR, libelleJeton: 'your USDC' });
+    if (ap.etat !== 'OK') return { etat: 'REFUSE', pourquoi: ap.pourquoi, plan };
+    return { etat: 'APPROBATIONS', etapes: ap.etapes, plan, pourquoi: null };
   }
   }
 

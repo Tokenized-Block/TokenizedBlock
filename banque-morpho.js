@@ -64,6 +64,9 @@ const appelApprove = (spender, montant) => '0x' + SEL.approve + motAdr(spender) 
 const nonMesure = (pourquoi) => ({ etat: 'NON_MESURE', pourquoi, aSigner: [] });
 const refuse = (pourquoi, resume) => ({ etat: 'REFUSE', pourquoi, aSigner: [], ...(resume ? { resume } : {}) });
 const divHaut = (a, b) => (a + b - 1n) / b;
+/** Un entier de l API Morpho en TEXTE decimal : texte de chiffres tel quel, nombre JSON seulement s il est un entier SUR (sinon sa
+ *  precision est deja perdue) ; tout le reste = null (non lu). */
+export const entierApi = (v) => (typeof v === 'string' && /^\d+$/.test(v) ? v : typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? String(v) : null);
 
 /** La LISTE des marches Morpho Base dont la garantie est une action de notre registre, lue chez blue-api.morpho.org (forme lue
  *  par introspection le 2026-10-10 : marketId, oracle{address}, state{...Usd}). ⛔ Ce sont les chiffres de L API, pas relus sur la
@@ -73,7 +76,7 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
   const adrs = [...ACTIONS.keys()];
   const q = 'query($c:[String!]){ markets(first: 200, where: { chainId_in: [8453], collateralAssetAddress_in: $c }) { items { marketId lltv listed '
     + 'oracle { address } loanAsset { address symbol decimals } collateralAsset { address symbol decimals } '
-    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd utilization borrowApy supplyApy price } } } }';
+    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssets liquidityAssetsUsd utilization borrowApy supplyApy price } } } }';
   let j;
   try {
     const r = await fetchImpl(URL_API_MORPHO, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(delaiMs),
@@ -96,6 +99,9 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
       prixOracle: s.price === null || s.price === undefined ? null : String(s.price),
       margeBps: Number(MARGE_EMPRUNT_BPS),
       offreUsd: s.supplyAssetsUsd ?? null, empruntUsd: s.borrowAssetsUsd ?? null, disponibleUsd: s.liquidityAssetsUsd ?? null,
+      /* 2026-10-11 : la liquidite en unites BRUTES du jeton prete (borne exacte de « ce que TU peux emprunter »). Sonde du jour : l API la
+       *   rend en NOMBRE JSON quand elle est petite et en TEXTE au-dela de 2^53 ; un nombre non sur = NON LU (null), jamais arrondi. */
+      disponibleBrut: entierApi(s.liquidityAssets),
       utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null });
   }
   marches.sort((a, b) => (b.offreUsd || 0) - (a.offreUsd || 0));
@@ -192,6 +198,39 @@ function garde({ marche, compte }) {
 
 /** Deposer `garantie` unites brutes d une action (0 = aucune) et emprunter `emprunt` unites brutes de l actif prete. */
 export async function planEmprunter({ rpc, compte, id, garantie = 0n, emprunt }) {
+  const b = await construireEmprunt({ rpc, compte, id, garantie, emprunt });
+  if (b.etat !== 'OK') return b;
+  return finaliser({ rpc, compte: b.compte, appels: b.appels, resume: b.resume });
+}
+
+/* ── 2026-10-11 — LE PANIER (Phil : « que tu puisses mettre plusieurs actions tokenisees en garantie en meme temps ») ─────────────
+ *   Morpho Blue ISOLE chaque marche : une garantie par marche, liquidee seule. Un panier n est donc PAS une garantie commune : ce sont
+ *   N emprunts (un par action), construits par le meme constructeur que l emprunt simple, mis bout a bout et SIMULES ENSEMBLE (une
+ *   sequence, un verdict). Une ligne refusee refuse le panier en la nommant. Une action deux fois : refuse (une ligne par action -
+ *   sinon deux autorisations lues a part se marcheraient dessus). */
+export const PANIER_MAX = 5;
+export const PHRASE_PANIER_SEPARE = 'Each stock is its own Morpho position: if one stock falls to its liquidation price, only that position is liquidated — the other stocks do not protect it.';
+export async function planEmprunterPanier({ rpc, compte, lignes }) {
+  if (!Array.isArray(lignes) || !lignes.length) return refuse('a basket needs at least one stock');
+  if (lignes.length > PANIER_MAX) return refuse('at most ' + PANIER_MAX + ' stocks in one basket');
+  const ids = lignes.map((l) => String((l && l.id) || '').toLowerCase());
+  if (new Set(ids).size !== ids.length) return refuse('the same market twice in one basket — put the whole amount on one line');
+  const appels = [], resumes = [], garanties = new Set();
+  let c = null;
+  for (const [k, l] of lignes.entries()) {
+    const b = await construireEmprunt({ rpc, compte, id: l.id, garantie: l.garantie, emprunt: l.emprunt });
+    const nom = (b.resume && b.resume.garantieAction) || ('line ' + (k + 1));
+    if (b.etat !== 'OK') return { ...b, pourquoi: nom + ': ' + b.pourquoi, aSigner: [] };
+    if (garanties.has(b.garantieToken)) return refuse(nom + ' appears twice: one line per stock');
+    garanties.add(b.garantieToken);
+    appels.push(...b.appels); resumes.push(b.resume); c = b.compte;
+  }
+  return finaliser({ rpc, compte: c, appels, resume: { panier: true, lignes: resumes, positionsSeparees: PHRASE_PANIER_SEPARE } });
+}
+
+/** Les appels d UN emprunt, sans simulation : garde, position, plafond (marge), liquidite du marche, solde et autorisation de la garantie.
+ *  Rend { etat: 'OK', compte, garantieToken, appels, resume } ou un refus / NON_MESURE (meme forme que les plans). */
+async function construireEmprunt({ rpc, compte, id, garantie = 0n, emprunt }) {
   const marche = await lireMarche({ rpc, id });
   const g = garde({ marche, compte }); if (g) return g;
   let G, E; try { G = BigInt(garantie); E = BigInt(emprunt); } catch (_) { return refuse('amounts are raw integer units'); }
@@ -219,7 +258,7 @@ export async function planEmprunter({ rpc, compte, id, garantie = 0n, emprunt })
     appels.push({ to: MORPHO_BLUE, data: appelSupplyCollateral(p, G, c), value: '0x0', nom: 'deposit the stock as collateral on Morpho' });
   }
   appels.push({ to: MORPHO_BLUE, data: appelBorrow(p, E, c, c), value: '0x0', nom: 'borrow on Morpho, to your own wallet' });
-  return finaliser({ rpc, compte: c, appels, resume });
+  return { etat: 'OK', compte: c, garantieToken: p.collateralToken, appels, resume };
 }
 
 /** Preter `montant` unites brutes de l actif prete du marche (USDC). */
