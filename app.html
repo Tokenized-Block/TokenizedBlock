@@ -24552,7 +24552,7 @@ function bcBanqueChoisir(mk, sens) {
   $('#bcBanqueMontantU').textContent = mk.pret.symbole;
   if (!choixDevise) $('#bcBanqueDevise').value = 'USDC';
   bcBanqueDeviseLend();
-  bcBanqueIndices(); /* repeint aussi la ligne OUSD (bcBanqueOusd) */
+  bcBanqueIndices();
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
 }

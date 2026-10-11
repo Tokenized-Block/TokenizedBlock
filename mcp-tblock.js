@@ -48,7 +48,8 @@ export const OUTILS = Object.freeze([
     annotations: { readOnlyHint: true, openWorldHint: true } },
   { name: 'tblock_plan_swap', title: 'Plan a swap on TokenizedBlock rails',
     description: 'Returns the unsigned calls for a swap routed by TokenizedBlock: a block against its quote token, block to block, block to a tokenized stock, '
-      + 'or ETH/USDC to a Coinbase tokenized stock and back. `amount` is in raw units of the token paid. APPROBATIONS means: sign the approvals, then ask again.',
+      + 'or ETH/USDC to a Coinbase tokenized stock and back, ETH to USDC and back, and OUSD to USDC and back (OUSD trades against USDC only: '
+      + 'ETH <-> OUSD is refused, swap through USDC in two trades). `amount` is in raw units of the token paid. APPROBATIONS means: sign the approvals, then ask again.',
     inputSchema: { type: 'object', required: ['from', 'to', 'amount', 'account'], additionalProperties: false, properties: {
       from: { ...JETON, description: 'Token paid: ETH or an address.' },
       to: { ...JETON, description: 'Token received: ETH or an address.' },
