@@ -36,6 +36,8 @@ import { USDC_BASE, FEE_WALLET } from './frais-creation.js';
 import { CLES_PRIX } from './prix-eth.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { RE_B20 } from './pool-sans-hook.js';
+import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
+import { decoderInitialize } from './pools-du-jeton.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -172,6 +174,38 @@ export async function meilleureAlternativeAerodrome({ rpc, action, montant, sort
   const net = (sortie * (10000n - FRAIS_INTERFACE_BPS_CL)) / 10000n;
   if (v4 === null || net <= v4) return rien(v4 === null ? null : 'Uniswap v4 pool kept: it gives you more than this stock’s Aerodrome pool at this size');
   return { choisie: true, sortie, phrase: 'Routed through this stock’s Aerodrome pool: at this size it gives you more than its Uniswap v4 pool' };
+}
+
+/* ?? 2026-10-11 (F, Grok) - USDC -> GMEc / RDDTc : NON_MESURE � execution reverted � en prod alors que la pool v4 MESUREE cote.
+ *   Mesure (mainnet.base.org) : le marche lu par le serveur designe une AUTRE pool v4 de l action, VIDE (GMEc fee 50000/ts 500,
+ *   RDDTc 30000/300) ; le quoteur v4 reverte dessus (0x6190b2b0, erreur de liquidite enveloppee) - echange.js:362. Les pools
+ *   de cles-v4-actions.js (GMEc 80000/800, RDDTc 50000/101) cotent. Et un devis v4 nul ne laissait jamais venir Aerodrome.
+ * ? cleV4MesureeDe : la cle MESUREE d une action, decodee par decoderInitialize (poolId recalcule) ; null sinon. */
+export function cleV4MesureeDe(action) {
+  const a = String(action || '').toLowerCase();
+  for (const l of LOGS_INITIALIZE_MESURES) {
+    const p = decoderInitialize(l);
+    if (p && !p.erreur && p.cle && String(p.cle.currency1).toLowerCase() === a && String(p.cle.currency0).toLowerCase() === USDC) return p.cle;
+  }
+  return null;
+}
+const memeCle = (x, y) => !!x && !!y && ['currency0', 'currency1', 'hooks'].every((k) => String(x[k]).toLowerCase() === String(y[k]).toLowerCase())
+  && Number(x.fee) === Number(y.fee) && Number(x.tickSpacing) === Number(y.tickSpacing);
+/** Le secours de l achat USDC -> action v4 quand le devis v4 n a PAS ete lu (NON_MESURE) : 1) recote sur la cle MESUREE si elle
+ *  differe de la cle lue ; 2) sinon la pool Aerodrome de l action (planAerodromeSegment : pool epinglee, plan SIMULE) ; 3) sinon le
+ *  NON_MESURE d origine. Un refus (pool trop fine, etc.) n est pas secouru : c est une reponse, pas une lecture ratee. Frais inchanges. */
+export async function achatUsdcActionAvecSecours({ pv4, cleLue, cleMesuree, planCle, planAero }) {
+  const pris = (p) => p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS');
+  if (!pv4 || pv4.etat !== 'NON_MESURE') return { plan: pv4, via: 'planEchange' };
+  if (cleMesuree && !memeCle(cleLue, cleMesuree)) {
+    let p = null;
+    try { p = await planCle(cleMesuree); } catch (_) { p = null; }
+    if (pris(p)) return { plan: p, via: 'planEchange', cleMesuree: true };
+  }
+  let pa = null;
+  try { pa = await planAero(); } catch (_) { pa = null; }
+  if (pris(pa)) return { plan: pa, via: 'planAerodromeSegment', choix: 'Routed through this stock’s Aerodrome pool: its Uniswap v4 pool could not quote this amount' };
+  return { plan: pv4, via: 'planEchange' };
 }
 
 /**
@@ -368,8 +402,15 @@ async function planRailBrut(q, deps) {
         }
         if (quoteDe(marcheV.cle, vers) !== USDC) return normaliser(route, { etat: 'REFUSE', pourquoi: ACTIONS.get(vers) + ' trades on v4 against ' + quoteDe(marcheV.cle, vers) + ', not USDC: pay with that token' });
         if (nd === 'USDC') {
-          const pv4 = await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
+          const pv4lu = await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
             marcheLu: marcheV, fraisDevisesOk, maintenant });
+          /* ? 2026-10-11 (F) : devis v4 non lu -> cle MESUREE, puis Aerodrome simule (achatUsdcActionAvecSecours, plus haut). */
+          const sec = await achatUsdcActionAvecSecours({ pv4: pv4lu, cleLue: marcheV.cle, cleMesuree: cleV4MesureeDe(vers),
+            planCle: (cle) => planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m, cleImposee: cle, fraisDevisesOk, maintenant }),
+            planAero: () => planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers, famille: 'aerodrome' }], devise: USDC,
+              block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }) });
+          if (sec.via === 'planAerodromeSegment') return normaliser(route, sec.plan, { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome', choix: sec.choix });
+          const pv4 = sec.plan;
           /* ⛔ 2026-10-09 (MRVLc et les pools v4 fines) : la pool Aerodrome de l action, si elle existe, est COTEE a la meme taille ;
            *   elle n est prise que si ce que la personne RECOIT est strictement plus grand (frais d interface de chaque route
            *   compris : 0,5 % en v4, 0,1 % sur Aerodrome). Regle du proprietaire (2026-09-30) : jamais un surcout pour la personne
