@@ -24,27 +24,30 @@ vu(!!ligneRienParti, 'BC_RIEN_PARTI introuvable');
 
 /* 1. bcPeutGrouper EXECUTE */
 const demandes = [];
-const fabriquerPeut = ({ eth = {}, compte = '0xc', reponse = true, leve = false } = {}) => new Function('window', 'compte', 'CHAINE', 'peutGrouper',
+const fabriquerPeut = ({ eth = {}, compte = '0xc', reponse = true, leve = false, banque = {} } = {}) => new Function('window', 'compte', 'CHAINE', 'peutGrouper', 'bcBanque',
   fonction('async function bcPeutGrouper(appels) {') + '\nreturn bcPeutGrouper;')({ ethereum: eth }, compte, 8453,
-  async (a) => { demandes.push(a); if (leve) throw new Error('boom'); return reponse; });
+  async (a) => { demandes.push(a); if (leve) throw new Error('boom'); return reponse; }, banque);
 const deux = [{ to: '0xa' }, { to: '0xb' }];
 vu(await fabriquerPeut()(deux) === true && demandes.at(-1).chaineHex === '0x2105' && demandes.at(-1).compte === '0xc', 'bcPeutGrouper : ne demande pas au wallet sur Base');
 const avant = demandes.length;
 vu(await fabriquerPeut()([{ to: '0xa' }]) === false && demandes.length === avant, 'bcPeutGrouper : un seul appel ne devrait rien demander');
 vu(await fabriquerPeut({ eth: null })(deux) === false && await fabriquerPeut({ compte: null })(deux) === false, 'bcPeutGrouper : sans provider ou sans compte -> false');
 vu(await fabriquerPeut({ leve: true })(deux) === false && await fabriquerPeut({ reponse: false })(deux) === false, 'bcPeutGrouper : une question qui leve ou un « non » -> false');
+/* 2026-10-11 (revue adverse) : un wallet qui a refuse le lot 2.0.0 (methode inconnue) dans cette visite garde les etapes au « Start again » */
+vu(await fabriquerPeut({ banque: { lotRefusePour: '0xc' } })(deux) === false && await fabriquerPeut({ banque: { lotRefusePour: '0xautre' } })(deux) === true,
+  'bcPeutGrouper : le refus du lot n est pas retenu pour ce compte (ou bloque un autre compte)');
 
 /* 2. bcSignerBanque EXECUTE, une issue de lot a la fois */
 const PLAN = [{ to: '0x' + '1'.repeat(40), data: '0xaa', nom: 'supplyCollateral' }, { to: '0x' + '2'.repeat(40), data: '0xbb', nom: 'borrow' },
   { to: '0x' + '3'.repeat(40), data: '0xcc', value: '0x0', nom: 'fee', frais: true }];
 const essai = async (issueLot, enLot = true, appels = PLAN) => {
-  const trace = { lots: [], separes: 0, etapes: [] };
-  const f = new Function('bcEtape', 'bcSigner', 'envoyerLotAtomique', 'messageEnvoi', 'window', 'rpc', 'CHAINE', 'compte',
+  const trace = { lots: [], separes: 0, etapes: [], banque: {} };
+  const f = new Function('bcEtape', 'bcSigner', 'envoyerLotAtomique', 'messageEnvoi', 'window', 'rpc', 'CHAINE', 'compte', 'bcBanque',
     ligneRienParti + '\n' + fonction('async function bcSignerBanque(m, appels, enLot) {') + '\nreturn bcSignerBanque;')(
     (m, t, k) => trace.etapes.push([t, k]),
     async (m, a) => { trace.separes += 1; return { ok: true, hash: '0xsep', hashOperation: '0xsep', faits: a.length, sequentiel: true }; },
     async (o) => { trace.lots.push(o); if (issueLot instanceof Error) throw issueLot; return issueLot; },
-    (r) => 'msg:' + r.etat, { ethereum: {} }, null, 8453, '0xc');
+    (r) => 'msg:' + r.etat, { ethereum: {} }, null, 8453, '0xc', trace.banque);
   const s = await f({}, appels, enLot);
   return { s, trace };
 };
@@ -56,8 +59,12 @@ r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: null });
 vu(r.s.ok, 'CONFIRME sans compte des recus (null) = succes, comme le swap');
 r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: false });
 vu(!r.s.ok && r.s.diffusee === true && r.trace.separes === 0, 'CONFIRME partiel : doit etre « on ne sait pas », sans repli : ' + JSON.stringify(r.s));
+/* 2026-10-11 (revue adverse, 3/3) : plus de repli AUTOMATIQUE (il rouvrait l emprunt sous « nothing was sent ») - rien n est parti,
+ *   le refus est retenu pour ce compte, la personne relance (« Start again ») et le plan se repeint en etapes */
 r = await essai({ etat: 'ECHEC_ENVOI', sendCallsUnsupported: true, pourquoi: 'method not supported' });
-vu(r.s.ok && r.s.sequentiel === true && r.trace.separes === 1 && /nothing was sent/.test(r.trace.etapes.map((e) => e[0]).join(' ')), 'wallet sans sendCalls : pas de repli dit sur les etapes');
+vu(!r.s.ok && r.s.diffusee === false && r.s.refuse === false && r.s.faits === 0 && r.trace.separes === 0 && r.trace.banque.lotRefusePour === '0xc'
+  && /nothing was sent/.test(r.trace.etapes.map((e) => e[0]).join(' ')), 'ROUGE->VERT : wallet sans lot 2.0.0 : repli automatique ou refus non retenu : ' + JSON.stringify(r.s));
+vu(r.trace.lots[0].sansRepliV1 === true, 'la Bank laisse envoi.js relancer en 1.0 (non atomique) sous une carte « all or none »');
 for (const etat of ['MAUVAISE_CHAINE', 'AUTRE_COMPTE', 'CHAINE_ILLISIBLE', 'COMPTE_ILLISIBLE', 'REFUSE', 'DESTINATION_INVALIDE']) {
   r = await essai({ etat, pourquoi: 'nothing was sent' });
   vu(!r.s.ok && r.s.diffusee === false && r.s.faits === 0 && r.trace.separes === 0, etat + ' : rien n est parti, mais ' + JSON.stringify(r.s));

@@ -64,12 +64,33 @@ vu(ref.etat === 'APPROBATIONS' && ref.etapes.length === 2, 'block existant sans 
 const capE0 = (ref.blocksRequis * 102n) / 100n, capE = capE0 < ref.solde ? capE0 : ref.solde;
 vu(mots(ref.etapes[0].data)[1] === capE && mots(ref.etapes[1].data)[2] === capE, 'block existant : les montants ne sont pas le plafond du mint');
 const futur = 1800000000n + 600n, passe = 1800000000n - 1n;
-const insuffisant = await planExistant({ allowanceP2: capE - 1n, permit2Montant: capE - 1n, permit2Expiration: futur });
-vu(insuffisant.etapes.length === 2, 'ROUGE->VERT : une autorisation non nulle mais INSUFFISANTE passe pour suffisante (le mint reverterait apres signature)');
+/* « insuffisant » = sous ce que le mint TIRE (1 unite, ou le besoin - 1) ; cap - 1 n est PLUS insuffisant depuis la regle anti-boucle
+ *   (le plafond du mint descend a l existant quand il couvre le besoin + 0,1 % : voir 2b) */
+for (const peu of [1n, ref.blocksRequis - 1n]) {
+  const insuffisant = await planExistant({ allowanceP2: peu, permit2Montant: peu, permit2Expiration: futur });
+  vu(insuffisant.etapes.length === 2, 'ROUGE->VERT : une autorisation non nulle mais INSUFFISANTE (' + peu + ') passe pour suffisante (le mint reverterait apres signature)');
+}
 const expire = await planExistant({ allowanceP2: capE, permit2Montant: capE, permit2Expiration: passe });
 vu(expire.etapes.length === 1 && expire.etapes[0].to.toLowerCase() === PERMIT2, 'Permit2 suffisant mais EXPIRE : ' + expire.etapes.length + ' etape(s)');
 const assez = await planExistant({ allowanceP2: capE, permit2Montant: capE, permit2Expiration: futur });
 vu(assez.etat === 'PRET' && assez.etapes.length === 0, 'autorisations suffisantes et valides : ' + assez.etat + ' / ' + assez.etapes.length);
+
+/* 2b. LA BOUCLE D APPROBATION (revue adverse 2026-10-11, 3/3) : apres une approbation exacte, le re-plan recalcule un plafond plus
+ *   grand de quelques unites -> l approbation etait redemandee sans fin. Desormais, si l existant couvre le besoin + 0,1 %, le plafond
+ *   du mint descend a l existant (0 etape) ; en dessous, l approbation est redemandee. */
+const planPart = (lus, part) => planLancement({ rpc: fabriquerRpc(lus), chaine: 8453, jeton: JETON, compte: COMPTE, valorisationEth: 10, partPourMille: part,
+  hooks: T.HOOK_7030, maintenant: MAINTENANT });
+for (const part of [500, 999]) {
+  const base0 = await planPart({ allowanceP2: 0n, permit2Montant: 0n, permit2Expiration: 0n }, part);
+  const capP = base0.montantApprouve, besoin = base0.blocksRequis;
+  const juste = capP - 3n; /* « signe il y a un instant », le re-plan veut 3 unites de plus */
+  const re = await planPart({ allowanceP2: juste, permit2Montant: juste, permit2Expiration: futur }, part);
+  vu(juste >= (besoin * 1001n) / 1000n, 'part ' + part + ' : le cas de boucle n est pas construit (existant sous le besoin + 0,1 %)');
+  vu(re.etat === 'PRET' && re.etapes.length === 0 && re.plafondMintBlock === juste,
+    'ROUGE->VERT part ' + part + ' : l approbation exacte deja signee est redemandee (boucle) : ' + re.etat + ' / ' + re.etapes.length + ' / ' + re.plafondMintBlock);
+  const court = await planPart({ allowanceP2: besoin, permit2Montant: besoin, permit2Expiration: futur }, part);
+  vu(court.etapes.length === 2, 'part ' + part + ' : un existant au besoin exact (sans marge) doit redemander l approbation');
+}
 
 /* 3. plus aucune constante illimitee dans le code (commentaires retires : ils citent l ancien defaut, expres) */
 const src = readFileSync(new URL('./lancer-pool.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');

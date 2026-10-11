@@ -22049,6 +22049,8 @@ async function bcSigner(m, appels) {
 /** Le wallet sait-il DEJA signer ces appels ensemble ? Au moins 2 appels, et `atomic: supported` seulement (peutGrouper). */
 async function bcPeutGrouper(appels) {
   if (!Array.isArray(appels) || appels.length < 2 || !window.ethereum || !compte) return false;
+  /* un wallet qui a deja refuse le lot 2.0.0 dans cette visite (methode inconnue) garde les etapes : sinon « Start again » reproposerait le lot */
+  if (bcBanque.lotRefusePour === String(compte).toLowerCase()) return false;
   try { return await peutGrouper({ eth: window.ethereum, compte, chaineHex: '0x' + Number(CHAINE).toString(16) }); } catch (_) { return false; }
 }
 /** 2026-10-11 — LE FRAIS DE LA BANK DANS LA MEME SIGNATURE, quand le wallet sait deja grouper.
@@ -22063,15 +22065,21 @@ async function bcSignerBanque(m, appels, enLot) {
   if (!enLot || !Array.isArray(appels) || appels.length < 2) return bcSigner(m, appels);
   bcEtape(m, 'Your wallet signs the ' + appels.length + ' steps together — all of them go through, or none…');
   let r;
-  try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, calls: appels.map((c) => ({ to: c.to, data: c.data || '0x', value: c.value || '0x0' })) }); }
+  /* sansRepliV1 : la 1.0 n exige pas l atomicite - la carte promet « all or none », on ne la tente pas (revue adverse 3/3) */
+  try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, sansRepliV1: true, calls: appels.map((c) => ({ to: c.to, data: c.data || '0x', value: c.value || '0x0' })) }); }
   catch (e) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
   if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
     bcEtape(m, 'Confirmed — all ' + appels.length + ' steps.', 'oui');
     return { ok: true, hash: r.hash, hashOperation: r.hash, faits: appels.length, enLot: true };
   }
+  /* ⛔ 2026-10-11 (revue adverse, 3/3) : plus de repli AUTOMATIQUE sur les etapes. Avant, ce drapeau (calcule sur la mauvaise erreur
+   *   apres une relance 1.0 qui avait pu partir) rouvrait aussitot le wallet sur l emprunt, sous « nothing was sent » - double emprunt
+   *   possible. Desormais : 2.0.0 seule, « methode inconnue » = rien n est parti ; on le dit, on retient le refus pour ce compte, et
+   *   c est la personne qui relance (« Start again ») - le plan se repeint alors en etapes, frais en dernier. */
   if (r.sendCallsUnsupported === true) {
-    bcEtape(m, 'Your wallet cannot sign them together — nothing was sent. It now asks for each step, the TokenizedBlock fee last.');
-    return bcSigner(m, appels);
+    bcBanque.lotRefusePour = String(compte).toLowerCase();
+    bcEtape(m, 'Your wallet does not take these steps as one batch — nothing was sent. Start again: the plan will show them one by one, the TokenizedBlock fee last.', 'non');
+    return { ok: false, refuse: false, diffusee: false, hash: null, hashOperation: null, faits: 0 };
   }
   if (BC_RIEN_PARTI.includes(r.etat)) {
     bcEtape(m, String(r.pourquoi || r.etat).slice(0, 160), 'non');

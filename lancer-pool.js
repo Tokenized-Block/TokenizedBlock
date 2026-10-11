@@ -468,26 +468,41 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
    *   (le temps de signer les etapes une a une). Meme helper que les echanges (approbations-exactes.js), expiration 1 h. */
   const capMint = blockEst1 ? max1 : max0;
   const aApprouver = capMint < solde ? capMint : solde;
-  let okP2 = null, okPosm = null;
+  let okP2 = null, okPosm = null, allLu = 0n, p2Lu = 0n;
   if (avantCreate) {
     okP2 = false;
     okPosm = false;
   } else {
     try {
-      const all = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2)));
-      okP2 = all >= aApprouver;
+      allLu = BigInt(await lireAppel(rpc, jeton, '0x' + selecteur('allowance(address,address)') + pad(compte) + pad(PERMIT2)));
+      okP2 = allLu >= aApprouver;
     } catch (e) { okP2 = null; }
     try {
       const raw = await lireAppel(rpc, PERMIT2, '0x' + selecteur('allowance(address,address,address)')
         + pad(compte) + pad(jeton) + pad(V.posm));
       const montant = BigInt('0x' + String(raw).slice(2, 66));
       const expiration = BigInt('0x' + String(raw).slice(66, 130));
-      okPosm = montant >= aApprouver && expiration >= BigInt(Math.floor(maintenant / 1000) + 300);
+      p2Lu = expiration >= BigInt(Math.floor(maintenant / 1000) + 300) ? montant : 0n;
+      okPosm = p2Lu >= aApprouver;
     } catch (e) { okPosm = null; }
   }
   if (okP2 === null || okPosm === null) {
     return { ...base, etat: 'NON_MESURE', etapes: [],
       pourquoi: 'an approval could not be read — nothing is offered to sign until it is measured' };
+  }
+  /* ⛔ 2026-10-11 (revue adverse, 3/3) — LA BOUCLE D APPROBATION. Apres une approbation EXACTE, le re-plan (app : « Approval confirmed »
+   *   puis preparerAjout) recalcule le plafond : un prix qui bouge, un solde a +1 wei, et le plafond depasse de quelques unites ce qui
+   *   vient d etre signe -> « insuffisant » -> la meme approbation redemandee, sans fin. Regle : si ce qui est DEJA autorise (le plus
+   *   petit des deux, ERC-20 -> Permit2 et Permit2 -> position manager valide) couvre ce que le mint tire + 0,1 %, le plafond du mint
+   *   cote block DESCEND a ce montant au lieu de redemander - le mint ne peut toujours pas tirer plus que ce qui est autorise ; un prix
+   *   qui bougerait au-dela de la marge restante fait reverter le mint (glissement), jamais une approbation de plus.
+   *   0,1 % et pas plus : placer 99,9 % du solde x 1,005 depasserait le solde lui-meme, et la boucle resterait (calcule, pas suppose). */
+  if (!avantCreate && (!okP2 || !okPosm)) {
+    const couvre = allLu < p2Lu ? allLu : p2Lu;
+    if (couvre >= (blocksRequis * 1001n) / 1000n && couvre < capMint) {
+      if (blockEst1) max1 = couvre; else max0 = couvre;
+      okP2 = true; okPosm = true;
+    }
   }
   const ap = etapesPermit2Exactes({ jeton, permit2: PERMIT2, routeur: V.posm, montant: aApprouver, maintenantSec: Math.floor(maintenant / 1000),
     okP2, okR: okPosm, libelleJeton: 'this block', libelleRouteur: 'the Uniswap position manager' });
@@ -524,9 +539,12 @@ export async function planLancement({ rpc, chaine, jeton, compte, valorisationEt
 
   return { ...base, etat: etapes.length ? 'APPROBATIONS' : 'PRET', etapes, tx, microSwap,
     permanente: String(proprietaire).toLowerCase() === PROPRIETAIRE_PERMANENT.toLowerCase(), proprietairePosition: proprietaire,
-    montantApprouve: aApprouver,
-    approbations: 'exactly the most this launch can place (the blocks it places + 2 %, never more than you hold): Permit2 may move '
-      + 'that amount of this block, and the position manager may take it through Permit2 for 1 hour — nothing more, nothing longer.' };
+    montantApprouve: aApprouver, plafondMintBlock: blockEst1 ? max1 : max0,
+    /* 2026-10-11 (revue adverse) : « nothing more, nothing longer » etait faux pour l approbation ERC-20 -> Permit2 (pas d expiration ;
+     *   ce que le mint ne tire pas reste autorise jusqu a revocation). La phrase dit les deux durees. */
+    approbations: 'exactly the most this launch can place (the blocks it places + 2 %, never more than you hold): the position manager '
+      + 'may take that amount through Permit2 for 1 hour; the approval to Permit2 itself has no expiry — what the launch does not use '
+      + 'stays allowed to Permit2 until you revoke it.' };
 }
 
 /**

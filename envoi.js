@@ -135,7 +135,10 @@ export async function gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu }
  * tip 2346 + Instant Birth: EIP-5792 wallet_sendCalls.
  * Accepts one call OR a batch [{to,data,value}]. atomicRequired: true on v2.
  */
-export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value, calls = null }) {
+export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, data, value, calls = null, sansRepliV1 = false }) {
+  /* sansRepliV1 (2026-10-11, revue adverse 3/3) : la relance en 1.0 n exige PAS l atomicite ; un appelant qui promet « tout ou rien »
+   *   (la Bank) la refuse - un wallet qui ne connait pas la 2.0.0 rend alors « rien n est parti », sans rouvrir de fenetre. */
+  let version = '2.0.0';
   if (!eth || typeof eth.request !== 'function') return null;
   const chainId = '0x' + Number(chaineAttendue).toString(16);
   const lot = Array.isArray(calls) && calls.length
@@ -187,7 +190,12 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
           + 'already be on its way, and signing it again would run the whole thing twice. Check '
           + 'your wallet before anything else. (' + msg.slice(0, 120) + ')' };
     }
+    if (sansRepliV1) {
+      return { etat: 'ECHEC_ENVOI', sendCallsUnsupported: true,
+        pourquoi: 'this wallet does not take an all-or-nothing batch (wallet_sendCalls 2.0.0) — nothing was sent' };
+    }
     /* older wallets: try 1.0 shape once (no atomicRequired) */
+    version = '1.0';
     try {
       const r = await eth.request({
         method: 'wallet_sendCalls',
@@ -200,8 +208,11 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
       });
       id = (typeof r === 'string') ? r : (r && r.id) || null;
     } catch (e2) {
+      /* ⛔ 2026-10-11 (revue adverse, 3/3) : le drapeau se lisait sur e2 + e ; e avait DEJA matche (c est lui qui ouvre ce repli),
+       *   donc un refus 4001 ou une reponse perdue APRES la fenetre 1.0 devenait « methode inconnue, rien n est parti ». Seule la
+       *   DERNIERE tentative dit si la methode est inconnue. */
       return { etat: 'ECHEC_ENVOI', pourquoi: 'smart wallet sendCalls failed — ' + String((e2 && e2.message) || e2 || e),
-        sendCallsUnsupported: /method|not supported|does not exist|4200/i.test(String((e2 && e2.message) || e2 || e) + String((e && e.message) || e)) };
+        sendCallsUnsupported: /method|not supported|does not exist|4200/i.test(String((e2 && e2.message) || e2 || '')) };
     }
   }
   if (!id) return { etat: 'ECHEC_ENVOI', pourquoi: 'wallet_sendCalls returned no id' };
@@ -227,7 +238,7 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
     const v = lireStatutGroupe(st);
     if (v.etat === 'EN_COURS') continue;
     if (v.etat === 'CONFIRME') {
-      return { etat: 'ENVOYE_AA', hash: String(v.hash || ''), gaz: null, batchSize: lot.length,
+      return { etat: 'ENVOYE_AA', hash: String(v.hash || ''), gaz: null, batchSize: lot.length, atomiqueExige: version === '2.0.0',
         /* ⛔ LE NOMBRE DE RECUS EST REMONTE : il permet a l appelant de verifier que le lot a bien
          *   applique TOUS ses appels, au lieu de le supposer depuis `batchSize`. */
         recusOk: (v.recus || []).length };
@@ -276,14 +287,14 @@ export function verdictUserOp(recu) {
  * Instant Birth: send an atomic batch when the wallet supports sendCalls.
  * Does NOT fall back to sequential eth_sendTransaction — caller owns EOA fallback + honest N-sig copy.
  */
-export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, calls, attendre = true, delai = 2000, essais = 30 }) {
+export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, calls, attendre = true, delai = 2000, essais = 30, sansRepliV1 = false }) {
   if (!Array.isArray(calls) || calls.length < 1) {
     return { etat: 'REFUSE', pourquoi: 'atomic batch is empty — nothing was sent' };
   }
   const garde = await gardeChaineEtCompte({ eth, chaineAttendue, compteAttendu: compte });
   if (!garde.ok) return { etat: garde.etat, pourquoi: garde.pourquoi };
   noterWalletUtilise(compte);
-  const aa = await envoyerViaSendCalls({ eth, chaineAttendue, compte, calls });
+  const aa = await envoyerViaSendCalls({ eth, chaineAttendue, compte, calls, sansRepliV1 });
   if (!aa) return { etat: 'ECHEC_ENVOI', pourquoi: 'no ethereum provider for sendCalls', sendCallsUnsupported: true };
   if (aa.etat === 'ENVOYE_AA' && aa.hash) {
     if (!attendre) return { etat: 'ENVOYE_AA', hash: aa.hash, gaz: null, batchSize: calls.length };
@@ -314,9 +325,13 @@ export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, cal
      *     l atomicite. Il prouve que tous les appels ont abouti CETTE FOIS. L atomicite est une
      *     garantie du wallet sur l echec, pas une observation sur un succes. */
     const confirmes = typeof aa.recusOk === 'number' ? aa.recusOk : null;
+    /* ⛔ 2026-10-11 (revue adverse, 3/3) : un lot 2.0.0 AVEC atomicRequired et statut 200 a applique TOUS ses appels par definition
+     *   (EIP-5792 : tout ou rien), meme s il ne rend qu UN recu (une seule transaction pour N appels - smart wallet, 7702). Compter
+     *   « 1 recu < 3 appels » affichait un emprunt REUSSI comme « Only 0 of 3 steps were confirmed ». Le compte des recus ne vaut
+     *   que pour un lot 1.0, qui n exige pas l atomicite. */
     return { etat: 'CONFIRME', hash: aa.hash, gaz: null, batchSize: calls.length,
-      appelsConfirmes: confirmes,
-      tousConfirmes: confirmes === null ? null : confirmes === calls.length };
+      appelsConfirmes: confirmes, atomiqueExige: aa.atomiqueExige === true,
+      tousConfirmes: aa.atomiqueExige === true ? true : confirmes === null ? null : confirmes === calls.length };
   }
   /* ⛔ LE `PARTIEL` REMONTE TEL QUEL, et surtout il ne tombe pas dans un `else` qui le melangerait
    *   a un echec propre. « Une partie a ete appliquee » demande a la personne d aller voir son

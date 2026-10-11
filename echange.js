@@ -718,15 +718,29 @@ export function estRevertDeChaine(e) {
 /** Une pool qui revert sur m cote-t-elle m/10, m/100 ou m/1000 ? Rend le diviseur qui cote (> 0), sinon 0.
  *  ⛔ Seulement apres un ECHEC (zero lecture de plus sur le chemin heureux) ; au plus 3 lectures, en file, arret au premier. */
 export async function coteAPlusPetit(lireQuote, m) {
+  return (await sonderFractions(lireQuote, m)).fraction;
+}
+/** NotEnoughLiquidity(poolId) enveloppe dans UnexpectedRevertBytes, lu dans error.data (puis le message en secours). */
+const NEL = /6190b2b0[0-9a-f]{128}7a5ed734/i;
+export function estRevertPasAssezDeLiquidite(er) {
+  return NEL.test(String((er && er.data) || '') + ' ' + String((er && er.message) || er || ''));
+}
+/** Le detail des 3 sondes : `fraction` (le diviseur qui cote, 0 sinon), `sondees` (fractions reellement lues : un montant trop petit
+ *  n en lit pas 3), `nel` (fractions qui ont reverte NotEnoughLiquidity - pas un 429, pas un delai).
+ *  ⛔ 2026-10-11 (revue adverse, 3/3) : le refus « hook » disait « nor 1/10, 1/100 or 1/1000 » alors que ces sondes avalaient TOUT
+ *   (429, delai) : une panne de lecture devenait un REFUSE definitif. Il exige desormais sondees === 3 ET nel === 3. */
+export async function sonderFractions(lireQuote, m) {
+  let sondees = 0, nel = 0;
   for (const d of [10n, 100n, 1000n]) {
     const mt = BigInt(m) / d;
     if (mt <= 0n) break;
+    sondees += 1;
     try {
       const r = await lireQuote(mt);
-      if (BigInt('0x' + String(r).slice(2, 66)) > 0n) return Number(d);
-    } catch (_) { /* plus petit encore */ }
+      if (BigInt('0x' + String(r).slice(2, 66)) > 0n) return { fraction: Number(d), sondees, nel };
+    } catch (e) { if (estRevertPasAssezDeLiquidite(e)) nel += 1; /* plus petit encore */ }
   }
-  return 0;
+  return { fraction: 0, sondees, nel };
 }
 
 export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates = CLES_PRIX } = {}) {
@@ -778,11 +792,13 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
   if (!best) {
     /* ⛔⛔ 2026-10-10 (Grok, vente E.T.FFB) : une pool qui revert a CETTE taille mais cote une fraction n est pas « introuvable »,
      *   elle est trop fine : REFUSE nomme. Sondes en ordre de liste, seulement sur les candidats qui ont LEVE, arret au premier. */
+    const sondes = [];
     for (let i = 0; i < essais.length; i += 1) {
       const e = essais[i];
       /* les gabarits de prix (CLES_PRIX, sans hook) ne sont pas sondes : leur absence dit l absence, et le plan « rien » garde ses 4 lectures */
       if (issues[i].ok || CLES_PRIX.includes(e.k) || !estRevertDeChaine(issues[i].erreur)) continue;
-      const fraction = await coteAPlusPetit((mt) => rpc('eth_call', [{ to: Q, data: encodeQuote({ cle: e.cle, zeroForOne: e.zeroForOne, montant: mt }) }, 'latest']), m);
+      sondes[i] = await sonderFractions((mt) => rpc('eth_call', [{ to: Q, data: encodeQuote({ cle: e.cle, zeroForOne: e.zeroForOne, montant: mt }) }, 'latest']), m);
+      const fraction = sondes[i].fraction;
       if (fraction) {
         return { etat: 'REFUSE', poolTropFine: true, fractionCotee: fraction, cle: e.cle, zeroForOne: e.zeroForOne, quote: null,
           essayees: liste.length, cotees,
@@ -797,8 +813,9 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
       const e = essais[i], h = adr(e.cle.hooks);
       if (issues[i].ok || CLES_PRIX.includes(e.k) || !/^0x[0-9a-f]{40}$/.test(h) || /^0x0{40}$/.test(h)) continue;
       /* 13:10 (Claude, 3 noeuds) : les octets du revert sont dans error.data, PAS dans le message ; data d abord, message en secours */
-      const er = issues[i].erreur;
-      if (!/6190b2b0[0-9a-f]{128}7a5ed734/i.test(String((er && er.data) || '') + ' ' + String((er && er.message) || er || ''))) continue;
+      if (!estRevertPasAssezDeLiquidite(issues[i].erreur)) continue;
+      /* le message dit « nor 1/10, 1/100 or 1/1000 » : il n est dit que si les 3 fractions ont ete LUES et ont reverte NotEnoughLiquidity */
+      if (!sondes[i] || sondes[i].sondees !== 3 || sondes[i].nel !== 3) continue;
       return { etat: 'REFUSE', hookSansDevis: true, cle: null, zeroForOne: null, quote: null, essayees: liste.length, cotees,
         pourquoi: 'this block\'s v4 pool (hook ' + h.slice(0, 8) + '...) can\'t fill this amount, nor '
           + '1/10, 1/100 or 1/1000 of it: it has no usable liquidity right now - not tradable here' };
