@@ -255,8 +255,9 @@ async function construireEmprunt({ rpc, compte, id, garantie = 0n, emprunt }) {
   const cap = capacite({ garantie: pos.garantie + G, prix: marche.prix, lltv: p.lltv });
   const resume = { marche: marche.id, garantieAction: ACTIONS.get(p.collateralToken), garantieApres: (pos.garantie + G).toString(),
     detteApres: (pos.dette + E).toString(), plafond: cap.plafond.toString(), maxLltv: cap.max.toString(), lltv: p.lltv.toString(),
-    liquiditeMarche: marche.liquidite.toString(), marge: Number(MARGE_EMPRUNT_BPS) / 100 + ' % of the LLTV limit' };
-  if (pos.dette + E > cap.plafond) return refuse('too much for this collateral: at most ' + (cap.plafond > pos.dette ? cap.plafond - pos.dette : 0n) + ' raw units more (we keep a ' + resume.marge + ' margin)', resume);
+    /* 2026-10-11 (Grok, contre-test prod : « 70 % of the LLTV limit » = jargon) : la meme borne, en mots */
+    liquiditeMarche: marche.liquidite.toString(), marge: Number(MARGE_EMPRUNT_BPS) / 100 + ' % of the most Morpho lets you borrow before liquidation' };
+  if (pos.dette + E > cap.plafond) return refuse('too much for this collateral: at most ' + (cap.plafond > pos.dette ? cap.plafond - pos.dette : 0n) + ' raw units more (we cap your debt at ' + resume.marge + ')', resume);
   if (E > marche.liquidite) return refuse('this market has only ' + marche.liquidite + ' raw units to lend right now', resume);
   /* le prix de la garantie auquel la position devient liquidable (unites brutes de pret par unite brute de garantie × 1e36) */
   const garantieApres = pos.garantie + G;

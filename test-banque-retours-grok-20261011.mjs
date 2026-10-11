@@ -27,4 +27,8 @@ vu(/'You lend '/.test(prop) && /'Risk: if a stock falls faster than its loans ar
 const panier = fonction('async function bcBanqueProposerPanier(lignes) {');
 vu(/bcBoutons\(m, \[\]\); \/\* une carte faite n a plus de bouton de signature \*\//.test(panier), 'le panier fait garde son bouton de signature');
 vu(html.indexOf('id="tkBankCarte"') > html.indexOf('id="v-tokenx"') && /\$\('#tkOuvrirBank'\)\.addEventListener\('click', \(\) => \{ bcOuvrirPop\(/.test(html), 'la Bank n est pas joignable depuis l onglet Tokenized');
+/* (6) contre-test du 2026-10-11 13:15 : « we cap it at 70 % of the LLTV limit » = jargon. La borne est dite en mots, cote serveur
+ *   (resume.marge, affiche par la carte ET cite par le refus « too much »). */
+const banque = readFileSync(new URL('./banque-morpho.js', import.meta.url), 'utf8');
+vu(!/LLTV limit/.test(banque.replace(/\/\*[\s\S]*?\*\//g, ' ')) && /' % of the most Morpho lets you borrow before liquidation'/.test(banque) && /\(we cap your debt at ' \+ resume\.marge \+ '\)'/.test(banque), 'la marge d emprunt reste dite en jargon (LLTV)');
 console.log('ok banque-retours-grok - ' + n + ' assertions ; NE PROUVE PAS un vrai wallet');
