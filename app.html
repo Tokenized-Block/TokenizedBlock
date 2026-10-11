@@ -2149,6 +2149,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- 2026-10-10 (Phil : « la liquidite entre fiat et tokenized stocks accessible au mondial ») : le fiat entre par le rail CDP
                EXISTANT (ouvrirRailFiat : onramp Coinbase vers le wallet connecte ; sans wallet, le lien public). -->
           <p class="note" id="bcBanqueFiat" style="margin:6px 0 0" hidden>No USDC yet? <a href="https://www.coinbase.com/onramp" id="bcBanqueCarte" target="_blank" rel="noopener">Add USDC with a card or bank (Coinbase — needs a Coinbase account outside the U.S.)</a> — it lands in your wallet, then lend it here.</p>
+          <!-- 2026-10-11 (Phil : « ajoute la path OUSD si possible ») : un wallet qui detient de l OUSD le change en USDC ici (bcBanqueOusd) -->
+          <p class="note" id="bcBanqueOusd" style="margin:6px 0 0" hidden></p>
           <button type="submit" class="bouton" id="bcBanqueGo">Review</button>
           <p class="note" id="bcBanqueNote" style="margin:6px 0 0"></p>
           <p class="note" style="margin:8px 0 0">Risks: interest grows while a loan is open; if the stock falls to the liquidation price, your collateral is sold to repay the debt. When stock markets are closed, the oracle price can stay still. Lending markets are Morpho’s, not ours.</p>
@@ -24537,9 +24539,34 @@ function bcBanqueChoisir(mk, sens) {
       + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '') : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
+  void bcBanqueOusd(mk, sens);
   bcBanqueIndices();
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
+}
+/* 2026-10-11 (Phil : « tu peux lend aussi les tokenized stock comme pour usdc et ajoute la path OUSD si possible ») : MESURE (blue-api
+ *   Morpho, Base, temoin = les 13 marches de la Bank retrouves) : AUCUN marche ne prete une action, AUCUN ne touche l OUSD. Ce qui se prete
+ *   ici, c est l USDC. Un wallet qui detient de l OUSD le change donc d abord en USDC : un echange ordinaire (route 6 de rails-api.js, pool
+ *   v4 OUSD/USDC sans hook ; banc-devises-fork : 6/6 executes), dont la carte, dans le Chat, dit notre frais et le minimum AVANT toute
+ *   signature. Solde illisible ou nul : rien n est affiche. Un jeton par peinture : une lecture plus ancienne (autre marche, autre
+ *   sens, autre compte) n ecrit plus. */
+let bcBanqueOusdGen = 0;
+async function bcBanqueOusd(mk, sens) {
+  const z = $('#bcBanqueOusd'); if (!z) return;
+  const gen = ++bcBanqueOusdGen;
+  z.textContent = ''; z.hidden = true;
+  if (sens !== 'preter' || !mk || !mk.pret || mk.pret.symbole !== 'USDC' || !compte) return;
+  const o = DEVISES_BASE.find((d) => d.symbole === 'OUSD'), u = DEVISES_BASE.find((d) => d.symbole === 'USDC');
+  if (!o || !u) return;
+  const de = { adr: String(o.adr).toLowerCase(), sym: 'OUSD' }, vers = { adr: String(u.adr).toLowerCase(), sym: 'USDC' }, qui = String(compte).toLowerCase();
+  let solde = null, dec = null;
+  try { [solde, dec] = await Promise.all([bcAvecDelai(bcSolde(de.adr, qui), 8000), bcAvecDelai(bcDecimales(de.adr), 6000)]); } catch (_) { return; }
+  if (gen !== bcBanqueOusdGen || bcBanque.sens !== 'preter' || !compte || String(compte).toLowerCase() !== qui) return;
+  if (typeof solde !== 'bigint' || solde <= 0n || !Number.isInteger(dec)) return;
+  const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Swap my ' + bcUnites(solde, dec) + ' OUSD to USDC' });
+  b.addEventListener('click', () => { void bcProposerSwap('You', '', { de, vers, montant: solde.toString() }, null); });
+  z.append(bcEl('span', { text: 'You hold ' + bcUnites(solde, dec) + ' OUSD. This market lends USDC, not OUSD: swap it first, then lend the USDC. The swap card shows our fee and the least you receive before you sign. ' }), b);
+  z.hidden = false;
 }
 /* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
 $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));

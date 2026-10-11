@@ -88,15 +88,18 @@ async function router(dir, de, vers) {
   const t = await router(ICI, USDC, BLOCK);
   ok(t.r.route === 'USDC>BLOCK' && t.lus[0] === BLOCK, 'B temoin : USDC > BLOCK garde la route 1 (le marche du block est lu en premier)');
   /* route 6 (QA wallet reel de Grok, P0) : ETH <-> USDC est ROUTE ; les autres devises restent refusees (aller sans retour, mesure
-   *   sur fork : banc-devises-fork-20261004.mjs — depuis cbBTC / TOSHI / OUSD le planificateur refuse 12/12) */
+   *   sur fork : banc-devises-fork-20261004.mjs — depuis cbBTC / TOSHI / OUSD le planificateur refuse 12/12)
+   * 2026-10-11 (Phil : « ajoute la path OUSD ») : OUSD rejoint la route 6, dans les deux sens — banc-devises-fork-20261004.mjs sur
+   *   fork ETH USDC OUSD : 6/6 executees, frais au wallet des frais (en OUSD quand on paie en OUSD, 19,9 bps). TOSHI reste refuse. */
   const { DEVISES_BASE } = await imp('paires.js');
   const TOSHI = String(DEVISES_BASE.find((d) => d.symbole === 'TOSHI').adr).toLowerCase();
-  for (const [de, vers, nom] of [['ETH', USDC, 'ETH > USDC'], [USDC, 'ETH', 'USDC > ETH']]) {
+  const OUSD = String(DEVISES_BASE.find((d) => d.symbole === 'OUSD').adr).toLowerCase();
+  for (const [de, vers, nom] of [['ETH', USDC, 'ETH > USDC'], [USDC, 'ETH', 'USDC > ETH'], [OUSD, USDC, 'OUSD > USDC'], [USDC, OUSD, 'USDC > OUSD'], [OUSD, 'ETH', 'OUSD > ETH']]) {
     const x = await router(ICI, de, vers);
     ok(!/is not offered by this API yet/.test(String(x.r.pourquoi)) && x.appels > 0 && /sautsDepuisChemin|planEchangeMultiSauts/.test(String(x.r.via)),
       'B ' + nom + ' : ROUTE (le planificateur cherche la pool v4 de la paire ; faux noeud = aucun plan, etat ' + x.r.etat + ')');
   }
-  for (const [de, vers, nom] of [[USDC, TOSHI, 'USDC > TOSHI'], [TOSHI, USDC, 'TOSHI > USDC'], [TOSHI, 'ETH', 'TOSHI > ETH']]) {
+  for (const [de, vers, nom] of [[USDC, TOSHI, 'USDC > TOSHI'], [TOSHI, USDC, 'TOSHI > USDC'], [TOSHI, 'ETH', 'TOSHI > ETH'], [OUSD, TOSHI, 'OUSD > TOSHI']]) {
     const x = await router(ICI, de, vers);
     ok(x.r.etat === 'REFUSE' && /is not offered by this API yet/.test(String(x.r.pourquoi)) && x.appels === 0, 'B ' + nom + ' : refuse sans lecture — une devise qu on ne peut pas revendre ici ne s y achete pas');
   }
@@ -176,7 +179,7 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
   ok(m.une && rouge, 'D mutant « vente Aerodrome contre ETH retiree » : ROUGE');
 }
 {
-  const m = muter('rails-api.js', "&& (d.symbole === 'ETH' || d.symbole === 'USDC')).map(", ').map(');
+  const m = muter('rails-api.js', "&& (d.symbole === 'ETH' || d.symbole === 'USDC' || d.symbole === 'OUSD')).map(", ').map(');
   let rouge = false;
   try {
     const { DEVISES_BASE } = await imp('paires.js');
@@ -184,6 +187,16 @@ const muter = (fichier, de, vers) => { const src = lire(fichier); const dir = co
     const x = await router(m.dir, USDC, TOSHI); rouge = !/is not offered by this API yet/.test(String(x.r.pourquoi));
   } catch (_) { rouge = true; }
   ok(m.une && rouge, 'D mutant « toutes les devises du registre ouvertes » : ROUGE (USDC > TOSHI serait route, sans retour possible)');
+}
+{
+  const m = muter('rails-api.js', "|| d.symbole === 'OUSD')).map(", ')).map(');
+  let rouge = false;
+  try {
+    const { DEVISES_BASE } = await imp('paires.js');
+    const OUSD = String(DEVISES_BASE.find((d) => d.symbole === 'OUSD').adr).toLowerCase();
+    const x = await router(m.dir, OUSD, USDC); rouge = /is not offered by this API yet/.test(String(x.r.pourquoi));
+  } catch (_) { rouge = true; }
+  ok(m.une && rouge, 'D mutant « OUSD retire de la route 6 » : ROUGE (OUSD > USDC redevient « not offered »)');
 }
 {
   const m = muter('calldata-aerodrome.js', 'const balayage = sortieEthNatif', 'const balayage = false');

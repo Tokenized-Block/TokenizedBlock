@@ -50,8 +50,12 @@ const DEVISES = new Map(DEVISES_BASE.map((d) => [bas(d.adr), d.symbole]));
  *     depuis cbBTC, TOSHI ou OUSD : 12/12 REFUSEES par le planificateur (« Not tradable here yet » : le frais se prend dans la
  *     devise payee, et `fraisDevisesOk` n admet pas celles-la).
  *   Offrir USDC > TOSHI sans TOSHI > USDC serait vendre un ALLER SANS RETOUR : la personne acheterait ici ce qu elle ne peut
- *   pas revendre ici. On n ouvre donc que la paire qui marche dans les DEUX sens. Les autres attendent une regle de frais. */
-const ECHANGEABLES = new Set(DEVISES_BASE.filter((d) => proposableEnEchange(d) && d.chaines.includes(8453) && (d.symbole === 'ETH' || d.symbole === 'USDC')).map((d) => bas(d.adr)));
+ *   pas revendre ici. On n ouvre donc que la paire qui marche dans les DEUX sens. Les autres attendent une regle de frais.
+ * 2026-10-11 (Phil : « ajoute la path OUSD », choix « OUSD -> USDC, OUSD seulement ») : OUSD rejoint ETH et USDC. Sa regle de
+ *   frais : le frais pris EN OUSD est admis parce que son marche est LU par le plan lui-meme (pool v4 OUSD/USDC sans hook, cotee
+ *   saut par saut) — `DEVISES_FRAIS_ROUTE6` l ajoute a `fraisDevisesOk` pour cette route seulement. cbBTC et TOSHI restent dehors. */
+const ECHANGEABLES = new Set(DEVISES_BASE.filter((d) => proposableEnEchange(d) && d.chaines.includes(8453) && (d.symbole === 'ETH' || d.symbole === 'USDC' || d.symbole === 'OUSD')).map((d) => bas(d.adr)));
+const DEVISES_FRAIS_ROUTE6 = [OUSD].filter((a) => ADR.test(a));
 const BORNE = 'unsigned calls built from the chain read now: your wallet signs them, in order; the minimums hold only at the '
   + 'price read now, and the chain can still refuse them later';
 
@@ -530,7 +534,7 @@ async function planRailBrut(q, deps) {
         const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec() });
         if (b.etat !== 'OK') { dernier = { b, chemin }; continue; }
         return normaliser(route, await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: de, sortie: vers, montant: m,
-          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk, maintenant }), { via: 'planEchangeMultiSauts', chemin });
+          decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk: new Set([...fraisDevisesOk, ...DEVISES_FRAIS_ROUTE6]), maintenant }), { via: 'planEchangeMultiSauts', chemin });
       }
       return normaliser(route, { etat: dernier.b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: dernier.b.pourquoi }, { via: 'sautsDepuisChemin', chemin: dernier.chemin });
     }
