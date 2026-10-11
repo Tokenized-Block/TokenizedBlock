@@ -3940,7 +3940,8 @@ import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGN
 import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
-  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin } from './blockskins.js';
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin,
+  appelValiderAchat, appelRevoquerAchat, appelExecuterValide, appelAnnonce, decoderAnnonce, appelValidation, decoderValidation, validationCourante, SUJET_ACHAT_VALIDE, acheteursValides, BLOCKSKINS_BLOC } from './blockskins.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -23475,6 +23476,8 @@ async function bcPeindreMarche() {
     const enVente = r.skins.filter((s) => s.enVente), miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
     etat.textContent = (enVente.length ? enVente.length + ' for sale' : 'Nothing for sale yet') + ' · ' + r.total + ' minted. Each sale pays 10 % to TokenizedBlock.'
       + (moi ? '' : ' Connect your wallet to buy, bid or sell.');
+    /* « les deux cochent » (spec de Phil) : ma validation sur les annonces des autres ; les acheteurs PRETS sur mes annonces */
+    if (moi) { await bcEnrichirValidations(enVente.filter((s) => !s.enchere), moi); if (!z.isConnected) return; }
     for (const s of enVente) z.append(bcLigneSkin(s, moi, t));
     if (miennes.length) { z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Your skins' })); for (const s of miennes) z.append(bcLigneSkin(s, moi, t)); }
     /* ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir) : on le lit ; une lecture ratee est DITE */
@@ -23495,6 +23498,34 @@ async function bcPeindreMarche() {
     }
   } finally { bc.marcheEnVol = false; }
 }
+/* « LES DEUX COCHENT » (Phil, spec 2026-10-04 ; « fini le Skinbrain market », 2026-10-11) : sur une annonce a prix fixe, l acheteur
+ *   VALIDE (validateBuy) ; ensuite n importe qui - le vendeur, son brain, un agent - EXECUTE (executeValidated) : les fonds ne vont
+ *   qu entre eux deux et le wallet de frais. Banc fork banc-skins-validation-fork-20261011.mjs 38/0 contre le contrat v2 deploye.
+ *   Ce qui est lu ici : listingOf (le numero de l annonce), validated(tokenId, compte) ; pour MES annonces, les journaux BuyValidated
+ *   depuis la naissance du contrat (CANDIDATS), chacun CONFIRME par validated == l annonce en cours, et en jeton par le solde et
+ *   l autorisation de l acheteur (sinon executeValidated reverterait). ⛔ Une lecture ratee est DITE (validationsNonLues), jamais
+ *   « personne n a valide ». */
+async function bcEnrichirValidations(liste, moi) {
+  const lire = async (data) => String(await rpc('eth_call', [{ to: BLOCKSKINS, data }, 'latest']));
+  for (const s of liste) {
+    s.maValidation = false; s.acheteursPrets = []; s.validationsNonLues = false;
+    try {
+      const annonce = decoderAnnonce(await lire(appelAnnonce(s.tokenId)));
+      if (s.detenteur !== moi) { s.maValidation = validationCourante(decoderValidation(await lire(appelValidation(s.tokenId, moi))), annonce); continue; }
+      const journaux = await rpc('eth_getLogs', [{ address: BLOCKSKINS, fromBlock: '0x' + BLOCKSKINS_BLOC.toString(16), toBlock: 'latest',
+        topics: [SUJET_ACHAT_VALIDE, '0x' + BigInt(s.tokenId).toString(16).padStart(64, '0')] }]);
+      for (const b of acheteursValides(journaux, s.tokenId)) {
+        if (!validationCourante(decoderValidation(await lire(appelValidation(s.tokenId, b))), annonce)) continue;
+        if (s.devise !== ETH_SKIN) {
+          const solde = await bcSolde(s.devise, b);
+          const autorise = BigInt(await rpc('eth_call', [{ to: s.devise, data: '0xdd62ed3e' + b.slice(2).padStart(64, '0') + BLOCKSKINS.slice(2).padStart(64, '0') }, 'latest']));
+          if (solde < s.prix || autorise < s.prix) continue;
+        }
+        s.acheteursPrets.push(b);
+      }
+    } catch (_) { s.validationsNonLues = true; }
+  }
+}
 function bcLigneSkin(s, moi, t) {
   const li = bcEl('div', { cls: 'bcLigneSkin' });
   const nom = 'Skin #' + s.tokenId + ' · ' + bcResoudre(s.block).sym;
@@ -23506,6 +23537,12 @@ function bcLigneSkin(s, moi, t) {
   const bouton = (texte, genre, x) => { const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: texte }); b.addEventListener('click', () => void bcActionMarche(genre, s, x)); li.append(b); };
   const acts = actionsSkin(s, moi, t);
   if (acts.includes('ACHETER')) bouton('Buy for ' + bcMontantSkin(s.prix, s.devise), 'ACHETER');
+  /* « les deux cochent » : l acheteur valide (ou revoque) ; le vendeur complete pour un acheteur dont la validation est CONFIRMEE */
+  if (acts.includes('ACHETER')) bouton(s.maValidation ? 'Revoke my validation' : 'Validate at this price', s.maValidation ? 'REVOQUER' : 'VALIDER');
+  if (acts.includes('RETIRER') && !s.enchere) {
+    for (const b of s.acheteursPrets || []) bouton('Complete the sale to ' + court(b) + ' (validated)', 'COMPLETER', { acheteur: b });
+    if (s.validationsNonLues) li.append(bcEl('small', { cls: 'note', text: 'Buyer validations could not be read this time — a buyer or an agent can still complete it.' }));
+  }
   if (acts.includes('ENCHERIR')) bouton('Bid ' + bcMontantSkin(offreMinimale(s), s.devise), 'ENCHERIR');
   if (acts.includes('REGLER')) bouton('Settle', 'REGLER');
   if (acts.includes('RETIRER')) bouton('Take it back', 'RETIRER');
@@ -23527,7 +23564,8 @@ function bcLigneSkin(s, moi, t) {
 async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
   const id = s ? s.tokenId : null;
   const titre = { ACHETER: 'Buy skin #' + id, ENCHERIR: 'Bid on skin #' + id, REGLER: 'Settle skin #' + id, RETIRER: 'Take back skin #' + id,
-    VENDRE: 'Sell skin #' + id, ENCHERE: 'Auction skin #' + id, CREDIT: 'Withdraw from the skins market' }[genre];
+    VENDRE: 'Sell skin #' + id, ENCHERE: 'Auction skin #' + id, CREDIT: 'Withdraw from the skins market',
+    VALIDER: 'Validate skin #' + id + ' at its price', REVOQUER: 'Revoke your validation of skin #' + id, COMPLETER: 'Complete the validated sale of skin #' + id }[genre];
   const m = bcMessage(qui, '', (qui === 'Skins' ? '' : 'Its brain proposes: ') + titre);
   bcVue('chat');
   if (CHAINE !== 8453) { bcEtape(m, 'The skins market is on Base mainnet only.', 'non'); return; }
@@ -23536,8 +23574,8 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
     if (!(await bcAvecWallet(m, go))) return;
     let appels = [];
     try {
-      if (genre === 'ACHETER' || genre === 'ENCHERIR') {
-        const montant = genre === 'ACHETER' ? s.prix : offreMinimale(s);
+      if (genre === 'ACHETER' || genre === 'ENCHERIR' || genre === 'VALIDER') {
+        const montant = genre === 'ENCHERIR' ? offreMinimale(s) : s.prix;
         if (s.devise !== ETH_SKIN) {
           /* en jeton : solde ET autorisation relus avant de signer ; approbation EXACTE du montant, seulement si besoin */
           let solde = null, autorise = null;
@@ -23547,9 +23585,12 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
           if (solde < montant) { bcEtape(m, 'This wallet holds ' + bcMontantSkin(solde, s.devise) + ' — this needs ' + bcMontantSkin(montant, s.devise) + '. Nothing was asked.', 'non'); return; }
           if (autorise < montant) appels.push(appelApprouver(s.devise, montant, 'Allow the skins market to take exactly ' + bcMontantSkin(montant, s.devise)));
         }
-        appels.push(genre === 'ACHETER' ? appelAcheter(s.tokenId, s.devise, montant) : appelEncherir(s.tokenId, s.devise, montant));
+        appels.push(genre === 'ACHETER' ? appelAcheter(s.tokenId, s.devise, montant) : genre === 'VALIDER' ? appelValiderAchat(s.tokenId, s.devise, montant) : appelEncherir(s.tokenId, s.devise, montant));
         const p = partage(montant);
-        bcEtape(m, genre === 'ACHETER'
+        if (genre === 'VALIDER') bcEtape(m, 'You agree to buy at ' + bcMontantSkin(montant, s.devise) + ' — this exact listing only. '
+          + (s.devise === ETH_SKIN ? 'Your ETH is held by the market contract until the trade is completed or you revoke. ' : 'It stays in your wallet; the trade takes exactly this amount when it is completed. ')
+          + 'Then anyone — the seller, a brain, an agent — can complete it: the seller receives ' + bcMontantSkin(p.vendeur, s.devise) + ', TokenizedBlock ' + bcMontantSkin(p.frais, s.devise) + ' (10 %). If the seller takes it back, your validation no longer applies.');
+        else bcEtape(m, genre === 'ACHETER'
           ? 'You pay ' + bcMontantSkin(montant, s.devise) + ': the seller receives ' + bcMontantSkin(p.vendeur, s.devise) + ', TokenizedBlock ' + bcMontantSkin(p.frais, s.devise) + ' (10 %). The skin comes to your wallet and dresses its block for you.'
           : 'Your bid: ' + bcMontantSkin(montant, s.devise) + ', held by the contract until the end. If someone outbids you, it is credited back to you to withdraw. 10 % of the winning bid goes to TokenizedBlock.');
       } else if (genre === 'REGLER') {
@@ -23567,6 +23608,12 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
       } else if (genre === 'CREDIT') {
         appels = [appelRetirerCredit(x.devise)];
         bcEtape(m, 'The market sends you ' + bcMontantSkin(x.du, x.devise) + '.');
+      } else if (genre === 'REVOQUER') {
+        appels = [appelRevoquerAchat(s.tokenId)];
+        bcEtape(m, 'Your validation is withdrawn.' + (s.devise === ETH_SKIN ? ' The ETH it held is credited to you: withdraw it from the market below.' : ''));
+      } else if (genre === 'COMPLETER') {
+        appels = [appelExecuterValide(s.tokenId, x.acheteur)];
+        bcEtape(m, 'Completes the sale ' + court(x.acheteur) + ' validated: the skin goes to that buyer, you receive ' + bcMontantSkin(partage(s.prix).vendeur, s.devise) + ' (90 %), TokenizedBlock 10 %.');
       }
     } catch (e) { bcEtape(m, 'This could not be prepared: ' + String((e && e.message) || e).slice(0, 120), 'non'); return; }
     bcBoutons(m, [['Sign ' + appels.length + ' step' + (appels.length > 1 ? 's' : '') + ' in my wallet', async () => {

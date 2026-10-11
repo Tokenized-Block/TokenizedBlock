@@ -9,11 +9,14 @@
 // ⛔ La skin appartient a qui DETIENT le NFT (ownerOf / skinsPage.holder) - jamais a un index de serveur.
 import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 import { selecteur } from './encodeur.js';
+import { topic } from './keccak.js';
 import { ACTIONS_COINBASE } from './paires.js';
 
 /* v2 (tokenURI avec image) quand son adresse a ete RELUE sur la chaine et ecrite par le generateur ; avant, v1 (`precedent`, jamais minte) */
 export const BLOCKSKINS = String(BLOCKSKINS_DEPLOIEMENT.adresse || BLOCKSKINS_DEPLOIEMENT.precedent.adresse).toLowerCase();
 export const BLOCKSKINS_CHAINE = BLOCKSKINS_DEPLOIEMENT.chaine;
+/* le bloc ou le contrat UTILISE est ne : les journaux (BuyValidated) ne se cherchent pas avant (lu dans l enregistrement genere) */
+export const BLOCKSKINS_BLOC = Number(BLOCKSKINS_DEPLOIEMENT.adresse ? BLOCKSKINS_DEPLOIEMENT.blocDeploiement : BLOCKSKINS_DEPLOIEMENT.precedent.blocDeploiement);
 export const SKIN_MINT_USDC = 1_000_000n; /* MINT_PRICE du contrat (6 decimales) */
 export const SKIN_FRAIS_BPS = 1000n;      /* SALE_FEE_BPS : 10 % */
 export const SKIN_ENCHERE_MAX_S = 604800n; /* MAX_AUCTION : 7 jours */
@@ -217,3 +220,57 @@ export function propositionSkin({ skins, moi, block, maintenant, achat, devise, 
 }
 /** pending(devise, compte) : ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir). */
 export function appelCredit(devise, compte) { return '0x' + selecteur('pending(address,address)') + adrMot(devise) + adrMot(compte); }
+
+/* ── « LES DEUX COCHENT » (spec de Phil, 2026-10-04 : « si les deux parties cochent valide, l echange est execute automatiquement par
+ *    les agents » ; Phil, 2026-10-11 : « fini le Skinbrain market »). Le contrat DEPLOYE l a deja (BlockSkins.sol 227-266) :
+ *   - l annonce du VENDEUR est sa validation ; validateBuy(tokenId) est celle de l ACHETEUR, liee a CETTE annonce (son prix, sa devise,
+ *     son numero `id`) - en ETH son paiement est TENU par le contrat ; en jeton, il doit avoir approuve le prix ;
+ *   - executeValidated(tokenId, acheteur) : N IMPORTE QUI (un agent, le vendeur, son brain) execute ; les fonds ne vont qu entre eux deux et
+ *     le wallet de frais (10 %) ; l executant ne tient ni les fonds ni la skin ;
+ *   - revokeBuy : l acheteur retire sa validation (l ETH tenu lui est CREDITE : il le retire par withdraw) ;
+ *   - une annonce retiree puis remise est une NOUVELLE annonce (`id` neuf) : une ancienne validation n y vaut plus. */
+export function appelValiderAchat(tokenId, devise, prix) {
+  const p = positif(prix, 'the price');
+  return appel('validateBuy(uint256)', [mot(positif(tokenId, 'the skin'))], bas(devise) === ETH ? p : 0n,
+    'Validate: you agree to buy this skin at this exact price — anyone (an agent) can then complete it');
+}
+export function appelRevoquerAchat(tokenId) {
+  return appel('revokeBuy(uint256)', [mot(positif(tokenId, 'the skin'))], 0n, 'Revoke your validation (ETH it held is credited back to you)');
+}
+export function appelExecuterValide(tokenId, acheteur) {
+  return appel('executeValidated(uint256,address)', [mot(positif(tokenId, 'the skin')), adrMot(acheteur)], 0n,
+    'Complete this trade both sides validated — 10 % of the price goes to TokenizedBlock');
+}
+/** listingOf(tokenId) -> { vendeur, devise, prix, debut, fin, id, encherisseur, offre } (getter public : 8 mots). */
+export function appelAnnonce(tokenId) { return '0x' + selecteur('listingOf(uint256)') + mot(positif(tokenId, 'the skin')); }
+export function decoderAnnonce(hex) {
+  const h = String(hex || '').replace(/^0x/, '');
+  if (h.length < 8 * 64 || !/^[0-9a-f]*$/i.test(h)) throw new Error('unreadable listing');
+  const w = (i) => h.slice(i * 64, i * 64 + 64), a = (i) => '0x' + w(i).slice(24), u = (i) => BigInt('0x' + w(i));
+  return { vendeur: a(0), devise: a(1), prix: u(2), debut: u(3), fin: u(4), id: u(5), encherisseur: a(6), offre: u(7) };
+}
+/** validated(tokenId, compte) -> { annonce, ethTenu } ; annonce 0n = aucune validation. */
+export function appelValidation(tokenId, compte) { return '0x' + selecteur('validated(uint256,address)') + mot(positif(tokenId, 'the skin')) + adrMot(compte); }
+export function decoderValidation(hex) {
+  const h = String(hex || '').replace(/^0x/, '');
+  if (h.length < 2 * 64 || !/^[0-9a-f]*$/i.test(h)) throw new Error('unreadable validation');
+  return { annonce: BigInt('0x' + h.slice(0, 64)), ethTenu: BigInt('0x' + h.slice(64, 128)) };
+}
+/** Une validation VAUT pour l annonce en cours seulement si son numero est celui de l annonce (le contrat : ListingChanged sinon). */
+export function validationCourante(v, annonce) {
+  return !!v && !!annonce && v.annonce !== 0n && annonce.id !== 0n && v.annonce === annonce.id && annonce.debut === 0n && ADR.test(bas(annonce.vendeur)) && bas(annonce.vendeur) !== ETH;
+}
+/** Les acheteurs qui ont valide une skin, lus dans les journaux BuyValidated(tokenId indexe, buyer indexe) - CANDIDATS seulement : chacun
+ *  doit encore etre confirme par validated(...) == l annonce en cours (une validation revoquee ou perimee reste dans les journaux). */
+export const SUJET_ACHAT_VALIDE = topic('BuyValidated(uint256,address,address,uint256)');
+export function acheteursValides(journaux, tokenId) {
+  const t = '0x' + mot(positif(tokenId, 'the skin'));
+  const vus = new Set();
+  for (const l of Array.isArray(journaux) ? journaux : []) {
+    const tp = (l && l.topics) || [];
+    if (tp.length < 3 || bas(tp[1]) !== t) continue;
+    const b = '0x' + bas(tp[2]).slice(26);
+    if (ADR.test(b)) vus.add(b);
+  }
+  return [...vus];
+}
