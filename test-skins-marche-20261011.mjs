@@ -41,7 +41,9 @@ const lancer = async ({ aifi, compte, skins = vitrine, etat = 'LU', etatSI }) =>
     () => {}, () => {}, () => {}, async (g, s, x, qui) => { cartes.push({ g, id: s.tokenId, qui }); });
   return { cartes, aifi: bc.aifi, st };
 };
-const SI = () => ({ block: BLK, achat: true, devise: { adr: ETH, sym: 'ETH', dec: 18 }, parTrade: String(10n ** 16n), budget: String(10n ** 16n), propose: '0' });
+/* 2026-10-11 (Phil : « t as pas ajoute le mode autonome suggestion au S.I ») : les propositions de skins suivent la regle VISIBLE
+ *   « Suggest skins… » (skins: true), plus la regle d achat des echanges */
+const SI = () => ({ block: BLK, achat: false, skins: true, devise: { adr: ETH, sym: 'ETH', dec: 18 }, parTrade: String(10n ** 16n), budget: String(10n ** 16n), propose: '0' });
 let x = await lancer({ aifi: SI(), compte: MOI });
 vu(x.cartes.length === 1 && x.cartes[0].g === 'ACHETER' && x.cartes[0].id === 6n && x.cartes[0].qui === 'Its brain · S.I', 'S.I ouvre UNE carte d achat (signee par la personne), au nom du brain');
 vu(x.aifi.propose === String(2n * 10n ** 15n), 'la proposition compte dans le budget de S.I comme un trade : ' + x.aifi.propose);
@@ -52,7 +54,11 @@ const memeSkin = await lancer({ aifi: SI(), compte: MOI, etatSI: x.st });
 vu(memeSkin.cartes.length === 0, 'jamais deux fois la meme skin dans la session');
 vu((await lancer({ aifi: SI(), compte: null })).cartes.length === 0 && (await lancer({ aifi: null, compte: MOI })).cartes.length === 0, 'sans wallet ou sans S.I : rien');
 vu((await lancer({ aifi: SI(), compte: MOI, etat: 'NON_LU' })).cartes.length === 0, 'marche non lu : rien (jamais une proposition sur une lecture ratee)');
-vu((await lancer({ aifi: { ...SI(), achat: false }, compte: MOI })).cartes.length === 0, 'regle d achat non cochee : aucun achat propose');
+vu((await lancer({ aifi: { ...SI(), skins: false, achat: true }, compte: MOI })).cartes.length === 0, 'regle « Suggest skins » non cochee : aucune proposition de skin (meme avec la regle d achat des echanges)');
+vu(/<input type="checkbox" id="bcAiSkins"><span>Suggest skins for this block from the market — you sign each<\/span>/.test(html), 'la regle « Suggest skins » n est pas a l ecran de S.I');
+vu(/skins = !!\(\$\('#bcAiSkins'\) && \$\('#bcAiSkins'\)\.checked\);/.test(html) && /bc\.aifi = \{ block: a, achat, vente, skins,/.test(html) && /'#bcAiSkins', '#bcAiDevise'/.test(html),
+  'la regle est lue au demarrage, gardee dans l etat de S.I et verrouillee pendant la marche');
+vu(/if \(\(achat \|\| skins\) && \(parTrade === null/.test(html), 'la regle skins exige les memes bornes (montant par trade, budget) qu un achat');
 const ecran = [marche, ligne, action].join('\n').match(/(?:bcEtape|bcMessage)\([^;]*?\);|text: '[^']*'|textContent = [^;]*;/g) || [];
 vu(ecran.length > 10, 'textes d ecran du marche introuvables');
 for (const l of ecran) vu(!/\bNFTs?\b|FEE_WALLET|beneficiaire|0xa6cf/i.test(l), 'texte d ecran interdit : ' + l.slice(0, 120));

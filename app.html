@@ -2047,6 +2047,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="bcLimites" id="bcLimites" hidden>
           <label class="bcCoche"><input type="checkbox" id="bcAiAchat"><span>Buy when it gets excited</span></label>
           <label class="bcCoche"><input type="checkbox" id="bcAiVente"><span>Sell a quarter when it gets worried</span></label>
+          <!-- 2026-10-11 (Phil, capture : « t as pas ajoute le mode autonome suggestion au S.I ») : les propositions du brain sur le marche
+               des skins (bcAifiProposerSkin) tournaient sans regle visible. Une regle a cocher ; chaque proposition = une carte, signee par la
+               personne, dans le budget de S.I. -->
+          <label class="bcCoche"><input type="checkbox" id="bcAiSkins"><span>Suggest skins for this block from the market — you sign each</span></label>
           <!-- 2026-10-04 (Phil) : « tu peux choisir tokenized action pour le paiement comme tu as fait pour la section manual ». Les
                MEMES choix que le ticket (bcChoixPaiement) ; le montant par trade et le budget sont dans la devise choisie. -->
           <label class="bcDevise"><span>Pay with</span><select id="bcAiDevise" aria-label="What each buy is paid with"></select></label>
@@ -23656,7 +23660,7 @@ function bcAifiArreter(pourquoi) {
 const SI_AUTORISATION_ACTIVE = false;
 function bcAifiPeindre() {
   const s = bc.aifi, b = $('#bcArmer'), e = $('#bcAiEtat');
-  for (const id of ['#bcAiAchat', '#bcAiVente', '#bcAiDevise', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
+  for (const id of ['#bcAiAchat', '#bcAiVente', '#bcAiSkins', '#bcAiDevise', '#bcLimTrade', '#bcLimBudget', '#bcLimDuree']) $(id).disabled = !!s;
   b.textContent = s ? 'Stop S.I' : 'Start S.I';
   const mode = document.querySelector('#bcPanneau [data-mode="full"]'); if (mode) mode.textContent = s ? 'S.I · on' : 'S.I';
   if (!s) { if (!e.classList.contains('wKo')) e.textContent = SI_AUTORISATION_ACTIVE ? 'One signature sets a capped, expiring allowance (enforced on chain); its brain then trades spot within it. Revoke any time.' : 'Its brain proposes; you confirm each trade in your wallet. Each trade pays the usual trade fee.'; return; }
@@ -23664,14 +23668,15 @@ function bcAifiPeindre() {
   e.className = 'note';
   /* le budget ne concerne que les ACHATS : sans la regle d achat, on ne l affiche pas (« 0 of 0 ETH » ne voulait rien dire) */
   const dv = s.devise || BC_AIFI_ETH();
-  e.textContent = 'On for ' + (bcResoudre(s.block).sym || court(s.block)) + (s.achat ? ' · proposed ' + bcUnites(s.propose, dv.dec) + ' of ' + bcUnites(s.budget, dv.dec) + ' ' + dv.sym : '')
+  e.textContent = 'On for ' + (bcResoudre(s.block).sym || court(s.block)) + (s.achat || s.skins ? ' · proposed ' + bcUnites(s.propose, dv.dec) + ' of ' + bcUnites(s.budget, dv.dec) + ' ' + dv.sym : '')
+    + (s.skins ? ' · suggests skins' : '')
     + ' · ' + (h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(h * 60)) + ' min') + ' left.';
 }
 async function bcAifiDemarrer() {
   const e = $('#bcAiEtat'), dire = (t) => { e.className = 'note wKo'; e.textContent = t; };
   if (!brainAdr) return dire('Pick a block first.');
-  const achat = $('#bcAiAchat').checked, vente = $('#bcAiVente').checked;
-  if (!achat && !vente) return dire('Tick at least one rule: when to buy, or when to sell.');
+  const achat = $('#bcAiAchat').checked, vente = $('#bcAiVente').checked, skins = !!($('#bcAiSkins') && $('#bcAiSkins').checked);
+  if (!achat && !vente && !skins) return dire('Tick at least one rule: when to buy, when to sell, or skins to suggest.');
   /* la devise de paiement, et SES decimales LUES (une action en a 8, l USDC 6) : jamais 18 par defaut pour un jeton */
   const choisie = $('#bcAiDevise').value || 'ETH';
   let devise = BC_AIFI_ETH();
@@ -23686,17 +23691,19 @@ async function bcAifiDemarrer() {
   if (bc.aifi) return; /* demarre entre-temps (double clic pendant la lecture des decimales) */
   const lire = (sel) => { const v = $(sel).value.trim(); return /^\d+([.,]\d+)?$/.test(v) ? enUnitesBrutes(v.replace(',', '.'), devise.dec) : null; };
   const parTrade = lire('#bcLimTrade'), budget = lire('#bcLimBudget'), heures = Number($('#bcLimDuree').value.trim());
-  if (achat && (parTrade === null || !(parTrade > 0n))) return dire('“Per trade” must be an amount in ' + devise.sym + ' above zero.');
-  if (achat && (budget === null || budget < parTrade)) return dire('The budget must be at least one trade.');
+  /* un skin propose s achete aussi dans le budget de S.I : la regle « skins » exige les memes bornes qu un achat */
+  if ((achat || skins) && (parTrade === null || !(parTrade > 0n))) return dire('“Per trade” must be an amount in ' + devise.sym + ' above zero.');
+  if ((achat || skins) && (budget === null || budget < parTrade)) return dire('The budget must be at least one trade.');
   if (!Number.isInteger(heures) || heures < 1 || heures > 168) return dire('“Stops after” must be a whole number of hours, from 1 to 168.');
   const snap = window.__TB_BRAIN_SNAPSHOT__, a = String(brainAdr).toLowerCase();
-  bc.aifi = { block: a, achat, vente, devise, parTrade: String(parTrade || 0n), budget: String(budget || 0n), propose: '0', jusqua: Date.now() + heures * 3600000,
+  bc.aifi = { block: a, achat, vente, skins, devise, parTrade: String(parTrade || 0n), budget: String(budget || 0n), propose: '0', jusqua: Date.now() + heures * 3600000,
     /* l humeur DE DEPART est notee : AiFi ne reagit qu a un changement survenu APRES son demarrage */
     phase: snap && String(snap.address || '').toLowerCase() === a && snap.tick !== null && snap.tick !== undefined ? String(snap.phase || '') : null };
   e.className = 'note';
   bcAifiSauver(); bcAifiPeindre();
   bcAifiSuivi.avis = null; /* un nouveau demarrage : les avis de la session d avant ne comptent plus */
-  bcAifiNote('Started on ' + (bcResoudre(a).sym || court(a)) + '. Its brain will open a trade card here when its mood changes; you confirm each one.');
+  bcAifiNote('Started on ' + (bcResoudre(a).sym || court(a)) + '. Its brain will open a card here'
+    + (achat || vente ? ' when its mood changes' : '') + (skins ? (achat || vente ? ', and' : '') + ' when a skin of this block is worth suggesting' : '') + '; you confirm each one.');
 }
 /* ⛔⛔ 2026-10-04 (Phil, sur le fil du panneau : deux cartes « 0.002 ETH → NVDAc » identiques, puis sept fois « It got worried, but
  *   no wallet is connected » — « ca casse tout, corrige »). Une humeur qui OSCILLE (excited, autre, excited…) rouvrait une carte et
@@ -23755,13 +23762,14 @@ function bcAifiBattre(a, snap) {
 const bcAifiSkins = { derniere: 0, proposes: new Set(), enVol: false };
 async function bcAifiProposerSkin() {
   const s = bc.aifi;
-  if (!s || !compte || CHAINE !== 8453 || bcAifiSkins.enVol || Date.now() - bcAifiSkins.derniere < 120000) return;
+  /* seulement si la personne a coche la regle « Suggest skins » (Phil, 2026-10-11 : elle tournait sans regle visible) */
+  if (!s || s.skins !== true || !compte || CHAINE !== 8453 || bcAifiSkins.enVol || Date.now() - bcAifiSkins.derniere < 120000) return;
   bcAifiSkins.enVol = true;
   try {
     const r = await lireSkins({ rpc });
     if (r.etat !== 'LU' || bc.aifi !== s) return;
     const dv = s.devise || BC_AIFI_ETH();
-    const p = propositionSkin({ skins: r.skins, moi: compte, block: s.block, maintenant: Math.floor(Date.now() / 1000), achat: !!s.achat,
+    const p = propositionSkin({ skins: r.skins, moi: compte, block: s.block, maintenant: Math.floor(Date.now() / 1000), achat: true,
       devise: dv.adr, parTrade: s.parTrade, reste: (BigInt(s.budget) - BigInt(s.propose)).toString(), dejaProposes: bcAifiSkins.proposes });
     if (!p) return;
     bcAifiSkins.proposes.add(String(p.skin.tokenId)); bcAifiSkins.derniere = Date.now();

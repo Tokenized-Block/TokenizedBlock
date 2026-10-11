@@ -125,7 +125,8 @@ ok(/<select id="bcAiDevise"/.test(html) && /try \{ dec = await bcAvecDelai\(bcDe
   && /if \(!Number\.isInteger\(dec\)\) return dire\('The decimals of ' \+ r\.sym \+ ' could not be read — try again\.'\);/.test(html)
   && /enUnitesBrutes\(v\.replace\(',', '\.'\), devise\.dec\)/.test(html),
   'C S.I : la devise de paiement se choisit ; ses decimales sont LUES (jamais 18 par defaut pour un jeton) et un echec de lecture refuse de demarrer');
-ok(/bcUnites\(s\.propose, dv\.dec\) \+ ' of ' \+ bcUnites\(s\.budget, dv\.dec\) \+ ' ' \+ dv\.sym/.test(html) && /for \(const id of \['#bcAiAchat', '#bcAiVente', '#bcAiDevise',/.test(html),
+/* 2026-10-11 : la regle « Suggest skins » (#bcAiSkins) est figee avec les autres pendant que S.I tourne */
+ok(/bcUnites\(s\.propose, dv\.dec\) \+ ' of ' \+ bcUnites\(s\.budget, dv\.dec\) \+ ' ' \+ dv\.sym/.test(html) && /for \(const id of \['#bcAiAchat', '#bcAiVente', '#bcAiSkins', '#bcAiDevise',/.test(html),
   'C S.I : le budget s affiche dans la devise choisie ; le menu est fige tant que S.I tourne');
 ok(/if \(ACTIONS_PAR_ADR\.has\(k\) && !POOLS_ACTIONS_AERODROME\.has\(k\)\) s\.add\(k\);/.test(html) && /for \(const l of LOGS_INITIALIZE_MESURES\) \{\s+const d = decoderInitialize\(l\);\s+if \(!d \|\| !d\.cle\) continue;\s+for \(const c of \[d\.cle\.currency0, d\.cle\.currency1\]\)/.test(html),
   'C … cette liste vient des pools v4 LUES (logs redecodes), et exclut la table Aerodrome (qui ne paie pas un block en un trade)');

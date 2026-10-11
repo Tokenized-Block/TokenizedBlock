@@ -332,7 +332,8 @@ await jeuAifi(srcAifi, (c, t) => ok(c, 'C2 ' + t));
 const aifiSrc = bcSrc.slice(bcSrc.indexOf("const BC_CLE_AIFI = 'tblock.panel.aifi';"), bcSrc.indexOf('/** Peint le panneau depuis LE snapshot'));
 ok(aifiSrc.length > 1500 && !/bcSigner|envoyerDepuisWallet|window\.ethereum|eth_send/.test(aifiSrc) && /void bcProposerSwap\('Its brain · S\.I', 'agent',/.test(aifiSrc),
   'C2 AiFi ne signe RIEN et n appelle jamais le wallet : il ouvre la carte d echange (porte du cerveau, plan, puis la personne)');
-ok(/\$\('#bcArmer'\)\.addEventListener\('click', \(\) => \{ if \(bc\.aifi\) bcAifiArreter\('S\.I stopped\.'\); else void bcAifiDemarrer\(\); \}\);/.test(html) && /if \(!achat && !vente\) return dire\(/.test(aifiSrc) && /heures < 1 \|\| heures > 168/.test(aifiSrc),
+/* 2026-10-11 : une troisieme regle, « Suggest skins » (Phil : le mode suggestion du S.I) - aucune des trois cochee = refus */
+ok(/\$\('#bcArmer'\)\.addEventListener\('click', \(\) => \{ if \(bc\.aifi\) bcAifiArreter\('S\.I stopped\.'\); else void bcAifiDemarrer\(\); \}\);/.test(html) && /if \(!achat && !vente && !skins\) return dire\(/.test(aifiSrc) && /heures < 1 \|\| heures > 168/.test(aifiSrc),
   'C2 AiFi : demarre et s arrete d un bouton ; refuse de demarrer sans regle cochee ou avec une duree hors de 1 a 168 h');
 ok(!/eth_sign|personal_sign|privateKey|signTypedData/.test(bcSrc), 'C2 temoin : le code du panneau ne contient aucune signature hors du wallet de la personne (envoyerDepuisWallet)');
 /* le solde avant le plan */
