@@ -22035,6 +22035,44 @@ async function bcSigner(m, appels) {
   }
   return { ok: true, hash, hashOperation: hashOperation || hash, faits: appels.length };
 }
+/** Le wallet sait-il DEJA signer ces appels ensemble ? Au moins 2 appels, et `atomic: supported` seulement (peutGrouper). */
+async function bcPeutGrouper(appels) {
+  if (!Array.isArray(appels) || appels.length < 2 || !window.ethereum || !compte) return false;
+  try { return await peutGrouper({ eth: window.ethereum, compte, chaineHex: '0x' + Number(CHAINE).toString(16) }); } catch (_) { return false; }
+}
+/** 2026-10-11 — LE FRAIS DE LA BANK DANS LA MEME SIGNATURE, quand le wallet sait deja grouper.
+ *  Avant : chaque appel du plan partait seul (bcSigner) ; le frais, dernier pas SEPARE, se refusait apres l emprunt.
+ *  ⛔ La voie groupee n est prise QUE si le wallet DECLARE `atomic: supported` (bcPeutGrouper, decide AVANT de peindre le bouton) :
+ *     un « ready » d EOA ouvrirait une demande de conversion en smart account (EIP-7702) au milieu d un emprunt. Le reste garde les etapes.
+ *  ⛔ Repli sur les etapes SEULEMENT quand rien n est parti : garde chaine/compte, wallet qui dit ne pas connaitre wallet_sendCalls
+ *     (`sendCallsUnsupported`), ou refus explicite dans le wallet. Tout autre echec du lot (sans reponse, PARTIEL, en attente, annule) :
+ *     on ne sait pas ce qui est passe -> rien n est rouvert, la carte renvoie vers « Your positions » (bcBanqueApresEchec, diffusee). */
+const BC_RIEN_PARTI = ['CHAINE_ILLISIBLE', 'MAUVAISE_CHAINE', 'COMPTE_ILLISIBLE', 'AUTRE_COMPTE', 'REFUSE', 'DESTINATION_INVALIDE'];
+async function bcSignerBanque(m, appels, enLot) {
+  if (!enLot || !Array.isArray(appels) || appels.length < 2) return bcSigner(m, appels);
+  bcEtape(m, 'Your wallet signs the ' + appels.length + ' steps together — all of them go through, or none…');
+  let r;
+  try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte, calls: appels.map((c) => ({ to: c.to, data: c.data || '0x', value: c.value || '0x0' })) }); }
+  catch (e) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
+  if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
+    bcEtape(m, 'Confirmed — all ' + appels.length + ' steps.', 'oui');
+    return { ok: true, hash: r.hash, hashOperation: r.hash, faits: appels.length, enLot: true };
+  }
+  if (r.sendCallsUnsupported === true) {
+    bcEtape(m, 'Your wallet cannot sign them together — nothing was sent. It now asks for each step, the TokenizedBlock fee last.');
+    return bcSigner(m, appels);
+  }
+  if (BC_RIEN_PARTI.includes(r.etat)) {
+    bcEtape(m, String(r.pourquoi || r.etat).slice(0, 160), 'non');
+    return { ok: false, refuse: false, diffusee: false, hash: null, hashOperation: null, faits: 0 };
+  }
+  if (r.etat === 'ECHEC_ENVOI' && /user rejected|user denied|rejected the request|denied transaction|cancel/i.test(String(r.pourquoi || ''))) {
+    bcEtape(m, 'You declined in your wallet — nothing was sent.', 'non');
+    return { ok: false, refuse: true, diffusee: false, hash: null, hashOperation: null, faits: 0 };
+  }
+  bcEtape(m, messageEnvoi(r), 'non');
+  return { ok: false, refuse: false, diffusee: true, hash: r.hash || null, hashOperation: null, faits: 0 };
+}
 /** Apres un plan de banque NON termine : ce qui est deja confirme reste sur la chaine. Si une etape au moins est passee (ou partie sans
  *  confirmation), on ne propose PAS de recommencer le meme plan - il referait un emprunt complet ; on dit quoi verifier. Sinon, « Start again ». */
 function bcBanqueApresEchec(m, s, total, planifier) {
@@ -23931,7 +23969,7 @@ function bcBanqueEstimer() {
     const fraisB = (d * BigInt(bcBanque.fraisBps) + 9999n) / 10000n;
     /* ⛔ revue adverse (2026-10-11) : « in the same batch » etait FAUX - la Bank signe chaque appel en transaction separee ; le frais est
      *   la DERNIERE, signee juste apres l emprunt */
-    morceaux.push('TokenizedBlock fee: ' + (bcBanque.fraisBps / 100) + ' % of what you borrow (≈ ' + bcUnites(fraisB, decP) + ' ' + mk.pret.symbole + '), a separate last step you sign right after the loan — after it you keep ≈ ' + bcUnites(d - fraisB, decP) + '.');
+    morceaux.push('TokenizedBlock fee: ' + (bcBanque.fraisBps / 100) + ' % of what you borrow (≈ ' + bcUnites(fraisB, decP) + ' ' + mk.pret.symbole + '), the last step of the plan — after it you keep ≈ ' + bcUnites(d - fraisB, decP) + '.');
   }
   if (g0 > 0n || d0 > 0n) morceaux.push('Counting what you already posted (' + bcUnites(g0, decG) + ' ' + mk.garantie.symbole + ') and owe (' + bcUnites(d0, decP) + ' ' + mk.pret.symbole + ').');
   if (gT > 0n) {
@@ -24042,7 +24080,7 @@ function bcPanierMaj() {
   const bps = Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? BigInt(bcBanque.fraisBps) : null;
   const frais = bps === null ? null : valides.reduce((s, v) => s + (v.brutM * bps + 9999n) / 10000n, 0n);
   if (t) t.textContent = valides.length ? 'You borrow ' + bcUnites(total, decP) + ' ' + symP + ' in total, against ' + valides.length + ' stock' + (valides.length > 1 ? 's' : '')
-    + (frais !== null ? '; TokenizedBlock fee ≈ ' + bcUnites(frais, decP) + ' (' + (bcBanque.fraisBps / 100) + ' %, a separate step after each loan), after it you keep ≈ ' + bcUnites(total - frais, decP) + ' ' + symP : '') + '. Estimate only.' : '';
+    + (frais !== null ? '; TokenizedBlock fee ≈ ' + bcUnites(frais, decP) + ' (' + (bcBanque.fraisBps / 100) + ' %, the last step of each loan), after it you keep ≈ ' + bcUnites(total - frais, decP) + ' ' + symP : '') + '. Estimate only.' : '';
   return valides;
 }
 $('#bcPanierGo').addEventListener('click', () => {
@@ -24072,6 +24110,7 @@ async function bcBanqueProposerPanier(lignes) {
       return;
     }
     const rs = p.resume || {};
+    const enLot = await bcPeutGrouper(p.aSigner); /* decide AVANT de peindre : le texte du frais et le bouton en dependent */
     for (const l of (Array.isArray(rs.lignes) ? rs.lignes : [])) {
       const x = lignes.find((y) => String(y.mk.id).toLowerCase() === String(l.marche || '').toLowerCase());
       if (!x) continue;
@@ -24087,11 +24126,13 @@ async function bcBanqueProposerPanier(lignes) {
       bcEtape(m, ligne + '.');
     }
     const fraisPanier = (Array.isArray(rs.lignes) ? rs.lignes : []).reduce((t, l) => t + (/^\d+$/.test(String(l.fraisApp || '')) ? BigInt(l.fraisApp) : 0n), 0n);
-    if (fraisPanier > 0n && lignes[0]) bcEtape(m, 'TokenizedBlock fee in total: ' + bcUnites(fraisPanier, Number(lignes[0].mk.pret.decimales)) + ' ' + lignes[0].mk.pret.symbole + ': one separate transfer to sign right after each loan.');
+    if (fraisPanier > 0n && lignes[0]) bcEtape(m, 'TokenizedBlock fee in total: ' + bcUnites(fraisPanier, Number(lignes[0].mk.pret.decimales)) + ' ' + lignes[0].mk.pret.symbole + (enLot ? ': in the same signature as the loans.' : ': one separate transfer to sign right after each loan.'));
     bcEtape(m, String(rs.positionsSeparees || 'Each stock is its own Morpho position.'));
-    bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.', 'oui');
-    bcBoutons(m, [['Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
-      const s = await bcSigner(m, p.aSigner);
+    bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. ' + (enLot
+      ? 'Your wallet can batch: one signature for the ' + p.aSigner.length + ' steps — all of them go through, or none.'
+      : 'Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.'), 'oui');
+    bcBoutons(m, [[enLot ? 'Sign once in my wallet (' + p.aSigner.length + ' steps)' : 'Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
+      const s = await bcSignerBanque(m, p.aSigner, enLot);
       /* revue adverse (2026-10-11) : un panier a moitie passe ne se rejoue JAMAIS (il referait les emprunts deja faits) */
       if (!s.ok) { bcBanqueApresEchec(m, s, p.aSigner.length, planifier); return; }
       bcApresOperation(); /* la Bank, ses positions ET la carte du Wallet se relisent (contre-test de Grok, 2026-10-11) */
@@ -24346,12 +24387,13 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       return;
     }
     const rs = p.resume || {}, decP = Number(mk.pret.decimales);
+    const enLot = await bcPeutGrouper(p.aSigner); /* decide AVANT de peindre : le texte du frais et le bouton en dependent */
     if (sens === 'emprunter') {
       let dg = decG;
       if (dg === null) { try { dg = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dg = null; } }
       if (rs.detteApres) bcEtape(m, 'Your debt after: ' + bcUnites(rs.detteApres, decP) + ' ' + mk.pret.symbole + ' (we cap it at ' + rs.marge + ').');
       /* 2026-10-11 (frais de service, decision de Phil) : le montant EXACT du plan (resume.fraisApp), et ou il va - nomme, jamais l adresse */
-      if (/^\d+$/.test(String(rs.fraisApp || ''))) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + mk.pret.symbole + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you borrow): the last step, a separate transfer your wallet asks you to sign right after the loan — after it you keep ' + bcUnites(BigInt(brutM) - BigInt(rs.fraisApp), decP) + ' ' + mk.pret.symbole + '.');
+      if (/^\d+$/.test(String(rs.fraisApp || ''))) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + mk.pret.symbole + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you borrow): ' + (enLot ? 'the last call of the batch your wallet signs once, with the loan' : 'the last step, a separate transfer your wallet asks you to sign right after the loan') + ' — after it you keep ' + bcUnites(BigInt(brutM) - BigInt(rs.fraisApp), decP) + ' ' + mk.pret.symbole + '.');
       if (rs.prixLiquidation && rs.prixActuel && dg !== null) {
         const enPret = (x) => Number(BigInt(x)) / 1e36 * 10 ** dg / 10 ** decP;
         bcEtape(m, 'Liquidated if 1 ' + mk.garantie.symbole + ' falls below ' + enPret(rs.prixLiquidation).toFixed(2) + ' ' + mk.pret.symbole + ' (oracle now: ' + enPret(rs.prixActuel).toFixed(2) + ').');
@@ -24372,8 +24414,9 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       bcEtape(m, 'You withdraw ' + (dgR === null ? brutM + ' raw units of' : bcUnites(brutM, dgR)) + ' ' + mk.garantie.symbole + ' of collateral to your wallet.');
     }
     bcEtape(m, 'Simulated on chain from your wallet: every step goes through.', 'oui');
-    bcBoutons(m, [['Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {
-      const s = await bcSigner(m, p.aSigner);
+    if (enLot) bcEtape(m, 'Your wallet can batch: one signature for the ' + p.aSigner.length + ' steps — all of them go through, or none.');
+    bcBoutons(m, [[enLot ? 'Sign once in my wallet (' + p.aSigner.length + ' steps)' : 'Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {
+      const s = await bcSignerBanque(m, p.aSigner, enLot);
       /* revue adverse (2026-10-11) : le frais est la DERNIERE etape ; s il est refuse, l emprunt est deja fait - « Start again »
        *   reconstruisait un SECOND emprunt complet. Un plan a moitie passe ne se rejoue jamais. */
       if (!s.ok) { bcBanqueApresEchec(m, s, p.aSigner.length, planifier); return; }

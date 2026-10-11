@@ -25,7 +25,7 @@ vu(/g\.value = bcUnites\(solde, Number\(mk\.garantie\.decimales\)\)/.test(pp) &&
 vu(/if \(bcBanque\.panierDemande\) \{ bcBanque\.panierDemande = false; if \(!zone\.hidden\) \{ zone\.open = true;/.test(pp), 'le panier demande depuis le Wallet ne s ouvre pas (ou le drapeau reste arme)');
 const pm = fonction('function bcPanierMaj() {');
 vu(/bcEstimationEmprunt\(x\.mk, g \+ g0, d \+ d0\)/.test(pm), 'l estimation d une ligne ignore ce qui est deja pose et du');
-vu(/TokenizedBlock fee ≈ ' \+ bcUnites\(frais, decP\)/.test(pm) && /a separate step after each loan\), after it you keep ≈ ' \+ bcUnites\(total - frais, decP\)/.test(pm), 'le total du panier ne dit pas le frais, son etape et le net');
+vu(/TokenizedBlock fee ≈ ' \+ bcUnites\(frais, decP\)/.test(pm) && /the last step of each loan\), after it you keep ≈ ' \+ bcUnites\(total - frais, decP\)/.test(pm), 'le total du panier ne dit pas le frais, son etape et le net');
 /* Wallet */
 const tp = fonction('function tbPanierPeindre(actions, p, nonLu, acceptees = []) {');
 vu(/if \(!actions\.length && nonLu\) \{ z\.hidden = true; return; \}/.test(tp), 'un panier NON LU dit « aucune action »');

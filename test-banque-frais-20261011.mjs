@@ -31,7 +31,8 @@ const estimer = (fraisBps) => { new Function('$', 'bcBanque', 'enUnitesBrutes', 
   (s) => champs[s], { choisi: mk, sens: 'emprunter', fraisBps }, enUnitesBrutes, (v, d) => (Number(v) / 10 ** d).toFixed(2), (x) => String(x), () => {})(); return champs['#bcBanqueEstim'].textContent; };
 const t = estimer(10);
 /* revue adverse (2026-10-11) : « in the same batch » etait FAUX (chaque appel est une transaction separee) - la phrase dit l etape */
-vu(/TokenizedBlock fee: 0\.1 % of what you borrow \(≈ 0\.01 USDC\), a separate last step you sign right after the loan — after it you keep ≈ 9\.99\./.test(t), 'l estimation ne dit pas le frais, son etape et le net : ' + t);
+/* 2026-10-11 (lot atomique) : l estimation ne connait pas le wallet - « separate » serait faux pour un wallet qui groupe ; elle dit la place */
+vu(/TokenizedBlock fee: 0\.1 % of what you borrow \(≈ 0\.01 USDC\), the last step of the plan — after it you keep ≈ 9\.99\./.test(t), 'l estimation ne dit pas le frais, son etape et le net : ' + t);
 champs['#bcBanqueMontant'].value = '0.0001'; /* 100 unites : 0,1 % = 0,1 -> arrondi SUPERIEUR = 1 unite, comme fraisEmprunt */
 vu(/\(≈ 0\.00 USDC\)/.test(estimer(10)) && B.fraisEmprunt(100n) === 1n, 'arrondi du frais : page et plan divergent');
 champs['#bcBanqueMontant'].value = '10';
