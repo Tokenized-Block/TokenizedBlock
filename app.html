@@ -8856,6 +8856,11 @@ function peutOuvrirPoolHooke(v) {
 function marcheHorsHookPourNotreBlock(v, origine) {
   return origine === 'TOKENIZEDBLOCK' && !!(v && v.etat === 'LUE' && v.cle) && !estNotreHook(v.cle.hooks);
 }
+/* un plan refuse efface ce que la carte promettait (frais, « Cheapest of N pools ») : il ne reste que le refus */
+function effacerPromessesCarte() {
+  const fe = $('#peFrais'); if (fe) fe.textContent = '';
+  const t = $('#peFraisTexte'); if (t) { t.innerHTML = ''; t.hidden = true; }
+}
 function echangeAutorise(v, etat, origine = null) {
   return etat === 'LUE' && !!v && !marcheHorsHookPourNotreBlock(v, origine);
 }
@@ -13338,6 +13343,7 @@ async function preparerEchange(sens) {
   }
   if (p.etat === 'REFUSE') {
     e.className = 'note wKo';
+    effacerPromessesCarte();
     /* ⛔⛔ DU JARGON INTERNE SUR L ECRAN DE QUELQU UN QUI VOULAIT ACHETER. Le refus d un marche cote
      *     en action remontait tel quel : « Buy/Sell fee must land as ETH or USDC — this pair cannot
      *     take the interface fee in an allowed asset ». C est NOTRE contrainte de frais, pas la
