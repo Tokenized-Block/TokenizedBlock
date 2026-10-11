@@ -231,14 +231,20 @@ ok(/if \(compte2\.get\(k\) > 1\) opts\.push\(\[String\(l\.adr\)\.toLowerCase\(\)
 /* l achat */
 const achat = bcSrc.slice(bcSrc.indexOf("const BC_CLE_SKIN = 'tblock.panel.skinEnAttente';"));
 ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /\$\('#bcSkinAcheter'\)\.addEventListener\('click', \(\) => void bcAcheterSkin\(\)\);/.test(html), 'C2 « Buy » lance bcAcheterSkin');
-ok(/prix\.prixUsdc !== SKIN_PRIX_USDC\.toString\(\) \|\| String\(prix\.usdc\)\.toLowerCase\(\) !== usdc \|\| String\(prix\.beneficiaire\)\.toLowerCase\(\) !== beneficiaire/.test(achat),
-  'C2 achat : le prix, le contrat USDC et le beneficiaire du SERVEUR doivent etre ceux de l APP — deux sources d accord, sinon rien n est demande');
-ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to TokenizedBlock\./.test(achat) && /appelAchatSkin\(\{ usdc, beneficiaire,/.test(achat), /* 2026-10-10 : regle de Phil - nomme, plus affiche ; le calldata garde l adresse */
-  'C2 achat : l argent va au wallet des frais du depot (calldata), NOMME TokenizedBlock a l ecran - le wallet montre l adresse');
-ok(/if \(solde < SKIN_PRIX_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_PRIX_USDC)') < achat.indexOf('await bcSigner(m, [appel])'), 'C2 achat : le solde USDC est relu AVANT de signer');
-ok(/const r = await bcSigner\(m, \[appel\]\);/.test(achat) && !/approve|0x095ea7b3/.test(achat), 'C2 achat : UN seul appel signe (le transfert + memo), aucune approbation');
-ok(/localStorage\.setItem\(BC_CLE_SKIN, JSON\.stringify\(\{ tx: r\.hash, block: a, skin: recette \}\)\);/.test(achat) && /if \(r && r\.etat === 'REFUSE'\)/.test(achat) && /bcBoutons\(m, \[\['Record it now', \(\) => bcEnregistrerSkin\(m\), true\]\]\);/.test(achat),
-  'C2 achat : un paiement fait mais pas encore enregistre est GARDE et se reenregistre (NON_LU se retente ; seul un REFUSE arrete)');
+/* 2026-10-11 (Phil : « la skin du block », sur le contrat BlockSkins DEPLOYE) : l achat MINTE sur le contrat. Les garanties d avant
+ *   restent, version chaine : prix ET destinataire GRAVES relus sur la chaine et compares a l app ; solde ET autorisation relus avant de
+ *   signer ; approbation EXACTE (1 USDC) seulement si besoin ; adresse de frais jamais a l ecran ; Base seulement. L ancien
+ *   enregistrement serveur (bcEnregistrerSkin) ne sert plus qu aux paiements d avant le contrat. */
+ok(/prixC = BigInt\(await rpc\('eth_call', \[\{ to: BLOCKSKINS, data: '0x' \+ selecteur\('MINT_PRICE\(\)'\) \}/.test(achat) && /selecteur\('FEE_WALLET\(\)'\)/.test(achat)
+  && /if \(prixC !== SKIN_MINT_USDC \|\| fraisC !== beneficiaire\) \{/.test(achat),
+  'C2 achat : le prix et le destinataire GRAVES dans le contrat sont relus sur la CHAINE et doivent etre ceux de l APP, sinon rien n est demande');
+ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to TokenizedBlock\./.test(achat) && /appelMint\(a, recette\)/.test(achat),
+  'C2 achat : le mint du contrat (qui paie le wallet de frais grave), NOMME TokenizedBlock a l ecran - le wallet montre l adresse');
+ok(/if \(solde < SKIN_MINT_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_MINT_USDC)') < achat.indexOf('await bcSigner(m, appels)'), 'C2 achat : le solde USDC est relu AVANT de signer');
+ok(/autorise >= SKIN_MINT_USDC \? \[\] : \[appelApprouver\(usdc, SKIN_MINT_USDC,/.test(achat) && !/MAX_UINT|ffffffffffffffff/.test(achat),
+  'C2 achat : approbation EXACTE de 1 USDC seulement si celle en place ne couvre pas le prix, jamais illimitee');
+ok(/if \(r\.diffusee\) \{ bcEtape\(m, 'The mint was sent and is not confirmed yet/.test(achat) && /await lireMesSkins\(\); poserMesSkins\(\);/.test(achat),
+  'C2 achat : un mint parti sans confirmation ne se relance pas ; apres le mint, la skin est RELUE sur la chaine');
 ok(/if \(CHAINE !== 8453\) \{ bcEtape\(m, 'Skins are bought on Base mainnet only\.', 'non'\); return; \}/.test(achat), 'C2 achat : Base mainnet seulement');
 /* ce qu il ressent, en mots : la fonction est extraite et executee */
 const srcRes = (bcSrc.match(/function bcRessenti\(snap\) \{\n[\s\S]*?\n\}\n/) || [])[0] || '';
