@@ -18,24 +18,32 @@ vu(i > 0, 'bcBanqueOusd absent d app.html');
 const fin = /\n\}\n/.exec(html.slice(i));
 const src = html.slice(i, i + fin.index + fin[0].length);
 vu(/<p class="note" id="bcBanqueOusd"[^>]* hidden><\/p>/.test(html), 'le paragraphe #bcBanqueOusd manque dans le formulaire de la Bank');
-vu(/\$\('#bcBanqueFiat'\)\.hidden = [^\n]+\n\s+void bcBanqueOusd\(mk, sens\);/.test(html), 'bcBanqueChoisir n appelle pas bcBanqueOusd');
+/* 2026-10-11 (revue adverse) : la ligne suit CHAQUE relecture du compte - bcBanqueIndices l appelle, et bcBanqueChoisir comme
+ *   bcBanquePourToi (connexion, changement de compte, deconnexion, apres une operation) appellent bcBanqueIndices */
+vu(/function bcBanqueIndices\(\) \{\n\s+const mk = bcBanque\.choisi; if \(!mk\) return;\n\s+void bcBanqueOusd\(mk, bcBanque\.sens\);/.test(html), 'bcBanqueIndices n appelle pas bcBanqueOusd en tete');
+vu(/\$\('#bcBanqueFiat'\)\.hidden = [^\n]+\n\s+bcBanqueIndices\(\);/.test(html), 'bcBanqueChoisir n appelle plus bcBanqueIndices juste apres #bcBanqueFiat');
+vu((html.match(/if \(bcBanque\.choisi\) bcBanqueIndices\(\);/g) || []).length === 2, 'bcBanquePourToi (connecte ET deconnecte) doit repeindre le formulaire choisi');
+vu((html.match(/bcBanqueOusd\(/g) || []).length === 2, 'bcBanqueOusd : une definition + un seul appel (bcBanqueIndices)');
 
 const OUSD = '0xb2000000000000000000002feb517dfec7415344', USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const DEVISES_BASE = [{ symbole: 'USDC', adr: USDC }, { symbole: 'OUSD', adr: OUSD }];
 const mkUsdc = { pret: { symbole: 'USDC' } };
 const attendre = (ms) => new Promise((o) => setTimeout(o, ms));
 function monde({ compte = '0x00000000000000000000000000000000c0ffee77', solde = 12500000n, dec = 6, rate = false, delais = [] } = {}) {
-  const z = { textContent: '', hidden: true, enfants: [], append(...e) { this.enfants.push(...e); } };
+  /* textContent = '' vide les enfants, comme le DOM ; dataset est un objet */
+  const z = { hidden: true, enfants: [], dataset: {}, append(...e) { this.enfants.push(...e); },
+    set textContent(v) { if (v === '') this.enfants = []; }, get textContent() { return this.enfants.map((e) => e.text || '').join(''); } };
   const proposes = [], lus = [];
   const bcEl = (tag, o = {}) => { const e = { tag, ...o, ecouteurs: {} }; e.addEventListener = (t, f) => { e.ecouteurs[t] = f; }; return e; };
   const etat = { compte, bcBanque: { sens: 'preter' } };
+  const ctl = { solde, rate };
   let k = 0;
-  const bcSolde = async (j, q) => { lus.push([j, q]); const d = delais[k++] || 0; if (d) await attendre(d); if (rate) throw new Error('read failed'); return solde; };
+  const bcSolde = async (j, q) => { lus.push([j, q]); const d = delais[k++] || 0; if (d) await attendre(d); if (ctl.rate) throw new Error('read failed'); return typeof ctl.solde === 'function' ? ctl.solde(q) : ctl.solde; };
   const f = new Function('$', 'DEVISES_BASE', 'bcEl', 'bcUnites', 'bcSolde', 'bcDecimales', 'bcAvecDelai', 'bcProposerSwap', 'etat',
     'with (etat) {\n' + src + '\nreturn bcBanqueOusd; }');
   const bcUnites = (b, d) => { const s = BigInt(b).toString().padStart(d + 1, '0'); const fr = s.slice(s.length - d).replace(/0+$/, ''); return s.slice(0, s.length - d) + (fr ? '.' + fr : ''); };
   const fn = f(() => z, DEVISES_BASE, bcEl, bcUnites, bcSolde, async () => dec, (p) => p, (...a) => { proposes.push(a); }, etat);
-  return { z, proposes, lus, fn, etat };
+  return { z, proposes, lus, fn, etat, ctl };
 }
 {
   const w = monde();
@@ -77,5 +85,57 @@ for (const [nom, opts, mk, sens] of [
   w.etat.bcBanque.sens = 'emprunter';
   await a;
   vu(w.z.hidden === true, 'passe sur Borrow pendant la lecture : rien ne s affiche');
+}
+/* ── revue adverse 2026-10-11 : la ligne suit le compte, une lecture ratee l efface, la poussiere ne propose rien ── */
+const B = '0x00000000000000000000000000000000000000bb';
+const mkA = { id: 'm1', pret: { symbole: 'USDC' } };
+{
+  const w = monde({ solde: (q) => (q === B ? 0n : 12500000n) });
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === false && /12\.5 OUSD/.test(w.z.textContent), 'compte A : la ligne dit 12.5 OUSD');
+  w.etat.compte = B;
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === true && w.z.enfants.length === 0, 'changement de compte vers B (0 OUSD) : la ligne de A disparait');
+  w.etat.compte = null;
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === true && w.z.enfants.length === 0 && w.z.dataset.pour === undefined, 'deconnexion : rien');
+}
+{
+  const w = monde();
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === false, 'temoin : ligne affichee');
+  w.ctl.solde = 0n;
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === true && w.z.enfants.length === 0, 'apres le swap (solde relu = 0) : la ligne disparait');
+}
+{
+  const w = monde();
+  await w.fn(mkA, 'preter');
+  w.ctl.rate = true;
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === true && w.z.enfants.length === 0, 'relecture ratee : la ligne d avant est effacee (un solde d avant n est pas un solde lu)');
+}
+{
+  const w = monde({ delais: [0, 40] });
+  await w.fn(mkA, 'preter');
+  const p = w.fn(mkA, 'preter');
+  await attendre(10);
+  vu(w.z.hidden === false && /12\.5 OUSD/.test(w.z.textContent), 'meme compte, meme marche : la ligne RESTE pendant la relecture (pas de clignotement)');
+  await p;
+  vu(w.z.enfants.filter((e) => e.tag === 'button').length === 1, '... et une seule ligne apres la relecture');
+}
+{
+  const w = monde({ delais: [0, 40] });
+  await w.fn(mkA, 'preter');
+  const p = w.fn({ id: 'm2', pret: { symbole: 'USDC' } }, 'preter');
+  await attendre(10);
+  vu(w.z.hidden === true, 'autre marche : la ligne est effacee des le debut de la relecture');
+  await p;
+  vu(w.z.hidden === false, '... puis repeinte pour ce marche');
+}
+for (const [solde, vue, nom] of [[300n, false, '300 unites (0.0003 OUSD, poussiere)'], [9999n, false, '9999 unites (moins d un cent)'], [10000n, true, '10000 unites (un cent)']]) {
+  const w = monde({ solde });
+  await w.fn(mkA, 'preter');
+  vu(w.z.hidden === !vue, nom + ' : ' + (vue ? 'la ligne s affiche' : 'rien (le planificateur refuserait)'));
 }
 console.log('ok banque-ousd - ' + n + ' assertions ; NE PROUVE PAS le rendu navigateur');

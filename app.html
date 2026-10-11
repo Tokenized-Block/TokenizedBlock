@@ -24183,6 +24183,7 @@ async function bcBanquePourToi(force = false) {
 /** Les champs du formulaire disent ce que CE wallet peut mettre (indices, rien n est rempli a sa place). */
 function bcBanqueIndices() {
   const mk = bcBanque.choisi; if (!mk) return;
+  void bcBanqueOusd(mk, bcBanque.sens); /* 2026-10-11 (revue adverse) : la ligne OUSD suit chaque relecture du compte */
   const r = bcPourToiDe(mk, bcBanque.pourToi && compte && bcBanque.pourToi.de === String(compte).toLowerCase() ? bcBanque.pourToi : null);
   const solde = r && bcBanque.pourToi.av ? bcBanque.pourToi.av.solde(mk.garantie.adr) : null;
   $('#bcBanqueGarantie').placeholder = typeof solde === 'bigint' ? (solde > 0n ? 'You hold ' + bcUnites(solde, mk.garantie.decimales) : 'You hold none') : '0.0';
@@ -24539,8 +24540,7 @@ function bcBanqueChoisir(mk, sens) {
       + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '') : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
-  void bcBanqueOusd(mk, sens);
-  bcBanqueIndices();
+  bcBanqueIndices(); /* repeint aussi la ligne OUSD (bcBanqueOusd) */
   bcBanqueEstimer();
   f.scrollIntoView({ block: 'nearest' });
 }
@@ -24549,23 +24549,33 @@ function bcBanqueChoisir(mk, sens) {
  *   ici, c est l USDC. Un wallet qui detient de l OUSD le change donc d abord en USDC : un echange ordinaire (route 6 de rails-api.js, pool
  *   v4 OUSD/USDC sans hook ; banc-devises-fork : 6/6 executes), dont la carte, dans le Chat, dit notre frais et le minimum AVANT toute
  *   signature. Solde illisible ou nul : rien n est affiche. Un jeton par peinture : une lecture plus ancienne (autre marche, autre
- *   sens, autre compte) n ecrit plus. */
+ *   sens, autre compte) n ecrit plus.
+ * ⛔ 2026-10-11 (revue adverse, 3 constats) : (1) appelee depuis bcBanqueIndices, donc a CHAQUE relecture du compte (connexion apres
+ *   ouverture du formulaire, changement de compte, deconnexion, apres une operation, retour sur la Bank) - avant, seulement au choix du
+ *   marche : la ligne gardait le solde de l ANCIEN compte, ou celui d avant le swap ; (2) une lecture ratee EFFACE la ligne (un solde
+ *   d avant n est pas un solde lu) ; meme compte + meme marche : l ancienne ligne reste pendant la relecture (pas de clignotement) ;
+ *   (3) moins d un cent d OUSD : rien - le frais d une poussiere arrondit a 0 et le planificateur refuse (« could not be assembled »). */
 let bcBanqueOusdGen = 0;
 async function bcBanqueOusd(mk, sens) {
   const z = $('#bcBanqueOusd'); if (!z) return;
   const gen = ++bcBanqueOusdGen;
-  z.textContent = ''; z.hidden = true;
-  if (sens !== 'preter' || !mk || !mk.pret || mk.pret.symbole !== 'USDC' || !compte) return;
+  const effacer = () => { z.textContent = ''; z.hidden = true; delete z.dataset.pour; };
+  if (sens !== 'preter' || !mk || !mk.pret || mk.pret.symbole !== 'USDC' || !compte) { effacer(); return; }
   const o = DEVISES_BASE.find((d) => d.symbole === 'OUSD'), u = DEVISES_BASE.find((d) => d.symbole === 'USDC');
-  if (!o || !u) return;
+  if (!o || !u) { effacer(); return; }
   const de = { adr: String(o.adr).toLowerCase(), sym: 'OUSD' }, vers = { adr: String(u.adr).toLowerCase(), sym: 'USDC' }, qui = String(compte).toLowerCase();
+  const pour = qui + '|' + String(mk.id || '');
+  if (z.dataset.pour !== pour) effacer();
   let solde = null, dec = null;
-  try { [solde, dec] = await Promise.all([bcAvecDelai(bcSolde(de.adr, qui), 8000), bcAvecDelai(bcDecimales(de.adr), 6000)]); } catch (_) { return; }
-  if (gen !== bcBanqueOusdGen || bcBanque.sens !== 'preter' || !compte || String(compte).toLowerCase() !== qui) return;
-  if (typeof solde !== 'bigint' || solde <= 0n || !Number.isInteger(dec)) return;
+  try { [solde, dec] = await Promise.all([bcAvecDelai(bcSolde(de.adr, qui), 8000), bcAvecDelai(bcDecimales(de.adr), 6000)]); } catch (_) { if (gen === bcBanqueOusdGen) effacer(); return; }
+  if (gen !== bcBanqueOusdGen) return;
+  if (bcBanque.sens !== 'preter' || !compte || String(compte).toLowerCase() !== qui) { effacer(); return; }
+  if (typeof solde !== 'bigint' || !Number.isInteger(dec) || solde < 10n ** BigInt(Math.max(0, dec - 2))) { effacer(); return; }
   const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Swap my ' + bcUnites(solde, dec) + ' OUSD to USDC' });
   b.addEventListener('click', () => { void bcProposerSwap('You', '', { de, vers, montant: solde.toString() }, null); });
+  z.textContent = '';
   z.append(bcEl('span', { text: 'You hold ' + bcUnites(solde, dec) + ' OUSD. This market lends USDC, not OUSD: swap it first, then lend the USDC. The swap card shows our fee and the least you receive before you sign. ' }), b);
+  z.dataset.pour = pour;
   z.hidden = false;
 }
 /* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
