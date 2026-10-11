@@ -4736,6 +4736,12 @@ const SEUIL_GROS_USD = 1000000;
  *   lu », et ces deux-la ne doivent jamais se confondre. */
 const prixUsdDeviseLus = new Map();
 const prixDeviseEnVol = new Set();
+/* ⛔⛔ 2026-10-11 (mesure prod, un chargement de la page) : 193 requetes /api/prix-usd pour 73 adresses distinctes ; les plus repetees
+ *   (x5 chacune) etaient des absences REPONDUES par le serveur (« no market above the 1000 USD noise floor ») - seuls les SUCCES etaient
+ *   retenus ici, chaque repeinture redemandait chaque absence (la lecon « cache des succes seulement »). Une absence repondue est
+ *   retenue 5 min (la duree du cache du serveur) ; une panne reseau ne l est pas. */
+const prixUsdAbsentsLus = new Map();
+const PRIX_ABSENT_MS = 300000;
 function assurerPrixDevise(sym) {
   const s = String(sym || '');
   if (!s || s === 'ETH' || s === 'USDC' || prixUsdDeviseLus.has(s) || prixDeviseEnVol.has(s)) return;
@@ -4748,6 +4754,8 @@ function assurerPrixDevise(sym) {
    *   d un symbole lu sur la chaine — c est exactement ainsi qu on se ferait passer un jeton pour
    *   un autre. */
   if (!adr) return;
+  const absente = prixUsdAbsentsLus.get(String(adr).toLowerCase());
+  if (absente && Date.now() - absente < PRIX_ABSENT_MS) return;
   prixDeviseEnVol.add(s);
   void prixUsdDevise(adr).then((p) => {
     if (typeof p === 'number' && Number.isFinite(p) && p > 0) {
@@ -15367,6 +15375,9 @@ async function prixUsdDeviseBrut(adr) {
           cleNonLue: d && d.cleNonLue === true,
           alternativeAerodrome: d.alternativeAerodrome || null });
     }
+    /* une absence REPONDUE par le serveur (ok: false - « no market above the 1000 USD noise floor ») est retenue 5 min pour la
+     *   repeinture (assurerPrixDevise) ; une panne reseau (catch) ne l est jamais : elle se relit */
+    if (d && d.ok === false) prixUsdAbsentsLus.set(String(adr).toLowerCase(), Date.now());
     return d && d.ok && d.prixUsd > 0 ? d.prixUsd : null;
   } catch (_) { return null; }
 }
