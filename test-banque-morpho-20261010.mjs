@@ -16,7 +16,8 @@ const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; c
 const charger = async (src) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'banque-'));
   fs.writeFileSync(path.join(dir, 'banque-morpho.js'), src);
-  for (const f of ['encodeur.js', 'lancer-pool.js', 'paires.js']) fs.writeFileSync(path.join(dir, f), "export * from '" + pathToFileURL(path.join(ICI, f)).href + "';\n");
+  /* 2026-10-11 : + frais-creation.js (FEE_WALLET, destinataire des frais de service de la Bank) */
+  for (const f of ['encodeur.js', 'lancer-pool.js', 'paires.js', 'frais-creation.js']) fs.writeFileSync(path.join(dir, f), "export * from '" + pathToFileURL(path.join(ICI, f)).href + "';\n");
   return { M: await import(pathToFileURL(path.join(dir, 'banque-morpho.js')).href), dir };
 };
 const SRC = fs.readFileSync(path.join(ICI, 'banque-morpho.js'), 'utf8');
@@ -65,7 +66,15 @@ const emprunter = (Bm, o, args = {}) => Bm.planEmprunter({ rpc: noeud(o).rpc, co
 
 /* ── C. trois etats ── */
 const pret = await emprunter(B, {});
-ok(pret.etat === 'PRET' && pret.resume.simule === true && pret.aSigner.length === 3, 'C simulation acceptee -> PRET (approve, supplyCollateral, borrow)');
+ok(pret.etat === 'PRET' && pret.resume.simule === true && pret.aSigner.length === 4, 'C simulation acceptee -> PRET (approve, supplyCollateral, borrow, frais de service)');
+/* 2026-10-11 (decision de Phil : 0,1 % de l emprunt -> FEE_WALLET) : le 4e appel est un transfer de l actif EMPRUNTE vers la caisse,
+ *   0,1 % de 10 USDC = 10 000 unites brutes ; arrondi a l unite superieure (jamais 0) ; le resume le dit */
+const { FEE_WALLET } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
+const fr = pret.aSigner[3], frMots = fr ? fr.data.slice(10).match(/.{64}/g) : [];
+ok(fr && fr.to === USDC && fr.data.startsWith('0x' + B.SEL.transfer) && frMots[0] === wa(FEE_WALLET.toLowerCase()) && BigInt('0x' + frMots[1]) === 10000n
+  && pret.resume.fraisApp === '10000' && pret.resume.fraisAppBps === 10 && pret.resume.fraisPour === 'TokenizedBlock', 'C frais de service : transfer 10 000 unites USDC vers FEE_WALLET, dit dans le resume');
+ok(B.fraisEmprunt(1n) === 1n && B.fraisEmprunt(9999n) === 10n && B.fraisEmprunt(10000n) === 10n && B.fraisEmprunt(10001n) === 11n && B.fraisEmprunt(0n) === 0n,
+  'C frais : 0,1 % arrondi a l unite SUPERIEURE, jamais 0 sur un emprunt positif');
 const rev = await emprunter(B, { sim: 'revert' });
 ok(rev.etat === 'REFUSE' && rev.aSigner.length === 0 && /refuses this exact sequence/.test(rev.pourquoi), 'C simulation qui reverte -> REFUSE, rien a signer');
 const muet = await emprunter(B, { sim: 'leve' });

@@ -42,11 +42,14 @@ const nd = noeud();
 const r = await B.planEmprunterPanier({ rpc: nd.rpc, compte: COMPTE, lignes: [L(ID_G), L(ID_N)] });
 vu(r.etat === 'PRET', 'panier de deux actions : ' + r.etat + ' ' + r.pourquoi);
 const sels = r.aSigner.map((c) => c.to.toLowerCase() + ':' + c.data.slice(2, 10));
-vu(r.aSigner.length === 6 && sels[0] === GOOGLC + ':' + B.SEL.approve && sels[3] === NVDAC + ':' + B.SEL.approve
-  && sels[2] === B.MORPHO_BLUE.toLowerCase() + ':' + B.SEL.borrow && sels[5] === B.MORPHO_BLUE.toLowerCase() + ':' + B.SEL.borrow,
-  'sequence attendue [approve G, depot G, emprunt G, approve N, depot N, emprunt N] : ' + JSON.stringify(sels));
-vu(BigInt('0x' + r.aSigner[0].data.slice(-64)) === 10n ** 7n && BigInt('0x' + r.aSigner[3].data.slice(-64)) === 10n ** 7n, 'approbations au MONTANT EXACT de chaque garantie');
-vu(nd.sims.length === 1 && nd.sims[0] === 6, 'la sequence n est pas simulee EN ENTIER, une fois : ' + JSON.stringify(nd.sims));
+/* 2026-10-11 (frais de service, decision de Phil : 0,1 % de l emprunt -> FEE_WALLET) : chaque emprunt est suivi de SON frais */
+vu(r.aSigner.length === 8 && sels[0] === GOOGLC + ':' + B.SEL.approve && sels[4] === NVDAC + ':' + B.SEL.approve
+  && sels[2] === B.MORPHO_BLUE.toLowerCase() + ':' + B.SEL.borrow && sels[6] === B.MORPHO_BLUE.toLowerCase() + ':' + B.SEL.borrow
+  && sels[3] === USDC + ':' + B.SEL.transfer && sels[7] === USDC + ':' + B.SEL.transfer,
+  'sequence attendue [approve G, depot G, emprunt G, frais G, approve N, depot N, emprunt N, frais N] : ' + JSON.stringify(sels));
+vu(BigInt('0x' + r.aSigner[0].data.slice(-64)) === 10n ** 7n && BigInt('0x' + r.aSigner[4].data.slice(-64)) === 10n ** 7n, 'approbations au MONTANT EXACT de chaque garantie');
+vu(BigInt('0x' + r.aSigner[3].data.slice(-64)) === B.fraisEmprunt(10n ** 7n) && r.resume.lignes.every((x) => x.fraisApp === String(B.fraisEmprunt(10n ** 7n))), 'le frais de chaque ligne n est pas 0,1 % de SON emprunt');
+vu(nd.sims.length === 1 && nd.sims[0] === 8, 'la sequence n est pas simulee EN ENTIER, une fois : ' + JSON.stringify(nd.sims));
 vu(r.resume && r.resume.panier === true && r.resume.lignes.length === 2 && r.resume.lignes.map((x) => x.garantieAction).join() === 'GOOGLc,NVDAc', 'resume du panier faux');
 vu(/its own Morpho position/.test(r.resume.positionsSeparees) && r.resume.positionsSeparees === B.PHRASE_PANIER_SEPARE, 'la phrase « chaque action est sa propre position » ne voyage pas');
 /* une ligne au-dela du plafond : le panier est refuse, la ligne NOMMEE */
@@ -63,5 +66,5 @@ const r4 = await B.planEmprunterPanier({ rpc: noeud({ sim: 'revert' }).rpc, comp
 vu(r4.etat === 'REFUSE' && r4.aSigner.length === 0, 'une simulation qui reverte laisse un panier a signer');
 /* l emprunt simple n a pas change (meme constructeur) */
 const s = await B.planEmprunter({ rpc: noeud().rpc, compte: COMPTE, id: ID_N, garantie: 10n ** 7n, emprunt: 10n ** 7n });
-vu(s.etat === 'PRET' && s.aSigner.length === 3, 'l emprunt simple a change : ' + s.etat);
+vu(s.etat === 'PRET' && s.aSigner.length === 4, 'l emprunt simple a change : ' + s.etat);
 console.log('ok banque-panier - ' + n + ' assertions ; NE PROUVE PAS l execution sur la chaine');

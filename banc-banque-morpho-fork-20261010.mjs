@@ -13,7 +13,7 @@
 import * as B from './banque-morpho.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { ACTIONS_COINBASE } from './paires.js';
-import { USDC_BASE } from './frais-creation.js';
+import { USDC_BASE, FEE_WALLET } from './frais-creation.js';
 const URL_FORK = /^https?:/.test(process.argv[2] || '') ? process.argv[2] : 'http://127.0.0.1:8549';
 let n = 0, ko = 0, idRpc = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } return c; };
@@ -48,15 +48,18 @@ try {
   ok(await envoyer(pool, { to: GOOGLC, data: '0xa9059cbb' + adrMot(compte) + DIXIEME.toString(16).padStart(64, '0') }) === '0x1', 'mise en place : le compte recoit 0,1 GOOGLc');
 
   const EMPRUNT = 10n * 10n ** 6n;
-  const u0 = await solde(USDC, compte), g0 = await solde(GOOGLC, compte);
+  const u0 = await solde(USDC, compte), g0 = await solde(GOOGLC, compte), f0 = await solde(USDC, FEE_WALLET);
   const p = await B.planEmprunter({ rpc, compte, id: ID, garantie: DIXIEME, emprunt: EMPRUNT });
   ok(p.etat === 'PRET' && p.resume.simule === true, '(2) deposer 0,1 GOOGLc + emprunter 10 USDC : PRET, simule (' + p.etat + (p.pourquoi ? ' — ' + p.pourquoi : '') + ')');
   const appro = (p.aSigner || []).find((c) => c.data.startsWith('0x' + B.SEL.approve));
   ok(!!appro && BigInt('0x' + appro.data.slice(-64)) === DIXIEME, '(2) l approbation est du MONTANT EXACT (0,1 GOOGLc), jamais l infini');
   const st = p.etat === 'PRET' ? await executer(compte, p) : [];
   ok(st.length === p.aSigner.length && st.every((s) => s === '0x1'), '(2) appels executes : ' + st.join(','));
+  /* 2026-10-11 (frais de service, decision de Phil : 0,1 % de l emprunt -> FEE_WALLET) : verifie sur les SOLDES, pas sur un evenement */
+  const frais = B.fraisEmprunt(EMPRUNT), df = (await solde(USDC, FEE_WALLET)) - f0;
   const du = (await solde(USDC, compte)) - u0, dg = g0 - (await solde(GOOGLC, compte));
-  ok(du === EMPRUNT && dg === DIXIEME, '(2) SOLDES : +' + du + ' USDC brut, -' + dg + ' GOOGLc brut');
+  ok(du === EMPRUNT - frais && dg === DIXIEME, '(2) SOLDES : +' + du + ' USDC brut (attendu ' + (EMPRUNT - frais) + ' = 10 USDC - frais), -' + dg + ' GOOGLc brut');
+  ok(frais === 10000n && df === frais, '(2) FRAIS : la caisse (FEE_WALLET) recoit +' + df + ' USDC brut (attendu 10 000 = 0,1 % de 10 USDC)');
   const m2 = await B.lireMarche({ rpc, id: ID }); const pos = await B.lirePosition({ rpc, marche: m2, compte });
   ok(pos.etat === 'LU' && pos.garantie === DIXIEME && pos.dette >= EMPRUNT, '(2) position Morpho : garantie ' + pos.garantie + ', dette ' + pos.dette);
 

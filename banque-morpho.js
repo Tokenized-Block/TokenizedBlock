@@ -18,11 +18,22 @@
 import { selecteur } from './encodeur.js';
 import { simulerSequenceLancement } from './lancer-pool.js';
 import { ACTIONS_COINBASE } from './paires.js';
+import { FEE_WALLET } from './frais-creation.js';
 
 export const MORPHO_BLUE = '0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb';
 /** Marge d emprunt : au plus 70 % de ce que le LLTV permet (a LLTV 77 %, ≈ 54 % de la valeur de la garantie). Proposition,
  *  pas une decision de Phil — ecrite UNE fois ici. */
 export const MARGE_EMPRUNT_BPS = 7000n;
+/** ⛔ LES FRAIS DE SERVICE DE LA BANK - DECISION DE PHIL (chat, 2026-10-11 : « creer un fees comme sur Aave ou Morpho pour que l app
+ *  gagne un peu aussi », « ajoute wallet dev comme recipient » ; choix : « 0,1 % de l emprunt », « FEE_WALLET 0xa6cf… »).
+ *  0,1 % de l actif EMPRUNTE, arrondi a l unite SUPERIEURE (jamais 0 : un frais qui s arrondit a rien n est pas un frais), pris dans la
+ *  MEME sequence que l emprunt (borrow -> transfer a la caisse), donc SIMULE avec elle. Rien pour preter, rembourser ou retirer : on ne
+ *  fait pas payer pour sortir. Le destinataire est la caisse de l app (FEE_WALLET, recopie dans frais-creation.js) ; l ecran dit
+ *  « TokenizedBlock », jamais l adresse - le wallet la montre au moment de signer. Ecrit UNE fois ici ; la page le lit dans
+ *  /api/banque/marches (fraisEmpruntBps) et dans le resume du plan, jamais en double. */
+export const FRAIS_EMPRUNT_BPS = 10n;
+export const DESTINATAIRE_FRAIS_BANQUE = FEE_WALLET;
+export const fraisEmprunt = (montant) => (BigInt(montant) <= 0n ? 0n : (BigInt(montant) * FRAIS_EMPRUNT_BPS + 9999n) / 10000n);
 const WAD = 10n ** 18n, ECHELLE_PRIX = 10n ** 36n;
 const ADR = /^0x[0-9a-f]{40}$/;
 const ACTIONS = new Map(ACTIONS_COINBASE.map((a) => [String(a.adr).toLowerCase(), a.symbole]));
@@ -41,6 +52,7 @@ export const SEL = Object.freeze({
   approve: selecteur('approve(address,uint256)'),
   allowance: selecteur('allowance(address,address)'),
   balanceOf: selecteur('balanceOf(address)'),
+  transfer: selecteur('transfer(address,uint256)'),
 });
 
 const motAdr = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
@@ -60,6 +72,7 @@ export const appelWithdrawCollateral = (p, assets, onBehalf, receiver) => '0x' +
 export const appelWithdraw = (p, assets, onBehalf, receiver) => '0x' + SEL.withdraw + mpMots(p) + motNb(assets) + motNb(0) + motAdr(onBehalf) + motAdr(receiver);
 export const appelWithdrawShares = (p, shares, onBehalf, receiver) => '0x' + SEL.withdraw + mpMots(p) + motNb(0) + motNb(shares) + motAdr(onBehalf) + motAdr(receiver);
 const appelApprove = (spender, montant) => '0x' + SEL.approve + motAdr(spender) + motNb(montant);
+export const appelTransfer = (vers, montant) => '0x' + SEL.transfer + motAdr(vers) + motNb(montant);
 
 const nonMesure = (pourquoi) => ({ etat: 'NON_MESURE', pourquoi, aSigner: [] });
 const refuse = (pourquoi, resume) => ({ etat: 'REFUSE', pourquoi, aSigner: [], ...(resume ? { resume } : {}) });
@@ -105,7 +118,8 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
       utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null });
   }
   marches.sort((a, b) => (b.offreUsd || 0) - (a.offreUsd || 0));
-  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches };
+  /* fraisEmpruntBps : la page dit le frais de service AVANT le plan, depuis cette source unique (FRAIS_EMPRUNT_BPS) */
+  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches, fraisEmpruntBps: Number(FRAIS_EMPRUNT_BPS) };
 }
 
 /** Les POSITIONS d un compte sur ces marches (API Morpho, marketPositions ; forme lue le 2026-10-10 sur de vrais emprunteurs :
@@ -258,6 +272,10 @@ async function construireEmprunt({ rpc, compte, id, garantie = 0n, emprunt }) {
     appels.push({ to: MORPHO_BLUE, data: appelSupplyCollateral(p, G, c), value: '0x0', nom: 'deposit the stock as collateral on Morpho' });
   }
   appels.push({ to: MORPHO_BLUE, data: appelBorrow(p, E, c, c), value: '0x0', nom: 'borrow on Morpho, to your own wallet' });
+  /* les frais de service (FRAIS_EMPRUNT_BPS, decision de Phil) : APRES l emprunt, sur l actif emprunte, dans la meme sequence simulee */
+  const frais = fraisEmprunt(E);
+  appels.push({ to: p.loanToken, data: appelTransfer(DESTINATAIRE_FRAIS_BANQUE, frais), value: '0x0', nom: 'TokenizedBlock service fee: ' + Number(FRAIS_EMPRUNT_BPS) / 100 + ' % of what you borrow' });
+  resume.fraisApp = frais.toString(); resume.fraisAppBps = Number(FRAIS_EMPRUNT_BPS); resume.fraisPour = 'TokenizedBlock';
   return { etat: 'OK', compte: c, garantieToken: p.collateralToken, appels, resume };
 }
 

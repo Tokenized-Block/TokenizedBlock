@@ -13,7 +13,7 @@
 import * as B from './banque-morpho.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { ACTIONS_COINBASE } from './paires.js';
-import { USDC_BASE } from './frais-creation.js';
+import { USDC_BASE, FEE_WALLET } from './frais-creation.js';
 const URL_FORK = /^https?:/.test(process.argv[2] || '') ? process.argv[2] : 'http://127.0.0.1:8549';
 let n = 0, ko = 0, idRpc = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } return c; };
@@ -45,7 +45,7 @@ try {
     await rpc('anvil_impersonateAccount', [pool]); await rpc('anvil_setBalance', [pool, '0x' + (10n ** 18n).toString(16)]);
     ok(await envoyer(pool, { to: jeton, data: '0xa9059cbb' + adrMot(compte) + qte.toString(16).padStart(64, '0') }) === '0x1', 'mise en place : le compte recoit ' + nom);
   }
-  const u0 = await solde(USDC, compte);
+  const u0 = await solde(USDC, compte), f0 = await solde(USDC, FEE_WALLET);
   const lignes = [{ id: ID_G, garantie: G, emprunt: 10n * 10n ** 6n }, { id: ID_A, garantie: A, emprunt: 2n * 10n ** 6n }];
   const p = await B.planEmprunterPanier({ rpc, compte, lignes });
   ok(p.etat === 'PRET' && p.resume && p.resume.simule === true && p.resume.panier === true, '(1) panier GOOGLc + AAPLc : PRET, sequence simulee (' + p.etat + (p.pourquoi ? ' — ' + p.pourquoi : '') + ')');
@@ -53,8 +53,11 @@ try {
   ok(appros.length === 2 && appros.some(([t, v]) => t === GOOGLC && v === G) && appros.some(([t, v]) => t === AAPLC && v === A), '(1) approbations au MONTANT EXACT de chaque garantie : ' + JSON.stringify(appros.map(([t, v]) => v.toString())));
   const st = p.etat === 'PRET' ? await executer(compte, p) : [];
   ok(st.length === (p.aSigner || []).length && st.length > 0 && st.every((s) => s === '0x1'), '(2) appels executes : ' + st.join(','));
-  const du = (await solde(USDC, compte)) - u0;
-  ok(du === 12n * 10n ** 6n, '(2) SOLDE : +' + du + ' USDC brut (attendu 12 000 000)');
+  /* 2026-10-11 (frais de service : 0,1 % de CHAQUE emprunt -> FEE_WALLET) : 10 000 + 2 000 = 12 000 unites, verifie sur les SOLDES */
+  const frais = B.fraisEmprunt(10n * 10n ** 6n) + B.fraisEmprunt(2n * 10n ** 6n);
+  const du = (await solde(USDC, compte)) - u0, df = (await solde(USDC, FEE_WALLET)) - f0;
+  ok(du === 12n * 10n ** 6n - frais, '(2) SOLDE : +' + du + ' USDC brut (attendu ' + (12n * 10n ** 6n - frais) + ' = 12 USDC - frais)');
+  ok(frais === 12000n && df === frais, '(2) FRAIS : la caisse (FEE_WALLET) recoit +' + df + ' USDC brut (attendu 12 000 = 0,1 % de 10 + 2 USDC)');
   for (const [id, g, nom] of [[ID_G, G, 'GOOGLc'], [ID_A, A, 'AAPLc']]) {
     const m = await B.lireMarche({ rpc, id }); const pos = await B.lirePosition({ rpc, marche: m, compte });
     ok(pos.etat === 'LU' && pos.garantie === g && pos.dette > 0n, '(2) position ' + nom + ' SEPAREE : garantie ' + pos.garantie + ', dette ' + pos.dette);

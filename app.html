@@ -24020,6 +24020,9 @@ async function bcBanqueLireMarches(force = false) {
   try { r = await (await fetch('/api/banque/marches', { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
   if (!r || r.ok !== true || !Array.isArray(r.marches)) return { ok: false, pourquoi: (r && r.pourquoi) || 'the data could not be fetched' };
   bcBanque.marches = r.marches; bcBanque.lu = Date.now();
+  /* 2026-10-11 (frais de service, decision de Phil : 0,1 % de l emprunt) : le taux vient du SERVEUR (FRAIS_EMPRUNT_BPS, banque-morpho.js),
+   *   la page ne le recopie pas ; absent ou illisible = null, et la page ne l annonce pas (le plan, lui, le dit toujours) */
+  bcBanque.fraisBps = Number.isInteger(r.fraisEmpruntBps) && r.fraisEmpruntBps >= 0 ? r.fraisEmpruntBps : null;
   return { ok: true };
 }
 /** Les marches LISTES par Morpho, tries par liquidite, et le nombre ecarte - le MEME filtre pour l onglet Bank et la carte du Wallet. */
@@ -24311,6 +24314,11 @@ function bcBanqueEstimer() {
   const morceaux = ['Oracle price: 1 ' + mk.garantie.symbole + ' = ' + bcUnites(prixUnite, decP) + ' ' + mk.pret.symbole + '.'];
   /* 2026-10-11 : le montant n est plus affiche par marche (« peur de liquidite ») - la limite reste, et elle se DIT ici, au moment ou elle compte */
   if (d > 0n && /^\d+$/.test(String(mk.disponibleBrut ?? '')) && d > BigInt(mk.disponibleBrut)) morceaux.push('This market cannot lend that much right now — try a smaller amount.');
+  /* 2026-10-11 (frais de service, decision de Phil) : le frais est DIT avant le plan - meme calcul que fraisEmprunt (0,1 %, arrondi superieur) */
+  if (d > 0n && Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0) {
+    const fraisB = (d * BigInt(bcBanque.fraisBps) + 9999n) / 10000n;
+    morceaux.push('TokenizedBlock fee: ' + (bcBanque.fraisBps / 100) + ' % of what you borrow (≈ ' + bcUnites(fraisB, decP) + ' ' + mk.pret.symbole + '), in the same batch — you receive ≈ ' + bcUnites(d - fraisB, decP) + '.');
+  }
   if (g0 > 0n || d0 > 0n) morceaux.push('Counting what you already posted (' + bcUnites(g0, decG) + ' ' + mk.garantie.symbole + ') and owe (' + bcUnites(d0, decP) + ' ' + mk.pret.symbole + ').');
   if (gT > 0n) {
     const valeur = (gT * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
@@ -24426,8 +24434,12 @@ async function bcBanqueProposerPanier(lignes) {
         const chute = (1 - enPret(l.prixLiquidation) / enPret(l.prixActuel)) * 100;
         ligne += '; liquidated if it falls below ' + enPret(l.prixLiquidation).toFixed(2) + ' (oracle ' + enPret(l.prixActuel).toFixed(2) + ', a ' + Math.max(0, chute).toFixed(1) + ' % fall)';
       }
+      /* 2026-10-11 (frais de service, decision de Phil) : le frais EXACT de chaque ligne, depuis le resume du plan */
+      if (/^\d+$/.test(String(l.fraisApp || ''))) ligne += '; ' + (l.fraisPour || 'TokenizedBlock') + ' fee ' + bcUnites(l.fraisApp, dp) + ' ' + x.mk.pret.symbole + ' (' + (Number(l.fraisAppBps) / 100) + ' %)';
       bcEtape(m, ligne + '.');
     }
+    const fraisPanier = (Array.isArray(rs.lignes) ? rs.lignes : []).reduce((t, l) => t + (/^\d+$/.test(String(l.fraisApp || '')) ? BigInt(l.fraisApp) : 0n), 0n);
+    if (fraisPanier > 0n && lignes[0]) bcEtape(m, 'TokenizedBlock fee in total: ' + bcUnites(fraisPanier, Number(lignes[0].mk.pret.decimales)) + ' ' + lignes[0].mk.pret.symbole + ', paid in this same batch, right after each loan.');
     bcEtape(m, String(rs.positionsSeparees || 'Each stock is its own Morpho position.'));
     bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.', 'oui');
     bcBoutons(m, [['Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
@@ -24462,7 +24474,9 @@ function bcBanqueChoisir(mk, sens) {
     : 'Lend ' + mk.pret.symbole + ' to people who post ' + mk.garantie.symbole + ' as collateral') + ' — Morpho market ' + mk.id.slice(0, 10) + '…'
     /* 2026-10-11 (Phil : « au moment du choix, le risque de liquidation en % ») : au plafond de l app (marge x LLTV), une baisse de
      *   (1 - marge) liquide - 30 % pour une marge de 70 %. Dit des le choix, avant tout montant. */
-    + (sens === 'emprunter' ? '. At our maximum (' + bcBanqueChiffres(mk).maxPct.toFixed(1) + ' % of the value), a ' + (100 - Number(mk.margeBps || 7000) / 100).toFixed(0) + ' % fall of ' + mk.garantie.symbole + ' liquidates you.' : '');
+    + (sens === 'emprunter' ? '. At our maximum (' + bcBanqueChiffres(mk).maxPct.toFixed(1) + ' % of the value), a ' + (100 - Number(mk.margeBps || 7000) / 100).toFixed(0) + ' % fall of ' + mk.garantie.symbole + ' liquidates you.'
+      /* 2026-10-11 (frais de service, decision de Phil) : dit AU CHOIX, avant tout montant */
+      + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '') : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
   bcBanqueIndices();
@@ -24542,7 +24556,9 @@ async function tbBanquePeindre() {
   const { listes } = lu.ok ? bcBanqueListes() : { listes: [] };
   if (lu.ok) {
     const res = bcBanqueResumer(listes);
-    tauxE.textContent = res.moinsCher !== null ? 'Costs from ' + bcPct(res.moinsCher) + ' a year' : 'Cost not read right now';
+    /* 2026-10-11 (frais de service, decision de Phil) : le frais unique est dit dans le CHOIX, a cote du cout annuel */
+    const fraisTxt = Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' + a one-time ' + (bcBanque.fraisBps / 100) + ' % fee' : '';
+    tauxE.textContent = res.moinsCher !== null ? 'Costs from ' + bcPct(res.moinsCher) + ' a year' + fraisTxt : 'Cost not read right now';
     tauxP.textContent = res.meilleurPret !== null ? 'Earns up to ' + bcPct(res.meilleurPret) + ' a year' : 'Rate not read right now';
   } else {
     tauxE.textContent = 'Rates not read right now'; tauxP.textContent = 'Rates not read right now';
@@ -24634,6 +24650,8 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       let dg = decG;
       if (dg === null) { try { dg = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dg = null; } }
       if (rs.detteApres) bcEtape(m, 'Your debt after: ' + bcUnites(rs.detteApres, decP) + ' ' + mk.pret.symbole + ' (we cap it at ' + rs.marge + ').');
+      /* 2026-10-11 (frais de service, decision de Phil) : le montant EXACT du plan (resume.fraisApp), et ou il va - nomme, jamais l adresse */
+      if (/^\d+$/.test(String(rs.fraisApp || ''))) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + mk.pret.symbole + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you borrow), paid in this same batch — you receive ' + bcUnites(BigInt(brutM) - BigInt(rs.fraisApp), decP) + ' ' + mk.pret.symbole + '.');
       if (rs.prixLiquidation && rs.prixActuel && dg !== null) {
         const enPret = (x) => Number(BigInt(x)) / 1e36 * 10 ** dg / 10 ** decP;
         bcEtape(m, 'Liquidated if 1 ' + mk.garantie.symbole + ' falls below ' + enPret(rs.prixLiquidation).toFixed(2) + ' ' + mk.pret.symbole + ' (oracle now: ' + enPret(rs.prixActuel).toFixed(2) + ').');
