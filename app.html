@@ -19476,6 +19476,9 @@ function choisirBrain(adr) {
   if (!adr) return;
   const meme = brainAdr && adrBrainEq(brainAdr, adr);
   brainAdr = adr;
+  /* 2026-10-11 (Grok, a9afbdd adapte) : l historique du panneau ne montre que les operations du block ouvert - repeint au changement.
+   *   (la Bank, elle, suit le block par bcChangerFil, 76cc62c) */
+  if (!meme) { try { bcPeindreOps(); } catch (_) { /* panneau pas encore pret */ } }
   try { localStorage.setItem(CLE_BRAIN_CHOIX + CHAINE, String(adr).toLowerCase()); } catch (_) { /* private mode */ }
   const s = $('#bChoix');
   if (s && s.options && s.options.length) {
@@ -21949,14 +21952,21 @@ function bcSauverOps() { try { localStorage.setItem(BC_CLE_OPS, JSON.stringify(b
 /* la carte du Chat de chaque operation ouverte dans CETTE page : une ligne « en cours » y ramene (elle ne survit pas au rechargement) */
 const bcCartes = new Map();
 function bcOp(texte, qui, carte = null) {
-  const op = { id: Date.now() + '-' + bc.ops.length, t: Date.now(), texte: String(texte).slice(0, 160), qui: String(qui).slice(0, 20), etat: 'proposed', tx: null };
+  const op = { id: Date.now() + '-' + bc.ops.length, t: Date.now(), texte: String(texte).slice(0, 160), qui: String(qui).slice(0, 20), etat: 'proposed', tx: null, block: brainAdr ? String(brainAdr).toLowerCase() : null };
   if (carte) bcCartes.set(op.id, carte);
   bc.ops.unshift(op); bc.ops = bc.ops.slice(0, 40);
   bcSauverOps();
   return op;
 }
 function bcOpMaj(op, etat, tx) { if (!op || !BC_ETATS[etat]) return; op.etat = etat; if (tx) op.tx = tx; if (etat === 'done') bc.soldesLus = 0; /* une transaction confirmee = soldes a relire */ bcSauverOps(); }
+/* 2026-10-11 (QA Grok 17:47 : UNALYN montrait « Swap 0.002 ETH -> IB022 . LEFT UNFINISHED ») : l historique d un block ne montre
+ *   que SES operations ; sans block ouvert, tout. Une ancienne operation sans block n est montree que sans block ouvert. */
+function bcOpsDuBlock(ops, adr) {
+  const ici = adr ? String(adr).toLowerCase() : null;
+  return ici ? ops.filter((o) => o && o.block === ici) : ops;
+}
 function bcPeindreOps() {
+  const ops = bcOpsDuBlock(bc.ops, brainAdr);
   const ligne = (o) => {
     const [lib, cls] = BC_ETATS[o.etat];
     const gauche = bcEl('span', {}, [bcEl('span', { text: o.texte + ' ' }), bcEl('span', { cls: 'note', text: '· ' + o.qui + ' · ' + new Date(o.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })]);
@@ -21972,7 +21982,7 @@ function bcPeindreOps() {
   };
   const remplir = (sel, liste, vide) => { const ul = $(sel); if (!ul) return; ul.textContent = ''; if (!liste.length) { if (vide) ul.append(bcEl('li', { cls: 'note', text: vide })); } else for (const o of liste) ul.append(ligne(o)); };
   /* une liste vide ne s affiche pas du tout (ni son titre) : « Nothing yet » sous un titre, c est du bruit */
-  const enCours = bc.ops.filter((o) => BC_EN_COURS.includes(o.etat)), passe = bc.ops.filter((o) => !BC_EN_COURS.includes(o.etat)).slice(0, 15);
+  const enCours = ops.filter((o) => BC_EN_COURS.includes(o.etat)), passe = ops.filter((o) => !BC_EN_COURS.includes(o.etat)).slice(0, 15);
   remplir('#bcEnCours', enCours, ''); remplir('#bcHistorique', passe, '');
   const be = $('#bcBlocEnCours'), bh = $('#bcBlocHistorique');
   if (be) be.hidden = !enCours.length;
