@@ -263,6 +263,27 @@ export function validationCourante(v, annonce) {
 /** Les acheteurs qui ont valide une skin, lus dans les journaux BuyValidated(tokenId indexe, buyer indexe) - CANDIDATS seulement : chacun
  *  doit encore etre confirme par validated(...) == l annonce en cours (une validation revoquee ou perimee reste dans les journaux). */
 export const SUJET_ACHAT_VALIDE = topic('BuyValidated(uint256,address,address,uint256)');
+/** VERIFIE une transaction validateBuy a partir de son RECU (index serveur des validations, POST /api/skins/validation) - pur.
+ *  ⛔ Un journal BuyValidated n est cru que s il vient de l ADRESSE du contrat : un autre contrat peut emettre le meme evenement en
+ *    nommant n importe qui (« un evenement n est pas une transaction »). On n exige PAS tx.from == acheteur : un wallet intelligent
+ *    (Base Account) appelle depuis son contrat, et c est lui (msg.sender) que le contrat enregistre comme acheteur.
+ *  Rend { ok, etat: 'OK' | 'NON_LU' | 'REFUSE', validations: [{ tokenId, acheteur, devise, prix }] } (nombres en texte). */
+export function verifierValidation({ recu, contrat = BLOCKSKINS }) {
+  if (!recu) return { ok: false, etat: 'NON_LU', pourquoi: 'the transaction is not readable yet — try again in a moment' };
+  if (String(recu.status) !== '0x1') return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction failed on chain' };
+  const c = bas(contrat), sujet = bas(SUJET_ACHAT_VALIDE), validations = [];
+  for (const l of Array.isArray(recu.logs) ? recu.logs : []) {
+    const tp = (l && l.topics) || [];
+    if (bas(l && l.address) !== c || tp.length < 3 || bas(tp[0]) !== sujet) continue;
+    const d = String(l.data || '').replace(/^0x/, '');
+    if (d.length < 128 || !/^[0-9a-f]+$/i.test(d)) continue;
+    const acheteur = '0x' + bas(tp[2]).slice(26), devise = '0x' + bas(d.slice(24, 64));
+    if (!ADR.test(acheteur) || !ADR.test(devise)) continue;
+    validations.push({ tokenId: BigInt(tp[1]).toString(), acheteur, devise, prix: BigInt('0x' + d.slice(64, 128)).toString() });
+  }
+  if (!validations.length) return { ok: false, etat: 'REFUSE', pourquoi: 'no skins-market validation in this transaction' };
+  return { ok: true, etat: 'OK', validations, bloc: recu.blockNumber ? parseInt(String(recu.blockNumber), 16) : null };
+}
 export function acheteursValides(journaux, tokenId) {
   const t = '0x' + mot(positif(tokenId, 'the skin'));
   const vus = new Set();

@@ -117,6 +117,7 @@ import { FEE_WALLET, USDC_BASE, CREATE_ROUTER } from './frais-creation.js';
 import { etatLive, htmlLive } from './live.js';
 import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
+import { verifierValidation } from './blockskins.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
 /* ══ RASTERISEUR PNG, CHARGE A LA DEMANDE ══════════════════════════════════════════════════════════
@@ -2524,6 +2525,56 @@ async function enregistrerAchatSkin({ tx, block, skin }) {
   } finally { skinsEnVol -= 1; }
 }
 const skinsDuBlock = (b) => [...skinsAchats.values()].filter((l) => l.block === b).reverse().slice(0, 20);
+
+/* ── LES VALIDATIONS « LES DEUX COCHENT » DU MARCHE DES SKINS : UN INDEX DE TRANSACTIONS (2026-10-11) ────────────────────────────
+ * POURQUOI. Revue adverse du cablage client (2 HIGH confirmes) : (1) chercher les BuyValidated par eth_getLogs depuis la naissance du
+ *   contrat ne tient pas - aucun de nos noeuds ne sert plus de ~10 000 blocs (publicnode non-archive, base.org 429, drpc ~100) ;
+ *   (2) l ETH tenu par une validation devenue perimee etait invisible. Meme remede que les achats de skins : l app ENVOIE le hash de
+ *   SA transaction validateBuy ; le serveur lit le RECU (eth_getTransactionReceipt : pas de fenetre, pas d archive) et garde
+ *   { tokenId, acheteur, devise, prix, tx, bloc } - un index que n importe qui peut refaire en relisant la chaine.
+ *   POST /api/skins/validation          { tx } -> verifie (verifierValidation : journal emis PAR le contrat), puis enregistre
+ *   GET  /api/skins/validations?token=N  les validations indexees d une skin (CANDIDATES : l app confirme validated() sur la chaine)
+ *   GET  /api/skins/validations?acheteur=0x…  celles d un acheteur (son ETH tenu, meme quand l annonce est finie)
+ * ⛔ L index ne fait foi de RIEN : la chaine decide (validated(tokenId, acheteur) == annonce en cours). Une validation faite hors de
+ *   cette app n y est pas - l ecran le dit. BORNES : 2 000 lignes, 3 verifications en vol. */
+const FICHIER_VALIDATIONS = FICHIER_SKINS ? FICHIER_SKINS.replace(/skins-achetees\.json$/, 'skins-validations.json') : null;
+const skinsValidations = new Map();
+let validationsEnVol = 0;
+const cleValidation = (v) => v.tokenId + ':' + v.acheteur;
+(function relireValidations() {
+  if (!FICHIER_VALIDATIONS || !existsSync(FICHIER_VALIDATIONS)) return;
+  try {
+    for (const v of JSON.parse(readFileSync(FICHIER_VALIDATIONS, 'utf8')) || []) {
+      if (v && /^[0-9]{1,78}$/.test(String(v.tokenId)) && /^0x[0-9a-f]{40}$/.test(String(v.acheteur)) && /^0x[0-9a-f]{40}$/.test(String(v.devise))
+        && /^[0-9]{1,78}$/.test(String(v.prix)) && /^0x[0-9a-f]{64}$/.test(String(v.tx))) skinsValidations.set(cleValidation(v), v);
+    }
+  } catch (_) { /* fichier illisible : l index repart vide, la chaine garde les validations */ }
+})();
+function ecrireValidations() {
+  if (!FICHIER_VALIDATIONS) return;
+  try { writeFileSync(FICHIER_VALIDATIONS + '.tmp', JSON.stringify([...skinsValidations.values()].slice(-2000))); renameSync(FICHIER_VALIDATIONS + '.tmp', FICHIER_VALIDATIONS); }
+  catch (_) { /* en memoire, et sur la chaine */ }
+}
+async function enregistrerValidationSkin({ tx }) {
+  const h = String(tx || '').toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/.test(h)) return { ok: false, etat: 'REFUSE', pourquoi: 'tx must be a whole transaction hash' };
+  if (validationsEnVol >= 3) return { ok: false, etat: 'NON_LU', occupe: true, pourquoi: 'the validation registry is busy — try again in a moment' };
+  validationsEnVol += 1;
+  try {
+    let recu = null;
+    try { recu = await rpcActivite('eth_getTransactionReceipt', [h]); } catch (_) { recu = null; }
+    const v = verifierValidation({ recu });
+    if (!v.ok) return { ok: false, etat: v.etat, pourquoi: v.pourquoi };
+    const lignes = v.validations.map((x) => ({ ...x, tx: h, bloc: v.bloc, t: new Date().toISOString() }));
+    for (const l of lignes) { skinsValidations.delete(cleValidation(l)); skinsValidations.set(cleValidation(l), l); }
+    while (skinsValidations.size > 2000) skinsValidations.delete(skinsValidations.keys().next().value);
+    ecrireValidations();
+    return { ok: true, etat: 'ENREGISTRE', validations: lignes };
+  } finally { validationsEnVol -= 1; }
+}
+function validationsIndexees({ token = null, acheteur = null }) {
+  return [...skinsValidations.values()].filter((v) => (token === null || v.tokenId === token) && (acheteur === null || v.acheteur === acheteur)).slice(-50);
+}
 
 /* ══ LA NAISSANCE PAR UN AGENT + LE MCP (2026-10-04) — naissance-api.js, mcp-tblock.js, caution-createur.js ════════════════════
  * ⛔ RIEN N EST SIGNE ICI : des appels NON SIGNES, simules avant d etre rendus. Le wallet de l agent signe.
@@ -5035,6 +5086,32 @@ function traiterRequete(req, res) {
         enregistrerAchatSkin({ tx: j.tx, block: j.block, skin: j.skin }).then((r) => rendreS(r.occupe ? 429 : 200, r))
           .catch((e) => rendreS(200, { ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) }));
       });
+      return;
+    }
+    /* « les deux cochent » : l index des validations (voir enregistrerValidationSkin) */
+    if (chemin === '/api/skins/validation') {
+      if (req.method !== 'POST') { rendreS(405, { ok: false, pourquoi: 'POST only' }); return; }
+      let brutV = '', tropV = false;
+      req.on('data', (c) => { if (tropV) return; brutV += c; if (brutV.length > 1024) { tropV = true; rendreS(413, { ok: false, pourquoi: 'request too large' }); req.destroy(); } });
+      req.on('end', () => {
+        if (tropV) return;
+        let j;
+        try { j = JSON.parse(brutV || '{}'); } catch { rendreS(400, { ok: false, pourquoi: 'not JSON' }); return; }
+        if (!j || typeof j !== 'object' || Array.isArray(j)) { rendreS(400, { ok: false, pourquoi: 'a JSON object is expected' }); return; }
+        enregistrerValidationSkin({ tx: j.tx }).then((r) => rendreS(r.occupe ? 429 : 200, r))
+          .catch((e) => rendreS(200, { ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) }));
+      });
+      return;
+    }
+    if (chemin === '/api/skins/validations') {
+      if (req.method !== 'GET') { rendreS(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const qv = new URL(req.url, 'http://x').searchParams;
+      const token = qv.has('token') ? String(qv.get('token')) : null, acheteur = qv.has('acheteur') ? String(qv.get('acheteur')).toLowerCase() : null;
+      if (token !== null && !/^[0-9]{1,78}$/.test(token)) { rendreS(400, { ok: false, pourquoi: 'token must be a whole number' }); return; }
+      if (acheteur !== null && !/^0x[0-9a-f]{40}$/.test(acheteur)) { rendreS(400, { ok: false, pourquoi: 'acheteur must be a whole address' }); return; }
+      if (token === null && acheteur === null) { rendreS(400, { ok: false, pourquoi: 'token or acheteur is required' }); return; }
+      rendreS(200, { ok: true, validations: validationsIndexees({ token, acheteur }),
+        borne: 'validations sent by this app after signing; candidates only - the chain (validated) decides' });
       return;
     }
     if (req.method !== 'GET') { rendreS(405, { ok: false, pourquoi: 'GET only' }); return; }
