@@ -114,6 +114,7 @@ import { scannerLancements } from './lancements-etrangers.js';
 import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE, GRAINE_NOS_BLOCKS, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
 import { FEE_WALLET, USDC_BASE, CREATE_ROUTER } from './frais-creation.js';
+import { etatLive, htmlLive } from './live.js';
 import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
@@ -1297,6 +1298,32 @@ async function fraisEnAttente() {
  *    rafraichissement d onglet relancerait tout et le noeud finirait par refuser — et des fenetres
  *    refusees rendraient le total « PLANCHER » sans que personne ne comprenne pourquoi. */
 let recentsCache = new Map();
+/* /live : les soldes du wallet de frais, relus au plus toutes les 30 s (un robot qui recharge ne martele pas le noeud) ; null = non lu */
+let liveSoldes = { t: 0, eth: null, usdc: null };
+/** /live (HTML sans script) et /api/live (JSON) : frais des hooks verifies (calcul en fond partage avec /api/frais-recents?h=24),
+ *  soldes du wallet de frais, 4 sondes. Rend vite : un calcul long ne tient pas la requete plus de 2,5 s (il dit EN_COURS). */
+async function servirLive(res, chemin) {
+  const c = enFond('frais-recents:24', () => fraisRecents(24), 300000);
+  if (c.enVol) await Promise.race([c.enVol, new Promise((ok) => setTimeout(ok, 2500))]);
+  if (!liveSoldes.t || Date.now() - liveSoldes.t > 30000) {
+    const lireSolde = async (p) => { try { return await p; } catch (_) { return null; } };
+    const [eth, usdc] = await Promise.all([
+      lireSolde(rpcServeur('eth_getBalance', [FEE_WALLET, 'latest']).then((h) => BigInt(h))),
+      lireSolde(rpcServeur('eth_call', [{ to: USDC_BASE, data: '0x70a08231' + FEE_WALLET.slice(2).toLowerCase().padStart(64, '0') }, 'latest']).then((h) => BigInt(h))),
+    ]);
+    liveSoldes = { t: Date.now(), eth, usdc };
+  }
+  const frais = c.r ? { etat: 'LU', ...c.r, ageS: Math.round((Date.now() - c.t) / 1000) }
+    : c.enVol ? { etat: 'EN_COURS' } : { etat: 'NON_LU', pourquoi: c.erreur || 'not read' };
+  const e = etatLive({ frais, soldes: liveSoldes, sondes: { naissance: naissanceSonde.etat, ...autresSondes }, build: buildServi(), maintenant: Date.now() });
+  if (chemin === '/api/live') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify(e));
+  } else {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=30', 'x-content-type-options': 'nosniff' });
+    res.end(htmlLive(e));
+  }
+}
 /* ⛔ 2026-10-09 (audit budget archive) : h n etait que BORNE, pas arrondi — h=1.0001, 1.0002... ouvraient chacun une cle de cache
  *   NEUVE, donc un scan entier chacun (h=6 : 11 fenetres x 7 filtres = 77 getLogs, compte sur filtresScan ; les plus profondes peuvent
  *   finir au noeud d archive, dernier repli des getLogs de rpcServeur), et la Map grossissait sans fin. Et le cache n etant ecrit
@@ -5481,6 +5508,14 @@ function traiterRequete(req, res) {
     const heures = Math.min(168, Math.max(1, Math.round(Number(new URL(req.url, 'http://x').searchParams.get('h'))) || 24));
     const c = enFond('frais-recents:' + heures, () => fraisRecents(heures), 300000);
     void repondreFond(res, c, () => ({ heures }));
+    return;
+  }
+
+  /* ══ /live (HTML sans script) et /api/live (JSON) — 2026-10-11, Phil : « que les tx puissent etre captees via X pour que Grok sur X
+   *   puisse lire en live ». Ce que le wallet de frais a VRAIMENT recu (frais des hooks verifies par le solde, meme calcul en fond que
+   *   /api/frais-recents?h=24), ses soldes, les 4 sondes. Lisible par un robot qui suit un lien ; rien n est publie sur X d ici. */
+  if (chemin === '/live' || chemin === '/api/live') {
+    void servirLive(res, chemin).catch(() => { try { res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }); res.end('live page failed'); } catch (_) { /* deja repondu */ } });
     return;
   }
 
