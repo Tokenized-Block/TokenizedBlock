@@ -38,6 +38,10 @@ for (const x of e) {
 }
 const srv = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
 vu(/import \{ planRail, echangesDevisesAnnonces \} from '\.\/rails-api\.js';/.test(srv) && /echanges: echangesDevisesAnnonces\(\),/.test(srv), 'pairesPourAgent ne publie pas `echanges`');
+/* revue adverse (2026-10-11) : le texte libre aussi est une annonce - « any Coinbase tokenized stock » etait faux (41/71 mesures en prod) */
+const note = (srv.match(/noteEchanges: '([^']*)'/) || [])[1] || '';
+vu(note && !/\bany\b|\ball\b|\bevery\b/i.test(note) && /only where that stock has a readable market/.test(note) && /REFUSE/.test(note) && /NON_MESURE/.test(note),
+  'noteEchanges ne promet pas « any / all / every » action et dit la regle (marche lisible, sinon REFUSE / NON_MESURE)');
 const mcp = fs.readFileSync(path.join(ICI, 'mcp-tblock.js'), 'utf8');
 vu(/name: 'tblock_pairs'[\s\S]{0,700}currency swaps/.test(mcp), 'la description de tblock_pairs ne dit pas qu elle liste les echanges');
 console.log('ok paires-agent-echanges - ' + n + ' assertions ; NE PROUVE PAS l execution');

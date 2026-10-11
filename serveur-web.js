@@ -2627,7 +2627,9 @@ function pairesPourAgent() {
     note: 'plancherMinimumCreateur = the contract floor of the creator minimum, in raw units of that currency; the amount asked at birth is the larger of that floor and about $1 at today’s price',
     /* 2026-10-11 (QA Grok M7) : `paires` = les devises de NAISSANCE ; un agent ne voyait aucun ECHANGE de devises. Derives de la route 6. */
     echanges: echangesDevisesAnnonces(),
-    noteEchanges: 'echanges = currency swaps tblock_plan_swap builds, both ways (OUSD against USDC only). Tokenized stocks: ETH or USDC to any Coinbase tokenized stock and back, also through tblock_plan_swap.' };
+    /* ⛔ revue adverse (2026-10-11, confirmee par 2 sceptiques) : « any Coinbase tokenized stock » etait FAUX - mesure prod du meme soir,
+     *   achat de 20 USDC : 41/71 construits, 25 refuses (aucune pool), 5 non mesures (pool v4 vide). La phrase dit la regle, pas un chiffre. */
+    noteEchanges: 'echanges = currency swaps tblock_plan_swap builds, both ways (OUSD against USDC only). Tokenized stocks: tblock_plan_swap also plans ETH or USDC to a Coinbase tokenized stock and back, only where that stock has a readable market; many listed here have none yet - it then answers REFUSE (no market) or NON_MESURE (not read), never a guess.' };
 }
 /* ── LA SONDE DE SANTE DE LA NAISSANCE (2026-10-04) ──────────────────────────────────────────────────────────────────────
  * ⛔⛔ POURQUOI : le 2026-10-03 un drapeau a route toutes les naissances vers un hook dont l inscription exigeait un sel que l app
