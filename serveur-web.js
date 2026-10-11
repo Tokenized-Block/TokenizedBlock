@@ -3907,6 +3907,9 @@ const SERVIS = [
    * signe rien : un bouton, puis le wallet. Aucun lien depuis l app ; `noindex`. */
   'deployer-blockskins.html',
   'blockskins-deploiement.js',
+  /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
+   *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
+  'admettre-devises-skins.html',
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */

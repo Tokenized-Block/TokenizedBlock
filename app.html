@@ -3934,7 +3934,7 @@ import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGN
 import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
-  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin } from './blockskins.js';
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin } from './blockskins.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -23387,8 +23387,11 @@ function bcPeindreBoutique() {
  *    USDC, approbation EXACTE du montant, et seulement si celle en place ne le couvre pas.
  *  ⛔ Lecture ratee = on le dit (jamais une vitrine vide a la place) ; jamais « NFT » ni l adresse de frais a l ecran. */
 const BC_DUREES_ENCHERE = [['1 hour', 3600n], ['1 day', 86400n], ['3 days', 259200n], ['7 days', 604800n]];
+/* les devises du marche : ETH et USDC toujours, plus chaque action que le contrat dit ADMISE (currencyAllowed lu a vrai, choix de Phil :
+ *   les 9 plus profondes, admises par sa signature setCurrency). Relues toutes les 10 min ; une lecture ratee n ajoute rien. */
+const bcDevisesSkin = () => bc.devisesSkin || DEVISES_SKIN;
 function bcMontantSkin(brut, devise) {
-  const d = DEVISES_SKIN[String(devise).toLowerCase()];
+  const d = bcDevisesSkin()[String(devise).toLowerCase()];
   return d ? bcUnites(brut, d.dec) + ' ' + d.sym : String(brut) + ' units of ' + court(devise);
 }
 function bcDureeSkin(s) {
@@ -23419,6 +23422,10 @@ async function bcPeindreMarche() {
       z.append(b);
       return;
     }
+    if (!bc.devisesSkinLu || Date.now() - bc.devisesSkinLu > 600000) {
+      try { const d = await lireDevisesSkin({ rpc }); bc.devisesSkin = d.devises; bc.devisesSkinNonLues = d.nonLues; bc.devisesSkinLu = Date.now(); } catch (_) { /* ETH et USDC restent */ }
+      if (!z.isConnected) return;
+    }
     const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
     const enVente = r.skins.filter((s) => s.enVente), miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
     etat.textContent = (enVente.length ? enVente.length + ' for sale' : 'Nothing for sale yet') + ' · ' + r.total + ' minted. Each sale pays 10 % to TokenizedBlock.'
@@ -23426,8 +23433,9 @@ async function bcPeindreMarche() {
     for (const s of enVente) z.append(bcLigneSkin(s, moi, t));
     if (miennes.length) { z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Your skins' })); for (const s of miennes) z.append(bcLigneSkin(s, moi, t)); }
     /* ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir) : on le lit ; une lecture ratee est DITE */
+    if (bc.devisesSkinNonLues && bc.devisesSkinNonLues.length) z.append(bcEl('p', { cls: 'note', text: 'Not read this time, so not offered: ' + bc.devisesSkinNonLues.join(', ') + '.' }));
     if (moi) {
-      for (const [devise, d] of Object.entries(DEVISES_SKIN)) {
+      for (const [devise, d] of Object.entries(bcDevisesSkin())) {
         let du = null;
         /* pending() rend UN mot de 32 octets : toute autre reponse est « non lue », jamais un montant (un noeud qui renvoie autre chose
          *   afficherait sinon un « Withdraw » de plusieurs centaines de chiffres - vu en simulant la vitrine le 2026-10-11) */
@@ -23460,10 +23468,10 @@ function bcLigneSkin(s, moi, t) {
     /* vendre SA skin : un prix tape, une devise admise, et pour une enchere une duree (7 jours au plus) */
     const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
     const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
-    for (const [adr, d] of Object.entries(DEVISES_SKIN)) dev.append(bcEl('option', { value: adr, text: d.sym }));
+    for (const [adr, d] of Object.entries(bcDevisesSkin())) dev.append(bcEl('option', { value: adr, text: d.sym }));
     for (const [lib, sec] of BC_DUREES_ENCHERE) duree.append(bcEl('option', { value: String(sec), text: lib }));
     duree.value = '86400';
-    const lire = () => { const d = DEVISES_SKIN[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
+    const lire = () => { const d = bcDevisesSkin()[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
     const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
     const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Sell at this price' }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Auction from this price' });
     bv.addEventListener('click', () => vendre('VENDRE')); be.addEventListener('click', () => vendre('ENCHERE'));

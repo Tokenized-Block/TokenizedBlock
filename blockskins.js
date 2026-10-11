@@ -9,6 +9,7 @@
 // ⛔ La skin appartient a qui DETIENT le NFT (ownerOf / skinsPage.holder) - jamais a un index de serveur.
 import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 import { selecteur } from './encodeur.js';
+import { ACTIONS_COINBASE } from './paires.js';
 
 /* v2 (tokenURI avec image) quand son adresse a ete RELUE sur la chaine et ecrite par le generateur ; avant, v1 (`precedent`, jamais minte) */
 export const BLOCKSKINS = String(BLOCKSKINS_DEPLOIEMENT.adresse || BLOCKSKINS_DEPLOIEMENT.precedent.adresse).toLowerCase();
@@ -138,6 +139,31 @@ export const DEVISES_SKIN = Object.freeze({
   [ETH]: Object.freeze({ sym: 'ETH', dec: 18 }),
   [bas(BLOCKSKINS_DEPLOIEMENT.constructeur.usdc)]: Object.freeze({ sym: 'USDC', dec: 6 }),
 });
+/* ── LES ACTIONS COMME DEVISE (Phil, 2026-10-11 : « enchères avec des actions tokenized Coinbase » ; son choix : « les 9 plus
+ *    profondes ») ── chacune > 700 k$ cote USDC sur Aerodrome (etude wse49fh8o, bloc ~52 470 683). Elles n entrent dans le contrat
+ *    QUE par setCurrency(action, true) signe par l OWNER ; adresses = celles de paires.js (ACTIONS_COINBASE), jamais recopiees. */
+export const SKIN_ACTIONS_CANDIDATES = Object.freeze(['NVDAc', 'AMZNc', 'AAPLc', 'GOOGLc', 'TSLAc', 'METAc', 'MSFTc', 'MSTRc', 'SPCXc']
+  .map((s) => ACTIONS_COINBASE.find((x) => x.symbole === s)).filter(Boolean).map((x) => Object.freeze({ sym: x.symbole, adr: bas(x.adr) })));
+/** setCurrency(devise, oui) : SEUL l owner du contrat peut le signer (sinon NotOwner). Non signe ici. */
+export function appelAdmettre(devise, oui = true) {
+  return appel('setCurrency(address,bool)', [adrMot(devise), mot(oui ? 1n : 0n)], 0n, (oui ? 'Allow ' : 'Disallow ') + 'this currency on the skins market');
+}
+/** Les devises que le contrat admet MAINTENANT, lues sur la chaine (currencyAllowed, et decimals() pour une action). ETH et USDC (ceux du
+ *  constructeur, DEVISES_SKIN) restent toujours : une lecture ratee ne les efface pas, et une action dont la lecture rate n est PAS ajoutee
+ *  (on ne propose jamais une devise que le contrat refuserait). Rend { devises, nonLues: [sym…] }. */
+export async function lireDevisesSkin({ rpc, candidats = SKIN_ACTIONS_CANDIDATES }) {
+  const devises = { ...DEVISES_SKIN }, nonLues = [];
+  for (const c of candidats) {
+    try {
+      const oui = BigInt(await rpc('eth_call', [{ to: BLOCKSKINS, data: '0x' + selecteur('currencyAllowed(address)') + adrMot(c.adr) }, 'latest'])) === 1n;
+      if (!oui) continue;
+      const dec = Number(BigInt(await rpc('eth_call', [{ to: c.adr, data: '0x' + selecteur('decimals()') }, 'latest'])));
+      if (!Number.isInteger(dec) || dec < 0 || dec > 36) { nonLues.push(c.sym); continue; }
+      devises[c.adr] = Object.freeze({ sym: c.sym, dec });
+    } catch (_) { nonLues.push(c.sym); }
+  }
+  return { devises, nonLues };
+}
 /** Un montant TAPE (« 2 », « 0.015 ») -> unites brutes. Strict : jamais de flottant, plus de decimales que la devise = refus (pas d arrondi). */
 export function montantVersBrut(texte, dec) {
   const t = String(texte == null ? '' : texte).trim().replace(',', '.');

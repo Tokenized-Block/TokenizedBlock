@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Skins currencies — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#07141a;color:#e8f4f6;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;margin:26px 0 8px;color:#9fd6dd}
+p{margin:8px 0}
+.note{color:#9db4ba;font-size:14px}
+.carte{border:1px solid #1d3a44;border-radius:14px;padding:14px 16px;margin:12px 0;background:#0b1d25}
+ul{padding-left:20px;margin:8px 0}
+#liste{list-style:none;padding:0}
+#liste li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #1d3a44;font-size:14px}
+#liste li span:last-child{color:#9db4ba}
+button{appearance:none;border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;cursor:pointer;background:#2fd0c8;color:#04262a}
+button.sec{background:transparent;color:#e8f4f6;border:1px solid #2a4a55}
+button:disabled{opacity:.45;cursor:not-allowed}
+.ok{color:#6fe3a5}.ko{color:#ff8f8f}
+</style>
+</head>
+<body>
+<main>
+  <h1>Tokenized stocks on the skins market</h1>
+  <p class="note">For the owner of the skins contract only. Each stock is one transaction signed by your wallet. This page sends nothing by itself.</p>
+
+  <h2>What this changes</h2>
+  <div class="carte">
+    <ul>
+      <li>Skins can then be sold and auctioned in these stocks. Each sale still pays 10% to the fee wallet, in that stock.</li>
+      <li>It applies to new listings. Disallowing a stock later never blocks an existing listing, bid, settlement or withdrawal.</li>
+      <li>Only the contract owner can sign it; any other wallet is refused by the contract.</li>
+    </ul>
+  </div>
+
+  <h2>The 9 stocks</h2>
+  <div class="carte">
+    <ul id="liste"></ul>
+    <p class="note" id="dEtatListe">Connect the owner wallet to read what the contract allows today.</p>
+  </div>
+
+  <h2>Sign</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bAdmettre" disabled>Allow the remaining stocks</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+  </div>
+</main>
+<script type="module">
+/* admettre-devises-skins.html — propose AU WALLET PROPRIETAIRE du contrat BlockSkins (v2) les appels setCurrency(action, true) pour les
+ * 9 actions choisies par Phil le 2026-10-11 (« les 9 plus profondes », SKIN_ACTIONS_CANDIDATES de blockskins.js, adresses de paires.js).
+ * ⛔ Rien ne part sans un appui ET la signature du wallet. La page RELIT owner() et refuse tout autre compte ; elle RELIT currencyAllowed
+ *   avant de proposer, et apres CHAQUE recu. Un seul type d envoi : setCurrency(une des 9, true) vers BLOCKSKINS, sans valeur. */
+import { BLOCKSKINS, SKIN_ACTIONS_CANDIDATES, appelAdmettre } from './blockskins.js';
+import { selecteur } from './keccak.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x2105';
+let compte = null, proprietaire = null, chaineOk = false, envoi = false;
+const admises = new Map(); /* adr -> true | false | null (non lu) */
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+const lire = async (to, data) => eth().request({ method: 'eth_call', params: [{ to, data }, 'latest'] });
+const motAdr = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
+async function lireAdmise(c) {
+  try { admises.set(c.adr, BigInt(await lire(BLOCKSKINS, selecteur('currencyAllowed(address)') + motAdr(c.adr))) === 1n); } catch (_) { admises.set(c.adr, null); }
+}
+async function relire() {
+  if (!eth()) return;
+  try { chaineOk = String(await eth().request({ method: 'eth_chainId' })).toLowerCase() === CHAINE_HEX; } catch (_) { chaineOk = false; }
+  if (chaineOk) {
+    try { proprietaire = '0x' + String(await lire(BLOCKSKINS, selecteur('owner()'))).slice(-40).toLowerCase(); } catch (_) { proprietaire = null; }
+    for (const c of SKIN_ACTIONS_CANDIDATES) await lireAdmise(c);
+  }
+  peindre();
+}
+const restantes = () => SKIN_ACTIONS_CANDIDATES.filter((c) => admises.get(c.adr) === false);
+function peindre() {
+  const ul = $('#liste'); ul.textContent = '';
+  for (const c of SKIN_ACTIONS_CANDIDATES) {
+    const v = admises.get(c.adr), li = document.createElement('li');
+    const a = document.createElement('span'), b = document.createElement('span');
+    a.textContent = c.sym; b.textContent = v === true ? 'allowed' : v === false ? 'not allowed yet' : 'not read';
+    if (v === true) b.className = 'ok';
+    li.append(a, b); ul.append(li);
+  }
+  const lus = SKIN_ACTIONS_CANDIDATES.filter((c) => admises.has(c.adr)).length;
+  $('#dEtatListe').textContent = !compte ? 'Connect the owner wallet to read what the contract allows today.'
+    : !chaineOk ? 'Switch your wallet to Base to read the contract.'
+    : lus ? SKIN_ACTIONS_CANDIDATES.filter((c) => admises.get(c.adr) === true).length + ' of ' + SKIN_ACTIONS_CANDIDATES.length + ' allowed, read on chain.' : 'Reading…';
+  const estProprio = !!compte && !!proprietaire && compte.toLowerCase() === proprietaire;
+  $('#dCompte').textContent = !compte ? (eth() ? 'No wallet connected.' : 'No wallet found in this browser.')
+    : estProprio ? 'Connected: ' + compte + ' — the owner of the skins contract.'
+    : 'Connected: ' + compte + ' — this wallet is not the owner of the skins contract: nothing can be allowed from it.';
+  $('#bConnecter').hidden = !!compte;
+  const n = restantes().length;
+  $('#bAdmettre').textContent = n ? 'Allow the ' + n + ' remaining stock' + (n > 1 ? 's' : '') : 'Nothing left to allow';
+  $('#bAdmettre').disabled = !estProprio || !chaineOk || envoi || n === 0;
+}
+async function attendreRecu(tx) {
+  for (let i = 0; i < 90; i += 1) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try { const r = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); if (r) return r; } catch (_) { /* reessaie */ }
+  }
+  return null;
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); return; }
+  try { if (String(await eth().request({ method: 'eth_chainId' })).toLowerCase() !== CHAINE_HEX) await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); } catch (_) { /* dit par peindre */ }
+  await relire();
+});
+$('#bAdmettre').addEventListener('click', async () => {
+  if (envoi || !compte || !proprietaire || compte.toLowerCase() !== proprietaire || !chaineOk) return;
+  envoi = true; peindre();
+  try {
+    for (const c of restantes()) {
+      const tx = appelAdmettre(c.adr);
+      dire('Allow ' + c.sym + ': confirm in your wallet…');
+      let h;
+      try { h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, to: tx.to, data: tx.data }] }); }
+      catch (e) { dire(e && e.code === 4001 ? 'You declined ' + c.sym + ' in your wallet — nothing more was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko'); return; }
+      dire('Allow ' + c.sym + ': sent, waiting for Base…');
+      const r = await attendreRecu(h);
+      if (!r) { dire(c.sym + ' is not confirmed yet after 3 minutes — check the transaction ' + h + ' before signing anything again.', 'note ko'); return; }
+      if (r.status !== '0x1') { dire(c.sym + ': the transaction failed on chain. Nothing more was sent.', 'note ko'); return; }
+      await lireAdmise(c); peindre();
+      if (admises.get(c.adr) !== true) { dire(c.sym + ': confirmed, but the contract does not read it as allowed. Stopped.', 'note ko'); return; }
+    }
+    dire('Done. Each stock was read back as allowed on chain; the app offers them on the skins market within 10 minutes.', 'note ok');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; void relire(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>

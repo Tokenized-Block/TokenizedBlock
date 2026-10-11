@@ -95,6 +95,23 @@ vu(pr && pr.genre === 'ENCHERIR' && pr.montant === 1050000000000000n, 'sans prix
 pr = P({ skins: [fixeEth(6, 10n ** 15n), { ...encEth, encherisseur: MOI }], maintenant: T + 1 });
 vu(pr && pr.genre === 'REGLER' && pr.skin.tokenId === 9n, 'une enchere FINIE gagnee par ce compte passe avant tout : la regler');
 vu(S.propositionSkin({ skins: [fixeEth(6, 10n ** 15n)], moi: null, block: B, maintenant: T, achat: true, devise: S.ETH, parTrade: 1n, reste: 1n }) === null, 'sans compte : rien');
+/* LES ACTIONS COMME DEVISE (Phil, 2026-10-11 : « les 9 plus profondes ») : jamais affichees sans currencyAllowed LU a vrai */
+const { ACTIONS_COINBASE } = await import('./paires.js');
+vu(S.SKIN_ACTIONS_CANDIDATES.length === 9 && S.SKIN_ACTIONS_CANDIDATES.every((c) => ACTIONS_COINBASE.some((x) => x.symbole === c.sym && x.adr.toLowerCase() === c.adr))
+  && JSON.stringify(S.SKIN_ACTIONS_CANDIDATES.map((c) => c.sym)) === JSON.stringify(['NVDAc', 'AMZNc', 'AAPLc', 'GOOGLc', 'TSLAc', 'METAc', 'MSFTc', 'MSTRc', 'SPCXc']), 'les 9 candidates = celles de paires.js, dans l ordre choisi');
+const adm = S.appelAdmettre(S.SKIN_ACTIONS_CANDIDATES[0].adr);
+vu(adm.to === S.BLOCKSKINS && adm.value === '0x0' && adm.data === '0x' + selecteur('setCurrency(address,bool)') + S.SKIN_ACTIONS_CANDIDATES[0].adr.slice(2).padStart(64, '0') + '1'.padStart(64, '0'), 'setCurrency(action, true) mal encode');
+const parSym = (s) => S.SKIN_ACTIONS_CANDIDATES.find((c) => c.sym === s);
+const [NV, AA, GO] = [parSym('NVDAc'), parSym('AMZNc'), parSym('GOOGLc')];
+const rpcDev = async (m, p) => {
+  const to = p[0].to.toLowerCase(), data = p[0].data;
+  if (to === S.BLOCKSKINS) { if (data.endsWith(GO.adr.slice(2))) throw new Error('429'); return '0x' + (data.endsWith(NV.adr.slice(2)) ? 1n : 0n).toString(16).padStart(64, '0'); }
+  if (to === NV.adr) return '0x' + (8n).toString(16).padStart(64, '0');
+  throw new Error('unexpected ' + to);
+};
+const dv = await S.lireDevisesSkin({ rpc: rpcDev, candidats: [NV, AA, GO] });
+vu(dv.devises[NV.adr] && dv.devises[NV.adr].sym === 'NVDAc' && dv.devises[NV.adr].dec === 8 && !dv.devises[AA.adr] && !dv.devises[GO.adr], 'admise (lue a vrai) : affichee avec ses decimales lues ; non admise : absente');
+vu(JSON.stringify(dv.nonLues) === '["GOOGLc"]' && dv.devises[S.ETH] && dv.devises[USDC], 'lecture ratee : dite non lue, PAS ajoutee ; ETH et USDC restent toujours');
 vu(S.appelCredit(S.ETH, MOI) ==='0x' + selecteur('pending(address,address)') + '0'.repeat(64) + MOI.slice(2).padStart(64, '0'), 'pending(devise, compte) mal encode');
 /* lireSkins : une lecture ratee n est JAMAIS une vitrine vide */
 const r = await S.lireSkins({ rpc: async () => { throw new Error('429'); } });
