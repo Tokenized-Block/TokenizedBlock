@@ -58,6 +58,26 @@ vu(d[1].enVente && d[1].enchere && d[1].devise === USDC && d[1].prix === 3000000
 vu(S.offreMinimale(d[1]) === 3307500n && S.offreMinimale(d[0]) === 0n, 'offreMinimale sur une skin DECODEE (3 150 000 + 5 %) : ' + S.offreMinimale(d[1]));
 leve = false; try { S.decoderPage('0x' + w(32) + w(3) + skin(1, MOI, B, p, 0, 0, S.ETH, 0, 0, S.ETH, 0)); } catch (_) { leve = true; } vu(leve, 'une vitrine tronquee est acceptee');
 vu(S.skinPortee(d, MOI, B).tokenId === 1n && S.skinPortee(d, MOI, AUTRE) === null && S.skinsDe(d, AUTRE).length === 1, 'skin portee / skins d un compte faux');
+/* LE MARCHE (2026-10-11) : la vitrine ne propose que ce que le contrat ACCEPTERAIT pour CE compte, a CET instant */
+vu(S.DEVISES_SKIN[S.ETH].dec === 18 && S.DEVISES_SKIN[USDC].sym === 'USDC' && S.DEVISES_SKIN[USDC].dec === 6 && Object.keys(S.DEVISES_SKIN).length === 2,
+  'devises du marche : ETH et l USDC du constructeur, rien d autre tant que l owner n a rien admis');
+vu(S.montantVersBrut('2', 6) === 2000000n && S.montantVersBrut('0.015', 18) === 15n * 10n ** 15n && S.montantVersBrut('1,5', 6) === 1500000n && S.montantVersBrut(' 3 ', 6) === 3000000n,
+  'montant tape -> unites brutes (2 USDC, 0.015 ETH, virgule, espaces)');
+for (const mauvais of [['0.0000001', 6], ['abc', 6], ['0', 6], ['-1', 6], ['1e3', 6], ['', 6], ['0.000', 6]]) {
+  let refuse = false; try { S.montantVersBrut(mauvais[0], mauvais[1]); } catch (_) { refuse = true; }
+  vu(refuse, 'montant invalide accepte : ' + JSON.stringify(mauvais));
+}
+const T = 1800000000;
+const fixe = { ...d[0], enVente: true, enchere: false, prix: 2000000n };
+const encSansOffre = { ...d[1], encherisseur: S.ETH, offre: 0n };
+const egal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+vu(egal(S.actionsSkin(d[0], MOI, T - 1), ['METTRE_EN_VENTE', 'OUVRIR_ENCHERE']) && egal(S.actionsSkin(d[0], AUTRE, T - 1), []), 'sa skin hors vente : la vendre ou l encherir ; un autre : rien');
+vu(egal(S.actionsSkin(fixe, MOI, T - 1), ['RETIRER']) && egal(S.actionsSkin(fixe, AUTRE, T - 1), ['ACHETER']), 'prix fixe : le vendeur retire, un autre achete');
+vu(egal(S.actionsSkin(d[1], MOI, T - 1), ['ENCHERIR']) && egal(S.actionsSkin(d[1], AUTRE, T - 1), []), 'enchere en cours AVEC offre : un autre encherit ; le vendeur ne peut rien (HasBids)');
+vu(egal(S.actionsSkin(encSansOffre, AUTRE, T - 1), ['RETIRER']), 'enchere en cours SANS offre : le vendeur peut la retirer');
+vu(egal(S.actionsSkin(d[1], MOI, T), ['REGLER']) && egal(S.actionsSkin(d[1], AUTRE, T + 5), ['REGLER']), 'enchere finie (a la seconde de fin comprise) : n importe qui regle');
+vu(egal(S.actionsSkin(fixe, null, T), []) && egal(S.actionsSkin(fixe, '0x123', T), []) && egal(S.actionsSkin(fixe, AUTRE, NaN), []), 'sans compte valide ou sans heure : aucune action');
+vu(S.appelCredit(S.ETH, MOI) === '0x' + selecteur('pending(address,address)') + '0'.repeat(64) + MOI.slice(2).padStart(64, '0'), 'pending(devise, compte) mal encode');
 /* lireSkins : une lecture ratee n est JAMAIS une vitrine vide */
 const r = await S.lireSkins({ rpc: async () => { throw new Error('429'); } });
 vu(r.etat === 'NON_LU' && !Array.isArray(r.skins), 'une lecture ratee rend une liste vide');

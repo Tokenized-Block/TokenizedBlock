@@ -130,3 +130,39 @@ export function skinPortee(skins, compte, block) {
   const b = bas(block), miennes = skinsDe(skins, compte).filter((s) => s.block === b);
   return miennes.length ? miennes[miennes.length - 1] : null;
 }
+
+/* ── LE MARCHE (Phil, 2026-10-11 : « le market des skins … enchères … des fees de l app pour chaque achat/vente ») ──
+ *   Les devises que le contrat admet AUJOURD HUI a sa naissance : ETH (adresse 0) et l USDC de SON constructeur (lu dans l enregistrement
+ *   de deploiement, jamais recopie). Une action tokenisee n y entre que par setCurrency, signe par l owner : pas listee ici avant. */
+export const DEVISES_SKIN = Object.freeze({
+  [ETH]: Object.freeze({ sym: 'ETH', dec: 18 }),
+  [bas(BLOCKSKINS_DEPLOIEMENT.constructeur.usdc)]: Object.freeze({ sym: 'USDC', dec: 6 }),
+});
+/** Un montant TAPE (« 2 », « 0.015 ») -> unites brutes. Strict : jamais de flottant, plus de decimales que la devise = refus (pas d arrondi). */
+export function montantVersBrut(texte, dec) {
+  const t = String(texte == null ? '' : texte).trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(t)) throw new Error('type an amount like 2 or 0.015');
+  const [ent, frac = ''] = t.split('.');
+  if (frac.length > dec) throw new Error('at most ' + dec + ' decimals');
+  const brut = BigInt(ent) * 10n ** BigInt(dec) + BigInt((frac + '0'.repeat(dec)).slice(0, dec) || '0');
+  if (brut <= 0n) throw new Error('the amount must be above zero');
+  return brut;
+}
+/** CE QUE CE COMPTE PEUT FAIRE sur CETTE skin, a cet instant (secondes) - seulement ce que le contrat ACCEPTERAIT :
+ *  - la sienne, pas en vente : la mettre en vente ou aux encheres ;
+ *  - en vente a prix fixe : le vendeur la retire, un autre l achete ;
+ *  - aux encheres, finie : n importe qui regle (le gagnant la recoit, sans offre elle revient au vendeur) ;
+ *  - aux encheres, en cours : un autre encherit ; le vendeur ne la retire que s il n y a AUCUNE offre (le contrat : HasBids).
+ *  Sans compte : rien (lire n est pas agir). */
+export function actionsSkin(s, moi, maintenant) {
+  const m = bas(moi), t = Number(maintenant);
+  if (!s || !ADR.test(m) || !Number.isFinite(t)) return [];
+  const mien = s.detenteur === m;
+  if (!s.enVente) return mien ? ['METTRE_EN_VENTE', 'OUVRIR_ENCHERE'] : [];
+  if (!s.enchere) return mien ? ['RETIRER'] : ['ACHETER'];
+  if (t >= Number(s.fin)) return ['REGLER'];
+  if (mien) return s.encherisseur === ETH ? ['RETIRER'] : [];
+  return ['ENCHERIR'];
+}
+/** pending(devise, compte) : ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir). */
+export function appelCredit(devise, compte) { return '0x' + selecteur('pending(address,address)') + adrMot(devise) + adrMot(compte); }

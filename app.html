@@ -750,6 +750,14 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcCherche input::placeholder{color:var(--doux);opacity:.7}
 #bcChercheNote:empty{display:none}
 .bcBoutique[hidden]{display:none}
+/* le marche des skins (2026-10-11) : une ligne par skin, ses actions dessous ; rien ne deborde a 375 px */
+.bcMarche{margin-top:12px;padding-top:10px;border-top:1px solid var(--ligne)}
+.bcLigneSkin{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-bottom:1px solid var(--ligne);font-size:12px;min-width:0}
+.bcLigneSkin>span:not(.bcPastille){flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.bcLigneSkin .bouton{padding:6px 10px;font-size:12px}
+.bcPastille{flex:0 0 22px;width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 4px rgb(var(--fondRgb))}
+.bcVendre{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.bcVendre input,.bcVendre select{min-width:0;flex:1 1 70px;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-size:12px;padding:6px 8px}
 .bcTuile{appearance:none;display:block;min-width:0;padding:8px;border:1px solid var(--ligne);border-radius:14px;background:var(--creux);color:var(--texte);font:inherit;text-align:center;cursor:pointer}
 .bcTuile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .25)}
 .bcTuile:disabled{opacity:.6;cursor:not-allowed}
@@ -3925,7 +3933,8 @@ import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
 import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1, tacheAutorisee } from './brain-tasks.js';
 import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
-import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee } from './blockskins.js';
+import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN } from './blockskins.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -23329,6 +23338,163 @@ function bcPeindreBoutique() {
     grille.append(bcEl('label', {}, [bcEl('span', {}, [document.createTextNode(lib + ' '), val]), c]));
   }
   z.append(grille);
+  /* le marche des skins, sous les curseurs : lu sur la chaine a chaque ouverture de la boutique */
+  z.append(bcEl('div', { cls: 'bcMarche', id: 'bcMarche' }));
+  void bcPeindreMarche();
+}
+/* ── LE MARCHE DES SKINS (Phil, 2026-10-11 : « le market des skins … tu peux faire des enchères … des fees de l app a mettre pour
+ *    chaque achat vente ») ── UNE lecture du contrat (lireSkins). Chaque ligne ne propose QUE ce que le contrat accepterait pour CE
+ *    compte, maintenant (actionsSkin : pur, teste). Tout passe par une carte du Chat et bcSigner : le wallet signe chaque etape ; en
+ *    USDC, approbation EXACTE du montant, et seulement si celle en place ne le couvre pas.
+ *  ⛔ Lecture ratee = on le dit (jamais une vitrine vide a la place) ; jamais « NFT » ni l adresse de frais a l ecran. */
+const BC_DUREES_ENCHERE = [['1 hour', 3600n], ['1 day', 86400n], ['3 days', 259200n], ['7 days', 604800n]];
+function bcMontantSkin(brut, devise) {
+  const d = DEVISES_SKIN[String(devise).toLowerCase()];
+  return d ? bcUnites(brut, d.dec) + ' ' + d.sym : String(brut) + ' units of ' + court(devise);
+}
+function bcDureeSkin(s) {
+  const n = Math.max(0, Math.floor(Number(s)));
+  return n >= 86400 ? Math.floor(n / 86400) + ' d ' + Math.floor((n % 86400) / 3600) + ' h' : n >= 3600 ? Math.floor(n / 3600) + ' h ' + Math.floor((n % 3600) / 60) + ' min' : Math.max(1, Math.ceil(n / 60)) + ' min';
+}
+function bcPastilleSkin(r) {
+  const p = bcEl('span', { cls: 'bcPastille', 'aria-hidden': 'true' }), c = (h, l) => 'hsl(' + h + ' 90% ' + l + '%)';
+  p.style.background = 'conic-gradient(from ' + r.angle + 'deg,' + c(r.h[0], 62) + ',' + c(r.h[1], 38) + ',' + c(r.h[2], 70) + ',' + c(r.h[1], 30) + ',' + c(r.h[0], 62) + ')';
+  return p;
+}
+async function bcPeindreMarche() {
+  const z = $('#bcMarche');
+  if (!z || bc.marcheEnVol) return;
+  bc.marcheEnVol = true;
+  try {
+    z.textContent = '';
+    z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Skins market' }));
+    const etat = bcEl('p', { cls: 'note', text: 'Reading the market on chain…' });
+    z.append(etat);
+    let r;
+    try { r = await lireSkins({ rpc }); } catch (_) { r = { etat: 'NON_LU' }; }
+    if (!z.isConnected) return;
+    if (r.etat !== 'LU') {
+      etat.textContent = 'The market could not be read right now — nothing is listed rather than a wrong list.';
+      const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Read again' });
+      b.addEventListener('click', () => void bcPeindreMarche());
+      z.append(b);
+      return;
+    }
+    const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
+    const enVente = r.skins.filter((s) => s.enVente), miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
+    etat.textContent = (enVente.length ? enVente.length + ' for sale' : 'Nothing for sale yet') + ' · ' + r.total + ' minted. Each sale pays 10 % to TokenizedBlock.'
+      + (moi ? '' : ' Connect your wallet to buy, bid or sell.');
+    for (const s of enVente) z.append(bcLigneSkin(s, moi, t));
+    if (miennes.length) { z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Your skins' })); for (const s of miennes) z.append(bcLigneSkin(s, moi, t)); }
+    /* ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir) : on le lit ; une lecture ratee est DITE */
+    if (moi) {
+      for (const [devise, d] of Object.entries(DEVISES_SKIN)) {
+        let du = null;
+        /* pending() rend UN mot de 32 octets : toute autre reponse est « non lue », jamais un montant (un noeud qui renvoie autre chose
+         *   afficherait sinon un « Withdraw » de plusieurs centaines de chiffres - vu en simulant la vitrine le 2026-10-11) */
+        try { const brut = String(await rpc('eth_call', [{ to: BLOCKSKINS, data: appelCredit(devise, moi) }, 'latest'])); du = /^0x[0-9a-f]{64}$/i.test(brut) ? BigInt(brut) : null; } catch (_) { du = null; }
+        if (!z.isConnected) return;
+        if (du === null) { z.append(bcEl('p', { cls: 'note', text: 'What the market owes you in ' + d.sym + ' could not be read — it stays yours; read again later.' })); continue; }
+        if (du === 0n) continue;
+        const b = bcEl('button', { type: 'button', cls: 'bouton', text: 'Withdraw ' + bcUnites(du, d.dec) + ' ' + d.sym });
+        b.addEventListener('click', () => void bcActionMarche('CREDIT', null, { devise, du }));
+        z.append(bcEl('div', { cls: 'bcLigneSkin' }, [bcEl('span', { text: 'The market owes you ' + bcUnites(du, d.dec) + ' ' + d.sym + ' (an outbid offer or a payment you could not receive).' }), b]));
+      }
+    }
+  } finally { bc.marcheEnVol = false; }
+}
+function bcLigneSkin(s, moi, t) {
+  const li = bcEl('div', { cls: 'bcLigneSkin' });
+  const nom = 'Skin #' + s.tokenId + ' · ' + bcResoudre(s.block).sym;
+  const detail = !s.enVente ? 'in your wallet'
+    : !s.enchere ? 'for ' + bcMontantSkin(s.prix, s.devise)
+    : t >= s.fin ? 'auction ended · ' + (s.offre > 0n ? 'winning bid ' + bcMontantSkin(s.offre, s.devise) : 'no bid')
+    : 'auction · ' + (s.offre > 0n ? 'highest bid ' + bcMontantSkin(s.offre, s.devise) : 'opens at ' + bcMontantSkin(s.prix, s.devise)) + ' · ends in ' + bcDureeSkin(s.fin - t);
+  li.append(bcPastilleSkin(s.recette), bcEl('span', {}, [bcEl('b', { text: nom }), document.createTextNode(' — ' + detail + (s.enVente && s.detenteur === moi ? ' (yours)' : ''))]));
+  const bouton = (texte, genre, x) => { const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: texte }); b.addEventListener('click', () => void bcActionMarche(genre, s, x)); li.append(b); };
+  const acts = actionsSkin(s, moi, t);
+  if (acts.includes('ACHETER')) bouton('Buy for ' + bcMontantSkin(s.prix, s.devise), 'ACHETER');
+  if (acts.includes('ENCHERIR')) bouton('Bid ' + bcMontantSkin(offreMinimale(s), s.devise), 'ENCHERIR');
+  if (acts.includes('REGLER')) bouton('Settle', 'REGLER');
+  if (acts.includes('RETIRER')) bouton('Take it back', 'RETIRER');
+  if (acts.includes('METTRE_EN_VENTE')) {
+    /* vendre SA skin : un prix tape, une devise admise, et pour une enchere une duree (7 jours au plus) */
+    const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
+    const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
+    for (const [adr, d] of Object.entries(DEVISES_SKIN)) dev.append(bcEl('option', { value: adr, text: d.sym }));
+    for (const [lib, sec] of BC_DUREES_ENCHERE) duree.append(bcEl('option', { value: String(sec), text: lib }));
+    duree.value = '86400';
+    const lire = () => { const d = DEVISES_SKIN[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
+    const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
+    const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Sell at this price' }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Auction from this price' });
+    bv.addEventListener('click', () => vendre('VENDRE')); be.addEventListener('click', () => vendre('ENCHERE'));
+    li.append(bcEl('div', { cls: 'bcVendre' }, [prix, dev, duree, bv, be]));
+  }
+  return li;
+}
+async function bcActionMarche(genre, s, x = {}) {
+  const id = s ? s.tokenId : null;
+  const titre = { ACHETER: 'Buy skin #' + id, ENCHERIR: 'Bid on skin #' + id, REGLER: 'Settle skin #' + id, RETIRER: 'Take back skin #' + id,
+    VENDRE: 'Sell skin #' + id, ENCHERE: 'Auction skin #' + id, CREDIT: 'Withdraw from the skins market' }[genre];
+  const m = bcMessage('Skins', '', titre);
+  bcVue('chat');
+  if (CHAINE !== 8453) { bcEtape(m, 'The skins market is on Base mainnet only.', 'non'); return; }
+  const refuser = () => bcEtape(m, 'Dismissed — nothing was sent.');
+  const go = async () => {
+    if (!(await bcAvecWallet(m, go))) return;
+    let appels = [];
+    try {
+      if (genre === 'ACHETER' || genre === 'ENCHERIR') {
+        const montant = genre === 'ACHETER' ? s.prix : offreMinimale(s);
+        if (s.devise !== ETH_SKIN) {
+          /* en jeton : solde ET autorisation relus avant de signer ; approbation EXACTE du montant, seulement si besoin */
+          let solde = null, autorise = null;
+          try { solde = await bcSolde(s.devise, compte); } catch (_) { solde = null; }
+          try { autorise = BigInt(await rpc('eth_call', [{ to: s.devise, data: '0xdd62ed3e' + String(compte).slice(2).toLowerCase().padStart(64, '0') + BLOCKSKINS.slice(2).padStart(64, '0') }, 'latest'])); } catch (_) { autorise = null; }
+          if (solde === null || autorise === null) { bcEtape(m, 'Your balance or approval could not be read — nothing was asked.', 'non'); bcBoutons(m, [['Try again', go, true], ['Dismiss', refuser, true]]); return; }
+          if (solde < montant) { bcEtape(m, 'This wallet holds ' + bcMontantSkin(solde, s.devise) + ' — this needs ' + bcMontantSkin(montant, s.devise) + '. Nothing was asked.', 'non'); return; }
+          if (autorise < montant) appels.push(appelApprouver(s.devise, montant, 'Allow the skins market to take exactly ' + bcMontantSkin(montant, s.devise)));
+        }
+        appels.push(genre === 'ACHETER' ? appelAcheter(s.tokenId, s.devise, montant) : appelEncherir(s.tokenId, s.devise, montant));
+        const p = partage(montant);
+        bcEtape(m, genre === 'ACHETER'
+          ? 'You pay ' + bcMontantSkin(montant, s.devise) + ': the seller receives ' + bcMontantSkin(p.vendeur, s.devise) + ', TokenizedBlock ' + bcMontantSkin(p.frais, s.devise) + ' (10 %). The skin comes to your wallet and dresses its block for you.'
+          : 'Your bid: ' + bcMontantSkin(montant, s.devise) + ', held by the contract until the end. If someone outbids you, it is credited back to you to withdraw. 10 % of the winning bid goes to TokenizedBlock.');
+      } else if (genre === 'REGLER') {
+        appels = [appelRegler(s.tokenId)];
+        bcEtape(m, s.offre > 0n ? 'The winner receives the skin, the seller 90 %, TokenizedBlock 10 %. Anyone can settle an ended auction.' : 'No bid: the skin goes back to its seller.');
+      } else if (genre === 'RETIRER') {
+        appels = [appelRetirer(s.tokenId)];
+        bcEtape(m, 'The skin leaves the market and comes back to your wallet.');
+      } else if (genre === 'VENDRE') {
+        appels = [appelMettreEnVente(s.tokenId, x.devise, x.brut)];
+        bcEtape(m, 'For sale at ' + bcMontantSkin(x.brut, x.devise) + '. While it is for sale the market contract holds it; when it sells you receive ' + bcMontantSkin(partage(x.brut).vendeur, x.devise) + ' (90 %).');
+      } else if (genre === 'ENCHERE') {
+        appels = [appelOuvrirEnchere(s.tokenId, x.devise, x.brut, x.duree)];
+        bcEtape(m, 'Auction from ' + bcMontantSkin(x.brut, x.devise) + ' for ' + bcDureeSkin(Number(x.duree)) + '. Each bid must raise the highest by 5 %; a bid in the last 5 minutes adds 5 minutes (never past 7 days). You receive 90 % of the winning bid.');
+      } else if (genre === 'CREDIT') {
+        appels = [appelRetirerCredit(x.devise)];
+        bcEtape(m, 'The market sends you ' + bcMontantSkin(x.du, x.devise) + '.');
+      }
+    } catch (e) { bcEtape(m, 'This could not be prepared: ' + String((e && e.message) || e).slice(0, 120), 'non'); return; }
+    bcBoutons(m, [['Sign ' + appels.length + ' step' + (appels.length > 1 ? 's' : '') + ' in my wallet', async () => {
+      const r = await bcSigner(m, appels);
+      /* relancer est SUR quand rien n est parti, ou quand seule une approbation est passee (relue au re-plan) ; jamais apres un envoi
+       *   diffuse sans confirmation (il pourrait passer deux fois) */
+      if (!r.ok) {
+        if (r.diffusee) { bcEtape(m, 'Sent, not confirmed yet — check your wallet before signing anything again.', 'non'); bcBoutons(m, []); }
+        else bcBoutons(m, [['Start again', go, true], ['Dismiss', refuser, true]]);
+        return;
+      }
+      bcBoutons(m, []);
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + r.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      mesSkins.lu = 0; bc.skinsLues = 0;
+      await lireMesSkins(); poserMesSkins(); bcPeindreSkinEtat();
+      void bcPeindreMarche();
+      bcEtape(m, 'Done — the market was read again on chain.', 'oui');
+    }], ['Dismiss', refuser, true]]);
+  };
+  await go();
 }
 /* ── AiFi : LE CERVEAU PROPOSE SEUL, DANS DES LIMITES ; LE WALLET CONFIRME CHAQUE TRADE (2026-10-04) ────────────────────────────
  * Ce que c est : quand l humeur du block CHANGE vers un etat que la personne a coche (excited -> achat ; worried -> vente d un quart
