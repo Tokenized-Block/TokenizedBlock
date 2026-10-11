@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title BlockSkins — a skin for a block is an NFT; its market lives in the same contract.
+/// @title BlockSkins — a skin bound to one block (an ERC-721 token, so wallets list it); its market lives in the same contract.
+/// @notice v2, 2026-10-11: the same rules as v1 (0xea6c…e77d, deployed 2026-10-04, never minted); only tokenURI changed — it now
+///         carries the skin's image, painted here from its recipe, so a wallet can show the skin (Phil: "visible in the wallet").
 /// @notice Phil, 2026-10-04: "when the user pays 1 USDC he receives the NFT of the skin he chose"; "he can resell it on a market
 ///         made only of block skins"; "auctions with a set duration, one week at most"; "sale and auction in ETH, USDC or a
 ///         tokenized stock with a deep pool"; "if both tick 'valid' the transaction is automatic, agents make the exchange";
@@ -498,20 +500,87 @@ contract BlockSkins {
         return id == 0x01ffc9a7 || id == 0x80ac58cd || id == 0x5b5e139f; // ERC-165, ERC-721, ERC-721 metadata
     }
 
-    /// @notice on-chain metadata: the block it dresses and its seven hues. No image is hosted anywhere: the app paints it.
+    /// @notice on-chain metadata a wallet can show: the name, the block it dresses, its seven hues and its IMAGE — the skin painted
+    ///         from its recipe by this contract (nothing hosted anywhere, no server, no IPFS).
+    /// @dev v2 (2026-10-11). v1's tokenURI had no image (a wallet could show a name at best) and its raw JSON carried "#", which a
+    ///      standards-conforming reader (fetch) takes as a URL fragment: measured on a fork, 29 characters returned out of 219, invalid
+    ///      JSON. Here the JSON and the image are both base64: no character of either data URI can be read as a fragment or delimiter.
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         ownerOf(tokenId);
         Skin memory s = skinOf[tokenId];
         uint16[7] memory h = unpackRecipe(s.recipe);
-        return string.concat(
-            'data:application/json;utf8,{"name":"TokenizedBlock skin #',
+        string memory b = _hex(s.blockToken);
+        string memory head = string.concat(
+            '{"name":"TokenizedBlock skin #',
             _u(tokenId),
-            '","description":"A skin for one block: a look, not a right over the block.","block":"',
-            _hex(s.blockToken),
-            '","hues":[',
-            _u(h[0]), ",", _u(h[1]), ",", _u(h[2]), ",", _u(h[3]), ",", _u(h[4]), ",", _u(h[5]), ",", _u(h[6]),
-            "]}"
+            '","description":"A skin for one block: a look, not a right over the block.","image":"data:image/svg+xml;base64,',
+            _b64(bytes(_svg(h))),
+            '","block":"',
+            b
         );
+        string memory hues = string.concat(_u(h[0]), ",", _u(h[1]), ",", _u(h[2]), ",", _u(h[3]));
+        hues = string.concat(hues, ",", _u(h[4]), ",", _u(h[5]), ",", _u(h[6]));
+        string memory json = string.concat(head, '","hues":[', hues, '],"attributes":[{"trait_type":"Block","value":"', b, '"}]}');
+        return string.concat("data:application/json;base64,", _b64(bytes(json)));
+    }
+
+    /// @dev the skin as the app paints it, as a still image: a dark background (hue 6), the ring's three hues turned by hue 0 (the
+    ///      app's conic ring, drawn as a rotated gradient), and the block's cube (edges: hue 4) around its glowing core (hue 5).
+    function _svg(uint16[7] memory h) private pure returns (string memory) {
+        string memory defs = string.concat(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400"><defs>',
+            '<linearGradient id="a" gradientTransform="rotate(',
+            _u(h[0]),
+            ' .5 .5)"><stop offset="0" stop-color="',
+            _hsl(h[1], 62),
+            '"/><stop offset=".33" stop-color="',
+            _hsl(h[2], 38),
+            '"/><stop offset=".66" stop-color="',
+            _hsl(h[3], 70)
+        );
+        defs = string.concat(
+            defs,
+            '"/><stop offset="1" stop-color="',
+            _hsl(h[2], 30),
+            '"/></linearGradient><radialGradient id="c"><stop offset="0" stop-color="',
+            _hsl(h[5], 70),
+            '"/><stop offset="1" stop-color="',
+            _hsl(h[5], 25),
+            '"/></radialGradient></defs>'
+        );
+        return string.concat(
+            defs,
+            '<rect width="400" height="400" fill="hsl(',
+            _u(h[6]),
+            ',45%,9%)"/><circle cx="200" cy="200" r="182" fill="none" stroke="url(#a)" stroke-width="14"/>',
+            '<circle cx="200" cy="200" r="58" fill="url(#c)"/><g fill="none" stroke="',
+            _hsl(h[4], 60),
+            '" stroke-width="5" stroke-linejoin="round"><path d="M200 90 295 145 295 255 200 310 105 255 105 145Z"/>',
+            '<path d="M105 145 200 200 295 145M200 200V310"/></g></svg>'
+        );
+    }
+
+    function _hsl(uint256 hue, uint256 light) private pure returns (string memory) {
+        return string.concat("hsl(", _u(hue), ",90%,", _u(light), "%)");
+    }
+
+    /// @dev standard base64 (RFC 4648, "=" padding), written here like the rest: the whole behaviour is in this one file.
+    function _b64(bytes memory data) private pure returns (string memory) {
+        uint256 n = data.length;
+        if (n == 0) return "";
+        bytes memory table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        bytes memory out = new bytes(4 * ((n + 2) / 3));
+        uint256 j;
+        for (uint256 i = 0; i < n; i += 3) {
+            uint256 t = uint256(uint8(data[i])) << 16;
+            if (i + 1 < n) t |= uint256(uint8(data[i + 1])) << 8;
+            if (i + 2 < n) t |= uint256(uint8(data[i + 2]));
+            out[j++] = table[(t >> 18) & 63];
+            out[j++] = table[(t >> 12) & 63];
+            out[j++] = i + 1 < n ? table[(t >> 6) & 63] : bytes1("=");
+            out[j++] = i + 2 < n ? table[t & 63] : bytes1("=");
+        }
+        return string(out);
     }
 
     function _u(uint256 v) private pure returns (string memory) {

@@ -10,7 +10,8 @@
 import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 import { selecteur } from './encodeur.js';
 
-export const BLOCKSKINS = BLOCKSKINS_DEPLOIEMENT.adresse.toLowerCase();
+/* v2 (tokenURI avec image) quand son adresse a ete RELUE sur la chaine et ecrite par le generateur ; avant, v1 (`precedent`, jamais minte) */
+export const BLOCKSKINS = String(BLOCKSKINS_DEPLOIEMENT.adresse || BLOCKSKINS_DEPLOIEMENT.precedent.adresse).toLowerCase();
 export const BLOCKSKINS_CHAINE = BLOCKSKINS_DEPLOIEMENT.chaine;
 export const SKIN_MINT_USDC = 1_000_000n; /* MINT_PRICE du contrat (6 decimales) */
 export const SKIN_FRAIS_BPS = 1000n;      /* SALE_FEE_BPS : 10 % */
@@ -18,9 +19,9 @@ export const SKIN_ENCHERE_MAX_S = 604800n; /* MAX_AUCTION : 7 jours */
 export const SKIN_SURENCHERE_BPS = 500n;   /* MIN_RAISE_BPS : +5 % */
 /* ⛔⛔ Phil, 2026-10-11 : « v2 avant tout mint ». Le contrat v1 (0xea6c…e77d) ne montre pas la skin dans un wallet : son tokenURI n a AUCUNE
  *   image, et son JSON brut porte « # » - fetch() (lecteur conforme) le coupe a 29 caracteres sur 219, JSON invalide (mesure sur fork,
- *   skin #1). Le mint ne s ouvre que sur un deploiement dont l enregistrement GENERE dit que le tokenURI porte l image - jamais sur un
- *   drapeau pose a la main ici. */
-export const SKIN_MINT_OUVERT = BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true;
+ *   skin #1). Le mint ne s ouvre que sur un deploiement dont l enregistrement GENERE dit que le tokenURI porte l image (derive de la
+ *   source) ET dont l adresse a ete relue sur la chaine - jamais sur un drapeau pose a la main ici. */
+export const SKIN_MINT_OUVERT = BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true && /^0x[0-9a-fA-F]{40}$/.test(String(BLOCKSKINS_DEPLOIEMENT.adresse || ''));
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();

@@ -152,11 +152,19 @@ try {
   const r1 = await envoyer(alice, { to: S, data: selecteur('withdraw(address)') + adrMot(NV.adr) });
   ok(r1.status === '0x1' && await solde(NV.adr, alice) === MISE1 && await solde(NV.adr, S) === 0n, 'l encherisseuse depassee retire sa mise en entier ; le contrat ne tient plus rien');
 
-  /* ── 5. la lecture unique de l app ── */
+  /* ── 5. CE QU UN WALLET LIT (v2, 2026-10-11). Le tokenURI est resolu par fetch() - le lecteur CONFORME qui coupait v1 au « # »
+   *   (29 caracteres sur 219, mesure sur fork) - et jamais en retirant le prefixe a la main, ce qui masquerait exactement ce defaut. */
   const uri = await lire(S, 'tokenURI(uint256)', mot(1));
   const texte = Buffer.from(uri.slice(2 + 128, 2 + 128 + Number(BigInt('0x' + uri.slice(66, 130))) * 2), 'hex').toString('utf8');
-  let meta = null; try { meta = JSON.parse(texte.replace(/^data:application\/json;utf8,/, '')); } catch (_) { meta = null; }
-  ok(!!meta && meta.block === NV.adr && JSON.stringify(meta.hues) === JSON.stringify(teintes), 'tokenURI est un JSON lisible : le block habille et ses sept teintes (' + (meta ? meta.hues.join(',') : 'illisible') + ')');
+  ok(texte.startsWith('data:application/json;base64,') && !texte.includes('#'), 'tokenURI : un data URI en base64, aucun « # » (' + texte.length + ' caracteres)');
+  let meta = null; try { meta = JSON.parse(await (await fetch(texte)).text()); } catch (_) { meta = null; }
+  ok(!!meta && meta.name === 'TokenizedBlock skin #1' && meta.block === NV.adr && JSON.stringify(meta.hues) === JSON.stringify(teintes),
+    'fetch(tokenURI) rend un JSON valide : nom, block habille et ses sept teintes (' + (meta ? meta.hues.join(',') : 'illisible') + ')');
+  let svg = ''; try { svg = await (await fetch(meta.image)).text(); } catch (_) { svg = ''; }
+  ok(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg) && svg.endsWith('</svg>') && svg.includes('stroke="hsl(' + teintes[4] + ',90%,60%)"') && svg.includes('fill="hsl(' + teintes[6] + ',45%,9%)"'),
+    'fetch(image) rend le SVG du skin, peint par le contrat : aretes teinte ' + teintes[4] + ', fond teinte ' + teintes[6] + ' (' + svg.length + ' caracteres)');
+  ok(!/\bNFTs?\b/i.test(JSON.stringify(meta)), 'les metadonnees lues par un wallet ne disent jamais « NFT »');
+  if (process.env.SVG_OUT) fs.writeFileSync(process.env.SVG_OUT, svg); /* pour le regarder rendu dans un navigateur */
   const page = await lire(S, 'skinsPage(uint256,uint256)', mot(1) + mot(10));
   ok(Number(BigInt('0x' + page.slice(66, 130))) === 2, 'skinsPage rend les 2 skins en une lecture');
 } catch (e) {

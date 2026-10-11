@@ -30,11 +30,18 @@ ok('0x' + fin.slice(24, 64) === USDC_BASE.toLowerCase() && '0x' + fin.slice(88, 
   'A elle finit par les deux arguments du constructeur : le USDC et le wallet des frais DU DEPOT (frais-creation.js)');
 ok(D.constructeur.usdc === USDC_BASE.toLowerCase() && D.constructeur.walletDesFrais === FEE_WALLET.toLowerCase() && D.chaine === 8453, 'A ce qu elle annonce (chaine 8453, USDC, wallet des frais) est ce qu elle encode');
 ok(crypto.createHash('sha256').update(lire('contracts/src/BlockSkins.sol')).digest('hex') === D.sha256Source, 'A elle a ete generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
-/* DEPLOYE le 2026-10-04 par le proprietaire ; adresse, tx et owner donnes par SA page et RELUS sur la chaine le meme soir (input de la tx
- *   identique a la donnee figee, contrat cree a cette adresse, USDC()/FEE_WALLET()/owner() conformes). Le test epingle ce qui a ete relu. */
-ok(D.adresse === '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' && D.txDeploiement === '0xc6e22bfa0b6a2dd931c59709b284d58be762a2b87317941168694f93126a2c9b'
-  && D.blocDeploiement === 52175537 && D.owner === '0x37eb9b7ce0b51fe12fbf092026e001918128580a' && Object.isFrozen(D),
-  'A l adresse deployee, sa transaction, son bloc et son owner sont ceux relus sur la chaine ; l objet est fige');
+/* v1 DEPLOYE le 2026-10-04 par le proprietaire ; adresse, tx et owner donnes par SA page et RELUS sur la chaine le meme soir (input de la
+ *   tx identique a la donnee figee v1, contrat cree a cette adresse, USDC()/FEE_WALLET()/owner() conformes). Le test epingle ce qui a ete
+ *   relu. v2 (2026-10-11, Phil : « v2 avant tout mint ») : seul tokenURI change ; PAS deploye tant que `adresse` est null. */
+const P = D.precedent || {};
+ok(P.adresse === '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' && P.txDeploiement === '0xc6e22bfa0b6a2dd931c59709b284d58be762a2b87317941168694f93126a2c9b'
+  && P.blocDeploiement === 52175537 && P.owner === '0x37eb9b7ce0b51fe12fbf092026e001918128580a' && P.version === 1 && Object.isFrozen(D) && Object.isFrozen(P),
+  'A v1 (precedent) : l adresse deployee, sa transaction, son bloc et son owner sont ceux relus sur la chaine ; les objets sont figes');
+ok(D.version === 2 && (D.adresse === null ? D.txDeploiement === null && D.blocDeploiement === null && D.owner === null
+  : /^0x[0-9a-f]{40}$/.test(D.adresse) && /^0x[0-9a-f]{64}$/.test(D.txDeploiement) && D.blocDeploiement > P.blocDeploiement && /^0x[0-9a-f]{40}$/.test(D.owner)),
+  'A v2 : soit PAS deploye (adresse, tx, bloc, owner tous null), soit les quatre relus ensemble - jamais une adresse seule');
+ok(D.imageDansLeWallet === (lire('contracts/src/BlockSkins.sol').includes('"image":"data:image/svg+xml;base64,')) && D.imageDansLeWallet === true,
+  'A imageDansLeWallet est DERIVE de la source (son tokenURI porte un champ image) - et la source v2 le porte');
 ok(octets.length - 64 <= 49152 && octets.length > 1000, 'A le code de creation tient sous la limite EIP-3860 (49 152 octets)');
 
 console.log('— B. la page');
@@ -43,8 +50,9 @@ const script = (page.match(/<script type="module">([\s\S]*?)<\/script>/) || ['',
 const envois = script.match(/eth_sendTransaction[^\n]*/g) || [];
 ok(envois.length === 1 && /params: \[\{ from: compte, data: D\.creation \}\]/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0]),
   'B UN seul envoi dans la page : la donnee figee, sans `to` (creation) ni valeur');
-ok(/if \(!compte \|\| !intacte \|\| envoi\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi;/.test(script),
+ok(/if \(!compte \|\| !intacte \|\| envoi \|\| deja\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| deja;/.test(script),
   'B rien ne part sans wallet connecte, ni si l empreinte recalculee dans le navigateur differe');
+ok(/const deja = !!D\.adresse;/.test(script), 'B un contrat deja deploye et relu (adresse ecrite) eteint le bouton : jamais un deuxieme contrat par erreur');
 ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /intacte = h === D\.sha256Creation && octets\.length === D\.octetsCreation && usdc === D\.constructeur\.usdc && frais === D\.constructeur\.walletDesFrais;/.test(script),
   'B l empreinte est RECALCULEE dans le navigateur, et les arguments affiches sont ceux LUS dans la donnee');
 ok(/const fin = D\.creation\.slice\(-128\), usdc = '0x' \+ fin\.slice\(24, 64\), frais = '0x' \+ fin\.slice\(88, 128\);/.test(script), 'B les deux adresses affichees viennent de la FIN de la donnee signee, pas d un champ a cote');

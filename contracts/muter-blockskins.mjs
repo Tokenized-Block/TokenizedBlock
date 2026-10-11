@@ -1,7 +1,7 @@
 /* muter-blockskins.mjs — chaque garde du contrat BlockSkins est RETIREE, une a la fois, dans une COPIE ; la suite doit rougir.
  * Un mutant qui reste vert = une garde que la suite ne tient pas. Ne touche jamais au depot : tout se passe dans un dossier temporaire.
  * Usage (depuis contracts/) : node muter-blockskins.mjs      [FORGE=chemin/vers/forge]
- * Mesure du 2026-10-04 : 27 mutants, 0 survivant, 0 ancre introuvable. */
+ * Mesure du 2026-10-04 : 27 mutants, 0 survivant, 0 ancre introuvable. 2026-10-11 (v2, tokenURI avec image) : +3 mutants. */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,6 +48,10 @@ const M = [
   ['duree d enchere non bornee', 'if (duration == 0 || duration > MAX_AUCTION) revert BadDuration();', 'if (duration == 0) revert BadDuration();'],
   ['transfert sans approbation', 'if (msg.sender != o && getApproved[tokenId] != msg.sender && !isApprovedForAll[o][msg.sender]) revert NotAllowed();', ''],
   ['seul owner : retire', 'if (msg.sender != owner) revert NotOwner();\n        currencyAllowed', 'currencyAllowed'],
+  /* v2 (2026-10-11) : le tokenURI qu un wallet lit */
+  ['tokenURI : JSON brut (le « # » de v1 revient)', 'return string.concat("data:application/json;base64,", _b64(bytes(json)));', 'return string.concat("data:application/json;utf8,", json);'],
+  ['base64 : padding « = » retire', 'out[j++] = i + 2 < n ? table[t & 63] : bytes1("=");', 'out[j++] = table[t & 63];'],
+  ['image : les aretes prennent la teinte du noyau', '_hsl(h[4], 60),', '_hsl(h[5], 60),'],
 ];
 let survivants = 0, introuvables = 0;
 try {

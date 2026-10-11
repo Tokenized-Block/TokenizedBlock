@@ -11,11 +11,14 @@ import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const R = { id: 'random', angle: 10, h: [20, 30, 359], cube: 0, noyau: 200, fond: 300 };
-vu(S.BLOCKSKINS === BLOCKSKINS_DEPLOIEMENT.adresse.toLowerCase(), 'l adresse n est pas celle du contrat deploye');
+const D = BLOCKSKINS_DEPLOIEMENT;
+vu(S.BLOCKSKINS === String(D.adresse || D.precedent.adresse).toLowerCase(), 'l adresse lue n est ni v2 relu ni v1 (precedent)');
 /* Phil, 2026-10-11 : « v2 avant tout mint ». La porte suit l ENREGISTREMENT de deploiement (genere), jamais un drapeau a la main :
- *   ouverte si et seulement si imageDansLeWallet === true ; le v1 (0xea6c…, tokenURI sans image) la garde FERMEE. */
-vu(S.SKIN_MINT_OUVERT === (BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true), 'la porte du mint ne suit pas l enregistrement de deploiement');
-vu(BLOCKSKINS_DEPLOIEMENT.adresse.toLowerCase() !== '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' || S.SKIN_MINT_OUVERT === false, 'le mint est OUVERT sur le contrat v1 qui ne montre pas la skin dans un wallet');
+ *   ouverte si et seulement si imageDansLeWallet === true (derive de la source) ET une adresse v2 relue ; v1 (0xea6c…, tokenURI sans
+ *   image) la garde FERMEE. */
+vu(S.SKIN_MINT_OUVERT === (D.imageDansLeWallet === true && /^0x[0-9a-f]{40}$/i.test(String(D.adresse || ''))), 'la porte du mint ne suit pas l enregistrement de deploiement');
+vu(S.BLOCKSKINS !== '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' || S.SKIN_MINT_OUVERT === false, 'le mint est OUVERT sur le contrat v1 qui ne montre pas la skin dans un wallet');
+vu(D.adresse !== null || S.SKIN_MINT_OUVERT === false, 'v2 pas deploye (adresse null) mais le mint est ouvert');
 vu(JSON.stringify(S.recetteVersTeintes(R)) === '[10,20,30,359,0,200,300]', 'ordre des teintes faux');
 const p = S.packRecette(R);
 vu(p === (10n | 20n << 9n | 30n << 18n | 359n << 27n | 0n << 36n | 200n << 45n | 300n << 54n) && (p >> 63n) === 0n, 'pack faux : ' + p);

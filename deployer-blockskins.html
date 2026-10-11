@@ -33,6 +33,7 @@ ul{padding-left:20px;margin:8px 0}
   <div class="carte">
     <ul>
       <li>Minting a skin costs 1 USDC, sent straight to the fee wallet.</li>
+      <li>Wallets can show the skin: its picture is drawn by the contract itself from its seven hues — no server, no IPFS.</li>
       <li>A skin can be sold at a fixed price or by auction (7 days at most). Each sale pays 10% to the fee wallet.</li>
       <li>Sales run in ETH, USDC, or a token the owner has allowed.</li>
       <li>A bid must raise the highest one by 5%. A bid in the last 5 minutes adds 5 minutes, never past the 7 days.</li>
@@ -81,6 +82,8 @@ const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
 const CHAINE_HEX = '0x' + D.chaine.toString(16);
 let compte = null, intacte = false, envoi = false;
+/* ⛔ deja deploye ET relu (adresse ecrite par le generateur) : en redeployer un creerait un DEUXIEME contrat - le bouton reste eteint */
+const deja = !!D.adresse;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 /* les deux arguments, LUS dans la fin de la donnee figee (2 mots de 32 octets) — pas dans le champ `constructeur` */
 const fin = D.creation.slice(-128), usdc = '0x' + fin.slice(24, 64), frais = '0x' + fin.slice(88, 128);
@@ -101,7 +104,8 @@ $('#dEmpreinte').textContent = 'sha256 ' + D.sha256Creation;
 function peindre() {
   $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
-  $('#bDeployer').disabled = !compte || !intacte || envoi;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || deja;
+  if (deja) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second contract.', 'note ok');
 }
 $('#bConnecter').addEventListener('click', async () => {
   if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
@@ -110,7 +114,7 @@ $('#bConnecter').addEventListener('click', async () => {
   peindre();
 });
 $('#bDeployer').addEventListener('click', async () => {
-  if (!compte || !intacte || envoi) return;
+  if (!compte || !intacte || envoi || deja) return;
   envoi = true; peindre();
   try {
     const chaine = await eth().request({ method: 'eth_chainId' });

@@ -195,13 +195,80 @@ contract BlockSkinsTest is Test {
         assertEq(usdc.balanceOf(FRAIS), 0);
     }
 
-    function test_tokenURI_dit_le_block_et_les_sept_teintes() public {
+    // ─────────────── tokenURI (v2, 2026-10-11) : ce qu un wallet lit. L attendu est construit ICI, avec le base64 de REFERENCE de forge
+    //   (vm.toBase64) et vm.toString : une implementation independante de celle du contrat.
+    function _svgAttendu(uint16[7] memory h) internal pure returns (string memory) {
+        string memory a = string.concat(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400"><defs><linearGradient id="a" gradientTransform="rotate(',
+            vm.toString(uint256(h[0])),
+            ' .5 .5)"><stop offset="0" stop-color="hsl(',
+            vm.toString(uint256(h[1])),
+            ',90%,62%)"/><stop offset=".33" stop-color="hsl(',
+            vm.toString(uint256(h[2])),
+            ',90%,38%)"/><stop offset=".66" stop-color="hsl(',
+            vm.toString(uint256(h[3]))
+        );
+        a = string.concat(
+            a,
+            ',90%,70%)"/><stop offset="1" stop-color="hsl(',
+            vm.toString(uint256(h[2])),
+            ',90%,30%)"/></linearGradient><radialGradient id="c"><stop offset="0" stop-color="hsl(',
+            vm.toString(uint256(h[5])),
+            ',90%,70%)"/><stop offset="1" stop-color="hsl(',
+            vm.toString(uint256(h[5])),
+            ',90%,25%)"/></radialGradient></defs>'
+        );
+        return string.concat(
+            a,
+            '<rect width="400" height="400" fill="hsl(',
+            vm.toString(uint256(h[6])),
+            ',45%,9%)"/><circle cx="200" cy="200" r="182" fill="none" stroke="url(#a)" stroke-width="14"/><circle cx="200" cy="200" r="58" fill="url(#c)"/><g fill="none" stroke="hsl(',
+            vm.toString(uint256(h[4])),
+            ',90%,60%)" stroke-width="5" stroke-linejoin="round"><path d="M200 90 295 145 295 255 200 310 105 255 105 145Z"/><path d="M105 145 200 200 295 145M200 200V310"/></g></svg>'
+        );
+    }
+
+    function _uriAttendu(uint256 id, address bloc, uint16[7] memory h) internal pure returns (string memory) {
+        string memory b = vm.toLowercase(vm.toString(bloc));
+        string memory j = string.concat(
+            '{"name":"TokenizedBlock skin #',
+            vm.toString(id),
+            '","description":"A skin for one block: a look, not a right over the block.","image":"data:image/svg+xml;base64,',
+            vm.toBase64(_svgAttendu(h)),
+            '","block":"',
+            b,
+            '","hues":['
+        );
+        j = string.concat(j, vm.toString(uint256(h[0])), ",", vm.toString(uint256(h[1])), ",", vm.toString(uint256(h[2])), ",");
+        j = string.concat(j, vm.toString(uint256(h[3])), ",", vm.toString(uint256(h[4])), ",", vm.toString(uint256(h[5])), ",");
+        j = string.concat(j, vm.toString(uint256(h[6])), '],"attributes":[{"trait_type":"Block","value":"', b, '"}]}');
+        return string.concat("data:application/json;base64,", vm.toBase64(j));
+    }
+
+    function _sansDiese(string memory u) internal pure returns (bool) {
+        bytes memory x = bytes(u);
+        for (uint256 i = 0; i < x.length; i++) if (x[i] == "#") return false;
+        return true;
+    }
+
+    function test_tokenURI_porte_l_image_du_skin_en_base64() public {
         uint256 id = _mint(alice);
         string memory u = s.tokenURI(id);
-        assertEq(
-            u,
-            'data:application/json;utf8,{"name":"TokenizedBlock skin #1","description":"A skin for one block: a look, not a right over the block.","block":"0xb200000000000000000000e4b0c5fbe9c8df579e","hues":[210,267,263,92,120,300,200]}'
-        );
+        assertEq(u, _uriAttendu(1, BLOC, [uint16(210), 267, 263, 92, 120, 300, 200]), "tokenURI : le JSON (nom, image, block, teintes) en base64");
+        // ⛔ v1 portait « # » en clair : fetch() le prenait pour un fragment et coupait le JSON (29 caracteres sur 219, mesure sur fork)
+        assertTrue(_sansDiese(u), "aucun # dans l URI : rien ne peut etre lu comme un fragment");
+        vm.expectRevert(BlockSkins.BadAddress.selector);
+        s.tokenURI(2);
+    }
+
+    /// @dev toute recette : couvre les trois longueurs de padding base64 (le nombre de chiffres des teintes et de l id varie).
+    function testFuzz_tokenURI_toute_recette(uint16[7] memory h, uint8 avant) public {
+        for (uint256 i = 0; i < 7; i++) h[i] = uint16(bound(h[i], 0, 359));
+        for (uint256 i = 0; i < avant % 12; i++) _mint(bob); // l id du skin varie de 1 a 12 (un ou deux chiffres)
+        uint64 r = s.packRecipe(h); // AVANT le prank : un appel externe en argument consommerait le prank
+        vm.prank(alice);
+        uint256 id = s.mint(BLOC, r);
+        assertEq(s.tokenURI(id), _uriAttendu(id, BLOC, h));
     }
 
     // ─────────────── ERC-721
