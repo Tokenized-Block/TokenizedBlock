@@ -176,11 +176,11 @@ export async function meilleureAlternativeAerodrome({ rpc, action, montant, sort
   return { choisie: true, sortie, phrase: 'Routed through this stock’s Aerodrome pool: at this size it gives you more than its Uniswap v4 pool' };
 }
 
-/* ?? 2026-10-11 (F, Grok) - USDC -> GMEc / RDDTc : NON_MESURE � execution reverted � en prod alors que la pool v4 MESUREE cote.
+/* ⛔⛔ 2026-10-11 (F, Grok) - USDC -> GMEc / RDDTc : NON_MESURE « execution reverted » en prod alors que la pool v4 MESUREE cote.
  *   Mesure (mainnet.base.org) : le marche lu par le serveur designe une AUTRE pool v4 de l action, VIDE (GMEc fee 50000/ts 500,
  *   RDDTc 30000/300) ; le quoteur v4 reverte dessus (0x6190b2b0, erreur de liquidite enveloppee) - echange.js:362. Les pools
  *   de cles-v4-actions.js (GMEc 80000/800, RDDTc 50000/101) cotent. Et un devis v4 nul ne laissait jamais venir Aerodrome.
- * ? cleV4MesureeDe : la cle MESUREE d une action, decodee par decoderInitialize (poolId recalcule) ; null sinon. */
+ * ⛔ cleV4MesureeDe : la cle MESUREE d une action, decodee par decoderInitialize (poolId recalcule) ; null sinon. */
 export function cleV4MesureeDe(action) {
   const a = String(action || '').toLowerCase();
   for (const l of LOGS_INITIALIZE_MESURES) {
@@ -404,7 +404,7 @@ async function planRailBrut(q, deps) {
         if (nd === 'USDC') {
           const pv4lu = await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
             marcheLu: marcheV, fraisDevisesOk, maintenant });
-          /* ? 2026-10-11 (F) : devis v4 non lu -> cle MESUREE, puis Aerodrome simule (achatUsdcActionAvecSecours, plus haut). */
+          /* ⛔ 2026-10-11 (F) : devis v4 non lu -> cle MESUREE, puis Aerodrome simule (achatUsdcActionAvecSecours, plus haut). */
           const sec = await achatUsdcActionAvecSecours({ pv4: pv4lu, cleLue: marcheV.cle, cleMesuree: cleV4MesureeDe(vers),
             planCle: (cle) => planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m, cleImposee: cle, fraisDevisesOk, maintenant }),
             planAero: () => planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers, famille: 'aerodrome' }], devise: USDC,
