@@ -2698,7 +2698,19 @@ async function sonderLeReste() {
  *   les recevait aussi : elles n ont rien a y faire, il les coupe. En production la variable n existe pas : sondes actives.
  *   ⛔ CE QUE JE N AI PAS PROUVE : que ce banc etait rouge A CAUSE d elles. Il est reste rouge une fois les sondes coupees, sur un KO
  *   different a chaque passage (C1, P1, mutant n24) — cause NON trouvee ; dit dans le compte rendu, pas masque. */
-if (process.env.TB_SONDES !== '0') setTimeout(() => { consommateurArchive.run('fond sondes', () => sonderNaissance().then(sonderLeReste)); setInterval(() => { consommateurArchive.run('fond sondes', () => sonderNaissance().then(sonderLeReste)); }, 10 * 60 * 1000).unref(); }, 45000).unref();
+/* 2026-10-11 : apres CHAQUE deploiement, le 1er passage (45 s apres le boot) tombait sur un 429 du noeud public (« Public endpoint rate
+ *   limit ») et 3 sondes sur 4 restaient fausses 10 min - mesure en prod a 17:43 et 18:25, cascade marche NON_LUE -> echange NON_MESURE
+ *   -> cerveau REFUSE ; retablies au passage suivant. UNE relecture 90 s plus tard quand une sonde n a pas pu LIRE (NON_LUE / NON_MESURE) :
+ *   jamais sur un refus mesure (REFUSE), jamais plus d une fois par passage (le noeud qui refuse est en limite de debit). */
+const SONDE_RELECTURE_MS = 90000;
+const sondeNonLue = (e) => e === 'NON_LUE' || e === 'NON_MESURE';
+function passageSondes(relecture = false) {
+  consommateurArchive.run(relecture ? 'fond sondes (relecture)' : 'fond sondes', () => sonderNaissance().then(sonderLeReste).then(() => {
+    const rate = sondeNonLue(naissanceSonde && naissanceSonde.etat) || sondeNonLue(autresSondes.marche.etat) || sondeNonLue(autresSondes.echange.etat);
+    if (rate && !relecture) setTimeout(() => passageSondes(true), SONDE_RELECTURE_MS).unref();
+  }));
+}
+if (process.env.TB_SONDES !== '0') setTimeout(() => { passageSondes(); setInterval(() => passageSondes(), 10 * 60 * 1000).unref(); }, 45000).unref();
 /* ── LE WIDGET MCP (mcp-widget-panneau.html) : le paquet officiel ext-apps 2.0.3 est EMBARQUE et inline (un bac a sable de chat
  *   bloque tout script distant). Son `export{…}` final devient `globalThis.ExtApps={…}` — la reecriture du guide officiel.
  *   ⛔ Empreinte VERIFIEE au demarrage : un paquet altere ou absent = pas de widget (les outils marchent sans lui). */
