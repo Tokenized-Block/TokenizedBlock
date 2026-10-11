@@ -41,6 +41,7 @@ try {
     ok((await envoyer(vendeur, S.appelApprouver(USDC, S.SKIN_MINT_USDC))).status === '0x1', 'approbation exacte de 1 USDC pour le mint');
     const r = await envoyer(vendeur, S.appelMint(BLOCK, recette));
     ok(r.status === '0x1', 'mint (1 USDC)');
+    ok(S.verifierValidation({ recu: r }).etat === 'REFUSE', 'temoin : le recu d un MINT n est pas une validation (REFUSE)');
     return BigInt(await rpc('eth_call', [{ to: C, data: '0x18160ddd' }, 'latest']));
   };
   for (const [nom, devise, prix] of [['ETH', S.ETH, 10n ** 15n], ['USDC', USDC, 5n * 10n ** 6n]]) {
@@ -54,6 +55,12 @@ try {
     ok(rv.status === '0x1', nom + ' : validateBuy (la validation de l acheteur)');
     ok(rv.logs.some((l) => String(l.topics[0]).toLowerCase() === S.SUJET_ACHAT_VALIDE.toLowerCase()), nom + ' : le journal BuyValidated porte le sujet de SUJET_ACHAT_VALIDE');
     ok(S.acheteursValides(rv.logs, t).includes(acheteur), nom + ' : acheteursValides retrouve l acheteur dans les journaux');
+    /* l INDEX SERVEUR (POST /api/skins/validation) verifie ce RECU-la : la skin, l acheteur, la devise, le prix - lus du journal du contrat */
+    const vv = S.verifierValidation({ recu: rv });
+    ok(vv.ok && vv.validations.length === 1 && vv.validations[0].tokenId === String(t) && vv.validations[0].acheteur === acheteur
+      && vv.validations[0].devise === devise && vv.validations[0].prix === String(prix), nom + ' : verifierValidation sur le VRAI recu -> ' + JSON.stringify(vv.validations && vv.validations[0]));
+    const recuMint = await rpc('eth_getTransactionReceipt', [String(rv.transactionHash)]);
+    ok(S.verifierValidation({ recu: recuMint }).ok, nom + ' : le meme recu relu par eth_getTransactionReceipt (le chemin du serveur) est verifie');
     const v = S.decoderValidation(await rpc('eth_call', [{ to: C, data: S.appelValidation(t, acheteur) }, 'latest']));
     ok(S.validationCourante(v, annonce) && v.ethTenu === (devise === S.ETH ? prix : 0n), nom + ' : validated() vaut pour CETTE annonce ; ETH tenu = ' + v.ethTenu);
     const av = { v: await bal(devise, vendeur), f: await bal(devise, FRAIS), a: await bal(devise, agent), b: await bal(devise, acheteur) };
