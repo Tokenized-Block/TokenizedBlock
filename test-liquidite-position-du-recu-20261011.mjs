@@ -36,7 +36,8 @@ vu(i > 0, 'signerLiquidite introuvable');
 const f = html.slice(i, i + /\r?\n\}/.exec(html.slice(i)).index);
 vu(/idsMintesDansRecu\(\{ recu: await rpc\('eth_getTransactionReceipt', \[r\.hash\]\), chaine: CHAINE, compte \}\)/.test(f), 'ROUGE->VERT : la position n est pas cherchee dans le recu');
 vu(/if \(!ids\.length && idAvant !== null\) ids = \[idAvant\];/.test(f), 'le compteur global n est plus seulement un secours');
-vu(/pos\.proprietaire\.toLowerCase\(\) === compte\.toLowerCase\(\)\) \{ garderPosition\(id, adr\); gardees \+= 1; \}/.test(f), 'ownerOf n est plus verifie avant de garder');
-vu(/gardees \? 'Liquidity added — your position is listed below\.'/.test(f) && !/'Liquidity added — your position is listed below\.' : 'Position withdrawn\.'/.test(f),
+/* 2026-10-11 (Grok, tache E : stockage plein) : garderPosition rend STOCKEE ou MEMOIRE ; la verification ownerOf reste AVANT */
+vu(/pos\.proprietaire\.toLowerCase\(\) === compte\.toLowerCase\(\)\) \{ if \(garderPosition\(id, adr\) === 'STOCKEE'\) stockees \+= 1; else memoire \+= 1;/.test(f), 'ownerOf n est plus verifie avant de garder');
+vu(/texteAjoutPosition\(\{ stockees, memoire, ids: idsGardes \}\)/.test(f) && /if \(stockees > 0\) return 'Liquidity added — your position is listed below\.'/.test(html),
   '« listed below » est dit meme quand aucune position n a ete gardee');
 console.log('ok liquidite-position-du-recu - ' + n + ' assertions (idsMintesDansRecu execute) ; NE PROUVE PAS le rendu ni un vrai wallet');

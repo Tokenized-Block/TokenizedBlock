@@ -4371,14 +4371,25 @@ try {
   const brut = localStorage.getItem(RPC_STOCKAGE);
   if (brut) for (const [k, v] of JSON.parse(brut)) rpcImmuable.set(k, v);
 } catch (_) { /* stockage absent ou refuse : on lit la chaine, simplement */ }
+/* 2026-10-11 (Grok, mesure prod 0x31e0 : localStorage PLEIN, tb-rpc-immuable-v1 = 1 401 959 caracteres, la position non gardee) :
+ *   le cache rpc a un BUDGET (~300 k), garde les entrees les plus RECENTES, et sur quota reessaie UNE fois a moitie - il ne prive
+ *   plus les autres cles. Rend true si ecrit. */
+const RPC_STOCKAGE_MAX = 300_000;
+function ecrireCacheRpc(stockage, cle, entrees, max) {
+  for (const budget of [max, Math.floor(max / 2)]) {
+    let taille = 2; const garde = [];
+    for (const e of [...entrees].reverse()) { const l = e[0].length + JSON.stringify(e[1]).length + 6; if (taille + l > budget) break; taille += l; garde.push(e); }
+    try { stockage.setItem(cle, JSON.stringify(garde.reverse())); return true; } catch (_) { /* quota : une fois, plus petit */ }
+  }
+  try { stockage.removeItem(cle); } catch (_) { /* rien */ }
+  return false;
+}
 function rpcStocker() {
   if (rpcStockagePlanifie) return;
   rpcStockagePlanifie = setTimeout(() => {
     rpcStockagePlanifie = null;
     try {
-      let taille = 0; const garde = [];
-      for (const e of [...rpcImmuable.entries()].reverse()) { const l = e[0].length + JSON.stringify(e[1]).length; if (taille + l > 1_500_000) break; taille += l; garde.push(e); }
-      localStorage.setItem(RPC_STOCKAGE, JSON.stringify(garde.reverse()));
+      ecrireCacheRpc(localStorage, RPC_STOCKAGE, [...rpcImmuable.entries()], RPC_STOCKAGE_MAX);
     } catch (_) { /* plein ou refuse : le cache memoire suffit pour cette visite */ }
   }, 3000);
 }
@@ -13513,12 +13524,35 @@ async function peindreJournalBuyback(adr) {
  * ⛔ L id de la position est lu AVANT l envoi (nextTokenId), puis VERIFIE apres (ownerOf = ce compte) : on ne garde
  *    jamais un id qu on n a pas vu appartenir a l utilisateur. Liste gardee par chaine et par compte. */
 let liquiditeEnCours = false;
-const clePositions = () => 'tblock.positions.' + CHAINE + '.' + String(compte || '').toLowerCase();
-function positionsGardees() { try { return JSON.parse(localStorage.getItem(clePositions()) || '[]'); } catch (e) { return []; } }
-function garderPosition(id, jeton) {
-  const l = positionsGardees().filter((x) => x.id !== String(id));
+/* 2026-10-11 (Grok, meme mesure) : setItem levait en silence -> la carte disait « listed below » et la liste restait vide. On libere le
+ *   cache rpc (relisible sur la chaine) et on reessaie ; sinon l id est garde EN MEMOIRE pour cette visite, et la carte le dit.
+ *   Rend 'STOCKEE' ou 'MEMOIRE'. */
+function garderPositionDans(stockage, cle, memoire, id, jeton, cleCacheRpc) {
+  let l = [];
+  try { l = JSON.parse(stockage.getItem(cle) || '[]'); } catch (_) { l = []; }
+  l = l.filter((x) => x.id !== String(id));
   l.push({ id: String(id), jeton: String(jeton).toLowerCase() });
-  try { localStorage.setItem(clePositions(), JSON.stringify(l.slice(-50))); } catch (e) { /* liste de la page seulement */ }
+  const val = JSON.stringify(l.slice(-50));
+  try { stockage.setItem(cle, val); return 'STOCKEE'; } catch (_) { /* plein */ }
+  try { stockage.removeItem(cleCacheRpc); stockage.setItem(cle, val); return 'STOCKEE'; } catch (_) { /* toujours plein */ }
+  if (!memoire.some((x) => x.id === String(id))) memoire.push({ id: String(id), jeton: String(jeton).toLowerCase() });
+  return 'MEMOIRE';
+}
+function texteAjoutPosition({ stockees, memoire, ids }) {
+  if (stockees > 0) return 'Liquidity added — your position is listed below.';
+  if (memoire > 0) return 'Liquidity added — position #' + ids.join(', #') + ' is yours on chain (see the explorer). This browser\'s storage is full, so it is listed below for this visit only.';
+  return 'Liquidity added. Its position number could not be read back yet, so it is not listed below — it is yours on chain (see the explorer).';
+}
+const positionsMemoire = [];
+const clePositions = () => 'tblock.positions.' + CHAINE + '.' + String(compte || '').toLowerCase();
+function positionsGardees() {
+  let l = [];
+  try { l = JSON.parse(localStorage.getItem(clePositions()) || '[]'); } catch (e) { l = []; }
+  for (const x of positionsMemoire) if (!l.some((y) => y.id === x.id)) l.push(x);
+  return l;
+}
+function garderPosition(id, jeton) {
+  return garderPositionDans(localStorage, clePositions(), positionsMemoire, id, jeton, RPC_STOCKAGE);
 }
 async function peindrePositions(adr) {
   const boite = $('#plqPositions');
@@ -13637,7 +13671,7 @@ async function signerLiquidite(tx, adr, genre) {
   /* 2026-10-11 (contre-test de Grok : « None added from this browser yet » juste apres un ajout confirme) : l id vient du RECU
    *   (Transfer 0x0 -> compte emis par le PositionManager), pas du compteur global lu avant l envoi - d autres avaient minte entre les
    *   deux (mesure : 2 positions de tiers en 16 blocs). Le compteur ne reste qu en secours, toujours verifie par ownerOf. */
-  let gardees = 0;
+  let stockees = 0, memoire = 0; const idsGardes = [];
   if (genre === 'AJOUT') {
     let ids = [];
     try { ids = idsMintesDansRecu({ recu: await rpc('eth_getTransactionReceipt', [r.hash]), chaine: CHAINE, compte }); } catch (_) { ids = []; }
@@ -13645,13 +13679,12 @@ async function signerLiquidite(tx, adr, genre) {
     for (const id of ids) {
       try {
         const pos = await lirePosition({ rpc, chaine: CHAINE, tokenId: id });
-        if (pos.etat === 'LUE' && pos.proprietaire.toLowerCase() === compte.toLowerCase()) { garderPosition(id, adr); gardees += 1; }
+        if (pos.etat === 'LUE' && pos.proprietaire.toLowerCase() === compte.toLowerCase()) { if (garderPosition(id, adr) === 'STOCKEE') stockees += 1; else memoire += 1; idsGardes.push(String(id)); }
       } catch { /* non verifiee : pas gardee */ }
     }
   }
   e.className = 'note wOk';
-  e.innerHTML = (genre !== 'AJOUT' ? 'Position withdrawn.' : gardees ? 'Liquidity added — your position is listed below.'
-    : 'Liquidity added. Its position number could not be read back yet, so it is not listed below — it is yours on chain (see the explorer).') + lien;
+  e.innerHTML = (genre !== 'AJOUT' ? 'Position withdrawn.' : enTexte(texteAjoutPosition({ stockees, memoire, ids: idsGardes }))) + lien;
   void peindrePositions(adr);
 }
 async function retirerPosition(id) {
