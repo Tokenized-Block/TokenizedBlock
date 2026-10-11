@@ -73,10 +73,13 @@ vu(entierApi(2 ** 60) === null && entierApi(1.5) === null && entierApi(-1) === n
 const charger = fonction('async function bcBanqueCharger(force = false) {');
 vu(/'data-pourtoi': mk\.id/.test(charger) && /void bcBanquePourToi\(\);/.test(charger), 'les cartes de marche ne portent pas la ligne « pour toi »');
 vu(/bcBanqueIndices\(\);\s*bcBanqueEstimer\(\);/.test(fonction('function bcBanqueChoisir(mk, sens) {')), 'les champs ne disent pas ce que ce wallet peut mettre');
-vu((html.match(/void bcBanquePourToi\(true\); setTimeout\(\(\) => \{ void bcBanquePourToi\(true\); \}, 35000\);/g) || []).length === 2, 'apres une operation, « ce que tu peux » ne se relit pas (simple ET panier)');
+/* 2026-10-11 (contre-test de Grok) : la relecture apres operation passe par bcApresOperation, qui relit AUSSI la carte du Wallet */
+vu((html.match(/bcApresOperation\(\); \/\* la Bank, ses positions ET la carte du Wallet se relisent/g) || []).length === 2, 'apres une operation, « ce que tu peux » ne se relit pas (simple ET panier)');
 vu(/This market cannot lend that much right now/.test(fonction('function bcBanqueEstimer() {')), 'la limite du marche n est plus dite au moment ou elle compte');
 /* mesure navigateur du 2026-10-11 : 110 unites brutes (second marche GOOGLc) s affichaient « ≈ 0.00 USDC » + « Limited by… » */
 const peindre = fonction('function bcPeindrePourToi(el, mk, r) {');
 vu(/rien \? 'Nothing now'/.test(peindre) && /r\.emprunt < 10n \*\* BigInt\(Math\.max\(0, Number\(pr\.decimales\) - 2\)\)/.test(peindre), 'sous un cent, « ≈ 0.00 » revient comme un montant');
-vu(/'You can borrow'/.test(fonction('async function tbBanquePeindre() {')) && /parAction/.test(fonction('async function tbBanquePeindre() {')), 'la carte du Wallet ne dit pas ce que ce wallet peut emprunter');
+/* 2026-10-11 (« je comprends pas » -> deux choix) : le montant de CE wallet vit DANS chaque choix de la carte du Wallet */
+vu(/toiE\.textContent = parAction\.size \? 'You: up to ≈ '/.test(fonction('async function tbBanquePeindre() {')) && /toiP\.textContent = soldeU === null/.test(fonction('async function tbBanquePeindre() {')),
+  'la carte du Wallet ne dit pas ce que ce wallet peut emprunter / preter');
 console.log('ok banque-pour-toi - ' + n + ' assertions ; NE PROUVE PAS le rendu ni l accord API Morpho / noeud (le plan relit la chaine)');

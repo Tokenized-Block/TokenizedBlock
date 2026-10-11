@@ -157,7 +157,9 @@ ok(/try \{ d\.show\(\); \}/.test(html) && !/\$\('#bcPop'\)\.showModal\(\)|d\.sho
   'C2 le panneau n est PLUS modal (show, pas showModal ; aucun voile) et vit sous <body> : l app reste visible et utilisable, d un onglet a l autre');
 ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPop'\); return !!\(p && p\.open\); \}\)\(\);/.test(html) && /if \(\(\$\('#v-brain'\)\.classList\.contains\('on'\) === false && !panneauOuvert\) \|\| !brainEtat\) return;/.test(html),
   'C2 tant que le panneau est ouvert, le cerveau qu il montre continue de battre hors de l onglet Brain');
-ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:62dvh\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (62 % de la hauteur depuis le 2026-10-09 : a 54 % les gestes et le chat restaient sous la ligne de flottaison)');
+/* 2026-10-11 (poignee : « abaisser ou agrandir le control panel ») : 62dvh reste la taille PAR DEFAUT - le repli de --bcHLibre, que seule
+ *   la personne pose en tirant le bord. La garde exige toujours 62dvh comme defaut ; elle ne se contente pas d une variable. */
+ok(/id="bcReduire"/.test(html) && /classList\.toggle\('bcReduit'\)/.test(html) && /@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*height:var\(--bcHLibre,62dvh\)\}\}/.test(html), 'C2 le panneau se replie sur son en-tete ; sur telephone c est une feuille en bas (62 % de la hauteur depuis le 2026-10-09 : a 54 % les gestes et le chat restaient sous la ligne de flottaison)');
 /* capture de Phil (telephone) : replie, le volet COUVRAIT la barre d onglets. Il se pose au-dessus, a sa hauteur MESUREE. */
 ok(/@media \(max-width:760px\)\{dialog\.bcPop\{[^}]*bottom:calc\(var\(--bcNav,66px\) \+ 8px\)/.test(html) && /dialog\.bcPop\.bcReduit\{top:auto;bottom:calc\(var\(--bcNav,66px\) \+ 8px\);height:auto\}/.test(html)
   && /dialog\.bcPop\{[^}]*height:calc\(100dvh - 24px - var\(--bcNav,66px\)\)/.test(html) && /setProperty\('--bcNav', \(n \? Math\.ceil\(n\.getBoundingClientRect\(\)\.height\) : 0\) \+ 'px'\)/.test(html)

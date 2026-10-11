@@ -38,6 +38,13 @@ vu(r.meilleurPret === 0.07, 'meilleur taux faux : ' + r.meilleurPret);
 const vide = bcBanqueResumer([M(null, undefined, null, null)]);
 vu(vide.moinsCher === null && vide.meilleurPret === null, 'rien lu -> un zero invente : ' + JSON.stringify(vide));
 vu(!/To borrow|bcUsd\(r\.total\)/.test(fonction('function bcBanquePeindreResume(listes, ecartes, cible = \'#bcBanqueResume\') {')), 'la tuile « To borrow $… » est revenue');
+/* 2026-10-11 (Phil, sur « Borrow from · Best lend · Markets 9 (+4) » : « honnetement je comprends pas ») : des mots simples et l unite ;
+ *   on compte les ACTIONS acceptees (GOOGLc a deux marches = une action), pas les marches */
+const G = (sym) => ({ ...M(10), garantie: { symbole: sym } });
+vu(JSON.stringify(bcBanqueResumer([G('GOOGLc'), G('GOOGLc'), G('AAPLc')]).actions) === '["GOOGLc","AAPLc"]', 'actions acceptees mal comptees (doublon GOOGLc ?)');
+const peindreR = fonction('function bcBanquePeindreResume(listes, ecartes, cible = \'#bcBanqueResume\') {');
+vu(/'Borrowing costs', bcPct\(r\.moinsCher\), 'a year, at the lowest'/.test(peindreR) && /'Lending earns', bcPct\(r\.meilleurPret\), 'a year, at the highest'/.test(peindreR)
+  && /'Stocks accepted', String\(r\.actions\.length\)/.test(peindreR) && !/'Borrow from'|'Best lend'|'Markets'/.test(peindreR), 'les tuiles parlent encore notre jargon');
 /* le panneau suit, et le block affiche passe en tete */
 const choisir = fonction('function bcBanqueChoisir(mk, sens) {');
 vu(/choisirBrain\(gA\); bcRepeindre\(\); bcVue\('bank'\);/.test(choisir), 'choisir un marche ne fait pas suivre le block du panneau');

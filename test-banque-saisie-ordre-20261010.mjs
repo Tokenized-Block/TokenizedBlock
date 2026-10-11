@@ -66,5 +66,9 @@ vu(/tbOuvrirBank'\)\.addEventListener\('click', \(\) => \{ bcOuvrirPop\([^)]*\);
  *   bouton (pleine largeur, pas au milieu d une phrase), AVANT l idee jamais construite, qui est REPLIEE (<details>) et garde son bandeau en tete */
 const iBouton = html.indexOf('<button type="button" class="bouton" id="tbOuvrirBank">'), iIdee = html.indexOf('<details class="tbIdee" id="tbIdee">');
 vu(iBouton > iCarte && iIdee > iBouton && iApercu > iIdee && html.indexOf('</details>', iIdee) > html.indexOf('id="tbAgent"'), 'la carte du Wallet ne mene pas directement a la Bank (bouton plein, idee repliee dessous, bandeau en tete de l idee)');
-vu(html.indexOf('id="tbBanqueResume"') > iCarte && html.indexOf('id="tbBanqueResume"') < iBouton && html.indexOf('id="tbBanquePos"') < iBouton, 'les chiffres de la carte du Wallet ne sont pas au-dessus du bouton');
+/* 2026-10-11 (Phil, « je comprends pas » sur les tuiles) : deux CHOIX en mots simples, au-dessus du bouton, chacun ouvre la Bank regle */
+const iChoix = html.indexOf('<div class="tbChoix" id="tbChoix">');
+vu(iChoix > iCarte && iChoix < iBouton && html.indexOf('id="tbBanquePos"') < iBouton && /data-intention="emprunter"[\s\S]{0,400}Borrow USDC/.test(html.slice(iChoix, iBouton))
+  && /data-intention="preter"[\s\S]{0,400}Lend USDC/.test(html.slice(iChoix, iBouton)), 'la carte du Wallet n offre pas les deux choix au-dessus du bouton');
+vu(/\$\('#tbChoix'\)\.addEventListener\('click', \(e\) => \{[\s\S]{0,300}bcBanque\.intentionChoisie = true;\s*bcOuvrirPop\(/.test(html), 'un choix de la carte du Wallet n ouvre pas la Bank reglee sur ce choix');
 console.log('ok banque-saisie-ordre - ' + n + ' assertions ; NE PROUVE PAS le rendu navigateur');

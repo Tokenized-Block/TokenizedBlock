@@ -559,6 +559,30 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcPourToi{border-top:1px dashed var(--ligne);margin-top:8px;padding-top:6px}
 .bcPourToi .bcPourToiChiffres{grid-template-columns:repeat(2,minmax(0,1fr));margin:2px 0 0}
 .bcPourToi .bcPourToiChiffres b{color:var(--texte)}
+/* 2026-10-11 (Phil : « honnetement je comprends pas » sur « Borrow from / Best lend / Markets 9 (+4) », puis « optimise l ux pour les
+ *   choix ») : des mots simples, une sous-ligne qui dit l unite (« a year »), un choix d intention, des montants tout faits. */
+.bcChiffre i{display:block;font-style:normal;font-size:11px;color:var(--doux);margin-top:1px}
+.bcIntention{margin:10px 0 0}
+.bcCote button[aria-selected="true"][data-intention]{background:rgb(var(--boutonRgb));color:var(--texte)}
+.bcListe li.bcAutresLi{display:block;border:0;padding:0;margin:0}
+.bcAutres>summary{cursor:pointer;font-size:13px;color:var(--doux);padding:6px 2px 8px}
+.bcPucesMontant{display:flex;gap:6px;margin:8px 0 0}
+.bcPucesMontant button{appearance:none;flex:1 1 0;min-width:0;border:1px solid var(--ligne);border-radius:12px;background:var(--creux);color:var(--texte);font:inherit;padding:7px 4px;cursor:pointer;text-align:center}
+.bcPucesMontant button:hover,.bcPucesMontant button:focus-visible{border-color:var(--accent);outline:none}
+.bcPucesMontant button small{display:block;font-size:10.5px;color:var(--doux);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.bcPucesMontant button b{display:block;font-size:13px;margin:2px 0}
+.bcPucesMontant button em{display:block;font-style:normal;font-size:11px;color:#fcd34d}
+.tbChoix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0}
+@media (max-width:430px){.tbChoix{grid-template-columns:1fr}} /* ⛔ pas 440 px : la requete media a 440 px est l ancre UNIQUE du mutant m1 de test-panneau-place (ne pas la recopier, meme ici) */
+.tbChoixCarte{appearance:none;display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;font:inherit;color:var(--texte);cursor:pointer;
+  border:1px solid var(--ligne);border-radius:16px;padding:12px 13px;background:linear-gradient(160deg,rgb(var(--accentRgb) / .14),transparent 70%),var(--creux)}
+.tbChoixCarte:hover,.tbChoixCarte:focus-visible{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .25);outline:none}
+.tbChoixCarte b{font-size:16px}
+.tbChoixQuoi{font-size:12.5px;line-height:1.4;color:var(--doux)}
+.tbChoixTaux{font-size:13px;font-weight:700;color:var(--accent)}
+.tbChoixToi{font-size:15px;font-weight:800}
+.tbChoixToi:empty{display:none}
+.tbChoixVa{font-size:12px;font-weight:700;color:var(--doux);margin-top:auto}
 .bcListe li.bcMarche{display:block;border:1px solid var(--ligne);border-radius:16px;padding:10px 12px;margin:0 0 8px;background:var(--creux)}
 .bcListe li.bcMarche:last-child{border-bottom:1px solid var(--ligne)}
 /* 2026-10-11 : un marche « Lend only » n est plus grise (opacite .62) - 4 cartes sur 9 avaient l air eteintes alors qu on peut y preter */
@@ -732,15 +756,27 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
    ca a la base ». Il n est donc PLUS modal : pas de voile, l app reste visible et utilisable. Grand ecran = un volet a droite ;
    telephone = une feuille en bas (60 % de la hauteur). Un bouton le replie sur son en-tete. */
 dialog.bcPop{border:0;padding:0;background:transparent;color:inherit;margin:0;position:fixed;z-index:70;inset:auto;
-  right:12px;top:12px;height:calc(100dvh - 24px - var(--bcNav,66px));width:min(430px,calc(100% - 24px));max-width:none;max-height:none;overflow:visible}
+  right:12px;top:12px;height:calc(100dvh - 24px - var(--bcNav,66px));width:var(--bcWLibre,min(430px,calc(100% - 24px)));max-width:none;max-height:none;overflow:visible}
 /* ⛔ FOND OPAQUE (capture de Phil : le texte de l app se lisait A TRAVERS le volet). `.carte` est translucide — sans le voile du
    mode modal, ce qui est derriere transparaissait. Une couleur pleine sous le degrade de la carte. */
 dialog.bcPop>.carte{background-color:rgb(var(--fondRgb));backdrop-filter:none;margin:0;height:100%;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent;
   box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
-@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:62dvh}}
+@media (max-width:760px){dialog.bcPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--bcHLibre,62dvh)}}
+/* 2026-10-11 (Phil : « la fleche pour abaisser ou agrandir le control panel, la meme sur tel ») : LA POIGNEE. --bcHLibre / --bcWLibre
+ *   (posees par bcAppliquerTaille sur le dialog) remplacent la taille d origine, qui reste la valeur par defaut ; replie, les regles
+ *   .bcReduit (plus precises) gardent la main et la poignee se cache. */
+/* 2026-10-11 (Phil : « garde pas la fleche visible, affiche comme Windows pour les fenetres ») : une bande INVISIBLE de 16 px a cheval sur
+ *   le bord ; le curseur ↕ / ↔ du systeme dit qu on peut tirer ; un trait fin s allume au survol, au clavier et pendant le geste. */
+.bcPoignee{position:absolute;z-index:3;touch-action:none;user-select:none;-webkit-user-select:none;background:transparent;cursor:ns-resize;outline:none}
+.bcPoignee::after{content:'';position:absolute;border-radius:99px;background:var(--accent);opacity:0;transition:opacity .15s}
+.bcPoignee:hover::after,.bcPoignee:focus-visible::after,.bcPoignee.tire::after{opacity:.8}
+@media (max-width:760px){.bcPoignee{top:-8px;left:18px;right:18px;height:16px}.bcPoignee::after{left:0;right:0;top:6px;height:3px}}
+@media (min-width:761px){.bcPoignee{left:-8px;top:18px;bottom:18px;width:16px;cursor:ew-resize}.bcPoignee::after{top:0;bottom:0;left:6px;width:3px}}
+@media (prefers-reduced-motion:reduce){.bcPoignee::after{transition:none}}
+dialog.bcPop.bcReduit .bcPoignee{display:none}
 /* 2026-10-09 (Phil : « optimise l UX du panneau sur PC et sur tel ») : un peu plus large sur grand ecran (tuiles a 3 colonnes sans
  *   coupure) ; sur telephone, les 4 puces de l en-tete en 2x2 (a 4 colonnes le prix d un petit block finissait en « $0.0000… »). */
-@media (min-width:1100px){dialog.bcPop{width:min(480px,calc(100% - 24px))}}
+@media (min-width:1100px){dialog.bcPop{width:var(--bcWLibre,min(480px,calc(100% - 24px)))}}
 /* 2026-10-09 (Phil, « le panel mange l info ») : la page etait poussee pour le panneau OUVERT >= 1100 px, et « replie, il ne pousse
  *   rien » — c etait la mauvaise moitie : replie, il descend SUR le contenu. Remplace par la regle du 2026-10-10, plus bas. */
 @media (max-width:440px){.bcChips{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -774,7 +810,7 @@ dialog.bcPop[open]{animation:bcPop .18s ease-out}
 dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit .bcPousse{display:none}
 dialog.bcPop.bcReduit .bcHaut{flex-wrap:nowrap;cursor:pointer}
 dialog.bcPop.bcReduit #bcAgent{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (min-width:761px) and (max-width:1099px){dialog.bcPop{width:clamp(300px,36vw,430px)}}
+@media (min-width:761px) and (max-width:1099px){dialog.bcPop{width:var(--bcWLibre,clamp(300px,36vw,430px))}}
 @media (min-width:761px){
   body.bcOuvert{padding-right:calc(var(--bcPopW,430px) + 24px);box-sizing:border-box}
   dialog.bcPop.bcReduit{top:12px;bottom:calc(var(--bcNav,66px) + 12px);height:auto;width:58px}
@@ -1908,6 +1944,14 @@ details[open] > summary::before{transform:rotate(90deg)}
          raster) que les cartes du dessous, pas une copie. On ecrit une commande ou on en touche une ; le cerveau la juge ; le plan
          est construit et simule ; le wallet signe. Un agent (Claude, Grok…) peut PROPOSER par le MCP — jamais signer. -->
     <dialog class="bcPop" id="bcPop" aria-label="Control panel">
+    <!-- 2026-10-11 (Phil, capture fleche ↕ sur le bord du panneau : « ajoute la fleche pour abaisser ou agrandir le control panel, la meme
+         sur tel, pour que le user ajuste lui-meme ») puis « garde pas la fleche visible, affiche comme Windows pour les fenetres » : le BORD
+         du panneau se tire, comme le bord d une fenetre - rien d affiche ; au survol, le curseur devient ↕ / ↔ et un trait fin s allume.
+         Telephone (feuille du bas) = la hauteur, bord du haut ; grand ecran (colonne de droite) = la largeur, bord gauche. Double clic /
+         double tap sur le bord = agrandir au maximum <-> taille d origine (comme Windows) ; clavier = fleches, Entree, Origine. Gardee dans
+         CE navigateur seulement (localStorage, en try/catch : sans lui, la taille d origine). -->
+    <div class="bcPoignee" id="bcPoignee" role="separator" tabindex="0" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+      aria-label="Resize the control panel: drag this edge; double click to switch between tallest and original size" title="Drag to resize · double click: tallest / original"></div>
     <div class="carte" id="bcPanneau">
       <div class="bcHaut">
         <p class="titre" style="margin:0">Control panel</p>
@@ -2040,6 +2084,12 @@ details[open] > summary::before{transform:rotate(90deg)}
              va dans le Chat, le plan est SIMULE avant d etre propose, et le wallet signe chaque etape. Un block en garantie : pas ouvert. -->
         <p class="note" style="margin:0">Borrow USDC against a tokenized stock you hold, or lend USDC. It runs on Morpho, a lending protocol already live on Base. Only your wallet signs.</p>
         <div class="bcBanqueResume" id="bcBanqueResume" hidden></div>
+        <!-- 2026-10-11 (Phil : « optimise l ux pour les choix ») : on choisit D ABORD ce qu on veut faire ; la liste se range pour ce
+             choix (emprunter : les actions que TU detiens d abord, les autres repliees ; preter : le meilleur taux d abord). -->
+        <div class="bcCote bcIntention" role="tablist" aria-label="What do you want to do?" id="bcBanqueIntention">
+          <button type="button" role="tab" data-intention="emprunter" aria-selected="true">I want to borrow</button>
+          <button type="button" role="tab" data-intention="preter" aria-selected="false">I want to lend</button>
+        </div>
         <p class="bcSousTitre">Markets</p>
         <ul class="bcListe" id="bcBanqueMarches"><li class="note">Reading…</li></ul>
         <!-- 2026-10-11 (Phil : « que tu puisses mettre plusieurs actions tokenisees en garantie en meme temps ») : N emprunts, un par action,
@@ -2064,6 +2114,9 @@ details[open] > summary::before{transform:rotate(90deg)}
           <label class="bcChamp"><span id="bcBanqueMontantLib">You borrow</span>
             <span class="bcChampIn"><input id="bcBanqueMontant" inputmode="decimal" placeholder="0.0" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Amount"><b class="bcUnite">USDC</b></span>
           </label>
+          <!-- 2026-10-11 (Phil : « optimise l ux pour les choix ») : des montants TOUT FAITS, calcules pour CE wallet ; chacun dit a quelle
+               baisse de l action la garantie serait vendue (le meme calcul que l estimation). Rien n est envoye : ils remplissent les champs. -->
+          <div class="bcPucesMontant" id="bcBanquePuces" hidden></div>
           <!-- 2026-10-10 (Phil : « check stoxcredit.xyz et copie ce qui marche deja ») : l ESTIMATION sans wallet, au prix de l oracle du marche -->
           <p class="note" id="bcBanqueEstim" style="margin:8px 0 0"></p>
           <div class="bcJauge" id="bcBanqueJauge" hidden></div>
@@ -2676,9 +2729,26 @@ details[open] > summary::before{transform:rotate(90deg)}
            ⛔ L idee du panier de blocks n est PAS supprimee (decision de Raksha du 2026-09-24 : « mode faux le temps de build ») : elle
              est REPLIEE sous le bouton, son bandeau « not built yet » en premier. Sa liste « My block » nourrit aussi le choix du hub
              du Bridge (peindreBridgeBlocks lit #tbBlock) - la retirer aurait vide ce choix en silence. -->
-      <p class="note" id="tbBanqueVivante" style="margin:0">Borrow USDC against the tokenized stocks you hold — one or several at once — or
-        lend USDC, on existing Morpho markets. Your wallet signs each step.</p>
-      <div class="bcBanqueResume" id="tbBanqueResume" hidden></div>
+      <!-- 2026-10-11 (Phil, sur « Borrow from 5.54 % · Best lend 5.49 % · Markets 9 (+4) » : « honnetement je comprends pas, glow up ») :
+           les chiffres sans phrase etaient notre jargon. DEUX CHOIX, dits en mots simples, chacun avec son cout ou son gain PAR AN et ce que
+           CE wallet peut faire ; un tap ouvre la Bank deja reglee sur ce choix. -->
+      <p class="note" id="tbBanqueVivante" style="margin:0">Two things you can do here. It runs on Morpho, a lending protocol already live on Base; your wallet signs every step.</p>
+      <div class="tbChoix" id="tbChoix">
+        <button type="button" class="tbChoixCarte" data-intention="emprunter">
+          <b>Borrow USDC</b>
+          <span class="tbChoixQuoi">Put a tokenized stock you hold as a deposit and get dollars (USDC) now. You keep the stock; the loan costs interest.</span>
+          <span class="tbChoixTaux" id="tbTauxEmprunt">Reading the rates…</span>
+          <span class="tbChoixToi" id="tbToiEmprunt"></span>
+          <span class="tbChoixVa">Choose a stock →</span>
+        </button>
+        <button type="button" class="tbChoixCarte" data-intention="preter">
+          <b>Lend USDC</b>
+          <span class="tbChoixQuoi">Lend the dollars (USDC) in your wallet to borrowers and earn interest. You can take them back when they are not lent out.</span>
+          <span class="tbChoixTaux" id="tbTauxPret">Reading the rates…</span>
+          <span class="tbChoixToi" id="tbToiPret"></span>
+          <span class="tbChoixVa">Choose a market →</span>
+        </button>
+      </div>
       <div class="tbBanquePos" id="tbBanquePos"></div>
       <button type="button" class="bouton" id="tbOuvrirBank">Open the Bank</button>
       <details class="tbIdee" id="tbIdee">
@@ -7364,7 +7434,9 @@ async function connecter() {
   try { void reprendreIntentApresConnect(); } catch (_) {}
   void peindreTokenizedBank();
   void tbBanquePeindre();
-  void bcBanquePourToi(); /* la Bank deja ouverte dit tout de suite ce que CE wallet peut */
+  /* la Bank deja ouverte se RANGE pour ce wallet et dit tout de suite ce qu il peut (bcBanqueCharger repeint aussi « pour toi ») ;
+   *   marches pas encore lus : au moins SES positions (mesure : « Connect your wallet to see them » restait apres la connexion) */
+  if (bcBanque.marches) void bcBanqueCharger(); else { void bcBanquePourToi(); void bcBanquePositions(); }
 }
 
 /* ⛔ UNE SEULE LECTURE POUR DEUX ONGLETS. My block et Wallet ont besoin des memes creations ; les
@@ -8161,7 +8233,7 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     void majWallet();
     void peindreTokenizedBank();
     void tbBanquePeindre();
-    void bcBanquePourToi();
+    if (bcBanque.marches) void bcBanqueCharger(); else { void bcBanquePourToi(); void bcBanquePositions(); }
   });
 }
 
@@ -22216,8 +22288,12 @@ function bcMessage(qui, classe, texte) {
 function bcEtape(m, texte, classe = '') {
   let ul = m.querySelector('ul');
   if (!ul) { ul = document.createElement('ul'); m.append(ul); }
-  ul.append(bcEl('li', { cls: classe, text: texte }));
+  /* 2026-10-11 (contre-test de Grok : « Building the plan… » restait affiche une fois le plan pret) : la ligne est RENDUE, pour qu une
+   *   etape « en cours » soit remplacee par son resultat plutot que de rester a cote de lui */
+  const li = bcEl('li', { cls: classe, text: texte });
+  ul.append(li);
   m.scrollIntoView({ block: 'nearest' });
+  return li;
 }
 function bcBoutons(m, liste) {
   const vieux = m.querySelector('.bcBoutons'); if (vieux) vieux.remove();
@@ -23920,16 +23996,21 @@ function bcBanqueResumer(listes) {
     if (lu(mk.apyPret) && (meilleurPret === null || Number(mk.apyPret) > meilleurPret)) meilleurPret = Number(mk.apyPret);
     if (d >= 10) { ouverts += 1; if (lu(mk.apyEmprunt) && (moinsCher === null || Number(mk.apyEmprunt) < moinsCher)) moinsCher = Number(mk.apyEmprunt); }
   }
-  return { meilleurPret, moinsCher, ouverts, n: (listes || []).length };
+  /* 2026-10-11 (« je comprends pas » : « Markets 9 (+4) ») : on compte les ACTIONS acceptees en depot (GOOGLc a deux marches = une action) */
+  const actions = [...new Set((listes || []).map((mk) => mk && mk.garantie && mk.garantie.symbole).filter(Boolean))];
+  return { meilleurPret, moinsCher, ouverts, n: (listes || []).length, actions };
 }
 function bcBanquePeindreResume(listes, ecartes, cible = '#bcBanqueResume') {
   const z = $(cible); if (!z) return;
   const r = bcBanqueResumer(listes);
   z.textContent = ''; z.hidden = !r.n;
-  const tuile = (titre, valeur) => bcEl('div', { cls: 'bcChiffre' }, [bcEl('small', { text: titre }), bcEl('b', { text: valeur })]);
-  z.append(tuile('Borrow from', bcPct(r.moinsCher)), tuile('Best lend', bcPct(r.meilleurPret)),
-    tuile('Markets', String(r.n) + (ecartes ? ' (+' + ecartes + ')' : '')));
-  z.title = r.ouverts + ' of ' + r.n + ' market(s) open to borrowing right now; every market accepts lenders';
+  /* 2026-10-11 (Phil, sur « Borrow from · Best lend · Markets 9 (+4) » : « honnetement je comprends pas ») : un titre en mots simples,
+   *   le chiffre, et une sous-ligne qui dit l unite et le sens (« a year, at the lowest »). */
+  const tuile = (titre, valeur, sous) => bcEl('div', { cls: 'bcChiffre' }, [bcEl('small', { text: titre }), bcEl('b', { text: valeur }), bcEl('i', { text: sous })]);
+  z.append(tuile('Borrowing costs', bcPct(r.moinsCher), 'a year, at the lowest'), tuile('Lending earns', bcPct(r.meilleurPret), 'a year, at the highest'),
+    tuile('Stocks accepted', String(r.actions.length), 'as a deposit'));
+  z.title = 'Stocks accepted: ' + r.actions.join(', ') + '. ' + r.ouverts + ' of ' + r.n + ' Morpho market(s) can lend right now'
+    + (ecartes ? '; ' + ecartes + ' unlisted market(s) not shown' : '') + '. Rates are variable.';
 }
 /** La lecture des marches, PARTAGEE par l onglet Bank et la carte TokenizedBank du Wallet (2026-10-11) : un seul cache (5 min), un seul
  *  chemin d echec. Rend { ok: true } ou { ok: false, pourquoi } - jamais une liste vide sur un echec. */
@@ -23969,8 +24050,33 @@ function bcPourToi(mk, soldeGarantie, position, soldePret) {
     const dispo = String(mk.disponibleBrut ?? '');
     if (/^\d+$/.test(dispo) && emprunt > BigInt(dispo)) { emprunt = BigInt(dispo); borneParMarche = true; }
   }
-  return { emprunt, borneParMarche, garantie, dette: position ? BigInt(position.detteBrute || 0) : null,
+  /* rien : moins d un cent (2 decimales du jeton prete) - pas un choix d emprunt utile (mesure du 2026-10-11 : 110 unites brutes) */
+  const rien = emprunt !== null && emprunt < 10n ** BigInt(Math.max(0, Number((mk && mk.pret && mk.pret.decimales) || 0) - 2));
+  return { emprunt, borneParMarche, garantie, dette: position ? BigInt(position.detteBrute || 0) : null, rien,
     liquiditeLue: /^\d+$/.test(String((mk && mk.disponibleBrut) ?? '')), pret: typeof soldePret === 'bigint' ? soldePret : null };
+}
+/** L ORDRE DES CHOIX (2026-10-11, Phil : « optimise l ux pour les choix »). infos = [{ mk, r (bcPourToi ou null), aPosition }] dans
+ *  l ordre d arrivee (liquidite, puis le block affiche en tete). Rend { tete, autres, aucune }, tri STABLE :
+ *  - preter : le meilleur taux de pret d abord (non lu en dernier) ; rien n est replie (on peut preter partout) ;
+ *  - emprunter, wallet lu : d abord les marches ou tu as une position, puis ceux ou tu peux emprunter (le plus grand montant d abord) ;
+ *    le reste (action non detenue, rien a emprunter) dans « autres », replie. Si rien n est utile : tout en tete, aucune = true
+ *    (on ne cache pas toute la liste, on dit pourquoi) ;
+ *  - sans wallet lu : l ordre d arrivee, rien de replie. */
+function bcOrdreChoix(infos, intention) {
+  const liste = [...(infos || [])];
+  if (intention === 'preter') {
+    const taux = (x) => { const a = x.mk.apyPret; return a === null || a === undefined || a === '' || !Number.isFinite(Number(a)) ? -1 : Number(a); };
+    return { tete: liste.sort((a, b) => taux(b) - taux(a)), autres: [], aucune: false };
+  }
+  if (!liste.some((x) => x.aPosition || (x.r && x.r.emprunt !== null))) return { tete: liste, autres: [], aucune: false };
+  const utile = (x) => !!x.aPosition || !!(x.r && x.r.emprunt !== null && !x.r.rien && x.r.garantie > 0n);
+  const tete = liste.filter(utile).sort((a, b) => {
+    if (!!b.aPosition !== !!a.aPosition) return b.aPosition ? 1 : -1;
+    const ea = a.r && a.r.emprunt !== null ? a.r.emprunt : -1n, eb = b.r && b.r.emprunt !== null ? b.r.emprunt : -1n;
+    return eb > ea ? 1 : eb < ea ? -1 : 0;
+  });
+  if (!tete.length) return { tete: liste, autres: [], aucune: true };
+  return { tete, autres: liste.filter((x) => !utile(x)), aucune: false };
 }
 /** Un montant brut a DEUX decimales, arrondi BAS - « jusqu a » ne surestime jamais : 152301234 (6 dec) -> « 152.30 ». */
 const bcBas2 = (brut, dec) => { const d = Number(dec); const c = d >= 2 ? brut / 10n ** BigInt(d - 2) : brut * 10n ** BigInt(2 - d); return (c / 100n).toLocaleString('en-US') + '.' + String(c % 100n).padStart(2, '0'); };
@@ -24021,13 +24127,29 @@ function bcPeindrePourToi(el, mk, r) {
   }
   if (note) el.append(bcEl('p', { cls: 'bcMarcheBas', text: note }));
 }
+/** Apres une operation de banque (signee ou non) : relire « pour toi » (soldes + positions) puis repeindre la Bank, ses positions ET la
+ *  carte TokenizedBank du Wallet - tout de suite, a 35 s (le serveur garde soldes et positions 30 s) et a 3 min (l API Morpho des
+ *  positions peut suivre la chaine avec retard).
+ *  ⛔ Contre-test de Grok (2026-10-11, wallet 0x31e0) : apres borrow, repay et withdraw, la carte du Wallet restait PERIMEE a t0 et a
+ *    t+35 s - une dette « fantome » 4-5 min, corrigee seulement en changeant d onglet. Je relisais la Bank, jamais la carte du Wallet. */
+function bcApresOperation() {
+  const relire = async () => {
+    try { await bcBanqueDonneesPourToi(true); } catch (_) { /* chaque peinture dira « not read » */ }
+    bcBanque.positionsDe = null; void bcBanquePositions(true);
+    void bcBanquePourToi(); void tbBanquePeindre();
+  };
+  void relire();
+  setTimeout(() => { void relire(); }, 35000);
+  setTimeout(() => { void relire(); }, 180000);
+}
 /** Remplit la ligne « pour toi » de chaque carte de marche affichee. Un jeton par peinture : un compte change en route n ecrit plus. */
 async function bcBanquePourToi(force = false) {
   const els = [...document.querySelectorAll('#bcBanqueMarches [data-pourtoi]')];
   if (!els.length) return;
   const gen = (bcBanque.genPourToi = (bcBanque.genPourToi || 0) + 1);
   const mkDe = (el) => (bcBanque.marches || []).find((x) => x.id === el.getAttribute('data-pourtoi'));
-  if (!compte) { for (const el of els) if (mkDe(el)) bcPeindrePourToi(el, mkDe(el), 'deconnecte'); return; }
+  /* deconnecte : les donnees de l ancien compte partent (sinon l estimation et les montants tout faits les reprendraient) */
+  if (!compte) { bcBanque.pourToi = null; for (const el of els) if (mkDe(el)) bcPeindrePourToi(el, mkDe(el), 'deconnecte'); if (bcBanque.choisi) bcBanqueIndices(); return; }
   if (force || !bcBanque.pourToi || bcBanque.pourToi.de !== String(compte).toLowerCase() || Date.now() - bcBanque.pourToi.t >= 20000) {
     for (const el of els) if (mkDe(el)) bcPeindrePourToi(el, mkDe(el), 'lecture');
   }
@@ -24044,15 +24166,30 @@ function bcBanqueIndices() {
   $('#bcBanqueGarantie').placeholder = typeof solde === 'bigint' ? (solde > 0n ? 'You hold ' + bcUnites(solde, mk.garantie.decimales) : 'You hold none') : '0.0';
   $('#bcBanqueMontant').placeholder = !r ? '0.0' : bcBanque.sens === 'emprunter' ? (r.emprunt !== null && r.emprunt > 0n ? 'Up to ≈ ' + bcBas2(r.emprunt, mk.pret.decimales) : '0.0')
     : bcBanque.sens === 'preter' ? (r.pret !== null && r.pret > 0n ? 'You have ' + bcBas2(r.pret, mk.pret.decimales) : '0.0') : '0.0';
+  bcBanquePuces(mk, r, solde); /* 2026-10-11 : les montants tout faits, sous le champ */
 }
 async function bcBanqueCharger(force = false) {
   const ul = $('#bcBanqueMarches');
+  const gen = (bcBanque.genCharge = (bcBanque.genCharge || 0) + 1); /* un jeton par peinture : une lecture plus ancienne n ecrit plus */
   const lu = await bcBanqueLireMarches(force);
+  if (gen !== bcBanque.genCharge) return;
   if (!lu.ok) {
     ul.textContent = '';
-    ul.append(bcEl('li', { cls: 'note', text: 'Lending markets not read — ' + lu.pourquoi + '. Try again later.' }));
+    /* 2026-10-11 (mesure locale, serveur froid : 3 lectures a 20 s d affilee) : l echec se DIT et propose de relire - un « try again
+     *   later » sans bouton laissait l onglet mort ; les positions, elles, ne dependent pas des marches et se lisent quand meme */
+    const reessayer = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Try again' });
+    reessayer.addEventListener('click', () => { void bcBanqueCharger(true); });
+    ul.append(bcEl('li', { cls: 'note' }, [bcEl('span', { text: 'Lending markets not read — ' + lu.pourquoi + '. ' }), reessayer]));
+    void bcBanquePositions();
     return;
   }
+  /* 2026-10-11 (Phil : « optimise l ux pour les choix ») : l ordre depend de CE wallet - on attend ses donnees (gardees 20 s) avant de
+   *   peindre ; leur echec ne bloque rien (l ordre d arrivee, et chaque carte dira « not read »). */
+  if (compte && !(bcBanque.pourToi && bcBanque.pourToi.de === String(compte).toLowerCase() && Date.now() - bcBanque.pourToi.t < 20000)) {
+    ul.textContent = ''; ul.append(bcEl('li', { cls: 'note', text: 'Reading your wallet…' }));
+  }
+  const p = compte ? await bcBanqueDonneesPourToi() : null;
+  if (gen !== bcBanque.genCharge) return;
   ul.textContent = '';
   const { listes, ecartes } = bcBanqueListes();
   /* 2026-10-11 (Phil : « le block sur le panel control doit suivre ») : les marches du block AFFICHE passent en tete (tri stable :
@@ -24062,27 +24199,69 @@ async function bcBanqueCharger(force = false) {
   bcBanquePeindreResume(listes, ecartes);
   if (!listes.length) ul.append(bcEl('li', { cls: 'note', text: 'No listed lending market accepts a stock of our list right now.' }));
   const pctLtv = (bps) => String(Number(bps.toFixed(1))) + ' %';
-  for (const mk of listes) {
+  const positionsLues = p && p.pos && p.pos.ok ? p.pos.positions : null;
+  const infos = listes.map((mk) => ({ mk, r: p ? bcPourToiDe(mk, p) : null, aPosition: !!(positionsLues && positionsLues.some((x) => x.id === mk.id)) }));
+  /* l intention : choisie par la personne (onglet du haut, ou la carte du Wallet) ; sinon, un wallet sans aucune action acceptee mais
+   *   avec de l USDC commence sur « preter » - neuf cartes « Hold X first » ne sont pas un choix */
+  if (!bcBanque.intentionChoisie && p) {
+    const peutEmprunter = infos.some((x) => x.r && x.r.emprunt !== null && !x.r.rien && x.r.garantie > 0n);
+    const aDeQuoiPreter = infos.some((x) => x.r && typeof x.r.pret === 'bigint' && x.r.pret > 0n);
+    bcBanque.intention = !peutEmprunter && aDeQuoiPreter ? 'preter' : 'emprunter';
+  }
+  const intention = bcBanque.intention === 'preter' ? 'preter' : 'emprunter';
+  for (const b of document.querySelectorAll('#bcBanqueIntention [data-intention]')) b.setAttribute('aria-selected', String(b.getAttribute('data-intention') === intention));
+  /* 2026-10-11 (contre-test de Grok : « GOOGLc liste 2 fois sans distinction claire ») : une action a PLUSIEURS marches -> chaque carte dit
+   *   ce qui les distingue pour la personne, la limite d emprunt (53.9 % / 43.8 %) ; une action a un seul marche n a pas cette puce */
+  const nParAction = new Map();
+  for (const mk of listes) nParAction.set(mk.garantie.symbole, (nParAction.get(mk.garantie.symbole) || 0) + 1);
+  const carte = ({ mk, r }) => {
     const c = bcBanqueChiffres(mk), estIci = !!ici && String(mk.garantie.adr).toLowerCase() === ici;
     const li = bcEl('li', { cls: 'bcMarche' + (c.etat === 'vide' ? ' vide' : '') + (estIci ? ' ici' : '') });
     li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcEl('b', { text: mk.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: mk.pret.symbole }),
-      ...(estIci ? [bcEl('span', { cls: 'bcPuce ici', text: 'This block' })] : []), bcEl('span', { cls: 'bcPuce ' + c.classe, text: c.puce })]));
+      ...(estIci ? [bcEl('span', { cls: 'bcPuce ici', text: 'This block' })] : []),
+      ...((nParAction.get(mk.garantie.symbole) || 0) > 1 ? [bcEl('span', { cls: 'bcPuce', text: 'up to ' + pctLtv(c.maxPct), title: 'One of ' + nParAction.get(mk.garantie.symbole) + ' ' + mk.garantie.symbole + ' markets: this one lends up to ' + pctLtv(c.maxPct) + ' of the value and liquidates at ' + pctLtv(c.liqPct) + '.' })] : []),
+      bcEl('span', { cls: 'bcPuce ' + c.classe, text: c.puce })]));
+    /* 2026-10-11 (« je comprends pas ») : des titres qui disent ce que le chiffre est - un cout par an, un gain par an, une part de la valeur */
     li.append(bcEl('div', { cls: 'bcMarcheChiffres' }, [
-      bcEl('div', {}, [bcEl('small', { text: 'Borrow' }), bcEl('b', { text: bcPct(mk.apyEmprunt) })]),
-      bcEl('div', {}, [bcEl('small', { text: 'Lend' }), bcEl('b', { text: bcPct(mk.apyPret) })]),
-      bcEl('div', {}, [bcEl('small', { text: 'Max borrow' }), bcEl('b', { text: pctLtv(c.maxPct) })])]));
+      bcEl('div', {}, [bcEl('small', { text: 'Costs a year' }), bcEl('b', { text: bcPct(mk.apyEmprunt) })]),
+      bcEl('div', {}, [bcEl('small', { text: 'Earns a year' }), bcEl('b', { text: bcPct(mk.apyPret) })]),
+      bcEl('div', {}, [bcEl('small', { text: 'Borrow up to' }), bcEl('b', { text: pctLtv(c.maxPct) })])]));
     li.append(bcEl('div', { cls: 'bcLtv', 'aria-hidden': 'true' }, [bcEl('i', { style: 'width:' + Math.min(100, c.maxPct).toFixed(1) + '%' }),
       bcEl('em', { style: 'left:' + Math.min(100, c.liqPct).toFixed(1) + '%' })]));
-    li.append(bcEl('p', { cls: 'bcMarcheBas', text: 'You borrow up to ' + pctLtv(c.maxPct) + ' of the value; liquidated at ' + pctLtv(c.liqPct) + '.' }));
+    li.append(bcEl('p', { cls: 'bcMarcheBas', text: 'You can borrow up to ' + pctLtv(c.maxPct) + ' of your ' + mk.garantie.symbole + "'s value. If the loan reaches "
+      + pctLtv(c.liqPct) + ' of it, the stock is sold to repay the loan (liquidation).' }));
     li.append(bcEl('div', { cls: 'bcPourToi', 'data-pourtoi': mk.id })); /* rempli par bcBanquePourToi : ce que CE wallet peut emprunter / preter */
     const boutons = bcEl('div', { cls: 'bcMarcheBoutons' });
-    for (const [txt, sens, cls] of [['Borrow', 'emprunter', 'bouton'], ['Lend', 'preter', 'bouton sec']]) {
+    /* le bouton principal suit l intention ; une action que ce wallet ne detient pas propose de l ACHETER (onglet Trade du panneau, sur
+     *   cette action) plutot qu un « Borrow » qui finirait en refus */
+    const nonDetenue = !!(r && r.garantie === 0n);
+    const gestes = intention === 'preter' ? [['Lend', 'preter', 'bouton'], ['Borrow', 'emprunter', 'bouton sec']]
+      : nonDetenue ? [['Buy ' + mk.garantie.symbole, 'acheter', 'bouton'], ['Lend', 'preter', 'bouton sec']]
+        : [['Borrow', 'emprunter', 'bouton'], ['Lend', 'preter', 'bouton sec']];
+    for (const [txt, sens, cls] of gestes) {
       const b = bcEl('button', { type: 'button', cls, text: txt });
-      b.addEventListener('click', () => bcBanqueChoisir(mk, sens));
+      b.addEventListener('click', () => {
+        if (sens !== 'acheter') { bcBanqueChoisir(mk, sens); return; }
+        try { choisirBrain(String(mk.garantie.adr).toLowerCase()); bcRepeindre(); bcVue('trade'); } catch (_) { /* l onglet Trade reste atteignable a la main */ }
+      });
       boutons.append(b);
     }
     li.append(boutons);
-    ul.append(li);
+    return li;
+  };
+  const ordre = bcOrdreChoix(infos, intention);
+  if (ordre.aucune && intention === 'emprunter') {
+    const detientUne = infos.some((x) => x.r && x.r.garantie !== null && x.r.garantie > 0n);
+    ul.append(bcEl('li', { cls: 'note', text: detientUne ? 'Right now no market can lend against the stocks you hold. You can still lend USDC: choose « I want to lend ».'
+      : 'You hold none of the stocks accepted as a deposit yet: buy one below, or choose « I want to lend ».' }));
+  }
+  for (const x of ordre.tete) ul.append(carte(x));
+  if (ordre.autres.length) {
+    const plis = bcEl('details', { cls: 'bcAutres' }, [bcEl('summary', { text: ordre.autres.length + ' more market' + (ordre.autres.length > 1 ? 's' : '') + ' — stocks you do not hold, or nothing to borrow right now' })]);
+    const sous = bcEl('ul', { cls: 'bcListe' });
+    for (const x of ordre.autres) sous.append(carte(x));
+    plis.append(sous);
+    ul.append(bcEl('li', { cls: 'bcAutresLi' }, [plis]));
   }
   if (ecartes > 0) ul.append(bcEl('li', { cls: 'note', text: ecartes + ' unlisted market' + (ecartes > 1 ? 's' : '') + ' not shown.' }));
   bcPanierPeindre(listes);
@@ -24116,6 +24295,12 @@ function bcBanqueEstimer() {
   const brut = (txt, dec) => (/^\s*0*(?:[.,]0*)?\s*$/.test(txt) ? 0n : enUnitesBrutes(txt.trim(), dec));
   const g = brut($('#bcBanqueGarantie').value, decG), d = brut($('#bcBanqueMontant').value, decP);
   if (g === null || d === null) { bcPeindreJauge(null); z.textContent = ''; return; }
+  /* 2026-10-11 : CE QUI EST DEJA POSE ET DEJA DU sur ce marche (positions lues pour le compte connecte) compte dans la LTV et la
+   *   liquidation - comme dans le plan (construireEmprunt : pos.garantie + G, pos.dette + E). Sans cela, les montants proposes
+   *   (bcBanquePuces) et cette estimation divergeaient pour qui a deja une position. Sans wallet ou non lu : zero, l estimation d avant. */
+  const pt = bcBanque.pourToi;
+  const ps = pt && pt.pos && pt.pos.ok && typeof compte !== 'undefined' && compte && pt.de === String(compte).toLowerCase() ? pt.pos.positions.find((x) => x.id === mk.id) : null;
+  const g0 = ps ? BigInt(ps.garantieBrute || 0) : 0n, d0 = ps ? BigInt(ps.detteBrute || 0) : 0n, gT = g + g0, dT = d + d0;
   const prix = BigInt(mk.prixOracle), lltv = BigInt(mk.lltv), marge = BigInt(mk.margeBps || 7000);
   /* 2026-10-11 (Phil : « au moment du choix, montre en pourcentage le risque de liquidation ») : la jauge et la DISTANCE a la
    *   liquidation (de combien l action peut baisser avant), en %. Une distance, pas une probabilite - et c est ecrit. */
@@ -24126,13 +24311,14 @@ function bcBanqueEstimer() {
   const morceaux = ['Oracle price: 1 ' + mk.garantie.symbole + ' = ' + bcUnites(prixUnite, decP) + ' ' + mk.pret.symbole + '.'];
   /* 2026-10-11 : le montant n est plus affiche par marche (« peur de liquidite ») - la limite reste, et elle se DIT ici, au moment ou elle compte */
   if (d > 0n && /^\d+$/.test(String(mk.disponibleBrut ?? '')) && d > BigInt(mk.disponibleBrut)) morceaux.push('This market cannot lend that much right now — try a smaller amount.');
-  if (g > 0n) {
-    const valeur = (g * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
-    morceaux.push('Collateral ≈ ' + bcUnites(valeur, decP) + ' ' + mk.pret.symbole + '; you can borrow up to ≈ ' + bcUnites(plafond, decP) + '.');
-    if (d > 0n && valeur > 0n) {
-      ltvPct = Number((d * 10000n) / valeur) / 100;
-      morceaux.push('Position LTV ' + (Number((d * 10000n) / valeur) / 100).toFixed(1) + ' %' + (d > plafond ? ' — above our limit: the plan will refuse it.' : '.'));
-      const liqUnite = (d * 10n ** 18n * unite) / (g * lltv); /* unites brutes de pret par action, au seuil de liquidation */
+  if (g0 > 0n || d0 > 0n) morceaux.push('Counting what you already posted (' + bcUnites(g0, decG) + ' ' + mk.garantie.symbole + ') and owe (' + bcUnites(d0, decP) + ' ' + mk.pret.symbole + ').');
+  if (gT > 0n) {
+    const valeur = (gT * prix) / 10n ** 36n, plafond = (valeur * lltv / 10n ** 18n) * marge / 10000n;
+    morceaux.push('Collateral ≈ ' + bcUnites(valeur, decP) + ' ' + mk.pret.symbole + '; you can borrow up to ≈ ' + bcUnites(plafond, decP) + (d0 > 0n ? ' in total' : '') + '.');
+    if (dT > 0n && valeur > 0n) {
+      ltvPct = Number((dT * 10000n) / valeur) / 100;
+      morceaux.push('Position LTV ' + (Number((dT * 10000n) / valeur) / 100).toFixed(1) + ' %' + (dT > plafond ? ' — above our limit: the plan will refuse it.' : '.'));
+      const liqUnite = (dT * 10n ** 18n * unite) / (gT * lltv); /* unites brutes de pret par action, au seuil de liquidation */
       morceaux.push('Liquidated if 1 ' + mk.garantie.symbole + ' falls below ≈ ' + bcUnites(liqUnite, decP) + ' ' + mk.pret.symbole + '.');
       if (prixUnite > 0n) {
         chutePct = Math.max(0, Number(10000n - (liqUnite * 10000n) / prixUnite) / 100);
@@ -24215,13 +24401,15 @@ async function bcBanqueProposerPanier(lignes) {
   bcVue('chat');
   const planifier = async () => {
     if (!(await bcAvecWallet(m, planifier))) return;
-    bcEtape(m, 'Building the plan — each position is read on chain and the whole sequence is simulated from your wallet…');
+    const enCours = bcEtape(m, 'Building the plan — each position is read on chain and the whole sequence is simulated from your wallet…');
     const q = new URLSearchParams({ action: 'panier', compte: String(compte).toLowerCase(), lignes: lignes.map((x) => x.mk.id + ':' + x.brutG + ':' + x.brutM).join(',') });
     let p;
     try {
       const r = await fetch('/api/banque/plan?' + q, { signal: AbortSignal.timeout(120000) });
       p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute' } : await r.json();
     } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched' }; }
+    /* l etape « en cours » devient son resultat : fait (relu + simule) ou, sur un refus, elle laisse la place au motif */
+    if (enCours) { if (p && p.etat === 'PRET') enCours.textContent = 'Plan built — every position read on chain and the whole sequence simulated from your wallet.'; else enCours.remove(); }
     if (!p || p.etat !== 'PRET') {
       bcEtape(m, (p && p.etat === 'REFUSE' ? 'Refused: ' : 'Not measured: ') + String((p && p.pourquoi) || 'no answer').slice(0, 240) + ' Nothing was sent.', 'non');
       bcBoutons(m, [['Try again', planifier, true]]);
@@ -24244,9 +24432,7 @@ async function bcBanqueProposerPanier(lignes) {
     bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.', 'oui');
     bcBoutons(m, [['Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
       const s = await bcSigner(m, p.aSigner);
-      bcBanque.positionsDe = null; void bcBanquePositions(true);
-      /* « ce que tu peux » se relit : tout de suite, puis apres 35 s (le serveur garde soldes et positions 30 s) */
-      void bcBanquePourToi(true); setTimeout(() => { void bcBanquePourToi(true); }, 35000);
+      bcApresOperation(); /* la Bank, ses positions ET la carte du Wallet se relisent (contre-test de Grok, 2026-10-11) */
       if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
       bcBoutons(m, []); /* une carte faite n a plus de bouton de signature */
       try { void majWallet(); } catch (_) { /* relu a l ouverture */ }
@@ -24288,22 +24474,81 @@ $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBan
 /* la carte TokenizedBank de l onglet Wallet mene a la banque qui existe : le panneau, sur son onglet Bank */
 $('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
 $('#tkOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
-/* 2026-10-11 (Phil : « refais bien le frontend de la carte TokenizedBank du Wallet, pour rediriger direct ») : la carte MENE a la Bank -
- *   les MEMES trois tuiles que l onglet Bank (meme lecture, meme cache, meme filtre : bcBanqueLireMarches / bcBanqueListes), une ligne par
- *   position de CE wallet (meme puce de sante : bcPuceSante), et un seul bouton. ⛔ Un echec se DIT dans la carte, il ne la vide pas et ne
- *   cache pas le bouton : la Bank relit tout a l ouverture. ⛔ Un jeton par peinture : une lecture plus ancienne (autre compte) n ecrit plus. */
+/* 2026-10-11 (Phil : « optimise l ux pour les choix ») : l INTENTION - choisie en haut de la Bank, ou par l une des deux cartes du Wallet
+ *   (qui ouvre la Bank deja reglee). Un choix explicite n est plus jamais remplace par le choix automatique. */
+$('#bcBanqueIntention').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-intention]'); if (!b) return;
+  bcBanque.intention = b.getAttribute('data-intention'); bcBanque.intentionChoisie = true; void bcBanqueCharger();
+});
+$('#tbChoix').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-intention]'); if (!b) return;
+  bcBanque.intention = b.getAttribute('data-intention'); bcBanque.intentionChoisie = true;
+  bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger();
+});
+/** Les montants tout faits, pour CE wallet, sur le marche choisi (2026-10-11, « optimise l ux pour les choix ») :
+ *  - emprunter : un quart, la moitie, presque notre maximum (95 % : le plan relit le prix sur la chaine, il peut differer un peu de
+ *    celui de l API) de « You can borrow » ; chacun dit a quelle BAISSE de l action la garantie serait vendue - bcEstimationEmprunt, le
+ *    calcul de l estimation, sur la garantie TOTALE (wallet + deja posee) et la dette TOTALE (deja due + ce montant) ; il remplit aussi
+ *    la garantie avec toute l action du wallet, l hypothese de « You can borrow » ;
+ *  - preter : un quart, la moitie, tout l USDC du wallet.
+ *  Arrondis au cent INFERIEUR. Rien n est envoye : ils remplissent les champs, l estimation et le plan font le reste. */
+function bcBanquePuces(mk, r, soldeG) {
+  const z = $('#bcBanquePuces'); if (!z) return;
+  z.textContent = ''; z.hidden = true;
+  if (!mk || !r || typeof r !== 'object') return;
+  const decP = Number(mk.pret.decimales), decG = Number(mk.garantie.decimales), sym = mk.garantie.symbole, cent = 10n ** BigInt(Math.max(0, decP - 2));
+  const choix = [];
+  if (bcBanque.sens === 'emprunter' && r.emprunt !== null && !r.rien && r.garantie !== null && r.garantie > 0n) {
+    for (const [nom, k] of [['A quarter', 25n], ['Half', 50n], ['Near our max', 95n]]) {
+      const m = ((r.emprunt * k) / 100n / cent) * cent; if (m <= 0n) continue;
+      const est = bcEstimationEmprunt(mk, r.garantie, (r.dette || 0n) + m);
+      const chute = est && est.chutePct !== null && Number.isFinite(est.chutePct) ? est.chutePct : null;
+      choix.push({ nom, m, brutG: typeof soldeG === 'bigint' ? soldeG : null, sous: chute !== null ? 'sold if ' + sym + ' falls ' + chute.toFixed(1) + ' %' : '', /* meme arrondi que l estimation (mesure : « 51 % » ici, « 51.5 % » la-bas) */
+        titre: 'Borrow ' + bcBas2(m, decP) + ' ' + mk.pret.symbole + (chute !== null ? ': your ' + sym + ' would be sold to repay the loan if its price fell ' + chute.toFixed(1) + ' %' : '') + '. Fills the form; nothing is sent.' });
+    }
+  } else if (bcBanque.sens === 'preter' && r.pret !== null && r.pret > 0n) {
+    for (const [nom, k] of [['A quarter', 25n], ['Half', 50n], ['All', 100n]]) {
+      const m = k === 100n ? r.pret : ((r.pret * k) / 100n / cent) * cent; if (m <= 0n) continue;
+      choix.push({ nom, m, brutG: null, sous: '', titre: 'Lend ' + bcBas2(m, decP) + ' ' + mk.pret.symbole + '. Fills the form; nothing is sent.' });
+    }
+  }
+  if (!choix.length) return;
+  for (const x of choix) {
+    const b = bcEl('button', { type: 'button', title: x.titre, 'aria-label': x.titre }, [bcEl('small', { text: x.nom }), bcEl('b', { text: bcBas2(x.m, decP) + ' ' + mk.pret.symbole }),
+      ...(x.sous ? [bcEl('em', { text: x.sous })] : [])]);
+    b.addEventListener('click', () => {
+      if (x.brutG !== null) $('#bcBanqueGarantie').value = x.brutG > 0n ? bcUnites(x.brutG, decG) : '';
+      $('#bcBanqueMontant').value = bcUnites(x.m, decP);
+      bcBanqueSaisie();
+    });
+    z.append(b);
+  }
+  z.hidden = false;
+}
+/* 2026-10-11 (Phil : « refais bien le frontend de la carte TokenizedBank du Wallet, pour rediriger direct », puis, sur « Borrow from ·
+ *   Best lend · Markets 9 (+4) » : « honnetement je comprends pas, glow up ») : la carte MENE a la Bank par DEUX CHOIX dits en mots
+ *   simples (#tbChoix : emprunter / preter), chacun avec son cout ou son gain PAR AN (bcBanqueResumer : la meme lecture et le meme filtre
+ *   que l onglet Bank) et ce que CE wallet peut (bcPourToiDe) ; puis ses positions (bcPuceSante). ⛔ Un echec se DIT dans la carte, il ne
+ *   la vide pas et ne cache pas les choix : la Bank relit tout a l ouverture. ⛔ Un jeton par peinture : une lecture plus ancienne (autre
+ *   compte) n ecrit plus. */
 let tbBanqueGeneration = 0;
 async function tbBanquePeindre() {
-  const pos = $('#tbBanquePos');
-  if (!pos || !$('#tbBanqueResume')) return;
+  const pos = $('#tbBanquePos'), tauxE = $('#tbTauxEmprunt'), tauxP = $('#tbTauxPret'), toiE = $('#tbToiEmprunt'), toiP = $('#tbToiPret');
+  if (!pos || !tauxE || !tauxP || !toiE || !toiP) return;
   const gen = ++tbBanqueGeneration;
   const lu = await bcBanqueLireMarches();
   if (gen !== tbBanqueGeneration) return;
-  pos.textContent = '';
-  const { listes, ecartes } = lu.ok ? bcBanqueListes() : { listes: [], ecartes: 0 };
-  if (lu.ok) bcBanquePeindreResume(listes, ecartes, '#tbBanqueResume');
-  else { $('#tbBanqueResume').hidden = true; pos.append(bcEl('p', { cls: 'note', text: 'Lending markets not read right now — ' + lu.pourquoi + '. The Bank reads them again when you open it.' })); }
-  if (!compte) { pos.append(bcEl('p', { cls: 'note', text: 'Connect your wallet to see how much you can borrow and lend with it.' })); return; }
+  pos.textContent = ''; toiE.textContent = ''; toiP.textContent = '';
+  const { listes } = lu.ok ? bcBanqueListes() : { listes: [] };
+  if (lu.ok) {
+    const res = bcBanqueResumer(listes);
+    tauxE.textContent = res.moinsCher !== null ? 'Costs from ' + bcPct(res.moinsCher) + ' a year' : 'Cost not read right now';
+    tauxP.textContent = res.meilleurPret !== null ? 'Earns up to ' + bcPct(res.meilleurPret) + ' a year' : 'Rate not read right now';
+  } else {
+    tauxE.textContent = 'Rates not read right now'; tauxP.textContent = 'Rates not read right now';
+    pos.append(bcEl('p', { cls: 'note', text: 'Lending markets not read right now — ' + lu.pourquoi + '. The Bank reads them again when you open it.' }));
+  }
+  if (!compte) { pos.append(bcEl('p', { cls: 'note', text: 'Connect your wallet to see how much you could borrow and lend.' })); return; }
   const c = String(compte).toLowerCase();
   const p = await bcBanqueDonneesPourToi();
   if (gen !== tbBanqueGeneration || !p || p.de !== c) return;
@@ -24322,14 +24567,11 @@ async function tbBanquePeindre() {
     const mkU = listes.find((mk) => mk.pret.symbole === 'USDC'), dec = mkU ? mkU.pret.decimales : 6;
     const soldeU = mkU && p.av ? p.av.solde(mkU.pret.adr) : null;
     let total = 0n; for (const v of parAction.values()) total += v.e;
-    const emprunt = parAction.size ? '≈ ' + bcBas2(total, dec) + ' USDC' : nonLu ? 'not read' : '0 USDC';
-    const pret = soldeU === null ? 'not read' : bcBas2(soldeU, dec) + ' USDC';
-    pos.append(bcEl('div', { cls: 'bcPourToi' }, [bcEl('div', { cls: 'bcMarcheChiffres bcPourToiChiffres' }, [
-      bcEl('div', {}, [bcEl('small', { text: 'You can borrow' }), bcEl('b', { text: emprunt })]),
-      bcEl('div', {}, [bcEl('small', { text: 'You can lend' }), bcEl('b', { text: pret })])])]));
-    const note = parAction.size ? 'Counts your ' + [...parAction.values()].map((v) => v.sym).join(', ') + ' — in your wallet and already posted — each on its best market, at our limit. Borrowing less keeps you further from liquidation.' + (nonLu ? ' Some markets were not read.' : '')
-      : nonLu ? '' : 'You hold none of the stocks these markets accept: buy one in Trade, or lend USDC.';
-    if (note) pos.append(bcEl('p', { cls: 'note', text: note }));
+    /* dans chaque CHOIX, ce que CE wallet peut (le detail de la regle reste dans la note dessous) */
+    toiE.textContent = parAction.size ? 'You: up to ≈ ' + bcBas2(total, dec) + ' USDC' : nonLu ? 'Your amount: not read right now' : 'You hold none of the accepted stocks yet';
+    toiP.textContent = soldeU === null ? 'Your USDC: not read right now' : soldeU > 0n ? 'You: ' + bcBas2(soldeU, dec) + ' USDC to lend' : 'No USDC in this wallet yet';
+    if (parAction.size) pos.append(bcEl('p', { cls: 'note', text: '« Up to » counts your ' + [...parAction.values()].map((v) => v.sym).join(', ')
+      + ' — in your wallet and already posted — each on its best market, at our limit. Borrowing less keeps you further from liquidation.' + (nonLu ? ' Some markets were not read.' : '') }));
   }
   const r = p.pos;
   if (!r || !r.ok) { pos.append(bcEl('p', { cls: 'note', text: 'Your Bank positions were not read — ' + ((r && r.pourquoi) || 'try again later') + '.' })); return; }
@@ -24370,7 +24612,7 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
   bcVue('chat');
   const planifier = async () => {
     if (!(await bcAvecWallet(m, planifier))) return;
-    bcEtape(m, 'Building the plan — your position is read on chain and the exact calls are simulated from your wallet…');
+    const enCours = bcEtape(m, 'Building the plan — your position is read on chain and the exact calls are simulated from your wallet…');
     const q = new URLSearchParams({ action: sens, id: mk.id, compte: String(compte).toLowerCase() });
     if (sens === 'emprunter') { q.set('garantie', String(brutG)); q.set('emprunt', String(brutM)); }
     else if (tout) q.set('tout', '1');
@@ -24380,6 +24622,8 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       const r = await fetch('/api/banque/plan?' + q, { signal: AbortSignal.timeout(90000) });
       p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute' } : await r.json();
     } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched' }; }
+    /* 2026-10-11 (contre-test de Grok : « Building the plan… » restait) : l etape « en cours » devient son resultat, ou laisse la place au refus */
+    if (enCours) { if (p && p.etat === 'PRET') enCours.textContent = 'Plan built — your position read on chain and the exact calls simulated from your wallet.'; else enCours.remove(); }
     if (!p || p.etat !== 'PRET') {
       bcEtape(m, (p && p.etat === 'REFUSE' ? 'Refused: ' : 'Not measured: ') + String((p && p.pourquoi) || 'no answer').slice(0, 240) + ' Nothing was sent.', 'non');
       bcBoutons(m, [['Try again', planifier, true]]);
@@ -24421,8 +24665,7 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       try { void majWallet(); } catch (_) { /* le Wallet se relira a son ouverture */ }
       bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
       m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
-      bcBanque.positionsDe = null; void bcBanquePositions(true);
-      void bcBanquePourToi(true); setTimeout(() => { void bcBanquePourToi(true); }, 35000); /* serveur : 30 s de cache */
+      bcApresOperation(); /* la Bank, ses positions ET la carte du Wallet se relisent (contre-test de Grok, 2026-10-11) */
       /* 2026-10-10 (Phil : « surtout pas forcer sur ETH, proposer tous les chemins d echange, full open for all assets ») : deux
        *   raccourcis (racheter l action en garantie, le block affiche) PUIS un selecteur de TOUS les actifs connus (actions du registre,
        *   devises de Base, block affiche). Ce sont les rails qui planifient ou refusent, avec la raison — rien n est filtre ici. */
@@ -24691,6 +24934,85 @@ $('#bcPanneau .bcHaut').addEventListener('click', (e) => {
   if (!$('#bcPop').classList.contains('bcReduit') || (e.target && e.target.closest && e.target.closest('button, a, input, form, select'))) return;
   $('#bcReduire').click();
 });
+/* ══ 2026-10-11 — LA POIGNEE (Phil : « la fleche pour abaisser ou agrandir le control panel, la meme sur tel, pour que le user ajuste
+ *   lui-meme ») ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+ * Telephone (feuille du bas, <= 760 px) : la HAUTEUR, tirer le bord du haut vers le haut = plus grand. Grand ecran (colonne de droite) :
+ *   la LARGEUR, tirer le bord gauche vers la gauche = plus large. Comme le bord d une fenetre Windows (Phil) : rien d affiche, un tap ne
+ *   fait RIEN (un bord touche par megarde ne change pas la taille) ; double clic / double tap : le maximum <-> la taille d origine ;
+ *   clavier : fleches, Entree (maximum <-> origine), Origine.
+ * bcBornerTaille : la taille libre BORNEE a l ecran - feuille 160 px .. hauteur utile (on garde 56 px au-dessus) ; colonne 300 px ..
+ *   900 px en laissant 320 px a la page. Une valeur illisible rend null : jamais une taille inventee (la taille d origine reste). */
+const BC_CLE_TAILLE = 'tblock.panel.taille.v1';
+function bcBornerTaille(axe, v, ecranL, ecranH, nav) {
+  const n = Number(v);
+  if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return null;
+  const min = axe === 'h' ? 160 : 300;
+  const max = axe === 'h' ? Math.max(min, ecranH - nav - 56) : Math.max(min, Math.min(900, ecranL - 320));
+  return Math.round(Math.min(max, Math.max(min, n)));
+}
+const bcAxeTaille = () => { try { return window.matchMedia('(max-width:760px)').matches ? 'h' : 'w'; } catch (_) { return 'h'; } };
+const bcNavPx = () => { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bcNav')); return Number.isFinite(v) ? v : 66; };
+/* localStorage : une commodite de CE navigateur ; illisible ou bloque (navigation privee) = la taille d origine, sans erreur */
+function bcLireTailles() { try { const o = JSON.parse(localStorage.getItem(BC_CLE_TAILLE) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; } }
+function bcAppliquerTaille(axe, v, garder) {
+  const d = $('#bcPop'), p = $('#bcPoignee'); if (!d) return null;
+  const b = bcBornerTaille(axe, v, window.innerWidth, window.innerHeight, bcNavPx());
+  const prop = axe === 'h' ? '--bcHLibre' : '--bcWLibre';
+  if (b === null) d.style.removeProperty(prop); else d.style.setProperty(prop, b + 'px');
+  if (p) {
+    const min = axe === 'h' ? 160 : 300, max = bcBornerTaille(axe, 1e6, window.innerWidth, window.innerHeight, bcNavPx());
+    const reel = axe === 'h' ? d.offsetHeight : d.offsetWidth;
+    p.setAttribute('aria-orientation', axe === 'h' ? 'horizontal' : 'vertical');
+    p.setAttribute('aria-valuenow', String(max > min ? Math.round(Math.min(100, Math.max(0, (reel - min) * 100 / (max - min)))) : 50));
+  }
+  if (garder) { try { const t = bcLireTailles(); if (b === null) delete t[axe]; else t[axe] = b; localStorage.setItem(BC_CLE_TAILLE, JSON.stringify(t)); } catch (_) { /* la taille vaut pour cette visite */ } }
+  bcPoserTaille(); /* la place laissee a la page suit la nouvelle taille */
+  return b;
+}
+/** Le double clic (comme le bord d une fenetre Windows) : deja au maximum -> la taille d origine ; sinon -> le maximum. */
+function bcBasculerTaille(axe) {
+  const d = $('#bcPop'); if (!d) return;
+  const max = bcBornerTaille(axe, 1e6, window.innerWidth, window.innerHeight, bcNavPx());
+  const reel = axe === 'h' ? d.offsetHeight : d.offsetWidth;
+  bcAppliquerTaille(axe, reel >= max - 2 ? null : max, true);
+}
+(function bcPoigneeGeste() {
+  const p = $('#bcPoignee'), d = $('#bcPop'); if (!p || !d) return;
+  for (const [axe, v] of Object.entries(bcLireTailles())) if (axe === 'h' || axe === 'w') bcAppliquerTaille(axe, v, false);
+  window.addEventListener('resize', () => { for (const [axe, v] of Object.entries(bcLireTailles())) if (axe === 'h' || axe === 'w') bcAppliquerTaille(axe, v, false); });
+  let depart = null, dernierTap = 0;
+  p.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const axe = bcAxeTaille();
+    depart = { axe, x: e.clientX, y: e.clientY, taille: axe === 'h' ? d.offsetHeight : d.offsetWidth, bouge: false };
+    try { p.setPointerCapture(e.pointerId); } catch (_) {}
+    p.classList.add('tire'); e.preventDefault();
+  });
+  p.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    /* vers le haut = plus haut (feuille) ; vers la gauche = plus large (colonne, poignee sur son bord gauche) */
+    const delta = depart.axe === 'h' ? depart.y - e.clientY : depart.x - e.clientX;
+    if (Math.abs(delta) > 4) depart.bouge = true;
+    if (depart.bouge) bcAppliquerTaille(depart.axe, depart.taille + delta, false);
+  });
+  p.addEventListener('pointerup', () => {
+    if (!depart) return;
+    const { axe, bouge } = depart; depart = null; p.classList.remove('tire');
+    if (bouge) { bcAppliquerTaille(axe, axe === 'h' ? d.offsetHeight : d.offsetWidth, true); return; }
+    /* un tap seul ne fait rien ; deux taps a moins de 350 ms : le maximum <-> la taille d origine */
+    const t = Date.now();
+    if (t - dernierTap < 350) { dernierTap = 0; bcBasculerTaille(axe); return; }
+    dernierTap = t;
+  });
+  p.addEventListener('pointercancel', () => { if (depart) { depart = null; p.classList.remove('tire'); } });
+  p.addEventListener('keydown', (e) => {
+    const axe = bcAxeTaille(), reel = axe === 'h' ? d.offsetHeight : d.offsetWidth;
+    const pas = { ArrowUp: axe === 'h' ? 40 : 0, ArrowDown: axe === 'h' ? -40 : 0, ArrowLeft: axe === 'w' ? 40 : 0, ArrowRight: axe === 'w' ? -40 : 0 }[e.key];
+    if (pas) { e.preventDefault(); bcAppliquerTaille(axe, reel + pas, true); }
+    else if (e.key === 'Enter') { e.preventDefault(); bcBasculerTaille(axe); }
+    else if (e.key === 'Home') { e.preventDefault(); bcAppliquerTaille(axe, null, true); }
+  });
+})();
 /* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
 (function bcDemarrage() {
   const h = new URLSearchParams(location.hash.replace(/^#/, ''));
