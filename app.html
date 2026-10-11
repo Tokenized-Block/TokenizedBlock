@@ -22315,7 +22315,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       bcBoutons(m, [['Try again', planifier, true], ['Dismiss', refuser, true]]);
       return;
     }
-    bcEtape(m, 'Building the plan…');
+    const enCours = bcEtape(m, 'Building the plan…');
     let p;
     try {
       const r = await fetch('/api/rails/plan?de=' + (de.adr === ETH_ADR.toLowerCase() ? 'ETH' : de.adr) + '&vers=' + (vers.adr === ETH_ADR.toLowerCase() ? 'ETH' : vers.adr)
@@ -22323,6 +22323,8 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       p = r.status === 429 ? { etat: 'NON_MESURE', pourquoi: 'the planner is busy — try again in a minute', aSigner: [] } : await r.json();
     } catch (_) { p = { etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched', aSigner: [] }; }
     bcNoter({ type: 'plan', ...refs, etat: String(p.etat || '').slice(0, 20), ...(p.pourquoi ? { text: String(p.pourquoi) } : {}) });
+    /* 2026-10-11 (QA Grok 17:47) : meme motif que la Bank - l etape en cours devient son resultat, ou laisse la place au refus */
+    if (enCours) { if (p.etat === 'PRET' || p.etat === 'APPROBATIONS') enCours.textContent = 'Plan built.'; else enCours.remove(); }
     if (p.etat !== 'PRET' && p.etat !== 'APPROBATIONS') {
       bcEtape(m, bcLigneEtatPlan(p), 'non');
       /* le refus REFERME l operation (elle restait a « waiting for you » alors que rien n attendait la personne) */
