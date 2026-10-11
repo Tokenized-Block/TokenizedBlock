@@ -31,8 +31,17 @@ if (typeof R.achatUsdcActionAvecSecours === 'function') {
   const b1 = await R.achatUsdcActionAvecSecours({ pv4: nm, cleLue: vide, cleMesuree: mes,
     planCle: async (c) => (c.fee === 80000 ? { etat: 'APPROBATIONS', resume: { quote: 5n } } : nm), planAero: async () => { aero += 1; return { etat: 'PRET' }; } });
   ok(b1.plan.etat === 'APPROBATIONS' && b1.via === 'planEchange' && aero === 0, 'B1 v4 qui reverte sur une pool vide : recote sur la pool MESUREE, Aerodrome pas appele');
-  const b2 = await R.achatUsdcActionAvecSecours({ pv4: nm, cleLue: vide, cleMesuree: mes, planCle: async () => nm, planAero: async () => ({ etat: 'PRET' }) });
-  ok(b2.plan.etat === 'PRET' && b2.via === 'planAerodromeSegment' && /Uniswap v4 pool could not quote/.test(b2.choix || ''), 'B2 devis v4 nul partout : Aerodrome (simule) est pris, et c est dit');
+  const b2 = await R.achatUsdcActionAvecSecours({ pv4: nm, cleLue: vide, cleMesuree: mes, planCle: async () => nm, planAero: async () => ({ etat: 'PRET' }), aeroMesuree: true });
+  ok(b2.plan.etat === 'PRET' && b2.via === 'planAerodromeSegment' && /Uniswap v4 pool could not quote/.test(b2.choix || ''), 'B2 devis v4 nul partout + pool Aerodrome MESUREE : Aerodrome (simule) est pris, et c est dit');
+  /* revue adverse 2026-10-11 (HIGH) : sans pool Aerodrome mesuree (CAKEc, DUOLc...), jamais de pool choisie par solde */
+  let aero6 = 0;
+  const b6 = await R.achatUsdcActionAvecSecours({ pv4: nm, cleLue: vide, cleMesuree: mes, planCle: async () => nm, planAero: async () => { aero6 += 1; return { etat: 'PRET' }; } });
+  ok(b6.plan === nm && b6.via === 'planEchange' && aero6 === 0, 'B6 devis v4 nul + action HORS de la table Aerodrome mesuree : le NON_MESURE d origine, Aerodrome pas appele');
+  /* revue adverse 2026-10-11 (MEDIUM) : un devis v4 LU puis un echec d une autre lecture n est pas un devis manquant */
+  let appels7 = 0;
+  const nmLu = { etat: 'NON_MESURE', pourquoi: 'an approval could not be read', resume: { quote: '123' } };
+  const b7 = await R.achatUsdcActionAvecSecours({ pv4: nmLu, cleLue: vide, cleMesuree: mes, planCle: async () => { appels7 += 1; return { etat: 'PRET' }; }, planAero: async () => { appels7 += 1; return { etat: 'PRET' }; }, aeroMesuree: true });
+  ok(b7.plan === nmLu && appels7 === 0, 'B7 devis v4 LU puis approbation illisible : aucun secours (ni recote ni Aerodrome), le NON_MESURE d origine');
   const b3 = await R.achatUsdcActionAvecSecours({ pv4: nm, cleLue: vide, cleMesuree: null, planCle: async () => nm, planAero: async () => ({ etat: 'REFUSE', pourquoi: 'no pool' }) });
   ok(b3.plan === nm && b3.via === 'planEchange', 'B3 rien ne cote : le NON_MESURE d origine reste (pas de chiffre invente)');
   const pret = { etat: 'PRET', resume: { quote: 1n } };
@@ -44,6 +53,7 @@ if (typeof R.achatUsdcActionAvecSecours === 'function') {
 console.log('- C. branchement');
 const src = fs.readFileSync(path.join(ICI, 'rails-api.js'), 'utf8');
 ok(/await achatUsdcActionAvecSecours\(\{ *pv4/.test(src), 'C planRail (USDC -> action v4) passe par le secours');
+ok(/aeroMesuree: POOLS_ACTIONS_AERODROME\.has\(vers\) \}\);/.test(src), 'C le secours Aerodrome n est permis que pour une action de la table MESUREE (pool epinglee)');
 ok(/FRAIS_INTERFACE_BPS_CL/.test(src) && !/0xa6cf/i.test(src.split('achatUsdcActionAvecSecours')[1] || ''), 'C aucun frais touche');
 console.log(rouges ? 'ROUGE : ' + rouges : 'VERT');
 process.exitCode = rouges ? 1 : 0;

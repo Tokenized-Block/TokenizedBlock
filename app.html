@@ -24566,7 +24566,8 @@ function bcBanqueChoisir(mk, sens) {
  *   ouverture du formulaire, changement de compte, deconnexion, apres une operation, retour sur la Bank) - avant, seulement au choix du
  *   marche : la ligne gardait le solde de l ANCIEN compte, ou celui d avant le swap ; (2) une lecture ratee EFFACE la ligne (un solde
  *   d avant n est pas un solde lu) ; meme compte + meme marche : l ancienne ligne reste pendant la relecture (pas de clignotement) ;
- *   (3) moins d un cent d OUSD : rien - le frais d une poussiere arrondit a 0 et le planificateur refuse (« could not be assembled »). */
+ *   (3) moins d un cent d OUSD : rien - un plancher PRODUIT (le planificateur, lui, ne refuse que sous 500 unites brutes, ou le frais
+ *   de 20 bps arrondit a 0 : « could not be assembled » ; mesure de la revue adverse). */
 /* Le mode « Lend avec OUSD » (menu #bcBanqueDevise) : Morpho ne prete pas d OUSD (mesure) ; Review ouvre donc l ECHANGE OUSD -> USDC
  *   (bcProposerSwap : la carte du Chat dit notre frais et le minimum avant la signature), puis la personne prete l USDC recu. */
 function bcBanqueDeviseLend() {
@@ -24789,7 +24790,7 @@ $('#bcBanqueForm').addEventListener('submit', async (e) => {
     if (!Number.isInteger(dec)) { note.className = 'note wKo'; note.textContent = 'The decimals of OUSD could not be read — try again.'; return; }
     const brut = enUnitesBrutes($('#bcBanqueMontant').value.trim(), dec);
     if (brut === null || brut <= 0n) { note.className = 'note wKo'; note.textContent = 'Type an amount of OUSD.'; return; }
-    if (brut < 10n ** BigInt(Math.max(0, dec - 2))) { note.className = 'note wKo'; note.textContent = 'Swap at least 0.01 OUSD: below that our fee rounds to zero and the route cannot be built.'; return; }
+    if (brut < 10n ** BigInt(Math.max(0, dec - 2))) { note.className = 'note wKo'; note.textContent = 'Swap at least 0.01 OUSD.'; return; } /* plancher produit, pas celui du planificateur (revue adverse : le frais n arrondit a 0 que sous 500 unites) */
     note.className = 'note'; note.textContent = 'After the swap, choose USDC here and lend what you received.';
     void bcProposerSwap('You', '', { de: { adr: String(o.adr).toLowerCase(), sym: 'OUSD' }, vers: { adr: String(u.adr).toLowerCase(), sym: 'USDC' }, montant: brut.toString() }, null);
     return;

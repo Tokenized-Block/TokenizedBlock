@@ -194,14 +194,24 @@ const memeCle = (x, y) => !!x && !!y && ['currency0', 'currency1', 'hooks'].ever
 /** Le secours de l achat USDC -> action v4 quand le devis v4 n a PAS ete lu (NON_MESURE) : 1) recote sur la cle MESUREE si elle
  *  differe de la cle lue ; 2) sinon la pool Aerodrome de l action (planAerodromeSegment : pool epinglee, plan SIMULE) ; 3) sinon le
  *  NON_MESURE d origine. Un refus (pool trop fine, etc.) n est pas secouru : c est une reponse, pas une lecture ratee. Frais inchanges. */
-export async function achatUsdcActionAvecSecours({ pv4, cleLue, cleMesuree, planCle, planAero }) {
+/* ⛔⛔ 2026-10-11 (revue adverse de (F), 2 constats) :
+ *   MEDIUM - un devis v4 LU (resume.quote) puis un NON_MESURE d une AUTRE lecture (approbation, verification, 429) n est pas un devis
+ *     manquant : basculer sur Aerodrome sautait la comparaison « seulement si la personne recoit plus » et l ecran affirmait « its v4
+ *     pool could not quote ». ⇒ devis lu = aucun secours, le NON_MESURE d origine (qui dit « try again »).
+ *   HIGH - pour une action HORS de la table mesuree (CAKEc, DUOLc, NVAXc, PTONc...), planAerodromeSegment choisissait la pool par solde,
+ *     non epinglee - la selection que le depot a retiree pour USDC/action (plan-franchissement.js, cas AMZNc), sans prix de reference.
+ *     ⇒ Aerodrome seulement si `aeroMesuree` (pool epinglee de POOLS_ACTIONS_AERODROME). GMEc/RDDTc gardent le correctif : leur recote sur
+ *     la cle v4 MESUREE suffit (mesure fork : PRET puis la comparaison existante choisit Aerodrome quand il rend plus). */
+export async function achatUsdcActionAvecSecours({ pv4, cleLue, cleMesuree, planCle, planAero, aeroMesuree = false }) {
   const pris = (p) => p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS');
   if (!pv4 || pv4.etat !== 'NON_MESURE') return { plan: pv4, via: 'planEchange' };
+  if (pv4.resume && pv4.resume.quote !== undefined && pv4.resume.quote !== null) return { plan: pv4, via: 'planEchange' };
   if (cleMesuree && !memeCle(cleLue, cleMesuree)) {
     let p = null;
     try { p = await planCle(cleMesuree); } catch (_) { p = null; }
     if (pris(p)) return { plan: p, via: 'planEchange', cleMesuree: true };
   }
+  if (!aeroMesuree) return { plan: pv4, via: 'planEchange' };
   let pa = null;
   try { pa = await planAero(); } catch (_) { pa = null; }
   if (pris(pa)) return { plan: pa, via: 'planAerodromeSegment', choix: 'Routed through this stock’s Aerodrome pool: its Uniswap v4 pool could not quote this amount' };
@@ -408,7 +418,7 @@ async function planRailBrut(q, deps) {
           const sec = await achatUsdcActionAvecSecours({ pv4: pv4lu, cleLue: marcheV.cle, cleMesuree: cleV4MesureeDe(vers),
             planCle: (cle) => planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m, cleImposee: cle, fraisDevisesOk, maintenant }),
             planAero: () => planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers, famille: 'aerodrome' }], devise: USDC,
-              block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }) });
+              block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }), aeroMesuree: POOLS_ACTIONS_AERODROME.has(vers) });
           if (sec.via === 'planAerodromeSegment') return normaliser(route, sec.plan, { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome', choix: sec.choix });
           const pv4 = sec.plan;
           /* ⛔ 2026-10-09 (MRVLc et les pools v4 fines) : la pool Aerodrome de l action, si elle existe, est COTEE a la meme taille ;
