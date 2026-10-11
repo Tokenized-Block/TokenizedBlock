@@ -3934,7 +3934,7 @@ import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGN
 import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
-  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN } from './blockskins.js';
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin } from './blockskins.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -23471,11 +23471,11 @@ function bcLigneSkin(s, moi, t) {
   }
   return li;
 }
-async function bcActionMarche(genre, s, x = {}) {
+async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
   const id = s ? s.tokenId : null;
   const titre = { ACHETER: 'Buy skin #' + id, ENCHERIR: 'Bid on skin #' + id, REGLER: 'Settle skin #' + id, RETIRER: 'Take back skin #' + id,
     VENDRE: 'Sell skin #' + id, ENCHERE: 'Auction skin #' + id, CREDIT: 'Withdraw from the skins market' }[genre];
-  const m = bcMessage('Skins', '', titre);
+  const m = bcMessage(qui, '', (qui === 'Skins' ? '' : 'Its brain proposes: ') + titre);
   bcVue('chat');
   if (CHAINE !== 8453) { bcEtape(m, 'The skins market is on Base mainnet only.', 'non'); return; }
   const refuser = () => bcEtape(m, 'Dismissed — nothing was sent.');
@@ -23703,6 +23703,30 @@ function bcAifiBattre(a, snap) {
     })();
   }
 }
+/* ── S.I ET LE MARCHE DES SKINS (Phil, 2026-10-11 : « les brains peuvent faire des propositions de maniere autonome » - son choix :
+ *    « le brain propose, tu signes ») ── toutes les 30 s tant que S.I tourne (page visible, wallet connecte), le marche est lu et AU PLUS
+ *    UNE proposition (propositionSkin : pure, testee) s ouvre comme une carte du marche ; la personne signe ou ecarte. Une proposition
+ *    toutes les 2 min au plus, jamais deux fois la meme skin ; un achat ou une offre proposes comptent dans le budget de S.I comme un trade.
+ *  ⛔ Rien ne part sans la signature de la personne ; le cerveau ne fait que lire le marche et ouvrir une carte. */
+const bcAifiSkins = { derniere: 0, proposes: new Set(), enVol: false };
+async function bcAifiProposerSkin() {
+  const s = bc.aifi;
+  if (!s || !compte || CHAINE !== 8453 || bcAifiSkins.enVol || Date.now() - bcAifiSkins.derniere < 120000) return;
+  bcAifiSkins.enVol = true;
+  try {
+    const r = await lireSkins({ rpc });
+    if (r.etat !== 'LU' || bc.aifi !== s) return;
+    const dv = s.devise || BC_AIFI_ETH();
+    const p = propositionSkin({ skins: r.skins, moi: compte, block: s.block, maintenant: Math.floor(Date.now() / 1000), achat: !!s.achat,
+      devise: dv.adr, parTrade: s.parTrade, reste: (BigInt(s.budget) - BigInt(s.propose)).toString(), dejaProposes: bcAifiSkins.proposes });
+    if (!p) return;
+    bcAifiSkins.proposes.add(String(p.skin.tokenId)); bcAifiSkins.derniere = Date.now();
+    if (p.montant > 0n) { s.propose = (BigInt(s.propose) + p.montant).toString(); bcAifiSauver(); bcAifiPeindre(); }
+    bcOuvrirPop();
+    void bcActionMarche(p.genre, p.skin, {}, 'Its brain · S.I');
+  } catch (_) { /* relu au tour suivant */ } finally { bcAifiSkins.enVol = false; }
+}
+setInterval(() => { if (bc.aifi && !document.hidden) void bcAifiProposerSkin(); }, 30000);
 /** Peint le panneau depuis LE snapshot du cerveau de l app (appele a chaque battement par publierSnapshotBrain). */
 function bcPeindre(snap) {
   if (!snap || !snap.address) return;

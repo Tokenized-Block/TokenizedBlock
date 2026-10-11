@@ -164,5 +164,30 @@ export function actionsSkin(s, moi, maintenant) {
   if (mien) return s.encherisseur === ETH ? ['RETIRER'] : [];
   return ['ENCHERIR'];
 }
+/** CE QUE LE BRAIN PROPOSE sur le marche (Phil, 2026-10-11 : « les brains font des propositions de maniere autonome » - son choix :
+ *  « le brain propose, tu signes »). Pur. AU PLUS UNE proposition, dans cet ordre :
+ *   1. REGLER une enchere FINIE ou ce compte est le meilleur encherisseur ou le vendeur (recevoir la skin, ou l argent, ou la reprendre) ;
+ *   2. si l achat est permis (regle « buy » de S.I) : ACHETER a prix fixe la moins chere des skins de CE block, dans la devise de S.I,
+ *      au plus `parTrade` et dans le budget `reste` ;
+ *   3. sinon ENCHERIR au minimum (offreMinimale) sur une enchere en cours d une skin de CE block, memes bornes.
+ *  Jamais sa propre annonce, jamais une skin deja proposee dans la session (`dejaProposes` : tokenId en texte). */
+export function propositionSkin({ skins, moi, block, maintenant, achat, devise, parTrade, reste, dejaProposes = new Set() }) {
+  const m = bas(moi), b = bas(block), dv = bas(devise), t = Number(maintenant);
+  if (!ADR.test(m) || !ADR.test(b) || !Array.isArray(skins) || !Number.isFinite(t)) return null;
+  const libre = (s) => !dejaProposes.has(String(s.tokenId));
+  const fin = skins.find((s) => libre(s) && s.enVente && s.enchere && t >= Number(s.fin) && (s.encherisseur === m || s.detenteur === m));
+  if (fin) return { genre: 'REGLER', skin: fin, montant: 0n };
+  if (!achat || !ADR.test(dv)) return null;
+  let p, r;
+  try { p = BigInt(parTrade); r = BigInt(reste); } catch (_) { return null; }
+  const dansLesBornes = (x) => x > 0n && x <= p && x <= r;
+  const deCeBlock = skins.filter((s) => libre(s) && s.block === b && s.enVente && s.detenteur !== m && s.devise === dv);
+  const asc = (x, y) => (x.montant < y.montant ? -1 : x.montant > y.montant ? 1 : 0);
+  const fixe = deCeBlock.filter((s) => !s.enchere).map((s) => ({ genre: 'ACHETER', skin: s, montant: BigInt(s.prix) })).filter((x) => dansLesBornes(x.montant)).sort(asc)[0];
+  if (fixe) return fixe;
+  const enchere = deCeBlock.filter((s) => s.enchere && t < Number(s.fin) && s.encherisseur !== m)
+    .map((s) => ({ genre: 'ENCHERIR', skin: s, montant: offreMinimale(s) })).filter((x) => dansLesBornes(x.montant)).sort(asc)[0];
+  return enchere || null;
+}
 /** pending(devise, compte) : ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir). */
 export function appelCredit(devise, compte) { return '0x' + selecteur('pending(address,address)') + adrMot(devise) + adrMot(compte); }

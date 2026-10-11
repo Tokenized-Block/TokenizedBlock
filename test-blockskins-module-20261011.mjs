@@ -77,7 +77,25 @@ vu(egal(S.actionsSkin(d[1], MOI, T - 1), ['ENCHERIR']) && egal(S.actionsSkin(d[1
 vu(egal(S.actionsSkin(encSansOffre, AUTRE, T - 1), ['RETIRER']), 'enchere en cours SANS offre : le vendeur peut la retirer');
 vu(egal(S.actionsSkin(d[1], MOI, T), ['REGLER']) && egal(S.actionsSkin(d[1], AUTRE, T + 5), ['REGLER']), 'enchere finie (a la seconde de fin comprise) : n importe qui regle');
 vu(egal(S.actionsSkin(fixe, null, T), []) && egal(S.actionsSkin(fixe, '0x123', T), []) && egal(S.actionsSkin(fixe, AUTRE, NaN), []), 'sans compte valide ou sans heure : aucune action');
-vu(S.appelCredit(S.ETH, MOI) === '0x' + selecteur('pending(address,address)') + '0'.repeat(64) + MOI.slice(2).padStart(64, '0'), 'pending(devise, compte) mal encode');
+/* LE BRAIN PROPOSE (Phil : « le brain propose, tu signes ») : au plus UNE proposition, bornee par S.I */
+const P = (o) => S.propositionSkin({ moi: MOI, block: B, maintenant: T - 10, achat: true, devise: S.ETH, parTrade: 10n ** 16n, reste: 10n ** 16n, ...o });
+const fixeEth = (id, prix, det = AUTRE) => ({ ...d[0], tokenId: BigInt(id), detenteur: det, enVente: true, enchere: false, devise: S.ETH, prix: BigInt(prix) });
+const encEth = { ...d[1], tokenId: 9n, devise: S.ETH, prix: 10n ** 15n, offre: 10n ** 15n, encherisseur: '0x' + '7'.repeat(40), fin: T };
+let pr = P({ skins: [fixeEth(5, 3n * 10n ** 15n), fixeEth(6, 2n * 10n ** 15n), encEth] });
+vu(pr && pr.genre === 'ACHETER' && pr.skin.tokenId === 6n && pr.montant === 2n * 10n ** 15n, 'le brain propose d ACHETER la moins chere a prix fixe de ce block');
+vu(P({ skins: [fixeEth(5, 3n * 10n ** 16n)] }) === null, 'au-dessus du montant par trade : rien');
+vu(P({ skins: [fixeEth(5, 5n * 10n ** 15n)], reste: 10n ** 15n }) === null, 'au-dessus du budget restant : rien');
+vu(P({ skins: [fixeEth(5, 10n ** 15n)], achat: false }) === null, 'regle « buy » non cochee : aucun achat propose');
+vu(P({ skins: [fixeEth(5, 10n ** 15n, MOI)] }) === null, 'jamais sa propre annonce');
+vu(P({ skins: [{ ...fixeEth(5, 10n ** 15n), block: AUTRE }] }) === null, 'une skin d un AUTRE block : rien');
+vu(P({ skins: [{ ...fixeEth(5, 1000000n), devise: USDC }] }) === null, 'une skin en USDC quand S.I paie en ETH : rien');
+vu(P({ skins: [fixeEth(6, 10n ** 15n)], dejaProposes: new Set(['6']) }) === null, 'jamais deux fois la meme skin dans la session');
+pr = P({ skins: [encEth] });
+vu(pr && pr.genre === 'ENCHERIR' && pr.montant === 1050000000000000n, 'sans prix fixe : encherir au MINIMUM (+5 %)');
+pr = P({ skins: [fixeEth(6, 10n ** 15n), { ...encEth, encherisseur: MOI }], maintenant: T + 1 });
+vu(pr && pr.genre === 'REGLER' && pr.skin.tokenId === 9n, 'une enchere FINIE gagnee par ce compte passe avant tout : la regler');
+vu(S.propositionSkin({ skins: [fixeEth(6, 10n ** 15n)], moi: null, block: B, maintenant: T, achat: true, devise: S.ETH, parTrade: 1n, reste: 1n }) === null, 'sans compte : rien');
+vu(S.appelCredit(S.ETH, MOI) ==='0x' + selecteur('pending(address,address)') + '0'.repeat(64) + MOI.slice(2).padStart(64, '0'), 'pending(devise, compte) mal encode');
 /* lireSkins : une lecture ratee n est JAMAIS une vitrine vide */
 const r = await S.lireSkins({ rpc: async () => { throw new Error('429'); } });
 vu(r.etat === 'NON_LU' && !Array.isArray(r.skins), 'une lecture ratee rend une liste vide');
