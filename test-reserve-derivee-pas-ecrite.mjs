@@ -94,11 +94,11 @@ ok('0e. TEMOIN — et il contient bien du texte d interface',
  *      Une garde qui accuse juste mais trop large finit desactivee, et ce depot l a deja vu.
  * ⇒ ON ACCUSE DONC : un texte d absence dont l element porteur n a PAS d `id`, ou dont l `id`
  *   n apparait dans AUCUN site de peinture. C est la definition exacte de « on oublie le front ». */
-const EXEMPTIONS = new Map([
-  ['tbApercu', 'decision de Raksha 2026-09-24 « mets en mode faux le temps de build » ; '
-    + 'BANK_CONTRACT vaut null, donc le bandeau est VRAI. Le retirer serait trancher seul une '
-    + 'semantique produit. ⛔ Il devra partir le jour ou la banque existe — pas avant.'],
-]);
+/* ⛔ 2026-10-11 : l exemption `tbApercu` (le bandeau « Preview — not built yet » de la maquette « panier de blocks ») est PARTIE avec la
+ *   maquette - Phil l a retiree (« retire ca… remplace par tokenized stocks, c est ce qu on a fait »), et le panier d ACTIONS construit la
+ *   remplace. C etait la seule exemption reelle : le temoin 1a ne peut donc plus la trouver dans la page. Il prouve desormais le classeur
+ *   sur un HTML FABRIQUE (une exemption, un repeignable, un fautif) en plus de la vraie page - meme exigence, sans exemption inventee. */
+const EXEMPTIONS = new Map();
 
 /* L `id` de l element porteur : le dernier `id="…"` avant le texte, a condition qu aucune balise
  * fermante de bloc ne se glisse entre les deux (sinon l id appartient a un element deja ferme). */
@@ -111,28 +111,37 @@ function idPorteur(src, i) {
   if (/<\/(p|div|section|li|td|h[1-6])>/i.test(entre)) return null;
   return dernier[1];
 }
-const peint = (id) => new RegExp("(\\$\\('#" + id + "'\\)|getElementById\\('" + id + "'\\))")
-  .test(app);
+const peintDans = (source, id) => new RegExp("(\\$\\('#" + id + "'\\)|getElementById\\('" + id + "'\\))").test(source);
+const peint = (id) => peintDans(app, id);
 
-const fautifs = [], exemptes = [], repeignables = [];
-for (const re of ANNONCES_D_ABSENCE) {
-  for (const m of htmlStatique.matchAll(new RegExp(re.source, 'gi'))) {
-    const extrait = htmlStatique.slice(Math.max(0, m.index - 90), m.index + 90)
-      .replace(/\s+/g, ' ').trim();
-    const id = idPorteur(htmlStatique, m.index);
-    const ou = '« ' + m[0] + ' »' + (id ? '  dans #' + id : '  SANS id') + '  : …' + extrait + '…';
-    if (id && EXEMPTIONS.has(id)) { exemptes.push(ou); continue; }
-    if (id && peint(id)) { repeignables.push(ou); continue; }
-    fautifs.push(ou);
+/* le classeur, UNE fonction : appliquee a la vraie page ET au temoin fabrique (meme code, pas une copie) */
+function classer(statique, source, exemptions) {
+  const fautifs = [], exemptes = [], repeignables = [];
+  for (const re of ANNONCES_D_ABSENCE) {
+    for (const m of statique.matchAll(new RegExp(re.source, 'gi'))) {
+      const extrait = statique.slice(Math.max(0, m.index - 90), m.index + 90)
+        .replace(/\s+/g, ' ').trim();
+      const id = idPorteur(statique, m.index);
+      const ou = '« ' + m[0] + ' »' + (id ? '  dans #' + id : '  SANS id') + '  : …' + extrait + '…';
+      if (id && exemptions.has(id)) { exemptes.push(ou); continue; }
+      if (id && peintDans(source, id)) { repeignables.push(ou); continue; }
+      fautifs.push(ou);
+    }
   }
+  return { fautifs, exemptes, repeignables };
 }
+const { fautifs, exemptes, repeignables } = classer(htmlStatique, app, EXEMPTIONS);
 /* ⛔ TEMOIN DU CLASSEUR : si `idPorteur` rendait toujours `null`, tout basculerait en « fautif » ;
  *   s il rendait toujours un id peint, tout passerait au vert. On exige donc que les trois
- *   populations soient DISTINGUEES — au moins une exemption connue et au moins un repeignable. */
+ *   populations soient DISTINGUEES. La vraie page n a plus d exemption (2026-10-11) : les trois sont
+ *   exigees sur un HTML FABRIQUE, et la vraie page doit encore fournir au moins un repeignable. */
+/* chaque phrase ne releve que d UN motif (« not live yet » en releve deux : not live yet ET \bnot live\b - ma premiere version comptait 2) */
+const fabrique = classer('<p id="tEx">Not built yet here.</p><p id="tRe">Fund is the only leg running.</p><p>quote only</p>',
+  "$('#tRe').textContent = x;", new Map([['tEx', 'temoin']]));
 ok('1a. TEMOIN — le classeur distingue repeignable / exempte / fautif',
-  exemptes.length >= 1 && repeignables.length >= 1,
-  exemptes.length + ' exempte(s), ' + repeignables.length + ' repeignable(s), '
-  + fautifs.length + ' fautif(s)');
+  fabrique.exemptes.length === 1 && fabrique.repeignables.length === 1 && fabrique.fautifs.length === 1 && repeignables.length >= 1,
+  'fabrique : ' + fabrique.exemptes.length + '/' + fabrique.repeignables.length + '/' + fabrique.fautifs.length + ' ; page : '
+  + exemptes.length + ' exempte(s), ' + repeignables.length + ' repeignable(s), ' + fautifs.length + ' fautif(s)');
 ok('1. ⭐ aucune annonce d absence n est hors de portee d une repeinture',
   fautifs.length === 0, fautifs.length + ' trouvee(s)\n        ' + fautifs.join('\n        '));
 for (const e of exemptes) console.log('      ⚠️ EXEMPTE  ' + e.slice(0, 110));

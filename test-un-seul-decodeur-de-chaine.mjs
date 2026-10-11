@@ -162,7 +162,9 @@ ok('texteAbi delegue au module canonique',
   /function texteAbi\(hex\)\s*\{\s*return symboleDepuisReponse\(hex\)/.test(appSrc));
 ok('lireJetonSource passe par symboleDepuisReponse', /symboleDepuisReponse\(rSym\)/.test(appSrc)
   && /symboleDepuisReponse\(rNom, 32\)/.test(appSrc));
-ok('la liste des blocks detenus passe par le module', /label = symboleDepuisReponse\(h\)/.test(appSrc));
+/* 2026-10-11 : la liste des blocks detenus (maquette « panier de blocks ») est RETIREE par decision de Phil - avec elle son decodage de
+ *   symbole, qui passait bien par le module. Aucun decodeur n est reste a sa place. */
+ok('la liste des blocks detenus de la maquette est retiree, sans decodeur laisse a cote', !/async function peindreTokenizedBank\(/.test(appSrc) && !/label = texteAbi\(|label = decoderChaine\(/.test(appSrc));
 /* ⛔ ET `decoderChaine` NE DOIT PLUS ETRE IMPORTE ICI : un nom importe sans usage est
  *   exactement `presence-dun-nom-nest-pas-son-usage`, et il ferait croire a un second chemin. */
 ok('decoderChaine n est PLUS importe dans app.html',

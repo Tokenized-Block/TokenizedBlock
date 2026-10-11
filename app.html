@@ -553,8 +553,22 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 #wBankCarte .tbBanquePos p{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0 0;font-size:13px}
 #wBankCarte .tbBanquePos .bcPuce{margin-left:0}
 #wBankCarte #tbOuvrirBank{margin-top:12px}
-.tbIdee{margin-top:14px;border-top:1px solid var(--ligne);padding-top:8px}
-.tbIdee>summary{cursor:pointer;font-size:13px;color:var(--doux)}
+/* 2026-10-11 (Phil : « remplace par tokenized stocks… une version aboutie avec nos paniers d actions ») : le panier d actions du Wallet */
+.tbPanier{margin-top:12px;border:1px solid var(--ligne);border-radius:16px;padding:10px 12px;background:var(--creux)}
+.tbPanierTitre{margin:0 0 4px;font-weight:800;font-size:15px}
+.tbPanierLignes{list-style:none;margin:0;padding:0}
+.tbPanierLignes li{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--ligne);font-size:13px}
+.tbPanierLignes li:last-child{border-bottom:0}
+.tbPanierLignes li b{display:block;font-size:14px}
+.tbPanierLignes li span{color:var(--doux)}
+.tbPanier #tbPanierGo{margin-top:10px}
+/* 2026-10-11 (Phil : « ajoute l image des blocks de notre app pour les tokenized stocks, pour que le user repere plus facilement ») : la
+ *   vignette du block - la MEME face que le panneau (dessin(adresse, symbole), dessinee dans la page) - a cote de chaque action : cartes
+ *   de marche, panier, positions */
+.bcVisage{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:30px;aspect-ratio:200/220;border-radius:8px;overflow:hidden;
+  background:var(--creux);border:1px solid var(--ligne);font-size:13px;font-weight:800;color:var(--accent)}
+.bcVisage svg{width:100%;height:100%;display:block}
+.tbPanierLignes .bcVisage{width:34px}
 /* 2026-10-11 (Phil : « le montant doit s adapter au user ») : sur chaque carte de marche, ce que CE wallet peut emprunter / preter */
 .bcPourToi{border-top:1px dashed var(--ligne);margin-top:8px;padding-top:6px}
 .bcPourToi .bcPourToiChiffres{grid-template-columns:repeat(2,minmax(0,1fr));margin:2px 0 0}
@@ -2726,9 +2740,10 @@ details[open] > summary::before{transform:rotate(90deg)}
            Bank. En tete, ce qui est EN LIGNE ; les chiffres lus (les memes tuiles que l onglet Bank, meme lecture) ; les positions de CE
            wallet ; et UN bouton, pleine largeur. Avant : le bouton etait au milieu d une phrase, puis venaient un bandeau « Preview »,
            un paragraphe et cinq boutons d une idee jamais construite.
-           ⛔ L idee du panier de blocks n est PAS supprimee (decision de Raksha du 2026-09-24 : « mode faux le temps de build ») : elle
-             est REPLIEE sous le bouton, son bandeau « not built yet » en premier. Sa liste « My block » nourrit aussi le choix du hub
-             du Bridge (peindreBridgeBlocks lit #tbBlock) - la retirer aurait vide ce choix en silence. -->
+           ⛔ 2026-10-11, PLUS TARD : Phil a demande de RETIRER l idee du panier de blocks (« retire ca… remplace par tokenized stocks,
+             c est ce qu on a fait ») - elle etait repliee ici depuis la decision de Raksha du 2026-09-24 (« mode faux le temps de
+             build »). Remplacee par le panier d ACTIONS, construit (#tbPanier). Sa liste « My block » nourrissait aussi le choix du hub
+             du Bridge (#tbBlock) : ce choix garde #wpBlock et les cartes de My blocks. -->
       <!-- 2026-10-11 (Phil, sur « Borrow from 5.54 % · Best lend 5.49 % · Markets 9 (+4) » : « honnetement je comprends pas, glow up ») :
            les chiffres sans phrase etaient notre jargon. DEUX CHOIX, dits en mots simples, chacun avec son cout ou son gain PAR AN et ce que
            CE wallet peut faire ; un tap ouvre la Bank deja reglee sur ce choix. -->
@@ -2749,74 +2764,22 @@ details[open] > summary::before{transform:rotate(90deg)}
           <span class="tbChoixVa">Choose a market →</span>
         </button>
       </div>
+      <!-- 2026-10-11 (Phil, sur la maquette « A separate idea, not built: borrowing against a basket of blocks » : « retire ca et change le
+           B20 from my block et remplace par tokenized stocks, c est ce qu on a fait ; reprends les best ideas et retravaille dessus pour
+           proposer une version aboutie avec nos paniers d actions a collateraliser ») : LE PANIER D ACTIONS, CONSTRUIT.
+           Des idees de la maquette, ce qui tient : la preuve de detention LUE sur la chaine (balanceOf, /api/avoirs, au bloc courant) ;
+           plusieurs avoirs dans un meme panier ; « en perdre un ne fait pas tomber les autres » - VRAI ici, Morpho isole chaque action (sa
+           propre position, liquidee seule). Ce qui part, parce que rien de cela n existe : des blocks en garantie (aucun marche Morpho), un
+           credit sur la totalite, une part de rendement des premiers, un agent qui opere seul. Peint par tbBanquePeindre ; cache tant que
+           rien n est lu (pas de phrase statique d absence). -->
+      <div class="tbPanier" id="tbPanier" hidden>
+        <p class="tbPanierTitre">Your stock basket</p>
+        <ul class="tbPanierLignes" id="tbPanierLignes"></ul>
+        <p class="note" id="tbPanierNote" style="margin:6px 0 0"></p>
+        <button type="button" class="bouton sec" id="tbPanierGo">Borrow against my basket</button>
+      </div>
       <div class="tbBanquePos" id="tbBanquePos"></div>
       <button type="button" class="bouton" id="tbOuvrirBank">Open the Bank</button>
-      <details class="tbIdee" id="tbIdee">
-      <summary>A separate idea, not built: borrowing against a basket of blocks</summary>
-      <!-- ⛔⛔ CET AVERTISSEMENT EST EN HAUT, ET C EST TOUT LE POINT. Il existait deja — mais EN BAS,
-           apres quatre paragraphes promettant du credit USDC, un partage de rendement et un agent
-           qui « fait tourner les operations ». Une reserve qui arrive apres l argument n est pas
-           une reserve : c est exactement le defaut du Bridge, ou « not live yet » s affichait
-           APRES la signature.
-           ⛔ ETAT REEL, MESURE LE 2026-09-24 : `BANK_CONTRACT` vaut `null`. Le seul morceau qui
-             touche la chaine est la lecture de `balanceOf` — celui-la est vrai. Tout le reste
-             (panier, early holders, ouverture) vit dans le localStorage de CE navigateur.
-           ⛔ Phil, 2026-09-24 : « mets en mode faux le temps de build ». C est ce bandeau. -->
-      <!-- 2026-10-10 (test prod Grok : « TokenizedBank y est encore marque not built yet ») : l emprunt d USDC contre une action EST en
-           ligne (onglet Bank du panneau, marches Morpho existants) - c est la tete de la carte. Le bandeau ci-dessous reste vrai pour le
-           PANIER de blocks. -->
-      <p class="note" id="tbApercu" style="border:1px solid var(--accent2);border-radius:10px;padding:8px 10px;margin:0 0 10px">
-        <b>Preview — not built yet.</b> Reading how many blocks you hold is real and happens on
-        chain. Everything else here is a sketch kept in this browser: there is no bank contract,
-        no credit, no yield, and nothing is sent or signed. Clearing your browser clears it all.
-      </p>
-      <!-- ⛔⛔ TOUT CE PARAGRAPHE ETAIT AU PRESENT DE L INDICATIF pour un produit qui n existe pas :
-           « open USDC credit », « credit contracts with Σ hold », « early holders share yield »,
-           « the agent runs the ops ». Ecrit comme ca, ce n est pas une description d intention —
-           c est une offre. Phil, 2026-09-24 : « t as juste traduit ». Exactement : l idee avait ete
-           mise en mots, pas construite, et les mots choisis etaient ceux d un produit livre.
-           ⛔ PASSE AU CONDITIONNEL, phrase par phrase. Le plan reste entier et lisible ; ce qui
-             change, c est qu on ne peut plus le lire comme une promesse tenue. -->
-      <p class="sous">The idea: a Tokenized Block could work as a <b>fund wallet</b>. You would link blocks you hold,
-        and borrow <b>USDC</b> against the proof that you hold them — the whole linked set, not your credit history.
-        You would have to <b>keep holding</b>. Losing one block would not end it: the ones you still hold would keep backing it,
-        and it would only die if none were left. Whoever linked blocks before it opened would share the yield;
-        afterwards anyone holding a block could link more. The agent would run the operations, with you confirming.
-        <b>None of this exists yet</b> — the paragraph above is the plan, not what the buttons below do.</p>
-      <ol class="note" style="margin:10px 0 8px 1.2em; padding:0; line-height:1.45">
-        <li><b>Hold</b> — pick a B20 from My blocks</li>
-        <li><b>Proof of hold</b> — read <code>balanceOf</code> on Base</li>
-        <li><b>Graft</b> — into basket (Open) or <b>Add liquidity</b> (same basket, any wallet)</li>
-        <li><b>Open / Add-liquidity credit</b> — on basket totality (stub until contract)</li>
-        <li><b>Confirm</b> — one click (wallet sign placeholder)</li>
-      </ol>
-      <label class="champ">My block (hold)
-        <select id="tbBlock"><option value="">Connect wallet to list your blocks…</option></select>
-      </label>
-      <p class="note mono" id="tbProof">Proof of hold: —</p>
-      <p class="titre" style="font-size:1em; margin-top:12px">Linked blocks (basket)</p>
-      <ul class="wListe" id="tbBasket"><li class="note">No blocks grafted yet.</li></ul>
-      <p class="note" id="tbBasketNote">Credit backs the basket. Remove one → survivors keep backing.</p>
-      <div class="wActions" style="margin-top:8px; flex-wrap:wrap; gap:8px">
-        <button class="bouton sec" id="tbProofBtn" type="button">Read proof of hold</button>
-        <button class="bouton sec" id="tbGraftBtn" type="button" disabled>Graft into basket</button>
-        <button class="bouton sec" id="tbAddLiqBtn" type="button" disabled hidden>Add liquidity — graft another block</button>
-        <button class="bouton sec" id="tbBasketProofBtn" type="button">Read basket proofs</button>
-        <button class="bouton" id="tbOpenBtn" type="button" disabled>Open TokenizedBank</button>
-      </div>
-      <p class="note" id="tbEtat" style="margin-top:8px"></p>
-      <!-- ⛔ AU CONDITIONNEL, PARCE QUE RIEN N EST ACQUIS. Ce texte promettait une « part de
-           rendement gelee » — un droit financier — alors que la liste vit dans le localStorage de
-           ce navigateur et qu aucun contrat n existe. On decrit une REGLE PREVUE, pas un titre. -->
-      <p class="note" id="tbEarly">If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.</p>
-      <!-- ⛔ « Zero 1 / Brain » RETIRE : « Zero 1 » est le nom interne d un de nos agents. Le
-           lecteur ne sait pas qui c est et ne peut pas l apprendre — nommer l operateur ne
-           l informe pas, ca lui fait croire qu il lui manque un savoir. Ce qui l interesse, c est
-           QUE ca tourne automatiquement, pas QUI le fait tourner. -->
-      <!-- ⛔ 2026-10-11 : « After confirm, the <b>Brain</b> runs ops automatically » - le present que la garde interdit, passe A COTE d elle
-           parce que la balise <b> coupait le motif « Brain runs ops ». Au conditionnel ; la garde lit maintenant le texte sans balises. -->
-      <p class="note" id="tbAgent">If this is ever built, the <b>Brain</b> would run the operations after you confirm. Nothing is deployed for it.</p>
-      </details>
     </div>
 
     <!-- ⛔⛔ DECISION GARDEE ICI, RETIREE DE L ECRAN (Phil, 2026-09-11 : « le user ne doit pas voir
@@ -3967,7 +3930,6 @@ import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } f
 let nosSet = new Set(NOS_BLOCKS_GENESE);
 const estANous = (adr) => CHAINE === 8453 && nosSet.has(String(adr).toLowerCase());
 import { frappesVers, fusionnerCache } from './mes-blocks.js';
-import { proofOfHold, proofOfHoldPanier, preuvePositive, grefferBlock, lireGreffes, retirerGreffe, ouvrirCreditUsdcStub, creditSurvitPerte, lireEarlyHolders, lireBankOuvert, peutAjouterLiquidite, grefferAjouterLiquidite, estEarlyHolder, BANK_CONTRACT } from './tokenized-bank.js';
 /* tip 20260922-prepaye-inscrire-dust */
 /* ⛔⛔⛔ `quoteBridge` ET `formatBridgeAmount` NE SONT PLUS IMPORTES, LE 2026-10-02 — ET CE RETRAIT
  *      EST LA VRAIE CORRECTION, PAS UN NETTOYAGE.
@@ -4235,7 +4197,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
-  if (nom === 'wallet') { void peindreTokenizedBank(); void tbBanquePeindre(); }
+  if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
@@ -7432,7 +7394,6 @@ async function connecter() {
   void majWallet();
   /* tip 20260923-wallet-intent-market: resume IB/Buy intent once after connect */
   try { void reprendreIntentApresConnect(); } catch (_) {}
-  void peindreTokenizedBank();
   void tbBanquePeindre();
   /* la Bank deja ouverte se RANGE pour ce wallet et dit tout de suite ce qu il peut (bcBanqueCharger repeint aussi « pour toi ») ;
    *   marches pas encore lus : au moins SES positions (mesure : « Connect your wallet to see them » restait apres la connexion) */
@@ -8231,7 +8192,6 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     $('#sEtat').textContent = '';
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
     void majWallet();
-    void peindreTokenizedBank();
     void tbBanquePeindre();
     if (bcBanque.marches) void bcBanqueCharger(); else { void bcBanquePourToi(); void bcBanquePositions(); }
   });
@@ -15079,394 +15039,11 @@ $('#wpOuvrir') && $('#wpOuvrir').addEventListener('click', async () => {
   $('#plEtat').className = 'note';
   $('#plEtat').textContent = 'Set its starting value in this currency, then “Work it out”. The 0.001 ETH fee opens this new market.';
 });
-/* ══ TokenizedBank (tip 20260922-2010) — basket + add-liquidity graft ═══════════════════════════
- * Hold → proofOfHold → graft (Open) or Add liquidity (any wallet, same basket) → one-click confirm.
- * Early = yield share frozen at Open (badge separate). Credit on totality; hold; losing one still leaves the rest.
- * ⛔ No BANK_CONTRACT yet. Never show fee sink a6cf. Does not touch Instant Birth / FRAIS_OUVERTURE_WEI. */
-let tbPreuve = null;
-let tbPanierPreuves = [];
-/* jeton de peinture de la liste « My blocks » du Tokenized Bank : seule la plus recente ecrit */
-let tbBankGeneration = 0;
-
-function tbBankOuvertIci() {
-  return !!(compte && lireBankOuvert(localStorage, compte));
-}
-
-function tbSyncGraftButtons() {
-  const open = tbBankOuvertIci();
-  const graft = $('#tbGraftBtn');
-  const add = $('#tbAddLiqBtn');
-  const openBtn = $('#tbOpenBtn');
-  if (graft) {
-    graft.hidden = !!open;
-    if (open) graft.disabled = true;
-  }
-  if (add) {
-    add.hidden = !open;
-    /* enabled only with positive proof — never gated by early list */
-    if (!open) add.disabled = true;
-    else add.disabled = !preuvePositive(tbPreuve);
-  }
-  if (openBtn) {
-    openBtn.hidden = !!open;
-  }
-}
-
-function peindrePanierBank() {
-  const ul = $('#tbBasket');
-  const note = $('#tbBasketNote');
-  const early = $('#tbEarly');
-  if (!ul) return;
-  if (!compte) {
-    ul.innerHTML = '<li class="note">Connect wallet to see your linked basket.</li>';
-    if (note) note.textContent = 'Credit backs the basket. Remove one → survivors keep backing.';
-    if (early) early.textContent = 'If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.';
-    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
-    tbSyncGraftButtons();
-    return;
-  }
-  const greffes = lireGreffes(localStorage, compte);
-  const ouvert = tbBankOuvertIci();
-  if (!greffes.length) {
-    ul.innerHTML = '<li class="note">No blocks grafted yet — proof a hold, then Graft into basket.</li>';
-    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
-  } else {
-    ul.innerHTML = greffes.map((b) => {
-      const pr = tbPanierPreuves.find((p) => p && String(p.block).toLowerCase() === b);
-      let statut = 'not proven yet';
-      if (pr && pr.etat === 'LU') {
-        statut = preuvePositive(pr)
-          ? ('hold ' + (typeof formaterUnites === 'function' ? formaterUnites(pr.balance, 18) : String(pr.balance)))
-          : 'hold 0 — not backing';
-      } else if (pr) statut = 'unread';
-      return '<li class="filL" style="display:flex;justify-content:space-between;gap:8px;align-items:center">'
-        + '<span class="mono">' + enTexte(court(b)) + '</span>'
-        + '<span class="note" style="margin:0">' + enTexte(statut) + '</span>'
-        + '<button type="button" class="puce" data-tb-ungraft="' + enTexte(b) + '">Remove</button></li>';
-    }).join('');
-    const positifs = tbPanierPreuves.filter(preuvePositive);
-    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = ouvert || positifs.length === 0;
-  }
-  if (note) {
-    note.textContent = greffes.length
-      ? ('Basket: ' + greffes.length + ' linked · credit on totality (Σ hold) · losing one still leaves the rest · '
-        + (ouvert ? 'bank open — any wallet with proof may add liquidity · ' : 'not open yet · ')
-        + 'contract: ' + (BANK_CONTRACT || 'not deployed'))
-      : 'Credit backs the basket. Remove one → survivors keep backing.';
-  }
-  if (early) {
-    const eh = lireEarlyHolders(localStorage, compte);
-    /* ⛔ « you: early (yield) » etait un BADGE DE DROIT sur une liste de navigateur. Quelqu un
-     *   pouvait se croire titulaire d une part de rendement parce qu une ligne de localStorage le
-     *   disait. On nomme ce que c est : une note locale, sur une regle qui n existe pas encore. */
-    const badge = compte && estEarlyHolder(localStorage, compte, compte) ? ' · including you' : '';
-    early.textContent = eh.length
-      ? ('Noted in this browser as linked before opening' + badge + ': ' + eh.map(court).join(', ')
-        + '. This grants nothing today — there is no contract behind it.')
-      : 'If this is ever built, the plan is that whoever linked blocks before it opens would share the yield. Today that list only exists in this browser.';
-  }
-  tbSyncGraftButtons();
-}
-
-async function peindreTokenizedBank() {
-  const sel = $('#tbBlock');
-  const etat = $('#tbEtat');
-  if (!sel) return;
-  if (!compte) {
-    tbBankGeneration++; /* une lecture encore en cours pour l ancien compte n ecrira plus */
-    sel.innerHTML = '<option value="">Connect wallet to list your blocks…</option>';
-    $('#tbProof').textContent = 'Proof of hold: —';
-    if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
-    if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
-    if ($('#tbOpenBtn')) $('#tbOpenBtn').disabled = true;
-    tbPreuve = null; tbPanierPreuves = [];
-    if (etat) etat.textContent = '';
-    peindrePanierBank();
-    return;
-  }
-  /* ⛔⛔ « Reading My blocks… » RESTAIT 40 A 70 SECONDES. Signale par Raksha (2026-10-01, wallet neuf et
-   *     vide : bloque > 20 s). Mesure du Grok Bot au navigateur (wallet simule vide, prod) : 72,6 s avant
-   *     « No B20 found », pour 345 `eth_getTransactionByHash` + 427 `eth_getLogs`.
-   *   ⇒ CAUSE : la liste attendait EN SERIE les deux balayages les plus lents de l app — `mesCreations()`
-   *     (43 200 blocs de creations, puis le createur de CHACUNE des ~340 creations, une transaction
-   *     par creation) PUIS `mesFrappes(recus)` (120 000 blocs de Transfer) — avant d ecrire quoi que ce
-   *     soit. Et l index SERVEUR (`/api/blocks-de`), qui repond en millisecondes, n arrivait qu au bout
-   *     du premier, a l interieur de `mesCreations`.
-   *   ⇒ On peint ce qu on sait DES qu on le sait : les avoirs deja lus et l index serveur d abord, puis
-   *     chaque balayage a son arrivee, en parallele. Tant qu un balayage court, la liste le DIT (« still
-   *     scanning ») au lieu de laisser un « Reading… » sans fin.
-   *   ⛔ UN JETON PAR PEINTURE : `connecter()` et l ouverture de l onglet Wallet l appellent tous les
-   *     deux ; une lecture plus ancienne ne doit pas ecraser une plus recente. Et le choix deja fait par
-   *     la personne est garde d une repeinture a l autre. */
-  const gen = ++tbBankGeneration;
-  sel.innerHTML = '<option value="">Reading My blocks…</option>';
-  const vus = new Map();
-  const ajouter = (jeton, sym) => {
-    const k = String(jeton || '').toLowerCase();
-    if (!/^0x[0-9a-f]{40}$/.test(k)) return;
-    if (!vus.has(k) || (!vus.get(k) && sym)) vus.set(k, sym || null);
-  };
-  for (const a of actifs || []) {
-    if (a && a.bloc && a.adr) ajouter(a.adr, a.nom || null);
-  }
-  const peindreEnCours = () => {
-    if (gen !== tbBankGeneration) return;
-    const garde = sel.value;
-    sel.innerHTML = vus.size
-      ? '<option value="">Pick a block you hold…</option>' + [...vus].map(([j, s]) =>
-        '<option value="' + enTexte(j) + '">' + enTexte(s || court(j)) + ' · ' + enTexte(court(j)) + '</option>').join('')
-        + '<option value="" disabled>Still scanning the chain for older blocks…</option>'
-      : '<option value="">No B20 found yet — still scanning the chain…</option>';
-    if (garde && vus.has(garde)) sel.value = garde;
-  };
-  try {
-    const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()), { cache: 'no-store' });
-    const j = rep.ok ? await rep.json() : null;
-    if (j && j.ok && Array.isArray(j.blocks)) for (const a of j.blocks) ajouter(a, null);
-  } catch (_) { /* index indisponible : les balayages ci-dessous restent */ }
-  peindreEnCours();
-  await Promise.allSettled([
-    mesCreations().then(({ gardees }) => {
-      for (const c of gardees || []) if (c && c.jeton) ajouter(c.jeton, c.symbole || null);
-      peindreEnCours();
-    }),
-    mesFrappes(false, true).then((fr) => {
-      for (const x of (fr && fr.blocks) || []) ajouter(x.jeton, null);
-      peindreEnCours();
-    }),
-  ]);
-  if (gen !== tbBankGeneration) return;
-  for (const a of actifs || []) {
-    if (a && a.bloc && a.adr) vus.set(String(a.adr).toLowerCase(), a.nom || null);
-  }
-  const opts = [];
-  for (const [jeton, sym] of vus) {
-    let label = sym;
-    if (!label) {
-      /* ⛔ LE TROISIEME DECODAGE LATIN-1 DE CE FICHIER, dans la liste des blocks qu on DETIENT :
-       *   c est precisement la ou le nom d un inconnu s affiche a quelqu un. Meme correction que
-       *   `texteAbi` — UTF-8, retombee sur le mot fixe, invisibles et overrides retires.
-       * ⛔ ET LE `catch (_) {}` RESTE MUET VOLONTAIREMENT ICI : `label` retombe sur l adresse
-       *   courte juste en dessous, donc l option existe quand meme. Un symbole illisible ne doit
-       *   pas faire disparaitre un block que la personne possede. */
-      try {
-        const h = await rpc('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest']);
-        label = symboleDepuisReponse(h);
-      } catch (_) {}
-    }
-    opts.push({ jeton, symbole: label || court(jeton) });
-  }
-  if (gen !== tbBankGeneration) return;
-  const choixFait = sel.value;
-  sel.innerHTML = opts.length
-    ? '<option value="">Pick a block you hold…</option>' + opts.map((o) =>
-      '<option value="' + enTexte(o.jeton) + '">' + enTexte(o.symbole) + ' · ' + enTexte(court(o.jeton)) + '</option>').join('')
-    : '<option value="">No B20 found for this wallet yet</option>';
-  /* ⛔ un block choisi pendant le balayage reste choisi, et sa preuve deja lue n est pas jetee */
-  if (choixFait && opts.some((o) => o.jeton === choixFait)) sel.value = choixFait;
-  if (!sel.value) {
-    tbPreuve = null;
-    $('#tbProof').textContent = 'Proof of hold: —';
-    if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
-    if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
-  }
-  if (etat) etat.textContent = BANK_CONTRACT
-    ? ''
-    : (tbBankOuvertIci()
-      ? 'Bank open. Any wallet with proof may graft to add liquidity. Early = yield share only. Hold; losing one still leaves the rest.'
-      /* ⛔ REECRIT LE 2026-09-23 : « One lost ≠ dead » portait un `≠` de specification, et le reste
-       *    de la phrase (« basket totality », « Open freezes early (yield) ») disait la mecanique
-       *    interne au lieu de ce que le lecteur doit faire. Meme sens, en clair. */
-      : 'Your credit counts the whole basket. Keep holding it — losing one block does not end it. '
-        + 'Opening locks who gets the early share; after that, any wallet can add liquidity.');
-  peindrePanierBank();
-}
-
-async function tbLirePreuve() {
-  const etat = $('#tbEtat');
-  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
-  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
-  if (!ADRESSE.test(block)) { if (etat) etat.textContent = 'Pick a block from My blocks.'; return; }
-  $('#tbProof').textContent = 'Proof of hold: reading balanceOf on Base…';
-  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
-  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
-  tbPreuve = null;
-  try {
-    tbPreuve = await proofOfHold({ rpc, block, holder: compte });
-  } catch (e) {
-    tbPreuve = { etat: 'NON_LU', balance: null, pourquoi: String((e && e.message) || e) };
-  }
-  if (tbPreuve.etat === 'LU') {
-    const u = typeof formaterUnites === 'function' ? formaterUnites(tbPreuve.balance, 18) : String(tbPreuve.balance);
-    $('#tbProof').textContent = 'Proof of hold: ' + u + ' (raw balanceOf) · ' + court(block);
-    if (preuvePositive(tbPreuve)) {
-      tbSyncGraftButtons();
-      if (etat) {
-        etat.textContent = tbBankOuvertIci()
-          ? 'Hold proven. Add liquidity — graft another block into the same basket (any wallet; early = yield only).'
-          : 'Hold proven. Graft into the basket — then Open TokenizedBank (freezes early yield shares).';
-      }
-    } else {
-      if (etat) etat.textContent = 'Proof is zero — graft stays gated until balanceOf > 0 (you must hold).';
-    }
-  } else {
-    $('#tbProof').textContent = 'Proof of hold: unread' + (tbPreuve.pourquoi ? (' · ' + tbPreuve.pourquoi) : '');
-    if (etat) etat.textContent = 'Could not prove hold — try again or pick another block.';
-  }
-}
-
-async function tbLirePanier() {
-  const etat = $('#tbEtat');
-  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
-  const greffes = lireGreffes(localStorage, compte);
-  if (!greffes.length) { if (etat) etat.textContent = 'Basket empty — graft a block first.'; return; }
-  if (etat) etat.textContent = 'Reading basket proofs on Base…';
-  try {
-    const panier = await proofOfHoldPanier({ rpc, blocks: greffes, holder: compte });
-    tbPanierPreuves = panier.preuves || [];
-    peindrePanierBank();
-    if (etat) {
-      etat.textContent = panier.survivants.length
-        ? ('Basket backing: ' + panier.survivants.length + ' / ' + greffes.length
-          + ' linked blocks with hold > 0. Credit uses this totality'
-          + (tbBankOuvertIci() ? ' (add-liquidity mode).' : ' — Open TokenizedBank when ready.'))
-        : 'No positive hold in basket — keep holding at least one linked block to maintain credit.';
-    }
-  } catch (e) {
-    if (etat) etat.textContent = 'Basket proofs unread — ' + String((e && e.message) || e);
-  }
-}
-
-function tbApresGreffe(r, mode) {
-  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
-  if (tbPreuve) {
-    tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== block.toLowerCase());
-    tbPanierPreuves.push(tbPreuve);
-  }
-  peindrePanierBank();
-  const etat = $('#tbEtat');
-  if (!etat) return;
-  /* ⛔ « Credit backs basket totality » et « early shares stay frozen » decrivaient un mecanisme
-   *   de credit qui n existe pas, au present de l indicatif. On dit ce qui vient de se passer —
-   *   une ligne ajoutee dans ce navigateur — et rien de plus. */
-  if (mode === 'ADD_LIQUIDITY') {
-    etat.textContent = 'Linked in this browser (' + r.grafts.length + ' block(s)). Nothing was sent.';
-  } else {
-    etat.textContent = 'Linked in this browser (' + r.grafts.length + ' block(s)). Next: read the proofs of hold on chain — that part is real.';
-  }
-}
-
-$('#tbProofBtn') && $('#tbProofBtn').addEventListener('click', () => { void tbLirePreuve(); });
-$('#tbBasketProofBtn') && $('#tbBasketProofBtn').addEventListener('click', () => { void tbLirePanier(); });
-$('#tbBlock') && $('#tbBlock').addEventListener('change', () => {
-  tbPreuve = null;
-  $('#tbProof').textContent = 'Proof of hold: —';
-  if ($('#tbGraftBtn')) $('#tbGraftBtn').disabled = true;
-  if ($('#tbAddLiqBtn')) $('#tbAddLiqBtn').disabled = true;
-  tbSyncGraftButtons();
-});
-$('#tbGraftBtn') && $('#tbGraftBtn').addEventListener('click', () => {
-  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
-  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
-    $('#tbEtat').textContent = 'Read a positive proof of hold first.';
-    return;
-  }
-  if (tbBankOuvertIci()) {
-    $('#tbEtat').textContent = 'Bank already open — use Add liquidity — graft another block.';
-    return;
-  }
-  const r = grefferBlock(localStorage, compte, block);
-  if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Graft failed.'; return; }
-  tbApresGreffe(r, 'OPEN');
-});
-$('#tbAddLiqBtn') && $('#tbAddLiqBtn').addEventListener('click', async () => {
-  const block = ($('#tbBlock') && $('#tbBlock').value) || '';
-  const etat = $('#tbEtat');
-  if (!preuvePositive(tbPreuve) || !compte || !ADRESSE.test(block)) {
-    if (etat) etat.textContent = 'Read a positive proof of hold first — add liquidity is not early-gated.';
-    return;
-  }
-  if (!peutAjouterLiquidite(localStorage, compte, compte)) {
-    if (etat) etat.textContent = 'Open TokenizedBank first — then any wallet with proof may add liquidity.';
-    return;
-  }
-  const r = grefferAjouterLiquidite(localStorage, compte, block);
-  if (!r.ok) { if (etat) etat.textContent = r.pourquoi || 'Add-liquidity graft failed.'; return; }
-  tbApresGreffe(r, 'ADD_LIQUIDITY');
-  const greffes = r.grafts;
-  const credit = ouvrirCreditUsdcStub({
-    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage,
-    geste: 'ADD_LIQUIDITY',
-  });
-  /* ⛔ MEME CORRECTIF QUE POUR « Open » : la demande de signature est retiree. Elle ouvrait une
-   *   vraie fenetre de wallet pour un geste qui n ecrit que dans ce navigateur. Voir le
-   *   commentaire complet sur le gestionnaire de `#tbOpenBtn`. */
-  peindrePanierBank();
-  if (etat) {
-    etat.textContent = credit.etat === 'PENDING_CONTRACT'
-      ? ('Saved in this browser only — ' + greffes.length + ' block(s) linked. Nothing was signed '
-        + 'and nothing was sent: this adds no liquidity anywhere and freezes no share.')
-      : ('Refused: ' + (credit.pourquoi || credit.etat));
-  }
-});
-$('#tbBasket') && $('#tbBasket').addEventListener('click', (e) => {
-  const btn = e.target && e.target.closest ? e.target.closest('[data-tb-ungraft]') : null;
-  if (!btn || !compte) return;
-  const block = btn.getAttribute('data-tb-ungraft');
-  const avant = lireGreffes(localStorage, compte);
-  const r = retirerGreffe(localStorage, compte, block);
-  if (!r.ok) { $('#tbEtat').textContent = r.pourquoi || 'Remove failed.'; return; }
-  const surv = creditSurvitPerte(avant, block, tbPanierPreuves);
-  tbPanierPreuves = tbPanierPreuves.filter((p) => p && String(p.block).toLowerCase() !== String(block).toLowerCase());
-  peindrePanierBank();
-  $('#tbEtat').textContent = surv.survit
-    ? ('Removed ' + court(block) + '. Credit still alive — surviving linked blocks: '
-      + surv.survivants.map(court).join(', ') + '.')
-    : ('Removed ' + court(block) + '. No surviving positive hold — credit backing is empty until you hold again.');
-});
-$('#tbOpenBtn') && $('#tbOpenBtn').addEventListener('click', async () => {
-  const etat = $('#tbEtat');
-  if (!compte) { if (etat) etat.textContent = 'Connect your wallet first.'; return; }
-  if (tbBankOuvertIci()) {
-    if (etat) etat.textContent = 'Bank already open — use Add liquidity to graft more blocks.';
-    return;
-  }
-  const greffes = lireGreffes(localStorage, compte);
-  if (!greffes.length) { if (etat) etat.textContent = 'Graft at least one block into the basket.'; return; }
-  if (!tbPanierPreuves.filter(preuvePositive).length) {
-    await tbLirePanier();
-  }
-  const positifs = tbPanierPreuves.filter(preuvePositive);
-  if (!positifs.length) {
-    if (etat) etat.textContent = 'Need proof > 0 on at least one linked block (hold to maintain credit).';
-    return;
-  }
-  const credit = ouvrirCreditUsdcStub({
-    holder: compte, blocks: greffes, preuves: tbPanierPreuves, stockage: localStorage, geste: 'OPEN',
-  });
-  /* ⛔⛔ LA DEMANDE DE SIGNATURE EST RETIREE, ET C EST LE CORRECTIF LE PLUS IMPORTANT DE CE PANNEAU.
-   *     Ce bouton ouvrait une VRAIE fenetre de wallet (`personal_sign`) pour une fonctionnalite qui
-   *     n existe pas : `BANK_CONTRACT` vaut `null`, aucun credit n est emis, rien ne part sur la
-   *     chaine. La signature obtenue n etait ni verifiee, ni envoyee, ni conservee — elle finissait
-   *     dans une variable aussitot oubliee.
-   *   ⛔ POURQUOI C EST GRAVE ET PAS SEULEMENT INUTILE : demander une signature habitue les gens a
-   *     signer ce qu on leur presente. Le faire pour un geste vide use exactement la prudence dont
-   *     ils auront besoin le jour ou une vraie signature comptera. Une demande de signature se
-   *     merite ; celle-ci ne se meritait pas.
-   *   ⛔ ET LE MESSAGE D APRES ETAIT FAUX TROIS FOIS : « Open confirmed » — rien n est confirme
-   *     nulle part ; « Early shares frozen » — le registre vit dans CE navigateur et se vide ;
-   *     « the Brain runs ops automatically » — aucune operation ne tourne. */
-  peindrePanierBank();
-  if (etat) {
-    etat.textContent = credit.etat === 'PENDING_CONTRACT'
-      ? ('Saved in this browser only — ' + greffes.length + ' block(s) linked, ' + positifs.length
-        + ' with a proof of hold read on chain. Nothing was signed and nothing was sent: the credit '
-        + 'contract does not exist yet, so this opens no credit and freezes no share. Clearing this '
-        + 'browser clears this list.')
-      : ('Refused: ' + (credit.pourquoi || credit.etat));
-  }
-});
-
+/* ══ 2026-10-11 — LA MAQUETTE « PANIER DE BLOCKS » EST RETIREE (Phil : « retire ca, change le B20 from my block et remplace par tokenized
+ *   stocks, c est ce qu on a fait »). Son JS (preuve de detention d un block, greffes, ouverture factice, early holders, tout en
+ *   localStorage) partait avec elle ; le panier CONSTRUIT est celui des actions : bcPanierPeindre (Bank) et tbBanquePeindre (Wallet).
+ *   Avec elle part aussi le balayage lourd qu elle lancait a CHAQUE ouverture du Wallet (mesCreations + mesFrappes + un symbole par
+ *   block, mesure du 2026-10-01 : 72,6 s et ~770 requetes sur un wallet vide). ══ */
 $('#pCompte').addEventListener('click', async () => {
   /* ⛔⛔ CE `return` TUAIT L INTENTION ECRITE JUSTE AU-DESSUS DU BOUTON. Le commentaire du header dit
    *     (Phil, 2026-09-18) : « il connecte, PUIS montre l adresse courte et ouvre l onglet Wallet ».
@@ -21609,21 +21186,32 @@ async function peindreBridgeBlocks() {
   }
   sel.innerHTML = '<option value="">Reading your blocks…</option>';
   const blocks = [];
-  for (const id of ['#tbBlock', '#wpBlock']) {
+  /* 2026-10-11 : '#tbBlock' (la liste de la maquette « panier de blocks ») est retire avec elle ; les blocks de ce wallet viennent
+   *   encore de #wpBlock et des cartes de My blocks, juste dessous */
+  for (const id of ['#wpBlock']) {
     const s = $(id);
     if (!s) continue;
     for (const o of s.options || []) {
       if (/^0x[0-9a-fA-F]{40}$/.test(o.value)) blocks.push({ jeton: o.value.toLowerCase(), label: o.textContent });
     }
   }
-  /* My block list cards — data-adr if present */
+  /* ⛔ revue adverse (2026-10-11) : retirer '#tbBlock' coupait la SEULE source automatique de ce choix - et le repli lisait `data-adr`,
+   *   un attribut que les cartes de My blocks ne portent pas (elles portent `data-block`) : un wallet qui detient des blocks lisait « No
+   *   blocks yet ». Les sources de l ancienne liste reviennent ici : les blocks deja lus par le Wallet (actifs), les cartes de My blocks
+   *   (data-block), et l index serveur /api/blocks-de (quelques ms). */
+  for (const a of actifs || []) if (a && a.bloc && /^0x[0-9a-fA-F]{40}$/.test(String(a.adr || ''))) blocks.push({ jeton: String(a.adr).toLowerCase(), label: a.nom || null });
   try {
-    for (const el of document.querySelectorAll('#mesBlocks [data-adr], #mesBlocks .mono')) {
-      const a = (el.getAttribute && el.getAttribute('data-adr')) || (el.textContent || '');
+    for (const el of document.querySelectorAll('#mesBlocks [data-block], #mesBlocks .mono')) {
+      const a = (el.getAttribute && el.getAttribute('data-block')) || (el.textContent || '');
       const m = String(a).match(/0x[0-9a-fA-F]{40}/);
-      if (m) blocks.push({ jeton: m[0].toLowerCase(), label: m[0].slice(0, 6) + '…' + m[0].slice(-4) });
+      if (m) blocks.push({ jeton: m[0].toLowerCase(), label: (el.getAttribute && el.getAttribute('data-sym')) || (m[0].slice(0, 6) + '…' + m[0].slice(-4)) });
     }
   } catch (_) {}
+  try {
+    const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    const j = rep.ok ? await rep.json() : null;
+    if (j && j.ok && Array.isArray(j.blocks)) for (const b of j.blocks) if (/^0x[0-9a-fA-F]{40}$/.test(String(b))) blocks.push({ jeton: String(b).toLowerCase(), label: null });
+  } catch (_) { /* index indisponible : les autres sources restent */ }
   const seen = new Set();
   const uniq = [];
   for (const b of blocks) {
@@ -22279,6 +21867,16 @@ const bcEl = (tag, props = {}, enfants = []) => {
   for (const c of enfants) e.append(c);
   return e;
 };
+/** La vignette d une action / d un block (Phil, 2026-10-11 : « ajoute l image des blocks de notre app pour les tokenized stocks, pour que
+ *  le user repere plus facilement au visuel ») : la MEME face que le panneau - dessin(adresse, symbole), dessinee dans la page, aucune
+ *  requete. Rien de dessinable : la premiere lettre du symbole, jamais une image cassee. Decorative (aria-hidden) : le symbole est ecrit a cote. */
+function bcVisage(adr, sym) {
+  const v = bcEl('span', { cls: 'bcVisage', 'aria-hidden': 'true' });
+  let svg = '';
+  try { svg = /^0x[0-9a-fA-F]{40}$/.test(String(adr || '')) ? dessin(String(adr).toLowerCase(), sym || '?') : ''; } catch (_) { svg = ''; }
+  if (svg) v.innerHTML = svg; else v.textContent = String(sym || '?').slice(0, 1);
+  return v;
+}
 function bcMessage(qui, classe, texte) {
   const m = bcEl('div', { cls: 'bcMsg ' + classe }, [bcEl('div', { cls: 'bcQui', text: qui }), bcEl('div', { text: texte })]);
   $('#bcFil').append(m);
@@ -22417,7 +22015,10 @@ const bcSolde = async (jeton, qui) => (String(jeton).toLowerCase() === ETH_ADR.t
   : BigInt(await rpc('eth_call', [{ to: jeton, data: '0x70a08231' + String(qui).slice(2).toLowerCase().padStart(64, '0') }, 'latest'])));
 /** Signe une suite d appels, un par un, dans l ordre ; s arrete au premier qui n est pas confirme. */
 async function bcSigner(m, appels) {
-  let hash = null;
+  /* 2026-10-11 (revue adverse) : `faits` = le nombre d etapes CONFIRMEES - un plan a moitie passe ne doit jamais etre rejoue tel quel
+   *   (un « Start again » apres un frais refuse reconstruisait un SECOND emprunt) ; `hashOperation` = la derniere transaction confirmee
+   *   qui n est pas un frais (le lien « explorer » montrait le frais au lieu de l emprunt). */
+  let hash = null, hashOperation = null;
   for (let i = 0; i < appels.length; i += 1) {
     const c = appels[i];
     bcEtape(m, 'Step ' + (i + 1) + ' of ' + appels.length + ': ' + (c.nom || 'transaction') + ' — check it in your wallet…');
@@ -22428,11 +22029,22 @@ async function bcSigner(m, appels) {
       const refuse = estRefusWallet(r);
       bcEtape(m, refuse ? 'You declined in your wallet — nothing more was sent.' : aEteDiffusee(r.etat) ? 'Sent, not confirmed yet — do not sign it again; check your wallet.'
         : 'It did not go through: ' + String(r.pourquoi || r.etat).slice(0, 160), 'non');
-      return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash };
+      return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash, hashOperation, faits: i };
     }
-    hash = r.hash; bcEtape(m, 'Confirmed.', 'oui');
+    hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, 'Confirmed.', 'oui');
   }
-  return { ok: true, hash };
+  return { ok: true, hash, hashOperation: hashOperation || hash, faits: appels.length };
+}
+/** Apres un plan de banque NON termine : ce qui est deja confirme reste sur la chaine. Si une etape au moins est passee (ou partie sans
+ *  confirmation), on ne propose PAS de recommencer le meme plan - il referait un emprunt complet ; on dit quoi verifier. Sinon, « Start again ». */
+function bcBanqueApresEchec(m, s, total, planifier) {
+  bcApresOperation(); /* signe ou non : la Bank, ses positions et la carte du Wallet se relisent */
+  if ((s && s.faits > 0) || (s && s.diffusee)) {
+    bcEtape(m, 'Only ' + ((s && s.faits) || 0) + ' of ' + total + ' steps were confirmed: what went through stays on chain — check « Your positions » below before doing anything else. Do not sign this plan again.', 'non');
+    bcBoutons(m, []);
+    return;
+  }
+  bcBoutons(m, [['Start again', planifier, true]]);
 }
 /** Le cerveau ecrit sa note (meme journal que la carte « Bot loop ») : seulement apres une transaction CONFIRMEE. */
 function bcJournal(action, hash) {
@@ -24220,7 +23832,7 @@ async function bcBanqueCharger(force = false) {
   const carte = ({ mk, r }) => {
     const c = bcBanqueChiffres(mk), estIci = !!ici && String(mk.garantie.adr).toLowerCase() === ici;
     const li = bcEl('li', { cls: 'bcMarche' + (c.etat === 'vide' ? ' vide' : '') + (estIci ? ' ici' : '') });
-    li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcEl('b', { text: mk.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: mk.pret.symbole }),
+    li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcVisage(mk.garantie.adr, mk.garantie.symbole), bcEl('b', { text: mk.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: mk.pret.symbole }),
       ...(estIci ? [bcEl('span', { cls: 'bcPuce ici', text: 'This block' })] : []),
       ...((nParAction.get(mk.garantie.symbole) || 0) > 1 ? [bcEl('span', { cls: 'bcPuce', text: 'up to ' + pctLtv(c.maxPct), title: 'One of ' + nParAction.get(mk.garantie.symbole) + ' ' + mk.garantie.symbole + ' markets: this one lends up to ' + pctLtv(c.maxPct) + ' of the value and liquidates at ' + pctLtv(c.liqPct) + '.' })] : []),
       bcEl('span', { cls: 'bcPuce ' + c.classe, text: c.puce })]));
@@ -24317,7 +23929,9 @@ function bcBanqueEstimer() {
   /* 2026-10-11 (frais de service, decision de Phil) : le frais est DIT avant le plan - meme calcul que fraisEmprunt (0,1 %, arrondi superieur) */
   if (d > 0n && Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0) {
     const fraisB = (d * BigInt(bcBanque.fraisBps) + 9999n) / 10000n;
-    morceaux.push('TokenizedBlock fee: ' + (bcBanque.fraisBps / 100) + ' % of what you borrow (≈ ' + bcUnites(fraisB, decP) + ' ' + mk.pret.symbole + '), in the same batch — you receive ≈ ' + bcUnites(d - fraisB, decP) + '.');
+    /* ⛔ revue adverse (2026-10-11) : « in the same batch » etait FAUX - la Bank signe chaque appel en transaction separee ; le frais est
+     *   la DERNIERE, signee juste apres l emprunt */
+    morceaux.push('TokenizedBlock fee: ' + (bcBanque.fraisBps / 100) + ' % of what you borrow (≈ ' + bcUnites(fraisB, decP) + ' ' + mk.pret.symbole + '), a separate last step you sign right after the loan — after it you keep ≈ ' + bcUnites(d - fraisB, decP) + '.');
   }
   if (g0 > 0n || d0 > 0n) morceaux.push('Counting what you already posted (' + bcUnites(g0, decG) + ' ' + mk.garantie.symbole + ') and owe (' + bcUnites(d0, decP) + ' ' + mk.pret.symbole + ').');
   if (gT > 0n) {
@@ -24352,27 +23966,54 @@ function bcEstimationEmprunt(mk, g, d) {
   return { valeur, plafond, ltvPct, chutePct, maxPct, liqPct, auDela: d > plafond };
 }
 const BC_PANIER_MAX = 5;
-/** Les lignes du panier : un marche LISTE ou l on peut emprunter (liquidite lue >= 1 $), une case, deux montants, son estimation. */
+/** Les lignes du panier (2026-10-11, Phil : « une version aboutie avec nos paniers d actions a collateraliser ») : UNE LIGNE PAR ACTION
+ *  (le serveur refuse la meme action deux fois) sur son meilleur marche - pour CE wallet celui ou il peut emprunter le plus, sans wallet
+ *  le plus liquide. Wallet lu : seules les actions DETENUES, cochees (au plus BC_PANIER_MAX), garantie = tout ce que le wallet en detient,
+ *  emprunt = la MOITIE de ce qu elles permettent (arrondi au cent inferieur) - un depart prudent, modifiable, rien n est envoye.
+ *  Sans wallet : toutes les actions empruntables, a remplir. Chaque ligne a la face de son block (bcVisage). */
 function bcPanierPeindre(listes) {
   const zone = $('#bcBanquePanier'), ul = $('#bcPanierLignes');
   if (!zone || !ul) return;
-  const empruntables = (listes || []).filter((mk) => ['ok', 'bas'].includes(bcBanqueChiffres(mk).etat));
-  zone.hidden = empruntables.length < 2;
+  const p = bcBanque.pourToi && typeof compte !== 'undefined' && compte && bcBanque.pourToi.de === String(compte).toLowerCase() ? bcBanque.pourToi : null;
+  const parAction = new Map();
+  for (const mk of listes || []) {
+    /* le panier ADDITIONNE des montants : un seul actif prete (USDC), comme la carte du Wallet - revue adverse 2026-10-11 */
+    if (mk.pret.symbole !== 'USDC' || !['ok', 'bas'].includes(bcBanqueChiffres(mk).etat)) continue;
+    const r = p ? bcPourToiDe(mk, p) : null, k = mk.garantie.symbole, cur = parAction.get(k);
+    const score = r && r.emprunt !== null ? r.emprunt : -1n;
+    if (!cur || score > cur.score) parAction.set(k, { mk, r, score });
+  }
+  let lignes = [...parAction.values()];
+  const detenue = (x) => !!(x.r && x.r.garantie !== null && x.r.garantie > 0n && x.r.emprunt !== null && !x.r.rien);
+  const parWallet = !!p && lignes.some((x) => x.r && x.r.emprunt !== null);
+  if (parWallet) lignes = lignes.filter(detenue);
+  zone.hidden = lignes.length < 2;
   ul.textContent = '';
-  for (const mk of empruntables) {
+  let cochees = 0;
+  for (const { mk, r } of lignes) {
     const li = bcEl('li', { cls: 'bcPanierLigne' });
     li.dataset.id = mk.id;
     const caseX = bcEl('input', { type: 'checkbox', 'aria-label': 'Use ' + mk.garantie.symbole });
     const g = bcEl('input', { inputmode: 'decimal', placeholder: mk.garantie.symbole + ' to post', 'aria-label': mk.garantie.symbole + ' collateral' });
     const d = bcEl('input', { inputmode: 'decimal', placeholder: mk.pret.symbole + ' to borrow', 'aria-label': mk.pret.symbole + ' to borrow' });
     g.disabled = true; d.disabled = true;
+    if (parWallet && cochees < BC_PANIER_MAX) {
+      const solde = p.av ? p.av.solde(mk.garantie.adr) : null, cent = 10n ** BigInt(Math.max(0, Number(mk.pret.decimales) - 2));
+      caseX.checked = true; g.disabled = false; d.disabled = false; cochees += 1;
+      if (typeof solde === 'bigint' && solde > 0n) g.value = bcUnites(solde, Number(mk.garantie.decimales));
+      const moitie = ((r.emprunt / 2n) / cent) * cent;
+      if (moitie > 0n) d.value = bcUnites(moitie, Number(mk.pret.decimales));
+    }
     const est = bcEl('p', { cls: 'bcMarcheBas', text: bcBanqueChiffres(mk).puce + ' · borrow ' + bcPct(mk.apyEmprunt) });
-    li.append(bcEl('label', { cls: 'bcPanierCase' }, [caseX, bcEl('span', { text: mk.garantie.symbole + ' → ' + mk.pret.symbole })]), bcEl('div', { cls: 'bcPanierChamps' }, [g, d]), est);
+    li.append(bcEl('label', { cls: 'bcPanierCase' }, [caseX, bcVisage(mk.garantie.adr, mk.garantie.symbole), bcEl('span', { text: mk.garantie.symbole + ' → ' + mk.pret.symbole
+      + (parWallet ? ' · up to ≈ ' + bcBas2(r.emprunt, mk.pret.decimales) : '') })]), bcEl('div', { cls: 'bcPanierChamps' }, [g, d]), est);
     li._panier = { mk, caseX, g, d, est };
     caseX.addEventListener('change', () => { g.disabled = d.disabled = !caseX.checked; bcPanierMaj(); });
     g.addEventListener('input', bcPanierMaj); d.addEventListener('input', bcPanierMaj);
     ul.append(li);
   }
+  /* le drapeau est TOUJOURS consomme (revue adverse : il restait arme si le panier etait cache, et ouvrait plus tard un panier non demande) */
+  if (bcBanque.panierDemande) { bcBanque.panierDemande = false; if (!zone.hidden) { zone.open = true; setTimeout(() => { try { zone.scrollIntoView({ block: 'start' }); } catch (_) {} }, 50); } }
   bcPanierMaj();
 }
 /** Lit les lignes cochees, peint l estimation de chacune et le total ; au plus BC_PANIER_MAX cases. Rend les lignes valides. */
@@ -24386,7 +24027,10 @@ function bcPanierMaj() {
     const dg = Number(x.mk.garantie.decimales), dp = Number(x.mk.pret.decimales);
     const lire = (txt, dec) => (/^\s*0*(?:[.,]0*)?\s*$/.test(txt) ? 0n : enUnitesBrutes(txt.trim(), dec));
     const g = lire(x.g.value, dg), d = lire(x.d.value, dp);
-    const e = g !== null && d !== null ? bcEstimationEmprunt(x.mk, g, d) : null;
+    /* 2026-10-11 : ce qui est DEJA pose et du sur ce marche compte, comme dans le plan (construireEmprunt) et l estimation simple */
+    const pt = bcBanque.pourToi, ps = pt && pt.pos && pt.pos.ok && typeof compte !== 'undefined' && compte && pt.de === String(compte).toLowerCase() ? pt.pos.positions.find((y) => y.id === x.mk.id) : null;
+    const g0 = ps ? BigInt(ps.garantieBrute || 0) : 0n, d0 = ps ? BigInt(ps.detteBrute || 0) : 0n;
+    const e = g !== null && d !== null ? bcEstimationEmprunt(x.mk, g + g0, d + d0) : null;
     x.est.textContent = !e ? 'Type the ' + x.mk.garantie.symbole + ' you post and the ' + x.mk.pret.symbole + ' you borrow.'
       : 'LTV ' + e.ltvPct.toFixed(1) + ' %' + (e.chutePct !== null ? ' · liquidated if ' + x.mk.garantie.symbole + ' falls ' + e.chutePct.toFixed(1) + ' %' : '')
         + (e.auDela ? ' — above our limit (' + e.maxPct.toFixed(1) + ' %): the plan will refuse it.' : '');
@@ -24394,7 +24038,11 @@ function bcPanierMaj() {
     if (e && d > 0n) { valides.push({ mk: x.mk, brutG: g, brutM: d }); total += d; decP = dp; symP = x.mk.pret.symbole; }
   }
   const t = $('#bcPanierTotal');
-  if (t) t.textContent = valides.length ? 'You borrow ' + bcUnites(total, decP) + ' ' + symP + ' in total, against ' + valides.length + ' stock' + (valides.length > 1 ? 's' : '') + '. Estimate only.' : '';
+  /* 2026-10-11 (frais de service, decision de Phil) : le frais de CHAQUE emprunt (0,1 %, arrondi superieur, comme fraisEmprunt) et le net */
+  const bps = Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? BigInt(bcBanque.fraisBps) : null;
+  const frais = bps === null ? null : valides.reduce((s, v) => s + (v.brutM * bps + 9999n) / 10000n, 0n);
+  if (t) t.textContent = valides.length ? 'You borrow ' + bcUnites(total, decP) + ' ' + symP + ' in total, against ' + valides.length + ' stock' + (valides.length > 1 ? 's' : '')
+    + (frais !== null ? '; TokenizedBlock fee ≈ ' + bcUnites(frais, decP) + ' (' + (bcBanque.fraisBps / 100) + ' %, a separate step after each loan), after it you keep ≈ ' + bcUnites(total - frais, decP) + ' ' + symP : '') + '. Estimate only.' : '';
   return valides;
 }
 $('#bcPanierGo').addEventListener('click', () => {
@@ -24439,17 +24087,18 @@ async function bcBanqueProposerPanier(lignes) {
       bcEtape(m, ligne + '.');
     }
     const fraisPanier = (Array.isArray(rs.lignes) ? rs.lignes : []).reduce((t, l) => t + (/^\d+$/.test(String(l.fraisApp || '')) ? BigInt(l.fraisApp) : 0n), 0n);
-    if (fraisPanier > 0n && lignes[0]) bcEtape(m, 'TokenizedBlock fee in total: ' + bcUnites(fraisPanier, Number(lignes[0].mk.pret.decimales)) + ' ' + lignes[0].mk.pret.symbole + ', paid in this same batch, right after each loan.');
+    if (fraisPanier > 0n && lignes[0]) bcEtape(m, 'TokenizedBlock fee in total: ' + bcUnites(fraisPanier, Number(lignes[0].mk.pret.decimales)) + ' ' + lignes[0].mk.pret.symbole + ': one separate transfer to sign right after each loan.');
     bcEtape(m, String(rs.positionsSeparees || 'Each stock is its own Morpho position.'));
     bcEtape(m, 'Simulated on chain from your wallet: the whole sequence goes through. Your wallet signs the ' + p.aSigner.length + ' steps one after another; if you stop midway, the positions already opened stay open — repay them below.', 'oui');
     bcBoutons(m, [['Sign ' + p.aSigner.length + ' steps in my wallet', async () => {
       const s = await bcSigner(m, p.aSigner);
+      /* revue adverse (2026-10-11) : un panier a moitie passe ne se rejoue JAMAIS (il referait les emprunts deja faits) */
+      if (!s.ok) { bcBanqueApresEchec(m, s, p.aSigner.length, planifier); return; }
       bcApresOperation(); /* la Bank, ses positions ET la carte du Wallet se relisent (contre-test de Grok, 2026-10-11) */
-      if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
       bcBoutons(m, []); /* une carte faite n a plus de bouton de signature */
       try { void majWallet(); } catch (_) { /* relu a l ouverture */ }
-      bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
-      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      bcEtape(m, 'Done — ' + court(s.hashOperation) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hashOperation, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
     }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
   };
   await planifier();
@@ -24553,6 +24202,7 @@ async function tbBanquePeindre() {
   const lu = await bcBanqueLireMarches();
   if (gen !== tbBanqueGeneration) return;
   pos.textContent = ''; toiE.textContent = ''; toiP.textContent = '';
+  const panierZ = $('#tbPanier'); if (panierZ) panierZ.hidden = true; /* repeint plus bas, seulement si les avoirs sont lus */
   const { listes } = lu.ok ? bcBanqueListes() : { listes: [] };
   if (lu.ok) {
     const res = bcBanqueResumer(listes);
@@ -24572,13 +24222,16 @@ async function tbBanquePeindre() {
    *   Par action detenue, son MEILLEUR marche (une meme action ne garantit qu un marche a la fois - on ne la compte pas deux fois) ; preter
    *   = l USDC du wallet. Un marche non lu n est pas compte et c est DIT. */
   if (lu.ok) {
-    const parAction = new Map(); let nonLu = false;
+    const parAction = new Map(), parActionPanier = new Map(); let nonLu = false;
     for (const mk of listes) {
       if (mk.pret.symbole !== 'USDC') continue;
       const r = bcPourToiDe(mk, p);
       if (!r || r.emprunt === null) { nonLu = true; continue; }
       const k = String(mk.garantie.adr).toLowerCase();
-      if (r.garantie > 0n && (!parAction.has(k) || r.emprunt > parAction.get(k).e)) parAction.set(k, { e: r.emprunt, sym: mk.garantie.symbole });
+      if (r.garantie > 0n && (!parAction.has(k) || r.emprunt > parAction.get(k).e)) parAction.set(k, { e: r.emprunt, sym: mk.garantie.symbole, mk, r });
+      /* revue adverse (2026-10-11) : le panier du Wallet suit la MEME regle que bcPanierPeindre (marches ou l on peut emprunter : liquidite
+       *   ok ou basse) - sinon « Borrow against my N stocks » comptait des actions que le panier de la Bank n ouvre pas */
+      if (r.garantie > 0n && ['ok', 'bas'].includes(bcBanqueChiffres(mk).etat) && (!parActionPanier.has(k) || r.emprunt > parActionPanier.get(k).e)) parActionPanier.set(k, { e: r.emprunt, sym: mk.garantie.symbole, mk, r });
     }
     const mkU = listes.find((mk) => mk.pret.symbole === 'USDC'), dec = mkU ? mkU.pret.decimales : 6;
     const soldeU = mkU && p.av ? p.av.solde(mkU.pret.adr) : null;
@@ -24586,8 +24239,8 @@ async function tbBanquePeindre() {
     /* dans chaque CHOIX, ce que CE wallet peut (le detail de la regle reste dans la note dessous) */
     toiE.textContent = parAction.size ? 'You: up to ≈ ' + bcBas2(total, dec) + ' USDC' : nonLu ? 'Your amount: not read right now' : 'You hold none of the accepted stocks yet';
     toiP.textContent = soldeU === null ? 'Your USDC: not read right now' : soldeU > 0n ? 'You: ' + bcBas2(soldeU, dec) + ' USDC to lend' : 'No USDC in this wallet yet';
-    if (parAction.size) pos.append(bcEl('p', { cls: 'note', text: '« Up to » counts your ' + [...parAction.values()].map((v) => v.sym).join(', ')
-      + ' — in your wallet and already posted — each on its best market, at our limit. Borrowing less keeps you further from liquidation.' + (nonLu ? ' Some markets were not read.' : '') }));
+    const acceptees = [...new Set(listes.filter((mk) => mk.pret.symbole === 'USDC').map((mk) => mk.garantie.symbole))];
+    tbPanierPeindre([...parActionPanier.values()], p, nonLu, acceptees);
   }
   const r = p.pos;
   if (!r || !r.ok) { pos.append(bcEl('p', { cls: 'note', text: 'Your Bank positions were not read — ' + ((r && r.pourquoi) || 'try again later') + '.' })); return; }
@@ -24598,9 +24251,56 @@ async function tbBanquePeindre() {
     else if (g > 0n) parts.push(bcUnites(g, ps.garantie.decimales) + ' ' + ps.garantie.symbole + ' as collateral');
     if (pr > 0n) parts.push('you lent ' + bcUnites(pr, ps.pret.decimales) + ' ' + ps.pret.symbole);
     const puce = bcPuceSante(ps);
-    pos.append(bcEl('p', {}, [bcEl('b', { text: ps.garantie.symbole + ' → ' + ps.pret.symbole }), bcEl('span', { text: parts.join(' · ') }), ...(puce ? [puce] : [])]));
+    pos.append(bcEl('p', {}, [bcVisage(ps.garantie.adr, ps.garantie.symbole), bcEl('b', { text: ps.garantie.symbole + ' → ' + ps.pret.symbole }), bcEl('span', { text: parts.join(' · ') }), ...(puce ? [puce] : [])]));
   }
 }
+/* ── 2026-10-11 — LE PANIER D ACTIONS DU WALLET (Phil : « remplace par tokenized stocks… une version aboutie avec nos paniers d actions a
+ *   collateraliser ») : les actions de CE wallet, LUES sur la chaine (/api/avoirs), chacune sur son meilleur marche ; ce qu elle peut
+ *   garantir ; la regle dite (chaque action est sa propre position). Un geste : la Bank, avec le panier pre-rempli (2 actions et plus) ou
+ *   le formulaire de l action (1), ou le Market pour en acheter une (0). Rien n est signe ici. */
+const tbPanierEtat = { mode: null, mk: null };
+function tbPanierPeindre(actions, p, nonLu, acceptees = []) {
+  const z = $('#tbPanier'), ul = $('#tbPanierLignes'), note = $('#tbPanierNote'), go = $('#tbPanierGo');
+  if (!z || !ul || !note || !go) return;
+  ul.textContent = '';
+  const positions = p && p.pos && p.pos.ok ? p.pos.positions : [];
+  for (const a of actions) {
+    const dg = Number(a.mk.garantie.decimales), dp = Number(a.mk.pret.decimales);
+    const enWallet = p.av ? p.av.solde(a.mk.garantie.adr) : null;
+    const pose = positions.filter((x) => String(x.garantie && x.garantie.adr).toLowerCase() === String(a.mk.garantie.adr).toLowerCase())
+      .reduce((s, x) => s + BigInt(x.garantieBrute || 0), 0n);
+    const detail = [typeof enWallet === 'bigint' && enWallet > 0n ? bcUnites(enWallet, dg) + ' in your wallet' : null, pose > 0n ? bcUnites(pose, dg) + ' posted' : null].filter(Boolean).join(' · ');
+    ul.append(bcEl('li', {}, [bcVisage(a.mk.garantie.adr, a.sym), bcEl('div', {}, [bcEl('b', { text: a.sym }), bcEl('span', { text: (detail ? detail + ' · ' : '')
+      + (a.r.rien ? 'nothing to borrow against it right now' : 'backs up to ≈ ' + bcBas2(a.e, dp) + ' ' + a.mk.pret.symbole + (a.r.borneParMarche ? ' (market limit)' : '')) })])]));
+  }
+  const utiles = actions.filter((a) => !a.r.rien);
+  if (!actions.length && nonLu) { z.hidden = true; return; } /* rien de lu : on ne dit pas « aucune action » */
+  if (!actions.length) {
+    tbPanierEtat.mode = 'acheter'; tbPanierEtat.mk = null;
+    /* revue adverse (2026-10-11) : « No tokenized stock » etait faux pour qui detient des actions que la Bank n accepte pas : on nomme
+     *   celles qu elle accepte */
+    note.textContent = 'None of the stocks the Bank can lend against right now is in this wallet'
+      + (acceptees.length ? ' (accepted: ' + acceptees.join(', ') + ')' : '') + '. Buy one, and it shows up here as something you can borrow against.';
+    go.textContent = 'Buy a tokenized stock';
+  } else {
+    tbPanierEtat.mode = utiles.length >= 2 ? 'panier' : utiles.length === 1 ? 'un' : null; tbPanierEtat.mk = utiles.length === 1 ? utiles[0].mk : null;
+    /* ⛔ revue adverse (2026-10-11) : « Read on chain just now » etait FAUX - les soldes du wallet sont lus sur la chaine mais gardes
+     *   jusqu a ~50 s (serveur 30 s + page 20 s), et « posted » / « backs up to » viennent de l API Morpho. On dit d ou vient chaque chiffre. */
+    note.textContent = 'Wallet balances are read on chain (up to a minute old); what is posted and what each stock backs come from the Morpho API, '
+      + 'and the Bank re-reads them on chain before you sign. Each stock is its own position: if one falls to its liquidation price, only that one is sold — the others are untouched. '
+      + 'You set the amounts in the Bank; nothing is signed before you review it.' + (nonLu ? ' Some markets were not read.' : '');
+    go.textContent = utiles.length >= 2 ? 'Borrow against my ' + utiles.length + ' stocks' : utiles.length === 1 ? 'Borrow against my ' + utiles[0].sym : 'Open the Bank';
+  }
+  go.hidden = false; z.hidden = false;
+}
+$('#tbPanierGo').addEventListener('click', async () => {
+  if (tbPanierEtat.mode === 'acheter') { try { allerA('trade'); } catch (_) { /* l onglet Market reste dans la barre */ } return; }
+  bcBanque.intention = 'emprunter'; bcBanque.intentionChoisie = true;
+  if (tbPanierEtat.mode === 'panier') bcBanque.panierDemande = true;
+  bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank');
+  await bcBanqueCharger();
+  if (tbPanierEtat.mode === 'un' && tbPanierEtat.mk) bcBanqueChoisir(tbPanierEtat.mk, 'emprunter');
+});
 $('#bcBanqueForm').addEventListener('click', (e) => { const b = e.target.closest('[data-banque]'); if (b && bcBanque.choisi) bcBanqueChoisir(bcBanque.choisi, b.getAttribute('data-banque')); });
 $('#bcBanqueForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -24651,7 +24351,7 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
       if (dg === null) { try { dg = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dg = null; } }
       if (rs.detteApres) bcEtape(m, 'Your debt after: ' + bcUnites(rs.detteApres, decP) + ' ' + mk.pret.symbole + ' (we cap it at ' + rs.marge + ').');
       /* 2026-10-11 (frais de service, decision de Phil) : le montant EXACT du plan (resume.fraisApp), et ou il va - nomme, jamais l adresse */
-      if (/^\d+$/.test(String(rs.fraisApp || ''))) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + mk.pret.symbole + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you borrow), paid in this same batch — you receive ' + bcUnites(BigInt(brutM) - BigInt(rs.fraisApp), decP) + ' ' + mk.pret.symbole + '.');
+      if (/^\d+$/.test(String(rs.fraisApp || ''))) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + mk.pret.symbole + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you borrow): the last step, a separate transfer your wallet asks you to sign right after the loan — after it you keep ' + bcUnites(BigInt(brutM) - BigInt(rs.fraisApp), decP) + ' ' + mk.pret.symbole + '.');
       if (rs.prixLiquidation && rs.prixActuel && dg !== null) {
         const enPret = (x) => Number(BigInt(x)) / 1e36 * 10 ** dg / 10 ** decP;
         bcEtape(m, 'Liquidated if 1 ' + mk.garantie.symbole + ' falls below ' + enPret(rs.prixLiquidation).toFixed(2) + ' ' + mk.pret.symbole + ' (oracle now: ' + enPret(rs.prixActuel).toFixed(2) + ').');
@@ -24674,25 +24374,31 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
     bcEtape(m, 'Simulated on chain from your wallet: every step goes through.', 'oui');
     bcBoutons(m, [['Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {
       const s = await bcSigner(m, p.aSigner);
-      if (!s.ok) { bcBoutons(m, [['Start again', planifier, true]]); return; }
+      /* revue adverse (2026-10-11) : le frais est la DERNIERE etape ; s il est refuse, l emprunt est deja fait - « Start again »
+       *   reconstruisait un SECOND emprunt complet. Un plan a moitie passe ne se rejoue jamais. */
+      if (!s.ok) { bcBanqueApresEchec(m, s, p.aSigner.length, planifier); return; }
       /* 2026-10-11 (test reel de Grok : « Sign N steps reste cliquable sur une carte deja faite » = double signature possible) : une carte
        *   faite n a PLUS de bouton de signature ; le formulaire se vide ; le Wallet se relit. */
       bcBoutons(m, []);
       for (const id of ['#bcBanqueGarantie', '#bcBanqueMontant']) { const e = $(id); if (e) e.value = ''; }
       try { bcBanqueEstimer(); } catch (_) { /* rien a estimer */ }
       try { void majWallet(); } catch (_) { /* le Wallet se relira a son ouverture */ }
-      bcEtape(m, 'Done — ' + court(s.hash) + '.', 'oui');
-      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+      /* le lien montre l OPERATION (emprunt, pret, remboursement), pas la transaction du frais qui la suit */
+      bcEtape(m, 'Done — ' + court(s.hashOperation) + '.', 'oui');
+      m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + s.hashOperation, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
       bcApresOperation(); /* la Bank, ses positions ET la carte du Wallet se relisent (contre-test de Grok, 2026-10-11) */
       /* 2026-10-10 (Phil : « surtout pas forcer sur ETH, proposer tous les chemins d echange, full open for all assets ») : deux
        *   raccourcis (racheter l action en garantie, le block affiche) PUIS un selecteur de TOUS les actifs connus (actions du registre,
        *   devises de Base, block affiche). Ce sont les rails qui planifient ou refusent, avec la raison — rien n est filtre ici. */
       if (sens === 'emprunter' && brutM) {
+        /* revue adverse (2026-10-11) : le wallet a recu l emprunt MOINS le frais (resume.fraisApp) - proposer le brut ferait un echange
+         *   d un montant que le wallet n a pas */
+        const netM = /^\d+$/.test(String(rs.fraisApp || '')) ? BigInt(brutM) - BigInt(rs.fraisApp) : BigInt(brutM);
         const usdc = bcResoudre('USDC'), suite = [], vus = new Set();
         const offrir = (j) => {
           if (!usdc.ok || !j || !j.ok || j.adr === usdc.adr || vus.has(j.adr)) return;
           vus.add(j.adr);
-          suite.push(['Buy ' + j.sym + ' with it', () => bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null), true]);
+          suite.push(['Buy ' + j.sym + ' with it', () => bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(netM) }, null), true]);
         };
         offrir(bcResoudre(mk.garantie.adr));
         if (brainAdr) offrir(bcResoudre(String(brainAdr)));
@@ -24705,7 +24411,7 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
           if (brainAdr && !tous.some((d) => d.adr === String(brainAdr).toLowerCase())) { const b = bcResoudre(String(brainAdr)); if (b.ok) tous.unshift({ adr: b.adr, sym: b.sym }); }
           for (const d of tous) choix.append(bcEl('option', { value: d.adr, text: d.sym }));
           const go = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Swap' });
-          go.addEventListener('click', () => { const j = bcResoudre(choix.value); if (j.ok) void bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null); });
+          go.addEventListener('click', () => { const j = bcResoudre(choix.value); if (j.ok) void bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(netM) }, null); });
           m.append(bcEl('div', { cls: 'bcBanqueLigne' }, [bcEl('span', { text: 'Any asset:' }), choix, go]));
         }
       }
@@ -24743,7 +24449,7 @@ async function bcBanquePositions(force = false) {
     /* 2026-10-11 (glow up) : une carte par position ; la sante (facteur Morpho, 1 = liquidation) en puce : rouge < 1,1, ambre < 1,5 */
     const carte = bcEl('ul', { cls: 'bcListe' }), li = bcEl('li', { cls: 'bcMarche' }), parts = [];
     const puceSante = bcPuceSante(ps);
-    li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcEl('b', { text: ps.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: ps.pret.symbole }),
+    li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcVisage(ps.garantie.adr, ps.garantie.symbole), bcEl('b', { text: ps.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: ps.pret.symbole }),
       ...(puceSante ? [puceSante] : [])]));
     const d = bcEl('div', { cls: 'bcMarcheBoutons' });
     const g = BigInt(ps.garantieBrute || 0), dt = BigInt(ps.detteBrute || 0), pr = BigInt(ps.preteBrut || 0);

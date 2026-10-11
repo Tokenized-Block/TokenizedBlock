@@ -135,7 +135,8 @@ const bloc = iBq > 0 && fBq > iBq ? app.slice(iBq, fBq) : '';
 ok(bloc.includes('offrir(bcResoudre(mk.garantie.adr));') && bloc.includes('if (brainAdr) offrir(bcResoudre(String(brainAdr)));') && !/Swap it to ETH/.test(bloc),
   'I apres un emprunt : acheter l action en garantie ou le block affiche avec l USDC ; aucun bouton ETH');
 ok(bloc.includes("[...DEVISES_BASE.filter((d) => d.chaines.includes(8453) && d.lancePubliquement !== false), ...ACTIONS_COINBASE]") && bloc.includes("text: 'Any asset:'")
-  && bloc.includes("bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(brutM) }, null)"),
+  /* revue adverse (2026-10-11) : le montant propose est le NET recu (emprunt - frais de service), plus le brut */
+  && bloc.includes("bcProposerSwap('You', '', { de: usdc, vers: j, montant: String(netM) }, null)"),
   'I « full open » : un selecteur de TOUS les actifs connus (devises de Base + actions du registre + block affiche), ce sont les rails qui jugent');
 ok(/ouvrirRailFiat\(e, \$\('#bcBanqueCarte'\), 'USDC'\)/.test(app) && /\$\('#bcBanqueFiat'\)\.hidden = !\(sens === 'preter' && mk\.pret\.symbole === 'USDC'\);/.test(app),
   'I mode Lend : « Add USDC with a card or bank » par le rail fiat existant, en USDC ; masque en mode Borrow');

@@ -274,7 +274,8 @@ async function construireEmprunt({ rpc, compte, id, garantie = 0n, emprunt }) {
   appels.push({ to: MORPHO_BLUE, data: appelBorrow(p, E, c, c), value: '0x0', nom: 'borrow on Morpho, to your own wallet' });
   /* les frais de service (FRAIS_EMPRUNT_BPS, decision de Phil) : APRES l emprunt, sur l actif emprunte, dans la meme sequence simulee */
   const frais = fraisEmprunt(E);
-  appels.push({ to: p.loanToken, data: appelTransfer(DESTINATAIRE_FRAIS_BANQUE, frais), value: '0x0', nom: 'TokenizedBlock service fee: ' + Number(FRAIS_EMPRUNT_BPS) / 100 + ' % of what you borrow' });
+  /* `frais: true` : la page sait que cette etape est le frais (le lien « explorer » montre l emprunt, pas le frais - revue adverse 2026-10-11) */
+  appels.push({ to: p.loanToken, data: appelTransfer(DESTINATAIRE_FRAIS_BANQUE, frais), value: '0x0', frais: true, nom: 'TokenizedBlock service fee: ' + Number(FRAIS_EMPRUNT_BPS) / 100 + ' % of what you borrow' });
   resume.fraisApp = frais.toString(); resume.fraisAppBps = Number(FRAIS_EMPRUNT_BPS); resume.fraisPour = 'TokenizedBlock';
   return { etat: 'OK', compte: c, garantieToken: p.collateralToken, appels, resume };
 }

@@ -19,7 +19,8 @@ vu(bcUsd(0.046) === '$0.05', 'ROUGE->VERT : une garantie de 0,046 $ s affiche ' 
 vu(bcUsd(0.004) === '< $0.01' && bcUsd(0) === '$0.00' && bcUsd(566.2) === '$566' && bcUsd(1486.4) === '$1,486' && bcUsd(null) === '—' && bcUsd('x') === '—', 'bcUsd faux : ' + [bcUsd(0.004), bcUsd(0), bcUsd(566.2), bcUsd(1486.4)].join(' | '));
 const fonction = (entete) => { const k = html.indexOf(entete); assert.ok(k > 0, 'introuvable : ' + entete); const f = /\r?\n\}/.exec(html.slice(k)); return html.slice(k, k + f.index + f[0].length); };
 const prop = fonction('async function bcBanqueProposer({');
-vu(/if \(!s\.ok\) \{ bcBoutons\(m, \[\['Start again', planifier, true\]\]\); return; \}\s*\/\*[\s\S]*?\*\/\s*bcBoutons\(m, \[\]\);/.test(prop), 'ROUGE->VERT : une carte faite garde son bouton de signature (double signature)');
+/* 2026-10-11 (revue adverse) : l echec passe desormais par bcBanqueApresEchec (jamais « Start again » apres une etape passee) */
+vu(/if \(!s\.ok\) \{ bcBanqueApresEchec\(m, s, p\.aSigner\.length, planifier\); return; \}\s*\/\*[\s\S]*?\*\/\s*bcBoutons\(m, \[\]\);/.test(prop), 'ROUGE->VERT : une carte faite garde son bouton de signature (double signature)');
 vu(/\['#bcBanqueGarantie', '#bcBanqueMontant'\]\) \{ const e = \$\(id\); if \(e\) e\.value = ''; \}/.test(prop) && /void majWallet\(\)/.test(prop), 'le formulaire ne se vide pas, ou le Wallet ne se relit pas apres une operation');
 vu(/'You lend '/.test(prop) && /'Risk: if a stock falls faster than its loans are liquidated/.test(prop) && /'You repay your whole debt: about '/.test(prop)
   && /' of what you lent\.'/.test(prop) && /' of collateral to your wallet\.'/.test(prop), 'les cartes ne disent pas leurs montants ou le risque du pret');

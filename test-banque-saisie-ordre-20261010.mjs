@@ -59,13 +59,15 @@ vu(j1 && Math.abs(j1[0] - 2.83) < 0.01 && Math.abs(j1[1] - 53.9) < 0.01 && Math.
 dit('', '10'); vu(jauges.at(-1)[0] === null, 'sans garantie, la jauge invente une LTV');
 dit('1', ''); vu(jauges.at(-1)[0] === 0 && jauges.at(-1)[3] === null, 'garantie sans emprunt : LTV 0, pas de baisse inventee');
 /* 3) la carte TokenizedBank du Wallet disait « not built yet, no credit » alors que l emprunt est en ligne : elle mene a la banque */
-const iCarte = html.indexOf('id="wBankCarte"'), iVive = html.indexOf('id="tbBanqueVivante"'), iApercu = html.indexOf('id="tbApercu"');
-vu(iCarte > 0 && iVive > iCarte && iVive < iApercu, 'la ligne « Live now » n est pas en tete de la carte, avant le bandeau Preview');
+/* 2026-10-11 : le bandeau « Preview » de la maquette est PARTI avec elle (decision de Phil) ; la ligne de ce qui est en ligne reste en tete */
+const iCarte = html.indexOf('id="wBankCarte"'), iVive = html.indexOf('id="tbBanqueVivante"');
+vu(iCarte > 0 && iVive > iCarte && iVive - iCarte < 3000 && html.indexOf('id="tbApercu"') < 0, 'la ligne de ce qui est en ligne n est pas en tete de la carte (ou le bandeau Preview est revenu)');
 vu(/tbOuvrirBank'\)\.addEventListener\('click', \(\) => \{ bcOuvrirPop\([^)]*\); bcVue\('bank'\); void bcBanqueCharger\(\); \}\)/.test(html), 'le bouton Open the Bank n ouvre pas l onglet Bank du panneau');
 /* 4) 2026-10-11 (Phil : « refais bien le frontend de l onglet Wallet pour TokenizedBank, pour rediriger direct ») : le bouton est un vrai
  *   bouton (pleine largeur, pas au milieu d une phrase), AVANT l idee jamais construite, qui est REPLIEE (<details>) et garde son bandeau en tete */
-const iBouton = html.indexOf('<button type="button" class="bouton" id="tbOuvrirBank">'), iIdee = html.indexOf('<details class="tbIdee" id="tbIdee">');
-vu(iBouton > iCarte && iIdee > iBouton && iApercu > iIdee && html.indexOf('</details>', iIdee) > html.indexOf('id="tbAgent"'), 'la carte du Wallet ne mene pas directement a la Bank (bouton plein, idee repliee dessous, bandeau en tete de l idee)');
+/*   2026-10-11, plus tard : l idee repliee est RETIREE (Phil) ; a sa place, le panier d ACTIONS, entre les choix et le bouton */
+const iBouton = html.indexOf('<button type="button" class="bouton" id="tbOuvrirBank">'), iPanier = html.indexOf('<div class="tbPanier" id="tbPanier" hidden>');
+vu(iBouton > iCarte && iPanier > iCarte && iPanier < iBouton && html.indexOf('id="tbIdee"') < 0, 'la carte du Wallet ne mene pas directement a la Bank (panier d actions avant le bouton plein, idee retiree)');
 /* 2026-10-11 (Phil, « je comprends pas » sur les tuiles) : deux CHOIX en mots simples, au-dessus du bouton, chacun ouvre la Bank regle */
 const iChoix = html.indexOf('<div class="tbChoix" id="tbChoix">');
 vu(iChoix > iCarte && iChoix < iBouton && html.indexOf('id="tbBanquePos"') < iBouton && /data-intention="emprunter"[\s\S]{0,400}Borrow USDC/.test(html.slice(iChoix, iBouton))
