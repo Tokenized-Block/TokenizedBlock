@@ -164,7 +164,8 @@ const srcMaj = extraire(app, 'async function majPaire() {');
 const srcVal = extraire(app, 'function validerCreation() {');
 ok('both functions found in app.html', !!srcMaj && !!srcVal);
 async function simuler(adr, { routable }) {
-  const el = (v = '') => ({ value: v, hidden: false, className: '', textContent: '', disabled: false, title: '' });
+  /* 2026-10-11 : la note d une ACTION refusee recoit un bouton (append, document.createElement) */
+  const el = (v = '') => ({ value: v, hidden: false, className: '', textContent: '', disabled: false, title: '', boutons: [], append(b) { this.boutons.push(b); } });
   const dom = { '#cPaire': el(adr), '#cPaireAutre': el(''), '#cPaireAutreRang': el(), '#cPaireNote': el(), '#cPaireChip': el(),
     '#cNom': el('My Block'), '#cSym': el('MYB'), '#cSel': el('salt-1') };
   const appels = { faitsDuBlock: 0, prixUsdDevise: 0 };
@@ -186,6 +187,9 @@ async function simuler(adr, { routable }) {
     /* 2026-10-03 (memestocks) : majPaire consulte la regle de lancement AVANT la lecture on-chain — le vrai module */
     hookDeLancementPour: P.hookDeLancementPour,
     symbolesLancables: () => P.pairesProposees(8453).filter((p) => p.type === 'ACTION' && P.hookDeLancementPour(p.adr, 8453, { v9: false })).map((p) => p.symbole),
+    /* 2026-10-11 : une ACTION refusee propose sa devise (secoursAction) - le vrai registre et la meme regle de lancement */
+    pairesProposees: P.pairesProposees, estPaireLancable: (a) => !!P.hookDeLancementPour(a, 8453, { v9: false }),
+    document: { createElement: () => ({ type: '', className: '', id: '', textContent: '', addEventListener() {} }) }, Event: class {},
   });
   vm.runInContext(srcMaj + '\n' + srcVal, ctx);
   await vm.runInContext('majPaire()', ctx);
@@ -196,8 +200,12 @@ async function simuler(adr, { routable }) {
 for (const [s, routable] of [['OUSD', true], ['PLTRc', true], ['TOSHI', false], ['MUc', false]]) {
   const r = await simuler(parSym[s], { routable });
   const attendu = refusPrixNouveauBlock(parSym[s], 8453, { routable, symbole: s }) || '(guard says: allowed)';
-  ok(s + ': refused on pick — no pair accepted, note = ' + JSON.stringify(attendu.slice(0, 34) + '…'),
-    r.paire === null && r.note === attendu && r.motif === attendu, { paire: r.paire && r.paire.symbole, note: r.note });
+  /* 2026-10-11 (Phil : « encore bcp de tokenized stocks sont en soon, fix pour donner un path ») : une ACTION refusee garde le refus
+   *   (motif, paire nulle, paiement bloque) mais la note propose sa devise ; les autres devises du registre gardent le refus seul */
+  const estAction = P.pairesProposees(8453).some((p) => p.type === 'ACTION' && String(p.adr).toLowerCase() === String(parSym[s]).toLowerCase());
+  ok(s + ': refused on pick — no pair accepted, ' + (estAction ? 'note offers its currency' : 'note = ' + JSON.stringify(attendu.slice(0, 34) + '…')),
+    r.paire === null && r.motif === attendu && (estAction ? r.note.startsWith(s + ' cannot be the pair of a new block here') : r.note === attendu),
+    { paire: r.paire && r.paire.symbole, note: r.note });
   ok(s + ': validerCreation stops the payment path with the same reason', r.v && r.v.ko === attendu, r.v);
   ok(s + ': no on-chain pair check was started', r.appels.faitsDuBlock === 0, r.appels);
 }
