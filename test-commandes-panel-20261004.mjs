@@ -101,7 +101,10 @@ ok(/dessinerReseau\(brainDernierVu, \{ canvas: dst, teinteCube: /.test(bcSrc) &&
   && /if \(!cible\) bwPos = pos;/.test(html) && /if \(!cible\) bwAretes = aretes;/.test(html) && (html.match(/function dessinerReseau\(/g) || []).length === 1,
   'Brain : le cube et ses connexions = la MEME fonction de dessin que « Its wiring » (pas une seconde), sans toucher aux positions du clic de la carte');
 /* 2026-10-04 (Phil) : le bouton desactive devient un « + » qui ouvre des skins A L ESSAI ; puis « prix 1 $ par skin » : elles s achetent. */
-const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), bcSrc.indexOf('/* ── AiFi : LE CERVEAU PROPOSE SEUL'));
+/* 2026-10-11 : le MARCHE des skins (qui, lui, signe : acheter, encherir, vendre) suit la boutique - la tranche « essayer » s arrete a
+ *   son debut ; le marche est teste dans test-skins-marche-20261011. */
+const finEssai = bcSrc.indexOf('/* ── LE MARCHE DES SKINS') > 0 ? bcSrc.indexOf('/* ── LE MARCHE DES SKINS') : bcSrc.indexOf('/* ── AiFi : LE CERVEAU PROPOSE SEUL');
+const skinsSrc = bcSrc.slice(bcSrc.indexOf('const BC_SKINS = Object.freeze(['), finEssai);
 ok(/<button type="button" class="bcPlus" id="bcSkins" aria-expanded="false" aria-controls="bcBoutique"/.test(html) && /\$\('#bcSkins'\)\.addEventListener\('click'/.test(html) && !/id="bcTaches"/.test(html),
   'Brain : la peau du block et un « + » qui ouvre les skins ; la liste des taches n y est plus');
 ok(skinsSrc.length > 500 && !/envoyerDepuisWallet|bcSigner|localStorage|appelAchatSkin/.test(skinsSrc.replace(/\/\*[\s\S]*?\*\//g, '')),

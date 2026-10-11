@@ -57,7 +57,8 @@ vu(ev.evenements.some((e) => e.type === 'GM' && e.tx === '0xaa01'), 'A evenement
 const html = readFileSync(process.env.TB_APP || new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const i0 = html.indexOf('async function relireTransfertsRefuses(');
 vu(i0 > 0, 'app.html n a pas relireTransfertsRefuses');
-const fin = html.indexOf('\n}\n', i0) + 3;
+const mFin = /\r?\n\}\r?\n/.exec(html.slice(i0)); /* fin de la fonction, quelle que soit la fin de ligne (test-tests-portables) */
+const fin = i0 + mFin.index + mFin[0].length;
 vu(/if \(sens !== 'ancien'\) \{ try \{ await relireTransfertsRefuses\(\); \}/.test(html), 'lireLive n appelle pas la relecture');
 vu(/if \(q === 'transfers' && [^\n]*liveTransfertsARelire\.push\(\{ de: f\.de, a: f\.a, adresses: f\.adresses \}\)/.test(html) && /if \(q === 'swaps' && [^\n]*liveSwapsRefuses\.push/.test(html), 'noterRateesLive ne garde pas les fenetres a relire');
 const executer = async ({ aRelire, swapsRefuses, ratees, evts, stub }) => {
