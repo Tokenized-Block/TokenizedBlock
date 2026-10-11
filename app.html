@@ -3925,7 +3925,7 @@ import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
 import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1, tacheAutorisee } from './brain-tasks.js';
 import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
-import { BLOCKSKINS, SKIN_MINT_USDC, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee } from './blockskins.js';
+import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee } from './blockskins.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -24603,6 +24603,9 @@ async function bcAcheterSkin() {
   const m = bcMessage('Skins', '', s.nom + ' for ' + nomB + ' — 1 USDC');
   bcVue('chat');
   if (CHAINE !== 8453) { bcEtape(m, 'Skins are bought on Base mainnet only.', 'non'); return; }
+  /* ⛔ Phil, 2026-10-11 : « v2 avant tout mint » - le contrat deploye ne montre pas la skin dans un wallet (blockskins.js, SKIN_MINT_OUVERT).
+   *   Rien n est demande tant que l enregistrement de deploiement n est pas celui du contrat qui porte l image. */
+  if (!SKIN_MINT_OUVERT) { bcEtape(m, 'Skins are moving to a contract your wallet can display — buying reopens when it is live. Nothing was asked.', 'non'); return; }
   const refuser = () => bcEtape(m, 'Dismissed — nothing was sent.');
   const payer = async () => {
     if (!(await bcAvecWallet(m, payer))) return;

@@ -12,6 +12,10 @@ let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const R = { id: 'random', angle: 10, h: [20, 30, 359], cube: 0, noyau: 200, fond: 300 };
 vu(S.BLOCKSKINS === BLOCKSKINS_DEPLOIEMENT.adresse.toLowerCase(), 'l adresse n est pas celle du contrat deploye');
+/* Phil, 2026-10-11 : « v2 avant tout mint ». La porte suit l ENREGISTREMENT de deploiement (genere), jamais un drapeau a la main :
+ *   ouverte si et seulement si imageDansLeWallet === true ; le v1 (0xea6c…, tokenURI sans image) la garde FERMEE. */
+vu(S.SKIN_MINT_OUVERT === (BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true), 'la porte du mint ne suit pas l enregistrement de deploiement');
+vu(BLOCKSKINS_DEPLOIEMENT.adresse.toLowerCase() !== '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' || S.SKIN_MINT_OUVERT === false, 'le mint est OUVERT sur le contrat v1 qui ne montre pas la skin dans un wallet');
 vu(JSON.stringify(S.recetteVersTeintes(R)) === '[10,20,30,359,0,200,300]', 'ordre des teintes faux');
 const p = S.packRecette(R);
 vu(p === (10n | 20n << 9n | 30n << 18n | 359n << 27n | 0n << 36n | 200n << 45n | 300n << 54n) && (p >> 63n) === 0n, 'pack faux : ' + p);
@@ -26,6 +30,11 @@ vu(m.to === S.BLOCKSKINS && m.data.startsWith('0x' + selecteur('mint(address,uin
 const a = S.appelApprouver(USDC, S.SKIN_MINT_USDC);
 vu(a.to === USDC && a.data.startsWith('0x095ea7b3') && a.data.slice(10, 74).endsWith(S.BLOCKSKINS.slice(2)) && BigInt('0x' + a.data.slice(74)) === 1000000n, 'approbation pas exacte');
 let leve = false; try { S.appelApprouver(USDC, 0n); } catch (_) { leve = true; } vu(leve, 'approbation de 0 acceptee');
+/* le nom de chaque etape S AFFICHE dans la carte de signature (« Step 2 of 2: ... ») : jamais « NFT » (Phil, 2026-10-11).
+ *   ROUGE sur 3693e6f : 'Mint this skin as your NFT — 1 USDC to TokenizedBlock'. */
+const etapes = [m, a, S.appelMettreEnVente(7n, USDC, 2000000n), S.appelRetirer(7n), S.appelAcheter(7n, USDC, 2000000n), S.appelOuvrirEnchere(7n, USDC, 1000000n, 3600n),
+  S.appelEncherir(7n, USDC, 9n), S.appelRegler(7n), S.appelRetirerCredit(USDC)];
+vu(etapes.every((x) => typeof x.nom === 'string' && x.nom.length > 0 && !/\bNFTs?\b/i.test(x.nom)), 'une etape affichee dit « NFT » ou n a pas de nom : ' + etapes.map((x) => x.nom).filter((t) => !t || /\bNFTs?\b/i.test(t)).join(' | '));
 vu(S.appelAcheter(7n, S.ETH, 5n * 10n ** 15n).value === '0x' + (5n * 10n ** 15n).toString(16) && S.appelAcheter(7n, USDC, 2000000n).value === '0x0', 'valeur ETH / jeton fausse a l achat');
 vu(S.appelEncherir(7n, S.ETH, 9n).value === '0x9' && S.appelEncherir(7n, USDC, 9n).value === '0x0', 'valeur ETH / jeton fausse a l enchere');
 leve = false; try { S.appelOuvrirEnchere(7n, USDC, 1000000n, 604801n); } catch (_) { leve = true; } vu(leve, 'enchere de plus de 7 jours acceptee');

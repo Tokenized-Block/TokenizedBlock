@@ -243,6 +243,11 @@ ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerC
 ok(/if \(solde < SKIN_MINT_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_MINT_USDC)') < achat.indexOf('await bcSigner(m, appels)'), 'C2 achat : le solde USDC est relu AVANT de signer');
 ok(/autorise >= SKIN_MINT_USDC \? \[\] : \[appelApprouver\(usdc, SKIN_MINT_USDC,/.test(achat) && !/MAX_UINT|ffffffffffffffff/.test(achat),
   'C2 achat : approbation EXACTE de 1 USDC seulement si celle en place ne couvre pas le prix, jamais illimitee');
+/* Phil, 2026-10-11 : « v2 avant tout mint » - la porte est AVANT tout appel au wallet (bcAvecWallet est dans payer) et ne demande rien. */
+const porte = achat.indexOf('if (!SKIN_MINT_OUVERT) {');
+ok(porte > 0 && porte < achat.indexOf('const payer = async () => {') && /if \(!SKIN_MINT_OUVERT\) \{ bcEtape\(m, '[^']*Nothing was asked\.', 'non'\); return; \}/.test(achat)
+  && /import \{[^}]*\bSKIN_MINT_OUVERT\b[^}]*\} from '\.\/blockskins\.js';/.test(html),
+  'C2 achat : tant que le contrat deploye ne montre pas la skin dans un wallet, le mint est ferme AVANT tout appel au wallet');
 ok(/if \(r\.diffusee\) \{ bcEtape\(m, 'The mint was sent and is not confirmed yet/.test(achat) && /await lireMesSkins\(\); poserMesSkins\(\);/.test(achat),
   'C2 achat : un mint parti sans confirmation ne se relance pas ; apres le mint, la skin est RELUE sur la chaine');
 ok(/if \(CHAINE !== 8453\) \{ bcEtape\(m, 'Skins are bought on Base mainnet only\.', 'non'\); return; \}/.test(achat), 'C2 achat : Base mainnet seulement');

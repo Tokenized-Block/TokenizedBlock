@@ -16,6 +16,11 @@ export const SKIN_MINT_USDC = 1_000_000n; /* MINT_PRICE du contrat (6 decimales)
 export const SKIN_FRAIS_BPS = 1000n;      /* SALE_FEE_BPS : 10 % */
 export const SKIN_ENCHERE_MAX_S = 604800n; /* MAX_AUCTION : 7 jours */
 export const SKIN_SURENCHERE_BPS = 500n;   /* MIN_RAISE_BPS : +5 % */
+/* ⛔⛔ Phil, 2026-10-11 : « v2 avant tout mint ». Le contrat v1 (0xea6c…e77d) ne montre pas la skin dans un wallet : son tokenURI n a AUCUNE
+ *   image, et son JSON brut porte « # » - fetch() (lecteur conforme) le coupe a 29 caracteres sur 219, JSON invalide (mesure sur fork,
+ *   skin #1). Le mint ne s ouvre que sur un deploiement dont l enregistrement GENERE dit que le tokenURI porte l image - jamais sur un
+ *   drapeau pose a la main ici. */
+export const SKIN_MINT_OUVERT = BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true;
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -46,7 +51,8 @@ export function unpackRecette(n) {
 const appel = (sig, args, value = 0n, nom = '') => ({ to: BLOCKSKINS, data: '0x' + selecteur(sig) + args.join(''), value: '0x' + BigInt(value).toString(16), nom });
 /** mint : 1 USDC passe du wallet de la personne au wallet de frais ; le NFT est a elle. Suppose l approbation USDC (appelApprouver). */
 export function appelMint(block, recette) {
-  return appel('mint(address,uint64)', [adrMot(block), mot(packRecette(recette))], 0n, 'Mint this skin as your NFT — 1 USDC to TokenizedBlock');
+  /* ⛔ le nom de l etape S AFFICHE (« Step 2 of 2: ... ») : jamais « NFT » a l ecran (Phil, 2026-10-11 : « un nouveau type relie au block ») */
+  return appel('mint(address,uint64)', [adrMot(block), mot(packRecette(recette))], 0n, 'Mint this skin for this block — 1 USDC to TokenizedBlock');
 }
 /** approve(BlockSkins, montant) EXACT sur un jeton (USDC, une action admise) - jamais illimite. */
 export function appelApprouver(jeton, montant, nom = 'Allow the skins market to take exactly this amount') {
