@@ -50,7 +50,12 @@ console.log('— A. la fonction extraite');
 jeu(html.slice(i0, i1), ok);
 
 console.log('— B. le cablage');
-ok(/const secours = q\.paire\.type === 'SAISIE' \? deviseDeSecoursPour\(q\.paire\.adr\) : null;/.test(html), 'la devise de secours n est proposee que pour une adresse tapee / un block choisi (SAISIE)');
+/* 2026-10-11 (Phil : « encore bcp de tokenized stocks sont en soon, fix pour donner un path ») : une ACTION non admise a aussi sa devise
+ *   de secours (USDC, sinon ETH), avec SA phrase ; toute autre devise du registre refusee garde son refus seul */
+ok(/const secours = q\.paire\.type === 'SAISIE' \? deviseDeSecoursPour\(q\.paire\.adr\) : q\.paire\.type === 'ACTION' \? secoursAction\(\) : null;/.test(html),
+  'la devise de secours : SAISIE -> devise du block, ACTION -> USDC/ETH, rien d autre');
+ok(/secours\.action\s*\? symA \+ ' cannot be the pair of a new block here: the market contract takes a fixed list of currencies/.test(html)
+  && !/the app routes between blocks and stocks/.test(html), 'une action non admise dit pourquoi (liste figee) sans promettre une route non mesuree');
 ok(/bS\.id = 'cPaireSecours';/.test(html) && /bS\.textContent = 'Pair with ' \+ secours\.symbole \+ ' instead';/.test(html)
   && /sP\.value = secours\.adr; sP\.dispatchEvent\(new Event\('change'\)\);/.test(html), 'un bouton « Pair with <devise> instead » change la paire du selecteur');
 ok(/A new block is born against a currency, not directly against another block\./.test(html), 'la phrase dit le fait : une naissance se fait contre une devise');

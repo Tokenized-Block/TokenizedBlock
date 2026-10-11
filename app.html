@@ -16382,10 +16382,15 @@ function peindrePaires() {
   const actions = liste.filter((p) => p.type === 'ACTION').sort((a, b) => Number(lancable(b.adr)) - Number(lancable(a.adr)));
   /* 2026-10-04 : une devise MESUREE sans unite en circulation (paireGrisee : `not_born`, jamais `not_read`) reste listee, grisee,
    *   avec LIBELLE_PAS_NEE. Toute autre devise sort a l octet pres comme avant (ouverte, ou « — soon »). */
+  /* ⛔ 2026-10-11 (Phil : « dans le menu deroulant encore bcp de tokenized stocks sont en soon, fix pour donner un path ») : la liste
+   *   des devises du contrat de marche est FIGEE - « soon » promettait ce que rien ne porte (meme constat que les blocks vivants le
+   *   2026-10-04). Une ACTION non admise devient CHOISISSABLE, « through its currency » : majPaire dit pourquoi elle ne peut pas etre la
+   *   paire et propose la devise de son marche (USDC le plus souvent) en un clic. Une devise « not_born » mesuree reste grisee. */
   const opt = (p) => {
     const pasNee = paireGrisee(p), ok = ouverte(p) && !pasNee;
-    return '<option value="' + enTexte(p.adr) + '"' + (ok ? '' : ' disabled') + '>'
-      + enTexte(etiquettePaire(p)) + (pasNee ? ' — ' + enTexte(LIBELLE_PAS_NEE) : (ok ? '' : ' — soon')) + '</option>';
+    const parSaDevise = !ok && !pasNee && p.type === 'ACTION';
+    return '<option value="' + enTexte(p.adr) + '"' + (ok || parSaDevise ? '' : ' disabled') + '>'
+      + enTexte(etiquettePaire(p)) + (pasNee ? ' — ' + enTexte(LIBELLE_PAS_NEE) : (ok ? '' : parSaDevise ? ' — through its currency' : ' — soon')) + '</option>';
   };
   /* tip 20260922-stock-pair-ux: optgroups — Base currencies vs Coinbase tokenized stocks */
   s.innerHTML = '<optgroup label="Base currencies">' + base.map(opt).join('') + '</optgroup>'
@@ -16767,10 +16772,23 @@ async function majPaire() {
        *   (celle de son marche, lue dans l index) si elle est dans la liste, sinon ETH — un clic, et la naissance repart. */
       /* seulement pour une adresse TAPEE ou choisie parmi les blocks vivants (type SAISIE) : une devise du registre refusee
        *   (ex. une action sans prix) garde son refus seul — lui proposer « pas un autre block » serait faux. */
-      const secours = q.paire.type === 'SAISIE' ? deviseDeSecoursPour(q.paire.adr) : null;
+      /* 2026-10-11 (Phil : « encore bcp de tokenized stocks sont en soon, fix pour donner un path ») : une ACTION non admise a aussi sa
+       *   devise de secours - USDC (les actions s echangent contre USDC), sinon ETH - avec SA phrase : « pas directement contre un autre
+       *   block » serait faux pour une action. */
+      const secoursAction = () => {
+        const liste = pairesProposees(CHAINE);
+        const c = liste.find((p) => p.type === 'STABLE' && /^usdc$/i.test(String(p.symbole)) && estPaireLancable(p.adr)) || liste.find((p) => p.type === 'NATIF');
+        return c && String(c.adr).toLowerCase() !== String(q.paire.adr).toLowerCase() ? { adr: c.adr, symbole: c.symbole, action: true } : null;
+      };
+      const secours = q.paire.type === 'SAISIE' ? deviseDeSecoursPour(q.paire.adr) : q.paire.type === 'ACTION' ? secoursAction() : null;
       if (secours) {
         n.className = 'note';
-        n.textContent = 'A new block is born against a currency, not directly against another block. '
+        const symA = String(q.paire.symbole || 'This stock');
+        n.textContent = secours.action
+          ? symA + ' cannot be the pair of a new block here: the market contract takes a fixed list of currencies, and ' + symA + ' is not on it. '
+            + 'Pair yours with ' + secours.symbole + (/^usdc$/i.test(secours.symbole) ? ' — the currency ' + symA + ' trades against, so your block and ' + symA + ' share it' : '')
+            + '. '
+          : 'A new block is born against a currency, not directly against another block. '
           + (secours.saCote ? (secours.symboleBlock || 'That block') + ' trades against ' + secours.symbole + ': pair yours with ' + secours.symbole
             + ' too — both then share the same currency, which is how the app routes one block into another. '
             : 'Pair yours with ' + secours.symbole + ', the default here: blocks that share a currency are routed into one another through it. ');

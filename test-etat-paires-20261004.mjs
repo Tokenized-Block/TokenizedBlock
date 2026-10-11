@@ -333,7 +333,10 @@ async function jeuApp(src, M, noter) {
   noter(app.opt(panne) === avant(panne, true) && app.opt(vivA) === avant(vivA, true) && app.opt(jamais) === avant(jamais, true) && app.opt(LISTE_APP[0]) === avant(LISTE_APP[0], true),
     'B « not_read », « born », jamais lue, ETH : l option sort A L OCTET PRES comme avant (choisissable)');
   e.ouverte = () => false;
-  noter(app.opt(panne) === avant(panne, false) && app.opt(vivA) === avant(vivA, false), 'B … et une devise que le contrat n admet pas garde « — soon », comme avant');
+  /* 2026-10-11 (Phil : « encore bcp de tokenized stocks sont en soon, fix pour donner un path ») : une ACTION que le contrat n admet
+   *   pas n est plus « — soon » grisee - elle est choisissable, « through its currency » (majPaire propose la devise de son marche) */
+  const parDevise = (p) => '<option value="' + p.adr + '">' + p.symbole + ' — ' + p.nom + ' — through its currency</option>';
+  noter(app.opt(panne) === parDevise(panne) && app.opt(vivA) === parDevise(vivA), 'B … une ACTION que le contrat n admet pas : choisissable, « through its currency » (plus « soon ») : ' + app.opt(panne));
   noter(/ disabled>/.test(app.opt(vide)) && !/— soon/.test(app.opt(vide)), 'B … une « not_born » non admise dit le fait mesure, pas « soon »');
   e.heure = T0 + M.AGE_MAX_MS + 1;
   noter(grises(app) === '', 'B onglet reste ouvert, verdict de plus de 30 min jamais rafraichi : plus rien n est grise');
@@ -544,7 +547,8 @@ const MUTANTS_APP = [
   ['deux requetes en meme temps', 'le', '  if (etatsPairesEnVol) return etatsPairesEnVol;', ''],
   ['l ecran est repeint a chaque lecture', 'le', 'if (grises(etatsPaires) !== avant) {', 'if (true) {'],
   ['l option « not_born » reste choisissable', 'opt', 'const pasNee = paireGrisee(p), ok = ouverte(p) && !pasNee;', 'const pasNee = paireGrisee(p), ok = ouverte(p);'],
-  ['l option « not_born » ne dit pas pourquoi', 'opt', "(pasNee ? ' — ' + enTexte(LIBELLE_PAS_NEE) : (ok ? '' : ' — soon'))", "(ok ? '' : ' — soon')"],
+  ['l option « not_born » ne dit pas pourquoi', 'opt', "(pasNee ? ' — ' + enTexte(LIBELLE_PAS_NEE) : (ok ? '' : parSaDevise ? ' — through its currency' : ' — soon'))", "(ok ? '' : parSaDevise ? ' — through its currency' : ' — soon')"],
+  ['une action non admise redevient « soon » grisee', 'opt', "const parSaDevise = !ok && !pasNee && p.type === 'ACTION';", 'const parSaDevise = false;'],
   ['toute option est grisee', 'opt', 'const pasNee = paireGrisee(p), ok = ouverte(p) && !pasNee;', 'const pasNee = true, ok = ouverte(p) && !pasNee;'],
 ];
 for (const [nom, cle, de, a] of MUTANTS_APP) {
