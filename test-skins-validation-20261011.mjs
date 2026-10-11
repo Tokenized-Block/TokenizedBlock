@@ -58,7 +58,7 @@ const iE = html.indexOf('async function bcEnrichirValidations(liste, moi) {');
 const f = /\n\}\n/.exec(html.slice(iE));
 const src = html.slice(i, iE + f.index + f[0].length);
 vu(!/eth_getLogs/.test(src), 'plus aucun eth_getLogs dans la lecture des validations (revue adverse : aucun noeud ne le sert depuis la naissance du contrat)');
-const j = [{ acheteur: B }, { acheteur: B }, { acheteur: B2 }];
+const indexB = [{ acheteur: B }, { acheteur: B }, { acheteur: B2 }];
 function noeud({ validations, soldes = {}, autorisations = {}, annonceId = 4 }) {
   return async (m, p) => {
     const d = String(p[0].data);
@@ -68,7 +68,7 @@ function noeud({ validations, soldes = {}, autorisations = {}, annonceId = 4 }) 
     throw new Error('appel inattendu ' + d.slice(0, 10));
   };
 }
-const lancer = async (liste, moi, rpc, { soldes = {}, index = j, indexCasse = false } = {}) => {
+const lancer = async (liste, moi, rpc, { soldes = {}, index = indexB, indexCasse = false } = {}) => {
   const fetchFaux = async (url) => { if (indexCasse) throw new Error('429'); vu(/^\/api\/skins\/validations\?token=7$/.test(url), 'l index est lu par skin (' + url + ')'); return { json: async () => ({ ok: true, validations: index }) }; };
   const fn = new Function('rpc', 'fetch', 'BLOCKSKINS', 'ETH_SKIN', 'decoderAnnonce', 'appelAnnonce', 'decoderValidation', 'appelValidation', 'validationCourante', 'bcSolde',
     src + '\nreturn bcEnrichirValidations;')(rpc, fetchFaux, S.BLOCKSKINS, S.ETH, S.decoderAnnonce, S.appelAnnonce, S.decoderValidation, S.appelValidation, S.validationCourante,
@@ -104,8 +104,8 @@ const lancer = async (liste, moi, rpc, { soldes = {}, index = j, indexCasse = fa
   const srcL = html.slice(k, k + fk.index + fk[0].length);
   const ligne = (s) => {
     const el = (tag, o = {}, enf = []) => ({ tag, ...o, enfants: [...enf], append(...e) { this.enfants.push(...e); }, addEventListener() {} });
-    const li = new Function('bcEl', 'bcResoudre', 'bcMontantSkin', 'bcPastilleSkin', 'actionsSkin', 'offreMinimale', 'court', 'bcDevisesSkin', 'BC_DUREES_ENCHERE', 'montantVersBrut', 'bcActionMarche', 'document',
-      srcL + '\nreturn bcLigneSkin;')(el, () => ({ sym: 'BLK' }), (m) => String(m), () => el('i'), S.actionsSkin, S.offreMinimale, (a) => a.slice(0, 6), () => ({}), [], S.montantVersBrut, () => {}, { createTextNode: (x) => ({ text: x }) })(s, MOI, 100);
+    const li = new Function('bcEl', 'bcResoudre', 'bcMontantSkin', 'bcPastilleSkin', 'actionsSkin', 'offreMinimale', 'court', 'bcDevisesSkin', 'BC_DUREES_ENCHERE', 'montantVersBrut', 'bcActionMarche', 'document', 'bcDureeSkin',
+      srcL + '\nreturn bcLigneSkin;')(el, () => ({ sym: 'BLK' }), (m) => String(m), () => el('i'), S.actionsSkin, S.offreMinimale, (a) => a.slice(0, 6), () => ({}), [], S.montantVersBrut, () => {}, { createTextNode: (x) => ({ text: x }) }, () => '1h')(s, MOI, 100);
     return li.enfants.filter((e) => e.tag === 'button').map((e) => e.text).concat(li.enfants.filter((e) => e.tag === 'small').map((e) => 'NOTE:' + e.text));
   };
   const base = { tokenId: 7n, detenteur: A, block: A, recette: {}, enVente: true, enchere: false, devise: S.ETH, prix: 1000n, fin: 0 };
@@ -136,7 +136,7 @@ vu(/genre === 'VALIDER' \? appelValiderAchat\(s\.tokenId, s\.devise, montant\)/.
   vu(/import \{ verifierValidation \} from '\.\/blockskins\.js';/.test(srv) && /const v = verifierValidation\(\{ recu \}\);/.test(srv) && /rpcActivite\('eth_getTransactionReceipt', \[h\]\)/.test(srv),
     'serveur : POST /api/skins/validation lit le RECU et le verifie (journal du contrat)');
   vu(/if \(chemin === '\/api\/skins\/validation'\) \{/.test(srv) && /if \(chemin === '\/api\/skins\/validations'\) \{/.test(srv)
-    && srv.indexOf("if (chemin === '/api/skins/validations') {") < srv.indexOf("if (req.method !== 'GET') { rendreS(405, { ok: false, pourquoi: 'GET only' }); return; }\n    /* les skins d UN ACHETEUR"),
+    && srv.indexOf("if (chemin === '/api/skins/validations') {") < srv.search(/if \(req\.method !== 'GET'\) \{ rendreS\(405, \{ ok: false, pourquoi: 'GET only' \}\); return; \}\r?\n\s+\/\* les skins d UN ACHETEUR/),
   'serveur : les deux routes passent AVANT le refus « GET only » du bloc skins');
 }
 /* le brain (S.I, regle « Suggest skins ») propose de COMPLETER une vente validee - avant ses propositions d achat */
