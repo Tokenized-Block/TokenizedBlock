@@ -31,4 +31,29 @@ const src = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const i = src.indexOf('async function cleV4DuPoolId(id)');
 const corps = src.slice(i, src.indexOf("rpcServeur('eth_blockNumber'", i));
 vu(i > 0 && /cleV4Connue\(k, /.test(corps) && /clesPool\.values\(\)/.test(corps), 'cleV4DuPoolId ne consulte pas clesPool avant de balayer');
-console.log('ok cle-v4-connue - ' + n + ' assertions ; NE PROUVE PAS le gain en archive (mesure prod apres 00:00 UTC)');
+/* 2026-10-11 (mesure prod) : la cle de RBLXc venait du cache PERSISTE de /api/cle (clesCache, cles-pool.json), pas de clesPool */
+vu(/clesCache\.values\(\)/.test(corps), 'cleV4DuPoolId ne consulte pas clesCache (le cache persiste de /api/cle) : apres un redemarrage, RBLXc rebalayerait');
+/* EXECUTE : cleV4DuPoolId TELLE QUE LIVREE, sur le cas mesure en prod le 2026-10-11 00:10 UTC - RBLXc, cle copiee de la reponse de
+ *   /api/cle (prod), rangee dans clesCache. Attendu : la cle rendue, ZERO lecture de chaine. Temoin : caches vides -> la chaine est lue. */
+const fin = /\r?\n\}\r?\n/.exec(src.slice(i));
+const corps2 = src.slice(i, i + fin.index + fin[0].length);
+const RBLX = { poolId: '0x4fb97de01a3c33f074b6970de40de67bba271e268d69263084cbef0c75ba139a', currency0: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+  currency1: '0xb2000000000000000000005bd7ae89b9e6189bb5', fee: 50000, tickSpacing: 500, hooks: '0x0000000000000000000000000000000000000000' };
+const monter = (clesCache, clesPool) => {
+  const lectures = [];
+  const rpcServeur = async (m) => { lectures.push(m); throw new Error('request limit reached'); };
+  const lecteurLogs = () => ({ rpc: rpcServeur, nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
+  const f = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'clesV4Absentes', 'CLES_V4_ABSENTES_MAX', 'apresAbsencesV4',
+    'lecteurLogs', 'cleV4Connue', 'clesPool', 'clesCache', corps2 + '\n; return cleV4DuPoolId;')(
+    new Map(), rpcServeur, '0x498581ff718922c3f8e6a244956af099b2652b2b', '0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438',
+    decoderInitialize, new Map(), 5000, () => {}, lecteurLogs, cleV4Connue, clesPool, clesCache);
+  return { f, lectures };
+};
+const m1 = monter(new Map([[RBLX.currency1, { ok: true, cles: [RBLX] }]]), new Map());
+const r1 = await m1.f(RBLX.poolId);
+vu(r1 && r1.fee === 50000 && r1.tickSpacing === 500 && r1.currency1 === RBLX.currency1, 'RBLXc : la cle de clesCache n est pas rendue (ou ne se recalcule pas) : ' + JSON.stringify(r1));
+vu(m1.lectures.length === 0, 'RBLXc : la chaine est encore lue malgre la cle connue (' + m1.lectures.length + ' lectures)');
+const m2 = monter(new Map(), new Map());
+const r2 = await m2.f(RBLX.poolId);
+vu(m2.lectures.length > 0 && r2 && r2.etat === 'NON_LUE', 'temoin : caches vides -> la chaine doit etre lue (et la cle NON_LUE sur un noeud qui refuse)');
+console.log('ok cle-v4-connue - ' + n + ' assertions ; NE PROUVE PAS le gain en archive (mesure prod apres deploiement)');

@@ -452,8 +452,11 @@ async function cleV4DuPoolId(id) {
   if (clesV4Lues.has(k)) return clesV4Lues.get(k);
   /* ⛔ 2026-10-11 (diagnostic Grok : /api/prix-usd = 880 appels d archive le 10/10, tous ici) : une cle deja RESOLUE par /api/cle
    *   (clesPool, par jeton) n etait pas consultee - on rebalayait 59 fenetres pour la retrouver. Prise SEULEMENT si son poolId se
-   *   recalcule (cle-v4-connue.js) ; gain NON mesure (budget du jour epuise), a mesurer apres 00:00 UTC. */
-  const connue = cleV4Connue(k, [...clesPool.values()].flatMap((r) => (r && Array.isArray(r.cles) ? r.cles : [])));
+   *   recalcule (cle-v4-connue.js).
+   *   ⛔ MESURE 2026-10-11 00:10 UTC (budget frais) : le seul consommateur etait RBLXc — poolId 0x4fb97de01a3c… absent des logs
+   *   mesures, 33/59 fenetres non lues -> NON_LUE, jamais retenue, rebalayee a chaque prechauffage (4 min) ; /api/cle la connaissait.
+   *   Les DEUX caches de /api/cle : clesCache (volume, cles-pool.json, relu au demarrage) puis clesPool. */
+  const connue = cleV4Connue(k, [...clesCache.values(), ...clesPool.values()].flatMap((r) => (r && Array.isArray(r.cles) ? r.cles : [])));
   if (connue) { clesV4Lues.set(k, connue); if (clesV4Absentes.delete(k)) apresAbsencesV4(); return connue; }
   const nonLue = (ratees, fenetres, pourquoi) => ({ etat: 'NON_LUE', ratees, fenetres, pourquoi });
   let tete;

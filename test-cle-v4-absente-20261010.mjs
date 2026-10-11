@@ -53,11 +53,11 @@ function monter({ tete = T0, disque = null, refuse = () => false, pool = null, l
     rpc: async (m, p) => { const r = await rpc(m, p); if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list'); return r; },
     nonEnvoyee: () => false, suivi: { nonEnvoyees: 0, essais: 0 } });
   const M = new Function('clesV4Lues', 'rpcServeur', 'PM_V4', 'TOPIC_INITIALIZE', 'decoderInitialize', 'process', 'existsSync', 'join',
-    'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console', 'lecteurLogs', 'cleV4Connue', 'clesPool',
+    'readFileSync', 'writeFileSync', 'renameSync', 'setTimeout', 'console', 'lecteurLogs', 'cleV4Connue', 'clesPool', 'clesCache',
     blocCle + '\n' + (disque ? blocP : '') + '\n; return { cleV4DuPoolId, clesV4Absentes, CLES_V4_ABSENTES_MAX };')(
     new Map(), rpc, PM, TOPIC, decoderInitialize, { env: {} }, (p) => p === '/data' || fichiers.has(p), (...x) => x.join('/'),
     (p) => fichiers.get(p), (p, v) => fichiers.set(p, v), (a, b) => { fichiers.set(b, fichiers.get(a)); fichiers.delete(a); },
-    (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} }, lecteurLogs, cleV4Connue, new Map());
+    (f) => { f(); return { unref() {} }; }, { log() {}, warn() {} }, lecteurLogs, cleV4Connue, new Map(), new Map());
   return { ...M, e };
 }
 

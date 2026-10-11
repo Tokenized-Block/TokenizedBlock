@@ -184,7 +184,7 @@ const RETOUR = '\n; return { archiveCompte, consommateurArchive, archiveEpuisee,
   + ' routeurEnCours: () => routeurEnCours, reconstruireHolders };';
 const PARAMS = ['fetch', 'process', 'ESSAI_SRV', 'existsSync', 'join', 'readFileSync', 'writeFileSync', 'renameSync', 'AsyncLocalStorage',
   'lecteurUrl', 'lecteurUrlNu', 'classeEnvoi', 'avecRepliLogs', 'RPC_LIST', 'RPC_FAITS_POOL', 'setTimeout', 'setInterval', 'Date', 'console',
-  'LOGS_INITIALIZE_MESURES', 'decoderInitialize', 'PM_V4', 'TOPIC_INITIALIZE', 'clesPool', 'cleV4Connue',
+  'LOGS_INITIALIZE_MESURES', 'decoderInitialize', 'PM_V4', 'TOPIC_INITIALIZE', 'clesPool', 'cleV4Connue', 'clesCache',
   'scannerNesDuRouteur', 'GRAINE_ROUTEUR', 'GRAINE_JUSQUA', 'PLANCHER_ROUTEUR', 'RETARD_MAX_INDEX', 'neDuRouteur', 'ROUTEURS_ANCIENS',
   'FEE_WALLET', 'CREATE_ROUTER', 'graineNosBlocksAdmise', 'verifierGraineNos', 'NOS_BLOCKS_GENESE', 'GRAINE_NOS_BLOCKS', 'prochaineFenetre', 'frappesVers',
   'holdersCache', 'HOLDERS_MAX', 'lireNaissance', 'naissanceDuJeton', 'passeIncrementale', 'ecrireHolders', 'pauseNosBlocks', 'routeurEnchaine'];
@@ -211,7 +211,7 @@ function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-
     (p) => { if (!disque.has(p)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return disque.get(p); },
     (p, v) => { if (p === FICHIER_COMPTE_TMP) ecritures.compte += 1; disque.set(p, String(v)); }, (a, b) => { disque.set(b, disque.get(a)); disque.delete(a); }, AsyncLocalStorage,
     avecFetch, avecFetch, RL.classeEnvoi, RL.avecRepliLogs, [BASE_ORG] /* RPC_LIST de prod depuis le 2026-10-10 */, faitsPool, st, (fn) => { intervalles.push(fn); return { unref() {} }; },
-    FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(), cleV4Connue,
+    FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(), cleV4Connue, new Map(),
     IR.scannerNesDuRouteur, IR.GRAINE_ROUTEUR, IR.GRAINE_JUSQUA, IR.PLANCHER_ROUTEUR, IR.RETARD_MAX_INDEX, IR.neDuRouteur, IR.ROUTEURS_ANCIENS,
     FEE_WALLET, CREATE_ROUTER, O.graineNosBlocksAdmise, O.verifierGraineNos, O.NOS_BLOCKS_GENESE, O.GRAINE_NOS_BLOCKS, prochaineFenetre, frappesVers,
     new Map(), 200, SJ.lireNaissance, SJ.naissanceDuJeton, SJ.passeIncrementale, () => {}, RF.pauseNosBlocks, RF.routeurEnchaine);
