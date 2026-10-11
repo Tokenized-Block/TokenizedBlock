@@ -58,6 +58,21 @@ const DEVISES = new Map(DEVISES_BASE.map((d) => [bas(d.adr), d.symbole]));
  *   saut par saut) — `DEVISES_FRAIS_ROUTE6` l ajoute a `fraisDevisesOk` pour cette route seulement. cbBTC et TOSHI restent dehors. */
 const ECHANGEABLES = new Set(DEVISES_BASE.filter((d) => proposableEnEchange(d) && d.chaines.includes(8453) && (d.symbole === 'ETH' || d.symbole === 'USDC' || d.symbole === 'OUSD')).map((d) => bas(d.adr)));
 const DEVISES_FRAIS_ROUTE6 = [OUSD].filter((a) => ADR.test(a));
+/** Les echanges de devises que la route 6 construit, pour un AGENT (tblock_pairs). 2026-10-11 (QA Grok, M7 : « tblock_pairs liste OUSD
+ *  comme devise de creation mais ne donne aucune paire d echange ») : DERIVES d ECHANGEABLES et de la regle OUSD (contre USDC seulement),
+ *  jamais une liste recopiee - si la route change, l annonce change avec elle. Paires non ordonnees : chacune s echange dans les deux sens. */
+export function echangesDevisesAnnonces() {
+  const sym = (a) => (a === ETH ? 'ETH' : DEVISES.get(a) || a);
+  const l = [...ECHANGEABLES].sort();
+  const out = [];
+  for (const [i, a] of l.entries()) {
+    for (const b of l.slice(i + 1)) {
+      if ((a === OUSD || b === OUSD) && a !== USDC && b !== USDC) continue;
+      out.push({ entre: [{ adresse: a === ETH ? 'ETH' : a, symbole: sym(a) }, { adresse: b === ETH ? 'ETH' : b, symbole: sym(b) }], sens: 'both ways' });
+    }
+  }
+  return out;
+}
 const BORNE = 'unsigned calls built from the chain read now: your wallet signs them, in order; the minimums hold only at the '
   + 'price read now, and the chain can still refuse them later';
 

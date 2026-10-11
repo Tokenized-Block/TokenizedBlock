@@ -31,7 +31,7 @@ const JETON = { type: 'string', pattern: '^(?:[eE][tT][hH]|0x[0-9a-fA-F]{40})$' 
 export const OUTILS = Object.freeze([
   { name: 'tblock_pairs', title: 'Currencies a block can be born against',
     description: 'Lists the currencies a new block can be paired with at birth on TokenizedBlock (ETH, USDC, cbBTC, OUSD and Coinbase tokenized stocks), '
-      + 'with the creator minimum floor of each. Read-only, no input.',
+      + 'with the creator minimum floor of each, and in `echanges` the currency swaps tblock_plan_swap builds (both ways). Read-only, no input.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: true } },
   { name: 'tblock_plan_birth', title: 'Plan the birth of a block',

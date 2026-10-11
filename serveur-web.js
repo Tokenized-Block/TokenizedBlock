@@ -142,7 +142,7 @@ import { resumerTrending } from './trending.js';
 import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-logs.js';
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
-import { planRail } from './rails-api.js';
+import { planRail, echangesDevisesAnnonces } from './rails-api.js';
 import { lireMarchesMorpho, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -2624,7 +2624,10 @@ async function faireCaution({ block, pair, account }) {
 function pairesPourAgent() {
   return { ok: true, etat: 'PRET', frais: { naissanceEthWei: '1000000000000000', note: '0.001 ETH: 0.0007 at creation + 0.0003 at registration' },
     paires: pairesDeNaissance(8453).map((p) => { const pl = plancher7030(p.adr); return { adresse: p.adr, symbole: p.symbole, type: p.type, plancherMinimumCreateur: pl === null ? null : pl.toString() }; }),
-    note: 'plancherMinimumCreateur = the contract floor of the creator minimum, in raw units of that currency; the amount asked at birth is the larger of that floor and about $1 at today’s price' };
+    note: 'plancherMinimumCreateur = the contract floor of the creator minimum, in raw units of that currency; the amount asked at birth is the larger of that floor and about $1 at today’s price',
+    /* 2026-10-11 (QA Grok M7) : `paires` = les devises de NAISSANCE ; un agent ne voyait aucun ECHANGE de devises. Derives de la route 6. */
+    echanges: echangesDevisesAnnonces(),
+    noteEchanges: 'echanges = currency swaps tblock_plan_swap builds, both ways (OUSD against USDC only). Tokenized stocks: ETH or USDC to any Coinbase tokenized stock and back, also through tblock_plan_swap.' };
 }
 /* ── LA SONDE DE SANTE DE LA NAISSANCE (2026-10-04) ──────────────────────────────────────────────────────────────────────
  * ⛔⛔ POURQUOI : le 2026-10-03 un drapeau a route toutes les naissances vers un hook dont l inscription exigeait un sel que l app

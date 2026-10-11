@@ -63,8 +63,8 @@ function monde({ compte = '0x00000000000000000000000000000000c0ffee77', solde = 
     'le clic remplit le formulaire (menu OUSD, 12.5, mode repeint) et ne propose RIEN (' + w.menu.value + ' / ' + w.champ.value + ' / ' + w.repeint.join(',') + ')');
 }
 /* ── le menu (Phil, capture : « toujours pas de menu deroulant ») ── */
-vu(/<select id="bcBanqueDevise" aria-label="Currency you lend with" hidden><option value="USDC">USDC<\/option><option value="OUSD">OUSD → USDC<\/option><\/select>/.test(html),
-  'le menu #bcBanqueDevise (USDC, OUSD -> USDC) est dans le champ du montant');
+vu(/<select id="bcBanqueDevise" aria-label="Currency you lend with" hidden><option value="USDC">USDC<\/option><option value="OUSD">OUSD<\/option><\/select>/.test(html),
+  'le menu #bcBanqueDevise (USDC, OUSD - libelle court : « OUSD -> USDC » etait coupe a 349 px en prod) est dans le champ du montant');
 vu(/const choixDevise = sens === 'preter' && mk\.pret\.symbole === 'USDC';\n\s+\$\('#bcBanqueDevise'\)\.hidden = !choixDevise; \$\('#bcBanqueMontantU'\)\.hidden = choixDevise;/.test(html),
   'bcBanqueChoisir : le menu remplace l unite en Lend sur un marche USDC, seulement la');
 {
