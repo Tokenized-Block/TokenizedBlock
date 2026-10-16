@@ -3687,6 +3687,7 @@ const ethLisible = (w) => arrondiAffichage(w, 6);
  *    pour ca que cette map dessinait ses propres cubes. Il est maintenant dans `logo.js`, deplace
  *    et PROUVE identique au caractere pres sur 300 combinaisons de reglages (`test-logo.mjs`). */
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
+import { tirerSousPlafond, PLAFOND_URI_OCTETS } from './face-hasard.js';
 import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 /* la feuille du cube 3D, posee une fois */
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
@@ -17219,8 +17220,18 @@ function majFundWalletPourPaire() {
 
 function hasardApparence() {
   const d = (n) => Math.floor(Math.random() * n);
-  for (const c of CURSEURS) apparenceChoisie[c.cle] = c.min + d(c.max - c.min + 1);
-  for (const l of LISTES) apparenceChoisie[l.cle] = l.valeurs[d(l.valeurs.length)];
+  /* 2026-10-16 : une face tiree ne doit jamais faire refuser la creation (plafond de uriCreation). Mesure = uriCreation elle-meme. */
+  const tirer = () => {
+    const a = { ...apparenceChoisie };
+    for (const c of CURSEURS) a[c.cle] = c.min + d(c.max - c.min + 1);
+    for (const l of LISTES) a[l.cle] = l.valeurs[d(l.valeurs.length)];
+    return a;
+  };
+  const avant = apparenceChoisie;
+  const mesure = (a) => { apparenceChoisie = a; try { return new TextEncoder().encode(uriCreation()).length; } catch (_) { return null; } finally { apparenceChoisie = avant; } };
+  const r = tirerSousPlafond({ tirer, mesure, plafond: PLAFOND_URI_OCTETS });
+  if (!r) { const z = $('#cEtat'); if (z) { z.className = 'note wKo'; z.textContent = 'No surprise face fits with this name and symbol - shorten them, or set the dials yourself.'; } return; }
+  Object.assign(apparenceChoisie, r.apparence);
   construireReglages();
   peindreApercuCreation();
 }
@@ -17280,7 +17291,7 @@ function uriCreation() {
    * octets ; 34 % de l espace des curseurs, pire cas 18 492).
    * 24 000 = au-dessus des deux pires cas mesures, et assez bas pour que le gas grave reste borne.
    * ⚠️ CE JET DOIT RESTER ATTRAPE PAR SES APPELANTS : c est de l avoir laisse filer qui tuait le bouton. */
-  if (new TextEncoder().encode(uri).length > 24000) {
+  if (new TextEncoder().encode(uri).length > PLAFOND_URI_OCTETS) {
     throw new Error('Engraved metadata is too big — simplify the face or shorten the name/symbol.');
   }
   return uri;
