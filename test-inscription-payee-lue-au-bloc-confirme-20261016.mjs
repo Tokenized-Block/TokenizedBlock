@@ -1,4 +1,4 @@
-﻿// test-inscription-payee-lue-au-bloc-confirme-20261016.mjs - 2026-10-16, UNIT (0xb200..4f27), wallet 0x31e0.
+// test-inscription-payee-lue-au-bloc-confirme-20261016.mjs - 2026-10-16, UNIT (0xb200..4f27), wallet 0x31e0.
 // MESURE (mainnet.base.org) : inscrireAvecCaution 0x8beeda0f payee 0.000715168377582366 ETH (tx 0x5afe0b77.., bloc 0x3240d72,
 // status 1) ; au bloc courant, sur la pool 0x79a40c32.. : payee = 1, inscrit = createurs = 0x31e0, prixInscrit = 10000 << 96.
 // Puis l app a REPROPOSE la meme inscription payante. `signerEtapeLancement` relit (calculerLancement) des la confirmation,
@@ -49,7 +49,7 @@ ok(q.etat === 'NON_MESURE' && (q.etapes || []).length === 0, 'noeud sans le bloc
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const i0 = html.indexOf('async function signerEtapeLancement(');
 const corps = i0 >= 0 ? html.slice(i0, html.indexOf('async function verifierLancement(', i0)) : '';
-ok(/eth_getTransactionReceipt/.test(corps) && /blocInscriptionConfirmee/.test(corps), 'signerEtapeLancement note le bloc de l inscription confirmee');
+ok(/eth_getTransactionReceipt/.test(corps) && /blocInscriptionConfirmee|noterBlocInscrit/.test(corps), 'signerEtapeLancement note le bloc de l inscription confirmee');
 const j0 = html.indexOf('async function calculerLancement(');
 const calc = j0 >= 0 ? html.slice(j0, j0 + 40000) : '';
 ok(/completerInscriptionPayee\(\{[^}]*blocMin:/.test(calc), 'calculerLancement passe blocMin au plan');
