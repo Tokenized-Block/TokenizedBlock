@@ -901,6 +901,7 @@ try {
     if (x && x.jour === new Date().toISOString().slice(0, 10)) {
       for (const k of ['appels', 'refusBudget', 'erreurs', 'servis', 'relances', 'nonEnvoyees']) if (Number.isSafeInteger(x[k]) && x[k] >= 0) archiveCompte[k] = x[k];
       if (typeof x.derniereErreur === 'string') archiveCompte.derniereErreur = x.derniereErreur.slice(0, 80);
+      if (x.derniereErreurForme && typeof x.derniereErreurForme === 'object') archiveCompte.derniereErreurForme = JSON.parse(JSON.stringify(x.derniereErreurForme).slice(0, 2000));
       archiveCompte.par = compteurEntier(x.par); archiveCompte.erreursPar = compteurEntier(x.erreursPar);
       archiveCompte.refusPar = compteurEntier(x.refusPar);
       archiveCompte.parQui = compteurEntier(x.parQui); archiveCompte.refusParQui = compteurEntier(x.refusParQui);
@@ -943,6 +944,11 @@ function lecteurArchive(origine = 'repli') {
           || archiveCompte.appels >= ARCHIVE_MAX_JOUR) {
           archiveCompte.erreurs++; archiveCompte.derniereErreur = masquerCle(m).slice(0, 80);
           const c = classeErreurArchive(m); archiveCompte.erreursPar[c] = (archiveCompte.erreursPar[c] || 0) + 1;
+          /* ⛔ 2026-10-11..16 (prod : 441 puis 175 erreurs/jour « invalid argument 0: hex string without 0x prefix », classe « autre »,
+           *   appelant INCONNU - le code relu porte partout des 0x) : la FORME de l appel fautif est gardee, EXPURGEE (jamais un
+           *   parametre entier : la forme des champs seulement), avec son appelant, pour nommer la cause au lieu de la deviner. */
+          archiveCompte.derniereErreurForme = { qui, methode, forme: formeParams(params) };
+          if (archiveCompte.erreurs % 5 === 1) sauverArchiveCompte(); /* la forme survit a un redeploiement, sans ecrire a chaque erreur */
           throw e;
         }
         archiveCompte.relances = (archiveCompte.relances || 0) + 1;
@@ -1054,6 +1060,17 @@ function noterNonEnvoyee() {
   if (archiveCompte.nonEnvoyees % 100 === 0) sauverArchiveCompte();
 }
 /** Un message de noeud peut recopier l URL qu il a recue : chaque segment du chemin du noeud d archive est masque avant publication. */
+/** La FORME des parametres d un appel (jamais leurs valeurs) : pour nommer un appel mal forme sans publier une adresse ni une cle.
+ *  Une chaine devient « 0x<n> » (hexadecimal prefixe, n = longueur) ou « s<n> » (autre chaine), un nombre « num », un tableau et
+ *  un objet gardent leur structure (clefs d un objet, 8 au plus). Pur. */
+function formeParams(p, prof = 0) {
+  if (prof > 3) return '…';
+  if (typeof p === 'string') return (/^0x[0-9a-fA-F]*$/.test(p) ? '0x' : /^[0-9]+$/.test(p) ? 'dec' : /^[0-9a-fA-F]+$/.test(p) ? 'hexSANS0x' : 's') + p.length;
+  if (typeof p === 'number') return 'num'; if (typeof p === 'bigint') return 'bigint'; if (p === null) return 'null'; if (p === undefined) return 'undef';
+  if (Array.isArray(p)) return p.slice(0, 8).map((x) => formeParams(x, prof + 1));
+  if (typeof p === 'object') { const o = {}; for (const k of Object.keys(p).slice(0, 8)) o[k] = formeParams(p[k], prof + 1); return o; }
+  return typeof p;
+}
 function masquerCle(s) {
   let out = String(s);
   if (RPC_ARCHIVE) { try { for (const seg of new URL(RPC_ARCHIVE).pathname.split('/')) if (seg.length >= 12) out = out.split(seg).join('«hidden»'); } catch { /* rien */ } }
