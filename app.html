@@ -3396,6 +3396,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="wConsent" id="plConfirmRang" hidden><input type="checkbox" id="plConfirm"> <span id="plConfirmTexte">Below 1 ETH for
           the whole supply: a very cheap start that anyone can buy up in seconds. I understand.</span></label>
         <button class="bouton creaGo" id="plCalculer" type="button" style="margin-top:10px">✨ Give birth</button>
+        <!-- 2026-10-17 guided launch: 1 birth, 2 register, 3 launch market - each with its amount and why, read on chain (lancement-guide.js) -->
+        <ol class="pmLignes" id="plGuide" hidden></ol>
         <ul class="pmLignes" id="plLignes"></ul>
         <div class="pActions" id="plActions" style="grid-template-columns:1fr"></div>
         <p class="note wOk" id="plProgression" hidden style="font-weight:700"></p>
@@ -3972,6 +3974,7 @@ import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phra
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
+import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
 import { etatCautionCreateur, sortieCautionPour } from './caution-createur.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -14090,6 +14093,16 @@ async function calculerLancement() {
    *    Une pool lue SANS liquidite n est pas un marche : on ne dit plus « deja vivant », on le dit et on laisse continuer. */
   const poolVide = !!(marcheAvant && marcheAvant.etat === 'LUE' && marcheAvant.liquidite !== undefined
     && marcheAvant.liquidite !== null && BigInt(marcheAvant.liquidite || 0) === 0n);
+  /* 2026-10-17 (UNIT, tx 0x980ae60d..) : une naissance sans apport place une plage 100 % block SOUS le prix - getLiquidity (actif) = 0 sur un
+   * marche OUVERT. poolVide le prenait pour une pool laissee vide ('someone opened this market before you'). Le guide lit le bord de plage. */
+  if (poolVide && marcheAvant.cle) {
+    const guide = await peindreGuideLancement(adr, marcheAvant.cle, null);
+    if (guide && guide.marche === 'OUVERT') {
+      e.className = 'note wOk'; vieAutoArreter(); e.textContent = texteMarcheOuvert(guide);
+      profilEnLecture = false; $('#plCalculer').disabled = false;
+      return;
+    }
+  }
   if (!marcheAvant || (marcheAvant.etat !== 'NON_TROUVEE' && !legacyUpgrade && !autrePaire && !marcheV1 && !poolVide)) {
     e.className = 'note wKo'; vieAutoArreter();
     if (marcheAvant && marcheAvant.etat === 'LUE' && infoHookMarche(marcheAvant).isTbFeeHook) {
@@ -14209,7 +14222,7 @@ async function calculerLancement() {
             plan = { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'how this block was created could not be read yet, so nothing was asked — try again in a moment' };
           } else {
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks,
-            blocMin: blocInscriptionConfirmee.get(String(adr).toLowerCase()) || null, caution: await cautionCreateurPour(hooks, deviseLancement || null), sel: selNe });
+            blocMin: blocInscritPour(adr), caution: await cautionCreateurPour(hooks, deviseLancement || null), sel: selNe });
           }
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
@@ -14246,6 +14259,7 @@ async function calculerLancement() {
     plan.pourquoi = 'someone opened this market before you and left it empty at the lowest price. Its starting price cannot be set from here any more — pick another pair to open a fresh market.';
   }
   /* ⛔ un plan calcule pour un autre block que celui affiche ne s affiche pas */
+  if (plan && plan.cle) { try { await peindreGuideLancement(adr, plan.cle, plan.caution && String((plan.cle || {}).currency0).toLowerCase() === '0x0000000000000000000000000000000000000000' ? BigInt(plan.caution) : null); } catch (_) {} }
   if ($('#profil').dataset.block !== adr) return;
   if (fraisLancementUsd(CHAINE) > 0) {
     plan.fraisLancementWei = await assurerFraisLancementWei(true);
@@ -14688,6 +14702,38 @@ async function refuserAvantPaiementLancement(etapePlan, e) {
 /* 2026-10-16 (UNIT, tx 0x5afe0b77..) : bloc ou l inscription de CE block a ete confirmee. Le plan suivant lit l etat du hook A ce bloc
  * (completerInscriptionPayee `blocMin`) : un noeud en retard ne peut plus faire repayer une inscription deja payee. */
 const blocInscriptionConfirmee = new Map();
+/* 2026-10-17 : le bloc survit a un rechargement (localStorage tb.blocInscrit.<block>) - sans lui, un noeud en retard apres F5 relisait 'latest'. */
+function blocInscritPour(adr) {
+  const k = String(adr || '').toLowerCase();
+  if (blocInscriptionConfirmee.has(k)) return blocInscriptionConfirmee.get(k);
+  try { const v = localStorage.getItem('tb.blocInscrit.' + k); if (v && /^0x[0-9a-f]+$/i.test(v)) return v; } catch (_) {}
+  return null;
+}
+function noterBlocInscrit(adr, bloc) {
+  const k = String(adr || '').toLowerCase();
+  blocInscriptionConfirmee.set(k, bloc);
+  try { localStorage.setItem('tb.blocInscrit.' + k, String(bloc)); } catch (_) { /* navigation privee : vaut pour cette visite */ }
+}
+/** Peint la liste numerotee du guide (1 naissance, 2 inscription, 3 marche). Lecture ratee -> 'not read', rien n est demande. */
+async function peindreGuideLancement(adr, cle, cautionWei) {
+  const ol = $('#plGuide');
+  if (!ol || !cle) return null;
+  let guide = null, fc = null, fv = null;
+  try {
+    guide = await lireEtatLancement({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, cle, hook: cle.hooks, compte, blocMin: blocInscritPour(adr) });
+    if (cle.hooks && estHook7030(cle.hooks)) {
+      fv = BigInt(await rpc('eth_call', [{ to: cle.hooks, data: '0x' + selecteur('fraisVie()') }, 'latest']));
+      fc = BigInt(await rpc('eth_call', [{ to: cle.hooks, data: '0x' + selecteur('fraisCreation()') }, 'latest']));
+    }
+  } catch (_) { /* montants non lus : la ligne le dit */ }
+  if ($('#profil').dataset.block !== adr) return guide;
+  const g = etapesGuidees(guide, { fraisCreateWei: fc, fraisVieWei: fv, cautionWei: typeof cautionWei === 'bigint' ? cautionWei : null, seedWei: 0n });
+  const marque = { FAIT: 'done', A_FAIRE: 'now', ATTENTE: 'next', NON_LU: 'not read' };
+  ol.innerHTML = g.etapes.map((x) => '<li' + (x.statut === 'A_FAIRE' ? ' style="font-weight:700"' : '') + '>' + enTexte(x.n + '. ' + x.nom + ' - ' + x.montant + ' (' + marque[x.statut] + '). ' + x.pourquoi) + '</li>').join('')
+    + (g.marcheOuvert ? '<li class="wOk" style="font-weight:700">' + enTexte(texteMarcheOuvert(guide)) + '</li>' : '');
+  ol.hidden = false;
+  return guide;
+}
 /** Le profil ouvert est-il ce block ? (la mise en vie depuis Create planifie sur `#profil.dataset.block`) */
 function profilEstLeBlockCree(adr) {
   const p = $('#profil');
@@ -14729,7 +14775,7 @@ async function signerEtapeLancement(etapePlan) {
   if (estEtapeInscription(String(etapePlan.data || '')) && r.hash) {
     try {
       const rc = await rpc('eth_getTransactionReceipt', [r.hash]);
-      if (rc && rc.status === '0x1' && rc.blockNumber) blocInscriptionConfirmee.set(String($('#profil').dataset.block || '').toLowerCase(), rc.blockNumber);
+      if (rc && rc.status === '0x1' && rc.blockNumber) noterBlocInscrit($('#profil').dataset.block, rc.blockNumber);
     } catch (_) { /* recu illisible : le plan relit 'latest', comme avant */ }
   }
   /* ⛔ ON REMESURE, ON NE SUPPOSE PAS : l autorisation est relue sur la chaine avant l etape suivante. */
