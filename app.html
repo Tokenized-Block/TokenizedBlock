@@ -14688,6 +14688,11 @@ async function refuserAvantPaiementLancement(etapePlan, e) {
 /* 2026-10-16 (UNIT, tx 0x5afe0b77..) : bloc ou l inscription de CE block a ete confirmee. Le plan suivant lit l etat du hook A ce bloc
  * (completerInscriptionPayee `blocMin`) : un noeud en retard ne peut plus faire repayer une inscription deja payee. */
 const blocInscriptionConfirmee = new Map();
+/** Le profil ouvert est-il ce block ? (la mise en vie depuis Create planifie sur `#profil.dataset.block`) */
+function profilEstLeBlockCree(adr) {
+  const p = $('#profil');
+  return !!(p && adr && String(p.dataset.block || '').toLowerCase() === String(adr).toLowerCase());
+}
 async function signerEtapeLancement(etapePlan) {
   if (lancementEnCours) return;
   lancementEnCours = true;
@@ -19102,7 +19107,14 @@ async function creerBlock() {
               p.style.marginTop = '8px';
               zoneEtat.appendChild(p);
             }
-            void ouvrirProfil(adresseCreee, v.sym, { sansNaviguer: true }).then(() => {
+            void ouvrirProfil(adresseCreee, v.sym, { sansNaviguer: true })
+              /* 2026-10-16 (UNIT -> profil TBGAS) : un autre ouvrirProfil lance entre-temps prend le profil ; le plan lirait CE block. */
+              .then(() => (profilEstLeBlockCree(adresseCreee) ? null : ouvrirProfil(adresseCreee, v.sym, { sansNaviguer: true })))
+              .then(() => {
+              if (!profilEstLeBlockCree(adresseCreee)) {
+                majProgressionVie('Another block was opened meanwhile - nothing was asked. Open ' + v.sym + ' from your blocks to bring it to life.');
+                return;
+              }
               try {
                 const d = $('#plDevise');
                 if (d) {
