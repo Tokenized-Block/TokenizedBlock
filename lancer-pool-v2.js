@@ -81,7 +81,11 @@ export async function completerInscriptionHook({ rpc, plan, compte }) {
  * ⛔ Pour TOUT compte, EOA comme smart wallet : sans elle, la chaine refuse d ouvrir le marche.
  * ⛔ L etat vient de la chaine (`payee`, `inscrit`) : deja payee -> pas de second paiement.
  */
-export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2, caution = null, sel = null }) {
+export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2, caution = null, sel = null, blocMin = null }) {
+  /* 2026-10-16 (UNIT 0xb200..4f27, tx 0x5afe0b77..) : inscription payee, puis REPROPOSEE au meme prix - la relecture suivait la
+   *   confirmation sur un noeud en retard (createurs = 0). `blocMin` = bloc de l inscription confirmee : l etat est lu A ce bloc ;
+   *   un noeud qui ne l a pas encore leve -> NON_MESURE, rien n est demande. L inscription est definitive : lire a ce bloc suffit. */
+  const tag = typeof blocMin === 'string' && /^0x[0-9a-fA-F]+$/.test(blocMin) ? blocMin : 'latest';
   if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) return plan;
   const out = { ...plan, hook, frais: FRAIS_V2, v2: true };
   if (plan.poolExiste) return out;
@@ -93,9 +97,9 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
   try {
     /* ⛔ le hook DONNE (V2 pour ETH, V3 pour une devise de sa liste) — mesure fork 2026-09-19 : ces lectures et l etape
      *    visaient encore HOOK_V2 en dur, et l inscription d une paire AAPLc est partie au V2, qui l a refusee. */
-    payee = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('payee(bytes32)') + id }, 'latest'])) !== 0n;
-    inscrit = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('inscrit(bytes32)') + id }, 'latest'])).slice(-40);
-    prix = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('prixInscrit(bytes32)') + id }, 'latest']));
+    payee = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('payee(bytes32)') + id }, tag])) !== 0n;
+    inscrit = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('inscrit(bytes32)') + id }, tag])).slice(-40);
+    prix = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('prixInscrit(bytes32)') + id }, tag]));
   } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the registration could not be read' }; }
   const etapes = [...plan.etapes];
   /* ⛔⛔ 2026-10-02 — HOOK 7030 : la naissance PASSE PAR inscrireAvecCaution, jamais par inscrire (sinon le createur ne
@@ -110,7 +114,7 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
     }
     let qui, allowance = null;
     try {
-      qui = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('createurs(bytes32)') + id }, 'latest'])).slice(26, 66);
+      qui = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('createurs(bytes32)') + id }, tag])).slice(26, 66);
       if (dev !== ETH_CAUTION) {
         allowance = BigInt(await rpc('eth_call', [{ to: dev, data: '0x' + selecteur('allowance(address,address)')
           + String(compte).slice(2).toLowerCase().padStart(64, '0') + String(hook).slice(2).toLowerCase().padStart(64, '0') }, 'latest']));

@@ -14208,7 +14208,7 @@ async function calculerLancement() {
             plan = { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'how this block was created could not be read yet, so nothing was asked — try again in a moment' };
           } else {
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks,
-            caution: await cautionCreateurPour(hooks, deviseLancement || null), sel: selNe });
+            blocMin: blocInscriptionConfirmee.get(String(adr).toLowerCase()) || null, caution: await cautionCreateurPour(hooks, deviseLancement || null), sel: selNe });
           }
           if (plan && deviseLancement) plan.symDevise = symDevise;
         } else if (hooks) plan = await completerInscriptionHook({ rpc, plan, compte });
@@ -14684,6 +14684,9 @@ async function refuserAvantPaiementLancement(etapePlan, e) {
   vieAutoArreter();
   return true;
 }
+/* 2026-10-16 (UNIT, tx 0x5afe0b77..) : bloc ou l inscription de CE block a ete confirmee. Le plan suivant lit l etat du hook A ce bloc
+ * (completerInscriptionPayee `blocMin`) : un noeud en retard ne peut plus faire repayer une inscription deja payee. */
+const blocInscriptionConfirmee = new Map();
 async function signerEtapeLancement(etapePlan) {
   if (lancementEnCours) return;
   lancementEnCours = true;
@@ -14716,6 +14719,12 @@ async function signerEtapeLancement(etapePlan) {
       + ligneDiagnostic('bring-to-life', r);
     vieAutoArreter();
     return;
+  }
+  if (estEtapeInscription(String(etapePlan.data || '')) && r.hash) {
+    try {
+      const rc = await rpc('eth_getTransactionReceipt', [r.hash]);
+      if (rc && rc.status === '0x1' && rc.blockNumber) blocInscriptionConfirmee.set(String($('#profil').dataset.block || '').toLowerCase(), rc.blockNumber);
+    } catch (_) { /* recu illisible : le plan relit 'latest', comme avant */ }
   }
   /* ⛔ ON REMESURE, ON NE SUPPOSE PAS : l autorisation est relue sur la chaine avant l etape suivante. */
   await calculerLancement();
