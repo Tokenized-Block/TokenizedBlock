@@ -19,7 +19,7 @@ vu(/z\.append\(bcEl\('div', \{ cls: 'bcMarche', id: 'bcMarche' \}\)\);\s*void bc
 vu(/if \(r\.etat !== 'LU'\) \{[\s\S]{0,120}could not be read right now — nothing is listed rather than a wrong list/.test(marche), 'une lecture ratee du marche doit etre DITE');
 vu(/const acts = actionsSkin\(s, moi, t\);/.test(ligne) && !/ACHETER'|ENCHERIR'/.test(ligne.replace(/acts\.includes\('(ACHETER|ENCHERIR|REGLER|RETIRER|METTRE_EN_VENTE)'\)/g, '').replace(/bouton\([^;]*\);/g, '')),
   'les boutons d une ligne doivent venir de actionsSkin (ce que le contrat accepterait), pas d une regle a cote');
-const iSolde = action.indexOf('bcSolde(s.devise, compte)'), iAutorise = action.indexOf("'0xdd62ed3e'"), iApprob = action.indexOf('appels.push(appelApprouver(s.devise, montant,'), iSigner = action.indexOf('await bcSigner(m, appels)');
+const iSolde = action.indexOf('bcSolde(s.devise, compte)'), iAutorise = action.indexOf("'0xdd62ed3e'"), iApprob = action.indexOf('appels.push(appelApprouver(s.devise, montant,'), iSigner = action.indexOf("await bcSigner(m, appels, 'skin_vente')");
 vu(iSolde > 0 && iAutorise > 0 && iApprob > iSolde && iApprob > iAutorise && iSigner > iApprob, 'en jeton : solde ET autorisation relus AVANT l approbation, elle-meme avant la signature');
 vu(/if \(autorise < montant\) appels\.push\(appelApprouver\(s\.devise, montant,/.test(action) && !/MAX_UINT|ffffffffffffffff|2n \*\* 256n/.test(action), 'approbation EXACTE du montant, seulement si besoin, jamais illimitee');
 vu(/if \(r\.diffusee\) \{ bcEtape\(m, 'Sent, not confirmed yet/.test(action), 'un envoi diffuse sans confirmation ne doit pas etre relance');

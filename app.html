@@ -5926,6 +5926,7 @@ async function acheterAvecUsdc(apresApprobation = false) {
          *   jumeaux et rendrait les deux ecrans incomparables. */
         try { etape('achat'); } catch (_) {}
         try { etape('achat_ok'); } catch (_) {}
+        signalerPaye(lot.hash, 'hook_block');
         note.textContent = 'Bought in one signature. At least '
           + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6) + ' of this block is in your wallet.';
         return;
@@ -5971,7 +5972,7 @@ async function acheterAvecUsdc(apresApprobation = false) {
   try { etape('achat_sign_propos'); } catch (_) {}
   const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
     to: r.tx.to, data: r.tx.data, value: r.tx.value });
-  if (env.etat === 'CONFIRME') { try { etape('achat'); } catch (_) {} try { etape('achat_ok'); } catch (_) {} }
+  if (env.etat === 'CONFIRME') { try { etape('achat'); } catch (_) {} try { etape('achat_ok'); } catch (_) {} signalerPaye(env.hash, 'hook_block'); }
   else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
   /* ⛔⛔ CE SITE AVAIT LE MEME DEFAUT QUE CELUI DU CHEMIN ETH, ET IL EST ANTERIEUR : tout ce qui
    *     n est pas `CONFIRME` etait annonce « Not sent ». Or `envoyerDepuisWallet` rend aussi
@@ -6117,6 +6118,7 @@ $('#fAcheterEth').addEventListener('click', async () => {
     if (env.etat === 'CONFIRME' && i === r.appels.length - 1) {
       try { etape('achat'); } catch (_) {}
       try { etape('achat_ok'); } catch (_) {}
+      signalerPaye(env.hash, 'hook_block');
     } else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
     /* ⛔⛔⛔ UN ACHAT SIGNE QUI ECHOUE SUR LA CHAINE N ETAIT COMPTE NULLE PART. `achat_sign_propos`
      *      partait, puis plus rien — indiscernable d un onglet ferme. Un client perdu ET un frais
@@ -9611,6 +9613,17 @@ function etape(nom, uneFois = false) {
     if (uneFois) { const k = 'tb.etape.' + nom; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); }
   } catch (_) { /* navigation privee : on compte quand meme */ }
   try { navigator.sendBeacon('/api/etape?e=' + encodeURIComponent(nom) + (INTERNE ? '&i=1' : '')); } catch (_) {}
+}
+/** 2026-10-16 — le hash d une transaction CONFIRMEE qui peut porter un frais, pour le compteur de revenu (/api/paye).
+ *  ⛔ On n envoie QUE le hash et la ligne : le serveur relit tx + recu et ne compte que ce qui est arrive au wallet de frais.
+ *  202 = recu pas encore lisible sur son noeud : renvoye 3 fois au plus, 8 s d ecart. Rien n est jamais montre a l ecran. */
+function signalerPaye(hash, ligne, essai = 0) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) return;
+  try {
+    fetch('/api/paye?h=' + encodeURIComponent(hash) + '&l=' + encodeURIComponent(ligne || 'autre') + (INTERNE ? '&i=1' : ''), { method: 'POST', keepalive: true })
+      .then((r) => { if ((r.status === 202 || r.status === 429) && essai < 3) setTimeout(() => signalerPaye(hash, ligne, essai + 1), 8000); })
+      .catch(() => {});
+  } catch (_) {}
 }
 function allerA(nom) {
   const b = document.querySelector('.navB[data-volet="' + nom + '"]');
@@ -13558,6 +13571,7 @@ async function signerEchange(tx, sens, estApprobation) {
   if (estApprobation) { e.className = 'note wOk'; e.innerHTML = 'Approval confirmed.' + lien; await preparerEchange(sens); return; }
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
   if (sens === 'ACHAT') { etape('achat'); try { etape('achat_ok'); } catch (_) {} }
+  if (!estApprobation) signalerPaye(r.hash, 'hook_block'); /* la vente paie le frais du hook aussi */
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « Bought. », le bouton « Sign the buy »
    *    RESTAIT affiche avec la meme transaction — le harnais l a reclique et a achete QUATRE fois. Un
    *    utilisateur qui clique deux fois paierait deux fois. Une transaction confirmee quitte l ecran ;
@@ -22170,7 +22184,7 @@ const bcUnites = (brut, dec) => { const s = BigInt(brut).toString().padStart(dec
 const bcSolde = async (jeton, qui) => (String(jeton).toLowerCase() === ETH_ADR.toLowerCase() ? BigInt(await rpc('eth_getBalance', [qui, 'latest']))
   : BigInt(await rpc('eth_call', [{ to: jeton, data: '0x70a08231' + String(qui).slice(2).toLowerCase().padStart(64, '0') }, 'latest'])));
 /** Signe une suite d appels, un par un, dans l ordre ; s arrete au premier qui n est pas confirme. */
-async function bcSigner(m, appels) {
+async function bcSigner(m, appels, ligne = 'autre') {
   /* 2026-10-11 (revue adverse) : `faits` = le nombre d etapes CONFIRMEES - un plan a moitie passe ne doit jamais etre rejoue tel quel
    *   (un « Start again » apres un frais refuse reconstruisait un SECOND emprunt) ; `hashOperation` = la derniere transaction confirmee
    *   qui n est pas un frais (le lien « explorer » montrait le frais au lieu de l emprunt). */
@@ -22188,6 +22202,7 @@ async function bcSigner(m, appels) {
       return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash, hashOperation, faits: i };
     }
     hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, 'Confirmed.', 'oui');
+    if (ligne) signalerPaye(r.hash, ligne); /* null = un envoi sans frais : rien a relire */
   }
   return { ok: true, hash, hashOperation: hashOperation || hash, faits: appels.length };
 }
@@ -22207,7 +22222,7 @@ async function bcPeutGrouper(appels) {
  *     on ne sait pas ce qui est passe -> rien n est rouvert, la carte renvoie vers « Your positions » (bcBanqueApresEchec, diffusee). */
 const BC_RIEN_PARTI = ['CHAINE_ILLISIBLE', 'MAUVAISE_CHAINE', 'COMPTE_ILLISIBLE', 'AUTRE_COMPTE', 'REFUSE', 'DESTINATION_INVALIDE'];
 async function bcSignerBanque(m, appels, enLot) {
-  if (!enLot || !Array.isArray(appels) || appels.length < 2) return bcSigner(m, appels);
+  if (!enLot || !Array.isArray(appels) || appels.length < 2) return bcSigner(m, appels, 'banque');
   bcEtape(m, 'Your wallet signs the ' + appels.length + ' steps together — all of them go through, or none…');
   let r;
   /* sansRepliV1 : la 1.0 n exige pas l atomicite - la carte promet « all or none », on ne la tente pas (revue adverse 3/3) */
@@ -22215,6 +22230,7 @@ async function bcSignerBanque(m, appels, enLot) {
   catch (e) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((e && e.message) || e) }; }
   if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
     bcEtape(m, 'Confirmed — all ' + appels.length + ' steps.', 'oui');
+    signalerPaye(r.hash, 'banque');
     return { ok: true, hash: r.hash, hashOperation: r.hash, faits: appels.length, enLot: true };
   }
   /* ⛔ 2026-10-11 (revue adverse, 3/3) : plus de repli AUTOMATIQUE sur les etapes. Avant, ce drapeau (calcule sur la mauvaise erreur
@@ -22418,6 +22434,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
         catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
         if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
           bcOpMaj(op, 'done', r.hash);
+          signalerPaye(r.hash, 'swap_action');
           bcEtape(m, 'Done — ' + court(r.hash) + '.', 'oui');
           m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + r.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
           bcNoter({ type: 'signed', ...refs, tx: r.hash, account: String(compte).toLowerCase() });
@@ -22440,7 +22457,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
           ['Start again', planifier, true]]);
         return;
       }
-      const s = await bcSigner(m, p.aSigner);
+      const s = await bcSigner(m, p.aSigner, 'swap_action');
       if (!s.ok) {
         bcNoter({ type: s.refuse ? 'declined' : 'failed', ...refs, ...(s.hash ? { tx: s.hash } : {}) });
         bcOpMaj(op, s.refuse ? 'declined' : s.diffusee ? 'sent' : 'failed', s.hash);
@@ -22495,7 +22512,7 @@ async function bcProposerEnvoi(qui, classe, { jeton, montant, destinataire }, re
     bcOpMaj(op, 'planned');
     bcBoutons(m, [['Sign in my wallet', async () => {
       bcOpMaj(op, 'signing');
-      const s = await bcSigner(m, [appel]);
+      const s = await bcSigner(m, [appel], null);
       if (!s.ok) { bcNoter({ type: s.refuse ? 'declined' : 'failed', ...refs, ...(s.hash ? { tx: s.hash } : {}) }); bcOpMaj(op, s.refuse ? 'declined' : s.diffusee ? 'sent' : 'failed', s.hash); return; }
       bcOpMaj(op, 'done', s.hash);
       bcEtape(m, 'Sent — ' + court(s.hash) + '.', 'oui');
@@ -23570,7 +23587,7 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
       }
     } catch (e) { bcEtape(m, 'This could not be prepared: ' + String((e && e.message) || e).slice(0, 120), 'non'); return; }
     bcBoutons(m, [['Sign ' + appels.length + ' step' + (appels.length > 1 ? 's' : '') + ' in my wallet', async () => {
-      const r = await bcSigner(m, appels);
+      const r = await bcSigner(m, appels, 'skin_vente');
       /* relancer est SUR quand rien n est parti, ou quand seule une approbation est passee (relue au re-plan) ; jamais apres un envoi
        *   diffuse sans confirmation (il pourrait passer deux fois) */
       if (!r.ok) {
@@ -25028,7 +25045,7 @@ async function bcAcheterSkin() {
     } catch (e) { bcEtape(m, 'This skin could not be prepared: ' + String((e && e.message) || e).slice(0, 120), 'non'); return; }
     bcEtape(m, '1 USDC goes to TokenizedBlock. The skin is minted to your wallet, bound to this block on chain: you wear it, and you can sell it or auction it (10 % of each sale goes to TokenizedBlock).'); /* 2026-10-10 regle de Phil : jamais l adresse de frais a l ecran ; le WALLET montre le vrai destinataire */
     bcBoutons(m, [['Sign ' + appels.length + ' step' + (appels.length > 1 ? 's' : '') + ' in my wallet', async () => {
-      const r = await bcSigner(m, appels);
+      const r = await bcSigner(m, appels, 'skin_mint');
       /* relancer est SUR ici : une approbation deja passee est relue au re-plan (seul le mint est redemande) ; seul un mint PARTI sans
        *   confirmation ne se relance pas (il pourrait minter deux fois) */
       if (!r.ok) {

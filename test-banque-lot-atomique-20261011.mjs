@@ -42,12 +42,13 @@ const PLAN = [{ to: '0x' + '1'.repeat(40), data: '0xaa', nom: 'supplyCollateral'
   { to: '0x' + '3'.repeat(40), data: '0xcc', value: '0x0', nom: 'fee', frais: true }];
 const essai = async (issueLot, enLot = true, appels = PLAN) => {
   const trace = { lots: [], separes: 0, etapes: [], banque: {} };
-  const f = new Function('bcEtape', 'bcSigner', 'envoyerLotAtomique', 'messageEnvoi', 'window', 'rpc', 'CHAINE', 'compte', 'bcBanque',
+  trace.payes = [];
+  const f = new Function('bcEtape', 'bcSigner', 'envoyerLotAtomique', 'messageEnvoi', 'window', 'rpc', 'CHAINE', 'compte', 'bcBanque', 'signalerPaye',
     ligneRienParti + '\n' + fonction('async function bcSignerBanque(m, appels, enLot) {') + '\nreturn bcSignerBanque;')(
     (m, t, k) => trace.etapes.push([t, k]),
-    async (m, a) => { trace.separes += 1; return { ok: true, hash: '0xsep', hashOperation: '0xsep', faits: a.length, sequentiel: true }; },
+    async (m, a, l) => { trace.separes += 1; trace.ligneSeparee = l; return { ok: true, hash: '0xsep', hashOperation: '0xsep', faits: a.length, sequentiel: true }; },
     async (o) => { trace.lots.push(o); if (issueLot instanceof Error) throw issueLot; return issueLot; },
-    (r) => 'msg:' + r.etat, { ethereum: {} }, null, 8453, '0xc', trace.banque);
+    (r) => 'msg:' + r.etat, { ethereum: {} }, null, 8453, '0xc', trace.banque, (h, l) => trace.payes.push([h, l]));
   const s = await f({}, appels, enLot);
   return { s, trace };
 };
@@ -55,6 +56,10 @@ let r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: true });
 vu(r.s.ok && r.s.faits === 3 && r.s.hashOperation === '0xlot' && r.trace.separes === 0 && r.trace.lots.length === 1, 'CONFIRME : ' + JSON.stringify(r.s));
 vu(r.trace.lots[0].calls.length === 3 && r.trace.lots[0].calls[2].to === PLAN[2].to && r.trace.lots[0].calls[2].data === '0xcc' && r.trace.lots[0].calls[0].value === '0x0'
   && r.trace.lots[0].chaineAttendue === 8453 && r.trace.lots[0].compte === '0xc', 'le lot n emporte pas les 3 appels (frais compris) tels quels');
+vu(JSON.stringify(r.trace.payes) === JSON.stringify([['0xlot', 'banque']]), 'lot CONFIRME : son hash part au compteur de revenu en ligne banque : ' + JSON.stringify(r.trace.payes));
+{ const p = await essai({ etat: 'CONFIRME', hash: '0xlot' }, false, PLAN.slice(0, 1)); vu(p.trace.separes === 1 && p.trace.ligneSeparee === 'banque', 'hors lot : bcSigner recoit la ligne banque (' + p.trace.ligneSeparee + ')'); }
+r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: false });
+vu(r.trace.payes.length === 0, 'lot PARTIEL : rien n est poste au compteur');
 r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: null });
 vu(r.s.ok, 'CONFIRME sans compte des recus (null) = succes, comme le swap');
 r = await essai({ etat: 'CONFIRME', hash: '0xlot', tousConfirmes: false });

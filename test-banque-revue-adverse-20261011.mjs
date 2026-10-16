@@ -14,11 +14,17 @@ const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const fonction = (entete) => { const i = html.indexOf(entete); assert.ok(i > 0, 'introuvable : ' + entete); const f = /\r?\n\}/.exec(html.slice(i)); return html.slice(i, i + f.index + f[0].length); };
 /* 1. bcSigner EXECUTE : emprunt confirme, frais refuse */
 const etapes = [];
-const signer = new Function('bcEtape', 'envoyerDepuisWallet', 'window', 'rpc', 'CHAINE', 'compte', 'estRefusWallet', 'aEteDiffusee', fonction('async function bcSigner(m, appels) {') + '\nreturn bcSigner;')(
+/* 2026-10-16 : bcSigner poste chaque hash CONFIRME au compteur de revenu (signalerPaye) - la signature porte la ligne de frais */
+const payes = [];
+const signer = new Function('bcEtape', 'envoyerDepuisWallet', 'window', 'rpc', 'CHAINE', 'compte', 'estRefusWallet', 'aEteDiffusee', 'signalerPaye', fonction("async function bcSigner(m, appels, ligne = 'autre') {") + '\nreturn bcSigner;')(
   (m, t) => etapes.push(t), async ({ to }) => (to === '0xemprunt' ? { etat: 'CONFIRME', hash: '0xh1' } : { etat: 'REFUSE', refuse: true }), { ethereum: {} }, null, 8453, '0xc',
-  (r) => r.etat === 'REFUSE', () => false);
-const s = await signer({}, [{ to: '0xemprunt', nom: 'borrow' }, { to: '0xfrais', nom: 'fee', frais: true }]);
+  (r) => r.etat === 'REFUSE', () => false, (h, l) => payes.push([h, l]));
+const s = await signer({}, [{ to: '0xemprunt', nom: 'borrow' }, { to: '0xfrais', nom: 'fee', frais: true }], 'banque');
 vu(s.ok === false && s.faits === 1 && s.hashOperation === '0xh1', 'bcSigner : faits / hash de l operation faux : ' + JSON.stringify(s));
+vu(JSON.stringify(payes) === JSON.stringify([['0xh1', 'banque']]), 'bcSigner : seul le hash CONFIRME part au compteur, avec sa ligne : ' + JSON.stringify(payes));
+payes.length = 0;
+await signer({}, [{ to: '0xemprunt' }], null);
+vu(payes.length === 0, 'bcSigner : ligne null (envoi sans frais) -> rien n est poste');
 const s2 = await signer({}, [{ to: '0xemprunt' }, { to: '0xemprunt', frais: true }]);
 vu(s2.ok === true && s2.faits === 2 && s2.hashOperation === '0xh1', 'bcSigner : le lien montrerait le frais, pas l operation : ' + JSON.stringify(s2));
 /* 2. jamais « Start again » apres une etape passee */

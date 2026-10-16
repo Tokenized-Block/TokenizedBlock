@@ -240,7 +240,7 @@ ok(/prixC = BigInt\(await rpc\('eth_call', \[\{ to: BLOCKSKINS, data: '0x' \+ se
   'C2 achat : le prix et le destinataire GRAVES dans le contrat sont relus sur la CHAINE et doivent etre ceux de l APP, sinon rien n est demande');
 ok(/const usdc = USDC_BASE\.toLowerCase\(\), beneficiaire = FEE_WALLET\.toLowerCase\(\);/.test(achat) && /bcEtape\(m, '1 USDC goes to TokenizedBlock\./.test(achat) && /appelMint\(a, recette\)/.test(achat),
   'C2 achat : le mint du contrat (qui paie le wallet de frais grave), NOMME TokenizedBlock a l ecran - le wallet montre l adresse');
-ok(/if \(solde < SKIN_MINT_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_MINT_USDC)') < achat.indexOf('await bcSigner(m, appels)'), 'C2 achat : le solde USDC est relu AVANT de signer');
+ok(/if \(solde < SKIN_MINT_USDC\)/.test(achat) && achat.indexOf('if (solde < SKIN_MINT_USDC)') < achat.indexOf("await bcSigner(m, appels, 'skin_mint')"), 'C2 achat : le solde USDC est relu AVANT de signer');
 ok(/autorise >= SKIN_MINT_USDC \? \[\] : \[appelApprouver\(usdc, SKIN_MINT_USDC,/.test(achat) && !/MAX_UINT|ffffffffffffffff/.test(achat),
   'C2 achat : approbation EXACTE de 1 USDC seulement si celle en place ne couvre pas le prix, jamais illimitee');
 /* Phil, 2026-10-11 : « v2 avant tout mint » - la porte est AVANT tout appel au wallet (bcAvecWallet est dans payer) et ne demande rien. */
