@@ -92,6 +92,7 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
  *   fonction et rend un silence qu on lirait comme un fait. */
 import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
+import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -3802,6 +3803,25 @@ setInterval(() => {
   catch (e) { console.log('[entonnoir] ecriture ratee :', e.message); }
 }, 30000).unref();
 
+/* 2026-10-16 : le compteur de revenu externe (route /api/paye), meme volume et meme ecriture atomique que l entonnoir */
+const FICHIER_REVENU = FICHIER_ENTONNOIR ? join(dirname(FICHIER_ENTONNOIR), 'revenu.json') : null;
+const revenu = (() => {
+  try {
+    if (FICHIER_REVENU && existsSync(FICHIER_REVENU)) {
+      const x = JSON.parse(readFileSync(FICHIER_REVENU, 'utf8'));
+      if (x && x.vus && x.parJour) return { externe: {}, interne: {}, tentatives: {}, ...x };
+    }
+  } catch (e) { console.log('[revenu] fichier illisible, on repart de zero :', e.message); }
+  return { depuis: new Date().toISOString(), externe: {}, interne: {}, parJour: {}, tentatives: {}, vus: {} };
+})();
+let revenuSale = !!FICHIER_REVENU && !existsSync(FICHIER_REVENU);
+const payesEnCours = new Set();
+setInterval(() => {
+  if (!revenuSale || !FICHIER_REVENU) return;
+  try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
+  catch (e) { console.log('[revenu] ecriture ratee :', e.message); }
+}, 30000).unref();
+
 const SERVIS = [
   /* ⛔⛔ LE MANIFESTE FARCASTER ETAIT ABSENT DE CETTE LISTE (releve par Zero 1 depuis un terminal,
    *     2026-09-21). Le fichier EXISTAIT sur le disque depuis le 8 septembre ; il n a simplement
@@ -5560,6 +5580,39 @@ function traiterRequete(req, res) {
     return;
   }
 
+  /* ══ REVENU EXTERNE (2026-10-16) — le client poste le hash d une transaction CONFIRMEE qui porte un frais ; le serveur relit
+   *   tx + recu lui-meme et ne compte que ce qui est ARRIVE a a6cf (revenu-externe.js). ⛔ Le client ne dit QUE le hash et la ligne :
+   *   montant, devise, payeur sont relus sur la chaine. ⛔ Un hash compte UNE fois (rejouer ne gonfle rien). ⛔ i=1 = notre trafic :
+   *   compte, mais dans le seau interne, comme l entonnoir. NON_LU (recu pas encore lisible) = 202, rien de compte, le client peut renvoyer. */
+  if (chemin === '/api/paye' && req.method === 'POST') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const h = String(q.get('h') || '').toLowerCase(), ligne = String(q.get('l') || '');
+    const repondre = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(corps)); };
+    if (!/^0x[0-9a-f]{64}$/.test(h) || !LIGNES_FRAIS.includes(ligne)) { repondre(400, { ok: false, pourquoi: 'a transaction hash and a known fee line are needed' }); return; }
+    if (revenu.vus[h]) { repondre(200, { ok: true, deja: true }); return; }
+    if (payesEnCours.has(h) || payesEnCours.size >= 3) { repondre(429, { ok: false, pourquoi: 'busy, send it again in a moment' }); return; }
+    payesEnCours.add(h);
+    (async () => { try {
+      const [tx, recu] = await Promise.all([rpcActivite('eth_getTransactionByHash', [h]), rpcActivite('eth_getTransactionReceipt', [h])]);
+      const internes = walletsInternes([COMPTE_SONDE, ...String(process.env.REVENU_INTERNES || '').split(',')]);
+      const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
+      revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
+      if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, { ok: false, etat: v.etat, pourquoi: v.pourquoi }); return; }
+      const verif = q.get('i') === '1' ? { ...v, externe: false } : v;
+      const jour = new Date().toISOString().slice(0, 10);
+      const etat = compterRevenu(revenu, { ligne, verif });
+      revenu.externe = etat.externe; revenu.interne = etat.interne;
+      revenu.parJour[jour] = compterRevenu(revenu.parJour[jour] || {}, { ligne, verif });
+      revenu.vus[h] = { jour, ligne, externe: verif.externe };
+      revenuSale = true;
+      console.log('[revenu]', jour, ligne, verif.externe ? 'EXTERNE' : 'interne', JSON.stringify(v.recus));
+      repondre(200, { ok: true, externe: verif.externe });
+    } catch (e) {
+      repondre(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' });
+    } finally { payesEnCours.delete(h); } })();
+    return;
+  }
+
   /* sonde de sante — pour qu un cron puisse demander « es-tu vivant » sans charger l app */
   if (chemin === '/sante') {
     /* ok:false (et 503) si un module importe par l app n est pas servi : la page repondrait 200 mais serait morte */
@@ -5577,6 +5630,10 @@ function traiterRequete(req, res) {
       /* l etat des devises de paire, en compteurs (born / not_born / not_read, passes, lectures) : lu en MEMOIRE, aucune lecture de chaine */
       paires: etatPaires.resume(),
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
+      /* 2026-10-16 : le revenu VERIFIE par recu, par ligne et par devise (unites brutes), externe et interne separes — jamais les hashes.
+       *   ⛔ BORNES dites : seules les transactions que le client poste sont vues ; l ETH natif (sans log) n est pas compte. */
+      revenu: { depuis: revenu.depuis, externe: revenu.externe, interne: revenu.interne, tentatives: revenu.tentatives, transactions: Object.keys(revenu.vus).length,
+        bornes: 'only transactions the app reports are seen; native ETH fees (no log) are not counted; amounts are raw units per token' },
       /* le noeud d archive : pose ou non, et sa consommation du jour — jamais son URL */
       archive: { pose: Boolean(RPC_ARCHIVE), noeud: RPC_ARCHIVE ? libelleNoeud(RPC_ARCHIVE) : null, maxJour: ARCHIVE_MAX_JOUR, ...archiveCompte },
       /* 2026-10-10 : l unite de archive.nonEnvoyees, dite a cote (une fois par fenetre et par tour, pas des fenetres distinctes) */
