@@ -68,7 +68,8 @@ function monde(contenu) {
     (p, d) => ecrits.push({ p, d }), () => {}, VER, 100000, TCMAX || 200, CNRMAX, { log: (...a) => journal.push(a.join(' ')) }, ...Object.values(st));
   return { ...m, st, ecrits, journal, etat: () => ({ ...st, ...m.lire() }) };
 }
-const corpsSain = JSON.stringify({ ok: true, lu: 'x', blocksSuivis: 3, fenetresRatees: 0, emetteurEtat: 'LU', lignes: [{ adr: J(1), emetteur: null, quoteAdr: null }] });
+/* 2026-10-17 : une ligne saine porte aussi `achat` (verdict serveur du Buy de Market, garde de forme champsLigne) */
+const corpsSain = JSON.stringify({ ok: true, lu: 'x', blocksSuivis: 3, fenetresRatees: 0, emetteurEtat: 'LU', lignes: [{ adr: J(1), emetteur: null, quoteAdr: null, achat: null }] });
 const avancement = {
   adrs: [J(1), J(2), J(3)], createurs: [[J(1), C(1)], [J(2), C(2)]],
   createursNonResolus: [{ jeton: J(3), tx: TX(3) }], createursNonResolusJetes: 0,

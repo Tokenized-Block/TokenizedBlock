@@ -18682,9 +18682,20 @@ function peindreTrending() {
         const pairer = '<button type="button" class="bouton sec trAcheter" data-pairer="' + enTexte(l.adr) + '">Pair a block with it</button>';
         const avecPair = (buy) => (pairable ? '<span class="trBoutons">' + buy + pairer + '</span>' : buy);
         const pool = poolDecouvertPour(l.adr);
-        const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE' || pool.confiance === 'SANS_HOOK' || pool.confiance === 'HOOK'));
+        /* ⛔⛔ 2026-10-17 (Phil : « pas tout on buy ») — MESURE prod 17:12Z : des 33 lignes qui avaient Buy par CETTE decouverte (pools
+         *   tierces « HOOK » / « SANS_HOOK »), 28 portaient une pool que le Quoter v4 refuse de coter : le bouton ouvrait une fiche
+         *   NON_MESURE. Et 16 lignes sans Buy avaient une pool ETH qui cote (13 sur le hook o1, 3 sans hook) — invisibles ici parce que
+         *   leur Initialize a plus de 9 000 blocs. La decouverte client ne garde donc que NOS hooks (toujours achetables par planEchange) ;
+         *   les pools tierces passent par le VERDICT SERVEUR `l.achat` (achat-marche.js : cle connue du serveur, filtres du planificateur,
+         *   devis reel du Quoter). Un Buy n est rendu que la ou un achat est possible — jamais un faux Buy. */
+        const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE'));
         const liqOk = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;
         if (feeOk && liqOk) {
+          return avecPair('<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>');
+        }
+        /* le verdict du serveur (cle lue, pool cotee a 0,001 ETH il y a moins de 5 min) : meme bouton, meme chemin (fiche -> planEchange, qui
+         *   re-cote au montant demande et montre le frais de 0,5 % avant la signature) */
+        if (l.achat && l.achat.cle && liqOk) {
           return avecPair('<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>');
         }
         /* ⛔⛔ 2026-10-03 (Phil : « nos cibles, les actions tokenisees Coinbase ») — MESURE en prod : les 9 actions sur

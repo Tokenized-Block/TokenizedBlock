@@ -273,6 +273,14 @@ export async function planEchange({ rpc, chaine, jeton, compte, sens, montant, t
     return { etat: marche.etat === 'NON_TROUVEE' ? 'REFUSE' : 'NON_MESURE',
       pourquoi: marche.etat === 'NON_TROUVEE' ? 'this block has no market to trade on yet' : 'its market could not be read' };
   }
+  /* ⛔⛔ 2026-10-17 (trou (c), lu en construisant le Buy de Market) : le piege a frais LP STATIQUE > 10 % n etait ecarte QUE par
+   *   vieDuBlock (cleEstUnMarche) — une cle recue par `marcheLu` ou `cleImposee` (la fiche, poolDecouvertPour, un appelant des rails)
+   *   n etait jamais jugee ici. Mesure du jour : NGMI a deux pools ETH sans hook a 89,369 % et 88,475 % de frais LP a cote de sa pool
+   *   o1 a 0 %. Un jeton TIERS (sources TB lues) passait les gardes suivantes avec une telle cle. Meme regle, meme fonction. */
+  if (!cleEstUnMarche(marche.cle)) {
+    return { etat: 'REFUSE', refusPiegeLp: true,
+      pourquoi: 'this pool charges a static LP fee above 10% (' + (Number(marche.cle.fee) / 10000).toFixed(2) + '%): a trap, not a market — nothing was sent' };
+  }
   let migrationEnAttente = false;
   if (String(marche.cle.hooks || '').toLowerCase() === HOOK_PREVU.toLowerCase()) {
     const actuelle = await poolActuelleDuBlock({ rpc: lire, stateView: V.stateView, cle: marche.cle });

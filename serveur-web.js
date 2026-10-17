@@ -161,6 +161,8 @@ import { etatCautionCreateur, sortieCautionPour, cleMarcheCreateur } from './cau
 import { creerRegistrePanel } from './panel-sessions.js';
 /* les sondes du marche, de l echange et du cerveau : les MEMES modules que l app (rien de reecrit pour la sonde) */
 import { vieDuBlock } from './marche.js';
+/* 2026-10-17 : le Buy de Market, par ligne — cle deja connue ici + filtres du planificateur + devis reel (achat-marche.js) */
+import { verdictAchatMarche, quoterV4 } from './achat-marche.js';
 import { lireReferenceAction, estActionCoinbase } from './reference-action.js';
 import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
 import { snapshotCerveau } from './export-cerveau.js';
@@ -3268,7 +3270,9 @@ function chargerTrendingDisque() {
      *     garde qui ne regarde que l enveloppe est vraie et couvre la mauvaise moitie.
      *   ⛔ TOUT AJOUT DE CHAMP DOIT ETRE AJOUTE ICI, et la version bumpee. Les deux, pas l une. */
     const champsAttendus = ['emetteurEtat'];
-    const champsLigne = ['emetteur', 'quoteAdr'];
+    /* 2026-10-17 : `achat` (verdict serveur du Buy de Market) — champ de ligne ajoute SANS bumper TRENDING_CACHE_VER (meme choix que
+     *   `trousRattrapage` : la bumper jetterait l index des createurs) ; un corps d avant est refuse par cette garde, le progres garde. */
+    const champsLigne = ['emetteur', 'quoteAdr', 'achat'];
     if (parsed && (parsed.lignes || []).length > 0) {
       const manque = champsAttendus.find((c) => !Object.prototype.hasOwnProperty.call(parsed, c))
         || champsLigne.find((c) => !Object.prototype.hasOwnProperty.call(parsed.lignes[0] || {}, c));
@@ -3533,16 +3537,79 @@ async function lireTrending() {
      *     laisserait GMEc, DJTc, NFLXc, AMDc, RDDTc, HTZc, PFEc… non marquees, et une ligne non
      *     marquee se lit « block lance ici ». La retombee le SIGNALE au lieu de le taire. */
     const em = await actionsEmetteurServies();
+    const resume = resumerTrending(paires, adrs, { max: 400, actionsEmetteur: em.adresses }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+    const achatMarche = await achatsMarche(resume.lignes);
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
-      emetteurEtat: em.etat, emetteurCompte: em.adresses.length,
-      ...resumerTrending(paires, adrs, { max: 400, actionsEmetteur: em.adresses }) }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+      emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche,
+      ...resume });
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });
   }
   trCache = { a: Date.now(), corps };
   sauverTrendingDisque();
   return corps;
+}
+/* ══ 2026-10-17 — LE BUY DE MARKET, JUGE ICI, PAR LIGNE (achat-marche.js) ═══════════════════════════════════════════════════════
+ * ⛔⛔ MESURE (prod, 17:12Z) : 28 des 33 lignes qui avaient Buy par la decouverte CLIENT ne cotaient pas au Quoter (faux Buy) ; 16 lignes
+ *   sans Buy avaient une pool ETH qui cote. Le client ne juge plus les pools tierces : il lit `achat` sur chaque ligne.
+ * ⛔ AUCUNE LECTURE DE LOGS ICI : seules les cles DEJA connues du serveur (clesCache = /api/cle et volume ; clesPool = cles mesurees /
+ *   resolues) entrent. Une ligne sans cle connue rend `achat: null` et est COMPTEE (sansCle) — « pas de Buy » n est pas « pas de marche ».
+ * ⛔ LE DEVIS COUTE UN eth_call PAR POOL CANDIDATE (lecteur large rpcRails) : le verdict d un jeton est garde ACHAT_CACHE_MS (une pool
+ *   peut se vider ou se remplir ; sa cle, elle, ne change pas) et le tour est borne a ACHAT_DEVIS_MAX devis — au-dela, `achat: null`
+ *   et le compte `nonMesures` le dit. Les sources TB sont chargees AVANT de juger (sinon tout B20 inconnu est un block : fail-closed). */
+const ACHAT_CACHE_MS = 10 * 60 * 1000;
+const ACHAT_DEVIS_MAX = 120;
+const achatsParJeton = new Map();
+/** Les cles de pool que ce serveur connait DEJA pour un jeton (cache /api/cle + cles mesurees), dedoublonnees par poolId. Zero lecture. */
+function clesConnuesServeur(jeton) {
+  const t = String(jeton || '').toLowerCase(), vues = new Set(), out = [];
+  for (const src of [clesCache.get(t), clesPool.get(t)]) {
+    for (const c of (src && src.ok === true && Array.isArray(src.cles)) ? src.cles : []) {
+      const id = String(c && c.poolId || '').toLowerCase();
+      if (!c || !c.currency0 || !c.currency1 || vues.has(id)) continue;
+      vues.add(id);
+      out.push({ currency0: c.currency0, currency1: c.currency1, fee: c.fee, tickSpacing: c.tickSpacing, hooks: c.hooks });
+    }
+  }
+  return out;
+}
+async function achatsMarche(lignes) {
+  const compte = { lignes: 0, sansCle: 0, achetables: 0, refusees: 0, nonMesures: 0, devis: 0, depuisCache: 0, lu: new Date().toISOString() };
+  try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
+  compte.sourcesTbLues = sourcesTbLues();
+  let quoter;
+  try { quoter = quoterV4({ rpc: rpcRails, chaine: 8453 }); } catch (e) { quoter = null; compte.pourquoi = String(e.message || e); }
+  const compteur = async (cle, montant) => { compte.devis += 1; return quoter(cle, montant); };
+  for (const l of (Array.isArray(lignes) ? lignes : [])) {
+    compte.lignes += 1;
+    l.achat = null;
+    const jeton = String(l && l.adr || '').toLowerCase();
+    const cles = clesConnuesServeur(jeton);
+    if (!cles.length) { compte.sansCle += 1; continue; }
+    const empreinte = jeton + '|' + cles.map((c) => String(c.hooks).toLowerCase() + ':' + c.fee + ':' + c.tickSpacing + ':' + String(c.currency0).toLowerCase()).sort().join(',');
+    const garde = achatsParJeton.get(jeton);
+    let v = garde && garde.empreinte === empreinte && Date.now() - garde.t < ACHAT_CACHE_MS ? garde.v : null;
+    if (v) compte.depuisCache += 1;
+    else if (!quoter || compte.devis >= ACHAT_DEVIS_MAX) { compte.nonMesures += 1; continue; }
+    else {
+      try { v = await verdictAchatMarche({ jeton, cles, quoter: compteur }); }
+      catch (e) { compte.nonMesures += 1; continue; }
+      /* une lecture ratee (nonCotees sans aucune pool qui cote) n est pas gardee : elle sera relue au tour suivant */
+      const lectureRatee = !v.achetable && v.essayees > 0 && v.nonCotees.some((x) => !/revert|quoted zero/i.test(x.raison));
+      if (!lectureRatee) achatsParJeton.set(jeton, { t: Date.now(), empreinte, v });
+      if (lectureRatee) { compte.nonMesures += 1; continue; }
+    }
+    if (v.achetable) {
+      compte.achetables += 1;
+      l.achat = { cle: v.cle, quote: String(v.quote), montant: String(v.montant), fraisPar: v.fraisPar, lu: compte.lu };
+    } else compte.refusees += 1;
+  }
+  if (achatsParJeton.size > 5000) for (const k of [...achatsParJeton.keys()].slice(0, achatsParJeton.size - 5000)) achatsParJeton.delete(k);
+  console.log('[achat-marche] ' + compte.achetables + ' achetable(s) / ' + compte.lignes + ' lignes · ' + compte.sansCle + ' sans cle connue · '
+    + compte.refusees + ' refusee(s) · ' + compte.nonMesures + ' non mesuree(s) · ' + compte.devis + ' devis (' + compte.depuisCache + ' du cache)'
+    + (compte.sourcesTbLues ? '' : ' · ⛔ sources TB non lues : tout B20 inconnu juge en block'));
+  return compte;
 }
 /* tip 20260923-map-trending: kick background scan; HTTP never waits on cold lireTrending */
 setTimeout(() => { void consommateurArchive.run('fond trending (demarrage)', () => lireTrending()); }, 1500); /* always rescans on boot; HTTP stays fail-open via trending() */

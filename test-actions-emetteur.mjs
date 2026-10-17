@@ -202,7 +202,7 @@ cas('⛔⛔⛔ UN CORPS DE CACHE PERSISTE D UNE FORME PERIMEE EST REFUSE', () =>
    *     passer un corps dont les LIGNES ont perdu un champ — et c est par ligne que l ecran decide :
    *     `quoteAdr` choisit entre une route a deux sauts et une a trois. Une garde qui ne regarde
    *     que l enveloppe est VRAIE et couvre la mauvaise moitie. */
-  assert.match(srv, /champsLigne = \['emetteur', 'quoteAdr'\]/,
+  assert.match(srv, /champsLigne = \['emetteur', 'quoteAdr', 'achat'\]/,
     'la garde de forme ne verifie pas les champs de LIGNE : un corps aux lignes amputees passerait');
   assert.match(srv, /parsed\.lignes\[0\] \|\| \{\}/, 'la garde de ligne ne lit aucune ligne');
   assert.match(srv, /disk cache ignored \(shape/,
