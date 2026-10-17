@@ -5576,8 +5576,25 @@ function traiterRequete(req, res) {
         try { const x = await rpcServeur('eth_call', [{ to: bloc, data: '0x95d89b41' }, 'latest']); const bx = String(x).slice(2); const n = parseInt(bx.slice(64, 128), 16); sym = Buffer.from(bx.slice(128, 128 + n * 2), 'hex').toString('utf8').replace(/[^\x20-\x7e]/g, '').slice(0, 12); } catch { sym = null; }
         pools.push({ hook: p.hook, hookNom: (HOOKS_FRAIS.find((h) => h.adr === p.hook) || {}).nom || '?', id: p.id, bloc, symbole: sym });
       }
+      /* ⛔⛔ 2026-10-17 (MESURE) : le hook 7030 — celui de TOUTES les naissances recentes, deploye au bloc 52 132 476, sans du() — n est PAS
+       *   dans HOOKS_FRAIS : ce balayage ne voit aucune de ses pools, et `createurDe` y REVERT (son getter est `createurs`). En prod,
+       *   0x31e0…, createur enregistre de UNIT, recevait ici 0 pool. On lit donc AUSSI les pools 7030 dont la CLE est deja connue du serveur
+       *   (le cache de /api/cle), par createurs(bytes32). Borne dite : une pool 7030 dont personne n a encore lu la cle n apparait pas. */
+      let pools7030 = 0;
+      const h7030 = String(HOOK_7030).toLowerCase();
+      for (const [jeton, v] of clesCache) {
+        for (const c of (v && Array.isArray(v.cles) ? v.cles : [])) {
+          if (String(c.hooks).toLowerCase() !== h7030 || !/^0x[0-9a-f]{64}$/i.test(String(c.poolId)) || pools.some((x) => x.id === String(c.poolId).toLowerCase())) continue;
+          let createur = null;
+          try { createur = ('0x' + String(await rpcServeur('eth_call', [{ to: h7030, data: '0x' + String(SEL_CREATEURS).replace(/^0x/, '') + String(c.poolId).slice(2) }, 'latest'])).slice(26, 66)).toLowerCase(); } catch { createur = null; }
+          if (createur !== compte) continue;
+          pools7030 += 1;
+          pools.push({ hook: h7030, hookNom: '7030', id: String(c.poolId).toLowerCase(), bloc: String(jeton).toLowerCase(), symbole: null });
+        }
+      }
       /* `complet` : un balayage avec des fenetres ratees rend une liste PLANCHER, et c est dit */
-      repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS, complet: fond.r.fenetresRatees === 0, balayeJusqua: fraisScan.jusqua });
+      repondre({ ok: true, compte, pools, feeWallet: WALLET_FRAIS, complet: fond.r.fenetresRatees === 0, balayeJusqua: fraisScan.jusqua,
+        pools7030, borne7030: 'hook 7030 pools are listed only when their pool key has already been read by this server (/api/cle)' });
     })().catch((e) => repondre({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
     return;
   }
