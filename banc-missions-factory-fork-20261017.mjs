@@ -6,7 +6,7 @@
  * DEROULE : (1) la donnee `creation` de MissionsDeployer est envoyee TELLE QUELLE (sans `to`) ; (2) relecture : missions(), rail(), V3.RAIL,
  *   rail.MISSIONS, owner = la factory, pendingOwner = le signataire, OPERATOR = le signataire, routeOf(UNIT) = 2 sauts ; acceptOwnership ;
  *   (3) une mission payee en UNIT sur la VRAIE pool UNIT/ETH (hook 7030) ; le joueur agit ; claim signe par la cle de test ;
- *   devOwed(UNIT) = 1,4 % de R ; (4) le rail vend cette part : convertDevShare -> USDC au dev wallet, 0 unite au dev, les unites dans le
+ *   devOwed(UNIT) = 3 % de R (7 % reserve, 0 createur — Phil 2026-10-17 20:50) ; (4) le rail vend cette part : convertDevShare -> USDC au dev wallet, 0 unite au dev, les unites dans le
  *   PoolManager. AVANT tout achat, puis (si refuse) APRES un achat de UNIT en ETH : la mesure dit si la pool UNIT avait de l ETH en face.
  * NE PROUVE PAS : Phil signant sur mainnet ; un vrai vendeur de UNIT au moment de la conversion. */
 import { readFileSync } from 'node:fs';
@@ -90,7 +90,7 @@ const claim = planReclamer({ contrat: V3, taskId: 0, txHash: act.transactionHash
 const rc = await envoyer(JOUEUR, claim.to, claim.data);
 vu(rc.status === '0x1', 'claim (signature JS de la cle de test) : status ' + rc.status);
 const du = await lireU(V3, '0x' + sel('devOwed(address)') + adr(UNIT_BLOCK));
-vu(du === R * 1000n / 10000n * 7000n / 10000n * 2000n / 10000n, 'devOwed(UNIT) = 1,4 % de R = ' + du + ' (avec rail : la part ATTEND la vente, rien a la reserve a sa place)');
+vu(du === R * 1000n / 10000n * 10000n / 10000n * 3000n / 10000n, 'devOwed(UNIT) = 3 % de R (Phil 2026-10-17 20:50 ; etait 1,4 %) = ' + du + ' (avec rail : la part ATTEND la vente, rien a la reserve a sa place)');
 
 /* (4) le rail vend la part : AVANT tout achat (mesure : la pool UNIT a-t-elle de l ETH en face ?) */
 const dev0 = { usdc: await solde(C.usdc, C.devWallet), unit: await solde(UNIT_BLOCK, C.devWallet), pm: await solde(UNIT_BLOCK, C.poolManager) };

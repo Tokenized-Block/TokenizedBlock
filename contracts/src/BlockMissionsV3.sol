@@ -25,15 +25,19 @@ pragma solidity ^0.8.24;
 ///     the last unpause; the caller chose which side is the block (MED) -> HOOK.cotes(key) says it (measured on UNIT); window end not
 ///     signed (MED) -> signed, ≤ 1 h old; native-ETH holding cannot be measured exactly (MED) -> refused; new posts into an insolvent
 ///     token (MED) -> refused, sweep() sends any surplus to the reserve.
-/// UNCHANGED from v2: fee 10 % of the reward (30 % creator, 70 % TB -> 80 % COMMUNITY_RESERVE in the reward token, 20 % dev), caps
+/// FEE (Phil 2026-10-17 20:50): 10 % of the reward -> 70 % COMMUNITY_RESERVE (the earn pool, in the reward token), 30 % dev, 0 creator
+///   (v2 gave 30 % to the creator and 80/20 inside TB's 70 %). UNCHANGED from v2: caps
 ///   (DAILY_CAP per wallet, TASK_DAILY_CAP, TOKEN_DAILY_CAP per block), txHash pays once, EIP-712 with a ≤ 1 h deadline, 2-step
 ///   ownership, fee-on-transfer refused, push-or-credit for a recipient that cannot receive, BLOCKERIE_PAID_DRAW = false (D18).
 /// ⚠ TRUST POINTS: the verifier key (KMS/HSM; a stolen key signs fake completions within the caps, and its rotation is now public 48 h
 ///   ahead) and the owner (can pause, propose; cannot touch escrow, cannot name a creator).
 contract BlockMissionsV3 {
     uint256 public constant FEE_BPS = 1000;
-    uint256 public constant TB_SHARE_BPS = 7000;
-    uint256 public constant RESERVE_SHARE_BPS = 8000;
+    /* Phil 2026-10-17 20:50 (chat) : « 7 % a TokenizedBlock — la partie qui fournit le pool des earn — et 3 % pour moi ». Le createur du
+     *   block ne prend plus rien sur les recompenses (il poste pour FAIRE TRADER son block ; sa part vient du hook 7030, 0,03 % par swap).
+     *   Avant : 30 % du frais au createur, 70 % TB (80 % reserve / 20 % dev) = 3 / 5,6 / 1,4. Maintenant : 0 / 7 / 3. */
+    uint256 public constant TB_SHARE_BPS = 10_000;
+    uint256 public constant RESERVE_SHARE_BPS = 7000;
     uint256 public constant DAILY_CAP = 5;
     uint256 public constant TASK_DAILY_CAP = 20;
     uint256 public constant TOKEN_DAILY_CAP = 100;

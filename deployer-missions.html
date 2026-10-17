@@ -54,19 +54,18 @@ ul{padding-left:20px;margin:8px 0}
 
   <h2>Where each reward goes</h2>
   <div class="carte">
-    <div class="barre" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
+    <!-- Phil 2026-10-17 20:50 : 7 % reserve (le pool des earn), 3 % dev, 0 createur (contrat : TB_SHARE 10000, RESERVE_SHARE 7000) -->
+    <div class="barre" role="img" aria-label="Player 90%, community reserve 7%, dev 3%">
       <span style="width:90%;background:#2fd0c8"></span>
-      <span style="width:3%;background:#f6c76e" title="Creator 3%"></span>
-      <span style="width:5.6%;background:#ff7eb6" title="Community reserve 5.6%"></span>
-      <span style="width:1.4%;background:#b9a4ff" title="Dev 1.4%"></span>
+      <span style="width:7%;background:#ff7eb6" title="Community reserve 7%"></span>
+      <span style="width:3%;background:#b9a4ff" title="Dev 3%"></span>
     </div>
     <div class="legende">
       <span><i style="background:#2fd0c8"></i>Player who did it: 90%</span>
-      <span><i style="background:#f6c76e"></i>Back to the creator: 3%</span>
-      <span><i style="background:#ff7eb6"></i>Community reserve: 5.6%</span>
-      <span><i style="background:#b9a4ff"></i>Dev: 1.4%, in USDC or the stock</span>
+      <span><i style="background:#ff7eb6"></i>Community reserve (the earn pool): 7%</span>
+      <span><i style="background:#b9a4ff"></i>Dev: 3%, in USDC or the stock</span>
     </div>
-    <p class="note">Paid in USDC or a tokenized stock: the dev's 1.4% goes to the dev in that token. Paid in UNIT: the converter sells it for USDC, to the dev. Paid in another block's units: it goes to the community reserve. The dev never holds block units.</p>
+    <p class="note">The creator takes nothing from a reward: a task exists to make the block trade, and the creator earns on every swap of its pool. Paid in USDC or a tokenized stock: the dev's 3% goes to the dev in that token. Paid in UNIT: the converter sells it for USDC, to the dev. Paid in another block's units: it goes to the community reserve. The dev never holds block units.</p>
   </div>
 
   <h2>Why it is safe to play</h2>
@@ -77,7 +76,7 @@ ul{padding-left:20px;margin:8px 0}
       <li>Changing the key that checks missions, or the guardian, is announced 48 hours ahead while everything stays open, so every creator can take their reward back first.</li>
       <li>A guardian can pause new missions; taking rewards back never pauses.</li>
       <li>The wallet that signs here becomes the owner (it confirms with a second, short signature). It cannot touch any reward put aside.</li>
-      <li>The dev's 1.4% of a reward paid in UNIT is sold for USDC by a fixed converter — UNIT to ETH to USDC, a route nobody can change — and only after the owner sets a minimum. The dev never receives block units.</li>
+      <li>The dev's 3% of a reward paid in UNIT is sold for USDC by a fixed converter — UNIT to ETH to USDC, a route nobody can change — and only after the owner sets a minimum. The dev never receives block units.</li>
     </ul>
   </div>
 
@@ -129,8 +128,8 @@ const NOMS = { hook: 'TokenizedBlock hook (which pools are ours)', poolManager: 
 let compte = null, intacte = false, envoi = false, v3Adr = null;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 $('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (D.constructeur[k] || '<span class="ko">missing</span>') + '</dd>').join('')
-  + '<dt>Stocks paid to the dev directly</dt><dd>' + D.devDirect.length + ' tokenized stocks of the hook (the dev\'s 1.4% of a reward in one of them goes to the dev in that stock; block units never)</dd>'
-  + '<dt>Converter route (fixed)</dt><dd>UNIT → ETH (UNIT\'s TokenizedBlock pool) → USDC (Uniswap v4, 0.05%) — sells the dev\'s 1.4% of a UNIT reward, USDC to the dev wallet</dd>'
+  + '<dt>Stocks paid to the dev directly</dt><dd>' + D.devDirect.length + ' tokenized stocks of the hook (the dev\'s 3% of a reward in one of them goes to the dev in that stock; block units never)</dd>'
+  + '<dt>Converter route (fixed)</dt><dd>UNIT → ETH (UNIT\'s TokenizedBlock pool) → USDC (Uniswap v4, 0.05%) — sells the dev\'s 3% of a UNIT reward, USDC to the dev wallet</dd>'
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
   + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation : '—') + '</dd>';
 $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manquants.map((m) => NOMS[m] + ' is missing'), ...D.refus].join(' · ') + '.</span>' : '';
