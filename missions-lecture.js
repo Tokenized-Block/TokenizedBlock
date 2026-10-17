@@ -18,13 +18,13 @@ const mots = (hex) => { const s = String(hex || '').replace(/^0x/, ''); const ou
 const adr = (w) => '0x' + w.slice(24).toLowerCase();
 const nb = (w) => BigInt('0x' + w);
 
-/** decode le retour de tasks(i). 12 mots exactement, sinon null. */
+/** decode le retour de tasks(i). 13 mots exactement (claude/missions-v3 82f3570 : topic1 AJOUTE EN DERNIER), sinon null. */
 export function decoderTache(hex) {
   const w = mots(hex);
-  if (w.length !== 12) return null;
+  if (w.length !== 13) return null;
   return { blockToken: adr(w[0]), paired: adr(w[1]), rewardToken: adr(w[2]), creator: adr(w[3]), reward: nb(w[4]).toString(),
     maxDone: Number(nb(w[5])), done: Number(nb(w[6])), perWallet: Number(nb(w[7])), expiry: Number(nb(w[8])), target: adr(w[9]),
-    topic0: '0x' + w[10], descHash: '0x' + w[11] };
+    topic0: '0x' + w[10], descHash: '0x' + w[11], topic1: '0x' + w[12] };
 }
 
 /** decode le retour de holdOf(i). 5 mots, sinon null. */

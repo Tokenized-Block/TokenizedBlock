@@ -86,7 +86,7 @@ contract SigneurClaim is Test {
         vm.prank(creator); usdc.approve(address(m), type(uint256).max);
         vm.warp(1_800_000_000);
         vm.prank(creator);
-        id = m.postTask(k, BlockMissionsV3.TaskParams(address(usdc), 10e6, 8, 1, uint64(block.timestamp + 7 days), address(0x7A26E7), keccak256("Swap()"), keccak256("text")),
+        id = m.postTask(k, BlockMissionsV3.TaskParams(address(usdc), 10e6, 8, 1, uint64(block.timestamp + 7 days), address(0x7A26E7), keccak256("Swap()"), keccak256("text"), bytes32(0)),
             BlockMissionsV3.Hold(50e18, 0, 0, 0, 24 hours));
         for (uint256 i = 0; i < 8; i++) blk.mint(joueur(i), 100e18);
         digestsEpingles.push(0x3d0d0c507db36b62d445446a64e1edb2890e5e14256e0bb9a2cc9a941999ed3a); sigsJs.push(hex"0fca428893253aee0ee5e8b8c2822b39a0725173b9b33eac9f3eac96016058b02efab0fb36c5f6fec5e2c2f4fb3c8f73a64cbd265e3bd3cc3d1ba611d405a5561b"); // 0 s BASCULE

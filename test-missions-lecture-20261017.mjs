@@ -12,11 +12,12 @@ vu(SEL.tasks === String(selecteur('tasks(uint256)')).replace(/^0x/, '') && SEL.t
 vu(appel('tasks', 3) === '0x' + SEL.tasks + '3'.padStart(64, '0'), 'calldata tasks(3)');
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const BLK = '0x' + 'b2'.repeat(20), AMZ = '0x' + 'aa'.repeat(20), CREA = '0x' + 'c0'.repeat(20), PM = '0x' + '49'.repeat(20);
-const tache = '0x' + [a(BLK), a(AMZ), a(AMZ), a(CREA), m(10n ** 18n), m(20), m(3), m(1), m(1800000000), a(PM), 'ab'.repeat(32), 'cd'.repeat(32)].join('');
+/* claude/missions-v3 82f3570 : Task porte topic1 EN DERNIER -> 13 mots */
+const tache = '0x' + [a(BLK), a(AMZ), a(AMZ), a(CREA), m(10n ** 18n), m(20), m(3), m(1), m(1800000000), a(PM), 'ab'.repeat(32), 'cd'.repeat(32), 'ef'.repeat(32)].join('');
 const t = decoderTache(tache);
 vu(t && t.blockToken === BLK && t.paired === AMZ && t.rewardToken === AMZ && t.creator === CREA && t.reward === '1000000000000000000' && t.maxDone === 20 && t.done === 3
-  && t.perWallet === 1 && t.expiry === 1800000000 && t.target === PM && t.topic0 === '0x' + 'ab'.repeat(32), 'Task decode exact (12 mots)');
-vu(decoderTache(tache.slice(0, -64)) === null, '11 mots -> null');
+  && t.perWallet === 1 && t.expiry === 1800000000 && t.target === PM && t.topic0 === '0x' + 'ab'.repeat(32) && t.topic1 === '0x' + 'ef'.repeat(32), 'Task decode exact (13 mots, topic1 en dernier)');
+vu(decoderTache(tache.slice(0, -64)) === null, '12 mots (l ancien format) -> null, jamais un topic1 invente');
 const h = decoderDetention('0x' + [m(50n * 10n ** 18n), m(2n * 10n ** 18n), m(0), m(0), m(86400)].join(''));
 vu(h && h.minBlock === '50000000000000000000' && h.minPaired === '2000000000000000000' && h.window === 86400, 'Hold decode exact (5 mots)');
 vu(etatMission(t, '5', 1700000000) === 'OUVERTE' && etatMission(t, '0', 1700000000) === 'FERMEE' && etatMission(t, '5', 1800000000) === 'EXPIREE'

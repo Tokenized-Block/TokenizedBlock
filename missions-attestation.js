@@ -104,7 +104,7 @@ export async function attester(io, { taskId, completer, txHash }) {
   /* 1. la tache */
   let tx = null, recu = null;
   try { [tx, recu] = await Promise.all([io.rpcEtat('eth_getTransactionByHash', [h]), io.rpcEtat('eth_getTransactionReceipt', [h])]); } catch (_) { /* dit plus bas */ }
-  const preuve = verifierTache({ tx, recu, completer: c, target: t.target, topic0: t.topic0 });
+  const preuve = verifierTache({ tx, recu, completer: c, target: t.target, topic0: t.topic0, topic1: t.topic1 });
   if (!preuve.ok) return preuve;
   /* 2. la fenetre */
   let fin, finTs, debut;

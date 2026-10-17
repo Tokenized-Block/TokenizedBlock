@@ -20,7 +20,7 @@ const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' +
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const TETE = 100000, WINDOW = 86400;
 /* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
-function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2, chaineLue = 8453, dejaPaye = false, pause = false, faites = 0, done = 0, expiry = 1900000000 } = {}) {
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2, chaineLue = 8453, dejaPaye = false, pause = false, faites = 0, done = 0, expiry = 1900000000, topic1 = '0x' + '0'.repeat(64), logTopic1 = '0x' + '0'.repeat(64) } = {}) {
   const ts = (b) => 1_800_000_000 + pasBloc * b;
   const finale = 60n * 10n ** 18n;
   const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
@@ -34,7 +34,7 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     if (meth === 'eth_chainId') return '0x' + chaineLue.toString(16);
     if (meth === 'eth_getBlockByNumber') { f.entetes += 1; return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) }; }
     if (meth === 'eth_getTransactionByHash') return { hash: H, from };
-    if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, blockNumber: '0x' + blocTx.toString(16), logs: [{ address: CIBLE, topics: [TOPIC] }] };
+    if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, blockNumber: '0x' + blocTx.toString(16), logs: [{ address: CIBLE, topics: [TOPIC, logTopic1] }] };
     if (meth === 'eth_getLogs') {
       const f = p[0], de = parseInt(f.fromBlock, 16), au = parseInt(f.toBlock, 16);
       return logs.filter((l) => { const b = parseInt(l.blockNumber, 16); return b >= de && b <= au && l.address === f.address && l.topics[0] === f.topics[0]
@@ -42,7 +42,7 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     }
     if (meth === 'eth_call') {
       const { to, data } = p[0], s = data.slice(2, 10), bloc = p[1] === 'latest' ? TETE : parseInt(p[1], 16);
-      if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(done), m(1), m(expiry), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32)].join('');
+      if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(done), m(1), m(expiry), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32), topic1.slice(2)].join('');
       if (to === CONTRAT && s === SEL.paused) return '0x' + m(pause ? 1 : 0);
       if (to === CONTRAT && s === selecteur('doneBy(uint256,address)').slice(2)) return '0x' + m(faites);
       /* la mission 3 existe a partir du bloc poseeAu (taskCount passe de 3 a 4) ; par defaut, postee depuis toujours */
@@ -96,6 +96,10 @@ vu(/full/.test((await attester(io({ done: 10 }), demande)).pourquoi || ''), 'mis
 vu(/already completed/.test((await attester(io({ faites: 1 }), demande)).pourquoi || ''), 'deja faite par ce wallet (perWallet 1) -> REFUSE');
 vu(/has ended/.test((await attester(io({ expiry: 1_800_000_000 + 2 * 99990 }), demande)).pourquoi || ''), 'mission expiree a la fin de fenetre -> REFUSE');
 vu((await attester(io({ blocTx: 95000, poseeAu: 99999 }), demande)).etat === 'REFUSE', 'mission postee APRES fin (tete-1) : vieille tx REFUSEE (l ancien scan s arretait a fin)');
+/* (7) topic1 (82f3570, chasse MED) : la mission nomme sa pool ; un swap sur une AUTRE pool ne la remplit pas */
+const POOL = '0x' + '9a'.repeat(32);
+vu((await attester(io({ topic1: POOL, logTopic1: '0x' + '12'.repeat(32) }), demande)).etat === 'REFUSE', 'topic1 de la mission != topic1 du log (autre pool) -> REFUSE');
+vu((await attester(io({ topic1: POOL, logTopic1: POOL }), demande)).ok === true, 'topic1 egal -> signe');
 /* (5) Grok A11 / A8b (188a29e) : chaine lue != chaine signee ; tx deja payee (txUsed global on-chain) */
 const autreChaine = await attester(io({ chaineLue: 1 }), demande);
 vu(autreChaine.etat === 'PAS_OUVERT' && /reads chain 1 but signs for chain 8453/.test(autreChaine.pourquoi), 'chaine lue 1, signee 8453 -> rien signe (A11)');

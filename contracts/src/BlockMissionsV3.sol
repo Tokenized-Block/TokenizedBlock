@@ -89,13 +89,19 @@ contract BlockMissionsV3 {
 
     /// @dev Uniswap v4 PoolKey, same field order and types: poolId = keccak256(abi.encode(key)).
     struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }
+    /// @dev topic1 (hunt 2026-10-17 evening, MED, confirmed): the task proof was (target, topic0) only — a "swap on this block" mission
+    ///      (target = PoolManager, topic0 = Swap) was completed by a dust swap on ANY pool. topic1 = the event's FIRST indexed topic the action
+    ///      must carry (for a v4 Swap: the poolId). 0 = any, refused when the target is the PoolManager. Appended last: tasks(i)'s first 12
+    ///      words keep their place.
     struct TaskParams {
         address rewardToken; uint256 reward; uint32 maxDone; uint8 perWallet; uint64 expiry; address target; bytes32 topic0; bytes32 descHash;
+        bytes32 topic1;
     }
     struct Hold { uint256 minBlock; uint256 minPaired; uint256 bonusMinBlock; uint16 bonusBps; uint32 window; }
     struct Task {
         address blockToken; address paired; address rewardToken; address creator; uint256 reward;
         uint32 maxDone; uint32 done; uint8 perWallet; uint64 expiry; address target; bytes32 topic0; bytes32 descHash;
+        bytes32 topic1;
     }
 
     Task[] private _tasks;
@@ -261,7 +267,7 @@ contract BlockMissionsV3 {
         (address blk, address paired) = _checkPost(key, p, h);
         uint256 budget = _escrow(p, h);
         id = _tasks.length;
-        _tasks.push(Task(blk, paired, p.rewardToken, msg.sender, p.reward, p.maxDone, 0, p.perWallet, p.expiry, p.target, p.topic0, p.descHash));
+        _tasks.push(Task(blk, paired, p.rewardToken, msg.sender, p.reward, p.maxDone, 0, p.perWallet, p.expiry, p.target, p.topic0, p.descHash, p.topic1));
         escrowLeft[id] = budget;
         holdOf[id] = h;
         _emitPosted(id, blk, p, poolIdOf(key));
@@ -285,6 +291,8 @@ contract BlockMissionsV3 {
             p.reward < MIN_REWARD || p.maxDone == 0 || p.maxDone > MAX_COMPLETIONS || p.perWallet == 0 || p.expiry <= block.timestamp
                 || p.expiry > block.timestamp + MAX_DURATION || p.target == address(0) || p.target == blk || p.target == p.rewardToken || p.topic0 == bytes32(0)
         ) revert BadParams();
+        /* a swap mission on the PoolManager must name ITS pool (topic1 = poolId): otherwise any swap anywhere would complete it */
+        if (p.target == POOL_MANAGER && p.topic1 == bytes32(0)) revert BadParams();
     }
 
     function _escrow(TaskParams calldata p, Hold calldata h) private returns (uint256 budget) {

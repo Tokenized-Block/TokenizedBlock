@@ -25,13 +25,17 @@ const bas = (x) => String(x || '').toLowerCase();
 export const TOPIC_TRANSFER = k256('Transfer(address,address,uint256)');
 
 /** 1. la tache : recu, payeur = completer, log de la cible. Rend {ok:true} | {ok:false, etat, pourquoi}. */
-export function verifierTache({ tx, recu, completer, target, topic0 }) {
+export function verifierTache({ tx, recu, completer, target, topic0, topic1 = null }) {
   if (!tx || !recu) return { ok: false, etat: 'NON_LU', pourquoi: 'transaction or receipt not readable yet' };
   if (String(recu.status) !== '0x1') return { ok: false, etat: 'REFUSE', pourquoi: 'the transaction failed' };
   if (bas(recu.transactionHash) !== bas(tx.hash)) return { ok: false, etat: 'REFUSE', pourquoi: 'receipt of another transaction' };
   const p = payeurDe({ tx, recu });
   if (!p || p !== bas(completer)) return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction was not sent by this player' };
-  const vu = (recu.logs || []).some((l) => bas(l.address) === bas(target) && (l.topics || []).length && bas(l.topics[0]) === bas(topic0));
+  /* chasse 2026-10-17 soir (MED, confirme) : (cible, topic0) seuls laissaient un swap MINUSCULE sur N IMPORTE QUELLE pool remplir une mission
+   *   « swap sur ce block ». topic1 (quand la mission le fixe, obligatoire sur le PoolManager) = le PREMIER topic indexe exige (le poolId). */
+  const t1 = topic1 && !/^0x0{64}$/.test(bas(topic1)) ? bas(topic1) : null;
+  const vu = (recu.logs || []).some((l) => bas(l.address) === bas(target) && (l.topics || []).length && bas(l.topics[0]) === bas(topic0)
+    && (!t1 || bas((l.topics || [])[1]) === t1));
   if (!vu) return { ok: false, etat: 'REFUSE', pourquoi: 'the task event is not in this transaction' };
   return { ok: true };
 }

@@ -24,7 +24,8 @@ if (existsSync(ART)) {
 vu(budgetMission(params, hold) === 33n * 10n ** 18n, 'budget = (10 + 1) x 3 = 33');
 const p = planPoster({ contrat: C, cle, params, hold, maintenant: 1000 });
 vu(p.etat === 'PRET' && p.appels[0].to === BLK && p.appels[0].data === '0x095ea7b3' + C.slice(2).padStart(64, '0') + (33n * 10n ** 18n).toString(16).padStart(64, '0'), 'approve EXACT du budget, au jeton de recompense');
-vu(p.appels[1].to === C && p.appels[1].data.length === 2 + 8 + 64 * 18, 'postTask : 18 mots statiques');
+vu(p.appels[1].to === C && p.appels[1].data.length === 2 + 8 + 64 * 19 && p.appels[1].data.slice(10 + 64 * 13, 10 + 64 * 14) === '0'.repeat(64),
+  'postTask : 19 mots statiques, topic1 (14e mot) = 0 quand la mission ne le fixe pas');
 /* (3) */
 const refus = (h2, p2) => planPoster({ contrat: C, cle, params: { ...params, ...p2 }, hold: { ...hold, ...h2 }, maintenant: 1000 });
 vu(refus({ minBlock: '0' }).etat === 'REFUSE', 'minBlock 0 refuse');
@@ -32,6 +33,16 @@ vu(refus({ window: 3600 }).etat === 'REFUSE' && refus({ window: 8 * 86400 }).eta
 vu(refus({ bonusBps: 0 }).etat === 'REFUSE' && refus({ bonusMinBlock: '10' }).etat === 'REFUSE', 'bonus sans palier / palier sous le minimum refuses');
 vu(refus({}, { reward: '999' }).etat === 'REFUSE' && refus({}, { expiry: 999 }).etat === 'REFUSE' && refus({}, { expiry: 1000 + 31 * 86400 }).etat === 'REFUSE', 'recompense < 1000, fin passee, fin > 30 j refusees');
 vu(refus({}, { target: BLK }).etat === 'REFUSE', 'cible = jeton de recompense refusee');
+/* chasse 2026-10-17 soir (LOW x3 + MED topic1) */
+const sansBonus = { minBlock: '50', window: 86400 }; /* bonusBps et bonusMinBlock ABSENTS */
+vu(planPoster({ contrat: C, cle, params, hold: sansBonus, maintenant: 1000 }).etat === 'PRET', 'mission SANS bonus (champs absents) : PRET (elle etait refusee)');
+vu(refus({}, { topic0: '0x' + '0'.repeat(64) }).etat === 'REFUSE' && refus({}, { target: '0x' + '0'.repeat(40) }).etat === 'REFUSE', 'topic0 nul / cible nulle refuses avant la signature');
+const PMx = '0x' + '98'.repeat(20);
+vu(planPoster({ contrat: C, cle, params: { ...params, target: PMx }, hold, maintenant: 1000, poolManager: PMx }).etat === 'REFUSE', 'mission sur le PoolManager sans topic1 : REFUSE');
+const avecPool = planPoster({ contrat: C, cle, params: { ...params, target: PMx, topic1: '0x' + '9a'.repeat(32) }, hold, maintenant: 1000, poolManager: PMx });
+vu(avecPool.etat === 'PRET' && avecPool.appels[1].data.slice(10 + 64 * 13, 10 + 64 * 14) === '9a'.repeat(32), 'avec topic1 : PRET, topic1 encode en 14e mot');
+vu(refus({}, { perWallet: 300 }).etat === 'REFUSE' && planPoster({ contrat: C, cle: { ...cle, fee: 1 << 24 }, params, hold, maintenant: 1000 }).etat === 'REFUSE'
+  && planPoster({ contrat: C, cle: { ...cle, tickSpacing: 1 << 23 }, params, hold, maintenant: 1000 }).etat === 'REFUSE', 'largeurs fixes : uint8 300, uint24 2^24, int24 2^23 refuses');
 /* (4) */
 const neg = planPoster({ contrat: C, cle: { ...cle, tickSpacing: -1 }, params, hold, maintenant: 1000 });
 vu(neg.appels[1].data.slice(10 + 64 * 3, 10 + 64 * 4) === 'f'.repeat(64), 'tickSpacing -1 = complement a deux sur 256 bits');
