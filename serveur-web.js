@@ -96,6 +96,9 @@ import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1 } from './tirage-saison.js';
 import { WETH_BASE } from './plan-eth-block.js';
+import { attester } from './missions-attestation.js';
+import { lireMissions } from './missions-lecture.js';
+import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -987,6 +990,16 @@ let archiveDirect = null;
 async function rpcHistoire(methode, params) {
   if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive('histoire'); return archiveDirect(methode, params); }
   return rpcServeur(methode, params);
+}
+/* BlockMissions : l etat lu par le verifier. rpcServeur d abord (base.org sert l etat a -24 h, sonde du 2026-10-17) ; un eth_call
+ *   HISTORIQUE qu il ne sert pas va a l archive si elle est posee. Le reste (tete, en-tetes, tx, recu) ne touche jamais l archive. */
+let archiveMissions = null;
+const attestationsEnCours = new Set();
+async function rpcMissionsEtat(methode, params) {
+  const historique = methode === 'eth_call' && Array.isArray(params) && params[1] !== 'latest';
+  try { return await rpcServeur(methode, params); } catch (e) { if (!historique || !RPC_ARCHIVE) throw e; }
+  if (!archiveMissions) archiveMissions = lecteurArchive('missions');
+  return archiveMissions(methode, params);
 }
 /* ══ 2026-10-10 — UN REFUS CERTAIN NE COUTE RIEN (lecteurLogs), VERSION REDUITE ══════════════════════════════════════════════════
  * ⛔⛔ MESURE PROD (2026-10-10, 16:27-16:31 UTC rapporte a l heure ; budget d archive epuise depuis ~03:00 UTC) : 4 044 refus de
@@ -5744,6 +5757,44 @@ function traiterRequete(req, res) {
       wallets: Object.entries(etat).map(([adresse, w]) => ({ adresse, fraisUsd: w.usd, hashes: w.hashes, ticket: w.usd >= F_USD_V1 })),
       regle: 'One ticket per wallet whose verified fees on tokenized-stock trades reach $' + F_USD_V1 + ' this week (fees already paid, no new stake; '
         + 'paying more gives nothing more). Shadow season: no prize. The winner will come from the hash of a block fixed when the season closes.' }));
+    return;
+  }
+
+  /* ══ BLOCK MISSIONS (2026-10-17) — la table des missions, et l ATTESTATION du verifier (missions-attestation.js).
+   * ⛔ Le contrat vient du fichier GENERE missions-deploiement.js (adresse null tant que Phil n a pas deploye) : aucune variable
+   *   d environnement ne peut le remplacer. Sans adresse -> PAS_OUVERT, AUCUNE lecture de chaine.
+   * ⛔ La cle du verifier vit SEULEMENT dans MISSIONS_VERIFIER_KEY (posee par Phil) : jamais loggee, jamais rendue. attester() refuse
+   *   de signer si elle n est pas le verifier() du contrat.
+   * Lectures (SONDE 2026-10-17, tete 52 726 151) : l en-tete d un bloc vieux de 24 h est servi par base.org ET publicnode ; un eth_call
+   *   a ce bloc est servi par base.org (USDC du PoolManager : 21 680 580 USDC vs 21 043 521 a la tete, valeur differente donc vraie) et
+   *   REFUSE par publicnode (« Archive requests require a personal token »). D ou : rpcServeur d abord, l archive en repli pour l etat
+   *   historique seulement. Les logs de la fenetre vont par rpcHistoire (l archive si posee) : sans archive, une fenetre plus
+   *   profonde que ~9 000 blocs n est servie par aucun noeud gratuit -> NON_MESURE, rien signe. NE PROUVE PAS une fenetre de 7 j. */
+  if (chemin === '/api/missions' && req.method === 'GET') {
+    const repondreM = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (!MISSIONS_DEPLOIEMENT.adresse) { repondreM(200, { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission board is not deployed yet' }); return; }
+    lireMissions({ rpc: rpcServeur, contrat: MISSIONS_DEPLOIEMENT.adresse })
+      .then((r) => repondreM(200, { ok: true, contrat: MISSIONS_DEPLOIEMENT.adresse, ...r }))
+      .catch(() => repondreM(202, { ok: false, etat: 'NON_LU', pourquoi: 'the mission board could not be read just now' }));
+    return;
+  }
+  if (chemin === '/api/missions/attestation' && req.method === 'POST') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const repondreA = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (!MISSIONS_DEPLOIEMENT.adresse) { repondreA(200, { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission board is not deployed yet' }); return; }
+    const taskId = Number(q.get('task')), completer = String(q.get('wallet') || '').toLowerCase(), txHash = String(q.get('tx') || '').toLowerCase();
+    if (!Number.isSafeInteger(taskId) || taskId < 0 || !/^0x[0-9a-f]{40}$/.test(completer) || !/^0x[0-9a-f]{64}$/.test(txHash)) {
+      repondreA(400, { ok: false, etat: 'REFUSE', pourquoi: 'a mission id, a wallet and a transaction hash are needed' }); return;
+    }
+    if (RPC_ARCHIVE && archiveEpuisee()) { repondreA(202, { ok: false, etat: 'NON_MESURE', pourquoi: 'the archive reads for today are used up: try again after 00:00 UTC' }); return; }
+    const k = taskId + ':' + completer;
+    if (attestationsEnCours.has(k) || attestationsEnCours.size >= 2) { repondreA(429, { ok: false, pourquoi: 'busy, send it again in a moment' }); return; }
+    attestationsEnCours.add(k);
+    attester({ rpcEtat: rpcMissionsEtat, rpcLogs: rpcHistoire, chaineId: 8453, contrat: MISSIONS_DEPLOIEMENT.adresse, cle: process.env.MISSIONS_VERIFIER_KEY || null },
+      { taskId, completer, txHash })
+      .then((r) => repondreA(r.ok || r.etat === 'REFUSE' || r.etat === 'PAS_OUVERT' ? 200 : 202, r))
+      .catch(() => repondreA(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' }))
+      .finally(() => attestationsEnCours.delete(k));
     return;
   }
 
