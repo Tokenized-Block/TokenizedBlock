@@ -12982,6 +12982,9 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     /* ⛔ UN FRAIS PAR LOT (2026-10-02) : on dit lequel. */
     r.fraisParHook === true ? 'Fee: one fee, included in the hooked pool'
       : 'Fee: ' + (Number(r.fraisBpsJambe2) / 100) + '% on what comes out (one fee for the whole crossing)',
+    /* ⛔⛔ 2026-10-17 (fork : 0,1296 $ d USDC laisses au compte sur ~12,96 $, sans une ligne a l ecran) : le reste en pivot est DIT,
+     *   chiffre par le plan (planFranchissement, `resteAuCompte`), avant la signature. */
+    ...(typeof r.resteAuCompte === 'string' && r.resteAuCompte ? [r.resteAuCompte] : []),
   ].map((l) => '<li>' + enTexte(l) + '</li>').join('');
 
   const bt = document.createElement('button');

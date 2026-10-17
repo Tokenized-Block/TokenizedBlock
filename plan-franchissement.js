@@ -77,6 +77,30 @@ function pairePingleeOuPivot(a, b) {
   for (const [k2, v] of POOLS_PIVOTS_AERODROME) if (k2 === k) return v;
   return null;
 }
+/**
+ * LA PHRASE DU RESTE : ce qui reste au compte, en mots simples, AVANT la signature.
+ * ⛔ Le montant n est donne en dollars que pour l USDC (6 decimales, 1 $ par unite entiere : c est le pivot des actions de la table).
+ *   Un autre pivot est dit en unites brutes avec son adresse — jamais un prix devine. Sans devis lisible : la phrase dit la NATURE
+ *   du reste, sans chiffre invente.
+ */
+export function phraseResteAuCompte({ reste = null, pivot, toleranceBps = 100n } = {}) {
+  const pct = (Number(BigInt(toleranceBps)) / 100).toString() + '%';
+  const pourquoi = ' — the stock leg can only spend what the first leg is guaranteed to deliver (its ' + pct + ' slippage margin)';
+  if (reste === null || reste === undefined) {
+    return 'Up to about ' + pct + ' of the first leg may stay in your wallet as the bridge asset' + pourquoi;
+  }
+  const r = BigInt(reste);
+  if (r <= 0n) return 'Nothing is expected to stay in your wallet as the bridge asset at the price read now';
+  if (bas(pivot) === bas(USDC_BASE)) {
+    /* « about » = au cent le PLUS PROCHE (0,1296 $ -> $0.13 : l arrondi inferieur sous-annoncait) ; sous un cent, « less than $0.01 »
+     *   plutot qu un « $0.00 » qui dirait qu il ne reste rien */
+    const cents = (r + 5000n) / 10000n;
+    const texte = r < 10000n ? 'less than $0.01' : '$' + (cents / 100n).toString() + '.' + (cents % 100n).toString().padStart(2, '0');
+    return 'About ' + texte + ' stays as USDC in your wallet' + pourquoi;
+  }
+  return 'About ' + r.toString() + ' raw units of ' + bas(pivot) + ' stay in your wallet' + pourquoi;
+}
+
 async function appel(rpc, to, data) {
   return rpc('eth_call', [{ to, data }, 'latest']);
 }
@@ -216,7 +240,9 @@ export async function poolAerodromeDe({ rpc, a, b, espacements = ESPACEMENTS_CL,
 export async function planFranchissement({ rpc, chaine, compte, chemin, devise, block, montant,
   decimalesEntree, prixUsdEntree = null, resoudreV4, beneficiaireFrais,
   toleranceBps = 100n, maintenant = Date.now(), espacements = ESPACEMENTS_CL,
-  fraisDevisesOk = null } = {}) {
+  fraisDevisesOk = null,
+  /* le planificateur de la jambe 1, injectable pour les tests (stubber tout `finaliser` serait une seconde implementation) */
+  planJambe1 = planEchangeMultiSauts } = {}) {
   const forme = franchissementDepuisChemin({ chemin });
   if (forme.etat !== 'OK') {
     return { etat: 'REFUSE', etape: 'forme', pourquoi: forme.pourquoi };
@@ -254,7 +280,7 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
   }
   let p1;
   try {
-    p1 = await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts,
+    p1 = await planJambe1({ rpc, chaine, compte, sauts: b.sauts,
       entree: devise, sortie: forme.pivot, montant, toleranceBps, maintenant,
       decimalesEntree, prixUsdEntree, fraisDevisesOk, fraisRouteurAilleurs: true });
   } catch (e) {
@@ -278,6 +304,16 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
     return { etat: 'REFUSE', etape: 'jambe 1',
       pourquoi: 'leg 1 guarantees nothing, so leg 2 has no honest input amount' };
   }
+  /* ⛔⛔ 2026-10-17 (mesure sur fork dedie, banc-reste-pivot-fork-20261017.mjs) : CE QUI RESTE AU COMPTE EST DIT, CHIFFRE.
+   *   La jambe 2 depense `minPivot` (le minimum garanti de la jambe 1), pas ce que la jambe 1 rend vraiment : le calldata d un lot
+   *   EIP-5792 est fige avant l envoi, et le routeur Aerodrome CL ne sait pas depenser un solde qu il detient (exactInput tire chez
+   *   msg.sender ; `exactInput` SwapRouter02 sans deadline, `pull`, `wrapETH` absents de son bytecode ; deux REVERT sur fork).
+   *   MESURE : IB022 > AAPLc, 0,1296 $ d USDC laisses au compte sur ~12,96 $ (1,0 % = la tolerance de la jambe 1), et l ecran ne le
+   *   disait pas. ⇒ Le reste ATTENDU = devis de la jambe 1 moins son minimum, au prix lu maintenant (plus si le prix monte d ici la
+   *   signature, moins s il baisse ; sous le minimum, tout le lot reverte). Aucun montant du lot ne change : c est une ANNONCE. */
+  let devisPivot = null;
+  try { devisPivot = BigInt(p1.resume.quote); } catch (_) { devisPivot = null; }
+  const restePivot = devisPivot !== null && devisPivot > minPivot ? devisPivot - minPivot : 0n;
 
   /* ── 3. LE MINIMUM DE LA JAMBE 2, DERIVE DU PRIX SPOT DE LA POOL ───────────────────────── */
   /* ⛔⛔ `sortieSpot` EST UNE ESTIMATION AU PRIX INSTANTANE, PAS UN DEVIS. Elle ignore la
@@ -347,6 +383,13 @@ export async function planFranchissement({ rpc, chaine, compte, chemin, devise, 
       minimumParPrixSpot: true,
       pool: aero.pool,
       tickSpacing: aero.tickSpacing,
+      /* ⛔⛔ 2026-10-17 : LE RESTE EN PIVOT, CHIFFRE ET DIT (voir plus haut). `pivotAuMoins` = ce que la jambe 2 depense exactement ;
+       *   `devisPivot` = ce que la jambe 1 rend au prix lu ; `restePivot` = la difference, ATTENDUE (pas garantie) au compte. */
+      devisPivot,
+      pivotAuMoins: minPivot,
+      restePivot: devisPivot === null ? null : restePivot,
+      toleranceBpsJambe1: BigInt(toleranceBps),
+      resteAuCompte: phraseResteAuCompte({ reste: devisPivot === null ? null : restePivot, pivot: forme.pivot, toleranceBps }),
     },
     pourquoi: null,
   };
