@@ -4056,6 +4056,8 @@ const SERVIS = [
    *   Elle ne signe rien ; bouton eteint tant que les 4 adresses de Phil (reserve, verifier, guardian, rail) manquent. noindex, aucun lien. */
   'deployer-missions.html',
   'missions-deploiement.js',
+  /* 2026-10-17 soir : la route FIXE du rail et l encodeur des arguments de MissionsDeployer (la page recalcule la donnee avec) */
+  'missions-rail.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
