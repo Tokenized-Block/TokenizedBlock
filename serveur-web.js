@@ -997,6 +997,9 @@ async function rpcHistoire(methode, params) {
 let archiveMissions = null;
 const attestationsEnCours = new Set();
 let sondeDetentionA = 0;
+const sondeDetentionJour = { jour: '', n: 0 };
+const SONDE_DETENTION_MAX_JOUR = Number.isSafeInteger(Number(process.env.SONDE_DETENTION_MAX_JOUR)) && Number(process.env.SONDE_DETENTION_MAX_JOUR) >= 0
+  ? Number(process.env.SONDE_DETENTION_MAX_JOUR) : 6;
 async function rpcMissionsEtat(methode, params) {
   const historique = methode === 'eth_call' && Array.isArray(params) && params[1] !== 'latest';
   try { return await rpcServeur(methode, params); } catch (e) { if (!historique || !RPC_ARCHIVE) throw e; }
@@ -5843,6 +5846,12 @@ function traiterRequete(req, res) {
     if (!RPC_ARCHIVE) { repondreS(200, { ok: false, etat: 'NON_MESURE', pourquoi: 'no archive node on this server' }); return; }
     if (archiveEpuisee()) { repondreS(202, { ok: false, etat: 'NON_MESURE', pourquoi: 'archive budget used up for today' }); return; }
     if (Date.now() - sondeDetentionA < 300000) { repondreS(429, { ok: false, pourquoi: 'one probe every 5 minutes', dans: Math.ceil((300000 - (Date.now() - sondeDetentionA)) / 1000) }); return; }
+    /* ⛔ chasse 2026-10-17 soir (MED, confirme) : 1 appel / 5 min = 288 / jour x ~44 getLogs d archive ~ 12 600, contre un budget de 3 000 :
+     *   n importe qui epuisait l archive commune. Plafond du JOUR (UTC) : SONDE_DETENTION_MAX_JOUR (6 par defaut, ~264 lectures au pire). */
+    const jourS = new Date().toISOString().slice(0, 10);
+    if (sondeDetentionJour.jour !== jourS) Object.assign(sondeDetentionJour, { jour: jourS, n: 0 });
+    if (sondeDetentionJour.n >= SONDE_DETENTION_MAX_JOUR) { repondreS(429, { ok: false, pourquoi: 'the probe budget for today is used up (' + SONDE_DETENTION_MAX_JOUR + ' a day)' }); return; }
+    sondeDetentionJour.n += 1;
     sondeDetentionA = Date.now();
     const avant = archiveCompte.appels, t0 = Date.now();
     mesurerFenetre({ rpcEtat: rpcMissionsEtat, rpcLogs: rpcHistoire, tranche: 2000 }, jeton, compte, 86400)

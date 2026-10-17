@@ -25,4 +25,8 @@ vu(!/console\./.test(bloc), 'aucun console.* dans les routes missions');
 const etat = src.slice(src.indexOf('async function rpcMissionsEtat'), src.indexOf('async function rpcMissionsEtat') + 500);
 vu(/params\[1\] !== 'latest'/.test(etat) && /try \{ return await rpcServeur/.test(etat) && /if \(!historique \|\| !RPC_ARCHIVE\) throw e/.test(etat), 'archive seulement en repli d un eth_call historique');
 vu(/import \{ attester(, mesurerFenetre)? \} from '\.\/missions-attestation\.js'/.test(src) && /import \{ MISSIONS_DEPLOIEMENT \} from '\.\/missions-deploiement\.js'/.test(src), 'imports presents');
+/* chasse 2026-10-17 soir (MED) : la sonde de detention a un PLAFOND DU JOUR, avant tout appel (sinon 288 x ~44 lectures d archive / jour) */
+const sonde = src.slice(src.indexOf("if (chemin === '/api/missions/sonde-detention'"), src.indexOf("if (chemin === '/sante')"));
+const iPlafond = sonde.indexOf('if (sondeDetentionJour.n >= SONDE_DETENTION_MAX_JOUR)'), iMesure = sonde.indexOf('mesurerFenetre(');
+vu(iPlafond > 0 && iMesure > iPlafond && /sondeDetentionJour\.n \+= 1;/.test(sonde), 'sonde : plafond du jour verifie AVANT la mesure, et compte');
 console.log('ok missions-route - ' + n + ' assertions ; NE PROUVE PAS le chemin avec contrat deploye');
