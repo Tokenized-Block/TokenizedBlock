@@ -17044,8 +17044,8 @@ async function peindreCautionProfil(adr, v) {
             : 'The 7 days have passed: the creator can take it back.'));
   carte.hidden = false;
   if (!moi) return;
-  peindreAjouterPaire(adr);
   const sortie = sortieCautionPour({ etat, compte, hook, cle });
+  peindreAjouterPaire(adr); /* createur nomme par le contrat seulement (apres « if (!moi) return ») */
   if (!sortie.appel) return;
   const envoyer = async () => {
     b.disabled = true; note.className = 'note'; note.textContent = 'Check it in your wallet…';
