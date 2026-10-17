@@ -94,6 +94,8 @@ import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
+import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1 } from './tirage-saison.js';
+import { WETH_BASE } from './plan-eth-block.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -3819,6 +3821,23 @@ const revenu = (() => {
  *   `createurs(bytes32)` (hook 7030) puis `createurDe(bytes32)` (hooks V2/V3).
  * ⛔ MESURE 2026-10-17 sur UNIT (pool 0x79a40c32…, hook 7030) : createurs rend 0x31e0…, createurDe REVERT. Ne lire que createurDe
  *   (comme /api/parts-createur) sauterait en silence toutes les pools 7030. Rien de lu -> null (la ligne dit CREATEUR_NON_LU). */
+/* 2026-10-17 — la valeur en dollars d un frais verifie, pour le tirage de saison. Decimales lues sur la chaine (cache : elles ne changent
+ *   pas) ; prix = celui de l ecran (prixUsdPourPlan ; l ETH natif/WETH par son pool). Non lu -> la devise vaut 0, jamais devinee. */
+const decimalesCache = new Map();
+const WETH_SRV = WETH_BASE.toLowerCase();
+async function valeurFraisUsd(recus) {
+  const prix = {}, decimales = {};
+  for (const r of recus || []) {
+    const d = String(r.devise).toLowerCase();
+    if (d === '0x' + '0'.repeat(40)) { decimales[d] = 18; prix[d] = await prixUsdPourPlan(null); continue; }
+    if (!decimalesCache.has(d)) {
+      try { const x = Number(BigInt(await rpcActivite('eth_call', [{ to: d, data: '0x313ce567' }, 'latest']))); if (Number.isInteger(x) && x >= 0 && x <= 36) decimalesCache.set(d, x); } catch (_) { /* non lu */ }
+    }
+    if (decimalesCache.has(d)) decimales[d] = decimalesCache.get(d);
+    prix[d] = d === WETH_SRV ? await prixUsdPourPlan(null) : await prixUsdPourPlan(d);
+  }
+  return valeurUsd(recus, { prix, decimales });
+}
 const SEL_CREATEURS = selecteurSrv('createurs(bytes32)'), SEL_CREATEUR_DE = selecteurSrv('createurDe(bytes32)');
 /* ⛔ 2026-10-17 (avant deploy) : le hook 7030 n est PAS dans HOOKS_FRAIS -> le balayage fraisScan ne voit AUCUNE pool 7030, donc aucune
  *   naissance recente. Les pools viennent d abord des CLES lues (clesCache / resoudreClePool, comme /api/cle : UNIT y rend sa pool 7030
@@ -5644,6 +5663,12 @@ function traiterRequete(req, res) {
         const createur = await createurDuBlock(r);
         revenu.registre[h] = ligneRegistre({ hash: h, jour, ligne, bloc: r, verif, createur });
       }
+      /* 2026-10-17 — TIRAGE DE SAISON (v1 BLANCHE) : un frais EXTERNE verifie sur une action (swap_action) credite son payeur dans la
+       *   saison de la semaine. Valeur en dollars au prix que l ecran lit A LA RECEPTION (secondes apres le bloc) ; non lu -> 0. */
+      if (verif.externe && ligne === 'swap_action') {
+        const usd = await valeurFraisUsd(v.recus);
+        revenu.saisons = crediter(revenu.saisons || {}, { saison: saisonDe(Date.now()).id, payeur: v.payeur, hash: h, usd });
+      }
       revenuSale = true;
       console.log('[revenu]', jour, ligne, verif.externe ? 'EXTERNE' : 'interne', JSON.stringify(v.recus));
       repondre(200, { ok: true, externe: verif.externe });
@@ -5675,6 +5700,21 @@ function traiterRequete(req, res) {
           + 'is owed 30% of the fee we actually received, per token (we keep floor(70%)). Same wallet as the creator: nothing. '
           + 'Owed is not paid: payouts are sent by a human wallet, never by this server. Amounts are raw token units.' }));
     })().catch((e) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) })); });
+    return;
+  }
+
+  /* ══ TIRAGE DE SAISON (2026-10-17, v1 BLANCHE) — public et rejouable : la saison, le seuil, chaque wallet avec ses frais verifies et
+   *   leurs hashes, les tickets, leur racine merkle. ⛔ Aucun pot en v1 : la reponse le dit. Le gagnant viendra d un bloc fixe a la cloture. */
+  if (chemin === '/api/tirage') {
+    const s = saisonDe(Date.now());
+    const etat = (revenu.saisons || {})[s.id] || {};
+    const t = tickets(etat, F_USD_V1);
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, saison: s.id, debut: new Date(s.debut).toISOString(), fin: new Date(s.fin).toISOString(),
+      seuilUsd: F_USD_V1, mode: 'SHADOW', pot: 0, tickets: t, racine: racine(t),
+      wallets: Object.entries(etat).map(([adresse, w]) => ({ adresse, fraisUsd: w.usd, hashes: w.hashes, ticket: w.usd >= F_USD_V1 })),
+      regle: 'One ticket per wallet whose verified fees on tokenized-stock trades reach $' + F_USD_V1 + ' this week (fees already paid, no new stake; '
+        + 'paying more gives nothing more). Shadow season: no prize. The winner will come from the hash of a block fixed when the season closes.' }));
     return;
   }
 
