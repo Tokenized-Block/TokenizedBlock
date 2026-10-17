@@ -18,7 +18,7 @@
  *   BLOCK > ACTION (pool Aerodrome mesuree)                  cheminBlocVersAction + planFranchissement (lot atomique)
  *   ETH > ACTION, USDC > ACTION (pool Aerodrome mesuree)     planAchatEthAction, planAerodromeSegment
  *   ETH|USDC > ACTION, ACTION > USDC (pool v4 USDC LUE)       planEchange / sautsDepuisChemin + planEchangeMultiSauts (2026-10-03) */
-import { planEchange, planEchangeMultiSauts, meilleureClePourMontant } from './echange.js';
+import { planEchange, planEchangeMultiSauts, meilleureClePourMontant, meilleureClePourBloc } from './echange.js';
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME } from './plan-franchissement.js';
@@ -266,7 +266,17 @@ async function planRailBrut(q, deps) {
    *   ce lecteur est la seule borne commune : tout ce que le plan lit passe par lui, les appels en trop attendent leur tour.
    *   Il ne reessaie rien et ne garde rien (lectures-en-vol.js). Le lecteur recu n est plus appele directement ci-dessous. */
   const rpc = typeof rpcRecu === 'function' ? lecteurBorne(rpcRecu, LECTURES_EN_VOL_MAX) : rpcRecu;
-  const clesDe = (deps && typeof deps.clesDe === 'function') ? deps.clesDe : (async () => []);
+  const clesDeRecu = (deps && typeof deps.clesDe === 'function') ? deps.clesDe : (async () => []);
+  /* 2026-10-17 : les cles lues d un jeton sont gardees LE TEMPS DE CE PLAN (une cle de pool est immuable) — le resolveur v4
+   *   les reprend TOUTES pour la jambe du block (meilleureClePourBloc), sans relire /api/cle. Une lecture ratee n est pas gardee. */
+  const clesLues = new Map();
+  const clesDe = async (a) => {
+    const k = bas(a);
+    if (clesLues.has(k)) return clesLues.get(k);
+    const r = await clesDeRecu(a);
+    if (Array.isArray(r) && r.length) clesLues.set(k, r);
+    return r;
+  };
   const chaine = Number((deps && deps.chaine) || 8453);
   const stateView = (deps && deps.stateView) || (V4_ADRESSES[chaine] || {}).stateView;
   const maintenant = (deps && deps.maintenant) || Date.now();
@@ -314,7 +324,26 @@ async function planRailBrut(q, deps) {
      *   de prix ETH/USDC) ne designent aucune pool de cette paire : 5 devis qui REVERTENT a chaque plan. Pour ce saut-la, la
      *   cle lue seule. Tout autre saut garde la regle d avant (la cle lue ET les cles de prix). */
     const sautAction = !!k && (natureJeton(d1) === 'ACTION' || natureJeton(v1) === 'ACTION');
+    /* ⛔ 2026-10-17 (toutes les pools d un block) : sur un saut de BLOCK, toutes ses cles lues sur CETTE paire sont candidates, et le
+     *   meilleur devis gagne (echange.js `meilleureClePourBloc` -> `meilleureClePourMontant`, filtres et marge de la pool qui paie
+     *   decrits la-bas). La cle lue `k` reste candidate telle qu avant. Les sauts d action gardent leur regle (cle lue seule). */
+    const block = [d1, v1].map(bas).find((a) => natureJeton(a) === 'BLOCK');
+    if (block && !sautAction) {
+      return meilleureClePourBloc({ rpc, chaine, de: d1, vers: v1, montant: mt, cles: clesLues.get(block) || [], cleConnue: k, autres: CLES_PRIX });
+    }
     return meilleureClePourMontant({ rpc, chaine, de: d1, vers: v1, montant: mt, candidates: sautAction ? sup : sup.concat(CLES_PRIX) });
+  };
+  /* ⛔ 2026-10-17 (achat / vente DIRECTS d un block contre sa cotation) : le marche lu par `vieDuBlock` est la PREMIERE pool
+   *   initialisee, choisie sans montant. Si le block a d autres pools sur la MEME paire, la meilleure au montant est prise
+   *   (meilleureClePourBloc ; memes filtres, meme marge de la pool qui paie). Rien de cote, ou une seule cle : le marche d avant,
+   *   inchange — planEchange rend alors son propre verdict, comme avant. */
+  const marcheAuMontant = async (marche, block, d1, v1) => {
+    const cles = clesLues.get(bas(block)) || [];
+    if (!marche || !marche.cle || cles.length < 2) return { marche, choix: null };
+    const r = await meilleureClePourBloc({ rpc, chaine, de: d1, vers: v1, montant: m, cles, cleConnue: marche.cle });
+    if (r.etat !== 'OK' || !r.cle) return { marche, choix: r.pourquoiPools || null };
+    const meme = bas(r.cle.hooks) === bas(marche.cle.hooks) && Number(r.cle.fee) === Number(marche.cle.fee) && Number(r.cle.tickSpacing) === Number(marche.cle.tickSpacing);
+    return { marche: meme ? marche : { ...marche, cle: r.cle }, choix: r.pourquoiPools || null };
   };
   try {
     /* ── 4 quater. UNE ACTION DE LA TABLE AERODROME CONTRE WETH / cbBTC / EURC (Phil, 2026-10-10, DIG-actions-hors-USDC) ──
@@ -338,8 +367,9 @@ async function planRailBrut(q, deps) {
       if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
       const quote = quoteDe(marcheB.cle, vers);
       if (de === quote) {
+        const au = await marcheAuMontant(marcheB, vers, de, vers);
         return normaliser(route, await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
-          marcheLu: marcheB, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote });
+          marcheLu: au.marche, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote, ...(au.choix ? { pools: au.choix } : {}) });
       }
       if ((nd === 'USDC' || nd === 'OUSD') && (quote === ETH || quote === USDC)) {
         const chemin = [];
@@ -362,8 +392,9 @@ async function planRailBrut(q, deps) {
       const quote = quoteDe(marcheA.cle, de);
       const decA = Number.isInteger(marcheA.decimales) ? marcheA.decimales : await decimalesDe(de);
       if (vers === quote) {
+        const au = await marcheAuMontant(marcheA, de, de, vers);
         return normaliser(route, await planEchange({ rpc, chaine, jeton: de, compte, sens: 'VENTE', montant: m,
-          marcheLu: marcheA, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote });
+          marcheLu: au.marche, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote, ...(au.choix ? { pools: au.choix } : {}) });
       }
       /* ⛔ 2026-10-10 (QA Grok : Sell n offrait pas USDC) : un block cote en ETH se vend contre USDC en UN appel au routeur Uniswap,
        *   block -> ETH -> USDC (meme assembleur, meme juge que la route vers une action ; frais une fois, dans le block vendu ou par

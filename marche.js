@@ -270,6 +270,14 @@ async function vieEnDevise({ rpc, stateView, jeton, clesExactes }) {
   return null;
 }
 
+/** Une cle exacte est-elle un MARCHE (et pas une pool piege a frais LP statique > 10 %) ? ⛔ UNE SEULE regle : lue par
+ *  vieDuBlock ET par le choix des pools d un block au montant (echange.js `clesDeLaPaire`, 2026-10-17). */
+const FRAIS_LP_MAX_MARCHE = 100000, FRAIS_DYNAMIQUE = 0x800000;
+export function cleEstUnMarche(c) {
+  return (!!c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing))
+      && (Number(c.fee) <= FRAIS_LP_MAX_MARCHE || Number(c.fee) === FRAIS_DYNAMIQUE));
+}
+
 export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], deviseDAbord = false }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
     return { etat: 'REFUSEE', vie: null, devise: null, via: null, pourquoi: 'not an address' };
@@ -285,10 +293,7 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], devi
    *   ETH sans hook a 88,0238 % de frais LP (liquidite 0), USDC a 75 %. La pool ETH etait lue la premiere et devenait « le
    *   marche » : le block paraissait cote en ETH, et sa vraie pool HIMSc n etait jamais atteinte. Un frais LP STATIQUE
    *   au-dessus de 10 % n est pas un marche ; le frais dynamique v4 (drapeau 0x800000) n est pas concerne. */
-  const FRAIS_LP_MAX_MARCHE = 100000, FRAIS_DYNAMIQUE = 0x800000;
-  const clesSaines = (Array.isArray(clesExactes) ? clesExactes : [])
-    .filter((c) => c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing))
-      && (Number(c.fee) <= FRAIS_LP_MAX_MARCHE || Number(c.fee) === FRAIS_DYNAMIQUE));
+  const clesSaines = (Array.isArray(clesExactes) ? clesExactes : []).filter(cleEstUnMarche);
   /* ⛔⛔ 2026-10-04 (MESURE sur le planificateur de prod) : un plan d action tokenisee mettait 27 a 175 s. Compte des lectures sur
    *   fork : 23 par plan, dont 17 `getSlot0` SEQUENTIELS sur des pools ETH qui n existent pas pour une action (elle est cotee
    *   en USDC) — sa vraie pool n etait lue qu APRES, par `vieEnDevise`. `deviseDAbord` lit d abord les cles exactes appariees a

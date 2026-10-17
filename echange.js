@@ -21,7 +21,8 @@ import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFrai
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
   AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
 import { etapesPermit2Exactes } from './approbations-exactes.js';
-import { vieDuBlock } from './marche.js';
+import { vieDuBlock, cleEstUnMarche } from './marche.js';
+import { choisirPool, MARGE_BPS } from './choix-de-pool.js';
 import { poolSansHookInterdite, indexPoolSansHookInterdite, MESSAGE_SANS_POOL, ROUTE_VIA_TBLOCK, cleTouchTblock,
   REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI, estDeviseConnue, cleSansHook, formatOpenLaunch, estBlockDeRoute, hookAdmisPourBlock, hooksDeRoute } from './pool-sans-hook.js';
 /* ⛔ L ASSEMBLAGE DE LA ROUTE MULTI-SAUTS VIT A PART, teste et mute (45 cas, 14/14 mutations). Ici
@@ -743,7 +744,7 @@ export async function sonderFractions(lireQuote, m) {
   return { fraction: 0, sondees, nel };
 }
 
-export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates = CLES_PRIX } = {}) {
+export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates = CLES_PRIX, detail = false } = {}) {
   const Q = QUOTEUR[Number(chaine)];
   const adr = (x) => String(x || '').toLowerCase();
   const estAdr = (x) => /^0x[0-9a-f]{40}$/.test(adr(x));
@@ -780,10 +781,15 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
     return BigInt('0x' + String(r).slice(2, 66));
   }, LECTURES_EN_VOL_MAX);
   let best = null, cotees = 0;
+  /* 2026-10-17 (toutes les pools d un block) : avec `detail`, la liste des candidats NON cotes est RENDUE, pour que l appelant
+   *   puisse DIRE quelle pool a ete sautee et pourquoi (jamais devinee). Sans `detail`, la reponse est OCTET POUR OCTET celle d avant
+   *   (test-lectures-paralleles-20261004 compare champs ET ordre des champs) ; le choix ci-dessous est inchange dans les deux cas. */
+  const nonCotees = [];
   for (const [i, e] of essais.entries()) {
+    if (!issues[i].ok) nonCotees.push({ fee: e.k.fee, tickSpacing: e.k.tickSpacing, hooks: e.cle.hooks, raison: String((issues[i].erreur && issues[i].erreur.message) || issues[i].erreur || 'no answer').slice(0, 80) });
     if (!issues[i].ok) continue; /* ⛔ une combinaison absente ne dit rien des autres */
     const quote = issues[i].valeur;
-    if (quote <= 0n) continue;
+    if (quote <= 0n) { nonCotees.push({ fee: e.k.fee, tickSpacing: e.k.tickSpacing, hooks: e.cle.hooks, raison: 'quoted zero' }); continue; }
     cotees += 1;
     if (!best || quote > best.quote) {
       best = { cle: e.cle, zeroForOne: e.zeroForOne, quote, fee: e.k.fee, tickSpacing: e.k.tickSpacing };
@@ -821,11 +827,104 @@ export async function meilleureClePourMontant({ rpc, chaine, de, vers, montant, 
           + '1/10, 1/100 or 1/1000 of it: it has no usable liquidity right now - not tradable here' };
     }
     return { etat: 'NON_MESURE', cle: null, zeroForOne: null, quote: null,
-      essayees: liste.length, cotees,
+      essayees: liste.length, cotees, ...(detail ? { nonCotees } : {}),
       pourquoi: 'no v4 pool among the ' + liste.length + ' tried combinations quoted this pair at this '
         + 'size — that is what we looked at, not proof that none exists' };
   }
-  return { etat: 'OK', ...best, essayees: liste.length, cotees, pourquoi: null };
+  return { etat: 'OK', ...best, essayees: liste.length, cotees, ...(detail ? { nonCotees } : {}), pourquoi: null };
+}
+
+/* ══ 2026-10-17 — TOUTES LES POOLS D UN BLOCK, PAS UNE SEULE ═════════════════════════════════════════════════════════════
+ * ⛔⛔ MESURE (dig du 2026-10-17, relu ici) : `/api/cle` de UNIT rend DEUX cles — sa pool ETH sur le hook 7030 et une pool contre
+ *   mmETH (0x4fc5…4131) sur un autre hook — et la jambe du block (rails-api `resolveurAvec`, app.html `resoudreA` / `resoudre`)
+ *   ne passait au quoter QU UNE cle : celle que `vieDuBlock` avait trouvee la premiere (premiere slot0 non nulle, sans montant).
+ *   Une seconde pool de la MEME paire, meilleure a ce montant, n etait jamais cotee.
+ * ⇒ `clesDeLaPaire` fait de TOUTES les cles lues du block sur la paire du saut des candidats ; `meilleureClePourBloc` les donne
+ *   au comparateur CANONIQUE (`meilleureClePourMontant`, aucun second comparateur) : le meilleur devis a ce montant gagne.
+ * ⛔ CE QUI NE CHANGE PAS, et qui est la condition de ce changement :
+ *   · la cle deja choisie avant (le marche lu) reste candidate SANS filtre nouveau — l ancien chemin est un sous-cas exact :
+ *     si aucune autre pool ne cote mieux, le plan est le meme qu avant ;
+ *   · une cle AJOUTEE n entre que si le planificateur l accepterait : pas de piege a frais LP > 10 % (`cleEstUnMarche`), pas de
+ *     pool sans hook pour un block TB (`poolSansHookInterdite`), pas de hook tiers pour un block TB (`hookAdmisPourBlock`, avec
+ *     TOUTES les cles du block en contexte : un block qui a une pool sur NOTRE hook est TB, et ses pools a hook tiers sont
+ *     ecartees — regle du fondateur C2/F1), pas de hook qui preleve en block (`fraisHookEnBlock`) ;
+ *   · « une fois par swap » reste juge par `planEchangeMultiSauts` / `planEchange` sur la cle choisie (hook payeur -> routeur 0) ;
+ *   · « router vers la pool qui paie » (choix-de-pool.js, MARGE_BPS, decision de Phil 2026-09-30) : si la meilleure pool ne
+ *     paie pas a6cf et qu une pool qui paie a ete COTEE, la pool qui paie est prise SEULEMENT si le surcout pour la personne
+ *     est <= MARGE_BPS (meme fonction `choisirPool`, meme marge, non recopiee). Au-dela, la meilleure pool.
+ *   · une pool qui ne cote pas est SAUTEE et DITE (`nonCotees`, `ecartees`), jamais devinee.
+ * ⚠️ BORNE ECRITE : une cle d une AUTRE paire (UNIT/mmETH pour un saut UNIT -> ETH) n est PAS une route vers ETH — elle est
+ *   ecartee et nommee. Atteindre ETH par elle exigerait un saut mmETH -> ETH : non construit ici. Et la comparaison est faite sur
+ *   les devis BRUTS : le frais routeur (10-20 bps du bareme) d une pool qui ne paie pas n est pas dans son devis. */
+const basE = (x) => String(x || '').toLowerCase();
+export function clesDeLaPaire({ cles = [], de, vers, cleConnue = null } = {}) {
+  const d = basE(de), v = basE(vers);
+  const toutes = (Array.isArray(cles) ? cles : []).filter((c) => c && c.currency0 && c.currency1);
+  const contexte = cleConnue ? [cleConnue, ...toutes] : toutes;
+  const block = !estDeviseConnue(v) ? v : (!estDeviseConnue(d) ? d : null);
+  const sens = block === v ? 'ACHAT' : 'VENTE';
+  const vues = new Set(), candidats = [], ecartees = [];
+  const decrire = (c) => ({ currency0: c.currency0, currency1: c.currency1, fee: Number(c.fee), tickSpacing: Number(c.tickSpacing), hooks: c.hooks || ETH });
+  for (const [i, c] of (cleConnue ? [cleConnue, ...toutes] : toutes).entries()) {
+    const connue = !!cleConnue && i === 0;
+    const c0 = basE(c.currency0), c1 = basE(c.currency1);
+    if (!((c0 === d && c1 === v) || (c0 === v && c1 === d))) {
+      if (!connue) ecartees.push({ ...decrire(c), pourquoi: 'another pair (' + c0.slice(0, 6) + '…/' + c1.slice(0, 6) + '…): not a pool of this hop' });
+      continue;
+    }
+    let id;
+    try { id = poolId(decrire(c)); } catch (_) { ecartees.push({ ...decrire(c), pourquoi: 'malformed key' }); continue; }
+    if (vues.has(id)) continue;
+    vues.add(id);
+    const cle = decrire(c);
+    const zf = basE(cle.currency0) === d;
+    if (!connue) {
+      let refus = null;
+      if (!cleEstUnMarche(cle)) refus = 'static LP fee above 10%: a trap, not a market';
+      else if (block && poolSansHookInterdite(cle, [block], contexte)) refus = 'no hook on a TokenizedBlock block (founder rule)';
+      else if (!hookAdmisPourBlock(cle, contexte)) refus = 'third-party hook on a TokenizedBlock block (founder rule)';
+      else if (block && REFUS_FRAIS_HOOK_EN_BLOCK && fraisHookEnBlock(cle, block, sens, zf)) refus = 'its hook would take the fee in the block';
+      if (refus) { ecartees.push({ ...cle, pourquoi: refus }); continue; }
+    }
+    const paie = !!hookPaieEnDeviseVendable({ cle, sens, zeroForOne: zf, jeton: block }).paie;
+    candidats.push({ fee: cle.fee, tickSpacing: cle.tickSpacing, hooks: cle.hooks, paie, connue, poolId: id });
+  }
+  /* la pool qui paie a6cf passe devant : a devis EGAL, `meilleureClePourMontant` garde le PREMIER (`>` strict) */
+  candidats.sort((a, b) => Number(b.paie) - Number(a.paie));
+  return { candidats, ecartees };
+}
+
+/** Le meilleur devis parmi TOUTES les pools du block sur ce saut (+ `autres`, ex. CLES_PRIX, passees telles quelles). */
+export async function meilleureClePourBloc({ rpc, chaine, de, vers, montant, cles = [], cleConnue = null, autres = [], margeBps = MARGE_BPS } = {}) {
+  const { candidats, ecartees } = clesDeLaPaire({ cles, de, vers, cleConnue });
+  const enK = (c) => ({ fee: c.fee, tickSpacing: c.tickSpacing, hooks: c.hooks });
+  const r = await meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates: [...candidats.map(enK), ...(Array.isArray(autres) ? autres : [])], detail: true });
+  const pools = { duBloc: candidats.length, ecartees, nonCotees: r.nonCotees || [] };
+  const phrase = (choix) => 'pools of this block on this hop: ' + candidats.length + ' tried'
+    + (pools.nonCotees.length ? ', ' + pools.nonCotees.length + ' did not quote' : '')
+    + (ecartees.length ? ', ' + ecartees.length + ' set aside (' + ecartees.map((e) => e.pourquoi).join('; ') + ')' : '')
+    + (choix ? ' — ' + choix : '');
+  if (r.etat !== 'OK') return { ...r, pools, pourquoiPools: phrase(null) };
+  const meme = (c) => basE(c.hooks) === basE(r.cle.hooks) && Number(c.fee) === Number(r.cle.fee) && Number(c.tickSpacing) === Number(r.cle.tickSpacing);
+  const gagnante = candidats.find(meme) || null;
+  const payeurs = candidats.filter((c) => c.paie);
+  if ((gagnante && gagnante.paie) || !payeurs.length) {
+    return { ...r, pools, choixPool: { verdict: gagnante && gagnante.paie ? 'PAYEUSE_MEILLEURE' : 'AUCUNE_PAYEUSE', surcoutBps: 0n }, pourquoiPools: phrase(null) };
+  }
+  /* la meilleure ne paie pas a6cf, une payeuse existe : son devis, puis la regle de Phil (choisirPool, MARGE_BPS) */
+  const rp = await meilleureClePourMontant({ rpc, chaine, de, vers, montant, candidates: payeurs.map(enK) });
+  if (rp.etat !== 'OK' || !(rp.quote > 0n)) {
+    return { ...r, pools, choixPool: { verdict: 'PAYEUSE_NON_COTEE', surcoutBps: null }, pourquoiPools: phrase('the pool that pays could not be quoted: kept the best pool') };
+  }
+  /* arrondi AU-DESSUS : un surcout de 10,4 bps ne doit jamais se lire 10 et passer la marge au detriment de la personne */
+  const surcout = ((r.quote - rp.quote) * 10000n + r.quote - 1n) / r.quote;
+  const ch = choisirPool({ aerodrome: { pool: 'payeuse', glissementBps: surcout }, autre: { pool: 'meilleure', glissementBps: 0n }, margeBps });
+  if (ch.verdict === 'AERODROME') {
+    return { ...rp, essayees: r.essayees, cotees: r.cotees, pools, choixPool: { verdict: 'PAYEUSE_DANS_LA_MARGE', surcoutBps: surcout },
+      pourquoiPools: phrase('the pool that pays costs you ' + surcout + ' bps more, within the ' + margeBps + ' bps margin') };
+  }
+  return { ...r, pools, choixPool: { verdict: 'MEILLEURE_HORS_MARGE', surcoutBps: surcout },
+    pourquoiPools: phrase('the pool that pays would cost you ' + surcout + ' bps more, above the ' + margeBps + ' bps margin: kept the best pool') };
 }
 
 /**

@@ -4043,7 +4043,7 @@ import { planAjouterPaire, AJOUTER_PAIRE_ACTIF, DEVISES_AJOUTABLES } from './ajo
  *   Deux rails, deux taux, explicitement — baisser l existant aurait coupe un revenu qui existe.
  * ⛔ `meilleureClePourMontant` est le resolveur CANONIQUE de pool V4, celui qu utilise deja
  *   `planEthVersUsdc`. On l injecte au lieu d en ecrire une copie : deux resolveurs divergeraient. */
-import { planEchange, planEchangeMultiSauts, planEthVersUsdc, meilleureClePourMontant,
+import { planEchange, planEchangeMultiSauts, planEthVersUsdc, meilleureClePourMontant, meilleureClePourBloc,
   estWalletDeFrais, FRAIS_INTERFACE_BPS, poolActuelleDuBlock } from './echange.js';
 /* ⛔ LE DECODEUR DE CHAINE ABI EST CANONIQUE, ON N EN ECRIT PAS UN TROISIEME.
  * `decoderChaine` rend de l UTF-8 et `null` plutot que du charabia. Un `String.fromCharCode`
@@ -13300,9 +13300,14 @@ async function preparerEchange(sens) {
         if (c.etat !== 'OK') pf = { etat: 'REFUSE', pourquoi: c.pourquoi };
         else {
           /* le resolveur v4 : la cle LUE du marche du block d abord, puis les cles de prix connues (comme l achat multi) */
+          const clesA = await clesReellesDe(adr);
           const resoudreA = async ({ de, vers, montant: mt }) => {
             const paire = new Set([String(de).toLowerCase(), String(vers).toLowerCase()]);
             const k = marcheA.cle && paire.has(String(marcheA.cle.currency0).toLowerCase()) && paire.has(String(marcheA.cle.currency1).toLowerCase()) ? marcheA.cle : null;
+            /* ⛔ 2026-10-17 : la jambe du block cote TOUTES ses pools de cette paire (echange.js meilleureClePourBloc) ; k reste candidate */
+            if (paire.has(String(adr).toLowerCase())) {
+              return meilleureClePourBloc({ rpc, chaine: CHAINE, de, vers, montant: mt, cles: clesA, cleConnue: k, autres: CLES_PRIX_UI });
+            }
             const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
             return meilleureClePourMontant({ rpc, chaine: CHAINE, de, vers, montant: mt, candidates: sup.concat(CLES_PRIX_UI) });
           };
@@ -13365,8 +13370,13 @@ async function preparerEchange(sens) {
       }
       return null;
     };
+    const clesDuProfil = await clesReellesDe(adr);
     const resoudre = async ({ de, vers, montant }) => {
       const k = cleConnuePour(de, vers);
+      /* ⛔ 2026-10-17 : la jambe du block cote TOUTES ses pools de cette paire (echange.js meilleureClePourBloc) ; k reste candidate */
+      if ([String(de).toLowerCase(), String(vers).toLowerCase()].includes(String(adr).toLowerCase())) {
+        return meilleureClePourBloc({ rpc, chaine: CHAINE, de, vers, montant, cles: clesDuProfil, cleConnue: k, autres: CLES_PRIX_UI });
+      }
       /* ⛔ `hooks` EST REPORTE : une cle sans son hook est une AUTRE pool, et son poolId diffère. */
       const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
       return meilleureClePourMontant({ rpc, chaine: CHAINE, de, vers, montant,
@@ -13442,7 +13452,21 @@ async function preparerEchange(sens) {
     afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec });
     return;
   }
-  try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu, fraisDevisesOk }); }
+  /* ⛔ 2026-10-17 (toutes les pools d un block) : achat / vente DIRECTS — si le block a d autres pools sur la MEME paire que son
+   *   marche lu, la meilleure au montant est prise (echange.js meilleureClePourBloc : memes filtres, marge de la pool qui paie).
+   *   Rien de cote, une seule cle, ou une lecture ratee : le marche d avant, inchange. */
+  let marcheEch = marcheLu;
+  try {
+    const clesD = marcheLu && marcheLu.etat === 'LUE' && marcheLu.cle ? await clesReellesDe(adr) : [];
+    if (clesD.length >= 2) {
+      const c0 = String(marcheLu.cle.currency0).toLowerCase(), j = String(adr).toLowerCase();
+      const qd = c0 === j ? String(marcheLu.cle.currency1).toLowerCase() : c0;
+      const rb = await meilleureClePourBloc({ rpc, chaine: CHAINE, de: sens === 'ACHAT' ? qd : j, vers: sens === 'ACHAT' ? j : qd,
+        montant: m.valeur, cles: clesD, cleConnue: marcheLu.cle });
+      if (rb.etat === 'OK' && rb.cle) marcheEch = { ...marcheLu, cle: rb.cle };
+    }
+  } catch (_) { marcheEch = marcheLu; }
+  try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu: marcheEch, fraisDevisesOk }); }
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
   if ($('#profil').dataset.block !== adr) return;
