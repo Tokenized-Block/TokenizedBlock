@@ -3543,9 +3543,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="jourActions">Trade stocks</button>
         <!-- un skin achete = le ticket du jour (pass verifie au recu, pass-skin ; Phil 19:40 : « skin 1 day ») -->
         <button type="button" class="bouton sec" id="jourSkin">Skin · today's ticket</button>
-        <button type="button" class="bouton sec" id="jourTirages">Replay the data</button>
       </div>
-      <p class="note" style="margin:6px 0 0">$10 of UNIT or tokenized-stock trades in a day (UTC) = today's ticket. A skin = today's ticket too. A draw every day; bigger ones when the week and the month close.</p>
+      <p class="note" style="margin:6px 0 0">Ticket = $10 of UNIT or tokenized-stock trades today (UTC), or a skin. One draw a day; bigger ones at week and month end.</p>
       <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
       <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
         <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
@@ -3559,17 +3558,20 @@ details[open] > summary::before{transform:rotate(90deg)}
          participent au draw sont eligibles pour les missions », garde serveur) + detenir le block (contrat). -->
     <div class="carte" id="missionsCarte">
       <span class="jeuKick">Game · Missions</span>
-      <p class="note" style="margin:4px 0 0">Today's ticket + holding the block = you can take its missions. Do the job, keep holding through the window, claim.
-        Player 90% · creator 3% · community reserve 5.6% · dev 1.4%.</p>
+      <!-- Phil 20:30 : « un market open : n importe quelle IA peut accepter et proposer une task contre reward ». Le contrat (BlockMissionsV3)
+           le permet deja : tout wallet poste (recompense en sequestre), tout wallet fait la tache, la chaine la prouve. -->
+      <p class="titre jeuTitre" style="font-size:16px">An open market of tasks, paid on proof.</p>
+      <p class="note" style="margin:4px 0 0">Post a task and lock its reward. Anyone — a person or an AI agent — does it on Base; the chain proves it; the reward pays out.
+        The doer gets 90%. The 10% fee: 3% to the block's creator, 7% to TokenizedBlock. To take a task: today's ticket + hold the block.</p>
       <p class="note" id="missionsEtat" style="margin:6px 0 0">The board waits for its contract on Base.</p>
       <ul class="bcListe" id="missionsListe" style="margin:8px 0 0;padding:0;list-style:none"></ul>
       <div class="jourEtapes">
         <button type="button" class="bouton sec" id="jourMissions">Refresh missions</button>
         <!-- CREATE A MISSION (Phil 19:40) : le createur d un block poste « trade my block » — cible = PoolManager, Swap sur SA pool (topic1) ;
              approve EXACT + postTask (missions-plan.js planPoster), signes par SON wallet. Montre seulement quand le contrat a une adresse. -->
-        <button type="button" class="bouton" id="jourCreerMission" hidden>Create a mission</button>
+        <button type="button" class="bouton" id="jourCreerMission">Post a task · market your block</button>
       </div>
-      <form id="missionForm" hidden style="margin-top:8px" autocomplete="off">
+      <form id="missionForm" hidden style="margin-top:8px" autocomplete="off" onsubmit="return false">
         <label class="champ">Your block
           <select id="mfBlock"><option value="">Reading your blocks…</option></select>
         </label>
@@ -3582,7 +3584,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="champ">Must hold at least (block units)
           <input id="mfHold" inputmode="decimal" placeholder="10">
         </label>
-        <p class="note" style="margin:4px 0">Mission: <b>trade my block on its TokenizedBlock pool</b>, then hold for 24 h. Open 7 days. 10% of each reward is the fee (3% to you, 7% to TokenizedBlock).</p>
+        <p class="note" style="margin:4px 0">Task: <b>trade my block on its TokenizedBlock pool</b>, then hold it 24 h. Open 7 days. Doer 90% · you 3% · TokenizedBlock 7%.</p>
         <button type="submit" class="bouton" id="mfPoster">Post it — escrow the rewards</button>
         <p class="note" id="mfEtat" style="margin:6px 0 0"></p>
       </form>
@@ -3599,12 +3601,12 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte" id="regleCarte">
       <details id="missionsLien">
         <summary class="note" style="cursor:pointer">How it works</summary>
-        <p class="sous" id="tirSous" style="margin:6px 0 0">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket. Or buy a skin: 7 days of tickets.</p>
+        <p class="sous" id="tirSous" style="margin:6px 0 0">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket. Or buy a skin: today's ticket.</p>
         <div class="jeuGrille">
           <div class="jeuTuile"><b>01 · TRADE</b><p>Trade UNIT on its TokenizedBlock market, or tokenized stocks in the app.</p></div>
           <div class="jeuTuile"><b>02 · THE TICKET</b><p>$10 of volume in a day (UTC) is that day's ticket. Trading more that day adds nothing.</p></div>
           <div class="jeuTuile"><b>03 · THE DRAWS</b><p>A draw every day, a bigger one when the week closes, the biggest when the month closes. Every day you hold a ticket is one more entry. A future block's hash picks the winners — anyone can replay it.</p></div>
-          <div class="jeuTuile"><b>04 · MISSIONS</b><p>Only wallets that hold the block's units — and today's ticket — can take its missions. The creator sets the reward aside up front, in units or in the stock the block is paired with. Keep holding through the whole window; selling early ends the run.</p></div>
+          <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward up front. Anyone — person or AI agent — with today's ticket and the block's units can do it. Keep holding through the window; selling early ends the run.</p></div>
         </div>
       </details>
     </div>
@@ -4488,7 +4490,6 @@ async function peindreMissions() {
     + '<button type="button" class="bouton" data-claim="' + x.id + '">I did it — claim</button><p class="note" data-metat></p></li>').join('');
   ul.dataset.contrat = String(j.contrat || '');
   /* le contrat existe : le createur peut poster (bouton montre) */
-  const bc = $('#jourCreerMission'); if (bc) bc.hidden = !j.contrat;
 }
 
 /* ══ CREATE A MISSION (Phil 2026-10-17, 19:40) — le createur poste « trade my block » : cible = PoolManager, topic0 = Swap v4, topic1 = la
@@ -4500,7 +4501,7 @@ async function mesBlocksPourMission() {
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!c) { sel.innerHTML = '<option value="">Connect your wallet</option>'; return; }
   let j = null;
-  try { j = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(c).toLowerCase()), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); } catch (_) { j = null; }
+  try { j = await fetch('/api/blocks-de?' + new URLSearchParams({ adr: String(c).toLowerCase() }),{ cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); } catch (_) { j = null; }
   const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks : [];
   sel.innerHTML = liste.length ? liste.map((b) => '<option value="' + enTexte(b) + '">' + enTexte(((habitants.find((h) => String(h.adr).toLowerCase() === String(b).toLowerCase()) || {}).sym) || b.slice(0, 6) + '…' + b.slice(-4)) + '</option>').join('')
     : '<option value="">No block created by this wallet was read</option>';
@@ -4512,7 +4513,7 @@ $('#missionForm').addEventListener('submit', async (e) => {
   let c = null; try { c = compte; } catch (_) { c = null; }
   const contrat = $('#missionsListe').dataset.contrat, block = String($('#mfBlock').value || '').toLowerCase();
   if (!c) { dit('Connect your wallet first.'); return; }
-  if (!/^0x[0-9a-f]{40}$/.test(contrat)) { dit('The board has no contract yet.'); return; }
+  if (!/^0x[0-9a-f]{40}$/.test(contrat)) { dit('Nothing was posted: the board opens once its contract is signed on Base. Your task is ready to post then.'); return; }
   if (!/^0x[0-9a-f]{40}$/.test(block)) { dit('Pick one of your blocks.'); return; }
   const dec = 18n; /* B20 : 18 decimales (frappe fixe) */
   const brut = (s) => { const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(String(s || '').trim()); if (!m) return null; return BigInt(m[1]) * 10n ** dec + BigInt((m[2] || '').padEnd(18, '0')); };
@@ -4586,7 +4587,6 @@ $('#missionsListe').addEventListener('click', async (e) => {
 /* pass skin : le panneau de UNIT, vue Skin (essayer puis acheter 1 USDC) ; l achat signale `skin_mint`, le serveur ouvre 7 jours de tickets */
 $('#jourSkin').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
 $('#jourMissions').addEventListener('click', () => { void peindreMissions(); });
-$('#jourTirages').addEventListener('click', () => { window.open('/api/tirage', '_blank', 'noopener'); });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 /* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
 setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 8000);
