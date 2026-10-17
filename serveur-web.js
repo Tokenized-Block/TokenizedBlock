@@ -5872,6 +5872,11 @@ function traiterRequete(req, res) {
       repondreA(400, { ok: false, etat: 'REFUSE', pourquoi: 'a mission id, a wallet and a transaction hash are needed' }); return;
     }
     if (RPC_ARCHIVE && archiveEpuisee()) { repondreA(202, { ok: false, etat: 'NON_MESURE', pourquoi: 'the archive reads for today are used up: try again after 00:00 UTC' }); return; }
+    /* Phil 2026-10-17 soir : « ceux qui participent au draw sont eligibles pour les missions » — le ticket du JOUR (10 $ de volume verifie,
+     *   ou pass skin) est exige AVANT toute lecture de chaine : pas de ticket, pas de signature. Le contrat exige en plus la detention. */
+    if (!ticketsJour(revenu.jours || {}, jourDe(Date.now()).id, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD).includes(completer)) {
+      repondreA(200, { ok: false, etat: 'REFUSE', pourquoi: 'missions are for today\'s ticket holders: trade $' + SEUIL_VOLUME_JOUR_USD + ' today (UNIT or tokenized stocks in the app), or hold a skin pass' }); return;
+    }
     const k = taskId + ':' + completer;
     if (attestationsEnCours.has(k) || attestationsEnCours.size >= 2) { repondreA(429, { ok: false, pourquoi: 'busy, send it again in a moment' }); return; }
     attestationsEnCours.add(k);

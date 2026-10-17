@@ -20,8 +20,8 @@ vu(/Number\(w\.volumeUsd\)/.test(f) && /Number\(t\.seuilVolumeUsd\)/.test(f) && 
   'progression = volume verifie du serveur, seuil du serveur, seulement pour le wallet connecte');
 vu(/etape\('wallet_connect_ok'\); \} catch \(_\) \{\}\s*\r?\n\s*try \{ peindreTirage\(\); \} catch/.test(app), 'repeinte a la connexion');
 vu(/if \(nom === 'missions'\) \{ void peindreTirage\(\); void peindreDernierBlock\(\); void peindreMissions\(\); \}/.test(app), 'repeinte a l ouverture de l onglet Missions (tirage + face en direct + tableau des missions)');
-const carte = app.slice(c, app.indexOf('id="missionsLien"', c));
-vu(/<p class="titre jeuTitre">Your trades are your ticket\.<\/p>/.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
+const carte = app.slice(c, app.indexOf('</section>', c));
+vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\.<\/p>/.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
 vu(/\$10 of volume in a day \(UTC\)/.test(carte) && /A draw every day, a bigger one when the week closes, the biggest when the month closes/.test(carte)
   && /A future block's hash picks the winners/.test(carte), 'les tuiles disent la regle v2 et le hasard verifiable');
 console.log('ok tirage-carte - ' + n + ' assertions ; NE PROUVE PAS un ticket reel');

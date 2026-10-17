@@ -199,6 +199,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jourFace svg{width:100%;height:100%}
 .jourFace[data-gagne="0"]{opacity:.38;filter:grayscale(.6)}
 .jourEtapes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.jeuDuel{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
+.jeuCote{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center}
+.jeuCote .jourFace{width:96px;height:96px;flex-basis:96px}
+.jeuVs{align-self:center;font-weight:800;color:var(--accent2);font-size:13px;letter-spacing:.1em}
 .jourEtapes .bouton{flex:1 1 140px}
 .jourPaires{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .jourPaires span{font-size:12px;border:1px solid var(--ligne);border-radius:999px;padding:2px 8px}
@@ -3506,96 +3510,70 @@ details[open] > summary::before{transform:rotate(90deg)}
        Les missions des blocks et le Season Draw, ensemble : trader UNIT est a la fois le pass de ses missions et le ticket du jour.
        ⛔ Rien ici ne pretend qu un contrat est ouvert : le tableau des missions le dit, le tirage dit « practice, no prize yet ».
        Fund / Swap / Bridge : section #v-bridge, affichee SOUS le Wallet (ids inchanges : le JS et les tests les trouvent). -->
-  <section class="volet" id="v-missions" aria-label="Missions">
-    <!-- 2026-10-17 soir (Phil : « un mix entre tout ca … affiche le nombre de tickets … des boutons pour chaque etape … le ticket est une face
-         … le dernier block apparu avec les combinaisons ») : TA JOURNEE, en tete. Le ticket du jour = la face d une adresse DERIVEE de
-         (wallet, jour) par SHA-256 : la meme pour tout le monde, rejouable. Grisee tant que les 10 $ du jour ne sont pas verifies. -->
+  <!-- 2026-10-17 soir, v3 (Phil : « change le nom en Game … moins de texte, plus vivant, pouvoir tout faire direct ») : UN ecran, trois
+       cartes d ACTION. L explication longue est dans « ? » (Learn) et dans le pli « How it works » en bas. Id interne `missions` garde. -->
+  <section class="volet" id="v-missions" aria-label="Game">
+    <!-- TA JOURNEE : ton ticket (face derivee de SHA-256(wallet|jour), grise tant que les 10 $ ne sont pas verifies ou sans pass skin)
+         FACE A la face gagnante EN DIRECT (celle que tirerait le dernier bloc Base ; seul le bloc E, minuit UTC + 120 s, compte). -->
     <div class="carte" id="jourCarte">
-      <span class="jeuKick">TokenizedBlock · Your day</span>
-      <p class="titre jeuTitre">Trade. Hold. Play.</p>
-      <div class="jourTicket">
-        <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
-        <div style="min-width:0">
-          <p class="note" id="jourTicketTxt" style="margin:0">Connect a wallet: today's ticket shows here.</p>
-          <p class="note" id="jourCompte" style="margin:4px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+      <span class="jeuKick">Game · Your day</span>
+      <div class="jeuDuel">
+        <div class="jeuCote">
+          <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
+          <p class="note" id="jourTicketTxt" style="margin:4px 0 0">Connect a wallet: your ticket shows here.</p>
+        </div>
+        <div class="jeuVs" aria-hidden="true">vs</div>
+        <div class="jeuCote" id="dernierCarte">
+          <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
+          <p class="note" id="dernierNom" style="margin:4px 0 0">Reading the chain…</p>
         </div>
       </div>
-      <!-- FACE OF THE DAY (2026-10-17 soir) : hier, la face revelee par le bloc E, ton score, le gagnant du tirage du jour -->
-      <div class="jourTicket" id="faceJour" hidden>
+      <p class="note" id="dernierMoi" style="margin:6px 0 0"></p>
+      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
+      <p class="note" id="jourCompte" style="margin:2px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="jourUnit">Trade UNIT · $10 = ticket</button>
+        <button type="button" class="bouton sec" id="jourActions">Trade stocks</button>
+        <!-- un skin achete = 7 jours de tickets (pass verifie au recu, pass-skin) -->
+        <button type="button" class="bouton sec" id="jourSkin">Skin · 7 days of tickets</button>
+      </div>
+      <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
+      <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
         <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
         <div style="min-width:0">
           <p class="note" id="faceJourTxt" style="margin:0"></p>
           <p class="note" id="faceJourGagnant" style="margin:4px 0 0"></p>
         </div>
       </div>
-      <div class="jourEtapes">
-        <button type="button" class="bouton" id="jourUnit">1 · Trade UNIT</button>
-        <button type="button" class="bouton sec" id="jourActions">or tokenized stocks</button>
-        <button type="button" class="bouton sec" id="jourMissions">2 · Missions</button>
-        <button type="button" class="bouton sec" id="jourTirages">3 · The draws</button>
-        <!-- 2026-10-17 soir (Phil : « buy Skin pour draws pour 1 semaine garanti ») : un skin achete = 7 jours de tickets (pass verifie au recu) -->
-        <button type="button" class="bouton sec" id="jourSkin">Or a skin: 7 days of tickets</button>
-      </div>
     </div>
-    <!-- 2026-10-17 soir (Phil, capture : « latest block born mauvais — c est la simulation du block cree au hasard qui definit le block
-         gagnant ») : LA FACE GAGNANTE DU JOUR, EN DIRECT. Le dernier bloc Base tire, a chaque instant, la face qu il donnerait si la journee
-         fermait maintenant ; seul le bloc E (premier bloc >= minuit UTC + 120 s) compte. Ton ticket est compare a elle en direct. -->
-    <div class="carte" id="dernierCarte">
-      <span class="jeuKick">Live · today's winning face</span>
-      <div class="jourTicket">
-        <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
-        <div style="min-width:0">
-          <p class="titre" id="dernierNom" style="margin:0">Reading the chain…</p>
-          <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
-          <p class="note" id="dernierMoi" style="margin:2px 0 0"></p>
-        </div>
-      </div>
-    </div>
+    <!-- MISSIONS : la liste du contrat (/api/missions) avec « I did it — claim » ; ELIGIBILITE = le ticket du jour (Phil : « ceux qui
+         participent au draw sont eligibles pour les missions », garde serveur) + detenir le block (contrat). -->
     <div class="carte" id="missionsCarte">
-      <span class="jeuKick">TokenizedBlock · Missions</span>
-      <p class="titre jeuTitre">Your block is your pass.</p>
-      <p class="sous">Holding a block's units proves you're part of its crew and you play on TokenizedBlock. Missions turn that into rewards.</p>
-      <div class="jeuGrille">
-        <div class="jeuTuile"><b>01 · THE PASS</b><p>Only wallets that hold the block's units can take its missions.</p></div>
-        <div class="jeuTuile"><b>02 · THE MISSION</b><p>The creator sets the reward aside up front — in units, or in the stock the block is paired with.</p></div>
-        <div class="jeuTuile"><b>03 · THE WIN</b><p>Do it and keep holding through the whole window. Selling early ends the run.</p></div>
-      </div>
-      <!-- ⛔ Phil 2026-10-17 soir : « tu l as ecrit 2 fois » — la barre portait « Player 90% » ET la legende juste dessous le redisait.
-           La barre n a plus de texte (son aria-label le dit) ; la legende est la seule source. Et « dev 1.4% (USDC only) » etait devenu
-           FAUX : le dev recoit l USDC, ou l action elle-meme, ou l UNIT vendu en USDC par le rail — jamais des unites de block. -->
-      <div class="jeuPart" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
-        <span style="width:90%;background:var(--accent)"></span>
-        <span style="width:3%;background:var(--accent2)"></span>
-        <span style="width:5.6%;background:rgb(var(--accentRgb) / .55)"></span>
-        <span style="width:1.4%;background:rgb(var(--accentRgb) / .3)"></span>
-      </div>
-      <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (in USDC or in the stock — never in block units).</p>
-      <!-- ⛔ « or its brain posts the job » RETIRE (Phil : « corrige les incoherences ») : le cerveau ne poste AUCUNE mission aujourd hui. -->
-      <p class="note" style="margin:6px 0 0">The block's creator posts the job. Example of a mission: <i>say GM back</i>, reward $1 of NVDAc.</p>
-      <!-- 2026-10-17 soir (Phil : « au lieu de l ecrire build le ») : LE TABLEAU. /api/missions (le contrat) ; chaque mission ouverte a son
-           « I did it — claim » : le hash de ton action -> /api/missions/attestation (verifier) -> claim signe par TON wallet (missions-plan.js).
-           Tant que le contrat n a pas d adresse, la phrase ci-dessous reste, et aucun bouton n est montre. -->
-      <p class="note" id="missionsEtat" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
+      <span class="jeuKick">Game · Missions</span>
+      <p class="note" style="margin:4px 0 0">Today's ticket + holding the block = you can take its missions. Do the job, keep holding through the window, claim.
+        Player 90% · creator 3% · community reserve 5.6% · dev 1.4%.</p>
+      <p class="note" id="missionsEtat" style="margin:6px 0 0">The board waits for its contract on Base.</p>
       <ul class="bcListe" id="missionsListe" style="margin:8px 0 0;padding:0;list-style:none"></ul>
+      <div class="jourEtapes"><button type="button" class="bouton sec" id="jourMissions">Refresh missions</button></div>
     </div>
-    <!-- 2026-10-17 soir — SEASON DRAW v2 QUOTIDIEN (Phil). Donnees : /api/tirage (publiques, rejouables). -->
+    <!-- DRAWS : jour / semaine / mois, pratique (pot 0, dit). Donnees : /api/tirage, publiques et rejouables. -->
     <div class="carte" id="tirCarte">
-      <span class="jeuKick">TokenizedBlock · Season Draw</span>
-      <p class="titre jeuTitre">Your trades are your ticket.</p>
-      <p class="sous" id="tirSous">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket.</p>
-      <div class="jeuGrille">
-        <div class="jeuTuile"><b>01 · TRADE</b><p>Trade UNIT on its TokenizedBlock market, or tokenized stocks in the app.</p></div>
-        <div class="jeuTuile"><b>02 · THE TICKET</b><p>$10 of volume in a day (UTC) is that day's ticket. Trading more that day adds nothing.</p></div>
-        <div class="jeuTuile"><b>03 · THE DRAWS</b><p>A draw every day, a bigger one when the week closes, the biggest when the month closes. Every day you hold a ticket is one more entry. A future block's hash picks the winners — anyone can replay it.</p></div>
-      </div>
+      <span class="jeuKick">Game · Draws</span>
+      <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket.</p>
       <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
       <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
       <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
-    </div>
-    <div class="carte" id="missionsLien">
-      <p class="titre">One habit, two games</p>
-      <p class="note" style="margin:0">The UNIT you trade is the pass for UNIT's missions — and each day you trade $10 of it is a ticket for the draws.
-        Trading tokenized stocks in the app counts for the draws too.</p>
+      <div class="jourEtapes"><button type="button" class="bouton sec" id="jourTirages">Replay the draw data</button></div>
+      <details id="missionsLien" style="margin-top:8px">
+        <summary class="note" style="cursor:pointer">How it works</summary>
+        <p class="sous" id="tirSous" style="margin:6px 0 0">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket. Or buy a skin: 7 days of tickets.</p>
+        <div class="jeuGrille">
+          <div class="jeuTuile"><b>01 · TRADE</b><p>Trade UNIT on its TokenizedBlock market, or tokenized stocks in the app.</p></div>
+          <div class="jeuTuile"><b>02 · THE TICKET</b><p>$10 of volume in a day (UTC) is that day's ticket. Trading more that day adds nothing.</p></div>
+          <div class="jeuTuile"><b>03 · THE DRAWS</b><p>A draw every day, a bigger one when the week closes, the biggest when the month closes. Every day you hold a ticket is one more entry. A future block's hash picks the winners — anyone can replay it.</p></div>
+          <div class="jeuTuile"><b>04 · MISSIONS</b><p>Only wallets that hold the block's units — and today's ticket — can take its missions. The creator sets the reward aside up front, in units or in the stock the block is paired with. Keep holding through the whole window; selling early ends the run.</p></div>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -3763,7 +3741,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Market</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
     <!-- 2026-10-17 soir (Phil) : l onglet Bridge devient Missions. Fund / Swap / Bridge s affichent sous le Wallet (allerA('bridge') y mene). -->
-    <button class="navB" role="tab" aria-selected="false" data-volet="missions"><b>✓</b>Missions</button>
+    <button class="navB" role="tab" aria-selected="false" data-volet="missions"><b>✓</b>Game</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>
@@ -4465,8 +4443,8 @@ $('#missionsListe').addEventListener('click', async (e) => {
 });
 /* pass skin : le panneau de UNIT, vue Skin (essayer puis acheter 1 USDC) ; l achat signale `skin_mint`, le serveur ouvre 7 jours de tickets */
 $('#jourSkin').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
-$('#jourMissions').addEventListener('click', () => { const e = $('#missionsCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-$('#jourTirages').addEventListener('click', () => { const e = $('#tirCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('#jourMissions').addEventListener('click', () => { void peindreMissions(); });
+$('#jourTirages').addEventListener('click', () => { window.open('/api/tirage', '_blank', 'noopener'); });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 /* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
 setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 8000);
@@ -21334,7 +21312,7 @@ const ETAPES = [
     d: 'Every block with a live market, and the stocks Coinbase tokenized on Base, ranked by what is moving right now. Tap one to open it and buy or sell — your own wallet shows each step and you sign it.' },
   { t: 'Create — make your own', ic: 0,
     d: 'Pick a name and a symbol; its face and its brain are ready. For 0.001 ETH it is born on Base, its tokens are minted to you, and its market opens.' },
-  { t: 'Missions — jobs and daily draws', ic: 3,
+  { t: 'Game — missions and daily draws', ic: 3,
     d: 'Blocks post missions here: hold the block, do the job, keep holding through the window, and the reward is yours. Trade $10 in a day — the UNIT block or tokenized stocks — and that day is a ticket for the daily draw, with bigger draws when the week and the month close.' },
   { t: 'Brain — what a block feels', ic: 9,
     d: 'Every block has a brain of 128 small neurons, seeded by its address — not a chatbot. It reacts to buys, sales and new holders; you watch it light up. Open its control panel to talk to it and trade. Switch S.I on and it proposes trades inside the limits you set — it never signs: you do.' },
