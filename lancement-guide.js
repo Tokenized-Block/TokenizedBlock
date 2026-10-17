@@ -20,7 +20,10 @@ export function ethTexte(w) {
 
 export async function lireEtatLancement({ rpc, stateView, jeton, cle, hook, compte, blocMin = null }) {
   if (!ADR.test(String(jeton || '')) || !cle || !ADR.test(String(stateView || ''))) return { etat: 'NON_MESURE', pourquoi: 'missing block, pool key or StateView' };
-  const tag = typeof blocMin === 'string' && /^0x[0-9a-fA-F]+$/.test(blocMin) ? blocMin : 'latest';
+  /* ⛔ 2026-10-17 (revue Claude) : lu a 'latest', jamais a `blocMin` (persiste ; un noeud non-archive refuse un vieux bloc -> NON_MESURE
+   *   pour toujours). Une inscription confirmee lue « non payee » = noeud en retard -> NON_MESURE. */
+  const tag = 'latest';
+  const inscriptionConfirmee = typeof blocMin === 'string' && /^0x[0-9a-fA-F]+$/.test(blocMin);
   const id = poolId(cle).slice(2);
   const appel = async (to, data, t = 'latest') => String(await rpc('eth_call', [{ to, data }, t]));
   try {
@@ -31,6 +34,7 @@ export async function lireEtatLancement({ rpc, stateView, jeton, cle, hook, comp
       payee = BigInt(await appel(hook, '0x' + selecteur('payee(bytes32)') + id, tag)) !== 0n;
       createur = '0x' + (await appel(hook, '0x' + selecteur('createurs(bytes32)') + id, tag)).slice(-40).toLowerCase();
       prixInscrit = BigInt(await appel(hook, '0x' + selecteur('prixInscrit(bytes32)') + id, tag));
+      if (inscriptionConfirmee && (!payee || /^0x0{40}$/.test(createur))) return { etat: 'NON_MESURE', pourquoi: 'the network has not caught up with your registration yet' };
     }
     const s0 = await appel(stateView, '0x' + selecteur('getSlot0(bytes32)') + id);
     const sqrt = BigInt('0x' + s0.slice(2, 66));

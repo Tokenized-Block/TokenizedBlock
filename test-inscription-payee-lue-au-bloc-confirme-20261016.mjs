@@ -41,11 +41,18 @@ const payantes = (p) => (p.etapes || []).filter((e) => e && e.payant);
 // temoin : sans bloc confirme, un noeud en retard refait payer (le defaut vu en prod)
 const t = await completerInscriptionPayee({ ...base, rpc: lecteur({ aJourA: () => true }) });
 ok(payantes(t).length === 1 && BigInt(payantes(t)[0].value) === 715168377582366n, 'temoin : noeud en retard sur latest -> 0.000715 redemande (defaut reproduit)');
+/* 2026-10-17 (revue Claude) : on lit a 'latest' ; une inscription CONFIRMEE (blocMin) lue « non payee » = noeud en retard -> NON_MESURE,
+ *   rien n est demande (avant : lecture AU bloc, qui devient illisible quelques heures plus tard sur un noeud non-archive). */
 const r = await completerInscriptionPayee({ ...base, rpc: lecteur({ aJourA: () => true }), blocMin: BLOC });
-ok(payantes(r).length === 0, 'blocMin = bloc confirme -> aucune etape payante');
-ok(r.etat === 'PRET' && r.inscriptionPayee === true, 'blocMin -> plan PRET, inscriptionPayee vraie (etat ' + r.etat + ')');
-const q = await completerInscriptionPayee({ ...base, rpc: lecteur({ aJourA: () => false }), blocMin: BLOC });
-ok(q.etat === 'NON_MESURE' && (q.etapes || []).length === 0, 'noeud sans le bloc confirme -> NON_MESURE, rien demande');
+ok(payantes(r).length === 0, 'blocMin + latest en retard -> aucune etape payante');
+ok(r.etat === 'NON_MESURE' && (r.etapes || []).length === 0 && /caught up/.test(r.pourquoi), 'blocMin + latest en retard -> NON_MESURE, rien demande (etat ' + r.etat + ')');
+const aJour = async (m, p) => lecteur({ aJourA: () => true })(m, [p[0], '0x1']); /* latest a jour : repond comme au bloc confirme */
+const ra = await completerInscriptionPayee({ ...base, rpc: aJour, blocMin: BLOC });
+ok(ra.etat === 'PRET' && ra.inscriptionPayee === true && payantes(ra).length === 0, 'blocMin + latest a jour -> PRET, inscription payee, rien a repayer (etat ' + ra.etat + ')');
+/* le defaut evite : des heures plus tard, un noeud non-archive refuse le vieux bloc — le plan ne doit PAS rester bloque */
+const archiveRefusee = async (m, p) => { if (p[1] !== 'latest') throw new Error('missing trie node'); return aJour(m, p); };
+const vieux = await completerInscriptionPayee({ ...base, rpc: archiveRefusee, blocMin: BLOC });
+ok(vieux.etat === 'PRET' && payantes(vieux).length === 0, 'vieux blocMin + noeud qui refuse l archive -> toujours PRET (jamais bloque a vie) (etat ' + vieux.etat + ')');
 const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 const i0 = html.indexOf('async function signerEtapeLancement(');
 const corps = i0 >= 0 ? html.slice(i0, html.indexOf('async function verifierLancement(', i0)) : '';

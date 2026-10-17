@@ -84,8 +84,14 @@ export async function completerInscriptionHook({ rpc, plan, compte }) {
 export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, hook = HOOK_V2, caution = null, sel = null, blocMin = null }) {
   /* 2026-10-16 (UNIT 0xb200..4f27, tx 0x5afe0b77..) : inscription payee, puis REPROPOSEE au meme prix - la relecture suivait la
    *   confirmation sur un noeud en retard (createurs = 0). `blocMin` = bloc de l inscription confirmee : l etat est lu A ce bloc ;
-   *   un noeud qui ne l a pas encore leve -> NON_MESURE, rien n est demande. L inscription est definitive : lire a ce bloc suffit. */
-  const tag = typeof blocMin === 'string' && /^0x[0-9a-fA-F]+$/.test(blocMin) ? blocMin : 'latest';
+   *   un noeud qui ne l a pas encore leve -> NON_MESURE, rien n est demande.
+   * ⛔ 2026-10-17 (revue Claude) : on ne LIT PLUS A ce bloc. `blocMin` est persiste (localStorage) ; quelques heures plus tard un noeud
+   *   non-archive refuse un eth_call a un vieux bloc (publicnode : ~10 000 blocs) -> NON_MESURE pour toujours, marche jamais ouvrable.
+   *   L inscription est DEFINITIVE : on lit a 'latest', et une inscription confirmee lue « non payee » / « sans createur » ne peut
+   *   venir que d un noeud en retard -> NON_MESURE, rien n est demande. Meme protection, sans dependre d une archive. */
+  const tag = 'latest';
+  const inscriptionConfirmee = typeof blocMin === 'string' && /^0x[0-9a-fA-F]+$/.test(blocMin);
+  const enRetard = { etat: 'NON_MESURE', etapes: [], pourquoi: 'the network has not caught up with your registration yet — nothing was asked, try again in a moment' };
   if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) return plan;
   const out = { ...plan, hook, frais: FRAIS_V2, v2: true };
   if (plan.poolExiste) return out;
@@ -101,6 +107,7 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
     inscrit = '0x' + String(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('inscrit(bytes32)') + id }, tag])).slice(-40);
     prix = BigInt(await rpc('eth_call', [{ to: hook, data: '0x' + selecteur('prixInscrit(bytes32)') + id }, tag]));
   } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the registration could not be read' }; }
+  if (inscriptionConfirmee && !payee) return { ...out, ...enRetard };
   const etapes = [...plan.etapes];
   /* ⛔⛔ 2026-10-02 — HOOK 7030 : la naissance PASSE PAR inscrireAvecCaution, jamais par inscrire (sinon le createur ne
    *   toucherait jamais ses 0,03 % : sans caution, sa part part au collateral). Plancher fixe par l app (paires.js
@@ -121,6 +128,7 @@ export async function completerInscriptionPayee({ rpc, plan, compte, fraisWei, h
       }
     } catch { return { ...out, etat: 'NON_MESURE', etapes: [], pourquoi: 'the registration could not be read' }; }
     const moi = String(compte).toLowerCase();
+    if (inscriptionConfirmee && /^0x0{40}$/.test(qui)) return { ...out, ...enRetard };
     if (/^0x0{40}$/.test(qui)) {
       if (dev !== ETH_CAUTION && allowance < min) {
         etapes.push({ nom: "Allow the creator's minimum", to: dev,

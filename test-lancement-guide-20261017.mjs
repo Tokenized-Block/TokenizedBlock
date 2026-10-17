@@ -64,9 +64,13 @@ e = await lire(2); g = etapesGuidees(e, montants);
 ok(e.payee === true && e.inscritParMoi === true && e.prixInscrit === SQRT, 'stage 2: paid, registered by me at 10000<<96');
 ok(g.etapes[1].statut === 'FAIT' && g.etapes[2].statut === 'A_FAIRE', 'stage 2: 2 done (paid, not re-asked), 3 to do');
 ok(g.courante === 3, 'stage 2: current step = 3 (launch market)');
-// 4) stale node after reload: latest lags, blocMin of the receipt known -> read AT the block -> still paid
+// 4) stale node after reload: latest lags, blocMin of the receipt known -> NON_MESURE, nothing current, nothing asked
+//    (2026-10-17, Claude's review: reads stay at 'latest'; reading AT a persisted old block fails on non-archive nodes hours later)
 e = await lire(2, { latestEnRetard: true, blocMin: '0x3240d72' }); g = etapesGuidees(e, montants);
-ok(e.payee === true && g.etapes[1].statut === 'FAIT', 'stale node + blocMin: paid step stays done');
+ok(e.etat === 'NON_MESURE' && g.courante === null && g.etapes.every((x) => x.statut !== 'A_FAIRE'), 'stale node + blocMin: NON_MESURE, step 2 never offered again');
+// 4b) caught-up node, old blocMin: the reads never use the old block (a non-archive node would refuse it) -> paid, step 3 current
+e = await lire(2, { blocMin: '0x3240d72' }); g = etapesGuidees(e, montants);
+ok(e.etat === 'LU' && e.payee === true && e.lueA === 'latest' && g.courante === 3, 'old blocMin on a caught-up node: read at latest, paid, step 3 current');
 // 5) stale node WITHOUT blocMin cannot see payment: it must not claim step 2 is to pay if the read is unsure -> it is to do,
 //    but etapesGuidees never builds a tx: that stays with completerInscriptionPayee (which reads at blocMin). Unreadable -> NON_LU.
 e = await lire(2, { plante: true }); g = etapesGuidees(e, montants);
